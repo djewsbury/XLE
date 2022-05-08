@@ -135,8 +135,7 @@ namespace RenderCore { namespace Techniques
 				IteratorRange<Assets::ScaffoldCmdIterator> geoMachine,
 				const std::shared_ptr<Assets::ModelScaffoldCmdStreamForm>& scaffold,
 				const std::shared_ptr<DeformAccelerator>& deformAccelerator,
-				const DeformerToRendererBinding& deformerBinding,
-				unsigned geoIdx)
+				const DeformerToRendererBinding::GeoBinding* deformerBinding)
 			{
 				const Assets::RawGeometryDesc* rawGeometry = nullptr;
 				const Assets::SkinningDataDesc* skinningData = nullptr;
@@ -169,11 +168,11 @@ namespace RenderCore { namespace Techniques
 					drawableGeo->_vertexStreamCount = 1;
 
 					// Attach those vertex streams that come from the deform operation
-					if (geoIdx < deformerBinding._geoBindings.size() && !deformerBinding._geoBindings[geoIdx]._generatedElements.empty()) {
+					if (deformerBinding && !deformerBinding->_generatedElements.empty()) {
 						drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
-						drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformerBinding._geoBindings[geoIdx]._postDeformBufferOffset;
+						drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformerBinding->_postDeformBufferOffset;
 						drawableGeo->_deformAccelerator = deformAccelerator;
-						_geosLayout.push_back(BuildFinalIA(rg, &deformerBinding._geoBindings[geoIdx], drawableGeo->_vertexStreamCount));
+						_geosLayout.push_back(BuildFinalIA(rg, deformerBinding, drawableGeo->_vertexStreamCount));
 						++drawableGeo->_vertexStreamCount;
 					} else {
 						if (skinningData) {
@@ -312,12 +311,14 @@ namespace RenderCore { namespace Techniques
 		{
 		public:
 			std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
+			std::vector<std::shared_ptr<PipelineAccelerator>> _pipelineAccelerators;
+			std::vector<std::shared_ptr<DescriptorSetAccelerator>> _descriptorSetAccelerators;
 			std::set<::Assets::DependencyValidation> _depVals;
 
 			struct WorkingMaterial
 			{
 				uint64_t _guid;
-				std::shared_ptr<Techniques::DescriptorSetAccelerator> _descriptorSetAccelerator;
+				unsigned _descriptorSetAcceleratorIdx;
 
 				std::shared_ptr<Assets::ShaderPatchCollection> _patchCollection;
 				ParameterBox _selectors;
@@ -369,9 +370,10 @@ namespace RenderCore { namespace Techniques
 					i->_selectors.MergeIn(resHasParameters);
 
 					// Descriptor set accelerator
+					std::shared_ptr<DescriptorSetAccelerator> descSet;
 					if (parametersDeformInfrastructure && deformAcceleratorPool) {
 						auto paramBinding = parametersDeformInfrastructure->GetOutputParameterBindings();
-						i->_descriptorSetAccelerator = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
+						descSet = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 							i->_patchCollection,
 							i->_selectors,
 							ParameterBox{},		// constantBindings
@@ -380,16 +382,32 @@ namespace RenderCore { namespace Techniques
 							{(const AnimatedParameterBinding*)paramBinding.begin(), (const AnimatedParameterBinding*)paramBinding.end()},
 							deformAcceleratorPool->GetDynamicPageResource());
 					} else {
-						i->_descriptorSetAccelerator = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
+						descSet = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 							i->_patchCollection,
 							i->_selectors,
 							ParameterBox{},
 							ParameterBox{});
 					}
 
+					i->_descriptorSetAcceleratorIdx = AddDescriptorSetAccelerator(std::move(descSet));
 					i->_batchFilter = (unsigned)CalculateBatchForStateSet(i->_stateSet);
 					return AsPointer(i);
 				}
+			}
+
+			unsigned AddDescriptorSetAccelerator(std::shared_ptr<DescriptorSetAccelerator> accelerator)
+			{
+				_descriptorSetAccelerators.emplace_back(std::move(accelerator));
+				return (unsigned)_descriptorSetAccelerators.size()-1;
+			}
+
+			unsigned AddPipelineAccelerator(std::shared_ptr<PipelineAccelerator> accelerator)
+			{
+				auto i = std::find(_pipelineAccelerators.begin(), _pipelineAccelerators.end(), accelerator);
+				if (i != _pipelineAccelerators.end())
+					return std::distance(_pipelineAccelerators.begin(), i);
+				_pipelineAccelerators.emplace_back(std::move(accelerator));
+				return (unsigned)_pipelineAccelerators.size()-1;
 			}
 
 			unsigned AddDrawableInputAssembly(
@@ -408,7 +426,7 @@ namespace RenderCore { namespace Techniques
 
 			struct CompiledPipeline
 			{
-				std::shared_ptr<PipelineAccelerator> _pipelineAccelerator;
+				unsigned _pipelineAcceleratorIdx;
 				unsigned _iaIdx;
 			};
 
@@ -418,17 +436,28 @@ namespace RenderCore { namespace Techniques
 				Topology topology)
 			{
 				CompiledPipeline resultGeoCall;
-				resultGeoCall._pipelineAccelerator =
-					_pipelineAcceleratorPool->CreatePipelineAccelerator(
-						material._patchCollection,
-						material._selectors,
-						inputElements,
-						topology,
-						material._stateSet);
+				resultGeoCall._pipelineAcceleratorIdx =
+					AddPipelineAccelerator(
+						_pipelineAcceleratorPool->CreatePipelineAccelerator(
+							material._patchCollection,
+							material._selectors,
+							inputElements,
+							topology,
+							material._stateSet));
 				resultGeoCall._iaIdx = AddDrawableInputAssembly(inputElements, topology);
 				return resultGeoCall;
 			}
 		};
+	}
+
+	static const DeformerToRendererBinding::GeoBinding* FindDeformerBinding(
+		const DeformerToRendererBinding& binding,
+		unsigned elementIdx, unsigned geoIdx)
+	{
+		auto i = std::find_if(binding._geoBindings.begin(), binding._geoBindings.end(), [p=std::make_pair(elementIdx, geoIdx)](const auto& q) { return q.first == p; });
+		if (i != binding._geoBindings.end())
+			return &i->second;
+		return nullptr;
 	}
 
 	class DrawableProvider::Pimpl
@@ -439,6 +468,8 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
 		std::future<BufferUploads::CommandListID> _uploadFuture;
 		std::atomic<bool> _fulfillWhenNotPendingCalled = false;
+		std::vector<Float4x4> _pendingGeoSpaceToNodeSpaces;
+		std::vector<DrawCall> _pendingDrawCalls;
 
 		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
 
@@ -446,20 +477,9 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<Assets::ModelScaffoldCmdStreamForm>& modelScaffold,
 			const std::shared_ptr<Assets::MaterialScaffoldCmdStreamForm>& materialScaffold,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
-			const std::shared_ptr<DeformAccelerator>& deformAccelerator)
+			const std::shared_ptr<DeformAccelerator>& deformAccelerator,
+			unsigned elementIdx)
 		{
-			struct DrawableSrc
-			{
-				std::shared_ptr<PipelineAccelerator> _pipelineAccelerator;
-				std::shared_ptr<Techniques::DescriptorSetAccelerator> _descriptorSetAccelerator;
-				unsigned 	_batchFilter;
-
-				uint64_t 	_materialGuid;
-				unsigned	_firstIndex, _indexCount;
-				unsigned	_firstVertex;
-			};
-			std::vector<DrawableSrc> drawableSrcs;
-
 			IteratorRange<const uint64_t*> currentMaterialAssignments;
 			unsigned currentTransformMarker = ~0u;
 
@@ -470,7 +490,7 @@ namespace RenderCore { namespace Techniques
 				deformParametersAttachment = deformAcceleratorPool->GetDeformParametersAttachment(*deformAccelerator).get();
 				geoDeformerInfrastructure = dynamic_cast<IGeoDeformerInfrastructure*>(deformAcceleratorPool->GetDeformAttachment(*deformAccelerator).get());
 				if (geoDeformerInfrastructure)
-					deformerBinding = geoDeformerInfrastructure->GetDeformerToRendererBinding();				
+					deformerBinding = geoDeformerInfrastructure->GetDeformerToRendererBinding();
 			}
 
 			std::vector<std::pair<unsigned, unsigned>> modelGeoIdToPendingGeoIndex;
@@ -503,8 +523,8 @@ namespace RenderCore { namespace Techniques
 						if (i == modelGeoIdToPendingGeoIndex.end()) {
 							pendingGeoIdx = _pendingGeos.AddGeo(
 								geoMachine, modelScaffold,
-								deformAccelerator, deformerBinding,
-								geoCallDesc._geoId);
+								deformAccelerator,
+								FindDeformerBinding(deformerBinding, elementIdx, geoCallDesc._geoId));
 							modelGeoIdToPendingGeoIndex.emplace_back(geoCallDesc._geoId, pendingGeoIdx);
 						} else {
 							pendingGeoIdx = i->second;
@@ -539,18 +559,54 @@ namespace RenderCore { namespace Techniques
 									*workingMaterial, 
 									_pendingGeos._geosLayout[pendingGeoIdx],
 									_pendingGeos._geosTopologies[pendingGeoIdx]);
-								drawableSrcs.push_back(DrawableSrc{
-									std::move(compiledPipeline._pipelineAccelerator),
-									workingMaterial->_descriptorSetAccelerator,
-									workingMaterial->_batchFilter,
-									matAssignment,
-									dc._firstIndex, dc._indexCount, dc._firstVertex});
+
+								DrawCall drawCall;
+								drawCall._geoIdx = pendingGeoIdx;
+								drawCall._pipelineAcceleratorIdx = compiledPipeline._pipelineAcceleratorIdx;
+								drawCall._descriptorSetAcceleratorIdx = workingMaterial->_descriptorSetAcceleratorIdx;
+								drawCall._geoSpaceToNodeSpaceIdx = AddGeoSpaceToNodeSpace(rawGeometry->_geoSpaceToNodeSpace);
+								drawCall._batchFilter = workingMaterial->_batchFilter;
+								drawCall._materialGuid = workingMaterial->_guid;
+								drawCall._firstIndex = dc._firstIndex;
+								drawCall._indexCount = dc._indexCount;
+								drawCall._firstVertex = dc._firstVertex;
+								_pendingDrawCalls.push_back(drawCall);
 							}
 						}
 					}
 					break;
 				}
 			}
+		}
+
+		unsigned AddGeoSpaceToNodeSpace(const Float4x4& transform)
+		{
+			auto i = std::find(_pendingGeoSpaceToNodeSpaces.begin(), _pendingGeoSpaceToNodeSpaces.end(), transform);
+			if (i != _pendingGeoSpaceToNodeSpaces.end())
+				return (unsigned)std::distance(_pendingGeoSpaceToNodeSpaces.begin(), i);
+			_pendingGeoSpaceToNodeSpaces.push_back(transform);
+			return (unsigned)_pendingGeoSpaceToNodeSpaces.size()-1;
+		}
+
+		void FillIn(DrawableProvider& dst)
+		{
+			unsigned geoIdxOffset = dst._drawableGeos.size();
+			unsigned pipelineAcceleratorIdxOffset = dst._pipelineAccelerators.size();
+			unsigned descSetAcceleratorIdxOffset = dst._descriptorSetAccelerators.size();
+			dst._drawableGeos.insert(dst._drawableGeos.end(), _pendingGeos._geos.begin(), _pendingGeos._geos.end());
+			dst._pipelineAccelerators.insert(dst._pipelineAccelerators.end(), _pendingPipelines._pipelineAccelerators.begin(), _pendingPipelines._pipelineAccelerators.end());
+			dst._descriptorSetAccelerators.insert(dst._descriptorSetAccelerators.end(), _pendingPipelines._descriptorSetAccelerators.begin(), _pendingPipelines._descriptorSetAccelerators.end());
+
+			for (auto& p:_pendingDrawCalls) {
+				p._geoIdx += geoIdxOffset;
+				p._pipelineAcceleratorIdx += pipelineAcceleratorIdxOffset;
+				p._descriptorSetAcceleratorIdx += descSetAcceleratorIdxOffset;
+			}
+			dst._drawCalls.insert(dst._drawCalls.end(), _pendingDrawCalls.begin(), _pendingDrawCalls.end());
+			_pendingDrawCalls.clear();
+			_pendingGeoSpaceToNodeSpaces.clear();
+			_pendingGeos = {};
+			_pendingPipelines = {};
 		}
 
 		Pimpl(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators, std::shared_ptr<BufferUploads::IManager> bufferUploads)
@@ -566,35 +622,13 @@ namespace RenderCore { namespace Techniques
 	void DrawableProvider::Add(const Assets::RendererConstruction& construction)
 	{
 		assert(construction.GetAssetState() == ::Assets::AssetState::Ready);
-		auto& internal = construction.GetInternal();
-		auto msmi = internal._modelScaffoldMarkers.begin();
-		auto mspi = internal._modelScaffoldPtrs.begin();
-		auto matsmi = internal._materialScaffoldMarkers.begin();
-		auto matspi = internal._materialScaffoldPtrs.begin();
-
-		// wallk through all of the registered elements, and depending on what has been registered
-		// with them, trigger AddModel()
-		for (unsigned e=0; e<internal._elementCount; ++e) {
-			while (msmi!=internal._modelScaffoldMarkers.end() && msmi->first < e) ++msmi;
-			while (mspi!=internal._modelScaffoldPtrs.end() && mspi->first < e) ++mspi;
-			while (matsmi!=internal._materialScaffoldMarkers.end() && matsmi->first < e) ++matsmi;
-			while (matspi!=internal._materialScaffoldPtrs.end() && matspi->first < e) ++matspi;
-			
-			std::shared_ptr<Assets::ModelScaffoldCmdStreamForm> modelScaffold;
-			std::shared_ptr<Assets::MaterialScaffoldCmdStreamForm> materialScaffold;
-			if (mspi!=internal._modelScaffoldPtrs.end() && mspi->first == e)
-				modelScaffold = mspi->second;
-			else if (msmi!=internal._modelScaffoldMarkers.end() && msmi->first == e)
-				modelScaffold = msmi->second->Actualize();
-			
-			if (matspi!=internal._materialScaffoldPtrs.end() && matspi->first == e)
-				materialScaffold = matspi->second;
-			else if (matsmi!=internal._materialScaffoldMarkers.end() && matsmi->first == e)
-				materialScaffold = matsmi->second->Actualize();
-			
-			if (modelScaffold && materialScaffold) {
-				_pimpl->AddModel(modelScaffold, materialScaffold, nullptr, nullptr);
-			}
+		unsigned elementIdx = 0;
+		for (auto e:construction) {
+			auto modelScaffold = e.GetModelScaffold();
+			auto materialScaffold = e.GetMaterialScaffold();
+			if (modelScaffold && materialScaffold)
+				_pimpl->AddModel(modelScaffold, materialScaffold, nullptr, nullptr, elementIdx);
+			++elementIdx;
 		}
 	}
 
@@ -613,6 +647,8 @@ namespace RenderCore { namespace Techniques
 				return (futureStatus == std::future_status::timeout) ? ::Assets::PollStatus::Continue : ::Assets::PollStatus::Finish;
 			},
 			[strongThis]() {
+				strongThis->_pimpl->FillIn(*strongThis);
+
 				FulFilledProvider result;
 				result._provider = strongThis;
 				result._completionCmdList = strongThis->_pimpl->_uploadFuture.get();

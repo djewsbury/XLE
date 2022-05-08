@@ -40,12 +40,16 @@ namespace RenderCore { namespace Techniques {
 		BindFlag::BitField bindFlags,
 		StringSection<> resourceName);
 
+	struct ModelScaffoldLoadRequest
+	{
+		std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> _modelScaffold;
+		unsigned _offset = ~0u, _size = ~0u;
+	};
 	/// Both data load is pushed to async thread, however resource construction occurs synchronously
 	std::pair<std::shared_ptr<IResource>, BufferUploads::TransactionMarker> LoadStaticResourcePartialAsync(
 		IDevice& device,
-		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
+		IteratorRange<const ModelScaffoldLoadRequest*> loadRequests,
 		unsigned resourceSize,
-		std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
 		BindFlag::BitField bindFlags,
 		StringSection<> resourceName);
 

@@ -12,11 +12,11 @@
 namespace RenderCore { class IDevice; }
 namespace RenderCore { namespace Techniques
 {
-	class IDeformOperationFactory;
-	std::shared_ptr<IDeformOperationFactory> CreateCPUSkinDeformerFactory();
+	class IGeoDeformerFactory;
+	std::shared_ptr<IGeoDeformerFactory> CreateCPUSkinDeformerFactory();
 
 	class PipelineCollection;
-	std::shared_ptr<IDeformOperationFactory> CreateGPUSkinDeformerFactory(
+	std::shared_ptr<IGeoDeformerFactory> CreateGPUSkinDeformerFactory(
 		std::shared_ptr<PipelineCollection> pipelineCollection);
 
 	class ISkinDeformer

@@ -13,6 +13,8 @@
 namespace Assets {  class IFileInterface; }
 namespace std { template<typename T> class promise; }
 
+// namespace RenderCore { namespace Techniques { class IGeoDeformerFactory; }}	// todo -- need to move this to reference deformers
+
 namespace RenderCore { namespace Assets
 {
 	static constexpr unsigned s_scaffoldCmdBegin_TransformationMachine = 0x500;
@@ -136,32 +138,41 @@ namespace RenderCore { namespace Assets
 	{
 	public:
 		class Internal;
-		class Element
+		class ElementConstructor
 		{
 		public:
-			Element& SetModelScaffold(StringSection<>);
-			Element& SetMaterialScaffold(StringSection<>);
+			ElementConstructor& SetModelScaffold(StringSection<>);
+			ElementConstructor& SetMaterialScaffold(StringSection<>);
 			
-			Element& SetModelScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>&);
-			Element& SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<MaterialScaffoldCmdStreamForm>&);
+			ElementConstructor& SetModelScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>&);
+			ElementConstructor& SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<MaterialScaffoldCmdStreamForm>&);
 			
-			Element& SetModelScaffold(const std::shared_ptr<ModelScaffoldCmdStreamForm>&);
-			Element& SetMaterialScaffold(const std::shared_ptr<MaterialScaffoldCmdStreamForm>&);
+			ElementConstructor& SetModelScaffold(const std::shared_ptr<ModelScaffoldCmdStreamForm>&);
+			ElementConstructor& SetMaterialScaffold(const std::shared_ptr<MaterialScaffoldCmdStreamForm>&);
 
-			Element& AddMorphTarget(uint64_t targetName, StringSection<> srcFile);
+			ElementConstructor& AddMorphTarget(uint64_t targetName, StringSection<> srcFile);
 
-			Element& SetRootTransform(const Float4x4&);
+			// ElementConstructor& AddDeform(uint64_t name);
+			// ElementConstructor& AddDeform(const std::shared_ptr<Techniques::IGeoDeformerFactory>&);
 
-			Element& SetName(const std::string&);
+			ElementConstructor& SetRootTransform(const Float4x4&);
+
+			ElementConstructor& SetName(const std::string&);
 		private:
 			unsigned _elementId = ~0u;
 			Internal* _internal = nullptr;
-			Element(unsigned elementId, Internal& internal) : _elementId(elementId), _internal(&internal) {}
-			Element() {}
+			ElementConstructor(unsigned elementId, Internal& internal) : _elementId(elementId), _internal(&internal) {}
+			ElementConstructor() {}
 			friend class RendererConstruction;
 		};
 
-		Element AddElement();
+		ElementConstructor AddElement();
+
+		class ElementIterator;
+		ElementIterator begin() const;
+		ElementIterator end() const;
+		ElementIterator GetElement(unsigned idx) const;
+
 		void SetSkeletonScaffold(StringSection<>);
 		void SetSkeletonScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>&);
 		void SetSkeletonScaffold(const std::shared_ptr<MaterialScaffoldCmdStreamForm>&);
@@ -188,14 +199,54 @@ namespace RenderCore { namespace Assets
 		using ModelScaffoldPtr = std::shared_ptr<ModelScaffoldCmdStreamForm>;
 		using MaterialScaffoldMarker = ::Assets::PtrToMarkerPtr<MaterialScaffoldCmdStreamForm>;
 		using MaterialScaffoldPtr = std::shared_ptr<MaterialScaffoldCmdStreamForm>;
+		// using DeformerPtr = std::shared_ptr<Techniques::IGeoDeformerFactory>;
 
 		std::vector<std::pair<ElementId, ModelScaffoldMarker>> _modelScaffoldMarkers;
 		std::vector<std::pair<ElementId, ModelScaffoldPtr>> _modelScaffoldPtrs;
 		std::vector<std::pair<ElementId, MaterialScaffoldMarker>> _materialScaffoldMarkers;
 		std::vector<std::pair<ElementId, MaterialScaffoldPtr>> _materialScaffoldPtrs;
+		// std::vector<std::pair<ElementId, DeformerPtr>> _deformers;
 		std::vector<std::pair<ElementId, std::string>> _names;
 		unsigned _elementCount = 0;
 		bool _sealed = false;
+	};
+
+	class RendererConstruction::ElementIterator
+	{
+	public:
+		class Value
+		{
+		public:
+			std::shared_ptr<ModelScaffoldCmdStreamForm> GetModelScaffold() const;
+			std::shared_ptr<MaterialScaffoldCmdStreamForm> GetMaterialScaffold() const;
+			std::string GetModelScaffoldName() const;
+			// std::vector<std::shared_ptr<Techniques::IGeoDeformerFactory>> GetGeoDeformerFactories() const;
+			unsigned ElementId() const;
+		private:
+			Value();
+			template<typename Type>
+				using Iterator = typename std::vector<std::pair<unsigned, Type>>::iterator;
+			Iterator<RendererConstruction::Internal::ModelScaffoldMarker> _msmi;
+			Iterator<RendererConstruction::Internal::ModelScaffoldPtr> _mspi;
+			Iterator<RendererConstruction::Internal::MaterialScaffoldMarker> _matsmi;
+			Iterator<RendererConstruction::Internal::MaterialScaffoldPtr> _matspi;
+			unsigned _elementId = 0;
+			Internal* _internal = nullptr;
+			friend class ElementIterator;
+			friend class RendererConstruction;
+		};
+
+		ElementIterator& operator++();
+		const Value& operator*() const;
+		const Value* operator->() const;
+		friend bool operator==(const ElementIterator&, const ElementIterator&);
+		friend bool operator!=(const ElementIterator&, const ElementIterator&);
+
+	private:
+		ElementIterator();
+		Value _value;
+		friend class RendererConstruction;
+		bool IsEqual(const ElementIterator& other) const;
 	};
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -256,25 +307,11 @@ namespace RenderCore { namespace Assets
 		return !lhs.IsEqual(rhs);
 	}
 
-	/*inline IScaffoldNavigation* ScaffoldCmdIterator::Navigation() const { return _navigation; }
-
-	inline ScaffoldCmdIterator::ScaffoldCmdIterator(IteratorRange<const void*> data, IScaffoldNavigation& navigation)
-	: _value(data)
-	, _navigation(&navigation)
-	{}*/
 	inline ScaffoldCmdIterator::ScaffoldCmdIterator(IteratorRange<const void*> data)
 	: _value(data)
 	{}
 	inline ScaffoldCmdIterator::ScaffoldCmdIterator() {}
 	inline ScaffoldCmdIterator::ScaffoldCmdIterator(nullptr_t) {}
-
-	/*inline IteratorRange<ScaffoldCmdIterator> MakeScaffoldCmdRange(IteratorRange<const void*> data, IScaffoldNavigation& navigation)
-	{
-		return {
-			ScaffoldCmdIterator(data, navigation),
-			ScaffoldCmdIterator({data.end(), data.end()}, navigation)
-		};
-	}*/
 
 	inline IteratorRange<ScaffoldCmdIterator> MakeScaffoldCmdRange(IteratorRange<const void*> data)
 	{
@@ -282,6 +319,27 @@ namespace RenderCore { namespace Assets
 			ScaffoldCmdIterator(data),
 			ScaffoldCmdIterator({data.end(), data.end()})
 		};
+	}
+
+	inline unsigned RendererConstruction::ElementIterator::Value::ElementId() const { return _elementId; }
+
+	inline auto RendererConstruction::ElementIterator::operator*() const -> const Value& { return _value; }
+	inline auto RendererConstruction::ElementIterator::operator->() const -> const Value* { return &_value; }
+
+	inline bool RendererConstruction::ElementIterator::IsEqual(const ElementIterator& other) const
+	{
+		assert(_value._internal == other._value._internal);
+		return _value._elementId == other._value._elementId;
+	}
+
+	inline bool operator==(const RendererConstruction::ElementIterator& lhs, const RendererConstruction::ElementIterator& rhs)
+	{
+		return lhs.IsEqual(rhs);
+	}
+
+	inline bool operator!=(const RendererConstruction::ElementIterator& lhs, const RendererConstruction::ElementIterator& rhs)
+	{
+		return !lhs.IsEqual(rhs);
 	}
 
 }}

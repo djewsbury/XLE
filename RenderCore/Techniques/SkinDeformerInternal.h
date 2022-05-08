@@ -7,16 +7,13 @@
 #include "SkinDeformer.h"
 #include "DeformInternal.h"
 #include "DeformOperationFactory.h"
-#include "../Assets/ModelScaffoldInternal.h"
-#include "../Assets/ModelImmutableData.h"
-#include "../Metal/InputLayout.h"
 #include "../Format.h"
 #include "../../Assets/Marker.h"
 #include "../../Math/Vector.h"
 #include "../../Utility/IteratorUtils.h"
 
 namespace RenderCore { class IDevice; class IResource; class UniformsStreamInterface; class ICompiledPipelineLayout; }
-namespace RenderCore { namespace Assets { class PredefinedPipelineLayout; }}
+namespace RenderCore { namespace Assets { class PredefinedPipelineLayout; class ModelScaffoldCmdStreamForm; }}
 namespace Utility { class ParameterBox; }
 
 namespace RenderCore { namespace Techniques
@@ -41,7 +38,7 @@ namespace RenderCore { namespace Techniques
 			const RenderCore::Assets::SkeletonBinding& binding) override;
 		
 		CPUSkinDeformer(
-			const RenderCore::Assets::ModelScaffold& modelScaffold,
+			const RenderCore::Assets::ModelScaffoldCmdStreamForm& modelScaffold,
 			const std::string& modelScaffoldName);
 		~CPUSkinDeformer();
 
@@ -49,7 +46,7 @@ namespace RenderCore { namespace Techniques
 
 		static std::vector<RenderCore::Techniques::DeformOperationInstantiation> InstantiationFunction(
 			StringSection<> initializer,
-			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold);
+			const std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm>& modelScaffold);
 	private:
 		struct Section
 		{
@@ -113,11 +110,11 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const Float4x4*> skeletonMachineOutput,
 			const RenderCore::Assets::SkeletonBinding& binding) override;
 
-		void Bind(const DeformerInputBinding& binding);
+		void Bind(const DeformerInputBinding& binding) override;
 	
 		GPUSkinDeformer(
 			std::shared_ptr<Internal::DeformerPipelineCollection> pipelineCollection,
-			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+			std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
 			const std::string& modelScaffoldName);
 		~GPUSkinDeformer();
 	private:
@@ -168,7 +165,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<Float3x4> _jointMatrices;
 		unsigned _jointMatricesInstanceStride = 0;
 
-		std::shared_ptr<RenderCore::Assets::ModelScaffold> _modelScaffold;
+		std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> _modelScaffold;
 		std::shared_ptr<Internal::DeformerPipelineCollection> _pipelineCollection;
 	};
 }}

@@ -99,15 +99,21 @@ namespace RenderCore { namespace Techniques
 				assert(subResources.size() == 1);
 				assert(subResources[0]._id == RenderCore::SubResourceId{});
 
-				{
-					auto file = _modelScaffold->OpenLargeBlocks();
+				for (auto i=_loadRequests.begin(); i!=_loadRequests.end(); ) {
+					auto startModelScaffold = i;
+					i++;
+					while (i!=_loadRequests.end() && i->_modelScaffold == startModelScaffold->_modelScaffold) ++i;
+
+					auto file = startModelScaffold->_modelScaffold->OpenLargeBlocks();
 					auto initialOffset = file->TellP();
-					std::sort(_loadRequests.begin(), _loadRequests.end(), [](auto lhs, auto rhs) { return lhs._srcOffset < rhs._srcOffset; });
-					for (auto i=_loadRequests.begin(); i!=_loadRequests.end();) {
-						auto start = i; ++i;
-						while (i != _loadRequests.end() && i->_srcOffset == ((i-1)->_srcOffset + (i-1)->_size) && i->_dstOffset == ((i-1)->_dstOffset + (i-1)->_size)) ++i;		// combine adjacent loads
+					
+					// loadRequests must be sorted by _srcOffset on entry (after model scaffold storing)
+					for (auto i2=startModelScaffold; i2!=i;) {
+						auto start = i2;
+						++i2;
+						while (i2 != i && i2->_srcOffset == ((i2-1)->_srcOffset + (i2-1)->_size) && i2->_dstOffset == ((i2-1)->_dstOffset + (i2-1)->_size)) ++i2;		// combine adjacent loads
 						
-						auto finalSize = ((i-1)->_srcOffset + (i-1)->_size) - start->_srcOffset;
+						auto finalSize = ((i2-1)->_srcOffset + (i2-1)->_size) - start->_srcOffset;
 						assert((start->_dstOffset + finalSize) <= subResources[0]._destination.size());
 						file->Seek(start->_srcOffset + initialOffset);
 						file->Read(PtrAdd(subResources[0]._destination.begin(), start->_dstOffset), finalSize);
@@ -119,24 +125,62 @@ namespace RenderCore { namespace Techniques
 			}
 			virtual ::Assets::DependencyValidation GetDependencyValidation() const
 			{
-				return _modelScaffold->GetDependencyValidation();
+				if (_depVal) return _depVal;
+
+				std::vector<::Assets::DependencyValidationMarker> depVals;
+				for (auto i=_loadRequests.begin(); i!=_loadRequests.end(); ) {
+					auto start = i;
+					i++;
+					while (i!=_loadRequests.end() && i->_modelScaffold == start->_modelScaffold) ++i;
+					depVals.push_back(start->_modelScaffold->GetDependencyValidation());
+				}
+				_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);		// cache this for reuse later
+				return _depVal;
 			}
 
-			std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> _modelScaffold;
 			ResourceDesc _resourceDesc;
-			struct LoadRequests { unsigned _dstOffset, _srcOffset, _size; };
+			struct LoadRequests
+			{
+				std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> _modelScaffold;
+				unsigned _dstOffset, _srcOffset, _size; 
+			};
 			std::vector<LoadRequests> _loadRequests;
+			mutable ::Assets::DependencyValidation _depVal;
 		};
 
-		static std::vector<ModelScaffoldDataSource::LoadRequests> AsLoadRequests(IteratorRange<std::pair<unsigned, unsigned>*> loadRequests)
+		static std::vector<ModelScaffoldDataSource::LoadRequests> AsLoadRequests(IteratorRange<const ModelScaffoldLoadRequest*> loadRequests)
 		{
 			std::vector<ModelScaffoldDataSource::LoadRequests> result;
 			result.reserve(loadRequests.size());
 			unsigned iterator = 0;
 			for (auto a:loadRequests) {
-				result.push_back({iterator, a.first, a.second});
+				result.push_back({a._modelScaffold, iterator, a._offset, a._size});
+				iterator += a._size;
+			}
+			std::sort(
+				result.begin(), result.end(),
+				[](const auto& lhs, const auto& rhs) {
+					if (lhs._modelScaffold < rhs._modelScaffold) return true;
+					if (lhs._modelScaffold > rhs._modelScaffold) return false;
+					return lhs._srcOffset < rhs._srcOffset;		// sorting by _srcOffset required by PrepareData
+				});
+
+			return result;
+		}
+
+		static std::vector<ModelScaffoldDataSource::LoadRequests> AsLoadRequests(
+			std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
+			IteratorRange<const std::pair<unsigned, unsigned>*> loadRequests)
+		{
+			std::vector<ModelScaffoldDataSource::LoadRequests> result;
+			result.reserve(loadRequests.size());
+			unsigned iterator = 0;
+			for (auto a:loadRequests) {
+				result.push_back({modelScaffold, iterator, a.first, a.second});
 				iterator += a.second;
 			}
+			// sorting by _srcOffset required by PrepareData
+			std::sort(result.begin(), result.end(), [](const auto& lhs, const auto& rhs) { return lhs._srcOffset < rhs._srcOffset; });
 			return result;
 		}
 	}
@@ -150,26 +194,24 @@ namespace RenderCore { namespace Techniques
 		StringSection<> resourceName)
 	{
 		auto dataSource = std::make_shared<Internal::ModelScaffoldDataSource>();
-		dataSource->_modelScaffold = std::move(modelScaffold);
 		dataSource->_resourceDesc = CreateDesc(
 			bindFlags | BindFlag::TransferDst, 0, GPUAccess::Read,
 			LinearBufferDesc::Create(resourceSize),
 			resourceName);
-		dataSource->_loadRequests = Internal::AsLoadRequests(loadRequests);
+		dataSource->_loadRequests = Internal::AsLoadRequests(modelScaffold, loadRequests);
 
 		return bufferUploads.Transaction_Begin(dataSource, bindFlags);
 	}
 
 	std::pair<std::shared_ptr<IResource>, BufferUploads::TransactionMarker> LoadStaticResourcePartialAsync(
 		IDevice& device,
-		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
+		IteratorRange<const ModelScaffoldLoadRequest*> loadRequests,
 		unsigned resourceSize,
 		std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
 		BindFlag::BitField bindFlags,
 		StringSection<> resourceName)
 	{
 		auto dataSource = std::make_shared<Internal::ModelScaffoldDataSource>();
-		dataSource->_modelScaffold = std::move(modelScaffold);
 		dataSource->_resourceDesc = CreateDesc(
 			bindFlags | BindFlag::TransferDst, 0, GPUAccess::Read,
 			LinearBufferDesc::Create(resourceSize),

@@ -11,31 +11,31 @@
 
 namespace RenderCore { namespace Techniques { namespace Internal
 {
-	GPUDeformEntryHelper::GPUDeformEntryHelper(const DeformerInputBinding& bindings, unsigned geoId)
+	GPUDeformEntryHelper::GPUDeformEntryHelper(const DeformerInputBinding& bindings, std::pair<unsigned, unsigned> elementAndGeoIdx)
 	{
-		auto binding = std::find_if(bindings._geoBindings.begin(), bindings._geoBindings.end(), [geoId](const auto& c) { return c._geoId == geoId; });
+		auto binding = std::find_if(bindings._geoBindings.begin(), bindings._geoBindings.end(), [elementAndGeoIdx](const auto& c) { return c.first == elementAndGeoIdx; });
 		if (binding == bindings._geoBindings.end())
-			Throw(std::runtime_error("Missing deformer binding for geoId (" + std::to_string(geoId) + ")"));
+			Throw(std::runtime_error("Missing deformer binding for geoId (" + std::to_string(elementAndGeoIdx.second) + ")"));
 
 		unsigned inPositionsOffset = 0, inNormalsOffset = 0, inTangentsOffset = 0;
 		unsigned outPositionsOffset = 0, outNormalsOffset = 0, outTangentsOffset = 0;
 		unsigned bufferFlags = 0;
-		for (const auto&ele:binding->_inputElements) {
+		for (const auto&ele:binding->second._inputElements) {
 			assert(ele._inputSlot == Internal::VB_GPUStaticData || ele._inputSlot == Internal::VB_GPUDeformTemporaries);
 			auto semanticHash = Hash64(ele._semanticName);
 			if (semanticHash == CommonSemantics::POSITION && ele._semanticIndex == 0) {
 				_selectors.SetParameter("IN_POSITION_FORMAT", (unsigned)ele._nativeFormat);
-				inPositionsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
+				inPositionsOffset = ele._alignedByteOffset + binding->second._bufferOffsets[ele._inputSlot];
 				if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
 					bufferFlags |= 0x1;
 			} else if (semanticHash == CommonSemantics::NORMAL && ele._semanticIndex == 0) {
 				_selectors.SetParameter("IN_NORMAL_FORMAT", (unsigned)ele._nativeFormat);
-				inNormalsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
+				inNormalsOffset = ele._alignedByteOffset + binding->second._bufferOffsets[ele._inputSlot];
 				if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
 					bufferFlags |= 0x2;
 			} else if (semanticHash == CommonSemantics::TEXTANGENT && ele._semanticIndex == 0) {
 				_selectors.SetParameter("IN_TEXTANGENT_FORMAT", (unsigned)ele._nativeFormat);
-				inTangentsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
+				inTangentsOffset = ele._alignedByteOffset + binding->second._bufferOffsets[ele._inputSlot];
 				if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
 					bufferFlags |= 0x4;
 			} else {
@@ -43,22 +43,22 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			}
 		}
 
-		for (const auto&ele:binding->_outputElements) {
+		for (const auto&ele:binding->second._outputElements) {
 			assert(ele._inputSlot == Internal::VB_PostDeform || ele._inputSlot == Internal::VB_GPUDeformTemporaries);
 			auto semanticHash = Hash64(ele._semanticName);
 			if (semanticHash == CommonSemantics::POSITION && ele._semanticIndex == 0) {
 				_selectors.SetParameter("OUT_POSITION_FORMAT", (unsigned)ele._nativeFormat);
-				outPositionsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
+				outPositionsOffset = ele._alignedByteOffset + binding->second._bufferOffsets[ele._inputSlot];
 				if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
 					bufferFlags |= 0x1<<16;
 			} else if (semanticHash == CommonSemantics::NORMAL && ele._semanticIndex == 0) {
 				_selectors.SetParameter("OUT_NORMAL_FORMAT", (unsigned)ele._nativeFormat);
-				outNormalsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
+				outNormalsOffset = ele._alignedByteOffset + binding->second._bufferOffsets[ele._inputSlot];
 				if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
 					bufferFlags |= 0x2<<16;
 			} else if (semanticHash == CommonSemantics::TEXTANGENT && ele._semanticIndex == 0) {
 				_selectors.SetParameter("OUT_TEXTANGENT_FORMAT", (unsigned)ele._nativeFormat);
-				outTangentsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
+				outTangentsOffset = ele._alignedByteOffset + binding->second._bufferOffsets[ele._inputSlot];
 				if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
 					bufferFlags |= 0x4<<16;
 			} else {
@@ -74,9 +74,9 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		_iaParams._outPositionsOffset = outPositionsOffset;
 		_iaParams._outNormalsOffset = outNormalsOffset;
 		_iaParams._outTangentsOffset = outTangentsOffset;
-		_iaParams._inputStride = binding->_bufferStrides[Internal::VB_GPUStaticData];
-		_iaParams._outputStride = binding->_bufferStrides[Internal::VB_PostDeform];
-		_iaParams._deformTemporariesStride = binding->_bufferStrides[Internal::VB_GPUDeformTemporaries];
+		_iaParams._inputStride = binding->second._bufferStrides[Internal::VB_GPUStaticData];
+		_iaParams._outputStride = binding->second._bufferStrides[Internal::VB_PostDeform];
+		_iaParams._deformTemporariesStride = binding->second._bufferStrides[Internal::VB_GPUDeformTemporaries];
 		_iaParams._mappingBufferByteOffset = 0;
 		_iaParams._dummy[0] = _iaParams._dummy[1] = ~0u;
 	}

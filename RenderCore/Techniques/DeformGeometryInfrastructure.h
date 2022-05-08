@@ -7,11 +7,13 @@
 #include "DeformAccelerator.h"
 #include "DeformOperationFactory.h"		// for DeformOperationFactorySet::Deformer
 
-namespace RenderCore { namespace Assets { class ModelScaffold; }}
+namespace RenderCore { namespace Assets { class RendererConstruction; }}
 
 namespace RenderCore { namespace Techniques
 {
 	struct DeformerToRendererBinding;
+	struct DeformerInputBinding;
+	class DeformerConstruction;
 	class IGeoDeformerInfrastructure;
 	class IGeoDeformer;
 
@@ -24,15 +26,8 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<IGeoDeformerInfrastructure> CreateDeformGeometryInfrastructure(
 		IDevice& device,
-		IteratorRange<const DeformOperationFactorySet::Deformer*> deformers,
-		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
-		const std::string& modelScaffoldName = {});
-
-	std::shared_ptr<IGeoDeformerInfrastructure> CreateDeformGeometryInfrastructure(
-		IDevice& device,
-		StringSection<> initializer,
-		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
-		const std::string& modelScaffoldName = {});
+		const Assets::RendererConstruction&,
+		const DeformerConstruction&);
 
 	class IGeoDeformer
 	{
@@ -68,20 +63,36 @@ namespace RenderCore { namespace Techniques
 			unsigned outputInstanceStride,
 			IteratorRange<const void*> dstCB) const;
 
+		virtual void Bind(const DeformerInputBinding& binding) = 0;
+		virtual bool IsCPUDeformer() const = 0;
+
 		virtual void* QueryInterface(size_t) = 0;
 		virtual ~IGeoDeformer();
 	};
 
+	struct DeformerInputBinding
+	{
+		struct GeoBinding
+		{
+			std::vector<InputElementDesc> _inputElements;		// use _inputSlot to indicate which buffer each element is within
+			std::vector<InputElementDesc> _outputElements;		// use _inputSlot to indicate which buffer each element is within
+			unsigned _bufferStrides[5];
+			unsigned _bufferOffsets[5];
+		};
+		using ElementAndGeoIdx = std::pair<unsigned, unsigned>;
+		std::vector<std::pair<ElementAndGeoIdx, GeoBinding>> _geoBindings;	// geoId, GeoBinding
+	};
+	
 	struct DeformerToRendererBinding
 	{
 		struct GeoBinding
 		{
-			unsigned _geoId = ~0u;
 			std::vector<InputElementDesc> _generatedElements;
 			std::vector<uint64_t> _suppressedElements;
 			unsigned _postDeformBufferOffset = 0;
 		};
-		std::vector<GeoBinding> _geoBindings;
+		using ElementAndGeoIdx = std::pair<unsigned, unsigned>;
+		std::vector<std::pair<ElementAndGeoIdx, GeoBinding>> _geoBindings;	// geoId, GeoBinding
 	};
 }}
 

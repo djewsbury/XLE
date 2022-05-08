@@ -25,12 +25,6 @@
 #include "../../xleres/FileList.h"
 #include <assert.h>
 
-#include "PipelineOperators.h"
-#include "CommonBindings.h"
-#include "../UniformsStream.h"
-#include "../../Assets/Marker.h"
-#include "../../Utility/ParameterBox.h"
-
 namespace RenderCore { namespace Techniques
 {
 
@@ -144,7 +138,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	CPUSkinDeformer::CPUSkinDeformer(
-		const RenderCore::Assets::ModelScaffold& modelScaffold,
+		const RenderCore::Assets::ModelScaffoldCmdStreamForm& modelScaffold,
 		const std::string& modelScaffoldName)
 	{
 		auto largeBlocks = modelScaffold.OpenLargeBlocks();
@@ -233,13 +227,12 @@ namespace RenderCore { namespace Techniques
 	{
 	}
 
-	class CPUSkinDeformerFactory : public IDeformOperationFactory
+	class CPUSkinDeformerFactory : public IGeoDeformerFactory
 	{
 	public:
 		std::shared_ptr<IGeoDeformer> Configure(
 			std::vector<RenderCore::Techniques::DeformOperationInstantiation>& result,
-			StringSection<> initializer,
-			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+			std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
 			const std::string& modelScaffoldName) override
 		{
 			// auto sep = std::find(initializer.begin(), initializer.end(), ',');
@@ -276,7 +269,7 @@ namespace RenderCore { namespace Techniques
 		virtual bool IsCPUDeformer() const override { return true; }
 	};
 
-	std::shared_ptr<IDeformOperationFactory> CreateCPUSkinDeformerFactory()
+	std::shared_ptr<IGeoDeformerFactory> CreateCPUSkinDeformerFactory()
 	{
 		return std::make_shared<CPUSkinDeformerFactory>();
 	}
@@ -404,139 +397,9 @@ namespace RenderCore { namespace Techniques
 		metrics._inputStaticDataSize += _staticVertexAttachmentsSize;
 	}
 
-#if 0
-	static void CopyWeightsUNorm8(void* dst, IteratorRange<VertexElementIterator> inputRange, unsigned dstStride)
-	{
-		// Since we're going from arbitrary inputs -> uint8, we can end up dropping a lot of precision here
-		auto fmtBreakdown = BreakdownFormat(inputRange.begin()._format);
-		switch (fmtBreakdown._type) {
-		case VertexUtilComponentType::Float32:
-			for (auto v:inputRange) {
-				for (unsigned c=0; c<fmtBreakdown._componentCount; c++)
-					((uint8_t*)dst)[2*c] = (uint8_t)std::clamp(((float*)v._data.begin())[c] * 255.f, 0.f, 255.f);
-				dst = PtrAdd(dst, dstStride);
-			}
-			break;
-
-		case VertexUtilComponentType::Float16:
-			for (auto v:inputRange) {
-				Float4 f32;
-				GetVertDataF16(f32.data(), (const uint16_t*)v._data.begin(), fmtBreakdown._componentCount);
-				for (unsigned c=0; c<fmtBreakdown._componentCount; c++)
-					((uint8_t*)dst)[2*c+1] = (uint8_t)std::clamp(f32[c] * 255.f, 0.f, 255.f);
-				dst = PtrAdd(dst, dstStride);
-			}
-			break;
-
-		case VertexUtilComponentType::UNorm8:
-			for (auto v:inputRange) {
-				for (unsigned c=0; c<fmtBreakdown._componentCount; c++)
-					((uint8_t*)dst)[2*c] = ((uint8_t*)v._data.begin())[c];
-				dst = PtrAdd(dst, dstStride);
-			}
-			break;
-
-		case VertexUtilComponentType::UNorm16:
-			for (auto v:inputRange) {
-				for (unsigned c=0; c<fmtBreakdown._componentCount; c++)
-					((uint8_t*)dst)[2*c] = ((uint16_t*)v._data.begin())[c] >> 8;
-				dst = PtrAdd(dst, dstStride);
-			}
-			break;
-
-		case VertexUtilComponentType::SNorm8:
-		case VertexUtilComponentType::SNorm16:
-		case VertexUtilComponentType::UInt8:
-		case VertexUtilComponentType::UInt16:
-		case VertexUtilComponentType::UInt32:
-		case VertexUtilComponentType::SInt8:
-		case VertexUtilComponentType::SInt16:
-		case VertexUtilComponentType::SInt32:
-		default:
-			Throw(std::runtime_error("Unexpected input format for skinning weights. Float32/Float16/UNorm8/UNorm16 expected"));
-		}
-	}
-
-	static void CopyIndicesUInt8(void* dst, IteratorRange<VertexElementIterator> inputRange, unsigned dstStride)
-	{
-		auto fmtBreakdown = BreakdownFormat(inputRange.begin()._format);
-		switch (fmtBreakdown._type) {
-		case VertexUtilComponentType::UInt8:
-			for (auto v:inputRange) {
-				for (unsigned c=0; c<fmtBreakdown._componentCount; c++)
-					((uint8_t*)dst)[2*c] = ((uint8_t*)v._data.begin())[c];
-				dst = PtrAdd(dst, dstStride);
-			}
-			break;
-		case VertexUtilComponentType::UInt16:
-			for (auto v:inputRange) {
-				for (unsigned c=0; c<fmtBreakdown._componentCount; c++)
-					((uint8_t*)dst)[2*c] = (((uint16_t*)v._data.begin())[c]) & 0xff;
-				dst = PtrAdd(dst, dstStride);
-			}
-			break;
-		case VertexUtilComponentType::UInt32:
-			for (auto v:inputRange) {
-				for (unsigned c=0; c<fmtBreakdown._componentCount; c++)
-					((uint8_t*)dst)[2*c] = (((uint32_t*)v._data.begin())[c]) & 0xff;
-				dst = PtrAdd(dst, dstStride);
-			}
-			break;
-
-		case VertexUtilComponentType::Float32:
-		case VertexUtilComponentType::Float16:
-		case VertexUtilComponentType::UNorm8:
-		case VertexUtilComponentType::UNorm16:
-		case VertexUtilComponentType::SNorm8:
-		case VertexUtilComponentType::SNorm16:
-		case VertexUtilComponentType::SInt8:
-		case VertexUtilComponentType::SInt16:
-		case VertexUtilComponentType::SInt32:
-		default:
-			Throw(std::runtime_error("Unexpected input format for skinning weights. UInt8/UInt16/UInt32 expected"));
-		}
-	}
-
-	static std::vector<uint8_t> ReconfigureStaticVertexAttachmentsBuffer(
-		unsigned influencesPerVertex,
-		unsigned vertexCount,
-		unsigned parrallelElementsCount,
-		const RenderCore::Assets::VertexData& skelVb,
-		IteratorRange<void*> skelVbData)
-	{
-		// Reform the vertex attributes based weight & joint idx buffer into the format that our compute shader
-		// wants to take
-		auto bufferByteSize = influencesPerVertex*2*vertexCount;
-		std::vector<uint8_t> buffer;
-		buffer.resize(bufferByteSize, 0u);
-
-		unsigned componentIterator=0;
-		for (unsigned c=0; c<parrallelElementsCount; ++c) {
-			auto weightsElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "WEIGHTS", c);
-			auto jointIndicesElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "JOINTINDICES", c);
-			assert(weightsElement && jointIndicesElement);
-
-			auto subWeights = Internal::AsVertexElementIteratorRange(MakeIteratorRange(skelVbData.begin(), PtrAdd(skelVbData.begin(), skelVb._size)), *weightsElement, skelVb._ia._vertexStride);
-			auto subJoints = Internal::AsVertexElementIteratorRange(MakeIteratorRange(skelVbData.begin(), PtrAdd(skelVbData.begin(), skelVb._size)), *jointIndicesElement, skelVb._ia._vertexStride);
-			auto subComponentCount = GetComponentCount(GetComponents(weightsElement->_nativeFormat));
-
-			assert(subWeights.size() == vertexCount);
-			assert(subJoints.size() == vertexCount);
-
-			// copy the weights & indices into the format which we'll use for the static attributes input buffer
-			// weights & indices are interleaved -- index, weight, index, weight...
-			CopyIndicesUInt8(PtrAdd(buffer.data(), componentIterator*2), subJoints, influencesPerVertex*2);
-			CopyWeightsUNorm8(PtrAdd(buffer.data(), componentIterator*2+1), subWeights, influencesPerVertex*2);
-			componentIterator += subComponentCount;
-		}
-
-		return buffer;
-	}
-#endif
-
 	GPUSkinDeformer::GPUSkinDeformer(
 		std::shared_ptr<Internal::DeformerPipelineCollection> pipelineCollection,
-		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+		std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
 		const std::string& modelScaffoldName)
 	: _modelScaffold(std::move(modelScaffold))			// we take internal pointers so preserve lifetime
 	, _pipelineCollection(std::move(pipelineCollection))
@@ -720,13 +583,12 @@ namespace RenderCore { namespace Techniques
 	static const std::string s_tangentEleName = "TEXTANGENT";
 	static const std::string s_normalEleName = "NORMAL";
 			
-	class GPUSkinDeformerFactory : public IDeformOperationFactory
+	class GPUSkinDeformerFactory : public IGeoDeformerFactory
 	{
 	public:
 		std::shared_ptr<IGeoDeformer> Configure(
 			std::vector<RenderCore::Techniques::DeformOperationInstantiation>& result,
-			StringSection<> initializer,
-			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+			std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
 			const std::string& modelScaffoldName) override
 		{
 			auto weightsEle = Hash64("WEIGHTS");
@@ -814,7 +676,7 @@ namespace RenderCore { namespace Techniques
 		SignalDelegateId _signalDelegate;
 	};
 
-	std::shared_ptr<IDeformOperationFactory> CreateGPUSkinDeformerFactory(
+	std::shared_ptr<IGeoDeformerFactory> CreateGPUSkinDeformerFactory(
 		std::shared_ptr<PipelineCollection> pipelineCollection)
 	{
 		return std::make_shared<GPUSkinDeformerFactory>(std::move(pipelineCollection));

@@ -8,6 +8,7 @@
 #include "DeformGeometryInfrastructure.h"
 #include "CommonBindings.h"
 #include "PipelineCollection.h"
+#include "CommonUtils.h"
 #include "../Metal/InputLayout.h"
 #include "../Assets/ModelScaffoldInternal.h"
 #include "../Format.h"
@@ -58,7 +59,8 @@ namespace RenderCore { namespace Techniques
 
 		struct SourceDataTransform
 		{
-			unsigned	_geoId;
+			const Assets::ModelScaffoldCmdStreamForm* _modelScaffold;
+			unsigned	_geoIdx;
 			uint64_t	_sourceStream;
 			Format		_targetFormat;
 			unsigned	_targetOffset;
@@ -66,25 +68,20 @@ namespace RenderCore { namespace Techniques
 			unsigned	_vertexCount;
 		};
 
-		struct WorkingDeformer
-		{
-			IteratorRange<const DeformOperationInstantiation*> _instantiations;
-			DeformerInputBinding _inputBinding;
-		};
-
 		struct DeformBufferIterators
 		{
 			unsigned _bufferIterators[VB_Count] = {0,0,0,0,0};
 			std::vector<SourceDataTransform> _cpuStaticDataLoadRequests;
-			std::vector<std::pair<unsigned, unsigned>> _gpuStaticDataLoadRequests;
+			std::vector<ModelScaffoldLoadRequest> _gpuStaticDataLoadRequests;
 		};
 
-		DeformerToRendererBinding CreateDeformBindings(
-			IteratorRange<WorkingDeformer*> workingDeformers,
+		DeformerToRendererBinding::GeoBinding CreateDeformBindings(
+			IteratorRange<DeformerInputBinding::GeoBinding*> resultDeformerBindings,
+			IteratorRange<const DeformOperationInstantiation*> instantiations,
 			DeformBufferIterators& bufferIterators,
 			bool isCPUDeformer,
-			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
-			const std::string& modelScaffoldName);
+			unsigned geoIdx,
+			const std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm>& modelScaffold);
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -159,7 +156,7 @@ namespace RenderCore { namespace Techniques
 			ParameterBox _selectors;
 			GPUDeformerIAParams _iaParams;
 
-			GPUDeformEntryHelper(const DeformerInputBinding& bindings, unsigned geoId);
+			GPUDeformEntryHelper(const DeformerInputBinding& bindings, std::pair<unsigned, unsigned> elementAndGeoIdx);
 		};
 
 		class DeformerPipelineCollection

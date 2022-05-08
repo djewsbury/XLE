@@ -8,6 +8,7 @@
 
 namespace RenderCore { namespace Techniques
 {
+#if 0
 	auto DeformOperationFactorySet::CreateDeformOperators(
 		StringSection<> initializer,
 		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
@@ -47,7 +48,15 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	auto DeformOperationFactorySet::Register(StringSection<> name, std::shared_ptr<IDeformOperationFactory> factory) -> RegisteredDeformId
+	std::shared_ptr<IGeoDeformerFactory> DeformOperationFactorySet::GetFactory(uint64_t name) const
+	{
+		auto i = LowerBound(_instantiationFunctions, name);
+		if (i!=_instantiationFunctions.end() && i->first == name)
+			return i->second._factory;
+		return nullptr;
+	}
+
+	auto DeformOperationFactorySet::Register(StringSection<> name, std::shared_ptr<IGeoDeformerFactory> factory) -> RegisteredDeformId
 	{
 		RegisteredDeformId result = _nextDeformId++;
 		auto hash = Hash64(name.begin(), name.end());
@@ -85,5 +94,6 @@ namespace RenderCore { namespace Techniques
 		return Services::GetDeformOperationFactorySet();
 	}
 
-	IDeformOperationFactory::~IDeformOperationFactory() {}
+	IGeoDeformerFactory::~IGeoDeformerFactory() {}
+#endif
 }}
