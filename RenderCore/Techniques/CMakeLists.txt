@@ -30,7 +30,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         PipelineCollection.cpp
         TextureCompilerUtil.cpp
         DeformAccelerator.cpp
-        DeformInternal.cpp
+        DeformGeoInternal.cpp
         DeformGeometryInfrastructure.cpp
         DeformParametersInfrastructure.cpp
         DrawableProvider.cpp

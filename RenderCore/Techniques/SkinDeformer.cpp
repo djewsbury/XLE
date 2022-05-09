@@ -4,7 +4,7 @@
 
 #include "SkinDeformer.h"
 #include "SkinDeformerInternal.h"
-#include "DeformInternal.h"		// (required for some utility functions)
+#include "DeformGeoInternal.h"		// (required for some utility functions)
 #include "CommonUtils.h"
 #include "Services.h"
 #include "SubFrameEvents.h"
@@ -144,18 +144,33 @@ namespace RenderCore { namespace Techniques
 		auto largeBlocks = modelScaffold.OpenLargeBlocks();
 		auto base = largeBlocks->TellP();
 
-		auto& immData = modelScaffold.ImmutableData();
-		for (unsigned c=0; c<immData._boundSkinnedControllerCount; ++c) {
-			auto& skinnedController = immData._boundSkinnedControllers[c];
+		auto geoCount = modelScaffold.GetGeoCount();
+		for (unsigned geoIdx=0; geoIdx<geoCount; ++geoIdx) {
+			auto geoMachine = modelScaffold.GetGeoMachine(geoIdx);
+
+			const RenderCore::Assets::RawGeometryDesc* rawGeometry = nullptr;
+			const RenderCore::Assets::SkinningDataDesc* skinningData = nullptr;
+			for (auto cmd:geoMachine) {
+				switch (cmd.Cmd()) {
+				case (uint32_t)Assets::GeoCommand::AttachRawGeometry:
+					rawGeometry = cmd.As<const Assets::RawGeometryDesc*>();
+					break;
+				case (uint32_t)Assets::GeoCommand::AttachSkinningData:
+					skinningData = cmd.As<const Assets::SkinningDataDesc*>();
+					break;
+				}
+			}
+
+			if (!skinningData) continue;
 		
-			auto& skelVb = skinnedController._skeletonBinding;
+			auto& skelVb = skinningData->_skeletonBinding;
 
 			auto skelVbData = std::make_unique<uint8_t[]>(skelVb._size);
 			largeBlocks->Seek(base + skelVb._offset);
 			largeBlocks->Read(skelVbData.get(), skelVb._size);
 
 			Geo constructedGeo;
-			constructedGeo._geoId = immData._geoCount + c;
+			constructedGeo._geoId = geoIdx;
 
 			constructedGeo._influencesPerVertex = 0;
 			unsigned elements = 0;
@@ -195,8 +210,8 @@ namespace RenderCore { namespace Techniques
 				}
 			}
 
-			constructedGeo._sections.reserve(skinnedController._preskinningSections.size());
-			for (const auto&sourceSection:skinnedController._preskinningSections) {
+			constructedGeo._sections.reserve(skinningData->_preskinningSections.size());
+			for (const auto&sourceSection:skinningData->_preskinningSections) {
 				Section section;
 				section._preskinningDrawCalls = MakeIteratorRange(sourceSection._preskinningDrawCalls);
 				section._bindShapeByInverseBindMatrices = MakeIteratorRange(sourceSection._bindShapeByInverseBindMatrices);
@@ -209,7 +224,8 @@ namespace RenderCore { namespace Techniques
 			_geos.emplace_back(std::move(constructedGeo));
 		}
 
-		_jointInputInterface = modelScaffold.CommandStream().GetInputInterface();
+		assert(0);		// _jointInputInterface!
+		// _jointInputInterface = modelScaffold.CommandStream().GetInputInterface();
 	}
 
 	void* CPUSkinDeformer::QueryInterface(size_t typeId)
@@ -223,10 +239,21 @@ namespace RenderCore { namespace Techniques
 		return nullptr;
 	}
 
+	void CPUSkinDeformer::Bind(const DeformerInputBinding& binding)
+	{
+		_bindingHelper._inputBinding = binding;
+	}
+
+	bool CPUSkinDeformer::IsCPUDeformer() const
+	{
+		return true;
+	}
+
 	CPUSkinDeformer::~CPUSkinDeformer()
 	{
 	}
 
+#if 0
 	class CPUSkinDeformerFactory : public IGeoDeformerFactory
 	{
 	public:
@@ -272,6 +299,54 @@ namespace RenderCore { namespace Techniques
 	std::shared_ptr<IGeoDeformerFactory> CreateCPUSkinDeformerFactory()
 	{
 		return std::make_shared<CPUSkinDeformerFactory>();
+	}
+#endif
+
+	static const auto s_weightsEle = Hash64("WEIGHTS");
+	static const auto s_jointIndicesEle = Hash64("JOINTINDICES");
+	static const std::string s_positionEleName = "POSITION";
+		
+	void ConfigureCPUSkinDeformers(
+		DeformerConstruction& deformerConstruction,
+		const Assets::RendererConstruction& rendererConstruction)
+	{
+		// We'll create one CPUSkinDeformer per element with skinned meshes. Each deformer will animate all of the meshes
+		// within that one element
+		unsigned elementIdx = 0;
+		for (auto ele:rendererConstruction) {
+			auto modelScaffold = ele.GetModelScaffold();
+			if (!modelScaffold) { ++elementIdx; continue; }
+
+			std::vector<std::pair<unsigned, DeformOperationInstantiation>> instantiations;
+			auto geoCount = modelScaffold->GetGeoCount();
+			for (unsigned c=0; c<geoCount; ++c) {
+				auto machine = modelScaffold->GetGeoMachine(c);
+
+				const Assets::SkinningDataDesc* skinningData = nullptr;
+				for (auto cmd:machine) {
+					if (cmd.Cmd() == (uint32_t)Assets::GeoCommand::AttachSkinningData) {
+						skinningData = cmd.As<const Assets::SkinningDataDesc*>();
+						break;
+					}
+				}
+				if (!skinningData) break;
+
+				DeformOperationInstantiation deformOp;
+				deformOp._generatedElements = {DeformOperationInstantiation::SemanticNameAndFormat{s_positionEleName, 0, Format::R32G32B32_FLOAT}};
+				deformOp._upstreamSourceElements = {DeformOperationInstantiation::SemanticNameAndFormat{s_positionEleName, 0, Format::R32G32B32_FLOAT}};
+				deformOp._suppressElements = {s_weightsEle, s_jointIndicesEle};
+				instantiations.emplace_back(c, std::move(deformOp));
+			}
+
+			// create the deformer if necessary and add the instantiations we just find
+			if (!instantiations.empty()) {
+				auto deformer = std::make_shared<CPUSkinDeformer>(*modelScaffold, ele.GetModelScaffoldName());
+				for (auto& inst:instantiations)
+					deformerConstruction.Add(deformer, std::move(inst.second), elementIdx, inst.first);
+			}
+
+			++elementIdx;
+		}
 	}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -404,17 +479,32 @@ namespace RenderCore { namespace Techniques
 	: _modelScaffold(std::move(modelScaffold))			// we take internal pointers so preserve lifetime
 	, _pipelineCollection(std::move(pipelineCollection))
 	{
-		auto& immData = _modelScaffold->ImmutableData();
+		auto geoCount = modelScaffold->GetGeoCount();
 
-		std::vector<std::pair<unsigned, unsigned>> staticDataLoadRequests;
-		staticDataLoadRequests.reserve(immData._boundSkinnedControllerCount);
+		std::vector<ModelScaffoldLoadRequest> staticDataLoadRequests;
+		staticDataLoadRequests.reserve(geoCount);
 		unsigned skelVBIterator = 0;
 
 		unsigned jointMatrixBufferCount = 0;
-		for (unsigned c=0; c<immData._boundSkinnedControllerCount; ++c) {
-			auto& skinnedController = immData._boundSkinnedControllers[c];
+		for (unsigned geoIdx=0; geoIdx<geoCount; ++geoIdx) {
+			auto geoMachine = modelScaffold->GetGeoMachine(geoIdx);
 
-			auto& skelVb = skinnedController._skeletonBinding;
+			const RenderCore::Assets::RawGeometryDesc* rawGeometry = nullptr;
+			const RenderCore::Assets::SkinningDataDesc* skinningData = nullptr;
+			for (auto cmd:geoMachine) {
+				switch (cmd.Cmd()) {
+				case (uint32_t)Assets::GeoCommand::AttachRawGeometry:
+					rawGeometry = cmd.As<const Assets::RawGeometryDesc*>();
+					break;
+				case (uint32_t)Assets::GeoCommand::AttachSkinningData:
+					skinningData = cmd.As<const Assets::SkinningDataDesc*>();
+					break;
+				}
+			}
+
+			if (!skinningData) continue;
+
+			auto& skelVb = skinningData->_skeletonBinding;
 
 			unsigned influencesPerVertex = 0;
 			unsigned skelVBStride = skelVb._ia._vertexStride;
@@ -460,10 +550,10 @@ namespace RenderCore { namespace Techniques
 					Throw(std::runtime_error("Could not create SkinDeformer because input skeleton binding data is not correctly aligned"));
 			}
 
-			_sections.reserve(skinnedController._preskinningSections.size());
-			for (const auto&sourceSection:skinnedController._preskinningSections) {
+			_sections.reserve(skinningData->_preskinningSections.size());
+			for (const auto&sourceSection:skinningData->_preskinningSections) {
 				Section section;
-				section._geoId = c+immData._geoCount;
+				section._geoId = geoIdx;
 				section._preskinningDrawCalls = MakeIteratorRange(sourceSection._preskinningDrawCalls);
 				section._bindShapeByInverseBindMatrices = MakeIteratorRange(sourceSection._bindShapeByInverseBindMatrices);
 				section._bindShapeMatrix = sourceSection._bindShapeMatrix;
@@ -486,7 +576,7 @@ namespace RenderCore { namespace Techniques
 			iaParams._staticVertexAttachmentsStride = skelVBStride;
 			_skinIAParams.push_back(iaParams);
 
-			staticDataLoadRequests.push_back({ skelVb._offset, skelVb._size });
+			staticDataLoadRequests.push_back({_modelScaffold, skelVb._offset, skelVb._size});
 			skelVBIterator += skelVb._size;
 		}
 		_jointMatricesInstanceStride = jointMatrixBufferCount;
@@ -494,20 +584,19 @@ namespace RenderCore { namespace Techniques
 
 		assert(!staticDataLoadRequests.empty());
 		_staticVertexAttachments = LoadStaticResourcePartialAsync(
-			*_pipelineCollection->_pipelineCollection->GetDevice(), MakeIteratorRange(staticDataLoadRequests), skelVBIterator, _modelScaffold,
+			*_pipelineCollection->_pipelineCollection->GetDevice(), MakeIteratorRange(staticDataLoadRequests), skelVBIterator,
 			BindFlag::UnorderedAccess,
 			(StringMeld<64>() << "[skin]" << modelScaffoldName).AsStringSection()).first;
 		_staticVertexAttachmentsView = _staticVertexAttachments->CreateBufferView(BindFlag::UnorderedAccess);
 		_staticVertexAttachmentsSize = skelVBIterator;
 
-		_jointInputInterface = _modelScaffold->CommandStream().GetInputInterface();
+		assert(0); // _jointInputInterface
+		// _jointInputInterface = _modelScaffold->CommandStream().GetInputInterface();
 	}
 
 	void GPUSkinDeformer::Bind(const DeformerInputBinding& bindings)
 	{
-		auto& immData = _modelScaffold->ImmutableData();
-
-		for (auto s=_sections.begin(); s!=_sections.end(); ){
+		for (auto s=_sections.begin(); s!=_sections.end();){
 			auto start = s;
 			++s;
 			while (s!=_sections.end() && s->_geoId == start->_geoId) ++s;
@@ -562,6 +651,8 @@ namespace RenderCore { namespace Techniques
 		_skinIAParamsView = skinIAParamsBuffer->CreateBufferView(BindFlag::UnorderedAccess);
 	}
 
+	bool GPUSkinDeformer::IsCPUDeformer() const { return false; }
+
 	void* GPUSkinDeformer::QueryInterface(size_t typeId)
 	{
 		if (typeId == typeid(GPUSkinDeformer).hash_code())
@@ -579,6 +670,7 @@ namespace RenderCore { namespace Techniques
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#if 0
 	static const std::string s_positionEleName = "POSITION";
 	static const std::string s_tangentEleName = "TEXTANGENT";
 	static const std::string s_normalEleName = "NORMAL";
@@ -681,6 +773,15 @@ namespace RenderCore { namespace Techniques
 	{
 		return std::make_shared<GPUSkinDeformerFactory>(std::move(pipelineCollection));
 	}
+#endif
+
+	void ConfigureGPUSkinDeformers(
+		DeformerConstruction&,
+		const Assets::RendererConstruction&,
+		std::shared_ptr<PipelineCollection>)
+	{
+		assert(0);
+	}
 
 	ISkinDeformer::~ISkinDeformer() {}
 
@@ -689,45 +790,48 @@ namespace RenderCore { namespace Techniques
 		const DeformerInputBinding::GeoBinding* DeformerInputBindingHelper::CalculateRanges(
 			IteratorRange<VertexElementRange*> sourceElements,
 			IteratorRange<VertexElementRange*> destinationElements,
-			unsigned geoId,
+			unsigned geoIdx,
 			IteratorRange<const void*> srcVB,
 			IteratorRange<const void*> deformTemporariesVB,
 			IteratorRange<const void*> dstVB) const
 		{
-			auto binding = std::find_if(_inputBinding._geoBindings.begin(), _inputBinding._geoBindings.end(), [geoId](const auto& c) { return c._geoId == geoId; });
-			assert(binding != _inputBinding._geoBindings.end());
-			if (binding == _inputBinding._geoBindings.end())
+			// note that we ignore the elementIdx when looking up in _inputBinding._geoBindings. This is because
+			// the input bindings are specific to this deformer, and the deformer only supports a single model scaffold, anyway
+			auto i = std::find_if(_inputBinding._geoBindings.begin(), _inputBinding._geoBindings.end(), [geoIdx](const auto& c) { return c.first.second == geoIdx; });
+			assert(i != _inputBinding._geoBindings.end());
+			if (i == _inputBinding._geoBindings.end())
 				return nullptr;
-			assert(binding->_inputElements.size() <= sourceElements.size());
-			assert(binding->_outputElements.size() <= destinationElements.size());
+			auto& binding = i->second;
+			assert(binding._inputElements.size() <= sourceElements.size());
+			assert(binding._outputElements.size() <= destinationElements.size());
 
-			for (unsigned c=0; c<binding->_inputElements.size(); ++c) {
-				if (binding->_inputElements[c]._inputSlot == Internal::VB_CPUStaticData) {
+			for (unsigned c=0; c<binding._inputElements.size(); ++c) {
+				if (binding._inputElements[c]._inputSlot == Internal::VB_CPUStaticData) {
 					sourceElements[c] = MakeVertexIteratorRangeConst(
-						MakeIteratorRange(PtrAdd(srcVB.begin(), binding->_inputElements[c]._alignedByteOffset + binding->_bufferOffsets[Internal::VB_CPUStaticData]), srcVB.end()),
-						binding->_bufferStrides[Internal::VB_CPUStaticData], binding->_inputElements[c]._nativeFormat);
+						MakeIteratorRange(PtrAdd(srcVB.begin(), binding._inputElements[c]._alignedByteOffset + binding._bufferOffsets[Internal::VB_CPUStaticData]), srcVB.end()),
+						binding._bufferStrides[Internal::VB_CPUStaticData], binding._inputElements[c]._nativeFormat);
 				} else {
-					assert(binding->_inputElements[c]._inputSlot == Internal::VB_CPUDeformTemporaries);
+					assert(binding._inputElements[c]._inputSlot == Internal::VB_CPUDeformTemporaries);
 					sourceElements[c] = MakeVertexIteratorRangeConst(
-						MakeIteratorRange(PtrAdd(deformTemporariesVB.begin(), binding->_inputElements[c]._alignedByteOffset + binding->_bufferOffsets[Internal::VB_CPUDeformTemporaries]), deformTemporariesVB.end()),
-						binding->_bufferStrides[Internal::VB_CPUDeformTemporaries], binding->_inputElements[c]._nativeFormat);
+						MakeIteratorRange(PtrAdd(deformTemporariesVB.begin(), binding._inputElements[c]._alignedByteOffset + binding._bufferOffsets[Internal::VB_CPUDeformTemporaries]), deformTemporariesVB.end()),
+						binding._bufferStrides[Internal::VB_CPUDeformTemporaries], binding._inputElements[c]._nativeFormat);
 				}
 			}
 
-			for (unsigned c=0; c<binding->_outputElements.size(); ++c) {
-				if (binding->_outputElements[c]._inputSlot == Internal::VB_PostDeform) {
+			for (unsigned c=0; c<binding._outputElements.size(); ++c) {
+				if (binding._outputElements[c]._inputSlot == Internal::VB_PostDeform) {
 					destinationElements[c] = MakeVertexIteratorRangeConst(
-						MakeIteratorRange(PtrAdd(dstVB.begin(), binding->_outputElements[c]._alignedByteOffset + binding->_bufferOffsets[Internal::VB_PostDeform]), dstVB.end()),
-						binding->_bufferStrides[Internal::VB_PostDeform], binding->_outputElements[c]._nativeFormat);
+						MakeIteratorRange(PtrAdd(dstVB.begin(), binding._outputElements[c]._alignedByteOffset + binding._bufferOffsets[Internal::VB_PostDeform]), dstVB.end()),
+						binding._bufferStrides[Internal::VB_PostDeform], binding._outputElements[c]._nativeFormat);
 				} else {
-					assert(binding->_outputElements[c]._inputSlot == Internal::VB_CPUDeformTemporaries);
+					assert(binding._outputElements[c]._inputSlot == Internal::VB_CPUDeformTemporaries);
 					destinationElements[c] = MakeVertexIteratorRangeConst(
-						MakeIteratorRange(PtrAdd(deformTemporariesVB.begin(), binding->_outputElements[c]._alignedByteOffset + binding->_bufferOffsets[Internal::VB_CPUDeformTemporaries]), deformTemporariesVB.end()),
-						binding->_bufferStrides[Internal::VB_CPUDeformTemporaries], binding->_outputElements[c]._nativeFormat);
+						MakeIteratorRange(PtrAdd(deformTemporariesVB.begin(), binding._outputElements[c]._alignedByteOffset + binding._bufferOffsets[Internal::VB_CPUDeformTemporaries]), deformTemporariesVB.end()),
+						binding._bufferStrides[Internal::VB_CPUDeformTemporaries], binding._outputElements[c]._nativeFormat);
 				}
 			}
 
-			return AsPointer(binding);
+			return &binding;
 		}
 	}
 }}

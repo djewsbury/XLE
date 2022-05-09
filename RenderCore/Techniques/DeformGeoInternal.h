@@ -51,7 +51,7 @@ namespace RenderCore { namespace Techniques
 			const DeformerInputBinding::GeoBinding* CalculateRanges(
 				IteratorRange<VertexElementRange*> sourceElements,
 				IteratorRange<VertexElementRange*> destinationElements,
-				unsigned geoId,
+				unsigned geoIdx,
 				IteratorRange<const void*> srcVB,
 				IteratorRange<const void*> deformTemporariesVB,
 				IteratorRange<const void*> dstVB) const;
@@ -156,7 +156,7 @@ namespace RenderCore { namespace Techniques
 			ParameterBox _selectors;
 			GPUDeformerIAParams _iaParams;
 
-			GPUDeformEntryHelper(const DeformerInputBinding& bindings, std::pair<unsigned, unsigned> elementAndGeoIdx);
+			GPUDeformEntryHelper(const DeformerInputBinding& bindings, unsigned geoIdx);
 		};
 
 		class DeformerPipelineCollection

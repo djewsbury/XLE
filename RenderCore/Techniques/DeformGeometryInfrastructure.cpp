@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "DeformGeometryInfrastructure.h"
-#include "DeformInternal.h"
+#include "DeformGeoInternal.h"
 #include "Services.h"
 #include "CommonUtils.h"
 #include "CommonResources.h"

@@ -89,9 +89,11 @@ namespace RenderCore { namespace Assets
 		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
 		using GeoIdx = unsigned;
 		Machine GetGeoMachine(GeoIdx) const;
+		unsigned GetGeoCount() const;
 
 		std::pair<Float3, Float3>	GetStaticBoundingBox(unsigned lodIndex = 0) const;
 		unsigned					GetMaxLOD() const;
+		const SkeletonMachine*		EmbeddedSkeleton() const { return _embeddedSkeleton; }
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		std::shared_ptr<::Assets::IFileInterface> OpenLargeBlocks() const;
@@ -106,6 +108,7 @@ namespace RenderCore { namespace Assets
 		Machine 				_commandStream;
 		const ModelDefaultPoseData* _defaultPoseData;
 		const ModelRootData*	_rootData;
+		const SkeletonMachine*	_embeddedSkeleton;
 
 		std::unique_ptr<uint8[], PODAlignedDeletor>		_rawMemoryBlock;
 		size_t											_rawMemoryBlockSize = 0;

@@ -5,7 +5,7 @@
 #pragma once
 
 #include "SkinDeformer.h"
-#include "DeformInternal.h"
+#include "DeformGeoInternal.h"
 #include "DeformOperationFactory.h"
 #include "../Format.h"
 #include "../../Assets/Marker.h"
@@ -36,6 +36,9 @@ namespace RenderCore { namespace Techniques
 			unsigned instanceIdx,
 			IteratorRange<const Float4x4*> skeletonMachineOutput,
 			const RenderCore::Assets::SkeletonBinding& binding) override;
+
+		virtual void Bind(const DeformerInputBinding& binding) override;
+		virtual bool IsCPUDeformer() const override;
 		
 		CPUSkinDeformer(
 			const RenderCore::Assets::ModelScaffoldCmdStreamForm& modelScaffold,
@@ -111,6 +114,7 @@ namespace RenderCore { namespace Techniques
 			const RenderCore::Assets::SkeletonBinding& binding) override;
 
 		void Bind(const DeformerInputBinding& binding) override;
+		bool IsCPUDeformer() const override;
 	
 		GPUSkinDeformer(
 			std::shared_ptr<Internal::DeformerPipelineCollection> pipelineCollection,

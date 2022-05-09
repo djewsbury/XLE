@@ -7,8 +7,9 @@
 #include "TechniqueTestsHelper.h"
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/Assets/ModelScaffold.h"
+#include "../../../RenderCore/Assets/ScaffoldCmdStream.h"
 #include "../../../RenderCore/Techniques/DeformAccelerator.h"
-#include "../../../RenderCore/Techniques/DeformInternal.h"
+#include "../../../RenderCore/Techniques/DeformGeoInternal.h"
 #include "../../../RenderCore/Techniques/DeformOperationFactory.h"
 #include "../../../RenderCore/Techniques/DeformGeometryInfrastructure.h"
 #include "../../../RenderCore/Techniques/SkinDeformer.h"
@@ -74,7 +75,7 @@ namespace UnitTests
 		return result;
 	}
 
-	std::shared_ptr<RenderCore::Assets::ModelScaffold> MakeTestAnimatedModel()
+	std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> MakeTestAnimatedModel()
 	{
 		// Create a model scaffold from a very simple cube model
 		// Each vertex has 8 weights and there are 8 joints in total
@@ -158,12 +159,12 @@ namespace UnitTests
 			MakeIteratorRange(serializedChunk),
 			::Assets::AssetState::Ready, ::Assets::DependencyValidation{});
 
-		return ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ModelScaffold>>(*artifactCollection);
+		return ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm>>(*artifactCollection);
 	}
 
 	static IResourcePtr LoadStorageBuffer(
 		IDevice& device,
-		const RenderCore::Assets::ModelScaffold& scaffold,
+		const RenderCore::Assets::ModelScaffoldCmdStreamForm& scaffold,
 		const RenderCore::Assets::VertexData& vb)
 	{
 		auto buffer = std::make_unique<uint8[]>(vb._size);
@@ -181,7 +182,7 @@ namespace UnitTests
 	}
 
 	std::vector<uint8_t> LoadCPUVertexBuffer(
-		const RenderCore::Assets::ModelScaffold& scaffold,
+		const RenderCore::Assets::ModelScaffoldCmdStreamForm& scaffold,
 		const RenderCore::Assets::VertexData& vb)
 	{
 		std::vector<uint8_t> result;
@@ -193,11 +194,12 @@ namespace UnitTests
 		return result;
 	}
 
-	static std::vector<Float4x4> BasePose(std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold)
+	static std::vector<Float4x4> BasePose(std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold)
 	{
+		REQUIRE(modelScaffold->EmbeddedSkeleton());
 		std::vector<Float4x4> result;
-		result.resize(modelScaffold->EmbeddedSkeleton().GetOutputMatrixCount());
-		modelScaffold->EmbeddedSkeleton().GenerateOutputTransforms(MakeIteratorRange(result), {});
+		result.resize(modelScaffold->EmbeddedSkeleton()->GetOutputMatrixCount());
+		modelScaffold->EmbeddedSkeleton()->GenerateOutputTransforms(MakeIteratorRange(result), {});
 		return result;
 	}
 
@@ -209,7 +211,19 @@ namespace UnitTests
 		return result;
 	}
 
-	static std::vector<uint8_t> RunGPUDeformerDirectly(MetalTestHelper& testHelper, BufferUploads::IManager& bufferUploads, std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold)
+	static const RenderCore::Assets::SkinningDataDesc* GetSkinningDataAtGeo0(const RenderCore::Assets::ModelScaffoldCmdStreamForm& scaffold)
+	{
+		for (auto cmd:scaffold.GetGeoMachine(0)) {
+			switch (cmd.Cmd()) {
+			case (uint32_t)RenderCore::Assets::GeoCommand::AttachSkinningData:
+				return cmd.As<const RenderCore::Assets::SkinningDataDesc*>();
+				break;
+			}
+		}
+		return nullptr;
+	}
+
+	static std::vector<uint8_t> RunGPUDeformerDirectly(MetalTestHelper& testHelper, BufferUploads::IManager& bufferUploads, std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold)
 	{
 		std::shared_ptr<Techniques::Internal::DeformerPipelineCollection> pipelineCollection;
 		{
@@ -235,7 +249,9 @@ namespace UnitTests
 				std::move(instRequests), MakeIteratorRange(patchExpansions));
 		}
 
-		const auto& animVB = modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements;
+		auto* skinningData = GetSkinningDataAtGeo0(*modelScaffold);
+		REQUIRE(skinningData);
+		const auto& animVB = skinningData->_animatedVertexElements;
 
 		std::promise<std::shared_ptr<Techniques::IGeoDeformer>> promise;
 		auto future = promise.get_future();
@@ -243,22 +259,22 @@ namespace UnitTests
 		Techniques::GPUSkinDeformer deformer(pipelineCollection, modelScaffold, "unit-test");
 		Techniques::DeformerInputBinding deformInputBinding;
 		deformInputBinding._geoBindings.push_back({
-			0, srcLayout, dstLayout
+			std::make_pair(0,0),
+			DeformerInputBinding::GeoBinding{srcLayout, dstLayout}
 		});
-		for (auto& o:deformInputBinding._geoBindings[0]._bufferOffsets) o = 0;
-		for (auto& s:deformInputBinding._geoBindings[0]._bufferStrides) s = 0;
-		deformInputBinding._geoBindings[0]._bufferStrides[Techniques::Internal::VB_GPUStaticData] = animVB._ia._vertexStride;
-		deformInputBinding._geoBindings[0]._bufferStrides[Techniques::Internal::VB_PostDeform] = CalculateVertexStrideForSlot(dstLayout, Techniques::Internal::VB_PostDeform);
+		for (auto& o:deformInputBinding._geoBindings[0].second._bufferOffsets) o = 0;
+		for (auto& s:deformInputBinding._geoBindings[0].second._bufferStrides) s = 0;
+		deformInputBinding._geoBindings[0].second._bufferStrides[Techniques::Internal::VB_GPUStaticData] = animVB._ia._vertexStride;
+		deformInputBinding._geoBindings[0].second._bufferStrides[Techniques::Internal::VB_PostDeform] = CalculateVertexStrideForSlot(dstLayout, Techniques::Internal::VB_PostDeform);
 		deformer.Bind(deformInputBinding);
 
-		REQUIRE(modelScaffold->ImmutableData()._boundSkinnedControllerCount == 1);
-		
 		auto inputResource = LoadStorageBuffer(*testHelper._device, *modelScaffold, animVB);
 		auto outputResource = testHelper._device->CreateResource(inputResource->GetDesc());
 
+		REQUIRE(modelScaffold->EmbeddedSkeleton());
 		deformer.FeedInSkeletonMachineResults(
 			0, BasePose(modelScaffold),
-			deformer.CreateBinding(modelScaffold->EmbeddedSkeleton().GetOutputInterface()));
+			deformer.CreateBinding(modelScaffold->EmbeddedSkeleton()->GetOutputInterface()));
 
 		auto inputView = inputResource->CreateBufferView(BindFlag::UnorderedAccess);
 		auto outputView = outputResource->CreateBufferView(BindFlag::UnorderedAccess);
@@ -297,12 +313,13 @@ namespace UnitTests
 		return outputResource->ReadBackSynchronized(*threadContext);
 	}
 
-	static std::vector<Float3> DeformPositionsOnCPU(std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold)
+	static std::vector<Float3> DeformPositionsOnCPU(std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold)
 	{
 		Techniques::CPUSkinDeformer cpuSkinDeformer { *modelScaffold, {} };
 
-		REQUIRE(modelScaffold->ImmutableData()._boundSkinnedControllerCount == 1);
-		auto& animVb = modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements;
+		auto* skinningData = GetSkinningDataAtGeo0(*modelScaffold);
+		REQUIRE(skinningData);
+		auto& animVb = skinningData->_animatedVertexElements;
 		auto rawInputBuffer = LoadCPUVertexBuffer(*modelScaffold, animVb);
 
 		auto inputFloat3s = AsFloat3s(
@@ -315,18 +332,18 @@ namespace UnitTests
 		outputBufferData.resize(inputFloat3s.size() * sizeof(Float3));
 
 		Techniques::DeformerInputBinding::GeoBinding geoBinding;
-		geoBinding._geoId = 0;
 		geoBinding._inputElements.push_back({"POSITION", 0, Format::R32G32B32_FLOAT, Techniques::Internal::VB_CPUStaticData, 0});
 		geoBinding._outputElements.push_back({"POSITION", 0, Format::R32G32B32_FLOAT, Techniques::Internal::VB_PostDeform, 0});
 		for (auto& o:geoBinding._bufferOffsets) o = 0;
 		for (auto& s:geoBinding._bufferStrides) s = 0;
 		geoBinding._bufferStrides[Techniques::Internal::VB_CPUStaticData] = sizeof(Float3);
 		geoBinding._bufferStrides[Techniques::Internal::VB_PostDeform] = sizeof(Float3);
-		cpuSkinDeformer._bindingHelper._inputBinding._geoBindings.push_back(std::move(geoBinding));
+		cpuSkinDeformer._bindingHelper._inputBinding._geoBindings.push_back({std::make_pair(0,0), std::move(geoBinding)});
 
+		REQUIRE(modelScaffold->EmbeddedSkeleton());
 		cpuSkinDeformer.FeedInSkeletonMachineResults(
 			0, BasePose(modelScaffold),
-			cpuSkinDeformer.CreateBinding(modelScaffold->EmbeddedSkeleton().GetOutputInterface()));
+			cpuSkinDeformer.CreateBinding(modelScaffold->EmbeddedSkeleton()->GetOutputInterface()));
 		unsigned instances[] = {0};
 		cpuSkinDeformer.ExecuteCPU(MakeIteratorRange(instances), outputBufferData.size(), MakeIteratorRange(inputFloat3s), {}, outputBufferData);
 
@@ -354,15 +371,15 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		TechniqueTestApparatus techniqueTestHelper{*testHelper};
 
-		techniqueTestHelper._techniqueServices->GetDeformOperationFactorySet().Register("skin", Techniques::CreateCPUSkinDeformerFactory());
-
 		auto modelScaffold = MakeTestAnimatedModel();
 
 		auto gpuRawBuffer = RunGPUDeformerDirectly(*testHelper, *techniqueTestHelper._bufferUploads, modelScaffold);
 		auto cpuPositions = DeformPositionsOnCPU(modelScaffold);
 
 		// Find the positions within the raw GPU output and convert to float3s
-		auto gpuPositions = GetFloat3sFromVertexBuffer(MakeIteratorRange(gpuRawBuffer), modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements._ia, Hash64("POSITION"));
+		auto* skinningData = GetSkinningDataAtGeo0(*modelScaffold);
+		REQUIRE(skinningData);
+		auto gpuPositions = GetFloat3sFromVertexBuffer(MakeIteratorRange(gpuRawBuffer), skinningData->_animatedVertexElements._ia, Hash64("POSITION"));
 
 		REQUIRE(cpuPositions.size() == gpuPositions.size());
 		auto vCount = gpuPositions.size();
@@ -377,6 +394,22 @@ namespace UnitTests
 		globalServices->PrepareForDestruction();
 	}
 
+	static void StallWhilePending(RenderCore::Assets::RendererConstruction& construction)
+	{
+		std::promise<std::shared_ptr<RenderCore::Assets::RendererConstruction>> promise;
+		auto future = promise.get_future();
+		construction.FulfillWhenNotPending(std::move(promise));
+		future.wait();
+	}
+
+	static void StallWhilePending(RenderCore::Techniques::DeformerConstruction& construction)
+	{
+		std::promise<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> promise;
+		auto future = promise.get_future();
+		construction.FulfillWhenNotPending(std::move(promise));
+		future.wait();
+	}
+
 	TEST_CASE( "Deform-DeformAccelerator", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
@@ -387,10 +420,13 @@ namespace UnitTests
 		TechniqueTestApparatus techniqueTestHelper{*testHelper};
 
 		auto pipelineCollection = std::make_shared<Techniques::PipelineCollection>(testHelper->_device);
-		techniqueTestHelper._techniqueServices->GetDeformOperationFactorySet().Register("gpu_skin", Techniques::CreateGPUSkinDeformerFactory(pipelineCollection));
-		techniqueTestHelper._techniqueServices->GetDeformOperationFactorySet().Register("cpu_skin", Techniques::CreateCPUSkinDeformerFactory());
+		// techniqueTestHelper._techniqueServices->GetDeformOperationFactorySet().Register("gpu_skin", Techniques::CreateGPUSkinDeformerFactory(pipelineCollection));
+		// techniqueTestHelper._techniqueServices->GetDeformOperationFactorySet().Register("cpu_skin", Techniques::CreateCPUSkinDeformerFactory());
 		
 		auto modelScaffold = MakeTestAnimatedModel();
+		auto rendererConstruction = std::make_shared<RenderCore::Assets::RendererConstruction>();
+		rendererConstruction->AddElement().SetModelScaffold(modelScaffold);
+		StallWhilePending(*rendererConstruction);
 		
 		auto pool = Techniques::CreateDeformAcceleratorPool(testHelper->_device);
 		
@@ -398,7 +434,11 @@ namespace UnitTests
 			auto cpuAccelerator = pool->CreateDeformAccelerator();
 			REQUIRE(cpuAccelerator);
 
-			auto cpuGeoDeformAttachment = Techniques::CreateDeformGeometryInfrastructure(*testHelper->_device, "cpu_skin", modelScaffold);
+			auto deformerConstruction = std::make_shared<Techniques::DeformerConstruction>();
+			ConfigureCPUSkinDeformers(*deformerConstruction, *rendererConstruction);
+			StallWhilePending(*deformerConstruction);
+
+			auto cpuGeoDeformAttachment = Techniques::CreateDeformGeometryInfrastructure(*testHelper->_device, *rendererConstruction, *deformerConstruction);
 			REQUIRE(cpuGeoDeformAttachment);
 
 			auto cpuRendererBinding = cpuGeoDeformAttachment->GetDeformerToRendererBinding();
@@ -410,16 +450,20 @@ namespace UnitTests
 		{
 			auto gpuAccelerator = pool->CreateDeformAccelerator();
 			REQUIRE(gpuAccelerator);
+
+			auto deformerConstruction = std::make_shared<Techniques::DeformerConstruction>();
+			ConfigureGPUSkinDeformers(*deformerConstruction, *rendererConstruction, pipelineCollection);
+			StallWhilePending(*deformerConstruction);
 			
-			auto gpuGeoDeformAttachment = Techniques::CreateDeformGeometryInfrastructure(*testHelper->_device, "gpu_skin", modelScaffold);
+			auto gpuGeoDeformAttachment = Techniques::CreateDeformGeometryInfrastructure(*testHelper->_device, *rendererConstruction, *deformerConstruction);
 			REQUIRE(gpuGeoDeformAttachment);
 
 			auto rendererBinding2 = gpuGeoDeformAttachment->GetDeformerToRendererBinding();
 			REQUIRE(!rendererBinding2._geoBindings.empty());
-			REQUIRE(rendererBinding2._geoBindings[0]._generatedElements.size() == 3);
-			REQUIRE(rendererBinding2._geoBindings[0]._generatedElements[0]._semanticName == "POSITION");
-			REQUIRE(rendererBinding2._geoBindings[0]._generatedElements[1]._semanticName == "NORMAL");
-			REQUIRE(rendererBinding2._geoBindings[0]._generatedElements[2]._semanticName == "TEXTANGENT");
+			REQUIRE(rendererBinding2._geoBindings[0].second._generatedElements.size() == 3);
+			REQUIRE(rendererBinding2._geoBindings[0].second._generatedElements[0]._semanticName == "POSITION");
+			REQUIRE(rendererBinding2._geoBindings[0].second._generatedElements[1]._semanticName == "NORMAL");
+			REQUIRE(rendererBinding2._geoBindings[0].second._generatedElements[2]._semanticName == "TEXTANGENT");
 
 			pool->Attach(*gpuAccelerator, gpuGeoDeformAttachment);
 		}
@@ -443,7 +487,9 @@ namespace UnitTests
 	TEST_CASE( "Deform-CPUInstantiation", "[rendercore_techniques]" )
 	{
 		auto modelScaffold = MakeTestAnimatedModel();
-		auto vertexCount = modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements._size / modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements._ia._vertexStride;
+		auto* skinningData = GetSkinningDataAtGeo0(*modelScaffold);
+		REQUIRE(skinningData);
+		auto vertexCount = skinningData->_animatedVertexElements._size / skinningData->_animatedVertexElements._ia._vertexStride;
 
 		{
 			// Single stage deform that takes POSITION & NORMAL and generates 3 arbitrary elements
@@ -454,18 +500,17 @@ namespace UnitTests
 			testInst0._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
 			testInst0._upstreamSourceElements.push_back({ "NORMAL", 0, Format::R8G8B8A8_UNORM });
 			testInst0._suppressElements.push_back(Hash64("BADSEMANTIC"));
-			testInst0._geoId = 0;
 			
 			std::vector<DeformOperationInstantiation> instantiations;
 			instantiations.push_back(testInst0);
 
-			Techniques::Internal::WorkingDeformer workingDeformer;
-			workingDeformer._instantiations = {&testInst0, &testInst0+1};
-
 			Techniques::Internal::DeformBufferIterators bufferIterators;
+			std::vector<DeformerInputBinding::GeoBinding> geoBindings;
+			geoBindings.resize(instantiations.size());
 			auto nascentDeform = Techniques::Internal::CreateDeformBindings(
-				{&workingDeformer, &workingDeformer+1}, bufferIterators, true,
-				modelScaffold, "unit-test");
+				MakeIteratorRange(geoBindings), instantiations,
+				bufferIterators, true, 0,
+				modelScaffold);
 
 			unsigned generatedVertexStride = 8 + 4 + 4;
 			unsigned staticDataVertexStride = 12+4;
@@ -475,52 +520,46 @@ namespace UnitTests
 			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_CPUDeformTemporaries] == 0);
 			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_GPUDeformTemporaries] == 0);
 
-			REQUIRE(workingDeformer._inputBinding._geoBindings.size() == 1);
-			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._inputElements.size() == 2);
-			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._inputElements[0]._nativeFormat == Format::R32G32B32_FLOAT);
-			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._inputElements[1]._nativeFormat == Format::R8G8B8A8_UNORM);
-			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._inputElements[0]._inputSlot == Techniques::Internal::VB_CPUStaticData);
-			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._inputElements[1]._inputSlot == Techniques::Internal::VB_CPUStaticData);
-			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._outputElements.size() == 3);
-			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._outputElements[0]._nativeFormat == Format::R16G16B16A16_FLOAT);
-			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._outputElements[1]._nativeFormat == Format::R8G8B8A8_UNORM);
-			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._outputElements[2]._nativeFormat == Format::R32_UINT);
-			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._outputElements[0]._inputSlot == Techniques::Internal::VB_PostDeform);
-			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._outputElements[1]._inputSlot == Techniques::Internal::VB_PostDeform);
-			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._outputElements[2]._inputSlot == Techniques::Internal::VB_PostDeform);
+			REQUIRE(geoBindings.size() == 1);
+			REQUIRE(geoBindings[0]._inputElements.size() == 2);
+			REQUIRE(geoBindings[0]._inputElements[0]._nativeFormat == Format::R32G32B32_FLOAT);
+			REQUIRE(geoBindings[0]._inputElements[1]._nativeFormat == Format::R8G8B8A8_UNORM);
+			REQUIRE(geoBindings[0]._inputElements[0]._inputSlot == Techniques::Internal::VB_CPUStaticData);
+			REQUIRE(geoBindings[0]._inputElements[1]._inputSlot == Techniques::Internal::VB_CPUStaticData);
+			REQUIRE(geoBindings[0]._outputElements.size() == 3);
+			REQUIRE(geoBindings[0]._outputElements[0]._nativeFormat == Format::R16G16B16A16_FLOAT);
+			REQUIRE(geoBindings[0]._outputElements[1]._nativeFormat == Format::R8G8B8A8_UNORM);
+			REQUIRE(geoBindings[0]._outputElements[2]._nativeFormat == Format::R32_UINT);
+			REQUIRE(geoBindings[0]._outputElements[0]._inputSlot == Techniques::Internal::VB_PostDeform);
+			REQUIRE(geoBindings[0]._outputElements[1]._inputSlot == Techniques::Internal::VB_PostDeform);
+			REQUIRE(geoBindings[0]._outputElements[2]._inputSlot == Techniques::Internal::VB_PostDeform);
 		}
 
 		{
 			// 3 deform stages with deformers that consume outputs from previous stages
-			Techniques::DeformOperationInstantiation testInst0;
-			testInst0._generatedElements.push_back({ "TEMPORARY", 0, Format::R16G16B16A16_FLOAT });
-			testInst0._generatedElements.push_back({ "GENERATED2", 0, Format::R8G8B8A8_UNORM });
-			testInst0._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
-			testInst0._upstreamSourceElements.push_back({ "NORMAL", 0, Format::R8G8B8A8_UNORM });
-			testInst0._suppressElements.push_back(Hash64("TANGENT"));
-			testInst0._geoId = 0;
+			Techniques::DeformOperationInstantiation testInst[3];
+			testInst[0]._generatedElements.push_back({ "TEMPORARY", 0, Format::R16G16B16A16_FLOAT });
+			testInst[0]._generatedElements.push_back({ "GENERATED2", 0, Format::R8G8B8A8_UNORM });
+			testInst[0]._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
+			testInst[0]._upstreamSourceElements.push_back({ "NORMAL", 0, Format::R8G8B8A8_UNORM });
+			testInst[0]._suppressElements.push_back(Hash64("TANGENT"));
 
-			Techniques::DeformOperationInstantiation testInst1;
-			testInst1._generatedElements.push_back({ "TEMPORARY", 1, Format::R16G16B16A16_FLOAT });
-			testInst1._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
-			testInst1._upstreamSourceElements.push_back({ "TEMPORARY", 0, Format::R16G16B16A16_FLOAT });
-			testInst1._geoId = 0;
+			testInst[1]._generatedElements.push_back({ "TEMPORARY", 1, Format::R16G16B16A16_FLOAT });
+			testInst[1]._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
+			testInst[1]._upstreamSourceElements.push_back({ "TEMPORARY", 0, Format::R16G16B16A16_FLOAT });
 
-			Techniques::DeformOperationInstantiation testInst2;
-			testInst2._generatedElements.push_back({ "GENERATED3", 0, Format::R16G16B16A16_FLOAT });
-			testInst2._upstreamSourceElements.push_back({ "TEMPORARY", 1, Format::R16G16B16A16_FLOAT });
-			testInst2._suppressElements.push_back(Hash64("TANGENT"));
-			testInst2._geoId = 0;
+			testInst[2]._generatedElements.push_back({ "GENERATED3", 0, Format::R16G16B16A16_FLOAT });
+			testInst[2]._upstreamSourceElements.push_back({ "TEMPORARY", 1, Format::R16G16B16A16_FLOAT });
+			testInst[2]._suppressElements.push_back(Hash64("TANGENT"));
 			
-			Techniques::Internal::WorkingDeformer deformers[3];
-			deformers[0]._instantiations = MakeIteratorRange(&testInst0, &testInst0+1);
-			deformers[1]._instantiations = MakeIteratorRange(&testInst1, &testInst1+1);
-			deformers[2]._instantiations = MakeIteratorRange(&testInst2, &testInst2+1);
-
 			Techniques::Internal::DeformBufferIterators bufferIterators;
+			std::vector<DeformerInputBinding::GeoBinding> geoBindings;
+			geoBindings.resize(dimof(testInst));
+
 			auto nascentDeform = Techniques::Internal::CreateDeformBindings(
-				MakeIteratorRange(deformers), bufferIterators, true,
-				modelScaffold, "unit-test");
+				MakeIteratorRange(geoBindings), testInst,
+				bufferIterators, true, 0,
+				modelScaffold);
 
 			unsigned generatedVertexStride = 4+8;				// {"GENERATED2", 0}, {"GENERATED3", 0}
 			unsigned staticDataVertexStride = 12+4;
@@ -531,26 +570,23 @@ namespace UnitTests
 			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_CPUDeformTemporaries] ==temporariesVertexStride*vertexCount);
 			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_GPUDeformTemporaries] == 0);
 
-			REQUIRE(deformers[0]._inputBinding._geoBindings.size() == 1);
-			REQUIRE(deformers[0]._inputBinding._geoBindings[0]._inputElements.size() == 2);
-			REQUIRE(deformers[0]._inputBinding._geoBindings[0]._inputElements[0]._inputSlot == Techniques::Internal::VB_CPUStaticData);
-			REQUIRE(deformers[0]._inputBinding._geoBindings[0]._inputElements[1]._inputSlot == Techniques::Internal::VB_CPUStaticData);
-			REQUIRE(deformers[0]._inputBinding._geoBindings[0]._outputElements.size() == 2);
-			REQUIRE(deformers[0]._inputBinding._geoBindings[0]._outputElements[0]._inputSlot == Techniques::Internal::VB_CPUDeformTemporaries);
-			REQUIRE(deformers[0]._inputBinding._geoBindings[0]._outputElements[1]._inputSlot == Techniques::Internal::VB_PostDeform);
+			REQUIRE(geoBindings[0]._inputElements.size() == 2);
+			REQUIRE(geoBindings[0]._inputElements[0]._inputSlot == Techniques::Internal::VB_CPUStaticData);
+			REQUIRE(geoBindings[0]._inputElements[1]._inputSlot == Techniques::Internal::VB_CPUStaticData);
+			REQUIRE(geoBindings[0]._outputElements.size() == 2);
+			REQUIRE(geoBindings[0]._outputElements[0]._inputSlot == Techniques::Internal::VB_CPUDeformTemporaries);
+			REQUIRE(geoBindings[0]._outputElements[1]._inputSlot == Techniques::Internal::VB_PostDeform);
 
-			REQUIRE(deformers[1]._inputBinding._geoBindings.size() == 1);
-			REQUIRE(deformers[1]._inputBinding._geoBindings[0]._inputElements.size() == 2);
-			REQUIRE(deformers[1]._inputBinding._geoBindings[0]._inputElements[0]._inputSlot == Techniques::Internal::VB_CPUStaticData);
-			REQUIRE(deformers[1]._inputBinding._geoBindings[0]._inputElements[1]._inputSlot == Techniques::Internal::VB_CPUDeformTemporaries);
-			REQUIRE(deformers[1]._inputBinding._geoBindings[0]._outputElements.size() == 1);
-			REQUIRE(deformers[1]._inputBinding._geoBindings[0]._outputElements[0]._inputSlot == Techniques::Internal::VB_CPUDeformTemporaries);
+			REQUIRE(geoBindings[1]._inputElements.size() == 2);
+			REQUIRE(geoBindings[1]._inputElements[0]._inputSlot == Techniques::Internal::VB_CPUStaticData);
+			REQUIRE(geoBindings[1]._inputElements[1]._inputSlot == Techniques::Internal::VB_CPUDeformTemporaries);
+			REQUIRE(geoBindings[1]._outputElements.size() == 1);
+			REQUIRE(geoBindings[1]._outputElements[0]._inputSlot == Techniques::Internal::VB_CPUDeformTemporaries);
 
-			REQUIRE(deformers[2]._inputBinding._geoBindings.size() == 1);
-			REQUIRE(deformers[2]._inputBinding._geoBindings[0]._inputElements.size() == 1);
-			REQUIRE(deformers[2]._inputBinding._geoBindings[0]._inputElements[0]._inputSlot == Techniques::Internal::VB_CPUDeformTemporaries);
-			REQUIRE(deformers[2]._inputBinding._geoBindings[0]._outputElements.size() == 1);
-			REQUIRE(deformers[2]._inputBinding._geoBindings[0]._outputElements[0]._inputSlot == Techniques::Internal::VB_PostDeform);
+			REQUIRE(geoBindings[2]._inputElements.size() == 1);
+			REQUIRE(geoBindings[2]._inputElements[0]._inputSlot == Techniques::Internal::VB_CPUDeformTemporaries);
+			REQUIRE(geoBindings[2]._outputElements.size() == 1);
+			REQUIRE(geoBindings[2]._outputElements[0]._inputSlot == Techniques::Internal::VB_PostDeform);
 		}
 	}
 
@@ -573,7 +609,9 @@ namespace UnitTests
 	TEST_CASE( "Deform-GPUInstantiation", "[rendercore_techniques]" )
 	{
 		auto modelScaffold = MakeTestAnimatedModel();
-		auto vertexCount = modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements._size / modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements._ia._vertexStride;
+		auto* skinningData = GetSkinningDataAtGeo0(*modelScaffold);
+		REQUIRE(skinningData);
+		auto vertexCount = skinningData->_animatedVertexElements._size / skinningData->_animatedVertexElements._ia._vertexStride;
 
 		{
 			// Single stage deform, but using a GPU deformer
@@ -588,35 +626,30 @@ namespace UnitTests
 				REQUIRE(dstVBLayout.size() == 3);
 				promise.set_value(std::make_shared<TestGPUDeformOperator>());
 			};*/
-			testInst0._geoId = 0;
 			
-			std::vector<DeformOperationInstantiation> instantiations;
-			instantiations.push_back(testInst0);
-
-			Techniques::Internal::WorkingDeformer workingDeformer;
-			workingDeformer._instantiations = instantiations;
-
 			Techniques::Internal::DeformBufferIterators bufferIterators;
+			std::vector<DeformerInputBinding::GeoBinding> geoBindings;
+			geoBindings.resize(1);
 			auto nascentDeform = Techniques::Internal::CreateDeformBindings(
-				{&workingDeformer, &workingDeformer+1}, bufferIterators, false,
-				modelScaffold, "unit-test");
+				MakeIteratorRange(geoBindings), {&testInst0, &testInst0+1},
+				bufferIterators, false, 0,
+				modelScaffold);
 
 			// The generated elements get reordered from largest to smallest element
-			REQUIRE(nascentDeform._geoBindings.size() == 1);
-			REQUIRE(nascentDeform._geoBindings[0]._generatedElements.size() == 3);
-			REQUIRE(nascentDeform._geoBindings[0]._generatedElements[0]._semanticName == "GENERATED");
-			REQUIRE(nascentDeform._geoBindings[0]._generatedElements[1]._semanticName == "GENERATED2");
-			REQUIRE(nascentDeform._geoBindings[0]._generatedElements[2]._semanticName == "GENERATED");
+			REQUIRE(nascentDeform._generatedElements.size() == 3);
+			REQUIRE(nascentDeform._generatedElements[0]._semanticName == "GENERATED");
+			REQUIRE(nascentDeform._generatedElements[1]._semanticName == "GENERATED2");
+			REQUIRE(nascentDeform._generatedElements[2]._semanticName == "GENERATED");
 
-			REQUIRE(nascentDeform._geoBindings[0]._suppressedElements.size() == 3);
-			REQUIRE(std::find(nascentDeform._geoBindings[0]._suppressedElements.begin(), nascentDeform._geoBindings[0]._suppressedElements.end(), Hash64("GENERATED")) != nascentDeform._geoBindings[0]._suppressedElements.end());
-			REQUIRE(std::find(nascentDeform._geoBindings[0]._suppressedElements.begin(), nascentDeform._geoBindings[0]._suppressedElements.end(), Hash64("GENERATED2")) != nascentDeform._geoBindings[0]._suppressedElements.end());
-			REQUIRE(std::find(nascentDeform._geoBindings[0]._suppressedElements.begin(), nascentDeform._geoBindings[0]._suppressedElements.end(), Hash64("GENERATED")+1) != nascentDeform._geoBindings[0]._suppressedElements.end());
+			REQUIRE(nascentDeform._suppressedElements.size() == 3);
+			REQUIRE(std::find(nascentDeform._suppressedElements.begin(), nascentDeform._suppressedElements.end(), Hash64("GENERATED")) != nascentDeform._suppressedElements.end());
+			REQUIRE(std::find(nascentDeform._suppressedElements.begin(), nascentDeform._suppressedElements.end(), Hash64("GENERATED2")) != nascentDeform._suppressedElements.end());
+			REQUIRE(std::find(nascentDeform._suppressedElements.begin(), nascentDeform._suppressedElements.end(), Hash64("GENERATED")+1) != nascentDeform._suppressedElements.end());
 		
 			unsigned generatedVertexStride = 8+4+4;
 			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_PostDeform] == generatedVertexStride*vertexCount);
 			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_CPUStaticData] == 0);
-			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_GPUStaticData] == modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements._ia._vertexStride*vertexCount);
+			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_GPUStaticData] == skinningData->_animatedVertexElements._ia._vertexStride*vertexCount);
 			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_CPUDeformTemporaries] == 0);
 			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_GPUDeformTemporaries] == 0);
 		}

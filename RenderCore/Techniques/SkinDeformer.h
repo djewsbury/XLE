@@ -10,14 +10,27 @@
 #include <memory>
 
 namespace RenderCore { class IDevice; }
+namespace RenderCore { namespace Assets { class RendererConstruction; }}
 namespace RenderCore { namespace Techniques
 {
-	class IGeoDeformerFactory;
+	/*class IGeoDeformerFactory;
 	std::shared_ptr<IGeoDeformerFactory> CreateCPUSkinDeformerFactory();
 
 	class PipelineCollection;
 	std::shared_ptr<IGeoDeformerFactory> CreateGPUSkinDeformerFactory(
-		std::shared_ptr<PipelineCollection> pipelineCollection);
+		std::shared_ptr<PipelineCollection> pipelineCollection);*/
+
+	class DeformerConstruction;
+	class PipelineCollection;
+
+	void ConfigureCPUSkinDeformers(
+		DeformerConstruction&,
+		const Assets::RendererConstruction&);
+
+	void ConfigureGPUSkinDeformers(
+		DeformerConstruction&,
+		const Assets::RendererConstruction&,
+		std::shared_ptr<PipelineCollection>);
 
 	class ISkinDeformer
 	{

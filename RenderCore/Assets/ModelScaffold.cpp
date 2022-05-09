@@ -178,6 +178,14 @@ namespace RenderCore { namespace Assets
 				assert(cmd.BlockSize() == sizeof(ModelRootData));
 				_rootData = (const ModelRootData*)cmd.RawData().begin();
 				break;
+
+			case (uint32_t)ScaffoldCommand::Skeleton:
+				{
+					struct SkeletonRef { size_t _dataSize; const SkeletonMachine* _data; };
+					assert(!_embeddedSkeleton);
+					_embeddedSkeleton = cmd.As<SkeletonRef>()._data;
+				}
+				break;
 			}
 		}
 	}

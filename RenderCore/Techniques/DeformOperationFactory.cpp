@@ -96,4 +96,22 @@ namespace RenderCore { namespace Techniques
 
 	IGeoDeformerFactory::~IGeoDeformerFactory() {}
 #endif
+
+	std::shared_ptr<IGeoDeformerFactory> DeformOperationFactorySet::GetFactory(uint64_t name) const { return nullptr; }
+
+	auto DeformOperationFactorySet::Register(StringSection<> name, std::shared_ptr<IGeoDeformerFactory>) -> RegisteredDeformId
+	{
+		return 0;
+	}
+	void DeformOperationFactorySet::Deregister(RegisteredDeformId) {}
+	
+	DeformOperationFactorySet::DeformOperationFactorySet() {}
+	DeformOperationFactorySet::~DeformOperationFactorySet() {}
+
+	DeformOperationFactorySet& DeformOperationFactorySet::GetInstance()
+	{
+		return Services::GetDeformOperationFactorySet();
+	}
+
+	IGeoDeformerFactory::~IGeoDeformerFactory() {}
 }}

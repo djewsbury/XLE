@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "DeformInternal.h"
+#include "DeformGeoInternal.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../IDevice.h"
 #include "../../Assets/Continuation.h"
@@ -11,11 +11,14 @@
 
 namespace RenderCore { namespace Techniques { namespace Internal
 {
-	GPUDeformEntryHelper::GPUDeformEntryHelper(const DeformerInputBinding& bindings, std::pair<unsigned, unsigned> elementAndGeoIdx)
+	GPUDeformEntryHelper::GPUDeformEntryHelper(const DeformerInputBinding& bindings, unsigned geoIdx)
 	{
-		auto binding = std::find_if(bindings._geoBindings.begin(), bindings._geoBindings.end(), [elementAndGeoIdx](const auto& c) { return c.first == elementAndGeoIdx; });
+		// note that we ignore the elementIdx when looking up in _inputBinding._geoBindings. This is because
+		// the input bindings are specific to a single deformer, and this is intended for use by deformers that
+		// suport only a single model scaffold
+		auto binding = std::find_if(bindings._geoBindings.begin(), bindings._geoBindings.end(), [geoIdx](const auto& c) { return c.first.second == geoIdx; });
 		if (binding == bindings._geoBindings.end())
-			Throw(std::runtime_error("Missing deformer binding for geoId (" + std::to_string(elementAndGeoIdx.second) + ")"));
+			Throw(std::runtime_error("Missing deformer binding for geoId (" + std::to_string(geoIdx) + ")"));
 
 		unsigned inPositionsOffset = 0, inNormalsOffset = 0, inTangentsOffset = 0;
 		unsigned outPositionsOffset = 0, outNormalsOffset = 0, outTangentsOffset = 0;

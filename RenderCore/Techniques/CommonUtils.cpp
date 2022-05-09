@@ -207,7 +207,6 @@ namespace RenderCore { namespace Techniques
 		IDevice& device,
 		IteratorRange<const ModelScaffoldLoadRequest*> loadRequests,
 		unsigned resourceSize,
-		std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
 		BindFlag::BitField bindFlags,
 		StringSection<> resourceName)
 	{
