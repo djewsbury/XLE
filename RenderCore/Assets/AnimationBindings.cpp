@@ -56,6 +56,30 @@ namespace RenderCore { namespace Assets
 		_modelJointIndexToMachineOutput = std::move(result);
 	}
 
+	SkeletonBinding::SkeletonBinding(   const SkeletonMachine::OutputInterface&		output,
+										IteratorRange<const uint64_t*> 				input)
+	{
+		std::vector<unsigned> result(input.size(), ~0u);
+
+		for (size_t c=0; c<input.size(); ++c) {
+			uint64_t name = input[c];
+			for (size_t c2=0; c2<output._outputMatrixNameCount; ++c2) {
+				if (output._outputMatrixNames[c2] == name) {
+					result[c] = unsigned(c2);
+					break;
+				}
+			}
+
+			#if defined(_DEBUG)
+				// if (result[c] == ~unsigned(0x0)) {
+				//     LogWarning << "Couldn't bind skin matrix to transformation machine output.";
+				// }
+			#endif
+		}
+			
+		_modelJointIndexToMachineOutput = std::move(result);
+	}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static Float4x4 TransformationCommandsToMatrix(IteratorRange<const void*> cmds)

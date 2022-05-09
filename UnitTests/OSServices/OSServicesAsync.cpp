@@ -21,6 +21,7 @@
 #include <random>
 #include <filesystem>
 #include <functional>
+#include <sstream>
 
 #if PLATFORMOS_TARGET == PLATFORMOS_LINUX
     // linux specific...

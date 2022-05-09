@@ -9,9 +9,8 @@
 #include "Services.h"
 #include "SubFrameEvents.h"
 #include "../Assets/ModelScaffold.h"
-#include "../Assets/ModelScaffoldInternal.h"
-#include "../Assets/ModelImmutableData.h"
 #include "../Assets/PredefinedPipelineLayout.h"
+#include "../Assets/ModelMachine.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
 #include "../Metal/TextureView.h"
@@ -29,6 +28,19 @@ namespace RenderCore { namespace Techniques
 {
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	static std::vector<uint64_t> CopyCmdStreamInputInterface(const Assets::ModelScaffoldCmdStreamForm& modelScaffold)
+	{
+		for (auto cmd:modelScaffold.CommandStream()) {
+			switch (cmd.Cmd()) {
+			case (uint32_t)Assets::ModelCommand::InputInterface:
+				auto data = cmd.RawData().Cast<const uint64_t*>();
+				return {data.begin(), data.end()};
+				break;
+			}
+		}
+		return {};
+	}
 
 	void CPUSkinDeformer::WriteJointTransforms(
 		const Section& section,
@@ -153,10 +165,10 @@ namespace RenderCore { namespace Techniques
 			for (auto cmd:geoMachine) {
 				switch (cmd.Cmd()) {
 				case (uint32_t)Assets::GeoCommand::AttachRawGeometry:
-					rawGeometry = cmd.As<const Assets::RawGeometryDesc*>();
+					rawGeometry = &cmd.As<Assets::RawGeometryDesc>();
 					break;
 				case (uint32_t)Assets::GeoCommand::AttachSkinningData:
-					skinningData = cmd.As<const Assets::SkinningDataDesc*>();
+					skinningData = &cmd.As<Assets::SkinningDataDesc>();
 					break;
 				}
 			}
@@ -224,8 +236,7 @@ namespace RenderCore { namespace Techniques
 			_geos.emplace_back(std::move(constructedGeo));
 		}
 
-		assert(0);		// _jointInputInterface!
-		// _jointInputInterface = modelScaffold.CommandStream().GetInputInterface();
+		_jointInputInterface = CopyCmdStreamInputInterface(modelScaffold);
 	}
 
 	void* CPUSkinDeformer::QueryInterface(size_t typeId)
@@ -325,7 +336,7 @@ namespace RenderCore { namespace Techniques
 				const Assets::SkinningDataDesc* skinningData = nullptr;
 				for (auto cmd:machine) {
 					if (cmd.Cmd() == (uint32_t)Assets::GeoCommand::AttachSkinningData) {
-						skinningData = cmd.As<const Assets::SkinningDataDesc*>();
+						skinningData = &cmd.As<Assets::SkinningDataDesc>();
 						break;
 					}
 				}
@@ -494,10 +505,10 @@ namespace RenderCore { namespace Techniques
 			for (auto cmd:geoMachine) {
 				switch (cmd.Cmd()) {
 				case (uint32_t)Assets::GeoCommand::AttachRawGeometry:
-					rawGeometry = cmd.As<const Assets::RawGeometryDesc*>();
+					rawGeometry = &cmd.As<Assets::RawGeometryDesc>();
 					break;
 				case (uint32_t)Assets::GeoCommand::AttachSkinningData:
-					skinningData = cmd.As<const Assets::SkinningDataDesc*>();
+					skinningData = &cmd.As<Assets::SkinningDataDesc>();
 					break;
 				}
 			}
@@ -590,8 +601,7 @@ namespace RenderCore { namespace Techniques
 		_staticVertexAttachmentsView = _staticVertexAttachments->CreateBufferView(BindFlag::UnorderedAccess);
 		_staticVertexAttachmentsSize = skelVBIterator;
 
-		assert(0); // _jointInputInterface
-		// _jointInputInterface = _modelScaffold->CommandStream().GetInputInterface();
+		_jointInputInterface = CopyCmdStreamInputInterface(*modelScaffold);
 	}
 
 	void GPUSkinDeformer::Bind(const DeformerInputBinding& bindings)

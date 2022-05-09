@@ -277,7 +277,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			serializer.SerializeSubBlock(tempBlock);
 		}
 
-		// SerializationOperator(serializer, skeleton);
+		{
+			::Assets::BlockSerializer tempBlock;
+			tempBlock << skeleton;
+
+			serializer << (uint32_t)Assets::ScaffoldCommand::Skeleton;
+			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
+			serializer << tempBlock.SizePrimaryBlock();
+			serializer.SerializeSubBlock(tempBlock);
+		}
 
 		{
 			auto defaultPoseData = CalculateDefaultPoseData(skeleton, cmdStream, geoObjects);

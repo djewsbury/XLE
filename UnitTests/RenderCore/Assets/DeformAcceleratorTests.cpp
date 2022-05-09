@@ -216,7 +216,7 @@ namespace UnitTests
 		for (auto cmd:scaffold.GetGeoMachine(0)) {
 			switch (cmd.Cmd()) {
 			case (uint32_t)RenderCore::Assets::GeoCommand::AttachSkinningData:
-				return cmd.As<const RenderCore::Assets::SkinningDataDesc*>();
+				return &cmd.As<RenderCore::Assets::SkinningDataDesc>();
 				break;
 			}
 		}
@@ -420,8 +420,6 @@ namespace UnitTests
 		TechniqueTestApparatus techniqueTestHelper{*testHelper};
 
 		auto pipelineCollection = std::make_shared<Techniques::PipelineCollection>(testHelper->_device);
-		// techniqueTestHelper._techniqueServices->GetDeformOperationFactorySet().Register("gpu_skin", Techniques::CreateGPUSkinDeformerFactory(pipelineCollection));
-		// techniqueTestHelper._techniqueServices->GetDeformOperationFactorySet().Register("cpu_skin", Techniques::CreateCPUSkinDeformerFactory());
 		
 		auto modelScaffold = MakeTestAnimatedModel();
 		auto rendererConstruction = std::make_shared<RenderCore::Assets::RendererConstruction>();

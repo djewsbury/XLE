@@ -34,7 +34,6 @@ namespace RenderCore { namespace Assets
 		ModelCommandStream,		// pointer to stream of ModelCommand
 
 		MaterialNameDehash,
-		InputInterface,
 		DefaultPoseData,
 		ModelRootData
 	};

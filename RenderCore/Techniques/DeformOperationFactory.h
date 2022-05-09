@@ -31,35 +31,46 @@ namespace RenderCore { namespace Techniques
 
 	class IGeoDeformer;
 
-	class DeformerConstruction
+	class DeformerConstruction : public std::enable_shared_from_this<DeformerConstruction>
 	{
 	public:
 		void Add(
 			::Assets::PtrToMarkerPtr<IGeoDeformer> deformer,
 			DeformOperationInstantiation&& instantiation,
-			unsigned _elementIdx,
-			unsigned _geoIdx);
+			unsigned elementIdx,
+			unsigned geoIdx);
 
 		void Add(
 			std::shared_ptr<IGeoDeformer> deformer,
 			DeformOperationInstantiation&& instantiation,
-			unsigned _elementIdx,
-			unsigned _geoIdx);
+			unsigned elementIdx,
+			unsigned geoIdx);
 
 		struct Entry
 		{
 			std::shared_ptr<IGeoDeformer> _deformer;
-			DeformOperationInstantiation _instantiation;
+			const DeformOperationInstantiation* _instantiation = nullptr;
 			unsigned _elementIdx = ~0u;
 			unsigned _geoIdx = ~0u;
 		};
 		std::vector<Entry> GetEntries() const;
 
 		void FulfillWhenNotPending(std::promise<std::shared_ptr<DeformerConstruction>>&& promise);
-		::Assets::AssetState GetAssetState() const;
+
+		DeformerConstruction();
+		~DeformerConstruction();
 	private:
 		bool _sealed = false;
-		std::vector<Entry> _entries;
+		std::vector<::Assets::PtrToMarkerPtr<IGeoDeformer>> _deformerMarkers;
+		std::vector<std::shared_ptr<IGeoDeformer>> _deformers;
+
+		struct StoredEntry
+		{
+			unsigned _elementIdx, _geoIdx;
+			unsigned _deformerIdx;
+			DeformOperationInstantiation _instantiation;
+		};
+		std::vector<StoredEntry> _storedEntries;
 	};
 
 #if 0

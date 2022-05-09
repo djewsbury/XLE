@@ -145,7 +145,7 @@ namespace RenderCore { namespace Techniques
 			thisGeoDeformerBindings.resize(i-start);
 
 			for (auto& d:MakeIteratorRange(start, i)) {
-				instantiations.push_back(d._instantiation);
+				instantiations.push_back(*d._instantiation);
 				if (d._deformer->IsCPUDeformer() != isCPUDeformer.value())
 					Throw(std::runtime_error("Attempting to mix CPU and GPU deformers. This isn't supported; deformations must be all CPU or all GPU"));
 			};
@@ -502,10 +502,10 @@ namespace RenderCore { namespace Techniques
 				switch (cmd.Cmd()) {
 				case (uint32_t)Assets::GeoCommand::AttachRawGeometry:
 					if (!vbData)	// always use the skinning input, if it exists
-						vbData = &cmd.As<const Assets::RawGeometryDesc*>()->_vb;
+						vbData = &cmd.As<Assets::RawGeometryDesc>()._vb;
 					break;
 				case (uint32_t)Assets::GeoCommand::AttachSkinningData:
-					vbData = &cmd.As<const Assets::SkinningDataDesc*>()->_animatedVertexElements;
+					vbData = &cmd.As<Assets::SkinningDataDesc>()._animatedVertexElements;
 					break;
 				}
 			}
@@ -593,10 +593,10 @@ namespace RenderCore { namespace Techniques
 					for (auto cmd:geoMachine) {
 						switch (cmd.Cmd()) {
 						case (uint32_t)Assets::GeoCommand::AttachRawGeometry:
-							rawGeometry = cmd.As<const Assets::RawGeometryDesc*>();
+							rawGeometry = &cmd.As<Assets::RawGeometryDesc>();
 							break;
 						case (uint32_t)Assets::GeoCommand::AttachSkinningData:
-							skinningData = cmd.As<const Assets::SkinningDataDesc*>();
+							skinningData = &cmd.As<Assets::SkinningDataDesc>();
 							break;
 						}
 					}

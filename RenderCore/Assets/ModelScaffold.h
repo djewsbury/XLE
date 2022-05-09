@@ -89,7 +89,7 @@ namespace RenderCore { namespace Assets
 		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
 		using GeoIdx = unsigned;
 		Machine GetGeoMachine(GeoIdx) const;
-		unsigned GetGeoCount() const;
+		unsigned GetGeoCount() const { return (unsigned)_geoMachines.size(); }
 
 		std::pair<Float3, Float3>	GetStaticBoundingBox(unsigned lodIndex = 0) const;
 		unsigned					GetMaxLOD() const;
@@ -106,9 +106,9 @@ namespace RenderCore { namespace Assets
 	private:
 		std::vector<Machine>	_geoMachines;
 		Machine 				_commandStream;
-		const ModelDefaultPoseData* _defaultPoseData;
-		const ModelRootData*	_rootData;
-		const SkeletonMachine*	_embeddedSkeleton;
+		const ModelDefaultPoseData* _defaultPoseData = nullptr;
+		const ModelRootData*	_rootData = nullptr;
+		const SkeletonMachine*	_embeddedSkeleton = nullptr;
 
 		std::unique_ptr<uint8[], PODAlignedDeletor>		_rawMemoryBlock;
 		size_t											_rawMemoryBlockSize = 0;

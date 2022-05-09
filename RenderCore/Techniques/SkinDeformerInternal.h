@@ -6,7 +6,6 @@
 
 #include "SkinDeformer.h"
 #include "DeformGeoInternal.h"
-#include "DeformOperationFactory.h"
 #include "../Format.h"
 #include "../../Assets/Marker.h"
 #include "../../Math/Vector.h"
@@ -78,7 +77,7 @@ namespace RenderCore { namespace Techniques
 		};
 		std::vector<Instance> _instanceData;
 		std::vector<Float4x4> _skeletonMachineOutput;
-		RenderCore::Assets::ModelCommandStream::InputInterface _jointInputInterface;
+		std::vector<uint64_t> _jointInputInterface;
 		RenderCore::Assets::SkeletonBinding _skeletonBinding;
 
 		void WriteJointTransforms(
@@ -128,7 +127,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IResourceView> _skinIAParamsView;
 		unsigned _staticVertexAttachmentsSize = 0;
 
-		RenderCore::Assets::ModelCommandStream::InputInterface _jointInputInterface;
+		std::vector<uint64_t> _jointInputInterface;
 
 		std::vector<Internal::GPUDeformerIAParams> _iaParams;
 

@@ -39,6 +39,8 @@ namespace RenderCore { namespace Assets
 
 		SkeletonBinding(    const SkeletonMachine::OutputInterface&		output,
 							const ModelCommandStream::InputInterface&   input);
+		SkeletonBinding(    const SkeletonMachine::OutputInterface&		output,
+							IteratorRange<const uint64_t*> 				input);
 		SkeletonBinding() = default;
 
 	private:

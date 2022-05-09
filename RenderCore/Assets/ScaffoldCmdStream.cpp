@@ -154,6 +154,19 @@ namespace RenderCore { namespace Assets
 		return result;
 	}
 
+	auto RendererConstruction::GetElement(unsigned idx) const -> ElementIterator
+	{
+		assert(idx < _internal->_elementCount);
+		ElementIterator result;
+		result._value._msmi = _internal->_modelScaffoldMarkers.begin() + idx;
+		result._value._mspi = _internal->_modelScaffoldPtrs.begin() + idx;
+		result._value._matsmi = _internal->_materialScaffoldMarkers.begin() + idx;
+		result._value._matspi = _internal->_materialScaffoldPtrs.begin() + idx;
+		result._value._elementId = idx;
+		result._value._internal = _internal.get();
+		return result;
+	}
+
 	RendererConstruction::RendererConstruction()
 	{
 		_internal = std::make_unique<Internal>();
@@ -193,6 +206,11 @@ namespace RenderCore { namespace Assets
 		if (_matsmi!=_internal->_materialScaffoldMarkers.end() && _matsmi->first == _elementId)
 			return _matsmi->second->Actualize();
 		return nullptr;
+	}
+
+	std::string RendererConstruction::ElementIterator::Value::GetModelScaffoldName() const
+	{
+		return {};
 	}
 	
 	RendererConstruction::ElementIterator::Value::Value() = default;
