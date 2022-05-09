@@ -546,7 +546,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		// write out the InputInterface
 		auto hashedInterface = obj.BuildHashedInputInterface();
-		serializer << MakeCmdAndRawData(ModelCommand::InputInterface, hashedInterface);
+		serializer << CmdAndRawData{(uint32_t)ModelCommand::InputInterface, hashedInterface};
 	}
 
 	std::vector<uint64_t> NascentModelCommandStream::BuildHashedInputInterface() const

@@ -7,6 +7,7 @@
 #include "../Assets/AnimationBindings.h"
 #include "../Assets/ModelImmutableData.h"
 #include "../../Math/Matrix.h"
+#include "../../Utility/FunctionUtils.h"
 #include <memory>
 
 namespace RenderCore { class IDevice; }
@@ -15,6 +16,7 @@ namespace RenderCore { namespace Techniques
 {
 	class DeformerConstruction;
 	class PipelineCollection;
+	namespace Internal { class DeformerPipelineCollection; }
 
 	void ConfigureCPUSkinDeformers(
 		DeformerConstruction&,
@@ -23,7 +25,10 @@ namespace RenderCore { namespace Techniques
 	void ConfigureGPUSkinDeformers(
 		DeformerConstruction&,
 		const Assets::RendererConstruction&,
-		std::shared_ptr<PipelineCollection>);
+		std::shared_ptr<Internal::DeformerPipelineCollection>);
+
+	std::shared_ptr<Internal::DeformerPipelineCollection> CreateGPUSkinPipelineCollection(
+		std::shared_ptr<PipelineCollection> pipelineCollection);
 
 	class ISkinDeformer
 	{
@@ -39,4 +44,3 @@ namespace RenderCore { namespace Techniques
 		virtual ~ISkinDeformer();
 	};
 }}
-

@@ -29,6 +29,12 @@ namespace RenderCore { namespace Techniques
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	static const auto s_weightsEle = Hash64("WEIGHTS");
+	static const auto s_jointIndicesEle = Hash64("JOINTINDICES");
+	static const std::string s_positionEleName = "POSITION";
+	static const std::string s_tangentEleName = "TEXTANGENT";
+	static const std::string s_normalEleName = "NORMAL";
+
 	static std::vector<uint64_t> CopyCmdStreamInputInterface(const Assets::ModelScaffoldCmdStreamForm& modelScaffold)
 	{
 		for (auto cmd:modelScaffold.CommandStream()) {
@@ -263,59 +269,6 @@ namespace RenderCore { namespace Techniques
 	CPUSkinDeformer::~CPUSkinDeformer()
 	{
 	}
-
-#if 0
-	class CPUSkinDeformerFactory : public IGeoDeformerFactory
-	{
-	public:
-		std::shared_ptr<IGeoDeformer> Configure(
-			std::vector<RenderCore::Techniques::DeformOperationInstantiation>& result,
-			std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
-			const std::string& modelScaffoldName) override
-		{
-			// auto sep = std::find(initializer.begin(), initializer.end(), ',');
-			// assert(sep != initializer.end());
-
-			const std::string positionEleName = "POSITION";
-			auto weightsEle = Hash64("WEIGHTS");
-			auto jointIndicesEle = Hash64("JOINTINDICES");
-			auto& immData = modelScaffold->ImmutableData();
-			for (unsigned c=0; c<immData._boundSkinnedControllerCount; ++c) {
-
-				// skeleton & anim set:
-				//			StringSection<>(initializer.begin(), sep),
-				//			StringSection<>(sep+1, initializer.end()
-
-				DeformOperationInstantiation deformOp;
-				// deformOp._cpuOperator = std::make_shared<SkinDeformer>(*modelScaffold, c);
-				deformOp._geoId = unsigned(immData._geoCount) + c;
-				deformOp._generatedElements = {DeformOperationInstantiation::SemanticNameAndFormat{positionEleName, 0, Format::R32G32B32_FLOAT}};
-				deformOp._upstreamSourceElements = {DeformOperationInstantiation::SemanticNameAndFormat{positionEleName, 0, Format::R32G32B32_FLOAT}};
-				deformOp._suppressElements = {weightsEle, jointIndicesEle};
-				result.emplace_back(std::move(deformOp));
-			}
-
-			return std::make_shared<CPUSkinDeformer>(*modelScaffold, modelScaffoldName);
-		}
-
-		virtual void Bind(IGeoDeformer& op, const DeformerInputBinding& binding) override
-		{
-			auto* deformer = checked_cast<CPUSkinDeformer*>(&op);
-			deformer->_bindingHelper._inputBinding = binding;
-		}
-
-		virtual bool IsCPUDeformer() const override { return true; }
-	};
-
-	std::shared_ptr<IGeoDeformerFactory> CreateCPUSkinDeformerFactory()
-	{
-		return std::make_shared<CPUSkinDeformerFactory>();
-	}
-#endif
-
-	static const auto s_weightsEle = Hash64("WEIGHTS");
-	static const auto s_jointIndicesEle = Hash64("JOINTINDICES");
-	static const std::string s_positionEleName = "POSITION";
 		
 	void ConfigureCPUSkinDeformers(
 		DeformerConstruction& deformerConstruction,
@@ -490,7 +443,7 @@ namespace RenderCore { namespace Techniques
 	: _modelScaffold(std::move(modelScaffold))			// we take internal pointers so preserve lifetime
 	, _pipelineCollection(std::move(pipelineCollection))
 	{
-		auto geoCount = modelScaffold->GetGeoCount();
+		auto geoCount = _modelScaffold->GetGeoCount();
 
 		std::vector<ModelScaffoldLoadRequest> staticDataLoadRequests;
 		staticDataLoadRequests.reserve(geoCount);
@@ -498,7 +451,7 @@ namespace RenderCore { namespace Techniques
 
 		unsigned jointMatrixBufferCount = 0;
 		for (unsigned geoIdx=0; geoIdx<geoCount; ++geoIdx) {
-			auto geoMachine = modelScaffold->GetGeoMachine(geoIdx);
+			auto geoMachine = _modelScaffold->GetGeoMachine(geoIdx);
 
 			const RenderCore::Assets::RawGeometryDesc* rawGeometry = nullptr;
 			const RenderCore::Assets::SkinningDataDesc* skinningData = nullptr;
@@ -601,7 +554,7 @@ namespace RenderCore { namespace Techniques
 		_staticVertexAttachmentsView = _staticVertexAttachments->CreateBufferView(BindFlag::UnorderedAccess);
 		_staticVertexAttachmentsSize = skelVBIterator;
 
-		_jointInputInterface = CopyCmdStreamInputInterface(*modelScaffold);
+		_jointInputInterface = CopyCmdStreamInputInterface(*_modelScaffold);
 	}
 
 	void GPUSkinDeformer::Bind(const DeformerInputBinding& bindings)
@@ -680,117 +633,88 @@ namespace RenderCore { namespace Techniques
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if 0
-	static const std::string s_positionEleName = "POSITION";
-	static const std::string s_tangentEleName = "TEXTANGENT";
-	static const std::string s_normalEleName = "NORMAL";
-			
-	class GPUSkinDeformerFactory : public IGeoDeformerFactory
+	std::shared_ptr<Internal::DeformerPipelineCollection> CreateGPUSkinPipelineCollection(
+		std::shared_ptr<PipelineCollection> pipelineCollection)
 	{
-	public:
-		std::shared_ptr<IGeoDeformer> Configure(
-			std::vector<RenderCore::Techniques::DeformOperationInstantiation>& result,
-			std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
-			const std::string& modelScaffoldName) override
-		{
-			auto weightsEle = Hash64("WEIGHTS");
-			auto jointIndicesEle = Hash64("JOINTINDICES");
-			auto& immData = modelScaffold->ImmutableData();
-			if (!immData._boundSkinnedControllerCount)
-				return nullptr;
-				
-			for (unsigned c=0; c<immData._boundSkinnedControllerCount; ++c) {
+		UniformsStreamInterface usi;
+		usi.BindResourceView(0, Hash64("StaticVertexAttachments"));
+		usi.BindResourceView(1, Hash64("InputAttributes"));
+		usi.BindResourceView(2, Hash64("OutputAttributes"));
+		usi.BindResourceView(3, Hash64("DeformTemporaryAttributes"));
+		usi.BindResourceView(4, Hash64("JointTransforms"));
+		usi.BindResourceView(5, Hash64("IAParams"));
+		usi.BindResourceView(6, Hash64("SkinIAParams"));
 
-				auto& animVB = immData._boundSkinnedControllers[c]._animatedVertexElements;
+		UniformsStreamInterface pushConstantsUSI;
+		pushConstantsUSI.BindImmediateData(0, Hash64("InvocationParams"));
+
+		ShaderSourceParser::InstantiationRequest instRequest { SKIN_COMPUTE_HLSL };
+		uint64_t patchExpansions[] { Hash64("PerformDeform"), Hash64("GetDeformInvocationParams") };
+
+		return std::make_shared<Internal::DeformerPipelineCollection>(
+			pipelineCollection,
+			SKIN_PIPELINE ":Main",
+			std::move(usi), std::move(pushConstantsUSI),
+			std::move(instRequest), MakeIteratorRange(patchExpansions));
+	}
+
+	void ConfigureGPUSkinDeformers(
+		DeformerConstruction& deformerConstruction,
+		const Assets::RendererConstruction& rendererConstruction,
+		std::shared_ptr<Internal::DeformerPipelineCollection> pipelineCollection)
+	{
+		// We'll create one GPUSkinDeformer per element with skinned meshes. Each deformer will animate all of the meshes
+		// within that one element
+		unsigned elementIdx = 0;
+		for (auto ele:rendererConstruction) {
+			auto modelScaffold = ele.GetModelScaffold();
+			if (!modelScaffold) { ++elementIdx; continue; }
+
+			std::vector<std::pair<unsigned, DeformOperationInstantiation>> instantiations;
+			auto geoCount = modelScaffold->GetGeoCount();
+			for (unsigned c=0; c<geoCount; ++c) {
+				auto machine = modelScaffold->GetGeoMachine(c);
+
+				const Assets::SkinningDataDesc* skinningData = nullptr;
+				for (auto cmd:machine) {
+					if (cmd.Cmd() == (uint32_t)Assets::GeoCommand::AttachSkinningData) {
+						skinningData = &cmd.As<Assets::SkinningDataDesc>();
+						break;
+					}
+				}
+				if (!skinningData) break;
+
+				auto& animVB = skinningData->_animatedVertexElements;
 				auto positionElement = Internal::FindElement(MakeIteratorRange(animVB._ia._elements), s_positionEleName);
 				auto tangentsElement = Internal::FindElement(MakeIteratorRange(animVB._ia._elements), s_tangentEleName);
 				auto normalsElement = Internal::FindElement(MakeIteratorRange(animVB._ia._elements), s_normalEleName);
 				if (!positionElement)
 					Throw(std::runtime_error("Missing animated position in GPU skinning input"));
 
-				DeformOperationInstantiation inst;
-				inst._upstreamSourceElements.push_back({s_positionEleName, 0});
-				inst._generatedElements.push_back({s_positionEleName, 0, positionElement->_nativeFormat});
+				DeformOperationInstantiation deformOp;
+				deformOp._upstreamSourceElements.push_back({s_positionEleName, 0});
+				deformOp._generatedElements.push_back({s_positionEleName, 0, positionElement->_nativeFormat});
 				if (normalsElement) {
-					inst._upstreamSourceElements.push_back({s_normalEleName, 0});
-					inst._generatedElements.push_back({s_normalEleName, 0, normalsElement->_nativeFormat});
+					deformOp._upstreamSourceElements.push_back({s_normalEleName, 0});
+					deformOp._generatedElements.push_back({s_normalEleName, 0, normalsElement->_nativeFormat});
 				}
 				if (tangentsElement) {
-					inst._upstreamSourceElements.push_back({s_tangentEleName, 0});
-					inst._generatedElements.push_back({s_tangentEleName, 0, tangentsElement->_nativeFormat});
+					deformOp._upstreamSourceElements.push_back({s_tangentEleName, 0});
+					deformOp._generatedElements.push_back({s_tangentEleName, 0, tangentsElement->_nativeFormat});
 				}
-				inst._suppressElements = {weightsEle, jointIndicesEle};
-				inst._geoId = unsigned(immData._geoCount) + c;
-				result.push_back(std::move(inst));
+				deformOp._suppressElements = {s_weightsEle, s_jointIndicesEle};
+				instantiations.emplace_back(c, std::move(deformOp));
 			}
-			return std::make_shared<GPUSkinDeformer>(_pipelineCollection, modelScaffold, modelScaffoldName);
+
+			// create the deformer if necessary and add the instantiations we just find
+			if (!instantiations.empty()) {
+				auto deformer = std::make_shared<GPUSkinDeformer>(pipelineCollection, modelScaffold, ele.GetModelScaffoldName());
+				for (auto& inst:instantiations)
+					deformerConstruction.Add(deformer, std::move(inst.second), elementIdx, inst.first);
+			}
+
+			++elementIdx;
 		}
-
-		virtual void Bind(
-			IGeoDeformer& op,
-			const DeformerInputBinding& binding) override
-		{
-			auto* deformer = checked_cast<GPUSkinDeformer*>(&op);
-			deformer->Bind(binding);
-		}
-
-		virtual bool IsCPUDeformer() const override { return false; }
-
-		GPUSkinDeformerFactory(
-			std::shared_ptr<PipelineCollection> pipelineCollection)
-		{
-			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Hash64("StaticVertexAttachments"));
-			usi.BindResourceView(1, Hash64("InputAttributes"));
-			usi.BindResourceView(2, Hash64("OutputAttributes"));
-			usi.BindResourceView(3, Hash64("DeformTemporaryAttributes"));
-			usi.BindResourceView(4, Hash64("JointTransforms"));
-			usi.BindResourceView(5, Hash64("IAParams"));
-			usi.BindResourceView(6, Hash64("SkinIAParams"));
-
-			UniformsStreamInterface pushConstantsUSI;
-			pushConstantsUSI.BindImmediateData(0, Hash64("InvocationParams"));
-
-			ShaderSourceParser::InstantiationRequest instRequest { SKIN_COMPUTE_HLSL };
-			uint64_t patchExpansions[] { Hash64("PerformDeform"), Hash64("GetDeformInvocationParams") };
-
-			_pipelineCollection = std::make_shared<Internal::DeformerPipelineCollection>(
-				pipelineCollection,
-				SKIN_PIPELINE ":Main",
-				std::move(usi), std::move(pushConstantsUSI),
-				std::move(instRequest), MakeIteratorRange(patchExpansions));
-			_signalDelegate = Techniques::Services::GetSubFrameEvents()._onFrameBarrier.Bind(
-				[this]() {
-					this->_pipelineCollection->OnFrameBarrier();
-				});
-		}
-
-		~GPUSkinDeformerFactory()
-		{
-			if (Techniques::Services::HasInstance())
-				Techniques::Services::GetSubFrameEvents()._onFrameBarrier.Unbind(_signalDelegate);
-		}
-
-		GPUSkinDeformerFactory(const GPUSkinDeformerFactory&) = delete;
-		GPUSkinDeformerFactory& operator=(const GPUSkinDeformerFactory&) = delete;
-
-		std::shared_ptr<Internal::DeformerPipelineCollection> _pipelineCollection;
-		SignalDelegateId _signalDelegate;
-	};
-
-	std::shared_ptr<IGeoDeformerFactory> CreateGPUSkinDeformerFactory(
-		std::shared_ptr<PipelineCollection> pipelineCollection)
-	{
-		return std::make_shared<GPUSkinDeformerFactory>(std::move(pipelineCollection));
-	}
-#endif
-
-	void ConfigureGPUSkinDeformers(
-		DeformerConstruction&,
-		const Assets::RendererConstruction&,
-		std::shared_ptr<PipelineCollection>)
-	{
-		assert(0);
 	}
 
 	ISkinDeformer::~ISkinDeformer() {}

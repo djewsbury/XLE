@@ -450,7 +450,9 @@ namespace UnitTests
 			REQUIRE(gpuAccelerator);
 
 			auto deformerConstruction = std::make_shared<Techniques::DeformerConstruction>();
-			ConfigureGPUSkinDeformers(*deformerConstruction, *rendererConstruction, pipelineCollection);
+			ConfigureGPUSkinDeformers(
+				*deformerConstruction, *rendererConstruction, 
+				RenderCore::Techniques::CreateGPUSkinPipelineCollection(pipelineCollection));
 			StallWhilePending(*deformerConstruction);
 			
 			auto gpuGeoDeformAttachment = Techniques::CreateDeformGeometryInfrastructure(*testHelper->_device, *rendererConstruction, *deformerConstruction);
