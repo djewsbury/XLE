@@ -53,6 +53,7 @@ namespace RenderCore { namespace Techniques
 		struct Section
 		{
 			IteratorRange<const RenderCore::Assets::DrawCallDesc*> _preskinningDrawCalls;
+			IteratorRange<const unsigned*> _drawCallWeightsPerVertex;
 			IteratorRange<const Float4x4*> _bindShapeByInverseBindMatrices;
 			IteratorRange<const uint16_t*> _jointMatrices;
 			Float4x4 _bindShapeMatrix;
@@ -142,6 +143,7 @@ namespace RenderCore { namespace Techniques
 		{
 			unsigned _geoId = ~0u;
 			IteratorRange<const RenderCore::Assets::DrawCallDesc*> _preskinningDrawCalls;
+			IteratorRange<const unsigned*> _drawCallWeightsPerVertex;
 			std::pair<unsigned, unsigned> _rangeInJointMatrices;
 			IteratorRange<const Float4x4*> _bindShapeByInverseBindMatrices;
 			IteratorRange<const uint16_t*> _jointMatrices;

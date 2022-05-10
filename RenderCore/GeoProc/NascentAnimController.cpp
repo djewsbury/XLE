@@ -880,32 +880,39 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		// Setup the per-section preskinning draw calls
 		for (unsigned controllerIdx=0; controllerIdx<controllers.size(); ++controllerIdx) {
 			std::vector<DrawCallDesc> preskinningDrawCalls;
+            std::vector<unsigned> drawCallWeightsPerVertex;
 			auto* bStart = &bucketStart[controllerIdx*bucketsPerController];
 			auto* bEnd = &bucketEnd[controllerIdx*bucketsPerController];
 			static_assert(bucketsPerController==6, "The following code is specialized for the bucketsPerController==6 case");
 			if (bEnd[0] > bStart[0]) {
 				preskinningDrawCalls.push_back(
-					DrawCallDesc{~unsigned(0x0), unsigned(bEnd[0] - bStart[0]), unsigned(bStart[0]), 0, Topology::PointList});
+					DrawCallDesc{~unsigned(0x0), unsigned(bEnd[0] - bStart[0]), unsigned(bStart[0]), Topology::PointList});
+                drawCallWeightsPerVertex.push_back(0);
 			}
 			if (bEnd[1] > bStart[1]) {
 				preskinningDrawCalls.push_back(
-					DrawCallDesc{~unsigned(0x0), unsigned(bEnd[1] - bStart[1]), unsigned(bStart[1]), 1, Topology::PointList});
+					DrawCallDesc{~unsigned(0x0), unsigned(bEnd[1] - bStart[1]), unsigned(bStart[1]), Topology::PointList});
+                drawCallWeightsPerVertex.push_back(1);
 			}
 			if (bEnd[2] > bStart[2]) {
 				preskinningDrawCalls.push_back(
-					DrawCallDesc{~unsigned(0x0), unsigned(bEnd[2] - bStart[2]), unsigned(bStart[2]), 2, Topology::PointList});
+					DrawCallDesc{~unsigned(0x0), unsigned(bEnd[2] - bStart[2]), unsigned(bStart[2]), Topology::PointList});
+                drawCallWeightsPerVertex.push_back(2);
 			}
 			if (bEnd[3] > bStart[3]) {
 				preskinningDrawCalls.push_back(
-					DrawCallDesc{~unsigned(0x0), unsigned(bEnd[3] - bStart[3]), unsigned(bStart[3]), 4, Topology::PointList});
+					DrawCallDesc{~unsigned(0x0), unsigned(bEnd[3] - bStart[3]), unsigned(bStart[3]), Topology::PointList});
+                drawCallWeightsPerVertex.push_back(4);
 			}
 			if (bEnd[4] > bStart[4]) {
 				preskinningDrawCalls.push_back(
-					DrawCallDesc{~unsigned(0x0), unsigned(bEnd[4] - bStart[4]), unsigned(bStart[4]), 8, Topology::PointList});
+					DrawCallDesc{~unsigned(0x0), unsigned(bEnd[4] - bStart[4]), unsigned(bStart[4]), Topology::PointList});
+                drawCallWeightsPerVertex.push_back(8);
 			}
 			if (bEnd[5] > bStart[5]) {
 				preskinningDrawCalls.push_back(
-					DrawCallDesc{~unsigned(0x0), unsigned(bEnd[5] - bStart[5]), unsigned(bStart[5]), 16, Topology::PointList});
+					DrawCallDesc{~unsigned(0x0), unsigned(bEnd[5] - bStart[5]), unsigned(bStart[5]), Topology::PointList});
+                drawCallWeightsPerVertex.push_back(16);
 			}
 
 			assert(bEnd[bucketsPerController-1] <= unifiedVertexCount);
@@ -940,6 +947,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			}
 
 			section._preskinningDrawCalls = std::move(preskinningDrawCalls);
+            section._drawCallWeightsPerVertex = std::move(drawCallWeightsPerVertex);
 			section._bindShapeMatrix = controllers[controllerIdx]._controller->GetBindShapeMatrix();
             section._postSkinningBindMatrix = controllers[controllerIdx]._controller->GetPostSkinningBindMatrix();
 			result._preskinningSections.emplace_back(std::move(section));
@@ -965,6 +973,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	{
 		SerializationOperator(outputSerializer, section._bindShapeByInverseBindMatrices);
 		SerializationOperator(outputSerializer, section._preskinningDrawCalls);
+        SerializationOperator(outputSerializer, section._drawCallWeightsPerVertex);
 		outputSerializer.SerializeSubBlock(MakeIteratorRange(section._jointMatrices));
         outputSerializer.SerializeValue(section._jointMatrices.size());
 		SerializationOperator(outputSerializer, section._bindShapeMatrix);

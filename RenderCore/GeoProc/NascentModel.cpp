@@ -132,7 +132,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		std::vector<DrawCallDesc> drawCalls;
 		for (const auto&d:geoBlock._drawCalls) {
-			drawCalls.push_back(DrawCallDesc{d._firstIndex, d._indexCount, 0, (unsigned)drawCalls.size(), d._topology});
+			drawCalls.push_back(DrawCallDesc{d._firstIndex, d._indexCount, 0, d._topology});
 		}
 
         return NascentRawGeometry {

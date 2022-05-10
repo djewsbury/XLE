@@ -573,13 +573,14 @@ namespace RenderCore { namespace Techniques
 							}
 
 							auto& pendingGeo = _pendingGeos._geos[pendingGeoIdx];
+							unsigned materialIterator = 0;
 							for (const auto& dc:rawGeometry->_drawCalls) {
 								// note -- there's some redundancy here, because we'll end up calling 
 								// AddMaterial & MakePipeline over and over again for the same parameters. There's
 								// some caching in those to precent allocating dupes, but it might still be more
 								// efficient to avoid some of the redundancy
-								assert(dc._subMaterialIndex < currentMaterialAssignments.size());
-								auto matAssignment = currentMaterialAssignments[dc._subMaterialIndex];
+								assert(materialIterator < currentMaterialAssignments.size());
+								auto matAssignment = currentMaterialAssignments[materialIterator++];
 								auto* workingMaterial = _pendingPipelines.AddMaterial(
 									materialScaffold->GetMaterialMachine(matAssignment),
 									*materialScaffold,

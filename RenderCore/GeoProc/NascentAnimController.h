@@ -43,6 +43,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		{
 			std::vector<Float4x4>		_bindShapeByInverseBindMatrices;
 			std::vector<DrawCallDesc>   _preskinningDrawCalls;
+            std::vector<unsigned>       _drawCallWeightsPerVertex;
 			std::vector<uint16_t>		_jointMatrices;
 			Float4x4					_bindShapeMatrix;
             Float4x4					_postSkinningBindMatrix;

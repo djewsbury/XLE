@@ -56,7 +56,6 @@ namespace RenderCore { namespace Assets
 	{
 		unsigned	_firstIndex = 0, _indexCount = 0;
 		unsigned	_firstVertex = 0;
-		unsigned	_subMaterialIndex = 0;
 		Topology	_topology = Topology::TriangleList;
 	};
 
@@ -114,6 +113,7 @@ namespace RenderCore { namespace Assets
 		{
 			SerializableVector<Float4x4>		_bindShapeByInverseBindMatrices;
 			SerializableVector<DrawCallDesc>	_preskinningDrawCalls;
+			SerializableVector<unsigned>		_drawCallWeightsPerVertex;
 			uint16_t*							_jointMatrices;
 			size_t								_jointMatrixCount;
 			Float4x4							_bindShapeMatrix;			// (the bind shape matrix is already combined into the _bindShapeByInverseBindMatrices fields. This is included mostly just for debugging)
@@ -196,7 +196,6 @@ namespace RenderCore { namespace Assets
 		SerializationOperator(outputSerializer, drawCall._firstIndex);
 		SerializationOperator(outputSerializer, drawCall._indexCount);
 		SerializationOperator(outputSerializer, drawCall._firstVertex);
-		SerializationOperator(outputSerializer, drawCall._subMaterialIndex);
 		SerializationOperator(outputSerializer, (unsigned)drawCall._topology);
 	}
 }}

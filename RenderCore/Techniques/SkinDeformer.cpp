@@ -115,13 +115,16 @@ namespace RenderCore { namespace Techniques
 					MakeIteratorRange(jointTransform),
 					MakeIteratorRange(_skeletonMachineOutput));
 
-				for (const auto&drawCall:section._preskinningDrawCalls) {
+				assert(section._preskinningDrawCalls.size() == section._drawCallWeightsPerVertex.size());
+				for (unsigned dc=0; dc<section._preskinningDrawCalls.size(); ++dc) {
+					auto& drawCall = section._preskinningDrawCalls[dc];
+					auto weightsPerVertex = section._drawCallWeightsPerVertex[dc];
 					assert((drawCall._firstVertex + drawCall._indexCount) <= outputPosElement.size());
 
 					auto srcPosition = inputPosElement.begin() + drawCall._firstVertex;
 
 					// drawCall._subMaterialIndex is 0, 1, 2 or 4 depending on the number of weights we have to proces
-					if (drawCall._subMaterialIndex == 0) {
+					if (weightsPerVertex == 0) {
 						// in this case, we just copy
 						for (auto p=outputPosElement.begin() + drawCall._firstVertex; p < (outputPosElement.begin() + drawCall._firstVertex + drawCall._indexCount); ++p, ++srcPosition)
 							*p = (*srcPosition).As<Float3>();
@@ -136,7 +139,7 @@ namespace RenderCore { namespace Techniques
 						++p, ++srcPosition, srcJointWeight+=geo._influencesPerVertex, srcJointIndex+=geo._influencesPerVertex) {
 					
 						Float3 deformedPosition { 0.f, 0.f, 0.f };
-						for (unsigned b=0; b<drawCall._subMaterialIndex; ++b) {
+						for (unsigned b=0; b<weightsPerVertex; ++b) {
 							assert(srcJointIndex[b] < jointTransform.size());
 							deformedPosition += srcJointWeight[b] * TransformPoint(jointTransform[srcJointIndex[b]], (*srcPosition).As<Float3>());
 						}
@@ -225,6 +228,7 @@ namespace RenderCore { namespace Techniques
 			for (const auto&sourceSection:skinningData->_preskinningSections) {
 				Section section;
 				section._preskinningDrawCalls = MakeIteratorRange(sourceSection._preskinningDrawCalls);
+				section._drawCallWeightsPerVertex = MakeIteratorRange(sourceSection._drawCallWeightsPerVertex);
 				section._bindShapeByInverseBindMatrices = MakeIteratorRange(sourceSection._bindShapeByInverseBindMatrices);
 				section._bindShapeMatrix = sourceSection._bindShapeMatrix;
 				section._postSkinningBindMatrix = sourceSection._postSkinningBindMatrix;
@@ -512,6 +516,7 @@ namespace RenderCore { namespace Techniques
 				Section section;
 				section._geoId = geoIdx;
 				section._preskinningDrawCalls = MakeIteratorRange(sourceSection._preskinningDrawCalls);
+				section._drawCallWeightsPerVertex = MakeIteratorRange(sourceSection._drawCallWeightsPerVertex);
 				section._bindShapeByInverseBindMatrices = MakeIteratorRange(sourceSection._bindShapeByInverseBindMatrices);
 				section._bindShapeMatrix = sourceSection._bindShapeMatrix;
 				section._postSkinningBindMatrix = sourceSection._postSkinningBindMatrix;
@@ -568,14 +573,16 @@ namespace RenderCore { namespace Techniques
 			for (auto q=start; q!=s; ++q) {
 				assert(q->_indicesFormat == start->_indicesFormat);
 				assert(q->_weightsFormat == start->_weightsFormat);
-				for (const auto& draw:q->_preskinningDrawCalls) {
+				assert(q->_preskinningDrawCalls.size() == q->_drawCallWeightsPerVertex.size());
+				for (unsigned dc=0; dc<q->_preskinningDrawCalls.size(); ++dc) {
+					const auto& draw = q->_preskinningDrawCalls[dc];
 					assert(draw._firstIndex == ~unsigned(0x0));		// avoid confusion; this isn't used for anything
 					Dispatch dispatch;
 					dispatch._iaParamsIdx = (unsigned)_iaParams.size();
 					dispatch._skinIAParamsIdx = q->_skinIAParamsIdx;
 					dispatch._vertexCount = draw._indexCount;
 					dispatch._firstVertex = draw._firstVertex;
-					dispatch._softInfluenceCount = draw._subMaterialIndex;
+					dispatch._softInfluenceCount = q->_drawCallWeightsPerVertex[dc];
 					dispatch._pipelineMarker = pipelineMarker;
 					dispatch._firstJointTransform = q->_rangeInJointMatrices.first;
 					_dispatches.push_back(dispatch);

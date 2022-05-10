@@ -26,8 +26,7 @@ namespace RenderCore { namespace Assets
 		stream << "{ [" << AsString(dc._topology) << "] idxCount: " << dc._indexCount;
 		if (dc._firstIndex)
 			stream << ", firstIdx: " << dc._firstIndex;
-		stream << ", material: " << dc._subMaterialIndex;
-		stream << ", topology: " << dc._subMaterialIndex;
+		stream << ", topology: " << AsString(dc._topology);
 		stream << " }";
 		return stream;
 	}
