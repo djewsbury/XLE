@@ -139,6 +139,14 @@ namespace RenderCore { namespace Assets
 			ScaffoldCmdIterator{MakeIteratorRange(end, end)}};
 	}
 
+	IteratorRange<const uint64_t*>  ModelScaffoldCmdStreamForm::FindCommandStreamInputInterface() const
+	{
+		for (auto cmd:CommandStream())
+			if (cmd.Cmd() == (uint32_t)Assets::ModelCommand::InputInterface)
+				return cmd.RawData().Cast<const uint64_t*>();
+		return {};
+	}
+
 	std::shared_ptr<::Assets::IFileInterface> ModelScaffoldCmdStreamForm::OpenLargeBlocks() const { return _largeBlocksReopen(); }
 
 	ModelScaffoldCmdStreamForm::ModelScaffoldCmdStreamForm() {}

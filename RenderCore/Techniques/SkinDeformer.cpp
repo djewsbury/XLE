@@ -37,15 +37,8 @@ namespace RenderCore { namespace Techniques
 
 	static std::vector<uint64_t> CopyCmdStreamInputInterface(const Assets::ModelScaffoldCmdStreamForm& modelScaffold)
 	{
-		for (auto cmd:modelScaffold.CommandStream()) {
-			switch (cmd.Cmd()) {
-			case (uint32_t)Assets::ModelCommand::InputInterface:
-				auto data = cmd.RawData().Cast<const uint64_t*>();
-				return {data.begin(), data.end()};
-				break;
-			}
-		}
-		return {};
+		auto src = modelScaffold.FindCommandStreamInputInterface();
+		return {src.begin(), src.end()};
 	}
 
 	void CPUSkinDeformer::WriteJointTransforms(

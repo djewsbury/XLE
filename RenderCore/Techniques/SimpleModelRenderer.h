@@ -5,37 +5,33 @@
 #pragma once
 
 #include "DrawableDelegates.h"					// for IUniformBufferDelegate
-#include "Drawables.h"							// for ExecuteDrawableContext
-#include "../Assets/AnimationBindings.h"			// for SkeletonBinding
+#include "../Assets/AnimationBindings.h"		// for SkeletonBinding
 #include "../../Math/Matrix.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/StringUtils.h"
 #include <vector>
 #include <memory>
 
-namespace RenderCore { namespace Assets 
-{ 
-	class ModelScaffold;
-	class MaterialScaffold;
-	class SkeletonScaffold;
-}}
-namespace RenderCore { class IThreadContext; class IResource; class UniformsStreamInterface; }
-namespace Utility { class VariantArray; }
+namespace RenderCore { namespace Assets { class ModelScaffold; class MaterialScaffold; class SkeletonScaffold; }} // todo -- remove
+
+namespace RenderCore { namespace Assets { class RendererConstruction; }}
+namespace RenderCore { class UniformsStreamInterface; }
 
 namespace RenderCore { namespace Techniques 
 {
-	class Drawable; class DrawableGeo;
+	class Drawable;
 	class DrawablesPacket; 
 	class ParsingContext; 
 	class IPipelineAcceleratorPool; 
-	class PipelineAccelerator;
 	class DescriptorSetAccelerator;
 	class IDeformAcceleratorPool;
+	class DeformAccelerator;
 	class IGeoDeformerInfrastructure;
-	class IDeformParametersAttachment;
 	class IGeoDeformer;
 	class ISkinDeformer;
 	class IUniformBufferDelegate;
+	class DrawableConstructor;
+	class ExecuteDrawableContext;
 
 	class ICustomDrawDelegate
 	{
@@ -69,28 +65,25 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<DrawablesPacket** const> pkts,
 			const Float4x4& localToWorld = Identity<Float4x4>()) const;
 
-		const ::Assets::DependencyValidation& GetDependencyValidation() const;
-
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		const std::shared_ptr<IGeoDeformerInfrastructure>& GetGeoDeformerInfrastructure() const { return _geoDeformerInfrastructure; }
 
-		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& GetModelScaffold() const { return _modelScaffold; }
+		/*const std::shared_ptr<RenderCore::Assets::ModelScaffold>& GetModelScaffold() const { return _modelScaffold; }
 		const std::shared_ptr<RenderCore::Assets::MaterialScaffold>& GetMaterialScaffold() const { return _materialScaffold; }
 		const std::string& GetModelScaffoldName() const { return _modelScaffoldName; }
-		const std::string& GetMaterialScaffoldName() const { return _materialScaffoldName; }
+		const std::string& GetMaterialScaffoldName() const { return _materialScaffoldName; }*/
+		const Assets::RendererConstruction& GetRendererConstruction() const;
 
 		using UniformBufferBinding = std::pair<uint64_t, std::shared_ptr<IUniformBufferDelegate>>;
 
 		SimpleModelRenderer(
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
-			const std::shared_ptr<RenderCore::Assets::MaterialScaffold>& materialScaffold,
+			const std::shared_ptr<Assets::RendererConstruction>& construction,
+			const std::shared_ptr<DrawableConstructor>& drawableConstructor,
+			const std::shared_ptr<Assets::SkeletonScaffold>& skeletonScaffold,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool = nullptr,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator = nullptr,
-			const std::shared_ptr<IGeoDeformerInfrastructure>& geoDeformerInfrastructure = nullptr,
-			const std::shared_ptr<IDeformParametersAttachment>& parametersDeformInfrastructure = nullptr,
-			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {},
-			const std::string& modelScaffoldName = {},
-			const std::string& materialScaffoldName = {});
+			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {});
 		~SimpleModelRenderer();
 
 		SimpleModelRenderer& operator=(const SimpleModelRenderer&) = delete;
@@ -100,12 +93,8 @@ namespace RenderCore { namespace Techniques
 			std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
-			const ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
-			const ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
-			StringSection<> deformOperations = {},
-			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {},
-			const std::string& modelScaffoldNameString = {},
-			const std::string& materialScaffoldNameString = {});
+			const std::shared_ptr<Assets::RendererConstruction>& construction,
+			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {});
 		
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
@@ -113,7 +102,6 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 			StringSection<> modelScaffoldName,
 			StringSection<> materialScaffoldName,
-			StringSection<> deformOperations = {},
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {});
 
 		static void ConstructToPromise(
@@ -121,39 +109,33 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			StringSection<> modelScaffoldName);
 
+		static void ConstructToPromise(	// todo -- remove
+			std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
+			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
+			const ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
+			const ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
+			StringSection<> deformOperations = {},
+			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {},
+			const std::string& modelScaffoldNameString = {},
+			const std::string& materialScaffoldNameString = {});
+
 	private:
-		std::shared_ptr<RenderCore::Assets::ModelScaffold> _modelScaffold;
-		std::shared_ptr<RenderCore::Assets::MaterialScaffold> _materialScaffold;
+		std::shared_ptr<DrawableConstructor> _drawableConstructor;
 
-		std::unique_ptr<Float4x4[]> _baseTransforms;
-		unsigned _baseTransformCount;
-
-		std::vector<std::shared_ptr<DrawableGeo>> _geos;
-		std::vector<std::shared_ptr<DrawableGeo>> _boundSkinnedControllers;
-
-		struct GeoCall
+		struct Element
 		{
-			std::shared_ptr<PipelineAccelerator> _pipelineAccelerator;
-			std::shared_ptr<DescriptorSetAccelerator> _descriptorSetAccelerator;
-			unsigned _batchFilter;
-			unsigned _iaIdx;
+			RenderCore::Assets::SkeletonBinding _skeletonBinding;
+			std::unique_ptr<Float4x4[]> _baseTransforms;
+			unsigned _baseTransformCount;
 		};
-
-		std::vector<GeoCall> _geoCalls;
-		std::vector<GeoCall> _boundSkinnedControllerGeoCalls;
-		unsigned _drawablesCount[2];
-
-		RenderCore::Assets::SkeletonBinding _skeletonBinding;
+		std::vector<Element> _elements;
 
 		std::shared_ptr<UniformsStreamInterface> _usi;
 
-		std::vector<std::shared_ptr<DrawableInputAssembly>> _drawableIAs;
 		std::shared_ptr<IDeformAcceleratorPool> _deformAcceleratorPool;
 		std::shared_ptr<DeformAccelerator> _deformAccelerator;
 		std::shared_ptr<IGeoDeformerInfrastructure> _geoDeformerInfrastructure;
-
-		std::string _modelScaffoldName;
-		std::string _materialScaffoldName;
 
 		::Assets::DependencyValidation _depVal;
 
@@ -181,9 +163,8 @@ namespace RenderCore { namespace Techniques
 			std::promise<std::shared_ptr<SimpleModelRenderer>>&& rendererFuture,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
-			const ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
-			const ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
-			const ::Assets::PtrToMarkerPtr<RenderCore::Assets::SkeletonScaffold>& skeletonScaffoldFuture,
+			const std::shared_ptr<Assets::RendererConstruction>& rendererConstruction,
+			const ::Assets::PtrToMarkerPtr<RenderCore::Assets::SkeletonScaffold>& skeletonScaffoldFuture,	// todo -- this could be managed by RendererConstruction
 			StringSection<> deformOperations = {},
 			IteratorRange<const SimpleModelRenderer::UniformBufferBinding*> uniformBufferDelegates = {});
 

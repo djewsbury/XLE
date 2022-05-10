@@ -109,7 +109,7 @@ namespace RenderCore { namespace Techniques
 
 		const UniformsStreamInterface& globalUSI = uniformDelegateMan.GetInterface();
 
-		auto& deformAccelerators = *g_hack_deformAccelerators;
+		auto* deformAccelerators = g_hack_deformAccelerators;
 		
 		UniformsStreamInterface materialUSI;
 		materialUSI.BindFixedDescriptorSet(0, s_materialDescSetName);
@@ -134,7 +134,7 @@ namespace RenderCore { namespace Techniques
 		unsigned justMatDescSetCount = 0;
 		unsigned executeCount = 0;
 		RenderCore::Metal_Vulkan::TemporaryStorageResourceMap dynamicPageResourceWorkingAllocation;
-		const auto dynamicPageResourceAlignment = deformAccelerators.GetDynamicPageResourceAlignment();
+		const auto dynamicPageResourceAlignment = deformAccelerators ? deformAccelerators->GetDynamicPageResourceAlignment() : 16u;
 		unsigned dynamicPageMovingGPUOffset = 0, dynamicPageMovingGPUEnd = 0;
 
 		TRY {
@@ -226,7 +226,8 @@ namespace RenderCore { namespace Techniques
 							unsigned preAlign = CeilToMultiple((size_t)dynamicPageMovingGPUOffset, dynamicPageResourceAlignment) - (size_t)dynamicPageMovingGPUOffset;
 							if ((dynamicPageMovingGPUOffset+preAlign+dynamicSize) > dynamicPageMovingGPUEnd) {
 								const unsigned defaultBlockSize = 16*1024;
-								dynamicPageResourceWorkingAllocation = AllocateFromDynamicPageResource(deformAccelerators, std::max(dynamicSize, defaultBlockSize));
+								assert(deformAccelerators);
+								dynamicPageResourceWorkingAllocation = AllocateFromDynamicPageResource(*deformAccelerators, std::max(dynamicSize, defaultBlockSize));
 								dynamicPageMovingGPUOffset = 0;
 								dynamicPageMovingGPUEnd = dynamicPageMovingGPUOffset + dynamicPageResourceWorkingAllocation.GetData().size();
 								preAlign = 0;

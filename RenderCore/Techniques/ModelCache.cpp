@@ -91,6 +91,7 @@ namespace RenderCore { namespace Techniques
         result._modelScaffolds = _pimpl->_modelScaffolds.LogRecords();
         result._materialScaffolds = _pimpl->_materialScaffolds.LogRecords();
 
+#if 0
         auto rendererRecords = _pimpl->_modelRenderers.LogRecords();
         result._modelRenderers.reserve(rendererRecords.size());
         for (const auto& r:rendererRecords) {
@@ -98,6 +99,8 @@ namespace RenderCore { namespace Techniques
             if (actual)
                 result._modelRenderers.push_back({(*actual)->GetModelScaffoldName(), (*actual)->GetMaterialScaffoldName(), r._decayFrames});
         }
+#endif
+        assert(0);
         return result;
     }
 

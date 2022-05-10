@@ -167,6 +167,17 @@ namespace RenderCore { namespace Assets
 		return result;
 	}
 
+	unsigned RendererConstruction::GetElementCount() const
+	{
+		return _internal->_elementCount;
+	}
+
+	const ::Assets::DependencyValidation& RendererConstruction::GetDependencyValidation() const
+	{
+		static ::Assets::DependencyValidation hack;
+		return hack;
+	}
+
 	RendererConstruction::RendererConstruction()
 	{
 		_internal = std::make_unique<Internal>();

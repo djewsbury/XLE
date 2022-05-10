@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "DrawableProvider.h"
+#include "DrawableConstructor.h"
 #include "Drawables.h"
 #include "DeformGeometryInfrastructure.h"
 #include "PipelineAccelerator.h"
@@ -18,6 +18,8 @@
 
 namespace RenderCore { namespace Techniques
 {
+	static_assert((uint32_t)DrawableConstructor::Command::BeginElement == Assets::s_scaffoldCmdBegin_DrawableConstructor);
+
 	namespace Internal
 	{
 		static std::vector<InputElementDesc> MakeIA(IteratorRange<const Assets::VertexElement*> elements, IteratorRange<const uint64_t*> suppressedElements, unsigned streamIdx)
@@ -460,16 +462,16 @@ namespace RenderCore { namespace Techniques
 		return nullptr;
 	}
 
-	class DrawableProvider::Pimpl
+	class DrawableConstructor::Pimpl
 	{
 	public:
 		Internal::PipelineBuilder _pendingPipelines;
 		Internal::DrawableGeoBuilder _pendingGeos;
-		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
 		std::future<BufferUploads::CommandListID> _uploadFuture;
 		std::atomic<bool> _fulfillWhenNotPendingCalled = false;
 		std::vector<Float4x4> _pendingGeoSpaceToNodeSpaces;
 		std::vector<DrawCall> _pendingDrawCalls;
+		std::vector<uint8_t> _pendingTranslatedCmdStream;
 
 		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
 
@@ -481,7 +483,6 @@ namespace RenderCore { namespace Techniques
 			unsigned elementIdx)
 		{
 			IteratorRange<const uint64_t*> currentMaterialAssignments;
-			unsigned currentTransformMarker = ~0u;
 
 			RenderCore::Techniques::IGeoDeformerInfrastructure* geoDeformerInfrastructure = nullptr;
 			RenderCore::Techniques::IDeformParametersAttachment* deformParametersAttachment = nullptr;
@@ -493,20 +494,28 @@ namespace RenderCore { namespace Techniques
 					deformerBinding = geoDeformerInfrastructure->GetDeformerToRendererBinding();
 			}
 
+			{
+				// BeginElement command
+				auto cmdId = (uint32_t)Command::BeginElement, blockSize = 4u;
+				_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
+				_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
+				_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&elementIdx, (const uint8_t*)(&elementIdx+1));
+			}
+
 			std::vector<std::pair<unsigned, unsigned>> modelGeoIdToPendingGeoIndex;
 			for (auto cmd:modelScaffold->CommandStream()) {
 				switch (cmd.Cmd()) {
-				case (uint32_t)Assets::ModelCommand::BeginSubModel:
-				case (uint32_t)Assets::ModelCommand::EndSubModel:
-				case (uint32_t)Assets::ModelCommand::SetLevelOfDetail:
-					break;		// submodel stuff not used at the moment
-
-				case (uint32_t)Assets::ModelCommand::SetTransformMarker:
-					currentTransformMarker = cmd.As<unsigned>();
-					break;
-
 				case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
 					currentMaterialAssignments = cmd.RawData().Cast<const uint64_t*>();
+					// intentional fall-through
+
+				default:
+					{
+						auto cmdId = cmd.Cmd(), blockSize = cmd.BlockSize();
+						_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
+						_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
+						_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)cmd.RawData().begin(), (const uint8_t*)cmd.RawData().end());
+					}
 					break;
 
 				case (uint32_t)Assets::ModelCommand::GeoCall:
@@ -514,6 +523,7 @@ namespace RenderCore { namespace Techniques
 						auto& geoCallDesc = cmd.As<Assets::GeoCallDesc>();
 						auto geoMachine = modelScaffold->GetGeoMachine(geoCallDesc._geoId);
 						assert(!geoMachine.empty());
+						assert(!currentMaterialAssignments.empty());
 
 						// Find the referenced geo object, and create the DrawableGeo object, etc
 						unsigned pendingGeoIdx = ~0u;
@@ -543,12 +553,15 @@ namespace RenderCore { namespace Techniques
 						}
 
 						if (rawGeometry) {
+							unsigned drawCallIterators[2] = {(unsigned)_pendingDrawCalls.size()};
+
 							auto& pendingGeo = _pendingGeos._geos[pendingGeoIdx];
 							for (const auto& dc:rawGeometry->_drawCalls) {
 								// note -- there's some redundancy here, because we'll end up calling 
 								// AddMaterial & MakePipeline over and over again for the same parameters. There's
 								// some caching in those to precent allocating dupes, but it might still be more
 								// efficient to avoid some of the redundancy
+								assert(dc._subMaterialIndex < currentMaterialAssignments.size());
 								auto matAssignment = currentMaterialAssignments[dc._subMaterialIndex];
 								auto* workingMaterial = _pendingPipelines.AddMaterial(
 									materialScaffold->GetMaterialMachine(matAssignment),
@@ -561,16 +574,25 @@ namespace RenderCore { namespace Techniques
 									_pendingGeos._geosTopologies[pendingGeoIdx]);
 
 								DrawCall drawCall;
-								drawCall._geoIdx = pendingGeoIdx;
+								drawCall._drawableGeoIdx = pendingGeoIdx;
 								drawCall._pipelineAcceleratorIdx = compiledPipeline._pipelineAcceleratorIdx;
 								drawCall._descriptorSetAcceleratorIdx = workingMaterial->_descriptorSetAcceleratorIdx;
 								drawCall._geoSpaceToNodeSpaceIdx = AddGeoSpaceToNodeSpace(rawGeometry->_geoSpaceToNodeSpace);
 								drawCall._batchFilter = workingMaterial->_batchFilter;
-								drawCall._materialGuid = workingMaterial->_guid;
 								drawCall._firstIndex = dc._firstIndex;
 								drawCall._indexCount = dc._indexCount;
 								drawCall._firstVertex = dc._firstVertex;
 								_pendingDrawCalls.push_back(drawCall);
+							}
+
+							{
+								// The ModelCommand::GeoCall cmd is not added to the translated command stream, but instead
+								// we add a ExecuteDrawCalls command
+								drawCallIterators[1] = (unsigned)_pendingDrawCalls.size();
+								auto cmdId = (uint32_t)Command::ExecuteDrawCalls, blockSize = 8u;
+								_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
+								_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
+								_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&drawCallIterators, (const uint8_t*)&drawCallIterators[2]);
 							}
 						}
 					}
@@ -588,38 +610,54 @@ namespace RenderCore { namespace Techniques
 			return (unsigned)_pendingGeoSpaceToNodeSpaces.size()-1;
 		}
 
-		void FillIn(DrawableProvider& dst)
+		void FillIn(DrawableConstructor& dst)
 		{
 			unsigned geoIdxOffset = dst._drawableGeos.size();
 			unsigned pipelineAcceleratorIdxOffset = dst._pipelineAccelerators.size();
 			unsigned descSetAcceleratorIdxOffset = dst._descriptorSetAccelerators.size();
+			unsigned drawCallIdxOffset = dst._drawCalls.size();
 			dst._drawableGeos.insert(dst._drawableGeos.end(), _pendingGeos._geos.begin(), _pendingGeos._geos.end());
 			dst._pipelineAccelerators.insert(dst._pipelineAccelerators.end(), _pendingPipelines._pipelineAccelerators.begin(), _pendingPipelines._pipelineAccelerators.end());
 			dst._descriptorSetAccelerators.insert(dst._descriptorSetAccelerators.end(), _pendingPipelines._descriptorSetAccelerators.begin(), _pendingPipelines._descriptorSetAccelerators.end());
 
 			for (auto& p:_pendingDrawCalls) {
-				p._geoIdx += geoIdxOffset;
+				p._drawableGeoIdx += geoIdxOffset;
 				p._pipelineAcceleratorIdx += pipelineAcceleratorIdxOffset;
 				p._descriptorSetAcceleratorIdx += descSetAcceleratorIdxOffset;
 			}
 			dst._drawCalls.insert(dst._drawCalls.end(), _pendingDrawCalls.begin(), _pendingDrawCalls.end());
+
+			// offset draw call indices in _pendingTranslatedCmdStream and append
+			for (auto cmd:Assets::MakeScaffoldCmdRange(MakeIteratorRange(_pendingTranslatedCmdStream)))
+				if (cmd.Cmd() == (uint32_t)Command::ExecuteDrawCalls) {
+					auto range = cmd.RawData().Cast<const unsigned*>();
+					for (auto& r:range) const_cast<unsigned&>(r) += drawCallIdxOffset;
+				}
+			dst._translatedCmdStream.insert(dst._translatedCmdStream.end(), _pendingTranslatedCmdStream.begin(), _pendingTranslatedCmdStream.end());
+
+			// count up draw calls
+			static_assert(dimof(dst._drawCallCounts) == (size_t)Batch::Max);
+			for (auto& count:dst._drawCallCounts) count = 0;
+			for (const auto& drawCall:dst._drawCalls)
+				++dst._drawCallCounts[(unsigned)drawCall._batchFilter];
+			
 			_pendingDrawCalls.clear();
 			_pendingGeoSpaceToNodeSpaces.clear();
 			_pendingGeos = {};
 			_pendingPipelines = {};
+			_pendingTranslatedCmdStream.clear();
 		}
 
-		Pimpl(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators, std::shared_ptr<BufferUploads::IManager> bufferUploads)
+		Pimpl(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
 		{
 			_pendingPipelines._pipelineAcceleratorPool = std::move(pipelineAccelerators);
-			_bufferUploads = std::move(bufferUploads);
 		}
 
 		~Pimpl()
 		{}
 	};
 
-	void DrawableProvider::Add(const Assets::RendererConstruction& construction)
+	void DrawableConstructor::Add(const Assets::RendererConstruction& construction)
 	{
 		assert(construction.GetAssetState() == ::Assets::AssetState::Ready);
 		unsigned elementIdx = 0;
@@ -632,7 +670,7 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	void DrawableProvider::FulfillWhenNotPending(std::promise<FulFilledProvider>&& promise)
+	void DrawableConstructor::FulfillWhenNotPending(std::promise<FulFilledPromise>&& promise)
 	{
 		// prevent multiple calls, because this introduces a lot of threading complications
 		auto prevCalled = _pimpl->_fulfillWhenNotPendingCalled.exchange(true);
@@ -649,25 +687,25 @@ namespace RenderCore { namespace Techniques
 			[strongThis]() {
 				strongThis->_pimpl->FillIn(*strongThis);
 
-				FulFilledProvider result;
-				result._provider = strongThis;
+				FulFilledPromise result;
+				result._constructor = strongThis;
 				result._completionCmdList = strongThis->_pimpl->_uploadFuture.get();
 				return result;
 			});
 	}
 
-	DrawableProvider::DrawableProvider(
+	DrawableConstructor::DrawableConstructor(
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
-		std::shared_ptr<BufferUploads::IManager> bufferUploads,
+		BufferUploads::IManager& bufferUploads,
 		const Assets::RendererConstruction& construction)
 	{
-		_pimpl = std::make_unique<Pimpl>(std::move(pipelineAccelerators), std::move(bufferUploads));
+		_pimpl = std::make_unique<Pimpl>(std::move(pipelineAccelerators));
 		Add(construction);
 		std::promise<BufferUploads::CommandListID> uploadPromise;
 		_pimpl->_uploadFuture = uploadPromise.get_future();
-		_pimpl->_pendingGeos.LoadPendingStaticResources(std::move(uploadPromise), *_pimpl->_bufferUploads);
+		_pimpl->_pendingGeos.LoadPendingStaticResources(std::move(uploadPromise), bufferUploads);
 	}
 
-	DrawableProvider::~DrawableProvider() {}
+	DrawableConstructor::~DrawableConstructor() {}
 
 }}

@@ -95,6 +95,8 @@ namespace RenderCore { namespace Assets
 		unsigned					GetMaxLOD() const;
 		const SkeletonMachine*		EmbeddedSkeleton() const { return _embeddedSkeleton; }
 
+		IteratorRange<const uint64_t*>  FindCommandStreamInputInterface() const;
+
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		std::shared_ptr<::Assets::IFileInterface> OpenLargeBlocks() const;
 

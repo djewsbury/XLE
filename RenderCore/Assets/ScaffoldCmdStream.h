@@ -22,6 +22,7 @@ namespace RenderCore { namespace Assets
 	static constexpr unsigned s_scaffoldCmdBegin_SkeletonMachine = 0x1500;
 	static constexpr unsigned s_scaffoldCmdBegin_MaterialMachine = 0x2000;
 	static constexpr unsigned s_scaffoldCmdBegin_ScaffoldMachine = 0x2500;
+	static constexpr unsigned s_scaffoldCmdBegin_DrawableConstructor = 0x3000;
 
 	enum class ScaffoldCommand : uint32_t
 	{
@@ -171,6 +172,7 @@ namespace RenderCore { namespace Assets
 		ElementIterator begin() const;
 		ElementIterator end() const;
 		ElementIterator GetElement(unsigned idx) const;
+		unsigned GetElementCount() const;
 
 		void SetSkeletonScaffold(StringSection<>);
 		void SetSkeletonScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>&);

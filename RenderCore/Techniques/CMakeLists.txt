@@ -33,7 +33,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         DeformGeoInternal.cpp
         DeformGeometryInfrastructure.cpp
         DeformParametersInfrastructure.cpp
-        DrawableProvider.cpp
+        DrawableConstructor.cpp
         ../../Tools/ToolsRig/VisualisationGeo.cpp
         )
     set(Headers

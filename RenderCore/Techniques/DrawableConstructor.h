@@ -2,8 +2,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "../Assets/ScaffoldCmdStream.h"
 #include "../../BufferUploads/IBufferUploads.h"
+#include "../../Math/Matrix.h"
 #include <memory>
 
 namespace RenderCore { namespace Assets { class RendererConstruction; }}
@@ -16,7 +16,7 @@ namespace RenderCore { namespace Techniques
 	class DescriptorSetAccelerator;
 	class DrawableGeo;
 
-	class DrawableProvider : public std::enable_shared_from_this<DrawableProvider>
+	class DrawableConstructor : public std::enable_shared_from_this<DrawableConstructor>
 	{
 	public:
 		std::vector<std::shared_ptr<DrawableGeo>> _drawableGeos;
@@ -25,30 +25,37 @@ namespace RenderCore { namespace Techniques
 		std::vector<Float4x4> _geoSpaceToNodeSpaces;
 		struct DrawCall
 		{
-			unsigned _geoIdx = ~0u;
-			unsigned _pipelineAcceleratorIdx = ~0u;
-			unsigned _descriptorSetAcceleratorIdx = ~0u;
-			unsigned _geoSpaceToNodeSpaceIdx = ~0u;
+			unsigned _drawableGeoIdx = ~0u;					// index into _drawableGeos
+			unsigned _pipelineAcceleratorIdx = ~0u;			// index into _pipelineAccelerators
+			unsigned _descriptorSetAcceleratorIdx = ~0u;	// index into _descriptorSetAccelerators
+			unsigned _geoSpaceToNodeSpaceIdx = ~0u;			// index into _geoSpaceToNodeSpaces
 			unsigned _batchFilter = 0;
-			uint64_t _materialGuid = ~0ull;
-			unsigned _firstIndex = 0, _indexCount =0;
+			unsigned _firstIndex = 0;
+			unsigned _indexCount = 0;
 			unsigned _firstVertex = 0;
 		};
 		std::vector<DrawCall> _drawCalls;
 		unsigned _drawCallCounts[2] = {0};		// per batch
 
-		struct FulFilledProvider
+		enum class Command : uint32_t
 		{
-			std::shared_ptr<DrawableProvider> _provider;
+			BeginElement = 0x3000,		// must equal s_scaffoldCmdBegin_DrawableConstructor
+			ExecuteDrawCalls,
+		};
+		std::vector<uint8_t> _translatedCmdStream;
+
+		struct FulFilledPromise
+		{
+			std::shared_ptr<DrawableConstructor> _constructor;
 			BufferUploads::CommandListID _completionCmdList;
 		};
-		void FulfillWhenNotPending(std::promise<FulFilledProvider>&& promise);
+		void FulfillWhenNotPending(std::promise<FulFilledPromise>&& promise);
 
-		DrawableProvider(
+		DrawableConstructor(
 			std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
-			std::shared_ptr<BufferUploads::IManager> bufferUploads,
+			BufferUploads::IManager& bufferUploads,
 			const Assets::RendererConstruction&);
-		~DrawableProvider();
+		~DrawableConstructor();
 	private:
 		class Pimpl;
 		std::unique_ptr<Pimpl> _pimpl;
