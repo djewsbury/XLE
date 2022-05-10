@@ -232,6 +232,8 @@ namespace UnitTests
 				prepare->StallWhilePending();
 				REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
 			}
+			pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();		// must call this to flip completed pipelines, etc, to visible
+			::Assets::Services::GetAssetSets().OnFrameBarrier();
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);

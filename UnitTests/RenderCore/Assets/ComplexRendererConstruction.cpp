@@ -9,7 +9,7 @@
 #include "../../../RenderCore/Assets/MaterialScaffold.h"
 #include "../../../RenderCore/Assets/ScaffoldCmdStream.h"
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
-#include "../../../RenderCore/Techniques/DrawableProvider.h"
+#include "../../../RenderCore/Techniques/DrawableConstructor.h"
 #include "../../../Assets/IntermediatesStore.h"
 #include "../../../Assets/IntermediateCompilers.h"
 #include "../../../Assets/CompileAndAsyncManager.h"
@@ -88,15 +88,15 @@ namespace UnitTests
 				REQUIRE(future.get() == rendererConstruction);
 				REQUIRE(rendererConstruction->GetAssetState() == ::Assets::AssetState::Ready);
 			
-				SECTION("Create DrawableProvider")
+				SECTION("Create DrawableConstructor")
 				{
-					auto provider = std::make_shared<RenderCore::Techniques::DrawableProvider>(testApparatus._pipelineAccelerators, testApparatus._bufferUploads, *rendererConstruction);
-					std::promise<RenderCore::Techniques::DrawableProvider::FulFilledProvider> promise;
+					auto constructor = std::make_shared<RenderCore::Techniques::DrawableConstructor>(testApparatus._pipelineAccelerators, *testApparatus._bufferUploads, *rendererConstruction);
+					std::promise<RenderCore::Techniques::DrawableConstructor::FulFilledPromise> promise;
 					auto future = promise.get_future();
-					provider->FulfillWhenNotPending(std::move(promise));
+					constructor->FulfillWhenNotPending(std::move(promise));
 					future.wait();
 					auto fulfilledPromise = future.get();
-					REQUIRE(fulfilledPromise._provider == provider);
+					REQUIRE(fulfilledPromise._constructor == constructor);
 					REQUIRE(fulfilledPromise._completionCmdList > 0);
 				}
 			}

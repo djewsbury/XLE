@@ -33,6 +33,7 @@
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../../RenderCore/Techniques/Services.h"
+#include "../../RenderCore/Techniques/Drawables.h"
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/ResourceDesc.h"
@@ -985,6 +986,8 @@ namespace ToolsRig
 			const PlatformRig::InputContext& context,
 			const PlatformRig::InputSnapshot& evnt)
         {
+			return false;
+			
 			if (evnt._mouseDelta == PlatformRig::Coord2 { 0, 0 })
 				return false;
 

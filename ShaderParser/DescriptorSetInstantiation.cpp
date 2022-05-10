@@ -116,6 +116,17 @@ namespace ShaderSourceParser
 		return result;
 	}
 
+	static bool MatchableDescriptorType(RenderCore::DescriptorType inputSlotType, RenderCore::DescriptorType pipelineLayoutSlotType)
+	{
+		// We can assign a non-dynamic-offset UniformBuffer / UnorderedAccessBuffer to a "dynamic offset" slot in the pipeline layout
+		// However not the other way around. If the "input/material layout" version is dynamic offset, it can't match with a non-dynamic-offset
+		// pipeline layout slot
+		return inputSlotType == pipelineLayoutSlotType
+			|| (inputSlotType == RenderCore::DescriptorType::UniformBuffer) && pipelineLayoutSlotType == RenderCore::DescriptorType::UniformBufferDynamicOffset
+			|| (inputSlotType == RenderCore::DescriptorType::UnorderedAccessBuffer) && pipelineLayoutSlotType == RenderCore::DescriptorType::UnorderedAccessBufferDynamicOffset
+			;
+	}
+
 	std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> LinkToFixedLayout(
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& input,
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& pipelineLayoutVersion,
@@ -158,7 +169,7 @@ namespace ShaderSourceParser
 				if (i != pipelineLayoutVersion._slots.end()) {
 					auto finalIdx = std::distance(pipelineLayoutVersion._slots.begin(), i);
 					// If the types do not agree, we can't use this slot. We will just treat them as unmatching
-					if (input._slots[c]._type != i->_type || input._slots[c]._arrayElementCount != i->_arrayElementCount)
+					if (!MatchableDescriptorType(input._slots[c]._type, i->_type) || input._slots[c]._arrayElementCount != i->_arrayElementCount)
 						continue;
 						
 					if (assignedSlots_final[i->_slotIdx])
@@ -167,6 +178,7 @@ namespace ShaderSourceParser
 					usedSlots_input[c] = true;
 					auto finalSlot = input._slots[c];
 					finalSlot._slotIdx = i->_slotIdx;
+					finalSlot._type = i->_type;
 					result->_slots.push_back(finalSlot);
 
 					// We could try to align up the CB layout in some way, to try to encourage consistency there, as well
@@ -191,7 +203,7 @@ namespace ShaderSourceParser
 					Throw(std::runtime_error(str.str()));
 				}
 				const auto& i = pipelineLayoutVersion._slots[q];
-				if (input._slots[c]._type != i._type || input._slots[c]._arrayElementCount != i._arrayElementCount) {
+				if (!MatchableDescriptorType(input._slots[c]._type, i._type) || input._slots[c]._arrayElementCount != i._arrayElementCount) {
 					std::stringstream str;
 					str << "Custom pipeline layout does not agree with fixed layout in LinkToFixedLayout. Matching slot (" << i._slotIdx << "), which has type (" << AsString(i._type) << ") in the fixed layout but type (" << AsString(input._slots[c]._type) << ") in the custom layout (" << input._slots[c]._name << ")";
 					Throw(std::runtime_error(str.str()));
@@ -199,7 +211,7 @@ namespace ShaderSourceParser
 			} else {
 				for (; q<pipelineLayoutVersion._slots.size(); q++) {
 					if (!assignedSlots_final[pipelineLayoutVersion._slots[q]._slotIdx]
-						&& input._slots[c]._type == pipelineLayoutVersion._slots[q]._type
+						&& MatchableDescriptorType(input._slots[c]._type, pipelineLayoutVersion._slots[q]._type)
 						&& input._slots[c]._arrayElementCount == pipelineLayoutVersion._slots[q]._arrayElementCount) {
 						break;
 					}
@@ -211,6 +223,7 @@ namespace ShaderSourceParser
 			assignedSlots_final[pipelineLayoutVersion._slots[q]._slotIdx] = true;
 			auto finalSlot = input._slots[c];
 			finalSlot._slotIdx = pipelineLayoutVersion._slots[q]._slotIdx;
+			finalSlot._type = pipelineLayoutVersion._slots[q]._type;
 			result->_slots.push_back(finalSlot);
 		}
 
@@ -226,7 +239,7 @@ namespace ShaderSourceParser
 			if (result->_slots[q]._cbIdx == ~0u) continue;
 
 			std::shared_ptr<RenderCore::Assets::PredefinedCBLayout> layout;
-			if (assignedSlots_final[pipelineLayoutVersion._slots[q]._slotIdx]) {
+			if (assignedSlots_final[result->_slots[q]._slotIdx]) {
 				layout = input._constantBuffers[result->_slots[q]._cbIdx];
 			} else {
 				layout = pipelineLayoutVersion._constantBuffers[result->_slots[q]._cbIdx];

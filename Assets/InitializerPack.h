@@ -50,6 +50,7 @@ namespace Assets
 		template<typename T> static auto HasSimpleHashing_(int) -> decltype(Hash64(std::declval<const T&>().get(), std::declval<uint64_t>()), std::true_type{});
 		template<typename T>  static auto HasSimpleHashing_(int) -> typename std::enable_if<std::is_integral<T>::value, std::true_type>::type;
 		template<typename T>  static auto HasSimpleHashing_(int) -> typename std::enable_if<std::is_enum<T>::value && !std::is_integral<T>::value, std::true_type>::type;
+		static inline auto HasSimpleHashing_(nullptr_t) -> std::true_type;
 		template<typename...> static auto HasSimpleHashing_(...) -> std::false_type;
 		template<typename T> struct HasSimpleHashing : decltype(HasSimpleHashing_<T>(0)) {};
 
@@ -83,6 +84,8 @@ namespace Assets
 
 		template<typename T, decltype(Hash64(std::declval<const T&>().get(), std::declval<uint64_t>()))* = nullptr>
 			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return Hash64(p.get(), seed); }
+
+		inline uint64_t HashParam_Chain(nullptr_t, uint64_t seed) { return seed+1; }
 
 		template<
 			typename T, 
@@ -136,6 +139,8 @@ namespace Assets
 		template<typename T, decltype(Hash64(std::declval<const T&>().get()))* = nullptr>
 			uint64_t HashParam_Single(const T& p) { return Hash64(p.get()); }
 
+		inline uint64_t HashParam_Single(nullptr_t) { return 0; }
+		
 		template<
 			typename T, 
 			decltype(std::declval<const T&>().begin() != std::declval<const T&>().end())* = nullptr, 

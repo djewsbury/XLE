@@ -424,6 +424,7 @@ namespace UnitTests
 							REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
 						}
 						testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
+						::Assets::Services::GetAssetSets().OnFrameBarrier();
 
 						Techniques::Draw(
 							parsingContext, 
@@ -496,6 +497,7 @@ namespace UnitTests
 							REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
 						}
 						testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
+						::Assets::Services::GetAssetSets().OnFrameBarrier();
 
 						Techniques::Draw(
 							parsingContext, 

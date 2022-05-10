@@ -156,7 +156,7 @@ float3 NoiseTexture3(float3 position, float scale, float detail, float distortio
     }
 
     int octaves = int(detail);
-    float normFactor = ((float)(1 << octaves) / (float)((1 << (octaves + 1)) - 1));
+    float normFactor = ((float)(int(1) << octaves) / (float)((int(1) << (octaves + int(1))) - 1.0f));
     fac = fbmNoise3DZeroToOne(p, 1.f, .5f, 2.1042, octaves) * normFactor;
     return float3(
         fac,

@@ -533,7 +533,7 @@ namespace ShaderSourceParser
 		}
 
 		for (auto cb=descriptorSet._slots.begin(); cb!=descriptorSet._slots.end(); ++cb) {
-            if (cb->_type != RenderCore::DescriptorType::UniformBuffer || cb->_name.empty())
+            if ((cb->_type != RenderCore::DescriptorType::UniformBuffer && cb->_type != RenderCore::DescriptorType::UniformBufferDynamicOffset) || cb->_name.empty())
                 continue;
 
 			result << "cbuffer " << cb->_name << " : register (b" << std::distance(descriptorSet._slots.begin(), cb)  << ", space" << descriptorSetSlotIdx << ")" << std::endl;

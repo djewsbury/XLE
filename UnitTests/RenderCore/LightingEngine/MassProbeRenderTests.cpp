@@ -844,6 +844,8 @@ namespace UnitTests
 				marker->StallWhilePending();
 				REQUIRE(marker->GetAssetState() == ::Assets::AssetState::Ready);
 			}
+			testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();		// must call this to flip completed pipelines, etc, to visible
+			::Assets::Services::GetAssetSets().OnFrameBarrier();
 		}
 		tester.Execute(threadContext, parsingContext, testApparatus, cameras, drawablesWriter);
 	}

@@ -169,7 +169,8 @@ namespace UnitTests
 			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
 			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
 			"temporary-out");
-		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
+		// create a framebuffer with 3 targets (to allow for deferred techniques)
+		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc, targetDesc, targetDesc);
 		
 		/////////////////////////////////////////////////////////////////
 
@@ -244,6 +245,8 @@ namespace UnitTests
 					prepare->StallWhilePending();
 					REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
 				}
+				pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();		// must call this to flip completed pipelines, etc, to visible
+				::Assets::Services::GetAssetSets().OnFrameBarrier();
 				Techniques::Draw(
 					parsingContext, 
 					*pipelineAcceleratorPool,
@@ -296,6 +299,7 @@ namespace UnitTests
 			}
 
 			pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();		// must call this to flip completed pipelines, etc, to visible
+			::Assets::Services::GetAssetSets().OnFrameBarrier();
 
 			for (unsigned c=0; c<1; ++c) {
 				{

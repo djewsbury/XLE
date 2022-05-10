@@ -143,8 +143,8 @@ namespace UnitTests
 	class UnitTestFBHelper::Pimpl : public RenderCore::INamedAttachments
 	{
 	public:
-		std::shared_ptr<RenderCore::IResource> _mainTarget;
-		RenderCore::ResourceDesc _originalMainTargetDesc;
+		std::vector<std::shared_ptr<RenderCore::IResource>> _targets;
+		std::vector<RenderCore::ResourceDesc> _targetDescs;
 		std::shared_ptr<RenderCore::Metal::FrameBuffer> _fb;
 		RenderCore::FrameBufferDesc _fbDesc;
 		mutable RenderCore::ViewPool _srvPool;
@@ -155,11 +155,11 @@ namespace UnitTests
 			const RenderCore::AttachmentDesc& requestDesc,
 			const RenderCore::FrameBufferProperties& props) const override
 		{
-			assert(resName == 0);
+			assert(resName <= _targets.size());
 			// the "requestDesc" is passed in here so that we can validate it. We're expecting
 			// it to match up to the desc that was provided in the FrameBufferDesc
-			assert(requestDesc._format == _originalMainTargetDesc._textureDesc._format);
-			return _srvPool.GetTextureView(_mainTarget, bindFlag, viewDesc);
+			assert(requestDesc._format == _targetDescs[resName]._textureDesc._format);
+			return _srvPool.GetTextureView(_targets[resName], bindFlag, viewDesc);
 		}
 	};
 
@@ -191,9 +191,9 @@ namespace UnitTests
 	{
 		std::map<unsigned, unsigned> result;
 
-		auto data = _pimpl->_mainTarget->ReadBackSynchronized(threadContext);
+		auto data = _pimpl->_targets[0]->ReadBackSynchronized(threadContext);
 
-		assert(data.size() == (size_t)RenderCore::ByteCount(_pimpl->_mainTarget->GetDesc()));
+		assert(data.size() == (size_t)RenderCore::ByteCount(_pimpl->_targets[0]->GetDesc()));
 		auto pixels = MakeIteratorRange((unsigned*)AsPointer(data.begin()), (unsigned*)AsPointer(data.end()));
 		for (auto p:pixels) ++result[p];
 
@@ -202,7 +202,7 @@ namespace UnitTests
 
 	void UnitTestFBHelper::SaveImage(RenderCore::IThreadContext& threadContext, StringSection<> filename) const
 	{
-		UnitTests::SaveImage(threadContext, *_pimpl->_mainTarget, filename);
+		UnitTests::SaveImage(threadContext, *_pimpl->_targets[0], filename);
 	}
 
 	void SaveImage(RenderCore::IThreadContext& threadContext, RenderCore::IResource& resource, StringSection<> filename)
@@ -257,7 +257,7 @@ namespace UnitTests
 
 	const std::shared_ptr<RenderCore::IResource> UnitTestFBHelper::GetMainTarget() const
 	{
-		return _pimpl->_mainTarget;
+		return _pimpl->_targets[0];
 	}
 
 	const RenderCore::FrameBufferDesc& UnitTestFBHelper::GetDesc() const
@@ -273,7 +273,7 @@ namespace UnitTests
 	UnitTestFBHelper::UnitTestFBHelper(
 		RenderCore::IDevice& device, 
 		RenderCore::IThreadContext& threadContext,
-		const RenderCore::ResourceDesc& mainFBDesc,
+		const RenderCore::ResourceDesc& mainTargetDesc,
 		RenderCore::LoadStore beginLoadStore)
 	{
 		using namespace RenderCore;
@@ -281,13 +281,10 @@ namespace UnitTests
 
 		// Create a resource that matches the given desc, and then also create
 		// a framebuffer with a single subpass rendering into that resource;
-		// std::vector<uint8_t> initBuffer(RenderCore::ByteCount(mainFBDesc), 0xdd);
-		// SubResourceInitData initData { MakeIteratorRange(initBuffer), MakeTexturePitches(mainFBDesc._textureDesc) };
-		SubResourceInitData initData{};
-		_pimpl->_mainTarget = device.CreateResource(mainFBDesc, initData);
-		_pimpl->_originalMainTargetDesc = mainFBDesc;
+		_pimpl->_targets.emplace_back(device.CreateResource(mainTargetDesc));
+		_pimpl->_targetDescs.emplace_back(mainTargetDesc);
 
-		AttachmentDesc mainAttachment { mainFBDesc._textureDesc._format };
+		AttachmentDesc mainAttachment { mainTargetDesc._textureDesc._format };
 		mainAttachment._loadFromPreviousPhase = beginLoadStore;
 		SubpassDesc mainSubpass;
 		mainSubpass.AppendOutput(0);
@@ -301,7 +298,47 @@ namespace UnitTests
 			_pimpl->_fbDesc,
 			*_pimpl);
 
-		Metal::CompleteInitialization(*Metal::DeviceContext::Get(threadContext), {_pimpl->_mainTarget.get()});
+		Metal::CompleteInitialization(*Metal::DeviceContext::Get(threadContext), {_pimpl->_targets[0].get()});
+	}
+
+	UnitTestFBHelper::UnitTestFBHelper(
+		RenderCore::IDevice& device, 
+		RenderCore::IThreadContext& threadContext,
+		const RenderCore::ResourceDesc& target0Desc,
+		const RenderCore::ResourceDesc& target1Desc,
+		const RenderCore::ResourceDesc& target2Desc)
+	{
+		using namespace RenderCore;
+		_pimpl = std::make_unique<UnitTestFBHelper::Pimpl>();
+
+		// Create a resource that matches the given desc, and then also create
+		// a framebuffer with a single subpass rendering into that resource;
+		_pimpl->_targets.emplace_back(device.CreateResource(target0Desc));
+		_pimpl->_targets.emplace_back(device.CreateResource(target1Desc));
+		_pimpl->_targets.emplace_back(device.CreateResource(target2Desc));
+		_pimpl->_targetDescs.emplace_back(target0Desc);
+		_pimpl->_targetDescs.emplace_back(target1Desc);
+		_pimpl->_targetDescs.emplace_back(target2Desc);
+
+		std::vector<AttachmentDesc> attachments;
+		attachments.emplace_back(AttachmentDesc{target0Desc._textureDesc._format, 0, LoadStore::Clear});
+		attachments.emplace_back(AttachmentDesc{target1Desc._textureDesc._format, 0, LoadStore::Clear});
+		attachments.emplace_back(AttachmentDesc{target2Desc._textureDesc._format, 0, LoadStore::Clear});
+		SubpassDesc mainSubpass;
+		mainSubpass.AppendOutput(0);
+		mainSubpass.AppendOutput(1);
+		mainSubpass.AppendOutput(2);
+		mainSubpass.SetName("unit-test-subpass");
+		_pimpl->_fbDesc = FrameBufferDesc { 
+			std::move(attachments),
+			std::vector<SubpassDesc>{ mainSubpass } };
+
+		_pimpl->_fb = std::make_shared<RenderCore::Metal::FrameBuffer>(
+			Metal::GetObjectFactory(device),
+			_pimpl->_fbDesc,
+			*_pimpl);
+
+		Metal::CompleteInitialization(*Metal::DeviceContext::Get(threadContext), {_pimpl->_targets[0].get(), _pimpl->_targets[1].get(), _pimpl->_targets[2].get()});
 	}
 
 	UnitTestFBHelper::UnitTestFBHelper(

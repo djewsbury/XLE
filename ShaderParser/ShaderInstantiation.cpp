@@ -57,6 +57,16 @@ namespace ShaderSourceParser
 			}
 		}
 
+		static std::string TrimImplements(const GraphLanguage::NodeGraphSignature& signature)
+		{
+			auto res = signature.GetImplements();
+			// remove the anything before the scoping operator, if it exists
+			auto i = res.find_last_of(':');
+			if (i != std::string::npos)
+				res.erase(res.begin(), res.begin()+i+1);
+			return res;
+		}
+
 		struct PendingInstantiation
 		{
 			GraphLanguage::INodeGraphProvider::NodeGraph _graph;
@@ -148,7 +158,7 @@ namespace ShaderSourceParser
 									entryPoint._implementsSignature = entryPoint._signature;
 								}
 								_entryPointsFromRawShaders.emplace_back(std::move(entryPoint));
-								_instantiationPrefixFromRawShaders.insert("#define HAS_INSTANTIATION_" + (sig._signature.GetImplements().empty() ? sig._name : sig._signature.GetImplements()) + " 1");
+								_instantiationPrefixFromRawShaders.insert("#define HAS_INSTANTIATION_" + (sig._signature.GetImplements().empty() ? sig._name : TrimImplements(sig._signature)) + " 1");
 							}
 						}
 					}
@@ -209,7 +219,7 @@ namespace ShaderSourceParser
 					}
 					result._entryPoints.emplace_back(std::move(entryPoint));
 					if (!scaffoldSignature.GetImplements().empty())
-						result._instantiationPrefix.insert("#define HAS_INSTANTIATION_" + scaffoldSignature.GetImplements() + " 1");
+						result._instantiationPrefix.insert("#define HAS_INSTANTIATION_" + Internal::TrimImplements(scaffoldSignature) + " 1");
 				}
 			}
 			else

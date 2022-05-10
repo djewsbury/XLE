@@ -49,7 +49,7 @@ namespace UnitTests
 		
 		DescriptorSet Material
 		{
-			UniformBuffer b0;
+			UniformBufferDynamic b0;
 			UniformBuffer b1;
 			UniformBuffer b2;
 

@@ -241,6 +241,8 @@ namespace UnitTests
 				prepare->StallWhilePending();
 				REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
 			}
+			testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
+			::Assets::Services::GetAssetSets().OnFrameBarrier();
 			Techniques::Draw(
 				parsingContext,
 				*testApparatus._pipelineAcceleratorPool,

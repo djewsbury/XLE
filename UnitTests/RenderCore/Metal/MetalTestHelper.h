@@ -69,6 +69,12 @@ namespace UnitTests
             RenderCore::LoadStore beginLoadStore = RenderCore::LoadStore::Clear);
         UnitTestFBHelper(
             RenderCore::IDevice& device,
+            RenderCore::IThreadContext& threadContext,
+            const RenderCore::ResourceDesc& target0,
+            const RenderCore::ResourceDesc& target1,
+            const RenderCore::ResourceDesc& target2);
+        UnitTestFBHelper(
+            RenderCore::IDevice& device,
             RenderCore::IThreadContext& threadContext);
         ~UnitTestFBHelper();
 
