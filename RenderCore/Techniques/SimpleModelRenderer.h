@@ -68,11 +68,6 @@ namespace RenderCore { namespace Techniques
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		const std::shared_ptr<IGeoDeformerInfrastructure>& GetGeoDeformerInfrastructure() const { return _geoDeformerInfrastructure; }
-
-		/*const std::shared_ptr<RenderCore::Assets::ModelScaffold>& GetModelScaffold() const { return _modelScaffold; }
-		const std::shared_ptr<RenderCore::Assets::MaterialScaffold>& GetMaterialScaffold() const { return _materialScaffold; }
-		const std::string& GetModelScaffoldName() const { return _modelScaffoldName; }
-		const std::string& GetMaterialScaffoldName() const { return _materialScaffoldName; }*/
 		BufferUploads::CommandListID GetCompletionCommandList() const;
 
 		using UniformBufferBinding = std::pair<uint64_t, std::shared_ptr<IUniformBufferDelegate>>;

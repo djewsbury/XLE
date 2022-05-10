@@ -15,8 +15,14 @@ namespace RenderCore { namespace Assets
 	auto RendererConstruction::ElementConstructor::SetModelAndMaterialScaffolds(StringSection<> model, StringSection<> material) -> ElementConstructor&
 	{
 		assert(_internal && !_internal->_sealed);
+		auto originalDisableHash = _internal->_disableHash;
 		SetModelScaffold(::Assets::MakeAsset<Internal::ModelScaffoldPtr>(model));
 		SetMaterialScaffold(::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(material, model));
+		_internal->_disableHash = originalDisableHash;
+		if (_internal->_elementHashValues.size() < _internal->_elementCount)
+			_internal->_elementHashValues.resize(_internal->_elementCount, 0);
+		_internal->_elementHashValues[_elementId] = Hash64(model, Hash64(material));
+		_internal->_hash = 0;
 		return *this;
 	}
 	auto RendererConstruction::ElementConstructor::SetModelScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>& scaffoldMarker) -> ElementConstructor&
@@ -27,6 +33,7 @@ namespace RenderCore { namespace Assets
 			i->second = scaffoldMarker;
 		} else
 			_internal->_modelScaffoldMarkers.insert(i, {_elementId, scaffoldMarker});
+		_internal->_disableHash = true;
 		return *this;
 	}
 	auto RendererConstruction::ElementConstructor::SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<MaterialScaffoldCmdStreamForm>& scaffoldMarker) -> ElementConstructor&
@@ -37,6 +44,7 @@ namespace RenderCore { namespace Assets
 			i->second = scaffoldMarker;
 		} else
 			_internal->_materialScaffoldMarkers.insert(i, {_elementId, scaffoldMarker});
+		_internal->_disableHash = true;
 		return *this;
 	}
 	auto RendererConstruction::ElementConstructor::SetModelScaffold(const std::shared_ptr<ModelScaffoldCmdStreamForm>& scaffoldPtr) -> ElementConstructor& 
@@ -47,6 +55,7 @@ namespace RenderCore { namespace Assets
 			i->second = scaffoldPtr;
 		} else
 			_internal->_modelScaffoldPtrs.insert(i, {_elementId, scaffoldPtr});
+		_internal->_disableHash = true;
 		return *this; 
 	}
 	auto RendererConstruction::ElementConstructor::SetMaterialScaffold(const std::shared_ptr<MaterialScaffoldCmdStreamForm>& scaffoldPtr) -> ElementConstructor&
@@ -57,6 +66,7 @@ namespace RenderCore { namespace Assets
 			i->second = scaffoldPtr;
 		} else
 			_internal->_materialScaffoldPtrs.insert(i, {_elementId, scaffoldPtr});
+		_internal->_disableHash = true;
 		return *this; 
 	}
 
@@ -173,6 +183,16 @@ namespace RenderCore { namespace Assets
 		return hack;
 	}
 
+	uint64_t RendererConstruction::GetHash() const
+	{
+		if (_internal->_disableHash)
+			Throw("Attempting to generate a hash for a RendererConstruction that cannot be hashed");
+		if (!_internal->_hash) // recalculate the hash value
+			_internal->_hash = Hash64(AsPointer(_internal->_elementHashValues.begin()), AsPointer(_internal->_elementHashValues.begin()));
+
+		return _internal->_hash;
+	}
+
 	RendererConstruction::RendererConstruction()
 	{
 		_internal = std::make_unique<Internal>();
@@ -215,6 +235,11 @@ namespace RenderCore { namespace Assets
 	}
 
 	std::string RendererConstruction::ElementIterator::Value::GetModelScaffoldName() const
+	{
+		return {};
+	}
+
+	std::string RendererConstruction::ElementIterator::Value::GetMaterialScaffoldName() const
 	{
 		return {};
 	}

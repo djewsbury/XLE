@@ -332,7 +332,7 @@ namespace RenderCore { namespace Techniques
 			};
 			std::vector<WorkingMaterial> _drawableMaterials;
 
-			std::vector<std::shared_ptr<DrawableInputAssembly>> _ias;
+			std::vector<std::shared_ptr<DrawableInputAssembly>> _pendingInputAssemblies;
 
 			const WorkingMaterial* AddMaterial(
 				IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
@@ -419,12 +419,12 @@ namespace RenderCore { namespace Techniques
 				Topology topology)
 			{
 				auto ia = std::make_shared<DrawableInputAssembly>(MakeIteratorRange(inputElements), topology);
-				auto w = std::find_if(_ias.begin(), _ias.end(), [hash=ia->GetHash()](const auto& q) { return q->GetHash() == hash; });
-				if (w == _ias.end()) {
-					_ias.push_back(ia);
-					return (unsigned)_ias.size() - 1;
+				auto w = std::find_if(_pendingInputAssemblies.begin(), _pendingInputAssemblies.end(), [hash=ia->GetHash()](const auto& q) { return q->GetHash() == hash; });
+				if (w == _pendingInputAssemblies.end()) {
+					_pendingInputAssemblies.push_back(ia);
+					return (unsigned)_pendingInputAssemblies.size() - 1;
 				} else {
-					return (unsigned)std::distance(_ias.begin(), w);
+					return (unsigned)std::distance(_pendingInputAssemblies.begin(), w);
 				}
 			}
 
@@ -574,6 +574,7 @@ namespace RenderCore { namespace Techniques
 
 							auto& pendingGeo = _pendingGeos._geos[pendingGeoIdx];
 							unsigned materialIterator = 0;
+							assert(rawGeometry->_drawCalls.size() == currentMaterialAssignments.size());
 							for (const auto& dc:rawGeometry->_drawCalls) {
 								// note -- there's some redundancy here, because we'll end up calling 
 								// AddMaterial & MakePipeline over and over again for the same parameters. There's
@@ -595,6 +596,7 @@ namespace RenderCore { namespace Techniques
 								drawCall._drawableGeoIdx = pendingGeoIdx;
 								drawCall._pipelineAcceleratorIdx = compiledPipeline._pipelineAcceleratorIdx;
 								drawCall._descriptorSetAcceleratorIdx = workingMaterial->_descriptorSetAcceleratorIdx;
+								drawCall._iaIdx = compiledPipeline._iaIdx;
 								drawCall._batchFilter = workingMaterial->_batchFilter;
 								drawCall._firstIndex = dc._firstIndex;
 								drawCall._indexCount = dc._indexCount;
@@ -623,15 +625,18 @@ namespace RenderCore { namespace Techniques
 			unsigned geoIdxOffset = dst._drawableGeos.size();
 			unsigned pipelineAcceleratorIdxOffset = dst._pipelineAccelerators.size();
 			unsigned descSetAcceleratorIdxOffset = dst._descriptorSetAccelerators.size();
+			unsigned iaIdxOffset = dst._drawableInputAssemblies.size();
 			unsigned drawCallIdxOffset = dst._drawCalls.size();
 			dst._drawableGeos.insert(dst._drawableGeos.end(), _pendingGeos._geos.begin(), _pendingGeos._geos.end());
 			dst._pipelineAccelerators.insert(dst._pipelineAccelerators.end(), _pendingPipelines._pipelineAccelerators.begin(), _pendingPipelines._pipelineAccelerators.end());
 			dst._descriptorSetAccelerators.insert(dst._descriptorSetAccelerators.end(), _pendingPipelines._descriptorSetAccelerators.begin(), _pendingPipelines._descriptorSetAccelerators.end());
+			dst._drawableInputAssemblies.insert(dst._drawableInputAssemblies.end(), _pendingPipelines._pendingInputAssemblies.begin(), _pendingPipelines._pendingInputAssemblies.end());
 
 			for (auto& p:_pendingDrawCalls) {
 				p._drawableGeoIdx += geoIdxOffset;
 				p._pipelineAcceleratorIdx += pipelineAcceleratorIdxOffset;
 				p._descriptorSetAcceleratorIdx += descSetAcceleratorIdxOffset;
+				p._iaIdx += iaIdxOffset;
 			}
 			dst._drawCalls.insert(dst._drawCalls.end(), _pendingDrawCalls.begin(), _pendingDrawCalls.end());
 

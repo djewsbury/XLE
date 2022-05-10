@@ -13,8 +13,6 @@
 namespace Assets {  class IFileInterface; }
 namespace std { template<typename T> class promise; }
 
-// namespace RenderCore { namespace Techniques { class IGeoDeformerFactory; }}	// todo -- need to move this to reference deformers
-
 namespace RenderCore { namespace Assets
 {
 	static constexpr unsigned s_scaffoldCmdBegin_TransformationMachine = 0x500;
@@ -150,10 +148,6 @@ namespace RenderCore { namespace Assets
 			ElementConstructor& SetMaterialScaffold(const std::shared_ptr<MaterialScaffoldCmdStreamForm>&);
 
 			ElementConstructor& AddMorphTarget(uint64_t targetName, StringSection<> srcFile);
-
-			// ElementConstructor& AddDeform(uint64_t name);
-			// ElementConstructor& AddDeform(const std::shared_ptr<Techniques::IGeoDeformerFactory>&);
-
 			ElementConstructor& SetRootTransform(const Float4x4&);
 
 			ElementConstructor& SetName(const std::string&);
@@ -177,6 +171,7 @@ namespace RenderCore { namespace Assets
 		void SetSkeletonScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>&);
 		void SetSkeletonScaffold(const std::shared_ptr<MaterialScaffoldCmdStreamForm>&);
 
+		uint64_t GetHash() const;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const;
 
 		void FulfillWhenNotPending(std::promise<std::shared_ptr<RendererConstruction>>&& promise);
@@ -199,16 +194,18 @@ namespace RenderCore { namespace Assets
 		using ModelScaffoldPtr = std::shared_ptr<ModelScaffoldCmdStreamForm>;
 		using MaterialScaffoldMarker = ::Assets::PtrToMarkerPtr<MaterialScaffoldCmdStreamForm>;
 		using MaterialScaffoldPtr = std::shared_ptr<MaterialScaffoldCmdStreamForm>;
-		// using DeformerPtr = std::shared_ptr<Techniques::IGeoDeformerFactory>;
 
 		std::vector<std::pair<ElementId, ModelScaffoldMarker>> _modelScaffoldMarkers;
 		std::vector<std::pair<ElementId, ModelScaffoldPtr>> _modelScaffoldPtrs;
 		std::vector<std::pair<ElementId, MaterialScaffoldMarker>> _materialScaffoldMarkers;
 		std::vector<std::pair<ElementId, MaterialScaffoldPtr>> _materialScaffoldPtrs;
-		// std::vector<std::pair<ElementId, DeformerPtr>> _deformers;
 		std::vector<std::pair<ElementId, std::string>> _names;
 		unsigned _elementCount = 0;
 		bool _sealed = false;
+
+		std::vector<uint64_t> _elementHashValues;
+		mutable uint64_t _hash = 0ull;
+		bool _disableHash = false;
 	};
 
 	class RendererConstruction::ElementIterator
@@ -220,7 +217,7 @@ namespace RenderCore { namespace Assets
 			std::shared_ptr<ModelScaffoldCmdStreamForm> GetModelScaffold() const;
 			std::shared_ptr<MaterialScaffoldCmdStreamForm> GetMaterialScaffold() const;
 			std::string GetModelScaffoldName() const;
-			// std::vector<std::shared_ptr<Techniques::IGeoDeformerFactory>> GetGeoDeformerFactories() const;
+			std::string GetMaterialScaffoldName() const;
 			unsigned ElementId() const;
 		private:
 			Value();

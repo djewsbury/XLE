@@ -15,6 +15,7 @@ namespace RenderCore { namespace Techniques
 	class PipelineAccelerator;
 	class DescriptorSetAccelerator;
 	class DrawableGeo;
+	class DrawableInputAssembly;
 
 	class DrawableConstructor : public std::enable_shared_from_this<DrawableConstructor>
 	{
@@ -22,11 +23,13 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::shared_ptr<DrawableGeo>> _drawableGeos;
 		std::vector<std::shared_ptr<PipelineAccelerator>> _pipelineAccelerators;
 		std::vector<std::shared_ptr<DescriptorSetAccelerator>> _descriptorSetAccelerators;
+		std::vector<std::shared_ptr<DrawableInputAssembly>> _drawableInputAssemblies;
 		struct DrawCall
 		{
 			unsigned _drawableGeoIdx = ~0u;					// index into _drawableGeos
 			unsigned _pipelineAcceleratorIdx = ~0u;			// index into _pipelineAccelerators
 			unsigned _descriptorSetAcceleratorIdx = ~0u;	// index into _descriptorSetAccelerators
+			unsigned _iaIdx = ~0u;							// index into _drawableInputAssemblies
 			unsigned _batchFilter = 0;
 			unsigned _firstIndex = 0;
 			unsigned _indexCount = 0;

@@ -43,6 +43,12 @@ namespace RenderCore { namespace Assets
 			return CmdAndRawData{(uint32_t)cmd, MakeOpaqueIteratorRange(obj)};
 		}
 
+	template<typename Type, typename Cmd>
+		CmdAndRawData MakeCmdAndRanged(Cmd cmd, const Type& obj)
+		{
+			return CmdAndRawData{(uint32_t)cmd, IteratorRange<const void*>{obj.begin(), obj.end()}};
+		}
+
 	inline void SerializationOperator(::Assets::BlockSerializer& serializer, const CmdAndRawData& obj)
 	{
 		serializer << (uint32_t)obj._cmd;

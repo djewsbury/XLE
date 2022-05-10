@@ -108,6 +108,7 @@ namespace ColladaConversion
 				Throw(::Exceptions::BasicLabel(
 					"Geometry object is empty (%s)", reference.AsString().c_str()));
 			}
+			assert(convertedMesh._geoBlock._drawCalls.size() == convertedMesh._matBindingSymbols.size());
 
 			model.Add(geoId, std::move(convertedMesh._geoBlock));
 			model.AttachNameToGeometryBlock(geoId, scaffoldGeo->GetName().AsString());

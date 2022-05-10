@@ -8,6 +8,7 @@
 #include "VisualisationUtils.h"
 #include "../../RenderCore/Assets/ModelScaffold.h"
 #include "../../RenderCore/Assets/MaterialScaffold.h"
+#include "../../RenderCore/Assets/ScaffoldCmdStream.h"
 #include "../../RenderCore/Techniques/SkinDeformer.h"
 #include "../../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
@@ -23,8 +24,8 @@
 
 namespace ToolsRig
 {
-	using RenderCore::Assets::ModelScaffold;
-    using RenderCore::Assets::MaterialScaffold;
+	using RenderCore::Assets::ModelScaffoldCmdStreamForm;
+    using RenderCore::Assets::MaterialScaffoldCmdStreamForm;
 	using RenderCore::Assets::AnimationSetScaffold;
 	using RenderCore::Assets::SkeletonScaffold;
     using RenderCore::Assets::SkeletonMachine;
@@ -63,7 +64,8 @@ namespace ToolsRig
 	struct ModelSceneRendererState
 	{
 		std::shared_ptr<SimpleModelRenderer>		_renderer;
-		std::shared_ptr<ModelScaffold>				_modelScaffoldForEmbeddedSkeleton;
+		std::shared_ptr<RenderCore::Assets::RendererConstruction> _rendererConstruction;
+		std::shared_ptr<ModelScaffoldCmdStreamForm>	_modelScaffoldForEmbeddedSkeleton;
 		std::shared_ptr<SkeletonScaffold>			_skeletonScaffold;
 		std::shared_ptr<AnimationSetScaffold>		_animationScaffold;
 		std::shared_ptr<RendererSkeletonInterface>	_skeletonInterface;
@@ -78,7 +80,7 @@ namespace ToolsRig
 			if (_skeletonScaffold) {
 				skeletonMachine = &_skeletonScaffold->GetSkeletonMachine();
 			} else if (_modelScaffoldForEmbeddedSkeleton)
-				skeletonMachine = &_modelScaffoldForEmbeddedSkeleton->EmbeddedSkeleton();
+				skeletonMachine = _modelScaffoldForEmbeddedSkeleton->EmbeddedSkeleton();
 			return skeletonMachine;
 		}
 
@@ -106,14 +108,17 @@ namespace ToolsRig
 			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators,
 			const ModelVisSettings& settings)
 		{
-			auto rendererFuture = ::Assets::MakeAssetPtr<SimpleModelRenderer>(pipelineAcceleratorPool, deformAccelerators, settings._modelName, settings._materialName, "skin");
+			auto construction = std::make_shared<RenderCore::Assets::RendererConstruction>();
+			construction->AddElement().SetModelAndMaterialScaffolds(settings._modelName, settings._materialName);
+			auto rendererFuture = ::Assets::MakeAssetPtr<SimpleModelRenderer>(pipelineAcceleratorPool, deformAccelerators, construction);
 
 			if (!settings._animationFileName.empty() && !settings._skeletonFileName.empty()) {
 				auto animationSetFuture = ::Assets::MakeAssetPtr<AnimationSetScaffold>(settings._animationFileName);
 				auto skeletonFuture = ::Assets::MakeAssetPtr<SkeletonScaffold>(settings._skeletonFileName);
 				::Assets::WhenAll(rendererFuture, animationSetFuture, skeletonFuture).ThenConstructToPromise(
 					std::move(promise), 
-					[](	std::shared_ptr<SimpleModelRenderer> renderer,
+					[construction](
+						std::shared_ptr<SimpleModelRenderer> renderer,
 						std::shared_ptr<AnimationSetScaffold> animationSet,
 						std::shared_ptr<SkeletonScaffold> skeleton) {
 						
@@ -130,7 +135,7 @@ namespace ToolsRig
 
 						return std::make_shared<ModelSceneRendererState>(
 							ModelSceneRendererState {
-								renderer,
+								renderer, construction,
 								nullptr, skeleton, animationSet, skeletonInterface,
 								std::move(animBinding), depVal,
 							});
@@ -139,14 +144,17 @@ namespace ToolsRig
 				auto animationSetFuture = ::Assets::MakeAssetPtr<AnimationSetScaffold>(settings._animationFileName);
 				::Assets::WhenAll(rendererFuture, animationSetFuture).ThenConstructToPromise(
 					std::move(promise), 
-					[](	std::shared_ptr<SimpleModelRenderer> renderer,
+					[construction](
+						std::shared_ptr<SimpleModelRenderer> renderer,
 						std::shared_ptr<AnimationSetScaffold> animationSet) {
 						
+						auto modelScaffold = construction->GetElement(0)->GetModelScaffold();
+						assert(modelScaffold->EmbeddedSkeleton());
 						RenderCore::Assets::AnimationSetBinding animBinding(
 							animationSet->ImmutableData()._animationSet.GetOutputInterface(), 
-							renderer->GetModelScaffold()->EmbeddedSkeleton());
+							*modelScaffold->EmbeddedSkeleton());
 
-						auto skeletonInterface = BuildSkeletonInterface(*renderer, renderer->GetModelScaffold()->EmbeddedSkeleton().GetOutputInterface());
+						auto skeletonInterface = BuildSkeletonInterface(*renderer, modelScaffold->EmbeddedSkeleton()->GetOutputInterface());
 
 						auto depVal = ::Assets::GetDepValSys().Make();
 						depVal.RegisterDependency(renderer->GetDependencyValidation());
@@ -154,19 +162,19 @@ namespace ToolsRig
 
 						return std::make_shared<ModelSceneRendererState>(
 							ModelSceneRendererState {
-								renderer,
-								renderer->GetModelScaffold(), nullptr, animationSet, skeletonInterface,
+								renderer, construction,
+								modelScaffold, nullptr, animationSet, skeletonInterface,
 								std::move(animBinding), depVal,
 							});
 					});
 			} else {
 				::Assets::WhenAll(rendererFuture).ThenConstructToPromise(
 					std::move(promise), 
-					[](std::shared_ptr<SimpleModelRenderer> renderer) {
+					[construction](std::shared_ptr<SimpleModelRenderer> renderer) {
 						return std::make_shared<ModelSceneRendererState>(
 							ModelSceneRendererState {
-								renderer,
-								renderer->GetModelScaffold(), nullptr, nullptr, nullptr,
+								renderer, construction,
+								construction->GetElement(0)->GetModelScaffold(), nullptr, nullptr, nullptr,
 								{}, renderer->GetDependencyValidation(),
 							});
 					});
@@ -232,14 +240,17 @@ namespace ToolsRig
 
 		DrawCallDetails GetDrawCallDetails(unsigned drawCallIndex, uint64_t materialGuid) const override
 		{
-			auto matName = _actualized->_renderer->GetMaterialScaffold()->GetMaterialName(materialGuid).AsString();
+			assert(_actualized->_rendererConstruction->GetElementCount() >= 1);
+			auto matName = _actualized->_rendererConstruction->GetElement(0)->GetMaterialScaffold()->DehashMaterialName(materialGuid).AsString();
 			if (matName.empty())
-				matName = _actualized->_renderer->GetMaterialScaffoldName();
-			return { _actualized->_renderer->GetModelScaffoldName(), matName };
+				matName = _actualized->_rendererConstruction->GetElement(0)->GetMaterialScaffoldName();
+			return { _actualized->_rendererConstruction->GetElement(0)->GetModelScaffoldName(), matName };
 		}
 		std::pair<Float3, Float3> GetBoundingBox() const override
 		{
-			return _actualized->_renderer->GetModelScaffold()->GetStaticBoundingBox(); 
+			assert(_actualized->_rendererConstruction->GetElementCount() >= 1);
+			return _actualized->_rendererConstruction->GetElement(0)->GetModelScaffold()->GetStaticBoundingBox(); 
+			assert(0); return {};
 		}
 
 		std::shared_ptr<ICustomDrawDelegate> SetCustomDrawDelegate(const std::shared_ptr<ICustomDrawDelegate>& delegate) override
