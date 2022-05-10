@@ -253,13 +253,19 @@ namespace UnitTests
 					*cfgId,
 					pkt);
 			}
+
+			// todo -- final image layout solution
+			Metal::Internal::SetImageLayout(
+				*Metal::DeviceContext::Get(*threadContext),
+				*dynamic_cast<Metal::Resource*>(fbHelper.GetMainTarget().get()),
+				Metal::Internal::ImageLayout::ColorAttachmentOptimal, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+				Metal::Internal::ImageLayout::General, 0, VK_PIPELINE_STAGE_HOST_BIT);
+
 			fbHelper.SaveImage(*threadContext, "drawables-render-sphere");
 		}
 
 		SECTION("Draw model file")
 		{
-			testHelper->BeginFrameCapture();
-
 			auto matRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);
 			#if defined(_DEBUG)
 				auto discoveredCompilations = ::Assets::DiscoverCompileOperations(compilers, "ColladaConversion.dll");
@@ -301,6 +307,8 @@ namespace UnitTests
 			pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();		// must call this to flip completed pipelines, etc, to visible
 			::Assets::Services::GetAssetSets().OnFrameBarrier();
 
+			testHelper->BeginFrameCapture();
+
 			for (unsigned c=0; c<1; ++c) {
 				{
 					auto rpi = fbHelper.BeginRenderPass(*threadContext);
@@ -308,20 +316,22 @@ namespace UnitTests
 					parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 					parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(globalDelegate);
 					
-					auto* d = (Techniques::Drawable*)pkts[0]._drawables.begin().get();
-					auto future = pipelineAcceleratorPool->GetPipelineMarker(*d->_pipeline, *cfgId);
-					if (future) {
-						future->StallWhilePending();
-						INFO(::Assets::AsString(future->GetActualizationLog()));
-						REQUIRE(future->GetAssetState() == ::Assets::AssetState::Ready);
-					}
-
 					for (const auto&pkt:pkts)
 						Techniques::Draw(parsingContext, *pipelineAcceleratorPool, *cfgId, pkt);
+
+					parsingContext.RequireCommandList(renderer->Actualize()->GetCompletionCommandList());
 
 					if (parsingContext._requiredBufferUploadsCommandList)
 						techniqueTestApparatus._bufferUploads->StallUntilCompletion(*threadContext, parsingContext._requiredBufferUploadsCommandList);
 				}
+
+				// todo -- final image layout solution
+				Metal::Internal::SetImageLayout(
+					*Metal::DeviceContext::Get(*threadContext),
+					*dynamic_cast<Metal::Resource*>(fbHelper.GetMainTarget().get()),
+					Metal::Internal::ImageLayout::ColorAttachmentOptimal, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+					Metal::Internal::ImageLayout::General, 0, VK_PIPELINE_STAGE_HOST_BIT);
+
 				fbHelper.SaveImage(*threadContext, "drawables-render-model");
 			}
 

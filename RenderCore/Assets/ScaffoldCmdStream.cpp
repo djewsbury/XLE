@@ -12,17 +12,12 @@
 
 namespace RenderCore { namespace Assets
 {
-	auto RendererConstruction::ElementConstructor::SetModelScaffold(StringSection<> initializer) -> ElementConstructor&
+	auto RendererConstruction::ElementConstructor::SetModelAndMaterialScaffolds(StringSection<> model, StringSection<> material) -> ElementConstructor&
 	{
 		assert(_internal && !_internal->_sealed);
-		SetModelScaffold(::Assets::MakeAsset<Internal::ModelScaffoldPtr>(initializer));
+		SetModelScaffold(::Assets::MakeAsset<Internal::ModelScaffoldPtr>(model));
+		SetMaterialScaffold(::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(material, model));
 		return *this;
-	}
-	auto RendererConstruction::ElementConstructor::SetMaterialScaffold(StringSection<> initializer) -> ElementConstructor&
-	{ 
-		assert(_internal && !_internal->_sealed);
-		SetMaterialScaffold(::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(initializer));
-		return *this; 
 	}
 	auto RendererConstruction::ElementConstructor::SetModelScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>& scaffoldMarker) -> ElementConstructor&
 	{
@@ -205,7 +200,7 @@ namespace RenderCore { namespace Assets
 		if (_mspi!=_internal->_modelScaffoldPtrs.end() && _mspi->first == _elementId)
 			return _mspi->second;
 		if (_msmi!=_internal->_modelScaffoldMarkers.end() && _msmi->first == _elementId)
-			return _msmi->second->Actualize();
+			return _msmi->second->ActualizeBkgrnd();
 		return nullptr;
 	}
 
@@ -215,7 +210,7 @@ namespace RenderCore { namespace Assets
 		if (_matspi!=_internal->_materialScaffoldPtrs.end() && _matspi->first == _elementId)
 			return _matspi->second;
 		if (_matsmi!=_internal->_materialScaffoldMarkers.end() && _matsmi->first == _elementId)
-			return _matsmi->second->Actualize();
+			return _matsmi->second->ActualizeBkgrnd();
 		return nullptr;
 	}
 

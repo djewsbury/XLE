@@ -81,10 +81,33 @@ namespace UnitTests
 			SampledTexture t9;
 			SampledTexture t10;
 
-			Sampler SeqSampler0;
-			Sampler s12;
-			Sampler s13;
-			Sampler s14;
+			// Samplers here must be "fixed" samplers in order to be compatible with sequencer.pipeline. Since main.pipeline
+			// (which brings in sequencer.pipeline) is referred to by TechniqueDelegates.cpp, we will otherwise end up mixing
+			// these together in some tests
+			Sampler DefaultSampler						// 11
+			{
+				Filter = Trilinear,
+				AddressU = Wrap,
+				AddressV = Wrap
+			};
+			Sampler ClampingSampler						// 12
+			{
+				Filter = Trilinear,
+				AddressU = Clamp,
+				AddressV = Clamp
+			};
+			Sampler AnisotropicSampler					// 13
+			{
+				Filter = Anisotropic,
+				AddressU = Wrap,
+				AddressV = Wrap
+			};
+			Sampler PointClampSampler					// 14
+			{
+				Filter = Point,
+				AddressU = Clamp,
+				AddressV = Clamp
+			};
 		};
 
 		PipelineLayout GraphicsMain

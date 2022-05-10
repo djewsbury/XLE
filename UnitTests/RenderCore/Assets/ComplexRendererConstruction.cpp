@@ -90,14 +90,14 @@ namespace UnitTests
 			
 				SECTION("Create DrawableConstructor")
 				{
-					auto constructor = std::make_shared<RenderCore::Techniques::DrawableConstructor>(testApparatus._pipelineAccelerators, *testApparatus._bufferUploads, *rendererConstruction);
-					std::promise<RenderCore::Techniques::DrawableConstructor::FulFilledPromise> promise;
+					auto constructor = std::make_shared<Techniques::DrawableConstructor>(testApparatus._pipelineAccelerators, *testApparatus._bufferUploads, *rendererConstruction);
+					std::promise<std::shared_ptr<Techniques::DrawableConstructor>> promise;
 					auto future = promise.get_future();
 					constructor->FulfillWhenNotPending(std::move(promise));
 					future.wait();
 					auto fulfilledPromise = future.get();
-					REQUIRE(fulfilledPromise._constructor == constructor);
-					REQUIRE(fulfilledPromise._completionCmdList > 0);
+					REQUIRE(fulfilledPromise == constructor);
+					REQUIRE(constructor->_completionCommandList > 0);
 				}
 			}
 		}

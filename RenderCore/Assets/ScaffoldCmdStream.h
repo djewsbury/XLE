@@ -141,8 +141,7 @@ namespace RenderCore { namespace Assets
 		class ElementConstructor
 		{
 		public:
-			ElementConstructor& SetModelScaffold(StringSection<>);
-			ElementConstructor& SetMaterialScaffold(StringSection<>);
+			ElementConstructor& SetModelAndMaterialScaffolds(StringSection<> model, StringSection<> material);
 			
 			ElementConstructor& SetModelScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>&);
 			ElementConstructor& SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<MaterialScaffoldCmdStreamForm>&);

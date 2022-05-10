@@ -6,7 +6,7 @@
 #include "../../Math/Matrix.h"
 #include <memory>
 
-namespace RenderCore { namespace Assets { class RendererConstruction; }}
+namespace RenderCore { namespace Assets { class RendererConstruction; class ScaffoldCmdIterator; }}
 namespace BufferUploads { class IManager; }
 namespace std { template<typename T> class promise; }
 namespace RenderCore { namespace Techniques
@@ -22,13 +22,11 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::shared_ptr<DrawableGeo>> _drawableGeos;
 		std::vector<std::shared_ptr<PipelineAccelerator>> _pipelineAccelerators;
 		std::vector<std::shared_ptr<DescriptorSetAccelerator>> _descriptorSetAccelerators;
-		std::vector<Float4x4> _geoSpaceToNodeSpaces;
 		struct DrawCall
 		{
 			unsigned _drawableGeoIdx = ~0u;					// index into _drawableGeos
 			unsigned _pipelineAcceleratorIdx = ~0u;			// index into _pipelineAccelerators
 			unsigned _descriptorSetAcceleratorIdx = ~0u;	// index into _descriptorSetAccelerators
-			unsigned _geoSpaceToNodeSpaceIdx = ~0u;			// index into _geoSpaceToNodeSpaces
 			unsigned _batchFilter = 0;
 			unsigned _firstIndex = 0;
 			unsigned _indexCount = 0;
@@ -41,15 +39,14 @@ namespace RenderCore { namespace Techniques
 		{
 			BeginElement = 0x3000,		// must equal s_scaffoldCmdBegin_DrawableConstructor
 			ExecuteDrawCalls,
+			SetGeoSpaceToNodeSpace
 		};
 		std::vector<uint8_t> _translatedCmdStream;
+		IteratorRange<Assets::ScaffoldCmdIterator> GetCmdStream() const;
 
-		struct FulFilledPromise
-		{
-			std::shared_ptr<DrawableConstructor> _constructor;
-			BufferUploads::CommandListID _completionCmdList;
-		};
-		void FulfillWhenNotPending(std::promise<FulFilledPromise>&& promise);
+		BufferUploads::CommandListID _completionCommandList;
+
+		void FulfillWhenNotPending(std::promise<std::shared_ptr<DrawableConstructor>>&& promise);
 
 		DrawableConstructor(
 			std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,

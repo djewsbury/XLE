@@ -16,6 +16,7 @@ namespace RenderCore { namespace Assets { class ModelScaffold; class MaterialSca
 
 namespace RenderCore { namespace Assets { class RendererConstruction; }}
 namespace RenderCore { class UniformsStreamInterface; }
+namespace BufferUploads { using CommandListID = uint32_t; }
 
 namespace RenderCore { namespace Techniques 
 {
@@ -72,7 +73,7 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<RenderCore::Assets::MaterialScaffold>& GetMaterialScaffold() const { return _materialScaffold; }
 		const std::string& GetModelScaffoldName() const { return _modelScaffoldName; }
 		const std::string& GetMaterialScaffoldName() const { return _materialScaffoldName; }*/
-		const Assets::RendererConstruction& GetRendererConstruction() const;
+		BufferUploads::CommandListID GetCompletionCommandList() const;
 
 		using UniformBufferBinding = std::pair<uint64_t, std::shared_ptr<IUniformBufferDelegate>>;
 

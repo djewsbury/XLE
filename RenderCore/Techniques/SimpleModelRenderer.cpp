@@ -441,7 +441,79 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<DrawablesPacket** const> pkts,
 		const Float4x4& localToWorld,
 		unsigned deformInstanceIdx,
-		uint32_t viewMask) const {}
+		uint32_t viewMask) const
+	{
+		assert(viewMask != 0);
+		if (_deformAcceleratorPool && _deformAccelerator)
+			_deformAcceleratorPool->EnableInstance(*_deformAccelerator, deformInstanceIdx);
+
+		SimpleModelDrawable* drawables[dimof(_drawableConstructor->_drawCallCounts)];
+		for (unsigned c=0; c<dimof(_drawableConstructor->_drawCallCounts); ++c) {
+			if (!_drawableConstructor->_drawCallCounts[c]) {
+				drawables[c] = nullptr;
+				continue;
+			}
+			drawables[c] = pkts[c] ? pkts[c]->_drawables.Allocate<SimpleModelDrawable>(_drawableConstructor->_drawCallCounts[c]) : nullptr;
+		}
+
+		auto* drawableFn = (viewMask==1) ? (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelStatic : (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelStaticMultiView; 
+
+		auto localToWorld3x4 = AsFloat3x4(localToWorld);
+		auto nodeSpaceToWorld = Identity<Float3x4>();;
+		const Float4x4* geoSpaceToNodeSpace = nullptr;
+		IteratorRange<const uint64_t*> materialGuids;
+		unsigned materialGuidsIterator = 0;
+		unsigned transformMarker = ~0u;
+		unsigned elementIdx = ~0u;
+		unsigned drawCallCounter = 0;
+		for (auto cmd:_drawableConstructor->GetCmdStream()) {
+			switch (cmd.Cmd()) {
+			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
+				transformMarker = cmd.As<unsigned>();
+				{
+					assert(elementIdx != ~0u);
+					auto& ele = _elements[elementIdx];
+					auto machineOutput = ele._skeletonBinding.ModelJointToMachineOutput(transformMarker);
+					assert(machineOutput < ele._baseTransformCount);
+					nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&ele._baseTransforms[machineOutput], localToWorld3x4);
+				}
+				break;
+			case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
+				materialGuids = cmd.RawData().Cast<const uint64_t*>();
+				materialGuidsIterator = 0;
+				break;
+			case (uint32_t)DrawableConstructor::Command::BeginElement:
+				elementIdx = cmd.As<unsigned>();
+				break;
+			case (uint32_t)DrawableConstructor::Command::SetGeoSpaceToNodeSpace:
+				geoSpaceToNodeSpace = (!cmd.RawData().empty()) ? &cmd.As<Float4x4>() : nullptr;
+				break;
+			case (uint32_t)DrawableConstructor::Command::ExecuteDrawCalls:
+				{
+					struct DrawCallsRef { unsigned _start, _end; };
+					auto& drawCallsRef = cmd.As<DrawCallsRef>();
+					for (const auto& dc:MakeIteratorRange(_drawableConstructor->_drawCalls.begin()+drawCallsRef._start, _drawableConstructor->_drawCalls.begin()+drawCallsRef._end)) {
+						if (!drawables[dc._batchFilter]) continue;
+						auto& drawable = *drawables[dc._batchFilter]++;
+						drawable._geo = _drawableConstructor->_drawableGeos[dc._drawableGeoIdx];
+						drawable._pipeline = _drawableConstructor->_pipelineAccelerators[dc._pipelineAcceleratorIdx];
+						drawable._descriptorSet = _drawableConstructor->_descriptorSetAccelerators[dc._descriptorSetAcceleratorIdx];
+						drawable._drawFn = drawableFn;
+						drawable._drawCall = RenderCore::Assets::DrawCallDesc { dc._firstIndex, dc._indexCount, dc._firstVertex };
+						drawable._looseUniformsInterface = _usi;
+						drawable._materialGuid = materialGuids[materialGuidsIterator++];
+						drawable._drawCallIdx = drawCallCounter;
+						drawable._localTransform._localToWorld = geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
+						drawable._localTransform._localSpaceView = Float3{0,0,0};
+						drawable._localTransform._viewMask = viewMask;
+						drawable._deformInstanceIdx = deformInstanceIdx;
+						++drawCallCounter;
+					}
+				}
+				break;
+			}
+		}
+	}
 
 	void SimpleModelRenderer::BuildDrawables(
 		IteratorRange<DrawablesPacket** const> pkts,
@@ -454,6 +526,11 @@ namespace RenderCore { namespace Techniques
 		const Float4x4& localToWorld) const {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	BufferUploads::CommandListID SimpleModelRenderer::GetCompletionCommandList() const
+	{
+		return _drawableConstructor->_completionCommandList;
+	}
 
 	SimpleModelRenderer::SimpleModelRenderer(
 		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
@@ -559,9 +636,9 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	static std::future<DrawableConstructor::FulFilledPromise> ToFuture(DrawableConstructor& construction)
+	static std::future<std::shared_ptr<DrawableConstructor>> ToFuture(DrawableConstructor& construction)
 	{
-		std::promise<DrawableConstructor::FulFilledPromise> promise;
+		std::promise<std::shared_ptr<DrawableConstructor>> promise;
 		auto result = promise.get_future();
 		construction.FulfillWhenNotPending(std::move(promise));
 		return result;
@@ -593,11 +670,11 @@ namespace RenderCore { namespace Techniques
 					
 					::Assets::WhenAll(ToFuture(*drawableConstructor)).ThenConstructToPromise(
 						std::move(promise),
-						[pipelineAcceleratorPool, deformAcceleratorPool, completedConstruction](auto drawableConstructionPromise) {
+						[pipelineAcceleratorPool, deformAcceleratorPool, completedConstruction](auto completedDrawableConstruction) {
 							return std::make_shared<SimpleModelRenderer>(
 								pipelineAcceleratorPool,
 								completedConstruction,
-								drawableConstructionPromise._constructor,
+								completedDrawableConstruction,
 								nullptr);		// skeleton scaffold
 						});
 				}
@@ -678,12 +755,13 @@ namespace RenderCore { namespace Techniques
 		StringSection<> materialScaffoldName,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
 	{
-		assert(0);
-		#if 0
-			auto scaffoldFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::ModelScaffold>(modelScaffoldName);
-			auto materialFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::MaterialScaffold>(materialScaffoldName, modelScaffoldName);
-			ConstructToPromise(std::move(promise), pipelineAcceleratorPool, deformAcceleratorPool, scaffoldFuture, materialFuture, deformOperations, uniformBufferDelegates, modelScaffoldName.AsString(), materialScaffoldName.AsString());
-		#endif
+		auto construction = std::make_shared<Assets::RendererConstruction>();
+		construction->AddElement().SetModelAndMaterialScaffolds(modelScaffoldName, materialScaffoldName);
+		return ConstructToPromise(
+			std::move(promise),
+			pipelineAcceleratorPool, deformAcceleratorPool,
+			construction,
+			uniformBufferDelegates);
 	}
 
 	void SimpleModelRenderer::ConstructToPromise(

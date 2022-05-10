@@ -104,6 +104,7 @@ namespace RenderCore { namespace Assets
 		ModelScaffoldCmdStreamForm(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
 		~ModelScaffoldCmdStreamForm();
 
+		static const auto CompileProcessType = ConstHash64<'Mode', 'l'>::Value;
 		static const ::Assets::ArtifactRequest ChunkRequests[2];
 	private:
 		std::vector<Machine>	_geoMachines;

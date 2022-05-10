@@ -296,11 +296,13 @@ namespace RenderCore { namespace Techniques
 						for (const auto& assign:pendingTransactions->_resAssignments) {
 							if (assign._drawableStream == DrawableStream::IB) {
 								assign._drawableGeo->_ib = locators[assign._markerIdx].GetContainingResource();
-								assign._drawableGeo->_ibOffset += locators[assign._markerIdx].GetRangeInContainingResource().first;
+								auto offset = locators[assign._markerIdx].GetRangeInContainingResource().first;
+								if (offset != ~size_t(0)) assign._drawableGeo->_ibOffset += offset;
 							} else {
 								auto& vertexStream = assign._drawableGeo->_vertexStreams[unsigned(assign._drawableStream)-unsigned(DrawableStream::Vertex0)];
 								vertexStream._resource = locators[assign._markerIdx].GetContainingResource();
-								vertexStream._vbOffset += locators[assign._markerIdx].GetRangeInContainingResource().first;
+								auto offset = locators[assign._markerIdx].GetRangeInContainingResource().first;
+								if (offset != ~size_t(0)) vertexStream._vbOffset += offset;
 							}
 						}
 
@@ -469,7 +471,6 @@ namespace RenderCore { namespace Techniques
 		Internal::DrawableGeoBuilder _pendingGeos;
 		std::future<BufferUploads::CommandListID> _uploadFuture;
 		std::atomic<bool> _fulfillWhenNotPendingCalled = false;
-		std::vector<Float4x4> _pendingGeoSpaceToNodeSpaces;
 		std::vector<DrawCall> _pendingDrawCalls;
 		std::vector<uint8_t> _pendingTranslatedCmdStream;
 
@@ -503,6 +504,7 @@ namespace RenderCore { namespace Techniques
 			}
 
 			std::vector<std::pair<unsigned, unsigned>> modelGeoIdToPendingGeoIndex;
+			std::optional<Float4x4> currentGeoSpaceToNodeSpace;
 			for (auto cmd:modelScaffold->CommandStream()) {
 				switch (cmd.Cmd()) {
 				case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
@@ -555,6 +557,21 @@ namespace RenderCore { namespace Techniques
 						if (rawGeometry) {
 							unsigned drawCallIterators[2] = {(unsigned)_pendingDrawCalls.size()};
 
+							if (!Equivalent(rawGeometry->_geoSpaceToNodeSpace, Identity<Float4x4>(), 1e-3f)) {
+								if (!currentGeoSpaceToNodeSpace.has_value() || currentGeoSpaceToNodeSpace.value() != rawGeometry->_geoSpaceToNodeSpace) {		// binary comparison intentional
+									auto cmdId = (uint32_t)Command::SetGeoSpaceToNodeSpace, blockSize = (uint32_t)sizeof(Float4x4);
+									_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
+									_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
+									_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&drawCallIterators, (const uint8_t*)&drawCallIterators[2]);
+									currentGeoSpaceToNodeSpace = rawGeometry->_geoSpaceToNodeSpace;
+								}
+							} else if (currentGeoSpaceToNodeSpace.has_value()) {
+								auto cmdId = (uint32_t)Command::SetGeoSpaceToNodeSpace, blockSize = (uint32_t)0;
+								_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
+								_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
+								currentGeoSpaceToNodeSpace = {};
+							}
+
 							auto& pendingGeo = _pendingGeos._geos[pendingGeoIdx];
 							for (const auto& dc:rawGeometry->_drawCalls) {
 								// note -- there's some redundancy here, because we'll end up calling 
@@ -577,7 +594,6 @@ namespace RenderCore { namespace Techniques
 								drawCall._drawableGeoIdx = pendingGeoIdx;
 								drawCall._pipelineAcceleratorIdx = compiledPipeline._pipelineAcceleratorIdx;
 								drawCall._descriptorSetAcceleratorIdx = workingMaterial->_descriptorSetAcceleratorIdx;
-								drawCall._geoSpaceToNodeSpaceIdx = AddGeoSpaceToNodeSpace(rawGeometry->_geoSpaceToNodeSpace);
 								drawCall._batchFilter = workingMaterial->_batchFilter;
 								drawCall._firstIndex = dc._firstIndex;
 								drawCall._indexCount = dc._indexCount;
@@ -599,15 +615,6 @@ namespace RenderCore { namespace Techniques
 					break;
 				}
 			}
-		}
-
-		unsigned AddGeoSpaceToNodeSpace(const Float4x4& transform)
-		{
-			auto i = std::find(_pendingGeoSpaceToNodeSpaces.begin(), _pendingGeoSpaceToNodeSpaces.end(), transform);
-			if (i != _pendingGeoSpaceToNodeSpaces.end())
-				return (unsigned)std::distance(_pendingGeoSpaceToNodeSpaces.begin(), i);
-			_pendingGeoSpaceToNodeSpaces.push_back(transform);
-			return (unsigned)_pendingGeoSpaceToNodeSpaces.size()-1;
 		}
 
 		void FillIn(DrawableConstructor& dst)
@@ -642,7 +649,6 @@ namespace RenderCore { namespace Techniques
 				++dst._drawCallCounts[(unsigned)drawCall._batchFilter];
 			
 			_pendingDrawCalls.clear();
-			_pendingGeoSpaceToNodeSpaces.clear();
 			_pendingGeos = {};
 			_pendingPipelines = {};
 			_pendingTranslatedCmdStream.clear();
@@ -670,7 +676,7 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	void DrawableConstructor::FulfillWhenNotPending(std::promise<FulFilledPromise>&& promise)
+	void DrawableConstructor::FulfillWhenNotPending(std::promise<std::shared_ptr<DrawableConstructor>>&& promise)
 	{
 		// prevent multiple calls, because this introduces a lot of threading complications
 		auto prevCalled = _pimpl->_fulfillWhenNotPendingCalled.exchange(true);
@@ -686,12 +692,15 @@ namespace RenderCore { namespace Techniques
 			},
 			[strongThis]() {
 				strongThis->_pimpl->FillIn(*strongThis);
-
-				FulFilledPromise result;
-				result._constructor = strongThis;
-				result._completionCmdList = strongThis->_pimpl->_uploadFuture.get();
-				return result;
+				auto cmdList = strongThis->_pimpl->_uploadFuture.get();
+				strongThis->_completionCommandList = std::max(strongThis->_completionCommandList, cmdList);
+				return strongThis;
 			});
+	}
+
+	IteratorRange<Assets::ScaffoldCmdIterator> DrawableConstructor::GetCmdStream() const
+	{
+		return Assets::MakeScaffoldCmdRange(MakeIteratorRange(_translatedCmdStream));
 	}
 
 	DrawableConstructor::DrawableConstructor(
@@ -699,6 +708,7 @@ namespace RenderCore { namespace Techniques
 		BufferUploads::IManager& bufferUploads,
 		const Assets::RendererConstruction& construction)
 	{
+		_completionCommandList = 0;
 		_pimpl = std::make_unique<Pimpl>(std::move(pipelineAccelerators));
 		Add(construction);
 		std::promise<BufferUploads::CommandListID> uploadPromise;
