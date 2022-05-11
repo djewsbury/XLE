@@ -216,12 +216,6 @@ namespace RenderCore { namespace Assets
 		return _internal->_elementCount;
 	}
 
-	const ::Assets::DependencyValidation& RendererConstruction::GetDependencyValidation() const
-	{
-		static ::Assets::DependencyValidation hack;
-		return hack;
-	}
-
 	uint64_t RendererConstruction::GetHash() const
 	{
 		if (_internal->_disableHash)

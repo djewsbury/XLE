@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../../BufferUploads/IBufferUploads.h"
+#include "../../Assets/DepVal.h"
 #include "../../Math/Matrix.h"
 #include <memory>
 
@@ -16,6 +17,8 @@ namespace RenderCore { namespace Techniques
 	class DescriptorSetAccelerator;
 	class DrawableGeo;
 	class DrawableInputAssembly;
+	class IDeformAcceleratorPool;
+	class DeformAccelerator;
 
 	class DrawableConstructor : public std::enable_shared_from_this<DrawableConstructor>
 	{
@@ -50,16 +53,23 @@ namespace RenderCore { namespace Techniques
 		BufferUploads::CommandListID _completionCommandList;
 
 		void FulfillWhenNotPending(std::promise<std::shared_ptr<DrawableConstructor>>&& promise);
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
 		DrawableConstructor(
 			std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
 			BufferUploads::IManager& bufferUploads,
-			const Assets::RendererConstruction&);
+			const Assets::RendererConstruction&,
+			const std::shared_ptr<IDeformAcceleratorPool>& =nullptr,
+			const std::shared_ptr<DeformAccelerator>& =nullptr);
 		~DrawableConstructor();
 	private:
 		class Pimpl;
 		std::unique_ptr<Pimpl> _pimpl;
+		::Assets::DependencyValidation _depVal;
 
-		void Add(const Assets::RendererConstruction&);
+		void Add(
+			const Assets::RendererConstruction&, 
+			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
+			const std::shared_ptr<DeformAccelerator>& deformAccelerator);
 	};
 }}

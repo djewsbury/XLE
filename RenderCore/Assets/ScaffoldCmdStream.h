@@ -173,7 +173,6 @@ namespace RenderCore { namespace Assets
 		std::shared_ptr<SkeletonScaffold> GetSkeletonScaffold() const;
 
 		uint64_t GetHash() const;
-		const ::Assets::DependencyValidation& GetDependencyValidation() const;
 
 		void FulfillWhenNotPending(std::promise<std::shared_ptr<RendererConstruction>>&& promise);
 		::Assets::AssetState GetAssetState() const;

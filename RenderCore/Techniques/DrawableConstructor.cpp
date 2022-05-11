@@ -317,7 +317,6 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
 			std::vector<std::shared_ptr<PipelineAccelerator>> _pipelineAccelerators;
 			std::vector<std::shared_ptr<DescriptorSetAccelerator>> _descriptorSetAccelerators;
-			std::set<::Assets::DependencyValidation> _depVals;
 
 			struct WorkingMaterial
 			{
@@ -473,6 +472,7 @@ namespace RenderCore { namespace Techniques
 		std::atomic<bool> _fulfillWhenNotPendingCalled = false;
 		std::vector<DrawCall> _pendingDrawCalls;
 		std::vector<uint8_t> _pendingTranslatedCmdStream;
+		std::vector<::Assets::DependencyValidation> _pendingDepVals;
 
 		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
 
@@ -483,6 +483,9 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator,
 			unsigned elementIdx)
 		{
+			_pendingDepVals.push_back(modelScaffold->GetDependencyValidation());
+			_pendingDepVals.push_back(materialScaffold->GetDependencyValidation());
+
 			IteratorRange<const uint64_t*> currentMaterialAssignments;
 
 			RenderCore::Techniques::IGeoDeformerInfrastructure* geoDeformerInfrastructure = nullptr;
@@ -653,11 +656,24 @@ namespace RenderCore { namespace Techniques
 			for (auto& count:dst._drawCallCounts) count = 0;
 			for (const auto& drawCall:dst._drawCalls)
 				++dst._drawCallCounts[(unsigned)drawCall._batchFilter];
+
+			if (!dst._depVal) {
+				std::vector<::Assets::DependencyValidationMarker> depValMarkers;
+				depValMarkers.reserve(_pendingDepVals.size());
+				for (const auto& d:_pendingDepVals) depValMarkers.push_back(d);
+				std::sort(depValMarkers.begin(), depValMarkers.end());
+				depValMarkers.erase(std::unique(depValMarkers.begin(), depValMarkers.end()), depValMarkers.end());
+				dst._depVal = ::Assets::GetDepValSys().MakeOrReuse(depValMarkers);
+			} else {
+				for (const auto& d:_pendingDepVals)
+					dst._depVal.RegisterDependency(d);
+			}
 			
 			_pendingDrawCalls.clear();
 			_pendingGeos = {};
 			_pendingPipelines = {};
 			_pendingTranslatedCmdStream.clear();
+			_pendingDepVals.clear();
 		}
 
 		Pimpl(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
@@ -669,7 +685,10 @@ namespace RenderCore { namespace Techniques
 		{}
 	};
 
-	void DrawableConstructor::Add(const Assets::RendererConstruction& construction)
+	void DrawableConstructor::Add(
+		const Assets::RendererConstruction& construction,
+		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
+		const std::shared_ptr<DeformAccelerator>& deformAccelerator)
 	{
 		assert(construction.GetAssetState() == ::Assets::AssetState::Ready);
 		unsigned elementIdx = 0;
@@ -677,7 +696,7 @@ namespace RenderCore { namespace Techniques
 			auto modelScaffold = e.GetModelScaffold();
 			auto materialScaffold = e.GetMaterialScaffold();
 			if (modelScaffold && materialScaffold)
-				_pimpl->AddModel(modelScaffold, materialScaffold, nullptr, nullptr, elementIdx);
+				_pimpl->AddModel(modelScaffold, materialScaffold, deformAcceleratorPool, deformAccelerator, elementIdx);
 			++elementIdx;
 		}
 	}
@@ -712,11 +731,13 @@ namespace RenderCore { namespace Techniques
 	DrawableConstructor::DrawableConstructor(
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
 		BufferUploads::IManager& bufferUploads,
-		const Assets::RendererConstruction& construction)
+		const Assets::RendererConstruction& construction,
+		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
+		const std::shared_ptr<DeformAccelerator>& deformAccelerator)
 	{
 		_completionCommandList = 0;
 		_pimpl = std::make_unique<Pimpl>(std::move(pipelineAccelerators));
-		Add(construction);
+		Add(construction, deformAcceleratorPool, deformAccelerator);
 		std::promise<BufferUploads::CommandListID> uploadPromise;
 		_pimpl->_uploadFuture = uploadPromise.get_future();
 		_pimpl->_pendingGeos.LoadPendingStaticResources(std::move(uploadPromise), bufferUploads);

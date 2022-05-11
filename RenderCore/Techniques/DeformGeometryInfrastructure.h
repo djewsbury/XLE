@@ -23,7 +23,7 @@ namespace RenderCore { namespace Techniques
 	public:
 		virtual const DeformerToRendererBinding& GetDeformerToRendererBinding() const = 0;
 		virtual std::vector<std::shared_ptr<IGeoDeformer>> GetOperations(size_t typeId) = 0;
-		virtual std::future<BufferUploads::CommandListID> GetCompletionCommandList() const = 0;
+		virtual std::shared_future<BufferUploads::CommandListID> GetCompletionCommandList() const = 0;
 	};
 
 	std::shared_ptr<IGeoDeformerInfrastructure> CreateDeformGeometryInfrastructure(

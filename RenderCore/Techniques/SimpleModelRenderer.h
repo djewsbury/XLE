@@ -128,6 +128,10 @@ namespace RenderCore { namespace Techniques
 		class DrawableGeoBuilder;
 	};
 
+	std::shared_ptr<DeformAccelerator> CreateDefaultDeformAccelerator(
+		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
+		const Assets::RendererConstruction& rendererConstruction);
+
 	class RendererSkeletonInterface
 	{
 	public:
@@ -140,7 +144,8 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const std::shared_ptr<IGeoDeformer>*> skinDeformers);
 		RendererSkeletonInterface(
 			const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
-			IGeoDeformerInfrastructure& geoDeformerInfrastructure);
+			IGeoDeformerInfrastructure& geoDeformerInfrastructure,
+			::Assets::DependencyValidation depVal = {});
 		~RendererSkeletonInterface();
 
 		static void ConstructToPromise(
@@ -148,6 +153,8 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator,
 			const std::shared_ptr<Assets::RendererConstruction>& construction);
+
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
 	private:
 		struct Deformer
@@ -157,6 +164,7 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<IGeoDeformer> _skinDeformerRef;
 		};
 		std::vector<Deformer> _deformers;
+		::Assets::DependencyValidation _depVal;
 	};
 
 	class SkinningUniformBufferDelegate : public IUniformBufferDelegate

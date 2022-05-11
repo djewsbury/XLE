@@ -39,7 +39,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<IResource> _gpuStaticDataBuffer, _gpuTemporariesBuffer;
 		std::shared_ptr<IResourceView> _gpuStaticDataBufferView, _gpuTemporariesBufferView;
-		std::shared_future<BufferUploads::ResourceLocator> _gpuStaticDataBufferFuture;
+		std::shared_future<BufferUploads::CommandListID> _gpuStaticDataCompletionListFuture;
 
 		bool _isCPUDeformer = false;
 		unsigned _outputVBSize = 0;
@@ -98,13 +98,9 @@ namespace RenderCore { namespace Techniques
 			return _rendererGeoInterface;
 		}
 
-		virtual std::future<BufferUploads::CommandListID> GetCompletionCommandList() const override
+		virtual std::shared_future<BufferUploads::CommandListID> GetCompletionCommandList() const override
 		{
-			std::promise<BufferUploads::CommandListID> promise;
-			auto result = promise.get_future();
-			::Assets::WhenAll(_gpuStaticDataBufferFuture).ThenConstructToPromise(
-				std::move(promise), [](const auto& locator) { return locator.GetCompletionCommandList(); });
-			return result;
+			return _gpuStaticDataCompletionListFuture;
 		}
 	};
 
@@ -206,7 +202,11 @@ namespace RenderCore { namespace Techniques
 				bufferIterators._bufferIterators[Internal::VB_GPUStaticData],
 				BindFlag::UnorderedAccess, "[deform]");
 			result->_gpuStaticDataBufferView = result->_gpuStaticDataBuffer->CreateBufferView(BindFlag::UnorderedAccess);
-			result->_gpuStaticDataBufferFuture = std::move(transactionMarker._future);
+
+			std::promise<BufferUploads::CommandListID> promise;
+			result->_gpuStaticDataCompletionListFuture = promise.get_future();
+			::Assets::WhenAll(std::move(transactionMarker._future)).ThenConstructToPromise(
+				std::move(promise), [](const auto& locator) { return locator.GetCompletionCommandList(); });
 		} else {
 			result->_gpuStaticDataBufferView = Techniques::Services::GetCommonResources()->_blackBufferUAV;
 		}

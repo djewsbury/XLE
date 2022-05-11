@@ -380,7 +380,7 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
 	: _drawableConstructor(drawableConstructor)
-	, _depVal(construction->GetDependencyValidation())
+	, _depVal(drawableConstructor->GetDependencyValidation())
 	{
 		using namespace RenderCore::Assets;
 		if (deformAccelerator && deformAcceleratorPool) {  // need both or neither
@@ -390,6 +390,11 @@ namespace RenderCore { namespace Techniques
 		}
 
 		auto externalSkeletonScaffold = construction->GetSkeletonScaffold();
+		if (externalSkeletonScaffold) {
+			// merge in the dep val from the skeleton scaffold
+			::Assets::DependencyValidationMarker depVals[] { _depVal, externalSkeletonScaffold->GetDependencyValidation() };
+			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
+		}
 
 		_elements.reserve(construction->GetElementCount());
 		for (auto ele:*construction) {
@@ -429,8 +434,10 @@ namespace RenderCore { namespace Techniques
 		_usi = pipelineAcceleratorPool->CombineWithLike(std::move(_usi));
 		
 		_completionCmdList = _drawableConstructor->_completionCommandList;
-		if (_geoDeformerInfrastructure)
-			_completionCmdList = std::max(_completionCmdList, _geoDeformerInfrastructure->GetCompletionCommandList().get());	// future must be ready before we get here
+		if (_geoDeformerInfrastructure) {
+			assert(_geoDeformerInfrastructure->GetCompletionCommandList().wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);	// future must be ready before we get here
+			_completionCmdList = std::max(_completionCmdList, _geoDeformerInfrastructure->GetCompletionCommandList().get());
+		}
 
 		// Check to make sure we've got a skeleton binding for each referenced geo call to world referenced
 		{
@@ -474,7 +481,7 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	static std::shared_ptr<DeformAccelerator> CreateDefaultDeformAccelerator(
+	std::shared_ptr<DeformAccelerator> CreateDefaultDeformAccelerator(
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const Assets::RendererConstruction& rendererConstruction)
 	{
@@ -516,13 +523,13 @@ namespace RenderCore { namespace Techniques
 		::Assets::WhenAll(ToFuture(*construction)).ThenConstructToPromise(
 			std::move(promise),
 			[pipelineAcceleratorPool, deformAcceleratorPool, deformAcceleratorInit, uniformBufferBindings=std::move(uniformBufferBindings)](auto&& promise, auto completedConstruction) mutable {
-				auto& bufferUploads = Services::GetInstance().GetBufferUploads();
-				auto drawableConstructor = std::make_shared<DrawableConstructor>(pipelineAcceleratorPool, bufferUploads, *completedConstruction);
-
 				// if we were given a deform accelerator pool, but no deform accelerator, go ahead and create the default accelerator
 				auto deformAccelerator = deformAcceleratorInit;
 				if (deformAcceleratorPool && !deformAccelerator)
 					deformAccelerator = CreateDefaultDeformAccelerator(deformAcceleratorPool, *completedConstruction);
+
+				auto& bufferUploads = Services::GetInstance().GetBufferUploads();
+				auto drawableConstructor = std::make_shared<DrawableConstructor>(pipelineAcceleratorPool, bufferUploads, *completedConstruction, deformAcceleratorPool, deformAccelerator);
 
 				::Assets::PollToPromise(
 					std::move(promise),
@@ -607,7 +614,9 @@ namespace RenderCore { namespace Techniques
 
 	RendererSkeletonInterface::RendererSkeletonInterface(
 		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
-		IGeoDeformerInfrastructure& geoDeformerInfrastructure)
+		IGeoDeformerInfrastructure& geoDeformerInfrastructure,
+		::Assets::DependencyValidation depVal)
+	: _depVal(depVal)
 	{
 		auto srcDeformers = geoDeformerInfrastructure.GetOperations(typeid(ISkinDeformer).hash_code());
 		_deformers.reserve(srcDeformers.size());
@@ -634,12 +643,16 @@ namespace RenderCore { namespace Techniques
 				// We must have either an external skeleton that applies to the whole model, or a single element with a model
 				// scaffold with an embedded skeleton
 				const Assets::SkeletonMachine* skeleton = nullptr;
-				if (completedConstruction->GetSkeletonScaffold())
+				::Assets::DependencyValidation depVal;
+				if (completedConstruction->GetSkeletonScaffold()) {
 					skeleton = &completedConstruction->GetSkeletonScaffold()->GetSkeletonMachine();
+					depVal = completedConstruction->GetSkeletonScaffold()->GetDependencyValidation();
+				}
 				if (!skeleton) {
 					if (completedConstruction->GetElementCount() != 1 || completedConstruction->GetElement(0)->GetModelScaffold())
 						Throw(std::runtime_error("Cannot bind skeleton interface to RendererConstruction, because there are multiple separate skeletons within the one construction"));
 					skeleton = completedConstruction->GetElement(0)->GetModelScaffold()->EmbeddedSkeleton();
+					depVal = completedConstruction->GetElement(0)->GetModelScaffold()->GetDependencyValidation();
 				}
 				if (!skeleton)
 					Throw(std::runtime_error("Cannot bind skeleton interface to RendererConstruction, because no skeleton with provided either as an embedded skeleton, or as an external skeleton"));
@@ -650,7 +663,8 @@ namespace RenderCore { namespace Techniques
 				if (!skeleton)
 					Throw(std::runtime_error("Cannot bind skeleton interface to RendererConstruction, because there is no geo deformer attached to the given deform accelerator"));
 				
-				return std::make_shared<RendererSkeletonInterface>(skeleton->GetOutputInterface(), *geoDeform);
+				// might need to take a dep val from the IGeoDeformerInfrastructure here, as well
+				return std::make_shared<RendererSkeletonInterface>(skeleton->GetOutputInterface(), *geoDeform, depVal);
 			});
 	}
 
