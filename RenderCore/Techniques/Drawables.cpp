@@ -21,6 +21,7 @@
 #include "../Metal/InputLayout.h"
 #include "../Metal/Resource.h"
 #include "../../Assets/AsyncMarkerGroup.h"
+#include "../../Assets/Marker.h"
 #include "../../Utility/ArithmeticUtils.h"
 #include "../../Utility/BitUtils.h"
 
@@ -219,6 +220,7 @@ namespace RenderCore { namespace Techniques
 				} 
 				{
 					if (matDescSet) {
+#if 0
 						auto dynamicSize = Internal::GetDynamicPageResourceSize(*matDescSet);
 						if (dynamicSize) {
 							
@@ -247,7 +249,9 @@ namespace RenderCore { namespace Techniques
 								Internal::GetOutputParameterState(*drawable._geo->_deformAccelerator, drawable._deformInstanceIdx),
 								dynamicPageBufferSpace);
 							currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *matDescSet->GetDescriptorSet(), s_uniformGroupMaterial, 0, MakeIteratorRange(&dynamicOffset, &dynamicOffset+1));
-						} else {
+						} else 
+#endif
+						{
 							unsigned dynamicOffset = 0;
 							currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *matDescSet->GetDescriptorSet(), s_uniformGroupMaterial, 0, MakeIteratorRange(&dynamicOffset, &dynamicOffset+1));
 						}

@@ -6,10 +6,9 @@
 
 #include "../UniformsStream.h"
 #include "../Types.h"
-#include "../../Assets/Marker.h"
-#include "../../Utility/ImpliedTyping.h"
 #include <vector>
 #include <memory>
+#include <future>
 
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
 namespace RenderCore { class IDevice; class IDescriptorSet; class SamplerPool; }
@@ -46,8 +45,6 @@ namespace RenderCore { namespace Techniques
 		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCommandList; }
 
 		std::shared_ptr<RenderCore::IDescriptorSet> _descriptorSet;
-		unsigned _dynamicPageBufferSize = 0u;
-		std::shared_ptr<AnimatedUniformBufferHelper> _animHelper;
 		DescriptorSetBindingInfo _bindingInfo;
 		BufferUploads::CommandListID _completionCommandList;
 		::Assets::DependencyValidation _depVal;
@@ -59,23 +56,6 @@ namespace RenderCore { namespace Techniques
 		ActualizedDescriptorSet& operator=(const ActualizedDescriptorSet&);
 		~ActualizedDescriptorSet();
 	};
-
-	class AnimatedParameterBinding
-	{
-	public:
-		uint64_t _name;
-		ImpliedTyping::TypeDesc _type;
-		unsigned _offset;
-	};
-
-	namespace Internal
-	{
-		inline unsigned GetDynamicPageResourceSize(const ActualizedDescriptorSet& descSet) { return descSet._dynamicPageBufferSize; }
-		bool PrepareDynamicPageResource(
-			const ActualizedDescriptorSet& descSet,
-			IteratorRange<const void*> animatedParameters,
-			IteratorRange<void*> dynamicPageBuffer);
-	}
 
 	void ConstructDescriptorSet(
 		std::promise<ActualizedDescriptorSet>&& promise,

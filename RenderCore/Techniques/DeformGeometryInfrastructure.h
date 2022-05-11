@@ -5,7 +5,7 @@
 #pragma once
 
 #include "DeformAccelerator.h"
-#include "DeformOperationFactory.h"		// for DeformOperationFactorySet::Deformer
+#include <future>
 
 namespace RenderCore { namespace Assets { class RendererConstruction; }}
 namespace BufferUploads { using CommandListID = uint32_t; }

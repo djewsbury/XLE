@@ -27,18 +27,6 @@
 
 namespace RenderCore { namespace Techniques 
 {
-	struct AnimatedUniformBufferHelper
-	{
-		struct Mapping
-		{
-			ImpliedTyping::TypeDesc _srcFormat, _dstFormat;
-			unsigned _srcOffset, _dstOffset;
-		};
-		std::vector<Mapping> _parameters;
-		std::vector<uint8_t> _baseContents;
-		unsigned _dynamicPageBufferSize = 0;
-	};
-
 	struct DescriptorSetInProgress : public ::Assets::IAsyncMarker
 	{
 		struct Resource
@@ -128,10 +116,6 @@ namespace RenderCore { namespace Techniques
 		if (generateBindingInfo)
 			working._bindingInfo._slots.resize(working._slots.size());
 
-		unsigned dynamicPageBufferResourceIdx = ~0u;
-		unsigned dynamicPageBufferMovingOffset = 0u;
-		const unsigned dynamicPageBufferAlignment = 256u;		// todo -- get this from somewhere
-
 		char stringMeldBuffer[512];
 		for (const auto& s:layout._slots) {
 			DescriptorSetInProgress::Slot slotInProgress;
@@ -164,20 +148,8 @@ namespace RenderCore { namespace Techniques
 				auto& cbLayout = layout._constantBuffers[s._cbIdx];
 				auto buffer = cbLayout->BuildCBDataAsVector(constantBindings, shrLanguage);
 
-				// try to match parameters in the cb layout to the animated parameter list
-				std::vector<AnimatedUniformBufferHelper::Mapping> parameterMapping;
-				unsigned dynamicPageBufferStart = CeilToMultiple(dynamicPageBufferMovingOffset, dynamicPageBufferAlignment);
-				for (const auto& p:cbLayout->_elements) {
-					auto i = std::find_if(animatedBindings.begin(), animatedBindings.end(), [&p](const auto& q) { return q._name == p._hash; });
-					if (i != animatedBindings.end()) {
-						assert(p._arrayElementCount == 0);		// can't animate array elements
-						parameterMapping.push_back({
-							i->_type, p._type,
-							i->_offset, dynamicPageBufferStart+p._offsetsByLanguage[(unsigned)shrLanguage]});
-					}
-				}
-
-				if (parameterMapping.empty()) {
+				const bool animated = false;
+				if (!animated) {
 					// non animated fixed buffer
 					auto cb = 
 						device->CreateResource(
@@ -191,27 +163,9 @@ namespace RenderCore { namespace Techniques
 					res._fixedResource = cb->CreateBufferView(BindFlag::ConstantBuffer);
 					working._resources.push_back(res);
 				} else {
-					// animated dynamically written buffer
-					if (dynamicPageBufferResourceIdx == ~0u) {
-						dynamicPageBufferResourceIdx = (unsigned)working._resources.size();
-						DescriptorSetInProgress::Resource res;
-						assert(dynamicPageResource);
-						res._fixedResource = dynamicPageResource;		// todo -- if there are multiple buffers that reference this, should we have an offset here?
-						working._resources.push_back(res);
-					}
-
-					assert(s._type == DescriptorType::UniformBufferDynamicOffset);		// we must have a dynamic offset for this mechanism to work
-					slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
-					slotInProgress._resourceIdx = dynamicPageBufferResourceIdx;
-
-					dynamicPageBufferMovingOffset = dynamicPageBufferStart + (unsigned)buffer.size();
-					if (!working._animHelper)
-						working._animHelper = std::make_shared<AnimatedUniformBufferHelper>();
-					working._animHelper->_baseContents.resize(dynamicPageBufferMovingOffset, 0);
-					std::memcpy(PtrAdd(working._animHelper->_baseContents.data(), dynamicPageBufferStart), buffer.data(), buffer.size());
-					working._animHelper->_parameters.insert(working._animHelper->_parameters.end(), parameterMapping.begin(), parameterMapping.end());
+					assert(0);		// use the animation page resource, and require a dynamic offset binding point
 				}
-
+					
 				gotBinding = true;
 
 				if (generateBindingInfo) {
@@ -246,8 +200,6 @@ namespace RenderCore { namespace Techniques
 		}
 
 		working._signature = layout.MakeDescriptorSetSignature(samplerPool);
-		if (working._animHelper)
-			working._animHelper->_dynamicPageBufferSize = dynamicPageBufferMovingOffset;
 
 		auto futureWorkingDescSet = ::Assets::MakeASyncMarkerBridge(std::move(working));
 		::Assets::WhenAll(std::move(futureWorkingDescSet)).ThenConstructToPromise(
@@ -323,8 +275,6 @@ namespace RenderCore { namespace Techniques
 				actualized._depVal = std::move(depVal);
 				actualized._bindingInfo = std::move(working._bindingInfo);
 				actualized._completionCommandList = completionCommandList;
-				actualized._dynamicPageBufferSize = working._animHelper ? working._animHelper->_dynamicPageBufferSize : 0;
-				actualized._animHelper = std::move(working._animHelper);
 				return actualized;
 			});
 	}
@@ -383,26 +333,5 @@ namespace RenderCore { namespace Techniques
 	ActualizedDescriptorSet::ActualizedDescriptorSet(const ActualizedDescriptorSet&) = default;
 	ActualizedDescriptorSet& ActualizedDescriptorSet::operator=(const ActualizedDescriptorSet&) = default;
 	ActualizedDescriptorSet::~ActualizedDescriptorSet() = default;
-
-	namespace Internal
-	{
-		bool PrepareDynamicPageResource(
-			const ActualizedDescriptorSet& descSet,
-			IteratorRange<const void*> animatedParameters,
-			IteratorRange<void*> dynamicPageBuffer)
-		{
-			if (!descSet._animHelper)
-				return false;
-
-			// copy in the parameter values to their expected destinations
-			auto& animHelper = *descSet._animHelper;
-			std::memcpy(dynamicPageBuffer.begin(), animHelper._baseContents.data(), animHelper._baseContents.size());
-			for (const auto& p:animHelper._parameters)
-				ImpliedTyping::Cast(
-					MakeIteratorRange(PtrAdd(dynamicPageBuffer.begin(), p._dstOffset), dynamicPageBuffer.end()), p._dstFormat, 
-					MakeIteratorRange(PtrAdd(animatedParameters.begin(), p._srcOffset), animatedParameters.end()), p._srcFormat);
-			return true;
-		}
-	}
 
 }}
