@@ -58,3 +58,18 @@ float4 flatColorEarlyRejection(VSOUT geo) : SV_Target0
         discard;
 	return VSOUT_GetColor0(geo);
 }
+
+float4 copyDiffuseAlbedo(VSOUT geo) : SV_Target0
+{
+	GBufferValues sample = PerPixel(geo);
+	return float4(sample.diffuseAlbedo, sample.blendingAlpha);
+}
+
+float4 copyDiffuseAlbedoWithEarlyRejection(VSOUT geo) : SV_Target0
+{
+    if (EarlyRejectionTest(geo))
+        discard;
+	GBufferValues sample = PerPixel(geo);
+	return float4(sample.diffuseAlbedo, sample.blendingAlpha);
+}
+

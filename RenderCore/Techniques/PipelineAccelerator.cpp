@@ -18,6 +18,7 @@
 #include "../Metal/ObjectFactory.h"
 #include "../Assets/RawMaterial.h"
 #include "../Assets/PredefinedPipelineLayout.h"
+#include "../Assets/ScaffoldCmdStream.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
@@ -28,9 +29,6 @@
 #include <cctype>
 #include <sstream>
 #include <iomanip>
-
-#include "Techniques.h"
-#include "TechniqueDelegates.h"
 
 namespace RenderCore { namespace Techniques
 {
@@ -359,12 +357,9 @@ namespace RenderCore { namespace Techniques
 
 		virtual std::shared_ptr<DescriptorSetAccelerator> CreateDescriptorSetAccelerator(
 			const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& shaderPatches,
-			const ParameterBox& materialSelectors,
-			const ParameterBox& constantBindings,
-			const ParameterBox& resourceBindings,
-			IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings,
-			IteratorRange<const AnimatedParameterBinding*> animatedBindings,
-			const std::shared_ptr<IResourceView>& dynamicPageResource) override;
+			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
+			std::shared_ptr<void> memoryHolder,
+			const std::shared_ptr<DeformerToDescriptorSetBinding>& deformBinding) override;
 
 		std::shared_ptr<SequencerConfig> CreateSequencerConfig(
 			const std::string& name,
@@ -657,30 +652,19 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<DescriptorSetAccelerator> PipelineAcceleratorPool::CreateDescriptorSetAccelerator(
 		const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& shaderPatches,
-		const ParameterBox& materialSelectors,
-		const ParameterBox& constantBindings,
-		const ParameterBox& resourceBindings,
-		IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings,
-		IteratorRange<const AnimatedParameterBinding*> animatedBindings,
-		const std::shared_ptr<IResourceView>& dynamicPageResource)
+		IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
+		std::shared_ptr<void> memoryHolder,
+		const std::shared_ptr<DeformerToDescriptorSetBinding>& deformBinding)
 	{
 		std::shared_ptr<DescriptorSetAccelerator> result;
 		{
 			ScopedLock(_constructionLock);
 
-			uint64_t hash = HashCombine(materialSelectors.GetHash(), materialSelectors.GetParameterNamesHash());
-			hash = HashCombine(constantBindings.GetHash(), hash);
-			hash = HashCombine(constantBindings.GetParameterNamesHash(), hash);
-			hash = HashCombine(resourceBindings.GetHash(), hash);
-			hash = HashCombine(resourceBindings.GetParameterNamesHash(), hash);
-			for (const auto&s:samplerBindings) {		// (note, different ordering will result in different hashes)
-				hash = HashCombine(s.first, hash);
-				hash = HashCombine(s.second.Hash(), hash);
-			}
+			uint64_t hash = HashMaterialMachine(materialMachine);
 			if (shaderPatches)
 				hash = HashCombine(shaderPatches->GetHash(), hash);
-			for (const auto& b:animatedBindings)
-				hash = HashCombine(b._name, hash);
+			// for (const auto& b:animatedBindings)
+				// hash = HashCombine(b._name, hash);
 
 			// If it already exists in the cache, just return it now
 			auto cachei = LowerBound(_descriptorSetAccelerators, hash);
@@ -703,36 +687,23 @@ namespace RenderCore { namespace Techniques
 		// We don't need to have "_constructionLock" after we've added the Marker to _descriptorSetAccelerators, so let's do the
 		// rest outside of the lock
 
-		std::vector<std::pair<uint64_t, std::shared_ptr<ISampler>>> metalSamplers;
-		metalSamplers.reserve(samplerBindings.size());
-		for (const auto&c:samplerBindings)
-			metalSamplers.push_back(std::make_pair(c.first, _samplerPool->GetSampler(c.second)));
-
+		bool generateBindingInfo = !!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
 		if (shaderPatches) {
 			auto patchCollectionFuture = ::Assets::MakeAssetPtr<CompiledShaderPatchCollection>(*shaderPatches, _matDescSetLayout);
 
 			// Most of the time, it will be ready immediately, and we can avoid some of the overhead of the
 			// future continuation functions
 			if (auto* patchCollection = patchCollectionFuture->TryActualize()) {
-				ConstructDescriptorSet(
-					result->_descriptorSet->AdoptPromise(),
-					_device,
-					(*patchCollection)->GetInterface().GetMaterialDescriptorSet(),
-					constantBindings,
-					resourceBindings,
-					MakeIteratorRange(metalSamplers), _samplerPool.get(), animatedBindings, dynamicPageResource,
-					PipelineType::Graphics,
-					!!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo));
+				ConstructDescriptorSetHelper{_device, _samplerPool.get(), PipelineType::Graphics, generateBindingInfo}
+					.Construct(
+						result->_descriptorSet->AdoptPromise(),
+						(*patchCollection)->GetInterface().GetMaterialDescriptorSet(),
+						materialMachine, deformBinding.get());
 			} else {
-				ParameterBox constantBindingsCopy = constantBindings;
-				ParameterBox resourceBindingsCopy = resourceBindings;
-				std::vector<AnimatedParameterBinding> animatedParamCopy{animatedBindings.begin(), animatedBindings.end()};
-
 				std::weak_ptr<IDevice> weakDevice = _device;
-				bool generateBindingInfo = !!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
 				::Assets::WhenAll(patchCollectionFuture).ThenConstructToPromise(
 					result->_descriptorSet->AdoptPromise(),
-					[constantBindingsCopy, resourceBindingsCopy, animatedParamCopy, metalSamplers, weakDevice, generateBindingInfo, samplerPool=std::weak_ptr<SamplerPool>(_samplerPool), dynamicPageResource=dynamicPageResource](
+					[materialMachine, memoryHolder, weakDevice, generateBindingInfo, samplerPool=std::weak_ptr<SamplerPool>(_samplerPool), deformBinding](
 						std::promise<ActualizedDescriptorSet>&& promise,
 						std::shared_ptr<CompiledShaderPatchCollection> patchCollection) {
 
@@ -740,27 +711,19 @@ namespace RenderCore { namespace Techniques
 						if (!d)
 							Throw(std::runtime_error("Device has been destroyed"));
 						
-						ConstructDescriptorSet(
-							std::move(promise),
-							d,
-							patchCollection->GetInterface().GetMaterialDescriptorSet(),
-							constantBindingsCopy,
-							resourceBindingsCopy,
-							MakeIteratorRange(metalSamplers), samplerPool.lock().get(), animatedParamCopy, dynamicPageResource,
-							PipelineType::Graphics,
-							generateBindingInfo);
+						ConstructDescriptorSetHelper{d, samplerPool.lock().get(), PipelineType::Graphics, generateBindingInfo}
+							.Construct(
+								std::move(promise),
+								patchCollection->GetInterface().GetMaterialDescriptorSet(),
+								materialMachine, deformBinding.get());
 					});
 			}
 		} else {
-			ConstructDescriptorSet(
-				result->_descriptorSet->AdoptPromise(),
-				_device,
-				*_matDescSetLayout.GetLayout(),
-				constantBindings,
-				resourceBindings,
-				MakeIteratorRange(metalSamplers), _samplerPool.get(), animatedBindings, dynamicPageResource,
-				PipelineType::Graphics,
-				!!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo));
+			ConstructDescriptorSetHelper{_device, _samplerPool.get(), PipelineType::Graphics, generateBindingInfo}
+				.Construct(
+					result->_descriptorSet->AdoptPromise(),
+					*_matDescSetLayout.GetLayout(),
+					materialMachine, deformBinding.get());
 		}
 
 		return result;

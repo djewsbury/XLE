@@ -104,6 +104,20 @@ static const char* s_basicTechniqueFile = R"--(
 			SKIP_MATERIAL_DIFFUSE=0
 		Preconfiguration=xleres/TechniqueLibrary/Framework/SelectorPreconfiguration.hlsl
 
+	CopyDiffuseAlbedo_NoPatches=~
+		Inherit=~; Shared
+		PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:copyDiffuseAlbedo
+
+	CopyDiffuseAlbedo_PerPixel=~
+		Inherit=~; Shared
+		PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:copyDiffuseAlbedo
+		
+	CopyDiffuseAlbedo_PerPixelAndEarlyRejection=~
+		Inherit=~; Shared
+		PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:copyDiffuseAlbedoWithEarlyRejection
+
+	~~~~~~~~~~~~~~~~~~~~~
+	
 	Deferred_NoPatches=~
 		Inherit=~; Shared
 		PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:deferred
@@ -115,6 +129,8 @@ static const char* s_basicTechniqueFile = R"--(
 	Deferred_PerPixelAndEarlyRejection=~
 		Inherit=~; Shared
 		PixelShader=xleres/TechniqueLibrary/Standard/deferred.pixel.hlsl:frameworkEntryWithEarlyRejection
+
+	~~~~~~~~~~~~~~~~~~~~~~~
 
 	VS_NoPatches=~
 		VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main

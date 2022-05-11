@@ -730,6 +730,10 @@ namespace RenderCore { namespace Techniques
 					psNoPatchesHash = Hash64("FlatColor_NoPatches");
 					psPerPixelHash = Hash64("FlatColor_NoPatches");
 					perPixelAndEarlyRejectionHash = Hash64("FlatColor_PerPixelAndEarlyRejection");
+				} else if (utilityType == UtilityDelegateType::CopyDiffuseAlbedo) {
+					psNoPatchesHash = Hash64("CopyDiffuseAlbedo_NoPatches");
+					psPerPixelHash = Hash64("CopyDiffuseAlbedo_PerPixel");
+					perPixelAndEarlyRejectionHash = Hash64("CopyDiffuseAlbedo_PerPixelAndEarlyRejection");
 				} else {
 					assert(0);
 				}

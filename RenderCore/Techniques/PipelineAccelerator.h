@@ -20,7 +20,7 @@ namespace RenderCore
 	class ICompiledPipelineLayout;
 }
 
-namespace RenderCore { namespace Assets { class RenderStateSet; class ShaderPatchCollection; class PredefinedDescriptorSetLayout; } }
+namespace RenderCore { namespace Assets { class RenderStateSet; class ShaderPatchCollection; class PredefinedDescriptorSetLayout; class ScaffoldCmdIterator; } }
 namespace RenderCore { class IDevice; class IDescriptorSet; class UniformsStreamInterface; class IResourceView; }
 
 namespace RenderCore { namespace Techniques
@@ -33,7 +33,7 @@ namespace RenderCore { namespace Techniques
 	class DescriptorSetLayoutAndBinding;
 	class ActualizedDescriptorSet;
 	class CompiledPipelineLayoutAsset;
-	class AnimatedParameterBinding;
+	class DeformerToDescriptorSetBinding;
 
 	// Switching this to a virtual interface style class in order to better support multiple DLLs/modules
 	// For many objects like the SimpleModelRenderer, the pipeline accelerator pools is one of the main
@@ -59,12 +59,9 @@ namespace RenderCore { namespace Techniques
 
 		virtual std::shared_ptr<DescriptorSetAccelerator> CreateDescriptorSetAccelerator(
 			const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& shaderPatches,
-			const ParameterBox& materialSelectors,
-			const Utility::ParameterBox& constantBindings,
-			const Utility::ParameterBox& resourceBindings,
-			IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings = {},
-			IteratorRange<const AnimatedParameterBinding*> animatedBindings = {},
-			const std::shared_ptr<IResourceView>& dynamicPageResource = nullptr) = 0;
+			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
+			std::shared_ptr<void> memoryHolder,								// retained while we need access to materialMachine
+			const std::shared_ptr<DeformerToDescriptorSetBinding>& deformBinding = {}) = 0;
 
 		virtual std::shared_ptr<SequencerConfig> CreateSequencerConfig(
 			const std::string& name,

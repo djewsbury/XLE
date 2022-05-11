@@ -20,6 +20,7 @@
 #include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
 #include "../../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"
+#include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Metal/InputLayout.h"
 #include "../../../RenderCore/Format.h"
@@ -628,12 +629,12 @@ namespace UnitTests
 				resourceBindings.SetParameter("InputTexture", "xleres/DefaultResources/waternoise.png");
 				samplerBindings.push_back(std::make_pair(Hash64("InputSampler"), SamplerDesc{}));
 				constantBindings.SetParameter("TextureAspectDistortion", Float2{0.5f, 3.0f});
+				auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(
+					constantBindings, resourceBindings, samplerBindings);
 				auto descriptorSetAccelerator = pipelinePool->CreateDescriptorSetAccelerator(
 					patchCollection,
-					ParameterBox{},
-					constantBindings,
-					resourceBindings,
-					MakeIteratorRange(samplerBindings));
+					matMachine->GetMaterialMachine(),
+					matMachine);
 
 				DrawViaPipelineAccelerator(
 					threadContext, fbHelper, globalTransform, pipelinePool,

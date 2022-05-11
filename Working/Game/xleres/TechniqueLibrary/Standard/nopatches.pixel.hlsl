@@ -74,3 +74,13 @@ float4 flatColor(VSOUT geo) : SV_Target0
 	DoAlphaTest(geo, GetAlphaThreshold());
 	return VSOUT_GetColor0(geo);
 }
+
+#if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))
+	[earlydepthstencil]
+#endif
+float4 copyDiffuseAlbedo(VSOUT geo) : SV_Target0
+{
+	DoAlphaTest(geo, GetAlphaThreshold());
+	GBufferValues sample = IllumShader_PerPixel(geo);
+	return float4(sample.diffuseAlbedo, sample.blendingAlpha);
+}

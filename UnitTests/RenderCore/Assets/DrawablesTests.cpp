@@ -169,8 +169,7 @@ namespace UnitTests
 			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
 			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
 			"temporary-out");
-		// create a framebuffer with 3 targets (to allow for deferred techniques)
-		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc, targetDesc, targetDesc);
+		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 		
 		/////////////////////////////////////////////////////////////////
 
@@ -191,14 +190,17 @@ namespace UnitTests
 			resourceBindings.SetParameter("BoundTexture", "xleres/DefaultResources/waternoise.png");
 			std::vector<std::pair<uint64_t, SamplerDesc>> samplerBindings;
 			samplerBindings.push_back(std::make_pair(Hash64("BoundSampler"), SamplerDesc{}));
+			auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(
+				constantBindings, resourceBindings, samplerBindings);
 			auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 				patches,
-				ParameterBox {}, constantBindings, resourceBindings, MakeIteratorRange(samplerBindings));
+				matMachine->GetMaterialMachine(),
+				matMachine);
 
 			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
 				"test",
-				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
+				Techniques::CreateTechniqueDelegate_Utility(techniqueSetFile, Techniques::UtilityDelegateType::CopyDiffuseAlbedo),
 				ParameterBox {},
 				fbHelper.GetDesc());
 
@@ -277,7 +279,7 @@ namespace UnitTests
 			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
 				"test",
-				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
+				Techniques::CreateTechniqueDelegate_Utility(techniqueSetFile, Techniques::UtilityDelegateType::CopyDiffuseAlbedo),
 				ParameterBox {},
 				fbHelper.GetDesc());
 

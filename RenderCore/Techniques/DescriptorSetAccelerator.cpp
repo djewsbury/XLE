@@ -6,103 +6,136 @@
 #include "DeferredShaderResource.h"
 #include "TechniqueUtils.h"
 #include "CommonResources.h"
-#include "Services.h"
-#include "DeformAccelerator.h"
-#include "DrawableDelegates.h"
-#include "Drawables.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedCBLayout.h"
-#include "../Metal/State.h"
-#include "../Metal/InputLayout.h"
+#include "../Assets/MaterialMachine.h"
+#include "../Assets/AssetUtils.h"
 #include "../IDevice.h"
-#include "../BufferView.h"
 #include "../UniformsStream.h"
 #include "../StateDesc.h"
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/ContinuationUtil.h"
+#include "../../Assets/BlockSerializer.h"
 #include "../../Utility/ParameterBox.h"
-#include "../../Utility/BitUtils.h"
 
 namespace RenderCore { namespace Techniques 
 {
-	struct DescriptorSetInProgress : public ::Assets::IAsyncMarker
+	namespace Internal
 	{
-		struct Resource
+		struct DescriptorSetInProgress : public ::Assets::IAsyncMarker
 		{
-			::Assets::PtrToMarkerPtr<DeferredShaderResource> _pendingResource;
-			std::shared_ptr<IResourceView> _fixedResource;
+			struct Resource
+			{
+				::Assets::PtrToMarkerPtr<DeferredShaderResource> _pendingResource;
+				std::shared_ptr<IResourceView> _fixedResource;
+			};
+			std::vector<Resource> _resources;
+			std::vector<std::shared_ptr<ISampler>> _samplers;
+
+			struct Slot
+			{
+				DescriptorSetInitializer::BindType _bindType = DescriptorSetInitializer::BindType::Empty;
+				unsigned _resourceIdx = ~0u;
+				std::string _slotName;
+				DescriptorType _slotType;
+			};
+			std::vector<Slot> _slots;
+
+			DescriptorSetSignature _signature;
+			DescriptorSetBindingInfo _bindingInfo;
+
+			std::shared_ptr<AnimatedUniformBufferHelper> _animHelper;
+
+			::Assets::AssetState GetAssetState() const override
+			{
+				// just check status right now
+				auto result = ::Assets::AssetState::Ready;
+				for (const auto&d:_resources) {
+					if (d._pendingResource) {
+						::Assets::DependencyValidation depVal;
+						::Assets::Blob actualizationLog;
+						auto status = d._pendingResource->CheckStatusBkgrnd(depVal, actualizationLog);
+						// return true only when everything is ready/invalid
+						if (status == ::Assets::AssetState::Pending) {
+							return ::Assets::AssetState::Pending;
+						} else if (status == ::Assets::AssetState::Invalid)
+							result = ::Assets::AssetState::Invalid;
+					}
+				}
+				return result;
+			}
+
+			std::optional<::Assets::AssetState> StallWhilePending(std::chrono::microseconds timeout) const override
+			{
+				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+				auto result = ::Assets::AssetState::Ready;
+				for (const auto&d:_resources) {
+					if (d._pendingResource) {
+						auto now = std::chrono::steady_clock::now();
+						auto partialTimeout = std::chrono::duration_cast<std::chrono::microseconds>(timeoutTime-now);
+						if (now >= timeoutTime || partialTimeout.count() == 0)
+							return {};		// timed out before we can even begin
+						auto status = d._pendingResource->StallWhilePending(partialTimeout);
+						if (!status.has_value() || status.value() == ::Assets::AssetState::Pending)
+							return status;		// timed out during StallWhilePending
+						if (status.value() == ::Assets::AssetState::Invalid)
+							result = ::Assets::AssetState::Invalid;
+					}
+				}
+				return result;
+			}
 		};
-		std::vector<Resource> _resources;
-		std::vector<std::shared_ptr<ISampler>> _samplers;
 
-		struct Slot
+		struct InterpretMaterialMachineHelper
 		{
-			DescriptorSetInitializer::BindType _bindType = DescriptorSetInitializer::BindType::Empty;
-			unsigned _resourceIdx = ~0u;
-			std::string _slotName;
-			DescriptorType _slotType;
-		};
-		std::vector<Slot> _slots;
+			const ParameterBox* _resourceBindings = nullptr;
+			const ParameterBox* _constantBindings = nullptr;
+			IteratorRange<const std::pair<uint64_t, SamplerDesc>*> _samplerBindings;
 
-		DescriptorSetSignature _signature;
-		DescriptorSetBindingInfo _bindingInfo;
+			uint64_t CalculateHash() const
+			{
+				uint64_t result = DefaultSeed64;
+				if (_resourceBindings) {
+					result = HashCombine(_resourceBindings->GetHash(), result);
+					result = HashCombine(_resourceBindings->GetParameterNamesHash(), result);
+				}
+				if (_constantBindings) {
+					result = HashCombine(_constantBindings->GetHash(), result);
+					result = HashCombine(_constantBindings->GetParameterNamesHash(), result);
+				}
+				for (const auto& c:_samplerBindings) {
+					result = HashCombine(c.first, result);
+					result = HashCombine(c.second.Hash(), result);
+				}
+				return result;
+			}
 
-		std::shared_ptr<AnimatedUniformBufferHelper> _animHelper;
-
-		::Assets::AssetState GetAssetState() const override
-		{
-			// just check status right now
-			auto result = ::Assets::AssetState::Ready;
-			for (const auto&d:_resources) {
-				if (d._pendingResource) {
-					::Assets::DependencyValidation depVal;
-					::Assets::Blob actualizationLog;
-					auto status = d._pendingResource->CheckStatusBkgrnd(depVal, actualizationLog);
-					// return true only when everything is ready/invalid
-					if (status == ::Assets::AssetState::Pending) {
-						return ::Assets::AssetState::Pending;
-					} else if (status == ::Assets::AssetState::Invalid)
-						result = ::Assets::AssetState::Invalid;
+			InterpretMaterialMachineHelper(IteratorRange<Assets::ScaffoldCmdIterator> materialMachine)
+			{
+				for (auto cmd:materialMachine) {
+					switch (cmd.Cmd()) {
+					case (uint32_t)Assets::MaterialCommand::AttachShaderResourceBindings:
+						_resourceBindings = &cmd.As<ParameterBox>();
+						break;
+					case (uint32_t)Assets::MaterialCommand::AttachConstants:
+						_constantBindings = &cmd.As<ParameterBox>();
+						break;
+					case (uint32_t)Assets::MaterialCommand::AttachSamplerBindings:
+						_samplerBindings = cmd.RawData().Cast<const std::pair<uint64_t, SamplerDesc>*>();
+						break;
+					}
 				}
 			}
-			return result;
-		}
+		};
+	}
 
-		std::optional<::Assets::AssetState> StallWhilePending(std::chrono::microseconds timeout) const override
-		{
-			auto timeoutTime = std::chrono::steady_clock::now() + timeout;
-			auto result = ::Assets::AssetState::Ready;
-			for (const auto&d:_resources) {
-				if (d._pendingResource) {
-					auto now = std::chrono::steady_clock::now();
-					auto partialTimeout = std::chrono::duration_cast<std::chrono::microseconds>(timeoutTime-now);
-					if (now >= timeoutTime || partialTimeout.count() == 0)
-						return {};		// timed out before we can even begin
-					auto status = d._pendingResource->StallWhilePending(partialTimeout);
-					if (!status.has_value() || status.value() == ::Assets::AssetState::Pending)
-						return status;		// timed out during StallWhilePending
-					if (status.value() == ::Assets::AssetState::Invalid)
-						result = ::Assets::AssetState::Invalid;
-				}
-			}
-			return result;
-		}
-	};
-
-	void ConstructDescriptorSet(
+	void ConstructDescriptorSetHelper::Construct(
 		std::promise<ActualizedDescriptorSet>&& promise,
-		const std::shared_ptr<IDevice>& device,
-		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
-		const Utility::ParameterBox& constantBindings,
-		const Utility::ParameterBox& resourceBindings,
-		IteratorRange<const std::pair<uint64_t, std::shared_ptr<ISampler>>*> samplerBindings,
-		SamplerPool* samplerPool,
-		IteratorRange<const AnimatedParameterBinding*> animatedBindings,
-		const std::shared_ptr<IResourceView>& dynamicPageResource,
-		PipelineType pipelineType,
-		bool generateBindingInfo)
+		const Assets::PredefinedDescriptorSetLayout& layout,
+		IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
+		const DeformerToDescriptorSetBinding* deformBinding)
 	{
 		auto shrLanguage = GetDefaultShaderLanguage();
 
@@ -111,14 +144,16 @@ namespace RenderCore { namespace Techniques
 			maxSlotIdx = std::max(maxSlotIdx, int(slot._slotIdx));
 		assert(maxSlotIdx >= 0);
 		
-		DescriptorSetInProgress working;
+		Internal::DescriptorSetInProgress working;
 		working._slots.resize(maxSlotIdx+1);
-		if (generateBindingInfo)
+		if (_generateBindingInfo)
 			working._bindingInfo._slots.resize(working._slots.size());
+
+		Internal::InterpretMaterialMachineHelper machineHelper{materialMachine};
 
 		char stringMeldBuffer[512];
 		for (const auto& s:layout._slots) {
-			DescriptorSetInProgress::Slot slotInProgress;
+			Internal::DescriptorSetInProgress::Slot slotInProgress;
 			slotInProgress._slotName = s._name;
 			slotInProgress._slotType = s._type;
 
@@ -128,38 +163,42 @@ namespace RenderCore { namespace Techniques
 
 			bool gotBinding = false;
 			auto hashName = Hash64(s._name);
-			auto boundResource = resourceBindings.GetParameterAsString(hashName);
+			std::optional<std::string> boundResource = machineHelper._resourceBindings ? machineHelper._resourceBindings->GetParameterAsString(hashName) : std::optional<std::string>{};
 			if (boundResource.has_value() && !boundResource.value().empty()) {
 				if (s._type != DescriptorType::SampledTexture)
 					Throw(std::runtime_error("Attempting to bind resource to non-texture descriptor slot for slot " + s._name));
 
 				slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
 				slotInProgress._resourceIdx = (unsigned)working._resources.size();
-				DescriptorSetInProgress::Resource res;
+				Internal::DescriptorSetInProgress::Resource res;
 				res._pendingResource = ::Assets::MakeAssetPtr<DeferredShaderResource>(MakeStringSection(boundResource.value()));
 				working._resources.push_back(res);
 				gotBinding = true;
 
-				if (generateBindingInfo)
+				if (_generateBindingInfo)
 					slotBindingInfo._binding = (StringMeldInPlace(stringMeldBuffer) << "DeferredShaderResource: " << boundResource.value()).AsString();
 
 			} else if ((s._type == DescriptorType::UniformBuffer || s._type == DescriptorType::UniformBufferDynamicOffset) && s._cbIdx < (unsigned)layout._constantBuffers.size()) {
 
 				auto& cbLayout = layout._constantBuffers[s._cbIdx];
-				auto buffer = cbLayout->BuildCBDataAsVector(constantBindings, shrLanguage);
+				std::vector<uint8_t> buffer;
+				if (machineHelper._constantBindings) {
+					buffer = cbLayout->BuildCBDataAsVector(*machineHelper._constantBindings, shrLanguage);
+				} else 
+					buffer = cbLayout->BuildCBDataAsVector({}, shrLanguage);
 
 				const bool animated = false;
 				if (!animated) {
 					// non animated fixed buffer
 					auto cb = 
-						device->CreateResource(
+						_device->CreateResource(
 							CreateDesc(BindFlag::ConstantBuffer, 0, GPUAccess::Read, LinearBufferDesc::Create((unsigned)buffer.size()), s._name),
 							SubResourceInitData{buffer});
 
 					slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
 					slotInProgress._resourceIdx = (unsigned)working._resources.size();
 
-					DescriptorSetInProgress::Resource res;
+					Internal::DescriptorSetInProgress::Resource res;
 					res._fixedResource = cb->CreateBufferView(BindFlag::ConstantBuffer);
 					working._resources.push_back(res);
 				} else {
@@ -168,21 +207,22 @@ namespace RenderCore { namespace Techniques
 					
 				gotBinding = true;
 
-				if (generateBindingInfo) {
+				if (_generateBindingInfo) {
 					std::stringstream str;
 					cbLayout->DescribeCB(str, MakeIteratorRange(buffer), shrLanguage);
 					slotBindingInfo._binding = str.str();
 				}
-			} else if (s._type == DescriptorType::Sampler) {
-				auto i = std::find_if(samplerBindings.begin(), samplerBindings.end(), [hashName](const auto& c) { return c.first == hashName; });
-				if (i != samplerBindings.end()) {
+			} else if (s._type == DescriptorType::Sampler && _samplerPool) {
+				auto i = std::find_if(machineHelper._samplerBindings.begin(), machineHelper._samplerBindings.end(), [hashName](const auto& c) { return c.first == hashName; });
+				if (i != machineHelper._samplerBindings.end()) {
 					slotInProgress._bindType = DescriptorSetInitializer::BindType::Sampler;
 					slotInProgress._resourceIdx = (unsigned)working._samplers.size();
-					working._samplers.push_back(i->second);
+					auto metalSampler = _samplerPool->GetSampler(i->second);
+					working._samplers.push_back(metalSampler);
 					gotBinding = true;
 
-					if (generateBindingInfo)
-						slotBindingInfo._binding = (StringMeldInPlace(stringMeldBuffer) << "Sampler: " << i->second->GetDesc()).AsString();
+					if (_generateBindingInfo)
+						slotBindingInfo._binding = (StringMeldInPlace(stringMeldBuffer) << "Sampler: " << metalSampler->GetDesc()).AsString();
 				}
 			} 
 			
@@ -192,19 +232,19 @@ namespace RenderCore { namespace Techniques
 
 				assert(s._slotIdx < working._slots.size());
 				working._slots[s._slotIdx] = slotInProgress;
-				if (generateBindingInfo) {
+				if (_generateBindingInfo) {
 					slotBindingInfo._bindType = slotInProgress._bindType;
 					working._bindingInfo._slots[s._slotIdx] = slotBindingInfo;
 				}
 			}
 		}
 
-		working._signature = layout.MakeDescriptorSetSignature(samplerPool);
+		working._signature = layout.MakeDescriptorSetSignature(_samplerPool);
 
 		auto futureWorkingDescSet = ::Assets::MakeASyncMarkerBridge(std::move(working));
 		::Assets::WhenAll(std::move(futureWorkingDescSet)).ThenConstructToPromise(
 			std::move(promise),
-			[device, pipelineType](DescriptorSetInProgress working) {
+			[device=_device, pipelineType=_pipelineType](Internal::DescriptorSetInProgress working) {
 				std::vector<::Assets::DependencyValidation> subDepVals;
 				std::vector<std::shared_ptr<IResourceView>> finalResources;
 				finalResources.reserve(working._resources.size());
@@ -279,14 +319,15 @@ namespace RenderCore { namespace Techniques
 			});
 	}
 
+	uint64_t HashMaterialMachine(IteratorRange<Assets::ScaffoldCmdIterator> materialMachine)
+	{
+		return Internal::InterpretMaterialMachineHelper{materialMachine}.CalculateHash();
+	}
 
-	std::shared_ptr<IDescriptorSet> ConstructDescriptorSet(
-		IDevice& device,
+	std::shared_ptr<IDescriptorSet> ConstructDescriptorSetHelper::ConstructImmediately(
 		const Assets::PredefinedDescriptorSetLayout& layout,
 		const UniformsStreamInterface& usi,
-		const UniformsStream& us,
-		SamplerPool* samplerPool,
-		PipelineType pipelineType)
+		const UniformsStream& us)
 	{
 		assert(usi._immediateDataBindings.empty());		// imm data bindings not supported here
 		DescriptorSetInitializer::BindTypeAndIdx bindTypesAndIdx[layout._slots.size()];
@@ -315,16 +356,42 @@ namespace RenderCore { namespace Techniques
 		}
 
 		// awkwardly we need to construct a descriptor set signature here
-		auto sig = layout.MakeDescriptorSetSignature(samplerPool);
+		auto sig = layout.MakeDescriptorSetSignature(_samplerPool);
 
 		DescriptorSetInitializer initializer;
 		initializer._slotBindings = MakeIteratorRange(bindTypesAndIdx, &bindTypesAndIdx[layout._slots.size()]);
 		initializer._bindItems._resourceViews = us._resourceViews;
 		initializer._bindItems._samplers = us._samplers;
 		initializer._signature = &sig;
-		initializer._pipelineType = pipelineType;
+		initializer._pipelineType = _pipelineType;
 
-		return device.CreateDescriptorSet(initializer);
+		return _device->CreateDescriptorSet(initializer);
+	}
+
+	IteratorRange<RenderCore::Assets::ScaffoldCmdIterator> ManualMaterialMachine::GetMaterialMachine() const
+	{
+		auto* start = ::Assets::Block_GetFirstObject(_dataBlock.get());
+		return Assets::MakeScaffoldCmdRange({start, PtrAdd(start, _primaryBlockSize)});
+	}
+
+	ManualMaterialMachine::ManualMaterialMachine(
+		const ParameterBox& constantBindings,
+		const ParameterBox& resourceBindings,
+		IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings)
+	{
+		::Assets::BlockSerializer serializer;
+		serializer << Assets::MakeCmdAndSerializable(
+			Assets::MaterialCommand::AttachConstants,
+			constantBindings);
+		serializer << Assets::MakeCmdAndSerializable(
+			Assets::MaterialCommand::AttachShaderResourceBindings,
+			resourceBindings);
+		serializer << Assets::MakeCmdAndRanged(
+			Assets::MaterialCommand::AttachSamplerBindings,
+			samplerBindings);
+		_dataBlock = serializer.AsMemoryBlock();
+		_primaryBlockSize = serializer.SizePrimaryBlock();
+		::Assets::Block_Initialize(_dataBlock.get());
 	}
 
 	ActualizedDescriptorSet::ActualizedDescriptorSet() = default;

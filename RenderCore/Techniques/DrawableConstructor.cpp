@@ -335,7 +335,7 @@ namespace RenderCore { namespace Techniques
 
 			const WorkingMaterial* AddMaterial(
 				IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
-				const Assets::MaterialScaffoldCmdStreamForm& materialScaffold,
+				const std::shared_ptr<Assets::MaterialScaffoldCmdStreamForm>& materialScaffold,
 				uint64_t materialGuid,
 				Techniques::IDeformAcceleratorPool* deformAcceleratorPool,
 				const IDeformParametersAttachment* parametersDeformInfrastructure)
@@ -353,7 +353,7 @@ namespace RenderCore { namespace Techniques
 						if (cmd.Cmd() == (uint32_t)Assets::MaterialCommand::AttachPatchCollectionId) {
 							assert(!i->_patchCollection);
 							auto id = *(const uint64_t*)cmd.RawData().begin();
-							i->_patchCollection = materialScaffold.GetShaderPatchCollection(id);
+							i->_patchCollection = materialScaffold->GetShaderPatchCollection(id);
 						} else if (cmd.Cmd() == (uint32_t)Assets::MaterialCommand::AttachShaderResourceBindings) {
 							assert(resHasParameters.GetCount() == 0);
 							assert(!cmd.RawData().empty());
@@ -375,21 +375,18 @@ namespace RenderCore { namespace Techniques
 					// Descriptor set accelerator
 					std::shared_ptr<DescriptorSetAccelerator> descSet;
 					if (parametersDeformInfrastructure && deformAcceleratorPool) {
-						auto paramBinding = parametersDeformInfrastructure->GetOutputParameterBindings();
+						// auto paramBinding = parametersDeformInfrastructure->GetOutputParameterBindings();
+						std::shared_ptr<DeformerToDescriptorSetBinding> deformBinding;
 						descSet = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 							i->_patchCollection,
-							i->_selectors,
-							ParameterBox{},		// constantBindings
-							ParameterBox{},		// resourceBindings
-							IteratorRange<const std::pair<uint64_t, SamplerDesc>*>{},		// samplerBindings
-							{(const AnimatedParameterBinding*)paramBinding.begin(), (const AnimatedParameterBinding*)paramBinding.end()},
-							deformAcceleratorPool->GetDynamicPageResource());
+							materialMachine,
+							materialScaffold,
+							deformBinding);
 					} else {
 						descSet = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 							i->_patchCollection,
-							i->_selectors,
-							ParameterBox{},
-							ParameterBox{});
+							materialMachine,
+							materialScaffold);
 					}
 
 					i->_descriptorSetAcceleratorIdx = AddDescriptorSetAccelerator(std::move(descSet));
@@ -587,7 +584,7 @@ namespace RenderCore { namespace Techniques
 								auto matAssignment = currentMaterialAssignments[materialIterator++];
 								auto* workingMaterial = _pendingPipelines.AddMaterial(
 									materialScaffold->GetMaterialMachine(matAssignment),
-									*materialScaffold,
+									materialScaffold,
 									matAssignment,
 									deformAcceleratorPool.get(), deformParametersAttachment);
 								auto compiledPipeline = _pendingPipelines.MakePipeline(

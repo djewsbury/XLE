@@ -89,7 +89,7 @@ namespace RenderCore { namespace Techniques
 		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 		PreDepthType preDepthType);
 
-	enum class UtilityDelegateType { FlatColor };
+	enum class UtilityDelegateType { FlatColor, CopyDiffuseAlbedo };
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Utility(
 		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 		UtilityDelegateType utilityType);

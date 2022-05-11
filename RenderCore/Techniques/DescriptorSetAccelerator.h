@@ -10,7 +10,7 @@
 #include <memory>
 #include <future>
 
-namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
+namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; class ScaffoldCmdIterator; }}
 namespace RenderCore { class IDevice; class IDescriptorSet; class SamplerPool; }
 namespace Utility { class ParameterBox; }
 namespace BufferUploads { using CommandListID = uint32_t; }
@@ -40,11 +40,11 @@ namespace RenderCore { namespace Techniques
 	class ActualizedDescriptorSet
 	{
 	public:
-		const std::shared_ptr<RenderCore::IDescriptorSet>& GetDescriptorSet() const { return _descriptorSet; }
+		const std::shared_ptr<IDescriptorSet>& GetDescriptorSet() const { return _descriptorSet; }
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCommandList; }
 
-		std::shared_ptr<RenderCore::IDescriptorSet> _descriptorSet;
+		std::shared_ptr<IDescriptorSet> _descriptorSet;
 		DescriptorSetBindingInfo _bindingInfo;
 		BufferUploads::CommandListID _completionCommandList;
 		::Assets::DependencyValidation _depVal;
@@ -57,25 +57,42 @@ namespace RenderCore { namespace Techniques
 		~ActualizedDescriptorSet();
 	};
 
-	void ConstructDescriptorSet(
-		std::promise<ActualizedDescriptorSet>&& promise,
-		const std::shared_ptr<IDevice>& device,
-		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
-		const Utility::ParameterBox& constantBindings,
-		const Utility::ParameterBox& resourceBindings,
-		IteratorRange<const std::pair<uint64_t, std::shared_ptr<ISampler>>*> samplerBindings,
-		SamplerPool* samplerPool,
-		IteratorRange<const AnimatedParameterBinding*> animatedBindings = {},
-		const std::shared_ptr<IResourceView>& dynamicPageResource = nullptr,
-		PipelineType pipelineType = PipelineType::Graphics,
-		bool generateBindingInfo = false);
+	class DeformerToDescriptorSetBinding;
 
-	std::shared_ptr<IDescriptorSet> ConstructDescriptorSet(
-		IDevice& device,
-		const Assets::PredefinedDescriptorSetLayout& layout,
-		const UniformsStreamInterface& usi,
-		const UniformsStream& us,
-		SamplerPool* samplerPool,
-		PipelineType pipelineType = PipelineType::Graphics);
+	struct ConstructDescriptorSetHelper
+	{
+		void Construct(
+			std::promise<ActualizedDescriptorSet>&& promise,
+			const Assets::PredefinedDescriptorSetLayout& layout,
+			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
+			const DeformerToDescriptorSetBinding* deformBinding);
+
+		std::shared_ptr<IDescriptorSet> ConstructImmediately(
+			const Assets::PredefinedDescriptorSetLayout& layout,
+			const UniformsStreamInterface& usi,
+			const UniformsStream& us);
+
+		std::shared_ptr<IDevice> _device;
+		SamplerPool* _samplerPool = nullptr;
+		PipelineType _pipelineType = PipelineType::Graphics;
+		bool _generateBindingInfo = false;
+	};
+
+	uint64_t HashMaterialMachine(IteratorRange<Assets::ScaffoldCmdIterator> materialMachine);
+
+	// Create a material machine that can be passed to ConstructDescriptorSetHelper::Construct
+	// Fairly primitive implementation, mostly intended for unit tests
+	struct ManualMaterialMachine
+	{
+	public:
+		IteratorRange<Assets::ScaffoldCmdIterator> GetMaterialMachine() const;
+		ManualMaterialMachine(
+			const ParameterBox& constantBindings,
+			const ParameterBox& resourceBindings,
+			IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings = {});
+	private:
+		std::unique_ptr<uint8_t[], PODAlignedDeletor> _dataBlock;
+		size_t _primaryBlockSize;
+	};
 
 }}
