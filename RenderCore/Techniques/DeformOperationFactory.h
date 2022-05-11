@@ -56,6 +56,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<Entry> GetEntries() const;
 
 		void FulfillWhenNotPending(std::promise<std::shared_ptr<DeformerConstruction>>&& promise);
+		bool IsEmpty() const;
 
 		DeformerConstruction();
 		~DeformerConstruction();

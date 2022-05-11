@@ -68,7 +68,7 @@ namespace RenderCore { namespace Techniques
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		const std::shared_ptr<IGeoDeformerInfrastructure>& GetGeoDeformerInfrastructure() const { return _geoDeformerInfrastructure; }
-		BufferUploads::CommandListID GetCompletionCommandList() const;
+		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCmdList; }
 
 		using UniformBufferBinding = std::pair<uint64_t, std::shared_ptr<IUniformBufferDelegate>>;
 
@@ -76,7 +76,6 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			const std::shared_ptr<Assets::RendererConstruction>& construction,
 			const std::shared_ptr<DrawableConstructor>& drawableConstructor,
-			const std::shared_ptr<Assets::SkeletonScaffold>& skeletonScaffold,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool = nullptr,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator = nullptr,
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {});
@@ -88,14 +87,14 @@ namespace RenderCore { namespace Techniques
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 			const std::shared_ptr<Assets::RendererConstruction>& construction,
+			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool = nullptr,
+			const std::shared_ptr<DeformAccelerator>& deformAccelerator = nullptr,
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {});
 		
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 			StringSection<> modelScaffoldName,
 			StringSection<> materialScaffoldName,
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {});
@@ -104,17 +103,6 @@ namespace RenderCore { namespace Techniques
 			std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			StringSection<> modelScaffoldName);
-
-		static void ConstructToPromise(	// todo -- remove
-			std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
-			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
-			const ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
-			const ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
-			StringSection<> deformOperations = {},
-			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {},
-			const std::string& modelScaffoldNameString = {},
-			const std::string& materialScaffoldNameString = {});
 
 	private:
 		std::shared_ptr<DrawableConstructor> _drawableConstructor;
@@ -134,6 +122,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IGeoDeformerInfrastructure> _geoDeformerInfrastructure;
 
 		::Assets::DependencyValidation _depVal;
+		BufferUploads::CommandListID _completionCmdList;
 
 		class GeoCallBuilder;
 		class DrawableGeoBuilder;
@@ -156,13 +145,9 @@ namespace RenderCore { namespace Techniques
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<RendererSkeletonInterface>>&& skeletonInterfaceFuture,
-			std::promise<std::shared_ptr<SimpleModelRenderer>>&& rendererFuture,
-			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
-			const std::shared_ptr<Assets::RendererConstruction>& rendererConstruction,
-			const ::Assets::PtrToMarkerPtr<RenderCore::Assets::SkeletonScaffold>& skeletonScaffoldFuture,	// todo -- this could be managed by RendererConstruction
-			StringSection<> deformOperations = {},
-			IteratorRange<const SimpleModelRenderer::UniformBufferBinding*> uniformBufferDelegates = {});
+			const std::shared_ptr<DeformAccelerator>& deformAccelerator,
+			const std::shared_ptr<Assets::RendererConstruction>& construction);
 
 	private:
 		struct Deformer

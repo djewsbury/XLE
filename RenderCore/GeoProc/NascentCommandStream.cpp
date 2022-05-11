@@ -526,7 +526,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				currentTransformMarker = geo._localToWorldId;
 			}
 			if (!currentMaterialAssignment || *currentMaterialAssignment != geo._materials) {
-				serializer << MakeCmdAndRawData(ModelCommand::SetMaterialAssignments, geo._materials);
+				serializer << MakeCmdAndRanged(ModelCommand::SetMaterialAssignments, geo._materials);
 				currentMaterialAssignment = &geo._materials;
 			}
 			serializer << MakeCmdAndRawData(ModelCommand::GeoCall, geo._id);
@@ -538,7 +538,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				currentTransformMarker = geo._localToWorldId;
 			}
 			if (!currentMaterialAssignment || *currentMaterialAssignment != geo._materials) {
-				serializer << MakeCmdAndRawData(ModelCommand::SetMaterialAssignments, geo._materials);
+				serializer << MakeCmdAndRanged(ModelCommand::SetMaterialAssignments, geo._materials);
 				currentMaterialAssignment = &geo._materials;
 			}
 			serializer << MakeCmdAndRawData(ModelCommand::GeoCall, geo._id);

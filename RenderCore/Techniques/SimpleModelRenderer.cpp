@@ -6,41 +6,26 @@
 #include "DrawableConstructor.h"
 #include "Drawables.h"
 #include "TechniqueUtils.h"
-#include "ParsingContext.h"
 #include "CommonBindings.h"
-#include "CommonUtils.h"
 #include "PipelineAccelerator.h"
-#include "DescriptorSetAccelerator.h"
 #include "DeformAccelerator.h"
 #include "DeformGeometryInfrastructure.h"
+#include "DeformOperationFactory.h"
 #include "SkinDeformer.h"
-#include "DeformParametersInfrastructure.h"
-#include "CompiledShaderPatchCollection.h"
-#include "DrawableDelegates.h"
 #include "Services.h"
-#include "../Assets/ScaffoldCmdStream.h"		// change to RendererConstruction
+#include "../Assets/ScaffoldCmdStream.h"
 #include "../Assets/ModelScaffold.h"
-#include "../Assets/ModelScaffoldInternal.h"
-#include "../Assets/ModelImmutableData.h"
-#include "../Assets/MaterialScaffold.h"
 #include "../Assets/AnimationBindings.h"
-#include "../Assets/ShaderPatchCollection.h"
-#include "../Assets/PredefinedDescriptorSetLayout.h"
-#include "../Types.h"
-#include "../ResourceDesc.h"
-#include "../IDevice.h"
-#include "../UniformsStream.h"
-#include "../BufferView.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/Continuation.h"
+#include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/ArithmeticUtils.h"
 #include <utility>
 #include <map>
 
-#include "DeformOperationFactory.h"
-#include "SkinDeformer.h"
+#include "PipelineCollection.h"	// temporary - related to creating default deform accelerator
 
 namespace RenderCore { namespace Techniques 
 {
@@ -138,107 +123,7 @@ namespace RenderCore { namespace Techniques
 			drawable._drawCall._indexCount, viewCount, drawable._drawCall._firstIndex, drawable._drawCall._firstVertex);
 	}
 
-#if 0
-	void SimpleModelRenderer::BuildDrawables(
-		IteratorRange<Techniques::DrawablesPacket** const> pkts,
-		const Float4x4& localToWorld,
-		unsigned deformInstanceIdx,
-		uint32_t viewMask) const
-	{
-		assert(viewMask != 0);
-		if (_deformAcceleratorPool && _deformAccelerator)
-			_deformAcceleratorPool->EnableInstance(*_deformAccelerator, deformInstanceIdx);
-
-		SimpleModelDrawable* drawables[dimof(_drawablesCount)];
-		for (unsigned c=0; c<dimof(_drawablesCount); ++c) {
-			if (!_drawablesCount[c]) {
-				drawables[c] = nullptr;
-				continue;
-			}
-			drawables[c] = pkts[c] ? pkts[c]->_drawables.Allocate<SimpleModelDrawable>(_drawablesCount[c]) : nullptr;
-		}
-
-		auto* drawableFn = (viewMask==1) ? (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelStatic : (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelStaticMultiView; 
-
-		auto localToWorld3x4 = AsFloat3x4(localToWorld);
-		unsigned drawCallCounter = 0;
-		const auto& cmdStream = _modelScaffold->CommandStream();
-		const auto& immData = _modelScaffold->ImmutableData();
-		auto geoCallIterator = _geoCalls.begin();
-		for (unsigned c = 0; c < cmdStream.GetGeoCallCount(); ++c) {
-			const auto& geoCall = cmdStream.GetGeoCall(c);
-			auto& rawGeo = immData._geos[geoCall._geoId];
-
-			auto machineOutput = _skeletonBinding.ModelJointToMachineOutput(geoCall._transformMarker);
-			assert(machineOutput < _baseTransformCount);
-			auto nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&_baseTransforms[machineOutput], localToWorld3x4);
-
-			for (unsigned d = 0; d < unsigned(rawGeo._drawCalls.size()); ++d) {
-				const auto& drawCall = rawGeo._drawCalls[d];
-				const auto& compiledGeoCall = geoCallIterator[drawCall._subMaterialIndex];
-
-				if (!drawables[compiledGeoCall._batchFilter]) continue;
-				auto& drawable = *drawables[compiledGeoCall._batchFilter]++;
-				drawable._geo = _geos[geoCall._geoId];
-				drawable._pipeline = compiledGeoCall._pipelineAccelerator;
-				drawable._descriptorSet = compiledGeoCall._descriptorSetAccelerator;
-				drawable._drawFn = drawableFn;
-				drawable._drawCall = drawCall;
-				drawable._looseUniformsInterface = _usi;
-				drawable._materialGuid = geoCall._materialGuids[drawCall._subMaterialIndex];
-				drawable._drawCallIdx = drawCallCounter;
-				drawable._localTransform._localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&rawGeo._geoSpaceToNodeSpace, nodeSpaceToWorld);
-				drawable._localTransform._localSpaceView = Float3{0,0,0};
-				drawable._localTransform._viewMask = viewMask;
-				drawable._deformInstanceIdx = deformInstanceIdx;
-				++drawCallCounter;
-			}
-
-			geoCallIterator += geoCall._materialCount;
-		}
-
-		geoCallIterator = _boundSkinnedControllerGeoCalls.begin();
-		for (unsigned c = 0; c < cmdStream.GetSkinCallCount(); ++c) {
-			const auto& geoCall = cmdStream.GetSkinCall(c);
-			auto& rawGeo = immData._boundSkinnedControllers[geoCall._geoId];
-
-			auto machineOutput = _skeletonBinding.ModelJointToMachineOutput(geoCall._transformMarker);
-			assert(machineOutput < _baseTransformCount);
-			auto nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&_baseTransforms[machineOutput], localToWorld3x4);
-
-			for (unsigned d = 0; d < unsigned(rawGeo._drawCalls.size()); ++d) {
-				const auto& drawCall = rawGeo._drawCalls[d];
-				const auto& compiledGeoCall = geoCallIterator[drawCall._subMaterialIndex];
-
-					// now we have at least once piece of geometry
-					// that we want to render... We need to bind the material,
-					// index buffer and vertex buffer and topology
-					// then we just execute the draw command
-
-				if (!drawables[compiledGeoCall._batchFilter]) continue;
-				auto& drawable = *drawables[compiledGeoCall._batchFilter]++;
-				drawable._geo = _boundSkinnedControllers[geoCall._geoId];
-				drawable._pipeline = compiledGeoCall._pipelineAccelerator;
-				drawable._descriptorSet = compiledGeoCall._descriptorSetAccelerator;
-				drawable._drawFn = drawableFn;
-				drawable._drawCall = drawCall;
-				drawable._looseUniformsInterface = _usi;
-				drawable._materialGuid = geoCall._materialGuids[drawCall._subMaterialIndex];
-				drawable._drawCallIdx = drawCallCounter;
-				drawable._localTransform._localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&rawGeo._geoSpaceToNodeSpace, nodeSpaceToWorld);
-				drawable._localTransform._localSpaceView = Float3{0,0,0};
-				drawable._localTransform._viewMask = viewMask;
-				drawable._deformInstanceIdx = deformInstanceIdx;
-
-				++drawCallCounter;
-			}
-
-			geoCallIterator += geoCall._materialCount;
-		}
-	}
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#endif
 
 	class SimpleModelDrawable_Delegate : public SimpleModelDrawable
 	{
@@ -263,179 +148,6 @@ namespace RenderCore { namespace Techniques
 	{
 		DrawFn_SimpleModelStatic(parsingContext, drawFnContext, (const SimpleModelDrawable_Delegate&)d);
 	}
-
-#if 0
-	void SimpleModelRenderer::BuildDrawables(
-		IteratorRange<Techniques::DrawablesPacket** const> pkts,
-		const Float4x4& localToWorld,
-		unsigned deformInstanceIdx,
-		const std::shared_ptr<ICustomDrawDelegate>& delegate) const
-	{
-		if (!delegate) {
-			BuildDrawables(pkts, localToWorld, deformInstanceIdx, 1u);
-			return;
-		}
-
-		if (_deformAcceleratorPool && _deformAccelerator)
-			_deformAcceleratorPool->EnableInstance(*_deformAccelerator, deformInstanceIdx);
-
-		SimpleModelDrawable_Delegate* drawables[dimof(_drawablesCount)];
-		for (unsigned c=0; c<dimof(_drawablesCount); ++c) {
-			if (!_drawablesCount[c]) {
-				drawables[c] = nullptr;
-				continue;
-			}
-			drawables[c] = pkts[c] ? pkts[c]->_drawables.Allocate<SimpleModelDrawable_Delegate>(_drawablesCount[c]) : nullptr;
-		}
-
-		auto localToWorld3x4 = AsFloat3x4(localToWorld);
-		unsigned drawCallCounter = 0;
-		const auto& cmdStream = _modelScaffold->CommandStream();
-		const auto& immData = _modelScaffold->ImmutableData();
-		auto geoCallIterator = _geoCalls.begin();
-		for (unsigned c = 0; c < cmdStream.GetGeoCallCount(); ++c) {
-			const auto& geoCall = cmdStream.GetGeoCall(c);
-			auto& rawGeo = immData._geos[geoCall._geoId];
-
-			auto machineOutput = _skeletonBinding.ModelJointToMachineOutput(geoCall._transformMarker);
-			assert(machineOutput < _baseTransformCount);
-			auto nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&_baseTransforms[machineOutput], localToWorld3x4);
-
-			for (unsigned d = 0; d < unsigned(rawGeo._drawCalls.size()); ++d) {
-				const auto& drawCall = rawGeo._drawCalls[d];
-				const auto& compiledGeoCall = geoCallIterator[drawCall._subMaterialIndex];
-
-				if (!drawables[compiledGeoCall._batchFilter]) continue;
-				auto& drawable = *drawables[compiledGeoCall._batchFilter]++;
-				drawable._geo = _geos[geoCall._geoId];
-				drawable._pipeline = compiledGeoCall._pipelineAccelerator;
-				drawable._descriptorSet = compiledGeoCall._descriptorSetAccelerator;
-				drawable._drawFn = (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelDelegate;
-				drawable._drawCall = drawCall;
-				drawable._looseUniformsInterface = _usi;
-				drawable._materialGuid = geoCall._materialGuids[drawCall._subMaterialIndex];
-				drawable._drawCallIdx = drawCallCounter;
-				drawable._delegate = delegate;
-				drawable._localTransform._localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&rawGeo._geoSpaceToNodeSpace, nodeSpaceToWorld);
-				drawable._localTransform._localSpaceView = Float3{0,0,0};
-				drawable._localTransform._viewMask = ~0u;
-				drawable._deformInstanceIdx = deformInstanceIdx;
-
-				++drawCallCounter;
-			}
-
-			geoCallIterator += geoCall._materialCount;
-		}
-
-		geoCallIterator = _boundSkinnedControllerGeoCalls.begin();
-		for (unsigned c = 0; c < cmdStream.GetSkinCallCount(); ++c) {
-			const auto& geoCall = cmdStream.GetSkinCall(c);
-			auto& rawGeo = immData._boundSkinnedControllers[geoCall._geoId];
-
-			auto machineOutput = _skeletonBinding.ModelJointToMachineOutput(geoCall._transformMarker);
-			assert(machineOutput < _baseTransformCount);
-			auto nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&_baseTransforms[machineOutput], localToWorld3x4);
-
-			for (unsigned d = 0; d < unsigned(rawGeo._drawCalls.size()); ++d) {
-				const auto& drawCall = rawGeo._drawCalls[d];
-				const auto& compiledGeoCall = geoCallIterator[drawCall._subMaterialIndex];
-
-					// now we have at least once piece of geometry
-					// that we want to render... We need to bind the material,
-					// index buffer and vertex buffer and topology
-					// then we just execute the draw command
-
-				if (!drawables[compiledGeoCall._batchFilter]) continue;
-				auto& drawable = *drawables[compiledGeoCall._batchFilter]++;
-				drawable._geo = _boundSkinnedControllers[geoCall._geoId];
-				drawable._pipeline = compiledGeoCall._pipelineAccelerator;
-				drawable._descriptorSet = compiledGeoCall._descriptorSetAccelerator;
-				drawable._drawFn = (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelDelegate;
-				drawable._drawCall = drawCall;
-				drawable._looseUniformsInterface = _usi;
-				drawable._materialGuid = geoCall._materialGuids[drawCall._subMaterialIndex];
-				drawable._drawCallIdx = drawCallCounter;
-				drawable._delegate = delegate;
-				drawable._localTransform._localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&rawGeo._geoSpaceToNodeSpace, nodeSpaceToWorld);
-				drawable._localTransform._localSpaceView = Float3{0,0,0};
-				drawable._localTransform._viewMask = ~0u;
-				drawable._deformInstanceIdx = deformInstanceIdx;
-
-				++drawCallCounter;
-			}
-
-			geoCallIterator += geoCall._materialCount;
-		}
-	}
-
-	void SimpleModelRenderer::BuildGeometryProcables(
-		IteratorRange<Techniques::DrawablesPacket** const> pkts,
-		const Float4x4& localToWorld) const
-	{
-		GeometryProcable* drawables[dimof(_drawablesCount)];
-		for (unsigned c=0; c<dimof(_drawablesCount); ++c) {
-			if (!_drawablesCount[c]) {
-				drawables[c] = nullptr;
-				continue;
-			}
-			drawables[c] = pkts[c] ? pkts[c]->_drawables.Allocate<GeometryProcable>(_drawablesCount[c]) : nullptr;
-		}
-
-		const auto& cmdStream = _modelScaffold->CommandStream();
-		const auto& immData = _modelScaffold->ImmutableData();
-		auto geoCallIterator = _geoCalls.begin();
-		for (unsigned c = 0; c < cmdStream.GetGeoCallCount(); ++c) {
-			const auto& geoCall = cmdStream.GetGeoCall(c);
-			auto& rawGeo = immData._geos[geoCall._geoId];
-
-			auto machineOutput = _skeletonBinding.ModelJointToMachineOutput(geoCall._transformMarker);
-			assert(machineOutput < _baseTransformCount);
-			auto nodeSpaceToWorld = Combine(_baseTransforms[machineOutput], localToWorld);
-
-			for (unsigned d = 0; d < unsigned(rawGeo._drawCalls.size()); ++d) {
-				const auto& drawCall = rawGeo._drawCalls[d];
-				const auto& compiledGeoCall = geoCallIterator[drawCall._subMaterialIndex];
-
-				if (!drawables[compiledGeoCall._batchFilter]) continue;
-				auto& drawable = *drawables[compiledGeoCall._batchFilter]++;
-				drawable._geo = _geos[geoCall._geoId];
-				drawable._inputAssembly = _drawableIAs[compiledGeoCall._iaIdx];
-				drawable._localToWorld = Combine(rawGeo._geoSpaceToNodeSpace, nodeSpaceToWorld);
-				drawable._indexCount = drawCall._indexCount;
-				drawable._startIndexLocation = drawCall._firstIndex;
-				assert(drawCall._firstVertex == 0);
-			}
-
-			geoCallIterator += geoCall._materialCount;
-		}
-
-		geoCallIterator = _boundSkinnedControllerGeoCalls.begin();
-		for (unsigned c = 0; c < cmdStream.GetSkinCallCount(); ++c) {
-			const auto& geoCall = cmdStream.GetSkinCall(c);
-			auto& rawGeo = immData._boundSkinnedControllers[geoCall._geoId];
-
-			auto machineOutput = _skeletonBinding.ModelJointToMachineOutput(geoCall._transformMarker);
-			assert(machineOutput < _baseTransformCount);
-			auto nodeSpaceToWorld = Combine(_baseTransforms[machineOutput], localToWorld);
-
-			for (unsigned d = 0; d < unsigned(rawGeo._drawCalls.size()); ++d) {
-				const auto& drawCall = rawGeo._drawCalls[d];
-				const auto& compiledGeoCall = geoCallIterator[drawCall._subMaterialIndex];
-
-				if (!drawables[compiledGeoCall._batchFilter]) continue;
-				auto& drawable = *drawables[compiledGeoCall._batchFilter]++;
-				drawable._geo = _boundSkinnedControllers[geoCall._geoId];
-				drawable._inputAssembly = _drawableIAs[compiledGeoCall._iaIdx];
-				drawable._localToWorld = Combine(rawGeo._geoSpaceToNodeSpace, nodeSpaceToWorld);
-				drawable._indexCount = drawCall._indexCount;
-				drawable._startIndexLocation = drawCall._firstIndex;
-				assert(drawCall._firstVertex == 0);
-			}
-
-			geoCallIterator += geoCall._materialCount;
-		}
-	}
-#endif
 
 	void SimpleModelRenderer::BuildDrawables(
 		IteratorRange<DrawablesPacket** const> pkts,
@@ -660,16 +372,10 @@ namespace RenderCore { namespace Techniques
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	BufferUploads::CommandListID SimpleModelRenderer::GetCompletionCommandList() const
-	{
-		return _drawableConstructor->_completionCommandList;
-	}
-
 	SimpleModelRenderer::SimpleModelRenderer(
 		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const std::shared_ptr<Assets::RendererConstruction>& construction,
 		const std::shared_ptr<DrawableConstructor>& drawableConstructor,
-		const std::shared_ptr<Assets::SkeletonScaffold>& skeletonScaffold,
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
@@ -683,26 +389,33 @@ namespace RenderCore { namespace Techniques
 			_geoDeformerInfrastructure = std::dynamic_pointer_cast<IGeoDeformerInfrastructure>(_deformAcceleratorPool->GetDeformAttachment(*_deformAccelerator));
 		}
 
+		auto externalSkeletonScaffold = construction->GetSkeletonScaffold();
+
 		_elements.reserve(construction->GetElementCount());
-		if (!skeletonScaffold) {		
-			for (auto ele:*construction) {
-				auto modelScaffold = ele.GetModelScaffold();
-				if (modelScaffold && modelScaffold->EmbeddedSkeleton()) {
-					auto* skeleton = modelScaffold->EmbeddedSkeleton();
+		for (auto ele:*construction) {
+			auto modelScaffold = ele.GetModelScaffold();
+			if (modelScaffold) {
+				const SkeletonMachine* localSkeleton = nullptr;
+				if (externalSkeletonScaffold)
+					localSkeleton = &externalSkeletonScaffold->GetSkeletonMachine();
+				if (!localSkeleton)
+					localSkeleton = modelScaffold->EmbeddedSkeleton();
+					
+				if (localSkeleton) {
 					Element ele;
 					ele._skeletonBinding = SkeletonBinding(
-						skeleton->GetOutputInterface(),
+						localSkeleton->GetOutputInterface(),
 						modelScaffold->FindCommandStreamInputInterface());
-					ele._baseTransformCount = skeleton->GetOutputMatrixCount();
+					ele._baseTransformCount = localSkeleton->GetOutputMatrixCount();
 					ele._baseTransforms = std::make_unique<Float4x4[]>(ele._baseTransformCount);
-					skeleton->GenerateOutputTransforms(MakeIteratorRange(ele._baseTransforms.get(), ele._baseTransforms.get() + ele._baseTransformCount));
+					localSkeleton->GenerateOutputTransforms(MakeIteratorRange(ele._baseTransforms.get(), ele._baseTransforms.get() + ele._baseTransformCount));
 					_elements.emplace_back(std::move(ele));
 				} else {
 					_elements.emplace_back(Element{});
 				}
+			} else {
+				_elements.emplace_back(Element{});
 			}
-		} else {
-			assert(0);		// support binding with external skeleton
 		}
 
 		_usi = std::make_shared<UniformsStreamInterface>();
@@ -714,6 +427,10 @@ namespace RenderCore { namespace Techniques
 			_usi->BindImmediateData(c++, u.first, u.second->GetLayout());
 
 		_usi = pipelineAcceleratorPool->CombineWithLike(std::move(_usi));
+		
+		_completionCmdList = _drawableConstructor->_completionCommandList;
+		if (_geoDeformerInfrastructure)
+			_completionCmdList = std::max(_completionCmdList, _geoDeformerInfrastructure->GetCompletionCommandList().get());	// future must be ready before we get here
 
 		// Check to make sure we've got a skeleton binding for each referenced geo call to world referenced
 		{
@@ -741,26 +458,6 @@ namespace RenderCore { namespace Techniques
 
 	SimpleModelRenderer::~SimpleModelRenderer() {}
 
-#if 0
-	std::pair<std::shared_ptr<DeformAccelerator>, std::shared_ptr<IGeoDeformerInfrastructure>> CreateAndBindDeformAccelerator(
-		IDeformAcceleratorPool& pool,
-		StringSection<> initializer,
-		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
-		const std::string& modelScaffoldName)
-	{
-		auto geoDeformAttachment = CreateDeformGeometryInfrastructure(
-			*pool.GetDevice(), 
-			initializer, modelScaffold, modelScaffoldName);
-		if (!geoDeformAttachment)
-			return {nullptr, nullptr};
-
-		auto deformAccelerator = pool.CreateDeformAccelerator();
-		pool.Attach(*deformAccelerator, geoDeformAttachment);
-		return {deformAccelerator, geoDeformAttachment};
-		return {nullptr, nullptr};
-	}
-#endif
-
 	static std::future<std::shared_ptr<Assets::RendererConstruction>> ToFuture(Assets::RendererConstruction& construction)
 	{
 		std::promise<std::shared_ptr<Assets::RendererConstruction>> promise;
@@ -777,113 +474,91 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
+	static std::shared_ptr<DeformAccelerator> CreateDefaultDeformAccelerator(
+		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
+		const Assets::RendererConstruction& rendererConstruction)
+	{
+		// The default deform accelerators just contains a skinning deform operation
+		static std::shared_ptr<Internal::DeformerPipelineCollection> s_deformerPipelineCollection;
+		if (!s_deformerPipelineCollection)
+			s_deformerPipelineCollection = CreateGPUSkinPipelineCollection(
+				std::make_shared<PipelineCollection>(deformAcceleratorPool->GetDevice()));
+
+		auto deformerConstruction = std::make_shared<DeformerConstruction>();
+		ConfigureGPUSkinDeformers(
+			*deformerConstruction, rendererConstruction,
+			s_deformerPipelineCollection);
+		if (deformerConstruction->IsEmpty()) return nullptr;
+
+		std::promise<std::shared_ptr<DeformerConstruction>> promise;
+		auto future = promise.get_future();
+		deformerConstruction->FulfillWhenNotPending(std::move(promise));
+		future.wait();
+
+		auto geometryInfrastructure = CreateDeformGeometryInfrastructure(
+			*deformAcceleratorPool->GetDevice(), rendererConstruction, *deformerConstruction);
+
+		auto result = deformAcceleratorPool->CreateDeformAccelerator();
+		deformAcceleratorPool->Attach(*result, geometryInfrastructure);
+		return result;
+	}
+
 	void SimpleModelRenderer::ConstructToPromise(
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<Assets::RendererConstruction>& construction,
+		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
+		const std::shared_ptr<DeformAccelerator>& deformAcceleratorInit,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
 	{
 		std::vector<UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
 
 		::Assets::WhenAll(ToFuture(*construction)).ThenConstructToPromise(
 			std::move(promise),
-			[pipelineAcceleratorPool, deformAcceleratorPool](auto&& promise, auto completedConstruction) {
+			[pipelineAcceleratorPool, deformAcceleratorPool, deformAcceleratorInit, uniformBufferBindings=std::move(uniformBufferBindings)](auto&& promise, auto completedConstruction) mutable {
 				auto& bufferUploads = Services::GetInstance().GetBufferUploads();
 				auto drawableConstructor = std::make_shared<DrawableConstructor>(pipelineAcceleratorPool, bufferUploads, *completedConstruction);
 
-				/*DeformerConstruction deformerConfig;
-				ConfigureGPUSkinDeformers(
-					deformerConfig,
-					*construction, 
-					Services::GetInstance().GetDeformerPipelineCollection());
-				if (deformerConfig) {
+				// if we were given a deform accelerator pool, but no deform accelerator, go ahead and create the default accelerator
+				auto deformAccelerator = deformAcceleratorInit;
+				if (deformAcceleratorPool && !deformAccelerator)
+					deformAccelerator = CreateDefaultDeformAccelerator(deformAcceleratorPool, *completedConstruction);
 
-				} else*/ {
-					
-					::Assets::WhenAll(ToFuture(*drawableConstructor)).ThenConstructToPromise(
-						std::move(promise),
-						[pipelineAcceleratorPool, deformAcceleratorPool, completedConstruction](auto completedDrawableConstruction) {
-							return std::make_shared<SimpleModelRenderer>(
-								pipelineAcceleratorPool,
-								completedConstruction,
-								completedDrawableConstruction,
-								nullptr);		// skeleton scaffold
-						});
-				}
+				::Assets::PollToPromise(
+					std::move(promise),
+					[constructorFuture=ToFuture(*drawableConstructor), deformAcceleratorPool, deformAccelerator](auto timeout) {
+						auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+						auto status = constructorFuture.wait_until(timeoutTime);
+						if (status == std::future_status::timeout)
+							return ::Assets::PollStatus::Continue;
+
+						// Need to ensure IGeoDeformerInfrastructure::GetCompletionCommandList() is ready, if we have a deform accelerator with a geo attachment
+						if (deformAcceleratorPool && deformAccelerator) {
+							auto* geoInfrastructure = dynamic_cast<IGeoDeformerInfrastructure*>(deformAcceleratorPool->GetDeformAttachment(*deformAccelerator).get());
+							if (geoInfrastructure) {
+								auto pendingCmdList = geoInfrastructure->GetCompletionCommandList();
+								auto status = pendingCmdList.wait_until(timeoutTime);
+								if (status == std::future_status::timeout)
+									return ::Assets::PollStatus::Continue;
+							}
+						}
+
+						return ::Assets::PollStatus::Finish;
+					},
+					[pipelineAcceleratorPool, deformAcceleratorPool, deformAccelerator, completedConstruction, drawableConstructor, uniformBufferBindings=std::move(uniformBufferBindings)]() {
+						return std::make_shared<SimpleModelRenderer>(
+							pipelineAcceleratorPool,
+							completedConstruction,
+							drawableConstructor,
+							deformAcceleratorPool, deformAccelerator,
+							uniformBufferBindings);
+					});
 			});
-
-#if 0
-		thousandeyes::futures::then(
-			ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
-			ToFuture(*construction),
-			[pipelineAcceleratorPool, deformAcceleratorPool](auto constructionFuture) {
-				auto construction = constructionFuture.get();
-				auto& bufferUploads = Services::GetInstance().GetBufferUploads();
-				auto drawableConstructor = std::make_shared<DrawableConstructor>(pipelineAcceleratorPool, bufferUploads, *construction);
-
-				/*DeformerConstruction deformerConfig;
-				ConfigureGPUSkinDeformers(
-					deformerConfig,
-					*construction, 
-					Services::GetInstance().GetDeformerPipelineCollection());
-				if (deformerConfig) {
-
-				} else*/ {
-					
-					thousandeyes::futures::then(
-						ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
-						ToFuture(*drawableConstructor),
-						[pipelineAcceleratorPool, deformAcceleratorPool](auto drawableConstructionPromise) {
-							auto newRenderer = std::make_shared<SimpleModelRenderer>(
-								pipelineAcceleratorPool, 
-								construction, 
-								*drawableConstructionPromise._constructor,
-								nullptr);		// skeleton scaffold
-
-							promise.set_value(newRenderer);
-						};
-				}
-			});
-#endif
-		
-#if 0
-		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture).ThenConstructToPromise(
-			std::move(promise),
-			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, uniformBufferBindings, modelScaffoldNameString, materialScaffoldNameString, deformAcceleratorPool](
-				auto scaffoldActual, auto materialActual) {
-				if (deformAcceleratorPool && !deformOperationString.empty()) {
-					auto deformAccelerator = CreateAndBindDeformAccelerator(
-						*deformAcceleratorPool, 
-						MakeStringSection(deformOperationString), 
-						scaffoldActual, modelScaffoldNameString);
-
-					if (!deformAccelerator.first)
-						deformAccelerator.first = deformAcceleratorPool->CreateDeformAccelerator();
-					auto deformParameters = CreateDeformParametersAttachment(scaffoldActual, modelScaffoldNameString);
-					if (deformParameters)
-						deformAcceleratorPool->Attach(*deformAccelerator.first, deformParameters);
-
-					return std::make_shared<SimpleModelRenderer>(
-						pipelineAcceleratorPool, scaffoldActual, materialActual,
-						deformAcceleratorPool, deformAccelerator.first, deformAccelerator.second, deformParameters,
-						MakeIteratorRange(uniformBufferBindings),
-						modelScaffoldNameString, materialScaffoldNameString);
-				} else {
-					return std::make_shared<SimpleModelRenderer>(
-						pipelineAcceleratorPool, scaffoldActual, materialActual,
-						nullptr, nullptr, nullptr, nullptr,
-						MakeIteratorRange(uniformBufferBindings),
-						modelScaffoldNameString, materialScaffoldNameString);
-				}
-			});
-#endif
 	}
 
 	void SimpleModelRenderer::ConstructToPromise(
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-		const std::shared_ptr<Techniques::IDeformAcceleratorPool>& deformAcceleratorPool,
 		StringSection<> modelScaffoldName,
 		StringSection<> materialScaffoldName,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
@@ -892,8 +567,8 @@ namespace RenderCore { namespace Techniques
 		construction->AddElement().SetModelAndMaterialScaffolds(modelScaffoldName, materialScaffoldName);
 		return ConstructToPromise(
 			std::move(promise),
-			pipelineAcceleratorPool, deformAcceleratorPool,
-			construction,
+			pipelineAcceleratorPool, construction,
+			nullptr, nullptr,
 			uniformBufferDelegates);
 	}
 
@@ -902,20 +577,8 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		StringSection<> modelScaffoldName)
 	{
-		ConstructToPromise(std::move(promise), pipelineAcceleratorPool, nullptr, modelScaffoldName, modelScaffoldName);
+		ConstructToPromise(std::move(promise), pipelineAcceleratorPool, modelScaffoldName, modelScaffoldName);
 	}
-
-	void SimpleModelRenderer::ConstructToPromise(	// todo -- remove
-		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
-		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
-		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
-		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
-		StringSection<> deformOperations,
-		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates,
-		const std::string& modelScaffoldNameString,
-		const std::string& materialScaffoldNameString)
-	{}
 
 	ICustomDrawDelegate::~ICustomDrawDelegate() {}
 
@@ -960,65 +623,35 @@ namespace RenderCore { namespace Techniques
 	{}
 
 	void RendererSkeletonInterface::ConstructToPromise(
-		std::promise<std::shared_ptr<RendererSkeletonInterface>>&& skeletonInterfacePromise,
-		std::promise<std::shared_ptr<SimpleModelRenderer>>&& rendererPromise,
-		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+		std::promise<std::shared_ptr<RendererSkeletonInterface>>&& promise,
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
-		const std::shared_ptr<Assets::RendererConstruction>& rendererConstruction,
-		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::SkeletonScaffold>& skeletonScaffoldFuture,
-		StringSection<> deformOperations,
-		IteratorRange<const SimpleModelRenderer::UniformBufferBinding*> uniformBufferDelegates)
+		const std::shared_ptr<DeformAccelerator>& deformAccelerator,
+		const std::shared_ptr<Assets::RendererConstruction>& construction)
 	{
-		assert(0);
-#if 0
-		// note -- skeletonInterfacePromise will never be fulfilled if renderPromise becomes invalid
-		auto modelScaffoldNameString = modelScaffoldFuture->Initializer();
-		auto materialScaffoldNameString = materialScaffoldFuture->Initializer();
-
-		std::vector<SimpleModelRenderer::UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
-		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture).ThenConstructToPromise(
-			std::move(rendererPromise),
-			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, deformAcceleratorPool, uniformBufferBindings, 
-				skeletonInterfacePromise=std::move(skeletonInterfacePromise), modelScaffoldNameString, materialScaffoldNameString](
-				std::shared_ptr<RenderCore::Assets::ModelScaffold> scaffoldActual, 
-				std::shared_ptr<RenderCore::Assets::MaterialScaffold> materialActual) mutable {
-
-				if (!deformOperationString.empty()) deformOperationString += ";skin";
-				else deformOperationString = "skin";
-
-				auto deformAccelerator = CreateAndBindDeformAccelerator(
-					*deformAcceleratorPool,
-					MakeStringSection(deformOperationString),
-					scaffoldActual, modelScaffoldNameString);
-
-				if (!deformAccelerator.first)
-					deformAccelerator.first = deformAcceleratorPool->CreateDeformAccelerator();
-				auto deformParameters = CreateDeformParametersAttachment(scaffoldActual, modelScaffoldNameString);
-				if (deformParameters)
-					deformAcceleratorPool->Attach(*deformAccelerator.first, deformParameters);
-
-				if (deformAccelerator.first) {
-					auto skeletonInterface = std::make_shared<RendererSkeletonInterface>(
-						scaffoldActual->EmbeddedSkeleton().GetOutputInterface(),
-						*deformAccelerator.second);
-					
-					skeletonInterfacePromise.set_value(skeletonInterface);
-
-					return std::make_shared<SimpleModelRenderer>(
-						pipelineAcceleratorPool, scaffoldActual, materialActual, 
-						deformAcceleratorPool, deformAccelerator.first, deformAccelerator.second, deformParameters,
-						uniformBufferBindings,
-						modelScaffoldNameString, materialScaffoldNameString);
-				} else {
-					skeletonInterfacePromise.set_value(nullptr);
-					return std::make_shared<SimpleModelRenderer>(
-						pipelineAcceleratorPool, scaffoldActual, materialActual, 
-						nullptr, nullptr, nullptr, nullptr,
-						uniformBufferBindings,
-						modelScaffoldNameString, materialScaffoldNameString);
+		::Assets::WhenAll(ToFuture(*construction)).ThenConstructToPromise(
+			std::move(promise),
+			[deformAcceleratorPool, deformAccelerator](auto completedConstruction) mutable {
+				// We must have either an external skeleton that applies to the whole model, or a single element with a model
+				// scaffold with an embedded skeleton
+				const Assets::SkeletonMachine* skeleton = nullptr;
+				if (completedConstruction->GetSkeletonScaffold())
+					skeleton = &completedConstruction->GetSkeletonScaffold()->GetSkeletonMachine();
+				if (!skeleton) {
+					if (completedConstruction->GetElementCount() != 1 || completedConstruction->GetElement(0)->GetModelScaffold())
+						Throw(std::runtime_error("Cannot bind skeleton interface to RendererConstruction, because there are multiple separate skeletons within the one construction"));
+					skeleton = completedConstruction->GetElement(0)->GetModelScaffold()->EmbeddedSkeleton();
 				}
+				if (!skeleton)
+					Throw(std::runtime_error("Cannot bind skeleton interface to RendererConstruction, because no skeleton with provided either as an embedded skeleton, or as an external skeleton"));
+				
+				IGeoDeformerInfrastructure* geoDeform = nullptr;
+				if (deformAccelerator && deformAcceleratorPool)
+					geoDeform = dynamic_cast<IGeoDeformerInfrastructure*>(deformAcceleratorPool->GetDeformAttachment(*deformAccelerator).get());
+				if (!skeleton)
+					Throw(std::runtime_error("Cannot bind skeleton interface to RendererConstruction, because there is no geo deformer attached to the given deform accelerator"));
+				
+				return std::make_shared<RendererSkeletonInterface>(skeleton->GetOutputInterface(), *geoDeform);
 			});
-#endif
 	}
 
 	void SkinningUniformBufferDelegate::FeedInSkeletonMachineResults(

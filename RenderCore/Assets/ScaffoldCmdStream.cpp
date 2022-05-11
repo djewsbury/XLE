@@ -70,9 +70,11 @@ namespace RenderCore { namespace Assets
 		return *this; 
 	}
 
-	auto RendererConstruction::ElementConstructor::AddMorphTarget(uint64_t targetName, StringSection<> srcFile) -> ElementConstructor& { return *this; }
-
-	auto RendererConstruction::ElementConstructor::SetRootTransform(const Float4x4&) -> ElementConstructor& { return *this; }
+	auto RendererConstruction::ElementConstructor::SetRootTransform(const Float4x4&) -> ElementConstructor&
+	{ 
+		assert(0);
+		return *this;
+	}
 
 	auto RendererConstruction::ElementConstructor::SetName(const std::string& name) -> ElementConstructor&
 	{ 
@@ -84,6 +86,42 @@ namespace RenderCore { namespace Assets
 			_internal->_names.insert(i, {_elementId, name});
 		return *this; 
 	}
+
+	void RendererConstruction::SetSkeletonScaffold(StringSection<> skeleton)
+	{
+		_internal->_skeletonScaffoldHashValue = Hash64(skeleton);
+		_internal->_skeletonScaffoldPtr = nullptr;
+		_internal->_skeletonScaffoldMarker = ::Assets::MakeAsset<std::shared_ptr<SkeletonScaffold>>(skeleton);
+	}
+	void RendererConstruction::SetSkeletonScaffold(const ::Assets::PtrToMarkerPtr<SkeletonScaffold>& skeleton)
+	{
+		_internal->_disableHash = true;
+		_internal->_skeletonScaffoldPtr = nullptr;
+		_internal->_skeletonScaffoldMarker = skeleton;
+	}
+	void RendererConstruction::SetSkeletonScaffold(const std::shared_ptr<SkeletonScaffold>& skeleton)
+	{
+		_internal->_disableHash = true;
+		_internal->_skeletonScaffoldPtr = skeleton;
+		_internal->_skeletonScaffoldMarker = nullptr;
+	}
+	std::shared_ptr<SkeletonScaffold> RendererConstruction::GetSkeletonScaffold() const
+	{
+		if (_internal->_skeletonScaffoldPtr)
+			return _internal->_skeletonScaffoldPtr;
+		if (_internal->_skeletonScaffoldMarker)
+			return _internal->_skeletonScaffoldMarker->ActualizeBkgrnd();
+		return nullptr;
+	}
+
+	template<typename Marker, typename Time>
+		static bool MarkerTimesOut(Marker& marker, Time timeoutTime)
+		{
+			auto remainingTime = timeoutTime - std::chrono::steady_clock::now();
+			if (remainingTime.count() <= 0) return true;
+			auto t = marker.StallWhilePending(std::chrono::duration_cast<std::chrono::microseconds>(remainingTime));
+			return t.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Pending;
+		}
 
 	void RendererConstruction::FulfillWhenNotPending(std::promise<std::shared_ptr<RendererConstruction>>&& promise)
 	{
@@ -97,13 +135,14 @@ namespace RenderCore { namespace Assets
 			[strongThis](auto timeout) {
 				// wait until all pending scaffold markers are finished
 				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
-				for (auto& f:strongThis->_internal->_modelScaffoldMarkers) {
-					auto remainingTime = timeoutTime - std::chrono::steady_clock::now();
-					if (remainingTime.count() <= 0) return ::Assets::PollStatus::Continue;
-					auto t = f.second->StallWhilePending(std::chrono::duration_cast<std::chrono::microseconds>(remainingTime));
-					if (t.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Pending)
+				for (auto& f:strongThis->_internal->_modelScaffoldMarkers)
+					if (MarkerTimesOut(*f.second, timeoutTime))
 						return ::Assets::PollStatus::Continue;
-				}
+
+				if (	strongThis->_internal->_skeletonScaffoldMarker
+					&& 	MarkerTimesOut(*strongThis->_internal->_skeletonScaffoldMarker, timeoutTime))
+					return ::Assets::PollStatus::Continue;
+
 				return ::Assets::PollStatus::Finish;
 			},
 			[strongThis]() {
@@ -187,8 +226,10 @@ namespace RenderCore { namespace Assets
 	{
 		if (_internal->_disableHash)
 			Throw("Attempting to generate a hash for a RendererConstruction that cannot be hashed");
-		if (!_internal->_hash) // recalculate the hash value
+		if (!_internal->_hash) {
 			_internal->_hash = Hash64(AsPointer(_internal->_elementHashValues.begin()), AsPointer(_internal->_elementHashValues.begin()));
+			_internal->_hash = _internal->_skeletonScaffoldHashValue ? HashCombine(_internal->_hash, _internal->_skeletonScaffoldHashValue) : _internal->_hash;
+		}
 
 		return _internal->_hash;
 	}

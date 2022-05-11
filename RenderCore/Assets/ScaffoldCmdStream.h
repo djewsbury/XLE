@@ -131,6 +131,7 @@ namespace RenderCore { namespace Assets
 
 	class ModelScaffoldCmdStreamForm;
 	class MaterialScaffoldCmdStreamForm;
+	class SkeletonScaffold;
 
 	class RendererConstruction : public std::enable_shared_from_this<RendererConstruction>
 	{
@@ -147,7 +148,6 @@ namespace RenderCore { namespace Assets
 			ElementConstructor& SetModelScaffold(const std::shared_ptr<ModelScaffoldCmdStreamForm>&);
 			ElementConstructor& SetMaterialScaffold(const std::shared_ptr<MaterialScaffoldCmdStreamForm>&);
 
-			ElementConstructor& AddMorphTarget(uint64_t targetName, StringSection<> srcFile);
 			ElementConstructor& SetRootTransform(const Float4x4&);
 
 			ElementConstructor& SetName(const std::string&);
@@ -168,8 +168,9 @@ namespace RenderCore { namespace Assets
 		unsigned GetElementCount() const;
 
 		void SetSkeletonScaffold(StringSection<>);
-		void SetSkeletonScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>&);
-		void SetSkeletonScaffold(const std::shared_ptr<MaterialScaffoldCmdStreamForm>&);
+		void SetSkeletonScaffold(const ::Assets::PtrToMarkerPtr<SkeletonScaffold>&);
+		void SetSkeletonScaffold(const std::shared_ptr<SkeletonScaffold>&);
+		std::shared_ptr<SkeletonScaffold> GetSkeletonScaffold() const;
 
 		uint64_t GetHash() const;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const;
@@ -201,6 +202,11 @@ namespace RenderCore { namespace Assets
 		std::vector<std::pair<ElementId, MaterialScaffoldPtr>> _materialScaffoldPtrs;
 		std::vector<std::pair<ElementId, std::string>> _names;
 		unsigned _elementCount = 0;
+
+		::Assets::PtrToMarkerPtr<SkeletonScaffold> _skeletonScaffoldMarker;
+		std::shared_ptr<SkeletonScaffold> _skeletonScaffoldPtr;
+		uint64_t _skeletonScaffoldHashValue = 0u;
+
 		bool _sealed = false;
 
 		std::vector<uint64_t> _elementHashValues;

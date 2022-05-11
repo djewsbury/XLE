@@ -14,6 +14,7 @@
 #include "../GeoProc/MeshDatabase.h"        // for GeoProc::Copy
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../Assets/IFileSystem.h"
+#include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/StringFormat.h"
 
 #include "../Assets/ScaffoldCmdStream.h"		// becomes RendererConstruction.h
@@ -38,7 +39,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<IResource> _gpuStaticDataBuffer, _gpuTemporariesBuffer;
 		std::shared_ptr<IResourceView> _gpuStaticDataBufferView, _gpuTemporariesBufferView;
-		BufferUploads::TransactionMarker _gpuStaticDataBufferMarker;
+		std::shared_future<BufferUploads::ResourceLocator> _gpuStaticDataBufferFuture;
 
 		bool _isCPUDeformer = false;
 		unsigned _outputVBSize = 0;
@@ -95,6 +96,15 @@ namespace RenderCore { namespace Techniques
 		virtual const DeformerToRendererBinding& GetDeformerToRendererBinding() const override
 		{
 			return _rendererGeoInterface;
+		}
+
+		virtual std::future<BufferUploads::CommandListID> GetCompletionCommandList() const override
+		{
+			std::promise<BufferUploads::CommandListID> promise;
+			auto result = promise.get_future();
+			::Assets::WhenAll(_gpuStaticDataBufferFuture).ThenConstructToPromise(
+				std::move(promise), [](const auto& locator) { return locator.GetCompletionCommandList(); });
+			return result;
 		}
 	};
 
@@ -189,12 +199,14 @@ namespace RenderCore { namespace Techniques
 		////////////////////////////////////////////////////////////////////////////////////
 
 		if (!bufferIterators._gpuStaticDataLoadRequests.empty()) {
-			std::tie(result->_gpuStaticDataBuffer, result->_gpuStaticDataBufferMarker) = LoadStaticResourcePartialAsync(
+			BufferUploads::TransactionMarker transactionMarker; 
+			std::tie(result->_gpuStaticDataBuffer, transactionMarker) = LoadStaticResourcePartialAsync(
 				device,
 				{bufferIterators._gpuStaticDataLoadRequests.begin(), bufferIterators._gpuStaticDataLoadRequests.end()}, 
 				bufferIterators._bufferIterators[Internal::VB_GPUStaticData],
 				BindFlag::UnorderedAccess, "[deform]");
 			result->_gpuStaticDataBufferView = result->_gpuStaticDataBuffer->CreateBufferView(BindFlag::UnorderedAccess);
+			result->_gpuStaticDataBufferFuture = std::move(transactionMarker._future);
 		} else {
 			result->_gpuStaticDataBufferView = Techniques::Services::GetCommonResources()->_blackBufferUAV;
 		}

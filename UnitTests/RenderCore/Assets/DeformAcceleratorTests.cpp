@@ -123,8 +123,6 @@ namespace UnitTests
 		for (unsigned vertex=0; vertex<8; ++vertex) {
 			float weights[8];
 			unsigned indices[] { 0, 1, 2, 3, 4, 5, 6, 7 };
-			// float weights[1];
-			// unsigned indices[] { 0 };
 			float weightTotal = 0.f;
 			for (unsigned bone=0; bone<dimof(weights); ++bone) {
 				float distance = Magnitude(s_cubeCorners[bone] - s_cubeCorners[vertex]);
@@ -621,11 +619,6 @@ namespace UnitTests
 			testInst0._generatedElements.push_back({ "GENERATED", 0, Format::R16G16B16A16_FLOAT });
 			testInst0._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
 			testInst0._upstreamSourceElements.push_back({ "NORMAL", 0, Format::R8G8B8A8_UNORM });
-			/*testInst0._gpuConstructor = [](auto&& promise, auto srcVBLayout, auto deformTemporariesVBLayout, auto dstVBLayout) {
-				REQUIRE(deformTemporariesVBLayout.size() == 0);
-				REQUIRE(dstVBLayout.size() == 3);
-				promise.set_value(std::make_shared<TestGPUDeformOperator>());
-			};*/
 			
 			Techniques::Internal::DeformBufferIterators bufferIterators;
 			std::vector<DeformerInputBinding::GeoBinding> geoBindings;

@@ -2065,7 +2065,7 @@ namespace SceneEngine
 		auto actual = scaff->TryActualize();
 		if (!actual) return std::string();
 
-        return (*actual)->GetMaterialName(materialGuid).AsString();
+        return (*actual)->DehashMaterialName(materialGuid).AsString();
     }
 
     void    Transaction::SetObject(unsigned index, const ObjTransDef& newState)

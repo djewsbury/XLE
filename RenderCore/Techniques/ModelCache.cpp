@@ -18,8 +18,8 @@ namespace RenderCore { namespace Techniques
     public:
         std::vector<std::pair<uint64_t, BoundingBox>> _boundingBoxes;
 
-        ::Assets::AssetHeapLRU<std::shared_ptr<RenderCore::Assets::ModelScaffold>>		_modelScaffolds;
-        ::Assets::AssetHeapLRU<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>	_materialScaffolds;
+        ::Assets::AssetHeapLRU<std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm>>		_modelScaffolds;
+        ::Assets::AssetHeapLRU<std::shared_ptr<RenderCore::Assets::MaterialScaffoldCmdStreamForm>>	_materialScaffolds;
         FrameByFrameLRUHeap<std::shared_ptr<::Assets::MarkerPtr<SimpleModelRenderer>>> _modelRenderers;
 		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
         std::shared_ptr<IDeformAcceleratorPool> _deformAcceleratorPool;
@@ -65,17 +65,19 @@ namespace RenderCore { namespace Techniques
 
 		auto modelScaffold = _pimpl->_modelScaffolds.Get(modelFilename);
 		auto materialScaffold = _pimpl->_materialScaffolds.Get(materialFilename, modelFilename);
+        auto construction = std::make_shared<Assets::RendererConstruction>();
+        construction->AddElement().SetModelScaffold(modelScaffold).SetMaterialScaffold(materialScaffold);
 
-		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_pipelineAcceleratorPool, _pimpl->_deformAcceleratorPool, modelScaffold, materialScaffold);
+		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_pipelineAcceleratorPool, construction);
 		return newFuture;
     }
 
-	auto ModelCache::GetModelScaffold(StringSection<ResChar> name) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>
+	auto ModelCache::GetModelScaffold(StringSection<ResChar> name) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffoldCmdStreamForm>
 	{
 		return _pimpl->_modelScaffolds.Get(name);
 	}
 
-	auto ModelCache::GetMaterialScaffold(StringSection<ResChar> materialName, StringSection<ResChar> modelName) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>
+	auto ModelCache::GetMaterialScaffold(StringSection<ResChar> materialName, StringSection<ResChar> modelName) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffoldCmdStreamForm>
 	{
 		return _pimpl->_materialScaffolds.Get(materialName, modelName);
 	}

@@ -12,8 +12,8 @@
 
 namespace RenderCore { namespace Assets
 {
-    class ModelScaffold;
-    class MaterialScaffold;
+    class ModelScaffoldCmdStreamForm;
+    class MaterialScaffoldCmdStreamForm;
 }}
 
 namespace Assets { class AssetHeapRecord; }
@@ -53,8 +53,8 @@ namespace RenderCore { namespace Techniques
             StringSection<ResChar> modelFilename, 
             StringSection<ResChar> materialFilename) -> ::Assets::PtrToMarkerPtr<SimpleModelRenderer>;
 
-        auto GetModelScaffold(StringSection<ResChar>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>;
-		auto GetMaterialScaffold(StringSection<ResChar>, StringSection<ResChar>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>;
+        auto GetModelScaffold(StringSection<ResChar>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffoldCmdStreamForm>;
+		auto GetMaterialScaffold(StringSection<ResChar>, StringSection<ResChar>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffoldCmdStreamForm>;
 
         uint32_t GetReloadId() const;
         void OnFrameBarrier();

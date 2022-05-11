@@ -110,7 +110,7 @@ namespace ToolsRig
 		{
 			auto construction = std::make_shared<RenderCore::Assets::RendererConstruction>();
 			construction->AddElement().SetModelAndMaterialScaffolds(settings._modelName, settings._materialName);
-			auto rendererFuture = ::Assets::MakeAssetPtr<SimpleModelRenderer>(pipelineAcceleratorPool, deformAccelerators, construction);
+			auto rendererFuture = ::Assets::MakeAssetPtr<SimpleModelRenderer>(pipelineAcceleratorPool, construction, deformAccelerators);
 
 			if (!settings._animationFileName.empty() && !settings._skeletonFileName.empty()) {
 				auto animationSetFuture = ::Assets::MakeAssetPtr<AnimationSetScaffold>(settings._animationFileName);

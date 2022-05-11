@@ -75,6 +75,11 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
+	bool DeformerConstruction::IsEmpty() const
+	{
+		return _storedEntries.empty();
+	}
+
 	void DeformerConstruction::FulfillWhenNotPending(std::promise<std::shared_ptr<DeformerConstruction>>&& promise)
 	{
 		_sealed = true;

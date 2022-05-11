@@ -658,6 +658,22 @@ namespace RenderCore { namespace Techniques
 			std::move(instRequest), MakeIteratorRange(patchExpansions));
 	}
 
+	static const Assets::SkinningDataDesc* FindSkinningData(IteratorRange<Assets::ScaffoldCmdIterator> machine)
+	{
+		for (auto cmd:machine)
+			if (cmd.Cmd() == (uint32_t)Assets::GeoCommand::AttachSkinningData)
+				return &cmd.As<Assets::SkinningDataDesc>();
+		return nullptr;
+	}
+
+	static const Assets::RawGeometryDesc* FindRawGeometry(IteratorRange<Assets::ScaffoldCmdIterator> machine)
+	{
+		for (auto cmd:machine)
+			if (cmd.Cmd() == (uint32_t)Assets::GeoCommand::AttachRawGeometry)
+				return &cmd.As<Assets::RawGeometryDesc>();
+		return nullptr;
+	}
+
 	void ConfigureGPUSkinDeformers(
 		DeformerConstruction& deformerConstruction,
 		const Assets::RendererConstruction& rendererConstruction,
@@ -673,15 +689,7 @@ namespace RenderCore { namespace Techniques
 			std::vector<std::pair<unsigned, DeformOperationInstantiation>> instantiations;
 			auto geoCount = modelScaffold->GetGeoCount();
 			for (unsigned c=0; c<geoCount; ++c) {
-				auto machine = modelScaffold->GetGeoMachine(c);
-
-				const Assets::SkinningDataDesc* skinningData = nullptr;
-				for (auto cmd:machine) {
-					if (cmd.Cmd() == (uint32_t)Assets::GeoCommand::AttachSkinningData) {
-						skinningData = &cmd.As<Assets::SkinningDataDesc>();
-						break;
-					}
-				}
+				auto* skinningData = FindSkinningData(modelScaffold->GetGeoMachine(c));
 				if (!skinningData) break;
 
 				auto& animVB = skinningData->_animatedVertexElements;

@@ -8,6 +8,7 @@
 #include "DeformOperationFactory.h"		// for DeformOperationFactorySet::Deformer
 
 namespace RenderCore { namespace Assets { class RendererConstruction; }}
+namespace BufferUploads { using CommandListID = uint32_t; }
 
 namespace RenderCore { namespace Techniques
 {
@@ -22,6 +23,7 @@ namespace RenderCore { namespace Techniques
 	public:
 		virtual const DeformerToRendererBinding& GetDeformerToRendererBinding() const = 0;
 		virtual std::vector<std::shared_ptr<IGeoDeformer>> GetOperations(size_t typeId) = 0;
+		virtual std::future<BufferUploads::CommandListID> GetCompletionCommandList() const = 0;
 	};
 
 	std::shared_ptr<IGeoDeformerInfrastructure> CreateDeformGeometryInfrastructure(

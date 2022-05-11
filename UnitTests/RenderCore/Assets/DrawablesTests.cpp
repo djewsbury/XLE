@@ -282,7 +282,7 @@ namespace UnitTests
 				fbHelper.GetDesc());
 
 			auto renderer = ::Assets::MakeAssetPtr<Techniques::SimpleModelRenderer>(
-				pipelineAcceleratorPool, nullptr,
+				pipelineAcceleratorPool,
 				"xleres/DefaultResources/materialsphere.dae",
 				"xleres/DefaultResources/materialsphere.material");
 			INFO(::Assets::AsString(renderer->GetActualizationLog()));
