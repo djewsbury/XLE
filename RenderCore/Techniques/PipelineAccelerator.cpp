@@ -9,7 +9,7 @@
 #include "CompiledShaderPatchCollection.h"
 #include "CommonResources.h"
 #include "ShaderVariationSet.h"
-#include "PipelineOperators.h"		// for CompiledPipelineLayoutAsset
+#include "PipelineOperators.h"		// for CompiledPipelineLayoutAsset & DescriptorSetLayoutAndBinding
 #include "DeformAccelerator.h"		// for DeformerToDescriptorSetBinding
 #include "../FrameBufferDesc.h"
 #include "../Format.h"
@@ -391,11 +391,10 @@ namespace RenderCore { namespace Techniques
 		Records LogRecords() const override;
 
 		const std::shared_ptr<IDevice>& GetDevice() const override;
-		const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const override;
 
 		PipelineAcceleratorPool(
 			const std::shared_ptr<IDevice>& device,
-			const DescriptorSetLayoutAndBinding& matDescSetLayout, 
+			const std::shared_ptr<DescriptorSetLayoutAndBinding>& matDescSetLayout, 
 			PipelineAcceleratorPoolFlags::BitField flags);
 		~PipelineAcceleratorPool();
 		PipelineAcceleratorPool(const PipelineAcceleratorPool&) = delete;
@@ -432,7 +431,7 @@ namespace RenderCore { namespace Techniques
 		void RebuildAllPipelinesAlreadyLocked(unsigned poolGuid, PipelineAccelerator& pipeline);
 
 		std::shared_ptr<SamplerPool> _samplerPool;
-		DescriptorSetLayoutAndBinding _matDescSetLayout;
+		std::shared_ptr<DescriptorSetLayoutAndBinding> _matDescSetLayout;
 		std::shared_ptr<PipelineCollection> _pipelineCollection;
 		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> _emptyPatchCollection;
 		PipelineAcceleratorPoolFlags::BitField _flags;
@@ -689,7 +688,7 @@ namespace RenderCore { namespace Techniques
 
 		bool generateBindingInfo = !!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
 		if (shaderPatches) {
-			auto patchCollectionFuture = ::Assets::MakeAssetPtr<CompiledShaderPatchCollection>(*shaderPatches, _matDescSetLayout);
+			auto patchCollectionFuture = ::Assets::MakeAssetPtr<CompiledShaderPatchCollection>(*shaderPatches, *_matDescSetLayout);
 
 			// Most of the time, it will be ready immediately, and we can avoid some of the overhead of the
 			// future continuation functions
@@ -722,7 +721,7 @@ namespace RenderCore { namespace Techniques
 			ConstructDescriptorSetHelper{_device, _samplerPool.get(), PipelineType::Graphics, generateBindingInfo}
 				.Construct(
 					result->_descriptorSet->AdoptPromise(),
-					*_matDescSetLayout.GetLayout(),
+					*_matDescSetLayout->GetLayout(),
 					materialMachine, deformBinding.get());
 		}
 
@@ -754,7 +753,7 @@ namespace RenderCore { namespace Techniques
 				// onto the result, it's just going to expire once more
 				if (!result) {
 					result = std::make_shared<SequencerConfig>(std::move(cfg));
-					result->_pipelineLayout = ::Assets::MakeAssetPtr<CompiledPipelineLayoutAsset>(_device, result->_delegate->GetPipelineLayout());
+					result->_pipelineLayout = ::Assets::MakeAssetPtr<CompiledPipelineLayoutAsset>(_device, result->_delegate->GetPipelineLayout(), _matDescSetLayout);
 					result->_cfgId = cfgId;
 					result->_name = name;
 					i->second = result;
@@ -765,7 +764,7 @@ namespace RenderCore { namespace Techniques
 					for (auto& accelerator:_pipelineAccelerators) {
 						auto a = accelerator.second.lock();
 						if (!a || !(*a).PipelineValidPipelineOrFuture(*result))
-							a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, _matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
+							a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, *_matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
 					}
 				} else {
 					if (!name.empty() && !XlFindString(result->_name, name))
@@ -778,7 +777,7 @@ namespace RenderCore { namespace Techniques
 
 		auto cfgId = SequencerConfigId(_sequencerConfigById.size()) | (SequencerConfigId(_guid) << 32ull);
 		auto result = std::make_shared<SequencerConfig>(std::move(cfg));
-		result->_pipelineLayout = ::Assets::MakeAssetPtr<CompiledPipelineLayoutAsset>(_device, result->_delegate->GetPipelineLayout());
+		result->_pipelineLayout = ::Assets::MakeAssetPtr<CompiledPipelineLayoutAsset>(_device, result->_delegate->GetPipelineLayout(), _matDescSetLayout);
 		result->_cfgId = cfgId;
 		result->_name = name;
 
@@ -788,7 +787,7 @@ namespace RenderCore { namespace Techniques
 		for (auto& accelerator:_pipelineAccelerators) {
 			auto a = accelerator.second.lock();
 			if (a)
-				a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, _matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
+				a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, *_matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
 		}
 
 		return result;
@@ -800,7 +799,7 @@ namespace RenderCore { namespace Techniques
 			auto cfgId = SequencerConfigId(c) | (SequencerConfigId(poolGuid) << 32ull);
 			auto l = _sequencerConfigById[c].second.lock();
 			if (l) 
-				pipeline.BeginPrepareForSequencerStateAlreadyLocked(l, _globalSelectors, _matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
+				pipeline.BeginPrepareForSequencerStateAlreadyLocked(l, _globalSelectors, *_matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
 		}
 	}
 
@@ -845,7 +844,7 @@ namespace RenderCore { namespace Techniques
 			if (cfg && cfg->_pipelineLayout->GetDependencyValidation().GetValidationIndex() != 0) {
 				assert(c == unsigned(cfg->_cfgId));
 				// rebuild pipeline layout asset
-				cfg->_pipelineLayout = ::Assets::MakeAssetPtr<CompiledPipelineLayoutAsset>(_device, cfg->_delegate->GetPipelineLayout());
+				cfg->_pipelineLayout = ::Assets::MakeAssetPtr<CompiledPipelineLayoutAsset>(_device, cfg->_delegate->GetPipelineLayout(), _matDescSetLayout);
 				invalidSequencerIndices[invalidSequencerCount++] = c;
 			}
 			lockedSequencerConfigs[c] = std::move(cfg);
@@ -856,7 +855,7 @@ namespace RenderCore { namespace Techniques
 			if (a) {
 				for (auto invalidSequencer:MakeIteratorRange(invalidSequencerIndices, &invalidSequencerIndices[invalidSequencerCount])) {
 					// It's out of date -- let's rebuild and reassign it
-					a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[invalidSequencer], _globalSelectors, _matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
+					a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[invalidSequencer], _globalSelectors, *_matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
 				}
 
 				// check for completed/invalidated pipelines
@@ -879,7 +878,7 @@ namespace RenderCore { namespace Techniques
 						a->_completedGraphicsPipelines[i->first] = {};
 						if (depVal.GetValidationIndex() != 0 && lockedSequencerConfigs[i->first]) {
 							// should not change _pendingGraphicsPipelines, just overwrite existing entry
-							a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[i->first], _globalSelectors, _matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
+							a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[i->first], _globalSelectors, *_matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
 						}
 						++i;
 					}
@@ -890,7 +889,7 @@ namespace RenderCore { namespace Techniques
 						if (a->_completedGraphicsPipelines[c].GetDependencyValidation().GetValidationIndex() != 0) {
 							auto existing = std::find_if(a->_pendingGraphicsPipelines.begin(), a->_pendingGraphicsPipelines.end(), [c](const auto& p) { return p.first == c; });
 							if (existing != a->_pendingGraphicsPipelines.end()) continue;	// already scheduled this rebuild
-							a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[c], _globalSelectors, _matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
+							a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[c], _globalSelectors, *_matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
 						}
 					} else {
 						// sequencer destroyed, release related pipelines
@@ -982,7 +981,6 @@ namespace RenderCore { namespace Techniques
 	}
 
 	const std::shared_ptr<IDevice>& PipelineAcceleratorPool::GetDevice() const { return _device; }
-	const DescriptorSetLayoutAndBinding& PipelineAcceleratorPool::GetMaterialDescriptorSetLayout() const { return _matDescSetLayout; }
 
 	static unsigned s_nextPipelineAcceleratorPoolGUID = 1;
 
@@ -1010,32 +1008,9 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	static DescriptorSetLayoutAndBinding ExtractDescriptorSetLayoutAndBinding(
-		const PipelineLayoutInitializer& pipelineLayoutDesc,
-		const char bindingName[])
-	{
-		auto i = std::find_if(
-			pipelineLayoutDesc.GetDescriptorSets().begin(), pipelineLayoutDesc.GetDescriptorSets().end(),
-			[bindingName](const auto& c) { return c._name == bindingName; });
-		if (i != pipelineLayoutDesc.GetDescriptorSets().end()) {
-			auto extractedLayout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>();
-			extractedLayout->_slots.reserve(i->_signature._slots.size());
-			unsigned idx = 0;
-			for (const auto& slot:i->_signature._slots)
-				extractedLayout->_slots.push_back(
-					RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot{
-						std::string{},
-						slot._type,
-						(slot._count == 1) ? 0u : slot._count,
-						idx++});
-			return DescriptorSetLayoutAndBinding { extractedLayout, (unsigned)std::distance(pipelineLayoutDesc.GetDescriptorSets().begin(), i) };
-		}
-		return {};
-	}
-
 	PipelineAcceleratorPool::PipelineAcceleratorPool(
 		const std::shared_ptr<IDevice>& device,
-		const DescriptorSetLayoutAndBinding& matDescSetLayout,
+		const std::shared_ptr<DescriptorSetLayoutAndBinding>& matDescSetLayout,
 		PipelineAcceleratorPoolFlags::BitField flags)
 	: _samplerPool(std::make_shared<SamplerPool>(*device))
 	{
@@ -1046,7 +1021,7 @@ namespace RenderCore { namespace Techniques
 		_emptyPatchCollection = std::make_shared<::Assets::MarkerPtr<CompiledShaderPatchCollection>>("empty-patch-collection");
 		_emptyPatchCollection->SetAsset(std::make_shared<CompiledShaderPatchCollection>());
 		_matDescSetLayout = matDescSetLayout;
-		assert(_matDescSetLayout.GetLayout());
+		assert(_matDescSetLayout && _matDescSetLayout->GetLayout());
 		#if defined(_DEBUG)
 			_boundThreadId = std::this_thread::get_id();
 		#endif
@@ -1057,7 +1032,7 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<IPipelineAcceleratorPool> CreatePipelineAcceleratorPool(
 		const std::shared_ptr<IDevice>& device, 
-		const DescriptorSetLayoutAndBinding& matDescSetLayout,
+		const std::shared_ptr<DescriptorSetLayoutAndBinding>& matDescSetLayout,
 		PipelineAcceleratorPoolFlags::BitField flags)
 	{
 		return std::make_shared<PipelineAcceleratorPool>(device, matDescSetLayout, flags);

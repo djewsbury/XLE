@@ -214,7 +214,7 @@ namespace UnitTests
 		auto filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
 
 		RenderCore::Assets::PredefinedPipelineLayoutFile pipelineLayoutFile(TechniqueTestApparatus::UnitTestPipelineLayout, {}, {});
-		auto matDescSetLayout = RenderCore::Techniques::FindLayout(pipelineLayoutFile, "GraphicsMain", "Material");
+		auto matDescSetLayout = RenderCore::Techniques::FindLayout(pipelineLayoutFile, "GraphicsMain", "Material", RenderCore::PipelineType::Graphics);
 
 		SECTION( "DeserializeShaderPatchCollection" )
 		{
@@ -300,7 +300,7 @@ namespace UnitTests
 			
 			InputStreamFormatter<utf8> formattr { MakeStringSection(s_fragmentsWithSelectors) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
-			auto compiledCollection = std::make_shared<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, matDescSetLayout);
+			auto compiledCollection = std::make_shared<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, *matDescSetLayout);
 			std::vector<uint64_t> instantiations { Hash64("PerPixel") };
 
 			::Assets::InitializerPack initializers {
@@ -327,13 +327,13 @@ namespace UnitTests
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
 			using RenderCore::Techniques::CompiledShaderPatchCollection;
-			CompiledShaderPatchCollection compiledCollection(patchCollection, matDescSetLayout);
+			CompiledShaderPatchCollection compiledCollection(patchCollection, *matDescSetLayout);
 
 			// Check for some of the expected interface elements
 			REQUIRE(compiledCollection.GetInterface().HasPatchType(Hash64("CoordinatesToColor")));
 			const auto& descSet = compiledCollection.GetInterface().GetMaterialDescriptorSet();
 			const auto& slots = descSet._slots;
-			REQUIRE(slots.size() == (size_t)matDescSetLayout.GetLayout()->_slots.size());
+			REQUIRE(slots.size() == (size_t)matDescSetLayout->GetLayout()->_slots.size());
 			auto material = std::find_if(slots.begin(), slots.end(), [](const auto& t) { return t._name == "MaterialUniforms"; });
 			auto second = std::find_if(slots.begin(), slots.end(), [](const auto& t) { return t._name == "SecondUnifomBuffer"; });
 			REQUIRE(material != slots.end());
@@ -350,7 +350,7 @@ namespace UnitTests
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
 			using RenderCore::Techniques::CompiledShaderPatchCollection;
-			CompiledShaderPatchCollection compiledCollection(patchCollection, matDescSetLayout);
+			CompiledShaderPatchCollection compiledCollection(patchCollection, *matDescSetLayout);
 
 			// Check for some of the recognized properties, in particular look for shader selectors
 			// We're expecting the selectors "RES_HAS_TextureDif" and "RES_HAS_TextureNorm"
@@ -383,7 +383,7 @@ namespace UnitTests
 				RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
 				for (unsigned c=0; c<std::max(dimof(dependenciesToCheck), dimof(nonDependencies)); ++c) {
-					RenderCore::Techniques::CompiledShaderPatchCollection compiledCollection(patchCollection, matDescSetLayout);
+					RenderCore::Techniques::CompiledShaderPatchCollection compiledCollection(patchCollection, *matDescSetLayout);
 					REQUIRE(compiledCollection._depVal.GetValidationIndex() == 0u);
 					
 					if (c < dimof(nonDependencies)) {

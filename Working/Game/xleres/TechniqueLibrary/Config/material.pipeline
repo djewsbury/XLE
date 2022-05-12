@@ -1,0 +1,30 @@
+DescriptorSet Material
+{
+	UniformBufferDynamic BasicMaterialConstants	// 0
+	{
+		float3  MaterialDiffuse = {1.f,1.f,1.f}c;
+		float   Opacity = 1;
+		float3  MaterialSpecular = {1.f,1.f,1.f}c;
+		float   AlphaThreshold = .33f;
+		float   RoughnessMin = 0.15f;
+		float   RoughnessMax = 1.f;
+		float   SpecularMin = 0.1f;
+		float   SpecularMax = 1.f;
+		float   MetalMin = 0.f;
+		float   MetalMax = 1.f;
+	};
+	UniformBuffer b1;						// 1
+	UniformBuffer b2;						// 2
+
+	SampledTexture DiffuseTexture;			// 3
+	SampledTexture NormalsTexture;			// 4
+	SampledTexture ParametersTexture;		// 5
+	SampledTexture SpecularColorTexture;	// 6
+	SampledTexture t7;						// 7
+	SampledTexture t8;						// 8
+	SampledTexture t9;						// 9
+	SampledTexture t10;						// 10
+
+	UnorderedAccessBuffer u11;				// 11
+	Sampler s12;							// 12
+};

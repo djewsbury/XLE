@@ -17,6 +17,7 @@
 #include "../../../RenderCore/Techniques/ParsingContext.h"
 #include "../../../RenderCore/Techniques/PipelineCollection.h"
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
+#include "../../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../ShaderParser/AutomaticSelectorFiltering.h"
 #include "../../../Assets/OSFileSystem.h"
@@ -33,8 +34,8 @@
 
 namespace UnitTests
 {
-	static RenderCore::Techniques::DescriptorSetLayoutAndBinding MakeMaterialDescriptorSetLayout();
-	static RenderCore::Techniques::DescriptorSetLayoutAndBinding MakeSequencerDescriptorSetLayout();
+	static std::shared_ptr<RenderCore::Techniques::DescriptorSetLayoutAndBinding> MakeMaterialDescriptorSetLayout();
+	static std::shared_ptr<RenderCore::Techniques::DescriptorSetLayoutAndBinding> MakeSequencerDescriptorSetLayout();
 
 	LightingEngineTestApparatus::LightingEngineTestApparatus()
 	{
@@ -72,7 +73,7 @@ namespace UnitTests
 		_techniqueContext->_drawablesPacketsPool = std::make_shared<RenderCore::Techniques::DrawablesPacketPool>();
 
 		_techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
-		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *MakeSequencerDescriptorSetLayout().GetLayout(), *_metalTestHelper->_device);
+		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *MakeSequencerDescriptorSetLayout()->GetLayout(), *_metalTestHelper->_device);
 		_techniqueContext->_uniformDelegateManager->AddShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*_metalTestHelper->_device));
 	}
 
@@ -95,7 +96,7 @@ namespace UnitTests
 		}
 	}
 
-	static RenderCore::Techniques::DescriptorSetLayoutAndBinding MakeMaterialDescriptorSetLayout()
+	static std::shared_ptr<RenderCore::Techniques::DescriptorSetLayoutAndBinding> MakeMaterialDescriptorSetLayout()
 	{
 		const char* unitTestsMaterialDescSet = R"(
 			UniformBuffer BasicMaterialConstants
@@ -131,10 +132,10 @@ namespace UnitTests
 		auto layout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>(
 			unitTestsMaterialDescSet, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{}
 		);
-		return RenderCore::Techniques::DescriptorSetLayoutAndBinding { layout, 1 };
+		return std::make_shared<RenderCore::Techniques::DescriptorSetLayoutAndBinding>(layout, 1, "Material", RenderCore::PipelineType::Graphics, ::Assets::DependencyValidation{});
 	}
 
-	static RenderCore::Techniques::DescriptorSetLayoutAndBinding MakeSequencerDescriptorSetLayout()
+	static std::shared_ptr<RenderCore::Techniques::DescriptorSetLayoutAndBinding> MakeSequencerDescriptorSetLayout()
 	{
 		const char* unitTestsSequencerDescSet = R"(
 			UniformBuffer GlobalTransform;				// 0
@@ -179,7 +180,7 @@ namespace UnitTests
 		auto layout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>(
 			unitTestsSequencerDescSet, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{}
 		);
-		return RenderCore::Techniques::DescriptorSetLayoutAndBinding { layout, 0 };
+		return std::make_shared<RenderCore::Techniques::DescriptorSetLayoutAndBinding>(layout, 0, "Sequencer", RenderCore::PipelineType::Graphics, ::Assets::DependencyValidation{});
 	}
 
 	RenderCore::Techniques::ParsingContext InitializeParsingContext(

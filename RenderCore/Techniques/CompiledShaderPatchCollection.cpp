@@ -4,6 +4,7 @@
 
 #include "CompiledShaderPatchCollection.h"
 #include "TechniqueUtils.h"
+#include "PipelineOperators.h"
 #include "../Assets/ShaderPatchCollection.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedPipelineLayout.h"
@@ -26,12 +27,15 @@ namespace RenderCore { namespace Techniques
 		const RenderCore::Assets::ShaderPatchCollection& src,
 		const DescriptorSetLayoutAndBinding& materialDescSetLayout)
 	: _src(src)
-	, _materialDescSetLayout(materialDescSetLayout)
+	, _matDescSetLayout(materialDescSetLayout.GetLayout())
+	, _matDescSetSlot(materialDescSetLayout.GetSlotIndex())
 	{
 		_guid = src.GetHash();
 		_depVal = ::Assets::GetDepValSys().Make();		// _depVal must be unique, because we call RegistryDependency on it in BuildFromInstantiatedShader
 		if (src.GetDependencyValidation())
 			_depVal.RegisterDependency(src.GetDependencyValidation());
+		if (materialDescSetLayout.GetDependencyValidation())
+			_depVal.RegisterDependency(materialDescSetLayout.GetDependencyValidation());
 
 		_interface._descriptorSet = materialDescSetLayout.GetLayout();
 		_interface._materialDescriptorSetSlotIndex = materialDescSetLayout.GetSlotIndex();
@@ -85,9 +89,12 @@ namespace RenderCore { namespace Techniques
 	CompiledShaderPatchCollection::CompiledShaderPatchCollection(
 		const ShaderSourceParser::InstantiatedShader& inst,
 		const DescriptorSetLayoutAndBinding& materialDescSetLayout)
-	: _materialDescSetLayout(materialDescSetLayout)
+	: _matDescSetLayout(materialDescSetLayout.GetLayout())
+	, _matDescSetSlot(materialDescSetLayout.GetSlotIndex())
 	{
 		_depVal = ::Assets::GetDepValSys().Make();
+		if (materialDescSetLayout.GetDependencyValidation())
+			_depVal.RegisterDependency(materialDescSetLayout.GetDependencyValidation());
 		_guid = 0;
 		BuildFromInstantiatedShader(inst);
 		_interface._descriptorSet = materialDescSetLayout.GetLayout();
@@ -221,59 +228,10 @@ namespace RenderCore { namespace Techniques
 		}
 
 		generateOptions._shaderLanguage = GetDefaultShaderLanguage();
-		generateOptions._pipelineLayoutMaterialDescriptorSet = _materialDescSetLayout.GetLayout().get();
-		generateOptions._materialDescriptorSetIndex = _materialDescSetLayout.GetSlotIndex();
+		generateOptions._pipelineLayoutMaterialDescriptorSet = _matDescSetLayout.get();
+		generateOptions._materialDescriptorSetIndex = _matDescSetSlot;
 		auto inst = ShaderSourceParser::InstantiateShader(MakeIteratorRange(finalInstRequests), generateOptions);
 		return {Merge(inst._instantiationPrefix), Merge(inst._sourceFragments)};
-	}
-
-	DescriptorSetLayoutAndBinding::DescriptorSetLayoutAndBinding(
-		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& layout,
-		unsigned slotIdx)
-	: _layout(layout), _slotIdx(slotIdx)
-	{
-		if (layout) {
-			_hash = HashCombine(layout->CalculateHash(), slotIdx);
-		} else {
-			_hash = 0;
-		}
-	}
-
-	DescriptorSetLayoutAndBinding::DescriptorSetLayoutAndBinding()
-	{
-		_hash = 0;
-		_slotIdx = ~0u;
-	}
-
-	DescriptorSetLayoutAndBinding::~DescriptorSetLayoutAndBinding()
-	{}
-
-	DescriptorSetLayoutAndBinding FindLayout(const RenderCore::Assets::PredefinedPipelineLayoutFile& file, const std::string& pipelineLayoutName, const std::string& descriptorSetName)
-	{
-		auto pipeline = file._pipelineLayouts.find(pipelineLayoutName);
-		if (pipeline == file._pipelineLayouts.end())
-			return {};
-
-		auto i = std::find_if(pipeline->second->_descriptorSets.begin(), pipeline->second->_descriptorSets.end(),
-			[descriptorSetName](const auto& c) {
-				return c._name == descriptorSetName;
-			});
-		if (i == pipeline->second->_descriptorSets.end())
-			return {};
-		
-		return DescriptorSetLayoutAndBinding { i->_descSet, (unsigned)std::distance(pipeline->second->_descriptorSets.begin(), i) };
-	}
-
-	DescriptorSetLayoutAndBinding FindLayout(const RenderCore::Assets::PredefinedPipelineLayout& pipeline, const std::string& descriptorSetName)
-	{
-		auto i = std::find_if(pipeline._descriptorSets.begin(), pipeline._descriptorSets.end(),
-			[descriptorSetName](const auto& c) {
-				return c._name == descriptorSetName;
-			});
-		if (i == pipeline._descriptorSets.end())
-			return {};
-		
-		return DescriptorSetLayoutAndBinding { i->_descSet, (unsigned)std::distance(pipeline._descriptorSets.begin(), i) };
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

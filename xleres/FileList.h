@@ -20,6 +20,7 @@
 #define GENERAL_OPERATOR_PIPELINE "xleres/TechniqueLibrary/LightingEngine/general-operator.pipeline"
 #define SHADOW_TEMPLATE_DS "xleres/TechniqueLibrary/Config/shadow-template.pipeline"
 #define SEQUENCER_DS "xleres/TechniqueLibrary/Config/sequencer.pipeline"
+#define MATERIAL_DS "xleres/TechniqueLibrary/Config/material.pipeline"
 
 #define ROOT_SIGNATURE_CFG "xleres/TechniqueLibrary/System/RootSignature.cfg"
 #define ROOT_SIGNATURE_COMPUTE_CFG "xleres/TechniqueLibrary/System/RootSignatureCS.cfg"

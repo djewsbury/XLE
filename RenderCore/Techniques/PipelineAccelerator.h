@@ -98,8 +98,6 @@ namespace RenderCore { namespace Techniques
 		struct Records;
 		virtual Records LogRecords() const = 0;
 
-		virtual const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const = 0;
-
 		virtual ~IPipelineAcceleratorPool();
 
 		unsigned GetGUID() const { return _guid; }
@@ -148,7 +146,7 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<IPipelineAcceleratorPool> CreatePipelineAcceleratorPool(
 		const std::shared_ptr<IDevice>&,
-		const DescriptorSetLayoutAndBinding& matDescSetLayout,
+		const std::shared_ptr<DescriptorSetLayoutAndBinding>& matDescSetLayout,
 		PipelineAcceleratorPoolFlags::BitField flags = 0);
 }}
 

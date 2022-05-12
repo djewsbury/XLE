@@ -68,7 +68,6 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _pipelineLayoutFile;
 		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _sequencerDescSetLayout;
 
-		std::shared_ptr<ICompiledPipelineLayout> _compiledPipelineLayout;
 		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<PipelineCollection> _graphicsPipelinePool;
 

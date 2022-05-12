@@ -456,7 +456,7 @@ namespace UnitTests
 			)--";
 			InputStreamFormatter<utf8> formattr { MakeStringSection(simplePatchCollectionFragments) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
-			auto compiledPatchCollection = std::make_shared<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, testApparatus._materialDescSetLayout);
+			auto compiledPatchCollection = std::make_shared<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, *testApparatus._materialDescSetLayout);
 
 			{
 				auto delegate = RenderCore::Techniques::CreateTechniqueDelegateLegacy(

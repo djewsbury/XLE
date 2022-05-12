@@ -184,6 +184,13 @@ namespace UnitTests
 		REQUIRE(future.GetAssetState() == ::Assets::AssetState::Ready);
 	}
 
+	static std::shared_ptr<RenderCore::ICompiledPipelineLayout> PipelineLayoutFromPool(RenderCore::Techniques::IPipelineAcceleratorPool& pool, RenderCore::Techniques::SequencerConfig& cfg)
+	{
+		auto compiledLayout = pool.GetCompiledPipelineLayoutMarker(cfg);
+		compiledLayout->StallWhilePending();
+		return compiledLayout->Actualize()->GetPipelineLayout();
+	}
+
 	TEST_CASE( "PipelineAcceleratorTests-ConfigurationAndCreation", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
@@ -299,7 +306,7 @@ namespace UnitTests
 				RenderQuad(
 					*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), 
 					*finalPipelineFuture->Actualize()._metalPipeline,
-					mainPool->GetCompiledPipelineLayoutMarker(*cfgIdWithColor)->Actualize()->GetPipelineLayout());
+					PipelineLayoutFromPool(*mainPool, *cfgIdWithColor));
 			}
 
 			// We should have filled the entire framebuffer with red 
@@ -325,7 +332,7 @@ namespace UnitTests
 				RenderQuad(
 					*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), 
 					*finalPipelineFuture->Actualize()._metalPipeline,
-					mainPool->GetCompiledPipelineLayoutMarker(*cfgIdWithColor)->Actualize()->GetPipelineLayout());
+					PipelineLayoutFromPool(*mainPool, *cfgIdWithColor));
 			}
 
 			auto breakdown1 = fbHelper.GetFullColorBreakdown(*threadContext);
@@ -498,7 +505,7 @@ namespace UnitTests
 				RenderQuad(
 					*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), 
 					*finalPipeline->Actualize()._metalPipeline, 
-					pipelineAcceleratorPool->GetCompiledPipelineLayoutMarker(*cfgId)->Actualize()->GetPipelineLayout(),
+					PipelineLayoutFromPool(*pipelineAcceleratorPool, *cfgId),
 					descriptorSetFuture->Actualize()._descriptorSet.get());
 			}
 
@@ -586,13 +593,13 @@ namespace UnitTests
 					RenderQuad(
 						*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), 
 						*finalPipeline->Actualize()._metalPipeline,
-						pipelineAcceleratorPool->GetCompiledPipelineLayoutMarker(*cfgId)->Actualize()->GetPipelineLayout(),
+						PipelineLayoutFromPool(*pipelineAcceleratorPool, *cfgId),
 						descriptorSetFuture->Actualize()._descriptorSet.get());
 				}
 
 				auto breakdown = fbHelper.GetFullColorBreakdown(*threadContext);
 				REQUIRE(breakdown.size() == 1);
-				REQUIRE(breakdown.find(0xff000000) != breakdown.end());
+				REQUIRE(breakdown.find(0x0) != breakdown.end());
 			}
 
 			SECTION("Bind missing texture")

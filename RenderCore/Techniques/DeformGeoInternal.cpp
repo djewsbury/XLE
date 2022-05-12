@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "DeformGeoInternal.h"
+#include "PipelineOperators.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../IDevice.h"
 #include "../../Assets/Continuation.h"

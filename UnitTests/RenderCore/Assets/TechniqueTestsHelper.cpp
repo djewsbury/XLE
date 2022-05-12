@@ -28,8 +28,8 @@ namespace UnitTests
 		_shaderCompiler2Registration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(testHelper._shaderSource, compilers);
 
         RenderCore::Assets::PredefinedPipelineLayoutFile layoutFile { UnitTestPipelineLayout, {}, {} };
-        _materialDescSetLayout = RenderCore::Techniques::FindLayout(layoutFile, "GraphicsMain", "Material");
-        _sequencerDescSetLayout = RenderCore::Techniques::FindLayout(layoutFile, "GraphicsMain", "Sequencer");
+        _materialDescSetLayout = RenderCore::Techniques::FindLayout(layoutFile, "GraphicsMain", "Material", PipelineType::Graphics);
+        _sequencerDescSetLayout = RenderCore::Techniques::FindLayout(layoutFile, "GraphicsMain", "Sequencer", PipelineType::Graphics);
 
 		_pipelineAccelerators = Techniques::CreatePipelineAcceleratorPool(
 			testHelper._device, _materialDescSetLayout, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
@@ -37,7 +37,7 @@ namespace UnitTests
 		_techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		_techniqueContext->_commonResources = _commonResources;
 		_techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
-		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *_sequencerDescSetLayout.GetLayout(), *testHelper._device);
+		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *_sequencerDescSetLayout->GetLayout(), *testHelper._device);
 		// _techniqueContext->_uniformDelegateManager->AddShaderResourceDelegate(std::make_shared<SystemUniformsDelegate>(*testHelper._device));
 	}
 
@@ -49,7 +49,7 @@ namespace UnitTests
 		
 		DescriptorSet Material
 		{
-			UniformBufferDynamic b0;
+			UniformBuffer b0;
 			UniformBuffer b1;
 			UniformBuffer b2;
 

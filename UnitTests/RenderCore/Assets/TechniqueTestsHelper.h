@@ -4,7 +4,7 @@
 
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/Techniques/Services.h"
-#include "../../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
+#include "../../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../BufferUploads/IBufferUploads.h"
@@ -27,8 +27,8 @@ namespace UnitTests
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<RenderCore::Techniques::TechniqueContext> _techniqueContext;
 
-		RenderCore::Techniques::DescriptorSetLayoutAndBinding _materialDescSetLayout;
-		RenderCore::Techniques::DescriptorSetLayoutAndBinding _sequencerDescSetLayout;
+		std::shared_ptr<RenderCore::Techniques::DescriptorSetLayoutAndBinding> _materialDescSetLayout;
+		std::shared_ptr<RenderCore::Techniques::DescriptorSetLayoutAndBinding> _sequencerDescSetLayout;
 
 		::Assets::CompilerRegistration _filteringRegistration;
 		::Assets::CompilerRegistration _shaderCompilerRegistration;

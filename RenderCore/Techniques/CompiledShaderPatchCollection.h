@@ -22,30 +22,8 @@ namespace ShaderSourceParser { class InstantiationRequest; class GenerateFunctio
 
 namespace RenderCore { namespace Techniques
 {
-	class DescriptorSetLayoutAndBinding
-	{
-	public:
-		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& GetLayout() const { return _layout; }
-		unsigned GetSlotIndex() const { return _slotIdx; }
-
-		uint64_t GetHash() const { return _hash; }
-		::Assets::DependencyValidation GetDependencyValidation() const { return _layout ? _layout->GetDependencyValidation() : ::Assets::DependencyValidation{}; }
-
-		DescriptorSetLayoutAndBinding(
-			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& layout,
-			unsigned slotIdx);
-		DescriptorSetLayoutAndBinding();
-		~DescriptorSetLayoutAndBinding();
-
-	private:
-		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _layout;
-		unsigned _slotIdx;
-		uint64_t _hash;
-	};
-
-	DescriptorSetLayoutAndBinding FindLayout(const RenderCore::Assets::PredefinedPipelineLayoutFile&, const std::string& pipelineLayoutName, const std::string& descSetName);
-	DescriptorSetLayoutAndBinding FindLayout(const RenderCore::Assets::PredefinedPipelineLayout& file, const std::string& descriptorSetName);
-
+	class DescriptorSetLayoutAndBinding;
+	
 	/// <summary>Compiled and optimized version of RenderCore::Assets::ShaderPatchCollection</summary>
 	/// A RenderCore::Assets::ShaderPatchCollection contains references to shader patches used by a material,
 	/// however in that form it's not directly usable. We must expand the shader graphs and calculate the inputs
@@ -114,7 +92,8 @@ namespace RenderCore { namespace Techniques
 		RenderCore::Assets::ShaderPatchCollection _src;
 		std::string _savedInstantiation;
 		std::string _savedInstantiationPrefix;
-		DescriptorSetLayoutAndBinding _materialDescSetLayout;
+		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _matDescSetLayout;
+		unsigned _matDescSetSlot = ~0u;
 
 		void BuildFromInstantiatedShader(const ShaderSourceParser::InstantiatedShader& inst);
 	};

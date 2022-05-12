@@ -835,13 +835,13 @@ namespace RenderCore { namespace ImplVulkan
 	std::shared_ptr<ICompiledPipelineLayout> Device::CreatePipelineLayout(const PipelineLayoutInitializer& desc)
 	{
 		DoSecondStageInit();
+		if (!_globalsContainer->_pools._descriptorSetLayoutCache)
+			_globalsContainer->_pools._descriptorSetLayoutCache = Metal_Vulkan::Internal::CreateCompiledDescriptorSetLayoutCache();
+
 		Metal_Vulkan::Internal::ValidatePipelineLayout(_physDev._dev, desc);
 
 		using DescriptorSetBinding = Metal_Vulkan::CompiledPipelineLayout::DescriptorSetBinding;
 		using PushConstantsBinding = Metal_Vulkan::CompiledPipelineLayout::PushConstantsBinding;
-
-		if (!_globalsContainer->_pools._descriptorSetLayoutCache)
-			_globalsContainer->_pools._descriptorSetLayoutCache = Metal_Vulkan::Internal::CreateCompiledDescriptorSetLayoutCache();
 
 		DescriptorSetBinding descSetBindings[desc.GetDescriptorSets().size()];
 		for (unsigned c=0; c<desc.GetDescriptorSets().size(); ++c) {
@@ -876,6 +876,10 @@ namespace RenderCore { namespace ImplVulkan
 
 	std::shared_ptr<IDescriptorSet> Device::CreateDescriptorSet(const DescriptorSetInitializer& desc)
 	{
+		DoSecondStageInit();
+		if (!_globalsContainer->_pools._descriptorSetLayoutCache)
+			_globalsContainer->_pools._descriptorSetLayoutCache = Metal_Vulkan::Internal::CreateCompiledDescriptorSetLayoutCache();
+
 		VkShaderStageFlags shaderStages = desc._pipelineType == PipelineType::Graphics ? VK_SHADER_STAGE_ALL_GRAPHICS : VK_SHADER_STAGE_COMPUTE_BIT;
 		auto descSetLayout = _globalsContainer->_pools._descriptorSetLayoutCache->CompileDescriptorSetLayout(*desc._signature, {}, shaderStages); // don't have the name available here
 		return std::make_shared<Metal_Vulkan::CompiledDescriptorSet>(

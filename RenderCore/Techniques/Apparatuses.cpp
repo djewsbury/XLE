@@ -43,6 +43,19 @@ namespace RenderCore { namespace Techniques
 {
 	static std::shared_ptr<RenderCore::ILowLevelCompiler> CreateDefaultShaderCompiler(RenderCore::IDevice& device, const LegacyRegisterBindingDesc& legacyRegisterBinding);
 
+	static unsigned FindMaterialDescSetSlotIdx(const Assets::PredefinedPipelineLayoutFile& layoutFile)
+	{
+		auto t = layoutFile._pipelineLayouts.find("GraphicsMain");
+		if (t != layoutFile._pipelineLayouts.end()) {
+			for (auto q=t->second->_descriptorSets.begin(); q!=t->second->_descriptorSets.end(); ++q)
+				if (q->_name == "Material") {
+					assert(q->_pipelineType == PipelineType::Graphics);
+					return (unsigned)std::distance(t->second->_descriptorSets.begin(), q);
+				}
+		}
+		return 1;		// default
+	}
+
 	DrawingApparatus::DrawingApparatus(std::shared_ptr<IDevice> device)
 	{
 		_depValPtr = ::Assets::GetDepValSys().Make();
@@ -76,14 +89,17 @@ namespace RenderCore { namespace Techniques
 		_sequencerDescSetLayout = i->second;
 		_depValPtr.RegisterDependency(descSetLayoutContainer->GetDependencyValidation());
 
-		const std::string pipelineLayoutName = "GraphicsMain";
-		auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout(*_pipelineLayoutFile, pipelineLayoutName).MakePipelineLayoutInitializer(_shaderCompiler->GetShaderLanguage(), &_commonResources->_samplerPool);
-		_compiledPipelineLayout = device->CreatePipelineLayout(pipelineInit);
+		auto matDescSetLayoutFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(MATERIAL_DS);
+		matDescSetLayoutFuture->StallWhilePending();
+		auto matDescSetLayoutContainer = matDescSetLayoutFuture->Actualize();
+		auto i2 = matDescSetLayoutContainer->_descriptorSets.find("Material");
+		if (i2 == matDescSetLayoutContainer->_descriptorSets.end())
+			Throw(std::runtime_error("Missing 'Material' descriptor set entry in material pipeline file"));
 
 		PipelineAcceleratorPoolFlags::BitField poolFlags = 0;
 		_pipelineAccelerators = CreatePipelineAcceleratorPool(
 			device,
-			FindLayout(*_pipelineLayoutFile, pipelineLayoutName, "Material"),
+			std::make_shared<DescriptorSetLayoutAndBinding>(i2->second, FindMaterialDescSetSlotIdx(*_pipelineLayoutFile), "Material", PipelineType::Graphics, matDescSetLayoutContainer->GetDependencyValidation()),
 			poolFlags);
 		
 		_systemUniformsDelegate = std::make_shared<SystemUniformsDelegate>(*_device);
