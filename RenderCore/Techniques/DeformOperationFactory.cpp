@@ -101,7 +101,7 @@ namespace RenderCore { namespace Techniques
 				}
 				return ::Assets::PollStatus::Finish;
 			},
-			[strongThis]() {
+			[strongThis]() mutable {
 				std::vector<std::shared_ptr<IGeoDeformer>> newFinishedDeformers;
 				newFinishedDeformers.reserve(strongThis->_deformerMarkers.size());
 				for (auto& f:strongThis->_deformerMarkers) {
@@ -115,7 +115,7 @@ namespace RenderCore { namespace Techniques
 					strongThis->_deformers[c] = std::move(newFinishedDeformers[c]);
 					strongThis->_deformerMarkers[c] = nullptr;
 				}
-				return strongThis;
+				return std::move(strongThis);
 			});
 	}
 

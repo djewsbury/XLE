@@ -517,7 +517,8 @@ namespace RenderCore { namespace Techniques
 		std::promise<std::shared_ptr<DeformerConstruction>> promise;
 		auto future = promise.get_future();
 		deformerConstruction->FulfillWhenNotPending(std::move(promise));
-		future.wait();
+		YieldToPool(future);
+		assert(future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);
 
 		auto geometryInfrastructure = CreateDeformGeometryInfrastructure(
 			*deformAcceleratorPool->GetDevice(), rendererConstruction, *deformerConstruction);

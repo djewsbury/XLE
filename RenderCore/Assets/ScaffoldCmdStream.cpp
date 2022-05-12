@@ -139,15 +139,19 @@ namespace RenderCore { namespace Assets
 					if (MarkerTimesOut(*f.second, timeoutTime))
 						return ::Assets::PollStatus::Continue;
 
+				for (auto& f:strongThis->_internal->_materialScaffoldMarkers)
+					if (MarkerTimesOut(*f.second, timeoutTime))
+						return ::Assets::PollStatus::Continue;
+
 				if (	strongThis->_internal->_skeletonScaffoldMarker
 					&& 	MarkerTimesOut(*strongThis->_internal->_skeletonScaffoldMarker, timeoutTime))
 					return ::Assets::PollStatus::Continue;
 
 				return ::Assets::PollStatus::Finish;
 			},
-			[strongThis]() {
+			[strongThis]() mutable {
 				assert(strongThis->GetAssetState() != ::Assets::AssetState::Pending);
-				return strongThis;
+				return std::move(strongThis);
 			});
 	}
 
@@ -254,8 +258,10 @@ namespace RenderCore { namespace Assets
 		assert(_internal);
 		if (_mspi!=_internal->_modelScaffoldPtrs.end() && _mspi->first == _elementId)
 			return _mspi->second;
-		if (_msmi!=_internal->_modelScaffoldMarkers.end() && _msmi->first == _elementId)
+		if (_msmi!=_internal->_modelScaffoldMarkers.end() && _msmi->first == _elementId) {
+			assert(!_msmi->second->IsBkgrndPending());		// we should be ready, via RendererConstruction::FulfillWhenNotPending before getting here
 			return _msmi->second->ActualizeBkgrnd();
+		}
 		return nullptr;
 	}
 
@@ -264,8 +270,10 @@ namespace RenderCore { namespace Assets
 		assert(_internal);
 		if (_matspi!=_internal->_materialScaffoldPtrs.end() && _matspi->first == _elementId)
 			return _matspi->second;
-		if (_matsmi!=_internal->_materialScaffoldMarkers.end() && _matsmi->first == _elementId)
+		if (_matsmi!=_internal->_materialScaffoldMarkers.end() && _matsmi->first == _elementId) {
+			assert(!_msmi->second->IsBkgrndPending());		// we should be ready, via RendererConstruction::FulfillWhenNotPending before getting here
 			return _matsmi->second->ActualizeBkgrnd();
+		}
 		return nullptr;
 	}
 

@@ -281,13 +281,13 @@ namespace Assets
 			TryRunPollingFunction(lock);
 		}
 
-		return _pendingFuture.get();
+		return _pendingFuture.get();		// note that we still actually stall here, because std::shared_future::get() implicitly waits
 	}
 
 	template<typename Type>
 		bool Marker<Type>::IsBkgrndPending() const
 	{
-		if (_state == AssetState::Ready)
+		if (_state != AssetState::Pending)
 			return false;
 		return _pendingFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready;	
 	}
