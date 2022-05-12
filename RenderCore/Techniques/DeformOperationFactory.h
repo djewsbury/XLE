@@ -46,14 +46,19 @@ namespace RenderCore { namespace Techniques
 			unsigned elementIdx,
 			unsigned geoIdx);
 
-		struct Entry
+		void Add(
+			std::shared_ptr<IDeformUniformsAttachment> deformer);
+
+		struct GeoEntry
 		{
 			std::shared_ptr<IGeoDeformer> _deformer;
 			const DeformOperationInstantiation* _instantiation = nullptr;
 			unsigned _elementIdx = ~0u;
 			unsigned _geoIdx = ~0u;
 		};
-		std::vector<Entry> GetEntries() const;
+		std::vector<GeoEntry> GetGeoEntries() const;
+
+		std::shared_ptr<IDeformUniformsAttachment> GetUniformsAttachment() const;
 
 		void FulfillWhenNotPending(std::promise<std::shared_ptr<DeformerConstruction>>&& promise);
 		bool IsEmpty() const;
@@ -65,13 +70,19 @@ namespace RenderCore { namespace Techniques
 		std::vector<::Assets::PtrToMarkerPtr<IGeoDeformer>> _deformerMarkers;
 		std::vector<std::shared_ptr<IGeoDeformer>> _deformers;
 
-		struct StoredEntry
+		struct StoredGeoEntry
 		{
 			unsigned _elementIdx, _geoIdx;
 			unsigned _deformerIdx;
 			DeformOperationInstantiation _instantiation;
 		};
-		std::vector<StoredEntry> _storedEntries;
+		std::vector<StoredGeoEntry> _storedGeoEntries;
+
+		struct StoredUniformsEntry
+		{
+			std::shared_ptr<IDeformUniformsAttachment> _deformer = nullptr;
+		};
+		StoredUniformsEntry _storedUniformsEntry;
 	};
 
 #if 0

@@ -24,7 +24,7 @@ namespace RenderCore { namespace Techniques
 			return;
 		}
 
-		StoredEntry newEntry;
+		StoredGeoEntry newEntry;
 		auto i = std::find(_deformerMarkers.begin(), _deformerMarkers.end(), deformer);
 		if (i != _deformerMarkers.end()) {
 			newEntry._deformerIdx = (unsigned)std::distance(_deformerMarkers.begin(), i);
@@ -36,7 +36,7 @@ namespace RenderCore { namespace Techniques
 		newEntry._elementIdx = elementIdx;
 		newEntry._geoIdx = geoIdx;
 		newEntry._instantiation = std::move(instantiation);
-		_storedEntries.emplace_back(std::move(newEntry));
+		_storedGeoEntries.emplace_back(std::move(newEntry));
 	}
 
 	void DeformerConstruction::Add(
@@ -46,7 +46,7 @@ namespace RenderCore { namespace Techniques
 		unsigned geoIdx)
 	{
 		assert(!_sealed);
-		StoredEntry newEntry;
+		StoredGeoEntry newEntry;
 		auto i = std::find(_deformers.begin(), _deformers.end(), deformer);
 		if (i != _deformers.end()) {
 			newEntry._deformerIdx = (unsigned)std::distance(_deformers.begin(), i);
@@ -58,16 +58,16 @@ namespace RenderCore { namespace Techniques
 		newEntry._elementIdx = elementIdx;
 		newEntry._geoIdx = geoIdx;
 		newEntry._instantiation = std::move(instantiation);
-		_storedEntries.emplace_back(std::move(newEntry));
+		_storedGeoEntries.emplace_back(std::move(newEntry));
 	}
 
-	auto DeformerConstruction::GetEntries() const -> std::vector<Entry>
+	auto DeformerConstruction::GetGeoEntries() const -> std::vector<GeoEntry>
 	{
-		std::vector<Entry> result;
-		result.reserve(_storedEntries.size());
-		for (const auto& e:_storedEntries) {
+		std::vector<GeoEntry> result;
+		result.reserve(_storedGeoEntries.size());
+		for (const auto& e:_storedGeoEntries) {
 			result.emplace_back(
-				Entry{
+				GeoEntry{
 					_deformers[e._deformerIdx],
 					&e._instantiation,
 					e._elementIdx, e._geoIdx});
@@ -75,9 +75,20 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
+	void DeformerConstruction::Add(std::shared_ptr<IDeformUniformsAttachment> deformer)
+	{
+		assert(!_storedUniformsEntry._deformer);
+		_storedUniformsEntry._deformer = std::move(deformer);
+	}
+
+	std::shared_ptr<IDeformUniformsAttachment> DeformerConstruction::GetUniformsAttachment() const
+	{
+		return _storedUniformsEntry._deformer;
+	}
+
 	bool DeformerConstruction::IsEmpty() const
 	{
-		return _storedEntries.empty();
+		return _storedGeoEntries.empty() && !_storedUniformsEntry._deformer;
 	}
 
 	void DeformerConstruction::FulfillWhenNotPending(std::promise<std::shared_ptr<DeformerConstruction>>&& promise)

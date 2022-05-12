@@ -6,6 +6,7 @@
 #include "DeferredShaderResource.h"
 #include "TechniqueUtils.h"
 #include "CommonResources.h"
+#include "DeformUniformsInfrastructure.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedCBLayout.h"
 #include "../Assets/MaterialMachine.h"
@@ -180,16 +181,19 @@ namespace RenderCore { namespace Techniques
 
 			} else if ((s._type == DescriptorType::UniformBuffer || s._type == DescriptorType::UniformBufferDynamicOffset) && s._cbIdx < (unsigned)layout._constantBuffers.size()) {
 
-				auto& cbLayout = layout._constantBuffers[s._cbIdx];
-				std::vector<uint8_t> buffer;
-				if (machineHelper._constantBindings) {
-					buffer = cbLayout->BuildCBDataAsVector(*machineHelper._constantBindings, shrLanguage);
-				} else 
-					buffer = cbLayout->BuildCBDataAsVector({}, shrLanguage);
+				bool animated = false;
+				if (deformBinding) {
+					animated = std::find_if(deformBinding->_animatedSlots.begin(), deformBinding->_animatedSlots.end(), [slotIdx=s._slotIdx](const auto& q) { return q.first == slotIdx; }) != deformBinding->_animatedSlots.end();
+				}
 
-				const bool animated = false;
 				if (!animated) {
-					// non animated fixed buffer
+						auto& cbLayout = layout._constantBuffers[s._cbIdx];
+					std::vector<uint8_t> buffer;
+					if (machineHelper._constantBindings) {
+						buffer = cbLayout->BuildCBDataAsVector(*machineHelper._constantBindings, shrLanguage);
+					} else 
+						buffer = cbLayout->BuildCBDataAsVector({}, shrLanguage);
+
 					auto cb = 
 						_device->CreateResource(
 							CreateDesc(BindFlag::ConstantBuffer, 0, GPUAccess::Read, LinearBufferDesc::Create((unsigned)buffer.size()), s._name),
@@ -201,17 +205,26 @@ namespace RenderCore { namespace Techniques
 					Internal::DescriptorSetInProgress::Resource res;
 					res._fixedResource = cb->CreateBufferView(BindFlag::ConstantBuffer);
 					working._resources.push_back(res);
+
+					if (_generateBindingInfo) {
+						std::stringstream str;
+						cbLayout->DescribeCB(str, MakeIteratorRange(buffer), shrLanguage);
+						slotBindingInfo._binding = str.str();
+					}
 				} else {
-					assert(0);		// use the animation page resource, and require a dynamic offset binding point
+					slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
+					slotInProgress._resourceIdx = (unsigned)working._resources.size();
+
+					Internal::DescriptorSetInProgress::Resource res;
+					res._fixedResource = deformBinding->_dynamicPageResource->CreateBufferView(BindFlag::ConstantBuffer);
+					working._resources.push_back(res);
+					
+					if (_generateBindingInfo)
+						slotBindingInfo._binding = "Animated Uniforms";
 				}
 					
 				gotBinding = true;
-
-				if (_generateBindingInfo) {
-					std::stringstream str;
-					cbLayout->DescribeCB(str, MakeIteratorRange(buffer), shrLanguage);
-					slotBindingInfo._binding = str.str();
-				}
+				
 			} else if (s._type == DescriptorType::Sampler && _samplerPool) {
 				auto i = std::find_if(machineHelper._samplerBindings.begin(), machineHelper._samplerBindings.end(), [hashName](const auto& c) { return c.first == hashName; });
 				if (i != machineHelper._samplerBindings.end()) {
@@ -392,6 +405,11 @@ namespace RenderCore { namespace Techniques
 		_dataBlock = serializer.AsMemoryBlock();
 		_primaryBlockSize = serializer.SizePrimaryBlock();
 		::Assets::Block_Initialize(_dataBlock.get());
+	}
+
+	const uint64_t DeformerToDescriptorSetBinding::GetHash() const
+	{
+		return Hash64(MakeIteratorRange(_animatedSlots), _dynamicPageResource->GetGUID());
 	}
 
 	ActualizedDescriptorSet::ActualizedDescriptorSet() = default;

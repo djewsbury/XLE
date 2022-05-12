@@ -70,6 +70,7 @@ namespace RenderCore { namespace Techniques
 	};
 
 	struct UniformDeformerToRendererBinding;
+	struct AnimatedUniform;
 	class IDeformUniformsAttachment
 	{
 	public:
@@ -78,17 +79,11 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const unsigned*> instanceIdx,
 			IteratorRange<void*> dst) = 0;
 
-		virtual const UniformDeformerToRendererBinding& GetDeformerToRendererBinding() const;
+		virtual const UniformDeformerToRendererBinding& GetDeformerToRendererBinding() const = 0;
 
 		/// 
-		struct InputValue
-		{
-			uint64_t _name;
-			ImpliedTyping::TypeDesc _type;
-			unsigned _offset;
-		};
 		virtual void SetInputValues(unsigned instanceIdx, IteratorRange<const void*> data) = 0;
-		virtual IteratorRange<const InputValue*> GetInputValuesLayout() const = 0;
+		virtual IteratorRange<const AnimatedUniform*> GetInputValuesLayout() const = 0;
 		virtual ~IDeformUniformsAttachment() = default;
 	};
 

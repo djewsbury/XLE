@@ -117,7 +117,7 @@ namespace RenderCore { namespace Techniques
 		Internal::DeformBufferIterators bufferIterators;
 		std::optional<bool> isCPUDeformer;
 
-		auto constructionEntries = deformerConstruction.GetEntries();
+		auto constructionEntries = deformerConstruction.GetGeoEntries();
 		std::stable_sort(
 			constructionEntries.begin(), constructionEntries.end(),
 			[](const auto& lhs, const auto& rhs) { 

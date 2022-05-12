@@ -10,7 +10,7 @@
 #include "CommonResources.h"
 #include "ShaderVariationSet.h"
 #include "PipelineOperators.h"		// for CompiledPipelineLayoutAsset & DescriptorSetLayoutAndBinding
-#include "DeformAccelerator.h"		// for DeformerToDescriptorSetBinding
+#include "DeformAccelerator.h"		// for UniformDeformerToRendererBinding
 #include "../FrameBufferDesc.h"
 #include "../Format.h"
 #include "../Metal/DeviceContext.h"
@@ -662,8 +662,8 @@ namespace RenderCore { namespace Techniques
 			uint64_t hash = HashMaterialMachine(materialMachine);
 			if (shaderPatches)
 				hash = HashCombine(shaderPatches->GetHash(), hash);
-			// for (const auto& b:animatedBindings)
-				// hash = HashCombine(b._name, hash);
+			if (deformBinding)
+				hash = HashCombine(deformBinding->GetHash(), hash);
 
 			// If it already exists in the cache, just return it now
 			auto cachei = LowerBound(_descriptorSetAccelerators, hash);
@@ -1008,8 +1008,6 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 	
-	const DescriptorSetLayoutAndBinding* g_hack_matDescSetLayout = nullptr;
-
 	PipelineAcceleratorPool::PipelineAcceleratorPool(
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<DescriptorSetLayoutAndBinding>& matDescSetLayout,
@@ -1027,8 +1025,6 @@ namespace RenderCore { namespace Techniques
 		#if defined(_DEBUG)
 			_boundThreadId = std::this_thread::get_id();
 		#endif
-
-		g_hack_matDescSetLayout = _matDescSetLayout.get();
 	}
 
 	PipelineAcceleratorPool::~PipelineAcceleratorPool() {}

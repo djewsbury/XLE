@@ -5,6 +5,8 @@
 #include "DrawableConstructor.h"
 #include "Drawables.h"
 #include "DeformGeometryInfrastructure.h"
+#include "DeformUniformsInfrastructure.h"
+#include "DescriptorSetAccelerator.h"
 #include "PipelineAccelerator.h"
 #include "CommonUtils.h"
 #include "../Assets/ScaffoldCmdStream.h"
@@ -336,15 +338,30 @@ namespace RenderCore { namespace Techniques
 			const WorkingMaterial* AddMaterial(
 				IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 				const std::shared_ptr<Assets::MaterialScaffoldCmdStreamForm>& materialScaffold,
-				uint64_t materialGuid,
+				unsigned elementIdx, uint64_t materialGuid,
 				Techniques::IDeformAcceleratorPool* deformAcceleratorPool,
 				const IDeformUniformsAttachment* parametersDeformInfrastructure)
 			{
-				auto i = std::lower_bound(_drawableMaterials.begin(), _drawableMaterials.end(), materialGuid, [](const auto& q, uint64_t materialGuid) { return q._guid < materialGuid; });
-				if (i != _drawableMaterials.end() && i->_guid == materialGuid) {
+				std::shared_ptr<DeformerToDescriptorSetBinding> deformBinding;
+				if (parametersDeformInfrastructure && deformAcceleratorPool) {
+					auto& rendererBinding = parametersDeformInfrastructure->GetDeformerToRendererBinding();
+					for (auto& b:rendererBinding._materialBindings)
+						if (b.first == std::make_pair(elementIdx, materialGuid)) {
+							deformBinding = std::make_shared<DeformerToDescriptorSetBinding>();
+							deformBinding->_animatedSlots = b.second._animatedSlots;
+							break;
+						}
+				}
+
+				auto materialAndDeformerHash = materialGuid;
+				if (deformBinding)
+					materialAndDeformerHash = HashCombine(materialGuid, deformBinding->GetHash());
+
+				auto i = std::lower_bound(_drawableMaterials.begin(), _drawableMaterials.end(), materialAndDeformerHash, [](const auto& q, uint64_t materialGuid) { return q._guid < materialGuid; });
+				if (i != _drawableMaterials.end() && i->_guid == materialAndDeformerHash) {
 					return AsPointer(i);
 				} else {
-					i = _drawableMaterials.insert(i, WorkingMaterial{materialGuid});
+					i = _drawableMaterials.insert(i, WorkingMaterial{materialAndDeformerHash});
 
 					// Fill in _selectors, _resourceBindings, _stateSet, etc
 					// We'll need to walk through the material machine to do this
@@ -373,21 +390,11 @@ namespace RenderCore { namespace Techniques
 					i->_selectors.MergeIn(resHasParameters);
 
 					// Descriptor set accelerator
-					std::shared_ptr<DescriptorSetAccelerator> descSet;
-					if (parametersDeformInfrastructure && deformAcceleratorPool) {
-						// auto paramBinding = parametersDeformInfrastructure->GetOutputParameterBindings();
-						std::shared_ptr<DeformerToDescriptorSetBinding> deformBinding;
-						descSet = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
-							i->_patchCollection,
-							materialMachine,
-							materialScaffold,
-							deformBinding);
-					} else {
-						descSet = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
-							i->_patchCollection,
-							materialMachine,
-							materialScaffold);
-					}
+					auto descSet = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
+						i->_patchCollection,
+						materialMachine,
+						materialScaffold,
+						deformBinding);
 
 					i->_descriptorSetAcceleratorIdx = AddDescriptorSetAccelerator(std::move(descSet));
 					i->_batchFilter = (unsigned)CalculateBatchForStateSet(i->_stateSet);
@@ -585,7 +592,7 @@ namespace RenderCore { namespace Techniques
 								auto* workingMaterial = _pendingPipelines.AddMaterial(
 									materialScaffold->GetMaterialMachine(matAssignment),
 									materialScaffold,
-									matAssignment,
+									elementIdx, matAssignment,
 									deformAcceleratorPool.get(), deformParametersAttachment);
 								auto compiledPipeline = _pendingPipelines.MakePipeline(
 									*workingMaterial, 

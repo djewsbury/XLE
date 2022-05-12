@@ -39,7 +39,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::pair<unsigned, AnimatedUniformBufferHelper>> result;
 		std::vector<AnimatedUniformBufferHelper::Mapping> parameterMapping;
 		for (const auto& slot:descSetLayout._slots) {
-			if ((slot._type != DescriptorType::UniformBuffer && slot._type != DescriptorType::UniformBuffer) || slot._cbIdx == ~0u)
+			if ((slot._type != DescriptorType::UniformBuffer && slot._type != DescriptorType::UniformBufferDynamicOffset) || slot._cbIdx == ~0u)
 				continue;
 
 			auto& cbLayout = *descSetLayout._constantBuffers[slot._cbIdx];
@@ -66,6 +66,15 @@ namespace RenderCore { namespace Techniques
 			result.emplace_back(std::make_pair(slot._slotIdx, std::move(helper)));
 		}
 		return result;
+	}
+
+	static void WriteAnimatedUniforms(IteratorRange<void*> dst, const AnimatedUniformBufferHelper& animHelper, IteratorRange<const void*> srcValues)
+	{
+		std::memcpy(dst.begin(), animHelper._baseContents.data(), animHelper._baseContents.size());
+		for (const auto& p:animHelper._parameters)
+			ImpliedTyping::Cast(
+				MakeIteratorRange(PtrAdd(dst.begin(), p._dstOffset), dst.end()), p._dstFormat, 
+				MakeIteratorRange(PtrAdd(srcValues.begin(), p._srcOffset), srcValues.end()), p._srcFormat);
 	}
 
 #if 0
@@ -112,11 +121,88 @@ namespace RenderCore { namespace Techniques
 	}
 #endif
 
+	class DeformUniformsAttachment : public IDeformUniformsAttachment
+	{
+	public:
+		virtual void Execute(
+			IteratorRange<const unsigned*> instanceIdx, 
+			IteratorRange<void*> dst) override
+		{
+			for (auto i:instanceIdx) {
+				assert(dst.size() >= _instanceOutputStride);
+
+				if ((i+1) * _instanceInputStride <= _instanceInputValues.size()) {
+					WriteAnimatedUniforms(
+						dst, _mainUniformHelper,
+						MakeIteratorRange(_instanceInputValues.begin() + i*_instanceInputStride, _instanceInputValues.begin() + (i+1*_instanceInputStride)));
+				} else {
+					WriteAnimatedUniforms(dst, _mainUniformHelper, MakeIteratorRange(_defaultInstanceData));
+				}
+
+				dst.first = PtrAdd(dst.first, _instanceOutputStride);
+			}
+		}
+
+		virtual void ReserveBytesRequired(unsigned instanceCount, unsigned& gpuBufferBytes, unsigned& cpuBufferBytes) override
+		{
+			gpuBufferBytes = _instanceOutputStride * instanceCount;
+		}
+
+		virtual const UniformDeformerToRendererBinding& GetDeformerToRendererBinding() const override
+		{
+			return _rendererBinding;
+		}
+
+		virtual void SetInputValues(unsigned instanceIdx, IteratorRange<const void*> data) override
+		{
+			// would we be better off with an interface that could just get the latest input values when we need it, just for
+			// the instances we need?
+			assert(data.size() == _instanceInputStride);
+			if ((instanceIdx + 1) * _instanceInputStride > _instanceInputValues.size()) {
+				_instanceInputValues.reserve((instanceIdx + 1) * _instanceInputStride);
+				while ((instanceIdx + 1) * _instanceInputStride > _instanceInputValues.size())
+					_instanceInputValues.insert(_instanceInputValues.end(), _defaultInstanceData.begin(), _defaultInstanceData.end());
+			}
+			std::memcpy(
+				AsPointer(_instanceInputValues.begin() + instanceIdx*_instanceInputStride),
+				data.begin(),
+				_instanceInputStride);
+		}
+
+		virtual IteratorRange<const AnimatedUniform*> GetInputValuesLayout() const override
+		{
+			return _inputValuesLayout;
+		}
+
+		DeformUniformsAttachment(
+			AnimatedUniformBufferHelper&& mainUniformHelper,
+			IteratorRange<const void*> defaultInstanceData,
+			IteratorRange<const AnimatedUniform*> inputValuesLayout,
+			unsigned instanceOutputStride,
+			UniformDeformerToRendererBinding&& rendererBinding)
+		: _mainUniformHelper(mainUniformHelper)
+		, _instanceOutputStride(instanceOutputStride)
+		, _instanceInputStride(defaultInstanceData.size())
+		, _defaultInstanceData{(const uint8_t*)defaultInstanceData.begin(), (const uint8_t*)defaultInstanceData.end()}
+		, _inputValuesLayout{inputValuesLayout.begin(), inputValuesLayout.end()}
+		, _rendererBinding(std::move(rendererBinding))
+		{
+		}
+
+		AnimatedUniformBufferHelper _mainUniformHelper;
+		unsigned _instanceOutputStride, _instanceInputStride;
+		std::vector<uint8_t> _instanceInputValues;
+		std::vector<uint8_t> _defaultInstanceData;
+		std::vector<AnimatedUniform> _inputValuesLayout;
+		UniformDeformerToRendererBinding _rendererBinding;
+	};
+
 	void ConfigureDeformUniformsAttachment(
 		DeformerConstruction& deformerConstruction,
 		const Assets::RendererConstruction& rendererConstruction,
 		const DescriptorSetLayoutAndBinding& matDescSetLayout,
-		IteratorRange<const AnimatedUniform*> animatedUniforms)
+		IteratorRange<const AnimatedUniform*> animatedUniforms,
+		IteratorRange<const void*> defaultInstanceData)
 	{
 		auto shrLanguage = GetDefaultShaderLanguage();
 
@@ -186,7 +272,7 @@ namespace RenderCore { namespace Techniques
 					matBinding._animatedSlots.emplace_back(b.first, pageOffset);
 				}
 
-				deformerToRendererBinding._geoBindings.emplace_back(
+				deformerToRendererBinding._materialBindings.emplace_back(
 					std::make_pair(elementIdx, materialGuid),
 					std::move(matBinding));
 			}
@@ -218,7 +304,14 @@ namespace RenderCore { namespace Techniques
 				c.second._baseContents.begin(), c.second._baseContents.end());
 		}
 
-		(void)finalBufferHelper;
+		auto attachment = std::make_shared<DeformUniformsAttachment>(
+			std::move(finalBufferHelper),
+			defaultInstanceData,
+			animatedUniforms,
+			defaultInstanceData.size(),
+			std::move(deformerToRendererBinding));
+
+		deformerConstruction.Add(std::move(attachment));
 	}
 
 #if 0

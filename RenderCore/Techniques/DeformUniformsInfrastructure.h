@@ -25,7 +25,8 @@ namespace RenderCore { namespace Techniques
 		DeformerConstruction& deformerConstruction,
 		const Assets::RendererConstruction& rendererConstruction,
 		const DescriptorSetLayoutAndBinding& matDescSetLayout,
-		IteratorRange<const AnimatedUniform*> animatedUniforms);
+		IteratorRange<const AnimatedUniform*> animatedUniforms,
+		IteratorRange<const void*> defaultInstanceData);
 
 	class ActualizedDescriptorSet;
 	namespace Internal
@@ -45,7 +46,7 @@ namespace RenderCore { namespace Techniques
 			std::vector<DescSetSlotAndPageOffset> _animatedSlots;
 		};
 		using ElementAndMaterialGuid = std::pair<unsigned, uint64_t>;
-		std::vector<std::pair<ElementAndMaterialGuid, MaterialBinding>> _geoBindings;
+		std::vector<std::pair<ElementAndMaterialGuid, MaterialBinding>> _materialBindings;
 	}; 
 
 }}
