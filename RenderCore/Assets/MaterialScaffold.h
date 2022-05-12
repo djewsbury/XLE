@@ -105,6 +105,7 @@ namespace RenderCore { namespace Assets
 		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
 		Machine				GetMaterialMachine(MaterialGuid guid) const;
 		StringSection<>		DehashMaterialName(MaterialGuid guid) const;
+		std::vector<uint64_t> GetMaterials() const;
 
 		std::shared_ptr<ShaderPatchCollection> GetShaderPatchCollection(uint64_t hash) const;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }

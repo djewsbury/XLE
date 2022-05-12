@@ -33,10 +33,10 @@ namespace RenderCore { namespace Techniques
 
 		virtual void Attach(
 			DeformAccelerator& deformAccelerator,
-			std::shared_ptr<IDeformParametersAttachment> deformAttachment) override;
+			std::shared_ptr<IDeformUniformsAttachment> deformAttachment) override;
 
 		std::shared_ptr<IDeformAttachment> GetDeformAttachment(DeformAccelerator& deformAccelerator) override;
-		std::shared_ptr<IDeformParametersAttachment> GetDeformParametersAttachment(DeformAccelerator& deformAccelerator) override;
+		std::shared_ptr<IDeformUniformsAttachment> GetDeformParametersAttachment(DeformAccelerator& deformAccelerator) override;
 
 		void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) override;
 		void ReadyInstances(IThreadContext&) override;
@@ -86,11 +86,10 @@ namespace RenderCore { namespace Techniques
 		std::vector<unsigned> _instanceToReadiedOffset[AllocationType_Max];
 		VertexBufferView _outputVBV;
 
-		unsigned _parametersReservationPerInstance = 0;
 		std::vector<uint8_t> _outputParameterValues;
 
 		std::shared_ptr<IDeformAttachment> _attachment;
-		std::shared_ptr<IDeformParametersAttachment> _parametersAttachment;
+		std::shared_ptr<IDeformUniformsAttachment> _parametersAttachment;
 
 		#if defined(_DEBUG)
 			DeformAcceleratorPool* _containingPool = nullptr;
@@ -108,10 +107,9 @@ namespace RenderCore { namespace Techniques
 
 		void ExecuteParameters(
 			IteratorRange<const unsigned*> instanceIdx, 
-			IteratorRange<void*> dst,
-			unsigned outputInstanceStride)
+			IteratorRange<void*> dst)
 		{
-			_parametersAttachment->Execute(instanceIdx, dst, outputInstanceStride);
+			_parametersAttachment->Execute(instanceIdx, dst);
 		}
 	};
 
@@ -147,7 +145,7 @@ namespace RenderCore { namespace Techniques
 
 	void DeformAcceleratorPool::Attach(
 		DeformAccelerator& accelerator,
-		std::shared_ptr<IDeformParametersAttachment> deformAttachment)
+		std::shared_ptr<IDeformUniformsAttachment> deformAttachment)
 	{
 		#if defined(_DEBUG)
 			assert(accelerator._containingPool == this);
@@ -155,7 +153,6 @@ namespace RenderCore { namespace Techniques
 		assert(!accelerator._parametersAttachment);		// we can't attach geometry deformers more than once to a given deform accelerator
 		assert(deformAttachment);
 		accelerator._parametersAttachment = std::move(deformAttachment);
-		accelerator._parametersReservationPerInstance = accelerator._parametersAttachment->GetOutputInstanceStride();
 	}
 
 	std::shared_ptr<IDeformAttachment> DeformAcceleratorPool::GetDeformAttachment(DeformAccelerator& deformAccelerator)
@@ -163,7 +160,7 @@ namespace RenderCore { namespace Techniques
 		return deformAccelerator._attachment;
 	}
 
-	std::shared_ptr<IDeformParametersAttachment> DeformAcceleratorPool::GetDeformParametersAttachment(DeformAccelerator& deformAccelerator)
+	std::shared_ptr<IDeformUniformsAttachment> DeformAcceleratorPool::GetDeformParametersAttachment(DeformAccelerator& deformAccelerator)
 	{
 		return deformAccelerator._parametersAttachment;
 	}
@@ -305,13 +302,14 @@ namespace RenderCore { namespace Techniques
 				}
 
 				if (accelerator->_parametersAttachment) {
-					if (accelerator->_outputParameterValues.size() < accelerator->_parametersReservationPerInstance * (maxInstanceIdx+1))
-						accelerator->_outputParameterValues.resize(accelerator->_parametersReservationPerInstance * (maxInstanceIdx+1), 0u);
+					unsigned gpuBufferBytes = 0, cpuBufferBytes = 0;
+					accelerator->_parametersAttachment->ReserveBytesRequired(maxInstanceIdx+1, gpuBufferBytes, cpuBufferBytes);
+					if (accelerator->_outputParameterValues.size() < cpuBufferBytes)
+						accelerator->_outputParameterValues.resize(cpuBufferBytes, 0u);
 
 					accelerator->ExecuteParameters(
 						MakeIteratorRange(instanceList, &instanceList[instanceCount]),
-						MakeIteratorRange(accelerator->_outputParameterValues), 
-						accelerator->_parametersReservationPerInstance);
+						MakeIteratorRange(accelerator->_outputParameterValues));
 				}
 
 				++_readyInstancesMetrics._acceleratorsReadied;
@@ -377,10 +375,12 @@ namespace RenderCore { namespace Techniques
 
 		IteratorRange<const void*> GetOutputParameterState(DeformAccelerator& accelerator, unsigned instanceIdx)
 		{
-			assert(!accelerator._outputParameterValues.empty());
+			assert(0);
+			return {};
+			/*assert(!accelerator._outputParameterValues.empty());
 			return MakeIteratorRange(
 				PtrAdd(accelerator._outputParameterValues.data(), instanceIdx*accelerator._parametersReservationPerInstance),
-				PtrAdd(accelerator._outputParameterValues.data(), (instanceIdx+1)*accelerator._parametersReservationPerInstance));
+				PtrAdd(accelerator._outputParameterValues.data(), (instanceIdx+1)*accelerator._parametersReservationPerInstance));*/
 		}
 	}
 	

@@ -120,6 +120,14 @@ namespace RenderCore { namespace Assets
 		return {};
 	}
 
+	std::vector<uint64_t> MaterialScaffoldCmdStreamForm::GetMaterials() const
+	{
+		std::vector<uint64_t> result;
+		result.reserve(_materialMachines.size());
+		for (auto& c:_materialMachines) result.push_back(c.first);
+		return result;
+	}
+
 	StringSection<>		MaterialScaffoldCmdStreamForm::DehashMaterialName(MaterialGuid guid) const
 	{
 		if (!_resolvedNames) return {};

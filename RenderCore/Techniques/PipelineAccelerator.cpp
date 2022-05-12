@@ -1007,6 +1007,8 @@ namespace RenderCore { namespace Techniques
 				Throw(std::runtime_error(std::string{"Pipeline layout does not match the provided "} + descSetName + " layout. Slot type does not match for slot (" + std::to_string(s) + ")"));
 		}
 	}
+	
+	const DescriptorSetLayoutAndBinding* g_hack_matDescSetLayout = nullptr;
 
 	PipelineAcceleratorPool::PipelineAcceleratorPool(
 		const std::shared_ptr<IDevice>& device,
@@ -1025,6 +1027,8 @@ namespace RenderCore { namespace Techniques
 		#if defined(_DEBUG)
 			_boundThreadId = std::this_thread::get_id();
 		#endif
+
+		g_hack_matDescSetLayout = _matDescSetLayout.get();
 	}
 
 	PipelineAcceleratorPool::~PipelineAcceleratorPool() {}

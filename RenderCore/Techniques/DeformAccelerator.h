@@ -19,7 +19,7 @@ namespace RenderCore { namespace Techniques
 {
 	class DeformAccelerator;
 	class IDeformAttachment;
-	class IDeformParametersAttachment;
+	class IDeformUniformsAttachment;
 
 	class IDeformAcceleratorPool
 	{
@@ -31,10 +31,10 @@ namespace RenderCore { namespace Techniques
 
 		virtual void Attach(
 			DeformAccelerator& deformAccelerator,
-			std::shared_ptr<IDeformParametersAttachment> deformAttachment) = 0;
+			std::shared_ptr<IDeformUniformsAttachment> deformAttachment) = 0;
 
 		virtual std::shared_ptr<IDeformAttachment> GetDeformAttachment(DeformAccelerator& deformAccelerator) = 0;
-		virtual std::shared_ptr<IDeformParametersAttachment> GetDeformParametersAttachment(DeformAccelerator& deformAccelerator) = 0;
+		virtual std::shared_ptr<IDeformUniformsAttachment> GetDeformParametersAttachment(DeformAccelerator& deformAccelerator) = 0;
 
 		virtual void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) = 0;
 		virtual void ReadyInstances(IThreadContext&) = 0;
@@ -69,20 +69,27 @@ namespace RenderCore { namespace Techniques
 		virtual ~IDeformAttachment() = default;
 	};
 
-	class IDeformParametersAttachment
+	struct UniformDeformerToRendererBinding;
+	class IDeformUniformsAttachment
 	{
 	public:
-		struct Bindings
+		virtual void ReserveBytesRequired(unsigned instanceCount, unsigned& gpuBufferBytes, unsigned& cpuBufferBytes) = 0;
+		virtual void Execute(
+			IteratorRange<const unsigned*> instanceIdx,
+			IteratorRange<void*> dst) = 0;
+
+		virtual const UniformDeformerToRendererBinding& GetDeformerToRendererBinding() const;
+
+		/// 
+		struct InputValue
 		{
 			uint64_t _name;
 			ImpliedTyping::TypeDesc _type;
 			unsigned _offset;
 		};
-		virtual void SetInputParameters(unsigned instanceIdx, const Utility::ParameterBox& parameters) = 0;
-		virtual IteratorRange<const Bindings*> GetOutputParameterBindings() const = 0;
-		virtual unsigned GetOutputInstanceStride() const = 0;
-		virtual void Execute(IteratorRange<const unsigned*> instanceIdx, IteratorRange<void*> dst, unsigned outputInstanceStride) = 0;
-		virtual ~IDeformParametersAttachment() = default;
+		virtual void SetInputValues(unsigned instanceIdx, IteratorRange<const void*> data) = 0;
+		virtual IteratorRange<const InputValue*> GetInputValuesLayout() const = 0;
+		virtual ~IDeformUniformsAttachment() = default;
 	};
 
 	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device);
@@ -104,7 +111,8 @@ namespace RenderCore { namespace Techniques
 	namespace Internal
 	{
 		VertexBufferView GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceIdx);
-		IteratorRange<const void*> GetOutputParameterState(DeformAccelerator& accelerator, unsigned instanceIdx);
+		// IteratorRange<const void*> GetOutputParameterState(DeformAccelerator& accelerator, unsigned instanceIdx);
+		unsigned GetUniformPageBufferOffset(DeformAccelerator& accelerator, unsigned instanceIdx);
 	}
 
 }}

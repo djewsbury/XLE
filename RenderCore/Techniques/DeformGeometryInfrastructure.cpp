@@ -125,7 +125,7 @@ namespace RenderCore { namespace Techniques
 				if (lhs._geoIdx > rhs._geoIdx) return false;
 				if (lhs._elementIdx < rhs._elementIdx) return true;
 				if (lhs._elementIdx > rhs._elementIdx) return false;
-				return true;	// no preferential ordering from here
+				return false;	// no preferential ordering from here
 			});
 
 		struct PendingDeformerBind

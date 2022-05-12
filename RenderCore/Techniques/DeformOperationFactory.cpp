@@ -105,8 +105,8 @@ namespace RenderCore { namespace Techniques
 				std::vector<std::shared_ptr<IGeoDeformer>> newFinishedDeformers;
 				newFinishedDeformers.reserve(strongThis->_deformerMarkers.size());
 				for (auto& f:strongThis->_deformerMarkers) {
-					if (!f) continue;
-					newFinishedDeformers.push_back(f->ActualizeBkgrnd());
+					if (f) newFinishedDeformers.push_back(f->ActualizeBkgrnd());
+					else newFinishedDeformers.push_back(nullptr);
 				}
 				// After every one has been actualized correctly, move the pointer to the _deformers vector
 				for (unsigned c=0; c<newFinishedDeformers.size(); ++c) {

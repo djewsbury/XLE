@@ -338,7 +338,7 @@ namespace RenderCore { namespace Techniques
 				const std::shared_ptr<Assets::MaterialScaffoldCmdStreamForm>& materialScaffold,
 				uint64_t materialGuid,
 				Techniques::IDeformAcceleratorPool* deformAcceleratorPool,
-				const IDeformParametersAttachment* parametersDeformInfrastructure)
+				const IDeformUniformsAttachment* parametersDeformInfrastructure)
 			{
 				auto i = std::lower_bound(_drawableMaterials.begin(), _drawableMaterials.end(), materialGuid, [](const auto& q, uint64_t materialGuid) { return q._guid < materialGuid; });
 				if (i != _drawableMaterials.end() && i->_guid == materialGuid) {
@@ -486,7 +486,7 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const uint64_t*> currentMaterialAssignments;
 
 			RenderCore::Techniques::IGeoDeformerInfrastructure* geoDeformerInfrastructure = nullptr;
-			RenderCore::Techniques::IDeformParametersAttachment* deformParametersAttachment = nullptr;
+			RenderCore::Techniques::IDeformUniformsAttachment* deformParametersAttachment = nullptr;
 			DeformerToRendererBinding deformerBinding;
 			if (deformAcceleratorPool && deformAccelerator) { 
 				deformParametersAttachment = deformAcceleratorPool->GetDeformParametersAttachment(*deformAccelerator).get();
