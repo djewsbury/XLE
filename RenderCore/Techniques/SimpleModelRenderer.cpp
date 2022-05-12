@@ -389,40 +389,6 @@ namespace RenderCore { namespace Techniques
 			_geoDeformerInfrastructure = std::dynamic_pointer_cast<IGeoDeformerInfrastructure>(_deformAcceleratorPool->GetDeformAttachment(*_deformAccelerator));
 		}
 
-		auto externalSkeletonScaffold = construction->GetSkeletonScaffold();
-		if (externalSkeletonScaffold) {
-			// merge in the dep val from the skeleton scaffold
-			::Assets::DependencyValidationMarker depVals[] { _depVal, externalSkeletonScaffold->GetDependencyValidation() };
-			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
-		}
-
-		_elements.reserve(construction->GetElementCount());
-		for (auto ele:*construction) {
-			auto modelScaffold = ele.GetModelScaffold();
-			if (modelScaffold) {
-				const SkeletonMachine* localSkeleton = nullptr;
-				if (externalSkeletonScaffold)
-					localSkeleton = &externalSkeletonScaffold->GetSkeletonMachine();
-				if (!localSkeleton)
-					localSkeleton = modelScaffold->EmbeddedSkeleton();
-					
-				if (localSkeleton) {
-					Element ele;
-					ele._skeletonBinding = SkeletonBinding(
-						localSkeleton->GetOutputInterface(),
-						modelScaffold->FindCommandStreamInputInterface());
-					ele._baseTransformCount = localSkeleton->GetOutputMatrixCount();
-					ele._baseTransforms = std::make_unique<Float4x4[]>(ele._baseTransformCount);
-					localSkeleton->GenerateOutputTransforms(MakeIteratorRange(ele._baseTransforms.get(), ele._baseTransforms.get() + ele._baseTransformCount));
-					_elements.emplace_back(std::move(ele));
-				} else {
-					_elements.emplace_back(Element{});
-				}
-			} else {
-				_elements.emplace_back(Element{});
-			}
-		}
-
 		_usi = std::make_shared<UniformsStreamInterface>();
 		_usi->BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
 		_usi->BindImmediateData(1, Techniques::ObjectCB::DrawCallProperties);
@@ -437,6 +403,57 @@ namespace RenderCore { namespace Techniques
 		if (_geoDeformerInfrastructure) {
 			assert(_geoDeformerInfrastructure->GetCompletionCommandList().wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);	// future must be ready before we get here
 			_completionCmdList = std::max(_completionCmdList, _geoDeformerInfrastructure->GetCompletionCommandList().get());
+		}
+
+		// setup skeleton binding
+		auto externalSkeletonScaffold = construction->GetSkeletonScaffold();
+		if (externalSkeletonScaffold) {
+			// merge in the dep val from the skeleton scaffold
+			::Assets::DependencyValidationMarker depVals[] { _depVal, externalSkeletonScaffold->GetDependencyValidation() };
+			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
+		}
+
+		_elements.reserve(construction->GetElementCount());
+		for (auto ele:*construction) {
+			auto modelScaffold = ele.GetModelScaffold();
+			if (modelScaffold) {
+				const SkeletonMachine* primarySkeleton = &externalSkeletonScaffold->GetSkeletonMachine();
+				const SkeletonMachine* secondarySkeleton = modelScaffold->EmbeddedSkeleton();
+				
+				// support 2 skeletons -- in this way if there are nodes that are not matched to the external skeleton,
+				// we can drop back to the embedded skeleton. Since the embedded skeleton always comes from the model
+				// source file itself, it should always have the transforms we need
+				if (!primarySkeleton) {
+					primarySkeleton = secondarySkeleton;
+					secondarySkeleton = nullptr;
+				}
+					
+				if (primarySkeleton && secondarySkeleton) {
+					Element ele;
+					ele._skeletonBinding = SkeletonBinding(
+						primarySkeleton->GetOutputInterface(),
+						secondarySkeleton->GetOutputInterface(),
+						modelScaffold->FindCommandStreamInputInterface());
+					ele._baseTransformCount = primarySkeleton->GetOutputMatrixCount() + secondarySkeleton->GetOutputMatrixCount();
+					ele._baseTransforms = std::make_unique<Float4x4[]>(ele._baseTransformCount);
+					primarySkeleton->GenerateOutputTransforms(MakeIteratorRange(ele._baseTransforms.get(), ele._baseTransforms.get() + primarySkeleton->GetOutputMatrixCount()));
+					secondarySkeleton->GenerateOutputTransforms(MakeIteratorRange(ele._baseTransforms.get() + primarySkeleton->GetOutputMatrixCount(), ele._baseTransforms.get() + primarySkeleton->GetOutputMatrixCount() + secondarySkeleton->GetOutputMatrixCount()));
+					_elements.emplace_back(std::move(ele));
+				} else if (primarySkeleton) {
+					Element ele;
+					ele._skeletonBinding = SkeletonBinding(
+						primarySkeleton->GetOutputInterface(),
+						modelScaffold->FindCommandStreamInputInterface());
+					ele._baseTransformCount = primarySkeleton->GetOutputMatrixCount();
+					ele._baseTransforms = std::make_unique<Float4x4[]>(ele._baseTransformCount);
+					primarySkeleton->GenerateOutputTransforms(MakeIteratorRange(ele._baseTransforms.get(), ele._baseTransforms.get() + primarySkeleton->GetOutputMatrixCount()));
+					_elements.emplace_back(std::move(ele));
+				} else {
+					_elements.emplace_back(Element{});
+				}
+			} else {
+				_elements.emplace_back(Element{});
+			}
 		}
 
 		// Check to make sure we've got a skeleton binding for each referenced geo call to world referenced

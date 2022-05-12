@@ -45,12 +45,6 @@ namespace RenderCore { namespace Assets
 					break;
 				}
 			}
-
-			#if defined(_DEBUG)
-				// if (result[c] == ~unsigned(0x0)) {
-				//     LogWarning << "Couldn't bind skin matrix to transformation machine output.";
-				// }
-			#endif
 		}
 			
 		_modelJointIndexToMachineOutput = std::move(result);
@@ -69,12 +63,30 @@ namespace RenderCore { namespace Assets
 					break;
 				}
 			}
+		}
+			
+		_modelJointIndexToMachineOutput = std::move(result);
+	}
 
-			#if defined(_DEBUG)
-				// if (result[c] == ~unsigned(0x0)) {
-				//     LogWarning << "Couldn't bind skin matrix to transformation machine output.";
-				// }
-			#endif
+	SkeletonBinding::SkeletonBinding(   const SkeletonMachine::OutputInterface&		primaryOutput,
+										const SkeletonMachine::OutputInterface&		secondaryOutput,
+										IteratorRange<const uint64_t*> 				input)
+	{
+		std::vector<unsigned> result(input.size(), ~0u);
+
+		for (size_t c=0; c<input.size(); ++c) {
+			uint64_t name = input[c];
+			for (size_t c2=0; c2<primaryOutput._outputMatrixNameCount; ++c2)
+				if (primaryOutput._outputMatrixNames[c2] == name) {
+					result[c] = unsigned(c2);
+					break;
+				}
+			if (result[c] == ~0u)
+				for (size_t c2=0; c2<secondaryOutput._outputMatrixNameCount; ++c2)
+					if (secondaryOutput._outputMatrixNames[c2] == name) {
+						result[c] = unsigned(c2) + primaryOutput._outputMatrixNameCount;
+						break;
+					}
 		}
 			
 		_modelJointIndexToMachineOutput = std::move(result);
