@@ -127,12 +127,14 @@ namespace RenderCore { namespace Techniques
 			}
 
 			std::vector<std::shared_ptr<Assets::ModelScaffold>> _registeredScaffolds;
-			unsigned GetScaffoldIdx(const std::shared_ptr<Assets::ModelScaffold>& scaffold)
+			std::vector<std::string> _registeredScaffoldNames;
+			unsigned GetScaffoldIdx(const std::shared_ptr<Assets::ModelScaffold>& scaffold, const std::string& name)
 			{
 				auto i = std::find(_registeredScaffolds.begin(), _registeredScaffolds.end(), scaffold);
 				if (i != _registeredScaffolds.end())
 					return std::distance(_registeredScaffolds.begin(), i);
 				_registeredScaffolds.push_back(scaffold);
+				_registeredScaffoldNames.push_back(name);
 				return (unsigned)_registeredScaffolds.size()-1;
 			}
 
@@ -140,7 +142,8 @@ namespace RenderCore { namespace Techniques
 				IteratorRange<Assets::ScaffoldCmdIterator> geoMachine,
 				const std::shared_ptr<Assets::ModelScaffold>& scaffold,
 				const std::shared_ptr<DeformAccelerator>& deformAccelerator,
-				const DeformerToRendererBinding::GeoBinding* deformerBinding)
+				const DeformerToRendererBinding::GeoBinding* deformerBinding,
+				const std::string modelScaffoldName)
 			{
 				const Assets::RawGeometryDesc* rawGeometry = nullptr;
 				const Assets::SkinningDataDesc* skinningData = nullptr;
@@ -167,7 +170,7 @@ namespace RenderCore { namespace Techniques
 					// Build the main non-deformed vertex stream
 					auto drawableGeo = std::make_shared<Techniques::DrawableGeo>();
 					auto drawableGeoIdx = (unsigned)_geos.size();
-					auto scaffoldIdx = GetScaffoldIdx(scaffold);
+					auto scaffoldIdx = GetScaffoldIdx(scaffold, modelScaffoldName);
 
 					AddStaticLoadRequest(LoadBuffer::VB, DrawableStream::Vertex0, scaffoldIdx, drawableGeoIdx, rg._vb._offset, rg._vb._size);
 					drawableGeo->_vertexStreamCount = 1;
@@ -268,7 +271,7 @@ namespace RenderCore { namespace Techniques
 						MakeIteratorRange(localLoadRequests),
 						offset, _registeredScaffolds[start->_scaffoldIdx],
 						(start->_loadBuffer == LoadBuffer::IB) ? BindFlag::IndexBuffer : BindFlag::VertexBuffer,
-						"[vb]");
+						(StringMeld<128>() << "[vb]" << _registeredScaffoldNames[start->_scaffoldIdx]).AsStringSection());
 					pendingTransactions->_markers.emplace_back(std::move(transMarker));
 				}
 				_staticLoadRequests.clear();
@@ -487,7 +490,7 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<Assets::MaterialScaffold>& materialScaffold,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator,
-			unsigned elementIdx)
+			unsigned elementIdx, const std::string& modelScaffoldName)
 		{
 			_pendingDepVals.push_back(modelScaffold->GetDependencyValidation());
 			_pendingDepVals.push_back(materialScaffold->GetDependencyValidation());
@@ -545,7 +548,8 @@ namespace RenderCore { namespace Techniques
 							pendingGeoIdx = _pendingGeos.AddGeo(
 								geoMachine, modelScaffold,
 								deformAccelerator,
-								FindDeformerBinding(deformerBinding, elementIdx, geoCallDesc._geoId));
+								FindDeformerBinding(deformerBinding, elementIdx, geoCallDesc._geoId),
+								modelScaffoldName);
 							modelGeoIdToPendingGeoIndex.emplace_back(geoCallDesc._geoId, pendingGeoIdx);
 						} else {
 							pendingGeoIdx = i->second;
@@ -702,7 +706,10 @@ namespace RenderCore { namespace Techniques
 			auto modelScaffold = e.GetModelScaffold();
 			auto materialScaffold = e.GetMaterialScaffold();
 			if (modelScaffold && materialScaffold)
-				_pimpl->AddModel(modelScaffold, materialScaffold, deformAcceleratorPool, deformAccelerator, elementIdx);
+				_pimpl->AddModel(
+					modelScaffold, materialScaffold,
+					deformAcceleratorPool, deformAccelerator, 
+					elementIdx, e.GetModelScaffoldName());
 			++elementIdx;
 		}
 	}

@@ -505,15 +505,9 @@ namespace RenderCore { namespace Techniques
 		const ModelRendererConstruction& rendererConstruction)
 	{
 		// The default deform accelerators just contains a skinning deform operation
-		static std::shared_ptr<Internal::DeformerPipelineCollection> s_deformerPipelineCollection;
-		if (!s_deformerPipelineCollection)
-			s_deformerPipelineCollection = CreateGPUSkinPipelineCollection(
-				std::make_shared<PipelineCollection>(deformAcceleratorPool->GetDevice()));
-
 		auto deformerConstruction = std::make_shared<DeformerConstruction>();
-		ConfigureGPUSkinDeformers(
-			*deformerConstruction, rendererConstruction,
-			s_deformerPipelineCollection);
+		SkinDeformerSystem::GetInstance()->ConfigureGPUSkinDeformers(
+			*deformerConstruction, rendererConstruction);
 		if (deformerConstruction->IsEmpty()) return nullptr;
 
 		std::promise<std::shared_ptr<DeformerConstruction>> promise;

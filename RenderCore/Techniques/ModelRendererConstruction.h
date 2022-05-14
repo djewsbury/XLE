@@ -110,6 +110,7 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<Assets::MaterialScaffold> GetMaterialScaffold() const;
 			std::string GetModelScaffoldName() const;
 			std::string GetMaterialScaffoldName() const;
+			std::string GetElementName() const;
 			unsigned ElementId() const;
 		private:
 			Value();
@@ -119,6 +120,7 @@ namespace RenderCore { namespace Techniques
 			Iterator<ModelRendererConstruction::Internal::ModelScaffoldPtr> _mspi;
 			Iterator<ModelRendererConstruction::Internal::MaterialScaffoldMarker> _matsmi;
 			Iterator<ModelRendererConstruction::Internal::MaterialScaffoldPtr> _matspi;
+			Iterator<std::string> _ni;
 			unsigned _elementId = 0;
 			Internal* _internal = nullptr;
 			friend class ElementIterator;
@@ -136,6 +138,7 @@ namespace RenderCore { namespace Techniques
 		Value _value;
 		friend class ModelRendererConstruction;
 		bool IsEqual(const ElementIterator& other) const;
+		void UpdateElementIdx();
 	};
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

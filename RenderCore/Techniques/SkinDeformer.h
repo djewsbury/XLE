@@ -17,17 +17,24 @@ namespace RenderCore { namespace Techniques
 	class PipelineCollection;
 	namespace Internal { class DeformerPipelineCollection; }
 
-	void ConfigureCPUSkinDeformers(
-		DeformerConstruction&,
-		const ModelRendererConstruction&);
+	class SkinDeformerSystem
+	{
+	public:
+		void ConfigureCPUSkinDeformers(
+			DeformerConstruction&,
+			const ModelRendererConstruction&);
 
-	void ConfigureGPUSkinDeformers(
-		DeformerConstruction&,
-		const ModelRendererConstruction&,
-		std::shared_ptr<Internal::DeformerPipelineCollection>);
+		void ConfigureGPUSkinDeformers(
+			DeformerConstruction&,
+			const ModelRendererConstruction&);
 
-	std::shared_ptr<Internal::DeformerPipelineCollection> CreateGPUSkinPipelineCollection(
-		std::shared_ptr<PipelineCollection> pipelineCollection);
+		static SkinDeformerSystem* GetInstance();
+
+		SkinDeformerSystem(std::shared_ptr<PipelineCollection> pipelineCollection);
+		~SkinDeformerSystem();
+	protected:
+		std::shared_ptr<RenderCore::Techniques::Internal::DeformerPipelineCollection> _pipelineCollection;
+	};
 
 	class ISkinDeformer
 	{

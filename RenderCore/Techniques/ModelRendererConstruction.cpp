@@ -185,6 +185,7 @@ namespace RenderCore { namespace Techniques
 		result._value._mspi = _internal->_modelScaffoldPtrs.begin();
 		result._value._matsmi = _internal->_materialScaffoldMarkers.begin();
 		result._value._matspi = _internal->_materialScaffoldPtrs.begin();
+		result._value._ni = _internal->_names.begin();
 		result._value._elementId = 0;
 		result._value._internal = _internal.get();
 		return result;
@@ -197,6 +198,7 @@ namespace RenderCore { namespace Techniques
 		result._value._mspi = _internal->_modelScaffoldPtrs.end();
 		result._value._matsmi = _internal->_materialScaffoldMarkers.end();
 		result._value._matspi = _internal->_materialScaffoldPtrs.end();
+		result._value._ni = _internal->_names.end();
 		result._value._elementId = _internal->_elementCount;
 		result._value._internal = _internal.get();
 		return result;
@@ -205,13 +207,9 @@ namespace RenderCore { namespace Techniques
 	auto ModelRendererConstruction::GetElement(unsigned idx) const -> ElementIterator
 	{
 		assert(idx < _internal->_elementCount);
-		ElementIterator result;
-		result._value._msmi = _internal->_modelScaffoldMarkers.begin() + idx;
-		result._value._mspi = _internal->_modelScaffoldPtrs.begin() + idx;
-		result._value._matsmi = _internal->_materialScaffoldMarkers.begin() + idx;
-		result._value._matspi = _internal->_materialScaffoldPtrs.begin() + idx;
+		auto result = begin();
 		result._value._elementId = idx;
-		result._value._internal = _internal.get();
+		if (idx != 0) result.UpdateElementIdx();		// advances iterators to find the right element idx
 		return result;
 	}
 
@@ -240,15 +238,21 @@ namespace RenderCore { namespace Techniques
 
 	ModelRendererConstruction::ElementIterator& ModelRendererConstruction::ElementIterator::operator++()
 	{
-		assert(_value._internal);
 		++_value._elementId;
+		UpdateElementIdx();
+		return *this;
+	}
+
+	void ModelRendererConstruction::ElementIterator::UpdateElementIdx()
+	{
+		assert(_value._internal);
 		assert(_value._elementId <= _value._internal->_elementCount);
 		auto e = _value._elementId;
 		while (_value._msmi!=_value._internal->_modelScaffoldMarkers.end() && _value._msmi->first < e) ++_value._msmi;
 		while (_value._mspi!=_value._internal->_modelScaffoldPtrs.end() && _value._mspi->first < e) ++_value._mspi;
 		while (_value._matsmi!=_value._internal->_materialScaffoldMarkers.end() && _value._matsmi->first < e) ++_value._matsmi;
 		while (_value._matspi!=_value._internal->_materialScaffoldPtrs.end() && _value._matspi->first < e) ++_value._matspi;
-		return *this;
+		while (_value._ni!=_value._internal->_names.end() && _value._ni->first < e) ++_value._ni;
 	}
 
 	ModelRendererConstruction::ElementIterator::ElementIterator() = default;
@@ -279,11 +283,22 @@ namespace RenderCore { namespace Techniques
 
 	std::string ModelRendererConstruction::ElementIterator::Value::GetModelScaffoldName() const
 	{
+		if (_msmi!=_internal->_modelScaffoldMarkers.end() && _msmi->first == _elementId)
+			return _msmi->second->Initializer();
 		return {};
 	}
 
 	std::string ModelRendererConstruction::ElementIterator::Value::GetMaterialScaffoldName() const
 	{
+		if (_matsmi!=_internal->_materialScaffoldMarkers.end() && _matsmi->first == _elementId)
+			return _matsmi->second->Initializer();
+		return {};
+	}
+
+	std::string ModelRendererConstruction::ElementIterator::Value::GetElementName() const
+	{
+		if (_ni != _internal->_names.end() && _ni->first == _elementId)
+			return _ni->second;
 		return {};
 	}
 	

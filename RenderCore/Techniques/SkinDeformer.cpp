@@ -268,7 +268,7 @@ namespace RenderCore { namespace Techniques
 	{
 	}
 		
-	void ConfigureCPUSkinDeformers(
+	void SkinDeformerSystem::ConfigureCPUSkinDeformers(
 		DeformerConstruction& deformerConstruction,
 		const ModelRendererConstruction& rendererConstruction)
 	{
@@ -634,7 +634,14 @@ namespace RenderCore { namespace Techniques
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	std::shared_ptr<Internal::DeformerPipelineCollection> CreateGPUSkinPipelineCollection(
+	static ConsoleRig::WeakAttachablePtr<SkinDeformerSystem> s_skinDeformerSystem;
+
+	SkinDeformerSystem* SkinDeformerSystem::GetInstance()
+	{
+		return s_skinDeformerSystem.lock().get();
+	}
+	
+	SkinDeformerSystem::SkinDeformerSystem(
 		std::shared_ptr<PipelineCollection> pipelineCollection)
 	{
 		UniformsStreamInterface usi;
@@ -652,12 +659,15 @@ namespace RenderCore { namespace Techniques
 		ShaderSourceParser::InstantiationRequest instRequest { SKIN_COMPUTE_HLSL };
 		uint64_t patchExpansions[] { Hash64("PerformDeform"), Hash64("GetDeformInvocationParams") };
 
-		return std::make_shared<Internal::DeformerPipelineCollection>(
+		_pipelineCollection = std::make_shared<Internal::DeformerPipelineCollection>(
 			pipelineCollection,
 			SKIN_PIPELINE ":Main",
 			std::move(usi), std::move(pushConstantsUSI),
 			std::move(instRequest), MakeIteratorRange(patchExpansions));
+		_pipelineCollection->RegisterOnFrameBarrierCallback(Techniques::Services::GetSubFrameEvents());
 	}
+
+	SkinDeformerSystem::~SkinDeformerSystem() {}
 
 	static const Assets::SkinningDataDesc* FindSkinningData(IteratorRange<Assets::ScaffoldCmdIterator> machine)
 	{
@@ -675,10 +685,9 @@ namespace RenderCore { namespace Techniques
 		return nullptr;
 	}
 
-	void ConfigureGPUSkinDeformers(
+	void SkinDeformerSystem::ConfigureGPUSkinDeformers(
 		DeformerConstruction& deformerConstruction,
-		const ModelRendererConstruction& rendererConstruction,
-		std::shared_ptr<Internal::DeformerPipelineCollection> pipelineCollection)
+		const ModelRendererConstruction& rendererConstruction)
 	{
 		// We'll create one GPUSkinDeformer per element with skinned meshes. Each deformer will animate all of the meshes
 		// within that one element
@@ -717,7 +726,7 @@ namespace RenderCore { namespace Techniques
 
 			// create the deformer if necessary and add the instantiations we just find
 			if (!instantiations.empty()) {
-				auto deformer = std::make_shared<GPUSkinDeformer>(pipelineCollection, modelScaffold, ele.GetModelScaffoldName());
+				auto deformer = std::make_shared<GPUSkinDeformer>(_pipelineCollection, modelScaffold, ele.GetModelScaffoldName());
 				for (auto& inst:instantiations)
 					deformerConstruction.Add(deformer, std::move(inst.second), elementIdx, inst.first);
 			}

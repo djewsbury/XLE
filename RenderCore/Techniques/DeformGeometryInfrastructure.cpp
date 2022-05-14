@@ -133,6 +133,8 @@ namespace RenderCore { namespace Techniques
 		};
 		std::vector<PendingDeformerBind> pendingDeformerBinds;
 
+		std::set<std::string> uniqueScaffoldNames;
+
 		for (auto i=constructionEntries.begin(); i!=constructionEntries.end();) {
 			auto start = i;
 			++i;
@@ -160,6 +162,7 @@ namespace RenderCore { namespace Techniques
 				bufferIterators, isCPUDeformer.value(),
 				start->_geoIdx,
 				element->GetModelScaffold());
+			uniqueScaffoldNames.insert(element->GetModelScaffoldName());
 
 			result->_rendererGeoInterface._geoBindings.emplace_back(std::make_pair(start->_elementIdx, start->_geoIdx), std::move(rendererBinding));
 
@@ -191,13 +194,20 @@ namespace RenderCore { namespace Techniques
 
 		////////////////////////////////////////////////////////////////////////////////////
 
+		for (auto i=uniqueScaffoldNames.begin(); i!=uniqueScaffoldNames.end(); ++i)
+			if (i->empty()) { uniqueScaffoldNames.erase(i); break; }
+
 		if (!bufferIterators._gpuStaticDataLoadRequests.empty()) {
+			StringMeld<64> bufferName;
+			bufferName << "[deform]";
+			if (uniqueScaffoldNames.size() == 1) bufferName << *uniqueScaffoldNames.begin();		// could be coming from multiple scaffolds
+
 			BufferUploads::TransactionMarker transactionMarker; 
 			std::tie(result->_gpuStaticDataBuffer, transactionMarker) = LoadStaticResourcePartialAsync(
 				device,
 				{bufferIterators._gpuStaticDataLoadRequests.begin(), bufferIterators._gpuStaticDataLoadRequests.end()}, 
 				bufferIterators._bufferIterators[Internal::VB_GPUStaticData],
-				BindFlag::UnorderedAccess, "[deform]");
+				BindFlag::UnorderedAccess, bufferName.AsStringSection());
 			result->_gpuStaticDataBufferView = result->_gpuStaticDataBuffer->CreateBufferView(BindFlag::UnorderedAccess);
 
 			std::promise<BufferUploads::CommandListID> promise;
@@ -209,11 +219,15 @@ namespace RenderCore { namespace Techniques
 		}
 
 		if (bufferIterators._bufferIterators[Internal::VB_GPUDeformTemporaries]) {
+			StringMeld<64> bufferName;
+			bufferName << "[deform-t]";
+			if (uniqueScaffoldNames.size() == 1) bufferName << *uniqueScaffoldNames.begin();		// could be coming from multiple scaffolds
+
 			result->_gpuTemporariesBuffer = device.CreateResource(
 				RenderCore::CreateDesc(
 					BindFlag::UnorderedAccess, 0, GPUAccess::Read|GPUAccess::Write,
 					LinearBufferDesc::Create(bufferIterators._bufferIterators[Internal::VB_GPUDeformTemporaries]),
-					"[deform]"));
+					bufferName.AsStringSection()));
 			result->_gpuTemporariesBufferView = result->_gpuTemporariesBuffer->CreateBufferView(BindFlag::UnorderedAccess);
 		} else {
 			result->_gpuTemporariesBufferView = Techniques::Services::GetCommonResources()->_blackBufferUAV;

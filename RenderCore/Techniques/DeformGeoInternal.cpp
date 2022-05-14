@@ -4,6 +4,7 @@
 
 #include "DeformGeoInternal.h"
 #include "CompiledLayoutPool.h"
+#include "SubFrameEvents.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../IDevice.h"
 #include "../../Assets/Continuation.h"
@@ -151,6 +152,17 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			}
 	}
 
+	void DeformerPipelineCollection::RegisterOnFrameBarrierCallback(SubFrameEvents& subFrameEvents)
+	{
+		assert(_onFrameBarrierDelegate == ~0u && _subFrameEvents == nullptr);
+		_onFrameBarrierDelegate = subFrameEvents._onFrameBarrier.Bind(
+			[weakThis=weak_from_this()]() {
+				auto l = weakThis.lock();
+				if (l) l->OnFrameBarrier();
+			});
+		_subFrameEvents = &subFrameEvents;
+	}
+
 	void DeformerPipelineCollection::RebuildSharedResources()
 	{
 		_pendingCreateSharedResources = false;
@@ -193,6 +205,11 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		// Don't create the shared resources immediately here; because we can end up here very early during initialization,
 		// before the device second stage init. That's a problem because we call IDevice::CreatePipelineLayout
 	}
-	DeformerPipelineCollection::~DeformerPipelineCollection() {}
+
+	DeformerPipelineCollection::~DeformerPipelineCollection() 
+	{
+		if (_onFrameBarrierDelegate != ~0u && _subFrameEvents)
+			_subFrameEvents->_onFrameBarrier.Unbind(_onFrameBarrierDelegate);
+	}
 
 }}}

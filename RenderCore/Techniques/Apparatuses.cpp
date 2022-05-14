@@ -206,6 +206,9 @@ namespace RenderCore { namespace Techniques
 		_modelCompilers = ::Assets::DiscoverCompileOperations(compilers, "*Conversion.dll");
 
 		_textureCompilerRegistration = RenderCore::Assets::RegisterTextureCompiler(compilers);
+
+		_skinDeformerSystem = std::make_shared<SkinDeformerSystem>(
+			std::make_shared<PipelineCollection>(device));
 		
 		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
 		_prePresentBinding = subFrameEvents._onPrePresent.Bind(

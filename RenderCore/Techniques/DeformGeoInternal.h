@@ -29,6 +29,7 @@ namespace RenderCore { namespace Techniques
 	class ComputePipelineAndLayout;
 	class CompiledShaderPatchCollection;
 	class PipelineCollection;
+	class SubFrameEvents;
 }}
 
 namespace RenderCore { namespace Techniques 
@@ -159,7 +160,7 @@ namespace RenderCore { namespace Techniques
 			GPUDeformEntryHelper(const DeformerInputBinding& bindings, unsigned geoIdx);
 		};
 
-		class DeformerPipelineCollection
+		class DeformerPipelineCollection : public std::enable_shared_from_this<DeformerPipelineCollection>
 		{
 		public:
 			using PipelineMarkerPtr = std::shared_ptr<::Assets::Marker<ComputePipelineAndLayout>>;
@@ -168,6 +169,7 @@ namespace RenderCore { namespace Techniques
 			PipelineMarkerIdx GetPipeline(ParameterBox&& selectors);
 			void StallForPipeline();
 			void OnFrameBarrier();
+			void RegisterOnFrameBarrierCallback(SubFrameEvents&);
 			
 			struct PreparedSharedResources
 			{
@@ -198,6 +200,8 @@ namespace RenderCore { namespace Techniques
 			std::vector<uint64_t> _patchExpansions;
 			std::string _predefinedPipelineInitializer;
 			bool _pendingCreateSharedResources = true;
+			SignalDelegateId _onFrameBarrierDelegate = ~0u;
+			SubFrameEvents* _subFrameEvents = nullptr;
 			Threading::Mutex _mutex;
 
 			void RebuildSharedResources();

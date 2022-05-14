@@ -44,6 +44,7 @@ namespace RenderCore { namespace Techniques
 	class SubFrameEvents;
 	class DrawablesPacketPool;
 	class IUniformDelegateManager;
+	class SkinDeformerSystem;
 
 	/** <summary>Organizes the objects required for rendering operations, and manages their lifetimes</summary>
 	 * 
@@ -135,6 +136,7 @@ namespace RenderCore { namespace Techniques
 
 		ConsoleRig::AttachablePtr<Services> _techniqueServices;
 		ConsoleRig::AttachablePtr<::Assets::Services> _assetServices;
+		ConsoleRig::AttachablePtr<SkinDeformerSystem> _skinDeformerSystem;
 
 		PrimaryResourcesApparatus(std::shared_ptr<IDevice> device);
 		~PrimaryResourcesApparatus();
