@@ -33,12 +33,12 @@ namespace Sample
 		auto modelLayer = ToolsRig::CreateSimpleSceneLayer(
 			globals._immediateDrawingApparatus,
 			lightingEngineApparatus,
-			globals._primaryResourcesApparatus->_deformAccelerators);
+			globals._drawingApparatus->_deformAccelerators);
 
 		ToolsRig::ModelVisSettings visSettings {};
 		ToolsRig::Services::GetEntityMountingTree().MountDocument("cfg/lighting", EntityInterface::CreateTextEntityDocument("rawos/defaultenv.dat"));
 
-		auto scene = ToolsRig::MakeScene(pipelineAccelerators, globals._primaryResourcesApparatus->_deformAccelerators, visSettings);
+		auto scene = ToolsRig::MakeScene(pipelineAccelerators, globals._drawingApparatus->_deformAccelerators, visSettings);
 		modelLayer->Set(scene);
 		modelLayer->Set([]() { return ToolsRig::MakeLightingStateDelegate("cfg/lighting"); });
 		AddSystem(modelLayer);

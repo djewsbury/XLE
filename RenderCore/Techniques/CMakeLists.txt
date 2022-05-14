@@ -59,7 +59,6 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         SkinDeformer.h
         SubFrameEvents.h
         TechniqueDelegates.h
-        TechniqueMaterial.h
         Techniques.h
         TechniqueUtils.h
         Services.h

@@ -8,6 +8,7 @@
 #include "RenderStepFragments.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/TechniqueUtils.h"
+#include "../../Assets/DepVal.h"
 
 namespace RenderCore { namespace LightingEngine
 {

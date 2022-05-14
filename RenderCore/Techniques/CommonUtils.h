@@ -15,8 +15,9 @@
 #include <utility>
 
 namespace RenderCore { class IResource; class IDevice; class CompiledShaderByteCode; class StreamOutputInitializers; class ICompiledPipelineLayout; }
-namespace RenderCore { namespace Assets { class ModelScaffoldCmdStreamForm; class ModelScaffold; class MaterialScaffoldMaterial; class PredefinedDescriptorSetLayout; class ShaderPatchCollection; }}
+namespace RenderCore { namespace Assets { class ModelScaffoldCmdStreamForm; class ModelScaffold; class PredefinedDescriptorSetLayout; class ShaderPatchCollection; class RenderStateSet; }}
 namespace Assets { class IFileInterface; }
+namespace Utility { class ParameterBox; }
 
 namespace RenderCore { namespace Techniques {
 
@@ -82,7 +83,8 @@ namespace RenderCore { namespace Techniques {
 		CreatePipelineAccelerator(
 			IPipelineAcceleratorPool& pool,
 			const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& patchCollection,
-			const RenderCore::Assets::MaterialScaffoldMaterial& material,
+			const ParameterBox& materialSelectors,
+			const Assets::RenderStateSet& renderStateSet,
 			IteratorRange<const InputElementDesc*> inputLayout,
 			Topology topology = Topology::TriangleList);
 

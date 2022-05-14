@@ -26,6 +26,8 @@
 #include "../../../RenderCore/Assets/Services.h"
 #include "../../../RenderCore/Assets/MaterialScaffold.h"
 #include "../../../RenderCore/Assets/PredefinedCBLayout.h"
+#include "../../../RenderCore/Assets/RawMaterial.h"
+#include "../../../RenderCore/Assets/ScaffoldCmdStream.h"
 #include "../../../RenderCore/ResourceDesc.h"
 #include "../../../RenderCore/FrameBufferDesc.h"
 #include "../../../RenderCore/MinimalShaderSource.h"

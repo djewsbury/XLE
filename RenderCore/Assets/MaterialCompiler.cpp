@@ -24,9 +24,20 @@
 #include "../../Utility/Streams/StreamDOM.h"
 #include "../../Utility/Streams/StreamTypes.h"
 #include "../../Utility/StringFormat.h"
+#include "../../Utility/FastParseValue.h"
 
 namespace RenderCore { namespace Assets
 {
+	MaterialGuid MakeMaterialGuid(StringSection<> name)
+	{
+		//  If the material name is just a number, then we will use that
+		//  as the guid. Otherwise we hash the name.
+        MaterialGuid result = 0;
+		const char* parseEnd = FastParseValue(name, result);
+		if (parseEnd != name.end()) { result = Hash64(name.begin(), name.end()); }
+		return result;
+	}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static void AddDep(
@@ -131,7 +142,6 @@ namespace RenderCore { namespace Assets
 				materialFutures.reserve(modelMat._configurations.size());
 
 				for (const auto& cfg:modelMat._configurations) {
-					MaterialScaffold::Material resMat;
 					ShaderPatchCollection patchCollection;
 					std::basic_stringstream<::Assets::ResChar> resName;
 					auto guid = MakeMaterialGuid(MakeStringSection(cfg));

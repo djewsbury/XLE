@@ -94,7 +94,7 @@ namespace UnitTests
 			compile->StallWhilePending();
 			REQUIRE(compile->GetAssetState() == ::Assets::AssetState::Ready);
 
-			auto newScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::MaterialScaffoldCmdStreamForm>>(
+			auto newScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>(
 				*compile->GetArtifactCollection(targetCode));
 			auto material0 = newScaffold->GetMaterialMachine(Hash64("Material0"));
 			REQUIRE(!material0.empty());

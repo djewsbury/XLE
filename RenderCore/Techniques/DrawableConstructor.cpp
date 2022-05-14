@@ -14,6 +14,7 @@
 #include "../Assets/MaterialMachine.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/MaterialScaffold.h"
+#include "../Assets/RawMaterial.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/Streams/StreamFormatter.h"
@@ -337,7 +338,7 @@ namespace RenderCore { namespace Techniques
 
 			const WorkingMaterial* AddMaterial(
 				IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
-				const std::shared_ptr<Assets::MaterialScaffoldCmdStreamForm>& materialScaffold,
+				const std::shared_ptr<Assets::MaterialScaffold>& materialScaffold,
 				unsigned elementIdx, uint64_t materialGuid,
 				Techniques::IDeformAcceleratorPool* deformAcceleratorPool,
 				const IDeformUniformsAttachment* parametersDeformInfrastructure)
@@ -483,7 +484,7 @@ namespace RenderCore { namespace Techniques
 
 		void AddModel(
 			const std::shared_ptr<Assets::ModelScaffoldCmdStreamForm>& modelScaffold,
-			const std::shared_ptr<Assets::MaterialScaffoldCmdStreamForm>& materialScaffold,
+			const std::shared_ptr<Assets::MaterialScaffold>& materialScaffold,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator,
 			unsigned elementIdx)

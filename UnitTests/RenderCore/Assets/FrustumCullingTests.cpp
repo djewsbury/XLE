@@ -17,6 +17,7 @@
 #include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Techniques/SystemUniformsDelegate.h"
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
+#include "../../../RenderCore/Assets/RawMaterial.h"
 #include "../../../RenderCore/Format.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../Assets/AssetServices.h"

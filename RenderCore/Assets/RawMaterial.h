@@ -23,8 +23,6 @@ namespace Utility { class OutputStreamFormatter; }
 
 namespace RenderCore { namespace Assets
 {
-    using MaterialGuid = uint64_t;
-    
     #pragma pack(push)
 	#pragma pack(1)
 
@@ -225,8 +223,6 @@ namespace RenderCore { namespace Assets
     void ResolveMaterialFilename(
         ::Assets::ResChar resolvedFile[], unsigned resolvedFileCount,
         const ::Assets::DirectorySearchRules& searchRules, StringSection<char> baseMatName);
-
-	MaterialGuid MakeMaterialGuid(StringSection<utf8> name);
 
     inline RenderStateSet::RenderStateSet()
     {

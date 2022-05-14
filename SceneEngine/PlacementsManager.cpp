@@ -45,6 +45,7 @@
 #include "../Utility/Conversion.h"
 
 #include <random>
+#include <set>
 
 namespace SceneEngine
 {

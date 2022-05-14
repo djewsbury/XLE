@@ -130,7 +130,7 @@ namespace RenderCore { namespace Assets
 #endif
 
 	class ModelScaffoldCmdStreamForm;
-	class MaterialScaffoldCmdStreamForm;
+	class MaterialScaffold;
 	class SkeletonScaffold;
 
 	class RendererConstruction : public std::enable_shared_from_this<RendererConstruction>
@@ -143,10 +143,10 @@ namespace RenderCore { namespace Assets
 			ElementConstructor& SetModelAndMaterialScaffolds(StringSection<> model, StringSection<> material);
 			
 			ElementConstructor& SetModelScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>&);
-			ElementConstructor& SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<MaterialScaffoldCmdStreamForm>&);
+			ElementConstructor& SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<MaterialScaffold>&);
 			
 			ElementConstructor& SetModelScaffold(const std::shared_ptr<ModelScaffoldCmdStreamForm>&);
-			ElementConstructor& SetMaterialScaffold(const std::shared_ptr<MaterialScaffoldCmdStreamForm>&);
+			ElementConstructor& SetMaterialScaffold(const std::shared_ptr<MaterialScaffold>&);
 
 			ElementConstructor& SetRootTransform(const Float4x4&);
 
@@ -192,8 +192,8 @@ namespace RenderCore { namespace Assets
 		using ElementId = unsigned;
 		using ModelScaffoldMarker = ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>;
 		using ModelScaffoldPtr = std::shared_ptr<ModelScaffoldCmdStreamForm>;
-		using MaterialScaffoldMarker = ::Assets::PtrToMarkerPtr<MaterialScaffoldCmdStreamForm>;
-		using MaterialScaffoldPtr = std::shared_ptr<MaterialScaffoldCmdStreamForm>;
+		using MaterialScaffoldMarker = ::Assets::PtrToMarkerPtr<MaterialScaffold>;
+		using MaterialScaffoldPtr = std::shared_ptr<MaterialScaffold>;
 
 		std::vector<std::pair<ElementId, ModelScaffoldMarker>> _modelScaffoldMarkers;
 		std::vector<std::pair<ElementId, ModelScaffoldPtr>> _modelScaffoldPtrs;
@@ -220,7 +220,7 @@ namespace RenderCore { namespace Assets
 		{
 		public:
 			std::shared_ptr<ModelScaffoldCmdStreamForm> GetModelScaffold() const;
-			std::shared_ptr<MaterialScaffoldCmdStreamForm> GetMaterialScaffold() const;
+			std::shared_ptr<MaterialScaffold> GetMaterialScaffold() const;
 			std::string GetModelScaffoldName() const;
 			std::string GetMaterialScaffoldName() const;
 			unsigned ElementId() const;

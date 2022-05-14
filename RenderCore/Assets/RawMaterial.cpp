@@ -18,7 +18,6 @@
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Streams/FormatterUtils.h"
 #include "../../Utility/StringFormat.h"
-#include "../../Utility/FastParseValue.h"
 
 namespace RenderCore { namespace Assets
 {
@@ -604,16 +603,6 @@ namespace RenderCore { namespace Assets
         if (existing == deps.cend())
             deps.push_back(depState);
     }
-
-	MaterialGuid MakeMaterialGuid(StringSection<> name)
-	{
-		//  If the material name is just a number, then we will use that
-		//  as the guid. Otherwise we hash the name.
-        MaterialGuid result = 0;
-		const char* parseEnd = FastParseValue(name, result);
-		if (parseEnd != name.end()) { result = Hash64(name.begin(), name.end()); }
-		return result;
-	}
 
 }}
 

@@ -7,6 +7,8 @@
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
+#include "../../RenderCore/Assets/RawMaterial.h"
+#include "../../RenderCore/Assets/ScaffoldCmdStream.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/UniformsStream.h"
 #include "../../Math/Matrix.h"

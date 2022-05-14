@@ -198,7 +198,7 @@ namespace ToolsRig
 #if 0
 			auto mat = _material;
 			if (!mat)
-				mat = std::make_shared<RenderCore::Assets::MaterialScaffoldMaterial>();
+				mat = std::make_shared<RenderCore::Assets::RawMaterial>();
 
 			std::weak_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> weakPipelineAcceleratorPool = _pipelineAcceleratorPool;
 
@@ -232,7 +232,7 @@ namespace ToolsRig
 		MaterialVisualizationScene(
 			const MaterialVisSettings& settings,
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-			const std::shared_ptr<RenderCore::Assets::MaterialScaffoldMaterial>& material)
+			const std::shared_ptr<RenderCore::Assets::RawMaterial>& material)
         : _settings(settings)
 		, _visGeo(*pipelineAcceleratorPool->GetDevice())
 		{
@@ -253,7 +253,7 @@ namespace ToolsRig
 		struct PendingPipeline
 		{
 			::Assets::DependencyValidation		_depVal;
-			std::shared_ptr<RenderCore::Assets::MaterialScaffoldMaterial> _material;
+			std::shared_ptr<RenderCore::Assets::RawMaterial> _material;
 			std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _pipelineAccelerator;
 			::Assets::PtrToMarkerPtr<RenderCore::Techniques::DescriptorSetAccelerator> _descriptorSet;
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
@@ -265,13 +265,13 @@ namespace ToolsRig
 		CachedVisGeo _visGeo;
 
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
-		std::shared_ptr<RenderCore::Assets::MaterialScaffoldMaterial> _material;
+		std::shared_ptr<RenderCore::Assets::RawMaterial> _material;
     };
 
 	std::shared_ptr<SceneEngine::IScene> MakeScene(
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const MaterialVisSettings& visObject,
-		const std::shared_ptr<RenderCore::Assets::MaterialScaffoldMaterial>& material)
+		const std::shared_ptr<RenderCore::Assets::RawMaterial>& material)
 	{
 		return std::make_shared<MaterialVisualizationScene>(visObject, pipelineAcceleratorPool, material);
 	}

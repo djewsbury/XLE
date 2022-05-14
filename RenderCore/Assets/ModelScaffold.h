@@ -21,7 +21,6 @@ namespace RenderCore { namespace Assets
 	class ModelCommandStream;
 	class SkeletonMachine;
 	
-	class MaterialScaffold;
 	class ModelSupplementScaffold;
 
 	class AnimationImmutableData;

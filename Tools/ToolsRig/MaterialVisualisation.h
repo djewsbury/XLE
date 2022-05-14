@@ -15,7 +15,7 @@ namespace std { template<typename R> class future; }
 
 namespace SceneEngine { class IScene; }
 namespace RenderCore { namespace Techniques { class ITechniqueDelegate; class IPipelineAcceleratorPool; class CompiledShaderPatchCollection; }}
-namespace RenderCore { namespace Assets { class MaterialScaffoldMaterial; }}
+namespace RenderCore { namespace Assets { class RawMaterial; }}
 namespace GraphLanguage { class INodeGraphProvider; class NodeGraph; class NodeGraphSignature; }
 namespace ShaderSourceParser { class PreviewOptions; }
 namespace OSServices { class OnChangeCallback; }
@@ -32,7 +32,7 @@ namespace ToolsRig
 	std::shared_ptr<SceneEngine::IScene> MakeScene(
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const MaterialVisSettings& visObject, 
-		const std::shared_ptr<RenderCore::Assets::MaterialScaffoldMaterial>& material = nullptr);
+		const std::shared_ptr<RenderCore::Assets::RawMaterial>& material = nullptr);
 
 	class OnChangeCallback
     {

@@ -36,7 +36,7 @@ namespace RenderCore { namespace Assets
 		_internal->_disableHash = true;
 		return *this;
 	}
-	auto RendererConstruction::ElementConstructor::SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<MaterialScaffoldCmdStreamForm>& scaffoldMarker) -> ElementConstructor&
+	auto RendererConstruction::ElementConstructor::SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<MaterialScaffold>& scaffoldMarker) -> ElementConstructor&
 	{ 
 		assert(_internal && !_internal->_sealed);
 		auto i = LowerBound(_internal->_materialScaffoldMarkers, _elementId);
@@ -58,7 +58,7 @@ namespace RenderCore { namespace Assets
 		_internal->_disableHash = true;
 		return *this; 
 	}
-	auto RendererConstruction::ElementConstructor::SetMaterialScaffold(const std::shared_ptr<MaterialScaffoldCmdStreamForm>& scaffoldPtr) -> ElementConstructor&
+	auto RendererConstruction::ElementConstructor::SetMaterialScaffold(const std::shared_ptr<MaterialScaffold>& scaffoldPtr) -> ElementConstructor&
 	{
 		assert(_internal && !_internal->_sealed);
 		auto i = LowerBound(_internal->_materialScaffoldPtrs, _elementId);
@@ -265,7 +265,7 @@ namespace RenderCore { namespace Assets
 		return nullptr;
 	}
 
-	std::shared_ptr<MaterialScaffoldCmdStreamForm> RendererConstruction::ElementIterator::Value::GetMaterialScaffold() const
+	std::shared_ptr<MaterialScaffold> RendererConstruction::ElementIterator::Value::GetMaterialScaffold() const
 	{
 		assert(_internal);
 		if (_matspi!=_internal->_materialScaffoldPtrs.end() && _matspi->first == _elementId)

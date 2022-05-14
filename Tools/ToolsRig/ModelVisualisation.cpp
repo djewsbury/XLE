@@ -26,7 +26,7 @@
 namespace ToolsRig
 {
 	using RenderCore::Assets::ModelScaffoldCmdStreamForm;
-    using RenderCore::Assets::MaterialScaffoldCmdStreamForm;
+    using RenderCore::Assets::MaterialScaffold;
 	using RenderCore::Assets::AnimationSetScaffold;
 	using RenderCore::Assets::SkeletonScaffold;
     using RenderCore::Assets::SkeletonMachine;

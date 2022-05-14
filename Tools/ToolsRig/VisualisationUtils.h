@@ -26,7 +26,6 @@ namespace RenderCore { namespace Techniques
     class DrawingApparatus;
 }}
 namespace RenderCore { namespace LightingEngine { class LightingEngineApparatus; }}
-namespace RenderCore { namespace Assets { class MaterialScaffoldMaterial; }}
 namespace RenderOverlays { class IOverlayContext; struct Rect; }
 namespace OSServices { class OnChangeCallback; }
 namespace SceneEngine { class IScene; class ILightingStateDelegate; class IRenderStep; }

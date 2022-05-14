@@ -72,7 +72,7 @@ namespace UnitTests
 				Log(Warning) << "Data: " << cmd.BlockSize() << std::endl;
 			}
 
-			auto materialScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::MaterialScaffoldCmdStreamForm>>(
+			auto materialScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>(
 				*materialCompile->GetArtifactCollection(RenderCore::Assets::MaterialScaffold::CompileProcessType));
 
 			SECTION("Create RendererConstruction")

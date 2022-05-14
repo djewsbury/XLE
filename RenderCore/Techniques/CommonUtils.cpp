@@ -284,13 +284,12 @@ namespace RenderCore { namespace Techniques
 		CreatePipelineAccelerator(
 			IPipelineAcceleratorPool& pool,
 			const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& patchCollection,
-			const RenderCore::Assets::MaterialScaffoldMaterial& material,
+			const ParameterBox& materialSelectors,
+			const Assets::RenderStateSet& renderStateSet,
 			IteratorRange<const RenderCore::InputElementDesc*> inputLayout,
 			Topology topology)
 	{
 		::Assets::PtrToMarkerPtr<DescriptorSetAccelerator> descriptorSetAccelerator;
-
-		auto matSelectors = material._matParams;
 
 		/*if (patchCollection) {
 			const auto* descriptorSetLayout = patchCollection->GetInterface().GetMaterialDescriptorSet().get();
@@ -314,10 +313,10 @@ namespace RenderCore { namespace Techniques
 
 		auto pipelineAccelerator = pool.CreatePipelineAccelerator(
 			patchCollection,
-			matSelectors,
+			materialSelectors,
 			inputLayout,
 			topology,
-			material._stateSet);
+			renderStateSet);
 
 		return std::make_pair(pipelineAccelerator, descriptorSetAccelerator);
 	}

@@ -19,7 +19,7 @@ namespace RenderCore { namespace Techniques
         std::vector<std::pair<uint64_t, BoundingBox>> _boundingBoxes;
 
         ::Assets::AssetHeapLRU<std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm>>		_modelScaffolds;
-        ::Assets::AssetHeapLRU<std::shared_ptr<RenderCore::Assets::MaterialScaffoldCmdStreamForm>>	_materialScaffolds;
+        ::Assets::AssetHeapLRU<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>	_materialScaffolds;
         FrameByFrameLRUHeap<std::shared_ptr<::Assets::MarkerPtr<SimpleModelRenderer>>> _modelRenderers;
 		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
         std::shared_ptr<IDeformAcceleratorPool> _deformAcceleratorPool;
@@ -77,7 +77,7 @@ namespace RenderCore { namespace Techniques
 		return _pimpl->_modelScaffolds.Get(name);
 	}
 
-	auto ModelCache::GetMaterialScaffold(StringSection<ResChar> materialName, StringSection<ResChar> modelName) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffoldCmdStreamForm>
+	auto ModelCache::GetMaterialScaffold(StringSection<ResChar> materialName, StringSection<ResChar> modelName) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>
 	{
 		return _pimpl->_materialScaffolds.Get(materialName, modelName);
 	}

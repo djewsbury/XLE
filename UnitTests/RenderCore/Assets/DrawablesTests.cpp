@@ -20,6 +20,7 @@
 #include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
 #include "../../../RenderCore/Assets/TextureLoaders.h"
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
+#include "../../../RenderCore/Assets/RawMaterial.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../RenderCore/Format.h"
 #include "../../../Assets/AssetServices.h"

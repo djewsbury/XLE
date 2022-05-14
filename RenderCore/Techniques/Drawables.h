@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include "../Assets/MaterialScaffold.h"		// used by DrawableMaterial below
 #include "../IDevice.h"
+#include "../StateDesc.h"
 #include "../../Math/Matrix.h"
 #include "../../Utility/VariantUtils.h"
 #include "../../Utility/IteratorUtils.h"
@@ -15,8 +15,8 @@
 #include <string>
 
 namespace Utility { class ParameterBox; }
-namespace RenderCore { class IThreadContext; class MiniInputElementDesc; class UniformsStreamInterface; class UniformsStream; class DescriptorSetSignature; }
-namespace RenderCore { namespace Assets { class MaterialScaffoldMaterial; class ShaderPatchCollection; class PredefinedDescriptorSetLayout; } }
+namespace RenderCore { class IThreadContext; class MiniInputElementDesc; class InputElementDesc; class UniformsStreamInterface; class UniformsStream; class DescriptorSetSignature; }
+namespace RenderCore { namespace Assets { class ShaderPatchCollection; class PredefinedDescriptorSetLayout; } }
 namespace Assets { class IAsyncMarker; }
 
 namespace RenderCore { namespace Techniques
@@ -193,11 +193,4 @@ namespace RenderCore { namespace Techniques
 		};
 		using BitField = unsigned;
 	}
-
-	class DrawableMaterial
-	{
-	public:
-		RenderCore::Assets::MaterialScaffoldMaterial _material;
-		std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> _patchCollection;
-	};
 }}
