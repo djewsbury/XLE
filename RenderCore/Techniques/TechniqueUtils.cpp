@@ -257,27 +257,7 @@ namespace RenderCore { namespace Techniques
 
 	IUniformBufferDelegate::~IUniformBufferDelegate() {}
 	IShaderResourceDelegate::~IShaderResourceDelegate() {}
-	IMaterialDelegate::~IMaterialDelegate() {}
     IUniformDelegateManager::~IUniformDelegateManager() {}
-
-	Metal::ShaderProgram* ITechniqueDelegate_Old::GetShader(
-		ParsingContext& context,
-		const ParameterBox* shaderSelectors[],
-		const DrawableMaterial& material)
-	{
-		Throw(std::runtime_error("This variation of GetShader() not implemented for this technique delegate"));
-	}
-
-	RenderCore::Metal::ShaderProgram* ITechniqueDelegate_Old::GetShader(
-		ParsingContext& context,
-		const ParameterBox* shaderSelectors[],
-		const DrawableMaterial& material,
-		unsigned techniqueIndex)
-	{
-		return GetShader(context, shaderSelectors, material);
-	}
-
-	ITechniqueDelegate_Old::~ITechniqueDelegate_Old() {}
 
 	void SetGeoSelectors(ParameterBox& geoParameters, IteratorRange<const InputElementDesc*> ia)
 	{

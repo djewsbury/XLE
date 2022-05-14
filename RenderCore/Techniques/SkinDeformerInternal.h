@@ -87,9 +87,6 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const Float4x4*>	skeletonMachineResult) const;
 	};
 
-    class PipelineCollection;
-    struct ComputePipelineAndLayout;
-	class CompiledShaderPatchCollection;
 	namespace Internal { struct GPUDeformerIAParams; class DeformerPipelineCollection; }
 
 	class GPUSkinDeformer : public IGeoDeformer, public ISkinDeformer

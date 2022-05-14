@@ -10,6 +10,7 @@
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
 #include "../Metal/Resource.h"
+#include "../Vulkan/Metal/CmdListAttachedStorage.h"		// todo -- this must become a GFX independant interface
 #include "../IDevice.h"
 #include "../BufferView.h"
 #include "../../Assets/IFileSystem.h"
@@ -18,8 +19,6 @@
 #include "../../Utility/ArithmeticUtils.h"
 #include "../../Utility/BitUtils.h"
 #include <vector>
-
-#include "../Vulkan/Metal/CmdListAttachedStorage.h"
 
 namespace RenderCore { namespace Techniques
 {

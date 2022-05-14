@@ -17,7 +17,6 @@
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/DrawableDelegates.h"
-#include "../RenderCore/Techniques/BasicDelegates.h"
 #include "../RenderCore/Techniques/RenderPass.h"
 #include "../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../RenderCore/Techniques/PipelineAccelerator.h"

@@ -18,7 +18,6 @@ namespace BufferUploads { class IManager; }
 
 namespace RenderCore { namespace Techniques
 {
-	class DeformOperationFactorySet;
 	class CommonResourceBox;
 	class SubFrameEvents;
 
@@ -26,7 +25,6 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		static BufferUploads::IManager& GetBufferUploads() { return *GetInstance()._bufferUploads; }
-		static DeformOperationFactorySet& GetDeformOperationFactorySet() { assert(GetInstance()._deformOpsFactory); return *GetInstance()._deformOpsFactory; }
 		static RenderCore::IDevice& GetDevice() { return *GetInstance()._device; }
 		static std::shared_ptr<RenderCore::IDevice> GetDevicePtr() { return GetInstance()._device; }
 		static std::shared_ptr<CommonResourceBox> GetCommonResources() { return GetInstance()._commonResources; }
@@ -55,7 +53,6 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
 		std::shared_ptr<CommonResourceBox> _commonResources;
 		std::shared_ptr<SubFrameEvents> _subFrameEvents;
-		std::shared_ptr<DeformOperationFactorySet> _deformOpsFactory;
 
 		class Pimpl;
 		std::unique_ptr<Pimpl> _pimpl;

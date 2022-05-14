@@ -72,38 +72,4 @@ namespace RenderCore { namespace Techniques
 
     std::shared_ptr<IUniformDelegateManager> CreateUniformDelegateManager();
 
-    XLE_DEPRECATED_ATTRIBUTE class IMaterialDelegate
-    {
-    public:
-        virtual UniformsStreamInterface GetInterface(const void* objectContext) const = 0;
-        virtual uint64_t GetInterfaceHash(const void* objectContext) const = 0;
-		virtual const ParameterBox* GetShaderSelectors(const void* objectContext) const = 0;
-        virtual void ApplyUniforms(
-            ParsingContext& context,
-            Metal::DeviceContext& devContext,
-            const Metal::BoundUniforms& boundUniforms,
-            unsigned streamIdx,
-            const void* objectContext) const = 0;
-        virtual ~IMaterialDelegate();
-    };
-
-	class DrawableMaterial;
-
-	XLE_DEPRECATED_ATTRIBUTE class ITechniqueDelegate_Old
-	{
-	public:
-		virtual Metal::ShaderProgram* GetShader(
-			ParsingContext& context,
-			const ParameterBox* shaderSelectors[],		// SelectorStages::Max
-			const DrawableMaterial& material);
-
-		virtual RenderCore::Metal::ShaderProgram* GetShader(
-			ParsingContext& context,
-			const ParameterBox* shaderSelectors[],		// SelectorStages::Max
-			const DrawableMaterial& material,
-			unsigned techniqueIndex);
-
-		virtual ~ITechniqueDelegate_Old();
-	};
-
 }}

@@ -17,7 +17,7 @@ namespace RenderCore { namespace Techniques
 	{
 		uint64_t _name;
 		ImpliedTyping::TypeDesc _type;
-		unsigned _offset;
+		unsigned _instanceValuesOffset;		// offset 
 	};
 	
 	void ConfigureDeformUniformsAttachment(
@@ -26,16 +26,6 @@ namespace RenderCore { namespace Techniques
 		RenderCore::Techniques::ICompiledLayoutPool& compiledLayoutPool,
 		IteratorRange<const AnimatedUniform*> animatedUniforms,
 		IteratorRange<const void*> defaultInstanceData);
-
-	class ActualizedDescriptorSet;
-	namespace Internal
-	{
-		inline unsigned GetDynamicPageResourceSize(const ActualizedDescriptorSet& descSet); // { return descSet._dynamicPageBufferSize; }
-		bool PrepareDynamicPageResource(
-			const ActualizedDescriptorSet& descSet,
-			IteratorRange<const void*> animatedParameters,
-			IteratorRange<void*> dynamicPageBuffer);
-	}
 
 	struct UniformDeformerToRendererBinding
 	{

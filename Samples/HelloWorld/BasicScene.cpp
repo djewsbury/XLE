@@ -30,7 +30,6 @@
 #include "../../Math/Transformations.h"
 #include "../../Utility/Streams/PathUtils.h"
 
-#include "../../RenderCore/Techniques/BasicDelegates.h"
 #include "../../RenderCore/Metal/State.h"
 #include "../../RenderCore/Techniques/SkinDeformer.h"
 #include "../../RenderCore/Techniques/DeformOperationFactory.h"

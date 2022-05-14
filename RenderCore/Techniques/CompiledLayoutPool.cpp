@@ -13,6 +13,7 @@
 #include "../UniformsStream.h"
 #include "../../Assets/AssetHeap.h"
 #include "../../Assets/Assets.h"
+#include "../../Utility/Threading/Mutex.h"
 
 namespace RenderCore { namespace Techniques
 {
@@ -42,22 +43,32 @@ namespace RenderCore { namespace Techniques
 
 		std::vector<std::pair<uint64_t, ::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection>>> _compiledPatchCollections;
 		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> _defaultCompiledPatchCollection;
+
+		Threading::Mutex _lock;
 	};
 
 	::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> CompiledLayoutPool::GetPatchCollectionFuture(
 		const Assets::ShaderPatchCollection& shaderPatchCollection)
 	{
-		auto hash = shaderPatchCollection.GetHash();
-		auto i = LowerBound(_compiledPatchCollections, hash);
-		if (i!= _compiledPatchCollections.end() && i->first == hash) {
-			if (!::Assets::IsInvalidated(*i->second))
-				return i->second;
-		} else {
-			i = _compiledPatchCollections.insert(i, std::make_pair(hash, nullptr));
+		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> result;
+		{
+			ScopedLock(_lock);
+			auto hash = shaderPatchCollection.GetHash();
+			auto i = LowerBound(_compiledPatchCollections, hash);
+			if (i!= _compiledPatchCollections.end() && i->first == hash) {
+				if (!::Assets::IsInvalidated(*i->second))
+					return i->second;
+			} else {
+				i = _compiledPatchCollections.insert(i, std::make_pair(hash, nullptr));
+			}
+
+			result = i->second = std::make_shared<::Assets::MarkerPtr<CompiledShaderPatchCollection>>();
 		}
 
-		i->second = ::Assets::MakeFuturePtr<CompiledShaderPatchCollection>(shaderPatchCollection, *_matDescSetLayout);
-		return i->second;
+		// Call AutoConstructToPromise outside of the lock. Note that this opens the door to other threads
+		// using the marker before we even initialize the promise like this
+		::Assets::AutoConstructToPromise(result->AdoptPromise(), shaderPatchCollection, std::ref(*_matDescSetLayout));
+		return result;
 	}
 
 	::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> CompiledLayoutPool::GetDefaultPatchCollectionFuture()

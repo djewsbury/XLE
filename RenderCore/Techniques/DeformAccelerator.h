@@ -75,16 +75,17 @@ namespace RenderCore { namespace Techniques
 	class IDeformUniformsAttachment
 	{
 	public:
+		/// interface for clients for providing animation state data & initializing renderers
+		virtual void SetInputValues(unsigned instanceIdx, IteratorRange<const void*> data) = 0;
+		virtual IteratorRange<const AnimatedUniform*> GetInputValuesLayout() const = 0;
+		virtual const UniformDeformerToRendererBinding& GetDeformerToRendererBinding() const = 0;
+
+		// interface used by IDeformAcceleratorPool to manage this attachment
 		virtual void ReserveBytesRequired(unsigned instanceCount, unsigned& gpuBufferBytes, unsigned& cpuBufferBytes) = 0;
 		virtual void Execute(
 			IteratorRange<const unsigned*> instanceIdx,
 			IteratorRange<void*> dst) = 0;
 
-		virtual const UniformDeformerToRendererBinding& GetDeformerToRendererBinding() const = 0;
-
-		/// 
-		virtual void SetInputValues(unsigned instanceIdx, IteratorRange<const void*> data) = 0;
-		virtual IteratorRange<const AnimatedUniform*> GetInputValuesLayout() const = 0;
 		virtual ~IDeformUniformsAttachment() = default;
 	};
 

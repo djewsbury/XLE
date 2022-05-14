@@ -10,7 +10,6 @@
 #include "PipelineAcceleratorInternal.h"
 #include "DescriptorSetAccelerator.h"
 #include "DeformAccelerator.h"
-#include "BasicDelegates.h"
 #include "CommonUtils.h"
 #include "CommonResources.h"
 #include "CompiledShaderPatchCollection.h"		// for DescriptorSetLayoutAndBinding
@@ -29,106 +28,68 @@ namespace RenderCore { namespace Techniques
 {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class RealExecuteDrawableContext
-	{
-	public:
-		Metal::DeviceContext*				_metalContext;
-		Metal::GraphicsEncoder_Optimized*	_encoder;
-		const Metal::GraphicsPipeline*		_pipeline;
-		const Metal::BoundUniforms*			_boundUniforms;
-	};
-
-	struct TemporaryStorageLocator
-	{
-		IResource* _res = nullptr;
-		size_t _begin = 0, _end = 0;
-	};
-
 	constexpr unsigned s_uniformGroupSequencer = 0;
 	constexpr unsigned s_uniformGroupMaterial = 1;
 	constexpr unsigned s_uniformGroupDraw = 2;
 	static const auto s_materialDescSetName = Hash64("Material");
 
-	struct PreStalledResources
-	{
-		std::vector<std::shared_ptr<::Assets::Marker<IPipelineAcceleratorPool::Pipeline>>> _pendingPipelineMarkers;
-		std::vector<std::shared_ptr<::Assets::Marker<ActualizedDescriptorSet>>> _pendingDescriptorSetMarkers;
-
-		void Setup(const IPipelineAcceleratorPool& pipelineAccelerators, const SequencerConfig& sequencerConfig, const DrawablesPacket& drawablePkt)
-		{
-			_pendingPipelineMarkers.resize(drawablePkt._drawables.size());
-			_pendingDescriptorSetMarkers.resize(drawablePkt._drawables.size());
-
-			bool stallOnMarkers = false;
-			unsigned idx=0;
-			PipelineAccelerator* lastPipelineAccelerator = nullptr;
-			for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d, ++idx) {
-				const auto& drawable = *(Drawable*)d.get();
-				if (drawable._pipeline.get() != lastPipelineAccelerator) {
-					auto* pipeline = pipelineAccelerators.TryGetPipeline(*drawable._pipeline, sequencerConfig);
-					if (!pipeline) {
-						_pendingPipelineMarkers[idx] = pipelineAccelerators.GetPipelineMarker(*drawable._pipeline, sequencerConfig);
-						stallOnMarkers = true;
-					}
-					lastPipelineAccelerator = drawable._pipeline.get();
-				}
-				if (drawable._descriptorSet) {
-					auto* actualizedDescSet = pipelineAccelerators.TryGetDescriptorSet(*drawable._descriptorSet);
-					if (!actualizedDescSet) {
-						_pendingDescriptorSetMarkers[idx] = pipelineAccelerators.GetDescriptorSetMarker(*drawable._descriptorSet);
-						stallOnMarkers = true;
-					}
-				}
-			}
-
-			// we should avoid being in the lock while stalling for these resources -- since this can lock up other threads
-			pipelineAccelerators.UnlockForReading();
-			for (const auto& c:_pendingPipelineMarkers) if (c) c->StallWhilePending();
-			for (const auto& c:_pendingDescriptorSetMarkers) if (c) c->StallWhilePending();
-			pipelineAccelerators.LockForReading();
-		}
-	};
-
-#if 0
-	struct DynamicPageResourceHelper
-	{
-		RenderCore::Metal_Vulkan::TemporaryStorageResourceMap _dynamicPageResourceWorkingAllocation;
-		unsigned _dynamicPageResourceAlignment = 16u;
-		unsigned _dynamicPageMovingGPUOffset = 0, _dynamicPageMovingGPUEnd = 0;
-		IDeformAcceleratorPool* _deformAccelerators = nullptr;
-
-		void AllocateSpace(unsigned sizeBytes)
-		{
-			// if it fits in the existing block, go with that; otherwise allocate a new block
-			unsigned preAlign = CeilToMultiple((size_t)_dynamicPageMovingGPUOffset, _dynamicPageResourceAlignment) - (size_t)_dynamicPageMovingGPUOffset;
-			if ((_dynamicPageMovingGPUOffset+preAlign+sizeBytes) > _dynamicPageMovingGPUEnd) {
-				const unsigned defaultBlockSize = 16*1024;
-				assert(_deformAccelerators);
-				_dynamicPageResourceWorkingAllocation = AllocateFromDynamicPageResource(*_deformAccelerators, std::max(sizeBytes, defaultBlockSize));
-				_dynamicPageMovingGPUOffset = 0;
-				_dynamicPageMovingGPUEnd = _dynamicPageMovingGPUOffset + _dynamicPageResourceWorkingAllocation.GetData().size();
-				preAlign = 0;
-			}
-
-			// deal with alignments and allocate our space from the allocated block
-			IteratorRange<void*> dynamicPageBufferSpace;
-			dynamicPageBufferSpace.first = PtrAdd(_dynamicPageResourceWorkingAllocation.GetData().begin(), _dynamicPageMovingGPUOffset+preAlign);
-			dynamicPageBufferSpace.second = PtrAdd(dynamicPageBufferSpace.first, sizeBytes);
-			unsigned dynamicOffset = _dynamicPageResourceWorkingAllocation.GetBeginAndEndInResource().first+_dynamicPageMovingGPUOffset+preAlign;
-			assert((dynamicOffset % _dynamicPageResourceAlignment) == 0);
-			_dynamicPageMovingGPUOffset += preAlign+sizeBytes;
-		}
-
-		DynamicPageResourceHelper(IDeformAcceleratorPool& deformAccelerators)
-		{
-			_dynamicPageResourceAlignment = deformAccelerators.GetDynamicPageResourceAlignment();
-			_deformAccelerators = &deformAccelerators;
-		}
-	};
-#endif
-
 	namespace Internal
 	{
+		class RealExecuteDrawableContext
+		{
+		public:
+			Metal::DeviceContext*				_metalContext;
+			Metal::GraphicsEncoder_Optimized*	_encoder;
+			const Metal::GraphicsPipeline*		_pipeline;
+			const Metal::BoundUniforms*			_boundUniforms;
+		};
+
+		struct TemporaryStorageLocator
+		{
+			IResource* _res = nullptr;
+			size_t _begin = 0, _end = 0;
+		};
+
+		struct PreStalledResources
+		{
+			std::vector<std::shared_ptr<::Assets::Marker<IPipelineAcceleratorPool::Pipeline>>> _pendingPipelineMarkers;
+			std::vector<std::shared_ptr<::Assets::Marker<ActualizedDescriptorSet>>> _pendingDescriptorSetMarkers;
+
+			void Setup(const IPipelineAcceleratorPool& pipelineAccelerators, const SequencerConfig& sequencerConfig, const DrawablesPacket& drawablePkt)
+			{
+				_pendingPipelineMarkers.resize(drawablePkt._drawables.size());
+				_pendingDescriptorSetMarkers.resize(drawablePkt._drawables.size());
+
+				bool stallOnMarkers = false;
+				unsigned idx=0;
+				PipelineAccelerator* lastPipelineAccelerator = nullptr;
+				for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d, ++idx) {
+					const auto& drawable = *(Drawable*)d.get();
+					if (drawable._pipeline.get() != lastPipelineAccelerator) {
+						auto* pipeline = pipelineAccelerators.TryGetPipeline(*drawable._pipeline, sequencerConfig);
+						if (!pipeline) {
+							_pendingPipelineMarkers[idx] = pipelineAccelerators.GetPipelineMarker(*drawable._pipeline, sequencerConfig);
+							stallOnMarkers = true;
+						}
+						lastPipelineAccelerator = drawable._pipeline.get();
+					}
+					if (drawable._descriptorSet) {
+						auto* actualizedDescSet = pipelineAccelerators.TryGetDescriptorSet(*drawable._descriptorSet);
+						if (!actualizedDescSet) {
+							_pendingDescriptorSetMarkers[idx] = pipelineAccelerators.GetDescriptorSetMarker(*drawable._descriptorSet);
+							stallOnMarkers = true;
+						}
+					}
+				}
+
+				// we should avoid being in the lock while stalling for these resources -- since this can lock up other threads
+				pipelineAccelerators.UnlockForReading();
+				for (const auto& c:_pendingPipelineMarkers) if (c) c->StallWhilePending();
+				for (const auto& c:_pendingDescriptorSetMarkers) if (c) c->StallWhilePending();
+				pipelineAccelerators.LockForReading();
+			}
+		};
+
 		static unsigned GetMaterialDescSetDynamicOffset(
 			DeformAccelerator& deformAccelerator,
 			const ActualizedDescriptorSet& descSet,
@@ -146,9 +107,9 @@ namespace RenderCore { namespace Techniques
 			const IPipelineAcceleratorPool& pipelineAccelerators,
 			const SequencerConfig& sequencerConfig,
 			const DrawablesPacket& drawablePkt,
-			const TemporaryStorageLocator& temporaryVB, 
-			const TemporaryStorageLocator& temporaryIB,
-			PreStalledResources& preStalledResources)
+			const Internal::TemporaryStorageLocator& temporaryVB, 
+			const Internal::TemporaryStorageLocator& temporaryIB,
+			Internal::PreStalledResources& preStalledResources)
 	{
 		auto& uniformDelegateMan = *parserContext.GetUniformDelegateManager();
 		uniformDelegateMan.InvalidateUniforms();
@@ -272,7 +233,7 @@ namespace RenderCore { namespace Techniques
 
 				//////////////////////////////////////////////////////////////////////////////
 
-				RealExecuteDrawableContext drawFnContext { &metalContext, &encoder, currentPipeline->_metalPipeline.get(), currentBoundUniforms };
+				Internal::RealExecuteDrawableContext drawFnContext { &metalContext, &encoder, currentPipeline->_metalPipeline.get(), currentBoundUniforms };
 				drawable._drawFn(parserContext, *(ExecuteDrawableContext*)&drawFnContext, drawable);
 				++executeCount;
 			}
@@ -293,7 +254,7 @@ namespace RenderCore { namespace Techniques
 		const DrawablesPacket& drawablePkt,
 		const DrawOptions& drawOptions)
 	{
-		TemporaryStorageLocator temporaryVB, temporaryIB;
+		Internal::TemporaryStorageLocator temporaryVB, temporaryIB;
 		if (!drawablePkt.GetStorage(DrawablesPacket::Storage::Vertex).empty()) {
 			auto srcData = drawablePkt.GetStorage(DrawablesPacket::Storage::Vertex);
 			auto mappedData = metalContext.MapTemporaryStorage(srcData.size(), BindFlag::VertexBuffer);
@@ -310,7 +271,7 @@ namespace RenderCore { namespace Techniques
 		}
 		assert(drawablePkt.GetStorage(DrawablesPacket::Storage::Uniform).empty());
 
-		PreStalledResources preStalledResources;
+		Internal::PreStalledResources preStalledResources;
 		if (drawOptions._stallForResources) {
 			preStalledResources.Setup(pipelineAccelerators, sequencerConfig, drawablePkt);
 			Draw<true>(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB, preStalledResources);
@@ -381,75 +342,75 @@ namespace RenderCore { namespace Techniques
 
 	void ExecuteDrawableContext::ApplyLooseUniforms(const UniformsStream& stream) const
 	{
-		auto& realContext = *(RealExecuteDrawableContext*)this;
+		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
 		realContext._boundUniforms->ApplyLooseUniforms(*realContext._metalContext, *realContext._encoder, stream, s_uniformGroupDraw);
 	}
 
 	void ExecuteDrawableContext::ApplyDescriptorSets(IteratorRange<const IDescriptorSet* const*> descSets) const
 	{
-		auto& realContext = *(RealExecuteDrawableContext*)this;
+		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
 		realContext._boundUniforms->ApplyDescriptorSets(*realContext._metalContext, *realContext._encoder, descSets, s_uniformGroupDraw);
 	}
 
 	uint64_t ExecuteDrawableContext::GetBoundLooseImmediateDatas() const
 	{
-		auto& realContext = *(RealExecuteDrawableContext*)this;
+		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
 		return realContext._boundUniforms->GetBoundLooseImmediateDatas(s_uniformGroupDraw);
 	}
 
 	uint64_t ExecuteDrawableContext::GetBoundLooseResources() const
 	{
-		auto& realContext = *(RealExecuteDrawableContext*)this;
+		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
 		return realContext._boundUniforms->GetBoundLooseResources(s_uniformGroupDraw);
 	}
 
 	uint64_t ExecuteDrawableContext::GetBoundLooseSamplers() const
 	{
-		auto& realContext = *(RealExecuteDrawableContext*)this;
+		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
 		return realContext._boundUniforms->GetBoundLooseSamplers(s_uniformGroupDraw);
 	}
 
 	bool ExecuteDrawableContext::AtLeastOneBoundLooseUniform() const
 	{
-		auto& realContext = *(RealExecuteDrawableContext*)this;
+		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
 		return (realContext._boundUniforms->GetBoundLooseImmediateDatas(s_uniformGroupDraw) | realContext._boundUniforms->GetBoundLooseResources(s_uniformGroupDraw) | realContext._boundUniforms->GetBoundLooseSamplers(s_uniformGroupDraw)) != 0;
 	}
 
 	void ExecuteDrawableContext::Draw(unsigned vertexCount, unsigned startVertexLocation) const
 	{
-		auto& realContext = *(RealExecuteDrawableContext*)this;
+		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
 		realContext._encoder->Draw(*realContext._pipeline, vertexCount, startVertexLocation);
 	}
 
 	void ExecuteDrawableContext::DrawIndexed(unsigned indexCount, unsigned startIndexLocation, unsigned baseVertexLocation) const
 	{
 		assert(baseVertexLocation == 0);		// parameter deprecated
-		auto& realContext = *(RealExecuteDrawableContext*)this;
+		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
 		realContext._encoder->DrawIndexed(*realContext._pipeline, indexCount, startIndexLocation);
 	}
 
 	void ExecuteDrawableContext::DrawInstances(unsigned vertexCount, unsigned instanceCount, unsigned startVertexLocation) const
 	{
-		auto& realContext = *(RealExecuteDrawableContext*)this;
+		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
 		realContext._encoder->DrawInstances(*realContext._pipeline, vertexCount, instanceCount, startVertexLocation);
 	}
 
 	void ExecuteDrawableContext::DrawIndexedInstances(unsigned indexCount, unsigned instanceCount, unsigned startIndexLocation, unsigned baseVertexLocation) const
 	{
 		assert(baseVertexLocation == 0);		// parameter deprecated
-		auto& realContext = *(RealExecuteDrawableContext*)this;
+		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
 		realContext._encoder->DrawIndexedInstances(*realContext._pipeline, indexCount, instanceCount, startIndexLocation);
 	}
 
 	void ExecuteDrawableContext::DrawAuto() const
 	{
-		auto& realContext = *(RealExecuteDrawableContext*)this;
+		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
 		realContext._encoder->DrawAuto(*realContext._pipeline);
 	}
 
 	void ExecuteDrawableContext::SetStencilRef(unsigned frontFaceStencil, unsigned backFaceStencil) const
 	{
-		auto& realContext = *(RealExecuteDrawableContext*)this;
+		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
 		realContext._encoder->SetStencilRef(frontFaceStencil, backFaceStencil);
 	}
 

@@ -129,44 +129,5 @@ namespace RenderCore { namespace Assets
 
 	#pragma pack(pop)
 
-
-			//////////////////////////////////////////////////////////
-
-#if 0
-	class AnimatedParameterSet
-	{
-	public:
-		IteratorRange<const float*>     GetFloat1Parameters() const     { return MakeIteratorRange(_float1Parameters);      }
-		IteratorRange<const Float3*>    GetFloat3Parameters() const     { return MakeIteratorRange(_float3Parameters);      }
-		IteratorRange<const Float4*>    GetFloat4Parameters() const     { return MakeIteratorRange(_float4Parameters);      }
-		IteratorRange<const Float4x4*>	GetFloat4x4Parameters() const	{ return MakeIteratorRange(_float4x4Parameters);	}
-
-		IteratorRange<float*>			GetFloat1Parameters()			{ return MakeIteratorRange(_float1Parameters);      }
-		IteratorRange<Float3*>			GetFloat3Parameters()			{ return MakeIteratorRange(_float3Parameters);      }
-		IteratorRange<Float4*>			GetFloat4Parameters()			{ return MakeIteratorRange(_float4Parameters);      }
-		IteratorRange<Float4x4*>		GetFloat4x4Parameters()			{ return MakeIteratorRange(_float4x4Parameters);	}
-
-		void Set(uint32_t index, float);
-		void Set(uint32_t index, Float3);
-		void Set(uint32_t index, Float4);
-		void Set(uint32_t index, Quaternion);
-		void Set(uint32_t index, const Float4x4&);
-			
-		AnimatedParameterSet();
-		AnimatedParameterSet(AnimatedParameterSet&& moveFrom);
-		AnimatedParameterSet& operator=(AnimatedParameterSet&& moveFrom);
-		AnimatedParameterSet(const AnimatedParameterSet& copyFrom);
-		AnimatedParameterSet& operator=(const AnimatedParameterSet& copyFrom);
-
-		void    SerializeMethod(::Assets::BlockSerializer& outputSerializer) const;
-
-	private:
-		SerializableVector<Float4x4>    _float4x4Parameters;
-		SerializableVector<Float4>      _float4Parameters;
-		SerializableVector<Float3>      _float3Parameters;
-		SerializableVector<float>       _float1Parameters;
-	};
-#endif
-
 }}
 
