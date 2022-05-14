@@ -383,10 +383,11 @@ namespace RenderCore { namespace Techniques
 	, _depVal(drawableConstructor->GetDependencyValidation())
 	{
 		using namespace RenderCore::Assets;
+		std::shared_ptr<IGeoDeformerInfrastructure> geoDeformerInfrastructure;
 		if (deformAccelerator && deformAcceleratorPool) {  // need both or neither
 			_deformAccelerator = deformAccelerator;
 			_deformAcceleratorPool = deformAcceleratorPool;
-			_geoDeformerInfrastructure = std::dynamic_pointer_cast<IGeoDeformerInfrastructure>(_deformAcceleratorPool->GetDeformAttachment(*_deformAccelerator));
+			geoDeformerInfrastructure = std::dynamic_pointer_cast<IGeoDeformerInfrastructure>(_deformAcceleratorPool->GetDeformAttachment(*_deformAccelerator));
 		}
 
 		_usi = std::make_shared<UniformsStreamInterface>();
@@ -400,9 +401,9 @@ namespace RenderCore { namespace Techniques
 		_usi = pipelineAcceleratorPool->CombineWithLike(std::move(_usi));
 		
 		_completionCmdList = _drawableConstructor->_completionCommandList;
-		if (_geoDeformerInfrastructure) {
-			assert(_geoDeformerInfrastructure->GetCompletionCommandList().wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);	// future must be ready before we get here
-			_completionCmdList = std::max(_completionCmdList, _geoDeformerInfrastructure->GetCompletionCommandList().get());
+		if (geoDeformerInfrastructure) {
+			assert(geoDeformerInfrastructure->GetCompletionCommandList().wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);	// future must be ready before we get here
+			_completionCmdList = std::max(_completionCmdList, geoDeformerInfrastructure->GetCompletionCommandList().get());
 		}
 
 		// setup skeleton binding

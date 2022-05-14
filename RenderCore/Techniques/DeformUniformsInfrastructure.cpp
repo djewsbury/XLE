@@ -136,7 +136,7 @@ namespace RenderCore { namespace Techniques
 						dst, _mainUniformHelper,
 						MakeIteratorRange(_instanceInputValues.begin() + i*_instanceInputStride, _instanceInputValues.begin() + (i+1*_instanceInputStride)));
 				} else {
-					WriteAnimatedUniforms(dst, _mainUniformHelper, MakeIteratorRange(_defaultInstanceData));
+					std::memcpy(dst.begin(), AsPointer(_defaultInstanceData.begin()), _defaultInstanceData.size());
 				}
 
 				dst.first = PtrAdd(dst.first, _instanceOutputStride);
@@ -161,7 +161,7 @@ namespace RenderCore { namespace Techniques
 			if ((instanceIdx + 1) * _instanceInputStride > _instanceInputValues.size()) {
 				_instanceInputValues.reserve((instanceIdx + 1) * _instanceInputStride);
 				while ((instanceIdx + 1) * _instanceInputStride > _instanceInputValues.size())
-					_instanceInputValues.insert(_instanceInputValues.end(), _defaultInstanceData.begin(), _defaultInstanceData.end());
+					_instanceInputValues.insert(_instanceInputValues.end(), _defaultInputValues.begin(), _defaultInputValues.end());
 			}
 			std::memcpy(
 				AsPointer(_instanceInputValues.begin() + instanceIdx*_instanceInputStride),
@@ -176,22 +176,26 @@ namespace RenderCore { namespace Techniques
 
 		DeformUniformsAttachment(
 			AnimatedUniformBufferHelper&& mainUniformHelper,
-			IteratorRange<const void*> defaultInstanceData,
 			IteratorRange<const AnimatedUniform*> inputValuesLayout,
-			unsigned instanceOutputStride,
+			IteratorRange<const void*> defaultInputValues,
 			UniformDeformerToRendererBinding&& rendererBinding)
 		: _mainUniformHelper(mainUniformHelper)
-		, _instanceOutputStride(instanceOutputStride)
-		, _instanceInputStride(defaultInstanceData.size())
-		, _defaultInstanceData{(const uint8_t*)defaultInstanceData.begin(), (const uint8_t*)defaultInstanceData.end()}
+		, _instanceInputStride(defaultInputValues.size())
 		, _inputValuesLayout{inputValuesLayout.begin(), inputValuesLayout.end()}
 		, _rendererBinding(std::move(rendererBinding))
+		, _defaultInputValues((const uint8_t*)defaultInputValues.begin(), (const uint8_t*)defaultInputValues.end())
 		{
+			_instanceOutputStride = (unsigned)_mainUniformHelper._baseContents.size();
+
+			// generate the default instance data from the buffer helper
+			_defaultInstanceData = _mainUniformHelper._baseContents;
+			WriteAnimatedUniforms(MakeIteratorRange(_defaultInstanceData), _mainUniformHelper, defaultInputValues);
 		}
 
 		AnimatedUniformBufferHelper _mainUniformHelper;
 		unsigned _instanceOutputStride, _instanceInputStride;
 		std::vector<uint8_t> _instanceInputValues;
+		std::vector<uint8_t> _defaultInputValues;
 		std::vector<uint8_t> _defaultInstanceData;
 		std::vector<AnimatedUniform> _inputValuesLayout;
 		UniformDeformerToRendererBinding _rendererBinding;
@@ -306,9 +310,8 @@ namespace RenderCore { namespace Techniques
 
 		auto attachment = std::make_shared<DeformUniformsAttachment>(
 			std::move(finalBufferHelper),
-			defaultInstanceData,
 			animatedUniforms,
-			defaultInstanceData.size(),
+			defaultInstanceData,
 			std::move(deformerToRendererBinding));
 
 		deformerConstruction.Add(std::move(attachment));

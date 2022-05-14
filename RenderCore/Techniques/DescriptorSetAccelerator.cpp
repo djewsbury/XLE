@@ -151,6 +151,7 @@ namespace RenderCore { namespace Techniques
 			working._bindingInfo._slots.resize(working._slots.size());
 
 		Internal::InterpretMaterialMachineHelper machineHelper{materialMachine};
+		bool applyDeformAcceleratorOffset = false;
 
 		char stringMeldBuffer[512];
 		for (const auto& s:layout._slots) {
@@ -187,7 +188,7 @@ namespace RenderCore { namespace Techniques
 				}
 
 				if (!animated) {
-						auto& cbLayout = layout._constantBuffers[s._cbIdx];
+					auto& cbLayout = layout._constantBuffers[s._cbIdx];
 					std::vector<uint8_t> buffer;
 					if (machineHelper._constantBindings) {
 						buffer = cbLayout->BuildCBDataAsVector(*machineHelper._constantBindings, shrLanguage);
@@ -212,6 +213,7 @@ namespace RenderCore { namespace Techniques
 						slotBindingInfo._binding = str.str();
 					}
 				} else {
+					applyDeformAcceleratorOffset = true;
 					slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
 					slotInProgress._resourceIdx = (unsigned)working._resources.size();
 
@@ -257,7 +259,7 @@ namespace RenderCore { namespace Techniques
 		auto futureWorkingDescSet = ::Assets::MakeASyncMarkerBridge(std::move(working));
 		::Assets::WhenAll(std::move(futureWorkingDescSet)).ThenConstructToPromise(
 			std::move(promise),
-			[device=_device, pipelineType=_pipelineType](Internal::DescriptorSetInProgress working) {
+			[device=_device, pipelineType=_pipelineType, applyDeformAcceleratorOffset](Internal::DescriptorSetInProgress working) {
 				std::vector<::Assets::DependencyValidation> subDepVals;
 				std::vector<std::shared_ptr<IResourceView>> finalResources;
 				finalResources.reserve(working._resources.size());
@@ -328,6 +330,7 @@ namespace RenderCore { namespace Techniques
 				actualized._depVal = std::move(depVal);
 				actualized._bindingInfo = std::move(working._bindingInfo);
 				actualized._completionCommandList = completionCommandList;
+				actualized._applyDeformAcceleratorOffset = applyDeformAcceleratorOffset;
 				return actualized;
 			});
 	}

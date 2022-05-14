@@ -11,7 +11,7 @@
 #include "../../Utility/ImpliedTyping.h"
 #include <memory>
 
-namespace RenderCore { class IDevice; class IThreadContext; class VertexBufferView; class IResourceView; }
+namespace RenderCore { class IDevice; class IThreadContext; class VertexBufferView; class IResourceView; class IResource; }
 namespace Assets { class DependencyValidation; }
 namespace Utility { class ParameterBox; }
 
@@ -34,15 +34,14 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<IDeformUniformsAttachment> deformAttachment) = 0;
 
 		virtual std::shared_ptr<IDeformAttachment> GetDeformAttachment(DeformAccelerator& deformAccelerator) = 0;
-		virtual std::shared_ptr<IDeformUniformsAttachment> GetDeformParametersAttachment(DeformAccelerator& deformAccelerator) = 0;
+		virtual std::shared_ptr<IDeformUniformsAttachment> GetDeformUniformsAttachment(DeformAccelerator& deformAccelerator) = 0;
 
 		virtual void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) = 0;
 		virtual void ReadyInstances(IThreadContext&) = 0;
 		virtual void SetVertexInputBarrier(IThreadContext&) const = 0;
 		virtual void OnFrameBarrier() = 0;
 
-		virtual std::shared_ptr<IResourceView> GetDynamicPageResource() const = 0;
-		virtual unsigned GetDynamicPageResourceAlignment() const = 0;
+		virtual std::shared_ptr<IResource> GetDynamicPageResource() const = 0;
 
 		unsigned GetGUID() const { return _guid; }
 		virtual const std::shared_ptr<IDevice>& GetDevice() const = 0;
@@ -96,6 +95,7 @@ namespace RenderCore { namespace Techniques
 		unsigned _instancesReadied = 0;
 		unsigned _cpuDeformAllocation = 0;
 		unsigned _gpuDeformAllocation = 0;
+		unsigned _uniformDeformAllocation = 0;
 		unsigned _dispatchCount = 0;
 		unsigned _vertexCount = 0;
 		unsigned _descriptorSetWrites = 0;

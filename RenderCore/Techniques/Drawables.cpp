@@ -89,8 +89,54 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
-	IDeformAcceleratorPool* g_hack_deformAccelerators = nullptr;
-	RenderCore::Metal_Vulkan::TemporaryStorageResourceMap AllocateFromDynamicPageResource(IDeformAcceleratorPool& accelerators, unsigned bytes);
+#if 0
+	struct DynamicPageResourceHelper
+	{
+		RenderCore::Metal_Vulkan::TemporaryStorageResourceMap _dynamicPageResourceWorkingAllocation;
+		unsigned _dynamicPageResourceAlignment = 16u;
+		unsigned _dynamicPageMovingGPUOffset = 0, _dynamicPageMovingGPUEnd = 0;
+		IDeformAcceleratorPool* _deformAccelerators = nullptr;
+
+		void AllocateSpace(unsigned sizeBytes)
+		{
+			// if it fits in the existing block, go with that; otherwise allocate a new block
+			unsigned preAlign = CeilToMultiple((size_t)_dynamicPageMovingGPUOffset, _dynamicPageResourceAlignment) - (size_t)_dynamicPageMovingGPUOffset;
+			if ((_dynamicPageMovingGPUOffset+preAlign+sizeBytes) > _dynamicPageMovingGPUEnd) {
+				const unsigned defaultBlockSize = 16*1024;
+				assert(_deformAccelerators);
+				_dynamicPageResourceWorkingAllocation = AllocateFromDynamicPageResource(*_deformAccelerators, std::max(sizeBytes, defaultBlockSize));
+				_dynamicPageMovingGPUOffset = 0;
+				_dynamicPageMovingGPUEnd = _dynamicPageMovingGPUOffset + _dynamicPageResourceWorkingAllocation.GetData().size();
+				preAlign = 0;
+			}
+
+			// deal with alignments and allocate our space from the allocated block
+			IteratorRange<void*> dynamicPageBufferSpace;
+			dynamicPageBufferSpace.first = PtrAdd(_dynamicPageResourceWorkingAllocation.GetData().begin(), _dynamicPageMovingGPUOffset+preAlign);
+			dynamicPageBufferSpace.second = PtrAdd(dynamicPageBufferSpace.first, sizeBytes);
+			unsigned dynamicOffset = _dynamicPageResourceWorkingAllocation.GetBeginAndEndInResource().first+_dynamicPageMovingGPUOffset+preAlign;
+			assert((dynamicOffset % _dynamicPageResourceAlignment) == 0);
+			_dynamicPageMovingGPUOffset += preAlign+sizeBytes;
+		}
+
+		DynamicPageResourceHelper(IDeformAcceleratorPool& deformAccelerators)
+		{
+			_dynamicPageResourceAlignment = deformAccelerators.GetDynamicPageResourceAlignment();
+			_deformAccelerators = &deformAccelerators;
+		}
+	};
+#endif
+
+	namespace Internal
+	{
+		static unsigned GetMaterialDescSetDynamicOffset(
+			DeformAccelerator& deformAccelerator,
+			const ActualizedDescriptorSet& descSet,
+			unsigned deformInstanceIdx)
+		{
+			return descSet.ApplyDeformAcceleratorOffset() ? GetUniformPageBufferOffset(deformAccelerator, deformInstanceIdx) : 0u;
+		}
+	}
 
 	template<bool UsePreStalledResources>
 		static void Draw(
@@ -110,8 +156,6 @@ namespace RenderCore { namespace Techniques
 
 		const UniformsStreamInterface& globalUSI = uniformDelegateMan.GetInterface();
 
-		auto* deformAccelerators = g_hack_deformAccelerators;
-		
 		UniformsStreamInterface materialUSI;
 		materialUSI.BindFixedDescriptorSet(0, s_materialDescSetName);
 		if (parserContext._extraSequencerDescriptorSet.second)
@@ -134,9 +178,7 @@ namespace RenderCore { namespace Techniques
 		unsigned fullDescSetCount = 0;
 		unsigned justMatDescSetCount = 0;
 		unsigned executeCount = 0;
-		RenderCore::Metal_Vulkan::TemporaryStorageResourceMap dynamicPageResourceWorkingAllocation;
-		const auto dynamicPageResourceAlignment = deformAccelerators ? deformAccelerators->GetDynamicPageResourceAlignment() : 16u;
-		unsigned dynamicPageMovingGPUOffset = 0, dynamicPageMovingGPUEnd = 0;
+		
 
 		TRY {
 			for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d, ++idx) {
@@ -220,41 +262,8 @@ namespace RenderCore { namespace Techniques
 				} 
 				{
 					if (matDescSet) {
-#if 0
-						auto dynamicSize = Internal::GetDynamicPageResourceSize(*matDescSet);
-						if (dynamicSize) {
-							
-							// if it fits in the existing block, go with that; otherwise allocate a new block
-							unsigned preAlign = CeilToMultiple((size_t)dynamicPageMovingGPUOffset, dynamicPageResourceAlignment) - (size_t)dynamicPageMovingGPUOffset;
-							if ((dynamicPageMovingGPUOffset+preAlign+dynamicSize) > dynamicPageMovingGPUEnd) {
-								const unsigned defaultBlockSize = 16*1024;
-								assert(deformAccelerators);
-								dynamicPageResourceWorkingAllocation = AllocateFromDynamicPageResource(*deformAccelerators, std::max(dynamicSize, defaultBlockSize));
-								dynamicPageMovingGPUOffset = 0;
-								dynamicPageMovingGPUEnd = dynamicPageMovingGPUOffset + dynamicPageResourceWorkingAllocation.GetData().size();
-								preAlign = 0;
-							}
-
-							// deal with alignments and allocate our space from the allocated block
-							IteratorRange<void*> dynamicPageBufferSpace;
-							dynamicPageBufferSpace.first = PtrAdd(dynamicPageResourceWorkingAllocation.GetData().begin(), dynamicPageMovingGPUOffset+preAlign);
-							dynamicPageBufferSpace.second = PtrAdd(dynamicPageBufferSpace.first, dynamicSize);
-							unsigned dynamicOffset = dynamicPageResourceWorkingAllocation.GetBeginAndEndInResource().first+dynamicPageMovingGPUOffset+preAlign;
-							assert((dynamicOffset % dynamicPageResourceAlignment) == 0);
-							dynamicPageMovingGPUOffset += preAlign+dynamicSize;
-
-							assert(drawable._geo->_deformAccelerator);
-							Internal::PrepareDynamicPageResource(
-								*matDescSet,
-								Internal::GetOutputParameterState(*drawable._geo->_deformAccelerator, drawable._deformInstanceIdx),
-								dynamicPageBufferSpace);
-							currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *matDescSet->GetDescriptorSet(), s_uniformGroupMaterial, 0, MakeIteratorRange(&dynamicOffset, &dynamicOffset+1));
-						} else 
-#endif
-						{
-							unsigned dynamicOffset = 0;
-							currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *matDescSet->GetDescriptorSet(), s_uniformGroupMaterial, 0, MakeIteratorRange(&dynamicOffset, &dynamicOffset+1));
-						}
+						unsigned dynamicOffset = Internal::GetMaterialDescSetDynamicOffset(*drawable._geo->_deformAccelerator, *matDescSet, drawable._deformInstanceIdx);
+						currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *matDescSet->GetDescriptorSet(), s_uniformGroupMaterial, 0, MakeIteratorRange(&dynamicOffset, &dynamicOffset+1));
 					}
 					if (parserContext._extraSequencerDescriptorSet.second)
 						currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *parserContext._extraSequencerDescriptorSet.second, s_uniformGroupMaterial, 1);

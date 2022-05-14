@@ -52,6 +52,7 @@ namespace PlatformRig { namespace Overlays
 		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Instances readied: %u", (unsigned)metrics._instancesReadied);
 		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), StringMeld<64>() << "CPU Deform Allocation: " << ByteCount{metrics._cpuDeformAllocation});
 		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), StringMeld<64>() << "GPU Deform Allocation: " << ByteCount{metrics._gpuDeformAllocation});
+		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), StringMeld<64>() << "Uniform Deform Allocation: " << ByteCount{metrics._uniformDeformAllocation});
 		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Dispatch count: %u", (unsigned)metrics._dispatchCount);
 		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Vertex count: %u", (unsigned)metrics._vertexCount);
 		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Ave vertex size: %.1f bytes", metrics._vertexCount?metrics._gpuDeformAllocation/(float)metrics._vertexCount:0.f);

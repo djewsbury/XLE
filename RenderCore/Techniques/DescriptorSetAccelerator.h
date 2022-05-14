@@ -43,11 +43,13 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<IDescriptorSet>& GetDescriptorSet() const { return _descriptorSet; }
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCommandList; }
+		bool ApplyDeformAcceleratorOffset() const { return _applyDeformAcceleratorOffset; }
 
 		std::shared_ptr<IDescriptorSet> _descriptorSet;
 		DescriptorSetBindingInfo _bindingInfo;
 		BufferUploads::CommandListID _completionCommandList;
 		::Assets::DependencyValidation _depVal;
+		bool _applyDeformAcceleratorOffset = false;
 
 		ActualizedDescriptorSet();
 		ActualizedDescriptorSet(ActualizedDescriptorSet&&);

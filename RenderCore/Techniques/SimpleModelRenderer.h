@@ -67,7 +67,7 @@ namespace RenderCore { namespace Techniques
 			const Float4x4& localToWorld = Identity<Float4x4>()) const;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
-		const std::shared_ptr<IGeoDeformerInfrastructure>& GetGeoDeformerInfrastructure() const { return _geoDeformerInfrastructure; }
+		const std::shared_ptr<DeformAccelerator>& GetDeformAccelerator() const { return _deformAccelerator; }
 		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCmdList; }
 
 		using UniformBufferBinding = std::pair<uint64_t, std::shared_ptr<IUniformBufferDelegate>>;
@@ -119,7 +119,6 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<IDeformAcceleratorPool> _deformAcceleratorPool;
 		std::shared_ptr<DeformAccelerator> _deformAccelerator;
-		std::shared_ptr<IGeoDeformerInfrastructure> _geoDeformerInfrastructure;
 
 		::Assets::DependencyValidation _depVal;
 		BufferUploads::CommandListID _completionCmdList;

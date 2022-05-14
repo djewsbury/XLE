@@ -13,6 +13,7 @@
 #include "../../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderCore/Techniques/DeformAccelerator.h"
+#include "../../RenderCore/Techniques/DeformGeometryInfrastructure.h"
 #include "../../RenderOverlays/AnimationVisualization.h"
 #include "../../SceneEngine/IScene.h"
 #include "../../Assets/Assets.h"
@@ -53,9 +54,12 @@ namespace ToolsRig
 
 	static std::shared_ptr<RendererSkeletonInterface> BuildSkeletonInterface(
 		SimpleModelRenderer& renderer,
+		RenderCore::Techniques::IDeformAcceleratorPool& deformAccelerators,
 		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface)
 	{
-		auto* deformerInfrastructure = renderer.GetGeoDeformerInfrastructure().get();
+		auto* deformAcc = renderer.GetDeformAccelerator().get();
+		if (!deformAcc) return nullptr;
+		auto* deformerInfrastructure = dynamic_cast<RenderCore::Techniques::IGeoDeformerInfrastructure*>(deformAccelerators.GetDeformAttachment(*deformAcc).get());
 		if (deformerInfrastructure)
 			return std::make_shared<RendererSkeletonInterface>(smOutputInterface, *deformerInfrastructure);
 		return nullptr;
@@ -117,7 +121,7 @@ namespace ToolsRig
 				auto skeletonFuture = ::Assets::MakeAssetPtr<SkeletonScaffold>(settings._skeletonFileName);
 				::Assets::WhenAll(rendererFuture, animationSetFuture, skeletonFuture).ThenConstructToPromise(
 					std::move(promise), 
-					[construction](
+					[construction, deformAccelerators](
 						std::shared_ptr<SimpleModelRenderer> renderer,
 						std::shared_ptr<AnimationSetScaffold> animationSet,
 						std::shared_ptr<SkeletonScaffold> skeleton) {
@@ -126,7 +130,7 @@ namespace ToolsRig
 							animationSet->ImmutableData()._animationSet.GetOutputInterface(), 
 							skeleton->GetSkeletonMachine());
 
-						auto skeletonInterface = BuildSkeletonInterface(*renderer, skeleton->GetSkeletonMachine().GetOutputInterface());
+						auto skeletonInterface = BuildSkeletonInterface(*renderer, *deformAccelerators, skeleton->GetSkeletonMachine().GetOutputInterface());
 
 						auto depVal = ::Assets::GetDepValSys().Make();
 						depVal.RegisterDependency(renderer->GetDependencyValidation());
@@ -144,7 +148,7 @@ namespace ToolsRig
 				auto animationSetFuture = ::Assets::MakeAssetPtr<AnimationSetScaffold>(settings._animationFileName);
 				::Assets::WhenAll(rendererFuture, animationSetFuture).ThenConstructToPromise(
 					std::move(promise), 
-					[construction](
+					[construction, deformAccelerators](
 						std::shared_ptr<SimpleModelRenderer> renderer,
 						std::shared_ptr<AnimationSetScaffold> animationSet) {
 						
@@ -154,7 +158,7 @@ namespace ToolsRig
 							animationSet->ImmutableData()._animationSet.GetOutputInterface(), 
 							*modelScaffold->EmbeddedSkeleton());
 
-						auto skeletonInterface = BuildSkeletonInterface(*renderer, modelScaffold->EmbeddedSkeleton()->GetOutputInterface());
+						auto skeletonInterface = BuildSkeletonInterface(*renderer, *deformAccelerators, modelScaffold->EmbeddedSkeleton()->GetOutputInterface());
 
 						auto depVal = ::Assets::GetDepValSys().Make();
 						depVal.RegisterDependency(renderer->GetDependencyValidation());

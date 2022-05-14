@@ -349,6 +349,7 @@ namespace RenderCore { namespace Techniques
 						if (b.first == std::make_pair(elementIdx, materialGuid)) {
 							deformBinding = std::make_shared<DeformerToDescriptorSetBinding>();
 							deformBinding->_animatedSlots = b.second._animatedSlots;
+							deformBinding->_dynamicPageResource = deformAcceleratorPool->GetDynamicPageResource();
 							break;
 						}
 				}
@@ -496,7 +497,7 @@ namespace RenderCore { namespace Techniques
 			RenderCore::Techniques::IDeformUniformsAttachment* deformParametersAttachment = nullptr;
 			DeformerToRendererBinding deformerBinding;
 			if (deformAcceleratorPool && deformAccelerator) { 
-				deformParametersAttachment = deformAcceleratorPool->GetDeformParametersAttachment(*deformAccelerator).get();
+				deformParametersAttachment = deformAcceleratorPool->GetDeformUniformsAttachment(*deformAccelerator).get();
 				geoDeformerInfrastructure = dynamic_cast<IGeoDeformerInfrastructure*>(deformAcceleratorPool->GetDeformAttachment(*deformAccelerator).get());
 				if (geoDeformerInfrastructure)
 					deformerBinding = geoDeformerInfrastructure->GetDeformerToRendererBinding();

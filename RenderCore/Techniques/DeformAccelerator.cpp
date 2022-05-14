@@ -36,7 +36,7 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<IDeformUniformsAttachment> deformAttachment) override;
 
 		std::shared_ptr<IDeformAttachment> GetDeformAttachment(DeformAccelerator& deformAccelerator) override;
-		std::shared_ptr<IDeformUniformsAttachment> GetDeformParametersAttachment(DeformAccelerator& deformAccelerator) override;
+		std::shared_ptr<IDeformUniformsAttachment> GetDeformUniformsAttachment(DeformAccelerator& deformAccelerator) override;
 
 		void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) override;
 		void ReadyInstances(IThreadContext&) override;
@@ -45,8 +45,7 @@ namespace RenderCore { namespace Techniques
 		ReadyInstancesMetrics GetMetrics() const override;
 		const std::shared_ptr<IDevice>& GetDevice() const override;
 
-		std::shared_ptr<IResourceView> GetDynamicPageResource() const override;
-		unsigned GetDynamicPageResourceAlignment() const override;
+		std::shared_ptr<IResource> GetDynamicPageResource() const override;
 
 		DeformAcceleratorPool(std::shared_ptr<IDevice>);
 		~DeformAcceleratorPool();
@@ -60,8 +59,7 @@ namespace RenderCore { namespace Techniques
 		mutable bool _pendingVertexInputBarrier = false;
 
 		RenderCore::Metal_Vulkan::NamedPage _cbNamedPage = ~0u;
-		std::shared_ptr<IResourceView> _cbPageResource;
-		RenderCore::Metal_Vulkan::CmdListAttachedStorage _cbPageResourceAttachedStorage;
+		std::shared_ptr<IResource> _cbPageResource;
 
 		Threading::Mutex _acceleratorsLock;
 		std::thread::id _boundThread;
@@ -72,7 +70,7 @@ namespace RenderCore { namespace Techniques
 		friend RenderCore::Metal_Vulkan::TemporaryStorageResourceMap AllocateFromDynamicPageResource(IDeformAcceleratorPool& accelerators, unsigned bytes);
 	};
 
-	enum AllocationType { AllocationType_GPUVB, AllocationType_CPUVB, AllocationType_Max };
+	enum AllocationType { AllocationType_GPUVB, AllocationType_CPUVB, AllocationType_UniformBuffer, AllocationType_Max };
 
 	class DeformAccelerator
 	{
@@ -82,11 +80,10 @@ namespace RenderCore { namespace Techniques
 		unsigned _minEnabledInstance = ~0u;
 		unsigned _maxEnabledInstance = 0;
 
-		unsigned _reversationPerInstance[AllocationType_Max] = {0,0};
+		unsigned _reservationPerInstance[AllocationType_Max] = {0,0,0};
 		std::vector<unsigned> _instanceToReadiedOffset[AllocationType_Max];
 		VertexBufferView _outputVBV;
-
-		std::vector<uint8_t> _outputParameterValues;
+		unsigned _uniformBufferPageResourceBaseOffset = ~0;
 
 		std::shared_ptr<IDeformAttachment> _attachment;
 		std::shared_ptr<IDeformUniformsAttachment> _parametersAttachment;
@@ -139,8 +136,8 @@ namespace RenderCore { namespace Techniques
 
 		unsigned reservationGPU = 0, reservationCPU = 0;
 		accelerator._attachment->ReserveBytesRequired(1, reservationGPU, reservationCPU);
-		accelerator._reversationPerInstance[AllocationType_GPUVB] += reservationGPU;
-		accelerator._reversationPerInstance[AllocationType_CPUVB] += reservationCPU;
+		accelerator._reservationPerInstance[AllocationType_GPUVB] = reservationGPU;
+		accelerator._reservationPerInstance[AllocationType_CPUVB] = reservationCPU;
 	}
 
 	void DeformAcceleratorPool::Attach(
@@ -153,6 +150,11 @@ namespace RenderCore { namespace Techniques
 		assert(!accelerator._parametersAttachment);		// we can't attach geometry deformers more than once to a given deform accelerator
 		assert(deformAttachment);
 		accelerator._parametersAttachment = std::move(deformAttachment);
+
+		unsigned reservationGPU = 0, reservationCPU = 0;
+		accelerator._parametersAttachment->ReserveBytesRequired(1, reservationGPU, reservationCPU);
+		accelerator._reservationPerInstance[AllocationType_UniformBuffer] = reservationGPU;
+		assert(reservationCPU == 0);
 	}
 
 	std::shared_ptr<IDeformAttachment> DeformAcceleratorPool::GetDeformAttachment(DeformAccelerator& deformAccelerator)
@@ -160,7 +162,7 @@ namespace RenderCore { namespace Techniques
 		return deformAccelerator._attachment;
 	}
 
-	std::shared_ptr<IDeformUniformsAttachment> DeformAcceleratorPool::GetDeformParametersAttachment(DeformAccelerator& deformAccelerator)
+	std::shared_ptr<IDeformUniformsAttachment> DeformAcceleratorPool::GetDeformUniformsAttachment(DeformAccelerator& deformAccelerator)
 	{
 		return deformAccelerator._parametersAttachment;
 	}
@@ -186,7 +188,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<DeformAccelerator> accelerators[_accelerators.size()];
 		unsigned activeAcceleratorCount=0;
-		unsigned reservationBytes[AllocationType_Max] = {0,0};
+		unsigned reservationBytes[AllocationType_Max] = {0,0,0};
 		unsigned maxInstanceCount = 0;
 		{
 			ScopedLock(_acceleratorsLock);
@@ -205,7 +207,7 @@ namespace RenderCore { namespace Techniques
 				
 				if (instanceCount) {
 					for (unsigned c=0; c<AllocationType_Max; ++c)
-						reservationBytes[c] += accelerator->_reversationPerInstance[c] * instanceCount;
+						reservationBytes[c] += accelerator->_reservationPerInstance[c] * instanceCount;
 					accelerators[activeAcceleratorCount++] = std::move(accelerator);
 					maxInstanceCount = std::max(maxInstanceCount, instanceCount);
 				} else {
@@ -232,9 +234,11 @@ namespace RenderCore { namespace Techniques
 
 			RenderCore::Metal_Vulkan::TemporaryStorageResourceMap cpuMap;
 			RenderCore::Metal_Vulkan::TemporaryStorageResourceMap cbMap;
+			RenderCore::Metal_Vulkan::TemporaryStorageResourceMap uniformBufferMap;
 			RenderCore::Metal_Vulkan::BufferAndRange gpuBufferAndRange;
 			RenderCore::VertexBufferView cpuVBV, gpuVBV;
-			IteratorRange<void*> cpuDst, cbDst;
+			IteratorRange<void*> cpuDst, cbDst, uniformBufferDst;
+			unsigned uniformBufferPageOffset = 0;
 
 			if (reservationBytes[AllocationType::AllocationType_CPUVB]) {
 				cpuMap = attachedStorage.MapStorage(reservationBytes[AllocationType::AllocationType_CPUVB], BindFlag::VertexBuffer, defaultPageSize);
@@ -247,8 +251,13 @@ namespace RenderCore { namespace Techniques
 				gpuVBV = gpuBufferAndRange.AsVertexBufferView();
 				assert(gpuVBV._resource);
 			}
+			if (reservationBytes[AllocationType::AllocationType_UniformBuffer]) {
+				uniformBufferMap = attachedStorage.MapStorageFromNamedPage(reservationBytes[AllocationType::AllocationType_UniformBuffer], _cbNamedPage);
+				uniformBufferDst = uniformBufferMap.GetData();
+				uniformBufferPageOffset = uniformBufferMap.AsConstantBufferView()._prebuiltRangeBegin;
+			}
 
-			unsigned movingOffsets[AllocationType_Max] = {0, 0};
+			unsigned movingOffsets[AllocationType_Max] = {0, 0, 0};
 			unsigned instanceList[maxInstanceCount];
 
 			for (unsigned c=0; c<activeAcceleratorCount; ++c) {
@@ -275,50 +284,55 @@ namespace RenderCore { namespace Techniques
 				accelerator->_minEnabledInstance = ~0u;
 				accelerator->_maxEnabledInstance = 0u;
 
-				auto cpuOutputRange = MakeIteratorRange(PtrAdd(cpuDst.begin(), movingOffsets[AllocationType_CPUVB]), PtrAdd(cpuDst.begin(), movingOffsets[AllocationType_CPUVB]+instanceCount*accelerator->_reversationPerInstance[AllocationType_CPUVB]));
 				std::shared_ptr<IResourceView> gpuBufferView;
-				if (accelerator->_reversationPerInstance[AllocationType_GPUVB] != 0) {
-					gpuBufferView = gpuBufferAndRange._resource->CreateBufferView(BindFlag::UnorderedAccess, gpuVBV._offset+movingOffsets[AllocationType_GPUVB], instanceCount*accelerator->_reversationPerInstance[AllocationType_GPUVB]);
+				if (accelerator->_reservationPerInstance[AllocationType_GPUVB] != 0) {
+					gpuBufferView = gpuBufferAndRange._resource->CreateBufferView(BindFlag::UnorderedAccess, gpuVBV._offset+movingOffsets[AllocationType_GPUVB], instanceCount*accelerator->_reservationPerInstance[AllocationType_GPUVB]);
 					accelerator->_outputVBV = gpuVBV;
 					atLeastOneGPUOperator = true;
 				}
 
 				if (accelerator->_attachment) {
+					auto cpuOutputRange = MakeIteratorRange(
+						PtrAdd(cpuDst.begin(), movingOffsets[AllocationType_CPUVB]),
+						PtrAdd(cpuDst.begin(), movingOffsets[AllocationType_CPUVB]+instanceCount*accelerator->_reservationPerInstance[AllocationType_CPUVB]));
+
 					accelerator->Execute(
 						threadContext, 
 						MakeIteratorRange(instanceList, &instanceList[instanceCount]),
 						*gpuBufferView, cpuOutputRange,
 						_readyInstancesMetrics);
-
-					for (unsigned allType=0; allType<AllocationType_Max; ++allType) {
-						if (accelerator->_instanceToReadiedOffset[allType].size() <= maxInstanceIdx+1)
-							accelerator->_instanceToReadiedOffset[allType].resize(maxInstanceIdx+1, ~0u);
-
-						for (auto i:MakeIteratorRange(instanceList, &instanceList[instanceCount])) {
-							accelerator->_instanceToReadiedOffset[allType][i] = movingOffsets[allType];
-							movingOffsets[allType] += accelerator->_reversationPerInstance[allType];
-						}
-					}
 				}
 
 				if (accelerator->_parametersAttachment) {
-					unsigned gpuBufferBytes = 0, cpuBufferBytes = 0;
-					accelerator->_parametersAttachment->ReserveBytesRequired(maxInstanceIdx+1, gpuBufferBytes, cpuBufferBytes);
-					if (accelerator->_outputParameterValues.size() < cpuBufferBytes)
-						accelerator->_outputParameterValues.resize(cpuBufferBytes, 0u);
+					auto cbOutputRange = MakeIteratorRange(
+						PtrAdd(uniformBufferDst.begin(), movingOffsets[AllocationType_UniformBuffer]),
+						PtrAdd(uniformBufferDst.begin(), movingOffsets[AllocationType_UniformBuffer]+instanceCount*accelerator->_reservationPerInstance[AllocationType_UniformBuffer]));
 
 					accelerator->ExecuteParameters(
 						MakeIteratorRange(instanceList, &instanceList[instanceCount]),
-						MakeIteratorRange(accelerator->_outputParameterValues));
+						cbOutputRange);
+					accelerator->_uniformBufferPageResourceBaseOffset = uniformBufferPageOffset;
+				}
+
+				// set accelerator->_instanceToReadiedOffset & advance movingOffsets
+				for (auto allType:{AllocationType_GPUVB, AllocationType_CPUVB, AllocationType_UniformBuffer}) {
+					if (!accelerator->_reservationPerInstance[allType]) continue;
+
+					if (accelerator->_instanceToReadiedOffset[allType].size() <= maxInstanceIdx+1)
+						accelerator->_instanceToReadiedOffset[allType].resize(maxInstanceIdx+1, ~0u);
+
+					for (auto i:MakeIteratorRange(instanceList, &instanceList[instanceCount])) {
+						accelerator->_instanceToReadiedOffset[allType][i] = movingOffsets[allType];
+						movingOffsets[allType] += accelerator->_reservationPerInstance[allType];
+					}
 				}
 
 				++_readyInstancesMetrics._acceleratorsReadied;
 				_readyInstancesMetrics._instancesReadied += instanceCount;
 			}
 
-			for (unsigned allType=0; allType<AllocationType_Max; ++allType) {
+			for (auto allType:{AllocationType_GPUVB, AllocationType_CPUVB, AllocationType_UniformBuffer})
 				assert(movingOffsets[allType] == reservationBytes[allType]);
-			}
 
 			#if defined(_DEBUG)
 				metalContext.EndLabel();
@@ -328,6 +342,7 @@ namespace RenderCore { namespace Techniques
 		_pendingVertexInputBarrier |= atLeastOneGPUOperator;
 		_readyInstancesMetrics._cpuDeformAllocation += reservationBytes[AllocationType_CPUVB];
 		_readyInstancesMetrics._gpuDeformAllocation += reservationBytes[AllocationType_GPUVB];
+		_readyInstancesMetrics._uniformDeformAllocation += reservationBytes[AllocationType_UniformBuffer];
 
 		// todo - we should add a pipeline barrier for any output buffers that were written by the GPU, before they ared used
 		// by the GPU (ie, written by a compute shader to be read by a vertex shader, etc)
@@ -373,6 +388,13 @@ namespace RenderCore { namespace Techniques
 			return result;
 		}
 
+		unsigned GetUniformPageBufferOffset(DeformAccelerator& accelerator, unsigned instanceIdx)
+		{
+			assert(accelerator._parametersAttachment && accelerator._reservationPerInstance[AllocationType_UniformBuffer]);
+			assert(accelerator._uniformBufferPageResourceBaseOffset != ~0u);
+			return accelerator._uniformBufferPageResourceBaseOffset + accelerator._instanceToReadiedOffset[AllocationType_UniformBuffer][instanceIdx];
+		}
+
 		IteratorRange<const void*> GetOutputParameterState(DeformAccelerator& accelerator, unsigned instanceIdx)
 		{
 			assert(0);
@@ -384,16 +406,12 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 	
-	std::shared_ptr<IResourceView> DeformAcceleratorPool::GetDynamicPageResource() const
+	std::shared_ptr<IResource> DeformAcceleratorPool::GetDynamicPageResource() const
 	{
 		return _cbPageResource;
 	}
 
-	unsigned DeformAcceleratorPool::GetDynamicPageResourceAlignment() const
-	{
-		return 256;		// todo -- real values
-	}
-
+#if 0
 	RenderCore::Metal_Vulkan::TemporaryStorageResourceMap AllocateFromDynamicPageResource(IDeformAcceleratorPool& accelerators, unsigned bytes)
 	{
 		auto& realAccelerators = *checked_cast<DeformAcceleratorPool*>(&accelerators);
@@ -402,6 +420,7 @@ namespace RenderCore { namespace Techniques
 			realAccelerators._cbPageResourceAttachedStorage = realAccelerators._temporaryStorageManager->BeginCmdListReservation();
 		return realAccelerators._cbPageResourceAttachedStorage.MapStorageFromNamedPage(bytes, realAccelerators._cbNamedPage);
 	}
+#endif
 
 	inline void DeformAcceleratorPool::OnFrameBarrier()
 	{
@@ -424,10 +443,6 @@ namespace RenderCore { namespace Techniques
 		for (auto& storage:_currentFrameAttachedStorage)
 			storage.OnSubmitToQueue(producerMarker);
 		_currentFrameAttachedStorage.clear();
-
-		// also invalidate data written by AllocateFromDynamicPageResource()
-		_cbPageResourceAttachedStorage.OnSubmitToQueue(producerMarker);
-		_cbPageResourceAttachedStorage = {};
 
 		_temporaryStorageManager->FlushDestroys();
 
@@ -454,7 +469,7 @@ namespace RenderCore { namespace Techniques
 			_temporaryStorageManager = std::make_unique<Metal_Vulkan::TemporaryStorageManager>(Metal::GetObjectFactory(), _asyncTracker);
 			const unsigned cbAllocationSize = 1024*1024;
 			_cbNamedPage = _temporaryStorageManager->CreateNamedPage(cbAllocationSize, BindFlag::ConstantBuffer);
-			_cbPageResource = _temporaryStorageManager->GetResourceForNamedPage(_cbNamedPage)->CreateBufferView(BindFlag::ConstantBuffer);
+			_cbPageResource = _temporaryStorageManager->GetResourceForNamedPage(_cbNamedPage);
 		}
 		_boundThread = std::this_thread::get_id();
 	}
