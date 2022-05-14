@@ -6,7 +6,7 @@
 #include "DeformOperationFactory.h"
 #include "CompiledShaderPatchCollection.h"
 #include "CompiledLayoutPool.h"
-#include "../Assets/ScaffoldCmdStream.h"
+#include "ModelRendererConstruction.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedCBLayout.h"
 #include "../Assets/MaterialScaffold.h"
@@ -203,7 +203,7 @@ namespace RenderCore { namespace Techniques
 
 	void ConfigureDeformUniformsAttachment(
 		DeformerConstruction& deformerConstruction,
-		const Assets::RendererConstruction& rendererConstruction,
+		const ModelRendererConstruction& rendererConstruction,
 		RenderCore::Techniques::ICompiledLayoutPool& compiledLayoutPool,
 		IteratorRange<const AnimatedUniform*> animatedUniforms,
 		IteratorRange<const void*> defaultInstanceData)

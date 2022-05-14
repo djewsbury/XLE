@@ -4,6 +4,7 @@
 
 #include "ModelCache.h"
 #include "SimpleModelRenderer.h"
+#include "ModelRendererConstruction.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/MaterialScaffold.h"
 #include "../../Assets/AssetHeapLRU.h"
@@ -65,7 +66,7 @@ namespace RenderCore { namespace Techniques
 
 		auto modelScaffold = _pimpl->_modelScaffolds.Get(modelFilename);
 		auto materialScaffold = _pimpl->_materialScaffolds.Get(materialFilename, modelFilename);
-        auto construction = std::make_shared<Assets::RendererConstruction>();
+        auto construction = std::make_shared<ModelRendererConstruction>();
         construction->AddElement().SetModelScaffold(modelScaffold).SetMaterialScaffold(materialScaffold);
 
 		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_pipelineAcceleratorPool, construction);

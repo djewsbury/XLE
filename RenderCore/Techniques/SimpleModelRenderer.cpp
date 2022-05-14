@@ -13,7 +13,7 @@
 #include "DeformOperationFactory.h"
 #include "SkinDeformer.h"
 #include "Services.h"
-#include "../Assets/ScaffoldCmdStream.h"
+#include "ModelRendererConstruction.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelMachine.h"		// for DrawCallDesc
 #include "../Assets/AnimationBindings.h"
@@ -375,7 +375,7 @@ namespace RenderCore { namespace Techniques
 
 	SimpleModelRenderer::SimpleModelRenderer(
 		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-		const std::shared_ptr<Assets::RendererConstruction>& construction,
+		const std::shared_ptr<ModelRendererConstruction>& construction,
 		const std::shared_ptr<DrawableConstructor>& drawableConstructor,
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator,
@@ -484,9 +484,9 @@ namespace RenderCore { namespace Techniques
 
 	SimpleModelRenderer::~SimpleModelRenderer() {}
 
-	static std::future<std::shared_ptr<Assets::RendererConstruction>> ToFuture(Assets::RendererConstruction& construction)
+	static std::future<std::shared_ptr<ModelRendererConstruction>> ToFuture(ModelRendererConstruction& construction)
 	{
-		std::promise<std::shared_ptr<Assets::RendererConstruction>> promise;
+		std::promise<std::shared_ptr<ModelRendererConstruction>> promise;
 		auto result = promise.get_future();
 		construction.FulfillWhenNotPending(std::move(promise));
 		return result;
@@ -502,7 +502,7 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<DeformAccelerator> CreateDefaultDeformAccelerator(
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
-		const Assets::RendererConstruction& rendererConstruction)
+		const ModelRendererConstruction& rendererConstruction)
 	{
 		// The default deform accelerators just contains a skinning deform operation
 		static std::shared_ptr<Internal::DeformerPipelineCollection> s_deformerPipelineCollection;
@@ -533,7 +533,7 @@ namespace RenderCore { namespace Techniques
 	void SimpleModelRenderer::ConstructToPromise(
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-		const std::shared_ptr<Assets::RendererConstruction>& construction,
+		const std::shared_ptr<ModelRendererConstruction>& construction,
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<DeformAccelerator>& deformAcceleratorInit,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
@@ -590,7 +590,7 @@ namespace RenderCore { namespace Techniques
 		StringSection<> materialScaffoldName,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
 	{
-		auto construction = std::make_shared<Assets::RendererConstruction>();
+		auto construction = std::make_shared<ModelRendererConstruction>();
 		construction->AddElement().SetModelAndMaterialScaffolds(modelScaffoldName, materialScaffoldName);
 		return ConstructToPromise(
 			std::move(promise),
@@ -655,7 +655,7 @@ namespace RenderCore { namespace Techniques
 		std::promise<std::shared_ptr<RendererSkeletonInterface>>&& promise,
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator,
-		const std::shared_ptr<Assets::RendererConstruction>& construction)
+		const std::shared_ptr<ModelRendererConstruction>& construction)
 	{
 		::Assets::WhenAll(ToFuture(*construction)).ThenConstructToPromise(
 			std::move(promise),
@@ -670,18 +670,18 @@ namespace RenderCore { namespace Techniques
 				}
 				if (!skeleton) {
 					if (completedConstruction->GetElementCount() != 1 || completedConstruction->GetElement(0)->GetModelScaffold())
-						Throw(std::runtime_error("Cannot bind skeleton interface to RendererConstruction, because there are multiple separate skeletons within the one construction"));
+						Throw(std::runtime_error("Cannot bind skeleton interface to ModelRendererConstruction, because there are multiple separate skeletons within the one construction"));
 					skeleton = completedConstruction->GetElement(0)->GetModelScaffold()->EmbeddedSkeleton();
 					depVal = completedConstruction->GetElement(0)->GetModelScaffold()->GetDependencyValidation();
 				}
 				if (!skeleton)
-					Throw(std::runtime_error("Cannot bind skeleton interface to RendererConstruction, because no skeleton with provided either as an embedded skeleton, or as an external skeleton"));
+					Throw(std::runtime_error("Cannot bind skeleton interface to ModelRendererConstruction, because no skeleton with provided either as an embedded skeleton, or as an external skeleton"));
 				
 				IGeoDeformerInfrastructure* geoDeform = nullptr;
 				if (deformAccelerator && deformAcceleratorPool)
 					geoDeform = dynamic_cast<IGeoDeformerInfrastructure*>(deformAcceleratorPool->GetDeformAttachment(*deformAccelerator).get());
 				if (!skeleton)
-					Throw(std::runtime_error("Cannot bind skeleton interface to RendererConstruction, because there is no geo deformer attached to the given deform accelerator"));
+					Throw(std::runtime_error("Cannot bind skeleton interface to ModelRendererConstruction, because there is no geo deformer attached to the given deform accelerator"));
 				
 				// might need to take a dep val from the IGeoDeformerInfrastructure here, as well
 				return std::make_shared<RendererSkeletonInterface>(skeleton->GetOutputInterface(), *geoDeform, depVal);

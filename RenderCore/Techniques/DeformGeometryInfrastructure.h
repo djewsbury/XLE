@@ -7,7 +7,6 @@
 #include "DeformAccelerator.h"
 #include <future>
 
-namespace RenderCore { namespace Assets { class RendererConstruction; }}
 namespace BufferUploads { using CommandListID = uint32_t; }
 
 namespace RenderCore { namespace Techniques
@@ -15,6 +14,7 @@ namespace RenderCore { namespace Techniques
 	struct DeformerToRendererBinding;
 	struct DeformerInputBinding;
 	class DeformerConstruction;
+	class ModelRendererConstruction;
 	class IGeoDeformerInfrastructure;
 	class IGeoDeformer;
 
@@ -28,7 +28,7 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<IGeoDeformerInfrastructure> CreateDeformGeometryInfrastructure(
 		IDevice& device,
-		const Assets::RendererConstruction&,
+		const ModelRendererConstruction&,
 		const DeformerConstruction&);
 
 	class IGeoDeformer

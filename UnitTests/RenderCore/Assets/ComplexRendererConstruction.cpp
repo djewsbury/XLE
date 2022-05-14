@@ -7,9 +7,9 @@
 #include "FakeModelCompiler.h"
 #include "../../../RenderCore/Assets/ModelScaffold.h"
 #include "../../../RenderCore/Assets/MaterialScaffold.h"
-#include "../../../RenderCore/Assets/ScaffoldCmdStream.h"
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
 #include "../../../RenderCore/Techniques/DrawableConstructor.h"
+#include "../../../RenderCore/Techniques/ModelRendererConstruction.h"
 #include "../../../Assets/IntermediatesStore.h"
 #include "../../../Assets/IntermediateCompilers.h"
 #include "../../../Assets/CompileAndAsyncManager.h"
@@ -75,13 +75,13 @@ namespace UnitTests
 			auto materialScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>(
 				*materialCompile->GetArtifactCollection(RenderCore::Assets::MaterialScaffold::CompileProcessType));
 
-			SECTION("Create RendererConstruction")
+			SECTION("Create ModelRendererConstruction")
 			{
-				auto rendererConstruction = std::make_shared<RenderCore::Assets::RendererConstruction>();
+				auto rendererConstruction = std::make_shared<RenderCore::Techniques::ModelRendererConstruction>();
 				auto& ele = rendererConstruction->AddElement().SetModelScaffold(modelScaffold).SetName("test-element");
 				ele.SetMaterialScaffold(materialScaffold);
 				
-				std::promise<std::shared_ptr<RenderCore::Assets::RendererConstruction>> promise;
+				std::promise<std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>> promise;
 				auto future = promise.get_future();
 				rendererConstruction->FulfillWhenNotPending(std::move(promise));
 				future.wait();

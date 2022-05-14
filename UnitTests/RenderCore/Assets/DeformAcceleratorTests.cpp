@@ -7,7 +7,6 @@
 #include "TechniqueTestsHelper.h"
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/Assets/ModelScaffold.h"
-#include "../../../RenderCore/Assets/ScaffoldCmdStream.h"
 #include "../../../RenderCore/Techniques/DeformAccelerator.h"
 #include "../../../RenderCore/Techniques/DeformGeoInternal.h"
 #include "../../../RenderCore/Techniques/DeformOperationFactory.h"
@@ -17,6 +16,7 @@
 #include "../../../RenderCore/Techniques/Services.h"
 #include "../../../RenderCore/Techniques/CommonUtils.h"
 #include "../../../RenderCore/Techniques/PipelineCollection.h"
+#include "../../../RenderCore/Techniques/ModelRendererConstruction.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"		// required for memory barrier
 #include "../../../RenderCore/GeoProc/MeshDatabase.h"
 #include "../../../RenderCore/GeoProc/NascentModel.h"
@@ -392,9 +392,9 @@ namespace UnitTests
 		globalServices->PrepareForDestruction();
 	}
 
-	static void StallWhilePending(RenderCore::Assets::RendererConstruction& construction)
+	static void StallWhilePending(RenderCore::Techniques::ModelRendererConstruction& construction)
 	{
-		std::promise<std::shared_ptr<RenderCore::Assets::RendererConstruction>> promise;
+		std::promise<std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>> promise;
 		auto future = promise.get_future();
 		construction.FulfillWhenNotPending(std::move(promise));
 		future.wait();
@@ -420,7 +420,7 @@ namespace UnitTests
 		auto pipelineCollection = std::make_shared<Techniques::PipelineCollection>(testHelper->_device);
 		
 		auto modelScaffold = MakeTestAnimatedModel();
-		auto rendererConstruction = std::make_shared<RenderCore::Assets::RendererConstruction>();
+		auto rendererConstruction = std::make_shared<RenderCore::Techniques::ModelRendererConstruction>();
 		rendererConstruction->AddElement().SetModelScaffold(modelScaffold);
 		StallWhilePending(*rendererConstruction);
 		

@@ -35,6 +35,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         DeformUniformsInfrastructure.cpp
         DrawableConstructor.cpp
         CompiledLayoutPool.cpp
+        ModelRendererConstruction.cpp
         ../../Tools/ToolsRig/VisualisationGeo.cpp
         )
     set(Headers

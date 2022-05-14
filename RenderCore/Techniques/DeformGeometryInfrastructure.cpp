@@ -7,6 +7,7 @@
 #include "Services.h"
 #include "CommonUtils.h"
 #include "CommonResources.h"
+#include "ModelRendererConstruction.h"
 #include "../IDevice.h"
 #include "../Assets/ModelScaffold.h"
 #include "../GeoProc/MeshDatabase.h"        // for GeoProc::Copy
@@ -14,8 +15,6 @@
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/StringFormat.h"
-
-#include "../Assets/ScaffoldCmdStream.h"		// becomes RendererConstruction.h
 
 namespace RenderCore { namespace Techniques
 {
@@ -104,7 +103,7 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<IGeoDeformerInfrastructure> CreateDeformGeometryInfrastructure(
 		IDevice& device,
-		const Assets::RendererConstruction& rendererConstruction,
+		const ModelRendererConstruction& rendererConstruction,
 		const DeformerConstruction& deformerConstruction)
 	{
 		auto result = std::make_shared<DeformGeoInfrastructure>();

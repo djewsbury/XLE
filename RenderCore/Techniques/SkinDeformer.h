@@ -10,20 +10,20 @@
 #include <memory>
 
 namespace RenderCore { class IDevice; }
-namespace RenderCore { namespace Assets { class RendererConstruction; }}
 namespace RenderCore { namespace Techniques
 {
 	class DeformerConstruction;
+	class ModelRendererConstruction;
 	class PipelineCollection;
 	namespace Internal { class DeformerPipelineCollection; }
 
 	void ConfigureCPUSkinDeformers(
 		DeformerConstruction&,
-		const Assets::RendererConstruction&);
+		const ModelRendererConstruction&);
 
 	void ConfigureGPUSkinDeformers(
 		DeformerConstruction&,
-		const Assets::RendererConstruction&,
+		const ModelRendererConstruction&,
 		std::shared_ptr<Internal::DeformerPipelineCollection>);
 
 	std::shared_ptr<Internal::DeformerPipelineCollection> CreateGPUSkinPipelineCollection(

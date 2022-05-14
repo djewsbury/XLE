@@ -7,7 +7,7 @@
 #include "../../Math/Matrix.h"
 #include <memory>
 
-namespace RenderCore { namespace Assets { class RendererConstruction; class ScaffoldCmdIterator; }}
+namespace RenderCore { namespace Assets { class ScaffoldCmdIterator; }}
 namespace BufferUploads { class IManager; }
 namespace std { template<typename T> class promise; }
 namespace RenderCore { namespace Techniques
@@ -19,6 +19,7 @@ namespace RenderCore { namespace Techniques
 	class DrawableInputAssembly;
 	class IDeformAcceleratorPool;
 	class DeformAccelerator;
+	class ModelRendererConstruction;
 
 	class DrawableConstructor : public std::enable_shared_from_this<DrawableConstructor>
 	{
@@ -58,7 +59,7 @@ namespace RenderCore { namespace Techniques
 		DrawableConstructor(
 			std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
 			BufferUploads::IManager& bufferUploads,
-			const Assets::RendererConstruction&,
+			const ModelRendererConstruction&,
 			const std::shared_ptr<IDeformAcceleratorPool>& =nullptr,
 			const std::shared_ptr<DeformAccelerator>& =nullptr);
 		~DrawableConstructor();
@@ -68,7 +69,7 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depVal;
 
 		void Add(
-			const Assets::RendererConstruction&, 
+			const ModelRendererConstruction&, 
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator);
 	};

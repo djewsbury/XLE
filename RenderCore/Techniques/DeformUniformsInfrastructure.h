@@ -7,12 +7,11 @@
 #include "DeformAccelerator.h"
 #include "../../Utility/ImpliedTyping.h"
 
-namespace RenderCore { namespace Assets { class RendererConstruction; }}
-
 namespace RenderCore { namespace Techniques
 {
 	class DeformerConstruction;
 	class ICompiledLayoutPool;
+	class ModelRendererConstruction;
 	
 	struct AnimatedUniform
 	{
@@ -23,7 +22,7 @@ namespace RenderCore { namespace Techniques
 	
 	void ConfigureDeformUniformsAttachment(
 		DeformerConstruction& deformerConstruction,
-		const Assets::RendererConstruction& rendererConstruction,
+		const ModelRendererConstruction& rendererConstruction,
 		RenderCore::Techniques::ICompiledLayoutPool& compiledLayoutPool,
 		IteratorRange<const AnimatedUniform*> animatedUniforms,
 		IteratorRange<const void*> defaultInstanceData);

@@ -12,9 +12,9 @@
 #include <vector>
 #include <memory>
 
-namespace RenderCore { namespace Assets { class MaterialScaffold; class SkeletonScaffold; }} // todo -- remove
+namespace RenderCore { namespace Assets { class ModelScaffold; class MaterialScaffold; class SkeletonScaffold; }} // todo -- remove
 
-namespace RenderCore { namespace Assets { class RendererConstruction; class DrawCallDesc; }}
+namespace RenderCore { namespace Assets { class DrawCallDesc; }}
 namespace RenderCore { class UniformsStreamInterface; }
 namespace BufferUploads { using CommandListID = uint32_t; }
 
@@ -33,6 +33,7 @@ namespace RenderCore { namespace Techniques
 	class IUniformBufferDelegate;
 	class DrawableConstructor;
 	class ExecuteDrawableContext;
+	class ModelRendererConstruction;
 
 	class ICustomDrawDelegate
 	{
@@ -74,7 +75,7 @@ namespace RenderCore { namespace Techniques
 
 		SimpleModelRenderer(
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-			const std::shared_ptr<Assets::RendererConstruction>& construction,
+			const std::shared_ptr<ModelRendererConstruction>& construction,
 			const std::shared_ptr<DrawableConstructor>& drawableConstructor,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool = nullptr,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator = nullptr,
@@ -87,7 +88,7 @@ namespace RenderCore { namespace Techniques
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-			const std::shared_ptr<Assets::RendererConstruction>& construction,
+			const std::shared_ptr<ModelRendererConstruction>& construction,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool = nullptr,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator = nullptr,
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {});
@@ -129,7 +130,7 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<DeformAccelerator> CreateDefaultDeformAccelerator(
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
-		const Assets::RendererConstruction& rendererConstruction);
+		const ModelRendererConstruction& rendererConstruction);
 
 	class RendererSkeletonInterface
 	{
@@ -151,7 +152,7 @@ namespace RenderCore { namespace Techniques
 			std::promise<std::shared_ptr<RendererSkeletonInterface>>&& skeletonInterfaceFuture,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator,
-			const std::shared_ptr<Assets::RendererConstruction>& construction);
+			const std::shared_ptr<ModelRendererConstruction>& construction);
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 

@@ -8,13 +8,13 @@
 #include "VisualisationUtils.h"
 #include "../../RenderCore/Assets/ModelScaffold.h"
 #include "../../RenderCore/Assets/MaterialScaffold.h"
-#include "../../RenderCore/Assets/ScaffoldCmdStream.h"
 #include "../../RenderCore/Assets/AnimationScaffoldInternal.h"
 #include "../../RenderCore/Techniques/SkinDeformer.h"
 #include "../../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderCore/Techniques/DeformAccelerator.h"
 #include "../../RenderCore/Techniques/DeformGeometryInfrastructure.h"
+#include "../../RenderCore/Techniques/ModelRendererConstruction.h"
 #include "../../RenderOverlays/AnimationVisualization.h"
 #include "../../SceneEngine/IScene.h"
 #include "../../Assets/Assets.h"
@@ -69,7 +69,7 @@ namespace ToolsRig
 	struct ModelSceneRendererState
 	{
 		std::shared_ptr<SimpleModelRenderer>		_renderer;
-		std::shared_ptr<RenderCore::Assets::RendererConstruction> _rendererConstruction;
+		std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction> _rendererConstruction;
 		std::shared_ptr<ModelScaffold>	_modelScaffoldForEmbeddedSkeleton;
 		std::shared_ptr<SkeletonScaffold>			_skeletonScaffold;
 		std::shared_ptr<AnimationSetScaffold>		_animationScaffold;
@@ -113,7 +113,7 @@ namespace ToolsRig
 			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators,
 			const ModelVisSettings& settings)
 		{
-			auto construction = std::make_shared<RenderCore::Assets::RendererConstruction>();
+			auto construction = std::make_shared<RenderCore::Techniques::ModelRendererConstruction>();
 			construction->AddElement().SetModelAndMaterialScaffolds(settings._modelName, settings._materialName);
 			auto rendererFuture = ::Assets::MakeAssetPtr<SimpleModelRenderer>(pipelineAcceleratorPool, construction, deformAccelerators);
 
