@@ -21,6 +21,7 @@
 #include "../../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
+#include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Metal/InputLayout.h"
 #include "../../../RenderCore/Format.h"

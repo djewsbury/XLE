@@ -34,6 +34,7 @@ namespace RenderCore { namespace Techniques
 	class ActualizedDescriptorSet;
 	class CompiledPipelineLayoutAsset;
 	class DeformerToDescriptorSetBinding;
+	class ICompiledLayoutPool;
 
 	// Switching this to a virtual interface style class in order to better support multiple DLLs/modules
 	// For many objects like the SimpleModelRenderer, the pipeline accelerator pools is one of the main
@@ -89,6 +90,7 @@ namespace RenderCore { namespace Techniques
 
 		virtual void	RebuildAllOutOfDatePipelines() = 0;
 		virtual const std::shared_ptr<IDevice>& GetDevice() const = 0;
+		virtual const std::shared_ptr<ICompiledLayoutPool>& GetCompiledLayoutPool() const = 0;
 
 		virtual void 	LockForReading() const = 0;
 		virtual void 	UnlockForReading() const = 0;
@@ -146,7 +148,7 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<IPipelineAcceleratorPool> CreatePipelineAcceleratorPool(
 		const std::shared_ptr<IDevice>&,
-		const std::shared_ptr<DescriptorSetLayoutAndBinding>& matDescSetLayout,
+		const std::shared_ptr<ICompiledLayoutPool>&,
 		PipelineAcceleratorPoolFlags::BitField flags = 0);
 }}
 

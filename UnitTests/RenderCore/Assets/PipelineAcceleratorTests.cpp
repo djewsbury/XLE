@@ -17,7 +17,7 @@
 #include "../../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
-#include "../../../RenderCore/Techniques/PipelineOperators.h"
+#include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
 #include "../../../RenderCore/Metal/Shader.h"
 #include "../../../RenderCore/Metal/InputLayout.h"
 #include "../../../RenderCore/Metal/State.h"

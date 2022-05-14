@@ -4,7 +4,7 @@
 
 #include "CompiledShaderPatchCollection.h"
 #include "TechniqueUtils.h"
-#include "PipelineOperators.h"
+#include "CompiledLayoutPool.h"
 #include "../Assets/ShaderPatchCollection.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedPipelineLayout.h"

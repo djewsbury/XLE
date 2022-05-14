@@ -13,6 +13,7 @@
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"
+#include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../RenderCore/Metal/Resource.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"

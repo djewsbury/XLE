@@ -44,10 +44,11 @@ namespace RenderCore { namespace Techniques
 		void OnFrameBarrier() override;
 		ReadyInstancesMetrics GetMetrics() const override;
 		const std::shared_ptr<IDevice>& GetDevice() const override;
+		const std::shared_ptr<ICompiledLayoutPool>& GetCompiledLayoutPool() const override;
 
 		std::shared_ptr<IResource> GetDynamicPageResource() const override;
 
-		DeformAcceleratorPool(std::shared_ptr<IDevice>);
+		DeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<ICompiledLayoutPool>);
 		~DeformAcceleratorPool();
 
 	private:
@@ -56,6 +57,7 @@ namespace RenderCore { namespace Techniques
 		std::unique_ptr<RenderCore::Metal_Vulkan::TemporaryStorageManager> _temporaryStorageManager;
 		std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
 		std::vector<RenderCore::Metal_Vulkan::CmdListAttachedStorage> _currentFrameAttachedStorage;
+		std::shared_ptr<ICompiledLayoutPool> _compiledLayoutPool;
 		mutable bool _pendingVertexInputBarrier = false;
 
 		RenderCore::Metal_Vulkan::NamedPage _cbNamedPage = ~0u;
@@ -394,33 +396,12 @@ namespace RenderCore { namespace Techniques
 			assert(accelerator._uniformBufferPageResourceBaseOffset != ~0u);
 			return accelerator._uniformBufferPageResourceBaseOffset + accelerator._instanceToReadiedOffset[AllocationType_UniformBuffer][instanceIdx];
 		}
-
-		IteratorRange<const void*> GetOutputParameterState(DeformAccelerator& accelerator, unsigned instanceIdx)
-		{
-			assert(0);
-			return {};
-			/*assert(!accelerator._outputParameterValues.empty());
-			return MakeIteratorRange(
-				PtrAdd(accelerator._outputParameterValues.data(), instanceIdx*accelerator._parametersReservationPerInstance),
-				PtrAdd(accelerator._outputParameterValues.data(), (instanceIdx+1)*accelerator._parametersReservationPerInstance));*/
-		}
 	}
 	
 	std::shared_ptr<IResource> DeformAcceleratorPool::GetDynamicPageResource() const
 	{
 		return _cbPageResource;
 	}
-
-#if 0
-	RenderCore::Metal_Vulkan::TemporaryStorageResourceMap AllocateFromDynamicPageResource(IDeformAcceleratorPool& accelerators, unsigned bytes)
-	{
-		auto& realAccelerators = *checked_cast<DeformAcceleratorPool*>(&accelerators);
-		bytes = CeilToMultiple(bytes, realAccelerators.GetDynamicPageResourceAlignment());	// for safety, ceil up to alignment
-		if (!realAccelerators._cbPageResourceAttachedStorage)
-			realAccelerators._cbPageResourceAttachedStorage = realAccelerators._temporaryStorageManager->BeginCmdListReservation();
-		return realAccelerators._cbPageResourceAttachedStorage.MapStorageFromNamedPage(bytes, realAccelerators._cbNamedPage);
-	}
-#endif
 
 	inline void DeformAcceleratorPool::OnFrameBarrier()
 	{
@@ -460,8 +441,14 @@ namespace RenderCore { namespace Techniques
 		return _device;
 	}
 
-	DeformAcceleratorPool::DeformAcceleratorPool(std::shared_ptr<IDevice> device)
+	const std::shared_ptr<ICompiledLayoutPool>& DeformAcceleratorPool::GetCompiledLayoutPool() const
+	{
+		return _compiledLayoutPool;
+	}
+
+	DeformAcceleratorPool::DeformAcceleratorPool(std::shared_ptr<IDevice> device, std::shared_ptr<ICompiledLayoutPool> compiledLayoutPool)
 	: _device(std::move(device))
+	, _compiledLayoutPool(std::move(compiledLayoutPool))
 	{
 		auto* deviceVulkan = (RenderCore::IDeviceVulkan*)_device->QueryInterface(typeid(RenderCore::IDeviceVulkan).hash_code());
 		if (deviceVulkan) {
@@ -483,8 +470,8 @@ namespace RenderCore { namespace Techniques
 	IDeformAcceleratorPool::IDeformAcceleratorPool() : _guid(s_nextDeformAcceleratorPool++) {}
 	IDeformAcceleratorPool::~IDeformAcceleratorPool() {}
 
-	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device)
+	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device, std::shared_ptr<ICompiledLayoutPool> compiledLayoutPool)
 	{
-		return std::make_shared<DeformAcceleratorPool>(std::move(device));
+		return std::make_shared<DeformAcceleratorPool>(std::move(device), std::move(compiledLayoutPool));
 	}
 }}

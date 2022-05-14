@@ -6,18 +6,18 @@
 #include "CommonResources.h"
 #include "RenderPass.h"
 #include "ParsingContext.h"
-#include "Drawables.h"
+#include "CompiledLayoutPool.h"
 #include "DrawablesInternal.h"
 #include "DrawableDelegates.h"
-#include "PipelineAcceleratorInternal.h"
-#include "Services.h"
+#include "PipelineAcceleratorInternal.h"		// for BoundUniformsPool
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
 #include "../Metal/Shader.h"
 #include "../Metal/ObjectFactory.h"
 #include "../../Assets/Assets.h"
-#include "../../Utility/Streams/PathUtils.h"
+#include "../../Assets/Marker.h"
+#include "../../Assets/Continuation.h"
 #include "../../xleres/FileList.h"
 
 namespace Assets 
@@ -459,101 +459,5 @@ namespace RenderCore { namespace Techniques
 
 	IShaderOperator::~IShaderOperator() {}
 	IComputeShaderOperator::~IComputeShaderOperator() {}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	const ::Assets::DependencyValidation CompiledPipelineLayoutAsset::GetDependencyValidation() const { return _predefinedLayout->GetDependencyValidation(); };
-
-	CompiledPipelineLayoutAsset::CompiledPipelineLayoutAsset(
-		std::shared_ptr<RenderCore::IDevice> device,
-		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> predefinedLayout,
-		std::shared_ptr<DescriptorSetLayoutAndBinding> patchInDescSet,
-		RenderCore::ShaderLanguage shaderLanguage)
-	: _predefinedLayout(std::move(predefinedLayout))
-	{
-		assert(Services::HasInstance() && Services::GetCommonResources());
-		auto& commonResources = *Services::GetCommonResources();
-		auto initializer = _predefinedLayout->MakePipelineLayoutInitializer(shaderLanguage, &commonResources._samplerPool);
-		if (patchInDescSet) {
-			if (patchInDescSet->GetSlotIndex() >= initializer._descriptorSets.size())
-				initializer._descriptorSets.resize(patchInDescSet->GetSlotIndex()+1);
-			auto& dst = initializer._descriptorSets[patchInDescSet->GetSlotIndex()];
-			dst._signature = patchInDescSet->GetLayout()->MakeDescriptorSetSignature(&commonResources._samplerPool);
-			dst._name = patchInDescSet->GetName();
-			dst._pipelineType = patchInDescSet->GetPipelineType();
-		}
-		_pipelineLayout = device->CreatePipelineLayout(initializer);
-	}
-
-	void CompiledPipelineLayoutAsset::ConstructToPromise(
-		std::promise<std::shared_ptr<CompiledPipelineLayoutAsset>>&& promise,
-		const std::shared_ptr<RenderCore::IDevice>& device,
-		StringSection<> srcFile,
-		const std::shared_ptr<DescriptorSetLayoutAndBinding>& patchInDescSet,
-		RenderCore::ShaderLanguage shaderLanguage)
-	{
-		using namespace RenderCore;
-		auto src = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(srcFile);
-		::Assets::WhenAll(src).ThenConstructToPromise(
-			std::move(promise),
-			[device, patchInDescSet, shaderLanguage](auto predefinedLayout) {
-				return std::make_shared<CompiledPipelineLayoutAsset>(device, predefinedLayout, patchInDescSet, shaderLanguage);
-			});
-	}
-
-	DescriptorSetLayoutAndBinding::DescriptorSetLayoutAndBinding(
-		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& layout,
-		unsigned slotIdx,
-		const std::string& name,
-		PipelineType pipelineType,
-		::Assets::DependencyValidation depVal)
-	: _layout(layout), _slotIdx(slotIdx)
-	, _name(name), _pipelineType(pipelineType)
-	, _depVal(std::move(depVal))
-	{
-		if (layout) {
-			_hash = HashCombine(layout->CalculateHash(), HashCombine(slotIdx, (uint64_t)_pipelineType));
-		} else {
-			_hash = 0;
-		}
-	}
-
-	DescriptorSetLayoutAndBinding::DescriptorSetLayoutAndBinding()
-	{
-		_hash = 0;
-		_slotIdx = ~0u;
-		_pipelineType = PipelineType::Graphics;
-	}
-
-	DescriptorSetLayoutAndBinding::~DescriptorSetLayoutAndBinding()
-	{}
-
-	std::shared_ptr<DescriptorSetLayoutAndBinding> FindLayout(const RenderCore::Assets::PredefinedPipelineLayoutFile& file, const std::string& pipelineLayoutName, const std::string& descriptorSetName, PipelineType pipelineType)
-	{
-		auto pipeline = file._pipelineLayouts.find(pipelineLayoutName);
-		if (pipeline == file._pipelineLayouts.end())
-			return nullptr;
-
-		auto i = std::find_if(pipeline->second->_descriptorSets.begin(), pipeline->second->_descriptorSets.end(),
-			[descriptorSetName](const auto& c) {
-				return c._name == descriptorSetName;
-			});
-		if (i == pipeline->second->_descriptorSets.end())
-			return {};
-		
-		return std::make_shared<DescriptorSetLayoutAndBinding>(i->_descSet, (unsigned)std::distance(pipeline->second->_descriptorSets.begin(), i), descriptorSetName, pipelineType, file.GetDependencyValidation());
-	}
-
-	std::shared_ptr<DescriptorSetLayoutAndBinding> FindLayout(const RenderCore::Assets::PredefinedPipelineLayout& pipeline, const std::string& descriptorSetName, PipelineType pipelineType)
-	{
-		auto i = std::find_if(pipeline._descriptorSets.begin(), pipeline._descriptorSets.end(),
-			[descriptorSetName](const auto& c) {
-				return c._name == descriptorSetName;
-			});
-		if (i == pipeline._descriptorSets.end())
-			return {};
-		
-		return std::make_shared<DescriptorSetLayoutAndBinding>(i->_descSet, (unsigned)std::distance(pipeline._descriptorSets.begin(), i), descriptorSetName, pipelineType, pipeline.GetDependencyValidation());
-	}
 
 }}

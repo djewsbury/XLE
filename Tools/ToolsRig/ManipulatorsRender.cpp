@@ -16,7 +16,7 @@
 #include "../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderCore/Techniques/Services.h"
-#include "../../RenderCore/Techniques/PipelineOperators.h"
+#include "../../RenderCore/Techniques/CompiledLayoutPool.h"
 #include "../../RenderCore/Techniques/Drawables.h"
 #include "../../RenderCore/Assets/PredefinedCBLayout.h"
 #include "../../RenderCore/Techniques/RenderPass.h"

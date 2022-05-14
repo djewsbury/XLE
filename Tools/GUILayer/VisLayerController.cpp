@@ -149,13 +149,13 @@ namespace GUILayer
 		auto immediateDrawables = EngineDevice::GetInstance()->GetNative().GetImmediateDrawables();
 		auto immediateDrawableApparatus = EngineDevice::GetInstance()->GetNative().GetImmediateDrawingApparatus();
 		auto lightingEngineApparatus = EngineDevice::GetInstance()->GetNative().GetLightingEngineApparatus();
-		auto primraryResourcesApparatus = EngineDevice::GetInstance()->GetNative().GetPrimaryResourcesApparatus();
+		auto primaryResourcesApparatus = EngineDevice::GetInstance()->GetNative().GetPrimaryResourcesApparatus();
 
 		_pimpl.reset(new VisLayerControllerPimpl());
 		_pimpl->_mouseOver = std::make_shared<ToolsRig::VisMouseOver>();
 		_pimpl->_animState = std::make_shared<ToolsRig::VisAnimationState>();
 
-		_pimpl->_modelLayer = ToolsRig::CreateSimpleSceneLayer(immediateDrawableApparatus, lightingEngineApparatus, primraryResourcesApparatus->_deformAccelerators);
+		_pimpl->_modelLayer = ToolsRig::CreateSimpleSceneLayer(immediateDrawableApparatus, lightingEngineApparatus, drawingApparatus->_deformAccelerators);
 		_pimpl->_modelLayer->Set(ToolsRig::VisEnvSettings{});
 
 		_pimpl->_visOverlay = std::make_shared<ToolsRig::VisualisationOverlay>(

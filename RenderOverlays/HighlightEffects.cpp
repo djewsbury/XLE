@@ -17,7 +17,7 @@
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/DeferredShaderResource.h"
-#include "../../RenderCore/Techniques/PipelineOperators.h"
+#include "../../RenderCore/Techniques/CompiledLayoutPool.h"
 #include "../../RenderCore/Format.h"
 #include "../../RenderCore/BufferView.h"
 #include "../../RenderCore/IDevice.h"

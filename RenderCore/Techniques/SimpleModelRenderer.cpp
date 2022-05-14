@@ -418,7 +418,7 @@ namespace RenderCore { namespace Techniques
 		for (auto ele:*construction) {
 			auto modelScaffold = ele.GetModelScaffold();
 			if (modelScaffold) {
-				const SkeletonMachine* primarySkeleton = &externalSkeletonScaffold->GetSkeletonMachine();
+				const SkeletonMachine* primarySkeleton = externalSkeletonScaffold ? &externalSkeletonScaffold->GetSkeletonMachine() : nullptr;
 				const SkeletonMachine* secondarySkeleton = modelScaffold->EmbeddedSkeleton();
 				
 				// support 2 skeletons -- in this way if there are nodes that are not matched to the external skeleton,

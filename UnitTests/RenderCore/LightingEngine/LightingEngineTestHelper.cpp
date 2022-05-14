@@ -18,6 +18,7 @@
 #include "../../../RenderCore/Techniques/PipelineCollection.h"
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/Techniques/PipelineOperators.h"
+#include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../ShaderParser/AutomaticSelectorFiltering.h"
 #include "../../../Assets/OSFileSystem.h"
@@ -57,8 +58,10 @@ namespace UnitTests
 		_compilerRegistrations.push_back(RenderCore::RegisterShaderCompiler(_metalTestHelper->_shaderSource, compilers));
 		_compilerRegistrations.push_back(RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(_metalTestHelper->_shaderSource, compilers));
 
+		auto matDescSetLayout = MakeMaterialDescriptorSetLayout();
+		auto compiledLayoutPool = CreateCompiledLayoutPool(_metalTestHelper->_device, matDescSetLayout);
 		_pipelineAcceleratorPool = Techniques::CreatePipelineAcceleratorPool(
-			_metalTestHelper->_device, MakeMaterialDescriptorSetLayout(), Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
+			_metalTestHelper->_device, compiledLayoutPool, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
 
 		_sharedDelegates = std::make_shared<LightingEngine::SharedTechniqueDelegateBox>();
 		_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*_metalTestHelper->_device);

@@ -12,6 +12,7 @@
 #include "RenderPass.h"
 #include "ParsingContext.h"
 #include "PipelineOperators.h"
+#include "CompiledLayoutPool.h"
 #include "../Assets/RawMaterial.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/ShaderPatchCollection.h"
@@ -347,7 +348,8 @@ namespace RenderCore { namespace Techniques
 			auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(_techniqueDelegate->GetPipelineLayout());
 			pipelineLayout->StallWhilePending();
 			auto matDescSetLayout = FindLayout(*pipelineLayout->Actualize(), "Material", PipelineType::Graphics);
-			_pipelineAcceleratorPool = CreatePipelineAcceleratorPool(device, matDescSetLayout, 0);
+			auto compiledLayoutPool = CreateCompiledLayoutPool(device, matDescSetLayout);
+			_pipelineAcceleratorPool = CreatePipelineAcceleratorPool(device, compiledLayoutPool, 0);
 			_lastQueuedDrawable = nullptr;
 			_lastQueuedDrawVertexCountOffset = 0;
 		}

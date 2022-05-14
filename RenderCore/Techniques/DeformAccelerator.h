@@ -20,6 +20,7 @@ namespace RenderCore { namespace Techniques
 	class DeformAccelerator;
 	class IDeformAttachment;
 	class IDeformUniformsAttachment;
+	class ICompiledLayoutPool;
 
 	class IDeformAcceleratorPool
 	{
@@ -45,6 +46,7 @@ namespace RenderCore { namespace Techniques
 
 		unsigned GetGUID() const { return _guid; }
 		virtual const std::shared_ptr<IDevice>& GetDevice() const = 0;
+		virtual const std::shared_ptr<ICompiledLayoutPool>& GetCompiledLayoutPool() const = 0;
 
 		struct ReadyInstancesMetrics;
 		virtual ReadyInstancesMetrics GetMetrics() const = 0;
@@ -86,7 +88,7 @@ namespace RenderCore { namespace Techniques
 		virtual ~IDeformUniformsAttachment() = default;
 	};
 
-	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device);
+	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<ICompiledLayoutPool>);
 
 	struct IDeformAcceleratorPool::ReadyInstancesMetrics
 	{
@@ -106,7 +108,6 @@ namespace RenderCore { namespace Techniques
 	namespace Internal
 	{
 		VertexBufferView GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceIdx);
-		// IteratorRange<const void*> GetOutputParameterState(DeformAccelerator& accelerator, unsigned instanceIdx);
 		unsigned GetUniformPageBufferOffset(DeformAccelerator& accelerator, unsigned instanceIdx);
 	}
 

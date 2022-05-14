@@ -78,6 +78,8 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<IUniformDelegateManager> _mainUniformDelegateManager;
 
+		std::shared_ptr<IDeformAcceleratorPool> _deformAccelerators;
+
 		SignalDelegateId _frameBarrierBinding, _onCheckCompleteInitialization;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
@@ -124,8 +126,6 @@ namespace RenderCore { namespace Techniques
 		::Assets::CompilerRegistration _mergedAnimSetCompilerRegistration;
 
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
-
-		std::shared_ptr<IDeformAcceleratorPool> _deformAccelerators;
 
 		SignalDelegateId _prePresentBinding;
 		SignalDelegateId _frameBarrierBinding;

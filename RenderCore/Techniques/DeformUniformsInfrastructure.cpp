@@ -5,7 +5,7 @@
 #include "DeformUniformsInfrastructure.h"
 #include "DeformOperationFactory.h"
 #include "CompiledShaderPatchCollection.h"
-#include "PipelineOperators.h"
+#include "CompiledLayoutPool.h"
 #include "../Assets/ScaffoldCmdStream.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedCBLayout.h"
@@ -204,7 +204,7 @@ namespace RenderCore { namespace Techniques
 	void ConfigureDeformUniformsAttachment(
 		DeformerConstruction& deformerConstruction,
 		const Assets::RendererConstruction& rendererConstruction,
-		const DescriptorSetLayoutAndBinding& matDescSetLayout,
+		RenderCore::Techniques::ICompiledLayoutPool& compiledLayoutPool,
 		IteratorRange<const AnimatedUniform*> animatedUniforms,
 		IteratorRange<const void*> defaultInstanceData)
 	{
@@ -243,7 +243,7 @@ namespace RenderCore { namespace Techniques
 				// includes any modifications made by the CompiledShaderPatchCollection...
 				std::vector<std::pair<unsigned, AnimatedUniformBufferHelper>> animBuffers;
 				if (shaderPatchCollection) {
-					auto patchCollectionFuture = ::Assets::MakeAssetPtr<CompiledShaderPatchCollection>(*shaderPatchCollection, matDescSetLayout);
+					auto patchCollectionFuture = compiledLayoutPool.GetPatchCollectionFuture(*shaderPatchCollection);
 					patchCollectionFuture->StallWhilePending();
 					auto compiledPatchCollection = patchCollectionFuture->Actualize();
 					animBuffers = FindAnimatedUniformsBuffers(
@@ -253,7 +253,7 @@ namespace RenderCore { namespace Techniques
 						shrLanguage);
 				} else {
 					animBuffers = FindAnimatedUniformsBuffers(
-						*matDescSetLayout.GetLayout(),
+						compiledLayoutPool.GetBaseMaterialDescriptorSetLayout(),
 						animatedUniforms,
 						constants,
 						shrLanguage);

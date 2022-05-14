@@ -424,7 +424,7 @@ namespace UnitTests
 		rendererConstruction->AddElement().SetModelScaffold(modelScaffold);
 		StallWhilePending(*rendererConstruction);
 		
-		auto pool = Techniques::CreateDeformAcceleratorPool(testHelper->_device);
+		auto pool = Techniques::CreateDeformAcceleratorPool(testHelper->_device, techniqueTestHelper._compiledLayoutPool);
 		
 		{
 			auto cpuAccelerator = pool->CreateDeformAccelerator();

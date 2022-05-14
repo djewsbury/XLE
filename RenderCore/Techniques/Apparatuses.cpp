@@ -19,6 +19,7 @@
 #include "Drawables.h"
 #include "PipelineCollection.h"
 #include "PipelineOperators.h"
+#include "CompiledLayoutPool.h"
 #include "../Assets/TextureCompiler.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/PipelineConfigurationUtils.h"
@@ -96,11 +97,11 @@ namespace RenderCore { namespace Techniques
 		if (i2 == matDescSetLayoutContainer->_descriptorSets.end())
 			Throw(std::runtime_error("Missing 'Material' descriptor set entry in material pipeline file"));
 
-		PipelineAcceleratorPoolFlags::BitField poolFlags = 0;
-		_pipelineAccelerators = CreatePipelineAcceleratorPool(
-			device,
-			std::make_shared<DescriptorSetLayoutAndBinding>(i2->second, FindMaterialDescSetSlotIdx(*_pipelineLayoutFile), "Material", PipelineType::Graphics, matDescSetLayoutContainer->GetDependencyValidation()),
-			poolFlags);
+		auto descSetAndBinding = std::make_shared<DescriptorSetLayoutAndBinding>(i2->second, FindMaterialDescSetSlotIdx(*_pipelineLayoutFile), "Material", PipelineType::Graphics, matDescSetLayoutContainer->GetDependencyValidation());		 
+		auto compiledLayoutPool = CreateCompiledLayoutPool(device, descSetAndBinding);
+		const PipelineAcceleratorPoolFlags::BitField poolFlags = 0;
+		_pipelineAccelerators = CreatePipelineAcceleratorPool(device, compiledLayoutPool, poolFlags);
+		_deformAccelerators = CreateDeformAcceleratorPool(device, compiledLayoutPool);
 		
 		_systemUniformsDelegate = std::make_shared<SystemUniformsDelegate>(*_device);
 
@@ -112,9 +113,12 @@ namespace RenderCore { namespace Techniques
 
 		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
 		_frameBarrierBinding = subFrameEvents._onFrameBarrier.Bind(
-			[pa=std::weak_ptr<IPipelineAcceleratorPool>{_pipelineAccelerators}]() {
+			[pa=std::weak_ptr<IPipelineAcceleratorPool>{_pipelineAccelerators},
+			 da=std::weak_ptr<IDeformAcceleratorPool>{_deformAccelerators}]() {
 				auto l = pa.lock();
 				if (l) l->RebuildAllOutOfDatePipelines();
+				auto l2 = da.lock();
+				if (l2) l2->OnFrameBarrier();
 			});
 
 		_onCheckCompleteInitialization = subFrameEvents._onCheckCompleteInitialization.Bind(
@@ -184,8 +188,6 @@ namespace RenderCore { namespace Techniques
 		//   P R I M A R Y   R E S O U R C E S   //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	extern IDeformAcceleratorPool* g_hack_deformAccelerators;
-
 	PrimaryResourcesApparatus::PrimaryResourcesApparatus(std::shared_ptr<IDevice> device)
 	{
 		if (!_techniqueServices)
@@ -197,13 +199,6 @@ namespace RenderCore { namespace Techniques
 		_techniqueServices->RegisterTextureLoader(std::regex{R"(.*\.[dD][dD][sS])"}, RenderCore::Assets::CreateDDSTextureLoader());
 		_techniqueServices->RegisterTextureLoader(std::regex{R"(.*\.[hH][dD][rR])"}, RenderCore::Assets::CreateHDRTextureLoader());
 		_techniqueServices->SetFallbackTextureLoader(RenderCore::Assets::CreateWICTextureLoader());
-
-		auto pipelineCollection = std::make_shared<Techniques::PipelineCollection>(device);
-		_techniqueServices->GetDeformOperationFactorySet().Register("skin", CreateGPUSkinDeformerFactory(pipelineCollection));
-		_techniqueServices->GetDeformOperationFactorySet().Register("cpu_skin", CreateCPUSkinDeformerFactory());
-		_deformAccelerators = CreateDeformAcceleratorPool(device);
-
-		g_hack_deformAccelerators = _deformAccelerators.get();
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		_materialCompilerRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);
@@ -219,11 +214,8 @@ namespace RenderCore { namespace Techniques
 			});
 
 		_frameBarrierBinding = subFrameEvents._onFrameBarrier.Bind(
-			[weakDeformAccelerators=std::weak_ptr<IDeformAcceleratorPool>{_deformAccelerators}]() {
+			[]() {
 				::Assets::Services::GetAssetSets().OnFrameBarrier();
-
-				auto da=weakDeformAccelerators.lock();
-				if (da) da->OnFrameBarrier();
 			});
 
 		assert(_assetServices != nullptr);

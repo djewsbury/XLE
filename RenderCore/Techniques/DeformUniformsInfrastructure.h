@@ -12,7 +12,7 @@ namespace RenderCore { namespace Assets { class RendererConstruction; }}
 namespace RenderCore { namespace Techniques
 {
 	class DeformerConstruction;
-	class DescriptorSetLayoutAndBinding;
+	class ICompiledLayoutPool;
 	
 	struct AnimatedUniform
 	{
@@ -24,7 +24,7 @@ namespace RenderCore { namespace Techniques
 	void ConfigureDeformUniformsAttachment(
 		DeformerConstruction& deformerConstruction,
 		const Assets::RendererConstruction& rendererConstruction,
-		const DescriptorSetLayoutAndBinding& matDescSetLayout,
+		RenderCore::Techniques::ICompiledLayoutPool& compiledLayoutPool,
 		IteratorRange<const AnimatedUniform*> animatedUniforms,
 		IteratorRange<const void*> defaultInstanceData);
 

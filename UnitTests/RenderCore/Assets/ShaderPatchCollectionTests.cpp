@@ -12,6 +12,7 @@
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
+#include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../RenderCore/IDevice.h"
 #include "../../../ShaderParser/ShaderInstantiation.h"

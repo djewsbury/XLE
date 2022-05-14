@@ -25,7 +25,7 @@
 #include "../RenderCore/Techniques/DrawablesInternal.h"
 #include "../RenderCore/Techniques/Services.h"
 #include "../RenderCore/Techniques/CommonUtils.h"
-#include "../RenderCore/Techniques/PipelineOperators.h"
+#include "../RenderCore/Techniques/CompiledLayoutPool.h"
 #include "../Assets/Assets.h"
 #include "../Assets/DepVal.h"
 #include "../Math/Transformations.h"
