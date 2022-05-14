@@ -6,8 +6,9 @@
 
 #pragma once
 
-#include "../Assets/ModelScaffoldInternal.h"
+#include "../Assets/ModelMachine.h"
 #include "../Format.h"
+#include "../../Math/Matrix.h"
 #include <vector>
 
 namespace Assets { class BlockSerializer; }

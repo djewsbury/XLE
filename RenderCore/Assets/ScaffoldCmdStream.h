@@ -129,7 +129,7 @@ namespace RenderCore { namespace Assets
 	std::shared_ptr<IScaffoldNavigation> CreateSimpleScaffoldNavigation(std::shared_ptr<ScaffoldAsset> scaffoldAsset);
 #endif
 
-	class ModelScaffoldCmdStreamForm;
+	class ModelScaffold;
 	class MaterialScaffold;
 	class SkeletonScaffold;
 
@@ -142,10 +142,10 @@ namespace RenderCore { namespace Assets
 		public:
 			ElementConstructor& SetModelAndMaterialScaffolds(StringSection<> model, StringSection<> material);
 			
-			ElementConstructor& SetModelScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>&);
+			ElementConstructor& SetModelScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffold>&);
 			ElementConstructor& SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<MaterialScaffold>&);
 			
-			ElementConstructor& SetModelScaffold(const std::shared_ptr<ModelScaffoldCmdStreamForm>&);
+			ElementConstructor& SetModelScaffold(const std::shared_ptr<ModelScaffold>&);
 			ElementConstructor& SetMaterialScaffold(const std::shared_ptr<MaterialScaffold>&);
 
 			ElementConstructor& SetRootTransform(const Float4x4&);
@@ -190,8 +190,8 @@ namespace RenderCore { namespace Assets
 	{
 	public:
 		using ElementId = unsigned;
-		using ModelScaffoldMarker = ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>;
-		using ModelScaffoldPtr = std::shared_ptr<ModelScaffoldCmdStreamForm>;
+		using ModelScaffoldMarker = ::Assets::PtrToMarkerPtr<ModelScaffold>;
+		using ModelScaffoldPtr = std::shared_ptr<ModelScaffold>;
 		using MaterialScaffoldMarker = ::Assets::PtrToMarkerPtr<MaterialScaffold>;
 		using MaterialScaffoldPtr = std::shared_ptr<MaterialScaffold>;
 
@@ -219,7 +219,7 @@ namespace RenderCore { namespace Assets
 		class Value
 		{
 		public:
-			std::shared_ptr<ModelScaffoldCmdStreamForm> GetModelScaffold() const;
+			std::shared_ptr<ModelScaffold> GetModelScaffold() const;
 			std::shared_ptr<MaterialScaffold> GetMaterialScaffold() const;
 			std::string GetModelScaffoldName() const;
 			std::string GetMaterialScaffoldName() const;

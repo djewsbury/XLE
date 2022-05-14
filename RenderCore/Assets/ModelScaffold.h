@@ -26,8 +26,10 @@ namespace RenderCore { namespace Assets
 	class AnimationImmutableData;
 	class ModelImmutableData;
 	class ModelSupplementImmutableData;
+	struct ModelDefaultPoseData;
+	struct ModelRootData;
 
-	typedef uint64_t MaterialGuid;
+	using MaterialGuid = uint64_t;
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -53,36 +55,6 @@ namespace RenderCore { namespace Assets
 	class ModelScaffold
 	{
 	public:
-		const ModelCommandStream&       CommandStream() const;
-		const ModelImmutableData&       ImmutableData() const;
-		const SkeletonMachine&			EmbeddedSkeleton() const;
-		std::pair<Float3, Float3>       GetStaticBoundingBox(unsigned lodIndex = 0) const;
-		unsigned                        GetMaxLOD() const;
-
-		const ::Assets::DependencyValidation&		GetDependencyValidation() const { return _depVal; }
-		std::shared_ptr<::Assets::IFileInterface>	OpenLargeBlocks() const;
-
-		static const auto CompileProcessType = ConstHash64<'Mode', 'l'>::Value;
-		static const ::Assets::ArtifactRequest ChunkRequests[2];
-
-		ModelScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
-		ModelScaffold(ModelScaffold&& moveFrom) never_throws;
-		ModelScaffold& operator=(ModelScaffold&& moveFrom) never_throws;
-		ModelScaffold();
-		~ModelScaffold();
-
-	private:
-		std::unique_ptr<uint8[], PODAlignedDeletor>		_rawMemoryBlock;
-		::Assets::ArtifactReopenFunction				_largeBlocksReopen;
-		::Assets::DependencyValidation					_depVal;
-	};
-
-	struct ModelDefaultPoseData;
-	struct ModelRootData;
-
-	class ModelScaffoldCmdStreamForm
-	{
-	public:
 		IteratorRange<ScaffoldCmdIterator> CommandStream() const;
 
 		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
@@ -99,9 +71,9 @@ namespace RenderCore { namespace Assets
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		std::shared_ptr<::Assets::IFileInterface> OpenLargeBlocks() const;
 
-		ModelScaffoldCmdStreamForm();
-		ModelScaffoldCmdStreamForm(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
-		~ModelScaffoldCmdStreamForm();
+		ModelScaffold();
+		ModelScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
+		~ModelScaffold();
 
 		static const auto CompileProcessType = ConstHash64<'Mode', 'l'>::Value;
 		static const ::Assets::ArtifactRequest ChunkRequests[2];
@@ -120,9 +92,9 @@ namespace RenderCore { namespace Assets
 		IteratorRange<ScaffoldCmdIterator> GetOuterCommandStream() const;
 	};
 
-	inline IteratorRange<ScaffoldCmdIterator> ModelScaffoldCmdStreamForm::CommandStream() const { return _commandStream; }
+	inline IteratorRange<ScaffoldCmdIterator> ModelScaffold::CommandStream() const { return _commandStream; }
 
-	inline auto ModelScaffoldCmdStreamForm::GetGeoMachine(GeoIdx idx) const -> Machine
+	inline auto ModelScaffold::GetGeoMachine(GeoIdx idx) const -> Machine
 	{
 		 assert(idx < _geoMachines.size());
 		 return _geoMachines[idx];

@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include "../Types.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/MemoryUtils.h"

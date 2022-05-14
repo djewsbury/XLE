@@ -75,7 +75,7 @@ namespace UnitTests
 		return result;
 	}
 
-	std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> MakeTestAnimatedModel()
+	std::shared_ptr<RenderCore::Assets::ModelScaffold> MakeTestAnimatedModel()
 	{
 		// Create a model scaffold from a very simple cube model
 		// Each vertex has 8 weights and there are 8 joints in total
@@ -157,12 +157,12 @@ namespace UnitTests
 			MakeIteratorRange(serializedChunk),
 			::Assets::AssetState::Ready, ::Assets::DependencyValidation{});
 
-		return ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm>>(*artifactCollection);
+		return ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ModelScaffold>>(*artifactCollection);
 	}
 
 	static IResourcePtr LoadStorageBuffer(
 		IDevice& device,
-		const RenderCore::Assets::ModelScaffoldCmdStreamForm& scaffold,
+		const RenderCore::Assets::ModelScaffold& scaffold,
 		const RenderCore::Assets::VertexData& vb)
 	{
 		auto buffer = std::make_unique<uint8[]>(vb._size);
@@ -180,7 +180,7 @@ namespace UnitTests
 	}
 
 	std::vector<uint8_t> LoadCPUVertexBuffer(
-		const RenderCore::Assets::ModelScaffoldCmdStreamForm& scaffold,
+		const RenderCore::Assets::ModelScaffold& scaffold,
 		const RenderCore::Assets::VertexData& vb)
 	{
 		std::vector<uint8_t> result;
@@ -192,7 +192,7 @@ namespace UnitTests
 		return result;
 	}
 
-	static std::vector<Float4x4> BasePose(std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold)
+	static std::vector<Float4x4> BasePose(std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold)
 	{
 		REQUIRE(modelScaffold->EmbeddedSkeleton());
 		std::vector<Float4x4> result;
@@ -209,7 +209,7 @@ namespace UnitTests
 		return result;
 	}
 
-	static const RenderCore::Assets::SkinningDataDesc* GetSkinningDataAtGeo0(const RenderCore::Assets::ModelScaffoldCmdStreamForm& scaffold)
+	static const RenderCore::Assets::SkinningDataDesc* GetSkinningDataAtGeo0(const RenderCore::Assets::ModelScaffold& scaffold)
 	{
 		for (auto cmd:scaffold.GetGeoMachine(0)) {
 			switch (cmd.Cmd()) {
@@ -221,7 +221,7 @@ namespace UnitTests
 		return nullptr;
 	}
 
-	static std::vector<uint8_t> RunGPUDeformerDirectly(MetalTestHelper& testHelper, BufferUploads::IManager& bufferUploads, std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold)
+	static std::vector<uint8_t> RunGPUDeformerDirectly(MetalTestHelper& testHelper, BufferUploads::IManager& bufferUploads, std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold)
 	{
 		std::shared_ptr<Techniques::Internal::DeformerPipelineCollection> pipelineCollection;
 		{
@@ -311,7 +311,7 @@ namespace UnitTests
 		return outputResource->ReadBackSynchronized(*threadContext);
 	}
 
-	static std::vector<Float3> DeformPositionsOnCPU(std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold)
+	static std::vector<Float3> DeformPositionsOnCPU(std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold)
 	{
 		Techniques::CPUSkinDeformer cpuSkinDeformer { *modelScaffold, {} };
 

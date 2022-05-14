@@ -12,7 +12,7 @@
 
 namespace RenderCore { namespace Assets
 {
-    class ModelScaffoldCmdStreamForm;
+    class ModelScaffold;
     class MaterialScaffold;
 }}
 
@@ -53,7 +53,7 @@ namespace RenderCore { namespace Techniques
             StringSection<ResChar> modelFilename, 
             StringSection<ResChar> materialFilename) -> ::Assets::PtrToMarkerPtr<SimpleModelRenderer>;
 
-        auto GetModelScaffold(StringSection<ResChar>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffoldCmdStreamForm>;
+        auto GetModelScaffold(StringSection<ResChar>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>;
 		auto GetMaterialScaffold(StringSection<ResChar>, StringSection<ResChar>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>;
 
         uint32_t GetReloadId() const;

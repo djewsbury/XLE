@@ -11,6 +11,7 @@
 #include "GeometryAlgorithm.h"
 #include "GeoProcUtil.h"
 #include "../Assets/AssetUtils.h"
+#include "../Assets/ModelMachine.h"
 #include "../Format.h"
 #include "../StateDesc.h"
 #include "../VertexUtil.h"

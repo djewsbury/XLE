@@ -9,8 +9,8 @@
 #include "CommonBindings.h"
 #include "PipelineCollection.h"
 #include "CommonUtils.h"
+#include "../Assets/ModelMachine.h"
 #include "../Metal/InputLayout.h"
-#include "../Assets/ModelScaffoldInternal.h"
 #include "../Format.h"
 #include "../Types.h"
 #include "../UniformsStream.h"
@@ -59,7 +59,7 @@ namespace RenderCore { namespace Techniques
 
 		struct SourceDataTransform
 		{
-			const Assets::ModelScaffoldCmdStreamForm* _modelScaffold;
+			const Assets::ModelScaffold* _modelScaffold;
 			unsigned	_geoIdx;
 			uint64_t	_sourceStream;
 			Format		_targetFormat;
@@ -81,7 +81,7 @@ namespace RenderCore { namespace Techniques
 			DeformBufferIterators& bufferIterators,
 			bool isCPUDeformer,
 			unsigned geoIdx,
-			const std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm>& modelScaffold);
+			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold);
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

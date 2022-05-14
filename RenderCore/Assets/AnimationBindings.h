@@ -6,7 +6,6 @@
 
 #include "AnimationSet.h"
 #include "SkeletonMachine.h"
-#include "ModelScaffoldInternal.h"		// for ModelCommandStream
 
 namespace RenderCore { namespace Assets
 {
@@ -37,8 +36,6 @@ namespace RenderCore { namespace Assets
 		unsigned GetModelJointCount() const { return (unsigned)_modelJointIndexToMachineOutput.size(); }
 		unsigned ModelJointToMachineOutput(unsigned index) const { return _modelJointIndexToMachineOutput[index]; }
 
-		SkeletonBinding(    const SkeletonMachine::OutputInterface&		output,
-							const ModelCommandStream::InputInterface&   input);
 		SkeletonBinding(    const SkeletonMachine::OutputInterface&		output,
 							IteratorRange<const uint64_t*> 				input);
 		SkeletonBinding(    const SkeletonMachine::OutputInterface&		primaryOutput,

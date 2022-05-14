@@ -7,6 +7,7 @@
 #include "NascentRawGeometry.h"
 #include "../Format.h"
 #include "../Assets/AssetUtils.h"
+#include "../Assets/ModelMachine.h"
 #include "../../Assets/BlockSerializer.h"
 #include "../../Math/MathSerialization.h"
 #include "../../Utility/StringUtils.h"

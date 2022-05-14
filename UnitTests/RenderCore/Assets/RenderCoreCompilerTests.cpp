@@ -8,7 +8,6 @@
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
 #include "../../../RenderCore/Assets/MaterialScaffold.h"
 #include "../../../RenderCore/Assets/ModelScaffold.h"
-#include "../../../RenderCore/Assets/ModelImmutableData.h"
 #include "../../../RenderCore/Assets/RawMaterial.h"
 #include "../../../RenderCore/Assets/MaterialMachine.h"
 #include "../../../Assets/IntermediatesStore.h"
@@ -202,7 +201,7 @@ namespace UnitTests
 
 			SECTION("Load into scaffold")
 			{
-				auto newScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm>>(
+				auto newScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ModelScaffold>>(
 					*compile->GetArtifactCollection(targetCode));
 
 				auto geoMachine = newScaffold->GetGeoMachine(0);
@@ -250,8 +249,8 @@ namespace UnitTests
 			REQUIRE(scaffoldFuture->GetAssetState() == ::Assets::AssetState::Ready);
 
 			auto scaffold = scaffoldFuture->Actualize();
-			auto& cmdStream = scaffold->CommandStream();
-			REQUIRE(cmdStream.GetGeoCallCount() != 0);
+			REQUIRE(scaffold->GetGeoCount() != 0);
+			REQUIRE(!scaffold->CommandStream().empty());
 
 			auto matScaffoldFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::MaterialScaffold>(testModelFile, testModelFile);
 			matScaffoldFuture->StallWhilePending();

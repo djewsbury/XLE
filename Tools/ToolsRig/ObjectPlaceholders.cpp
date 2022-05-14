@@ -8,11 +8,10 @@
 #include "../../SceneEngine/IntersectionTest.h"
 #include "../../SceneEngine/IScene.h"
 #include "../../RenderCore/Assets/ModelScaffold.h"
-#include "../../RenderCore/Assets/ModelScaffoldInternal.h"
-#include "../../RenderCore/Assets/ModelImmutableData.h"
 #include "../../RenderCore/Assets/PredefinedCBLayout.h"
 #include "../../RenderCore/Assets/MaterialScaffold.h"
 #include "../../RenderCore/Assets/RawMaterial.h"
+#include "../../RenderCore/Assets/ModelMachine.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/CommonBindings.h"
@@ -92,7 +91,7 @@ namespace ToolsRig
 
 		SimpleModel(
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-			const RenderCore::Assets::RawGeometry& geo, ::Assets::IFileInterface& largeBlocksFile);
+			const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile);
 		SimpleModel(
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			StringSection<::Assets::ResChar> filename);
@@ -108,7 +107,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> _descriptorSetAccelerator;
 		std::shared_ptr<RenderCore::UniformsStreamInterface> _usi;
 
-		void Build(const RenderCore::Assets::RawGeometry& geo, ::Assets::IFileInterface& largeBlocksFile);
+		void Build(const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile);
 	};
 
 	void SimpleModel::BuildDrawables(
@@ -167,7 +166,7 @@ namespace ToolsRig
 
 	SimpleModel::SimpleModel(
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-		const RenderCore::Assets::RawGeometry& geo, ::Assets::IFileInterface& largeBlocksFile)
+		const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile)
 	{
 		_pipelineAcceleratorPool = pipelineAcceleratorPool;
 		Build(geo, largeBlocksFile);
@@ -179,14 +178,20 @@ namespace ToolsRig
 	{
 		_pipelineAcceleratorPool = pipelineAcceleratorPool;
 		auto& scaffold = ::Assets::Legacy::GetAssetComp<RenderCore::Assets::ModelScaffold>(filename);
-		if (scaffold.ImmutableData()._geoCount > 0) {
+		// we only use the first geo in the scaffold; and ignore the command stream
+		if (scaffold.GetGeoCount() > 0) {
 			auto largeBlocksFile = scaffold.OpenLargeBlocks();
-			Build(*scaffold.ImmutableData()._geos, *largeBlocksFile);
+			const RenderCore::Assets::RawGeometryDesc* geo = nullptr;
+			for (auto cmd:scaffold.GetGeoMachine(0))
+				if (cmd.Cmd() == (uint32_t)RenderCore::Assets::GeoCommand::AttachRawGeometry)
+					geo = &cmd.As<RenderCore::Assets::RawGeometryDesc>();
+			if (geo)
+				Build(*geo, *largeBlocksFile);
 		}
 		_depVal = scaffold.GetDependencyValidation();
 	}
 
-	void SimpleModel::Build(const RenderCore::Assets::RawGeometry& geo, ::Assets::IFileInterface& largeBlocksFile)
+	void SimpleModel::Build(const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile)
 	{
 		// load the vertex buffer & index buffer from the geo input, and copy draw calls data
 		auto largeBlocksOffset = largeBlocksFile.TellP();

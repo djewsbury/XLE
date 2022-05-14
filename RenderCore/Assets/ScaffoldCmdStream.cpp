@@ -25,7 +25,7 @@ namespace RenderCore { namespace Assets
 		_internal->_hash = 0;
 		return *this;
 	}
-	auto RendererConstruction::ElementConstructor::SetModelScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>& scaffoldMarker) -> ElementConstructor&
+	auto RendererConstruction::ElementConstructor::SetModelScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffold>& scaffoldMarker) -> ElementConstructor&
 	{
 		assert(_internal && !_internal->_sealed);
 		auto i = LowerBound(_internal->_modelScaffoldMarkers, _elementId);
@@ -47,7 +47,7 @@ namespace RenderCore { namespace Assets
 		_internal->_disableHash = true;
 		return *this;
 	}
-	auto RendererConstruction::ElementConstructor::SetModelScaffold(const std::shared_ptr<ModelScaffoldCmdStreamForm>& scaffoldPtr) -> ElementConstructor& 
+	auto RendererConstruction::ElementConstructor::SetModelScaffold(const std::shared_ptr<ModelScaffold>& scaffoldPtr) -> ElementConstructor& 
 	{
 		assert(_internal && !_internal->_sealed);
 		auto i = LowerBound(_internal->_modelScaffoldPtrs, _elementId);
@@ -253,7 +253,7 @@ namespace RenderCore { namespace Assets
 
 	RendererConstruction::ElementIterator::ElementIterator() = default;
 
-	std::shared_ptr<ModelScaffoldCmdStreamForm> RendererConstruction::ElementIterator::Value::GetModelScaffold() const
+	std::shared_ptr<ModelScaffold> RendererConstruction::ElementIterator::Value::GetModelScaffold() const
 	{
 		assert(_internal);
 		if (_mspi!=_internal->_modelScaffoldPtrs.end() && _mspi->first == _elementId)

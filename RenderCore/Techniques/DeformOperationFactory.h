@@ -12,7 +12,7 @@
 #include <functional>
 #include <future>
 
-namespace RenderCore { namespace Assets { class ModelScaffoldCmdStreamForm; }}
+namespace RenderCore { namespace Assets { class ModelScaffold; }}
 
 namespace RenderCore { namespace Techniques 
 {

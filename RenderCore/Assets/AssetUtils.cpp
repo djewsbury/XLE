@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "AssetUtils.h"
-#include "ModelScaffoldInternal.h"
+#include "ModelMachine.h"
 #include "../Types.h"
 #include "../Format.h"
 #include "../StateDesc.h"
@@ -85,6 +85,18 @@ namespace RenderCore { namespace Assets
 				MiniInputElementDesc{Hash64(sourceElement._semanticName) + sourceElement._semanticIndex, sourceElement._nativeFormat});
 		}
 		return result;
+	}
+
+	uint64_t GeoInputAssembly::BuildHash() const
+	{
+			//  Build a hash for this object.
+			//  Note that we should be careful that we don't get an
+			//  noise from characters in the left-over space in the
+			//  semantic names. Do to this right, we should make sure
+			//  that left over space has no effect.
+		auto elementsHash = Hash64(AsPointer(_elements.cbegin()), AsPointer(_elements.cend()));
+		elementsHash ^= uint64_t(_vertexStride);
+		return elementsHash;
 	}
 }}
 

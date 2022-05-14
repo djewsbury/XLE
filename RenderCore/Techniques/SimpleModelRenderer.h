@@ -12,9 +12,9 @@
 #include <vector>
 #include <memory>
 
-namespace RenderCore { namespace Assets { class ModelScaffold; class MaterialScaffold; class SkeletonScaffold; }} // todo -- remove
+namespace RenderCore { namespace Assets { class MaterialScaffold; class SkeletonScaffold; }} // todo -- remove
 
-namespace RenderCore { namespace Assets { class RendererConstruction; }}
+namespace RenderCore { namespace Assets { class RendererConstruction; class DrawCallDesc; }}
 namespace RenderCore { class UniformsStreamInterface; }
 namespace BufferUploads { using CommandListID = uint32_t; }
 
@@ -185,6 +185,7 @@ namespace RenderCore { namespace Techniques
 			std::vector<unsigned> _sectionMatrixToMachineOutput;
 			std::vector<Float4x4> _bindShapeByInverseBind;
 			std::vector<Float3x4> _cbData;
+			unsigned _geoIdx = ~0u;
 		};
 		std::vector<Section> _sections;
 	};

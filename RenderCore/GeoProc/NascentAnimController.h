@@ -8,11 +8,12 @@
 
 #include "NascentRawGeometry.h"
 #include "NascentObjectGuid.h"
-#include "../RenderCore/Types.h"
-#include "../Math/Matrix.h"
-#include "../Math/Vector.h"
-#include "../Utility/UTFUtils.h"
-#include "../Utility/PtrUtils.h"
+#include "../Assets/ModelMachine.h"
+#include "../Types.h"
+#include "../../Math/Matrix.h"
+#include "../../Math/Vector.h"
+#include "../../Utility/UTFUtils.h"
+#include "../../Utility/PtrUtils.h"
 #include <vector>
 
 namespace RenderCore { namespace Assets { namespace GeoProc

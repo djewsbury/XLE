@@ -141,7 +141,7 @@ namespace RenderCore { namespace Techniques
 			ResourceDesc _resourceDesc;
 			struct LoadRequests
 			{
-				std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> _modelScaffold;
+				std::shared_ptr<RenderCore::Assets::ModelScaffold> _modelScaffold;
 				unsigned _dstOffset, _srcOffset, _size; 
 			};
 			std::vector<LoadRequests> _loadRequests;
@@ -169,7 +169,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		static std::vector<ModelScaffoldDataSource::LoadRequests> AsLoadRequests(
-			std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
+			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 			IteratorRange<const std::pair<unsigned, unsigned>*> loadRequests)
 		{
 			std::vector<ModelScaffoldDataSource::LoadRequests> result;
@@ -189,7 +189,7 @@ namespace RenderCore { namespace Techniques
 		BufferUploads::IManager& bufferUploads,
 		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
 		unsigned resourceSize,
-		std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
+		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 		BindFlag::BitField bindFlags,
 		StringSection<> resourceName)
 	{
@@ -220,18 +220,6 @@ namespace RenderCore { namespace Techniques
 		auto resource = device.CreateResource(dataSource->_resourceDesc);
 		auto marker = Services::GetBufferUploads().Transaction_Begin(resource, dataSource, bindFlags);
 		return {std::move(resource), std::move(marker)};
-	}
-
-	std::pair<std::shared_ptr<IResource>, BufferUploads::TransactionMarker> LoadStaticResourcePartialAsync(		// deprecated version
-		IDevice& device,
-		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
-		unsigned resourceSize,
-		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
-		BindFlag::BitField bindFlags,
-		StringSection<> resourceName)
-	{
-		assert(0);
-		return {};
 	}
 
 	::Assets::PtrToMarkerPtr<Metal::ShaderProgram> CreateShaderProgramFromByteCode(

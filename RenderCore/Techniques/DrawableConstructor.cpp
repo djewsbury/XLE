@@ -126,8 +126,8 @@ namespace RenderCore { namespace Techniques
 						loadBuffer, drawableStream});
 			}
 
-			std::vector<std::shared_ptr<Assets::ModelScaffoldCmdStreamForm>> _registeredScaffolds;
-			unsigned GetScaffoldIdx(const std::shared_ptr<Assets::ModelScaffoldCmdStreamForm>& scaffold)
+			std::vector<std::shared_ptr<Assets::ModelScaffold>> _registeredScaffolds;
+			unsigned GetScaffoldIdx(const std::shared_ptr<Assets::ModelScaffold>& scaffold)
 			{
 				auto i = std::find(_registeredScaffolds.begin(), _registeredScaffolds.end(), scaffold);
 				if (i != _registeredScaffolds.end())
@@ -138,7 +138,7 @@ namespace RenderCore { namespace Techniques
 
 			unsigned AddGeo(
 				IteratorRange<Assets::ScaffoldCmdIterator> geoMachine,
-				const std::shared_ptr<Assets::ModelScaffoldCmdStreamForm>& scaffold,
+				const std::shared_ptr<Assets::ModelScaffold>& scaffold,
 				const std::shared_ptr<DeformAccelerator>& deformAccelerator,
 				const DeformerToRendererBinding::GeoBinding* deformerBinding)
 			{
@@ -483,7 +483,7 @@ namespace RenderCore { namespace Techniques
 		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
 
 		void AddModel(
-			const std::shared_ptr<Assets::ModelScaffoldCmdStreamForm>& modelScaffold,
+			const std::shared_ptr<Assets::ModelScaffold>& modelScaffold,
 			const std::shared_ptr<Assets::MaterialScaffold>& materialScaffold,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator,

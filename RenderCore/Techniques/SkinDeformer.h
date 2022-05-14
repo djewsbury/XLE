@@ -5,7 +5,6 @@
 #pragma once
 
 #include "../Assets/AnimationBindings.h"
-#include "../Assets/ModelImmutableData.h"
 #include "../../Math/Matrix.h"
 #include "../../Utility/FunctionUtils.h"
 #include <memory>

@@ -6,7 +6,7 @@
 
 #include "GeometryAlgorithm.h"
 #include "MeshDatabase.h"
-#include "../Assets/ModelScaffoldInternal.h"
+#include "../Assets/ModelMachine.h"     // for VertexElement
 #include "../Format.h"
 #include "../Types.h"
 #include "../../Math/Geometry.h"

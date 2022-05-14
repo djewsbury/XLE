@@ -9,8 +9,6 @@
 #include "CommonResources.h"
 #include "../IDevice.h"
 #include "../Assets/ModelScaffold.h"
-#include "../Assets/ModelScaffoldInternal.h"
-#include "../Assets/ModelImmutableData.h"
 #include "../GeoProc/MeshDatabase.h"        // for GeoProc::Copy
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../Assets/IFileSystem.h"
@@ -249,7 +247,7 @@ namespace RenderCore { namespace Techniques
 			/* in */ unsigned animatedElementsStride,
 			/* in */ bool isCPUDeformer,
 			/* in */ unsigned geoIdx,
-			/* in */ const RenderCore::Assets::ModelScaffoldCmdStreamForm& modelScaffold,
+			/* in */ const RenderCore::Assets::ModelScaffold& modelScaffold,
 			/* in */ IteratorRange<const DeformOperationInstantiation*> instantiations,
 			/* out */ IteratorRange<DeformerInputBinding::GeoBinding*> resultDeformerBindings,
 			/* out */ DeformerToRendererBinding::GeoBinding& resultRendererBinding,
@@ -501,7 +499,7 @@ namespace RenderCore { namespace Techniques
 			DeformBufferIterators& bufferIterators,
 			bool isCPUDeformer,
 			unsigned geoIdx,
-			const std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm>& modelScaffold)
+			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold)
 		{
 			assert(!instantiations.empty());
 			assert(instantiations.size() == resultDeformerBindings.size());

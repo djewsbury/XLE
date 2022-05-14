@@ -10,8 +10,8 @@
 #include "GeoProcUtil.h"
 #include "MeshDatabase.h"
 #include "../Assets/AssetUtils.h"
-#include "../Assets/ModelImmutableData.h"
 #include "../Assets/AnimationBindings.h"
+#include "../Assets/ModelMachine.h"
 #include "../../Math/MathSerialization.h"
 #include "../../Assets/NascentChunk.h"
 #include "../../Utility/Streams/SerializationUtils.h"
@@ -197,11 +197,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         auto skelOutputInterface = skeleton.GetSkeletonMachine().BuildHashedOutputInterface();
         auto streamInputInterface = cmdStream.BuildHashedInputInterface();
         RenderCore::Assets::SkeletonBinding skelBinding(
-            RenderCore::Assets::SkeletonMachine::OutputInterface
-                {AsPointer(skelOutputInterface.begin()), skelOutputInterface.size()},
-            RenderCore::Assets::ModelCommandStream::InputInterface
-                {	AsPointer(streamInputInterface.begin()), 
-					streamInputInterface.size()});
+            RenderCore::Assets::SkeletonMachine::OutputInterface{AsPointer(skelOutputInterface.begin()), skelOutputInterface.size()},
+			MakeIteratorRange(streamInputInterface));
 
         auto finalMatrixCount = (unsigned)streamInputInterface.size(); // immData->_visualScene.GetInputInterface()._jointCount;
         result._defaultTransforms.resize(finalMatrixCount);
@@ -343,7 +340,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			std::vector<uint64_t> materialGuid;
 			materialGuid.reserve(cmd.second._materialBindingSymbols.size());
 			for (const auto&mat:cmd.second._materialBindingSymbols) {
-				MaterialGuid guid = 0;
+				NascentModelCommandStream::MaterialGuid guid = 0;
 				const char* parseEnd = FastParseValue(MakeStringSection(mat), guid);
 				if (parseEnd == AsPointer(mat.end())) {
 					materialGuid.push_back(guid);

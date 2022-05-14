@@ -4,6 +4,7 @@
 
 #include "GeoProcUtil.h"
 #include "NascentRawGeometry.h"
+#include "../Assets/ModelMachine.h"
 #include "../Format.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Foreign/half-1.9.2/include/half.hpp"

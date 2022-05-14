@@ -9,6 +9,7 @@
 #include "../../RenderCore/Assets/ModelScaffold.h"
 #include "../../RenderCore/Assets/MaterialScaffold.h"
 #include "../../RenderCore/Assets/ScaffoldCmdStream.h"
+#include "../../RenderCore/Assets/AnimationScaffoldInternal.h"
 #include "../../RenderCore/Techniques/SkinDeformer.h"
 #include "../../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
@@ -25,7 +26,7 @@
 
 namespace ToolsRig
 {
-	using RenderCore::Assets::ModelScaffoldCmdStreamForm;
+	using RenderCore::Assets::ModelScaffold;
     using RenderCore::Assets::MaterialScaffold;
 	using RenderCore::Assets::AnimationSetScaffold;
 	using RenderCore::Assets::SkeletonScaffold;
@@ -69,7 +70,7 @@ namespace ToolsRig
 	{
 		std::shared_ptr<SimpleModelRenderer>		_renderer;
 		std::shared_ptr<RenderCore::Assets::RendererConstruction> _rendererConstruction;
-		std::shared_ptr<ModelScaffoldCmdStreamForm>	_modelScaffoldForEmbeddedSkeleton;
+		std::shared_ptr<ModelScaffold>	_modelScaffoldForEmbeddedSkeleton;
 		std::shared_ptr<SkeletonScaffold>			_skeletonScaffold;
 		std::shared_ptr<AnimationSetScaffold>		_animationScaffold;
 		std::shared_ptr<RendererSkeletonInterface>	_skeletonInterface;

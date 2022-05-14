@@ -8,8 +8,11 @@
 #include "../StateDesc.h"
 #include "../Format.h"
 #include "../../Math/Matrix.h"
+#include "../../Math/Vector.h"
 #include "../../Assets/BlockSerializer.h"
 #include "../../Utility/Streams/SerializationUtils.h"
+
+namespace RenderCore { class InputElementDesc; class MiniInputElementDesc; }
 
 namespace RenderCore { namespace Assets
 {
@@ -101,9 +104,23 @@ namespace RenderCore { namespace Assets
 		SerializableVector<unsigned>		_finalVertexIndexToOriginalIndex;		// originalIndex = _finalVertexIndexToOriginalIndex[finalIndex]
 	};
 
+	struct ModelDefaultPoseData
+	{
+		SerializableVector<Float4x4>    _defaultTransforms;
+		std::pair<Float3, Float3>       _boundingBox = {Float3(0,0,0), Float3(0,0,0)};
+
+		friend void SerializationOperator(::Assets::BlockSerializer&, const ModelDefaultPoseData&);
+	};
+
+	struct ModelRootData
+	{
+		unsigned    _maxLOD = 0;
+		friend void SerializationOperator(::Assets::BlockSerializer&, const ModelRootData&);
+	};
+
 	struct SkinningDataDesc
 	{
-			//  The "RawGeometry" base class contains the 
+			//  The "RawGeometryDesc" base class contains the 
 			//  unanimated vertex elements (and draw calls for
 			//  rendering the object as a whole)
 		VertexData		_animatedVertexElements;
@@ -125,6 +142,14 @@ namespace RenderCore { namespace Assets
 	};
 
 	#pragma pack(pop)
+
+	unsigned BuildLowLevelInputAssembly(
+		IteratorRange<InputElementDesc*> dst,
+		IteratorRange<const VertexElement*> source,
+		unsigned lowLevelSlot = 0);
+
+	std::vector<MiniInputElementDesc> BuildLowLevelInputAssembly(
+		IteratorRange<const VertexElement*> source);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

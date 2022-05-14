@@ -64,7 +64,7 @@ namespace UnitTests
 			auto modelCollection = modelCompile->GetArtifactCollection(RenderCore::Assets::ModelScaffold::CompileProcessType);
 			REQUIRE(modelCompile->GetAssetState() == ::Assets::AssetState::Ready);
 
-			auto modelScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm>>(*modelCollection);
+			auto modelScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ModelScaffold>>(*modelCollection);
 			auto cmdStream = modelScaffold->CommandStream();
 			REQUIRE(!cmdStream.empty());
 			for (auto cmd:cmdStream) {

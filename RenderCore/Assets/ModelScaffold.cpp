@@ -5,9 +5,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ModelScaffold.h"
-#include "ModelScaffoldInternal.h"
-#include "ModelImmutableData.h"
 #include "AssetUtils.h"
+#include "ModelMachine.h"
 #include "../../Assets/ChunkFileContainer.h"
 #include "../../Math/MathSerialization.h"
 #include "../../Utility/MemoryUtils.h"
@@ -19,114 +18,27 @@ namespace RenderCore { namespace Assets
 	static const unsigned ModelScaffoldVersion = 1;
 	static const unsigned ModelScaffoldLargeBlocksVersion = 0;
 
-	template <typename Type>
-		void DestroyArray(const Type* begin, const Type* end)
-		{
-			for (auto i=begin; i!=end; ++i) { i->~Type(); }
-		}
+//////////////////////////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-
-		/// This DestroyArray stuff is too awkward! We could use a serializable vector instead
-	ModelCommandStream::~ModelCommandStream()
+	std::pair<Float3, Float3> ModelScaffold::GetStaticBoundingBox(unsigned lodIndex) const
 	{
-		DestroyArray(_geometryInstances,        &_geometryInstances[_geometryInstanceCount]);
-		DestroyArray(_skinControllerInstances,  &_skinControllerInstances[_skinControllerInstanceCount]);
+		if (!_defaultPoseData) return {Zero<Float3>(), Zero<Float3>()};
+		return _defaultPoseData->_boundingBox;
 	}
 
-	BoundSkinnedGeometry::~BoundSkinnedGeometry() {}
-
-	ModelImmutableData::~ModelImmutableData()
+	unsigned ModelScaffold::GetMaxLOD() const
 	{
-		DestroyArray(_geos, &_geos[_geoCount]);
-		DestroyArray(_boundSkinnedControllers, &_boundSkinnedControllers[_boundSkinnedControllerCount]);
+		if (!_rootData) return 0;
+		return _rootData->_maxLOD;
 	}
-
-	uint64_t GeoInputAssembly::BuildHash() const
-	{
-			//  Build a hash for this object.
-			//  Note that we should be careful that we don't get an
-			//  noise from characters in the left-over space in the
-			//  semantic names. Do to this right, we should make sure
-			//  that left over space has no effect.
-		auto elementsHash = Hash64(AsPointer(_elements.cbegin()), AsPointer(_elements.cend()));
-		elementsHash ^= uint64_t(_vertexStride);
-		return elementsHash;
-	}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-	const ModelImmutableData&   ModelScaffold::ImmutableData() const                
-	{
-		return *(const ModelImmutableData*)::Assets::Block_GetFirstObject(_rawMemoryBlock.get());
-	}
-
-	const ModelCommandStream&       ModelScaffold::CommandStream() const                { return ImmutableData()._visualScene; }
-	const SkeletonMachine&			ModelScaffold::EmbeddedSkeleton() const             { return ImmutableData()._embeddedSkeleton; }
-	std::pair<Float3, Float3>       ModelScaffold::GetStaticBoundingBox(unsigned) const { return ImmutableData()._boundingBox; }
-	unsigned                        ModelScaffold::GetMaxLOD() const                    { return ImmutableData()._maxLOD; }
-
-	std::shared_ptr<::Assets::IFileInterface>	ModelScaffold::OpenLargeBlocks() const { return _largeBlocksReopen(); }
 
 	const ::Assets::ArtifactRequest ModelScaffold::ChunkRequests[2]
 	{
 		::Assets::ArtifactRequest { "Scaffold", ChunkType_ModelScaffold, ModelScaffoldVersion, ::Assets::ArtifactRequest::DataType::BlockSerializer },
 		::Assets::ArtifactRequest { "LargeBlocks", ChunkType_ModelScaffoldLargeBlocks, ModelScaffoldLargeBlocksVersion, ::Assets::ArtifactRequest::DataType::ReopenFunction }
 	};
-	
-	ModelScaffold::ModelScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
-	{
-		assert(chunks.size() == 2);
-		_rawMemoryBlock = std::move(chunks[0]._buffer);
-		_largeBlocksReopen = std::move(chunks[1]._reopenFunction);
-		_depVal = depVal;
-	}
 
-	ModelScaffold::ModelScaffold(ModelScaffold&& moveFrom) never_throws
-	: _rawMemoryBlock(std::move(moveFrom._rawMemoryBlock))
-	, _largeBlocksReopen(std::move(moveFrom._largeBlocksReopen))
-	, _depVal(std::move(moveFrom._depVal))
-	{}
-
-	ModelScaffold& ModelScaffold::operator=(ModelScaffold&& moveFrom) never_throws
-	{
-		if (_rawMemoryBlock)
-			ImmutableData().~ModelImmutableData();
-		_rawMemoryBlock = std::move(moveFrom._rawMemoryBlock);
-		_largeBlocksReopen = std::move(moveFrom._largeBlocksReopen);
-		_depVal = std::move(moveFrom._depVal);
-		return *this;
-	}
-
-	ModelScaffold::ModelScaffold() {}
-
-	ModelScaffold::~ModelScaffold()
-	{
-		if (_rawMemoryBlock)
-			ImmutableData().~ModelImmutableData();
-	}
-
-//////////////////////////////////////////////////////////////////////////////////////////////////
-
-	std::pair<Float3, Float3> ModelScaffoldCmdStreamForm::GetStaticBoundingBox(unsigned lodIndex) const
-	{
-		if (!_defaultPoseData) return {Zero<Float3>(), Zero<Float3>()};
-		return _defaultPoseData->_boundingBox;
-	}
-
-	unsigned ModelScaffoldCmdStreamForm::GetMaxLOD() const
-	{
-		if (!_rootData) return 0;
-		return _rootData->_maxLOD;
-	}
-
-	const ::Assets::ArtifactRequest ModelScaffoldCmdStreamForm::ChunkRequests[2]
-	{
-		::Assets::ArtifactRequest { "Scaffold", ChunkType_ModelScaffold, ModelScaffoldVersion, ::Assets::ArtifactRequest::DataType::BlockSerializer },
-		::Assets::ArtifactRequest { "LargeBlocks", ChunkType_ModelScaffoldLargeBlocks, ModelScaffoldLargeBlocksVersion, ::Assets::ArtifactRequest::DataType::ReopenFunction }
-	};
-
-	IteratorRange<ScaffoldCmdIterator> ModelScaffoldCmdStreamForm::GetOuterCommandStream() const
+	IteratorRange<ScaffoldCmdIterator> ModelScaffold::GetOuterCommandStream() const
 	{
 		if (_rawMemoryBlockSize <= sizeof(uint32_t)) return {};
 		auto* firstObject = ::Assets::Block_GetFirstObject(_rawMemoryBlock.get());
@@ -139,7 +51,7 @@ namespace RenderCore { namespace Assets
 			ScaffoldCmdIterator{MakeIteratorRange(end, end)}};
 	}
 
-	IteratorRange<const uint64_t*>  ModelScaffoldCmdStreamForm::FindCommandStreamInputInterface() const
+	IteratorRange<const uint64_t*>  ModelScaffold::FindCommandStreamInputInterface() const
 	{
 		for (auto cmd:CommandStream())
 			if (cmd.Cmd() == (uint32_t)Assets::ModelCommand::InputInterface)
@@ -147,10 +59,10 @@ namespace RenderCore { namespace Assets
 		return {};
 	}
 
-	std::shared_ptr<::Assets::IFileInterface> ModelScaffoldCmdStreamForm::OpenLargeBlocks() const { return _largeBlocksReopen(); }
+	std::shared_ptr<::Assets::IFileInterface> ModelScaffold::OpenLargeBlocks() const { return _largeBlocksReopen(); }
 
-	ModelScaffoldCmdStreamForm::ModelScaffoldCmdStreamForm() {}
-	ModelScaffoldCmdStreamForm::ModelScaffoldCmdStreamForm(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
+	ModelScaffold::ModelScaffold() {}
+	ModelScaffold::ModelScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
 	: _depVal{depVal}
 	{
 		assert(chunks.size() == 2);
@@ -197,9 +109,23 @@ namespace RenderCore { namespace Assets
 			}
 		}
 	}
-	ModelScaffoldCmdStreamForm::~ModelScaffoldCmdStreamForm() {}
+	ModelScaffold::~ModelScaffold() {}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
+
+	class SupplementGeo
+	{
+	public:
+		unsigned			_geoId;
+		GeoInputAssembly	_vbIA;
+	};
+
+	class ModelSupplementImmutableData
+	{
+	public:
+		SupplementGeo*  _geos;
+		size_t          _geoCount;
+	};
 
 	const ModelSupplementImmutableData&   ModelSupplementScaffold::ImmutableData() const                
 	{

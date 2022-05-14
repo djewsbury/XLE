@@ -12,7 +12,7 @@
 #include "../../Utility/IteratorUtils.h"
 
 namespace RenderCore { class IDevice; class IResource; class UniformsStreamInterface; class ICompiledPipelineLayout; }
-namespace RenderCore { namespace Assets { class PredefinedPipelineLayout; class ModelScaffoldCmdStreamForm; }}
+namespace RenderCore { namespace Assets { class PredefinedPipelineLayout; class ModelScaffold; }}
 namespace Utility { class ParameterBox; }
 
 namespace RenderCore { namespace Techniques
@@ -40,7 +40,7 @@ namespace RenderCore { namespace Techniques
 		virtual bool IsCPUDeformer() const override;
 		
 		CPUSkinDeformer(
-			const RenderCore::Assets::ModelScaffoldCmdStreamForm& modelScaffold,
+			const RenderCore::Assets::ModelScaffold& modelScaffold,
 			const std::string& modelScaffoldName);
 		~CPUSkinDeformer();
 
@@ -48,7 +48,7 @@ namespace RenderCore { namespace Techniques
 
 		static std::vector<RenderCore::Techniques::DeformOperationInstantiation> InstantiationFunction(
 			StringSection<> initializer,
-			const std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm>& modelScaffold);
+			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold);
 	private:
 		struct Section
 		{
@@ -118,7 +118,7 @@ namespace RenderCore { namespace Techniques
 	
 		GPUSkinDeformer(
 			std::shared_ptr<Internal::DeformerPipelineCollection> pipelineCollection,
-			std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
+			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 			const std::string& modelScaffoldName);
 		~GPUSkinDeformer();
 	private:
@@ -170,7 +170,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<Float3x4> _jointMatrices;
 		unsigned _jointMatricesInstanceStride = 0;
 
-		std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> _modelScaffold;
+		std::shared_ptr<RenderCore::Assets::ModelScaffold> _modelScaffold;
 		std::shared_ptr<Internal::DeformerPipelineCollection> _pipelineCollection;
 	};
 }}

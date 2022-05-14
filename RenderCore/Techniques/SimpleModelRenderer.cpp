@@ -15,6 +15,7 @@
 #include "Services.h"
 #include "../Assets/ScaffoldCmdStream.h"
 #include "../Assets/ModelScaffold.h"
+#include "../Assets/ModelMachine.h"		// for DrawCallDesc
 #include "../Assets/AnimationBindings.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Marker.h"
@@ -718,31 +719,36 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& scaffoldActual, 
 		const std::shared_ptr<RenderCore::Assets::SkeletonScaffold>& skeletonActual)
 	{
-		auto& cmdStream = scaffoldActual->CommandStream();
 		RenderCore::Assets::SkeletonBinding binding {
 			skeletonActual->GetSkeletonMachine().GetOutputInterface(),
-			cmdStream.GetInputInterface() };
+			scaffoldActual->FindCommandStreamInputInterface() };
 
 		std::vector<Float4x4> defaultTransforms(skeletonActual->GetSkeletonMachine().GetOutputInterface()._outputMatrixNameCount);
 		skeletonActual->GetSkeletonMachine().GenerateOutputTransforms(MakeIteratorRange(defaultTransforms));
 
-		auto& immutableData = scaffoldActual->ImmutableData();
-		for (const auto&skinnedGeo:MakeIteratorRange(immutableData._boundSkinnedControllers, &immutableData._boundSkinnedControllers[immutableData._boundSkinnedControllerCount])) {
-			for (const auto&section:skinnedGeo._preskinningSections) {
-				Section finalSection;
-				finalSection._sectionMatrixToMachineOutput.reserve(section._jointMatrixCount);
-				finalSection._bindShapeByInverseBind = std::vector<Float4x4>(section._bindShapeByInverseBindMatrices.begin(), section._bindShapeByInverseBindMatrices.end());
-				finalSection._cbData = std::vector<Float3x4>(section._jointMatrixCount);
-				for (unsigned j=0; j<section._jointMatrixCount; ++j) {
-					auto machineOutput = binding.ModelJointToMachineOutput(section._jointMatrices[j]);
-					finalSection._sectionMatrixToMachineOutput.push_back(machineOutput);
-					if (machineOutput != ~unsigned(0x0)) {
-						finalSection._cbData[j] = AsFloat3x4(Combine(finalSection._bindShapeByInverseBind[j], defaultTransforms[machineOutput]));
-					} else {
-						finalSection._cbData[j] = Identity<Float3x4>();
+		for (unsigned geoIdx=0; geoIdx<scaffoldActual->GetGeoCount(); ++geoIdx) {
+			for (auto cmd:scaffoldActual->GetGeoMachine(geoIdx)) {
+				if (cmd.Cmd() != (uint32_t)Assets::GeoCommand::AttachSkinningData) continue;
+
+				auto& skinningData = cmd.As<Assets::SkinningDataDesc>();
+
+				for (const auto&section:skinningData._preskinningSections) {
+					Section finalSection;
+					finalSection._sectionMatrixToMachineOutput.reserve(section._jointMatrixCount);
+					finalSection._bindShapeByInverseBind = std::vector<Float4x4>(section._bindShapeByInverseBindMatrices.begin(), section._bindShapeByInverseBindMatrices.end());
+					finalSection._cbData = std::vector<Float3x4>(section._jointMatrixCount);
+					finalSection._geoIdx = geoIdx;
+					for (unsigned j=0; j<section._jointMatrixCount; ++j) {
+						auto machineOutput = binding.ModelJointToMachineOutput(section._jointMatrices[j]);
+						finalSection._sectionMatrixToMachineOutput.push_back(machineOutput);
+						if (machineOutput != ~unsigned(0x0)) {
+							finalSection._cbData[j] = AsFloat3x4(Combine(finalSection._bindShapeByInverseBind[j], defaultTransforms[machineOutput]));
+						} else {
+							finalSection._cbData[j] = Identity<Float3x4>();
+						}
 					}
+					_sections.emplace_back(std::move(finalSection));
 				}
-				_sections.emplace_back(std::move(finalSection));
 			}
 		}
 	}

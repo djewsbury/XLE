@@ -4,7 +4,6 @@
 
 #include "../../UnitTestHelper.h"
 #include "../../EmbeddedRes.h"
-#include "../../../RenderCore/Assets/ModelImmutableData.h"
 #include "../../../RenderCore/Assets/ModelScaffold.h"
 #include "../../../RenderCore/Assets/Services.h"
 #include "../../../Assets/Assets.h"

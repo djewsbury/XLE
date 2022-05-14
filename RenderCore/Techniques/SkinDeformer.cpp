@@ -35,7 +35,7 @@ namespace RenderCore { namespace Techniques
 	static const std::string s_tangentEleName = "TEXTANGENT";
 	static const std::string s_normalEleName = "NORMAL";
 
-	static std::vector<uint64_t> CopyCmdStreamInputInterface(const Assets::ModelScaffoldCmdStreamForm& modelScaffold)
+	static std::vector<uint64_t> CopyCmdStreamInputInterface(const Assets::ModelScaffold& modelScaffold)
 	{
 		auto src = modelScaffold.FindCommandStreamInputInterface();
 		return {src.begin(), src.end()};
@@ -152,7 +152,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	CPUSkinDeformer::CPUSkinDeformer(
-		const RenderCore::Assets::ModelScaffoldCmdStreamForm& modelScaffold,
+		const RenderCore::Assets::ModelScaffold& modelScaffold,
 		const std::string& modelScaffoldName)
 	{
 		auto largeBlocks = modelScaffold.OpenLargeBlocks();
@@ -435,7 +435,7 @@ namespace RenderCore { namespace Techniques
 
 	GPUSkinDeformer::GPUSkinDeformer(
 		std::shared_ptr<Internal::DeformerPipelineCollection> pipelineCollection,
-		std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
+		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 		const std::string& modelScaffoldName)
 	: _modelScaffold(std::move(modelScaffold))			// we take internal pointers so preserve lifetime
 	, _pipelineCollection(std::move(pipelineCollection))
