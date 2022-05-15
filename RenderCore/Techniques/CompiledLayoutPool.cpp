@@ -110,8 +110,6 @@ namespace RenderCore { namespace Techniques
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	const ::Assets::DependencyValidation CompiledPipelineLayoutAsset::GetDependencyValidation() const { return _predefinedLayout->GetDependencyValidation(); };
-
 	CompiledPipelineLayoutAsset::CompiledPipelineLayoutAsset(
 		std::shared_ptr<RenderCore::IDevice> device,
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> predefinedLayout,
@@ -119,6 +117,8 @@ namespace RenderCore { namespace Techniques
 		RenderCore::ShaderLanguage shaderLanguage)
 	: _predefinedLayout(std::move(predefinedLayout))
 	{
+		_depVal = _predefinedLayout->GetDependencyValidation();
+
 		assert(Services::HasInstance() && Services::GetCommonResources());
 		auto& commonResources = *Services::GetCommonResources();
 		auto initializer = _predefinedLayout->MakePipelineLayoutInitializer(shaderLanguage, &commonResources._samplerPool);
@@ -129,6 +129,9 @@ namespace RenderCore { namespace Techniques
 			dst._signature = patchInDescSet->GetLayout()->MakeDescriptorSetSignature(&commonResources._samplerPool);
 			dst._name = patchInDescSet->GetName();
 			dst._pipelineType = patchInDescSet->GetPipelineType();
+
+			::Assets::DependencyValidationMarker depVals[] { _depVal, patchInDescSet->GetDependencyValidation() };
+			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
 		_pipelineLayout = device->CreatePipelineLayout(initializer);
 	}

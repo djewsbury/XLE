@@ -53,12 +53,9 @@ namespace Assets
 		{
 			unsigned validCount = 0;
 			for (auto marker:dependencyAssets)
-				if (marker != DependencyValidationMarker_Invalid) {
+				if (marker != DependencyValidationMarker_Invalid)
 					++validCount;
-					break;
-				}
 			if (!validCount) return {};
-			
 			
 			ScopedLock(_lock);
 			if (validCount == 1)

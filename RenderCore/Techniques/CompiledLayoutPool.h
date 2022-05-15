@@ -39,7 +39,7 @@ namespace RenderCore { namespace Techniques
 	public:
 		const std::shared_ptr<ICompiledPipelineLayout>& GetPipelineLayout() const { return _pipelineLayout; }
 		const std::shared_ptr<Assets::PredefinedPipelineLayout>& GetPredefinedPipelineLayout() const { return _predefinedLayout; }
-		const ::Assets::DependencyValidation GetDependencyValidation() const;
+		const ::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
 
 		CompiledPipelineLayoutAsset(
 			std::shared_ptr<IDevice> device,
@@ -58,6 +58,7 @@ namespace RenderCore { namespace Techniques
 	protected:
 		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
 		std::shared_ptr<Assets::PredefinedPipelineLayout> _predefinedLayout;
+		::Assets::DependencyValidation _depVal;
 	};
 
 	class DescriptorSetLayoutAndBinding
