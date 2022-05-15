@@ -3,10 +3,10 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "DeformUniformsInfrastructure.h"
-#include "DeformOperationFactory.h"
 #include "CompiledShaderPatchCollection.h"
 #include "CompiledLayoutPool.h"
 #include "ModelRendererConstruction.h"
+#include "DeformerConstruction.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedCBLayout.h"
 #include "../Assets/MaterialScaffold.h"

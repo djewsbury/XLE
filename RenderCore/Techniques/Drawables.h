@@ -122,11 +122,11 @@ namespace RenderCore { namespace Techniques
 	public:
 		VariantArray _drawables;
 
-		enum class Storage { Vertex, Index, Uniform };
+		enum class Storage { Vertex, Index, Uniform, CPU };
 		struct AllocateStorageResult { IteratorRange<void*> _data; unsigned _startOffset; };
 		AllocateStorageResult AllocateStorage(Storage storageType, size_t size);
 
-		void Reset() { _drawables.clear(); _vbStorage.clear(); _ibStorage.clear(); _ubStorage.clear(); }
+		void Reset() { _drawables.clear(); _vbStorage.clear(); _ibStorage.clear(); _ubStorage.clear(); _cpuStorage.clear(); }
 
 		IteratorRange<const void*> GetStorage(Storage storageType) const;
 
@@ -138,6 +138,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<uint8_t>	_vbStorage;
 		std::vector<uint8_t>	_ibStorage;
 		std::vector<uint8_t>	_ubStorage;
+		std::vector<uint8_t>	_cpuStorage;
 		unsigned				_storageAlignment = 0u;
 		unsigned				_ubStorageAlignment = 0u;
 		DrawablesPacketPool*	_pool = nullptr;

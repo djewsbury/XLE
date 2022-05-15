@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "SimpleModelRenderer.h"
+#include "ModelRendererConstruction.h"
 #include "DrawableConstructor.h"
 #include "Drawables.h"
 #include "TechniqueUtils.h"
@@ -10,10 +11,9 @@
 #include "PipelineAccelerator.h"
 #include "DeformAccelerator.h"
 #include "DeformGeometryInfrastructure.h"
-#include "DeformOperationFactory.h"
+#include "DeformerConstruction.h"
 #include "SkinDeformer.h"
 #include "Services.h"
-#include "ModelRendererConstruction.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelMachine.h"		// for DrawCallDesc
 #include "../Assets/AnimationBindings.h"
@@ -25,8 +25,6 @@
 #include "../../Utility/ArithmeticUtils.h"
 #include <utility>
 #include <map>
-
-#include "PipelineCollection.h"	// temporary - related to creating default deform accelerator
 
 namespace RenderCore { namespace Techniques 
 {
@@ -205,6 +203,7 @@ namespace RenderCore { namespace Techniques
 				{
 					struct DrawCallsRef { unsigned _start, _end; };
 					auto& drawCallsRef = cmd.As<DrawCallsRef>();
+					auto localTransform = geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
 					for (const auto& dc:MakeIteratorRange(_drawableConstructor->_drawCalls.begin()+drawCallsRef._start, _drawableConstructor->_drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
@@ -216,7 +215,7 @@ namespace RenderCore { namespace Techniques
 						drawable._looseUniformsInterface = _usi;
 						drawable._materialGuid = materialGuids[materialGuidsIterator++];
 						drawable._drawCallIdx = drawCallCounter;
-						drawable._localTransform._localToWorld = geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
+						drawable._localTransform._localToWorld = localTransform;
 						drawable._localTransform._localSpaceView = Float3{0,0,0};
 						drawable._localTransform._viewMask = viewMask;
 						drawable._deformInstanceIdx = deformInstanceIdx;
@@ -285,6 +284,7 @@ namespace RenderCore { namespace Techniques
 				{
 					struct DrawCallsRef { unsigned _start, _end; };
 					auto& drawCallsRef = cmd.As<DrawCallsRef>();
+					auto localTransform = geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
 					for (const auto& dc:MakeIteratorRange(_drawableConstructor->_drawCalls.begin()+drawCallsRef._start, _drawableConstructor->_drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
@@ -296,7 +296,7 @@ namespace RenderCore { namespace Techniques
 						drawable._looseUniformsInterface = _usi;
 						drawable._materialGuid = materialGuids[materialGuidsIterator++];
 						drawable._drawCallIdx = drawCallCounter;
-						drawable._localTransform._localToWorld = geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
+						drawable._localTransform._localToWorld = localTransform;
 						drawable._localTransform._localSpaceView = Float3{0,0,0};
 						drawable._localTransform._viewMask = ~0u;
 						drawable._deformInstanceIdx = deformInstanceIdx;
@@ -354,12 +354,13 @@ namespace RenderCore { namespace Techniques
 				{
 					struct DrawCallsRef { unsigned _start, _end; };
 					auto& drawCallsRef = cmd.As<DrawCallsRef>();
+					auto localToWorld = AsFloat4x4(geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld); // todo -- don't have to recalculate this every draw call
 					for (const auto& dc:MakeIteratorRange(_drawableConstructor->_drawCalls.begin()+drawCallsRef._start, _drawableConstructor->_drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
 						drawable._geo = _drawableConstructor->_drawableGeos[dc._drawableGeoIdx];
 						drawable._inputAssembly = _drawableConstructor->_drawableInputAssemblies[dc._iaIdx];
-						drawable._localToWorld = AsFloat4x4(geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld); // todo -- don't have to recalculate this every draw call
+						drawable._localToWorld = localToWorld;
 						drawable._indexCount = dc._indexCount;
 						drawable._startIndexLocation = dc._firstIndex;
 						assert(dc._firstVertex == 0);

@@ -46,10 +46,6 @@ namespace RenderCore { namespace Techniques
 		~CPUSkinDeformer();
 
 		Internal::DeformerInputBindingHelper _bindingHelper;
-
-		static std::vector<RenderCore::Techniques::DeformOperationInstantiation> InstantiationFunction(
-			StringSection<> initializer,
-			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold);
 	private:
 		struct Section
 		{

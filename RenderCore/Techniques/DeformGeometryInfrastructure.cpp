@@ -4,6 +4,7 @@
 
 #include "DeformGeometryInfrastructure.h"
 #include "DeformGeoInternal.h"
+#include "DeformerConstruction.h"
 #include "Services.h"
 #include "CommonUtils.h"
 #include "CommonResources.h"

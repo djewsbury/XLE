@@ -436,9 +436,13 @@ namespace RenderCore { namespace Techniques
 	{
 		if (storageType == Storage::Index) {
 			return AllocateFrom(_ibStorage, size, _storageAlignment);
-		} else {
-			assert(storageType == Storage::Vertex);
+		} else if (storageType == Storage::Vertex) {
 			return AllocateFrom(_vbStorage, size, _storageAlignment);
+		} else if (storageType == Storage::Uniform) {
+			return AllocateFrom(_ubStorage, size, _ubStorageAlignment);
+		} else {
+			assert(storageType == Storage::CPU);
+			return AllocateFrom(_cpuStorage, size, 1u);
 		}
 	}
 
@@ -468,10 +472,13 @@ namespace RenderCore { namespace Techniques
 	: _drawables(std::move(moveFrom._drawables))
 	, _vbStorage(std::move(moveFrom._vbStorage))
 	, _ibStorage(std::move(moveFrom._ibStorage))
+	, _ubStorage(std::move(moveFrom._ubStorage))
+	, _cpuStorage(std::move(moveFrom._cpuStorage))
 	{
 		_pool = moveFrom._pool;
 		moveFrom._pool = nullptr;
 		_storageAlignment = moveFrom._storageAlignment;
+		_ubStorageAlignment = moveFrom._ubStorageAlignment;
 	}
 	DrawablesPacket& DrawablesPacket::operator=(DrawablesPacket&& moveFrom) never_throws
 	{
@@ -484,9 +491,12 @@ namespace RenderCore { namespace Techniques
 		_drawables = std::move(moveFrom._drawables);
 		_vbStorage = std::move(moveFrom._vbStorage);
 		_ibStorage = std::move(moveFrom._ibStorage);
+		_ubStorage = std::move(moveFrom._ubStorage);
+		_cpuStorage = std::move(moveFrom._cpuStorage);
 		_pool = moveFrom._pool;
 		moveFrom._pool = nullptr;
 		_storageAlignment = moveFrom._storageAlignment;
+		_ubStorageAlignment = moveFrom._ubStorageAlignment;
 		return *this;
 	}
 

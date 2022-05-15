@@ -59,8 +59,7 @@ namespace PlatformRig
             if (!executeString.IsEmpty()) {
                 auto keyName = attrib.Name();
                 auto p = std::make_pair(
-                    PlatformRig::KeyId_Make(
-                        StringSection<char>((const char*)keyName.begin(), (const char*)keyName.end())),
+                    PlatformRig::KeyId_Make(keyName),
                     executeString.AsString());
                 _table.push_back(p);
             }

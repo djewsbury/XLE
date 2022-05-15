@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "DeformOperationFactory.h"
 #include "DeformGeometryInfrastructure.h"
 #include "CommonBindings.h"
 #include "PipelineCollection.h"
@@ -30,6 +29,7 @@ namespace RenderCore { namespace Techniques
 	class CompiledShaderPatchCollection;
 	class PipelineCollection;
 	class SubFrameEvents;
+	struct DeformOperationInstantiation;
 }}
 
 namespace RenderCore { namespace Techniques 

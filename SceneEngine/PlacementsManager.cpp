@@ -15,7 +15,7 @@
 #include "../RenderCore/Assets/ModelScaffold.h"
 #include "../RenderCore/Assets/MaterialScaffold.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
-#include "../RenderCore/Techniques/RenderStateResolver.h"
+#include "../RenderCore/Techniques/LightWeightBuildDrawables.h"
 
 #include "../Assets/IFileSystem.h"
 #include "../Assets/AssetTraits.h"
@@ -47,18 +47,8 @@
 #include <random>
 #include <set>
 
-#include "../RenderCore/Techniques/Drawables.h"
-#include "../RenderCore/Techniques/DrawableConstructor.h"
-#include "../RenderCore/Techniques/CommonBindings.h"
-#include "../RenderCore/Assets/ModelMachine.h"      // DrawCallDesc
-
 namespace SceneEngine
 {
-    using Assets::ResChar;
-
-    using RenderCore::Assets::ModelScaffold;
-    using RenderCore::Assets::MaterialScaffold;
-
     using SupplementRange = IteratorRange<const uint64_t*>;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -140,14 +130,14 @@ namespace SceneEngine
                 && i->_modelFilenameOffset == starti->_modelFilenameOffset
                 && i->_supplementsOffset == starti->_supplementsOffset) { ++i; }
 
-            auto modelName = (const ResChar*)PtrAdd(AsPointer(_filenamesBuffer.begin()), starti->_modelFilenameOffset + sizeof(uint64_t));
-            auto materialName = (const ResChar*)PtrAdd(AsPointer(_filenamesBuffer.begin()), starti->_materialFilenameOffset + sizeof(uint64_t));
+            auto modelName = (const char*)PtrAdd(AsPointer(_filenamesBuffer.begin()), starti->_modelFilenameOffset + sizeof(uint64_t));
+            auto materialName = (const char*)PtrAdd(AsPointer(_filenamesBuffer.begin()), starti->_materialFilenameOffset + sizeof(uint64_t));
             auto supplementCount = !_supplementsBuffer.empty() ? _supplementsBuffer[starti->_supplementsOffset] : 0;
             Log(Verbose) << "    [" << (i-starti) << "] objects (" << modelName << "), (" << materialName << "), (" << supplementCount << ")" << std::endl;
         }
     }
 
-    void Placements::ReplaceString(const ResChar oldString[], const ResChar newString[])
+    void Placements::ReplaceString(const char oldString[], const char newString[])
     {
         unsigned replacementStart = 0, preReplacementEnd = 0;
         unsigned postReplacementEnd = 0;
@@ -174,11 +164,11 @@ namespace SceneEngine
                     // the new
 
                 auto length = XlStringSize(newString);
-                std::vector<uint8_t> replacementContent(sizeof(uint64_t) + (length + 1) * sizeof(ResChar), 0);
+                std::vector<uint8_t> replacementContent(sizeof(uint64_t) + (length + 1) * sizeof(char), 0);
                 *(uint64_t*)AsPointer(replacementContent.begin()) = newHash;
 
                 XlCopyString(
-                    (ResChar*)AsPointer(replacementContent.begin() + sizeof(uint64_t)),
+                    (char*)AsPointer(replacementContent.begin() + sizeof(uint64_t)),
                     length+1, newString);
 
                 replacementStart = (unsigned)std::distance(_filenamesBuffer.begin(), starti);
@@ -270,11 +260,11 @@ namespace SceneEngine
     class PlacementCell
     {
     public:
-        uint64_t      _filenameHash;
+        uint64_t    _filenameHash;
         Float3x4    _cellToWorld;
         Float3      _aabbMin, _aabbMax;
         Float2      _captureMins, _captureMaxs;
-        ResChar     _filename[256];
+        char        _filename[256];
     };
 
     class GenericQuadTree;
@@ -299,7 +289,7 @@ namespace SceneEngine
 
     static ::Assets::AssetState TryGetBoundingBox(
         Placements::BoundingBox& result, 
-        PlacementsModelCache& modelCache, const ResChar modelFilename[], 
+        PlacementsModelCache& modelCache, const char modelFilename[], 
         unsigned LOD = 0, bool stallWhilePending = false)
     {
 		auto model = modelCache.GetModelScaffold(modelFilename);
@@ -389,15 +379,16 @@ namespace SceneEngine
             const GenericQuadTree* quadTree,
             CullMetrics* metrics = nullptr);
 
-        void BuildDrawables(
-            const ExecuteSceneContext& executeContext,
-            const Placements& placements,
-            IteratorRange<const unsigned*> objects,
-            const Float3x4& cellToWorld,
-            const uint64_t* filterStart = nullptr, const uint64_t* filterEnd = nullptr,
-            BuildDrawablesMetrics* metrics = nullptr);
+        template<bool DoFilter>
+            void BuildDrawables(
+                IteratorRange<RenderCore::Techniques::DrawablesPacket**const> pkts,
+                const Placements& placements,
+                IteratorRange<const unsigned*> objects,
+                const Float3x4& cellToWorld,
+                const uint64_t* filterStart = nullptr, const uint64_t* filterEnd = nullptr,
+                BuildDrawablesMetrics* metrics = nullptr);
 
-        void BuildDrawables(
+        void BuildDrawablesViewMasks(
             IteratorRange<RenderCore::Techniques::DrawablesPacket**const> pkts,
             const Placements& placements,
             IteratorRange<const std::pair<unsigned, uint32_t>*> objects,
@@ -597,124 +588,6 @@ namespace SceneEngine
             supplementsBuffer+supplementsOffset+1+supplementsBuffer[supplementsOffset]);
     }
 
-    namespace Internal
-    {
-        class RendererHelper
-        {
-        public:
-            template<bool UseImposters = true>
-                void BuildDrawables(
-					IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
-                    PlacementsModelCache& cache,
-                    const void* filenamesBuffer,
-                    const uint64_t* supplementsBuffer,
-                    const Placements::ObjectReference& obj,
-                    const Float3x4& cellToWorld,
-                    const Float3& cameraPosition,
-                    unsigned viewMask = 1);
-
-
-            BuildDrawablesMetrics _metrics;
-
-            RendererHelper(DynamicImposters* imposters)
-            {
-                _currentModel = _currentMaterial = 0ull;
-                _currentSupplements = 0u;
-
-                auto maxDistance = 1000.f;
-                if (imposters && imposters->IsEnabled())
-                    maxDistance = imposters->GetThresholdDistance();
-                _imposterDistSq = maxDistance * maxDistance;
-
-                _imposters = imposters;
-                _currentModelRendered = false;
-            }
-        protected:
-            uint64_t _currentModel, _currentMaterial;
-            unsigned _currentSupplements;
-            const RenderCore::Techniques::SimpleModelRenderer* _current;
-            float _imposterDistSq;
-            bool _currentModelRendered;
-            DynamicImposters* _imposters;
-        };
-
-        template<bool UseImposters>
-            void RendererHelper::BuildDrawables(
-                IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
-				PlacementsModelCache& cache,
-                const void* filenamesBuffer,
-                const uint64_t* supplementsBuffer,
-                const Placements::ObjectReference& obj,
-                const Float3x4& cellToWorld,
-                const Float3& cameraPosition, 
-                unsigned viewMask)
-        {
-                // Basic draw distance calculation
-                // many objects don't need to render out to the far clip
-
-            float distanceSq = MagnitudeSquared(
-                .5f * (obj._cellSpaceBoundary.first + obj._cellSpaceBoundary.second) - cameraPosition);
-
-                //  Objects should be sorted by model & material. This is important for
-                //  reducing the work load in "_cache". Typically cells will only refer
-                //  to a limited number of different types of objects, but the same object
-                //  may be repeated many times. In these cases, we want to minimize the
-                //  workload for every repeat.
-            auto modelHash = *(uint64_t*)PtrAdd(filenamesBuffer, obj._modelFilenameOffset);
-            auto materialHash = *(uint64_t*)PtrAdd(filenamesBuffer, obj._materialFilenameOffset);
-            materialHash = HashCombine(materialHash, modelHash);
-
-                // Simple LOD calculation based on distanceSq from camera...
-                //      Currently all models have only the single LOD. But this
-                //      may cause problems with models with multiple LOD, because
-                //      it may mean rapidly switching back and forth between 
-                //      renderers (which can be expensive)
-
-            // todo -- we need to improve this in 2 critical ways:
-            //      1) more complex metric for selecting the LOD (eg, considering size on screen, maybe triangle density)
-            //              - also consider best approach for selecting LOD for very large objects
-            //      2) we need to record the result from last frame, so we can do transitions (eg, using a dither based fade)
-            //
-            // However, that functionality should probably be combined with a change to the scene parser that 
-            // to add a more formal "prepare" step. So it will have to wait for now.
-            // auto LOD = unsigned(distanceSq / (75.f*75.f));
-
-            if (    modelHash != _currentModel 
-                ||  materialHash != _currentMaterial 
-                ||  obj._supplementsOffset != _currentSupplements) {
-
-                _current = cache.TryGetRendererActual(
-                    *(const uint64_t*)PtrAdd(filenamesBuffer, obj._modelFilenameOffset), (const ResChar*)PtrAdd(filenamesBuffer, obj._modelFilenameOffset + sizeof(uint64_t)),
-                    *(const uint64_t*)PtrAdd(filenamesBuffer, obj._materialFilenameOffset), (const ResChar*)PtrAdd(filenamesBuffer, obj._materialFilenameOffset + sizeof(uint64_t)));
-                _currentModel = modelHash;
-                _currentMaterial = materialHash;
-                _currentSupplements = obj._supplementsOffset;
-                _currentModelRendered = false;
-            }
-
-			if (!_current) return;
-
-            auto localToWorld = Combine(obj._localToCell, cellToWorld);
-
-            if (constant_expression<UseImposters>::result() && distanceSq > _imposterDistSq) {
-                assert(_imposters);
-                // _imposters->Queue(*current, *current->GetModelScaffold(), localToWorld, cameraPosition);
-                ++_metrics._impostersQueued;
-                return; 
-            }
-
-                //  if we have internal transforms, we must use them.
-                //  But some models don't have any internal transforms -- in these
-                //  cases, the _defaultTransformCount will be zero
-            const auto instanceIdx = ~0u;
-            _current->BuildDrawables(pkts, AsFloat4x4(localToWorld), instanceIdx, viewMask);
-
-            ++_metrics._instancesPrepared;
-            _metrics._uniqueModelsPrepared += !_currentModelRendered;
-            _currentModelRendered = true;
-        }
-    }
-
     static Utility::Internal::StringMeldInPlace<char> QuickMetrics(const ExecuteSceneContext& executeContext)
     {
         return StringMeldAppend(executeContext._quickMetrics);
@@ -851,104 +724,20 @@ namespace SceneEngine
         }
     }
 
-    class LightWeightDrawable : public RenderCore::Techniques::Drawable
-	{
-	public:
-        RenderCore::Assets::DrawCallDesc _drawCall;
-        RenderCore::Techniques::LocalTransformConstants _localTransform;
-	};
-
-    static void DrawFn_LightWeightDrawable(
-		RenderCore::Techniques::ParsingContext& parserContext,
-		const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext,
-		const LightWeightDrawable& drawable)
-	{
-        if (drawFnContext.GetBoundLooseImmediateDatas()) {
-			RenderCore::UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(drawable._localTransform) };
-			drawFnContext.ApplyLooseUniforms(RenderCore::UniformsStream{{}, immDatas});
-		}
-
-        drawFnContext.DrawIndexed(
-			drawable._drawCall._indexCount, drawable._drawCall._firstIndex, drawable._drawCall._firstVertex);
-    }
-
-    static void LightWeightBuildDrawables(
-        RenderCore::Techniques::DrawableConstructor& constructor,
-        IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
-        IteratorRange<const Float4x4*> objectToWorlds)
+    static bool FilterIn(const uint64_t*& filterIterator, const uint64_t* filterEnd, uint64_t objGuid)
     {
-        using namespace RenderCore;
-        LightWeightDrawable* drawables[dimof(constructor._drawCallCounts)];
-		for (unsigned c=0; c<dimof(constructor._drawCallCounts); ++c) {
-			if (!constructor._drawCallCounts[c]) {
-				drawables[c] = nullptr;
-				continue;
-			}
-			drawables[c] = pkts[c] ? pkts[c]->_drawables.Allocate<LightWeightDrawable>(constructor._drawCallCounts[c]) : nullptr;
-		}
-
-        static std::shared_ptr<UniformsStreamInterface> usi;
-        if (!usi) {
-            usi = std::make_shared<UniformsStreamInterface>();
-		    usi->BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
-        }
-
-		auto* drawableFn = (Techniques::ExecuteDrawableFn*)&DrawFn_LightWeightDrawable;
-        const unsigned deformInstanceIdx = ~0u;
-
-		const unsigned viewMask = 1;
-        auto nodeSpaceToWorld = Identity<Float3x4>();;
-		const Float4x4* geoSpaceToNodeSpace = nullptr;
-        using ModelCommand = RenderCore::Assets::ModelCommand;
-        using DrawableConstructor = RenderCore::Techniques::DrawableConstructor;
-		for (auto cmd:constructor.GetCmdStream()) {
-			switch (cmd.Cmd()) {
-			case (uint32_t)ModelCommand::SetTransformMarker:
-				{
-                    auto transformMarker = cmd.As<unsigned>();
-                    assert(constructor._baseTransformsPerElement.size() == 1);
-                    assert(transformMarker < constructor._baseTransforms.size());
-					nodeSpaceToWorld = Combine(*(const Float3x4*)&constructor._baseTransforms[transformMarker], *(const Float3x4*)&objectToWorlds[0]);
-                    assert(!geoSpaceToNodeSpace);
-				}
-				break;
-			case (uint32_t)DrawableConstructor::Command::BeginElement:
-				assert(cmd.As<unsigned>() == 0);    // expecting only a single element
-				break;
-			case (uint32_t)DrawableConstructor::Command::SetGeoSpaceToNodeSpace:
-				geoSpaceToNodeSpace = (!cmd.RawData().empty()) ? &cmd.As<Float4x4>() : nullptr;
-				break;
-			case (uint32_t)DrawableConstructor::Command::ExecuteDrawCalls:
-				{
-					struct DrawCallsRef { unsigned _start, _end; };
-					auto& drawCallsRef = cmd.As<DrawCallsRef>();
-					for (const auto& dc:MakeIteratorRange(constructor._drawCalls.begin()+drawCallsRef._start, constructor._drawCalls.begin()+drawCallsRef._end)) {
-						if (!drawables[dc._batchFilter]) continue;
-						auto& drawable = *drawables[dc._batchFilter]++;
-						drawable._geo = constructor._drawableGeos[dc._drawableGeoIdx];
-						drawable._pipeline = constructor._pipelineAccelerators[dc._pipelineAcceleratorIdx];
-						drawable._descriptorSet = constructor._descriptorSetAccelerators[dc._descriptorSetAcceleratorIdx];
-						drawable._drawFn = drawableFn;
-                        drawable._looseUniformsInterface = usi;
-						drawable._drawCall = RenderCore::Assets::DrawCallDesc { dc._firstIndex, dc._indexCount, dc._firstVertex };
-                        drawable._localTransform._localToWorld = geoSpaceToNodeSpace ? Combine(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
-						drawable._localTransform._localSpaceView = Float3{0,0,0};
-						drawable._localTransform._viewMask = viewMask;
-						drawable._deformInstanceIdx = deformInstanceIdx;
-					}
-				}
-				break;
-			}
-		}
+        while (filterIterator != filterEnd && *filterIterator < objGuid) { ++filterIterator; }
+        return filterIterator != filterEnd && *filterIterator == objGuid;
     }
 
-    void PlacementsRenderer::Pimpl::BuildDrawables(
-        const ExecuteSceneContext& executeContext,
-        const Placements& placements,
-        IteratorRange<const unsigned*> objects,
-        const Float3x4& cellToWorld,
-        const uint64_t* filterStart, const uint64_t* filterEnd,
-        BuildDrawablesMetrics* metrics)
+    template<bool DoFilter>
+        void PlacementsRenderer::Pimpl::BuildDrawables(
+            IteratorRange<RenderCore::Techniques::DrawablesPacket**const> pkts,
+            const Placements& placements,
+            IteratorRange<const unsigned*> objects,
+            const Float3x4& cellToWorld,
+            const uint64_t* filterStart, const uint64_t* filterEnd,
+            BuildDrawablesMetrics* metrics)
     {
             //
             //  Here we render all of the placements defined by the placement
@@ -981,14 +770,13 @@ namespace SceneEngine
             //  
 
         const uint64_t* filterIterator = filterStart;
-        const bool doFilter = filterStart != filterEnd;
-        Internal::RendererHelper helper(_imposters.get());
+        if (DoFilter)
+            assert(filterStart != filterEnd);
 
-        auto cameraPositionCell = ExtractTranslation(executeContext._view._projection._cameraToWorld);
-        cameraPositionCell = TransformPointByOrthonormalInverse(cellToWorld, cameraPositionCell);
+        // auto cameraPositionCell = ExtractTranslation(executeContext._view._projection._cameraToWorld);
+        // cameraPositionCell = TransformPointByOrthonormalInverse(cellToWorld, cameraPositionCell);
         
         const auto* filenamesBuffer = placements.GetFilenamesBuffer();
-        const auto* supplementsBuffer = placements.GetSupplementsBuffer();
         const auto* objRef = placements.GetObjectReferences();
 
             // Filtering is required in some cases (for example, if we want to render only
@@ -996,101 +784,100 @@ namespace SceneEngine
             // ideal for this architecture. Mostly the cell is intended to work as a 
             // immutable atomic object. However, we really need filtering for some things.
 
-        if (_imposters && _imposters->IsEnabled()) { //////////////////////////////////////////////////////////////////
-            if (doFilter) {
-                for (auto o:objects) {
-                    auto& obj = objRef[o];
-                    while (filterIterator != filterEnd && *filterIterator < obj._guid) { ++filterIterator; }
-                    if (filterIterator == filterEnd || *filterIterator != obj._guid) { continue; }
-                    helper.BuildDrawables<true>(
-                        executeContext._destinationPkts, *_cache,
-                        filenamesBuffer, supplementsBuffer, obj, cellToWorld, cameraPositionCell);
-                }
-            } else {
-                for (auto o:objects)
-                    helper.BuildDrawables<true>(
-                        executeContext._destinationPkts, *_cache,
-                        filenamesBuffer, supplementsBuffer, objRef[o], cellToWorld, cameraPositionCell);
+        assert(!_imposters);    // not supported after implementing light weight build drawables path
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        Float3x4 localToWorldBuffer[objects.size()];
+        BuildDrawablesMetrics workingMetrics;
+
+        auto i = objects.begin();
+        for (; i!=objects.end();) {
+            if constexpr (DoFilter) {
+                while (i!=objects.end() && !FilterIn(filterIterator, filterEnd, *i)) ++i;
+                if (i == objects.end()) break;
             }
-        } else { //////////////////////////////////////////////////////////////////////////////////////////////////////
-            if (doFilter) {
-                for (auto o:objects) {
-                    auto& obj = objRef[o];
-                    while (filterIterator != filterEnd && *filterIterator < obj._guid) { ++filterIterator; }
-                    if (filterIterator == filterEnd || *filterIterator != obj._guid) { continue; }
-                    helper.BuildDrawables<false>(
-                        executeContext._destinationPkts, *_cache,
-                        filenamesBuffer, supplementsBuffer, obj, cellToWorld, cameraPositionCell);
-                }
+
+            auto start = i;
+            ++i;
+            auto modelFilenameOffset = objRef[*start]._modelFilenameOffset;
+            auto materialFilenameOffset = objRef[*start]._materialFilenameOffset;
+            if constexpr (DoFilter) {
+                while (i!=objects.end() 
+                    && objRef[*i]._modelFilenameOffset == modelFilenameOffset && objRef[*i]._materialFilenameOffset == materialFilenameOffset 
+                    && FilterIn(filterIterator, filterEnd, *i)) ++i;
             } else {
-                /*for (auto o:objects)
-                    helper.BuildDrawables<false>(
-                        executeContext._destinationPkts, *_cache,
-                        filenamesBuffer, supplementsBuffer, objRef[o], cellToWorld, cameraPositionCell);*/
-                Float4x4 localToWorldBuffer[objects.size()];
-                auto i = objects.begin();
-                for (; i!=objects.end();) {
-                    auto start = i;
-                    ++i;
-                    auto modelFilenameOffset = objRef[*start]._modelFilenameOffset;
-                    auto materialFilenameOffset = objRef[*start]._materialFilenameOffset;
-                    while (i!=objects.end() && objRef[*i]._modelFilenameOffset == modelFilenameOffset && objRef[*i]._materialFilenameOffset == materialFilenameOffset) ++i;
-
-                    auto objCount = i-start;
-                    Float4x4* localToWorldI = localToWorldBuffer;
-                    for (auto idx:MakeIteratorRange(start, i)) {
-                        *localToWorldI = AsFloat4x4(Combine(objRef[idx]._localToCell, cellToWorld));
-                        ++localToWorldI;
-                    }
-
-                    auto* renderer = _cache->TryGetRendererActual(
-                        *(const uint64_t*)PtrAdd(filenamesBuffer, modelFilenameOffset), (const ResChar*)PtrAdd(filenamesBuffer, modelFilenameOffset + sizeof(uint64_t)),
-                        *(const uint64_t*)PtrAdd(filenamesBuffer, materialFilenameOffset), (const ResChar*)PtrAdd(filenamesBuffer, materialFilenameOffset + sizeof(uint64_t)));
-                    if (renderer) {
-                        auto* drawableConstructor = renderer->GetDrawableConstructor().get();
-                        LightWeightBuildDrawables(
-                            *drawableConstructor,
-                            executeContext._destinationPkts,
-                            MakeIteratorRange(localToWorldBuffer, &localToWorldBuffer[objCount]));
-
-                        /*for (unsigned c=0; c<objCount; ++c) {
-                            const auto instanceIdx = ~0u;
-                            const auto viewMask = 1u;
-                            renderer->BuildDrawables(
-                                executeContext._destinationPkts, localToWorldBuffer[c], instanceIdx, viewMask);
-                        }*/
-
-                        helper._metrics._instancesPrepared += objCount;
-                        ++helper._metrics._uniqueModelsPrepared;
-                    }
-                }
+                while (i!=objects.end() && objRef[*i]._modelFilenameOffset == modelFilenameOffset && objRef[*i]._materialFilenameOffset == materialFilenameOffset) ++i;
             }
-        } /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        if (metrics) *metrics += helper._metrics;
+            auto* renderer = _cache->TryGetRendererActual(
+                *(const uint64_t*)PtrAdd(filenamesBuffer, modelFilenameOffset), (const char*)PtrAdd(filenamesBuffer, modelFilenameOffset + sizeof(uint64_t)),
+                *(const uint64_t*)PtrAdd(filenamesBuffer, materialFilenameOffset), (const char*)PtrAdd(filenamesBuffer, materialFilenameOffset + sizeof(uint64_t)));
+            if (!renderer) continue;
+
+            auto objCount = i-start;
+            Float3x4* localToWorldI = localToWorldBuffer;
+            for (auto idx:MakeIteratorRange(start, i)) {
+                *localToWorldI = Combine(objRef[idx]._localToCell, cellToWorld);
+                ++localToWorldI;
+            }
+
+            RenderCore::Techniques::LightWeightBuildDrawables::InstancedFixedSkeleton(
+                *renderer->GetDrawableConstructor(),
+                pkts,
+                MakeIteratorRange(localToWorldBuffer, &localToWorldBuffer[objCount]));
+            workingMetrics._instancesPrepared += objCount;
+            ++workingMetrics._uniqueModelsPrepared;
+        }
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        if (metrics) *metrics += workingMetrics;
     }
 
-    void PlacementsRenderer::Pimpl::BuildDrawables(
+    void PlacementsRenderer::Pimpl::BuildDrawablesViewMasks(
         IteratorRange<RenderCore::Techniques::DrawablesPacket**const> pkts,
         const Placements& placements,
         IteratorRange<const std::pair<unsigned, uint32_t>*> objects,
         const Float3x4& cellToWorld,
         BuildDrawablesMetrics* metrics)
     {
-        Internal::RendererHelper helper(_imposters.get());
-        
         const auto* filenamesBuffer = placements.GetFilenamesBuffer();
-        const auto* supplementsBuffer = placements.GetSupplementsBuffer();
         const auto* objRef = placements.GetObjectReferences();
-        auto cameraPositionCell = Zero<Float3>();
 
-        for (auto o:objects)
-            helper.BuildDrawables<false>(
-                pkts, *_cache,
-                filenamesBuffer, supplementsBuffer, objRef[o.first], cellToWorld, cameraPositionCell,
-                o.second);
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        Float3x4 localToWorldBuffer[objects.size()];
+        uint32_t viewMaskBuffer[objects.size()];
+        BuildDrawablesMetrics workingMetrics;
 
-        if (metrics) *metrics += helper._metrics;
+        auto i = objects.begin();
+        for (; i!=objects.end();) {
+            auto start = i;
+            ++i;
+            auto modelFilenameOffset = objRef[start->first]._modelFilenameOffset;
+            auto materialFilenameOffset = objRef[start->first]._materialFilenameOffset;
+            while (i!=objects.end() && objRef[i->first]._modelFilenameOffset == modelFilenameOffset && objRef[i->first]._materialFilenameOffset == materialFilenameOffset) ++i;
+
+            auto* renderer = _cache->TryGetRendererActual(
+                *(const uint64_t*)PtrAdd(filenamesBuffer, modelFilenameOffset), (const char*)PtrAdd(filenamesBuffer, modelFilenameOffset + sizeof(uint64_t)),
+                *(const uint64_t*)PtrAdd(filenamesBuffer, materialFilenameOffset), (const char*)PtrAdd(filenamesBuffer, materialFilenameOffset + sizeof(uint64_t)));
+            if (!renderer) continue;
+
+            auto objCount = i-start;
+            Float3x4* localToWorldI = localToWorldBuffer;
+            unsigned* viewMaskI = viewMaskBuffer;
+            for (auto idx:MakeIteratorRange(start, i)) {
+                *localToWorldI++ = Combine(objRef[idx.first]._localToCell, cellToWorld);
+                *viewMaskI++ = idx.second;
+            }
+
+            RenderCore::Techniques::LightWeightBuildDrawables::InstancedFixedSkeleton(
+                *renderer->GetDrawableConstructor(),
+                pkts,
+                MakeIteratorRange(localToWorldBuffer, &localToWorldBuffer[objCount]),
+                MakeIteratorRange(viewMaskI, &viewMaskI[objCount]));
+            workingMetrics._instancesPrepared += objCount;
+            ++workingMetrics._uniqueModelsPrepared;
+        }
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////
     }
 
     PlacementsRenderer::Pimpl::Pimpl(
@@ -1191,11 +978,11 @@ namespace SceneEngine
 			if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == i->_filenameHash) {
                 __declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, view._projection._worldToProjection);
                 _pimpl->CullCell(visibleObjects, cellToCullSpace, *ovr->second.get(), nullptr, &cullMetrics);
-				_pimpl->BuildDrawables(executeContext, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
+				_pimpl->BuildDrawables<false>(executeContext._destinationPkts, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
 			} else {
 				auto* plc = _pimpl->CullCell(visibleObjects, view._projection._worldToProjection, *i, &cullMetrics);
 				if (plc)
-					_pimpl->BuildDrawables(executeContext, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
+					_pimpl->BuildDrawables<false>(executeContext._destinationPkts, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
 			}
 
             metricsHelper.AddMetrics(i->_filename, cullMetrics, bdMetrics);
@@ -1224,11 +1011,11 @@ namespace SceneEngine
 
 			if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == i->_filenameHash) {
                 _pimpl->CullCell(visibleObjects, volumeTester, i->_cellToWorld, *ovr->second.get(), nullptr, &cullMetrics);
-				_pimpl->BuildDrawables(executeContext, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
+				_pimpl->BuildDrawables<false>(executeContext._destinationPkts, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
 			} else {
 				auto* plc = _pimpl->CullCell(visibleObjects, volumeTester, *i, &cullMetrics);
 				if (plc)
-					_pimpl->BuildDrawables(executeContext, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
+					_pimpl->BuildDrawables<false>(executeContext._destinationPkts, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
 			}
 
             metricsHelper.AddMetrics(i->_filename, cullMetrics, bdMetrics);
@@ -1261,7 +1048,7 @@ namespace SceneEngine
 
             auto* plc = _pimpl->CullCell(visibleObjects, worldToCullingFrustums, partialMask, *i);
             if (plc)
-                _pimpl->BuildDrawables(executeContext._destinationPkts, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld);
+                _pimpl->BuildDrawablesViewMasks(executeContext._destinationPkts, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld);
         }
     }
 
@@ -1298,11 +1085,11 @@ namespace SceneEngine
 					if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == ci->_filenameHash) {
                         __declspec(align(16)) auto cellToCullSpace = Combine(ci->_cellToWorld, view._projection._worldToProjection);
                         _pimpl->CullCell(visibleObjects, cellToCullSpace, *ovr->second.get(), nullptr);
-						_pimpl->BuildDrawables(executeContext, *ovr->second, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
+						_pimpl->BuildDrawables<true>(executeContext._destinationPkts, *ovr->second, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
 					} else {
 						auto* plcmnts = _pimpl->CullCell(visibleObjects, view._projection._worldToProjection, *ci);
 						if (plcmnts)
-							_pimpl->BuildDrawables(executeContext, *plcmnts, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
+							_pimpl->BuildDrawables<true>(executeContext._destinationPkts, *plcmnts, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
 					}
 
                 } else {
@@ -1320,11 +1107,11 @@ namespace SceneEngine
                     __declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, view._projection._worldToProjection);
                 
                     _pimpl->CullCell(visibleObjects, cellToCullSpace, *ovr->second.get(), nullptr);
-					_pimpl->BuildDrawables(executeContext, *ovr->second, MakeIteratorRange(visibleObjects), i->_cellToWorld);
+					_pimpl->BuildDrawables<false>(executeContext._destinationPkts, *ovr->second, MakeIteratorRange(visibleObjects), i->_cellToWorld);
 				} else {
 					auto* plcmnts = _pimpl->CullCell(visibleObjects, view._projection._worldToProjection, *i);
 					if (plcmnts)
-						_pimpl->BuildDrawables(executeContext, *plcmnts, MakeIteratorRange(visibleObjects), i->_cellToWorld);
+						_pimpl->BuildDrawables<false>(executeContext._destinationPkts, *plcmnts, MakeIteratorRange(visibleObjects), i->_cellToWorld);
 				}
             }
         }
@@ -1567,14 +1354,14 @@ namespace SceneEngine
         uint64_t AddPlacement(
             const Float3x4& objectToCell, 
             const std::pair<Float3, Float3>& cellSpaceBoundary,
-            StringSection<ResChar> modelFilename, StringSection<ResChar> materialFilename,
+            StringSection<> modelFilename, StringSection<> materialFilename,
             SupplementRange supplements,
             uint64_t objectGuid);
 
         std::vector<ObjectReference>& GetObjects() { return _objects; }
         bool HasObject(uint64_t guid);
 
-        unsigned AddString(StringSection<ResChar> str);
+        unsigned AddString(StringSection<> str);
         unsigned AddSupplements(SupplementRange supplements);
 
         DynamicPlacements(const Placements& copyFrom);
@@ -1587,7 +1374,7 @@ namespace SceneEngine
         return generator();
     }
 
-    unsigned DynamicPlacements::AddString(StringSection<ResChar> str)
+    unsigned DynamicPlacements::AddString(StringSection<> str)
     {
         unsigned result = ~unsigned(0x0);
         auto stringHash = Hash64(str.begin(), str.end());
@@ -1600,17 +1387,17 @@ namespace SceneEngine
             if (h == stringHash) { result = (unsigned)(ptrdiff_t(i) - ptrdiff_t(start)); }
 
             i += sizeof(uint64_t);
-            i = (uint8_t*)std::find((const ResChar*)i, (const ResChar*)end, ResChar('\0'));
-            i += sizeof(ResChar);
+            i = (uint8_t*)std::find((const char*)i, (const char*)end, '\0');
+            i += sizeof(char);
         }
 
         if (result == ~unsigned(0x0)) {
             result = unsigned(_filenamesBuffer.size());
             auto lengthInBaseChars = str.end() - str.begin();
-            _filenamesBuffer.resize(_filenamesBuffer.size() + sizeof(uint64_t) + (lengthInBaseChars + 1) * sizeof(ResChar));
+            _filenamesBuffer.resize(_filenamesBuffer.size() + sizeof(uint64_t) + (lengthInBaseChars + 1) * sizeof(char));
             auto* dest = &_filenamesBuffer[result];
             *(uint64_t*)dest = stringHash;
-            XlCopyString((ResChar*)PtrAdd(dest, sizeof(uint64_t)), lengthInBaseChars+1, str);
+            XlCopyString((char*)PtrAdd(dest, sizeof(uint64_t)), lengthInBaseChars+1, str);
         }
 
         return result;
@@ -1642,7 +1429,7 @@ namespace SceneEngine
     uint64_t DynamicPlacements::AddPlacement(
         const Float3x4& objectToCell,
         const std::pair<Float3, Float3>& cellSpaceBoundary,
-        StringSection<ResChar> modelFilename, StringSection<ResChar> materialFilename,
+        StringSection<> modelFilename, StringSection<> materialFilename,
         SupplementRange supplements,
         uint64_t objectGuid)
     {
@@ -1827,7 +1614,7 @@ namespace SceneEngine
             Placements::BoundingBox localBoundingBox;
             auto assetState = TryGetBoundingBox(
                 localBoundingBox, *_modelCache, 
-                (const ResChar*)PtrAdd(p->GetFilenamesBuffer(), obj._modelFilenameOffset + sizeof(uint64_t)));
+                (const char*)PtrAdd(p->GetFilenamesBuffer(), obj._modelFilenameOffset + sizeof(uint64_t)));
 
                 // When assets aren't yet ready, we can't perform any intersection tests on them
             if (assetState != ::Assets::AssetState::Ready)
@@ -1884,7 +1671,7 @@ namespace SceneEngine
             Placements::BoundingBox localBoundingBox;
             auto assetState = TryGetBoundingBox(
                 localBoundingBox, *_modelCache, 
-                (const ResChar*)PtrAdd(p->GetFilenamesBuffer(), obj._modelFilenameOffset + sizeof(uint64_t)));
+                (const char*)PtrAdd(p->GetFilenamesBuffer(), obj._modelFilenameOffset + sizeof(uint64_t)));
 
                 // When assets aren't yet ready, we can't perform any intersection tests on them
             if (assetState != ::Assets::AssetState::Ready)
@@ -1940,7 +1727,7 @@ namespace SceneEngine
                 Placements::BoundingBox localBoundingBox;
                 auto assetState = TryGetBoundingBox(
                     localBoundingBox, *_modelCache, 
-                    (const ResChar*)PtrAdd(p->GetFilenamesBuffer(), obj._modelFilenameOffset + sizeof(uint64_t)));
+                    (const char*)PtrAdd(p->GetFilenamesBuffer(), obj._modelFilenameOffset + sizeof(uint64_t)));
 
                     // When assets aren't yet ready, we can't perform any intersection tests on them
                 if (assetState != ::Assets::AssetState::Ready)
@@ -2128,7 +1915,7 @@ namespace SceneEngine
 
         bool GetLocalBoundingBox_Stall(
             std::pair<Float3, Float3>& result,
-            const ResChar filename[]) const;
+            const char filename[]) const;
 
         enum State { Active, Committed };
         State _state;
@@ -2147,7 +1934,7 @@ namespace SceneEngine
         return (unsigned)_originalGuids.size();
     }
 
-    bool Transaction::GetLocalBoundingBox_Stall(std::pair<Float3, Float3>& result, const ResChar filename[]) const
+    bool Transaction::GetLocalBoundingBox_Stall(std::pair<Float3, Float3>& result, const char filename[]) const
     {
             // get the local bounding box for a model
             // ... but stall waiting for any pending resources
@@ -2589,8 +2376,8 @@ namespace SceneEngine
 
                         ObjTransDef def;
                         def._localToWorld = Combine(pIterator->_localToCell, cellToWorld);
-                        def._model = (const ResChar*)PtrAdd(placements->GetFilenamesBuffer(), sizeof(uint64_t) + pIterator->_modelFilenameOffset);
-                        def._material = (const ResChar*)PtrAdd(placements->GetFilenamesBuffer(), sizeof(uint64_t) + pIterator->_materialFilenameOffset);
+                        def._model = (const char*)PtrAdd(placements->GetFilenamesBuffer(), sizeof(uint64_t) + pIterator->_modelFilenameOffset);
+                        def._material = (const char*)PtrAdd(placements->GetFilenamesBuffer(), sizeof(uint64_t) + pIterator->_materialFilenameOffset);
                         def._supplements = SupplementsGuidsToString(AsSupplements(placements->GetSupplementsBuffer(), pIterator->_supplementsOffset));
                         def._transaction = ObjTransDef::Unchanged;
                         originalState.push_back(def);
@@ -2613,8 +2400,8 @@ namespace SceneEngine
                             // Build a ObjTransDef object from this object, and record it
                         ObjTransDef def;
                         def._localToWorld = Combine(pIterator->_localToCell, cellToWorld);
-                        def._model = (const ResChar*)PtrAdd(placements->GetFilenamesBuffer(), sizeof(uint64_t) + pIterator->_modelFilenameOffset);
-                        def._material = (const ResChar*)PtrAdd(placements->GetFilenamesBuffer(), sizeof(uint64_t) + pIterator->_materialFilenameOffset);
+                        def._model = (const char*)PtrAdd(placements->GetFilenamesBuffer(), sizeof(uint64_t) + pIterator->_modelFilenameOffset);
+                        def._material = (const char*)PtrAdd(placements->GetFilenamesBuffer(), sizeof(uint64_t) + pIterator->_materialFilenameOffset);
                         def._supplements = SupplementsGuidsToString(AsSupplements(placements->GetSupplementsBuffer(), pIterator->_supplementsOffset));
                         def._transaction = ObjTransDef::Unchanged;
                         originalState.push_back(def);
@@ -2746,7 +2533,7 @@ namespace SceneEngine
         return result;
     }
     
-    static void SavePlacements(const ResChar outputFilename[], Placements& placements)
+    static void SavePlacements(const char outputFilename[], Placements& placements)
     {
         placements.Write(outputFilename);
     }
@@ -2835,7 +2622,7 @@ namespace SceneEngine
         return result.str();
     }
 
-    std::pair<Float3, Float3> PlacementsEditor::GetModelBoundingBox(const ResChar modelName[]) const
+    std::pair<Float3, Float3> PlacementsEditor::GetModelBoundingBox(const char modelName[]) const
     {
         Placements::BoundingBox boundingBox;
         auto assetState = TryGetBoundingBox(boundingBox, *_pimpl->_modelCache, modelName, 0, true);
@@ -2902,7 +2689,7 @@ namespace SceneEngine
 
     void WorldPlacementsConfig::ConstructToPromise(
 		std::promise<std::shared_ptr<WorldPlacementsConfig>>&& promise,
-        StringSection<::Assets::ResChar> initializer)
+        StringSection<> initializer)
     {
         auto splitName = MakeFileNameSplitter(initializer);
 		if (XlEqStringI(splitName.Extension(), "dat")) {

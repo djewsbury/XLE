@@ -9,6 +9,7 @@
 #include "Services.h"
 #include "SubFrameEvents.h"
 #include "ModelRendererConstruction.h"
+#include "DeformerConstruction.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/ModelMachine.h"

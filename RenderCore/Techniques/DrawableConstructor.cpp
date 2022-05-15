@@ -16,6 +16,7 @@
 #include "../Assets/MaterialScaffold.h"
 #include "../Assets/RawMaterial.h"
 #include "../Assets/SkeletonMachine.h"
+#include "../Assets/AnimationBindings.h"		// required for extracting base transforms
 #include "../../Assets/Marker.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/Streams/StreamFormatter.h"
@@ -520,14 +521,17 @@ namespace RenderCore { namespace Techniques
 
 			std::vector<std::pair<unsigned, unsigned>> modelGeoIdToPendingGeoIndex;
 			std::optional<Float4x4> currentGeoSpaceToNodeSpace;
+			int maxTransformMarker = -1;
 			for (auto cmd:modelScaffold->CommandStream()) {
 				switch (cmd.Cmd()) {
-				case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
-					currentMaterialAssignments = cmd.RawData().Cast<const uint64_t*>();
-					// intentional fall-through
-
 				default:
 					{
+						if (cmd.Cmd() == (uint32_t)Assets::ModelCommand::SetMaterialAssignments) {
+							currentMaterialAssignments = cmd.RawData().Cast<const uint64_t*>();
+						} else if (cmd.Cmd() == (uint32_t)Assets::ModelCommand::SetTransformMarker) {
+							maxTransformMarker = std::max(maxTransformMarker, (int)cmd.As<unsigned>());
+						}
+
 						auto cmdId = cmd.Cmd(), blockSize = cmd.BlockSize();
 						_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
 						_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
@@ -635,19 +639,35 @@ namespace RenderCore { namespace Techniques
 				}
 			}
 
-			AddBaseTransforms(*modelScaffold, elementIdx);
+			if (maxTransformMarker >= 0)
+				AddBaseTransforms(*modelScaffold, elementIdx, maxTransformMarker+1);
 		}
 
-		void AddBaseTransforms(Assets::ModelScaffold& scaffold, unsigned elementIdx)
+		void AddBaseTransforms(Assets::ModelScaffold& scaffold, unsigned elementIdx, unsigned transformMarkerCount)
 		{
 			// Record the embedded skeleton transform marker -> local transforms
 			// these can be useful when using light weight renderers, because this is the last
 			// bit of information required to use a model scaffold for basic rendering
 			auto* embeddedSkeleton = scaffold.EmbeddedSkeleton();
-			size_t start = _pendingBaseTransforms.size();
-			_pendingBaseTransforms.resize(start+embeddedSkeleton->GetOutputMatrixCount(), Identity<Float4x4>());
-			embeddedSkeleton->GenerateOutputTransforms(MakeIteratorRange(_pendingBaseTransforms.begin()+start, _pendingBaseTransforms.end()));
-			_pendingBaseTransformsPerElement.emplace_back(elementIdx, embeddedSkeleton->GetOutputMatrixCount());
+			if (embeddedSkeleton) {
+				Float4x4 skeleOutputTransforms[embeddedSkeleton->GetOutputMatrixCount()];
+				embeddedSkeleton->GenerateOutputTransforms(MakeIteratorRange(skeleOutputTransforms, &skeleOutputTransforms[embeddedSkeleton->GetOutputMatrixCount()]));
+
+				transformMarkerCount = std::min(transformMarkerCount, (unsigned)scaffold.FindCommandStreamInputInterface().size());
+				size_t start = _pendingBaseTransforms.size();
+				_pendingBaseTransforms.resize(start+transformMarkerCount, Identity<Float4x4>());
+
+				// still have to do mapping from skeleton output to the command stream input interface
+				Assets::SkeletonBinding skeleBinding{embeddedSkeleton->GetOutputInterface(), scaffold.FindCommandStreamInputInterface()};
+				for (unsigned c=0; c<transformMarkerCount; ++c) {
+					auto machineOutput = skeleBinding.ModelJointToMachineOutput(c);
+					if (machineOutput < embeddedSkeleton->GetOutputMatrixCount()) {
+						_pendingBaseTransforms[start+c] = skeleOutputTransforms[machineOutput];
+					} else
+						_pendingBaseTransforms[start+c] = Identity<Float4x4>();
+				}
+				_pendingBaseTransformsPerElement.emplace_back(elementIdx, transformMarkerCount);
+			}
 		}
 
 		void FillIn(DrawableConstructor& dst)

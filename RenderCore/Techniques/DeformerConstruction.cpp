@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "DeformOperationFactory.h"
+#include "DeformerConstruction.h"
 #include "Services.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/ContinuationUtil.h"

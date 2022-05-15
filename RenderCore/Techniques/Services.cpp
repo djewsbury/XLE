@@ -3,7 +3,6 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "Services.h"
-#include "DeformOperationFactory.h"
 #include "CommonResources.h"
 #include "SubFrameEvents.h"
 #include "../../BufferUploads/IBufferUploads.h"

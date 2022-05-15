@@ -9,7 +9,7 @@
 #include "../../../RenderCore/Assets/ModelScaffold.h"
 #include "../../../RenderCore/Techniques/DeformAccelerator.h"
 #include "../../../RenderCore/Techniques/DeformGeoInternal.h"
-#include "../../../RenderCore/Techniques/DeformOperationFactory.h"
+#include "../../../RenderCore/Techniques/DeformerConstruction.h"
 #include "../../../RenderCore/Techniques/DeformGeometryInfrastructure.h"
 #include "../../../RenderCore/Techniques/SkinDeformer.h"
 #include "../../../RenderCore/Techniques/SkinDeformerInternal.h"

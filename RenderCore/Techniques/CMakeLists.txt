@@ -17,7 +17,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         RenderPassUtils.cpp
         RenderStateResolver.cpp
         ShaderVariationSet.cpp
-        DeformOperationFactory.cpp
+        DeformerConstruction.cpp
         SimpleModelRenderer.cpp
         SkinDeformer.cpp
         SystemUniformsDelegate.cpp
@@ -36,6 +36,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         DrawableConstructor.cpp
         CompiledLayoutPool.cpp
         ModelRendererConstruction.cpp
+        LightWeightBuildDrawables.cpp
         ../../Tools/ToolsRig/VisualisationGeo.cpp
         )
     set(Headers
@@ -55,7 +56,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         RenderPassUtils.h
         RenderStateResolver.h
         ShaderVariationSet.h
-        DeformOperationFactory.h
+        DeformerConstruction.h
         SimpleModelRenderer.h
         SkinDeformer.h
         SubFrameEvents.h
