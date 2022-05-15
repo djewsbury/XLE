@@ -38,6 +38,7 @@ namespace RenderCore { namespace Techniques
 
 		virtual void Bind(const DeformerInputBinding& binding) override;
 		virtual bool IsCPUDeformer() const override;
+		virtual std::future<void> GetInitializationFuture() const override;
 		
 		CPUSkinDeformer(
 			const RenderCore::Assets::ModelScaffold& modelScaffold,
@@ -112,6 +113,7 @@ namespace RenderCore { namespace Techniques
 
 		void Bind(const DeformerInputBinding& binding) override;
 		bool IsCPUDeformer() const override;
+		std::future<void> GetInitializationFuture() const override;
 	
 		GPUSkinDeformer(
 			std::shared_ptr<Internal::DeformerPipelineCollection> pipelineCollection,

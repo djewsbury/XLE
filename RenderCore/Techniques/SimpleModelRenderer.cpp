@@ -384,11 +384,11 @@ namespace RenderCore { namespace Techniques
 	, _depVal(drawableConstructor->GetDependencyValidation())
 	{
 		using namespace RenderCore::Assets;
-		std::shared_ptr<IGeoDeformerInfrastructure> geoDeformerInfrastructure;
+		std::shared_ptr<IDeformGeoAttachment> geoDeformerInfrastructure;
 		if (deformAccelerator && deformAcceleratorPool) {  // need both or neither
 			_deformAccelerator = deformAccelerator;
 			_deformAcceleratorPool = deformAcceleratorPool;
-			geoDeformerInfrastructure = std::dynamic_pointer_cast<IGeoDeformerInfrastructure>(_deformAcceleratorPool->GetDeformAttachment(*_deformAccelerator));
+			geoDeformerInfrastructure = std::dynamic_pointer_cast<IDeformGeoAttachment>(_deformAcceleratorPool->GetDeformGeoAttachment(*_deformAccelerator));
 		}
 
 		_usi = std::make_shared<UniformsStreamInterface>();
@@ -402,10 +402,8 @@ namespace RenderCore { namespace Techniques
 		_usi = pipelineAcceleratorPool->CombineWithLike(std::move(_usi));
 		
 		_completionCmdList = _drawableConstructor->_completionCommandList;
-		if (geoDeformerInfrastructure) {
-			assert(geoDeformerInfrastructure->GetCompletionCommandList().wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);	// future must be ready before we get here
-			_completionCmdList = std::max(_completionCmdList, geoDeformerInfrastructure->GetCompletionCommandList().get());
-		}
+		if (geoDeformerInfrastructure)
+			_completionCmdList = std::max(_completionCmdList, geoDeformerInfrastructure->GetCompletionCommandList());
 
 		// setup skeleton binding
 		auto externalSkeletonScaffold = construction->GetSkeletonScaffold();
@@ -500,28 +498,42 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	std::shared_ptr<DeformAccelerator> CreateDefaultDeformAccelerator(
+	static std::future<std::shared_ptr<DeformerConstruction>> ToFuture(DeformerConstruction& construction)
+	{
+		std::promise<std::shared_ptr<DeformerConstruction>> promise;
+		auto result = promise.get_future();
+		construction.FulfillWhenNotPending(std::move(promise));
+		return result;
+	}
+
+	std::future<std::shared_ptr<DeformAccelerator>> CreateDefaultDeformAccelerator(
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
-		const ModelRendererConstruction& rendererConstruction)
+		const std::shared_ptr<ModelRendererConstruction>& rendererConstruction)
 	{
 		// The default deform accelerators just contains a skinning deform operation
 		auto deformerConstruction = std::make_shared<DeformerConstruction>();
 		SkinDeformerSystem::GetInstance()->ConfigureGPUSkinDeformers(
-			*deformerConstruction, rendererConstruction);
-		if (deformerConstruction->IsEmpty()) return nullptr;
+			*deformerConstruction, *rendererConstruction);
+		if (deformerConstruction->IsEmpty()) return {};
 
-		std::promise<std::shared_ptr<DeformerConstruction>> promise;
-		auto future = promise.get_future();
-		deformerConstruction->FulfillWhenNotPending(std::move(promise));
-		YieldToPool(future);
-		assert(future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);
+		std::promise<std::shared_ptr<DeformAccelerator>> promise;
+		auto result = promise.get_future();
 
-		auto geometryInfrastructure = CreateDeformGeometryInfrastructure(
-			*deformAcceleratorPool->GetDevice(), rendererConstruction, *deformerConstruction);
+		::Assets::WhenAll(ToFuture(*deformerConstruction)).ThenConstructToPromise(
+			std::move(promise),
+			[pool=std::weak_ptr<IDeformAcceleratorPool>(deformAcceleratorPool), rendererConstruction](auto deformerConstructionActual) {
+				auto l = pool.lock();
+				if (!l) Throw(std::runtime_error("DeformAcceleratorPool expired"));
 
-		auto result = deformAcceleratorPool->CreateDeformAccelerator();
-		deformAcceleratorPool->Attach(*result, geometryInfrastructure);
-		return result;
+				auto geometryInfrastructure = CreateDeformGeoAttachment(
+					*l->GetDevice(), *rendererConstruction, *deformerConstructionActual);
+				
+				auto result = l->CreateDeformAccelerator();
+				l->Attach(*result, geometryInfrastructure);
+				return result;
+			});
+
+		return result;	
 	}
 
 	void SimpleModelRenderer::ConstructToPromise(
@@ -529,39 +541,54 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const std::shared_ptr<ModelRendererConstruction>& construction,
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
-		const std::shared_ptr<DeformAccelerator>& deformAcceleratorInit,
+		std::shared_ptr<DeformAccelerator> deformAcceleratorInit,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
 	{
 		std::vector<UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
 
 		::Assets::WhenAll(ToFuture(*construction)).ThenConstructToPromise(
 			std::move(promise),
-			[pipelineAcceleratorPool, deformAcceleratorPool, deformAcceleratorInit, uniformBufferBindings=std::move(uniformBufferBindings)](auto&& promise, auto completedConstruction) mutable {
-				// if we were given a deform accelerator pool, but no deform accelerator, go ahead and create the default accelerator
-				auto deformAccelerator = deformAcceleratorInit;
-				if (deformAcceleratorPool && !deformAccelerator)
-					deformAccelerator = CreateDefaultDeformAccelerator(deformAcceleratorPool, *completedConstruction);
+			[pipelineAcceleratorPool, deformAcceleratorPool, deformAccelerator=deformAcceleratorInit, uniformBufferBindings=std::move(uniformBufferBindings)](auto&& promise, auto completedConstruction) mutable {
 
-				auto& bufferUploads = Services::GetInstance().GetBufferUploads();
-				auto drawableConstructor = std::make_shared<DrawableConstructor>(pipelineAcceleratorPool, bufferUploads, *completedConstruction, deformAcceleratorPool, deformAccelerator);
+				std::shared_ptr<DrawableConstructor> drawableConstructor;
+				std::shared_future<void> deformAcceleratorInitFuture;
+
+				TRY {
+					// if we were given a deform accelerator pool, but no deform accelerator, go ahead and create the default accelerator
+					if (deformAcceleratorPool && !deformAccelerator) {
+						auto deformAcceleratorFuture = CreateDefaultDeformAccelerator(deformAcceleratorPool, completedConstruction);
+						if (deformAcceleratorFuture.valid()) {
+							deformAcceleratorFuture.wait();
+							deformAccelerator = deformAcceleratorFuture.get();
+						}
+					}
+					
+					if (deformAccelerator) {
+						auto* geoInfrastructure = deformAcceleratorPool->GetDeformGeoAttachment(*deformAccelerator).get();
+						if (geoInfrastructure)
+							deformAcceleratorInitFuture = geoInfrastructure->GetInitializationFuture();
+					}
+
+					auto& bufferUploads = Services::GetInstance().GetBufferUploads();
+					drawableConstructor = std::make_shared<DrawableConstructor>(pipelineAcceleratorPool, bufferUploads, *completedConstruction, deformAcceleratorPool, deformAccelerator);
+				} CATCH(...) {
+					promise.set_exception(std::current_exception());
+					return;
+				} CATCH_END
 
 				::Assets::PollToPromise(
 					std::move(promise),
-					[constructorFuture=ToFuture(*drawableConstructor), deformAcceleratorPool, deformAccelerator](auto timeout) {
+					[constructorFuture=ToFuture(*drawableConstructor), deformAcceleratorInitFuture=std::move(deformAcceleratorInitFuture)](auto timeout) {
 						auto timeoutTime = std::chrono::steady_clock::now() + timeout;
 						auto status = constructorFuture.wait_until(timeoutTime);
 						if (status == std::future_status::timeout)
 							return ::Assets::PollStatus::Continue;
 
 						// Need to ensure IGeoDeformerInfrastructure::GetCompletionCommandList() is ready, if we have a deform accelerator with a geo attachment
-						if (deformAcceleratorPool && deformAccelerator) {
-							auto* geoInfrastructure = dynamic_cast<IGeoDeformerInfrastructure*>(deformAcceleratorPool->GetDeformAttachment(*deformAccelerator).get());
-							if (geoInfrastructure) {
-								auto pendingCmdList = geoInfrastructure->GetCompletionCommandList();
-								auto status = pendingCmdList.wait_until(timeoutTime);
-								if (status == std::future_status::timeout)
-									return ::Assets::PollStatus::Continue;
-							}
+						if (deformAcceleratorInitFuture.valid()) {
+							auto status = deformAcceleratorInitFuture.wait_until(timeoutTime);
+							if (status == std::future_status::timeout)
+								return ::Assets::PollStatus::Continue;
 						}
 
 						return ::Assets::PollStatus::Finish;
@@ -628,7 +655,7 @@ namespace RenderCore { namespace Techniques
 
 	RendererSkeletonInterface::RendererSkeletonInterface(
 		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
-		IGeoDeformerInfrastructure& geoDeformerInfrastructure,
+		IDeformGeoAttachment& geoDeformerInfrastructure,
 		::Assets::DependencyValidation depVal)
 	: _depVal(depVal)
 	{
@@ -671,10 +698,10 @@ namespace RenderCore { namespace Techniques
 				if (!skeleton)
 					Throw(std::runtime_error("Cannot bind skeleton interface to ModelRendererConstruction, because no skeleton with provided either as an embedded skeleton, or as an external skeleton"));
 				
-				IGeoDeformerInfrastructure* geoDeform = nullptr;
+				IDeformGeoAttachment* geoDeform = nullptr;
 				if (deformAccelerator && deformAcceleratorPool)
-					geoDeform = dynamic_cast<IGeoDeformerInfrastructure*>(deformAcceleratorPool->GetDeformAttachment(*deformAccelerator).get());
-				if (!skeleton)
+					geoDeform = deformAcceleratorPool->GetDeformGeoAttachment(*deformAccelerator).get();
+				if (!geoDeform)
 					Throw(std::runtime_error("Cannot bind skeleton interface to ModelRendererConstruction, because there is no geo deformer attached to the given deform accelerator"));
 				
 				// might need to take a dep val from the IGeoDeformerInfrastructure here, as well

@@ -25,7 +25,7 @@ namespace RenderCore { namespace Techniques
 			unsigned destinationBufferSize);
 	}
 
-	class DeformGeoInfrastructure : public IGeoDeformerInfrastructure
+	class DeformGeoInfrastructure : public IDeformGeoAttachment
 	{
 	public:
 		std::vector<std::shared_ptr<IGeoDeformer>> _deformOps;
@@ -36,7 +36,8 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<IResource> _gpuStaticDataBuffer, _gpuTemporariesBuffer;
 		std::shared_ptr<IResourceView> _gpuStaticDataBufferView, _gpuTemporariesBufferView;
-		std::shared_future<BufferUploads::CommandListID> _gpuStaticDataCompletionListFuture;
+		BufferUploads::CommandListID _gpuStaticDataCompletionList;
+		std::shared_future<void> _initializationFuture;
 
 		bool _isCPUDeformer = false;
 		unsigned _outputVBSize = 0;
@@ -95,13 +96,20 @@ namespace RenderCore { namespace Techniques
 			return _rendererGeoInterface;
 		}
 
-		virtual std::shared_future<BufferUploads::CommandListID> GetCompletionCommandList() const override
+		virtual BufferUploads::CommandListID GetCompletionCommandList() const override
 		{
-			return _gpuStaticDataCompletionListFuture;
+			// we must have waited on the initialization future before doing this
+			assert(_initializationFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);
+			return _gpuStaticDataCompletionList;
+		}
+
+		virtual std::shared_future<void> GetInitializationFuture() const override
+		{
+			return _initializationFuture;
 		}
 	};
 
-	std::shared_ptr<IGeoDeformerInfrastructure> CreateDeformGeometryInfrastructure(
+	std::shared_ptr<IDeformGeoAttachment> CreateDeformGeoAttachment(
 		IDevice& device,
 		const ModelRendererConstruction& rendererConstruction,
 		const DeformerConstruction& deformerConstruction)
@@ -175,6 +183,8 @@ namespace RenderCore { namespace Techniques
 		result->_isCPUDeformer = isCPUDeformer.value();
 
 		// Call call Bind on all deformers, for everything calculated in CreateDeformBindings
+		std::vector<std::future<void>> deformerInitFutures;
+		deformerInitFutures.reserve(pendingDeformerBinds.size());
 		std::sort(
 			pendingDeformerBinds.begin(), pendingDeformerBinds.end(),
 			[](const auto& lhs, const auto& rhs) { return lhs._deformer < rhs._deformer; });
@@ -189,6 +199,7 @@ namespace RenderCore { namespace Techniques
 				inputBinding._geoBindings.emplace_back(std::make_pair(c._elementIdx, c._geoIdx), std::move(c._binding));
 
 			start->_deformer->Bind(inputBinding);
+			deformerInitFutures.emplace_back(start->_deformer->GetInitializationFuture());
 			result->_deformOps.push_back(std::move(start->_deformer));
 		}
 
@@ -197,6 +208,7 @@ namespace RenderCore { namespace Techniques
 		for (auto i=uniqueScaffoldNames.begin(); i!=uniqueScaffoldNames.end(); ++i)
 			if (i->empty()) { uniqueScaffoldNames.erase(i); break; }
 
+		std::shared_future<BufferUploads::CommandListID> gpuStaticDataCompletionListFuture;
 		if (!bufferIterators._gpuStaticDataLoadRequests.empty()) {
 			StringMeld<64> bufferName;
 			bufferName << "[deform]";
@@ -211,7 +223,7 @@ namespace RenderCore { namespace Techniques
 			result->_gpuStaticDataBufferView = result->_gpuStaticDataBuffer->CreateBufferView(BindFlag::UnorderedAccess);
 
 			std::promise<BufferUploads::CommandListID> promise;
-			result->_gpuStaticDataCompletionListFuture = promise.get_future();
+			gpuStaticDataCompletionListFuture = promise.get_future();
 			::Assets::WhenAll(std::move(transactionMarker._future)).ThenConstructToPromise(
 				std::move(promise), [](const auto& locator) { return locator.GetCompletionCommandList(); });
 		} else {
@@ -247,6 +259,32 @@ namespace RenderCore { namespace Techniques
 		if (bufferIterators._bufferIterators[Internal::VB_CPUDeformTemporaries]) {
 			result->_deformTemporaryBuffer.resize(bufferIterators._bufferIterators[Internal::VB_CPUDeformTemporaries], 0);
 		}
+
+		// Unfortunately a bit of synchronization to finish off here. Can't complete until
+		//	1. all deformers have their pipelines completed
+		//	2. buffer uploads has given us a completion command list id for the geometry upload
+		std::promise<void> initializationPromise;
+		result->_initializationFuture = initializationPromise.get_future();
+		::Assets::PollToPromise(
+			std::move(initializationPromise),
+			[deformerInitFutures=std::move(deformerInitFutures), gpuStaticDataCompletionListFuture](auto timeout) {
+				// complete when all deformers are completed, and when the gpu command list future is serviced
+				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+				for (auto& d:deformerInitFutures)
+					if (d.wait_until(timeoutTime) == std::future_status::timeout)
+						return ::Assets::PollStatus::Continue;
+				if (gpuStaticDataCompletionListFuture.valid())
+					if (gpuStaticDataCompletionListFuture.wait_until(timeoutTime) == std::future_status::timeout)
+						return ::Assets::PollStatus::Continue;
+				return ::Assets::PollStatus::Finish;
+			},
+			[weakResult=std::weak_ptr<DeformGeoInfrastructure>{result}, gpuStaticDataCompletionListFuture]() {
+				// fill in _gpuStaticDataCompletionList, now the future is complete
+				auto l = weakResult.lock();
+				if (l && gpuStaticDataCompletionListFuture.valid())
+					l->_gpuStaticDataCompletionList = gpuStaticDataCompletionListFuture.get();
+			});
+
 		return result;
 	}
 
@@ -707,14 +745,6 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<const void*> srcVB,
 		IteratorRange<const void*> deformTemporariesVB,
 		IteratorRange<const void*> dstVB) const
-	{
-		assert(0);
-	}
-
-	void IGeoDeformer::ExecuteCB(
-		IteratorRange<const unsigned*> instanceIndices,
-		unsigned outputInstanceStride,
-		IteratorRange<const void*> dstCB) const
 	{
 		assert(0);
 	}

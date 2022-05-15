@@ -17,6 +17,7 @@ namespace RenderCore { namespace Assets { class ModelScaffold; class MaterialSca
 namespace RenderCore { namespace Assets { class DrawCallDesc; }}
 namespace RenderCore { class UniformsStreamInterface; }
 namespace BufferUploads { using CommandListID = uint32_t; }
+namespace std { template<typename T> class future; }
 
 namespace RenderCore { namespace Techniques 
 {
@@ -27,7 +28,7 @@ namespace RenderCore { namespace Techniques
 	class DescriptorSetAccelerator;
 	class IDeformAcceleratorPool;
 	class DeformAccelerator;
-	class IGeoDeformerInfrastructure;
+	class IDeformGeoAttachment;
 	class IGeoDeformer;
 	class ISkinDeformer;
 	class IUniformBufferDelegate;
@@ -90,7 +91,7 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			const std::shared_ptr<ModelRendererConstruction>& construction,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool = nullptr,
-			const std::shared_ptr<DeformAccelerator>& deformAccelerator = nullptr,
+			std::shared_ptr<DeformAccelerator> deformAccelerator = nullptr,
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {});
 		
 		static void ConstructToPromise(
@@ -128,7 +129,7 @@ namespace RenderCore { namespace Techniques
 		class DrawableGeoBuilder;
 	};
 
-	std::shared_ptr<DeformAccelerator> CreateDefaultDeformAccelerator(
+	std::future<std::shared_ptr<DeformAccelerator>> CreateDefaultDeformAccelerator(
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const ModelRendererConstruction& rendererConstruction);
 
@@ -144,7 +145,7 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const std::shared_ptr<IGeoDeformer>*> skinDeformers);
 		RendererSkeletonInterface(
 			const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
-			IGeoDeformerInfrastructure& geoDeformerInfrastructure,
+			IDeformGeoAttachment& geoDeformerInfrastructure,
 			::Assets::DependencyValidation depVal = {});
 		~RendererSkeletonInterface();
 

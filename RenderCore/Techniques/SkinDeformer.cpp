@@ -21,6 +21,7 @@
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/AssetTraits.h"
 #include "../../Assets/Continuation.h"
+#include "../../Assets/ContinuationUtil.h"
 #include "../../Assets/Assets.h"
 #include "../../xleres/FileList.h"
 #include <assert.h>
@@ -93,8 +94,8 @@ namespace RenderCore { namespace Techniques
 		auto instanceIdx = instanceIndices[0];
 		assert(instanceIdx == 0);
 
-		IGeoDeformer::VertexElementRange sourceElements[16];
-		IGeoDeformer::VertexElementRange destinationElements[16];
+		IteratorRange<VertexElementIterator> sourceElements[16];
+		IteratorRange<VertexElementIterator> destinationElements[16];
 
 		for (const auto&geo:_geos) {
 
@@ -262,6 +263,11 @@ namespace RenderCore { namespace Techniques
 	bool CPUSkinDeformer::IsCPUDeformer() const
 	{
 		return true;
+	}
+
+	std::future<void> CPUSkinDeformer::GetInitializationFuture() const
+	{
+		return {};
 	}
 
 	CPUSkinDeformer::~CPUSkinDeformer()
@@ -432,6 +438,42 @@ namespace RenderCore { namespace Techniques
 		metrics._dispatchCount += (unsigned)_dispatches.size();
 		metrics._constantDataSize += jmTemporaryDataSize;
 		metrics._inputStaticDataSize += _staticVertexAttachmentsSize;
+	}
+
+	template<typename Marker, typename Time>
+		static bool MarkerTimesOut(Marker& marker, Time timeoutTime)
+		{
+			auto remainingTime = timeoutTime - std::chrono::steady_clock::now();
+			if (remainingTime.count() <= 0) return true;
+			auto t = marker.StallWhilePending(std::chrono::duration_cast<std::chrono::microseconds>(remainingTime));
+			return t.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Pending;
+		}
+
+	std::future<void> GPUSkinDeformer::GetInitializationFuture() const
+	{
+		std::vector<unsigned> pipelineMarkers;
+		pipelineMarkers.reserve(_dispatches.size());
+		for (const auto&dispatch:_dispatches) {
+			auto i = std::lower_bound(pipelineMarkers.begin(), pipelineMarkers.end(), dispatch._pipelineMarker);
+			if (i == pipelineMarkers.end() || *i != dispatch._pipelineMarker)
+				pipelineMarkers.insert(i, dispatch._pipelineMarker);
+		}
+
+		std::promise<void> promise;
+		auto result = promise.get_future();
+		::Assets::PollToPromise(
+			std::move(promise),
+			[pipelineCollection=std::weak_ptr<Internal::DeformerPipelineCollection>(_pipelineCollection), pipelineMarkers](auto timeout) {
+				auto l = pipelineCollection.lock();
+				if (!l) return ::Assets::PollStatus::Finish;
+				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+				if (MarkerTimesOut(l->_preparedSharedResources, timeoutTime)) return ::Assets::PollStatus::Continue;
+				for (auto m:pipelineMarkers)
+					if (MarkerTimesOut(*l->_pipelines[m], timeoutTime)) return ::Assets::PollStatus::Continue;
+				return ::Assets::PollStatus::Finish;
+			},
+			[]() {});
+		return result;
 	}
 
 	GPUSkinDeformer::GPUSkinDeformer(

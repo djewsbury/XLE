@@ -418,6 +418,7 @@ namespace UnitTests
 		TechniqueTestApparatus techniqueTestHelper{*testHelper};
 
 		auto pipelineCollection = std::make_shared<Techniques::PipelineCollection>(testHelper->_device);
+		SkinDeformerSystem skinDeformerSystem{pipelineCollection};
 		
 		auto modelScaffold = MakeTestAnimatedModel();
 		auto rendererConstruction = std::make_shared<RenderCore::Techniques::ModelRendererConstruction>();
@@ -431,10 +432,10 @@ namespace UnitTests
 			REQUIRE(cpuAccelerator);
 
 			auto deformerConstruction = std::make_shared<Techniques::DeformerConstruction>();
-			ConfigureCPUSkinDeformers(*deformerConstruction, *rendererConstruction);
+			skinDeformerSystem.ConfigureCPUSkinDeformers(*deformerConstruction, *rendererConstruction);
 			StallWhilePending(*deformerConstruction);
 
-			auto cpuGeoDeformAttachment = Techniques::CreateDeformGeometryInfrastructure(*testHelper->_device, *rendererConstruction, *deformerConstruction);
+			auto cpuGeoDeformAttachment = Techniques::CreateDeformGeoAttachment(*testHelper->_device, *rendererConstruction, *deformerConstruction);
 			REQUIRE(cpuGeoDeformAttachment);
 
 			auto cpuRendererBinding = cpuGeoDeformAttachment->GetDeformerToRendererBinding();
@@ -448,12 +449,11 @@ namespace UnitTests
 			REQUIRE(gpuAccelerator);
 
 			auto deformerConstruction = std::make_shared<Techniques::DeformerConstruction>();
-			ConfigureGPUSkinDeformers(
-				*deformerConstruction, *rendererConstruction, 
-				RenderCore::Techniques::CreateGPUSkinPipelineCollection(pipelineCollection));
+			skinDeformerSystem.ConfigureGPUSkinDeformers(
+				*deformerConstruction, *rendererConstruction);
 			StallWhilePending(*deformerConstruction);
 			
-			auto gpuGeoDeformAttachment = Techniques::CreateDeformGeometryInfrastructure(*testHelper->_device, *rendererConstruction, *deformerConstruction);
+			auto gpuGeoDeformAttachment = Techniques::CreateDeformGeoAttachment(*testHelper->_device, *rendererConstruction, *deformerConstruction);
 			REQUIRE(gpuGeoDeformAttachment);
 
 			auto rendererBinding2 = gpuGeoDeformAttachment->GetDeformerToRendererBinding();
@@ -466,21 +466,6 @@ namespace UnitTests
 			pool->Attach(*gpuAccelerator, gpuGeoDeformAttachment);
 		}
 	}
-
-	class TestCPUDeformOperator : public Techniques::IGeoDeformer
-	{
-	public:
-		virtual void Execute(
-			unsigned instanceIdx,
-			IteratorRange<const VertexElementRange*> sourceElements,
-			IteratorRange<const VertexElementRange*> destinationElements) const
-		{
-			REQUIRE(instanceIdx == 0);
-			REQUIRE(sourceElements.size() == 2);
-			REQUIRE(destinationElements.size() == 3);
-		}
-		virtual void* QueryInterface(size_t) { return nullptr; }
-	};
 
 	TEST_CASE( "Deform-CPUInstantiation", "[rendercore_techniques]" )
 	{
@@ -587,22 +572,6 @@ namespace UnitTests
 			REQUIRE(geoBindings[2]._outputElements[0]._inputSlot == Techniques::Internal::VB_PostDeform);
 		}
 	}
-
-	class TestGPUDeformOperator : public Techniques::IGeoDeformer
-	{
-	public:
-		virtual void ExecuteGPU(
-			IThreadContext& threadContext,
-			unsigned instanceIdx,
-			const IResourceView& srcVB,
-			const IResourceView& deformTemporariesVB,
-			const IResourceView& dstVB) const
-		{
-			REQUIRE(instanceIdx == 0);
-		}
-		virtual void* QueryInterface(size_t) { return nullptr; }
-		virtual ::Assets::DependencyValidation GetDependencyValidation() { return {}; }
-	};
 
 	TEST_CASE( "Deform-GPUInstantiation", "[rendercore_techniques]" )
 	{

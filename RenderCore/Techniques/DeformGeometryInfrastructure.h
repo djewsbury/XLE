@@ -5,28 +5,16 @@
 #pragma once
 
 #include "DeformAccelerator.h"
+#include "../../Assets/AssetsCore.h"
 #include <future>
-
-namespace BufferUploads { using CommandListID = uint32_t; }
 
 namespace RenderCore { namespace Techniques
 {
-	struct DeformerToRendererBinding;
-	struct DeformerInputBinding;
 	class DeformerConstruction;
 	class ModelRendererConstruction;
-	class IGeoDeformerInfrastructure;
-	class IGeoDeformer;
+	struct DeformerInputBinding;
 
-	class IGeoDeformerInfrastructure : public IDeformAttachment
-	{
-	public:
-		virtual const DeformerToRendererBinding& GetDeformerToRendererBinding() const = 0;
-		virtual std::vector<std::shared_ptr<IGeoDeformer>> GetOperations(size_t typeId) = 0;
-		virtual std::shared_future<BufferUploads::CommandListID> GetCompletionCommandList() const = 0;
-	};
-
-	std::shared_ptr<IGeoDeformerInfrastructure> CreateDeformGeometryInfrastructure(
+	std::shared_ptr<IDeformGeoAttachment> CreateDeformGeoAttachment(
 		IDevice& device,
 		const ModelRendererConstruction&,
 		const DeformerConstruction&);
@@ -52,7 +40,6 @@ namespace RenderCore { namespace Techniques
 			const IResourceView& dstVB,
 			Metrics& metrics) const;
 
-		using VertexElementRange = IteratorRange<RenderCore::VertexElementIterator>;
 		virtual void ExecuteCPU(
 			IteratorRange<const unsigned*> instanceIndices,
 			unsigned outputInstanceStride,
@@ -60,13 +47,9 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const void*> deformTemporariesVB,
 			IteratorRange<const void*> dstVB) const;
 
-		virtual void ExecuteCB(
-			IteratorRange<const unsigned*> instanceIndices,
-			unsigned outputInstanceStride,
-			IteratorRange<const void*> dstCB) const;
-
 		virtual void Bind(const DeformerInputBinding& binding) = 0;
 		virtual bool IsCPUDeformer() const = 0;
+		virtual std::future<void> GetInitializationFuture() const = 0;
 
 		virtual void* QueryInterface(size_t) = 0;
 		virtual ~IGeoDeformer();

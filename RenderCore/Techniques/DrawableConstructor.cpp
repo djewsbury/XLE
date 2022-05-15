@@ -497,12 +497,12 @@ namespace RenderCore { namespace Techniques
 
 			IteratorRange<const uint64_t*> currentMaterialAssignments;
 
-			RenderCore::Techniques::IGeoDeformerInfrastructure* geoDeformerInfrastructure = nullptr;
+			RenderCore::Techniques::IDeformGeoAttachment* geoDeformerInfrastructure = nullptr;
 			RenderCore::Techniques::IDeformUniformsAttachment* deformParametersAttachment = nullptr;
 			DeformerToRendererBinding deformerBinding;
 			if (deformAcceleratorPool && deformAccelerator) { 
 				deformParametersAttachment = deformAcceleratorPool->GetDeformUniformsAttachment(*deformAccelerator).get();
-				geoDeformerInfrastructure = dynamic_cast<IGeoDeformerInfrastructure*>(deformAcceleratorPool->GetDeformAttachment(*deformAccelerator).get());
+				geoDeformerInfrastructure = deformAcceleratorPool->GetDeformGeoAttachment(*deformAccelerator).get();
 				if (geoDeformerInfrastructure)
 					deformerBinding = geoDeformerInfrastructure->GetDeformerToRendererBinding();
 			}

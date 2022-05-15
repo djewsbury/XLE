@@ -28,13 +28,13 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<DeformAccelerator> CreateDeformAccelerator() override;
 		void Attach(
 			DeformAccelerator& deformAccelerator,
-			std::shared_ptr<IDeformAttachment> deformAttachment) override;
+			std::shared_ptr<IDeformGeoAttachment> deformAttachment) override;
 
 		virtual void Attach(
 			DeformAccelerator& deformAccelerator,
 			std::shared_ptr<IDeformUniformsAttachment> deformAttachment) override;
 
-		std::shared_ptr<IDeformAttachment> GetDeformAttachment(DeformAccelerator& deformAccelerator) override;
+		std::shared_ptr<IDeformGeoAttachment> GetDeformGeoAttachment(DeformAccelerator& deformAccelerator) override;
 		std::shared_ptr<IDeformUniformsAttachment> GetDeformUniformsAttachment(DeformAccelerator& deformAccelerator) override;
 
 		void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) override;
@@ -86,7 +86,7 @@ namespace RenderCore { namespace Techniques
 		VertexBufferView _outputVBV;
 		unsigned _uniformBufferPageResourceBaseOffset = ~0;
 
-		std::shared_ptr<IDeformAttachment> _attachment;
+		std::shared_ptr<IDeformGeoAttachment> _attachment;
 		std::shared_ptr<IDeformUniformsAttachment> _parametersAttachment;
 
 		#if defined(_DEBUG)
@@ -127,12 +127,13 @@ namespace RenderCore { namespace Techniques
 
 	void DeformAcceleratorPool::Attach(
 		DeformAccelerator& accelerator,
-		std::shared_ptr<IDeformAttachment> deformAttachment)
+		std::shared_ptr<IDeformGeoAttachment> deformAttachment)
 	{
 		#if defined(_DEBUG)
 			assert(accelerator._containingPool == this);
 		#endif
 		assert(!accelerator._attachment);		// we can't attach geometry deformers more than once to a given deform accelerator
+		assert(deformAttachment);
 		accelerator._attachment = std::move(deformAttachment);
 
 		unsigned reservationGPU = 0, reservationCPU = 0;
@@ -158,7 +159,7 @@ namespace RenderCore { namespace Techniques
 		assert(reservationCPU == 0);
 	}
 
-	std::shared_ptr<IDeformAttachment> DeformAcceleratorPool::GetDeformAttachment(DeformAccelerator& deformAccelerator)
+	std::shared_ptr<IDeformGeoAttachment> DeformAcceleratorPool::GetDeformGeoAttachment(DeformAccelerator& deformAccelerator)
 	{
 		return deformAccelerator._attachment;
 	}
@@ -473,4 +474,7 @@ namespace RenderCore { namespace Techniques
 	{
 		return std::make_shared<DeformAcceleratorPool>(std::move(device), std::move(compiledLayoutPool));
 	}
+
+	IDeformGeoAttachment::~IDeformGeoAttachment() = default;
+	IDeformUniformsAttachment::~IDeformUniformsAttachment() = default;
 }}
