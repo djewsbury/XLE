@@ -70,6 +70,7 @@ namespace RenderCore { namespace Techniques
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		const std::shared_ptr<DeformAccelerator>& GetDeformAccelerator() const { return _deformAccelerator; }
+		const std::shared_ptr<DrawableConstructor>& GetDrawableConstructor() const { return _drawableConstructor; }
 		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCmdList; }
 
 		using UniformBufferBinding = std::pair<uint64_t, std::shared_ptr<IUniformBufferDelegate>>;

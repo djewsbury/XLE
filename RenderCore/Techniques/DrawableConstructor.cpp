@@ -15,6 +15,7 @@
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/MaterialScaffold.h"
 #include "../Assets/RawMaterial.h"
+#include "../Assets/SkeletonMachine.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/Streams/StreamFormatter.h"
@@ -482,6 +483,8 @@ namespace RenderCore { namespace Techniques
 		std::vector<DrawCall> _pendingDrawCalls;
 		std::vector<uint8_t> _pendingTranslatedCmdStream;
 		std::vector<::Assets::DependencyValidation> _pendingDepVals;
+		std::vector<Float4x4> _pendingBaseTransforms;
+		std::vector<std::pair<unsigned, unsigned>> _pendingBaseTransformsPerElement;
 
 		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
 
@@ -631,6 +634,20 @@ namespace RenderCore { namespace Techniques
 					break;
 				}
 			}
+
+			AddBaseTransforms(*modelScaffold, elementIdx);
+		}
+
+		void AddBaseTransforms(Assets::ModelScaffold& scaffold, unsigned elementIdx)
+		{
+			// Record the embedded skeleton transform marker -> local transforms
+			// these can be useful when using light weight renderers, because this is the last
+			// bit of information required to use a model scaffold for basic rendering
+			auto* embeddedSkeleton = scaffold.EmbeddedSkeleton();
+			size_t start = _pendingBaseTransforms.size();
+			_pendingBaseTransforms.resize(start+embeddedSkeleton->GetOutputMatrixCount(), Identity<Float4x4>());
+			embeddedSkeleton->GenerateOutputTransforms(MakeIteratorRange(_pendingBaseTransforms.begin()+start, _pendingBaseTransforms.end()));
+			_pendingBaseTransformsPerElement.emplace_back(elementIdx, embeddedSkeleton->GetOutputMatrixCount());
 		}
 
 		void FillIn(DrawableConstructor& dst)
@@ -644,6 +661,8 @@ namespace RenderCore { namespace Techniques
 			dst._pipelineAccelerators.insert(dst._pipelineAccelerators.end(), _pendingPipelines._pipelineAccelerators.begin(), _pendingPipelines._pipelineAccelerators.end());
 			dst._descriptorSetAccelerators.insert(dst._descriptorSetAccelerators.end(), _pendingPipelines._descriptorSetAccelerators.begin(), _pendingPipelines._descriptorSetAccelerators.end());
 			dst._drawableInputAssemblies.insert(dst._drawableInputAssemblies.end(), _pendingPipelines._pendingInputAssemblies.begin(), _pendingPipelines._pendingInputAssemblies.end());
+			dst._baseTransforms.insert(dst._baseTransforms.end(), _pendingBaseTransforms.begin(), _pendingBaseTransforms.end());
+			dst._baseTransformsPerElement.insert(dst._baseTransformsPerElement.end(), _pendingBaseTransformsPerElement.begin(), _pendingBaseTransformsPerElement.end());
 
 			for (auto& p:_pendingDrawCalls) {
 				p._drawableGeoIdx += geoIdxOffset;
@@ -684,6 +703,8 @@ namespace RenderCore { namespace Techniques
 			_pendingPipelines = {};
 			_pendingTranslatedCmdStream.clear();
 			_pendingDepVals.clear();
+			_pendingBaseTransforms.clear();
+			_pendingBaseTransformsPerElement.clear();
 		}
 
 		Pimpl(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)

@@ -47,6 +47,11 @@
 #include <random>
 #include <set>
 
+#include "../RenderCore/Techniques/Drawables.h"
+#include "../RenderCore/Techniques/DrawableConstructor.h"
+#include "../RenderCore/Techniques/CommonBindings.h"
+#include "../RenderCore/Assets/ModelMachine.h"      // DrawCallDesc
+
 namespace SceneEngine
 {
     using Assets::ResChar;
@@ -598,7 +603,7 @@ namespace SceneEngine
         {
         public:
             template<bool UseImposters = true>
-                void Render(
+                void BuildDrawables(
 					IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
                     PlacementsModelCache& cache,
                     const void* filenamesBuffer,
@@ -627,14 +632,14 @@ namespace SceneEngine
         protected:
             uint64_t _currentModel, _currentMaterial;
             unsigned _currentSupplements;
-            ::Assets::PtrToMarkerPtr<RenderCore::Techniques::SimpleModelRenderer> _current;
+            const RenderCore::Techniques::SimpleModelRenderer* _current;
             float _imposterDistSq;
             bool _currentModelRendered;
             DynamicImposters* _imposters;
         };
 
         template<bool UseImposters>
-            void RendererHelper::Render(
+            void RendererHelper::BuildDrawables(
                 IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
 				PlacementsModelCache& cache,
                 const void* filenamesBuffer,
@@ -678,17 +683,16 @@ namespace SceneEngine
                 ||  materialHash != _currentMaterial 
                 ||  obj._supplementsOffset != _currentSupplements) {
 
-                _current = cache.GetModelRenderer(
-                    (const ResChar*)PtrAdd(filenamesBuffer, obj._modelFilenameOffset + sizeof(uint64_t)),
-                    (const ResChar*)PtrAdd(filenamesBuffer, obj._materialFilenameOffset + sizeof(uint64_t)));
+                _current = cache.TryGetRendererActual(
+                    *(const uint64_t*)PtrAdd(filenamesBuffer, obj._modelFilenameOffset), (const ResChar*)PtrAdd(filenamesBuffer, obj._modelFilenameOffset + sizeof(uint64_t)),
+                    *(const uint64_t*)PtrAdd(filenamesBuffer, obj._materialFilenameOffset), (const ResChar*)PtrAdd(filenamesBuffer, obj._materialFilenameOffset + sizeof(uint64_t)));
                 _currentModel = modelHash;
                 _currentMaterial = materialHash;
                 _currentSupplements = obj._supplementsOffset;
                 _currentModelRendered = false;
             }
 
-			auto current = _current ? _current->TryActualize() : nullptr;
-			if (!current) return;
+			if (!_current) return;
 
             auto localToWorld = Combine(obj._localToCell, cellToWorld);
 
@@ -703,7 +707,7 @@ namespace SceneEngine
                 //  But some models don't have any internal transforms -- in these
                 //  cases, the _defaultTransformCount will be zero
             const auto instanceIdx = ~0u;
-            (*current)->BuildDrawables(pkts, AsFloat4x4(localToWorld), instanceIdx, viewMask);
+            _current->BuildDrawables(pkts, AsFloat4x4(localToWorld), instanceIdx, viewMask);
 
             ++_metrics._instancesPrepared;
             _metrics._uniqueModelsPrepared += !_currentModelRendered;
@@ -847,6 +851,97 @@ namespace SceneEngine
         }
     }
 
+    class LightWeightDrawable : public RenderCore::Techniques::Drawable
+	{
+	public:
+        RenderCore::Assets::DrawCallDesc _drawCall;
+        RenderCore::Techniques::LocalTransformConstants _localTransform;
+	};
+
+    static void DrawFn_LightWeightDrawable(
+		RenderCore::Techniques::ParsingContext& parserContext,
+		const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext,
+		const LightWeightDrawable& drawable)
+	{
+        if (drawFnContext.GetBoundLooseImmediateDatas()) {
+			RenderCore::UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(drawable._localTransform) };
+			drawFnContext.ApplyLooseUniforms(RenderCore::UniformsStream{{}, immDatas});
+		}
+
+        drawFnContext.DrawIndexed(
+			drawable._drawCall._indexCount, drawable._drawCall._firstIndex, drawable._drawCall._firstVertex);
+    }
+
+    static void LightWeightBuildDrawables(
+        RenderCore::Techniques::DrawableConstructor& constructor,
+        IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
+        IteratorRange<const Float4x4*> objectToWorlds)
+    {
+        using namespace RenderCore;
+        LightWeightDrawable* drawables[dimof(constructor._drawCallCounts)];
+		for (unsigned c=0; c<dimof(constructor._drawCallCounts); ++c) {
+			if (!constructor._drawCallCounts[c]) {
+				drawables[c] = nullptr;
+				continue;
+			}
+			drawables[c] = pkts[c] ? pkts[c]->_drawables.Allocate<LightWeightDrawable>(constructor._drawCallCounts[c]) : nullptr;
+		}
+
+        static std::shared_ptr<UniformsStreamInterface> usi;
+        if (!usi) {
+            usi = std::make_shared<UniformsStreamInterface>();
+		    usi->BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
+        }
+
+		auto* drawableFn = (Techniques::ExecuteDrawableFn*)&DrawFn_LightWeightDrawable;
+        const unsigned deformInstanceIdx = ~0u;
+
+		const unsigned viewMask = 1;
+        auto nodeSpaceToWorld = Identity<Float3x4>();;
+		const Float4x4* geoSpaceToNodeSpace = nullptr;
+        using ModelCommand = RenderCore::Assets::ModelCommand;
+        using DrawableConstructor = RenderCore::Techniques::DrawableConstructor;
+		for (auto cmd:constructor.GetCmdStream()) {
+			switch (cmd.Cmd()) {
+			case (uint32_t)ModelCommand::SetTransformMarker:
+				{
+                    auto transformMarker = cmd.As<unsigned>();
+                    assert(constructor._baseTransformsPerElement.size() == 1);
+                    assert(transformMarker < constructor._baseTransforms.size());
+					nodeSpaceToWorld = Combine(*(const Float3x4*)&constructor._baseTransforms[transformMarker], *(const Float3x4*)&objectToWorlds[0]);
+                    assert(!geoSpaceToNodeSpace);
+				}
+				break;
+			case (uint32_t)DrawableConstructor::Command::BeginElement:
+				assert(cmd.As<unsigned>() == 0);    // expecting only a single element
+				break;
+			case (uint32_t)DrawableConstructor::Command::SetGeoSpaceToNodeSpace:
+				geoSpaceToNodeSpace = (!cmd.RawData().empty()) ? &cmd.As<Float4x4>() : nullptr;
+				break;
+			case (uint32_t)DrawableConstructor::Command::ExecuteDrawCalls:
+				{
+					struct DrawCallsRef { unsigned _start, _end; };
+					auto& drawCallsRef = cmd.As<DrawCallsRef>();
+					for (const auto& dc:MakeIteratorRange(constructor._drawCalls.begin()+drawCallsRef._start, constructor._drawCalls.begin()+drawCallsRef._end)) {
+						if (!drawables[dc._batchFilter]) continue;
+						auto& drawable = *drawables[dc._batchFilter]++;
+						drawable._geo = constructor._drawableGeos[dc._drawableGeoIdx];
+						drawable._pipeline = constructor._pipelineAccelerators[dc._pipelineAcceleratorIdx];
+						drawable._descriptorSet = constructor._descriptorSetAccelerators[dc._descriptorSetAcceleratorIdx];
+						drawable._drawFn = drawableFn;
+                        drawable._looseUniformsInterface = usi;
+						drawable._drawCall = RenderCore::Assets::DrawCallDesc { dc._firstIndex, dc._indexCount, dc._firstVertex };
+                        drawable._localTransform._localToWorld = geoSpaceToNodeSpace ? Combine(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
+						drawable._localTransform._localSpaceView = Float3{0,0,0};
+						drawable._localTransform._viewMask = viewMask;
+						drawable._deformInstanceIdx = deformInstanceIdx;
+					}
+				}
+				break;
+			}
+		}
+    }
+
     void PlacementsRenderer::Pimpl::BuildDrawables(
         const ExecuteSceneContext& executeContext,
         const Placements& placements,
@@ -907,13 +1002,13 @@ namespace SceneEngine
                     auto& obj = objRef[o];
                     while (filterIterator != filterEnd && *filterIterator < obj._guid) { ++filterIterator; }
                     if (filterIterator == filterEnd || *filterIterator != obj._guid) { continue; }
-                    helper.Render<true>(
+                    helper.BuildDrawables<true>(
                         executeContext._destinationPkts, *_cache,
                         filenamesBuffer, supplementsBuffer, obj, cellToWorld, cameraPositionCell);
                 }
             } else {
                 for (auto o:objects)
-                    helper.Render<true>(
+                    helper.BuildDrawables<true>(
                         executeContext._destinationPkts, *_cache,
                         filenamesBuffer, supplementsBuffer, objRef[o], cellToWorld, cameraPositionCell);
             }
@@ -923,15 +1018,52 @@ namespace SceneEngine
                     auto& obj = objRef[o];
                     while (filterIterator != filterEnd && *filterIterator < obj._guid) { ++filterIterator; }
                     if (filterIterator == filterEnd || *filterIterator != obj._guid) { continue; }
-                    helper.Render<false>(
+                    helper.BuildDrawables<false>(
                         executeContext._destinationPkts, *_cache,
                         filenamesBuffer, supplementsBuffer, obj, cellToWorld, cameraPositionCell);
                 }
             } else {
-                for (auto o:objects)
-                    helper.Render<false>(
+                /*for (auto o:objects)
+                    helper.BuildDrawables<false>(
                         executeContext._destinationPkts, *_cache,
-                        filenamesBuffer, supplementsBuffer, objRef[o], cellToWorld, cameraPositionCell);
+                        filenamesBuffer, supplementsBuffer, objRef[o], cellToWorld, cameraPositionCell);*/
+                Float4x4 localToWorldBuffer[objects.size()];
+                auto i = objects.begin();
+                for (; i!=objects.end();) {
+                    auto start = i;
+                    ++i;
+                    auto modelFilenameOffset = objRef[*start]._modelFilenameOffset;
+                    auto materialFilenameOffset = objRef[*start]._materialFilenameOffset;
+                    while (i!=objects.end() && objRef[*i]._modelFilenameOffset == modelFilenameOffset && objRef[*i]._materialFilenameOffset == materialFilenameOffset) ++i;
+
+                    auto objCount = i-start;
+                    Float4x4* localToWorldI = localToWorldBuffer;
+                    for (auto idx:MakeIteratorRange(start, i)) {
+                        *localToWorldI = AsFloat4x4(Combine(objRef[idx]._localToCell, cellToWorld));
+                        ++localToWorldI;
+                    }
+
+                    auto* renderer = _cache->TryGetRendererActual(
+                        *(const uint64_t*)PtrAdd(filenamesBuffer, modelFilenameOffset), (const ResChar*)PtrAdd(filenamesBuffer, modelFilenameOffset + sizeof(uint64_t)),
+                        *(const uint64_t*)PtrAdd(filenamesBuffer, materialFilenameOffset), (const ResChar*)PtrAdd(filenamesBuffer, materialFilenameOffset + sizeof(uint64_t)));
+                    if (renderer) {
+                        auto* drawableConstructor = renderer->GetDrawableConstructor().get();
+                        LightWeightBuildDrawables(
+                            *drawableConstructor,
+                            executeContext._destinationPkts,
+                            MakeIteratorRange(localToWorldBuffer, &localToWorldBuffer[objCount]));
+
+                        /*for (unsigned c=0; c<objCount; ++c) {
+                            const auto instanceIdx = ~0u;
+                            const auto viewMask = 1u;
+                            renderer->BuildDrawables(
+                                executeContext._destinationPkts, localToWorldBuffer[c], instanceIdx, viewMask);
+                        }*/
+
+                        helper._metrics._instancesPrepared += objCount;
+                        ++helper._metrics._uniqueModelsPrepared;
+                    }
+                }
             }
         } /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -953,7 +1085,7 @@ namespace SceneEngine
         auto cameraPositionCell = Zero<Float3>();
 
         for (auto o:objects)
-            helper.Render<false>(
+            helper.BuildDrawables<false>(
                 pkts, *_cache,
                 filenamesBuffer, supplementsBuffer, objRef[o.first], cellToWorld, cameraPositionCell,
                 o.second);
@@ -1316,8 +1448,9 @@ namespace SceneEngine
 
                 std::vector<std::shared_future<std::shared_ptr<RenderCore::Techniques::SimpleModelRenderer>>> rendererFutures;
                 for (const auto&ref:modelRendererRefs) {
-                    auto marker = cache->GetModelRenderer(ref.second._model, ref.second._material);
-                    rendererFutures.push_back(marker->ShareFuture());
+                    auto marker = cache->GetRendererMarker(ref.second._model, ref.second._material);
+                    if (marker) // note that we fill up the cache here, and not be able to create markers for all models
+                        rendererFutures.push_back(marker->ShareFuture());
                 }
 
                 // It would be preferable here to create another continuation. However that would require expanding

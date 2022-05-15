@@ -21,6 +21,7 @@ namespace Assets { class AssetHeapRecord; }
 namespace RenderCore { namespace Techniques
 {
     class SimpleModelRenderer;
+    class DrawableConstructor;
 	class IPipelineAcceleratorPool;
     class IDeformAcceleratorPool;
 
@@ -49,10 +50,10 @@ namespace RenderCore { namespace Techniques
         using SupplementGUID = uint64;
         using SupplementRange = IteratorRange<const SupplementGUID*>;
 
-		auto GetModelRendererMarker(
+		auto GetRendererMarker(
             StringSection<ResChar> modelFilename, 
             StringSection<ResChar> materialFilename) -> ::Assets::PtrToMarkerPtr<SimpleModelRenderer>;
-        auto TryGetModelRendererMarkerActual(
+        auto TryGetRendererActual(
             uint64_t modelFilenameHash, StringSection<ResChar> modelFilename, 
             uint64_t materialFilenameHash, StringSection<ResChar> materialFilename) -> const SimpleModelRenderer*;
 

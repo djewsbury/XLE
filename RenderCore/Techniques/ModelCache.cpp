@@ -47,7 +47,7 @@ namespace RenderCore { namespace Techniques
 
 	uint32_t ModelCache::GetReloadId() const { return _pimpl->_reloadId; }
 
-	auto ModelCache::GetModelRendererMarker(
+	auto ModelCache::GetRendererMarker(
 		StringSection<ResChar> modelFilename,
 		StringSection<ResChar> materialFilename) -> ::Assets::PtrToMarkerPtr<SimpleModelRenderer>
 	{
@@ -82,7 +82,7 @@ namespace RenderCore { namespace Techniques
 		return newFuture;
 	}
 
-	auto ModelCache::TryGetModelRendererMarkerActual(
+	auto ModelCache::TryGetRendererActual(
 		uint64_t modelFilenameHash, StringSection<ResChar> modelFilename,
 		uint64_t materialFilenameHash, StringSection<ResChar> materialFilename) -> const SimpleModelRenderer*
 	{

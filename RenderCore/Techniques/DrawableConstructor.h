@@ -51,6 +51,9 @@ namespace RenderCore { namespace Techniques
 		std::vector<uint8_t> _translatedCmdStream;
 		IteratorRange<Assets::ScaffoldCmdIterator> GetCmdStream() const;
 
+		std::vector<Float4x4> _baseTransforms;
+		std::vector<std::pair<unsigned, unsigned>> _baseTransformsPerElement;
+
 		BufferUploads::CommandListID _completionCommandList;
 
 		void FulfillWhenNotPending(std::promise<std::shared_ptr<DrawableConstructor>>&& promise);
