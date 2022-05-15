@@ -575,7 +575,7 @@ namespace RenderCore { namespace Techniques
 									auto cmdId = (uint32_t)Command::SetGeoSpaceToNodeSpace, blockSize = (uint32_t)sizeof(Float4x4);
 									_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
 									_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
-									_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&drawCallIterators, (const uint8_t*)&drawCallIterators[2]);
+									_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&rawGeometry->_geoSpaceToNodeSpace, (const uint8_t*)(&rawGeometry->_geoSpaceToNodeSpace+1));
 									currentGeoSpaceToNodeSpace = rawGeometry->_geoSpaceToNodeSpace;
 								}
 							} else if (currentGeoSpaceToNodeSpace.has_value()) {

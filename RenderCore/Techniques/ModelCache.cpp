@@ -47,7 +47,7 @@ namespace RenderCore { namespace Techniques
 
 	uint32_t ModelCache::GetReloadId() const { return _pimpl->_reloadId; }
 
-	auto ModelCache::GetModelRenderer(
+	auto ModelCache::GetModelRendererMarker(
 		StringSection<ResChar> modelFilename,
 		StringSection<ResChar> materialFilename) -> ::Assets::PtrToMarkerPtr<SimpleModelRenderer>
 	{
@@ -80,6 +80,40 @@ namespace RenderCore { namespace Techniques
 
 		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_pipelineAcceleratorPool, construction);
 		return newFuture;
+	}
+
+	auto ModelCache::TryGetModelRendererMarkerActual(
+		uint64_t modelFilenameHash, StringSection<ResChar> modelFilename,
+		uint64_t materialFilenameHash, StringSection<ResChar> materialFilename) -> const SimpleModelRenderer*
+	{
+		auto hash = HashCombine(modelFilenameHash, materialFilenameHash);
+
+		::Assets::PtrToMarkerPtr<SimpleModelRenderer> newFuture;
+		{
+			auto query = _pimpl->_modelRenderers.Query(hash);
+			if (query.GetType() == LRUCacheInsertType::Update) {
+				auto attempt = query.GetExisting()._rendererMarker->TryActualize();
+				return attempt ? attempt->get() : nullptr;
+			} else if (query.GetType() == LRUCacheInsertType::Fail) {
+				return nullptr; // cache blown during this frame
+			}
+
+			auto stringInitializer = ::Assets::Internal::AsString(modelFilename, materialFilename);	// (used for tracking/debugging purposes)
+			newFuture = std::make_shared<::Assets::MarkerPtr<SimpleModelRenderer>>(stringInitializer);
+			Pimpl::Renderer r;
+			r._rendererMarker = newFuture;
+			r._modelScaffoldName = modelFilename.AsString();
+			r._materialScaffoldName = materialFilename.AsString();
+			query.Set(std::move(r));
+		}
+
+		auto modelScaffold = _pimpl->_modelScaffolds.Get(modelFilename);
+		auto materialScaffold = _pimpl->_materialScaffolds.Get(materialFilename, modelFilename);
+		auto construction = std::make_shared<ModelRendererConstruction>();
+		construction->AddElement().SetModelScaffold(modelScaffold).SetMaterialScaffold(materialScaffold);
+
+		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_pipelineAcceleratorPool, construction);
+		return nullptr;	// implicitly not available immediately
 	}
 
 	auto ModelCache::GetModelScaffold(StringSection<ResChar> name) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>

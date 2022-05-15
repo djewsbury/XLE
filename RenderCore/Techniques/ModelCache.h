@@ -49,9 +49,12 @@ namespace RenderCore { namespace Techniques
         using SupplementGUID = uint64;
         using SupplementRange = IteratorRange<const SupplementGUID*>;
 
-		auto GetModelRenderer(
+		auto GetModelRendererMarker(
             StringSection<ResChar> modelFilename, 
             StringSection<ResChar> materialFilename) -> ::Assets::PtrToMarkerPtr<SimpleModelRenderer>;
+        auto TryGetModelRendererMarkerActual(
+            uint64_t modelFilenameHash, StringSection<ResChar> modelFilename, 
+            uint64_t materialFilenameHash, StringSection<ResChar> materialFilename) -> const SimpleModelRenderer*;
 
         auto GetModelScaffold(StringSection<ResChar>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>;
 		auto GetMaterialScaffold(StringSection<ResChar>, StringSection<ResChar>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>;
