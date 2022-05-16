@@ -207,12 +207,12 @@ namespace RenderCore { namespace Techniques
 					for (const auto& dc:MakeIteratorRange(_drawableConstructor->_drawCalls.begin()+drawCallsRef._start, _drawableConstructor->_drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
-						drawable._geo = _drawableConstructor->_drawableGeos[dc._drawableGeoIdx];
+						drawable._geo = _drawableConstructor->_drawableGeos[dc._drawableGeoIdx].get();
 						drawable._pipeline = _drawableConstructor->_pipelineAccelerators[dc._pipelineAcceleratorIdx];
 						drawable._descriptorSet = _drawableConstructor->_descriptorSetAccelerators[dc._descriptorSetAcceleratorIdx];
 						drawable._drawFn = drawableFn;
 						drawable._drawCall = RenderCore::Assets::DrawCallDesc { dc._firstIndex, dc._indexCount, dc._firstVertex };
-						drawable._looseUniformsInterface = _usi;
+						drawable._looseUniformsInterface = _usi.get();
 						drawable._materialGuid = materialGuids[materialGuidsIterator++];
 						drawable._drawCallIdx = drawCallCounter;
 						drawable._localTransform._localToWorld = localTransform;
@@ -288,12 +288,12 @@ namespace RenderCore { namespace Techniques
 					for (const auto& dc:MakeIteratorRange(_drawableConstructor->_drawCalls.begin()+drawCallsRef._start, _drawableConstructor->_drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
-						drawable._geo = _drawableConstructor->_drawableGeos[dc._drawableGeoIdx];
+						drawable._geo = _drawableConstructor->_drawableGeos[dc._drawableGeoIdx].get();
 						drawable._pipeline = _drawableConstructor->_pipelineAccelerators[dc._pipelineAcceleratorIdx];
 						drawable._descriptorSet = _drawableConstructor->_descriptorSetAccelerators[dc._descriptorSetAcceleratorIdx];
 						drawable._drawFn = (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelDelegate;
 						drawable._drawCall = RenderCore::Assets::DrawCallDesc { dc._firstIndex, dc._indexCount, dc._firstVertex };
-						drawable._looseUniformsInterface = _usi;
+						drawable._looseUniformsInterface = _usi.get();
 						drawable._materialGuid = materialGuids[materialGuidsIterator++];
 						drawable._drawCallIdx = drawCallCounter;
 						drawable._localTransform._localToWorld = localTransform;
@@ -393,15 +393,22 @@ namespace RenderCore { namespace Techniques
 			geoDeformerInfrastructure = std::dynamic_pointer_cast<IDeformGeoAttachment>(_deformAcceleratorPool->GetDeformGeoAttachment(*_deformAccelerator));
 		}
 
-		_usi = std::make_shared<UniformsStreamInterface>();
-		_usi->BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
-		_usi->BindImmediateData(1, Techniques::ObjectCB::DrawCallProperties);
 
-		unsigned c=2;
-		for (const auto&u:uniformBufferDelegates)
-			_usi->BindImmediateData(c++, u.first, u.second->GetLayout());
-
-		_usi = drawablesPool.CombineWithLike(std::move(_usi));
+		if (!uniformBufferDelegates.empty()) {
+			UniformsStreamInterface usi;
+			usi.BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
+			usi.BindImmediateData(1, Techniques::ObjectCB::DrawCallProperties);
+			unsigned c=2;
+			for (const auto&u:uniformBufferDelegates)
+				usi.BindImmediateData(c++, u.first, u.second->GetLayout());
+			_usi = drawablesPool.CreateProtectedLifetime(std::move(usi));
+		} else {
+			// todo -- this can just become static
+			UniformsStreamInterface usi;
+			usi.BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
+			usi.BindImmediateData(1, Techniques::ObjectCB::DrawCallProperties);
+			_usi = drawablesPool.CreateProtectedLifetime(std::move(usi));
+		}
 		
 		_completionCmdList = _drawableConstructor->_completionCommandList;
 		if (geoDeformerInfrastructure)

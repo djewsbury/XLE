@@ -123,11 +123,11 @@ namespace RenderCore { namespace Techniques
 			materialUSI.BindFixedDescriptorSet(1, parserContext._extraSequencerDescriptorSet.first);
 
 		UniformsStreamInterface emptyUSI;
-		DrawableGeo* currentGeo = nullptr;
+		const DrawableGeo* currentGeo = nullptr;
 		PipelineAccelerator* currentPipelineAccelerator = nullptr;
 		const IPipelineAcceleratorPool::Pipeline* currentPipeline = nullptr;
 		uint64_t currentSequencerUniformRules = 0;
-		UniformsStreamInterface* currentLooseUniformsInterface = nullptr;
+		const UniformsStreamInterface* currentLooseUniformsInterface = nullptr;
 		Metal::BoundUniforms* currentBoundUniforms = nullptr;
 		unsigned idx = 0;
 
@@ -157,16 +157,16 @@ namespace RenderCore { namespace Techniques
 					currentBoundUniforms = &currentPipeline->_boundUniformsPool.Get(
 						*currentPipeline->_metalPipeline,
 						globalUSI, materialUSI,
-						*(drawable._looseUniformsInterface ? drawable._looseUniformsInterface.get() : &emptyUSI));
-					currentLooseUniformsInterface = drawable._looseUniformsInterface.get();
+						*(drawable._looseUniformsInterface ? drawable._looseUniformsInterface : &emptyUSI));
+					currentLooseUniformsInterface = drawable._looseUniformsInterface;
 					++boundUniformLookupCount;
 					++pipelineLookupCount;
-				} else if (currentLooseUniformsInterface != drawable._looseUniformsInterface.get()) {
+				} else if (currentLooseUniformsInterface != drawable._looseUniformsInterface) {
 					currentBoundUniforms = &currentPipeline->_boundUniformsPool.Get(
 						*currentPipeline->_metalPipeline,
 						globalUSI, materialUSI,
-						*(drawable._looseUniformsInterface ? drawable._looseUniformsInterface.get() : &emptyUSI));
-					currentLooseUniformsInterface = drawable._looseUniformsInterface.get();
+						*(drawable._looseUniformsInterface ? drawable._looseUniformsInterface : &emptyUSI));
+					currentLooseUniformsInterface = drawable._looseUniformsInterface;
 					++boundUniformLookupCount;
 				}
 
@@ -182,7 +182,7 @@ namespace RenderCore { namespace Techniques
 				////////////////////////////////////////////////////////////////////////////// 
 			
 				VertexBufferView vbv[4];
-				if (drawable._geo.get() != currentGeo && drawable._geo.get()) {
+				if (drawable._geo != currentGeo && drawable._geo) {
 					for (unsigned c=0; c<drawable._geo->_vertexStreamCount; ++c) {
 						auto& stream = drawable._geo->_vertexStreams[c];
 						if (stream._type == DrawableGeo::StreamType::Resource) {
@@ -211,7 +211,7 @@ namespace RenderCore { namespace Techniques
 					} else {
 						encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{});
 					}
-					currentGeo = drawable._geo.get();
+					currentGeo = drawable._geo;
 				}
 
 				//////////////////////////////////////////////////////////////////////////////
@@ -414,6 +414,78 @@ namespace RenderCore { namespace Techniques
 		realContext._encoder->SetStencilRef(frontFaceStencil, backFaceStencil);
 	}
 
+	namespace Internal
+	{
+		/// Simple resizable heap with pointer stability and no deletion until we delete all at once
+		class DrawableGeoHeap
+		{
+		public:
+			struct Page
+			{
+				std::unique_ptr<uint8_t[]> _storage;
+			};
+			std::vector<Page> _pages;
+			unsigned _allocatedCount = 0;
+			static constexpr unsigned s_geosPerPage = 64;
+
+			DrawableGeo* Allocate();
+			void DestroyAll();
+
+			DrawableGeoHeap();
+			~DrawableGeoHeap();
+			DrawableGeoHeap(DrawableGeoHeap&&);
+			DrawableGeoHeap& operator=(DrawableGeoHeap&&);
+		};
+
+		DrawableGeo* DrawableGeoHeap::Allocate()
+		{
+			auto pageForNewItem = _allocatedCount / s_geosPerPage;
+			auto indexInPage = _allocatedCount % s_geosPerPage;
+			++_allocatedCount;
+			while (pageForNewItem >= _pages.size()) {
+				auto newStorage = std::make_unique<uint8_t[]>(sizeof(DrawableGeo)*s_geosPerPage);
+				_pages.emplace_back(Page{std::move(newStorage)});
+			}
+			auto* result = (DrawableGeo*)PtrAdd(_pages[pageForNewItem]._storage.get(), sizeof(DrawableGeo)*indexInPage);
+			new(result) DrawableGeo();
+			return result;
+		}
+
+		DrawableGeoHeap::DrawableGeoHeap() = default;
+		DrawableGeoHeap::~DrawableGeoHeap() 
+		{
+			DestroyAll();
+		}
+		DrawableGeoHeap::DrawableGeoHeap(DrawableGeoHeap&& moveFrom)
+		: _pages(std::move(moveFrom._pages))
+		{
+			_allocatedCount = moveFrom._allocatedCount;
+			moveFrom._allocatedCount = 0;
+		}
+		DrawableGeoHeap& DrawableGeoHeap::operator=(DrawableGeoHeap&& moveFrom)
+		{
+			if (&moveFrom == this) return *this;
+			DestroyAll();
+			_pages = std::move(moveFrom._pages);
+			_allocatedCount = moveFrom._allocatedCount;
+			moveFrom._allocatedCount = 0;
+			return *this;
+		}
+
+		void DrawableGeoHeap::DestroyAll()
+		{
+			auto pageI = _pages.begin();
+			while (_allocatedCount) {
+				assert(pageI != _pages.end());
+				unsigned geosThisPage = std::min(_allocatedCount, s_geosPerPage);
+				auto* geos = (DrawableGeo*)pageI->_storage.get();
+				for (unsigned c=0; c<geosThisPage; ++c) geos[c].~DrawableGeo();
+				++pageI;
+				_allocatedCount -= geosThisPage;
+			}
+		}
+	}
+
 	static DrawablesPacket::AllocateStorageResult AllocateFrom(std::vector<uint8_t>& vector, size_t size, unsigned alignment)
 	{
 		unsigned preAlignmentBuffer = 0;
@@ -458,9 +530,31 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	DrawablesPacket::DrawablesPacket() {}
+	DrawableGeo* DrawablesPacket::AllocateTemporaryGeo()
+	{
+		assert(_geoHeap);
+		return _geoHeap->Allocate();
+	}
+
+	void DrawablesPacket::Reset()
+	{ 
+		_drawables.clear(); 
+		_vbStorage.clear();
+		_ibStorage.clear();
+		_ubStorage.clear();
+		_cpuStorage.clear();
+		_geoHeap->DestroyAll();
+	}
+
+	DrawablesPacket::DrawablesPacket()
+	{
+		_geoHeap = std::make_unique<Internal::DrawableGeoHeap>();
+	}
 	DrawablesPacket::DrawablesPacket(IDrawablesPool& pool, unsigned poolMarker)
-	: _pool(&pool), _poolMarker(poolMarker) {}
+	: _pool(&pool), _poolMarker(poolMarker)
+	{
+		_geoHeap = std::make_unique<Internal::DrawableGeoHeap>();
+	}
 	DrawablesPacket::~DrawablesPacket()
 	{
 		if (_pool) {
@@ -474,6 +568,7 @@ namespace RenderCore { namespace Techniques
 	, _ibStorage(std::move(moveFrom._ibStorage))
 	, _ubStorage(std::move(moveFrom._ubStorage))
 	, _cpuStorage(std::move(moveFrom._cpuStorage))
+	, _geoHeap(std::move(moveFrom._geoHeap))
 	{
 		_pool = moveFrom._pool;
 		_poolMarker = moveFrom._poolMarker;
@@ -495,6 +590,7 @@ namespace RenderCore { namespace Techniques
 		_ibStorage = std::move(moveFrom._ibStorage);
 		_ubStorage = std::move(moveFrom._ubStorage);
 		_cpuStorage = std::move(moveFrom._cpuStorage);
+		_geoHeap = std::move(moveFrom._geoHeap);
 		_pool = moveFrom._pool;
 		_poolMarker = moveFrom._poolMarker;
 		moveFrom._pool = nullptr;
@@ -509,18 +605,10 @@ namespace RenderCore { namespace Techniques
 	public:
 		DrawablesPacket CreatePacket() override;
 		std::shared_ptr<DrawableGeo> CreateGeo() override;
-		std::shared_ptr<DrawableInputAssembly> CreateInputAssembly() override;
-		std::shared_ptr<UniformsStreamInterface> CreateUniformsStreamInterface() override;
+		std::shared_ptr<DrawableInputAssembly> CreateInputAssembly(IteratorRange<const InputElementDesc*>, Topology) override;
+		std::shared_ptr<UniformsStreamInterface> CreateProtectedLifetime(UniformsStreamInterface&& input) override;
 
-		std::shared_ptr<UniformsStreamInterface> CombineWithLike(std::shared_ptr<UniformsStreamInterface> input) override
-		{
-			return input;		// todo -- fill out
-		}
-
-		int EstimateAliveClientObjectsCount() const override
-		{
-			return _aliveCount.load();
-		}
+		int EstimateAliveClientObjectsCount() const override { return _aliveCount.load(); }
 
 		DrawablesPool();
 		~DrawablesPool();
@@ -538,12 +626,49 @@ namespace RenderCore { namespace Techniques
 		ResizableCircularBuffer<std::pair<Marker, unsigned>, 32> _markerCounts;
 		using DestructionFunctionSig = void(void*);
 		std::deque<std::pair<void*, DestructionFunctionSig*>> _holdingPendingDestruction;
-		template<typename Type> void QueueDestroy(Type* t);
+		template<typename Type> void ProtectedDestroy(Type* t);
 
 		void ReturnToPool(DrawablesPacket&& pkt, unsigned marker) override;
 
 		std::atomic<int> _aliveCount;
+
+		Threading::Mutex _usisLock;
+		std::vector<std::pair<uint64_t, std::shared_ptr<UniformsStreamInterface>>> _usis;
+
+		template<typename Type, typename... Args>
+			std::shared_ptr<Type> MakeProtectedPtr(Args...);
 	};
+
+	template<typename Type, typename... Args>
+		std::shared_ptr<Type> DrawablesPool::MakeProtectedPtr(Args... args)
+	{
+		++_aliveCount;
+		return std::shared_ptr<Type>(
+			new Type(std::forward<Args>(args)...),
+			[this](auto* obj) { this->ProtectedDestroy(obj); });
+	}
+	
+	std::shared_ptr<DrawableInputAssembly> DrawablesPool::CreateInputAssembly(IteratorRange<const InputElementDesc*> elements, Topology topology)
+	{
+		return MakeProtectedPtr<DrawableInputAssembly>(elements, topology);
+	}
+
+	std::shared_ptr<UniformsStreamInterface> DrawablesPool::CreateProtectedLifetime(UniformsStreamInterface&& input)
+	{
+		ScopedLock(_usisLock);
+		auto hash = input.GetHash();
+		auto i = LowerBound(_usis, hash);
+		if (i != _usis.end() && i->first == hash)
+			return i->second;
+		auto result = MakeProtectedPtr<UniformsStreamInterface>(std::move(input));
+		_usis.insert(i, std::make_pair(hash, result));
+		return result;
+	}
+
+	std::shared_ptr<DrawableGeo> DrawablesPool::CreateGeo()
+	{
+		return MakeProtectedPtr<DrawableGeo>();
+	}
 
 	DrawablesPacket DrawablesPool::CreatePacket()
 	{
@@ -558,22 +683,12 @@ namespace RenderCore { namespace Techniques
 		return res;
 	}
 
-	std::shared_ptr<DrawableInputAssembly> DrawablesPool::CreateInputAssembly()
-	{
-		return nullptr;
-	}
-
-	std::shared_ptr<UniformsStreamInterface> DrawablesPool::CreateUniformsStreamInterface()
-	{
-		return nullptr;
-	}
-
 	void DrawablesPool::ReturnToPool(DrawablesPacket&& pkt, unsigned marker)
 	{
 		assert(pkt._drawables.empty() && pkt._vbStorage.empty() && pkt._ibStorage.empty() && pkt._ubStorage.empty() && pkt._cpuStorage.empty());
 		assert(marker != ~0u);
 		pkt._poolMarker = ~0u;
-		ScopedLock(_lock);
+		std::unique_lock<decltype(_lock)> locker(_lock);
 		_availablePackets.push_back(std::move(pkt));
 		if (marker == _destroyedPktMarker+1) {
 			++_destroyedPktMarker;
@@ -588,9 +703,12 @@ namespace RenderCore { namespace Techniques
 			while (!_markerCounts.empty() && _markerCounts.front().first <= _destroyedPktMarker) { queuedObjectsToDestroy += _markerCounts.front().second; _markerCounts.pop_front(); }
 			if (queuedObjectsToDestroy) {
 				assert(queuedObjectsToDestroy <= _holdingPendingDestruction.size());
-				for (auto i=_holdingPendingDestruction.begin(); i!=_holdingPendingDestruction.begin()+queuedObjectsToDestroy; ++i) i->second(i->first);
+				std::vector<std::pair<void*, DestructionFunctionSig*>> toDestroy{_holdingPendingDestruction.begin(), _holdingPendingDestruction.begin()+queuedObjectsToDestroy};
 				_holdingPendingDestruction.erase(_holdingPendingDestruction.begin(), _holdingPendingDestruction.begin()+queuedObjectsToDestroy);
 				_aliveCount -= queuedObjectsToDestroy;
+				
+				locker = {};	// unlock because the destruction function could cause us to reenter a DrawablesPool fn
+				for (const auto& t:toDestroy) t.second(t.first);
 			}
 		} else {
 			auto i = std::lower_bound(_queuedDestroyedPacket.begin(), _queuedDestroyedPacket.end(), marker);
@@ -599,21 +717,11 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	std::shared_ptr<DrawableGeo> DrawablesPool::CreateGeo()
-	{
-		++_aliveCount;
-		return std::shared_ptr<DrawableGeo>(
-			new DrawableGeo(),
-			[this](auto* geo) {
-				this->QueueDestroy(geo);
-			});
-	}
-
 	template<typename Type>
 		static void DestructionFunction(void* ptr) { delete (Type*)ptr; }
 
 	template<typename Type>
-		void DrawablesPool::QueueDestroy(Type* object)
+		void DrawablesPool::ProtectedDestroy(Type* object)
 	{
 		ScopedLock(_lock);
 		if (_destroyedPktMarker == _createdPktMarker) {
@@ -645,12 +753,27 @@ namespace RenderCore { namespace Techniques
 
 	DrawablesPool::~DrawablesPool()
 	{
-		ScopedLock(_lock);
-		// ensure packets in _availablePackets don't try to call ReturnToPool when shutting down
-		for (auto& p:_availablePackets)
-			p._pool = nullptr;
-		for (auto& q:_holdingPendingDestruction) q.second(q.first);
-		_aliveCount -= _holdingPendingDestruction.size();
+		{
+			ScopedLock(_usisLock);
+			_usis.clear();
+		}
+
+		// do this in a loop to try to catch objects queued for destroy during destruction of other objects
+		for (;;) {
+			std::deque<std::pair<void*, DestructionFunctionSig*>> toDestroy;
+			{
+				ScopedLock(_lock);
+				// ensure packets in _availablePackets don't try to call ReturnToPool when shutting down
+				for (auto& p:_availablePackets) p._pool = nullptr;
+				_availablePackets.clear();
+				_destroyedPktMarker = ~0u;	// max value -- just destroy everything now
+				_aliveCount -= _holdingPendingDestruction.size();
+				toDestroy = std::move(_holdingPendingDestruction);
+			}
+			if (toDestroy.empty()) break;
+			for (const auto& t:toDestroy) t.second(t.first);
+		}
+		
 		assert(_aliveCount.load() == 0);		// if you hit this, it means some client objects are still alive. This will end up holding dangling pointers to this
 	}
 

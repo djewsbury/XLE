@@ -79,6 +79,17 @@ namespace ToolsRig
 		}
 	};
 
+	namespace Internal
+	{
+		static UniformsStreamInterface MakeLocalTransformUSI()
+		{
+			UniformsStreamInterface result;
+			result.BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
+			return result;
+		}
+		static UniformsStreamInterface s_localTransformUSI = MakeLocalTransformUSI();
+	}
+
 	class SimpleModel
 	{
 	public:
@@ -108,7 +119,6 @@ namespace ToolsRig
 		
 		std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _pipelineAccelerator;
 		std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> _descriptorSetAccelerator;
-		std::shared_ptr<RenderCore::UniformsStreamInterface> _usi;
 
 		void Build(const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile);
 	};
@@ -151,9 +161,9 @@ namespace ToolsRig
 			auto& drawable = *drawables++;
 			drawable._pipeline = _pipelineAccelerator;
 			drawable._descriptorSet = _descriptorSetAccelerator;
-			drawable._geo = _drawableGeo;
+			drawable._geo = _drawableGeo.get();
 			drawable._drawFn = (Techniques::ExecuteDrawableFn*)&SimpleModelDrawable::DrawFn;
-			drawable._looseUniformsInterface = _usi;
+			drawable._looseUniformsInterface = &Internal::s_localTransformUSI;
 			drawable._drawCall = drawCall;
             drawable._objectToWorld = localToWorld;
         }
@@ -232,9 +242,6 @@ namespace ToolsRig
 			MakeIteratorRange(inputElements),
 			_drawCalls[0]._topology,
 			RenderCore::Assets::RenderStateSet {});
-
-		_usi = std::make_shared<UniformsStreamInterface>();
-		_usi->BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
 	}
 
 	SimpleModel::~SimpleModel() {}
@@ -251,7 +258,6 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _genTube;
 		std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _genRectangle;
 		std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> _descriptorSetAccelerator;
-		std::shared_ptr<RenderCore::UniformsStreamInterface> _usi;
 		::Assets::DependencyValidation _depVal;
 
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _cubeGeo;
@@ -317,8 +323,6 @@ namespace ToolsRig
 					nullptr, {}, GlobalInputLayouts::P, Topology::TriangleList, RenderCore::Assets::RenderStateSet{});
 
 				res._descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, {}, {});
-				res._usi = std::make_shared<UniformsStreamInterface>();
-				res._usi->BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
 				return res;
 			});
     }
@@ -430,7 +434,7 @@ namespace ToolsRig
 		auto ibData = pkt.AllocateStorage(Techniques::DrawablesPacket::Storage::Index, indexListType._arrayCount * sizeof(unsigned));
 		std::memcpy(ibData._data.begin(), indices.get(), indexListType._arrayCount * sizeof(unsigned));
 
-		auto geo = drawablesPool.CreateGeo();
+		auto geo = pkt.AllocateTemporaryGeo();
 		geo->_vertexStreams[0]._vbOffset = vbData._startOffset;
 		geo->_vertexStreamCount = 1;
 		geo->_ibOffset = ibData._startOffset;
@@ -445,7 +449,7 @@ namespace ToolsRig
 		drawable->_pipeline = visBox._justPointsPipelineAccelerator;
 		drawable->_geo = geo;
 		drawable->_indexCount = indexListType._arrayCount;
-		drawable->_looseUniformsInterface = visBox._usi;
+		drawable->_looseUniformsInterface = &Internal::s_localTransformUSI;
 		drawable->_localTransform = GetTransform(obj);
 
 		drawable->_drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
@@ -506,7 +510,7 @@ namespace ToolsRig
 							drawable._drawCall = RenderCore::Assets::DrawCallDesc { 0, vertexCount };
 							drawable._objectToWorld = GetTransform(*o);
 							drawable._indexed = false;
-							drawable._looseUniformsInterface = visBox->_usi;
+							drawable._looseUniformsInterface = &Internal::s_localTransformUSI;
 						}
 					}
 				}

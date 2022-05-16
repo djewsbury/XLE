@@ -95,8 +95,6 @@ namespace RenderCore { namespace Techniques
 		virtual void 	LockForReading() const = 0;
 		virtual void 	UnlockForReading() const = 0;
 
-		virtual std::shared_ptr<UniformsStreamInterface> CombineWithLike(std::shared_ptr<UniformsStreamInterface> input) = 0;
-
 		struct Records;
 		virtual Records LogRecords() const = 0;
 

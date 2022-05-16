@@ -71,6 +71,14 @@ namespace RenderCore { namespace Techniques
 				drawFnContext.DrawIndexed(drawable._indexCount, drawable._firstIndex);
 			}
 		}
+
+		static UniformsStreamInterface MakeLocalTransformUSI()
+		{
+			UniformsStreamInterface result;
+			result.BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
+			return result;
+		}
+		static UniformsStreamInterface s_localTransformUSI = MakeLocalTransformUSI();
 	}
 
 	void LightWeightBuildDrawables::InstancedFixedSkeleton(
@@ -90,12 +98,6 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 		if (!pktForAllocations) return;		// no overlap between our output pkts and what's in 'pkts'
-
-		static std::shared_ptr<UniformsStreamInterface> usi;
-		if (!usi) {
-			usi = std::make_shared<UniformsStreamInterface>();
-			usi->BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
-		}
 
 		const unsigned deformInstanceIdx = ~0u;
 
@@ -131,11 +133,11 @@ namespace RenderCore { namespace Techniques
 					for (const auto& dc:MakeIteratorRange(constructor._drawCalls.begin()+drawCallsRef._start, constructor._drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
-						drawable._geo = constructor._drawableGeos[dc._drawableGeoIdx];
+						drawable._geo = constructor._drawableGeos[dc._drawableGeoIdx].get();
 						drawable._pipeline = constructor._pipelineAccelerators[dc._pipelineAcceleratorIdx];
 						drawable._descriptorSet = constructor._descriptorSetAccelerators[dc._descriptorSetAcceleratorIdx];
 						drawable._drawFn = (Techniques::ExecuteDrawableFn*)&Internal::DrawFn_InstancedFixedSkeleton;
-						drawable._looseUniformsInterface = usi;
+						drawable._looseUniformsInterface = &Internal::s_localTransformUSI;
 						assert(dc._firstVertex == 0);
 						drawable._firstIndex = dc._firstIndex;
 						drawable._indexCount = dc._indexCount;
@@ -199,12 +201,6 @@ namespace RenderCore { namespace Techniques
 		}
 		if (!pktForAllocations) return;		// no overlap between our output pkts and what's in 'pkts'
 
-		static std::shared_ptr<UniformsStreamInterface> usi;
-		if (!usi) {
-			usi = std::make_shared<UniformsStreamInterface>();
-			usi->BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
-		}
-
 		const unsigned deformInstanceIdx = ~0u;
 
 		auto nodeSpaceToWorld = Identity<Float3x4>();
@@ -243,11 +239,11 @@ namespace RenderCore { namespace Techniques
 					for (const auto& dc:MakeIteratorRange(constructor._drawCalls.begin()+drawCallsRef._start, constructor._drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
-						drawable._geo = constructor._drawableGeos[dc._drawableGeoIdx];
+						drawable._geo = constructor._drawableGeos[dc._drawableGeoIdx].get();
 						drawable._pipeline = constructor._pipelineAccelerators[dc._pipelineAcceleratorIdx];
 						drawable._descriptorSet = constructor._descriptorSetAccelerators[dc._descriptorSetAcceleratorIdx];
 						drawable._drawFn = (Techniques::ExecuteDrawableFn*)&Internal::DrawFn_InstancedFixedSkeletonViewMask;
-						drawable._looseUniformsInterface = usi;
+						drawable._looseUniformsInterface = &Internal::s_localTransformUSI;
 						assert(dc._firstVertex == 0);
 						drawable._firstIndex = dc._firstIndex;
 						drawable._indexCount = dc._indexCount;

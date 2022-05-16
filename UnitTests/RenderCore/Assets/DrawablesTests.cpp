@@ -230,7 +230,7 @@ namespace UnitTests
 			auto* drawable = pkt._drawables.Allocate<CustomDrawable>();
 			drawable->_pipeline = pipelineWithTexCoord;
 			drawable->_descriptorSet = descriptorSetAccelerator;
-			drawable->_geo = drawableGeo;
+			drawable->_geo = drawableGeo.get();
 			drawable->_vertexCount = sphereGeo.size();
 			drawable->_drawFn = [](Techniques::ParsingContext&, const Techniques::ExecuteDrawableContext& drawFnContext, const Techniques::Drawable& drawable)
 				{

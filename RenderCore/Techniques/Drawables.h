@@ -25,38 +25,40 @@ namespace RenderCore { namespace Techniques
 	class PipelineAccelerator;
 	class DescriptorSetAccelerator;
 	class DeformAccelerator;
+	namespace Internal { class DrawableGeoHeap; }
 
 	class DrawableGeo
-    {
-    public:
-        enum class StreamType { Resource, PacketStorage, Deform };
+	{
+	public:
+		enum class StreamType { Resource, PacketStorage, Deform };
 		struct VertexStream
-        {
-            IResourcePtr	_resource;
-            unsigned		_vbOffset = 0u;
+		{
+			IResourcePtr	_resource;
+			unsigned		_vbOffset = 0u;
 			StreamType		_type = StreamType::Resource;
-        };
-        VertexStream        _vertexStreams[4];
-        unsigned            _vertexStreamCount = 0;
+		};
+		VertexStream        _vertexStreams[4];
+		unsigned            _vertexStreamCount = 0;
 
-        IResourcePtr		_ib;
-        Format				_ibFormat = Format(0);
-        unsigned			_ibOffset = 0u;
+		IResourcePtr		_ib;
+		Format				_ibFormat = Format(0);
+		unsigned			_ibOffset = 0u;
 		StreamType			_ibStreamType = StreamType::Resource;
 
-        struct Flags
-        {
-            enum Enum { Temporary       = 1 << 0 };
-            using BitField = unsigned;
-        };
-        Flags::BitField     _flags = 0u;
+		struct Flags
+		{
+			enum Enum { Temporary       = 1 << 0 };
+			using BitField = unsigned;
+		};
+		Flags::BitField     _flags = 0u;
 
 		std::shared_ptr<DeformAccelerator> _deformAccelerator;
 
 	protected:
 		DrawableGeo();
 		friend class DrawablesPool;
-    };
+		friend class Internal::DrawableGeoHeap;
+	};
 
 	class ExecuteDrawableContext
 	{
@@ -83,11 +85,11 @@ namespace RenderCore { namespace Techniques
 	class Drawable
 	{
 	public:
-        std::shared_ptr<PipelineAccelerator>		_pipeline;
+		std::shared_ptr<PipelineAccelerator>		_pipeline;
 		std::shared_ptr<DescriptorSetAccelerator>	_descriptorSet;
-        std::shared_ptr<DrawableGeo>				_geo;
-		std::shared_ptr<UniformsStreamInterface>  	_looseUniformsInterface;
-        ExecuteDrawableFn*							_drawFn;
+		const DrawableGeo*							_geo;
+		const UniformsStreamInterface*				_looseUniformsInterface;
+		ExecuteDrawableFn*							_drawFn;
 		unsigned									_deformInstanceIdx = 0;
 	};
 
@@ -99,14 +101,16 @@ namespace RenderCore { namespace Techniques
 		Topology GetTopology() const { return _topology; }
 		uint64_t GetHash() const { return _hash; }
 
-		DrawableInputAssembly(
-			IteratorRange<const InputElementDesc*> inputElements,
-			Topology topology);
 	private:
 		std::vector<InputElementDesc> _inputElements;
 		std::vector<unsigned> _strides;
 		uint64_t _hash;
 		Topology _topology;
+
+		DrawableInputAssembly(
+			IteratorRange<const InputElementDesc*> inputElements,
+			Topology topology);
+		friend class DrawablesPool;
 	};
 
 	class GeometryProcable
@@ -129,8 +133,9 @@ namespace RenderCore { namespace Techniques
 		enum class Storage { Vertex, Index, Uniform, CPU };
 		struct AllocateStorageResult { IteratorRange<void*> _data; unsigned _startOffset; };
 		AllocateStorageResult AllocateStorage(Storage storageType, size_t size);
+		DrawableGeo* AllocateTemporaryGeo();
 
-		void Reset() { _drawables.clear(); _vbStorage.clear(); _ibStorage.clear(); _ubStorage.clear(); _cpuStorage.clear(); }
+		void Reset();
 
 		IteratorRange<const void*> GetStorage(Storage storageType) const;
 
@@ -147,6 +152,7 @@ namespace RenderCore { namespace Techniques
 		unsigned				_ubStorageAlignment = 0u;
 		IDrawablesPool*	_pool = nullptr;
 		unsigned _poolMarker = ~0u;
+		std::unique_ptr<Internal::DrawableGeoHeap> _geoHeap;
 
 		friend class IDrawablesPool;
 		friend class DrawablesPool;
@@ -158,9 +164,8 @@ namespace RenderCore { namespace Techniques
 	public:
 		virtual DrawablesPacket CreatePacket() = 0;
 		virtual std::shared_ptr<DrawableGeo> CreateGeo() = 0;
-		virtual std::shared_ptr<DrawableInputAssembly> CreateInputAssembly() = 0;
-		virtual std::shared_ptr<UniformsStreamInterface> CreateUniformsStreamInterface() = 0;
-		virtual std::shared_ptr<UniformsStreamInterface> CombineWithLike(std::shared_ptr<UniformsStreamInterface> input) = 0;
+		virtual std::shared_ptr<DrawableInputAssembly> CreateInputAssembly(IteratorRange<const InputElementDesc*>, Topology) = 0;
+		virtual std::shared_ptr<UniformsStreamInterface> CreateProtectedLifetime(UniformsStreamInterface&& input) = 0;
 		virtual int EstimateAliveClientObjectsCount() const = 0;
 		~IDrawablesPool();
 		unsigned GetGUID() const { return _guid; }
@@ -178,7 +183,7 @@ namespace RenderCore { namespace Techniques
 	struct DrawOptions { bool _stallForResources = false; };
 		
 	void Draw(
-        ParsingContext& parserContext,
+		ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt,
@@ -190,9 +195,9 @@ namespace RenderCore { namespace Techniques
 		const DrawablesPacket& drawablePkt);
 
 	enum class Batch
-    {
-        Opaque, Blending, Max
-    };
+	{
+		Opaque, Blending, Max
+	};
 	
 	namespace BatchFlags
 	{

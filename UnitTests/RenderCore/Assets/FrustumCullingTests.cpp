@@ -197,11 +197,12 @@ namespace UnitTests
 				RenderCore::Assets::RenderStateSet{});
 
 			drawable->_pipeline = pipelineWithTexCoord;
-			drawable->_geo = drawableGeo;
+			drawable->_geo = drawableGeo.get();
 			drawable->_vertexCount = sphereGeo.size();
-			drawable->_looseUniformsInterface = std::make_shared<RenderCore::UniformsStreamInterface>();
-			drawable->_looseUniformsInterface->BindImmediateData(0, Hash64("LocalTransform"));
-			drawable->_looseUniformsInterface->BindImmediateData(1, Hash64("Settings"));
+			RenderCore::UniformsStreamInterface usi;
+			usi.BindImmediateData(0, Hash64("LocalTransform"));
+			usi.BindImmediateData(1, Hash64("Settings"));
+			drawable->_looseUniformsInterface = testApparatus._drawablesPool->CreateProtectedLifetime(std::move(usi)).get();
 			drawable->_drawFn = [](Techniques::ParsingContext&, const Techniques::ExecuteDrawableContext& drawFnContext, const Techniques::Drawable& drawable)
 				{
 					auto& customDrawable = ((CustomDrawable&)drawable);

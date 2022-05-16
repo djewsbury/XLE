@@ -379,8 +379,6 @@ namespace RenderCore { namespace Techniques
 		void 			LockForReading() const override;
 		void 			UnlockForReading() const override;
 
-		std::shared_ptr<UniformsStreamInterface> CombineWithLike(std::shared_ptr<UniformsStreamInterface> input) override;
-
 		Records LogRecords() const override;
 
 		const std::shared_ptr<IDevice>& GetDevice() const override;
@@ -428,9 +426,6 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<PipelineCollection> _pipelineCollection;
 		std::shared_ptr<ICompiledLayoutPool> _layoutPatcher;
 		PipelineAcceleratorPoolFlags::BitField _flags;
-
-		Threading::Mutex _usisLock;
-		std::vector<std::pair<uint64_t, std::shared_ptr<UniformsStreamInterface>>> _usis;
 
 		#if defined(_DEBUG)
 			mutable std::optional<std::thread::id> _lockForThreadingThread;
@@ -905,17 +900,6 @@ namespace RenderCore { namespace Techniques
 		ScopedLock(_constructionLock);
 		_globalSelectors.RemoveParameter(name);
 		RebuildAllPipelinesAlreadyLocked(_guid);
-	}
-
-	std::shared_ptr<UniformsStreamInterface> PipelineAcceleratorPool::CombineWithLike(std::shared_ptr<UniformsStreamInterface> input)
-	{
-		ScopedLock(_usisLock);
-		auto hash = input->GetHash();
-		auto i = LowerBound(_usis, hash);
-		if (i != _usis.end() && i->first == hash)
-			return i->second;
-		_usis.insert(i, std::make_pair(hash, input));
-		return input;
 	}
 
 	static std::string AsString(const ParameterBox& selectors, unsigned countPerLine)

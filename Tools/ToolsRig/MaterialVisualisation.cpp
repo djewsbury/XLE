@@ -101,6 +101,17 @@ namespace ToolsRig
 		}
 	};
 
+	namespace Internal
+	{
+		static UniformsStreamInterface MakeLocalTransformUSI()
+		{
+			UniformsStreamInterface result;
+			result.BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
+			return result;
+		}
+		static UniformsStreamInterface s_localTransformUSI = MakeLocalTransformUSI();
+	}
+
     class MaterialVisualizationScene : public SceneEngine::IScene, public IVisContent, public IPatchCollectionVisualizationScene
     {
     public:
@@ -110,9 +121,6 @@ namespace ToolsRig
         {
 			auto* pkt = executeContext._destinationPkts[(unsigned)RenderCore::Techniques::Batch::Opaque];
 			if (!pkt) return;
-
-			auto usi = std::make_shared<UniformsStreamInterface>();
-			usi->BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
 
 			auto pipeline = _pipelineFuture->Actualize();
 
@@ -138,13 +146,14 @@ namespace ToolsRig
 					drawable._descriptorSet = t ? *t : nullptr;
 				}
 				drawable._pipeline = pipeline->_pipelineAccelerator;
-				drawable._geo = _drawablesPool->CreateGeo();
-				drawable._geo->_vertexStreams[0]._vbOffset = space._startOffset;
-				drawable._geo->_vertexStreams[0]._type = Techniques::DrawableGeo::StreamType::PacketStorage;
-				drawable._geo->_vertexStreamCount = 1;
+				auto* geo = pkt->AllocateTemporaryGeo();
+				geo->_vertexStreams[0]._vbOffset = space._startOffset;
+				geo->_vertexStreams[0]._type = Techniques::DrawableGeo::StreamType::PacketStorage;
+				geo->_vertexStreamCount = 1;
+				drawable._geo = geo;
 				drawable._drawFn = (Techniques::ExecuteDrawableFn*)&MaterialSceneParserDrawable::DrawFn;
 				drawable._vertexCount = (unsigned)dimof(vertices);
-				drawable._looseUniformsInterface = usi;
+				drawable._looseUniformsInterface = &Internal::s_localTransformUSI;
 
             } else {
 
@@ -164,12 +173,13 @@ namespace ToolsRig
 					drawable._descriptorSet = t ? *t : nullptr;
 				}
 				drawable._pipeline = pipeline->_pipelineAccelerator;
-				drawable._geo = _drawablesPool->CreateGeo();
-				drawable._geo->_vertexStreams[0]._resource = vb;
-				drawable._geo->_vertexStreamCount = 1;
+				auto* geo = pkt->AllocateTemporaryGeo();
+				geo->_vertexStreams[0]._resource = vb;
+				geo->_vertexStreamCount = 1;
+				drawable._geo = geo;
 				drawable._drawFn = (Techniques::ExecuteDrawableFn*)&MaterialSceneParserDrawable::DrawFn;
 				drawable._vertexCount = count;
-				drawable._looseUniformsInterface = usi;
+				drawable._looseUniformsInterface = &Internal::s_localTransformUSI;
 
             }
         }

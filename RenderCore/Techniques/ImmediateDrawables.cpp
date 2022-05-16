@@ -189,18 +189,19 @@ namespace RenderCore { namespace Techniques
 			} else {
 				auto vertexStorage = _workingPkt.AllocateStorage(DrawablesPacket::Storage::Vertex, vertexDataSize);
 				auto* drawable = _workingPkt._drawables.Allocate<DrawableWithVertexCount>();
-				drawable->_geo = AllocateDrawableGeo();
-				drawable->_geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
-				drawable->_geo->_vertexStreams[0]._vbOffset = vertexStorage._startOffset;
-				drawable->_geo->_vertexStreamCount = 1;
-				drawable->_geo->_ibFormat = Format(0);
+				auto* geo = _workingPkt.AllocateTemporaryGeo();
+				geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
+				geo->_vertexStreams[0]._vbOffset = vertexStorage._startOffset;
+				geo->_vertexStreamCount = 1;
+				geo->_ibFormat = Format(0);
+				drawable->_geo = geo;
 				drawable->_pipeline = std::move(pipeline);
 				drawable->_vertexCount = vertexCount;
 				drawable->_vertexStride = vStride;
 				drawable->_bytesAllocated = vertexDataSize;
 				drawable->_drawFn = &DrawableWithVertexCount::ExecuteFn;
 				if (material._uniformStreamInterface) {
-					drawable->_looseUniformsInterface = material._uniformStreamInterface;
+					drawable->_looseUniformsInterface = material._uniformStreamInterface.get();
 					drawable->_uniforms = material._uniforms;
 				}
 				_lastQueuedDrawable = drawable;
@@ -217,7 +218,7 @@ namespace RenderCore { namespace Techniques
 			Topology topology = Topology::TriangleList) override
 		{
 			auto* drawable = _workingPkt._drawables.Allocate<DrawableWithVertexCount>();
-			drawable->_geo = std::move(customGeo);
+			drawable->_geo = customGeo.get();
 			drawable->_pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors, material._patchCollection);
 			drawable->_vertexCount = indexOrVertexCount;
 			drawable->_vertexStartLocation = indexOrVertexStartLocation;
@@ -227,7 +228,7 @@ namespace RenderCore { namespace Techniques
 			bool _indexed = drawable->_geo->_ibFormat != Format(0);
 			drawable->_drawFn = _indexed ? &DrawableWithVertexCount::IndexedExecuteFn : &DrawableWithVertexCount::ExecuteFn;
 			if (material._uniformStreamInterface) {
-				drawable->_looseUniformsInterface = material._uniformStreamInterface;
+				drawable->_looseUniformsInterface = material._uniformStreamInterface.get();
 				drawable->_uniforms = material._uniforms;
 			}
 			_lastQueuedDrawable = nullptr;		// this is always null, because we can't modify or extend a user geo
@@ -242,7 +243,7 @@ namespace RenderCore { namespace Techniques
 			Topology topology = Topology::TriangleList) override
 		{
 			auto* drawable = _workingPkt._drawables.Allocate<DrawableWithVertexCount>();
-			drawable->_geo = std::move(customGeo);
+			drawable->_geo = customGeo.get();
 			drawable->_pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors, material._patchCollection);
 			drawable->_vertexCount = indexOrVertexCount;
 			drawable->_vertexStartLocation = indexOrVertexStartLocation;
@@ -252,7 +253,7 @@ namespace RenderCore { namespace Techniques
 			bool _indexed = drawable->_geo->_ibFormat != Format(0);
 			drawable->_drawFn = _indexed ? &DrawableWithVertexCount::IndexedExecuteFn : &DrawableWithVertexCount::ExecuteFn;
 			if (material._uniformStreamInterface) {
-				drawable->_looseUniformsInterface = material._uniformStreamInterface;
+				drawable->_looseUniformsInterface = material._uniformStreamInterface.get();
 				drawable->_uniforms = material._uniforms;
 			}
 			_lastQueuedDrawable = nullptr;		// this is always null, because we can't modify or extend a user geo
@@ -290,8 +291,6 @@ namespace RenderCore { namespace Techniques
 		void AbandonDraws() override
 		{
 			_workingPkt.Reset();
-			_reservedDrawableGeos.insert(_reservedDrawableGeos.end(), _drawableGeosInWorkingPkt.begin(), _drawableGeosInWorkingPkt.end());
-			_drawableGeosInWorkingPkt.clear();
 			_lastQueuedDrawable = nullptr;
 			_lastQueuedDrawVertexCountOffset = 0;
 		}
@@ -317,11 +316,13 @@ namespace RenderCore { namespace Techniques
 		{
 			auto& sequencerConfig = GetSequencerConfig(fbDesc, subpassIndex);
 			assert(parserContext.GetViewport()._width * parserContext.GetViewport()._height);
-			Draw(
-				parserContext,
-				*_pipelineAcceleratorPool,
-				sequencerConfig,
-				_workingPkt);
+			if (!_workingPkt._drawables.empty()) {
+				Draw(
+					parserContext,
+					*_pipelineAcceleratorPool,
+					sequencerConfig,
+					_workingPkt);
+			}
 
 			AbandonDraws();	// (this just clears out everything prepared)
 		}
@@ -356,33 +357,12 @@ namespace RenderCore { namespace Techniques
 
 	protected:
 		DrawablesPacket _workingPkt;
-		std::vector<std::shared_ptr<DrawableGeo>> _drawableGeosInWorkingPkt;
-		std::deque<std::shared_ptr<DrawableGeo>> _reservedDrawableGeos;
 		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
 		std::vector<std::pair<uint64_t, std::shared_ptr<PipelineAccelerator>>> _pipelineAccelerators;
 		std::shared_ptr<ITechniqueDelegate> _techniqueDelegate;
 		DrawableWithVertexCount* _lastQueuedDrawable = nullptr;
 		unsigned _lastQueuedDrawVertexCountOffset = 0;
 		std::vector<std::pair<uint64_t, std::shared_ptr<SequencerConfig>>> _sequencerConfigs;
-
-		std::shared_ptr<DrawableGeo> AllocateDrawableGeo()
-		{
-			#if 0
-			// Not super efficient caching scheme here! But it's simple
-			// Would be better if we just used std::shared_ptr<>s with custom deallocate functions,
-			// and a contiguous custom heap
-			std::shared_ptr<DrawableGeo> res;
-			if (!_reservedDrawableGeos.empty()) {
-				res = std::move(_reservedDrawableGeos.front());
-				_reservedDrawableGeos.pop_front();
-			} else 
-				res = std::make_shared<DrawableGeo>();
-			_drawableGeosInWorkingPkt.push_back(res);
-			return res;
-			#endif
-			assert(0);
-			return nullptr;
-		}
 
 		template<typename InputAssemblyType>
 			std::shared_ptr<PipelineAccelerator> GetPipelineAccelerator(

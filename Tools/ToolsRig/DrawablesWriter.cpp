@@ -59,16 +59,23 @@ namespace ToolsRig
 		return {geo, pyramidGeo.size()};
 	}
 
+	static RenderCore::UniformsStreamInterface MakeLocalTransformUSI()
+	{
+		RenderCore::UniformsStreamInterface result;
+		result.BindImmediateData(0, Hash64("LocalTransform"));
+		return result;
+	}
+	RenderCore::UniformsStreamInterface s_localTransformUSI = MakeLocalTransformUSI();
+
 	class DrawablesWriterCommon : public IDrawablesWriter
 	{
 	public:
 		std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _pipelineAccelerator;
 		std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> _descriptorSetAccelerator;
-		std::shared_ptr<RenderCore::UniformsStreamInterface> _usi;
 
 		void WriteDrawable(
 			RenderCore::Techniques::DrawablesPacket& pkt, 
-			std::shared_ptr<RenderCore::Techniques::DrawableGeo> geo,
+			const RenderCore::Techniques::DrawableGeo& geo,
 			size_t vertexCount,
 			const Float4x4& localToWorld)
 		{
@@ -76,9 +83,9 @@ namespace ToolsRig
 			auto* drawables = pkt._drawables.Allocate<CustomDrawable>(1);
 			drawables[0]._pipeline = _pipelineAccelerator;
 			drawables[0]._descriptorSet = _descriptorSetAccelerator;
-			drawables[0]._geo = std::move(geo);
+			drawables[0]._geo = &geo;
 			drawables[0]._vertexCount = vertexCount;
-			drawables[0]._looseUniformsInterface = _usi;
+			drawables[0]._looseUniformsInterface = &s_localTransformUSI;
 			drawables[0]._localToWorld = localToWorld;
 			drawables[0]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
 				{
@@ -90,7 +97,7 @@ namespace ToolsRig
 
 		void WriteDrawable(
 			RenderCore::Techniques::DrawablesPacket& pkt, 
-			std::shared_ptr<RenderCore::Techniques::DrawableGeo> geo,
+			const RenderCore::Techniques::DrawableGeo& geo,
 			size_t vertexCount,
 			const Float4x4& localToWorld,
 			const std::shared_ptr<IExtendedDrawablesWriter::CustomDrawDelegate>& customDrawDelegate,
@@ -106,9 +113,9 @@ namespace ToolsRig
 			auto* drawables = pkt._drawables.Allocate<CustomDrawable2>(1);
 			drawables[0]._pipeline = _pipelineAccelerator;
 			drawables[0]._descriptorSet = _descriptorSetAccelerator;
-			drawables[0]._geo = std::move(geo);
+			drawables[0]._geo = &geo;
 			drawables[0]._vertexCount = vertexCount;
-			drawables[0]._looseUniformsInterface = _usi;
+			drawables[0]._looseUniformsInterface = &s_localTransformUSI;
 			drawables[0]._localToWorld = localToWorld;
 			drawables[0]._customDrawDelegate = customDrawDelegate;
 			drawables[0]._viewMask = viewMask;
@@ -120,11 +127,10 @@ namespace ToolsRig
 				};
 		}
 
-		DrawablesWriterCommon(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+		DrawablesWriterCommon(
+			RenderCore::IDevice& device,
+			RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		{
-			_usi = std::make_shared<RenderCore::UniformsStreamInterface>();
-			_usi->BindImmediateData(0, Hash64("LocalTransform"));
-
 			_pipelineAccelerator = pipelineAcceleratorPool.CreatePipelineAccelerator(
 				nullptr,
 				ParameterBox {},
@@ -146,7 +152,7 @@ namespace ToolsRig
 
 		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
 		{
-			WriteDrawable(pkt, _geo, _vertexCount, Identity<Float4x4>());
+			WriteDrawable(pkt, *_geo, _vertexCount, Identity<Float4x4>());
 		}
 
 		SphereDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
@@ -171,7 +177,7 @@ namespace ToolsRig
 		{
 			WriteDrawable(
 				pkt,
-				_sphereGeo, _sphereVertexCount, 
+				*_sphereGeo, _sphereVertexCount, 
 				AsFloat4x4(Float3{0.f, 1.0f + std::sqrt(8.0f)/2.0f, 0.f}));
 
 			Float4x4 transform = Identity<Float4x4>();
@@ -179,12 +185,12 @@ namespace ToolsRig
 			Combine_IntoLHS(transform, RotationZ{gPI / 4.0f});
 			WriteDrawable(
 				pkt,
-				_cubeGeo, _cubeVertexCount, 
+				*_cubeGeo, _cubeVertexCount, 
 				transform);
 
 			WriteDrawable(
 				pkt,
-				_cubeGeo, _cubeVertexCount, 
+				*_cubeGeo, _cubeVertexCount, 
 				AsFloat4x4(Float3{0.f, -1.0f - std::sqrt(8.0f)/2.0f, 0.f}));
 		}
 
@@ -224,7 +230,7 @@ namespace ToolsRig
 
 				WriteDrawable(
 					pkt,
-					_geo, _vertexCount, 
+					*_geo, _vertexCount, 
 					transform);
 			}
 
@@ -240,7 +246,7 @@ namespace ToolsRig
 
 			WriteDrawable(
 				pkt,
-				_geo, _vertexCount, 
+				*_geo, _vertexCount, 
 				baseTransform);
 		}
 
@@ -271,7 +277,7 @@ namespace ToolsRig
 			};
 			WriteDrawable(
 				pkt,
-				_geo, _vertexCount, 
+				*_geo, _vertexCount, 
 				AsFloat4x4(srt));
 		}
 
@@ -299,7 +305,7 @@ namespace ToolsRig
 				Identity<Float3x3>(),
 				Float3 { 0.f, 15.0f, 0.f }
 			};
-			WriteDrawable(pkt, _geo, _vertexCount, AsFloat4x4(srt));
+			WriteDrawable(pkt, *_geo, _vertexCount, AsFloat4x4(srt));
 		}
 
 		using FlatPlaneDrawableWriter::FlatPlaneDrawableWriter;
@@ -318,7 +324,7 @@ namespace ToolsRig
 
 		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
 		{
-			WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, AsFloat4x4(Float3{0.f, 0.0f, 1.f}));
+			WriteDrawable(pkt, *_sphereGeo, _sphereVertexCount, AsFloat4x4(Float3{0.f, 0.0f, 1.f}));
 			auto pyramidTransform = MakeObjectToWorld(Float3{0.f, 0.0f, 1.f}, Float3{1.f, 0.f, 0.f}, Float3{0.f, 0.f, -1.f});
 			Combine_IntoLHS(pyramidTransform, RotationZ(-gPI/4.0f));
 			
@@ -330,7 +336,7 @@ namespace ToolsRig
 			Combine_IntoLHS(pyramidTransform, RotationX(gPI*3.0f/16.0f));
 			Combine_IntoLHS(pyramidTransform, Float3{0.f, 0.0f, 1.f});
 
-			WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCount, pyramidTransform);
+			WriteDrawable(pkt, *_pyramidGeo, _pyramidVertexCount, pyramidTransform);
 		}
 
 		SharpContactDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
@@ -367,16 +373,16 @@ namespace ToolsRig
 
 		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
 		{
-			for (const auto& transform:_cubes) WriteDrawable(pkt, _cubeGeo, _cubeVertexCount, transform);
-			for (const auto& transform:_spheres) WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, transform);
-			for (const auto& transform:_pyramid) WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCount, transform);
+			for (const auto& transform:_cubes) WriteDrawable(pkt, *_cubeGeo, _cubeVertexCount, transform);
+			for (const auto& transform:_spheres) WriteDrawable(pkt, *_sphereGeo, _sphereVertexCount, transform);
+			for (const auto& transform:_pyramid) WriteDrawable(pkt, *_pyramidGeo, _pyramidVertexCount, transform);
 		}
 
 		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, const std::shared_ptr<CustomDrawDelegate>& customDraw)
 		{
-			for (const auto& transform:_cubes) WriteDrawable(pkt, _cubeGeo, _cubeVertexCount, transform, customDraw);
-			for (const auto& transform:_spheres) WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, transform, customDraw);
-			for (const auto& transform:_pyramid) WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCount, transform, customDraw);
+			for (const auto& transform:_cubes) WriteDrawable(pkt, *_cubeGeo, _cubeVertexCount, transform, customDraw);
+			for (const auto& transform:_spheres) WriteDrawable(pkt, *_sphereGeo, _sphereVertexCount, transform, customDraw);
+			for (const auto& transform:_pyramid) WriteDrawable(pkt, *_pyramidGeo, _pyramidVertexCount, transform, customDraw);
 		}
 
 		void WriteDrawables(
@@ -391,7 +397,7 @@ namespace ToolsRig
 				cullingDelegate.TestAABB(boundaryViewMask, withinViewMask, viewMask, bb->first, bb->second);
 				boundaryViewMask |= withinViewMask;
 				if (boundaryViewMask)
-					WriteDrawable(pkt, _cubeGeo, _cubeVertexCount, transform, customDraw, boundaryViewMask);
+					WriteDrawable(pkt, *_cubeGeo, _cubeVertexCount, transform, customDraw, boundaryViewMask);
 					// WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, transform, customDraw, boundaryViewMask);
 				++bb;
 			}
@@ -401,7 +407,7 @@ namespace ToolsRig
 				cullingDelegate.TestAABB(boundaryViewMask, withinViewMask, viewMask, bb->first, bb->second);
 				boundaryViewMask |= withinViewMask;
 				if (boundaryViewMask)
-					WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, transform, customDraw, boundaryViewMask);
+					WriteDrawable(pkt, *_sphereGeo, _sphereVertexCount, transform, customDraw, boundaryViewMask);
 					// WriteDrawable(pkt, _cubeGeo, _cubeVertexCount, transform, customDraw, boundaryViewMask);
 				++bb;
 			}
@@ -411,7 +417,7 @@ namespace ToolsRig
 				cullingDelegate.TestAABB(boundaryViewMask, withinViewMask, viewMask, bb->first, bb->second);
 				boundaryViewMask |= withinViewMask;
 				if (boundaryViewMask)
-					WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCount, transform, customDraw, boundaryViewMask);
+					WriteDrawable(pkt, *_pyramidGeo, _pyramidVertexCount, transform, customDraw, boundaryViewMask);
 					// WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, transform, customDraw, boundaryViewMask);
 				++bb;
 			}
@@ -424,21 +430,21 @@ namespace ToolsRig
 			auto bb=_cubeBoundingBoxes.begin();
 			for (const auto& transform:_cubes) {
 				if (!CullAABB(cullingVolume, bb->first, bb->second, RenderCore::Techniques::GetDefaultClipSpaceType())) 
-					WriteDrawable(pkt, _cubeGeo, _cubeVertexCount, transform);
+					WriteDrawable(pkt, *_cubeGeo, _cubeVertexCount, transform);
 				++bb;
 			}
 
 			bb=_sphereBoundingBoxes.begin();
 			for (const auto& transform:_spheres) {
 				if (!CullAABB(cullingVolume, bb->first, bb->second, RenderCore::Techniques::GetDefaultClipSpaceType())) 
-					WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, transform);
+					WriteDrawable(pkt, *_sphereGeo, _sphereVertexCount, transform);
 				++bb;
 			}
 
 			bb=_pyramidBoundingBoxes.begin();
 			for (const auto& transform:_pyramid) {
 				if (!CullAABB(cullingVolume, bb->first, bb->second, RenderCore::Techniques::GetDefaultClipSpaceType())) 
-					WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCount, transform);
+					WriteDrawable(pkt, *_pyramidGeo, _pyramidVertexCount, transform);
 				++bb;
 			}
 		}

@@ -323,6 +323,7 @@ namespace RenderCore { namespace Techniques
 		class PipelineBuilder
 		{
 		public:
+			std::shared_ptr<IDrawablesPool> _drawablesPool;
 			std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
 			std::vector<std::shared_ptr<PipelineAccelerator>> _pipelineAccelerators;
 			std::vector<std::shared_ptr<DescriptorSetAccelerator>> _descriptorSetAccelerators;
@@ -429,7 +430,7 @@ namespace RenderCore { namespace Techniques
 				IteratorRange<const InputElementDesc*> inputElements,
 				Topology topology)
 			{
-				auto ia = std::make_shared<DrawableInputAssembly>(MakeIteratorRange(inputElements), topology);
+				auto ia = _drawablesPool->CreateInputAssembly(MakeIteratorRange(inputElements), topology);
 				auto w = std::find_if(_pendingInputAssemblies.begin(), _pendingInputAssemblies.end(), [hash=ia->GetHash()](const auto& q) { return q->GetHash() == hash; });
 				if (w == _pendingInputAssemblies.end()) {
 					_pendingInputAssemblies.push_back(ia);
@@ -730,6 +731,7 @@ namespace RenderCore { namespace Techniques
 
 		Pimpl(std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
 		{
+			_pendingPipelines._drawablesPool = drawablesPool;
 			_pendingPipelines._pipelineAcceleratorPool = std::move(pipelineAccelerators);
 			_pendingGeos._drawablesPool = std::move(drawablesPool);
 		}
