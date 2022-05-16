@@ -196,7 +196,8 @@ namespace UnitTests
 				Topology::TriangleList,
 				RenderCore::Assets::RenderStateSet{});
 
-			drawable->_pipeline = pipelineWithTexCoord;
+			drawable->_pipeline = pipelineWithTexCoord.get();
+			drawable->_descriptorSet = nullptr;
 			drawable->_geo = drawableGeo.get();
 			drawable->_vertexCount = sphereGeo.size();
 			RenderCore::UniformsStreamInterface usi;

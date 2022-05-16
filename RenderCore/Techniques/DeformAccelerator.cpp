@@ -7,6 +7,7 @@
 #include "GPUTrackerHeap.h"
 #include "CommonUtils.h"
 #include "CommonResources.h"
+#include "Drawables.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
 #include "../Metal/Resource.h"
@@ -47,12 +48,13 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<IResource> GetDynamicPageResource() const override;
 
-		DeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<ICompiledLayoutPool>);
+		DeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<IDrawablesPool>, std::shared_ptr<ICompiledLayoutPool>);
 		~DeformAcceleratorPool();
 
 	private:
 		std::vector<std::weak_ptr<DeformAccelerator>> _accelerators;
 		std::shared_ptr<IDevice> _device;
+		std::shared_ptr<IDrawablesPool> _drawablesPool;
 		std::unique_ptr<RenderCore::Metal_Vulkan::TemporaryStorageManager> _temporaryStorageManager;
 		std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
 		std::vector<RenderCore::Metal_Vulkan::CmdListAttachedStorage> _currentFrameAttachedStorage;
@@ -113,7 +115,11 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<DeformAccelerator> DeformAcceleratorPool::CreateDeformAccelerator()
 	{
-		auto newAccelerator = std::make_shared<DeformAccelerator>();
+		std::shared_ptr<DeformAccelerator> newAccelerator;
+		if (_drawablesPool) {
+			newAccelerator = _drawablesPool->MakeProtectedPtr<DeformAccelerator>();
+		} else
+			newAccelerator = std::make_shared<DeformAccelerator>();
 		newAccelerator->_enabledInstances.resize(8, 0);
 		newAccelerator->_readiedInstances.resize(8, 0);
 		#if defined(_DEBUG)
@@ -431,24 +437,14 @@ namespace RenderCore { namespace Techniques
 		_readyInstancesMetrics = {};
 	}
 
-	auto DeformAcceleratorPool::GetMetrics() const -> ReadyInstancesMetrics
-	{
-		return _lastFrameReadyInstancesMetrics;
-	}
+	auto DeformAcceleratorPool::GetMetrics() const -> ReadyInstancesMetrics { return _lastFrameReadyInstancesMetrics; }
+	const std::shared_ptr<IDevice>& DeformAcceleratorPool::GetDevice() const { return _device; }
+	const std::shared_ptr<ICompiledLayoutPool>& DeformAcceleratorPool::GetCompiledLayoutPool() const { return _compiledLayoutPool; }
 
-	const std::shared_ptr<IDevice>& DeformAcceleratorPool::GetDevice() const
-	{
-		return _device;
-	}
-
-	const std::shared_ptr<ICompiledLayoutPool>& DeformAcceleratorPool::GetCompiledLayoutPool() const
-	{
-		return _compiledLayoutPool;
-	}
-
-	DeformAcceleratorPool::DeformAcceleratorPool(std::shared_ptr<IDevice> device, std::shared_ptr<ICompiledLayoutPool> compiledLayoutPool)
+	DeformAcceleratorPool::DeformAcceleratorPool(std::shared_ptr<IDevice> device, std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<ICompiledLayoutPool> compiledLayoutPool)
 	: _device(std::move(device))
 	, _compiledLayoutPool(std::move(compiledLayoutPool))
+	, _drawablesPool(std::move(drawablesPool))
 	{
 		auto* deviceVulkan = (RenderCore::IDeviceVulkan*)_device->QueryInterface(typeid(RenderCore::IDeviceVulkan).hash_code());
 		if (deviceVulkan) {
@@ -470,9 +466,9 @@ namespace RenderCore { namespace Techniques
 	IDeformAcceleratorPool::IDeformAcceleratorPool() : _guid(s_nextDeformAcceleratorPool++) {}
 	IDeformAcceleratorPool::~IDeformAcceleratorPool() {}
 
-	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device, std::shared_ptr<ICompiledLayoutPool> compiledLayoutPool)
+	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device, std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<ICompiledLayoutPool> compiledLayoutPool)
 	{
-		return std::make_shared<DeformAcceleratorPool>(std::move(device), std::move(compiledLayoutPool));
+		return std::make_shared<DeformAcceleratorPool>(std::move(device), std::move(drawablesPool), std::move(compiledLayoutPool));
 	}
 
 	IDeformGeoAttachment::~IDeformGeoAttachment() = default;

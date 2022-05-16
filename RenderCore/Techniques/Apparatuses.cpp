@@ -99,8 +99,8 @@ namespace RenderCore { namespace Techniques
 		auto descSetAndBinding = std::make_shared<DescriptorSetLayoutAndBinding>(i2->second, FindMaterialDescSetSlotIdx(*_pipelineLayoutFile), "Material", PipelineType::Graphics, matDescSetLayoutContainer->GetDependencyValidation());		 
 		auto compiledLayoutPool = CreateCompiledLayoutPool(device, descSetAndBinding);
 		const PipelineAcceleratorPoolFlags::BitField poolFlags = 0;
-		_pipelineAccelerators = CreatePipelineAcceleratorPool(device, compiledLayoutPool, poolFlags);
-		_deformAccelerators = CreateDeformAcceleratorPool(device, compiledLayoutPool);
+		_pipelineAccelerators = CreatePipelineAcceleratorPool(device, _drawablesPool, compiledLayoutPool, poolFlags);
+		_deformAccelerators = CreateDeformAcceleratorPool(device, _drawablesPool, compiledLayoutPool);
 		
 		_systemUniformsDelegate = std::make_shared<SystemUniformsDelegate>(*_device);
 

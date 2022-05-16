@@ -23,6 +23,7 @@ namespace RenderCore { namespace Techniques
 	class IDeformGeoAttachment;
 	class IDeformUniformsAttachment;
 	class ICompiledLayoutPool;
+	class IDrawablesPool;
 
 	class IDeformAcceleratorPool
 	{
@@ -58,6 +59,8 @@ namespace RenderCore { namespace Techniques
 	private:
 		uint64_t _guid;
 	};
+
+	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<IDrawablesPool>, std::shared_ptr<ICompiledLayoutPool>);
 
 	class IGeoDeformer;
 	class DeformerToRendererBinding;
@@ -103,8 +106,6 @@ namespace RenderCore { namespace Techniques
 
 		virtual ~IDeformUniformsAttachment();
 	};
-
-	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<ICompiledLayoutPool>);
 
 	struct IDeformAcceleratorPool::ReadyInstancesMetrics
 	{

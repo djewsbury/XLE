@@ -134,8 +134,8 @@ namespace RenderCore { namespace Techniques
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
 						drawable._geo = constructor._drawableGeos[dc._drawableGeoIdx].get();
-						drawable._pipeline = constructor._pipelineAccelerators[dc._pipelineAcceleratorIdx];
-						drawable._descriptorSet = constructor._descriptorSetAccelerators[dc._descriptorSetAcceleratorIdx];
+						drawable._pipeline = constructor._pipelineAccelerators[dc._pipelineAcceleratorIdx].get();
+						drawable._descriptorSet = constructor._descriptorSetAccelerators[dc._descriptorSetAcceleratorIdx].get();
 						drawable._drawFn = (Techniques::ExecuteDrawableFn*)&Internal::DrawFn_InstancedFixedSkeleton;
 						drawable._looseUniformsInterface = &Internal::s_localTransformUSI;
 						assert(dc._firstVertex == 0);
@@ -240,8 +240,8 @@ namespace RenderCore { namespace Techniques
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
 						drawable._geo = constructor._drawableGeos[dc._drawableGeoIdx].get();
-						drawable._pipeline = constructor._pipelineAccelerators[dc._pipelineAcceleratorIdx];
-						drawable._descriptorSet = constructor._descriptorSetAccelerators[dc._descriptorSetAcceleratorIdx];
+						drawable._pipeline = constructor._pipelineAccelerators[dc._pipelineAcceleratorIdx].get();
+						drawable._descriptorSet = constructor._descriptorSetAccelerators[dc._descriptorSetAcceleratorIdx].get();
 						drawable._drawFn = (Techniques::ExecuteDrawableFn*)&Internal::DrawFn_InstancedFixedSkeletonViewMask;
 						drawable._looseUniformsInterface = &Internal::s_localTransformUSI;
 						assert(dc._firstVertex == 0);

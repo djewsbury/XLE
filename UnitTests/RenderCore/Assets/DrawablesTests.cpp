@@ -228,8 +228,8 @@ namespace UnitTests
 			struct CustomDrawable : public Techniques::Drawable { unsigned _vertexCount; };
 			Techniques::DrawablesPacket pkt;
 			auto* drawable = pkt._drawables.Allocate<CustomDrawable>();
-			drawable->_pipeline = pipelineWithTexCoord;
-			drawable->_descriptorSet = descriptorSetAccelerator;
+			drawable->_pipeline = pipelineWithTexCoord.get();
+			drawable->_descriptorSet = descriptorSetAccelerator.get();
 			drawable->_geo = drawableGeo.get();
 			drawable->_vertexCount = sphereGeo.size();
 			drawable->_drawFn = [](Techniques::ParsingContext&, const Techniques::ExecuteDrawableContext& drawFnContext, const Techniques::Drawable& drawable)

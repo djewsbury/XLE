@@ -81,8 +81,8 @@ namespace ToolsRig
 		{
 			struct CustomDrawable : public RenderCore::Techniques::Drawable { unsigned _vertexCount; Float4x4 _localToWorld; };
 			auto* drawables = pkt._drawables.Allocate<CustomDrawable>(1);
-			drawables[0]._pipeline = _pipelineAccelerator;
-			drawables[0]._descriptorSet = _descriptorSetAccelerator;
+			drawables[0]._pipeline = _pipelineAccelerator.get();
+			drawables[0]._descriptorSet = _descriptorSetAccelerator.get();
 			drawables[0]._geo = &geo;
 			drawables[0]._vertexCount = vertexCount;
 			drawables[0]._looseUniformsInterface = &s_localTransformUSI;
@@ -111,8 +111,8 @@ namespace ToolsRig
 				unsigned _vertexCount; 
 			};
 			auto* drawables = pkt._drawables.Allocate<CustomDrawable2>(1);
-			drawables[0]._pipeline = _pipelineAccelerator;
-			drawables[0]._descriptorSet = _descriptorSetAccelerator;
+			drawables[0]._pipeline = _pipelineAccelerator.get();
+			drawables[0]._descriptorSet = _descriptorSetAccelerator.get();
 			drawables[0]._geo = &geo;
 			drawables[0]._vertexCount = vertexCount;
 			drawables[0]._looseUniformsInterface = &s_localTransformUSI;

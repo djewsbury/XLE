@@ -60,15 +60,15 @@ namespace UnitTests
 
 		auto matDescSetLayout = MakeMaterialDescriptorSetLayout();
 		auto compiledLayoutPool = CreateCompiledLayoutPool(_metalTestHelper->_device, matDescSetLayout);
+		_drawablesPool = Techniques::CreateDrawablesPool();
 		_pipelineAcceleratorPool = Techniques::CreatePipelineAcceleratorPool(
-			_metalTestHelper->_device, compiledLayoutPool, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
+			_metalTestHelper->_device, _drawablesPool, compiledLayoutPool, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
 
 		_sharedDelegates = std::make_shared<LightingEngine::SharedTechniqueDelegateBox>();
 		_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*_metalTestHelper->_device);
 		_techniqueServices->SetCommonResources(_commonResources);
 
 		_pipelinePool = std::make_shared<Techniques::PipelineCollection>(_metalTestHelper->_device);
-		_drawablesPool = Techniques::CreateDrawablesPool();
 
 		_techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		_techniqueContext->_commonResources = _commonResources;

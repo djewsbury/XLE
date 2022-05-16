@@ -430,10 +430,11 @@ namespace RenderCore { namespace Techniques
 				IteratorRange<const InputElementDesc*> inputElements,
 				Topology topology)
 			{
-				auto ia = _drawablesPool->CreateInputAssembly(MakeIteratorRange(inputElements), topology);
-				auto w = std::find_if(_pendingInputAssemblies.begin(), _pendingInputAssemblies.end(), [hash=ia->GetHash()](const auto& q) { return q->GetHash() == hash; });
+				auto hash = DrawableInputAssembly{MakeIteratorRange(inputElements), topology}.GetHash();
+				auto w = std::find_if(_pendingInputAssemblies.begin(), _pendingInputAssemblies.end(), [hash](const auto& q) { return q->GetHash() == hash; });
 				if (w == _pendingInputAssemblies.end()) {
-					_pendingInputAssemblies.push_back(ia);
+					auto ia = _drawablesPool->CreateInputAssembly(MakeIteratorRange(inputElements), topology);
+					_pendingInputAssemblies.push_back(std::move(ia));
 					return (unsigned)_pendingInputAssemblies.size() - 1;
 				} else {
 					return (unsigned)std::distance(_pendingInputAssemblies.begin(), w);

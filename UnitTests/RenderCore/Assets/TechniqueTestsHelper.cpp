@@ -36,9 +36,9 @@ namespace UnitTests
         _sequencerDescSetLayout = RenderCore::Techniques::FindLayout(layoutFile, "GraphicsMain", "Sequencer", PipelineType::Graphics);
 
 		_compiledLayoutPool = CreateCompiledLayoutPool(testHelper._device, _materialDescSetLayout);
-		_pipelineAccelerators = Techniques::CreatePipelineAcceleratorPool(
-			testHelper._device, _compiledLayoutPool, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
 		_drawablesPool = Techniques::CreateDrawablesPool();
+		_pipelineAccelerators = Techniques::CreatePipelineAcceleratorPool(
+			testHelper._device, _drawablesPool, _compiledLayoutPool, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
 
 		_techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		_techniqueContext->_commonResources = _commonResources;

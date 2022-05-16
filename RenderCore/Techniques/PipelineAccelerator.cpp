@@ -12,6 +12,7 @@
 #include "PipelineOperators.h"		// for CompiledPipelineLayoutAsset & DescriptorSetLayoutAndBinding
 #include "DeformAccelerator.h"		// for UniformDeformerToRendererBinding
 #include "CompiledLayoutPool.h"
+#include "Drawables.h"				// for IDrawablesPool & protected destroy
 #include "../FrameBufferDesc.h"
 #include "../Format.h"
 #include "../Metal/DeviceContext.h"
@@ -386,6 +387,7 @@ namespace RenderCore { namespace Techniques
 
 		PipelineAcceleratorPool(
 			std::shared_ptr<IDevice> device,
+			std::shared_ptr<IDrawablesPool> drawablesPool,
 			std::shared_ptr<ICompiledLayoutPool> patchCollectionPool,
 			PipelineAcceleratorPoolFlags::BitField flags);
 		~PipelineAcceleratorPool();
@@ -424,6 +426,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<SamplerPool> _samplerPool;
 		std::shared_ptr<PipelineCollection> _pipelineCollection;
+		std::shared_ptr<IDrawablesPool> _drawablesPool;
 		std::shared_ptr<ICompiledLayoutPool> _layoutPatcher;
 		PipelineAcceleratorPoolFlags::BitField _flags;
 
@@ -555,6 +558,8 @@ namespace RenderCore { namespace Techniques
 		return cfg;
 	}
 
+	static void DestroyPipelineAccelerator(void* obj) { delete (PipelineAccelerator*)obj; }
+
 	std::shared_ptr<PipelineAccelerator> PipelineAcceleratorPool::CreatePipelineAccelerator(
 		const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& shaderPatches,
 		const ParameterBox& materialSelectors,
@@ -579,11 +584,20 @@ namespace RenderCore { namespace Techniques
 				return l;
 		}
 
-		auto newAccelerator = std::make_shared<PipelineAccelerator>(
-			_guid,
-			shaderPatches, materialSelectors,
-			inputAssembly, topology,
-			stateSet);
+		std::shared_ptr<PipelineAccelerator> newAccelerator;
+		if (_drawablesPool) {
+			newAccelerator = _drawablesPool->MakeProtectedPtr<PipelineAccelerator>(
+				_guid,
+				shaderPatches, materialSelectors,
+				inputAssembly, topology,
+				stateSet);
+		} else {
+			newAccelerator = std::make_shared<PipelineAccelerator>(
+				_guid,
+				shaderPatches, materialSelectors,
+				inputAssembly, topology,
+				stateSet);
+		}
 
 		if (i != _pipelineAccelerators.end() && i->first == hash) {
 			i->second = newAccelerator;		// (we replaced one that expired)
@@ -620,11 +634,20 @@ namespace RenderCore { namespace Techniques
 				return l;
 		}
 
-		auto newAccelerator = std::make_shared<PipelineAccelerator>(
-			_guid,
-			shaderPatches, materialSelectors,
-			inputAssembly, topology,
-			stateSet);
+		std::shared_ptr<PipelineAccelerator> newAccelerator;
+		if (_drawablesPool) {
+			newAccelerator = _drawablesPool->MakeProtectedPtr<PipelineAccelerator>(
+				_guid,
+				shaderPatches, materialSelectors,
+				inputAssembly, topology,
+				stateSet);
+		} else {
+			newAccelerator = std::make_shared<PipelineAccelerator>(
+				_guid,
+				shaderPatches, materialSelectors,
+				inputAssembly, topology,
+				stateSet);
+		}
 
 		if (i != _pipelineAccelerators.end() && i->first == hash) {
 			i->second = newAccelerator;		// (we replaced one that expired)
@@ -661,7 +684,10 @@ namespace RenderCore { namespace Techniques
 					return l;
 			}
 
-			result = std::make_shared<DescriptorSetAccelerator>();
+			if (_drawablesPool) {
+				result = _drawablesPool->MakeProtectedPtr<DescriptorSetAccelerator>();
+			} else
+				result = std::make_shared<DescriptorSetAccelerator>();
 			result->_descriptorSet = std::make_shared<::Assets::Marker<ActualizedDescriptorSet>>("descriptorset-accelerator");
 
 			if (cachei != _descriptorSetAccelerators.end() && cachei->first == hash) {
@@ -988,10 +1014,12 @@ namespace RenderCore { namespace Techniques
 	
 	PipelineAcceleratorPool::PipelineAcceleratorPool(
 		std::shared_ptr<IDevice> device,
+		std::shared_ptr<IDrawablesPool> drawablesPool,
 		std::shared_ptr<ICompiledLayoutPool> patchCollectionPool,
 		PipelineAcceleratorPoolFlags::BitField flags)
 	: _samplerPool(std::make_shared<SamplerPool>(*device))
 	, _layoutPatcher(std::move(patchCollectionPool))
+	, _drawablesPool(std::move(drawablesPool))
 	{
 		_guid = s_nextPipelineAcceleratorPoolGUID++;
 		_device = std::move(device);
@@ -1007,10 +1035,11 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<IPipelineAcceleratorPool> CreatePipelineAcceleratorPool(
 		const std::shared_ptr<IDevice>& device, 
+		const std::shared_ptr<IDrawablesPool>& drawablesPool,
 		const std::shared_ptr<ICompiledLayoutPool>& patchCollectionPool,
 		PipelineAcceleratorPoolFlags::BitField flags)
 	{
-		return std::make_shared<PipelineAcceleratorPool>(device, patchCollectionPool, flags);
+		return std::make_shared<PipelineAcceleratorPool>(device, drawablesPool, patchCollectionPool, flags);
 	}
 
 	namespace Internal

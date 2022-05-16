@@ -54,8 +54,10 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<DeformAccelerator> _deformAccelerator;
 
-	protected:
+		// avoid constructing directly -- prefer IDrawablesPool::CreateGeo() or DrawablesPacket::CreateTemporaryGeo()
 		DrawableGeo();
+		~DrawableGeo();
+	protected:
 		friend class DrawablesPool;
 		friend class Internal::DrawableGeoHeap;
 	};
@@ -79,18 +81,17 @@ namespace RenderCore { namespace Techniques
 		void        DrawAuto() const;
 	};
 
-	class Drawable;
+	struct Drawable;
 	using ExecuteDrawableFn = void(ParsingContext&, const ExecuteDrawableContext&, const Drawable&);
 
-	class Drawable
+	struct Drawable
 	{
-	public:
-		std::shared_ptr<PipelineAccelerator>		_pipeline;
-		std::shared_ptr<DescriptorSetAccelerator>	_descriptorSet;
-		const DrawableGeo*							_geo;
-		const UniformsStreamInterface*				_looseUniformsInterface;
-		ExecuteDrawableFn*							_drawFn;
-		unsigned									_deformInstanceIdx = 0;
+		PipelineAccelerator*				_pipeline;
+		DescriptorSetAccelerator*			_descriptorSet;
+		const DrawableGeo*					_geo;
+		const UniformsStreamInterface*		_looseUniformsInterface;
+		ExecuteDrawableFn*					_drawFn;
+		unsigned							_deformInstanceIdx;
 	};
 
 	class DrawableInputAssembly
@@ -101,16 +102,16 @@ namespace RenderCore { namespace Techniques
 		Topology GetTopology() const { return _topology; }
 		uint64_t GetHash() const { return _hash; }
 
+		// avoid constructing directly -- prefer IDrawablesPool::CreateInputAssembly()
+		DrawableInputAssembly(
+			IteratorRange<const InputElementDesc*> inputElements,
+			Topology topology);
+		~DrawableInputAssembly();
 	private:
 		std::vector<InputElementDesc> _inputElements;
 		std::vector<unsigned> _strides;
 		uint64_t _hash;
 		Topology _topology;
-
-		DrawableInputAssembly(
-			IteratorRange<const InputElementDesc*> inputElements,
-			Topology topology);
-		friend class DrawablesPool;
 	};
 
 	class GeometryProcable
@@ -133,7 +134,7 @@ namespace RenderCore { namespace Techniques
 		enum class Storage { Vertex, Index, Uniform, CPU };
 		struct AllocateStorageResult { IteratorRange<void*> _data; unsigned _startOffset; };
 		AllocateStorageResult AllocateStorage(Storage storageType, size_t size);
-		DrawableGeo* AllocateTemporaryGeo();
+		DrawableGeo* CreateTemporaryGeo();
 
 		void Reset();
 
@@ -166,7 +167,15 @@ namespace RenderCore { namespace Techniques
 		virtual std::shared_ptr<DrawableGeo> CreateGeo() = 0;
 		virtual std::shared_ptr<DrawableInputAssembly> CreateInputAssembly(IteratorRange<const InputElementDesc*>, Topology) = 0;
 		virtual std::shared_ptr<UniformsStreamInterface> CreateProtectedLifetime(UniformsStreamInterface&& input) = 0;
+		
+		virtual void IncreaseAliveCount() = 0;
+		using DestructionFunctionSig = void(void*);
+		virtual void ProtectedDestroy(void* object, DestructionFunctionSig* destructionFunction) = 0;
 		virtual int EstimateAliveClientObjectsCount() const = 0;
+
+		template<typename Type, typename... Args>
+			std::shared_ptr<Type> MakeProtectedPtr(Args...);
+
 		~IDrawablesPool();
 		unsigned GetGUID() const { return _guid; }
 	protected:
@@ -207,5 +216,20 @@ namespace RenderCore { namespace Techniques
 			Blending = 1u<<unsigned(Batch::Blending)
 		};
 		using BitField = unsigned;
+	}
+
+	namespace Internal
+	{
+		template<typename Type>
+			static void DestructionFunction(void* ptr) { delete (Type*)ptr; }
+	}
+
+	template<typename Type, typename... Args>
+		std::shared_ptr<Type> IDrawablesPool::MakeProtectedPtr(Args... args)
+	{
+		IncreaseAliveCount();
+		return std::shared_ptr<Type>(
+			new Type(std::forward<Args>(args)...),
+			[this](auto* obj) { this->ProtectedDestroy(obj, &Internal::DestructionFunction<Type>); });
 	}
 }}

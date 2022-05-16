@@ -189,13 +189,14 @@ namespace RenderCore { namespace Techniques
 			} else {
 				auto vertexStorage = _workingPkt.AllocateStorage(DrawablesPacket::Storage::Vertex, vertexDataSize);
 				auto* drawable = _workingPkt._drawables.Allocate<DrawableWithVertexCount>();
-				auto* geo = _workingPkt.AllocateTemporaryGeo();
+				auto* geo = _workingPkt.CreateTemporaryGeo();
 				geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
 				geo->_vertexStreams[0]._vbOffset = vertexStorage._startOffset;
 				geo->_vertexStreamCount = 1;
 				geo->_ibFormat = Format(0);
 				drawable->_geo = geo;
-				drawable->_pipeline = std::move(pipeline);
+				drawable->_pipeline = pipeline;
+				drawable->_descriptorSet = nullptr;
 				drawable->_vertexCount = vertexCount;
 				drawable->_vertexStride = vStride;
 				drawable->_bytesAllocated = vertexDataSize;
@@ -221,6 +222,7 @@ namespace RenderCore { namespace Techniques
 			drawable->_geo = customGeo.get();
 			drawable->_pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors, material._patchCollection);
 			drawable->_vertexCount = indexOrVertexCount;
+			drawable->_descriptorSet = nullptr;
 			drawable->_vertexStartLocation = indexOrVertexStartLocation;
 			drawable->_vertexStride = 0;
 			drawable->_bytesAllocated = 0;
@@ -245,6 +247,7 @@ namespace RenderCore { namespace Techniques
 			auto* drawable = _workingPkt._drawables.Allocate<DrawableWithVertexCount>();
 			drawable->_geo = customGeo.get();
 			drawable->_pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors, material._patchCollection);
+			drawable->_descriptorSet = nullptr;
 			drawable->_vertexCount = indexOrVertexCount;
 			drawable->_vertexStartLocation = indexOrVertexStartLocation;
 			drawable->_vertexStride = 0;
@@ -350,7 +353,7 @@ namespace RenderCore { namespace Techniques
 			pipelineLayout->StallWhilePending();
 			auto matDescSetLayout = FindLayout(*pipelineLayout->Actualize(), "Material", PipelineType::Graphics);
 			auto compiledLayoutPool = CreateCompiledLayoutPool(device, matDescSetLayout);
-			_pipelineAcceleratorPool = CreatePipelineAcceleratorPool(device, compiledLayoutPool, 0);
+			_pipelineAcceleratorPool = CreatePipelineAcceleratorPool(device, nullptr, compiledLayoutPool, 0);
 			_lastQueuedDrawable = nullptr;
 			_lastQueuedDrawVertexCountOffset = 0;
 		}
@@ -365,7 +368,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::pair<uint64_t, std::shared_ptr<SequencerConfig>>> _sequencerConfigs;
 
 		template<typename InputAssemblyType>
-			std::shared_ptr<PipelineAccelerator> GetPipelineAccelerator(
+			PipelineAccelerator* GetPipelineAccelerator(
 				IteratorRange<const InputAssemblyType*> inputAssembly,
 				const RenderCore::Assets::RenderStateSet& stateSet,
 				Topology topology,
@@ -384,7 +387,7 @@ namespace RenderCore { namespace Techniques
 
 			auto existing = LowerBound(_pipelineAccelerators, hashCode);
 			if (existing != _pipelineAccelerators.end() && existing->first == hashCode)
-				return existing->second;
+				return existing->second.get();
 
 			auto newAccelerator = _pipelineAcceleratorPool->CreatePipelineAccelerator(
 				patchCollection, 
@@ -392,7 +395,7 @@ namespace RenderCore { namespace Techniques
 				topology, stateSet);
 			// Note that we keep this pipeline accelerator alive indefinitely 
 			_pipelineAccelerators.insert(existing, std::make_pair(hashCode, newAccelerator));
-			return newAccelerator;
+			return newAccelerator.get();
 		}
 	};
 

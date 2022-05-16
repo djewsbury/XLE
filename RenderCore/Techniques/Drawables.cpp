@@ -65,13 +65,13 @@ namespace RenderCore { namespace Techniques
 				PipelineAccelerator* lastPipelineAccelerator = nullptr;
 				for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d, ++idx) {
 					const auto& drawable = *(Drawable*)d.get();
-					if (drawable._pipeline.get() != lastPipelineAccelerator) {
+					if (drawable._pipeline != lastPipelineAccelerator) {
 						auto* pipeline = pipelineAccelerators.TryGetPipeline(*drawable._pipeline, sequencerConfig);
 						if (!pipeline) {
 							_pendingPipelineMarkers[idx] = pipelineAccelerators.GetPipelineMarker(*drawable._pipeline, sequencerConfig);
 							stallOnMarkers = true;
 						}
-						lastPipelineAccelerator = drawable._pipeline.get();
+						lastPipelineAccelerator = drawable._pipeline;
 					}
 					if (drawable._descriptorSet) {
 						auto* actualizedDescSet = pipelineAccelerators.TryGetDescriptorSet(*drawable._descriptorSet);
@@ -145,14 +145,14 @@ namespace RenderCore { namespace Techniques
 			for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d, ++idx) {
 				const auto& drawable = *(Drawable*)d.get();
 				assert(drawable._pipeline);
-				if (drawable._pipeline.get() != currentPipelineAccelerator) {
+				if (drawable._pipeline != currentPipelineAccelerator) {
 					auto* pipeline = pipelineAccelerators.TryGetPipeline(*drawable._pipeline, sequencerConfig);
 					if (UsePreStalledResources && !pipeline && preStalledResources._pendingPipelineMarkers[idx])
 						pipeline = &preStalledResources._pendingPipelineMarkers[idx]->ActualizeBkgrnd();
 					if (!pipeline) continue;
 
 					currentPipeline = pipeline;
-					currentPipelineAccelerator = drawable._pipeline.get();
+					currentPipelineAccelerator = drawable._pipeline;
 
 					currentBoundUniforms = &currentPipeline->_boundUniformsPool.Get(
 						*currentPipeline->_metalPipeline,
@@ -530,7 +530,7 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	DrawableGeo* DrawablesPacket::AllocateTemporaryGeo()
+	DrawableGeo* DrawablesPacket::CreateTemporaryGeo()
 	{
 		assert(_geoHeap);
 		return _geoHeap->Allocate();
@@ -607,7 +607,10 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<DrawableGeo> CreateGeo() override;
 		std::shared_ptr<DrawableInputAssembly> CreateInputAssembly(IteratorRange<const InputElementDesc*>, Topology) override;
 		std::shared_ptr<UniformsStreamInterface> CreateProtectedLifetime(UniformsStreamInterface&& input) override;
+		
+		void ProtectedDestroy(void* object, DestructionFunctionSig* destructionFunction) override;
 
+		void IncreaseAliveCount() override { ++_aliveCount; }
 		int EstimateAliveClientObjectsCount() const override { return _aliveCount.load(); }
 
 		DrawablesPool();
@@ -624,9 +627,7 @@ namespace RenderCore { namespace Techniques
 		Marker _createdPktMarker = 0;					// highest marker given to a newly created packet
 
 		ResizableCircularBuffer<std::pair<Marker, unsigned>, 32> _markerCounts;
-		using DestructionFunctionSig = void(void*);
 		std::deque<std::pair<void*, DestructionFunctionSig*>> _holdingPendingDestruction;
-		template<typename Type> void ProtectedDestroy(Type* t);
 
 		void ReturnToPool(DrawablesPacket&& pkt, unsigned marker) override;
 
@@ -634,20 +635,8 @@ namespace RenderCore { namespace Techniques
 
 		Threading::Mutex _usisLock;
 		std::vector<std::pair<uint64_t, std::shared_ptr<UniformsStreamInterface>>> _usis;
-
-		template<typename Type, typename... Args>
-			std::shared_ptr<Type> MakeProtectedPtr(Args...);
 	};
 
-	template<typename Type, typename... Args>
-		std::shared_ptr<Type> DrawablesPool::MakeProtectedPtr(Args... args)
-	{
-		++_aliveCount;
-		return std::shared_ptr<Type>(
-			new Type(std::forward<Args>(args)...),
-			[this](auto* obj) { this->ProtectedDestroy(obj); });
-	}
-	
 	std::shared_ptr<DrawableInputAssembly> DrawablesPool::CreateInputAssembly(IteratorRange<const InputElementDesc*> elements, Topology topology)
 	{
 		return MakeProtectedPtr<DrawableInputAssembly>(elements, topology);
@@ -717,15 +706,11 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	template<typename Type>
-		static void DestructionFunction(void* ptr) { delete (Type*)ptr; }
-
-	template<typename Type>
-		void DrawablesPool::ProtectedDestroy(Type* object)
+	void DrawablesPool::ProtectedDestroy(void* object, DestructionFunctionSig* destructionFunction)
 	{
 		ScopedLock(_lock);
 		if (_destroyedPktMarker == _createdPktMarker) {
-			delete object;	// no packets alive currently
+			destructionFunction(object);	// no packets alive currently
 			--_aliveCount;
 		} else {
 			auto marker = _createdPktMarker;
@@ -738,7 +723,7 @@ namespace RenderCore { namespace Techniques
 				assert(_markerCounts.front().first < marker);
 				_markerCounts.emplace_back(std::make_pair(marker, 1u));
 			}
-			_holdingPendingDestruction.emplace_back(object, &DestructionFunction<Type>);
+			_holdingPendingDestruction.emplace_back(object, destructionFunction);
 		}
 	}
 
@@ -793,7 +778,10 @@ namespace RenderCore { namespace Techniques
 		_topology = topology;
 		_hash = rotl64(HashInputAssembly(MakeIteratorRange(_inputElements), DefaultSeed64), (unsigned)_topology);
 	}
+	DrawableInputAssembly::~DrawableInputAssembly() = default;
 
 	DrawableGeo::DrawableGeo() = default;
+	DrawableGeo::~DrawableGeo() = default;
+	
 
 }}

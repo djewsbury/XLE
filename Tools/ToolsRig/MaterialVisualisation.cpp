@@ -143,10 +143,10 @@ namespace ToolsRig
 				auto& drawable = *pkt->_drawables.Allocate<MaterialSceneParserDrawable>();
 				if (pipeline->_descriptorSet) {
 					auto* t = pipeline->_descriptorSet->TryActualize();
-					drawable._descriptorSet = t ? *t : nullptr;
+					drawable._descriptorSet = t ? t->get() : nullptr;
 				}
-				drawable._pipeline = pipeline->_pipelineAccelerator;
-				auto* geo = pkt->AllocateTemporaryGeo();
+				drawable._pipeline = pipeline->_pipelineAccelerator.get();
+				auto* geo = pkt->CreateTemporaryGeo();
 				geo->_vertexStreams[0]._vbOffset = space._startOffset;
 				geo->_vertexStreams[0]._type = Techniques::DrawableGeo::StreamType::PacketStorage;
 				geo->_vertexStreamCount = 1;
@@ -170,10 +170,10 @@ namespace ToolsRig
 				auto& drawable = *pkt->_drawables.Allocate<MaterialSceneParserDrawable>();
 				if (pipeline->_descriptorSet) {
 					auto* t = pipeline->_descriptorSet->TryActualize();
-					drawable._descriptorSet = t ? *t : nullptr;
+					drawable._descriptorSet = t ? t->get() : nullptr;
 				}
-				drawable._pipeline = pipeline->_pipelineAccelerator;
-				auto* geo = pkt->AllocateTemporaryGeo();
+				drawable._pipeline = pipeline->_pipelineAccelerator.get();
+				auto* geo = pkt->CreateTemporaryGeo();
 				geo->_vertexStreams[0]._resource = vb;
 				geo->_vertexStreamCount = 1;
 				drawable._geo = geo;

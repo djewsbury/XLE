@@ -159,8 +159,8 @@ namespace ToolsRig
 		auto* drawables = pkts[(unsigned)RenderCore::Techniques::Batch::Opaque]->_drawables.Allocate<SimpleModelDrawable>(_drawCalls.size());
 		for (const auto& drawCall:_drawCalls) {
 			auto& drawable = *drawables++;
-			drawable._pipeline = _pipelineAccelerator;
-			drawable._descriptorSet = _descriptorSetAccelerator;
+			drawable._pipeline = _pipelineAccelerator.get();
+			drawable._descriptorSet = _descriptorSetAccelerator.get();
 			drawable._geo = _drawableGeo.get();
 			drawable._drawFn = (Techniques::ExecuteDrawableFn*)&SimpleModelDrawable::DrawFn;
 			drawable._looseUniformsInterface = &Internal::s_localTransformUSI;
@@ -434,7 +434,7 @@ namespace ToolsRig
 		auto ibData = pkt.AllocateStorage(Techniques::DrawablesPacket::Storage::Index, indexListType._arrayCount * sizeof(unsigned));
 		std::memcpy(ibData._data.begin(), indices.get(), indexListType._arrayCount * sizeof(unsigned));
 
-		auto geo = pkt.AllocateTemporaryGeo();
+		auto geo = pkt.CreateTemporaryGeo();
 		geo->_vertexStreams[0]._vbOffset = vbData._startOffset;
 		geo->_vertexStreamCount = 1;
 		geo->_ibOffset = ibData._startOffset;
@@ -446,7 +446,8 @@ namespace ToolsRig
 			Float4x4 _localTransform; 
 		};
 		auto* drawable = pkt._drawables.Allocate<CustomDrawable>();
-		drawable->_pipeline = visBox._justPointsPipelineAccelerator;
+		drawable->_pipeline = visBox._justPointsPipelineAccelerator.get();
+		drawable->_descriptorSet = nullptr;
 		drawable->_geo = geo;
 		drawable->_indexCount = indexListType._arrayCount;
 		drawable->_looseUniformsInterface = &Internal::s_localTransformUSI;
@@ -501,11 +502,11 @@ namespace ToolsRig
 
 							auto& drawable = *pkts[(unsigned)RenderCore::Techniques::Batch::Opaque]->_drawables.Allocate<SimpleModelDrawable>(1);
 							switch (shape) { 
-							case 2: drawable._pipeline = visBox->_genTube; break;
-							case 3: drawable._pipeline = visBox->_genRectangle; vertexCount = 6*6; break;
-							default: drawable._pipeline = visBox->_genSphere; break;
+							case 2: drawable._pipeline = visBox->_genTube.get(); break;
+							case 3: drawable._pipeline = visBox->_genRectangle.get(); vertexCount = 6*6; break;
+							default: drawable._pipeline = visBox->_genSphere.get(); break;
 							}
-							drawable._descriptorSet = visBox->_descriptorSetAccelerator;
+							drawable._descriptorSet = visBox->_descriptorSetAccelerator.get();
 							drawable._drawFn = (Techniques::ExecuteDrawableFn*)&SimpleModelDrawable::DrawFn;
 							drawable._drawCall = RenderCore::Assets::DrawCallDesc { 0, vertexCount };
 							drawable._objectToWorld = GetTransform(*o);

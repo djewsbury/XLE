@@ -21,7 +21,7 @@ namespace std { template<typename T> class future; }
 
 namespace RenderCore { namespace Techniques 
 {
-	class Drawable;
+	struct Drawable;
 	class DrawablesPacket; 
 	class ParsingContext; 
 	class IPipelineAcceleratorPool; 
