@@ -161,6 +161,7 @@ namespace RenderCore { namespace Techniques
 		virtual std::shared_ptr<DrawableInputAssembly> CreateInputAssembly() = 0;
 		virtual std::shared_ptr<UniformsStreamInterface> CreateUniformsStreamInterface() = 0;
 		virtual std::shared_ptr<UniformsStreamInterface> CombineWithLike(std::shared_ptr<UniformsStreamInterface> input) = 0;
+		virtual int EstimateAliveClientObjectsCount() const = 0;
 		~IDrawablesPool();
 		unsigned GetGUID() const { return _guid; }
 	protected:

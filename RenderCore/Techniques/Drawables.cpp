@@ -517,6 +517,11 @@ namespace RenderCore { namespace Techniques
 			return input;		// todo -- fill out
 		}
 
+		int EstimateAliveClientObjectsCount() const override
+		{
+			return _aliveCount.load();
+		}
+
 		DrawablesPool();
 		~DrawablesPool();
 		DrawablesPool(const DrawablesPool&) = delete;
@@ -526,15 +531,18 @@ namespace RenderCore { namespace Techniques
 		std::vector<DrawablesPacket> _availablePackets;
 
 		using Marker = unsigned;
-		std::vector<Marker> _queuedDestroyedPacket;	// packets destroyed out of order, waiting to increase _destroyedPktMarker
-		Marker _destroyedPktMarker = 0;				// every packet <= this number has been destroyed already
+		std::vector<Marker> _queuedDestroyedPacket;		// packets destroyed out of order, waiting to increase _destroyedPktMarker
+		Marker _destroyedPktMarker = 0;					// every packet <= this number has been destroyed already
 		Marker _createdPktMarker = 0;					// highest marker given to a newly created packet
 
 		ResizableCircularBuffer<std::pair<Marker, unsigned>, 32> _markerCounts;
-		std::deque<std::shared_ptr<void>> _holdingPendingDestruction;
+		using DestructionFunctionSig = void(void*);
+		std::deque<std::pair<void*, DestructionFunctionSig*>> _holdingPendingDestruction;
 		template<typename Type> void QueueDestroy(Type* t);
 
 		void ReturnToPool(DrawablesPacket&& pkt, unsigned marker) override;
+
+		std::atomic<int> _aliveCount;
 	};
 
 	DrawablesPacket DrawablesPool::CreatePacket()
@@ -569,9 +577,20 @@ namespace RenderCore { namespace Techniques
 		_availablePackets.push_back(std::move(pkt));
 		if (marker == _destroyedPktMarker+1) {
 			++_destroyedPktMarker;
+			// integrate out-of-order packet destruction
 			while (!_queuedDestroyedPacket.empty() && *_queuedDestroyedPacket.begin() == _destroyedPktMarker+1) {
 				++_destroyedPktMarker;
 				_queuedDestroyedPacket.erase(_queuedDestroyedPacket.begin());
+			}
+
+			// catch up on our queue -- if we have some pending destroys, service them now
+			unsigned queuedObjectsToDestroy = 0;
+			while (!_markerCounts.empty() && _markerCounts.front().first <= _destroyedPktMarker) { queuedObjectsToDestroy += _markerCounts.front().second; _markerCounts.pop_front(); }
+			if (queuedObjectsToDestroy) {
+				assert(queuedObjectsToDestroy <= _holdingPendingDestruction.size());
+				for (auto i=_holdingPendingDestruction.begin(); i!=_holdingPendingDestruction.begin()+queuedObjectsToDestroy; ++i) i->second(i->first);
+				_holdingPendingDestruction.erase(_holdingPendingDestruction.begin(), _holdingPendingDestruction.begin()+queuedObjectsToDestroy);
+				_aliveCount -= queuedObjectsToDestroy;
 			}
 		} else {
 			auto i = std::lower_bound(_queuedDestroyedPacket.begin(), _queuedDestroyedPacket.end(), marker);
@@ -582,6 +601,7 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<DrawableGeo> DrawablesPool::CreateGeo()
 	{
+		++_aliveCount;
 		return std::shared_ptr<DrawableGeo>(
 			new DrawableGeo(),
 			[this](auto* geo) {
@@ -590,11 +610,15 @@ namespace RenderCore { namespace Techniques
 	}
 
 	template<typename Type>
+		static void DestructionFunction(void* ptr) { delete (Type*)ptr; }
+
+	template<typename Type>
 		void DrawablesPool::QueueDestroy(Type* object)
 	{
 		ScopedLock(_lock);
 		if (_destroyedPktMarker == _createdPktMarker) {
 			delete object;	// no packets alive currently
+			--_aliveCount;
 		} else {
 			auto marker = _createdPktMarker;
 			if (_markerCounts.empty()) {
@@ -606,7 +630,7 @@ namespace RenderCore { namespace Techniques
 				assert(_markerCounts.front().first < marker);
 				_markerCounts.emplace_back(std::make_pair(marker, 1u));
 			}
-			_holdingPendingDestruction.emplace_back(object, [](Type* t) { delete t; });
+			_holdingPendingDestruction.emplace_back(object, &DestructionFunction<Type>);
 		}
 	}
 
@@ -616,13 +640,18 @@ namespace RenderCore { namespace Techniques
 	{
 		_guid = s_nextDrawablesPoolGUID++;
 		_availablePackets.reserve(8);
+		_aliveCount.store(0);
 	}
 
 	DrawablesPool::~DrawablesPool()
 	{
+		ScopedLock(_lock);
 		// ensure packets in _availablePackets don't try to call ReturnToPool when shutting down
 		for (auto& p:_availablePackets)
 			p._pool = nullptr;
+		for (auto& q:_holdingPendingDestruction) q.second(q.first);
+		_aliveCount -= _holdingPendingDestruction.size();
+		assert(_aliveCount.load() == 0);		// if you hit this, it means some client objects are still alive. This will end up holding dangling pointers to this
 	}
 
 	std::shared_ptr<IDrawablesPool> CreateDrawablesPool()

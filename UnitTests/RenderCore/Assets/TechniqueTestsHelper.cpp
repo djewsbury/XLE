@@ -9,6 +9,8 @@
 #include "../../../RenderCore/Techniques/Drawables.h"
 #include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
+#include "../../../Assets/AssetSetManager.h"
+#include "../../../Assets/AssetServices.h"
 
 namespace UnitTests
 {
@@ -47,6 +49,10 @@ namespace UnitTests
 
 	TechniqueTestApparatus::~TechniqueTestApparatus()
 	{
+		// we have to clear the asset sets here, because we're starting to pull down manager
+		// like the drawables pool
+		if (::Assets::Services::HasAssetSets())
+			::Assets::Services::GetAssetSets().Clear();
 	}
 
 	const char TechniqueTestApparatus::UnitTestPipelineLayout[] = R"--(

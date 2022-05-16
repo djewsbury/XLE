@@ -503,4 +503,66 @@ namespace UnitTests
 			REQUIRE(udel1->_queryCount == 1);		// removed from binding
 		}
 	}
+
+	TEST_CASE( "Drawables-LifecycleProtection", "[rendercore_techniques]" )
+	{
+		using namespace RenderCore;
+		auto drawablesPool = Techniques::CreateDrawablesPool();
+
+		// Objects created by IDrawablesPool will not be fully destroyed until all "packets" that were open at the time
+		// of destruction are released
+		
+		SECTION("Create & destroy without packets")
+		{
+			auto geo0 = drawablesPool->CreateGeo();
+			auto geo1 = drawablesPool->CreateGeo();
+			REQUIRE(drawablesPool->EstimateAliveClientObjectsCount() == 2);
+			geo0 = geo1 = {};	// immediate destroy because no packets alive
+			REQUIRE(drawablesPool->EstimateAliveClientObjectsCount() == 0);
+
+			// create & destroy packet, but maintain geo lifetimes beyond packet destruction
+			auto geoBeforePacket = drawablesPool->CreateGeo();
+			auto packet = drawablesPool->CreatePacket();
+			auto geoAfterPacket = drawablesPool->CreateGeo();
+			REQUIRE(drawablesPool->EstimateAliveClientObjectsCount() == 2);
+			packet = {};
+			REQUIRE(drawablesPool->EstimateAliveClientObjectsCount() == 2);
+			geoBeforePacket = geoAfterPacket = {};
+			REQUIRE(drawablesPool->EstimateAliveClientObjectsCount() == 0);		// destroyed immediately because all packets gone
+		}
+
+		SECTION("Destruction delayed by packet")
+		{
+			auto geoBeforePacket = drawablesPool->CreateGeo();
+			auto packet = drawablesPool->CreatePacket();
+			auto geoAfterPacket = drawablesPool->CreateGeo();
+			auto secondPacket = drawablesPool->CreatePacket();
+			auto thirdPacket = drawablesPool->CreatePacket();
+			REQUIRE(drawablesPool->EstimateAliveClientObjectsCount() == 2);
+			thirdPacket = {};
+			geoBeforePacket = geoAfterPacket = {};
+			REQUIRE(drawablesPool->EstimateAliveClientObjectsCount() == 2);		// not destroyed yet -- waiting for packets to be destroyed
+			packet = {};
+			REQUIRE(drawablesPool->EstimateAliveClientObjectsCount() == 2);		// still one packet up
+			secondPacket = {};
+			REQUIRE(drawablesPool->EstimateAliveClientObjectsCount() == 0);
+
+			// create & destroy quickly with no packets open
+			geoBeforePacket = drawablesPool->CreateGeo();
+			geoBeforePacket = {};
+			REQUIRE(drawablesPool->EstimateAliveClientObjectsCount() == 0);
+
+			// interleaved packed lifetimes
+			geoBeforePacket = drawablesPool->CreateGeo();
+			packet = drawablesPool->CreatePacket();
+			geoAfterPacket = drawablesPool->CreateGeo();
+			REQUIRE(drawablesPool->EstimateAliveClientObjectsCount() == 2);
+			secondPacket = drawablesPool->CreatePacket();
+			geoBeforePacket = geoAfterPacket = {};
+			packet = {};
+			REQUIRE(drawablesPool->EstimateAliveClientObjectsCount() == 2);		// kept alive by secondPacket
+			secondPacket = {};
+			REQUIRE(drawablesPool->EstimateAliveClientObjectsCount() == 0);
+		}
+	}
 }
