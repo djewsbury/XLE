@@ -359,7 +359,7 @@ namespace UnitTests
 		{
 			++_resViewQueryCount;
 			REQUIRE(bindingFlags == 1ull<<uint64_t(_realTextureSlot));
-			REQUIRE(dst.size() == _interface._resourceViewBindings.size());
+			REQUIRE(dst.size() == _interface.GetResourceViewBindings().size());
 			dst[_realTextureSlot] = _textureResource.get();
 		}
 
@@ -367,7 +367,7 @@ namespace UnitTests
 		{
 			++_samplerQueryCount;
 			REQUIRE(bindingFlags == 1ull<<uint64_t(_realSamplerSlot));
-			REQUIRE(dst.size() == _interface._samplerBindings.size());
+			REQUIRE(dst.size() == _interface.GetSamplerBindings().size());
 			dst[0] = _sampler.get();
 		}
 

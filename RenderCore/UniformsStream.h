@@ -80,33 +80,39 @@ namespace RenderCore
 		void BindSampler(unsigned slot, uint64_t hashName);
 		void BindFixedDescriptorSet(unsigned slot, uint64_t hashName, const DescriptorSetSignature* signature = nullptr);
 
-		uint64_t GetHash() const;
-
-		UniformsStreamInterface();
-		~UniformsStreamInterface();
-
-	////////////////////////////////////////////////////////////////////////
-		std::vector<uint64_t> _resourceViewBindings;
-		std::vector<uint64_t> _immediateDataBindings;
-		std::vector<uint64_t> _samplerBindings;
-		std::vector<uint64_t> _fixedDescriptorSetBindings;
-
 		struct ExplicitCBLayout
 		{
 			std::vector<ConstantBufferElementDesc> _elements = {};
 		};
-		std::vector<std::pair<uint64_t, ExplicitCBLayout>> _cbLayouts;
+		IteratorRange<const ConstantBufferElementDesc*> GetCBLayoutElements(uint64_t hashName) const;
 
 		struct FixedDescriptorSetBinding
 		{
 			const DescriptorSetSignature* _signature = nullptr;
 		};
-		std::vector<std::pair<uint64_t, FixedDescriptorSetBinding>> _descriptorSetLayouts;
-
-		IteratorRange<const ConstantBufferElementDesc*> GetCBLayoutElements(uint64_t hashName) const;
 		const DescriptorSetSignature* GetDescriptorSetSignature(uint64_t hashName) const;
 
-	private:
+		uint64_t GetHash() const;		// returns zero for an empty object
+
+		IteratorRange<const uint64_t*> GetResourceViewBindings() const { return _resourceViewBindings; };
+		IteratorRange<const uint64_t*> GetImmediateDataBindings() const { return _immediateDataBindings; }
+		IteratorRange<const uint64_t*> GetSamplerBindings() const { return _samplerBindings; }
+		IteratorRange<const uint64_t*> GetFixedDescriptorSetBindings() const { return _fixedDescriptorSetBindings; }
+
+		void Reset();
+
+		UniformsStreamInterface();
+		~UniformsStreamInterface();
+
+	////////////////////////////////////////////////////////////////////////
+	protected:
+		std::vector<uint64_t> _resourceViewBindings;
+		std::vector<uint64_t> _immediateDataBindings;
+		std::vector<uint64_t> _samplerBindings;
+		std::vector<uint64_t> _fixedDescriptorSetBindings;
+		std::vector<std::pair<uint64_t, ExplicitCBLayout>> _cbLayouts;
+		std::vector<std::pair<uint64_t, FixedDescriptorSetBinding>> _descriptorSetLayouts;
+
 		mutable uint64_t _hash;
 	};
 

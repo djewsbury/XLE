@@ -166,45 +166,45 @@ namespace RenderCore { namespace Techniques
 		newBinding._delegate = &del;
 
 		auto& usi = del._interface;
-		newBinding._resourceInterfaceToUSI.reserve(usi._resourceViewBindings.size());
-		for (auto b:usi._resourceViewBindings) {
-			auto existing = std::find(_finalUSI._resourceViewBindings.begin(), _finalUSI._resourceViewBindings.end(), b);
-			if (existing != _finalUSI._resourceViewBindings.end()) {
+		newBinding._resourceInterfaceToUSI.reserve(usi.GetResourceViewBindings().size());
+		for (auto b:usi.GetResourceViewBindings()) {
+			auto existing = std::find(_finalUSI.GetResourceViewBindings().begin(), _finalUSI.GetResourceViewBindings().end(), b);
+			if (existing != _finalUSI.GetResourceViewBindings().end()) {
 				newBinding._resourceInterfaceToUSI.push_back(~0u);
 			} else {
-				auto finalUSISlot = (unsigned)_finalUSI._resourceViewBindings.size();
+				auto finalUSISlot = (unsigned)_finalUSI.GetResourceViewBindings().size();
 				newBinding._resourceInterfaceToUSI.push_back(finalUSISlot);
-				_finalUSI._resourceViewBindings.push_back(b);
+				_finalUSI.BindResourceView(finalUSISlot, b);
 				assert(finalUSISlot < 64);
 				newBinding._usiSlotsFilled_ResourceViews |= 1ull << uint64_t(finalUSISlot);
 			}
 		}
 
-		newBinding._samplerInterfaceToUSI.reserve(usi._samplerBindings.size());
-		for (auto b:usi._samplerBindings) {
-			auto existing = std::find(_finalUSI._samplerBindings.begin(), _finalUSI._samplerBindings.end(), b);
-			if (existing != _finalUSI._samplerBindings.end()) {
+		newBinding._samplerInterfaceToUSI.reserve(usi.GetSamplerBindings().size());
+		for (auto b:usi.GetSamplerBindings()) {
+			auto existing = std::find(_finalUSI.GetSamplerBindings().begin(), _finalUSI.GetSamplerBindings().end(), b);
+			if (existing != _finalUSI.GetSamplerBindings().end()) {
 				newBinding._samplerInterfaceToUSI.push_back(~0u);
 			} else {
-				auto finalUSISlot = (unsigned)_finalUSI._samplerBindings.size();
+				auto finalUSISlot = (unsigned)_finalUSI.GetSamplerBindings().size();
 				newBinding._samplerInterfaceToUSI.push_back(finalUSISlot);
-				_finalUSI._samplerBindings.push_back(b);
+				_finalUSI.BindSampler(finalUSISlot, b);
 				assert(finalUSISlot < 64);
 				newBinding._usiSlotsFilled_Samplers |= 1ull << uint64_t(finalUSISlot);
 			}
 		}
 
-		newBinding._immediateDataInterfaceToUSI.reserve(usi._immediateDataBindings.size());
+		newBinding._immediateDataInterfaceToUSI.reserve(usi.GetImmediateDataBindings().size());
 		unsigned idx=0;
-		for (auto b:usi._immediateDataBindings) {
-			auto existing = std::find(_finalUSI._immediateDataBindings.begin(), _finalUSI._immediateDataBindings.end(), b);
-			if (existing != _finalUSI._immediateDataBindings.end()) {
+		for (auto b:usi.GetImmediateDataBindings()) {
+			auto existing = std::find(_finalUSI.GetImmediateDataBindings().begin(), _finalUSI.GetImmediateDataBindings().end(), b);
+			if (existing != _finalUSI.GetImmediateDataBindings().end()) {
 				newBinding._immediateDataInterfaceToUSI.push_back(~0u);
 				newBinding._immediateDataBeginAndEnd.push_back({});
 			} else {
-				auto finalUSISlot = (unsigned)_finalUSI._immediateDataBindings.size();
+				auto finalUSISlot = (unsigned)_finalUSI.GetImmediateDataBindings().size();
 				newBinding._immediateDataInterfaceToUSI.push_back(finalUSISlot);
-				_finalUSI._immediateDataBindings.push_back(b);
+				_finalUSI.BindImmediateData(finalUSISlot, b);
 				assert(finalUSISlot < 64);
 				newBinding._usiSlotsFilled_ImmediateDatas |= 1ull << uint64_t(finalUSISlot);
 
@@ -302,14 +302,14 @@ namespace RenderCore { namespace Techniques
 
 	void DelegateQueryHelper::Prepare(IUniformBufferDelegate& del, uint64_t delBinding)
 	{
-		auto existing = std::find(_finalUSI._immediateDataBindings.begin(), _finalUSI._immediateDataBindings.end(), delBinding);
-		if (existing != _finalUSI._immediateDataBindings.end())
+		auto existing = std::find(_finalUSI.GetImmediateDataBindings().begin(), _finalUSI.GetImmediateDataBindings().end(), delBinding);
+		if (existing != _finalUSI.GetImmediateDataBindings().end())
 			return;
 			
 		UniformBufferDelegateBinding newBinding;
 		newBinding._delegate = &del;
-		newBinding._usiSlotFilled = (unsigned)_finalUSI._immediateDataBindings.size();
-		_finalUSI._immediateDataBindings.push_back(delBinding);
+		newBinding._usiSlotFilled = (unsigned)_finalUSI.GetImmediateDataBindings().size();
+		_finalUSI.BindImmediateData(newBinding._usiSlotFilled, delBinding);
 		newBinding._size = del.GetSize();
 		newBinding._tempBufferOffset = _workingTempBufferSize;
 		_workingTempBufferSize += CeilToMultiplePow2(newBinding._size, s_immediateDataAlignment);
@@ -358,12 +358,7 @@ namespace RenderCore { namespace Techniques
 		const UniformDelegateGroup& group)
 	{
 		// reset everything and rebuild all bindings
-		_finalUSI._resourceViewBindings.clear();
-		_finalUSI._resourceViewBindings.reserve(64);
-		_finalUSI._immediateDataBindings.clear();
-		_finalUSI._immediateDataBindings.reserve(64);
-		_finalUSI._samplerBindings.clear();
-		_finalUSI._samplerBindings.reserve(64);
+		_finalUSI.Reset();
 		_slotsQueried_ResourceViews = _slotsQueried_Samplers = _slotsQueried_ImmediateDatas = 0ull;
 		_workingTempBufferSize = 0;
 		_srBindings.clear();
@@ -391,11 +386,11 @@ namespace RenderCore { namespace Techniques
 				groupsToVisit.push(baseGroup.second.get());
 		}
 
-		_queriedResources.resize(_finalUSI._resourceViewBindings.size(), nullptr);
+		_queriedResources.resize(_finalUSI.GetResourceViewBindings().size(), nullptr);
 		std::fill(_queriedResources.begin(), _queriedResources.end(), nullptr);
-		_queriedSamplers.resize(_finalUSI._samplerBindings.size(), nullptr);
+		_queriedSamplers.resize(_finalUSI.GetSamplerBindings().size(), nullptr);
 		std::fill(_queriedSamplers.begin(), _queriedSamplers.end(), nullptr);
-		_queriedImmediateDatas.resize(_finalUSI._immediateDataBindings.size(), {});
+		_queriedImmediateDatas.resize(_finalUSI.GetImmediateDataBindings().size(), {});
 		std::fill(_queriedImmediateDatas.begin(), _queriedImmediateDatas.end(), UniformsStream::ImmediateData{});
 		_tempDataBuffer.resize(_workingTempBufferSize, 0);
 	}
@@ -455,41 +450,41 @@ namespace RenderCore { namespace Techniques
 			auto hashName = Hash64(_descSetLayout._slots[slotIdx]._name);
 
 			if (_descSetLayout._slots[slotIdx]._type == DescriptorType::Sampler) {
-				auto samplerBinding = std::find(delegateHelper._finalUSI._samplerBindings.begin(), delegateHelper._finalUSI._samplerBindings.end(), hashName);
-				if (samplerBinding != delegateHelper._finalUSI._samplerBindings.end()) {
-					auto samplerIdx = (unsigned)std::distance(delegateHelper._finalUSI._samplerBindings.begin(), samplerBinding);
+				auto samplerBinding = std::find(delegateHelper._finalUSI.GetSamplerBindings().begin(), delegateHelper._finalUSI.GetSamplerBindings().end(), hashName);
+				if (samplerBinding != delegateHelper._finalUSI.GetSamplerBindings().end()) {
+					auto samplerIdx = (unsigned)std::distance(delegateHelper._finalUSI.GetSamplerBindings().begin(), samplerBinding);
 					bindTypesAndIdx.push_back({DescriptorSetInitializer::BindType::Sampler, samplerIdx});
 					samplersWeNeed |= 1ull << uint64_t(samplerIdx);
 					continue;
 				}
 				#if defined(_DEBUG)		// just check to make sure we're not attempting to bind some incorrect type here 
-					auto resourceBinding = std::find(delegateHelper._finalUSI._resourceViewBindings.begin(), delegateHelper._finalUSI._resourceViewBindings.end(), hashName);
-					if (resourceBinding != delegateHelper._finalUSI._resourceViewBindings.end())
+					auto resourceBinding = std::find(delegateHelper._finalUSI.GetResourceViewBindings().begin(), delegateHelper._finalUSI.GetResourceViewBindings().end(), hashName);
+					if (resourceBinding != delegateHelper._finalUSI.GetResourceViewBindings().end())
 						Log(Warning) << "Resource view provided for descriptor set slot (" << _descSetLayout._slots[slotIdx]._name << "), however, this lot is 'sampler' type in the descriptor set layout." << std::endl;
-					auto immediateDataBinding = std::find(delegateHelper._finalUSI._immediateDataBindings.begin(), delegateHelper._finalUSI._immediateDataBindings.end(), hashName);
-					if (immediateDataBinding != delegateHelper._finalUSI._immediateDataBindings.end())
+					auto immediateDataBinding = std::find(delegateHelper._finalUSI.GetImmediateDataBindings().begin(), delegateHelper._finalUSI.GetImmediateDataBindings().end(), hashName);
+					if (immediateDataBinding != delegateHelper._finalUSI.GetImmediateDataBindings().end())
 						Log(Warning) << "Immediate data provided for descriptor set slot (" << _descSetLayout._slots[slotIdx]._name << "), however, this lot is 'sampler' type in the descriptor set layout." << std::endl;
 				#endif
 			} else {
-				auto resourceBinding = std::find(delegateHelper._finalUSI._resourceViewBindings.begin(), delegateHelper._finalUSI._resourceViewBindings.end(), hashName);
-				if (resourceBinding != delegateHelper._finalUSI._resourceViewBindings.end()) {
-					auto resourceIdx = (unsigned)std::distance(delegateHelper._finalUSI._resourceViewBindings.begin(), resourceBinding);
+				auto resourceBinding = std::find(delegateHelper._finalUSI.GetResourceViewBindings().begin(), delegateHelper._finalUSI.GetResourceViewBindings().end(), hashName);
+				if (resourceBinding != delegateHelper._finalUSI.GetResourceViewBindings().end()) {
+					auto resourceIdx = (unsigned)std::distance(delegateHelper._finalUSI.GetResourceViewBindings().begin(), resourceBinding);
 					bindTypesAndIdx.push_back({DescriptorSetInitializer::BindType::ResourceView, resourceIdx});
 					resourcesWeNeed |= 1ull << uint64_t(resourceIdx);
 					continue;
 				}
 
-				auto immediateDataBinding = std::find(delegateHelper._finalUSI._immediateDataBindings.begin(), delegateHelper._finalUSI._immediateDataBindings.end(), hashName);
-				if (immediateDataBinding != delegateHelper._finalUSI._immediateDataBindings.end()) {
-					auto resourceIdx = (unsigned)std::distance(delegateHelper._finalUSI._immediateDataBindings.begin(), immediateDataBinding);
+				auto immediateDataBinding = std::find(delegateHelper._finalUSI.GetImmediateDataBindings().begin(), delegateHelper._finalUSI.GetImmediateDataBindings().end(), hashName);
+				if (immediateDataBinding != delegateHelper._finalUSI.GetImmediateDataBindings().end()) {
+					auto resourceIdx = (unsigned)std::distance(delegateHelper._finalUSI.GetImmediateDataBindings().begin(), immediateDataBinding);
 					bindTypesAndIdx.push_back({DescriptorSetInitializer::BindType::ImmediateData, resourceIdx});
 					immediateDatasWeNeed |= 1ull << uint64_t(resourceIdx);
 					continue;
 				}
 
 				#if defined(_DEBUG)		// just check to make sure we're not attempting to bind some incorrect type here 
-					auto samplerBinding = std::find(delegateHelper._finalUSI._samplerBindings.begin(), delegateHelper._finalUSI._samplerBindings.end(), hashName);
-					if (samplerBinding != delegateHelper._finalUSI._samplerBindings.end())
+					auto samplerBinding = std::find(delegateHelper._finalUSI.GetSamplerBindings().begin(), delegateHelper._finalUSI.GetSamplerBindings().end(), hashName);
+					if (samplerBinding != delegateHelper._finalUSI.GetSamplerBindings().end())
 						Log(Warning) << "Sampler provided for descriptor set slot (" << _descSetLayout._slots[slotIdx]._name << "), however, this lot is not a sampler type in the descriptor set layout." << std::endl;
 				#endif
 			}

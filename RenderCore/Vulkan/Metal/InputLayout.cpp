@@ -283,21 +283,21 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		for (signed groupIdx = (signed)looseUniforms.size()-1; groupIdx>=0; --groupIdx) {
 			const auto& group = looseUniforms[groupIdx];
-			auto srv = std::find(group->_resourceViewBindings.begin(), group->_resourceViewBindings.end(), bindingName);
-			if (srv != group->_resourceViewBindings.end()) {
-				auto inputSlot = (unsigned)std::distance(group->_resourceViewBindings.begin(), srv);
+			auto srv = std::find(group->GetResourceViewBindings().begin(), group->GetResourceViewBindings().end(), bindingName);
+			if (srv != group->GetResourceViewBindings().end()) {
+				auto inputSlot = (unsigned)std::distance(group->GetResourceViewBindings().begin(), srv);
 				return std::make_tuple(UniformStreamType::ResourceView, groupIdx, inputSlot);
 			}
 
-			auto imData = std::find(group->_immediateDataBindings.begin(), group->_immediateDataBindings.end(), bindingName);
-			if (imData != group->_immediateDataBindings.end()) {
-				auto inputSlot = (unsigned)std::distance(group->_immediateDataBindings.begin(), imData);
+			auto imData = std::find(group->GetImmediateDataBindings().begin(), group->GetImmediateDataBindings().end(), bindingName);
+			if (imData != group->GetImmediateDataBindings().end()) {
+				auto inputSlot = (unsigned)std::distance(group->GetImmediateDataBindings().begin(), imData);
 				return std::make_tuple(UniformStreamType::ImmediateData, groupIdx, inputSlot);
 			}
 
-			auto sampler = std::find(group->_samplerBindings.begin(), group->_samplerBindings.end(), bindingName);
-			if (sampler != group->_samplerBindings.end()) {
-				auto inputSlot = (unsigned)std::distance(group->_samplerBindings.begin(), sampler);
+			auto sampler = std::find(group->GetSamplerBindings().begin(), group->GetSamplerBindings().end(), bindingName);
+			if (sampler != group->GetSamplerBindings().end()) {
+				auto inputSlot = (unsigned)std::distance(group->GetSamplerBindings().begin(), sampler);
 				return std::make_tuple(UniformStreamType::Sampler, groupIdx, inputSlot);
 			}
 		}
@@ -356,8 +356,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			for (unsigned c=0; c<_pipelineLayout->GetDescriptorSetCount(); ++c) {
 				bool foundMapping = false;
 				for (signed gIdx=3; gIdx>=0 && !foundMapping; --gIdx) {
-					for (unsigned dIdx=0; dIdx<_looseUniforms[gIdx]->_fixedDescriptorSetBindings.size() && !foundMapping; ++dIdx) {
-						auto bindName = _looseUniforms[gIdx]->_fixedDescriptorSetBindings[dIdx];
+					for (unsigned dIdx=0; dIdx<_looseUniforms[gIdx]->GetFixedDescriptorSetBindings().size() && !foundMapping; ++dIdx) {
+						auto bindName = _looseUniforms[gIdx]->GetFixedDescriptorSetBindings()[dIdx];
 						if (_pipelineLayout->GetDescriptorSetBindingNames()[c] == bindName) {
 							// todo -- we should check compatibility between the given descriptor set and the pipeline layout
 							_fixedDescriptorSets.insert({c, std::make_tuple(gIdx, dIdx, _looseUniforms[gIdx]->GetDescriptorSetSignature(bindName))});
@@ -372,7 +372,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		{
 			unsigned firstLooseUniformsGroup = ~0u;
 			for (unsigned c=0; c<_looseUniforms.size(); ++c)
-				if (!_looseUniforms[c]->_immediateDataBindings.empty() || !_looseUniforms[c]->_resourceViewBindings.empty() || !_looseUniforms[c]->_samplerBindings.empty()) {
+				if (!_looseUniforms[c]->GetImmediateDataBindings().empty() || !_looseUniforms[c]->GetResourceViewBindings().empty() || !_looseUniforms[c]->GetSamplerBindings().empty()) {
 					firstLooseUniformsGroup = c;	// assign this to the first group that is not just fixed descriptor sets
 					break;
 				}

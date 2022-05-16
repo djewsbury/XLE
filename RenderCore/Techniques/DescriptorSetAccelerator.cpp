@@ -345,26 +345,26 @@ namespace RenderCore { namespace Techniques
 		const UniformsStreamInterface& usi,
 		const UniformsStream& us)
 	{
-		assert(usi._immediateDataBindings.empty());		// imm data bindings not supported here
+		assert(usi.GetImmediateDataBindings().empty());		// imm data bindings not supported here
 		DescriptorSetInitializer::BindTypeAndIdx bindTypesAndIdx[layout._slots.size()];
 
 		auto* bind = bindTypesAndIdx;
 		for (const auto& slot:layout._slots) {
 			auto hash = Hash64(slot._name);
 
-			auto i = std::find(usi._resourceViewBindings.begin(), usi._resourceViewBindings.end(), hash);
-			if (i != usi._resourceViewBindings.end()) {
+			auto i = std::find(usi.GetResourceViewBindings().begin(), usi.GetResourceViewBindings().end(), hash);
+			if (i != usi.GetResourceViewBindings().end()) {
 				*bind++ = DescriptorSetInitializer::BindTypeAndIdx{
 					DescriptorSetInitializer::BindType::ResourceView,
-					(unsigned)std::distance(usi._resourceViewBindings.begin(), i)};
+					(unsigned)std::distance(usi.GetResourceViewBindings().begin(), i)};
 				continue;
 			}
 
-			i = std::find(usi._samplerBindings.begin(), usi._samplerBindings.end(), hash);
-			if (i != usi._samplerBindings.end()) {
+			i = std::find(usi.GetSamplerBindings().begin(), usi.GetSamplerBindings().end(), hash);
+			if (i != usi.GetSamplerBindings().end()) {
 				*bind++ = DescriptorSetInitializer::BindTypeAndIdx{
 					DescriptorSetInitializer::BindType::Sampler,
-					(unsigned)std::distance(usi._samplerBindings.begin(), i)};
+					(unsigned)std::distance(usi.GetSamplerBindings().begin(), i)};
 				continue;
 			}
 

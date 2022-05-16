@@ -358,8 +358,8 @@ namespace RenderCore { namespace Techniques
 					for (const auto& dc:MakeIteratorRange(_drawableConstructor->_drawCalls.begin()+drawCallsRef._start, _drawableConstructor->_drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
-						drawable._geo = _drawableConstructor->_drawableGeos[dc._drawableGeoIdx];
-						drawable._inputAssembly = _drawableConstructor->_drawableInputAssemblies[dc._iaIdx];
+						drawable._geo = _drawableConstructor->_drawableGeos[dc._drawableGeoIdx].get();
+						drawable._inputAssembly = _drawableConstructor->_drawableInputAssemblies[dc._iaIdx].get();
 						drawable._localToWorld = localToWorld;
 						drawable._indexCount = dc._indexCount;
 						drawable._startIndexLocation = dc._firstIndex;

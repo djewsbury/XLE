@@ -334,7 +334,7 @@ namespace RenderOverlays
 
 		auto mat = AsMaterial(_currentState);
 		if (drawCall._textureResource) {
-			mat._uniformStreamInterface = _texturedUSI;
+			mat._uniformStreamInterface = _texturedUSI.get();
 			mat._uniforms._resourceViews.push_back(drawCall._textureResource);
 		}
 

@@ -155,8 +155,9 @@ namespace UnitTests
 			bufferUploads->StallUntilCompletion(*threadContext, tex->Actualize()->GetCompletionCommandList());
 
 			Techniques::ImmediateDrawableMaterial material;
-			material._uniformStreamInterface = std::make_shared<UniformsStreamInterface>();
-			material._uniformStreamInterface->BindResourceView(0, Hash64("InputTexture"));
+			RenderCore::UniformsStreamInterface inputTextureUSI;
+			inputTextureUSI.BindResourceView(0, Hash64("InputTexture"));
+			material._uniformStreamInterface = &inputTextureUSI;
 			material._uniforms._resourceViews.push_back(tex->Actualize()->GetShaderResource());
 			auto data = immediateDrawables->QueueDraw(
 				sphereGeo.size(),

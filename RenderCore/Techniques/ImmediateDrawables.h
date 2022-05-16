@@ -6,6 +6,7 @@
 
 #include "PipelineAccelerator.h"
 #include "../Assets/RawMaterial.h"
+#include "../UniformsStream.h"
 #include "../Types.h"
 #include "../StateDesc.h"
 #include "../RenderUtils.h"		// for SharedPkt
@@ -34,9 +35,9 @@ namespace RenderCore { namespace Techniques
 	class ImmediateDrawableMaterial
 	{
 	public:
-		std::shared_ptr<UniformsStreamInterface> _uniformStreamInterface;
+		const UniformsStreamInterface* _uniformStreamInterface = nullptr;
 		RetainedUniformsStream _uniforms;
-		ParameterBox _shaderSelectors;
+		const ParameterBox* _shaderSelectors = nullptr;
 		RenderCore::Assets::RenderStateSet _stateSet;
 		std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> _patchCollection;
 	};

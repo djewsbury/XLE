@@ -47,7 +47,7 @@ namespace RenderCore
 			_resourceViewBindings.resize(slot+1);
 
 		_resourceViewBindings[slot] = hashName;
-		_hash = 0;
+		_hash = ~0ull;
 
 		if (cbElements.size()) {
 			#if defined(_DEBUG)
@@ -66,7 +66,7 @@ namespace RenderCore
 			_immediateDataBindings.resize(slot+1);
 
 		_immediateDataBindings[slot] = hashName;
-		_hash = 0;
+		_hash = ~0ull;
 
 		if (cbElements.size()) {
 			#if defined(_DEBUG)
@@ -84,7 +84,7 @@ namespace RenderCore
 		if (_samplerBindings.size() <= slot)
 			_samplerBindings.resize(slot+1);
 		_samplerBindings[slot] = hashName;
-		_hash = 0;
+		_hash = ~0ull;
 	}
 
 	void UniformsStreamInterface::BindFixedDescriptorSet(unsigned slot, uint64_t hashName, const DescriptorSetSignature* signature)
@@ -93,7 +93,7 @@ namespace RenderCore
 			_fixedDescriptorSetBindings.resize(slot+1);
 
 		_fixedDescriptorSetBindings[slot] = hashName;
-		_hash = 0;
+		_hash = ~0ull;
 
 		if (signature) {
 			#if defined(_DEBUG)
@@ -124,7 +124,7 @@ namespace RenderCore
 
 	uint64_t UniformsStreamInterface::GetHash() const
 	{
-		if (expect_evaluation(_hash==0, false)) {
+		if (expect_evaluation(_hash==~0ull, false)) {
 			_hash = DefaultSeed64;
 			// to prevent some oddities when the same hash value could be in either in _resourceViewBindings or _immediateDataBindings
 			// we need to include the count of the first array we look through in the hash
@@ -137,6 +137,22 @@ namespace RenderCore
 		}
 
 		return _hash;
+	}
+
+	void UniformsStreamInterface::Reset()
+	{
+		_hash = 0;
+		_resourceViewBindings.clear();
+		_immediateDataBindings.clear();
+		_samplerBindings.clear();
+		_fixedDescriptorSetBindings.clear();
+		_cbLayouts.clear();
+		_descriptorSetLayouts.clear();
+
+		// reserve some space, because this is used by DelegateQueryHelper::Prepare in UniformDelegateManager.cpp
+		_resourceViewBindings.reserve(64);
+		_immediateDataBindings.reserve(64);
+		_samplerBindings.reserve(64);
 	}
 
 	UniformsStreamInterface::UniformsStreamInterface() : _hash(0) {}

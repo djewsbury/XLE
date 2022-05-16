@@ -171,15 +171,18 @@ namespace RenderCore { namespace Techniques
 
 			// check if we can just merge it into the previous draw call. If so we're just going to
 			// increase the vertex count on that draw call
+			// note that we're not checking the values of the uniforms in the material when we do this
+			// comparison, because that comparison would just be too expensive
 			assert(!_lastQueuedDrawable || !_lastQueuedDrawable->_userGeo); 
 			bool compatibleWithLastDraw =
 				    _lastQueuedDrawable && _lastQueuedDrawable->_pipeline == pipeline && _lastQueuedDrawable->_vertexStride == vStride
 				&& topology != Topology::TriangleStrip
 				&& topology != Topology::LineStrip
 				;
+			auto matUSIHash = material._uniformStreamInterface ? material._uniformStreamInterface->GetHash() : 0;
 			if (compatibleWithLastDraw) {
-				if (material._uniformStreamInterface) {
-					compatibleWithLastDraw &= _lastQueuedDrawable->_looseUniformsInterface && (material._uniformStreamInterface->GetHash() == _lastQueuedDrawable->_looseUniformsInterface->GetHash());
+				if (matUSIHash) {
+					compatibleWithLastDraw &= _lastQueuedDrawable->_looseUniformsInterface && (matUSIHash == _lastQueuedDrawable->_looseUniformsInterface->GetHash());
 				} else
 					compatibleWithLastDraw &= _lastQueuedDrawable->_looseUniformsInterface == nullptr;
 			}
@@ -196,13 +199,14 @@ namespace RenderCore { namespace Techniques
 				geo->_ibFormat = Format(0);
 				drawable->_geo = geo;
 				drawable->_pipeline = pipeline;
+
 				drawable->_descriptorSet = nullptr;
 				drawable->_vertexCount = vertexCount;
 				drawable->_vertexStride = vStride;
 				drawable->_bytesAllocated = vertexDataSize;
 				drawable->_drawFn = &DrawableWithVertexCount::ExecuteFn;
-				if (material._uniformStreamInterface) {
-					drawable->_looseUniformsInterface = material._uniformStreamInterface.get();
+				if (matUSIHash) {
+					drawable->_looseUniformsInterface = ProtectLifetime(*material._uniformStreamInterface);
 					drawable->_uniforms = material._uniforms;
 				}
 				_lastQueuedDrawable = drawable;
@@ -229,12 +233,13 @@ namespace RenderCore { namespace Techniques
 			DEBUG_ONLY(drawable->_userGeo = true;)
 			bool _indexed = drawable->_geo->_ibFormat != Format(0);
 			drawable->_drawFn = _indexed ? &DrawableWithVertexCount::IndexedExecuteFn : &DrawableWithVertexCount::ExecuteFn;
-			if (material._uniformStreamInterface) {
-				drawable->_looseUniformsInterface = material._uniformStreamInterface.get();
+			if (material._uniformStreamInterface && material._uniformStreamInterface->GetHash()) {
+				drawable->_looseUniformsInterface = ProtectLifetime(*material._uniformStreamInterface);
 				drawable->_uniforms = material._uniforms;
 			}
 			_lastQueuedDrawable = nullptr;		// this is always null, because we can't modify or extend a user geo
 			_lastQueuedDrawVertexCountOffset = 0;
+			_customGeosInWorkingPkt.emplace_back(std::move(customGeo));
 		}
 
 		void QueueDraw(
@@ -255,12 +260,13 @@ namespace RenderCore { namespace Techniques
 			DEBUG_ONLY(drawable->_userGeo = true;)
 			bool _indexed = drawable->_geo->_ibFormat != Format(0);
 			drawable->_drawFn = _indexed ? &DrawableWithVertexCount::IndexedExecuteFn : &DrawableWithVertexCount::ExecuteFn;
-			if (material._uniformStreamInterface) {
-				drawable->_looseUniformsInterface = material._uniformStreamInterface.get();
+			if (material._uniformStreamInterface && material._uniformStreamInterface->GetHash()) {
+				drawable->_looseUniformsInterface = ProtectLifetime(*material._uniformStreamInterface);
 				drawable->_uniforms = material._uniforms;
 			}
 			_lastQueuedDrawable = nullptr;		// this is always null, because we can't modify or extend a user geo
 			_lastQueuedDrawVertexCountOffset = 0;
+			_customGeosInWorkingPkt.emplace_back(std::move(customGeo));
 		}
 
 		IteratorRange<void*> UpdateLastDrawCallVertexCount(size_t newVertexCount) override
@@ -294,6 +300,7 @@ namespace RenderCore { namespace Techniques
 		void AbandonDraws() override
 		{
 			_workingPkt.Reset();
+			_customGeosInWorkingPkt.clear();
 			_lastQueuedDrawable = nullptr;
 			_lastQueuedDrawVertexCountOffset = 0;
 		}
@@ -343,6 +350,11 @@ namespace RenderCore { namespace Techniques
 
 		virtual void OnFrameBarrier() override
 		{
+			// Nothing should be in _workingPkt when we hit the frame barrier
+			// keeping packets between frames may complicate lifecycle management for Drawable objects
+			assert(_workingPkt._drawables.empty());
+			assert(_lastQueuedDrawable == nullptr);
+			assert(_customGeosInWorkingPkt.empty());
 			_pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
 		}
 
@@ -366,21 +378,23 @@ namespace RenderCore { namespace Techniques
 		DrawableWithVertexCount* _lastQueuedDrawable = nullptr;
 		unsigned _lastQueuedDrawVertexCountOffset = 0;
 		std::vector<std::pair<uint64_t, std::shared_ptr<SequencerConfig>>> _sequencerConfigs;
+		std::vector<std::pair<uint64_t, std::shared_ptr<UniformsStreamInterface>>> _usis;
+		std::vector<std::shared_ptr<DrawableGeo>> _customGeosInWorkingPkt;
 
 		template<typename InputAssemblyType>
 			PipelineAccelerator* GetPipelineAccelerator(
 				IteratorRange<const InputAssemblyType*> inputAssembly,
 				const RenderCore::Assets::RenderStateSet& stateSet,
 				Topology topology,
-				const ParameterBox& shaderSelectors,
+				const ParameterBox* shaderSelectors,
 				const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& patchCollection)
 		{
 			uint64_t hashCode = HashInputAssembly(inputAssembly, stateSet.GetHash());
 			if (topology != Topology::TriangleList)
 				hashCode = HashCombine((uint64_t)topology, hashCode);	// awkward because it's just a small integer value
-			if (shaderSelectors.GetCount() != 0) {
-				hashCode = HashCombine(shaderSelectors.GetParameterNamesHash(), hashCode);
-				hashCode = HashCombine(shaderSelectors.GetHash(), hashCode);
+			if (shaderSelectors && shaderSelectors->GetCount() != 0) {
+				hashCode = HashCombine(shaderSelectors->GetParameterNamesHash(), hashCode);
+				hashCode = HashCombine(shaderSelectors->GetHash(), hashCode);
 			}
 			if (patchCollection)
 				hashCode = HashCombine(patchCollection->GetHash(), hashCode);
@@ -391,11 +405,23 @@ namespace RenderCore { namespace Techniques
 
 			auto newAccelerator = _pipelineAcceleratorPool->CreatePipelineAccelerator(
 				patchCollection, 
-				shaderSelectors, inputAssembly,
+				shaderSelectors ? *shaderSelectors : ParameterBox{}, inputAssembly,
 				topology, stateSet);
 			// Note that we keep this pipeline accelerator alive indefinitely 
 			_pipelineAccelerators.insert(existing, std::make_pair(hashCode, newAccelerator));
 			return newAccelerator.get();
+		}
+
+		UniformsStreamInterface* ProtectLifetime(const UniformsStreamInterface& usi)
+		{
+			auto hash = usi.GetHash();
+			assert(hash != 0);
+			auto i = LowerBound(_usis, hash);
+			if (i != _usis.end() && i->first == hash)
+				return i->second.get();
+			auto result = std::make_shared<UniformsStreamInterface>(usi);
+			_usis.insert(i, std::make_pair(hash, result));
+			return result.get();
 		}
 	};
 

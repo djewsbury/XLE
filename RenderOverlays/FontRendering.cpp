@@ -138,13 +138,30 @@ namespace RenderOverlays
 		_immediateDrawables->UpdateLastDrawCallVertexCount(_currentIterator - _currentAllocation.begin());
 	}
 
+	namespace Internal
+	{
+		RenderCore::UniformsStreamInterface CreateInputTextureUSI()
+		{
+			RenderCore::UniformsStreamInterface result;
+			result.BindResourceView(0, Hash64("InputTexture"));
+			return result;
+		}
+		ParameterBox CreateFontRendererSelectorBox()
+		{
+			ParameterBox result;
+			result.SetParameter("FONT_RENDERER", 1);
+			return result;
+		}
+	}
+	static RenderCore::UniformsStreamInterface s_inputTextureUSI = Internal::CreateInputTextureUSI();
+	static ParameterBox s_fontRendererSelectorBox = Internal::CreateFontRendererSelectorBox();
+
 	static RenderCore::Techniques::ImmediateDrawableMaterial CreateWorkingVertexSetPCTMaterial()
 	{
 		RenderCore::Techniques::ImmediateDrawableMaterial material;
-		material._uniformStreamInterface = std::make_shared<RenderCore::UniformsStreamInterface>();
-		material._uniformStreamInterface->BindResourceView(0, Hash64("InputTexture"));
+		material._uniformStreamInterface = &s_inputTextureUSI;
 		material._stateSet = RenderCore::Assets::RenderStateSet{};
-		material._shaderSelectors.SetParameter("FONT_RENDERER", 1);
+		material._shaderSelectors = &s_fontRendererSelectorBox;
 		return material;
 	}
 

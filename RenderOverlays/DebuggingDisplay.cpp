@@ -166,16 +166,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     ///////////////////////////////////////////////////////////////////////////////////
 
-    static RenderCore::Techniques::ImmediateDrawableMaterial BuildImmediateDrawableMaterial(
-        const RenderCore::Assets::ResolvedMaterial& rawMat)
-    {
-        RenderCore::Techniques::ImmediateDrawableMaterial result;
-        result._shaderSelectors = rawMat._matParamBox;
-        result._stateSet = rawMat._stateSet;
-        result._patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(rawMat._patchCollection);
-        return result;
-    }
-
     class DefaultFontsBox
     {
     public:
@@ -213,6 +203,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         RenderCore::Techniques::ImmediateDrawableMaterial _fillReverseRaisedRoundedRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _fillEllipse;
         RenderCore::Techniques::ImmediateDrawableMaterial _outlineEllipse;
+        RenderCore::UniformsStreamInterface _roundedRectUSI;
 
         const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; };
         ::Assets::DependencyValidation _depVal;
@@ -242,13 +233,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
             _fillEllipse = BuildImmediateDrawableMaterial(fillEllipse);
             _outlineEllipse = BuildImmediateDrawableMaterial(outlineEllipse);
 
-            auto roundedRectUSI = std::make_shared<RenderCore::UniformsStreamInterface>();
-            roundedRectUSI->BindImmediateData(0, Hash64("RoundedRectSettings"));
-            _fillRoundedRect._uniformStreamInterface = roundedRectUSI;
-            _fillAndOutlineRoundedRect._uniformStreamInterface = roundedRectUSI;
-            _outlineRoundedRect._uniformStreamInterface = roundedRectUSI;
-            _fillRaisedRoundedRect._uniformStreamInterface = roundedRectUSI;
-            _fillReverseRaisedRoundedRect._uniformStreamInterface = roundedRectUSI;
+            _roundedRectUSI.BindImmediateData(0, Hash64("RoundedRectSettings"));
+            _fillRoundedRect._uniformStreamInterface = &_roundedRectUSI;
+            _fillAndOutlineRoundedRect._uniformStreamInterface = &_roundedRectUSI;
+            _outlineRoundedRect._uniformStreamInterface = &_roundedRectUSI;
+            _fillRaisedRoundedRect._uniformStreamInterface = &_roundedRectUSI;
+            _fillReverseRaisedRoundedRect._uniformStreamInterface = &_roundedRectUSI;
 
             _depVal = ::Assets::GetDepValSys().Make();
             _depVal.RegisterDependency(horizTweakerBarMaterial.GetDependencyValidation());
@@ -279,6 +269,22 @@ namespace RenderOverlays { namespace DebuggingDisplay
             auto outlineEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineEllipse");
 
             ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse).ThenConstructToPromise(std::move(promise));
+        }
+
+        std::vector<std::unique_ptr<ParameterBox>> _retainedParameterBoxes;
+        RenderCore::Techniques::ImmediateDrawableMaterial BuildImmediateDrawableMaterial(
+            const RenderCore::Assets::ResolvedMaterial& rawMat)
+        {
+            RenderCore::Techniques::ImmediateDrawableMaterial result;
+            // somewhat awkwardly, we need to protect the lifetime of the shader selector box so it lives as long as the result
+            if (rawMat._matParamBox.GetCount() != 0) {
+                auto newBox = std::make_unique<ParameterBox>(rawMat._matParamBox);
+                result._shaderSelectors = newBox.get();
+                _retainedParameterBoxes.emplace_back(std::move(newBox));
+            }
+            result._stateSet = rawMat._stateSet;
+            result._patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(rawMat._patchCollection);
+            return result;
         }
     };
 

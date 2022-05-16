@@ -117,8 +117,8 @@ namespace RenderCore { namespace Techniques
 	class GeometryProcable
 	{
 	public:
-		std::shared_ptr<DrawableGeo> _geo;
-		std::shared_ptr<DrawableInputAssembly> _inputAssembly;
+		const DrawableGeo* _geo;
+		const DrawableInputAssembly* _inputAssembly;
 		Float4x4 _localToWorld;
 		unsigned _indexCount = 0;
 		unsigned _startIndexLocation = 0;
