@@ -6,6 +6,7 @@
 #include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
+#include "../../../RenderCore/Techniques/Drawables.h"
 #include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 
@@ -35,6 +36,7 @@ namespace UnitTests
 		_compiledLayoutPool = CreateCompiledLayoutPool(testHelper._device, _materialDescSetLayout);
 		_pipelineAccelerators = Techniques::CreatePipelineAcceleratorPool(
 			testHelper._device, _compiledLayoutPool, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
+		_drawablesPool = Techniques::CreateDrawablesPool();
 
 		_techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		_techniqueContext->_commonResources = _commonResources;
@@ -51,7 +53,21 @@ namespace UnitTests
 		
 		DescriptorSet Material
 		{
-			UniformBuffer b0;
+			UniformBuffer BasicMaterialConstants		// this CB layout used by "no patches" techniques for linking with material info
+			{
+				float3  MaterialDiffuse = {1,1,1};
+				float   Opacity = 1;
+				float3  MaterialSpecular = {1,1,1};
+				float   AlphaThreshold = .5f;
+
+				float   RoughnessMin = 0.1f;
+				float   RoughnessMax = 0.6f;
+				float   SpecularMin = 0.0f;
+				float   SpecularMax = 0.5f;
+				float   MetalMin = 0.f;
+				float   MetalMax = 1.f;
+			};
+
 			UniformBuffer b1;
 			UniformBuffer b2;
 

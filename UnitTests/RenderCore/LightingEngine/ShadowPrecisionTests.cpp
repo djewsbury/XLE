@@ -231,7 +231,7 @@ namespace UnitTests
 				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
 				PumpBufferUploads(testApparatus);
 
-				auto drawableWriter = ToolsRig::CreateFlatPlaneDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool);
+				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool).CreateFlatPlaneDrawableWriter();
 				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
 
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
@@ -278,7 +278,7 @@ namespace UnitTests
 				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
 				PumpBufferUploads(testApparatus);
 
-				auto drawableWriter = ToolsRig::CreateSharpContactDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool);
+				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool).CreateSharpContactDrawableWriter();
 				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
 
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
@@ -521,7 +521,8 @@ namespace UnitTests
 				PumpBufferUploads(testApparatus);
 
 				const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
-				auto drawableWriter = ToolsRig::CreateShapeWorldDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool, worldMins, worldMaxs);
+				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool)
+					.CreateShapeWorldDrawableWriter(worldMins, worldMaxs);
 				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
 
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);

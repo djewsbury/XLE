@@ -68,12 +68,13 @@ namespace UnitTests
 		_techniqueServices->SetCommonResources(_commonResources);
 
 		_pipelinePool = std::make_shared<Techniques::PipelineCollection>(_metalTestHelper->_device);
+		_drawablesPool = Techniques::CreateDrawablesPool();
 
 		_techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		_techniqueContext->_commonResources = _commonResources;
 		_techniqueContext->_attachmentPool = std::make_shared<Techniques::AttachmentPool>(_metalTestHelper->_device);
 		_techniqueContext->_frameBufferPool = Techniques::CreateFrameBufferPool();
-		_techniqueContext->_drawablesPacketsPool = std::make_shared<RenderCore::Techniques::DrawablesPacketPool>();
+		_techniqueContext->_drawablesPool = RenderCore::Techniques::CreateDrawablesPool();
 
 		_techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
 		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *MakeSequencerDescriptorSetLayout()->GetLayout(), *_metalTestHelper->_device);
@@ -102,7 +103,7 @@ namespace UnitTests
 	static std::shared_ptr<RenderCore::Techniques::DescriptorSetLayoutAndBinding> MakeMaterialDescriptorSetLayout()
 	{
 		const char* unitTestsMaterialDescSet = R"(
-			UniformBuffer BasicMaterialConstants
+			UniformBuffer BasicMaterialConstants		// this CB layout used by "no patches" techniques for linking with material info
 			{
 				float3  MaterialDiffuse = {1,1,1};
 				float   Opacity = 1;

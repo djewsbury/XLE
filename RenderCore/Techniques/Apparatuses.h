@@ -42,7 +42,7 @@ namespace RenderCore { namespace Techniques
 	class SystemUniformsDelegate;
 	class PipelineCollection;
 	class SubFrameEvents;
-	class DrawablesPacketPool;
+	class IDrawablesPool;
 	class IUniformDelegateManager;
 	class SkinDeformerSystem;
 
@@ -75,7 +75,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<LegacyRegisterBindingDesc> _legacyRegisterBindingDesc;
 		std::shared_ptr<SystemUniformsDelegate> _systemUniformsDelegate;
 		std::shared_ptr<CommonResourceBox> _commonResources;
-		std::shared_ptr<DrawablesPacketPool> _drawablesPacketsPool;
+		std::shared_ptr<IDrawablesPool> _drawablesPool;
 
 		std::shared_ptr<IUniformDelegateManager> _mainUniformDelegateManager;
 

@@ -861,9 +861,8 @@ namespace UnitTests
 		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, *threadContext);
 
 		const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
-		auto drawablesWriter = ToolsRig::CreateShapeWorldDrawableWriter(
-			*testHelper->_device, *testApparatus._pipelineAcceleratorPool,
-			worldMins, worldMaxs);
+		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool)
+			.CreateShapeWorldDrawableWriter(worldMins, worldMaxs);
 
 		RenderCore::Techniques::CameraDesc cameras[s_probesToRender];
 		std::mt19937_64 rng(745023620);
@@ -891,7 +890,7 @@ namespace UnitTests
 			queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
 			const unsigned iterationCount = 512;
 			for (unsigned c=0; c<iterationCount; ++c)
-				RunTest<ViewInstancingShader>(*threadContext, parsingContext, testApparatus, MakeIteratorRange(cameras), *drawablesWriter);
+				RunTest<ViewInstancingShader>(*threadContext, parsingContext, testApparatus, MakeIteratorRange(cameras), *drawableWriter);
 			queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
 
 			queryPool.EndFrame(*Metal::DeviceContext::Get(*threadContext), queryPoolFrameId);

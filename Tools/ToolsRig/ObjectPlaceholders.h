@@ -11,7 +11,7 @@
 #include <memory>
 #include <string>
 
-namespace RenderCore { namespace Techniques { class ParsingContext; class DrawablesPacket; class IPipelineAcceleratorPool; } }
+namespace RenderCore { namespace Techniques { class ParsingContext; class DrawablesPacket; class IDrawablesPool; class IPipelineAcceleratorPool; } }
 namespace SceneEngine { class IIntersectionScene; class ExecuteSceneContext; }
 
 namespace EntityInterface { class RetainedEntities; }
@@ -28,8 +28,9 @@ namespace ToolsRig
         std::shared_ptr<SceneEngine::IIntersectionScene> CreateIntersectionTester();
 
         ObjectPlaceholders(
-			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-			const std::shared_ptr<EntityInterface::RetainedEntities>& objects);
+			std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
+            std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+			std::shared_ptr<EntityInterface::RetainedEntities> objects);
         ~ObjectPlaceholders();
     protected:
         std::shared_ptr<EntityInterface::RetainedEntities> _objects;
@@ -44,7 +45,8 @@ namespace ToolsRig
         std::vector<Annotation> _triMeshAnnotations;
 		std::vector<Annotation> _areaLightAnnotation;
 
-		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
+		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> _drawablesPool;
+        std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
 
         class IntersectionTester;
     };

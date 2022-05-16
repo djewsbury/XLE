@@ -24,6 +24,7 @@ namespace RenderCore { namespace Techniques
     class DrawableConstructor;
 	class IPipelineAcceleratorPool;
     class IDeformAcceleratorPool;
+    class IDrawablesPool;
 
 	class ModelCacheModel
     {
@@ -67,7 +68,8 @@ namespace RenderCore { namespace Techniques
         Records LogRecords() const;
 
         ModelCache(
-			std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool, 
+			std::shared_ptr<IDrawablesPool> drawablesPool, 
+            std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool, 
             std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
 			const Config& cfg = Config());
         ~ModelCache();

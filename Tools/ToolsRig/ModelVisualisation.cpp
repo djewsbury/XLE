@@ -15,6 +15,7 @@
 #include "../../RenderCore/Techniques/DeformAccelerator.h"
 #include "../../RenderCore/Techniques/DeformGeometryInfrastructure.h"
 #include "../../RenderCore/Techniques/ModelRendererConstruction.h"
+#include "../../RenderCore/Techniques/Drawables.h"
 #include "../../RenderOverlays/AnimationVisualization.h"
 #include "../../SceneEngine/IScene.h"
 #include "../../Assets/Assets.h"
@@ -109,13 +110,14 @@ namespace ToolsRig
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<ModelSceneRendererState>>&& promise,
+			const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>& drawablesPool,
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators,
 			const ModelVisSettings& settings)
 		{
 			auto construction = std::make_shared<RenderCore::Techniques::ModelRendererConstruction>();
 			construction->AddElement().SetModelAndMaterialScaffolds(settings._modelName, settings._materialName);
-			auto rendererFuture = ::Assets::MakeAssetPtr<SimpleModelRenderer>(pipelineAcceleratorPool, construction, deformAccelerators);
+			auto rendererFuture = ::Assets::MakeAssetPtr<SimpleModelRenderer>(drawablesPool, pipelineAcceleratorPool, construction, deformAccelerators);
 
 			if (!settings._animationFileName.empty() && !settings._skeletonFileName.empty()) {
 				auto animationSetFuture = ::Assets::MakeAssetPtr<AnimationSetScaffold>(settings._animationFileName);
@@ -352,11 +354,12 @@ namespace ToolsRig
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	Assets::PtrToMarkerPtr<SceneEngine::IScene> MakeScene(
+		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
 		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
 		const ModelVisSettings& settings)
 	{
-		auto rendererFuture = ::Assets::MakeFuturePtr<ModelSceneRendererState>(pipelineAcceleratorPool, deformAcceleratorPool, settings);
+		auto rendererFuture = ::Assets::MakeFuturePtr<ModelSceneRendererState>(drawablesPool, pipelineAcceleratorPool, deformAcceleratorPool, settings);
 		auto result = std::make_shared<Assets::MarkerPtr<SceneEngine::IScene>>();
 		::Assets::WhenAll(rendererFuture).ThenConstructToPromise(
 			result->AdoptPromise(),

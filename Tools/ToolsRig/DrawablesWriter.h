@@ -59,13 +59,22 @@ namespace ToolsRig
 		virtual ~IExtendedDrawablesWriter() = default; 
 	};
 
-	std::shared_ptr<IDrawablesWriter> CreateSphereDrawablesWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
-	std::shared_ptr<IDrawablesWriter> CreateShapeStackDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
-	std::shared_ptr<IDrawablesWriter> CreateStonehengeDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
-	std::shared_ptr<IDrawablesWriter> CreateFlatPlaneDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
-	std::shared_ptr<IDrawablesWriter> CreateFlatPlaneAndBlockerDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
-	std::shared_ptr<IDrawablesWriter> CreateSharpContactDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
-	std::shared_ptr<IDrawablesWriter> CreateShapeWorldDrawableWriter(
-		RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
-		const Float2& worldMins, const Float2& worldMaxs);
+	struct DrawablesWriterHelper
+	{
+		std::shared_ptr<IDrawablesWriter> CreateSphereDrawablesWriter();
+		std::shared_ptr<IDrawablesWriter> CreateShapeStackDrawableWriter();
+		std::shared_ptr<IDrawablesWriter> CreateStonehengeDrawableWriter();
+		std::shared_ptr<IDrawablesWriter> CreateFlatPlaneDrawableWriter();
+		std::shared_ptr<IDrawablesWriter> CreateFlatPlaneAndBlockerDrawableWriter();
+		std::shared_ptr<IDrawablesWriter> CreateSharpContactDrawableWriter();
+		std::shared_ptr<IDrawablesWriter> CreateShapeWorldDrawableWriter(const Float2& worldMins, const Float2& worldMaxs);
+
+		DrawablesWriterHelper(
+			RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool,
+			RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
+	protected:
+		RenderCore::IDevice* _device;
+		RenderCore::Techniques::IDrawablesPool* _drawablesPool;
+		RenderCore::Techniques::IPipelineAcceleratorPool* _pipelineAcceleratorPool;
+	};
 }

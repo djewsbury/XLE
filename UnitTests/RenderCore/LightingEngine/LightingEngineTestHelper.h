@@ -47,6 +47,7 @@ namespace UnitTests
 		std::shared_ptr<RenderCore::LightingEngine::SharedTechniqueDelegateBox> _sharedDelegates;
 		std::shared_ptr<RenderCore::Techniques::CommonResourceBox> _commonResources;
 		std::shared_ptr<RenderCore::Techniques::TechniqueContext> _techniqueContext;
+		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> _drawablesPool;
 		
 		LightingEngineTestApparatus();
 		~LightingEngineTestApparatus();

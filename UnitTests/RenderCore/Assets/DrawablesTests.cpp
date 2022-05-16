@@ -179,7 +179,7 @@ namespace UnitTests
 		{
 			auto sphereGeo = ToolsRig::BuildGeodesicSphere();
 			auto sphereVb = testHelper->CreateVB(sphereGeo);
-			auto drawableGeo = std::make_shared<Techniques::DrawableGeo>();
+			auto drawableGeo = techniqueTestApparatus._drawablesPool->CreateGeo();
 			drawableGeo->_vertexStreams[0]._resource = sphereVb;
 			drawableGeo->_vertexStreamCount = 1;
 			s_sphereVertexCount = sphereGeo.size();
@@ -286,6 +286,7 @@ namespace UnitTests
 				fbHelper.GetDesc());
 
 			auto renderer = ::Assets::MakeAssetPtr<Techniques::SimpleModelRenderer>(
+				techniqueTestApparatus._drawablesPool,
 				pipelineAcceleratorPool,
 				"xleres/DefaultResources/materialsphere.dae",
 				"xleres/DefaultResources/materialsphere.material");

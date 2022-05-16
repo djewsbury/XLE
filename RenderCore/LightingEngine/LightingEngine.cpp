@@ -396,7 +396,7 @@ namespace RenderCore { namespace LightingEngine
 		for (unsigned c=0; c<result.size(); ++c) {
 			if (batches & (1u<<c)) {
 				if (!_drawablePktsReserved[pktIdx+c]) {
-					_drawablePkt[pktIdx+c] = _parsingContext->GetTechniqueContext()._drawablesPacketsPool->Allocate();
+					_drawablePkt[pktIdx+c] = _parsingContext->GetTechniqueContext()._drawablesPool->CreatePacket();
 					_drawablePktsReserved[pktIdx+c] = true;
 				}
 				result[c] = _drawablePkt.data()+pktIdx+c;

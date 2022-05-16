@@ -29,31 +29,31 @@ namespace ToolsRig
 			SubResourceInitData { data });
 	}
 
-	static std::pair<std::shared_ptr<RenderCore::Techniques::DrawableGeo>, size_t> CreateSphereGeo(RenderCore::IDevice& device)
+	static std::pair<std::shared_ptr<RenderCore::Techniques::DrawableGeo>, size_t> CreateSphereGeo(RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool)
 	{
 		auto sphereGeo = ToolsRig::BuildGeodesicSphere();
 		auto sphereVb = CreateVB(device, sphereGeo);
-		auto geo = std::make_shared<RenderCore::Techniques::DrawableGeo>();
+		auto geo = drawablesPool.CreateGeo();
 		geo->_vertexStreams[0]._resource = sphereVb;
 		geo->_vertexStreamCount = 1;
 		return {geo, sphereGeo.size()};
 	}
 
-	static std::pair<std::shared_ptr<RenderCore::Techniques::DrawableGeo>, size_t> CreateCubeGeo(RenderCore::IDevice& device)
+	static std::pair<std::shared_ptr<RenderCore::Techniques::DrawableGeo>, size_t> CreateCubeGeo(RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool)
 	{
 		auto cubeGeo = ToolsRig::BuildCube();
 		auto cubeVb = CreateVB(device, cubeGeo);
-		auto geo = std::make_shared<RenderCore::Techniques::DrawableGeo>();
+		auto geo = drawablesPool.CreateGeo();
 		geo->_vertexStreams[0]._resource = cubeVb;
 		geo->_vertexStreamCount = 1;
 		return {geo, cubeGeo.size()};
 	}
 
-	static std::pair<std::shared_ptr<RenderCore::Techniques::DrawableGeo>, size_t> CreateTriangleBasePyramidGeo(RenderCore::IDevice& device)
+	static std::pair<std::shared_ptr<RenderCore::Techniques::DrawableGeo>, size_t> CreateTriangleBasePyramidGeo(RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool)
 	{
 		auto pyramidGeo = ToolsRig::BuildTriangleBasePyramid();
 		auto pyramidVb = CreateVB(device, pyramidGeo);
-		auto geo = std::make_shared<RenderCore::Techniques::DrawableGeo>();
+		auto geo = drawablesPool.CreateGeo();
 		geo->_vertexStreams[0]._resource = pyramidVb;
 		geo->_vertexStreamCount = 1;
 		return {geo, pyramidGeo.size()};
@@ -149,16 +149,16 @@ namespace ToolsRig
 			WriteDrawable(pkt, _geo, _vertexCount, Identity<Float4x4>());
 		}
 
-		SphereDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+		SphereDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		: DrawablesWriterCommon(device, pipelineAcceleratorPool)
 		{
-			std::tie(_geo, _vertexCount) = CreateSphereGeo(device);
+			std::tie(_geo, _vertexCount) = CreateSphereGeo(device, drawablesPool);
 		}
 	};
 
-	std::shared_ptr<IDrawablesWriter> CreateSphereDrawablesWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+	std::shared_ptr<IDrawablesWriter> DrawablesWriterHelper::CreateSphereDrawablesWriter()
 	{
-		return std::make_shared<SphereDrawableWriter>(device, pipelineAcceleratorPool);
+		return std::make_shared<SphereDrawableWriter>(*_device, *_drawablesPool, *_pipelineAcceleratorPool);
 	}
 
 	class ShapeStackDrawableWriter : public DrawablesWriterCommon
@@ -188,17 +188,17 @@ namespace ToolsRig
 				AsFloat4x4(Float3{0.f, -1.0f - std::sqrt(8.0f)/2.0f, 0.f}));
 		}
 
-		ShapeStackDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+		ShapeStackDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		: DrawablesWriterCommon(device, pipelineAcceleratorPool)
 		{
-			std::tie(_sphereGeo, _sphereVertexCount) = CreateSphereGeo(device);
-			std::tie(_cubeGeo, _cubeVertexCount) = CreateCubeGeo(device);
+			std::tie(_sphereGeo, _sphereVertexCount) = CreateSphereGeo(device, drawablesPool);
+			std::tie(_cubeGeo, _cubeVertexCount) = CreateCubeGeo(device, drawablesPool);
 		}
 	};
 
-	std::shared_ptr<IDrawablesWriter> CreateShapeStackDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+	std::shared_ptr<IDrawablesWriter> DrawablesWriterHelper::CreateShapeStackDrawableWriter()
 	{
-		return std::make_shared<ShapeStackDrawableWriter>(device, pipelineAcceleratorPool);
+		return std::make_shared<ShapeStackDrawableWriter>(*_device, *_drawablesPool, *_pipelineAcceleratorPool);
 	}
 
 	class StonehengeDrawableWriter : public DrawablesWriterCommon
@@ -244,16 +244,16 @@ namespace ToolsRig
 				baseTransform);
 		}
 
-		StonehengeDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+		StonehengeDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		: DrawablesWriterCommon(device, pipelineAcceleratorPool)
 		{
-			std::tie(_geo, _vertexCount) = CreateCubeGeo(device);
+			std::tie(_geo, _vertexCount) = CreateCubeGeo(device, drawablesPool);
 		}
 	};
 
-	std::shared_ptr<IDrawablesWriter> CreateStonehengeDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+	std::shared_ptr<IDrawablesWriter> DrawablesWriterHelper::CreateStonehengeDrawableWriter()
 	{
-		return std::make_shared<StonehengeDrawableWriter>(device, pipelineAcceleratorPool);
+		return std::make_shared<StonehengeDrawableWriter>(*_device, *_drawablesPool, *_pipelineAcceleratorPool);
 	}
 
 	class FlatPlaneDrawableWriter : public DrawablesWriterCommon
@@ -275,16 +275,16 @@ namespace ToolsRig
 				AsFloat4x4(srt));
 		}
 
-		FlatPlaneDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+		FlatPlaneDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		: DrawablesWriterCommon(device, pipelineAcceleratorPool)
 		{
-			std::tie(_geo, _vertexCount) = CreateCubeGeo(device);
+			std::tie(_geo, _vertexCount) = CreateCubeGeo(device, drawablesPool);
 		}
 	};
 
-	std::shared_ptr<IDrawablesWriter> CreateFlatPlaneDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+	std::shared_ptr<IDrawablesWriter> DrawablesWriterHelper::CreateFlatPlaneDrawableWriter()
 	{
-		return std::make_shared<FlatPlaneDrawableWriter>(device, pipelineAcceleratorPool);
+		return std::make_shared<FlatPlaneDrawableWriter>(*_device, *_drawablesPool, *_pipelineAcceleratorPool);
 	}
 
 	class FlatPlaneAndBlockerDrawableWriter : public FlatPlaneDrawableWriter
@@ -305,9 +305,9 @@ namespace ToolsRig
 		using FlatPlaneDrawableWriter::FlatPlaneDrawableWriter;
 	};
 
-	std::shared_ptr<IDrawablesWriter> CreateFlatPlaneAndBlockerDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+	std::shared_ptr<IDrawablesWriter> DrawablesWriterHelper::CreateFlatPlaneAndBlockerDrawableWriter()
 	{
-		return std::make_shared<FlatPlaneAndBlockerDrawableWriter>(device, pipelineAcceleratorPool);
+		return std::make_shared<FlatPlaneAndBlockerDrawableWriter>(*_device, *_drawablesPool, *_pipelineAcceleratorPool);
 	}
 
 	class SharpContactDrawableWriter : public DrawablesWriterCommon
@@ -333,17 +333,17 @@ namespace ToolsRig
 			WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCount, pyramidTransform);
 		}
 
-		SharpContactDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+		SharpContactDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		: DrawablesWriterCommon(device, pipelineAcceleratorPool)
 		{
-			std::tie(_sphereGeo, _sphereVertexCount) = CreateSphereGeo(device);
-			std::tie(_pyramidGeo, _pyramidVertexCount) = CreateTriangleBasePyramidGeo(device);
+			std::tie(_sphereGeo, _sphereVertexCount) = CreateSphereGeo(device, drawablesPool);
+			std::tie(_pyramidGeo, _pyramidVertexCount) = CreateTriangleBasePyramidGeo(device, drawablesPool);
 		}
 	};
 
-	std::shared_ptr<IDrawablesWriter> CreateSharpContactDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+	std::shared_ptr<IDrawablesWriter> DrawablesWriterHelper::CreateSharpContactDrawableWriter()
 	{
-		return std::make_shared<SharpContactDrawableWriter>(device, pipelineAcceleratorPool);
+		return std::make_shared<SharpContactDrawableWriter>(*_device, *_drawablesPool, *_pipelineAcceleratorPool);
 	}
 
 	static std::pair<Float3, Float3> CreateSphereBoundingBox(const Float3& position, float radius)
@@ -444,13 +444,13 @@ namespace ToolsRig
 		}
 
 		ShapeWorldDrawableWriter(
-			RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
+			RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
 			const Float2& worldMins, const Float2& worldMaxs)
 		: DrawablesWriterCommon(device, pipelineAcceleratorPool)
 		{
-			std::tie(_sphereGeo, _sphereVertexCount) = CreateSphereGeo(device);
-			std::tie(_pyramidGeo, _pyramidVertexCount) = CreateTriangleBasePyramidGeo(device);
-			std::tie(_cubeGeo, _cubeVertexCount) = CreateCubeGeo(device);
+			std::tie(_sphereGeo, _sphereVertexCount) = CreateSphereGeo(device, drawablesPool);
+			std::tie(_pyramidGeo, _pyramidVertexCount) = CreateTriangleBasePyramidGeo(device, drawablesPool);
+			std::tie(_cubeGeo, _cubeVertexCount) = CreateCubeGeo(device, drawablesPool);
 
 			// //// //// //// //// //// //// //
 			std::mt19937_64 rng(0);
@@ -496,11 +496,16 @@ namespace ToolsRig
 		std::vector<std::pair<Float3, Float3>> _pyramidBoundingBoxes;
 	};
 
-	std::shared_ptr<IDrawablesWriter> CreateShapeWorldDrawableWriter(
-		RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
+	std::shared_ptr<IDrawablesWriter> DrawablesWriterHelper::CreateShapeWorldDrawableWriter(
 		const Float2& worldMins, const Float2& worldMaxs)
 	{
-		return std::make_shared<ShapeWorldDrawableWriter>(device, pipelineAcceleratorPool, worldMins, worldMaxs);
+		return std::make_shared<ShapeWorldDrawableWriter>(*_device, *_drawablesPool, *_pipelineAcceleratorPool, worldMins, worldMaxs);
 	}
+
+	DrawablesWriterHelper::DrawablesWriterHelper(
+		RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool,
+		RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+	: _device(&device), _drawablesPool(&drawablesPool), _pipelineAcceleratorPool(&pipelineAcceleratorPool)
+	{}
     
 }

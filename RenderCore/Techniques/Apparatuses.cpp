@@ -73,7 +73,7 @@ namespace RenderCore { namespace Techniques
 		_graphShaderCompiler2Registration = RegisterInstantiateShaderGraphCompiler(_shaderSource, compilers);
 
 		_commonResources = std::make_shared<CommonResourceBox>(*_device);
-		_drawablesPacketsPool = std::make_shared<DrawablesPacketPool>();
+		_drawablesPool = CreateDrawablesPool();
 
 		auto pipelineLayoutFileFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(MAIN_PIPELINE);
 		pipelineLayoutFileFuture->StallWhilePending();

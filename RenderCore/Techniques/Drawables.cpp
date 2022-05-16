@@ -459,13 +459,13 @@ namespace RenderCore { namespace Techniques
 	}
 
 	DrawablesPacket::DrawablesPacket() {}
-	DrawablesPacket::DrawablesPacket(DrawablesPacketPool& pool)
-	: _pool(&pool) {}
+	DrawablesPacket::DrawablesPacket(IDrawablesPool& pool, unsigned poolMarker)
+	: _pool(&pool), _poolMarker(poolMarker) {}
 	DrawablesPacket::~DrawablesPacket()
 	{
 		if (_pool) {
 			Reset();
-			_pool->ReturnToPool(std::move(*this));
+			_pool->ReturnToPool(std::move(*this), _poolMarker);
 		}
 	}
 	DrawablesPacket::DrawablesPacket(DrawablesPacket&& moveFrom) never_throws
@@ -476,7 +476,9 @@ namespace RenderCore { namespace Techniques
 	, _cpuStorage(std::move(moveFrom._cpuStorage))
 	{
 		_pool = moveFrom._pool;
+		_poolMarker = moveFrom._poolMarker;
 		moveFrom._pool = nullptr;
+		moveFrom._poolMarker = ~0u;
 		_storageAlignment = moveFrom._storageAlignment;
 		_ubStorageAlignment = moveFrom._ubStorageAlignment;
 	}
@@ -486,7 +488,7 @@ namespace RenderCore { namespace Techniques
 			return *this;
 
 		if (_pool)
-			_pool->ReturnToPool(std::move(*this));
+			_pool->ReturnToPool(std::move(*this), _poolMarker);
 
 		_drawables = std::move(moveFrom._drawables);
 		_vbStorage = std::move(moveFrom._vbStorage);
@@ -494,41 +496,141 @@ namespace RenderCore { namespace Techniques
 		_ubStorage = std::move(moveFrom._ubStorage);
 		_cpuStorage = std::move(moveFrom._cpuStorage);
 		_pool = moveFrom._pool;
+		_poolMarker = moveFrom._poolMarker;
 		moveFrom._pool = nullptr;
+		moveFrom._poolMarker = ~0u;
 		_storageAlignment = moveFrom._storageAlignment;
 		_ubStorageAlignment = moveFrom._ubStorageAlignment;
 		return *this;
 	}
 
-	DrawablesPacket DrawablesPacketPool::Allocate()
+	class DrawablesPool : public IDrawablesPool
+	{
+	public:
+		DrawablesPacket CreatePacket() override;
+		std::shared_ptr<DrawableGeo> CreateGeo() override;
+		std::shared_ptr<DrawableInputAssembly> CreateInputAssembly() override;
+		std::shared_ptr<UniformsStreamInterface> CreateUniformsStreamInterface() override;
+
+		std::shared_ptr<UniformsStreamInterface> CombineWithLike(std::shared_ptr<UniformsStreamInterface> input) override
+		{
+			return input;		// todo -- fill out
+		}
+
+		DrawablesPool();
+		~DrawablesPool();
+		DrawablesPool(const DrawablesPool&) = delete;
+		DrawablesPool& operator=(const DrawablesPool&) = delete;
+	private:
+		Threading::Mutex _lock;
+		std::vector<DrawablesPacket> _availablePackets;
+
+		using Marker = unsigned;
+		std::vector<Marker> _queuedDestroyedPacket;	// packets destroyed out of order, waiting to increase _destroyedPktMarker
+		Marker _destroyedPktMarker = 0;				// every packet <= this number has been destroyed already
+		Marker _createdPktMarker = 0;					// highest marker given to a newly created packet
+
+		ResizableCircularBuffer<std::pair<Marker, unsigned>, 32> _markerCounts;
+		std::deque<std::shared_ptr<void>> _holdingPendingDestruction;
+		template<typename Type> void QueueDestroy(Type* t);
+
+		void ReturnToPool(DrawablesPacket&& pkt, unsigned marker) override;
+	};
+
+	DrawablesPacket DrawablesPool::CreatePacket()
 	{
 		ScopedLock(_lock);
+		auto marker = ++_createdPktMarker;
 		if (_availablePackets.empty())
-			return DrawablesPacket(*this);
+			return DrawablesPacket(*this, marker);
 		auto res = std::move(*(_availablePackets.end()-1));
 		_availablePackets.erase(_availablePackets.end()-1);
+		res._pool = this;
+		res._poolMarker = marker;
 		return res;
 	}
 
-	void DrawablesPacketPool::ReturnToPool(DrawablesPacket&& pkt)
+	std::shared_ptr<DrawableInputAssembly> DrawablesPool::CreateInputAssembly()
 	{
-		assert(pkt._drawables.empty() && pkt._vbStorage.empty() && pkt._ibStorage.empty());
-		ScopedLock(_lock);
-		_availablePackets.push_back(std::move(pkt));
+		return nullptr;
 	}
 
-	DrawablesPacketPool::DrawablesPacketPool()
+	std::shared_ptr<UniformsStreamInterface> DrawablesPool::CreateUniformsStreamInterface()
 	{
+		return nullptr;
+	}
+
+	void DrawablesPool::ReturnToPool(DrawablesPacket&& pkt, unsigned marker)
+	{
+		assert(pkt._drawables.empty() && pkt._vbStorage.empty() && pkt._ibStorage.empty() && pkt._ubStorage.empty() && pkt._cpuStorage.empty());
+		assert(marker != ~0u);
+		pkt._poolMarker = ~0u;
+		ScopedLock(_lock);
+		_availablePackets.push_back(std::move(pkt));
+		if (marker == _destroyedPktMarker+1) {
+			++_destroyedPktMarker;
+			while (!_queuedDestroyedPacket.empty() && *_queuedDestroyedPacket.begin() == _destroyedPktMarker+1) {
+				++_destroyedPktMarker;
+				_queuedDestroyedPacket.erase(_queuedDestroyedPacket.begin());
+			}
+		} else {
+			auto i = std::lower_bound(_queuedDestroyedPacket.begin(), _queuedDestroyedPacket.end(), marker);
+			assert(i == _queuedDestroyedPacket.end() || *i != marker);
+			_queuedDestroyedPacket.insert(i, marker);
+		}
+	}
+
+	std::shared_ptr<DrawableGeo> DrawablesPool::CreateGeo()
+	{
+		return std::shared_ptr<DrawableGeo>(
+			new DrawableGeo(),
+			[this](auto* geo) {
+				this->QueueDestroy(geo);
+			});
+	}
+
+	template<typename Type>
+		void DrawablesPool::QueueDestroy(Type* object)
+	{
+		ScopedLock(_lock);
+		if (_destroyedPktMarker == _createdPktMarker) {
+			delete object;	// no packets alive currently
+		} else {
+			auto marker = _createdPktMarker;
+			if (_markerCounts.empty()) {
+				assert(_holdingPendingDestruction.empty());
+				_markerCounts.emplace_back(std::make_pair(marker, 1u));
+			} else if (_markerCounts.back().first == marker) {
+				++_markerCounts.back().second;
+			} else {
+				assert(_markerCounts.front().first < marker);
+				_markerCounts.emplace_back(std::make_pair(marker, 1u));
+			}
+			_holdingPendingDestruction.emplace_back(object, [](Type* t) { delete t; });
+		}
+	}
+
+	static unsigned s_nextDrawablesPoolGUID = 1;
+
+	DrawablesPool::DrawablesPool()
+	{
+		_guid = s_nextDrawablesPoolGUID++;
 		_availablePackets.reserve(8);
 	}
 
-	DrawablesPacketPool::~DrawablesPacketPool()
+	DrawablesPool::~DrawablesPool()
 	{
 		// ensure packets in _availablePackets don't try to call ReturnToPool when shutting down
 		for (auto& p:_availablePackets)
 			p._pool = nullptr;
 	}
 
+	std::shared_ptr<IDrawablesPool> CreateDrawablesPool()
+	{
+		return std::make_shared<DrawablesPool>();
+	}
+
+	IDrawablesPool::~IDrawablesPool() = default;
 
 	DrawableInputAssembly::DrawableInputAssembly(
 		IteratorRange<const InputElementDesc*> inputElements,
@@ -539,5 +641,7 @@ namespace RenderCore { namespace Techniques
 		_topology = topology;
 		_hash = rotl64(HashInputAssembly(MakeIteratorRange(_inputElements), DefaultSeed64), (unsigned)_topology);
 	}
+
+	DrawableGeo::DrawableGeo() = default;
 
 }}

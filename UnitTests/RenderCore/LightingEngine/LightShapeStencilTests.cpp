@@ -188,8 +188,8 @@ namespace UnitTests
 			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
 			PumpBufferUploads(testApparatus);
 
-			auto drawableWriter = ToolsRig::CreateFlatPlaneDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool);
-			auto drawableWriterWithBlocker = ToolsRig::CreateFlatPlaneAndBlockerDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool);
+			auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool).CreateFlatPlaneDrawableWriter();
+			auto drawableWriterWithBlocker = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool).CreateFlatPlaneAndBlockerDrawableWriter();
 			PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
 			testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
 

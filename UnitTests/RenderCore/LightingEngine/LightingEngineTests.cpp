@@ -168,7 +168,7 @@ namespace UnitTests
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 
 		// auto drawableWriter = CreateSphereDrawablesWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
-		auto drawableWriter = ToolsRig::CreateShapeStackDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool);
+		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool).CreateShapeStackDrawableWriter();
 
 		RenderCore::Techniques::CameraDesc camera;
 		// camera._cameraToWorld = MakeCameraToWorld(Float3{1.0f, 0.0f, 0.0f}, Float3{0.0f, 1.0f, 0.0f}, Float3{-3.33f, 0.f, 0.f});
@@ -296,7 +296,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 
-		auto drawableWriter = ToolsRig::CreateStonehengeDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool);
+		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool).CreateStonehengeDrawableWriter();
 
 		RenderCore::Techniques::CameraDesc camera;
 		camera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-8.0f, 5.f, 0.f}), Float3{0.0f, 1.0f, 0.0f}, Float3{-8.0f, 5.f, 0.f});

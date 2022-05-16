@@ -179,7 +179,7 @@ namespace UnitTests
 
 			auto sphereGeo = ToolsRig::BuildGeodesicSphere();
 			auto sphereVb = testHelper->CreateVB(sphereGeo);
-			auto drawableGeo = std::make_shared<Techniques::DrawableGeo>();
+			auto drawableGeo = testApparatus._drawablesPool->CreateGeo();
 			drawableGeo->_vertexStreams[0]._resource = sphereVb;
 			drawableGeo->_vertexStreamCount = 1;
 

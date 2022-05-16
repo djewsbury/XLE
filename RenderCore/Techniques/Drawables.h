@@ -52,6 +52,10 @@ namespace RenderCore { namespace Techniques
         Flags::BitField     _flags = 0u;
 
 		std::shared_ptr<DeformAccelerator> _deformAccelerator;
+
+	protected:
+		DrawableGeo();
+		friend class DrawablesPool;
     };
 
 	class ExecuteDrawableContext
@@ -115,7 +119,7 @@ namespace RenderCore { namespace Techniques
 		unsigned _startIndexLocation = 0;
 	};
 
-	class DrawablesPacketPool;
+	class IDrawablesPool;
 
 	class DrawablesPacket
 	{
@@ -141,27 +145,31 @@ namespace RenderCore { namespace Techniques
 		std::vector<uint8_t>	_cpuStorage;
 		unsigned				_storageAlignment = 0u;
 		unsigned				_ubStorageAlignment = 0u;
-		DrawablesPacketPool*	_pool = nullptr;
+		IDrawablesPool*	_pool = nullptr;
+		unsigned _poolMarker = ~0u;
 
-		friend class DrawablesPacketPool;
-		DrawablesPacket(DrawablesPacketPool&);
+		friend class IDrawablesPool;
+		friend class DrawablesPool;
+		DrawablesPacket(IDrawablesPool&, unsigned);
 	};
 
-	class DrawablesPacketPool
+	class IDrawablesPool
 	{
 	public:
-		DrawablesPacket Allocate();
-		void ReturnToPool(DrawablesPacket&&);
-
-		DrawablesPacketPool();
-		~DrawablesPacketPool();
-
-		DrawablesPacketPool(const DrawablesPacketPool&) = delete;
-		DrawablesPacketPool& operator=(const DrawablesPacketPool&) = delete;
-	private:
-		Threading::Mutex _lock;
-		std::vector<DrawablesPacket> _availablePackets;
+		virtual DrawablesPacket CreatePacket() = 0;
+		virtual std::shared_ptr<DrawableGeo> CreateGeo() = 0;
+		virtual std::shared_ptr<DrawableInputAssembly> CreateInputAssembly() = 0;
+		virtual std::shared_ptr<UniformsStreamInterface> CreateUniformsStreamInterface() = 0;
+		virtual std::shared_ptr<UniformsStreamInterface> CombineWithLike(std::shared_ptr<UniformsStreamInterface> input) = 0;
+		~IDrawablesPool();
+		unsigned GetGUID() const { return _guid; }
+	protected:
+		virtual void ReturnToPool(DrawablesPacket&&, unsigned) = 0;
+		friend class DrawablesPacket;
+		unsigned _guid;
 	};
+
+	std::shared_ptr<IDrawablesPool> CreateDrawablesPool();
 
 	class IPipelineAcceleratorPool;
 	class SequencerConfig;

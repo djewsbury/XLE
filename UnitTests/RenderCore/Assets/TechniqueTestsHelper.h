@@ -14,7 +14,7 @@
 #include "../../../ConsoleRig/AttachablePtr.h"
 #include <regex>
 
-namespace RenderCore { namespace Techniques { class TechniqueContext; class ICompiledLayoutPool; }}
+namespace RenderCore { namespace Techniques { class TechniqueContext; class ICompiledLayoutPool; class IDrawablesPool; }}
 
 namespace UnitTests
 {
@@ -27,6 +27,7 @@ namespace UnitTests
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<RenderCore::Techniques::TechniqueContext> _techniqueContext;
 		std::shared_ptr<RenderCore::Techniques::ICompiledLayoutPool> _compiledLayoutPool;
+		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> _drawablesPool;
 
 		std::shared_ptr<RenderCore::Techniques::DescriptorSetLayoutAndBinding> _materialDescSetLayout;
 		std::shared_ptr<RenderCore::Techniques::DescriptorSetLayoutAndBinding> _sequencerDescSetLayout;

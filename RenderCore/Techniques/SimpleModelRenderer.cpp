@@ -375,20 +375,21 @@ namespace RenderCore { namespace Techniques
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	SimpleModelRenderer::SimpleModelRenderer(
-		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-		const std::shared_ptr<ModelRendererConstruction>& construction,
-		const std::shared_ptr<DrawableConstructor>& drawableConstructor,
-		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
-		const std::shared_ptr<DeformAccelerator>& deformAccelerator,
+		IDrawablesPool& drawablesPool,
+		const ModelRendererConstruction& construction,
+		std::shared_ptr<DrawableConstructor> drawableConstructor,
+		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
+		std::shared_ptr<DeformAccelerator> deformAccelerator,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
-	: _drawableConstructor(drawableConstructor)
-	, _depVal(drawableConstructor->GetDependencyValidation())
+	: _drawableConstructor(std::move(drawableConstructor))
 	{
+		_depVal = _drawableConstructor->GetDependencyValidation();
+
 		using namespace RenderCore::Assets;
 		std::shared_ptr<IDeformGeoAttachment> geoDeformerInfrastructure;
 		if (deformAccelerator && deformAcceleratorPool) {  // need both or neither
-			_deformAccelerator = deformAccelerator;
-			_deformAcceleratorPool = deformAcceleratorPool;
+			_deformAccelerator = std::move(deformAccelerator);
+			_deformAcceleratorPool = std::move(deformAcceleratorPool);
 			geoDeformerInfrastructure = std::dynamic_pointer_cast<IDeformGeoAttachment>(_deformAcceleratorPool->GetDeformGeoAttachment(*_deformAccelerator));
 		}
 
@@ -400,22 +401,22 @@ namespace RenderCore { namespace Techniques
 		for (const auto&u:uniformBufferDelegates)
 			_usi->BindImmediateData(c++, u.first, u.second->GetLayout());
 
-		_usi = pipelineAcceleratorPool->CombineWithLike(std::move(_usi));
+		_usi = drawablesPool.CombineWithLike(std::move(_usi));
 		
 		_completionCmdList = _drawableConstructor->_completionCommandList;
 		if (geoDeformerInfrastructure)
 			_completionCmdList = std::max(_completionCmdList, geoDeformerInfrastructure->GetCompletionCommandList());
 
 		// setup skeleton binding
-		auto externalSkeletonScaffold = construction->GetSkeletonScaffold();
+		auto externalSkeletonScaffold = construction.GetSkeletonScaffold();
 		if (externalSkeletonScaffold) {
 			// merge in the dep val from the skeleton scaffold
 			::Assets::DependencyValidationMarker depVals[] { _depVal, externalSkeletonScaffold->GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
 
-		_elements.reserve(construction->GetElementCount());
-		for (auto ele:*construction) {
+		_elements.reserve(construction.GetElementCount());
+		for (auto ele:construction) {
 			auto modelScaffold = ele.GetModelScaffold();
 			if (modelScaffold) {
 				const SkeletonMachine* primarySkeleton = externalSkeletonScaffold ? &externalSkeletonScaffold->GetSkeletonMachine() : nullptr;
@@ -539,9 +540,10 @@ namespace RenderCore { namespace Techniques
 
 	void SimpleModelRenderer::ConstructToPromise(
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
-		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-		const std::shared_ptr<ModelRendererConstruction>& construction,
-		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
+		std::shared_ptr<IDrawablesPool> drawablesPool,
+		std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool,
+		std::shared_ptr<ModelRendererConstruction> construction,
+		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
 		std::shared_ptr<DeformAccelerator> deformAcceleratorInit,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
 	{
@@ -549,7 +551,8 @@ namespace RenderCore { namespace Techniques
 
 		::Assets::WhenAll(ToFuture(*construction)).ThenConstructToPromise(
 			std::move(promise),
-			[pipelineAcceleratorPool, deformAcceleratorPool, deformAccelerator=deformAcceleratorInit, uniformBufferBindings=std::move(uniformBufferBindings)](auto&& promise, auto completedConstruction) mutable {
+			[pipelineAcceleratorPool=std::move(pipelineAcceleratorPool), deformAcceleratorPool=std::move(deformAcceleratorPool), drawablesPool=std::move(drawablesPool),
+			deformAccelerator=std::move(deformAcceleratorInit), uniformBufferBindings=std::move(uniformBufferBindings)](auto&& promise, auto completedConstruction) mutable {
 
 				std::shared_ptr<DrawableConstructor> drawableConstructor;
 				std::shared_future<void> deformAcceleratorInitFuture;
@@ -571,7 +574,7 @@ namespace RenderCore { namespace Techniques
 					}
 
 					auto& bufferUploads = Services::GetInstance().GetBufferUploads();
-					drawableConstructor = std::make_shared<DrawableConstructor>(pipelineAcceleratorPool, bufferUploads, *completedConstruction, deformAcceleratorPool, deformAccelerator);
+					drawableConstructor = std::make_shared<DrawableConstructor>(drawablesPool, pipelineAcceleratorPool, bufferUploads, *completedConstruction, deformAcceleratorPool, deformAccelerator);
 				} CATCH(...) {
 					promise.set_exception(std::current_exception());
 					return;
@@ -594,12 +597,14 @@ namespace RenderCore { namespace Techniques
 
 						return ::Assets::PollStatus::Finish;
 					},
-					[pipelineAcceleratorPool, deformAcceleratorPool, deformAccelerator, completedConstruction, drawableConstructor, uniformBufferBindings=std::move(uniformBufferBindings)]() {
+					[drawablesPool=std::move(drawablesPool), deformAcceleratorPool=std::move(deformAcceleratorPool), 
+					deformAccelerator=std::move(deformAccelerator), completedConstruction=std::move(completedConstruction), 
+					drawableConstructor, uniformBufferBindings=std::move(uniformBufferBindings)]() mutable {
 						return std::make_shared<SimpleModelRenderer>(
-							pipelineAcceleratorPool,
-							completedConstruction,
-							drawableConstructor,
-							deformAcceleratorPool, deformAccelerator,
+							*drawablesPool,
+							*completedConstruction,
+							std::move(drawableConstructor),
+							std::move(deformAcceleratorPool), std::move(deformAccelerator),
 							uniformBufferBindings);
 					});
 			});
@@ -607,7 +612,8 @@ namespace RenderCore { namespace Techniques
 
 	void SimpleModelRenderer::ConstructToPromise(
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
-		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+		std::shared_ptr<IDrawablesPool> drawablesPool,
+		std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
 		StringSection<> modelScaffoldName,
 		StringSection<> materialScaffoldName,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
@@ -616,17 +622,18 @@ namespace RenderCore { namespace Techniques
 		construction->AddElement().SetModelAndMaterialScaffolds(modelScaffoldName, materialScaffoldName);
 		return ConstructToPromise(
 			std::move(promise),
-			pipelineAcceleratorPool, construction,
+			std::move(drawablesPool), std::move(pipelineAcceleratorPool), std::move(construction),
 			nullptr, nullptr,
 			uniformBufferDelegates);
 	}
 
 	void SimpleModelRenderer::ConstructToPromise(
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
-		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+		std::shared_ptr<IDrawablesPool> drawablesPool,
+		std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
 		StringSection<> modelScaffoldName)
 	{
-		ConstructToPromise(std::move(promise), pipelineAcceleratorPool, modelScaffoldName, modelScaffoldName);
+		ConstructToPromise(std::move(promise), std::move(drawablesPool), std::move(pipelineAcceleratorPool), modelScaffoldName, modelScaffoldName);
 	}
 
 	ICustomDrawDelegate::~ICustomDrawDelegate() {}

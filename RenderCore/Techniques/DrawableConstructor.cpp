@@ -101,6 +101,7 @@ namespace RenderCore { namespace Techniques
 			using InputLayout = std::vector<InputElementDesc>;
 			std::vector<InputLayout> _geosLayout;
 			std::vector<Topology> _geosTopologies;
+			std::shared_ptr<IDrawablesPool> _drawablesPool;
 
 			enum class LoadBuffer { VB, IB };
 			enum class DrawableStream { IB, Vertex0, Vertex1, Vertex2, Vertex3 };
@@ -170,7 +171,7 @@ namespace RenderCore { namespace Techniques
 					auto& rg = *rawGeometry;
 
 					// Build the main non-deformed vertex stream
-					auto drawableGeo = std::make_shared<Techniques::DrawableGeo>();
+					auto drawableGeo = _drawablesPool->CreateGeo();
 					auto drawableGeoIdx = (unsigned)_geos.size();
 					auto scaffoldIdx = GetScaffoldIdx(scaffold, modelScaffoldName);
 
@@ -727,9 +728,10 @@ namespace RenderCore { namespace Techniques
 			_pendingBaseTransformsPerElement.clear();
 		}
 
-		Pimpl(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
+		Pimpl(std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
 		{
 			_pendingPipelines._pipelineAcceleratorPool = std::move(pipelineAccelerators);
+			_pendingGeos._drawablesPool = std::move(drawablesPool);
 		}
 
 		~Pimpl()
@@ -783,6 +785,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	DrawableConstructor::DrawableConstructor(
+		std::shared_ptr<IDrawablesPool> drawablesPool,
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
 		BufferUploads::IManager& bufferUploads,
 		const ModelRendererConstruction& construction,
@@ -790,7 +793,7 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator)
 	{
 		_completionCommandList = 0;
-		_pimpl = std::make_unique<Pimpl>(std::move(pipelineAccelerators));
+		_pimpl = std::make_unique<Pimpl>(std::move(drawablesPool), std::move(pipelineAccelerators));
 		Add(construction, deformAcceleratorPool, deformAccelerator);
 		std::promise<BufferUploads::CommandListID> uploadPromise;
 		_pimpl->_uploadFuture = uploadPromise.get_future();

@@ -12,6 +12,7 @@ namespace BufferUploads { class IManager; }
 namespace std { template<typename T> class promise; }
 namespace RenderCore { namespace Techniques
 {
+	class IDrawablesPool;
 	class IPipelineAcceleratorPool;
 	class PipelineAccelerator;
 	class DescriptorSetAccelerator;
@@ -60,6 +61,7 @@ namespace RenderCore { namespace Techniques
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
 		DrawableConstructor(
+			std::shared_ptr<IDrawablesPool> drawablesPool,
 			std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
 			BufferUploads::IManager& bufferUploads,
 			const ModelRendererConstruction&,

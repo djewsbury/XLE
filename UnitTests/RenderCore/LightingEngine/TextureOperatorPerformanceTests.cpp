@@ -371,7 +371,7 @@ namespace UnitTests
 		testHelper->BeginFrameCapture();
 
 		const auto downsampledResult = Hash64("Downsampled");
-		auto drawableWriter = ToolsRig::CreateShapeStackDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool);
+		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool).CreateShapeStackDrawableWriter();
 		auto commonResourceBox = std::make_shared<Techniques::CommonResourceBox>(*testHelper->_device);
 
 		{

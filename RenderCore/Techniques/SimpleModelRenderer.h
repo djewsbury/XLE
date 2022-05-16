@@ -25,6 +25,7 @@ namespace RenderCore { namespace Techniques
 	class DrawablesPacket; 
 	class ParsingContext; 
 	class IPipelineAcceleratorPool; 
+	class IDrawablesPool;
 	class DescriptorSetAccelerator;
 	class IDeformAcceleratorPool;
 	class DeformAccelerator;
@@ -76,11 +77,11 @@ namespace RenderCore { namespace Techniques
 		using UniformBufferBinding = std::pair<uint64_t, std::shared_ptr<IUniformBufferDelegate>>;
 
 		SimpleModelRenderer(
-			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-			const std::shared_ptr<ModelRendererConstruction>& construction,
-			const std::shared_ptr<DrawableConstructor>& drawableConstructor,
-			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool = nullptr,
-			const std::shared_ptr<DeformAccelerator>& deformAccelerator = nullptr,
+			IDrawablesPool& drawablesPool,
+			const ModelRendererConstruction& construction,
+			std::shared_ptr<DrawableConstructor> drawableConstructor,
+			std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool = nullptr,
+			std::shared_ptr<DeformAccelerator> deformAccelerator = nullptr,
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {});
 		~SimpleModelRenderer();
 
@@ -89,22 +90,25 @@ namespace RenderCore { namespace Techniques
 		
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
-			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-			const std::shared_ptr<ModelRendererConstruction>& construction,
-			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool = nullptr,
+			std::shared_ptr<IDrawablesPool> drawablesPool,
+			std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool,
+			std::shared_ptr<ModelRendererConstruction> construction,
+			std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool = nullptr,
 			std::shared_ptr<DeformAccelerator> deformAccelerator = nullptr,
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {});
 		
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
-			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+			std::shared_ptr<IDrawablesPool> drawablesPool,
+			std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool,
 			StringSection<> modelScaffoldName,
 			StringSection<> materialScaffoldName,
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {});
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
-			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+			std::shared_ptr<IDrawablesPool> drawablesPool,
+			std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool,
 			StringSection<> modelScaffoldName);
 
 	private:

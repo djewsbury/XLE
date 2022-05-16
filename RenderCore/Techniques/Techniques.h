@@ -96,7 +96,7 @@ namespace RenderCore { namespace Techniques
     class AttachmentPool;
     class FrameBufferPool;
     class CommonResourceBox;
-    class DrawablesPacketPool;
+    class IDrawablesPool;
     class PipelineCollection;
 
     class TechniqueContext
@@ -108,7 +108,7 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<AttachmentPool> _attachmentPool;
 		std::shared_ptr<FrameBufferPool> _frameBufferPool;
         std::shared_ptr<CommonResourceBox> _commonResources;
-        std::shared_ptr<DrawablesPacketPool> _drawablesPacketsPool;
+        std::shared_ptr<IDrawablesPool> _drawablesPool;
         std::shared_ptr<PipelineCollection> _graphicsPipelinePool;
     };
 

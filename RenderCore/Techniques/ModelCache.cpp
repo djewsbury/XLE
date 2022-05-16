@@ -29,6 +29,7 @@ namespace RenderCore { namespace Techniques
 		FrameByFrameLRUHeap<Renderer> _modelRenderers;
 		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
 		std::shared_ptr<IDeformAcceleratorPool> _deformAcceleratorPool;
+		std::shared_ptr<IDrawablesPool> _drawablesPool;
 
 		uint32_t _reloadId;
 
@@ -78,7 +79,7 @@ namespace RenderCore { namespace Techniques
 		auto construction = std::make_shared<ModelRendererConstruction>();
 		construction->AddElement().SetModelScaffold(modelScaffold).SetMaterialScaffold(materialScaffold);
 
-		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_pipelineAcceleratorPool, construction);
+		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, construction);
 		return newFuture;
 	}
 
@@ -112,7 +113,7 @@ namespace RenderCore { namespace Techniques
 		auto construction = std::make_shared<ModelRendererConstruction>();
 		construction->AddElement().SetModelScaffold(modelScaffold).SetMaterialScaffold(materialScaffold);
 
-		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_pipelineAcceleratorPool, construction);
+		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, construction);
 		return nullptr;	// implicitly not available immediately
 	}
 
@@ -146,6 +147,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	ModelCache::ModelCache(
+		std::shared_ptr<IDrawablesPool> drawablesPool, 
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool,
 		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
 		const Config& cfg)
@@ -153,6 +155,7 @@ namespace RenderCore { namespace Techniques
 		_pimpl = std::make_unique<Pimpl>(cfg);
 		_pimpl->_pipelineAcceleratorPool = std::move(pipelineAcceleratorPool);
 		_pimpl->_deformAcceleratorPool = std::move(deformAcceleratorPool);
+		_pimpl->_drawablesPool = std::move(drawablesPool);
 	}
 
 	ModelCache::~ModelCache()

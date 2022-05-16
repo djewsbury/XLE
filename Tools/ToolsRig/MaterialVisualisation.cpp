@@ -138,7 +138,7 @@ namespace ToolsRig
 					drawable._descriptorSet = t ? *t : nullptr;
 				}
 				drawable._pipeline = pipeline->_pipelineAccelerator;
-				drawable._geo = std::make_shared<Techniques::DrawableGeo>();
+				drawable._geo = _drawablesPool->CreateGeo();
 				drawable._geo->_vertexStreams[0]._vbOffset = space._startOffset;
 				drawable._geo->_vertexStreams[0]._type = Techniques::DrawableGeo::StreamType::PacketStorage;
 				drawable._geo->_vertexStreamCount = 1;
@@ -164,7 +164,7 @@ namespace ToolsRig
 					drawable._descriptorSet = t ? *t : nullptr;
 				}
 				drawable._pipeline = pipeline->_pipelineAccelerator;
-				drawable._geo = std::make_shared<Techniques::DrawableGeo>();
+				drawable._geo = _drawablesPool->CreateGeo();
 				drawable._geo->_vertexStreams[0]._resource = vb;
 				drawable._geo->_vertexStreamCount = 1;
 				drawable._drawFn = (Techniques::ExecuteDrawableFn*)&MaterialSceneParserDrawable::DrawFn;
@@ -231,12 +231,14 @@ namespace ToolsRig
 
 		MaterialVisualizationScene(
 			const MaterialVisSettings& settings,
+			const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>& drawablesPool,
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			const std::shared_ptr<RenderCore::Assets::RawMaterial>& material)
         : _settings(settings)
 		, _visGeo(*pipelineAcceleratorPool->GetDevice())
 		{
 			_pipelineAcceleratorPool = pipelineAcceleratorPool;
+			_drawablesPool = drawablesPool;
 			_material = material;
 		}
 
@@ -265,15 +267,17 @@ namespace ToolsRig
 		CachedVisGeo _visGeo;
 
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
+		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> _drawablesPool;
 		std::shared_ptr<RenderCore::Assets::RawMaterial> _material;
     };
 
 	std::shared_ptr<SceneEngine::IScene> MakeScene(
+		const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>& drawablesPool,
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const MaterialVisSettings& visObject,
 		const std::shared_ptr<RenderCore::Assets::RawMaterial>& material)
 	{
-		return std::make_shared<MaterialVisualizationScene>(visObject, pipelineAcceleratorPool, material);
+		return std::make_shared<MaterialVisualizationScene>(visObject, drawablesPool, pipelineAcceleratorPool, material);
 	}
 
 	/*::Assets::PtrToMarkerPtr<SceneEngine::IScene> ConvertToFuture(const std::shared_ptr<SceneEngine::IScene>& scene)

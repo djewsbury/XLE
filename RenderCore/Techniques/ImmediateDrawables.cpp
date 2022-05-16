@@ -367,6 +367,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<DrawableGeo> AllocateDrawableGeo()
 		{
+			#if 0
 			// Not super efficient caching scheme here! But it's simple
 			// Would be better if we just used std::shared_ptr<>s with custom deallocate functions,
 			// and a contiguous custom heap
@@ -378,6 +379,9 @@ namespace RenderCore { namespace Techniques
 				res = std::make_shared<DrawableGeo>();
 			_drawableGeosInWorkingPkt.push_back(res);
 			return res;
+			#endif
+			assert(0);
+			return nullptr;
 		}
 
 		template<typename InputAssemblyType>
