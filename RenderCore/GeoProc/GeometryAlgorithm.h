@@ -39,4 +39,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     unsigned CalculateVertexSize(IteratorRange<const Assets::VertexElement*> layout);
     unsigned CalculateVertexSize(IteratorRange<const InputElementDesc*> layout);
 
+    /// <summary>Generated a tri-list-with-adjacency index buffer</summary>
+    /// Given in input tri-list index buffer, calculate the adjancency information for each edge, and build
+    /// a tri-list-with-adjacency index buffer. In the output, there are 6 vertices per triangle -- the 
+    /// 3 extra vertices can be combined with the 3 main triangle edges to find adjacency triangles. See the
+    /// vulkan spec documentation for the particulars of the output
+    void TriListToTriListWithAdjacency(
+        IteratorRange<unsigned*> outputTriListWithAdjacency,
+        IteratorRange<const unsigned*> inputTriListIndexBuffer);
+
 }}}

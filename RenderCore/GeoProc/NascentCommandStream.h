@@ -189,13 +189,14 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         std::vector<CameraInstance>                 _cameraInstances;
         std::vector<SkinControllerInstance>         _skinControllerInstances;
 
-        friend void SerializationOperator(::Assets::BlockSerializer&, const NascentModelCommandStream&);
-        friend void SerializeCmdStreamForm(::Assets::BlockSerializer&, const NascentModelCommandStream&);
+        friend void SerializationOperator(::Assets::BlockSerializer&, const NascentModelCommandStream&, unsigned geoIdOffset);
         friend std::ostream& SerializationOperator(std::ostream&, const NascentModelCommandStream&);
 
     private:
         std::vector<std::pair<std::string, std::string>>	_inputInterfaceNames;
     };
+
+    void SerializationOperator(::Assets::BlockSerializer&, const NascentModelCommandStream&, unsigned geoIdOffset = 0);
 }}}
 
 

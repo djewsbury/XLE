@@ -271,8 +271,8 @@ namespace RenderCore { namespace Techniques
 							PendingTransactions::ResAssignment{_geos[i2->_drawableGeoIdx], (unsigned)pendingTransactions->_markers.size(), i2->_drawableStream});
 
 						// The same block can be requested multiple times for different DrawableGeos. Multiples will be sequential, though, 
-						// because it's sorted... so don't register the upload if it's the same as the last
-						if (localLoadRequests.empty() || localLoadRequests.back().first != i2->_srcOffset || localLoadRequests.back().second != i2->_srcSize) {
+						// because it's sorted... so don't register the upload until we hit the last of a string of identical ones
+						if ((i2+1) == i || (i2+1)->_srcOffset != i2->_srcOffset || (i2+1)->_srcSize != i2->_srcSize) {
 							// check for overlap with the previous upload
 							assert(localLoadRequests.empty() || (localLoadRequests.back().first + localLoadRequests.back().second) <= i2->_srcOffset);
 
@@ -550,7 +550,7 @@ namespace RenderCore { namespace Techniques
 				IteratorRange<const uint64_t*> currentMaterialAssignments;
 				std::vector<std::pair<unsigned, unsigned>> modelGeoIdToPendingGeoIndex;
 				std::optional<Float4x4> currentGeoSpaceToNodeSpace;
-				for (auto cmd:modelScaffold->CommandStream()) {
+				for (auto cmd:modelScaffold->CommandStream(cmdStreamGuid)) {
 					switch (cmd.Cmd()) {
 					default:
 						{

@@ -573,5 +573,89 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         return result/8;
     }
 
+	struct WorkingEdge
+	{
+		uint64_t _id;
+		unsigned _tri0, _tri1;
+		unsigned _tri0EdgeIdx;
+
+		friend bool operator<(const WorkingEdge& lhs, const WorkingEdge& rhs) { return lhs._id < rhs._id; }
+
+		WorkingEdge(unsigned v0, unsigned v1, unsigned edgeIdx, unsigned tri0)
+		{
+			auto vSmall = std::min(v0, v1);
+			auto vBig = std::max(v0, v1);
+			_id = uint64_t(vSmall) | (uint64_t(vBig) << 32ull);
+			_tri0 = tri0;
+			_tri1 = ~0u;
+			_tri0EdgeIdx = edgeIdx;
+		}
+	};
+
+	void TriListToTriListWithAdjacency(
+		IteratorRange<unsigned*> outputTriListWithAdjacency,
+		IteratorRange<const unsigned*> inputTriListIndexBuffer)
+	{
+		// 1. Find all of the edges in the input buffer, and generate an edge list buffer
+		// 		If we find any edge that are used in more than 2 triangles, we must throw an exception
+		// 2. while doing this, resolve the adjacency by finding the "third vertex" that completes the tri along with the edge
+		// 3. write out an index buffer with the adjacent vertex indices in interleaved order
+		// when there is no adjacency for an edge, we duplicate one of the vertex indices from the edge
+
+		const unsigned inputTriCount = inputTriListIndexBuffer.size() / 3;
+		const unsigned estimateEdgeCount = inputTriCount * 3 / 2;		// assuming each edge is used twice
+		
+		std::vector<WorkingEdge> edges;
+		edges.reserve(estimateEdgeCount + estimateEdgeCount/2);			// estimateEdgeCount is best case, so add some extra
+
+		std::vector<unsigned> adjacentVertices;
+		adjacentVertices.resize(inputTriListIndexBuffer.size(), ~0u);
+
+		assert(inputTriListIndexBuffer.size()%3 == 0);
+		const unsigned thirdVerticesIdx[] { 2, 0, 1 };
+		for (auto trii=inputTriListIndexBuffer.begin(); trii!=inputTriListIndexBuffer.end(); trii+=3) {
+			auto v0 = *(trii+0), v1 = *(trii+1), v2 = *(trii+2);
+			if (v0 == v1 || v1 == v2 || v0 == v2) continue;		// degenerate
+
+			auto triIdx = (unsigned)std::distance(inputTriListIndexBuffer.begin(), trii) / 3u;
+			WorkingEdge es[] { WorkingEdge{v0, v1, 0, triIdx}, WorkingEdge{v1, v2, 1, triIdx}, WorkingEdge{v2, v0, 2, triIdx} };
+			
+			for (unsigned c=0; c<3; ++c) {
+				auto i = std::lower_bound(edges.begin(), edges.end(), es[c]);
+				if (i != edges.end() && i->_id == es[c]._id) {
+					if (i->_tri1 != ~0u)
+						Throw(std::runtime_error("Cannot generate adjacency information for given mesh because some edges are used more than twice"));
+					i->_tri1 = triIdx;
+
+					// third vertex of tri0 becomes our adjacent vertex
+					auto* adjacentTri = &inputTriListIndexBuffer[i->_tri0*3];
+					auto tri0ThirdVertex = *(adjacentTri+thirdVerticesIdx[i->_tri0EdgeIdx]);
+					adjacentVertices.push_back(tri0ThirdVertex);
+
+					// third vertex of ours becomes the adjacency for the other triangle
+					assert(adjacentVertices[i->_tri0*3+i->_tri0EdgeIdx] == ~0u);
+					adjacentVertices[i->_tri0*3+i->_tri0EdgeIdx] = trii[thirdVerticesIdx[c]];
+				} else {
+					edges.insert(i, es[c]);
+					adjacentVertices.push_back(~0u);	// no adjacency, but may get one later
+				}
+			}
+		}
+
+		// Edges now contains a list of all edges in the mesh, with the indices of the triangles that include that edge
+		// adjacentVertices contains the list of adjacent vertices in edge order
+		// just need to interleave them both
+
+		assert(outputTriListWithAdjacency.size() == inputTriListIndexBuffer.size()*2);	// 6 indices per triangle, rather than 3s
+
+		auto i = inputTriListIndexBuffer.begin();
+		auto i2 = adjacentVertices.begin();
+		auto o = outputTriListWithAdjacency.begin();
+		for (; i!=inputTriListIndexBuffer.end(); ++i, ++i2) {
+			*o++ = *i; 
+			*o++ = (*i2 != ~0u) ? *i2 : *i; 		// when no adjacency, just duplicate the preceeding vertex
+		}
+	}
+
 }}}
 

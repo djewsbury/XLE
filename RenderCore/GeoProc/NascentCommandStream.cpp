@@ -499,23 +499,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		SerializationOperator(serializer, obj._levelOfDetail);
 	}
 
-	void SerializationOperator(::Assets::BlockSerializer& serializer, const NascentModelCommandStream& obj)
-	{
-		serializer.SerializeSubBlock(MakeIteratorRange(obj._geometryInstances));
-		serializer.SerializeValue(obj._geometryInstances.size());
-		serializer.SerializeSubBlock(MakeIteratorRange(obj._skinControllerInstances));
-		serializer.SerializeValue(obj._skinControllerInstances.size());
-			
-			//
-			//      Turn our list of input matrices into hash values, and write out the
-			//      run-time input interface definition...
-			//
-		auto hashedInterface = obj.BuildHashedInputInterface();
-		serializer.SerializeSubBlock(MakeIteratorRange(hashedInterface));
-		serializer.SerializeValue(hashedInterface.size());
-	}
-
-	void SerializeCmdStreamForm(::Assets::BlockSerializer& serializer, const NascentModelCommandStream& obj)
+	void SerializationOperator(::Assets::BlockSerializer& serializer, const NascentModelCommandStream& obj, unsigned geoIdOffset)
 	{
 		// _geometryInstances & _skinControllerInstances are identical in their serialized form
 		std::optional<unsigned> currentTransformMarker;
@@ -529,7 +513,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				serializer << MakeCmdAndRanged(ModelCommand::SetMaterialAssignments, geo._materials);
 				currentMaterialAssignment = &geo._materials;
 			}
-			serializer << MakeCmdAndRawData(ModelCommand::GeoCall, geo._id);
+			serializer << MakeCmdAndRawData(ModelCommand::GeoCall, geo._id + geoIdOffset);
 		}
 
 		for (const auto& geo:obj._skinControllerInstances) {
@@ -541,7 +525,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				serializer << MakeCmdAndRanged(ModelCommand::SetMaterialAssignments, geo._materials);
 				currentMaterialAssignment = &geo._materials;
 			}
-			serializer << MakeCmdAndRawData(ModelCommand::GeoCall, geo._id);
+			serializer << MakeCmdAndRawData(ModelCommand::GeoCall, geo._id + geoIdOffset);
 		}
 
 		// write out the InputInterface

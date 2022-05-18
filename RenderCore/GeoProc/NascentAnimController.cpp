@@ -983,25 +983,21 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
     void NascentBoundSkinnedGeometry::SerializeWithResourceBlock(
         ::Assets::BlockSerializer& outputSerializer, 
-        std::vector<uint8_t>& largeResourcesBlock) const
+        LargeResourceBlockConstructor& largeResourcesBlock) const
     {
         using namespace Assets;
 
-        auto vbOffset0 = largeResourcesBlock.size();
+        auto vbOffset0 = largeResourcesBlock.AddBlock(_unanimatedVertexElements);
         auto vbSize0 = _unanimatedVertexElements.size();
-        largeResourcesBlock.insert(largeResourcesBlock.end(), _unanimatedVertexElements.begin(), _unanimatedVertexElements.end());
 
-        auto vbOffset1 = largeResourcesBlock.size();
+        auto vbOffset1 = largeResourcesBlock.AddBlock(_animatedVertexElements);
         auto vbSize1 = _animatedVertexElements.size();
-        largeResourcesBlock.insert(largeResourcesBlock.end(), _animatedVertexElements.begin(), _animatedVertexElements.end());
 
-        auto vbOffset2 = largeResourcesBlock.size();
+        auto vbOffset2 = largeResourcesBlock.AddBlock(_skeletonBinding);
         auto vbSize2 = _skeletonBinding.size();
-        largeResourcesBlock.insert(largeResourcesBlock.end(), _skeletonBinding.begin(), _skeletonBinding.end());
 
-        auto ibOffset = largeResourcesBlock.size();
+        auto ibOffset = largeResourcesBlock.AddBlock(_indices);
         auto ibSize = _indices.size();
-        largeResourcesBlock.insert(largeResourcesBlock.end(), _indices.begin(), _indices.end());
 
             // first part is just like "NascentRawGeometry::SerializeMethod"
 
@@ -1044,6 +1040,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         SerializationOperator(outputSerializer, _localBoundingBox.second);
 
         outputSerializer.PushSizeValueAtRecall(recall);
+    }
+
+    void    NascentBoundSkinnedGeometry::SerializeTopologicalWithResourceBlock(
+            ::Assets::BlockSerializer& outputSerializer,
+            LargeResourceBlockConstructor& largeResourcesBlock) const
+    {
+        assert(0);      // unimplemented -- awkward amount of copied code
     }
 
 

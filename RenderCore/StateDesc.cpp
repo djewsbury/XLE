@@ -174,7 +174,10 @@ namespace RenderCore
 		case Topology::LineStrip: return "LineStrip";
 		case Topology::TriangleList: return "TriangleList";
         case Topology::TriangleStrip: return "TriangleStrip";
-        case Topology::LineListAdj: return "LineListAdj";
+        case Topology::LineListWithAdjacency: return "LineListWithAdjacency";
+        case Topology::LineStripWithAdjacency: return "LineStripWithAdjacency";
+        case Topology::TriangleListWithAdjacency: return "TriangleListWithAdjacency";
+        case Topology::TriangleStripWithAdjacency: return "TriangleStripWithAdjacency";
         case Topology::PatchList1: return "PatchList1";
         case Topology::PatchList2: return "PatchList2";
         case Topology::PatchList3: return "PatchList3";

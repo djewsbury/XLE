@@ -159,30 +159,62 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			IteratorRange<const Float4x4*> transforms
 		);
 
-	static ::Assets::Blob SerializeSkin(
+	static unsigned SerializeSkin(
 		::Assets::BlockSerializer& serializer, 
+		LargeResourceBlockConstructor& largeResourcesConstructor,
 		const NascentGeometryObjects& objs)
 	{
-		auto result = std::make_shared<std::vector<uint8>>();
+		unsigned geoBlocksWritten = 0;
 		for (const auto& geo:objs._rawGeos) {
 			::Assets::BlockSerializer tempBlock;
-			geo.second.SerializeWithResourceBlock(tempBlock, *result);
+			geo.second.SerializeWithResourceBlock(tempBlock, largeResourcesConstructor);
 
 			serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
 			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
 			serializer << tempBlock.SizePrimaryBlock();
 			serializer.SerializeSubBlock(tempBlock);
+			++geoBlocksWritten;
 		}
 		for (const auto& geo:objs._skinnedGeos) {
 			::Assets::BlockSerializer tempBlock;
-			geo.second.SerializeWithResourceBlock(tempBlock, *result);
+			geo.second.SerializeWithResourceBlock(tempBlock, largeResourcesConstructor);
 
 			serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
 			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
 			serializer << tempBlock.SizePrimaryBlock();
 			serializer.SerializeSubBlock(tempBlock);
+			++geoBlocksWritten;
 		}
-		return result;
+		return geoBlocksWritten;
+	}
+
+	static unsigned SerializeSkinTopological(
+		::Assets::BlockSerializer& serializer, 
+		LargeResourceBlockConstructor& largeResourcesConstructor,
+		const NascentGeometryObjects& objs)
+	{
+		unsigned geoBlocksWritten = 0;
+		for (const auto& geo:objs._rawGeos) {
+			::Assets::BlockSerializer tempBlock;
+			geo.second.SerializeTopologicalWithResourceBlock(tempBlock, largeResourcesConstructor);
+
+			serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
+			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
+			serializer << tempBlock.SizePrimaryBlock();
+			serializer.SerializeSubBlock(tempBlock);
+			++geoBlocksWritten;
+		}
+		for (const auto& geo:objs._skinnedGeos) {
+			::Assets::BlockSerializer tempBlock;
+			geo.second.SerializeTopologicalWithResourceBlock(tempBlock, largeResourcesConstructor);
+
+			serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
+			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
+			serializer << tempBlock.SizePrimaryBlock();
+			serializer.SerializeSubBlock(tempBlock);
+			++geoBlocksWritten;
+		}
+		return geoBlocksWritten;
 	}
 
     static ModelDefaultPoseData CalculateDefaultPoseData(
@@ -262,15 +294,34 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		::Assets::BlockSerializer serializer;
 		auto recall = serializer.CreateRecall(sizeof(unsigned));
 
-		auto largeResourcesBlock = SerializeSkin(serializer, geoObjects);
+		LargeResourceBlockConstructor largeResourcesConstructor;
+		unsigned geoBlocksWritten = 0;
 
+		// main command streams
 		{
+			geoBlocksWritten += SerializeSkin(serializer, largeResourcesConstructor, geoObjects);
+
 			::Assets::BlockSerializer tempBlock;
-			SerializeCmdStreamForm(tempBlock, cmdStream);
+			tempBlock << cmdStream;
 
 			serializer << (uint32_t)Assets::ScaffoldCommand::ModelCommandStream;
 			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t) + sizeof(uint64_t));
 			serializer << 0ull;	// default cmd stream id (s_CmdStreamGuid_Default)
+			serializer << tempBlock.SizePrimaryBlock();
+			serializer.SerializeSubBlock(tempBlock);
+		}
+
+		// topological command streams
+		{
+			auto geoBlockOffset = geoBlocksWritten;
+			geoBlocksWritten += SerializeSkinTopological(serializer, largeResourcesConstructor, geoObjects);
+
+			::Assets::BlockSerializer tempBlock;
+			SerializationOperator(tempBlock, cmdStream, geoBlockOffset);
+
+			serializer << (uint32_t)Assets::ScaffoldCommand::ModelCommandStream;
+			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t) + sizeof(uint64_t));
+			serializer << Hash64("adjacency");
 			serializer << tempBlock.SizePrimaryBlock();
 			serializer.SerializeSubBlock(tempBlock);
 		}
@@ -297,6 +348,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		}
 
 		serializer.PushSizeValueAtRecall(recall);
+
+		auto largeResourcesBlock = std::make_shared<std::vector<uint8_t>>();
+		largeResourcesBlock->resize(largeResourcesConstructor.CalculateSize());
+		auto i = largeResourcesBlock->begin();
+		for (const auto& e:largeResourcesConstructor._elements) {
+			std::memcpy(AsPointer(i), e.begin(), e.size());
+			i += e.size();
+		}
+		assert(i == largeResourcesBlock->end());
 
 		// SerializationOperator human-readable metrics information
 		std::stringstream metricsStream;
