@@ -269,7 +269,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			SerializeCmdStreamForm(tempBlock, cmdStream);
 
 			serializer << (uint32_t)Assets::ScaffoldCommand::ModelCommandStream;
-			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
+			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t) + sizeof(uint64_t));
+			serializer << 0ull;	// default cmd stream id (s_CmdStreamGuid_Default)
 			serializer << tempBlock.SizePrimaryBlock();
 			serializer.SerializeSubBlock(tempBlock);
 		}

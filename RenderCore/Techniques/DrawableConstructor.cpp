@@ -122,6 +122,9 @@ namespace RenderCore { namespace Techniques
 			{
 				if (!largeBlocksSize) return;
 				// note -- we could throw in a hash check here to avoid reuploading the same data
+				// we don't need to merge identical requests, because later on we sort and ensure each
+				// block is loaded only once
+				// however, there's no check for overlapping blocks
 				_staticLoadRequests.emplace_back(
 					LoadRequest{
 						scaffoldIdx, drawableGeoIdx,
@@ -257,17 +260,25 @@ namespace RenderCore { namespace Techniques
 					localLoadRequests.reserve(i-start);
 					unsigned offset = 0;
 					for (auto i2=start; i2!=i; ++i2) {
-						localLoadRequests.emplace_back(i2->_srcOffset, i2->_srcSize);
+
 						// set the offset value in the DrawableGeo now (though the resource won't be filled in immediately)
 						if (i2->_drawableStream == DrawableStream::IB) {
 							_geos[i2->_drawableGeoIdx]->_ibOffset = offset;
 						} else {
 							_geos[i2->_drawableGeoIdx]->_vertexStreams[unsigned(i2->_drawableStream)-unsigned(DrawableStream::Vertex0)]._vbOffset = offset;
 						}
-						offset += i2->_srcSize;	// todo -- alignment?
-
 						pendingTransactions->_resAssignments.emplace_back(
 							PendingTransactions::ResAssignment{_geos[i2->_drawableGeoIdx], (unsigned)pendingTransactions->_markers.size(), i2->_drawableStream});
+
+						// The same block can be requested multiple times for different DrawableGeos. Multiples will be sequential, though, 
+						// because it's sorted... so don't register the upload if it's the same as the last
+						if (localLoadRequests.empty() || localLoadRequests.back().first != i2->_srcOffset || localLoadRequests.back().second != i2->_srcSize) {
+							// check for overlap with the previous upload
+							assert(localLoadRequests.empty() || (localLoadRequests.back().first + localLoadRequests.back().second) <= i2->_srcOffset);
+
+							localLoadRequests.emplace_back(i2->_srcOffset, i2->_srcSize);
+							offset += i2->_srcSize;	// todo -- alignment?
+						}
 					}
 					auto transMarker = LoadStaticResourceFullyAsync(
 						bufferUploads,
@@ -484,11 +495,16 @@ namespace RenderCore { namespace Techniques
 		Internal::DrawableGeoBuilder _pendingGeos;
 		std::future<BufferUploads::CommandListID> _uploadFuture;
 		std::atomic<bool> _fulfillWhenNotPendingCalled = false;
-		std::vector<DrawCall> _pendingDrawCalls;
-		std::vector<uint8_t> _pendingTranslatedCmdStream;
 		std::vector<::Assets::DependencyValidation> _pendingDepVals;
 		std::vector<Float4x4> _pendingBaseTransforms;
 		std::vector<std::pair<unsigned, unsigned>> _pendingBaseTransformsPerElement;
+
+		struct PendingCmdStream
+		{
+			std::vector<DrawCall> _drawCalls;
+			std::vector<uint8_t> _translatedCmdStream;
+		};
+		std::vector<std::pair<uint64_t, PendingCmdStream>> _pendingCmdStreams;
 
 		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
 
@@ -502,8 +518,6 @@ namespace RenderCore { namespace Techniques
 			_pendingDepVals.push_back(modelScaffold->GetDependencyValidation());
 			_pendingDepVals.push_back(materialScaffold->GetDependencyValidation());
 
-			IteratorRange<const uint64_t*> currentMaterialAssignments;
-
 			RenderCore::Techniques::IDeformGeoAttachment* geoDeformerInfrastructure = nullptr;
 			RenderCore::Techniques::IDeformUniformsAttachment* deformParametersAttachment = nullptr;
 			DeformerToRendererBinding deformerBinding;
@@ -514,131 +528,143 @@ namespace RenderCore { namespace Techniques
 					deformerBinding = geoDeformerInfrastructure->GetDeformerToRendererBinding();
 			}
 
-			{
-				// BeginElement command
-				auto cmdId = (uint32_t)Command::BeginElement, blockSize = 4u;
-				_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
-				_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
-				_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&elementIdx, (const uint8_t*)(&elementIdx+1));
-			}
-
-			std::vector<std::pair<unsigned, unsigned>> modelGeoIdToPendingGeoIndex;
-			std::optional<Float4x4> currentGeoSpaceToNodeSpace;
+			// there can be multiple cmd streams in a single model scaffold. We will load and interpret each one
 			int maxTransformMarker = -1;
-			for (auto cmd:modelScaffold->CommandStream()) {
-				switch (cmd.Cmd()) {
-				default:
-					{
-						if (cmd.Cmd() == (uint32_t)Assets::ModelCommand::SetMaterialAssignments) {
-							currentMaterialAssignments = cmd.RawData().Cast<const uint64_t*>();
-						} else if (cmd.Cmd() == (uint32_t)Assets::ModelCommand::SetTransformMarker) {
-							maxTransformMarker = std::max(maxTransformMarker, (int)cmd.As<unsigned>());
-						}
+			for (auto cmdStreamGuid:modelScaffold->CollateCommandStreams()) {
+				PendingCmdStream* dstCmdStream;
+				auto existingCmdStream = std::find_if(_pendingCmdStreams.begin(), _pendingCmdStreams.end(), [cmdStreamGuid](const auto& q) { return q.first == cmdStreamGuid; });
+				if (existingCmdStream == _pendingCmdStreams.end()) {
+					_pendingCmdStreams.emplace_back(cmdStreamGuid, PendingCmdStream{});
+					dstCmdStream = &_pendingCmdStreams.back().second;
+				} else
+					dstCmdStream = &existingCmdStream->second;
 
-						auto cmdId = cmd.Cmd(), blockSize = cmd.BlockSize();
-						_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
-						_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
-						_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)cmd.RawData().begin(), (const uint8_t*)cmd.RawData().end());
-					}
-					break;
+				{
+					// BeginElement command
+					auto cmdId = (uint32_t)Command::BeginElement, blockSize = 4u;
+					dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
+					dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
+					dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&elementIdx, (const uint8_t*)(&elementIdx+1));
+				}
 
-				case (uint32_t)Assets::ModelCommand::GeoCall:
-					{
-						auto& geoCallDesc = cmd.As<Assets::GeoCallDesc>();
-						auto geoMachine = modelScaffold->GetGeoMachine(geoCallDesc._geoId);
-						assert(!geoMachine.empty());
-						assert(!currentMaterialAssignments.empty());
-
-						// Find the referenced geo object, and create the DrawableGeo object, etc
-						unsigned pendingGeoIdx = ~0u;
-						auto i = std::find_if(
-							modelGeoIdToPendingGeoIndex.begin(), modelGeoIdToPendingGeoIndex.end(),
-							[geoId=geoCallDesc._geoId](const auto& q) { return q.first == geoId; });
-						if (i == modelGeoIdToPendingGeoIndex.end()) {
-							pendingGeoIdx = _pendingGeos.AddGeo(
-								geoMachine, modelScaffold,
-								deformAccelerator,
-								FindDeformerBinding(deformerBinding, elementIdx, geoCallDesc._geoId),
-								modelScaffoldName);
-							modelGeoIdToPendingGeoIndex.emplace_back(geoCallDesc._geoId, pendingGeoIdx);
-						} else {
-							pendingGeoIdx = i->second;
-						}
-
-						// configure the draw calls that we're going to need to make for this geocall
-						// while doing this we'll also sort out materials
-						const Assets::RawGeometryDesc* rawGeometry = nullptr;
-						for (auto cmd:geoMachine) {
-							switch (cmd.Cmd()) {
-							case (uint32_t)Assets::GeoCommand::AttachRawGeometry:
-								assert(!rawGeometry);
-								rawGeometry = (const Assets::RawGeometryDesc*)cmd.RawData().begin();
-								break;
+				IteratorRange<const uint64_t*> currentMaterialAssignments;
+				std::vector<std::pair<unsigned, unsigned>> modelGeoIdToPendingGeoIndex;
+				std::optional<Float4x4> currentGeoSpaceToNodeSpace;
+				for (auto cmd:modelScaffold->CommandStream()) {
+					switch (cmd.Cmd()) {
+					default:
+						{
+							if (cmd.Cmd() == (uint32_t)Assets::ModelCommand::SetMaterialAssignments) {
+								currentMaterialAssignments = cmd.RawData().Cast<const uint64_t*>();
+							} else if (cmd.Cmd() == (uint32_t)Assets::ModelCommand::SetTransformMarker) {
+								maxTransformMarker = std::max(maxTransformMarker, (int)cmd.As<unsigned>());
 							}
+
+							auto cmdId = cmd.Cmd(), blockSize = cmd.BlockSize();
+							dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
+							dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
+							dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)cmd.RawData().begin(), (const uint8_t*)cmd.RawData().end());
 						}
+						break;
 
-						if (rawGeometry) {
-							unsigned drawCallIterators[2] = {(unsigned)_pendingDrawCalls.size()};
+					case (uint32_t)Assets::ModelCommand::GeoCall:
+						{
+							auto& geoCallDesc = cmd.As<Assets::GeoCallDesc>();
+							auto geoMachine = modelScaffold->GetGeoMachine(geoCallDesc._geoId);
+							assert(!geoMachine.empty());
+							assert(!currentMaterialAssignments.empty());
 
-							if (!Equivalent(rawGeometry->_geoSpaceToNodeSpace, Identity<Float4x4>(), 1e-3f)) {
-								if (!currentGeoSpaceToNodeSpace.has_value() || currentGeoSpaceToNodeSpace.value() != rawGeometry->_geoSpaceToNodeSpace) {		// binary comparison intentional
-									auto cmdId = (uint32_t)Command::SetGeoSpaceToNodeSpace, blockSize = (uint32_t)sizeof(Float4x4);
-									_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
-									_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
-									_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&rawGeometry->_geoSpaceToNodeSpace, (const uint8_t*)(&rawGeometry->_geoSpaceToNodeSpace+1));
-									currentGeoSpaceToNodeSpace = rawGeometry->_geoSpaceToNodeSpace;
+							// Find the referenced geo object, and create the DrawableGeo object, etc
+							unsigned pendingGeoIdx = ~0u;
+							auto i = std::find_if(
+								modelGeoIdToPendingGeoIndex.begin(), modelGeoIdToPendingGeoIndex.end(),
+								[geoId=geoCallDesc._geoId](const auto& q) { return q.first == geoId; });
+							if (i == modelGeoIdToPendingGeoIndex.end()) {
+								pendingGeoIdx = _pendingGeos.AddGeo(
+									geoMachine, modelScaffold,
+									deformAccelerator,
+									FindDeformerBinding(deformerBinding, elementIdx, geoCallDesc._geoId),
+									modelScaffoldName);
+								modelGeoIdToPendingGeoIndex.emplace_back(geoCallDesc._geoId, pendingGeoIdx);
+							} else {
+								pendingGeoIdx = i->second;
+							}
+
+							// configure the draw calls that we're going to need to make for this geocall
+							// while doing this we'll also sort out materials
+							const Assets::RawGeometryDesc* rawGeometry = nullptr;
+							for (auto cmd:geoMachine) {
+								switch (cmd.Cmd()) {
+								case (uint32_t)Assets::GeoCommand::AttachRawGeometry:
+									assert(!rawGeometry);
+									rawGeometry = (const Assets::RawGeometryDesc*)cmd.RawData().begin();
+									break;
 								}
-							} else if (currentGeoSpaceToNodeSpace.has_value()) {
-								auto cmdId = (uint32_t)Command::SetGeoSpaceToNodeSpace, blockSize = (uint32_t)0;
-								_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
-								_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
-								currentGeoSpaceToNodeSpace = {};
 							}
 
-							auto& pendingGeo = _pendingGeos._geos[pendingGeoIdx];
-							unsigned materialIterator = 0;
-							assert(rawGeometry->_drawCalls.size() == currentMaterialAssignments.size());
-							for (const auto& dc:rawGeometry->_drawCalls) {
-								// note -- there's some redundancy here, because we'll end up calling 
-								// AddMaterial & MakePipeline over and over again for the same parameters. There's
-								// some caching in those to precent allocating dupes, but it might still be more
-								// efficient to avoid some of the redundancy
-								assert(materialIterator < currentMaterialAssignments.size());
-								auto matAssignment = currentMaterialAssignments[materialIterator++];
-								auto* workingMaterial = _pendingPipelines.AddMaterial(
-									materialScaffold->GetMaterialMachine(matAssignment),
-									materialScaffold,
-									elementIdx, matAssignment,
-									deformAcceleratorPool.get(), deformParametersAttachment);
-								auto compiledPipeline = _pendingPipelines.MakePipeline(
-									*workingMaterial, 
-									_pendingGeos._geosLayout[pendingGeoIdx],
-									_pendingGeos._geosTopologies[pendingGeoIdx]);
+							if (rawGeometry) {
+								unsigned drawCallIterators[2] = {(unsigned)dstCmdStream->_drawCalls.size()};
 
-								DrawCall drawCall;
-								drawCall._drawableGeoIdx = pendingGeoIdx;
-								drawCall._pipelineAcceleratorIdx = compiledPipeline._pipelineAcceleratorIdx;
-								drawCall._descriptorSetAcceleratorIdx = workingMaterial->_descriptorSetAcceleratorIdx;
-								drawCall._iaIdx = compiledPipeline._iaIdx;
-								drawCall._batchFilter = workingMaterial->_batchFilter;
-								drawCall._firstIndex = dc._firstIndex;
-								drawCall._indexCount = dc._indexCount;
-								drawCall._firstVertex = dc._firstVertex;
-								_pendingDrawCalls.push_back(drawCall);
-							}
+								if (!Equivalent(rawGeometry->_geoSpaceToNodeSpace, Identity<Float4x4>(), 1e-3f)) {
+									if (!currentGeoSpaceToNodeSpace.has_value() || currentGeoSpaceToNodeSpace.value() != rawGeometry->_geoSpaceToNodeSpace) {		// binary comparison intentional
+										auto cmdId = (uint32_t)Command::SetGeoSpaceToNodeSpace, blockSize = (uint32_t)sizeof(Float4x4);
+										dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
+										dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
+										dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&rawGeometry->_geoSpaceToNodeSpace, (const uint8_t*)(&rawGeometry->_geoSpaceToNodeSpace+1));
+										currentGeoSpaceToNodeSpace = rawGeometry->_geoSpaceToNodeSpace;
+									}
+								} else if (currentGeoSpaceToNodeSpace.has_value()) {
+									auto cmdId = (uint32_t)Command::SetGeoSpaceToNodeSpace, blockSize = (uint32_t)0;
+									dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
+									dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
+									currentGeoSpaceToNodeSpace = {};
+								}
 
-							{
-								// The ModelCommand::GeoCall cmd is not added to the translated command stream, but instead
-								// we add a ExecuteDrawCalls command
-								drawCallIterators[1] = (unsigned)_pendingDrawCalls.size();
-								auto cmdId = (uint32_t)Command::ExecuteDrawCalls, blockSize = 8u;
-								_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
-								_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
-								_pendingTranslatedCmdStream.insert(_pendingTranslatedCmdStream.end(), (const uint8_t*)&drawCallIterators, (const uint8_t*)&drawCallIterators[2]);
+								auto& pendingGeo = _pendingGeos._geos[pendingGeoIdx];
+								unsigned materialIterator = 0;
+								assert(rawGeometry->_drawCalls.size() == currentMaterialAssignments.size());
+								for (const auto& dc:rawGeometry->_drawCalls) {
+									// note -- there's some redundancy here, because we'll end up calling 
+									// AddMaterial & MakePipeline over and over again for the same parameters. There's
+									// some caching in those to precent allocating dupes, but it might still be more
+									// efficient to avoid some of the redundancy
+									assert(materialIterator < currentMaterialAssignments.size());
+									auto matAssignment = currentMaterialAssignments[materialIterator++];
+									auto* workingMaterial = _pendingPipelines.AddMaterial(
+										materialScaffold->GetMaterialMachine(matAssignment),
+										materialScaffold,
+										elementIdx, matAssignment,
+										deformAcceleratorPool.get(), deformParametersAttachment);
+									auto compiledPipeline = _pendingPipelines.MakePipeline(
+										*workingMaterial, 
+										_pendingGeos._geosLayout[pendingGeoIdx],
+										_pendingGeos._geosTopologies[pendingGeoIdx]);
+
+									DrawCall drawCall;
+									drawCall._drawableGeoIdx = pendingGeoIdx;
+									drawCall._pipelineAcceleratorIdx = compiledPipeline._pipelineAcceleratorIdx;
+									drawCall._descriptorSetAcceleratorIdx = workingMaterial->_descriptorSetAcceleratorIdx;
+									drawCall._iaIdx = compiledPipeline._iaIdx;
+									drawCall._batchFilter = workingMaterial->_batchFilter;
+									drawCall._firstIndex = dc._firstIndex;
+									drawCall._indexCount = dc._indexCount;
+									drawCall._firstVertex = dc._firstVertex;
+									dstCmdStream->_drawCalls.push_back(drawCall);
+								}
+
+								{
+									// The ModelCommand::GeoCall cmd is not added to the translated command stream, but instead
+									// we add a ExecuteDrawCalls command
+									drawCallIterators[1] = (unsigned)dstCmdStream->_drawCalls.size();
+									auto cmdId = (uint32_t)Command::ExecuteDrawCalls, blockSize = 8u;
+									dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
+									dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
+									dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&drawCallIterators, (const uint8_t*)&drawCallIterators[2]);
+								}
 							}
 						}
+						break;
 					}
-					break;
 				}
 			}
 
@@ -679,35 +705,12 @@ namespace RenderCore { namespace Techniques
 			unsigned pipelineAcceleratorIdxOffset = dst._pipelineAccelerators.size();
 			unsigned descSetAcceleratorIdxOffset = dst._descriptorSetAccelerators.size();
 			unsigned iaIdxOffset = dst._drawableInputAssemblies.size();
-			unsigned drawCallIdxOffset = dst._drawCalls.size();
 			dst._drawableGeos.insert(dst._drawableGeos.end(), _pendingGeos._geos.begin(), _pendingGeos._geos.end());
 			dst._pipelineAccelerators.insert(dst._pipelineAccelerators.end(), _pendingPipelines._pipelineAccelerators.begin(), _pendingPipelines._pipelineAccelerators.end());
 			dst._descriptorSetAccelerators.insert(dst._descriptorSetAccelerators.end(), _pendingPipelines._descriptorSetAccelerators.begin(), _pendingPipelines._descriptorSetAccelerators.end());
 			dst._drawableInputAssemblies.insert(dst._drawableInputAssemblies.end(), _pendingPipelines._pendingInputAssemblies.begin(), _pendingPipelines._pendingInputAssemblies.end());
 			dst._baseTransforms.insert(dst._baseTransforms.end(), _pendingBaseTransforms.begin(), _pendingBaseTransforms.end());
 			dst._baseTransformsPerElement.insert(dst._baseTransformsPerElement.end(), _pendingBaseTransformsPerElement.begin(), _pendingBaseTransformsPerElement.end());
-
-			for (auto& p:_pendingDrawCalls) {
-				p._drawableGeoIdx += geoIdxOffset;
-				p._pipelineAcceleratorIdx += pipelineAcceleratorIdxOffset;
-				p._descriptorSetAcceleratorIdx += descSetAcceleratorIdxOffset;
-				p._iaIdx += iaIdxOffset;
-			}
-			dst._drawCalls.insert(dst._drawCalls.end(), _pendingDrawCalls.begin(), _pendingDrawCalls.end());
-
-			// offset draw call indices in _pendingTranslatedCmdStream and append
-			for (auto cmd:Assets::MakeScaffoldCmdRange(MakeIteratorRange(_pendingTranslatedCmdStream)))
-				if (cmd.Cmd() == (uint32_t)Command::ExecuteDrawCalls) {
-					auto range = cmd.RawData().Cast<const unsigned*>();
-					for (auto& r:range) const_cast<unsigned&>(r) += drawCallIdxOffset;
-				}
-			dst._translatedCmdStream.insert(dst._translatedCmdStream.end(), _pendingTranslatedCmdStream.begin(), _pendingTranslatedCmdStream.end());
-
-			// count up draw calls
-			static_assert(dimof(dst._drawCallCounts) == (size_t)Batch::Max);
-			for (auto& count:dst._drawCallCounts) count = 0;
-			for (const auto& drawCall:dst._drawCalls)
-				++dst._drawCallCounts[(unsigned)drawCall._batchFilter];
 
 			if (!dst._depVal) {
 				std::vector<::Assets::DependencyValidationMarker> depValMarkers;
@@ -721,13 +724,46 @@ namespace RenderCore { namespace Techniques
 					dst._depVal.RegisterDependency(d);
 			}
 			
-			_pendingDrawCalls.clear();
 			_pendingGeos = {};
 			_pendingPipelines = {};
-			_pendingTranslatedCmdStream.clear();
 			_pendingDepVals.clear();
 			_pendingBaseTransforms.clear();
 			_pendingBaseTransformsPerElement.clear();
+
+			// per-command-stream stuff --
+
+			for (auto& srcCmdStream:_pendingCmdStreams) {
+				auto dstCmdStream = std::find_if(dst._cmdStreams.begin(), dst._cmdStreams.end(), [guid=srcCmdStream.first](const auto& q) { return q._guid == guid; });
+				if (dstCmdStream == dst._cmdStreams.end()) {
+					dst._cmdStreams.emplace_back(CommandStream{srcCmdStream.first});
+					dstCmdStream = dst._cmdStreams.end()-1;
+				}
+
+				unsigned drawCallIdxOffset = dstCmdStream->_drawCalls.size();
+				for (auto& p:srcCmdStream.second._drawCalls) {
+					p._drawableGeoIdx += geoIdxOffset;
+					p._pipelineAcceleratorIdx += pipelineAcceleratorIdxOffset;
+					p._descriptorSetAcceleratorIdx += descSetAcceleratorIdxOffset;
+					p._iaIdx += iaIdxOffset;
+				}
+				dstCmdStream->_drawCalls.insert(dstCmdStream->_drawCalls.end(), srcCmdStream.second._drawCalls.begin(), srcCmdStream.second._drawCalls.end());
+
+				// offset draw call indices in _pendingTranslatedCmdStream and append
+				for (auto cmd:Assets::MakeScaffoldCmdRange(MakeIteratorRange(srcCmdStream.second._translatedCmdStream)))
+					if (cmd.Cmd() == (uint32_t)Command::ExecuteDrawCalls) {
+						auto range = cmd.RawData().Cast<const unsigned*>();
+						for (auto& r:range) const_cast<unsigned&>(r) += drawCallIdxOffset;
+					}
+				dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), srcCmdStream.second._translatedCmdStream.begin(), srcCmdStream.second._translatedCmdStream.end());
+
+				// count up draw calls
+				static_assert(dimof(dstCmdStream->_drawCallCounts) == (size_t)Batch::Max);
+				for (auto& count:dstCmdStream->_drawCallCounts) count = 0;
+				for (const auto& drawCall:dstCmdStream->_drawCalls)
+					++dstCmdStream->_drawCallCounts[(unsigned)drawCall._batchFilter];
+			}
+
+			_pendingCmdStreams.clear();
 		}
 
 		Pimpl(std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
@@ -782,7 +818,15 @@ namespace RenderCore { namespace Techniques
 			});
 	}
 
-	IteratorRange<Assets::ScaffoldCmdIterator> DrawableConstructor::GetCmdStream() const
+	IteratorRange<Assets::ScaffoldCmdIterator> DrawableConstructor::GetCmdStream(uint64_t guid) const
+	{
+		for (const auto& q:_cmdStreams)
+			if (q._guid == guid)
+				return q.GetCmdStream();
+		return {};
+	}
+
+	IteratorRange<Assets::ScaffoldCmdIterator> DrawableConstructor::CommandStream::GetCmdStream() const
 	{
 		return Assets::MakeScaffoldCmdRange(MakeIteratorRange(_translatedCmdStream));
 	}

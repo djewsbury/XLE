@@ -61,6 +61,21 @@ namespace RenderCore { namespace Assets
 
 	std::shared_ptr<::Assets::IFileInterface> ModelScaffold::OpenLargeBlocks() const { return _largeBlocksReopen(); }
 
+	IteratorRange<ScaffoldCmdIterator> ModelScaffold::CommandStream(uint64_t cmdStreamId) const
+	{
+		auto i = LowerBound(_commandStreams, cmdStreamId);
+		if (i != _commandStreams.end() && i->first == cmdStreamId)
+			return i->second;
+		return {};
+	}
+	std::vector<uint64_t> ModelScaffold::CollateCommandStreams() const
+	{
+		std::vector<uint64_t> result;
+		result.reserve(_commandStreams.size());
+		for (const auto& q:_commandStreams) result.push_back(q.first);
+		return result;
+	}
+
 	ModelScaffold::ModelScaffold() {}
 	ModelScaffold::ModelScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
 	: _depVal{depVal}
@@ -83,9 +98,11 @@ namespace RenderCore { namespace Assets
 
 			case (uint32_t)ScaffoldCommand::ModelCommandStream:
 				{
-					struct StreamRef { size_t _dataSize; const void* _data; };
+					struct StreamRef { uint64_t _guid; size_t _dataSize; const void* _data; };
 					auto ref = cmd.As<StreamRef>();
-					_commandStream = Assets::MakeScaffoldCmdRange(MakeIteratorRange(ref._data, PtrAdd(ref._data, ref._dataSize)));
+					_commandStreams.insert(
+						LowerBound(_commandStreams, ref._guid),
+						std::make_pair(ref._guid, Assets::MakeScaffoldCmdRange(MakeIteratorRange(ref._data, PtrAdd(ref._data, ref._dataSize)))));
 				}
 				break;
 

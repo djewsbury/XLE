@@ -30,6 +30,8 @@ namespace RenderCore { namespace Assets
 	struct ModelRootData;
 
 	using MaterialGuid = uint64_t;
+	using CmdStreamGuid = uint64_t;
+	static constexpr CmdStreamGuid s_CmdStreamGuid_Default = 0x0;
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -55,7 +57,8 @@ namespace RenderCore { namespace Assets
 	class ModelScaffold
 	{
 	public:
-		IteratorRange<ScaffoldCmdIterator> CommandStream() const;
+		IteratorRange<ScaffoldCmdIterator> CommandStream(uint64_t cmdStreamId = s_CmdStreamGuid_Default) const;
+		std::vector<uint64_t> CollateCommandStreams() const;
 
 		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
 		using GeoIdx = unsigned;
@@ -79,7 +82,7 @@ namespace RenderCore { namespace Assets
 		static const ::Assets::ArtifactRequest ChunkRequests[2];
 	private:
 		std::vector<Machine>	_geoMachines;
-		Machine 				_commandStream;
+		std::vector<std::pair<uint64_t, Machine>> _commandStreams;
 		const ModelDefaultPoseData* _defaultPoseData = nullptr;
 		const ModelRootData*	_rootData = nullptr;
 		const SkeletonMachine*	_embeddedSkeleton = nullptr;
@@ -91,8 +94,6 @@ namespace RenderCore { namespace Assets
 
 		IteratorRange<ScaffoldCmdIterator> GetOuterCommandStream() const;
 	};
-
-	inline IteratorRange<ScaffoldCmdIterator> ModelScaffold::CommandStream() const { return _commandStream; }
 
 	inline auto ModelScaffold::GetGeoMachine(GeoIdx idx) const -> Machine
 	{

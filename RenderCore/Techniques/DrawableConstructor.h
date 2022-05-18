@@ -29,6 +29,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::shared_ptr<PipelineAccelerator>> _pipelineAccelerators;
 		std::vector<std::shared_ptr<DescriptorSetAccelerator>> _descriptorSetAccelerators;
 		std::vector<std::shared_ptr<DrawableInputAssembly>> _drawableInputAssemblies;
+
 		struct DrawCall
 		{
 			unsigned _drawableGeoIdx = ~0u;					// index into _drawableGeos
@@ -40,17 +41,24 @@ namespace RenderCore { namespace Techniques
 			unsigned _indexCount = 0;
 			unsigned _firstVertex = 0;
 		};
-		std::vector<DrawCall> _drawCalls;
-		unsigned _drawCallCounts[2] = {0};		// per batch
-
 		enum class Command : uint32_t
 		{
 			BeginElement = 0x3000,		// must equal s_scaffoldCmdBegin_DrawableConstructor
 			ExecuteDrawCalls,
 			SetGeoSpaceToNodeSpace
 		};
-		std::vector<uint8_t> _translatedCmdStream;
-		IteratorRange<Assets::ScaffoldCmdIterator> GetCmdStream() const;
+		struct CommandStream
+		{
+			uint64_t _guid;
+			std::vector<DrawCall> _drawCalls;
+			unsigned _drawCallCounts[2] = {0};		// per batch
+			std::vector<uint8_t> _translatedCmdStream;
+
+			IteratorRange<Assets::ScaffoldCmdIterator> GetCmdStream() const;
+		};
+		std::vector<CommandStream> _cmdStreams;
+
+		IteratorRange<Assets::ScaffoldCmdIterator> GetCmdStream(uint64_t guid) const;
 
 		std::vector<Float4x4> _baseTransforms;
 		std::vector<std::pair<unsigned, unsigned>> _baseTransformsPerElement;

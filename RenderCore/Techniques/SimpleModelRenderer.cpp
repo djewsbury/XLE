@@ -158,26 +158,28 @@ namespace RenderCore { namespace Techniques
 		if (_deformAcceleratorPool && _deformAccelerator)
 			_deformAcceleratorPool->EnableInstance(*_deformAccelerator, deformInstanceIdx);
 
-		SimpleModelDrawable* drawables[dimof(_drawableConstructor->_drawCallCounts)];
-		for (unsigned c=0; c<dimof(_drawableConstructor->_drawCallCounts); ++c) {
-			if (!_drawableConstructor->_drawCallCounts[c]) {
+		assert(!_drawableConstructor->_cmdStreams.empty());
+		auto& cmdStream = _drawableConstructor->_cmdStreams.front();
+		SimpleModelDrawable* drawables[dimof(cmdStream._drawCallCounts)];
+		for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c) {
+			if (!cmdStream._drawCallCounts[c]) {
 				drawables[c] = nullptr;
 				continue;
 			}
-			drawables[c] = pkts[c] ? pkts[c]->_drawables.Allocate<SimpleModelDrawable>(_drawableConstructor->_drawCallCounts[c]) : nullptr;
+			drawables[c] = pkts[c] ? pkts[c]->_drawables.Allocate<SimpleModelDrawable>(cmdStream._drawCallCounts[c]) : nullptr;
 		}
 
 		auto* drawableFn = (viewMask==1) ? (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelStatic : (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelStaticMultiView; 
 
 		auto localToWorld3x4 = AsFloat3x4(localToWorld);
-		auto nodeSpaceToWorld = Identity<Float3x4>();;
+		auto nodeSpaceToWorld = Identity<Float3x4>();
 		const Float4x4* geoSpaceToNodeSpace = nullptr;
 		IteratorRange<const uint64_t*> materialGuids;
 		unsigned materialGuidsIterator = 0;
 		unsigned transformMarker = ~0u;
 		unsigned elementIdx = ~0u;
 		unsigned drawCallCounter = 0;
-		for (auto cmd:_drawableConstructor->GetCmdStream()) {
+		for (auto cmd:cmdStream.GetCmdStream()) {
 			switch (cmd.Cmd()) {
 			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
 				transformMarker = cmd.As<unsigned>();
@@ -204,7 +206,7 @@ namespace RenderCore { namespace Techniques
 					struct DrawCallsRef { unsigned _start, _end; };
 					auto& drawCallsRef = cmd.As<DrawCallsRef>();
 					auto localTransform = geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
-					for (const auto& dc:MakeIteratorRange(_drawableConstructor->_drawCalls.begin()+drawCallsRef._start, _drawableConstructor->_drawCalls.begin()+drawCallsRef._end)) {
+					for (const auto& dc:MakeIteratorRange(cmdStream._drawCalls.begin()+drawCallsRef._start, cmdStream._drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
 						drawable._geo = _drawableConstructor->_drawableGeos[dc._drawableGeoIdx].get();
@@ -241,24 +243,26 @@ namespace RenderCore { namespace Techniques
 		if (_deformAcceleratorPool && _deformAccelerator)
 			_deformAcceleratorPool->EnableInstance(*_deformAccelerator, deformInstanceIdx);
 
-		SimpleModelDrawable* drawables[dimof(_drawableConstructor->_drawCallCounts)];
-		for (unsigned c=0; c<dimof(_drawableConstructor->_drawCallCounts); ++c) {
-			if (!_drawableConstructor->_drawCallCounts[c]) {
+		assert(!_drawableConstructor->_cmdStreams.empty());
+		auto& cmdStream = _drawableConstructor->_cmdStreams.front();
+		SimpleModelDrawable* drawables[dimof(cmdStream._drawCallCounts)];
+		for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c) {
+			if (!cmdStream._drawCallCounts[c]) {
 				drawables[c] = nullptr;
 				continue;
 			}
-			drawables[c] = pkts[c] ? pkts[c]->_drawables.Allocate<SimpleModelDrawable_Delegate>(_drawableConstructor->_drawCallCounts[c]) : nullptr;
+			drawables[c] = pkts[c] ? pkts[c]->_drawables.Allocate<SimpleModelDrawable_Delegate>(cmdStream._drawCallCounts[c]) : nullptr;
 		}
 
 		auto localToWorld3x4 = AsFloat3x4(localToWorld);
-		auto nodeSpaceToWorld = Identity<Float3x4>();;
+		auto nodeSpaceToWorld = Identity<Float3x4>();
 		const Float4x4* geoSpaceToNodeSpace = nullptr;
 		IteratorRange<const uint64_t*> materialGuids;
 		unsigned materialGuidsIterator = 0;
 		unsigned transformMarker = ~0u;
 		unsigned elementIdx = ~0u;
 		unsigned drawCallCounter = 0;
-		for (auto cmd:_drawableConstructor->GetCmdStream()) {
+		for (auto cmd:cmdStream.GetCmdStream()) {
 			switch (cmd.Cmd()) {
 			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
 				transformMarker = cmd.As<unsigned>();
@@ -285,7 +289,7 @@ namespace RenderCore { namespace Techniques
 					struct DrawCallsRef { unsigned _start, _end; };
 					auto& drawCallsRef = cmd.As<DrawCallsRef>();
 					auto localTransform = geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
-					for (const auto& dc:MakeIteratorRange(_drawableConstructor->_drawCalls.begin()+drawCallsRef._start, _drawableConstructor->_drawCalls.begin()+drawCallsRef._end)) {
+					for (const auto& dc:MakeIteratorRange(cmdStream._drawCalls.begin()+drawCallsRef._start, cmdStream._drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
 						drawable._geo = _drawableConstructor->_drawableGeos[dc._drawableGeoIdx].get();
@@ -312,23 +316,25 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<DrawablesPacket** const> pkts,
 		const Float4x4& localToWorld) const 
 	{
-		GeometryProcable* drawables[dimof(_drawableConstructor->_drawCallCounts)];
-		for (unsigned c=0; c<dimof(_drawableConstructor->_drawCallCounts); ++c) {
-			if (!_drawableConstructor->_drawCallCounts[c]) {
+		assert(!_drawableConstructor->_cmdStreams.empty());
+		auto& cmdStream = _drawableConstructor->_cmdStreams.front();
+		GeometryProcable* drawables[dimof(cmdStream._drawCallCounts)];
+		for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c) {
+			if (!cmdStream._drawCallCounts[c]) {
 				drawables[c] = nullptr;
 				continue;
 			}
-			drawables[c] = pkts[c] ? pkts[c]->_drawables.Allocate<GeometryProcable>(_drawableConstructor->_drawCallCounts[c]) : nullptr;
+			drawables[c] = pkts[c] ? pkts[c]->_drawables.Allocate<GeometryProcable>(cmdStream._drawCallCounts[c]) : nullptr;
 		}
 
 		auto localToWorld3x4 = AsFloat3x4(localToWorld);
-		auto nodeSpaceToWorld = Identity<Float3x4>();;
+		auto nodeSpaceToWorld = Identity<Float3x4>();
 		const Float4x4* geoSpaceToNodeSpace = nullptr;
 		IteratorRange<const uint64_t*> materialGuids;
 		unsigned materialGuidsIterator = 0;
 		unsigned transformMarker = ~0u;
 		unsigned elementIdx = ~0u;
-		for (auto cmd:_drawableConstructor->GetCmdStream()) {
+		for (auto cmd:cmdStream.GetCmdStream()) {
 			switch (cmd.Cmd()) {
 			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
 				transformMarker = cmd.As<unsigned>();
@@ -355,7 +361,7 @@ namespace RenderCore { namespace Techniques
 					struct DrawCallsRef { unsigned _start, _end; };
 					auto& drawCallsRef = cmd.As<DrawCallsRef>();
 					auto localToWorld = AsFloat4x4(geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld); // todo -- don't have to recalculate this every draw call
-					for (const auto& dc:MakeIteratorRange(_drawableConstructor->_drawCalls.begin()+drawCallsRef._start, _drawableConstructor->_drawCalls.begin()+drawCallsRef._end)) {
+					for (const auto& dc:MakeIteratorRange(cmdStream._drawCalls.begin()+drawCallsRef._start, cmdStream._drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
 						drawable._geo = _drawableConstructor->_drawableGeos[dc._drawableGeoIdx].get();
@@ -468,22 +474,23 @@ namespace RenderCore { namespace Techniques
 		// Check to make sure we've got a skeleton binding for each referenced geo call to world referenced
 		{
 			std::optional<unsigned> currentElementIdx;
-			auto cmdStream = Assets::MakeScaffoldCmdRange(MakeIteratorRange(_drawableConstructor->_translatedCmdStream));
-			for (auto cmd:cmdStream) {
-				switch (cmd.Cmd()) {
-				case (uint32_t)DrawableConstructor::Command::BeginElement:
-					currentElementIdx = cmd.As<unsigned>();
-					break;
-				case (uint32_t)Assets::ModelCommand::SetTransformMarker:
-					if (!currentElementIdx.has_value() || currentElementIdx.value() >= _elements.size())
-						Throw(std::runtime_error("Bad or missing element index in DrawableConstructor command stream"));
-					auto& element = _elements[*currentElementIdx];
-					unsigned machineOutput = ~0u;
-					if (cmd.As<unsigned>() < element._skeletonBinding.GetModelJointCount())
-						machineOutput = element._skeletonBinding.ModelJointToMachineOutput(cmd.As<unsigned>());
-					if (machineOutput >= element._baseTransformCount)
-						Throw(std::runtime_error("Geocall to world unbound in skeleton binding"));
-					break;
+			for (const auto& cmdStream:_drawableConstructor->_cmdStreams) {
+				for (auto cmd:cmdStream.GetCmdStream()) {
+					switch (cmd.Cmd()) {
+					case (uint32_t)DrawableConstructor::Command::BeginElement:
+						currentElementIdx = cmd.As<unsigned>();
+						break;
+					case (uint32_t)Assets::ModelCommand::SetTransformMarker:
+						if (!currentElementIdx.has_value() || currentElementIdx.value() >= _elements.size())
+							Throw(std::runtime_error("Bad or missing element index in DrawableConstructor command stream"));
+						auto& element = _elements[*currentElementIdx];
+						unsigned machineOutput = ~0u;
+						if (cmd.As<unsigned>() < element._skeletonBinding.GetModelJointCount())
+							machineOutput = element._skeletonBinding.ModelJointToMachineOutput(cmd.As<unsigned>());
+						if (machineOutput >= element._baseTransformCount)
+							Throw(std::runtime_error("Geocall to world unbound in skeleton binding"));
+						break;
+					}
 				}
 			}
 		}

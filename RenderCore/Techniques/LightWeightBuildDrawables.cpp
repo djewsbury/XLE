@@ -87,11 +87,13 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<const Float3x4*> objectToWorlds)
 	{
 		using namespace RenderCore;
-		Internal::InstancedFixedSkeleton_Drawable* drawables[dimof(constructor._drawCallCounts)];
+		assert(!constructor._cmdStreams.empty());
+		auto& cmdStream = constructor._cmdStreams.front();		// first is always the default
+		Internal::InstancedFixedSkeleton_Drawable* drawables[dimof(cmdStream._drawCallCounts)];
 		RenderCore::Techniques::DrawablesPacket* pktForAllocations = nullptr;
-		for (unsigned c=0; c<dimof(constructor._drawCallCounts); ++c) {
-			if (constructor._drawCallCounts[c] && pkts[c]) {
-				drawables[c] = pkts[c]->_drawables.Allocate<Internal::InstancedFixedSkeleton_Drawable>(constructor._drawCallCounts[c]);
+		for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c) {
+			if (cmdStream._drawCallCounts[c] && pkts[c]) {
+				drawables[c] = pkts[c]->_drawables.Allocate<Internal::InstancedFixedSkeleton_Drawable>(cmdStream._drawCallCounts[c]);
 				pktForAllocations = pkts[c];
 			} else {
 				drawables[c] = nullptr;
@@ -104,7 +106,7 @@ namespace RenderCore { namespace Techniques
 		auto nodeSpaceToWorld = Identity<Float3x4>();
 		const Float4x4* geoSpaceToNodeSpace = nullptr;
 		unsigned transformMarker = ~0u;
-		for (auto cmd:constructor.GetCmdStream()) {
+		for (auto cmd:cmdStream.GetCmdStream()) {
 			switch (cmd.Cmd()) {
 			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
 				transformMarker = cmd.As<unsigned>();
@@ -130,7 +132,7 @@ namespace RenderCore { namespace Techniques
 						for (unsigned c=0; c<objectToWorlds.size(); ++c)
 							transformsPkt[c] = Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker], objectToWorlds[c]);
 
-					for (const auto& dc:MakeIteratorRange(constructor._drawCalls.begin()+drawCallsRef._start, constructor._drawCalls.begin()+drawCallsRef._end)) {
+					for (const auto& dc:MakeIteratorRange(cmdStream._drawCalls.begin()+drawCallsRef._start, cmdStream._drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
 						drawable._geo = constructor._drawableGeos[dc._drawableGeoIdx].get();
@@ -189,11 +191,13 @@ namespace RenderCore { namespace Techniques
 	{
 		using namespace RenderCore;
 		assert(viewMasks.size() == objectToWorlds.size());
-		Internal::InstancedFixedSkeletonViewMask_Drawable* drawables[dimof(constructor._drawCallCounts)];
+		assert(!constructor._cmdStreams.empty());
+		auto& cmdStream = constructor._cmdStreams.front();		// first is always the default
+		Internal::InstancedFixedSkeletonViewMask_Drawable* drawables[dimof(cmdStream._drawCallCounts)];
 		RenderCore::Techniques::DrawablesPacket* pktForAllocations = nullptr;
-		for (unsigned c=0; c<dimof(constructor._drawCallCounts); ++c) {
-			if (constructor._drawCallCounts[c] && pkts[c]) {
-				drawables[c] = pkts[c]->_drawables.Allocate<Internal::InstancedFixedSkeletonViewMask_Drawable>(constructor._drawCallCounts[c]);
+		for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c) {
+			if (cmdStream._drawCallCounts[c] && pkts[c]) {
+				drawables[c] = pkts[c]->_drawables.Allocate<Internal::InstancedFixedSkeletonViewMask_Drawable>(cmdStream._drawCallCounts[c]);
 				pktForAllocations = pkts[c];
 			} else {
 				drawables[c] = nullptr;
@@ -206,7 +210,7 @@ namespace RenderCore { namespace Techniques
 		auto nodeSpaceToWorld = Identity<Float3x4>();
 		const Float4x4* geoSpaceToNodeSpace = nullptr;
 		unsigned transformMarker = ~0u;
-		for (auto cmd:constructor.GetCmdStream()) {
+		for (auto cmd:cmdStream.GetCmdStream()) {
 			switch (cmd.Cmd()) {
 			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
 				transformMarker = cmd.As<unsigned>();
@@ -236,7 +240,7 @@ namespace RenderCore { namespace Techniques
 					auto* viewMasksPkt = (uint32_t*)PtrAdd(extraData, sizeof(Float3x4)*objectToWorlds.size());
 					for (unsigned c=0; c<viewMasks.size(); ++c) viewMasksPkt[c] = viewMasks[c];
 
-					for (const auto& dc:MakeIteratorRange(constructor._drawCalls.begin()+drawCallsRef._start, constructor._drawCalls.begin()+drawCallsRef._end)) {
+					for (const auto& dc:MakeIteratorRange(cmdStream._drawCalls.begin()+drawCallsRef._start, cmdStream._drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
 						drawable._geo = constructor._drawableGeos[dc._drawableGeoIdx].get();
