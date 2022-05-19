@@ -609,13 +609,16 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		edges.reserve(estimateEdgeCount + estimateEdgeCount/2);			// estimateEdgeCount is best case, so add some extra
 
 		std::vector<unsigned> adjacentVertices;
-		adjacentVertices.resize(inputTriListIndexBuffer.size(), ~0u);
+		adjacentVertices.reserve(inputTriListIndexBuffer.size());
 
 		assert(inputTriListIndexBuffer.size()%3 == 0);
 		const unsigned thirdVerticesIdx[] { 2, 0, 1 };
 		for (auto trii=inputTriListIndexBuffer.begin(); trii!=inputTriListIndexBuffer.end(); trii+=3) {
 			auto v0 = *(trii+0), v1 = *(trii+1), v2 = *(trii+2);
-			if (v0 == v1 || v1 == v2 || v0 == v2) continue;		// degenerate
+			if (v0 == v1 || v1 == v2 || v0 == v2) {
+				assert(0);		// degenerate
+				continue;
+			}
 
 			auto triIdx = (unsigned)std::distance(inputTriListIndexBuffer.begin(), trii) / 3u;
 			WorkingEdge es[] { WorkingEdge{v0, v1, 0, triIdx}, WorkingEdge{v1, v2, 1, triIdx}, WorkingEdge{v2, v0, 2, triIdx} };
@@ -647,6 +650,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		// just need to interleave them both
 
 		assert(outputTriListWithAdjacency.size() == inputTriListIndexBuffer.size()*2);	// 6 indices per triangle, rather than 3s
+		assert(adjacentVertices.size() == inputTriListIndexBuffer.size());
 
 		auto i = inputTriListIndexBuffer.begin();
 		auto i2 = adjacentVertices.begin();
@@ -654,6 +658,85 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		for (; i!=inputTriListIndexBuffer.end(); ++i, ++i2) {
 			*o++ = *i; 
 			*o++ = (*i2 != ~0u) ? *i2 : *i; 		// when no adjacency, just duplicate the preceeding vertex
+		}
+	}
+
+	std::vector<uint8_t> BuildAdjacencyIndexBuffer(
+		RenderCore::Assets::GeoProc::MeshDatabase& mesh, 
+		const void* rawIb, size_t indexCount, Format ibFormat,
+		Topology topology)
+	{
+		// Generate an adjacency index buffer for the given input mesh.
+		// We need to find unique vertex positions; rather than relying on the unified vertices in the mesh database
+		
+		auto posElement = mesh.FindElement("POSITION");
+		if (posElement == ~0u)
+			return {};		// can't be generated because there are no positions
+
+		// if the position streams have a vertex map, we can assume this is a mapping from unified vertex index
+		// to unique position index. It's best to reuse this, if this mapping already exists -- because it might have
+		// be specifically authored in a content tool
+		auto& stream = mesh.GetStreams()[posElement];
+		auto& posVertexMap = stream.GetVertexMap();
+
+		std::vector<unsigned> remappedIndexBuffer;
+		remappedIndexBuffer.reserve(indexCount);
+		if (ibFormat == Format::R32_UINT) {
+			for (const auto i:MakeIteratorRange((const unsigned*)rawIb, (const unsigned*)rawIb+indexCount))
+				remappedIndexBuffer.push_back(posVertexMap[i]);
+		} else if (ibFormat == Format::R16_UINT) {
+			for (const auto i:MakeIteratorRange((const uint16_t*)rawIb, (const uint16_t*)rawIb+indexCount))
+				remappedIndexBuffer.push_back(posVertexMap[i]);
+		} else if (ibFormat == Format::R8_UINT) {
+			for (const auto i:MakeIteratorRange((const uint8_t*)rawIb, (const uint8_t*)rawIb+indexCount))
+				remappedIndexBuffer.push_back(posVertexMap[i]);
+		} else
+			Throw(std::runtime_error("Unsupported index format in BuildAdjacencyIndexBuffer"));
+
+		// Now we have an buffer with indices of unique positions, we can build a topological buffer
+		std::vector<uint8_t> adjacencyIndexBuffer;
+		auto adjacencyIndexFormat = Format::R32_UINT;
+		adjacencyIndexBuffer.resize(remappedIndexBuffer.size()*2*sizeof(unsigned));
+		TriListToTriListWithAdjacency(
+			MakeIteratorRange((unsigned*)AsPointer(adjacencyIndexBuffer.begin()), (unsigned*)AsPointer(adjacencyIndexBuffer.end())),
+			MakeIteratorRange(remappedIndexBuffer));
+
+		// The new index buffer still has indicies to unique positions. We need to convert this to the unified vertex indices, so that
+		// it's useful in shaders. There will be multiple options for each unique vertex position; probably with different normals and so
+		// on... Let's just assume we're only interested in the vertex position and choose randomly
+
+		std::vector<unsigned> demapBuffer;
+		demapBuffer.resize(indexCount, ~0u);		// overestimate
+		for (unsigned c=0; c<stream.GetVertexMap().size(); ++c) {
+			auto m = stream.GetVertexMap()[c];
+			if (demapBuffer[m] == ~0u) demapBuffer[m] = c;
+		}
+
+		for (auto& i:MakeIteratorRange((unsigned*)adjacencyIndexBuffer.data(), (unsigned*)AsPointer(adjacencyIndexBuffer.end()))) {
+			assert(demapBuffer[i] != ~0u);
+			i = demapBuffer[i];
+		}
+
+		// go back to the original index format; there's no reason to make it wider
+		if (ibFormat == Format::R32_UINT) {
+			return adjacencyIndexBuffer;
+		} else if (ibFormat == Format::R16_UINT) {
+			std::vector<uint8_t> convertedResult;
+			convertedResult.resize(adjacencyIndexBuffer.size()/2);
+			std::copy(
+				(const unsigned*)adjacencyIndexBuffer.data(), (const unsigned*)AsPointer(adjacencyIndexBuffer.end()),
+				(uint16_t*)convertedResult.data());
+			return convertedResult;
+		} else if (ibFormat == Format::R8_UINT) {
+			std::vector<uint8_t> convertedResult;
+			convertedResult.resize(adjacencyIndexBuffer.size()/4);
+			std::copy(
+				(const unsigned*)adjacencyIndexBuffer.data(), (const unsigned*)AsPointer(adjacencyIndexBuffer.end()),
+				(uint8_t*)convertedResult.data());
+			return convertedResult;
+		} else {
+			assert(0);
+			return {};
 		}
 	}
 

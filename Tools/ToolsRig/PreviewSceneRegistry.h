@@ -12,7 +12,7 @@
 #include <string>
 
 namespace SceneEngine { class IScene; }
-namespace RenderCore { namespace Techniques { class IPipelineAcceleratorPool; class IDeformAcceleratorPool; }}
+namespace RenderCore { namespace Techniques { class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; }}
 
 namespace ToolsRig
 {
@@ -22,6 +22,7 @@ namespace ToolsRig
 		virtual std::vector<std::string> EnumerateScenes() = 0;
 		virtual ::Assets::PtrToMarkerPtr<SceneEngine::IScene> CreateScene(
 			StringSection<>, 
+			const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>&,
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>&,
 			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>&) = 0;
 		virtual ~IPreviewSceneRegistrySet();
@@ -33,6 +34,7 @@ namespace ToolsRig
 		virtual std::vector<std::string> EnumerateScenes() = 0;
 		virtual ::Assets::PtrToMarkerPtr<SceneEngine::IScene> CreateScene(
 			StringSection<>, 
+			const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>&,
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>&,
 			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>&) = 0;
 

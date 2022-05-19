@@ -166,5 +166,9 @@ VSOUT BuildVSOUT(
 		output.fogColor = ResolveOutputFogColor(worldPosition.xyz, SysUniform_GetWorldSpaceView().xyz);
 	#endif
 
+	#if VSOUT_HAS_VERTEX_ID
+		output.vertexId = input.vertexId;
+	#endif
+
 	return output;
 }

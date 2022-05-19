@@ -764,6 +764,7 @@ namespace RenderCore { namespace Techniques
 			}
 
 			_pendingCmdStreams.clear();
+			std::sort(dst._cmdStreams.begin(), dst._cmdStreams.begin(), [](const auto& lhs, const auto& rhs) { return lhs._guid < rhs._guid; });
 		}
 
 		Pimpl(std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
@@ -816,19 +817,6 @@ namespace RenderCore { namespace Techniques
 				strongThis->_completionCommandList = std::max(strongThis->_completionCommandList, cmdList);
 				return strongThis;
 			});
-	}
-
-	IteratorRange<Assets::ScaffoldCmdIterator> DrawableConstructor::GetCmdStream(uint64_t guid) const
-	{
-		for (const auto& q:_cmdStreams)
-			if (q._guid == guid)
-				return q.GetCmdStream();
-		return {};
-	}
-
-	IteratorRange<Assets::ScaffoldCmdIterator> DrawableConstructor::CommandStream::GetCmdStream() const
-	{
-		return Assets::MakeScaffoldCmdRange(MakeIteratorRange(_translatedCmdStream));
 	}
 
 	DrawableConstructor::DrawableConstructor(

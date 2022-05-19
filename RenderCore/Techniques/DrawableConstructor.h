@@ -2,6 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#include "../Assets/ScaffoldCmdStream.h"		// for MakeScaffoldCmdRange
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../Assets/DepVal.h"
 #include "../../Math/Matrix.h"
@@ -58,7 +59,7 @@ namespace RenderCore { namespace Techniques
 		};
 		std::vector<CommandStream> _cmdStreams;
 
-		IteratorRange<Assets::ScaffoldCmdIterator> GetCmdStream(uint64_t guid) const;
+		const CommandStream* FindCmdStream(uint64_t guid) const;
 
 		std::vector<Float4x4> _baseTransforms;
 		std::vector<std::pair<unsigned, unsigned>> _baseTransformsPerElement;
@@ -86,4 +87,18 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator);
 	};
+
+	inline auto DrawableConstructor::FindCmdStream(uint64_t guid) const -> const CommandStream*
+	{
+		for (const auto& q:_cmdStreams)
+			if (q._guid == guid)
+				return &q;
+		return nullptr;
+	}
+
+	inline IteratorRange<Assets::ScaffoldCmdIterator> DrawableConstructor::CommandStream::GetCmdStream() const
+	{
+		return Assets::MakeScaffoldCmdRange(MakeIteratorRange(_translatedCmdStream));
+	}
+
 }}

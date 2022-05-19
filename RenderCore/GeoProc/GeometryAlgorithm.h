@@ -7,6 +7,7 @@
 #pragma once
 
 #include "../Format.h"
+#include "../StateDesc.h"
 #include "../../Math/Matrix.h"
 #include "../../Utility/IteratorUtils.h"
 
@@ -47,5 +48,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     void TriListToTriListWithAdjacency(
         IteratorRange<unsigned*> outputTriListWithAdjacency,
         IteratorRange<const unsigned*> inputTriListIndexBuffer);
+
+    std::vector<uint8_t> BuildAdjacencyIndexBuffer(
+        RenderCore::Assets::GeoProc::MeshDatabase& mesh, 
+        const void* rawIb = nullptr, size_t indexCount = 0, Format ibFormat = Format::Unknown,
+        Topology topology = Topology::TriangleList);
 
 }}}

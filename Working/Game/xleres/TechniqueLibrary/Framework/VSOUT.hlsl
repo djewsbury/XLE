@@ -91,6 +91,10 @@ struct VSOUT /////////////////////////////////////////////////////
 	#if VSOUT_HAS_INSTANCE_ID
 		uint instanceId : SV_InstanceID;
 	#endif
+
+	#if VSOUT_HAS_VERTEX_ID
+		uint vertexId : VERTEX_ID;
+	#endif
 }; //////////////////////////////////////////////////////////////////
 
 float2 VSOUT_GetTexCoord0(VSOUT geo)

@@ -63,25 +63,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		auto vbOffset = largeResourcesBlock.AddBlock(_vertices);
 		auto vbSize = _vertices.size();
 
-		std::vector<uint8_t> adjacencyIndexBuffer;
-		auto adjacencyIndexFormat = Format::R32_UINT;
-
-		if (_indexFormat == Format::R32_UINT) {
-			adjacencyIndexBuffer.resize(_indices.size()*2);
-			TriListToTriListWithAdjacency(
-				MakeIteratorRange((unsigned*)AsPointer(adjacencyIndexBuffer.begin()), (unsigned*)AsPointer(adjacencyIndexBuffer.end())),
-				MakeIteratorRange((const unsigned*)AsPointer(_indices.begin()), (const unsigned*)AsPointer(_indices.end())));
-		} else if (_indexFormat == Format::R16_UINT) {
-			std::vector<unsigned> largeIndices { (const uint16_t*)AsPointer(_indices.begin()), (const uint16_t*)AsPointer(_indices.end()) };
-			adjacencyIndexBuffer.resize(largeIndices.size()*2*sizeof(unsigned));
-			TriListToTriListWithAdjacency(
-				MakeIteratorRange((unsigned*)AsPointer(adjacencyIndexBuffer.begin()), (unsigned*)AsPointer(adjacencyIndexBuffer.end())),
-				MakeIteratorRange(largeIndices));
-		} else
-			Throw(std::runtime_error("Unsupported index format in SerializeTopologicalWithResourceBlock"));
-
-		auto ibSize = adjacencyIndexBuffer.size();
-		auto ibOffset = largeResourcesBlock.AddBlock(std::move(adjacencyIndexBuffer));
+		auto ibSize = _adjacencyIndexBuffer.size();
+		auto ibOffset = largeResourcesBlock.AddBlock(std::move(_adjacencyIndexBuffer));
 
 		serializer << (uint32_t)Assets::GeoCommand::AttachRawGeometry;
 		auto recall = serializer.CreateRecall(sizeof(unsigned));
@@ -94,7 +77,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		SerializationOperator(
 			serializer, 
 			RenderCore::Assets::IndexData 
-				{ adjacencyIndexFormat, unsigned(ibOffset), unsigned(ibSize) });
+				{ _indexFormat, unsigned(ibOffset), unsigned(ibSize) });
 		
 		auto adjustedDrawCalls = _mainDrawCalls;
 		for (auto& a:adjustedDrawCalls) {

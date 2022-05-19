@@ -21,10 +21,10 @@ namespace ToolsRig
 			return result;
 		}
 
-		::Assets::PtrToMarkerPtr<SceneEngine::IScene> CreateScene(StringSection<> sceneName, const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators, const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators)
+		::Assets::PtrToMarkerPtr<SceneEngine::IScene> CreateScene(StringSection<> sceneName, const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>& drawablesPool, const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators, const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators)
 		{
 			for (auto i=_registrySet.begin(); i!=_registrySet.end(); ++i) {
-				auto s = i->second->CreateScene(sceneName, pipelineAccelerators, deformAccelerators);
+				auto s = i->second->CreateScene(sceneName, drawablesPool, pipelineAccelerators, deformAccelerators);
 				if (s) return s;
 			}
 			return nullptr;

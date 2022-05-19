@@ -57,17 +57,20 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<DrawablesPacket** const> pkts,
 			const Float4x4& localToWorld = Identity<Float4x4>(),
 			unsigned deformInstanceIdx = 0,
-			uint32_t viewMask = 1) const;
+			uint32_t viewMask = 1,
+			uint64_t cmdStream = 0) const;		/* s_CmdStreamGuid_Default */
 
 		void BuildDrawables(
 			IteratorRange<DrawablesPacket** const> pkts,
 			const Float4x4& localToWorld,
 			unsigned deformInstanceIdx,
-			const std::shared_ptr<ICustomDrawDelegate>& delegate) const;
+			const std::shared_ptr<ICustomDrawDelegate>& delegate,
+			uint64_t cmdStream = 0) const;		/* s_CmdStreamGuid_Default */
 
 		void BuildGeometryProcables(
 			IteratorRange<DrawablesPacket** const> pkts,
-			const Float4x4& localToWorld = Identity<Float4x4>()) const;
+			const Float4x4& localToWorld = Identity<Float4x4>(),
+			uint64_t cmdStream = 0) const;		/* s_CmdStreamGuid_Default */
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		const std::shared_ptr<DeformAccelerator>& GetDeformAccelerator() const { return _deformAccelerator; }

@@ -111,7 +111,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	static NascentRawGeometry CompleteInstantiation(const NascentModel::GeometryBlock& geoBlock, const NativeVBSettings& nativeVBSettings)
 	{
 		const bool generateMissingTangentsAndNormals = true;
-        if (constant_expression<generateMissingTangentsAndNormals>::result()) {
+        if constexpr (generateMissingTangentsAndNormals) {
 			auto indexCount = geoBlock._indices.size() * 8 / BitsPerPixel(geoBlock._indexFormat);
             GenerateNormalsAndTangents(
                 *geoBlock._mesh, 0,
@@ -124,8 +124,18 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             // normal or the bitangent... Lets' remove the binormal, because it makes it 
             // easier to do low quality rendering with normal maps turned off.
         const bool removeRedundantBitangents = true;
-        if (constant_expression<removeRedundantBitangents>::result())
+        if constexpr (removeRedundantBitangents)
             RemoveRedundantBitangents(*geoBlock._mesh);
+
+		std::vector<uint8_t> adjacencyIndexBuffer;
+		const bool buildTopologicalIndexBuffer = true;
+		if constexpr (buildTopologicalIndexBuffer) {
+			// note -- assuming Topology::TriangleList here (also that all indices are going to be read in order)
+			auto indexCount = geoBlock._indices.size() * 8 / BitsPerPixel(geoBlock._indexFormat);
+			adjacencyIndexBuffer = BuildAdjacencyIndexBuffer(
+				*geoBlock._mesh,
+				geoBlock._indices.data(), indexCount, geoBlock._indexFormat);
+		}
 
         NativeVBLayout vbLayout = BuildDefaultLayout(*geoBlock._mesh, nativeVBSettings);
         auto nativeVB = geoBlock._mesh->BuildNativeVertexBuffer(vbLayout);
@@ -142,7 +152,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			drawCalls,
 			geoBlock._geoSpaceToNodeSpace,
 			geoBlock._mesh->GetUnifiedVertexCount(),
-			geoBlock._meshVertexIndexToSrcIndex };
+			geoBlock._meshVertexIndexToSrcIndex,
+			std::move(adjacencyIndexBuffer) };
 	}
 
 	class NascentGeometryObjects
