@@ -89,9 +89,10 @@ namespace Sample
 
 	void NativeModelViewerOverlay::OnRenderTargetUpdate(
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
-		const RenderCore::FrameBufferProperties& fbProps)
+		const RenderCore::FrameBufferProperties& fbProps,
+		IteratorRange<const RenderCore::Format*> systemAttachmentFormats)
 	{
-		OverlaySystemSet::OnRenderTargetUpdate(preregAttachments, fbProps);
+		OverlaySystemSet::OnRenderTargetUpdate(preregAttachments, fbProps, systemAttachmentFormats);
 	}
 
 	NativeModelViewerOverlay::NativeModelViewerOverlay()
