@@ -787,6 +787,58 @@ namespace RenderCore { namespace ImplVulkan
 
 	FormatCapability    Device::QueryFormatCapability(Format format, BindFlag::BitField bindingType)
 	{
+		assert(_underlying);
+		auto fmtProps = _globalsContainer->_objectFactory.GetFormatProperties((VkFormat)Metal_Vulkan::AsVkFormat(format));
+
+		// bind flags not tested:
+		// 	VertexBuffer, IndexBuffer, ConstantBuffer, StreamOutput, DrawIndirectArgs, RawViews
+		// 	PresentationSrc
+		if (bindingType & BindFlag::ShaderResource) {
+			auto req = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;		// VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+		if (bindingType & BindFlag::RenderTarget) {
+			auto req = VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT|VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT;
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+		if (bindingType & BindFlag::DepthStencil) {
+			auto req = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+		if (bindingType & BindFlag::UnorderedAccess) {
+			auto req = VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;	// VK_FORMAT_FEATURE_STORAGE_IMAGE_ATOMIC_BIT
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+		if (bindingType & BindFlag::InputAttachment) {
+			auto req = VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT;
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+		if (bindingType & BindFlag::TransferSrc) {
+			auto req = VK_FORMAT_FEATURE_BLIT_SRC_BIT;
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+		if (bindingType & BindFlag::TransferDst) {
+			auto req = VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+		if ((bindingType & (BindFlag::TexelBuffer|BindFlag::UnorderedAccess)) == (BindFlag::TexelBuffer|BindFlag::UnorderedAccess)) {
+			auto req = VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT;	// VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_ATOMIC_BIT
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+		if ((bindingType & (BindFlag::TexelBuffer|BindFlag::ShaderResource)) == (BindFlag::TexelBuffer|BindFlag::ShaderResource)) {
+			auto req = VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT;
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+
 		return FormatCapability::Supported;
 	}
 
