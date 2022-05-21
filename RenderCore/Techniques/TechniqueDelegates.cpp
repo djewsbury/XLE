@@ -1108,6 +1108,29 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
+	RasterizationDesc BuildDefaultRastizerDesc(const Assets::RenderStateSet& states)
+	{
+		auto cullMode = CullMode::Back;
+		auto fillMode = FillMode::Solid;
+		int depthBias = 0;
+		if (states._flag & Assets::RenderStateSet::Flag::DoubleSided) {
+			cullMode = states._doubleSided ? CullMode::None : CullMode::Back;
+		}
+		if (states._flag & Assets::RenderStateSet::Flag::DepthBias) {
+			depthBias = states._depthBias;
+		}
+		if (states._flag & Assets::RenderStateSet::Flag::Wireframe) {
+			fillMode = states._wireframe ? FillMode::Wireframe : FillMode::Solid;
+		}
+
+		RasterizationDesc result;
+		result._cullMode = cullMode;
+		result._depthBiasConstantFactor = (float)depthBias;
+		result._depthBiasClamp = 0.f;
+		result._depthBiasSlopeFactor = 0.f;
+		return result;
+	}
+
 	ITechniqueDelegate::~ITechniqueDelegate() {}
 
 }}

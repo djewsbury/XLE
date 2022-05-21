@@ -19,8 +19,6 @@ namespace RenderCore { class UniformsStreamInterface; class IThreadContext; }
 
 namespace RenderCore { namespace Techniques
 {
-    class IRenderStateDelegate;
-
     struct SelectorStages { enum Enum { Geometry, GlobalEnvironment, Runtime, Material, Max }; };
 
         //////////////////////////////////////////////////////////////////

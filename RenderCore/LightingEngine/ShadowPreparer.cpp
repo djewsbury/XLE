@@ -10,7 +10,6 @@
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/TechniqueDelegates.h"
-#include "../Techniques/RenderStateResolver.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/CommonResources.h"
@@ -253,10 +252,9 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::FrameBufferDescFragment fragment;
 		{
 			SubpassDesc subpass;
-			subpass.SetDepthStencil(
-				fragment.DefineAttachment(
-					Techniques::AttachmentSemantics::ShadowDepthMap, 
-					AttachmentDesc{desc._format, 0, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource | BindFlag::DepthStencil}));
+			auto attach = fragment.DefineAttachment(Techniques::AttachmentSemantics::ShadowDepthMap)
+				.Clear().FinalState(BindFlag::ShaderResource | BindFlag::DepthStencil);
+			subpass.SetDepthStencil(attach);
 			fragment.AddSubpass(std::move(subpass));
 		}
 		///////////////////////////////

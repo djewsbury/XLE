@@ -157,8 +157,9 @@ namespace RenderCore { namespace LightingEngine
 		RenderStepFragmentInterface fragment { RenderCore::PipelineType::Graphics };
 		auto depthTarget = fragment.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear, 0);
 		auto lightResolveTarget = fragment.DefineAttachment(
-			Techniques::AttachmentSemantics::ColorHDR,
-			{ (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT, AttachmentDesc::Flags::Multisampled, LoadStore::Clear, LoadStore::DontCare });
+			Techniques::AttachmentSemantics::ColorHDR).Clear().Discard()
+			.FixedFormat((!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT)
+			.MultisamplingMode(true);
 
 		TextureViewDesc justStencilWindow {
 			TextureViewDesc::Aspect::Stencil,
@@ -478,8 +479,8 @@ namespace RenderCore { namespace LightingEngine
 		const auto sampleDensitySemantic = Utility::Hash64("ShadowSampleDensity");
 		Techniques::FrameBufferDescFragment fbDesc;
 		Techniques::FrameBufferDescFragment::SubpassDesc sp;
-		sp.AppendOutput(fbDesc.DefineAttachment(cascadeIndexSemantic + idx, AttachmentDesc { Format::R8_UINT, 0, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::UnorderedAccess }));
-		sp.AppendOutput(fbDesc.DefineAttachment(sampleDensitySemantic + idx, AttachmentDesc { Format::R32G32B32A32_FLOAT, 0, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::UnorderedAccess }));
+		sp.AppendOutput(fbDesc.DefineAttachment(cascadeIndexSemantic).FixedFormat(Format::R8_UINT).NoInitialState().FinalState(BindFlag::UnorderedAccess));
+		sp.AppendOutput(fbDesc.DefineAttachment(sampleDensitySemantic + idx).FixedFormat(Format::R32G32B32A32_FLOAT).NoInitialState().FinalState(BindFlag::UnorderedAccess));
 		sp.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
 		sp.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::Aspect::Depth});
 		fbDesc.AddSubpass(std::move(sp));

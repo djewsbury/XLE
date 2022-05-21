@@ -116,75 +116,140 @@ namespace RenderCore { namespace Techniques
         return str;
     }
 
+    AttachmentMatchingRules& AttachmentMatchingRules::FixedFormat(Format fmt)
+    {
+        _flagsSet &= ~(uint32_t(Flags::SystemFormat)|uint32_t(Flags::CopyFormatFromSemantic));
+        _flagsSet |= uint32_t(Flags::FixedFormat);
+        _fixedFormat = fmt;
+        return *this;
+    }
+
+    AttachmentMatchingRules& AttachmentMatchingRules::SystemAttachmentFormat(Techniques::SystemAttachmentFormat fmt)
+    {
+        _flagsSet &= ~(uint32_t(Flags::CopyFormatFromSemantic)|uint32_t(Flags::FixedFormat));
+        _flagsSet |= uint32_t(Flags::SystemFormat);
+        _systemFormat = fmt;
+        return *this;
+    }
+
+    AttachmentMatchingRules& AttachmentMatchingRules::CopyFormat(uint64_t srcSemantic)
+    {
+        _flagsSet &= ~(uint32_t(Flags::SystemFormat)|uint32_t(Flags::FixedFormat));
+        _flagsSet |= uint32_t(Flags::CopyFormatFromSemantic);
+        _copyFormatSrc = srcSemantic;
+        return *this;
+    }
+
+    AttachmentMatchingRules& AttachmentMatchingRules::RequireBindFlags(BindFlag::BitField flags)
+    {
+        _requiredBindFlags |= flags;
+        return *this;
+    }
+
+    AttachmentMatchingRules& AttachmentMatchingRules::MultisamplingMode(bool enable)
+    {
+        _flagsSet |= uint32_t(Flags::MultisamplingMode);
+        _multisamplingMode = enable;
+        return *this;
+    }
+
     FrameBufferDescFragment::DefineAttachmentHelper FrameBufferDescFragment::DefineAttachment(uint64_t semantic)
     {
         auto name = (AttachmentName)_attachments.size();
         Attachment attachment;
-        attachment._inputSemanticBinding = attachment._outputSemanticBinding = semantic;
-        attachment._desc._loadFromPreviousPhase = LoadStore::Retain;
-        attachment._desc._storeToNextPhase = LoadStore::Retain;
-        attachment._desc._initialLayout = 0;
-        attachment._desc._finalLayout = 0;
+        attachment._semantic = semantic;
+        attachment._loadFromPreviousPhase = LoadStore::Retain;
+        attachment._storeToNextPhase = LoadStore::Retain;
+        attachment._initialLayout = 0;
+        attachment._finalLayout = 0;
         _attachments.push_back(attachment);
         return DefineAttachmentHelper{this, name};
     }
 
-    FrameBufferDescFragment::DefineAttachmentHelper FrameBufferDescFragment::DefineAttachment(uint64_t semantic, const AttachmentDesc& request)
+    auto FrameBufferDescFragment::DefineAttachment(const Attachment& attachment) -> DefineAttachmentHelper
     {
+        if (attachment._semantic != 0) {
+            for (const auto& a:_attachments) assert(a._semantic != attachment._semantic);
+        }
         auto name = (AttachmentName)_attachments.size();
-        Attachment attachment;
-        attachment._inputSemanticBinding = attachment._outputSemanticBinding = semantic;
-        attachment._desc = request;
         _attachments.push_back(attachment);
         return DefineAttachmentHelper{this, name};
     }
 
     FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::Clear()
     {
-        _fragment->_attachments[_attachmentName]._desc._initialLayout = 0;
-        _fragment->_attachments[_attachmentName]._desc._loadFromPreviousPhase = LoadStore::Clear;
+        _fragment->_attachments[_attachmentName]._initialLayout = 0;
+        _fragment->_attachments[_attachmentName]._loadFromPreviousPhase = LoadStore::Clear;
         return *this;
     }
 
     FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::Discard()
     {
-        _fragment->_attachments[_attachmentName]._desc._finalLayout = 0;
-        _fragment->_attachments[_attachmentName]._desc._storeToNextPhase = LoadStore::DontCare;
+        _fragment->_attachments[_attachmentName]._finalLayout = 0;
+        _fragment->_attachments[_attachmentName]._storeToNextPhase = LoadStore::DontCare;
         return *this;
     }
 
     FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::InitialState(BindFlag::BitField flags)
     {
-        _fragment->_attachments[_attachmentName]._desc._initialLayout = flags;
-        _fragment->_attachments[_attachmentName]._desc._loadFromPreviousPhase = LoadStore::Retain;
+        _fragment->_attachments[_attachmentName]._initialLayout = flags;
+        _fragment->_attachments[_attachmentName]._loadFromPreviousPhase = LoadStore::Retain;
         return *this;
     }
 
     FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::FinalState(BindFlag::BitField flags)
     {
-        _fragment->_attachments[_attachmentName]._desc._finalLayout = flags;
-        _fragment->_attachments[_attachmentName]._desc._storeToNextPhase = LoadStore::Retain;
+        _fragment->_attachments[_attachmentName]._finalLayout = flags;
+        _fragment->_attachments[_attachmentName]._storeToNextPhase = LoadStore::Retain;
         return *this;
     }
 
     FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::NoInitialState()
     {
-        _fragment->_attachments[_attachmentName]._desc._initialLayout = 0;
-        _fragment->_attachments[_attachmentName]._desc._loadFromPreviousPhase = LoadStore::DontCare;
+        _fragment->_attachments[_attachmentName]._initialLayout = 0;
+        _fragment->_attachments[_attachmentName]._loadFromPreviousPhase = LoadStore::DontCare;
         return *this;
     }
 
     FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::InitialState(LoadStore loadStore, BindFlag::BitField flags)
     {
-        _fragment->_attachments[_attachmentName]._desc._initialLayout = flags;
-        _fragment->_attachments[_attachmentName]._desc._loadFromPreviousPhase = loadStore;
+        _fragment->_attachments[_attachmentName]._initialLayout = flags;
+        _fragment->_attachments[_attachmentName]._loadFromPreviousPhase = loadStore;
         return *this;
     }
 
     FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::FinalState(LoadStore loadStore, BindFlag::BitField flags)
     {
-        _fragment->_attachments[_attachmentName]._desc._finalLayout = flags;
-        _fragment->_attachments[_attachmentName]._desc._storeToNextPhase = loadStore;
+        _fragment->_attachments[_attachmentName]._finalLayout = flags;
+        _fragment->_attachments[_attachmentName]._storeToNextPhase = loadStore;
+        return *this;
+    }
+
+    FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::FixedFormat(Format fmt)
+    {
+        _fragment->_attachments[_attachmentName]._matchingRules.FixedFormat(fmt);
+        return *this;
+    }
+
+    FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::SystemAttachmentFormat(Techniques::SystemAttachmentFormat fmt)
+    {
+        _fragment->_attachments[_attachmentName]._matchingRules.SystemAttachmentFormat(fmt);
+        return *this;
+    }
+
+    FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::RequireBindFlags(BindFlag::BitField flags)
+    {
+        _fragment->_attachments[_attachmentName]._matchingRules.RequireBindFlags(flags);
+        return *this;
+    }
+    FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::MultisamplingMode(bool enable)
+    {
+        _fragment->_attachments[_attachmentName]._matchingRules.MultisamplingMode(enable);
+        return *this;
+    }
+    FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::CopyFormat(uint64_t srcSemantic)
+    {
+        _fragment->_attachments[_attachmentName]._matchingRules.CopyFormat(srcSemantic);
         return *this;
     }
 
@@ -1292,78 +1357,6 @@ namespace RenderCore { namespace Techniques
         return result;
     }
 
-    static FrameBufferDesc BuildFrameBufferDesc(
-        const FrameBufferDescFragment& fragment,
-        const FrameBufferProperties& props,
-        IteratorRange<const FragmentStitchingContext::AttachmentTransform*> transforms)
-    {
-        //
-        // Convert a frame buffer fragment to a discrete FrameBufferDesc. We actually don't need
-        // to do much conversion. The SubpassDescs can just be copied across as is.
-        // Attachments need to be transformed slightly. Here we also look for "split semantics".
-        // This occurs when the input attachment for a semantic is different from the output
-        // attachment for a semantic. This is illegal because in the FrameBufferDesc form, we can
-        // only bind a single buffer to each semantic (this is because we can only bind a single
-        // attachment to each semantic in the AttachmentPool -- this restriction was intended to
-        // make the interface a little simplier and clearer)
-        //
-        // Split semantics typically happen when we want a RenderPass that reads from one attachment and
-        // then writes back to the same attachment at the end (for example, that attachment might be
-        // the main color buffer, and we want to do some post processing operation on it).
-        //
-        // Sometimes MergeFragments can't find a solution that can achieve this without adding extra
-        // subpasses. So it creates this split semantic case. There are two options to solve this:
-        // * use 2 different semantics for the operation in question (for example, a tonemap operation
-        //      might take in a "hdrcolor" semantic and write to a "lhdrcolor" semantic)
-        // * add an extra "copy" subpass -- this should just copy to the expected output buffer
-        //
-        std::vector<AttachmentDesc> fbAttachments;
-        std::vector<uint64_t> attachmentSemantics;
-        fbAttachments.reserve(fragment._attachments.size());
-        attachmentSemantics.reserve(fragment._attachments.size());
-        assert(transforms.size() == fragment._attachments.size());
-        auto ti = transforms.begin();
-        for (const auto& inputFrag:fragment._attachments) {
-            uint64_t semantic = 0;
-            if (inputFrag._inputSemanticBinding != 0 || inputFrag._outputSemanticBinding != 0) {
-                if (    inputFrag._inputSemanticBinding != 0 && inputFrag._outputSemanticBinding != 0
-                    &&  inputFrag._inputSemanticBinding != inputFrag._outputSemanticBinding)
-                    Throw(std::runtime_error("Cannot construct FrameBufferDesc because input fragment has an attachment with two different semantics for input and output. This isn't supported; we must instead use two different attachments, one for each semantic."));
-
-                for (auto compareFrag=attachmentSemantics.begin(); compareFrag!=attachmentSemantics.end(); ++compareFrag) {
-                    if (    ((inputFrag._inputSemanticBinding != 0) && *compareFrag == inputFrag._inputSemanticBinding)
-                        ||  ((inputFrag._outputSemanticBinding != 0) && *compareFrag == inputFrag._outputSemanticBinding)) {
-                        // Hit a duplicate semantic binding case. Let's check if it's a "split semantic" case
-                        // If the two attachments in question have non-coinciding zeroes for their semantic interface
-                        // (and we already know that the non-zero semantics are equal), then it must be the split
-                        // semantic case
-                        auto& suspect = fragment._attachments[std::distance(attachmentSemantics.begin(), compareFrag)];
-                        if (    (suspect._inputSemanticBinding == 0 && inputFrag._outputSemanticBinding == 0)
-                            ||  (suspect._outputSemanticBinding == 0 && inputFrag._inputSemanticBinding == 0)) {
-                            Throw(std::runtime_error("Cannot construct FrameBufferDesc because input fragment has a \"split semantic\" attachment. This can occur when an extra copy subpass is required"));
-                        } else {
-                            Throw(std::runtime_error("Cannot construct FrameBufferDesc because input fragment has more than one buffer assigned to the same semantic. This isn't supported because the AttachmentPool can only bind a single attachment to each semantic."));
-                        }
-                    }
-                }
-                semantic = (inputFrag._inputSemanticBinding != 0) ? inputFrag._inputSemanticBinding : inputFrag._outputSemanticBinding;
-            }
-            AttachmentDesc desc = inputFrag._desc;
-            if (ti->_newLayout) desc._finalLayout = ti->_newLayout;     // we need to ensure that this layout agrees with what the FragmentStitchingContext thinks we're going to land on
-            fbAttachments.push_back(desc);
-            attachmentSemantics.push_back(semantic);
-            ++ti;
-        }
-
-        // Generate the final FrameBufferDesc by moving the subpasses out of the fragment
-        // Usually this function is called as a final step when converting a number of fragments
-        // into a final FrameBufferDesc, so it makes sense to move the subpasses from the input
-        std::vector<SubpassDesc> subpasses;
-        subpasses.reserve(fragment._subpasses.size());
-        for (const auto& sp:fragment._subpasses) subpasses.push_back(sp);
-        return FrameBufferDesc { std::move(fbAttachments), std::move(subpasses), props };
-    }
-
     static AttachmentName Remap(const std::vector<std::pair<AttachmentName, AttachmentName>>& remapping, AttachmentName name)
     {
         if (name == ~0u) return ~0u;
@@ -1396,8 +1389,8 @@ namespace RenderCore { namespace Techniques
 
     static DirectionFlags::BitField GetDirectionFlags(const FrameBufferDescFragment& fragment, AttachmentName attachment)
     {
-        auto loadOp = fragment._attachments[attachment]._desc._loadFromPreviousPhase;
-        auto storeOp = fragment._attachments[attachment]._desc._storeToNextPhase;
+        auto loadOp = fragment._attachments[attachment]._loadFromPreviousPhase;
+        auto storeOp = fragment._attachments[attachment]._storeToNextPhase;
         DirectionFlags::BitField result = 0;
         if (HasRetain(storeOp))
             result |= DirectionFlags::RetainsOnExit;
@@ -1437,58 +1430,49 @@ namespace RenderCore { namespace Techniques
         return result;
     }
 
-    class WorkingAttachment
+    class WorkingAttachmentContext
     {
     public:
-        AttachmentName _name = ~0u;
+        struct Attachment
+        {
+            AttachmentName _name = ~0u;
 
-        Format _format = Format::Unknown;
-        TextureSamples _samples = TextureSamples::Create();
+            uint64_t _shouldReceiveDataForSemantic = 0;         // when looking for an attachment to write the data for this semantic, prefer this attachment
+            uint64_t _containsDataForSemantic = 0;              // the data for this semantic is already written to this attachment
 
-        uint64_t _shouldReceiveDataForSemantic = 0;         // when looking for an attachment to write the data for this semantic, prefer this attachment
-        uint64_t _containsDataForSemantic = 0;              // the data for this semantic is already written to this attachment
+            uint64_t _firstAccessSemantic = 0;
+            LoadStore _firstAccessLoad = LoadStore::DontCare;
+            BindFlag::BitField _firstAccessInitialLayout = 0;
+            uint64_t _lastWriteSemantic = 0;
+            LoadStore _lastAccessStore = LoadStore::DontCare;
+            BindFlag::BitField _lastAccessFinalLayout = 0;
 
-        uint64_t _firstAccessSemantic = 0;
-        LoadStore _firstAccessLoad = LoadStore::DontCare;
-        BindFlag::BitField _firstAccessInitialLayout = 0;
-        uint64_t _lastWriteSemantic = 0;
-        LoadStore _lastAccessStore = LoadStore::DontCare;
-        BindFlag::BitField _lastAccessFinalLayout = 0;
+            bool _hasBeenAccessed = false;
+            std::optional<PreregisteredAttachment> _fullyDefinedAttachment;
+            AttachmentMatchingRules _matchingRules;
 
-        bool _hasBeenAccessed = false;
-        PreregisteredAttachment::State _state = PreregisteredAttachment::State::Uninitialized;
+            std::optional<Attachment> TryMerge(const AttachmentMatchingRules& matchingRules) const;
 
-        WorkingAttachment(const PreregisteredAttachment& attachment);
-        WorkingAttachment(const FrameBufferDescFragment::Attachment& attachment, const FrameBufferProperties& props);
-        WorkingAttachment() {}
+            Attachment(const PreregisteredAttachment& attachment);
+            Attachment(const AttachmentMatchingRules& matchingRules);
+            Attachment() {}
+        };
+        std::vector<Attachment> _attachments;
+
+        std::optional<Attachment> MatchAttachment(const AttachmentMatchingRules& matchingRules, uint64_t semantic, LoadStore loadMode);
     };
 
-    WorkingAttachment::WorkingAttachment(const PreregisteredAttachment& attachment)
+    static Format ResolveSystemFormat(SystemAttachmentFormat fmt)
     {
-        _format = attachment._desc._textureDesc._format;
-        _samples = attachment._desc._textureDesc._samples;
-        _state = attachment._state;
-        if (_state == PreregisteredAttachment::State::Initialized
-            || _state == PreregisteredAttachment::State::Initialized_StencilUninitialized
-            || _state == PreregisteredAttachment::State::Uninitialized_StencilInitialized
-            || _state == PreregisteredAttachment::State::PingPongBuffer0
-            || _state == PreregisteredAttachment::State::PingPongBuffer1)
-            _containsDataForSemantic = attachment._semantic;
-        _shouldReceiveDataForSemantic = attachment._semantic;
-        _firstAccessInitialLayout = attachment._layoutFlags;
+        assert(0);
+        return Format::Unknown;
     }
 
-    static TextureSamples GetSamples(const FrameBufferDescFragment::Attachment& attachment, const FrameBufferProperties& props)
+    static TextureSamples GetSamples(const AttachmentMatchingRules& matchingRules, const FrameBufferProperties& props)
     {
-        return (attachment._desc._flags & AttachmentDesc::Flags::Multisampled) ? props._samples : TextureSamples::Create();
-    }
-
-    WorkingAttachment::WorkingAttachment(
-        const FrameBufferDescFragment::Attachment& attachment,
-        const FrameBufferProperties& props)
-    {
-        _samples = GetSamples(attachment, props);
-        _format = attachment._desc._format;
+        if (!(matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::MultisamplingMode))
+            return TextureSamples::Create();
+        return (matchingRules._multisamplingMode & AttachmentDesc::Flags::Multisampled) ? props._samples : TextureSamples::Create();
     }
 
     static bool FormatCompatible(Format lhs, Format rhs)
@@ -1498,15 +1482,8 @@ namespace RenderCore { namespace Techniques
                 rhsTypeless = AsTypelessFormat(rhs);
         return lhsTypeless == rhsTypeless;
     }
-    
-    static bool IsCompatible(const WorkingAttachment& testAttachment, const FrameBufferDescFragment::Attachment& request, const FrameBufferProperties& fbProps)
-    {
-        return 
-            ( (FormatCompatible(testAttachment._format, request._desc._format)) || (testAttachment._format == Format::Unknown) || (request._desc._format == Format::Unknown) )
-            && (testAttachment._samples == GetSamples(request, fbProps));
-    }
 
-    static AttachmentName NextName(IteratorRange<const WorkingAttachment*> attachments0, IteratorRange<const WorkingAttachment*> attachments1)
+    static AttachmentName NextName(IteratorRange<const WorkingAttachmentContext::Attachment*> attachments0, IteratorRange<const WorkingAttachmentContext::Attachment*> attachments1)
     {
         // find the lowest name not used by any of the attachments
         uint64_t bitField = 0;
@@ -1525,6 +1502,171 @@ namespace RenderCore { namespace Techniques
         // Find the position of the least significant bit set in the inverse
         // That is the smallest number less than 64 that hasn't been used yet
         return xl_ctz8(~bitField);
+    }
+
+    static bool IsCompatible(const AttachmentMatchingRules& matchingRules, const PreregisteredAttachment& pregAttach, const FrameBufferProperties& fbProps)
+    {
+        if (matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::FixedFormat)
+            if (matchingRules._fixedFormat != pregAttach._desc._textureDesc._format)
+                return false;
+        if (matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::SystemFormat) {
+            auto fmt = ResolveSystemFormat(matchingRules._systemFormat);
+            if (fmt != pregAttach._desc._textureDesc._format)
+                return false;
+        }
+        if (matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::CopyFormatFromSemantic) {
+            assert(0);      // todo
+            return false;
+        }
+        // Note that when the multisample mode flag is not set it will mean that we ignore multisampling as a criteria -- ie, either
+        // multisampled or non multisampled can be selected
+        if (matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::MultisamplingMode) {
+            
+            if (!(GetSamples(matchingRules, fbProps) == pregAttach._desc._textureDesc._samples))
+                return false;
+        }
+
+        if ((matchingRules._requiredBindFlags & pregAttach._desc._bindFlags) != matchingRules._requiredBindFlags)
+            return false;      // doesn't have all of the bind flags we need
+        return true;
+    }
+
+    auto WorkingAttachmentContext::Attachment::TryMerge(const AttachmentMatchingRules& matchingRules) const -> std::optional<Attachment>
+    {
+        if (_fullyDefinedAttachment) {
+            FrameBufferProperties fbProps;  // todo
+            if (!IsCompatible(matchingRules, *_fullyDefinedAttachment, fbProps))
+                return {};
+            return *this;
+        } else {
+            Attachment merge = *this;
+
+            if (matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::CopyFormatFromSemantic
+                || merge._matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::CopyFormatFromSemantic) {
+                assert(0);
+                return {};
+            }
+
+            if (    matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::FixedFormat
+                || matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::SystemFormat) {
+
+                Format matchingRulesFormat;
+                if (matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::FixedFormat)
+                    matchingRulesFormat = matchingRules._fixedFormat;
+                else if (matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::SystemFormat)
+                    matchingRulesFormat = ResolveSystemFormat(matchingRules._systemFormat);
+
+                if (merge._matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::FixedFormat) {
+                    if (!FormatCompatible(matchingRulesFormat, merge._matchingRules._fixedFormat))
+                        return {};
+                    // If the formats are not exactly the same, we must downgrade to a typeless format
+                    if (matchingRulesFormat != merge._matchingRules._fixedFormat)
+                        merge._matchingRules._fixedFormat = AsTypelessFormat(matchingRulesFormat);
+                } else if (merge._matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::SystemFormat) {
+                    auto fmt = ResolveSystemFormat(matchingRules._systemFormat);
+                    if (!FormatCompatible(matchingRulesFormat, fmt))
+                        return {};
+                } else {
+                    // Original didn't have any rules for the format.
+                    // copy across the format matching rules to the output
+                    merge._matchingRules._flagsSet |= matchingRules._flagsSet & (uint32_t(AttachmentMatchingRules::Flags::FixedFormat)|uint32_t(AttachmentMatchingRules::Flags::SystemFormat));
+                    merge._matchingRules._fixedFormat = matchingRules._fixedFormat;
+                    merge._matchingRules._systemFormat = matchingRules._systemFormat;
+                }
+            }
+
+            if (matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::MultisamplingMode) {
+                if (merge._matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::MultisamplingMode) {
+                    if (matchingRules._multisamplingMode != merge._matchingRules._multisamplingMode)
+                        return {};
+                } else {
+                    merge._matchingRules._flagsSet |= (uint32_t)AttachmentMatchingRules::Flags::MultisamplingMode;
+                    merge._matchingRules._multisamplingMode = matchingRules._multisamplingMode;
+                }
+            }
+
+            merge._matchingRules._requiredBindFlags |= matchingRules._requiredBindFlags;
+
+            return merge;
+        }
+    }
+
+    WorkingAttachmentContext::Attachment::Attachment(const PreregisteredAttachment& attachment)
+    {
+        if (attachment._state == PreregisteredAttachment::State::Initialized
+            || attachment._state == PreregisteredAttachment::State::Initialized_StencilUninitialized
+            || attachment._state == PreregisteredAttachment::State::Uninitialized_StencilInitialized
+            || attachment._state == PreregisteredAttachment::State::PingPongBuffer0
+            || attachment._state == PreregisteredAttachment::State::PingPongBuffer1)
+            _containsDataForSemantic = attachment._semantic;
+        _shouldReceiveDataForSemantic = attachment._semantic;
+        _firstAccessInitialLayout = attachment._layoutFlags;
+        _fullyDefinedAttachment = attachment;
+    }
+
+    WorkingAttachmentContext::Attachment::Attachment(
+        const AttachmentMatchingRules& matchingRules)
+    {
+        _matchingRules = matchingRules;
+    }
+
+    auto WorkingAttachmentContext::MatchAttachment(const AttachmentMatchingRules& matchingRules, uint64_t semantic, LoadStore loadMode) -> std::optional<Attachment>
+    {
+        // Attempt to find an attachment in "_attachments" that matches the request
+        // If we find one, remove it from our array and return it
+        std::optional<Attachment> result;
+        
+        bool requiresPreinitData = HasRetain(loadMode); // requires preinitialized data -- only match against attachments with the right semantic & already have some data present
+        if (requiresPreinitData) {
+            assert(semantic != 0);
+        }
+
+        // look for an existing attachment that matches the given matching rules
+        if (requiresPreinitData) {
+            for (auto i=_attachments.begin(); i!=_attachments.end(); ++i) {
+                if (i->_containsDataForSemantic == semantic) {
+                    result = i->TryMerge(matchingRules);
+                    if (!result.has_value()) {
+                        if (!semantic) continue;
+                        return {};     // fail immediately if the matching semantic attachment is incompatible with the request
+                    }
+                    _attachments.erase(i);                  // remove from our array
+                    break;
+                }
+            }
+        } else {
+            for (auto i=_attachments.begin(); i!=_attachments.end(); ++i) {
+                if (i->_shouldReceiveDataForSemantic == semantic) {
+                    result  = i->TryMerge(matchingRules);
+                    if (!result.has_value()) {
+                        if (!semantic) continue;
+                        return {};     // fail immediately if the matching semantic attachment is incompatible with the request
+                    }
+                    _attachments.erase(i);                  // remove from our array
+                    break;
+                }
+            }
+
+            // For attachments that don't require preinitialized data, widen the search and good for something we can 
+            // reuse, even if the semantic doesn't match
+            if (!result.has_value()) {
+                for (auto i=_attachments.begin(); i!=_attachments.end(); ++i) {
+                    // only consider uninitialized/empty attachments in this case
+                    if (i->_shouldReceiveDataForSemantic != 0 || i->_containsDataForSemantic != 0) continue;
+                    if (auto newState = i->TryMerge(matchingRules)) {
+                        _attachments.erase(i);      // remove from our array
+                        result = newState;
+                        break;
+                    }
+                }
+            }
+
+            // nothing found, create something new and fill as much as we can
+            if (!result.has_value())
+                result = Attachment{matchingRules};
+        }
+
+        return result;
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1552,17 +1694,48 @@ namespace RenderCore { namespace Techniques
         return str;
     }
 
-    static std::ostream& operator<<(std::ostream& str, const WorkingAttachment& attachment)
+    static const char* AsString(SystemAttachmentFormat fmt)
+    {
+        switch (fmt) {
+        case SystemAttachmentFormat::LDRColor: return "LDRColor";
+        case SystemAttachmentFormat::HDRColor: return "HDRColor";
+        case SystemAttachmentFormat::TargetColor: return "TargetColor";
+        case SystemAttachmentFormat::MainDepth: return "MainDepth";
+        case SystemAttachmentFormat::LowDetailDepth: return "LowDetailDepth";
+        case SystemAttachmentFormat::ShadowDepth: return "ShadowDepth";
+        default: return "<<unknown>>";
+        }
+    }
+
+    static std::ostream& operator<<(std::ostream& str, const AttachmentMatchingRules& rules)
+    {
+        str << "Matching { ";
+        if (rules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::FixedFormat)
+            str << AsString(rules._fixedFormat) << ", ";
+        if (rules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::SystemFormat)
+            str << AsString(rules._systemFormat) << ", ";
+        if (rules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::CopyFormatFromSemantic)
+            str << "copy format from " << AttachmentSemantic{rules._copyFormatSrc} << ", ";
+        if (rules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::MultisamplingMode)
+            str << (rules._multisamplingMode ? "no multisampling" : "multisampling") << ", ";
+        str << BindFlagsAsString(rules._requiredBindFlags) << " }";
+        return str;
+    }
+
+    static std::ostream& operator<<(std::ostream& str, const WorkingAttachmentContext::Attachment& attachment)
     {
         str << "WorkingAttachment {"
             << attachment._name << ", "
-            << "{" << AsString(attachment._format) << ", " << (unsigned)attachment._samples._sampleCount << "}, "
-            << std::hex << "Contains: " << AttachmentSemantic{attachment._containsDataForSemantic} << ", "
+            << "{";
+        if (attachment._fullyDefinedAttachment.has_value()) str << *attachment._fullyDefinedAttachment;
+        else str << attachment._matchingRules;
+
+        str << ", " << std::hex 
+            << "Contains: " << AttachmentSemantic{attachment._containsDataForSemantic} << ", "
             << "ShouldReceive: " << AttachmentSemantic{attachment._shouldReceiveDataForSemantic} << ", "
             << "FirstAccess: {" << AttachmentSemantic{attachment._firstAccessSemantic} << ", " << BindFlagsAsString(attachment._firstAccessInitialLayout) << ", " << AsString(attachment._firstAccessLoad) << "}, "
             << "LastAccess: {" << AttachmentSemantic{attachment._lastWriteSemantic} << ", " << BindFlagsAsString(attachment._lastAccessFinalLayout) << ", " << AsString(attachment._lastAccessStore) << "}, "
-            << std::dec
-            << AsString(attachment._state) << "}";
+            << std::dec << "}";
         return str;
     }
 
@@ -1571,7 +1744,7 @@ namespace RenderCore { namespace Techniques
         str << "FrameBufferDescFragment with attachments: " << std::endl;
         for (unsigned c=0; c<fragment._attachments.size(); ++c) {
             str << StreamIndent(4) << "[" << c << "] "
-                << AttachmentSemantic{fragment._attachments[c].GetInputSemanticBinding()} << ", " << AttachmentSemantic{fragment._attachments[c].GetOutputSemanticBinding()} << " : " << fragment._attachments[c]._desc
+                << AttachmentSemantic{fragment._attachments[c].GetInputSemanticBinding()} << ", " << AttachmentSemantic{fragment._attachments[c].GetOutputSemanticBinding()} << " : " << fragment._attachments[c]._matchingRules
                 << std::endl;
         }
         str << "Subpasses: " << std::endl;
@@ -1581,7 +1754,13 @@ namespace RenderCore { namespace Techniques
         return str;
     }
 
-    static bool CompareAttachmentName(const WorkingAttachment& lhs, const WorkingAttachment& rhs)
+    static std::ostream& operator<<(std::ostream& str, const FrameBufferDescFragment::Attachment& attachment)
+    {
+        str << AttachmentSemantic{attachment._semantic} << " : " << attachment._matchingRules;
+        return str;
+    }
+
+    static bool CompareAttachmentName(const WorkingAttachmentContext::Attachment& lhs, const WorkingAttachmentContext::Attachment& rhs)
     {
         return lhs._name < rhs._name;
     }
@@ -1591,21 +1770,74 @@ namespace RenderCore { namespace Techniques
         unsigned usageBindFlags, 
         const FrameBufferProperties& props)
     {
-        // Prefer "typeless" formats when creating the actual attachments
-        // This ensures that we can have complete freedom when we create views
+        Format fmt = Format::Unknown;
+        if (attachmentDesc._matchingRules._flagsSet & uint32_t(AttachmentMatchingRules::Flags::FixedFormat))
+            fmt = attachmentDesc._matchingRules._fixedFormat;
+        else if (attachmentDesc._matchingRules._flagsSet & uint32_t(AttachmentMatchingRules::Flags::SystemFormat))
+            fmt = ResolveSystemFormat(attachmentDesc._matchingRules._systemFormat);
+        assert(fmt != Format::Unknown);
+
         TextureDesc tDesc = TextureDesc::Plain2D(
             (unsigned)props._outputWidth, (unsigned)props._outputHeight,
-            attachmentDesc._desc._format, 1, 0u,
-            GetSamples(attachmentDesc, props));
-        auto bindFlags = usageBindFlags | attachmentDesc._desc._initialLayout | attachmentDesc._desc._finalLayout; 
+            fmt, 1, 0u,
+            GetSamples(attachmentDesc._matchingRules, props));
+        auto bindFlags = usageBindFlags | attachmentDesc._initialLayout | attachmentDesc._finalLayout | attachmentDesc._matchingRules._requiredBindFlags;
 
         PreregisteredAttachment result;
         result._desc = CreateDesc(bindFlags, 0, 0, tDesc, "attachment-pool");
         assert(result._desc._textureDesc._format != Format::Unknown);       // at this point we must have a resolved format. If it's still unknown, we can't created a preregistered attachment
-        result._semantic = attachmentDesc._inputSemanticBinding;
+        result._semantic = attachmentDesc._semantic;
         result._state = PreregisteredAttachment::State::Uninitialized;
-        result._layoutFlags = attachmentDesc._desc._finalLayout ? attachmentDesc._desc._finalLayout : usageBindFlags;
+        result._layoutFlags = attachmentDesc._finalLayout ? attachmentDesc._finalLayout : usageBindFlags;
         return result;
+    }
+
+    static FrameBufferDesc BuildFrameBufferDesc(
+        const FrameBufferDescFragment& fragment,
+        const FrameBufferProperties& props,
+        IteratorRange<const PreregisteredAttachment*> fullAttachmentDescriptions,
+        IteratorRange<const FragmentStitchingContext::AttachmentTransform*> transforms)
+    {
+        std::vector<AttachmentDesc> fbAttachments;
+        fbAttachments.reserve(fragment._attachments.size());
+        assert(transforms.size() == fragment._attachments.size());
+        auto ti = transforms.begin();
+        for (const auto& inputFrag:fragment._attachments) {
+            uint64_t semantic = inputFrag._semantic;
+            AttachmentDesc desc;
+            desc._loadFromPreviousPhase = inputFrag._loadFromPreviousPhase;
+            desc._storeToNextPhase = inputFrag._storeToNextPhase;
+            desc._initialLayout = inputFrag._initialLayout;
+            desc._finalLayout = inputFrag._finalLayout;
+
+            // try to get the format & multisample information from the full description
+            // (or get it from the matching rules if it doesn't exist)
+            auto fullDescription = std::find_if(fullAttachmentDescriptions.begin(), fullAttachmentDescriptions.end(),
+                [semantic=inputFrag._semantic](const auto& q) { return q._semantic == semantic; });
+            if (fullDescription != fullAttachmentDescriptions.end()) {
+                desc._format = fullDescription->_desc._textureDesc._format;
+                if (fullDescription->_desc._textureDesc._samples._sampleCount > 1u)
+                    desc._flags |= AttachmentDesc::Flags::Multisampled;
+            } else {
+                // build the attachment we'd expect to get if we used the matching rules directly
+                auto prereg = BuildPreregisteredAttachment(inputFrag, 0, props);
+                desc._format = prereg._desc._textureDesc._format;
+                if (prereg._desc._textureDesc._samples._sampleCount > 1u)
+                    desc._flags |= AttachmentDesc::Flags::Multisampled;
+            }
+
+            assert(desc._format != Format::Unknown);
+            fbAttachments.push_back(desc);
+            ++ti;
+        }
+
+        // Generate the final FrameBufferDesc by moving the subpasses out of the fragment
+        // Usually this function is called as a final step when converting a number of fragments
+        // into a final FrameBufferDesc, so it makes sense to move the subpasses from the input
+        std::vector<SubpassDesc> subpasses;
+        subpasses.reserve(fragment._subpasses.size());
+        for (const auto& sp:fragment._subpasses) subpasses.push_back(sp);
+        return FrameBufferDesc { std::move(fbAttachments), std::move(subpasses), props };
     }
 
     auto FragmentStitchingContext::TryStitchFrameBufferDescInternal(const FrameBufferDescFragment& fragment) -> StitchResult
@@ -1627,19 +1859,19 @@ namespace RenderCore { namespace Techniques
             // or created a new one if we can't match
             auto i = std::find_if(
                 _workingAttachments.begin(), _workingAttachments.end(),
-                [semantic=a._inputSemanticBinding](const auto& c) { return c._semantic == semantic; });
+                [semantic=a._semantic](const auto& c) { return c._semantic == semantic; });
             if (i != _workingAttachments.end()) {
                 #if defined(_DEBUG)
-                    if (!IsCompatible(*i, a, _workingProps)) {     // todo -- check layout flags
-                        Log(Warning) << "Preregistered attachment for semantic (" << AttachmentSemantic{a._inputSemanticBinding} << " does not match the request for this semantic. Attempting to use it anyway. Request: "
-                            << a._desc << ", Preregistered: " << *i << std::endl;
+                    if (!IsCompatible(a._matchingRules, *i, _workingProps)) {     // todo -- check layout flags
+                        Log(Warning) << "Preregistered attachment for semantic (" << AttachmentSemantic{a._semantic} << " does not match the request for this semantic. Attempting to use it anyway. Request: "
+                            << a << ", Preregistered: " << *i << std::endl;
                     }
                 #endif
                 result._fullAttachmentDescriptions.push_back(*i);
 
-                auto requiredBindFlags = usageFlags | a._desc._initialLayout | a._desc._finalLayout; 
+                auto requiredBindFlags = usageFlags | a._initialLayout | a._finalLayout; 
                 if ((i->_desc._bindFlags & requiredBindFlags) != requiredBindFlags)
-                    Throw(std::runtime_error((StringMeld<512>() << "FrameBufferDescFragment requires attachment bind flags that are not present in the preregistered attachment. Attachment semantic (" << AttachmentSemantic{a._inputSemanticBinding} << "). Preregistered attachment bind flags: (" << BindFlagsAsString(i->_desc._bindFlags) << "), Frame buffer request bind flags: (" << BindFlagsAsString(requiredBindFlags) << ")").AsString()));
+                    Throw(std::runtime_error((StringMeld<512>() << "FrameBufferDescFragment requires attachment bind flags that are not present in the preregistered attachment. Attachment semantic (" << AttachmentSemantic{a._semantic} << "). Preregistered attachment bind flags: (" << BindFlagsAsString(i->_desc._bindFlags) << "), Frame buffer request bind flags: (" << BindFlagsAsString(requiredBindFlags) << ")").AsString()));
 
                 AttachmentTransform transform;
                 if (directionFlags & DirectionFlags::RetainsOnExit) {
@@ -1658,17 +1890,17 @@ namespace RenderCore { namespace Techniques
                 // Unless we're actually generating the attachment from scratch, don't remove the layout flags that were
                 // previously on the attachment
                 if (transform._type == AttachmentTransform::Generated || transform._type == AttachmentTransform::Temporary) {
-                    transform._newLayout = a._desc._finalLayout ? a._desc._finalLayout : usageFlags;
+                    transform._newLayout = a._finalLayout ? a._finalLayout : usageFlags;
                 } else {
-                    transform._newLayout = a._desc._finalLayout ? a._desc._finalLayout : (i->_layoutFlags | usageFlags);
+                    transform._newLayout = a._finalLayout ? a._finalLayout : (i->_layoutFlags | usageFlags);
                 }
                 result._attachmentTransforms.push_back(transform);
             } else {
-                #if defined(_DEBUG)
-                    if (a._desc._format == Format::Unknown)
-                        Log(Warning) << "Missing format information for attachment with semantic: " << AttachmentSemantic{a._inputSemanticBinding} << std::endl;
-                #endif 
                 auto newAttachment = BuildPreregisteredAttachment(a, usageFlags, _workingProps);
+                #if defined(_DEBUG)
+                    if (newAttachment._desc._textureDesc._format == Format::Unknown)
+                        Log(Warning) << "Missing format information for attachment with semantic: " << AttachmentSemantic{a._semantic} << std::endl;
+                #endif 
                 result._fullAttachmentDescriptions.push_back(newAttachment);
                 AttachmentTransform transform;
                 assert(!(directionFlags & DirectionFlags::RequirePreinitializedData));      // If you hit this, it means the fragment has an attachment that loads data, but there's no matching attachment in the stitching context
@@ -1693,7 +1925,7 @@ namespace RenderCore { namespace Techniques
 				Log(Warning) << "Detected a frame buffer fragment which be simplified. This usually means one or more of the attachments can be reused, thereby reducing the total number of attachments required." << std::endl;
         #endif
 
-        result._fbDesc = BuildFrameBufferDesc(fragment, _workingProps, MakeIteratorRange(result._attachmentTransforms));
+        result._fbDesc = BuildFrameBufferDesc(fragment, _workingProps, MakeIteratorRange(result._fullAttachmentDescriptions), MakeIteratorRange(result._attachmentTransforms));
         return result;
     }
     
@@ -1843,29 +2075,16 @@ namespace RenderCore { namespace Techniques
 
         result._pipelineType = fragments[0]._pipelineType;
         
-        std::vector<WorkingAttachment> workingAttachments;
-        workingAttachments.reserve(preregisteredInputs.size());
+        WorkingAttachmentContext workingAttachments;
+        workingAttachments._attachments.reserve(preregisteredInputs.size());
         for (unsigned c=0; c<preregisteredInputs.size(); c++) {
-            workingAttachments.push_back(WorkingAttachment{ preregisteredInputs[c] });
+            workingAttachments._attachments.push_back(WorkingAttachmentContext::Attachment{ preregisteredInputs[c] });
         }
 
         for (auto f=fragments.begin(); f!=fragments.end(); ++f) {
-            std::vector<WorkingAttachment> newWorkingAttachments;
             std::vector<std::pair<AttachmentName, AttachmentName>> attachmentRemapping;
 
             assert(f->_pipelineType == result._pipelineType);       // all fragments must have the same pipeline type
-
-            // Capture the default properties for each semantic on the interface now
-            std::unordered_map<uint64_t, Format> defaultSemanticFormats;
-            for (const auto& a:preregisteredInputs) {
-                defaultSemanticFormats[a._semantic] = a._desc._textureDesc._format;
-            }
-            for (const auto& a:workingAttachments) {
-                if (a._shouldReceiveDataForSemantic)
-                    defaultSemanticFormats[a._shouldReceiveDataForSemantic] = a._format;
-                if (a._containsDataForSemantic)
-                    defaultSemanticFormats[a._containsDataForSemantic] = a._format;
-            }
 
             #if defined(_DEBUG)
                 debugInfo << "-------------------------------" << std::endl;
@@ -1892,170 +2111,50 @@ namespace RenderCore { namespace Techniques
                     return (lhs.second & DirectionFlags::RequirePreinitializedData) > (rhs.second & DirectionFlags::RequirePreinitializedData);
                 });
 
+            std::vector<WorkingAttachmentContext::Attachment> newWorkingAttachments;
+            newWorkingAttachments.reserve(sortedInterfaceAttachments.size());
+
             for (const auto&pair:sortedInterfaceAttachments) {
                 const auto& interfaceAttachment = f->_attachments[pair.first];
                 AttachmentName interfaceAttachmentName = pair.first;
                 DirectionFlags::BitField directionFlags = pair.second;
                 
-                WorkingAttachment newState;
-                if (directionFlags & DirectionFlags::RequirePreinitializedData) {
-                    // We're expecting a buffer that already has some initialized contents. Look for
-                    // something matching in our working attachments array
-                    auto compat = std::find_if(
-                        workingAttachments.begin(), workingAttachments.end(),
-                        [&interfaceAttachment, fbProps](const WorkingAttachment& workingAttachment) {
-                            return (workingAttachment._state == PreregisteredAttachment::State::Initialized || workingAttachment._state == PreregisteredAttachment::State::Initialized_StencilUninitialized || workingAttachment._state == PreregisteredAttachment::State::Uninitialized_StencilInitialized || workingAttachment._state == PreregisteredAttachment::State::PingPongBuffer0 || workingAttachment._state == PreregisteredAttachment::State::PingPongBuffer1)
-                                && (workingAttachment._containsDataForSemantic == interfaceAttachment.GetInputSemanticBinding())
-                                && IsCompatible(workingAttachment, interfaceAttachment, fbProps);
-                        });
+                auto newState = workingAttachments.MatchAttachment(
+                    interfaceAttachment._matchingRules, interfaceAttachment._semantic,
+                    interfaceAttachment._loadFromPreviousPhase);
 
-                    if (compat == workingAttachments.end()) {
-                        // This is a new buffer that will be part of the input interface for the
-                        // final fragment.
-                        // Note that we don't allow an attachment with a "Unknown" format to be defined
-                        // in this way -- just because that could start to get confusing to the caller.
-                        if (!interfaceAttachment.GetInputSemanticBinding()) {
-                            #if defined(_DEBUG)
-                                auto uninitializedCheck = std::find_if(
-                                    workingAttachments.begin(), workingAttachments.end(),
-                                    [&interfaceAttachment, fbProps](const WorkingAttachment& workingAttachment) {
-                                        return IsCompatible(workingAttachment, interfaceAttachment, fbProps);
-                                    });
-                                debugInfo << "      * Failed to find compatible initialized buffer for request: " << interfaceAttachment._desc << ". Semantic: " << AttachmentSemantic{interfaceAttachment.GetInputSemanticBinding()} << std::endl;
-                                if (uninitializedCheck != workingAttachments.end())
-                                    debugInfo << "      * Buffer " << std::distance(workingAttachments.begin(), uninitializedCheck) << " is compatible, but does not contain any initialized data (is there a missing Retain flag?)" << std::endl;
-                                debugInfo << "      * Working attachments are: " << std::endl;
-                                for (const auto& att : workingAttachments)
-                                    debugInfo << att << std::endl;
-                                auto debugInfoStr = debugInfo.str();
-                                Log(Error) << "MergeFragments() failed. Details:" << std::endl << debugInfoStr << std::endl;
-                                Throw(::Exceptions::BasicLabel("Couldn't bind renderpass fragment input request. Details:\n%s\n", debugInfoStr.c_str()));
-                            #else
-                                Throw(::Exceptions::BasicLabel("Couldn't bind renderpass fragment input request"));
-                            #endif
-                        }
-
-                        newState = WorkingAttachment { interfaceAttachment, fbProps };
-                    } else {
-                        // Remove from the working attachments and push back in it's new state
-                        // If we're not writing to this attachment, it will lose it's semantic here
-                        newState = *compat;
-                        workingAttachments.erase(compat);
-                    }
-                } else {
-                    // define a new output buffer, or reuse something that we can reuse
-                    // Prefer a buffer that is uninitialized, but we can drop back to something that
-                    // is initialized if we have to
-                    auto compat = std::find_if(
-                        workingAttachments.begin(), workingAttachments.end(),
-                        [&interfaceAttachment, fbProps](const WorkingAttachment& workingAttachment) {
-                            return (workingAttachment._shouldReceiveDataForSemantic == interfaceAttachment.GetOutputSemanticBinding())
-                                && (workingAttachment._state == PreregisteredAttachment::State::Uninitialized || workingAttachment._state == PreregisteredAttachment::State::PingPongBuffer0 || workingAttachment._state == PreregisteredAttachment::State::PingPongBuffer1)
-                                && IsCompatible(workingAttachment, interfaceAttachment, fbProps);
-                        });
-
-                    if (compat == workingAttachments.end() && interfaceAttachment.GetOutputSemanticBinding()) {
-
-                        // Be a little more flexible by looking for a buffer with a compatible semantic, even if it means overwriting
-                        // data that's already there
-                        compat = std::find_if(
-                            workingAttachments.begin(), workingAttachments.end(),
-                            [&interfaceAttachment, fbProps](const WorkingAttachment& workingAttachment) {
-                                return (workingAttachment._shouldReceiveDataForSemantic == interfaceAttachment.GetOutputSemanticBinding()) || (workingAttachment._containsDataForSemantic == interfaceAttachment.GetOutputSemanticBinding())
-                                    && IsCompatible(workingAttachment, interfaceAttachment, fbProps);
-                            });
-
-                        if (compat == workingAttachments.end()) {
-                            // Look for a buffer with no assigned semantic. It will take on the semantic we
-                            // give it
-                            compat = std::find_if(
-                                workingAttachments.begin(), workingAttachments.end(),
-                                [&interfaceAttachment, fbProps](const WorkingAttachment& workingAttachment) {
-                                    return (workingAttachment._shouldReceiveDataForSemantic == 0)
-                                        && (workingAttachment._state == PreregisteredAttachment::State::Uninitialized)
-                                        && IsCompatible(workingAttachment, interfaceAttachment, fbProps);
-                                });
-                        }
-                    }
-
-                    if (compat == workingAttachments.end() && interfaceAttachment._desc._format != Format::Unknown) {
-                        // Couldn't find a buffer in the "uninitialized" state. We're just going to
-                        // find a initialized buffer and overwrite it's contents.
-                        // We need this flexibility because some fragments use "retain" on their
-                        // last read or write speculatively (maybe because they don't know whether the buffer
-                        // will actually be read from again, or they have been mistakenly marked as
-                        // retain)
-                        // (this relies on us sorting the attachment list so load operations are processed
-                        // first to work reliably)
-						// Also, we shouldn't do this when the request format is "unknown" -- because then we
-						// can match against almost anything
-                        compat = std::find_if(
-                            workingAttachments.begin(), workingAttachments.end(),
-                            [&interfaceAttachment, fbProps](const WorkingAttachment& workingAttachment) {
-                                return (workingAttachment._shouldReceiveDataForSemantic == interfaceAttachment.GetOutputSemanticBinding() || workingAttachment._shouldReceiveDataForSemantic == 0)
-                                    && IsCompatible(workingAttachment, interfaceAttachment, fbProps);
-                            });
-                    }
-
-                    if (compat == workingAttachments.end()) {
-                        // Technically we could do a second pass looking for some initialized attachment
-                        // we could write over -- but that would lead to other complications. Let's just
-                        // create something new.
-
-                        // We can steal the settings from an existing attachment with the same semantic
-                        // name, if necessary. We get these from a capture of the working attachments
-                        // we made at the start of the fragment
-                        auto desc = interfaceAttachment._desc;
-                        auto sameSemantic = defaultSemanticFormats.find(interfaceAttachment.GetOutputSemanticBinding());
-                        if (sameSemantic != defaultSemanticFormats.end()) {
-                            if (desc._format == Format::Unknown) desc._format = sameSemantic->second;
-                        } else {
-                            if (desc._format == Format::Unknown) {
-                                #if defined(_DEBUG)
-                                    debugInfo << "      * Could not resolve correct format for attachment: " << interfaceAttachment._desc << ". Semantic: " << AttachmentSemantic{interfaceAttachment.GetInputSemanticBinding()} << std::endl;
-                                    for (const auto& att : workingAttachments)
-                                        debugInfo << att << std::endl;
-                                    auto debugInfoStr = debugInfo.str();
-                                    Log(Error) << "MergeFragments() failed. Details:" << std::endl << debugInfoStr << std::endl;
-                                    Throw(::Exceptions::BasicLabel("Couldn't bind renderpass fragment input request. Details:\n%s\n", debugInfoStr.c_str()));
-                                #else
-                                    Throw(::Exceptions::BasicLabel("Couldn't bind renderpass fragment input request"));
-                                #endif
-                            }
-                        }
-
-                        newState = WorkingAttachment { interfaceAttachment, fbProps };
-
-                        #if defined(_DEBUG)
-                            debugInfo 
-                                << "      * " 
-                                << "Cannot find compatible buffer, creating #" << newState._name << ", " << newState << std::endl;
-                        #endif
-                    } else {
-                        // remove from the working attachments and push back in it's new state
-                        newState = *compat;
-                        workingAttachments.erase(compat);
-                    }
+                if (!newState.has_value()) {
+                    #if defined(_DEBUG)
+                        debugInfo << "      * Failed to find compatible initialized buffer for request: " << interfaceAttachment._matchingRules << ". Semantic: " << AttachmentSemantic{interfaceAttachment.GetInputSemanticBinding()} << std::endl;
+                        debugInfo << "      * Working attachments are: " << std::endl;
+                        for (const auto& att : workingAttachments._attachments)
+                            debugInfo << att << std::endl;
+                        auto debugInfoStr = debugInfo.str();
+                        Log(Error) << "MergeFragments() failed. Details:" << std::endl << debugInfoStr << std::endl;
+                        Throw(::Exceptions::BasicLabel("Couldn't bind renderpass fragment input request. Details:\n%s\n", debugInfoStr.c_str()));
+                    #else
+                        Throw(::Exceptions::BasicLabel("Couldn't bind renderpass fragment input request"));
+                    #endif
                 }
 
-                if (!newState._hasBeenAccessed) {
-                    newState._hasBeenAccessed = true;
-                    newState._firstAccessSemantic = interfaceAttachment.GetInputSemanticBinding();
-                    newState._firstAccessLoad = interfaceAttachment._desc._loadFromPreviousPhase;
-                    if (interfaceAttachment._desc._initialLayout)       // otherwise inherit from what we set from the PreregisteredAttachment
-                        newState._firstAccessInitialLayout = interfaceAttachment._desc._initialLayout;
+                if (!newState->_hasBeenAccessed) {
+                    newState->_hasBeenAccessed = true;
+                    newState->_firstAccessSemantic = interfaceAttachment.GetInputSemanticBinding();
+                    newState->_firstAccessLoad = interfaceAttachment._loadFromPreviousPhase;
+                    if (interfaceAttachment._initialLayout)       // otherwise inherit from what we set from the PreregisteredAttachment
+                        newState->_firstAccessInitialLayout = interfaceAttachment._initialLayout;
                 }
 
                 if (directionFlags & DirectionFlags::WritesData) {
-                    if (newState._state != PreregisteredAttachment::State::PingPongBuffer0 && newState._state != PreregisteredAttachment::State::PingPongBuffer1)
-                        newState._state = PreregisteredAttachment::State::Initialized;
-                    newState._containsDataForSemantic = interfaceAttachment.GetOutputSemanticBinding();
-                    newState._lastWriteSemantic = interfaceAttachment.GetOutputSemanticBinding();
+                    newState->_containsDataForSemantic = interfaceAttachment.GetOutputSemanticBinding();
+                    newState->_lastWriteSemantic = interfaceAttachment.GetOutputSemanticBinding();
                 }
 
-                newState._lastAccessStore = interfaceAttachment._desc._storeToNextPhase;
-                newState._lastAccessFinalLayout = interfaceAttachment._desc._finalLayout;
-                newWorkingAttachments.push_back(newState);
+                newState->_lastAccessStore = interfaceAttachment._storeToNextPhase;
+                newState->_lastAccessFinalLayout = interfaceAttachment._finalLayout;
+                if (!HasRetain(interfaceAttachment._storeToNextPhase))
+                    newState->_containsDataForSemantic = 0;     // if we don't explicitly retain the data, let's forget it exists
+                newWorkingAttachments.push_back(*newState);
 
                 attachmentRemapping.push_back({interfaceAttachmentName, (unsigned)newWorkingAttachments.size()-1});
             }
@@ -2071,7 +2170,7 @@ namespace RenderCore { namespace Techniques
             for (auto&mapping:attachmentRemapping) {
                 auto& newState = newWorkingAttachments[mapping.second];
                 if (newState._name == ~0u)
-                    newState._name = NextName(MakeIteratorRange(workingAttachments), MakeIteratorRange(newWorkingAttachments));
+                    newState._name = NextName(MakeIteratorRange(workingAttachments._attachments), MakeIteratorRange(newWorkingAttachments));
                 // attachmentRemapping morphs from <old attachment name> -> <index in newWorkingAttachments>
                 // to <old attachment name> -> <new attachment name>
                 mapping.second = newState._name;
@@ -2086,43 +2185,53 @@ namespace RenderCore { namespace Techniques
 
             /////////////////////////////////////////////////////////////////////////////
 
-            workingAttachments.insert(workingAttachments.end(), newWorkingAttachments.begin(), newWorkingAttachments.end());
+            workingAttachments._attachments.insert(workingAttachments._attachments.end(), newWorkingAttachments.begin(), newWorkingAttachments.end());
 
             #if defined(_DEBUG)
                 debugInfo << "Merge calculated this attachment remapping:" << std::endl;
                 for (const auto&r:attachmentRemapping)
                     debugInfo << StreamIndent(4) << "[" << r.first << "] remapped to " << r.second << " ("
-                        << f->_attachments[r.first]._desc
+                        << f->_attachments[r.first]
                         << ")" << std::endl;
                 debugInfo << "Current fragment interface:" << std::endl;
-                for (const auto&w:workingAttachments)
+                for (const auto&w:workingAttachments._attachments)
                     debugInfo << StreamIndent(4) << w << std::endl;
             #endif
         }
 
         // The workingAttachments array is now the list of attachments that must go into
         // the output fragment;
-        result._attachments.reserve(workingAttachments.size());
-        std::sort(workingAttachments.begin(), workingAttachments.end(), CompareAttachmentName);
-        for (auto& a:workingAttachments) {
+        result._attachments.reserve(workingAttachments._attachments.size());
+        std::sort(workingAttachments._attachments.begin(), workingAttachments._attachments.end(), CompareAttachmentName);
+        for (auto& a:workingAttachments._attachments) {
             if (a._name == ~0u) continue;
             // The AttachmentNames in FrameBufferDescFragment are just indices into the attachment
             // list -- so we must ensure that we insert in order, and without gaps
             assert(a._name == result._attachments.size());
-            FrameBufferDescFragment::Attachment r { a._firstAccessSemantic, a._containsDataForSemantic };
-            r._desc._format = a._format;
-            r._desc._flags = (a._samples._sampleCount > 1) ? AttachmentDesc::Flags::Multisampled : 0u;
-            r._desc._initialLayout = a._firstAccessInitialLayout;
-            r._desc._finalLayout = a._lastAccessFinalLayout;
-            r._desc._loadFromPreviousPhase = a._firstAccessLoad;
-            r._desc._storeToNextPhase = a._lastAccessStore;
+            assert(a._firstAccessSemantic == a._containsDataForSemantic);       // split semantic case
+            FrameBufferDescFragment::Attachment r { a._containsDataForSemantic };
+            // r._desc._format = a._format;
+            // r._desc._flags = (a._samples._sampleCount > 1) ? AttachmentDesc::Flags::Multisampled : 0u;
+            if (a._fullyDefinedAttachment.has_value()) {
+                // Setting the matching rules should be redundant here, since the semantic should map it to a
+                // predefined attachment, anyway
+                assert(a._fullyDefinedAttachment->_semantic == r.GetInputSemanticBinding());
+            } else {
+                r._matchingRules = a._matchingRules;
+                // matching rules must specify the format through some method --
+                assert(r._matchingRules._flagsSet & (uint32_t(AttachmentMatchingRules::Flags::FixedFormat)|uint32_t(AttachmentMatchingRules::Flags::SystemFormat)|uint32_t(AttachmentMatchingRules::Flags::CopyFormatFromSemantic)));
+            }
+            r._initialLayout = a._firstAccessInitialLayout;
+            r._finalLayout = a._lastAccessFinalLayout;
+            r._loadFromPreviousPhase = a._firstAccessLoad;
+            r._storeToNextPhase = a._lastAccessStore;
             result._attachments.push_back(r);
         }
 
         MergeFragmentsResult finalResult;
         finalResult._mergedFragment = std::move(result);
 
-        for (auto& a:workingAttachments) {
+        for (auto& a:workingAttachments._attachments) {
             if (a._name == ~0u) continue;
             if (a._firstAccessSemantic && HasRetain(a._firstAccessLoad))
                 finalResult._inputAttachments.push_back({a._firstAccessSemantic, a._name});
@@ -2134,17 +2243,15 @@ namespace RenderCore { namespace Techniques
             debugInfo << "-------------------------------" << std::endl;
             debugInfo << "Final attachments" << std::endl;
             for (unsigned c=0; c<result._attachments.size(); ++c)
-                debugInfo << StreamIndent(4) << "[" << c << "] "
-                    << AttachmentSemantic{result._attachments[c].GetInputSemanticBinding()} << ", " << AttachmentSemantic{result._attachments[c].GetOutputSemanticBinding()}
-                    << " : " << result._attachments[c]._desc << std::endl;
+                debugInfo << StreamIndent(4) << "[" << c << "] " << result._attachments[c] << std::endl;
             debugInfo << "Final subpasses" << std::endl;
             for (unsigned c=0; c<result._subpasses.size(); ++c)
                 debugInfo << StreamIndent(4) << "[" << c << "] " << result._subpasses[c] << std::endl;
             debugInfo << "Interface summary" << std::endl;
             for (unsigned c=0; c<finalResult._inputAttachments.size(); ++c)
-                debugInfo << StreamIndent(4) << "Input [" << c << "] " << AttachmentSemantic{finalResult._inputAttachments[c].first} << " " << finalResult._inputAttachments[c].second << " (" << finalResult._mergedFragment._attachments[finalResult._inputAttachments[c].second]._desc << ")" << std::endl;
+                debugInfo << StreamIndent(4) << "Input [" << c << "] " << finalResult._inputAttachments[c].second << " (" << finalResult._mergedFragment._attachments[finalResult._inputAttachments[c].second] << ")" << std::endl;
             for (unsigned c=0; c<finalResult._outputAttachments.size(); ++c)
-                debugInfo << StreamIndent(4) << "Output [" << c << "] " << AttachmentSemantic{finalResult._outputAttachments[c].first} << " " << finalResult._outputAttachments[c].second << " (" << finalResult._mergedFragment._attachments[finalResult._outputAttachments[c].second]._desc << ")" << std::endl;
+                debugInfo << StreamIndent(4) << "Output [" << c << "] "  << finalResult._outputAttachments[c].second << " (" << finalResult._mergedFragment._attachments[finalResult._outputAttachments[c].second] << ")" << std::endl;
             debugInfo << "MergeFragments() finished." << std::endl;
             finalResult._log = debugInfo.str();
         #endif
@@ -2163,7 +2270,7 @@ namespace RenderCore { namespace Techniques
         auto existing = LowerBound(remapping, input);
         if (existing == remapping.end() || existing->first != input) {
             auto semantic = srcFragment._attachments[input].GetInputSemanticBinding();
-            auto newName = dstFragment.DefineAttachment(semantic, srcFragment._attachments[input]._desc);
+            auto newName = dstFragment.DefineAttachment(srcFragment._attachments[input]);
             existing = remapping.insert(existing, {input, newName});
         }
 

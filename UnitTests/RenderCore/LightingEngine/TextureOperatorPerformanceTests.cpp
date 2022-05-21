@@ -387,9 +387,8 @@ namespace UnitTests
 				// output 0: some arbitrary pixels for downsampling (Format::R11G11B10_FLOAT precision)
 				SubpassDesc writeInputTexture;
 				writeInputTexture.SetName("write-input-texture");
-				auto preDownsampleAttachment = fragDesc.DefineAttachment(
-					Techniques::AttachmentSemantics::ColorLDR,
-					{Format::Unknown, 0, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource});
+				auto preDownsampleAttachment = fragDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR)
+					.Clear().FinalState(BindFlag::ShaderResource);
 				writeInputTexture.AppendOutput(preDownsampleAttachment);
 				fragDesc.AddSubpass(std::move(writeInputTexture));
 
@@ -415,7 +414,7 @@ namespace UnitTests
 				Techniques::FrameBufferDescFragment fragDesc;
 				SubpassDesc downsampleStep;
 				downsampleStep.SetName("downsample");
-				downsampleStep.AppendOutput(fragDesc.DefineAttachment(downsampledResult, {Format::R8_UNORM, 0, LoadStore::DontCare, LoadStore::Retain}));
+				downsampleStep.AppendOutput(fragDesc.DefineAttachment(downsampledResult).FixedFormat(Format::R8_UNORM).NoInitialState());
 				fragDesc.AddSubpass(std::move(downsampleStep));
 
 				Techniques::RenderPassInstance rpi { parsingContext, fragDesc };

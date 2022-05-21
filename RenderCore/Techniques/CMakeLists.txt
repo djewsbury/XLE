@@ -15,7 +15,6 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         PipelineOperators.cpp
         RenderPass.cpp
         RenderPassUtils.cpp
-        RenderStateResolver.cpp
         ShaderVariationSet.cpp
         DeformerConstruction.cpp
         SimpleModelRenderer.cpp
@@ -39,35 +38,8 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         LightWeightBuildDrawables.cpp
         ../../Tools/ToolsRig/VisualisationGeo.cpp
         )
-    set(Headers
-        Apparatuses.h
-        CommonBindings.h
-        CommonResources.h
-        CommonUtils.h
-        CompiledRenderStateSet.h
-        CompiledShaderPatchCollection.h
-        DeferredShaderResource.h
-        DrawableDelegates.h
-        Drawables.h
-        ImmediateDrawables.h
-        ParsingContext.h
-        PipelineAccelerator.h
-        RenderPass.h
-        RenderPassUtils.h
-        RenderStateResolver.h
-        ShaderVariationSet.h
-        DeformerConstruction.h
-        SimpleModelRenderer.h
-        SkinDeformer.h
-        SubFrameEvents.h
-        TechniqueDelegates.h
-        Techniques.h
-        TechniqueUtils.h
-        Services.h
-        ModelCache.h
-        )
 
-    add_library(RenderCoreTechniques-${metal_name} STATIC ${Src} ${Headers})
+    add_library(RenderCoreTechniques-${metal_name} STATIC ${Src})
     xle_configure_library(RenderCoreTechniques-${metal_name})
     target_compile_definitions(RenderCoreTechniques-${metal_name} PUBLIC ${metal_macro})
     target_link_libraries(RenderCoreTechniques-${metal_name} PUBLIC RenderCoreAssets RenderCore_${metal_name} RenderCore Utility ForeignMisc)

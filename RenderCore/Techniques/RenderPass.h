@@ -18,7 +18,6 @@
 namespace RenderCore 
 {
     class FrameBufferDesc;
-    class AttachmentDesc;
     class TextureViewDesc;
     class TextureSamples;
     class FrameBufferProperties;
@@ -34,6 +33,32 @@ namespace RenderCore { namespace Techniques
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+    enum class SystemAttachmentFormat
+    {
+        LDRColor, HDRColor, TargetColor,
+        MainDepth, LowDetailDepth,
+        ShadowDepth
+    };
+
+    class AttachmentMatchingRules
+    {
+    public:
+        AttachmentMatchingRules& FixedFormat(Format);
+        AttachmentMatchingRules& SystemAttachmentFormat(Techniques::SystemAttachmentFormat);
+        AttachmentMatchingRules& RequireBindFlags(BindFlag::BitField);
+        AttachmentMatchingRules& MultisamplingMode(bool);
+        AttachmentMatchingRules& CopyFormat(uint64_t srcSemantic);
+
+        // avoid changing the members directly -- prefer the accessors above to ensure compatibility
+        enum class Flags { FixedFormat=1<<0, SystemFormat=1<<1, MultisamplingMode=1<<2, CopyFormatFromSemantic=1<<3 };
+        Format _fixedFormat;
+        Techniques::SystemAttachmentFormat _systemFormat;
+        bool _multisamplingMode;
+        uint64_t _copyFormatSrc;
+        uint32_t _flagsSet = 0u;
+        BindFlag::BitField _requiredBindFlags = 0u;
+    };
+
     class FrameBufferDescFragment
     {
     public:
@@ -48,12 +73,19 @@ namespace RenderCore { namespace Techniques
             DefineAttachmentHelper& FinalState(BindFlag::BitField);
             DefineAttachmentHelper& InitialState(LoadStore, BindFlag::BitField);
             DefineAttachmentHelper& FinalState(LoadStore, BindFlag::BitField);
+
+            // Matching rules
+            DefineAttachmentHelper& FixedFormat(Format);
+            DefineAttachmentHelper& SystemAttachmentFormat(Techniques::SystemAttachmentFormat);
+            DefineAttachmentHelper& RequireBindFlags(BindFlag::BitField);
+            DefineAttachmentHelper& MultisamplingMode(bool);
+            DefineAttachmentHelper& CopyFormat(uint64_t srcSemantic);
+
             FrameBufferDescFragment* _fragment = nullptr;
             AttachmentName _attachmentName = ~0u;
         };
         DefineAttachmentHelper DefineAttachment(uint64_t semantic);
-		DefineAttachmentHelper DefineAttachment(uint64_t semantic, const AttachmentDesc& request);
-        
+
         struct ViewedAttachment : public RenderCore::AttachmentViewDesc { BindFlag::Enum _usage = BindFlag::ShaderResource; };
         struct SubpassDesc : public RenderCore::SubpassDesc
         {
@@ -69,16 +101,21 @@ namespace RenderCore { namespace Techniques
 
         struct Attachment
         {
-            uint64_t _inputSemanticBinding;
-            uint64_t _outputSemanticBinding;
-            AttachmentDesc _desc;
+            uint64_t _semantic;
+            AttachmentMatchingRules _matchingRules;
+            LoadStore _loadFromPreviousPhase = LoadStore::Retain;
+            LoadStore _storeToNextPhase = LoadStore::Retain;
+            BindFlag::BitField _initialLayout = 0u;
+            BindFlag::BitField _finalLayout = 0u;
 
-            uint64_t GetInputSemanticBinding() const { return _inputSemanticBinding; }
-            uint64_t GetOutputSemanticBinding() const { return _outputSemanticBinding; }
+            uint64_t GetInputSemanticBinding() const { return _semantic; }
+            uint64_t GetOutputSemanticBinding() const { return _semantic; }
         };
         std::vector<Attachment>     _attachments;
         std::vector<SubpassDesc>    _subpasses;
 		PipelineType				_pipelineType = PipelineType::Graphics;
+
+        DefineAttachmentHelper DefineAttachment(const Attachment& attachment);
     };
 
     struct PreregisteredAttachment

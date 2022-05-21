@@ -12,11 +12,6 @@ namespace RenderCore { namespace LightingEngine
 		return _frameBufferDescFragment.DefineAttachment(semantic);
 	}
 
-	RenderCore::Techniques::FrameBufferDescFragment::DefineAttachmentHelper RenderStepFragmentInterface::DefineAttachment(uint64_t semantic, const AttachmentDesc& request)
-	{
-		return _frameBufferDescFragment.DefineAttachment(semantic, request);
-	}
-
 	void RenderStepFragmentInterface::AddSubpass(
 		Techniques::FrameBufferDescFragment::SubpassDesc&& subpass,
 		std::shared_ptr<Techniques::ITechniqueDelegate> techniqueDelegate,

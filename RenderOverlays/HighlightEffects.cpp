@@ -246,8 +246,9 @@ namespace RenderOverlays
         _pimpl->_parsingContext = &parsingContext;
 
 		Techniques::FrameBufferDescFragment fbDescFrag;
-		auto n_offscreen = fbDescFrag.DefineAttachment(
-            0, AttachmentDesc { Format::R8G8B8A8_UNORM, 0u, LoadStore::Clear, s_inputAttachmentMode ? LoadStore::DontCare : LoadStore::Retain, 0, BindFlag::ShaderResource });
+        auto n_offscreen = fbDescFrag.DefineAttachment(0).FixedFormat(Format::R8G8B8A8_UNORM).MultisamplingMode(false)
+            .Clear()
+            .FinalState(s_inputAttachmentMode ? LoadStore::DontCare : LoadStore::Retain, BindFlag::ShaderResource);
 		const bool doDepthTest = true;
         auto n_depth = doDepthTest ? fbDescFrag.DefineAttachment(RenderCore::Techniques::AttachmentSemantics::MultisampleDepth) : ~0u;
 

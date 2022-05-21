@@ -24,7 +24,6 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		Techniques::FrameBufferDescFragment::DefineAttachmentHelper DefineAttachment(uint64_t semantic);
-		Techniques::FrameBufferDescFragment::DefineAttachmentHelper DefineAttachment(uint64_t semantic, const AttachmentDesc& request);
 		void AddSubpass(
 			Techniques::FrameBufferDescFragment::SubpassDesc&& subpass,
 			std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> techniqueDelegate = nullptr,

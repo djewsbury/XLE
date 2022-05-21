@@ -3,7 +3,6 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "Techniques.h"
-#include "RenderStateResolver.h"
 #include "Services.h"
 #include "../UniformsStream.h"
 #include "../IDevice.h"
