@@ -59,10 +59,10 @@ namespace UnitTests
 
 			auto adapter = CreateAdapter(overlaySystem, camera, weak_from_this());
 			_frameRig->SetMainOverlaySystem(adapter);
-			_frameRig->UpdatePresentationChain(*_windowApparatus->_presentationChain);
+			_frameRig->UpdatePresentationChain(*_device, *_windowApparatus->_presentationChain);
 			_windowApparatus->_mainInputHandler->AddListener(adapter->GetInputListener());
 			while (PlatformRig::OverlappedWindow::DoMsgPump() != PlatformRig::OverlappedWindow::PumpResult::Terminate) {
-				_frameRig->ExecuteFrame(*_windowApparatus, *_frameRenderingApparatus, _drawingApparatus.get());
+				_frameRig->ExecuteFrame(*_windowApparatus);
 				_frameRenderingApparatus->_frameCPUProfiler->EndFrame();
 			}
 			_frameRig->SetMainOverlaySystem(nullptr);
@@ -106,20 +106,6 @@ namespace UnitTests
 			auto v = _device->GetDesc();
 			_windowApparatus->_osWindow->SetTitle(StringMeld<128>() << "XLE interactive unit test [RenderCore: " << v._buildVersion << ", " << v._buildDate << "]");
 
-			_frameRig = std::make_shared<PlatformRig::FrameRig>(_frameRenderingApparatus->GetSubFrameEvents());
-			_windowApparatus->_windowHandler->_onResize.Bind(
-				[fra = std::weak_ptr<RenderCore::Techniques::FrameRenderingApparatus>{_frameRenderingApparatus},
-				ps = std::weak_ptr<RenderCore::IPresentationChain>(_windowApparatus->_presentationChain), 
-				fr = std::weak_ptr<PlatformRig::FrameRig>{_frameRig}](unsigned, unsigned) {
-					auto apparatus = fra.lock();
-					if (apparatus)
-						RenderCore::Techniques::ResetFrameBufferPool(*apparatus->_frameBufferPool);
-					auto presChain = ps.lock();
-					auto frameRig = fr.lock();
-					if (presChain && frameRig)
-						frameRig->UpdatePresentationChain(*presChain);
-				});
-
 			if (enabledComponents & EnabledComponents::RenderCoreTechniques) {
 				_drawingApparatus = std::make_shared<RenderCore::Techniques::DrawingApparatus>(_device);
 				_immediateDrawingApparatus = std::make_shared<RenderCore::Techniques::ImmediateDrawingApparatus>(_drawingApparatus);
@@ -129,6 +115,22 @@ namespace UnitTests
 				REQUIRE(enabledComponents & EnabledComponents::RenderCoreTechniques);
 				_lightingEngineApparatus = std::make_shared<RenderCore::LightingEngine::LightingEngineApparatus>(_drawingApparatus);
 			}
+
+			_frameRig = std::make_shared<PlatformRig::FrameRig>(*_frameRenderingApparatus, _drawingApparatus.get());
+			_windowApparatus->_windowHandler->_onResize.Bind(
+				[fra = std::weak_ptr<RenderCore::Techniques::FrameRenderingApparatus>{_frameRenderingApparatus},
+				ps = std::weak_ptr<RenderCore::IPresentationChain>(_windowApparatus->_presentationChain),
+				d = std::weak_ptr<RenderCore::IDevice>(_device),
+				fr = std::weak_ptr<PlatformRig::FrameRig>{_frameRig}](unsigned, unsigned) {
+					auto apparatus = fra.lock();
+					if (apparatus)
+						RenderCore::Techniques::ResetFrameBufferPool(*apparatus->_frameBufferPool);
+					auto presChain = ps.lock();
+					auto frameRig = fr.lock();
+					auto device = d.lock();
+					if (presChain && frameRig && device)
+						frameRig->UpdatePresentationChain(*device, *presChain);
+				});
 		}
 
 		~InteractiveTestHelper()

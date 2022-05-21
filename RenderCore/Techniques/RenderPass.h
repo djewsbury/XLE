@@ -36,8 +36,9 @@ namespace RenderCore { namespace Techniques
     enum class SystemAttachmentFormat
     {
         LDRColor, HDRColor, TargetColor,
-        MainDepth, LowDetailDepth,
-        ShadowDepth
+        MainDepthStencil, LowDetailDepth,
+        ShadowDepth,
+        Max
     };
 
     class AttachmentMatchingRules
@@ -151,7 +152,7 @@ namespace RenderCore { namespace Techniques
 
         struct AttachmentTransform
         {
-            enum Type 
+            enum Type
             {
                 Preserved, Generated, Written, Consumed, Temporary
             };
@@ -173,10 +174,15 @@ namespace RenderCore { namespace Techniques
 
         void UpdateAttachments(const StitchResult& res);
         IteratorRange<const PreregisteredAttachment*> GetPreregisteredAttachments() const { return MakeIteratorRange(_workingAttachments); }
+        Format GetSystemAttachmentFormat(SystemAttachmentFormat) const;
 
         FrameBufferProperties _workingProps;
+        Format _systemFormats[(unsigned)SystemAttachmentFormat::Max];
 
-        FragmentStitchingContext(IteratorRange<const PreregisteredAttachment*> preregAttachments = {}, const FrameBufferProperties& fbProps = {});
+        FragmentStitchingContext(
+            IteratorRange<const PreregisteredAttachment*> preregAttachments = {}, 
+            const FrameBufferProperties& fbProps = {},
+            IteratorRange<const Format*> systemFormats = {});
         ~FragmentStitchingContext();
     private:
         std::vector<PreregisteredAttachment> _workingAttachments;
@@ -194,7 +200,8 @@ namespace RenderCore { namespace Techniques
     MergeFragmentsResult MergeFragments(
         IteratorRange<const PreregisteredAttachment*> preregisteredAttachments,
         IteratorRange<const FrameBufferDescFragment*> fragments,
-		const FrameBufferProperties& fbProps);
+		const FrameBufferProperties& fbProps,
+        IteratorRange<const Format*> systemAttachmentFormats);      // systemAttachmentFormats indexed by SystemAttachmentFormat
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -390,16 +397,10 @@ namespace RenderCore { namespace Techniques
     bool CanBeSimplified(
         const FrameBufferDescFragment& inputFragment,
         IteratorRange<const PreregisteredAttachment*> systemAttachments,
-        const FrameBufferProperties& fbProps);
+        const FrameBufferProperties& fbProps = {},
+        IteratorRange<const Format*> systemFormats = {});
 
-/*    void MergeInOutputs(
-        std::vector<PreregisteredAttachment>& workingSystemAttachments,
-        const FrameBufferDescFragment& fragment,
-        const FrameBufferProperties& fbProps);
-
-    // bool IsCompatible(const AttachmentDesc& testAttachment, const AttachmentDesc& request, UInt2 dimensions);
-*/
+    std::vector<Format> CalculateDefaultSystemFormats(IDevice&);
 
 }}
-
 

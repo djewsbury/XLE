@@ -155,7 +155,7 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::AttachmentSemantics::MultisampleDepth,
 				CreateDesc(
 					BindFlag::DepthStencil | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::D24_UNORM_S8_UINT),
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], stitchingContext.GetSystemAttachmentFormat(Techniques::SystemAttachmentFormat::MainDepthStencil)),
 					"main-depth")
 			},
 			Techniques::PreregisteredAttachment {
@@ -329,7 +329,7 @@ namespace RenderCore { namespace LightingEngine
 
 		auto balancedNoiseTexture = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
 		
-		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps };
+		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps, Techniques::CalculateDefaultSystemFormats(*pipelinePool->GetDevice()) };
 		PreregisterAttachments(stitchingContext);
 
 		auto result = std::make_shared<::Assets::MarkerPtr<CompiledLightingTechnique>>("forward-lighting-technique");

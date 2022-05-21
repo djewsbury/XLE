@@ -139,7 +139,8 @@ namespace ToolsRig
 
 		virtual void OnRenderTargetUpdate(
             IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
-            const RenderCore::FrameBufferProperties& fbProps) override;
+            const RenderCore::FrameBufferProperties& fbProps,
+			IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override;
 
         SimpleSceneLayer(
             const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
@@ -304,7 +305,8 @@ namespace ToolsRig
 
 	void SimpleSceneLayer::OnRenderTargetUpdate(
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
-		const RenderCore::FrameBufferProperties& fbProps)
+		const RenderCore::FrameBufferProperties& fbProps,
+		IteratorRange<const RenderCore::Format*> systemAttachmentFormats)
 	{
 		assert(_pipelineAccelerators && _lightingApparatus);
 		_lightingTechniqueTargetsHash = RenderCore::Techniques::HashPreregisteredAttachments(preregAttachments, fbProps);
@@ -665,10 +667,11 @@ namespace ToolsRig
 			if (!parserContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::MultisampleDepth))		// we need this attachment to continue
 				return;
 
+			auto preRegs = parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments();
 			auto q = std::find_if(
-				parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments().begin(), parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments().end(),
+				preRegs.begin(), preRegs.end(),
 				[](const auto&a) { return a._semantic == Techniques::AttachmentSemantics::MultisampleDepth; });
-			if (q == parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments().end())
+			if (q == preRegs.end())
 				return;
 		}
 
@@ -845,7 +848,8 @@ namespace ToolsRig
 
 	void VisualisationOverlay::OnRenderTargetUpdate(
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
-		const RenderCore::FrameBufferProperties& fbProps)
+		const RenderCore::FrameBufferProperties& fbProps,
+		IteratorRange<const RenderCore::Format*> systemAttachmentFormats)
 	{
 		using namespace RenderCore;
 
@@ -864,8 +868,9 @@ namespace ToolsRig
 
 			// register a default depth texture
 			auto depthDesc = colorPreg._desc;
-			depthDesc._bindFlags = BindFlag::DepthStencil;
-			depthDesc._textureDesc._format = Format::D24_UNORM_S8_UINT;
+			depthDesc._bindFlags = BindFlag::DepthStencil|BindFlag::TransferSrc;
+			assert(systemAttachmentFormats.size() > (unsigned)Techniques::SystemAttachmentFormat::MainDepthStencil);
+			depthDesc._textureDesc._format = systemAttachmentFormats[(unsigned)Techniques::SystemAttachmentFormat::MainDepthStencil];
 			stitching.DefineAttachment({Techniques::AttachmentSemantics::MultisampleDepth, depthDesc, Techniques::PreregisteredAttachment::State::Initialized});
 		}
 

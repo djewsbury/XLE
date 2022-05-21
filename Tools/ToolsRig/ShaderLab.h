@@ -41,7 +41,8 @@ namespace ToolsRig
 		::Assets::PtrToMarkerPtr<ICompiledOperation> BuildCompiledTechnique(
 			::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> futureFormatter,
 			IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachmentsInit,
-			const RenderCore::FrameBufferProperties& fBProps);
+			const RenderCore::FrameBufferProperties& fBProps,
+			IteratorRange<const RenderCore::Format*> systemAttachmentFormats);
 
 		::Assets::PtrToMarkerPtr<IVisualizeStep> BuildVisualizeStep(
 			::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> futureFormatter);

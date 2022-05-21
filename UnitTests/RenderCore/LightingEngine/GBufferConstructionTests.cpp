@@ -102,8 +102,6 @@ namespace UnitTests
 	};
 
 	static UInt2 s_testResolution { 2048, 2048 };
-	static RenderCore::Format s_depthStencilFormat = RenderCore::Format::D24_UNORM_S8_UINT;
-	// static RenderCore::Format s_depthStencilFormat = RenderCore::Format::D16_UNORM;
 
 	static RenderCore::Techniques::ParsingContext InitializeParsingContext(
 		RenderCore::Techniques::TechniqueContext& techniqueContext,
@@ -397,7 +395,7 @@ namespace UnitTests
 					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse).Clear().FinalState(BindFlag::ShaderResource));
 					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal).Clear().FinalState(BindFlag::ShaderResource));
 					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter).Clear().FinalState(BindFlag::ShaderResource));
-					subpass.SetDepthStencil(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).FixedFormat(s_depthStencilFormat).Clear().FinalState(BindFlag::ShaderResource));
+					subpass.SetDepthStencil(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).SystemAttachmentFormat(Techniques::SystemAttachmentFormat::MainDepthStencil).Clear().FinalState(BindFlag::ShaderResource));
 					fbFrag.AddSubpass(std::move(subpass));
 
 					RenderCore::Techniques::RenderPassInstance rpi(parsingContext, fbFrag);
@@ -470,7 +468,7 @@ namespace UnitTests
 					SubpassDesc subpass;
 					subpass.AppendOutput(frag.DefineAttachment(Hash64("DirectWorldPosition")).Clear());
 					subpass.AppendOutput(frag.DefineAttachment(Hash64("DirectWorldNormal")).Clear());
-					subpass.SetDepthStencil(frag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).FixedFormat(s_depthStencilFormat).Clear());
+					subpass.SetDepthStencil(frag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).SystemAttachmentFormat(Techniques::SystemAttachmentFormat::MainDepthStencil).Clear());
 					frag.AddSubpass(std::move(subpass));
 					RenderCore::Techniques::RenderPassInstance rpi(parsingContext, frag);
 

@@ -273,7 +273,7 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::AttachmentSemantics::MultisampleDepth,
 				CreateDesc(
 					BindFlag::DepthStencil | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::D24_UNORM_S8_UINT),
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], stitchingContext.GetSystemAttachmentFormat(Techniques::SystemAttachmentFormat::MainDepthStencil)),
 					"main-depth")
 			},
 			Techniques::PreregisteredAttachment {
@@ -349,7 +349,7 @@ namespace RenderCore { namespace LightingEngine
 					auto lightScene = std::make_shared<DeferredLightScene>();
 					lightScene->_shadowPreparationOperators = shadowPreparationOperators;
 
-					Techniques::FragmentStitchingContext stitchingContext{preregisteredAttachments, fbProps};
+					Techniques::FragmentStitchingContext stitchingContext{preregisteredAttachments, fbProps, Techniques::CalculateDefaultSystemFormats(*device)};
 					PreregisterAttachments(stitchingContext, GBufferType::PositionNormalParameters);
 
 					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(pipelineAccelerators, stitchingContext, lightScene);

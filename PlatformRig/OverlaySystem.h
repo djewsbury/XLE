@@ -44,7 +44,8 @@ namespace PlatformRig
 
         virtual void OnRenderTargetUpdate(
             IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
-            const RenderCore::FrameBufferProperties& fbProps);
+            const RenderCore::FrameBufferProperties& fbProps,
+            IteratorRange<const RenderCore::Format*> systemAttachmentFormats);
 
         virtual ~IOverlaySystem();
     };
@@ -62,7 +63,8 @@ namespace PlatformRig
 
         virtual void OnRenderTargetUpdate(
             IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
-            const RenderCore::FrameBufferProperties& fbProps) override;
+            const RenderCore::FrameBufferProperties& fbProps,
+            IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override;
 
         void AddSystem(uint32_t activator, std::shared_ptr<IOverlaySystem> system);
 
@@ -78,6 +80,7 @@ namespace PlatformRig
 
         std::vector<RenderCore::Techniques::PreregisteredAttachment> _preregisteredAttachments;
         RenderCore::FrameBufferProperties _fbProps;
+        std::vector<RenderCore::Format> _systemAttachmentFormats;
     };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,7 +96,8 @@ namespace PlatformRig
 
         virtual void OnRenderTargetUpdate(
             IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
-            const RenderCore::FrameBufferProperties& fbProps) override;
+            const RenderCore::FrameBufferProperties& fbProps,
+            IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override;
 
         void AddSystem(std::shared_ptr<IOverlaySystem> system);
 		void RemoveSystem(IOverlaySystem& system);
@@ -110,6 +114,7 @@ namespace PlatformRig
 
         std::vector<RenderCore::Techniques::PreregisteredAttachment> _preregisteredAttachments;
         RenderCore::FrameBufferProperties _fbProps;
+        std::vector<RenderCore::Format> _systemAttachmentFormats;
     };
 
     std::shared_ptr<IOverlaySystem> CreateConsoleOverlaySystem(

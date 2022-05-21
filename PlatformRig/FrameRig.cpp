@@ -79,6 +79,9 @@ namespace PlatformRig
         uint64_t _mainOverlayRigTargetConfig = 0;
         uint64_t _debugScreensTargetConfig = 0; 
 
+        RenderCore::Techniques::TechniqueContext _techniqueContext;
+        std::shared_ptr<Utility::HierarchicalCPUProfiler> _frameCPUProfiler;
+
         Pimpl()
         : _prevFrameStartTime(0) 
         , _timerFrequency(OSServices::GetPerformanceCounterFrequency())
@@ -117,9 +120,9 @@ namespace PlatformRig
     auto FrameRig::ExecuteFrame(
         std::shared_ptr<RenderCore::IThreadContext> context,
         RenderCore::IPresentationChain& presChain,
-		RenderCore::Techniques::ParsingContext& parserContext,
-        HierarchicalCPUProfiler* cpuProfiler) -> FrameResult
+		RenderCore::Techniques::ParsingContext& parserContext) -> FrameResult
     {
+        auto* cpuProfiler = _pimpl->_frameCPUProfiler.get();
         CPUProfileEvent_Conditional pEvnt("FrameRig::ExecuteFrame", cpuProfiler);
         assert(&parserContext.GetThreadContext() == context.get());
 
@@ -301,37 +304,21 @@ namespace PlatformRig
 
     auto FrameRig::ExecuteFrame(
         std::shared_ptr<RenderCore::IThreadContext> context,
-        RenderCore::IPresentationChain& presChain,
-        RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
-        RenderCore::Techniques::DrawingApparatus* drawingApparatus) -> FrameResult
+        RenderCore::IPresentationChain& presChain) -> FrameResult
     {
-        RenderCore::Techniques::TechniqueContext techniqueContext;
-        if (drawingApparatus) {
-            techniqueContext._commonResources = drawingApparatus->_commonResources;
-            techniqueContext._drawablesPool = drawingApparatus->_drawablesPool;
-            techniqueContext._graphicsPipelinePool = drawingApparatus->_graphicsPipelinePool;
-            techniqueContext._uniformDelegateManager = drawingApparatus->_mainUniformDelegateManager;
-        }
-        techniqueContext._attachmentPool = frameRenderingApparatus._attachmentPool;
-        techniqueContext._frameBufferPool = frameRenderingApparatus._frameBufferPool;
-        RenderCore::Techniques::ParsingContext parserContext{techniqueContext, *context};
+        RenderCore::Techniques::ParsingContext parserContext{_pimpl->_techniqueContext, *context};
         return ExecuteFrame(
             std::move(context), presChain,
-            parserContext, 
-            frameRenderingApparatus._frameCPUProfiler.get());
+            parserContext);
     }
 
     auto FrameRig::ExecuteFrame(
-        WindowApparatus& windowApparatus,
-        RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
-        RenderCore::Techniques::DrawingApparatus* drawingApparatus) -> FrameResult
+        WindowApparatus& windowApparatus) -> FrameResult
     {
-        return ExecuteFrame(
-            windowApparatus._immediateContext, *windowApparatus._presentationChain,
-            frameRenderingApparatus, drawingApparatus);
+        return ExecuteFrame(windowApparatus._immediateContext, *windowApparatus._presentationChain);
     }
 
-    void FrameRig::UpdatePresentationChain(RenderCore::IPresentationChain& presChain)
+    void FrameRig::UpdatePresentationChain(RenderCore::IDevice& device, RenderCore::IPresentationChain& presChain)
     {
         auto desc = presChain.GetDesc();
 
@@ -342,32 +329,36 @@ namespace PlatformRig
             TextureDesc::Plain2D(desc->_width, desc->_height, desc->_format, 1, 0, desc->_samples),
             "presentation-target");
 
-        auto fbProps = RenderCore::FrameBufferProperties { desc->_width, desc->_height, desc->_samples };
+        // update system attachment formats
+        _pimpl->_techniqueContext._systemAttachmentFormats = Techniques::CalculateDefaultSystemFormats(device);
+        _pimpl->_techniqueContext._systemAttachmentFormats[(unsigned)Techniques::SystemAttachmentFormat::TargetColor] = targetDesc._textureDesc._format;
+
+        auto fbProps = FrameBufferProperties { desc->_width, desc->_height, desc->_samples };
         if (_mainOverlaySys) {
-            std::vector<RenderCore::Techniques::PreregisteredAttachment> preregisteredAttachments;
+            std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments;
             preregisteredAttachments.push_back(
-                RenderCore::Techniques::PreregisteredAttachment {
-                    RenderCore::Techniques::AttachmentSemantics::ColorLDR,
+                Techniques::PreregisteredAttachment {
+                    Techniques::AttachmentSemantics::ColorLDR,
                     targetDesc,
-                    RenderCore::Techniques::PreregisteredAttachment::State::Uninitialized
+                    Techniques::PreregisteredAttachment::State::Uninitialized
                 });
-            _mainOverlaySys->OnRenderTargetUpdate(MakeIteratorRange(preregisteredAttachments), fbProps);
-            _pimpl->_mainOverlayRigTargetConfig = RenderCore::Techniques::HashPreregisteredAttachments(MakeIteratorRange(preregisteredAttachments), fbProps);
+            _mainOverlaySys->OnRenderTargetUpdate(MakeIteratorRange(preregisteredAttachments), fbProps, MakeIteratorRange(_pimpl->_techniqueContext._systemAttachmentFormats));
+            _pimpl->_mainOverlayRigTargetConfig = Techniques::HashPreregisteredAttachments(MakeIteratorRange(preregisteredAttachments), fbProps);
         } else {
             _pimpl->_mainOverlayRigTargetConfig = 0;
         }
 
         if (_debugScreenOverlaySystem) {
-            std::vector<RenderCore::Techniques::PreregisteredAttachment> preregisteredAttachments;
+            std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments;
             preregisteredAttachments.push_back(
-                RenderCore::Techniques::PreregisteredAttachment {
-                    RenderCore::Techniques::AttachmentSemantics::ColorLDR,
+                Techniques::PreregisteredAttachment {
+                    Techniques::AttachmentSemantics::ColorLDR,
                     targetDesc,
-                    RenderCore::Techniques::PreregisteredAttachment::State::Initialized,
-                    RenderCore::BindFlag::RenderTarget
+                    Techniques::PreregisteredAttachment::State::Initialized,
+                    BindFlag::RenderTarget
                 });
-            _debugScreenOverlaySystem->OnRenderTargetUpdate(MakeIteratorRange(preregisteredAttachments), fbProps);
-            _pimpl->_debugScreensTargetConfig = RenderCore::Techniques::HashPreregisteredAttachments(MakeIteratorRange(preregisteredAttachments), fbProps);
+            _debugScreenOverlaySystem->OnRenderTargetUpdate(MakeIteratorRange(preregisteredAttachments), fbProps, MakeIteratorRange(_pimpl->_techniqueContext._systemAttachmentFormats));
+            _pimpl->_debugScreensTargetConfig = Techniques::HashPreregisteredAttachments(MakeIteratorRange(preregisteredAttachments), fbProps);
         } else {
             _pimpl->_debugScreensTargetConfig = 0;
         }
@@ -390,8 +381,9 @@ namespace PlatformRig
     }
 
     FrameRig::FrameRig(
-        const std::shared_ptr<RenderCore::Techniques::SubFrameEvents>& subFrameEvents)
-    : _subFrameEvents(subFrameEvents)
+        RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
+        RenderCore::Techniques::DrawingApparatus* drawingApparatus)
+    : _subFrameEvents(frameRenderingApparatus.GetSubFrameEvents())
     {
         _pimpl = std::make_unique<Pimpl>();
 
@@ -405,6 +397,18 @@ namespace PlatformRig
             if (metrics._blockCount)
                 Log(Verbose) << "(" << metrics._blockCount << ") active normal block allocations in (" << metrics._usage / (1024.f*1024.f) << "M bytes). Ave: (" << metrics._usage / metrics._blockCount << ")." << std::endl;
         }
+
+        auto& techniqueContext = _pimpl->_techniqueContext;
+        if (drawingApparatus) {
+            techniqueContext._commonResources = drawingApparatus->_commonResources;
+            techniqueContext._drawablesPool = drawingApparatus->_drawablesPool;
+            techniqueContext._graphicsPipelinePool = drawingApparatus->_graphicsPipelinePool;
+            techniqueContext._uniformDelegateManager = drawingApparatus->_mainUniformDelegateManager;
+        }
+        techniqueContext._attachmentPool = frameRenderingApparatus._attachmentPool;
+        techniqueContext._frameBufferPool = frameRenderingApparatus._frameBufferPool;
+
+        _pimpl->_frameCPUProfiler = frameRenderingApparatus._frameCPUProfiler;
     }
 
     FrameRig::~FrameRig() 

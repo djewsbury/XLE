@@ -1453,7 +1453,7 @@ namespace RenderCore { namespace Techniques
             std::optional<PreregisteredAttachment> _fullyDefinedAttachment;
             AttachmentMatchingRules _matchingRules;
 
-            std::optional<Attachment> TryMerge(const AttachmentMatchingRules& matchingRules) const;
+            std::optional<Attachment> TryMerge(const AttachmentMatchingRules& matchingRules, const FrameBufferProperties& fbProps) const;
 
             Attachment(const PreregisteredAttachment& attachment);
             Attachment(const AttachmentMatchingRules& matchingRules);
@@ -1461,7 +1461,7 @@ namespace RenderCore { namespace Techniques
         };
         std::vector<Attachment> _attachments;
 
-        std::optional<Attachment> MatchAttachment(const AttachmentMatchingRules& matchingRules, uint64_t semantic, LoadStore loadMode);
+        std::optional<Attachment> MatchAttachment(const AttachmentMatchingRules& matchingRules, uint64_t semantic, LoadStore loadMode, const FrameBufferProperties& fbProps);
     };
 
     static Format ResolveSystemFormat(SystemAttachmentFormat fmt)
@@ -1523,7 +1523,6 @@ namespace RenderCore { namespace Techniques
         // Note that when the multisample mode flag is not set it will mean that we ignore multisampling as a criteria -- ie, either
         // multisampled or non multisampled can be selected
         if (matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::MultisamplingMode) {
-            
             if (!(GetSamples(matchingRules, fbProps) == pregAttach._desc._textureDesc._samples))
                 return false;
         }
@@ -1533,47 +1532,34 @@ namespace RenderCore { namespace Techniques
         return true;
     }
 
-    auto WorkingAttachmentContext::Attachment::TryMerge(const AttachmentMatchingRules& matchingRules) const -> std::optional<Attachment>
+    auto WorkingAttachmentContext::Attachment::TryMerge(const AttachmentMatchingRules& matchingRules, const FrameBufferProperties& fbProps) const -> std::optional<Attachment>
     {
         if (_fullyDefinedAttachment) {
-            FrameBufferProperties fbProps;  // todo
             if (!IsCompatible(matchingRules, *_fullyDefinedAttachment, fbProps))
                 return {};
             return *this;
         } else {
             Attachment merge = *this;
 
-            if (matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::CopyFormatFromSemantic
-                || merge._matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::CopyFormatFromSemantic) {
+            if (    matchingRules._flagsSet & ((uint32_t)AttachmentMatchingRules::Flags::CopyFormatFromSemantic|(uint32_t)AttachmentMatchingRules::Flags::SystemFormat)
+                ||  merge._matchingRules._flagsSet & ((uint32_t)AttachmentMatchingRules::Flags::CopyFormatFromSemantic|(uint32_t)AttachmentMatchingRules::Flags::SystemFormat)) {
+                // We should not get there, because the matching rules should be simplied by converting CopyFormatFromSemantic & SystemFormat
+                // to FixedFormat before we get here
                 assert(0);
-                return {};
             }
 
-            if (    matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::FixedFormat
-                || matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::SystemFormat) {
-
-                Format matchingRulesFormat;
-                if (matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::FixedFormat)
-                    matchingRulesFormat = matchingRules._fixedFormat;
-                else if (matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::SystemFormat)
-                    matchingRulesFormat = ResolveSystemFormat(matchingRules._systemFormat);
-
+            if (    matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::FixedFormat) {
                 if (merge._matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::FixedFormat) {
-                    if (!FormatCompatible(matchingRulesFormat, merge._matchingRules._fixedFormat))
+                    if (!FormatCompatible(matchingRules._fixedFormat, merge._matchingRules._fixedFormat))
                         return {};
                     // If the formats are not exactly the same, we must downgrade to a typeless format
-                    if (matchingRulesFormat != merge._matchingRules._fixedFormat)
-                        merge._matchingRules._fixedFormat = AsTypelessFormat(matchingRulesFormat);
-                } else if (merge._matchingRules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::SystemFormat) {
-                    auto fmt = ResolveSystemFormat(matchingRules._systemFormat);
-                    if (!FormatCompatible(matchingRulesFormat, fmt))
-                        return {};
+                    if (matchingRules._fixedFormat != merge._matchingRules._fixedFormat)
+                        merge._matchingRules._fixedFormat = AsTypelessFormat(matchingRules._fixedFormat);
                 } else {
                     // Original didn't have any rules for the format.
                     // copy across the format matching rules to the output
-                    merge._matchingRules._flagsSet |= matchingRules._flagsSet & (uint32_t(AttachmentMatchingRules::Flags::FixedFormat)|uint32_t(AttachmentMatchingRules::Flags::SystemFormat));
+                    merge._matchingRules._flagsSet |= uint32_t(AttachmentMatchingRules::Flags::FixedFormat);
                     merge._matchingRules._fixedFormat = matchingRules._fixedFormat;
-                    merge._matchingRules._systemFormat = matchingRules._systemFormat;
                 }
             }
 
@@ -1612,7 +1598,7 @@ namespace RenderCore { namespace Techniques
         _matchingRules = matchingRules;
     }
 
-    auto WorkingAttachmentContext::MatchAttachment(const AttachmentMatchingRules& matchingRules, uint64_t semantic, LoadStore loadMode) -> std::optional<Attachment>
+    auto WorkingAttachmentContext::MatchAttachment(const AttachmentMatchingRules& matchingRules, uint64_t semantic, LoadStore loadMode, const FrameBufferProperties& fbProps) -> std::optional<Attachment>
     {
         // Attempt to find an attachment in "_attachments" that matches the request
         // If we find one, remove it from our array and return it
@@ -1627,7 +1613,7 @@ namespace RenderCore { namespace Techniques
         if (requiresPreinitData) {
             for (auto i=_attachments.begin(); i!=_attachments.end(); ++i) {
                 if (i->_containsDataForSemantic == semantic) {
-                    result = i->TryMerge(matchingRules);
+                    result = i->TryMerge(matchingRules, fbProps);
                     if (!result.has_value()) {
                         if (!semantic) continue;
                         return {};     // fail immediately if the matching semantic attachment is incompatible with the request
@@ -1639,7 +1625,7 @@ namespace RenderCore { namespace Techniques
         } else {
             for (auto i=_attachments.begin(); i!=_attachments.end(); ++i) {
                 if (i->_shouldReceiveDataForSemantic == semantic) {
-                    result  = i->TryMerge(matchingRules);
+                    result  = i->TryMerge(matchingRules, fbProps);
                     if (!result.has_value()) {
                         if (!semantic) continue;
                         return {};     // fail immediately if the matching semantic attachment is incompatible with the request
@@ -1655,7 +1641,7 @@ namespace RenderCore { namespace Techniques
                 for (auto i=_attachments.begin(); i!=_attachments.end(); ++i) {
                     // only consider uninitialized/empty attachments in this case
                     if (i->_shouldReceiveDataForSemantic != 0 || i->_containsDataForSemantic != 0) continue;
-                    if (auto newState = i->TryMerge(matchingRules)) {
+                    if (auto newState = i->TryMerge(matchingRules, fbProps)) {
                         _attachments.erase(i);      // remove from our array
                         result = newState;
                         break;
@@ -1702,7 +1688,7 @@ namespace RenderCore { namespace Techniques
         case SystemAttachmentFormat::LDRColor: return "LDRColor";
         case SystemAttachmentFormat::HDRColor: return "HDRColor";
         case SystemAttachmentFormat::TargetColor: return "TargetColor";
-        case SystemAttachmentFormat::MainDepth: return "MainDepth";
+        case SystemAttachmentFormat::MainDepthStencil: return "MainDepthStencil";
         case SystemAttachmentFormat::LowDetailDepth: return "LowDetailDepth";
         case SystemAttachmentFormat::ShadowDepth: return "ShadowDepth";
         default: return "<<unknown>>";
@@ -1978,7 +1964,7 @@ namespace RenderCore { namespace Techniques
 
     auto FragmentStitchingContext::TryStitchFrameBufferDesc(IteratorRange<const FrameBufferDescFragment*> fragments) -> StitchResult
     {
-        auto merged = MergeFragments(MakeIteratorRange(_workingAttachments), fragments, _workingProps);
+        auto merged = MergeFragments(MakeIteratorRange(_workingAttachments), fragments, _workingProps, MakeIteratorRange(_systemFormats));
         auto stitched = TryStitchFrameBufferDescInternal(merged._mergedFragment);
         stitched._log = merged._log;
         return stitched;
@@ -2002,6 +1988,7 @@ namespace RenderCore { namespace Techniques
     void FragmentStitchingContext::DefineAttachment(
         const PreregisteredAttachment& attachment)
 	{
+        assert(attachment._desc._textureDesc._format != Format::Unknown);
 		auto i = std::find_if(
 			_workingAttachments.begin(), _workingAttachments.end(),
 			[semantic=attachment._semantic](const auto& c) { return c._semantic == semantic; });
@@ -2020,11 +2007,25 @@ namespace RenderCore { namespace Techniques
             _workingAttachments.erase(i);
     }
 
-    FragmentStitchingContext::FragmentStitchingContext(IteratorRange<const PreregisteredAttachment*> preregAttachments, const FrameBufferProperties& fbProps)
+    Format FragmentStitchingContext::GetSystemAttachmentFormat(SystemAttachmentFormat fmt) const
+    {
+        if ((unsigned)fmt < dimof(_systemFormats))
+            return _systemFormats[(unsigned(fmt))];
+        return Format::Unknown;
+    }
+
+    FragmentStitchingContext::FragmentStitchingContext(
+        IteratorRange<const PreregisteredAttachment*> preregAttachments,
+        const FrameBufferProperties& fbProps,
+        IteratorRange<const Format*> systemFormats)
     : _workingProps(fbProps)
     {
         for (const auto&attach:preregAttachments)
             DefineAttachment(attach);
+        
+        auto q = (unsigned)std::min(systemFormats.size(), dimof(_systemFormats)), c=0u;
+        for (; c<q; ++c) _systemFormats[c] = systemFormats[c];
+        for (; c<dimof(_systemFormats); ++c) _systemFormats[c] = Format::Unknown;
     }
 
     FragmentStitchingContext::~FragmentStitchingContext()
@@ -2068,7 +2069,8 @@ namespace RenderCore { namespace Techniques
     MergeFragmentsResult MergeFragments(
         IteratorRange<const PreregisteredAttachment*> preregisteredInputs,
         IteratorRange<const FrameBufferDescFragment*> fragments,
-		const FrameBufferProperties& fbProps)
+		const FrameBufferProperties& fbProps,
+        IteratorRange<const Format*> systemAttachmentFormats)
     {
         #if defined(_DEBUG)
             std::stringstream debugInfo;
@@ -2131,10 +2133,29 @@ namespace RenderCore { namespace Techniques
                 const auto& interfaceAttachment = f->_attachments[pair.first];
                 AttachmentName interfaceAttachmentName = pair.first;
                 DirectionFlags::BitField directionFlags = pair.second;
+
+                auto simplifiedMatchingRules = interfaceAttachment._matchingRules;
+                if (simplifiedMatchingRules._flagsSet & uint32_t(AttachmentMatchingRules::Flags::SystemFormat)) {
+                    if ((unsigned)simplifiedMatchingRules._systemFormat >= systemAttachmentFormats.size() ||
+                        systemAttachmentFormats[(unsigned)simplifiedMatchingRules._systemFormat] == Format::Unknown)
+                        Throw(std::runtime_error(StringMeld<256>() << "No system attachment format given for attachment " << interfaceAttachment));
+                    simplifiedMatchingRules.FixedFormat(systemAttachmentFormats[(unsigned)simplifiedMatchingRules._systemFormat]);
+                }
+
+                if (simplifiedMatchingRules._flagsSet & uint32_t(AttachmentMatchingRules::Flags::CopyFormatFromSemantic)) {
+                    for (const auto& a:preregisteredInputs)
+                        if (a._semantic == simplifiedMatchingRules._copyFormatSrc) {
+                            simplifiedMatchingRules.FixedFormat(a._desc._textureDesc._format);
+                            break;
+                        }
+                    if (simplifiedMatchingRules._flagsSet & uint32_t(AttachmentMatchingRules::Flags::CopyFormatFromSemantic))
+                        Throw(std::runtime_error(StringMeld<256>() << "Could not find source attachment with required semantic to copy format from for attachment " << interfaceAttachment));
+                }
                 
                 auto newState = workingAttachments.MatchAttachment(
-                    interfaceAttachment._matchingRules, interfaceAttachment._semantic,
-                    interfaceAttachment._loadFromPreviousPhase);
+                    simplifiedMatchingRules, interfaceAttachment._semantic,
+                    interfaceAttachment._loadFromPreviousPhase,
+                    fbProps);
 
                 if (!newState.has_value()) {
                     #if defined(_DEBUG)
@@ -2302,7 +2323,8 @@ namespace RenderCore { namespace Techniques
     bool CanBeSimplified(
         const FrameBufferDescFragment& inputFragment,
         IteratorRange<const PreregisteredAttachment*> systemAttachments,
-        const FrameBufferProperties& fbProps)
+        const FrameBufferProperties& fbProps,
+        IteratorRange<const Format*> systemFormats)
     {
         TRY
         {
@@ -2318,7 +2340,7 @@ namespace RenderCore { namespace Techniques
                 testFragments.emplace_back(std::move(separatedFragment));
             }
             auto collapsed = MergeFragments(
-                systemAttachments, MakeIteratorRange(testFragments), fbProps);
+                systemAttachments, MakeIteratorRange(testFragments), fbProps, systemFormats);
             assert(collapsed._mergedFragment._attachments.size() <= inputFragment._attachments.size());
             if (collapsed._mergedFragment._attachments.size() < inputFragment._attachments.size()) {
                 return true;
@@ -2346,6 +2368,27 @@ namespace RenderCore { namespace Techniques
                 if (r._resourceName == attachmentName)
                     result |= r._usage;
         }
+        return result;
+    }
+
+    static Format FallbackChain(IDevice& device, std::initializer_list<Format> fmts, BindFlag::BitField bindFlags)
+    {
+        for (auto f:fmts)
+            if (device.QueryFormatCapability(f, bindFlags) == FormatCapability::Supported)
+                return f;
+        assert(0);
+        return Format::Unknown;
+    }
+
+    std::vector<Format> CalculateDefaultSystemFormats(IDevice& device)
+    {
+        std::vector<Format> result;
+        result.resize((unsigned)SystemAttachmentFormat::Max, Format::Unknown);
+        result[(unsigned)SystemAttachmentFormat::LDRColor] = FallbackChain(device, {Format::R8G8B8A8_UNORM_SRGB}, BindFlag::RenderTarget);
+        result[(unsigned)SystemAttachmentFormat::HDRColor] = FallbackChain(device, {Format::R11G11B10_FLOAT, Format::R16G16B16A16_FLOAT, Format::R32G32B32A32_FLOAT}, BindFlag::RenderTarget|BindFlag::ShaderResource);
+        result[(unsigned)SystemAttachmentFormat::MainDepthStencil] = FallbackChain(device, {Format::D24_UNORM_S8_UINT, Format::D32_SFLOAT_S8_UINT}, BindFlag::DepthStencil);
+        result[(unsigned)SystemAttachmentFormat::LowDetailDepth] = FallbackChain(device, {Format::D16_UNORM, Format::D32_FLOAT}, BindFlag::DepthStencil);
+        result[(unsigned)SystemAttachmentFormat::ShadowDepth] = FallbackChain(device, {Format::D16_UNORM, Format::D32_FLOAT}, BindFlag::DepthStencil|BindFlag::ShaderResource);
         return result;
     }
 

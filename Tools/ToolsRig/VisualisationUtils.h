@@ -172,7 +172,8 @@ namespace ToolsRig
 
         virtual void OnRenderTargetUpdate(
             IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
-            const RenderCore::FrameBufferProperties& fbProps) override;
+            const RenderCore::FrameBufferProperties& fbProps,
+            IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override;
 
         VisualisationOverlay(
             const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,

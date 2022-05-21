@@ -47,7 +47,10 @@ namespace RenderCore { namespace Techniques
 	FragmentStitchingContext& ParsingContext::GetFragmentStitchingContext()
 	{
 		if (!_stitchingContext)
-			_stitchingContext = std::make_unique<FragmentStitchingContext>();
+			_stitchingContext = std::make_unique<FragmentStitchingContext>(
+                IteratorRange<const PreregisteredAttachment*>{},
+                FrameBufferProperties{},
+                _techniqueContext->_systemAttachmentFormats);
 		return *_stitchingContext;
 	}
 

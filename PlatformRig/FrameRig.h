@@ -30,24 +30,19 @@ namespace PlatformRig
         };
 
         FrameResult ExecuteFrame(
-            WindowApparatus& windowApparatus,
-			RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
-            RenderCore::Techniques::DrawingApparatus* drawingApparatus = nullptr);
+            WindowApparatus& windowApparatus);
 
         FrameResult ExecuteFrame(
             std::shared_ptr<RenderCore::IThreadContext> context,
-            RenderCore::IPresentationChain& presChain,
-			RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
-            RenderCore::Techniques::DrawingApparatus* drawingApparatus = nullptr);
+            RenderCore::IPresentationChain& presChain);
 
-        FrameResult ExecuteFrame(
+        auto ExecuteFrame(
             std::shared_ptr<RenderCore::IThreadContext> context,
             RenderCore::IPresentationChain& presChain,
-			RenderCore::Techniques::ParsingContext& parserContext,
-            Utility::HierarchicalCPUProfiler* profiler);
+            RenderCore::Techniques::ParsingContext& parserContext) -> FrameResult;
 
         void SetFrameLimiter(unsigned maxFPS);
-        void UpdatePresentationChain(RenderCore::IPresentationChain& presChain);
+        void UpdatePresentationChain(RenderCore::IDevice& device, RenderCore::IPresentationChain& presChain);
 
         void SetMainOverlaySystem(std::shared_ptr<IOverlaySystem>);
 		void SetDebugScreensOverlaySystem(std::shared_ptr<IOverlaySystem>);
@@ -59,7 +54,8 @@ namespace PlatformRig
         auto CreateDisplay(std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> debugSystem) -> std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget>;
 
         FrameRig(
-            const std::shared_ptr<RenderCore::Techniques::SubFrameEvents>& subFrameEvents);
+            RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
+            RenderCore::Techniques::DrawingApparatus* drawingApparatus = nullptr);
         ~FrameRig();
 
         FrameRig(const FrameRig&) = delete;

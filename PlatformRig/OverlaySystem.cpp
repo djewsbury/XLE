@@ -103,20 +103,22 @@ namespace PlatformRig
         _childSystems.push_back(std::make_pair(activator, std::move(system)));
 
         if (!_preregisteredAttachments.empty())
-            sys->OnRenderTargetUpdate(_preregisteredAttachments, _fbProps);
+            sys->OnRenderTargetUpdate(_preregisteredAttachments, _fbProps, _systemAttachmentFormats);
     }
 
     void OverlaySystemSwitch::OnRenderTargetUpdate(
         IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
-        const RenderCore::FrameBufferProperties& fbProps)
+        const RenderCore::FrameBufferProperties& fbProps,
+        IteratorRange<const RenderCore::Format*> systemAttachmentFormats)
     {
         // We could potentially avoid calling this on inactive children; but we would then have to 
         // call it when they become active
         for (const auto&c:_childSystems)
-            c.second->OnRenderTargetUpdate(preregAttachments, fbProps);
+            c.second->OnRenderTargetUpdate(preregAttachments, fbProps, systemAttachmentFormats);
 
         _preregisteredAttachments = {preregAttachments.begin(), preregAttachments.end()};
         _fbProps = fbProps;
+        _systemAttachmentFormats = {systemAttachmentFormats.begin(), systemAttachmentFormats.end()};
     }
 
     OverlaySystemSwitch::OverlaySystemSwitch() 
@@ -188,7 +190,7 @@ namespace PlatformRig
             // todo -- do we need to call SetActivationState() here?
 
         if (!_preregisteredAttachments.empty())
-            sys->OnRenderTargetUpdate(_preregisteredAttachments, _fbProps);
+            sys->OnRenderTargetUpdate(_preregisteredAttachments, _fbProps, _systemAttachmentFormats);
     }
 
 	void OverlaySystemSet::RemoveSystem(IOverlaySystem& system)
@@ -202,13 +204,15 @@ namespace PlatformRig
 
     void OverlaySystemSet::OnRenderTargetUpdate(
         IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
-        const RenderCore::FrameBufferProperties& fbProps)
+        const RenderCore::FrameBufferProperties& fbProps,
+        IteratorRange<const RenderCore::Format*> systemAttachmentFormats)
     {
         for (const auto&c:_childSystems)
-            c->OnRenderTargetUpdate(preregAttachments, fbProps);
+            c->OnRenderTargetUpdate(preregAttachments, fbProps, systemAttachmentFormats);
 
         _preregisteredAttachments = {preregAttachments.begin(), preregAttachments.end()};
         _fbProps = fbProps;
+        _systemAttachmentFormats = {systemAttachmentFormats.begin(), systemAttachmentFormats.end()};
     }
 
     OverlaySystemSet::OverlaySystemSet() 
@@ -230,7 +234,8 @@ namespace PlatformRig
 	auto IOverlaySystem::GetOverlayState() const -> OverlayState { return {}; }
     void IOverlaySystem::OnRenderTargetUpdate(
         IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
-        const RenderCore::FrameBufferProperties& fbProps) {}
+        const RenderCore::FrameBufferProperties& fbProps,
+        IteratorRange<const RenderCore::Format*> systemAttachmentFormats) {}
     IOverlaySystem::~IOverlaySystem() {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

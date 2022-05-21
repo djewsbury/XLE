@@ -64,14 +64,16 @@ namespace ToolsRig
 	::Assets::PtrToMarkerPtr<ShaderLab::ICompiledOperation> ShaderLab::BuildCompiledTechnique(
 		::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> futureFormatter,
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachmentsInit,
-		const RenderCore::FrameBufferProperties& fBProps)
+		const RenderCore::FrameBufferProperties& fBProps,
+		IteratorRange<const RenderCore::Format*> systemAttachmentFormatsInit)
 	{
 		auto result = std::make_shared<::Assets::MarkerPtr<ShaderLab::ICompiledOperation>>();
 		std::vector<RenderCore::Techniques::PreregisteredAttachment> preregAttachments { preregAttachmentsInit.begin(), preregAttachmentsInit.end() };
+		std::vector<RenderCore::Format> systemAttachmentsFormat { systemAttachmentFormatsInit.begin(), systemAttachmentFormatsInit.end() };
 		auto weakThis = weak_from_this();
 		AsyncConstructToPromise(
 			result->AdoptPromise(),
-			[preregAttachments=std::move(preregAttachments), fBProps=fBProps, futureFormatter=std::move(futureFormatter), weakThis]() {
+			[preregAttachments=std::move(preregAttachments), fBProps=fBProps, futureFormatter=std::move(futureFormatter), systemAttachmentsFormat=std::move(systemAttachmentsFormat), weakThis]() {
 				auto l = weakThis.lock();
 				if (!l) Throw(std::runtime_error("ShaderLab shutdown before construction finished"));
 
@@ -80,7 +82,7 @@ namespace ToolsRig
 
 				TRY {
 					OperationConstructorContext constructorContext;
-					constructorContext._stitchingContext = { preregAttachments, fBProps };
+					constructorContext._stitchingContext = { preregAttachments, fBProps, MakeIteratorRange(systemAttachmentsFormat) };
 					constructorContext._depVal = ::Assets::GetDepValSys().Make();
 					constructorContext._drawingApparatus = l->_drawingApparatus;
 
