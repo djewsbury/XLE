@@ -90,7 +90,7 @@ namespace RenderCore { namespace Techniques
         struct SubpassDesc : public RenderCore::SubpassDesc
         {
             IteratorRange<const ViewedAttachment*> GetViews() const { return MakeIteratorRange(_views); }
-            void AppendNonFrameBufferAttachmentView(AttachmentName name, BindFlag::Enum usage = BindFlag::ShaderResource, TextureViewDesc window = {});
+            unsigned AppendNonFrameBufferAttachmentView(AttachmentName name, BindFlag::Enum usage = BindFlag::ShaderResource, TextureViewDesc window = {});
             std::vector<ViewedAttachment> _views;
         };
         void AddSubpass(SubpassDesc&& subpass);

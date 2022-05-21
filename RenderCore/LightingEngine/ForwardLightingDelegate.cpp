@@ -163,7 +163,8 @@ namespace RenderCore { namespace LightingEngine
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT),
-					"color-hdr")
+					"color-hdr"),
+				Techniques::PreregisteredAttachment::State::Initialized			// we have to register this as initialized, because some effects can use the contents from the previous frame
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferMotion,

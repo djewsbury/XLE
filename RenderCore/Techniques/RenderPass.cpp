@@ -266,13 +266,15 @@ namespace RenderCore { namespace Techniques
     FrameBufferDescFragment::FrameBufferDescFragment() {}
     FrameBufferDescFragment::~FrameBufferDescFragment() {}
 
-    void FrameBufferDescFragment::SubpassDesc::AppendNonFrameBufferAttachmentView(AttachmentName name, BindFlag::Enum usage, TextureViewDesc window)
+    unsigned FrameBufferDescFragment::SubpassDesc::AppendNonFrameBufferAttachmentView(AttachmentName name, BindFlag::Enum usage, TextureViewDesc window)
     {
+        auto result = (unsigned)_views.size();
         ViewedAttachment view;
         view._resourceName = name;
         view._window = window;
         view._usage = usage;
         _views.push_back(view);
+        return result;
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1709,16 +1711,24 @@ namespace RenderCore { namespace Techniques
 
     static std::ostream& operator<<(std::ostream& str, const AttachmentMatchingRules& rules)
     {
-        str << "Matching { ";
-        if (rules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::FixedFormat)
-            str << AsString(rules._fixedFormat) << ", ";
-        if (rules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::SystemFormat)
-            str << AsString(rules._systemFormat) << ", ";
-        if (rules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::CopyFormatFromSemantic)
-            str << "copy format from " << AttachmentSemantic{rules._copyFormatSrc} << ", ";
-        if (rules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::MultisamplingMode)
-            str << (rules._multisamplingMode ? "no multisampling" : "multisampling") << ", ";
-        str << BindFlagsAsString(rules._requiredBindFlags) << " }";
+        str << "Matching {";
+        const char* pending = " ";
+        if (rules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::FixedFormat) {
+            str << pending << AsString(rules._fixedFormat); pending = ", ";
+        }
+        if (rules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::SystemFormat) {
+            str << pending << AsString(rules._systemFormat); pending = ", ";
+        }
+        if (rules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::CopyFormatFromSemantic) {
+            str << pending << "copy format from " << AttachmentSemantic{rules._copyFormatSrc}; pending = ", ";
+        }
+        if (rules._flagsSet & (uint32_t)AttachmentMatchingRules::Flags::MultisamplingMode) {
+            str << pending << (rules._multisamplingMode ? "no multisampling" : "multisampling"); pending = ", ";
+        }
+        if (rules._requiredBindFlags) {
+            str << pending << BindFlagsAsString(rules._requiredBindFlags); pending = ", ";
+        }
+        str << " }";
         return str;
     }
 
@@ -1743,9 +1753,12 @@ namespace RenderCore { namespace Techniques
     {
         str << "FrameBufferDescFragment with attachments: " << std::endl;
         for (unsigned c=0; c<fragment._attachments.size(); ++c) {
-            str << StreamIndent(4) << "[" << c << "] "
-                << AttachmentSemantic{fragment._attachments[c].GetInputSemanticBinding()} << ", " << AttachmentSemantic{fragment._attachments[c].GetOutputSemanticBinding()} << " : " << fragment._attachments[c]._matchingRules
-                << std::endl;
+            str << StreamIndent(4) << "[" << c << "] ";
+            if (fragment._attachments[c].GetInputSemanticBinding() == fragment._attachments[c].GetOutputSemanticBinding()) {
+                str << AttachmentSemantic{fragment._attachments[c].GetInputSemanticBinding()};
+            } else
+                str << AttachmentSemantic{fragment._attachments[c].GetInputSemanticBinding()} << ", " << AttachmentSemantic{fragment._attachments[c].GetOutputSemanticBinding()};
+            str << ": " << fragment._attachments[c]._matchingRules << std::endl;
         }
         str << "Subpasses: " << std::endl;
         for (unsigned c=0; c<fragment._subpasses.size(); ++c) {
@@ -2125,7 +2138,16 @@ namespace RenderCore { namespace Techniques
 
                 if (!newState.has_value()) {
                     #if defined(_DEBUG)
-                        debugInfo << "      * Failed to find compatible initialized buffer for request: " << interfaceAttachment._matchingRules << ". Semantic: " << AttachmentSemantic{interfaceAttachment.GetInputSemanticBinding()} << std::endl;
+                        debugInfo << "      * Failed to find compatible attachment for request: " << interfaceAttachment._matchingRules;
+                        if (interfaceAttachment.GetInputSemanticBinding()) {
+                            debugInfo << ". Semantic: " << AttachmentSemantic{interfaceAttachment.GetInputSemanticBinding()} << std::endl;
+                            for (const auto& a:workingAttachments._attachments)
+                                if (a._containsDataForSemantic == interfaceAttachment.GetInputSemanticBinding()) {
+                                    debugInfo << "        Couldn't be matched against: " << a << std::endl;
+                                }
+                        } else {
+                            debugInfo << std::endl;
+                        }
                         debugInfo << "      * Working attachments are: " << std::endl;
                         for (const auto& att : workingAttachments._attachments)
                             debugInfo << att << std::endl;
@@ -2208,8 +2230,8 @@ namespace RenderCore { namespace Techniques
             // The AttachmentNames in FrameBufferDescFragment are just indices into the attachment
             // list -- so we must ensure that we insert in order, and without gaps
             assert(a._name == result._attachments.size());
-            assert(a._firstAccessSemantic == a._containsDataForSemantic);       // split semantic case
-            FrameBufferDescFragment::Attachment r { a._containsDataForSemantic };
+            assert(a._firstAccessSemantic == 0 || a._containsDataForSemantic == 0 || a._firstAccessSemantic == a._containsDataForSemantic);       // split semantic case
+            FrameBufferDescFragment::Attachment r { a._containsDataForSemantic ?: a._firstAccessSemantic };
             // r._desc._format = a._format;
             // r._desc._flags = (a._samples._sampleCount > 1) ? AttachmentDesc::Flags::Multisampled : 0u;
             if (a._fullyDefinedAttachment.has_value()) {
