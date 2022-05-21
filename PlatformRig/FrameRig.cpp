@@ -308,7 +308,7 @@ namespace PlatformRig
         RenderCore::Techniques::TechniqueContext techniqueContext;
         if (drawingApparatus) {
             techniqueContext._commonResources = drawingApparatus->_commonResources;
-            techniqueContext._drawablesPacketsPool = drawingApparatus->_drawablesPacketsPool;
+            techniqueContext._drawablesPool = drawingApparatus->_drawablesPool;
             techniqueContext._graphicsPipelinePool = drawingApparatus->_graphicsPipelinePool;
             techniqueContext._uniformDelegateManager = drawingApparatus->_mainUniformDelegateManager;
         }

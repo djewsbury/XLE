@@ -578,6 +578,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		uint64_t _id;
 		unsigned _tri0, _tri1;
 		unsigned _tri0EdgeIdx;
+		unsigned _tri1EdgeIdx;
 
 		friend bool operator<(const WorkingEdge& lhs, const WorkingEdge& rhs) { return lhs._id < rhs._id; }
 
@@ -589,6 +590,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			_tri0 = tri0;
 			_tri1 = ~0u;
 			_tri0EdgeIdx = edgeIdx;
+			_tri1EdgeIdx = ~0u;
 		}
 	};
 
@@ -626,9 +628,17 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			for (unsigned c=0; c<3; ++c) {
 				auto i = std::lower_bound(edges.begin(), edges.end(), es[c]);
 				if (i != edges.end() && i->_id == es[c]._id) {
-					if (i->_tri1 != ~0u)
-						Throw(std::runtime_error("Cannot generate adjacency information for given mesh because some edges are used more than twice"));
+					if (i->_tri1 != ~0u) {
+						// what do we do with edges that are used by more than 2 triangles? We can try to figure out which of the triangles are most likely to
+						// contribute to a silhouette...? Or we can just disable adjacency information for this edge entirely
+						Log(Warning) << "Some edges used more than 2 times when building adjacency information in TriListToTriListWithAdjacency" << std::endl;
+						adjacentVertices.push_back(~0u);
+						adjacentVertices[i->_tri0*3+i->_tri0EdgeIdx] = ~0u;		// disable previously calculated adjacency
+						adjacentVertices[i->_tri1*3+i->_tri1EdgeIdx] = ~0u;
+						continue;
+					}
 					i->_tri1 = triIdx;
+					i->_tri1EdgeIdx = c;
 
 					// third vertex of tri0 becomes our adjacent vertex
 					auto* adjacentTri = &inputTriListIndexBuffer[i->_tri0*3];
