@@ -352,7 +352,7 @@ namespace RenderCore { namespace LightingEngine
 					Techniques::FragmentStitchingContext stitchingContext{preregisteredAttachments, fbProps, Techniques::CalculateDefaultSystemFormats(*device)};
 					PreregisterAttachments(stitchingContext, GBufferType::PositionNormalParameters);
 
-					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(pipelineAccelerators, stitchingContext, lightScene);
+					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(lightScene);
 					auto captures = std::make_shared<DeferredLightingCaptures>();
 					captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(device);
 					captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
@@ -410,7 +410,7 @@ namespace RenderCore { namespace LightingEngine
 						mainSequence.CreatePrepareOnlyStep_ExecuteDrawables(shadowPreparer._preparer->GetSequencerConfig().first);
 					}
 
-					lightingTechnique->CompleteConstruction();
+					lightingTechnique->CompleteConstruction(pipelineAccelerators, stitchingContext);
 
 					//
 					// Now that we've finalized the frame buffer layout, build the light resolve operators

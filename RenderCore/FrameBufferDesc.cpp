@@ -63,6 +63,42 @@ namespace RenderCore
         }
     }
 
+    std::pair<LoadStore, LoadStore> SplitAspects(LoadStore input)
+    {
+        switch (input) {
+        case LoadStore::DontCare: return {LoadStore::DontCare, LoadStore::DontCare};
+        case LoadStore::Retain: return {LoadStore::Retain, LoadStore::Retain};
+        case LoadStore::Clear: return {LoadStore::Clear, LoadStore::Clear};
+        case LoadStore::DontCare_StencilRetain: return {LoadStore::DontCare, LoadStore::Retain};
+        case LoadStore::DontCare_StencilClear: return {LoadStore::DontCare, LoadStore::Clear};
+        case LoadStore::Retain_StencilDontCare: return {LoadStore::Retain, LoadStore::DontCare};
+        case LoadStore::Retain_StencilClear: return {LoadStore::Retain, LoadStore::Clear};
+        case LoadStore::Clear_StencilDontCare: return {LoadStore::Clear, LoadStore::DontCare};
+        case LoadStore::Clear_StencilRetain: return {LoadStore::Clear, LoadStore::Retain};
+        default: return {LoadStore::Retain, LoadStore::Retain};
+        }
+    }
+    LoadStore CombineAspects(LoadStore mainAspect, LoadStore stencilAspect)
+    {
+        assert(stencilAspect == LoadStore::Retain || stencilAspect == LoadStore::Clear || stencilAspect == LoadStore::DontCare);
+        if (mainAspect == LoadStore::Retain) {
+            if (stencilAspect == LoadStore::Retain) return LoadStore::Retain;
+            else if (stencilAspect == LoadStore::Clear) return LoadStore::Retain_StencilClear;
+            else return LoadStore::Retain_StencilDontCare;
+        } else if (mainAspect == LoadStore::Clear) {
+            if (stencilAspect == LoadStore::Retain) return LoadStore::Clear_StencilRetain;
+            else if (stencilAspect == LoadStore::Clear) return LoadStore::Clear;
+            else return LoadStore::Clear_StencilDontCare;
+        } else if (mainAspect == LoadStore::DontCare) {
+            if (stencilAspect == LoadStore::Retain) return LoadStore::DontCare_StencilRetain;
+            else if (stencilAspect == LoadStore::Clear) return LoadStore::DontCare_StencilClear;
+            else return LoadStore::DontCare;
+        } else {
+            assert(0);
+            return LoadStore::Retain;
+        }
+    }
+
     static uint64_t MaskBits(unsigned bitCount) { return (1ull << uint64_t(bitCount)) - 1ull; }
 
     uint64_t AttachmentDesc::CalculateHash() const

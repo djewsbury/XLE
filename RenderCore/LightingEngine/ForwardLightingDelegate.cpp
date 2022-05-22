@@ -352,7 +352,7 @@ namespace RenderCore { namespace LightingEngine
 					if (lightScene->HasScreenSpaceReflectionsOperator())
 						lightScene->GetScreenSpaceReflectionsOperator().PreregisterAttachments(stitchingContext);
 
-					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(pipelineAccelerators, stitchingContext, lightScene);
+					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(lightScene);
 					lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
 					lightingTechnique->_depVal.RegisterDependency(lightScene->GetHierarchicalDepthsOperator().GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(lightScene->GetLightTiler().GetDependencyValidation());
@@ -429,7 +429,7 @@ namespace RenderCore { namespace LightingEngine
 							captures->_lightScene->_preparedDominantShadow = nullptr;
 						});
 
-					lightingTechnique->CompleteConstruction();
+					lightingTechnique->CompleteConstruction(pipelineAccelerators, stitchingContext);
 
 					// Any final operators that depend on the resolved frame buffer:
 					auto resolvedFB = mainSequence.GetResolvedFrameBufferDesc(mainSceneFragmentRegistration);

@@ -97,6 +97,12 @@ namespace RenderCore { namespace Techniques
         void AddSubpass(SubpassDesc&& subpass);
         void AddSubpass(RenderCore::SubpassDesc&& subpass);
 
+        struct Attachment;
+        IteratorRange<const Attachment*> GetAttachments() const     { return _attachments; }
+        IteratorRange<Attachment*> GetAttachments()                 { return MakeIteratorRange(_attachments); }
+        IteratorRange<const SubpassDesc*> GetSubpasses() const      { return _subpasses; }
+        IteratorRange<SubpassDesc*> GetSubpasses()                  { return MakeIteratorRange(_subpasses); }
+
         FrameBufferDescFragment();
         ~FrameBufferDescFragment();
 

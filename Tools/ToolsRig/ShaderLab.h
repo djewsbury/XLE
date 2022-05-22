@@ -26,6 +26,7 @@ namespace ToolsRig
 				RenderCore::Techniques::DrawingApparatus& drawingApparatus,
 				RenderCore::Techniques::ImmediateDrawingApparatus& immediateDrawingApparatus) = 0;
 			virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
+			virtual auto GetRequiredAttachments() const -> std::vector<std::pair<uint64_t, RenderCore::BindFlag::BitField>> = 0;
 			virtual ~IVisualizeStep() = default;
 		};
 
@@ -40,6 +41,7 @@ namespace ToolsRig
 
 		::Assets::PtrToMarkerPtr<ICompiledOperation> BuildCompiledTechnique(
 			::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> futureFormatter,
+			::Assets::PtrToMarkerPtr<IVisualizeStep> visualizeStep,
 			IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachmentsInit,
 			const RenderCore::FrameBufferProperties& fBProps,
 			IteratorRange<const RenderCore::Format*> systemAttachmentFormats);

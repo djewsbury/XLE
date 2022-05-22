@@ -114,31 +114,30 @@ namespace RenderCore { namespace LightingEngine
 		return _nextFragmentInterfaceRegistration++;
 	}
 
+	void LightingTechniqueSequence::ForceRetainAttachment(uint64_t semantic, BindFlag::BitField layout)
+	{
+		assert(!_frozen);
+		_forceRetainSemantics.emplace_back(semantic, layout);
+	}
+
 	static const std::string s_defaultSequencerCfgName = "lighting-technique";
 
 	void LightingTechniqueSequence::ResolvePendingCreateFragmentSteps()
 	{
+		assert(!_frozen);
 		if (_pendingCreateFragmentSteps.empty()) return;
 
-		Techniques::FragmentStitchingContext::StitchResult mergedFB;
 		{
 			std::vector<Techniques::FrameBufferDescFragment> fragments;
 			for (auto& step:_pendingCreateFragmentSteps)
 				fragments.emplace_back(Techniques::FrameBufferDescFragment{step.first.GetFrameBufferDescFragment()});
-			mergedFB = _stitchingContext->TryStitchFrameBufferDesc(MakeIteratorRange(fragments));
+			_fbDescsPendingStitch.emplace_back(std::move(fragments));
 		}
-
-		#if defined(_DEBUG)
-			Log(Warning) << "Merged fragment in lighting technique:" << std::endl << mergedFB._log << std::endl;
-		#endif
-
-		_stitchingContext->UpdateAttachments(mergedFB);
-		_fbDescs.emplace_back(std::move(mergedFB));
 
 		// Generate commands for walking through the render pass
 		ExecuteStep beginStep;
 		beginStep._type = ExecuteStep::Type::BeginRenderPassInstance;
-		beginStep._fbDescIdx = (unsigned)_fbDescs.size()-1;
+		beginStep._fbDescIdx = (unsigned)_fbDescsPendingStitch.size()-1;
 		_steps.emplace_back(std::move(beginStep));
 		
 		unsigned stepCounter = 0;
@@ -158,16 +157,17 @@ namespace RenderCore { namespace LightingEngine
 					ExecuteStep drawStep;
 					drawStep._type = ExecuteStep::Type::ExecuteDrawables;
 					#if defined(_DEBUG)
-						auto name = _fbDescs[beginStep._fbDescIdx]._fbDesc.GetSubpasses()[c]._name;
+						auto name = fragmentStep.first.GetFrameBufferDescFragment().GetSubpasses()[c]._name;
 						if (name.empty()) name = s_defaultSequencerCfgName;
 					#else
 						auto name = s_defaultSequencerCfgName;
 					#endif
 					drawStep._fbDescIdx = CreateParseScene(sb._batchFilter);
-					drawStep._sequencerConfig = _pipelineAccelerators->CreateSequencerConfig(
-						name,
-						sb._techniqueDelegate, sb._sequencerSelectors, 
-						_fbDescs[beginStep._fbDescIdx]._fbDesc, c);
+					_sequencerConfigsPendingConstruction.push_back(
+						SequencerConfigPendingConstruction {
+							(unsigned)_steps.size(),
+							name, sb._techniqueDelegate, sb._sequencerSelectors,
+							beginStep._fbDescIdx, c });
 					drawStep._shaderResourceDelegate = sb._shaderResourceDelegate;
 					_steps.emplace_back(std::move(drawStep));
 				} else if (sb._type == SubpassExtension::Type::ExecuteSky) {
@@ -192,6 +192,94 @@ namespace RenderCore { namespace LightingEngine
 		_pendingCreateFragmentSteps.clear();
 	}
 
+	void LightingTechniqueSequence::CompleteAndSeal(
+		Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
+		Techniques::FragmentStitchingContext& stitchingContext)
+	{
+		// complete all frame buffers in _fbDescsPendingStitch & fill in the sequencer configs pointed to by _sequencerConfigsPendingConstruction
+		ResolvePendingCreateFragmentSteps();
+		_frozen = true;
+		PropagateReverseAttachmentDependencies(stitchingContext);
+
+		assert(_fbDescs.empty());
+		_fbDescs.reserve(_fbDescsPendingStitch.size());
+		for (const auto& stitchOp:_fbDescsPendingStitch) {
+			auto mergedFB = stitchingContext.TryStitchFrameBufferDesc(MakeIteratorRange(stitchOp));
+
+			#if defined(_DEBUG)
+				Log(Warning) << "Merged fragment in lighting technique:" << std::endl << mergedFB._log << std::endl;
+			#endif
+
+			stitchingContext.UpdateAttachments(mergedFB);
+			_fbDescs.emplace_back(std::move(mergedFB));
+		}
+		_fbDescsPendingStitch.clear();
+
+		for (const auto& createSequencerConfig:_sequencerConfigsPendingConstruction) {
+			auto seqCfg = pipelineAccelerators.CreateSequencerConfig(
+				createSequencerConfig._name,
+				createSequencerConfig._delegate, createSequencerConfig._sequencerSelectors, 
+				_fbDescs[createSequencerConfig._fbDescIndex]._fbDesc, createSequencerConfig._subpassIndex);
+			assert(createSequencerConfig._stepIndex < _steps.size());
+			assert(_steps[createSequencerConfig._stepIndex]._type == ExecuteStep::Type::ExecuteDrawables);
+			assert(_steps[createSequencerConfig._stepIndex]._sequencerConfig == nullptr);
+			_steps[createSequencerConfig._stepIndex]._sequencerConfig = std::move(seqCfg);
+		}
+		_sequencerConfigsPendingConstruction.clear();
+	}
+
+	void LightingTechniqueSequence::PropagateReverseAttachmentDependencies(Techniques::FragmentStitchingContext& stitchingContext)
+	{
+		// For each input attachment in later fragments, search backwards 
+		// another fragment that produces/writes to that attachment. Ensure that
+		// the store state is correct to match the required load state
+		// This will sometimes flip a "discard" state into a "store" state (for example)
+		std::vector<Techniques::FrameBufferDescFragment*> frags;
+		frags.reserve(_fbDescsPendingStitch.size()*2);
+		for (auto& part:_fbDescsPendingStitch) for (auto& f:part) frags.push_back(&f);
+
+		for (auto readingFrag=frags.rbegin(); readingFrag!=frags.rend(); ++readingFrag) {
+			for (const auto& a:(*readingFrag)->GetAttachments()) {
+				auto [mainLoad, stencilLoad] = SplitAspects(a._loadFromPreviousPhase);
+				if (mainLoad != LoadStore::Retain && stencilLoad != LoadStore::Retain) continue;
+				
+				// Find the first fragment before this that used this attachemnt
+				for (auto preparingFrag=readingFrag+1; preparingFrag!=frags.rend(); ++preparingFrag) {
+					auto i = std::find_if((*preparingFrag)->GetAttachments().begin(), (*preparingFrag)->GetAttachments().end(),
+						[semantic=a._semantic](const auto& q) { return q._semantic == semantic; });
+					if (i != (*preparingFrag)->GetAttachments().end()) {
+						auto [mainStore, stencilStore] = SplitAspects(i->_storeToNextPhase);
+						if (	(mainLoad == LoadStore::Retain && mainStore != LoadStore::Retain)
+							||	(stencilLoad == LoadStore::Retain && stencilStore != LoadStore::Retain)) {
+
+							mainStore = (mainLoad == LoadStore::Retain)?LoadStore::Retain:mainStore;
+							stencilStore = (stencilLoad == LoadStore::Retain)?LoadStore::Retain:stencilStore;
+
+							Log(Warning) << "Changed store operation in PropagateReverseAttachmentDependencies" << std::endl;
+							i->_storeToNextPhase = CombineAspects(mainStore, stencilStore);
+						}
+						break;
+					}
+				}
+			}
+		}
+
+		for (auto forceRetain:_forceRetainSemantics) {
+			for (auto preparingFrag=frags.rbegin(); preparingFrag!=frags.rend(); ++preparingFrag) {
+				auto i = std::find_if((*preparingFrag)->GetAttachments().begin(), (*preparingFrag)->GetAttachments().end(),
+					[forceRetain](const auto& q) { return q._semantic == forceRetain.first; });
+				if (i != (*preparingFrag)->GetAttachments().end()) {
+					if (i->_storeToNextPhase != LoadStore::Retain) {
+						i->_storeToNextPhase = LoadStore::Retain;
+						Log(Warning) << "Changed store operation due to force retain in PropagateReverseAttachmentDependencies" << std::endl;
+					}
+					i->_finalLayout = forceRetain.second;
+					break;
+				}
+			}
+		}
+	}
+
 	void LightingTechniqueSequence::Reset()
 	{
 		_pendingCreateFragmentSteps.clear();
@@ -200,7 +288,6 @@ namespace RenderCore { namespace LightingEngine
 		_fbDescs.clear();
 		_fragmentInterfaceMappings.clear();
 		_nextFragmentInterfaceRegistration = 0;
-		_stitchingContext = nullptr;
 		_frozen = false;
 		_nextParseId = 0;
 	}
@@ -214,11 +301,7 @@ namespace RenderCore { namespace LightingEngine
 			_fragmentInterfaceMappings[regId]._subpassBegin);
 	}
 
-	LightingTechniqueSequence::LightingTechniqueSequence(
-		std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
-		Techniques::FragmentStitchingContext& stitchingContext)
-	: _pipelineAccelerators(std::move(pipelineAccelerators))
-	, _stitchingContext(&stitchingContext)
+	LightingTechniqueSequence::LightingTechniqueSequence()
 	{}
 
 	LightingTechniqueSequence::~LightingTechniqueSequence()
@@ -228,23 +311,22 @@ namespace RenderCore { namespace LightingEngine
 
 	static const unsigned s_drawablePktsPerParse = (unsigned)Techniques::Batch::Max;
 
-	void CompiledLightingTechnique::CompleteConstruction()
+	void CompiledLightingTechnique::CompleteConstruction(
+		std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
+		Techniques::FragmentStitchingContext& stitchingContext)
 	{
 		assert(!_isConstructionCompleted);
-		for (auto&s:_sequences) {
-			if (!s._dynamicFn) {
-				s._sequence->ResolvePendingCreateFragmentSteps();
-				s._sequence->_frozen = true;
-			}
-		}
+		for (auto&s:_sequences)
+			if (!s._dynamicFn)
+				s._sequence->CompleteAndSeal(*pipelineAccelerators, stitchingContext);
 		_isConstructionCompleted = true;
-		_stitchingContext = nullptr;
+		_pipelineAccelerators = std::move(pipelineAccelerators);
 	}
 
 	LightingTechniqueSequence& CompiledLightingTechnique::CreateSequence()
 	{
 		Sequence newSequence;
-		newSequence._sequence = std::make_shared<LightingTechniqueSequence>(_pipelineAccelerators, *_stitchingContext);
+		newSequence._sequence = std::make_shared<LightingTechniqueSequence>();
 		auto* res = newSequence._sequence.get();
 		_sequences.push_back(std::move(newSequence));
 		return *res;
@@ -252,7 +334,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void CompiledLightingTechnique::CreateDynamicSequence(DynamicSequenceFn&& fn)
 	{
-		auto newSequence = std::make_shared<LightingTechniqueSequence>(_pipelineAccelerators, *_stitchingContext);
+		auto newSequence = std::make_shared<LightingTechniqueSequence>();
 		_sequences.emplace_back(Sequence{std::move(newSequence), std::move(fn)});
 	}
 
@@ -277,15 +359,9 @@ namespace RenderCore { namespace LightingEngine
 		return technique.GetDependencyValidation();
 	}
 
-	CompiledLightingTechnique::CompiledLightingTechnique(
-		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		Techniques::FragmentStitchingContext& stitchingContext,
-		const std::shared_ptr<ILightScene>& lightScene)
-	: _pipelineAccelerators(pipelineAccelerators)
-	, _stitchingContext(&stitchingContext)
-	, _lightScene(lightScene)
-	{
-	}
+	CompiledLightingTechnique::CompiledLightingTechnique(const std::shared_ptr<ILightScene>& lightScene)
+	: _lightScene(lightScene)
+	{}
 
 	CompiledLightingTechnique::~CompiledLightingTechnique() {}
 
@@ -414,6 +490,7 @@ namespace RenderCore { namespace LightingEngine
 	, _deformAcceleratorPool(nullptr)
 	, _compiledTechnique(&compiledTechnique)
 	{
+		assert(_pipelineAcceleratorPool);
 		// If you hit this, it probably means that there's a missing call to CompiledLightingTechnique::CompleteConstruction()
 		// (which should have happened at the end of the technique construction process)
 		assert(compiledTechnique._isConstructionCompleted); 

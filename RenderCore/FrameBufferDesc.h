@@ -26,6 +26,8 @@ namespace RenderCore
 	};
 
     const char* AsString(LoadStore);
+    std::pair<LoadStore, LoadStore> SplitAspects(LoadStore);
+    LoadStore CombineAspects(LoadStore mainAspect, LoadStore stencilAspect);
 
     /// <summary>Attachments are part of a frame buffer, and typically represent a rendering surface</summary>
     /// This description object can define an attachment. Typically the attachment is defined in terms of

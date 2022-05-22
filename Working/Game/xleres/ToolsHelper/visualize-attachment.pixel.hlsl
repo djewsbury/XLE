@@ -55,18 +55,27 @@ cbuffer DebuggingGlobals : register(b5, space1)
 	const int2 MousePosition;
 }
 
+uint2 ToAttachmentCoords(uint2 xy)
+{
+	// Adjust mapping for attachments that don't match the viewport size exactly
+	uint2 outputDims;
+	VisualizeInput.GetDimensions(outputDims.x, outputDims.y);
+	return xy * outputDims / ViewportDimensions;
+}
+
 float4 main(float4 position : SV_Position) : SV_Target0
 {
 	float r = length(position.xy - MousePosition);
 	if (r <= 128) {
 		uint2 magnifiedCoords = MousePosition + (position.xy - MousePosition) / 3;
+		magnifiedCoords = ToAttachmentCoords(magnifiedCoords.xy);
 		float4 col = Value(magnifiedCoords.xy);
 
 		float borderValue = (128 - r);
 		float b = borderValue / 4;
 		return lerp(float4(0,0,0,1), col, smoothstep(0, 1, saturate(b)));
 	} else {
-		return Value(position.xy);
+		return Value(ToAttachmentCoords(position.xy));
 	}
 }
 

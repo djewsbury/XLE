@@ -35,15 +35,20 @@ namespace RenderCore { namespace LightingEngine
 		ParseId CreatePrepareOnlyParseScene(Techniques::BatchFlags::BitField);
 		void CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig, ParseId parseId=0);
 
+		// Ensure that we retain attachment data for the given semantic. This is typically used for debugging
+		//		-- ie, keeping an intermediate attachment that would otherwise be discarded after usage
+		void ForceRetainAttachment(uint64_t semantic, BindFlag::BitField layout);
+
 		void ResolvePendingCreateFragmentSteps();
+		void CompleteAndSeal(
+			Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
+			Techniques::FragmentStitchingContext& stitchingContext);
 		void Reset();
 		unsigned DrawablePktsToReserve() const { return _nextParseId; }
 
 		std::pair<const FrameBufferDesc*, unsigned> GetResolvedFrameBufferDesc(FragmentInterfaceRegistration) const;
 
-		LightingTechniqueSequence(
-			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
-			Techniques::FragmentStitchingContext& stitchingContext);
+		LightingTechniqueSequence();
 		~LightingTechniqueSequence();
 
 	private:
@@ -69,7 +74,21 @@ namespace RenderCore { namespace LightingEngine
 			bool _prepareOnly = false;
 		};
 		std::vector<ParseStep> _parseSteps;
+
+		std::vector<std::vector<Techniques::FrameBufferDescFragment>> _fbDescsPendingStitch;
 		std::vector<Techniques::FragmentStitchingContext::StitchResult> _fbDescs;
+		std::vector<std::pair<uint64_t, BindFlag::BitField>> _forceRetainSemantics;
+
+		struct SequencerConfigPendingConstruction
+		{
+			unsigned _stepIndex = ~0u;
+			std::string _name;
+			std::shared_ptr<Techniques::ITechniqueDelegate> _delegate;
+			ParameterBox _sequencerSelectors;
+			unsigned _fbDescIndex = ~0u;
+			unsigned _subpassIndex = ~0u;
+		};
+		std::vector<SequencerConfigPendingConstruction> _sequencerConfigsPendingConstruction;
 		
 		struct FragmentInterfaceMapping
 		{
@@ -79,10 +98,10 @@ namespace RenderCore { namespace LightingEngine
 		std::vector<FragmentInterfaceMapping> _fragmentInterfaceMappings;
 		FragmentInterfaceRegistration _nextFragmentInterfaceRegistration = 0;
 
-		Techniques::FragmentStitchingContext* _stitchingContext = nullptr;
-		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		ParseId _nextParseId = 0;
 		bool _frozen = false;
+
+		void PropagateReverseAttachmentDependencies(Techniques::FragmentStitchingContext& stitchingContext);
 
 		friend class LightingTechniqueIterator;
 		friend class LightingTechniqueInstance;
@@ -96,7 +115,9 @@ namespace RenderCore { namespace LightingEngine
 		LightingTechniqueSequence& CreateSequence();
 		using DynamicSequenceFn = std::function<void(LightingTechniqueIterator&, LightingTechniqueSequence&)>;
 		void CreateDynamicSequence(DynamicSequenceFn&& fn);
-		void CompleteConstruction();
+		void CompleteConstruction(
+			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
+			Techniques::FragmentStitchingContext& stitchingContext);
 		void PreSequenceSetup(std::function<void(LightingTechniqueIterator&)>&&);
 
 		ILightScene& GetLightScene();
@@ -106,10 +127,7 @@ namespace RenderCore { namespace LightingEngine
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		::Assets::DependencyValidation _depVal;
 
-		CompiledLightingTechnique(
-			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-			Techniques::FragmentStitchingContext& stitchingContext,
-			const std::shared_ptr<ILightScene>& lightScene);
+		CompiledLightingTechnique(const std::shared_ptr<ILightScene>& lightScene = nullptr);
 		~CompiledLightingTechnique();
 
 		mutable unsigned _frameIdx = 0;
@@ -117,7 +135,6 @@ namespace RenderCore { namespace LightingEngine
 		mutable bool _hasPrevProjDesc = false;
 
 	private:
-		Techniques::FragmentStitchingContext* _stitchingContext = nullptr;
 		std::shared_ptr<ILightScene> _lightScene;
 		bool _isConstructionCompleted = false;
 

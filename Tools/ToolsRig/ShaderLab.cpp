@@ -63,6 +63,7 @@ namespace ToolsRig
 	
 	::Assets::PtrToMarkerPtr<ShaderLab::ICompiledOperation> ShaderLab::BuildCompiledTechnique(
 		::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> futureFormatter,
+		::Assets::PtrToMarkerPtr<IVisualizeStep> visualizeStep,
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachmentsInit,
 		const RenderCore::FrameBufferProperties& fBProps,
 		IteratorRange<const RenderCore::Format*> systemAttachmentFormatsInit)
@@ -73,7 +74,7 @@ namespace ToolsRig
 		auto weakThis = weak_from_this();
 		AsyncConstructToPromise(
 			result->AdoptPromise(),
-			[preregAttachments=std::move(preregAttachments), fBProps=fBProps, futureFormatter=std::move(futureFormatter), systemAttachmentsFormat=std::move(systemAttachmentsFormat), weakThis]() {
+			[preregAttachments=std::move(preregAttachments), fBProps=fBProps, futureFormatter=std::move(futureFormatter), visualizeStep=std::move(visualizeStep), systemAttachmentsFormat=std::move(systemAttachmentsFormat), weakThis]() {
 				auto l = weakThis.lock();
 				if (!l) Throw(std::runtime_error("ShaderLab shutdown before construction finished"));
 
@@ -109,9 +110,7 @@ namespace ToolsRig
 						}
 					}
 
-					auto technique = std::make_shared<RenderCore::LightingEngine::CompiledLightingTechnique>(
-						l->_drawingApparatus->_pipelineAccelerators,
-						constructorContext._stitchingContext, nullptr);
+					auto technique = std::make_shared<RenderCore::LightingEngine::CompiledLightingTechnique>();
 					auto& sequence = technique->CreateSequence();
 					sequence.CreateStep_CallFunction(
 						[](RenderCore::LightingEngine::LightingTechniqueIterator& iterator) {
@@ -119,7 +118,17 @@ namespace ToolsRig
 							iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
 						});
 					for (auto& fn:constructorContext._setupFunctions) fn(sequence);
-					technique->CompleteConstruction();
+
+					if (visualizeStep) {
+						visualizeStep->StallWhilePending();
+						auto reqAttachments = visualizeStep->ActualizeBkgrnd()->GetRequiredAttachments();
+						for (const auto& r:reqAttachments)
+							sequence.ForceRetainAttachment(r.first, r.second);
+					}
+					
+					technique->CompleteConstruction(
+						l->_drawingApparatus->_pipelineAccelerators,
+						constructorContext._stitchingContext);
 
 					auto result = std::make_shared<CompiledTechnique>();
 					result->_operation = std::move(technique);
@@ -309,6 +318,11 @@ namespace ToolsRig
 			static ::Assets::DependencyValidation s_dummy;
 			return s_dummy;
 		};
+
+		virtual auto GetRequiredAttachments() const -> std::vector<std::pair<uint64_t, RenderCore::BindFlag::BitField>> override
+		{
+			return {std::make_pair(ConstHash64FromString(AsPointer(_attachmentName.begin()), AsPointer(_attachmentName.end())), RenderCore::BindFlag::ShaderResource)};
+		}
 
 		VisualizeAttachment(
 			StringSection<> attachmentName,
