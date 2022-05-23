@@ -618,7 +618,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		for (auto trii=inputTriListIndexBuffer.begin(); trii!=inputTriListIndexBuffer.end(); trii+=3) {
 			auto v0 = *(trii+0), v1 = *(trii+1), v2 = *(trii+2);
 			if (v0 == v1 || v1 == v2 || v0 == v2) {
-				assert(0);		// degenerate
+				// degenerate -- no point in finding adjacencies or make this an adjacency of anything else, since it's just a line
+				adjacentVertices.push_back(~0u);
+				adjacentVertices.push_back(~0u);
+				adjacentVertices.push_back(~0u);
 				continue;
 			}
 
@@ -688,7 +691,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		// be specifically authored in a content tool
         // Either way, we'll combine bitwise identical positions, because that should not have any negative effects
 		auto& stream = mesh.GetStreams()[posElement];
-        auto mappingToUniquePositions = MapToBitwiseIdenticals(*stream.GetSourceData(), stream.GetVertexMap());
+        auto mappingToUniquePositions = MapToBitwiseIdenticals(*stream.GetSourceData(), stream.GetVertexMap(), true);
 
 		std::vector<unsigned> remappedIndexBuffer;
 		remappedIndexBuffer.reserve(indexCount);

@@ -735,7 +735,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
     static std::vector<std::pair<QuantizedBlockId, unsigned>> BuildQuantizedCoords(
         const IVertexSourceData& sourceStream,
-        Float4 quantization, Float4 offset)
+        Float4 quantization, Float4 offset,
+        bool ignoreWComponent = false)
     {
         std::vector<std::pair<QuantizedBlockId, unsigned>> result;
         result.resize(sourceStream.GetCount());
@@ -764,20 +765,24 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             int64_t C = int64_t((pos[2] + doubleOffset[2]) / doubleQuant[2]);
             int64_t D = int64_t((pos[3] + doubleOffset[3]) / doubleQuant[3]);
 
-            assert((A>>32ull) >= std::numeric_limits<int16_t>::min() && (A>>32ull) <= std::numeric_limits<int16_t>::max());
-            assert((B>>32ull) >= std::numeric_limits<int16_t>::min() && (B>>32ull) <= std::numeric_limits<int16_t>::max());
-            assert((C>>32ull) >= std::numeric_limits<int16_t>::min() && (C>>32ull) <= std::numeric_limits<int16_t>::max());
-            assert((D>>32ull) >= std::numeric_limits<int16_t>::min() && (D>>32ull) <= std::numeric_limits<int16_t>::max());
-            int16_t uberA = A>>32ull;
-            int16_t uberB = B>>32ull;
-            int16_t uberC = C>>32ull;
-            int16_t uberD = D>>32ull;
+            assert((A>>32ll) >= std::numeric_limits<int16_t>::min() && (A>>32ll) <= std::numeric_limits<int16_t>::max());
+            assert((B>>32ll) >= std::numeric_limits<int16_t>::min() && (B>>32ll) <= std::numeric_limits<int16_t>::max());
+            assert((C>>32ll) >= std::numeric_limits<int16_t>::min() && (C>>32ll) <= std::numeric_limits<int16_t>::max());
+            assert((D>>32ll) >= std::numeric_limits<int16_t>::min() && (D>>32ll) <= std::numeric_limits<int16_t>::max());
+            int16_t uberA = A>>32ll;
+            int16_t uberB = B>>32ll;
+            int16_t uberC = C>>32ll;
+            int16_t uberD = D>>32ll;
             uint64_t uberIdx = (uint64_t(uberD) << 48ull) | (uint64_t(uberC) << 32ull) | (uint64_t(uberB) << 16ull) | uint64_t(uberA);
-
             Int4 q{int(A), int(B), int(C), int(D)};
-
             result[c] = std::make_pair(QuantizedBlockId{q, uberIdx}, c);
         }
+
+        if (ignoreWComponent)
+            for (auto& r:result) {
+                r.first._blockCoords[3] = 0;
+                r.first._uberBlockId &= (1ull<<48ull)-1ull;     // clear top 16 bits
+            }
 
         return result;
     }
@@ -1090,19 +1095,30 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
     std::vector<unsigned> MapToBitwiseIdenticals(
         const IVertexSourceData& sourceStream,
-        IteratorRange<const unsigned*> originalMapping)
+        IteratorRange<const unsigned*> originalMapping,
+        bool ignoreWComponent)
     {
         std::vector<unsigned> oldOrderingToNewOrdering(sourceStream.GetCount(), ~0u);
-
-        const auto vertexSize = BitsPerPixel(sourceStream.GetFormat()) / 8;
 
         auto srcStreamStart = sourceStream.GetData().begin();
         auto srcStreamCount = sourceStream.GetCount();
         if (!srcStreamCount) return {};
 
         auto quant = Float4(1e-5f, 1e-5f, 1e-5f, 1e-5f);
-        auto quantizedSet0 = BuildQuantizedCoords(sourceStream, quant, Zero<Float4>());
+        auto quantizedSet0 = BuildQuantizedCoords(sourceStream, quant, Zero<Float4>(), ignoreWComponent);
         std::sort(quantizedSet0.begin(), quantizedSet0.end(), SortQuantizedSet);
+
+        const auto fmtBrkdn = BreakdownFormat(sourceStream.GetFormat());
+        const auto stride = sourceStream.GetStride();
+        auto vertexSize = BitsPerPixel(sourceStream.GetFormat()) / 8;
+
+        if (ignoreWComponent) {
+            auto typelessFormat = AsTypelessFormat(sourceStream.GetFormat());
+            if (typelessFormat == Format::R32G32B32A32_TYPELESS) vertexSize = sizeof(float)*3;
+            else if (typelessFormat == Format::R16G16B16A16_TYPELESS) vertexSize = sizeof(uint16_t)*3;
+            else if (typelessFormat == Format::R8G8B8A8_TYPELESS) vertexSize = sizeof(uint8_t)*3;
+            else assert(GetComponents(typelessFormat) != FormatComponents::RGBAlpha);
+        }
 
         auto q = quantizedSet0.begin();
         while (q != quantizedSet0.end()) {
@@ -1113,10 +1129,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 if (oldOrderingToNewOrdering[c->second] != ~0u) continue;
                 oldOrderingToNewOrdering[c->second] = c->second;
 
-                auto vFirst = PtrAdd(srcStreamStart, c->second*vertexSize);
-                for (auto c2=c+1; c2!=q2; c2++)
-                    if (std::memcmp(vFirst, PtrAdd(srcStreamStart, c2->second*vertexSize), vertexSize) == 0)
+                auto vFirst = PtrAdd(srcStreamStart, c->second*stride);
+                for (auto c2=c+1; c2!=q2; c2++) {
+                    if (std::memcmp(vFirst, PtrAdd(srcStreamStart, c2->second*stride), vertexSize) == 0)
                         oldOrderingToNewOrdering[c2->second] = c->second;
+                }
             }
             
             q = q2;

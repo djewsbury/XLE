@@ -188,9 +188,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     // Similar to RemoveBitwiseIdenticals, however this time don't modify
     // the underlying vertex buffer. We will just produce a mapping with duplicate
     // entries for every case where there are bitwise indentical entries
+    // Some vertex layouts use the w component in position for some purpose 
+    // other than position -- to avoid problems in these cases, consider setting
+    // the "ignoreWComponent" flag
     std::vector<unsigned> MapToBitwiseIdenticals(
         const IVertexSourceData& sourceStream,
-            IteratorRange<const unsigned*> originalMapping = {});
+            IteratorRange<const unsigned*> originalMapping = {},
+            bool ignoreWComponent = false);
 
 	MeshDatabase RemoveDuplicates(
 		std::vector<unsigned>& outputMapping,
