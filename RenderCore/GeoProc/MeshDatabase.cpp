@@ -1040,6 +1040,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
         auto srcStreamStart = sourceStream.GetData().begin();
         auto srcStreamCount = sourceStream.GetCount();
+        if (!srcStreamCount) return {};
 
         auto quant = Float4(1e-5f, 1e-5f, 1e-5f, 1e-5f);
         auto quantizedSet0 = BuildQuantizedCoords(sourceStream, quant, Zero<Float4>());
@@ -1085,6 +1086,53 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         return std::make_shared<RawVertexSourceDataAdapter>(
             std::move(finalVB), finalVBCount, vertexSize,  
             sourceStream.GetFormat());
+    }
+
+    std::vector<unsigned> MapToBitwiseIdenticals(
+        const IVertexSourceData& sourceStream,
+        IteratorRange<const unsigned*> originalMapping)
+    {
+        std::vector<unsigned> oldOrderingToNewOrdering(sourceStream.GetCount(), ~0u);
+
+        const auto vertexSize = BitsPerPixel(sourceStream.GetFormat()) / 8;
+
+        auto srcStreamStart = sourceStream.GetData().begin();
+        auto srcStreamCount = sourceStream.GetCount();
+        if (!srcStreamCount) return {};
+
+        auto quant = Float4(1e-5f, 1e-5f, 1e-5f, 1e-5f);
+        auto quantizedSet0 = BuildQuantizedCoords(sourceStream, quant, Zero<Float4>());
+        std::sort(quantizedSet0.begin(), quantizedSet0.end(), SortQuantizedSet);
+
+        auto q = quantizedSet0.begin();
+        while (q != quantizedSet0.end()) {
+            auto q2 = q+1;
+            while (q2 != quantizedSet0.end() && q2->first == q->first) ++q2;
+
+            for (auto c=q; c!=q2; ++c) {
+                if (oldOrderingToNewOrdering[c->second] != ~0u) continue;
+                oldOrderingToNewOrdering[c->second] = c->second;
+
+                auto vFirst = PtrAdd(srcStreamStart, c->second*vertexSize);
+                for (auto c2=c+1; c2!=q2; c2++)
+                    if (std::memcmp(vFirst, PtrAdd(srcStreamStart, c2->second*vertexSize), vertexSize) == 0)
+                        oldOrderingToNewOrdering[c2->second] = c->second;
+            }
+            
+            q = q2;
+        }
+
+        if (originalMapping.empty())
+            return oldOrderingToNewOrdering;
+
+        // have to transform "originalMapping" via this new mapping
+        std::vector<unsigned> outputMapping;
+        outputMapping.reserve(originalMapping.size());
+        std::transform(
+            originalMapping.begin(), originalMapping.end(),
+            std::back_inserter(outputMapping),
+            [&oldOrderingToNewOrdering](const unsigned i) { return oldOrderingToNewOrdering[i]; });
+        return outputMapping;
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

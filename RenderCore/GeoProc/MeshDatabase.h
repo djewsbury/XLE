@@ -185,6 +185,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             const IVertexSourceData& sourceStream,
             IteratorRange<const unsigned*> originalMapping = {});
 
+    // Similar to RemoveBitwiseIdenticals, however this time don't modify
+    // the underlying vertex buffer. We will just produce a mapping with duplicate
+    // entries for every case where there are bitwise indentical entries
+    std::vector<unsigned> MapToBitwiseIdenticals(
+        const IVertexSourceData& sourceStream,
+            IteratorRange<const unsigned*> originalMapping = {});
+
 	MeshDatabase RemoveDuplicates(
 		std::vector<unsigned>& outputMapping,
 		const MeshDatabase& input);

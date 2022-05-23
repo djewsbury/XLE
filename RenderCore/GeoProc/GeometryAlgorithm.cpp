@@ -686,20 +686,21 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		// if the position streams have a vertex map, we can assume this is a mapping from unified vertex index
 		// to unique position index. It's best to reuse this, if this mapping already exists -- because it might have
 		// be specifically authored in a content tool
+        // Either way, we'll combine bitwise identical positions, because that should not have any negative effects
 		auto& stream = mesh.GetStreams()[posElement];
-		auto& posVertexMap = stream.GetVertexMap();
+        auto mappingToUniquePositions = MapToBitwiseIdenticals(*stream.GetSourceData(), stream.GetVertexMap());
 
 		std::vector<unsigned> remappedIndexBuffer;
 		remappedIndexBuffer.reserve(indexCount);
 		if (ibFormat == Format::R32_UINT) {
 			for (const auto i:MakeIteratorRange((const unsigned*)rawIb, (const unsigned*)rawIb+indexCount))
-				remappedIndexBuffer.push_back(posVertexMap[i]);
+				remappedIndexBuffer.push_back(mappingToUniquePositions[i]);
 		} else if (ibFormat == Format::R16_UINT) {
 			for (const auto i:MakeIteratorRange((const uint16_t*)rawIb, (const uint16_t*)rawIb+indexCount))
-				remappedIndexBuffer.push_back(posVertexMap[i]);
+				remappedIndexBuffer.push_back(mappingToUniquePositions[i]);
 		} else if (ibFormat == Format::R8_UINT) {
 			for (const auto i:MakeIteratorRange((const uint8_t*)rawIb, (const uint8_t*)rawIb+indexCount))
-				remappedIndexBuffer.push_back(posVertexMap[i]);
+				remappedIndexBuffer.push_back(mappingToUniquePositions[i]);
 		} else
 			Throw(std::runtime_error("Unsupported index format in BuildAdjacencyIndexBuffer"));
 
@@ -717,8 +718,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		std::vector<unsigned> demapBuffer;
 		demapBuffer.resize(indexCount, ~0u);		// overestimate
-		for (unsigned c=0; c<stream.GetVertexMap().size(); ++c) {
-			auto m = stream.GetVertexMap()[c];
+		for (unsigned c=0; c<mappingToUniquePositions.size(); ++c) {
+			auto m = mappingToUniquePositions[c];
 			if (demapBuffer[m] == ~0u) demapBuffer[m] = c;
 		}
 
