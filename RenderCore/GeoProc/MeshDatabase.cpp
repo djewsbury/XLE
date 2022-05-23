@@ -731,55 +731,76 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    static std::vector<std::pair<Int4, unsigned>> BuildQuantizedCoords(
+    struct QuantizedBlockId { Int4 _blockCoords; uint64_t _uberBlockId; };
+
+    static std::vector<std::pair<QuantizedBlockId, unsigned>> BuildQuantizedCoords(
         const IVertexSourceData& sourceStream,
         Float4 quantization, Float4 offset)
     {
-        std::vector<std::pair<Int4, unsigned>> result;
+        std::vector<std::pair<QuantizedBlockId, unsigned>> result;
         result.resize(sourceStream.GetCount());
 
         auto stride = sourceStream.GetStride();
         auto fmtBrkdn = BreakdownFormat(sourceStream.GetFormat());
 
-        Float4 precisionMin(float(INT_MIN) * quantization[0], float(INT_MIN) * quantization[1], float(INT_MIN) * quantization[2], float(INT_MIN) * quantization[3]);
-        Float4 precisionMax(float(INT_MAX) * quantization[0], float(INT_MAX) * quantization[1], float(INT_MAX) * quantization[2], float(INT_MAX) * quantization[3]);
+        std::vector<Float4> extractedPositions;
+        extractedPositions.resize(sourceStream.GetCount());
+        CopyVertexData(
+            extractedPositions.data(), Format::R32G32B32A32_FLOAT, sizeof(Float4), extractedPositions.size()*sizeof(Float4),
+            sourceStream.GetData().begin(), sourceStream.GetFormat(), sourceStream.GetStride(), sourceStream.GetData().size(),
+            sourceStream.GetCount());
 
-        for (unsigned c=0; c<sourceStream.GetCount(); ++c) {
-            const auto* sourceStart = PtrAdd(sourceStream.GetData().begin(), c * stride);
-        
-            float input[4];
-            GetVertData(input, (const float*)sourceStart, fmtBrkdn, sourceStream.GetProcessingFlags());
-            
-                // note that if we're using very small values for quantization,
-                // or if the source data is very large numbers, we could run into
-                // integer precision problems here. We could use uint64 instead?
-            assert(input[0] > precisionMin[0] && input[0] < precisionMax[0]);
-            assert(input[1] > precisionMin[1] && input[1] < precisionMax[1]);
-            assert(input[2] > precisionMin[2] && input[2] < precisionMax[2]);
-			assert(input[3] > precisionMin[3] && input[3] < precisionMax[3]);
-            Int4 q( int((input[0] + offset[0]) / quantization[0]),
-                    int((input[1] + offset[1]) / quantization[1]),
-                    int((input[2] + offset[2]) / quantization[2]),
-					int((input[3] + offset[3]) / quantization[3]));
+        Double4 doubleOffset = offset, doubleQuant = quantization;
 
-            result[c] = std::make_pair(q, c);
+        for (unsigned c=0; c<extractedPositions.size(); ++c) {
+
+            // note that if we're using very small values for quantization,
+            // or if the source data is very large numbers, we could run into
+            // integer precision problems here.
+
+            Double4 pos = extractedPositions[c];
+            int64_t A = int64_t((pos[0] + doubleOffset[0]) / doubleQuant[0]);
+            int64_t B = int64_t((pos[1] + doubleOffset[1]) / doubleQuant[1]);
+            int64_t C = int64_t((pos[2] + doubleOffset[2]) / doubleQuant[2]);
+            int64_t D = int64_t((pos[3] + doubleOffset[3]) / doubleQuant[3]);
+
+            assert((A>>32ull) >= std::numeric_limits<int16_t>::min() && (A>>32ull) <= std::numeric_limits<int16_t>::max());
+            assert((B>>32ull) >= std::numeric_limits<int16_t>::min() && (B>>32ull) <= std::numeric_limits<int16_t>::max());
+            assert((C>>32ull) >= std::numeric_limits<int16_t>::min() && (C>>32ull) <= std::numeric_limits<int16_t>::max());
+            assert((D>>32ull) >= std::numeric_limits<int16_t>::min() && (D>>32ull) <= std::numeric_limits<int16_t>::max());
+            int16_t uberA = A>>32ull;
+            int16_t uberB = B>>32ull;
+            int16_t uberC = C>>32ull;
+            int16_t uberD = D>>32ull;
+            uint64_t uberIdx = (uint64_t(uberD) << 48ull) | (uint64_t(uberC) << 32ull) | (uint64_t(uberB) << 16ull) | uint64_t(uberA);
+
+            Int4 q{int(A), int(B), int(C), int(D)};
+
+            result[c] = std::make_pair(QuantizedBlockId{q, uberIdx}, c);
         }
 
         return result;
     }
 
-    static bool SortQuantizedSet(
-        const std::pair<Int4, unsigned>& lhs,
-        const std::pair<Int4, unsigned>& rhs)
+    static bool operator==(const QuantizedBlockId& lhs, const QuantizedBlockId& rhs)
     {
-        if (lhs.first[0] < rhs.first[0]) return true;
-        if (lhs.first[0] > rhs.first[0]) return false;
-        if (lhs.first[1] < rhs.first[1]) return true;
-        if (lhs.first[1] > rhs.first[1]) return false;
-        if (lhs.first[2] < rhs.first[2]) return true;
-        if (lhs.first[2] > rhs.first[2]) return false;
-		if (lhs.first[3] < rhs.first[3]) return true;
-        if (lhs.first[3] > rhs.first[3]) return false;
+        return lhs._blockCoords == rhs._blockCoords && lhs._uberBlockId == rhs._uberBlockId;
+    }
+
+    static bool SortQuantizedSet(
+        const std::pair<QuantizedBlockId, unsigned>& lhs,
+        const std::pair<QuantizedBlockId, unsigned>& rhs)
+    {
+        if (lhs.first._uberBlockId < rhs.first._uberBlockId) return true;
+        if (lhs.first._uberBlockId > rhs.first._uberBlockId) return false;
+        if (lhs.first._blockCoords[0] < rhs.first._blockCoords[0]) return true;
+        if (lhs.first._blockCoords[0] > rhs.first._blockCoords[0]) return false;
+        if (lhs.first._blockCoords[1] < rhs.first._blockCoords[1]) return true;
+        if (lhs.first._blockCoords[1] > rhs.first._blockCoords[1]) return false;
+        if (lhs.first._blockCoords[2] < rhs.first._blockCoords[2]) return true;
+        if (lhs.first._blockCoords[2] > rhs.first._blockCoords[2]) return false;
+		if (lhs.first._blockCoords[3] < rhs.first._blockCoords[3]) return true;
+        if (lhs.first._blockCoords[3] > rhs.first._blockCoords[3]) return false;
             // when the quantized coordinates are equal, sort by
             // vertex index.
         return lhs.second < rhs.second; 
@@ -797,7 +818,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
     static void FindVertexPairs(
         std::vector<std::pair<unsigned, unsigned>>& closeVertices,
-        std::vector<std::pair<Int4, unsigned>> & quantizedSet,
+        std::vector<std::pair<QuantizedBlockId, unsigned>> & quantizedSet,
         const IVertexSourceData& sourceStream, float threshold)
     {
         auto stride = sourceStream.GetStride();
