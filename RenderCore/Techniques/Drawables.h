@@ -205,7 +205,7 @@ namespace RenderCore { namespace Techniques
 
 	enum class Batch
 	{
-		Opaque, Blending, Max
+		Opaque, Blending, Topological, Max
 	};
 	
 	namespace BatchFlags
@@ -213,7 +213,8 @@ namespace RenderCore { namespace Techniques
 		enum Flags
 		{
 			Opaque = 1u<<unsigned(Batch::Opaque),
-			Blending = 1u<<unsigned(Batch::Blending)
+			Blending = 1u<<unsigned(Batch::Blending),
+			Topological = 1u<<unsigned(Batch::Topological)
 		};
 		using BitField = unsigned;
 	}

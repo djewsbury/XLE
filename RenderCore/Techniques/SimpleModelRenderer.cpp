@@ -148,6 +148,8 @@ namespace RenderCore { namespace Techniques
 		DrawFn_SimpleModelStatic(parsingContext, drawFnContext, (const SimpleModelDrawable_Delegate&)d);
 	}
 
+	static const uint64_t s_topologicalCmdStream = Hash64("adjacency");
+
 	void SimpleModelRenderer::BuildDrawables(
 		IteratorRange<DrawablesPacket** const> pkts,
 		const Float4x4& localToWorld,
@@ -228,6 +230,10 @@ namespace RenderCore { namespace Techniques
 				break;
 			}
 		}
+
+		// if we need the topological batch, make sure to draw the appropriate cmd stream
+		if (pkts[(unsigned)Batch::Topological] && cmdStreamGuid != s_topologicalCmdStream)
+			BuildDrawables(pkts, localToWorld, deformInstanceIdx, viewMask, s_topologicalCmdStream);
 	}
 
 	void SimpleModelRenderer::BuildDrawables(
@@ -312,6 +318,10 @@ namespace RenderCore { namespace Techniques
 				break;
 			}
 		}
+
+		// if we need the topological batch, make sure to draw the appropriate cmd stream
+		if (pkts[(unsigned)Batch::Topological] && cmdStreamGuid != s_topologicalCmdStream)
+			BuildDrawables(pkts, localToWorld, deformInstanceIdx, delegate, s_topologicalCmdStream);
 	}
 
 	void SimpleModelRenderer::BuildGeometryProcables(

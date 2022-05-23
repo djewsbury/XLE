@@ -488,6 +488,8 @@ namespace RenderCore { namespace Techniques
 		return nullptr;
 	}
 
+	static const uint64_t s_topologicalCmdStream = Hash64("adjacency");
+
 	class DrawableConstructor::Pimpl
 	{
 	public:
@@ -649,6 +651,12 @@ namespace RenderCore { namespace Techniques
 									drawCall._firstIndex = dc._firstIndex;
 									drawCall._indexCount = dc._indexCount;
 									drawCall._firstVertex = dc._firstVertex;
+
+									if (cmdStreamGuid == s_topologicalCmdStream) {
+										if (drawCall._batchFilter != (unsigned)Batch::Opaque) continue;		// drop this draw call
+										drawCall._batchFilter = (unsigned)Batch::Topological;
+									}
+
 									dstCmdStream->_drawCalls.push_back(drawCall);
 								}
 

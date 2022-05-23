@@ -52,7 +52,7 @@ namespace RenderCore { namespace Techniques
 		{
 			uint64_t _guid;
 			std::vector<DrawCall> _drawCalls;
-			unsigned _drawCallCounts[2] = {0};		// per batch
+			unsigned _drawCallCounts[3] = {0};		// per batch
 			std::vector<uint8_t> _translatedCmdStream;
 
 			IteratorRange<Assets::ScaffoldCmdIterator> GetCmdStream() const;
