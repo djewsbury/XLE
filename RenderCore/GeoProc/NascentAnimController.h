@@ -25,15 +25,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     class NascentBoundSkinnedGeometry
     {
     public:
-        std::vector<uint8_t>		_unanimatedVertexElements;
-        std::vector<uint8_t>		_indices;
+        NascentRawGeometry          _unanimatedBase;
 
-        Format                      _indexFormat = (Format)0;
-        GeoInputAssembly            _mainDrawUnanimatedIA;
         GeoInputAssembly            _mainDrawAnimatedIA;
-
-        std::vector<DrawCallDesc>	_mainDrawCalls;
-		Float4x4					_geoSpaceToNodeSpace = Identity<Float4x4>();
 
         std::vector<uint8_t>		_animatedVertexElements;
         std::vector<uint8_t>		_skeletonBinding;
@@ -53,7 +47,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         GeoInputAssembly            _preskinningIA;
 
         std::pair<Float3, Float3>	_localBoundingBox = InvalidBoundingBox();
-		std::vector<uint32_t>		_finalVertexIndexToOriginalIndex;
 
         void    SerializeWithResourceBlock(
             ::Assets::BlockSerializer& outputSerializer,
@@ -126,7 +119,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	};
 
     NascentBoundSkinnedGeometry BindController(
-        const NascentRawGeometry& sourceGeo,
+        NascentRawGeometry&& sourceGeo,
         IteratorRange<const UnboundSkinControllerAndJointMatrices*> controllers,
         const char nodeName[]);
 }}}

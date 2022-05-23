@@ -63,8 +63,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		auto vbOffset = largeResourcesBlock.AddBlock(_vertices);
 		auto vbSize = _vertices.size();
 
-		auto ibSize = _adjacencyIndexBuffer.size();
-		auto ibOffset = largeResourcesBlock.AddBlock(std::move(_adjacencyIndexBuffer));
+		auto ibSize = _adjacencyIndices.size();
+		auto ibOffset = largeResourcesBlock.AddBlock(std::move(_adjacencyIndices));
 
 		serializer << (uint32_t)Assets::GeoCommand::AttachRawGeometry;
 		auto recall = serializer.CreateRecall(sizeof(unsigned));

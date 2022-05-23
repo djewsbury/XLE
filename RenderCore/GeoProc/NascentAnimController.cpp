@@ -452,8 +452,33 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return (((bucketIdx >> 16) + controllerIdx*bucketsPerController)<<16) | (bucketIdx & 0xffff);
 	}
 
+    static void RemapIndexBuffer(
+        IteratorRange<const void*> outputIndices, IteratorRange<const void*> inputIndices,
+        IteratorRange<const uint32_t*> reordering, Format indexFormat,
+        const char nodeName[])
+    {
+        if (indexFormat == Format::R32_UINT) {
+            std::transform(
+                (const uint32_t*)inputIndices.begin(), (const uint32_t*)inputIndices.end(),
+                (uint32_t*)outputIndices.begin(),
+                [reordering](uint32_t inputIndex) { return reordering[inputIndex]; });
+        } else if (indexFormat == Format::R16_UINT) {
+            std::transform(
+                (const uint16_t*)inputIndices.begin(), (const uint16_t*)inputIndices.end(),
+                (uint16_t*)outputIndices.begin(),
+                [reordering](uint16_t inputIndex) -> uint16_t { auto result = reordering[inputIndex]; assert(result <= 0xffff); return (uint16_t)result; });
+        } else if (indexFormat == Format::R8_UINT) {
+            std::transform(
+                (const uint8_t*)inputIndices.begin(), (const uint8_t*)inputIndices.end(),
+                (uint8_t*)outputIndices.begin(),
+                [reordering](uint8_t inputIndex) -> uint8_t { auto result = reordering[inputIndex]; assert(result <= 0xff); return (uint8_t)result; });
+        } else {
+            Throw(::Exceptions::BasicLabel("Unrecognised index format when instantiating skin controller in node (%s).", nodeName));
+        }
+    }
+
     NascentBoundSkinnedGeometry BindController(
-        const NascentRawGeometry& sourceGeo,
+        NascentRawGeometry&& sourceGeo,
         IteratorRange<const UnboundSkinControllerAndJointMatrices*> controllers,
         const char nodeName[])
     {
@@ -625,8 +650,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		std::vector<uint8_t> unanimatedVertexBuffer(unanimatedVertexStride*unifiedVertexCount);
 		std::vector<uint8_t> animatedVertexBuffer(animatedVertexStride*unifiedVertexCount);
 		std::vector<uint8_t> newIndexBuffer(sourceGeo._indices.size());
+        std::vector<uint8_t> newAdjacencyIndexBuffer(sourceGeo._adjacencyIndices.size());
 		{
-			std::vector<uint32_t> vertexOrdering;       // unifiedVertexReordering[oldIndex] = newIndex;
+			std::vector<uint32_t> vertexOrdering;       // vertexOrdering[oldIndex] = newIndex;
 			vertexOrdering.resize(unifiedVertexCount, (uint32_t)~uint32_t(0x0));
 			for (auto i=vertexMappingByFinalOrdering.cbegin(); i!=vertexMappingByFinalOrdering.cend(); ++i)
 				vertexOrdering[i->_inputUnifiedVertexIndex] = (unsigned)std::distance(vertexMappingByFinalOrdering.cbegin(), i);
@@ -646,24 +672,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				MakeIteratorRange(vertexOrdering));
 
 				//      We have to remap the index buffer, also.
-			if (sourceGeo._indexFormat == Format::R32_UINT) {
-				std::transform(
-					(const uint32_t*)AsPointer(sourceGeo._indices.begin()), (const uint32_t*)AsPointer(sourceGeo._indices.end()),
-					(uint32_t*)newIndexBuffer.data(),
-					[&vertexOrdering](uint32_t inputIndex) { return vertexOrdering[inputIndex]; });
-			} else if (sourceGeo._indexFormat == Format::R16_UINT) {
-				std::transform(
-					(const uint16_t*)AsPointer(sourceGeo._indices.begin()), (const uint16_t*)AsPointer(sourceGeo._indices.end()),
-					(uint16_t*)newIndexBuffer.data(),
-					[&vertexOrdering](uint16_t inputIndex) -> uint16_t { auto result = vertexOrdering[inputIndex]; assert(result <= 0xffff); return (uint16_t)result; });
-			} else if (sourceGeo._indexFormat == Format::R8_UINT) {
-				std::transform(
-					(const uint8_t*)AsPointer(sourceGeo._indices.begin()), (const uint8_t*)AsPointer(sourceGeo._indices.end()),
-					(uint8_t*)newIndexBuffer.data(),
-					[&vertexOrdering](uint8_t inputIndex) -> uint8_t { auto result = vertexOrdering[inputIndex]; assert(result <= 0xff); return (uint8_t)result; });
-			} else {
-				Throw(::Exceptions::BasicLabel("Unrecognised index format when instantiating skin controller in node (%s).", nodeName));
-			}
+            RemapIndexBuffer(newIndexBuffer, sourceGeo._indices, vertexOrdering, sourceGeo._indexFormat, nodeName);
+            RemapIndexBuffer(newAdjacencyIndexBuffer, sourceGeo._adjacencyIndices, vertexOrdering, sourceGeo._indexFormat, nodeName);
 		}
 
             //      Build the final vertex weights buffer (our weights are currently stored
@@ -860,23 +870,25 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
             //      Build the final "BoundSkinnedGeometry" object
         NascentBoundSkinnedGeometry result;
-		result._unanimatedVertexElements = std::move(unanimatedVertexBuffer);
 		result._animatedVertexElements = std::move(animatedVertexBuffer);
 		result._skeletonBinding = std::move(skeletonBindingVertices);
-		result._indices = std::move(newIndexBuffer);
-
         result._skeletonBindingVertexStride = (unsigned)destinationWeightVertexStride;
         result._animatedVertexBufferSize = (unsigned)(animatedVertexStride*unifiedVertexCount);
-
-        result._mainDrawCalls = sourceGeo._mainDrawCalls;
-        result._mainDrawUnanimatedIA._vertexStride = unanimatedVertexStride;
-        result._mainDrawUnanimatedIA._elements = std::move(unanimatedVertexLayout);
-        result._indexFormat = sourceGeo._indexFormat;
 
         result._mainDrawAnimatedIA._vertexStride = animatedVertexStride;
         result._mainDrawAnimatedIA._elements = std::move(animatedVertexLayout);
 
-		result._geoSpaceToNodeSpace = sourceGeo._geoSpaceToNodeSpace;
+        result._unanimatedBase._vertices = std::move(unanimatedVertexBuffer);
+        result._unanimatedBase._indices = std::move(newIndexBuffer);
+        result._unanimatedBase._adjacencyIndices = std::move(newAdjacencyIndexBuffer);
+        result._unanimatedBase._mainDrawCalls = std::move(sourceGeo._mainDrawCalls);
+        result._unanimatedBase._mainDrawInputAssembly._vertexStride = unanimatedVertexStride;
+        result._unanimatedBase._mainDrawInputAssembly._elements = std::move(unanimatedVertexLayout);
+        result._unanimatedBase._indexFormat = sourceGeo._indexFormat;
+        result._unanimatedBase._geoSpaceToNodeSpace = sourceGeo._geoSpaceToNodeSpace;
+        result._unanimatedBase._finalVertexIndexToOriginalIndex.reserve(vertexMappingByFinalOrdering.size());
+		for (const auto&r:vertexMappingByFinalOrdering)
+			result._unanimatedBase._finalVertexIndexToOriginalIndex.push_back(r._originalIndex);
 
 		// Setup the per-section preskinning draw calls
 		for (unsigned controllerIdx=0; controllerIdx<controllers.size(); ++controllerIdx) {
@@ -961,10 +973,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
         result._localBoundingBox = boundingBox;
 
-		result._finalVertexIndexToOriginalIndex.reserve(vertexMappingByFinalOrdering.size());
-		for (const auto&r:vertexMappingByFinalOrdering)
-			result._finalVertexIndexToOriginalIndex.push_back(r._originalIndex);
-
         return std::move(result);
     }
 
@@ -985,45 +993,18 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         ::Assets::BlockSerializer& outputSerializer, 
         LargeResourceBlockConstructor& largeResourcesBlock) const
     {
-        using namespace Assets;
+        _unanimatedBase.SerializeWithResourceBlock(outputSerializer, largeResourcesBlock);
 
-        auto vbOffset0 = largeResourcesBlock.AddBlock(_unanimatedVertexElements);
-        auto vbSize0 = _unanimatedVertexElements.size();
-
+        // Note that this will end up interleaving the index buffer between the vertex buffers
         auto vbOffset1 = largeResourcesBlock.AddBlock(_animatedVertexElements);
         auto vbSize1 = _animatedVertexElements.size();
 
         auto vbOffset2 = largeResourcesBlock.AddBlock(_skeletonBinding);
         auto vbSize2 = _skeletonBinding.size();
 
-        auto ibOffset = largeResourcesBlock.AddBlock(_indices);
-        auto ibSize = _indices.size();
-
-            // first part is just like "NascentRawGeometry::SerializeMethod"
-
-        outputSerializer << (uint32_t)Assets::GeoCommand::AttachRawGeometry;
-		auto recall = outputSerializer.CreateRecall(sizeof(unsigned));
-
-        SerializationOperator(
-            outputSerializer, 
-            RenderCore::Assets::VertexData 
-                { _mainDrawUnanimatedIA, unsigned(vbOffset0), unsigned(vbSize0) });
-
-        SerializationOperator(
-            outputSerializer, 
-            RenderCore::Assets::IndexData 
-                { _indexFormat, unsigned(ibOffset), unsigned(ibSize) });
-
-        SerializationOperator(outputSerializer, _mainDrawCalls);
-		SerializationOperator(outputSerializer, _geoSpaceToNodeSpace);
-
-		SerializationOperator(outputSerializer, _finalVertexIndexToOriginalIndex);
-
-        outputSerializer.PushSizeValueAtRecall(recall);
-
             // append skinning related information
         outputSerializer << (uint32_t)Assets::GeoCommand::AttachSkinningData;
-		recall = outputSerializer.CreateRecall(sizeof(unsigned));
+		auto recall = outputSerializer.CreateRecall(sizeof(unsigned));
 
         SerializationOperator(
             outputSerializer, 
@@ -1046,7 +1027,34 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             ::Assets::BlockSerializer& outputSerializer,
             LargeResourceBlockConstructor& largeResourcesBlock) const
     {
-        assert(0);      // unimplemented -- awkward amount of copied code
+        _unanimatedBase.SerializeTopologicalWithResourceBlock(outputSerializer, largeResourcesBlock);
+
+        // Note that this will end up interleaving the index buffer between the vertex buffers
+        auto vbOffset1 = largeResourcesBlock.AddBlock(_animatedVertexElements);
+        auto vbSize1 = _animatedVertexElements.size();
+
+        auto vbOffset2 = largeResourcesBlock.AddBlock(_skeletonBinding);
+        auto vbSize2 = _skeletonBinding.size();
+
+            // append skinning related information
+        outputSerializer << (uint32_t)Assets::GeoCommand::AttachSkinningData;
+		auto recall = outputSerializer.CreateRecall(sizeof(unsigned));
+
+        SerializationOperator(
+            outputSerializer, 
+            RenderCore::Assets::VertexData 
+                { _mainDrawAnimatedIA, unsigned(vbOffset1), unsigned(vbSize1) });
+        SerializationOperator(
+            outputSerializer, 
+            RenderCore::Assets::VertexData 
+                { _preskinningIA, unsigned(vbOffset2), unsigned(vbSize2) });
+        
+		SerializationOperator(outputSerializer, _preskinningSections);
+
+        SerializationOperator(outputSerializer, _localBoundingBox.first);
+        SerializationOperator(outputSerializer, _localBoundingBox.second);
+
+        outputSerializer.PushSizeValueAtRecall(recall);
     }
 
 
@@ -1157,17 +1165,17 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
     std::ostream& SerializationOperator(std::ostream& stream, const NascentBoundSkinnedGeometry& geo)
     {
-        stream << "   Unanimated VB bytes: " << ByteCount(geo._unanimatedVertexElements.size()) << " (" << geo._unanimatedVertexElements.size() / std::max(1u, geo._mainDrawUnanimatedIA._vertexStride) << "*" << geo._mainDrawUnanimatedIA._vertexStride << ")" << std::endl;
+        stream << "   Unanimated VB bytes: " << ByteCount(geo._unanimatedBase._vertices.size()) << " (" << geo._unanimatedBase._vertices.size() / std::max(1u, geo._unanimatedBase._mainDrawInputAssembly._vertexStride) << "*" << geo._unanimatedBase._mainDrawInputAssembly._vertexStride << ")" << std::endl;
         stream << "     Animated VB bytes: " << ByteCount(geo._animatedVertexElements.size()) << " (" << geo._animatedVertexElements.size() / std::max(1u, geo._mainDrawAnimatedIA._vertexStride) << "*" << geo._mainDrawAnimatedIA._vertexStride << ")" << std::endl;
         stream << "Skele binding VB bytes: " << ByteCount(geo._skeletonBinding.size()) << " (" << geo._skeletonBinding.size() / std::max(1u, geo._skeletonBindingVertexStride) << "*" << geo._skeletonBindingVertexStride << ")" << std::endl;
         stream << "     Animated VB bytes: " << ByteCount(geo._animatedVertexBufferSize) << " (" << geo._animatedVertexBufferSize / std::max(1u, geo._mainDrawAnimatedIA._vertexStride) << "*" << geo._mainDrawAnimatedIA._vertexStride << ")" << std::endl;
-        stream << "              IB bytes: " << ByteCount(geo._indices.size()) << " (" << (geo._indices.size()*8/BitsPerPixel(geo._indexFormat)) << "*" << BitsPerPixel(geo._indexFormat)/8 << ")" << std::endl;
-        stream << " Unanimated IA: " << geo._mainDrawUnanimatedIA << std::endl;
+        stream << "              IB bytes: " << ByteCount(geo._unanimatedBase._indices.size()) << " (" << (geo._unanimatedBase._indices.size()*8/BitsPerPixel(geo._unanimatedBase._indexFormat)) << "*" << BitsPerPixel(geo._unanimatedBase._indexFormat)/8 << ")" << std::endl;
+        stream << " Unanimated IA: " << geo._unanimatedBase._mainDrawInputAssembly << std::endl;
         stream << "   Animated IA: " << geo._mainDrawAnimatedIA << std::endl;
         stream << "Preskinning IA: " << geo._preskinningIA << std::endl;
-        stream << "Index fmt: " << AsString(geo._indexFormat) << std::endl;
+        stream << "Index fmt: " << AsString(geo._unanimatedBase._indexFormat) << std::endl;
         unsigned c=0;
-        for(const auto& dc:geo._mainDrawCalls)
+        for(const auto& dc:geo._unanimatedBase._mainDrawCalls)
             stream << "Draw [" << c++ << "] " << dc << std::endl;
 		for(unsigned sectionIdx=0; sectionIdx<geo._preskinningSections.size(); ++sectionIdx) {
 			c=0;
@@ -1182,7 +1190,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			}
 			stream << std::endl;
 		}
-		stream << "Geo Space To Node Space: " << geo._geoSpaceToNodeSpace << std::endl;
+		stream << "Geo Space To Node Space: " << geo._unanimatedBase._geoSpaceToNodeSpace << std::endl;
         
         stream << std::endl;
         return stream;

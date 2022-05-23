@@ -458,7 +458,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 						controllers.emplace_back(UnboundSkinControllerAndJointMatrices { &controller, std::move(jointMatrices) });
 					}
 
-					auto boundController = BindController(rawGeo, MakeIteratorRange(controllers), "");
+					auto boundController = BindController(std::move(rawGeo), MakeIteratorRange(controllers), "");
 					geoObjects._skinnedGeos.emplace_back(std::make_pair(hashedId, std::move(boundController)));
 					i = geoObjects._skinnedGeos.end()-1;
 				}
@@ -543,7 +543,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			if (inst._localToWorldId < transforms.size())
 				localToWorld = transforms[inst._localToWorldId];
 
-			localToWorld = Combine(controller->_geoSpaceToNodeSpace, localToWorld);
+			localToWorld = Combine(controller->_unanimatedBase._geoSpaceToNodeSpace, localToWorld);
 
 			//  We can't get the vertex position data directly from the vertex buffer, because
 			//  the "bound" object is already using an opaque hardware object. However, we can

@@ -43,7 +43,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		size_t						_finalVertexCount;
 		std::vector<uint32_t>		_finalVertexIndexToOriginalIndex;
 
-		std::vector<uint8_t>		_adjacencyIndexBuffer;
+		std::vector<uint8_t>		_adjacencyIndices;
 
 		void SerializeWithResourceBlock(
 			::Assets::BlockSerializer& outputSerializer, 
