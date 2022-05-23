@@ -708,8 +708,9 @@ namespace RenderCore { namespace Techniques
 
 	void DrawablesPool::ProtectedDestroy(void* object, DestructionFunctionSig* destructionFunction)
 	{
-		ScopedLock(_lock);
+		std::unique_lock<decltype(_lock)> locker{_lock};
 		if (_destroyedPktMarker == _createdPktMarker) {
+			locker = {};	// unlock while destroying to avoid recursive locks
 			destructionFunction(object);	// no packets alive currently
 			--_aliveCount;
 		} else {
