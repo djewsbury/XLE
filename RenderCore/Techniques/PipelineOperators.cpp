@@ -195,10 +195,10 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
 		::Assets::DependencyValidation _depVal;
 
-		virtual void BeginDispatches(
+		void BeginDispatchesInternal(
 			ParsingContext& parsingContext,
 			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets,
-			uint64_t pushConstantsBinding = 0) override
+			uint64_t pushConstantsBinding = 0)
 		{
 			assert(!_betweenBeginEnd);
 			auto& sysUsi = parsingContext.GetUniformDelegateManager()->GetInterface();
@@ -220,7 +220,7 @@ namespace RenderCore { namespace Techniques
 			_betweenBeginEnd = true;
 		}
 
-		virtual void BeginDispatches(IThreadContext& threadContext, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets, uint64_t pushConstantsBinding = 0) override
+		void BeginDispatchesInternal(IThreadContext& threadContext, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets, uint64_t pushConstantsBinding = 0)
 		{
 			assert(!_betweenBeginEnd);
 			UniformsStreamInterface pushConstantsUSI;
@@ -238,6 +238,21 @@ namespace RenderCore { namespace Techniques
 			_betweenBeginEnd = true;
 		}
 
+		virtual DispatchGroupHelper BeginDispatches(
+			ParsingContext& parsingContext,
+			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets,
+			uint64_t pushConstantsBinding = 0) override
+		{
+			BeginDispatchesInternal(parsingContext, us, descSets, pushConstantsBinding);
+			return DispatchGroupHelper{this};
+		}
+
+		virtual DispatchGroupHelper BeginDispatches(IThreadContext& threadContext, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets, uint64_t pushConstantsBinding = 0) override
+		{
+			BeginDispatchesInternal(threadContext, us, descSets, pushConstantsBinding);
+			return DispatchGroupHelper{this};
+		}
+
 		virtual void EndDispatches() override
 		{
 			assert(_betweenBeginEnd);
@@ -251,7 +266,7 @@ namespace RenderCore { namespace Techniques
 			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
 			TRY {
-				BeginDispatches(parsingContext, us, descSets);
+				BeginDispatchesInternal(parsingContext, us, descSets);
 				_activeEncoder.Dispatch(*_pipeline, countX, countY, countZ);
 			} CATCH(...) {
 				_activeEncoder = {};
@@ -265,7 +280,7 @@ namespace RenderCore { namespace Techniques
 		virtual void Dispatch(IThreadContext& threadContext, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
 			TRY {
-				BeginDispatches(threadContext, us, descSets);
+				BeginDispatchesInternal(threadContext, us, descSets);
 				_activeEncoder.Dispatch(*_pipeline, countX, countY, countZ);
 			} CATCH(...) {
 				_activeEncoder = {};

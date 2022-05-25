@@ -461,6 +461,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			assert(stageFlags == VK_SHADER_STAGE_COMPUTE_BIT);
 		} else
 			assert(!(stageFlags & VK_SHADER_STAGE_COMPUTE_BIT));
+		_pipelineLayout->ValidatePushConstantsRange(offset, data.size(), stageFlags);
 		_sharedState->_commandList.PushConstants(
 			GetUnderlyingPipelineLayout(),
 			stageFlags, offset, (uint32_t)data.size(), data.begin());

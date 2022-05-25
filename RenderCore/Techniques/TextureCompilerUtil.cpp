@@ -128,13 +128,13 @@ namespace RenderCore { namespace Techniques
 
 			UniformsStream us;
 			us._resourceViews = MakeIteratorRange(resViews);
-			computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
+			auto dispatchGroup = computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
 
 			if (filter == EquRectFilterMode::ToCubeMap) {
 				auto passCount = (mipDesc._width+7)/8 * (mipDesc._height+7)/8 * 6;
 				for (unsigned p=0; p<passCount; ++p) {
 					struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, p, passCount, 0 };
-					computeOp->Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
+					dispatchGroup.Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
 				}
 			} else if (filter == EquRectFilterMode::ToGlossySpecular) {
 				auto pixelCount = mipDesc._width * mipDesc._height * ActualArrayLayerCount(targetDesc);
@@ -144,12 +144,12 @@ namespace RenderCore { namespace Techniques
 				auto dispatchesPerCommit = std::min(32768u, pixelCount);
 				for (unsigned d=0; d<dispatchCount; ++d) {
 					struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, d, dispatchCount, 0 };
-					computeOp->Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
+					dispatchGroup.Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
 
 					if ((d%dispatchesPerCommit) == (dispatchesPerCommit-1)) {
-						computeOp->EndDispatches();
+						dispatchGroup = {};
 						threadContext->CommitCommands();
-						computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
+						dispatchGroup = computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
 					} else {
 						/* 	We shouldn't need a barrier here, because we won't write to the same pixel in the same
 							cmd list. The pixel we're writing to is based on 'd' -- and this won't wrap around back to
@@ -171,10 +171,10 @@ namespace RenderCore { namespace Techniques
 				}
 			} else {
 				assert(filter == EquRectFilterMode::ProjectToSphericalHarmonic);
-				computeOp->Dispatch(targetDesc._width, 1, 1);
+				dispatchGroup.Dispatch(targetDesc._width, 1, 1);
 			}
 
-			computeOp->EndDispatches();
+			dispatchGroup = {};
 		}
 
 		// We need a barrier before the transfer in DataSourceFromResourceSynchronized

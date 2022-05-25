@@ -12,6 +12,7 @@
 #include "../../UniformsStream.h"
 #include "../../../Assets/AssetsCore.h"
 #include "../../../Assets/AssetUtils.h"
+#include "../../../Utility/StringFormat.h"
 #include <memory>
 #include <vector>
 #include <string>
@@ -52,6 +53,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		IteratorRange<const uint64_t*> 	GetDescriptorSetBindingNames() const;
 		IteratorRange<const uint64_t*> 	GetPushConstantsBindingNames() const;
 		const VkPushConstantRange&		GetPushConstantsRange(unsigned idx) const;		
+
+		void ValidatePushConstantsRange(unsigned offset, unsigned size, VkShaderStageFlags stageFlags) const;
 
 		#if defined(VULKAN_VERBOSE_DEBUG)
 			const DescriptorSetDebugInfo& GetBlankDescriptorSetDebugInfo(DescriptorSetIndex) const;
@@ -101,9 +104,13 @@ namespace RenderCore { namespace Metal_Vulkan
 		uint64_t				_descriptorSetBindingNames[s_maxBoundDescriptorSetCount];
 		uint64_t				_pushConstantBufferBindingNames[s_maxPushConstantBuffers];
 
-		uint64_t				_guid;
+		uint64_t					_guid;
 		PipelineLayoutInitializer	_initializer;
-		std::vector<unsigned> 	_dynamicOffsetsBuffer;
+		std::vector<unsigned> 		_dynamicOffsetsBuffer;
+
+		#if defined(_DEBUG)
+			std::vector<std::pair<unsigned, VkShaderStageFlags>> _pushConstantsRangeValidation;
+		#endif
 
 		#if defined(VULKAN_VERBOSE_DEBUG)
 			DescriptorSetDebugInfo _blankDescriptorSetsDebugInfo[s_maxBoundDescriptorSetCount];
@@ -149,6 +156,31 @@ namespace RenderCore { namespace Metal_Vulkan
 	inline unsigned CompiledPipelineLayout::GetDescriptorSetCount() const
 	{
 		return _descriptorSetCount;
+	}
+
+	inline void CompiledPipelineLayout::ValidatePushConstantsRange(unsigned offset, unsigned size, VkShaderStageFlags stageFlags) const
+	{
+		#if defined(_DEBUG)
+			// unfortunately it's a little expensive, but we can validate that the given range has all of the correct
+			// stage flags required (and doesn't overflow what was registered in the pipeline layout)
+			if (size == 0) Throw(std::runtime_error("Zero sized push constants operation"));
+			if (_pushConstantsRangeValidation.empty()) Throw(std::runtime_error("Attempting to use push constants for pipeline layout without any registered"));
+
+			auto i=_pushConstantsRangeValidation.begin();
+			while ((i+1) != _pushConstantsRangeValidation.end() && (i+1)->first <= offset) ++i;
+			auto start = i;
+			while (i != _pushConstantsRangeValidation.end() && i->first < (offset+size)) ++i;
+			if (i == _pushConstantsRangeValidation.end()) {
+				StringMeld<128> meld;
+				meld << "Overflowed push constants range -- shader range ends at " << (_pushConstantsRangeValidation.end()-1)->first << " but attempting to push the range " << offset << "-" << offset+size;
+				Throw(std::runtime_error(meld.AsString()));
+			}
+
+			// Ensure that the shader stages assigned in th erange in the pipeline layout are a superset of the stage flags in this operation
+			for (auto i2=start; i2!=i; ++i2)
+				if ((i2->second & stageFlags) != stageFlags)
+					Throw(std::runtime_error("Shader stage flags in push constant range do not match the pipeline layout"));
+		#endif
 	}
 
 	#if defined(VULKAN_VERBOSE_DEBUG)

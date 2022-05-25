@@ -90,6 +90,30 @@ namespace RenderCore { namespace Metal_Vulkan
 		_pipelineLayout = factory.CreatePipelineLayout(
 			MakeIteratorRange(rawDescriptorSetLayouts, &rawDescriptorSetLayouts[_descriptorSetCount]),
 			MakeIteratorRange(_pushConstantRanges, &_pushConstantRanges[_pushConstantBufferCount]));
+
+		#if defined(_DEBUG)
+			// generate a validation buffer for push constant ranges
+			// we're a little more permissive with range overlaps here than Vulkan may actually be...
+			if (_pushConstantBufferCount) {
+				std::vector<VkPushConstantRange> sortedPushConstants { _pushConstantRanges, &_pushConstantRanges[_pushConstantBufferCount] };
+				std::sort(sortedPushConstants.begin(), sortedPushConstants.end(),
+					[](const auto& lhs, const auto& rhs) { return lhs.offset < rhs.offset; });
+				_pushConstantsRangeValidation.reserve(sortedPushConstants.size()+1);
+				unsigned end = 0;
+				for (auto i=sortedPushConstants.begin(); i!=sortedPushConstants.end(); ++i) {
+					auto stageFlags = i->stageFlags;
+					end = i->offset+i->size;
+					if ((i+1) != sortedPushConstants.end()) end = std::min(end, (i+1)->offset);
+					// check every range for an overlap and collate the stage flags
+					for (auto i2=sortedPushConstants.begin(); i2!=sortedPushConstants.end(); ++i2)
+						if (i2->offset < end && (i2->offset + i2->size) > i->offset)
+							stageFlags |= i2->stageFlags;
+					_pushConstantsRangeValidation.emplace_back(i->offset, stageFlags);
+				}
+				assert(end != 0);
+				_pushConstantsRangeValidation.emplace_back(end, 0);
+			}
+		#endif
 	}
 
 	#if defined(VULKAN_VERBOSE_DEBUG)

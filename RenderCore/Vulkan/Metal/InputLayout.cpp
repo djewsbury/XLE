@@ -1333,7 +1333,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		for (const auto&pushConstants:_group[groupIdx]._pushConstantsRules) {
 			auto cb = stream._immediateData[pushConstants._inputCBSlot];
-			// assert(cb.size() == pushConstants._size);		 this isn't accurate currently because we don't query the correct push constants size from the SPIRV reflection
+			assert(cb.size() == pushConstants._size);
 			encoder.PushConstants(pushConstants._shaderStageBind, pushConstants._offset, cb);
 		}
 	}

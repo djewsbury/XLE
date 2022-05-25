@@ -280,9 +280,7 @@ namespace RenderCore { namespace LightingEngine
 				0, nullptr);
 		}
 
-		_intersect->BeginDispatches(*iterator._parsingContext, us);
-		_intersect->DispatchIndirect(*_indirectArgsBuffer);
-		_intersect->EndDispatches();
+		_intersect->BeginDispatches(*iterator._parsingContext, us).DispatchIndirect(*_indirectArgsBuffer);
 
 		{
 			auto* res = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intSRV)->GetResource().get();
