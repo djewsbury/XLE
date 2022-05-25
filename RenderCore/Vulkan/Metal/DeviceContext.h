@@ -152,6 +152,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	class CommandList;
 	class VulkanEncoderSharedState;
 	class NumericUniformsInterface;
+	class BoundUniforms;
 
 	class CapturedStates
     {
@@ -176,6 +177,10 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		enum class EncoderType { None, Graphics, ProgressiveGraphics, Compute };
 		EncoderType GetEncoderType();
+
+		// utilities for validating full flushing of BoundUniforms
+		const BoundUniforms* _pendingBoundUniforms = nullptr;
+		unsigned _pendingBoundUniformsFlushGroupMask = 0u, _pendingBoundUniformsCompletionMask = 0u;
 	protected:
 		SharedEncoder(
 			EncoderType encoderType = EncoderType::None,
@@ -187,6 +192,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		VkPipelineLayout GetUnderlyingPipelineLayout();
 		unsigned GetDescriptorSetCount();
+		void ValidateFlushedBoundUniforms();
 
 		std::shared_ptr<CompiledPipelineLayout> _pipelineLayout;
 		std::shared_ptr<VulkanEncoderSharedState> _sharedState;

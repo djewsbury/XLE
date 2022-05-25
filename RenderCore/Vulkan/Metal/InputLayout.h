@@ -200,6 +200,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		class ConstructionHelper;
 		class BindingHelper;
 
+		void AbortPendingApplies() const;
+		friend class SharedEncoder;
+
 		#if defined(_DEBUG)
 			std::string _debuggingDescription;
 		#endif

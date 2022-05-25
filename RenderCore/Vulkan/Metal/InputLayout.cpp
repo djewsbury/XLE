@@ -888,26 +888,24 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 	public:
 		ProgressiveDescriptorSetBuilder _builder;
-		unsigned _unflushedGroupMask = 0;
 		unsigned _groupMask = 0;
 		std::vector<DescriptorSlot> _signature;
 
 		SharedDescSetBuilder(IteratorRange<const DescriptorSlot*> signature)
-		: _builder(signature), _unflushedGroupMask(0), _groupMask(0), _signature(signature.begin(), signature.end()) {}
+		: _builder(signature), _groupMask(0), _signature(signature.begin(), signature.end()) {}
 		SharedDescSetBuilder(SharedDescSetBuilder&&) = default;
 		SharedDescSetBuilder& operator=(SharedDescSetBuilder&&) = default;
 		SharedDescSetBuilder(const SharedDescSetBuilder& copyFrom)
 		: _builder(MakeIteratorRange(copyFrom._signature))
 		, _groupMask(copyFrom._groupMask)
 		, _signature(copyFrom._signature)
-		, _unflushedGroupMask(0) {}
+		{}
 		SharedDescSetBuilder& operator=(const SharedDescSetBuilder& copyFrom)
 		{
 			if (&copyFrom != this) {
 				_builder = ProgressiveDescriptorSetBuilder{MakeIteratorRange(copyFrom._signature)};
 				_groupMask = copyFrom._groupMask;
 				_signature = copyFrom._signature;
-				_unflushedGroupMask = 0;
 			}
 			return *this;
 		}
@@ -1222,6 +1220,15 @@ namespace RenderCore { namespace Metal_Vulkan
 		// todo -- consider using VK_KHR_descriptor_update_template as an optimized way of updating many descriptors
 		// in one go
 
+		// We can hit the following exception in some cases when we have a BoundUniforms with mutliple groups, but
+		// do not all ApplyLooseUniforms for every group in that bound uniforms. When multiple groups contribute to the
+		// same descriptor set, the descriptor set isn't actually applied to the device until all of the relevant groups
+		// are applied.
+		// When this happens, the exception will trigger on the *next* bound uniforms we attempt to apply
+		// "encoder._pendingBoundUniforms" will be the incomplete BoundUniforms
+		if (encoder._pendingBoundUniforms != nullptr && encoder._pendingBoundUniforms != this)
+			Throw(std::runtime_error("Attempting to apply BoundUniforms while a previously BoundUniforms has not been fully completed."));
+
 		// assert(encoder.GetPipelineLayout().get() == _pipelineLayout.get()); todo -- pipeline layout compatibility validation
 		assert(groupIdx < dimof(_group));
 		for (const auto& adaptiveSet:_group[groupIdx]._adaptiveSetRules) {
@@ -1255,13 +1262,14 @@ namespace RenderCore { namespace Metal_Vulkan
 				builder = &sharedBuilder._builder;
 				// Flush only when all of the groups that will write to this descriptor set have done
 				// their thing
-				sharedBuilder._unflushedGroupMask |= 1 << groupIdx;
-				assert((sharedBuilder._unflushedGroupMask & sharedBuilder._groupMask) == sharedBuilder._unflushedGroupMask);
-				if (sharedBuilder._unflushedGroupMask == sharedBuilder._groupMask) {
-					sharedBuilder._unflushedGroupMask = 0;
-				} else {
-					doFlushNow = false;
+				assert(encoder._pendingBoundUniforms == nullptr || encoder._pendingBoundUniforms == this);
+				if (!encoder._pendingBoundUniforms) {
+					encoder._pendingBoundUniforms = this;
+					encoder._pendingBoundUniformsFlushGroupMask = 0;
 				}
+				encoder._pendingBoundUniformsCompletionMask |= sharedBuilder._groupMask;		// everything is complete when encoder._pendingBoundUniformsFlushGroupMask == encoder._pendingBoundUniformsCompletionMask
+				encoder._pendingBoundUniformsFlushGroupMask |= 1 << groupIdx;
+				doFlushNow = (encoder._pendingBoundUniformsFlushGroupMask & sharedBuilder._groupMask) == sharedBuilder._groupMask;	// flush only when everything is in pending state
 			}
 			
 			auto descSetSlots = BindingHelper::WriteImmediateDataBindings(
@@ -1328,6 +1336,9 @@ namespace RenderCore { namespace Metal_Vulkan
 					adaptiveSet._descriptorSetIdx, descriptorSet.get(),
 					MakeIteratorRange(dynamicOffsets, &dynamicOffsets[dynamicOffsetCount])
 					VULKAN_VERBOSE_DEBUG_ONLY(, std::move(verboseDescription)));
+
+				if (encoder._pendingBoundUniformsFlushGroupMask == encoder._pendingBoundUniformsCompletionMask)
+					encoder._pendingBoundUniforms = nullptr;
 			}
 		}
 
@@ -1401,6 +1412,15 @@ namespace RenderCore { namespace Metal_Vulkan
 				#endif
 				break;
 			}
+	}
+
+	void BoundUniforms::AbortPendingApplies() const
+	{
+		// cancel incomplete descriptor sets. This is useful when multiple groups apply to the same descriptor set, 
+		// and only some of those groups have been applied with ApplyLooseUniforms.
+		// Reset should abandon the previous changes and return us to a fresh state
+		for (auto& sharedBuilder:_sharedDescSetBuilders)
+			sharedBuilder._builder.Reset();
 	}
 
 	BoundUniforms::BoundUniforms() 

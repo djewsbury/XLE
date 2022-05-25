@@ -130,6 +130,20 @@ namespace RenderCore { namespace Metal_Vulkan
 		vkCmdSetScissor(_sharedState->_commandList.GetUnderlying().get(), 0, scissorRects.size(), vkScissors);
 	}
 
+	inline void SharedEncoder::ValidateFlushedBoundUniforms()
+	{
+		#if defined(_DEBUG)
+			// We will hit the following exception if a BoundUniforms object wasn't fully completed before ending the encoder
+			// (ie, only some of the groups of the BoundUniforms were applied using ApplyLooseUniforms)
+			// See BoundUniforms for more information.
+			if (_pendingBoundUniforms) {
+				_pendingBoundUniforms->AbortPendingApplies();
+				_pendingBoundUniforms = nullptr;
+				Throw(std::runtime_error("Incomplete BoundUniforms. Some required groups were not applied with ApplyLooseUniforms"));
+			}
+		#endif
+	}
+
 	void        GraphicsEncoder::Bind(IteratorRange<const VertexBufferView*> vbViews, const IndexBufferView& ibView)
 	{
 		assert(_sharedState->_commandList.GetUnderlying());
@@ -259,6 +273,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	void GraphicsEncoder_ProgressivePipeline::Draw(unsigned vertexCount, unsigned startVertexLocation)
 	{
 		assert(_sharedState->_commandList.GetUnderlying());
+		ValidateFlushedBoundUniforms();
 		if (BindGraphicsPipeline()) {
 			assert(vertexCount);
 			vkCmdDraw(
@@ -272,6 +287,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		assert(_sharedState->_commandList.GetUnderlying());
 		assert(_sharedState->_ibBound);
+		ValidateFlushedBoundUniforms();
 		if (BindGraphicsPipeline()) {
 			assert(indexCount);
 			vkCmdDrawIndexed(
@@ -296,6 +312,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		// and where possible move that to construction time.
 		Log(Verbose) << "DrawInstances is very inefficient on Vulkan. Prefer pre-building buffers and vkCmdDrawIndirect" << std::endl;
 		assert(_sharedState->_commandList.GetUnderlying());
+		ValidateFlushedBoundUniforms();
 		if (BindGraphicsPipeline()) {
 			VkDrawIndirectCommand indirectCommands[] {
 				VkDrawIndirectCommand { vertexCount, instanceCount, startVertexLocation, 0 }
@@ -318,6 +335,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		Log(Verbose) << "DrawIndexedInstances is very inefficient on Vulkan. Prefer pre-building buffers and vkCmdDrawIndirect" << std::endl;
 		assert(_sharedState->_commandList.GetUnderlying());
+		ValidateFlushedBoundUniforms();
 		if (BindGraphicsPipeline()) {
 			VkDrawIndexedIndirectCommand indirectCommands[] {
 				VkDrawIndexedIndirectCommand { indexCount, instanceCount, startIndexLocation, 0, 0 }
@@ -366,8 +384,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void GraphicsEncoder_Optimized::Draw(const GraphicsPipeline& pipeline, unsigned vertexCount, unsigned startVertexLocation)
 	{
-		BindPipeline(pipeline);
 		assert(vertexCount);
+		ValidateFlushedBoundUniforms();
+		BindPipeline(pipeline);
 		vkCmdDraw(
 			_sharedState->_commandList.GetUnderlying().get(),
 			vertexCount, 1,
@@ -376,9 +395,10 @@ namespace RenderCore { namespace Metal_Vulkan
 	
 	void GraphicsEncoder_Optimized::DrawIndexed(const GraphicsPipeline& pipeline, unsigned indexCount, unsigned startIndexLocation)
 	{
-		BindPipeline(pipeline);
 		assert(_sharedState->_ibBound);
 		assert(indexCount);
+		ValidateFlushedBoundUniforms();
+		BindPipeline(pipeline);
 		vkCmdDrawIndexed(
 			_sharedState->_commandList.GetUnderlying().get(),
 			indexCount, 1,
@@ -388,6 +408,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void GraphicsEncoder_Optimized::DrawInstances(const GraphicsPipeline& pipeline, unsigned vertexCount, unsigned instanceCount, unsigned startVertexLocation)
 	{
+		ValidateFlushedBoundUniforms();
 		BindPipeline(pipeline);
 		vkCmdDraw(
 			_sharedState->_commandList.GetUnderlying().get(),
@@ -397,6 +418,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void GraphicsEncoder_Optimized::DrawIndexedInstances(const GraphicsPipeline& pipeline, unsigned indexCount, unsigned instanceCount, unsigned startIndexLocation)
 	{
+		ValidateFlushedBoundUniforms();
 		BindPipeline(pipeline);
 		vkCmdDrawIndexed(
 			_sharedState->_commandList.GetUnderlying().get(),
@@ -527,6 +549,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	SharedEncoder::~SharedEncoder()
 	{
+		if (_pendingBoundUniforms)
+			_pendingBoundUniforms->AbortPendingApplies();		// this helps us surive exception scenarios -- but there is no lifecycle protection
+
 		if (_sharedState) {
 			assert(_sharedState->_currentEncoder == this);
 			_sharedState->_currentEncoder = nullptr;
@@ -543,10 +568,16 @@ namespace RenderCore { namespace Metal_Vulkan
 		_pipelineLayout = std::move(moveFrom._pipelineLayout);
 		_capturedStates = std::move(moveFrom._capturedStates);
 		moveFrom._capturedStates = nullptr;
+		_pendingBoundUniforms = moveFrom._pendingBoundUniforms; moveFrom._pendingBoundUniforms = nullptr;
+		_pendingBoundUniformsFlushGroupMask = moveFrom._pendingBoundUniformsFlushGroupMask;
+		_pendingBoundUniformsCompletionMask = moveFrom._pendingBoundUniformsCompletionMask;
 	}
 
 	SharedEncoder& SharedEncoder::operator=(SharedEncoder&& moveFrom)
 	{
+		if (_pendingBoundUniforms)
+			_pendingBoundUniforms->AbortPendingApplies();		// this helps us surive exception scenarios -- but there is no lifecycle protection
+
 		if (_sharedState) {
 			assert(_sharedState->_currentEncoder == this);
 			_sharedState->_currentEncoder = nullptr;
@@ -562,6 +593,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		_pipelineLayout = std::move(moveFrom._pipelineLayout);
 		_capturedStates = std::move(moveFrom._capturedStates);
 		moveFrom._capturedStates = nullptr;
+		_pendingBoundUniforms = moveFrom._pendingBoundUniforms; moveFrom._pendingBoundUniforms = nullptr;
+		_pendingBoundUniformsFlushGroupMask = moveFrom._pendingBoundUniformsFlushGroupMask;
+		_pendingBoundUniformsCompletionMask = moveFrom._pendingBoundUniformsCompletionMask;
 		return *this;
 	}
 
@@ -721,8 +755,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void ComputeEncoder::Dispatch(const ComputePipeline& pipeline, unsigned countX, unsigned countY, unsigned countZ)
 	{
-		BindPipeline(pipeline);
 		assert(countX && countY && countZ);
+		ValidateFlushedBoundUniforms();
+		BindPipeline(pipeline);
 		vkCmdDispatch(
 			_sharedState->_commandList.GetUnderlying().get(),
 			countX, countY, countZ);
@@ -730,6 +765,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void ComputeEncoder::DispatchIndirect(const ComputePipeline& pipeline, const IResource& res, unsigned offset)
 	{
+		ValidateFlushedBoundUniforms();
 		BindPipeline(pipeline);
 		vkCmdDispatchIndirect(
 			_sharedState->_commandList.GetUnderlying().get(),
