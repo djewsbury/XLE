@@ -422,25 +422,29 @@ namespace RenderCore
 
     Format      AsTypelessFormat(Format inputFormat)
     {
-            // note -- currently this only modifies formats that are also
-            //          modified by AsSRGBFormat and AsLinearFormat. This is
-            //          important, because this function is used to convert
-            //          a pixel format for a texture that might be used by
-            //          either a linear or srgb shader resource view.
-            //          If this function changes formats aren't also changed
-            //          by AsSRGBFormat and AsLinearFormat, it will cause some
-            //          sources to fail to load correctly.
         switch (inputFormat) {
         case Format::R8G8B8A8_UNORM:
-        case Format::R8G8B8A8_UNORM_SRGB: return Format::R8G8B8A8_TYPELESS;
+        case Format::R8G8B8A8_UNORM_SRGB: 
+        case Format::R8G8B8A8_UINT: 
+        case Format::R8G8B8A8_SNORM: 
+        case Format::R8G8B8A8_SINT: return Format::R8G8B8A8_TYPELESS;
         case Format::R8G8B8_UNORM:
-        case Format::R8G8B8_UNORM_SRGB: return Format::R8G8B8_TYPELESS;
+        case Format::R8G8B8_UNORM_SRGB:
+        case Format::R8G8B8_UINT:
+        case Format::R8G8B8_SNORM:
+        case Format::R8G8B8_SINT: return Format::R8G8B8_TYPELESS;
         case Format::BC1_UNORM:
         case Format::BC1_UNORM_SRGB: return Format::BC1_TYPELESS;
         case Format::BC2_UNORM:
         case Format::BC2_UNORM_SRGB: return Format::BC2_TYPELESS;
         case Format::BC3_UNORM:
         case Format::BC3_UNORM_SRGB: return Format::BC3_TYPELESS;
+        case Format::BC4_UNORM:
+        case Format::BC4_SNORM: return Format::BC4_TYPELESS;
+        case Format::BC5_UNORM:
+        case Format::BC5_SNORM: return Format::BC5_TYPELESS;
+        case Format::BC6H_UF16:
+        case Format::BC6H_SF16: return Format::BC6H_TYPELESS;
         case Format::BC7_UNORM:
         case Format::BC7_UNORM_SRGB: return Format::BC7_TYPELESS;
 
@@ -449,16 +453,61 @@ namespace RenderCore
         case Format::B8G8R8X8_UNORM:
         case Format::B8G8R8X8_UNORM_SRGB: return Format::B8G8R8X8_TYPELESS;
 
+        case Format::R32G32B32A32_FLOAT:
+        case Format::R32G32B32A32_UINT:
+        case Format::R32G32B32A32_SINT: return Format::R32G32B32A32_TYPELESS;
+
+        case Format::R32G32B32_FLOAT:
+        case Format::R32G32B32_UINT:
+        case Format::R32G32B32_SINT: return Format::R32G32B32_TYPELESS;
+
+        case Format::R16G16B16A16_FLOAT:
+        case Format::R16G16B16A16_UNORM:
+        case Format::R16G16B16A16_UINT:
+        case Format::R16G16B16A16_SNORM:
+        case Format::R16G16B16A16_SINT: return Format::R16G16B16A16_TYPELESS;
+
+        case Format::R32G32_FLOAT:
+        case Format::R32G32_UINT:
+        case Format::R32G32_SINT: return Format::R16G16B16A16_TYPELESS;
+
+        case Format::R10G10B10A2_UNORM:
+        case Format::R10G10B10A2_UINT:
+        case Format::R11G11B10_FLOAT: return Format::R10G10B10A2_TYPELESS;
+
+        case Format::R16G16_FLOAT:
+        case Format::R16G16_UNORM:
+        case Format::R16G16_UINT:
+        case Format::R16G16_SNORM:
+        case Format::R16G16_SINT: return Format::R16G16_TYPELESS;
+
         case Format::D24_UNORM_S8_UINT:
         case Format::R24_UNORM_X8_TYPELESS:
         case Format::X24_TYPELESS_G8_UINT: return Format::R24G8_TYPELESS;
 
-        case Format::R32_TYPELESS:
         case Format::D32_FLOAT:
         case Format::R32_FLOAT:
         case Format::R32_UINT:
         case Format::R32_SINT: return Format::R32_TYPELESS;
 
+        case Format::R8G8_UNORM:
+        case Format::R8G8_UINT:
+        case Format::R8G8_SNORM:
+        case Format::R8G8_SINT: return Format::R8G8_TYPELESS;
+
+        case Format::R16_FLOAT:
+        case Format::D16_UNORM:
+        case Format::R16_UNORM:
+        case Format::R16_UINT:
+        case Format::R16_SNORM:
+        case Format::R16_SINT: return Format::R16_TYPELESS;
+
+        case Format::R8_UNORM:
+        case Format::R8_UINT:
+        case Format::R8_SNORM:
+        case Format::R8_SINT:
+        case Format::A8_UNORM:
+        case Format::R1_UNORM:
         case Format::S8_UINT: return Format::R8_TYPELESS;
 
         case Format::RGB_PVRTC1_2BPP_UNORM:
