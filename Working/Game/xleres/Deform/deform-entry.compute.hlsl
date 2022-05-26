@@ -1,21 +1,23 @@
 
 #include "deform-helper.compute.hlsl"
 
+#define R32G32B32A32_FLOAT 2
+#define R32G32B32_FLOAT 6
+#define R16G16B16A16_FLOAT 10
+#define R32_UINT 42
+#define R16_UINT 57
+
 #if !IN_POSITION_FORMAT
-	#define IN_POSITION_FORMAT 6       // DXGIVALUE_R32G32B32_FLOAT
+	#define IN_POSITION_FORMAT R32G32B32_FLOAT
 #endif
 
 #if !OUT_POSITION_FORMAT
-	#define OUT_POSITION_FORMAT 6
+	#define OUT_POSITION_FORMAT R32G32B32_FLOAT
 #endif
 
 #if !defined(BUFFER_FLAGS)
 	#define BUFFER_FLAGS 0
 #endif
-
-#define R32G32B32A32_FLOAT 2
-#define R32G32B32_FLOAT 6
-#define R16G16B16A16_FLOAT 10
 
 float3 LoadAsFloat3(ByteAddressBuffer buffer, uint format, uint byteOffset);
 float4 LoadAsFloat4(ByteAddressBuffer buffer, uint format, uint byteOffset);
@@ -55,6 +57,8 @@ StructuredBuffer<IAParamsStruct> IAParams : register(t3);
 	{
 		return InvocationParams;
 	}
+#else
+	DeformInvocationStruct GetDeformInvocationParams();
 #endif
 
 struct LoadVertexResult
@@ -212,6 +216,32 @@ float4 LoadAsFloat4(RWByteAddressBuffer buffer, uint format, uint byteOffset)
 		return f16tof32(uint4(A.x&0xffff, A.x>>16, A.y&0xffff, A.y>>16));
 	} else {
 		return 0;	// trouble
+	}
+}
+
+uint LoadAsUInt(ByteAddressBuffer buffer, uint format, uint byteOffset)
+{
+	if (format == R32_UINT) {
+		return buffer.Load(byteOffset);
+	} else if (format == R16_UINT) {
+		uint index = buffer.Load(byteOffset & ~3);
+		if (byteOffset & 3) return index >> 16;
+		else return index & 0xffff;
+	} else {
+		return 0;
+	}
+}
+
+uint3 LoadAsUInt3(ByteAddressBuffer buffer, uint format, uint byteOffset)
+{
+	if (format == R32_UINT) {
+		return buffer.Load3(byteOffset);
+	} else if (format == R16_UINT) {
+		uint2 raw = buffer.Load2(byteOffset & ~3);
+		if (byteOffset & 3) return uint3(raw.x >> 16, raw.y & 0xffff, raw.y >> 16);
+		else return uint3(raw.x & 0xffff, raw.x >> 16, raw.y & 0xffff);
+	} else {
+		return 0;
 	}
 }
 
