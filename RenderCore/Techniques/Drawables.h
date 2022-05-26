@@ -79,6 +79,8 @@ namespace RenderCore { namespace Techniques
 		void		DrawInstances(unsigned vertexCount, unsigned instanceCount, unsigned startVertexLocation=0) const;
 		void		DrawIndexedInstances(unsigned indexCount, unsigned instanceCount, unsigned startIndexLocation=0, unsigned baseVertexLocation=0) const;
 		void        DrawAuto() const;
+		void        DrawIndirect(const IResource& res, unsigned offset=0) const;
+		void        DrawIndexedIndirect(const IResource& res, unsigned offset=0) const;
 	};
 
 	struct Drawable;

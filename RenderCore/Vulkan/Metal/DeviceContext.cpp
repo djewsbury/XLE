@@ -432,6 +432,28 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(0);      // not implemented
 	}
 
+	void GraphicsEncoder_Optimized::DrawIndirect(const GraphicsPipeline& pipeline, const IResource& res, unsigned offset)
+	{
+		ValidateFlushedBoundUniforms();
+		BindPipeline(pipeline);
+		vkCmdDrawIndirect(
+			_sharedState->_commandList.GetUnderlying().get(),
+			checked_cast<const Resource*>(&res)->GetBuffer(),
+			offset,
+			1, sizeof(uint32_t)*4);
+	}
+
+	void GraphicsEncoder_Optimized::DrawIndexedIndirect(const GraphicsPipeline& pipeline, const IResource& res, unsigned offset)
+	{
+		ValidateFlushedBoundUniforms();
+		BindPipeline(pipeline);
+		vkCmdDrawIndexedIndirect(
+			_sharedState->_commandList.GetUnderlying().get(),
+			checked_cast<const Resource*>(&res)->GetBuffer(),
+			offset,
+			1, sizeof(uint32_t)*5);
+	}
+
 	void SharedEncoder::BindDescriptorSet(
 		unsigned index, VkDescriptorSet set,
 		IteratorRange<const unsigned*> dynamicOffsets

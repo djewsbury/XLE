@@ -269,6 +269,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		void    	DrawInstances(const GraphicsPipeline& pipeline, unsigned vertexCount, unsigned instanceCount, unsigned startVertexLocation=0);
 		void    	DrawIndexedInstances(const GraphicsPipeline& pipeline, unsigned indexCount, unsigned instanceCount, unsigned startIndexLocation=0);
 		void        DrawAuto(const GraphicsPipeline& pipeline);
+		void        DrawIndirect(const GraphicsPipeline& pipeline, const IResource& res, unsigned offset=0);
+		void        DrawIndexedIndirect(const GraphicsPipeline& pipeline, const IResource& res, unsigned offset=0);
 
 		GraphicsEncoder_Optimized(GraphicsEncoder_Optimized&&);
 		GraphicsEncoder_Optimized& operator=(GraphicsEncoder_Optimized&&);

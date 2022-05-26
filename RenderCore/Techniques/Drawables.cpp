@@ -408,6 +408,17 @@ namespace RenderCore { namespace Techniques
 		realContext._encoder->DrawAuto(*realContext._pipeline);
 	}
 
+	void ExecuteDrawableContext::DrawIndirect(const IResource& res, unsigned offset) const
+	{
+		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
+		realContext._encoder->DrawIndirect(*realContext._pipeline, res, offset);
+	}
+	void ExecuteDrawableContext::DrawIndexedIndirect(const IResource& res, unsigned offset) const
+	{
+		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
+		realContext._encoder->DrawIndexedIndirect(*realContext._pipeline, res, offset);
+	}
+
 	void ExecuteDrawableContext::SetStencilRef(unsigned frontFaceStencil, unsigned backFaceStencil) const
 	{
 		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
