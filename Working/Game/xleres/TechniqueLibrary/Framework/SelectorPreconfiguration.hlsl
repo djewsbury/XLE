@@ -78,13 +78,3 @@
 	#define VSOUT_HAS_NORMAL 1
 	#define VSOUT_HAS_WORLD_VIEW_VECTOR 1
 #endif
-
-#if (SPAWNED_INSTANCE==1)
-	#define GEO_HAS_INSTANCE_ID 1
-	#if !defined(VSOUT_HAS_SHADOW_PROJECTION_COUNT)
-		#define PER_INSTANCE_MLO 1
-	#endif
-	#if (PER_INSTANCE_MLO==1)
-		#define VSOUT_HAS_PER_VERTEX_MLO 1
-	#endif
-#endif

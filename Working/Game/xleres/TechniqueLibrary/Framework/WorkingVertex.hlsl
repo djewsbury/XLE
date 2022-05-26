@@ -114,6 +114,8 @@ uint DefaultTangentVectorToReconstruct()
 		return 0;
 	#elif GEO_HAS_TEXTANGENT && GEO_HAS_TEXBITANGENT
 		return 2;		// implicitly no normal in this case
+	#elif GEO_HAS_NORMAL
+		return 3;		// just normal
 	#else
 		// awkward case; probably not a full tangent frame
 		return 0;
@@ -196,6 +198,18 @@ WorkingVertex WorkingVertex_DefaultInitialize(VSIN input)
 		#endif
 	#else
 		result.texCoordCount = 0;
+	#endif
+
+	// transform position & tangent from through local-to-instance, if we have it
+	#if GEO_HAS_INSTANCE_TO_LOCAL
+		result.position = mul(
+			float3x4(input.instanceToLocalA.xyzw, input.instanceToLocalB.xyzw, input.instanceToLocalC.xyzw),
+			float4(result.position, 1));
+		result.tangentFrame = Transform(
+			float3x3(input.instanceToLocalA.xyz, input.instanceToLocalB.xyz, input.instanceToLocalC.xyz),
+			result.tangentFrame, result.tangentVectorToReconstruct);
+	#elif GEO_HAS_INSTANCE_OFFSET
+		result.position += input.instanceOffset;
 	#endif
 
 	return result;

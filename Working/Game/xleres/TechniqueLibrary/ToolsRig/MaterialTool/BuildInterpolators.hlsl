@@ -129,10 +129,6 @@ VSOUT BuildInterpolator_VSOutput(VSIN input) : NE_WritesVSOutput
 		output.fogColor = ResolveOutputFogColor(worldPosition.xyz, SysUniform_GetWorldSpaceView().xyz);
 	#endif
 
-	#if VSOUT_HAS_PER_VERTEX_AO && (SPAWNED_INSTANCE==1)
-		output.ambientOcclusion = 1.f; // GetInstanceShadowing(input);
-	#endif
-
 	#if VSOUT_HAS_INSTANCE_ID && GEO_HAS_INSTANCE_ID
 		output.instanceId = input.instanceId;
 	#endif

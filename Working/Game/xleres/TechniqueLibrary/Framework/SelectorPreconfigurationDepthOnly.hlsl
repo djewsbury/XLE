@@ -53,10 +53,6 @@
 	#undef GEO_HAS_COLOR
 #endif
 
-#if (SPAWNED_INSTANCE==1)
-	#define GEO_HAS_INSTANCE_ID 1
-#endif
-
 #undef GEO_HAS_TEXCOORD1
 #undef GEO_HAS_COLOR1
 #undef GEO_HAS_PER_VERTEX_AO

@@ -20,11 +20,6 @@ Skinnable=~
 	Selectors=~
 		SKIN_TRANSFORMS=~; relevance=<:(value!=0):>
 
-VegetationSpawn=~
-	Selectors=~
-		SPAWNED_INSTANCE
-		GEO_INSTANCE_ALIGN_UP
-
 System=~
 	Selectors=~
 		AUTO_COTANGENT=~; relevance=<:(value!=0):>

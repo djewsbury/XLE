@@ -14,12 +14,6 @@ WorkingVertex VertexPatch_Standard(VSIN input)
 {
 	WorkingVertex result = WorkingVertex_DefaultInitialize(input);
 
-	#if SPAWNED_INSTANCE==1
-		float3 objectCentreWorld;
-		float3 worldNormalTemp;
-		result.position = InstanceWorldPosition(input, worldNormalTemp, objectCentreWorld);
-	#endif
-
 	#if GEO_HAS_BONEWEIGHTS
 		result.position = TransformPositionThroughSkinning(input, result.position);
 		result.tangentFrame.basisVector0 = TransformDirectionVectorThroughSkinning(input, result.tangentFrame.basisVector0);
@@ -33,13 +27,7 @@ WorkingVertex VertexPatch_WindBending(VSIN input)
 {
 	WorkingVertex result = WorkingVertex_DefaultInitialize(input);
 
-	float3 objectCentreWorld;
-	#if SPAWNED_INSTANCE==1
-		float3 worldNormalTemp;
-		InstanceWorldPosition(input, worldNormalTemp, objectCentreWorld);
-	#else
-		objectCentreWorld = float3(SysUniform_GetLocalToWorld()[0][3], SysUniform_GetLocalToWorld()[1][3], SysUniform_GetLocalToWorld()[2][3]);
-	#endif
+	float3 objectCentreWorld = float3(SysUniform_GetLocalToWorld()[0][3], SysUniform_GetLocalToWorld()[1][3], SysUniform_GetLocalToWorld()[2][3]);
 
 	if (result.coordinateSpace == WORKINGVERTEX_COORDINATESPACE_LOCAL) {
 		result.tangentFrame = TransformLocalToWorld(result.tangentFrame, DefaultTangentVectorToReconstruct());

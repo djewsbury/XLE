@@ -69,6 +69,16 @@ struct VSIN //////////////////////////////////////////////////////
 	#if GEO_HAS_PER_VERTEX_AO
 		float ambientOcclusion : PER_VERTEX_AO;
 	#endif
+
+	#if GEO_HAS_INSTANCE_OFFSET
+		float3 instanceOffset : INSTANCE_OFFSET;
+	#endif
+
+	#if GEO_HAS_INSTANCE_TO_LOCAL
+		half4 instanceToLocalA : INSTANCE_TO_LOCAL;
+		half4 instanceToLocalB : INSTANCE_TO_LOCAL1;
+		half4 instanceToLocalC : INSTANCE_TO_LOCAL2;
+	#endif
 }; //////////////////////////////////////////////////////////////////
 
 #if GEO_HAS_COLOR ////////////////////////////////////////////////

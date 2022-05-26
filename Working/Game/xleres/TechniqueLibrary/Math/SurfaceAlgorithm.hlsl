@@ -192,6 +192,50 @@ TangentFrame TransformLocalToWorld(TangentFrame inputFrame, uint vectorToReconst
 			result.handiness = sign(inputFrame.handiness);
 		#endif
 		result.tangent = TangentFromNormalBitangent(result.normal, result.bitangent, result.handiness);
+	} else if (vectorToReconstruct == 3) {
+		// just normal
+		result.normal = LocalToWorldUnitVector(inputFrame.normal);
+	}
+	return result;
+}
+
+TangentFrame Transform(float3x3 transform, TangentFrame inputFrame, uint vectorToReconstruct)
+{
+	// pass vectorToReconstruct == 0 to reconstruct tangent
+	// pass vectorToReconstruct == 1 to reconstruct bitangent
+	// pass vectorToReconstruct == 2 to reconstruct normal
+
+	TangentFrame result;
+	if (vectorToReconstruct == 2) {
+		result.tangent = mul(transform, inputFrame.tangent);		// skipping re-normalize
+		result.bitangent = mul(transform, inputFrame.bitangent);
+		#if LOCAL_TO_WORLD_HAS_FLIP==1
+			result.handiness = sign(-inputFrame.handiness);
+		#else
+			result.handiness = sign(inputFrame.handiness);
+		#endif
+		result.normal = NormalFromTangents(result.tangent, result.bitangent, result.handiness);
+	} else if (vectorToReconstruct == 1) {
+		result.normal = mul(transform, inputFrame.normal);
+		result.tangent = mul(transform, inputFrame.tangent);
+		#if LOCAL_TO_WORLD_HAS_FLIP==1
+			result.handiness = sign(-inputFrame.handiness);
+		#else
+			result.handiness = sign(inputFrame.handiness);
+		#endif
+		result.bitangent = BitangentFromNormalTangent(result.normal, result.tangent, result.handiness);
+	} else if (vectorToReconstruct == 0) {
+		result.normal = mul(transform, inputFrame.normal);
+		result.bitangent = mul(transform, inputFrame.bitangent);
+		#if LOCAL_TO_WORLD_HAS_FLIP==1
+			result.handiness = sign(-inputFrame.handiness);
+		#else
+			result.handiness = sign(inputFrame.handiness);
+		#endif
+		result.tangent = TangentFromNormalBitangent(result.normal, result.bitangent, result.handiness);
+	}else if (vectorToReconstruct == 3) {
+		// just normal
+		result.normal = mul(transform, inputFrame.normal);
 	}
 	return result;
 }

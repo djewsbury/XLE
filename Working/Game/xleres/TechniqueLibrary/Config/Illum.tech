@@ -5,11 +5,11 @@
 	~~ silhouette (plus alpha testing)
 
 Silhouette=~
-	Inherit=~; Shared.tech:Skinnable; Shared.tech:VegetationSpawn
+	Inherit=~; Shared.tech:Skinnable
 	Preconfiguration=xleres/TechniqueLibrary/Framework/SelectorPreconfiguration.hlsl
 
 SilhouetteDepthOnly=~
-	Inherit=~; Shared.tech:Skinnable; Shared.tech:VegetationSpawn
+	Inherit=~; Shared.tech:Skinnable
 	Preconfiguration=xleres/TechniqueLibrary/Framework/SelectorPreconfigurationDepthOnly.hlsl
 
 VertexIdViewInstancing=~

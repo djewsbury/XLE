@@ -157,9 +157,6 @@ VSOUT BuildVSOUT(
 
 	#if VSOUT_HAS_PER_VERTEX_MLO
 		output.mainLightOcclusion = 1.f;
-		#if (SPAWNED_INSTANCE==1)
-			output.mainLightOcclusion *= GetInstanceShadowing(input);
-		#endif
 	#endif
 
 	#if VSOUT_HAS_FOG_COLOR == 1
