@@ -810,7 +810,7 @@ namespace RenderCore { namespace Techniques
 		// prevent multiple calls, because this introduces a lot of threading complications
 		auto prevCalled = _pimpl->_fulfillWhenNotPendingCalled.exchange(true);
 		if (prevCalled)
-			Throw(std::runtime_error("Attempting to call DrawableProvider::FulfillWhenNotPending multiple times. This can only be called once"));
+			Throw(std::runtime_error("Attempting to call DrawableConstructor::FulfillWhenNotPending multiple times. This can only be called once"));
 
 		auto strongThis = shared_from_this();
 		::Assets::PollToPromise(

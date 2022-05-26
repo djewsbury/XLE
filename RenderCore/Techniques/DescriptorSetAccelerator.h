@@ -90,7 +90,7 @@ namespace RenderCore { namespace Techniques
 
 	// Create a material machine that can be passed to ConstructDescriptorSetHelper::Construct
 	// Fairly primitive implementation, mostly intended for unit tests
-	struct ManualMaterialMachine
+	class ManualMaterialMachine
 	{
 	public:
 		IteratorRange<Assets::ScaffoldCmdIterator> GetMaterialMachine() const;

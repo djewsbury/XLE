@@ -86,6 +86,7 @@ namespace ToolsRig
 					constructorContext._stitchingContext = { preregAttachments, fBProps, MakeIteratorRange(systemAttachmentsFormat) };
 					constructorContext._depVal = ::Assets::GetDepValSys().Make();
 					constructorContext._drawingApparatus = l->_drawingApparatus;
+					constructorContext._bufferUploads = l->_bufferUploads;
 
 					{
 						StringSection<> keyname;
@@ -215,8 +216,9 @@ namespace ToolsRig
 		_visualizeStepConstructors.emplace_back(name.AsString(), std::move(constructor));
 	}
 
-	ShaderLab::ShaderLab(std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus)
+	ShaderLab::ShaderLab(std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus, std::shared_ptr<BufferUploads::IManager> bufferUploads)
 	: _drawingApparatus(std::move(drawingApparatus))
+	, _bufferUploads(std::move(bufferUploads))
 	{
 	}
 

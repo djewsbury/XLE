@@ -390,6 +390,9 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 
+		// if we need the topological batch, make sure to draw the appropriate cmd stream
+		if (pkts[(unsigned)Batch::Topological] && cmdStreamGuid != s_topologicalCmdStream)
+			BuildGeometryProcables(pkts, localToWorld, s_topologicalCmdStream);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

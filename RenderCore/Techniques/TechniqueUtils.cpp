@@ -259,32 +259,6 @@ namespace RenderCore { namespace Techniques
 	IShaderResourceDelegate::~IShaderResourceDelegate() {}
     IUniformDelegateManager::~IUniformDelegateManager() {}
 
-	void SetGeoSelectors(ParameterBox& geoParameters, IteratorRange<const InputElementDesc*> ia)
-	{
-		if (HasElement(ia, "TEXCOORD"))     { geoParameters.SetParameter((const utf8*)"GEO_HAS_TEXCOORD", 1); }
-        if (HasElement(ia, "COLOR"))        { geoParameters.SetParameter((const utf8*)"GEO_HAS_COLOR", 1); }
-        if (HasElement(ia, "NORMAL"))		{ geoParameters.SetParameter((const utf8*)"GEO_HAS_NORMAL", 1); }
-        if (HasElement(ia, "TEXTANGENT"))      { geoParameters.SetParameter((const utf8*)"GEO_HAS_TEXTANGENT", 1); }
-        if (HasElement(ia, "TEXBITANGENT"))    { geoParameters.SetParameter((const utf8*)"GEO_HAS_TEXBITANGENT", 1); }
-        if (HasElement(ia, "BONEINDICES") && HasElement(ia, "BONEWEIGHTS"))
-            { geoParameters.SetParameter((const utf8*)"GEO_HAS_BONEWEIGHTS", 1); }
-        if (HasElement(ia, "PER_VERTEX_AO"))
-            { geoParameters.SetParameter((const utf8*)"GEO_HAS_PER_VERTEX_AO", 1); }
-	}
-
-	void SetGeoSelectors(ParameterBox& geoParameters, IteratorRange<const MiniInputElementDesc*> ia)
-	{
-		if (HasElement(ia, CommonSemantics::TEXCOORD))			{ geoParameters.SetParameter((const utf8*)"GEO_HAS_TEXCOORD", 1); }
-        if (HasElement(ia, CommonSemantics::COLOR))				{ geoParameters.SetParameter((const utf8*)"GEO_HAS_COLOR", 1); }
-        if (HasElement(ia, CommonSemantics::NORMAL))				{ geoParameters.SetParameter((const utf8*)"GEO_HAS_NORMAL", 1); }
-        if (HasElement(ia, CommonSemantics::TEXTANGENT))			{ geoParameters.SetParameter((const utf8*)"GEO_HAS_TEXTANGENT", 1); }
-        if (HasElement(ia, CommonSemantics::TEXBITANGENT))		{ geoParameters.SetParameter((const utf8*)"GEO_HAS_TEXBITANGENT", 1); }
-        if (HasElement(ia, CommonSemantics::BONEINDICES) && HasElement(ia, CommonSemantics::BONEWEIGHTS))
-            { geoParameters.SetParameter((const utf8*)"GEO_HAS_BONEWEIGHTS", 1); }
-        if (HasElement(ia, CommonSemantics::PER_VERTEX_AO))
-            { geoParameters.SetParameter((const utf8*)"GEO_HAS_PER_VERTEX_AO", 1); }
-	}
-
 	ProjectionDesc BuildProjectionDesc(const CameraDesc& sceneCamera, UInt2 viewportDims)
     {
         const float aspectRatio = viewportDims[0] / float(viewportDims[1]);

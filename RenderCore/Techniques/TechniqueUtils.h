@@ -119,9 +119,6 @@ namespace RenderCore { namespace Techniques
 
     bool HasHandinessFlip(const ProjectionDesc& projDesc);
 
-	void SetGeoSelectors(ParameterBox& geoSelectors, IteratorRange<const InputElementDesc*> ia);
-	void SetGeoSelectors(ParameterBox& geoSelectors, IteratorRange<const MiniInputElementDesc*> ia);
-
 	/// <summary>Build a projection desc with parameters from a standard camera</summary>
 	ProjectionDesc BuildProjectionDesc(const CameraDesc& sceneCamera, UInt2 viewportDims);
 
