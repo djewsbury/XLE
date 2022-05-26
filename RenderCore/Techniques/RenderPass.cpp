@@ -709,10 +709,10 @@ namespace RenderCore { namespace Techniques
             }
 
             switch (stitchedFragment._attachmentTransforms[aIdx]._type) {
-            case FragmentStitchingContext::AttachmentTransform::Preserved:
             case FragmentStitchingContext::AttachmentTransform::Temporary:
-            case FragmentStitchingContext::AttachmentTransform::Written:
+            case FragmentStitchingContext::AttachmentTransform::Preserved:
                 break;
+            case FragmentStitchingContext::AttachmentTransform::Written:
             case FragmentStitchingContext::AttachmentTransform::Generated:
                 parsingContext.GetTechniqueContext()._attachmentPool->Bind(semantic, _attachmentPoolReservation.GetResourceIds()[aIdx]);
                 break;
@@ -1014,6 +1014,11 @@ namespace RenderCore { namespace Techniques
             // We will go through and either find an existing buffer or create a new one
             bool foundMatch = false;
             for (unsigned q=0; q<_pimpl->_attachments.size(); ++q) {
+                // Any of the attachments in _poolSemanticAttachments can potentially be used for that semantic data at a later time.
+                // We can't really tell if the data has been abandoned for sure -- so side on the safe side, and don't attempt to reuse it
+                auto i = std::find_if(_pimpl->_poolSemanticAttachments.begin(), _pimpl->_poolSemanticAttachments.end(), [q](const auto& c) { return c.second == q; });
+                if (i != _pimpl->_poolSemanticAttachments.end()) continue;
+
                 if (MatchRequest(request._desc, _pimpl->_attachments[q]._desc) && q < originalAttachmentsSize && !consumed[q]) {
                     consumed[q] = true;
                     selectedAttachments[r] = q;
@@ -1084,6 +1089,7 @@ namespace RenderCore { namespace Techniques
 
     void AttachmentPool::Bind(uint64_t semantic, AttachmentName resName)
     {
+        assert(semantic);
         if (resName & (1u<<31u)) return;
 
         auto existing = std::find_if(
@@ -1116,6 +1122,7 @@ namespace RenderCore { namespace Techniques
 
     void AttachmentPool::Unbind(uint64_t semantic)
     {
+        assert(semantic);
         auto existingBinding = std::find_if(
             _pimpl->_semanticAttachments.begin(),
             _pimpl->_semanticAttachments.end(),
