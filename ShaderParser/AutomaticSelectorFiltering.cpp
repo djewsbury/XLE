@@ -370,11 +370,6 @@ namespace ShaderSourceParser
 	ParameterBox SelectorPreconfiguration::Preconfigure(ParameterBox&& input) const
 	{
 		ParameterBox output = std::move(input);
-
-		/*Log(Warning) << "Prior to filtering: " << std::endl;
-		for (auto v:output)
-			Log(Warning) << "\t" << v.Name() << " = " << v.ValueAsString() << std::endl;*/
-
 		for (const auto&subst:_preconfigurationSideEffects._substitutions) {
 			const ParameterBox* o = &output;
 			auto conditionEval = _preconfigurationSideEffects._dictionary.EvaluateExpression(subst._condition, MakeIteratorRange(&o, &o+1));
@@ -388,10 +383,6 @@ namespace ShaderSourceParser
 				output.RemoveParameter(MakeStringSection(subst._symbol));
 			}
 		}
-
-		/*Log(Warning) << "After filtering: " << std::endl;
-		for (auto v:output)
-			Log(Warning) << "\t" << v.Name() << " = " << v.ValueAsString() << std::endl;*/
 
 		return output;
 	}
@@ -412,32 +403,33 @@ namespace ShaderSourceParser
 				_hash = rotl64(_hash, (int8_t)i._type);
 			}
 
-			std::stringstream metrics;
-			for (const auto& i:_preconfigurationSideEffects._substitutions) {
-				metrics << i._symbol << " is ";
-				if (i._type == Utility::Internal::PreprocessorSubstitutions::Type::Undefine) {
-					metrics << "undefined";
-				} else {
-					if (i._type == Utility::Internal::PreprocessorSubstitutions::Type::Define) metrics << "defined to ";
-					else if (i._type == Utility::Internal::PreprocessorSubstitutions::Type::DefaultDefine) metrics << "default defined to ";
-					else metrics << "<<unknown operation>> ";
-					metrics << _preconfigurationSideEffects._dictionary.AsString(i._substitution);
-				}
-				if (i._condition.empty() || (i._condition.size() == 1 && i._condition[0] == 1)) {
-					// unconditional
-				} else 
-					metrics << ", if " << _preconfigurationSideEffects._dictionary.AsString(i._condition);
-				metrics << std::endl;
-			}
-
-			// Log(Warning) << metrics.str() << std::endl;
+			
 		} CATCH (const std::exception& e) {
 			Throw(::Assets::Exceptions::ConstructionError(e, handler.MakeDependencyValidation()));
 		} CATCH_END
 	}
 
-	SelectorPreconfiguration::~SelectorPreconfiguration()
-	{
+	SelectorPreconfiguration::~SelectorPreconfiguration() {}
 
-	}	
+
+	std::ostream& SerializationOperator(std::ostream& str, const SelectorPreconfiguration& preconfig)
+	{
+		for (const auto& i:preconfig._preconfigurationSideEffects._substitutions) {
+			str << i._symbol << " is ";
+			if (i._type == Utility::Internal::PreprocessorSubstitutions::Type::Undefine) {
+				str << "undefined";
+			} else {
+				if (i._type == Utility::Internal::PreprocessorSubstitutions::Type::Define) str << "defined to ";
+				else if (i._type == Utility::Internal::PreprocessorSubstitutions::Type::DefaultDefine) str << "default defined to ";
+				else str << "<<unknown operation>> ";
+				str << preconfig._preconfigurationSideEffects._dictionary.AsString(i._substitution);
+			}
+			if (i._condition.empty() || (i._condition.size() == 1 && i._condition[0] == 1)) {
+				// unconditional
+			} else 
+				str << ", if " << preconfig._preconfigurationSideEffects._dictionary.AsString(i._condition);
+			str << std::endl;
+		}
+		return str;
+	}
 }

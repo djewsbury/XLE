@@ -80,6 +80,7 @@ namespace Utility
 		ExpressionTokenList AndExpression(const ExpressionTokenList& lhs, const ExpressionTokenList& rhs);
 		ExpressionTokenList OrExpression(const ExpressionTokenList& lhs, const ExpressionTokenList& rhs);
 		ExpressionTokenList AndNotExpression(const ExpressionTokenList& lhs, const ExpressionTokenList& rhs);
+		ExpressionTokenList OrNotExpression(const ExpressionTokenList& lhs, const ExpressionTokenList& rhs);
 
 		struct PreprocessorSubstitutions
 		{

@@ -584,8 +584,35 @@ namespace Utility
 			return result;
 		}
 
+		ExpressionTokenList OrNotExpression(const ExpressionTokenList& lhs, const ExpressionTokenList& rhs)
+		{
+			if (lhs.empty()) return InvertExpression(rhs);
+			if (rhs.empty()) return lhs;
+
+			if (lhs.size() == 1) {
+				if (lhs[0] == s_fixedTokenTrue) return {s_fixedTokenTrue};
+				if (lhs[0] == s_fixedTokenFalse) return InvertExpression(rhs);
+			}
+
+			if (rhs.size() == 1) {
+				if (rhs[0] == s_fixedTokenFalse) return {s_fixedTokenTrue};
+				if (rhs[0] == s_fixedTokenTrue) return lhs;
+			}
+
+			ExpressionTokenList result;
+			result.reserve(lhs.size() + rhs.size() + 3);
+			result.insert(result.end(), lhs.begin(), lhs.end());
+			result.push_back(s_fixedTokenUnaryMarker);
+			result.insert(result.end(), rhs.begin(), rhs.end());
+			result.push_back(s_fixedTokenNot);
+			result.push_back(s_fixedTokenLogicalOr);
+			return result;
+		}
+
 		ExpressionTokenList InvertExpression(const ExpressionTokenList& expr)
 		{
+			if (expr.empty()) return {};
+			
 			if (expr.size() == 1) {
 				if (expr[0] == s_fixedTokenTrue) return {s_fixedTokenFalse};
 				if (expr[0] == s_fixedTokenFalse) return {s_fixedTokenTrue};

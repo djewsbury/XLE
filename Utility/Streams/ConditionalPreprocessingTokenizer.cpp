@@ -684,7 +684,10 @@ namespace Utility
                         conditionsStack.erase(conditionsStack.end()-1);
 
                         // The "_negativeCond" must be false for this section to be used
-                        auto negCondition = Internal::AndExpression(prevCondition._positiveCond, prevCondition._negativeCond);
+                        // If the previous negative condition is true, then the new negative condition should continue to be true
+                        //      !Z = !X && !Y
+                        //       -> Z = X || Y
+                        auto negCondition = Internal::OrExpression(prevCondition._positiveCond, prevCondition._negativeCond);
 
                         if (XlEqStringI(directive._value, "elif")) {
 

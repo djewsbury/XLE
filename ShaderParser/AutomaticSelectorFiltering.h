@@ -77,6 +77,7 @@ namespace ShaderSourceParser
 	SelectorFilteringRules GenerateSelectorFilteringRules(StringSection<> sourceCode);
 
 	std::ostream& SerializationOperator(std::ostream&, const SelectorFilteringRules& rules);
+	std::ostream& SerializationOperator(std::ostream&, const SelectorPreconfiguration& preconfig);
 
 }
 

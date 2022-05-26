@@ -95,7 +95,30 @@ static const int NonPreprocessorLine0 = 0;
 			)--")),
 
 		std::make_pair("example-perpixel.pixel.hlsl", ::Assets::AsBlob(s_examplePerPixelShaderFile)),
-		std::make_pair("example.graph", ::Assets::AsBlob(s_exampleGraphFile))
+		std::make_pair("example.graph", ::Assets::AsBlob(s_exampleGraphFile)),
+
+		std::make_pair(
+			"selector-preconfiguration.hlsl",
+			::Assets::AsBlob(R"--(
+#if GEO_HAS_TEXCOORD && GEO_HAS_NORMAL && RES_HAS_NormalsTexture
+	#if !defined(VSOUT_HAS_TANGENT_FRAME)
+		#define VSOUT_HAS_TANGENT_FRAME 1
+	#endif
+	#if !defined(VSOUT_HAS_TEXCOORD)
+		#define VSOUT_HAS_TEXCOORD 1
+	#endif
+#elif GEO_HAS_TEXCOORD && (MAT_ALPHA_TEST || MAT_ALPHA_TEST_PREDEPTH) && RES_HAS_DiffuseTexture
+	#if !defined(VSOUT_HAS_TEXCOORD)
+		#define VSOUT_HAS_TEXCOORD 1
+	#endif
+#elif BLUE
+#elif RED
+#else
+	#undef VSOUT_HAS_TANGENT_FRAME
+	#undef VSOUT_HAS_TEXCOORD
+	#undef GEO_HAS_TEXCOORD
+#endif
+			)--"))
 	};
 
 	static void FindShaderSources(
@@ -331,6 +354,34 @@ static const int NonPreprocessorLine0 = 0;
 
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt0);
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(utDataMount);
+	}
+
+	TEST_CASE( "ShaderParser-SelectorPreconfiguration", "[shader_parser]" )
+	{
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto utDataMount = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
+
+		ShaderSourceParser::SelectorPreconfiguration preconfig{"ut-data/selector-preconfiguration.hlsl"};
+		ParameterBox inputSelectors;
+		inputSelectors.SetParameter("GEO_HAS_TEXCOORD", 1);
+		inputSelectors.SetParameter("MAT_ALPHA_TEST", 1);
+		inputSelectors.SetParameter("RES_HAS_DiffuseTexture", 1);
+		auto filteredSelectors = preconfig.Preconfigure(std::move(inputSelectors));
+
+		std::stringstream str;
+		str << preconfig << std::endl;
+		INFO(str.str());
+
+		REQUIRE(filteredSelectors.HasParameter("MAT_ALPHA_TEST"));
+		REQUIRE(filteredSelectors.HasParameter("RES_HAS_DiffuseTexture"));
+		REQUIRE(filteredSelectors.HasParameter("GEO_HAS_TEXCOORD"));
+		REQUIRE(filteredSelectors.HasParameter("VSOUT_HAS_TEXCOORD"));
+
+		inputSelectors = {};
+		inputSelectors.SetParameter("GEO_HAS_TEXCOORD", 1);
+		inputSelectors.SetParameter("BLUE", 1);
+		filteredSelectors = preconfig.Preconfigure(std::move(inputSelectors));
+		REQUIRE(filteredSelectors.HasParameter("GEO_HAS_TEXCOORD"));
 	}
 
 }
