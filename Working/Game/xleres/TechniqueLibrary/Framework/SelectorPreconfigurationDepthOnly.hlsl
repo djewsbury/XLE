@@ -11,9 +11,14 @@
 		#if !defined(VSOUT_HAS_TEXCOORD)
 			#define VSOUT_HAS_TEXCOORD 1
 		#endif
+	#elif GEO_HAS_TEXCOORD && (MAT_ALPHA_TEST || MAT_ALPHA_TEST_PREDEPTH) && RES_HAS_DiffuseTexture
+		#if !defined(VSOUT_HAS_TEXCOORD)
+			#define VSOUT_HAS_TEXCOORD 1
+		#endif
 	#else
 		#undef VSOUT_HAS_TANGENT_FRAME
 		#undef VSOUT_HAS_TEXCOORD
+		#undef GEO_HAS_TEXCOORD
 	#endif
 	#if GEO_HAS_NORMAL
 		#if !defined(VSOUT_HAS_NORMAL)
@@ -29,7 +34,7 @@
 	#undef GEO_HAS_NORMAL
 	#undef VSOUT_HAS_TANGENT_FRAME
 
-	#if GEO_HAS_TEXCOORD && (MAT_ALPHA_TEST==1)
+	#if GEO_HAS_TEXCOORD && (MAT_ALPHA_TEST || MAT_ALPHA_TEST_PREDEPTH) && RES_HAS_DiffuseTexture
 		#if !defined(VSOUT_HAS_TEXCOORD)
 			#define VSOUT_HAS_TEXCOORD 1
 		#endif
