@@ -87,6 +87,51 @@ namespace BufferUploads
         return std::make_shared<BasicRawDataPacket>(data.size(), data, rowAndSlicePitch);
     }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+    class VectorRawDataPacket : public IDataPacket
+    {
+    public:
+        virtual IteratorRange<void*> GetData(SubResourceId subRes = {}) override;
+        virtual TexturePitches GetPitches(SubResourceId subRes = {}) const override;
+
+        VectorRawDataPacket(std::vector<uint8_t>&& data, TexturePitches pitches = TexturePitches());
+        virtual ~VectorRawDataPacket();
+    protected:
+        std::vector<uint8_t> _data; 
+        TexturePitches _pitches;
+
+        VectorRawDataPacket(const VectorRawDataPacket&) = delete;
+        VectorRawDataPacket& operator=(const VectorRawDataPacket&) = delete;
+    };
+
+
+    VectorRawDataPacket::VectorRawDataPacket(std::vector<uint8_t>&& data, TexturePitches pitches)
+    : _data(std::move(data)), _pitches(pitches)    
+    {}
+
+    VectorRawDataPacket::~VectorRawDataPacket()
+    {}
+
+    IteratorRange<void*> VectorRawDataPacket::GetData(SubResourceId subRes)
+    {
+        assert(subRes._mip == 0 && subRes._arrayLayer == 0);
+        return MakeIteratorRange(_data); 
+    }
+    
+    TexturePitches VectorRawDataPacket::GetPitches(SubResourceId subRes) const
+    {
+        assert(subRes._mip == 0 && subRes._arrayLayer == 0);
+        return _pitches; 
+    }
+
+    std::shared_ptr<IDataPacket> CreateBasicPacket(std::vector<uint8_t>&& data, TexturePitches rowAndSlicePitch)
+    {
+        return std::make_shared<VectorRawDataPacket>(std::move(data), rowAndSlicePitch);
+    }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
     std::shared_ptr<IDataPacket> CreateEmptyPacket(const ResourceDesc& desc)
     {
             // Create an empty packet of the appropriate size for the given desc

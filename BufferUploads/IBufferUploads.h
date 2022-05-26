@@ -267,6 +267,10 @@ namespace BufferUploads
         IteratorRange<const void*> data = {}, 
         TexturePitches pitches = TexturePitches());
 
+    buffer_upload_dll_export std::shared_ptr<IDataPacket> CreateBasicPacket(
+        std::vector<uint8_t>&& data, 
+        TexturePitches pitches = TexturePitches());
+
     buffer_upload_dll_export std::shared_ptr<IDataPacket> CreateEmptyPacket(const ResourceDesc& desc);
     buffer_upload_dll_export std::shared_ptr<IDataPacket> CreateEmptyLinearBufferPacket(size_t size);
     buffer_upload_dll_export std::unique_ptr<IManager> CreateManager(RenderCore::IDevice& renderDevice);
