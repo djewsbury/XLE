@@ -19,13 +19,20 @@ namespace RenderCore { namespace Assets
 	class ShaderPatchCollection
 	{
 	public:
+		// getters
 		IteratorRange<const std::pair<std::string, ShaderSourceParser::InstantiationRequest>*> GetPatches() const { return MakeIteratorRange(_patches); }
 		StringSection<> GetDescriptorSetFileName() const { return MakeStringSection(_descriptorSet.begin(), _descriptorSet.end()); }
 		StringSection<> GetPreconfigurationFileName() const { return MakeStringSection(_preconfiguration.begin(), _preconfiguration.end()); }
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
-		uint64_t GetHash() const { return _hash; }
+
+		// setters
+		void AddPatch(const std::string& name, const ShaderSourceParser::InstantiationRequest&);
+		void SetDescriptorSetFileName(const std::string&);
+		void SetPreconfigurationFileName(const std::string&);
 
 		void MergeIn(const ShaderPatchCollection& dest);
+
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+		uint64_t GetHash() const;
 
 		friend bool operator<(const ShaderPatchCollection& lhs, const ShaderPatchCollection& rhs);
 		friend bool operator<(const ShaderPatchCollection& lhs, uint64_t rhs);

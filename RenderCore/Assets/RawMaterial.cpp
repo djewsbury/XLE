@@ -485,6 +485,69 @@ namespace RenderCore { namespace Assets
         return result;
     }
 
+    void RawMaterial::BindSampler(const std::string& name, const SamplerDesc& sampler)
+    {
+        auto i = std::find_if(_samplers.begin(), _samplers.end(), [name](const auto& q) { return q.first == name; });
+        if (i != _samplers.end()) {
+            i->second = sampler;
+        } else
+            _samplers.emplace_back(name, sampler);
+    }
+
+    void RawMaterial::AddInheritted(const std::string& value)
+    {
+        if (std::find(_inherit.begin(), _inherit.end(), value) == _inherit.end())
+            _inherit.emplace_back(value);
+    }
+
+    RenderStateSet& RenderStateSet::SetDoubleSided(bool newValue)
+    {
+        _doubleSided = newValue;
+        _flag |= Flag::DoubleSided;
+        return *this;
+    }
+
+    RenderStateSet& RenderStateSet::SetWireframe(bool newValue)
+    {
+        _wireframe = newValue;
+        _flag |= Flag::Wireframe;
+        return *this;
+    }
+
+    RenderStateSet& RenderStateSet::SetWriteMask(unsigned newValue)
+    {
+        assert((newValue & ((1u<<4u)-1u)) == newValue);     // only lower 4 bits are used
+        _writeMask = newValue;
+        _flag |= Flag::WriteMask;
+        return *this;
+    }
+
+    RenderStateSet& RenderStateSet::SetBlendType(BlendType newValue)
+    {
+        assert((unsigned(newValue) & ((1u<<4u)-1u)) == unsigned(newValue));
+        _blendType = newValue;
+        _flag |= Flag::BlendType;
+        return *this;
+    }
+
+    RenderStateSet& RenderStateSet::SetForwardBlend(Blend src, Blend dst, BlendOp op)
+    {
+        assert((unsigned(src) & ((1u<<5u)-1u)) == unsigned(src));
+        assert((unsigned(dst) & ((1u<<5u)-1u)) == unsigned(dst));
+        assert((unsigned(op) & ((1u<<5u)-1u)) == unsigned(op));
+        _forwardBlendSrc = src;
+        _forwardBlendDst = dst;
+        _forwardBlendOp = op;
+        _flag |= Flag::ForwardBlend;
+        return *this;
+    }
+
+    RenderStateSet& RenderStateSet::SetDepthBias(int newValue)
+    {
+        _depthBias = newValue;
+        return *this;
+    }
+
 	RawMatConfigurations::RawMatConfigurations(
 		const ::Assets::Blob& blob,
 		const ::Assets::DependencyValidation& depVal,

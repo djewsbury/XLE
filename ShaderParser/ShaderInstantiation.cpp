@@ -430,5 +430,6 @@ namespace ShaderSourceParser
 	}
 
 	InstantiationRequest::InstantiationRequest(const std::string& archiveName) : _archiveName(archiveName) {}
+	InstantiationRequest::InstantiationRequest(const char archiveName[]) : _archiveName(archiveName) {}
 	InstantiationRequest::~InstantiationRequest() {}
 }

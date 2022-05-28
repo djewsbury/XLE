@@ -45,7 +45,9 @@ namespace ShaderSourceParser
 		InstantiationRequest& operator=(InstantiationRequest&&) = default;
 		InstantiationRequest(const InstantiationRequest&);
 		InstantiationRequest& operator=(const InstantiationRequest&);
-		InstantiationRequest(const std::string& archiveName = std::string{});
+		InstantiationRequest() = default;
+		InstantiationRequest(const std::string& archiveName);
+		InstantiationRequest(const char archiveName[]);
 		~InstantiationRequest();
 	};
 

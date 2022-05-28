@@ -125,6 +125,13 @@ namespace RenderCore { namespace Assets
 
         int             _depthBias;     // do we need all of the bits for this?
 
+        RenderStateSet& SetDoubleSided(bool);
+        RenderStateSet& SetWireframe(bool);
+        RenderStateSet& SetWriteMask(unsigned);
+        RenderStateSet& SetBlendType(BlendType);
+        RenderStateSet& SetForwardBlend(Blend src, Blend dst, BlendOp op = BlendOp::Add);
+        RenderStateSet& SetDepthBias(int);
+
         uint64 GetHash() const;
         RenderStateSet();
     };
@@ -155,6 +162,15 @@ namespace RenderCore { namespace Assets
 		ShaderPatchCollection _patchCollection;
 
         std::vector<std::string> _inherit;
+
+        template<typename Value>
+            void BindResource(StringSection<>, const Value&);
+        template<typename Value>
+            void SetSelector(StringSection<>, const Value&);
+        template<typename Value>
+            void SetUniform(StringSection<>, const Value&);
+        void BindSampler(const std::string&, const SamplerDesc&);
+        void AddInheritted(const std::string&);
 
 		void					    MergeIn(const RawMaterial& src);
 		std::vector<std::string>	ResolveInherited(const ::Assets::DirectorySearchRules& searchRules) const;
@@ -225,6 +241,10 @@ namespace RenderCore { namespace Assets
     void ResolveMaterialFilename(
         ::Assets::ResChar resolvedFile[], unsigned resolvedFileCount,
         const ::Assets::DirectorySearchRules& searchRules, StringSection<char> baseMatName);
+
+    template<typename Value> void RawMaterial::BindResource(StringSection<> name, const Value& value) { _resources.SetParameter(name, value); }
+    template<typename Value> void RawMaterial::SetSelector(StringSection<> name, const Value& value) { _selectors.SetParameter(name, value); }
+    template<typename Value> void RawMaterial::SetUniform(StringSection<> name, const Value& value) { _uniforms.SetParameter(name, value); }
 
     inline RenderStateSet::RenderStateSet()
     {

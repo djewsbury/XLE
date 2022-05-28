@@ -15,6 +15,8 @@
 
 namespace RenderCore { namespace Assets
 {
+	static const uint64_t s_rebuildHash = ~0ull;
+
 	void ShaderPatchCollection::MergeIn(const ShaderPatchCollection& src)
 	{
 		for (const auto&p:src._patches) {
@@ -39,6 +41,34 @@ namespace RenderCore { namespace Assets
 		SortAndCalculateHash();
 		::Assets::DependencyValidationMarker depVals[] { _depVal, src._depVal };
 		_depVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
+	}
+
+	void ShaderPatchCollection::AddPatch(const std::string& name, const ShaderSourceParser::InstantiationRequest& instRequest)
+	{
+		auto i = std::find_if(_patches.begin(), _patches.end(), [name](const auto& q) { return q.first == name; });
+		if (i != _patches.end())
+			Throw(std::runtime_error("Cannot add shader patch named (" + name + ") because one with this name already exists"));
+		_patches.emplace_back(name, instRequest);
+		_hash = s_rebuildHash;
+	}
+
+	void ShaderPatchCollection::SetDescriptorSetFileName(const std::string& name)
+	{
+		_descriptorSet = name;
+		_hash = s_rebuildHash;
+	}
+
+	void ShaderPatchCollection::SetPreconfigurationFileName(const std::string& name)
+	{
+		_preconfiguration = name;
+		_hash = s_rebuildHash;
+	}
+
+	uint64_t ShaderPatchCollection::GetHash() const
+	{
+		if (_hash == s_rebuildHash)
+			const_cast<ShaderPatchCollection*>(this)->SortAndCalculateHash();
+		return _hash;
 	}
 
 	ShaderPatchCollection::ShaderPatchCollection()
