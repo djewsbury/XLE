@@ -15,6 +15,7 @@ PipelineLayout GraphicsMain
 	{
 		float3x4 LocalToWorld;
 		float3 LocalSpaceView;
+		uint Dummy;
 	};
 };
 
@@ -30,6 +31,7 @@ PipelineLayout GraphicsForwardPlus
 	{
 		float3x4 LocalToWorld;
 		float3 LocalSpaceView;
+		uint Dummy;
 	};
 };
 
@@ -45,6 +47,5 @@ PipelineLayout GraphicsProbePrepare
 		float3x4 LocalToWorld;
 		float3 LocalSpaceView;
 		uint ViewMask;
-		// uint4 ViewIndices[4];
 	};
 };

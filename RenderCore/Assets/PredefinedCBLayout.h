@@ -53,6 +53,7 @@ namespace RenderCore { namespace Assets
         std::vector<uint8> BuildCBDataAsVector(const ParameterBox& parameters, ShaderLanguage lang) const;
         SharedPkt BuildCBDataAsPkt(const ParameterBox& parameters, ShaderLanguage lang) const;
         unsigned GetSize(ShaderLanguage lang) const;
+        unsigned GetSize_NoPostfix(ShaderLanguage lang) const;
         std::vector<ConstantBufferElementDesc> MakeConstantBufferElements(ShaderLanguage lang) const;
 
 		// Reorder the given elements to try to find an ordering that will minimize the
@@ -96,6 +97,7 @@ namespace RenderCore { namespace Assets
 
         // Similar to the offset values, the size of the CB depends on what shader language rules are used
         unsigned _cbSizeByLanguage[AlignmentRules_Max];
+        unsigned _cbSizeByLanguageNoPostfix[AlignmentRules_Max];
 
         friend class PredefinedCBLayoutFile;
 		friend class PredefinedDescriptorSetLayout;

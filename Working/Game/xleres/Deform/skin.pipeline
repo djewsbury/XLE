@@ -27,5 +27,6 @@ PipelineLayout Main
 		uint SoftInfluenceCount;
 		uint FirstJointTransform;
 		uint SkinParamsIdx;
+		uint JointMatricesInstanceStride;
 	};
 };

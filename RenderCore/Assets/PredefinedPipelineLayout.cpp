@@ -245,7 +245,7 @@ namespace RenderCore { namespace Assets
 				auto& binding = pushConstantBindings[pushConstantBindingsCount++];
 				binding._name = _vsPushConstants.first;
 				binding._shaderStage = ShaderStage::Vertex;
-				binding._cbSize = _vsPushConstants.second->GetSize(language);
+				binding._cbSize = _vsPushConstants.second->GetSize_NoPostfix(language);		// don't align end to a vector boundary
 				binding._cbElements = _vsPushConstants.second->MakeConstantBufferElements(language);
 			}
 
@@ -253,7 +253,7 @@ namespace RenderCore { namespace Assets
 				auto& binding = pushConstantBindings[pushConstantBindingsCount++];
 				binding._name = _psPushConstants.first;
 				binding._shaderStage = ShaderStage::Pixel;
-				binding._cbSize = _psPushConstants.second->GetSize(language);
+				binding._cbSize = _psPushConstants.second->GetSize_NoPostfix(language);		// don't align end to a vector boundary
 				binding._cbElements = _psPushConstants.second->MakeConstantBufferElements(language);
 			}
 
@@ -261,14 +261,14 @@ namespace RenderCore { namespace Assets
 				auto& binding = pushConstantBindings[pushConstantBindingsCount++];
 				binding._name = _gsPushConstants.first;
 				binding._shaderStage = ShaderStage::Geometry;
-				binding._cbSize = _gsPushConstants.second->GetSize(language);
+				binding._cbSize = _gsPushConstants.second->GetSize_NoPostfix(language);		// don't align end to a vector boundary
 				binding._cbElements = _gsPushConstants.second->MakeConstantBufferElements(language);
 			}
 			if (_csPushConstants.second) {
 				auto& binding = pushConstantBindings[pushConstantBindingsCount++];
 				binding._name = _csPushConstants.first;
 				binding._shaderStage = ShaderStage::Compute;
-				binding._cbSize = _csPushConstants.second->GetSize(language);
+				binding._cbSize = _csPushConstants.second->GetSize_NoPostfix(language);		// don't align end to a vector boundary
 				binding._cbElements = _csPushConstants.second->MakeConstantBufferElements(language);
 			}
 			assert(pushConstantBindingsCount <= dimof(pushConstantBindings));

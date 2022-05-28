@@ -38,6 +38,8 @@ float4x4 	SysUniform_GetPrevWorldToClip() { return PrevWorldToClip; }
 		float3 LocalSpaceView;
 		#if VERTEX_ID_VIEW_INSTANCING
 			uint ViewMask;
+		#else
+			uint Dummy;		// CPU code always writes this, so we need space for it
 		#endif
 	} LocalTransform;
 

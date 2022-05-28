@@ -25,8 +25,10 @@ namespace RenderCore { namespace Assets
 
     PredefinedCBLayout::PredefinedCBLayout(StringSection<::Assets::ResChar> initializer)
     {
-		for (unsigned c=0; c<dimof(_cbSizeByLanguage); ++c)
+		for (unsigned c=0; c<dimof(_cbSizeByLanguage); ++c) {
+            _cbSizeByLanguageNoPostfix[c] = 0;
             _cbSizeByLanguage[c] = 0;
+        }
 		_validationCallback = ::Assets::GetDepValSys().Make(initializer);
 
 		TRY {
@@ -65,8 +67,10 @@ namespace RenderCore { namespace Assets
         const ::Assets::DependencyValidation& depVal)
     : _validationCallback(depVal)
     {
-        for (unsigned c=0; c<dimof(_cbSizeByLanguage); ++c)
+        for (unsigned c=0; c<dimof(_cbSizeByLanguage); ++c) {
+            _cbSizeByLanguageNoPostfix[c] = 0;
             _cbSizeByLanguage[c] = 0;
+        }
         ConditionalProcessingTokenizer tokenizer{source};
         Parse(tokenizer);
         if (!tokenizer.Remaining().IsEmpty())
@@ -78,8 +82,10 @@ namespace RenderCore { namespace Assets
         const ::Assets::DependencyValidation& depVal)
     : _validationCallback(depVal)
     {
-        for (unsigned c=0; c<dimof(_cbSizeByLanguage); ++c)
+        for (unsigned c=0; c<dimof(_cbSizeByLanguage); ++c) {
+            _cbSizeByLanguageNoPostfix[c] = 0;
             _cbSizeByLanguage[c] = 0;
+        }
         Parse(tokenizer);
     }
 
@@ -301,8 +307,10 @@ namespace RenderCore { namespace Assets
             AppendElement(*this, parsed, cbIterator);
         }
 
-        for (unsigned c=0; c<dimof(cbIterator); ++c)
+        for (unsigned c=0; c<dimof(cbIterator); ++c) {
+            _cbSizeByLanguageNoPostfix[c] = cbIterator[c];
             _cbSizeByLanguage[c] = CeilToMultiplePow2(cbIterator[c], 16);
+        }
     }
 
     static PredefinedCBLayout::AlignmentRules AlignmentRulesForLanguage(ShaderLanguage lang)
@@ -379,6 +387,12 @@ namespace RenderCore { namespace Assets
         return _cbSizeByLanguage[alignmentRules];
     }
 
+    unsigned PredefinedCBLayout::GetSize_NoPostfix(ShaderLanguage lang) const
+    {
+        unsigned alignmentRules = AlignmentRulesForLanguage(lang);
+        return _cbSizeByLanguageNoPostfix[alignmentRules];
+    }
+
     PredefinedCBLayout PredefinedCBLayout::Filter(const std::unordered_map<std::string, int>& definedTokens)
     {
         PredefinedCBLayout result;
@@ -404,8 +418,10 @@ namespace RenderCore { namespace Assets
             }
         }
 
-        for (unsigned c=0; c<AlignmentRules_Max; ++c)
+        for (unsigned c=0; c<AlignmentRules_Max; ++c) {
+            result._cbSizeByLanguageNoPostfix[c] = cbIterator[c];
             result._cbSizeByLanguage[c] = CeilToMultiplePow2(cbIterator[c], 16);
+        }
         return result;
     }
 
@@ -444,14 +460,18 @@ namespace RenderCore { namespace Assets
         for (auto&e:elements)
             AppendElement(*this, e, cbIterator);
 
-        for (unsigned c=0; c<dimof(cbIterator); ++c)
+        for (unsigned c=0; c<dimof(cbIterator); ++c) {
+            _cbSizeByLanguageNoPostfix[c] = cbIterator[c];
             _cbSizeByLanguage[c] = CeilToMultiplePow2(cbIterator[c], 16);
+        }
     }
 
     PredefinedCBLayout::PredefinedCBLayout()
     {
-        for (unsigned c=0; c<dimof(_cbSizeByLanguage); ++c)
+        for (unsigned c=0; c<dimof(_cbSizeByLanguage); ++c) {
+            _cbSizeByLanguageNoPostfix[c] = 0;
             _cbSizeByLanguage[c] = 0;
+        }
     }
 
     PredefinedCBLayout::~PredefinedCBLayout() {}
@@ -583,8 +603,10 @@ namespace RenderCore { namespace Assets
                 if (!XlEqString(token._value, ";"))
                     Throw(FormatException(StringMeld<256>() << "Expecting ; after }, but got " << token._value, token._start));
 
-                for (unsigned c=0; c<dimof(currentLayout->_cbSizeByLanguage); ++c)
+                for (unsigned c=0; c<dimof(currentLayout->_cbSizeByLanguage); ++c) {
+                    currentLayout->_cbSizeByLanguageNoPostfix[c] = currentLayoutCBIterator[c];
                     currentLayout->_cbSizeByLanguage[c] = CeilToMultiplePow2(currentLayoutCBIterator[c], 16);
+                }
                 _layouts.insert(std::make_pair(currentLayoutName, std::move(currentLayout)));
                 currentLayoutName = {};
                 currentLayout = nullptr;
@@ -601,8 +623,10 @@ namespace RenderCore { namespace Assets
         }
 
         if (currentLayout) {
-            for (unsigned c=0; c<dimof(currentLayout->_cbSizeByLanguage); ++c)
+            for (unsigned c=0; c<dimof(currentLayout->_cbSizeByLanguage); ++c) {
+                currentLayout->_cbSizeByLanguageNoPostfix[c] = currentLayoutCBIterator[c];
                 currentLayout->_cbSizeByLanguage[c] = CeilToMultiplePow2(currentLayoutCBIterator[c], 16);
+            }
             _layouts.insert(std::make_pair(currentLayoutName, std::move(currentLayout)));
         }
     }
