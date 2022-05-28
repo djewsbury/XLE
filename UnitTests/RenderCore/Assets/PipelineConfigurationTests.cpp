@@ -101,6 +101,7 @@ namespace UnitTests
 					{
 						float3x4 LocalToWorld;
 						float3 LocalSpaceView;
+						uint Dummy;
 					};
 
 					PSPushConstants pspush
