@@ -837,10 +837,21 @@ namespace RenderCore { namespace Techniques
 	{
 		_completionCommandList = 0;
 		_pimpl = std::make_unique<Pimpl>(std::move(drawablesPool), std::move(pipelineAccelerators));
-		Add(construction, deformAcceleratorPool, deformAccelerator);
-		std::promise<BufferUploads::CommandListID> uploadPromise;
-		_pimpl->_uploadFuture = uploadPromise.get_future();
-		_pimpl->_pendingGeos.LoadPendingStaticResources(std::move(uploadPromise), bufferUploads);
+		TRY {
+			Add(construction, deformAcceleratorPool, deformAccelerator);
+			std::promise<BufferUploads::CommandListID> uploadPromise;
+			_pimpl->_uploadFuture = uploadPromise.get_future();
+			_pimpl->_pendingGeos.LoadPendingStaticResources(std::move(uploadPromise), bufferUploads);
+		} CATCH (const std::exception& e) {
+			std::vector<::Assets::DependencyValidationMarker> depValMarkers;
+			depValMarkers.reserve(_pimpl->_pendingDepVals.size());
+			for (const auto& d:_pimpl->_pendingDepVals) depValMarkers.push_back(d);
+			std::sort(depValMarkers.begin(), depValMarkers.end());
+			depValMarkers.erase(std::unique(depValMarkers.begin(), depValMarkers.end()), depValMarkers.end());
+			auto depVal = ::Assets::GetDepValSys().MakeOrReuse(depValMarkers);
+			Throw(::Assets::Exceptions::ConstructionError(e, depVal));
+
+		} CATCH_END
 	}
 
 	DrawableConstructor::~DrawableConstructor() {}
