@@ -253,6 +253,7 @@ namespace PlatformRig
                 RenderCore::Metal::Internal::ImageLayout::ColorAttachmentOptimal, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
                 RenderCore::Metal::Internal::ImageLayout::PresentSrc, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
 
+            endAnnotatorFrame = false;
             context->GetAnnotator().Frame_End();        // calling Frame_End() can prevent creating a new command list immediately after the Present() call (which ends the previous command list)
 
 			{

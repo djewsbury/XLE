@@ -73,7 +73,11 @@ VSOUT BuildVSOUT(
 				output.color.a = workingVertex.color0.a;
 			#endif
 		} else {
-			output.color = float4(1,1,1,1);
+			#if VSOUT_HAS_VERTEX_ALPHA
+				output.color = float4(1,1,1,1);
+			#else
+				output.color = float3(1,1,1);
+			#endif
 		}
 	#elif VSOUT_HAS_VERTEX_ALPHA
 		if (workingVertex.colorCount >= 1) {

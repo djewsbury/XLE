@@ -52,7 +52,7 @@ DepthPlusEncoded depthPlusWithEarlyRejection(VSOUT geo)
 	return EncodeDepthPlus(sample, int2(prevPos.xy));
 }
 
-float4 flatColorEarlyRejection(VSOUT geo) : SV_Target0
+float4 flatColorWithEarlyRejection(VSOUT geo) : SV_Target0
 {
     if (EarlyRejectionTest(geo))
         discard;
