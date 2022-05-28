@@ -238,6 +238,8 @@ namespace RenderCore { namespace Techniques
 
 					if (_generateBindingInfo)
 						slotBindingInfo._binding = (StringMeldInPlace(stringMeldBuffer) << "Sampler: " << metalSampler->GetDesc()).AsString();
+				} else {
+					Throw(std::runtime_error("No settings given for sampler (" + s._name + ") while building material descriptor set"));
 				}
 			} 
 			

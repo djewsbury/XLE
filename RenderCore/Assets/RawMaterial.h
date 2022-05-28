@@ -146,10 +146,11 @@ namespace RenderCore { namespace Assets
     class RawMaterial
     {
     public:
-        ParameterBox	_resourceBindings;
-        ParameterBox	_matParamBox;
+        ParameterBox	_resources;
+        ParameterBox	_selectors;
+        ParameterBox	_uniforms;
         RenderStateSet	_stateSet;
-        ParameterBox	_constants;
+        std::vector<std::pair<std::string, SamplerDesc>> _samplers;
         
 		ShaderPatchCollection _patchCollection;
 
@@ -200,10 +201,11 @@ namespace RenderCore { namespace Assets
     class ResolvedMaterial
     {
     public:
-        ParameterBox	_resourceBindings;
-        ParameterBox	_matParamBox;
+        ParameterBox	_resources;
+        ParameterBox	_selectors;
+        ParameterBox	_uniforms;
         RenderStateSet	_stateSet;
-        ParameterBox	_constants;
+        std::vector<std::pair<std::string, SamplerDesc>> _samplers;
         
 		ShaderPatchCollection _patchCollection;
         std::vector<::Assets::DependentFileState> _depFileStates;

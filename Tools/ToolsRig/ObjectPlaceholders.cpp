@@ -280,7 +280,7 @@ namespace ToolsRig
 	{
 		return pipelineAcceleratorPool->CreatePipelineAccelerator(
 			std::make_shared<RenderCore::Assets::ShaderPatchCollection>(mat._patchCollection),
-			mat._matParamBox,
+			mat._selectors,
 			IteratorRange<const InputElementDesc*>{},
 			Topology::TriangleList,
 			mat._stateSet);

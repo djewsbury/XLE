@@ -17,6 +17,7 @@
 #include "../../Utility/Streams/StreamDOM.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Streams/FormatterUtils.h"
+#include "../../Utility/Streams/SerializationUtils.h"
 #include "../../Utility/StringFormat.h"
 
 namespace RenderCore { namespace Assets
@@ -217,6 +218,85 @@ namespace RenderCore { namespace Assets
         }
     }
 
+    static SamplerDesc DeserializeSamplerState(InputStreamFormatter<>& formatter)
+    {
+        // See also SamplerDesc ParseFixedSampler(ConditionalProcessingTokenizer& iterator) in PredefinedDescriptorSetLayout
+        // Possibly we could create a IDynamicFormatter<> wrapper for ConditionalProcessingTokenizer and use that to make a single
+        // deserialization method?
+        char exceptionBuffer[256];
+        SamplerDesc result{};
+        StringSection<> keyname;
+		while (formatter.TryKeyedItem(keyname)) {
+			if (XlEqString(keyname, "Filter")) {
+				auto value = RequireStringValue(formatter);
+				auto filterMode = AsFilterMode(value);
+				if (!filterMode)
+					Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown filter mode (" << value << ")", formatter.GetLocation()));
+				result._filter = filterMode.value();
+			} else if (XlEqString(keyname, "AddressU") || XlEqString(keyname, "AddressV") || XlEqString(keyname, "AddressW") ) {
+				auto value = RequireStringValue(formatter);
+                auto addressMode = AsAddressMode(value);
+				if (!addressMode)
+					Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown address mode (" << value << ")", formatter.GetLocation()));
+				if (XlEqString(keyname, "AddressU")) result._addressU = addressMode.value();
+				if (XlEqString(keyname, "AddressV")) result._addressV = addressMode.value();
+				else result._addressW = addressMode.value();
+			} else if (XlEqString(keyname, "Comparison")) {
+				auto value = RequireStringValue(formatter);
+				auto compareMode = AsCompareOp(value);
+				if (!compareMode)
+					Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown comparison mode (" << value << ")", formatter.GetLocation()));
+				result._comparison = compareMode.value();
+			} else {
+				auto flag = AsSamplerDescFlag(keyname);
+				if (!flag)
+					Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown sampler field (" << keyname << ")", formatter.GetLocation()));
+				result._flags |= flag.value();
+			}
+		}
+
+		return result;
+    }
+
+    static OutputStreamFormatter& SerializeSamplerDesc(OutputStreamFormatter& str, const SamplerDesc& sampler)
+    {
+        str.WriteKeyedValue("Filter", AsString(sampler._filter));
+        str.WriteKeyedValue("AddressU", AsString(sampler._addressU));
+        str.WriteKeyedValue("AddressV", AsString(sampler._addressV));
+        str.WriteKeyedValue("AddressW", AsString(sampler._addressW));
+        str.WriteKeyedValue("Comparison", AsString(sampler._comparison));
+        for (auto f:{SamplerDescFlags::DisableMipmaps, SamplerDescFlags::UnnormalizedCoordinates})
+            if (sampler._flags & f)
+                str.WriteSequencedValue(SamplerDescFlagAsString(f));
+        return str;
+    }
+
+    std::vector<std::pair<std::string, SamplerDesc>> DeserializeSamplerStates(InputStreamFormatter<>& formatter)
+    {
+        std::vector<std::pair<std::string, SamplerDesc>> result;
+        StringSection<> keyName;
+        while (formatter.TryKeyedItem(keyName)) {
+            auto str = keyName.AsString();
+            auto i = std::find_if(result.begin(), result.end(), [str](const auto& q) { return q.first==str; });
+            if (i != result.end())
+                Throw(FormatException(StringMeld<256>() << "Multiple samplers with the same name (" << str << ")", formatter.GetLocation()));
+            RequireBeginElement(formatter);
+            result.emplace_back(str, DeserializeSamplerState(formatter));
+            RequireEndElement(formatter);
+        }
+        return result;
+    }
+
+    static OutputStreamFormatter& SerializeSamplerStates(OutputStreamFormatter& str, const std::vector<std::pair<std::string, SamplerDesc>>& samplers)
+    {
+        for (const auto& s:samplers) {
+            auto ele = str.BeginKeyedElement(s.first);
+            SerializeSamplerDesc(str, s.second);
+            str.EndElement(ele);
+        }
+        return str;
+    }
+
     RenderStateSet Merge(RenderStateSet underride, RenderStateSet override)
     {
         RenderStateSet result = underride;
@@ -274,17 +354,17 @@ namespace RenderCore { namespace Assets
                 RequireBeginElement(formatter);
                 _inherit = DeserializeInheritList(formatter);
                 RequireEndElement(formatter);
-            } else if (XlEqString(eleName, "ShaderParams")) {
+            } else if (XlEqString(eleName, "Selectors")) {
                 RequireBeginElement(formatter);
-                _matParamBox = ParameterBox(formatter);
+                _selectors = ParameterBox(formatter);
                 RequireEndElement(formatter);
-            } else if (XlEqString(eleName, "Constants")) {
+            } else if (XlEqString(eleName, "Uniforms")) {
                 RequireBeginElement(formatter);
-                _constants = ParameterBox(formatter);
+                _uniforms = ParameterBox(formatter);
                 RequireEndElement(formatter);
-            } else if (XlEqString(eleName, "ResourceBindings")) {
+            } else if (XlEqString(eleName, "Resources")) {
                 RequireBeginElement(formatter);
-                _resourceBindings = ParameterBox(formatter);
+                _resources = ParameterBox(formatter);
                 RequireEndElement(formatter);
             } else if (XlEqString(eleName, "States")) {
                 RequireBeginElement(formatter);
@@ -293,6 +373,10 @@ namespace RenderCore { namespace Assets
             } else if (XlEqString(eleName, "Patches")) {
                 RequireBeginElement(formatter);
                 _patchCollection = ShaderPatchCollection(formatter, searchRules, depVal);
+                RequireEndElement(formatter);
+            } else if (XlEqString(eleName, "Samplers")) {
+                RequireBeginElement(formatter);
+                _samplers = DeserializeSamplerStates(formatter);
                 RequireEndElement(formatter);
             } else {
                 SkipValueOrElement(formatter);
@@ -320,21 +404,21 @@ namespace RenderCore { namespace Assets
             formatter.EndElement(ele);
         }
 
-        if (_matParamBox.GetCount() > 0) {
-            auto ele = formatter.BeginKeyedElement("ShaderParams");
-            _matParamBox.SerializeWithCharType<utf8>(formatter);
+        if (_selectors.GetCount() > 0) {
+            auto ele = formatter.BeginKeyedElement("Selectors");
+            _selectors.SerializeWithCharType<utf8>(formatter);
             formatter.EndElement(ele);
         }
 
-        if (_constants.GetCount() > 0) {
-            auto ele = formatter.BeginKeyedElement("Constants");
-            _constants.SerializeWithCharType<utf8>(formatter);
+        if (_uniforms.GetCount() > 0) {
+            auto ele = formatter.BeginKeyedElement("Uniforms");
+            _uniforms.SerializeWithCharType<utf8>(formatter);
             formatter.EndElement(ele);
         }
 
-        if (_resourceBindings.GetCount() > 0) {
-            auto ele = formatter.BeginKeyedElement("ResourceBindings");
-            _resourceBindings.SerializeWithCharType<utf8>(formatter);
+        if (_resources.GetCount() > 0) {
+            auto ele = formatter.BeginKeyedElement("Resources");
+            _resources.SerializeWithCharType<utf8>(formatter);
             formatter.EndElement(ele);
         }
 
@@ -343,14 +427,27 @@ namespace RenderCore { namespace Assets
             SerializeStateSet(formatter, _stateSet);
             formatter.EndElement(ele);
         }
+
+        if (!_samplers.empty()) {
+            auto ele = formatter.BeginKeyedElement("Samplers");
+            SerializeSamplerStates(formatter, _samplers);
+            formatter.EndElement(ele);
+        }
     }
 
 	void RawMaterial::MergeIn(const RawMaterial& src)
 	{
-		_matParamBox.MergeIn(src._matParamBox);
+		_selectors.MergeIn(src._selectors);
         _stateSet = Merge(_stateSet, src._stateSet);
-        _constants.MergeIn(src._constants);
-        _resourceBindings.MergeIn(src._resourceBindings);
+        _uniforms.MergeIn(src._uniforms);
+        _resources.MergeIn(src._resources);
+        for (const auto& s:src._samplers) {
+            auto i = std::find_if(_samplers.begin(), _samplers.end(), [n=s.first](const auto& q) { return q.first == n; });
+            if (i != _samplers.end()) {
+                i->second = s.second;
+            } else
+                _samplers.emplace_back(s);
+        }
 		_patchCollection.MergeIn(src._patchCollection);
 	}
 
@@ -571,21 +668,29 @@ namespace RenderCore { namespace Assets
 
     void MergeIn(ResolvedMaterial& dest, const RawMaterial& source)
     {
-        dest._matParamBox.MergeIn(source._matParamBox);
+        dest._selectors.MergeIn(source._selectors);
         dest._stateSet = Merge(dest._stateSet, source._stateSet);
-        dest._constants.MergeIn(source._constants);
+        dest._uniforms.MergeIn(source._uniforms);
 
 		// Resolve all of the directory names here, as we write into the Techniques::Material
-		for (const auto&b:source._resourceBindings) {
+		for (const auto&b:source._resources) {
 			auto unresolvedName = b.ValueAsString();
 			if (!unresolvedName.empty()) {
 				char resolvedName[MaxPath];
 				source.GetDirectorySearchRules().ResolveFile(resolvedName, unresolvedName);
-				dest._resourceBindings.SetParameter(b.Name(), MakeStringSection(resolvedName));
+				dest._resources.SetParameter(b.Name(), MakeStringSection(resolvedName));
 			} else {
-				dest._resourceBindings.SetParameter(b.Name(), MakeStringSection(unresolvedName));
+				dest._resources.SetParameter(b.Name(), MakeStringSection(unresolvedName));
 			}
 		}
+
+        for (const auto& s:source._samplers) {
+            auto i = std::find_if(dest._samplers.begin(), dest._samplers.end(), [n=s.first](const auto& q) { return q.first == n; });
+            if (i != dest._samplers.end()) {
+                i->second = s.second;
+            } else
+                dest._samplers.emplace_back(s);
+        }
 
 		dest._patchCollection.MergeIn(source._patchCollection);
     }

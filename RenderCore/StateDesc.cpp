@@ -208,6 +208,15 @@ namespace RenderCore
         }
     }
 
+    const char* SamplerDescFlagAsString(SamplerDescFlags::Flag flags)
+    {
+        switch (flags) {
+        case SamplerDescFlags::DisableMipmaps: return "DisableMipmaps";
+        case SamplerDescFlags::UnnormalizedCoordinates: return "UnnormalizedCoordinates";
+        default: return "<<unknown>>";
+        }
+    }
+
     std::optional<AddressMode> AsAddressMode(StringSection<> input)
     {
         if (XlEqString(input, "Wrap")) return AddressMode::Wrap;

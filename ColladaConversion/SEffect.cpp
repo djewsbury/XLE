@@ -64,7 +64,7 @@ namespace ColladaConversion
                         utf8 rebuiltPath[MaxPath];
                         SplitPath<utf8>(image->GetInitFrom()).Simplify().Rebuild(rebuiltPath, dimof(rebuiltPath));
 
-                        dest._resourceBindings.SetParameter(bindingName, (const char*)rebuiltPath);
+                        dest._resources.SetParameter(bindingName, (const char*)rebuiltPath);
                         return;
                     }
                 }
@@ -133,10 +133,10 @@ namespace ColladaConversion
                     auto binding = cfg.GetConstantBindings().AsNative(t.first);
 
                     if (value._type == TechniqueValue::Type::Color) {
-                        matSettings._constants.SetParameter(
+                        matSettings._uniforms.SetParameter(
                             binding.c_str(), value._value);
                     } else {
-                        matSettings._constants.SetParameter(binding.c_str(), value._value[0]);
+                        matSettings._uniforms.SetParameter(binding.c_str(), value._value[0]);
                     }
                     break;
                 }

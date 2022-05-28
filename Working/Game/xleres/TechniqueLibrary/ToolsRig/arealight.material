@@ -2,19 +2,19 @@ sphere=~
 	Patches=~
 		main=~
 			xleres/TechniqueLibrary/ToolsRig/arealight.hlsl::VertexPatch
-	ShaderParams=~
+	Selectors=~
 		SHAPE=1
 
 tube=~
 	Patches=~
 		main=~
 			xleres/TechniqueLibrary/ToolsRig/arealight.hlsl::VertexPatch
-	ShaderParams=~
+	Selectors=~
 		SHAPE=2
 
 rectangle=~
 	Patches=~
 		main=~
 			xleres/TechniqueLibrary/ToolsRig/arealight.hlsl::VertexPatch
-	ShaderParams=~
+	Selectors=~
 		SHAPE=3

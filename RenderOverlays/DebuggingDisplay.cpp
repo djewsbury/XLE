@@ -277,8 +277,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
         {
             RenderCore::Techniques::ImmediateDrawableMaterial result;
             // somewhat awkwardly, we need to protect the lifetime of the shader selector box so it lives as long as the result
-            if (rawMat._matParamBox.GetCount() != 0) {
-                auto newBox = std::make_unique<ParameterBox>(rawMat._matParamBox);
+            if (rawMat._selectors.GetCount() != 0) {
+                auto newBox = std::make_unique<ParameterBox>(rawMat._selectors);
                 result._shaderSelectors = newBox.get();
                 _retainedParameterBoxes.emplace_back(std::move(newBox));
             }

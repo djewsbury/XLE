@@ -38,13 +38,13 @@ namespace UnitTests
 			"test.material",
 			::Assets::AsBlob(R"--(
 				*=~
-					Constants=~
+					Uniforms=~
 						OnEverything=75
 				Material0=~
 					Inherit=~; ./base.material:BaseSetting
-					ShaderParams=~
+					Selectors=~
 						MAT_DOUBLE_SIDED_LIGHTING=1u
-					Constants=~
+					Uniforms=~
 						MaterialDiffuse={0.1f, 0.1f, 0.1f}c
 					States=~
 						DoubleSided=1u
@@ -57,7 +57,7 @@ namespace UnitTests
 			"base.material",
 			::Assets::AsBlob(R"--(
 				BaseSetting=~
-					Constants=~
+					Uniforms=~
 						SharedConstant={1.0f, 1.0f, 1.0f}c
 			)--"))
 	};
@@ -221,12 +221,12 @@ namespace UnitTests
 			REQUIRE(cfgs._configurations[1] == "Material1");
 
 			auto material0 = ::Assets::ActualizeAssetPtr<RenderCore::Assets::RawMaterial>("fake-model:Material0");
-			REQUIRE(material0->_constants.GetParameter<float>("Brightness") == 50_a);
-			REQUIRE(Equivalent(material0->_constants.GetParameter<Float3>("Emissive").value(), Float3{0.5f, 0.5f, 0.5f}, 1e-3f));
+			REQUIRE(material0->_uniforms.GetParameter<float>("Brightness") == 50_a);
+			REQUIRE(Equivalent(material0->_uniforms.GetParameter<Float3>("Emissive").value(), Float3{0.5f, 0.5f, 0.5f}, 1e-3f));
 
 			auto material1 = ::Assets::ActualizeAssetPtr<RenderCore::Assets::RawMaterial>("fake-model:Material1");
-			REQUIRE(material1->_constants.GetParameter<float>("Brightness") == 33_a);
-			REQUIRE(Equivalent(material1->_constants.GetParameter<Float3>("Emissive").value(), Float3{2.5f, 0.25f, 0.15f}, 1e-3f));
+			REQUIRE(material1->_uniforms.GetParameter<float>("Brightness") == 33_a);
+			REQUIRE(Equivalent(material1->_uniforms.GetParameter<Float3>("Emissive").value(), Float3{2.5f, 0.25f, 0.15f}, 1e-3f));
 		}
 	}
 

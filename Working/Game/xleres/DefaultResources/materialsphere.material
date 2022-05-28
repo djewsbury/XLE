@@ -1,5 +1,5 @@
 Material=~
-	Constants=~; MetalMin=0; SpecularMin=.5; RoughnessMin=0.1
+	Uniforms=~; MetalMin=0; SpecularMin=.5; RoughnessMin=0.1
 		MaterialDiffuse={0.690526, 0.30101, 0.181573, 1}v
 Diffuse=~
-	Constants=~; MaterialDiffuse={0.128, 0.128, 0.128, 1}v
+	Uniforms=~; MaterialDiffuse={0.128, 0.128, 0.128, 1}v

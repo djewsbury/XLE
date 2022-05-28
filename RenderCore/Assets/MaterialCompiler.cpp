@@ -26,6 +26,20 @@
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/FastParseValue.h"
 
+namespace RenderCore
+{
+	::Assets::BlockSerializer& SerializationOperator(::Assets::BlockSerializer& str, const SamplerDesc& sampler)
+	{
+		str << (uint32_t)sampler._filter;
+		str << (uint32_t)sampler._addressU;
+		str << (uint32_t)sampler._addressV;
+		str << (uint32_t)sampler._addressW;
+		str << (uint32_t)sampler._comparison;
+		str << sampler._flags;
+		return str;
+	}
+}
+
 namespace RenderCore { namespace Assets
 {
 	MaterialGuid MakeMaterialGuid(StringSection<> name)
@@ -207,12 +221,21 @@ namespace RenderCore { namespace Assets
 
 					::Assets::BlockSerializer tempBlock;
 
-					if (resolvedMat._resourceBindings.GetCount())
-						tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachShaderResourceBindings, resolvedMat._resourceBindings);
-					if (resolvedMat._matParamBox.GetCount())
-						tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachSelectors, resolvedMat._matParamBox);
-					if (resolvedMat._constants.GetCount())
-						tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachConstants, resolvedMat._constants);
+					if (resolvedMat._resources.GetCount())
+						tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachShaderResourceBindings, resolvedMat._resources);
+					if (resolvedMat._selectors.GetCount())
+						tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachSelectors, resolvedMat._selectors);
+					if (resolvedMat._uniforms.GetCount())
+						tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachConstants, resolvedMat._uniforms);
+					if (!resolvedMat._samplers.empty()) {
+						tempBlock << (uint32_t)MaterialCommand::AttachSamplerBindings;
+						auto recall = tempBlock.CreateRecall(sizeof(uint32_t));
+						for (auto& s:resolvedMat._samplers) {
+							tempBlock << Hash64(s.first);
+							tempBlock << s.second;
+						}
+						tempBlock.PushSizeValueAtRecall(recall);
+					}
 					tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachStateSet, resolvedMat._stateSet.GetHash());
 
 					if (resolvedMat._patchCollection.GetHash() != 0) {

@@ -89,12 +89,12 @@ namespace UnitTests
 			OutputStreamFormatter formatter(strm);
 
 			RenderCore::Assets::RawMaterial material0;
-			material0._constants = {
+			material0._uniforms = {
 				std::make_pair("Emissive", "{.5, .5, .5}c"),
 				std::make_pair("Brightness", "50")
 			};
 			RenderCore::Assets::RawMaterial material1;
-			material1._constants = {
+			material1._uniforms = {
 				std::make_pair("Emissive", "{2.5, .25, .15}c"),
 				std::make_pair("Brightness", "33")
 			};
