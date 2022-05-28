@@ -326,6 +326,11 @@ namespace RenderCore { namespace Assets
 
 	SamplerDesc ParseFixedSampler(ConditionalProcessingTokenizer& iterator)
 	{
+		#if defined(_DEBUG)
+			auto initialCondition = iterator._preprocessorContext.GetCurrentConditionString();
+		#endif
+
+		char exceptionBuffer[256];
 		SamplerDesc result{};
 		for (;;) {
 			auto next = iterator.PeekNextToken();
@@ -333,13 +338,17 @@ namespace RenderCore { namespace Assets
 				break;
 			iterator.GetNextToken();
 
+			#if defined(_DEBUG)
+				assert(iterator._preprocessorContext.GetCurrentConditionString() == initialCondition); // can't support preprocessor conditions changing mid-sampler
+			#endif
+
 			if (XlEqString(next._value, "Filter")) {
 				if (!XlEqString(iterator.GetNextToken()._value, "="))
 					Throw(FormatException("Expecting '=' after field in sampler desc", iterator.GetLocation()));
 				next = iterator.GetNextToken();
 				auto filterMode = AsFilterMode(next._value);
 				if (!filterMode)
-					Throw(FormatException(StringMeld<256>() << "Unknown filter mode (" << next._value << ")", iterator.GetLocation()));
+					Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown filter mode (" << next._value << ")", iterator.GetLocation()));
 				result._filter = filterMode.value();
 			} else if (XlEqString(next._value, "AddressU") || XlEqString(next._value, "AddressV") || XlEqString(next._value, "AddressW") ) {
 				auto prop = next._value;
@@ -348,7 +357,7 @@ namespace RenderCore { namespace Assets
 				next = iterator.GetNextToken();
 				auto addressMode = AsAddressMode(next._value);
 				if (!addressMode)
-					Throw(FormatException(StringMeld<256>() << "Unknown address mode (" << next._value << ")", iterator.GetLocation()));
+					Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown address mode (" << next._value << ")", iterator.GetLocation()));
 				if (XlEqString(prop, "AddressU")) result._addressU = addressMode.value();
 				if (XlEqString(prop, "AddressV")) result._addressV = addressMode.value();
 				else result._addressW = addressMode.value();
@@ -358,12 +367,12 @@ namespace RenderCore { namespace Assets
 				next = iterator.GetNextToken();
 				auto compareMode = AsCompareOp(next._value);
 				if (!compareMode)
-					Throw(FormatException(StringMeld<256>() << "Unknown comparison mode (" << next._value << ")", iterator.GetLocation()));
+					Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown comparison mode (" << next._value << ")", iterator.GetLocation()));
 				result._comparison = compareMode.value();
 			} else {
 				auto flag = AsSamplerDescFlag(next._value);
 				if (!flag)
-					Throw(FormatException(StringMeld<256>() << "Unknown sampler field (" << next._value << ")", iterator.GetLocation()));
+					Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown sampler field (" << next._value << ")", iterator.GetLocation()));
 				result._flags |= flag.value();
 			}
 
@@ -371,7 +380,7 @@ namespace RenderCore { namespace Assets
 			if (next._value.IsEmpty() || XlEqString(next._value, "}"))
 				break;
 			if (!XlEqString(next._value, ","))
-				Throw(FormatException(StringMeld<256>() << "Expecting comma between values in sampler declaration", iterator.GetLocation()));
+				Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Expecting comma between values in sampler declaration", iterator.GetLocation()));
 			iterator.GetNextToken();
 		}
 
