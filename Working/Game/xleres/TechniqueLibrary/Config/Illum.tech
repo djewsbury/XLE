@@ -6,11 +6,11 @@
 
 Silhouette=~
 	Inherit=~; Shared.tech:Skinnable
-	Preconfiguration=xleres/TechniqueLibrary/Framework/SelectorPreconfiguration.hlsl
+	Preconfiguration=xleres/TechniqueLibrary/Framework/Preconfiguration.hlsl
 
 SilhouetteDepthOnly=~
 	Inherit=~; Shared.tech:Skinnable
-	Preconfiguration=xleres/TechniqueLibrary/Framework/SelectorPreconfigurationDepthOnly.hlsl
+	Preconfiguration=xleres/TechniqueLibrary/Framework/PreconfigurationDepthOnly.hlsl
 
 VertexIdViewInstancing=~
 	Selectors=~

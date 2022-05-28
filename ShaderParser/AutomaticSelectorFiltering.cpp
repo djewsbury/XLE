@@ -387,11 +387,11 @@ namespace ShaderSourceParser
 		return output;
 	}
 
-	SelectorPreconfiguration::SelectorPreconfiguration(StringSection<> filename)
+	SelectorPreconfiguration::SelectorPreconfiguration(StringSection<> filename0, StringSection<> filename1)
 	{
 		::Assets::PreprocessorIncludeHandler handler;
 		TRY {
-			auto analysis = GeneratePreprocessorAnalysisFromFile(filename, &handler);
+			auto analysis = GeneratePreprocessorAnalysisFromFile(filename0, filename1, &handler);
 			_preconfigurationSideEffects = analysis._sideEffects;
 			_depVal = handler.MakeDependencyValidation();
 
@@ -402,8 +402,6 @@ namespace ShaderSourceParser
 				_hash = Hash64(AsPointer(i._substitution.begin()), AsPointer(i._substitution.end()), _hash);
 				_hash = rotl64(_hash, (int8_t)i._type);
 			}
-
-			
 		} CATCH (const std::exception& e) {
 			Throw(::Assets::Exceptions::ConstructionError(e, handler.MakeDependencyValidation()));
 		} CATCH_END

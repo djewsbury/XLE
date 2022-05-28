@@ -21,6 +21,7 @@ namespace RenderCore { namespace Assets
 	public:
 		IteratorRange<const std::pair<std::string, ShaderSourceParser::InstantiationRequest>*> GetPatches() const { return MakeIteratorRange(_patches); }
 		StringSection<> GetDescriptorSetFileName() const { return MakeStringSection(_descriptorSet.begin(), _descriptorSet.end()); }
+		StringSection<> GetPreconfigurationFileName() const { return MakeStringSection(_preconfiguration.begin(), _preconfiguration.end()); }
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		uint64_t GetHash() const { return _hash; }
 
@@ -41,7 +42,7 @@ namespace RenderCore { namespace Assets
 
 	private:
 		std::vector<std::pair<std::string, ShaderSourceParser::InstantiationRequest>> _patches;
-		std::string _descriptorSet;
+		std::string _descriptorSet, _preconfiguration;
 		uint64_t _hash = ~0ull;
 		::Assets::DependencyValidation _depVal;
 

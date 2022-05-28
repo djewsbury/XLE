@@ -130,6 +130,11 @@ namespace Utility
 		StringSection<> inputFilename,
 		IPreprocessorIncludeHandler* includeHandler = nullptr);
 
+	PreprocessorAnalysis GeneratePreprocessorAnalysisFromFile(
+		StringSection<> inputFilename0,
+		StringSection<> inputFilename1,
+		IPreprocessorIncludeHandler* includeHandler = nullptr);
+
 	class IPreprocessorIncludeHandler
 	{
 	public:

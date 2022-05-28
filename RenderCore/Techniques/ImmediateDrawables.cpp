@@ -62,6 +62,7 @@ namespace RenderCore { namespace Techniques
 				nascentDesc->_patchExpansions.emplace_back(s_patchShape, ShaderStage::Pixel);
 				nascentDesc->_patchExpansions.emplace_back(s_patchFill, ShaderStage::Pixel);
 				nascentDesc->_patchExpansions.emplace_back(s_patchOutline, ShaderStage::Pixel);
+				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
 				auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("immediate-renderer");
 				result->SetAsset(std::move(nascentDesc));
@@ -72,6 +73,7 @@ namespace RenderCore { namespace Techniques
 
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntryForTwoLayersShader:ps_*";
 				nascentDesc->_patchExpansions.emplace_back(s_patchTwoLayersShader, ShaderStage::Pixel);
+				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
 				auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("immediate-renderer");
 				result->SetAsset(std::move(nascentDesc));
@@ -91,7 +93,7 @@ namespace RenderCore { namespace Techniques
 			auto templateDesc = std::make_shared<GraphicsPipelineDesc>();
 			templateDesc->_shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":frameworkEntry:vs_*";
 			templateDesc->_shaders[(unsigned)ShaderStage::Pixel] = BASIC_PIXEL_HLSL ":frameworkEntry:ps_*";
-			templateDesc->_selectorPreconfigurationFile = RENDEROVERLAYS_SEL_PRECONFIG;
+			templateDesc->_techniquePreconfigurationFile = RENDEROVERLAYS_SEL_PRECONFIG;
 
 			templateDesc->_rasterization = CommonResourceBox::s_rsDefault;
 			templateDesc->_blend.push_back(CommonResourceBox::s_abStraightAlpha);

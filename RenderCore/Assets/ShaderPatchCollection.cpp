@@ -33,6 +33,8 @@ namespace RenderCore { namespace Assets
 		}
 		if (!src._descriptorSet.empty())
 			_descriptorSet = src._descriptorSet;
+		if (!src._preconfiguration.empty())
+			_preconfiguration = src._preconfiguration;
 
 		SortAndCalculateHash();
 		::Assets::DependencyValidationMarker depVals[] { _depVal, src._depVal };
@@ -83,6 +85,8 @@ namespace RenderCore { namespace Assets
 		}
 		if (!_descriptorSet.empty())
 			_hash = Hash64(_descriptorSet, _hash);
+		if (!_preconfiguration.empty())
+			_hash = Hash64(_preconfiguration, _hash);
 	}
 
 	bool operator<(const ShaderPatchCollection& lhs, const ShaderPatchCollection& rhs) { return lhs.GetHash() < rhs.GetHash(); }
@@ -110,8 +114,10 @@ namespace RenderCore { namespace Assets
 			SerializeInstantiationRequest(formatter, p.second);
 			formatter.EndElement(pele);
 		}
-		if (!patchCollection._descriptorSet.empty())
+		if (!patchCollection.GetDescriptorSetFileName().IsEmpty())
 			formatter.WriteKeyedValue("DescriptorSet", patchCollection.GetDescriptorSetFileName());
+		if (!patchCollection.GetPreconfigurationFileName().IsEmpty())
+			formatter.WriteKeyedValue("Preconfiguration", patchCollection.GetPreconfigurationFileName());
 	}
 
 	std::ostream& SerializationOperator(std::ostream& str, const ShaderPatchCollection& patchCollection)
@@ -178,6 +184,9 @@ namespace RenderCore { namespace Assets
 				
 				if (XlEqString(name, "DescriptorSet")) {
 					_descriptorSet = RequireStringValue(formatter).AsString();
+					continue;
+				} else if (XlEqString(name, "Preconfiguration")) {
+					_preconfiguration = RequireStringValue(formatter).AsString();
 					continue;
 				}
 				

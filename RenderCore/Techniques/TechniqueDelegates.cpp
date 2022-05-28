@@ -55,7 +55,7 @@ namespace RenderCore { namespace Techniques
 		nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = entry._pixelShaderName;
 		nascentDesc->_shaders[(unsigned)ShaderStage::Geometry] = entry._geometryShaderName;
 		nascentDesc->_manualSelectorFiltering = entry._selectorFiltering;
-		nascentDesc->_selectorPreconfigurationFile = entry._preconfigurationFileName;
+		nascentDesc->_techniquePreconfigurationFile = entry._preconfigurationFileName;
 	}
 
 	auto TechniqueDelegate_Legacy::GetPipelineDesc(
@@ -68,6 +68,7 @@ namespace RenderCore { namespace Techniques
 		nascentDesc->_blend.push_back(_blend);
 		nascentDesc->_rasterization = _rasterization;
 		nascentDesc->_depthStencil = _depthStencil;
+		nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
 		auto technique = _techniqueFuture->TryActualize();
 		if (technique) {
@@ -211,6 +212,7 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_blend.push_back(deferredDecal ? CommonResourceBox::s_abStraightAlpha : CommonResourceBox::s_abOpaque);
 			nascentDesc->_blend.push_back(deferredDecal ? CommonResourceBox::s_abStraightAlpha : CommonResourceBox::s_abOpaque);
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWrite;
+			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
@@ -340,6 +342,7 @@ namespace RenderCore { namespace Techniques
 				nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 			}
 			nascentDesc->_depthStencil = _depthStencil;
+			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
@@ -479,6 +482,7 @@ namespace RenderCore { namespace Techniques
 			// always use less than (not less than or equal) here, because writing equally deep pixels is redundant
 			// (and we can potentially skip a texture lookup for alpha test geo sometimes)
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteCloserThan;
+			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
 			bool hasEarlyRejectionTest = shaderPatches.HasPatchType(s_earlyRejectionTest);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
@@ -635,6 +639,7 @@ namespace RenderCore { namespace Techniques
 				if (_preDepthType == PreDepthType::DepthMotionNormal || _preDepthType == PreDepthType::DepthMotionNormalRoughness)
 					nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 			}
+			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
@@ -774,6 +779,7 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_rasterization = _rs[cullDisable];
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWrite;
 			nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
+			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
@@ -907,6 +913,7 @@ namespace RenderCore { namespace Techniques
 				nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 			}
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteCloserThan;		// note -- read and write from depth -- if we do a pre-depth pass for probes we could just set this to read
+			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
@@ -1016,6 +1023,7 @@ namespace RenderCore { namespace Techniques
 			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-forward-delegate");
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsDisable;
+			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
 			nascentDesc->_soElements = _soElements;
 			nascentDesc->_soBufferStrides = _soStrides;
@@ -1085,8 +1093,10 @@ namespace RenderCore { namespace Techniques
 	uint64_t GraphicsPipelineDesc::GetHash() const
 	{
 		auto result = CalculateHashNoSelectors(_manualSelectorFiltering.GetHash());
-		if (!_selectorPreconfigurationFile.empty())
-			result = Hash64(_selectorPreconfigurationFile, result);
+		if (!_techniquePreconfigurationFile.empty())
+			result = Hash64(_techniquePreconfigurationFile, result);
+		if (!_materialPreconfigurationFile.empty())
+			result = Hash64(_materialPreconfigurationFile, result);
 		return result;
 	}
 

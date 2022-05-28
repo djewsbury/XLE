@@ -64,7 +64,7 @@ namespace ShaderSourceParser
 		ParameterBox Preconfigure(ParameterBox&&) const;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		
-		SelectorPreconfiguration(StringSection<> filename);
+		SelectorPreconfiguration(StringSection<> filename0, StringSection<> filename1 = {});
 		~SelectorPreconfiguration();
 	private:
 		::Assets::DependencyValidation _depVal;

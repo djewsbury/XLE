@@ -56,6 +56,7 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const Patch*> GetPatches() const { return MakeIteratorRange(_patches); }
 			const RenderCore::Assets::PredefinedDescriptorSetLayout& GetMaterialDescriptorSet() const { return *_descriptorSet; }
 			const ShaderSourceParser::SelectorFilteringRules& GetSelectorFilteringRules(unsigned filteringRulesId) const;
+			const std::string& GetPreconfigurationFileName() const { return _preconfiguration; }
 
 			bool HasPatchType(uint64_t implementing) const;
 
@@ -64,6 +65,7 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _descriptorSet;
 			unsigned _materialDescriptorSetSlotIndex;
 			std::vector<ShaderSourceParser::SelectorFilteringRules> _filteringRules;
+			std::string _preconfiguration;
 
 			friend class CompiledShaderPatchCollection;
 		};

@@ -558,7 +558,7 @@ namespace Utility
         IPreprocessorIncludeHandler* _includeHandler = nullptr;
         std::set<uint64_t> _processingFilesSet;
 
-        PreprocessorAnalysis GeneratePreprocessorAnalysisFromFile(
+        PreprocessorAnalysis GeneratePreprocessorAnalysisFromFileInternal(
 			StringSection<> requestString,
 			StringSection<> fileIncludedFrom)
         {
@@ -576,8 +576,53 @@ namespace Utility
 				includeHandlerResult._filename);
 
             _processingFilesSet.erase(hashedName);
-
             return result;
+        }
+
+        void GeneratePreprocessorAnalysisFromFile(
+            PreprocessorAnalysis& result,
+			StringSection<> requestString,
+			StringSection<> fileIncludedFrom)
+        {
+            auto unmerged = GeneratePreprocessorAnalysisFromFileInternal(requestString, fileIncludedFrom);
+            if (result._relevanceTable.empty() && result._sideEffects._substitutions.empty()) {
+                result = unmerged;
+            } else {
+                MergeInAnalysis(result._tokenDictionary, result._relevanceTable, result._sideEffects, unmerged, {});
+            }
+        }
+
+        void MergeInAnalysis(
+            Internal::TokenDictionary& tokenDictionary,
+            Internal::WorkingRelevanceTable& relevanceTable,
+            Internal::PreprocessorSubstitutions& activeSubstitutions,
+            const PreprocessorAnalysis& includedAnalysis,
+            const Internal::ExpressionTokenList& currentCondition)
+        {
+            // merge in the results we got from this included file
+            if (includedAnalysis._relevanceTable.empty() && includedAnalysis._sideEffects._substitutions.empty())
+                return;
+
+            std::map<Internal::Token, Internal::ExpressionTokenList> translatedRelevanceTable;
+            for (const auto& relevance:includedAnalysis._relevanceTable) {
+                translatedRelevanceTable.insert(std::make_pair(
+                    tokenDictionary.Translate(includedAnalysis._tokenDictionary, relevance.first),
+                    tokenDictionary.Translate(includedAnalysis._tokenDictionary, relevance.second)));
+            }
+            relevanceTable = Internal::MergeRelevanceTables(
+                relevanceTable, {},
+                translatedRelevanceTable, currentCondition);
+
+            if (!includedAnalysis._sideEffects._substitutions.empty()) {
+                auto currentConditionInSideEffectDictionary = activeSubstitutions._dictionary.Translate(tokenDictionary, currentCondition);
+                for (const auto& sideEffect:includedAnalysis._sideEffects._substitutions) {
+                    auto newSubst = sideEffect;
+                    newSubst._condition = activeSubstitutions._dictionary.Translate(includedAnalysis._sideEffects._dictionary, newSubst._condition);
+                    newSubst._condition = Internal::AndExpression(currentConditionInSideEffectDictionary, newSubst._condition);
+                    newSubst._substitution = activeSubstitutions._dictionary.Translate(includedAnalysis._sideEffects._dictionary, newSubst._substitution);
+                    activeSubstitutions._substitutions.push_back(newSubst);
+                }
+            }
         }
         
         PreprocessorAnalysis GeneratePreprocessorAnalysisFromString(
@@ -836,30 +881,10 @@ namespace Utility
 
                         // todo -- do we need any #pragma once type functionality to prevent infinite recursion
                         // or just searching through too many files
-                        auto includedAnalysis = GeneratePreprocessorAnalysisFromFile(symbol._value, filenameForRelativeIncludeSearch);
-
-                        // merge in the results we got from this included file
-                        std::map<Internal::Token, Internal::ExpressionTokenList> translatedRelevanceTable;
-                        for (const auto& relevance:includedAnalysis._relevanceTable) {
-                            translatedRelevanceTable.insert(std::make_pair(
-                                tokenDictionary.Translate(includedAnalysis._tokenDictionary, relevance.first),
-                                tokenDictionary.Translate(includedAnalysis._tokenDictionary, relevance.second)));
-                        }
                         auto currentCondition = GetCurrentCondition(conditionsStack);
-                        relevanceTable = Internal::MergeRelevanceTables(
-                            relevanceTable, {},
-                            translatedRelevanceTable, currentCondition);
-
-                        if (!includedAnalysis._sideEffects._substitutions.empty()) {
-                            auto currentConditionInSideEffectDictionary = activeSubstitutions._dictionary.Translate(tokenDictionary, currentCondition);
-                            for (const auto& sideEffect:includedAnalysis._sideEffects._substitutions) {
-                                auto newSubst = sideEffect;
-                                newSubst._condition = activeSubstitutions._dictionary.Translate(includedAnalysis._sideEffects._dictionary, newSubst._condition);
-                                newSubst._condition = Internal::AndExpression(currentConditionInSideEffectDictionary, newSubst._condition);
-                                newSubst._substitution = activeSubstitutions._dictionary.Translate(includedAnalysis._sideEffects._dictionary, newSubst._substitution);
-                                activeSubstitutions._substitutions.push_back(newSubst);
-                            }
-                        }
+                        auto includedAnalysis = GeneratePreprocessorAnalysisFromFileInternal(symbol._value, filenameForRelativeIncludeSearch);
+                        MergeInAnalysis(tokenDictionary, relevanceTable, activeSubstitutions, includedAnalysis, currentCondition);
+                        
                     } else {
                         helper.ReadUntilEndOfLine();
                     }
@@ -928,6 +953,22 @@ namespace Utility
 		IPreprocessorIncludeHandler* includeHandler)
     {
         PreprocessAnalysisIncludeHelper helper { includeHandler };
-        return helper.GeneratePreprocessorAnalysisFromFile(inputFilename, {});
+        PreprocessorAnalysis result;
+        helper.GeneratePreprocessorAnalysisFromFile(result, inputFilename, {});
+        return result;
+    }
+
+    PreprocessorAnalysis GeneratePreprocessorAnalysisFromFile(
+		StringSection<> inputFilename0,
+        StringSection<> inputFilename1,
+		IPreprocessorIncludeHandler* includeHandler)
+    {
+        PreprocessAnalysisIncludeHelper helper { includeHandler };
+        PreprocessorAnalysis result;
+        if (!inputFilename0.IsEmpty())
+            helper.GeneratePreprocessorAnalysisFromFile(result, inputFilename0, {});
+        if (!inputFilename1.IsEmpty())
+            helper.GeneratePreprocessorAnalysisFromFile(result, inputFilename1, {});
+        return result;
     }
 }

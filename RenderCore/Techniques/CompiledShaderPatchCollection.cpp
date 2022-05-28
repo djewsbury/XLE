@@ -39,6 +39,7 @@ namespace RenderCore { namespace Techniques
 
 		_interface._descriptorSet = materialDescSetLayout.GetLayout();
 		_interface._materialDescriptorSetSlotIndex = materialDescSetLayout.GetSlotIndex();
+		_interface._preconfiguration = src.GetPreconfigurationFileName().AsString();
 
 		if (!src.GetDescriptorSetFileName().IsEmpty()) {
 			auto layoutFileFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(src.GetDescriptorSetFileName());

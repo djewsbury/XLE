@@ -62,7 +62,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 				if (filteringFuture[(unsigned)ShaderStage::Pixel] && !filteringFuture[(unsigned)ShaderStage::Geometry]) {
 
-					if (pipelineDesc->_selectorPreconfigurationFile.empty()) {
+					if (pipelineDesc->_techniquePreconfigurationFile.empty() && pipelineDesc->_materialPreconfigurationFile.empty()) {
 						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel]).ThenConstructToPromise(
 							std::move(promise),
 							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -75,7 +75,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								return finalObject;
 							});
 					} else {
-						auto preconfigurationFuture = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_selectorPreconfigurationFile);
+						auto preconfigurationFuture = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_materialPreconfigurationFile, pipelineDesc->_techniquePreconfigurationFile);
 						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], preconfigurationFuture).ThenConstructToPromise(
 							std::move(promise),
 							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -93,7 +93,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 				} else if (filteringFuture[(unsigned)ShaderStage::Pixel] && filteringFuture[(unsigned)ShaderStage::Geometry]) {
 
-					if (pipelineDesc->_selectorPreconfigurationFile.empty()) {
+					if (pipelineDesc->_techniquePreconfigurationFile.empty() && pipelineDesc->_materialPreconfigurationFile.empty()) {
 						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], filteringFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToPromise(
 							std::move(promise),
 							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -108,7 +108,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								return finalObject;
 							});
 					} else {
-						auto preconfigurationFuture = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_selectorPreconfigurationFile);
+						auto preconfigurationFuture = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_materialPreconfigurationFile, pipelineDesc->_techniquePreconfigurationFile);
 						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], filteringFuture[(unsigned)ShaderStage::Geometry], preconfigurationFuture).ThenConstructToPromise(
 							std::move(promise),
 							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -128,7 +128,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 				} else if (!filteringFuture[(unsigned)ShaderStage::Pixel] && filteringFuture[(unsigned)ShaderStage::Geometry]) {
 
-					if (pipelineDesc->_selectorPreconfigurationFile.empty()) {
+					if (pipelineDesc->_techniquePreconfigurationFile.empty() && pipelineDesc->_materialPreconfigurationFile.empty()) {
 						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToPromise(
 							std::move(promise),
 							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -141,7 +141,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								return finalObject;
 							});
 					} else {
-						auto preconfigurationFuture = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_selectorPreconfigurationFile);
+						auto preconfigurationFuture = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_materialPreconfigurationFile, pipelineDesc->_techniquePreconfigurationFile);
 						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Geometry], preconfigurationFuture).ThenConstructToPromise(
 							std::move(promise),
 							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,

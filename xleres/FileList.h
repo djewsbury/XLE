@@ -54,7 +54,7 @@
 
 #define RENDEROVERLAYS_SHAPES_HLSL "xleres/TechniqueLibrary/RenderOverlays/dd/ShapesFrameworkEntry.hlsl"
 #define RENDEROVERLAYS_SHAPES_MATERIAL "xleres/TechniqueLibrary/RenderOverlays/dd/DebuggingShapes.material"
-#define RENDEROVERLAYS_SEL_PRECONFIG "xleres/TechniqueLibrary/RenderOverlays/dd/SelectorPreconfiguration.hlsl"
+#define RENDEROVERLAYS_SEL_PRECONFIG "xleres/TechniqueLibrary/RenderOverlays/dd/Preconfiguration.hlsl"
 
 #define SCENE_ENGINE_RES "xleres/TechniqueLibrary/SceneEngine"
 
