@@ -624,6 +624,8 @@ namespace Assets
 	template<typename Type>
 		Marker<Type>::~Marker() 
 	{
+		EnsureFrameBarrierCallbackStopped();		// stop the frame barrier callback early, before we start destroying any members
+
 		// note -- if you get a broken_promise exception from here, it means that the future is begin
 		// destroyed without anyone adopting the promise to fulfill it
 	}
