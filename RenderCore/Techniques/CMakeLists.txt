@@ -36,6 +36,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         CompiledLayoutPool.cpp
         ModelRendererConstruction.cpp
         LightWeightBuildDrawables.cpp
+        ManualDrawables.cpp
         ../../Tools/ToolsRig/VisualisationGeo.cpp
         )
 

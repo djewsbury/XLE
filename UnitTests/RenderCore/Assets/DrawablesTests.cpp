@@ -18,6 +18,7 @@
 #include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
+#include "../../../RenderCore/Techniques/ManualDrawables.h"
 #include "../../../RenderCore/Assets/TextureLoaders.h"
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
 #include "../../../RenderCore/Assets/RawMaterial.h"

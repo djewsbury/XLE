@@ -88,19 +88,4 @@ namespace RenderCore { namespace Techniques
 
 	uint64_t HashMaterialMachine(IteratorRange<Assets::ScaffoldCmdIterator> materialMachine);
 
-	// Create a material machine that can be passed to ConstructDescriptorSetHelper::Construct
-	// Fairly primitive implementation, mostly intended for unit tests
-	class ManualMaterialMachine
-	{
-	public:
-		IteratorRange<Assets::ScaffoldCmdIterator> GetMaterialMachine() const;
-		ManualMaterialMachine(
-			const ParameterBox& constantBindings,
-			const ParameterBox& resourceBindings,
-			IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings = {});
-	private:
-		std::unique_ptr<uint8_t[], PODAlignedDeletor> _dataBlock;
-		size_t _primaryBlockSize;
-	};
-
 }}

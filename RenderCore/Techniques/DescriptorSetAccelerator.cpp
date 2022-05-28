@@ -384,32 +384,6 @@ namespace RenderCore { namespace Techniques
 		return _device->CreateDescriptorSet(initializer);
 	}
 
-	IteratorRange<RenderCore::Assets::ScaffoldCmdIterator> ManualMaterialMachine::GetMaterialMachine() const
-	{
-		auto* start = ::Assets::Block_GetFirstObject(_dataBlock.get());
-		return Assets::MakeScaffoldCmdRange({start, PtrAdd(start, _primaryBlockSize)});
-	}
-
-	ManualMaterialMachine::ManualMaterialMachine(
-		const ParameterBox& constantBindings,
-		const ParameterBox& resourceBindings,
-		IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings)
-	{
-		::Assets::BlockSerializer serializer;
-		serializer << Assets::MakeCmdAndSerializable(
-			Assets::MaterialCommand::AttachConstants,
-			constantBindings);
-		serializer << Assets::MakeCmdAndSerializable(
-			Assets::MaterialCommand::AttachShaderResourceBindings,
-			resourceBindings);
-		serializer << Assets::MakeCmdAndRanged(
-			Assets::MaterialCommand::AttachSamplerBindings,
-			samplerBindings);
-		_dataBlock = serializer.AsMemoryBlock();
-		_primaryBlockSize = serializer.SizePrimaryBlock();
-		::Assets::Block_Initialize(_dataBlock.get());
-	}
-
 	const uint64_t DeformerToDescriptorSetBinding::GetHash() const
 	{
 		return Hash64(MakeIteratorRange(_animatedSlots), _dynamicPageResource->GetGUID());
