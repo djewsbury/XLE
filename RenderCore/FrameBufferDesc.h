@@ -82,12 +82,12 @@ namespace RenderCore
     public:
 		static const AttachmentViewDesc Unused;
 
-        void AppendOutput(AttachmentName attachment, const TextureViewDesc& = {});
-        void AppendInput(AttachmentName attachment, const TextureViewDesc& = {});
-        void SetDepthStencil(AttachmentName attachment, const TextureViewDesc& = {});
-		void AppendResolveOutput(AttachmentName attachment, const TextureViewDesc& = {});
-        void SetResolveDepthStencil(AttachmentName attachment, const TextureViewDesc& = {});
-        void SetViewInstanceMask(uint32_t);
+        SubpassDesc& AppendOutput(AttachmentName attachment, const TextureViewDesc& = {});
+        SubpassDesc& AppendInput(AttachmentName attachment, const TextureViewDesc& = {});
+        SubpassDesc& SetDepthStencil(AttachmentName attachment, const TextureViewDesc& = {});
+		SubpassDesc& AppendResolveOutput(AttachmentName attachment, const TextureViewDesc& = {});
+        SubpassDesc& SetResolveDepthStencil(AttachmentName attachment, const TextureViewDesc& = {});
+        SubpassDesc& SetViewInstanceMask(uint32_t);
 
         uint64_t CalculateHash() const;
 
@@ -101,11 +101,11 @@ namespace RenderCore
 
 		#if defined(_DEBUG)
             mutable std::string _name = std::string();
-            inline void SetName(const std::string& name) const { _name = name; }
-            inline void SetName(const std::string& name) { _name = name; }
+            inline const SubpassDesc& SetName(const std::string& name) const { _name = name; return *this; }
+            inline SubpassDesc& SetName(const std::string& name) { _name = name; return *this; }
         #else
-            inline void SetName(const std::string& name) const {}
-            inline void SetName(const std::string& name) {}
+            inline const SubpassDesc& SetName(const std::string& name) const { return *this; }
+            inline SubpassDesc& SetName(const std::string& name) { return *this; }
         #endif
 
 		friend FrameBufferDesc SeparateSingleSubpass(const FrameBufferDesc& input, unsigned subpassIdx);
@@ -260,7 +260,7 @@ namespace RenderCore
         about any previous contents in the buffer before this subpass, and whether we want to use the
         contents in future subpasses.
     */
-	inline void SubpassDesc::AppendOutput(AttachmentName attachment, const TextureViewDesc& viewDesc)
+	inline SubpassDesc& SubpassDesc::AppendOutput(AttachmentName attachment, const TextureViewDesc& viewDesc)
     {
         assert((BufferSpaceUsed()+1) <= s_maxAttachmentCount);
 		for (unsigned c=_outputAttachmentCount+_inputAttachmentCount+_resolveOutputAttachmentCount; c>_outputAttachmentCount; --c)
@@ -268,6 +268,7 @@ namespace RenderCore
 
         _attachmentViewBuffer[_outputAttachmentCount] = {attachment, viewDesc};
 		++_outputAttachmentCount;
+        return *this;
     }
 
     /** <summary>Add a "input" attachment to the given subpass</summary>
@@ -280,7 +281,7 @@ namespace RenderCore
         the ShaderResourceView (which determines how the attachment is presented to the shader).
         Typically this involves RenderCore::Techniques::RenderPassInstance::GetInputAttachmentSRV.
     */
-    inline void SubpassDesc::AppendInput(AttachmentName attachment, const TextureViewDesc& viewDesc)
+    inline SubpassDesc& SubpassDesc::AppendInput(AttachmentName attachment, const TextureViewDesc& viewDesc)
     {
 		assert((BufferSpaceUsed()+1) <= s_maxAttachmentCount);
 		for (unsigned c=_outputAttachmentCount+_inputAttachmentCount+_resolveOutputAttachmentCount; c>_outputAttachmentCount+_inputAttachmentCount; --c)
@@ -288,32 +289,37 @@ namespace RenderCore
 
         _attachmentViewBuffer[_outputAttachmentCount+_inputAttachmentCount] = {attachment, viewDesc};
 		++_inputAttachmentCount;
+        return *this;
     }
 
-	inline void SubpassDesc::AppendResolveOutput(AttachmentName attachment, const TextureViewDesc& viewDesc)
+	inline SubpassDesc& SubpassDesc::AppendResolveOutput(AttachmentName attachment, const TextureViewDesc& viewDesc)
 	{
 		assert((BufferSpaceUsed()+1) <= s_maxAttachmentCount);
         _attachmentViewBuffer[_outputAttachmentCount+_inputAttachmentCount+_resolveOutputAttachmentCount] = {attachment, viewDesc};
 		++_resolveOutputAttachmentCount;
+        return *this;
 	}
 
     /** <summary>Set the depth/stencil attachment for the given subpass</summary>
         This sets the depth/stencil attachment. There can be only one attachment of this type,
         so it will overwrite anything that was previously set.
     */
-    inline void SubpassDesc::SetDepthStencil(AttachmentName attachment, const TextureViewDesc& viewDesc)
+    inline SubpassDesc& SubpassDesc::SetDepthStencil(AttachmentName attachment, const TextureViewDesc& viewDesc)
     {
         _depthStencil = {attachment, viewDesc};
+        return *this;
     }
 
-	inline void SubpassDesc::SetResolveDepthStencil(AttachmentName attachment, const TextureViewDesc& viewDesc)
+	inline SubpassDesc& SubpassDesc::SetResolveDepthStencil(AttachmentName attachment, const TextureViewDesc& viewDesc)
 	{
 		_resolveDepthStencil = {attachment, viewDesc};
+        return *this;
 	}
 
-    inline void SubpassDesc::SetViewInstanceMask(uint32_t mask)
+    inline SubpassDesc& SubpassDesc::SetViewInstanceMask(uint32_t mask)
     {
         _viewInstancingMask = mask;
+        return *this;
     }
 
     inline uint64_t SubpassDesc::GetViewInstanceMask() const

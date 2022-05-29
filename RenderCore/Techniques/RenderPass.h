@@ -177,6 +177,7 @@ namespace RenderCore { namespace Techniques
         };
 
         StitchResult TryStitchFrameBufferDesc(IteratorRange<const FrameBufferDescFragment*> fragments);
+        StitchResult TryStitchFrameBufferDesc(const FrameBufferDescFragment& fragment);
 
         void UpdateAttachments(const StitchResult& res);
         IteratorRange<const PreregisteredAttachment*> GetPreregisteredAttachments() const { return MakeIteratorRange(_workingAttachments); }
@@ -407,6 +408,11 @@ namespace RenderCore { namespace Techniques
         IteratorRange<const Format*> systemFormats = {});
 
     std::vector<Format> CalculateDefaultSystemFormats(IDevice&);
+
+    inline auto FragmentStitchingContext::TryStitchFrameBufferDesc(const FrameBufferDescFragment& fragment) -> StitchResult
+    {
+        return TryStitchFrameBufferDesc({&fragment, &fragment+1});
+    }
 
 }}
 
