@@ -317,6 +317,8 @@ namespace RenderCore { namespace Metal_Vulkan
                 if (paramStart[6] == 2) {
                     if (paramStart[2] == 5) {
                         _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::StorageTexelBuffer));
+                    } else if (paramStart[2] == 6) {
+                        _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::InputAttachment));
                     } else
                         _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::StorageImage));
                 } else {

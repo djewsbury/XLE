@@ -560,7 +560,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			switch (slotType) { 
 			case DescriptorType::SampledTexture:
 			case DescriptorType::UnorderedAccessTexture:
-				return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._type && (*reflectionVariable._type == SPIRVReflection::BasicType::SampledImage || *reflectionVariable._type == SPIRVReflection::BasicType::Image || *reflectionVariable._type == SPIRVReflection::BasicType::StorageImage); 
+				return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._type && (*reflectionVariable._type == SPIRVReflection::BasicType::SampledImage || *reflectionVariable._type == SPIRVReflection::BasicType::Image || *reflectionVariable._type == SPIRVReflection::BasicType::StorageImage || *reflectionVariable._type == SPIRVReflection::BasicType::InputAttachment); 
 			case DescriptorType::UniformBuffer:
 			case DescriptorType::UniformBufferDynamicOffset:
 				return reflectionVariable._isStructType || (reflectionVariable._type && (*reflectionVariable._type != SPIRVReflection::BasicType::Image && *reflectionVariable._type != SPIRVReflection::BasicType::SampledImage && *reflectionVariable._type != SPIRVReflection::BasicType::Sampler));
@@ -1446,6 +1446,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			result._type = DescriptorType::UnorderedAccessTexelBuffer;
 		} else if (*varinfo._type == SPIRVReflection::BasicType::StorageImage) {
 			result._type = DescriptorType::UnorderedAccessTexture;
+		} else if (*varinfo._type == SPIRVReflection::BasicType::InputAttachment) {
+			result._type = DescriptorType::InputAttachment;
 		} else if (*varinfo._type == SPIRVReflection::BasicType::Sampler) {
 			result._type = DescriptorType::Sampler;
 		} else
