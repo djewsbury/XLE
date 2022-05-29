@@ -1059,14 +1059,14 @@ namespace BufferUploads
         }
     }
 
-    std::shared_ptr<RenderCore::IResourceView> ResourceLocator::CreateTextureView(BindFlag::Enum usage, const RenderCore::TextureViewDesc& window)
+    std::shared_ptr<RenderCore::IResourceView> ResourceLocator::CreateTextureView(BindFlag::Enum usage, const RenderCore::TextureViewDesc& window) const
     {
         if (!IsWholeResource() || _managedByPool)
             Throw(std::runtime_error("Cannot create a texture view from a partial resource locator"));
         return _resource->CreateTextureView(usage, window);
     }
 
-    std::shared_ptr<RenderCore::IResourceView> ResourceLocator::CreateBufferView(BindFlag::Enum usage, unsigned rangeOffset, unsigned rangeSize)
+    std::shared_ptr<RenderCore::IResourceView> ResourceLocator::CreateBufferView(BindFlag::Enum usage, unsigned rangeOffset, unsigned rangeSize) const
     {
         return _resource->CreateBufferView(usage, rangeOffset + ((_interiorOffset != ~size_t(0)) ? unsigned(_interiorOffset) : 0u), rangeSize);
     }

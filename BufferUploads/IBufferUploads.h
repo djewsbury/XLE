@@ -83,8 +83,8 @@ namespace BufferUploads
         RenderCore::VertexBufferView CreateVertexBufferView() const;
         RenderCore::IndexBufferView CreateIndexBufferView(RenderCore::Format indexFormat) const;
         RenderCore::ConstantBufferView CreateConstantBufferView() const;
-        std::shared_ptr<RenderCore::IResourceView> CreateTextureView(BindFlag::Enum usage = BindFlag::ShaderResource, const RenderCore::TextureViewDesc& window = RenderCore::TextureViewDesc{});
-        std::shared_ptr<RenderCore::IResourceView> CreateBufferView(BindFlag::Enum usage = BindFlag::ConstantBuffer, unsigned rangeOffset = 0, unsigned rangeSize = 0);
+        std::shared_ptr<RenderCore::IResourceView> CreateTextureView(BindFlag::Enum usage = BindFlag::ShaderResource, const RenderCore::TextureViewDesc& window = RenderCore::TextureViewDesc{}) const;
+        std::shared_ptr<RenderCore::IResourceView> CreateBufferView(BindFlag::Enum usage = BindFlag::ConstantBuffer, unsigned rangeOffset = 0, unsigned rangeSize = 0) const;
 
         const std::shared_ptr<IResource>& GetContainingResource() const { return _resource; }
         std::pair<size_t, size_t> GetRangeInContainingResource() const { return std::make_pair(_interiorOffset, _interiorOffset+_interiorSize); }
@@ -138,9 +138,11 @@ namespace BufferUploads
             /// <summary>Begin a new transaction</summary>
             /// Begin a new transaction, either by creating a new resource, or by attaching
             /// to an existing resource.
-        virtual TransactionMarker   Transaction_Begin    (const ResourceDesc& desc, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags=0) = 0;
         virtual TransactionMarker   Transaction_Begin    (const std::shared_ptr<IAsyncDataSource>& data, BindFlag::BitField bindFlags = BindFlag::ShaderResource, TransactionOptions::BitField flags=0) = 0;
         virtual TransactionMarker   Transaction_Begin    (ResourceLocator destinationResource, const std::shared_ptr<IAsyncDataSource>& data, TransactionOptions::BitField flags=0) = 0;
+
+        virtual TransactionMarker   Transaction_Begin    (const ResourceDesc& desc, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags=0) = 0;
+        virtual TransactionMarker   Transaction_Begin    (ResourceLocator destinationResource, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags=0) = 0;
 
         virtual void            Transaction_Cancel      (TransactionID id) = 0;
 

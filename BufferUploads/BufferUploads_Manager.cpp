@@ -90,6 +90,7 @@ namespace BufferUploads
         };
         
         TransactionMarker       Transaction_Begin(const ResourceDesc& desc, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags);
+        TransactionMarker       Transaction_Begin(ResourceLocator destinationResource, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags);
         TransactionMarker       Transaction_Begin(const std::shared_ptr<IAsyncDataSource>& data, BindFlag::BitField bindFlags, TransactionOptions::BitField flags);
         TransactionMarker       Transaction_Begin(ResourceLocator destinationResource, const std::shared_ptr<IAsyncDataSource>& data, TransactionOptions::BitField flags);
         void                    Transaction_AddRef(TransactionID id);
@@ -260,23 +261,15 @@ namespace BufferUploads
         return PartialResource{};
     }
 
-    TransactionMarker AssemblyLine::Transaction_Begin(
-        const ResourceDesc& desc, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags)
+    static void ValidatePacketSize(const ResourceDesc& desc, IDataPacket& data)
     {
-        assert(desc._name[0]);
-        
-        TransactionID transactionID = AllocateTransaction(flags);
-        Transaction* transaction = GetTransaction(transactionID);
-        assert(transaction);
-        transaction->_desc = desc;
-
         #if defined(_DEBUG)
                     //
                     //      Validate the size of information in the initialisation packet.
                     //
-            if (data && desc._type == ResourceDesc::Type::Texture) {
+            if (desc._type == ResourceDesc::Type::Texture) {
                 for (unsigned m=0; m<desc._textureDesc._mipCount; ++m) {
-                    const size_t dataSize = data->GetData(SubResourceId{m, 0}).size();
+                    const size_t dataSize = data.GetData(SubResourceId{m, 0}).size();
                     if (dataSize) {
                         TextureDesc mipMapDesc     = RenderCore::CalculateMipMapDesc(desc._textureDesc, m);
                         mipMapDesc._mipCount       = 1;
@@ -286,6 +279,18 @@ namespace BufferUploads
                 }
             }
         #endif
+    }
+
+    TransactionMarker AssemblyLine::Transaction_Begin(
+        const ResourceDesc& desc, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags)
+    {
+        assert(desc._name[0]);
+        
+        TransactionID transactionID = AllocateTransaction(flags);
+        Transaction* transaction = GetTransaction(transactionID);
+        assert(transaction);
+        transaction->_desc = desc;
+        if (data) ValidatePacketSize(desc, *data);
 
             //
             //      Have to increase _currentQueuedBytes before we push in the create step... Otherwise the create 
@@ -298,6 +303,27 @@ namespace BufferUploads
             GetQueueSet(flags),
             *transaction,
             CreateFromDataPacketStep { transactionID, desc, data, PartialResource_All() });
+
+        return { transaction->_promise.get_future(), transactionID };
+    }
+
+    TransactionMarker AssemblyLine::Transaction_Begin(ResourceLocator destinationResource, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags)
+    {
+        auto rangeInDest = destinationResource.GetRangeInContainingResource();
+        if (rangeInDest.first != ~size_t(0))
+            Throw(std::runtime_error("Attempting to begin IDataPacket upload on partial/internal resource. Only full resources are supported for this variation."));
+        
+        TransactionID transactionID = AllocateTransaction(flags);
+        Transaction* transaction = GetTransaction(transactionID);
+        assert(transaction);
+        transaction->_desc = destinationResource.GetContainingResource()->GetDesc();
+        if (data) ValidatePacketSize(transaction->_desc, *data);
+        _currentQueuedBytes[(unsigned)AsUploadDataType(transaction->_desc)] += RenderCore::ByteCount(transaction->_desc);
+
+        PushStep(
+            GetQueueSet(flags),
+            *transaction,
+            CreateFromDataPacketStep { transactionID, transaction->_desc, data, PartialResource_All() });
 
         return { transaction->_promise.get_future(), transactionID };
     }
@@ -1184,7 +1210,7 @@ namespace BufferUploads
             return false;
 
         auto* transaction = GetTransaction(resourceCreateStep._id);
-        assert(transaction && transaction->_finalResource.IsEmpty());
+        assert(transaction);
 
         unsigned uploadRequestSize = 0;
         const unsigned objectSize = RenderCore::ByteCount(transaction->_desc);
@@ -1204,22 +1230,29 @@ namespace BufferUploads
         if ((metricsUnderConstruction._bytesUploadTotal+uploadRequestSize) > budgetUnderConstruction._limit_BytesUploaded && metricsUnderConstruction._bytesUploadTotal !=0)
             return false;
 
-        if (transaction->_desc._type == ResourceDesc::Type::LinearBuffer && _resourceSource.CanBeBatched(transaction->_desc)) {
-                //      In the batched path, we pop now, and perform all of the batched operations as once when we resolve the 
-                //      command list. But don't release the transaction -- that will happen after the batching operation is 
-                //      performed.
-            _batchPreparation_Main._batchedSteps.push_back(resourceCreateStep);
-            _batchPreparation_Main._batchedAllocationSize += MarkerHeap<uint16_t>::AlignSize(objectSize);
-            return true;
+        ResourceSource::ResourceConstruction finalConstruction;
+        if (transaction->_finalResource.IsEmpty()) {
+            // No resource provided beforehand -- have to create it now
+            if (transaction->_desc._type == ResourceDesc::Type::LinearBuffer && _resourceSource.CanBeBatched(transaction->_desc)) {
+                    //      In the batched path, we pop now, and perform all of the batched operations as once when we resolve the 
+                    //      command list. But don't release the transaction -- that will happen after the batching operation is 
+                    //      performed.
+                _batchPreparation_Main._batchedSteps.push_back(resourceCreateStep);
+                _batchPreparation_Main._batchedAllocationSize += MarkerHeap<uint16_t>::AlignSize(objectSize);
+                return true;
+            }
+
+            assert(!(transaction->_desc._allocationRules & AllocationRules::Staging));
+            finalConstruction = _resourceSource.Create(
+                transaction->_desc, resourceCreateStep._initialisationData.get(), 
+                ((metricsUnderConstruction._deviceCreateOperations+1) <= budgetUnderConstruction._limit_DeviceCreates)?0:ResourceSource::CreationOptions::PreventDeviceCreation);
+
+            if (finalConstruction._locator.IsEmpty())
+                return false;
+        } else {
+            finalConstruction._locator = transaction->_finalResource;
+            finalConstruction._flags |= ResourceSource::ResourceConstruction::Flags::InitialisationSuccessful;
         }
-
-        assert(!(transaction->_desc._allocationRules & AllocationRules::Staging));
-        auto finalConstruction = _resourceSource.Create(
-            transaction->_desc, resourceCreateStep._initialisationData.get(), 
-            ((metricsUnderConstruction._deviceCreateOperations+1) <= budgetUnderConstruction._limit_DeviceCreates)?0:ResourceSource::CreationOptions::PreventDeviceCreation);
-
-        if (finalConstruction._locator.IsEmpty())
-            return false;
 
         if (resourceCreateStep._initialisationData && !(finalConstruction._flags & ResourceSource::ResourceConstruction::Flags::InitialisationSuccessful)) {
             if (transaction->_desc._type == ResourceDesc::Type::Texture) {
@@ -1857,6 +1890,11 @@ namespace BufferUploads
     TransactionMarker           Manager::Transaction_Begin(const ResourceDesc& desc, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags)
     {
         return _assemblyLine->Transaction_Begin(desc, data, flags);
+    }
+
+    TransactionMarker           Manager::Transaction_Begin(ResourceLocator destinationResource, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags)
+    {
+        return _assemblyLine->Transaction_Begin(destinationResource, data, flags);
     }
 
     TransactionMarker           Manager::Transaction_Begin(const std::shared_ptr<IAsyncDataSource>& data, BindFlag::BitField bindFlags, TransactionOptions::BitField flags)
