@@ -82,14 +82,13 @@ namespace RenderCore { namespace Techniques
 			return *_predefinedPipelineLayout;
 		}
 
+		// ICompiledPipelineLayout
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<FullViewportOperator>>&& promise,
 			const std::shared_ptr<PipelineCollection>& pool,
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 			const ParameterBox& selectors,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-			const std::shared_ptr<Assets::PredefinedPipelineLayout>& predefinedPipelineLayout,
-			const ::Assets::DependencyValidation& pipelineLayoutDepVal,
 			const FrameBufferTarget& fbTarget,
 			const UniformsStreamInterface& usi)
 		{
@@ -99,19 +98,73 @@ namespace RenderCore { namespace Techniques
 			pool->CreateGraphicsPipeline(pipelineFuture->AdoptPromise(), pipelineLayout, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, fbTarget);
 			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 				std::move(promise),
-				[pipelineLayout=pipelineLayout, usi=usi, pipelineLayoutDepVal, predefinedPipelineLayout](auto pipelineAndLayout) {
+				[pipelineLayout=pipelineLayout, usi=usi](auto pipelineAndLayout) {
 					auto op = std::make_shared<FullViewportOperator>();
 					op->_usi = std::move(usi);
-					if (pipelineLayoutDepVal) {
-						op->_depVal = ::Assets::GetDepValSys().Make();
-						op->_depVal.RegisterDependency(pipelineAndLayout.GetDependencyValidation());
-						op->_depVal.RegisterDependency(pipelineLayoutDepVal);
-					} else
-						op->_depVal = pipelineAndLayout.GetDependencyValidation();
+					op->_depVal = pipelineAndLayout.GetDependencyValidation();
 					op->_pipelineLayout = std::move(pipelineAndLayout._layout);
 					op->_pipeline = std::move(pipelineAndLayout._pipeline);
-					op->_predefinedPipelineLayout = predefinedPipelineLayout;
 					return op;
+				});
+		}
+
+		// just auto pipeline layout
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<FullViewportOperator>>&& promise,
+			const std::shared_ptr<PipelineCollection>& pool,
+			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
+			const ParameterBox& selectors,
+			const FrameBufferTarget& fbTarget,
+			const UniformsStreamInterface& usi)
+		{
+			VertexInputStates vInputStates { {}, {}, Topology::TriangleStrip };
+			const ParameterBox* selectorList[] { &selectors };
+			auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
+			pool->CreateGraphicsPipeline(pipelineFuture->AdoptPromise(), {}, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, fbTarget);
+			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
+				std::move(promise),
+				[usi=usi](auto pipelineAndLayout) {
+					auto op = std::make_shared<FullViewportOperator>();
+					op->_usi = std::move(usi);
+					op->_depVal = pipelineAndLayout.GetDependencyValidation();
+					op->_pipelineLayout = std::move(pipelineAndLayout._layout);
+					op->_pipeline = std::move(pipelineAndLayout._pipeline);
+					return op;
+				});
+		}
+
+		// pipeline layout asset (by name)
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<FullViewportOperator>>&& promise,
+			const std::shared_ptr<PipelineCollection>& pool,
+			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
+			const ParameterBox& selectors,
+			StringSection<> pipelineLayoutAssetName,
+			const FrameBufferTarget& fbTarget,
+			const UniformsStreamInterface& usi)
+		{
+			auto futurePipelineLayout = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
+			::Assets::WhenAll(futurePipelineLayout).ThenConstructToPromise(
+				std::move(promise),
+				[pool, selectors, usi, plan=Hash64(pipelineLayoutAssetName), pipelineDesc, fbTarget](auto&& promise, const auto& predefinedPipelineLayout) {
+					
+					auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
+					const ParameterBox* selectorList[] { &selectors };
+					VertexInputStates vInputStates { {}, {}, Topology::TriangleStrip };
+					pool->CreateGraphicsPipeline(pipelineFuture->AdoptPromise(), {predefinedPipelineLayout, plan}, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, fbTarget);
+
+					::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
+						std::move(promise),
+						[predefinedPipelineLayout, usi=usi](auto pipelineAndLayout) {
+							auto op = std::make_shared<FullViewportOperator>();
+							op->_usi = std::move(usi);
+							::Assets::DependencyValidationMarker depVals[] { pipelineAndLayout.GetDependencyValidation(), predefinedPipelineLayout->GetDependencyValidation() };
+							op->_depVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
+							op->_pipelineLayout = std::move(pipelineAndLayout._layout);
+							op->_pipeline = std::move(pipelineAndLayout._pipeline);
+							op->_predefinedPipelineLayout = predefinedPipelineLayout;
+							return op;
+						});
 				});
 		}
 	};
@@ -146,7 +199,7 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(!pixelShader.IsEmpty());
 		auto pipelineDesc = CreatePipelineDesc(pixelShader, subType, po);
-		auto op = ::Assets::MakeAssetPtr<FullViewportOperator>(pool, pipelineDesc, selectors, pipelineLayout, std::shared_ptr<Assets::PredefinedPipelineLayout>{}, ::Assets::DependencyValidation{}, FrameBufferTarget{po._fbDesc, po._subpassIdx}, usi);
+		auto op = ::Assets::MakeAssetPtr<FullViewportOperator>(pool, pipelineDesc, selectors, pipelineLayout, FrameBufferTarget{po._fbDesc, po._subpassIdx}, usi);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
 	}
 
@@ -161,26 +214,8 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(!pixelShader.IsEmpty());
 		auto pipelineDesc = CreatePipelineDesc(pixelShader, subType, po);
-		auto pipelineLayoutAsset = ::Assets::MakeAssetPtr<CompiledPipelineLayoutAsset>(pool->GetDevice(), pipelineLayoutAssetName, nullptr);
-		auto fastLayout = pipelineLayoutAsset->TryActualize();
-		if (fastLayout) {
-			auto op = ::Assets::MakeAssetPtr<FullViewportOperator>(pool, pipelineDesc, selectors, (*fastLayout)->GetPipelineLayout(), (*fastLayout)->GetPredefinedPipelineLayout(), (*fastLayout)->GetDependencyValidation(), FrameBufferTarget{po._fbDesc, po._subpassIdx}, usi);
-			return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
-		} else {
-			auto result = std::make_shared<::Assets::MarkerPtr<FullViewportOperator>>();
-			::Assets::WhenAll(pipelineLayoutAsset).ThenConstructToPromise(
-				result->AdoptPromise(),
-				[pool=pool, subType, pipelineDesc, selectors=selectors,
-				fbDesc=*po._fbDesc, subPassIdx=po._subpassIdx,
-				usi=usi](std::promise<std::shared_ptr<FullViewportOperator>>&& resultPromise,
-					std::shared_ptr<CompiledPipelineLayoutAsset> pipelineLayout) {
-					FullViewportOperator::ConstructToPromise(
-						std::move(resultPromise), pool, pipelineDesc, selectors, 
-						pipelineLayout->GetPipelineLayout(), pipelineLayout->GetPredefinedPipelineLayout(), pipelineLayout->GetDependencyValidation(),
-						{&fbDesc, subPassIdx}, usi);
-				});
-			return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&result);
-		}
+		auto op = ::Assets::MakeAssetPtr<FullViewportOperator>(pool, pipelineDesc, selectors, pipelineLayoutAssetName, FrameBufferTarget{po._fbDesc, po._subpassIdx}, usi);
+		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
 	}
 
 	class ComputeOperator : public Techniques::IComputeShaderOperator

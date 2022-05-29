@@ -81,6 +81,9 @@ namespace RenderCore { namespace Assets
         PipelineLayoutInitializer MakePipelineLayoutInitializerWithAutoMatching(
             const PipelineLayoutInitializer& autoInitializer,
             ShaderLanguage language, SamplerPool* =nullptr) const;
+        PipelineLayoutInitializer MakePipelineLayoutInitializerWithAutoMatching(
+            IteratorRange<const PipelineLayoutInitializer**> autoInitializers,
+            ShaderLanguage language, SamplerPool* =nullptr) const;
 
         bool HasAutoDescriptorSets() const;
         const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
@@ -99,7 +102,7 @@ namespace RenderCore { namespace Assets
     protected:
         ::Assets::DependencyValidation _depVal;
 
-        PipelineLayoutInitializer MakePipelineLayoutInitializerInternal(const PipelineLayoutInitializer*, ShaderLanguage language, SamplerPool*) const;
+        PipelineLayoutInitializer MakePipelineLayoutInitializerInternal(IteratorRange<const PipelineLayoutInitializer**>, ShaderLanguage, SamplerPool*) const;
     };
 
 }}

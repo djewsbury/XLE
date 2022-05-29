@@ -179,42 +179,82 @@ namespace RenderCore { namespace Assets
 	PredefinedPipelineLayoutFile::~PredefinedPipelineLayoutFile() {}
 
 	static DescriptorSetSignature BuildAutoDescriptorSet(
-		const DescriptorSetSignature& autoSignature,
-		const PredefinedDescriptorSetLayout& predefinedLayout,
+		IteratorRange<const DescriptorSetSignature**> autoSignatures,
+		const PredefinedDescriptorSetLayout* predefinedLayout,
 		SamplerPool* samplerPool)
 	{
-		DescriptorSetSignature result = autoSignature;
-		for (unsigned s=0; s<result._slots.size(); ++s) {
-			if (result._slots[s]._type == DescriptorType::Sampler) {
-				// look for a fixed sampler in the predefined layout
-				auto name = result._slotNames[s];
-				auto i = std::find_if(predefinedLayout._slots.begin(), predefinedLayout._slots.end(), [name](const auto& c) { return Hash64(c._name) == name; });
-				if (i != predefinedLayout._slots.end() && i->_fixedSamplerIdx != ~0u) {
-					if (result._fixedSamplers.size() <= s)
-						result._fixedSamplers.resize(s+1);
-					result._fixedSamplers[s] = samplerPool->GetSampler(predefinedLayout._fixedSamplers[i->_fixedSamplerIdx]);					
+		DescriptorSetSignature result;
+
+		size_t slotCount = 0;
+		for (auto&sig:autoSignatures) slotCount = std::max(slotCount, sig->_slots.size());
+		result._slots.resize(slotCount);
+		result._slotNames.resize(slotCount, 0);
+
+		char exceptionBuffer[256];
+		for (auto&sig:autoSignatures) {
+			for (unsigned slotIdx=0; slotIdx<sig->_slots.size(); ++slotIdx) {
+				if (sig->_slots[slotIdx]._type == DescriptorType::Empty) continue;
+				// For slots that are filled in, all signatures must agree. You may hit an exception here, if (for example), a slot is
+				// used with one type in the pixel shader, but another type in the vertex shader. This doesn't work because with graphics
+				// pipelines there is one descriptor set that is applied to be used by all shaders in the pipeline
+				if (result._slots[slotIdx]._type != DescriptorType::Empty && result._slots[slotIdx]._type != sig->_slots[slotIdx]._type) {
+					StringMeldInPlace(exceptionBuffer) << "Cannot build auto descriptor set because descriptor slot (" << slotIdx << ") do not agree. (" << AsString(sig->_slots[slotIdx]._type) << " vs " << AsString(result._slots[slotIdx]._type) << ")";
+					Throw(std::runtime_error(exceptionBuffer));
+				}
+				if (result._slots[slotIdx]._type != DescriptorType::Empty && result._slots[slotIdx]._count != sig->_slots[slotIdx]._count) {
+					StringMeldInPlace(exceptionBuffer) << "Cannot build auto descriptor set because array count for descriptor slot (" << slotIdx << ") do not agree). (" << sig->_slots[slotIdx]._count << " vs " << result._slots[slotIdx]._count << ")";
+					Throw(std::runtime_error(exceptionBuffer));
+				}
+				result._slots[slotIdx] = sig->_slots[slotIdx];
+				result._slotNames[slotIdx] = sig->_slotNames[slotIdx];
+			}
+
+			assert(sig->_fixedSamplers.empty());		// we ignore fixed samplers in signatures from reflection data
+		}
+
+		if (predefinedLayout) {
+			for (unsigned s=0; s<result._slots.size(); ++s) {
+				if (result._slots[s]._type == DescriptorType::Sampler) {
+					// look for a fixed sampler in the predefined layout
+					auto name = result._slotNames[s];
+					auto i = std::find_if(predefinedLayout->_slots.begin(), predefinedLayout->_slots.end(), [name](const auto& c) { return Hash64(c._name) == name; });
+					if (i != predefinedLayout->_slots.end() && i->_fixedSamplerIdx != ~0u) {
+						if (result._fixedSamplers.size() <= s)
+							result._fixedSamplers.resize(s+1);
+						result._fixedSamplers[s] = samplerPool->GetSampler(predefinedLayout->_fixedSamplers[i->_fixedSamplerIdx]);
+					}
 				}
 			}
 		}
+
 		return result;
 	}
 
 	PipelineLayoutInitializer PredefinedPipelineLayout::MakePipelineLayoutInitializerInternal(
-		const PipelineLayoutInitializer* autoInitializer,
+		IteratorRange<const PipelineLayoutInitializer**> autoInitializers,
 		ShaderLanguage language, SamplerPool* samplerPool) const
 	{
-		auto descSetCount = autoInitializer ? autoInitializer->GetDescriptorSets().size() : _descriptorSets.size();
+		unsigned descSetCount = 0;
+		if (autoInitializers.empty()) { 
+			descSetCount = _descriptorSets.size();
+		} else {
+			for (auto& sig:autoInitializers) descSetCount = std::max(unsigned(sig->GetDescriptorSets().size()), descSetCount);
+		}
 		PipelineLayoutInitializer::DescriptorSetBinding descriptorSetBindings[descSetCount];
+		std::vector<const DescriptorSetSignature*> descSetSigs;
+		descSetSigs.reserve(autoInitializers.size());
 		size_t c=0;
 		for (; c<_descriptorSets.size() && c<descSetCount; ++c) {
 			descriptorSetBindings[c]._name = _descriptorSets[c]._name;
 			descriptorSetBindings[c]._pipelineType = _descriptorSets[c]._pipelineType;
 			if (_descriptorSets[c]._isAuto) {
-				if (!autoInitializer)
+				if (autoInitializers.empty())
 					Throw(std::runtime_error("Pipeline layout has auto descriptor sets and cannot be used without reflection information from the shader"));
-				if (c < autoInitializer->GetDescriptorSets().size()) {
-					auto* matchingDescriptorSet = &autoInitializer->GetDescriptorSets()[c]._signature;
-					descriptorSetBindings[c]._signature = BuildAutoDescriptorSet(*matchingDescriptorSet, *_descriptorSets[c]._descSet, samplerPool);
+
+				descSetSigs.clear();
+				for (auto&sig:autoInitializers) if (c < sig->GetDescriptorSets().size()) descSetSigs.push_back(&sig->GetDescriptorSets()[c]._signature);
+				if (!descSetSigs.empty()) {
+					descriptorSetBindings[c]._signature = BuildAutoDescriptorSet(MakeIteratorRange(descSetSigs), _descriptorSets[c]._descSet.get(), samplerPool);
 				} else {
 					// shader doesn't actually use anything from this descriptor set, we'll just keep the signature blank
 				}
@@ -222,24 +262,41 @@ namespace RenderCore { namespace Assets
 				descriptorSetBindings[c]._signature = _descriptorSets[c]._descSet->MakeDescriptorSetSignature(samplerPool);
 			}
 		}
-		if (autoInitializer) {
+		if (!autoInitializers.empty()) {
 			// If the shader requires some descriptor sets that aren't in the predefined layout, we'll include those here
-			for (; c<autoInitializer->GetDescriptorSets().size(); ++c)
-				descriptorSetBindings[c] = autoInitializer->GetDescriptorSets()[c];
+			for (; c<descSetCount; ++c) {
+				descSetSigs.clear();
+				for (auto&sig:autoInitializers) if (c < sig->GetDescriptorSets().size()) descSetSigs.push_back(&sig->GetDescriptorSets()[c]._signature);
+				assert(!descSetSigs.empty());
+				descriptorSetBindings[c]._signature = BuildAutoDescriptorSet(MakeIteratorRange(descSetSigs), nullptr, samplerPool);
+			}
 
-			// If there's at least one auto descriptor set, we'll reset all of the pipeline types to 
-			if (!autoInitializer->GetDescriptorSets().empty())
+			// If there's at least one auto descriptor set, we'll reset all of the pipeline types to the pipeline type expected
+			// by the auto initializer. The pipeline type must be consistant across the entire pipeline layout, after all
+			std::optional<PipelineType> autoPipelineType;
+			for (auto& sig:autoInitializers)
+				for (auto& descSet:sig->GetDescriptorSets()) {
+					if (autoPipelineType.has_value() && *autoPipelineType != descSet._pipelineType)
+						Throw(std::runtime_error("Cannot build pipeline layout with auto descriptor sets because the pipeline types of the auto descriptor sets do not agree"));
+					autoPipelineType = descSet._pipelineType;
+				}
+			if (autoPipelineType.has_value())
 				for (unsigned c=0; c<descSetCount; ++c)
-					descriptorSetBindings[c]._pipelineType = autoInitializer->GetDescriptorSets()[0]._pipelineType;
+					descriptorSetBindings[c]._pipelineType = *autoPipelineType;
 		}
 
 		PipelineLayoutInitializer::PushConstantsBinding pushConstantBindings[3];
 		unsigned pushConstantBindingsCount = 0;
 		IteratorRange<const PipelineLayoutInitializer::PushConstantsBinding*> pushConstantsInitializer;
 
-		if (autoInitializer) {
+		if (!autoInitializers.empty()) {
 			// also just defer to the autoInitializer for push constant initializers
-			pushConstantsInitializer = autoInitializer->GetPushConstants();
+			for (auto& sig:autoInitializers)
+				for (auto& c:sig->GetPushConstants()) {
+					if (pushConstantBindingsCount >= dimof(pushConstantBindings))
+						Throw(std::runtime_error("Too many push constant bindings from auto descriptor sets while building pipeline layout"));
+					pushConstantBindings[pushConstantBindingsCount++] = c;
+				}
 		} else {
 			if (_vsPushConstants.second) {
 				auto& binding = pushConstantBindings[pushConstantBindingsCount++];
@@ -282,14 +339,22 @@ namespace RenderCore { namespace Assets
 
 	PipelineLayoutInitializer PredefinedPipelineLayout::MakePipelineLayoutInitializer(ShaderLanguage language, SamplerPool* samplerPool) const
 	{
-		return MakePipelineLayoutInitializerInternal(nullptr, language, samplerPool);
+		return MakePipelineLayoutInitializerInternal({}, language, samplerPool);
 	}
 
 	PipelineLayoutInitializer PredefinedPipelineLayout::MakePipelineLayoutInitializerWithAutoMatching(
 		const PipelineLayoutInitializer& autoInitializer,
 		ShaderLanguage language, SamplerPool* samplerPool) const
 	{
-		return MakePipelineLayoutInitializerInternal(&autoInitializer, language, samplerPool);
+		const PipelineLayoutInitializer* inits[] = {&autoInitializer};
+		return MakePipelineLayoutInitializerInternal(MakeIteratorRange(inits), language, samplerPool);
+	}
+
+	PipelineLayoutInitializer PredefinedPipelineLayout::MakePipelineLayoutInitializerWithAutoMatching(
+		IteratorRange<const PipelineLayoutInitializer**> autoInitializers,
+		ShaderLanguage language, SamplerPool* samplerPool) const
+	{
+		return MakePipelineLayoutInitializerInternal(autoInitializers, language, samplerPool);
 	}
 
 	const PredefinedDescriptorSetLayout* PredefinedPipelineLayout::FindDescriptorSet(StringSection<> name) const

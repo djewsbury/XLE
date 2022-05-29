@@ -455,6 +455,45 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			Throw(std::runtime_error("Missing shader stages while building shader program"));
 	}
 
+	// Make a final pipeline laaout (for a graphics pipeline) including filling in "auto" descriptor sets as necessary
+	static std::shared_ptr<ICompiledPipelineLayout> MakeCompatibleCompiledPipelineLayout(
+		IDevice& device,
+		SamplerPool* samplerPool,
+		RenderCore::Assets::PredefinedPipelineLayout& predefinedPipelineLayout,
+		const CompiledShaderByteCode* vsByteCode,
+		const CompiledShaderByteCode* psByteCode=nullptr,
+		const CompiledShaderByteCode* gsByteCode=nullptr)
+	{
+		std::shared_ptr<ICompiledPipelineLayout> finalPipelineLayout;
+		if (predefinedPipelineLayout.HasAutoDescriptorSets()) {
+			PipelineLayoutInitializer layoutInits[3];
+			const PipelineLayoutInitializer* layoutPtrs[3];
+			unsigned layoutInitCount = 0;
+			if (vsByteCode) {
+				layoutInits[layoutInitCount] = Metal::BuildPipelineLayoutInitializer(*vsByteCode);
+				layoutPtrs[layoutInitCount] = &layoutInits[layoutInitCount];
+				++layoutInitCount;
+			}
+			if (psByteCode) {
+				layoutInits[layoutInitCount] = Metal::BuildPipelineLayoutInitializer(*psByteCode);
+				layoutPtrs[layoutInitCount] = &layoutInits[layoutInitCount];
+				++layoutInitCount;
+			}
+			if (gsByteCode) {
+				layoutInits[layoutInitCount] = Metal::BuildPipelineLayoutInitializer(*gsByteCode);
+				layoutPtrs[layoutInitCount] = &layoutInits[layoutInitCount];
+				++layoutInitCount;
+			}
+			auto initializer = predefinedPipelineLayout.MakePipelineLayoutInitializerWithAutoMatching(
+				MakeIteratorRange(layoutPtrs, &layoutPtrs[layoutInitCount]), GetDefaultShaderLanguage(), samplerPool);
+			finalPipelineLayout = device.CreatePipelineLayout(initializer);
+		} else {
+			auto initializer = predefinedPipelineLayout.MakePipelineLayoutInitializer(GetDefaultShaderLanguage(), samplerPool);
+			finalPipelineLayout = device.CreatePipelineLayout(initializer);
+		}
+		return finalPipelineLayout;
+	}
+
 	static void MakeGraphicsPipelineFuture1(
 		std::promise<GraphicsPipelineAndLayout>&& promise,
 		const std::shared_ptr<IDevice>& device,
@@ -463,8 +502,59 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>&& pipelineLayout,
 		const GraphicsPipelineRetainedConstructionParams& params)
 	{
-		assert(0);
-		promise.set_exception(std::make_exception_ptr(std::runtime_error("Unimplemented")));
+		if (!byteCodeFuture[(unsigned)ShaderStage::Vertex])
+			Throw(std::runtime_error("Missing vertex shader stage while building shader program"));
+
+		if (byteCodeFuture[(unsigned)ShaderStage::Pixel] && !byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
+			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel]).ThenConstructToPromise(
+				std::move(promise),
+				[pipelineLayout=std::move(pipelineLayout), weakDevice=std::weak_ptr<IDevice>{device}, samplerPool, params=std::move(params)](
+					const CompiledShaderByteCode& vsCode, 
+					const CompiledShaderByteCode& psCode) mutable {
+					auto d = weakDevice.lock();
+					if (!d) Throw(std::runtime_error("Device shutdown before completion"));
+
+					auto pipelineLayoutActual = MakeCompatibleCompiledPipelineLayout(*d, samplerPool.get(), *pipelineLayout, &vsCode, &psCode);
+					Metal::ShaderProgram shaderProgram{
+						Metal::GetObjectFactory(),
+						pipelineLayoutActual, vsCode, psCode};
+					return MakeGraphicsPipelineAndLayout(shaderProgram, pipelineLayoutActual, {}, params);
+				});
+		} else if (byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
+			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel], byteCodeFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToPromise(
+				std::move(promise),
+				[pipelineLayout=std::move(pipelineLayout), weakDevice=std::weak_ptr<IDevice>{device}, samplerPool, params=std::move(params)](
+					const CompiledShaderByteCode& vsCode, 
+					const CompiledShaderByteCode& psCode,
+					const CompiledShaderByteCode& gsCode) mutable {
+					auto d = weakDevice.lock();
+					if (!d) Throw(std::runtime_error("Device shutdown before completion"));
+
+					auto pipelineLayoutActual = MakeCompatibleCompiledPipelineLayout(*d, samplerPool.get(), *pipelineLayout, &vsCode, &psCode);
+					Metal::ShaderProgram shaderProgram(
+						Metal::GetObjectFactory(),
+						pipelineLayoutActual, vsCode, gsCode, psCode,
+						StreamOutputInitializers{params._pipelineDesc->_soElements, params._pipelineDesc->_soBufferStrides});
+					return MakeGraphicsPipelineAndLayout(shaderProgram, pipelineLayoutActual, {}, params);
+				});
+		} else if (!byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
+			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToPromise(
+				std::move(promise),
+				[pipelineLayout=std::move(pipelineLayout), weakDevice=std::weak_ptr<IDevice>{device}, samplerPool, params=std::move(params)](
+					const CompiledShaderByteCode& vsCode, 
+					const CompiledShaderByteCode& gsCode) mutable {
+					auto d = weakDevice.lock();
+					if (!d) Throw(std::runtime_error("Device shutdown before completion"));
+
+					auto pipelineLayoutActual = MakeCompatibleCompiledPipelineLayout(*d, samplerPool.get(), *pipelineLayout, &vsCode, &gsCode);
+					Metal::ShaderProgram shaderProgram(
+						Metal::GetObjectFactory(),
+						pipelineLayoutActual, vsCode, gsCode, CompiledShaderByteCode{},
+						StreamOutputInitializers{params._pipelineDesc->_soElements, params._pipelineDesc->_soBufferStrides});
+					return MakeGraphicsPipelineAndLayout(shaderProgram, pipelineLayoutActual, {}, params);
+				});
+		} else
+			Throw(std::runtime_error("Missing shader stages while building shader program"));
 	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -515,23 +605,13 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		// Variation for MakePipelineLayoutInitializerWithAutoMatching
 		::Assets::WhenAll(csCode).ThenConstructToPromise(
 			std::move(promise),
-			[weakDevice=std::weak_ptr<IDevice>{device}, samplers=samplerPool, predefinedPipelineLayout=std::move(pipelineLayout)](const auto& csCodeActual) {
+			[weakDevice=std::weak_ptr<IDevice>{device}, samplerPool=samplerPool, predefinedPipelineLayout=std::move(pipelineLayout)](const auto& csCodeActual) {
 				auto d = weakDevice.lock();
 				if (!d) Throw(std::runtime_error("Device shutdown before completion"));
 
 				// This case is a little more complicated because we need to generate a pipeline layout 
 				// (potentially using the shader byte code)
-				std::shared_ptr<ICompiledPipelineLayout> finalPipelineLayout;
-				if (predefinedPipelineLayout->HasAutoDescriptorSets()) {
-					auto autoInitializer = Metal::BuildPipelineLayoutInitializer(csCodeActual);
-					auto initializer = predefinedPipelineLayout->MakePipelineLayoutInitializerWithAutoMatching(
-						autoInitializer, GetDefaultShaderLanguage(), samplers.get());
-					finalPipelineLayout = d->CreatePipelineLayout(initializer);
-				} else {
-					auto initializer = predefinedPipelineLayout->MakePipelineLayoutInitializer(GetDefaultShaderLanguage(), samplers.get());
-					finalPipelineLayout = d->CreatePipelineLayout(initializer);
-				}
-
+				auto finalPipelineLayout = MakeCompatibleCompiledPipelineLayout(*d, samplerPool.get(), *predefinedPipelineLayout, &csCodeActual);
 				return MakeComputePipelineAndLayout(csCodeActual, finalPipelineLayout, predefinedPipelineLayout->GetDependencyValidation());
 			});
 	}
