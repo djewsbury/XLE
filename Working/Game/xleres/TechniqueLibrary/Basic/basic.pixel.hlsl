@@ -9,8 +9,8 @@
 #include "../Framework/VSOUT.hlsl"
 #include "../Utility/Colour.hlsl"
 
-Texture2D		InputTexture BIND_NUMERIC_T0;
-[[vk::input_attachment_index(0)]] SubpassInput<float4> SubpassInputAttachment BIND_NUMERIC_T2;
+Texture2D		InputTexture;
+[[vk::input_attachment_index(0)]] SubpassInput<float4> SubpassInputAttachment;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -2,17 +2,17 @@
 #include "xleres/TechniqueLibrary/Math/Misc.hlsl"
 #include "xleres/Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
 
-Texture2D<float> InputTexture : register(t1, space1);
-RWTexture2D<float> OutputTexture : register(u2, space1);
-RWTexture2D<float> DownsampleDepths : register(u3, space1);
-RWTexture2D<float> AccumulationAO : register(u4, space1);
-Texture2D InputNormals : register(t6, space1);
-Texture2D<int2> GBufferMotion : register(t7, space1);
-Texture2D<float> AccumulationAOLast : register(t8, space1);
+Texture2D<float> InputTexture;
+RWTexture2D<float> OutputTexture;
+RWTexture2D<float> DownsampleDepths;
+RWTexture2D<float> AccumulationAO;
+Texture2D InputNormals;
+Texture2D<int2> GBufferMotion;
+Texture2D<float> AccumulationAOLast;
 
-Texture2D<float> HierarchicalDepths : register(t9, space1);
+Texture2D<float> HierarchicalDepths;
 
-cbuffer AOProps : register(b5, space1)
+cbuffer AOProps
 {
 	uint FrameIdx;
 	bool ClearAccumulation;

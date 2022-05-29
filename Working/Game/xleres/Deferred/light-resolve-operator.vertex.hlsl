@@ -70,7 +70,7 @@ struct TileableLightDesc
 	float LinearizedDepthMin, LinearizedDepthMax;
 	uint Dummy0, Dummy1;
 };
-StructuredBuffer<TileableLightDesc> CombinedLightBuffer : register (t1, space1);
+StructuredBuffer<TileableLightDesc> CombinedLightBuffer : register(t0, space0);
 
 void PrepareMany(
 	float3 iPosition : POSITION,

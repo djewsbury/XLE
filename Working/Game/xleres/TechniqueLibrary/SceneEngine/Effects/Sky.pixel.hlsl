@@ -12,9 +12,9 @@
 #include "../../Framework/Binding.hlsl"
 
 #if SKY_PROJECTION==1
-	Texture2D ReflectionBox[3]	BIND_MAT_T3;
+	Texture2D ReflectionBox[3];
 #elif SKY_PROJECTION==5
-	TextureCube ReflectionCube	BIND_MAT_T3;
+	TextureCube ReflectionCube;
 #endif
 
 float3 CalculateBaseSkyColor(float2 texCoord, float3 viewFrustumVector)

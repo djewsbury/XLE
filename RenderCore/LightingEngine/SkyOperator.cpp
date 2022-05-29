@@ -39,11 +39,11 @@ namespace RenderCore { namespace LightingEngine
 	void SkyOperator::SetResource(std::shared_ptr<IResourceView> texture)
 	{
 		auto& pipelineLayout = _shader->GetPredefinedPipelineLayout();
-		auto* descSetLayout = pipelineLayout.FindDescriptorSet("Material");
+		auto* descSetLayout = pipelineLayout.FindDescriptorSet("SkyDS");
 		assert(descSetLayout);
 		
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Hash64("t3"));
+		usi.BindResourceView(0, Hash64("Sky"));
 		auto& commonRes = *Techniques::Services::GetCommonResources();
 		if (texture) {
 			_descSet = Techniques::ConstructDescriptorSetHelper{_device, &commonRes._samplerPool}
@@ -80,7 +80,7 @@ namespace RenderCore { namespace LightingEngine
 		const Techniques::FrameBufferTarget& fbTarget)
 	{
 		UniformsStreamInterface usi;
-		usi.BindFixedDescriptorSet(0, Hash64("Material"));
+		usi.BindFixedDescriptorSet(0, Hash64("SkyDS"));
 
 		ParameterBox params;
 		params.SetParameter("SKY_PROJECTION", 5);
@@ -94,7 +94,7 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::FullViewportOperatorSubType::MaxDepth,
 			SKY_PIXEL_HLSL ":main",
 			params,
-			GENERAL_OPERATOR_PIPELINE ":GraphicsWithMaterial",
+			GENERAL_OPERATOR_PIPELINE ":Sky",
 			po, usi);
 		::Assets::WhenAll(futureShader).ThenConstructToPromise(
 			std::move(promise),

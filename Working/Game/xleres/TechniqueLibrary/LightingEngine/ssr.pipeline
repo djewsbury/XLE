@@ -53,7 +53,7 @@ DescriptorSet DownsampleDepthsDS
 
 PipelineLayout DownsampleDepths
 {
-	ComputeDescriptorSet Sequencer;
 	ComputeDescriptorSet DownsampleDepthsDS;
+	ComputeDescriptorSet Sequencer;
 };
 

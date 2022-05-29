@@ -17,11 +17,11 @@
 #include "IBL/IBLRef.hlsl"
 #include "../../Math/Misc.hlsl"        // for DitherPatternInt
 
-TextureCube SpecularIBL : register(t1, space2);
-Texture2D<float2> GlossLUT : register(t2, space2);        // this is the look up table used in the split-sum IBL glossy reflections
+TextureCube SpecularIBL : register(t1, space0);
+Texture2D<float2> GlossLUT : register(t2, space0);        // this is the look up table used in the split-sum IBL glossy reflections
 
-TextureCube DiffuseIBL : register(t4, space2);
-Texture2DArray<float> GlossTransLUT : register(t5, space2);
+TextureCube DiffuseIBL : register(t4, space0);
+Texture2DArray<float> GlossTransLUT : register(t5, space0);
 
 #if MAT_SEPARATE_REFRACTION_MAP
     TextureCube SpecularTransIBL;

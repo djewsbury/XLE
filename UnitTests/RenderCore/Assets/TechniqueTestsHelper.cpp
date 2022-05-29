@@ -93,7 +93,7 @@ namespace UnitTests
 		DescriptorSet Sequencer
 		{
 			UniformBuffer GlobalTransform;
-			UniformBuffer LocalTransform;
+			UniformBuffer ReciprocalViewportDimensionsCB;
 			UniformBuffer SeqBuffer0;
 			UniformBuffer b3;
 			UniformBuffer b4;
@@ -134,8 +134,11 @@ namespace UnitTests
 			};
 		};
 
+		DescriptorSet Numeric {};
+
 		PipelineLayout GraphicsMain
 		{
+			DescriptorSet Numeric;
 			DescriptorSet Sequencer;
 			DescriptorSet Material;
 		};

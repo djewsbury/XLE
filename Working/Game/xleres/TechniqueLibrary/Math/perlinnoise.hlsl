@@ -9,8 +9,8 @@
 
 #include "../Framework/CommonResources.hlsl"
 
-Texture1D<float3>       GradTexture     BIND_NUMERIC_T0;
-Texture1D<float>        PermTexture     BIND_NUMERIC_T1;
+Texture1D<float3>       GradTexture;
+Texture1D<float>        PermTexture;
 
     //
     //      Improved Perlin noise calculation

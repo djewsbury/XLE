@@ -2,21 +2,9 @@
 #include "../Config/sequencer.pipeline"
 #include "lighting-engine.pipeline"
 
-DescriptorSet AODS
+DescriptorSet General
 {
-	ConstantBuffer cb;							// 0
-	SampledTexture InputTexture;				// 1
-	UnorderedAccessTexture OutputTexture;		// 2
-	UnorderedAccessTexture DownsampleDepths;	// 3
-	UnorderedAccessTexture AccumulationAO;		// 4
-	ConstantBuffer AOProps;						// 5
-	SampledTexture InputNormals;				// 6
-	SampledTexture GBufferMotion;				// 7
-	SampledTexture AccumulationAOLast;			// 8
-	SampledTexture tex0;						// 9
-	SampledTexture tex1;						// 10
-	ConstantBuffer b11;							// 11
-	Sampler FixedSampler						// 12
+	Sampler FixedSampler
 	{
 		Filter = Bilinear,
 		AddressU = Wrap,
@@ -26,41 +14,27 @@ DescriptorSet AODS
 
 PipelineLayout ComputeMain
 {
+	AutoDescriptorSet General;
 	ComputeDescriptorSet Sequencer;
-	ComputeDescriptorSet AODS;
 	ComputeDescriptorSet LightingEngine;
 };
 
 PipelineLayout GraphicsMain
 {
+	AutoDescriptorSet General;
 	DescriptorSet Sequencer;
-	DescriptorSet AODS;
 	DescriptorSet LightingEngine;
 };
 
 ////////////////////////////////////////////////////////
 
-DescriptorSet Material
+DescriptorSet SkyDS
 {
-	UniformBuffer b0;						// 0
-	UniformBuffer b1;						// 1
-	UniformBuffer b2;						// 2
-
-	SampledTexture t3;						// 3
-	SampledTexture t4;						// 4
-	SampledTexture t5;						// 5
-	SampledTexture t7;						// 6
-	SampledTexture t7;						// 7
-	SampledTexture t8;						// 8
-	SampledTexture t9;						// 9
-	SampledTexture t10;						// 10
-
-	UnorderedAccessBuffer u11;				// 11
-	Sampler s12;							// 12
+	SampledTexture Sky;
 };
 
-PipelineLayout GraphicsWithMaterial
+PipelineLayout Sky
 {
+	DescriptorSet SkyDS;
 	DescriptorSet Sequencer;
-	DescriptorSet Material;
 };

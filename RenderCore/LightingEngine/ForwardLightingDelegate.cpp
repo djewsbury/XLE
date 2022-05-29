@@ -96,7 +96,7 @@ namespace RenderCore { namespace LightingEngine
 			_operator = Techniques::CreateFullViewportOperator(
 				pool, Techniques::FullViewportOperatorSubType::DisableDepth,
 				BASIC_PIXEL_HLSL ":copy_inputattachment",
-				{}, LIGHTING_OPERATOR_PIPELINE ":LightingOperator",
+				{}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
 				fbTarget, usi);
 		}
 	};

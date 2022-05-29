@@ -81,5 +81,7 @@ namespace RenderCore { namespace Techniques
 
         std::pair<const char*, unsigned> TryDehash(uint64_t);
     }
+
+    static constexpr unsigned s_defaultMaterialDescSetSlot = 2;
 }}
 

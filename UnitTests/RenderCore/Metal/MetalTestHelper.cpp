@@ -537,9 +537,9 @@ namespace UnitTests
 		};
 
 		RenderCore::PipelineLayoutInitializer desc;
+		desc.AppendDescriptorSet("Numeric", numericSet, RenderCore::PipelineType::Graphics);
 		desc.AppendDescriptorSet("Sequencer", sequencerSet, RenderCore::PipelineType::Graphics);
 		desc.AppendDescriptorSet("Material", materialSet, RenderCore::PipelineType::Graphics);
-		desc.AppendDescriptorSet("Numeric", numericSet, RenderCore::PipelineType::Graphics);
 		desc.AppendPushConstants("LocalTransform", 64, ShaderStage::Vertex);
 		return device.CreatePipelineLayout(desc);
 	}

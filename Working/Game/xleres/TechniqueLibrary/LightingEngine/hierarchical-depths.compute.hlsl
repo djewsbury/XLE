@@ -32,9 +32,9 @@ THE SOFTWARE.
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
-Texture2D<float> InputDepths            : register(t0, space1);
-RWTexture2D<float> DownsampleDepths[13] : register(u1, space1);
-RWBuffer<uint> AtomicBuffer             : register(u2, space1);
+Texture2D<float> InputDepths            : register(t0, space0);
+RWTexture2D<float> DownsampleDepths[13] : register(u1, space0);
+RWBuffer<uint> AtomicBuffer             : register(u2, space0);
 
 groupshared float GroupDepthValues[16][16];
 groupshared uint GroupAtomicCounter;

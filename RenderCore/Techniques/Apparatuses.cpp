@@ -53,7 +53,8 @@ namespace RenderCore { namespace Techniques
 					return (unsigned)std::distance(t->second->_descriptorSets.begin(), q);
 				}
 		}
-		return 1;		// default
+		assert(0);
+		return s_defaultMaterialDescSetSlot;		// default
 	}
 
 	DrawingApparatus::DrawingApparatus(std::shared_ptr<IDevice> device)

@@ -11,45 +11,45 @@
 #define VISUALIZE_TYPE_GBUFFERNORMALS 6
 
 #if VISUALIZE_TYPE == VISUALIZE_TYPE_DEPTH
-	Texture2D<float> VisualizeInput : register(t1, space1);
+	Texture2D<float> VisualizeInput;
 	float4 Value(uint2 position)
 	{
 		return float4(VisualizeInput.Load(uint3(position.xy, 0)).rrr, 1);
 	}
 #elif VISUALIZE_TYPE == VISUALIZE_TYPE_NORMAL
-	Texture2D<float3> VisualizeInput : register(t1, space1);
+	Texture2D<float3> VisualizeInput;
 	float4 Value(uint2 position)
 	{
 		return float4(0.5f + 0.5f * VisualizeInput.Load(uint3(position.xy, 0)).rgb, 1);
 	}
 #elif VISUALIZE_TYPE == VISUALIZE_TYPE_MOTION
-	Texture2D<int3> VisualizeInput : register(t1, space1);
+	Texture2D<int3> VisualizeInput;
 	float4 Value(uint2 position)
 	{
 		return float4(VisualizeInput.Load(uint3(position.xy, 0)).rg / 255.f, 0, 1);
 	}
 #elif VISUALIZE_TYPE == VISUALIZE_TYPE_GREYSCALE
-	Texture2D<float> VisualizeInput : register(t1, space1);
+	Texture2D<float> VisualizeInput;
 	float4 Value(uint2 position)
 	{
 		return float4(VisualizeInput.Load(uint3(position.xy, 0)).rrr, 1);
 	}
 #elif VISUALIZE_TYPE == VISUALIZE_TYPE_GBUFFERNORMALS
 	#include "../TechniqueLibrary/Framework/gbuffer.hlsl"
-	Texture2D VisualizeInput : register(t1, space1);
+	Texture2D VisualizeInput;
 	float4 Value(uint2 position)
 	{
 		return float4(DecompressGBufferNormal(VisualizeInput.Load(uint3(position.xy, 0)).rgb), 1);
 	}
 #else
-	Texture2D VisualizeInput : register(t1, space1);
+	Texture2D VisualizeInput;
 	float4 Value(uint2 position)
 	{
 		return float4(VisualizeInput.Load(uint3(position.xy, 0)).rgb, 1);
 	}
 #endif
 
-cbuffer DebuggingGlobals : register(b5, space1)
+cbuffer DebuggingGlobals
 {
 	const uint2 ViewportDimensions;
 	const int2 MousePosition;

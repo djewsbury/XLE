@@ -13,6 +13,7 @@
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/PipelineCollection.h"
 #include "../Techniques/CompiledLayoutPool.h"
+#include "../Assets/PredefinedPipelineLayout.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
 #include "../IAnnotator.h"
@@ -297,12 +298,11 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 		const Configuration& config)
 	{
-		auto pipelineLayoutMarker = ::Assets::MakeAssetPtr<Techniques::CompiledPipelineLayoutAsset>(
-			pipelinePool->GetDevice(),
-			TILED_LIGHTING_PREPARE_PIPELINE ":GraphicsMain");
+		const char pipelineLayoutAssetName[] = TILED_LIGHTING_PREPARE_PIPELINE ":GraphicsMain";
+		auto pipelineLayoutMarker = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
 		::Assets::WhenAll(pipelineLayoutMarker).ThenConstructToPromise(
 			std::move(promise),
-			[pipelinePool, config](std::promise<std::shared_ptr<RasterizationLightTileOperator>>&& promise, std::shared_ptr<Techniques::CompiledPipelineLayoutAsset> pipelineLayout) {
+			[pipelinePool, config, plan=Hash64(pipelineLayoutAssetName)](std::promise<std::shared_ptr<RasterizationLightTileOperator>>&& promise, std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> pipelineLayout) {
 				TRY {
 					auto pipelineDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 					pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL ":PrepareMany";
@@ -325,7 +325,7 @@ namespace RenderCore { namespace LightingEngine
 					auto futurePipeline = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
 					pipelinePool->CreateGraphicsPipeline(
 						futurePipeline->AdoptPromise(),
-						pipelineLayout->GetPipelineLayout(),
+						{pipelineLayout, plan},
 						pipelineDesc,
 						{},
 						inputStates, fbTarget);

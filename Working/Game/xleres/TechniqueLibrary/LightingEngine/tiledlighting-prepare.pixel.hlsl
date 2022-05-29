@@ -1,6 +1,6 @@
 
-RWTexture3D<uint> TiledLightBitField : register(u0, space1);
-Texture2D<float> DownsampleDepths : register(t2, space1);
+RWTexture3D<uint> TiledLightBitField : register(u1, space0);
+Texture2D<float> DownsampleDepths : register(t2, space0);
 
 static const uint GridDims = 16;
 
@@ -53,8 +53,8 @@ uint LaneIndexWithKey(uint key)
 #include "xleres/TechniqueLibrary/Math/TextureAlgorithm.hlsl"
 #include "xleres/TechniqueLibrary/LightingEngine/LightDesc.hlsl"
 
-StructuredBuffer<LightDesc> CombinedLightBuffer : register (t1, space1);
-StructuredBuffer<uint> LightDepthTable : register(t3, space1);
+StructuredBuffer<LightDesc> CombinedLightBuffer : register (t0, space0);
+StructuredBuffer<uint> LightDepthTable : register(t3, space0);
 
 float DistanceAttenuation(float distanceSq, float power) { return power / (distanceSq+1); }
 

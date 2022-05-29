@@ -22,9 +22,9 @@ DescriptorSet Material
 
 PipelineLayout ImmediateDrawables
 {
+	DescriptorSet Numeric;
 	DescriptorSet Sequencer;
 	DescriptorSet Material;
-	DescriptorSet Numeric;
 
 	VSPushConstants LocalTransform
 	{
