@@ -234,11 +234,12 @@ namespace RenderCore { namespace Techniques
 				toLoadDelegate |= 1ull << uint64_t(c);
 
 		assert(toLoadDelegate);
-		auto minToCheck = xl_ctz8(toLoad);
-		auto maxPlusOneToCheck = 64 - xl_clz8(toLoad);
+		auto minToCheck = xl_ctz8(toLoadDelegate);
+		auto maxPlusOneToCheck = 64 - xl_clz8(toLoadDelegate);
 		IResourceView* rvDst[maxPlusOneToCheck];
 
 		del._delegate->WriteResourceViews(parsingContext, nullptr, toLoadDelegate, MakeIteratorRange(rvDst, &rvDst[maxPlusOneToCheck]));
+		parsingContext.RequireCommandList(del._delegate->_completionCmdList);
 		
 		for (unsigned c=minToCheck; c<maxPlusOneToCheck; ++c)
 			if (del._resourceInterfaceToUSI[c] != ~0u && (resourcesToQuery & (1 << uint64_t(del._resourceInterfaceToUSI[c])))) {
@@ -260,11 +261,11 @@ namespace RenderCore { namespace Techniques
 				toLoadDelegate |= 1ull << uint64_t(c);
 
 		assert(toLoadDelegate);
-		auto minToCheck = xl_ctz8(toLoad);
-		auto maxPlusOneToCheck = 64 - xl_clz8(toLoad);
+		auto minToCheck = xl_ctz8(toLoadDelegate);
+		auto maxPlusOneToCheck = 64 - xl_clz8(toLoadDelegate);
 		ISampler* samplerDst[maxPlusOneToCheck];
 
-		del._delegate->WriteSamplers(parsingContext, nullptr, toLoadDelegate, MakeIteratorRange(samplerDst, &samplerDst[maxPlusOneToCheck]));
+		del._delegate->WriteSamplers(parsingContext, nullptr, toLoadDelegate, MakeIteratorRange(&samplerDst[minToCheck], &samplerDst[maxPlusOneToCheck]));
 		
 		for (unsigned c=minToCheck; c<maxPlusOneToCheck; ++c)
 			if (del._samplerInterfaceToUSI[c] != ~0u && (samplersToQuery & (1 << uint64_t(del._samplerInterfaceToUSI[c])))) {

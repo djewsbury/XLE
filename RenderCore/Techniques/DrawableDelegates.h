@@ -15,6 +15,7 @@
 
 namespace Utility { class ParameterBox; }
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
+namespace BufferUploads { using CommandListID = uint32_t; }
 
 namespace RenderCore { namespace Techniques 
 {
@@ -37,8 +38,9 @@ namespace RenderCore { namespace Techniques
         virtual void WriteImmediateData(ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst);
         virtual size_t GetImmediateDataSize(ParsingContext& context, const void* objectContext, unsigned idx);
         virtual ~IShaderResourceDelegate();
-        
+
         UniformsStreamInterface _interface;
+        BufferUploads::CommandListID _completionCmdList = 0;
     protected:
 		void BindResourceView(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*> cbElements = {});
 		void BindImmediateData(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*> cbElements = {});
