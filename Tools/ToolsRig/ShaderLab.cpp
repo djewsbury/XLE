@@ -184,7 +184,8 @@ namespace ToolsRig
 				} CATCH (const ::Assets::Exceptions::InvalidAsset& e) {
 					auto depVel = ::Assets::GetDepValSys().Make();
 					depVel.RegisterDependency(formatter->GetDependencyValidation());
-					depVel.RegisterDependency(e.GetDependencyValidation());
+					if (e.GetDependencyValidation())
+						depVel.RegisterDependency(e.GetDependencyValidation());
 					Throw(::Assets::Exceptions::ConstructionError(e, depVel));
 				} CATCH (const std::exception& e) {
 					Throw(::Assets::Exceptions::ConstructionError(e, formatter->GetDependencyValidation()));

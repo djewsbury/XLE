@@ -78,7 +78,6 @@ WriteTriangleIndex=~
 VisNormals=~
 	Selectors=~
 		VSOUT_HAS_WORLD_POSITION=1
-		VSOUT_HAS_TANGENT_FRAME=1
 	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
 	GeometryShader=xleres/TechniqueLibrary/ToolsRig/Vis/geowires.geo.hlsl:NormalsAndTangents
 	PixelShader=xleres/TechniqueLibrary/Basic/basic.pixel.hlsl:PC
@@ -86,7 +85,6 @@ VisNormals=~
 
 VisWireframe=~
 	Selectors=~
-		GEO_HAS_TEXCOORD
 		VSOUT_HAS_WORLD_POSITION=1
 	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
 	GeometryShader=xleres/TechniqueLibrary/ToolsRig/Vis/solidwireframe.geo.hlsl:main

@@ -1,18 +1,18 @@
 ~~!Format=2; Tab=4
 galleon_sail_1=~
-	ShaderParams=~; MAT_DOUBLE_SIDED_LIGHTING=1u
+	Selectors=~; MAT_DOUBLE_SIDED_LIGHTING=1u
 	States=~; DoubleSided=1u
 galleon_sail=~
-	ShaderParams=~; MAT_DOUBLE_SIDED_LIGHTING=1u
-	Constants=~; SpecularMin=0.05f; RoughnessMin=0.9f; AlphaThreshold=0.5f
+	Selectors=~; MAT_DOUBLE_SIDED_LIGHTING=1u
+	Uniforms=~; SpecularMin=0.05f; RoughnessMin=0.9f; AlphaThreshold=0.5f
 		MaterialDiffuse={0.1f, 0.1f, 0.1f}c
 	States=~; DoubleSided=1u
 *=~
-	Constants=~; MetalMin=0u; RoughnessMax=0.25f; SpecularMin=0.03f; RoughnessMin=0.05f
+	Uniforms=~; MetalMin=0u; RoughnessMax=0.25f; SpecularMin=0.03f; RoughnessMin=0.05f
 		SpecularMax=0.2f; MetalMax=0u
 galleon_add03=~
-	ShaderParams=~; MAT_ALPHA_TEST=1u
-	ResourceBindings=~; DiffuseTexture=./images/24_galleon_add03pirate_df.dds; SpecularColorTexture=<:():>
+	Selectors=~; MAT_ALPHA_TEST=1u
+	Resources=~; DiffuseTexture=./images/24_galleon_add03pirate_df.dds; SpecularColorTexture=<:():>
 		NormalsTexture=./images/25_galleon_add03pirate_ddn.dds
 galleon_add02=~
-	ShaderParams=~; MAT_ALPHA_TEST=1u
+	Selectors=~; MAT_ALPHA_TEST=1u

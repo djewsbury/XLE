@@ -25,7 +25,7 @@ void WriteWire(inout LineStream<PCOut> outputStream, float3 worldStart, float3 w
     outputStream.RestartStrip();
 }
 
-[maxvertexcount(18)]
+[maxvertexcount(6)]
     void NormalsAndTangents(triangle VSOUT input[3], inout LineStream<PCOut> outputStream)
 {
         // for each vertex, we will create a tiny line for the normal, tangent and bitangent
