@@ -17,6 +17,7 @@
 #include "../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../RenderCore/UniformsStream.h"
 #include "../../RenderCore/FrameBufferDesc.h"
+#include "../../SceneEngine/Noise.h"
 #include "../../Formatters/IDynamicFormatter.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../ConsoleRig/GlobalServices.h"
@@ -31,13 +32,44 @@
 
 namespace ToolsRig
 {
+	class GlobalStateDelegate : public RenderCore::Techniques::IShaderResourceDelegate
+	{
+	public:
+		struct State
+		{
+			float _currentTime = 0.f;
+			unsigned _dummy[3] = {0,0,0};
+		};
+		State _state;
+
+		void WriteImmediateData(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override
+		{
+			assert(idx == 0);
+			assert(dst.size() == sizeof(_state));
+			std::memcpy(dst.begin(), &_state, sizeof(_state));
+		}
+
+		size_t GetImmediateDataSize(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override
+		{
+			assert(idx == 0);
+			return sizeof(_state);
+		}
+
+		GlobalStateDelegate()
+		{
+			_interface.BindImmediateData(0, Hash64("GlobalState"));
+		}
+	};
+
 	class CompiledTechnique : public ShaderLab::ICompiledOperation
 	{
 	public:
 		virtual RenderCore::LightingEngine::CompiledLightingTechnique& GetLightingTechnique() const override { assert(_operation); return *_operation; }
 		const ::Assets::DependencyValidation& GetDependencyValidation() const override  { return _depVal; }
-		virtual unsigned GetCompletionCommandList() const override { return _completionCommandList; }
+		unsigned GetCompletionCommandList() const override { return _completionCommandList; }
+		void AdvanceTime(float time) override { _globalStateDelegate->_state._currentTime += time; }
 		std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> _operation;
+		std::shared_ptr<GlobalStateDelegate> _globalStateDelegate;
 		::Assets::DependencyValidation _depVal;
 		unsigned _completionCommandList = 0;
 	};
@@ -71,15 +103,18 @@ namespace ToolsRig
 		auto result = std::make_shared<::Assets::MarkerPtr<ShaderLab::ICompiledOperation>>();
 		std::vector<RenderCore::Techniques::PreregisteredAttachment> preregAttachments { preregAttachmentsInit.begin(), preregAttachmentsInit.end() };
 		std::vector<RenderCore::Format> systemAttachmentsFormat { systemAttachmentFormatsInit.begin(), systemAttachmentFormatsInit.end() };
+		auto noiseDelegateFuture = SceneEngine::CreatePerlinNoiseResources();
 		auto weakThis = weak_from_this();
 		AsyncConstructToPromise(
 			result->AdoptPromise(),
-			[preregAttachments=std::move(preregAttachments), fBProps=fBProps, futureFormatter=std::move(futureFormatter), visualizeStep=std::move(visualizeStep), systemAttachmentsFormat=std::move(systemAttachmentsFormat), weakThis]() {
+			[preregAttachments=std::move(preregAttachments), fBProps=fBProps, futureFormatter=std::move(futureFormatter), visualizeStep=std::move(visualizeStep), systemAttachmentsFormat=std::move(systemAttachmentsFormat), noiseDelegateFuture=std::move(noiseDelegateFuture), weakThis]() mutable {
 				auto l = weakThis.lock();
 				if (!l) Throw(std::runtime_error("ShaderLab shutdown before construction finished"));
 
 				futureFormatter->StallWhilePending();
 				auto formatter = futureFormatter->Actualize();
+
+				auto noiseDelegate = noiseDelegateFuture.get();	// stall 
 
 				TRY {
 					OperationConstructorContext constructorContext;
@@ -111,8 +146,12 @@ namespace ToolsRig
 						}
 					}
 
+					auto globalStateDelegate = std::make_shared<GlobalStateDelegate>();
+
 					auto technique = std::make_shared<RenderCore::LightingEngine::CompiledLightingTechnique>();
 					auto& sequence = technique->CreateSequence();
+					sequence.CreateStep_BindDelegate(globalStateDelegate);
+					sequence.CreateStep_BindDelegate(noiseDelegate);
 					sequence.CreateStep_CallFunction(
 						[](RenderCore::LightingEngine::LightingTechniqueIterator& iterator) {
 							iterator._parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
@@ -138,6 +177,7 @@ namespace ToolsRig
 						constructorContext._depVal.RegisterDependency(result->_operation->GetDependencyValidation());
 					result->_depVal = std::move(constructorContext._depVal);
 					result->_completionCommandList = constructorContext._completionCommandList;
+					result->_globalStateDelegate = std::move(globalStateDelegate);
 					return std::static_pointer_cast<ICompiledOperation>(result);
 				} CATCH (const ::Assets::Exceptions::ConstructionError& e) {
 					Throw(::Assets::Exceptions::ConstructionError(e, formatter->GetDependencyValidation()));
@@ -247,6 +287,9 @@ namespace ToolsRig
 			RenderCore::Techniques::ImmediateDrawingApparatus& immediateDrawingApparatus) override
 		{
 			using namespace RenderCore;
+
+			// update graphics descriptor set, because we've probably just done bunch of unbind operations
+			parsingContext.GetUniformDelegateManager()->BringUpToDateGraphics(parsingContext);
 
 			Techniques::FrameBufferDescFragment fragment;
 

@@ -41,6 +41,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         ../SceneEngine/DynamicImposters.cpp
         ../SceneEngine/BasicLightingStateDelegate.cpp
         ../SceneEngine/ExecuteScene.cpp
+        ../SceneEngine/Noise.cpp
         )
 
     if (WIN32)

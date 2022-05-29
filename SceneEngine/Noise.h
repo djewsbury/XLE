@@ -6,21 +6,13 @@
 
 #pragma once
 
-#include "../RenderCore/Metal/TextureView.h"
+#include <memory>
+#include <future>
+
+namespace RenderCore { namespace Techniques { class IShaderResourceDelegate; }}
 
 namespace SceneEngine
 {
-    class PerlinNoiseResources
-    {
-    public:
-        class Desc {};
-
-        PerlinNoiseResources(const Desc& desc);
-        ~PerlinNoiseResources();
-
-        using SRV = RenderCore::Metal::ShaderResourceView;
-        SRV _gradShaderResource;
-        SRV _permShaderResource;
-    };
+	std::future<std::shared_ptr<RenderCore::Techniques::IShaderResourceDelegate>> CreatePerlinNoiseResources();
 }
 

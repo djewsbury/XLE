@@ -37,6 +37,7 @@ namespace ToolsRig
 			virtual RenderCore::LightingEngine::CompiledLightingTechnique& GetLightingTechnique() const = 0;
 			virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
 			virtual unsigned GetCompletionCommandList() const = 0;
+			virtual void AdvanceTime(float) = 0;
 			virtual ~ICompiledOperation() = default;
 		};
 
