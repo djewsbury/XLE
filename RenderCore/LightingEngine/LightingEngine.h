@@ -51,6 +51,7 @@ namespace RenderCore { namespace LightingEngine
 		class PrepareResourcesIterator;
 		std::unique_ptr<PrepareResourcesIterator> _prepareResourcesIterator;
 		Step GetNextPrepareResourcesStep();
+		void CleanupPostIteration();
 	};
 
 	class ILightScene;

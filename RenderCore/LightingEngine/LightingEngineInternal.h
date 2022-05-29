@@ -35,6 +35,9 @@ namespace RenderCore { namespace LightingEngine
 		ParseId CreatePrepareOnlyParseScene(Techniques::BatchFlags::BitField);
 		void CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig, ParseId parseId=0);
 
+		void CreateStep_BindDelegate(std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate);
+		void CreateStep_InvalidateUniforms();
+
 		// Ensure that we retain attachment data for the given semantic. This is typically used for debugging
 		//		-- ie, keeping an intermediate attachment that would otherwise be discarded after usage
 		void ForceRetainAttachment(uint64_t semantic, BindFlag::BitField layout);
@@ -58,7 +61,7 @@ namespace RenderCore { namespace LightingEngine
 
 		struct ExecuteStep
 		{
-			enum class Type { DrawSky, CallFunction, ExecuteDrawables, BeginRenderPassInstance, EndRenderPassInstance, NextRenderPassStep, PrepareOnly_ExecuteDrawables, None };
+			enum class Type { DrawSky, CallFunction, ExecuteDrawables, BeginRenderPassInstance, EndRenderPassInstance, NextRenderPassStep, PrepareOnly_ExecuteDrawables, BindDelegate, InvalidateUniforms, None };
 			Type _type = Type::None;
 			std::shared_ptr<Techniques::SequencerConfig> _sequencerConfig;
 			std::shared_ptr<Techniques::IShaderResourceDelegate> _shaderResourceDelegate;
@@ -198,6 +201,7 @@ namespace RenderCore { namespace LightingEngine
 		enum class Phase { SequenceSetup, SceneParse, Execute };
 		Phase _currentPhase = Phase::SequenceSetup;
 		void ResetIteration(Phase newPhase);
+		std::vector<Techniques::IShaderResourceDelegate*> _delegatesPendingUnbind;
 
 		void GetOrAllocatePkts(IteratorRange<Techniques::DrawablesPacket**> result, LightingTechniqueSequence::ParseId parse, Techniques::BatchFlags::BitField batches);
 

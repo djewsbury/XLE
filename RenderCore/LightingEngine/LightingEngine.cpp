@@ -114,6 +114,23 @@ namespace RenderCore { namespace LightingEngine
 		return _nextFragmentInterfaceRegistration++;
 	}
 
+	void LightingTechniqueSequence::CreateStep_BindDelegate(std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate)
+	{
+		assert(!_frozen);
+		ExecuteStep newStep;
+		newStep._type = ExecuteStep::Type::BindDelegate;
+		newStep._shaderResourceDelegate = std::move(uniformDelegate);
+		_steps.emplace_back(std::move(newStep));
+	}
+
+	void LightingTechniqueSequence::CreateStep_InvalidateUniforms()
+	{
+		assert(!_frozen);
+		ExecuteStep newStep;
+		newStep._type = ExecuteStep::Type::InvalidateUniforms;
+		_steps.emplace_back(std::move(newStep));
+	}
+
 	void LightingTechniqueSequence::ForceRetainAttachment(uint64_t semantic, BindFlag::BitField layout)
 	{
 		assert(!_frozen);
@@ -584,17 +601,35 @@ namespace RenderCore { namespace LightingEngine
 			case LightingTechniqueSequence::ExecuteStep::Type::PrepareOnly_ExecuteDrawables:
 				break;
 
+			case LightingTechniqueSequence::ExecuteStep::Type::BindDelegate:
+				_iterator->_parsingContext->GetUniformDelegateManager()->AddShaderResourceDelegate(next->_shaderResourceDelegate);
+				_iterator->_delegatesPendingUnbind.push_back(next->_shaderResourceDelegate.get());
+				break;
+
+			case LightingTechniqueSequence::ExecuteStep::Type::InvalidateUniforms:
+				_iterator->_parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
+				break;
+
 			case LightingTechniqueSequence::ExecuteStep::Type::None:
 				assert(0);
 				break;
 			}
 		}
 
+		CleanupPostIteration();
+		return Step { StepType::None };
+	}
+
+	void LightingTechniqueInstance::CleanupPostIteration()
+	{
 		// release all drawables now we're complete
 		for (auto& pkt:_iterator->_drawablePkt)
 			pkt.Reset();
 
-		return Step { StepType::None };
+		auto& delegateMan = *_iterator->_parsingContext->GetUniformDelegateManager();
+		for (auto delegate:_iterator->_delegatesPendingUnbind)
+			delegateMan.RemoveShaderResourceDelegate(*delegate);
+		_iterator->_delegatesPendingUnbind.clear();
 	}
 
 	LightingTechniqueInstance::LightingTechniqueInstance(
@@ -606,8 +641,11 @@ namespace RenderCore { namespace LightingEngine
 
 	LightingTechniqueInstance::~LightingTechniqueInstance() 
 	{
-		if (_iterator)
+		if (_iterator) {
+			// in case of exception, ensure that we've cleaned up everything from the iteration
+			CleanupPostIteration();
 			++_iterator->_compiledTechnique->_frameIdx;
+		}
 	}
 
 	class LightingTechniqueInstance::PrepareResourcesIterator
@@ -687,6 +725,8 @@ namespace RenderCore { namespace LightingEngine
 			case LightingTechniqueSequence::ExecuteStep::Type::BeginRenderPassInstance:
 			case LightingTechniqueSequence::ExecuteStep::Type::EndRenderPassInstance:
 			case LightingTechniqueSequence::ExecuteStep::Type::NextRenderPassStep:
+			case LightingTechniqueSequence::ExecuteStep::Type::BindDelegate:
+			case LightingTechniqueSequence::ExecuteStep::Type::InvalidateUniforms:
 				break;
 
 			case LightingTechniqueSequence::ExecuteStep::Type::None:
