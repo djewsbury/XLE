@@ -101,14 +101,6 @@ float3 NormalMapAlgorithm(  Texture2D normalMap, SamplerState samplerObject, boo
     //    + normalTextureSample.z * tangentFrame.normal;
 }
 
-void AlphaTestAlgorithm(Texture2D textureObject, SamplerState samplerObject,
-                        float2 texCoord, float alphaThreshold)
-{
-	if (textureObject.Sample(samplerObject, texCoord).a < alphaThreshold) {
-		clip(-1);
-	}
-}
-
 float3x3 GetLocalToWorldUniformScale()
 {
         // note -- here, we assume that local-to-world doesn't have a nonuniform

@@ -9,8 +9,9 @@
 #include "../Math/SurfaceAlgorithm.hlsl"
 #include "../Framework/Binding.hlsl"
 
-Texture2D		DiffuseTexture          BIND_MAT_T3;
-Texture2D		NormalsTexture          BIND_MAT_T4;
+Texture2D			DiffuseTexture          BIND_MAT_T3;
+Texture2D			NormalsTexture          BIND_MAT_T4;
+Texture2D<float>	OpacityTexture          BIND_MAT_T7;
 
 float3 SampleDefaultNormalMap(VSOUT geo)
 {
@@ -26,10 +27,22 @@ float3 SampleDefaultNormalMap(VSOUT geo)
 void DoAlphaTest(VSOUT geo, float alphaThreshold)
 {
 	#if VSOUT_HAS_TEXCOORD && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1))
-		#if (USE_CLAMPING_SAMPLER_FOR_DIFFUSE==1)
-			AlphaTestAlgorithm(DiffuseTexture, ClampingSampler, geo.texCoord, alphaThreshold);
+		#if RES_HAS_OpacityTexture
+			#if (USE_CLAMPING_SAMPLER_FOR_DIFFUSE==1)
+				if (OpacityTexture.Sample(ClampingSampler, geo.texCoord).r < alphaThreshold)
+					discard;
+			#else
+				if (OpacityTexture.Sample(MaybeAnisotropicSampler, geo.texCoord).r < alphaThreshold)
+					discard;
+			#endif
 		#else
-        	AlphaTestAlgorithm(DiffuseTexture, MaybeAnisotropicSampler, geo.texCoord, alphaThreshold);
+			#if (USE_CLAMPING_SAMPLER_FOR_DIFFUSE==1)
+				if (DiffuseTexture.Sample(ClampingSampler, geo.texCoord).a < alphaThreshold)
+					discard;
+			#else
+				if (DiffuseTexture.Sample(MaybeAnisotropicSampler, geo.texCoord).a < alphaThreshold)
+					discard;
+			#endif
 		#endif
 	#endif
 }

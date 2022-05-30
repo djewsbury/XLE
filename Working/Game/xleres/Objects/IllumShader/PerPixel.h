@@ -54,6 +54,14 @@ GBufferValues IllumShader_PerPixel(VSOUT geo)
         result.blendingAlpha = diffuseTextureSample.a;
     #endif
 
+    #if VSOUT_HAS_TEXCOORD && (RES_HAS_OpacityTexture!=0)
+        #if (USE_CLAMPING_SAMPLER_FOR_DIFFUSE==1)
+            result.blendingAlpha = OpacityTexture.Sample(ClampingSampler, geo.texCoord).r;
+        #else
+            result.blendingAlpha = OpacityTexture.Sample(MaybeAnisotropicSampler, geo.texCoord).r;
+        #endif
+    #endif
+
     #if VSOUT_HAS_VERTEX_ALPHA && MAT_MODULATE_VERTEX_ALPHA
         result.blendingAlpha *= VSOUT_GetColor0(geo).a;
     #endif

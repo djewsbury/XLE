@@ -8,5 +8,5 @@
 #endif
 
 #if !defined(ENABLE_ALPHA_TEST)
-	#define ENABLE_ALPHA_TEST (GEO_HAS_TEXCOORD && (MAT_ALPHA_TEST || MAT_ALPHA_TEST_PREDEPTH) && RES_HAS_DiffuseTexture)
+	#define ENABLE_ALPHA_TEST (GEO_HAS_TEXCOORD && (MAT_ALPHA_TEST || MAT_ALPHA_TEST_PREDEPTH) && (RES_HAS_DiffuseTexture || RES_HAS_OpacityTexture))
 #endif
