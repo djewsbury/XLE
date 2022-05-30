@@ -70,7 +70,7 @@ namespace RenderCore { namespace LightingEngine
 
         auto accumulation0 = result.DefineAttachment(Hash_AOAccumulation0).InitialState(BindFlag::UnorderedAccess).FinalState(BindFlag::UnorderedAccess);
         auto accumulation1 = result.DefineAttachment(Hash_AOAccumulation1).InitialState(BindFlag::UnorderedAccess).FinalState(BindFlag::UnorderedAccess);
-        auto aoOutput = result.DefineAttachment(Hash_AOOutput);
+        auto aoOutput = result.DefineAttachment(Hash_AOOutput).NoInitialState().FinalState(BindFlag::UnorderedAccess);
 
         Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc { TextureViewDesc::Aspect::Depth });
