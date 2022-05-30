@@ -73,8 +73,6 @@ namespace RenderCore { namespace LightingEngine
 			const RasterizationLightTileOperator::Configuration& tilerCfg);
 
 		std::shared_ptr<DynamicShadowPreparationOperators> _shadowPreparationOperators;
-		std::vector<std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>> _preparedShadows;
-		std::shared_ptr<IPreparedShadowResult> _preparedDominantShadow;
 
 	private:
 		std::vector<LightSourceOperatorDesc> _positionalLightOperators;

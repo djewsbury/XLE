@@ -26,7 +26,6 @@
 
 namespace RenderCore { namespace LightingEngine
 {
-	static const uint64_t s_shadowTemplate = Utility::Hash64("ShadowTemplate");
 	static const unsigned s_shadowProbeShadowFlag = 1u<<31u;
 
 	class ForwardPlusLightDesc : public Internal::StandardPositionalLight
@@ -345,12 +344,6 @@ namespace RenderCore { namespace LightingEngine
 
 		if (_completionCommandListID)
 			parsingContext.RequireCommandList(_completionCommandListID);
-
-		if (_preparedDominantShadow) {
-			// find the prepared shadow associated with the dominant light (if it exists) and make sure it's descriptor set is accessible
-			assert(!parsingContext._extraSequencerDescriptorSet.second);
-			parsingContext._extraSequencerDescriptorSet = {s_shadowTemplate, _preparedDominantShadow->GetDescriptorSet().get()};
-		}
 	}
 
 	class ForwardPlusLightScene::ShaderResourceDelegate : public Techniques::IShaderResourceDelegate

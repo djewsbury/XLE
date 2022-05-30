@@ -36,6 +36,8 @@
 namespace RenderCore { namespace LightingEngine
 {
 
+	static const uint64_t s_shadowTemplate = Utility::Hash64("ShadowTemplate");
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class ForwardLightingCaptures
@@ -48,8 +50,14 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<HierarchicalDepthsOperator> _hierarchicalDepthsOperator;
 		std::shared_ptr<ScreenSpaceReflectionsOperator> _ssrOperator;
 
+		// frame temporaries
+		std::vector<std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>> _preparedShadows;
+		std::shared_ptr<IPreparedShadowResult> _preparedDominantShadow;
+
 		void DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence);
 		void DoToneMap(LightingTechniqueIterator& iterator);
+		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext);
+		void ReleaseParsingContext(Techniques::ParsingContext& parsingContext);
 	};
 
 	void ForwardLightingCaptures::DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence)
@@ -57,10 +65,10 @@ namespace RenderCore { namespace LightingEngine
 		sequence.Reset();
 		if (_lightScene->_shadowPreparationOperators->_operators.empty()) return;
 
-		_lightScene->_preparedShadows.reserve(_lightScene->_dynamicShadowProjections.size());
+		_preparedShadows.reserve(_lightScene->_dynamicShadowProjections.size());
 		ILightScene::LightSourceId prevLightId = ~0u; 
 		for (unsigned c=0; c<_lightScene->_dynamicShadowProjections.size(); ++c) {
-			_lightScene->_preparedShadows.push_back(std::make_pair(
+			_preparedShadows.push_back(std::make_pair(
 				_lightScene->_dynamicShadowProjections[c]._lightId,
 				Internal::SetupShadowPrepare(
 					iterator, sequence, 
@@ -75,13 +83,30 @@ namespace RenderCore { namespace LightingEngine
 
 		if (_lightScene->_dominantShadowProjection._desc) {
 			assert(_lightScene->_dominantLightSet._lights.size() == 1);
-			_lightScene->_preparedDominantShadow =
+			_preparedDominantShadow =
 				Internal::SetupShadowPrepare(
 					iterator, sequence, 
 					*_lightScene->_dominantShadowProjection._desc, 
 					*_lightScene, _lightScene->_dominantLightSet._lights[0]._id,
 					*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool);
 		}
+	}
+
+	void ForwardLightingCaptures::ConfigureParsingContext(Techniques::ParsingContext& parsingContext)
+	{
+		_lightScene->ConfigureParsingContext(parsingContext);
+		if (_preparedDominantShadow) {
+			// find the prepared shadow associated with the dominant light (if it exists) and make sure it's descriptor set is accessible
+			assert(!parsingContext._extraSequencerDescriptorSet.second);
+			parsingContext._extraSequencerDescriptorSet = {s_shadowTemplate, _preparedDominantShadow->GetDescriptorSet().get()};
+		}
+	}
+
+	void ForwardLightingCaptures::ReleaseParsingContext(Techniques::ParsingContext& parsingContext)
+	{
+		parsingContext._extraSequencerDescriptorSet = {0ull, nullptr};
+		_preparedShadows.clear();
+		_preparedDominantShadow = nullptr;
 	}
 
 	class ToneMapStandin
@@ -384,17 +409,6 @@ namespace RenderCore { namespace LightingEngine
 					if (ssrActual)
 						lightingTechnique->_depVal.RegisterDependency(ssrActual->GetDependencyValidation());
 
-					// Reset captures
-					lightingTechnique->PreSequenceSetup(
-						[captures](LightingTechniqueIterator& iterator) {
-							auto& stitchingContext = iterator._parsingContext->GetFragmentStitchingContext();
-							PreregisterAttachments(stitchingContext);
-							captures->_hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);
-							captures->_lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
-							if (captures->_ssrOperator)
-								captures->_ssrOperator->PreregisterAttachments(stitchingContext);
-						});
-
 					// Prepare shadows
 					lightingTechnique->CreateDynamicSequence(
 						[captures](LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence) {
@@ -434,7 +448,7 @@ namespace RenderCore { namespace LightingEngine
 
 					mainSequence.CreateStep_CallFunction(
 						[captures](LightingTechniqueIterator& iterator) {
-							captures->_lightScene->ConfigureParsingContext(*iterator._parsingContext);
+							captures->ConfigureParsingContext(*iterator._parsingContext);
 						});
 
 					// Draw main scene
@@ -450,9 +464,7 @@ namespace RenderCore { namespace LightingEngine
 
 					mainSequence.CreateStep_CallFunction(
 						[captures](LightingTechniqueIterator& iterator) {
-							iterator._parsingContext->_extraSequencerDescriptorSet = {0ull, nullptr};
-							captures->_lightScene->_preparedShadows.clear();
-							captures->_lightScene->_preparedDominantShadow = nullptr;
+							captures->ReleaseParsingContext(*iterator._parsingContext);	// almost need a "finally" step for this, because it may not be called on exception
 						});
 
 					lightingTechnique->CompleteConstruction(pipelineAccelerators, stitchingContext);
