@@ -16,19 +16,29 @@ namespace RenderCore { namespace LightingEngine
 	class ShadowOperatorDesc;
 	class LightSourceOperatorDesc;
 	class AmbientLightOperatorDesc;
-	::Assets::PtrToMarkerPtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
-		const std::shared_ptr<LightingEngineApparatus>& apparatus,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-		const AmbientLightOperatorDesc& ambientLightOperator,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
+
+	void CreateForwardLightingTechnique(
+		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
+		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
+		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
+		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
+		std::shared_ptr<ILightScene> lightScene,
+		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit,
 		const FrameBufferProperties& fbProps);
 
-	::Assets::PtrToMarkerPtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
+	void CreateForwardLightingScene(
+		std::promise<std::shared_ptr<ILightScene>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
+		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
+		const AmbientLightOperatorDesc& ambientLightOperator);
+
+	// Simplified construction --
+	::Assets::PtrToMarkerPtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
+		const std::shared_ptr<LightingEngineApparatus>& apparatus,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		const AmbientLightOperatorDesc& ambientLightOperator,

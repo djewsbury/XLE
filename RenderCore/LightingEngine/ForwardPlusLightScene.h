@@ -33,6 +33,7 @@ namespace RenderCore { namespace LightingEngine
 		std::optional<LightSourceOperatorDesc> GetDominantLightOperator() const;
 		std::optional<ShadowOperatorDesc> GetDominantShadowOperator() const;
 		std::shared_ptr<Techniques::IShaderResourceDelegate> CreateMainSceneResourceDelegate();
+		const AmbientLightOperatorDesc& GetAmbientLightOperatorDesc() const;
 
 		// The following are for propagating configuration settings to operators managed by the delegate
 		// signaled on arbitrary thread

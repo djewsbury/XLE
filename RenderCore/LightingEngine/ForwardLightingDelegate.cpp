@@ -301,47 +301,60 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		const AmbientLightOperatorDesc& ambientLightOperator,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
+		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit,
 		const FrameBufferProperties& fbProps)
 	{
-		return CreateForwardLightingTechnique(
+		std::promise<std::shared_ptr<ILightScene>> lightScenePromise;
+		auto lightSceneFuture = lightScenePromise.get_future();
+		CreateForwardLightingScene(
+			std::move(lightScenePromise),
 			apparatus->_pipelineAccelerators, apparatus->_lightingOperatorCollection, apparatus->_sharedDelegates, 
 			apparatus->_dmShadowDescSetTemplate,
-			resolveOperators, shadowGenerators, ambientLightOperator,
-			preregisteredAttachments, fbProps);
+			resolveOperators, shadowGenerators, ambientLightOperator);
+
+		auto result = std::make_shared<::Assets::MarkerPtr<CompiledLightingTechnique>>("forward-lighting-technique");
+		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
+		::Assets::WhenAll(std::move(lightSceneFuture)).ThenConstructToPromise(
+			result->AdoptPromise(),
+			[
+				A=apparatus->_pipelineAccelerators, B=apparatus->_lightingOperatorCollection, C=apparatus->_sharedDelegates,
+				preregisteredAttachments=std::move(preregisteredAttachments), fbProps
+			](auto&& promise, auto lightSceneActual) {
+				CreateForwardLightingTechnique(
+					std::move(promise),
+					A, B, C,
+					lightSceneActual,
+					MakeIteratorRange(preregisteredAttachments), fbProps);
+			});
+		return result;
 	}
 
-	::Assets::PtrToMarkerPtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
+	void CreateForwardLightingTechnique(
+		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
-		IteratorRange<const LightSourceOperatorDesc*> positionalLightOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-		const AmbientLightOperatorDesc& ambientLightOperator,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
+		std::shared_ptr<ILightScene> lightScene,
+		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit,
 		const FrameBufferProperties& fbProps)
 	{
-		RasterizationLightTileOperator::Configuration tilingConfig;
-		auto lightSceneFuture = std::make_shared<::Assets::MarkerPtr<ForwardPlusLightScene>>("forward-light-scene");
-		ForwardPlusLightScene::ConstructToPromise(
-			lightSceneFuture->AdoptPromise(), pipelineAccelerators, pipelinePool, techDelBox, shadowDescSet,
-			positionalLightOperators, shadowGenerators, ambientLightOperator, tilingConfig);
-
-		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps, Techniques::CalculateDefaultSystemFormats(*pipelinePool->GetDevice()) };
-		PreregisterAttachments(stitchingContext);
+		auto forwardLightScene = std::dynamic_pointer_cast<ForwardPlusLightScene>(lightScene);
+		if (!forwardLightScene) {
+			promise.set_exception(std::make_exception_ptr(std::runtime_error("Incorrect light scene type used with forward lighting delegate")));
+			return;
+		}
 
 		auto hierarchicalDepthsOperatorFuture = ::Assets::MakeFuturePtr<HierarchicalDepthsOperator>(pipelinePool);
 		::Assets::PtrToMarkerPtr<ScreenSpaceReflectionsOperator> ssrFuture;
-		if (ambientLightOperator._ssrOperator.has_value())
-			ssrFuture = ::Assets::MakeFuturePtr<ScreenSpaceReflectionsOperator>(pipelinePool, ambientLightOperator._ssrOperator.value());
+		if (forwardLightScene->GetAmbientLightOperatorDesc()._ssrOperator.has_value())
+			ssrFuture = ::Assets::MakeFuturePtr<ScreenSpaceReflectionsOperator>(pipelinePool, forwardLightScene->GetAmbientLightOperatorDesc()._ssrOperator.value());
 
-		auto result = std::make_shared<::Assets::MarkerPtr<CompiledLightingTechnique>>("forward-lighting-technique");
-		::Assets::WhenAll(lightSceneFuture, hierarchicalDepthsOperatorFuture).ThenConstructToPromise(
-			result->AdoptPromise(),
-			[techDelBox, stitchingContextCap=std::move(stitchingContext), pipelineAccelerators, pipelinePool, ssrFuture=std::move(ssrFuture)]
-			(	auto&& thatPromise,
-				auto lightScene, auto hierarchicalDepthsOperator) {
+		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
+
+		::Assets::WhenAll(hierarchicalDepthsOperatorFuture).ThenConstructToPromise(
+			std::move(promise),
+			[techDelBox, pipelineAccelerators, pipelinePool, ssrFuture=std::move(ssrFuture), forwardLightScene=std::move(forwardLightScene), preregisteredAttachments=std::move(preregisteredAttachments), fbProps]
+			(auto&& thatPromise, auto hierarchicalDepthsOperator) {
 
 				TRY {
 					std::shared_ptr<ScreenSpaceReflectionsOperator> ssrActual;
@@ -353,20 +366,21 @@ namespace RenderCore { namespace LightingEngine
 					auto captures = std::make_shared<ForwardLightingCaptures>();
 					captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(pipelineAccelerators->GetDevice());
 					captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
-					captures->_lightScene = lightScene;
+					captures->_lightScene = forwardLightScene;
 					captures->_hierarchicalDepthsOperator = hierarchicalDepthsOperator;
 					captures->_ssrOperator = ssrActual;
 
-					auto stitchingContext = stitchingContextCap;
+					Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps, Techniques::CalculateDefaultSystemFormats(*pipelinePool->GetDevice()) };
+					PreregisterAttachments(stitchingContext);
 					hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);
-					lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
+					forwardLightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
 					if (ssrActual)
 						ssrActual->PreregisterAttachments(stitchingContext);
 
-					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(lightScene);
+					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(forwardLightScene);
 					lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
 					lightingTechnique->_depVal.RegisterDependency(hierarchicalDepthsOperator->GetDependencyValidation());
-					lightingTechnique->_depVal.RegisterDependency(lightScene->GetLightTiler().GetDependencyValidation());
+					lightingTechnique->_depVal.RegisterDependency(forwardLightScene->GetLightTiler().GetDependencyValidation());
 					if (ssrActual)
 						lightingTechnique->_depVal.RegisterDependency(ssrActual->GetDependencyValidation());
 
@@ -411,8 +425,8 @@ namespace RenderCore { namespace LightingEngine
 					mainSequence.CreateStep_RunFragments(hierarchicalDepthsOperator->CreateFragment(stitchingContext._workingProps));
 
 					// Light tiling & configure lighting descriptors
-					mainSequence.CreateStep_RunFragments(lightScene->GetLightTiler().CreateInitFragment(stitchingContext._workingProps));
-					mainSequence.CreateStep_RunFragments(lightScene->GetLightTiler().CreateFragment(stitchingContext._workingProps));
+					mainSequence.CreateStep_RunFragments(forwardLightScene->GetLightTiler().CreateInitFragment(stitchingContext._workingProps));
+					mainSequence.CreateStep_RunFragments(forwardLightScene->GetLightTiler().CreateFragment(stitchingContext._workingProps));
 
 					// Calculate SSRs
 					if (ssrActual)
@@ -476,9 +490,28 @@ namespace RenderCore { namespace LightingEngine
 					thatPromise.set_exception(std::current_exception());
 				} CATCH_END
 			});
-		return result;
 	}
 
+	void CreateForwardLightingScene(
+		std::promise<std::shared_ptr<ILightScene>>&& promise,
+		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
+		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
+		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
+		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
+		IteratorRange<const LightSourceOperatorDesc*> positionalLightOperators,
+		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
+		const AmbientLightOperatorDesc& ambientLightOperator)
+	{
+		RasterizationLightTileOperator::Configuration tilingConfig;
+		std::promise<std::shared_ptr<ForwardPlusLightScene>> specialisedPromise;
+		auto specializedFuture = specialisedPromise.get_future();
+		ForwardPlusLightScene::ConstructToPromise(
+			std::move(specialisedPromise), pipelineAccelerators, pipelinePool, techDelBox, shadowDescSet,
+			positionalLightOperators, shadowGenerators, ambientLightOperator, tilingConfig);
+
+		// transform from shared_ptr<ForwardPlusLightScene> -> shared_ptr<ILightScene>
+		::Assets::WhenAll(std::move(specializedFuture)).ThenConstructToPromise(std::move(promise), [](auto ptr) { return std::static_pointer_cast<ILightScene>(std::move(ptr)); });
+	}
 
 	bool ForwardLightingTechniqueIsCompatible(
 		CompiledLightingTechnique& technique,

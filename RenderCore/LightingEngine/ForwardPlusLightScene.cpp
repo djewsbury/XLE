@@ -427,6 +427,11 @@ namespace RenderCore { namespace LightingEngine
 		return _shadowPreparationOperators->_operators[_shadowOperatorIdMapping._operatorToDynamicShadowOperator[_dominantLightSet._shadowOperatorId]]._desc;
 	}
 
+	const AmbientLightOperatorDesc& ForwardPlusLightScene::GetAmbientLightOperatorDesc() const
+	{
+		return _ambientLight->_ambientLightOperator;
+	}
+
 	static ShadowProbes::Configuration MakeShadowProbeConfiguration(const ShadowOperatorDesc& opDesc)
 	{
 		ShadowProbes::Configuration result;
