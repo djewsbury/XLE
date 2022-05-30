@@ -19,26 +19,26 @@ namespace RenderCore { namespace LightingEngine
 	class HierarchicalDepthsOperator;
 	class SkyOperator;
 	class DynamicShadowPreparationOperators;
+	class SHCoefficientsAsset;
 
 	class ForwardPlusLightScene : public Internal::StandardLightScene, public IDistantIBLSource, public ISSAmbientOcclusion, public std::enable_shared_from_this<ForwardPlusLightScene>
 	{
 	public:
-		ScreenSpaceReflectionsOperator& GetScreenSpaceReflectionsOperator() { return *_ssrOperator; }
 		RasterizationLightTileOperator& GetLightTiler() { return *_lightTiler; }
-		HierarchicalDepthsOperator& GetHierarchicalDepthsOperator() { return *_hierarchicalDepthsOperator; }
 		ShadowProbes& GetShadowProbes() { return *_shadowProbes; }
 
-		bool HasScreenSpaceReflectionsOperator() { return _ssrOperator != nullptr; }
-
 		void FinalizeConfiguration();
-		virtual void SetEquirectangularSource(StringSection<> input) override;
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext);
 
 		std::optional<LightSourceOperatorDesc> GetDominantLightOperator() const;
 		std::optional<ShadowOperatorDesc> GetDominantShadowOperator() const;
-		std::shared_ptr<Techniques::IShaderResourceDelegate> CreateMainSceneResourceDelegate(Techniques::DeferredShaderResource& balanceNoiseTexture);
+		std::shared_ptr<Techniques::IShaderResourceDelegate> CreateMainSceneResourceDelegate();
 
-		Signal<std::shared_ptr<Techniques::DeferredShaderResource>> _onChangeSkyTexture;		// signaled on arbitrary thread
+		// The following are for propagating configuration settings to operators managed by the delegate
+		// signaled on arbitrary thread
+		Signal<std::shared_ptr<Techniques::DeferredShaderResource>> _onChangeSkyTexture;
+		Signal<std::shared_ptr<Techniques::DeferredShaderResource>> _onChangeSpecularIBL;
+		Signal<std::optional<SHCoefficientsAsset>> _onChangeDiffuseIBL;
 
 		// ILightScene
 		virtual LightSourceId CreateLightSource(ILightScene::LightOperatorId opId) override;
@@ -49,6 +49,9 @@ namespace RenderCore { namespace LightingEngine
 		virtual void DestroyShadowProjection(ShadowProjectionId) override;
 		virtual void* TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode) override;
 		virtual void* TryGetShadowProjectionInterface(ShadowProjectionId projectionid, uint64_t interfaceTypeCode) override;
+
+		// IDistantIBLSource
+		virtual void SetEquirectangularSource(StringSection<> input) override;
 
 		bool IsCompatible(
 			IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
@@ -74,9 +77,7 @@ namespace RenderCore { namespace LightingEngine
 
 	private:
 		std::vector<LightSourceOperatorDesc> _positionalLightOperators;
-		std::shared_ptr<ScreenSpaceReflectionsOperator> _ssrOperator;
 		std::shared_ptr<RasterizationLightTileOperator> _lightTiler;
-		std::shared_ptr<HierarchicalDepthsOperator> _hierarchicalDepthsOperator;
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<SharedTechniqueDelegateBox> _techDelBox;
 
@@ -114,9 +115,7 @@ namespace RenderCore { namespace LightingEngine
 
 		static std::shared_ptr<ForwardPlusLightScene> CreateInternal(
 			std::shared_ptr<DynamicShadowPreparationOperators> shadowPreparationOperators,
-			std::shared_ptr<HierarchicalDepthsOperator> hierarchicalDepthsOperator,
 			std::shared_ptr<RasterizationLightTileOperator> lightTiler, 
-			std::shared_ptr<ScreenSpaceReflectionsOperator> ssr,
 			const std::vector<LightSourceOperatorDesc>& positionalLightOperators,
 			const AmbientLightOperatorDesc& ambientLightOperator, 
 			const ForwardPlusLightScene::ShadowOperatorIdMapping& shadowOperatorMapping, 

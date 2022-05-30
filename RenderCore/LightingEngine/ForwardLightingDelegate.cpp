@@ -45,6 +45,8 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
 		std::shared_ptr<ForwardPlusLightScene> _lightScene;
 		std::shared_ptr<SkyOperator> _skyOperator;
+		std::shared_ptr<HierarchicalDepthsOperator> _hierarchicalDepthsOperator;
+		std::shared_ptr<ScreenSpaceReflectionsOperator> _ssrOperator;
 
 		void DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence);
 		void DoToneMap(LightingTechniqueIterator& iterator);
@@ -245,7 +247,6 @@ namespace RenderCore { namespace LightingEngine
 	static RenderStepFragmentInterface CreateForwardSceneFragment(
 		std::shared_ptr<ForwardLightingCaptures> captures,
 		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate,
-		Techniques::DeferredShaderResource& balancedNoiseTexture,
 		bool hasSSR)
 	{
 		RenderStepFragmentInterface result { PipelineType::Graphics };
@@ -291,7 +292,7 @@ namespace RenderCore { namespace LightingEngine
 			}
 		}
 
-		result.AddSubpass(std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending, std::move(box), captures->_lightScene->CreateMainSceneResourceDelegate(balancedNoiseTexture));
+		result.AddSubpass(std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending, std::move(box), captures->_lightScene->CreateMainSceneResourceDelegate());
 		return result;
 	}
 
@@ -327,47 +328,57 @@ namespace RenderCore { namespace LightingEngine
 			lightSceneFuture->AdoptPromise(), pipelineAccelerators, pipelinePool, techDelBox, shadowDescSet,
 			positionalLightOperators, shadowGenerators, ambientLightOperator, tilingConfig);
 
-		auto balancedNoiseTexture = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
-		
 		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps, Techniques::CalculateDefaultSystemFormats(*pipelinePool->GetDevice()) };
 		PreregisterAttachments(stitchingContext);
 
+		auto hierarchicalDepthsOperatorFuture = ::Assets::MakeFuturePtr<HierarchicalDepthsOperator>(pipelinePool);
+		::Assets::PtrToMarkerPtr<ScreenSpaceReflectionsOperator> ssrFuture;
+		if (ambientLightOperator._ssrOperator.has_value())
+			ssrFuture = ::Assets::MakeFuturePtr<ScreenSpaceReflectionsOperator>(pipelinePool, ambientLightOperator._ssrOperator.value());
+
 		auto result = std::make_shared<::Assets::MarkerPtr<CompiledLightingTechnique>>("forward-lighting-technique");
-		::Assets::WhenAll(lightSceneFuture, balancedNoiseTexture).ThenConstructToPromise(
+		::Assets::WhenAll(lightSceneFuture, hierarchicalDepthsOperatorFuture).ThenConstructToPromise(
 			result->AdoptPromise(),
-			[techDelBox, stitchingContextCap=std::move(stitchingContext), pipelineAccelerators, pipelinePool]
-			(	std::promise<std::shared_ptr<CompiledLightingTechnique>>&& thatPromise,
-				std::shared_ptr<ForwardPlusLightScene> lightScene,
-				std::shared_ptr<Techniques::DeferredShaderResource> balancedNoiseTexture) {
+			[techDelBox, stitchingContextCap=std::move(stitchingContext), pipelineAccelerators, pipelinePool, ssrFuture=std::move(ssrFuture)]
+			(	auto&& thatPromise,
+				auto lightScene, auto hierarchicalDepthsOperator) {
 
 				TRY {
+					std::shared_ptr<ScreenSpaceReflectionsOperator> ssrActual;
+					if (ssrFuture) {
+						ssrFuture->StallWhilePending();		// a little awkward to rely on an optional future, but since we're already on a background thread, this should be ok
+						ssrActual = ssrFuture->Actualize();
+					}
+
 					auto captures = std::make_shared<ForwardLightingCaptures>();
 					captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(pipelineAccelerators->GetDevice());
 					captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
 					captures->_lightScene = lightScene;
+					captures->_hierarchicalDepthsOperator = hierarchicalDepthsOperator;
+					captures->_ssrOperator = ssrActual;
 
 					auto stitchingContext = stitchingContextCap;
-					lightScene->GetHierarchicalDepthsOperator().PreregisterAttachments(stitchingContext);
+					hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);
 					lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
-					if (lightScene->HasScreenSpaceReflectionsOperator())
-						lightScene->GetScreenSpaceReflectionsOperator().PreregisterAttachments(stitchingContext);
+					if (ssrActual)
+						ssrActual->PreregisterAttachments(stitchingContext);
 
 					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(lightScene);
 					lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
-					lightingTechnique->_depVal.RegisterDependency(lightScene->GetHierarchicalDepthsOperator().GetDependencyValidation());
+					lightingTechnique->_depVal.RegisterDependency(hierarchicalDepthsOperator->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(lightScene->GetLightTiler().GetDependencyValidation());
-					if (lightScene->HasScreenSpaceReflectionsOperator())
-						lightingTechnique->_depVal.RegisterDependency(lightScene->GetScreenSpaceReflectionsOperator().GetDependencyValidation());
+					if (ssrActual)
+						lightingTechnique->_depVal.RegisterDependency(ssrActual->GetDependencyValidation());
 
 					// Reset captures
 					lightingTechnique->PreSequenceSetup(
 						[captures](LightingTechniqueIterator& iterator) {
 							auto& stitchingContext = iterator._parsingContext->GetFragmentStitchingContext();
 							PreregisterAttachments(stitchingContext);
-							captures->_lightScene->GetHierarchicalDepthsOperator().PreregisterAttachments(stitchingContext);
+							captures->_hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);
 							captures->_lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
-							if (captures->_lightScene->HasScreenSpaceReflectionsOperator())
-								captures->_lightScene->GetScreenSpaceReflectionsOperator().PreregisterAttachments(stitchingContext);
+							if (captures->_ssrOperator)
+								captures->_ssrOperator->PreregisterAttachments(stitchingContext);
 						});
 
 					// Prepare shadows
@@ -382,8 +393,9 @@ namespace RenderCore { namespace LightingEngine
 							if (iterator._deformAcceleratorPool)
 								iterator._deformAcceleratorPool->SetVertexInputBarrier(*iterator._threadContext);
 						});
+
 					// Pre depth
-					if (lightScene->HasScreenSpaceReflectionsOperator()) {
+					if (ssrActual) {
 						mainSequence.CreateStep_RunFragments(CreateDepthMotionNormalFragment(techDelBox->_depthMotionNormalRoughnessDelegate));
 					} else {
 						mainSequence.CreateStep_RunFragments(CreateDepthMotionFragment(techDelBox->_depthMotionDelegate));
@@ -396,15 +408,15 @@ namespace RenderCore { namespace LightingEngine
 						});
 
 					// Build hierarchical depths
-					mainSequence.CreateStep_RunFragments(lightScene->GetHierarchicalDepthsOperator().CreateFragment(stitchingContext._workingProps));
+					mainSequence.CreateStep_RunFragments(hierarchicalDepthsOperator->CreateFragment(stitchingContext._workingProps));
 
 					// Light tiling & configure lighting descriptors
 					mainSequence.CreateStep_RunFragments(lightScene->GetLightTiler().CreateInitFragment(stitchingContext._workingProps));
 					mainSequence.CreateStep_RunFragments(lightScene->GetLightTiler().CreateFragment(stitchingContext._workingProps));
 
 					// Calculate SSRs
-					if (lightScene->HasScreenSpaceReflectionsOperator())
-						mainSequence.CreateStep_RunFragments(lightScene->GetScreenSpaceReflectionsOperator().CreateFragment(stitchingContext._workingProps));
+					if (ssrActual)
+						mainSequence.CreateStep_RunFragments(ssrActual->CreateFragment(stitchingContext._workingProps));
 
 					mainSequence.CreateStep_CallFunction(
 						[captures](LightingTechniqueIterator& iterator) {
@@ -413,7 +425,7 @@ namespace RenderCore { namespace LightingEngine
 
 					// Draw main scene
 					auto mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
-						CreateForwardSceneFragment(captures, techDelBox->_forwardIllumDelegate_DisableDepthWrite, *balancedNoiseTexture, captures->_lightScene->HasScreenSpaceReflectionsOperator()));
+						CreateForwardSceneFragment(captures, techDelBox->_forwardIllumDelegate_DisableDepthWrite, ssrActual!=nullptr));
 
 					// Post processing
 					auto toneMapFragment = CreateToneMapFragment(
@@ -439,9 +451,23 @@ namespace RenderCore { namespace LightingEngine
 						[captures, lightingTechnique](auto skyOp) {
 							captures->_skyOperator = skyOp;
 							captures->_lightScene->_onChangeSkyTexture.Bind(
-								[weakSkyOperator=std::weak_ptr<SkyOperator>(skyOp)](std::shared_ptr<Techniques::DeferredShaderResource> texture) {
+								[weakSkyOperator=std::weak_ptr<SkyOperator>(skyOp)](auto texture) {
 									auto l=weakSkyOperator.lock();
 									if (l) l->SetResource(texture ? texture->GetShaderResource() : nullptr);
+								});
+							captures->_lightScene->_onChangeSkyTexture.Bind(
+								[weakSSROperator=std::weak_ptr<ScreenSpaceReflectionsOperator>(captures->_ssrOperator)](auto texture) {
+									auto l=weakSSROperator.lock();
+									if (l) {
+										// Note -- this is getting the full sky texture (not the specular IBL prefiltered texture!)
+										if (texture) {
+											TextureViewDesc adjustedViewDesc;
+											adjustedViewDesc._mipRange._min = 2;
+											auto adjustedView = texture->GetShaderResource()->GetResource()->CreateTextureView(BindFlag::ShaderResource, adjustedViewDesc);
+											l->SetSpecularIBL(adjustedView);
+										} else
+											l->SetSpecularIBL(nullptr);
+									}
 								});
 							lightingTechnique->_depVal.RegisterDependency(skyOp->GetDependencyValidation());
 							return lightingTechnique;

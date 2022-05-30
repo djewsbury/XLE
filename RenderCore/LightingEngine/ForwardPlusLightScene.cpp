@@ -274,23 +274,18 @@ namespace RenderCore { namespace LightingEngine
 				} CATCH_END
 
 				if (!specularIBL || !diffuseIBL.has_value()) {
-					if (l->_ssrOperator)
-						l->_ssrOperator->SetSpecularIBL(nullptr);
+					l->_onChangeSpecularIBL(nullptr);
 					l->_onChangeSkyTexture(nullptr);
+					l->_onChangeDiffuseIBL({});
 					std::memset(l->_diffuseSHCoefficients, 0, sizeof(l->_diffuseSHCoefficients));
 				} else {
 					auto ambientRawCubemap = ambientRawCubemapFuture.get();
-					{
-						TextureViewDesc adjustedViewDesc;
-						adjustedViewDesc._mipRange._min = 2;
-						auto adjustedView = ambientRawCubemap->GetShaderResource()->GetResource()->CreateTextureView(BindFlag::ShaderResource, adjustedViewDesc);
-						if (l->_ssrOperator)
-							l->_ssrOperator->SetSpecularIBL(adjustedView);
-					}
 					std::memset(l->_diffuseSHCoefficients, 0, sizeof(l->_diffuseSHCoefficients));
 					std::memcpy(l->_diffuseSHCoefficients, diffuseIBL.value().GetCoefficients().begin(), sizeof(Float4*)*std::min(diffuseIBL.value().GetCoefficients().size(), dimof(l->_diffuseSHCoefficients)));
 					l->_completionCommandListID = std::max(l->_completionCommandListID, ambientRawCubemap->GetCompletionCommandList());
+					l->_onChangeSpecularIBL(specularIBL);
 					l->_onChangeSkyTexture(ambientRawCubemap);
+					l->_onChangeDiffuseIBL(diffuseIBL);
 				}
 			});
 	}
@@ -344,7 +339,7 @@ namespace RenderCore { namespace LightingEngine
 			}
 
 			i->_lightCount = tilerOutputs._lightCount;
-			i->_enableSSR = HasScreenSpaceReflectionsOperator() && lastFrameBuffersPrimed;
+			i->_enableSSR = _ambientLight->_ambientLightOperator._ssrOperator.has_value() && lastFrameBuffersPrimed;
 			std::memcpy(i->_diffuseSHCoefficients, _diffuseSHCoefficients, sizeof(_diffuseSHCoefficients));
 		}
 
@@ -376,7 +371,7 @@ namespace RenderCore { namespace LightingEngine
 
 			if (bindingFlags & (1ull<<4ull)) {
 				assert(context._rpi);
-				if (_lightScene->HasScreenSpaceReflectionsOperator()) {
+				if (_lightScene->_ambientLight->_ambientLightOperator._ssrOperator.has_value()) {
 					dst[4] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
 					dst[5] = context._rpi->GetNonFrameBufferAttachmentView(1).get();
 				} else {
@@ -397,13 +392,9 @@ namespace RenderCore { namespace LightingEngine
 					dst[7] = context.GetTechniqueContext()._commonResources->_blackBufferUAV.get();
 				}
 			}
-			if (bindingFlags & (1ull<<7ull)) {
-				dst[8] = _noise.get();
-				context.RequireCommandList(_completionCmdList);
-			}
 		}
 		ForwardPlusLightScene* _lightScene = nullptr;
-		ShaderResourceDelegate(ForwardPlusLightScene& lightScene, Techniques::DeferredShaderResource& balanceNoiseTexture)
+		ShaderResourceDelegate(ForwardPlusLightScene& lightScene)
 		{
 			_lightScene = &lightScene;
 			BindResourceView(0, Hash64("LightDepthTable"));
@@ -414,19 +405,12 @@ namespace RenderCore { namespace LightingEngine
 			BindResourceView(5, Hash64("SSRConfidence"));
 			BindResourceView(6, Hash64("StaticShadowProbeDatabase"));
 			BindResourceView(7, Hash64("StaticShadowProbeProperties"));
-			BindResourceView(8, Hash64("NoiseTexture"));
-
-			_noise = balanceNoiseTexture.GetShaderResource();
-			_completionCmdList = balanceNoiseTexture.GetCompletionCommandList();
 		}
-
-		std::shared_ptr<IResourceView> _noise;
-		BufferUploads::CommandListID _completionCmdList;
 	};
 
-	std::shared_ptr<Techniques::IShaderResourceDelegate> ForwardPlusLightScene::CreateMainSceneResourceDelegate(Techniques::DeferredShaderResource& balanceNoiseTexture)
+	std::shared_ptr<Techniques::IShaderResourceDelegate> ForwardPlusLightScene::CreateMainSceneResourceDelegate()
 	{
-		return std::make_shared<ShaderResourceDelegate>(*this, balanceNoiseTexture);
+		return std::make_shared<ShaderResourceDelegate>(*this);
 	}
 
 	std::optional<LightSourceOperatorDesc> ForwardPlusLightScene::GetDominantLightOperator() const
@@ -494,9 +478,7 @@ namespace RenderCore { namespace LightingEngine
 
 	std::shared_ptr<ForwardPlusLightScene> ForwardPlusLightScene::CreateInternal(
 		std::shared_ptr<DynamicShadowPreparationOperators> shadowPreparationOperators,
-		std::shared_ptr<HierarchicalDepthsOperator> hierarchicalDepthsOperator,
 		std::shared_ptr<RasterizationLightTileOperator> lightTiler, 
-		std::shared_ptr<ScreenSpaceReflectionsOperator> ssr,
 		const std::vector<LightSourceOperatorDesc>& positionalLightOperators,
 		const AmbientLightOperatorDesc& ambientLightOperator, 
 		const ForwardPlusLightScene::ShadowOperatorIdMapping& shadowOperatorMapping, 
@@ -506,8 +488,6 @@ namespace RenderCore { namespace LightingEngine
 		auto lightScene = std::make_shared<ForwardPlusLightScene>(ambientLightOperator);
 		lightScene->_positionalLightOperators = std::move(positionalLightOperators);
 		lightScene->_shadowPreparationOperators = shadowPreparationOperators;
-		lightScene->_ssrOperator = ssr;
-		lightScene->_hierarchicalDepthsOperator = hierarchicalDepthsOperator;
 		lightScene->_pipelineAccelerators = std::move(pipelineAccelerators);
 		lightScene->_techDelBox = std::move(techDelBox);
 
@@ -560,23 +540,13 @@ namespace RenderCore { namespace LightingEngine
 				pipelineAccelerators, techDelBox, shadowDescSet);
 		}
 
-		auto hierarchicalDepthsOperatorFuture = ::Assets::MakeFuturePtr<HierarchicalDepthsOperator>(pipelinePool);
 		auto lightTilerFuture = ::Assets::MakeFuturePtr<RasterizationLightTileOperator>(pipelinePool, tilerCfg);
 		std::vector<LightSourceOperatorDesc> positionalLightOperators { positionalLightOperatorsInit.begin(), positionalLightOperatorsInit.end() };
 
 		using namespace std::placeholders;
-		if (ambientLightOperator._ssrOperator) {
-			auto ssrFuture = ::Assets::MakeFuturePtr<ScreenSpaceReflectionsOperator>(pipelinePool, ambientLightOperator._ssrOperator.value());
-			::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture, ssrFuture).ThenConstructToPromise(
-				std::move(promise),
-				std::bind(CreateInternal, _1, _2, _3, _4, positionalLightOperators, ambientLightOperator, std::move(shadowOperatorMapping), pipelineAccelerators, techDelBox));
-
-		} else {
-			::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture).ThenConstructToPromise(
-				std::move(promise),
-				std::bind(CreateInternal, _1, _2, _3, nullptr, positionalLightOperators, ambientLightOperator, std::move(shadowOperatorMapping), pipelineAccelerators, techDelBox));
-		}
-
+		::Assets::WhenAll(shadowPreparationOperatorsFuture, lightTilerFuture).ThenConstructToPromise(
+			std::move(promise),
+			std::bind(CreateInternal, _1, _2, positionalLightOperators, ambientLightOperator, std::move(shadowOperatorMapping), pipelineAccelerators, techDelBox));
 	}
 
 }}
