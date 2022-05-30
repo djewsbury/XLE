@@ -8,6 +8,7 @@
 #include "../Techniques/TechniqueUtils.h"
 #include "../StateDesc.h"
 #include "../Format.h"
+#include "../Types.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/ParameterBox.h"
@@ -93,6 +94,7 @@ namespace RenderCore { namespace LightingEngine
 			IThreadContext& threadContext, 
 			Techniques::ParsingContext& parsingContext,
 			Techniques::RenderPassInstance& rpi,
+			PipelineType descSetPipelineType,
 			IPreparedShadowResult& res) = 0;
 		virtual std::pair<std::shared_ptr<Techniques::SequencerConfig>, std::shared_ptr<Techniques::IShaderResourceDelegate>> GetSequencerConfig() = 0;
 		virtual std::shared_ptr<IPreparedShadowResult> CreatePreparedShadowResult() = 0;

@@ -48,6 +48,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		LightingTechniqueSequence& sequence,
 		Internal::ILightBase& proj,
 		ILightScene& lightScene, ILightScene::LightSourceId associatedLightId,
+		PipelineType descSetPipelineType,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::AttachmentPool& shadowGenAttachmentPool)
 	{
@@ -57,7 +58,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		auto& preparer = *standardProj._preparer;
 		auto res = preparer.CreatePreparedShadowResult();
 		sequence.CreateStep_CallFunction(
-			[&preparer, &proj, &shadowGenFrameBufferPool, &shadowGenAttachmentPool, parseId, res](LightingTechniqueIterator& iterator) {
+			[&preparer, &proj, &shadowGenFrameBufferPool, &shadowGenAttachmentPool, parseId, res, descSetPipelineType](LightingTechniqueIterator& iterator) {
 				auto rpi = preparer.Begin(
 					*iterator._threadContext,
 					*iterator._parsingContext,
@@ -66,7 +67,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					shadowGenAttachmentPool);
 				iterator.ExecuteDrawables(parseId, *preparer.GetSequencerConfig().first, preparer.GetSequencerConfig().second);
 				rpi.End();
-				preparer.End(*iterator._threadContext, *iterator._parsingContext, rpi, *res);
+				preparer.End(*iterator._threadContext, *iterator._parsingContext, rpi, descSetPipelineType, *res);
 			});
 		return res;
 	}

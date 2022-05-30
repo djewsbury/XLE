@@ -29,6 +29,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
         LightingTechniqueSequence& sequence,
 		ILightBase& proj,
         ILightScene& lightScene, ILightScene::LightSourceId associatedLightId,
+        PipelineType descSetPipelineType,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::AttachmentPool& shadowGenAttachmentPool);
 

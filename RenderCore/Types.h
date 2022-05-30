@@ -7,6 +7,8 @@
 #include "../Utility/IteratorUtils.h"
 #include <string>
 
+namespace Utility { template<typename CharType> class StringSection; }
+
 namespace RenderCore
 {
 	#define VS_DefShaderModel   "vs_*"
@@ -125,11 +127,12 @@ namespace RenderCore
 
 	enum class PipelineType { Graphics, Compute };
 
+    const char* AsString(PipelineType);
+    PipelineType AsPipelineType(Utility::StringSection<char>);
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-
     struct ClearFilter { enum Enum { Depth = 1<<0, Stencil = 1<<1 }; using BitField = unsigned; };
-
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

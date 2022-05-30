@@ -1025,6 +1025,21 @@ namespace RenderCore
         }
     }
 
+    const char* AsString(PipelineType pipelineType)
+    {
+        switch(pipelineType) {
+        case PipelineType::Graphics: return "Graphics";
+        case PipelineType::Compute: return "Compute";
+        default: return "<<unknown>>";
+        }
+    }
+
+    PipelineType AsPipelineType(Utility::StringSection<> str)
+    {
+        if (XlEqString(str, "Compute")) return PipelineType::Compute;
+        return PipelineType::Graphics;
+    }
+
     IResourcePtr IDevice::CreateResource(const ResourceDesc& desc, const SubResourceInitData& initData)
     {
         // Utility function to make creating single-subresource resources a little easier

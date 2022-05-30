@@ -74,6 +74,7 @@ namespace RenderCore { namespace LightingEngine
 					iterator, sequence, 
 					*_lightScene->_dynamicShadowProjections[c]._desc, 
 					*_lightScene, _lightScene->_dynamicShadowProjections[c]._lightId,
+					PipelineType::Graphics,
 					*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool)));
 
 			// shadow entries must be sorted by light id
@@ -88,6 +89,7 @@ namespace RenderCore { namespace LightingEngine
 					iterator, sequence, 
 					*_lightScene->_dominantShadowProjection._desc, 
 					*_lightScene, _lightScene->_dominantLightSet._lights[0]._id,
+					PipelineType::Graphics,
 					*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool);
 		}
 	}

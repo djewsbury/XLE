@@ -224,6 +224,7 @@ namespace RenderCore { namespace LightingEngine
 				Internal::SetupShadowPrepare(
 					iterator, sequence, *_lightScene->_dynamicShadowProjections[c]._desc, 
 					*_lightScene, _lightScene->_dynamicShadowProjections[c]._lightId,
+					PipelineType::Graphics,
 					*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool)});
 
 			// shadow entries must be sorted by light id

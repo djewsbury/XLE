@@ -8,7 +8,7 @@
 #include <vector>
 #include <functional>
 
-namespace RenderCore { namespace LightingEngine { class CompiledLightingTechnique; class LightingTechniqueSequence; }}
+namespace RenderCore { namespace LightingEngine { class CompiledLightingTechnique; class LightingTechniqueSequence; class LightingTechniqueIterator; class ILightScene; }}
 namespace RenderCore { namespace Techniques { class PreregisteredAttachment; class DrawingApparatus; class FragmentStitchingContext; class ImmediateDrawingApparatus; }}
 namespace RenderCore { class FrameBufferProperties; }
 namespace BufferUploads { class IManager; }
@@ -44,6 +44,7 @@ namespace ToolsRig
 		::Assets::PtrToMarkerPtr<ICompiledOperation> BuildCompiledTechnique(
 			::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> futureFormatter,
 			::Assets::PtrToMarkerPtr<IVisualizeStep> visualizeStep,
+			::Assets::PtrToMarkerPtr<RenderCore::LightingEngine::ILightScene> lightScene,
 			IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachmentsInit,
 			const RenderCore::FrameBufferProperties& fBProps,
 			IteratorRange<const RenderCore::Format*> systemAttachmentFormats);
@@ -53,11 +54,14 @@ namespace ToolsRig
 
 		struct OperationConstructorContext
 		{
-			using SetupFunctionList = std::vector<std::function<void(RenderCore::LightingEngine::LightingTechniqueSequence&)>>;
-			SetupFunctionList _setupFunctions;
+			using SetupFunction = std::function<void(RenderCore::LightingEngine::LightingTechniqueSequence&)>;
+			using DynamicSequenceFunction = std::function<void(RenderCore::LightingEngine::LightingTechniqueIterator&, RenderCore::LightingEngine::LightingTechniqueSequence&)>;
+			std::vector<SetupFunction> _setupFunctions;
+			std::vector<DynamicSequenceFunction> _dynamicSequenceFunctions;
 			RenderCore::Techniques::FragmentStitchingContext _stitchingContext;
 			std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
 			std::shared_ptr<BufferUploads::IManager> _bufferUploads;
+			std::shared_ptr<RenderCore::LightingEngine::ILightScene> _lightScene;
 			unsigned _completionCommandList = 0;
 			::Assets::DependencyValidation _depVal;
 		};

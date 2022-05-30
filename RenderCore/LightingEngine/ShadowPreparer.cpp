@@ -47,6 +47,7 @@ namespace RenderCore { namespace LightingEngine
 			IThreadContext& threadContext, 
 			Techniques::ParsingContext& parsingContext,
 			Techniques::RenderPassInstance& rpi,
+			PipelineType,
 			IPreparedShadowResult& res) override;
 
 		std::pair<std::shared_ptr<Techniques::SequencerConfig>, std::shared_ptr<Techniques::IShaderResourceDelegate>> GetSequencerConfig() override;
@@ -160,6 +161,7 @@ namespace RenderCore { namespace LightingEngine
 		IThreadContext& threadContext, 
 		Techniques::ParsingContext& parsingContext,
 		Techniques::RenderPassInstance& rpi,
+		PipelineType descSetPipelineType,
 		IPreparedShadowResult& res)
 	{
 		/*
@@ -199,6 +201,7 @@ namespace RenderCore { namespace LightingEngine
 		immediateData[2] = {screenToShadow.begin(), screenToShadow.end()};
 		descSetInit._bindItems._resourceViews = MakeIteratorRange(srvs);
 		descSetInit._bindItems._immediateData = MakeIteratorRange(immediateData);
+		descSetInit._pipelineType = descSetPipelineType;
 		auto descSet = device.CreateDescriptorSet(descSetInit);
 		checked_cast<PreparedShadowResult*>(&res)->_descriptorSet = std::move(descSet);
 
@@ -255,6 +258,7 @@ namespace RenderCore { namespace LightingEngine
 			auto attach = fragment.DefineAttachment(Techniques::AttachmentSemantics::ShadowDepthMap)
 				.Clear().FinalState(BindFlag::ShaderResource | BindFlag::DepthStencil);
 			subpass.SetDepthStencil(attach);
+			subpass.SetName("prepare-shadow");
 			fragment.AddSubpass(std::move(subpass));
 		}
 		///////////////////////////////

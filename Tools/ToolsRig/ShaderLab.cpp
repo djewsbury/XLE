@@ -96,6 +96,7 @@ namespace ToolsRig
 	::Assets::PtrToMarkerPtr<ShaderLab::ICompiledOperation> ShaderLab::BuildCompiledTechnique(
 		::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> futureFormatter,
 		::Assets::PtrToMarkerPtr<IVisualizeStep> visualizeStep,
+		::Assets::PtrToMarkerPtr<RenderCore::LightingEngine::ILightScene> futureLightScene,
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachmentsInit,
 		const RenderCore::FrameBufferProperties& fBProps,
 		IteratorRange<const RenderCore::Format*> systemAttachmentFormatsInit)
@@ -107,21 +108,29 @@ namespace ToolsRig
 		auto weakThis = weak_from_this();
 		AsyncConstructToPromise(
 			result->AdoptPromise(),
-			[preregAttachments=std::move(preregAttachments), fBProps=fBProps, futureFormatter=std::move(futureFormatter), visualizeStep=std::move(visualizeStep), systemAttachmentsFormat=std::move(systemAttachmentsFormat), noiseDelegateFuture=std::move(noiseDelegateFuture), weakThis]() mutable {
-				auto l = weakThis.lock();
-				if (!l) Throw(std::runtime_error("ShaderLab shutdown before construction finished"));
-
-				futureFormatter->StallWhilePending();
-				auto formatter = futureFormatter->Actualize();
-
-				auto noiseDelegate = noiseDelegateFuture.get();	// stall 
-
+			[preregAttachments=std::move(preregAttachments), fBProps=fBProps, futureFormatter=std::move(futureFormatter), futureLightScene=std::move(futureLightScene), visualizeStep=std::move(visualizeStep), systemAttachmentsFormat=std::move(systemAttachmentsFormat), noiseDelegateFuture=std::move(noiseDelegateFuture), weakThis]() mutable {
+				std::shared_ptr<Formatters::IDynamicFormatter> formatter;
 				TRY {
+					auto l = weakThis.lock();
+					if (!l) Throw(std::runtime_error("ShaderLab shutdown before construction finished"));
+
+					futureFormatter->StallWhilePending();
+					formatter = futureFormatter->Actualize();
+
+					std::shared_ptr<RenderCore::LightingEngine::ILightScene> lightScene;
+					if (futureLightScene) {
+						futureLightScene->StallWhilePending();
+						lightScene = futureLightScene->Actualize();
+					}
+
+					auto noiseDelegate = noiseDelegateFuture.get();	// stall 
+				
 					OperationConstructorContext constructorContext;
 					constructorContext._stitchingContext = { preregAttachments, fBProps, MakeIteratorRange(systemAttachmentsFormat) };
 					constructorContext._depVal = ::Assets::GetDepValSys().Make();
 					constructorContext._drawingApparatus = l->_drawingApparatus;
 					constructorContext._bufferUploads = l->_bufferUploads;
+					constructorContext._lightScene = lightScene;
 
 					{
 						StringSection<> keyname;
@@ -149,6 +158,8 @@ namespace ToolsRig
 					auto globalStateDelegate = std::make_shared<GlobalStateDelegate>();
 
 					auto technique = std::make_shared<RenderCore::LightingEngine::CompiledLightingTechnique>();
+					for (auto& fn:constructorContext._dynamicSequenceFunctions)
+						technique->CreateDynamicSequence(std::move(fn));
 					auto& sequence = technique->CreateSequence();
 					sequence.CreateStep_BindDelegate(globalStateDelegate);
 					sequence.CreateStep_BindDelegate(noiseDelegate);
@@ -180,15 +191,18 @@ namespace ToolsRig
 					result->_globalStateDelegate = std::move(globalStateDelegate);
 					return std::static_pointer_cast<ICompiledOperation>(result);
 				} CATCH (const ::Assets::Exceptions::ConstructionError& e) {
-					Throw(::Assets::Exceptions::ConstructionError(e, formatter->GetDependencyValidation()));
+					if (formatter) Throw(::Assets::Exceptions::ConstructionError(e, formatter->GetDependencyValidation()));
+					throw;
 				} CATCH (const ::Assets::Exceptions::InvalidAsset& e) {
 					auto depVel = ::Assets::GetDepValSys().Make();
-					depVel.RegisterDependency(formatter->GetDependencyValidation());
+					if (formatter)
+						depVel.RegisterDependency(formatter->GetDependencyValidation());
 					if (e.GetDependencyValidation())
 						depVel.RegisterDependency(e.GetDependencyValidation());
 					Throw(::Assets::Exceptions::ConstructionError(e, depVel));
 				} CATCH (const std::exception& e) {
-					Throw(::Assets::Exceptions::ConstructionError(e, formatter->GetDependencyValidation()));
+					if (formatter) Throw(::Assets::Exceptions::ConstructionError(e, formatter->GetDependencyValidation()));
+					throw;
 				} CATCH_END
 			});
 
