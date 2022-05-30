@@ -287,7 +287,6 @@ namespace RenderCore { namespace Assets
 
 		PipelineLayoutInitializer::PushConstantsBinding pushConstantBindings[3];
 		unsigned pushConstantBindingsCount = 0;
-		IteratorRange<const PipelineLayoutInitializer::PushConstantsBinding*> pushConstantsInitializer;
 
 		if (!autoInitializers.empty()) {
 			// also just defer to the autoInitializer for push constant initializers
@@ -329,12 +328,11 @@ namespace RenderCore { namespace Assets
 				binding._cbElements = _csPushConstants.second->MakeConstantBufferElements(language);
 			}
 			assert(pushConstantBindingsCount <= dimof(pushConstantBindings));
-			pushConstantsInitializer = MakeIteratorRange(pushConstantBindings, &pushConstantBindings[pushConstantBindingsCount]);
 		}
 
 		return PipelineLayoutInitializer {
 			MakeIteratorRange(descriptorSetBindings, &descriptorSetBindings[descSetCount]),
-			pushConstantsInitializer};
+			MakeIteratorRange(pushConstantBindings, &pushConstantBindings[pushConstantBindingsCount])};
 	}
 
 	PipelineLayoutInitializer PredefinedPipelineLayout::MakePipelineLayoutInitializer(ShaderLanguage language, SamplerPool* samplerPool) const
