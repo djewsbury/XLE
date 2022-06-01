@@ -149,7 +149,7 @@ bool FindCollision(float3 startPosition, float3 endPosition, out float3 collisio
 
 			// just do a reflect to simulation a basic collision & bounce off
 		float4 rawNormal = NormalsBuffer.Load(int3(collisionTexCoords,0));
-		float3 worldSpaceNormal = DecompressGBufferNormal(rawNormal);
+		float3 worldSpaceNormal = DecodeGBufferNormal(rawNormal);
 		input.velocity = .75f * reflect(input.velocity, worldSpaceNormal);
 		input.velocity.z *= 0.5f;
 		input.position = collisionPoint + (1.f/60.f) * input.velocity;

@@ -456,9 +456,9 @@ void ClusterKeyToLinearDepths(uint clusterKey, out float minDepth, out float max
 	float3 pixelViewSpacePosition = float3(AB * frustumDim * viewSpaceDepth, viewSpaceDepth);
 
 	#if MSAA_SAMPLES > 1
-		float3 normal = DecompressGBufferNormal(GBuffer_Normals.Load(pixelCoord, sampleIndex));
+		float3 normal = DecodeGBufferNormal(GBuffer_Normals.Load(pixelCoord, sampleIndex));
 	#else
-		float3 normal = DecompressGBufferNormal(GBuffer_Normals[pixelCoord]);
+		float3 normal = DecodeGBufferNormal(GBuffer_Normals[pixelCoord]);
 	#endif
 	float3 lightQuantity = 0.0.xxx;
 

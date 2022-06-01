@@ -219,9 +219,9 @@ GBufferEncoded ps_deferred(VSOUT geo)
         // But we always have to do the final compression step
         //      -- the only way to avoid that would be if the normals where
         //          in view space in the gbuffer
-    float3 tempNormal = DecompressGBufferNormal(normal.xyz);
+    float3 tempNormal = DecodeGBufferNormal(normal.xyz);
     normal.xyz = mul(tempNormal.xyz, normalsTextureToWorld);
-    normal.xyz = CompressGBufferNormal(normal.xyz);
+    normal.xyz = EncodeGBufferNormal(normal.xyz);
     // normal.xyz = lerp(0.5.xxx, normal.xyz, normal.a);
 
     #if 0

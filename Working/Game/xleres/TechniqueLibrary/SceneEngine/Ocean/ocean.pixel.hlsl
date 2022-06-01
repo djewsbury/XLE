@@ -189,7 +189,7 @@ OceanSurfaceSample BuildOceanSurfaceSample(
 		result.worldSpaceNormal = compressedNormal.rgb;
 	#else
 		result.compressedNormal = NormalsTexture.Sample(DefaultSampler, texCoord);
-		result.worldSpaceNormal = DecompressGBufferNormal(compressedNormal);
+		result.worldSpaceNormal = DecodeGBufferNormal(compressedNormal);
 	#endif
 
 	// float specularity = SurfaceSpecularity.Sample(DefaultSampler, specularityTC);

@@ -31,10 +31,10 @@ void main(float4 position : SV_Position, float2 texCoord : TEXCOORD0)
 			//		We can deal with this without normalizes by looking
 			//		at the magnitude squared of the base normal. It's not perfect,
 			//		but might be ok.
-		float3 baseNormal = DecompressGBufferNormal(GBuffer_Normals.Load(int2(position.xy), 0));
+		float3 baseNormal = DecodeGBufferNormal(GBuffer_Normals.Load(int2(position.xy), 0));
 		baseNormalMagnitudeSq = dot(baseNormal, baseNormal);
 		for (int c2=1; c2<MSAA_SAMPLES; ++c2) {
-			float3 sampleNormal = DecompressGBufferNormal(GBuffer_Normals.Load(int2(position.xy), c2));
+			float3 sampleNormal = DecodeGBufferNormal(GBuffer_Normals.Load(int2(position.xy), c2));
 			float d = dot(sampleNormal, baseNormal);
 			minNormalDot = min(d, minNormalDot);
 		}

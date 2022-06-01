@@ -63,7 +63,7 @@ SamplerState SkyCubeSampler;
 
 float3 FFX_SSSR_LoadNormal(int2 pixel_coordinate)
 {
-    return DecompressGBufferNormal(GBufferNormal.Load(int3(pixel_coordinate, 0)).xyz);
+    return DecodeGBufferNormal(GBufferNormal.Load(int3(pixel_coordinate, 0)).xyz);
 }
 
 float FFX_SSSR_LoadDepth(int2 pixel_coordinate, int mip)

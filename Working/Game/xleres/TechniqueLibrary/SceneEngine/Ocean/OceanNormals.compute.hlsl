@@ -121,10 +121,10 @@ Texture2D<uint4>	SourceNormalsTexture;
 		uint2 sourceCoords10 = sourceCoords00 + uint2(1,0);
 		uint2 sourceCoords11 = sourceCoords00 + uint2(1,1);
 
-		float3 sourceNormal00 = DecompressGBufferNormal(SourceNormalsTexture[sourceCoords00] / 255.f);
-		float3 sourceNormal01 = DecompressGBufferNormal(SourceNormalsTexture[sourceCoords01] / 255.f);
-		float3 sourceNormal10 = DecompressGBufferNormal(SourceNormalsTexture[sourceCoords10] / 255.f);
-		float3 sourceNormal11 = DecompressGBufferNormal(SourceNormalsTexture[sourceCoords11] / 255.f);
+		float3 sourceNormal00 = DecodeGBufferNormal(SourceNormalsTexture[sourceCoords00] / 255.f);
+		float3 sourceNormal01 = DecodeGBufferNormal(SourceNormalsTexture[sourceCoords01] / 255.f);
+		float3 sourceNormal10 = DecodeGBufferNormal(SourceNormalsTexture[sourceCoords10] / 255.f);
+		float3 sourceNormal11 = DecodeGBufferNormal(SourceNormalsTexture[sourceCoords11] / 255.f);
 
 		float3 averageNormal = .25f * ( sourceNormal00 + sourceNormal01 + sourceNormal10 + sourceNormal11 );
 		float accuracyFactor = dot(averageNormal, averageNormal);

@@ -39,7 +39,7 @@
 	Texture2D VisualizeInput;
 	float4 Value(uint2 position)
 	{
-		return float4(DecompressGBufferNormal(VisualizeInput.Load(uint3(position.xy, 0)).rgb), 1);
+		return float4(DecodeGBufferNormal(VisualizeInput.Load(uint3(position.xy, 0)).rgb), 1);
 	}
 #else
 	Texture2D VisualizeInput;

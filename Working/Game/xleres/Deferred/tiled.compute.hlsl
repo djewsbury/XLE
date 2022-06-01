@@ -312,9 +312,9 @@ ProjectedLight BuildProjectedLight(Light l)
 	float3 pixelViewSpacePosition = float3(AB * frustumDim * viewSpaceDepth, viewSpaceDepth);
 
 	#if MSAA_SAMPLES > 1
-		float3 normal = DecompressGBufferNormal(GBuffer_Normals.Load(pixelCoord, sampleIndex).xyz);
+		float3 normal = DecodeGBufferNormal(GBuffer_Normals.Load(pixelCoord, sampleIndex).xyz);
 	#else
-		float3 normal = DecompressGBufferNormal(GBuffer_Normals.Load(uint3(pixelCoord, 0)).xyz);
+		float3 normal = DecodeGBufferNormal(GBuffer_Normals.Load(uint3(pixelCoord, 0)).xyz);
 	#endif
 	float3 lightQuantity = 0.0.xxx;
 

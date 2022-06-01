@@ -60,12 +60,12 @@ float2 FFX_DNSR_Reflections_LoadMotionVector(int2 pixel_coordinate)
 
 float3 FFX_DNSR_Reflections_LoadNormal(int2 pixel_coordinate)
 {
-    return DecompressGBufferNormal(GBufferNormal.Load(int3(pixel_coordinate, 0)).xyz);
+    return DecodeGBufferNormal(GBufferNormal.Load(int3(pixel_coordinate, 0)).xyz);
 }
 
 float3 FFX_DNSR_Reflections_LoadNormalHistory(int2 pixel_coordinate)
 {
-    return DecompressGBufferNormal(GBufferNormalPrev.Load(int3(pixel_coordinate, 0)).xyz);
+    return DecodeGBufferNormal(GBufferNormalPrev.Load(int3(pixel_coordinate, 0)).xyz);
 }
 
 float FFX_DNSR_Reflections_LoadRoughness(int2 pixel_coordinate)

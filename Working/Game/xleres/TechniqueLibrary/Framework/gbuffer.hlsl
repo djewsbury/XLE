@@ -112,7 +112,7 @@ float3 oct_to_float32x3(float2 e)
     #define NORMAL_COMPRESSION NORMAL_COMPRESSION_OCTANT
 #endif
 
-float3 CompressGBufferNormal(float3 inputNormal)
+float3 EncodeGBufferNormal(float3 inputNormal)
 {
     #if NORMAL_COMPRESSION == NORMAL_COMPRESSION_OCTANT
         // assuming that the input is pre-normalized here!
@@ -122,7 +122,7 @@ float3 CompressGBufferNormal(float3 inputNormal)
     #endif
 }
 
-float3 DecompressGBufferNormal(float3 gBufferNormalSample)
+float3 DecodeGBufferNormal(float3 gBufferNormalSample)
 {
     #if NORMAL_COMPRESSION == NORMAL_COMPRESSION_OCTANT
         return oct_to_float32x3(gBufferNormalSample.xy);
@@ -236,7 +236,7 @@ GBufferEncoded Encode(GBufferValues values)
     GBufferEncoded result;
     result.diffuseBuffer.rgb = values.diffuseAlbedo;
     #if NORMAL_BUFFER_8BIT == 1
-        result.normalBuffer.xyz = CompressGBufferNormal(values.worldSpaceNormal.xyz);
+        result.normalBuffer.xyz = EncodeGBufferNormal(values.worldSpaceNormal.xyz);
     #else
         result.normalBuffer.xyz = values.worldSpaceNormal.xyz;
     #endif
@@ -269,7 +269,7 @@ GBufferValues Decode(GBufferEncoded values)
 {
     GBufferValues result = GBufferValues_Default();
 	result.diffuseAlbedo = values.diffuseBuffer.rgb;
-	result.worldSpaceNormal  = DecompressGBufferNormal(values.normalBuffer.xyz);
+	result.worldSpaceNormal  = DecodeGBufferNormal(values.normalBuffer.xyz);
 
     result.material.roughness = values.normalBuffer.a;
     result.material.specular = values.diffuseBuffer.a;
@@ -316,7 +316,7 @@ DepthPlusEncoded EncodeDepthPlus(GBufferValues values, int2 motion)
         result.motionBuffer = motion;
     #endif
     #if DEPTH_PLUS_NORMAL
-        result.normalBuffer.xyz = CompressGBufferNormal(values.worldSpaceNormal.xyz);
+        result.normalBuffer.xyz = EncodeGBufferNormal(values.worldSpaceNormal.xyz);
     #endif
     #if DEPTH_PLUS_ROUGHNESS
         result.normalBuffer.a = values.material.roughness;

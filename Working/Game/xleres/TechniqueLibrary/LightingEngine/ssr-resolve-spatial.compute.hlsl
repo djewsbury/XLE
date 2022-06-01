@@ -118,7 +118,7 @@ min16RadianceValue FFX_DNSR_Reflections_LoadRadianceFP16(int2 pixel_coordinate)
 
 min16float3 FFX_DNSR_Reflections_LoadNormalFP16(int2 pixel_coordinate)
 {
-    return (min16float3) DecompressGBufferNormal(GBufferNormal.Load(int3(pixel_coordinate, 0)).xyz);
+    return (min16float3) DecodeGBufferNormal(GBufferNormal.Load(int3(pixel_coordinate, 0)).xyz);
 }
 
 float FFX_DNSR_Reflections_LoadDepth(int2 pixel_coordinate)
