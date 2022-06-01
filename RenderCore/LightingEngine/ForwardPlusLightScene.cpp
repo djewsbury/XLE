@@ -363,26 +363,15 @@ namespace RenderCore { namespace LightingEngine
 				dst[3] = uniforms._propertyCBView.get();
 
 			if (bindingFlags & (1ull<<4ull)) {
-				assert(context._rpi);
-				if (_lightScene->_ambientLight->_ambientLightOperator._ssrOperator.has_value()) {
-					dst[4] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
-					dst[5] = context._rpi->GetNonFrameBufferAttachmentView(1).get();
-				} else {
-					dst[4] = context.GetTechniqueContext()._commonResources->_black2DSRV.get();
-					dst[5] = context.GetTechniqueContext()._commonResources->_black2DSRV.get();
-				}
-			}
-
-			if (bindingFlags & (1ull<<6ull)) {
-				assert(bindingFlags & (1ull<<7ull));
+				assert(bindingFlags & (1ull<<5ull));
 				if (_lightScene->_shadowProbes && _lightScene->_shadowProbes->IsReady()) {
-					dst[6] = &_lightScene->_shadowProbes->GetStaticProbesTable();
-					dst[7] = &_lightScene->_shadowProbes->GetShadowProbeUniforms();
+					dst[4] = &_lightScene->_shadowProbes->GetStaticProbesTable();
+					dst[5] = &_lightScene->_shadowProbes->GetShadowProbeUniforms();
 				} else {
 					// We need a white dummy texture in reverseZ modes, or black in non-reverseZ modes
 					assert(Techniques::GetDefaultClipSpaceType() == ClipSpaceType::Positive_ReverseZ || Techniques::GetDefaultClipSpaceType() == ClipSpaceType::PositiveRightHanded_ReverseZ);
-					dst[6] = context.GetTechniqueContext()._commonResources->_whiteCubeArraySRV.get();
-					dst[7] = context.GetTechniqueContext()._commonResources->_blackBufferUAV.get();
+					dst[4] = context.GetTechniqueContext()._commonResources->_whiteCubeArraySRV.get();
+					dst[5] = context.GetTechniqueContext()._commonResources->_blackBufferUAV.get();
 				}
 			}
 		}
@@ -394,10 +383,8 @@ namespace RenderCore { namespace LightingEngine
 			BindResourceView(1, Hash64("LightList"));
 			BindResourceView(2, Hash64("TiledLightBitField"));
 			BindResourceView(3, Hash64("EnvironmentProps"));
-			BindResourceView(4, Hash64("SSR"));
-			BindResourceView(5, Hash64("SSRConfidence"));
-			BindResourceView(6, Hash64("StaticShadowProbeDatabase"));
-			BindResourceView(7, Hash64("StaticShadowProbeProperties"));
+			BindResourceView(4, Hash64("StaticShadowProbeDatabase"));
+			BindResourceView(5, Hash64("StaticShadowProbeProperties"));
 		}
 	};
 

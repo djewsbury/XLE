@@ -271,6 +271,48 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
+	class MainSceneResourceDelegate : public Techniques::IShaderResourceDelegate
+	{
+	public:
+		void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst) override
+		{
+			if (bindingFlags & (1ull<<uint64_t(_resourceViewsStart))) {
+				assert(bindingFlags & (1ull<<uint64_t(_resourceViewsStart+1)));
+				assert(context._rpi);
+				dst[_resourceViewsStart] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
+				dst[_resourceViewsStart+1] = context._rpi->GetNonFrameBufferAttachmentView(1).get();
+			}
+			_lightSceneDelegate->WriteResourceViews(context, objectContext, bindingFlags, dst);
+		}
+
+		void WriteSamplers(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<ISampler**> dst) override
+		{
+			_lightSceneDelegate->WriteSamplers(context, objectContext, bindingFlags, dst);
+		}
+		void WriteImmediateData(Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override
+		{
+			_lightSceneDelegate->WriteImmediateData(context, objectContext, idx, dst);
+		}
+		size_t GetImmediateDataSize(Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override
+		{
+			return _lightSceneDelegate->GetImmediateDataSize(context, objectContext, idx);
+		}
+
+		MainSceneResourceDelegate(std::shared_ptr<Techniques::IShaderResourceDelegate> lightSceneDelegate, bool hasSSR)
+		: _lightSceneDelegate(std::move(lightSceneDelegate))
+		{
+			_interface = _lightSceneDelegate->_interface;
+			_resourceViewsStart = (unsigned)_interface.GetResourceViewBindings().size();
+			if (hasSSR) {
+				_interface.BindResourceView(_resourceViewsStart+0, Hash64("SSR"));
+				_interface.BindResourceView(_resourceViewsStart+1, Hash64("SSRConfidence"));
+			}
+		}
+
+		std::shared_ptr<Techniques::IShaderResourceDelegate> _lightSceneDelegate;
+		unsigned _resourceViewsStart = 0;
+	};
+
 	static RenderStepFragmentInterface CreateForwardSceneFragment(
 		std::shared_ptr<ForwardLightingCaptures> captures,
 		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate,
@@ -319,7 +361,13 @@ namespace RenderCore { namespace LightingEngine
 			}
 		}
 
-		result.AddSubpass(std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending, std::move(box), captures->_lightScene->CreateMainSceneResourceDelegate());
+		auto resourceDelegate = std::make_shared<MainSceneResourceDelegate>(
+			captures->_lightScene->CreateMainSceneResourceDelegate(),
+			hasSSR);
+
+		result.AddSubpass(
+			std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending, std::move(box),
+			std::move(resourceDelegate));
 		return result;
 	}
 
