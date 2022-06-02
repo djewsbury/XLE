@@ -25,6 +25,7 @@ void color_visualisation(
 
     GBufferValues sample = LoadGBuffer(position.xy, sys);
     LightOperatorInputs resolvePixel = LightOperatorInputs_Create(position, viewFrustumVector, sys);
+    if (resolvePixel.ndcDepth == 0) discard;
     CascadeAddress cascade = ResolveShadowsCascade(resolvePixel.worldPosition, sample.worldSpaceNormal, texCoord, resolvePixel.worldSpaceDepth);
     if (cascade.cascadeIndex >= 0) {
         float4 cols[6]= {
@@ -51,12 +52,17 @@ void detailed_visualisation(
 {
     GBufferValues sample = LoadGBuffer(position.xy, sys);
     LightOperatorInputs resolvePixel = LightOperatorInputs_Create(position, viewFrustumVector, sys);
-    CascadeAddress cascade = ResolveShadowsCascade(resolvePixel.worldPosition, sample.worldSpaceNormal, texCoord, resolvePixel.worldSpaceDepth);
-    outCascadeIndex = cascade.cascadeIndex;
-    outSampleDensity.x = 2048 * 0.5 * (ddx_fine(cascade.frustumCoordinates.x) + ddy_fine(cascade.frustumCoordinates.x));
-    outSampleDensity.y = 2048 * 0.5 * (ddx_fine(cascade.frustumCoordinates.y) + ddy_fine(cascade.frustumCoordinates.y));
-    outSampleDensity.z = 16384 * 0.5 * (ddx_fine(cascade.frustumCoordinates.z) + ddy_fine(cascade.frustumCoordinates.z));
-    outSampleDensity.w = 1.0f;
+    if (resolvePixel.ndcDepth != 0) {
+        CascadeAddress cascade = ResolveShadowsCascade(resolvePixel.worldPosition, sample.worldSpaceNormal, texCoord, resolvePixel.worldSpaceDepth);    
+        outCascadeIndex = cascade.cascadeIndex;
+        outSampleDensity.x = 2048 * 0.5 * (ddx_fine(cascade.frustumCoordinates.x) + ddy_fine(cascade.frustumCoordinates.x));
+        outSampleDensity.y = 2048 * 0.5 * (ddx_fine(cascade.frustumCoordinates.y) + ddy_fine(cascade.frustumCoordinates.y));
+        outSampleDensity.z = 16384 * 0.5 * (ddx_fine(cascade.frustumCoordinates.z) + ddy_fine(cascade.frustumCoordinates.z));
+        outSampleDensity.w = 1.0f;
+    } else {
+        outCascadeIndex = 255;
+        outSampleDensity = 0;
+    }
 }
 
 Texture2D<uint> PrebuiltCascadeIndexTexture;

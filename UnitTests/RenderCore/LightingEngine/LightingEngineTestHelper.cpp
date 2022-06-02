@@ -30,6 +30,7 @@
 #include "../../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Utility/Threading/CompletionThreadPool.h"
+#include "../../../xleres/FileList.h"
 #include <regex>
 #include <chrono>
 
@@ -92,13 +93,42 @@ namespace UnitTests
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	static void BlackOutSky(RenderCore::Techniques::ParsingContext& parsingContext)
+	{
+		using namespace RenderCore;
+		UniformsStreamInterface usi;
+
+		parsingContext.GetUniformDelegateManager()->BringUpToDateGraphics(parsingContext);
+
+		Techniques::PixelOutputStates po;
+		assert(parsingContext._rpi);
+		po.Bind(*parsingContext._rpi);
+		po.Bind(Techniques::CommonResourceBox::s_dsReadOnly);
+		AttachmentBlendDesc blendDescs[] {Techniques::CommonResourceBox::s_abOpaque};
+		po.Bind(MakeIteratorRange(blendDescs));
+		auto futureShader = CreateFullViewportOperator(
+			parsingContext.GetTechniqueContext()._graphicsPipelinePool,
+			Techniques::FullViewportOperatorSubType::MaxDepth,
+			BASIC_PIXEL_HLSL ":blackOpaque",
+			ParameterBox{},
+			GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
+			po, usi);
+		futureShader->StallWhilePending();
+		futureShader->Actualize()->Draw(parsingContext, {});
+	}
+
 	void ParseScene(RenderCore::LightingEngine::LightingTechniqueInstance& lightingIterator, ToolsRig::IDrawablesWriter& drawableWriter)
 	{
 		using namespace RenderCore;
 		for (;;) {
 			auto next = lightingIterator.GetNextStep();
 			if (next._type == LightingEngine::StepType::None || next._type == LightingEngine::StepType::Abort) break;
-			if (next._type == LightingEngine::StepType::DrawSky || next._type == LightingEngine::StepType::ReadyInstances) continue;
+			if (next._type == LightingEngine::StepType::ReadyInstances) continue;
+			if (next._type == LightingEngine::StepType::DrawSky) {
+				// we need to draw something, otherwise we'll just end up garbage in the areas of the image outside of the gbuffer
+				if (next._parsingContext) BlackOutSky(*next._parsingContext);
+				continue;
+			}
 			assert(next._type == LightingEngine::StepType::ParseScene);
 			assert(!next._pkts.empty() && next._pkts[0]);
 			drawableWriter.WriteDrawables(*next._pkts[0]);

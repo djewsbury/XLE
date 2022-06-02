@@ -259,13 +259,6 @@ namespace UnitTests
 					pkt);
 			}
 
-			// todo -- final image layout solution
-			Metal::Internal::SetImageLayout(
-				*Metal::DeviceContext::Get(*threadContext),
-				*dynamic_cast<Metal::Resource*>(fbHelper.GetMainTarget().get()),
-				Metal::Internal::ImageLayout::ColorAttachmentOptimal, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-				Metal::Internal::ImageLayout::General, 0, VK_PIPELINE_STAGE_HOST_BIT);
-
 			fbHelper.SaveImage(*threadContext, "drawables-render-sphere");
 		}
 
@@ -330,13 +323,6 @@ namespace UnitTests
 					if (parsingContext._requiredBufferUploadsCommandList)
 						techniqueTestApparatus._bufferUploads->StallUntilCompletion(*threadContext, parsingContext._requiredBufferUploadsCommandList);
 				}
-
-				// todo -- final image layout solution
-				Metal::Internal::SetImageLayout(
-					*Metal::DeviceContext::Get(*threadContext),
-					*dynamic_cast<Metal::Resource*>(fbHelper.GetMainTarget().get()),
-					Metal::Internal::ImageLayout::ColorAttachmentOptimal, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-					Metal::Internal::ImageLayout::General, 0, VK_PIPELINE_STAGE_HOST_BIT);
 
 				fbHelper.SaveImage(*threadContext, "drawables-render-model");
 			}

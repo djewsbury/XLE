@@ -207,6 +207,14 @@ namespace UnitTests
 
 	void SaveImage(RenderCore::IThreadContext& threadContext, RenderCore::IResource& resource, StringSection<> filename)
 	{
+		// todo -- final image layout solution
+		using namespace RenderCore;
+		Metal::Internal::SetImageLayout(
+			*Metal::DeviceContext::Get(threadContext),
+			*dynamic_cast<Metal::Resource*>(&resource),
+			Metal::Internal::ImageLayout::ColorAttachmentOptimal, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+			Metal::Internal::ImageLayout::General, 0, VK_PIPELINE_STAGE_HOST_BIT);
+
 		auto desc = resource.GetDesc();
 		auto data = resource.ReadBackSynchronized(threadContext);
 		if (RenderCore::GetCompressionType(desc._textureDesc._format) != RenderCore::FormatCompressionType::None

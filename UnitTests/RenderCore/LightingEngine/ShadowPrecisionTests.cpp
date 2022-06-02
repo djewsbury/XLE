@@ -151,6 +151,8 @@ namespace UnitTests
 			prepareMarker->StallWhilePending();
 			REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
 		}
+		testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
+		::Assets::Services::GetAssetSets().OnFrameBarrier();
 	}
 
 	static void PumpBufferUploads(LightingEngineTestApparatus& testApparatus)

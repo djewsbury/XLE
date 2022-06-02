@@ -575,7 +575,12 @@ namespace RenderCore { namespace LightingEngine
 				break;
 
 			case LightingTechniqueSequence::ExecuteStep::Type::DrawSky:
-				return { StepType::DrawSky };
+				{
+					Step result;
+					result._type = StepType::DrawSky;
+					result._parsingContext = _iterator->_parsingContext;
+					return result;
+				}
 
 			case LightingTechniqueSequence::ExecuteStep::Type::BeginRenderPassInstance:
 				{

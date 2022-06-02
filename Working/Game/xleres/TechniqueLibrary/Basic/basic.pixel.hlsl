@@ -157,10 +157,15 @@ float4 copy_point_scrolllimit(float4 position : SV_Position, float2 texCoord : T
 	return float4(InputTexture.SampleLevel(PointClampSampler, texCoord, 0).rgb, alpha);
 }
 
-float4 invalid(float4 position : SV_Position)
+float4 invalid(float4 position : SV_Position) : SV_Target0
 {
 	float3 color0 = float3(1.0f, 0.f, 0.f);
 	float3 color1 = float3(0.0f, 0.f, 1.f);
 	uint flag = (uint(position.x/4.f) + uint(position.y/4.f))&1;
 	return float4(flag?color0:color1, 1.0f);
+}
+
+float4 blackOpaque(float4 position : SV_Position) : SV_Target0
+{
+	return float4(0,0,0,1);
 }

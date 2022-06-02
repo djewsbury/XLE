@@ -133,7 +133,9 @@ namespace UnitTests
 		}
 
 		statsQuery.End(metalContext, query);
-		threadContext.CommitCommands();
+		// On AMD, it seems we need a CommitCommandsFlags::WaitForCompletion; -- however, we might not not on nvidia, because
+		// GetResults_Stall implicitly stalls
+		threadContext.CommitCommands(CommitCommandsFlags::WaitForCompletion);
 
 		Metal::QueryPool::QueryResult_ShaderInvocations shaderInvocationsCount;
 		if (statsQuery.GetResults_Stall(metalContext, query, MakeOpaqueIteratorRange(shaderInvocationsCount))) {
@@ -216,6 +218,9 @@ namespace UnitTests
 				auto stencilHighLight = CountPixelShaderInvocations(*threadContext, parsingContext, *lightingTechnique, testApparatus, *drawableWriter);
 				lightScene.DestroyLightSource(lightId);
 
+				auto baseInvocations2 = CountPixelShaderInvocations(*threadContext, parsingContext, *lightingTechnique, testApparatus, *drawableWriter);
+
+				REQUIRE(baseInvocations2 == baseInvocations);
 				REQUIRE(stencilHighLight == baseInvocations);		// depth bounds should prevent this "high light" from effect any pixels
 				REQUIRE(stencilHighLight < stencilMedLight);
 				REQUIRE(stencilMedLight < stencilLowLight);			// because were using orthogonal projection, we won't see a big different between low and mid lights -- but we shift one off the to the side a bit
@@ -232,7 +237,7 @@ namespace UnitTests
 
 				testHelper->EndFrameCapture();
 
-				REQUIRE(stencilLowLightWithBlocker < stencilLowLight);
+				REQUIRE(stencilLowLightWithBlocker < stencilLowLight);		// seem to be triggering this on AMD; even though the pipeline configuration seems to be correct
 				REQUIRE(stencilLowLightWithBlocker != baseInvocations);
 				REQUIRE(stencilHighLightWithBlocker == baseInvocations);
 			}

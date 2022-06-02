@@ -30,6 +30,8 @@ float4 main(
 	GBufferValues sample = LoadGBuffer(position.xy, sys);
     LightOperatorInputs inputs = LightOperatorInputs_Create(position, viewFrustumVector, sys);
 
+    if (inputs.ndcDepth == 0) discard;      // max distance in ReverseZ modes. Discard early to skip sky pixels
+
     LightSampleExtra sampleExtra;
     sampleExtra.screenSpaceOcclusion = 1.f;
 	#if HAS_SCREENSPACE_AO==1

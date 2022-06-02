@@ -25,7 +25,6 @@
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Assets.h"
-#include "../../ConsoleRig/ResourceBox.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../xleres/FileList.h"
 
@@ -236,37 +235,30 @@ namespace RenderCore { namespace LightingEngine
 			_preparedShadows);
 	}
 
-	class ToneMapStandin
+	static ::Assets::PtrToMarkerPtr<Techniques::IShaderOperator> CreateToneMapOperator(
+		const std::shared_ptr<Techniques::PipelineCollection>& pool, 
+		Techniques::RenderPassInstance& rpi)
 	{
-	public:
-		::Assets::PtrToMarkerPtr<Techniques::IShaderOperator> _operator;
-		const ::Assets::DependencyValidation& GetDependencyValidation() { return _operator->GetDependencyValidation(); }
-		ToneMapStandin(
-			const std::shared_ptr<Techniques::PipelineCollection>& pool,
-			const Techniques::PixelOutputStates& fbTarget)
-		{
-			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Utility::Hash64("SubpassInputAttachment"));
-			_operator = Techniques::CreateFullViewportOperator(
-				pool, Techniques::FullViewportOperatorSubType::DisableDepth,
-				BASIC_PIXEL_HLSL ":copy_inputattachment",
-				{}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
-				fbTarget, usi);
-		}
+		Techniques::PixelOutputStates outputStates;
+		outputStates.Bind(rpi);
+		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
+		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
+		outputStates.Bind(MakeIteratorRange(blendStates));
+		UniformsStreamInterface usi;
+		usi.BindResourceView(0, Utility::Hash64("SubpassInputAttachment"));
+		return Techniques::CreateFullViewportOperator(
+			pool, Techniques::FullViewportOperatorSubType::DisableDepth,
+			BASIC_PIXEL_HLSL ":copy_inputattachment",
+			{}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
+			outputStates, usi);
 	};
 
 	void DeferredLightingCaptures::DoToneMap(LightingTechniqueIterator& iterator)
 	{
 		// Very simple stand-in for tonemap -- just use a copy shader to write the HDR values directly to the LDR texture
-		Techniques::PixelOutputStates outputStates;
-		outputStates.Bind(iterator._rpi);
-		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
-		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
-		outputStates.Bind(MakeIteratorRange(blendStates));
-		auto& standin = ConsoleRig::FindCachedBox<ToneMapStandin>(
-			iterator._parsingContext->GetTechniqueContext()._graphicsPipelinePool,
-			outputStates);
-		auto* pipeline = standin._operator->TryActualize();
+		auto pipelineFuture = CreateToneMapOperator(iterator._parsingContext->GetTechniqueContext()._graphicsPipelinePool, iterator._rpi);
+		pipelineFuture->StallWhilePending();
+		auto pipeline = pipelineFuture->TryActualize();
 		if (pipeline) {
 			UniformsStream us;
 			IResourceView* srvs[] = { iterator._rpi.GetInputAttachmentView(0).get() };

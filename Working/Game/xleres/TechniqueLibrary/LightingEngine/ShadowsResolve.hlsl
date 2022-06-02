@@ -209,7 +209,7 @@ float CalculateShadowCasterDistance(
         float cDist2 = comparisonDistance + dot(rotatedFilter2, filterPlane);
         float cDist3 = comparisonDistance + dot(rotatedFilter3, filterPlane);
 
-        // Note that we have to flip this comparison for the ReserveZ projection modes, since
+        // Note that we have to flip this comparison for the ReverseZ projection modes, since
         // larger values mean closer to the light in ReverseZ, while smaller numbers mean closer to the
         // light in non-ReverseZ modes
         float4 difference 		 = sampleDepth - float4(cDist0, cDist1, cDist2, cDist3);
@@ -229,12 +229,7 @@ float CalculateShadowCasterDistance(
     // This reduces the possibility of acne in unshadows pixels significantly
     if (minDifference == minDifferenceInitial) return 0.f;
 
-    return minDifference - CasterDistanceExtraBias;
-
-        //
-        //		finalDistance is the assumed distance to the shadow caster
-    float finalDistance = accumulatedDistance / max(accumulatedSampleCount, 1e-5f);
-    return finalDistance;
+    return minDifference + CasterDistanceExtraBias;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

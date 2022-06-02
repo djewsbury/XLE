@@ -25,7 +25,6 @@
 #include "../IDevice.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
-#include "../../ConsoleRig/ResourceBox.h"
 #include "../../xleres/FileList.h"
 
 namespace RenderCore { namespace LightingEngine
@@ -106,37 +105,30 @@ namespace RenderCore { namespace LightingEngine
 		_preparedDominantShadow = nullptr;
 	}
 
-	class ToneMapStandin
+	static ::Assets::PtrToMarkerPtr<Techniques::IShaderOperator> CreateToneMapOperator(
+		const std::shared_ptr<Techniques::PipelineCollection>& pool, 
+		Techniques::RenderPassInstance& rpi)
 	{
-	public:
-		::Assets::PtrToMarkerPtr<Techniques::IShaderOperator> _operator;
-		const ::Assets::DependencyValidation& GetDependencyValidation() { return _operator->GetDependencyValidation(); }
-		ToneMapStandin(
-			const std::shared_ptr<Techniques::PipelineCollection>& pool,
-			const Techniques::PixelOutputStates& fbTarget)
-		{
-			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Utility::Hash64("SubpassInputAttachment"));
-			_operator = Techniques::CreateFullViewportOperator(
-				pool, Techniques::FullViewportOperatorSubType::DisableDepth,
-				BASIC_PIXEL_HLSL ":copy_inputattachment",
-				{}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
-				fbTarget, usi);
-		}
+		Techniques::PixelOutputStates outputStates;
+		outputStates.Bind(rpi);
+		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
+		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
+		outputStates.Bind(MakeIteratorRange(blendStates));
+		UniformsStreamInterface usi;
+		usi.BindResourceView(0, Utility::Hash64("SubpassInputAttachment"));
+		return Techniques::CreateFullViewportOperator(
+			pool, Techniques::FullViewportOperatorSubType::DisableDepth,
+			BASIC_PIXEL_HLSL ":copy_inputattachment",
+			{}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
+			outputStates, usi);
 	};
 
 	void ForwardLightingCaptures::DoToneMap(LightingTechniqueIterator& iterator)
 	{
 		// Very simple stand-in for tonemap -- just use a copy shader to write the HDR values directly to the LDR texture
-		Techniques::PixelOutputStates outputStates;
-		outputStates.Bind(iterator._rpi);
-		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
-		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
-		outputStates.Bind(MakeIteratorRange(blendStates));
-		auto& standin = ConsoleRig::FindCachedBox<ToneMapStandin>(
-			iterator._parsingContext->GetTechniqueContext()._graphicsPipelinePool,
-			outputStates);
-		auto* pipeline = standin._operator->TryActualize();
+		auto pipelineFuture = CreateToneMapOperator(iterator._parsingContext->GetTechniqueContext()._graphicsPipelinePool, iterator._rpi);
+		pipelineFuture->StallWhilePending();
+		auto pipeline = pipelineFuture->TryActualize();
 		if (pipeline) {
 			UniformsStream us;
 			IResourceView* srvs[] = { iterator._rpi.GetInputAttachmentView(0).get() };
@@ -277,6 +269,8 @@ namespace RenderCore { namespace LightingEngine
 				dst[_resourceViewsStart] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
 				dst[_resourceViewsStart+1] = context._rpi->GetNonFrameBufferAttachmentView(1).get();
 			}
+			if (bindingFlags & (1ull<<uint64_t(_resourceViewsStart+2)))
+				dst[_resourceViewsStart+2] = _noise.get();
 			_lightSceneDelegate->WriteResourceViews(context, objectContext, bindingFlags, dst);
 		}
 
@@ -293,7 +287,7 @@ namespace RenderCore { namespace LightingEngine
 			return _lightSceneDelegate->GetImmediateDataSize(context, objectContext, idx);
 		}
 
-		MainSceneResourceDelegate(std::shared_ptr<Techniques::IShaderResourceDelegate> lightSceneDelegate, bool hasSSR)
+		MainSceneResourceDelegate(std::shared_ptr<Techniques::IShaderResourceDelegate> lightSceneDelegate, bool hasSSR, Techniques::DeferredShaderResource& balanceNoiseTexture)
 		: _lightSceneDelegate(std::move(lightSceneDelegate))
 		{
 			_interface = _lightSceneDelegate->_interface;
@@ -302,16 +296,22 @@ namespace RenderCore { namespace LightingEngine
 				_interface.BindResourceView(_resourceViewsStart+0, Hash64("SSR"));
 				_interface.BindResourceView(_resourceViewsStart+1, Hash64("SSRConfidence"));
 			}
+
+			_noise = balanceNoiseTexture.GetShaderResource();
+			_completionCmdList = balanceNoiseTexture.GetCompletionCommandList();
+			_interface.BindResourceView(_resourceViewsStart+2, Hash64("NoiseTexture"));
 		}
 
 		std::shared_ptr<Techniques::IShaderResourceDelegate> _lightSceneDelegate;
 		unsigned _resourceViewsStart = 0;
+		std::shared_ptr<IResourceView> _noise;
 	};
 
 	static RenderStepFragmentInterface CreateForwardSceneFragment(
 		std::shared_ptr<ForwardLightingCaptures> captures,
 		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate,
-		bool hasSSR)
+		bool hasSSR,
+		Techniques::DeferredShaderResource& balanceNoiseTexture)
 	{
 		RenderStepFragmentInterface result { PipelineType::Graphics };
 		auto lightResolve = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).NoInitialState();
@@ -358,7 +358,7 @@ namespace RenderCore { namespace LightingEngine
 
 		auto resourceDelegate = std::make_shared<MainSceneResourceDelegate>(
 			captures->_lightScene->CreateMainSceneResourceDelegate(),
-			hasSSR);
+			hasSSR, balanceNoiseTexture);
 
 		result.AddSubpass(
 			std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending, std::move(box),
@@ -414,6 +414,7 @@ namespace RenderCore { namespace LightingEngine
 			return;
 		}
 
+		auto balancedNoiseTexture = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
 		auto hierarchicalDepthsOperatorFuture = ::Assets::MakeFuturePtr<HierarchicalDepthsOperator>(pipelinePool);
 		::Assets::PtrToMarkerPtr<ScreenSpaceReflectionsOperator> ssrFuture;
 		if (forwardLightScene->GetAmbientLightOperatorDesc()._ssrOperator.has_value())
@@ -421,10 +422,10 @@ namespace RenderCore { namespace LightingEngine
 
 		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
 
-		::Assets::WhenAll(hierarchicalDepthsOperatorFuture).ThenConstructToPromise(
+		::Assets::WhenAll(hierarchicalDepthsOperatorFuture, balancedNoiseTexture).ThenConstructToPromise(
 			std::move(promise),
 			[techDelBox, pipelineAccelerators, pipelinePool, ssrFuture=std::move(ssrFuture), forwardLightScene=std::move(forwardLightScene), preregisteredAttachments=std::move(preregisteredAttachments), fbProps]
-			(auto&& thatPromise, auto hierarchicalDepthsOperator) {
+			(auto&& thatPromise, auto hierarchicalDepthsOperator, auto balancedNoiseTexture) {
 
 				TRY {
 					std::shared_ptr<ScreenSpaceReflectionsOperator> ssrActual;
@@ -498,7 +499,7 @@ namespace RenderCore { namespace LightingEngine
 
 					// Draw main scene
 					auto mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
-						CreateForwardSceneFragment(captures, techDelBox->_forwardIllumDelegate_DisableDepthWrite, ssrActual!=nullptr));
+						CreateForwardSceneFragment(captures, techDelBox->_forwardIllumDelegate_DisableDepthWrite, ssrActual!=nullptr, *balancedNoiseTexture));
 
 					// Post processing
 					auto toneMapFragment = CreateToneMapFragment(

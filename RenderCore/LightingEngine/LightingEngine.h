@@ -29,6 +29,7 @@ namespace RenderCore { namespace LightingEngine
 			std::vector<Techniques::DrawablesPacket*> _pkts;			// todo -- candidate for subframe heap
 			XLEMath::ArbitraryConvexVolumeTester* _complexCullingVolume;
 			std::vector<Techniques::ProjectionDesc> _multiViewDesc;		// todo -- candidate for subframe heap
+			Techniques::ParsingContext* _parsingContext = nullptr;
 
 			operator bool() const { return _type != StepType::None && _type != StepType::Abort; }
 		};
