@@ -75,6 +75,7 @@ namespace UnitTests
 		_techniqueContext->_attachmentPool = std::make_shared<Techniques::AttachmentPool>(_metalTestHelper->_device);
 		_techniqueContext->_frameBufferPool = Techniques::CreateFrameBufferPool();
 		_techniqueContext->_drawablesPool = RenderCore::Techniques::CreateDrawablesPool();
+		_techniqueContext->_graphicsPipelinePool = _pipelinePool;
 
 		_techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
 		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *MakeSequencerDescriptorSetLayout()->GetLayout(), *_metalTestHelper->_device);
@@ -83,6 +84,10 @@ namespace UnitTests
 
 	LightingEngineTestApparatus::~LightingEngineTestApparatus()
 	{
+		// we have to clear the asset sets here, because we're starting to pull down manager
+		// like the drawables pool
+		if (::Assets::Services::HasAssetSets())
+			::Assets::Services::GetAssetSets().Clear();
 	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,7 +98,7 @@ namespace UnitTests
 		for (;;) {
 			auto next = lightingIterator.GetNextStep();
 			if (next._type == LightingEngine::StepType::None || next._type == LightingEngine::StepType::Abort) break;
-			if (next._type == LightingEngine::StepType::DrawSky) continue;
+			if (next._type == LightingEngine::StepType::DrawSky || next._type == LightingEngine::StepType::ReadyInstances) continue;
 			assert(next._type == LightingEngine::StepType::ParseScene);
 			assert(!next._pkts.empty() && next._pkts[0]);
 			drawableWriter.WriteDrawables(*next._pkts[0]);
@@ -136,7 +141,7 @@ namespace UnitTests
 		auto layout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>(
 			unitTestsMaterialDescSet, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{}
 		);
-		return std::make_shared<RenderCore::Techniques::DescriptorSetLayoutAndBinding>(layout, 1, "Material", RenderCore::PipelineType::Graphics, ::Assets::DependencyValidation{});
+		return std::make_shared<RenderCore::Techniques::DescriptorSetLayoutAndBinding>(layout, RenderCore::Techniques::s_defaultMaterialDescSetSlot, "Material", RenderCore::PipelineType::Graphics, ::Assets::DependencyValidation{});
 	}
 
 	static std::shared_ptr<RenderCore::Techniques::DescriptorSetLayoutAndBinding> MakeSequencerDescriptorSetLayout()

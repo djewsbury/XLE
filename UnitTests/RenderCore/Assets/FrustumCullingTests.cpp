@@ -72,7 +72,7 @@ namespace UnitTests
 			auto templateDesc = std::make_shared<GraphicsPipelineDesc>();
 			templateDesc->_shaders[(unsigned)ShaderStage::Vertex] = NO_PATCHES_VERTEX_HLSL ":main:vs_*";
 			templateDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/local.pixel.hlsl:main:ps_*";
-			templateDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Framework/Preconfiguration.hlsl";
+			templateDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Config/Preconfiguration.hlsl";
 			templateDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
 			templateDesc->_rasterization = Techniques::CommonResourceBox::s_rsDefault;

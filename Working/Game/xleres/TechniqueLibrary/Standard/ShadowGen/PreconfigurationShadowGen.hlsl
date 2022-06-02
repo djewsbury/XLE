@@ -2,6 +2,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#include "../../Config/PreconfigurationShared.hlsl"
+
 #undef VSOUT_HAS_COLOR_LINEAR
 #undef VSOUT_HAS_LOCAL_TANGENT_FRAME
 #undef VSOUT_HAS_TANGENT_FRAME
@@ -12,7 +14,7 @@
 #define VSOUT_HAS_LOCAL_TANGENT_FRAME 0
 #define VSOUT_HAS_TANGENT_FRAME 0
 #define VSOUT_HAS_NORMAL 0
-#if (MAT_ALPHA_TEST!=1) && (MAT_ALPHA_DITHER_SHADOWS!=1)
+#if ENABLE_ALPHA_TEST && MAT_ALPHA_DITHER_SHADOWS
 	#undef GEO_HAS_TEXCOORD
 	#define GEO_HAS_TEXCOORD 0
 	#undef VSOUT_HAS_TEXCOORD

@@ -414,7 +414,12 @@ namespace RenderCore { namespace LightingEngine
 		};
 		encoder.Bind(MakeIteratorRange(vbvs), {});
 
-		AccurateFrustumTester frustumTester(projectionDesc._worldToProjection, Techniques::GetDefaultClipSpaceType());
+		auto clipSpaceType = Techniques::GetDefaultClipSpaceType();
+		assert(clipSpaceType != ClipSpaceType::StraddlingZero);		// only positive clip space types supported (see code below)
+		const bool reverseZ = (clipSpaceType == ClipSpaceType::Positive_ReverseZ) || (clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ);
+		AccurateFrustumTester frustumTester(projectionDesc._worldToProjection, clipSpaceType);
+
+		auto nearAndFar = CalculateNearAndFarPlane(ExtractMinimalProjection(projectionDesc._cameraToProjection), clipSpaceType);
 
 		auto cameraForward = ExtractForward_Cam(projectionDesc._cameraToWorld);
 		auto cameraRight = ExtractRight_Cam(projectionDesc._cameraToWorld);
@@ -499,6 +504,15 @@ namespace RenderCore { namespace LightingEngine
 						Float4 extremePoint0 = projectionDesc._worldToProjection * Float4{standardLightDesc._position + cameraForward * standardLightDesc._cutoffRange, 1.0f};
 						Float4 extremePoint1 = projectionDesc._worldToProjection * Float4{standardLightDesc._position - cameraForward * standardLightDesc._cutoffRange, 1.0f};
 						float d0 = extremePoint0[2] / extremePoint0[3], d1 = extremePoint1[2] / extremePoint1[3];
+						if (d0 < 0) continue;		// entirely behind (probably should have culled it earlier)
+						if (d1 < 0 && reverseZ) {
+							// interpolate to z=+w plane -- matching shader as close as possible
+							float alpha = (extremePoint0[3] - extremePoint0[2]) / (extremePoint1[2] - extremePoint1[3] - extremePoint0[2] + extremePoint0[3]);
+							extremePoint1[2] = LinearInterpolate(extremePoint0[2], extremePoint1[2], alpha);
+							extremePoint1[3] = LinearInterpolate(extremePoint0[3], extremePoint1[3], alpha);
+							extremePoint1[2] -= 1e-4f;		// creep protecting (matching ClipToNear shader)
+							d1 = extremePoint1[2] / extremePoint1[3];
+						}
 						encoder.SetDepthBounds(std::max(0.f, std::min(d0, d1)), std::min(1.f, std::max(d0, d1)));
 
 						// We only need the front faces of the sphere. There are some special problems when the camera is inside of the sphere,

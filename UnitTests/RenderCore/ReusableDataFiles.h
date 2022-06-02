@@ -102,7 +102,7 @@ static const char* s_basicTechniqueFile = R"--(
 		Selectors=~
 			CLASSIFY_NORMAL_MAP
 			SKIP_MATERIAL_DIFFUSE=0
-		Preconfiguration=xleres/TechniqueLibrary/Framework/Preconfiguration.hlsl
+		Preconfiguration=xleres/TechniqueLibrary/Config/Preconfiguration.hlsl
 
 	CopyDiffuseAlbedo_NoPatches=~
 		Inherit=~; Shared

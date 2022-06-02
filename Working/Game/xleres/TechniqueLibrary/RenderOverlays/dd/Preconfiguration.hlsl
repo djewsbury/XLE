@@ -1,5 +1,5 @@
 
-#include "xleres/TechniqueLibrary/Framework/Preconfiguration.hlsl"
+#include "../../Config/Preconfiguration.hlsl"
 
 #if GEO_HAS_COLOR
 	#if !defined(VSOUT_HAS_COLOR_LINEAR)

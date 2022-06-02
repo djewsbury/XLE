@@ -209,12 +209,31 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	static VkAttachmentReference2 MakeAttachmentReference(uint32_t attachmentName, BindFlag::BitField bindFlagInSubpass, Internal::AttachmentResourceUsageType::BitField usageOverFullLife, const TextureViewDesc& window)
 	{
+		auto aspectMask = GetAspectForTextureView(window);
+		if (aspectMask == 0) {
+			// no aspect can be derived from the view (it's probably all defaulted out)
+			// Have to take the aspect from the usage
+			if (usageOverFullLife & Internal::AttachmentResourceUsageType::Output) aspectMask |= VK_IMAGE_ASPECT_COLOR_BIT;
+			if (usageOverFullLife & Internal::AttachmentResourceUsageType::DepthStencil) aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+		}
+		assert(aspectMask);		// no way to imply the aspect from anything given. It needs to be explicitly specified in the TextureViewDesc
+
+		if (usageOverFullLife & Internal::AttachmentResourceUsageType::DepthStencil) {
+			assert(aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT));
+			assert(!(aspectMask & VK_IMAGE_ASPECT_COLOR_BIT));
+			assert(!(usageOverFullLife & Internal::AttachmentResourceUsageType::Output));
+		}
+
+		if (usageOverFullLife & Internal::AttachmentResourceUsageType::Output) {
+			assert(aspectMask & VK_IMAGE_ASPECT_COLOR_BIT);
+		}
+
 		return VkAttachmentReference2 {
 			VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
 			nullptr,
 			attachmentName,
 			LayoutFromBindFlagsAndUsage(bindFlagInSubpass, usageOverFullLife),
-			GetAspectForTextureView(window)};
+			aspectMask};
 	}
 
 	class RenderPassHelper 
@@ -385,9 +404,9 @@ namespace RenderCore { namespace Metal_Vulkan
 				// set that contains a lot of the important information. Instead we just want to find the most recent use of this physical
 				// attachment with an overlapping view. That will be considered the same "viewed attachment"
 				for (auto i=_workingViewedAttachments.rbegin(); i!=_workingViewedAttachments.rend(); ++i)
-					if (ViewsOverlap(i->_view, view) && i->_mappedAttachmentIdx == resourceName) {
+					if (ViewsOverlap(i->_view, view) && i->_mappedAttachmentIdx == mappedAttachmentIdx) {
 						i2 = (i+1).base();
-						assert(i2->_mappedAttachmentIdx == resourceName);
+						assert(i2->_mappedAttachmentIdx == mappedAttachmentIdx);
 					}
 
 				if (i2 == _workingViewedAttachments.end())

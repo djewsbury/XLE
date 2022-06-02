@@ -28,11 +28,6 @@
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../xleres/FileList.h"
 
-#include "../Metal/DeviceContext.h"
-#include "../Metal/InputLayout.h"
-#include "../Metal/Shader.h"
-
-
 namespace RenderCore { namespace LightingEngine
 {
 
@@ -147,7 +142,7 @@ namespace RenderCore { namespace LightingEngine
 			IResourceView* srvs[] = { iterator._rpi.GetInputAttachmentView(0).get() };
 			us._resourceViews = MakeIteratorRange(srvs);
 			(*pipeline)->Draw(*iterator._threadContext, us);
-		} 
+		}
 	}
 
 	static RenderStepFragmentInterface CreateToneMapFragment(

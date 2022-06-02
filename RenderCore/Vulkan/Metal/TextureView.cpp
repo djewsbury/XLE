@@ -105,6 +105,7 @@ namespace RenderCore { namespace Metal_Vulkan
         if (window._arrayLayerRange._count == TextureViewDesc::Unlimited)
             view_info.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
         view_info.subresourceRange.aspectMask = GetAspectForTextureView(window);
+        assert(view_info.subresourceRange.aspectMask != 0);
         return view_info;
     }
 

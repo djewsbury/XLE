@@ -100,6 +100,8 @@ namespace RenderCore { namespace Metal_Vulkan
         //     view_info.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
         // }
 
+		if (fmt == Format::Unknown) return 0;
+
         auto components = GetComponents(fmt);
         switch (components) {
         case FormatComponents::Depth:           return VK_IMAGE_ASPECT_DEPTH_BIT;

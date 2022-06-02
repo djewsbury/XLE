@@ -2,7 +2,6 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "ShadowGenGeometryConfiguration.hlsl"
 #include "../../LightingEngine/ShadowProjection.hlsl"
 #include "../../Framework/SystemUniforms.hlsl"
 #include "../../Framework/VSOUT.hlsl"

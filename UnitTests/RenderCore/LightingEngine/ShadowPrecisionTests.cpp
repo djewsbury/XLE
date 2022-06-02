@@ -377,15 +377,14 @@ namespace UnitTests
 	static void DrawCascadeColors(
 		RenderCore::IThreadContext& threadContext,
 		RenderCore::Techniques::ParsingContext& parsingContext,
-		const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pipelinePool,
-		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout)
+		const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pipelinePool)
 	{
 		using namespace RenderCore;
 		auto rpi = Techniques::RenderPassToPresentationTarget(parsingContext);
 		UniformsStreamInterface usi;
 		auto cascadeIndexTexture = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Hash64("CascadeIndex")+0);
 		REQUIRE(cascadeIndexTexture);
-		auto cascadeIndexTextureSRV = cascadeIndexTexture->CreateTextureView(BindFlag::UnorderedAccess);
+		auto cascadeIndexTextureSRV = cascadeIndexTexture->CreateTextureView(BindFlag::ShaderResource);
 		usi.BindResourceView(0, Hash64("PrebuiltCascadeIndexTexture"));
 		IResourceView* srvs[] = { cascadeIndexTextureSRV.get() };
 		UniformsStream us;
@@ -396,7 +395,7 @@ namespace UnitTests
 		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abStraightAlpha };
 		outputStates.Bind(MakeIteratorRange(blendStates));
 		auto op = CreateFullViewportOperator(
-			pipelinePool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":col_vis_pass", {}, pipelineLayout, outputStates, usi);
+			pipelinePool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":col_vis_pass", {}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain", outputStates, usi);
 		op->StallWhilePending();
 		op->Actualize()->Draw(parsingContext, us);
 	}
@@ -532,11 +531,6 @@ namespace UnitTests
 				lightScene.TryGetShadowProjectionInterface<LightingEngine::ISunSourceShadows>(shadowProjectionId)->FixMainSceneCamera(
 					BuildProjectionDesc(sceneCamera, UInt2{2048, 2048}));
 
-				auto generalPipelineFuture = ::Assets::MakeAssetPtr<RenderCore::Techniques::CompiledPipelineLayoutAsset>(testHelper->_device, GENERAL_OPERATOR_PIPELINE ":GraphicsMain");
-				generalPipelineFuture->StallWhilePending();
-				REQUIRE(generalPipelineFuture->GetAssetState() == ::Assets::AssetState::Ready);
-				auto generalPipeline = generalPipelineFuture->Actualize();
-
 				// draw once from the "scene camera"
 				{
 					{
@@ -545,7 +539,7 @@ namespace UnitTests
 						ParseScene(lightingIterator, *drawableWriter);
 					}
 
-					DrawCascadeColors(parsingContext.GetThreadContext(), parsingContext, testApparatus._pipelinePool, generalPipeline->GetPipelineLayout());
+					DrawCascadeColors(parsingContext.GetThreadContext(), parsingContext, testApparatus._pipelinePool);
 
 					auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
 					REQUIRE(colorLDR);
@@ -576,7 +570,7 @@ namespace UnitTests
 						ParseScene(lightingIterator, *drawableWriter);
 					}
 
-					DrawCascadeColors(*threadContext, parsingContext, testApparatus._pipelinePool, generalPipeline->GetPipelineLayout());
+					DrawCascadeColors(*threadContext, parsingContext, testApparatus._pipelinePool);
 
 					// draw the camera and shadow frustums into the output image
 					DrawCameraAndShadowFrustums(*threadContext, immediateDrawingHelper, parsingContext, lightScene, shadowProjectionId, sceneCamera);

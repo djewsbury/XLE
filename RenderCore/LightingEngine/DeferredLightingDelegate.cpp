@@ -20,20 +20,14 @@
 #include "../Techniques/PipelineCollection.h"
 #include "../Techniques/PipelineOperators.h"
 #include "../Techniques/Drawables.h"
+#include "../Techniques/CommonResources.h"
+#include "../Techniques/Techniques.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Assets.h"
+#include "../../ConsoleRig/ResourceBox.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../xleres/FileList.h"
-
-
-#include "../Metal/DeviceContext.h"
-#include "../Metal/ObjectFactory.h"
-#include "../Metal/InputLayout.h"
-#include "../Techniques/CommonResources.h"
-#include "../Techniques/Techniques.h"
-#include "../../ConsoleRig/GlobalServices.h"
-#include "../../ConsoleRig/Console.h"
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -242,28 +236,43 @@ namespace RenderCore { namespace LightingEngine
 			_preparedShadows);
 	}
 
+	class ToneMapStandin
+	{
+	public:
+		::Assets::PtrToMarkerPtr<Techniques::IShaderOperator> _operator;
+		const ::Assets::DependencyValidation& GetDependencyValidation() { return _operator->GetDependencyValidation(); }
+		ToneMapStandin(
+			const std::shared_ptr<Techniques::PipelineCollection>& pool,
+			const Techniques::PixelOutputStates& fbTarget)
+		{
+			UniformsStreamInterface usi;
+			usi.BindResourceView(0, Utility::Hash64("SubpassInputAttachment"));
+			_operator = Techniques::CreateFullViewportOperator(
+				pool, Techniques::FullViewportOperatorSubType::DisableDepth,
+				BASIC_PIXEL_HLSL ":copy_inputattachment",
+				{}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
+				fbTarget, usi);
+		}
+	};
+
 	void DeferredLightingCaptures::DoToneMap(LightingTechniqueIterator& iterator)
 	{
 		// Very simple stand-in for tonemap -- just use a copy shader to write the HDR values directly to the LDR texture
-		auto pipelineLayout = _lightResolveOperators->_pipelineLayout;
-		auto copyShader = ::Assets::ActualizeAssetPtr<Metal::ShaderProgram>(
-			pipelineLayout,
-			BASIC2D_VERTEX_HLSL ":fullscreen",
-			BASIC_PIXEL_HLSL ":copy_inputattachment");
-		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
-		auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(pipelineLayout);
-		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Utility::Hash64("SubpassInputAttachment"));
-		Metal::BoundUniforms uniforms(*copyShader, usi);
-		encoder.Bind(*copyShader);
-		encoder.Bind(Techniques::CommonResourceBox::s_dsDisable);
-		encoder.Bind({&Techniques::CommonResourceBox::s_abOpaque, &Techniques::CommonResourceBox::s_abOpaque+1});
-		UniformsStream us;
-		IResourceView* srvs[] = { iterator._rpi.GetInputAttachmentView(0).get() };
-		us._resourceViews = MakeIteratorRange(srvs);
-		uniforms.ApplyLooseUniforms(metalContext, encoder, us);
-		encoder.Bind({}, Topology::TriangleStrip);
-		encoder.Draw(4);
+		Techniques::PixelOutputStates outputStates;
+		outputStates.Bind(iterator._rpi);
+		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
+		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
+		outputStates.Bind(MakeIteratorRange(blendStates));
+		auto& standin = ConsoleRig::FindCachedBox<ToneMapStandin>(
+			iterator._parsingContext->GetTechniqueContext()._graphicsPipelinePool,
+			outputStates);
+		auto* pipeline = standin._operator->TryActualize();
+		if (pipeline) {
+			UniformsStream us;
+			IResourceView* srvs[] = { iterator._rpi.GetInputAttachmentView(0).get() };
+			us._resourceViews = MakeIteratorRange(srvs);
+			(*pipeline)->Draw(*iterator._threadContext, us);
+		}
 	}
 
 	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, GBufferType gbufferType, bool precisionTargets = false)
@@ -480,8 +489,8 @@ namespace RenderCore { namespace LightingEngine
 		const auto sampleDensitySemantic = Utility::Hash64("ShadowSampleDensity");
 		Techniques::FrameBufferDescFragment fbDesc;
 		Techniques::FrameBufferDescFragment::SubpassDesc sp;
-		sp.AppendOutput(fbDesc.DefineAttachment(cascadeIndexSemantic).FixedFormat(Format::R8_UINT).NoInitialState().FinalState(BindFlag::UnorderedAccess));
-		sp.AppendOutput(fbDesc.DefineAttachment(sampleDensitySemantic + idx).FixedFormat(Format::R32G32B32A32_FLOAT).NoInitialState().FinalState(BindFlag::UnorderedAccess));
+		sp.AppendOutput(fbDesc.DefineAttachment(cascadeIndexSemantic).FixedFormat(Format::R8_UINT).NoInitialState().FinalState(BindFlag::ShaderResource).RequireBindFlags(BindFlag::TransferSrc));
+		sp.AppendOutput(fbDesc.DefineAttachment(sampleDensitySemantic + idx).FixedFormat(Format::R32G32B32A32_FLOAT).NoInitialState().FinalState(BindFlag::ShaderResource).RequireBindFlags(BindFlag::TransferSrc));
 		sp.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
 		sp.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::Aspect::Depth});
 		fbDesc.AddSubpass(std::move(sp));
@@ -506,7 +515,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::PixelOutputStates outputStates;
 		outputStates.Bind(rpi);
 		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
-		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abStraightAlpha, Techniques::CommonResourceBox::s_abStraightAlpha };
+		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque, Techniques::CommonResourceBox::s_abOpaque };
 		outputStates.Bind(MakeIteratorRange(blendStates));
 		auto op = Techniques::CreateFullViewportOperator(pool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":detailed_visualisation", selectors, lightingOperatorLayout, outputStates, usi);
 		op->StallWhilePending();

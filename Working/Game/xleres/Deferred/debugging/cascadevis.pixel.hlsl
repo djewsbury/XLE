@@ -59,7 +59,7 @@ void detailed_visualisation(
     outSampleDensity.w = 1.0f;
 }
 
-Texture2D<uint> PrebuiltCascadeIndexTexture : register(t3, space1);
+Texture2D<uint> PrebuiltCascadeIndexTexture;
 
 float4 col_vis_pass(float4 position : SV_Position) : SV_Target0
 {

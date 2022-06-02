@@ -81,7 +81,7 @@ VisNormals=~
 	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
 	GeometryShader=xleres/TechniqueLibrary/ToolsRig/Vis/geowires.geo.hlsl:NormalsAndTangents
 	PixelShader=xleres/TechniqueLibrary/Basic/basic.pixel.hlsl:PC
-	Preconfiguration=xleres/TechniqueLibrary/Framework/Preconfiguration.hlsl
+	Preconfiguration=xleres/TechniqueLibrary/Config/Preconfiguration.hlsl
 
 VisWireframe=~
 	Selectors=~

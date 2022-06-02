@@ -76,8 +76,8 @@ DescriptorSet RTShadow
 
 PipelineLayout LightingOperator
 {
+	DescriptorSet Numeric;
 	DescriptorSet PerLightDescriptors;
 	DescriptorSet ShadowTemplate;
-	DescriptorSet Numeric;
 	DescriptorSet SharedDescriptors;
 };

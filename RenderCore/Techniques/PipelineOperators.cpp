@@ -92,6 +92,7 @@ namespace RenderCore { namespace Techniques
 			const FrameBufferTarget& fbTarget,
 			const UniformsStreamInterface& usi)
 		{
+			assert(pool);
 			VertexInputStates vInputStates { {}, {}, Topology::TriangleStrip };
 			const ParameterBox* selectorList[] { &selectors };
 			auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
@@ -117,6 +118,7 @@ namespace RenderCore { namespace Techniques
 			const FrameBufferTarget& fbTarget,
 			const UniformsStreamInterface& usi)
 		{
+			assert(pool);
 			VertexInputStates vInputStates { {}, {}, Topology::TriangleStrip };
 			const ParameterBox* selectorList[] { &selectors };
 			auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
@@ -143,6 +145,7 @@ namespace RenderCore { namespace Techniques
 			const FrameBufferTarget& fbTarget,
 			const UniformsStreamInterface& usi)
 		{
+			assert(pool);
 			auto futurePipelineLayout = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
 			::Assets::WhenAll(futurePipelineLayout).ThenConstructToPromise(
 				std::move(promise),
@@ -355,6 +358,7 @@ namespace RenderCore { namespace Techniques
 			const ParameterBox& selectors,
 			const UniformsStreamInterface& usi)
 		{
+			assert(pool);
 			const ParameterBox* selectorList[] { &selectors };
 			auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
 			pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), pipelineLayout, computeShader, MakeIteratorRange(selectorList));
@@ -378,6 +382,7 @@ namespace RenderCore { namespace Techniques
 			const ParameterBox& selectors,
 			const UniformsStreamInterface& usi)
 		{
+			assert(pool);
 			const ParameterBox* selectorList[] { &selectors };
 			auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
 			pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), {}, computeShader, MakeIteratorRange(selectorList));
@@ -401,6 +406,7 @@ namespace RenderCore { namespace Techniques
 			const ParameterBox& selectors,
 			const UniformsStreamInterface& usi)
 		{
+			assert(pool);
 			auto futurePipelineLayout = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
 			::Assets::WhenAll(futurePipelineLayout).ThenConstructToPromise(
 				std::move(promise),
@@ -420,7 +426,6 @@ namespace RenderCore { namespace Techniques
 							return op;
 						});
 				});
-			
 		}
 
 		RenderCore::Metal::ComputeEncoder _activeEncoder;

@@ -192,6 +192,7 @@ namespace UnitTests
 			auto drawableWriterWithBlocker = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool).CreateFlatPlaneAndBlockerDrawableWriter();
 			PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
 			testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
+			::Assets::Services::GetAssetSets().OnFrameBarrier();		// required to flip pipeline layouts in pipeline accelerator pool to visible
 
 			///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 			SECTION("sphere light")
@@ -214,7 +215,6 @@ namespace UnitTests
 				lightId = CreateTestLight(lightScene, {0.f, 8.0f, 0.f}, 0);
 				auto stencilHighLight = CountPixelShaderInvocations(*threadContext, parsingContext, *lightingTechnique, testApparatus, *drawableWriter);
 				lightScene.DestroyLightSource(lightId);
-
 
 				REQUIRE(stencilHighLight == baseInvocations);		// depth bounds should prevent this "high light" from effect any pixels
 				REQUIRE(stencilHighLight < stencilMedLight);
