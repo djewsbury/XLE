@@ -559,8 +559,6 @@ namespace RenderCore { namespace Metal_Vulkan
     template<int Index, typename Type>
         inline void DeferredDestruction::DoDestroy(Type obj)
     {
-        //  Note -- we need std::get<Type> access.. But that requires C++14, and
-        //          isn't supported on VS2013
 		auto marker = _gpuTracker->GetProducerMarker();
         auto& q = std::get<Index>(_queues);
         ScopedLock(q._lock);

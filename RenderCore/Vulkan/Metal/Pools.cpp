@@ -22,13 +22,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-    VulkanSharedPtr<VkCommandBuffer> CommandPool::Allocate(CommandBufferType type)
+    VulkanSharedPtr<VkCommandBuffer> CommandBufferPool::Allocate(CommandBufferType type)
 	{
-        #if defined(CHECK_COMMAND_POOL)
-            std::unique_lock<std::mutex> guard(_lock, std::try_to_lock);
-            if (!guard.owns_lock())
-                Throw(::Exceptions::BasicLabel("Bad lock attempt in CommandPool::Allocate. Multiple threads attempting to use the same object."));
-        #endif
+        ScopedLock(_lock);
 
 		VkCommandBufferAllocateInfo cmd = {};
 		cmd.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -47,8 +43,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		return result;
 	}
 
-	void CommandPool::QueueDestroy(VkCommandBuffer buffer)
+	void CommandBufferPool::QueueDestroy(VkCommandBuffer buffer)
 	{
+        ScopedLock(_lock);
 		auto currentMarker = _gpuTracker ? _gpuTracker->GetProducerMarker() : ~0u;
         if (!_markedDestroys.empty() && _markedDestroys.back()._marker == currentMarker) {
             ++_markedDestroys.back()._pendingCount;
@@ -70,13 +67,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		_pendingDestroys.push_back(buffer);
 	}
 
-	void CommandPool::FlushDestroys()
+	void CommandBufferPool::FlushDestroys()
 	{
-        #if defined(CHECK_COMMAND_POOL)
-            std::unique_lock<std::mutex> guard(_lock, std::try_to_lock);
-            if (!guard.owns_lock())
-                Throw(::Exceptions::BasicLabel("Bad lock attempt in CommandPool::FlushDestroys. Multiple threads attempting to use the same object."));
-        #endif
+        ScopedLock(_lock);
 
 		auto trackerMarker = _gpuTracker ? _gpuTracker->GetConsumerMarker() : ~0u;
 		size_t countToDestroy = 0;
@@ -96,13 +89,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-    CommandPool::CommandPool(CommandPool&& moveFrom) never_throws
+    CommandBufferPool::CommandBufferPool(CommandBufferPool&& moveFrom) never_throws
     {
-        #if defined(CHECK_COMMAND_POOL)
-            std::unique_lock<std::mutex> guard(moveFrom._lock, std::try_to_lock);
-            if (!guard.owns_lock())
-                Throw(::Exceptions::BasicLabel("Bad lock attempt in CommandPool::Allocate. Multiple threads attempting to use the same object."));
-        #endif
+        std::unique_lock<std::mutex> guard(moveFrom._lock, std::try_to_lock);
+        if (!guard.owns_lock())
+            Throw(::Exceptions::BasicLabel("Bad lock attempt in CommandPool::Allocate. Multiple threads attempting to use the same object."));
 
         _pool = std::move(moveFrom._pool);
         _device = std::move(moveFrom._device);
@@ -111,21 +102,15 @@ namespace RenderCore { namespace Metal_Vulkan
 		_gpuTracker = std::move(moveFrom._gpuTracker);
     }
     
-    CommandPool& CommandPool::operator=(CommandPool&& moveFrom) never_throws
+    CommandBufferPool& CommandBufferPool::operator=(CommandBufferPool&& moveFrom) never_throws
     {
-        #if defined(CHECK_COMMAND_POOL)
-            // note -- locking both mutexes here.
-            //  because we're using try_lock(), it should prevent deadlocks
-            std::unique_lock<std::mutex> guard(moveFrom._lock, std::try_to_lock);
-            if (!guard.owns_lock())
-                Throw(::Exceptions::BasicLabel("Bad lock attempt in CommandPool::Allocate. Multiple threads attempting to use the same object."));
-
-            std::unique_lock<std::mutex> guard2(_lock, std::try_to_lock);
-            if (!guard2.owns_lock())
-                Throw(::Exceptions::BasicLabel("Bad lock attempt in CommandPool::Allocate. Multiple threads attempting to use the same object."));
-        #endif
-
+        std::unique_lock<std::mutex> guard(moveFrom._lock, std::defer_lock);
+        std::unique_lock<std::mutex> guard2(_lock, std::defer_lock);
+        if (!std::try_lock(guard, guard2))
+            Throw(::Exceptions::BasicLabel("Bad lock attempt in CommandPool::Allocate. Multiple threads attempting to use the same object."));
+        
 		if (!_pendingDestroys.empty()) {
+            // potentially dangerous early destruction (can happen in exception cases)
 			vkFreeCommandBuffers(
 				_device.get(), _pool.get(),
 				(uint32_t)_pendingDestroys.size(), AsPointer(_pendingDestroys.begin()));
@@ -140,7 +125,7 @@ namespace RenderCore { namespace Metal_Vulkan
         return *this;
     }
 
-	CommandPool::CommandPool(ObjectFactory& factory, unsigned queueFamilyIndex, bool resetable, const std::shared_ptr<IAsyncTracker>& tracker)
+	CommandBufferPool::CommandBufferPool(ObjectFactory& factory, unsigned queueFamilyIndex, bool resetable, const std::shared_ptr<IAsyncTracker>& tracker)
 	: _device(factory.GetDevice())
 	, _gpuTracker(tracker)
 	{
@@ -149,10 +134,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			resetable ? VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT : 0);
 	}
 
-	CommandPool::CommandPool() {}
-	CommandPool::~CommandPool() 
+	CommandBufferPool::CommandBufferPool() {}
+	CommandBufferPool::~CommandBufferPool() 
 	{
 		if (!_pendingDestroys.empty()) {
+            // potentially dangerous early destruction (can happen in exception cases)
 			vkFreeCommandBuffers(
 				_device.get(), _pool.get(),
 				(uint32_t)_pendingDestroys.size(), AsPointer(_pendingDestroys.begin()));
@@ -249,12 +235,13 @@ namespace RenderCore { namespace Metal_Vulkan
     {
         VkDescriptorPoolSize type_count[] = 
         {
-            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1024},
-            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 128},
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1024},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 128},
-            {VK_DESCRIPTOR_TYPE_SAMPLER, 256},
-            {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 128}
+            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 16*1024},
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 16*128},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 16*1024},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 16*1024},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 16*128},
+            {VK_DESCRIPTOR_TYPE_SAMPLER, 16*256},
+            {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 16*128}
         };
 
         VkDescriptorPoolCreateInfo descriptor_pool = {};
@@ -271,6 +258,7 @@ namespace RenderCore { namespace Metal_Vulkan
     DescriptorPool::~DescriptorPool() 
     {
 		if (!_pendingDestroys.empty()) {
+            // potentially dangerous early destruction (can happen in exception cases)
 			vkFreeDescriptorSets(
 				_device.get(), _pool.get(),
 				(uint32_t)_pendingDestroys.size(), AsPointer(_pendingDestroys.begin()));

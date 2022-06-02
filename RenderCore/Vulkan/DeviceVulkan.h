@@ -56,10 +56,15 @@ namespace RenderCore { namespace ImplVulkan
         void Resize(unsigned newWidth, unsigned newHeight) /*override*/;
 
         const std::shared_ptr<PresentationChainDesc>& GetDesc() const;
-        Metal_Vulkan::ResourceView* AcquireNextImage(Metal_Vulkan::SubmissionQueue& queue);
         const TextureDesc& GetBufferDesc() { return _bufferDesc; }
 
 		void PresentToQueue(Metal_Vulkan::SubmissionQueue& queue);
+        struct AquireResult
+        {
+            std::shared_ptr<IResource> _resource;
+            VulkanSharedPtr<VkCommandBuffer> _primaryCommandBuffer;
+        };
+        AquireResult AcquireNextImage(Metal_Vulkan::SubmissionQueue& queue);
 
 		class PresentSync
 		{
@@ -71,12 +76,12 @@ namespace RenderCore { namespace ImplVulkan
 		};
 		PresentSync& GetSyncs() { return _presentSyncs[_activePresentSync]; }
 		VkCommandBuffer GetPrimaryBuffer() { return _primaryBuffers[_activePresentSync].get(); }
-		VulkanSharedPtr<VkCommandBuffer> SharePrimaryBuffer() { return _primaryBuffers[_activePresentSync]; }
 
         PresentationChain(
 			Metal_Vulkan::ObjectFactory& factory,
             VulkanSharedPtr<VkSurfaceKHR> surface, 
 			VectorPattern<unsigned, 2> extent,
+            Metal_Vulkan::SubmissionQueue* submissionQueue,
 			unsigned queueFamilyIndex,
             const void* platformValue);
         ~PresentationChain();
@@ -88,21 +93,16 @@ namespace RenderCore { namespace ImplVulkan
         const void*		_platformValue;
         unsigned		_activeImageIndex;
 
-        class Image
-        {
-        public:
-            VkImage     _image;
-			Metal_Vulkan::ResourceView      _rtv;
-        };
-        std::vector<Image> _images;
+        std::vector<std::shared_ptr<IResource>> _images;
 
 		TextureDesc     _bufferDesc;
 		std::shared_ptr<PresentationChainDesc>	_desc;
 
         PresentSync     _presentSyncs[3];
         unsigned        _activePresentSync;
+        Metal_Vulkan::SubmissionQueue*	_submissionQueue;
 
-		Metal_Vulkan::CommandPool _primaryBufferPool;
+		Metal_Vulkan::CommandBufferPool _primaryBufferPool;
 		VulkanSharedPtr<VkCommandBuffer> _primaryBuffers[3];
 
         void BuildImages();
@@ -126,8 +126,6 @@ namespace RenderCore { namespace ImplVulkan
         void                        IncrFrameId();
 		void						InvalidateCachedState() const override;
 
-        Metal_Vulkan::CommandPool&  GetRenderingCommandPool()   { return _renderingCommandPool; }
-
 		IAnnotator&					GetAnnotator() override;
 
         virtual void*   QueryInterface(size_t guid) override;
@@ -137,14 +135,12 @@ namespace RenderCore { namespace ImplVulkan
 
         ThreadContext(
             std::shared_ptr<Device> device, 
-			std::shared_ptr<Metal_Vulkan::SubmissionQueue> submissionQueue,
-            Metal_Vulkan::CommandPool&& cmdPool);
+			std::shared_ptr<Metal_Vulkan::SubmissionQueue> submissionQueue);
         ~ThreadContext();
     protected:
 		std::shared_ptr<Metal_Vulkan::DeviceContext> _metalContext;
         std::weak_ptr<Device>           _device;  // (must be weak, because Device holds a shared_ptr to the immediate context)
 		unsigned                        _frameId;
-        Metal_Vulkan::CommandPool		_renderingCommandPool;
         std::shared_ptr<Metal_Vulkan::SubmissionQueue> _submissionQueue;
 		std::unique_ptr<IAnnotator>		_annotator;
         std::shared_ptr<Metal_Vulkan::IDestructionQueue> _destrQueue;

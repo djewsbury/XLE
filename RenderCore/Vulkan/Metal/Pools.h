@@ -15,10 +15,6 @@
 #include "../../../Utility/Threading/Mutex.h"
 #include <vector>
 
-#if defined(CHECK_COMMAND_POOL)
-    #include "../../../Utility/Threading/Mutex.h"       // (cannot be included into CLR code)
-#endif
-
 namespace RenderCore { namespace Metal_Vulkan
 {
     class ObjectFactory;
@@ -27,19 +23,19 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	enum class CommandBufferType { Primary, Secondary };
 
-    class CommandPool
+    class CommandBufferPool
 	{
 	public:
 		VulkanSharedPtr<VkCommandBuffer> Allocate(CommandBufferType type);
 
 		void FlushDestroys();
 
-		CommandPool(ObjectFactory& factory, unsigned queueFamilyIndex, bool resetable, const std::shared_ptr<IAsyncTracker>& tracker);
-		CommandPool();
-		~CommandPool();
+		CommandBufferPool(ObjectFactory& factory, unsigned queueFamilyIndex, bool resetable, const std::shared_ptr<IAsyncTracker>& tracker);
+		CommandBufferPool();
+		~CommandBufferPool();
 
-        CommandPool(CommandPool&& moveFrom) never_throws;
-        CommandPool& operator=(CommandPool&& moveFrom) never_throws;
+        CommandBufferPool(CommandBufferPool&& moveFrom) never_throws;
+        CommandBufferPool& operator=(CommandBufferPool&& moveFrom) never_throws;
 	private:
 		VulkanSharedPtr<VkCommandPool> _pool;
 		VulkanSharedPtr<VkDevice> _device;
@@ -48,9 +44,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		struct MarkedDestroys { IAsyncTracker::Marker _marker; unsigned _pendingCount; };
         ResizableCircularBuffer<MarkedDestroys, 32> _markedDestroys;
 		std::vector<VkCommandBuffer> _pendingDestroys;
-        #if defined(CHECK_COMMAND_POOL)
-            Threading::Mutex _lock;
-        #endif
+        Threading::Mutex _lock;
 
 		void QueueDestroy(VkCommandBuffer buffer);
 	};
@@ -134,6 +128,7 @@ namespace RenderCore { namespace Metal_Vulkan
         std::unique_ptr<TemporaryStorageManager> _temporaryStorageManager;
         DescriptorPool                      _mainDescriptorPool;
 		DescriptorPool                      _longTermDescriptorPool;
+        CommandBufferPool                   _commandBufferPool;
         VulkanRenderPassPool                _renderPassPool;
         VulkanSharedPtr<VkPipelineCache>    _mainPipelineCache;
         DummyResources                      _dummyResources;

@@ -31,7 +31,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	class GlobalPools;
 	class FrameBuffer;
 	class PipelineLayout;
-	class CommandPool;
+	class CommandBufferPool;
 	class DescriptorPool;
 	class DummyResources;
 	enum class CommandBufferType;
@@ -354,7 +354,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		GlobalPools&    GetGlobalPools();
 		VkDevice        GetUnderlyingDevice();
-		ObjectFactory&	GetFactory() const				{ return *_factory; }
+		ObjectFactory&	GetFactory() const;
 
 		void BeginRenderPass(
 			const FrameBuffer& fb,
@@ -367,7 +367,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		DeviceContext(
 			ObjectFactory& factory, 
 			GlobalPools& globalPools,
-			CommandPool& cmdPool, 
 			CommandBufferType cmdBufferType);
 		~DeviceContext();
 		DeviceContext(const DeviceContext&) = delete;
@@ -380,13 +379,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		bool			IsImmediate() { return false; }
 
 	private:
-		ObjectFactory*						_factory;
-		GlobalPools*                        _globalPools;
-
 		std::shared_ptr<VulkanEncoderSharedState> _sharedState;
-
-		CommandPool*                        _cmdPool;
-		CommandBufferType					_cmdBufferType;
+		CommandBufferType _cmdBufferType;
 
 		friend class BlitEncoder;
 		void EndBlitEncoder();

@@ -70,38 +70,25 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		bool			_inBltPass = false;
 
-		class DescriptorCollection
+		struct DescriptorDebugTracking
 		{
-		public:
 			#if defined(VULKAN_VERBOSE_DEBUG)
 				std::vector<DescriptorSetDebugInfo> _currentlyBoundDesc;
 			#endif
-
 			void ResetState(const CompiledPipelineLayout&);
-			const ObjectFactory& GetObjectFactory() { return *_factory; }
-
-			DescriptorCollection(
-				const ObjectFactory&    factory, 
-				GlobalPools&            globalPools,
-				unsigned				descriptorSetCount);
-
-		private:
-			const ObjectFactory*    _factory;
-			GlobalPools*			_globalPools;
 		};
 
-		DescriptorCollection	_graphicsDescriptors;
-		DescriptorCollection	_computeDescriptors;
+		DescriptorDebugTracking	_graphicsDescriptorsTracking;
+		DescriptorDebugTracking	_computeDescriptorsTracking;
 
 		void* _currentEncoder = nullptr;
 		SharedEncoder::EncoderType _currentEncoderType = SharedEncoder::EncoderType::None;
 
 		bool _ibBound = false;		// (for debugging, validates that an index buffer actually is bound when calling DrawIndexed & alternatives)
 		GlobalPools* _globalPools = nullptr;
+		ObjectFactory* _objectFactory = nullptr;
 
-		VulkanEncoderSharedState(
-			const ObjectFactory&    factory, 
-			GlobalPools&            globalPools);
+		VulkanEncoderSharedState(ObjectFactory& factory, GlobalPools& globalPools);
 		~VulkanEncoderSharedState();
 	};
 
@@ -463,7 +450,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(encoderType != EncoderType::None);
 		assert(index < s_maxBoundDescriptorSetCount);
 		assert(index < GetDescriptorSetCount());
-		auto& collection = (encoderType == EncoderType::Compute) ? _sharedState->_computeDescriptors : _sharedState->_graphicsDescriptors;
+		auto& collection = (encoderType == EncoderType::Compute) ? _sharedState->_computeDescriptorsTracking : _sharedState->_graphicsDescriptorsTracking;
 		if (_capturedStates) {
 			if (_capturedStates->_currentDescSet[index] != set)
 				_sharedState->_commandList.BindDescriptorSets(
@@ -492,7 +479,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			cmdList._attachedStorage = _sharedState->_globalPools->_temporaryStorageManager->BeginCmdListReservation();
 
 		return NumericUniformsInterface { 
-			_sharedState->_graphicsDescriptors.GetObjectFactory(),
+			*_sharedState->_objectFactory,
 			*_pipelineLayout,
 			cmdList._attachedStorage,
 			Internal::VulkanGlobalsTemp::GetInstance()._legacyRegisterBindings};
@@ -554,7 +541,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			_sharedState->_currentEncoder = this;
 			_sharedState->_currentEncoderType = encoderType;
 
-			auto* descCollection = (encoderType == EncoderType::Compute) ? &_sharedState->_computeDescriptors : &_sharedState->_graphicsDescriptors;
+			auto* descCollection = (encoderType == EncoderType::Compute) ? &_sharedState->_computeDescriptorsTracking : &_sharedState->_graphicsDescriptorsTracking;
 			descCollection->ResetState(*_pipelineLayout);
 
 			// Bind default blank descriptor sets for the layout
@@ -830,7 +817,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		if (_sharedState->_inBltPass)
 			Throw(::Exceptions::BasicLabel("Attempting to begin a graphics encoder while a blt encoder is in progress"));
-		return GraphicsEncoder_ProgressivePipeline { checked_pointer_cast<CompiledPipelineLayout>(std::move(pipelineLayout)), _sharedState, *_factory, *_globalPools };
+		return GraphicsEncoder_ProgressivePipeline { checked_pointer_cast<CompiledPipelineLayout>(std::move(pipelineLayout)), _sharedState, *_sharedState->_objectFactory, *_sharedState->_globalPools };
 	}
 
 	GraphicsEncoder_Optimized DeviceContext::BeginStreamOutputEncoder(
@@ -842,11 +829,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (outputBuffers.empty())
 			Throw(::Exceptions::BasicLabel("No stream output buffers provided to BeginStreamOutputEncoder"));
 
-		if (!_factory->GetExtensionFunctions()._beginTransformFeedback)
+		if (!_sharedState->_objectFactory->GetExtensionFunctions()._beginTransformFeedback)
 			Throw(::Exceptions::BasicLabel("Stream output extension not supported on this platform"));
 
-		assert(_factory->GetExtensionFunctions()._beginTransformFeedback);
-		assert(_factory->GetExtensionFunctions()._bindTransformFeedbackBuffers);
+		assert(_sharedState->_objectFactory->GetExtensionFunctions()._beginTransformFeedback);
+		assert(_sharedState->_objectFactory->GetExtensionFunctions()._bindTransformFeedbackBuffers);
 
 		VkDeviceSize offsets[outputBuffers.size()];
 		VkBuffer buffers[outputBuffers.size()];
@@ -856,12 +843,12 @@ namespace RenderCore { namespace Metal_Vulkan
 			buffers[c] = checked_cast<const Resource*>(outputBuffers[c]._resource)->GetBuffer();
 		}
 
-		(*_factory->GetExtensionFunctions()._bindTransformFeedbackBuffers)(
+		(*_sharedState->_objectFactory->GetExtensionFunctions()._bindTransformFeedbackBuffers)(
 			GetActiveCommandList().GetUnderlying().get(),
 			0, outputBuffers.size(), 
 			buffers, offsets, nullptr);
 
-		(*_factory->GetExtensionFunctions()._beginTransformFeedback)(
+		(*_sharedState->_objectFactory->GetExtensionFunctions()._beginTransformFeedback)(
 			GetActiveCommandList().GetUnderlying().get(),
 			0, 0, nullptr, nullptr);
 
@@ -889,18 +876,23 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	GlobalPools&    DeviceContext::GetGlobalPools()
 	{
-		return *_globalPools;
+		return *_sharedState->_globalPools;
+	}
+
+	ObjectFactory&	DeviceContext::GetFactory() const
+	{
+		return *_sharedState->_objectFactory;
 	}
 
 	VkDevice        DeviceContext::GetUnderlyingDevice()
 	{
-		return _factory->GetDevice().get();
+		return _sharedState->_objectFactory->GetDevice().get();
 	}
 
 	void		DeviceContext::BeginCommandList(std::shared_ptr<IAsyncTracker> asyncTracker)
 	{
-		if (!_cmdPool) return;
-		BeginCommandList(_cmdPool->Allocate(_cmdBufferType), std::move(asyncTracker));
+		assert(_sharedState && _sharedState->_globalPools);
+		BeginCommandList(_sharedState->_globalPools->_commandBufferPool.Allocate(_cmdBufferType), std::move(asyncTracker));
 	}
 
 	void		DeviceContext::BeginCommandList(const VulkanSharedPtr<VkCommandBuffer>& cmdList, std::shared_ptr<IAsyncTracker> asyncTracker)
@@ -1181,20 +1173,17 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		auto& cmdList = _sharedState->_commandList;
 		if (!cmdList._attachedStorage)
-			cmdList._attachedStorage = _globalPools->_temporaryStorageManager->BeginCmdListReservation();
+			cmdList._attachedStorage = _sharedState->_globalPools->_temporaryStorageManager->BeginCmdListReservation();
 		return cmdList._attachedStorage.MapStorage(byteCount, type);
 	}
 
 	DeviceContext::DeviceContext(
 		ObjectFactory&			factory, 
 		GlobalPools&            globalPools,
-		CommandPool&            cmdPool, 
 		CommandBufferType		cmdBufferType)
-	: _cmdPool(&cmdPool), _cmdBufferType(cmdBufferType)
-	, _factory(&factory)
-	, _globalPools(&globalPools)
+	: _cmdBufferType(cmdBufferType)
 	{
-		_sharedState = std::make_shared<VulkanEncoderSharedState>(*_factory, *_globalPools);
+		_sharedState = std::make_shared<VulkanEncoderSharedState>(factory, globalPools);
 	}
 
 	DeviceContext::~DeviceContext()
@@ -1204,11 +1193,10 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	VulkanEncoderSharedState::VulkanEncoderSharedState(
-		const ObjectFactory&    factory, 
-		GlobalPools&            globalPools)
-	: _graphicsDescriptors(factory, globalPools, s_maxBoundDescriptorSetCount)
-	, _computeDescriptors(factory, globalPools, s_maxBoundDescriptorSetCount)
-	, _globalPools(&globalPools)	
+		ObjectFactory&	factory, 
+		GlobalPools&	globalPools)
+	: _globalPools(&globalPools)	
+	, _objectFactory(&factory)
 	{
 		_renderPass = nullptr;
 		_renderPassSubpass = 0u;
@@ -1222,21 +1210,10 @@ namespace RenderCore { namespace Metal_Vulkan
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	void VulkanEncoderSharedState::DescriptorCollection::ResetState(const CompiledPipelineLayout& layout)
+	void VulkanEncoderSharedState::DescriptorDebugTracking::ResetState(const CompiledPipelineLayout& layout)
 	{
 		#if defined(VULKAN_VERBOSE_DEBUG)
 			_currentlyBoundDesc.resize(layout.GetDescriptorSetCount());
-		#endif
-	}
-
-	VulkanEncoderSharedState::DescriptorCollection::DescriptorCollection(
-		const ObjectFactory&    factory, 
-		GlobalPools&            globalPools,
-		unsigned				descriptorSetCount)
-	: _factory(&factory), _globalPools(&globalPools)
-	{
-		#if defined(VULKAN_VERBOSE_DEBUG)
-			_currentlyBoundDesc.resize(descriptorSetCount);
 		#endif
 	}
 

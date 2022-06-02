@@ -608,16 +608,14 @@ namespace RenderCore { namespace ImplVulkan
 
             pools._mainDescriptorPool = Metal_Vulkan::DescriptorPool(objFactory, _graphicsQueue->GetTracker());
 			pools._longTermDescriptorPool = Metal_Vulkan::DescriptorPool(objFactory, _graphicsQueue->GetTracker());
+			pools._commandBufferPool = Metal_Vulkan::CommandBufferPool(objFactory, _physDev._renderingQueueFamily, false, _graphicsQueue->GetTracker());
 			pools._renderPassPool = Metal_Vulkan::VulkanRenderPassPool(objFactory);
             pools._mainPipelineCache = objFactory.CreatePipelineCache();
             pools._dummyResources = Metal_Vulkan::DummyResources(objFactory);
 			pools._temporaryStorageManager = std::make_unique<Metal_Vulkan::TemporaryStorageManager>(objFactory, _graphicsQueue->GetTracker());
 
 			assert(!_foregroundPrimaryContext);
-            _foregroundPrimaryContext = std::make_shared<ThreadContext>(
-				shared_from_this(), 
-				_graphicsQueue,
-                Metal_Vulkan::CommandPool(objFactory, _physDev._renderingQueueFamily, false, _graphicsQueue->GetTracker()));
+            _foregroundPrimaryContext = std::make_shared<ThreadContext>(shared_from_this(), _graphicsQueue);
 			_foregroundPrimaryContext->AttachDestroyer(destroyer);
 
 			// We need to ensure that the "dummy" resources get their layout change to complete initialization
@@ -753,7 +751,7 @@ namespace RenderCore { namespace ImplVulkan
         
         auto finalChain = std::make_unique<PresentationChain>(
             _globalsContainer->_objectFactory, std::move(surface), VectorPattern<unsigned, 2>{desc._width, desc._height}, 
-			_physDev._renderingQueueFamily, platformValue);
+			_graphicsQueue.get(), _physDev._renderingQueueFamily, platformValue);
         return std::move(finalChain);
     }
 
@@ -772,10 +770,7 @@ namespace RenderCore { namespace ImplVulkan
         // we will not verify the selected physical device against a
         // presentation surface.
         DoSecondStageInit();
-		return std::make_unique<ThreadContext>(
-            shared_from_this(), 
-            _graphicsQueue,
-            Metal_Vulkan::CommandPool(_globalsContainer->_objectFactory, _physDev._renderingQueueFamily, false, _graphicsQueue->GetTracker()));
+		return std::make_unique<ThreadContext>(shared_from_this(), _graphicsQueue);
     }
 
 	IResourcePtr Device::CreateResource(
@@ -992,7 +987,7 @@ namespace RenderCore { namespace ImplVulkan
 		return _desc;
     }
 
-    Metal_Vulkan::ResourceView* PresentationChain::AcquireNextImage(Metal_Vulkan::SubmissionQueue& queue)
+    auto PresentationChain::AcquireNextImage(Metal_Vulkan::SubmissionQueue& queue) -> AquireResult
     {
         _activePresentSync = (_activePresentSync+1) % dimof(_presentSyncs);
         auto& sync = _presentSyncs[_activePresentSync];
@@ -1024,7 +1019,10 @@ namespace RenderCore { namespace ImplVulkan
         if (res != VK_SUCCESS)
             Throw(VulkanAPIFailure(res, "Failure during acquire next image"));
 
-        return &_images[_activeImageIndex]._rtv;
+		AquireResult result;
+		result._resource = _images[_activeImageIndex];
+		result._primaryCommandBuffer = _primaryBuffers[_activePresentSync];
+		return result;
     }
 
     static std::vector<VkImage> GetImages(VkDevice dev, VkSwapchainKHR swapChain)
@@ -1063,18 +1061,11 @@ namespace RenderCore { namespace ImplVulkan
     {
         auto images = GetImages(_device.get(), _swapChain.get());
         _images.reserve(images.size());
-        for (auto& i:images) {
-            TextureViewDesc window{
-                _bufferDesc._format, 
-                TextureViewDesc::SubResourceRange{0, _bufferDesc._mipCount},
-				TextureViewDesc::SubResourceRange{0, _bufferDesc._arrayCount},
-				_bufferDesc._dimensionality};
+        for (auto& vkImage:images) {
             auto resDesc = CreateDesc(
                 BindFlag::PresentationSrc | BindFlag::RenderTarget, 0u, GPUAccess::Write, 
                 _bufferDesc, "presentationimage");
-            auto resPtr = std::make_shared<Metal_Vulkan::Resource>(i, resDesc);
-            _images.emplace_back(
-                Image { i, Metal_Vulkan::ResourceView(*_factory, resPtr, BindFlag::RenderTarget, window) });
+            _images.emplace_back(std::make_shared<Metal_Vulkan::Resource>(vkImage, resDesc));
         }
     }
 
@@ -1082,11 +1073,13 @@ namespace RenderCore { namespace ImplVulkan
 		Metal_Vulkan::ObjectFactory& factory,
         VulkanSharedPtr<VkSurfaceKHR> surface, 
 		VectorPattern<unsigned, 2> extent,
+		Metal_Vulkan::SubmissionQueue* submissionQueue,
 		unsigned queueFamilyIndex,
         const void* platformValue)
     : _surface(std::move(surface))
     , _device(factory.GetDevice())
     , _factory(&factory)
+	, _submissionQueue(submissionQueue)
     , _platformValue(platformValue)
 	, _primaryBufferPool(factory, queueFamilyIndex, true, nullptr)
     {
@@ -1119,6 +1112,11 @@ namespace RenderCore { namespace ImplVulkan
 
     PresentationChain::~PresentationChain()
     {
+		// for safety -- ensure that all submitted Present() events have finished on the GPU
+		if (_submissionQueue)
+			for (auto& sync:_presentSyncs)
+				if (sync._presentFence.has_value())
+					_submissionQueue->WaitForFence(sync._presentFence.value());
 		_images.clear();
 		_swapChain.reset();
 		_device.reset();
@@ -1212,14 +1210,13 @@ namespace RenderCore { namespace ImplVulkan
 		_nextQueueShouldWaitOnAcquire = swapChain->GetSyncs()._onAcquireComplete.get();
 
 		{
-			auto cmdList = swapChain->SharePrimaryBuffer();
-			auto res = vkResetCommandBuffer(cmdList.get(), VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+			auto res = vkResetCommandBuffer(nextImage._primaryCommandBuffer.get(), VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
 			if (res != VK_SUCCESS)
 				Throw(VulkanAPIFailure(res, "Failure while resetting command buffer"));
-			_metalContext->BeginCommandList(std::move(cmdList), _submissionQueue->GetTracker());
+			_metalContext->BeginCommandList(nextImage._primaryCommandBuffer, _submissionQueue->GetTracker());
 		}
 
-        return nextImage->GetResource();
+        return std::move(nextImage._resource);
 	}
 
 	void            ThreadContext::Present(IPresentationChain& chain)
@@ -1281,8 +1278,8 @@ namespace RenderCore { namespace ImplVulkan
 			_globalPools->_mainDescriptorPool.FlushDestroys();
 			_globalPools->_longTermDescriptorPool.FlushDestroys();
 			_globalPools->_temporaryStorageManager->FlushDestroys();
+			_globalPools->_commandBufferPool.FlushDestroys();
 		}
-		_renderingCommandPool.FlushDestroys();
 	}
 
     bool ThreadContext::IsImmediate() const
@@ -1314,11 +1311,9 @@ namespace RenderCore { namespace ImplVulkan
 
     ThreadContext::ThreadContext(
 		std::shared_ptr<Device> device,
-		std::shared_ptr<Metal_Vulkan::SubmissionQueue> submissionQueue,
-        Metal_Vulkan::CommandPool&& cmdPool)
+		std::shared_ptr<Metal_Vulkan::SubmissionQueue> submissionQueue)
     : _device(device)
 	, _frameId(0)
-    , _renderingCommandPool(std::move(cmdPool))
 	, _factory(&device->GetObjectFactory())
 	, _globalPools(&device->GetGlobalPools())
 	, _submissionQueue(submissionQueue)
@@ -1326,7 +1321,7 @@ namespace RenderCore { namespace ImplVulkan
     {
 		_metalContext = std::make_shared<Metal_Vulkan::DeviceContext>(
 			device->GetObjectFactory(), device->GetGlobalPools(), 
-            _renderingCommandPool, Metal_Vulkan::CommandBufferType::Primary);
+            Metal_Vulkan::CommandBufferType::Primary);
 	}
 
     ThreadContext::~ThreadContext() 
