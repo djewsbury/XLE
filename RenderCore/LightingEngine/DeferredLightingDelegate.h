@@ -31,10 +31,9 @@ namespace RenderCore { namespace LightingEngine
 		DeferredLightingTechniqueFlags::BitField flags = 0);
 
 	::Assets::PtrToMarkerPtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
-		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelineCollection,
+		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,

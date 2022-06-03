@@ -143,4 +143,11 @@ namespace RenderCore { namespace LightingEngine
 		virtual float GetNearRadius(float) = 0;
 		virtual ~IShadowProbeDatabase();
 	};
+
+	class IAttachedShadowProbe
+	{
+	public:
+		virtual void SetDatabaseEntry(unsigned) = 0;
+		virtual ~IAttachedShadowProbe();
+	};
 }}

@@ -85,5 +85,10 @@ namespace RenderCore { namespace LightingEngine
 		class ProbeRenderingInstance;
 	};
 
+	std::shared_ptr<IPreparable> CreateShadowProbePrepareDelegate(
+		std::shared_ptr<ShadowProbes> shadowProbes,
+		IteratorRange<const uint32_t*> associatedLights, 
+		ILightScene* lightScene);
+
 }}
 

@@ -28,10 +28,12 @@ namespace RenderCore { namespace LightingEngine
 {
 	static const unsigned s_shadowProbeShadowFlag = 1u<<31u;
 
-	class ForwardPlusLightDesc : public Internal::StandardPositionalLight
+	class ForwardPlusLightDesc : public Internal::StandardPositionalLight, public IAttachedShadowProbe
 	{
 	public:
 		unsigned _staticProbeDatabaseEntry = 0;
+
+		virtual void SetDatabaseEntry(unsigned newEntry) override { _staticProbeDatabaseEntry = newEntry; };
 
 		using StandardPositionalLight::StandardPositionalLight; 
 	};
@@ -153,58 +155,6 @@ namespace RenderCore { namespace LightingEngine
 		return ~0u;
 	}
 
-	class ForwardPlusLightScene::ShadowProbePrepareDelegate : public IPreparable, public IShadowProbeDatabase
-	{
-	public:
-		static std::vector<ShadowProbes::Probe> MakeProbes(ILightScene& lightScene, IteratorRange<const ILightScene::LightSourceId*> lights, float defaultNearRadius)
-		{
-			std::vector<ShadowProbes::Probe> result;
-			result.reserve(lights.size());
-			for (auto pending:lights) {
-				ShadowProbes::Probe probe;
-				probe._position = Zero<Float3>();
-				probe._nearRadius = 1.f;
-				probe._farRadius = 1024.f;
-				float lightSourceRadius = 0.f;
-				auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(pending);
-				if (positional) {
-					probe._position = ExtractTranslation(positional->GetLocalToWorld());
-					lightSourceRadius = ExtractUniformScaleFast(AsFloat3x4(positional->GetLocalToWorld()));
-				}
-				auto* finite = lightScene.TryGetLightSourceInterface<IFiniteLightSource>(pending);
-				if (finite) {
-					probe._nearRadius = std::max(lightSourceRadius, defaultNearRadius);
-					probe._farRadius = finite->GetCutoffRange();
-				}
-
-				auto& internalLightDesc = *dynamic_cast<ForwardPlusLightDesc*>(positional);
-				assert(internalLightDesc._staticProbeDatabaseEntry == 0);
-				// we use zero as a sentinal, so add one to the actual index
-				internalLightDesc._staticProbeDatabaseEntry = unsigned(result.size()+1);
-
-				result.push_back(probe);
-			}
-			return result;
-		}
-
-		std::shared_ptr<IProbeRenderingInstance> BeginPrepare(IThreadContext& threadContext) override
-		{
-			auto probes = MakeProbes(*_lightScene, _associatedLights, _defaultNearRadius);
-			_shadowProbes->AddProbes(probes);
-			return _shadowProbes->PrepareStaticProbes(threadContext);
-		}
-
-		void SetNearRadius(float nearRadius) override { _defaultNearRadius = nearRadius; }
-		float GetNearRadius(float) override { return _defaultNearRadius; }
-
-		std::shared_ptr<ShadowProbes> _shadowProbes;
-		ShadowProbePrepareDelegate(std::shared_ptr<ShadowProbes> shadowProbes, IteratorRange<const LightSourceId*> associatedLights, ForwardPlusLightScene* lightScene) 
-		: _shadowProbes(std::move(shadowProbes)), _associatedLights(associatedLights.begin(), associatedLights.end()), _lightScene(lightScene) {}
-		std::vector<LightSourceId> _associatedLights;
-		ForwardPlusLightScene* _lightScene;
-		float _defaultNearRadius = 1.f;
-	};
-
 	ILightScene::ShadowProjectionId ForwardPlusLightScene::CreateShadowProjection(ShadowOperatorId opId, IteratorRange<const LightSourceId*> associatedLights)
 	{
 		if (opId == _shadowOperatorIdMapping._operatorForStaticProbes) {
@@ -213,7 +163,7 @@ namespace RenderCore { namespace LightingEngine
 			
 			_shadowProbes = std::make_shared<ShadowProbes>(
 				_pipelineAccelerators, *_techDelBox, _shadowOperatorIdMapping._shadowProbesCfg);
-			_spPrepareDelegate = std::make_shared<ShadowProbePrepareDelegate>(_shadowProbes, associatedLights, this);
+			_spPrepareDelegate = Internal::CreateShadowProbePrepareDelegate(_shadowProbes, associatedLights, this);
 			return s_shadowProbeShadowFlag;
 		} else {
 			Throw(std::runtime_error("This shadow projection operation can't be used with the multi-light constructor variation"));
@@ -246,7 +196,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (projectionid == s_shadowProbeShadowFlag) {
 			if (interfaceTypeCode == typeid(IPreparable).hash_code()) return (IPreparable*)_spPrepareDelegate.get();
-			else if (interfaceTypeCode == typeid(IShadowProbeDatabase).hash_code()) return (IShadowProbeDatabase*)_spPrepareDelegate.get();
+			else if (interfaceTypeCode == typeid(IShadowProbeDatabase).hash_code()) return dynamic_cast<IShadowProbeDatabase*>(_spPrepareDelegate.get());
 			return nullptr;
 		} else {
 			return Internal::StandardLightScene::TryGetShadowProjectionInterface(projectionid, interfaceTypeCode);

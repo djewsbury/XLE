@@ -5,6 +5,7 @@
 #include "LightingDelegateUtil.h"
 #include "ShadowUniforms.h"
 #include "ShadowPreparer.h"
+#include "ShadowProbes.h"
 #include "LightingEngineInternal.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/DrawableDelegates.h"
@@ -100,6 +101,66 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			result.AdoptPromise(),
 			[](auto nft) { return std::make_shared<BuildGBufferResourceDelegate>(*nft); });
 		return result;
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////
+
+	class ShadowProbePrepareDelegate : public IPreparable, public IShadowProbeDatabase
+	{
+	public:
+		static std::vector<ShadowProbes::Probe> MakeProbes(ILightScene& lightScene, IteratorRange<const ILightScene::LightSourceId*> lights, float defaultNearRadius)
+		{
+			std::vector<ShadowProbes::Probe> result;
+			result.reserve(lights.size());
+			for (auto pending:lights) {
+				ShadowProbes::Probe probe;
+				probe._position = Zero<Float3>();
+				probe._nearRadius = 1.f;
+				probe._farRadius = 1024.f;
+				float lightSourceRadius = 0.f;
+				auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(pending);
+				if (positional) {
+					probe._position = ExtractTranslation(positional->GetLocalToWorld());
+					lightSourceRadius = ExtractUniformScaleFast(AsFloat3x4(positional->GetLocalToWorld()));
+				}
+				auto* finite = lightScene.TryGetLightSourceInterface<IFiniteLightSource>(pending);
+				if (finite) {
+					probe._nearRadius = std::max(lightSourceRadius, defaultNearRadius);
+					probe._farRadius = finite->GetCutoffRange();
+				}
+
+				auto* databaseEntry = lightScene.TryGetLightSourceInterface<IAttachedShadowProbe>(pending);
+				if (databaseEntry) {
+					// we use zero as a sentinal, so add one to the actual index
+					databaseEntry->SetDatabaseEntry(unsigned(result.size()+1));
+				}
+
+				result.push_back(probe);
+			}
+			return result;
+		}
+
+		std::shared_ptr<IProbeRenderingInstance> BeginPrepare(IThreadContext& threadContext) override
+		{
+			auto probes = MakeProbes(*_lightScene, _associatedLights, _defaultNearRadius);
+			_shadowProbes->AddProbes(probes);
+			return _shadowProbes->PrepareStaticProbes(threadContext);
+		}
+
+		void SetNearRadius(float nearRadius) override { _defaultNearRadius = nearRadius; }
+		float GetNearRadius(float) override { return _defaultNearRadius; }
+
+		std::shared_ptr<ShadowProbes> _shadowProbes;
+		ShadowProbePrepareDelegate(std::shared_ptr<ShadowProbes> shadowProbes, IteratorRange<const ILightScene::LightSourceId*> associatedLights, ILightScene* lightScene) 
+		: _shadowProbes(std::move(shadowProbes)), _associatedLights(associatedLights.begin(), associatedLights.end()), _lightScene(lightScene) {}
+		std::vector<ILightScene::LightSourceId> _associatedLights;
+		ILightScene* _lightScene;
+		float _defaultNearRadius = 1.f;
+	};
+
+	std::shared_ptr<IPreparable> CreateShadowProbePrepareDelegate(std::shared_ptr<ShadowProbes> shadowProbes, IteratorRange<const ILightScene::LightSourceId*> associatedLights, ILightScene* lightScene)
+	{
+		return std::make_shared<ShadowProbePrepareDelegate>(shadowProbes, associatedLights, lightScene);
 	}
 
 }}}

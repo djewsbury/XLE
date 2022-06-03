@@ -11,28 +11,32 @@
 
 namespace RenderCore { namespace Techniques
 {
-    class FrameBufferPool;
-    class AttachmentPool;
-    class IShaderResourceDelegate;
+	class FrameBufferPool;
+	class AttachmentPool;
+	class IShaderResourceDelegate;
 }}
 
 namespace RenderCore { namespace LightingEngine
 {
-    class IPreparedShadowResult;
+	class IPreparedShadowResult;
+	class IPreparable;
+	class ShadowProbes;
 }}
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
-    class ILightBase;
-    std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
+	class ILightBase;
+	std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
 		LightingTechniqueIterator& iterator,
-        LightingTechniqueSequence& sequence,
+		LightingTechniqueSequence& sequence,
 		ILightBase& proj,
-        ILightScene& lightScene, ILightScene::LightSourceId associatedLightId,
-        PipelineType descSetPipelineType,
+		ILightScene& lightScene, ILightScene::LightSourceId associatedLightId,
+		PipelineType descSetPipelineType,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::AttachmentPool& shadowGenAttachmentPool);
 
-    ::Assets::MarkerPtr<Techniques::IShaderResourceDelegate> CreateBuildGBufferResourceDelegate();
+	::Assets::MarkerPtr<Techniques::IShaderResourceDelegate> CreateBuildGBufferResourceDelegate();
+
+	std::shared_ptr<IPreparable> CreateShadowProbePrepareDelegate(std::shared_ptr<ShadowProbes> shadowProbes, IteratorRange<const ILightScene::LightSourceId*> associatedLights, ILightScene* lightScene);
 }}}
 

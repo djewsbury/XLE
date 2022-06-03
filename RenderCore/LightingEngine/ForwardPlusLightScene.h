@@ -89,8 +89,7 @@ namespace RenderCore { namespace LightingEngine
 		ShadowOperatorIdMapping _shadowOperatorIdMapping;
 
 		std::shared_ptr<ShadowProbes> _shadowProbes;
-		class ShadowProbePrepareDelegate;
-		std::shared_ptr<ShadowProbePrepareDelegate> _spPrepareDelegate;
+		std::shared_ptr<IPreparable> _spPrepareDelegate;
 
 		class AmbientLightConfig;
 		std::shared_ptr<AmbientLightConfig> _ambientLight;

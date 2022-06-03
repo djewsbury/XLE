@@ -268,4 +268,5 @@ namespace RenderCore { namespace LightingEngine
 	IOrthoShadowProjections::~IOrthoShadowProjections() {}
 	INearShadowProjection::~INearShadowProjection() {}
 	IShadowProbeDatabase::~IShadowProbeDatabase() {}
+	IAttachedShadowProbe::~IAttachedShadowProbe() {}
 }}
