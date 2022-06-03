@@ -19,6 +19,7 @@
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
+#include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../ShaderParser/AutomaticSelectorFiltering.h"
 #include "../../../Assets/OSFileSystem.h"
@@ -26,6 +27,7 @@
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/AssetSetManager.h"
 #include "../../../Assets/CompileAndAsyncManager.h"
+#include "../../../Assets/Assets.h"
 #include "../../../Tools/ToolsRig/VisualisationGeo.h"
 #include "../../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../../Math/Transformations.h"
@@ -89,6 +91,23 @@ namespace UnitTests
 		// like the drawables pool
 		if (::Assets::Services::HasAssetSets())
 			::Assets::Services::GetAssetSets().Clear();
+	}
+
+
+	LightingOperatorsPipelineLayout::LightingOperatorsPipelineLayout(const MetalTestHelper& testHelper)
+	{	
+		_samplerPool = std::make_shared<RenderCore::SamplerPool>(*testHelper._device);
+		_pipelineLayoutFile = ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
+
+		const std::string pipelineLayoutName = "LightingOperator";
+		auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout{*_pipelineLayoutFile, pipelineLayoutName}.MakePipelineLayoutInitializer(
+			testHelper._shaderCompiler->GetShaderLanguage(), _samplerPool.get());
+		_pipelineLayout = testHelper._device->CreatePipelineLayout(pipelineInit);
+
+		auto i = _pipelineLayoutFile->_descriptorSets.find("DMShadow");
+		if (i == _pipelineLayoutFile->_descriptorSets.end())
+			Throw(std::runtime_error("Missing ShadowTemplate entry in pipeline layout file"));
+		_dmShadowDescSetTemplate = i->second;
 	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

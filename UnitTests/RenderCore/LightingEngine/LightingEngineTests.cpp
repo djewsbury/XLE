@@ -125,34 +125,6 @@ namespace UnitTests
 		return future.Actualize();
 	}
 
-	struct LightingOperatorsPipelineLayout
-	{
-		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _pipelineLayoutFile;
-		std::shared_ptr<RenderCore::ICompiledPipelineLayout> _pipelineLayout;
-		std::shared_ptr<RenderCore::Techniques::PipelineCollection> _pipelineCollection;
-		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _dmShadowDescSetTemplate;
-		std::shared_ptr<RenderCore::SamplerPool> _samplerPool;
-
-		LightingOperatorsPipelineLayout(const MetalTestHelper& testHelper)
-		{	
-			_samplerPool = std::make_shared<RenderCore::SamplerPool>(*testHelper._device);
-			auto pipelineLayoutFileFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
-			_pipelineLayoutFile = StallAndRequireReady(*pipelineLayoutFileFuture);
-
-			const std::string pipelineLayoutName = "LightingOperator";
-			auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout{*_pipelineLayoutFile, pipelineLayoutName}.MakePipelineLayoutInitializer(
-				testHelper._shaderCompiler->GetShaderLanguage(), _samplerPool.get());
-			_pipelineLayout = testHelper._device->CreatePipelineLayout(pipelineInit);
-
-			auto i = _pipelineLayoutFile->_descriptorSets.find("DMShadow");
-			if (i == _pipelineLayoutFile->_descriptorSets.end())
-				Throw(std::runtime_error("Missing ShadowTemplate entry in pipeline layout file"));
-			_dmShadowDescSetTemplate = i->second;
-
-			_pipelineCollection = std::make_shared<RenderCore::Techniques::PipelineCollection>(testHelper._device);
-		}
-	};
-
 	TEST_CASE( "LightingEngine-ExecuteTechnique", "[rendercore_lighting_engine]" )
 	{
 		using namespace RenderCore;
@@ -248,8 +220,7 @@ namespace UnitTests
 
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-				testHelper->_device,
-				testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
+				testApparatus._pipelineAcceleratorPool, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
@@ -325,8 +296,7 @@ namespace UnitTests
 
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-				testHelper->_device,
-				testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
+				testApparatus._pipelineAcceleratorPool, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);

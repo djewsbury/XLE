@@ -116,6 +116,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         RenderCore/LightingEngine/LightShapeStencilTests.cpp
         RenderCore/LightingEngine/TextureOperatorPerformanceTests.cpp
         RenderCore/LightingEngine/MassProbeRenderTests.cpp
+        RenderCore/LightingEngine/BackgroundPrepareTests.cpp
         RenderCore/Metal/MetalTestHelper.cpp
         EmbeddedRes.cpp
         ../Tools/ToolsRig/VisualisationGeo.cpp

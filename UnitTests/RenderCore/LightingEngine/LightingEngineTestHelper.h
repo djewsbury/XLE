@@ -53,6 +53,16 @@ namespace UnitTests
 		~LightingEngineTestApparatus();
 	};
 
+	struct LightingOperatorsPipelineLayout
+	{
+		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _pipelineLayoutFile;
+		std::shared_ptr<RenderCore::ICompiledPipelineLayout> _pipelineLayout;
+		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _dmShadowDescSetTemplate;
+		std::shared_ptr<RenderCore::SamplerPool> _samplerPool;
+
+		LightingOperatorsPipelineLayout(const MetalTestHelper& testHelper);
+	};
+
 	void ParseScene(RenderCore::LightingEngine::LightingTechniqueInstance& lightingIterator, ToolsRig::IDrawablesWriter& drawableWriter);
 
 	RenderCore::Techniques::ParsingContext InitializeParsingContext(
