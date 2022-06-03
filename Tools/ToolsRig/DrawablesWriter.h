@@ -14,7 +14,7 @@ namespace ToolsRig
 	class IDrawablesWriter
 	{
 	public:
-		virtual void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt) = 0;
+		virtual void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, uint32_t viewMask = 1) = 0;
 		virtual ~IDrawablesWriter() = default;
 	};
 
@@ -55,7 +55,8 @@ namespace ToolsRig
 			const std::shared_ptr<CustomDrawDelegate>& customDraw) = 0;
 		virtual void WriteDrawables(
 			RenderCore::Techniques::DrawablesPacket& pkt,
-			const Float4x4& cullingVolume) = 0;
+			const Float4x4& cullingVolume,
+			uint32_t viewMask = 1) = 0;
 		virtual ~IExtendedDrawablesWriter() = default; 
 	};
 

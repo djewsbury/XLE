@@ -77,9 +77,10 @@ namespace ToolsRig
 			RenderCore::Techniques::DrawablesPacket& pkt, 
 			const RenderCore::Techniques::DrawableGeo& geo,
 			size_t vertexCount,
-			const Float4x4& localToWorld)
+			const Float4x4& localToWorld,
+			uint32_t viewMask)
 		{
-			struct CustomDrawable : public RenderCore::Techniques::Drawable { unsigned _vertexCount; Float4x4 _localToWorld; };
+			struct CustomDrawable : public RenderCore::Techniques::Drawable { unsigned _vertexCount; Float4x4 _localToWorld; uint32_t _viewMask; };
 			auto* drawables = pkt._drawables.Allocate<CustomDrawable>(1);
 			drawables[0]._pipeline = _pipelineAccelerator.get();
 			drawables[0]._descriptorSet = _descriptorSetAccelerator.get();
@@ -87,9 +88,10 @@ namespace ToolsRig
 			drawables[0]._vertexCount = vertexCount;
 			drawables[0]._looseUniformsInterface = &s_localTransformUSI;
 			drawables[0]._localToWorld = localToWorld;
+			drawables[0]._viewMask = viewMask;
 			drawables[0]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
 				{
-					auto localTransform = RenderCore::Techniques::MakeLocalTransform(((CustomDrawable&)drawable)._localToWorld, ExtractTranslation(parsingContext.GetProjectionDesc()._cameraToWorld));
+					auto localTransform = RenderCore::Techniques::MakeLocalTransform(((CustomDrawable&)drawable)._localToWorld, ExtractTranslation(parsingContext.GetProjectionDesc()._cameraToWorld), ((CustomDrawable&)drawable)._viewMask);
 					drawFnContext.ApplyLooseUniforms(RenderCore::ImmediateDataStream(localTransform));
 					drawFnContext.Draw(((CustomDrawable&)drawable)._vertexCount);
 				};
@@ -150,9 +152,9 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _geo;
 		size_t _vertexCount;
 
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, uint32_t viewMask)
 		{
-			WriteDrawable(pkt, *_geo, _vertexCount, Identity<Float4x4>());
+			WriteDrawable(pkt, *_geo, _vertexCount, Identity<Float4x4>(), viewMask);
 		}
 
 		SphereDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
@@ -173,12 +175,12 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _sphereGeo, _cubeGeo;
 		size_t _sphereVertexCount, _cubeVertexCount;
 
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, uint32_t viewMask)
 		{
 			WriteDrawable(
 				pkt,
 				*_sphereGeo, _sphereVertexCount, 
-				AsFloat4x4(Float3{0.f, 1.0f + std::sqrt(8.0f)/2.0f, 0.f}));
+				AsFloat4x4(Float3{0.f, 1.0f + std::sqrt(8.0f)/2.0f, 0.f}), viewMask);
 
 			Float4x4 transform = Identity<Float4x4>();
 			Combine_IntoLHS(transform, RotationY{gPI / 4.0f});
@@ -186,12 +188,12 @@ namespace ToolsRig
 			WriteDrawable(
 				pkt,
 				*_cubeGeo, _cubeVertexCount, 
-				transform);
+				transform, viewMask);
 
 			WriteDrawable(
 				pkt,
 				*_cubeGeo, _cubeVertexCount, 
-				AsFloat4x4(Float3{0.f, -1.0f - std::sqrt(8.0f)/2.0f, 0.f}));
+				AsFloat4x4(Float3{0.f, -1.0f - std::sqrt(8.0f)/2.0f, 0.f}), viewMask);
 		}
 
 		ShapeStackDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
@@ -213,7 +215,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _geo;
 		size_t _vertexCount;
 
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, uint32_t viewMask)
 		{
 			const unsigned stoneCount = 32;
 			
@@ -231,7 +233,7 @@ namespace ToolsRig
 				WriteDrawable(
 					pkt,
 					*_geo, _vertexCount, 
-					transform);
+					transform, viewMask);
 			}
 
 			Float4x4 baseTransform = Identity<Float4x4>();
@@ -247,7 +249,7 @@ namespace ToolsRig
 			WriteDrawable(
 				pkt,
 				*_geo, _vertexCount, 
-				baseTransform);
+				baseTransform, viewMask);
 		}
 
 		StonehengeDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
@@ -268,7 +270,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _geo;
 		size_t _vertexCount;
 
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, uint32_t viewMask)
 		{
 			ScaleRotationTranslationM srt {
 				Float3 { 1000.f, 1.0f, 1000.f },
@@ -278,7 +280,7 @@ namespace ToolsRig
 			WriteDrawable(
 				pkt,
 				*_geo, _vertexCount, 
-				AsFloat4x4(srt));
+				AsFloat4x4(srt), viewMask);
 		}
 
 		FlatPlaneDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
@@ -296,16 +298,16 @@ namespace ToolsRig
 	class FlatPlaneAndBlockerDrawableWriter : public FlatPlaneDrawableWriter
 	{
 	public:
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, uint32_t viewMask)
 		{
-			FlatPlaneDrawableWriter::WriteDrawables(pkt);
+			FlatPlaneDrawableWriter::WriteDrawables(pkt, viewMask);
 
 			ScaleRotationTranslationM srt {
 				Float3 { 1.f, 1.0f, 1.f },
 				Identity<Float3x3>(),
 				Float3 { 0.f, 15.0f, 0.f }
 			};
-			WriteDrawable(pkt, *_geo, _vertexCount, AsFloat4x4(srt));
+			WriteDrawable(pkt, *_geo, _vertexCount, AsFloat4x4(srt), viewMask);
 		}
 
 		using FlatPlaneDrawableWriter::FlatPlaneDrawableWriter;
@@ -322,9 +324,9 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _sphereGeo, _pyramidGeo;
 		size_t _sphereVertexCount, _pyramidVertexCount;
 
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, uint32_t viewMask)
 		{
-			WriteDrawable(pkt, *_sphereGeo, _sphereVertexCount, AsFloat4x4(Float3{0.f, 0.0f, 1.f}));
+			WriteDrawable(pkt, *_sphereGeo, _sphereVertexCount, AsFloat4x4(Float3{0.f, 0.0f, 1.f}), viewMask);
 			auto pyramidTransform = MakeObjectToWorld(Float3{0.f, 0.0f, 1.f}, Float3{1.f, 0.f, 0.f}, Float3{0.f, 0.f, -1.f});
 			Combine_IntoLHS(pyramidTransform, RotationZ(-gPI/4.0f));
 			
@@ -336,7 +338,7 @@ namespace ToolsRig
 			Combine_IntoLHS(pyramidTransform, RotationX(gPI*3.0f/16.0f));
 			Combine_IntoLHS(pyramidTransform, Float3{0.f, 0.0f, 1.f});
 
-			WriteDrawable(pkt, *_pyramidGeo, _pyramidVertexCount, pyramidTransform);
+			WriteDrawable(pkt, *_pyramidGeo, _pyramidVertexCount, pyramidTransform, viewMask);
 		}
 
 		SharpContactDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
@@ -371,11 +373,11 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _sphereGeo, _pyramidGeo, _cubeGeo;
 		size_t _sphereVertexCount, _pyramidVertexCount, _cubeVertexCount;
 
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, uint32_t viewMask)
 		{
-			for (const auto& transform:_cubes) WriteDrawable(pkt, *_cubeGeo, _cubeVertexCount, transform);
-			for (const auto& transform:_spheres) WriteDrawable(pkt, *_sphereGeo, _sphereVertexCount, transform);
-			for (const auto& transform:_pyramid) WriteDrawable(pkt, *_pyramidGeo, _pyramidVertexCount, transform);
+			for (const auto& transform:_cubes) WriteDrawable(pkt, *_cubeGeo, _cubeVertexCount, transform, viewMask);
+			for (const auto& transform:_spheres) WriteDrawable(pkt, *_sphereGeo, _sphereVertexCount, transform, viewMask);
+			for (const auto& transform:_pyramid) WriteDrawable(pkt, *_pyramidGeo, _pyramidVertexCount, transform, viewMask);
 		}
 
 		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, const std::shared_ptr<CustomDrawDelegate>& customDraw)
@@ -425,26 +427,27 @@ namespace ToolsRig
 
 		void WriteDrawables(
 			RenderCore::Techniques::DrawablesPacket& pkt,
-			const Float4x4& cullingVolume)
+			const Float4x4& cullingVolume,
+			uint32_t viewMask)
 		{
 			auto bb=_cubeBoundingBoxes.begin();
 			for (const auto& transform:_cubes) {
 				if (!CullAABB(cullingVolume, bb->first, bb->second, RenderCore::Techniques::GetDefaultClipSpaceType())) 
-					WriteDrawable(pkt, *_cubeGeo, _cubeVertexCount, transform);
+					WriteDrawable(pkt, *_cubeGeo, _cubeVertexCount, transform, viewMask);
 				++bb;
 			}
 
 			bb=_sphereBoundingBoxes.begin();
 			for (const auto& transform:_spheres) {
 				if (!CullAABB(cullingVolume, bb->first, bb->second, RenderCore::Techniques::GetDefaultClipSpaceType())) 
-					WriteDrawable(pkt, *_sphereGeo, _sphereVertexCount, transform);
+					WriteDrawable(pkt, *_sphereGeo, _sphereVertexCount, transform, viewMask);
 				++bb;
 			}
 
 			bb=_pyramidBoundingBoxes.begin();
 			for (const auto& transform:_pyramid) {
 				if (!CullAABB(cullingVolume, bb->first, bb->second, RenderCore::Techniques::GetDefaultClipSpaceType())) 
-					WriteDrawable(pkt, *_pyramidGeo, _pyramidVertexCount, transform);
+					WriteDrawable(pkt, *_pyramidGeo, _pyramidVertexCount, transform, viewMask);
 				++bb;
 			}
 		}
