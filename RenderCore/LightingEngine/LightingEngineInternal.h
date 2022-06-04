@@ -127,8 +127,10 @@ namespace RenderCore { namespace LightingEngine
 
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 
+		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCommandList; }
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		::Assets::DependencyValidation _depVal;
+		BufferUploads::CommandListID _completionCommandList = 0;
 
 		CompiledLightingTechnique(const std::shared_ptr<ILightScene>& lightScene = nullptr);
 		~CompiledLightingTechnique();

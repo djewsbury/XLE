@@ -148,17 +148,18 @@ namespace RenderCore { namespace LightingEngine
 		BufferUploads::CommandListID _completionCmdList;
 	};
 
-	static ::Assets::PtrToMarkerPtr<RenderStepFragmentInterface> CreateBuildGBufferSceneFragment(
+	static std::future<std::pair<RenderStepFragmentInterface, BufferUploads::CommandListID>> CreateBuildGBufferSceneFragment(
 		SharedTechniqueDelegateBox& techDelBox,
 		GBufferType gbufferType, 
 		bool precisionTargets = false)
 	{
-		auto result = std::make_shared<::Assets::MarkerPtr<RenderStepFragmentInterface>>("build-gbuffer");
+		std::promise<std::pair<RenderStepFragmentInterface, BufferUploads::CommandListID>> promise;
+		auto result = promise.get_future();
 		auto normalsFittingTexture = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
 
 		::Assets::WhenAll(normalsFittingTexture).ThenConstructToPromise(
-			result->AdoptPromise(),
-			[defIllumDel = techDelBox._deferredIllumDelegate, gbufferType, precisionTargets](std::shared_ptr<Techniques::DeferredShaderResource> normalsFitting) {
+			std::move(promise),
+			[defIllumDel = techDelBox._deferredIllumDelegate, gbufferType, precisionTargets](auto normalsFitting) {
 
 				// This render pass will include just rendering to the gbuffer and doing the initial
 				// lighting resolve.
@@ -173,11 +174,11 @@ namespace RenderCore { namespace LightingEngine
 				// We can elect to retain or discard the gbuffer contents after the lighting resolve. Frequently
 				// the gbuffer contents are useful for various effects.
 
-				auto createGBuffer = std::make_shared<RenderStepFragmentInterface>(RenderCore::PipelineType::Graphics);
-				auto msDepth = createGBuffer->DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).Clear().FinalState(BindFlag::DepthStencil|BindFlag::ShaderResource);
-				auto diffuse = createGBuffer->DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse).NoInitialState();
-				auto normal = createGBuffer->DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal).NoInitialState();
-				auto parameter = createGBuffer->DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter).NoInitialState();
+				RenderStepFragmentInterface createGBuffer{RenderCore::PipelineType::Graphics};
+				auto msDepth = createGBuffer.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).Clear().FinalState(BindFlag::DepthStencil|BindFlag::ShaderResource);
+				auto diffuse = createGBuffer.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse).NoInitialState();
+				auto normal = createGBuffer.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal).NoInitialState();
+				auto parameter = createGBuffer.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter).NoInitialState();
 
 				Techniques::FrameBufferDescFragment::SubpassDesc subpass;
 				auto diffuseAspect = (!precisionTargets) ? TextureViewDesc::Aspect::ColorSRGB : TextureViewDesc::Aspect::ColorLinear;
@@ -192,8 +193,8 @@ namespace RenderCore { namespace LightingEngine
 
 				ParameterBox box;
 				box.SetParameter("GBUFFER_TYPE", (unsigned)gbufferType);
-				createGBuffer->AddSubpass(std::move(subpass), defIllumDel, Techniques::BatchFlags::Opaque, std::move(box), std::move(srDelegate));
-				return createGBuffer;
+				createGBuffer.AddSubpass(std::move(subpass), defIllumDel, Techniques::BatchFlags::Opaque, std::move(box), std::move(srDelegate));
+				return std::make_pair(std::move(createGBuffer), normalsFitting->GetCompletionCommandList());
 			});
 		return result;
 	}
@@ -451,14 +452,12 @@ namespace RenderCore { namespace LightingEngine
 
 		auto result = std::make_shared<::Assets::MarkerPtr<CompiledLightingTechnique>>("deferred-lighting-technique");
 		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
-		::Assets::WhenAll(buildGBufferFragment, std::move(lightSceneFuture)).ThenConstructToPromise(
+		::Assets::WhenAll(std::move(buildGBufferFragment), std::move(lightSceneFuture)).ThenConstructToPromise(
 			result->AdoptPromise(),
 			[pipelineAccelerators, techDelBox, fbProps, 
 			preregisteredAttachments=std::move(preregisteredAttachments),
 			resolveOperators=std::move(resolveOperators), pipelineCollection, lightingOperatorLayout, flags](
-				std::promise<std::shared_ptr<CompiledLightingTechnique>>&& thatPromise,
-				std::shared_ptr<RenderStepFragmentInterface> buildGbuffer,
-				std::shared_ptr<DeferredLightScene> lightScene) {
+				auto&& thatPromise, auto buildGbuffer, auto lightScene) {
 
 				TRY {
 					Techniques::FragmentStitchingContext stitchingContext{preregisteredAttachments, fbProps, Techniques::CalculateDefaultSystemFormats(*pipelineAccelerators->GetDevice())};
@@ -486,7 +485,8 @@ namespace RenderCore { namespace LightingEngine
 
 					auto& mainSequence = lightingTechnique->CreateSequence();
 					// Draw main scene
-					mainSequence.CreateStep_RunFragments(std::move(*buildGbuffer));
+					mainSequence.CreateStep_RunFragments(std::move(buildGbuffer.first));
+					lightingTechnique->_completionCommandList = std::max(lightingTechnique->_completionCommandList, buildGbuffer.second);
 
 					// Lighting resolve (gbuffer -> HDR color image)
 					auto lightingResolveFragment = CreateLightingResolveFragment(
@@ -544,6 +544,7 @@ namespace RenderCore { namespace LightingEngine
 							captures->_lightResolveOperators = resolveOperators;
 							captures->_lightScene->_lightResolveOperators = resolveOperators;
 							lightingTechnique->_depVal = resolveOperators->GetDependencyValidation();
+							lightingTechnique->_completionCommandList = std::max(lightingTechnique->_completionCommandList, resolveOperators->_completionCommandList);
 							return lightingTechnique;
 						});
 				} CATCH(...) {

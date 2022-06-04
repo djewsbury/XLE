@@ -26,7 +26,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::FrameBufferDescFragment::DefineAttachmentHelper DefineAttachment(uint64_t semantic);
 		void AddSubpass(
 			Techniques::FrameBufferDescFragment::SubpassDesc&& subpass,
-			std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> techniqueDelegate = nullptr,
+			std::shared_ptr<Techniques::ITechniqueDelegate> techniqueDelegate = nullptr,
 			Techniques::BatchFlags::BitField batchFilter = Techniques::BatchFlags::Opaque,
 			ParameterBox&& sequencerSelectors = {},
 			std::shared_ptr<Techniques::IShaderResourceDelegate> shaderResourceDelegates = {});
@@ -38,17 +38,17 @@ namespace RenderCore { namespace LightingEngine
 			IteratorRange<const Techniques::FrameBufferDescFragment::SubpassDesc*> subpasses,
 			std::function<void(LightingTechniqueIterator&)>&& fn);
 
-		RenderStepFragmentInterface(RenderCore::PipelineType);
+		RenderStepFragmentInterface(PipelineType = PipelineType::Graphics);
 		~RenderStepFragmentInterface();
 
-		const RenderCore::Techniques::FrameBufferDescFragment& GetFrameBufferDescFragment() const { return _frameBufferDescFragment; }
+		const Techniques::FrameBufferDescFragment& GetFrameBufferDescFragment() const { return _frameBufferDescFragment; }
 		PipelineType GetPipelineType() const { return _frameBufferDescFragment._pipelineType; }
 
 		struct SubpassExtension
 		{
 			enum Type { ExecuteDrawables, ExecuteSky, CallLightingIteratorFunction, HandledByPrevious };
 			Type _type;
-			std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _techniqueDelegate;
+			std::shared_ptr<Techniques::ITechniqueDelegate> _techniqueDelegate;
 			ParameterBox _sequencerSelectors;
 			Techniques::BatchFlags::BitField _batchFilter;
 			std::shared_ptr<Techniques::IShaderResourceDelegate> _shaderResourceDelegate;
@@ -56,24 +56,24 @@ namespace RenderCore { namespace LightingEngine
 		};
 		IteratorRange<const SubpassExtension*> GetSubpassAddendums() const { return MakeIteratorRange(_subpassExtensions); }
 	private:
-		RenderCore::Techniques::FrameBufferDescFragment _frameBufferDescFragment;
+		Techniques::FrameBufferDescFragment _frameBufferDescFragment;
 		std::vector<SubpassExtension> _subpassExtensions;
 	};
 
 	class RenderStepFragmentInstance
 	{
 	public:
-		const RenderCore::Techniques::SequencerConfig* GetSequencerConfig() const;
-		const RenderCore::Techniques::RenderPassInstance& GetRenderPassInstance() const { return *_rpi; }
-		RenderCore::Techniques::RenderPassInstance& GetRenderPassInstance() { return *_rpi; }
+		const Techniques::SequencerConfig* GetSequencerConfig() const;
+		const Techniques::RenderPassInstance& GetRenderPassInstance() const { return *_rpi; }
+		Techniques::RenderPassInstance& GetRenderPassInstance() { return *_rpi; }
 
 		RenderStepFragmentInstance(
-			RenderCore::Techniques::RenderPassInstance& rpi,
-			IteratorRange<const std::shared_ptr<RenderCore::Techniques::SequencerConfig>*> sequencerConfigs);
+			Techniques::RenderPassInstance& rpi,
+			IteratorRange<const std::shared_ptr<Techniques::SequencerConfig>*> sequencerConfigs);
 		RenderStepFragmentInstance();
 	private:
-		RenderCore::Techniques::RenderPassInstance* _rpi;
-		IteratorRange<const std::shared_ptr<RenderCore::Techniques::SequencerConfig>*> _sequencerConfigs;
+		Techniques::RenderPassInstance* _rpi;
+		IteratorRange<const std::shared_ptr<Techniques::SequencerConfig>*> _sequencerConfigs;
 		unsigned _firstSubpassIndex;
 	};
 

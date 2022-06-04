@@ -760,6 +760,7 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::PreparedResourcesVisibility _starterVisibility;
 			};
 			auto futures = std::make_shared<Futures>();
+			futures->_starterVisibility._bufferUploadsVisibility = _prepareResourcesIterator->_compiledTechnique->GetCompletionCommandList();
 
 			for (auto& c:_prepareResourcesIterator->_requiredResources) {
 				auto status = c.wait_for(std::chrono::milliseconds(0));

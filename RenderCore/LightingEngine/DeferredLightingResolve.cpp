@@ -81,7 +81,7 @@ namespace RenderCore { namespace LightingEngine
 		true, StencilSky, 0xff, 
 		StencilDesc{StencilOp::DontWrite, StencilOp::DontWrite, StencilOp::DontWrite, CompareOp::Equal}};
 
-	static std::shared_ptr<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>> BuildLightResolveOperator(
+	static std::future<Techniques::GraphicsPipelineAndLayout> BuildLightResolveOperator(
 		Techniques::PipelineCollection& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		const LightSourceOperatorDesc& desc,
@@ -141,24 +141,32 @@ namespace RenderCore { namespace LightingEngine
 		pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = DEFERRED_LIGHT_OPERATOR_PIXEL_HLSL ":main";
 
 		const ParameterBox* selectorList[] { &selectors };
-		auto marker = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
+		std::promise<Techniques::GraphicsPipelineAndLayout> promise;
+		auto result = promise.get_future();
 		pipelineCollection.CreateGraphicsPipeline(
-			marker->AdoptPromise(),
+			std::move(promise),
 			pipelineLayout, pipelineDesc, MakeIteratorRange(selectorList),
 			inputStates, fbTarget);
-		return marker;
+		return result;
 	}
 
-	::Assets::PtrToMarkerPtr<IDescriptorSet> BuildFixedLightResolveDescriptorSet(
+	struct DescSetAndCmdListId
+	{
+		std::shared_ptr<IDescriptorSet> _descSet;
+		BufferUploads::CommandListID _completionCommandList = 0;
+	};
+
+	std::future<DescSetAndCmdListId> BuildFixedLightResolveDescriptorSet(
 		std::shared_ptr<IDevice> device,
 		const DescriptorSetSignature& descSetLayout)
 	{
 		auto balancedNoiseFuture = ::Assets::MakeAssetPtr<RenderCore::Techniques::DeferredShaderResource>("xleres/DefaultResources/balanced_noise.dds:LT");
 
-		auto result = std::make_shared<::Assets::MarkerPtr<IDescriptorSet>>();
+		std::promise<DescSetAndCmdListId> promise;
+		auto future = promise.get_future();
 		::Assets::WhenAll(balancedNoiseFuture).ThenConstructToPromise(
-			result->AdoptPromise(),
-			[device, descSetLayout=descSetLayout](std::shared_ptr<RenderCore::Techniques::DeferredShaderResource> balancedNoise) {
+			std::move(promise),
+			[device, descSetLayout=descSetLayout](auto balancedNoise) {
 				DescriptorSetInitializer::BindTypeAndIdx bindTypes[4];
 				bindTypes[0] = { DescriptorSetInitializer::BindType::Empty };
 				bindTypes[1] = { DescriptorSetInitializer::BindType::ResourceView, 0 };
@@ -167,9 +175,12 @@ namespace RenderCore { namespace LightingEngine
 				inits._slotBindings = MakeIteratorRange(bindTypes);
 				inits._bindItems._resourceViews = MakeIteratorRange(srv);
 				inits._signature = &descSetLayout;
-				return device->CreateDescriptorSet(inits);
+				DescSetAndCmdListId result;
+				result._descSet = device->CreateDescriptorSet(inits);
+				result._completionCommandList = balancedNoise->GetCompletionCommandList();
+				return result;
 			});
-		return result;
+		return future;
 	}
 
 	static bool IsCompatible(const LightSourceOperatorDesc& lightSource, const ShadowOperatorDesc& shadowOp)
@@ -201,8 +212,7 @@ namespace RenderCore { namespace LightingEngine
 			LightSourceOperatorDesc::Flags::BitField _flags = 0;
 			LightSourceShape _stencilingShape = LightSourceShape::Sphere;
 		};
-		using PipelineFuture = std::shared_ptr<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>;
-		std::vector<PipelineFuture> pipelineFutures;
+		std::vector<std::future<Techniques::GraphicsPipelineAndLayout>> pipelineFutures;
 		std::vector<AttachedData> attachedData;
 		std::vector<std::tuple<ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned>> operatorToPipelineMap;
 		
@@ -276,29 +286,41 @@ namespace RenderCore { namespace LightingEngine
 		auto fixedDescSetFuture = BuildFixedLightResolveDescriptorSet(pipelineCollection.GetDevice(), *sig);
 		auto device = pipelineCollection.GetDevice();
 
+		struct PendingHelper
+		{
+			std::vector<std::future<Techniques::GraphicsPipelineAndLayout>> _pipelineFutures;
+			std::future<DescSetAndCmdListId> _fixedDescSetFuture;
+		};
+		auto pendingHelper = std::make_shared<PendingHelper>();
+		pendingHelper->_pipelineFutures = std::move(pipelineFutures);
+		pendingHelper->_fixedDescSetFuture = std::move(fixedDescSetFuture);
+
 		auto result = std::make_shared<::Assets::MarkerPtr<LightResolveOperators>>("light-operators");
 		::Assets::PollToPromise(
 			result->AdoptPromise(),
-			[pipelineFutures, fixedDescSetFuture]() {
-				for (const auto& p:pipelineFutures)
-					if (p->IsBkgrndPending()) 
+			[pendingHelper](auto timeout) {
+				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+				for (auto& p:pendingHelper->_pipelineFutures)
+					if (p.wait_until(timeoutTime) == std::future_status::timeout)
 						return ::Assets::PollStatus::Continue;
-				if (fixedDescSetFuture->IsBkgrndPending())
+				if (pendingHelper->_fixedDescSetFuture.wait_until(timeoutTime) == std::future_status::timeout)
 					return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
 			},
-			[pipelineFutures, fixedDescSetFuture, finalResult=std::move(finalResult), operatorToPipelineMap=std::move(operatorToPipelineMap), attachedData=std::move(attachedData), device=std::move(device)]() {
+			[pendingHelper, finalResult=std::move(finalResult), operatorToPipelineMap=std::move(operatorToPipelineMap), attachedData=std::move(attachedData), device=std::move(device)]() {
 				using namespace ::Assets;
 				std::vector<Techniques::GraphicsPipelineAndLayout> actualized;
-				actualized.resize(pipelineFutures.size());
+				actualized.resize(pendingHelper->_pipelineFutures.size());
 				auto a=actualized.begin();
-				for (const auto& p:pipelineFutures) {
-					*a = p->ActualizeBkgrnd();
+				for (auto& p:pendingHelper->_pipelineFutures) {
+					*a = p.get();
 					assert(a->_pipeline);
 					++a;
 				}
 
-				finalResult->_fixedDescriptorSet = fixedDescSetFuture->ActualizeBkgrnd();
+				auto descSetAndCmdList = pendingHelper->_fixedDescSetFuture.get();
+				finalResult->_fixedDescriptorSet = descSetAndCmdList._descSet;
+				finalResult->_completionCommandList = descSetAndCmdList._completionCommandList;
 
 				finalResult->_depVal = ::Assets::GetDepValSys().Make();
 				finalResult->_pipelines.reserve(actualized.size());

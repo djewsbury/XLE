@@ -14,6 +14,7 @@
 
 namespace RenderCore { class FrameBufferDesc; }
 namespace RenderCore { namespace Techniques { class RenderPassInstance; }}
+namespace BufferUploads { using CommandListID = uint32_t; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -52,6 +53,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<RenderCore::IDescriptorSet> _fixedDescriptorSet;
         bool _debuggingOn = false;
 		LightStencilingGeometry _stencilingGeometry;
+		BufferUploads::CommandListID _completionCommandList = 0;
 
 		std::unique_ptr<Internal::ILightBase> CreateLightSource(ILightScene::LightOperatorId);
 
