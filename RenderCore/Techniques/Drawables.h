@@ -192,8 +192,12 @@ namespace RenderCore { namespace Techniques
 
 	class IPipelineAcceleratorPool;
 	class SequencerConfig;
+	using VisibilityMarkerId = uint32_t;
 
-	struct DrawOptions {};
+	struct DrawOptions
+	{
+		std::optional<VisibilityMarkerId> _pipelineAcceleratorsVisibility;	// when empty, the marker in the ParsingContext is used
+	};
 		
 	void Draw(
 		ParsingContext& parserContext,
@@ -202,7 +206,6 @@ namespace RenderCore { namespace Techniques
 		const DrawablesPacket& drawablePkt,
 		const DrawOptions& drawOptions = {});
 
-	using VisibilityMarkerId = uint32_t;
 	struct PreparedResourcesVisibility
 	{
 		VisibilityMarkerId _pipelineAcceleratorsVisibility = 0;

@@ -65,6 +65,7 @@ namespace RenderCore { namespace Techniques
         assert(size_t(_internal.get()) % 16 == 0);
 
 		_uniformDelegateManager = _techniqueContext->_uniformDelegateManager;
+        _pipelineAcceleratorsVisibility = 0;
     }
 
     ParsingContext::~ParsingContext() {}

@@ -140,7 +140,7 @@ namespace UnitTests
 		// Start a render pass and execute the operators we've created
 		std::shared_ptr<IResource> outputResource;
 		{
-			Techniques::ParsingContext parsingContext{*testApparatus._techniqueContext, *threadContext};
+			auto parsingContext = BeginParsingContext(testApparatus, *threadContext);
 			Techniques::RenderPassInstance rpi{parsingContext, stitch};
 			parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*testHelper->_device));
 			parsingContext.GetUniformDelegateManager()->BringUpToDateGraphics(parsingContext);

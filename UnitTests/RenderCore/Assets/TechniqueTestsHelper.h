@@ -46,4 +46,6 @@ namespace UnitTests
 		TechniqueTestApparatus& testApparatus,
 		const RenderCore::Techniques::SequencerConfig& sequencerConfig,
 		const RenderCore::Techniques::DrawablesPacket& drawablePkt);
+
+	RenderCore::Techniques::ParsingContext BeginParsingContext(TechniqueTestApparatus& testApparatus, RenderCore::IThreadContext& threadContext);
 }

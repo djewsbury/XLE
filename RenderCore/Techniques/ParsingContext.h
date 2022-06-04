@@ -25,6 +25,7 @@ namespace RenderCore { namespace Techniques
     class FragmentStitchingContext;
     class RenderPassInstance;
     class IUniformDelegateManager;
+    using VisibilityMarkerId = uint32_t;
         
     /// <summary>Manages critical shader state</summary>
     /// Certain system variables are bound to the shaders, and managed by higher
@@ -65,9 +66,10 @@ namespace RenderCore { namespace Techniques
         BufferUploads::CommandListID _requiredBufferUploadsCommandList = 0;
         void RequireCommandList(BufferUploads::CommandListID);
 
+        VisibilityMarkerId GetPipelineAcceleratorsVisibility() const;
+        void SetPipelineAcceleratorsVisibility(VisibilityMarkerId newMarkerId);
+
 			//  ----------------- Frame buffer / render pass state -----------------
-        /*std::vector<PreregisteredAttachment> _preregisteredAttachments;
-        FrameBufferProperties _fbProps;*/
         FragmentStitchingContext& GetFragmentStitchingContext();
 
 			//  ----------------- Overlays for late rendering -----------------
@@ -117,8 +119,7 @@ namespace RenderCore { namespace Techniques
 
 		ParameterBox                        _subframeShaderSelectors;
         std::unique_ptr<FragmentStitchingContext> _stitchingContext;
-
-		
+        VisibilityMarkerId                  _pipelineAcceleratorsVisibility;
     };
 
     /// <summary>Utility macros for catching asset exceptions</summary>
@@ -155,5 +156,9 @@ namespace RenderCore { namespace Techniques
             _requiredBufferUploadsCommandList = std::max(cmdList, _requiredBufferUploadsCommandList);
         assert(_requiredBufferUploadsCommandList != ~0u);
     }
+
+    inline VisibilityMarkerId ParsingContext::GetPipelineAcceleratorsVisibility() const { return _pipelineAcceleratorsVisibility; }
+    inline void ParsingContext::SetPipelineAcceleratorsVisibility(VisibilityMarkerId newMarkerId) { _pipelineAcceleratorsVisibility = newMarkerId; }
+
 }}
 

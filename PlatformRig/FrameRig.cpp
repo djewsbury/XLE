@@ -168,6 +168,11 @@ namespace PlatformRig
                 //  It appears that the driver might forget bound constant buffers
                 //  during the begin frame or present
             context->InvalidateCachedState();
+            
+            if (_pimpl->_techniqueContext._pipelineAccelerators) {
+                auto newVisibility = _pimpl->_techniqueContext._pipelineAccelerators->VisibilityBarrier();
+                parserContext.SetPipelineAcceleratorsVisibility(newVisibility);
+            }
 
 			// Bind the presentation target as the default output for the parser context
 			// (including setting the normalized width and height)
@@ -405,6 +410,7 @@ namespace PlatformRig
             techniqueContext._drawablesPool = drawingApparatus->_drawablesPool;
             techniqueContext._graphicsPipelinePool = drawingApparatus->_graphicsPipelinePool;
             techniqueContext._uniformDelegateManager = drawingApparatus->_mainUniformDelegateManager;
+            techniqueContext._pipelineAccelerators = drawingApparatus->_pipelineAccelerators;
         }
         techniqueContext._attachmentPool = frameRenderingApparatus._attachmentPool;
         techniqueContext._frameBufferPool = frameRenderingApparatus._frameBufferPool;

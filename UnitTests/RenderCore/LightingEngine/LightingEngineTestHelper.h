@@ -65,11 +65,15 @@ namespace UnitTests
 
 	void ParseScene(RenderCore::LightingEngine::LightingTechniqueInstance& lightingIterator, ToolsRig::IDrawablesWriter& drawableWriter);
 
-	RenderCore::Techniques::ParsingContext InitializeParsingContext(
-		RenderCore::Techniques::TechniqueContext& techniqueContext,
-		const RenderCore::ResourceDesc& targetDesc,
-		const RenderCore::Techniques::CameraDesc& camera,
+	RenderCore::Techniques::ParsingContext BeginParsingContext(
+		LightingEngineTestApparatus& testApparatus,
 		RenderCore::IThreadContext& threadContext);
+
+	RenderCore::Techniques::ParsingContext BeginParsingContext(
+		LightingEngineTestApparatus& testApparatus,
+		RenderCore::IThreadContext& threadContext,
+		const RenderCore::ResourceDesc& targetDesc,
+		const RenderCore::Techniques::CameraDesc& camera);
 
 	RenderCore::Techniques::PreparedResourcesVisibility PrepareAndStall(
 		LightingEngineTestApparatus& testApparatus,

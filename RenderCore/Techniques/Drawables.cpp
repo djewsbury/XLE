@@ -68,7 +68,8 @@ namespace RenderCore { namespace Techniques
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt,
 		const Internal::TemporaryStorageLocator& temporaryVB, 
-		const Internal::TemporaryStorageLocator& temporaryIB)
+		const Internal::TemporaryStorageLocator& temporaryIB,
+		VisibilityMarkerId acceleratorVisibilityId)
 	{
 		auto& uniformDelegateMan = *parserContext.GetUniformDelegateManager();
 		uniformDelegateMan.InvalidateUniforms();
@@ -99,8 +100,6 @@ namespace RenderCore { namespace Techniques
 		unsigned justMatDescSetCount = 0;
 		unsigned executeCount = 0;
 		
-		uint32_t acceleratorVisibilityId = ~0u;
-
 		TRY {
 			for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d, ++idx) {
 				const auto& drawable = *(Drawable*)d.get();
@@ -226,8 +225,11 @@ namespace RenderCore { namespace Techniques
 			temporaryIB = { mappedData.GetResource().get(), mappedData.GetBeginAndEndInResource().first, mappedData.GetBeginAndEndInResource().second };
 		}
 		assert(drawablePkt.GetStorage(DrawablesPacket::Storage::Uniform).empty());
+		assert(drawOptions._pipelineAcceleratorsVisibility.has_value() || &pipelineAccelerators == parserContext.GetTechniqueContext()._pipelineAccelerators.get());		// if we're not using the default pipeline accelerators, we should explicitly specify the visibility
 
-		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB);
+		Draw(
+			metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB, 
+			drawOptions._pipelineAcceleratorsVisibility.value_or(parserContext.GetPipelineAcceleratorsVisibility()));
 	}
 
 	void Draw(

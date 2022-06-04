@@ -113,10 +113,7 @@ namespace RenderCore { namespace Techniques
 
 		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
 		_frameBarrierBinding = subFrameEvents._onFrameBarrier.Bind(
-			[pa=std::weak_ptr<IPipelineAcceleratorPool>{_pipelineAccelerators},
-			 da=std::weak_ptr<IDeformAcceleratorPool>{_deformAccelerators}]() {
-				auto l = pa.lock();
-				if (l) l->VisibilityBarrier();
+			[da=std::weak_ptr<IDeformAcceleratorPool>{_deformAccelerators}]() {
 				auto l2 = da.lock();
 				if (l2) l2->OnFrameBarrier();
 			});

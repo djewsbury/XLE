@@ -240,7 +240,7 @@ namespace UnitTests
 			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
 			TextureDesc::Plain2D(256, 256, RenderCore::Format::R8G8B8A8_UNORM),
 			"temporary-out");
-		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera, *threadContext);
+		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
 
 		const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
 		auto drawablesWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators)

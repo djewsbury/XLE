@@ -242,7 +242,7 @@ namespace UnitTests
 	const uint64_t s_attachmentProbeTarget = 100;
 	const uint64_t s_attachmentProbeDepth = 101;
 
-	static RenderCore::Techniques::ParsingContext InitializeParsingContext(RenderCore::Techniques::TechniqueContext& techniqueContext, RenderCore::IThreadContext& threadContext)
+	static RenderCore::Techniques::ParsingContext BeginMassProbesParsingContext(LightingEngineTestApparatus& testApparatus, RenderCore::IThreadContext& threadContext)
 	{
 		using namespace RenderCore;
 
@@ -268,7 +268,7 @@ namespace UnitTests
 		};
 		FrameBufferProperties fbProps { s_testResolution[0], s_testResolution[1] };
 
-		Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
+		auto parsingContext = BeginMassProbesParsingContext(testApparatus, threadContext);
 
 		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 		stitchingContext._workingProps = fbProps;
@@ -843,7 +843,9 @@ namespace UnitTests
 		{
 			RenderCore::Techniques::DrawablesPacket pkt;
 			drawablesWriter.WriteDrawables(pkt);
-			PrepareAndStall(testApparatus, *tester._cfg, pkt);
+			auto newVisibility = PrepareAndStall(testApparatus, *tester._cfg, pkt);
+			parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
+			parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 		}
 		tester.Execute(threadContext, parsingContext, testApparatus, cameras, drawablesWriter);
 	}
@@ -856,7 +858,7 @@ namespace UnitTests
 		auto utdatamnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
-		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, *threadContext);
+		auto parsingContext = BeginMassProbesParsingContext(testApparatus, *threadContext);
 
 		const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
 		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators)

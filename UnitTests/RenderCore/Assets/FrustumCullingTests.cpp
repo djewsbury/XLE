@@ -235,7 +235,7 @@ namespace UnitTests
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
-				Techniques::ParsingContext parsingContext{*testApparatus._techniqueContext, *threadContext};
+				auto parsingContext = BeginParsingContext(testApparatus, *threadContext);
 				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(visCamera, UInt2{ targetDesc._textureDesc._width, targetDesc._textureDesc._height });
 				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 				Techniques::CommonResourceBox commonResBox{*testHelper->_device};

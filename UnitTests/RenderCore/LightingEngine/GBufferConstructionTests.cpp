@@ -104,7 +104,7 @@ namespace UnitTests
 	static UInt2 s_testResolution { 2048, 2048 };
 
 	static RenderCore::Techniques::ParsingContext InitializeParsingContext(
-		RenderCore::Techniques::TechniqueContext& techniqueContext,
+		LightingEngineTestApparatus& testApparatus,
 		const RenderCore::Techniques::CameraDesc& camera,
 		RenderCore::IThreadContext& threadContext)
 	{
@@ -177,7 +177,7 @@ namespace UnitTests
 		};
 		FrameBufferProperties fbProps { s_testResolution[0], s_testResolution[1] };
 
-		Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
+		auto parsingContext = BeginParsingContext(testApparatus, threadContext);
 		parsingContext.GetProjectionDesc() = BuildProjectionDesc(camera, s_testResolution);
 
 		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
@@ -374,7 +374,7 @@ namespace UnitTests
 				INFO("Camera: " + std::to_string(c));
 				testHelper->BeginFrameCapture();
 				const auto& camera = cameras[c];
-				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, camera, *threadContext);
+				auto parsingContext = InitializeParsingContext(testApparatus, camera, *threadContext);
 
 				auto globalDelegate = std::make_shared<GBufferConstructionUnitTestGlobalUniforms>();
 				parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(globalDelegate);

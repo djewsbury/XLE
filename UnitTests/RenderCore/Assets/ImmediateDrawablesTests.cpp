@@ -137,7 +137,7 @@ namespace UnitTests
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
-				RenderCore::Techniques::ParsingContext parsingContext { *techniqueContext, *threadContext };
+				auto parsingContext = RenderCore::Techniques::ParsingContext { *techniqueContext, *threadContext };
 				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 				Techniques::CameraDesc camera {};
 				SetTranslation(camera._cameraToWorld, ExtractForward_Cam(camera._cameraToWorld) * -5.0f);

@@ -48,8 +48,6 @@ namespace UnitTests
 		_xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 		_metalTestHelper = MakeTestHelper();
 
-		// Verbose.SetConfiguration(OSServices::MessageTargetConfiguration{});
-
 		_techniqueServices = std::make_shared<Techniques::Services>(_metalTestHelper->_device);
 		_techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), RenderCore::Assets::CreateDDSTextureLoader());
 		_techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), RenderCore::Assets::CreateWICTextureLoader());
@@ -77,8 +75,10 @@ namespace UnitTests
 		_techniqueContext->_commonResources = _commonResources;
 		_techniqueContext->_attachmentPool = std::make_shared<Techniques::AttachmentPool>(_metalTestHelper->_device);
 		_techniqueContext->_frameBufferPool = Techniques::CreateFrameBufferPool();
-		_techniqueContext->_drawablesPool = RenderCore::Techniques::CreateDrawablesPool();
+		_techniqueContext->_drawablesPool = _drawablesPool;
 		_techniqueContext->_graphicsPipelinePool = _pipelinePool;
+		_techniqueContext->_pipelineAccelerators = _pipelineAccelerators;
+		_techniqueContext->_systemAttachmentFormats = Techniques::CalculateDefaultSystemFormats(*_metalTestHelper->_device);
 
 		_techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
 		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *MakeSequencerDescriptorSetLayout()->GetLayout(), *_metalTestHelper->_device);
@@ -270,11 +270,18 @@ namespace UnitTests
 		return std::make_shared<RenderCore::Techniques::DescriptorSetLayoutAndBinding>(layout, 0, "Sequencer", RenderCore::PipelineType::Graphics, ::Assets::DependencyValidation{});
 	}
 
-	RenderCore::Techniques::ParsingContext InitializeParsingContext(
-		RenderCore::Techniques::TechniqueContext& techniqueContext,
+	RenderCore::Techniques::ParsingContext BeginParsingContext(LightingEngineTestApparatus& testApparatus, RenderCore::IThreadContext& threadContext)
+	{
+		RenderCore::Techniques::ParsingContext parsingContext{*testApparatus._techniqueContext, threadContext};
+		parsingContext.SetPipelineAcceleratorsVisibility(testApparatus._pipelineAccelerators->VisibilityBarrier());
+		return parsingContext;
+	}
+
+	RenderCore::Techniques::ParsingContext BeginParsingContext(
+		LightingEngineTestApparatus& testApparatus,
+		RenderCore::IThreadContext& threadContext,
 		const RenderCore::ResourceDesc& targetDesc,
-		const RenderCore::Techniques::CameraDesc& camera,
-		RenderCore::IThreadContext& threadContext)
+		const RenderCore::Techniques::CameraDesc& camera)
 	{
 		using namespace RenderCore;
 
@@ -287,7 +294,7 @@ namespace UnitTests
 		};
 		FrameBufferProperties fbProps { targetDesc._textureDesc._width, targetDesc._textureDesc._height };
 
-		Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
+		auto parsingContext = BeginParsingContext(testApparatus, threadContext);
 		parsingContext.GetProjectionDesc() = BuildProjectionDesc(camera, UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
 		
 		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();

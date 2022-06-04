@@ -8,6 +8,8 @@
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/Techniques/Drawables.h"
 #include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
+#include "../../../RenderCore/Techniques/ParsingContext.h"
+#include "../../../RenderCore/Techniques/RenderPass.h"
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../Assets/AssetSetManager.h"
 #include "../../../Assets/AssetServices.h"
@@ -44,6 +46,9 @@ namespace UnitTests
 		_techniqueContext->_commonResources = _commonResources;
 		_techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
 		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *_sequencerDescSetLayout->GetLayout(), *testHelper._device);
+		_techniqueContext->_pipelineAccelerators = _pipelineAccelerators;
+		_techniqueContext->_drawablesPool = _drawablesPool;
+		_techniqueContext->_systemAttachmentFormats = Techniques::CalculateDefaultSystemFormats(*testHelper._device);
 		// _techniqueContext->_uniformDelegateManager->AddShaderResourceDelegate(std::make_shared<SystemUniformsDelegate>(*testHelper._device));
 	}
 
@@ -70,6 +75,13 @@ namespace UnitTests
 			*testApparatus._pipelineAccelerators->GetDevice()->GetImmediateContext(),
 			requiredVisibility._bufferUploadsVisibility);
 		return requiredVisibility;
+	}
+
+	RenderCore::Techniques::ParsingContext BeginParsingContext(TechniqueTestApparatus& testApparatus, RenderCore::IThreadContext& threadContext)
+	{
+		RenderCore::Techniques::ParsingContext parsingContext{*testApparatus._techniqueContext, threadContext};
+		parsingContext.SetPipelineAcceleratorsVisibility(testApparatus._pipelineAccelerators->VisibilityBarrier());
+		return parsingContext;
 	}
 
 	const char TechniqueTestApparatus::UnitTestPipelineLayout[] = R"--(

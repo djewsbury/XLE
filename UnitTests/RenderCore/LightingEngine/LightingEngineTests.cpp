@@ -158,7 +158,7 @@ namespace UnitTests
 			camera._bottom = -3.0f;
 		}
 
-		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera, *threadContext);
+		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
 		parsingContext.GetTechniqueContext()._attachmentPool->Bind(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget());
 
 		testHelper->BeginFrameCapture();
@@ -234,7 +234,9 @@ namespace UnitTests
 			{
 				RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*lightingTechnique);
 				ParseScene(prepareLightingIterator, *drawableWriter);
-				PrepareAndStall(testApparatus, prepareLightingIterator.GetResourcePreparationMarker());
+				auto newVisibility = PrepareAndStall(testApparatus, prepareLightingIterator.GetResourcePreparationMarker());
+				parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
+				parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 			}
 
 			{
@@ -268,7 +270,7 @@ namespace UnitTests
 		RenderCore::Techniques::CameraDesc camera;
 		camera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-8.0f, 5.f, 0.f}), Float3{0.0f, 1.0f, 0.0f}, Float3{-8.0f, 5.f, 0.f});
 		
-		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera, *threadContext);
+		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
 		parsingContext.GetTechniqueContext()._attachmentPool->Bind(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget());
 
 		testHelper->BeginFrameCapture();
@@ -309,7 +311,9 @@ namespace UnitTests
 			{
 				RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*lightingTechnique);
 				ParseScene(prepareLightingIterator, *drawableWriter);
-				PrepareAndStall(testApparatus, prepareLightingIterator.GetResourcePreparationMarker());
+				auto newVisibility = PrepareAndStall(testApparatus, prepareLightingIterator.GetResourcePreparationMarker());
+				parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
+				parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 			}
 
 			{

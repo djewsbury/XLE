@@ -990,7 +990,7 @@ namespace UnitTests
 			RenderCore::ClearValue clearValues[] = { RenderCore::MakeClearValue(1.0f, 1.0f, 1.f) };
 			auto rpi = fbHelper.BeginRenderPass(*threadContext, MakeIteratorRange(clearValues));
 			auto techContext = testHelper.CreateTechniqueContext();
-			RenderCore::Techniques::ParsingContext parserContext(techContext, *threadContext);
+			RenderCore::Techniques::ParsingContext parserContext{techContext, *threadContext};
 			auto defaultViewport = fbHelper.GetDefaultViewport();
 			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(StartingCamera(cameraMins, cameraMaxs), {defaultViewport._width, defaultViewport._height});
 			parserContext.GetViewport() = defaultViewport;

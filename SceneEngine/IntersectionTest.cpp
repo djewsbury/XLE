@@ -15,6 +15,7 @@
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/Drawables.h"
 #include "../RenderCore/Techniques/Apparatuses.h"
+#include "../RenderCore/Techniques/PipelineAccelerator.h"
 
 #include "../Math/Transformations.h"
 #include "../Math/Vector.h"
@@ -159,6 +160,9 @@ namespace SceneEngine
         RenderCore::Techniques::TechniqueContext techniqueContext;
         techniqueContext._commonResources = drawingApparatus._commonResources;
         techniqueContext._uniformDelegateManager = drawingApparatus._mainUniformDelegateManager;
+        techniqueContext._drawablesPool = drawingApparatus._drawablesPool;
+        techniqueContext._pipelineAccelerators = drawingApparatus._pipelineAccelerators;
+        techniqueContext._graphicsPipelinePool = drawingApparatus._graphicsPipelinePool;
         return techniqueContext;
     }
 
@@ -173,6 +177,7 @@ namespace SceneEngine
 		auto& threadContext = *RenderCore::Techniques::GetThreadContext();
         auto techniqueContext = MakeTechniqueContext(*context._drawingApparatus);
 		RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
+        parsingContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
         parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(context._cameraDesc, context._viewportMaxs - context._viewportMins);
 
         if ((filter & Type::Terrain) && _terrainManager) {
@@ -305,6 +310,7 @@ namespace SceneEngine
                 {
                     auto techniqueContext = MakeTechniqueContext(*context._drawingApparatus);
 					RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
+                    parsingContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
 
                     // note --  we could do this all in a single render call, except that there
                     //          is no way to associate a low level intersection result with a specific

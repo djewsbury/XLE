@@ -237,7 +237,9 @@ namespace UnitTests
 		if (1) {
 			Techniques::DrawablesPacket pkt;
 			drawableWriter.WriteDrawables(pkt);
-			PrepareAndStall(testApparatus, *sequencerConfig, pkt);
+			auto newVisibility = PrepareAndStall(testApparatus, *sequencerConfig, pkt);
+			parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
+			parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 			Techniques::Draw(
 				parsingContext,
 				*testApparatus._pipelineAccelerators,
@@ -358,7 +360,7 @@ namespace UnitTests
 		camera._top = 2.f;
 		camera._right = 2.f * aspectRatio;
 		camera._bottom = -2.f;
-		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera, *threadContext);
+		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
 		parsingContext.GetFragmentStitchingContext()._workingProps._outputWidth = workingRes[0];
 		parsingContext.GetFragmentStitchingContext()._workingProps._outputHeight = workingRes[1];
 

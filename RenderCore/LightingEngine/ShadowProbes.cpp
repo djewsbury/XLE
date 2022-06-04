@@ -108,7 +108,9 @@ namespace RenderCore { namespace LightingEngine
 				uniformDelegateMan->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *_pimpl->_sequencerDescSetLayout, *threadContext.GetDevice());
 				_techContext._uniformDelegateManager = uniformDelegateMan;
 				_techContext._commonResources = Techniques::Services::GetCommonResources();
+				_techContext._pipelineAccelerators = _pimpl->_pipelineAccelerators;
 				_parsingContext = std::make_unique<Techniques::ParsingContext>(_techContext, threadContext);
+				_parsingContext->SetPipelineAcceleratorsVisibility(_techContext._pipelineAccelerators->VisibilityBarrier());
 				for (const auto&a:preregisteredAttachments) _parsingContext->GetFragmentStitchingContext().DefineAttachment(a);
 			}
 

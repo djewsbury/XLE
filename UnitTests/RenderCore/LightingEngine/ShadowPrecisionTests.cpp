@@ -113,12 +113,12 @@ namespace UnitTests
 		return future.Actualize();
 	}
 
-	static void PrepareResources(ToolsRig::IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
+	static RenderCore::Techniques::PreparedResourcesVisibility PrepareResources(ToolsRig::IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
 	{
 		// stall until all resources are ready
 		RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(lightingTechnique);
 		ParseScene(prepareLightingIterator, drawablesWriter);
-		PrepareAndStall(testApparatus, prepareLightingIterator.GetResourcePreparationMarker());
+		return PrepareAndStall(testApparatus, prepareLightingIterator.GetResourcePreparationMarker());
 	}
 
 	static void PumpBufferUploads(LightingEngineTestApparatus& testApparatus)
@@ -187,7 +187,7 @@ namespace UnitTests
 					"saved-image");
 				auto stitchedImage = testHelper->_device->CreateResource(stitchedImageDesc);
 				UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, stripeTargetDesc);
-				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, stripeTargetDesc, camera, *threadContext);
+				auto parsingContext = BeginParsingContext(testApparatus, *threadContext, stripeTargetDesc, camera);
 				parsingContext.GetTechniqueContext()._attachmentPool->Bind(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget());
 
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
@@ -199,7 +199,9 @@ namespace UnitTests
 				PumpBufferUploads(testApparatus);
 
 				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateFlatPlaneDrawableWriter();
-				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
+				auto newVisibility = PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
+				parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
+				parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
 				for (unsigned c=0; c<stripes; ++c) {
@@ -235,7 +237,7 @@ namespace UnitTests
 					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
 					"temporary-out");
 
-				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera, *threadContext);
+				auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 					testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
@@ -245,7 +247,9 @@ namespace UnitTests
 				PumpBufferUploads(testApparatus);
 
 				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateSharpContactDrawableWriter();
-				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
+				auto newVisibility = PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
+				parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
+				parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
 				auto lightId = ConfigureLightScene(lightScene, gPI/4.0f);
@@ -476,7 +480,7 @@ namespace UnitTests
 					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
 					"temporary-out");
 
-				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, sceneCamera, *threadContext);
+				auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, sceneCamera);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 					testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
@@ -489,7 +493,9 @@ namespace UnitTests
 				const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
 				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators)
 					.CreateShapeWorldDrawableWriter(worldMins, worldMaxs);
-				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
+				auto newVisibility = PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
+				parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
+				parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
 				auto lightId = lightScene.CreateLightSource(0);

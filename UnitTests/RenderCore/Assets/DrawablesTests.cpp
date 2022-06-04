@@ -241,10 +241,12 @@ namespace UnitTests
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
-				Techniques::ParsingContext parsingContext{*techniqueTestApparatus._techniqueContext, *threadContext};
+				auto parsingContext = BeginParsingContext(techniqueTestApparatus, *threadContext);
 				parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(globalDelegate);
 				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
-				PrepareAndStall(techniqueTestApparatus, *cfgId, pkt);
+				auto newVisibility = PrepareAndStall(techniqueTestApparatus, *cfgId, pkt);
+				parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
+				parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 				Techniques::Draw(
 					parsingContext, 
 					*pipelineAcceleratorPool,
@@ -296,7 +298,7 @@ namespace UnitTests
 			for (unsigned c=0; c<1; ++c) {
 				{
 					auto rpi = fbHelper.BeginRenderPass(*threadContext);
-					Techniques::ParsingContext parsingContext{*techniqueTestApparatus._techniqueContext, *threadContext};
+					auto parsingContext = BeginParsingContext(techniqueTestApparatus, *threadContext);
 					parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 					parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(globalDelegate);
 					
@@ -440,7 +442,7 @@ namespace UnitTests
 		auto udel1 = std::make_shared<UniformDel>();
 		
 		auto threadContext = testHelper->_device->GetImmediateContext();
-		ParsingContext parsingContext(*testApparatus._techniqueContext, *threadContext);
+		auto parsingContext = BeginParsingContext(testApparatus, *threadContext);
 
 		RenderCore::Assets::PredefinedDescriptorSetLayout fakeSequencerDescSet{s_fakeSequencerDescSet, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{}};
 		

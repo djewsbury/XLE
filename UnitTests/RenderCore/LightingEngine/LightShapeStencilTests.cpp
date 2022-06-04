@@ -66,12 +66,12 @@ namespace UnitTests
 		return future.Actualize();
 	}
 
-	static void PrepareResources(ToolsRig::IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
+	static RenderCore::Techniques::PreparedResourcesVisibility PrepareResources(ToolsRig::IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
 	{
 		// stall until all resources are ready
 		RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(lightingTechnique);
 		ParseScene(prepareLightingIterator, drawablesWriter);
-		PrepareAndStall(testApparatus, prepareLightingIterator.GetResourcePreparationMarker());
+		return PrepareAndStall(testApparatus, prepareLightingIterator.GetResourcePreparationMarker());
 	}
 
 	static void PumpBufferUploads(LightingEngineTestApparatus& testApparatus)
@@ -148,7 +148,7 @@ namespace UnitTests
 				TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
 				"temporary-out");
 
-			auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera, *threadContext);
+			auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 				testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
@@ -159,7 +159,9 @@ namespace UnitTests
 
 			auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateFlatPlaneDrawableWriter();
 			auto drawableWriterWithBlocker = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateFlatPlaneAndBlockerDrawableWriter();
-			PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
+			auto newVisibility = PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
+			parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
+			parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 
 			///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 			SECTION("sphere light")

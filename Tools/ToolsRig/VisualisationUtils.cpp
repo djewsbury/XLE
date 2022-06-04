@@ -914,6 +914,9 @@ namespace ToolsRig
         RenderCore::Techniques::TechniqueContext techniqueContext;
 		techniqueContext._commonResources = drawingApparatus._commonResources;
 		techniqueContext._uniformDelegateManager = drawingApparatus._mainUniformDelegateManager;
+		techniqueContext._drawablesPool = drawingApparatus._drawablesPool;
+		techniqueContext._pipelineAccelerators = drawingApparatus._pipelineAccelerators;
+		techniqueContext._graphicsPipelinePool = drawingApparatus._graphicsPipelinePool;
         return techniqueContext;
     }
 
@@ -927,6 +930,7 @@ namespace ToolsRig
 
 		auto techniqueContext = MakeTechniqueContext(drawingApparatus);
 		Techniques::ParsingContext parserContext { techniqueContext, threadContext };
+		parserContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
 
 		RenderCore::Techniques::DrawablesPacket pkt;
 		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max];

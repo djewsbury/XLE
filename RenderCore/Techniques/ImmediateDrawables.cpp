@@ -329,11 +329,14 @@ namespace RenderCore { namespace Techniques
 			auto& sequencerConfig = GetSequencerConfig(fbDesc, subpassIndex);
 			assert(parserContext.GetViewport()._width * parserContext.GetViewport()._height);
 			if (!_workingPkt._drawables.empty()) {
+				Techniques::DrawOptions options;
+				options._pipelineAcceleratorsVisibility = _pipelineAcceleratorsVisibility;
 				Draw(
 					parserContext,
 					*_pipelineAcceleratorPool,
 					sequencerConfig,
-					_workingPkt);
+					_workingPkt,
+					options);
 			}
 
 			AbandonDraws();	// (this just clears out everything prepared)
