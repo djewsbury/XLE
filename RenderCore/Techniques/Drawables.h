@@ -18,6 +18,8 @@ namespace Utility { class ParameterBox; }
 namespace RenderCore { class IThreadContext; class MiniInputElementDesc; class InputElementDesc; class UniformsStreamInterface; class UniformsStream; class DescriptorSetSignature; }
 namespace RenderCore { namespace Assets { class ShaderPatchCollection; class PredefinedDescriptorSetLayout; } }
 namespace Assets { class IAsyncMarker; }
+namespace BufferUploads { using CommandListID = uint32_t; }
+namespace std { template<typename Type> class promise; }
 
 namespace RenderCore { namespace Techniques
 {
@@ -191,7 +193,7 @@ namespace RenderCore { namespace Techniques
 	class IPipelineAcceleratorPool;
 	class SequencerConfig;
 
-	struct DrawOptions { bool _stallForResources = false; };
+	struct DrawOptions {};
 		
 	void Draw(
 		ParsingContext& parserContext,
@@ -200,7 +202,14 @@ namespace RenderCore { namespace Techniques
 		const DrawablesPacket& drawablePkt,
 		const DrawOptions& drawOptions = {});
 
-	std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(
+	using VisibilityMarkerId = uint32_t;
+	struct PreparedResourcesVisibility
+	{
+		VisibilityMarkerId _pipelineAcceleratorsVisibility = 0;
+		BufferUploads::CommandListID _bufferUploadsVisibility = 0;
+	};
+	void PrepareResources(
+		std::promise<PreparedResourcesVisibility>&& promise,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt);

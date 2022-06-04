@@ -23,6 +23,7 @@ namespace RenderCore { namespace Techniques
 	class DrawableGeo;
 	class DrawablesPacket;
 	class RenderPassInstance;
+	struct PreparedResourcesVisibility;
 
 	class RetainedUniformsStream
 	{
@@ -69,7 +70,8 @@ namespace RenderCore { namespace Techniques
 			unsigned subpassIndex) = 0;
 		virtual void AbandonDraws() = 0;
 		void ExecuteDraws(ParsingContext&, const RenderPassInstance&);
-		virtual std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(
+		virtual void PrepareResources(
+			std::promise<PreparedResourcesVisibility>&& promise,
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex) = 0;
 		virtual DrawablesPacket* GetDrawablesPacket() = 0;

@@ -14,6 +14,7 @@ namespace RenderCore { namespace Techniques
 	class ParsingContext;
 	class SequencerConfig;
 	enum class Batch;
+	struct PreparedResourcesVisibility;
 }}
 
 namespace RenderCore { namespace LightingEngine 
@@ -23,6 +24,7 @@ namespace RenderCore { namespace LightingEngine
 }}
 namespace RenderCore { class IThreadContext; }
 namespace Assets { class IAsyncMarker; }
+namespace std { template<typename Type> class future; }
 
 namespace SceneEngine
 {
@@ -38,7 +40,7 @@ namespace SceneEngine
 		SceneEngine::ILightingStateDelegate& lightingState,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique);
 
-	std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(
+	std::future<RenderCore::Techniques::PreparedResourcesVisibility> PrepareResources(
 		RenderCore::IThreadContext& threadContext,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique,
 		IScene& scene);

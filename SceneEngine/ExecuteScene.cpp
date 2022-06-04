@@ -37,7 +37,7 @@ namespace SceneEngine
 		return RenderCore::LightingEngine::LightingTechniqueInstance { parsingContext, compiledTechnique };
 	}
 
-	std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(
+	std::future<RenderCore::Techniques::PreparedResourcesVisibility> PrepareResources(
 		RenderCore::IThreadContext& threadContext,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique,
 		IScene& scene)

@@ -21,6 +21,7 @@
 #include "../Metal/Resource.h"
 #include "../../Assets/AsyncMarkerGroup.h"
 #include "../../Assets/Marker.h"
+#include "../../Assets/ContinuationUtil.h"		// for PrepareResources
 #include "../../Utility/ArithmeticUtils.h"
 #include "../../Utility/BitUtils.h"
 
@@ -50,46 +51,6 @@ namespace RenderCore { namespace Techniques
 			size_t _begin = 0, _end = 0;
 		};
 
-		struct PreStalledResources
-		{
-			std::vector<std::shared_ptr<::Assets::Marker<IPipelineAcceleratorPool::Pipeline>>> _pendingPipelineMarkers;
-			std::vector<std::shared_ptr<::Assets::Marker<ActualizedDescriptorSet>>> _pendingDescriptorSetMarkers;
-
-			void Setup(const IPipelineAcceleratorPool& pipelineAccelerators, const SequencerConfig& sequencerConfig, const DrawablesPacket& drawablePkt)
-			{
-				_pendingPipelineMarkers.resize(drawablePkt._drawables.size());
-				_pendingDescriptorSetMarkers.resize(drawablePkt._drawables.size());
-
-				bool stallOnMarkers = false;
-				unsigned idx=0;
-				PipelineAccelerator* lastPipelineAccelerator = nullptr;
-				for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d, ++idx) {
-					const auto& drawable = *(Drawable*)d.get();
-					if (drawable._pipeline != lastPipelineAccelerator) {
-						auto* pipeline = pipelineAccelerators.TryGetPipeline(*drawable._pipeline, sequencerConfig);
-						if (!pipeline) {
-							_pendingPipelineMarkers[idx] = pipelineAccelerators.GetPipelineMarker(*drawable._pipeline, sequencerConfig);
-							stallOnMarkers = true;
-						}
-						lastPipelineAccelerator = drawable._pipeline;
-					}
-					if (drawable._descriptorSet) {
-						auto* actualizedDescSet = pipelineAccelerators.TryGetDescriptorSet(*drawable._descriptorSet);
-						if (!actualizedDescSet) {
-							_pendingDescriptorSetMarkers[idx] = pipelineAccelerators.GetDescriptorSetMarker(*drawable._descriptorSet);
-							stallOnMarkers = true;
-						}
-					}
-				}
-
-				// we should avoid being in the lock while stalling for these resources -- since this can lock up other threads
-				pipelineAccelerators.UnlockForReading();
-				for (const auto& c:_pendingPipelineMarkers) if (c) c->StallWhilePending();
-				for (const auto& c:_pendingDescriptorSetMarkers) if (c) c->StallWhilePending();
-				pipelineAccelerators.LockForReading();
-			}
-		};
-
 		static unsigned GetMaterialDescSetDynamicOffset(
 			DeformAccelerator& deformAccelerator,
 			const ActualizedDescriptorSet& descSet,
@@ -99,17 +60,15 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	template<bool UsePreStalledResources>
-		static void Draw(
-			RenderCore::Metal::DeviceContext& metalContext,
-			RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
-			ParsingContext& parserContext,
-			const IPipelineAcceleratorPool& pipelineAccelerators,
-			const SequencerConfig& sequencerConfig,
-			const DrawablesPacket& drawablePkt,
-			const Internal::TemporaryStorageLocator& temporaryVB, 
-			const Internal::TemporaryStorageLocator& temporaryIB,
-			Internal::PreStalledResources& preStalledResources)
+	static void Draw(
+		RenderCore::Metal::DeviceContext& metalContext,
+		RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
+		ParsingContext& parserContext,
+		const IPipelineAcceleratorPool& pipelineAccelerators,
+		const SequencerConfig& sequencerConfig,
+		const DrawablesPacket& drawablePkt,
+		const Internal::TemporaryStorageLocator& temporaryVB, 
+		const Internal::TemporaryStorageLocator& temporaryIB)
 	{
 		auto& uniformDelegateMan = *parserContext.GetUniformDelegateManager();
 		uniformDelegateMan.InvalidateUniforms();
@@ -140,15 +99,14 @@ namespace RenderCore { namespace Techniques
 		unsigned justMatDescSetCount = 0;
 		unsigned executeCount = 0;
 		
+		uint32_t acceleratorVisibilityId = ~0u;
 
 		TRY {
 			for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d, ++idx) {
 				const auto& drawable = *(Drawable*)d.get();
 				assert(drawable._pipeline);
 				if (drawable._pipeline != currentPipelineAccelerator) {
-					auto* pipeline = pipelineAccelerators.TryGetPipeline(*drawable._pipeline, sequencerConfig);
-					if (UsePreStalledResources && !pipeline && preStalledResources._pendingPipelineMarkers[idx])
-						pipeline = &preStalledResources._pendingPipelineMarkers[idx]->ActualizeBkgrnd();
+					auto* pipeline = TryGetPipeline(*drawable._pipeline, sequencerConfig, acceleratorVisibilityId);
 					if (!pipeline) continue;
 
 					currentPipeline = pipeline;
@@ -172,9 +130,7 @@ namespace RenderCore { namespace Techniques
 
 				const ActualizedDescriptorSet* matDescSet = nullptr;
 				if (drawable._descriptorSet) {
-					matDescSet = pipelineAccelerators.TryGetDescriptorSet(*drawable._descriptorSet);
-					if (UsePreStalledResources && !matDescSet && preStalledResources._pendingDescriptorSetMarkers[idx])
-						matDescSet = &preStalledResources._pendingDescriptorSetMarkers[idx]->ActualizeBkgrnd();
+					matDescSet = TryGetDescriptorSet(*drawable._descriptorSet, acceleratorVisibilityId);
 					if (!matDescSet) continue;
 					parserContext.RequireCommandList(matDescSet->GetCompletionCommandList());
 				}
@@ -271,13 +227,7 @@ namespace RenderCore { namespace Techniques
 		}
 		assert(drawablePkt.GetStorage(DrawablesPacket::Storage::Uniform).empty());
 
-		Internal::PreStalledResources preStalledResources;
-		if (drawOptions._stallForResources) {
-			preStalledResources.Setup(pipelineAccelerators, sequencerConfig, drawablePkt);
-			Draw<true>(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB, preStalledResources);
-		} else {
-			Draw<false>(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB, preStalledResources);
-		}
+		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB);
 	}
 
 	void Draw(
@@ -287,10 +237,12 @@ namespace RenderCore { namespace Techniques
 		const DrawablesPacket& drawablePkt,
 		const DrawOptions& drawOptions)
 	{
+		uint32_t acceleratorVisibilityId = ~0u;
+
 		pipelineAccelerators.LockForReading();
 		TRY {
 			auto& metalContext = *Metal::DeviceContext::Get(parserContext.GetThreadContext());
-			auto pipelineLayout = pipelineAccelerators.TryGetCompiledPipelineLayout(sequencerConfig);
+			auto pipelineLayout = TryGetCompiledPipelineLayout(sequencerConfig, acceleratorVisibilityId);
 			if (!pipelineLayout) {
 				pipelineAccelerators.UnlockForReading();
 				return;
@@ -310,34 +262,112 @@ namespace RenderCore { namespace Techniques
 	static const std::string s_graphicsPipeline { "graphics-pipeline" };
 	static const std::string s_descriptorSet { "descriptor-set" };
 
-	std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(
+	void PrepareResources(
+		std::promise<PreparedResourcesVisibility>&& promise,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt)
 	{
 		std::shared_ptr<::Assets::AsyncMarkerGroup> result;
 
+		std::set<PipelineAccelerator*> uniquePipelineAccelerators;
+		std::set<DescriptorSetAccelerator*> uniqueDescriptorSetAccelerators;
+
 		for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d) {
 			const auto& drawable = *(Drawable*)d.get();
 			assert(drawable._pipeline);
-			auto pipelineFuture = pipelineAccelerators.GetPipelineMarker(*drawable._pipeline, sequencerConfig);
-			if (pipelineFuture && pipelineFuture->GetAssetState() != ::Assets::AssetState::Ready) {
-				if (!result)
-					result = std::make_shared<::Assets::AsyncMarkerGroup>();
-				result->Add(pipelineFuture, s_graphicsPipeline);
-			}
+			uniquePipelineAccelerators.insert(drawable._pipeline);
+			if (drawable._descriptorSet)
+				uniqueDescriptorSetAccelerators.insert(drawable._descriptorSet);
+		}
 
-			if (drawable._descriptorSet) {
-				auto descriptorSetFuture = pipelineAccelerators.GetDescriptorSetMarker(*drawable._descriptorSet);
-				if (descriptorSetFuture && descriptorSetFuture->GetAssetState() != ::Assets::AssetState::Ready) {
-					if (!result)
-						result = std::make_shared<::Assets::AsyncMarkerGroup>();
-					result->Add(descriptorSetFuture, s_descriptorSet);
+		struct Futures
+		{
+			std::vector<std::future<VisibilityMarkerId>> _pendingFutures1;
+			std::vector<std::future<std::pair<VisibilityMarkerId, BufferUploads::CommandListID>>> _pendingFutures2;
+
+			std::vector<std::future<VisibilityMarkerId>> _readyFutures1;
+			std::vector<std::future<std::pair<VisibilityMarkerId, BufferUploads::CommandListID>>> _readyFutures2;
+
+			VisibilityMarkerId _starterVisMarker = 0;
+			BufferUploads::CommandListID _starterCmdList = 0;
+		};
+		auto futures = std::make_shared<Futures>();
+
+		for (const auto& pipeline:uniquePipelineAccelerators) {
+			auto pipelineFuture = pipelineAccelerators.GetPipelineMarker(*pipeline, sequencerConfig);
+			if (pipelineFuture.valid()) {
+				auto initialState = pipelineFuture.wait_for(std::chrono::milliseconds(0));
+				if (initialState == std::future_status::timeout) {
+					futures->_pendingFutures1.emplace_back(std::move(pipelineFuture));
+				} else {
+					futures->_starterVisMarker = std::max(futures->_starterVisMarker, pipelineFuture.get());
 				}
 			}
 		}
 
-		return result;
+		for (const auto& descSet:uniqueDescriptorSetAccelerators) {
+			auto descSetFuture = pipelineAccelerators.GetDescriptorSetMarker(*descSet);
+			if (descSetFuture.valid()) {
+				auto initialState = descSetFuture.wait_for(std::chrono::milliseconds(0));
+				if (initialState == std::future_status::timeout) {
+					futures->_pendingFutures2.emplace_back(std::move(descSetFuture));
+				} else {
+					auto p = descSetFuture.get();
+					futures->_starterVisMarker = std::max(futures->_starterVisMarker, p.first);
+					futures->_starterCmdList = std::max(futures->_starterCmdList, p.second);
+				}
+			}
+		}
+
+		auto layoutMarker = pipelineAccelerators.GetCompiledPipelineLayoutMarker(sequencerConfig);
+		if (layoutMarker.valid()) {
+			auto initialState = layoutMarker.wait_for(std::chrono::milliseconds(0));
+			if (initialState == std::future_status::timeout) {
+				futures->_pendingFutures1.emplace_back(std::move(layoutMarker));
+			} else {
+				futures->_starterVisMarker = std::max(futures->_starterVisMarker, layoutMarker.get());
+			}
+		}
+
+		if (!futures->_pendingFutures1.empty() || !futures->_pendingFutures2.empty()) {
+			::Assets::PollToPromise(
+				std::move(promise),
+				[futures](auto timeout) {
+					auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+					// If we have a lot of futures, there's a possible scenario where timeout can elapse
+					// before we can check each future (even if each future is actually ready). To avoid this,
+					// let's record which futures have previously returned ready
+					while (!futures->_pendingFutures1.empty()) {
+						if ((futures->_pendingFutures1.end()-1)->wait_until(timeoutTime) == std::future_status::timeout)
+							return ::Assets::PollStatus::Continue;
+						futures->_readyFutures1.emplace_back(std::move(*(futures->_pendingFutures1.end()-1)));
+						futures->_pendingFutures1.erase(futures->_pendingFutures1.end()-1);
+					}
+					while (!futures->_pendingFutures2.empty()) {
+						if ((futures->_pendingFutures2.end()-1)->wait_until(timeoutTime) == std::future_status::timeout)
+							return ::Assets::PollStatus::Continue;
+						futures->_readyFutures2.emplace_back(std::move(*(futures->_pendingFutures2.end()-1)));
+						futures->_pendingFutures2.erase(futures->_pendingFutures2.end()-1);
+					}
+					return ::Assets::PollStatus::Finish;
+				},
+				[futures]() {
+					assert(futures->_pendingFutures1.empty() && futures->_pendingFutures2.empty());
+					PreparedResourcesVisibility result{futures->_starterVisMarker, futures->_starterCmdList};
+					for (auto& f:futures->_readyFutures1)
+						result._pipelineAcceleratorsVisibility = std::max(f.get(), result._pipelineAcceleratorsVisibility);
+					for (auto& f:futures->_readyFutures2) {
+						auto p = f.get();
+						result._pipelineAcceleratorsVisibility = std::max(p.first, result._pipelineAcceleratorsVisibility);
+						result._bufferUploadsVisibility = std::max(p.second, result._bufferUploadsVisibility);
+					}
+					return result;
+				});
+		} else {
+			// we can complete immediately
+			promise.set_value(PreparedResourcesVisibility{futures->_starterVisMarker, futures->_starterCmdList});
+		}
 	}
 
 	void ExecuteDrawableContext::ApplyLooseUniforms(const UniformsStream& stream) const

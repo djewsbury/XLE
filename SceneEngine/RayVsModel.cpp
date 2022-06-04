@@ -300,10 +300,12 @@ namespace SceneEngine
 		VertexBufferView sov { _pimpl->_res->_streamOutputBuffer.get() };
 		_pimpl->_sequencerConfig = (testType == TestType::FrustumTest) ? box._frustumTestSequencerCfg : box._rayTestSequencerCfg;
 
-		auto pipelineLayout = pipelineAcceleratorPool.GetCompiledPipelineLayoutMarker(*_pimpl->_sequencerConfig);
-		pipelineLayout->StallWhilePending();
+		const Techniques::VisibilityMarkerId visibilityId = 0;
+		auto pipelineLayout = Techniques::TryGetCompiledPipelineLayout(*_pimpl->_sequencerConfig, visibilityId);
+		if (!pipelineLayout)
+			Throw(std::runtime_error("Pipeline layout pending"));
 
-		_pimpl->_encoder = metalContext.BeginStreamOutputEncoder(pipelineLayout->Actualize()->GetPipelineLayout(), MakeIteratorRange(&sov, &sov+1));
+		_pimpl->_encoder = metalContext.BeginStreamOutputEncoder(pipelineLayout, MakeIteratorRange(&sov, &sov+1));
 		_pimpl->_testType = testType;
 		_pimpl->_pipelineAccelerators = &pipelineAcceleratorPool;
     }

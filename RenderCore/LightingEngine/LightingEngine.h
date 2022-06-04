@@ -7,9 +7,10 @@
 #include "../../Utility/IteratorUtils.h"
 
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ProjectionDesc; class IDeformAcceleratorPool; class DrawablesPacket; class ParsingContext; }}
+namespace RenderCore { namespace Techniques { class ProjectionDesc; class IDeformAcceleratorPool; class DrawablesPacket; class ParsingContext; struct PreparedResourcesVisibility; }}
 namespace Assets { class IAsyncMarker; class DependencyValidation; }
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
+namespace std { template<typename Type> class future; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -43,7 +44,7 @@ namespace RenderCore { namespace LightingEngine
 		~LightingTechniqueInstance();
 
 		// For ensuring that required resources are prepared/loaded
-		std::shared_ptr<::Assets::IAsyncMarker> GetResourcePreparationMarker();
+		std::future<Techniques::PreparedResourcesVisibility> GetResourcePreparationMarker();
 		LightingTechniqueInstance(
 			CompiledLightingTechnique&);
 	private:

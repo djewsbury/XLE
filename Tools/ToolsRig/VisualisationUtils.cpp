@@ -396,18 +396,11 @@ namespace ToolsRig
 								auto pendingResources = SceneEngine::PrepareResources(
 									*RenderCore::Techniques::GetThreadContext(),
 									*preparedScene->_compiledLightingTechnique, *preparedScene->_scene);
-								if (pendingResources) {
-									::Assets::WhenAll(::Assets::MakeASyncMarkerBridge(pendingResources)).Then(
-										[pendingResources, preparedScene, thatPromise=std::move(thatPromise)](auto) mutable {
-											auto state = pendingResources->GetAssetState();
-											assert(state != ::Assets::AssetState::Pending);
-											if (state == ::Assets::AssetState::Invalid) {
-												// We should still actually set the asset here. Some resources might be valid, and might still render
-												// Also, if we don't set the asset, there will be no dependency validation chain for hot reloading a fix
-												Log(Warning) << "Got invalid asset during PrepareResources for scene." << std::endl;
-											}
-
-											thatPromise.set_value(std::move(preparedScene));
+								if (pendingResources.valid()) {
+									::Assets::WhenAll(std::move(pendingResources)).ThenConstructToPromise(
+										std::move(thatPromise),
+										[preparedScene](auto) mutable {
+											return std::move(preparedScene);
 										});
 								} else {
 									thatPromise.set_value(std::move(preparedScene));

@@ -11,7 +11,6 @@
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/StringUtils.h"
 #include <memory>
-#include <future>
 
 namespace RenderCore 
 {
@@ -23,6 +22,8 @@ namespace RenderCore
 
 namespace RenderCore { namespace Assets { class RenderStateSet; class ShaderPatchCollection; class PredefinedDescriptorSetLayout; class ScaffoldCmdIterator; } }
 namespace RenderCore { class IDevice; class IDescriptorSet; class UniformsStreamInterface; class IResourceView; }
+namespace BufferUploads { using CommandListID = uint32_t; }
+namespace std { template<typename Type> class future; }
 
 namespace RenderCore { namespace Techniques
 {
@@ -76,9 +77,9 @@ namespace RenderCore { namespace Techniques
 
 		class Pipeline;
 
-		virtual std::future<VisibilityMarkerId> GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
-		virtual std::future<VisibilityMarkerId> GetDescriptorSetMarker(DescriptorSetAccelerator& accelerator) const = 0;
-		virtual std::future<VisibilityMarkerId> GetCompiledPipelineLayoutMarker(const SequencerConfig& sequencerConfig) const = 0;
+		virtual auto GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const -> std::future<VisibilityMarkerId> = 0;
+		virtual auto GetDescriptorSetMarker(DescriptorSetAccelerator& accelerator) const -> std::future<std::pair<VisibilityMarkerId, BufferUploads::CommandListID>> = 0;
+		virtual auto GetCompiledPipelineLayoutMarker(const SequencerConfig& sequencerConfig) const -> std::future<VisibilityMarkerId> = 0;
 
 		virtual void	SetGlobalSelector(StringSection<> name, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) = 0;
 		T1(Type) void   SetGlobalSelector(StringSection<> name, Type value);

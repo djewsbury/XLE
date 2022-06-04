@@ -339,10 +339,10 @@ namespace RenderCore { namespace Techniques
 			AbandonDraws();	// (this just clears out everything prepared)
 		}
 
-		std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(const FrameBufferDesc& fbDesc, unsigned subpassIndex) override
+		void PrepareResources(std::promise<PreparedResourcesVisibility>&& promise, const FrameBufferDesc& fbDesc, unsigned subpassIndex) override
 		{
 			auto& sequencerConfig = GetSequencerConfig(fbDesc, subpassIndex);
-			return Techniques::PrepareResources(*_pipelineAcceleratorPool, sequencerConfig, _workingPkt);
+			Techniques::PrepareResources(std::move(promise), *_pipelineAcceleratorPool, sequencerConfig, _workingPkt);
 		}
 
 		virtual DrawablesPacket* GetDrawablesPacket() override

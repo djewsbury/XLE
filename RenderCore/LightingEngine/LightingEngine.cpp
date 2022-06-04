@@ -13,6 +13,7 @@
 #include "../Techniques/DrawableDelegates.h"
 #include "../FrameBufferDesc.h"
 #include "../../Assets/Continuation.h"
+#include "../../Assets/ContinuationUtil.h"
 #include "../../Assets/AsyncMarkerGroup.h"
 #include "../../OSServices/Log.h"
 
@@ -657,7 +658,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		std::vector<Techniques::DrawablesPacket> _drawablePkt;
-		std::vector<std::shared_ptr<::Assets::IAsyncMarker>> _requiredResources;
+		std::vector<std::future<Techniques::PreparedResourcesVisibility>> _requiredResources;
 
 		Techniques::IPipelineAcceleratorPool* _pipelineAcceleratorPool = nullptr;
 		const CompiledLightingTechnique* _compiledTechnique = nullptr;
@@ -720,9 +721,10 @@ namespace RenderCore { namespace LightingEngine
 				{
 					auto pktIdx = _prepareResourcesIterator->_stepper._drawablePktIdxOffset+(next->_fbDescIdx&0xffff);
 					assert(pktIdx < _prepareResourcesIterator->_drawablePkt.size());
-					auto preparation = Techniques::PrepareResources(*_prepareResourcesIterator->_pipelineAcceleratorPool, *next->_sequencerConfig, _prepareResourcesIterator->_drawablePkt[pktIdx]);
-					if (preparation)
-						_prepareResourcesIterator->_requiredResources.push_back(std::move(preparation));
+					std::promise<Techniques::PreparedResourcesVisibility> promise;
+					auto future = promise.get_future();
+					Techniques::PrepareResources(std::move(promise), *_prepareResourcesIterator->_pipelineAcceleratorPool, *next->_sequencerConfig, _prepareResourcesIterator->_drawablePkt[pktIdx]);
+					_prepareResourcesIterator->_requiredResources.emplace_back(std::move(future));
 				}
 				break;
 
@@ -746,14 +748,65 @@ namespace RenderCore { namespace LightingEngine
 		return Step { StepType::None };
 	}
 
-	std::shared_ptr<::Assets::IAsyncMarker> LightingTechniqueInstance::GetResourcePreparationMarker()
+	std::future<Techniques::PreparedResourcesVisibility> LightingTechniqueInstance::GetResourcePreparationMarker()
 	{
 		if (!_prepareResourcesIterator || _prepareResourcesIterator->_requiredResources.empty()) return {};
 		
-		auto marker = std::make_shared<::Assets::AsyncMarkerGroup>();
-		for (const auto& c:_prepareResourcesIterator->_requiredResources)
-			marker->Add(c, {});
-		return marker;
+		TRY {
+			struct Futures
+			{
+				std::vector<std::future<Techniques::PreparedResourcesVisibility>> _pendingFutures;
+				std::vector<std::future<Techniques::PreparedResourcesVisibility>> _readyFutures;
+				Techniques::PreparedResourcesVisibility _starterVisibility;
+			};
+			auto futures = std::make_shared<Futures>();
+
+			for (auto& c:_prepareResourcesIterator->_requiredResources) {
+				auto status = c.wait_for(std::chrono::milliseconds(0));
+				if (status == std::future_status::timeout) {
+					futures->_pendingFutures.emplace_back(std::move(c));
+				} else {
+					auto result = c.get();
+					futures->_starterVisibility._pipelineAcceleratorsVisibility = std::max(futures->_starterVisibility._pipelineAcceleratorsVisibility, result._pipelineAcceleratorsVisibility);
+					futures->_starterVisibility._bufferUploadsVisibility = std::max(futures->_starterVisibility._bufferUploadsVisibility, result._bufferUploadsVisibility);
+				}
+			}
+			_prepareResourcesIterator->_requiredResources.clear();	// have to clear, can only query the futures once
+			
+			std::promise<Techniques::PreparedResourcesVisibility> promise;
+			auto future = promise.get_future();
+			if (futures->_pendingFutures.empty()) {
+				promise.set_value(futures->_starterVisibility);
+			} else {
+				::Assets::PollToPromise(
+					std::move(promise),
+					[futures](auto timeout) {
+						auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+						while (!futures->_pendingFutures.empty()) {
+							if ((futures->_pendingFutures.end()-1)->wait_until(timeoutTime) == std::future_status::timeout)
+								return ::Assets::PollStatus::Continue;
+							futures->_readyFutures.emplace_back(std::move(*(futures->_pendingFutures.end()-1)));
+							futures->_pendingFutures.erase(futures->_pendingFutures.end()-1);
+						}
+						return ::Assets::PollStatus::Finish;
+					},
+					[futures]() {
+						assert(futures->_pendingFutures.empty());
+						auto result = futures->_starterVisibility;
+						for (auto& f:futures->_readyFutures) {
+							auto p = f.get();
+							result._pipelineAcceleratorsVisibility = std::max(result._pipelineAcceleratorsVisibility, p._pipelineAcceleratorsVisibility);
+							result._bufferUploadsVisibility = std::max(result._bufferUploadsVisibility, p._bufferUploadsVisibility);
+						}
+						return result;
+					});
+			}
+			return future;
+		} CATCH(...) {
+			std::promise<Techniques::PreparedResourcesVisibility> exceptionPromise;
+			exceptionPromise.set_exception(std::current_exception());
+			return exceptionPromise.get_future();
+		} CATCH_END
 	}
 
 	void LightingTechniqueInstance::SetDeformAcceleratorPool(Techniques::IDeformAcceleratorPool& pool)
