@@ -70,23 +70,29 @@ namespace RenderCore { namespace Techniques
 			const RenderCore::Assets::RenderStateSet& stateSet);
 		~PipelineAccelerator();
 	
-		// "_completedGraphicsPipelines" is protected by the _pipelineUsageLock lock in the pipeline accelerator pool
-		std::vector<IPipelineAcceleratorPool::Pipeline> _completedGraphicsPipelines;
-
-		// "_pendingGraphicsPipelines" is protected by the _constructionLock in the pipeline accelerator pool
+		// "_completedPipelines" is protected by the _pipelineUsageLock lock in the pipeline accelerator pool
 		using Pipeline = IPipelineAcceleratorPool::Pipeline;
-		using PtrToPipelineFuture = std::shared_ptr<::Assets::Marker<Pipeline>>;
-		std::vector<std::pair<SequencerConfigId, PtrToPipelineFuture>> _pendingGraphicsPipelines;
+		struct CompletedPipeline
+		{
+			VisibilityMarkerId _visibilityMarker;
+			Pipeline _pipeline; 
+			::Assets::DependencyValidation _depVal;
+		};
+		std::vector<CompletedPipeline> _completedPipelines;
 
-		void BeginPrepareForSequencerStateAlreadyLocked(
+		// "_pendingPipelines" is protected by the _constructionLock in the pipeline accelerator pool
+		using FuturePipeline = std::shared_future<Pipeline>;
+		std::vector<std::pair<SequencerConfigId, FuturePipeline>> _pendingPipelines;
+
+		std::shared_future<Pipeline> BeginPrepareForSequencerStateAlreadyLocked(
 			std::shared_ptr<SequencerConfig> cfg,
 			const ParameterBox& globalSelectors,
 			const std::shared_ptr<PipelineCollection>& pipelineCollection,
 			ICompiledLayoutPool& layoutPatcher);
-		bool PipelineValidPipelineOrFuture(const SequencerConfig& cfg) const;
+		bool HasCurrentOrFuturePipeline(const SequencerConfig& cfg) const;
 
-		Pipeline* TryGetPipeline(const SequencerConfig& cfg);
-		PtrToPipelineFuture FindPipelineFutureAlreadyLocked(const SequencerConfig& cfg);
+		Pipeline* TryGetPipeline(const SequencerConfig& cfg, VisibilityMarkerId visibilityMarker);
+		// PtrToPipelineFuture FindPipelineFutureAlreadyLocked(const SequencerConfig& cfg);
 	
 		std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> _shaderPatches;
 		ParameterBox _materialSelectors;
@@ -99,13 +105,14 @@ namespace RenderCore { namespace Techniques
 		unsigned _ownerPoolId;
 	};
 
-	void PipelineAccelerator::BeginPrepareForSequencerStateAlreadyLocked(
+	auto PipelineAccelerator::BeginPrepareForSequencerStateAlreadyLocked(
 		std::shared_ptr<SequencerConfig> cfg,
 		const ParameterBox& globalSelectors,
 		const std::shared_ptr<PipelineCollection>& pipelineCollection,
-		ICompiledLayoutPool& layoutPatcher)
+		ICompiledLayoutPool& layoutPatcher) -> std::shared_future<Pipeline>
 	{
-		PtrToPipelineFuture pipelineFuture = std::make_shared<::Assets::Marker<IPipelineAcceleratorPool::Pipeline>>("PipelineAccelerator Pipeline");
+		std::promise<Pipeline> pipelinePromise;
+		std::shared_future<Pipeline> futurePipeline = pipelinePromise.get_future();
 		ParameterBox copyGlobalSelectors = globalSelectors;
 		std::weak_ptr<PipelineAccelerator> weakThis = shared_from_this();
 		auto patchCollectionFuture = _shaderPatches ? layoutPatcher.GetPatchCollectionFuture(*_shaderPatches) : layoutPatcher.GetDefaultPatchCollectionFuture();
@@ -118,7 +125,7 @@ namespace RenderCore { namespace Techniques
 		// final pipeline will only contain the dependencies for the shader. So if the root problem
 		// is actually something about the configuration, we won't get the proper recompile functionality 
 		::Assets::WhenAll(patchCollectionFuture, cfg->_pipelineLayout).ThenConstructToPromise(
-			pipelineFuture->AdoptPromise(),
+			std::move(pipelinePromise),
 			[pipelineCollection, copyGlobalSelectors, cfg, weakThis](
 				std::promise<IPipelineAcceleratorPool::Pipeline>&& resultPromise,
 				std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection,
@@ -166,14 +173,29 @@ namespace RenderCore { namespace Techniques
 			});
 
 		unsigned sequencerIdx = unsigned(cfg->_cfgId);
-		auto i = std::find_if(_pendingGraphicsPipelines.begin(), _pendingGraphicsPipelines.end(), [sequencerIdx](const auto& p) { return p.first == sequencerIdx; });
-		if (i != _pendingGraphicsPipelines.end()) {
-			i->second = pipelineFuture;
+		auto i = std::find_if(_pendingPipelines.begin(), _pendingPipelines.end(), [sequencerIdx](const auto& p) { return p.first == sequencerIdx; });
+		if (i != _pendingPipelines.end()) {
+			i->second = futurePipeline;
 		} else 
-			_pendingGraphicsPipelines.emplace_back(sequencerIdx, std::move(pipelineFuture));
+			_pendingPipelines.emplace_back(sequencerIdx, futurePipeline);
+
+#if 0
+		// When the future completes, add an note to tell the pool to update the completed pipelines list
+		// this should work even if there end up begin multiple pipelines queued for the same sequencer/accelerator pair
+		::Assets::WhenAll(futurePipeline).Then(
+			[weakThis, sequencerIdx](const auto&) {
+				auto containingPipelineAccelerator = weakThis.lock();
+				if (!containingPipelineAccelerator)
+					Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));
+
+				ScopedLock(containingPipelineAccelerator->_futuresToCheckLock);
+				containingPipelineAccelerator->_futuresToCheck.push_back(sequencerIdx);
+			});
+#endif
+		return futurePipeline;
 	}
 
-	bool PipelineAccelerator::PipelineValidPipelineOrFuture(const SequencerConfig& cfg) const
+	bool PipelineAccelerator::HasCurrentOrFuturePipeline(const SequencerConfig& cfg) const
 	{
 		#if defined(_DEBUG)
 			unsigned poolId = unsigned(cfg._cfgId >> 32ull);
@@ -181,26 +203,21 @@ namespace RenderCore { namespace Techniques
 				Throw(std::runtime_error("Mixing a pipeline accelerator from an incorrect pool"));
 		#endif
 
-		// If we have something in _completedGraphicsPipelines with a current validation index, return true
+		// If we have something in _completedPipelines return true
 		unsigned sequencerIdx = unsigned(cfg._cfgId);
-		if (sequencerIdx < _completedGraphicsPipelines.size())
-			if (_completedGraphicsPipelines[sequencerIdx]._metalPipeline && _completedGraphicsPipelines[sequencerIdx].GetDependencyValidation().GetValidationIndex() == 0)
-				return true;
+		assert(sequencerIdx < _completedPipelines.size());
+		if (_completedPipelines[sequencerIdx]._pipeline._metalPipeline)
+			return true;
 
-		// If we have a pipeline currently in pending state, or ready/invalid with a current validation index, then return true
-		auto i = std::find_if(_pendingGraphicsPipelines.begin(), _pendingGraphicsPipelines.end(), [sequencerIdx](const auto& p) { return p.first == sequencerIdx; });
-		if (i != _pendingGraphicsPipelines.end()) {
-			::Assets::DependencyValidation depVal;
-			::Assets::Blob b;
-			auto state = i->second->CheckStatusBkgrnd(depVal, b);
-			if (state == ::Assets::AssetState::Pending)
-				return true;
-			return depVal.GetValidationIndex() == 0;
-		}
+		// If we have a pipeline currently in pending state, also return true
+		auto i = std::find_if(_pendingPipelines.begin(), _pendingPipelines.end(), [sequencerIdx](const auto& p) { return p.first == sequencerIdx; });
+		if (i != _pendingPipelines.end())
+			return true;
+
 		return false;
 	}
 
-	auto PipelineAccelerator::TryGetPipeline(const SequencerConfig& cfg) -> Pipeline*
+	auto PipelineAccelerator::TryGetPipeline(const SequencerConfig& cfg, VisibilityMarkerId visibilityMarker) -> Pipeline*
 	{
 		#if defined(_DEBUG)
 			unsigned poolId = unsigned(cfg._cfgId >> 32ull);
@@ -209,11 +226,13 @@ namespace RenderCore { namespace Techniques
 		#endif
 
 		unsigned sequencerIdx = unsigned(cfg._cfgId);
-		if (sequencerIdx >= _completedGraphicsPipelines.size() || !_completedGraphicsPipelines[sequencerIdx]._metalPipeline)
+		assert(_completedPipelines.size() > sequencerIdx);
+		if (_completedPipelines[sequencerIdx]._visibilityMarker > visibilityMarker || !_completedPipelines[sequencerIdx]._pipeline._metalPipeline)
 			return nullptr;
-		return &_completedGraphicsPipelines[sequencerIdx];
+		return &_completedPipelines[sequencerIdx]._pipeline;
 	}
 
+#if 0
 	auto PipelineAccelerator::FindPipelineFutureAlreadyLocked(const SequencerConfig& cfg) -> PtrToPipelineFuture
 	{
 		#if defined(_DEBUG)
@@ -224,11 +243,12 @@ namespace RenderCore { namespace Techniques
 
 		// we should be in the pool's _constructionLock for this
 		unsigned sequencerIdx = unsigned(cfg._cfgId);
-		auto i = std::find_if(_pendingGraphicsPipelines.begin(), _pendingGraphicsPipelines.end(), [sequencerIdx](const auto& p) { return p.first == sequencerIdx; });
-		if (i != _pendingGraphicsPipelines.end())
+		auto i = std::find_if(_pendingPipelines.begin(), _pendingPipelines.end(), [sequencerIdx](const auto& p) { return p.first == sequencerIdx; });
+		if (i != _pendingPipelines.end())
 			return i->second;
 		return nullptr;
 	}
+#endif
 
 	PipelineAccelerator::PipelineAccelerator(
 		unsigned ownerPoolId,
@@ -362,14 +382,13 @@ namespace RenderCore { namespace Techniques
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex = 0) override;
 
-		std::shared_ptr<::Assets::Marker<Pipeline>> GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
-		const Pipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
+		// const Pipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig, VisibilityMarkerId) const override;
+		// const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator, VisibilityMarkerId) const override;
+		// std::shared_ptr<ICompiledPipelineLayout> TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig, VisibilityMarkerId) const override;
 
-		std::shared_ptr<::Assets::Marker<ActualizedDescriptorSet>> GetDescriptorSetMarker(DescriptorSetAccelerator& accelerator) const override;
-		const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const override;
-
-		::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> GetCompiledPipelineLayoutMarker(const SequencerConfig& sequencerConfig) const override;
-		std::shared_ptr<ICompiledPipelineLayout> TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig) const override;
+		std::future<VisibilityMarkerId> GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
+		std::future<VisibilityMarkerId> GetDescriptorSetMarker(DescriptorSetAccelerator& accelerator) const override;
+		std::future<VisibilityMarkerId> GetCompiledPipelineLayoutMarker(const SequencerConfig& sequencerConfig) const override;
 
 		void			SetGlobalSelector(StringSection<> name, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) override;
 		T1(Type) void   SetGlobalSelector(StringSection<> name, Type value);
@@ -422,7 +441,7 @@ namespace RenderCore { namespace Techniques
 			unsigned subpassIndex);
 
 		void RebuildAllPipelinesAlreadyLocked(unsigned poolGuid);
-		void RebuildAllPipelinesAlreadyLocked(unsigned poolGuid, PipelineAccelerator& pipeline);
+		void RebuildAllPipelinesAlreadyLocked(unsigned poolGuid, PipelineAccelerator& pipeline, uint64_t pipelineHash);
 
 		std::shared_ptr<SamplerPool> _samplerPool;
 		std::shared_ptr<PipelineCollection> _pipelineCollection;
@@ -430,10 +449,27 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<ICompiledLayoutPool> _layoutPatcher;
 		PipelineAcceleratorPoolFlags::BitField _flags;
 
+		struct FuturesToCheckHelper
+		{
+			Threading::Mutex _lock;
+			std::vector<std::pair<uint64_t, SequencerConfigId>> _futuresToCheck;
+		};
+		std::shared_ptr<FuturesToCheckHelper> _futuresToCheckHelper;
+
+		unsigned _lastReturnedVisibilityMarker = 0;
+
 		#if defined(_DEBUG)
 			mutable std::optional<std::thread::id> _lockForThreadingThread;
 			std::thread::id _boundThreadId;
 		#endif
+
+		struct NewlyQueued
+		{
+			std::shared_future<PipelineAccelerator::Pipeline> _future; uint64_t _acceleratorHash; SequencerConfigId _cfgId; 
+			NewlyQueued() = default;
+			NewlyQueued(std::shared_future<PipelineAccelerator::Pipeline> future, uint64_t acceleratorHash, SequencerConfigId cfgId) : _future(std::move(future)), _acceleratorHash(acceleratorHash), _cfgId(cfgId) {}
+		};
+		void SetupNewlyQueuedAlreadyLocked(IteratorRange<const NewlyQueued*>);
 	};
 
 	void PipelineAcceleratorPool::LockForReading() const
@@ -454,6 +490,7 @@ namespace RenderCore { namespace Techniques
 		_pipelineUsageLock.unlock_shared();	
 	}
 
+#if 0
 	auto PipelineAcceleratorPool::GetPipelineMarker(
 		PipelineAccelerator& pipelineAccelerator, 
 		const SequencerConfig& sequencerConfig) const -> std::shared_ptr<::Assets::Marker<Pipeline>>
@@ -471,32 +508,10 @@ namespace RenderCore { namespace Techniques
 		return pipelineAccelerator.FindPipelineFutureAlreadyLocked(sequencerConfig);
 	}
 
-	auto PipelineAcceleratorPool::TryGetPipeline(
-		PipelineAccelerator& pipelineAccelerator, 
-		const SequencerConfig& sequencerConfig) const -> const Pipeline*
-	{
-		#if defined(_DEBUG)
-			assert(_lockForThreadingThread.has_value() && _lockForThreadingThread.value() == std::this_thread::get_id());
-			unsigned poolId = unsigned(sequencerConfig._cfgId >> 32ull);
-			if (poolId != pipelineAccelerator._ownerPoolId)
-				Throw(std::runtime_error("Mixing a pipeline accelerator from an incorrect pool"));
-		#endif
-		
-		return pipelineAccelerator.TryGetPipeline(sequencerConfig);
-	}
-
 	std::shared_ptr<::Assets::Marker<ActualizedDescriptorSet>> PipelineAcceleratorPool::GetDescriptorSetMarker(DescriptorSetAccelerator& accelerator) const
 	{
 		ScopedLock(_constructionLock);
 		return accelerator._descriptorSet;
-	}
-
-	const ActualizedDescriptorSet* PipelineAcceleratorPool::TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const
-	{
-		#if defined(_DEBUG)
-			assert(_lockForThreadingThread.has_value() && _lockForThreadingThread.value() == std::this_thread::get_id());
-		#endif
-		return accelerator._descriptorSet->TryActualize();
 	}
 
 	::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> PipelineAcceleratorPool::GetCompiledPipelineLayoutMarker(const SequencerConfig& sequencerConfig) const
@@ -504,10 +519,47 @@ namespace RenderCore { namespace Techniques
 		ScopedLock(_constructionLock);
 		return sequencerConfig._pipelineLayout;
 	}
+#endif
 
-	std::shared_ptr<ICompiledPipelineLayout> PipelineAcceleratorPool::TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig) const
+	std::future<VisibilityMarkerId> PipelineAcceleratorPool::GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const
 	{
-		#if defined(_DEBUG)
+		return {};
+	}
+	std::future<VisibilityMarkerId> PipelineAcceleratorPool::GetDescriptorSetMarker(DescriptorSetAccelerator& accelerator) const
+	{
+		return {};
+	}
+	std::future<VisibilityMarkerId> PipelineAcceleratorPool::GetCompiledPipelineLayoutMarker(const SequencerConfig& sequencerConfig) const
+	{
+		return {};
+	}
+
+	const IPipelineAcceleratorPool::Pipeline* TryGetPipeline(
+		PipelineAccelerator& pipelineAccelerator,
+		const SequencerConfig& sequencerConfig,
+		VisibilityMarkerId visibilityMarker)
+	{
+		#if 0 // defined(_DEBUG) -- todo -- bring back this debugging
+			assert(_lockForThreadingThread.has_value() && _lockForThreadingThread.value() == std::this_thread::get_id());
+			unsigned poolId = unsigned(sequencerConfig._cfgId >> 32ull);
+			if (poolId != pipelineAccelerator._ownerPoolId)
+				Throw(std::runtime_error("Mixing a pipeline accelerator from an incorrect pool"));
+		#endif
+		
+		return pipelineAccelerator.TryGetPipeline(sequencerConfig, visibilityMarker);
+	}
+
+	const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator, VisibilityMarkerId visibilityMarker)
+	{
+		#if 0 // defined(_DEBUG)
+			assert(_lockForThreadingThread.has_value() && _lockForThreadingThread.value() == std::this_thread::get_id());
+		#endif
+		return accelerator._descriptorSet->TryActualize();
+	}
+
+	std::shared_ptr<ICompiledPipelineLayout> TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig, VisibilityMarkerId visibilityMarker)
+	{
+		#if 0 // defined(_DEBUG)
 			assert(_lockForThreadingThread.has_value() && _lockForThreadingThread.value() == std::this_thread::get_id());
 		#endif
 		auto actual = sequencerConfig._pipelineLayout->TryActualize();
@@ -605,7 +657,7 @@ namespace RenderCore { namespace Techniques
 			_pipelineAccelerators.insert(i, std::make_pair(hash, newAccelerator));
 		}
 
-		RebuildAllPipelinesAlreadyLocked(_guid, *newAccelerator);
+		RebuildAllPipelinesAlreadyLocked(_guid, *newAccelerator, hash);
 
 		return newAccelerator;
 	}
@@ -655,7 +707,7 @@ namespace RenderCore { namespace Techniques
 			_pipelineAccelerators.insert(i, std::make_pair(hash, newAccelerator));
 		}
 
-		RebuildAllPipelinesAlreadyLocked(_guid, *newAccelerator);
+		RebuildAllPipelinesAlreadyLocked(_guid, *newAccelerator, hash);
 
 		return newAccelerator;
 	}
@@ -678,11 +730,9 @@ namespace RenderCore { namespace Techniques
 
 			// If it already exists in the cache, just return it now
 			auto cachei = LowerBound(_descriptorSetAccelerators, hash);
-			if (cachei != _descriptorSetAccelerators.end() && cachei->first == hash) {
-				auto l = cachei->second.lock();
-				if (l)
+			if (cachei != _descriptorSetAccelerators.end() && cachei->first == hash)
+				if (auto l = cachei->second.lock())
 					return l;
-			}
 
 			if (_drawablesPool) {
 				result = _drawablesPool->MakeProtectedPtr<DescriptorSetAccelerator>();
@@ -751,6 +801,8 @@ namespace RenderCore { namespace Techniques
 	{
 		ScopedLock(_constructionLock);
 
+		std::vector<NewlyQueued> newlyQueued;
+
 		uint64_t hash = 0;
 		auto cfg = MakeSequencerConfig(hash, delegate, sequencerSelectors, fbDesc, subpassIndex);
 
@@ -777,8 +829,10 @@ namespace RenderCore { namespace Techniques
 					// as necessary -- 
 					for (auto& accelerator:_pipelineAccelerators) {
 						auto a = accelerator.second.lock();
-						if (a && !a->PipelineValidPipelineOrFuture(*result))
-							a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, _pipelineCollection, *_layoutPatcher);
+						if (a && !a->HasCurrentOrFuturePipeline(*result)) {
+							auto future = a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, _pipelineCollection, *_layoutPatcher);
+							newlyQueued.emplace_back(std::move(future), accelerator.first, cfgId);
+						}
 					}
 				} else {
 					if (!name.empty() && !XlFindString(result->_name, name))
@@ -800,21 +854,36 @@ namespace RenderCore { namespace Techniques
 		// trigger creation of pipeline states for all accelerators
 		for (auto& accelerator:_pipelineAccelerators) {
 			auto a = accelerator.second.lock();
-			if (a)
-				a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, _pipelineCollection, *_layoutPatcher);
+			if (a) {
+				if (a->_completedPipelines.size() < _sequencerConfigById.size())
+					a->_completedPipelines.resize(_sequencerConfigById.size());
+				auto future = a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, _pipelineCollection, *_layoutPatcher);
+				newlyQueued.emplace_back(std::move(future), accelerator.first, cfgId);
+			}
 		}
+
+		SetupNewlyQueuedAlreadyLocked(newlyQueued);
 
 		return result;
 	}
 
-	void PipelineAcceleratorPool::RebuildAllPipelinesAlreadyLocked(unsigned poolGuid, PipelineAccelerator& pipeline)
+	void PipelineAcceleratorPool::RebuildAllPipelinesAlreadyLocked(unsigned poolGuid, PipelineAccelerator& pipeline, uint64_t acceleratorHash)
 	{
+		std::vector<NewlyQueued> newlyQueued;
+
+		if (pipeline._completedPipelines.size() < _sequencerConfigById.size())
+			pipeline._completedPipelines.resize(_sequencerConfigById.size());
+
 		for (unsigned c=0; c<_sequencerConfigById.size(); ++c) {
 			auto cfgId = SequencerConfigId(c) | (SequencerConfigId(poolGuid) << 32ull);
 			auto l = _sequencerConfigById[c].second.lock();
-			if (l) 
-				pipeline.BeginPrepareForSequencerStateAlreadyLocked(l, _globalSelectors, _pipelineCollection, *_layoutPatcher);
+			if (l) {
+				auto future = pipeline.BeginPrepareForSequencerStateAlreadyLocked(l, _globalSelectors, _pipelineCollection, *_layoutPatcher);
+				newlyQueued.emplace_back(std::move(future), acceleratorHash, cfgId);
+			}
 		}
+
+		SetupNewlyQueuedAlreadyLocked(newlyQueued);
 	}
 
 	void PipelineAcceleratorPool::RebuildAllPipelinesAlreadyLocked(unsigned poolGuid)
@@ -822,7 +891,7 @@ namespace RenderCore { namespace Techniques
 		for (auto& accelerator:_pipelineAccelerators) {
 			auto a = accelerator.second.lock();
 			if (a)
-				RebuildAllPipelinesAlreadyLocked(poolGuid, *a);
+				RebuildAllPipelinesAlreadyLocked(poolGuid, *a, accelerator.first);
 		}
 	}
 
@@ -845,6 +914,9 @@ namespace RenderCore { namespace Techniques
 		ScopedLock(_pipelineUsageLock);		// (exclusive lock here)
 		ScopedLock(_constructionLock);
 
+		auto newVisibilityMarker = ++_lastReturnedVisibilityMarker;
+		std::vector<NewlyQueued> newlyQueued;
+
 		// Look through every pipeline registered in this pool, and 
 		// trigger a rebuild of any that appear to be out of date.
 		// This allows us to support hotreloading when files change, etc
@@ -863,55 +935,98 @@ namespace RenderCore { namespace Techniques
 			}
 			lockedSequencerConfigs[c] = std::move(cfg);
 		}
-					
-		for (auto& accelerator:_pipelineAccelerators) {
-			auto a = accelerator.second.lock();
-			if (a) {
-				for (auto invalidSequencer:MakeIteratorRange(invalidSequencerIndices, &invalidSequencerIndices[invalidSequencerCount])) {
-					// It's out of date -- let's rebuild and reassign it
-					a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[invalidSequencer], _globalSelectors, _pipelineCollection, *_layoutPatcher);
-				}
 
-				// check for completed/invalidated pipelines
-				if (a->_completedGraphicsPipelines.size() < _sequencerConfigById.size())
-					a->_completedGraphicsPipelines.resize(_sequencerConfigById.size());
-
-				for (auto i=a->_pendingGraphicsPipelines.begin(); i!=a->_pendingGraphicsPipelines.end();) {
-					PipelineAccelerator::Pipeline pipeline;
-					::Assets::DependencyValidation depVal;
-					::Assets::Blob b;
-					auto state = i->second->CheckStatusBkgrnd(pipeline, depVal, b);
-					if (state == ::Assets::AssetState::Pending) {
-						++i;
-						continue;
-					} else if (state == ::Assets::AssetState::Ready) {
-						a->_completedGraphicsPipelines[i->first] = std::move(pipeline);
-						i=a->_pendingGraphicsPipelines.erase(i);
-					} else {
-						// "invalid" state. Attempt to rebuild on changes
-						a->_completedGraphicsPipelines[i->first] = {};
-						if (depVal.GetValidationIndex() != 0 && lockedSequencerConfigs[i->first]) {
-							// should not change _pendingGraphicsPipelines, just overwrite existing entry
-							a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[i->first], _globalSelectors, _pipelineCollection, *_layoutPatcher);
-						}
-						++i;
-					}
-				}
-
-				for (unsigned c=0; c<_sequencerConfigById.size(); ++c) {
-					if (lockedSequencerConfigs[c]) {
-						if (a->_completedGraphicsPipelines[c].GetDependencyValidation().GetValidationIndex() != 0) {
-							auto existing = std::find_if(a->_pendingGraphicsPipelines.begin(), a->_pendingGraphicsPipelines.end(), [c](const auto& p) { return p.first == c; });
-							if (existing != a->_pendingGraphicsPipelines.end()) continue;	// already scheduled this rebuild
-							a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[c], _globalSelectors, _pipelineCollection, *_layoutPatcher);
-						}
-					} else {
-						// sequencer destroyed, release related pipelines
-						a->_completedGraphicsPipelines[c] = {};
+		// Requeue pipelines for invalidated sequencers
+		if (invalidSequencerCount) {
+			for (auto& accelerator:_pipelineAccelerators) {
+				auto a = accelerator.second.lock();
+				if (a) {
+					for (auto invalidSequencer:MakeIteratorRange(invalidSequencerIndices, &invalidSequencerIndices[invalidSequencerCount])) {
+						// It's out of date -- let's rebuild and reassign it
+						auto future = a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[invalidSequencer], _globalSelectors, _pipelineCollection, *_layoutPatcher);
+						newlyQueued.emplace_back(std::move(future), accelerator.first, lockedSequencerConfigs[invalidSequencer]->_cfgId);
 					}
 				}
 			}
 		}
+
+		// check for completed futures
+		std::vector<std::pair<uint64_t, SequencerConfigId>> thisTimeFuturesToCheck;
+		{
+			ScopedLock(_futuresToCheckHelper->_lock);
+			std::swap(_futuresToCheckHelper->_futuresToCheck, thisTimeFuturesToCheck);
+		}
+
+		for (auto& futureToCheck:thisTimeFuturesToCheck) {
+			auto a = LowerBound(_pipelineAccelerators, futureToCheck.first);
+			if (a == _pipelineAccelerators.end() || a->first != futureToCheck.first) continue;	// pipeline accelerator removed?
+
+			auto accelerator = a->second.lock();
+			if (!accelerator) continue;
+
+			assert(accelerator->_completedPipelines.size() >= _sequencerConfigById.size());
+			auto seqIdx = uint32_t(futureToCheck.second);
+			assert(seqIdx < _sequencerConfigById.size());
+
+			auto p = std::find_if(
+				accelerator->_pendingPipelines.begin(), accelerator->_pendingPipelines.end(),
+				[w=seqIdx](const auto& q) { return q.first == w; });
+			if (p == accelerator->_pendingPipelines.end()) continue;
+
+			auto state = p->second.wait_for(std::chrono::milliseconds(0));
+			if (state == std::future_status::timeout) continue;
+			assert(state == std::future_status::ready);
+
+			auto pendingPipeline = std::move(*p);
+			accelerator->_pendingPipelines.erase(p);
+
+			TRY
+			{
+				auto pipeline = pendingPipeline.second.get();
+				accelerator->_completedPipelines[seqIdx]._depVal = pipeline.GetDependencyValidation();
+				accelerator->_completedPipelines[seqIdx]._pipeline = std::move(pipeline);
+				accelerator->_completedPipelines[seqIdx]._visibilityMarker = newVisibilityMarker;
+			} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
+				// we've gone invalid
+				accelerator->_completedPipelines[seqIdx]._visibilityMarker = 0;
+				accelerator->_completedPipelines[seqIdx]._depVal = e.GetDependencyValidation();
+				accelerator->_completedPipelines[seqIdx]._pipeline = {};
+			} CATCH(const std::exception& e) {
+				// we've gone invalid (no dep val)
+				accelerator->_completedPipelines[seqIdx]._visibilityMarker = 0;
+				accelerator->_completedPipelines[seqIdx]._depVal = {};
+				accelerator->_completedPipelines[seqIdx]._pipeline = {};
+			} CATCH_END
+		}
+
+		// todo -- invalidation behaviour & releasing unneeded pipelines
+		#if 0
+			for (unsigned c=0; c<_sequencerConfigById.size(); ++c) {
+				if (lockedSequencerConfigs[c]) {
+					if (a->_completedPipelines[c].GetDependencyValidation().GetValidationIndex() != 0) {
+						auto existing = std::find_if(a->_pendingPipelines.begin(), a->_pendingPipelines.end(), [c](const auto& p) { return p.first == c; });
+						if (existing != a->_pendingPipelines.end()) continue;	// already scheduled this rebuild
+						a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[c], _globalSelectors, _pipelineCollection, *_layoutPatcher);
+					}
+				} else {
+					// sequencer destroyed, release related pipelines
+					a->_completedPipelines[c] = {};
+				}
+			}
+		#endif
+
+		SetupNewlyQueuedAlreadyLocked(newlyQueued);
+	}
+
+	void PipelineAcceleratorPool::SetupNewlyQueuedAlreadyLocked(IteratorRange<const NewlyQueued*> newlyQueued)
+	{
+		// after the newly queued futures are completed, make a record so we know to come and check them
+		for (const auto& q:newlyQueued)
+			::Assets::WhenAll(std::move(q._future)).Then(
+				[helper=_futuresToCheckHelper, acceleratorHash=q._acceleratorHash, cfgId=q._cfgId](const auto&) {
+					ScopedLock(helper->_lock);
+					helper->_futuresToCheck.emplace_back(acceleratorHash, cfgId);
+				});
 	}
 
 	void PipelineAcceleratorPool::SetGlobalSelector(StringSection<> name, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
@@ -1028,6 +1143,7 @@ namespace RenderCore { namespace Techniques
 		#if defined(_DEBUG)
 			_boundThreadId = std::this_thread::get_id();
 		#endif
+		_futuresToCheckHelper = std::make_shared<FuturesToCheckHelper>();
 	}
 
 	PipelineAcceleratorPool::~PipelineAcceleratorPool() {}

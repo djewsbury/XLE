@@ -11,6 +11,7 @@
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/StringUtils.h"
 #include <memory>
+#include <future>
 
 namespace RenderCore 
 {
@@ -36,6 +37,7 @@ namespace RenderCore { namespace Techniques
 	class DeformerToDescriptorSetBinding;
 	class ICompiledLayoutPool;
 	class IDrawablesPool;
+	using VisibilityMarkerId = uint32_t;
 
 	// Switching this to a virtual interface style class in order to better support multiple DLLs/modules
 	// For many objects like the SimpleModelRenderer, the pipeline accelerator pools is one of the main
@@ -74,16 +76,9 @@ namespace RenderCore { namespace Techniques
 
 		class Pipeline;
 
-		virtual const Pipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
-		virtual const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;
-		virtual std::shared_ptr<ICompiledPipelineLayout> TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig) const = 0;
-
-		// These "Get...Marker" functions are less optimal than the "TryGet..." ones, and should not be called frequently
-		// They are find to use during construction tasks (eg, stalling until a pipeline is ready, etc), but during the render
-		// loop use the "TryGet..." versions
-		virtual std::shared_ptr<::Assets::Marker<Pipeline>> GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
-		virtual std::shared_ptr<::Assets::Marker<ActualizedDescriptorSet>> GetDescriptorSetMarker(DescriptorSetAccelerator& accelerator) const = 0;
-		virtual ::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> GetCompiledPipelineLayoutMarker(const SequencerConfig& sequencerConfig) const = 0;
+		virtual std::future<VisibilityMarkerId> GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
+		virtual std::future<VisibilityMarkerId> GetDescriptorSetMarker(DescriptorSetAccelerator& accelerator) const = 0;
+		virtual std::future<VisibilityMarkerId> GetCompiledPipelineLayoutMarker(const SequencerConfig& sequencerConfig) const = 0;
 
 		virtual void	SetGlobalSelector(StringSection<> name, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) = 0;
 		T1(Type) void   SetGlobalSelector(StringSection<> name, Type value);
@@ -106,6 +101,10 @@ namespace RenderCore { namespace Techniques
 		unsigned _guid;
 		std::shared_ptr<IDevice> _device;
 	};
+
+	const IPipelineAcceleratorPool::Pipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig, VisibilityMarkerId);
+	const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator, VisibilityMarkerId);
+	std::shared_ptr<ICompiledPipelineLayout> TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig, VisibilityMarkerId);
 
 	T1(Type) inline void   IPipelineAcceleratorPool::SetGlobalSelector(StringSection<> name, Type value)
 	{
