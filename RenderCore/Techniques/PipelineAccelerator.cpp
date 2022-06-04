@@ -90,7 +90,7 @@ namespace RenderCore { namespace Techniques
 
 		// "_pendingPipelines" is protected by the _constructionLock in the pipeline accelerator pool
 		using FuturePipeline = std::shared_future<Pipeline>;
-		std::vector<std::pair<SequencerConfigId, FuturePipeline>> _pendingPipelines;
+		std::vector<std::pair<uint32_t, FuturePipeline>> _pendingPipelines;		// sequencer index -> FuturePipeline
 
 		std::shared_future<Pipeline> BeginPrepareForSequencerStateAlreadyLocked(
 			std::shared_ptr<SequencerConfig> cfg,
@@ -397,7 +397,7 @@ namespace RenderCore { namespace Techniques
 		T1(Type) void   SetGlobalSelector(StringSection<> name, Type value);
 		void			RemoveGlobalSelector(StringSection<> name) override;
 
-		void			RebuildAllOutOfDatePipelines() override;
+		VisibilityMarkerId VisibilityBarrier(VisibilityMarkerId expectedVisibility) override;
 
 		void 			LockForReading() const override;
 		void 			UnlockForReading() const override;
@@ -507,7 +507,7 @@ namespace RenderCore { namespace Techniques
 
 		auto pending = std::find_if(
 			pipelineAccelerator._pendingPipelines.begin(), pipelineAccelerator._pendingPipelines.end(),
-			[cfgId=sequencerConfig._cfgId](const auto& p) { return p.first == cfgId; });
+			[cfgId=uint32_t(sequencerConfig._cfgId)](const auto& p) { return p.first == cfgId; });
 		if (pending != pipelineAccelerator._pendingPipelines.end()) {
 			std::promise<VisibilityMarkerId> newPromise;
 			auto result = newPromise.get_future();
@@ -519,11 +519,12 @@ namespace RenderCore { namespace Techniques
 				});
 			return result;
 		}
-
-		if (sequencerConfig._cfgId >= pipelineAccelerator._completedPipelines.size())
+		
+		auto seqIndex = unsigned(sequencerConfig._cfgId);
+		if (seqIndex >= pipelineAccelerator._completedPipelines.size())
 			return {};
 
-		auto& completed = pipelineAccelerator._completedPipelines[sequencerConfig._cfgId];
+		auto& completed = pipelineAccelerator._completedPipelines[seqIndex];
 		std::promise<VisibilityMarkerId> immediatePromise;
 		immediatePromise.set_value((VisibilityMarkerId)completed._visibilityMarker); // includes invalid, & not pending case
 		return immediatePromise.get_future();
@@ -949,7 +950,7 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	void PipelineAcceleratorPool::RebuildAllOutOfDatePipelines()
+	VisibilityMarkerId PipelineAcceleratorPool::VisibilityBarrier(VisibilityMarkerId expectedVisibility)
 	{
 		#if defined(_DEBUG)
 			assert(std::this_thread::get_id() == _boundThreadId);
@@ -967,6 +968,12 @@ namespace RenderCore { namespace Techniques
 		// This way around should be more easily controllable for us
 		ScopedLock(_pipelineUsageLock);		// (exclusive lock here)
 		ScopedLock(_constructionLock);
+
+		// We can make the barrier optional by setting "expectedVisibility" to something other than the default (which is ~0u)
+		// This can allow us to early out if we find that the required visibility is already achieved
+		auto current = _futuresToCheckHelper->_lastPublishedVisibilityMarker.load();
+		if (current >= expectedVisibility)
+			return current;
 
 		auto newVisibilityMarker = ++_futuresToCheckHelper->_lastPublishedVisibilityMarker;
 		std::vector<NewlyQueued> newlyQueued;
@@ -1136,6 +1143,8 @@ namespace RenderCore { namespace Techniques
 		#endif
 
 		SetupNewlyQueuedAlreadyLocked(newlyQueued);
+
+		return newVisibilityMarker;
 	}
 
 	void PipelineAcceleratorPool::SetupNewlyQueuedAlreadyLocked(IteratorRange<const NewlyQueued*> newlyQueued)

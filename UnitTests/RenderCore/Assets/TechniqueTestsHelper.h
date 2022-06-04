@@ -14,7 +14,7 @@
 #include "../../../ConsoleRig/AttachablePtr.h"
 #include <regex>
 
-namespace RenderCore { namespace Techniques { class TechniqueContext; class ICompiledLayoutPool; class IDrawablesPool; }}
+namespace RenderCore { namespace Techniques { class TechniqueContext; class ICompiledLayoutPool; class IDrawablesPool; class DrawablesPacket; struct PreparedResourcesVisibility; }}
 
 namespace UnitTests
 {
@@ -41,4 +41,9 @@ namespace UnitTests
 		TechniqueTestApparatus(MetalTestHelper& testHelper);
 		~TechniqueTestApparatus();
 	};
+
+	RenderCore::Techniques::PreparedResourcesVisibility PrepareAndStall(
+		TechniqueTestApparatus& testApparatus,
+		const RenderCore::Techniques::SequencerConfig& sequencerConfig,
+		const RenderCore::Techniques::DrawablesPacket& drawablePkt);
 }

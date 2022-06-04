@@ -85,7 +85,7 @@ namespace RenderCore { namespace Techniques
 		T1(Type) void   SetGlobalSelector(StringSection<> name, Type value);
 		virtual void	RemoveGlobalSelector(StringSection<> name) = 0;
 
-		virtual void	RebuildAllOutOfDatePipelines() = 0;
+		virtual VisibilityMarkerId VisibilityBarrier(VisibilityMarkerId expectedVisibility=~0u) = 0;
 		virtual const std::shared_ptr<IDevice>& GetDevice() const = 0;
 		virtual const std::shared_ptr<ICompiledLayoutPool>& GetCompiledLayoutPool() const = 0;
 

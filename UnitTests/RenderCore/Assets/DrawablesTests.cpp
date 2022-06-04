@@ -89,12 +89,13 @@ namespace UnitTests
 		return std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 	}
 
-	template<typename Type>
-		static void StallForDescriptorSet(RenderCore::IThreadContext& threadContext, ::Assets::Marker<Type>& descriptorSetFuture)
+	static RenderCore::Techniques::VisibilityMarkerId StallForDescriptorSet(
+		RenderCore::IThreadContext& threadContext, 
+		std::future<std::pair<RenderCore::Techniques::VisibilityMarkerId, BufferUploads::CommandListID>>& descriptorSetFuture)
 	{
-		auto state = descriptorSetFuture.StallWhilePending();
-		if (state.has_value() && state.value() == ::Assets::AssetState::Ready)
-			RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(threadContext, descriptorSetFuture.Actualize().GetCompletionCommandList());
+		auto state = descriptorSetFuture.get();
+		RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(threadContext, state.second);
+		return state.first;
 	}
 
 	template<typename Type>
@@ -215,16 +216,14 @@ namespace UnitTests
 				RenderCore::Assets::RenderStateSet{});
 
 			auto descSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
-			REQUIRE(descSetFuture);
-			StallForDescriptorSet(*threadContext, *descSetFuture);
-			RequireReady(*descSetFuture);
+			REQUIRE(descSetFuture.valid());
+			StallForDescriptorSet(*threadContext, descSetFuture);
 
 			auto pipelineFuture = pipelineAcceleratorPool->GetPipelineMarker(*pipelineWithTexCoord, *cfgId);
-			REQUIRE(pipelineFuture);
-			pipelineFuture->StallWhilePending();
-			RequireReady(*pipelineFuture);
+			REQUIRE(pipelineFuture.valid());
+			auto pipelineVisibilityMarker = pipelineFuture.get();		// stall
 
-			pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();		// must call this to flip completed pipelines, etc, to visible
+			pipelineAcceleratorPool->VisibilityBarrier(pipelineVisibilityMarker);		// must call this to flip completed pipelines, etc, to visible
 
 			struct CustomDrawable : public Techniques::Drawable { unsigned _vertexCount; };
 			Techniques::DrawablesPacket pkt;
@@ -245,13 +244,7 @@ namespace UnitTests
 				Techniques::ParsingContext parsingContext{*techniqueTestApparatus._techniqueContext, *threadContext};
 				parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(globalDelegate);
 				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
-				auto prepare = Techniques::PrepareResources(*pipelineAcceleratorPool, *cfgId, pkt);
-				if (prepare) {
-					prepare->StallWhilePending();
-					REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
-				}
-				pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();		// must call this to flip completed pipelines, etc, to visible
-				::Assets::Services::GetAssetSets().OnFrameBarrier();
+				PrepareAndStall(techniqueTestApparatus, *cfgId, pkt);
 				Techniques::Draw(
 					parsingContext, 
 					*pipelineAcceleratorPool,
@@ -295,16 +288,8 @@ namespace UnitTests
 				
 			auto globalDelegate = std::make_shared<UnitTestGlobalUniforms>(targetDesc);
 
-			for (const auto&pkt:pkts) {
-				auto prepare = Techniques::PrepareResources(*pipelineAcceleratorPool, *cfgId, pkt);
-				if (prepare) {
-					prepare->StallWhilePending();
-					REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
-				}
-			}
-
-			pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();		// must call this to flip completed pipelines, etc, to visible
-			::Assets::Services::GetAssetSets().OnFrameBarrier();
+			for (const auto&pkt:pkts)
+				PrepareAndStall(techniqueTestApparatus, *cfgId, pkt);
 
 			testHelper->BeginFrameCapture();
 
@@ -422,6 +407,26 @@ namespace UnitTests
 		unsigned _queryCount = 0;
 	};
 
+	static const char* s_fakeSequencerDescSet = R"--(
+		UniformBuffer GlobalTransform;
+		UniformBuffer LocalTransform;
+		UniformBuffer SeqBuffer0;
+		UniformBuffer b3;
+		UniformBuffer b4;
+		UniformBuffer b5;
+
+		SampledTexture SeqTex0;
+		SampledTexture t7;
+		SampledTexture t8;
+		SampledTexture t9;
+		SampledTexture t10;
+
+		Sampler SeqSampler0;
+		Sampler s12;
+		Sampler s13;
+		Sampler s14;
+	)--";
+
 	TEST_CASE( "Drawables-SequencerDescriptorSet", "[rendercore_techniques]" )
 	{
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
@@ -436,10 +441,12 @@ namespace UnitTests
 		
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		ParsingContext parsingContext(*testApparatus._techniqueContext, *threadContext);
+
+		RenderCore::Assets::PredefinedDescriptorSetLayout fakeSequencerDescSet{s_fakeSequencerDescSet, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{}};
 		
 		{
 			auto helper0 = Techniques::CreateUniformDelegateManager();
-			helper0->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *testApparatus._sequencerDescSetLayout->GetLayout(), *testHelper->_device);
+			helper0->AddSemiConstantDescriptorSet(Hash64("Sequencer"), fakeSequencerDescSet, *testHelper->_device);
 			helper0->AddShaderResourceDelegate(del0);
 			helper0->AddShaderResourceDelegate(del1);
 			helper0->AddUniformDelegate(Hash64("slot-doesnt-exist-0"), udel0);
@@ -467,7 +474,7 @@ namespace UnitTests
 
 		{
 			auto helper1 = Techniques::CreateUniformDelegateManager();
-			helper1->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *testApparatus._sequencerDescSetLayout->GetLayout(), *testHelper->_device);
+			helper1->AddSemiConstantDescriptorSet(Hash64("Sequencer"), fakeSequencerDescSet, *testHelper->_device);
 			helper1->AddShaderResourceDelegate(del0);
 			helper1->AddShaderResourceDelegate(del1);
 			helper1->AddUniformDelegate(Hash64("slot-doesnt-exist-0"), udel0);

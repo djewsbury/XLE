@@ -33,6 +33,7 @@
 #include "../../../RenderCore/FrameBufferDesc.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../BufferUploads/BufferUploads_Manager.h"
+#include "../../../BufferUploads/IBufferUploads.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/IFileSystem.h"
 #include "../../../Assets/OSFileSystem.h"
@@ -187,11 +188,47 @@ namespace UnitTests
 		REQUIRE(future.GetAssetState() == ::Assets::AssetState::Ready);
 	}
 
-	static std::shared_ptr<RenderCore::ICompiledPipelineLayout> PipelineLayoutFromPool(RenderCore::Techniques::IPipelineAcceleratorPool& pool, RenderCore::Techniques::SequencerConfig& cfg)
+	static std::shared_ptr<RenderCore::ICompiledPipelineLayout> StallForPipelineLayout(RenderCore::Techniques::IPipelineAcceleratorPool& pool, RenderCore::Techniques::SequencerConfig& cfg)
 	{
 		auto compiledLayout = pool.GetCompiledPipelineLayoutMarker(cfg);
-		compiledLayout->StallWhilePending();
-		return compiledLayout->Actualize()->GetPipelineLayout();
+		REQUIRE(compiledLayout.valid());
+		auto resultBecomesVisibleAt = compiledLayout.get();		// stall
+		auto newVisibility = pool.VisibilityBarrier(resultBecomesVisibleAt);
+		REQUIRE(newVisibility >= resultBecomesVisibleAt);
+		auto result = RenderCore::Techniques::TryGetCompiledPipelineLayout(cfg, newVisibility);
+		REQUIRE(result);
+		return result;
+	}
+
+	static const RenderCore::Techniques::IPipelineAcceleratorPool::Pipeline* StallForPipeline(
+		RenderCore::Techniques::IPipelineAcceleratorPool& pool,
+		RenderCore::Techniques::PipelineAccelerator& accelerator,
+		const RenderCore::Techniques::SequencerConfig& cfg)
+	{
+		auto pipelineMarker = pool.GetPipelineMarker(accelerator, cfg);
+		REQUIRE(pipelineMarker.valid());
+		auto resultBecomesVisibleAt = pipelineMarker.get();		// stall
+		auto newVisibility = pool.VisibilityBarrier(resultBecomesVisibleAt);
+		REQUIRE(newVisibility >= resultBecomesVisibleAt);
+		auto result = RenderCore::Techniques::TryGetPipeline(accelerator, cfg, newVisibility);
+		REQUIRE(result);
+		return result;
+	}
+
+	static const RenderCore::Techniques::ActualizedDescriptorSet* StallForDescriptorSet(
+		RenderCore::Techniques::IPipelineAcceleratorPool& pool,
+		BufferUploads::IManager& bu,
+		RenderCore::Techniques::DescriptorSetAccelerator& accelerator)
+	{
+		auto descSetMarker = pool.GetDescriptorSetMarker(accelerator);
+		REQUIRE(descSetMarker.valid());
+		auto resultBecomesVisibleAt = descSetMarker.get();		// stall
+		auto newVisibility = pool.VisibilityBarrier(resultBecomesVisibleAt.first);
+		REQUIRE(newVisibility >= resultBecomesVisibleAt.first);
+		auto result = RenderCore::Techniques::TryGetDescriptorSet(accelerator, newVisibility);
+		REQUIRE(result);
+		bu.StallUntilCompletion(*pool.GetDevice()->GetImmediateContext(), resultBecomesVisibleAt.second);
+		return result;
 	}
 
 	TEST_CASE( "PipelineAcceleratorTests-ConfigurationAndCreation", "[rendercore_techniques]" )
@@ -231,10 +268,8 @@ namespace UnitTests
 				Topology::TriangleList,
 				doubledSidedStateSet);
 
-			auto finalPipeline = mainPool->GetPipelineMarker(*pipelineAccelerator, *cfgId);
+			auto finalPipeline = StallForPipeline(*mainPool, *pipelineAccelerator, *cfgId);
 			REQUIRE(finalPipeline);
-			finalPipeline->StallWhilePending();
-			RequireReady(*finalPipeline);
 		}
 
 			//
@@ -255,10 +290,8 @@ namespace UnitTests
 					//	We should get a valid pipeline in this case; since there are no texture coordinates
 					//	on the geometry, this disables the code that triggers a compiler warning
 					//
-				auto finalPipelineFuture = mainPool->GetPipelineMarker(*pipelineNoTexCoord, *cfgId);
+				auto finalPipelineFuture = StallForPipeline(*mainPool, *pipelineNoTexCoord, *cfgId);
 				REQUIRE(finalPipelineFuture);
-				finalPipelineFuture->StallWhilePending();
-				RequireReady(*finalPipelineFuture);
 			}
 
 			auto pipelineWithTexCoord = mainPool->CreatePipelineAccelerator(
@@ -270,16 +303,17 @@ namespace UnitTests
 
 			{
 					//
-					//	Here, the pipeline will fail to compile. We should ensure we get a reasonable
+					//	Here, the pipeline will fail to compile.  We should ensure we get a reasonable
 					//	error message -- that is the shader compile error should propagate through
 					//	to the pipeline error log
 					//
-				auto finalPipelineFuture = mainPool->GetPipelineMarker(*pipelineWithTexCoord, *cfgId);
-				REQUIRE(finalPipelineFuture);
-				finalPipelineFuture->StallWhilePending();
-				REQUIRE(finalPipelineFuture->GetAssetState() == ::Assets::AssetState::Invalid);
-				auto log = ::Assets::AsString(finalPipelineFuture->GetActualizationLog());
-				REQUIRE(!log.empty());
+				TRY {
+					StallForPipeline(*mainPool, *pipelineWithTexCoord, *cfgId);
+					FAIL("Expecting exception while stalling for invalid asset");
+				} CATCH(const std::exception& e) {
+					auto log = std::string{e.what()};
+					REQUIRE(!log.empty());
+				} CATCH_END
 			}
 
 			// Now we'll create a new sequencer config, and we're actually going to use
@@ -300,16 +334,14 @@ namespace UnitTests
 			auto vertexBuffer = testHelper->CreateVB(vertices_fullViewport);
 
 			{
-				auto finalPipelineFuture = mainPool->GetPipelineMarker(*pipelineWithTexCoord, *cfgIdWithColor);
+				auto finalPipelineFuture = StallForPipeline(*mainPool, *pipelineWithTexCoord, *cfgIdWithColor);
 				REQUIRE(finalPipelineFuture);
-				finalPipelineFuture->StallWhilePending();
-				RequireReady(*finalPipelineFuture);
 
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
 				RenderQuad(
 					*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), 
-					*finalPipelineFuture->Actualize()._metalPipeline,
-					PipelineLayoutFromPool(*mainPool, *cfgIdWithColor));
+					*finalPipelineFuture->_metalPipeline,
+					StallForPipelineLayout(*mainPool, *cfgIdWithColor));
 			}
 
 			// We should have filled the entire framebuffer with red 
@@ -326,16 +358,14 @@ namespace UnitTests
 				MakeSimpleFrameBufferDesc());
 
 			{
-				auto finalPipelineFuture = mainPool->GetPipelineMarker(*pipelineWithTexCoord, *cfgIdWithColor);
+				auto finalPipelineFuture = StallForPipeline(*mainPool, *pipelineWithTexCoord, *cfgIdWithColor);
 				REQUIRE(finalPipelineFuture);
-				finalPipelineFuture->StallWhilePending();
-				RequireReady(*finalPipelineFuture);
 
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
 				RenderQuad(
 					*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), 
-					*finalPipelineFuture->Actualize()._metalPipeline,
-					PipelineLayoutFromPool(*mainPool, *cfgIdWithColor));
+					*finalPipelineFuture->_metalPipeline,
+					StallForPipelineLayout(*mainPool, *cfgIdWithColor));
 			}
 
 			auto breakdown1 = fbHelper.GetFullColorBreakdown(*threadContext);
@@ -345,13 +375,6 @@ namespace UnitTests
 
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(utdatamnt);
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);
-	}
-
-	static void StallForDescriptorSet(RenderCore::IThreadContext& threadContext, ::Assets::Marker<RenderCore::Techniques::ActualizedDescriptorSet>& descriptorSetFuture)
-	{
-		auto state = descriptorSetFuture.StallWhilePending();
-		if (state.has_value() && state.value() == ::Assets::AssetState::Ready)
-			RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(threadContext, descriptorSetFuture.Actualize().GetCompletionCommandList());
 	}
 
 	TEST_CASE( "PipelineAcceleratorTests-DescriptorSetAcceleratorConstruction", "[rendercore_techniques]" )
@@ -388,10 +411,8 @@ namespace UnitTests
 				patches,
 				matMachine->GetMaterialMachine(),
 				matMachine);
-			auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
-			if (descriptorSetFuture) descriptorSetFuture->StallWhilePending();
-			auto& descSet = descriptorSetFuture->Actualize();
-			auto* bindingInfo = &descSet._bindingInfo;
+			auto descSet = StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator);
+			auto* bindingInfo = &descSet->_bindingInfo;
 
 			// we should have 2 constant buffers and no shader resources
 			auto materialUniformsI = std::find_if(bindingInfo->_slots.begin(), bindingInfo->_slots.end(), [](const auto& slot) { return slot._layoutName == "MaterialUniforms"; });
@@ -466,7 +487,6 @@ namespace UnitTests
 				patches,
 				matMachine->GetMaterialMachine(), 
 				matMachine);
-			auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
 
 			// Put together the pieces we need to create a pipeline
 			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
@@ -490,14 +510,12 @@ namespace UnitTests
 			auto vertexBuffer = testHelper->CreateVB(vertices_fullViewport);
 
 			{
-				auto finalPipeline = pipelineAcceleratorPool->GetPipelineMarker(*pipelineWithTexCoord, *cfgId);
-				finalPipeline->StallWhilePending();
-				RequireReady(*finalPipeline);
+				auto finalPipeline = StallForPipeline(*pipelineAcceleratorPool, *pipelineWithTexCoord, *cfgId);
+				REQUIRE(finalPipeline);
 
-				StallForDescriptorSet(*threadContext, *descriptorSetFuture);
-				RequireReady(*descriptorSetFuture);
-				auto& descSet = descriptorSetFuture->Actualize();
-				auto* bindingInfo = &descSet._bindingInfo;
+				auto descSet = StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator);
+				REQUIRE(descSet);
+				auto* bindingInfo = &descSet->_bindingInfo;
 				auto boundTextureI = std::find_if(bindingInfo->_slots.begin(), bindingInfo->_slots.end(), [](const auto& slot) { return slot._layoutName == "BoundTexture"; });
 				REQUIRE(boundTextureI != bindingInfo->_slots.end());
 				REQUIRE(boundTextureI->_layoutSlotType == DescriptorType::SampledTexture);
@@ -507,9 +525,9 @@ namespace UnitTests
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
 				RenderQuad(
 					*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), 
-					*finalPipeline->Actualize()._metalPipeline, 
-					PipelineLayoutFromPool(*pipelineAcceleratorPool, *cfgId),
-					descriptorSetFuture->Actualize()._descriptorSet.get());
+					*finalPipeline->_metalPipeline, 
+					StallForPipelineLayout(*pipelineAcceleratorPool, *cfgId),
+					descSet->_descriptorSet.get());
 			}
 
 			auto breakdown = fbHelper.GetFullColorBreakdown(*threadContext);
@@ -570,10 +588,8 @@ namespace UnitTests
 				GlobalInputLayouts::PCT,
 				Topology::TriangleList,
 				doubledSidedStateSet);
-			auto finalPipeline = pipelineAcceleratorPool->GetPipelineMarker(*pipelineWithTexCoord, *cfgId);
+			auto finalPipeline = StallForPipeline(*pipelineAcceleratorPool, *pipelineWithTexCoord, *cfgId);
 			REQUIRE(finalPipeline);
-			finalPipeline->StallWhilePending();
-			RequireReady(*finalPipeline);
 
 			auto vertexBuffer = testHelper->CreateVB(vertices_fullViewport);
 
@@ -584,20 +600,18 @@ namespace UnitTests
 				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 					patches,
 					{}, {});
-				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
-				StallForDescriptorSet(*threadContext, *descriptorSetFuture);
-				RequireReady(*descriptorSetFuture);
-				auto& descSet = descriptorSetFuture->Actualize();
-				auto* bindingInfo = &descSet._bindingInfo;
+				auto descSet = StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator);
+				REQUIRE(descSet);
+				auto* bindingInfo = &descSet->_bindingInfo;
 				REQUIRE(bindingInfo->_slots.size() > 0);
 				
 				{
 					auto rpi = fbHelper.BeginRenderPass(*threadContext);
 					RenderQuad(
 						*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), 
-						*finalPipeline->Actualize()._metalPipeline,
-						PipelineLayoutFromPool(*pipelineAcceleratorPool, *cfgId),
-						descriptorSetFuture->Actualize()._descriptorSet.get());
+						*finalPipeline->_metalPipeline,
+						StallForPipelineLayout(*pipelineAcceleratorPool, *cfgId),
+						descSet->_descriptorSet.get());
 				}
 
 				auto breakdown = fbHelper.GetFullColorBreakdown(*threadContext);
@@ -615,9 +629,7 @@ namespace UnitTests
 					patches,
 					matMachine->GetMaterialMachine(),
 					matMachine);
-				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
-				StallForDescriptorSet(*threadContext, *descriptorSetFuture);
-				REQUIRE_THROWS(descriptorSetFuture->Actualize());		// if any texture is bad, the entire descriptor set is considered bad
+				REQUIRE_THROWS(StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator));
 			}
 
 			SECTION("Bind invalid texture")
@@ -630,9 +642,7 @@ namespace UnitTests
 					patches,
 					matMachine->GetMaterialMachine(),
 					matMachine);
-				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
-				StallForDescriptorSet(*threadContext, *descriptorSetFuture);
-				REQUIRE_THROWS(descriptorSetFuture->Actualize());		// if any texture is bad, the entire descriptor set is considered bad
+				REQUIRE_THROWS(StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator));
 			}
 
 			SECTION("Bind bad uniform inputs")
@@ -647,12 +657,9 @@ namespace UnitTests
 					patches,
 					matMachine->GetMaterialMachine(),
 					matMachine);
-				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
-				REQUIRE(descriptorSetFuture);
-				StallForDescriptorSet(*threadContext, *descriptorSetFuture);
-				RequireReady(*descriptorSetFuture);
-				auto& descSet = descriptorSetFuture->Actualize();
-				auto* bindingInfo = &descSet._bindingInfo;
+				auto descSet = StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator);
+				REQUIRE(descSet);
+				auto* bindingInfo = &descSet->_bindingInfo;
 				REQUIRE(bindingInfo->_slots.size() > 0);
 
 				// If we try to create another accelerator with the same settings, we'll get the same
@@ -678,9 +685,7 @@ namespace UnitTests
 					patches,
 					matMachine->GetMaterialMachine(),
 					matMachine);
-				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
-				StallForDescriptorSet(*threadContext, *descriptorSetFuture);
-				REQUIRE_THROWS(descriptorSetFuture->Actualize());
+				REQUIRE_THROWS(StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator));
 
 				// do the same, but messing up sampler configurations
 				std::vector<std::pair<uint64_t, SamplerDesc>> samplerBindings {
@@ -695,9 +700,7 @@ namespace UnitTests
 					patches,
 					matMachine2->GetMaterialMachine(),
 					matMachine2);
-				descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
-				StallForDescriptorSet(*threadContext, *descriptorSetFuture);
-				REQUIRE_THROWS(descriptorSetFuture->Actualize());
+				REQUIRE_THROWS(StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator));
 			}
 		}
 

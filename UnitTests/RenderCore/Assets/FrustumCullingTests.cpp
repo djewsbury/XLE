@@ -231,13 +231,7 @@ namespace UnitTests
 					}
 				};
 
-			auto prepare = Techniques::PrepareResources(*pipelineAcceleratorPool, *cfgId, pkt);
-			if (prepare) {
-				prepare->StallWhilePending();
-				REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
-			}
-			pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();		// must call this to flip completed pipelines, etc, to visible
-			::Assets::Services::GetAssetSets().OnFrameBarrier();
+			PrepareAndStall(testApparatus, *cfgId, pkt);
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);

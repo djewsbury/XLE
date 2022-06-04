@@ -369,25 +369,33 @@ namespace UnitTests
 		const std::shared_ptr<RenderCore::Techniques::SequencerConfig>& cfg,		
 		const RenderCore::IResource& vb, size_t vertexCount)
 	{
-		auto pipelineFuture = pipelinePool->GetPipelineMarker(*pipelineAccelerator, *cfg);
-		REQUIRE(pipelineFuture != nullptr);
-		pipelineFuture->StallWhilePending();
-		if (pipelineFuture->GetAssetState() == ::Assets::AssetState::Invalid) {
-			INFO(::Assets::AsString(pipelineFuture->GetActualizationLog()));
-		}
-		auto& pipeline = pipelineFuture->Actualize();
+		using namespace RenderCore;
+		const Techniques::IPipelineAcceleratorPool::Pipeline* pipeline;
+		const Techniques::ActualizedDescriptorSet* descriptorSet = nullptr;
+		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout;
 
-		std::shared_ptr<RenderCore::IDescriptorSet> descriptorSet;
-		if (descriptorSetAccelerator) {
-			auto descSetFuture = pipelinePool->GetDescriptorSetMarker(*descriptorSetAccelerator);
-			REQUIRE(descSetFuture != nullptr);
-			descSetFuture->StallWhilePending();
-			INFO(::Assets::AsString(descSetFuture->GetActualizationLog()));
-			REQUIRE(descSetFuture->GetAssetState() == ::Assets::AssetState::Ready);
-			auto& actualizedDescSet = descSetFuture->Actualize();
-			descriptorSet = actualizedDescSet.GetDescriptorSet();
-			REQUIRE(descriptorSet != nullptr);
-			RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(*threadContext, actualizedDescSet.GetCompletionCommandList());
+		{
+			auto pipelineMarker = pipelinePool->GetPipelineMarker(*pipelineAccelerator, *cfg);
+			Techniques::PreparedResourcesVisibility visibility;
+			visibility._pipelineAcceleratorsVisibility = std::max(pipelineMarker.get(), visibility._pipelineAcceleratorsVisibility);
+
+			auto layoutMarker = pipelinePool->GetCompiledPipelineLayoutMarker(*cfg);
+			visibility._pipelineAcceleratorsVisibility = std::max(layoutMarker.get(), visibility._pipelineAcceleratorsVisibility);
+
+			if (descriptorSetAccelerator) {
+				auto descSetMarker = pipelinePool->GetDescriptorSetMarker(*descriptorSetAccelerator);
+				auto descSetVis = descSetMarker.get();
+				visibility._pipelineAcceleratorsVisibility = std::max(descSetVis.first, visibility._pipelineAcceleratorsVisibility);
+				visibility._bufferUploadsVisibility = std::max(descSetVis.second, visibility._bufferUploadsVisibility);
+			}
+
+			auto newVisibility = pipelinePool->VisibilityBarrier(visibility._pipelineAcceleratorsVisibility);
+			RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(*threadContext, visibility._bufferUploadsVisibility);
+
+			pipeline = Techniques::TryGetPipeline(*pipelineAccelerator, *cfg, newVisibility);
+			pipelineLayout = Techniques::TryGetCompiledPipelineLayout(*cfg, newVisibility);
+			if (descriptorSetAccelerator)
+				descriptorSet = Techniques::TryGetDescriptorSet(*descriptorSetAccelerator, newVisibility);
 		}
 
 		using namespace RenderCore;
@@ -395,27 +403,25 @@ namespace UnitTests
 		usi.BindImmediateData(0, Hash64("GlobalTransform"));
 		if (descriptorSet)
 			usi.BindFixedDescriptorSet(0, Hash64("Material"));
-		Metal::BoundUniforms uniforms { *pipeline._metalPipeline, usi };
+		Metal::BoundUniforms uniforms { *pipeline->_metalPipeline, usi };
 
 		{
 			auto rpi = fbHelper.BeginRenderPass(*threadContext);
 
 			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-			auto pipelineLayoutAsset = pipelinePool->GetCompiledPipelineLayoutMarker(*cfg);
-			pipelineLayoutAsset->StallWhilePending();
-			auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayoutAsset->Actualize()->GetPipelineLayout());
+			auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayout);
 
 			UniformsStream::ImmediateData cbvs[] = { MakeOpaqueIteratorRange(globalTransform) };
 			UniformsStream uniformsStream;
 			uniformsStream._immediateData = cbvs;
 			uniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
 
-			IDescriptorSet* descSets[] = { descriptorSet.get() };
+			IDescriptorSet* descSets[] = { descriptorSet->_descriptorSet.get() };
 			uniforms.ApplyDescriptorSets(metalContext, encoder, MakeIteratorRange(descSets));
 
 			VertexBufferView vbvs[] = { &vb };
 			encoder.Bind(MakeIteratorRange(vbvs), {});
-			encoder.Draw(*pipeline._metalPipeline, (unsigned)vertexCount);
+			encoder.Draw(*pipeline->_metalPipeline, (unsigned)vertexCount);
 		}
 
 		static unsigned counter = 0;

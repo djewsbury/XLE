@@ -344,7 +344,7 @@ namespace UnitTests
 		
 		auto threadContext = testHelper->_device->GetImmediateContext();
 
-		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool).CreateSphereDrawablesWriter();
+		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateSphereDrawablesWriter();
 
 		RenderCore::Techniques::CameraDesc cameras[3];
 		cameras[0]._cameraToWorld = MakeCameraToWorld(Float3{1.0f, 0.0f, 0.0f}, Float3{0.0f, 1.0f, 0.0f}, Float3{-3.33f, 0.f, 0.f});
@@ -404,7 +404,7 @@ namespace UnitTests
 					parameterResource = rpi.GetOutputAttachmentResource(2);
 					depthResource = rpi.GetDepthStencilAttachmentResource();
 
-					auto gbufferWriteCfg = testApparatus._pipelineAcceleratorPool->CreateSequencerConfig(
+					auto gbufferWriteCfg = testApparatus._pipelineAccelerators->CreateSequencerConfig(
 						"gbufferWriteCfg",
 						Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
 						ParameterBox {},
@@ -413,17 +413,10 @@ namespace UnitTests
 					{
 						Techniques::DrawablesPacket pkt;
 						drawableWriter->WriteDrawables(pkt);
-						auto prepareMarker = Techniques::PrepareResources(*testApparatus._pipelineAcceleratorPool, *gbufferWriteCfg.get(), pkt);
-						if (prepareMarker) {
-							prepareMarker->StallWhilePending();
-							REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
-						}
-						testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
-						::Assets::Services::GetAssetSets().OnFrameBarrier();
-
+						PrepareAndStall(testApparatus, *gbufferWriteCfg.get(), pkt);
 						Techniques::Draw(
 							parsingContext, 
-							*testApparatus._pipelineAcceleratorPool,
+							*testApparatus._pipelineAccelerators,
 							*gbufferWriteCfg,
 							pkt);
 					}
@@ -472,7 +465,7 @@ namespace UnitTests
 					frag.AddSubpass(std::move(subpass));
 					RenderCore::Techniques::RenderPassInstance rpi(parsingContext, frag);
 
-					auto writeDirectCfg = testApparatus._pipelineAcceleratorPool->CreateSequencerConfig(
+					auto writeDirectCfg = testApparatus._pipelineAccelerators->CreateSequencerConfig(
 						"writeDirectCfg",
 						std::make_shared<WriteWorldCoordsDelegate>(),
 						ParameterBox {},
@@ -484,17 +477,10 @@ namespace UnitTests
 					{
 						Techniques::DrawablesPacket pkt;
 						drawableWriter->WriteDrawables(pkt);
-						auto prepareMarker = Techniques::PrepareResources(*testApparatus._pipelineAcceleratorPool, *writeDirectCfg.get(), pkt);
-						if (prepareMarker) {
-							prepareMarker->StallWhilePending();
-							REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
-						}
-						testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
-						::Assets::Services::GetAssetSets().OnFrameBarrier();
-
+						PrepareAndStall(testApparatus, *writeDirectCfg.get(), pkt);
 						Techniques::Draw(
 							parsingContext, 
-							*testApparatus._pipelineAcceleratorPool,
+							*testApparatus._pipelineAccelerators,
 							*writeDirectCfg,
 							pkt);
 					}

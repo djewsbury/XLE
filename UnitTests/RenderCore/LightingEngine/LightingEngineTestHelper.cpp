@@ -64,7 +64,7 @@ namespace UnitTests
 		auto matDescSetLayout = MakeMaterialDescriptorSetLayout();
 		auto compiledLayoutPool = CreateCompiledLayoutPool(_metalTestHelper->_device, matDescSetLayout);
 		_drawablesPool = Techniques::CreateDrawablesPool();
-		_pipelineAcceleratorPool = Techniques::CreatePipelineAcceleratorPool(
+		_pipelineAccelerators = Techniques::CreatePipelineAcceleratorPool(
 			_metalTestHelper->_device, _drawablesPool, compiledLayoutPool, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
 
 		_sharedDelegates = std::make_shared<LightingEngine::SharedTechniqueDelegateBox>();
@@ -152,6 +152,35 @@ namespace UnitTests
 			assert(!next._pkts.empty() && next._pkts[0]);
 			drawableWriter.WriteDrawables(*next._pkts[0]);
 		}
+	}
+
+	RenderCore::Techniques::PreparedResourcesVisibility PrepareAndStall(
+		LightingEngineTestApparatus& testApparatus,
+		const RenderCore::Techniques::SequencerConfig& sequencerConfig,
+		const RenderCore::Techniques::DrawablesPacket& drawablePkt)
+	{
+		using namespace RenderCore;
+		std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
+		auto prepareFuture = preparePromise.get_future();
+		Techniques::PrepareResources(std::move(preparePromise), *testApparatus._pipelineAccelerators, sequencerConfig, drawablePkt);
+		auto requiredVisibility = prepareFuture.get();		// stall
+		testApparatus._pipelineAccelerators->VisibilityBarrier(requiredVisibility._pipelineAcceleratorsVisibility);		// must call this to flip completed pipelines, etc, to visible
+		testApparatus._bufferUploads->StallUntilCompletion(
+			*testApparatus._pipelineAccelerators->GetDevice()->GetImmediateContext(),
+			requiredVisibility._bufferUploadsVisibility);
+		return requiredVisibility;
+	}
+
+	RenderCore::Techniques::PreparedResourcesVisibility PrepareAndStall(
+		LightingEngineTestApparatus& testApparatus,
+		std::future<RenderCore::Techniques::PreparedResourcesVisibility> visibility)
+	{
+		auto requiredVisibility = visibility.get();		// stall
+		testApparatus._pipelineAccelerators->VisibilityBarrier(requiredVisibility._pipelineAcceleratorsVisibility);		// must call this to flip completed pipelines, etc, to visible
+		testApparatus._bufferUploads->StallUntilCompletion(
+			*testApparatus._pipelineAccelerators->GetDevice()->GetImmediateContext(),
+			requiredVisibility._bufferUploadsVisibility);
+		return requiredVisibility;
 	}
 
 	static std::shared_ptr<RenderCore::Techniques::DescriptorSetLayoutAndBinding> MakeMaterialDescriptorSetLayout()

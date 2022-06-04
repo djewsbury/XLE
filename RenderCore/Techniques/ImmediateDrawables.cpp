@@ -352,12 +352,10 @@ namespace RenderCore { namespace Techniques
 
 		virtual void OnFrameBarrier() override
 		{
-			// Nothing should be in _workingPkt when we hit the frame barrier
-			// keeping packets between frames may complicate lifecycle management for Drawable objects
-			assert(_workingPkt._drawables.empty());
-			assert(_lastQueuedDrawable == nullptr);
-			assert(_customGeosInWorkingPkt.empty());
-			_pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
+			// Removed assertions related to keeping drawable packets empty here. This is because OnFrameBarrier()
+			// can be called on a non-framebarrier -- ie, if we just want to advance the visibility barrier for the
+			// pipeline accelerators
+			_pipelineAcceleratorsVisibility = _pipelineAcceleratorPool->VisibilityBarrier();
 		}
 
 		ImmediateDrawables(const std::shared_ptr<IDevice>& device)
@@ -382,6 +380,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::pair<uint64_t, std::shared_ptr<SequencerConfig>>> _sequencerConfigs;
 		std::vector<std::pair<uint64_t, std::shared_ptr<UniformsStreamInterface>>> _usis;
 		std::vector<std::shared_ptr<DrawableGeo>> _customGeosInWorkingPkt;
+		VisibilityMarkerId _pipelineAcceleratorsVisibility = 0;
 
 		template<typename InputAssemblyType>
 			PipelineAccelerator* GetPipelineAccelerator(

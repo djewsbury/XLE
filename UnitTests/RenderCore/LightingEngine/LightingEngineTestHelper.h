@@ -42,7 +42,7 @@ namespace UnitTests
 
 		std::vector<::Assets::CompilerRegistration> _compilerRegistrations;
 
-		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
+		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<RenderCore::Techniques::PipelineCollection> _pipelinePool;
 		std::shared_ptr<RenderCore::LightingEngine::SharedTechniqueDelegateBox> _sharedDelegates;
 		std::shared_ptr<RenderCore::Techniques::CommonResourceBox> _commonResources;
@@ -70,4 +70,13 @@ namespace UnitTests
 		const RenderCore::ResourceDesc& targetDesc,
 		const RenderCore::Techniques::CameraDesc& camera,
 		RenderCore::IThreadContext& threadContext);
+
+	RenderCore::Techniques::PreparedResourcesVisibility PrepareAndStall(
+		LightingEngineTestApparatus& testApparatus,
+		const RenderCore::Techniques::SequencerConfig& sequencerConfig,
+		const RenderCore::Techniques::DrawablesPacket& drawablePkt);
+
+	RenderCore::Techniques::PreparedResourcesVisibility PrepareAndStall(
+		LightingEngineTestApparatus& testApparatus,
+		std::future<RenderCore::Techniques::PreparedResourcesVisibility> visibility);
 }

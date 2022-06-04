@@ -118,13 +118,7 @@ namespace UnitTests
 		// stall until all resources are ready
 		RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(lightingTechnique);
 		ParseScene(prepareLightingIterator, drawablesWriter);
-		auto prepareMarker = prepareLightingIterator.GetResourcePreparationMarker();
-		if (prepareMarker) {
-			prepareMarker->StallWhilePending();
-			REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
-		}
-		testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
-		::Assets::Services::GetAssetSets().OnFrameBarrier();
+		PrepareAndStall(testApparatus, prepareLightingIterator.GetResourcePreparationMarker());
 	}
 
 	static void PumpBufferUploads(LightingEngineTestApparatus& testApparatus)
@@ -198,13 +192,13 @@ namespace UnitTests
 
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-					testApparatus._pipelineAcceleratorPool, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
+					testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
 				PumpBufferUploads(testApparatus);
 
-				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool).CreateFlatPlaneDrawableWriter();
+				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateFlatPlaneDrawableWriter();
 				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
 
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
@@ -244,13 +238,13 @@ namespace UnitTests
 				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera, *threadContext);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-					testApparatus._pipelineAcceleratorPool, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
+					testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
 				PumpBufferUploads(testApparatus);
 
-				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool).CreateSharpContactDrawableWriter();
+				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateSharpContactDrawableWriter();
 				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
 
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
@@ -338,11 +332,13 @@ namespace UnitTests
 		RenderOverlays::DebuggingDisplay::DrawFrustum(*overlayContext, sceneProjDesc._worldToProjection, RenderOverlays::ColorB(0xff, 0xff, 0xff), 0x2);
 
 		auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parsingContext);
-		auto prepare = immediateDrawingHelper._immediateDrawables->PrepareResources(rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
-		if (prepare) {
-			prepare->StallWhilePending();
-			REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
-		}
+		std::promise<RenderCore::Techniques::PreparedResourcesVisibility> visibilityPromise;
+		auto visibilityFuture = visibilityPromise.get_future();
+		immediateDrawingHelper._immediateDrawables->PrepareResources(std::move(visibilityPromise), rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+		auto requiredVisibility = visibilityFuture.get(); // stall();
+		immediateDrawingHelper._immediateDrawables->OnFrameBarrier();
+		RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(*RenderCore::Techniques::GetThreadContext(), requiredVisibility._bufferUploadsVisibility);
+		
 		immediateDrawingHelper._immediateDrawables->ExecuteDraws(parsingContext, rpi);
 	}
 
@@ -483,7 +479,7 @@ namespace UnitTests
 				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, sceneCamera, *threadContext);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-					testApparatus._pipelineAcceleratorPool, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
+					testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps,
 					LightingEngine::DeferredLightingTechniqueFlags::GenerateDebuggingTextures);
@@ -491,7 +487,7 @@ namespace UnitTests
 				PumpBufferUploads(testApparatus);
 
 				const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
-				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool)
+				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators)
 					.CreateShapeWorldDrawableWriter(worldMins, worldMaxs);
 				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
 

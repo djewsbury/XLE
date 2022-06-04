@@ -71,11 +71,7 @@ namespace UnitTests
 		// stall until all resources are ready
 		RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(lightingTechnique);
 		ParseScene(prepareLightingIterator, drawablesWriter);
-		auto prepareMarker = prepareLightingIterator.GetResourcePreparationMarker();
-		if (prepareMarker) {
-			prepareMarker->StallWhilePending();
-			REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
-		}
+		PrepareAndStall(testApparatus, prepareLightingIterator.GetResourcePreparationMarker());
 	}
 
 	static void PumpBufferUploads(LightingEngineTestApparatus& testApparatus)
@@ -155,17 +151,15 @@ namespace UnitTests
 			auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera, *threadContext);
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-				testApparatus._pipelineAcceleratorPool, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
+				testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 				MakeIteratorRange(resolveOperators), {}, 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
 			PumpBufferUploads(testApparatus);
 
-			auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool).CreateFlatPlaneDrawableWriter();
-			auto drawableWriterWithBlocker = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool).CreateFlatPlaneAndBlockerDrawableWriter();
+			auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateFlatPlaneDrawableWriter();
+			auto drawableWriterWithBlocker = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateFlatPlaneAndBlockerDrawableWriter();
 			PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
-			testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
-			::Assets::Services::GetAssetSets().OnFrameBarrier();		// required to flip pipeline layouts in pipeline accelerator pool to visible
 
 			///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 			SECTION("sphere light")

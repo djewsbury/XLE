@@ -68,6 +68,16 @@ namespace UnitTests
 		Sampler PointClampSampler;
 	)";
 
+	static void StallForResources(RenderCore::Techniques::IImmediateDrawables& immediateDrawables, const RenderCore::FrameBufferDesc& fbDesc, unsigned subpassIndex)
+	{
+		using namespace RenderCore;
+		std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
+		auto prepareFuture = preparePromise.get_future();
+		immediateDrawables.PrepareResources(std::move(preparePromise), fbDesc, subpassIndex);
+		prepareFuture.get();		// stall
+		immediateDrawables.OnFrameBarrier();		// annoyingly we have to call this to flip the pipelines into visibility
+	}
+
 	TEST_CASE( "ImmediateDrawablesTests", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
@@ -123,14 +133,7 @@ namespace UnitTests
 			REQUIRE(data.size() == (sphereGeo.size() * sizeof(decltype(sphereGeo)::value_type)));
 			std::memcpy(data.data(), sphereGeo.data(), data.size());
 			
-			auto asyncMarker = immediateDrawables->PrepareResources(fbHelper.GetDesc(), 0);
-			if (asyncMarker) {
-				auto finalState = asyncMarker->StallWhilePending();
-				REQUIRE(finalState.has_value());
-				REQUIRE(finalState.value() == ::Assets::AssetState::Ready);
-				REQUIRE(asyncMarker->GetAssetState() == ::Assets::AssetState::Ready);
-			}
-			immediateDrawables->OnFrameBarrier();		// annoyingly we have to call this to flip the pipelines into visibility
+			StallForResources(*immediateDrawables, fbHelper.GetDesc(), 0);
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
@@ -166,14 +169,7 @@ namespace UnitTests
 			REQUIRE(data.size() == (sphereGeo.size() * sizeof(decltype(sphereGeo)::value_type)));
 			std::memcpy(data.data(), sphereGeo.data(), data.size());
 			
-			auto asyncMarker = immediateDrawables->PrepareResources(fbHelper.GetDesc(), 0);
-			if (asyncMarker) {
-				auto finalState = asyncMarker->StallWhilePending();
-				REQUIRE(finalState.has_value());
-				REQUIRE(finalState.value() == ::Assets::AssetState::Ready);
-				REQUIRE(asyncMarker->GetAssetState() == ::Assets::AssetState::Ready);
-			}
-			immediateDrawables->OnFrameBarrier();		// annoyingly we have to call this to flip the pipelines into visibility
+			StallForResources(*immediateDrawables, fbHelper.GetDesc(), 0);
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);

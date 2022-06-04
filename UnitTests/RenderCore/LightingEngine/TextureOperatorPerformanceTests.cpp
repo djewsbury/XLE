@@ -229,7 +229,7 @@ namespace UnitTests
 		ToolsRig::IDrawablesWriter& drawableWriter)
 	{
 		using namespace RenderCore;
-		auto sequencerConfig = testApparatus._pipelineAcceleratorPool->CreateSequencerConfig(
+		auto sequencerConfig = testApparatus._pipelineAccelerators->CreateSequencerConfig(
 			"WriteDownsampleInput",
 			testApparatus._sharedDelegates->_deferredIllumDelegate,
 			{}, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
@@ -237,16 +237,10 @@ namespace UnitTests
 		if (1) {
 			Techniques::DrawablesPacket pkt;
 			drawableWriter.WriteDrawables(pkt);
-			auto prepare = Techniques::PrepareResources(*testApparatus._pipelineAcceleratorPool, *sequencerConfig, pkt);
-			if (prepare) {
-				prepare->StallWhilePending();
-				REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
-			}
-			testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
-			::Assets::Services::GetAssetSets().OnFrameBarrier();
+			PrepareAndStall(testApparatus, *sequencerConfig, pkt);
 			Techniques::Draw(
 				parsingContext,
-				*testApparatus._pipelineAcceleratorPool,
+				*testApparatus._pipelineAccelerators,
 				*sequencerConfig,
 				pkt);
 		}
@@ -371,7 +365,7 @@ namespace UnitTests
 		testHelper->BeginFrameCapture();
 
 		const auto downsampledResult = Hash64("Downsampled");
-		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool).CreateShapeStackDrawableWriter();
+		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateShapeStackDrawableWriter();
 		auto commonResourceBox = std::make_shared<Techniques::CommonResourceBox>(*testHelper->_device);
 
 		{

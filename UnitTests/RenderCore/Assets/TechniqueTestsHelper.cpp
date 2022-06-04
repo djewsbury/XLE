@@ -55,6 +55,23 @@ namespace UnitTests
 			::Assets::Services::GetAssetSets().Clear();
 	}
 
+	RenderCore::Techniques::PreparedResourcesVisibility PrepareAndStall(
+		TechniqueTestApparatus& testApparatus,
+		const RenderCore::Techniques::SequencerConfig& sequencerConfig,
+		const RenderCore::Techniques::DrawablesPacket& drawablePkt)
+	{
+		using namespace RenderCore;
+		std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
+		auto prepareFuture = preparePromise.get_future();
+		Techniques::PrepareResources(std::move(preparePromise), *testApparatus._pipelineAccelerators, sequencerConfig, drawablePkt);
+		auto requiredVisibility = prepareFuture.get();		// stall
+		testApparatus._pipelineAccelerators->VisibilityBarrier(requiredVisibility._pipelineAcceleratorsVisibility);		// must call this to flip completed pipelines, etc, to visible
+		testApparatus._bufferUploads->StallUntilCompletion(
+			*testApparatus._pipelineAccelerators->GetDevice()->GetImmediateContext(),
+			requiredVisibility._bufferUploadsVisibility);
+		return requiredVisibility;
+	}
+
 	const char TechniqueTestApparatus::UnitTestPipelineLayout[] = R"--(
 		
 		DescriptorSet Material

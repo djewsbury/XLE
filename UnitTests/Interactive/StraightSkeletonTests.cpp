@@ -13,6 +13,7 @@
 #include "../../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
+#include "../../RenderCore/Techniques/Drawables.h"		// unfortunately required for PreparedResourcesVisibility
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
@@ -29,6 +30,7 @@
 #include <random>
 #include <fstream>
 #include <filesystem>
+#include <future>
 
 using namespace Catch::literals;
 using namespace std::chrono_literals;
@@ -992,10 +994,13 @@ namespace UnitTests
 			auto defaultViewport = fbHelper.GetDefaultViewport();
 			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(StartingCamera(cameraMins, cameraMaxs), {defaultViewport._width, defaultViewport._height});
 			parserContext.GetViewport() = defaultViewport;
-			auto prepare = testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->PrepareResources(fbHelper.GetDesc(), 0);
-			if (prepare) {
-				auto state = prepare->StallWhilePending();
-				REQUIRE(state == ::Assets::AssetState::Ready);
+
+			{
+				std::promise<RenderCore::Techniques::PreparedResourcesVisibility> promise;
+				auto future = promise.get_future();
+				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->PrepareResources(std::move(promise), fbHelper.GetDesc(), 0);
+				future.get();		// stall
+				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->OnFrameBarrier();	// flip visible
 			}
 			testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, fbHelper.GetDesc(), 0);
 		}

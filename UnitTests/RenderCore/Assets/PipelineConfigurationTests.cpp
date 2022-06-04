@@ -111,7 +111,7 @@ namespace UnitTests
 
 					GSPushConstants gspush
 					{
-						float4x4 SomeTransforms[4];
+						uint4 SomeGSData;
 					};
 				};
 			)--"))

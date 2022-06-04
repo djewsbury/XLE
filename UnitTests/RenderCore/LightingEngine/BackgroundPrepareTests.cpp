@@ -115,14 +115,14 @@ namespace UnitTests
 			LightingOperatorsPipelineLayout pipelineLayout(*lightingApparatus._metalTestHelper);
 
 			auto techniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
-				lightingApparatus._pipelineAcceleratorPool, lightingApparatus._pipelinePool, lightingApparatus._sharedDelegates,
+				lightingApparatus._pipelineAccelerators, lightingApparatus._pipelinePool, lightingApparatus._sharedDelegates,
 				pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 				operators._lightResolveOperators, operators._shadowResolveOperators,
 				preregAttachments, fbProps);
 
 			::Assets::WhenAll(std::move(techniqueFuture)).ThenConstructToPromise(
 				std::move(promise),
-				[lightingDelegate=std::move(lightingDelegate), drawablesWriter=std::move(drawablesWriter), pipelineAcceleratorPool=lightingApparatus._pipelineAcceleratorPool](auto lightingTechnique) mutable {
+				[lightingDelegate=std::move(lightingDelegate), drawablesWriter=std::move(drawablesWriter), pipelineAcceleratorPool=lightingApparatus._pipelineAccelerators](auto lightingTechnique) mutable {
 
 					PreparedSceneForShadowProbe result{
 						std::move(lightingTechnique),
@@ -243,7 +243,7 @@ namespace UnitTests
 		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera, *threadContext);
 
 		const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
-		auto drawablesWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool)
+		auto drawablesWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators)
 			.CreateShapeWorldDrawableWriter(worldMins, worldMaxs);
 
 		auto lightingDelegate = std::make_shared<LightingStateDelegate>();

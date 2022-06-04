@@ -140,7 +140,7 @@ namespace UnitTests
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 
 		// auto drawableWriter = CreateSphereDrawablesWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
-		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool).CreateShapeStackDrawableWriter();
+		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateShapeStackDrawableWriter();
 
 		RenderCore::Techniques::CameraDesc camera;
 		// camera._cameraToWorld = MakeCameraToWorld(Float3{1.0f, 0.0f, 0.0f}, Float3{0.0f, 1.0f, 0.0f}, Float3{-3.33f, 0.f, 0.f});
@@ -220,7 +220,7 @@ namespace UnitTests
 
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-				testApparatus._pipelineAcceleratorPool, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
+				testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
@@ -234,11 +234,7 @@ namespace UnitTests
 			{
 				RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*lightingTechnique);
 				ParseScene(prepareLightingIterator, *drawableWriter);
-				auto prepareMarker = prepareLightingIterator.GetResourcePreparationMarker();
-				if (prepareMarker) {
-					prepareMarker->StallWhilePending();
-					REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
-				}
+				PrepareAndStall(testApparatus, prepareLightingIterator.GetResourcePreparationMarker());
 			}
 
 			{
@@ -267,7 +263,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 
-		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool).CreateStonehengeDrawableWriter();
+		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateStonehengeDrawableWriter();
 
 		RenderCore::Techniques::CameraDesc camera;
 		camera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-8.0f, 5.f, 0.f}), Float3{0.0f, 1.0f, 0.0f}, Float3{-8.0f, 5.f, 0.f});
@@ -296,7 +292,7 @@ namespace UnitTests
 
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-				testApparatus._pipelineAcceleratorPool, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
+				testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
@@ -313,11 +309,7 @@ namespace UnitTests
 			{
 				RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*lightingTechnique);
 				ParseScene(prepareLightingIterator, *drawableWriter);
-				auto prepareMarker = prepareLightingIterator.GetResourcePreparationMarker();
-				if (prepareMarker) {
-					prepareMarker->StallWhilePending();
-					REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
-				}
+				PrepareAndStall(testApparatus, prepareLightingIterator.GetResourcePreparationMarker());
 			}
 
 			{

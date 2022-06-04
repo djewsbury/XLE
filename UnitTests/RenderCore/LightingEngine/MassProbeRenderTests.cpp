@@ -346,7 +346,7 @@ namespace UnitTests
 				RenderCore::Techniques::DrawablesPacket pkt;
 				extWriter->WriteDrawables(pkt, projDesc._worldToProjection);
 
-				Techniques::Draw(parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, pkt);
+				Techniques::Draw(parsingContext, *testApparatus._pipelineAccelerators, *_cfg, pkt);
 
 				++c;
 				if (c == cameras.size()) break;
@@ -369,7 +369,7 @@ namespace UnitTests
 				_fragment.AddSubpass(std::move(sp));
 			}
 
-			_cfg = CreateSequencerConfig("mass-probe-simple", *testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>());
+			_cfg = CreateSequencerConfig("mass-probe-simple", *testApparatus._pipelineAccelerators, std::make_shared<TechniqueDelegate>());
 		}
 
 	private:
@@ -498,7 +498,7 @@ namespace UnitTests
 
 				{
 					Techniques::RenderPassInstance rpi{parsingContext, *frag};
-					Techniques::Draw(parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, pkt);
+					Techniques::Draw(parsingContext, *testApparatus._pipelineAccelerators, *_cfg, pkt);
 				}
 
 				parsingContext.GetUniformDelegateManager()->RemoveShaderResourceDelegate(*uniformDel);
@@ -511,7 +511,7 @@ namespace UnitTests
 		{
 			using namespace RenderCore;
 			_fragments = MakeFragments(s_probesToRender, maxPerBatch);
-			_cfg = CreateSequencerConfig("mass-probe-amplifying-gs", *testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>());
+			_cfg = CreateSequencerConfig("mass-probe-amplifying-gs", *testApparatus._pipelineAccelerators, std::make_shared<TechniqueDelegate>());
 		}
 
 	private:
@@ -702,7 +702,7 @@ namespace UnitTests
 				parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(uniformDel);
 
 				Techniques::RenderPassInstance rpi{parsingContext, *frag};
-				Techniques::Draw(parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, pkt);
+				Techniques::Draw(parsingContext, *testApparatus._pipelineAccelerators, *_cfg, pkt);
 
 				parsingContext.GetUniformDelegateManager()->RemoveShaderResourceDelegate(*uniformDel);
 				cameras.first = batchCameras.second;
@@ -713,7 +713,7 @@ namespace UnitTests
 		VertexInstancingShader(const LightingEngineTestApparatus& testApparatus)
 		{
 			_fragments = MakeFragments(s_probesToRender, maxViewsPerDraw);
-			_cfg = CreateSequencerConfig("mass-probe-vertex-instancing", *testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>());
+			_cfg = CreateSequencerConfig("mass-probe-vertex-instancing", *testApparatus._pipelineAccelerators, std::make_shared<TechniqueDelegate>());
 		}
 
 	private:
@@ -813,7 +813,7 @@ namespace UnitTests
 
 				{
 					Techniques::RenderPassInstance rpi{parsingContext, *frag};
-					Techniques::Draw(parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, pkt);
+					Techniques::Draw(parsingContext, *testApparatus._pipelineAccelerators, *_cfg, pkt);
 				}
 
 				parsingContext.GetUniformDelegateManager()->RemoveShaderResourceDelegate(*uniformDel);
@@ -825,7 +825,7 @@ namespace UnitTests
 		ViewInstancingShader(const LightingEngineTestApparatus& testApparatus)
 		{
 			_fragments = MakeFragments(s_probesToRender, maxMultiview, true);
-			_cfg = CreateSequencerConfig("mass-probe-view-instancing", *testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>(), true);
+			_cfg = CreateSequencerConfig("mass-probe-view-instancing", *testApparatus._pipelineAccelerators, std::make_shared<TechniqueDelegate>(), true);
 		}
 
 	private:
@@ -835,7 +835,7 @@ namespace UnitTests
 	template<typename TestClass>
 		void RunTest(
 			RenderCore::IThreadContext& threadContext, RenderCore::Techniques::ParsingContext& parsingContext, 
-			const LightingEngineTestApparatus& testApparatus, IteratorRange<const RenderCore::Techniques::CameraDesc*> cameras,
+			LightingEngineTestApparatus& testApparatus, IteratorRange<const RenderCore::Techniques::CameraDesc*> cameras,
 			ToolsRig::IDrawablesWriter& drawablesWriter)
 	{
 		TestClass tester(testApparatus);
@@ -843,13 +843,7 @@ namespace UnitTests
 		{
 			RenderCore::Techniques::DrawablesPacket pkt;
 			drawablesWriter.WriteDrawables(pkt);
-			auto marker = RenderCore::Techniques::PrepareResources(*testApparatus._pipelineAcceleratorPool, *tester._cfg, pkt);
-			if (marker) {
-				marker->StallWhilePending();
-				REQUIRE(marker->GetAssetState() == ::Assets::AssetState::Ready);
-			}
-			testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();		// must call this to flip completed pipelines, etc, to visible
-			::Assets::Services::GetAssetSets().OnFrameBarrier();
+			PrepareAndStall(testApparatus, *tester._cfg, pkt);
 		}
 		tester.Execute(threadContext, parsingContext, testApparatus, cameras, drawablesWriter);
 	}
@@ -865,7 +859,7 @@ namespace UnitTests
 		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, *threadContext);
 
 		const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
-		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAcceleratorPool)
+		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators)
 			.CreateShapeWorldDrawableWriter(worldMins, worldMaxs);
 
 		RenderCore::Techniques::CameraDesc cameras[s_probesToRender];
