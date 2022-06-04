@@ -17,7 +17,7 @@
 #endif
 
 #if defined(GBUFFER_SHADER_RESOURCE)
-    Texture2D_MaybeMS<float>	DepthTexture	 	BIND_SEQ_T10;       // moved to T10 for GenerateShadowingDebugTextures()
+    Texture2D_MaybeMS<float>	DepthTexture;
     float LoadSubpassDepth(uint2 pixelCoords, uint sampleIndex)
     {
         return LoadFloat1(DepthTexture, pixelCoords.xy, sampleIndex);

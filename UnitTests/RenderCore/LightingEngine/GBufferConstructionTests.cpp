@@ -34,6 +34,10 @@
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 
+#include "../../../RenderCore/Metal/Resource.h"
+#include "../../../RenderCore/Metal/DeviceContext.h"
+#include "../../../RenderCore/Vulkan/Metal/IncludeVulkan.h"
+
 using namespace Catch::literals;
 using namespace std::chrono_literals;
 namespace UnitTests
@@ -246,18 +250,23 @@ namespace UnitTests
 	static void RunSimpleFullscreen(
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pipelinePool,
-		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout,
 		const RenderCore::Techniques::RenderPassInstance& rpi,
 		StringSection<> pixelShader,
+		StringSection<> pipelayoutLayoutAsset,
 		RenderCore::UniformsStreamInterface& usi,
 		RenderCore::UniformsStream& us)
 	{
 		RenderCore::Techniques::PixelOutputStates outputStates;
 		outputStates.Bind(rpi);
 		outputStates.Bind(RenderCore::Techniques::CommonResourceBox::s_dsDisable);
-		RenderCore::AttachmentBlendDesc blendStates[] { RenderCore::Techniques::CommonResourceBox::s_abStraightAlpha };
+		RenderCore::AttachmentBlendDesc blendStates[] { RenderCore::Techniques::CommonResourceBox::s_abOpaque };
 		outputStates.Bind(MakeIteratorRange(blendStates));
-		auto op = RenderCore::Techniques::CreateFullViewportOperator(pipelinePool, RenderCore::Techniques::FullViewportOperatorSubType::DisableDepth, pixelShader, {}, pipelineLayout, outputStates, usi);
+		ParameterBox selectors;
+		auto op = RenderCore::Techniques::CreateFullViewportOperator(
+			pipelinePool,
+			RenderCore::Techniques::FullViewportOperatorSubType::DisableDepth,
+			pixelShader, selectors, pipelayoutLayoutAsset,
+			outputStates, usi);
 		op->StallWhilePending();
 		op->Actualize()->Draw(parsingContext, us);
 	}
@@ -333,6 +342,17 @@ namespace UnitTests
 		Log(Warning) << "Smallest difference: " << differences[0] << ", largest differences: " << differences[differences.size()-1] << std::endl;
 
 		REQUIRE(standardDev < 5e-2f);
+	}
+
+	static void ReadyForTransfer(RenderCore::IThreadContext& threadContext, RenderCore::IResource& resource)
+	{
+		// todo -- final image layout solution
+		using namespace RenderCore;
+		Metal::Internal::SetImageLayout(
+			*Metal::DeviceContext::Get(threadContext),
+			*dynamic_cast<Metal::Resource*>(&resource),
+			Metal::Internal::ImageLayout::ColorAttachmentOptimal, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+			Metal::Internal::ImageLayout::General, 0, VK_PIPELINE_STAGE_HOST_BIT);
 	}
 
 	TEST_CASE( "LightingEngine-GBufferAccuracy", "[rendercore_lighting_engine]" )
@@ -413,7 +433,9 @@ namespace UnitTests
 					{
 						Techniques::DrawablesPacket pkt;
 						drawableWriter->WriteDrawables(pkt);
-						PrepareAndStall(testApparatus, *gbufferWriteCfg.get(), pkt);
+						auto newVisibility = PrepareAndStall(testApparatus, *gbufferWriteCfg.get(), pkt);
+						parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
+						parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 						Techniques::Draw(
 							parsingContext, 
 							*testApparatus._pipelineAccelerators,
@@ -426,8 +448,8 @@ namespace UnitTests
 				{
 					RenderCore::Techniques::FrameBufferDescFragment frag;
 					RenderCore::Techniques::FrameBufferDescFragment::SubpassDesc subpass;
-					subpass.AppendOutput(frag.DefineAttachment(Hash64("ReconstructedWorldPosition")).Clear());
-					subpass.AppendOutput(frag.DefineAttachment(Hash64("ReconstructedWorldNormal")).Clear());
+					subpass.AppendOutput(frag.DefineAttachment(Hash64("ReconstructedWorldPosition")).Clear().FinalState(BindFlag::TransferSrc));
+					subpass.AppendOutput(frag.DefineAttachment(Hash64("ReconstructedWorldNormal")).Clear().FinalState(BindFlag::TransferSrc));
 					subpass.AppendNonFrameBufferAttachmentView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse));
 					subpass.AppendNonFrameBufferAttachmentView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
 					subpass.AppendNonFrameBufferAttachmentView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter));
@@ -450,7 +472,7 @@ namespace UnitTests
 						rpi.GetNonFrameBufferAttachmentView(3).get()
 					};
 					us._resourceViews = MakeIteratorRange(srvs);
-					RunSimpleFullscreen(parsingContext, pipelinePool, testHelper->_pipelineLayout, rpi, "ut-data/reconstruct_from_gbuffer.pixel.hlsl:main", usi, us);
+					RunSimpleFullscreen(parsingContext, pipelinePool, rpi, "ut-data/reconstruct_from_gbuffer.pixel.hlsl:main", GENERAL_OPERATOR_PIPELINE ":GraphicsMain", usi, us);
 
 					attachmentReservation = rpi.GetAttachmentReservation();
 				}
@@ -459,8 +481,8 @@ namespace UnitTests
 				{
 					RenderCore::Techniques::FrameBufferDescFragment frag;
 					SubpassDesc subpass;
-					subpass.AppendOutput(frag.DefineAttachment(Hash64("DirectWorldPosition")).Clear());
-					subpass.AppendOutput(frag.DefineAttachment(Hash64("DirectWorldNormal")).Clear());
+					subpass.AppendOutput(frag.DefineAttachment(Hash64("DirectWorldPosition")).Clear().FinalState(BindFlag::TransferSrc));
+					subpass.AppendOutput(frag.DefineAttachment(Hash64("DirectWorldNormal")).Clear().FinalState(BindFlag::TransferSrc));
 					subpass.SetDepthStencil(frag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).SystemAttachmentFormat(Techniques::SystemAttachmentFormat::MainDepthStencil).Clear());
 					frag.AddSubpass(std::move(subpass));
 					RenderCore::Techniques::RenderPassInstance rpi(parsingContext, frag);
@@ -477,7 +499,9 @@ namespace UnitTests
 					{
 						Techniques::DrawablesPacket pkt;
 						drawableWriter->WriteDrawables(pkt);
-						PrepareAndStall(testApparatus, *writeDirectCfg.get(), pkt);
+						auto newVisibility = PrepareAndStall(testApparatus, *writeDirectCfg.get(), pkt);
+						parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
+						parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 						Techniques::Draw(
 							parsingContext, 
 							*testApparatus._pipelineAccelerators,
@@ -486,6 +510,11 @@ namespace UnitTests
 					}
 				}
 				testHelper->EndFrameCapture();
+
+				ReadyForTransfer(*threadContext, *reconstructedWorldPosition);
+				ReadyForTransfer(*threadContext, *reconstructedWorldNormal);
+				ReadyForTransfer(*threadContext, *directWorldPosition);
+				ReadyForTransfer(*threadContext, *directWorldNormal);
 
 				SaveImage(*threadContext, *diffuseResource, "gbuffer-diffuse");
 				SaveImage(*threadContext, *normalResource, "gbuffer-normals");

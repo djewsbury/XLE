@@ -14,10 +14,10 @@
 
 #if defined(GBUFFER_SHADER_RESOURCE) /////////////////////////////////////////
 
-    Texture2D_MaybeMS<float4>		GBuffer_Diffuse		BIND_SEQ_T6;
-    Texture2D_MaybeMS<float4>		GBuffer_Normals		BIND_SEQ_T7;
+    Texture2D_MaybeMS<float4>		GBuffer_Diffuse;
+    Texture2D_MaybeMS<float4>		GBuffer_Normals;
     #if HAS_PROPERTIES_BUFFER==1
-        Texture2D_MaybeMS<float4>	GBuffer_Parameters	BIND_SEQ_T8;
+        Texture2D_MaybeMS<float4>	GBuffer_Parameters;
     #endif
 
     GBufferValues LoadGBuffer(float2 position, SystemInputs sys)

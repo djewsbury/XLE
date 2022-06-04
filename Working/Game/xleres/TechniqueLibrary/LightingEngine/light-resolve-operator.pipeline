@@ -81,3 +81,21 @@ PipelineLayout LightingOperator
 	DescriptorSet ShadowTemplate;
 	DescriptorSet SharedDescriptors;
 };
+
+DescriptorSet General
+{
+	Sampler FixedSampler
+	{
+		Filter = Bilinear,
+		AddressU = Wrap,
+		AddressV = Wrap
+	};
+};
+
+PipelineLayout LightingOperatorWithAuto
+{
+	AutoDescriptorSet General;
+	DescriptorSet PerLightDescriptors;
+	DescriptorSet ShadowTemplate;
+	DescriptorSet SharedDescriptors;
+};

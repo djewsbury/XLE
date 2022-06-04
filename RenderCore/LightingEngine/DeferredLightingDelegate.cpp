@@ -581,7 +581,6 @@ namespace RenderCore { namespace LightingEngine
 		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
 		const std::shared_ptr<Techniques::PipelineCollection>& pool,
-		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
 		const ShadowOperatorDesc& shadowOpDesc,
 		const IPreparedShadowResult& preparedShadowResult,
 		unsigned idx)
@@ -618,7 +617,7 @@ namespace RenderCore { namespace LightingEngine
 		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
 		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque, Techniques::CommonResourceBox::s_abOpaque };
 		outputStates.Bind(MakeIteratorRange(blendStates));
-		auto op = Techniques::CreateFullViewportOperator(pool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":detailed_visualisation", selectors, lightingOperatorLayout, outputStates, usi);
+		auto op = Techniques::CreateFullViewportOperator(pool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":detailed_visualisation", selectors, LIGHTING_OPERATOR_PIPELINE ":LightingOperatorWithAuto", outputStates, usi);
 		op->StallWhilePending();
 		assert(op->GetAssetState() == ::Assets::AssetState::Ready);
 		op->Actualize()->Draw(parsingContext, us, MakeIteratorRange(shadowDescSets));
@@ -633,7 +632,6 @@ namespace RenderCore { namespace LightingEngine
 			GenerateShadowingDebugTextures( 
 				*iterator._threadContext, *iterator._parsingContext, 
 				_pipelineCollection,
-				_lightingOperatorLayout,
 				_shadowPreparationOperators->_operators[opId]._desc,
 				*preparedShadow._preparedResult, c);
 			++c;
