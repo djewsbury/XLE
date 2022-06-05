@@ -463,7 +463,6 @@ namespace RenderCore { namespace Techniques
 
 		#if defined(_DEBUG)
 			mutable std::optional<std::thread::id> _lockForThreadingThread;
-			std::thread::id _boundThreadId;
 		#endif
 
 		struct NewlyQueued
@@ -954,9 +953,6 @@ namespace RenderCore { namespace Techniques
 
 	VisibilityMarkerId PipelineAcceleratorPool::VisibilityBarrier(VisibilityMarkerId expectedVisibility)
 	{
-		#if defined(_DEBUG)
-			assert(std::this_thread::get_id() == _boundThreadId);
-		#endif
 		// We're locking 2 lock here, so we have to be a little careful of deadlocks here
 		// _constructionLock will be locked for short durations of arbitrary threads -- including the main thread and threadpool threads
 		//   This lock isn't exposed to the user, and fully controlled by this system
@@ -1271,9 +1267,6 @@ namespace RenderCore { namespace Techniques
 		_device = std::move(device);
 		_flags = flags;
 		_pipelineCollection = std::make_shared<PipelineCollection>(_device);
-		#if defined(_DEBUG)
-			_boundThreadId = std::this_thread::get_id();
-		#endif
 		_futuresToCheckHelper = std::make_shared<FuturesToCheckHelper>();
 		_futuresToCheckHelper->_lastPublishedVisibilityMarker.store(0);
 	}

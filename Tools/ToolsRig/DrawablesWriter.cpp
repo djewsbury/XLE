@@ -14,6 +14,7 @@
 #include "../../Math/Matrix.h"
 #include "../../Math/Transformations.h"
 #include "../../Math/ProjectionMath.h"
+#include "../../Utility/ArithmeticUtils.h"
 #include <memory>
 
 namespace ToolsRig
@@ -93,7 +94,19 @@ namespace ToolsRig
 				{
 					auto localTransform = RenderCore::Techniques::MakeLocalTransform(((CustomDrawable&)drawable)._localToWorld, ExtractTranslation(parsingContext.GetProjectionDesc()._cameraToWorld), ((CustomDrawable&)drawable)._viewMask);
 					drawFnContext.ApplyLooseUniforms(RenderCore::ImmediateDataStream(localTransform));
-					drawFnContext.Draw(((CustomDrawable&)drawable)._vertexCount);
+
+					auto viewMask = ((CustomDrawable&)drawable)._viewMask;
+					unsigned v=0;
+					while (viewMask) {
+						auto lz = xl_ctz8(viewMask);
+						v++;
+						viewMask ^= 1ull<<lz;
+					}
+					unsigned viewCount = v; 
+					if (!viewCount) return;
+
+					if (viewCount == 1) drawFnContext.Draw(((CustomDrawable&)drawable)._vertexCount);
+					else drawFnContext.DrawInstances(((CustomDrawable&)drawable)._vertexCount, viewCount);
 				};
 		}
 
