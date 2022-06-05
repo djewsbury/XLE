@@ -541,12 +541,14 @@ namespace RenderCore { namespace Techniques
 				std::move(newPromise),
 				[helper=_futuresToCheckHelper](const auto& descSetActual) {
 					// the visibility marker should always be the next one
+					assert(descSetActual._completionCommandList != ~0u);		// use zero when not required
 					return std::make_pair(helper->_lastPublishedVisibilityMarker.load()+1, descSetActual._completionCommandList);
 				});
 			return result;
 		}
 
 		std::promise<std::pair<VisibilityMarkerId, BufferUploads::CommandListID>> immediatePromise;
+		assert(accelerator._completed._completionCommandList != ~0u);		// use zero when not required
 		immediatePromise.set_value(std::make_pair((VisibilityMarkerId)accelerator._visibilityMarker, accelerator._completed._completionCommandList));
 		return immediatePromise.get_future();
 	}

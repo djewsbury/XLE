@@ -47,7 +47,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<IDescriptorSet> _descriptorSet;
 		DescriptorSetBindingInfo _bindingInfo;
-		BufferUploads::CommandListID _completionCommandList;
+		BufferUploads::CommandListID _completionCommandList = 0;
 		::Assets::DependencyValidation _depVal;
 		bool _applyDeformAcceleratorOffset = false;
 

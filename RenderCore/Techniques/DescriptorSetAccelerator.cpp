@@ -264,7 +264,7 @@ namespace RenderCore { namespace Techniques
 				std::vector<std::shared_ptr<IResourceView>> finalResources;
 				finalResources.reserve(working._resources.size());
 				subDepVals.reserve(working._resources.size());
-				BufferUploads::CommandListID completionCommandList = BufferUploads::CommandListID_Invalid;
+				BufferUploads::CommandListID completionCommandList = 0;
 
 				// Construct the final descriptor set; even if we got some (or all) invalid assets
 				for (const auto&d:working._resources) {
@@ -279,12 +279,8 @@ namespace RenderCore { namespace Techniques
 							finalResources.push_back(actualized->GetShaderResource());
 
 							auto resCmdList = actualized->GetCompletionCommandList();
-							if (resCmdList != BufferUploads::CommandListID_Invalid) {
-								if (completionCommandList == BufferUploads::CommandListID_Invalid) {
-									completionCommandList = resCmdList;
-								} else  
-									completionCommandList = std::max(resCmdList, completionCommandList);
-							}
+							if (resCmdList != BufferUploads::CommandListID_Invalid)
+								completionCommandList = std::max(resCmdList, completionCommandList);
 						} else {
 							// If any subassets fail, we consider the entire descriptor set to be invalid
 							// We'll return, and propagate the actualization log back
@@ -302,6 +298,8 @@ namespace RenderCore { namespace Techniques
 						finalResources.push_back(d._fixedResource);
 					}
 				}
+
+				assert(completionCommandList != BufferUploads::CommandListID_Invalid);		// use zero when not required, instead
 
 				auto depVal = ::Assets::GetDepValSys().Make();
 				for (const auto&d:subDepVals) depVal.RegisterDependency(d);
