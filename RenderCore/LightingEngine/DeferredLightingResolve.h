@@ -53,6 +53,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<RenderCore::IDescriptorSet> _fixedDescriptorSet;
         bool _debuggingOn = false;
 		LightStencilingGeometry _stencilingGeometry;
+		bool _enableShadowProbes = false;
 		BufferUploads::CommandListID _completionCommandList = 0;
 
 		std::unique_ptr<Internal::ILightBase> CreateLightSource(ILightScene::LightOperatorId);
@@ -65,6 +66,7 @@ namespace RenderCore { namespace LightingEngine
 	class ShadowOperatorDesc;
 	namespace Internal { class StandardLightScene; }
 	struct PreparedShadow { ILightScene::LightSourceId _lightId; ILightScene::ShadowOperatorId _shadowOpId; std::shared_ptr<IPreparedShadowResult> _preparedResult; };
+	class ShadowProbes;
 
     void ResolveLights(
 		IThreadContext& threadContext,
@@ -72,7 +74,8 @@ namespace RenderCore { namespace LightingEngine
         Techniques::RenderPassInstance& rpi,
 		const LightResolveOperators& lightResolveOperators,
 		Internal::StandardLightScene& lightScene,
-		IteratorRange<const PreparedShadow*> preparedShadows);
+		IteratorRange<const PreparedShadow*> preparedShadows,
+		ShadowProbes* shadowProbes);
 
 	enum class GBufferType { PositionNormal, PositionNormalParameters };
 

@@ -43,8 +43,7 @@ float4 main(
         normalize(-viewFrustumVector), inputs.screenDest);
 
     // Also calculate the shadowing -- (though we could skip it if the lighting is too dim here)
-    CascadeAddress cascade = ResolveShadowsCascade(inputs.worldPosition, sample.worldSpaceNormal, texCoord, inputs.worldSpaceDepth);
-    float shadow = ResolveShadows(cascade, inputs.screenDest);
+    float shadow = ResolveShadows(Light, inputs.worldPosition, sample.worldSpaceNormal, texCoord, inputs.worldSpaceDepth, inputs.screenDest);
     
     // return float4(cascade.frustumCoordinates.xyz, 1.0f);
     // return float4(shadow.xxx, 1.f);

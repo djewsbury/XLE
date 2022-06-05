@@ -18,7 +18,7 @@ namespace RenderCore { namespace LightingEngine
 	class ScreenSpaceReflectionsOperator;
 	class HierarchicalDepthsOperator;
 	class SkyOperator;
-	class DynamicShadowPreparationOperators;
+	class DynamicShadowPreparers;
 	class SHCoefficientsAsset;
 
 	class ForwardPlusLightScene : public Internal::StandardLightScene, public IDistantIBLSource, public ISSAmbientOcclusion, public std::enable_shared_from_this<ForwardPlusLightScene>
@@ -72,7 +72,7 @@ namespace RenderCore { namespace LightingEngine
 			const AmbientLightOperatorDesc& ambientLightOperator,
 			const RasterizationLightTileOperator::Configuration& tilerCfg);
 
-		std::shared_ptr<DynamicShadowPreparationOperators> _shadowPreparationOperators;
+		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
 
 	private:
 		std::vector<LightSourceOperatorDesc> _positionalLightOperators;
@@ -80,13 +80,14 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<SharedTechniqueDelegateBox> _techDelBox;
 
-		struct ShadowOperatorIdMapping
+		std::vector<ShadowOperatorDesc> _shadowOperators;
+		struct ShadowPreparerIdMapping
 		{
-			std::vector<unsigned> _operatorToDynamicShadowOperator;
+			std::vector<unsigned> _operatorToShadowPreparerId;
 			unsigned _operatorForStaticProbes = ~0u;
 			ShadowProbes::Configuration _shadowProbesCfg;
 		};
-		ShadowOperatorIdMapping _shadowOperatorIdMapping;
+		ShadowPreparerIdMapping _shadowPreparerIdMapping;
 
 		std::shared_ptr<ShadowProbes> _shadowProbes;
 		std::shared_ptr<IPreparable> _spPrepareDelegate;
@@ -112,11 +113,12 @@ namespace RenderCore { namespace LightingEngine
 		unsigned _pingPongCounter = 0;
 
 		static std::shared_ptr<ForwardPlusLightScene> CreateInternal(
-			std::shared_ptr<DynamicShadowPreparationOperators> shadowPreparationOperators,
+			std::shared_ptr<DynamicShadowPreparers> shadowPreparers,
 			std::shared_ptr<RasterizationLightTileOperator> lightTiler, 
 			const std::vector<LightSourceOperatorDesc>& positionalLightOperators,
+			const std::vector<ShadowOperatorDesc>& shadowOperators,
 			const AmbientLightOperatorDesc& ambientLightOperator, 
-			const ForwardPlusLightScene::ShadowOperatorIdMapping& shadowOperatorMapping, 
+			const ForwardPlusLightScene::ShadowPreparerIdMapping& shadowPreparerMapping, 
 			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators, 
 			const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox);
 	};

@@ -7,6 +7,7 @@
 #include "LightUniforms.h"
 #include "StandardLightScene.h"
 #include "ShadowPreparer.h"
+#include "ShadowProbes.h"
 
 #include "../Techniques/CommonResources.h"
 #include "../Techniques/Techniques.h"
@@ -63,6 +64,8 @@ namespace RenderCore { namespace LightingEngine
 			GBuffer_Normals,
 			GBuffer_Parameters,
 			DepthTexture,
+			StaticShadowProbeDatabase,
+			StaticShadowProbeProperties,
 			Max
 		};
 	};
@@ -185,15 +188,19 @@ namespace RenderCore { namespace LightingEngine
 
 	static bool IsCompatible(const LightSourceOperatorDesc& lightSource, const ShadowOperatorDesc& shadowOp)
 	{
-		switch (shadowOp._projectionMode) {
-		case ShadowProjectionMode::Arbitrary:
-		case ShadowProjectionMode::Ortho:
-			return lightSource._shape == LightSourceShape::Directional || lightSource._shape == LightSourceShape::Rectangle || lightSource._shape == LightSourceShape::Disc;
-		case ShadowProjectionMode::ArbitraryCubeMap:
+		if (shadowOp._resolveType != ShadowResolveType::Probe) {
+			switch (shadowOp._projectionMode) {
+			case ShadowProjectionMode::Arbitrary:
+			case ShadowProjectionMode::Ortho:
+				return lightSource._shape == LightSourceShape::Directional || lightSource._shape == LightSourceShape::Rectangle || lightSource._shape == LightSourceShape::Disc;
+			case ShadowProjectionMode::ArbitraryCubeMap:
+				return lightSource._shape == LightSourceShape::Sphere || lightSource._shape == LightSourceShape::Tube;
+			default:
+				assert(0);
+				return false;
+			}
+		} else {
 			return lightSource._shape == LightSourceShape::Sphere || lightSource._shape == LightSourceShape::Tube;
-		default:
-			assert(0);
-			return false;
 		}
 	}
 
@@ -215,6 +222,7 @@ namespace RenderCore { namespace LightingEngine
 		std::vector<std::future<Techniques::GraphicsPipelineAndLayout>> pipelineFutures;
 		std::vector<AttachedData> attachedData;
 		std::vector<std::tuple<ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned>> operatorToPipelineMap;
+		bool enableShadowProbe = false;
 		
 		pipelineFutures.reserve(resolveOperators.size() * (1+shadowOperators.size()));
 		operatorToPipelineMap.reserve(resolveOperators.size() * (1+shadowOperators.size()));
@@ -256,6 +264,8 @@ namespace RenderCore { namespace LightingEngine
 					operatorToPipelineMap.push_back({lightOperatorId, shadowOperatorId, basePipelineIdx+shadowParamCount});
 					shadowParams[shadowParamCount++] = param;
 				}
+
+				enableShadowProbe |= param._shadowing == Internal::ShadowResolveParam::Shadowing::Probe;
 			}
 
 			for (unsigned c=0; c<shadowParamCount; ++c) {
@@ -307,7 +317,7 @@ namespace RenderCore { namespace LightingEngine
 					return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
 			},
-			[pendingHelper, finalResult=std::move(finalResult), operatorToPipelineMap=std::move(operatorToPipelineMap), attachedData=std::move(attachedData), device=std::move(device)]() {
+			[pendingHelper, finalResult=std::move(finalResult), operatorToPipelineMap=std::move(operatorToPipelineMap), attachedData=std::move(attachedData), device=std::move(device), enableShadowProbe]() {
 				using namespace ::Assets;
 				std::vector<Techniques::GraphicsPipelineAndLayout> actualized;
 				actualized.resize(pendingHelper->_pipelineFutures.size());
@@ -343,11 +353,16 @@ namespace RenderCore { namespace LightingEngine
 				usi.BindResourceView(SR::GBuffer_Normals, Utility::Hash64("GBuffer_Normals"));
 				usi.BindResourceView(SR::GBuffer_Parameters, Utility::Hash64("GBuffer_Parameters"));
 				usi.BindResourceView(SR::DepthTexture, Utility::Hash64("DepthTexture"));
+				if (enableShadowProbe) {
+					usi.BindResourceView(SR::StaticShadowProbeDatabase, Utility::Hash64("StaticShadowProbeDatabase"));
+					usi.BindResourceView(SR::StaticShadowProbeProperties, Utility::Hash64("StaticShadowProbeProperties"));
+				}
 				finalResult->_boundUniforms = Metal::BoundUniforms {
 					finalResult->_pipelineLayout,
 					usi, sharedUsi};
 
 				finalResult->_stencilingGeometry = LightStencilingGeometry(*device);
+				finalResult->_enableShadowProbes = enableShadowProbe;
 				return finalResult;
 			});
 		return result;
@@ -393,13 +408,14 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::RenderPassInstance& rpi,
 		const LightResolveOperators& lightResolveOperators,
 		Internal::StandardLightScene& lightScene,
-		IteratorRange<const PreparedShadow*> preparedShadows)
+		IteratorRange<const PreparedShadow*> preparedShadows,
+		ShadowProbes* shadowProbes)
 	{
 		GPUAnnotation anno(threadContext, "Lights");
 
 		IteratorRange<const void*> cbvs[CB::Max];
 
-		const IResourceView* srvs[] = { nullptr, nullptr, nullptr, nullptr };
+		const IResourceView* srvs[] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
 		static_assert(dimof(srvs)==SR::Max, "Shader resource array incorrect size");
 		
 		struct DebuggingGlobals
@@ -420,6 +436,11 @@ namespace RenderCore { namespace LightingEngine
 		srvs[SR::GBuffer_Normals] = rpi.GetInputAttachmentView(1).get();
 		srvs[SR::GBuffer_Parameters] = rpi.GetInputAttachmentView(2).get();
 		srvs[SR::DepthTexture] = rpi.GetInputAttachmentView(3).get();
+		if (lightResolveOperators._enableShadowProbes) {
+			assert(shadowProbes);
+			srvs[SR::StaticShadowProbeDatabase] = &shadowProbes->GetStaticProbesTable();
+			srvs[SR::StaticShadowProbeProperties] = &shadowProbes->GetShadowProbeUniforms();
+		}
 
 			////////////////////////////////////////////////////////////////////////
 
@@ -526,7 +547,6 @@ namespace RenderCore { namespace LightingEngine
 						Float4 extremePoint0 = projectionDesc._worldToProjection * Float4{standardLightDesc._position + cameraForward * standardLightDesc._cutoffRange, 1.0f};
 						Float4 extremePoint1 = projectionDesc._worldToProjection * Float4{standardLightDesc._position - cameraForward * standardLightDesc._cutoffRange, 1.0f};
 						float d0 = extremePoint0[2] / extremePoint0[3], d1 = extremePoint1[2] / extremePoint1[3];
-						if (d0 < 0) continue;		// entirely behind (probably should have culled it earlier)
 						if (d1 < 0 && reverseZ) {
 							// interpolate to z=+w plane -- matching shader as close as possible
 							float alpha = (extremePoint0[3] - extremePoint0[2]) / (extremePoint1[2] - extremePoint1[3] - extremePoint0[2] + extremePoint0[3]);

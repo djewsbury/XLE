@@ -19,6 +19,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				return (IFiniteLightSource*)this;
 		} else if (interfaceTypeCode == typeid(StandardPositionalLight).hash_code()) {
 			return this;
+		} else if (interfaceTypeCode == typeid(IAttachedShadowProbe).hash_code()) {
+			return (IAttachedShadowProbe*)this;
 		}
 		return nullptr;
 	}
@@ -139,6 +141,33 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		assert(0);		// could not find a light with the id "associatedLight"
 		return result;
+	}
+
+	void StandardLightScene::ChangeLightsShadowOperator(IteratorRange<const LightSourceId*> lights, ShadowOperatorId shadowOperatorId)
+	{
+		std::vector<size_t> intersection;
+		intersection.reserve(lights.size());
+		for (unsigned seti=0; seti<_tileableLightSets.size(); ++seti) {
+			{
+				auto& set = _tileableLightSets[seti];
+				if (set._shadowOperatorId == shadowOperatorId) continue;
+
+				intersection.clear();
+				for (size_t c=0; c<set._lights.size(); ++c)
+					if (std::find(lights.begin(), lights.end(), set._lights[c]._id) != lights.end())
+						intersection.push_back(c);
+			}
+
+			if (!intersection.empty()) {
+				auto& dstSet = GetLightSet(_tileableLightSets[seti]._operatorId, shadowOperatorId);	// modifies _tileableLightSets
+				auto& srcSet = _tileableLightSets[seti];
+				for (auto i=intersection.rbegin(); i!=intersection.rend(); ++i) {
+					auto l = std::move(srcSet._lights[*i]);
+					srcSet._lights.erase(srcSet._lights.begin()+*i);
+					dstSet._lights.push_back(std::move(l));
+				}
+			}
+		}
 	}
 
 	void StandardLightScene::DestroyShadowProjection(ShadowProjectionId preparerId)

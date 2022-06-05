@@ -109,19 +109,19 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout);
 
-	class DynamicShadowPreparationOperators
+	class DynamicShadowPreparers
 	{
 	public:
-		struct Operator
+		struct Preparer
 		{
 			std::shared_ptr<ICompiledShadowPreparer> _preparer;
 			ShadowOperatorDesc _desc;
 		};
-		std::vector<Operator> _operators;
+		std::vector<Preparer> _preparers;
 
 		std::unique_ptr<Internal::ILightBase> CreateShadowProjection(unsigned operatorIdx);
 	};
-	::Assets::PtrToMarkerPtr<DynamicShadowPreparationOperators> CreateDynamicShadowPreparationOperators(
+	::Assets::PtrToMarkerPtr<DynamicShadowPreparers> CreateDynamicShadowPreparers(
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
@@ -133,7 +133,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		struct ShadowResolveParam
 		{
-			enum class Shadowing { NoShadows, PerspectiveShadows, OrthShadows, OrthShadowsNearCascade, OrthHybridShadows, CubeMapShadows };
+			enum class Shadowing { NoShadows, PerspectiveShadows, OrthShadows, OrthShadowsNearCascade, OrthHybridShadows, CubeMapShadows, Probe };
 			Shadowing _shadowing = Shadowing::NoShadows;
 			ShadowFilterModel _filterModel = ShadowFilterModel::PoissonDisc;
 			unsigned _normalProjCount = 1u;

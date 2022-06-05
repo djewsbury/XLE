@@ -30,7 +30,7 @@ namespace ToolsRig
 			sequence.Reset();
 			_preparedShadows.clear();
 			_preparedDominantShadow = nullptr;
-			if (_lightScene->_shadowPreparationOperators->_operators.empty()) return;
+			if (_lightScene->_shadowPreparers->_preparers.empty()) return;
 
 			_preparedShadows.reserve(_lightScene->_dynamicShadowProjections.size());
 			LightingEngine::ILightScene::LightSourceId prevLightId = ~0u; 

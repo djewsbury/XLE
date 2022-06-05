@@ -37,7 +37,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
                 light._brightness, light._radii[0],
                 ExtractRight(light._orientation), light._radii[1],
                 ExtractForward(light._orientation), AsLightShapeId(operatorDesc._shape), 
-                ExtractUp(light._orientation), 0
+                ExtractUp(light._orientation), light._staticProbeDatabaseEntry
             };
     }
 

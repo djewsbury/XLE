@@ -10,6 +10,7 @@
 #include "../../Math/ProjectionMath.h"
 
 namespace RenderCore { namespace Techniques { class ParsingContext; }}
+namespace RenderCore { namespace LightingEngine { class ShadowProbes; }}
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
@@ -70,11 +71,16 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			LightSourceId associatedLight,
 			std::unique_ptr<ILightBase> desc);
 
+		// move the given lights into a set with the given shadow operator assignment (but do nothing else)
+		void ChangeLightsShadowOperator(
+			IteratorRange<const LightSourceId*> lights,
+			ShadowOperatorId shadowOperatorId);
+
 		void ReserveLightSourceIds(unsigned idCount); 
 		LightSet& GetLightSet(LightOperatorId, ShadowOperatorId);
 	};
 
-	class StandardPositionalLight : public ILightBase, public IPositionalLightSource, public IUniformEmittance, public IFiniteLightSource
+	class StandardPositionalLight : public ILightBase, public IPositionalLightSource, public IUniformEmittance, public IFiniteLightSource, public IAttachedShadowProbe
 	{
 	public:
 		Float3x3    _orientation;
@@ -85,6 +91,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		Float3      _brightness;
 		float       _diffuseWideningMin;
 		float       _diffuseWideningMax;
+
+		unsigned _staticProbeDatabaseEntry = 0;
 
  		virtual void SetLocalToWorld(const Float4x4& localToWorld) override
 		{
@@ -131,7 +139,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		{
 			return Float2 { _diffuseWideningMin, _diffuseWideningMax };
 		}
-
+		
+		virtual void SetDatabaseEntry(unsigned newEntry) override { _staticProbeDatabaseEntry = newEntry; };
+		
 		virtual void* QueryInterface(uint64_t interfaceTypeCode) override;
 
 		struct Flags

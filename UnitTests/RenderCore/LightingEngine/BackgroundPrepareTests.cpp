@@ -80,9 +80,11 @@ namespace UnitTests
 		PreparedSceneForShadowProbe(PreparedSceneForShadowProbe&& moveFrom) = default;
 		PreparedSceneForShadowProbe& operator=(PreparedSceneForShadowProbe&& moveFrom)
 		{
+			if (this == &moveFrom) return *this;
 			UnbindLightScene();
 			_compiledLightingTechnique = std::move(moveFrom._compiledLightingTechnique);
 			_lightingStateDelegate = std::move(moveFrom._lightingStateDelegate);
+			_drawablesWriter = std::move(moveFrom._drawablesWriter);
 			return *this;
 		}
 
@@ -166,20 +168,33 @@ namespace UnitTests
 		void PostRender(RenderCore::LightingEngine::ILightScene& lightScene) override {}
 		void BindScene(RenderCore::LightingEngine::ILightScene& lightScene) override 
 		{
-			REQUIRE(!_lightSourceId); REQUIRE(!_shadowProjectionId);
-			_lightSourceId = lightScene.CreateLightSource(0);
-			RenderCore::LightingEngine::ILightScene::LightSourceId probeSources[] {
-				*_lightSourceId
-			};
-			_shadowProjectionId = lightScene.CreateShadowProjection(0, MakeIteratorRange(probeSources));
+			REQUIRE(_lightSourcesId.empty()); REQUIRE(!_shadowProjectionId);
+			_lightSourcesId.emplace_back(lightScene.CreateLightSource(0));
+			_lightSourcesId.emplace_back(lightScene.CreateLightSource(0));
+			_lightSourcesId.emplace_back(lightScene.CreateLightSource(0));
+			_shadowProjectionId = lightScene.CreateShadowProjection(0, MakeIteratorRange(_lightSourcesId));
 
-			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(*_lightSourceId)->SetLocalToWorld(AsFloat4x4(Float3(5, 5, 5)));
-			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(*_lightSourceId)->SetCutoffRange(20);
+			// red
+			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(_lightSourcesId[0])->SetLocalToWorld(AsFloat4x4(Float3(50, 5, 50)));
+			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(_lightSourcesId[0])->SetCutoffRange(50);
+			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(_lightSourcesId[0])->SetBrightness(Float3{100.f, 0.f, 0.f});
+
+			// green
+			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(_lightSourcesId[1])->SetLocalToWorld(AsFloat4x4(Float3(30, 5, 40)));
+			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(_lightSourcesId[1])->SetCutoffRange(50);
+			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(_lightSourcesId[1])->SetBrightness(Float3{0.f, 100.f, 0.f});
+
+			// blue
+			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(_lightSourcesId[2])->SetLocalToWorld(AsFloat4x4(Float3(55, 5, 60)));
+			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(_lightSourcesId[2])->SetCutoffRange(50);
+			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(_lightSourcesId[2])->SetBrightness(Float3{0.f, 0.f, 100.f});
 		}
 		void UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) override
 		{
 			if (_shadowProjectionId) lightScene.DestroyShadowProjection(*_shadowProjectionId);
-			if (_lightSourceId) lightScene.DestroyLightSource(*_lightSourceId);
+			for (auto light:_lightSourcesId) lightScene.DestroyLightSource(light);
+			_shadowProjectionId = {};
+			_lightSourcesId.clear();
 		}
 		std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> BeginPrepareStep(
 			RenderCore::LightingEngine::ILightScene& lightScene,
@@ -187,7 +202,7 @@ namespace UnitTests
 		{ 
 			if (_shadowProjectionId.has_value()) {
 				if (auto* props = lightScene.TryGetShadowProjectionInterface<RenderCore::LightingEngine::IShadowProbeDatabase>(*_shadowProjectionId))
-					props->SetNearRadius(3.f);
+					props->SetNearRadius(0.2f);
 				if (auto* prepareable = lightScene.TryGetShadowProjectionInterface<RenderCore::LightingEngine::IPreparable>(*_shadowProjectionId))
 					return prepareable->BeginPrepare(threadContext);
 			}
@@ -200,6 +215,10 @@ namespace UnitTests
 			lightOp._shape = RenderCore::LightingEngine::LightSourceShape::Sphere;
 			RenderCore::LightingEngine::ShadowOperatorDesc shadowOp;
 			shadowOp._resolveType = RenderCore::LightingEngine::ShadowResolveType::Probe;
+			// we need some bias to avoid rampant acne
+			shadowOp._singleSidedBias._depthBias = -8;
+			shadowOp._singleSidedBias._slopeScaledBias = -0.5f;
+			shadowOp._doubleSidedBias = shadowOp._singleSidedBias;
 			Operators result;
 			result._lightResolveOperators.emplace_back(lightOp);
 			result._shadowResolveOperators.emplace_back(shadowOp);
@@ -209,7 +228,7 @@ namespace UnitTests
 		auto GetEnvironmentalLightingDesc() -> SceneEngine::EnvironmentalLightingDesc override { return {}; }
 		auto GetToneMapSettings() -> SceneEngine::ToneMapSettings override { return {}; }
 
-		std::optional<RenderCore::LightingEngine::ILightScene::LightSourceId> _lightSourceId;
+		std::vector<RenderCore::LightingEngine::ILightScene::LightSourceId> _lightSourcesId;
 		std::optional<RenderCore::LightingEngine::ILightScene::ShadowProjectionId> _shadowProjectionId;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const override { return _depVal; }
@@ -230,15 +249,17 @@ namespace UnitTests
 
 		testHelper->BeginFrameCapture();
 
-		RenderCore::Techniques::CameraDesc camera;
-		camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, 1.0f}), Float3{0.0f, 5.0f, 0.0f});
+		Techniques::CameraDesc camera;
+		camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{1.f, -0.85f, 1.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{15.0f, 25.0f, 15.0f});
 		camera._projection = Techniques::CameraDesc::Projection::Orthogonal;
 		camera._nearClip = 0.f;
 		camera._farClip = 100.f;		// a small far clip here reduces the impact of gbuffer reconstruction accuracy on sampling
+		camera._left = -20.f; camera._right = 20.f;
+		camera._top = 20.f; camera._bottom = -20.f;
 
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
-			TextureDesc::Plain2D(256, 256, RenderCore::Format::R8G8B8A8_UNORM),
+			TextureDesc::Plain2D(1024, 1024, RenderCore::Format::R8G8B8A8_UNORM),
 			"temporary-out");
 		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
 
@@ -255,7 +276,26 @@ namespace UnitTests
 			lightingDelegate, drawablesWriter,
 			testApparatus, 
 			parsingContext.GetFragmentStitchingContext().GetPreregisteredAttachments(), parsingContext.GetFragmentStitchingContext()._workingProps);
-		futureScene.get();		// consider drawing some frames in the foreground while we wait for this
+		auto scene = futureScene.get();		// consider drawing some frames in the foreground while we wait for this
+
+		{
+			LightingEngine::LightingTechniqueInstance prepareInstance{*scene._compiledLightingTechnique};
+			ParseScene(prepareInstance, *scene._drawablesWriter);
+			auto marker = prepareInstance.GetResourcePreparationMarker();
+			auto newVisibility = marker.get();		// stall
+			if (newVisibility._bufferUploadsVisibility)
+				testApparatus._bufferUploads->StallUntilCompletion(*threadContext, newVisibility._bufferUploadsVisibility);
+		}
+
+		{
+			auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
+			LightingEngine::LightingTechniqueInstance drawInstance{parsingContext, *scene._compiledLightingTechnique};
+			ParseScene(drawInstance, *scene._drawablesWriter);
+		}
+
+		auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
+		REQUIRE(colorLDR);
+		SaveImage(*threadContext, *colorLDR, "background-probe-prepare");
 
 		testHelper->EndFrameCapture();
 	}

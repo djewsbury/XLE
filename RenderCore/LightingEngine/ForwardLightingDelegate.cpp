@@ -57,7 +57,7 @@ namespace RenderCore { namespace LightingEngine
 	void ForwardLightingCaptures::DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence)
 	{
 		sequence.Reset();
-		if (_lightScene->_shadowPreparationOperators->_operators.empty()) return;
+		if (_lightScene->_shadowPreparers->_preparers.empty()) return;
 
 		_preparedShadows.reserve(_lightScene->_dynamicShadowProjections.size());
 		ILightScene::LightSourceId prevLightId = ~0u; 

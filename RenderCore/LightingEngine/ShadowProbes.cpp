@@ -161,6 +161,15 @@ namespace RenderCore { namespace LightingEngine
 				if (!_pendingViews.empty()) {
 					// Commit the objects that were prepared for rendering
 					if (!_drawablePkt._drawables.empty()) {
+						std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
+						auto prepareFuture = preparePromise.get_future();
+						Techniques::PrepareResources(std::move(preparePromise), *_pimpl->_pipelineAccelerators, *_pimpl->_probePrepareCfg, _drawablePkt);
+						YieldToPool(prepareFuture);
+						auto requiredVisibility = prepareFuture.get();
+						_staticPrepareHelper->_parsingContext->SetPipelineAcceleratorsVisibility(
+							_pimpl->_pipelineAccelerators->VisibilityBarrier(requiredVisibility._pipelineAcceleratorsVisibility));
+						_staticPrepareHelper->_parsingContext->RequireCommandList(requiredVisibility._bufferUploadsVisibility);
+
 						_pimpl->_multiViewUniformsDelegate->SetWorldToProjections(MakeIteratorRange(_pendingViews));
 						_staticPrepareHelper->_parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
 						auto rpi = _staticPrepareHelper->BeginRPI(_probeIterator*6, _pendingViews.size());

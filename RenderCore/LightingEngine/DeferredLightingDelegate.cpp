@@ -38,7 +38,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		std::shared_ptr<LightResolveOperators> _lightResolveOperators;
-		std::shared_ptr<DynamicShadowPreparationOperators> _shadowPreparationOperators;
+		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
 
 		LightSourceId CreateLightSource(LightOperatorId opId) override
 		{
@@ -48,9 +48,9 @@ namespace RenderCore { namespace LightingEngine
 
 		ShadowProjectionId CreateShadowProjection(ShadowOperatorId opId, LightSourceId associatedLight) override
 		{
-			auto dynIdx = _shadowOperatorIdMapping._operatorToDynamicShadowOperator[opId];
-			if (dynIdx != ~0u) {
-				auto desc = _shadowPreparationOperators->CreateShadowProjection(dynIdx);
+			auto preparerId = _shadowOperatorIdMapping._operatorToShadowPreparerId[opId];
+			if (preparerId != ~0u) {
+				auto desc = _shadowPreparers->CreateShadowProjection(preparerId);
 				return AddShadowProjection(opId, associatedLight, std::move(desc));
 			} else if (opId == _shadowOperatorIdMapping._operatorForStaticProbes) {
 				Throw(std::runtime_error("Use the multi-light shadow projection constructor for shadow probes"));
@@ -67,6 +67,8 @@ namespace RenderCore { namespace LightingEngine
 				_shadowProbes = std::make_shared<ShadowProbes>(
 					_pipelineAccelerators, *_techDelBox, _shadowOperatorIdMapping._shadowProbesCfg);
 				_spPrepareDelegate = Internal::CreateShadowProbePrepareDelegate(_shadowProbes, associatedLights, this);
+				ChangeLightsShadowOperator(associatedLights, opId);
+				_lightsAssignedToShadowProbes = {associatedLights.begin(), associatedLights.end()};
 				return s_shadowProbeShadowFlag;
 			} else {
 				Throw(std::runtime_error("This shadow projection operation can't be used with the multi-light constructor variation"));
@@ -79,6 +81,8 @@ namespace RenderCore { namespace LightingEngine
 			if (projectionId == s_shadowProbeShadowFlag) {
 				_shadowProbes.reset();
 				_spPrepareDelegate.reset();
+				ChangeLightsShadowOperator(_lightsAssignedToShadowProbes, ~0u);
+				_lightsAssignedToShadowProbes.clear();
 			} else {
 				return Internal::StandardLightScene::DestroyShadowProjection(projectionId);
 			}
@@ -95,16 +99,17 @@ namespace RenderCore { namespace LightingEngine
 			} 
 		}
 
-		struct ShadowOperatorIdMapping
+		struct ShadowPreparerIdMapping
 		{
-			std::vector<unsigned> _operatorToDynamicShadowOperator;
+			std::vector<unsigned> _operatorToShadowPreparerId;
 			unsigned _operatorForStaticProbes = ~0u;
 			ShadowProbes::Configuration _shadowProbesCfg;
 		};
 
-		ShadowOperatorIdMapping _shadowOperatorIdMapping;
+		ShadowPreparerIdMapping _shadowOperatorIdMapping;
 		std::shared_ptr<ShadowProbes> _shadowProbes;
 		std::shared_ptr<IPreparable> _spPrepareDelegate;
+		std::vector<LightSourceId> _lightsAssignedToShadowProbes;
 
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<SharedTechniqueDelegateBox> _techDelBox;
@@ -114,7 +119,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		std::vector<PreparedShadow> _preparedShadows;
-		std::shared_ptr<DynamicShadowPreparationOperators> _shadowPreparationOperators;
+		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
 		std::shared_ptr<LightResolveOperators> _lightResolveOperators;
 		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
 		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
@@ -262,7 +267,7 @@ namespace RenderCore { namespace LightingEngine
 	void DeferredLightingCaptures::DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence)
 	{
 		sequence.Reset();
-		if (_shadowPreparationOperators->_operators.empty()) return;
+		if (_shadowPreparers->_preparers.empty()) return;
 
 		_preparedShadows.reserve(_lightScene->_dynamicShadowProjections.size());
 		ILightScene::LightSourceId prevLightId = ~0u; 
@@ -288,7 +293,7 @@ namespace RenderCore { namespace LightingEngine
 		ResolveLights(
 			*iterator._threadContext, *iterator._parsingContext, iterator._rpi,
 			*_lightResolveOperators, *_lightScene,
-			_preparedShadows);
+			_preparedShadows, _lightScene->_shadowProbes.get());
 	}
 
 	static ::Assets::PtrToMarkerPtr<Techniques::IShaderOperator> CreateToneMapOperator(
@@ -392,9 +397,9 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators)
 	{
-		DeferredLightScene::ShadowOperatorIdMapping shadowOperatorMapping;
-		shadowOperatorMapping._operatorToDynamicShadowOperator.resize(shadowGenerators.size(), ~0u);
-		::Assets::PtrToMarkerPtr<DynamicShadowPreparationOperators> shadowPreparationOperatorsFuture;
+		DeferredLightScene::ShadowPreparerIdMapping shadowOperatorMapping;
+		shadowOperatorMapping._operatorToShadowPreparerId.resize(shadowGenerators.size(), ~0u);
+		::Assets::PtrToMarkerPtr<DynamicShadowPreparers> shadowPreparationOperatorsFuture;
 
 		// Map the shadow operator ids onto the underlying type of shadow (dynamically generated, shadow probes, etc)
 		{
@@ -409,11 +414,11 @@ namespace RenderCore { namespace LightingEngine
 					shadowOperatorMapping._shadowProbesCfg = MakeShadowProbeConfiguration(shadowGenerators[c]);
 				} else {
 					dynShadowGens[dynShadowCount] = shadowGenerators[c];
-					shadowOperatorMapping._operatorToDynamicShadowOperator[c] = dynShadowCount;
+					shadowOperatorMapping._operatorToShadowPreparerId[c] = dynShadowCount;
 					++dynShadowCount;
 				}
 			}
-			shadowPreparationOperatorsFuture = CreateDynamicShadowPreparationOperators(
+			shadowPreparationOperatorsFuture = CreateDynamicShadowPreparers(
 				MakeIteratorRange(dynShadowGens, &dynShadowGens[dynShadowCount]),
 				pipelineAccelerators, techDelBox, shadowDescSet);
 		}
@@ -423,7 +428,7 @@ namespace RenderCore { namespace LightingEngine
 			std::move(promise),
 			[shadowOperatorMapping, pipelineAccelerators, techDelBox](auto shadowPreparationOperators) {
 				auto lightScene = std::make_shared<DeferredLightScene>();
-				lightScene->_shadowPreparationOperators = std::move(shadowPreparationOperators);
+				lightScene->_shadowPreparers = std::move(shadowPreparationOperators);
 				lightScene->_shadowOperatorIdMapping = shadowOperatorMapping;
 				lightScene->_pipelineAccelerators = pipelineAccelerators;
 				lightScene->_techDelBox = techDelBox;
@@ -438,17 +443,18 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperatorsInit,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
+		IteratorRange<const ShadowOperatorDesc*> shadowOperatorsInit,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit,
 		const FrameBufferProperties& fbProps,
 		DeferredLightingTechniqueFlags::BitField flags)
 	{
 		auto buildGBufferFragment = CreateBuildGBufferSceneFragment(*techDelBox, GBufferType::PositionNormalParameters);
 		std::vector<LightSourceOperatorDesc> resolveOperators { resolveOperatorsInit.begin(), resolveOperatorsInit.end() };
+		std::vector<ShadowOperatorDesc> shadowOperators { shadowOperatorsInit.begin(), shadowOperatorsInit.end() };
 
 		std::promise<std::shared_ptr<DeferredLightScene>> lightScenePromise;
 		auto lightSceneFuture = lightScenePromise.get_future();
-		BeginLightSceneConstruction(std::move(lightScenePromise), pipelineAccelerators, techDelBox, shadowDescSet, shadowGenerators);
+		BeginLightSceneConstruction(std::move(lightScenePromise), pipelineAccelerators, techDelBox, shadowDescSet, shadowOperatorsInit);
 
 		auto result = std::make_shared<::Assets::MarkerPtr<CompiledLightingTechnique>>("deferred-lighting-technique");
 		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
@@ -456,7 +462,7 @@ namespace RenderCore { namespace LightingEngine
 			result->AdoptPromise(),
 			[pipelineAccelerators, techDelBox, fbProps, 
 			preregisteredAttachments=std::move(preregisteredAttachments),
-			resolveOperators=std::move(resolveOperators), pipelineCollection, lightingOperatorLayout, flags](
+			resolveOperators=std::move(resolveOperators), shadowOperators=std::move(shadowOperators), pipelineCollection, lightingOperatorLayout, flags](
 				auto&& thatPromise, auto buildGbuffer, auto lightScene) {
 
 				TRY {
@@ -467,7 +473,7 @@ namespace RenderCore { namespace LightingEngine
 					auto captures = std::make_shared<DeferredLightingCaptures>();
 					captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(pipelineAccelerators->GetDevice());
 					captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
-					captures->_shadowPreparationOperators = lightScene->_shadowPreparationOperators;
+					captures->_shadowPreparers = lightScene->_shadowPreparers;
 					captures->_lightScene = lightScene;
 					captures->_lightingOperatorLayout = lightingOperatorLayout;
 					captures->_pipelineCollection = pipelineCollection;
@@ -517,7 +523,7 @@ namespace RenderCore { namespace LightingEngine
 						});
 
 					// prepare-only steps
-					for (const auto&shadowPreparer:captures->_shadowPreparationOperators->_operators) {
+					for (const auto&shadowPreparer:captures->_shadowPreparers->_preparers) {
 						mainSequence.CreatePrepareOnlyParseScene(Techniques::BatchFlags::Opaque);
 						mainSequence.CreatePrepareOnlyStep_ExecuteDrawables(shadowPreparer._preparer->GetSequencerConfig().first);
 					}
@@ -529,12 +535,9 @@ namespace RenderCore { namespace LightingEngine
 					// And then we'll complete the technique when the future from BuildLightResolveOperators() is completed
 					//
 					auto resolvedFB = mainSequence.GetResolvedFrameBufferDesc(resolveFragmentRegistration);
-					std::vector<ShadowOperatorDesc> shadowOp;
-					shadowOp.reserve(captures->_shadowPreparationOperators->_operators.size());
-					for (const auto& c:captures->_shadowPreparationOperators->_operators) shadowOp.push_back(c._desc);
 					auto lightResolveOperators = BuildLightResolveOperators(
 						*pipelineCollection, lightingOperatorLayout,
-						resolveOperators, shadowOp,
+						resolveOperators, shadowOperators,
 						*resolvedFB.first, resolvedFB.second+1,
 						false, GBufferType::PositionNormalParameters);
 
@@ -630,10 +633,13 @@ namespace RenderCore { namespace LightingEngine
 		unsigned c=0;
 		for (const auto& preparedShadow:_preparedShadows) {
 			auto opId = preparedShadow._shadowOpId;
+			auto preparerId = _lightScene->_shadowOperatorIdMapping._operatorToShadowPreparerId[opId];
+			if (preparerId == ~0u) continue;
+
 			GenerateShadowingDebugTextures( 
 				*iterator._threadContext, *iterator._parsingContext, 
 				_pipelineCollection,
-				_shadowPreparationOperators->_operators[opId]._desc,
+				_shadowPreparers->_preparers[preparerId]._desc,
 				*preparedShadow._preparedResult, c);
 			++c;
 		}

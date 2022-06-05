@@ -320,11 +320,11 @@ namespace RenderCore { namespace LightingEngine
 
 	DMShadowPreparer::~DMShadowPreparer() {}
 
-	std::unique_ptr<Internal::ILightBase> DynamicShadowPreparationOperators::CreateShadowProjection(unsigned operatorIdx)
+	std::unique_ptr<Internal::ILightBase> DynamicShadowPreparers::CreateShadowProjection(unsigned operatorIdx)
 	{
-		assert(operatorIdx <= _operators.size());
+		assert(operatorIdx <= _preparers.size());
 		auto result = std::make_unique<Internal::StandardShadowProjection>();
-		auto& op = _operators[operatorIdx];
+		auto& op = _preparers[operatorIdx];
 		result->_projections._mode = op._desc._projectionMode;
 		result->_projections._useNearProj = op._desc._enableNearCascade;
 		result->_projections._operatorNormalProjCount = op._desc._normalProjCount;
@@ -350,15 +350,15 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	::Assets::PtrToMarkerPtr<DynamicShadowPreparationOperators> CreateDynamicShadowPreparationOperators(
+	::Assets::PtrToMarkerPtr<DynamicShadowPreparers> CreateDynamicShadowPreparers(
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	{
-		auto result = std::make_shared<::Assets::MarkerPtr<DynamicShadowPreparationOperators>>();
+		auto result = std::make_shared<::Assets::MarkerPtr<DynamicShadowPreparers>>();
 		if (shadowGenerators.empty()) {
-			result->SetAsset(std::make_shared<DynamicShadowPreparationOperators>());
+			result->SetAsset(std::make_shared<DynamicShadowPreparers>());
 			return result;
 		}
 
@@ -388,12 +388,12 @@ namespace RenderCore { namespace LightingEngine
 				for (const auto& p:futures)
 					*a++ = p->ActualizeBkgrnd();
 
-				auto finalResult = std::make_shared<DynamicShadowPreparationOperators>();
-				finalResult->_operators.reserve(actualized.size());
+				auto finalResult = std::make_shared<DynamicShadowPreparers>();
+				finalResult->_preparers.reserve(actualized.size());
 				assert(actualized.size() == shadowGeneratorCopy.size());
 				auto i = shadowGeneratorCopy.begin();
 				for (auto&a:actualized)
-					finalResult->_operators.push_back(DynamicShadowPreparationOperators::Operator{std::move(a), *i++});
+					finalResult->_preparers.push_back(DynamicShadowPreparers::Preparer{std::move(a), *i++});
 
 				return finalResult;
 			});
@@ -449,17 +449,21 @@ namespace RenderCore { namespace LightingEngine
 		void ShadowResolveParam::WriteShaderSelectors(ParameterBox& selectors) const
 		{
 			if (_shadowing != ShadowResolveParam::Shadowing::NoShadows) {
-				if (_shadowing == ShadowResolveParam::Shadowing::OrthShadows || _shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade || _shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows) {
-					selectors.SetParameter("SHADOW_CASCADE_MODE", 2u);
-				} else if (_shadowing == ShadowResolveParam::Shadowing::CubeMapShadows) {
-					selectors.SetParameter("SHADOW_CASCADE_MODE", 3u);
-				} else
-					selectors.SetParameter("SHADOW_CASCADE_MODE", 1u);
-				selectors.SetParameter("SHADOW_SUB_PROJECTION_COUNT", _normalProjCount);
-				selectors.SetParameter("SHADOW_ENABLE_NEAR_CASCADE", _shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade ? 1u : 0u);
-				selectors.SetParameter("SHADOW_FILTER_MODEL", unsigned(_filterModel));
-				selectors.SetParameter("SHADOW_FILTER_CONTACT_HARDENING", _enableContactHardening);
-				selectors.SetParameter("SHADOW_RT_HYBRID=", unsigned(_shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows));
+				if (_shadowing != ShadowResolveParam::Shadowing::Probe) {
+					if (_shadowing == ShadowResolveParam::Shadowing::OrthShadows || _shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade || _shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows) {
+						selectors.SetParameter("SHADOW_CASCADE_MODE", 2u);
+					} else if (_shadowing == ShadowResolveParam::Shadowing::CubeMapShadows) {
+						selectors.SetParameter("SHADOW_CASCADE_MODE", 3u);
+					} else
+						selectors.SetParameter("SHADOW_CASCADE_MODE", 1u);
+					selectors.SetParameter("SHADOW_SUB_PROJECTION_COUNT", _normalProjCount);
+					selectors.SetParameter("SHADOW_ENABLE_NEAR_CASCADE", _shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade ? 1u : 0u);
+					selectors.SetParameter("SHADOW_FILTER_MODEL", unsigned(_filterModel));
+					selectors.SetParameter("SHADOW_FILTER_CONTACT_HARDENING", _enableContactHardening);
+					selectors.SetParameter("SHADOW_RT_HYBRID=", unsigned(_shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows));
+				} else {
+					selectors.SetParameter("SHADOW_PROBE", 1);
+				}
 			}
 		}
 
@@ -467,21 +471,25 @@ namespace RenderCore { namespace LightingEngine
 		{
 			ShadowResolveParam param;
 			param._filterModel = shadowOp._filterModel;
-			switch (shadowOp._projectionMode) {
-			case ShadowProjectionMode::Arbitrary:
-				param._shadowing = ShadowResolveParam::Shadowing::PerspectiveShadows;
-				assert(!shadowOp._enableNearCascade);
-				break;
-			case ShadowProjectionMode::Ortho:
-				param._shadowing = shadowOp._enableNearCascade ? ShadowResolveParam::Shadowing::OrthShadowsNearCascade : ShadowResolveParam::Shadowing::OrthShadows;
-				break;
-			case ShadowProjectionMode::ArbitraryCubeMap:
-				param._shadowing = ShadowResolveParam::Shadowing::CubeMapShadows;
-				assert(!shadowOp._enableNearCascade);
-				break;
+			if (shadowOp._resolveType != ShadowResolveType::Probe) {
+				switch (shadowOp._projectionMode) {
+				case ShadowProjectionMode::Arbitrary:
+					param._shadowing = ShadowResolveParam::Shadowing::PerspectiveShadows;
+					assert(!shadowOp._enableNearCascade);
+					break;
+				case ShadowProjectionMode::Ortho:
+					param._shadowing = shadowOp._enableNearCascade ? ShadowResolveParam::Shadowing::OrthShadowsNearCascade : ShadowResolveParam::Shadowing::OrthShadows;
+					break;
+				case ShadowProjectionMode::ArbitraryCubeMap:
+					param._shadowing = ShadowResolveParam::Shadowing::CubeMapShadows;
+					assert(!shadowOp._enableNearCascade);
+					break;
+				}
+				param._normalProjCount = shadowOp._normalProjCount;
+				param._enableContactHardening = shadowOp._enableContactHardening;
+			} else {
+				param._shadowing = ShadowResolveParam::Shadowing::Probe;
 			}
-			param._normalProjCount = shadowOp._normalProjCount;
-			param._enableContactHardening = shadowOp._enableContactHardening;
 			return param;
 		}
 	}

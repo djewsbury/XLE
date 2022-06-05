@@ -25,8 +25,8 @@ DescriptorSet PerLightDescriptors
 	SubpassInput GBuffer_Parameters;			// 8
 	SubpassInput DepthTexture;					// 9
 
-	SampledTexture d3;	// 10
-	SampledTexture d4;	// 11
+	SampledTexture StaticShadowProbeDatabase;	// 10
+	StorageBuffer StaticShadowProbeProperties;	// 11
 	SampledTexture d5;	// 12
 
 	Sampler DefaultSampler;						// 13

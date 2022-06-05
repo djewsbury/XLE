@@ -34,23 +34,35 @@ float3 ResolveLight(
     //   S H A D O W S
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-float ResolveShadows(CascadeAddress cascadeAddress, LightScreenDest screenDesc)
-{
-    ShadowResolveConfig config = ShadowResolveConfig_Default();
-    #if SHADOW_CASCADE_MODE == 0
-        return 1.0f;
-    #elif SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_CUBEMAP
-        return ResolveShadows_CubeMap(
-            cascadeAddress.frustumCoordinates.xyz, cascadeAddress.miniProjection,
-            screenDesc.pixelCoords, screenDesc.sampleIndex,
-            config);
-    #else
-        return ResolveShadows_Cascade(
-            cascadeAddress,
-            screenDesc.pixelCoords, screenDesc.sampleIndex,
-            config);
-    #endif
-}
+#if SHADOW_PROBE
+    TextureCubeArray<float> StaticShadowProbeDatabase : register(t10, space1);
+    struct StaticShadowProbeDesc
+    {
+        MiniProjZW _miniProjZW;
+    };
+    StructuredBuffer<StaticShadowProbeDesc> StaticShadowProbeProperties : register(t11, space1);
+
+    float SampleStaticDatabase(uint databaseEntry, float3 offset)
+    {
+        // todo -- less silly way of querying the cubemap shadows
+        float distance;
+        if (abs(offset.x) > abs(offset.y)) {
+            if (abs(offset.x) > abs(offset.z)) {
+                distance = abs(offset.x);
+            } else {
+                distance = abs(offset.z);
+            }
+        } else if (abs(offset.y) > abs(offset.z)) {
+            distance = abs(offset.y);
+        } else {
+            distance = abs(offset.z);
+        }
+
+        distance = WorldSpaceDepthToNDC_Perspective(distance, StaticShadowProbeProperties[databaseEntry]._miniProjZW);
+        // distance += 0.5f / 65535.f;     // bias half precision
+        return StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float4(offset, float(databaseEntry)), distance);
+    }
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -85,6 +97,32 @@ CascadeAddress ResolveShadowsCascade(float3 worldPosition, float3 worldNormal, f
         return CascadeAddress_CubeMap(worldPosition-lightPosition);
     #else
         return CascadeAddress_Invalid();
+    #endif
+}
+
+float ResolveShadows(LightDesc light, float3 worldPosition, float3 worldNormal, float2 camXY, float worldSpaceDepth, LightScreenDest screenDesc)
+{
+    #if !SHADOW_PROBE
+        CascadeAddress cascadeAddress = ResolveShadowsCascade(worldPosition, worldNormal, camXY, worldSpaceDepth);
+
+        ShadowResolveConfig config = ShadowResolveConfig_Default();
+        #if SHADOW_CASCADE_MODE == 0
+            return 1.0f;
+        #elif SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_CUBEMAP
+            return ResolveShadows_CubeMap(
+                cascadeAddress.frustumCoordinates.xyz, cascadeAddress.miniProjection,
+                screenDesc.pixelCoords, screenDesc.sampleIndex,
+                config);
+        #else
+            return ResolveShadows_Cascade(
+                cascadeAddress,
+                screenDesc.pixelCoords, screenDesc.sampleIndex,
+                config);
+        #endif
+    #else
+        if (light.StaticDatabaseLightId != 0)
+            return SampleStaticDatabase(light.StaticDatabaseLightId-1, worldPosition - light.Position);
+        return 0;
     #endif
 }
 
