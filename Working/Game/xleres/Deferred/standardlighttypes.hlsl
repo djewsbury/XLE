@@ -9,6 +9,7 @@
 #include "../TechniqueLibrary/LightingEngine/LightShapes.hlsl"
 #include "../TechniqueLibrary/LightingEngine/CascadeResolve.hlsl"
 #include "../TechniqueLibrary/LightingEngine/ShadowsResolve.hlsl"
+#include "../TechniqueLibrary/LightingEngine/ShadowProbes.hlsl"
 #include "../TechniqueLibrary/LightingEngine/LightDesc.hlsl"
 
 float3 ResolveLight(
@@ -33,36 +34,6 @@ float3 ResolveLight(
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     //   S H A D O W S
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-#if SHADOW_PROBE
-    TextureCubeArray<float> StaticShadowProbeDatabase : register(t10, space1);
-    struct StaticShadowProbeDesc
-    {
-        MiniProjZW _miniProjZW;
-    };
-    StructuredBuffer<StaticShadowProbeDesc> StaticShadowProbeProperties : register(t11, space1);
-
-    float SampleStaticDatabase(uint databaseEntry, float3 offset)
-    {
-        // todo -- less silly way of querying the cubemap shadows
-        float distance;
-        if (abs(offset.x) > abs(offset.y)) {
-            if (abs(offset.x) > abs(offset.z)) {
-                distance = abs(offset.x);
-            } else {
-                distance = abs(offset.z);
-            }
-        } else if (abs(offset.y) > abs(offset.z)) {
-            distance = abs(offset.y);
-        } else {
-            distance = abs(offset.z);
-        }
-
-        distance = WorldSpaceDepthToNDC_Perspective(distance, StaticShadowProbeProperties[databaseEntry]._miniProjZW);
-        // distance += 0.5f / 65535.f;     // bias half precision
-        return StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float4(offset, float(databaseEntry)), distance);
-    }
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -121,7 +92,7 @@ float ResolveShadows(LightDesc light, float3 worldPosition, float3 worldNormal, 
         #endif
     #else
         if (light.StaticDatabaseLightId != 0)
-            return SampleStaticDatabase(light.StaticDatabaseLightId-1, worldPosition - light.Position);
+            return SampleStaticDatabase(light.StaticDatabaseLightId-1, worldPosition - light.Position, screenDesc);
         return 0;
     #endif
 }

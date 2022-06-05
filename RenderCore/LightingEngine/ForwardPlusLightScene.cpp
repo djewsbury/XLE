@@ -355,6 +355,7 @@ namespace RenderCore { namespace LightingEngine
 	static ShadowProbes::Configuration MakeShadowProbeConfiguration(const ShadowOperatorDesc& opDesc)
 	{
 		ShadowProbes::Configuration result;
+		assert(opDesc._width == opDesc._height);		// expecting square probe textures
 		result._staticFaceDims = opDesc._width;
 		result._staticFormat = opDesc._format;
 		result._singleSidedBias = opDesc._singleSidedBias;

@@ -9,6 +9,7 @@
 #include "../TechniqueLibrary/LightingEngine/LightShapes.hlsl"
 #include "../TechniqueLibrary/LightingEngine/CascadeResolve.hlsl"
 #include "../TechniqueLibrary/LightingEngine/ShadowsResolve.hlsl"
+#include "../TechniqueLibrary/LightingEngine/ShadowProbes.hlsl"
 #include "../TechniqueLibrary/LightingEngine/SphericalHarmonics.hlsl"
 #include "../TechniqueLibrary/Math/ProjectionMath.hlsl"
 
@@ -26,18 +27,6 @@ Texture3D<uint> TiledLightBitField : register(t3, space3);
 
 Texture2D<float3> SSR : register(t4, space3);
 Texture2D<float> SSRConfidence : register(t5, space3);
-
-#if TEST_SHADOW_PROBE
-	Texture2DArray<float> StaticShadowProbeDatabase : register(t6, space3);
-#else
-	TextureCubeArray<float> StaticShadowProbeDatabase : register(t6, space3);
-#endif
-
-struct StaticShadowProbeDesc
-{
-	MiniProjZW _miniProjZW;
-};
-StructuredBuffer<StaticShadowProbeDesc> StaticShadowProbeProperties : register(t7, space3);
 
 static const uint TiledLights_DepthGradiations = 1024;
 static const uint TiledLights_GridDims = 16;
@@ -64,79 +53,6 @@ float3 LightResolve_Ambient(GBufferValues sample, float3 directionToEye, LightSc
 
 	return result; 
 }
-
-// See https://www.shadertoy.com/view/wtXXDl for interesting "biquadratic" texture sampling hack
-
-#if TEST_SHADOW_PROBE
-
-float SampleStaticDatabase(uint databaseEntry, float3 offset)
-{
-	float distance;
-	float2 texCoord;
-	uint faceIdx = 0;
-	if (abs(offset.x) > abs(offset.y)) {
-		if (abs(offset.x) > abs(offset.z)) {
-			distance = abs(offset.x);
-			texCoord = -offset.zy;
-			if (offset.x < 0) { texCoord.x = -texCoord.x; faceIdx = 1; } else faceIdx = 0;
-		} else {
-			distance = abs(offset.z);
-			texCoord = -offset.xy;
-			if (offset.z > 0) { texCoord.x = -texCoord.x; faceIdx = 4; } else faceIdx = 5;
-		}
-	} else if (abs(offset.y) > abs(offset.z)) {
-		distance = abs(offset.y);
-		texCoord = offset.xz;
-		if (offset.y < 0) { texCoord.y = -texCoord.y; faceIdx = 3; } else faceIdx = 2;
-	} else {
-		distance = abs(offset.z);
-		texCoord = -offset.xy;
-		if (offset.z > 0) { texCoord.x = -texCoord.x; faceIdx = 4; } else faceIdx = 5;
-	}
-
-	texCoord = 0.5 + 0.5f * texCoord / distance;
-	distance = WorldSpaceDepthToNDC_Perspective(distance, StaticShadowProbeProperties[databaseEntry]._miniProjZW);
-	// return StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float3(texCoord.xy, float(databaseEntry*6+faceIdx)), distance);
-
-	uint3 probeDatabaseDims;
-	StaticShadowProbeDatabase.GetDimensions(probeDatabaseDims.x, probeDatabaseDims.y, probeDatabaseDims.z);
-	float2 res = float2(probeDatabaseDims.xy);
-	float2 q = frac(texCoord * res);
-	float2 c = (q*(q - 1.0) + 0.5) / res;
-	float2 w0 = texCoord - c;
-	float2 w1 = texCoord + c;
-	float result 
-		= StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float3(w0.x, w0.y, float(databaseEntry*6+faceIdx)), distance)
-		+ StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float3(w0.x, w1.y, float(databaseEntry*6+faceIdx)), distance)
-		+ StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float3(w1.x, w1.y, float(databaseEntry*6+faceIdx)), distance)
-		+ StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float3(w1.x, w0.y, float(databaseEntry*6+faceIdx)), distance);
-	return result / 4.0;
-}
-
-#else
-
-float SampleStaticDatabase(uint databaseEntry, float3 offset)
-{
-	// todo -- less silly way of querying the cubemap shadows
-	float distance;
-	if (abs(offset.x) > abs(offset.y)) {
-		if (abs(offset.x) > abs(offset.z)) {
-			distance = abs(offset.x);
-		} else {
-			distance = abs(offset.z);
-		}
-	} else if (abs(offset.y) > abs(offset.z)) {
-		distance = abs(offset.y);
-	} else {
-		distance = abs(offset.z);
-	}
-	
-	distance = WorldSpaceDepthToNDC_Perspective(distance, StaticShadowProbeProperties[databaseEntry]._miniProjZW);
-	// distance += 0.5f / 65535.f;		// offset half the depth precision
-	return StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float4(offset, float(databaseEntry)), distance);
-}
-
-#endif
 
 uint MaskBitsUntil(uint bitIdx) { return (1u<<bitIdx)-1u; }
 

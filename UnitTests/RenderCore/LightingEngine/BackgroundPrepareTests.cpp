@@ -216,9 +216,10 @@ namespace UnitTests
 			RenderCore::LightingEngine::ShadowOperatorDesc shadowOp;
 			shadowOp._resolveType = RenderCore::LightingEngine::ShadowResolveType::Probe;
 			// we need some bias to avoid rampant acne
-			shadowOp._singleSidedBias._depthBias = -8;
-			shadowOp._singleSidedBias._slopeScaledBias = -0.5f;
+			shadowOp._singleSidedBias._depthBias = 6 * -8;
+			shadowOp._singleSidedBias._slopeScaledBias = -0.75f;
 			shadowOp._doubleSidedBias = shadowOp._singleSidedBias;
+			shadowOp._width = shadowOp._height = 128;
 			Operators result;
 			result._lightResolveOperators.emplace_back(lightOp);
 			result._shadowResolveOperators.emplace_back(shadowOp);
@@ -249,19 +250,11 @@ namespace UnitTests
 
 		testHelper->BeginFrameCapture();
 
-		Techniques::CameraDesc camera;
-		camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{1.f, -0.85f, 1.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{15.0f, 25.0f, 15.0f});
-		camera._projection = Techniques::CameraDesc::Projection::Orthogonal;
-		camera._nearClip = 0.f;
-		camera._farClip = 100.f;		// a small far clip here reduces the impact of gbuffer reconstruction accuracy on sampling
-		camera._left = -20.f; camera._right = 20.f;
-		camera._top = 20.f; camera._bottom = -20.f;
-
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
 			TextureDesc::Plain2D(1024, 1024, RenderCore::Format::R8G8B8A8_UNORM),
 			"temporary-out");
-		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
+		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, Techniques::CameraDesc{});
 
 		const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
 		auto drawablesWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators)
@@ -287,15 +280,41 @@ namespace UnitTests
 				testApparatus._bufferUploads->StallUntilCompletion(*threadContext, newVisibility._bufferUploadsVisibility);
 		}
 
-		{
-			auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
-			LightingEngine::LightingTechniqueInstance drawInstance{parsingContext, *scene._compiledLightingTechnique};
-			ParseScene(drawInstance, *scene._drawablesWriter);
-		}
+		Techniques::CameraDesc camerasToRender[3];
 
-		auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
-		REQUIRE(colorLDR);
-		SaveImage(*threadContext, *colorLDR, "background-probe-prepare");
+		camerasToRender[0]._cameraToWorld = MakeCameraToWorld(Normalize(Float3{1.f, -0.85f, 1.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{15.0f, 25.0f, 15.0f});
+		camerasToRender[0]._projection = Techniques::CameraDesc::Projection::Orthogonal;
+		camerasToRender[0]._nearClip = 0.f;
+		camerasToRender[0]._farClip = 100.f;		// a small far clip here reduces the impact of gbuffer reconstruction accuracy on sampling
+		camerasToRender[0]._left = -20.f; camerasToRender[0]._right = 20.f;
+		camerasToRender[0]._top = 20.f; camerasToRender[0]._bottom = -20.f;
+
+		camerasToRender[1]._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, 1.0f}), Float3{50.0f, 25.0f, 50.0f});
+		camerasToRender[1]._projection = Techniques::CameraDesc::Projection::Orthogonal;
+		camerasToRender[1]._nearClip = 0.f;
+		camerasToRender[1]._farClip = 100.f;		// a small far clip here reduces the impact of gbuffer reconstruction accuracy on sampling
+		camerasToRender[1]._left = -20.f; camerasToRender[1]._right = 20.f;
+		camerasToRender[1]._top = 20.f; camerasToRender[1]._bottom = -20.f;
+
+		camerasToRender[2]._cameraToWorld = MakeCameraToWorld(Normalize(Float3{1.f, -2.f, 1.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{12.5f, 25.0f, 32.5f});
+		camerasToRender[2]._projection = Techniques::CameraDesc::Projection::Orthogonal;
+		camerasToRender[2]._nearClip = 0.f;
+		camerasToRender[2]._farClip = 100.f;		// a small far clip here reduces the impact of gbuffer reconstruction accuracy on sampling
+		camerasToRender[2]._left = -5.f; camerasToRender[2]._right = 5.f;
+		camerasToRender[2]._top = 5.f; camerasToRender[2]._bottom = -5.f;
+
+		for (unsigned c=0; c<dimof(camerasToRender); ++c) {
+			{
+				parsingContext.GetProjectionDesc() = BuildProjectionDesc(camerasToRender[c], UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
+				parsingContext.SetPipelineAcceleratorsVisibility(testApparatus._pipelineAccelerators->VisibilityBarrier());
+				LightingEngine::LightingTechniqueInstance drawInstance{parsingContext, *scene._compiledLightingTechnique};
+				ParseScene(drawInstance, *scene._drawablesWriter);
+			}
+
+			auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
+			REQUIRE(colorLDR);
+			SaveImage(*threadContext, *colorLDR, "background-probe-prepare-" + std::to_string(c));
+		}
 
 		testHelper->EndFrameCapture();
 	}
