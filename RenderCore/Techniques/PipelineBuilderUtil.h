@@ -345,7 +345,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		#endif
 	};	
 
-	static std::shared_ptr<Metal::GraphicsPipeline> MakeGraphicsPipeline(
+	static GraphicsPipelineAndLayout MakeGraphicsPipelineAndLayout(
 		const Metal::ShaderProgram& shader,
 		const GraphicsPipelineRetainedConstructionParams& params)
 	{
@@ -368,25 +368,10 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 		builder.SetRenderPassConfiguration(params._fbDesc, params._subpassIdx);
 
-		return builder.CreatePipeline(Metal::GetObjectFactory());
-	}
-
-	static GraphicsPipelineAndLayout MakeGraphicsPipelineAndLayout(
-		const Metal::ShaderProgram& shader,
-		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		const ::Assets::DependencyValidation& pipelineLayoutDepVal,
-		const GraphicsPipelineRetainedConstructionParams& params)
-	{
-		auto pipeline = MakeGraphicsPipeline(shader, params);
-		::Assets::DependencyValidation depVal; 
-		if (pipelineLayoutDepVal) {
-			depVal = ::Assets::GetDepValSys().Make();
-			depVal.RegisterDependency(pipeline->GetDependencyValidation());
-			depVal.RegisterDependency(pipelineLayoutDepVal);
-		} else
-			depVal = pipeline->GetDependencyValidation();
+		auto pipeline = builder.CreatePipeline(Metal::GetObjectFactory());
+		auto depVal = pipeline->GetDependencyValidation();
 		return GraphicsPipelineAndLayout { 
-			std::move(pipeline), pipelineLayout, std::move(depVal) 
+			std::move(pipeline), shader.GetPipelineLayout(), std::move(depVal)
 			#if defined(_DEBUG)
 				, params._debugInfo
 			#endif
@@ -416,7 +401,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 					Metal::ShaderProgram shaderProgram{
 						Metal::GetObjectFactory(),
 						pipelineLayoutActual, vsCode, psCode};
-					return MakeGraphicsPipelineAndLayout(shaderProgram, pipelineLayoutActual, {}, params);
+					return MakeGraphicsPipelineAndLayout(shaderProgram, params);
 				});
 		} else if (byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
 			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel], byteCodeFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToPromise(
@@ -433,7 +418,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 						Metal::GetObjectFactory(),
 						pipelineLayoutActual, vsCode, gsCode, psCode,
 						StreamOutputInitializers{params._pipelineDesc->_soElements, params._pipelineDesc->_soBufferStrides});
-					return MakeGraphicsPipelineAndLayout(shaderProgram, pipelineLayoutActual, {}, params);
+					return MakeGraphicsPipelineAndLayout(shaderProgram, params);
 				});
 		} else if (!byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
 			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToPromise(
@@ -449,7 +434,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 						Metal::GetObjectFactory(),
 						pipelineLayoutActual, vsCode, gsCode, CompiledShaderByteCode{},
 						StreamOutputInitializers{params._pipelineDesc->_soElements, params._pipelineDesc->_soBufferStrides});
-					return MakeGraphicsPipelineAndLayout(shaderProgram, pipelineLayoutActual, {}, params);
+					return MakeGraphicsPipelineAndLayout(shaderProgram, params);
 				});
 		} else
 			Throw(std::runtime_error("Missing shader stages while building shader program"));
@@ -518,7 +503,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 					Metal::ShaderProgram shaderProgram{
 						Metal::GetObjectFactory(),
 						pipelineLayoutActual, vsCode, psCode};
-					return MakeGraphicsPipelineAndLayout(shaderProgram, pipelineLayoutActual, {}, params);
+					return MakeGraphicsPipelineAndLayout(shaderProgram, params);
 				});
 		} else if (byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
 			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel], byteCodeFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToPromise(
@@ -535,7 +520,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 						Metal::GetObjectFactory(),
 						pipelineLayoutActual, vsCode, gsCode, psCode,
 						StreamOutputInitializers{params._pipelineDesc->_soElements, params._pipelineDesc->_soBufferStrides});
-					return MakeGraphicsPipelineAndLayout(shaderProgram, pipelineLayoutActual, {}, params);
+					return MakeGraphicsPipelineAndLayout(shaderProgram, params);
 				});
 		} else if (!byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
 			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToPromise(
@@ -551,7 +536,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 						Metal::GetObjectFactory(),
 						pipelineLayoutActual, vsCode, gsCode, CompiledShaderByteCode{},
 						StreamOutputInitializers{params._pipelineDesc->_soElements, params._pipelineDesc->_soBufferStrides});
-					return MakeGraphicsPipelineAndLayout(shaderProgram, pipelineLayoutActual, {}, params);
+					return MakeGraphicsPipelineAndLayout(shaderProgram, params);
 				});
 		} else
 			Throw(std::runtime_error("Missing shader stages while building shader program"));

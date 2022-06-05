@@ -218,11 +218,23 @@ namespace RenderCore { namespace Metal_Vulkan
 		pipeline.renderPass = renderPass;
 		pipeline.subpass = subpass;
 
-		auto vkPipeline = factory.CreateGraphicsPipeline(pipelineCache, pipeline);
-		auto result = std::make_shared<GraphicsPipeline>(std::move(vkPipeline));
-		result->_shader = *_shaderProgram;
-		_pipelineStale = false;
-		return result;
+		TRY {
+			auto vkPipeline = factory.CreateGraphicsPipeline(pipelineCache, pipeline);
+			auto result = std::make_shared<GraphicsPipeline>(std::move(vkPipeline));
+			result->_shader = *_shaderProgram;
+			_pipelineStale = false;
+			return result;
+		} CATCH (...) {
+			// We got a low level Vulkan exception. Let's do our own validation here, because sometimes we
+			// can report a more informative error
+			auto& vs = _shaderProgram->GetCompiledCode(ShaderStage::Vertex);
+			if (!vs.GetByteCode().empty()) ValidateShaderToPipelineLayout(vs, *_shaderProgram->GetPipelineLayout());
+			auto& ps = _shaderProgram->GetCompiledCode(ShaderStage::Pixel);
+			if (!ps.GetByteCode().empty()) ValidateShaderToPipelineLayout(ps, *_shaderProgram->GetPipelineLayout());
+			auto& gs = _shaderProgram->GetCompiledCode(ShaderStage::Geometry);
+			if (!gs.GetByteCode().empty()) ValidateShaderToPipelineLayout(gs, *_shaderProgram->GetPipelineLayout());
+			RETHROW;
+		} CATCH_END
 	}
 
 	std::shared_ptr<GraphicsPipeline> GraphicsPipelineBuilder::CreatePipeline(ObjectFactory& factory)
@@ -323,11 +335,18 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::string csEntryPoint = _shader->GetCompiledCode().GetEntryPoint().AsString();
 		pipeline.stage = BuildShaderStage(_shader->GetModule().get(), VK_SHADER_STAGE_COMPUTE_BIT, csEntryPoint);
 
-		auto vkPipeline = factory.CreateComputePipeline(pipelineCache, pipeline);
-		auto result = std::make_shared<ComputePipeline>(std::move(vkPipeline));
-		result->_shader = *_shader;
-		_pipelineStale = false;
-		return result;
+		TRY {
+			auto vkPipeline = factory.CreateComputePipeline(pipelineCache, pipeline);
+			auto result = std::make_shared<ComputePipeline>(std::move(vkPipeline));
+			result->_shader = *_shader;
+			_pipelineStale = false;
+			return result;
+		} CATCH (...) {
+			// We got a low level Vulkan exception. Let's do our own validation here, because sometimes we
+			// can report a more informative error
+			ValidateShaderToPipelineLayout(_shader->GetCompiledCode(), *_shader->GetPipelineLayout());
+			RETHROW;
+		} CATCH_END
 	}
 
 	std::shared_ptr<ComputePipeline> ComputePipelineBuilder::CreatePipeline(ObjectFactory& factory)

@@ -107,6 +107,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	using DeepShaderProgram = ShaderProgram;
 
+	void ValidateShaderToPipelineLayout(const CompiledShaderByteCode& byteCode, const ICompiledPipelineLayout& pipelineLayout);
+
         ////////////////////////////////////////////////////////////////////////////////////////////////
 
     class ComputeShader

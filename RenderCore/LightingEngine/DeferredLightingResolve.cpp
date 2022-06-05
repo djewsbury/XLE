@@ -157,6 +157,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		std::shared_ptr<IDescriptorSet> _descSet;
 		BufferUploads::CommandListID _completionCommandList = 0;
+		RenderCore::DescriptorSetSignature _signature;
 	};
 
 	std::future<DescSetAndCmdListId> BuildFixedLightResolveDescriptorSet(
@@ -181,6 +182,7 @@ namespace RenderCore { namespace LightingEngine
 				DescSetAndCmdListId result;
 				result._descSet = device->CreateDescriptorSet(inits);
 				result._completionCommandList = balancedNoise->GetCompletionCommandList();
+				result._signature = descSetLayout;
 				return result;
 			});
 		return future;
@@ -342,7 +344,7 @@ namespace RenderCore { namespace LightingEngine
 				finalResult->_operatorToPipelineMap = operatorToPipelineMap; 
 
 				UniformsStreamInterface sharedUsi;
-				sharedUsi.BindFixedDescriptorSet(0, Utility::Hash64("SharedDescriptors"));
+				sharedUsi.BindFixedDescriptorSet(0, Utility::Hash64("SharedDescriptors"), &descSetAndCmdList._signature);
 
 				UniformsStreamInterface usi;
 				usi.BindFixedDescriptorSet(0, Utility::Hash64("ShadowTemplate"));

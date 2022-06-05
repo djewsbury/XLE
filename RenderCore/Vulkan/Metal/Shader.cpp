@@ -59,10 +59,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			_interfaceBindingHash = Hash64(byteCode.begin(), byteCode.end(), _interfaceBindingHash);
 		}
-
-		// auto& globals = Internal::VulkanGlobalsTemp::GetInstance();
-		// Assets::RegisterAssetDependency(_validationCallback, globals._graphicsRootSignatureFile->GetDependencyValidation());
-		// _pipelineLayoutConfig = globals._mainGraphicsConfig;
     }
     
     ShaderProgram::ShaderProgram(   ObjectFactory& factory,
@@ -128,24 +124,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
     bool ShaderProgram::DynamicLinkingEnabled() const { return false; }
 
-	/*void        ShaderProgram::Apply(GraphicsPipelineBuilder& pipeline) const
-    {
-        if (pipeline._shaderProgram != this) {
-            pipeline._shaderProgram = this;
-			pipeline._PipelineDescriptorsLayoutBuilder.SetShaderBasedDescriptorSets(*_pipelineLayoutConfig);
-            pipeline._pipelineStale = true;
-        }
-    }
-
-	void        ShaderProgram::Apply(GraphicsPipelineBuilder& pipeline, const BoundClassInterfaces&) const
-	{
-		if (pipeline._shaderProgram != this) {
-            pipeline._shaderProgram = this;
-			pipeline._PipelineDescriptorsLayoutBuilder.SetShaderBasedDescriptorSets(*_pipelineLayoutConfig);
-            pipeline._pipelineStale = true;
-        }
-	}*/
-
         ////////////////////////////////////////////////////////////////////////////////////////////////
 
     ComputeShader::ComputeShader(
@@ -165,10 +143,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 
         _validationCallback = compiledShader.GetDependencyValidation();
-
-		// auto& globals = Internal::VulkanGlobalsTemp::GetInstance();
-		// Assets::RegisterAssetDependency(_validationCallback, globals._computeRootSignatureFile->GetDependencyValidation());
-		// _pipelineLayoutConfig = globals._mainComputeConfig;
     }
 
     ComputeShader::ComputeShader() {}
