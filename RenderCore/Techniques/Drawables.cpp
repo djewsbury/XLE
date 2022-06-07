@@ -556,8 +556,29 @@ namespace RenderCore { namespace Techniques
 		} else if (storageType == Storage::Uniform) {
 			return AllocateFrom(_ubStorage, size, _ubStorageAlignment);
 		} else {
+			// The caller may hold onto the pointers we pass back, so we need to use a paging system
 			assert(storageType == Storage::CPU);
-			return AllocateFrom(_cpuStorage, size, 1u);
+			const unsigned CPUPageSize = 16 * 1024;
+			for (auto i=_cpuStoragePages.begin(); i!=_cpuStoragePages.end(); ++i) {
+				if ((i->_used + size) <= i->_allocated) {
+					AllocateStorageResult result { 
+						MakeIteratorRange(
+							PtrAdd(i->_memory.get(), i->_used),
+							PtrAdd(i->_memory.get(), i->_used+size)),
+						unsigned(std::distance(_cpuStoragePages.begin(), i) * CPUPageSize + i->_used) };
+					i->_used += size;
+					return result;
+				}
+			}
+			CPUStoragePage newPage;
+			newPage._memory = std::make_unique<uint8_t[]>(CPUPageSize);
+			newPage._allocated = CPUPageSize;
+			newPage._used = size;
+			AllocateStorageResult result { 
+				MakeIteratorRange(newPage._memory.get(), PtrAdd(newPage._memory.get(), size)),
+				unsigned(_cpuStoragePages.size() * CPUPageSize) };
+			_cpuStoragePages.emplace_back(std::move(newPage));
+			return result;
 		}
 	}
 
@@ -585,7 +606,7 @@ namespace RenderCore { namespace Techniques
 		_vbStorage.clear();
 		_ibStorage.clear();
 		_ubStorage.clear();
-		_cpuStorage.clear();
+		_cpuStoragePages.clear();
 		_geoHeap->DestroyAll();
 	}
 
@@ -610,7 +631,7 @@ namespace RenderCore { namespace Techniques
 	, _vbStorage(std::move(moveFrom._vbStorage))
 	, _ibStorage(std::move(moveFrom._ibStorage))
 	, _ubStorage(std::move(moveFrom._ubStorage))
-	, _cpuStorage(std::move(moveFrom._cpuStorage))
+	, _cpuStoragePages(std::move(moveFrom._cpuStoragePages))
 	, _geoHeap(std::move(moveFrom._geoHeap))
 	{
 		_pool = moveFrom._pool;
@@ -632,7 +653,7 @@ namespace RenderCore { namespace Techniques
 		_vbStorage = std::move(moveFrom._vbStorage);
 		_ibStorage = std::move(moveFrom._ibStorage);
 		_ubStorage = std::move(moveFrom._ubStorage);
-		_cpuStorage = std::move(moveFrom._cpuStorage);
+		_cpuStoragePages = std::move(moveFrom._cpuStoragePages);
 		_geoHeap = std::move(moveFrom._geoHeap);
 		_pool = moveFrom._pool;
 		_poolMarker = moveFrom._poolMarker;

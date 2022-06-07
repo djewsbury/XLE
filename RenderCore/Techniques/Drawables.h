@@ -152,7 +152,12 @@ namespace RenderCore { namespace Techniques
 		std::vector<uint8_t>	_vbStorage;
 		std::vector<uint8_t>	_ibStorage;
 		std::vector<uint8_t>	_ubStorage;
-		std::vector<uint8_t>	_cpuStorage;
+		struct CPUStoragePage
+		{
+			std::unique_ptr<uint8_t[]> _memory;
+			size_t _allocated = 0, _used = 0;
+		};
+		std::vector<CPUStoragePage>	_cpuStoragePages;
 		unsigned				_storageAlignment = 0u;
 		unsigned				_ubStorageAlignment = 0u;
 		IDrawablesPool*	_pool = nullptr;
