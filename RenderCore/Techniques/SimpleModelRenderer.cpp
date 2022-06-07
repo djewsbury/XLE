@@ -96,7 +96,6 @@ namespace RenderCore { namespace Techniques
 		unsigned v=0;
 		while (viewMask) {
 			auto lz = xl_ctz8(viewMask);
-			// constants._viewIndices[v++] = lz;
 			v++;
 			viewMask ^= 1ull<<lz;
 		}

@@ -11,6 +11,7 @@
 #include "../Assets/ModelMachine.h"
 #include "../UniformsStream.h"
 #include "../../Math/Transformations.h"
+#include "../../Utility/ArithmeticUtils.h"
 
 namespace RenderCore { namespace Techniques
 {
@@ -163,6 +164,17 @@ namespace RenderCore { namespace Techniques
 			uint32_t* _viewMasks;
 		};
 
+		static unsigned CountBitsSet(uint32_t viewMask)
+		{
+			unsigned v=0;
+			while (viewMask) {
+				auto lz = xl_ctz8(viewMask);
+				v++;
+				viewMask ^= 1ull<<lz;
+			}
+			return v;
+		}
+
 		static void DrawFn_InstancedFixedSkeletonViewMask(
 			RenderCore::Techniques::ParsingContext& parserContext,
 			const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext,
@@ -175,10 +187,12 @@ namespace RenderCore { namespace Techniques
 			RenderCore::UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(localTransform) };
 
 			for (unsigned c=0; c<drawable._objectToWorldCount; ++c) {
+				auto viewCount = CountBitsSet(drawable._viewMasks[c]);
+				assert(viewCount);
 				localTransform._localToWorld = drawable._objectToWorlds[c];
 				localTransform._viewMask = drawable._viewMasks[c];
 				drawFnContext.ApplyLooseUniforms(RenderCore::UniformsStream{{}, immDatas});
-				drawFnContext.DrawIndexed(drawable._indexCount, drawable._firstIndex);
+				drawFnContext.DrawIndexedInstances(drawable._indexCount, viewCount, drawable._firstIndex);
 			}
 		}
 	}
