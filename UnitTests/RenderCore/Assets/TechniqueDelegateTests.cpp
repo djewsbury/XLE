@@ -416,8 +416,10 @@ namespace UnitTests
 			uniformsStream._immediateData = cbvs;
 			uniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
 
-			IDescriptorSet* descSets[] = { descriptorSet->_descriptorSet.get() };
-			uniforms.ApplyDescriptorSets(metalContext, encoder, MakeIteratorRange(descSets));
+			if (descriptorSet) {
+				IDescriptorSet* descSets[] = { descriptorSet->_descriptorSet.get() };
+				uniforms.ApplyDescriptorSets(metalContext, encoder, MakeIteratorRange(descSets));
+			}
 
 			VertexBufferView vbvs[] = { &vb };
 			encoder.Bind(MakeIteratorRange(vbvs), {});

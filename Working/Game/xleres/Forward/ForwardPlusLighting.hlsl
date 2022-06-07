@@ -115,8 +115,10 @@ float3 CalculateIllumination(
 						LightDesc l = LightList[idx];
 
 						float shadowing = 1.0f;
-						if (l.StaticDatabaseLightId != 0)
-							shadowing = SampleStaticDatabase(l.StaticDatabaseLightId-1, worldPosition-l.Position);
+						#if SHADOW_PROBE
+							if (l.StaticDatabaseLightId != 0)
+								shadowing = SampleStaticDatabase(l.StaticDatabaseLightId-1, worldPosition-l.Position, screenDest);
+						#endif
 
 						if (l.Shape == 0) {
 							result += shadowing * DirectionalLightResolve(sample, sampleExtra, l, worldPosition, directionToEye, screenDest);

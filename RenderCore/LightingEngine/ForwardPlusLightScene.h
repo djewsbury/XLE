@@ -26,6 +26,7 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		RasterizationLightTileOperator& GetLightTiler() { return *_lightTiler; }
 		ShadowProbes& GetShadowProbes() { return *_shadowProbes; }
+		bool ShadowProbesSupported() const;
 
 		void FinalizeConfiguration();
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext);

@@ -354,6 +354,8 @@ namespace RenderCore { namespace LightingEngine
 			} else {
 				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)dominantLightOp.value()._shape);
 			}
+			if (captures->_lightScene->ShadowProbesSupported())
+				box.SetParameter("SHADOW_PROBE", 1);
 		}
 
 		auto resourceDelegate = std::make_shared<MainSceneResourceDelegate>(

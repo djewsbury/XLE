@@ -873,7 +873,7 @@ namespace SceneEngine
                 *renderer->GetDrawableConstructor(),
                 pkts,
                 MakeIteratorRange(localToWorldBuffer, &localToWorldBuffer[objCount]),
-                MakeIteratorRange(viewMaskI, &viewMaskI[objCount]));
+                MakeIteratorRange(viewMaskBuffer, &viewMaskBuffer[objCount]));
             workingMetrics._instancesPrepared += objCount;
             ++workingMetrics._uniqueModelsPrepared;
         }

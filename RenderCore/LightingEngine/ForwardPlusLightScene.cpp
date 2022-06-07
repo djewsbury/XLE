@@ -352,6 +352,12 @@ namespace RenderCore { namespace LightingEngine
 		return _ambientLight->_ambientLightOperator;
 	}
 
+	bool ForwardPlusLightScene::ShadowProbesSupported() const
+	{
+		// returns true if we have an operator for shadow probes, even if the shadow probe database hasn't actually been created
+		return _shadowPreparerIdMapping._operatorForStaticProbes != ~0u;
+	}
+
 	static ShadowProbes::Configuration MakeShadowProbeConfiguration(const ShadowOperatorDesc& opDesc)
 	{
 		ShadowProbes::Configuration result;
