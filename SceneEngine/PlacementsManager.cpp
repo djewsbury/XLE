@@ -1176,8 +1176,14 @@ namespace SceneEngine
     std::future<void> PlacementsRenderer::PrepareDrawables(IteratorRange<const Float4x4*> worldToCullingFrustums, const PlacementCellSet& cellSet)
     {
         auto& cells = cellSet._pimpl->_cells;
-        std::vector<std::shared_ptr<::Assets::Marker<Placements>>> placementsFutures;
-        placementsFutures.reserve(cells.size());
+        struct Helper
+        {
+            std::vector<std::shared_future<Placements>> _pendingFutures;
+            std::vector<std::shared_future<Placements>> _readyFutures;
+        };
+        auto helper = std::make_shared<Helper>();
+        helper->_pendingFutures.reserve(cells.size());
+        helper->_readyFutures.reserve(cells.size());
 
         for (auto i=cells.begin(); i!=cells.end(); ++i) {
             uint32_t partialMask = 0;
@@ -1189,63 +1195,89 @@ namespace SceneEngine
             if (!partialMask) continue;
 
             auto& renderInfo = _pimpl->GetCellRenderInfo(*i);
-            placementsFutures.push_back(renderInfo._placements);
+            helper->_pendingFutures.emplace_back(renderInfo._placements->ShareFuture());
         }
 
         // We have to do this in two phases -- first load the placement cells
         // and secondly, load the models referenced by those cells
-        // Note that we're using a future to a dependency validation here. This works a little like
-        // a std::future<void>
-
         std::promise<void> promise;
         auto result = promise.get_future();
         ::Assets::PollToPromise(
             std::move(promise),
-            [placementsFutures]() {
-                for (const auto& p:placementsFutures)
-					if (p->IsBkgrndPending()) 
-						return ::Assets::PollStatus::Continue;
-				return ::Assets::PollStatus::Finish;
+            [helper](auto timeout) {
+                auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+                while (!helper->_pendingFutures.empty()) {
+                    if ((helper->_pendingFutures.end()-1)->wait_until(timeoutTime) == std::future_status::timeout)
+                        return ::Assets::PollStatus::Continue;
+                    helper->_readyFutures.emplace_back(std::move(*(helper->_pendingFutures.end()-1)));
+                    helper->_pendingFutures.erase(helper->_pendingFutures.end()-1);
+                }
+                return ::Assets::PollStatus::Finish;
             },
-            [placementsFutures, cache=_pimpl->_cache]() {
-                struct ModelRendererRef 
-                {
-                    std::string _model, _material;
-                };
-                std::vector<std::pair<uint64_t, ModelRendererRef>> modelRendererRefs;
+            [helper, cache=_pimpl->_cache](std::promise<void>&& promise) {
+                TRY {
+                    struct ModelRendererRef 
+                    {
+                        std::string _model, _material;
+                    };
+                    std::vector<std::pair<uint64_t, ModelRendererRef>> modelRendererRefs;
 
-                for (const auto& p:placementsFutures) {
-                    const auto& actual = p->ActualizeBkgrnd();
-                    std::set<uint64_t> modelMaterialCombos;
-                    for (unsigned o=0; o<actual.GetObjectReferenceCount(); ++o) {
-                        const auto& ref = actual.GetObjectReferences()[o];
-                        modelMaterialCombos.insert((uint64_t(ref._materialFilenameOffset) << 32ull) | uint64_t(ref._modelFilenameOffset));
+                    assert(helper->_pendingFutures.empty());
+                    for (auto& p:helper->_readyFutures) {
+                        const auto& actual = p.get();
+                        std::set<uint64_t> modelMaterialCombos;
+                        for (unsigned o=0; o<actual.GetObjectReferenceCount(); ++o) {
+                            const auto& ref = actual.GetObjectReferences()[o];
+                            modelMaterialCombos.insert((uint64_t(ref._materialFilenameOffset) << 32ull) | uint64_t(ref._modelFilenameOffset));
+                        }
+                        for (auto c:modelMaterialCombos) {
+                            ModelRendererRef ref {
+                                (const char*)PtrAdd(actual.GetFilenamesBuffer(), uint32_t(c) + sizeof(uint64_t)),
+                                (const char*)PtrAdd(actual.GetFilenamesBuffer(), uint32_t(c>>32ull) + sizeof(uint64_t))};
+                            modelRendererRefs.push_back(std::make_pair(Hash64(ref._material, Hash64(ref._model)), ref));
+                        }
                     }
-                    for (auto c:modelMaterialCombos) {
-                        ModelRendererRef ref {
-                            (const char*)PtrAdd(actual.GetFilenamesBuffer(), uint32_t(c) + sizeof(uint64_t)),
-                            (const char*)PtrAdd(actual.GetFilenamesBuffer(), uint32_t(c>>32ull) + sizeof(uint64_t))};
-                        modelRendererRefs.push_back(std::make_pair(Hash64(ref._material, Hash64(ref._model)), ref));
+
+                    std::sort(modelRendererRefs.begin(), modelRendererRefs.end(), CompareFirst<uint64_t, ModelRendererRef>());
+                    auto i = std::unique(modelRendererRefs.begin(), modelRendererRefs.end(), [](const auto& lhs, const auto& rhs) { return lhs.first == rhs.first; });
+                    modelRendererRefs.erase(i, modelRendererRefs.end());
+
+                    struct Helper2
+                    {
+                        std::vector<std::shared_future<std::shared_ptr<RenderCore::Techniques::SimpleModelRenderer>>> _pendingFutures;
+                        std::vector<std::shared_future<std::shared_ptr<RenderCore::Techniques::SimpleModelRenderer>>> _readyFutures;
+                    };
+                    auto helper2 = std::make_shared<Helper2>();
+                    for (const auto&ref:modelRendererRefs) {
+                        auto marker = cache->GetRendererMarker(ref.second._model, ref.second._material);
+                        if (marker) // note that we fill up the cache here, and not be able to create markers for all models
+                            helper2->_pendingFutures.emplace_back(marker->ShareFuture());
                     }
-                }
 
-                std::sort(modelRendererRefs.begin(), modelRendererRefs.end(), CompareFirst<uint64_t, ModelRendererRef>());
-                auto i = std::unique(modelRendererRefs.begin(), modelRendererRefs.end(), [](const auto& lhs, const auto& rhs) { return lhs.first == rhs.first; });
-                modelRendererRefs.erase(i, modelRendererRefs.end());
+                    // we're chaining again to another PollToPromise(). This is the second stage where we're
+                    // waiting for the actual "renderer" objects
+                    ::Assets::PollToPromise(
+                        std::move(promise),
+                        [helper2](auto timeout) {
+                            auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+                            while (!helper2->_pendingFutures.empty()) {
+                                if ((helper2->_pendingFutures.end()-1)->wait_until(timeoutTime) == std::future_status::timeout)
+                                    return ::Assets::PollStatus::Continue;
+                                helper2->_readyFutures.emplace_back(std::move(*(helper2->_pendingFutures.end()-1)));
+                                helper2->_pendingFutures.erase(helper2->_pendingFutures.end()-1);
+                            }
+                            return ::Assets::PollStatus::Finish;
+                        },
+                        [helper2]() {
+                            assert(helper2->_pendingFutures.empty());
+                            // we have to call "get" to finish the future, and pass through any exceptions
+                            for (auto& future:helper2->_readyFutures)
+                                future.get();
+                        });
 
-                std::vector<std::shared_future<std::shared_ptr<RenderCore::Techniques::SimpleModelRenderer>>> rendererFutures;
-                for (const auto&ref:modelRendererRefs) {
-                    auto marker = cache->GetRendererMarker(ref.second._model, ref.second._material);
-                    if (marker) // note that we fill up the cache here, and not be able to create markers for all models
-                        rendererFutures.push_back(marker->ShareFuture());
-                }
-
-                // It would be preferable here to create another continuation. However that would require expanding
-                // the interface of PollToPromuse() to support passing in the promise to this dispatch function
-                // We achieve something similar with just yields, though
-                for (auto&future:rendererFutures)
-                    if (future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
-                        YieldToPool(future);
+                } CATCH(const std::exception& e) {
+                    promise.set_exception(std::current_exception());
+                } CATCH_END
             });
 
         return result;

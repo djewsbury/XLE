@@ -270,106 +270,120 @@ namespace RenderCore { namespace Techniques
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt)
 	{
-		std::shared_ptr<::Assets::AsyncMarkerGroup> result;
+		TRY {
+			std::shared_ptr<::Assets::AsyncMarkerGroup> result;
 
-		std::set<PipelineAccelerator*> uniquePipelineAccelerators;
-		std::set<DescriptorSetAccelerator*> uniqueDescriptorSetAccelerators;
+			std::set<PipelineAccelerator*> uniquePipelineAccelerators;
+			std::set<DescriptorSetAccelerator*> uniqueDescriptorSetAccelerators;
 
-		for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d) {
-			const auto& drawable = *(Drawable*)d.get();
-			assert(drawable._pipeline);
-			uniquePipelineAccelerators.insert(drawable._pipeline);
-			if (drawable._descriptorSet)
-				uniqueDescriptorSetAccelerators.insert(drawable._descriptorSet);
-		}
+			for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d) {
+				const auto& drawable = *(Drawable*)d.get();
+				assert(drawable._pipeline);
+				uniquePipelineAccelerators.insert(drawable._pipeline);
+				if (drawable._descriptorSet)
+					uniqueDescriptorSetAccelerators.insert(drawable._descriptorSet);
+			}
 
-		struct Futures
-		{
-			std::vector<std::future<VisibilityMarkerId>> _pendingFutures1;
-			std::vector<std::future<std::pair<VisibilityMarkerId, BufferUploads::CommandListID>>> _pendingFutures2;
+			struct Futures
+			{
+				std::vector<std::future<VisibilityMarkerId>> _pendingFutures1;
+				std::vector<std::future<std::pair<VisibilityMarkerId, BufferUploads::CommandListID>>> _pendingFutures2;
 
-			std::vector<std::future<VisibilityMarkerId>> _readyFutures1;
-			std::vector<std::future<std::pair<VisibilityMarkerId, BufferUploads::CommandListID>>> _readyFutures2;
+				std::vector<std::future<VisibilityMarkerId>> _readyFutures1;
+				std::vector<std::future<std::pair<VisibilityMarkerId, BufferUploads::CommandListID>>> _readyFutures2;
 
-			VisibilityMarkerId _starterVisMarker = 0;
-			BufferUploads::CommandListID _starterCmdList = 0;
-		};
-		auto futures = std::make_shared<Futures>();
+				VisibilityMarkerId _starterVisMarker = 0;
+				BufferUploads::CommandListID _starterCmdList = 0;
+			};
+			auto futures = std::make_shared<Futures>();
 
-		for (const auto& pipeline:uniquePipelineAccelerators) {
-			auto pipelineFuture = pipelineAccelerators.GetPipelineMarker(*pipeline, sequencerConfig);
-			if (pipelineFuture.valid()) {
-				auto initialState = pipelineFuture.wait_for(std::chrono::milliseconds(0));
-				if (initialState == std::future_status::timeout) {
-					futures->_pendingFutures1.emplace_back(std::move(pipelineFuture));
-				} else {
-					futures->_starterVisMarker = std::max(futures->_starterVisMarker, pipelineFuture.get());
+			for (const auto& pipeline:uniquePipelineAccelerators) {
+				auto pipelineFuture = pipelineAccelerators.GetPipelineMarker(*pipeline, sequencerConfig);
+				if (pipelineFuture.valid()) {
+					auto initialState = pipelineFuture.wait_for(std::chrono::milliseconds(0));
+					if (initialState == std::future_status::timeout) {
+						futures->_pendingFutures1.emplace_back(std::move(pipelineFuture));
+					} else {
+						futures->_starterVisMarker = std::max(futures->_starterVisMarker, pipelineFuture.get());
+					}
 				}
 			}
-		}
 
-		for (const auto& descSet:uniqueDescriptorSetAccelerators) {
-			auto descSetFuture = pipelineAccelerators.GetDescriptorSetMarker(*descSet);
-			if (descSetFuture.valid()) {
-				auto initialState = descSetFuture.wait_for(std::chrono::milliseconds(0));
-				if (initialState == std::future_status::timeout) {
-					futures->_pendingFutures2.emplace_back(std::move(descSetFuture));
-				} else {
-					auto p = descSetFuture.get();
-					futures->_starterVisMarker = std::max(futures->_starterVisMarker, p.first);
-					futures->_starterCmdList = std::max(futures->_starterCmdList, p.second);
+			for (const auto& descSet:uniqueDescriptorSetAccelerators) {
+				auto descSetFuture = pipelineAccelerators.GetDescriptorSetMarker(*descSet);
+				if (descSetFuture.valid()) {
+					auto initialState = descSetFuture.wait_for(std::chrono::milliseconds(0));
+					if (initialState == std::future_status::timeout) {
+						futures->_pendingFutures2.emplace_back(std::move(descSetFuture));
+					} else {
+						TRY {
+							auto p = descSetFuture.get();
+							futures->_starterVisMarker = std::max(futures->_starterVisMarker, p.first);
+							futures->_starterCmdList = std::max(futures->_starterCmdList, p.second);
+						} CATCH(const std::exception& e) {
+							// we have to suppress exceptions from descriptor sets, because missing textures, etc, are not serious enough to bail on the entire prepare
+							Log(Warning) << "Descriptor set invalid while preparing resources: " << e.what() << std::endl;
+						} CATCH_END
+					}
 				}
 			}
-		}
 
-		auto layoutMarker = pipelineAccelerators.GetCompiledPipelineLayoutMarker(sequencerConfig);
-		if (layoutMarker.valid()) {
-			auto initialState = layoutMarker.wait_for(std::chrono::milliseconds(0));
-			if (initialState == std::future_status::timeout) {
-				futures->_pendingFutures1.emplace_back(std::move(layoutMarker));
+			auto layoutMarker = pipelineAccelerators.GetCompiledPipelineLayoutMarker(sequencerConfig);
+			if (layoutMarker.valid()) {
+				auto initialState = layoutMarker.wait_for(std::chrono::milliseconds(0));
+				if (initialState == std::future_status::timeout) {
+					futures->_pendingFutures1.emplace_back(std::move(layoutMarker));
+				} else {
+					futures->_starterVisMarker = std::max(futures->_starterVisMarker, layoutMarker.get());
+				}
+			}
+
+			if (!futures->_pendingFutures1.empty() || !futures->_pendingFutures2.empty()) {
+				::Assets::PollToPromise(
+					std::move(promise),
+					[futures](auto timeout) {
+						auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+						// If we have a lot of futures, there's a possible scenario where timeout can elapse
+						// before we can check each future (even if each future is actually ready). To avoid this,
+						// let's record which futures have previously returned ready
+						while (!futures->_pendingFutures1.empty()) {
+							if ((futures->_pendingFutures1.end()-1)->wait_until(timeoutTime) == std::future_status::timeout)
+								return ::Assets::PollStatus::Continue;
+							futures->_readyFutures1.emplace_back(std::move(*(futures->_pendingFutures1.end()-1)));
+							futures->_pendingFutures1.erase(futures->_pendingFutures1.end()-1);
+						}
+						while (!futures->_pendingFutures2.empty()) {
+							if ((futures->_pendingFutures2.end()-1)->wait_until(timeoutTime) == std::future_status::timeout)
+								return ::Assets::PollStatus::Continue;
+							futures->_readyFutures2.emplace_back(std::move(*(futures->_pendingFutures2.end()-1)));
+							futures->_pendingFutures2.erase(futures->_pendingFutures2.end()-1);
+						}
+						return ::Assets::PollStatus::Finish;
+					},
+					[futures]() {
+						assert(futures->_pendingFutures1.empty() && futures->_pendingFutures2.empty());
+						PreparedResourcesVisibility result{futures->_starterVisMarker, futures->_starterCmdList};
+						for (auto& f:futures->_readyFutures1)
+							result._pipelineAcceleratorsVisibility = std::max(f.get(), result._pipelineAcceleratorsVisibility);
+						for (auto& f:futures->_readyFutures2) {
+							TRY {
+								auto p = f.get();
+								result._pipelineAcceleratorsVisibility = std::max(p.first, result._pipelineAcceleratorsVisibility);
+								result._bufferUploadsVisibility = std::max(p.second, result._bufferUploadsVisibility);
+							} CATCH(const std::exception& e) {
+								// we have to suppress exceptions from descriptor sets, because missing textures, etc, are not serious enough to bail on the entire prepare
+								Log(Warning) << "Descriptor set invalid while preparing resources: " << e.what() << std::endl;
+							} CATCH_END
+						}
+						return result;
+					});
 			} else {
-				futures->_starterVisMarker = std::max(futures->_starterVisMarker, layoutMarker.get());
+				// we can complete immediately
+				promise.set_value(PreparedResourcesVisibility{futures->_starterVisMarker, futures->_starterCmdList});
 			}
-		}
-
-		if (!futures->_pendingFutures1.empty() || !futures->_pendingFutures2.empty()) {
-			::Assets::PollToPromise(
-				std::move(promise),
-				[futures](auto timeout) {
-					auto timeoutTime = std::chrono::steady_clock::now() + timeout;
-					// If we have a lot of futures, there's a possible scenario where timeout can elapse
-					// before we can check each future (even if each future is actually ready). To avoid this,
-					// let's record which futures have previously returned ready
-					while (!futures->_pendingFutures1.empty()) {
-						if ((futures->_pendingFutures1.end()-1)->wait_until(timeoutTime) == std::future_status::timeout)
-							return ::Assets::PollStatus::Continue;
-						futures->_readyFutures1.emplace_back(std::move(*(futures->_pendingFutures1.end()-1)));
-						futures->_pendingFutures1.erase(futures->_pendingFutures1.end()-1);
-					}
-					while (!futures->_pendingFutures2.empty()) {
-						if ((futures->_pendingFutures2.end()-1)->wait_until(timeoutTime) == std::future_status::timeout)
-							return ::Assets::PollStatus::Continue;
-						futures->_readyFutures2.emplace_back(std::move(*(futures->_pendingFutures2.end()-1)));
-						futures->_pendingFutures2.erase(futures->_pendingFutures2.end()-1);
-					}
-					return ::Assets::PollStatus::Finish;
-				},
-				[futures]() {
-					assert(futures->_pendingFutures1.empty() && futures->_pendingFutures2.empty());
-					PreparedResourcesVisibility result{futures->_starterVisMarker, futures->_starterCmdList};
-					for (auto& f:futures->_readyFutures1)
-						result._pipelineAcceleratorsVisibility = std::max(f.get(), result._pipelineAcceleratorsVisibility);
-					for (auto& f:futures->_readyFutures2) {
-						auto p = f.get();
-						result._pipelineAcceleratorsVisibility = std::max(p.first, result._pipelineAcceleratorsVisibility);
-						result._bufferUploadsVisibility = std::max(p.second, result._bufferUploadsVisibility);
-					}
-					return result;
-				});
-		} else {
-			// we can complete immediately
-			promise.set_value(PreparedResourcesVisibility{futures->_starterVisMarker, futures->_starterCmdList});
-		}
+		} CATCH (...) {
+			promise.set_exception(std::current_exception());
+		} CATCH_END
 	}
 
 	void ExecuteDrawableContext::ApplyLooseUniforms(const UniformsStream& stream) const
@@ -738,7 +752,7 @@ namespace RenderCore { namespace Techniques
 
 	void DrawablesPool::ReturnToPool(DrawablesPacket&& pkt, unsigned marker)
 	{
-		assert(pkt._drawables.empty() && pkt._vbStorage.empty() && pkt._ibStorage.empty() && pkt._ubStorage.empty() && pkt._cpuStorage.empty());
+		assert(pkt._drawables.empty() && pkt._vbStorage.empty() && pkt._ibStorage.empty() && pkt._ubStorage.empty() && pkt._cpuStoragePages.empty());
 		assert(marker != ~0u);
 		pkt._poolMarker = ~0u;
 		std::unique_lock<decltype(_lock)> locker(_lock);
