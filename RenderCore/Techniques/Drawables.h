@@ -55,6 +55,7 @@ namespace RenderCore { namespace Techniques
 		Flags::BitField     _flags = 0u;
 
 		std::shared_ptr<DeformAccelerator> _deformAccelerator;
+		BufferUploads::CommandListID _completionCmdList = 0;
 
 		// avoid constructing directly -- prefer IDrawablesPool::CreateGeo() or DrawablesPacket::CreateTemporaryGeo()
 		DrawableGeo();

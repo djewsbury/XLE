@@ -23,7 +23,9 @@ namespace SceneEngine
 		RenderCore::Techniques::DrawablesPacket pkt;
 		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max];
 		pkts[(unsigned)batch] = &pkt;
-        scene.ExecuteScene(parserContext.GetThreadContext(), ExecuteSceneContext{view, MakeIteratorRange(pkts)});
+		ExecuteSceneContext executeContext{view, MakeIteratorRange(pkts)};
+        scene.ExecuteScene(parserContext.GetThreadContext(), executeContext);
+		parserContext.RequireCommandList(executeContext._completionCmdList);
 		RenderCore::Techniques::Draw(parserContext, pipelineAccelerators, sequencerConfig, pkt);
     }
 

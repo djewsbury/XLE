@@ -166,6 +166,7 @@ namespace RenderCore { namespace Techniques
 					} else {
 						encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{});
 					}
+					assert(parserContext._requiredBufferUploadsCommandList >= drawable._geo->_completionCmdList);	// parser context must be configured for this completion cmd list before getting here
 					currentGeo = drawable._geo;
 				}
 

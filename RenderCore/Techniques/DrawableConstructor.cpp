@@ -324,6 +324,9 @@ namespace RenderCore { namespace Techniques
 								auto offset = locators[assign._markerIdx].GetRangeInContainingResource().first;
 								if (offset != ~size_t(0)) vertexStream._vbOffset += offset;
 							}
+							// record completion cmd list
+							if (locators[assign._markerIdx].GetCompletionCommandList() != BufferUploads::CommandListID_Invalid)
+								assign._drawableGeo->_completionCmdList = std::max(assign._drawableGeo->_completionCmdList, locators[assign._markerIdx].GetCompletionCommandList());
 						}
 
 						return largestCmdList;

@@ -235,6 +235,7 @@ namespace ToolsRig
 
 			auto localToWorld = Identity<Float4x4>();
 			_actualized->_renderer->BuildDrawables(executeContext._destinationPkts, localToWorld, instanceIdx, _preDrawDelegate);
+			executeContext._completionCmdList = std::max(executeContext._completionCmdList, _actualized->_renderer->GetCompletionCommandList());
 		}
 
 		void ExecuteScene(

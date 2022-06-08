@@ -152,8 +152,8 @@ namespace RenderCore { namespace Techniques
 
     inline void ParsingContext::RequireCommandList(BufferUploads::CommandListID cmdList)
     {
-        if (cmdList != ~0u)
-            _requiredBufferUploadsCommandList = std::max(cmdList, _requiredBufferUploadsCommandList);
+        assert(cmdList != ~0u);
+        _requiredBufferUploadsCommandList = std::max(cmdList, _requiredBufferUploadsCommandList);
         assert(_requiredBufferUploadsCommandList != ~0u);
     }
 

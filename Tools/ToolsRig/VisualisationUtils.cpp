@@ -249,7 +249,9 @@ namespace ToolsRig
 						if (next._type == RenderCore::LightingEngine::StepType::None || next._type == RenderCore::LightingEngine::StepType::Abort) break;
 						if (next._type == RenderCore::LightingEngine::StepType::ParseScene) {
 							assert(!next._pkts.empty());
-							actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), SceneEngine::ExecuteSceneContext{SceneEngine::SceneView{}, MakeIteratorRange(next._pkts)});
+							SceneEngine::ExecuteSceneContext executeContext{SceneEngine::SceneView{}, MakeIteratorRange(next._pkts)};
+							actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), executeContext);
+							parserContext.RequireCommandList(executeContext._completionCmdList);
 						} else if (next._type == RenderCore::LightingEngine::StepType::ReadyInstances) {
 							_deformAccelerators->ReadyInstances(parserContext.GetThreadContext());
 						}
