@@ -85,6 +85,7 @@ namespace RenderCore { namespace Techniques
 			volatile VisibilityMarkerId _visibilityMarker = ~VisibilityMarkerId(0);
 			Pipeline _pipeline; 
 			::Assets::DependencyValidation _depVal;
+			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		};
 		std::vector<CompletedPipeline> _completedPipelines;
 
@@ -460,6 +461,10 @@ namespace RenderCore { namespace Techniques
 			std::vector<uint64_t> _descSetFuturesToCheck;
 		};
 		std::shared_ptr<FuturesToCheckHelper> _futuresToCheckHelper;
+
+		std::vector<bool> _lastFrameSequencerConfigExpired;
+		unsigned _lastSequencerCfgHotReloadCheck = 0;
+		unsigned _lastPipelineAcceleratorHotReloadCheck = 0;
 
 		#if defined(_DEBUG)
 			mutable std::optional<std::thread::id> _lockForThreadingThread;
@@ -895,6 +900,7 @@ namespace RenderCore { namespace Techniques
 						result->_name += "|" + name;		// we're repurposing the same cfg for something else
 				}
 
+				SetupNewlyQueuedAlreadyLocked(newlyQueued);
 				return result;
 			}
 		}
@@ -919,7 +925,6 @@ namespace RenderCore { namespace Techniques
 		}
 
 		SetupNewlyQueuedAlreadyLocked(newlyQueued);
-
 		return result;
 	}
 
@@ -979,15 +984,23 @@ namespace RenderCore { namespace Techniques
 		// Look through every pipeline registered in this pool, and 
 		// trigger a rebuild of any that appear to be out of date.
 		// This allows us to support hotreloading when files change, etc
-		std::vector<std::shared_ptr<SequencerConfig>> lockedSequencerConfigs;
-		lockedSequencerConfigs.resize(_sequencerConfigById.size());
+		_lastFrameSequencerConfigExpired.resize(_sequencerConfigById.size(), true);
 		unsigned invalidSequencerIndices[_sequencerConfigById.size()];
 		unsigned invalidSequencerCount = 0;
+		unsigned newlyExpiredSequencerIndices[_sequencerConfigById.size()];
+		unsigned newlyExpiredSequencerCount = 0;
 
 		for (unsigned c=0; c<_sequencerConfigById.size(); ++c) {
 			auto cfg = _sequencerConfigById[c].second.lock();
-			if (!cfg) continue;
+			if (!cfg) {
+				if (!_lastFrameSequencerConfigExpired[c]) {
+					newlyExpiredSequencerIndices[newlyExpiredSequencerCount++] = c;
+					_lastFrameSequencerConfigExpired[c] = true;
+				}
+				continue;
+			}
 
+			_lastFrameSequencerConfigExpired[c] = false;
 			if (cfg->_pipelineLayout._pending.valid()) {
 				auto state = cfg->_pipelineLayout._pending.wait_for(std::chrono::milliseconds(0));
 				if (state != std::future_status::timeout) {
@@ -1021,19 +1034,74 @@ namespace RenderCore { namespace Techniques
 				cfg->_pipelineLayout._pending = _layoutPatcher->GetPatchedPipelineLayout(cfg->_delegate->GetPipelineLayout())->ShareFuture();
 				invalidSequencerIndices[invalidSequencerCount++] = c;
 			}
-			lockedSequencerConfigs[c] = std::move(cfg);
 		}
 
 		// Requeue pipelines for invalidated sequencers
 		if (invalidSequencerCount) {
+			std::shared_ptr<SequencerConfig> lockedSequencers[invalidSequencerCount];
+			for (unsigned c=0; c<invalidSequencerCount; ++c)
+				lockedSequencers[c] = _sequencerConfigById[invalidSequencerIndices[c]].second.lock();
+
 			for (auto& accelerator:_pipelineAccelerators) {
 				auto a = accelerator.second.lock();
 				if (a) {
-					for (auto invalidSequencer:MakeIteratorRange(invalidSequencerIndices, &invalidSequencerIndices[invalidSequencerCount])) {
+					for (unsigned c=0; c<invalidSequencerCount; ++c) {
 						// It's out of date -- let's rebuild and reassign it
-						auto future = a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[invalidSequencer], _globalSelectors, _pipelineCollection, *_layoutPatcher);
-						newlyQueued.emplace_back(std::move(future), accelerator.first, lockedSequencerConfigs[invalidSequencer]->_cfgId);
+						if (!lockedSequencers[c]) continue;
+						auto future = a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencers[c], _globalSelectors, _pipelineCollection, *_layoutPatcher);
+						newlyQueued.emplace_back(std::move(future), accelerator.first, lockedSequencers[c]->_cfgId);
 					}
+				}
+			}
+		} else {
+			// pipeline invalidation behaviour & releasing unneeded pipelines
+			// check only 1 sequencer cfg per frame, and just a few pipeline accelerators, but rotate through
+			// also don't do it if we've also invalidated a full sequencer cfg this frame
+			const bool checkForInvalidatedAccelerators = true;
+			if (checkForInvalidatedAccelerators && !_sequencerConfigById.empty()) {
+				std::shared_ptr<SequencerConfig> seqCfg;
+				for (unsigned c=0; c<_sequencerConfigById.size(); ++c) {
+					auto idx = (c+_lastSequencerCfgHotReloadCheck)%_sequencerConfigById.size();
+					seqCfg = _sequencerConfigById[idx].second.lock();
+					if (seqCfg) {
+						_lastSequencerCfgHotReloadCheck = idx;
+						break;
+					}
+				}
+
+				if (seqCfg) {
+					unsigned acceleratorsToCheckCountDown = 32;	// only check a few accelerators; doesn't matter if it takes a few frames to get through all of them
+					for (; _lastPipelineAcceleratorHotReloadCheck<_pipelineAccelerators.size(); ++_lastPipelineAcceleratorHotReloadCheck) {
+						if (!acceleratorsToCheckCountDown--) break;
+						auto a = _pipelineAccelerators[_lastPipelineAcceleratorHotReloadCheck].second.lock();
+						if (!a) continue;
+						if (a->_completedPipelines[_lastSequencerCfgHotReloadCheck].GetDependencyValidation().GetValidationIndex() != 0) {
+							// Don't attempt hotreload if we already have a pending pipeline here (if the hotreload is already out of date it will still get rebuilt after finishing)
+							auto existing = std::find_if(a->_pendingPipelines.begin(), a->_pendingPipelines.end(), [c=_lastSequencerCfgHotReloadCheck](const auto& p) { return p.first == c; });
+							if (existing != a->_pendingPipelines.end()) continue;
+							auto future = a->BeginPrepareForSequencerStateAlreadyLocked(seqCfg, _globalSelectors, _pipelineCollection, *_layoutPatcher);
+							newlyQueued.emplace_back(std::move(future), _pipelineAccelerators[_lastPipelineAcceleratorHotReloadCheck].first, seqCfg->_cfgId);
+						}
+					}
+					if (_lastPipelineAcceleratorHotReloadCheck >= _pipelineAccelerators.size()) {
+						_lastPipelineAcceleratorHotReloadCheck = 0;
+						++_lastSequencerCfgHotReloadCheck;
+					}
+				}
+
+				// We can't automatically reload descriptor sets quite so easily -- because we don't hold onto
+				// the construction information. In theory we could do that; but it would mean duplicating a
+				// fair bit of data...
+			}
+		}
+
+		// Release pipeline accelerators for any sequencers that have just been dropped
+		if (newlyExpiredSequencerCount) {
+			for (auto& accelerator:_pipelineAccelerators) {
+				auto a = accelerator.second.lock();
+				if (a) {
+					for (auto newlyExpired:MakeIteratorRange(newlyExpiredSequencerIndices, &newlyExpiredSequencerIndices[newlyExpiredSequencerCount]))
+						a->_completedPipelines[newlyExpired] = {};
 				}
 			}
 		}
@@ -1069,6 +1137,8 @@ namespace RenderCore { namespace Techniques
 
 			auto pendingPipeline = std::move(*p);
 			accelerator->_pendingPipelines.erase(p);
+
+			if (_sequencerConfigById[seqIdx].second.expired()) continue;		// don't keep a pipeline for an expired sequencer config
 
 			TRY
 			{
@@ -1123,22 +1193,6 @@ namespace RenderCore { namespace Techniques
 				descSet->_pending = {};
 			} CATCH_END
 		}
-
-		// todo -- invalidation behaviour & releasing unneeded pipelines
-		#if 0
-			for (unsigned c=0; c<_sequencerConfigById.size(); ++c) {
-				if (lockedSequencerConfigs[c]) {
-					if (a->_completedPipelines[c].GetDependencyValidation().GetValidationIndex() != 0) {
-						auto existing = std::find_if(a->_pendingPipelines.begin(), a->_pendingPipelines.end(), [c](const auto& p) { return p.first == c; });
-						if (existing != a->_pendingPipelines.end()) continue;	// already scheduled this rebuild
-						a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[c], _globalSelectors, _pipelineCollection, *_layoutPatcher);
-					}
-				} else {
-					// sequencer destroyed, release related pipelines
-					a->_completedPipelines[c] = {};
-				}
-			}
-		#endif
 
 		SetupNewlyQueuedAlreadyLocked(newlyQueued);
 
