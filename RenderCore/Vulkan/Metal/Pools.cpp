@@ -293,6 +293,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	VulkanSharedPtr<VkRenderPass> VulkanRenderPassPool::CreateVulkanRenderPass(const FrameBufferDesc& layout)
 	{
+        ScopedLock(_lock);
 		auto hash = layout.GetHashExcludingDimensions();
 		auto i = LowerBound(_cachedRenderPasses, hash);
 		if (i != _cachedRenderPasses.end() && i->first == hash) {
@@ -308,6 +309,19 @@ namespace RenderCore { namespace Metal_Vulkan
 	: _factory(&factory) {}
 	VulkanRenderPassPool::VulkanRenderPassPool() {}
 	VulkanRenderPassPool::~VulkanRenderPassPool() {}
+    VulkanRenderPassPool::VulkanRenderPassPool(VulkanRenderPassPool&& moveFrom) never_throws
+    {
+        _cachedRenderPasses = std::move(moveFrom._cachedRenderPasses);
+        _factory = moveFrom._factory;
+        moveFrom._factory = nullptr;
+    }
+    VulkanRenderPassPool& VulkanRenderPassPool::operator=(VulkanRenderPassPool&& moveFrom) never_throws
+    {
+        _cachedRenderPasses = std::move(moveFrom._cachedRenderPasses);
+        _factory = moveFrom._factory;
+        moveFrom._factory = nullptr;
+        return *this;
+    }
 
     static std::shared_ptr<Resource> CreateDummyTexture(ObjectFactory& factory)
     {

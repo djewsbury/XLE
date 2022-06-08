@@ -90,11 +90,12 @@ namespace RenderCore { namespace Metal_Vulkan
         VulkanRenderPassPool();
         ~VulkanRenderPassPool();
 
-        VulkanRenderPassPool(VulkanRenderPassPool&&) never_throws = default;
-        VulkanRenderPassPool& operator=(VulkanRenderPassPool&&) never_throws = default;
+        VulkanRenderPassPool(VulkanRenderPassPool&&) never_throws;
+        VulkanRenderPassPool& operator=(VulkanRenderPassPool&&) never_throws;
     private:
         std::vector<std::pair<uint64_t, VulkanSharedPtr<VkRenderPass>>> _cachedRenderPasses;
         ObjectFactory* _factory;
+        Threading::Mutex _lock;
     };
 
     class DummyResources
