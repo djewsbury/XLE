@@ -65,13 +65,16 @@ namespace RenderCore { namespace Metal_Vulkan
 			unsigned	_queryCount;
 		};
 		Buffer		_buffers[s_bufferCount];
-		unsigned	_activeBuffer;
+		unsigned	_activeBuffer, _nextResetBuffer;
 		FrameId		_nextFrameId;
 
 		VkDevice	_device;
 		unsigned	_queryCount;
-		uint64_t		_frequency;
+		uint64_t	_frequency;
 		std::unique_ptr<uint64_t[]> _timestampsBuffer;
+		bool 		_openFrame;
+
+		std::vector<bool> _requiresReset;
 	};
 
 	class QueryPool

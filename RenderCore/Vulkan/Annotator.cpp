@@ -4,6 +4,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#include "IDeviceVulkan.h"
 #include "../IAnnotator.h"
 #include "../Utility/Threading/Mutex.h"
 #include "../Core/SelectConfiguration.h"
@@ -57,6 +58,7 @@ namespace RenderCore { namespace ImplVulkan
 		{
 			Metal::TimeStampQueryPool::FrameId _queryFrameId;
 			unsigned _renderFrameId;
+			Metal_Vulkan::IAsyncTracker::Marker _commandListMarker;
 		};
 
 		std::deque<EventInFlight> _eventsInFlight;
@@ -73,6 +75,7 @@ namespace RenderCore { namespace ImplVulkan
 		unsigned _nextListenerId;
 
 		std::weak_ptr<IThreadContext> _threadContext;
+		std::shared_ptr<Metal_Vulkan::IAsyncTracker> _asyncTracker;
 	};
 
 	//////////////////////////////////////////////////////////////////
@@ -108,14 +111,16 @@ namespace RenderCore { namespace ImplVulkan
 		auto context = _threadContext.lock();
 		if (!context) return;
 
+		auto& metalContext = *Metal::DeviceContext::Get(*context);
+		FlushFinishedQueries(metalContext);
+
 		++_frameRecursionDepth;
 		if (_currentQueryFrameId != Metal::TimeStampQueryPool::FrameId_Invalid || (_frameRecursionDepth>1)) {
 			assert(_currentQueryFrameId != Metal::TimeStampQueryPool::FrameId_Invalid && (_frameRecursionDepth>1));
 			return;
 		}
 
-		auto metalContext = Metal::DeviceContext::Get(*context);
-		_currentQueryFrameId = _queryPool.BeginFrame(*metalContext);
+		_currentQueryFrameId = _queryPool.BeginFrame(metalContext);
 		_currentRenderFrameId = frameId;
 	}
 
@@ -123,7 +128,7 @@ namespace RenderCore { namespace ImplVulkan
 	{
 		auto context = _threadContext.lock();
 		if (!context) return;
-		auto metalContext = Metal::DeviceContext::Get(*context);
+		auto& metalContext = *Metal::DeviceContext::Get(*context);
 
 		--_frameRecursionDepth;
 		if (_frameRecursionDepth == 0) {
@@ -131,15 +136,14 @@ namespace RenderCore { namespace ImplVulkan
 				QueryFrame frameInFlight;
 				frameInFlight._queryFrameId = _currentQueryFrameId;
 				frameInFlight._renderFrameId = _currentRenderFrameId;
+				frameInFlight._commandListMarker = _asyncTracker->GetProducerMarker();
 				_framesInFlight.push_back(frameInFlight);
-				_queryPool.EndFrame(*metalContext, _currentQueryFrameId);
+				_queryPool.EndFrame(metalContext, _currentQueryFrameId);
 
 				_currentQueryFrameId = Metal::TimeStampQueryPool::FrameId_Invalid;
 				_currentRenderFrameId = ~unsigned(0);
 			}
 		}
-
-		FlushFinishedQueries(*metalContext);
 	}
 
 	static size_t AsListenerType(IAnnotator::EventTypes::BitField types)
@@ -155,8 +159,14 @@ namespace RenderCore { namespace ImplVulkan
 		//      "in-flight" list
 		//
 
+		auto asyncConsumerMarker = _asyncTracker->GetConsumerMarker();
 		while (!_framesInFlight.empty()) {
 			QueryFrame& frameInFlight = *_framesInFlight.begin();
+			// Avoid calling GetFrameResults() until we know the command list has been queued and executed. We won't get
+			// valid results back from the queries, anyway, and we don't want to test the query before it's even been set
+			// by the cmd list
+			// In other words, GetFrameResults operates on the device, while setting/resetting queries operators on the cmdlist
+			if (frameInFlight._commandListMarker > asyncConsumerMarker) break;
 			auto results = _queryPool.GetFrameResults(context, frameInFlight._queryFrameId);
 			if (!results._resultsReady) return;
 
@@ -299,6 +309,12 @@ namespace RenderCore { namespace ImplVulkan
 	: _queryPool(factory)
 	, _threadContext(std::move(threadContext))
 	{
+		auto tc = _threadContext.lock();
+		assert(tc);
+		auto vulkanDevice = (IDeviceVulkan*)tc->GetDevice()->QueryInterface(typeid(IDeviceVulkan).hash_code());
+		assert(vulkanDevice);
+		_asyncTracker = vulkanDevice->GetAsyncTracker();
+
 		_currentRenderFrameId = ~unsigned(0);
 		_frameRecursionDepth = 0;
 		_currentQueryFrameId = Metal::TimeStampQueryPool::FrameId_Invalid;

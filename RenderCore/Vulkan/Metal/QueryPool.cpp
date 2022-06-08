@@ -29,27 +29,26 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	auto TimeStampQueryPool::BeginFrame(DeviceContext& context) -> FrameId
 	{
-		for (unsigned q=0; q<dimof(_buffers); ++q) {
-			auto& b = _buffers[(_activeBuffer+q)%dimof(_buffers)];
-			if (b._pendingReset) {
-				auto& cmdList = context.GetActiveCommandList();
-				if ((b._queryStart + b._queryCount) > _queryCount) {
-					auto firstPartCount = _queryCount - b._queryStart;
-					cmdList.ResetQueryPool(_timeStamps.get(), b._queryStart, firstPartCount);
-					cmdList.ResetQueryPool(_timeStamps.get(), 0, b._queryCount-firstPartCount);
-					_allocatedCount -= b._queryCount;
-				} else if (b._queryCount) {
-					cmdList.ResetQueryPool(_timeStamps.get(), b._queryStart, b._queryCount);
-					_allocatedCount -= b._queryCount;
-				}
-				assert(_nextFree == b._queryStart);
-				assert(_allocatedCount >= 0 && _allocatedCount <= _queryCount);
-				if (b._queryCount)
-					_nextFree = (b._queryStart + b._queryCount)%_queryCount;
-				b._frameId = FrameId_Invalid;
-				b._pendingReset = false;
-				b._queryStart = b._queryCount = 0;
+		assert(!_openFrame);
+		while (_buffers[_nextResetBuffer]._pendingReset) {
+			auto& b = _buffers[_nextResetBuffer];
+			auto& cmdList = context.GetActiveCommandList();
+			if ((b._queryStart + b._queryCount) > _queryCount) {
+				auto firstPartCount = _queryCount - b._queryStart;
+				cmdList.ResetQueryPool(_timeStamps.get(), b._queryStart, firstPartCount);
+				cmdList.ResetQueryPool(_timeStamps.get(), 0, b._queryCount-firstPartCount);
+			} else if (b._queryCount) {
+				cmdList.ResetQueryPool(_timeStamps.get(), b._queryStart, b._queryCount);
 			}
+			_allocatedCount -= b._queryCount;
+			assert(_nextFree == b._queryStart);
+			assert(_allocatedCount >= 0 && _allocatedCount <= _queryCount);
+			if (b._queryCount)
+				_nextFree = (b._queryStart + b._queryCount)%_queryCount;
+			b._frameId = FrameId_Invalid;
+			b._pendingReset = false;
+			b._queryStart = b._queryCount = 0;
+			_nextResetBuffer = (_nextResetBuffer+1) % dimof(_buffers);
 		}
 
 		auto& b = _buffers[_activeBuffer];
@@ -57,16 +56,19 @@ namespace RenderCore { namespace Metal_Vulkan
 			Log(Warning) << "Query pool eating it's tail. Insufficient buffers." << std::endl;
 			return FrameId_Invalid;
 		}
+		assert(!b._pendingReset);
 		assert(b._frameId == FrameId_Invalid);
 		b._frameId = _nextFrameId;
 		b._queryStart = _nextAllocation;
 		b._queryCount = 0;
 		++_nextFrameId;
+		_openFrame = true;
 		return b._frameId;
 	}
 
 	void TimeStampQueryPool::EndFrame(DeviceContext& context, FrameId frame)
 	{
+		assert(_openFrame);
 		auto& b = _buffers[_activeBuffer];
 		b._pendingReadback = true;
 		if (_nextAllocation >= b._queryStart) b._queryCount = _nextAllocation - b._queryStart;
@@ -74,6 +76,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(b._queryCount != _queryCount);	// problems if we allocate all queries in a single frame currently
 		// roll forward to the next buffer
 		_activeBuffer = (_activeBuffer + 1) % s_bufferCount;
+		_openFrame = false;
 	}
 
 	auto TimeStampQueryPool::GetFrameResults(DeviceContext& context, FrameId id) -> FrameResults
@@ -143,12 +146,14 @@ namespace RenderCore { namespace Metal_Vulkan
 	TimeStampQueryPool::TimeStampQueryPool(ObjectFactory& factory) 
 	{
 		_queryCount = 96;
-		_activeBuffer = 0;
+		_activeBuffer = 1;
+		_nextResetBuffer = 0;
 		_nextFrameId = 0;
 		_device = factory.GetDevice().get();
 		_timestampsBuffer = std::make_unique<uint64_t[]>(_queryCount);
 		_timeStamps = factory.CreateQueryPool(VK_QUERY_TYPE_TIMESTAMP, _queryCount);
 		_nextAllocation = _nextFree = _allocatedCount = 0;
+		_openFrame = false;
 
 		for (unsigned c=0; c<s_bufferCount; ++c) {
 			_buffers[c]._frameId = FrameId_Invalid;
