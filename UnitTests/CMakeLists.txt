@@ -17,6 +17,7 @@ add_executable(
     Assets/AssetCompilerTests.cpp
     Assets/ArchiveCacheTests.cpp
     Assets/AssetSetManagerTests.cpp
+    Assets/ContinuationTests.cpp
     )
 
 xle_configure_executable(UnitTests-Core)
