@@ -276,15 +276,6 @@ namespace RenderCore { namespace Techniques
 
 			std::set<PipelineAccelerator*> uniquePipelineAccelerators;
 			std::set<DescriptorSetAccelerator*> uniqueDescriptorSetAccelerators;
-
-			for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d) {
-				const auto& drawable = *(Drawable*)d.get();
-				assert(drawable._pipeline);
-				uniquePipelineAccelerators.insert(drawable._pipeline);
-				if (drawable._descriptorSet)
-					uniqueDescriptorSetAccelerators.insert(drawable._descriptorSet);
-			}
-
 			struct Futures
 			{
 				std::vector<std::future<VisibilityMarkerId>> _pendingFutures1;
@@ -297,6 +288,16 @@ namespace RenderCore { namespace Techniques
 				BufferUploads::CommandListID _starterCmdList = 0;
 			};
 			auto futures = std::make_shared<Futures>();
+
+			for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d) {
+				const auto& drawable = *(Drawable*)d.get();
+				assert(drawable._pipeline);
+				uniquePipelineAccelerators.insert(drawable._pipeline);
+				if (drawable._descriptorSet)
+					uniqueDescriptorSetAccelerators.insert(drawable._descriptorSet);
+				if (drawable._geo)
+					futures->_starterCmdList = std::max(futures->_starterCmdList, drawable._geo->_completionCmdList);
+			}
 
 			for (const auto& pipeline:uniquePipelineAccelerators) {
 				auto pipelineFuture = pipelineAccelerators.GetPipelineMarker(*pipeline, sequencerConfig);
