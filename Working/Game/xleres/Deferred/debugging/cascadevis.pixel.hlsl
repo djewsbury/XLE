@@ -4,6 +4,7 @@
 
 #include "../operator-util.hlsl"
 #include "../standardlighttypes.hlsl"
+#include "../../TechniqueLibrary/LightingEngine/ShadowProjection.hlsl"
 #include "../../TechniqueLibrary/LightingEngine/CascadeResolve.hlsl"
 #include "../../TechniqueLibrary/LightingEngine/ShadowProjection.hlsl"
 #include "../../TechniqueLibrary/Utility/LoadGBuffer.hlsl"

@@ -22,7 +22,7 @@ struct GSOutput
 	uint4	properties : PROPERTIES;
 };
 
-cbuffer RayDefinition BIND_SEQ_B4
+cbuffer RayDefinition BIND_SEQ_B5
 {
 	float3	RayStart;
 	float	RayLength;

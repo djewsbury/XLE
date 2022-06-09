@@ -235,7 +235,7 @@ namespace UnitTests
 			UniformBuffer MultiProbeProperties;			// 1
 			UniformBuffer b2;							// 2
 			UniformBuffer BasicLightingEnvironment;		// 3
-			UniformBuffer b4;							// 4
+			UniformBuffer MultiViewProperties;			// 4
 			UniformBuffer ShadowProjection;				// 5
 
 			SampledTexture tex0;						// 6

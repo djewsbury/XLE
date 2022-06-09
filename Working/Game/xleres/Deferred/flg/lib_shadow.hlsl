@@ -4,8 +4,9 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "../TechniqueLibrary/SceneEngine/Lighting/ShadowsResolve.hlsl"
-#include "../TechniqueLibrary/SceneEngine/Lighting/CascadeResolve.hlsl"
+#include "../TechniqueLibrary/LightingEngine/ShadowProjection.hlsl"
+#include "../TechniqueLibrary/LightingEngine/CascadeResolve.hlsl"
+#include "../TechniqueLibrary/LightingEngine/ShadowsResolve.hlsl"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -7,18 +7,19 @@
 #if !defined(SHADOWS_RESOLVE_H)
 #define SHADOWS_RESOLVE_H
 
-#include "ShadowSampleFiltering.hlsl"
-#include "RTShadows.hlsl"
-#include "../Math/ProjectionMath.hlsl"
-#include "../Math/MathConstants.hlsl"
-#include "../Math/PoissonDisc.hlsl"
-#include "../Framework/Binding.hlsl"
-
-#include "ShadowProjection.hlsl"
+#if !defined(SHADOW_PROJECTION_H)
+    #error Please include ShadowProjection.hlsl before this file
+#endif
 
 #if !defined(CASCADE_RESOLVE_H)
     #error Please include CascadeResolve.hlsl before this file
 #endif
+
+#include "ShadowSampleFiltering.hlsl"
+#include "RTShadows.hlsl"
+#include "../Math/MathConstants.hlsl"
+#include "../Math/PoissonDisc.hlsl"
+#include "../Framework/Binding.hlsl"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     //   I N P U T S

@@ -10,9 +10,9 @@
 #include "../Utility/Colour.hlsl"
 
 #if VERTEX_ID_VIEW_INSTANCING
-	cbuffer MultiViewProperties BIND_SEQ_B3
+	cbuffer MultiViewProperties BIND_SEQ_B4
 	{
-		row_major float4x4 MultiViewWorldToClip[64];
+		row_major float4x4 MultiViewWorldToClip[32];
 	}
 	uint GetMultiViewIndex(uint instanceId)
 	{

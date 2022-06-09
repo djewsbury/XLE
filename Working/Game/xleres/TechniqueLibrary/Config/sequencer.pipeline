@@ -19,9 +19,9 @@ DescriptorSet Sequencer
 		uint GlobalSamplingPassCount;
 	};
 
-	UniformBuffer MultiViewProperties;			// 3
-	UniformBuffer RayDefinition;				// 4
-	UniformBuffer ShadowProjection;				// 5
+	UniformBuffer b3;							// 3		(can be used for BasicLightingEnvironment)
+	UniformBuffer MultiViewProperties;			// 4
+	UniformBuffer ShadowProjection;				// 5		(also RayDefinition)
 
 	SampledTexture tex0;						// 6
 	SampledTexture tex1;						// 7

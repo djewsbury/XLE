@@ -7,8 +7,11 @@
 #if !defined(CASCADE_RESOLVE_H)
 #define CASCADE_RESOLVE_H
 
+#if !defined(SHADOW_PROJECTION_H)
+    #error Please include ShadowProjection.hlsl before this file
+#endif
+
 #include "LightDesc.hlsl"      // CascadeAddress
-#include "ShadowProjection.hlsl"
 #include "../Framework/SystemUniforms.hlsl"
 #include "../Math/ProjectionMath.hlsl"
 

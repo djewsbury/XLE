@@ -7,6 +7,7 @@
 
 #include "../TechniqueLibrary/LightingEngine/LightDesc.hlsl"
 #include "../TechniqueLibrary/LightingEngine/LightShapes.hlsl"
+#include "../TechniqueLibrary/LightingEngine/ShadowProjection.hlsl"
 #include "../TechniqueLibrary/LightingEngine/CascadeResolve.hlsl"
 #include "../TechniqueLibrary/LightingEngine/ShadowsResolve.hlsl"
 #include "../TechniqueLibrary/LightingEngine/ShadowProbes.hlsl"

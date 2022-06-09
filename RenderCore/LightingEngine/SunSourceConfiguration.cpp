@@ -1001,6 +1001,7 @@ namespace RenderCore { namespace LightingEngine
         result._filterModel = settings._filterModel;
         result._enableContactHardening = settings._enableContactHardening;
         result._cullMode = settings._cullMode;
+        result._multiViewInstancingPath = true;
 
 		return result;
 	}
