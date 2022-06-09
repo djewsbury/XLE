@@ -662,6 +662,121 @@ namespace SceneEngine
 
     bool GenericQuadTree::CalculateVisibleObjects(
         const XLEMath::ArbitraryConvexVolumeTester& volumeTester,
+        const Float3x4& cellToArbitraryVolume,
+        IteratorRange<const Float4x4*> cellToClipAligned, uint32_t viewMask, ClipSpaceType clipSpaceType,
+        const BoundingBox objCellSpaceBoundingBoxes[], size_t objStride,
+        std::pair<unsigned, uint32_t> visObjs[], unsigned& visObjsCount, unsigned visObjMaxCount,
+        Metrics* metrics) const
+    {
+        visObjsCount = 0;
+        assert((size_t(AsFloatArray(*cellToClipAligned.begin())) & 0xf) == 0);
+        assert(cellToClipAligned.size() <= 32);
+
+        unsigned nodeAabbTestCount = 0, payloadAabbTestCount = 0;
+        unsigned nodeArbitraryVolumeTest = 0;
+
+		const auto& pimpl = GetPimpl();
+
+            //  Traverse through the quad tree, and find do bounding box level 
+            //  culling on each object
+        struct NodeEntry { unsigned _nodeIndex; uint32_t _partialInsideMask; uint32_t _entirelyInsideMask; bool _entirelyWithinComplexVolume; };
+        static std::stack<NodeEntry> workingStack;
+        static std::vector<NodeEntry> payloadsToProcess;
+        assert(workingStack.empty() && payloadsToProcess.empty());
+        workingStack.push({0, viewMask, 0});
+        while (!workingStack.empty()) {
+            auto nodeIndex = workingStack.top();
+            workingStack.pop();
+
+            // The "arbitrary volume" takes priority -- objects outside of this are always removed
+            // This is used for distinguihing objects that will cast shadows into the view frustum
+            // vs those that won't
+            auto& node = pimpl._nodes[nodeIndex._nodeIndex];
+            bool entirelyWithinComplexVolume = nodeIndex._entirelyWithinComplexVolume;
+            if (!entirelyWithinComplexVolume) {
+                auto test = volumeTester.TestAABB(cellToArbitraryVolume, node._boundary.first, node._boundary.second);
+                ++nodeArbitraryVolumeTest;
+                if (test == CullTestResult::Culled) continue;
+                entirelyWithinComplexVolume = test == CullTestResult::Within;
+            }
+            
+            uint32_t partialInside = nodeIndex._partialInsideMask, entirelyInsideMask = nodeIndex._entirelyInsideMask;
+            uint32_t partialIterator = partialInside;
+            while (partialIterator) {
+                unsigned viewIdx = xl_ctz4(partialIterator);
+                partialIterator ^= 1u<<viewIdx;
+
+                auto test = TestAABB_Aligned(cellToClipAligned[viewIdx], node._boundary.first, node._boundary.second, clipSpaceType);
+                if (test == CullTestResult::Culled) {
+                    partialInside ^= 1u<<viewIdx;
+                } else if (test == CullTestResult::Within) {
+                    partialInside ^= 1u<<viewIdx;
+                    entirelyInsideMask |= 1u<<viewIdx;
+                }
+                ++nodeAabbTestCount;
+            }
+
+            if ((entirelyInsideMask|partialInside) != 0) {
+                for (unsigned c=0; c<4; ++c)
+                    if (node._children[c] < pimpl._nodes.size())
+                        workingStack.push({node._children[c], partialInside, entirelyInsideMask, entirelyWithinComplexVolume});
+
+                if (node._payloadID < pimpl._payloads.size())
+                    payloadsToProcess.push_back({node._payloadID, partialInside, entirelyInsideMask, true});
+            }
+        }
+
+        for (auto payloadIdx:payloadsToProcess) {
+            auto& payload = pimpl._payloads[payloadIdx._nodeIndex];
+            assert(payloadIdx._partialInsideMask | payloadIdx._entirelyInsideMask);
+            if ((visObjsCount + payload._objects.size()) > visObjMaxCount)
+                return false;
+
+            if (objCellSpaceBoundingBoxes) {
+                unsigned objectsVisible = 0;
+                for (auto i=payload._objects.cbegin(); i!=payload._objects.cend(); ++i) {
+                    const auto& boundary = *PtrAdd(objCellSpaceBoundingBoxes, (*i) * objStride);
+                    uint32_t partialIterator = payloadIdx._partialInsideMask;
+                    uint32_t partialInside = payloadIdx._partialInsideMask;
+                    while (partialIterator) {
+                        unsigned viewIdx = xl_ctz4(partialIterator);
+                        partialIterator ^= 1u<<viewIdx;
+
+                        // we might be able to get better performance with a single optimized function that does either multiple views
+                        // or multiple bounding boxes all in one go 
+                        auto test = TestAABB_Aligned(cellToClipAligned[viewIdx], boundary.first, boundary.second, clipSpaceType);
+                        if (test == CullTestResult::Culled)
+                            partialInside ^= 1u<<viewIdx;
+                        ++payloadAabbTestCount;
+                    }
+
+                    if ((visObjsCount+1) > visObjMaxCount)
+                        return false;
+                    if (partialInside|payloadIdx._entirelyInsideMask) {
+                        visObjs[visObjsCount++] = {*i, partialInside|payloadIdx._entirelyInsideMask};
+                        ++objectsVisible;
+                    }
+                }
+            } else {
+                if ((visObjsCount + payload._objects.size()) > visObjMaxCount)
+                    return false;
+                for (auto i=payload._objects.cbegin(); i!=payload._objects.cend(); ++i)
+                    visObjs[visObjsCount++] = {*i, payloadIdx._partialInsideMask|payloadIdx._entirelyInsideMask};
+            }
+        }
+        payloadsToProcess.clear();
+
+        assert(visObjsCount <= visObjMaxCount);
+        if (metrics) {
+            metrics->_nodeAabbTestCount += nodeAabbTestCount + nodeArbitraryVolumeTest; 
+            metrics->_payloadAabbTestCount += payloadAabbTestCount;
+        }
+
+        return true;
+    }
+
+    bool GenericQuadTree::CalculateVisibleObjects(
+        const XLEMath::ArbitraryConvexVolumeTester& volumeTester,
         const Float3x4& cellToClip,
         const BoundingBox objCellSpaceBoundingBoxes[], size_t objStride,
         unsigned visObjs[], unsigned& visObjsCount, unsigned visObjMaxCount,

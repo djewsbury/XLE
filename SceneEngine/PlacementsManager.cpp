@@ -354,12 +354,22 @@ namespace SceneEngine
 
         const Placements* CullCell(
             std::vector<std::pair<unsigned, uint32_t>>& visibleObjects,
+            const ArbitraryConvexVolumeTester* volumeTester,
             IteratorRange<const Float4x4*> worldToCullingFrustums,
             uint32_t viewMask,
             const PlacementCell& cell);
 
         void CullCell(
             std::vector<std::pair<unsigned, uint32_t>>& visiblePlacements,
+            IteratorRange<const Float4x4*> cellToCullingFrustums,
+            uint32_t viewMask,
+            const Placements& placements,
+            const GenericQuadTree* quadTree);
+
+        void CullCell(
+            std::vector<std::pair<unsigned, uint32_t>>& visiblePlacements,
+            const ArbitraryConvexVolumeTester& volumeTester,
+            const Float3x4& cellToArbitraryVolume,
             IteratorRange<const Float4x4*> cellToCullingFrustums,
             uint32_t viewMask,
             const Placements& placements,
@@ -517,6 +527,7 @@ namespace SceneEngine
 
     const Placements* PlacementsRenderer::Pimpl::CullCell(
         std::vector<std::pair<unsigned, uint32_t>>& visibleObjects,
+        const ArbitraryConvexVolumeTester* arbitraryVolume,
         IteratorRange<const Float4x4*> worldToCullingFrustums,
         uint32_t viewMask,
         const PlacementCell& cell)
@@ -540,11 +551,22 @@ namespace SceneEngine
         Float4x4 cellToCullingFrustums[worldToCullingFrustums.size()];
         for (unsigned c=0; c<worldToCullingFrustums.size(); ++c)
             cellToCullingFrustums[c] = Combine(cell._cellToWorld, worldToCullingFrustums[c]);
-        CullCell(
-            visibleObjects, MakeIteratorRange(cellToCullingFrustums, &cellToCullingFrustums[worldToCullingFrustums.size()]),
-            viewMask,
-            *placements, 
-            renderInfo._quadTree.get());
+        if (arbitraryVolume) {
+            CullCell(
+                visibleObjects, 
+                *arbitraryVolume, cell._cellToWorld,
+                MakeIteratorRange(cellToCullingFrustums, &cellToCullingFrustums[worldToCullingFrustums.size()]),
+                viewMask,
+                *placements, 
+                renderInfo._quadTree.get());
+
+        } else {
+            CullCell(
+                visibleObjects, MakeIteratorRange(cellToCullingFrustums, &cellToCullingFrustums[worldToCullingFrustums.size()]),
+                viewMask,
+                *placements, 
+                renderInfo._quadTree.get());
+        }
 
         return placements;
     }
@@ -659,6 +681,47 @@ namespace SceneEngine
             GenericQuadTree::Metrics metrics;
 			assert(placementCount < (1<<28));
             quadTree->CalculateVisibleObjects(
+                cellToCullingFrustums, viewMask, RenderCore::Techniques::GetDefaultClipSpaceType(),
+                &objRef->_cellSpaceBoundary,
+                sizeof(Placements::ObjectReference),
+                AsPointer(visiblePlacements.begin()), cullResults, cullResults,
+                &metrics);
+            visiblePlacements.resize(cullResults);
+
+                // we have to sort to return to our expected order
+            std::sort(
+                visiblePlacements.begin(), visiblePlacements.end(),
+                [](const std::pair<unsigned, uint32_t>& lhs, const std::pair<unsigned, uint32_t>& rhs) {
+                    return lhs.first < rhs.first;
+                });
+        } else {
+            assert(0);      // quad tree required
+        }
+    }
+
+    void PlacementsRenderer::Pimpl::CullCell(
+        std::vector<std::pair<unsigned, uint32_t>>& visiblePlacements,
+        const ArbitraryConvexVolumeTester& arbitraryVolume,
+        const Float3x4& cellToArbitraryVolume,
+        IteratorRange<const Float4x4*> cellToCullingFrustums,
+        uint32_t viewMask,
+        const Placements& placements,
+        const GenericQuadTree* quadTree)
+    {
+        auto placementCount = placements.GetObjectReferenceCount();
+        if (!placementCount)
+            return;
+        
+        const auto* objRef = placements.GetObjectReferences();
+        
+        if (quadTree) {
+            auto cullResults = quadTree->GetMaxResults();
+            assert(cullResults);
+            visiblePlacements.resize(cullResults);
+            GenericQuadTree::Metrics metrics;
+			assert(placementCount < (1<<28));
+            quadTree->CalculateVisibleObjects(
+                arbitraryVolume, cellToArbitraryVolume,
                 cellToCullingFrustums, viewMask, RenderCore::Techniques::GetDefaultClipSpaceType(),
                 &objRef->_cellSpaceBoundary,
                 sizeof(Placements::ObjectReference),
@@ -1045,12 +1108,16 @@ namespace SceneEngine
     {
         static std::vector<std::pair<unsigned, uint32_t>> visibleObjects;
         BufferUploads::CommandListID completionCmdList = 0;
+        auto* arbitraryVolume = executeContext._view._complexVolumeTester;
 
             // Render every registered cell
             // We catch exceptions on a cell based level (so pending cells won't cause other cells to flicker)
             // non-asset exceptions will throw back to the caller and bypass EndRender()
         auto& cells = cellSet._pimpl->_cells;
         for (auto i=cells.begin(); i!=cells.end(); ++i) {
+            if (arbitraryVolume && arbitraryVolume->TestAABB(i->_aabbMin, i->_aabbMax) == CullTestResult::Culled)
+				continue;
+
             uint32_t partialMask = 0;
             for (unsigned c=0; c<worldToCullingFrustums.size(); ++c)
                 if (!CullAABB_Aligned(worldToCullingFrustums[c], i->_aabbMin, i->_aabbMax, RenderCore::Techniques::GetDefaultClipSpaceType())) {
@@ -1063,7 +1130,7 @@ namespace SceneEngine
 			auto ovr = LowerBound(cellSet._pimpl->_cellOverrides, i->_filenameHash);
             assert(ovr == cellSet._pimpl->_cellOverrides.end() || ovr->first != i->_filenameHash);
 
-            auto* plc = _pimpl->CullCell(visibleObjects, worldToCullingFrustums, partialMask, *i);
+            auto* plc = _pimpl->CullCell(visibleObjects, arbitraryVolume, worldToCullingFrustums, partialMask, *i);
             if (plc) {
                 auto cmdList = _pimpl->BuildDrawablesViewMasks(executeContext._destinationPkts, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld);
                 completionCmdList = std::max(cmdList, completionCmdList);
