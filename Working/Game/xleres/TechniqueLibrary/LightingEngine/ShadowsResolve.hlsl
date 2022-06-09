@@ -205,24 +205,48 @@ float CalculateShadowCasterDistance(
         sampleDepth.z = ShadowTextures.SampleLevel(ShadowDepthSampler, float3(texCoords + rotatedFilter2, float(arrayIndex)), 0).r;
         sampleDepth.w = ShadowTextures.SampleLevel(ShadowDepthSampler, float3(texCoords + rotatedFilter3, float(arrayIndex)), 0).r;
 
-        float cDist0 = comparisonDistance + dot(rotatedFilter0, filterPlane);
-        float cDist1 = comparisonDistance + dot(rotatedFilter1, filterPlane);
-        float cDist2 = comparisonDistance + dot(rotatedFilter2, filterPlane);
-        float cDist3 = comparisonDistance + dot(rotatedFilter3, filterPlane);
-
         // Note that we have to flip this comparison for the ReverseZ projection modes, since
         // larger values mean closer to the light in ReverseZ, while smaller numbers mean closer to the
         // light in non-ReverseZ modes
-        float4 difference 		 = sampleDepth - float4(cDist0, cDist1, cDist2, cDist3);
+        float4 difference = sampleDepth - comparisonDistance.xxxx;
+        difference.x -= dot(rotatedFilter0, filterPlane);       // subtract this bias, which is the same as adding to comparisonDistance earlier
+        difference.y -= dot(rotatedFilter1, filterPlane);
+        difference.z -= dot(rotatedFilter2, filterPlane);
+        difference.w -= dot(rotatedFilter3, filterPlane);
+
         float4 sampleCount 		 = difference > 0.0f;					// array of 1s for pixels in the shadow texture closer to the light
         accumulatedSampleCount 	+= dot(sampleCount, 1.0.xxxx);			// count number of 1s in "sampleCount"
             // Clamp maximum distance considered here?
         accumulatedDistance     += dot(difference, sampleCount);		// accumulate only the samples closer to the light
 
-        minDifference = difference.x > 0.0f ? min(minDifference, difference.x) : minDifference;
-        minDifference = difference.y > 0.0f ? min(minDifference, difference.y) : minDifference;
-        minDifference = difference.z > 0.0f ? min(minDifference, difference.z) : minDifference;
-        minDifference = difference.w > 0.0f ? min(minDifference, difference.w) : minDifference;
+        const bool excludeOutlier = true;
+        if (!excludeOutlier) {
+            minDifference = difference.x > 0.0f ? min(minDifference, difference.x) : minDifference;
+            minDifference = difference.y > 0.0f ? min(minDifference, difference.y) : minDifference;
+            minDifference = difference.z > 0.0f ? min(minDifference, difference.z) : minDifference;
+            minDifference = difference.w > 0.0f ? min(minDifference, difference.w) : minDifference;
+        } else {
+            // From each group of four, exclude the smallest as an outlier and find the next smallest
+            // this is an experiment to try to cut down on the noise slightly
+            // It reduces the amount of noise considerably, but might be a bit subjective
+            difference += (difference < 0.f) * minDifferenceInitial; // add massive amount to samples we want to ignore
+            float m = min(min(min(difference.x, difference.y), difference.z), difference.w);
+            difference += (difference == m) * minDifferenceInitial;
+            // The following approach is technically more accurate (since if there are 2 identical samples, only
+            // one will be rejecected). But in practice it doesn't seem to matter. Perhaps if the light, caster and lit
+            // surface were all arranged very neatly it might matter
+            // if (difference.x < difference.y) {
+            //     if (difference.x < difference.z && difference.x < difference.w) difference.x += minDifferenceInitial;
+            //     else if (difference.z < difference.w) difference.z += minDifferenceInitial;
+            //     else difference.w += minDifferenceInitial;
+            // } else {
+            //     if (difference.y < difference.z && difference.y < difference.w) difference.y += minDifferenceInitial;
+            //     else if (difference.z < difference.w) difference.z += minDifferenceInitial;
+            //     else difference.w += minDifferenceInitial;
+            // }
+            m = min(min(min(difference.x, difference.y), difference.z), difference.w);
+            minDifference = min(minDifference, m);
+        }
     }
 
     // if we didn't find anything that looks like a caster, we should return 0
@@ -230,7 +254,8 @@ float CalculateShadowCasterDistance(
     // This reduces the possibility of acne in unshadows pixels significantly
     if (minDifference == minDifferenceInitial) return 0.f;
 
-    return minDifference + CasterDistanceExtraBias;
+    return minDifference + extraBias;
+    // return accumulatedDistance / accumulatedSampleCount;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -266,6 +291,12 @@ float CalculateFilteredShadows_PoissonDisc(
     filterRotation *= filterSizeNorm;
 
     float weightTotal = 0.0f;
+
+    // We want to use the "filterPlane" to detect if the shadow map point is on the same geometric plane as the surface we're sampling
+    // We need to use a little bit of extra bias to make that work, though, to order to compensate for lost precision in the math 
+    // along the way -- particularly due to rounding for the integer depth representations
+    const float filterPlaneBiasFactor = 1.f/1024.f;
+    comparisonDistance += filterPlaneBiasFactor * max(abs(filterPlane.x), abs(filterPlane.y));
 
     const bool doFilterRotation = true;
     float shadowingTotal = 0.0f;
@@ -306,14 +337,6 @@ float CalculateFilteredShadows_PoissonDisc(
         float cDist2 = comparisonDistance + dot(rotatedFilter2, filterPlane);
         float cDist3 = comparisonDistance + dot(rotatedFilter3, filterPlane);
 
-        // We want to use the "filterPlane" to detect if the shadow map point is on the same geometric plane as the surface we're sampling
-        // We need to use a little bit of extra bias to make that work, though, to order to compensate for lost precision in the math 
-        // along the way -- particularly due to rounding for the integer depth representations
-        cDist0 += 1.f / 1024.f * max(abs(filterPlane.x), abs(filterPlane.y));
-        cDist1 += 1.f / 1024.f * max(abs(filterPlane.x), abs(filterPlane.y));
-        cDist2 += 1.f / 1024.f * max(abs(filterPlane.x), abs(filterPlane.y));
-        cDist3 += 1.f / 1024.f * max(abs(filterPlane.x), abs(filterPlane.y));
-        
         float4 sampleDepth;
         sampleDepth.x = TestShadow(texCoords + rotatedFilter0, arrayIndex, cDist0);
         sampleDepth.y = TestShadow(texCoords + rotatedFilter1, arrayIndex, cDist1);
@@ -428,26 +451,26 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeS
         // We need a world space maximum search distance here; even though we later clamp the
         // maximum distance in pixel space. This is to get consistency between the cascades -- because
         // if we search further in larger cascades, it emphasizes the differences between them
+        // Also don't use maxBlurNorm, because we don't want the transitionary effect on this lookup
+        const float blockerFilterToMainFilterRatio = 0.5;
         #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
-            float searchSize = OrthoShadowCascadeScale[cascadeIndex].x * maxBlurNorm * 0.125 * 1024;
+            float searchSize = OrthoShadowCascadeScale[cascadeIndex].x / OrthoShadowCascadeScale[0].x * blockerFilterToMainFilterRatio * MaxBlurRadiusNorm;
         #else
-            float searchSize = maxBlurNorm;
+            float searchSize = blockerFilterToMainFilterRatio * MaxBlurRadiusNorm;
         #endif
         filterSize = CalculateFilterSize(
             cascadeIndex, shadowTexCoord, miniProjection, biasedDepth, 
             searchSize, filterPlane, randomizerValue, msaaSampleIndex);
-        if (filterSize < 0.0f)
+
+        // return (filterSize - MinBlurRadiusNorm) / (maxBlurNorm - MinBlurRadiusNorm);
+
+        // If the filter size is very small, let's do a cheaper single tap test (offten a pretty fair amount of samples end up here)
+        [branch] if (filterSize <= 1/ShadowTextureSize)
             return TestShadow(shadowTexCoord, cascadeIndex, biasedDepth);
 
         filterSize = min(max(filterSize, MinBlurRadiusNorm), maxBlurNorm);
-        // return (filterSize - MinBlurRadiusNorm) / (maxBlurNorm - MinBlurRadiusNorm);
-        // filterSize = maxBlurNorm;
     } else {
-        #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
-            filterSize = max(MinBlurRadiusNorm, OrthoShadowCascadeScale[cascadeIndex].x * MaxBlurRadiusNorm * 0.125 * 1024);
-        #else
-            filterSize = maxBlurNorm;
-        #endif
+        filterSize = max(MinBlurRadiusNorm, maxBlurNorm);
     }
 
     return CalculateFilteredShadows(

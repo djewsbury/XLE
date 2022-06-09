@@ -81,7 +81,8 @@ CascadeAddress ResolveCascade_FromWorldPosition(float3 worldPosition, float3 wor
             // const uint halfTextureSize = 512;
             // const float fullyInsidePoint = float(halfTextureSize-maxBlurSearchInPix) / float(halfTextureSize);
             // maxBlurSearchInPix/halfTextureSize == 2*ProjectionMaxBlurRadiusNorm
-            const float fullyInsidePoint = 1.f-2.f*ProjectionMaxBlurRadiusNorm;
+            const float transitionInFilterCount = 1.f;      // number of filter radii in the transition zone
+            const float fullyInsidePoint = 1.f-2.f*ProjectionMaxBlurRadiusNorm*transitionInFilterCount;
 
             [unroll] for (; ; lowerCascadeIndex++) {
                 if (lowerCascadeIndex==GetShadowSubProjectionCount())
@@ -102,7 +103,7 @@ CascadeAddress ResolveCascade_FromWorldPosition(float3 worldPosition, float3 wor
                             // a = (((a-1) * halfTextureSize) + maxBlurSearchInPix) / maxBlurSearchInPix;
                             // a = (a*halfTextureSize - halfTextureSize + maxBlurSearchInPix) / maxBlurSearchInPix;
                             // a = (a-1)*halfTextureSize/maxBlurSearchInPix + 1;
-                            a = (a-1.f)/(2.f*ProjectionMaxBlurRadiusNorm) + 1.f;
+                            a = (a-1.f)/(2.f*ProjectionMaxBlurRadiusNorm*transitionInFilterCount) + 1.f;
                             cascadeAlpha = saturate(a);
                             higherCascadeIndex = lowerCascadeIndex+1;
                             frustumCoordinates = nextCascadeFrustumCoordinates;
