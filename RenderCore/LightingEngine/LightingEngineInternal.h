@@ -23,6 +23,10 @@ namespace RenderCore { namespace LightingEngine
 
 		ParseId CreateParseScene(Techniques::BatchFlags::BitField);
 		ParseId CreateParseScene(Techniques::BatchFlags::BitField batchFilter, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume);
+		ParseId CreateMultiViewParseScene(
+			Techniques::BatchFlags::BitField batchFilter,
+			std::vector<Techniques::ProjectionDesc>&& projDescs,
+			std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume);
 
 		void CreateStep_CallFunction(std::function<StepFnSig>&&);
 		void CreateStep_ExecuteDrawables(
@@ -74,6 +78,7 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::BatchFlags::BitField _batches = 0u;
 			ParseId _parseId;
 			std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> _complexCullingVolume;
+			std::vector<Techniques::ProjectionDesc> _multiViewProjections;		// subframe allocation candidate (for dynamic sequencers)
 			bool _prepareOnly = false;
 		};
 		std::vector<ParseStep> _parseSteps;

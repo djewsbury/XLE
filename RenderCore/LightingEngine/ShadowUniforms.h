@@ -52,6 +52,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		ShadowProjectionMode	_mode;
 		SharedPkt				_cbSource;
 
+		Float4x4 _multiViewWorldToClip[MaxShadowTexturesPerLight+1];
+
 		// maxBlurRadiusNorm is used to leave room for the blur during cascade transitions
 		// it should be max blur in pix / texture size in pix
 		void InitialiseConstants(
@@ -148,6 +150,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		Float4      _specialNearMinimalProjection;
 	};
 
+	void CalculateProjections(
+		IteratorRange<Techniques::ProjectionDesc*> dst,
+		const MultiProjection<MaxShadowTexturesPerLight>& projections);
+
 	class IShadowProjectionDriver
 	{
 	public:
@@ -179,6 +185,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		std::shared_ptr<ICompiledShadowPreparer> _preparer;
 		std::shared_ptr<Internal::ILightBase> _driver;
+		bool 			_multiViewInstancingPath = false;
 
 		virtual void SetDesc(const Desc& newDesc) override
 		{

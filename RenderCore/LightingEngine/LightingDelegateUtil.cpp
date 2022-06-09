@@ -38,10 +38,17 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		}
 
 		// todo - cull out any offscreen projections
-		if (volumeTester) {
-			return sequence.CreateParseScene(Techniques::BatchFlags::Opaque, std::move(volumeTester));
-		} else
-			return sequence.CreateParseScene(Techniques::BatchFlags::Opaque);
+		if (standardProj._multiViewInstancingPath) {
+			std::vector<Techniques::ProjectionDesc> projDescs;
+			projDescs.resize(standardProj._projections.Count());
+			CalculateProjections(MakeIteratorRange(projDescs), standardProj._projections);
+			return sequence.CreateMultiViewParseScene(Techniques::BatchFlags::Opaque, std::move(projDescs), std::move(volumeTester));
+		} else {
+			if (volumeTester) {
+				return sequence.CreateParseScene(Techniques::BatchFlags::Opaque, std::move(volumeTester));
+			} else
+				return sequence.CreateParseScene(Techniques::BatchFlags::Opaque);
+		}
 	}
 
 	std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(

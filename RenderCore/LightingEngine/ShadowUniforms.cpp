@@ -93,7 +93,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			}
 
 				//  Also fill in the constants for ortho projection mode
-			baseCB->_minimalProjection = Float4(1,1,1,0);
+			baseCB->_minimalProjection = 
+				ExtractMinimalProjection(
+					OrthogonalProjection(
+						desc._orthoSub[0]._leftTopFront[0], desc._orthoSub[0]._leftTopFront[1], 
+						desc._orthoSub[0]._rightBottomBack[0], desc._orthoSub[0]._rightBottomBack[1], 
+						desc._orthoSub[0]._leftTopFront[2], desc._orthoSub[0]._rightBottomBack[2],
+						Techniques::GetDefaultClipSpaceType()));
 			baseCB->_worldToView = AsFloat3x4(baseWorldToView);
 
 				// the special "near" cascade is reached via the main transform
@@ -125,6 +131,49 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		_mode = desc._mode;
 		_enableNearCascade = desc._useNearProj;
 		_cbSource = BuildShadowConstantBuffers(desc, operatorMaxFrustumCount, maxBlurRadiusNorm);
+
+		assert(desc.Count() <= dimof(_multiViewWorldToClip));
+		Techniques::ProjectionDesc projDescs[desc.Count()];
+		CalculateProjections({projDescs, &projDescs[desc.Count()]}, desc);
+		for (unsigned c=0; c<desc.Count(); ++c)
+			_multiViewWorldToClip[c] = projDescs[c]._worldToProjection;
+	}
+
+	void CalculateProjections(
+		IteratorRange<Techniques::ProjectionDesc*> dst,
+		const MultiProjection<MaxShadowTexturesPerLight>& desc)
+	{
+		assert(dst.size() == desc.Count());
+
+		for (auto& d:dst) {
+			// most members of ProjectionDesc have little meaning here; let's just avoid
+			// filling them out
+			d._cameraToProjection = Identity<Float4x4>();
+			d._cameraToWorld = Identity<Float4x4>();
+			d._verticalFov = d._aspectRatio = 1.f;
+			d._nearClip = 0.f; d._farClip = 1.f;
+		}
+
+		unsigned c=0;
+		if (desc._mode == ShadowProjectionMode::Arbitrary || desc._mode == ShadowProjectionMode::ArbitraryCubeMap) {
+			for (; c<desc._normalProjCount; ++c)
+				dst[c]._worldToProjection = desc._fullProj[c]._worldToProjTransform;
+			assert(!desc._useNearProj);
+		} else if (desc._mode == ShadowProjectionMode::Ortho) {
+			auto baseWorldToView = desc._definitionViewMatrix;
+			for (; c<desc._normalProjCount; ++c) {
+				dst[c]._worldToProjection = Combine(
+					baseWorldToView,
+					OrthogonalProjection(
+						desc._orthoSub[c]._leftTopFront[0], desc._orthoSub[c]._leftTopFront[1], 
+						desc._orthoSub[c]._rightBottomBack[0], desc._orthoSub[c]._rightBottomBack[1], 
+						desc._orthoSub[c]._leftTopFront[2], desc._orthoSub[c]._rightBottomBack[2],
+						Techniques::GetDefaultClipSpaceType()));
+			}
+			if (desc._useNearProj)
+				dst[c++]._worldToProjection = Combine(baseWorldToView, desc._specialNearProjection);
+		}
+		assert(c == dst.size());
 	}
 
 	PreparedShadowFrustum::PreparedShadowFrustum()
@@ -137,7 +186,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	, _frustumCount(moveFrom._frustumCount)
 	, _enableNearCascade(moveFrom._enableNearCascade)
 	, _mode(moveFrom._mode)
-	{}
+	{
+		auto totalFrustumCount = _frustumCount + (_enableNearCascade?1:0);
+		for (unsigned c=0; c<totalFrustumCount; ++c)
+			_multiViewWorldToClip[c] = moveFrom._multiViewWorldToClip[c];
+	}
 
 	PreparedShadowFrustum& PreparedShadowFrustum::operator=(PreparedShadowFrustum&& moveFrom) never_throws
 	{
@@ -145,6 +198,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		_frustumCount = moveFrom._frustumCount;
 		_enableNearCascade = moveFrom._enableNearCascade;
 		_mode = moveFrom._mode;
+		auto totalFrustumCount = _frustumCount + (_enableNearCascade?1:0);
+		for (unsigned c=0; c<totalFrustumCount; ++c)
+			_multiViewWorldToClip[c] = moveFrom._multiViewWorldToClip[c];
 		return *this;
 	}
 

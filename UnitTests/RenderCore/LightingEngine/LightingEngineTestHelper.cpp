@@ -148,9 +148,15 @@ namespace UnitTests
 				if (next._parsingContext) BlackOutSky(*next._parsingContext);
 				continue;
 			}
-			assert(next._type == LightingEngine::StepType::ParseScene);
-			assert(!next._pkts.empty() && next._pkts[0]);
-			drawableWriter.WriteDrawables(*next._pkts[0]);
+			if (next._type == LightingEngine::StepType::ParseScene) {
+				assert(!next._pkts.empty() && next._pkts[0]);
+				drawableWriter.WriteDrawables(*next._pkts[0]);
+			} else {
+				assert(next._type == LightingEngine::StepType::MultiViewParseScene);
+				uint32_t viewMask = (1u << next._multiViewDesc.size()) - 1u;
+				assert(!next._pkts.empty() && next._pkts[0]);
+				drawableWriter.WriteDrawables(*next._pkts[0], viewMask);
+			}
 		}
 	}
 

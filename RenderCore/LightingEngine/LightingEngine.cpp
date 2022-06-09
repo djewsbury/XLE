@@ -33,7 +33,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		assert(!_frozen);
 		for (auto& s:_parseSteps)
-			if (!s._complexCullingVolume) {
+			if (!s._complexCullingVolume && s._multiViewProjections.empty()) {
 				s._prepareOnly = false;
 				s._batches |= batches;
 				return s._parseId | (batches << 16u);
@@ -50,7 +50,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		assert(!_frozen);
 		for (auto& s:_parseSteps)
-			if (s._complexCullingVolume == complexCullingVolume) {
+			if (s._complexCullingVolume == complexCullingVolume && s._multiViewProjections.empty()) {
 				s._prepareOnly = false;
 				s._batches |= batches;
 				return s._parseId | (batches << 16u);
@@ -59,6 +59,24 @@ namespace RenderCore { namespace LightingEngine
 		newStep._batches = batches;
 		newStep._parseId = _nextParseId++;
 		newStep._complexCullingVolume = std::move(complexCullingVolume);
+		_parseSteps.emplace_back(std::move(newStep));
+		assert((newStep._parseId & 0xffff) == newStep._parseId);
+		return newStep._parseId | (batches << 16u);
+	}
+
+	auto LightingTechniqueSequence::CreateMultiViewParseScene(
+		Techniques::BatchFlags::BitField batches,
+		std::vector<Techniques::ProjectionDesc>&& projDescs,
+		std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume) -> ParseId
+	{
+		assert(!_frozen);
+		// Don't bother trying to combine this with another parse step in this case -- since it's unlikely
+		// we'll find one with exactly the same views
+		ParseStep newStep;
+		newStep._batches = batches;
+		newStep._parseId = _nextParseId++;
+		newStep._complexCullingVolume = std::move(complexCullingVolume);
+		newStep._multiViewProjections = std::move(projDescs);
 		_parseSteps.emplace_back(std::move(newStep));
 		assert((newStep._parseId & 0xffff) == newStep._parseId);
 		return newStep._parseId | (batches << 16u);
@@ -552,7 +570,11 @@ namespace RenderCore { namespace LightingEngine
 					std::vector<Techniques::DrawablesPacket*> pkts;
 					pkts.resize((unsigned)Techniques::Batch::Max);
 					_iterator->GetOrAllocatePkts(MakeIteratorRange(pkts), next->_parseId, next->_batches);
-					return { StepType::ParseScene, std::move(pkts), next->_complexCullingVolume.get() };
+					if (next->_multiViewProjections.empty()) {
+						return { StepType::ParseScene, std::move(pkts), next->_complexCullingVolume.get() };
+					} else {
+						return { StepType::MultiViewParseScene, std::move(pkts), next->_complexCullingVolume.get(), next->_multiViewProjections };
+					}
 				}
 			}
 
@@ -704,7 +726,11 @@ namespace RenderCore { namespace LightingEngine
 				std::vector<Techniques::DrawablesPacket*> pkts;
 				pkts.resize((unsigned)Techniques::Batch::Max);
 				_prepareResourcesIterator->GetOrAllocatePkts(MakeIteratorRange(pkts), next->_parseId, next->_batches);
-				return { StepType::ParseScene, std::move(pkts), next->_complexCullingVolume.get() };
+				if (next->_multiViewProjections.empty()) {
+					return { StepType::ParseScene, std::move(pkts), next->_complexCullingVolume.get() };
+				} else {
+					return { StepType::MultiViewParseScene, std::move(pkts), next->_complexCullingVolume.get(), next->_multiViewProjections };
+				}
 			}
 
 			_prepareResourcesIterator->ResetIteration(PrepareResourcesIterator::Phase::Execute);

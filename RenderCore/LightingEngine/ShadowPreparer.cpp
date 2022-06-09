@@ -86,6 +86,16 @@ namespace RenderCore { namespace LightingEngine
 					assert(_preparer->_workingDMFrustum._cbSource.size() == dst.size());
 					std::memcpy(dst.begin(), _preparer->_workingDMFrustum._cbSource.begin(), dst.size());
 					break;
+				case 1:
+					{
+						#if defined(_DEBUG)
+							unsigned projCount = _preparer->_workingDMFrustum._frustumCount;
+							if (_preparer->_workingDMFrustum._enableNearCascade) ++projCount;
+							assert(dst.size() == sizeof(Float4x4)*projCount);
+						#endif
+						std::memcpy(dst.begin(), _preparer->_workingDMFrustum._multiViewWorldToClip, dst.size());
+					}
+					break;
 				default:
 					assert(0);
 					break;
@@ -98,6 +108,12 @@ namespace RenderCore { namespace LightingEngine
 				case 0: 
 					assert(_preparer->_workingDMFrustum._cbSource.size());		// we can hit this when the subprojection count is 0
 					return _preparer->_workingDMFrustum._cbSource.size();
+				case 1:
+					{
+						unsigned projCount = _preparer->_workingDMFrustum._frustumCount;
+						if (_preparer->_workingDMFrustum._enableNearCascade) ++projCount;
+						return sizeof(Float4x4)*projCount;
+					}
 				default:
 					assert(0);
 					return 0;
@@ -107,6 +123,7 @@ namespace RenderCore { namespace LightingEngine
 			UniformDelegate(DMShadowPreparer& preparer) : _preparer(&preparer)
 			{
 				BindImmediateData(0, Utility::Hash64("ShadowProjection"), {});
+				BindImmediateData(1, Utility::Hash64("MultiViewProperties"), {});
 			}
 			DMShadowPreparer* _preparer;
 		};
@@ -164,26 +181,6 @@ namespace RenderCore { namespace LightingEngine
 		PipelineType descSetPipelineType,
 		IPreparedShadowResult& res)
 	{
-		/*
-		if (lightingParserContext._preparedDMShadows.size() == Tweakable("ShadowGenDebugging", 0)) {
-			auto srvForDebugging = *rpi.GetRenderPassInstance().GetDepthStencilAttachmentSRV(TextureViewDesc{TextureViewDesc::Aspect::ColorLinear});
-			parsingContext._pendingOverlays.push_back(
-				std::bind(
-					&ShadowGen_DrawDebugging, 
-					std::placeholders::_1, std::placeholders::_2,
-					srvForDebugging));
-		}
-
-		if (lightingParserContext._preparedDMShadows.size() == Tweakable("ShadowGenFrustumDebugging", 0)) {
-			parsingContext._pendingOverlays.push_back(
-				std::bind(
-					&ShadowGen_DrawShadowFrustums, 
-					std::placeholders::_1, std::placeholders::_2,
-					lightingParserContext.GetMainTargets(),
-					shadowDelegate._shadowProj));
-		}
-		*/
-
 		auto& device = *threadContext.GetDevice();
 		DescriptorSetInitializer descSetInit;
 		descSetInit._signature = &_descSetSig;
@@ -236,7 +233,7 @@ namespace RenderCore { namespace LightingEngine
 			arrayCount = desc._normalProjCount + (desc._enableNearCascade ? 1 : 0);
 
 		auto shadowGenDelegate = delegatesBox->GetShadowGenTechniqueDelegate(
-			Techniques::ShadowGenType::GSAmplify,
+			desc._multiViewInstancingPath ? Techniques::ShadowGenType::VertexIdViewInstancing : Techniques::ShadowGenType::GSAmplify,
 			desc._singleSidedBias, desc._doubleSidedBias, desc._cullMode);
 
 		ParameterBox sequencerSelectors;
@@ -329,6 +326,7 @@ namespace RenderCore { namespace LightingEngine
 		result->_projections._useNearProj = op._desc._enableNearCascade;
 		result->_projections._operatorNormalProjCount = op._desc._normalProjCount;
 		result->_preparer = op._preparer;
+		result->_multiViewInstancingPath = op._desc._multiViewInstancingPath;
 		return result;
 	}
 
@@ -424,6 +422,7 @@ namespace RenderCore { namespace LightingEngine
 			| (GetBits<1>(_dominantLight)  			<< 51ull)
 			| (GetBits<2>(_filterModel)  			<< 52ull)
 			| (GetBits<1>(_enableContactHardening)	<< 54ull)
+			| (GetBits<1>(_multiViewInstancingPath)	<< 55ull)
 			;
 
 		uint64_t h1 = 
@@ -460,7 +459,7 @@ namespace RenderCore { namespace LightingEngine
 					selectors.SetParameter("SHADOW_ENABLE_NEAR_CASCADE", _shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade ? 1u : 0u);
 					selectors.SetParameter("SHADOW_FILTER_MODEL", unsigned(_filterModel));
 					selectors.SetParameter("SHADOW_FILTER_CONTACT_HARDENING", _enableContactHardening);
-					selectors.SetParameter("SHADOW_RT_HYBRID=", unsigned(_shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows));
+					selectors.SetParameter("SHADOW_RT_HYBRID", unsigned(_shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows));
 				} else {
 					selectors.SetParameter("SHADOW_PROBE", 1);
 				}
