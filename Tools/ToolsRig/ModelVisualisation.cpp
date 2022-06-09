@@ -196,43 +196,8 @@ namespace ToolsRig
             RenderCore::IThreadContext& threadContext,
 			const SceneEngine::ExecuteSceneContext& executeContext) const override
 		{
-			auto skeletonMachine = _actualized->GetSkeletonMachine();
-			assert(skeletonMachine);
-
-			std::vector<Float4x4> skeletonMachineOutput(skeletonMachine->GetOutputMatrixCount());
-
-			if (_actualized->_animationScaffold && _animationState && _animationState->_state != VisAnimationState::State::BindPose) {
-				auto& animData = _actualized->_animationScaffold->ImmutableData();
-
-				auto animHash = Hash64(_animationState->_activeAnimation);
-				auto foundAnimation = animData._animationSet.FindAnimation(animHash);
-				float time = _animationState->_animationTime;
-				if (_animationState->_state == VisAnimationState::State::Playing)
-					time += std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - _animationState->_anchorTime).count() / 1000.f;
-				time = fmodf(time - foundAnimation._beginTime, foundAnimation._endTime - foundAnimation._beginTime) + foundAnimation._beginTime;
-
-				auto parameterBlockSize = _actualized->_animSetBinding.GetParameterDefaultsBlock().size();
-				uint8_t parameterBlock[parameterBlockSize];
-				std::memcpy(parameterBlock, _actualized->_animSetBinding.GetParameterDefaultsBlock().begin(), parameterBlockSize);
-
-				animData._animationSet.CalculateOutput(
-					MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]),
-					{time, animHash},
-					_actualized->_animSetBinding.GetParameterBindingRules());
-
-				// We have to use the "specialized" skeleton in _animSetBinding
-				assert(_actualized->_animSetBinding.GetOutputMatrixCount() == skeletonMachineOutput.size());
-				_actualized->_animSetBinding.GenerateOutputTransforms(
-					MakeIteratorRange(skeletonMachineOutput),
-					MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]));
-			} else {
-				skeletonMachine->GenerateOutputTransforms(MakeIteratorRange(skeletonMachineOutput));
-			}
-
 			const auto instanceIdx = 0u;
-			if (_actualized->_skeletonInterface)
-				_actualized->_skeletonInterface->FeedInSkeletonMachineResults(instanceIdx, MakeIteratorRange(skeletonMachineOutput));
-
+			UpdateSkeletonInterface(instanceIdx);
 			auto localToWorld = Identity<Float4x4>();
 			_actualized->_renderer->BuildDrawables(executeContext._destinationPkts, localToWorld, instanceIdx, _preDrawDelegate);
 			executeContext._completionCmdList = std::max(executeContext._completionCmdList, _actualized->_renderer->GetCompletionCommandList());
@@ -243,7 +208,13 @@ namespace ToolsRig
 			const SceneEngine::ExecuteSceneContext& executeContext,
 			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> multiViews) const override
 		{
-			assert(0);
+			const auto instanceIdx = 0u;
+			UpdateSkeletonInterface(instanceIdx);
+			auto localToWorld = Identity<Float4x4>();
+			assert(multiViews.size() > 0 && multiViews.size() < 32);
+			uint32_t viewMask = (1 << unsigned(multiViews.size()))-1;
+			_actualized->_renderer->BuildDrawables(executeContext._destinationPkts, localToWorld, instanceIdx, _preDrawDelegate, viewMask);
+			executeContext._completionCmdList = std::max(executeContext._completionCmdList, _actualized->_renderer->GetCompletionCommandList());
 		}
 
 		DrawCallDetails GetDrawCallDetails(unsigned drawCallIndex, uint64_t materialGuid) const override
@@ -350,6 +321,45 @@ namespace ToolsRig
 		std::shared_ptr<VisAnimationState>				_animationState;
 
 		std::vector<std::shared_ptr<RenderCore::Techniques::ISkinDeformer>> _skinDeformers;
+
+		void UpdateSkeletonInterface(unsigned instanceIdx) const
+		{
+			auto skeletonMachine = _actualized->GetSkeletonMachine();
+			assert(skeletonMachine);
+
+			auto outputMatrixCount = skeletonMachine->GetOutputMatrixCount();
+			Float4x4 skeletonMachineOutput[outputMatrixCount];
+			if (_actualized->_animationScaffold && _animationState && _animationState->_state != VisAnimationState::State::BindPose) {
+				auto& animData = _actualized->_animationScaffold->ImmutableData();
+
+				auto animHash = Hash64(_animationState->_activeAnimation);
+				auto foundAnimation = animData._animationSet.FindAnimation(animHash);
+				float time = _animationState->_animationTime;
+				if (_animationState->_state == VisAnimationState::State::Playing)
+					time += std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - _animationState->_anchorTime).count() / 1000.f;
+				time = fmodf(time - foundAnimation._beginTime, foundAnimation._endTime - foundAnimation._beginTime) + foundAnimation._beginTime;
+
+				auto parameterBlockSize = _actualized->_animSetBinding.GetParameterDefaultsBlock().size();
+				uint8_t parameterBlock[parameterBlockSize];
+				std::memcpy(parameterBlock, _actualized->_animSetBinding.GetParameterDefaultsBlock().begin(), parameterBlockSize);
+
+				animData._animationSet.CalculateOutput(
+					MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]),
+					{time, animHash},
+					_actualized->_animSetBinding.GetParameterBindingRules());
+
+				// We have to use the "specialized" skeleton in _animSetBinding
+				assert(_actualized->_animSetBinding.GetOutputMatrixCount() == outputMatrixCount);
+				_actualized->_animSetBinding.GenerateOutputTransforms(
+					MakeIteratorRange(skeletonMachineOutput, &skeletonMachineOutput[outputMatrixCount]),
+					MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]));
+			} else {
+				skeletonMachine->GenerateOutputTransforms(MakeIteratorRange(skeletonMachineOutput, &skeletonMachineOutput[outputMatrixCount]));
+			}
+
+			if (_actualized->_skeletonInterface)
+				_actualized->_skeletonInterface->FeedInSkeletonMachineResults(instanceIdx, MakeIteratorRange(skeletonMachineOutput, &skeletonMachineOutput[outputMatrixCount]));
+		}
     };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

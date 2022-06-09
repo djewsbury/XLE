@@ -45,6 +45,7 @@ namespace RenderCore { namespace Techniques
 		static uint64_t GetMaterialGuid(const Drawable&);
 		static unsigned GetDrawCallIndex(const Drawable&);
 		static Float3x4 GetLocalToWorld(const Drawable&);
+		static uint32_t GetViewMask(const Drawable&);
 		static RenderCore::Assets::DrawCallDesc GetDrawCallDesc(const Drawable&);
 		static void ExecuteStandardDraw(ParsingContext&, const ExecuteDrawableContext&, const Drawable&);
 		virtual ~ICustomDrawDelegate();
@@ -65,6 +66,7 @@ namespace RenderCore { namespace Techniques
 			const Float4x4& localToWorld,
 			unsigned deformInstanceIdx,
 			const std::shared_ptr<ICustomDrawDelegate>& delegate,
+			uint32_t viewMask = 1,
 			uint64_t cmdStream = 0) const;		/* s_CmdStreamGuid_Default */
 
 		void BuildGeometryProcables(

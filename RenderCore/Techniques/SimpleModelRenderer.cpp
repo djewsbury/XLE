@@ -121,8 +121,6 @@ namespace RenderCore { namespace Techniques
 			drawable._drawCall._indexCount, viewCount, drawable._drawCall._firstIndex, drawable._drawCall._firstVertex);
 	}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 	class SimpleModelDrawable_Delegate : public SimpleModelDrawable
 	{
 	public:
@@ -141,11 +139,19 @@ namespace RenderCore { namespace Techniques
 	uint64_t ICustomDrawDelegate::GetMaterialGuid(const Drawable& d) { return ((SimpleModelDrawable_Delegate&)d)._materialGuid; }
 	unsigned ICustomDrawDelegate::GetDrawCallIndex(const Drawable& d) { return ((SimpleModelDrawable_Delegate&)d)._drawCallIdx; }
 	Float3x4 ICustomDrawDelegate::GetLocalToWorld(const Drawable& d) { return ((SimpleModelDrawable_Delegate&)d)._localTransform._localToWorld; }
+	uint32_t ICustomDrawDelegate::GetViewMask(const Drawable& d) { return ((SimpleModelDrawable_Delegate&)d)._localTransform._viewMask; }
 	RenderCore::Assets::DrawCallDesc ICustomDrawDelegate::GetDrawCallDesc(const Drawable& d) { return ((SimpleModelDrawable_Delegate&)d)._drawCall; }
 	void ICustomDrawDelegate::ExecuteStandardDraw(ParsingContext& parsingContext, const ExecuteDrawableContext& drawFnContext, const Drawable& d)
 	{
-		DrawFn_SimpleModelStatic(parsingContext, drawFnContext, (const SimpleModelDrawable_Delegate&)d);
+		auto& simpleModelDrawable = (const SimpleModelDrawable&)d;
+		if (simpleModelDrawable._localTransform._viewMask == 1) {
+			DrawFn_SimpleModelStatic(parsingContext, drawFnContext, simpleModelDrawable);
+		} else {
+			DrawFn_SimpleModelStaticMultiView(parsingContext, drawFnContext, simpleModelDrawable);
+		}
 	}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static const uint64_t s_topologicalCmdStream = Hash64("adjacency");
 
@@ -240,13 +246,15 @@ namespace RenderCore { namespace Techniques
 		const Float4x4& localToWorld,
 		unsigned deformInstanceIdx,
 		const std::shared_ptr<ICustomDrawDelegate>& delegate,
+		uint32_t viewMask,
 		uint64_t cmdStreamGuid) const
 	{
 		if (!delegate) {
-			BuildDrawables(pkts, localToWorld, deformInstanceIdx, 1u);
+			BuildDrawables(pkts, localToWorld, deformInstanceIdx, viewMask, cmdStreamGuid);
 			return;
 		}
 
+		assert(viewMask != 0);
 		if (_deformAcceleratorPool && _deformAccelerator)
 			_deformAcceleratorPool->EnableInstance(*_deformAccelerator, deformInstanceIdx);
 
@@ -309,7 +317,7 @@ namespace RenderCore { namespace Techniques
 						drawable._drawCallIdx = drawCallCounter;
 						drawable._localTransform._localToWorld = localTransform;
 						drawable._localTransform._localSpaceView = Float3{0,0,0};
-						drawable._localTransform._viewMask = ~0u;
+						drawable._localTransform._viewMask = viewMask;
 						drawable._deformInstanceIdx = deformInstanceIdx;
 						++drawCallCounter;
 					}
@@ -320,7 +328,7 @@ namespace RenderCore { namespace Techniques
 
 		// if we need the topological batch, make sure to draw the appropriate cmd stream
 		if (pkts[(unsigned)Batch::Topological] && cmdStreamGuid != s_topologicalCmdStream)
-			BuildDrawables(pkts, localToWorld, deformInstanceIdx, delegate, s_topologicalCmdStream);
+			BuildDrawables(pkts, localToWorld, deformInstanceIdx, delegate, viewMask, s_topologicalCmdStream);
 	}
 
 	void SimpleModelRenderer::BuildGeometryProcables(

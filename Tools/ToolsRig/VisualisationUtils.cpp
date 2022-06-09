@@ -252,6 +252,12 @@ namespace ToolsRig
 							SceneEngine::ExecuteSceneContext executeContext{SceneEngine::SceneView{}, MakeIteratorRange(next._pkts)};
 							actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), executeContext);
 							parserContext.RequireCommandList(executeContext._completionCmdList);
+						} else if (next._type == RenderCore::LightingEngine::StepType::MultiViewParseScene) {
+							assert(!next._pkts.empty());
+							assert(!next._multiViewDesc.empty());
+							SceneEngine::ExecuteSceneContext executeContext{SceneEngine::SceneView{}, MakeIteratorRange(next._pkts)};
+							actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), executeContext, next._multiViewDesc);
+							parserContext.RequireCommandList(executeContext._completionCmdList);
 						} else if (next._type == RenderCore::LightingEngine::StepType::ReadyInstances) {
 							_deformAccelerators->ReadyInstances(parserContext.GetThreadContext());
 						}
