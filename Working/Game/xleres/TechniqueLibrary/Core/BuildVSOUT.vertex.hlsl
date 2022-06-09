@@ -63,8 +63,15 @@ VSOUT BuildVSOUT(
 			// generally we don't need it with probe rendering, so avoid the overhead
 			#error Prev position not supported with multi-probe rendering
 		#endif
-	#endif
 
+		#if SHADOW_ORTHOGONAL_CLIP_TO_NEAR
+			// this happens to work in orthogonal projections; but we can capture all shadows behind the shadow
+			// camera by preventing the Z value from going behind the near plane.
+			// see more notes in shadow.geo.hlsl
+			// specialized for ReverseZ
+			output.position.z = min(1, output.position.z);
+		#endif
+	#endif
 	
 	#if VSOUT_HAS_COLOR_LINEAR
 		if (workingVertex.colorCount >= 1) {

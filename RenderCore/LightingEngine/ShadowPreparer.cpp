@@ -218,6 +218,7 @@ namespace RenderCore { namespace LightingEngine
 	static const auto s_shadowCascadeModeString = "SHADOW_CASCADE_MODE";
     static const auto s_shadowEnableNearCascadeString = "SHADOW_ENABLE_NEAR_CASCADE";
 	static const auto s_shadowSubProjectionCountString = "SHADOW_SUB_PROJECTION_COUNT";
+	static const auto s_shadowOrthogonalClipToNearString = "SHADOW_ORTHOGONAL_CLIP_TO_NEAR";
 
 	DMShadowPreparer::DMShadowPreparer(
 		const ShadowOperatorDesc& desc,
@@ -239,6 +240,7 @@ namespace RenderCore { namespace LightingEngine
 		ParameterBox sequencerSelectors;
 		if (desc._projectionMode == ShadowProjectionMode::Ortho) {
 			sequencerSelectors.SetParameter(s_shadowCascadeModeString, 2);
+			sequencerSelectors.SetParameter(s_shadowOrthogonalClipToNearString, 1u);		// cheap solution for geometry behind the shadow camera in orthogonal modes
 		} else if (desc._projectionMode == ShadowProjectionMode::ArbitraryCubeMap) {
 			sequencerSelectors.SetParameter(s_shadowCascadeModeString, 3);
 		} else {
@@ -450,13 +452,13 @@ namespace RenderCore { namespace LightingEngine
 			if (_shadowing != ShadowResolveParam::Shadowing::NoShadows) {
 				if (_shadowing != ShadowResolveParam::Shadowing::Probe) {
 					if (_shadowing == ShadowResolveParam::Shadowing::OrthShadows || _shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade || _shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows) {
-						selectors.SetParameter("SHADOW_CASCADE_MODE", 2u);
+						selectors.SetParameter(s_shadowCascadeModeString, 2u);
 					} else if (_shadowing == ShadowResolveParam::Shadowing::CubeMapShadows) {
-						selectors.SetParameter("SHADOW_CASCADE_MODE", 3u);
+						selectors.SetParameter(s_shadowCascadeModeString, 3u);
 					} else
-						selectors.SetParameter("SHADOW_CASCADE_MODE", 1u);
-					selectors.SetParameter("SHADOW_SUB_PROJECTION_COUNT", _normalProjCount);
-					selectors.SetParameter("SHADOW_ENABLE_NEAR_CASCADE", _shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade ? 1u : 0u);
+						selectors.SetParameter(s_shadowCascadeModeString, 1u);
+					selectors.SetParameter(s_shadowSubProjectionCountString, _normalProjCount);
+					selectors.SetParameter(s_shadowEnableNearCascadeString, _shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade ? 1u : 0u);
 					selectors.SetParameter("SHADOW_FILTER_MODEL", unsigned(_filterModel));
 					selectors.SetParameter("SHADOW_FILTER_CONTACT_HARDENING", _enableContactHardening);
 					selectors.SetParameter("SHADOW_RT_HYBRID", unsigned(_shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows));
