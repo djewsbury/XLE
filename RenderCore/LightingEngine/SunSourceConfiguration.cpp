@@ -708,6 +708,7 @@ namespace RenderCore { namespace LightingEngine
             if (minAndMaxDepth[0] > minAndMaxDepth[1])
                 return {{}, closestUncoveredPart.second};
 
+            const float fractionTowardsLight = 0.05f;
             bool entireViewFrustumCovered = (minAndMaxDepth[1] - newProjectionDimsZ) < minAndMaxDepth[0];
             if (!entireViewFrustumCovered) {
                 if (TransformDirectionVector(worldToLightView, ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld))[2] > 0) {
@@ -715,12 +716,12 @@ namespace RenderCore { namespace LightingEngine
                     result._leftTopFront[2] = minAndMaxDepth[0];
                     result._rightBottomBack[2] = minAndMaxDepth[0] + newProjectionDimsZ;
                 } else {
-                    result._leftTopFront[2] = minAndMaxDepth[1] - newProjectionDimsZ;
-                    result._rightBottomBack[2] = minAndMaxDepth[1];
+                    result._leftTopFront[2] = minAndMaxDepth[1] - (1.f-fractionTowardsLight) * newProjectionDimsZ;
+                    result._rightBottomBack[2] = minAndMaxDepth[1] + fractionTowardsLight * newProjectionDimsZ;
                 }
             } else {
-                result._leftTopFront[2] = minAndMaxDepth[1] - newProjectionDimsZ;
-                result._rightBottomBack[2] = minAndMaxDepth[1];
+                result._leftTopFront[2] = minAndMaxDepth[1] - (1.f-fractionTowardsLight) * newProjectionDimsZ;
+                result._rightBottomBack[2] = minAndMaxDepth[1] + fractionTowardsLight * newProjectionDimsZ;
             }
             assert(result._leftTopFront[2] < result._rightBottomBack[2]);
 
@@ -855,8 +856,13 @@ namespace RenderCore { namespace LightingEngine
         // opposite directions), that will pin the shadow projection to the far clip and it's possible that 
         // the shadow frustum won't reach all of the way to the camera. In that case, we pin the positive side
         // of the shadow frustum to the view and extend backwards
+        //
+        // Some effects (particularly caster search for contact hardening) need to know the distance to the caster
+        // even if the caster is out of the view frustum. To allow for this, we allow a bit of extra space
+        // shadow frustum torwards the light
         auto minAndMaxDepth = MinAndMaxOrthoSpaceZ(mainSceneProjectionDesc._worldToProjection, absFrustumCorners, lightViewToWorld, Truncate(firstSubProjection._leftTopFront), Truncate(firstSubProjection._rightBottomBack), cameraMiniProj, depthRangeClosest, clipSpaceType);
         assert(projectionDimsZ > 0);
+        const float fractionTowardsLight = 0.05f;
         bool entireViewFrustumCovered = (minAndMaxDepth[1] - projectionDimsZ) < minAndMaxDepth[0];
         if (!entireViewFrustumCovered) {
             if (TransformDirectionVector(worldToLightView, cameraForward)[2] > 0) {
@@ -864,12 +870,12 @@ namespace RenderCore { namespace LightingEngine
                 firstSubProjection._leftTopFront[2] = minAndMaxDepth[0];
                 firstSubProjection._rightBottomBack[2] = minAndMaxDepth[0] + projectionDimsZ;
             } else {
-                firstSubProjection._leftTopFront[2] = minAndMaxDepth[1] - projectionDimsZ;
-                firstSubProjection._rightBottomBack[2] = minAndMaxDepth[1];
+                firstSubProjection._leftTopFront[2] = minAndMaxDepth[1] - (1.f-fractionTowardsLight) * projectionDimsZ;
+                firstSubProjection._rightBottomBack[2] = minAndMaxDepth[1] + fractionTowardsLight * projectionDimsZ;
             }
         } else {
-            firstSubProjection._leftTopFront[2] = minAndMaxDepth[1] - projectionDimsZ;
-            firstSubProjection._rightBottomBack[2] = minAndMaxDepth[1];
+            firstSubProjection._leftTopFront[2] = minAndMaxDepth[1] - (1.f-fractionTowardsLight) * projectionDimsZ;
+            firstSubProjection._rightBottomBack[2] = minAndMaxDepth[1] + fractionTowardsLight * projectionDimsZ;
         }
         assert(firstSubProjection._leftTopFront[2] < firstSubProjection._rightBottomBack[2]);
 
