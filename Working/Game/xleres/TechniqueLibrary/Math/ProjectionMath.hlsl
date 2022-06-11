@@ -77,7 +77,7 @@
 //      let:
 //          Vz = view space "z" component
 //          NDCz = NDC "z" component
-//          Pz, Pw = most projection z and w components
+//          Pz, Pw = post projection z and w components
 //          Lz = linear 0 to 1 depth
 //
 //      NDCz = Pz / Pw

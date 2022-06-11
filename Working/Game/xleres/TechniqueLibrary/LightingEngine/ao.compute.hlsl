@@ -29,7 +29,9 @@ float TraverseRay_NonHierachicalDepths(uint2 pixelId, float cosPhi, float sinPhi
 {
 	// in world space units, how big is the distance between samples in the sample direction?
 	// For orthogonal, this only depends on the angle phi since there's no foreshortening
-	float2 orthoProjSize = 100.0;		// hard coded for the particular camera we're using
+
+	float d0 = HierarchicalDepths.Load(uint3(pixelId.xy, 1));
+	[branch] if (d0 == 0) return 0;		// early out for sky, to avoid excessive noise in the image
 
 	float cosMaxTheta = 0.0;
 	float xStep, yStep;
@@ -42,18 +44,29 @@ float TraverseRay_NonHierachicalDepths(uint2 pixelId, float cosPhi, float sinPhi
 		yStep = sinPhi / abs(cosPhi);
 	}
 
-	float2 worldSpacePixelSize = orthoProjSize / float2(textureDims.xy/2);
-	worldSpacePixelSize *= float2(xStep, yStep);
-	stepDistanceSq = dot(worldSpacePixelSize, worldSpacePixelSize);
+	#if ORTHO_CAMERA
+		float2 worldSpacePixelSize = 2 / SysUniform_GetMinimalProjection().xy / float2(textureDims.xy/2);
+		worldSpacePixelSize *= float2(xStep, yStep);
+		stepDistanceSq = dot(worldSpacePixelSize, worldSpacePixelSize);
+	#else
+		float wsDepth0 = NDCDepthToWorldSpace_Perspective(d0, GlobalMiniProjZW());
+		// worldSpacePixelSize calculation simplifed by assuming moving on constant depth plane (which will not be entirely correct)
+		float2 worldSpacePixelSize = 2 / SysUniform_GetMinimalProjection().xy * wsDepth0 / float2(textureDims.xy/2);
+		worldSpacePixelSize *= float2(xStep, yStep);
+		stepDistanceSq = dot(worldSpacePixelSize, worldSpacePixelSize);
+	#endif
 
 	float2 xy = pixelId.xy + float2(xStep, yStep);
 
-	float d0 = HierarchicalDepths.Load(uint3(pixelId.xy, 1));
 	int c=1;
 	for (; c<8; ++c) {
 		float d = HierarchicalDepths.Load(uint3(xy, 1));
 		xy += float2(xStep, yStep);
-		float worldSpaceDepthDifference = NDCDepthDifferenceToWorldSpace_Ortho(d0-d, GlobalMiniProjZW());
+		#if ORTHO_CAMERA
+			float worldSpaceDepthDifference = NDCDepthDifferenceToWorldSpace_Ortho(d0-d, GlobalMiniProjZW());
+		#else
+			float worldSpaceDepthDifference = wsDepth0 - NDCDepthToWorldSpace_Perspective(d, GlobalMiniProjZW());
+		#endif
 		float C = float(c);		// maybe -0.5... or even 0.5. It depends if we wwant to see the pixels as cubes, pyramids or slopes?
 		float azmuthalXSq = C * C * stepDistanceSq;
 
@@ -72,96 +85,6 @@ float TraverseRay_NonHierachicalDepths(uint2 pixelId, float cosPhi, float sinPhi
 	return cosMaxTheta;
 }
 
-float TraverseRay_HierachicalDepths_0(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
-{
-	float2 orthoProjSize = 100.0;		// hard coded for the particular camera we're using
-	float cosMaxTheta = 0.0;
-
-	float2 direction = float2(cosPhi, sinPhi);
-	float2 xyJumpFromFloor = direction.xy < 0 ? 0 : 1;
-	float2 uvOffset = float2(0.005,0.005) * exp2(1) / textureDims;	// shift just off the pixel edge when iterating
-	// uvOffset *= 1000;
-	uvOffset = direction.xy < 0 ? -uvOffset : uvOffset;
-
-	const uint mostDetailedMipLevel = 1;
-	uint currentMipLevel = mostDetailedMipLevel;
-	float2 currentMipRes = textureDims/exp2(currentMipLevel);
-	float2 currentUV = pixelId.xy / float2(textureDims/2);
-	float2 initialUV = currentUV;
-	float d0 = HierarchicalDepths.Load(uint3(currentUV*currentMipRes, currentMipLevel));
-
-	const bool oneFreeJump = false;
-	if (oneFreeJump) {
-		float2 xyPlane = floor(currentUV * currentMipRes) + xyJumpFromFloor;
-		xyPlane = xyPlane/currentMipRes+uvOffset;
-		float2 t = (xyPlane - initialUV)/direction;
-		currentUV = initialUV + min(t.x, t.y) * direction;
-	}
-
-	int c=0;
-	const uint occupancyThreshold = 8;		// uniform candidate
-	for (; c<64; ++c) {
-		float2 xyPlane = floor(currentUV * currentMipRes) + xyJumpFromFloor;
-		// uvOffset = float2(0.005,0.005) * exp2(currentMipLevel) / textureDims;
-		// uvOffset = direction.xy < 0 ? -uvOffset : uvOffset;
-		xyPlane = xyPlane/currentMipRes+uvOffset;
-		float2 t = (xyPlane - initialUV)/direction;
-		float2 uvMovement = min(t.x, t.y) * direction;
-		float2 newUV = initialUV + uvMovement;
-		
-		if (any(newUV.xy < 0 || newUV.xy >= 1)) break;
-		if (WaveActiveCountBits(true) <= occupancyThreshold) break;	// exit due to low occupancy
-
-		float azmuthalXSq;
-		const bool accurateDistanceCalc = true;
-		float2 texel = floor(newUV*currentMipRes);
-		if (accurateDistanceCalc) {
-			float2 center = (texel+0.5.xx+0.5*direction)/currentMipRes;
-			float distanceToCenter = dot(direction, center-initialUV);
-			// float distanceToCenter = length(center-initialUV);
-			azmuthalXSq = dot(distanceToCenter*direction*orthoProjSize, distanceToCenter*direction*orthoProjSize);
-		} else {
-			azmuthalXSq = dot(uvMovement*orthoProjSize, uvMovement*orthoProjSize);
-		}
-
-		float d = HierarchicalDepths.Load(uint3(texel, currentMipLevel));
-		float worldSpaceDepthDifference = NDCDepthDifferenceToWorldSpace_Ortho(d0-d, GlobalMiniProjZW());
-
-		float cosTheta = worldSpaceDepthDifference * rsqrt(worldSpaceDepthDifference * worldSpaceDepthDifference + azmuthalXSq);
-		
-		// Shift the mip level we're testing up or down to either refine the estimate or attempt to make a bigger step
-		// on the next loop iteration
-		// Here, we're assuming that the depth downsampling is using a min() filter (ie, each depth value is the closest to the camera
-		// of the source pixels from the next more detailed mip). But, it may look visually acceptable with other mip filters also
-#if 1
-		if (cosTheta > cosMaxTheta) {
-			if (currentMipLevel == mostDetailedMipLevel) {
-				cosMaxTheta = cosTheta;
-				currentUV = newUV;
-			} else {
-				// refine estimate at higher mip level before we commit to it
-				--currentMipLevel;
-				currentMipRes *= 2;
-			}
-		} else {
-			currentUV = newUV;
-			// if we're on a boundary with the next mip level, then decrease
-			float2 nextMipRes = currentMipRes*0.5;
-			float2 test = (currentUV-uvOffset) * nextMipRes;
-			bool nextMipLevelBoundary = any(frac(test + 0.125) < 0.25);
-			currentMipLevel += nextMipLevelBoundary;
-			currentMipRes = nextMipLevelBoundary ? nextMipRes : currentMipRes;
-		}
-#else
-		cosMaxTheta = max(cosMaxTheta, cosTheta);
-		currentUV = newUV;
-#endif
-	}
-
-	// cosMaxTheta = float(c)/32;
-	return cosMaxTheta;
-}
-
 float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
 {
 	// There are 2 ways to ray march through the depth field
@@ -169,9 +92,10 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 	//	b) take the longest axis and step along that; even if it means missing some intersecting pixels
 	// type (b) is a lot more efficient, and just seems to produce few artifacts. Since we're sampling
 	// so many directions, the skipped pixels will still be accounted for; so type (B) just seems better
-	float2 orthoProjSize = 5000.0;		// uniform candidate -- hard coded for the particular camera we're using
-	float cosMaxTheta = 0.0;
+	float d0 = HierarchicalDepths.Load(uint3(pixelId.xy, 1));
+	[branch] if (d0 == 0) return 0;		// early out for sky, to avoid excessive noise in the image
 
+	float cosMaxTheta = 0.0;
 	float xStep, yStep;
 	float stepDistanceSq;
 	if (abs(sinPhi) > abs(cosPhi)) {
@@ -187,12 +111,17 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 	float2 mostDetailedMipRes = textureDims*pow(0.5, mostDetailedMipLevel);
 	float currentMipLevelScale = exp2(currentMipLevel-mostDetailedMipLevel);
 
-	float2 worldSpacePixelSize = orthoProjSize / mostDetailedMipRes;
-	worldSpacePixelSize *= float2(xStep, yStep);
-	stepDistanceSq = dot(worldSpacePixelSize, worldSpacePixelSize);
-
-	float d0 = HierarchicalDepths.Load(uint3(pixelId.xy, 1));
-	[branch] if (d0 == 0) return 0;		// early out for sky, to avoid excessive noise in the image
+	#if ORTHO_CAMERA
+		float2 worldSpacePixelSize = 2 / SysUniform_GetMinimalProjection().xy / mostDetailedMipRes;
+		worldSpacePixelSize *= float2(xStep, yStep);
+		stepDistanceSq = dot(worldSpacePixelSize, worldSpacePixelSize);
+	#else
+		float wsDepth0 = NDCDepthToWorldSpace_Perspective(d0, GlobalMiniProjZW());
+		// worldSpacePixelSize calculation simplifed by assuming moving on constant depth plane (which will not be entirely correct)
+		float2 worldSpacePixelSize = 2 / SysUniform_GetMinimalProjection().xy * wsDepth0 / mostDetailedMipRes;
+		worldSpacePixelSize *= float2(xStep, yStep);
+		stepDistanceSq = dot(worldSpacePixelSize, worldSpacePixelSize);
+	#endif
 
 	const float initialStepSize = 1;
 	float2 xy = pixelId.xy + initialStepSize*float2(xStep, yStep);
@@ -205,7 +134,11 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 
 		float d = HierarchicalDepths.Load(uint3(xy/currentMipLevelScale, currentMipLevel));
 
-		float worldSpaceDepthDifference = NDCDepthDifferenceToWorldSpace_Ortho(d0-d, GlobalMiniProjZW());
+		#if ORTHO_CAMERA
+			float worldSpaceDepthDifference = NDCDepthDifferenceToWorldSpace_Ortho(d0-d, GlobalMiniProjZW());
+		#else
+			float worldSpaceDepthDifference = wsDepth0 - NDCDepthToWorldSpace_Perspective(d, GlobalMiniProjZW());
+		#endif
 		float azmuthalXSq = stepsAtMostDetailedRes * stepsAtMostDetailedRes * stepDistanceSq;
 		float cosTheta = worldSpaceDepthDifference * rsqrt(worldSpaceDepthDifference * worldSpaceDepthDifference + azmuthalXSq);
 		
@@ -213,37 +146,36 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 		// on the next loop iteration
 		// Here, we're assuming that the depth downsampling is using a min() filter (ie, each depth value is the closest to the camera
 		// of the source pixels from the next more detailed mip). But, it may look visually acceptable with other mip filters also
-#if 1
-		if (cosTheta > cosMaxTheta) {
-			if (currentMipLevel == mostDetailedMipLevel) {
-				cosMaxTheta = cosTheta;
-				xy += float2(xStep, yStep);
-				stepsAtMostDetailedRes += 1.0f;
+		#if 1 // ENABLE_HIERARCHICAL_STEPPING
+			if (cosTheta > cosMaxTheta) {
+				if (currentMipLevel == mostDetailedMipLevel) {
+					cosMaxTheta = cosTheta;
+					xy += float2(xStep, yStep);
+					stepsAtMostDetailedRes += 1.0f;
+				} else {
+					// refine estimate at higher mip level before we commit to it
+					--currentMipLevel;
+					currentMipLevelScale /= 2;
+				}
 			} else {
-				// refine estimate at higher mip level before we commit to it
-				--currentMipLevel;
-				currentMipLevelScale /= 2;
-			}
-		} else {
-			float2 startXY = xy;
-			xy += float2(xStep, yStep)*currentMipLevelScale;
-			stepsAtMostDetailedRes += currentMipLevelScale;
+				float2 startXY = xy;
+				xy += float2(xStep, yStep)*currentMipLevelScale;
+				stepsAtMostDetailedRes += currentMipLevelScale;
 
-			// if we're on a boundary with the next mip level, then decrease
-			float2 test = xy / (2*currentMipLevelScale);
-			// bool nextMipLevelBoundary = any(frac(test + 0.125) < 0.25);
-			bool nextMipLevelBoundary = any(uint2(startXY/(2*currentMipLevelScale)) != uint2(test));
-			currentMipLevel += nextMipLevelBoundary;
-			currentMipLevelScale *= nextMipLevelBoundary?2:1;
-		}
-#else
-		cosMaxTheta = max(cosMaxTheta, cosTheta);
-		xy += float2(xStep, yStep);
-		stepsAtMostDetailedRes += 1.0f;
-#endif
+				// if we're on a boundary with the next mip level, then decrease
+				float2 test = xy / (2*currentMipLevelScale);
+				// bool nextMipLevelBoundary = any(frac(test + 0.125) < 0.25);
+				bool nextMipLevelBoundary = any(uint2(startXY/(2*currentMipLevelScale)) != uint2(test));
+				currentMipLevel += nextMipLevelBoundary;
+				currentMipLevelScale *= nextMipLevelBoundary?2:1;
+			}
+		#else
+			cosMaxTheta = max(cosMaxTheta, cosTheta);
+			xy += float2(xStep, yStep);
+			stepsAtMostDetailedRes += 1.0f;
+		#endif
 	}
 
-	// cosMaxTheta = float(c)/64;
 	return cosMaxTheta;
 }
 
