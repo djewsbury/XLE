@@ -132,90 +132,26 @@ DepthOnly_EarlyRejection=~
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+DepthPlus_NoPatches=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:depthPlus
+
+DepthPlus_PerPixel=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthPlus
+
+DepthPlus_PerPixelAndEarlyRejection=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthPlusWithEarlyRejection
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 RayTest_NoPatches=~
 	Inherit=~; RayTest
 
 RayTest_EarlyRejection=~
 	Inherit=~; RayTest
 	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:frameworkEntryDepthOnlyWithEarlyRejection
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-DepthMotionNormalRoughness_NoPatches=~
-	Inherit=~; DepthOnly
-	Selectors=~
-		VSOUT_HAS_PREV_POSITION=1
-		DEPTH_PLUS_MOTION=1
-		DEPTH_PLUS_NORMAL=1
-		DEPTH_PLUS_ROUGHNESS=1
-	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:depthPlus
-
-DepthMotionNormalRoughness_PerPixel=~
-	Inherit=~; DepthOnly
-	Selectors=~
-		VSOUT_HAS_PREV_POSITION=1
-		DEPTH_PLUS_MOTION=1
-		DEPTH_PLUS_NORMAL=1
-		DEPTH_PLUS_ROUGHNESS=1
-	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthPlus
-
-DepthMotionNormalRoughness_PerPixelAndEarlyRejection=~
-	Inherit=~; DepthOnly
-	Selectors=~
-		VSOUT_HAS_PREV_POSITION=1
-		DEPTH_PLUS_MOTION=1
-		DEPTH_PLUS_NORMAL=1
-		DEPTH_PLUS_ROUGHNESS=1
-	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthPlusWithEarlyRejection
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-DepthMotionNormal_NoPatches=~
-	Inherit=~; DepthOnly
-	Selectors=~
-		VSOUT_HAS_PREV_POSITION=1
-		DEPTH_PLUS_MOTION=1
-		DEPTH_PLUS_NORMAL=1
-	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:depthPlus
-
-DepthMotionNormal_PerPixel=~
-	Inherit=~; DepthOnly
-	Selectors=~
-		VSOUT_HAS_PREV_POSITION=1
-		DEPTH_PLUS_MOTION=1
-		DEPTH_PLUS_NORMAL=1
-	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthPlus
-
-DepthMotionNormal_PerPixelAndEarlyRejection=~
-	Inherit=~; DepthOnly
-	Selectors=~
-		VSOUT_HAS_PREV_POSITION=1
-		DEPTH_PLUS_MOTION=1
-		DEPTH_PLUS_NORMAL=1
-	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthPlusWithEarlyRejection
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-DepthMotion_NoPatches=~
-	Inherit=~; DepthOnly
-	Selectors=~
-		VSOUT_HAS_PREV_POSITION=1
-		DEPTH_PLUS_MOTION=1
-	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:depthPlus
-
-DepthMotion_PerPixel=~
-	Inherit=~; DepthOnly
-	Selectors=~
-		VSOUT_HAS_PREV_POSITION=1
-		DEPTH_PLUS_MOTION=1
-	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthPlus
-
-DepthMotion_PerPixelAndEarlyRejection=~
-	Inherit=~; DepthOnly
-	Selectors=~
-		VSOUT_HAS_PREV_POSITION=1
-		DEPTH_PLUS_MOTION=1
-	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthPlusWithEarlyRejection
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

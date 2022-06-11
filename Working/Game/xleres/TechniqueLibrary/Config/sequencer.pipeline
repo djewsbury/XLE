@@ -23,8 +23,8 @@ DescriptorSet Sequencer
 	UniformBuffer MultiViewProperties;			// 4
 	UniformBuffer ShadowProjection;				// 5		(also RayDefinition)
 
-	SampledTexture tex0;						// 6
-	SampledTexture tex1;						// 7
+	SampledTexture DepthPrev;					// 6
+	SampledTexture GBufferNormalPrev;			// 7
 	SampledTexture tex2;						// 8
 	SampledTexture tex3;						// 9
 	SampledTexture NormalsFittingTexture;		// 10

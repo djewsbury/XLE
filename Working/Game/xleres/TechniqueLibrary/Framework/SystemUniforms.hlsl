@@ -2,8 +2,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#if !defined(TRANSFORM_H)
-#define TRANSFORM_H
+#if !defined(SYSTEM_UNIFORMS_H)
+#define SYSTEM_UNIFORMS_H
 
 #include "../Framework/Binding.hlsl"
 

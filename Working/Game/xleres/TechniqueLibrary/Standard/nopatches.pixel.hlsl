@@ -2,10 +2,9 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#define DEPTH_PLUS_HISTORY_ACCUMULATION 1
-
 #include "../Framework/VSOUT.hlsl"
-#include "../Math/TextureAlgorithm.hlsl"		// for SystemInputs
+#include "../Framework/SystemUniforms.hlsl"
+#include "depth-plus-util.hlsl"
 #include "../../Objects/IllumShader/PerPixel.h"
 
 #if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))
@@ -46,32 +45,6 @@ GBufferEncoded deferred(VSOUT geo)
 	}
 #endif
 
-#if DEPTH_PLUS_HISTORY_ACCUMULATION
-	Texture2D<float> DepthPrev BIND_NUMERIC_T0;
-	Texture2D<float4> GBufferNormalPrev BIND_NUMERIC_T1;
-#endif
-
-// Based on approach from AMD SSR shaders
-float CalculateEdgeStoppingNormalWeight(float3 normalToday, float3 normalYesterday)
-{
-	const float sigma = 4.0;
-	return pow(max(dot(normalToday, normalYesterday), 0.0), sigma);
-}
-
-float CalculateEdgeStoppingRoughnessWeight(float roughnessToday, float roughnessYesterday)
-{
-	const float sigmaMin = 0.001f;
-	const float sigmaMax = 0.01f;
-	return 1.0 - smoothstep(sigmaMin, sigmaMax, abs(roughnessToday - roughnessYesterday));
-}
-
-float CalculateEdgeStoppingDepthWeight(float depthToday, float depthYesterday)
-{
-	float ratio = min(depthToday, depthYesterday) / max(depthToday, depthYesterday);
-	if (ratio > 0.9) return smoothstep(0, 1, (ratio-0.9)/0.1);
-	return 0;
-}
-
 #if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))
 	[earlydepthstencil]
 #endif
@@ -79,40 +52,7 @@ DepthPlusEncoded depthPlus(VSOUT geo)
 {
 	DoAlphaTest(geo, GetAlphaThreshold());
 	GBufferValues sample = IllumShader_PerPixel(geo);
-
-	float3 prevPos;
-	float historyAccumulationWeight = 1;
-	#if VSOUT_HAS_PREV_POSITION
-		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
-		prevPos.x = prevPos.x * 0.5 + 0.5;
-		prevPos.y = prevPos.y * 0.5 + 0.5;
-		prevPos.xy = SysUniform_GetViewportMinXY() + prevPos.xy * SysUniform_GetViewportWidthHeight();
-		prevPos.xyz -= geo.position.xyz;
-		prevPos.xy = clamp(round(prevPos.xy), -127, 127);
-
-		#if DEPTH_PLUS_HISTORY_ACCUMULATION
-			int2 loadPos = int2(geo.position.xy+prevPos.xy);
-			if (all(loadPos > 0) && loadPos.x < 1920 && loadPos.y < 1080) {
-				float depthPrev = DepthPrev.Load(int3(loadPos, 0));
-				float4 normalSamplePrev = GBufferNormalPrev.Load(int3(loadPos, 0));
-				float3 normalPrev = DecodeGBufferNormal(normalSamplePrev.xyz);
-				float roughnessPrev = normalSamplePrev.w;
-				// Note that historyAccumulationWeight will be reduced a little bit just because of the normal compression method
-				historyAccumulationWeight
-					= CalculateEdgeStoppingNormalWeight(sample.worldSpaceNormal, normalPrev)
-					* CalculateEdgeStoppingRoughnessWeight(sample.material.roughness, roughnessPrev)
-					* CalculateEdgeStoppingDepthWeight(geo.prevPosition.z / geo.prevPosition.w, depthPrev)
-					;
-
-				if (depthPrev == 0) historyAccumulationWeight = 0;
-			} else {
-				historyAccumulationWeight = 0;
-			}
-		#endif
-	#else
-		prevPos = 0.0.xxx;
-	#endif
-	return EncodeDepthPlus(sample, int2(prevPos.xy), historyAccumulationWeight);
+	return ResolveDepthPlus(geo, sample);
 }
 
 #if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))

@@ -1,4 +1,5 @@
 #include "../Framework/VSOUT.hlsl"
+#include "depth-plus-util.hlsl"
 #include "../../Nodes/Templates.pixel.sh"
 
 [earlydepthstencil]
@@ -16,20 +17,7 @@ void frameworkEntryDepthOnlyWithEarlyRejection(VSOUT geo)
 DepthPlusEncoded depthPlus(VSOUT geo)
 {
 	GBufferValues sample = PerPixel(geo);
-
-	float3 prevPos;
-	float historyAccumulationWeight = 1;
-	#if VSOUT_HAS_PREV_POSITION
-		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
-		prevPos.x = prevPos.x * 0.5 + 0.5;
-		prevPos.y = prevPos.y * 0.5 + 0.5;
-		prevPos.xy = SysUniform_GetViewportMinXY() + prevPos.xy * SysUniform_GetViewportWidthHeight();
-		prevPos.xyz -= geo.position.xyz;
-		prevPos.xy = clamp(round(prevPos.xy), -127, 127);
-	#else
-		prevPos = 0.0.xxx;
-	#endif
-	return EncodeDepthPlus(sample, int2(prevPos.xy), historyAccumulationWeight);
+	return ResolveDepthPlus(geo, sample);
 }
 
 DepthPlusEncoded depthPlusWithEarlyRejection(VSOUT geo)
@@ -38,20 +26,7 @@ DepthPlusEncoded depthPlusWithEarlyRejection(VSOUT geo)
         discard;
 
 	GBufferValues sample = PerPixel(geo);
-
-	float3 prevPos;
-	float historyAccumulationWeight = 1;
-	#if VSOUT_HAS_PREV_POSITION
-		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
-		prevPos.x = prevPos.x * 0.5 + 0.5;
-		prevPos.y = prevPos.y * 0.5 + 0.5;
-		prevPos.xy = SysUniform_GetViewportMinXY() + prevPos.xy * SysUniform_GetViewportWidthHeight();
-		prevPos.xyz -= geo.position.xyz;
-		prevPos.xy = clamp(round(prevPos.xy), -127, 127);
-	#else
-		prevPos = 0.0.xxx;
-	#endif
-	return EncodeDepthPlus(sample, int2(prevPos.xy), historyAccumulationWeight);
+	return ResolveDepthPlus(geo, sample);
 }
 
 float4 flatColorWithEarlyRejection(VSOUT geo) : SV_Target0

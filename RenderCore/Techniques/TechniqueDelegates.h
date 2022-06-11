@@ -85,7 +85,7 @@ namespace RenderCore { namespace Techniques
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit);
 
-	enum class PreDepthType { DepthOnly, DepthMotion, DepthMotionNormal, DepthMotionNormalRoughness };
+	enum class PreDepthType { DepthOnly, DepthMotion, DepthMotionNormal, DepthMotionNormalRoughness, DepthMotionNormalRoughnessAccumulation };
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_PreDepth(
 		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 		PreDepthType preDepthType);

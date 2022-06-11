@@ -578,18 +578,10 @@ namespace RenderCore { namespace Techniques
 			: _techniqueSet(techniqueSet)
 			{
 				uint64_t psNoPatchesHash, psPerPixelHash, perPixelAndEarlyRejectionHash;
-				if (preDepthType == PreDepthType::DepthMotionNormal) {
-					psNoPatchesHash = Hash64("DepthMotionNormal_NoPatches");
-					psPerPixelHash = Hash64("DepthMotionNormal_PerPixel");
-					perPixelAndEarlyRejectionHash = Hash64("DepthMotionNormal_PerPixelAndEarlyRejection");
-				} else if (preDepthType == PreDepthType::DepthMotionNormalRoughness) {
-					psNoPatchesHash = Hash64("DepthMotionNormalRoughness_NoPatches");
-					psPerPixelHash = Hash64("DepthMotionNormalRoughness_PerPixel");
-					perPixelAndEarlyRejectionHash = Hash64("DepthMotionNormalRoughness_PerPixelAndEarlyRejection");
-				} else if (preDepthType == PreDepthType::DepthMotion) {
-					psNoPatchesHash = Hash64("DepthMotion_NoPatches");
-					psPerPixelHash = Hash64("DepthMotion_PerPixel");
-					perPixelAndEarlyRejectionHash = Hash64("DepthMotion_PerPixelAndEarlyRejection");
+				if (preDepthType != PreDepthType::DepthOnly) {
+					psNoPatchesHash = Hash64("DepthPlus_NoPatches");
+					psPerPixelHash = Hash64("DepthPlus_PerPixel");
+					perPixelAndEarlyRejectionHash = Hash64("DepthPlus_PerPixelAndEarlyRejection");
 				} else {
 					assert(preDepthType == PreDepthType::DepthOnly);
 					psNoPatchesHash = Hash64("DepthOnly_NoPatches");
@@ -636,10 +628,11 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteCloserThan;
 			if (_preDepthType != PreDepthType::DepthOnly) {
 				nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
-				if (_preDepthType == PreDepthType::DepthMotionNormal || _preDepthType == PreDepthType::DepthMotionNormalRoughness)
+				if (_preDepthType == PreDepthType::DepthMotionNormal || _preDepthType == PreDepthType::DepthMotionNormalRoughness || _preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
+					nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
+				if (_preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
 					nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 			}
-			nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
 			auto illumType = CalculateIllumType(shaderPatches);
@@ -647,7 +640,7 @@ namespace RenderCore { namespace Techniques
 
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
 				result->AdoptPromise(),
-				[nascentDesc, illumType, hasDeformVertex](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
+				[nascentDesc, illumType, hasDeformVertex, preDepthType=_preDepthType](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
 
 					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_psNoPatchesSrc;
 					switch (illumType) {
@@ -673,6 +666,17 @@ namespace RenderCore { namespace Techniques
 
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
 					mergedTechEntry.MergeIn(*psTechEntry);
+
+					if (preDepthType == PreDepthType::DepthMotion || preDepthType == PreDepthType::DepthMotionNormal || preDepthType == PreDepthType::DepthMotionNormalRoughness || preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation) {
+						mergedTechEntry._selectorFiltering._setValues.SetParameter("VSOUT_HAS_PREV_POSITION", 1);
+						mergedTechEntry._selectorFiltering._setValues.SetParameter("DEPTH_PLUS_MOTION", 1);
+					}
+					if (preDepthType == PreDepthType::DepthMotionNormal || preDepthType == PreDepthType::DepthMotionNormalRoughness || preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
+						mergedTechEntry._selectorFiltering._setValues.SetParameter("DEPTH_PLUS_NORMAL", 1);
+					if (preDepthType == PreDepthType::DepthMotionNormalRoughness || preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
+						mergedTechEntry._selectorFiltering._setValues.SetParameter("DEPTH_PLUS_ROUGHNESS", 1);
+					if (preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
+						mergedTechEntry._selectorFiltering._setValues.SetParameter("DEPTH_PLUS_HISTORY_ACCUMULATION", 1);
 
 					PrepareShadersFromTechniqueEntry(nascentDesc, mergedTechEntry);
 					return nascentDesc;

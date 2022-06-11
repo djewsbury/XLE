@@ -162,6 +162,7 @@ X(TechniqueLibrary/SceneEngine/VolumetricEffect/shadowsfilter.pixel.hlsl, __LINE
 X(TechniqueLibrary/SceneEngine/VolumetricEffect/VolumetricFog.hlsl, __LINE__)
 X(TechniqueLibrary/Standard/deferred.pixel.hlsl, __LINE__)
 X(TechniqueLibrary/Standard/VertexPatch_Standard.vertex.hlsl, __LINE__)
+X(TechniqueLibrary/Standard/depth-plus-util.hlsl, __LINE__)
 X(TechniqueLibrary/Standard/depthonly.pixel.hlsl, __LINE__)
 X(TechniqueLibrary/Standard/forward.pixel.hlsl, __LINE__)
 X(TechniqueLibrary/Standard/main.vertex.hlsl, __LINE__)
