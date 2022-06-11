@@ -469,14 +469,29 @@ namespace RenderCore { namespace LightingEngine
         return {{}, depthRangeCovered};
     }
 
+    struct MainSceneCameraDetails
+    {
+        float _nearClip, _farClip;
+        ClipSpaceType _clipSpaceType;
+        std::pair<float, float> GetNearAndFarClip() const { return {_nearClip, _farClip}; }
+        MainSceneCameraDetails(const Float4x4& cameraToProjection, ClipSpaceType clipSpaceType)
+        : _clipSpaceType(clipSpaceType)
+        {
+            if (IsOrthogonalProjection(cameraToProjection)) {
+                std::tie(_nearClip, _farClip) = CalculateNearAndFarPlane_Ortho(ExtractMinimalProjection(cameraToProjection), _clipSpaceType);
+            } else {
+                std::tie(_nearClip, _farClip) = CalculateNearAndFarPlane(ExtractMinimalProjection(cameraToProjection), _clipSpaceType);
+            }
+        }
+    };
+
     static Float2 MinAndMaxOrthoSpaceZ(
         const Float4x4& cameraWorldToClip,
         const Float3* absFrustumCorners,
         const Float4x4& orthoViewToWorld,
         const Float2& leftTop2D, const Float2& rightBottom2D,
-        const Float4& cameraMiniProj,
-        float depthRangeCovered,
-        ClipSpaceType clipSpaceType)
+        const MainSceneCameraDetails& mainSceneCameraDetails,
+        float depthRangeCovered)
     {
         const unsigned edges_zpattern[] = {
             0, 1,
@@ -579,9 +594,9 @@ namespace RenderCore { namespace LightingEngine
             assert(leftTopFront[1] < rightBottomBack[1]);
 
             float f, n;
-            std::tie(n,f) = CalculateNearAndFarPlane(cameraMiniProj, clipSpaceType);
+            std::tie(n,f) = mainSceneCameraDetails.GetNearAndFarClip();
             #if !defined(USE_W_FOR_DEPTH_RANGE_COVERED)
-                float depthAlphaValue = (depthRangeCovered - cameraMiniProj[3]) / cameraMiniProj[2];            
+                float depthAlphaValue = (depthRangeCovered - cameraMiniProj[3]) / cameraMiniProj[2];
                 depthAlphaValue = (-depthAlphaValue - n) / f;
             #else
                 float depthAlphaValue = (depthRangeCovered - n) / f;
@@ -653,10 +668,9 @@ namespace RenderCore { namespace LightingEngine
         const Float3* absFrustumCorners,
         const Float4x4& lightViewToWorld,
         const IOrthoShadowProjections::OrthoSubProjection& prev,
-        const Float4& cameraMiniProj,
+        const MainSceneCameraDetails& mainSceneCameraDetails,
         const float maxProjectionDimsZ,
-        float depthRangeCovered,
-        ClipSpaceType clipSpaceType)
+        float depthRangeCovered)
     {
         // Calculate the next frustum for a set of cascades, based on unfilled space
         // Find the nearest part of the view frustum that is not included in the previous ortho projection
@@ -665,7 +679,7 @@ namespace RenderCore { namespace LightingEngine
         auto closestUncoveredPart = NearestPointNotInsideOrthoProjection(
             mainSceneProjectionDesc._worldToProjection, absFrustumCorners,
             lightViewToWorld,
-            prev, depthRangeCovered, clipSpaceType);
+            prev, depthRangeCovered, mainSceneCameraDetails._clipSpaceType);
 
         if (!closestUncoveredPart.first.empty()) {
 
@@ -704,7 +718,7 @@ namespace RenderCore { namespace LightingEngine
             result._leftTopFront = Float3 { focusPositionInOrtho[0] - 0.5f * newProjectionDimsXY, focusPositionInOrtho[1] - 0.5f * newProjectionDimsXY, focusPositionInOrtho[2] - 0.5f * newProjectionDimsZ };
             result._rightBottomBack = Float3 { focusPositionInOrtho[0] + 0.5f * newProjectionDimsXY, focusPositionInOrtho[1] + 0.5f * newProjectionDimsXY, focusPositionInOrtho[2] + 0.5f * newProjectionDimsZ };
 
-            auto minAndMaxDepth = MinAndMaxOrthoSpaceZ(mainSceneProjectionDesc._worldToProjection, absFrustumCorners, lightViewToWorld, Truncate(result._leftTopFront), Truncate(result._rightBottomBack), cameraMiniProj, closestUncoveredPart.second, clipSpaceType);
+            auto minAndMaxDepth = MinAndMaxOrthoSpaceZ(mainSceneProjectionDesc._worldToProjection, absFrustumCorners, lightViewToWorld, Truncate(result._leftTopFront), Truncate(result._rightBottomBack), mainSceneCameraDetails, closestUncoveredPart.second);
             if (minAndMaxDepth[0] > minAndMaxDepth[1])
                 return {{}, closestUncoveredPart.second};
 
@@ -777,14 +791,13 @@ namespace RenderCore { namespace LightingEngine
         Float3 cameraForward = ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld);
         Float3 focusPoint = settings._focusDistance * ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld);
 
-        assert(!IsOrthogonalProjection(mainSceneProjectionDesc._cameraToProjection));
-        auto cameraMiniProj = ExtractMinimalProjection(mainSceneProjectionDesc._cameraToProjection);
+        MainSceneCameraDetails mainSceneCameraDetails { mainSceneProjectionDesc._cameraToProjection, clipSpaceType };
 
         // Limit the depth of the shadow projection to some reasonable fixed value. If we allow it to 
         // get too large, we will get end up with a lot of floating point precision issues when building
         // the frustum
         // This will have an impact on the correct shadow bias values, etc, though
-        const float maxProjectionDimsZ = 1.5f * CalculateNearAndFarPlane(cameraMiniProj, clipSpaceType).second;
+        const float maxProjectionDimsZ = 1.5f * mainSceneCameraDetails._farClip;
 
         // find the dimensions in view space for the focus point
         auto worldToMainCamera = InvertOrthonormalTransform(mainSceneProjectionDesc._cameraToWorld);
@@ -838,7 +851,7 @@ namespace RenderCore { namespace LightingEngine
         #if !defined(USE_W_FOR_DEPTH_RANGE_COVERED)
             if (clipSpaceType == ClipSpaceType::Positive_ReverseZ || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ) {
                 float n, f;
-                std::tie(n,f) = CalculateNearAndFarPlane(cameraMiniProj, clipSpaceType);
+                std::tie(n,f) = mainSceneCameraDetails.GetNearAndFarClip();
                 depthRangeClosest = (n*n-(n*f)) / (n-f);
             } else {
                 depthRangeClosest = 0.f;
@@ -860,7 +873,7 @@ namespace RenderCore { namespace LightingEngine
         // Some effects (particularly caster search for contact hardening) need to know the distance to the caster
         // even if the caster is out of the view frustum. To allow for this, we allow a bit of extra space
         // shadow frustum torwards the light
-        auto minAndMaxDepth = MinAndMaxOrthoSpaceZ(mainSceneProjectionDesc._worldToProjection, absFrustumCorners, lightViewToWorld, Truncate(firstSubProjection._leftTopFront), Truncate(firstSubProjection._rightBottomBack), cameraMiniProj, depthRangeClosest, clipSpaceType);
+        auto minAndMaxDepth = MinAndMaxOrthoSpaceZ(mainSceneProjectionDesc._worldToProjection, absFrustumCorners, lightViewToWorld, Truncate(firstSubProjection._leftTopFront), Truncate(firstSubProjection._rightBottomBack), mainSceneCameraDetails, depthRangeClosest);
         assert(projectionDimsZ > 0);
         const float fractionTowardsLight = 0.05f;
         bool entireViewFrustumCovered = (minAndMaxDepth[1] - projectionDimsZ) < minAndMaxDepth[0];
@@ -887,7 +900,7 @@ namespace RenderCore { namespace LightingEngine
 
         float depthRangeCovered = depthRangeClosest;
         while (result._normalProjCount < settings._maxFrustumCount) {
-            auto next = CalculateNextFrustum_UnfilledSpace(mainSceneProjectionDesc, absFrustumCorners, lightViewToWorld, result._orthSubProjections[result._normalProjCount-1], cameraMiniProj, maxProjectionDimsZ, depthRangeCovered, clipSpaceType);
+            auto next = CalculateNextFrustum_UnfilledSpace(mainSceneProjectionDesc, absFrustumCorners, lightViewToWorld, result._orthSubProjections[result._normalProjCount-1], mainSceneCameraDetails, maxProjectionDimsZ, depthRangeCovered);
             if (!next.first.has_value()) break;
 
             // Log(Debug) << "DepthRangeCovered: " << depthRangeCovered << std::endl;
