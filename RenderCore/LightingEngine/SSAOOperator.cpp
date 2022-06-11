@@ -16,9 +16,9 @@
 #include "../../xleres/FileList.h"
 #include <memory>
 
-/*#include "../Metal/Resource.h"
+#include "../Metal/Resource.h"
 #include "../Metal/DeviceContext.h"
-#include "../Vulkan/Metal/IncludeVulkan.h"*/
+#include "../Vulkan/Metal/IncludeVulkan.h"
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -34,16 +34,43 @@ namespace RenderCore { namespace LightingEngine
         IResourceView& inputDepthsSRV,
         IResourceView& inputNormalsSRV,
         IResourceView& inputVelocitiesSRV,
+        IResourceView& inputHistoryAccumulation,
         IResourceView& accumulation0UAV,
         IResourceView& accumulation1UAV,
         IResourceView& aoOutputUAV,
         IResourceView& hierarchicalDepths)
     {
+        {
+            // need to ensure the hierarchical depths compute step has finished
+            auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
+            VkImageMemoryBarrier barrier[1];
+            barrier[0] = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+            barrier[0].pNext = nullptr;
+            barrier[0].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+            barrier[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            barrier[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            barrier[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            barrier[0].image = checked_cast<Metal_Vulkan::Resource*>(hierarchicalDepths.GetResource().get())->GetImage();
+            barrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier[0].subresourceRange.baseMipLevel = 0;
+            barrier[0].subresourceRange.baseArrayLayer = 0;
+            barrier[0].subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+            barrier[0].subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+            vkCmdPipelineBarrier(
+				metalContext.GetActiveCommandList().GetUnderlying().get(),
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				dimof(barrier), barrier);
+		}
+
         IResourceView* accumulationUAV = (_pingPongCounter&1) ? &accumulation0UAV : &accumulation1UAV;
         IResourceView* accumulationLastUAV = (_pingPongCounter&1) ? &accumulation1UAV : &accumulation0UAV;
         
         UniformsStream us;
-        IResourceView* srvs[] = { &inputDepthsSRV, &aoOutputUAV, accumulationUAV, accumulationLastUAV, &inputNormalsSRV, &inputVelocitiesSRV, &hierarchicalDepths };
+        IResourceView* srvs[] = { &inputDepthsSRV, &aoOutputUAV, accumulationUAV, accumulationLastUAV, &inputNormalsSRV, &inputVelocitiesSRV, &inputHistoryAccumulation, &hierarchicalDepths };
         us._resourceViews = MakeIteratorRange(srvs);
         UInt4 aoProps { _pingPongCounter, _pingPongCounter == ~0u, 0, 0 };
         UniformsStream::ImmediateData immData[] = {
@@ -76,6 +103,7 @@ namespace RenderCore { namespace LightingEngine
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc { TextureViewDesc::Aspect::Depth });
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion));
+        spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HistoryAcc));
 
         spDesc.AppendNonFrameBufferAttachmentView(accumulation0, BindFlag::UnorderedAccess);
         spDesc.AppendNonFrameBufferAttachmentView(accumulation1, BindFlag::UnorderedAccess);
@@ -94,7 +122,8 @@ namespace RenderCore { namespace LightingEngine
                     *iterator._rpi.GetNonFrameBufferAttachmentView(3),
                     *iterator._rpi.GetNonFrameBufferAttachmentView(4),
                     *iterator._rpi.GetNonFrameBufferAttachmentView(5),
-                    *iterator._rpi.GetNonFrameBufferAttachmentView(6));
+                    *iterator._rpi.GetNonFrameBufferAttachmentView(6),
+                    *iterator._rpi.GetNonFrameBufferAttachmentView(7));
             });
 
         return result;
@@ -160,7 +189,8 @@ namespace RenderCore { namespace LightingEngine
         usi.BindResourceView(3, Hash64("AccumulationAOLast"));
         usi.BindResourceView(4, Hash64("InputNormals"));
         usi.BindResourceView(5, Hash64("GBufferMotion"));
-        usi.BindResourceView(6, Hash64("HierarchicalDepths"));
+        usi.BindResourceView(6, Hash64("HistoryAcc"));
+        usi.BindResourceView(7, Hash64("HierarchicalDepths"));
         usi.BindImmediateData(0, Hash64("AOProps"));
 
         ParameterBox selectors;

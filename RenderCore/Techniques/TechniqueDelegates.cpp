@@ -639,6 +639,7 @@ namespace RenderCore { namespace Techniques
 				if (_preDepthType == PreDepthType::DepthMotionNormal || _preDepthType == PreDepthType::DepthMotionNormalRoughness)
 					nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 			}
+			nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
 			auto illumType = CalculateIllumType(shaderPatches);

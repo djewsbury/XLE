@@ -49,9 +49,12 @@ namespace RenderCore { namespace Techniques
         constexpr uint64_t MultisampleDepth = ConstHash64<'Mult', 'isam', 'pleD', 'epth'>::Value;
         constexpr uint64_t GBufferDiffuse   = ConstHash64<'GBuf', 'ferD', 'iffu', 'se'>::Value;
         constexpr uint64_t GBufferNormal    = ConstHash64<'GBuf', 'ferN', 'orma', 'l'>::Value;
-        constexpr uint64_t GBufferNormalPrev= ConstHash64<'GBuf', 'ferN', 'orma', 'l'>::Value+1;
         constexpr uint64_t GBufferParameter = ConstHash64<'GBuf', 'ferP', 'aram', 'eter'>::Value;
         constexpr uint64_t GBufferMotion    = ConstHash64<'GBuf', 'ferM', 'otio', 'n'>::Value;
+        constexpr uint64_t HistoryAcc       = ConstHash64<'Hist', 'oryA', 'cc'>::Value;
+
+        constexpr uint64_t MultisampleDepthPrev = ConstHash64<'Mult', 'isam', 'pleD', 'epth'>::Value+1;
+        constexpr uint64_t GBufferNormalPrev    = ConstHash64<'GBuf', 'ferN', 'orma', 'l'>::Value+1;
 
         constexpr uint64_t ColorLDR         = ConstHash64<'Colo', 'rLDR'>::Value;
         constexpr uint64_t ColorHDR         = ConstHash64<'Colo', 'rHDR'>::Value;

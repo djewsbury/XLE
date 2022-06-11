@@ -15,6 +15,7 @@
 #include "../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../RenderCore/Techniques/CommonBindings.h"
 #include "../../RenderCore/Techniques/DrawableDelegates.h"
+#include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/UniformsStream.h"
 #include "../../RenderCore/FrameBufferDesc.h"
 #include "../../SceneEngine/Noise.h"
@@ -32,6 +33,55 @@
 
 namespace ToolsRig
 {
+	class ShaderLab::HistoricalAttachmentsHelper : public IHistoricalAttachmentsHelper
+	{
+	public:
+		void OnFrameBarrier(RenderCore::Techniques::ParsingContext& parsingContext) override
+		{
+			// flip the attachments in the
+			auto& attachmentPool = *parsingContext.GetTechniqueContext()._attachmentPool;
+			for (const auto& a:_attachmentsToFlip) {
+				auto A = attachmentPool.GetBoundResource(a._srcSemantic);
+				auto B = attachmentPool.GetBoundResource(a._dstSemantic);
+				attachmentPool.Unbind(a._srcSemantic);
+				attachmentPool.Unbind(a._dstSemantic);
+				assert(A);
+				assert(A != B);
+				if (A) attachmentPool.Bind(a._dstSemantic, A);
+				if (B) attachmentPool.Bind(a._srcSemantic, B);
+			}
+		}
+
+		void PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext)
+		{
+			_attachmentsToFlip.clear();	// hack until we step this up properly
+
+			using namespace RenderCore;
+			uint64_t attachmentsToDoubleBuffer[] { Techniques::AttachmentSemantics::MultisampleDepth, Techniques::AttachmentSemantics::GBufferNormal };
+			std::vector<Techniques::PreregisteredAttachment> newAttachments;
+			for (const auto& a:stitchingContext.GetPreregisteredAttachments()) {
+				auto i = std::find(attachmentsToDoubleBuffer, &attachmentsToDoubleBuffer[dimof(attachmentsToDoubleBuffer)], a._semantic);
+				if (i != &attachmentsToDoubleBuffer[dimof(attachmentsToDoubleBuffer)]) {
+					auto newAttachment = a;
+					++newAttachment._semantic;
+					newAttachment._state = Techniques::PreregisteredAttachment::State::Initialized;
+					_attachmentsToFlip.push_back({a._semantic, newAttachment._semantic});
+					newAttachments.emplace_back(std::move(newAttachment));
+				}
+			}
+			assert(_attachmentsToFlip.size() <= dimof(attachmentsToDoubleBuffer));
+			for (const auto&a:newAttachments) stitchingContext.DefineAttachment(a);
+		}
+
+		struct AttachmentsToFlip
+		{
+			uint64_t _srcSemantic, _dstSemantic;
+		};
+		std::vector<AttachmentsToFlip> _attachmentsToFlip;
+	};
+
+	ShaderLab::IHistoricalAttachmentsHelper& ShaderLab::GetHistoricalAttachmentsHelper() { return *_historicalAttachmentsHelper; }
+
 	class GlobalStateDelegate : public RenderCore::Techniques::IShaderResourceDelegate
 	{
 	public:
@@ -108,7 +158,7 @@ namespace ToolsRig
 		auto weakThis = weak_from_this();
 		AsyncConstructToPromise(
 			result->AdoptPromise(),
-			[preregAttachments=std::move(preregAttachments), fBProps=fBProps, futureFormatter=std::move(futureFormatter), futureLightScene=std::move(futureLightScene), visualizeStep=std::move(visualizeStep), systemAttachmentsFormat=std::move(systemAttachmentsFormat), noiseDelegateFuture=std::move(noiseDelegateFuture), weakThis]() mutable {
+			[preregAttachments=std::move(preregAttachments), fBProps=fBProps, futureFormatter=std::move(futureFormatter), futureLightScene=std::move(futureLightScene), visualizeStep=std::move(visualizeStep), systemAttachmentsFormat=std::move(systemAttachmentsFormat), noiseDelegateFuture=std::move(noiseDelegateFuture), historicalAttachmentsHelper=_historicalAttachmentsHelper, weakThis]() mutable {
 				std::shared_ptr<Formatters::IDynamicFormatter> formatter;
 				TRY {
 					auto l = weakThis.lock();
@@ -169,6 +219,9 @@ namespace ToolsRig
 							iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
 						});
 					for (auto& fn:constructorContext._setupFunctions) fn(sequence);
+
+					// Setup attachments we intend to double buffer
+					historicalAttachmentsHelper->PreregisterAttachments(constructorContext._stitchingContext);
 
 					if (visualizeStep) {
 						visualizeStep->StallWhilePending();
@@ -275,6 +328,7 @@ namespace ToolsRig
 	: _drawingApparatus(std::move(drawingApparatus))
 	, _bufferUploads(std::move(bufferUploads))
 	{
+		_historicalAttachmentsHelper = std::make_shared<HistoricalAttachmentsHelper>();
 	}
 
 	ShaderLab::~ShaderLab(){}

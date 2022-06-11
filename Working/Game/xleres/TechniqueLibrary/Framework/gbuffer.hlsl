@@ -302,10 +302,13 @@ struct DepthPlusEncoded
         #elif DEPTH_PLUS_NORMAL
             float3 normalBuffer     : SV_Target1;
         #endif
+        #if DEPTH_PLUS_HISTORY_ACCUMULATION
+            float historyAccumulation : SV_Target2;     // must also have DEPTH_PLUS_NORMAL && DEPTH_PLUS_ROUGHNESS set
+        #endif
     #endif
 };
 
-DepthPlusEncoded EncodeDepthPlus(GBufferValues values, int2 motion)
+DepthPlusEncoded EncodeDepthPlus(GBufferValues values, int2 motion, float historyAccumulationWeight)
 {
         //
         //      Take the raw gbuffer input values and
@@ -320,6 +323,9 @@ DepthPlusEncoded EncodeDepthPlus(GBufferValues values, int2 motion)
     #endif
     #if DEPTH_PLUS_ROUGHNESS
         result.normalBuffer.a = values.material.roughness;
+    #endif
+    #if DEPTH_PLUS_MOTION && DEPTH_PLUS_HISTORY_ACCUMULATION
+        result.historyAccumulation = historyAccumulationWeight;
     #endif
     return result;
 }

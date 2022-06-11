@@ -18,6 +18,7 @@ DepthPlusEncoded depthPlus(VSOUT geo)
 	GBufferValues sample = PerPixel(geo);
 
 	float3 prevPos;
+	float historyAccumulationWeight = 1;
 	#if VSOUT_HAS_PREV_POSITION
 		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
 		prevPos.x = prevPos.x * 0.5 + 0.5;
@@ -28,7 +29,7 @@ DepthPlusEncoded depthPlus(VSOUT geo)
 	#else
 		prevPos = 0.0.xxx;
 	#endif
-	return EncodeDepthPlus(sample, int2(prevPos.xy));
+	return EncodeDepthPlus(sample, int2(prevPos.xy), historyAccumulationWeight);
 }
 
 DepthPlusEncoded depthPlusWithEarlyRejection(VSOUT geo)
@@ -39,6 +40,7 @@ DepthPlusEncoded depthPlusWithEarlyRejection(VSOUT geo)
 	GBufferValues sample = PerPixel(geo);
 
 	float3 prevPos;
+	float historyAccumulationWeight = 1;
 	#if VSOUT_HAS_PREV_POSITION
 		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
 		prevPos.x = prevPos.x * 0.5 + 0.5;
@@ -49,7 +51,7 @@ DepthPlusEncoded depthPlusWithEarlyRejection(VSOUT geo)
 	#else
 		prevPos = 0.0.xxx;
 	#endif
-	return EncodeDepthPlus(sample, int2(prevPos.xy));
+	return EncodeDepthPlus(sample, int2(prevPos.xy), historyAccumulationWeight);
 }
 
 float4 flatColorWithEarlyRejection(VSOUT geo) : SV_Target0

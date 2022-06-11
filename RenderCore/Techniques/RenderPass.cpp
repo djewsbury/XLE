@@ -1039,15 +1039,19 @@ namespace RenderCore { namespace Techniques
 
     void AttachmentPool::Bind(uint64_t semantic, const IResourcePtr& resource)
     {
-        #if defined(_DEBUG)
-            assert(semantic != 0);      // using zero as a semantic is not supported; this is used as a sentinel for "no semantic"
+        assert(semantic != 0);      // using zero as a semantic is not supported; this is used as a sentinel for "no semantic"
+        {
+            
             auto i = std::find_if(
                 _pimpl->_attachments.begin(), _pimpl->_attachments.end(),
                 [res=resource.get()](const auto& attach) {
                     return attach._resource.get() == res;
                 });
-            assert(i == _pimpl->_attachments.end());        // don't bind a resource from the attachment pool itself in this way
-        #endif
+            if (i != _pimpl->_attachments.end()) {
+                Bind(semantic, (AttachmentName)std::distance(_pimpl->_attachments.begin(), i));
+                return;
+            }
+        }
         
         auto binding = std::find_if(
             _pimpl->_semanticAttachments.begin(),

@@ -41,6 +41,13 @@ namespace ToolsRig
 			virtual ~ICompiledOperation() = default;
 		};
 
+		class IHistoricalAttachmentsHelper
+		{
+		public:
+			virtual void OnFrameBarrier(RenderCore::Techniques::ParsingContext& parsingContext) = 0;
+			virtual ~IHistoricalAttachmentsHelper() = default;
+		};
+
 		::Assets::PtrToMarkerPtr<ICompiledOperation> BuildCompiledTechnique(
 			::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> futureFormatter,
 			::Assets::PtrToMarkerPtr<IVisualizeStep> visualizeStep,
@@ -75,6 +82,8 @@ namespace ToolsRig
 			StringSection<> name,
 			VisualizeStepConstructor&& constructor);
 
+		IHistoricalAttachmentsHelper& GetHistoricalAttachmentsHelper();
+
 		ShaderLab(
 			std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
 			std::shared_ptr<BufferUploads::IManager> bufferUploads);
@@ -84,6 +93,8 @@ namespace ToolsRig
 		std::vector<std::pair<std::string, VisualizeStepConstructor>> _visualizeStepConstructors;
 		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
+		class HistoricalAttachmentsHelper;
+		std::shared_ptr<HistoricalAttachmentsHelper> _historicalAttachmentsHelper;
 	};
 
 	void RegisterVisualizeAttachment(ShaderLab&);

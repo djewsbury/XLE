@@ -1,5 +1,6 @@
 #include "xleres/TechniqueLibrary/Math/ProjectionMath.hlsl"
 #include "xleres/TechniqueLibrary/Math/Misc.hlsl"
+#include "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
 #include "xleres/Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
 
 Texture2D<float> InputTexture;
@@ -8,6 +9,7 @@ RWTexture2D<float> DownsampleDepths;
 RWTexture2D<float> AccumulationAO;
 Texture2D InputNormals;
 Texture2D<int2> GBufferMotion;
+Texture2D<float> HistoryAcc;
 Texture2D<float> AccumulationAOLast;
 
 Texture2D<float> HierarchicalDepths;
@@ -97,6 +99,7 @@ float TraverseRay_HierachicalDepths_0(uint2 pixelId, float cosPhi, float sinPhi,
 	}
 
 	int c=0;
+	const uint occupancyThreshold = 8;		// uniform candidate
 	for (; c<64; ++c) {
 		float2 xyPlane = floor(currentUV * currentMipRes) + xyJumpFromFloor;
 		// uvOffset = float2(0.005,0.005) * exp2(currentMipLevel) / textureDims;
@@ -106,8 +109,8 @@ float TraverseRay_HierachicalDepths_0(uint2 pixelId, float cosPhi, float sinPhi,
 		float2 uvMovement = min(t.x, t.y) * direction;
 		float2 newUV = initialUV + uvMovement;
 		
-		if (any(newUV.xy < 0) || any(newUV.xy >= 1)) break;
-		if (WaveActiveCountBits(true) <= 8) break;	// exit due to low occupancy
+		if (any(newUV.xy < 0 || newUV.xy >= 1)) break;
+		if (WaveActiveCountBits(true) <= occupancyThreshold) break;	// exit due to low occupancy
 
 		float azmuthalXSq;
 		const bool accurateDistanceCalc = true;
@@ -166,7 +169,7 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 	//	b) take the longest axis and step along that; even if it means missing some intersecting pixels
 	// type (b) is a lot more efficient, and just seems to produce few artifacts. Since we're sampling
 	// so many directions, the skipped pixels will still be accounted for; so type (B) just seems better
-	float2 orthoProjSize = 100.0;		// hard coded for the particular camera we're using
+	float2 orthoProjSize = 5000.0;		// uniform candidate -- hard coded for the particular camera we're using
 	float cosMaxTheta = 0.0;
 
 	float xStep, yStep;
@@ -189,13 +192,16 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 	stepDistanceSq = dot(worldSpacePixelSize, worldSpacePixelSize);
 
 	float d0 = HierarchicalDepths.Load(uint3(pixelId.xy, 1));
+	[branch] if (d0 == 0) return 0;		// early out for sky, to avoid excessive noise in the image
+
 	const float initialStepSize = 1;
 	float2 xy = pixelId.xy + initialStepSize*float2(xStep, yStep);
 	int c=1;
 	float stepsAtMostDetailedRes = initialStepSize;
+	const uint occupancyThreshold = 8;		// uniform candidate
 	for (; c<32; ++c) {
-		if (any(xy < 0) || any(xy >= mostDetailedMipRes)) break;
-		if (WaveActiveCountBits(true) <= 8) break;	// exit due to low occupancy
+		if (any(xy < 0 || xy >= mostDetailedMipRes)) break;
+		if (WaveActiveCountBits(true) <= occupancyThreshold) break;	// exit due to low occupancy
 
 		float d = HierarchicalDepths.Load(uint3(xy/currentMipLevelScale, currentMipLevel));
 
@@ -226,7 +232,7 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 			// if we're on a boundary with the next mip level, then decrease
 			float2 test = xy / (2*currentMipLevelScale);
 			// bool nextMipLevelBoundary = any(frac(test + 0.125) < 0.25);
-			bool nextMipLevelBoundary = uint2(startXY/(2*currentMipLevelScale)) != uint2(test);
+			bool nextMipLevelBoundary = any(uint2(startXY/(2*currentMipLevelScale)) != uint2(test));
 			currentMipLevel += nextMipLevelBoundary;
 			currentMipLevelScale *= nextMipLevelBoundary?2:1;
 		}
@@ -346,12 +352,7 @@ static const uint ditherTable[96] = {24, 72, 0, 48, 60, 12, 84, 36, 90, 42, 66, 
 	// 2 A sin(B) + cos^2(A) (-cos(B)) + sin^2(A) cos(B) - 2 sin(A) cos(A) sin(B) + cos(B)
 	//
 
-	float3 worldSpaceNormal = InputNormals.Load(uint3(pixelId.xy*2, 0)).rgb;		// todo -- maybe can avoid this normalize with a different encoding scheme
-	if (dot(worldSpaceNormal, worldSpaceNormal) == 0) {
-		AccumulationAO[pixelId.xy] = 0;
-		return;
-	}
-	worldSpaceNormal = normalize(worldSpaceNormal);
+	float3 worldSpaceNormal = DecodeGBufferNormal(InputNormals.Load(uint3(pixelId.xy*2, 0)).rgb);
 
 	float3 cameraRight = float3(SysUniform_GetCameraBasis()[0].x, SysUniform_GetCameraBasis()[1].x, SysUniform_GetCameraBasis()[2].x);
 	float3 cameraUp = float3(SysUniform_GetCameraBasis()[0].y, SysUniform_GetCameraBasis()[1].y, SysUniform_GetCameraBasis()[2].y);
@@ -474,7 +475,7 @@ void InitializeGroupSharedMem(int2 dispatchThreadId, int2 groupThreadId)
 void DoTemporalAccumulation(int2 groupThreadId, int2 srcPixel, float minV, float maxV)
 {
 	int2 textureDims;
-	GBufferMotion.GetDimensions(textureDims.x, textureDims.y);
+	GBufferMotion.GetDimensions(textureDims.x, textureDims.y);		// uniform candidate
 	int2 vel = GBufferMotion.Load(uint3(srcPixel*2, 0)).rg;
 	int2 accumulationYesterdayPos = srcPixel.xy + vel / 2;
 	if (max(abs(vel.x), abs(vel.y)) >= 127 || any(accumulationYesterdayPos<0) || any(accumulationYesterdayPos>=(textureDims/2))) {
@@ -482,8 +483,10 @@ void DoTemporalAccumulation(int2 groupThreadId, int2 srcPixel, float minV, float
 	} else {
 		float accumulationYesterday = AccumulationAOLast.Load(uint3(accumulationYesterdayPos.xy, 0));
 		const float Nvalue = FrameWrap*2;
-		const float alpha = 2.0/(Nvalue+1.0);
-		float accumulationToday = accumulationYesterday * (1-alpha) + GroupAO[groupThreadId.y][groupThreadId.x] * alpha;
+		float alpha = 2.0/(Nvalue+1.0);
+		alpha = 1-alpha;
+		alpha *= HistoryAcc.Load(uint3(srcPixel*2, 0));		// scale alpha by our confidence in the "yesterday" data
+		float accumulationToday = accumulationYesterday * alpha + GroupAO[groupThreadId.y][groupThreadId.x] * (1-alpha);
 		accumulationToday = clamp(accumulationToday, minV, maxV);
 		GroupAO[groupThreadId.y][groupThreadId.x] = accumulationToday;
 	}
@@ -524,11 +527,6 @@ void LateTemporalFiltering(int2 dispatchThreadId, int2 groupThreadId)
 	DoTemporalAccumulation(groupThreadId+int2(0,8), dispatchThreadId+int2(-4,4), minV, maxV);
 	DoTemporalAccumulation(groupThreadId+int2(8,0), dispatchThreadId+int2(4,-4), minV, maxV);
 	DoTemporalAccumulation(groupThreadId+int2(8,8), dispatchThreadId+int2(4,4), minV, maxV);
-
-	// GroupAO[groupThreadId.y][groupThreadId.x] = valueStd;
-	// GroupAO[groupThreadId.y][groupThreadId.x+8] = valueStd;
-	// GroupAO[groupThreadId.y+8][groupThreadId.x] = valueStd;
-	// GroupAO[groupThreadId.y+8][groupThreadId.x+8] = valueStd;
 
 	int2 pixelToWrite = groupThreadId + int2(groupThreadId.x<4?8:0, groupThreadId.y<4?8:0);
 	AccumulationAO[dispatchThreadId.xy-groupThreadId.xy+pixelToWrite.xy-int2(4,4)] = GroupAO[pixelToWrite.y][pixelToWrite.x];
@@ -588,7 +586,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 	float2 depth2divs = float2(outDepth3 - outDepth2, outDepth2 - outDepth0);
 	float2 depth3divs = float2(outDepth3 - outDepth2, outDepth3 - outDepth1);
 #elif 0
-	float3 worldSpaceNormal = normalize(InputNormals.Load(uint3(outputPixel.xy*2, 0)).rgb);
+	float3 worldSpaceNormal = DecodeGBufferNormal(InputNormals.Load(uint3(outputPixel.xy*2, 0)).rgb);
 	float3 cameraRight = float3(SysUniform_GetCameraBasis()[0].x, SysUniform_GetCameraBasis()[1].x, SysUniform_GetCameraBasis()[2].x);
 	float3 cameraUp = float3(SysUniform_GetCameraBasis()[0].y, SysUniform_GetCameraBasis()[1].y, SysUniform_GetCameraBasis()[2].y);
 	float3 negCameraForward = float3(SysUniform_GetCameraBasis()[0].z, SysUniform_GetCameraBasis()[1].z, SysUniform_GetCameraBasis()[2].z);
