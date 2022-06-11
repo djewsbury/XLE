@@ -1151,6 +1151,11 @@ namespace RenderCore { namespace Techniques
 				accelerator->_completedPipelines[seqIdx]._depVal = e.GetDependencyValidation();
 				accelerator->_completedPipelines[seqIdx]._pipeline = {};
 				accelerator->_completedPipelines[seqIdx]._visibilityMarker = ~VisibilityMarkerId(0);
+			} CATCH(const ::Assets::Exceptions::InvalidAsset& e) {
+				// we've gone invalid
+				accelerator->_completedPipelines[seqIdx]._depVal = e.GetDependencyValidation();
+				accelerator->_completedPipelines[seqIdx]._pipeline = {};
+				accelerator->_completedPipelines[seqIdx]._visibilityMarker = ~VisibilityMarkerId(0);
 			} CATCH(const std::exception& e) {
 				// we've gone invalid (no dep val)
 				accelerator->_completedPipelines[seqIdx]._depVal = {};
@@ -1180,6 +1185,12 @@ namespace RenderCore { namespace Techniques
 				descSet->_visibilityMarker = newVisibilityMarker;
 				descSet->_pending = {};
 			} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
+				// we've gone invalid
+				descSet->_depVal = e.GetDependencyValidation();
+				descSet->_completed = {};
+				descSet->_visibilityMarker = ~VisibilityMarkerId(0);
+				descSet->_pending = {};
+			} CATCH(const ::Assets::Exceptions::InvalidAsset& e) {
 				// we've gone invalid
 				descSet->_depVal = e.GetDependencyValidation();
 				descSet->_completed = {};
