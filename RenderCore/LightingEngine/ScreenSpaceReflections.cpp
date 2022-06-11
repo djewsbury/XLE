@@ -4,7 +4,8 @@
 
 #include "ScreenSpaceReflections.h"
 #include "BlueNoiseGenerator.h"
-#include "LightingEngineInternal.h"
+#include "LightingEngineIterator.h"
+#include "RenderStepFragments.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/PipelineOperators.h"
 #include "../Techniques/ParsingContext.h"

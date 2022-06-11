@@ -3,10 +3,11 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "LightingDelegateUtil.h"
+#include "LightingEngineIterator.h"
 #include "ShadowUniforms.h"
 #include "ShadowPreparer.h"
 #include "ShadowProbes.h"
-#include "LightingEngineInternal.h"
+#include "LightingEngineInitialization.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/DeferredShaderResource.h"
@@ -18,7 +19,7 @@
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
-	static LightingTechniqueSequence::ParseId SetupShadowParse(
+	static TechniqueSequenceParseId SetupShadowParse(
 		LightingTechniqueIterator& iterator,
 		LightingTechniqueSequence& sequence,
 		Internal::ILightBase& proj,

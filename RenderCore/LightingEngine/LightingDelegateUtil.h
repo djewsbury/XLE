@@ -5,8 +5,8 @@
 #pragma once
 
 #include "ILightScene.h"
-#include "LightingEngineInternal.h"
-#include "Assets/Marker.h"
+#include "../Types.h"
+#include "../../Assets/Marker.h"
 #include <memory>
 
 namespace RenderCore { namespace Techniques
@@ -21,6 +21,8 @@ namespace RenderCore { namespace LightingEngine
 	class IPreparedShadowResult;
 	class IPreparable;
 	class ShadowProbes;
+	class LightingTechniqueIterator;
+	class LightingTechniqueSequence;
 }}
 
 namespace RenderCore { namespace LightingEngine { namespace Internal

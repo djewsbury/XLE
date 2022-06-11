@@ -3,7 +3,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "HierarchicalDepths.h"
-#include "LightingEngineInternal.h"
+#include "LightingEngineIterator.h"
+#include "RenderStepFragments.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/PipelineOperators.h"
 #include "../Techniques/Drawables.h"		// for SequencerUniformsHelper

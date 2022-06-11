@@ -3,7 +3,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "LightingEngine.h"
-#include "LightingEngineInternal.h"
+#include "LightingEngineInitialization.h"
+#include "LightingEngineIterator.h"
 #include "RenderStepFragments.h"
 #include "LightingEngineApparatus.h"
 #include "../Techniques/RenderPass.h"
@@ -29,7 +30,7 @@ namespace RenderCore { namespace LightingEngine
 		_steps.emplace_back(std::move(newStep));
 	}
 
-	auto LightingTechniqueSequence::CreateParseScene(Techniques::BatchFlags::BitField batches) -> ParseId
+	auto LightingTechniqueSequence::CreateParseScene(Techniques::BatchFlags::BitField batches) -> TechniqueSequenceParseId
 	{
 		assert(!_frozen);
 		for (auto& s:_parseSteps)
@@ -46,7 +47,7 @@ namespace RenderCore { namespace LightingEngine
 		return newStep._parseId | (batches << 16u);
 	}
 
-	auto LightingTechniqueSequence::CreateParseScene(Techniques::BatchFlags::BitField batches, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume) -> ParseId
+	auto LightingTechniqueSequence::CreateParseScene(Techniques::BatchFlags::BitField batches, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume) -> TechniqueSequenceParseId
 	{
 		assert(!_frozen);
 		for (auto& s:_parseSteps)
@@ -67,7 +68,7 @@ namespace RenderCore { namespace LightingEngine
 	auto LightingTechniqueSequence::CreateMultiViewParseScene(
 		Techniques::BatchFlags::BitField batches,
 		std::vector<Techniques::ProjectionDesc>&& projDescs,
-		std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume) -> ParseId
+		std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume) -> TechniqueSequenceParseId
 	{
 		assert(!_frozen);
 		// Don't bother trying to combine this with another parse step in this case -- since it's unlikely
@@ -82,7 +83,7 @@ namespace RenderCore { namespace LightingEngine
 		return newStep._parseId | (batches << 16u);
 	}
 
-	auto LightingTechniqueSequence::CreatePrepareOnlyParseScene(Techniques::BatchFlags::BitField batches) -> ParseId
+	auto LightingTechniqueSequence::CreatePrepareOnlyParseScene(Techniques::BatchFlags::BitField batches) -> TechniqueSequenceParseId
 	{
 		assert(!_frozen);
 		for (auto& s:_parseSteps)
@@ -102,7 +103,7 @@ namespace RenderCore { namespace LightingEngine
 	void LightingTechniqueSequence::CreateStep_ExecuteDrawables(
 		std::shared_ptr<Techniques::SequencerConfig> sequencerConfig,
 		std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate,
-		ParseId parseId)
+		TechniqueSequenceParseId parseId)
 	{
 		assert(!_frozen);
 		ResolvePendingCreateFragmentSteps();
@@ -114,7 +115,7 @@ namespace RenderCore { namespace LightingEngine
 		_steps.emplace_back(std::move(newStep));
 	}
 
-	void LightingTechniqueSequence::CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig, ParseId parseId)
+	void LightingTechniqueSequence::CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig, TechniqueSequenceParseId parseId)
 	{
 		assert(!_frozen);
 		ExecuteStep newStep;
@@ -401,6 +402,26 @@ namespace RenderCore { namespace LightingEngine
 
 	CompiledLightingTechnique::~CompiledLightingTechnique() {}
 
+	class LightingTechniqueStepper
+	{
+	public:
+		std::vector<LightingTechniqueSequence::ExecuteStep>::const_iterator _stepIterator;
+		std::vector<LightingTechniqueSequence::ExecuteStep>::const_iterator _stepEnd;
+
+		std::vector<LightingTechniqueSequence::ParseStep>::const_iterator _parseStepIterator;
+		std::vector<LightingTechniqueSequence::ParseStep>::const_iterator _parseStepEnd;
+
+		std::vector<CompiledLightingTechnique::Sequence>::const_iterator _sequenceIterator;
+		std::vector<CompiledLightingTechnique::Sequence>::const_iterator _sequenceEnd;
+
+		const LightingTechniqueSequence::ExecuteStep* AdvanceExecuteStep();
+		const LightingTechniqueSequence::ParseStep* AdvanceParseStep();
+		unsigned _drawablePktIdxOffset = 0;
+
+		LightingTechniqueStepper(const CompiledLightingTechnique& technique);
+		LightingTechniqueStepper() = default;
+	};
+
 	const LightingTechniqueSequence::ExecuteStep* LightingTechniqueStepper::AdvanceExecuteStep()
 	{
 		if (_sequenceIterator == _sequenceEnd) return nullptr;
@@ -450,7 +471,7 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	void LightingTechniqueIterator::ExecuteDrawables(
-		LightingTechniqueSequence::ParseId parseId,
+		TechniqueSequenceParseId parseId,
 		Techniques::SequencerConfig& sequencerCfg,
 		const std::shared_ptr<Techniques::IShaderResourceDelegate>& uniformDelegate)
 	{
@@ -474,15 +495,15 @@ namespace RenderCore { namespace LightingEngine
 
 	void LightingTechniqueIterator::ResetIteration(Phase newPhase)
 	{
-		_stepper = LightingTechniqueStepper{*_compiledTechnique};
+		*_stepper = LightingTechniqueStepper{*_compiledTechnique};
 		_currentPhase = newPhase;
 	}
 
-	void LightingTechniqueIterator::GetPkts(IteratorRange<Techniques::DrawablesPacket**> result, LightingTechniqueSequence::ParseId parseId)
+	void LightingTechniqueIterator::GetPkts(IteratorRange<Techniques::DrawablesPacket**> result, TechniqueSequenceParseId parseId)
 	{
 		auto realParseId = parseId & 0xffff;
 		auto batchFlags = parseId >> 16;
-		auto pktIdx = _stepper._drawablePktIdxOffset+realParseId*s_drawablePktsPerParse;
+		auto pktIdx = _stepper->_drawablePktIdxOffset+realParseId*s_drawablePktsPerParse;
 		assert(pktIdx < _drawablePkt.size());
 		assert(result.size() == s_drawablePktsPerParse);
 		for (unsigned c=0; c<s_drawablePktsPerParse; ++c) {
@@ -495,10 +516,10 @@ namespace RenderCore { namespace LightingEngine
 		}
 	}
 
-	void LightingTechniqueIterator::GetOrAllocatePkts(IteratorRange<Techniques::DrawablesPacket**> result, LightingTechniqueSequence::ParseId parseId, Techniques::BatchFlags::BitField batches)
+	void LightingTechniqueIterator::GetOrAllocatePkts(IteratorRange<Techniques::DrawablesPacket**> result, TechniqueSequenceParseId parseId, Techniques::BatchFlags::BitField batches)
 	{
 		auto realParseId = parseId & 0xffff;
-		auto pktIdx = _stepper._drawablePktIdxOffset+realParseId*s_drawablePktsPerParse;
+		auto pktIdx = _stepper->_drawablePktIdxOffset+realParseId*s_drawablePktsPerParse;
 		if ((pktIdx+s_drawablePktsPerParse) > _drawablePkt.size()) {
 			_drawablePkt.resize(pktIdx+s_drawablePktsPerParse);
 			_drawablePktsReserved.resize(pktIdx+s_drawablePktsPerParse, false);
@@ -526,6 +547,7 @@ namespace RenderCore { namespace LightingEngine
 	, _deformAcceleratorPool(nullptr)
 	, _compiledTechnique(&compiledTechnique)
 	{
+		_stepper = std::make_unique<LightingTechniqueStepper>();
 		assert(_pipelineAcceleratorPool);
 		// If you hit this, it probably means that there's a missing call to CompiledLightingTechnique::CompleteConstruction()
 		// (which should have happened at the end of the technique construction process)
@@ -565,7 +587,7 @@ namespace RenderCore { namespace LightingEngine
 
 		if (_iterator->_currentPhase == LightingTechniqueIterator::Phase::SceneParse) {
 			const LightingTechniqueSequence::ParseStep* next;
-			while ((next=_iterator->_stepper.AdvanceParseStep())) {
+			while ((next=_iterator->_stepper->AdvanceParseStep())) {
 				if (!next->_prepareOnly) {
 					std::vector<Techniques::DrawablesPacket*> pkts;
 					pkts.resize((unsigned)Techniques::Batch::Max);
@@ -583,7 +605,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		const LightingTechniqueSequence::ExecuteStep* next;
-		while ((next=_iterator->_stepper.AdvanceExecuteStep())) {
+		while ((next=_iterator->_stepper->AdvanceExecuteStep())) {
 			switch (next->_type) {
 			case LightingTechniqueSequence::ExecuteStep::Type::CallFunction:
 				TRY {
@@ -607,12 +629,12 @@ namespace RenderCore { namespace LightingEngine
 
 			case LightingTechniqueSequence::ExecuteStep::Type::BeginRenderPassInstance:
 				{
-					assert(next->_fbDescIdx < _iterator->_stepper._sequenceIterator->_sequence->_fbDescs.size());
+					assert(next->_fbDescIdx < _iterator->_stepper->_sequenceIterator->_sequence->_fbDescs.size());
 					Techniques::RenderPassBeginDesc beginDesc;
 					beginDesc._frameIdx = _iterator->_compiledTechnique->_frameIdx;
 					_iterator->_rpi = Techniques::RenderPassInstance{
 						*_iterator->_parsingContext,
-						_iterator->_stepper._sequenceIterator->_sequence->_fbDescs[next->_fbDescIdx],
+						_iterator->_stepper->_sequenceIterator->_sequence->_fbDescs[next->_fbDescIdx],
 						beginDesc};
 				}
 				break;
@@ -694,7 +716,7 @@ namespace RenderCore { namespace LightingEngine
 			_currentPhase = newPhase;
 		}
 
-		void GetOrAllocatePkts(IteratorRange<Techniques::DrawablesPacket**> result, LightingTechniqueSequence::ParseId parseId, Techniques::BatchFlags::BitField batches)
+		void GetOrAllocatePkts(IteratorRange<Techniques::DrawablesPacket**> result, TechniqueSequenceParseId parseId, Techniques::BatchFlags::BitField batches)
 		{
 			auto realParseId = parseId & 0xffff;
 			auto pktIdx = _stepper._drawablePktIdxOffset+realParseId*s_drawablePktsPerParse;

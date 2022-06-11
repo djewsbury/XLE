@@ -4,8 +4,9 @@
 
 #include "LightTiler.h"
 #include "LightUniforms.h"
-#include "LightingEngineInternal.h"
+#include "LightingEngineIterator.h"
 #include "StandardLightScene.h"
+#include "RenderStepFragments.h"
 #include "../Techniques/TechniqueUtils.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/TechniqueDelegates.h"

@@ -4,7 +4,8 @@
 
 #include "DeferredLightingDelegate.h"
 #include "DeferredLightingResolve.h"
-#include "LightingEngineInternal.h"
+#include "LightingEngineIterator.h"
+#include "LightingEngineInitialization.h"
 #include "LightingEngineApparatus.h"
 #include "LightUniforms.h"
 #include "ShadowPreparer.h"

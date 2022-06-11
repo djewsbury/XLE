@@ -5,7 +5,7 @@
 #include "SSAOOperator.h"
 #include "RenderStepFragments.h"
 #include "LightingEngine.h"
-#include "LightingEngineInternal.h"
+#include "LightingEngineIterator.h"
 #include "../Techniques/PipelineOperators.h"
 #include "../Techniques/CommonBindings.h"
 #include "../Format.h"

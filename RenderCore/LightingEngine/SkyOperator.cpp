@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "SkyOperator.h"
-#include "LightingEngineInternal.h"
+#include "LightingEngineIterator.h"
 #include "../Techniques/PipelineOperators.h"
 #include "../Techniques/Drawables.h"
 #include "../Techniques/DescriptorSetAccelerator.h"
