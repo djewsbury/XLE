@@ -7,7 +7,8 @@
 #include "../../Tools/EntityInterface/EntityInterface.h"
 #include "../../Tools/EntityInterface/FormatterAdapters.h"
 #include "../../RenderOverlays/SimpleVisualization.h"
-#include "../../RenderCore/LightingEngine/LightingEngineInternal.h"
+#include "../../RenderCore/LightingEngine/LightingEngineInitialization.h"
+#include "../../RenderCore/LightingEngine/LightingEngineIterator.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
@@ -33,55 +34,6 @@
 
 namespace ToolsRig
 {
-	class ShaderLab::HistoricalAttachmentsHelper : public IHistoricalAttachmentsHelper
-	{
-	public:
-		void OnFrameBarrier(RenderCore::Techniques::ParsingContext& parsingContext) override
-		{
-			// flip the attachments in the
-			auto& attachmentPool = *parsingContext.GetTechniqueContext()._attachmentPool;
-			for (const auto& a:_attachmentsToFlip) {
-				auto A = attachmentPool.GetBoundResource(a._srcSemantic);
-				auto B = attachmentPool.GetBoundResource(a._dstSemantic);
-				attachmentPool.Unbind(a._srcSemantic);
-				attachmentPool.Unbind(a._dstSemantic);
-				assert(A);
-				assert(A != B);
-				if (A) attachmentPool.Bind(a._dstSemantic, A);
-				if (B) attachmentPool.Bind(a._srcSemantic, B);
-			}
-		}
-
-		void PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext)
-		{
-			_attachmentsToFlip.clear();	// hack until we step this up properly
-
-			using namespace RenderCore;
-			uint64_t attachmentsToDoubleBuffer[] { Techniques::AttachmentSemantics::MultisampleDepth, Techniques::AttachmentSemantics::GBufferNormal };
-			std::vector<Techniques::PreregisteredAttachment> newAttachments;
-			for (const auto& a:stitchingContext.GetPreregisteredAttachments()) {
-				auto i = std::find(attachmentsToDoubleBuffer, &attachmentsToDoubleBuffer[dimof(attachmentsToDoubleBuffer)], a._semantic);
-				if (i != &attachmentsToDoubleBuffer[dimof(attachmentsToDoubleBuffer)]) {
-					auto newAttachment = a;
-					++newAttachment._semantic;
-					newAttachment._state = Techniques::PreregisteredAttachment::State::Initialized;
-					_attachmentsToFlip.push_back({a._semantic, newAttachment._semantic});
-					newAttachments.emplace_back(std::move(newAttachment));
-				}
-			}
-			assert(_attachmentsToFlip.size() <= dimof(attachmentsToDoubleBuffer));
-			for (const auto&a:newAttachments) stitchingContext.DefineAttachment(a);
-		}
-
-		struct AttachmentsToFlip
-		{
-			uint64_t _srcSemantic, _dstSemantic;
-		};
-		std::vector<AttachmentsToFlip> _attachmentsToFlip;
-	};
-
-	ShaderLab::IHistoricalAttachmentsHelper& ShaderLab::GetHistoricalAttachmentsHelper() { return *_historicalAttachmentsHelper; }
-
 	class GlobalStateDelegate : public RenderCore::Techniques::IShaderResourceDelegate
 	{
 	public:
@@ -118,10 +70,12 @@ namespace ToolsRig
 		const ::Assets::DependencyValidation& GetDependencyValidation() const override  { return _depVal; }
 		unsigned GetCompletionCommandList() const override { return _completionCommandList; }
 		void AdvanceTime(float time) override { _globalStateDelegate->_state._currentTime += time; }
+		IteratorRange<const RenderCore::Techniques::DoubleBufferAttachment*> GetDoubleBufferAttachments() const override { return _doubleBufferAttachments; }
 		std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> _operation;
 		std::shared_ptr<GlobalStateDelegate> _globalStateDelegate;
 		::Assets::DependencyValidation _depVal;
 		unsigned _completionCommandList = 0;
+		std::vector<RenderCore::Techniques::DoubleBufferAttachment> _doubleBufferAttachments;
 	};
 
 	template<typename Function, typename... Args>
@@ -158,7 +112,7 @@ namespace ToolsRig
 		auto weakThis = weak_from_this();
 		AsyncConstructToPromise(
 			result->AdoptPromise(),
-			[preregAttachments=std::move(preregAttachments), fBProps=fBProps, futureFormatter=std::move(futureFormatter), futureLightScene=std::move(futureLightScene), visualizeStep=std::move(visualizeStep), systemAttachmentsFormat=std::move(systemAttachmentsFormat), noiseDelegateFuture=std::move(noiseDelegateFuture), historicalAttachmentsHelper=_historicalAttachmentsHelper, weakThis]() mutable {
+			[preregAttachments=std::move(preregAttachments), fBProps=fBProps, futureFormatter=std::move(futureFormatter), futureLightScene=std::move(futureLightScene), visualizeStep=std::move(visualizeStep), systemAttachmentsFormat=std::move(systemAttachmentsFormat), noiseDelegateFuture=std::move(noiseDelegateFuture), weakThis]() mutable {
 				std::shared_ptr<Formatters::IDynamicFormatter> formatter;
 				TRY {
 					auto l = weakThis.lock();
@@ -220,15 +174,15 @@ namespace ToolsRig
 						});
 					for (auto& fn:constructorContext._setupFunctions) fn(sequence);
 
-					// Setup attachments we intend to double buffer
-					historicalAttachmentsHelper->PreregisterAttachments(constructorContext._stitchingContext);
-
 					if (visualizeStep) {
 						visualizeStep->StallWhilePending();
 						auto reqAttachments = visualizeStep->ActualizeBkgrnd()->GetRequiredAttachments();
 						for (const auto& r:reqAttachments)
 							sequence.ForceRetainAttachment(r.first, r.second);
 					}
+
+					for (auto doubleBuffer:constructorContext._stitchingContext.GetDoubleBufferAttachments())
+						sequence.ForceRetainAttachment(doubleBuffer._todaySemantic, doubleBuffer._initialLayoutFlags);
 					
 					technique->CompleteConstruction(
 						l->_drawingApparatus->_pipelineAccelerators,
@@ -242,6 +196,7 @@ namespace ToolsRig
 					result->_depVal = std::move(constructorContext._depVal);
 					result->_completionCommandList = constructorContext._completionCommandList;
 					result->_globalStateDelegate = std::move(globalStateDelegate);
+					result->_doubleBufferAttachments = { constructorContext._stitchingContext.GetDoubleBufferAttachments().begin(), constructorContext._stitchingContext.GetDoubleBufferAttachments().end() };
 					return std::static_pointer_cast<ICompiledOperation>(result);
 				} CATCH (const ::Assets::Exceptions::ConstructionError& e) {
 					if (formatter) Throw(::Assets::Exceptions::ConstructionError(e, formatter->GetDependencyValidation()));
@@ -327,9 +282,7 @@ namespace ToolsRig
 	ShaderLab::ShaderLab(std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus, std::shared_ptr<BufferUploads::IManager> bufferUploads)
 	: _drawingApparatus(std::move(drawingApparatus))
 	, _bufferUploads(std::move(bufferUploads))
-	{
-		_historicalAttachmentsHelper = std::make_shared<HistoricalAttachmentsHelper>();
-	}
+	{}
 
 	ShaderLab::~ShaderLab(){}
 

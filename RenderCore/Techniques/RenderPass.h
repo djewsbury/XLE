@@ -127,13 +127,11 @@ namespace RenderCore { namespace Techniques
 
     struct PreregisteredAttachment
     {
-    public:
         uint64_t _semantic = 0ull;
         ResourceDesc _desc;
         enum class State { 
             Uninitialized, Initialized, 
-            Initialized_StencilUninitialized, Uninitialized_StencilInitialized,
-            PingPongBuffer0, PingPongBuffer1
+            Initialized_StencilUninitialized, Uninitialized_StencilInitialized
         };
         State _state = State::Uninitialized;
         BindFlag::BitField _layoutFlags = 0;
@@ -146,6 +144,15 @@ namespace RenderCore { namespace Techniques
         const FrameBufferProperties& fbProps,
         uint64_t seed = DefaultSeed64);
 
+    struct DoubleBufferAttachment
+    { 
+        uint64_t _yesterdaySemantic;
+        uint64_t _todaySemantic;
+        unsigned _initialLayoutFlags;
+        ClearValue _initialContents;
+        ResourceDesc _desc;
+    };
+
     class FragmentStitchingContext
     {
     public:
@@ -155,6 +162,15 @@ namespace RenderCore { namespace Techniques
             BindFlag::BitField initialLayoutFlags = 0);
         void DefineAttachment(const PreregisteredAttachment& attachment);
         void Undefine(uint64_t semantic);
+
+        // Declare that we will need the data from the previous frame for the given attachment
+        // The data will be accessable in the attachment semantic+1
+        // (eg, if you call DefineDoubleBufferAttachment(AttachmentSemantics::MultisampleDepth), 
+        // you can then use AttachmentSemantics::MultisampleDepthPrev)
+        void DefineDoubleBufferAttachment(
+            uint64_t semantic,
+            ClearValue initialContents,
+            unsigned initialLayoutFlags=0);
 
         struct AttachmentTransform
         {
@@ -183,6 +199,8 @@ namespace RenderCore { namespace Techniques
         IteratorRange<const PreregisteredAttachment*> GetPreregisteredAttachments() const { return MakeIteratorRange(_workingAttachments); }
         Format GetSystemAttachmentFormat(SystemAttachmentFormat) const;
 
+        IteratorRange<const DoubleBufferAttachment*> GetDoubleBufferAttachments() const;
+
         FrameBufferProperties _workingProps;
         Format _systemFormats[(unsigned)SystemAttachmentFormat::Max];
 
@@ -193,6 +211,7 @@ namespace RenderCore { namespace Techniques
         ~FragmentStitchingContext();
     private:
         std::vector<PreregisteredAttachment> _workingAttachments;
+        std::vector<DoubleBufferAttachment> _doubleBufferAttachments;
         StitchResult TryStitchFrameBufferDescInternal(const FrameBufferDescFragment& fragment);
     };
 
@@ -234,8 +253,11 @@ namespace RenderCore { namespace Techniques
         class Reservation;
         Reservation Reserve(
             IteratorRange<const PreregisteredAttachment*>, 
-            unsigned frameIdx,      // (used for pingpong buffers)
             ReservationFlag::BitField = 0);
+
+        void FlipDoubleBufferAttachments(
+            IThreadContext& threadContext,
+            IteratorRange<const DoubleBufferAttachment*> attachments);
 
         void ResetActualized();
         std::string GetMetrics() const;

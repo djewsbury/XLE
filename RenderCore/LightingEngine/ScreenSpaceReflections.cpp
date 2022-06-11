@@ -378,20 +378,13 @@ namespace RenderCore { namespace LightingEngine
 					CreateDesc(
 						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
 						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
-						"ssr-intermediate0"),
-					Techniques::PreregisteredAttachment::State::PingPongBuffer0
-				},
-				Techniques::PreregisteredAttachment {
-					SSRInt+1,
-					CreateDesc(
-						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
-						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
-						"ssr-intermediate1"),
-					Techniques::PreregisteredAttachment::State::PingPongBuffer1
+						"ssr-intermediate"),
+					Techniques::PreregisteredAttachment::State::Uninitialized
 				}
 			};
 			for (const auto& a:attachments)
 				stitchingContext.DefineAttachment(a);
+			stitchingContext.DefineDoubleBufferAttachment(SSRInt, MakeClearValue(0,0,0,0));
 		} else {	/////////////////////////////////////////////
 			Techniques::PreregisteredAttachment attachments[] {
 				Techniques::PreregisteredAttachment {
@@ -400,15 +393,7 @@ namespace RenderCore { namespace LightingEngine
 						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
 						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
 						"ssr-reflections0"),
-					Techniques::PreregisteredAttachment::State::PingPongBuffer0
-				},
-				Techniques::PreregisteredAttachment {
-					SSRReflections+1,
-					CreateDesc(
-						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
-						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
-						"ssr-reflections1"),
-					Techniques::PreregisteredAttachment::State::PingPongBuffer1
+					Techniques::PreregisteredAttachment::State::Uninitialized
 				},
 				Techniques::PreregisteredAttachment {
 					SSRInt,
@@ -421,6 +406,7 @@ namespace RenderCore { namespace LightingEngine
 			};
 			for (const auto& a:attachments)
 				stitchingContext.DefineAttachment(a);
+			stitchingContext.DefineDoubleBufferAttachment(SSRReflections, MakeClearValue(0,0,0,0));
 		}	/////////////////////////////////////////////
 
 		if (_desc._splitConfidence) {
@@ -431,15 +417,7 @@ namespace RenderCore { namespace LightingEngine
 						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
 						TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R8_UNORM),
 						"ssr-confidence0"),
-					Techniques::PreregisteredAttachment::State::PingPongBuffer0
-				},
-				Techniques::PreregisteredAttachment {
-					SSRConfidence+1,
-					CreateDesc(
-						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
-						TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R8_UNORM),
-						"ssr-confidence1"),
-					Techniques::PreregisteredAttachment::State::PingPongBuffer1
+					Techniques::PreregisteredAttachment::State::Uninitialized
 				},
 				Techniques::PreregisteredAttachment {
 					SSRConfidenceInt,
@@ -452,6 +430,7 @@ namespace RenderCore { namespace LightingEngine
 			};
 			for (const auto& a:attachments)
 				stitchingContext.DefineAttachment(a);
+			stitchingContext.DefineDoubleBufferAttachment(SSRConfidence, MakeClearValue(0,0,0,0));
 		}
 
 		Techniques::PreregisteredAttachment attachments[] {
@@ -466,6 +445,7 @@ namespace RenderCore { namespace LightingEngine
 		};
 		for (const auto& a:attachments)
 			stitchingContext.DefineAttachment(a);
+		stitchingContext.DefineDoubleBufferAttachment(Techniques::AttachmentSemantics::GBufferNormal, MakeClearValue(0,0,0,0));
 	}
 
 	void ScreenSpaceReflectionsOperator::ResetAccumulation() { _pingPongCounter = ~0u; }

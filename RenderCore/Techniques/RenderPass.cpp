@@ -695,18 +695,6 @@ namespace RenderCore { namespace Techniques
         for (unsigned aIdx=0; aIdx<stitchedFragment._attachmentTransforms.size(); ++aIdx) {
             auto semantic = stitchedFragment._fullAttachmentDescriptions[aIdx]._semantic;
             if (!semantic) continue;
-            // The pool will ping-pong these buffers, and we have to undo that a bit here to return to the original semantic bindings
-            if (stitchedFragment._fullAttachmentDescriptions[aIdx]._state == PreregisteredAttachment::State::PingPongBuffer0 && (beginInfo._frameIdx&1))
-                ++semantic;
-            else if (stitchedFragment._fullAttachmentDescriptions[aIdx]._state == PreregisteredAttachment::State::PingPongBuffer1 && (beginInfo._frameIdx&1))
-                --semantic;
-
-            // hack -- we have to keep the ping pong buffers bound in all cases, because they are intended to stay set, and we just flip flop between them
-            if (    stitchedFragment._fullAttachmentDescriptions[aIdx]._state == PreregisteredAttachment::State::PingPongBuffer0 
-                ||  stitchedFragment._fullAttachmentDescriptions[aIdx]._state == PreregisteredAttachment::State::PingPongBuffer1) {
-                parsingContext.GetTechniqueContext()._attachmentPool->Bind(semantic, _attachmentPoolReservation.GetResourceIds()[aIdx]);
-                continue;
-            }
 
             switch (stitchedFragment._attachmentTransforms[aIdx]._type) {
             case FragmentStitchingContext::AttachmentTransform::Temporary:
@@ -945,7 +933,6 @@ namespace RenderCore { namespace Techniques
 
     auto AttachmentPool::Reserve(
         IteratorRange<const PreregisteredAttachment*> attachmentRequests,
-        unsigned frameIdx,
         ReservationFlag::BitField flags) -> Reservation
     {
         bool consumed[_pimpl->_attachments.size()];
@@ -974,10 +961,6 @@ namespace RenderCore { namespace Techniques
             if (!request._semantic) continue;
 
             auto requestSemantic = request._semantic;
-            if ((frameIdx&1) && request._state == PreregisteredAttachment::State::PingPongBuffer0)
-                ++ requestSemantic;
-            else if ((frameIdx&1) && request._state == PreregisteredAttachment::State::PingPongBuffer1)
-                --requestSemantic;
             for (unsigned q=0; q<_pimpl->_semanticAttachments.size(); ++q) {
                 if (requestSemantic == _pimpl->_semanticAttachments[q]._semantic && !consumedSemantic[q] && _pimpl->_semanticAttachments[q]._resource) {
                     #if defined(_DEBUG)
@@ -1210,6 +1193,62 @@ namespace RenderCore { namespace Techniques
                 assert(a<_pimpl->_attachments.size());
                 assert(_pimpl->_attachments[a]._lockCount >= 1);
                 --_pimpl->_attachments[a]._lockCount;
+            }
+        }
+    }
+
+    void AttachmentPool::FlipDoubleBufferAttachments(
+        IThreadContext& threadContext,
+        IteratorRange<const DoubleBufferAttachment*> attachments)
+    {
+        // todo -- flip into _initialLayout? particularly post clear op
+
+        for (const auto& a:attachments) {
+            auto A = GetBoundResource(a._todaySemantic);
+            auto B = GetBoundResource(a._yesterdaySemantic);
+            Unbind(a._todaySemantic);
+            Unbind(a._yesterdaySemantic);
+            assert(!A || A != B);
+            if (A) {
+                Bind(a._yesterdaySemantic, A);
+            } else {
+                // There was no last frame -- we need to create or find an attachment for this, and
+                // make sure it's cleared with the initial data required
+                PreregisteredAttachment preReg;
+                preReg._desc = a._desc;
+                preReg._desc._bindFlags |= BindFlag::TransferDst;     // need TransferDst for a clear op
+                auto reservation = Reserve(MakeIteratorRange(&preReg, &preReg+1));
+                if (reservation.HasPendingCompleteInitialization()) {
+                    reservation.CompleteInitialization(threadContext);
+                    auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+                    if (a._desc._bindFlags & BindFlag::RenderTarget) {
+                        auto rtv = GetView(reservation.GetResourceIds()[0], BindFlag::RenderTarget);
+                        metalContext.Clear(*rtv, a._initialContents._float);
+                    } else if (a._desc._bindFlags & BindFlag::UnorderedAccess) {
+                        auto uav = GetView(reservation.GetResourceIds()[0], BindFlag::UnorderedAccess);
+                        metalContext.ClearFloat(*uav, a._initialContents._float);
+                    } else if (a._desc._bindFlags & BindFlag::DepthStencil) {
+                        auto dsv = GetView(reservation.GetResourceIds()[0], BindFlag::DepthStencil);
+                        auto components = GetComponents(preReg._desc._textureDesc._format);
+                        ClearFilter::BitField clearFilter = 0;
+                        if (components == FormatComponents::Depth || components == FormatComponents::DepthStencil)
+                            clearFilter |= ClearFilter::Depth;
+                        if (components == FormatComponents::Stencil || components == FormatComponents::DepthStencil)
+                            clearFilter |= ClearFilter::Stencil;
+                        metalContext.Clear(*dsv, clearFilter, a._initialContents._depthStencil._depth, a._initialContents._depthStencil._stencil);
+                    } else {
+                        Throw(std::runtime_error("Unable to initialize double buffered attachment, because no writable bind flags were given"));
+                    }
+                }
+                Bind(a._yesterdaySemantic, reservation.GetResourceIds()[0]);
+            }
+            if (B) {
+                // Explicitly use the "yesterday" attachment as the "today" attachment, rather
+                // than just dropping it back in the pool
+                // This will minimize the number of separate metal frame buffers actually created
+                // We don't have to do anything special when it's missing -- the standard path for this
+                // is fine
+                Bind(a._todaySemantic, B);
             }
         }
     }
@@ -1594,9 +1633,7 @@ namespace RenderCore { namespace Techniques
     {
         if (attachment._state == PreregisteredAttachment::State::Initialized
             || attachment._state == PreregisteredAttachment::State::Initialized_StencilUninitialized
-            || attachment._state == PreregisteredAttachment::State::Uninitialized_StencilInitialized
-            || attachment._state == PreregisteredAttachment::State::PingPongBuffer0
-            || attachment._state == PreregisteredAttachment::State::PingPongBuffer1)
+            || attachment._state == PreregisteredAttachment::State::Uninitialized_StencilInitialized)
             _containsDataForSemantic = attachment._semantic;
         _shouldReceiveDataForSemantic = attachment._semantic;
         _firstAccessInitialLayout = attachment._layoutFlags;
@@ -1677,8 +1714,6 @@ namespace RenderCore { namespace Techniques
         case PreregisteredAttachment::State::Initialized:   return "Initialized";
         case PreregisteredAttachment::State::Initialized_StencilUninitialized:   return "Initialized_StencilUninitialized";
         case PreregisteredAttachment::State::Uninitialized_StencilInitialized:   return "Uninitialized_StencilInitialized";
-        case PreregisteredAttachment::State::PingPongBuffer0:   return "PingPongBuffer0";
-        case PreregisteredAttachment::State::PingPongBuffer1:   return "PingPongBuffer1";
         default:                                            return "<<unknown>>";
         }
     }
@@ -1951,8 +1986,7 @@ namespace RenderCore { namespace Techniques
             case FragmentStitchingContext::AttachmentTransform::Written:
                 {
                     auto desc = stitchResult._fullAttachmentDescriptions[aIdx];
-                    if (desc._state != PreregisteredAttachment::State::PingPongBuffer0 && desc._state != PreregisteredAttachment::State::PingPongBuffer1)
-                        desc._state = PreregisteredAttachment::State::Initialized;
+                    desc._state = PreregisteredAttachment::State::Initialized;
                     desc._layoutFlags = stitchResult._attachmentTransforms[aIdx]._newLayout;
                     DefineAttachment(desc);
                     break;
@@ -1960,8 +1994,7 @@ namespace RenderCore { namespace Techniques
             case FragmentStitchingContext::AttachmentTransform::Generated:
                 {
                     auto desc = stitchResult._fullAttachmentDescriptions[aIdx];
-                    if (desc._state != PreregisteredAttachment::State::PingPongBuffer0 && desc._state != PreregisteredAttachment::State::PingPongBuffer1)
-                        desc._state = PreregisteredAttachment::State::Initialized;
+                    desc._state = PreregisteredAttachment::State::Initialized;
                     desc._layoutFlags = stitchResult._attachmentTransforms[aIdx]._newLayout;
                     DefineAttachment(desc);
                     break;
@@ -2018,11 +2051,49 @@ namespace RenderCore { namespace Techniques
             _workingAttachments.erase(i);
     }
 
+    void FragmentStitchingContext::DefineDoubleBufferAttachment(uint64_t semantic, ClearValue initialContents, unsigned initialLayoutFlags)
+    {
+        auto i = std::find_if(
+			_workingAttachments.begin(), _workingAttachments.end(),
+			[semantic](const auto& c) { return c._semantic == semantic; });
+        if (i == _workingAttachments.end())
+            Throw(std::runtime_error("Attempting to call DefineDoubleBufferAttachment() for a semantic that doesn't have a predefined attachment yet. Define the attachment for the current frame first, before requiring a double buffer of it"));
+
+        auto i3 = std::find_if(
+			_doubleBufferAttachments.begin(), _doubleBufferAttachments.end(),
+			[semantic](const auto& c) { return c._todaySemantic == semantic; });
+        if (i3 != _doubleBufferAttachments.end()) {
+            // can't easily check if the clear values are the same, because it's an enum
+            assert(i3->_initialLayoutFlags == initialLayoutFlags);
+            return; // already defined
+        }
+
+        auto i2 = std::find_if(
+			_workingAttachments.begin(), _workingAttachments.end(),
+			[semantic](const auto& c) { return c._semantic == semantic+1; });
+        if (i2 != _workingAttachments.end())
+            Throw(std::runtime_error("Attempting to call DefineDoubleBufferAttachment(), but there is an overlapping predefined attachment for the double buffer. Only predefine the attachment one."));
+
+        DoubleBufferAttachment a;
+        a._todaySemantic = semantic;
+        a._yesterdaySemantic = semantic+1;
+        a._initialContents = initialContents;
+        a._initialLayoutFlags = initialLayoutFlags;
+        a._desc = i->_desc;
+        _doubleBufferAttachments.push_back(a);
+        DefineAttachment(a._yesterdaySemantic, a._desc, PreregisteredAttachment::State::Initialized, initialLayoutFlags);
+    }
+
     Format FragmentStitchingContext::GetSystemAttachmentFormat(SystemAttachmentFormat fmt) const
     {
         if ((unsigned)fmt < dimof(_systemFormats))
             return _systemFormats[(unsigned(fmt))];
         return Format::Unknown;
+    }
+
+    IteratorRange<const DoubleBufferAttachment*> FragmentStitchingContext::GetDoubleBufferAttachments() const
+    {
+        return _doubleBufferAttachments;
     }
 
     FragmentStitchingContext::FragmentStitchingContext(

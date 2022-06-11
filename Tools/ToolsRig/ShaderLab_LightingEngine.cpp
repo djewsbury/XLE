@@ -4,6 +4,8 @@
 
 #include "ShaderLab_LightingEngine.h"
 #include "../../RenderCore/LightingEngine/LightingDelegateUtil.h"
+#include "../../RenderCore/LightingEngine/LightingEngineInitialization.h"
+#include "../../RenderCore/LightingEngine/LightingEngineIterator.h"
 #include "../../RenderCore/LightingEngine/ForwardPlusLightScene.h"
 #include "../../RenderCore/LightingEngine/ShadowPreparer.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"

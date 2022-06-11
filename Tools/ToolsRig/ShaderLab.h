@@ -9,7 +9,7 @@
 #include <functional>
 
 namespace RenderCore { namespace LightingEngine { class CompiledLightingTechnique; class LightingTechniqueSequence; class LightingTechniqueIterator; class ILightScene; }}
-namespace RenderCore { namespace Techniques { class PreregisteredAttachment; class DrawingApparatus; class FragmentStitchingContext; class ImmediateDrawingApparatus; }}
+namespace RenderCore { namespace Techniques { class PreregisteredAttachment; class DrawingApparatus; class FragmentStitchingContext; class ImmediateDrawingApparatus; struct DoubleBufferAttachment; }}
 namespace RenderCore { class FrameBufferProperties; }
 namespace BufferUploads { class IManager; }
 namespace Formatters { class IDynamicFormatter; }
@@ -38,14 +38,8 @@ namespace ToolsRig
 			virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
 			virtual unsigned GetCompletionCommandList() const = 0;
 			virtual void AdvanceTime(float) = 0;
+			virtual IteratorRange<const RenderCore::Techniques::DoubleBufferAttachment*> GetDoubleBufferAttachments() const = 0;
 			virtual ~ICompiledOperation() = default;
-		};
-
-		class IHistoricalAttachmentsHelper
-		{
-		public:
-			virtual void OnFrameBarrier(RenderCore::Techniques::ParsingContext& parsingContext) = 0;
-			virtual ~IHistoricalAttachmentsHelper() = default;
 		};
 
 		::Assets::PtrToMarkerPtr<ICompiledOperation> BuildCompiledTechnique(
@@ -82,8 +76,6 @@ namespace ToolsRig
 			StringSection<> name,
 			VisualizeStepConstructor&& constructor);
 
-		IHistoricalAttachmentsHelper& GetHistoricalAttachmentsHelper();
-
 		ShaderLab(
 			std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
 			std::shared_ptr<BufferUploads::IManager> bufferUploads);
@@ -93,8 +85,6 @@ namespace ToolsRig
 		std::vector<std::pair<std::string, VisualizeStepConstructor>> _visualizeStepConstructors;
 		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
-		class HistoricalAttachmentsHelper;
-		std::shared_ptr<HistoricalAttachmentsHelper> _historicalAttachmentsHelper;
 	};
 
 	void RegisterVisualizeAttachment(ShaderLab&);
