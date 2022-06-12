@@ -52,7 +52,7 @@ namespace RenderCore { namespace Techniques
 						ShaderStage::Compute, MakeIteratorRange(selectorsList, &selectorsList[selectorsCopy._selectors.size()]), *automaticFiltering, 
 						{}, nullptr, compiledPatchCollection, patchExpansions);
 					auto chainedFuture = sharedPools->CreateComputePipelineAlreadyLocked(shaderCopy, std::move(pipelineLayout), compiledPatchCollection, patchExpansions, filteredSelectors);
-					::Assets::WhenAll(chainedFuture).ThenConstructToPromise(std::move(promise));
+					::Assets::WhenAll(chainedFuture).CheckImmediately().ThenConstructToPromise(std::move(promise));
 				} CATCH (...) {
 					promise.set_exception(std::current_exception());
 				} CATCH_END
@@ -94,47 +94,78 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection)
 	{
 		auto result = std::make_shared<::Assets::Marker<GraphicsPipelineAndLayout>>("graphics-pipeline");
-		::Assets::WhenAll(pipelineDescWithFilteringFuture).ThenConstructToPromise(
-			std::move(promise),
-			[sharedPools=_sharedPools, selectorsCopy=RetainedSelectors{selectors}, pipelineLayout=std::move(pipelineLayout), compiledPatchCollection,
-				inputAssembly=Internal::AsVector(inputStates._inputAssembly), miniInputAssembly=Internal::AsVector(inputStates._miniInputAssembly), topology=inputStates._topology,
-				fbDesc=*fbTarget._fbDesc, spIdx=fbTarget._subpassIdx](
+		std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules> immediatePipelineDesc; ::Assets::DependencyValidation pipelineDescDepVal; ::Assets::Blob pipelineDescLog;
+		if (pipelineDescWithFilteringFuture->CheckStatusBkgrnd(immediatePipelineDesc, pipelineDescDepVal, pipelineDescLog) == ::Assets::AssetState::Ready) {
+			TRY {
+				auto cfgDepVal = MakeConfigurationDepVal(*immediatePipelineDesc);
 
-				std::promise<GraphicsPipelineAndLayout>&& promise,
-				auto pipelineDescWithFiltering) mutable {
-					
-				TRY {
-					auto cfgDepVal = MakeConfigurationDepVal(*pipelineDescWithFiltering);
+				ScopedLock(_sharedPools->_lock);
+				UniqueShaderVariationSet::FilteredSelectorSet filteredSelectors[dimof(GraphicsPipelineDesc::_shaders)];
+				auto* pipelineDesc = immediatePipelineDesc->_pipelineDesc.get();
+				for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
+					if (!pipelineDesc->_shaders[c].empty())
+						filteredSelectors[c] = _sharedPools->FilterSelectorsAlreadyLocked(
+							(ShaderStage)c,
+							selectors,
+							*immediatePipelineDesc->_automaticFiltering[c],
+							pipelineDesc->_manualSelectorFiltering,
+							immediatePipelineDesc->_preconfiguration.get(),
+							compiledPatchCollection,
+							pipelineDesc->_patchExpansions);
 
-					ScopedLock(sharedPools->_lock);
-					UniqueShaderVariationSet::FilteredSelectorSet filteredSelectors[dimof(GraphicsPipelineDesc::_shaders)];
-					const ParameterBox* selectorsList[selectorsCopy._selectors.size()];
-					for (unsigned c=0; c<selectorsCopy._selectors.size(); ++c)
-						selectorsList[c] = &selectorsCopy._selectors[c];
+				auto chainFuture = _sharedPools->CreateGraphicsPipelineAlreadyLocked(
+					inputStates, immediatePipelineDesc,
+					std::move(pipelineLayout), compiledPatchCollection,
+					filteredSelectors, fbTarget);
+				::Assets::WhenAll(chainFuture).CheckImmediately().ThenConstructToPromise(
+					std::move(promise),
+					[cfgDepVal](auto chainActual) { return MergeDepVal(chainActual, cfgDepVal); });
+			} CATCH(...) {
+				promise.set_exception(std::current_exception());
+			} CATCH_END
+		} else {
+			::Assets::WhenAll(pipelineDescWithFilteringFuture).ThenConstructToPromise(
+				std::move(promise),
+				[sharedPools=_sharedPools, selectorsCopy=RetainedSelectors{selectors}, pipelineLayout=std::move(pipelineLayout), compiledPatchCollection,
+					inputAssembly=Internal::AsVector(inputStates._inputAssembly), miniInputAssembly=Internal::AsVector(inputStates._miniInputAssembly), topology=inputStates._topology,
+					fbDesc=*fbTarget._fbDesc, spIdx=fbTarget._subpassIdx](
 
-					auto* pipelineDesc = pipelineDescWithFiltering->_pipelineDesc.get();
-					for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
-						if (!pipelineDesc->_shaders[c].empty())
-							filteredSelectors[c] = sharedPools->FilterSelectorsAlreadyLocked(
-								(ShaderStage)c,
-								MakeIteratorRange(selectorsList, &selectorsList[selectorsCopy._selectors.size()]),
-								*pipelineDescWithFiltering->_automaticFiltering[c],
-								pipelineDesc->_manualSelectorFiltering,
-								pipelineDescWithFiltering->_preconfiguration.get(),
-								compiledPatchCollection,
-								pipelineDesc->_patchExpansions);
+					std::promise<GraphicsPipelineAndLayout>&& promise,
+					auto pipelineDescWithFiltering) mutable {
+						
+					TRY {
+						auto cfgDepVal = MakeConfigurationDepVal(*pipelineDescWithFiltering);
 
-					auto chainFuture = sharedPools->CreateGraphicsPipelineAlreadyLocked(
-						VertexInputStates{inputAssembly, miniInputAssembly, topology}, pipelineDescWithFiltering,
-						std::move(pipelineLayout), compiledPatchCollection,
-						filteredSelectors, {&fbDesc, spIdx});
-					::Assets::WhenAll(chainFuture).ThenConstructToPromise(
-						std::move(promise),
-						[cfgDepVal](auto chainActual) { return MergeDepVal(chainActual, cfgDepVal); });
-				} CATCH(...) {
-					promise.set_exception(std::current_exception());
-				} CATCH_END
-			});
+						ScopedLock(sharedPools->_lock);
+						UniqueShaderVariationSet::FilteredSelectorSet filteredSelectors[dimof(GraphicsPipelineDesc::_shaders)];
+						const ParameterBox* selectorsList[selectorsCopy._selectors.size()];
+						for (unsigned c=0; c<selectorsCopy._selectors.size(); ++c)
+							selectorsList[c] = &selectorsCopy._selectors[c];
+
+						auto* pipelineDesc = pipelineDescWithFiltering->_pipelineDesc.get();
+						for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
+							if (!pipelineDesc->_shaders[c].empty())
+								filteredSelectors[c] = sharedPools->FilterSelectorsAlreadyLocked(
+									(ShaderStage)c,
+									MakeIteratorRange(selectorsList, &selectorsList[selectorsCopy._selectors.size()]),
+									*pipelineDescWithFiltering->_automaticFiltering[c],
+									pipelineDesc->_manualSelectorFiltering,
+									pipelineDescWithFiltering->_preconfiguration.get(),
+									compiledPatchCollection,
+									pipelineDesc->_patchExpansions);
+
+						auto chainFuture = sharedPools->CreateGraphicsPipelineAlreadyLocked(
+							VertexInputStates{inputAssembly, miniInputAssembly, topology}, pipelineDescWithFiltering,
+							std::move(pipelineLayout), compiledPatchCollection,
+							filteredSelectors, {&fbDesc, spIdx});
+						::Assets::WhenAll(chainFuture).CheckImmediately().ThenConstructToPromise(
+							std::move(promise),
+							[cfgDepVal](auto chainActual) { return MergeDepVal(chainActual, cfgDepVal); });
+					} CATCH(...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+		}
 	}
 
 	void PipelineCollection::CreateGraphicsPipeline(

@@ -98,6 +98,12 @@ namespace RenderCore { namespace Techniques
 			const ParameterBox& globalSelectors,
 			const std::shared_ptr<PipelineCollection>& pipelineCollection,
 			ICompiledLayoutPool& layoutPatcher);
+
+		void BeginPrepareForSequencerStateInternal(
+			std::promise<IPipelineAcceleratorPool::Pipeline>&& resultPromise,
+			std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection,
+			PipelineCollection& pipelineCollection, const ParameterBox& globalSelectors, std::shared_ptr<SequencerConfig> cfg, PipelineLayoutMarker& pipelineLayoutMarker);
+
 		bool HasCurrentOrFuturePipeline(const SequencerConfig& cfg) const;
 
 		Pipeline* TryGetPipeline(const SequencerConfig& cfg, VisibilityMarkerId visibilityMarker);
@@ -113,6 +119,57 @@ namespace RenderCore { namespace Techniques
 		unsigned _ownerPoolId;
 	};
 
+	void PipelineAccelerator::BeginPrepareForSequencerStateInternal(
+		std::promise<IPipelineAcceleratorPool::Pipeline>&& resultPromise,
+		std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection,
+		PipelineCollection& pipelineCollection, const ParameterBox& globalSelectors, std::shared_ptr<SequencerConfig> cfg, PipelineLayoutMarker& pipelineLayoutMarker)
+	{
+		// Use our copy of PipelineLayoutMarker (rather than the one in cfg) to avoid and race conditions
+		std::shared_ptr<CompiledPipelineLayoutAsset> actualPipelineLayoutAsset = pipelineLayoutMarker._pipelineLayout;
+		if (!actualPipelineLayoutAsset) {
+			assert(pipelineLayoutMarker._pending.valid());
+			YieldToPool(pipelineLayoutMarker._pending);		// this case should be uncommon, and YieldToPool is a lot simplier than making pipelineLayoutMarker._pending an optional precondition
+			actualPipelineLayoutAsset = pipelineLayoutMarker._pending.get();
+		}
+
+		const ParameterBox* paramBoxes[] = {
+			&cfg->_sequencerSelectors,
+			&_geoSelectors,
+			&_materialSelectors,
+			&globalSelectors
+		};
+
+		auto pipelineDescFuture = cfg->_delegate->GetPipelineDesc(compiledPatchCollection->GetInterface(), _stateSet);
+		VertexInputStates vis { _inputAssembly, _miniInputAssembly, _topology };
+		auto metalPipelineFuture = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
+		pipelineCollection.CreateGraphicsPipeline(
+			metalPipelineFuture->AdoptPromise(),
+			actualPipelineLayoutAsset->GetPipelineLayout(), pipelineDescFuture,
+			MakeIteratorRange(paramBoxes), 
+			vis, FrameBufferTarget{&cfg->_fbDesc, cfg->_subpassIdx}, compiledPatchCollection);
+
+		std::weak_ptr<PipelineAccelerator> weakThis = shared_from_this();
+		::Assets::WhenAll(metalPipelineFuture, pipelineDescFuture).ThenConstructToPromise(
+			std::move(resultPromise),
+			[cfg=std::move(cfg), weakThis](
+				GraphicsPipelineAndLayout metalPipeline, auto pipelineDesc) {
+
+				auto containingPipelineAccelerator = weakThis.lock();
+				if (!containingPipelineAccelerator)
+					Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));
+
+				IPipelineAcceleratorPool::Pipeline result;
+				result._metalPipeline = std::move(metalPipeline._pipeline);
+				result._depVal = metalPipeline._depVal;
+				#if defined(_DEBUG)
+					result._vsDescription = metalPipeline._debugInfo._vsDescription;
+					result._psDescription = metalPipeline._debugInfo._psDescription;
+					result._gsDescription = metalPipeline._debugInfo._gsDescription;
+				#endif
+				return result;
+			});
+	}
+
 	auto PipelineAccelerator::BeginPrepareForSequencerStateAlreadyLocked(
 		std::shared_ptr<SequencerConfig> cfg,
 		const ParameterBox& globalSelectors,
@@ -127,6 +184,7 @@ namespace RenderCore { namespace Techniques
 
 		// capture the "PipelineLayoutMarker" while inside of the lock
 		auto pipelineLayoutMarker = cfg->_pipelineLayout;
+		unsigned sequencerIdx = unsigned(cfg->_cfgId);
 
 		// Queue massive chain of future continuation functions (it's not as scary as it looks)
 		//
@@ -135,66 +193,35 @@ namespace RenderCore { namespace Techniques
 		// Note there may be an issue here in that if the shader compile fails, the dep val for the 
 		// final pipeline will only contain the dependencies for the shader. So if the root problem
 		// is actually something about the configuration, we won't get the proper recompile functionality 
-		::Assets::WhenAll(patchCollectionFuture).ThenConstructToPromise(
-			std::move(pipelinePromise),
-			[pipelineCollection, copyGlobalSelectors, cfg, pipelineLayoutMarker, weakThis](
-				std::promise<IPipelineAcceleratorPool::Pipeline>&& resultPromise,
-				std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection) mutable {
+		std::shared_ptr<CompiledShaderPatchCollection> immediatePatchCollection; ::Assets::DependencyValidation patchCollectionDepVal; ::Assets::Blob patchCollectionLog;
+		if (patchCollectionFuture->CheckStatusBkgrnd(immediatePatchCollection, patchCollectionDepVal, patchCollectionLog) == ::Assets::AssetState::Ready) {
+			TRY {
+				BeginPrepareForSequencerStateInternal(
+					std::move(pipelinePromise),
+					immediatePatchCollection, *pipelineCollection, copyGlobalSelectors, std::move(cfg), pipelineLayoutMarker);
+			} CATCH(...) {
+				pipelinePromise.set_exception(std::current_exception());
+			} CATCH_END
+		} else {
+			::Assets::WhenAll(patchCollectionFuture).ThenConstructToPromise(
+				std::move(pipelinePromise),
+				[pipelineCollection, copyGlobalSelectors, cfg=std::move(cfg), pipelineLayoutMarker, weakThis](
+					std::promise<IPipelineAcceleratorPool::Pipeline>&& resultPromise,
+					std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection) mutable {
 
-				TRY {
-					auto containingPipelineAccelerator = weakThis.lock();
-					if (!containingPipelineAccelerator)
-						Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));
+					TRY {
+						auto containingPipelineAccelerator = weakThis.lock();
+						if (!containingPipelineAccelerator)
+							Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));
+						containingPipelineAccelerator->BeginPrepareForSequencerStateInternal(
+							std::move(resultPromise),
+							compiledPatchCollection, *pipelineCollection, copyGlobalSelectors, std::move(cfg), pipelineLayoutMarker);
+					} CATCH(...) {
+						resultPromise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+		}
 
-					// Use our copy of PipelineLayoutMarker (rather than the one in cfg) to avoid and race conditions
-					std::shared_ptr<CompiledPipelineLayoutAsset> actualPipelineLayoutAsset = pipelineLayoutMarker._pipelineLayout;
-					if (!actualPipelineLayoutAsset) {
-						assert(pipelineLayoutMarker._pending.valid());
-						YieldToPool(pipelineLayoutMarker._pending);		// this case should be uncommon, and YieldToPool is a lot simplier than making pipelineLayoutMarker._pending an optional precondition
-						actualPipelineLayoutAsset = pipelineLayoutMarker._pending.get();
-					}
-
-					const ParameterBox* paramBoxes[] = {
-						&cfg->_sequencerSelectors,
-						&containingPipelineAccelerator->_geoSelectors,
-						&containingPipelineAccelerator->_materialSelectors,
-						&copyGlobalSelectors
-					};
-
-					auto pipelineDescFuture = cfg->_delegate->GetPipelineDesc(compiledPatchCollection->GetInterface(), containingPipelineAccelerator->_stateSet);
-					VertexInputStates vis { containingPipelineAccelerator->_inputAssembly, containingPipelineAccelerator->_miniInputAssembly, containingPipelineAccelerator->_topology };
-					auto metalPipelineFuture = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
-					pipelineCollection->CreateGraphicsPipeline(
-						metalPipelineFuture->AdoptPromise(),
-						actualPipelineLayoutAsset->GetPipelineLayout(), pipelineDescFuture,
-						MakeIteratorRange(paramBoxes), 
-						vis, FrameBufferTarget{&cfg->_fbDesc, cfg->_subpassIdx}, compiledPatchCollection);
-
-					::Assets::WhenAll(metalPipelineFuture, pipelineDescFuture).ThenConstructToPromise(
-						std::move(resultPromise),
-						[cfg, weakThis](
-							GraphicsPipelineAndLayout metalPipeline, auto pipelineDesc) {
-
-							auto containingPipelineAccelerator = weakThis.lock();
-							if (!containingPipelineAccelerator)
-								Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));
-
-							IPipelineAcceleratorPool::Pipeline result;
-							result._metalPipeline = std::move(metalPipeline._pipeline);
-							result._depVal = metalPipeline._depVal;
-							#if defined(_DEBUG)
-								result._vsDescription = metalPipeline._debugInfo._vsDescription;
-								result._psDescription = metalPipeline._debugInfo._psDescription;
-								result._gsDescription = metalPipeline._debugInfo._gsDescription;
-							#endif
-							return result;
-						});
-				} CATCH(...) {
-					resultPromise.set_exception(std::current_exception());
-				} CATCH_END
-			});
-
-		unsigned sequencerIdx = unsigned(cfg->_cfgId);
 		auto i = std::find_if(_pendingPipelines.begin(), _pendingPipelines.end(), [sequencerIdx](const auto& p) { return p.first == sequencerIdx; });
 		if (i != _pendingPipelines.end()) {
 			i->second = futurePipeline;
@@ -817,11 +844,12 @@ namespace RenderCore { namespace Techniques
 
 			// Most of the time, it will be ready immediately, and we can avoid some of the overhead of the
 			// future continuation functions
-			if (auto* patchCollection = patchCollectionFuture->TryActualize()) {
+			std::shared_ptr<CompiledShaderPatchCollection> patchCollection; ::Assets::DependencyValidation patchCollectionDepVal; ::Assets::Blob patchCollectionLog;
+			if (patchCollectionFuture->CheckStatusBkgrnd(patchCollection, patchCollectionDepVal, patchCollectionLog) == ::Assets::AssetState::Ready) {
 				ConstructDescriptorSetHelper{_device, _samplerPool.get(), PipelineType::Graphics, generateBindingInfo}
 					.Construct(
 						std::move(promise),
-						(*patchCollection)->GetInterface().GetMaterialDescriptorSet(),
+						patchCollection->GetInterface().GetMaterialDescriptorSet(),
 						materialMachine, deformBinding.get());
 			} else {
 				std::weak_ptr<IDevice> weakDevice = _device;
