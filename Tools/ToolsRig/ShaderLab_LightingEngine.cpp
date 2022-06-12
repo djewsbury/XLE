@@ -162,8 +162,8 @@ namespace ToolsRig
 				while (formatter.TryKeyedItem(keyname)) {
 					if (XlEqString(keyname, "SearchSteps"))
 						desc._searchSteps = RequireCastValue<unsigned>(formatter);
-					else if (XlEqString(keyname, "OccupancyThreshold"))
-						desc._occupancyThreshold = RequireCastValue<unsigned>(formatter);
+					else if (XlEqString(keyname, "MaxWorldSpaceDistance"))
+						desc._maxWorldSpaceDistance = RequireCastValue<float>(formatter);
 					else if (XlEqString(keyname, "SampleBothDirections"))
 						desc._sampleBothDirections = RequireCastValue<bool>(formatter);
 					else if (XlEqString(keyname, "LateTemporalFiltering"))
@@ -172,6 +172,8 @@ namespace ToolsRig
 						desc._enableFiltering = RequireCastValue<bool>(formatter);
 					else if (XlEqString(keyname, "EnableHierarchicalStepping"))
 						desc._enableHierarchicalStepping = RequireCastValue<bool>(formatter);
+					else if (XlEqString(keyname, "ThicknessHeuristicFactor"))
+						desc._thicknessHeuristicFactor = RequireCastValue<float>(formatter);
 					else
 						formatter.SkipValueOrElement();
 				}

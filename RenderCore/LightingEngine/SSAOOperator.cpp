@@ -79,13 +79,15 @@ namespace RenderCore { namespace LightingEngine
         struct AOProps
         {
             unsigned _searchSteps;
-            unsigned _occupancyThreshold;
+            float _maxWorldSpaceDistanceSq;
             unsigned _frameIdx;
             unsigned _clearAccumulation;
+            float _thicknessHeuristicFactor;
         } aoProps {
-            _opDesc._searchSteps, _opDesc._occupancyThreshold,
+            _opDesc._searchSteps, _opDesc._maxWorldSpaceDistance * _opDesc._maxWorldSpaceDistance,
             _pingPongCounter, 
             _pingPongCounter == ~0u,
+            _opDesc._thicknessHeuristicFactor
         };
         UniformsStream::ImmediateData immData[] = {
             MakeOpaqueIteratorRange(aoProps)
@@ -245,7 +247,7 @@ namespace RenderCore { namespace LightingEngine
 		bool hasHierarchicalDepths)
     {
         assert(opDesc._searchSteps > 1 && opDesc._searchSteps < 1024);  // rationality check
-        assert(opDesc._occupancyThreshold > 1);
+        assert(opDesc._maxWorldSpaceDistance > 0);
 
         UniformsStreamInterface usi;
         usi.BindResourceView(0, Hash64("InputTexture"));
@@ -265,6 +267,7 @@ namespace RenderCore { namespace LightingEngine
         if (hasHierarchicalDepths) selectors.SetParameter("HAS_HIERARCHICAL_DEPTHS", 1);
         if (opDesc._enableHierarchicalStepping) selectors.SetParameter("ENABLE_HIERARCHICAL_STEPPING", 1);
         if (opDesc._enableFiltering) selectors.SetParameter("ENABLE_FILTERING", 1);
+        if (opDesc._thicknessHeuristicFactor < 1) selectors.SetParameter("ENABLE_THICKNESS_HEURISTIC", 1);
         auto perspectiveComputeOp = Techniques::CreateComputeOperator(
             pipelinePool,
             AO_COMPUTE_HLSL ":main",
@@ -310,15 +313,19 @@ namespace RenderCore { namespace LightingEngine
 
     uint64_t AmbientOcclusionOperatorDesc::GetHash(uint64_t seed) const
     {
-        uint64_t value = 
+        uint64_t value0 = 
             CompressToBits(_searchSteps, 8)
-            | (CompressToBits(_occupancyThreshold, 5) << 8ull)
-            | (CompressToBits(_sampleBothDirections, 1) << 13ull)
-            | (CompressToBits(_lateTemporalFiltering, 1) << 14ull)
-            | (CompressToBits(_enableFiltering, 1) << 15ull)
-            | (CompressToBits(_enableHierarchicalStepping, 1) << 16ull)
+            | (CompressToBits(_sampleBothDirections, 1) << 8ull)
+            | (CompressToBits(_lateTemporalFiltering, 1) << 9ull)
+            | (CompressToBits(_enableFiltering, 1) << 10ull)
+            | (CompressToBits(_enableHierarchicalStepping, 1) << 11ull)
             ;
-        return HashCombine(value, seed);
+
+        uint32_t value1 =
+            CompressToBits(*reinterpret_cast<const unsigned*>(&_maxWorldSpaceDistance), 32)
+            | (CompressToBits(*reinterpret_cast<const unsigned*>(&_thicknessHeuristicFactor), 32) << 32ull)
+            ;
+        return HashCombine(HashCombine(value0, value1), seed);
     }
 
 }}

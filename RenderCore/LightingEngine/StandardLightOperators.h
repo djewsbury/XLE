@@ -7,6 +7,7 @@
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/StringUtils.h"
 #include <optional>
+#include <limits>
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -40,11 +41,12 @@ namespace RenderCore { namespace LightingEngine
 	struct AmbientOcclusionOperatorDesc
 	{
 		unsigned _searchSteps = 32;
-		unsigned _occupancyThreshold = 8;
+		float _maxWorldSpaceDistance = std::numeric_limits<float>::max();
 		bool _sampleBothDirections = true;
 		bool _lateTemporalFiltering = true;
 		bool _enableFiltering = true;
 		bool _enableHierarchicalStepping = true;
+		float _thicknessHeuristicFactor = 0.15;		// set to 1 to disable
 
 		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
 	};

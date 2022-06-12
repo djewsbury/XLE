@@ -16,10 +16,11 @@ Texture2D<float> HierarchicalDepths;
 
 cbuffer AOProps
 {
-	uint SearchSteps;			// 32
-	uint OccupancyThreshold;	// 8
+	uint SearchSteps;					// 32
+	float MaxWorldSpaceDistanceSq;		// 1
 	uint FrameIdx;
 	uint ClearAccumulation;
+	float ThicknessHeuristicFactor;		// 0.15
 }
 
 // #define BOTH_WAYS 1
@@ -29,6 +30,7 @@ cbuffer AOProps
 // #define ORTHO_CAMERA 1
 // #define ENABLE_HIERARCHICAL_STEPPING 1
 // #define ENABLE_FILTERING 1
+// #define ENABLE_THICKNESS_HEURISTIC 1
 
 static const uint FrameWrap = 6;
 
@@ -43,7 +45,7 @@ float TraverseRay_NonHierachicalDepths(uint2 pixelId, float cosPhi, float sinPhi
 	float d0 = HierarchicalDepths.Load(uint3(pixelId.xy, 1));
 	[branch] if (d0 == 0) return 0;		// early out for sky, to avoid excessive noise in the image
 
-	float cosMaxTheta = 0.0;
+	float maxCosTheta = 0.0;
 	float xStep, yStep;
 	float stepDistanceSq;
 	if (abs(sinPhi) > abs(cosPhi)) {
@@ -70,8 +72,6 @@ float TraverseRay_NonHierachicalDepths(uint2 pixelId, float cosPhi, float sinPhi
 
 	int c=1;
 	for (; c<SearchSteps; ++c) {
-		if (WaveActiveCountBits(true) <= OccupancyThreshold) break;	// exit due to low occupancy
-
 		float d = HierarchicalDepths.Load(uint3(xy, 1));
 		xy += float2(xStep, yStep);
 		#if ORTHO_CAMERA
@@ -89,12 +89,12 @@ float TraverseRay_NonHierachicalDepths(uint2 pixelId, float cosPhi, float sinPhi
 		// so we can just take worldSpaceDepthDifference / length(vector to test point)
 		//
 		float cosTheta = worldSpaceDepthDifference * rsqrt(worldSpaceDepthDifference * worldSpaceDepthDifference + azmuthalXSq);
-		cosMaxTheta = max(cosTheta, cosMaxTheta);
+		maxCosTheta = max(cosTheta, maxCosTheta);
 
 		// note -- thickness heuristic
 	}
 
-	return cosMaxTheta;
+	return maxCosTheta;
 }
 
 float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
@@ -107,7 +107,7 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 	float d0 = HierarchicalDepths.Load(uint3(pixelId.xy, 1));
 	[branch] if (d0 == 0) return 0;		// early out for sky, to avoid excessive noise in the image
 
-	float cosMaxTheta = 0.0;
+	float maxCosTheta = 0.0;
 	float xStep, yStep;
 	float stepDistanceSq;
 	if (abs(sinPhi) > abs(cosPhi)) {
@@ -135,14 +135,15 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 		stepDistanceSq = dot(worldSpacePixelSize, worldSpacePixelSize);
 	#endif
 
+	const float maxWSDistanceSq = MaxWorldSpaceDistanceSq;
+
 	const float initialStepSize = 1;
 	float2 xy = pixelId.xy + initialStepSize*float2(xStep, yStep);
 	int c=SearchSteps;
 	float stepsAtMostDetailedRes = initialStepSize;
+	float lastCosTheta = 1;
 	while (c--) {
 		if (any(xy < 0 || xy >= mostDetailedMipRes)) break;
-		if (WaveActiveCountBits(true) <= OccupancyThreshold) break;	// exit due to low occupancy
-
 		float d = HierarchicalDepths.Load(uint3(xy/currentMipLevelScale, currentMipLevel));
 
 		#if ORTHO_CAMERA
@@ -151,16 +152,35 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 			float worldSpaceDepthDifference = wsDepth0 - NDCDepthToWorldSpace_Perspective(d, GlobalMiniProjZW());
 		#endif
 		float azmuthalXSq = stepsAtMostDetailedRes * stepsAtMostDetailedRes * stepDistanceSq;
+		if (azmuthalXSq > maxWSDistanceSq) break;
+
 		float cosTheta = worldSpaceDepthDifference * rsqrt(worldSpaceDepthDifference * worldSpaceDepthDifference + azmuthalXSq);
+
+		// This is the "thickness' heutristic from the gtoa paper. It helps reduce the intensity of AO shadows around thin objects, and
+		// also takes the edge of some of the less desirable effects of the method.
+		// The idea is to soften out changes in the "cosTheta" value by tracking the exponential moving average of cosTheta, rather than
+		// using the raw values directly. For big features, this should have little impact, because the average will catch up to real
+		// values very quickly -- and while the final calculated angle will be a little wrong, it don't be significantly of.
+		// The justification given in the paper is to say that features tend to be roughly as thick as they are wide, and therefore
+		// using width is valid. This is a little misleading, though, because even thin features do end up creating AO shadows.
+		// We could extend this concept further, though, if we could make a more accurate guess at the width of occluder and comparing
+		// it to worldSpaceDepthDifference.
+		// Either way, this idea doesn't need to be accurate to work well, and I really like the overall idea.
+		bool improveAccuracy = cosTheta > maxCosTheta;
+		#if defined(ENABLE_THICKNESS_HEURISTIC)
+			if (cosTheta > lastCosTheta)
+				cosTheta = lerp(lastCosTheta, cosTheta, ThicknessHeuristicFactor*currentMipLevel);
+			lastCosTheta = cosTheta;
+		#endif
 		
 		// Shift the mip level we're testing up or down to either refine the estimate or attempt to make a bigger step
 		// on the next loop iteration
 		// Here, we're assuming that the depth downsampling is using a min() filter (ie, each depth value is the closest to the camera
 		// of the source pixels from the next more detailed mip). But, it may look visually acceptable with other mip filters also
-		#if ENABLE_HIERARCHICAL_STEPPING
-			if (cosTheta > cosMaxTheta) {
+		#if defined(ENABLE_HIERARCHICAL_STEPPING)
+			if (improveAccuracy) {
 				if (currentMipLevel == mostDetailedMipLevel) {
-					cosMaxTheta = cosTheta;
+					maxCosTheta = max(maxCosTheta, cosTheta);
 					xy += float2(xStep, yStep);
 					stepsAtMostDetailedRes += 1.0f;
 				} else {
@@ -181,13 +201,13 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 				currentMipLevelScale *= nextMipLevelBoundary?2:1;
 			}
 		#else
-			cosMaxTheta = max(cosMaxTheta, cosTheta);
+			maxCosTheta = max(maxCosTheta, cosTheta);
 			xy += float2(xStep, yStep);
 			stepsAtMostDetailedRes += 1.0f;
 		#endif
 	}
 
-	return cosMaxTheta;
+	return maxCosTheta;
 }
 
 float TraverseRay(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
@@ -264,7 +284,7 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 
 	float cosPhi, sinPhi;
 	sincos(phi, sinPhi, cosPhi);
-	float cosMaxTheta = TraverseRay(pixelId, cosPhi, sinPhi, textureDims);
+	float maxCosTheta = TraverseRay(pixelId, cosPhi, sinPhi, textureDims);
 
 #if BOTH_WAYS
 	float cosMaxTheta2 = TraverseRay(pixelId, -cosPhi, -sinPhi, textureDims);
@@ -298,7 +318,7 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 	float gamma = acos(cosGamma);
 	float sinGamma = sin(gamma);
 
-	float maxTheta = acos(min(1,cosMaxTheta));
+	float maxTheta = acos(min(1,maxCosTheta));
 	float gtoa = cosGamma + 2 * maxTheta * sinGamma - cos(2*maxTheta - gamma);	// 0.25f * reciprocalMagProjectedWorldSpaceNormal below
 
 #if BOTH_WAYS
