@@ -6,4 +6,5 @@ namespace ToolsRig
 {
 	class ShaderLab;
 	void RegisterPrepareLightScene(ToolsRig::ShaderLab&);
+	void RegisterCommonLightingEngineSteps(ToolsRig::ShaderLab&);
 }

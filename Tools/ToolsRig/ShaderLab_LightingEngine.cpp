@@ -8,8 +8,14 @@
 #include "../../RenderCore/LightingEngine/LightingEngineIterator.h"
 #include "../../RenderCore/LightingEngine/ForwardPlusLightScene.h"
 #include "../../RenderCore/LightingEngine/ShadowPreparer.h"
+#include "../../RenderCore/LightingEngine/SSAOOperator.h"
+#include "../../RenderCore/LightingEngine/HierarchicalDepths.h"
+#include "../../RenderCore/LightingEngine/ScreenSpaceReflections.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
+#include "../../RenderCore/Techniques/DeferredShaderResource.h"
+#include "../../RenderCore/Techniques/CommonBindings.h"
+#include "../../RenderCore/Assets/TextureCompiler.h"
 #include "../../Tools/ToolsRig/ShaderLab.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/DeferredConstruction.h"
@@ -122,6 +128,115 @@ namespace ToolsRig
 								opStep->ConfigureParsingContext(*iterator._parsingContext);
 							});
 					});
+			});
+	}
+
+	template<typename Type, typename... Params> Type MakeFutureAndActualize(Params... initialisers)
+	{
+		std::promise<Type> promise;
+		auto future = promise.get_future();
+		::Assets::AutoConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
+		return future.get();		// stall here
+	}
+
+	void RegisterCommonLightingEngineSteps(ToolsRig::ShaderLab& shaderLab)
+	{
+		shaderLab.RegisterOperation(
+			"HierarchicalDepths",
+			[](Formatters::IDynamicFormatter& formatter, ToolsRig::ShaderLab::OperationConstructorContext& context) {
+				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::HierarchicalDepthsOperator>>(context._drawingApparatus->_graphicsPipelinePool);
+				opStep->PreregisterAttachments(context._stitchingContext);
+				context._setupFunctions.push_back(
+					[opStep, fbProps=context._stitchingContext._workingProps](auto& sequence) {
+						sequence.CreateStep_RunFragments(opStep->CreateFragment(fbProps));
+					});
+				context._depVal.RegisterDependency(opStep->GetDependencyValidation());
+				context._completionCommandList = std::max(opStep->GetCompletionCommandList(), context._completionCommandList);
+			});
+
+		shaderLab.RegisterOperation(
+			"SSAOOperator",
+			[](Formatters::IDynamicFormatter& formatter, ToolsRig::ShaderLab::OperationConstructorContext& context) {
+				RenderCore::LightingEngine::AmbientOcclusionOperatorDesc desc;
+				StringSection<> keyname;
+				while (formatter.TryKeyedItem(keyname)) {
+					if (XlEqString(keyname, "SearchSteps"))
+						desc._searchSteps = RequireCastValue<unsigned>(formatter);
+					else if (XlEqString(keyname, "OccupancyThreshold"))
+						desc._occupancyThreshold = RequireCastValue<unsigned>(formatter);
+					else if (XlEqString(keyname, "SampleBothDirections"))
+						desc._sampleBothDirections = RequireCastValue<bool>(formatter);
+					else if (XlEqString(keyname, "LateTemporalFiltering"))
+						desc._lateTemporalFiltering = RequireCastValue<bool>(formatter);
+					else if (XlEqString(keyname, "EnableFiltering"))
+						desc._enableFiltering = RequireCastValue<bool>(formatter);
+					else if (XlEqString(keyname, "EnableHierarchicalStepping"))
+						desc._enableHierarchicalStepping = RequireCastValue<bool>(formatter);
+					else
+						formatter.SkipValueOrElement();
+				}
+
+				bool hasHierarchialDepths = false;
+				for (const auto& a:context._stitchingContext.GetPreregisteredAttachments())
+					hasHierarchialDepths |= a._semantic == Techniques::AttachmentSemantics::HierarchicalDepths;
+
+				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::SSAOOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc, hasHierarchialDepths);
+				opStep->PreregisterAttachments(context._stitchingContext);
+				context._setupFunctions.push_back(
+					[opStep, fbProps=context._stitchingContext._workingProps](auto& sequence) {
+						sequence.CreateStep_RunFragments(opStep->CreateFragment(fbProps));
+					});
+				context._depVal.RegisterDependency(opStep->GetDependencyValidation());
+				context._completionCommandList = std::max(opStep->GetCompletionCommandList(), context._completionCommandList);
+			});
+
+		shaderLab.RegisterOperation(
+			"SSROperator",
+			[](Formatters::IDynamicFormatter& formatter, ToolsRig::ShaderLab::OperationConstructorContext& context) {
+				RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc desc;
+				StringSection<> keyname;
+				StringSection<> ambientCubemap;
+				while (formatter.TryKeyedItem(keyname)) {
+					if (XlEqString(keyname, "EnableFinalBlur"))
+						desc._enableFinalBlur = RequireCastValue<bool>(formatter);
+					else if (XlEqString(keyname, "SplitConfidence"))
+						desc._splitConfidence = RequireCastValue<bool>(formatter);
+					else if (XlEqString(keyname, "AmbientCubemap"))
+						ambientCubemap = RequireStringValue(formatter);
+					else
+						formatter.SkipValueOrElement();
+				}
+
+				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::ScreenSpaceReflectionsOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc);
+				opStep->PreregisterAttachments(context._stitchingContext);
+				context._setupFunctions.push_back(
+					[opStep, fbProps=context._stitchingContext._workingProps](auto& sequence) {
+						sequence.CreateStep_RunFragments(opStep->CreateFragment(fbProps));
+					});
+				context._depVal.RegisterDependency(opStep->GetDependencyValidation());
+
+				// set a sky texture
+				if (!ambientCubemap.IsEmpty()) {
+					RenderCore::Assets::TextureCompilationRequest request2;
+					request2._operation = RenderCore::Assets::TextureCompilationRequest::Operation::EquRectToCubeMap; 
+					request2._srcFile = ambientCubemap.AsString();
+					request2._format = Format::BC6H_UF16;
+					request2._faceDim = 1024;
+					request2._mipMapFilter = RenderCore::Assets::TextureCompilationRequest::MipMapFilter::FromSource;
+					auto ambientRawCubemap = ::Assets::MakeFuturePtr<Techniques::DeferredShaderResource>(request2);
+
+					std::weak_ptr<RenderCore::LightingEngine::ScreenSpaceReflectionsOperator> weakOp = opStep;
+					::Assets::WhenAll(ambientRawCubemap).Then(
+						[weakOp](auto ambientRawCubemapFuture) {
+							auto l = weakOp.lock();
+							if (!l) return;
+							auto ambientRawCubemap = ambientRawCubemapFuture.get();
+							TextureViewDesc adjustedViewDesc;
+							adjustedViewDesc._mipRange._min = 2;
+							auto adjustedView = ambientRawCubemap->GetShaderResource()->GetResource()->CreateTextureView(BindFlag::ShaderResource, adjustedViewDesc);
+							l->SetSpecularIBL(adjustedView);
+						});
+				}
 			});
 	}
 }
