@@ -97,6 +97,31 @@ namespace Assets { namespace Internal
 		return future.wait_for(timeout) == std::future_status::ready;
 	}
 
+	template<typename PromisedType>
+		bool TimedWaitUntil(const std::shared_ptr<Marker<PromisedType>>& future, std::chrono::steady_clock::time_point timeoutTime)
+	{
+		auto stallResult = future->StallWhilePendingUntil(timeoutTime);
+		return stallResult.value_or(AssetState::Pending) != AssetState::Pending;
+	}
+	
+	static bool TimedWaitUntil(const IAsyncMarker& future, std::chrono::steady_clock::time_point timeoutTime)
+	{
+		auto stallResult = future.StallWhilePending(std::chrono::microseconds(500));	// no StallUntil(), so just have to pick a timeout time
+		return stallResult.value_or(AssetState::Pending) != AssetState::Pending;
+	}
+
+	template<typename PromisedType>
+		bool TimedWaitUntil(const std::future<PromisedType>& future, std::chrono::steady_clock::time_point timeoutTime)
+	{
+		return future.wait_until(timeoutTime) == std::future_status::ready;
+	}
+
+	template<typename PromisedType>
+		bool TimedWaitUntil(const std::shared_future<PromisedType>& future, std::chrono::steady_clock::time_point timeoutTime)
+	{
+		return future.wait_until(timeoutTime) == std::future_status::ready;
+	}
+
 	#if CONTINUATION_DETAILED_LOGGING 
 		template<int I, typename... Types>
 			void SerializeNames(std::ostream& str)
@@ -459,22 +484,43 @@ namespace Assets { namespace Internal
 		{}
 
 		template<std::size_t I>
-			bool timedWait_(const std::chrono::microseconds& timeout)
+			bool timedWaitUntil_(const std::chrono::steady_clock::time_point& timeoutTime)
 		{
-			if (!TimedWait(std::get<I>(_subFutures), timeout))
+			if (I >= _lastCompletedTo && !TimedWaitUntil(std::get<I>(_subFutures), timeoutTime)) {
+				_lastCompletedTo = I;
 				return false;
+			}
 			if constexpr(I+1 != sizeof...(FutureTypes))
-				if (!timedWait_<I+1>(timeout))
+				if (!timedWaitUntil_<I+1>(timeoutTime))
+					return false;
+			return true;
+		}
+
+		template<std::size_t I>
+			bool timedWait_(const std::chrono::microseconds& timeoutDuration)
+		{
+			if (I >= _lastCompletedTo && !TimedWait(std::get<I>(_subFutures), timeoutDuration)) {
+				_lastCompletedTo = I;
+				return false;
+			}
+			if constexpr(I+1 != sizeof...(FutureTypes))
+				if (!timedWait_<I+1>(timeoutDuration))
 					return false;
 			return true;
 		}
 
 		bool timedWait(const std::chrono::microseconds& timeout) override
 		{
-			return timedWait_<0>(timeout);
+			if (timeout.count() != 0) {
+				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+				return timedWaitUntil_<0>(timeoutTime);
+			} else {
+				return timedWait_<0>(timeout);
+			}
 		}
 
 		TupleOfFutures _subFutures;
+		size_t _lastCompletedTo = 0;
 	};
 
 	template<typename... FutureTypes>

@@ -60,6 +60,7 @@ namespace Assets
 		const Type* TryActualize() const;
 		
         std::optional<AssetState>   StallWhilePending(std::chrono::microseconds timeout = std::chrono::microseconds(0)) const override;
+		std::optional<AssetState>   StallWhilePendingUntil(std::chrono::steady_clock::time_point timeoutTime) const;
 
 		AssetState		            GetAssetState() const override { return _state; }
 		const DependencyValidation&	GetDependencyValidation() const { return _actualizedDepVal; }
@@ -475,6 +476,59 @@ namespace Assets
 			DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
 			return (AssetState)that->_state;
 		}
+	}
+
+	template<typename Type>
+		std::optional<AssetState>   Marker<Type>::StallWhilePendingUntil(std::chrono::steady_clock::time_point timeoutTime) const
+	{
+		auto* that = const_cast<Marker<Type>*>(this);	// hack to defeat the "const" on this method
+		assert(!that->_pollingFunction);		// this version doesn't support pollingFunctions (btw, this check not thread safe check)
+
+		if (that->_state != AssetState::Pending) {
+			DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
+			return (AssetState)that->_state;
+		}
+		auto waitResult = YieldToPoolUntil(that->_pendingFuture, timeoutTime);
+		if (waitResult == std::future_status::timeout) {
+			DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
+			return {};
+		}
+
+		// Force the background version into the foreground (see OnFrameBarrier)
+		// This is required because we can be woken up by SetAsset, which only set the
+		// background asset. But the caller most likely needs the asset right now, so
+		// we've got to swap it into the foreground.
+		// There is a problem if the caller is using both Actualize() and StallWhilePending() on the
+		// same asset in the same frame -- in this case, the order can have side effects.
+		AssetState newState;
+		Type newActualized;
+		Blob newActualizationLog;
+		DependencyValidation newDepVal;
+		Internal::TryGetAssetFromFuture(that->_pendingFuture, newState, newActualized, newActualizationLog, newDepVal);
+		
+		lock = std::unique_lock<Threading::Mutex>(that->_lock);
+		if (that->_state == AssetState::Pending) {
+			that->_actualized = std::move(newActualized);
+			that->_actualizationLog = std::move(newActualizationLog);
+			that->_actualizedDepVal = std::move(newDepVal);
+			that->_state = newState;
+		} else {
+			#if defined(_DEBUG)
+				assert(that->_state == newState);
+				assert(that->_actualizedDepVal == newDepVal);
+				if (that->_actualizationLog == nullptr || newActualizationLog == nullptr) {
+					assert((that->_actualizationLog == nullptr) == (newActualizationLog == nullptr));
+				} else {
+					// If the exception within the future is just a std::exception, we can end up with actualization 
+					// logs that contain the same data, but are different pointers, because the log is copied on query
+					assert(that->_actualizationLog->size() == newActualizationLog->size());
+				}
+			#endif
+		}
+
+		that->DisableFrameBarrierCallbackAlreadyLocked();
+		DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
+		return (AssetState)that->_state;
 	}
 
 	template<typename Type>
