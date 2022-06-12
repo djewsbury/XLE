@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "StandardLightOperators.h"
 #include "../../Assets/AssetsCore.h"
 #include <memory>
 
@@ -14,40 +15,51 @@ namespace RenderCore { namespace LightingEngine
 {
 	class LightingTechniqueIterator;
 	class RenderStepFragmentInterface;
+	struct AmbientOcclusionOperatorDesc;
 
 	class SSAOOperator : public std::enable_shared_from_this<SSAOOperator>
 	{
 	public:
 		void Execute(
-			RenderCore::LightingEngine::LightingTechniqueIterator& iterator,
-			RenderCore::IResourceView& inputDepthsSRV,
-			RenderCore::IResourceView& inputNormalsSRV,
-			RenderCore::IResourceView& inputVelocitiesSRV,
-			RenderCore::IResourceView& inputHistoryAccumulation,
-			RenderCore::IResourceView& accumulation0UAV,
-			RenderCore::IResourceView& accumulation1UAV,
-			RenderCore::IResourceView& aoOutputUAV,
-			IResourceView& hierarchicalDepths);
+			LightingTechniqueIterator& iterator,
+			IResourceView& inputDepthsSRV,
+			IResourceView& inputNormalsSRV,
+			IResourceView& inputVelocitiesSRV,
+			IResourceView& inputHistoryAccumulation,
+			IResourceView& accumulation0UAV,
+			IResourceView& accumulation1UAV,
+			IResourceView& aoOutputUAV,
+			IResourceView* hierarchicalDepths);
 
-		RenderCore::LightingEngine::RenderStepFragmentInterface CreateFragment(const RenderCore::FrameBufferProperties& fbProps);
-		void PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext);
+		RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
+		void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext);
 
 		void ResetAccumulation();
 		::Assets::DependencyValidation GetDependencyValidation() const;
 		uint32_t GetCompletionCommandList() const { return 0; }
 
 		SSAOOperator(
-			std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> computeOp,
-			std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> upsampleOp);
+			std::shared_ptr<Techniques::IComputeShaderOperator> perspectiveComputeOp,
+			std::shared_ptr<Techniques::IComputeShaderOperator> orthogonalComputeOp,
+			std::shared_ptr<Techniques::IComputeShaderOperator> upsampleOp,
+			std::shared_ptr<IResourceView> ditherTable,
+			const AmbientOcclusionOperatorDesc& opDesc,
+			bool hasHierarchicalDepths);
 		~SSAOOperator();
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<SSAOOperator>>&& promise,
-			std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool);
+			std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
+			const AmbientOcclusionOperatorDesc& opDesc,
+			bool hasHierarchicalDepths);
 	private:
-		std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> _computeOp;
-		std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> _upsampleOp;
+		std::shared_ptr<Techniques::IComputeShaderOperator> _perspectiveComputeOp;
+		std::shared_ptr<Techniques::IComputeShaderOperator> _orthogonalComputeOp;
+		std::shared_ptr<Techniques::IComputeShaderOperator> _upsampleOp;
+		std::shared_ptr<IResourceView> _ditherTable;
 		::Assets::DependencyValidation _depVal;
 		unsigned _pingPongCounter = ~0u;
+		AmbientOcclusionOperatorDesc _opDesc;
+		bool _hasHierarchicalDepths = false;
 	};
 }}

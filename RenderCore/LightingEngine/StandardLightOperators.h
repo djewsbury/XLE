@@ -37,10 +37,23 @@ namespace RenderCore { namespace LightingEngine
 		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
 	};
 
+	struct AmbientOcclusionOperatorDesc
+	{
+		unsigned _searchSteps = 32;
+		unsigned _occupancyThreshold = 8;
+		bool _sampleBothDirections = true;
+		bool _lateTemporalFiltering = true;
+		bool _enableFiltering = true;
+		bool _enableHierarchicalStepping = true;
+
+		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
+	};
+
 	class AmbientLightOperatorDesc
 	{
 	public:
 		std::optional<ScreenSpaceReflectionsOperatorDesc> _ssrOperator;
+		std::optional<AmbientOcclusionOperatorDesc> _ssaoOperator;
 	};
 
 	std::optional<LightSourceShape> AsLightSourceShape(StringSection<>);

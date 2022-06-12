@@ -653,7 +653,8 @@ namespace RenderCore { namespace LightingEngine
 
 	uint64_t ScreenSpaceReflectionsOperatorDesc::GetHash(uint64_t seed) const
 	{
-		return rotl64(seed, !!_enableFinalBlur);
+		uint32_t value = (_enableFinalBlur<<1) | (_splitConfidence<<0);
+		return rotl64(seed, value);
 	}
 
 	/*

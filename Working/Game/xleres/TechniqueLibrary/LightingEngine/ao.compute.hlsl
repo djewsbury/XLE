@@ -16,14 +16,24 @@ Texture2D<float> HierarchicalDepths;
 
 cbuffer AOProps
 {
+	uint SearchSteps;			// 32
+	uint OccupancyThreshold;	// 8
 	uint FrameIdx;
-	bool ClearAccumulation;
+	uint ClearAccumulation;
 }
 
-#define BOTH_WAYS 1
+// #define BOTH_WAYS 1
 // #define DITHER3x3 1
-#define HAS_HIERARCHICAL_DEPTHS 1
-#define DO_LATE_TEMPORAL_FILTERING 1
+// #define HAS_HIERARCHICAL_DEPTHS 1
+// #define DO_LATE_TEMPORAL_FILTERING 1
+// #define ORTHO_CAMERA 1
+// #define ENABLE_HIERARCHICAL_STEPPING 1
+// #define ENABLE_FILTERING 1
+
+static const uint FrameWrap = 6;
+
+// static const uint DitherTable[96] = {24, 72, 0, 48, 60, 12, 84, 36, 90, 42, 66, 18, 6, 54, 30, 78, 7, 91, 61, 25, 55, 43, 13, 73, 31, 67, 85, 1, 79, 19, 37, 49, 80, 20, 38, 50, 32, 68, 86, 2, 56, 44, 14, 74, 8, 92, 62, 26, 9, 57, 33, 81, 93, 45, 69, 21, 63, 15, 87, 39, 27, 75, 3, 51, 52, 4, 76, 28, 40, 88, 16, 64, 22, 70, 46, 94, 82, 34, 58, 10, 29, 65, 95, 11, 77, 17, 47, 59, 5, 89, 71, 35, 53, 41, 23, 83};
+Buffer<uint> DitherTable;
 
 float TraverseRay_NonHierachicalDepths(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
 {
@@ -59,7 +69,9 @@ float TraverseRay_NonHierachicalDepths(uint2 pixelId, float cosPhi, float sinPhi
 	float2 xy = pixelId.xy + float2(xStep, yStep);
 
 	int c=1;
-	for (; c<8; ++c) {
+	for (; c<SearchSteps; ++c) {
+		if (WaveActiveCountBits(true) <= OccupancyThreshold) break;	// exit due to low occupancy
+
 		float d = HierarchicalDepths.Load(uint3(xy, 1));
 		xy += float2(xStep, yStep);
 		#if ORTHO_CAMERA
@@ -125,12 +137,11 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 
 	const float initialStepSize = 1;
 	float2 xy = pixelId.xy + initialStepSize*float2(xStep, yStep);
-	int c=1;
+	int c=SearchSteps;
 	float stepsAtMostDetailedRes = initialStepSize;
-	const uint occupancyThreshold = 8;		// uniform candidate
-	for (; c<32; ++c) {
+	while (c--) {
 		if (any(xy < 0 || xy >= mostDetailedMipRes)) break;
-		if (WaveActiveCountBits(true) <= occupancyThreshold) break;	// exit due to low occupancy
+		if (WaveActiveCountBits(true) <= OccupancyThreshold) break;	// exit due to low occupancy
 
 		float d = HierarchicalDepths.Load(uint3(xy/currentMipLevelScale, currentMipLevel));
 
@@ -146,7 +157,7 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 		// on the next loop iteration
 		// Here, we're assuming that the depth downsampling is using a min() filter (ie, each depth value is the closest to the camera
 		// of the source pixels from the next more detailed mip). But, it may look visually acceptable with other mip filters also
-		#if 1 // ENABLE_HIERARCHICAL_STEPPING
+		#if ENABLE_HIERARCHICAL_STEPPING
 			if (cosTheta > cosMaxTheta) {
 				if (currentMipLevel == mostDetailedMipLevel) {
 					cosMaxTheta = cosTheta;
@@ -200,12 +211,6 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 	return ditherArray[t.x+t.y*3];
 }
 
-static const uint FrameWrap = 6;
-// static const uint FrameWrap = 12;
-
-// todo -- consider putting "ditherTable" into a shader resource
-static const uint ditherTable[96] = {24, 72, 0, 48, 60, 12, 84, 36, 90, 42, 66, 18, 6, 54, 30, 78, 7, 91, 61, 25, 55, 43, 13, 73, 31, 67, 85, 1, 79, 19, 37, 49, 80, 20, 38, 50, 32, 68, 86, 2, 56, 44, 14, 74, 8, 92, 62, 26, 9, 57, 33, 81, 93, 45, 69, 21, 63, 15, 87, 39, 27, 75, 3, 51, 52, 4, 76, 28, 40, 88, 16, 64, 22, 70, 46, 94, 82, 34, 58, 10, 29, 65, 95, 11, 77, 17, 47, 59, 5, 89, 71, 35, 53, 41, 23, 83};
-
 [numthreads(8, 8, 1)]
 	void main(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
@@ -213,7 +218,7 @@ static const uint ditherTable[96] = {24, 72, 0, 48, 60, 12, 84, 36, 90, 42, 66, 
 	uint2 textureDims;
 	InputTexture.GetDimensions(textureDims.x, textureDims.y);
 
-	uint2 threadGroupCounts = uint2((textureDims.x/2)/8, (textureDims.y/2)/8);
+	uint2 threadGroupCounts = uint2((textureDims.x+(2*8)-1)/(2*8), (textureDims.y+(2*8)-1)/(2*8));
 	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
 
 	///////////// downsample ///////////
@@ -231,26 +236,23 @@ static const uint ditherTable[96] = {24, 72, 0, 48, 60, 12, 84, 36, 90, 42, 66, 
 #else
 	uint2 textureDims;
 	HierarchicalDepths.GetDimensions(textureDims.x, textureDims.y);
-	uint2 threadGroupCounts = uint2((textureDims.x/2)/8, (textureDims.y/2)/8);
+	uint2 threadGroupCounts = uint2((textureDims.x+(2*8)-1)/(2*8), (textureDims.y+(2*8)-1)/(2*8));
 	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
+	if (any(pixelId >= textureDims)) return;
 #endif
-
-	uint frameIdxOrder[] = { 0, 4, 2, 5, 3 };
-	// uint frameIdxOrder[] = { 0, 10, 5, 2, 8, 11, 3, 6, 1, 9, 4, 7 };
 
 #if !defined(DITHER3x3)
 	// The cost of looking up the dither pattern here is not trivially cheap; but you have a big impact
 	// on the visual result... If we had a way of doing this without a table lookup it might be a bit faster
-	// uint ditherValue = DitherPatternInt(pixelId.xy);
-	// uint idx = frameIdxOrder[FrameIdx%FrameWrap] * 16 + ditherValue * FrameWrap;
-	// uint idx = (frameIdxOrder[FrameIdx%FrameWrap] + ditherValue * 6u) % 96u;
-	uint idx = ditherTable[(pixelId.x%4)+(pixelId.y%4)*4+(FrameIdx%6)*16];
+	uint idx = DitherTable[(pixelId.x%4)+(pixelId.y%4)*4+(FrameIdx%6)*16];
 	#if BOTH_WAYS
 		float phi = idx / 96.0 * 3.14159;
 	#else
 		float phi = idx / 96.0 * 2.0 * 3.14159;
 	#endif
 #else
+	uint frameIdxOrder[] = { 0, 4, 2, 5, 3 };
+	// uint frameIdxOrder[] = { 0, 10, 5, 2, 8, 11, 3, 6, 1, 9, 4, 7 };
 	uint ditherValue = Dither3x3PatternInt(pixelId.xy);
 	uint idx = frameIdxOrder[FrameIdx%FrameWrap] * 9 + ditherValue * FrameWrap;
 	#if BOTH_WAYS
@@ -314,30 +316,21 @@ static const uint ditherTable[96] = {24, 72, 0, 48, 60, 12, 84, 36, 90, 42, 66, 
 	float final = gtoa * 2.0 * 0.25; 
 #endif
 
-#if !defined(DO_LATE_TEMPORAL_FILTERING)
-	if (ClearAccumulation) {
-		AccumulationAO[pixelId.xy] = final;
-	} else {
-		int2 vel = GBufferMotion.Load(uint3(pixelId.xy*2, 0)).rg;
-		// uint2 accumulationYesterdayPos = round(pixelId.xy + vel / 2);
-		int2 accumulationYesterdayPos = pixelId.xy + vel / 2;
-		if (max(abs(vel.x), abs(vel.y)) >= 127 || any(accumulationYesterdayPos<0) || any(accumulationYesterdayPos>=(textureDims/2))) {
-			AccumulationAO[pixelId.xy] = final;
-		} else {
-			float accumulationYesterday = AccumulationAOLast.Load(uint3(accumulationYesterdayPos.xy, 0));
-			float2 diff = accumulationYesterdayPos.xy - float2(pixelId.xy);
-			float magSq = dot(diff, diff);
+#if defined(ENABLE_FILTERING) && !defined(DO_LATE_TEMPORAL_FILTERING)
+	int2 vel = GBufferMotion.Load(uint3(pixelId.xy*2, 0)).rg;
+	float accumulationYesterday = AccumulationAOLast.Load(uint3(pixelId.xy + vel / 2, 0));
+	float2 diff = accumulationYesterdayPos.xy - float2(pixelId.xy);
+	float magSq = dot(diff, diff);
 
-			// We have to set the "Nvalue" here to a multiple of frameWrap, or we will start to get
-			// a strobing effect. Just tweaking this for what looks right
-			// (also tone it down a little bit when we've moved considerably from the previous sample)
-			// float Nvalue = FrameWrap*3;
-			float Nvalue = FrameWrap*lerp(3,1,saturate(magSq/(25.0*25.0)));
-			float alpha = 2.0/(Nvalue+1.0);
-			float accumulationToday = accumulationYesterday * (1-alpha) + final * alpha;
-			AccumulationAO[pixelId.xy] = accumulationToday;
-		}
-	}
+	// We have to set the "Nvalue" here to a multiple of frameWrap, or we will start to get
+	// a strobing effect. Just tweaking this for what looks right
+	// (also tone it down a little bit when we've moved considerably from the previous sample)
+	float Nvalue = FrameWrap*2;
+	float alpha = 2.0/(Nvalue+1.0);
+	alpha = 1-alpha;
+	alpha *= HistoryAcc.Load(uint3(pixelId.xy*2, 0));		// scale alpha by our confidence in the "yesterday" data
+	float accumulationToday = accumulationYesterday * alpha + final * (1-alpha);
+	AccumulationAO[pixelId.xy] = accumulationToday;
 #else
 	AccumulationAO[pixelId.xy] = final;
 #endif
@@ -406,22 +399,15 @@ void InitializeGroupSharedMem(int2 dispatchThreadId, int2 groupThreadId)
 
 void DoTemporalAccumulation(int2 groupThreadId, int2 srcPixel, float minV, float maxV)
 {
-	int2 textureDims;
-	GBufferMotion.GetDimensions(textureDims.x, textureDims.y);		// uniform candidate
 	int2 vel = GBufferMotion.Load(uint3(srcPixel*2, 0)).rg;
-	int2 accumulationYesterdayPos = srcPixel.xy + vel / 2;
-	if (max(abs(vel.x), abs(vel.y)) >= 127 || any(accumulationYesterdayPos<0) || any(accumulationYesterdayPos>=(textureDims/2))) {
-		// no change; just keep the "today" 
-	} else {
-		float accumulationYesterday = AccumulationAOLast.Load(uint3(accumulationYesterdayPos.xy, 0));
-		const float Nvalue = FrameWrap*2;
-		float alpha = 2.0/(Nvalue+1.0);
-		alpha = 1-alpha;
-		alpha *= HistoryAcc.Load(uint3(srcPixel*2, 0));		// scale alpha by our confidence in the "yesterday" data
-		float accumulationToday = accumulationYesterday * alpha + GroupAO[groupThreadId.y][groupThreadId.x] * (1-alpha);
-		accumulationToday = clamp(accumulationToday, minV, maxV);
-		GroupAO[groupThreadId.y][groupThreadId.x] = accumulationToday;
-	}
+	float accumulationYesterday = AccumulationAOLast.Load(uint3(srcPixel.xy + vel / 2, 0));	// will sometimes read outside
+	const float Nvalue = FrameWrap*2;
+	float alpha = 2.0/(Nvalue+1.0);
+	alpha = 1-alpha;
+	alpha *= HistoryAcc.Load(uint3(srcPixel*2, 0));		// scale alpha by our confidence in the "yesterday" data
+	float accumulationToday = accumulationYesterday * alpha + GroupAO[groupThreadId.y][groupThreadId.x] * (1-alpha);
+	accumulationToday = clamp(accumulationToday, minV, maxV);
+	GroupAO[groupThreadId.y][groupThreadId.x] = accumulationToday;
 }
 
 void LateTemporalFiltering(int2 dispatchThreadId, int2 groupThreadId)
@@ -473,7 +459,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 {
 	uint2 textureDims;
 	InputTexture.GetDimensions(textureDims.x, textureDims.y);
-	uint2 threadGroupCounts = uint2((textureDims.x/2)/8, (textureDims.y/2)/8);
+	uint2 threadGroupCounts = uint2((textureDims.x+(2*8)-1)/(2*8), (textureDims.y+(2*8)-1)/(2*8));
 
 	// Not sure that the thread group tiling actually helps any more with better use of group shared
 	// memory. It doesn't seem particularly impactful with some basic profiling 
@@ -486,18 +472,18 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 		groupThreadId.xy = outputPixel.xy-groupId.xy*8;
 	#endif
 
+	#if !defined(ENABLE_FILTERING)
+		OutputTexture[outputPixel.xy*2] = AccumulationAO[outputPixel.xy + int2(0,0)];
+		OutputTexture[outputPixel.xy*2 + uint2(1,0)] = AccumulationAO[outputPixel.xy + int2(0,0)];
+		OutputTexture[outputPixel.xy*2 + uint2(0,1)] = AccumulationAO[outputPixel.xy + int2(0,0)];
+		OutputTexture[outputPixel.xy*2 + uint2(1,1)] = AccumulationAO[outputPixel.xy + int2(0,0)];
+		return;
+	#endif
+
 	InitializeGroupSharedMem(outputPixel, groupThreadId.xy);
 	#if defined(DO_LATE_TEMPORAL_FILTERING)
 		LateTemporalFiltering(outputPixel, groupThreadId.xy);
 	#endif
-
-#if 0
-	OutputTexture[outputPixel.xy*2] = AccumulationAO[outputPixel.xy + int2(0,0)];
-	OutputTexture[outputPixel.xy*2 + uint2(1,0)] = AccumulationAO[outputPixel.xy + int2(0,0)];
-	OutputTexture[outputPixel.xy*2 + uint2(0,1)] = AccumulationAO[outputPixel.xy + int2(0,0)];
-	OutputTexture[outputPixel.xy*2 + uint2(1,1)] = AccumulationAO[outputPixel.xy + int2(0,0)];
-	return;
-#endif
 
 	// experimental filtering, inspired by demosaicing. We're assuming that there's
 	// an underlying pattern in the input data we're upsampling: there is a pattern that
@@ -512,23 +498,10 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	base = groupThreadId.xy;
 
-#if 1
 	float2 depth0divs = float2(outDepth1 - outDepth0, outDepth2 - outDepth0);
 	float2 depth1divs = float2(outDepth1 - outDepth0, outDepth3 - outDepth1);
 	float2 depth2divs = float2(outDepth3 - outDepth2, outDepth2 - outDepth0);
 	float2 depth3divs = float2(outDepth3 - outDepth2, outDepth3 - outDepth1);
-#elif 0
-	float3 worldSpaceNormal = DecodeGBufferNormal(InputNormals.Load(uint3(outputPixel.xy*2, 0)).rgb);
-	float3 cameraRight = float3(SysUniform_GetCameraBasis()[0].x, SysUniform_GetCameraBasis()[1].x, SysUniform_GetCameraBasis()[2].x);
-	float3 cameraUp = float3(SysUniform_GetCameraBasis()[0].y, SysUniform_GetCameraBasis()[1].y, SysUniform_GetCameraBasis()[2].y);
-	float3 negCameraForward = float3(SysUniform_GetCameraBasis()[0].z, SysUniform_GetCameraBasis()[1].z, SysUniform_GetCameraBasis()[2].z);
-	float dotZ = dot(worldSpaceNormal, -negCameraForward), dotX = dot(worldSpaceNormal, cameraRight), dotY = dot(worldSpaceNormal, -cameraUp);
-
-	float2 depth0divs = float2(-dotX/dotZ, -dotY/dotZ)*1*float2((100.f/1920)*1/400.f,(100.f/1920)*1/400.f);
-	float2 depth1divs = depth0divs;
-	float2 depth2divs = depth0divs;
-	float2 depth3divs = depth0divs;
-#endif
 
 	float out0 = 0, out1 = 0, out2 = 0, out3 = 0;
 	float out0TotalWeight = 0, out1TotalWeight = 0, out2TotalWeight = 0, out3TotalWeight = 0;
