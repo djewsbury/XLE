@@ -161,9 +161,13 @@ namespace Assets { namespace Internal
 			Blob& actualizationBlob,
 			DependencyValidation& exceptionDepVal)
 	{
-		AssetState state;
-		TryGetAssetFromFuture(future, state, actualized, actualizationBlob, exceptionDepVal);
-		return state;
+		auto futureState = future.wait_for(std::chrono::seconds(0));
+		if (futureState == std::future_status::ready) {
+			AssetState state;
+			TryGetAssetFromFuture(future, state, actualized, actualizationBlob, exceptionDepVal);
+			return state;
+		} else
+			return AssetState::Pending;
 	}
 
 	template<typename Payload>
@@ -173,9 +177,13 @@ namespace Assets { namespace Internal
 			Blob& actualizationBlob,
 			DependencyValidation& exceptionDepVal)
 	{
-		AssetState state;
-		TryGetAssetFromFuture(future, state, actualized, actualizationBlob, exceptionDepVal);
-		return state;
+		auto futureState = future.wait_for(std::chrono::seconds(0));
+		if (futureState == std::future_status::ready) {
+			AssetState state;
+			TryGetAssetFromFuture(future, state, actualized, actualizationBlob, exceptionDepVal);
+			return state;
+		} else
+			return AssetState::Pending;
 	}
 
 	template<size_t I = 0, typename... Futures>
@@ -184,7 +192,7 @@ namespace Assets { namespace Internal
 			Blob& actualizationBlob,
 			DependencyValidation& exceptionDepVal,
 			std::tuple<Futures...>& completedFutures,
-			std::tuple<FutureResult<Futures>...>& actualized)
+			std::tuple<std::decay_t<FutureResult<Futures>>...>& actualized)
 	{
 		Blob queriedLog;
 		DependencyValidation queriedDepVal;
@@ -205,13 +213,13 @@ namespace Assets { namespace Internal
 	}
 
 	template<typename... Futures>
-		static std::tuple<FutureResult<Futures>...> TryQueryFutures(
+		static std::tuple<std::decay_t<FutureResult<Futures>>...> TryQueryFutures(
 			AssetState& currentState,
 			Blob& actualizationBlob,
 			DependencyValidation& exceptionDepVal,
 			std::tuple<Futures...>& completedFutures)
 	{
-		std::tuple<FutureResult<Futures>...> result;
+		std::tuple<std::decay_t<FutureResult<Futures>>...> result;
 		TryQueryFutures_(currentState, actualizationBlob, exceptionDepVal, completedFutures, result);
 		return result;
 	}
@@ -259,7 +267,7 @@ namespace Assets { namespace Internal
 		TRY {
 			auto actualized = QueryToTuple(completedFutures, std::make_index_sequence<sizeof...(Futures)>());
 			auto finalConstruction = ApplyConstructFinalAssetObject<PromisedAssetType>(std::move(actualized));
-			promise.set_value(std::move(finalConstruction));	
+			promise.set_value(std::move(finalConstruction));
 		} CATCH(...) {
 			promise.set_exception(std::current_exception());
 		} CATCH_END
@@ -357,6 +365,68 @@ namespace Assets { namespace Internal
 			promise.set_exception(std::current_exception());
 		} CATCH_END
 	}
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template<typename PromisedType, typename... FutureTypes>
+		static bool CanBeFulfilledImmediately(
+			std::tuple<FutureTypes...>& futures,
+			std::promise<PromisedType>&& promise)
+	{
+		AssetState state = AssetState::Ready; Blob actualizationBlob; DependencyValidation exceptionDepVal;
+		auto actualized = Internal::TryQueryFutures(state, actualizationBlob, exceptionDepVal, futures);
+		if (state == AssetState::Ready) {
+			TRY {
+				auto finalConstruction = Internal::ApplyConstructFinalAssetObject<PromisedType>(std::move(actualized));
+				promise.set_value(std::move(finalConstruction));
+			} CATCH(...) {
+				promise.set_exception(std::current_exception());
+			} CATCH_END
+			return true;
+		}
+		return false;
+	}
+		
+	template<typename PromisedType, typename Fn, typename... FutureTypes>
+		static auto CanBeFulfilledImmediately(
+			std::tuple<FutureTypes...>& futures,
+			std::promise<PromisedType>&& promise,
+			Fn&& fn) -> std::enable_if_t<!std::is_void_v<std::invoke_result_t<Fn, Internal::FutureResult<FutureTypes>...>>, bool>
+	{
+		AssetState state = AssetState::Ready; Blob actualizationBlob; DependencyValidation exceptionDepVal;
+		auto actualized = Internal::TryQueryFutures(state, actualizationBlob, exceptionDepVal, futures);
+		if (state == AssetState::Ready) {
+			TRY {
+				auto finalResult = std::apply(std::move(fn), std::move(actualized));
+				promise.set_value(std::move(finalResult));
+			} CATCH(...) {
+				promise.set_exception(std::current_exception());
+			} CATCH_END
+			return true;
+		}
+		return false;
+	}
+
+	template<typename PromisedType, typename Fn, typename... FutureTypes>
+		static auto CanBeFulfilledImmediately(
+			std::tuple<FutureTypes...>& futures,
+			std::promise<PromisedType>&& promise,
+			Fn&& fn) -> std::enable_if_t<std::is_void_v<std::invoke_result_t<Fn, std::promise<PromisedType>&&, Internal::FutureResult<FutureTypes>...>>, bool>
+	{
+		AssetState state = AssetState::Ready; Blob actualizationBlob; DependencyValidation exceptionDepVal;
+		auto actualized = Internal::TryQueryFutures(state, actualizationBlob, exceptionDepVal, futures);
+		if (state == AssetState::Ready) {
+			TRY {
+				std::apply(std::move(fn), std::tuple_cat(std::make_tuple(std::move(promise)), std::move(actualized)));
+			} CATCH(...) {
+				promise.set_exception(std::current_exception());
+			} CATCH_END
+			return true;
+		}
+		return false;
+	}
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template<int I, typename... FutureTypes>
 		static void CheckValidForContinuation()

@@ -21,6 +21,8 @@ namespace Assets
 		template<typename PromisedType>
 			void ThenConstructToPromise(std::promise<PromisedType>&& promise)
 		{
+			if (_checkImmediatelyFulfilled && Internal::CanBeFulfilledImmediately(_futures, std::move(promise)))
+				return;
 			Internal::LogBeginWatch<PromisedType, Internal::FutureResult<FutureTypes>...>();
 			MakeContinuation(
 				std::move(promise),
@@ -35,6 +37,8 @@ namespace Assets
 				std::promise<PromisedType>&& promise,
 				Fn&& fn)
 		{
+			if (_checkImmediatelyFulfilled && Internal::CanBeFulfilledImmediately(_futures, std::move(promise), std::move(fn)))
+				return;
 			Internal::LogBeginWatch<PromisedType, Internal::FutureResult<FutureTypes>...>();
 			using FunctionResult = std::invoke_result_t<Fn, Internal::FutureResult<FutureTypes>...>;
 			static_assert(std::is_constructible_v<std::decay_t<PromisedType>, std::decay_t<FunctionResult>>, "Mismatch between function result and promise type");
@@ -51,6 +55,8 @@ namespace Assets
 				std::promise<PromisedType>&& promise,
 				Fn&& fn)
 		{
+			if (_checkImmediatelyFulfilled && Internal::CanBeFulfilledImmediately(_futures, std::move(promise), std::move(fn)))
+				return;
 			Internal::LogBeginWatch<PromisedType, Internal::FutureResult<FutureTypes>...>();
 			MakeContinuation(
 				std::move(promise),
@@ -65,6 +71,7 @@ namespace Assets
 				std::promise<PromisedType>&& promise,
 				Fn&& fn)
 		{
+			assert(!_checkImmediatelyFulfilled);		// this variation not implemented
 			Internal::LogBeginWatch<PromisedType, Internal::FutureResult<FutureTypes>...>();
 			using FunctionResult = std::invoke_result_t<Fn, FutureTypes...>;
 			static_assert(std::is_constructible_v<std::decay_t<PromisedType>, std::decay_t<FunctionResult>>, "Mismatch between function result and promise type");
@@ -81,6 +88,7 @@ namespace Assets
 				std::promise<PromisedType>&& promise,
 				Fn&& fn)
 		{
+			assert(!_checkImmediatelyFulfilled);		// this variation not implemented
 			Internal::LogBeginWatch<PromisedType, Internal::FutureResult<FutureTypes>...>();
 			MakeContinuation(
 				std::move(promise),
@@ -93,6 +101,7 @@ namespace Assets
 		template<typename Fn>
 			std::future<std::invoke_result_t<Fn, FutureTypes...>> Then(Fn&& fn)
 		{
+			assert(!_checkImmediatelyFulfilled);		// this variation not implemented
 			using FunctionResult = std::invoke_result_t<Fn, FutureTypes...>;
 			Internal::LogBeginWatch<FunctionResult, Internal::FutureResult<FutureTypes>...>();
 			std::promise<FunctionResult> promise;
@@ -108,6 +117,7 @@ namespace Assets
 
 		std::future<void> ThenOpaqueFuture()
 		{
+			assert(!_checkImmediatelyFulfilled);		// this variation not implemented
 			Internal::LogBeginWatch<void, Internal::FutureResult<FutureTypes>...>();
 			std::promise<void> promise;
 			auto result = promise.get_future();
@@ -125,6 +135,8 @@ namespace Assets
 			return MakeFuture();
 		}
 
+		MultiAssetFuture& CheckImmediately() { _checkImmediatelyFulfilled = true; return *this; }
+
 		MultiAssetFuture(FutureTypes... subFutures) 
 		: _futures{std::forward<FutureTypes>(subFutures)...}
 		{
@@ -132,6 +144,7 @@ namespace Assets
 
 	private:
 		std::tuple<FutureTypes...> _futures;
+		bool _checkImmediatelyFulfilled = false;
 
 		std::future<std::tuple<FutureTypes...>> MakeFuture()
 		{
