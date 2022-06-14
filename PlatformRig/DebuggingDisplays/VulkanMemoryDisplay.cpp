@@ -9,6 +9,8 @@
 #include "../../Assets/Marker.h"
 #include "../../Utility/StreamUtils.h"
 #include "../../Utility/StringFormat.h"
+#include <iostream>
+#include <fstream>
 
 namespace PlatformRig { namespace Overlays
 {
@@ -39,7 +41,7 @@ namespace PlatformRig { namespace Overlays
 
 		// get statistics out of the Vulkan Memory Allocator system
 		if ((_counter++ % 64) == 0)
-			vmaCalculateStatistics(RenderCore::Metal_Vulkan::GetObjectFactory(*_device).GetVMAAllocator(), &_stats);
+			vmaCalculateStatistics(RenderCore::Metal_Vulkan::GetObjectFactory(*_device).GetVmaAllocator(), &_stats);
 
 		VmaDetailedStatistics* stats = &_stats.total;
 		if (_memoryHeap < VK_MAX_MEMORY_HEAPS) stats = &_stats.memoryHeap[_memoryHeap];
@@ -71,7 +73,8 @@ namespace PlatformRig { namespace Overlays
 		DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), (StringMeldInPlace(buffer) << "Unused ranges count: " << stats->unusedRangeCount).AsStringSection());
 
 		layout.AllocateFullWidth(lineHeight);
-		DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "Press 0-9 to select a specific heap (or ` for all)");
+		DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "Press 0-9 to select a specific heap (or ` for all).");
+		DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "Press 'q' to write out a report to vk_alloc.json");
 	}
 
 	ProcessInputResult VulkanMemoryAllocatorDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input)
@@ -82,6 +85,14 @@ namespace PlatformRig { namespace Overlays
 		} else if (input._pressedChar == '`') {
 			_memoryHeap = ~0u;
 			return ProcessInputResult::Consumed;
+		} else if (input._pressedChar == 'q') {
+			auto allocator = RenderCore::Metal_Vulkan::GetObjectFactory(*_device).GetVmaAllocator();
+			char* statsString = nullptr;
+			vmaBuildStatsString(allocator, &statsString, true);
+			if (statsString) {
+				std::ofstream{"vk_alloc.json"} << statsString;
+				vmaFreeStatsString(allocator, statsString);
+			}
 		}
 		return ProcessInputResult::Passthrough;
 	}

@@ -15,6 +15,14 @@
 using VkSampleCountFlagBits_ = uint32_t;
 using VkImageLayout_ = uint32_t;
 
+extern "C" 
+{
+	#define FAKE_VK_DEFINE_HANDLE(object) typedef struct object##_T* object;
+	FAKE_VK_DEFINE_HANDLE(VmaAllocation)
+	FAKE_VK_DEFINE_HANDLE(VmaAllocator)
+	#undef FAKE_VK_DEFINE_HANDLE
+}
+
 namespace RenderCore { namespace Metal_Vulkan
 {
 	class ObjectFactory;
@@ -52,6 +60,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkDeviceMemory GetMemory() const    { return _mem.get(); }
 		VkImage GetImage() const            { return _underlyingImage.get(); }
 		VkBuffer GetBuffer() const          { return _underlyingBuffer.get(); }
+		VmaAllocation GetVmaMemory() const	{ return _vmaMem; }
 
 		const VulkanSharedPtr<VkImage>& ShareImage() const { return _underlyingImage; }
 		const VulkanSharedPtr<VkBuffer>& ShareBuffer() const { return _underlyingBuffer; }
@@ -75,6 +84,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		VulkanSharedPtr<VkImage> _underlyingImage;
 		VulkanSharedPtr<VkBuffer> _underlyingBuffer;
 		VulkanSharedPtr<VkDeviceMemory> _mem;
+		VmaAllocation _vmaMem = nullptr;
 
 		Desc _desc;
 		uint64_t _guid;
@@ -144,24 +154,27 @@ namespace RenderCore { namespace Metal_Vulkan
 		// ----------- Vulkan specific interface -----------
 
 		ResourceMap(
-			VkDevice dev, IResource& resource,
+			ObjectFactory& factory, IResource& resource,
 			Mode mapMode);
 		ResourceMap(
-			VkDevice dev, IResource& resource,
+			ObjectFactory& factory, IResource& resource,
 			Mode mapMode,
 			SubResourceId subResource);
 		ResourceMap(
-			VkDevice dev, IResource& resource,
+			ObjectFactory& factory, IResource& resource,
 			Mode mapMode,
 			VkDeviceSize offset, VkDeviceSize size);
 
 		ResourceMap(
 			VkDevice dev, VkDeviceMemory memory,
 			VkDeviceSize offset = 0, VkDeviceSize size = ~0ull);
+		ResourceMap(VmaAllocator dev, VmaAllocation memory);
 
 	private:
-		VkDevice            _dev;
-		VkDeviceMemory      _mem;
+		VkDevice            _dev = nullptr;
+		VkDeviceMemory      _mem = nullptr;
+		VmaAllocator		_vmaAllocator = nullptr;
+		VmaAllocation       _vmaMem = nullptr;
 		void*               _data;
 		size_t              _dataSize;
 

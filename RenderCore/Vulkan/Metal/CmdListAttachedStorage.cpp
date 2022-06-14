@@ -332,7 +332,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			auto space = AllocateSpaceFromPage(**page, byteCount);
 			if (space != ~0u)
 				return TemporaryStorageResourceMap {
-					_manager->_factory->GetDevice().get(),
+					*_manager->_factory,
 					(*page)->_resource, space, byteCount, (*page)->_pageId };
 		}
 
@@ -343,7 +343,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto newPageAndAllocation = _manager->ReserveNewPageForAllocation(byteCount, bindFlags, cpuMappable, defaultPageSize);
 		_reservedPages.push_back(newPageAndAllocation.first);
 		return TemporaryStorageResourceMap {
-			_manager->_factory->GetDevice().get(), 
+			*_manager->_factory, 
 			newPageAndAllocation.first->_resource, newPageAndAllocation.second, byteCount, newPageAndAllocation.first->_pageId };
 	}
 
@@ -381,7 +381,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto space = AllocateSpaceFromPage(page, byteCount);
 		if (space != ~0u)
 			return TemporaryStorageResourceMap {
-				_manager->_factory->GetDevice().get(),
+				*_manager->_factory,
 				page._resource, space, byteCount, page._pageId };
 
 		assert(0);
@@ -519,11 +519,11 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	TemporaryStorageResourceMap::TemporaryStorageResourceMap(
-		VkDevice dev, std::shared_ptr<IResource> resource,
+		ObjectFactory& factory, std::shared_ptr<IResource> resource,
 		VkDeviceSize offset, VkDeviceSize size,
 		unsigned pageId)
 	: ResourceMap(
-		dev, *resource,
+		factory, *resource,
 		Mode::WriteDiscardPrevious,
 		offset, size)
 	, _resource(std::move(resource))

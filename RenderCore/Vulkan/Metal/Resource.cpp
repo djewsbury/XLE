@@ -32,7 +32,7 @@ namespace RenderCore { namespace Metal_Vulkan
     }
 
 	static unsigned CopyViaMemoryMap(
-		VkDevice device, VkImage image, VkDeviceMemory mem,
+		VkDevice device, VkImage image, ResourceMap& map,
 		const TextureDesc& desc,
 		const std::function<SubResourceInitData(SubResourceId)>& initData);
 
@@ -434,58 +434,43 @@ namespace RenderCore { namespace Metal_Vulkan
         return factory.AllocateMemoryDirectFromVulkan(memReqs.size, type);
     }
 
-	static VulkanUniquePtr<VkDeviceMemory> AttachDedicatedMemory(const ObjectFactory& factory, const ResourceDesc& desc, const VkMemoryRequirements& mem_reqs, VkBuffer underlyingBuffer, const std::function<SubResourceInitData(SubResourceId)>& initData)
+	static void WriteInitDataViaMap(ObjectFactory& factory, const ResourceDesc& desc, Resource& resource, const std::function<SubResourceInitData(SubResourceId)>& initData)
 	{
-		const bool hasInitData = !!initData;
-		const auto hostVisibleReqs = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-		auto memoryRequirements = (hasInitData || desc._cpuAccess != 0) ? hostVisibleReqs : 0;
-		auto result = AllocateDeviceMemory(factory, mem_reqs, memoryRequirements);
-
-		const VkDeviceSize offset = 0; 
 		// After allocation, we must initialise the data. True linear buffers don't have subresources,
 		// so it's reasonably easy. But if this buffer is really a staging texture, then we need to 
 		// copy in all of the sub resources.
-		if (hasInitData) {
-			if (desc._type == ResourceDesc::Type::LinearBuffer) {
-				auto subResData = initData({0, 0});
-				if (subResData._data.size()) {
-					ResourceMap map(factory.GetDevice().get(), result.get());
-					std::memcpy(map.GetData().begin(), subResData._data.begin(), std::min(subResData._data.size(), (size_t)mem_reqs.size));
-				}
-			} else {
-				// This is the staging texture path. Rather that getting the arrangement of subresources from
-				// the VkImage, we specify it ourselves.
-				CopyViaMemoryMap(
-					factory.GetDevice().get(), nullptr, result.get(), 
-					desc._textureDesc, initData);
+		if (desc._type == ResourceDesc::Type::LinearBuffer) {
+			auto subResData = initData({0, 0});
+			if (subResData._data.size()) {
+				ResourceMap map{factory, resource, ResourceMap::Mode::WriteDiscardPrevious};
+				std::memcpy(map.GetData().begin(), subResData._data.begin(), std::min(subResData._data.size(), (size_t)desc._linearBufferDesc._sizeInBytes));
 			}
+		} else {
+			// This is the staging texture path. Rather that getting the arrangement of subresources from
+			// the VkImage, we specify it ourselves.
+			ResourceMap map{factory, resource, ResourceMap::Mode::WriteDiscardPrevious};
+			CopyViaMemoryMap(
+				factory.GetDevice().get(), nullptr, map, 
+				desc._textureDesc, initData);
 		}
+	}
 
-		auto res = vkBindBufferMemory(factory.GetDevice().get(), underlyingBuffer, result.get(), offset);
+	static VulkanUniquePtr<VkDeviceMemory> AttachDedicatedMemory(ObjectFactory& factory, const ResourceDesc& desc, const VkMemoryRequirements& mem_reqs, VkBuffer underlyingBuffer, bool hasInitData)
+	{
+		const auto hostVisibleReqs = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+		auto memoryRequirements = (hasInitData || desc._cpuAccess != 0) ? hostVisibleReqs : 0;
+		auto result = AllocateDeviceMemory(factory, mem_reqs, memoryRequirements);
+		auto res = vkBindBufferMemory(factory.GetDevice().get(), underlyingBuffer, result.get(), 0);
 		if (res != VK_SUCCESS)
 			Throw(VulkanAPIFailure(res, "Failed while binding a buffer to device memory"));
 		return result;
 	}
 
-	static VulkanUniquePtr<VkDeviceMemory> AttachDedicatedMemory(const ObjectFactory& factory, const ResourceDesc& desc, const VkMemoryRequirements& mem_reqs, VkImage underlyingImage, const std::function<SubResourceInitData(SubResourceId)>& initData)
+	static VulkanUniquePtr<VkDeviceMemory> AttachDedicatedMemory(ObjectFactory& factory, const ResourceDesc& desc, const VkMemoryRequirements& mem_reqs, VkImage underlyingImage, bool hasInitData)
 	{
-		const bool hasInitData = !!initData;
 		const auto hostVisibleReqs = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 		auto memoryRequirements = (hasInitData || desc._cpuAccess != 0) ? hostVisibleReqs : 0;
 		auto result = AllocateDeviceMemory(factory, mem_reqs, memoryRequirements);
-		
-		// Initialisation for images is more complex... We just iterate through each subresource
-		// and copy in the data. We're going to do this with a single map -- assuming that all
-		// if any of the subresources have init data, then they must all have. 
-		// Alternatively, we could map each subresource separately... But there doesn't seem to
-		// be any advantage to that.
-		if (hasInitData) {
-			assert(desc._type == ResourceDesc::Type::Texture);
-			CopyViaMemoryMap(
-				factory.GetDevice().get(), underlyingImage, result.get(), 
-				desc._textureDesc, initData);
-		}
-
 		auto res = vkBindImageMemory(factory.GetDevice().get(), underlyingImage, result.get(), 0);
 		if (res != VK_SUCCESS)
 			Throw(VulkanAPIFailure(res, "Failed while binding an image to device memory"));
@@ -506,7 +491,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		_steadyStateLayout = Internal::ImageLayout::Undefined;
 		_steadyStateAccessMask = 0;
 
-		const bool allocateDirectFromVulkan = (desc._cpuAccess != 0) || hasInitData;
+		const bool allocateDirectFromVulkan = false;
+		VmaAllocationCreateFlags vmaFlags = 0;
+		if (desc._cpuAccess & CPUAccess::Read) vmaFlags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+		else if (desc._cpuAccess != 0 || hasInitData) vmaFlags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 		VkMemoryRequirements mem_reqs = {}; 
 		if (desc._type == Desc::Type::LinearBuffer) {
 			assert(desc._linearBufferDesc._sizeInBytes);	// zero sized buffer is can cause Vulkan to crash (and is silly, anyway)
@@ -521,13 +509,12 @@ namespace RenderCore { namespace Metal_Vulkan
 			buf_info.flags = 0;     // flags for sparse buffers
 
                     // set this flag to enable usage with "vkCmdUpdateBuffer"
-			if ((desc._cpuAccess & CPUAccess::WriteDynamic) == CPUAccess::WriteDynamic)
+			if ((desc._cpuAccess & CPUAccess::WriteDynamic) == CPUAccess::WriteDynamic || hasInitData)
 				buf_info.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
 			assert(buf_info.usage != 0);
 			if (!allocateDirectFromVulkan) {
-				VmaAllocation vmaAllocation;
-				_underlyingBuffer = factory.CreateBufferWithAutoMemory(buf_info, vmaAllocation);
+				_underlyingBuffer = factory.CreateBufferWithAutoMemory(buf_info, vmaFlags, _vmaMem);
 			} else {
 				_underlyingBuffer = factory.CreateBuffer(buf_info);
 				vkGetBufferMemoryRequirements(factory.GetDevice().get(), _underlyingBuffer.get(), &mem_reqs);
@@ -577,6 +564,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			image_create_info.initialLayout = hasInitData ? VK_IMAGE_LAYOUT_PREINITIALIZED : VK_IMAGE_LAYOUT_UNDEFINED;
 			image_create_info.usage = AsImageUsageFlags(desc._bindFlags);
 
+			if (hasInitData)
+				image_create_info.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
 			// minor validations
             if (image_create_info.tiling == VK_IMAGE_TILING_OPTIMAL && (image_create_info.usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) {
                 // For depth/stencil textures, if the device doesn't support optimal tiling, they switch back to linear
@@ -624,8 +614,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			    buf_info.flags = 0;
 
                 if (!allocateDirectFromVulkan) {
-					VmaAllocation allocation;
-					_underlyingBuffer = factory.CreateBufferWithAutoMemory(buf_info, allocation);
+					_underlyingBuffer = factory.CreateBufferWithAutoMemory(buf_info, vmaFlags, _vmaMem);
 				} else {
 					_underlyingBuffer = factory.CreateBuffer(buf_info);
     				vkGetBufferMemoryRequirements(factory.GetDevice().get(), _underlyingBuffer.get(), &mem_reqs);
@@ -633,8 +622,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
             } else {
 				if (!allocateDirectFromVulkan) {
-					VmaAllocation allocation;
-					_underlyingImage = factory.CreateImageWithAutoMemory(image_create_info, allocation, _guid);
+					_underlyingImage = factory.CreateImageWithAutoMemory(image_create_info, vmaFlags, _vmaMem, _guid);
 				} else {
 					_underlyingImage = factory.CreateImage(image_create_info, _guid);
 					vkGetImageMemoryRequirements(factory.GetDevice().get(), _underlyingImage.get(), &mem_reqs);
@@ -661,12 +649,15 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		if (allocateDirectFromVulkan) {
 			if (_underlyingBuffer) {
-				_mem = AttachDedicatedMemory(factory, desc, mem_reqs, _underlyingBuffer.get(), initData);
+				_mem = AttachDedicatedMemory(factory, desc, mem_reqs, _underlyingBuffer.get(), hasInitData);
 			} else {
 				assert(_underlyingImage);
-				_mem = AttachDedicatedMemory(factory, desc, mem_reqs, _underlyingImage.get(), initData);
+				_mem = AttachDedicatedMemory(factory, desc, mem_reqs, _underlyingImage.get(), hasInitData);
 			}
 		}
+
+		// Upload the init data now. Generally this isn't an ideal path, prefer to use more explicit synchronization
+		if (hasInitData) WriteInitDataViaMap(factory, desc, *this, initData);
 	}
 
 	void Resource::ConfigureDefaultSteadyState(BindFlag::BitField bindFlags)
@@ -739,7 +730,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	std::vector<uint8_t>    Resource::ReadBackSynchronized(IThreadContext& context, SubResourceId subRes) const
 	{
-		bool requiresDestaging = !_desc._cpuAccess;
+		bool requiresDestaging = !(_desc._cpuAccess & CPUAccess::Read);		// only resources created with VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT can be read from
 		if (requiresDestaging) {
 			// todo -- we could destaging only a single sub resource...?
 			auto stagingCopyDesc = _desc;
@@ -772,7 +763,7 @@ namespace RenderCore { namespace Metal_Vulkan
 						0, nullptr);
 				}
 
-				Internal::CaptureForBind capture(ctx, *const_cast<Resource*>(this), BindFlag::TransferSrc);
+				Internal::CaptureForBind capture{ctx, *const_cast<Resource*>(this), BindFlag::TransferSrc};
 				Copy(ctx, destaging, *const_cast<Resource*>(this), destaging._steadyStateLayout, capture.GetLayout());
 
 				// "7.9. Host Write Ordering Guarantees" suggests we shouldn't need a transfer -> host barrier here
@@ -792,13 +783,11 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		DeviceContext::Get(context);		// trigger recreation of command list, due to CommitCommands() finishing the previous one
 
-		auto* vulkanDevice = (IDeviceVulkan*)context.GetDevice()->QueryInterface(typeid(IDeviceVulkan).hash_code());
-		assert(vulkanDevice);
-		ResourceMap map(
-			vulkanDevice->GetUnderlyingDevice(),
+		ResourceMap map{
+			GetObjectFactory(*context.GetDevice()),
 			*const_cast<Resource*>(this),
 			ResourceMap::Mode::Read,
-			subRes);
+			subRes};
 
 		return std::vector<uint8_t>{
 			(const uint8_t*)map.GetData(subRes).begin(),
@@ -1198,14 +1187,13 @@ namespace RenderCore { namespace Metal_Vulkan
     }
 
     static unsigned CopyViaMemoryMap(
-        VkDevice device, VkImage image, VkDeviceMemory mem,
+        VkDevice device, VkImage image, ResourceMap& map,
         const TextureDesc& desc,
         const std::function<SubResourceInitData(SubResourceId)>& initData)
     {
         // Copy all of the subresources to device member, using a MemoryMap path.
         // If "image" is not null, we will get the arrangement of subresources from
         // the images. Otherwise, we will use a default arrangement of subresources.
-        ResourceMap map(device, mem);
         unsigned bytesUploaded = 0;
 
 		auto mipCount = unsigned(desc._mipCount);
@@ -1252,9 +1240,18 @@ namespace RenderCore { namespace Metal_Vulkan
 			const std::function<SubResourceInitData(SubResourceId)>& initData)
 		{
 			assert(resource.GetDesc()._type == ResourceDesc::Type::Texture);
-			return Metal_Vulkan::CopyViaMemoryMap(
-				ExtractUnderlyingDevice(dev), resource.GetImage(), resource.GetMemory(),
-				resource.GetDesc()._textureDesc, initData);
+			auto& factory = GetObjectFactory(dev);
+			if (resource.GetVmaMemory()) {
+				ResourceMap map{factory.GetVmaAllocator(), resource.GetVmaMemory()};
+				return Metal_Vulkan::CopyViaMemoryMap(
+					factory.GetDevice().get(), resource.GetImage(), map,
+					resource.GetDesc()._textureDesc, initData);
+			} else {
+				ResourceMap map{factory.GetDevice().get(), resource.GetMemory()};
+				return Metal_Vulkan::CopyViaMemoryMap(
+					factory.GetDevice().get(), resource.GetImage(), map,
+					resource.GetDesc()._textureDesc, initData);
+			}
 		}
 	}
 
@@ -1345,8 +1342,22 @@ namespace RenderCore { namespace Metal_Vulkan
 		_subResources.push_back(std::make_pair(SubResourceId{}, SubResourceOffset{ 0, _dataSize, pitches }));
 	}
 
+	ResourceMap::ResourceMap(VmaAllocator dev, VmaAllocation memory)
+	{
+		auto res = vmaMapMemory(dev, memory, &_data);
+		if (res != VK_SUCCESS)
+			Throw(VulkanAPIFailure(res, "Failed while mapping device memory"));
+		_vmaAllocator = dev;
+		_vmaMem = memory;
+
+		// we don't actually know the size or pitches in this case
+        _dataSize = 0;
+		TexturePitches pitches { (unsigned)_dataSize, (unsigned)_dataSize, (unsigned)_dataSize };
+		_subResources.push_back(std::make_pair(SubResourceId{}, SubResourceOffset{ 0, _dataSize, pitches }));
+	}
+
 	ResourceMap::ResourceMap(
-		VkDevice dev, IResource& iresource,
+		ObjectFactory& factory, IResource& iresource,
 		Mode mapMode,
         VkDeviceSize offset, VkDeviceSize size)
 	{
@@ -1364,17 +1375,27 @@ namespace RenderCore { namespace Metal_Vulkan
 		_dataSize = std::min(desc._linearBufferDesc._sizeInBytes - offset, size);
 		TexturePitches pitches { (unsigned)_dataSize, (unsigned)_dataSize, (unsigned)_dataSize };
 			
-		auto res = vkMapMemory(dev, resource.GetMemory(), offset, size, 0, &_data);
-		if (res != VK_SUCCESS)
-			Throw(VulkanAPIFailure(res, "Failed while mapping device memory"));
+		if ((_vmaMem = resource.GetVmaMemory())) {
+			if (offset != 0 || desc._linearBufferDesc._sizeInBytes != _dataSize)
+				Throw(std::runtime_error("vma based Vulkan resources only support whole-resource mapping. Avoid mapping a subrange of the resource"));
+			auto res = vmaMapMemory(factory.GetVmaAllocator(), _vmaMem, &_data);
+			_data = PtrAdd(_data, offset);
+			if (res != VK_SUCCESS)
+				Throw(VulkanAPIFailure(res, "Failed while mapping device memory"));
+			_vmaAllocator = factory.GetVmaAllocator();
+		} else {
+			_dev = factory.GetDevice().get();
+			auto res = vkMapMemory(_dev, resource.GetMemory(), offset, size, 0, &_data);
+			if (res != VK_SUCCESS)
+				Throw(VulkanAPIFailure(res, "Failed while mapping device memory"));
+			_mem = resource.GetMemory();
+		}
 
-        _dev = dev;
-        _mem = resource.GetMemory();
 		_subResources.push_back(std::make_pair(SubResourceId{}, SubResourceOffset{ 0, _dataSize, pitches }));
 	}
 
 	ResourceMap::ResourceMap(
-		VkDevice dev, IResource& iresource,
+		ObjectFactory& factory, IResource& iresource,
 		Mode mapMode,
         SubResourceId subResource)
 	{
@@ -1385,8 +1406,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		TexturePitches pitches;
 
 		auto& resource = *checked_cast<Resource*>(&iresource);
+		if (resource.GetVmaMemory())
+			Throw(std::runtime_error("vma based Vulkan resources only support whole-resource mapping. Avoid mapping a subrange of the resource"));
 
         // special case for images, where we need to take into account the requested "subresource"
+		_dev = factory.GetDevice().get();
         auto* image = resource.GetImage();
         auto desc = resource.GetDesc();
         if (image) {
@@ -1394,7 +1418,7 @@ namespace RenderCore { namespace Metal_Vulkan
             auto aspectMask = AsImageAspectMask(desc._textureDesc._format);
             VkImageSubresource sub = { aspectMask, subResource._mip, subResource._arrayLayer };
             VkSubresourceLayout layout = {};
-            vkGetImageSubresourceLayout(dev, image, &sub, &layout);
+            vkGetImageSubresourceLayout(_dev, image, &sub, &layout);
             finalOffset += layout.offset;
             finalSize = std::min(layout.size, finalSize);
             pitches = TexturePitches { unsigned(layout.rowPitch), unsigned(layout.depthPitch) };
@@ -1412,17 +1436,16 @@ namespace RenderCore { namespace Metal_Vulkan
 			pitches = TexturePitches { (unsigned)_dataSize, (unsigned)_dataSize, (unsigned)_dataSize };
 		}
 
-        auto res = vkMapMemory(dev, resource.GetMemory(), finalOffset, finalSize, 0, &_data);
+        auto res = vkMapMemory(_dev, resource.GetMemory(), finalOffset, finalSize, 0, &_data);
 		if (res != VK_SUCCESS)
 			Throw(VulkanAPIFailure(res, "Failed while mapping device memory"));
 
-        _dev = dev;
         _mem = resource.GetMemory();
 		_subResources.push_back(std::make_pair(subResource, SubResourceOffset{ 0, _dataSize, pitches }));
     }
 
 	ResourceMap::ResourceMap(
-		VkDevice dev, IResource& iresource,
+		ObjectFactory& factory, IResource& iresource,
 		Mode mapMode)
 	{
 		///////////
@@ -1430,13 +1453,20 @@ namespace RenderCore { namespace Metal_Vulkan
 		///////////////////
 		auto& resource = *checked_cast<Resource*>(&iresource);
 
-		auto res = vkMapMemory(dev, resource.GetMemory(), 0, VK_WHOLE_SIZE, 0, &_data);
-		if (res != VK_SUCCESS)
-			Throw(VulkanAPIFailure(res, "Failed while mapping device memory"));
+		if ((_vmaMem = resource.GetVmaMemory())) {
+			auto res = vmaMapMemory(factory.GetVmaAllocator(), _vmaMem, &_data);
+			if (res != VK_SUCCESS)
+				Throw(VulkanAPIFailure(res, "Failed while mapping device memory"));
+			_vmaAllocator = factory.GetVmaAllocator();
+		} else {
+			_dev = factory.GetDevice().get(); 
+			auto res = vkMapMemory(_dev, resource.GetMemory(), 0, VK_WHOLE_SIZE, 0, &_data);
+			if (res != VK_SUCCESS)
+				Throw(VulkanAPIFailure(res, "Failed while mapping device memory"));
+			_mem = resource.GetMemory();
+		}
 
-		_subResources = FindSubresources(dev, resource);
-		_dev = dev;
-        _mem = resource.GetMemory();
+		_subResources = FindSubresources(factory.GetDevice().get(), resource);
 		_dataSize = 0;
 		for (const auto& subRes:_subResources)
 			_dataSize = std::max(_dataSize, subRes.second._offset + subRes.second._size);
@@ -1445,7 +1475,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	ResourceMap::ResourceMap(
 		DeviceContext& context, IResource& resource,
 		Mode mapMode)
-	: ResourceMap(context.GetUnderlyingDevice(), resource, mapMode)
+	: ResourceMap(GetObjectFactory(context), resource, mapMode)
 	{
 	}
 
@@ -1453,7 +1483,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		DeviceContext& context, IResource& resource,
 		Mode mapMode,
 		SubResourceId subResource)
-	: ResourceMap(context.GetUnderlyingDevice(), resource, mapMode, subResource)
+	: ResourceMap(GetObjectFactory(context), resource, mapMode, subResource)
 	{
 	}
 	
@@ -1461,43 +1491,41 @@ namespace RenderCore { namespace Metal_Vulkan
 		DeviceContext& context, IResource& resource,
 		Mode mapMode,
 		VkDeviceSize offset, VkDeviceSize size)
-	: ResourceMap(context.GetUnderlyingDevice(), resource, mapMode, offset, size)
+	: ResourceMap(GetObjectFactory(context), resource, mapMode, offset, size)
 	{
-	}
-
-	static VkDevice GetUnderlyingDevice(IDevice& device)
-	{
-		auto vkDevice = (IDeviceVulkan*)device.QueryInterface(typeid(IDeviceVulkan).hash_code());
-		if (!vkDevice) Throw("Incorrect device type passed to ResourceMap");
-		return vkDevice->GetUnderlyingDevice();
 	}
 
 	ResourceMap::ResourceMap(
-		IDevice& device, IResource& resource,
+		IDevice& device, IResource& iresource,
 		Mode mapMode)
-	: ResourceMap(GetUnderlyingDevice(device), resource, mapMode)
 	{
+		auto& factory = GetObjectFactory(device);
+		auto& resource = *checked_cast<Resource*>(&iresource);
+		if (resource.GetVmaMemory()) *this = ResourceMap{factory.GetVmaAllocator(), resource.GetVmaMemory()};
+		else *this = ResourceMap{factory.GetDevice().get(), resource.GetMemory()};
 	}
 
 	ResourceMap::ResourceMap(
-		IDevice& device, IResource& resource,
+		IDevice& device, IResource& iresource,
 		Mode mapMode,
 		SubResourceId subResource)
-	: ResourceMap(GetUnderlyingDevice(device), resource, mapMode, subResource)
+	: ResourceMap{GetObjectFactory(device), iresource, mapMode, subResource}		// only non-vma
 	{
 	}
 
 	ResourceMap::ResourceMap(
-		IDevice& device, IResource& resource,
+		IDevice& device, IResource& iresource,
 		Mode mapMode,
 		VkDeviceSize offset, VkDeviceSize size)
-	: ResourceMap(GetUnderlyingDevice(device), resource, mapMode, offset, size)
+	: ResourceMap{GetObjectFactory(device), iresource, mapMode, offset, size}		// only non-vma
 	{
 	}
 
 	void ResourceMap::TryUnmap()
 	{
-        if (_dev && _mem)
+        if (_vmaAllocator && _vmaMem) {
+			vmaUnmapMemory(_vmaAllocator, _vmaMem);
+		} else if (_dev && _mem)
 		    vkUnmapMemory(_dev, _mem);
 	}
 
@@ -1538,7 +1566,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	IteratorRange<const void*>  ResourceMap::GetData() const { assert(_subResources.size() == 1); return GetData(SubResourceId{}); }
 	TexturePitches				ResourceMap::GetPitches() const { assert(_subResources.size() == 1); return GetPitches(SubResourceId{}); }
 
-    ResourceMap::ResourceMap() : _dev(nullptr), _mem(nullptr), _data(nullptr), _dataSize{0} {}
+    ResourceMap::ResourceMap() : _dev(nullptr), _mem(nullptr), _vmaMem(nullptr), _data(nullptr), _dataSize{0} {}
 
 	ResourceMap::~ResourceMap()
 	{
@@ -1551,6 +1579,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		_dataSize = moveFrom._dataSize; moveFrom._dataSize = 0;
 		_dev = moveFrom._dev; moveFrom._dev = nullptr;
 		_mem = moveFrom._mem; moveFrom._mem = nullptr;
+		_vmaMem = moveFrom._vmaMem; moveFrom._vmaMem = nullptr;
+		_vmaAllocator = moveFrom._vmaAllocator; moveFrom._vmaAllocator = nullptr;
 		_subResources = std::move(moveFrom._subResources);
 	}
 
@@ -1561,6 +1591,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		_dataSize = moveFrom._dataSize; moveFrom._dataSize = 0;
 		_dev = moveFrom._dev; moveFrom._dev = nullptr;
 		_mem = moveFrom._mem; moveFrom._mem = nullptr;
+		_vmaMem = moveFrom._vmaMem; moveFrom._vmaMem = nullptr;
+		_vmaAllocator = moveFrom._vmaAllocator; moveFrom._vmaAllocator = nullptr;
 		_subResources = std::move(moveFrom._subResources);
 		return *this;
 	}

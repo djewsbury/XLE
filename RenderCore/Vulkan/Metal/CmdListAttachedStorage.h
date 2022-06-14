@@ -56,7 +56,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		TemporaryStorageResourceMap& operator=(ResourceMap&&) = delete;
 	private:
 		TemporaryStorageResourceMap(
-			VkDevice dev, std::shared_ptr<IResource> resource,
+			ObjectFactory&, std::shared_ptr<IResource> resource,
 			VkDeviceSize offset, VkDeviceSize size,
 			unsigned pageId);
 		std::shared_ptr<IResource> _resource;

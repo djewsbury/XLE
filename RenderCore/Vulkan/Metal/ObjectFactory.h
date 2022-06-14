@@ -76,8 +76,8 @@ namespace RenderCore { namespace Metal_Vulkan
         VulkanUniquePtr<VkFramebuffer> CreateFramebuffer(const VkFramebufferCreateInfo& createInfo) const;
         VulkanUniquePtr<VkRenderPass> CreateRenderPass(const VkRenderPassCreateInfo2& createInfo) const;
 
-        VulkanUniquePtr<VkBuffer> CreateBufferWithAutoMemory(const VkBufferCreateInfo& createInfo, VmaAllocation& allocationResult) const;
-        VulkanUniquePtr<VkImage> CreateImageWithAutoMemory(const VkImageCreateInfo& createInfo, VmaAllocation& allocationResult, uint64_t guidForVisibilityTracking = 0ull) const;
+        VulkanUniquePtr<VkBuffer> CreateBufferWithAutoMemory(const VkBufferCreateInfo& createInfo, VmaAllocationCreateFlags memoryFlags, VmaAllocation& allocationResult) const;
+        VulkanUniquePtr<VkImage> CreateImageWithAutoMemory(const VkImageCreateInfo& createInfo, VmaAllocationCreateFlags memoryFlags, VmaAllocation& allocationResult, uint64_t guidForVisibilityTracking = 0ull) const;
 
         // resource views
         VulkanUniquePtr<VkImageView> CreateImageView(const VkImageViewCreateInfo& createInfo) const;
@@ -141,7 +141,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		std::shared_ptr<IDestructionQueue> CreateMarkerTrackingDestroyer(const std::shared_ptr<IAsyncTracker>&);
 		void SetDefaultDestroyer(const std::shared_ptr<IDestructionQueue>&);
-        VmaAllocator GetVMAAllocator() { return _vmaAllocator; }
+        VmaAllocator GetVmaAllocator() { return _vmaAllocator; }
 
         #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
             void ForgetResource(uint64_t resourceGuid) const;
