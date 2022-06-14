@@ -535,20 +535,26 @@ namespace BufferUploads
             if (stagingConstruction._locator.IsEmpty())
                 return {};
     
-            PlatformInterface::ResourceUploadHelper deviceContext(threadContext);
-            deviceContext.WriteToTextureViaMap(
-                stagingConstruction._locator,
-                stagingDesc, Box2D(),
-                [&part, &initialisationData](RenderCore::SubResourceId sr) -> RenderCore::SubResourceInitData
-                {
-                    RenderCore::SubResourceInitData result = {};
-					result._data = initialisationData.GetData(SubResourceId{sr._mip, sr._arrayLayer});
-                    assert(result._data.empty());
-                    result._pitches = initialisationData.GetPitches(SubResourceId{sr._mip, sr._arrayLayer});
-                    return result;
-                });
+            PlatformInterface::ResourceUploadHelper helper(threadContext);
+            if (desc._type == ResourceDesc::Type::Texture) {
+                helper.WriteToTextureViaMap(
+                    stagingConstruction._locator,
+                    stagingDesc, Box2D(),
+                    [&part, &initialisationData](RenderCore::SubResourceId sr) -> RenderCore::SubResourceInitData
+                    {
+                        RenderCore::SubResourceInitData result = {};
+                        result._data = initialisationData.GetData(SubResourceId{sr._mip, sr._arrayLayer});
+                        assert(result._data.empty());
+                        result._pitches = initialisationData.GetPitches(SubResourceId{sr._mip, sr._arrayLayer});
+                        return result;
+                    });
+            } else {
+                helper.WriteToBufferViaMap(
+                    stagingConstruction._locator, stagingDesc,
+                    0, initialisationData.GetData());
+            }
     
-            deviceContext.UpdateFinalResourceFromStaging(
+            helper.UpdateFinalResourceFromStaging(
                 finalResourceConstruction._locator, 
                 stagingConstruction._locator, desc, 
                 stagingToFinalMapping);
@@ -1255,19 +1261,19 @@ namespace BufferUploads
         }
 
         if (resourceCreateStep._initialisationData && !(finalConstruction._flags & ResourceSource::ResourceConstruction::Flags::InitialisationSuccessful)) {
-            if (transaction->_desc._type == ResourceDesc::Type::Texture) {
-                assert(finalConstruction._locator.GetContainingResource()->GetDesc()._bindFlags & BindFlag::TransferDst);    // need TransferDst to recieve staging data
-                
-                ResourceDesc stagingDesc;
-                PlatformInterface::StagingToFinalMapping stagingToFinalMapping;
-                std::tie(stagingDesc, stagingToFinalMapping) = PlatformInterface::CalculatePartialStagingDesc(transaction->_desc, resourceCreateStep._part);
+            assert(finalConstruction._locator.GetContainingResource()->GetDesc()._bindFlags & BindFlag::TransferDst);    // need TransferDst to recieve staging data
+            
+            ResourceDesc stagingDesc;
+            PlatformInterface::StagingToFinalMapping stagingToFinalMapping;
+            std::tie(stagingDesc, stagingToFinalMapping) = PlatformInterface::CalculatePartialStagingDesc(transaction->_desc, resourceCreateStep._part);
 
-                auto stagingConstruction = _resourceSource.Create(stagingDesc, resourceCreateStep._initialisationData.get());
-                assert(!stagingConstruction._locator.IsEmpty());
-                if (stagingConstruction._locator.IsEmpty())
-                    return false;
-        
-                auto& helper = context.GetResourceUploadHelper();
+            auto stagingConstruction = _resourceSource.Create(stagingDesc, resourceCreateStep._initialisationData.get());
+            assert(!stagingConstruction._locator.IsEmpty());
+            if (stagingConstruction._locator.IsEmpty())
+                return false;
+    
+            auto& helper = context.GetResourceUploadHelper();
+            if (transaction->_desc._type == ResourceDesc::Type::Texture) {
                 helper.WriteToTextureViaMap(
                     stagingConstruction._locator,
                     stagingDesc, Box2D(),
@@ -1279,22 +1285,21 @@ namespace BufferUploads
                         result._pitches = initialisationData->GetPitches(SubResourceId{sr._mip, sr._arrayLayer});
                         return result;
                     });
-        
-                helper.UpdateFinalResourceFromStaging(
-                    finalConstruction._locator, 
-                    stagingConstruction._locator, transaction->_desc, 
-                    stagingToFinalMapping);
-
-                context.GetCommitStepUnderConstruction().AddDelayedDelete(std::move(stagingConstruction._locator));
-                    
-                ++metricsUnderConstruction._contextOperations;
-                metricsUnderConstruction._stagingBytesUsed[uploadDataType] += uploadRequestSize;
             } else {
-                auto& helper = context.GetResourceUploadHelper();
                 helper.WriteToBufferViaMap(
-                    finalConstruction._locator, transaction->_desc,
+                    stagingConstruction._locator, stagingDesc,
                     0, resourceCreateStep._initialisationData->GetData());
             }
+    
+            helper.UpdateFinalResourceFromStaging(
+                finalConstruction._locator, 
+                stagingConstruction._locator, transaction->_desc, 
+                stagingToFinalMapping);
+
+            context.GetCommitStepUnderConstruction().AddDelayedDelete(std::move(stagingConstruction._locator));
+                
+            ++metricsUnderConstruction._contextOperations;
+            metricsUnderConstruction._stagingBytesUsed[uploadDataType] += uploadRequestSize;
         }
 
         metricsUnderConstruction._bytesUploaded[uploadDataType] += uploadRequestSize;

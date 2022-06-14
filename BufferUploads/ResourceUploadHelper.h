@@ -127,7 +127,7 @@ namespace BufferUploads { namespace PlatformInterface
 	#elif GFXAPI_TARGET == GFXAPI_VULKAN
 		// Vulkan capabilities haven't been tested!
 		static const bool SupportsResourceInitialisation_Texture = false;
-		static const bool SupportsResourceInitialisation_Buffer = true;
+		static const bool SupportsResourceInitialisation_Buffer = false;
 		static const bool RequiresStagingTextureUpload = true;
 		static const bool RequiresStagingResourceReadBack = true;
 		static const bool CanDoNooverwriteMapInBackground = true;
