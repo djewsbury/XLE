@@ -55,3 +55,6 @@
 [submodule "Foreign/FidelityFX-SSSR"]
 	path = Foreign/FidelityFX-SSSR
 	url = git@github.com:GPUOpen-Effects/FidelityFX-SSSR
+[submodule "Foreign/VulkanMemoryAllocator"]
+	path = Foreign/VulkanMemoryAllocator
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
