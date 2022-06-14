@@ -144,7 +144,7 @@ namespace BufferUploads
         virtual TransactionMarker   Transaction_Begin    (const ResourceDesc& desc, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags=0) = 0;
         virtual TransactionMarker   Transaction_Begin    (ResourceLocator destinationResource, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags=0) = 0;
 
-        virtual void            Transaction_Cancel      (TransactionID id) = 0;
+        virtual void            Transaction_Release      (TransactionID id) = 0;
 
             /// <summary>Validates a transaction</summary>
             /// This is a tool for debugging. Checks a transaction for common problems.
@@ -255,12 +255,15 @@ namespace BufferUploads
         bool IsValid() const;
         operator bool() const { return IsValid(); }
         
-        TransactionMarker() = default;
+        TransactionMarker();
+        ~TransactionMarker();
+        TransactionMarker(TransactionMarker&& moveFrom) never_throws;
+        TransactionMarker& operator=(TransactionMarker&& moveFrom) never_throws;
     private:
-        TransactionMarker(std::future<ResourceLocator>&&, TransactionID);
-
         friend class AssemblyLine;
         friend class Manager;
+        TransactionMarker(std::future<ResourceLocator>&&, TransactionID, AssemblyLine&);
+        AssemblyLine* _assemblyLine = nullptr;
     };
 
         /////////////////////////////////////////////////

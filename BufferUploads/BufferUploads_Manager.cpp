@@ -94,7 +94,7 @@ namespace BufferUploads
         TransactionMarker       Transaction_Begin(const std::shared_ptr<IAsyncDataSource>& data, BindFlag::BitField bindFlags, TransactionOptions::BitField flags);
         TransactionMarker       Transaction_Begin(ResourceLocator destinationResource, const std::shared_ptr<IAsyncDataSource>& data, TransactionOptions::BitField flags);
         void                    Transaction_AddRef(TransactionID id);
-        void                    Transaction_Cancel(TransactionID id);
+        void                    Transaction_Release(TransactionID id);
         void                    Transaction_Validate(TransactionID id);
 
         ResourceLocator         Transaction_Immediate(
@@ -233,7 +233,7 @@ namespace BufferUploads
         };
 
         void    ResolveBatchOperation(BatchPreparation& batchOperation, ThreadContext& context, unsigned stepMask);
-        void    ReleaseTransaction(Transaction* transaction, ThreadContext& context, bool abort = false);
+        void    SystemReleaseTransaction(Transaction* transaction, ThreadContext& context, bool abort = false);
         void    ClientReleaseTransaction(Transaction* transaction);
 
         bool    Process(const CreateFromDataPacketStep& resourceCreateStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction);
@@ -304,7 +304,9 @@ namespace BufferUploads
             *transaction,
             CreateFromDataPacketStep { transactionID, desc, data, PartialResource_All() });
 
-        return { transaction->_promise.get_future(), transactionID };
+        TransactionMarker result { transaction->_promise.get_future(), transactionID, *this };
+        --transaction->_referenceCount;     // todo -- can't stay like this
+        return result;
     }
 
     TransactionMarker AssemblyLine::Transaction_Begin(ResourceLocator destinationResource, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags)
@@ -325,7 +327,9 @@ namespace BufferUploads
             *transaction,
             CreateFromDataPacketStep { transactionID, transaction->_desc, data, PartialResource_All() });
 
-        return { transaction->_promise.get_future(), transactionID };
+        TransactionMarker result { transaction->_promise.get_future(), transactionID, *this };
+        --transaction->_referenceCount;     // todo -- can't stay like this
+        return result;
     }
 
     TransactionMarker AssemblyLine::Transaction_Begin(
@@ -335,7 +339,7 @@ namespace BufferUploads
         Transaction* transaction = GetTransaction(transactionID);
         assert(transaction);
 
-        TransactionMarker result { transaction->_promise.get_future(), transactionID };
+        TransactionMarker result { transaction->_promise.get_future(), transactionID, *this };
 
         // Let's optimize the case where the desc is available immediately, since certain
         // usage patterns will allow for that
@@ -363,6 +367,7 @@ namespace BufferUploads
                 });
         }
 
+        --transaction->_referenceCount;     // todo -- can't stay like this
         return result;
     }
 
@@ -373,13 +378,12 @@ namespace BufferUploads
         assert(transaction);
         transaction->_finalResource = std::move(destinationResource);
 
-        TransactionMarker result { transaction->_promise.get_future(), transactionID };
+        TransactionMarker result { transaction->_promise.get_future(), transactionID, *this };
 
         // Let's optimize the case where the desc is available immediately, since certain
         // usage patterns will allow for that
         auto descFuture = data->GetDesc();
-        auto status = descFuture.wait_for(0s);
-        if (status == std::future_status::ready) {
+        if (descFuture.wait_for(0s) == std::future_status::ready) {
 
             ++transaction->_referenceCount;
             CompleteWaitForDescFuture(transactionID, std::move(descFuture), data, 0, PartialResource_All());
@@ -401,10 +405,11 @@ namespace BufferUploads
                 });
         }
 
+        --transaction->_referenceCount;     // todo -- can't stay like this
         return result;
     }
 
-    void AssemblyLine::ReleaseTransaction(Transaction* transaction, ThreadContext& context, bool abort)
+    void AssemblyLine::SystemReleaseTransaction(Transaction* transaction, ThreadContext& context, bool abort)
     {
         AssemblyLineRetirement retirementBuffer;
         AssemblyLineRetirement* retirement = &retirementBuffer;
@@ -460,6 +465,7 @@ namespace BufferUploads
             --_allocatedTransactionCount;
 
             #if defined(OPTIMISED_ALLOCATE_TRANSACTION)
+                ScopedLock(_transactionsLock);
                 if (isLongTerm) {
                     _transactionsHeap_LongTerm.Deallocate(heapIndex<<4, 1<<4);
                 } else {
@@ -486,6 +492,7 @@ namespace BufferUploads
             --_allocatedTransactionCount;
 
             #if defined(OPTIMISED_ALLOCATE_TRANSACTION)
+                ScopedLock(_transactionsLock);
                 if (isLongTerm) {
                     _transactionsHeap_LongTerm.Deallocate(heapIndex<<4, 1<<4);
                 } else {
@@ -495,7 +502,7 @@ namespace BufferUploads
         }
     }
 
-    void AssemblyLine::Transaction_Cancel(TransactionID id)
+    void AssemblyLine::Transaction_Release(TransactionID id)
     {
         Transaction* transaction = GetTransaction(id);
         assert(transaction);
@@ -846,8 +853,8 @@ namespace BufferUploads
         newTransaction._requestTime = OSServices::GetPerformanceCounter();
         newTransaction._creationOptions = flags;
 
-            // Start with a client ref count 1
-        destinationPosition->_referenceCount.store(0x01000000);
+            // Start with a client ref count 1 & system ref count 1
+        destinationPosition->_referenceCount.store(0x01000001);
         ++_allocatedTransactionCount;
 
         *destinationPosition = std::move(newTransaction);
@@ -859,25 +866,27 @@ namespace BufferUploads
     {
         unsigned index = unsigned(id);
         unsigned key = unsigned(id>>32) & ~(1<<31);
+        AssemblyLine::Transaction* result = nullptr;
         #if defined(DEQUE_BASED_TRANSACTIONS)
             ScopedLock(_transactionsLock);       // must be locked when using the deque method... if the deque is resized at the same time, operator[] can seem to fail
             if (id & (1ull<<63ull)) {
                 if ((index < _transactions_LongTerm.size()) && (key == _transactions_LongTerm[index]._idTopPart)) {
-                    return &_transactions_LongTerm[index];
+                    result = &_transactions_LongTerm[index];
                 }
             } else {
                 if ((index < _transactions.size()) && (key == _transactions[index]._idTopPart)) {
-                    return &_transactions[index];
+                    result = &_transactions[index];
                 }
             }
         #else
             if (index < _transactions.size()) {
                 if (key == _transactions[index]._idTopPart) {
-                    return &_transactions[index];
+                    result = &_transactions[index];
                 }
             }
         #endif
-        return NULL;
+        if (result) assert(result->_referenceCount.load());     // this is only thread safe if there's some kind of reference on the transaction
+        return result;
     }
 
     void AssemblyLine::Wait(unsigned stepMask, ThreadContext& context)
@@ -1150,7 +1159,7 @@ namespace BufferUploads
                         Transaction* transaction = GetTransaction(i->_id);
                         transaction->_finalResource = batchedResource.MakeSubLocator(*o, byteCount);
                         transaction->_promise.set_value(transaction->_finalResource);
-                        ReleaseTransaction(transaction, context);
+                        SystemReleaseTransaction(transaction, context);
                     }
 
                     if (batchingI == batchOperation._batchedSteps.end()) {
@@ -1225,13 +1234,13 @@ namespace BufferUploads
             uploadRequestSize = objectSize;
         }
         
-        if (!(transaction->_referenceCount & 0xff000000)) {
+        /*if (!(transaction->_referenceCount & 0xff000000)) {
                 //  If there are no client references, we can consider this cancelled...
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Aborted because client references were released")));
             ReleaseTransaction(transaction, context, true);
             _currentQueuedBytes[uploadDataType] -= uploadRequestSize;
             return true;
-        }
+        }*/
 
         if ((metricsUnderConstruction._bytesUploadTotal+uploadRequestSize) > budgetUnderConstruction._limit_BytesUploaded && metricsUnderConstruction._bytesUploadTotal !=0)
             return false;
@@ -1317,7 +1326,7 @@ namespace BufferUploads
         transaction->_finalResource = ResourceLocator { std::move(finalConstruction._locator), context.CommandList_GetUnderConstruction() };
         transaction->_promise.set_value(transaction->_finalResource);
 
-        ReleaseTransaction(transaction, context);
+        SystemReleaseTransaction(transaction, context);
         return true;
     }
 
@@ -1333,11 +1342,11 @@ namespace BufferUploads
         auto* transaction = GetTransaction(prepareStagingStep._id);
         assert(transaction);
 
-        if (!(transaction->_referenceCount & 0xff000000)) {
+        /*if (!(transaction->_referenceCount & 0xff000000)) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Aborted because client references were released")));
             ReleaseTransaction(transaction, context, true);
             return true;
-        }
+        }*/
 
         try {
             const auto& desc = prepareStagingStep._desc;
@@ -1457,7 +1466,7 @@ namespace BufferUploads
             transaction->_promise.set_exception(std::current_exception());
         }
 
-        ReleaseTransaction(transaction, context);
+        SystemReleaseTransaction(transaction, context);
         return true;
     }
 
@@ -1483,7 +1492,7 @@ namespace BufferUploads
             [transactionID](AssemblyLine& assemblyLine, ThreadContext& context) {
                 Transaction* transaction = assemblyLine.GetTransaction(transactionID);
                 assert(transaction);
-                assemblyLine.ReleaseTransaction(transaction, context);
+                assemblyLine.SystemReleaseTransaction(transaction, context);
             });
         _wakeupEvent.Increment();
     }
@@ -1511,7 +1520,7 @@ namespace BufferUploads
             [transactionID](AssemblyLine& assemblyLine, ThreadContext& context) {
                 Transaction* transaction = assemblyLine.GetTransaction(transactionID);
                 assert(transaction);
-                assemblyLine.ReleaseTransaction(transaction, context);
+                assemblyLine.SystemReleaseTransaction(transaction, context);
             });
         _wakeupEvent.Increment();
     }
@@ -1526,12 +1535,12 @@ namespace BufferUploads
         assert(transaction);
         auto dataType = (unsigned)AsUploadDataType(transaction->_desc);
 
-        if (!(transaction->_referenceCount & 0xff000000)) {
+        /*if (!(transaction->_referenceCount & 0xff000000)) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Aborted because client references were released")));
             ReleaseTransaction(transaction, context, true);
             _currentQueuedBytes[dataType] -= transferStagingToFinalStep._stagingByteCount;
             return true;
-        }
+        }*/
 
         if ((metricsUnderConstruction._bytesUploadTotal+transferStagingToFinalStep._stagingByteCount) > budgetUnderConstruction._limit_BytesUploaded && metricsUnderConstruction._bytesUploadTotal !=0)
             return false;
@@ -1573,7 +1582,7 @@ namespace BufferUploads
             transaction->_promise.set_exception(std::current_exception());
         }
 
-        ReleaseTransaction(transaction, context);
+        SystemReleaseTransaction(transaction, context);
         return true;
     }
 
@@ -1924,9 +1933,9 @@ namespace BufferUploads
 
         /////////////////////////////////////////////
 
-    void                    Manager::Transaction_Cancel(TransactionID id)
+    void                    Manager::Transaction_Release(TransactionID id)
     {
-        _assemblyLine->Transaction_Cancel(id);
+        _assemblyLine->Transaction_Release(id);
     }
 
     void                    Manager::Transaction_Validate(TransactionID id)
@@ -2119,10 +2128,38 @@ namespace BufferUploads
         return _transactionID != TransactionID_Invalid && _future.valid();
     }
 
-    TransactionMarker::TransactionMarker(std::future<ResourceLocator>&& future, TransactionID transactionID)
+    TransactionMarker::TransactionMarker(std::future<ResourceLocator>&& future, TransactionID transactionID, AssemblyLine& assemblyLine)
     : _future(std::move(future))
     , _transactionID(transactionID)
+    , _assemblyLine(&assemblyLine)
     {}
+
+    TransactionMarker::TransactionMarker() = default;
+    TransactionMarker::~TransactionMarker()
+    {
+        if (_assemblyLine)
+            _assemblyLine->Transaction_Release(_transactionID);
+    }
+    TransactionMarker::TransactionMarker(TransactionMarker&& moveFrom) never_throws
+    : _future(std::move(moveFrom._future))
+    , _transactionID(std::move(moveFrom._transactionID))
+    , _assemblyLine(std::move(moveFrom._assemblyLine))
+    {
+        moveFrom._transactionID = TransactionID_Invalid;
+        moveFrom._assemblyLine = nullptr;
+    }
+    TransactionMarker& TransactionMarker::operator=(TransactionMarker&& moveFrom) never_throws
+    {
+        if (&moveFrom == this) return *this;
+        if (_assemblyLine)
+            _assemblyLine->Transaction_Release(_transactionID);
+        _future = std::move(moveFrom._future);
+        _transactionID = std::move(moveFrom._transactionID);
+        _assemblyLine = std::move(moveFrom._assemblyLine);
+        moveFrom._transactionID = TransactionID_Invalid;
+        moveFrom._assemblyLine = nullptr;
+        return *this;
+    }
 
     std::unique_ptr<IManager> CreateManager(RenderCore::IDevice& renderDevice)
     {
