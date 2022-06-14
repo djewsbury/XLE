@@ -7,6 +7,7 @@
 #include "TechniqueUtils.h"
 #include "CommonResources.h"
 #include "DeformUniformsInfrastructure.h"
+#include "Services.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedCBLayout.h"
 #include "../Assets/MaterialMachine.h"
@@ -20,6 +21,7 @@
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Assets/BlockSerializer.h"
 #include "../../Utility/ParameterBox.h"
+#include "../../Utility/BitUtils.h"
 
 namespace RenderCore { namespace Techniques 
 {
@@ -29,12 +31,14 @@ namespace RenderCore { namespace Techniques
 		{
 			struct Resource
 			{
-				std::shared_future<std::shared_ptr<DeferredShaderResource>> _future;
+				std::shared_future<std::shared_ptr<DeferredShaderResource>> _deferredShaderResource;
+				std::pair<unsigned, unsigned> _cbResourceOffsetAndSize = {0,0};
 				std::shared_ptr<IResourceView> _fixedResource;
 			};
 			std::vector<Resource> _resources;
 			std::vector<std::shared_ptr<ISampler>> _samplers;
 			size_t _allReadyBefore = 0;
+			BufferUploads::TransactionMarker _cbUploadMarker;
 
 			struct Slot
 			{
@@ -57,11 +61,15 @@ namespace RenderCore { namespace Techniques
 				for (size_t c=_allReadyBefore; c<_resources.size(); ++c) {
 					auto& res = _resources[c];
 					if (res._fixedResource) continue;
-					if (res._future.wait_until(timeoutTime) == std::future_status::timeout) {
+					if (res._cbResourceOffsetAndSize.second) continue;
+					if (res._deferredShaderResource.wait_until(timeoutTime) == std::future_status::timeout) {
 						_allReadyBefore = c;
 						return ::Assets::PollStatus::Continue;
 					}
 				}
+
+				if (_cbUploadMarker._future.wait_until(timeoutTime) == std::future_status::timeout) 
+					return ::Assets::PollStatus::Continue;
 
 				return ::Assets::PollStatus::Finish;
 			}
@@ -110,12 +118,17 @@ namespace RenderCore { namespace Techniques
 		};
 	}
 
+	static const std::string s_multipleDescSetCBs = "DescSetCBs";
+
 	void ConstructDescriptorSetHelper::Construct(
 		std::promise<ActualizedDescriptorSet>&& promise,
 		const Assets::PredefinedDescriptorSetLayout& layout,
 		IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 		const DeformerToDescriptorSetBinding* deformBinding)
 	{
+		// todo -- this might be better if we could construct multiple descriptor sets all at once. Ie, one compound load for an entire model,
+		//		rather than a bunch of individual operations
+
 		auto shrLanguage = GetDefaultShaderLanguage();
 
 		int maxSlotIdx = -1;
@@ -130,6 +143,10 @@ namespace RenderCore { namespace Techniques
 
 		Internal::InterpretMaterialMachineHelper machineHelper{materialMachine};
 		bool applyDeformAcceleratorOffset = false;
+
+		std::vector<uint8_t> cbUploadBuffer;
+		const unsigned cbAlignmentRules = 64;		// todo -- get from device
+		std::optional<StringSection<>> cbName;
 
 		char stringMeldBuffer[512];
 		for (const auto& s:layout._slots) {
@@ -151,7 +168,7 @@ namespace RenderCore { namespace Techniques
 				slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
 				slotInProgress._resourceIdx = (unsigned)working->_resources.size();
 				Internal::DescriptorSetInProgress::Resource res;
-				res._future = ::Assets::MakeAssetPtr<DeferredShaderResource>(MakeStringSection(boundResource.value()))->ShareFuture();
+				res._deferredShaderResource = ::Assets::MakeAssetPtr<DeferredShaderResource>(MakeStringSection(boundResource.value()))->ShareFuture();
 				working->_resources.push_back(res);
 				gotBinding = true;
 
@@ -167,28 +184,32 @@ namespace RenderCore { namespace Techniques
 
 				if (!animated) {
 					auto& cbLayout = layout._constantBuffers[s._cbIdx];
-					std::vector<uint8_t> buffer;
-					if (machineHelper._constantBindings) {
-						buffer = cbLayout->BuildCBDataAsVector(*machineHelper._constantBindings, shrLanguage);
-					} else 
-						buffer = cbLayout->BuildCBDataAsVector({}, shrLanguage);
+					auto cbSize = cbLayout->GetSize(shrLanguage);
+					if (cbSize) {
+						auto uploadBufferStart = CeilToMultiple(unsigned(cbUploadBuffer.size()), cbAlignmentRules);
+						auto uploadBufferEnd = CeilToMultiple(uploadBufferStart+cbSize, cbAlignmentRules);
+						cbUploadBuffer.resize(uploadBufferEnd);
+						auto uploadBufferRange = MakeIteratorRange(PtrAdd(cbUploadBuffer.data(), uploadBufferStart), PtrAdd(cbUploadBuffer.data(), uploadBufferEnd));
+						
+						if (machineHelper._constantBindings) {
+							cbLayout->BuildCB(uploadBufferRange, *machineHelper._constantBindings, shrLanguage);
+						} else {
+							cbLayout->BuildCB(uploadBufferRange, {}, shrLanguage);
+						}
 
-					auto cb = 
-						_device->CreateResource(
-							CreateDesc(BindFlag::ConstantBuffer, 0, GPUAccess::Read, LinearBufferDesc::Create((unsigned)buffer.size()), s._name),
-							SubResourceInitData{buffer});
+						slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
+						slotInProgress._resourceIdx = (unsigned)working->_resources.size();
 
-					slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
-					slotInProgress._resourceIdx = (unsigned)working->_resources.size();
+						Internal::DescriptorSetInProgress::Resource res;
+						res._cbResourceOffsetAndSize = {uploadBufferStart, cbSize};
+						working->_resources.push_back(res);
 
-					Internal::DescriptorSetInProgress::Resource res;
-					res._fixedResource = cb->CreateBufferView(BindFlag::ConstantBuffer);
-					working->_resources.push_back(res);
-
-					if (_generateBindingInfo) {
-						std::stringstream str;
-						cbLayout->DescribeCB(str, MakeIteratorRange(buffer), shrLanguage);
-						slotBindingInfo._binding = str.str();
+						if (_generateBindingInfo) {
+							std::stringstream str;
+							cbLayout->DescribeCB(str, uploadBufferRange, shrLanguage);
+							slotBindingInfo._binding = str.str();
+						}
+						cbName = cbName.has_value() ? MakeStringSection(s_multipleDescSetCBs) : MakeStringSection(s._name);
 					}
 				} else {
 					applyDeformAcceleratorOffset = true;
@@ -234,6 +255,14 @@ namespace RenderCore { namespace Techniques
 
 		working->_signature = layout.MakeDescriptorSetSignature(_samplerPool);
 
+		if (!cbUploadBuffer.empty()) {
+			auto& bu = Services::GetBufferUploads();
+			auto size = cbUploadBuffer.size();
+			working->_cbUploadMarker = bu.Transaction_Begin(
+				CreateDesc(BindFlag::ConstantBuffer, 0, GPUAccess::Read, LinearBufferDesc::Create((unsigned)size), cbName.value()),
+				BufferUploads::CreateBasicPacket(std::move(cbUploadBuffer)));
+		}
+
 		::Assets::PollToPromise(
 			std::move(promise),
 			[working](auto timeout) {
@@ -247,10 +276,18 @@ namespace RenderCore { namespace Techniques
 				subDepVals.reserve(working->_resources.size());
 				BufferUploads::CommandListID completionCommandList = 0;
 
+				BufferUploads::ResourceLocator uploadedCB;
+				if (working->_cbUploadMarker.IsValid()) {
+					uploadedCB = working->_cbUploadMarker._future.get();
+					completionCommandList = std::max(completionCommandList, uploadedCB.GetCompletionCommandList());
+				}
+
 				// Construct the final descriptor set; even if we got some (or all) invalid assets
 				for (auto&d:working->_resources) {
-					if (!d._fixedResource) {
-						auto actualized = d._future.get();		// note -- on invalidate, the only dep val returned will be the one that is invalid
+					if (d._cbResourceOffsetAndSize.second) {
+						finalResources.push_back(uploadedCB.CreateBufferView(BindFlag::ConstantBuffer, d._cbResourceOffsetAndSize.first, d._cbResourceOffsetAndSize.second));
+					} else if (!d._fixedResource) {
+						auto actualized = d._deferredShaderResource.get();		// note -- on invalidate, the only dep val returned will be the one that is invalid
 						finalResources.push_back(actualized->GetShaderResource());
 
 						auto resCmdList = actualized->GetCompletionCommandList();

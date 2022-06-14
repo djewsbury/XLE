@@ -323,17 +323,18 @@ namespace RenderCore { namespace Assets
         }
     }
 
-    void PredefinedCBLayout::WriteBuffer(void* dst, const ParameterBox& parameters, ShaderLanguage lang) const
+    void PredefinedCBLayout::BuildCB(IteratorRange<void*> dst, const ParameterBox& parameters, ShaderLanguage lang) const
     {
         unsigned alignmentRules = AlignmentRulesForLanguage(lang);
+        assert(dst.size() >= _cbSizeByLanguage[alignmentRules]);
         for (auto c=_elements.cbegin(); c!=_elements.cend(); ++c) {
             for (auto e=0u; e<std::max(1u, c->_arrayElementCount); e++) {
                 bool gotValue = parameters.GetParameter(
-                    c->_hash + e, PtrAdd(dst, c->_offsetsByLanguage[alignmentRules] + e * c->_arrayElementStride),
+                    c->_hash + e, PtrAdd(dst.begin(), c->_offsetsByLanguage[alignmentRules] + e * c->_arrayElementStride),
                     c->_type);
 
                 if (!gotValue)
-                    _defaults.GetParameter(c->_hash + e, PtrAdd(dst, c->_offsetsByLanguage[alignmentRules]), c->_type);
+                    _defaults.GetParameter(c->_hash + e, PtrAdd(dst.begin(), c->_offsetsByLanguage[alignmentRules]), c->_type);
             }
         }
     }
@@ -342,7 +343,7 @@ namespace RenderCore { namespace Assets
     {
         unsigned alignmentRules = AlignmentRulesForLanguage(lang);
         std::vector<uint8> cbData(_cbSizeByLanguage[alignmentRules], uint8(0));
-        WriteBuffer(AsPointer(cbData.begin()), parameters, lang);
+        BuildCB(MakeIteratorRange(cbData), parameters, lang);
         return cbData;
     }
 
@@ -351,7 +352,7 @@ namespace RenderCore { namespace Assets
         unsigned alignmentRules = AlignmentRulesForLanguage(lang);
         SharedPkt result = MakeSharedPktSize(_cbSizeByLanguage[alignmentRules]);
         std::memset(result.begin(), 0, _cbSizeByLanguage[alignmentRules]);
-        WriteBuffer(result.begin(), parameters, lang);
+        BuildCB(MakeIteratorRange(result), parameters, lang);
         return result;
     }
     

@@ -52,6 +52,8 @@ namespace RenderCore { namespace Assets
 
         std::vector<uint8> BuildCBDataAsVector(const ParameterBox& parameters, ShaderLanguage lang) const;
         SharedPkt BuildCBDataAsPkt(const ParameterBox& parameters, ShaderLanguage lang) const;
+        void BuildCB(IteratorRange<void*> dst, const ParameterBox& parameters, ShaderLanguage lang) const;
+
         unsigned GetSize(ShaderLanguage lang) const;
         unsigned GetSize_NoPostfix(ShaderLanguage lang) const;
         std::vector<ConstantBufferElementDesc> MakeConstantBufferElements(ShaderLanguage lang) const;
@@ -93,7 +95,6 @@ namespace RenderCore { namespace Assets
         ::Assets::DependencyValidation   _validationCallback;
 
         void Parse(ConditionalProcessingTokenizer&);
-        void WriteBuffer(void* dst, const ParameterBox& parameters, ShaderLanguage lang) const;
 
         // Similar to the offset values, the size of the CB depends on what shader language rules are used
         unsigned _cbSizeByLanguage[AlignmentRules_Max];
