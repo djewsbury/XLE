@@ -11,6 +11,8 @@
 #include "../../../Utility/IteratorUtils.h"
 #include "../../../Core/Types.h"
 #include <memory>
+#include "IncludeVulkan.h"
+#include "Foreign/VulkanMemoryAllocator/include/vk_mem_alloc.h"
 
 namespace RenderCore { namespace Metal_Vulkan
 {
@@ -50,6 +52,8 @@ namespace RenderCore { namespace Metal_Vulkan
         virtual void    Destroy(VkFence) = 0;
         virtual void    Destroy(VkSampler) = 0;
 		virtual void	Destroy(VkQueryPool) = 0;
+        virtual void	Destroy(VkImage, VmaAllocation) = 0;
+        virtual void	Destroy(VkBuffer, VmaAllocation) = 0;
 
 		struct FlushFlags
 		{
@@ -63,35 +67,23 @@ namespace RenderCore { namespace Metal_Vulkan
 	class ObjectFactory
 	{
 	public:
-		VkPhysicalDevice GetPhysicalDevice() const { return _physDev; }
-		const VulkanSharedPtr<VkDevice>& GetDevice() const { return _device; }
-
-        VulkanUniquePtr<VkCommandPool> CreateCommandPool(
-            unsigned queueFamilyIndex, VkCommandPoolCreateFlags flags = 0) const;
-
-        VulkanUniquePtr<VkSemaphore> CreateSemaphore(
-            VkSemaphoreCreateFlags flags = 0) const;
-		VulkanUniquePtr<VkEvent> CreateEvent() const;
-
-        VulkanUniquePtr<VkDeviceMemory> AllocateMemory(
-            VkDeviceSize allocationSize, unsigned memoryTypeIndex) const;
-
-        VulkanUniquePtr<VkRenderPass> CreateRenderPass(
-            const VkRenderPassCreateInfo2& createInfo) const;
-
+        // main resources
         VulkanUniquePtr<VkImage> CreateImage(
             const VkImageCreateInfo& createInfo,
             uint64_t guidForVisibilityTracking = 0ull) const;
+        VulkanUniquePtr<VkBuffer> CreateBuffer(const VkBufferCreateInfo& createInfo) const;
+        VulkanUniquePtr<VkSampler> CreateSampler(const VkSamplerCreateInfo& createInfo) const;
+        VulkanUniquePtr<VkFramebuffer> CreateFramebuffer(const VkFramebufferCreateInfo& createInfo) const;
+        VulkanUniquePtr<VkRenderPass> CreateRenderPass(const VkRenderPassCreateInfo2& createInfo) const;
 
-        VulkanUniquePtr<VkImageView> CreateImageView(
-            const VkImageViewCreateInfo& createInfo) const;
+        VulkanUniquePtr<VkBuffer> CreateBufferWithAutoMemory(const VkBufferCreateInfo& createInfo, VmaAllocation& allocationResult) const;
+        VulkanUniquePtr<VkImage> CreateImageWithAutoMemory(const VkImageCreateInfo& createInfo, VmaAllocation& allocationResult, uint64_t guidForVisibilityTracking = 0ull) const;
 
-        VulkanUniquePtr<VkBufferView> CreateBufferView(
-            const VkBufferViewCreateInfo& createInfo) const;
+        // resource views
+        VulkanUniquePtr<VkImageView> CreateImageView(const VkImageViewCreateInfo& createInfo) const;
+        VulkanUniquePtr<VkBufferView> CreateBufferView(const VkBufferViewCreateInfo& createInfo) const;
 
-        VulkanUniquePtr<VkFramebuffer> CreateFramebuffer(
-            const VkFramebufferCreateInfo& createInfo) const;
-
+        // pipelines / shaders
         VulkanUniquePtr<VkShaderModule> CreateShaderModule(
             IteratorRange<const void*> byteCode,
             VkShaderModuleCreateFlags flags = 0) const;
@@ -108,40 +100,48 @@ namespace RenderCore { namespace Metal_Vulkan
             const void* initialData = nullptr, size_t initialDataSize = 0,
             VkPipelineCacheCreateFlags flags = 0) const;
 
+        VulkanUniquePtr<VkPipelineLayout> CreatePipelineLayout(
+            IteratorRange<const VkDescriptorSetLayout*> setLayouts,
+            IteratorRange<const VkPushConstantRange*> pushConstants = IteratorRange<const VkPushConstantRange*>(),
+            VkPipelineLayoutCreateFlags flags = 0) const;
+
+        // desc sets
         VulkanUniquePtr<VkDescriptorSetLayout> CreateDescriptorSetLayout(
             IteratorRange<const VkDescriptorSetLayoutBinding*> bindings) const;
 
         VulkanUniquePtr<VkDescriptorPool> CreateDescriptorPool(
             const VkDescriptorPoolCreateInfo& createInfo) const;
 
-        VulkanUniquePtr<VkPipelineLayout> CreatePipelineLayout(
-            IteratorRange<const VkDescriptorSetLayout*> setLayouts,
-            IteratorRange<const VkPushConstantRange*> pushConstants = IteratorRange<const VkPushConstantRange*>(),
-            VkPipelineLayoutCreateFlags flags = 0) const;
+        // misc
+        VulkanUniquePtr<VkCommandPool> CreateCommandPool(
+            unsigned queueFamilyIndex, VkCommandPoolCreateFlags flags = 0) const;
 
-        VulkanUniquePtr<VkBuffer> CreateBuffer(
-            const VkBufferCreateInfo& createInfo) const;
-
+        // sync
         VulkanUniquePtr<VkFence> CreateFence(VkFenceCreateFlags flags = 0) const;
-
-        VulkanUniquePtr<VkSampler> CreateSampler(const VkSamplerCreateInfo& createInfo) const;
-
-		VulkanUniquePtr<VkQueryPool> CreateQueryPool(
+        VulkanUniquePtr<VkSemaphore> CreateSemaphore(VkSemaphoreCreateFlags flags = 0) const;
+		VulkanUniquePtr<VkEvent> CreateEvent() const;
+        VulkanUniquePtr<VkQueryPool> CreateQueryPool(
 			VkQueryType_ type, unsigned count, 
 			VkQueryPipelineStatisticFlags pipelineStats = 0) const;
 
+        // memory direct from Vulkan
+        VulkanUniquePtr<VkDeviceMemory> AllocateMemoryDirectFromVulkan(
+            VkDeviceSize allocationSize, unsigned memoryTypeIndex) const;
 		unsigned FindMemoryType(
             VkFlags memoryTypeBits, 
             VkMemoryPropertyFlags requirementsMask = 0) const;
+
+        // device & capabilities query
+        VkPhysicalDevice GetPhysicalDevice() const { return _physDev; }
+		const VulkanSharedPtr<VkDevice>& GetDevice() const { return _device; }
 		VkFormatProperties GetFormatProperties(VkFormat_ fmt) const;
         const VkPhysicalDeviceProperties& GetPhysicalDeviceProperties() const { return *_physDevProperties; }
         const VkPhysicalDeviceFeatures& GetPhysicalDeviceFeatures() const { return *_physDevFeatures; }
+        ExtensionFunctions& GetExtensionFunctions() { return *_extensionFunctions; }
 
 		std::shared_ptr<IDestructionQueue> CreateMarkerTrackingDestroyer(const std::shared_ptr<IAsyncTracker>&);
-
 		void SetDefaultDestroyer(const std::shared_ptr<IDestructionQueue>&);
-
-        ExtensionFunctions& GetExtensionFunctions() { return *_extensionFunctions; }
+        VmaAllocator GetVMAAllocator() { return _vmaAllocator; }
 
         #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
             void ForgetResource(uint64_t resourceGuid) const;
@@ -149,6 +149,7 @@ namespace RenderCore { namespace Metal_Vulkan
         #endif
 
 		ObjectFactory(
+            VkInstance instance,
             VkPhysicalDevice physDev, VulkanSharedPtr<VkDevice> device, 
             std::shared_ptr<ExtensionFunctions> extensionFunctions);
 		ObjectFactory();
@@ -163,6 +164,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	private:
         VkPhysicalDevice            _physDev;
 		VulkanSharedPtr<VkDevice>   _device;
+        VmaAllocator _vmaAllocator;
         
 		std::shared_ptr<IDestructionQueue> _immediateDestruction; 
 		std::shared_ptr<IDestructionQueue> _destruction;
@@ -171,6 +173,10 @@ namespace RenderCore { namespace Metal_Vulkan
         std::unique_ptr<VkPhysicalDeviceProperties> _physDevProperties;
         std::unique_ptr<VkPhysicalDeviceFeatures> _physDevFeatures;
         std::shared_ptr<ExtensionFunctions> _extensionFunctions;
+
+        #if defined(_DEBUG)
+            std::vector<std::weak_ptr<IDestructionQueue>> _associatedDestructionQueues;
+        #endif
 	};
 
 	ObjectFactory& GetObjectFactory(IDevice& device);

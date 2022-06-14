@@ -75,6 +75,7 @@ namespace RenderCore { namespace ImplVulkan
 	{
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
 		, VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME
+		, VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME					// (rolled into 1.1)
 	};
 
     #if defined(ENABLE_DEBUG_EXTENSIONS)

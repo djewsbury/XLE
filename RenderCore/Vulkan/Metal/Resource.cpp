@@ -394,15 +394,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		};
 	}
 
-    static VulkanSharedPtr<VkDeviceMemory> AllocateDeviceMemory(
-        const Metal_Vulkan::ObjectFactory& factory, VkMemoryRequirements memReqs, VkMemoryPropertyFlags requirementMask)
-    {
-        auto type = factory.FindMemoryType(memReqs.memoryTypeBits, requirementMask);
-        if (type >= 32)
-            Throw(Exceptions::BasicLabel("Could not find compatible memory type for image"));
-        return factory.AllocateMemory(memReqs.size, type);
-    }
-
 	#if defined(TRACK_RESOURCE_GUIDS)
 		static std::vector<std::pair<unsigned, std::string>> s_resourceGUIDToName;
 		static void AssociateResourceGUID(unsigned guid, std::string name)
@@ -418,6 +409,89 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	#endif
 
+	static void AssignObjectName(ObjectFactory& factory, VkImage underlyingImage, VkBuffer underlyingBuffer, const char* name)
+	{
+		#if defined(_DEBUG)
+			if (factory.GetExtensionFunctions()._setObjectName && name && name[0]) {
+				const VkDebugUtilsObjectNameInfoEXT imageNameInfo {
+					VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT, // sType
+					NULL,                                               // pNext
+					(underlyingImage != nullptr) ? VK_OBJECT_TYPE_IMAGE : VK_OBJECT_TYPE_BUFFER,					// objectType
+					(underlyingImage != nullptr) ? (uint64_t)underlyingImage : (uint64_t)underlyingBuffer,			// object
+					name
+				};
+				factory.GetExtensionFunctions()._setObjectName(factory.GetDevice().get(), &imageNameInfo);
+			}
+		#endif
+	}
+
+    static VulkanUniquePtr<VkDeviceMemory> AllocateDeviceMemory(
+        const Metal_Vulkan::ObjectFactory& factory, VkMemoryRequirements memReqs, VkMemoryPropertyFlags requirementMask)
+    {
+        auto type = factory.FindMemoryType(memReqs.memoryTypeBits, requirementMask);
+        if (type >= 32)
+            Throw(Exceptions::BasicLabel("Could not find compatible memory type for image"));
+        return factory.AllocateMemoryDirectFromVulkan(memReqs.size, type);
+    }
+
+	static VulkanUniquePtr<VkDeviceMemory> AttachDedicatedMemory(const ObjectFactory& factory, const ResourceDesc& desc, const VkMemoryRequirements& mem_reqs, VkBuffer underlyingBuffer, const std::function<SubResourceInitData(SubResourceId)>& initData)
+	{
+		const bool hasInitData = !!initData;
+		const auto hostVisibleReqs = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+		auto memoryRequirements = (hasInitData || desc._cpuAccess != 0) ? hostVisibleReqs : 0;
+		auto result = AllocateDeviceMemory(factory, mem_reqs, memoryRequirements);
+
+		const VkDeviceSize offset = 0; 
+		// After allocation, we must initialise the data. True linear buffers don't have subresources,
+		// so it's reasonably easy. But if this buffer is really a staging texture, then we need to 
+		// copy in all of the sub resources.
+		if (hasInitData) {
+			if (desc._type == ResourceDesc::Type::LinearBuffer) {
+				auto subResData = initData({0, 0});
+				if (subResData._data.size()) {
+					ResourceMap map(factory.GetDevice().get(), result.get());
+					std::memcpy(map.GetData().begin(), subResData._data.begin(), std::min(subResData._data.size(), (size_t)mem_reqs.size));
+				}
+			} else {
+				// This is the staging texture path. Rather that getting the arrangement of subresources from
+				// the VkImage, we specify it ourselves.
+				CopyViaMemoryMap(
+					factory.GetDevice().get(), nullptr, result.get(), 
+					desc._textureDesc, initData);
+			}
+		}
+
+		auto res = vkBindBufferMemory(factory.GetDevice().get(), underlyingBuffer, result.get(), offset);
+		if (res != VK_SUCCESS)
+			Throw(VulkanAPIFailure(res, "Failed while binding a buffer to device memory"));
+		return result;
+	}
+
+	static VulkanUniquePtr<VkDeviceMemory> AttachDedicatedMemory(const ObjectFactory& factory, const ResourceDesc& desc, const VkMemoryRequirements& mem_reqs, VkImage underlyingImage, const std::function<SubResourceInitData(SubResourceId)>& initData)
+	{
+		const bool hasInitData = !!initData;
+		const auto hostVisibleReqs = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+		auto memoryRequirements = (hasInitData || desc._cpuAccess != 0) ? hostVisibleReqs : 0;
+		auto result = AllocateDeviceMemory(factory, mem_reqs, memoryRequirements);
+		
+		// Initialisation for images is more complex... We just iterate through each subresource
+		// and copy in the data. We're going to do this with a single map -- assuming that all
+		// if any of the subresources have init data, then they must all have. 
+		// Alternatively, we could map each subresource separately... But there doesn't seem to
+		// be any advantage to that.
+		if (hasInitData) {
+			assert(desc._type == ResourceDesc::Type::Texture);
+			CopyViaMemoryMap(
+				factory.GetDevice().get(), underlyingImage, result.get(), 
+				desc._textureDesc, initData);
+		}
+
+		auto res = vkBindImageMemory(factory.GetDevice().get(), underlyingImage, result.get(), 0);
+		if (res != VK_SUCCESS)
+			Throw(VulkanAPIFailure(res, "Failed while binding an image to device memory"));
+		return result;
+	}
+
 	Resource::Resource(
 		ObjectFactory& factory, const Desc& desc,
 		const std::function<SubResourceInitData(SubResourceId)>& initData)
@@ -432,6 +506,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		_steadyStateLayout = Internal::ImageLayout::Undefined;
 		_steadyStateAccessMask = 0;
 
+		const bool allocateDirectFromVulkan = (desc._cpuAccess != 0) || hasInitData;
 		VkMemoryRequirements mem_reqs = {}; 
 		if (desc._type == Desc::Type::LinearBuffer) {
 			assert(desc._linearBufferDesc._sizeInBytes);	// zero sized buffer is can cause Vulkan to crash (and is silly, anyway)
@@ -450,22 +525,13 @@ namespace RenderCore { namespace Metal_Vulkan
 				buf_info.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
 			assert(buf_info.usage != 0);
-			_underlyingBuffer = factory.CreateBuffer(buf_info);
-
-			vkGetBufferMemoryRequirements(factory.GetDevice().get(), _underlyingBuffer.get(), &mem_reqs);
-
-			#if defined(_DEBUG)
-				if (factory.GetExtensionFunctions()._setObjectName && desc._name[0]) {
-					const VkDebugUtilsObjectNameInfoEXT imageNameInfo {
-						VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT, // sType
-						NULL,                                               // pNext
-						VK_OBJECT_TYPE_BUFFER,                              // objectType
-						(uint64_t)_underlyingBuffer.get(),                  // object
-						desc._name
-					};
-					factory.GetExtensionFunctions()._setObjectName(factory.GetDevice().get(), &imageNameInfo);
-				}
-			#endif
+			if (!allocateDirectFromVulkan) {
+				VmaAllocation vmaAllocation;
+				_underlyingBuffer = factory.CreateBufferWithAutoMemory(buf_info, vmaAllocation);
+			} else {
+				_underlyingBuffer = factory.CreateBuffer(buf_info);
+				vkGetBufferMemoryRequirements(factory.GetDevice().get(), _underlyingBuffer.get(), &mem_reqs);
+			}
 
 		} else {
 			if (desc._type != Desc::Type::Texture)
@@ -557,12 +623,22 @@ namespace RenderCore { namespace Metal_Vulkan
 			    buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 			    buf_info.flags = 0;
 
-                _underlyingBuffer = factory.CreateBuffer(buf_info);
-    			vkGetBufferMemoryRequirements(factory.GetDevice().get(), _underlyingBuffer.get(), &mem_reqs);
+                if (!allocateDirectFromVulkan) {
+					VmaAllocation allocation;
+					_underlyingBuffer = factory.CreateBufferWithAutoMemory(buf_info, allocation);
+				} else {
+					_underlyingBuffer = factory.CreateBuffer(buf_info);
+    				vkGetBufferMemoryRequirements(factory.GetDevice().get(), _underlyingBuffer.get(), &mem_reqs);
+				}
 
             } else {
-    			_underlyingImage = factory.CreateImage(image_create_info, _guid);
-	    		vkGetImageMemoryRequirements(factory.GetDevice().get(), _underlyingImage.get(), &mem_reqs);
+				if (!allocateDirectFromVulkan) {
+					VmaAllocation allocation;
+					_underlyingImage = factory.CreateImageWithAutoMemory(image_create_info, allocation, _guid);
+				} else {
+					_underlyingImage = factory.CreateImage(image_create_info, _guid);
+					vkGetImageMemoryRequirements(factory.GetDevice().get(), _underlyingImage.get(), &mem_reqs);
+				}
             }
 
 			ConfigureDefaultSteadyState(desc._bindFlags);
@@ -576,69 +652,20 @@ namespace RenderCore { namespace Metal_Vulkan
 					helper.MakeResourceVisible(res.GetGUID());
 				};
 
-			#if defined(_DEBUG)
-				if (factory.GetExtensionFunctions()._setObjectName && desc._name[0]) {
-					const VkDebugUtilsObjectNameInfoEXT imageNameInfo {
-						VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT, // sType
-						NULL,                                               // pNext
-						(_underlyingImage != nullptr) ? VK_OBJECT_TYPE_IMAGE : VK_OBJECT_TYPE_BUFFER,							// objectType
-						(_underlyingImage != nullptr) ? (uint64_t)_underlyingImage.get() : (uint64_t)_underlyingBuffer.get(),	// object
-						desc._name
-					};
-					factory.GetExtensionFunctions()._setObjectName(factory.GetDevice().get(), &imageNameInfo);
-				}
-			#endif
-
 			#if defined(TRACK_RESOURCE_GUIDS)
 				AssociateResourceGUID(_guid, desc._name);
 			#endif
 		}
 
-        const auto hostVisibleReqs = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        auto memoryRequirements = (hasInitData || desc._cpuAccess != 0) ? hostVisibleReqs : 0;
-        _mem = AllocateDeviceMemory(factory, mem_reqs, memoryRequirements);
+		AssignObjectName(factory, _underlyingImage.get(), _underlyingBuffer.get(), desc._name);
 
-		const VkDeviceSize offset = 0; 
-		if (_underlyingBuffer) {
-
-			// After allocation, we must initialise the data. True linear buffers don't have subresources,
-			// so it's reasonably easy. But if this buffer is really a staging texture, then we need to 
-            // copy in all of the sub resources.
-			if (hasInitData) {
-                if (desc._type == Desc::Type::LinearBuffer) {
-                    auto subResData = initData({0, 0});
-				    if (subResData._data.size()) {
-					    ResourceMap map(factory.GetDevice().get(), _mem.get());
-					    std::memcpy(map.GetData().begin(), subResData._data.begin(), std::min(subResData._data.size(), (size_t)mem_reqs.size));
-				    }
-                } else {
-                    // This is the staging texture path. Rather that getting the arrangement of subresources from
-                    // the VkImage, we specify it ourselves.
-                    CopyViaMemoryMap(
-                        factory.GetDevice().get(), nullptr, _mem.get(), 
-                        _desc._textureDesc, initData);
-                }
+		if (allocateDirectFromVulkan) {
+			if (_underlyingBuffer) {
+				_mem = AttachDedicatedMemory(factory, desc, mem_reqs, _underlyingBuffer.get(), initData);
+			} else {
+				assert(_underlyingImage);
+				_mem = AttachDedicatedMemory(factory, desc, mem_reqs, _underlyingImage.get(), initData);
 			}
-
-			auto res = vkBindBufferMemory(factory.GetDevice().get(), _underlyingBuffer.get(), _mem.get(), offset);
-			if (res != VK_SUCCESS)
-				Throw(VulkanAPIFailure(res, "Failed while binding a buffer to device memory"));
-		} else if (_underlyingImage) {
-			
-			// Initialisation for images is more complex... We just iterate through each subresource
-			// and copy in the data. We're going to do this with a single map -- assuming that all
-            // if any of the subresources have init data, then they must all have. 
-            // Alternatively, we could map each subresource separately... But there doesn't seem to
-            // be any advantage to that.
-			if (hasInitData) {
-                CopyViaMemoryMap(
-                    factory.GetDevice().get(), _underlyingImage.get(), _mem.get(), 
-                    _desc._textureDesc, initData);
-			}
-
-			auto res = vkBindImageMemory(factory.GetDevice().get(), _underlyingImage.get(), _mem.get(), 0);
-			if (res != VK_SUCCESS)
-				Throw(VulkanAPIFailure(res, "Failed while binding an image to device memory"));
 		}
 	}
 

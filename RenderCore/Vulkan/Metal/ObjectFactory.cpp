@@ -19,7 +19,7 @@ namespace RenderCore { namespace Metal_Vulkan
 {
     const VkAllocationCallbacks* g_allocationCallbacks = nullptr;
 
-	static std::shared_ptr<IDestructionQueue> CreateImmediateDestroyer(VulkanSharedPtr<VkDevice> device);
+	static std::shared_ptr<IDestructionQueue> CreateImmediateDestroyer(VulkanSharedPtr<VkDevice> device, VmaAllocator vmaAllocator);
 
     VulkanUniquePtr<VkCommandPool> ObjectFactory::CreateCommandPool(
         unsigned queueFamilyIndex, VkCommandPoolCreateFlags flags) const
@@ -82,7 +82,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		return std::move(result);
 	}
 
-    VulkanUniquePtr<VkDeviceMemory> ObjectFactory::AllocateMemory(
+    VulkanUniquePtr<VkDeviceMemory> ObjectFactory::AllocateMemoryDirectFromVulkan(
         VkDeviceSize allocationSize, unsigned memoryTypeIndex) const
     {
         VkMemoryAllocateInfo mem_alloc = {};
@@ -331,6 +331,52 @@ namespace RenderCore { namespace Metal_Vulkan
         return std::move(buffer);
     }
 
+    VulkanUniquePtr<VkBuffer> ObjectFactory::CreateBufferWithAutoMemory(const VkBufferCreateInfo& createInfo, VmaAllocation& allocationResult) const
+    {
+        // Using vma, create a buffer and automatically allocate the memory
+        // doesn't seem to be any particular benefit to separating buffer & memory allocation with this library, so let's
+        // go ahead and simplify it
+        VmaAllocationCreateInfo allocCreateInfo = {};
+        allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        VkBuffer rawBuffer = nullptr;
+        VmaAllocationInfo allocInfo;
+        auto res = vmaCreateBuffer(_vmaAllocator, &createInfo, &allocCreateInfo, &rawBuffer, &allocationResult, &allocInfo);
+        auto buffer = VulkanUniquePtr<VkBuffer>(
+            rawBuffer,
+            [d=_destruction.get(), allocationResult](VkBuffer buffer)
+            { 
+                d->Destroy(buffer, allocationResult); 
+            });
+        if (res != VK_SUCCESS)
+            Throw(VulkanAPIFailure(res, "Failed while creating buffer"));
+        return std::move(buffer);
+    }
+
+    VulkanUniquePtr<VkImage> ObjectFactory::CreateImageWithAutoMemory(const VkImageCreateInfo& createInfo, VmaAllocation& allocationResult, uint64_t guidForVisibilityTracking) const
+    {
+        VmaAllocationCreateInfo allocCreateInfo = {};
+        allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        VkImage rawImage = nullptr;
+        VmaAllocationInfo allocInfo;
+        auto res = vmaCreateImage(_vmaAllocator, &createInfo, &allocCreateInfo, &rawImage, &allocationResult, &allocInfo);
+        VulkanUniquePtr<VkImage> image;
+        #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+            if (guidForVisibilityTracking) {
+                image = VulkanUniquePtr<VkImage>(
+                    rawImage,
+                    [d=_destruction.get(), allocationResult, guidForVisibilityTracking, this](VkImage image) { d->Destroy(image, allocationResult); this->ForgetResource(guidForVisibilityTracking); });
+            } else
+        #endif
+        {
+            image = VulkanUniquePtr<VkImage>(
+                rawImage,
+                [d=_destruction.get(), allocationResult](VkImage image) { d->Destroy(image, allocationResult); });
+        }
+        if (res != VK_SUCCESS)
+            Throw(VulkanAPIFailure(res, "Failed while creating image"));
+        return std::move(image);
+    }
+
     VulkanUniquePtr<VkFence> ObjectFactory::CreateFence(VkFenceCreateFlags flags) const
     {
         VkFenceCreateInfo createInfo = {};
@@ -429,10 +475,27 @@ namespace RenderCore { namespace Metal_Vulkan
     , _physDevProperties(std::move(moveFrom._physDevProperties))
     , _physDevFeatures(std::move(moveFrom._physDevFeatures))
     , _extensionFunctions(std::move(moveFrom._extensionFunctions))
-    {}
+    , _vmaAllocator(std::move(moveFrom._vmaAllocator))
+    {
+        moveFrom._vmaAllocator = nullptr;
+        #if defined(_DEBUG)
+            _associatedDestructionQueues = std::move(moveFrom._associatedDestructionQueues);
+        #endif
+    }
 
 	ObjectFactory& ObjectFactory::operator=(ObjectFactory&& moveFrom) never_throws
     {
+        if (&moveFrom == this) return *this;
+
+        #if defined(_DEBUG)
+            // Ensure that all destruction queues created with CreateMarkerTrackingDestroyer() have been destroyed before coming here
+            // This is important because they hold unprotected references to _vmaAllocator
+            for (const auto& q:_associatedDestructionQueues)
+                assert(q.expired());
+        #endif
+        if (_vmaAllocator)
+            vmaDestroyAllocator(_vmaAllocator);
+
         _physDev = std::move(moveFrom._physDev);
 		_device = std::move(moveFrom._device);
         _destruction = std::move(moveFrom._destruction);
@@ -441,10 +504,14 @@ namespace RenderCore { namespace Metal_Vulkan
         _physDevProperties = std::move(moveFrom._physDevProperties);
         _physDevFeatures = std::move(moveFrom._physDevFeatures);
         _extensionFunctions = std::move(moveFrom._extensionFunctions);
+        _vmaAllocator = std::move(moveFrom._vmaAllocator); moveFrom._vmaAllocator = nullptr;
+        #if defined(_DEBUG)
+            _associatedDestructionQueues = std::move(moveFrom._associatedDestructionQueues);
+        #endif
         return *this;
     }
 
-    ObjectFactory::ObjectFactory(VkPhysicalDevice physDev, VulkanSharedPtr<VkDevice> device, std::shared_ptr<ExtensionFunctions> extensionFunctions)
+    ObjectFactory::ObjectFactory(VkInstance instance,  VkPhysicalDevice physDev, VulkanSharedPtr<VkDevice> device, std::shared_ptr<ExtensionFunctions> extensionFunctions)
     : _physDev(physDev), _device(device), _extensionFunctions(extensionFunctions)
     {
         _memProps = std::make_unique<VkPhysicalDeviceMemoryProperties>(VkPhysicalDeviceMemoryProperties{});
@@ -470,13 +537,41 @@ namespace RenderCore { namespace Metal_Vulkan
         _physDevFeatures = std::make_unique<VkPhysicalDeviceFeatures>(VkPhysicalDeviceFeatures{});
         *_physDevFeatures = physDevFeatures2.features;
 
-		_immediateDestruction = CreateImmediateDestroyer(_device);
+        // Create the VMA main instance object (_vmaAllocator)
+        VmaVulkanFunctions vulkanFunctions = {};
+        vulkanFunctions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
+        vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+        
+        VmaAllocatorCreateInfo allocatorCreateInfo = {};
+        allocatorCreateInfo.vulkanApiVersion = VK_HEADER_VERSION_COMPLETE;
+        allocatorCreateInfo.physicalDevice = _physDev;
+        allocatorCreateInfo.device = _device.get();
+        allocatorCreateInfo.instance = instance;
+        allocatorCreateInfo.pVulkanFunctions = &vulkanFunctions;
+        
+        auto allocatorCreationResult = vmaCreateAllocator(&allocatorCreateInfo, &_vmaAllocator);
+        if (allocatorCreationResult != VK_SUCCESS)
+            Throw(VulkanAPIFailure(allocatorCreationResult, "Failure while creating allocator instance"));
+
+        // default destruction behaviour (should normally be overriden by the device later)
+        _immediateDestruction = CreateImmediateDestroyer(_device, _vmaAllocator);
 		_destruction = _immediateDestruction;
     }
 
 	ObjectFactory::ObjectFactory() {}
 	ObjectFactory::~ObjectFactory() 
-    {}
+    {
+        _immediateDestruction.reset();
+        _destruction.reset();
+        #if defined(_DEBUG)
+            // Ensure that all destruction queues created with CreateMarkerTrackingDestroyer() have been destroyed before coming here
+            // This is important because they hold unprotected references to _vmaAllocator
+            for (const auto& q:_associatedDestructionQueues)
+                assert(q.expired());
+        #endif
+        if (_vmaAllocator)
+            vmaDestroyAllocator(_vmaAllocator);
+    }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -485,33 +580,36 @@ namespace RenderCore { namespace Metal_Vulkan
     class DeferredDestruction : public IDestructionQueue
     {
     public:
-        void    Destroy(VkCommandPool);
-        void    Destroy(VkSemaphore);
-		void    Destroy(VkEvent);
-        void    Destroy(VkDeviceMemory);
-        void    Destroy(VkRenderPass);
-        void    Destroy(VkImage);
-        void    Destroy(VkImageView);
-        void    Destroy(VkBufferView);
-        void    Destroy(VkFramebuffer);
-        void    Destroy(VkShaderModule);
-        void    Destroy(VkDescriptorSetLayout);
-        void    Destroy(VkDescriptorPool);
-        void    Destroy(VkPipeline);
-        void    Destroy(VkPipelineCache);
-        void    Destroy(VkPipelineLayout);
-        void    Destroy(VkBuffer);
-        void    Destroy(VkFence);
-        void    Destroy(VkSampler);
-		void	Destroy(VkQueryPool);
+        void    Destroy(VkCommandPool) override;
+        void    Destroy(VkSemaphore) override;
+		void    Destroy(VkEvent) override;
+        void    Destroy(VkDeviceMemory) override;
+        void    Destroy(VkRenderPass) override;
+        void    Destroy(VkImage) override;
+        void    Destroy(VkImageView) override;
+        void    Destroy(VkBufferView) override;
+        void    Destroy(VkFramebuffer) override;
+        void    Destroy(VkShaderModule) override;
+        void    Destroy(VkDescriptorSetLayout) override;
+        void    Destroy(VkDescriptorPool) override;
+        void    Destroy(VkPipeline) override;
+        void    Destroy(VkPipelineCache) override;
+        void    Destroy(VkPipelineLayout) override;
+        void    Destroy(VkBuffer) override;
+        void    Destroy(VkFence) override;
+        void    Destroy(VkSampler) override;
+		void	Destroy(VkQueryPool) override;
+        void	Destroy(VkImage, VmaAllocation) override;
+        void	Destroy(VkBuffer, VmaAllocation) override;
 
-        void    Flush(FlushFlags::BitField);
+        void    Flush(FlushFlags::BitField) override;
 
-        DeferredDestruction(VulkanSharedPtr<VkDevice> device, const std::shared_ptr<IAsyncTracker>& tracker);
+        DeferredDestruction(VulkanSharedPtr<VkDevice> device, const std::shared_ptr<IAsyncTracker>& tracker, VmaAllocator vmaAllocator);
         ~DeferredDestruction();
     private:
         VulkanSharedPtr<VkDevice> _device;
 		std::shared_ptr<IAsyncTracker> _gpuTracker;
+        VmaAllocator _vmaAllocator;      // raw reference
 
 		using Marker = IAsyncTracker::Marker;
         template<typename Type>
@@ -547,6 +645,8 @@ namespace RenderCore { namespace Metal_Vulkan
             , Queue<VkSampler>                  // 16
 			, Queue<VkQueryPool>				// 17
 			, Queue<VkEvent>					// 18
+            , Queue<std::pair<VkImage, VmaAllocation>>     // 19
+            , Queue<std::pair<VkBuffer, VmaAllocation>>     // 20
         > _queues;
 
         template<int Index, typename Type>
@@ -575,26 +675,29 @@ namespace RenderCore { namespace Metal_Vulkan
 		q._objects.push_back(obj);
     }
 
-    template<typename Type> void DestroyObjectImmediate(VkDevice device, Type obj);
-    template<> inline void DestroyObjectImmediate(VkDevice device, VkCommandPool obj)           { vkDestroyCommandPool(device, obj, g_allocationCallbacks ); }
-    template<> inline void DestroyObjectImmediate(VkDevice device, VkSemaphore obj)             { vkDestroySemaphore(device, obj, g_allocationCallbacks ); }
-	template<> inline void DestroyObjectImmediate(VkDevice device, VkEvent obj)					{ vkDestroyEvent(device, obj, g_allocationCallbacks); }
-	template<> inline void DestroyObjectImmediate(VkDevice device, VkFence obj)                 { vkDestroyFence(device, obj, g_allocationCallbacks ); }
-    template<> inline void DestroyObjectImmediate(VkDevice device, VkRenderPass obj)            { vkDestroyRenderPass(device, obj, g_allocationCallbacks ); }
-    template<> inline void DestroyObjectImmediate(VkDevice device, VkImage obj)                 { vkDestroyImage(device, obj, g_allocationCallbacks ); }
-    template<> inline void DestroyObjectImmediate(VkDevice device, VkImageView obj)             { vkDestroyImageView(device, obj, g_allocationCallbacks ); }
-    template<> inline void DestroyObjectImmediate(VkDevice device, VkBufferView obj)            { vkDestroyBufferView(device, obj, g_allocationCallbacks ); }
-    template<> inline void DestroyObjectImmediate(VkDevice device, VkFramebuffer obj)           { vkDestroyFramebuffer(device, obj, g_allocationCallbacks ); }
-    template<> inline void DestroyObjectImmediate(VkDevice device, VkShaderModule obj)          { vkDestroyShaderModule(device, obj, g_allocationCallbacks ); }
-    template<> inline void DestroyObjectImmediate(VkDevice device, VkDescriptorSetLayout obj)   { vkDestroyDescriptorSetLayout(device, obj, g_allocationCallbacks ); }
-    template<> inline void DestroyObjectImmediate(VkDevice device, VkDescriptorPool obj)        { vkDestroyDescriptorPool(device, obj, g_allocationCallbacks ); }
-    template<> inline void DestroyObjectImmediate(VkDevice device, VkPipeline obj)              { vkDestroyPipeline(device, obj, g_allocationCallbacks ); }
-    template<> inline void DestroyObjectImmediate(VkDevice device, VkPipelineCache obj)         { vkDestroyPipelineCache(device, obj, g_allocationCallbacks ); }
-    template<> inline void DestroyObjectImmediate(VkDevice device, VkPipelineLayout obj)        { vkDestroyPipelineLayout(device, obj, g_allocationCallbacks ); }
-    template<> inline void DestroyObjectImmediate(VkDevice device, VkBuffer obj)                { vkDestroyBuffer(device, obj, g_allocationCallbacks ); }
-    template<> inline void DestroyObjectImmediate(VkDevice device, VkDeviceMemory obj)          { vkFreeMemory(device, obj, g_allocationCallbacks ); }
-    template<> inline void DestroyObjectImmediate(VkDevice device, VkSampler obj)               { vkDestroySampler(device, obj, g_allocationCallbacks ); }
-	template<> inline void DestroyObjectImmediate(VkDevice device, VkQueryPool obj)				{ vkDestroyQueryPool(device, obj, g_allocationCallbacks); }
+    template<typename Type> void DestroyObjectImmediate(VkDevice device, VmaAllocator, Type obj);
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkCommandPool obj)           { vkDestroyCommandPool(device, obj, g_allocationCallbacks ); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkSemaphore obj)             { vkDestroySemaphore(device, obj, g_allocationCallbacks ); }
+	template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkEvent obj)					{ vkDestroyEvent(device, obj, g_allocationCallbacks); }
+	template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkFence obj)                 { vkDestroyFence(device, obj, g_allocationCallbacks ); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkRenderPass obj)            { vkDestroyRenderPass(device, obj, g_allocationCallbacks ); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkImage obj)                 { vkDestroyImage(device, obj, g_allocationCallbacks ); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkImageView obj)             { vkDestroyImageView(device, obj, g_allocationCallbacks ); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkBufferView obj)            { vkDestroyBufferView(device, obj, g_allocationCallbacks ); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkFramebuffer obj)           { vkDestroyFramebuffer(device, obj, g_allocationCallbacks ); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkShaderModule obj)          { vkDestroyShaderModule(device, obj, g_allocationCallbacks ); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkDescriptorSetLayout obj)   { vkDestroyDescriptorSetLayout(device, obj, g_allocationCallbacks ); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkDescriptorPool obj)        { vkDestroyDescriptorPool(device, obj, g_allocationCallbacks ); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkPipeline obj)              { vkDestroyPipeline(device, obj, g_allocationCallbacks ); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkPipelineCache obj)         { vkDestroyPipelineCache(device, obj, g_allocationCallbacks ); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkPipelineLayout obj)        { vkDestroyPipelineLayout(device, obj, g_allocationCallbacks ); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkBuffer obj)                { vkDestroyBuffer(device, obj, g_allocationCallbacks ); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkDeviceMemory obj)          { vkFreeMemory(device, obj, g_allocationCallbacks ); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkSampler obj)               { vkDestroySampler(device, obj, g_allocationCallbacks ); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator, VkQueryPool obj)             { vkDestroyQueryPool(device, obj, g_allocationCallbacks); }
+
+	template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator allocator, std::pair<VkImage, VmaAllocation> p)     { vmaDestroyImage(allocator, p.first, p.second); }
+    template<> inline void DestroyObjectImmediate(VkDevice device, VmaAllocator allocator, std::pair<VkBuffer, VmaAllocation> p)    { vmaDestroyBuffer(allocator, p.first, p.second); }
 
     template<int Index>
         inline void DeferredDestruction::FlushQueue(Marker marker)
@@ -608,7 +711,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			assert(countToDelete <= q._objects.size());
 			auto endi = q._objects.begin() + std::min(q._objects.size(), countToDelete);
 			for (auto i=q._objects.begin(); i!=endi; ++i)
-				DestroyObjectImmediate(_device.get(), *i);
+				DestroyObjectImmediate(_device.get(), _vmaAllocator, *i);
 			
 			q._markerCounts.pop_front(); 
 			q._objects.erase(q._objects.begin(), endi);
@@ -634,6 +737,8 @@ namespace RenderCore { namespace Metal_Vulkan
     void    DeferredDestruction::Destroy(VkSampler obj) { DoDestroy<16>(obj); }
 	void    DeferredDestruction::Destroy(VkQueryPool obj) { DoDestroy<17>(obj); }
 	void    DeferredDestruction::Destroy(VkEvent obj) { DoDestroy<18>(obj); }
+    void    DeferredDestruction::Destroy(VkImage image, VmaAllocation allocation) { DoDestroy<19>(std::make_pair(image, allocation)); }
+    void    DeferredDestruction::Destroy(VkBuffer buffer, VmaAllocation allocation) { DoDestroy<20>(std::make_pair(buffer, allocation)); }
 
     void    DeferredDestruction::Flush(FlushFlags::BitField flags)
     {
@@ -657,10 +762,12 @@ namespace RenderCore { namespace Metal_Vulkan
 		FlushQueue<16>(marker);
 		FlushQueue<17>(marker);
         FlushQueue<18>(marker);
+        FlushQueue<19>(marker);
+        FlushQueue<20>(marker);
     }
 
-    DeferredDestruction::DeferredDestruction(VulkanSharedPtr<VkDevice> device, const std::shared_ptr<IAsyncTracker>& tracker)
-    : _device(device), _gpuTracker(tracker)
+    DeferredDestruction::DeferredDestruction(VulkanSharedPtr<VkDevice> device, const std::shared_ptr<IAsyncTracker>& tracker, VmaAllocator vmaAllocator)
+    : _device(device), _gpuTracker(tracker), _vmaAllocator(vmaAllocator)
     {
     }
 
@@ -671,69 +778,78 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	std::shared_ptr<IDestructionQueue> ObjectFactory::CreateMarkerTrackingDestroyer(const std::shared_ptr<IAsyncTracker>& tracker)
 	{
-		return std::make_shared<DeferredDestruction>(_device, tracker);
+		auto result = std::make_shared<DeferredDestruction>(_device, tracker, _vmaAllocator);
+        #if defined(_DEBUG)
+            _associatedDestructionQueues.emplace_back(result);
+        #endif
+        return result;
 	}
 
 	class ImmediateDestruction : public IDestructionQueue
 	{
 	public:
-		void    Destroy(VkCommandPool);
-		void    Destroy(VkSemaphore);
-		void    Destroy(VkEvent);
-		void    Destroy(VkDeviceMemory);
-		void    Destroy(VkRenderPass);
-		void    Destroy(VkImage);
-		void    Destroy(VkImageView);
-        void    Destroy(VkBufferView);
-		void    Destroy(VkFramebuffer);
-		void    Destroy(VkShaderModule);
-		void    Destroy(VkDescriptorSetLayout);
-		void    Destroy(VkDescriptorPool);
-		void    Destroy(VkPipeline);
-		void    Destroy(VkPipelineCache);
-		void    Destroy(VkPipelineLayout);
-		void    Destroy(VkBuffer);
-		void    Destroy(VkFence);
-		void    Destroy(VkSampler);
-		void	Destroy(VkQueryPool);
+		void    Destroy(VkCommandPool) override;
+		void    Destroy(VkSemaphore) override;
+		void    Destroy(VkEvent) override;
+		void    Destroy(VkDeviceMemory) override;
+		void    Destroy(VkRenderPass) override;
+		void    Destroy(VkImage) override;
+		void    Destroy(VkImageView) override;
+        void    Destroy(VkBufferView) override;
+		void    Destroy(VkFramebuffer) override;
+		void    Destroy(VkShaderModule) override;
+		void    Destroy(VkDescriptorSetLayout) override;
+		void    Destroy(VkDescriptorPool) override;
+		void    Destroy(VkPipeline) override;
+		void    Destroy(VkPipelineCache) override;
+		void    Destroy(VkPipelineLayout) override;
+		void    Destroy(VkBuffer) override;
+		void    Destroy(VkFence) override;
+		void    Destroy(VkSampler) override;
+		void	Destroy(VkQueryPool) override;
+        void	Destroy(VkImage, VmaAllocation) override;
+        void	Destroy(VkBuffer, VmaAllocation) override;
 
-		void    Flush(FlushFlags::BitField);
+		void    Flush(FlushFlags::BitField) override;
 
-		ImmediateDestruction(VulkanSharedPtr<VkDevice> device);
+		ImmediateDestruction(VulkanSharedPtr<VkDevice> device, VmaAllocator allocator);
 		~ImmediateDestruction();
 	private:
 		VulkanSharedPtr<VkDevice> _device;
+        VmaAllocator _allocator;        // raw reference
 	};
 
-	void    ImmediateDestruction::Destroy(VkCommandPool obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void    ImmediateDestruction::Destroy(VkSemaphore obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void    ImmediateDestruction::Destroy(VkEvent obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void    ImmediateDestruction::Destroy(VkDeviceMemory obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void    ImmediateDestruction::Destroy(VkRenderPass obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void    ImmediateDestruction::Destroy(VkImage obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void    ImmediateDestruction::Destroy(VkImageView obj) { DestroyObjectImmediate(_device.get(), obj); }
-    void    ImmediateDestruction::Destroy(VkBufferView obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void    ImmediateDestruction::Destroy(VkFramebuffer obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void    ImmediateDestruction::Destroy(VkShaderModule obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void    ImmediateDestruction::Destroy(VkDescriptorSetLayout obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void    ImmediateDestruction::Destroy(VkDescriptorPool obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void    ImmediateDestruction::Destroy(VkPipeline obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void    ImmediateDestruction::Destroy(VkPipelineCache obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void    ImmediateDestruction::Destroy(VkPipelineLayout obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void    ImmediateDestruction::Destroy(VkBuffer obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void    ImmediateDestruction::Destroy(VkFence obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void    ImmediateDestruction::Destroy(VkSampler obj) { DestroyObjectImmediate(_device.get(), obj); }
-	void	ImmediateDestruction::Destroy(VkQueryPool obj) { DestroyObjectImmediate(_device.get(), obj); }
+	void    ImmediateDestruction::Destroy(VkCommandPool obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void    ImmediateDestruction::Destroy(VkSemaphore obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void    ImmediateDestruction::Destroy(VkEvent obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void    ImmediateDestruction::Destroy(VkDeviceMemory obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void    ImmediateDestruction::Destroy(VkRenderPass obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void    ImmediateDestruction::Destroy(VkImage obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void    ImmediateDestruction::Destroy(VkImageView obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+    void    ImmediateDestruction::Destroy(VkBufferView obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void    ImmediateDestruction::Destroy(VkFramebuffer obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void    ImmediateDestruction::Destroy(VkShaderModule obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void    ImmediateDestruction::Destroy(VkDescriptorSetLayout obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void    ImmediateDestruction::Destroy(VkDescriptorPool obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void    ImmediateDestruction::Destroy(VkPipeline obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void    ImmediateDestruction::Destroy(VkPipelineCache obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void    ImmediateDestruction::Destroy(VkPipelineLayout obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void    ImmediateDestruction::Destroy(VkBuffer obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void    ImmediateDestruction::Destroy(VkFence obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void    ImmediateDestruction::Destroy(VkSampler obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+	void	ImmediateDestruction::Destroy(VkQueryPool obj) { DestroyObjectImmediate(_device.get(), _allocator, obj); }
+    void	ImmediateDestruction::Destroy(VkImage obj, VmaAllocation allocation) { DestroyObjectImmediate(_device.get(), _allocator, std::make_pair(obj, allocation)); }
+    void	ImmediateDestruction::Destroy(VkBuffer obj, VmaAllocation allocation) { DestroyObjectImmediate(_device.get(), _allocator, std::make_pair(obj, allocation)); }
 
 	void    ImmediateDestruction::Flush(FlushFlags::BitField) {}
 
-	ImmediateDestruction::ImmediateDestruction(VulkanSharedPtr<VkDevice> device)
-	: _device(device) {}
+	ImmediateDestruction::ImmediateDestruction(VulkanSharedPtr<VkDevice> device, VmaAllocator allocator)
+	: _device(device), _allocator(allocator) {}
 	ImmediateDestruction::~ImmediateDestruction() {}
 
-	static std::shared_ptr<IDestructionQueue> CreateImmediateDestroyer(VulkanSharedPtr<VkDevice> device)
+	static std::shared_ptr<IDestructionQueue> CreateImmediateDestroyer(VulkanSharedPtr<VkDevice> device, VmaAllocator vmaAllocator)
 	{
-		return std::make_shared<ImmediateDestruction>(std::move(device));
+		return std::make_shared<ImmediateDestruction>(std::move(device), vmaAllocator);
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

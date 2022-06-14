@@ -33,6 +33,10 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         DebuggingDisplays/ModelCacheDisplay.cpp
         )
 
+    if (${metal_macro} STREQUAL "SELECT_VULKAN")
+        list(APPEND DebuggingDisplaysSrc DebuggingDisplays/VulkanMemoryDisplay.cpp)
+    endif()
+
     set(MiniSceneEngineSrc
         ../SceneEngine/RayVsModel.cpp
         ../SceneEngine/IntersectionTest.cpp
