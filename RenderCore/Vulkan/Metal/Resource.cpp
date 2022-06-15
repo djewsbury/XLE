@@ -1706,5 +1706,183 @@ namespace RenderCore { namespace Metal_Vulkan
 		_devContext->EndBlitEncoder();
 	}
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+	BarrierResourceUsage::BarrierResourceUsage(BindFlag::Enum usage)
+	{
+		switch (usage) {
+		case BindFlag::VertexBuffer:
+			_accessFlags = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+			_pipelineStageFlags = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+			break;
+		case BindFlag::IndexBuffer:
+			_accessFlags = VK_ACCESS_INDEX_READ_BIT;
+			_pipelineStageFlags = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+			break;
+		case BindFlag::ShaderResource:
+			assert(0);		// explicitly specify the shader stage for better results
+			_accessFlags = VK_ACCESS_SHADER_READ_BIT;
+			_pipelineStageFlags = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+			break;
+		case BindFlag::RenderTarget:
+			_accessFlags = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			_pipelineStageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			break;
+		case BindFlag::DepthStencil:
+			_accessFlags = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+			_pipelineStageFlags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+			break;
+		case BindFlag::TexelBuffer:
+		case BindFlag::UnorderedAccess:
+			assert(0);		// explicitly specify the shader stage for better results
+			_accessFlags = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+			_pipelineStageFlags = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+			break;
+		case BindFlag::ConstantBuffer:
+			assert(0);		// explicitly specify the shader stage for better results
+			_accessFlags = VK_ACCESS_UNIFORM_READ_BIT;
+			_pipelineStageFlags = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+			break;
+		case BindFlag::StreamOutput:
+			_accessFlags = VK_ACCESS_TRANSFORM_FEEDBACK_WRITE_BIT_EXT;
+			_pipelineStageFlags = VK_PIPELINE_STAGE_TRANSFORM_FEEDBACK_BIT_EXT;
+			break;
+		case BindFlag::DrawIndirectArgs:
+			_accessFlags = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+			_pipelineStageFlags = VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+			break;
+		case BindFlag::InputAttachment:
+			_accessFlags = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+			_pipelineStageFlags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;		// only fragment shader makes sense for input attachment
+			break;
+		case BindFlag::TransferSrc:
+			_accessFlags = VK_ACCESS_TRANSFER_READ_BIT;
+			_pipelineStageFlags = VK_PIPELINE_STAGE_TRANSFER_BIT;		// only fragment shader makes sense for input attachment
+			break;
+		case BindFlag::TransferDst:
+			_accessFlags = VK_ACCESS_TRANSFER_WRITE_BIT;
+			_pipelineStageFlags = VK_PIPELINE_STAGE_TRANSFER_BIT;		// only fragment shader makes sense for input attachment
+			break;
+
+		default:
+		case BindFlag::PresentationSrc:
+		case BindFlag::RawViews:
+			assert(0);
+			_accessFlags = _pipelineStageFlags = 0;
+			break;
+		}
+	}
+
+	static VkPipelineStageFlags AsPipelineStage(ShaderStage shaderStage)
+	{
+		switch (shaderStage) {
+		case ShaderStage::Vertex: return VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+		case ShaderStage::Pixel: return VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		case ShaderStage::Geometry: return VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT;
+		case ShaderStage::Compute: return VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+		case ShaderStage::Hull:
+		case ShaderStage::Domain:
+		case ShaderStage::Null:
+		case ShaderStage::Max:
+			assert(0);	// bad shader stage
+			return 0;
+		}
+	}
+
+	BarrierResourceUsage::BarrierResourceUsage(BindFlag::Enum usage, ShaderStage shaderStage)
+	{
+		switch (usage) {
+		case BindFlag::ShaderResource:
+			_accessFlags = VK_ACCESS_SHADER_READ_BIT;
+			_pipelineStageFlags = AsPipelineStage(shaderStage);
+			break;
+		case BindFlag::TexelBuffer:
+		case BindFlag::UnorderedAccess:
+			_accessFlags = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+			_pipelineStageFlags = AsPipelineStage(shaderStage);
+			break;
+		case BindFlag::ConstantBuffer:
+			_accessFlags = VK_ACCESS_UNIFORM_READ_BIT;
+			_pipelineStageFlags = AsPipelineStage(shaderStage);
+			break;
+
+		default:
+			*this = BarrierResourceUsage{usage};		// shader stage not required
+			break;
+		}
+	}
+
+	BarrierResourceUsage BarrierResourceUsage::HostRead()
+	{
+		BarrierResourceUsage result;
+		result._accessFlags =  VK_ACCESS_HOST_READ_BIT;
+		result._pipelineStageFlags = VK_PIPELINE_STAGE_HOST_BIT;
+		return result;
+	}
+
+	BarrierResourceUsage BarrierResourceUsage::HostWrite()
+	{
+		BarrierResourceUsage result;
+		result._accessFlags =  VK_ACCESS_HOST_WRITE_BIT;
+		result._pipelineStageFlags = VK_PIPELINE_STAGE_HOST_BIT;
+		return result;
+	}
+
+	BarrierResourceUsage BarrierResourceUsage::AllCommandsRead()
+	{
+		BarrierResourceUsage result;
+		result._accessFlags =  VK_ACCESS_MEMORY_READ_BIT;
+		result._pipelineStageFlags = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+		return result;
+	}
+
+	BarrierResourceUsage BarrierResourceUsage::AllCommandsWrite()
+	{
+		BarrierResourceUsage result;
+		result._accessFlags =  VK_ACCESS_MEMORY_WRITE_BIT;
+		result._pipelineStageFlags = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+		return result;
+	}
+
+	BarrierHelper& BarrierHelper::Add(IResource& resource, BarrierResourceUsage preBarrierUsage, BarrierResourceUsage postBarrierUsage)
+	{
+		auto* res = checked_cast<Resource*>(&resource);
+		if (res->GetBuffer()) {
+			if (_bufferBarrierCount == dimof(_bufferBarriers)) Flush();
+			_bufferBarriers[_bufferBarrierCount++] = {
+				VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+				nullptr,
+				preBarrierUsage._accessFlags,
+				postBarrierUsage._accessFlags,
+				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+				checked_cast<Resource*>(&resource)->GetBuffer(),
+				0, VK_WHOLE_SIZE
+			};
+		} else {
+			assert(0);		// images not supported yet
+		}
+		_srcStageMask |= preBarrierUsage._pipelineStageFlags;
+		_dstStageMask |= postBarrierUsage._pipelineStageFlags;
+		return *this;
+	}
+	void BarrierHelper::Flush()
+	{
+		if (!_bufferBarrierCount) return;
+		assert(_deviceContext);
+		vkCmdPipelineBarrier(
+			_deviceContext->GetActiveCommandList().GetUnderlying().get(),
+			_srcStageMask, _dstStageMask,
+			0,
+			0, nullptr,
+			_bufferBarrierCount, _bufferBarriers,
+			0, nullptr);
+		_bufferBarrierCount = 0;
+		_srcStageMask = 0;
+		_dstStageMask = 0;
+	}
+	BarrierHelper::BarrierHelper(IThreadContext& threadContext)
+	: _deviceContext{DeviceContext::Get(threadContext).get()} {}
+	BarrierHelper::~BarrierHelper() { Flush(); }
+
 }}
 

@@ -11,6 +11,7 @@
 #include "../../Types.h"
 #include "../../ResourceUtils.h"
 #include "../../../Utility/IteratorUtils.h"
+#include "IncludeVulkan.h"				// require for BarrierHelper
 
 using VkSampleCountFlagBits_ = uint32_t;
 using VkImageLayout_ = uint32_t;
@@ -217,6 +218,36 @@ namespace RenderCore { namespace Metal_Vulkan
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 		//      U T I L S       //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+	struct BarrierResourceUsage
+	{
+		VkAccessFlags _accessFlags = 0;
+		VkPipelineStageFlags _pipelineStageFlags = 0;
+		BarrierResourceUsage(RenderCore::BindFlag::Enum);
+		BarrierResourceUsage(RenderCore::BindFlag::Enum, RenderCore::ShaderStage);
+		BarrierResourceUsage() = default;
+		static BarrierResourceUsage HostRead();
+		static BarrierResourceUsage HostWrite();
+		static BarrierResourceUsage AllCommandsRead();
+		static BarrierResourceUsage AllCommandsWrite();
+	};
+
+	struct BarrierHelper
+	{
+		VkBufferMemoryBarrier _bufferBarriers[8];
+		unsigned _bufferBarrierCount = 0;
+		VkPipelineStageFlags _srcStageMask = 0;
+		VkPipelineStageFlags _dstStageMask = 0;
+		DeviceContext* _deviceContext;
+
+		BarrierHelper& Add(RenderCore::IResource& resource, BarrierResourceUsage preBarrierUsage, BarrierResourceUsage postBarrierUsage);
+		BarrierHelper(RenderCore::IThreadContext& threadContext);
+		~BarrierHelper();
+		BarrierHelper(const BarrierHelper&) = delete;
+		BarrierHelper& operator=(const BarrierHelper&) = delete;
+	private:
+		void Flush();
+	};
 
 	namespace Internal
 	{
