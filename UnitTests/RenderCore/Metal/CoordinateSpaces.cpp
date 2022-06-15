@@ -129,7 +129,7 @@ namespace UnitTests
 		auto testHelper = MakeTestHelper();
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
@@ -165,7 +165,7 @@ namespace UnitTests
 		auto testHelper = MakeTestHelper();
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
@@ -288,7 +288,7 @@ namespace UnitTests
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
@@ -367,7 +367,7 @@ namespace UnitTests
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 
 		auto targetDesc0 = CreateDesc(
-			BindFlag::RenderTarget|BindFlag::ShaderResource|BindFlag::TransferSrc, 0, GPUAccess::Read|GPUAccess::Write,
+			BindFlag::RenderTarget|BindFlag::ShaderResource|BindFlag::TransferSrc,
 			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
 			"temporary-out0");
 		UnitTestFBHelper fbHelper0(*testHelper->_device, *threadContext, targetDesc0);
@@ -378,7 +378,7 @@ namespace UnitTests
 		}
 
 		auto targetDesc1 = CreateDesc(
-			BindFlag::RenderTarget|BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget|BindFlag::TransferSrc,
 			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
 			"temporary-out1");
 		UnitTestFBHelper fbHelper1(*testHelper->_device, *threadContext, targetDesc1);
@@ -437,7 +437,7 @@ namespace UnitTests
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 
 		auto targetDesc0 = CreateDesc(
-			BindFlag::RenderTarget|BindFlag::TransferSrc, 0, GPUAccess::Read|GPUAccess::Write,
+			BindFlag::RenderTarget|BindFlag::TransferSrc,
 			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
 			"temporary-out0");
 		UnitTestFBHelper fbHelper0(*testHelper->_device, *threadContext, targetDesc0);
@@ -448,7 +448,7 @@ namespace UnitTests
 		}
 
 		auto targetDesc1 = CreateDesc(
-			BindFlag::RenderTarget|BindFlag::TransferDst, 0, GPUAccess::Write,
+			BindFlag::RenderTarget|BindFlag::TransferDst,
 			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
 			"temporary-out1");
 		UnitTestFBHelper fbHelper1(*testHelper->_device, *threadContext, targetDesc1);

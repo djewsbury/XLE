@@ -72,7 +72,7 @@ namespace UnitTests
 
 		auto soBuffer = testHelper->_device->CreateResource(
 			CreateDesc(
-				BindFlag::StreamOutput | BindFlag::TransferSrc, 0, GPUAccess::Read | GPUAccess::Write,
+				BindFlag::StreamOutput | BindFlag::TransferSrc,
 				LinearBufferDesc::Create(1024, 1024),
 				"soBuffer"));
 
@@ -102,7 +102,7 @@ namespace UnitTests
 
 		auto vertexBuffer = testHelper->_device->CreateResource(
 			CreateDesc(
-				BindFlag::VertexBuffer, 0, GPUAccess::Read,
+				BindFlag::VertexBuffer,
 				LinearBufferDesc::Create(1024, 1024),
 				"vertexBuffer"),
 			SubResourceInitData{MakeIteratorRange(inputVertices)});

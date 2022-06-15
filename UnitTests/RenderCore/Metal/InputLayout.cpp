@@ -166,7 +166,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto shaderProgram = testHelper->MakeShaderProgram(vsText_clipInput, psText);
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc | BindFlag::TransferDst, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc | BindFlag::TransferDst,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 
@@ -178,7 +178,7 @@ namespace UnitTests
 
 		{
 			auto stagingDesc = CreateDesc(
-				BindFlag::TransferSrc, 0, 0,
+				BindFlag::TransferSrc,
 				TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 				"staging-temp");
 			std::vector<uint8_t> initBuffer(RenderCore::ByteCount(stagingDesc), 0xdd);
@@ -227,7 +227,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto shaderProgram = testHelper->MakeShaderProgram(vsText_clipInput, psText);
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 
@@ -274,7 +274,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto shaderProgram = testHelper->MakeShaderProgram(vsText, psText);
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 
@@ -367,7 +367,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto shaderProgram = testHelper->MakeShaderProgram(vsText_Instanced, psText);
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 
@@ -466,7 +466,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto shaderProgram = testHelper->MakeShaderProgram(vsText_FullViewport, psText);
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 		auto& metalContext = *Metal::DeviceContext::Get(*testHelper->_device->GetImmediateContext());
@@ -495,7 +495,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto shaderProgram = testHelper->MakeShaderProgram(vsText, psText);
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 		auto& metalContext = *Metal::DeviceContext::Get(*testHelper->_device->GetImmediateContext());
@@ -535,7 +535,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto shaderProgram = testHelper->MakeShaderProgram(vsText_FullViewport, psText_Uniforms);
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 
@@ -627,7 +627,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto shaderProgram = testHelper->MakeShaderProgram(vsText_FullViewport2, psText_Uniforms);
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 
@@ -717,7 +717,7 @@ namespace UnitTests
 		{
 			using namespace RenderCore;
 			_resDesc = CreateDesc(
-				BindFlag::ShaderResource, 0, GPUAccess::Read,
+				BindFlag::ShaderResource,
 				TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM),
 				"input-tex");
 			for (unsigned y=0; y<16; ++y)
@@ -746,7 +746,7 @@ namespace UnitTests
 		auto shaderProgramCB = testHelper->MakeShaderProgram(vsText_FullViewport2, psText_Uniforms);
 		auto shaderProgramSRV = testHelper->MakeShaderProgram(vsText_FullViewport2, psText_TextureBinding);
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 
@@ -855,7 +855,7 @@ namespace UnitTests
 		auto shaderProgramCB = testHelper->MakeShaderProgram(vsText_FullViewport2, psText_Uniforms);
 		auto shaderProgramSRV = testHelper->MakeShaderProgram(vsText_FullViewport2, psText_TextureBinding);
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 
@@ -969,7 +969,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto shaderProgram = testHelper->MakeShaderProgram(vsText_FullViewport2, psText_TextureBinding);
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 
@@ -1041,7 +1041,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto shaderProgram = testHelper->MakeShaderProgram(vsText_FullViewport2, psText_TextureBinding);
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 
@@ -1143,7 +1143,7 @@ namespace UnitTests
 		auto testHelper = MakeTestHelper();
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
-			BindFlag::UnorderedAccess | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::UnorderedAccess | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 
@@ -1178,7 +1178,7 @@ namespace UnitTests
 		std::shared_ptr<IResourceView> colorBufferViews[dimof(colors)];
 		for (unsigned c=0; c<dimof(colors); ++c) {
 			auto desc = CreateDesc(
-				BindFlag::UnorderedAccess, 0, GPUAccess::Read|GPUAccess::Write,
+				BindFlag::UnorderedAccess,
 				LinearBufferDesc::Create(sizeof(Float4)),
 				"uav-buffer");
 			auto res = testHelper->_device->CreateResource(desc, SubResourceInitData{MakeOpaqueIteratorRange(colors[c])});
@@ -1252,7 +1252,7 @@ namespace UnitTests
 		auto testHelper = MakeTestHelper();
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
-			BindFlag::UnorderedAccess | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::UnorderedAccess | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 
@@ -1297,28 +1297,28 @@ namespace UnitTests
 
 		auto UnorderedAccessReadBuffer = testHelper->_device->CreateResource(
 			CreateDesc(
-				BindFlag::UnorderedAccess, 0, GPUAccess::Read|GPUAccess::Write,
+				BindFlag::UnorderedAccess,
 				LinearBufferDesc::Create(sizeof(Float4)),
 				"srv-buffer"), 
 			SubResourceInitData{MakeOpaqueIteratorRange(colors[0])})->CreateBufferView(BindFlag::UnorderedAccess);
 
 		auto UnorderedAccessRWBuffer = testHelper->_device->CreateResource(
 			CreateDesc(
-				BindFlag::UnorderedAccess, 0, GPUAccess::Read|GPUAccess::Write,
+				BindFlag::UnorderedAccess,
 				LinearBufferDesc::Create(sizeof(Float4)),
 				"uav-buffer"), 
 			SubResourceInitData{MakeOpaqueIteratorRange(colors[1])})->CreateBufferView(BindFlag::UnorderedAccess);
 
 		auto TexelBuffer = testHelper->_device->CreateResource(
 			CreateDesc(
-				BindFlag::UnorderedAccess | BindFlag::TexelBuffer, 0, GPUAccess::Read|GPUAccess::Write,
+				BindFlag::UnorderedAccess | BindFlag::TexelBuffer,
 				LinearBufferDesc::Create(sizeof(Float4)),
 				"uav-texture"), 
 			SubResourceInitData{MakeOpaqueIteratorRange(colors[2])})->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32G32B32A32_FLOAT}});
 
 		auto InputTexelBuffer = testHelper->_device->CreateResource(
 			CreateDesc(
-				BindFlag::ShaderResource | BindFlag::TexelBuffer, 0, GPUAccess::Read|GPUAccess::Write,
+				BindFlag::ShaderResource | BindFlag::TexelBuffer,
 				LinearBufferDesc::Create(sizeof(Float4)),
 				"uav-texture"), 
 			SubResourceInitData{MakeOpaqueIteratorRange(colors[3])})->CreateTextureView(BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32G32B32A32_FLOAT}});

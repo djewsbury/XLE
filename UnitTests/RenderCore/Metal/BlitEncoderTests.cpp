@@ -26,9 +26,7 @@ namespace UnitTests
 		using namespace RenderCore;
 		auto result = desc;
 		result._bindFlags = BindFlag::TransferSrc;
-		result._cpuAccess = CPUAccess::Write|CPUAccess::Read;
-		result._gpuAccess = 0;
-		result._allocationRules |= AllocationRules::Staging;
+		result._allocationRules = AllocationRules::HostVisibleSequentialWrite;
 		StringMeldInPlace(result._name) << "staging-" << desc._name;
 		return result;
 	}
@@ -43,7 +41,7 @@ namespace UnitTests
 
 		SECTION("SingleSubResourceCopy")
 		{
-			auto desc = CreateDesc(BindFlag::ShaderResource, 0, 0, TextureDesc::Plain2D(512, 512, Format::R8_UNORM), "test");
+			auto desc = CreateDesc(BindFlag::ShaderResource, TextureDesc::Plain2D(512, 512, Format::R8_UNORM), "test");
 			auto stagingDesc = AsStagingDesc(desc);
 			auto initData = CreateInitData(desc);
 			
@@ -62,7 +60,7 @@ namespace UnitTests
 			}
 
 			// copy from larger buffer
-			auto largeStagingResource = AsStagingDesc(CreateDesc(0, 0, 0, LinearBufferDesc{8*1024*1024}, "largebuffer"));
+			auto largeStagingResource = AsStagingDesc(CreateDesc(0, LinearBufferDesc{8*1024*1024}, "largebuffer"));
 			auto largeInitData = CreateInitData(largeStagingResource);
 			auto largeStaging = device.CreateResource(largeStagingResource, SubResourceInitData{MakeIteratorRange(largeInitData)});
 			blitEncoder.Copy(*deviceResource, *staging);
@@ -175,7 +173,7 @@ namespace UnitTests
 
 		SECTION("Multi-subresource copy")
 		{
-			auto desc = CreateDesc(BindFlag::ShaderResource, 0, 0, TextureDesc::Plain2D(227, 227, Format::R8_UNORM, 8), "test");
+			auto desc = CreateDesc(BindFlag::ShaderResource, TextureDesc::Plain2D(227, 227, Format::R8_UNORM, 8), "test");
 			auto stagingDesc = AsStagingDesc(desc);
 			auto initData = CreateInitData(desc);
 			
@@ -256,7 +254,7 @@ namespace UnitTests
 					desc._textureDesc._format, {singleMipDesc._width, singleMipDesc._height, 1});
 				
 				auto destaging = device.CreateResource(
-					AsStagingDesc(CreateDesc(0, 0, 0, CalculateMipMapDesc(desc._textureDesc, 1), "temp")));
+					AsStagingDesc(CreateDesc(0, CalculateMipMapDesc(desc._textureDesc, 1), "temp")));
 				unsigned mipInDestaging = 1;
 				blitEncoder.Copy(
 					CopyPartial_Dest(*destaging, {mipInDestaging, 0}),
@@ -281,7 +279,7 @@ namespace UnitTests
 					desc._textureDesc._format, {singleMipDesc._width, singleMipDesc._height, 1});
 				
 				auto destaging = device.CreateResource(
-					AsStagingDesc(CreateDesc(0, 0, 0, LinearBufferDesc{ByteCount(singleMipDesc)}, "temp")));
+					AsStagingDesc(CreateDesc(0, LinearBufferDesc{ByteCount(singleMipDesc)}, "temp")));
 				blitEncoder.Copy(
 					CopyPartial_Dest(*destaging),
 					CopyPartial_Src(*deviceResource, {mipInDeviceResource, 0}));

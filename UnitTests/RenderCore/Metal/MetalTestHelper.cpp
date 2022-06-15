@@ -456,7 +456,7 @@ namespace UnitTests
 		using namespace RenderCore;
 		return _device->CreateResource(
 			CreateDesc(
-				BindFlag::VertexBuffer, 0, GPUAccess::Read,
+				BindFlag::VertexBuffer,
 				LinearBufferDesc::Create((unsigned)data.size()),
 				"vertex-buffer"),
 			SubResourceInitData { data });
@@ -467,7 +467,7 @@ namespace UnitTests
 		using namespace RenderCore;
 		return _device->CreateResource(
 			CreateDesc(
-				BindFlag::IndexBuffer, 0, GPUAccess::Read,
+				BindFlag::IndexBuffer,
 				LinearBufferDesc::Create((unsigned)data.size()),
 				"index-buffer"),
 			SubResourceInitData { data });
@@ -478,7 +478,7 @@ namespace UnitTests
 		using namespace RenderCore;
 		return _device->CreateResource(
 			CreateDesc(
-				BindFlag::ConstantBuffer, 0, GPUAccess::Read,
+				BindFlag::ConstantBuffer,
 				LinearBufferDesc::Create((unsigned)data.size()),
 				"constant-buffer"),
 			SubResourceInitData { data });

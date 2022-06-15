@@ -170,9 +170,7 @@ namespace UnitTests
 	{
 		auto stagingDesc = desc;
 		stagingDesc._bindFlags = RenderCore::BindFlag::TransferSrc;
-		stagingDesc._cpuAccess = RenderCore::CPUAccess::Write;
-		stagingDesc._gpuAccess = 0;
-		stagingDesc._allocationRules |= RenderCore::AllocationRules::Staging;
+		stagingDesc._allocationRules = RenderCore::AllocationRules::HostVisibleSequentialWrite;
 		return stagingDesc;
 	}
 
@@ -180,7 +178,7 @@ namespace UnitTests
 	{
 		using namespace RenderCore;
 		auto desc = CreateDesc(
-			BindFlag::UnorderedAccess | BindFlag::TransferDst, 0, GPUAccess::Read,
+			BindFlag::UnorderedAccess | BindFlag::TransferDst,
 			TextureDesc::Plain2D(8, 8, Format::R8G8B8A8_UINT),
 			"test-storage-texture");
 		auto result = device.CreateResource(desc);
@@ -218,7 +216,7 @@ namespace UnitTests
 
 		using namespace RenderCore;
 		auto desc = CreateDesc(
-			BindFlag::UnorderedAccess, 0, GPUAccess::Read,
+			BindFlag::UnorderedAccess,
 			LinearBufferDesc::Create(sizeof(contents)),
 			"test-storage-buffer");
 
@@ -231,7 +229,7 @@ namespace UnitTests
 		auto testHelper = MakeTestHelper();
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
@@ -408,7 +406,7 @@ namespace UnitTests
 		auto testHelper = MakeTestHelper();
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
@@ -420,7 +418,7 @@ namespace UnitTests
 		std::shared_ptr<IResource> tex0, tex1;
 		{
 			auto desc = CreateDesc(
-				BindFlag::ShaderResource | BindFlag::TransferDst, 0, GPUAccess::Read,
+				BindFlag::ShaderResource | BindFlag::TransferDst,
 				TextureDesc::Plain2D(8, 8, Format::R8G8B8A8_UINT),
 				"test-storage-texture-0");
 			tex0 = testHelper->_device->CreateResource(desc);

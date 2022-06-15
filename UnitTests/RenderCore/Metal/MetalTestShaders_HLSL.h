@@ -113,7 +113,7 @@ namespace UnitTests
     static const char psText_Uniforms[] =
         HLSLPrefix
 		R"(
-            cbuffer Values
+            cbuffer Values : register(b3, space0)
             {
                 float A, B, C;
                 float4 vA;
@@ -128,8 +128,8 @@ namespace UnitTests
     static const char psText_TextureBinding[] = 
         HLSLPrefix
 		R"(
-            Texture2D Texture : register(t6, space0);
-            SamplerState Texture_sampler : register(s13, space0);
+            Texture2D Texture : register(t0, space0)
+            SamplerState Texture_sampler : register(s5, space0)
             float4 main(float2 a_texCoord : TEXCOORD) : SV_Target0
             {
                 return Texture.Sample(Texture_sampler, a_texCoord);

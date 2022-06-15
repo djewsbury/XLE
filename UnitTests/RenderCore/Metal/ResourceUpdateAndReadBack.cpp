@@ -120,7 +120,7 @@ namespace UnitTests
 
 		Metal::BoundInputLayout inputLayout(MakeIteratorRange(inputElePC), shaderProgram);
 		REQUIRE(inputLayout.AllAttributesBound());
-		VertexBufferView vbvs[] = { vertexBuffer0.get() };            
+		VertexBufferView vbvs[] = { vertexBuffer0.get() };
 
 		encoder.Bind(MakeIteratorRange(vbvs), IndexBufferView{});
 		encoder.Bind(inputLayout, Topology::TriangleStrip);
@@ -142,14 +142,14 @@ namespace UnitTests
 	{
 		using namespace RenderCore;
 		if (unsynchronized) {
-			Metal::ResourceMap map(metalContext, cbResource, Metal::ResourceMap::Mode::WriteDiscardPrevious);
+			Metal::ResourceMap map{metalContext, cbResource, Metal::ResourceMap::Mode::WriteDiscardPrevious};
+			REQUIRE(newData.size() == map.GetData().size());
 			std::memcpy(map.GetData().begin(), newData.begin(), std::min(newData.size(), map.GetData().size()));
 		} else {
 			auto stagingDesc = cbResource.GetDesc();
 			stagingDesc._bindFlags = BindFlag::TransferSrc;
-			stagingDesc._cpuAccess = CPUAccess::Write;
-			stagingDesc._gpuAccess = 0;
-			stagingDesc._allocationRules = AllocationRules::Staging;
+			stagingDesc._allocationRules = AllocationRules::HostVisibleSequentialWrite;
+			XlCopyString(stagingDesc._name, "TempStaging");
 			auto stagingRes = device.CreateResource(stagingDesc, newData);
 			auto encoder = metalContext.BeginBlitEncoder();
 			encoder.Copy(cbResource, *stagingRes);
@@ -167,15 +167,24 @@ namespace UnitTests
 		auto threadContext = testHelper._device->GetImmediateContext();
 		auto shaderProgram = testHelper.MakeShaderProgram(vsText_clipInput, psText_Uniforms);
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 
-		auto cbResource = testHelper._device->CreateResource(
-			CreateDesc(	
-				BindFlag::ConstantBuffer, CPUAccess::WriteDynamic, GPUAccess::Read,
-				LinearBufferDesc::Create(sizeof(Values)),
-				"test-cbuffer"));
+		std::shared_ptr<IResource> cbResource;
+		if (unsynchronized) {
+			cbResource = testHelper._device->CreateResource(
+				CreateDesc(	
+					BindFlag::ConstantBuffer, AllocationRules::HostVisibleSequentialWrite,
+					LinearBufferDesc::Create(sizeof(Values)),
+					"test-cbuffer"));
+		} else {
+			cbResource = testHelper._device->CreateResource(
+				CreateDesc(	
+					BindFlag::ConstantBuffer | BindFlag::TransferDst, 0,
+					LinearBufferDesc::Create(sizeof(Values)),
+					"test-cbuffer"));
+		}
 
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 		UpdateConstantBuffer(metalContext, *testHelper._device, *cbResource, MakeOpaqueIteratorRange(testValue0), unsynchronized);
@@ -188,7 +197,7 @@ namespace UnitTests
 
 		// ............. Start RPI .............................................................
 
-		UnitTestFBHelper fbHelper(*testHelper._device, *threadContext, targetDesc, LoadStore::Retain);
+		UnitTestFBHelper fbHelper(*testHelper._device, *threadContext, targetDesc, LoadStore::Retain);		// retain because we use it twice
 
 		{
 			auto rpi = fbHelper.BeginRenderPass(*threadContext);
@@ -229,7 +238,9 @@ namespace UnitTests
 
 		// Set a value to be used in the next render pass--the right place for unsynchronized
 		if (!unsynchronized) {
+			Metal::BarrierHelper(*threadContext).Add(*cbResource, {BindFlag::ConstantBuffer, ShaderStage::Pixel}, BindFlag::TransferDst);
 			UpdateConstantBuffer(metalContext, *testHelper._device, *cbResource, MakeOpaqueIteratorRange(testValue3), unsynchronized);
+			Metal::BarrierHelper(*threadContext).Add(*cbResource, BindFlag::TransferDst, {BindFlag::ConstantBuffer, ShaderStage::Pixel});
 		}
 
 		{
@@ -262,7 +273,7 @@ namespace UnitTests
 				FAIL("Known issues running this code on non GLES300 OpenGL: unsynchronized writes are simulated with synchronized writes, so we don't get the expected results");
 			}
 		}
-		
+
 		auto breakdown = _UpdateConstantBufferHelper(*testHelper, true);
 
 		// Since we're not synchronizing anywhere, and doing virtually no CPU work,
@@ -281,7 +292,9 @@ namespace UnitTests
 	{
 		auto testHelper = MakeTestHelper();
 
+		testHelper->BeginFrameCapture();
 		auto breakdown = _UpdateConstantBufferHelper(*testHelper, false);
+		testHelper->EndFrameCapture();
 
 		// With synchronized writes that happen on render-pass boundaries, we're
 		// expecting that the first three quadrants (in the first render pass)
@@ -295,7 +308,6 @@ namespace UnitTests
 		}
 	}
 
-
 	TEST_CASE( "ResourceUpdateAndReadback-AllocationThrashing", "[rendercore_metal]" )
 	{
 		using namespace RenderCore;
@@ -304,7 +316,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto shaderProgram = testHelper->MakeShaderProgram(vsText_clipInput, psText_Uniforms);
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 
@@ -319,6 +331,9 @@ namespace UnitTests
 		// ............. Start RPI .............................................................
 
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc, LoadStore::Retain);
+
+		uint8_t initData[32*1024];
+		std::memset(initData, 0xff, sizeof(initData));
 
 		// This is a thrash test to ensure that GPU resources are destroyed in a reasonable way 
 		// Resources must be kept alive even after all client references on them have been dropped,
@@ -335,10 +350,10 @@ namespace UnitTests
 			for (unsigned d=0; d<dimof(cbs); ++d) {
 				cbs[d] = testHelper->_device->CreateResource(
 					CreateDesc(	
-						BindFlag::ConstantBuffer, CPUAccess::WriteDynamic, GPUAccess::Read,
-						LinearBufferDesc::Create(32 * 1024),
+						BindFlag::ConstantBuffer, AllocationRules::HostVisibleSequentialWrite,
+						LinearBufferDesc::Create(sizeof(initData)),
 						"test-cbuffer"));
-				UpdateConstantBuffer(metalContext, *testHelper->_device, *cbs[d], MakeOpaqueIteratorRange(testValue0), true);
+				UpdateConstantBuffer(metalContext, *testHelper->_device, *cbs[d], MakeOpaqueIteratorRange(initData), true);
 			}
 
 			{
