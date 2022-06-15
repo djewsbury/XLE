@@ -597,7 +597,7 @@ namespace RenderCore { namespace ImplVulkan
 			_underlying = CreateUnderlyingDevice(_physDev);
 			auto extensionFunctions = std::make_shared<Metal_Vulkan::ExtensionFunctions>(_instance.get());
 			_globalsContainer = std::make_shared<Metal_Vulkan::GlobalsContainer>();
-			_globalsContainer->_objectFactory = Metal_Vulkan::ObjectFactory{_physDev._dev, _underlying, extensionFunctions};
+			_globalsContainer->_objectFactory = Metal_Vulkan::ObjectFactory{_instance.get(), _physDev._dev, _underlying, extensionFunctions};
 			auto& objFactory = _globalsContainer->_objectFactory;
 			auto& pools = _globalsContainer->_pools;
 
