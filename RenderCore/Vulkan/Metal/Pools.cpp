@@ -326,9 +326,8 @@ namespace RenderCore { namespace Metal_Vulkan
     static std::shared_ptr<Resource> CreateDummyTexture(ObjectFactory& factory)
     {
         auto desc = CreateDesc(
-            BindFlag::ShaderResource, 
-            CPUAccess::Write, GPUAccess::Read, 
-            TextureDesc::Plain2D(32, 32, Format::R8G8B8A8_UNORM), "DummyTexture");
+            BindFlag::ShaderResource,
+            0, TextureDesc::Plain2D(32, 32, Format::R8G8B8A8_UNORM), "DummyTexture");
         uint32 dummyData[32*32];
         std::memset(dummyData, 0, sizeof(dummyData));
         return Internal::CreateResource(
@@ -343,8 +342,7 @@ namespace RenderCore { namespace Metal_Vulkan
     {
         auto desc = CreateDesc(
             BindFlag::UnorderedAccess, 
-            0, GPUAccess::Read|GPUAccess::Write, 
-            TextureDesc::Plain2D(32, 32, Format::R8G8B8A8_UNORM), "DummyUAVTexture");
+            0, TextureDesc::Plain2D(32, 32, Format::R8G8B8A8_UNORM), "DummyUAVTexture");
         return Internal::CreateResource(factory, desc);
     }
 
@@ -352,13 +350,13 @@ namespace RenderCore { namespace Metal_Vulkan
     {
         auto desc = CreateDesc(
             BindFlag::UnorderedAccess, 
-            0, GPUAccess::Read|GPUAccess::Write, 
-            LinearBufferDesc::Create(256, 256), "DummyBuffer");
+            0, LinearBufferDesc::Create(256, 256), "DummyBuffer");
         return Internal::CreateResource(factory, desc);
     }
 
 	void DummyResources::CompleteInitialization(DeviceContext& devContext)
 	{
+        // todo -- transfer the dummy buffer && dummyTexture data via a staging resource here!
 		IResource* res[] = { _blankTexture.get(), _blankUAVImageRes.get(), _blankUAVBufferRes.get() }; 
 		Metal_Vulkan::CompleteInitialization(devContext, MakeIteratorRange(res));
 	}
@@ -377,7 +375,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto initData = MakeIteratorRange(blankData);
         _blankBuffer = Internal::CreateResource(
             factory, 
-            CreateDesc(BindFlag::ConstantBuffer, 0, GPUAccess::Read, LinearBufferDesc::Create(sizeof(blankData)), "DummyBuffer"),
+            CreateDesc(BindFlag::ConstantBuffer, 0, LinearBufferDesc::Create(sizeof(blankData)), "DummyBuffer"),
 			[initData](SubResourceId subResId) -> SubResourceInitData {
                 assert(subResId._mip == 0 && subResId._arrayLayer == 0);
             	return SubResourceInitData{initData};

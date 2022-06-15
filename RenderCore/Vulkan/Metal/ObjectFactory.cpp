@@ -331,18 +331,28 @@ namespace RenderCore { namespace Metal_Vulkan
         return std::move(buffer);
     }
 
-    VulkanUniquePtr<VkBuffer> ObjectFactory::CreateBufferWithAutoMemory(const VkBufferCreateInfo& createInfo, VmaAllocationCreateFlags memoryFlags, VmaAllocation& allocationResult) const
+    static VmaAllocationCreateInfo SetupAllocationCreateInfo(AllocationRules::BitField allocationRules)
+    {
+        VmaAllocationCreateInfo allocCreateInfo = {};
+        allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocCreateInfo.flags = 0;
+
+		if (allocationRules & AllocationRules::HostVisibleRandomAccess) allocCreateInfo.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+		else if (allocationRules & AllocationRules::HostVisibleSequentialWrite) allocCreateInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        if ((allocCreateInfo.flags & VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT) || (allocCreateInfo.flags & VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT)) {
+            allocCreateInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+            if (!(allocationRules & AllocationRules::DisableAutoCacheCoherency))
+                allocCreateInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        }
+        return allocCreateInfo;
+    }
+
+    VulkanUniquePtr<VkBuffer> ObjectFactory::CreateBufferWithAutoMemory(const VkBufferCreateInfo& createInfo, AllocationRules::BitField allocationRules, VmaAllocation& allocationResult) const
     {
         // Using vma, create a buffer and automatically allocate the memory
         // doesn't seem to be any particular benefit to separating buffer & memory allocation with this library, so let's
         // go ahead and simplify it
-        VmaAllocationCreateInfo allocCreateInfo = {};
-        allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        allocCreateInfo.flags = memoryFlags;
-        if ((memoryFlags & VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT) || (memoryFlags & VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT)) {
-            // hack -- require coherent, no support without it currently
-            allocCreateInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        }
+        auto allocCreateInfo = SetupAllocationCreateInfo(allocationRules);
         VkBuffer rawBuffer = nullptr;
         VmaAllocationInfo allocInfo;
         auto res = vmaCreateBuffer(_vmaAllocator, &createInfo, &allocCreateInfo, &rawBuffer, &allocationResult, &allocInfo);
@@ -357,15 +367,9 @@ namespace RenderCore { namespace Metal_Vulkan
         return std::move(buffer);
     }
 
-    VulkanUniquePtr<VkImage> ObjectFactory::CreateImageWithAutoMemory(const VkImageCreateInfo& createInfo, VmaAllocationCreateFlags memoryFlags, VmaAllocation& allocationResult, uint64_t guidForVisibilityTracking) const
+    VulkanUniquePtr<VkImage> ObjectFactory::CreateImageWithAutoMemory(const VkImageCreateInfo& createInfo, AllocationRules::BitField allocationRules, VmaAllocation& allocationResult, uint64_t guidForVisibilityTracking) const
     {
-        VmaAllocationCreateInfo allocCreateInfo = {};
-        allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        allocCreateInfo.flags = memoryFlags;
-        if ((memoryFlags & VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT) || (memoryFlags & VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT)) {
-            // hack -- require coherent, no support without it currently
-            allocCreateInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        }
+        auto allocCreateInfo = SetupAllocationCreateInfo(allocationRules);
         VkImage rawImage = nullptr;
         VmaAllocationInfo allocInfo;
         auto res = vmaCreateImage(_vmaAllocator, &createInfo, &allocCreateInfo, &rawImage, &allocationResult, &allocInfo);

@@ -272,7 +272,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		return CreateDesc(
 			bindingFlags,
-			cpuMappable ? CPUAccess::Write : 0, GPUAccess::Read,
+			cpuMappable ? AllocationRules::HostVisibleSequentialWrite : 0,
 			LinearBufferDesc::Create(unsigned(byteCount)),
 			"RollingTempBuf");
 	}

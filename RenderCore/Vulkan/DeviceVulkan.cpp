@@ -1064,7 +1064,7 @@ namespace RenderCore { namespace ImplVulkan
         _images.reserve(images.size());
         for (auto& vkImage:images) {
             auto resDesc = CreateDesc(
-                BindFlag::PresentationSrc | BindFlag::RenderTarget, 0u, GPUAccess::Write, 
+                BindFlag::PresentationSrc | BindFlag::RenderTarget, AllocationRules::ResizeableRenderTarget,
                 _bufferDesc, "presentationimage");
             _images.emplace_back(std::make_shared<Metal_Vulkan::Resource>(vkImage, resDesc));
         }

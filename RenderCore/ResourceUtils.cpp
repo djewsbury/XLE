@@ -317,14 +317,10 @@ namespace RenderCore
         if (resDesc._type == ResourceDesc::Type::LinearBuffer) {
             strm << "LinearBuffer (" << resDesc._name << ") size: " << resDesc._linearBufferDesc._sizeInBytes / 1024.f << "KiB";
             strm << ", BindFlags: " << resDesc._bindFlags;
-            strm << ", CPUAccess: " << resDesc._cpuAccess;
-            strm << ", GPUAccess: " << resDesc._gpuAccess;
             strm << ", AllocationRules: " << resDesc._allocationRules;
         } else if (resDesc._type == ResourceDesc::Type::Texture) {
             strm << "Texture (" << resDesc._name << ") [" << resDesc._textureDesc << "]";
             strm << ", BindFlags: " << resDesc._bindFlags;
-            strm << ", CPUAccess: " << resDesc._cpuAccess;
-            strm << ", GPUAccess: " << resDesc._gpuAccess;
             strm << ", AllocationRules: " << resDesc._allocationRules;
         }
         return strm;

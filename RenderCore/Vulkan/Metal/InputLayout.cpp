@@ -1144,7 +1144,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					assert(!pkt.empty());
 					Resource cb{
 						factory, 
-						CreateDesc(BindFlag::ConstantBuffer, 0, GPUAccess::Read, LinearBufferDesc::Create(unsigned(pkt.size())), "overflow-buf"), 
+						CreateDesc(BindFlag::ConstantBuffer, LinearBufferDesc::Create(unsigned(pkt.size())), "overflow-buf"), 
 						SubResourceInitData{pkt}};
 					builder.Bind(bind[0], { cb.GetBuffer(), 0, VK_WHOLE_SIZE } DEBUG_ONLY(, *nameIterator++, "temporary buffer"));
 					bindingsWrittenTo |= (1ull << uint64_t(bind[0]));

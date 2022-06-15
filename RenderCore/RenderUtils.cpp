@@ -495,15 +495,11 @@ namespace RenderCore
     {
         assert((unsigned(_type) & ((1<<2)-1)) == unsigned(_type));
         assert((_bindFlags & ((1<<16)-1)) == _bindFlags);
-        assert((_cpuAccess & ((1<<3)-1)) == _cpuAccess);
-        assert((_gpuAccess & ((1<<3)-1)) == _gpuAccess);
-        assert((_allocationRules & ((1<<3)-1)) == _allocationRules);
+        assert((_allocationRules & ((1<<10)-1)) == _allocationRules);
         uint64_t h0 = 
             uint64_t(_type)
             | (uint64_t(_bindFlags) << 2ull)
-            | (uint64_t(_cpuAccess) << 18ull)
-            | (uint64_t(_gpuAccess) << 21ull)
-            | (uint64_t(_allocationRules) << 24ull)
+            | (uint64_t(_allocationRules) << 18ull)
             ;
         if (_type == Type::Texture) h0 = HashCombine(_textureDesc.CalculateHash(), h0);
         else if (_type == Type::LinearBuffer) h0 = HashCombine(_linearBufferDesc.CalculateHash(), h0);
@@ -513,7 +509,7 @@ namespace RenderCore
 	ResourceDesc::ResourceDesc()
 	{
 		_type = Type::Unknown;
-		_bindFlags = _cpuAccess = _gpuAccess = _allocationRules = 0;
+		_bindFlags = _allocationRules = 0;
 		_name[0] = '\0';
 		XlZeroMemory(_textureDesc);
 	}

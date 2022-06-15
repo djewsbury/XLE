@@ -984,7 +984,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					linearBufferIterator += CeilToMultiple(size, offsetMultiple);
 				}
 			assert(linearBufferIterator == linearBufferSize);
-			auto desc = CreateDesc(BindFlag::ConstantBuffer, 0, GPUAccess::Read, LinearBufferDesc::Create(linearBufferSize), "descriptor-set-bound-data");
+			auto desc = CreateDesc(BindFlag::ConstantBuffer, 0, LinearBufferDesc::Create(linearBufferSize), "descriptor-set-bound-data");
 			_associatedLinearBufferData = Resource(factory, desc, MakeIteratorRange(initData).Cast<const void*>());
 
 			linearBufferIterator = 0;

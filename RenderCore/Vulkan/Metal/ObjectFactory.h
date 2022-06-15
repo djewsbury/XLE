@@ -8,6 +8,7 @@
 
 #include "VulkanCore.h"
 #include "../../IDevice_Forward.h"
+#include "../../ResourceDesc.h"     // for AllocationRules
 #include "../../../Utility/IteratorUtils.h"
 #include "../../../Core/Types.h"
 #include <memory>
@@ -76,8 +77,8 @@ namespace RenderCore { namespace Metal_Vulkan
         VulkanUniquePtr<VkFramebuffer> CreateFramebuffer(const VkFramebufferCreateInfo& createInfo) const;
         VulkanUniquePtr<VkRenderPass> CreateRenderPass(const VkRenderPassCreateInfo2& createInfo) const;
 
-        VulkanUniquePtr<VkBuffer> CreateBufferWithAutoMemory(const VkBufferCreateInfo& createInfo, VmaAllocationCreateFlags memoryFlags, VmaAllocation& allocationResult) const;
-        VulkanUniquePtr<VkImage> CreateImageWithAutoMemory(const VkImageCreateInfo& createInfo, VmaAllocationCreateFlags memoryFlags, VmaAllocation& allocationResult, uint64_t guidForVisibilityTracking = 0ull) const;
+        VulkanUniquePtr<VkBuffer> CreateBufferWithAutoMemory(const VkBufferCreateInfo& createInfo, AllocationRules::BitField allocationRules, VmaAllocation& allocationResult) const;
+        VulkanUniquePtr<VkImage> CreateImageWithAutoMemory(const VkImageCreateInfo& createInfo, AllocationRules::BitField allocationRules, VmaAllocation& allocationResult, uint64_t guidForVisibilityTracking = 0ull) const;
 
         // resource views
         VulkanUniquePtr<VkImageView> CreateImageView(const VkImageViewCreateInfo& createInfo) const;

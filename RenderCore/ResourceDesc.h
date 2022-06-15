@@ -14,48 +14,6 @@
 
 namespace RenderCore
 {
-    /// Container for CPUAccess::Enum
-    namespace CPUAccess
-    {
-        /// <summary>Determines CPU access privileges</summary>
-        /// Determines what access (if any) the CPU will have to the
-        /// buffer. This can control how the object is stored in memory
-        /// in into what memory it is stored.
-        ///
-        /// It is always a good idea to use as few flags as possible. Many
-        /// buffers should be fine with a CPUAccess flag of "0".
-        ///
-        /// Note that this flag can change how the system performs upload
-        /// operations. For example, in D3D11, when the CPUAccess::WriteDynamic flag
-        /// is set, UpdateSubresource() can't be used to some types of buffers.
-        /// In these cases, Map() is used instead.
-        ///
-        /// Try to avoid "WriteDynamic" unless the buffer will be Locked
-        /// multiple times per frame. If a buffer only needs to be updated
-        /// once per frame (or less), use CPUAccess::Write
-        enum Enum
-        {
-            Read                = 1<<0,             ///< CPU can read from this resource (using IManager::Resource_Readback)
-            Write               = 1<<1,             ///< CPU can write to this resource, but will only do so once (or less) per frame
-            WriteDynamic        = (1<<2)|Write      ///< CPU can write to this resource, and will lock it multiple times during a single per frame
-        };
-        typedef unsigned BitField;
-    }
-
-    /// Container for GPUAccess::Enum
-    namespace GPUAccess
-    {
-        /// <summary>Determines GPU access privileges</summary>
-        /// Determines whether the GPU will read from or write to a resource (or both).
-        /// As usual, try to limit the privileges were possible.
-        enum Enum
-        {
-            Read                = 1<<0,     ///< GPU can read from a resource (eg, shader resource, texture, input structured buffer)
-            Write               = 1<<1      ///< GPU can write to the resource (eg, render target, RWTexture, RWStructuredBuffer)
-        };
-        typedef unsigned BitField;
-    }
-
     /// Container for BindFlag::Enum
     namespace BindFlag
     {
@@ -98,13 +56,41 @@ namespace RenderCore
     /// Container for AllocationRules::Enum
     namespace AllocationRules
     {
-        /// <summary>Determines how BufferUploads will allocate a resource</summary>
-        /// Special flags that determine how the system will allocate a resource.
+        /// <summary>Determines how to to allocate the resource, and rules for host access</summary>
+        /// Use these flags to identicate how the host (ie, CPU-side) will use the resource.
+        ///
+        /// Most resources should be GPU-only, in which case there will be no host flags. However, for staging
+        /// buffers, dynamic resources, and other similar resources, we need to place them into memory
+        /// that is visible to the CPU. As a result, we need to specify how we're going to use the source at
+        /// allocation time.
+        ///
+        /// Different graphics APIs have different names and flags for these rules. But at the end of the
+        /// day, there are a few main usage patterns. The flags here are selected to try to match those patterns.
         enum Enum
         {
-            Pooled              = 1<<0,     ///< If a compatible resource has been recently released, reuse it
-            Batched             = 1<<1,     ///< Batch together similar uploads, so they become a single low level operation per frame
-            Staging             = 1<<2      ///< Staging memory only (ie, don't send to GPU)
+            /// Host will not read, and typically writes in a sequential pattern. Use for staging resources and most dynamic resources.
+            /// ResourceMap{} is enabled, but use Mode::WriteDiscardPrevious
+            HostVisibleSequentialWrite       = 1<<0,
+            /// Both reading and writing are enabled. Use for readback buffers (ie, blit from a GPU resource to a HostAccessRandomAccess 
+            /// to read back data from a resource)
+            /// ResourceMap{} is enabled in any mode
+            HostVisibleRandomAccess          = 1<<1,
+            /// All the system to return a non-mappable buffer, even if a HostAccess... flag is set.
+            /// Use this if you want a buffer that is both host visible & GPU local, but are prepared to handle cases where this isn't
+            /// possible (ie, if it's not supported on the particular machine, or if such memory is all used up).
+            /// The ResourceMap{} may or may not be enabled -- caller must handle either case
+            FallbackNonHostVisible          = 1<<2,
+            /// Map the resource into CPU visible memory at allocation time, and keep it mapped until destruction. This is useful
+            /// for reuable staging buffers, and avoid thrashing the CPU heap by continually mapping and unmapping resources.
+            PermanentlyMapped               = 1<<3,
+            /// Set to disable automatic cache invalidation & flushing before and after ResourceMap{} operations. In Vulkan, by
+            /// default we set the VK_MEMORY_PROPERTY_HOST_COHERENT_BIT flag. This ensures the CPU cache and the GPU cache are kept
+            /// up to date implicitly. Use DisableAutoCacheCoherency to disable the Vulkan flag -- in which case, the caller must
+            /// explicity flush and invalidate the cache as needed. This can be useful (particular with PermanentlyMapped buffers)
+            /// when the caller wants to affect the caches for only a part of the resource.
+            DisableAutoCacheCoherency       = 1<<4,
+            /// Set as a hint to the allocator that this is a large resizable render target (which can be a source of fragmentation)
+            ResizeableRenderTarget          = 1<<5
         };
         typedef unsigned BitField;
     }
@@ -173,8 +159,6 @@ namespace RenderCore
         enum class Type { LinearBuffer, Texture, Unknown, Max };
         Type _type;
         BindFlag::BitField _bindFlags;
-        CPUAccess::BitField _cpuAccess; 
-        GPUAccess::BitField _gpuAccess;
         AllocationRules::BitField _allocationRules;
         union {
             LinearBufferDesc _linearBufferDesc;
@@ -255,16 +239,42 @@ namespace RenderCore
 
     inline ResourceDesc CreateDesc(
         BindFlag::BitField bindFlags,
-        CPUAccess::BitField cpuAccess, 
-        GPUAccess::BitField gpuAccess,
+        AllocationRules::BitField allocationRules,
         const TextureDesc& textureDesc,
         StringSection<char> name)
     {
 		ResourceDesc desc;
         desc._type = ResourceDesc::Type::Texture;
         desc._bindFlags = bindFlags;
-        desc._cpuAccess = cpuAccess;
-        desc._gpuAccess = gpuAccess;
+        desc._allocationRules = allocationRules;
+        desc._textureDesc = textureDesc;
+        XlCopyString(desc._name, dimof(desc._name), name);
+        return desc;
+    }
+
+    inline ResourceDesc CreateDesc(
+        BindFlag::BitField bindFlags,
+        AllocationRules::BitField allocationRules,
+        const LinearBufferDesc& linearBufferDesc,
+        StringSection<char> name)
+    {
+		ResourceDesc desc;
+        desc._type = ResourceDesc::Type::LinearBuffer;
+        desc._bindFlags = bindFlags;
+        desc._allocationRules = allocationRules;
+        desc._linearBufferDesc = linearBufferDesc;
+        XlCopyString(desc._name, dimof(desc._name), name);
+        return desc;
+    }
+
+    inline ResourceDesc CreateDesc(
+        BindFlag::BitField bindFlags,
+        const TextureDesc& textureDesc,
+        StringSection<char> name)
+    {
+		ResourceDesc desc;
+        desc._type = ResourceDesc::Type::Texture;
+        desc._bindFlags = bindFlags;
         desc._allocationRules = 0;
         desc._textureDesc = textureDesc;
         XlCopyString(desc._name, dimof(desc._name), name);
@@ -273,16 +283,12 @@ namespace RenderCore
 
     inline ResourceDesc CreateDesc(
         BindFlag::BitField bindFlags,
-        CPUAccess::BitField cpuAccess, 
-        GPUAccess::BitField gpuAccess,
         const LinearBufferDesc& linearBufferDesc,
         StringSection<char> name)
     {
 		ResourceDesc desc;
         desc._type = ResourceDesc::Type::LinearBuffer;
         desc._bindFlags = bindFlags;
-        desc._cpuAccess = cpuAccess;
-        desc._gpuAccess = gpuAccess;
         desc._allocationRules = 0;
         desc._linearBufferDesc = linearBufferDesc;
         XlCopyString(desc._name, dimof(desc._name), name);
