@@ -727,6 +727,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
+	void Resource::ChangeSteadyState(BindFlag::Enum usage)
+	{
+		ConfigureDefaultSteadyState(usage);
+	}
+
 	std::shared_ptr<IResourceView>  Resource::CreateTextureView(BindFlag::Enum usage, const TextureViewDesc& window)
 	{
 		return std::make_shared<ResourceView>(GetObjectFactory(), shared_from_this(), usage, window);
@@ -1546,11 +1551,8 @@ namespace RenderCore { namespace Metal_Vulkan
 	ResourceMap::ResourceMap(
 		IDevice& device, IResource& iresource,
 		Mode mapMode)
+	: ResourceMap{GetObjectFactory(device), iresource, mapMode}
 	{
-		auto& factory = GetObjectFactory(device);
-		auto& resource = *checked_cast<Resource*>(&iresource);
-		if (resource.GetVmaMemory()) *this = ResourceMap{factory.GetVmaAllocator(), resource.GetVmaMemory()};
-		else *this = ResourceMap{factory.GetDevice().get(), resource.GetMemory()};
 	}
 
 	ResourceMap::ResourceMap(
@@ -1693,6 +1695,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		CopyPartial_Src srcPartial {
 			*transferSrc, SubResourceId{},
+			1,1,
 			{0,0,0},
 			srcDataDimensions };
 
@@ -1742,9 +1745,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			_pipelineStageFlags = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
 			break;
 		case BindFlag::ShaderResource:
-			assert(0);		// explicitly specify the shader stage for better results
 			_accessFlags = VK_ACCESS_SHADER_READ_BIT;
-			_pipelineStageFlags = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+			_pipelineStageFlags = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 			break;
 		case BindFlag::RenderTarget:
 			_accessFlags = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
@@ -1756,14 +1758,12 @@ namespace RenderCore { namespace Metal_Vulkan
 			break;
 		case BindFlag::TexelBuffer:
 		case BindFlag::UnorderedAccess:
-			assert(0);		// explicitly specify the shader stage for better results
 			_accessFlags = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-			_pipelineStageFlags = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+			_pipelineStageFlags = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 			break;
 		case BindFlag::ConstantBuffer:
-			assert(0);		// explicitly specify the shader stage for better results
 			_accessFlags = VK_ACCESS_UNIFORM_READ_BIT;
-			_pipelineStageFlags = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+			_pipelineStageFlags = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 			break;
 		case BindFlag::StreamOutput:
 			_accessFlags = VK_ACCESS_TRANSFORM_FEEDBACK_WRITE_BIT_EXT;
@@ -1793,6 +1793,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			_accessFlags = _pipelineStageFlags = 0;
 			break;
 		}
+		_imageLayout = (VkImageLayout)Internal::AsVkImageLayout(Internal::GetLayoutForBindType(usage)._optimalLayout);
 	}
 
 	static VkPipelineStageFlags AsPipelineStage(ShaderStage shaderStage)
@@ -1832,6 +1833,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			*this = BarrierResourceUsage{usage};		// shader stage not required
 			break;
 		}
+		_imageLayout = (VkImageLayout)Internal::AsVkImageLayout(Internal::GetLayoutForBindType(usage)._optimalLayout);
 	}
 
 	BarrierResourceUsage BarrierResourceUsage::HostRead()
@@ -1839,6 +1841,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		BarrierResourceUsage result;
 		result._accessFlags =  VK_ACCESS_HOST_READ_BIT;
 		result._pipelineStageFlags = VK_PIPELINE_STAGE_HOST_BIT;
+		result._imageLayout = (VkImageLayout)0;
 		return result;
 	}
 
@@ -1847,6 +1850,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		BarrierResourceUsage result;
 		result._accessFlags =  VK_ACCESS_HOST_WRITE_BIT;
 		result._pipelineStageFlags = VK_PIPELINE_STAGE_HOST_BIT;
+		result._imageLayout = (VkImageLayout)0;
 		return result;
 	}
 
@@ -1855,6 +1859,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		BarrierResourceUsage result;
 		result._accessFlags =  VK_ACCESS_MEMORY_READ_BIT;
 		result._pipelineStageFlags = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+		result._imageLayout = (VkImageLayout)0;
 		return result;
 	}
 
@@ -1863,6 +1868,25 @@ namespace RenderCore { namespace Metal_Vulkan
 		BarrierResourceUsage result;
 		result._accessFlags =  VK_ACCESS_MEMORY_WRITE_BIT;
 		result._pipelineStageFlags = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+		result._imageLayout = (VkImageLayout)0;
+		return result;
+	}
+
+	BarrierResourceUsage BarrierResourceUsage::NoState()
+	{
+		BarrierResourceUsage result;
+		result._accessFlags =  0;
+		result._pipelineStageFlags = 0;
+		result._imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		return result;
+	}
+
+	BarrierResourceUsage BarrierResourceUsage::Preinitialized()
+	{
+		BarrierResourceUsage result;
+		result._accessFlags =  0;
+		result._pipelineStageFlags = 0;
+		result._imageLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
 		return result;
 	}
 
@@ -1881,7 +1905,21 @@ namespace RenderCore { namespace Metal_Vulkan
 				0, VK_WHOLE_SIZE
 			};
 		} else {
-			assert(0);		// images not supported yet
+			if (_imageBarrierCount == dimof(_imageBarriers)) Flush();
+			auto& barrier = _imageBarriers[_imageBarrierCount++];
+			barrier = {};
+			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			barrier.pNext = nullptr;
+			barrier.oldLayout = preBarrierUsage._imageLayout;
+			barrier.newLayout = postBarrierUsage._imageLayout;
+			barrier.srcAccessMask = preBarrierUsage._accessFlags;
+			barrier.dstAccessMask = postBarrierUsage._accessFlags;
+			barrier.image = checked_cast<Resource*>(&resource)->GetImage();
+			barrier.subresourceRange.aspectMask = AsImageAspectMask(resource.GetDesc()._textureDesc._format);
+			barrier.subresourceRange.baseMipLevel = 0;
+			barrier.subresourceRange.baseArrayLayer = 0;
+			barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+			barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 		}
 		_srcStageMask |= preBarrierUsage._pipelineStageFlags;
 		_dstStageMask |= postBarrierUsage._pipelineStageFlags;
@@ -1897,8 +1935,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			0,
 			0, nullptr,
 			_bufferBarrierCount, _bufferBarriers,
-			0, nullptr);
+			_imageBarrierCount, _imageBarriers);
 		_bufferBarrierCount = 0;
+		_imageBarrierCount = 0;
 		_srcStageMask = 0;
 		_dstStageMask = 0;
 	}

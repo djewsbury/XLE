@@ -67,6 +67,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		const VulkanSharedPtr<VkBuffer>& ShareBuffer() const { return _underlyingBuffer; }
 		const VulkanSharedPtr<VkDeviceMemory>& ShareDeviceMemory() const { return _mem; }
 
+		void ChangeSteadyState(BindFlag::Enum);
+
 		Resource(
 			ObjectFactory& factory, const Desc& desc,
 			const SubResourceInitData& initData = SubResourceInitData{});
@@ -223,6 +225,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		VkAccessFlags _accessFlags = 0;
 		VkPipelineStageFlags _pipelineStageFlags = 0;
+		VkImageLayout _imageLayout = (VkImageLayout)0;
 		BarrierResourceUsage(RenderCore::BindFlag::Enum);
 		BarrierResourceUsage(RenderCore::BindFlag::Enum, RenderCore::ShaderStage);
 		BarrierResourceUsage() = default;
@@ -230,12 +233,16 @@ namespace RenderCore { namespace Metal_Vulkan
 		static BarrierResourceUsage HostWrite();
 		static BarrierResourceUsage AllCommandsRead();
 		static BarrierResourceUsage AllCommandsWrite();
+		static BarrierResourceUsage NoState();
+		static BarrierResourceUsage Preinitialized();
 	};
 
 	struct BarrierHelper
 	{
 		VkBufferMemoryBarrier _bufferBarriers[8];
 		unsigned _bufferBarrierCount = 0;
+		VkImageMemoryBarrier _imageBarriers[8];
+		unsigned _imageBarrierCount = 0;
 		VkPipelineStageFlags _srcStageMask = 0;
 		VkPipelineStageFlags _dstStageMask = 0;
 		DeviceContext* _deviceContext;

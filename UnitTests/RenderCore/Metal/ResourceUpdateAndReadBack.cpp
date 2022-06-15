@@ -384,7 +384,9 @@ namespace UnitTests
 	class BackgroundTextureUploader
 	{
 	public:
-		std::future<std::shared_ptr<RenderCore::IResource>> Queue(const RenderCore::ResourceDesc& desc);
+		std::future<std::shared_ptr<RenderCore::IResource>> Queue(
+			const RenderCore::ResourceDesc& desc,
+			RenderCore::BindFlag::Enum finalResourceState);
 		void Tick();
 
 		BackgroundTextureUploader(std::shared_ptr<RenderCore::IDevice> device);
@@ -399,6 +401,7 @@ namespace UnitTests
 		struct QueuedUpload
 		{
 			RenderCore::ResourceDesc _desc;
+			RenderCore::BindFlag::Enum _finalResourceState;
 			std::promise<std::shared_ptr<RenderCore::IResource>> _promise;
 		};
 		std::queue<QueuedUpload> _itemsToUpload;
@@ -410,7 +413,8 @@ namespace UnitTests
 
 			std::shared_ptr<RenderCore::IResource> CreateAndTransferData(
 				RenderCore::IThreadContext& threadContext,
-				const RenderCore::ResourceDesc& desc);
+				const RenderCore::ResourceDesc& desc,
+				RenderCore::BindFlag::Enum finalResourceState);
 
 			struct AllocationPendingRelease
 			{
@@ -427,11 +431,12 @@ namespace UnitTests
 		StagingBufferMan _stagingBufferMan;
 	};
 
-	std::future<std::shared_ptr<RenderCore::IResource>> BackgroundTextureUploader::Queue(const RenderCore::ResourceDesc& desc)
+	std::future<std::shared_ptr<RenderCore::IResource>> BackgroundTextureUploader::Queue(const RenderCore::ResourceDesc& desc, RenderCore::BindFlag::Enum finalResourceState)
 	{
 		ScopedLock(_queueLock);
 		QueuedUpload upload;
 		upload._desc = desc;
+		upload._finalResourceState = finalResourceState;
 		auto result = upload._promise.get_future();
 		_itemsToUpload.push(std::move(upload));
 		_newlyQueued.notify_one();
@@ -449,44 +454,27 @@ namespace UnitTests
 		RenderCore::IResource& finalResource, const RenderCore::ResourceDesc& destinationDesc, 
 		RenderCore::IResource& stagingResource, unsigned stagingResourceBegin, unsigned stagingResourceSize)
 	{
+		// no layout changes -- we're expecting the caller to have already shifted the resource layouts
+		// into something valid
+
 		using namespace RenderCore;
 		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
-
 		if (destinationDesc._type == ResourceDesc::Type::Texture) {
-			auto dstLodLevelMax = destinationDesc._textureDesc._mipCount ? (unsigned)destinationDesc._textureDesc._mipCount-1 : 0;
-			auto dstArrayLayerMax = destinationDesc._textureDesc._arrayCount ? (unsigned)destinationDesc._textureDesc._arrayCount-1 : 0;
-			auto allLods = true;
-			auto allArrayLayers = true;
-			auto entire2DPlane = true;
-
-			// During the transfer, the images must be in either TransferSrcOptimal, TransferDstOptimal or General.
-			Metal::Internal::CaptureForBind(metalContext, finalResource, BindFlag::TransferDst);
-			Metal::Internal::CaptureForBind(metalContext, stagingResource, BindFlag::TransferSrc);
+			auto lodLevelCount = destinationDesc._textureDesc._mipCount ? (unsigned)destinationDesc._textureDesc._mipCount : 1;
+			auto arrayLayerCount = destinationDesc._textureDesc._arrayCount ? (unsigned)destinationDesc._textureDesc._arrayCount : 1;
 			auto blitEncoder = metalContext.BeginBlitEncoder();
-
-			for (unsigned a=0; a<=dstArrayLayerMax; ++a) {
-				for (unsigned mip=0; mip<=dstLodLevelMax; ++mip) {
-					auto offset = GetSubResourceOffset(destinationDesc._textureDesc, mip, a);
-					assert(offset._offset+offset._size <= stagingResourceSize);
-					blitEncoder.Copy(
-						CopyPartial_Dest{finalResource, SubResourceId{mip, a}},
-						CopyPartial_Src{stagingResource, unsigned(stagingResourceBegin+offset._offset), unsigned(stagingResourceBegin+offset._offset+offset._size)});
-				}
-			}
+			blitEncoder.Copy(
+				CopyPartial_Dest{finalResource},
+				CopyPartial_Src{stagingResource, stagingResourceBegin, stagingResourceBegin+stagingResourceSize, lodLevelCount, arrayLayerCount});
 		} else {
 			assert(destinationDesc._type == ResourceDesc::Type::LinearBuffer);
 			assert(destinationDesc._linearBufferDesc._sizeInBytes <= stagingResource.GetDesc()._linearBufferDesc._sizeInBytes);
 
-			Metal::Internal::CaptureForBind(metalContext, finalResource, BindFlag::TransferDst);
-			Metal::Internal::CaptureForBind(metalContext, stagingResource, BindFlag::TransferSrc);
 			auto blitEncoder = metalContext.BeginBlitEncoder();
 			blitEncoder.Copy(
 				CopyPartial_Dest{finalResource},
 				CopyPartial_Src{stagingResource, stagingResourceBegin, stagingResourceBegin+stagingResourceSize});
 		}
-
-		auto finalContainingGuid = finalResource.GetGUID();
-		metalContext.GetActiveCommandList().MakeResourcesVisible({&finalContainingGuid, &finalContainingGuid+1});
 	}
 
 	static RenderCore::Metal_Vulkan::IAsyncTracker::Marker GetProducerMarker(RenderCore::IThreadContext& threadContext)
@@ -509,11 +497,13 @@ namespace UnitTests
 
 	auto BackgroundTextureUploader::StagingBufferMan::CreateAndTransferData(
 		RenderCore::IThreadContext& threadContext,
-		const RenderCore::ResourceDesc& desc) -> std::shared_ptr<RenderCore::IResource>
+		const RenderCore::ResourceDesc& desc,
+		RenderCore::BindFlag::Enum finalResourceState) -> std::shared_ptr<RenderCore::IResource>
 	{
 		using namespace RenderCore;
 		auto byteCount = ByteCount(desc);
 		byteCount = CeilToMultiple(byteCount, _alignment);
+		assert(finalResourceState);
 
 		unsigned stagingAllocation = 0, stagingSize = 0;
 		auto modifiedDesc = desc;
@@ -535,24 +525,37 @@ namespace UnitTests
 
 			Metal::ResourceMap mapping { *threadContext.GetDevice(), *resource, Metal::ResourceMap::Mode::WriteDiscardPrevious };
 			std::memset(mapping.GetData().begin(), 0x3d, byteCount);
+			Metal::BarrierHelper(threadContext).Add(*resource, Metal::BarrierResourceUsage::Preinitialized(), finalResourceState);
 			// immediately usable (at least by cmdlist not already submitted)
 		} else {
 			assert(stagingSize);
 
 			{
 				Metal::ResourceMap mapping { *threadContext.GetDevice(), *_stagingBuffer, Metal::ResourceMap::Mode::WriteDiscardPrevious };
-				std::memset(PtrAdd(mapping.GetData().begin(), stagingAllocation), 0x3d, stagingSize);
+				auto uploadRange = MakeIteratorRange(PtrAdd(mapping.GetData().begin(), stagingAllocation), PtrAdd(mapping.GetData().begin(), stagingAllocation+stagingSize));
+				uint8_t iterator = 0;
+				for (auto& i:uploadRange.Cast<uint8_t*>()) 
+					i = iterator++;
 				// mapping.FlushRange(result._stagingAllocation, result._stagingSize);
 			}
+
+			// During the transfer, the images must be in either TransferSrcOptimal, TransferDstOptimal or General
+			Metal::BarrierHelper(threadContext).Add(*resource, Metal::BarrierResourceUsage::NoState(), BindFlag::TransferDst);
 
 			UpdateFinalResourceFromStaging(
 				threadContext,
 				*resource, desc,
 				*_stagingBuffer, stagingAllocation, stagingSize);
 
+			Metal::BarrierHelper(threadContext).Add(*resource, BindFlag::TransferDst, finalResourceState);
+			checked_cast<RenderCore::Metal_Vulkan::Resource*>(resource.get())->ChangeSteadyState(finalResourceState);
+
 			auto producerMarker = GetProducerMarker(threadContext);
 			_allocationsPendingRelease.push_back({producerMarker, stagingAllocation, stagingSize});
 		}
+
+		auto finalContainingGuid = resource->GetGUID();
+		Metal::DeviceContext::Get(threadContext)->GetActiveCommandList().MakeResourcesVisible({&finalContainingGuid, &finalContainingGuid+1});
 
 		return resource;
 	}
@@ -613,7 +616,7 @@ namespace UnitTests
 
 				if (frontItem) {
 					// process this upload request
-					auto res = _stagingBufferMan.CreateAndTransferData(*bkThreadContext, frontItem->_desc);
+					auto res = _stagingBufferMan.CreateAndTransferData(*bkThreadContext, frontItem->_desc, frontItem->_finalResourceState);
 					if (!res) {
 						// commit all to try to release staging allocations
 						bkThreadContext->CommitCommands();
@@ -691,9 +694,13 @@ namespace UnitTests
 		std::vector<std::future<std::shared_ptr<IResource>>> futureResources;
 		std::vector<std::shared_ptr<IResource>> completedResources;
 
+		testHelper->BeginFrameCapture();
+
 		const unsigned uploadCount = 100;
 		for (unsigned c=0; c<uploadCount; ++c) {
-			auto future = uploads.Queue(CreateDesc(BindFlag::ShaderResource, TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM_SRGB), "upload-test"));
+			auto future = uploads.Queue(
+				CreateDesc(BindFlag::ShaderResource, TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM_SRGB, 11), "upload-test"),
+				BindFlag::ShaderResource);
 			futureResources.emplace_back(std::move(future));
 
 			if ((c % 4) == 0) {
@@ -722,6 +729,7 @@ namespace UnitTests
 					}
 				}
 
+				// we need to keep using CommitCommands on the immediate context to ensure that the producer/consumer markers are updated on vulkan
 				threadContext->CommitCommands();
 				uploads.Tick();
 				std::this_thread::sleep_for(std::chrono::milliseconds(16));
@@ -738,6 +746,8 @@ namespace UnitTests
 			}
 			f.get();
 		}
+
+		testHelper->EndFrameCapture();
 	}
 
 }
