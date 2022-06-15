@@ -12,18 +12,23 @@
 #include "../../../RenderCore/Metal/QueryPool.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Metal/Resource.h"
+#include "../../../RenderCore/Metal/ObjectFactory.h"
 #include "../../../RenderCore/OpenGLES/IDeviceOpenGLES.h"
+#include "../../../RenderCore/Vulkan/IDeviceVulkan.h"
 #include "../../../RenderCore/ResourceDesc.h"
 #include "../../../RenderCore/BufferView.h"
 #include "../../../RenderCore/IDevice.h"
 #include "../../../Math/Vector.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Utility/MemoryUtils.h"
+#include "../../../Utility/HeapUtils.h"
+#include "../../../Utility/BitUtils.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 #include <map>
 #include <deque>
 #include <queue>
+#include <future>
 
 using namespace Catch::literals;
 
@@ -292,9 +297,7 @@ namespace UnitTests
 	{
 		auto testHelper = MakeTestHelper();
 
-		testHelper->BeginFrameCapture();
 		auto breakdown = _UpdateConstantBufferHelper(*testHelper, false);
-		testHelper->EndFrameCapture();
 
 		// With synchronized writes that happen on render-pass boundaries, we're
 		// expecting that the first three quadrants (in the first render pass)
@@ -378,5 +381,363 @@ namespace UnitTests
 		}
 	}
 
+	class BackgroundTextureUploader
+	{
+	public:
+		std::future<std::shared_ptr<RenderCore::IResource>> Queue(const RenderCore::ResourceDesc& desc);
+		void Tick();
+
+		BackgroundTextureUploader(std::shared_ptr<RenderCore::IDevice> device);
+		~BackgroundTextureUploader();
+	private:
+		std::condition_variable _newlyQueued;
+		std::mutex _queueLock;
+		std::atomic<unsigned> _frameIdx;
+		std::thread _workerThread;
+		std::atomic<bool> _quit;
+
+		struct QueuedUpload
+		{
+			RenderCore::ResourceDesc _desc;
+			std::promise<std::shared_ptr<RenderCore::IResource>> _promise;
+		};
+		std::queue<QueuedUpload> _itemsToUpload;
+
+		struct StagingBufferMan
+		{
+			SpanningHeap<uint32_t> _stagingBufferHeap;
+			std::shared_ptr<RenderCore::IResource> _stagingBuffer;
+
+			std::shared_ptr<RenderCore::IResource> CreateAndTransferData(
+				RenderCore::IThreadContext& threadContext,
+				const RenderCore::ResourceDesc& desc);
+
+			struct AllocationPendingRelease
+			{
+				RenderCore::Metal_Vulkan::IAsyncTracker::Marker _releaseMarker;
+				unsigned _stagingAllocation = 0;
+				unsigned _stagingSize = 0;
+			};
+			std::vector<AllocationPendingRelease> _allocationsPendingRelease;
+
+			void UpdateConsumerMarker(RenderCore::IThreadContext& threadContext);
+
+			unsigned _alignment = 1;
+		};
+		StagingBufferMan _stagingBufferMan;
+	};
+
+	std::future<std::shared_ptr<RenderCore::IResource>> BackgroundTextureUploader::Queue(const RenderCore::ResourceDesc& desc)
+	{
+		ScopedLock(_queueLock);
+		QueuedUpload upload;
+		upload._desc = desc;
+		auto result = upload._promise.get_future();
+		_itemsToUpload.push(std::move(upload));
+		_newlyQueued.notify_one();
+		return result;
+	}
+
+	void BackgroundTextureUploader::Tick()
+	{
+		++_frameIdx;
+		_newlyQueued.notify_all();
+	}
+
+	static void UpdateFinalResourceFromStaging(
+		RenderCore::IThreadContext& threadContext,
+		RenderCore::IResource& finalResource, const RenderCore::ResourceDesc& destinationDesc, 
+		RenderCore::IResource& stagingResource, unsigned stagingResourceBegin, unsigned stagingResourceSize)
+	{
+		using namespace RenderCore;
+		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+
+		if (destinationDesc._type == ResourceDesc::Type::Texture) {
+			auto dstLodLevelMax = destinationDesc._textureDesc._mipCount ? (unsigned)destinationDesc._textureDesc._mipCount-1 : 0;
+			auto dstArrayLayerMax = destinationDesc._textureDesc._arrayCount ? (unsigned)destinationDesc._textureDesc._arrayCount-1 : 0;
+			auto allLods = true;
+			auto allArrayLayers = true;
+			auto entire2DPlane = true;
+
+			// During the transfer, the images must be in either TransferSrcOptimal, TransferDstOptimal or General.
+			Metal::Internal::CaptureForBind(metalContext, finalResource, BindFlag::TransferDst);
+			Metal::Internal::CaptureForBind(metalContext, stagingResource, BindFlag::TransferSrc);
+			auto blitEncoder = metalContext.BeginBlitEncoder();
+
+			for (unsigned a=0; a<=dstArrayLayerMax; ++a) {
+				for (unsigned mip=0; mip<=dstLodLevelMax; ++mip) {
+					auto offset = GetSubResourceOffset(destinationDesc._textureDesc, mip, a);
+					assert(offset._offset+offset._size <= stagingResourceSize);
+					blitEncoder.Copy(
+						CopyPartial_Dest{finalResource, SubResourceId{mip, a}},
+						CopyPartial_Src{stagingResource, unsigned(stagingResourceBegin+offset._offset), unsigned(stagingResourceBegin+offset._offset+offset._size)});
+				}
+			}
+		} else {
+			assert(destinationDesc._type == ResourceDesc::Type::LinearBuffer);
+			assert(destinationDesc._linearBufferDesc._sizeInBytes <= stagingResource.GetDesc()._linearBufferDesc._sizeInBytes);
+
+			Metal::Internal::CaptureForBind(metalContext, finalResource, BindFlag::TransferDst);
+			Metal::Internal::CaptureForBind(metalContext, stagingResource, BindFlag::TransferSrc);
+			auto blitEncoder = metalContext.BeginBlitEncoder();
+			blitEncoder.Copy(
+				CopyPartial_Dest{finalResource},
+				CopyPartial_Src{stagingResource, stagingResourceBegin, stagingResourceBegin+stagingResourceSize});
+		}
+
+		auto finalContainingGuid = finalResource.GetGUID();
+		metalContext.GetActiveCommandList().MakeResourcesVisible({&finalContainingGuid, &finalContainingGuid+1});
+	}
+
+	static RenderCore::Metal_Vulkan::IAsyncTracker::Marker GetProducerMarker(RenderCore::IThreadContext& threadContext)
+	{
+		using namespace RenderCore;
+		auto* vulkanDevice = (IDeviceVulkan*)threadContext.GetDevice()->QueryInterface(typeid(IDeviceVulkan).hash_code());
+		if (!vulkanDevice)
+			Throw(std::runtime_error("Expecting Vulkan device"));
+		return vulkanDevice->GetAsyncTracker()->GetProducerMarker();
+	}
+
+	static RenderCore::Metal_Vulkan::IAsyncTracker::Marker GetConsumerMarker(RenderCore::IThreadContext& threadContext)
+	{
+		using namespace RenderCore;
+		auto* vulkanDevice = (IDeviceVulkan*)threadContext.GetDevice()->QueryInterface(typeid(IDeviceVulkan).hash_code());
+		if (!vulkanDevice)
+			Throw(std::runtime_error("Expecting Vulkan device"));
+		return vulkanDevice->GetAsyncTracker()->GetConsumerMarker();
+	}
+
+	auto BackgroundTextureUploader::StagingBufferMan::CreateAndTransferData(
+		RenderCore::IThreadContext& threadContext,
+		const RenderCore::ResourceDesc& desc) -> std::shared_ptr<RenderCore::IResource>
+	{
+		using namespace RenderCore;
+		auto byteCount = ByteCount(desc);
+		byteCount = CeilToMultiple(byteCount, _alignment);
+
+		unsigned stagingAllocation = 0, stagingSize = 0;
+		auto modifiedDesc = desc;
+		if (!(modifiedDesc._allocationRules & (AllocationRules::HostVisibleRandomAccess|AllocationRules::HostVisibleSequentialWrite))) {
+			modifiedDesc._bindFlags |= BindFlag::TransferDst;
+
+			stagingAllocation = _stagingBufferHeap.Allocate(byteCount);
+			if (stagingAllocation == ~0u) return {};
+			stagingSize = byteCount;
+		}
+		
+		auto resource = threadContext.GetDevice()->CreateResource(modifiedDesc);
+		if (false) { // Metal::ResourceMap::CanMap(result._resource, Metal::ResourceMap::Mode::WriteDiscardPrevious)) {
+			if (stagingAllocation) {
+				// didn't need to make this allocation after all
+				_stagingBufferHeap.Deallocate(stagingAllocation, stagingSize);
+				stagingAllocation = stagingSize = 0;
+			}
+
+			Metal::ResourceMap mapping { *threadContext.GetDevice(), *resource, Metal::ResourceMap::Mode::WriteDiscardPrevious };
+			std::memset(mapping.GetData().begin(), 0x3d, byteCount);
+			// immediately usable (at least by cmdlist not already submitted)
+		} else {
+			assert(stagingSize);
+
+			{
+				Metal::ResourceMap mapping { *threadContext.GetDevice(), *_stagingBuffer, Metal::ResourceMap::Mode::WriteDiscardPrevious };
+				std::memset(PtrAdd(mapping.GetData().begin(), stagingAllocation), 0x3d, stagingSize);
+				// mapping.FlushRange(result._stagingAllocation, result._stagingSize);
+			}
+
+			UpdateFinalResourceFromStaging(
+				threadContext,
+				*resource, desc,
+				*_stagingBuffer, stagingAllocation, stagingSize);
+
+			auto producerMarker = GetProducerMarker(threadContext);
+			_allocationsPendingRelease.push_back({producerMarker, stagingAllocation, stagingSize});
+		}
+
+		return resource;
+	}
+
+	void BackgroundTextureUploader::StagingBufferMan::UpdateConsumerMarker(RenderCore::IThreadContext& threadContext)
+	{
+		auto consumerMarker = GetConsumerMarker(threadContext);
+		while (!_allocationsPendingRelease.empty() && _allocationsPendingRelease.front()._releaseMarker <= consumerMarker) {
+			_stagingBufferHeap.Deallocate(_allocationsPendingRelease.front()._stagingAllocation, _allocationsPendingRelease.front()._stagingSize);
+			_allocationsPendingRelease.erase(_allocationsPendingRelease.begin());
+		}
+	}
+
+	BackgroundTextureUploader::BackgroundTextureUploader(std::shared_ptr<RenderCore::IDevice> device)
+	: _quit(false)
+	{
+		using namespace RenderCore;
+		struct ItemsOnCmdList
+		{
+			std::promise<std::shared_ptr<RenderCore::IResource>> _promise;
+			std::shared_ptr<RenderCore::IResource> _resource;
+		};
+
+		const unsigned stagingHeapSize = 32*1024*1024;
+		_stagingBufferMan._stagingBufferHeap = SpanningHeap<uint32_t>(stagingHeapSize);
+		_stagingBufferMan._stagingBuffer = device->CreateResource(
+			CreateDesc(BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc::Create(stagingHeapSize),
+			"main-staging-buffer"));
+
+		_workerThread = std::thread{[device, this]() {
+			auto bkThreadContext = device->CreateDeferredContext();
+			std::optional<unsigned> oldestItem;
+			std::vector<ItemsOnCmdList> itemsOnCmdList;
+
+			std::optional<QueuedUpload> frontItem;
+			bool pendingPopFrontItem = false;
+			while (true) {
+				{
+					std::unique_lock<std::mutex> lk(_queueLock);
+					if (pendingPopFrontItem) {
+						_itemsToUpload.pop();		// pop the one that was completed last loop
+						pendingPopFrontItem = false;
+					} else if (frontItem) {
+						_itemsToUpload.front() = std::move(*frontItem);
+					}
+					if (_itemsToUpload.empty())
+						_newlyQueued.wait(lk);
+
+					if (_quit)
+						break;
+
+					frontItem = {};
+					if (!_itemsToUpload.empty())
+						frontItem = std::move(_itemsToUpload.front());
+				}
+
+				_stagingBufferMan.UpdateConsumerMarker(*bkThreadContext);
+
+				if (frontItem) {
+					// process this upload request
+					auto res = _stagingBufferMan.CreateAndTransferData(*bkThreadContext, frontItem->_desc);
+					if (!res) {
+						// commit all to try to release staging allocations
+						bkThreadContext->CommitCommands();
+						for (auto& i:itemsOnCmdList)
+							i._promise.set_value(i._resource);
+						itemsOnCmdList.clear();
+						oldestItem = {};
+						if (_stagingBufferMan._allocationsPendingRelease.empty()) {
+							// no more allocations to release -- can't complete this one
+							frontItem->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Resource requires more space than is available in the entire staging buffer")));
+							pendingPopFrontItem = true;
+						}
+						continue;		// no space now -- wrap around and try again
+					}
+
+					itemsOnCmdList.emplace_back(ItemsOnCmdList{std::move(frontItem->_promise), std::move(res)});
+					pendingPopFrontItem = true;		// pop it next time we have the lock
+					if (!oldestItem.has_value()) oldestItem = _frameIdx;
+				}
+
+				const unsigned frameThreshold = 5;
+				if (oldestItem.has_value() && (_frameIdx - oldestItem.value()) >= frameThreshold) {
+					bkThreadContext->CommitCommands();
+					// fulfill the promises for everything on this cmd list
+					for (auto& i:itemsOnCmdList)
+						i._promise.set_value(i._resource);
+					itemsOnCmdList.clear();
+					oldestItem = {};
+				}
+			}
+
+			for (auto& i:itemsOnCmdList)
+				i._promise.set_exception(std::make_exception_ptr(std::runtime_error("Shutdown before upload completed")));
+
+			// note -- not releasing alocations in allocationsPendingRelease
+		}};
+	}
+
+	BackgroundTextureUploader::~BackgroundTextureUploader()
+	{
+		_quit = true;
+		_newlyQueued.notify_all();
+		_workerThread.join();
+	}
+
+	TEST_CASE( "ResourceUpdateAndReadback-StagingTexturePattern", "[rendercore_metal]" )
+	{
+		using namespace RenderCore;
+		auto testHelper = MakeTestHelper();
+		auto threadContext = testHelper->_device->GetImmediateContext();
+		auto shaderProgram = testHelper->MakeShaderProgram(vsText_clipInput, psText_TextureBinding);
+		auto targetDesc = CreateDesc(
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
+			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
+			"temporary-out");
+
+		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc, LoadStore::Clear);
+
+		UniformsStreamInterface usi;
+		usi.BindResourceView(0, Hash64("Texture"));
+		usi.BindSampler(0, Hash64("Texture_sampler"));
+		Metal::BoundUniforms uniforms { shaderProgram, usi };
+		auto sampler = testHelper->_device->CreateSampler({});
+
+		//
+		// todo -- 	permanently mapped staging buffer
+		//			resizable BAR resources
+		//			buffers & textures uploading
+		//			textures with mipmaps, and textures without them
+		//			set the device alignment to the correct value for transfer src
+		//
+
+		BackgroundTextureUploader uploads{testHelper->_device};
+
+		std::vector<std::future<std::shared_ptr<IResource>>> futureResources;
+		std::vector<std::shared_ptr<IResource>> completedResources;
+
+		const unsigned uploadCount = 100;
+		for (unsigned c=0; c<uploadCount; ++c) {
+			auto future = uploads.Queue(CreateDesc(BindFlag::ShaderResource, TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM_SRGB), "upload-test"));
+			futureResources.emplace_back(std::move(future));
+
+			if ((c % 4) == 0) {
+				while (!futureResources.empty() && futureResources.front().wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+					completedResources.push_back(futureResources.front().get());
+					futureResources.erase(futureResources.begin());
+				}
+
+				// emulate drawing a frame
+				{
+					auto rpi = fbHelper.BeginRenderPass(*threadContext);
+					auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
+					auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+					encoder.Bind(shaderProgram);
+
+					if (!completedResources.empty()) {
+						auto srv = completedResources.front()->CreateTextureView();
+						IResourceView* views[] = { srv.get() };
+						ISampler* samplers[] = { sampler.get() };
+						UniformsStream uniformsStream;
+						uniformsStream._resourceViews = MakeIteratorRange(views);
+						uniformsStream._samplers = MakeIteratorRange(samplers);
+						uniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
+
+						DrawClipSpaceQuad(*testHelper, metalContext, encoder, shaderProgram, Float2(-1.0f, -1.0f), Float2( 1.0f, 1.0f));
+					}
+				}
+
+				threadContext->CommitCommands();
+				uploads.Tick();
+				std::this_thread::sleep_for(std::chrono::milliseconds(16));
+			}
+		}
+
+		int c=0;
+		(void)c;
+		for (auto& f:futureResources) {
+			while (f.wait_for(std::chrono::seconds(1)) != std::future_status::ready) {
+				// keep things ticking over
+				threadContext->CommitCommands();
+				uploads.Tick();
+			}
+			f.get();
+		}
+	}
 
 }
