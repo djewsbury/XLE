@@ -130,7 +130,7 @@ namespace UnitTests
 				unsigned srcRightBottomBack[] = {desc._textureDesc._width, desc._textureDesc._height, 1};
 				blitEncoder.Copy(
 					CopyPartial_Dest(*destaging, {}, destOffset),
-					CopyPartial_Src{*deviceResource, {}, srcLeftTopFront, srcRightBottomBack});
+					CopyPartial_Src{*deviceResource, {}, 1, 1, srcLeftTopFront, srcRightBottomBack});
 
 				auto readback = destaging->ReadBackSynchronized(*threadContext);
 				for (unsigned y=0; y<desc._textureDesc._height; ++y)
@@ -153,7 +153,7 @@ namespace UnitTests
 				unsigned srcRightBottomBack[] = {324, 493, 1};
 				blitEncoder.Copy(
 					CopyPartial_Dest(*destaging, {}, destOffset),
-					CopyPartial_Src{*deviceResource, {}, srcLeftTopFront, srcRightBottomBack});
+					CopyPartial_Src{*deviceResource, {}, 1, 1, srcLeftTopFront, srcRightBottomBack});
 
 				auto readback = destaging->ReadBackSynchronized(*threadContext);
 				for (unsigned y=0; y<desc._textureDesc._height; ++y)

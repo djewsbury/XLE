@@ -49,27 +49,31 @@ namespace RenderCore
     class CopyPartial_Src
     {
     public:
-        IResource*          _resource;
-        SubResourceId       _subResource;
+        IResource*                      _resource;
+        SubResourceId                   _subResource;
+        unsigned                        _mipLevelCount = 1;
+        unsigned                        _arrayLayerCount = 1;
         VectorPattern<unsigned, 3>      _leftTopFront;
         VectorPattern<unsigned, 3>      _rightBottomBack;
 
         CopyPartial_Src(
             IResource& source,
             SubResourceId subRes = {},
+            unsigned mipLeveCount = 1, unsigned arrayLayerCount = 1,
             VectorPattern<unsigned, 3> leftTopFront = {0u,0u,0u},
             VectorPattern<unsigned, 3> rightBottomBack = {~0u,~0u,~0u})
-        : _resource(&source), _subResource(subRes), _leftTopFront(leftTopFront), _rightBottomBack(rightBottomBack) {}
+        : _resource(&source), _subResource(subRes), _leftTopFront(leftTopFront), _rightBottomBack(rightBottomBack), _mipLevelCount(mipLeveCount), _arrayLayerCount(arrayLayerCount) {}
 
         // Note that there's no way to copy from a buffer to a subcube within a texture
         // using this interface -- because rightBottomBack is only in CopyPartial_Src, and that's
         // considered a linear begin/end. However we can copy a subcube in the opposite direction
         CopyPartial_Src(
             IResource& source,
-            unsigned bufferStart, unsigned bufferEnd = ~0u)
-        : _resource(&source), _subResource(), _leftTopFront(bufferStart, 0, 0), _rightBottomBack(bufferEnd, ~0u, ~0u) {}
+            unsigned bufferStart, unsigned bufferEnd = ~0u,
+            unsigned mipLeveCount = 1, unsigned arrayLayerCount = 1)
+        : _resource(&source), _subResource(), _leftTopFront(bufferStart, 0, 0), _rightBottomBack(bufferEnd, ~0u, ~0u), _mipLevelCount(mipLeveCount), _arrayLayerCount(arrayLayerCount) {}
     };
-        
+
     class Box2D
     {
     public:
@@ -78,7 +82,7 @@ namespace RenderCore
 
         friend bool operator==(const Box2D& lhs, const Box2D& rhs);
     };
-    
+
     unsigned CopyMipLevel(
         void* destination, size_t destinationDataSize, TexturePitches dstPitches,
         const TextureDesc& dstDesc,

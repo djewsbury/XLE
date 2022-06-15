@@ -1058,35 +1058,41 @@ namespace RenderCore { namespace Metal_Vulkan
 		    const auto& dstDesc = dstResource->GetDesc();
 		    assert(srcDesc._type == Resource::Desc::Type::Texture);
 		    assert(dstDesc._type == Resource::Desc::Type::Texture);
+			assert(src._mipLevelCount > 0);
 
 		    auto dstAspectMask = AsImageAspectMask(dstDesc._textureDesc._format);
 		    auto srcAspectMask = AsImageAspectMask(srcDesc._textureDesc._format);
+			auto mipLevelCount = std::min(std::min(src._mipLevelCount, srcDesc._textureDesc._mipCount - src._subResource._mip), dstDesc._textureDesc._mipCount - dst._subResource._mip);
 
-            VkImageCopy c;
-            c.srcOffset = VkOffset3D { (int)src._leftTopFront._values[0], (int)src._leftTopFront._values[1], (int)src._leftTopFront._values[2] };
-			c.dstOffset = VkOffset3D { (int)dst._leftTopFront._values[0], (int)dst._leftTopFront._values[1], (int)dst._leftTopFront._values[2] };
-			c.extent = VkExtent3D { 
-                src._rightBottomBack._values[0] - src._leftTopFront._values[0],
-                src._rightBottomBack._values[1] - src._leftTopFront._values[1],
-                src._rightBottomBack._values[2] - src._leftTopFront._values[2]
-            };
-			c.srcSubresource.aspectMask = srcAspectMask;
-			c.srcSubresource.mipLevel = src._subResource._mip;
-			c.srcSubresource.baseArrayLayer = src._subResource._arrayLayer;
-			c.srcSubresource.layerCount = 1;
-			c.dstSubresource.aspectMask = dstAspectMask;
-			c.dstSubresource.mipLevel = dst._subResource._mip;
-			c.dstSubresource.baseArrayLayer = dst._subResource._arrayLayer;
-			c.dstSubresource.layerCount = 1;
+            VkImageCopy copies[mipLevelCount];
+			for (unsigned q=0; q<mipLevelCount; ++q) {
+				auto&c = copies[q];
+				c.srcOffset = VkOffset3D { (int)src._leftTopFront._values[0], (int)src._leftTopFront._values[1], (int)src._leftTopFront._values[2] };
+				c.dstOffset = VkOffset3D { (int)dst._leftTopFront._values[0], (int)dst._leftTopFront._values[1], (int)dst._leftTopFront._values[2] };
+				c.extent = VkExtent3D { 
+					src._rightBottomBack._values[0] - src._leftTopFront._values[0],
+					src._rightBottomBack._values[1] - src._leftTopFront._values[1],
+					src._rightBottomBack._values[2] - src._leftTopFront._values[2]
+				};
+				c.srcSubresource.aspectMask = srcAspectMask;
+				c.srcSubresource.mipLevel = src._subResource._mip;
+				c.srcSubresource.baseArrayLayer = src._subResource._arrayLayer;
+				c.srcSubresource.layerCount = ((src._subResource._arrayLayer + src._arrayLayerCount) < std::max(1u,(unsigned)srcDesc._textureDesc._arrayCount)) ? src._arrayLayerCount : VK_REMAINING_ARRAY_LAYERS;
+				c.dstSubresource.aspectMask = dstAspectMask;
+				c.dstSubresource.mipLevel = dst._subResource._mip;
+				c.dstSubresource.baseArrayLayer = dst._subResource._arrayLayer;
+				c.dstSubresource.layerCount = ((dst._subResource._arrayLayer + src._arrayLayerCount) < std::max(1u,(unsigned)dstDesc._textureDesc._arrayCount)) ? src._arrayLayerCount : VK_REMAINING_ARRAY_LAYERS;
+			}
 
-            context.GetActiveCommandList().CopyImage(
+			context.GetActiveCommandList().CopyImage(
 			    srcResource->GetImage(), (VkImageLayout)Internal::AsVkImageLayout(srcLayout),
 			    dstResource->GetImage(), (VkImageLayout)Internal::AsVkImageLayout(dstLayout),
-			    1, &c);
+			    mipLevelCount, copies);
         } else if (dstResource->GetBuffer() && srcResource->GetBuffer()) {
             // buffer to buffer copy
             const auto& srcDesc = src._resource->GetDesc();
 		    const auto& dstDesc = dst._resource->GetDesc();
+			assert(src._mipLevelCount == 0 && src._arrayLayerCount == 0);
             VkBufferCopy c;
             c.srcOffset = src._leftTopFront._values[0];
             c.dstOffset = dst._leftTopFront._values[0];
@@ -1105,57 +1111,67 @@ namespace RenderCore { namespace Metal_Vulkan
 
             auto dstAspectMask = AsImageAspectMask(dstDesc._textureDesc._format);
 
-            VkBufferImageCopy copyOp;
-
-            auto dstSubResDesc = CalculateMipMapDesc(dstDesc._textureDesc, dst._subResource._mip);
-			unsigned 
-				width = dstSubResDesc._width, 
-				height = dstSubResDesc._height, 
-				depth = dstSubResDesc._depth;
-            auto minDims = (GetCompressionType(dstDesc._textureDesc._format) == FormatCompressionType::BlockCompression) ? 4u : 1u;
-
-			copyOp.imageSubresource = VkImageSubresourceLayers{ dstAspectMask, dst._subResource._mip, dst._subResource._arrayLayer, 1 };
-			copyOp.imageOffset = VkOffset3D{(int32_t)dst._leftTopFront[0], (int32_t)dst._leftTopFront[1], (int32_t)dst._leftTopFront[2]};
-
+			unsigned mipCopyCount = src._mipLevelCount;
+			unsigned arrayCopyCount = src._arrayLayerCount;
+			mipCopyCount = std::min(mipCopyCount, dstDesc._textureDesc._mipCount - dst._subResource._mip);
+			arrayCopyCount = std::min(arrayCopyCount, std::max(1u,(unsigned)dstDesc._textureDesc._arrayCount) - dst._subResource._arrayLayer);
 			if (srcDesc._type == Resource::Desc::Type::Texture) {
-				auto srcMipOffset = GetSubResourceOffset(srcDesc._textureDesc, src._subResource._mip, src._subResource._arrayLayer);
-				copyOp.bufferOffset = srcMipOffset._offset;
-				copyOp.bufferOffset += 
-					  src._leftTopFront[2] * srcMipOffset._pitches._slicePitch
-					+ src._leftTopFront[1] * srcMipOffset._pitches._rowPitch
-					+ src._leftTopFront[0] * BitsPerPixel(srcDesc._textureDesc._format) / 8;
-				copyOp.bufferRowLength = std::max(srcDesc._textureDesc._width, minDims);
-				copyOp.bufferImageHeight = std::max(srcDesc._textureDesc._height, minDims);
-
-				copyOp.imageExtent = VkExtent3D{
-					std::min(src._rightBottomBack[0], srcDesc._textureDesc._width) - src._leftTopFront[0],
-					std::min(src._rightBottomBack[1], srcDesc._textureDesc._height) - src._leftTopFront[1],
-					std::min(src._rightBottomBack[2], std::max(srcDesc._textureDesc._depth, 1u)) - src._leftTopFront[2]};
-			} else {
-				assert(dst._subResource == SubResourceId{});		// buffers have no subresources, so this must be zeroed out
-				copyOp.bufferOffset = src._leftTopFront[0];		// this is considered just a byte offset when 'dst' is a buffer
-
-				// We don't have an explicit right/bottom/back for this. We must figure out out based on a dense packing &
-				// using src._rightBottomBack[0] as a linear end point in the buffer
-				unsigned bufferSize = std::min(src._rightBottomBack[0], srcDesc._linearBufferDesc._sizeInBytes) - copyOp.bufferOffset;
-				auto bbp = BitsPerPixel(dstDesc._textureDesc._format)/8;
-				unsigned right = bufferSize / bbp, 
-					bottom = std::max(1u, bufferSize / ((dstSubResDesc._width-dst._leftTopFront[0]) * bbp)),
-					back = std::max(1u, bufferSize / ((dstSubResDesc._width-dst._leftTopFront[0]) * (dstSubResDesc._height-dst._leftTopFront[1]) * bbp));
-
-				copyOp.imageExtent = VkExtent3D{
-					std::min(right, dstSubResDesc._width) - dst._leftTopFront[0],
-					std::min(bottom, dstSubResDesc._height) - dst._leftTopFront[1],
-					std::min(back, std::max(dstSubResDesc._depth, 1u)) - dst._leftTopFront[2]};
-					
-				copyOp.bufferRowLength = copyOp.imageExtent.width;
-				copyOp.bufferImageHeight = copyOp.imageExtent.height;
+				mipCopyCount = std::min(mipCopyCount, srcDesc._textureDesc._mipCount - src._subResource._mip);
+				arrayCopyCount = std::min(arrayCopyCount, std::max(1u,(unsigned)srcDesc._textureDesc._arrayCount) - src._subResource._arrayLayer);
 			}
+			assert(arrayCopyCount > 0 && mipCopyCount > 0);
+
+			// Vulkan can copy mutliple array layers in a single VkBufferImageCopy, but that expects
+			// array layers to be stored contiguously. By contrast, GetSubResourceOffset() uses a layout
+			// where a full mipchain is contigous, and there's a gap between subsequent array layers of
+			// the same mip level. So let's just expand out to a separate copy op per mip chain, just to
+			// avoid a special requirement there.
+            VkBufferImageCopy copyOps[arrayCopyCount*mipCopyCount];
+
+			for (unsigned m=0; m<mipCopyCount; ++m)
+				for (unsigned a=0; a<arrayCopyCount; ++a) {
+					auto& copyOp = copyOps[m*arrayCopyCount+a];
+
+					auto dstSubResDesc = CalculateMipMapDesc(dstDesc._textureDesc, dst._subResource._mip+m);
+					auto minDims = (GetCompressionType(dstDesc._textureDesc._format) == FormatCompressionType::BlockCompression) ? 4u : 1u;
+
+					copyOp.imageSubresource = VkImageSubresourceLayers{ dstAspectMask, dst._subResource._mip+m, dst._subResource._arrayLayer+a, 1 };
+					copyOp.imageOffset = VkOffset3D{(int32_t)dst._leftTopFront[0], (int32_t)dst._leftTopFront[1], (int32_t)dst._leftTopFront[2]};
+
+					if (srcDesc._type == Resource::Desc::Type::Texture) {
+						auto srcMipOffset = GetSubResourceOffset(srcDesc._textureDesc, src._subResource._mip+m, src._subResource._arrayLayer+a);
+						copyOp.bufferOffset = srcMipOffset._offset;
+						copyOp.bufferOffset += 
+							src._leftTopFront[2] * srcMipOffset._pitches._slicePitch
+							+ src._leftTopFront[1] * srcMipOffset._pitches._rowPitch
+							+ src._leftTopFront[0] * BitsPerPixel(srcDesc._textureDesc._format) / 8;
+						auto srcSubResDesc = CalculateMipMapDesc(srcDesc._textureDesc, dst._subResource._mip+m);
+						copyOp.bufferRowLength = std::max(srcSubResDesc._width, minDims);
+						copyOp.bufferImageHeight = std::max(srcSubResDesc._height, minDims);
+
+						copyOp.imageExtent = VkExtent3D{
+							std::min(src._rightBottomBack[0], srcSubResDesc._width) - src._leftTopFront[0],
+							std::min(src._rightBottomBack[1], srcSubResDesc._height) - src._leftTopFront[1],
+							std::min(src._rightBottomBack[2], std::max(srcSubResDesc._depth, 1u)) - src._leftTopFront[2]};
+					} else {
+						auto srcMipOffset = GetSubResourceOffset(dstDesc._textureDesc, src._subResource._mip+m, src._subResource._arrayLayer+a);
+						copyOp.bufferOffset = srcMipOffset._offset;
+						copyOp.bufferOffset += src._leftTopFront[0];			// this is considered just a byte offset when 'dst' is a buffer
+
+						copyOp.bufferRowLength = std::max(dstSubResDesc._width, minDims);
+						copyOp.bufferImageHeight = std::max(dstSubResDesc._height, minDims);
+
+						assert(dst._leftTopFront[0] == 0);		// leftTopFront / rightBottomBack isn't supported in this mode. We must be transfering to the entire 2D/3D area
+						assert(dst._leftTopFront[1] == 0);
+						assert(dst._leftTopFront[2] == 0);
+						copyOp.imageExtent = VkExtent3D{dstSubResDesc._width, dstSubResDesc._height, std::max(dstSubResDesc._depth, 1u)};
+					}
+				}
 
             context.GetActiveCommandList().CopyBufferToImage(
                 srcResource->GetBuffer(),
                 dstResource->GetImage(), (VkImageLayout)Internal::AsVkImageLayout(dstLayout),
-                1, &copyOp);
+                arrayCopyCount*mipCopyCount, copyOps);
 		} else if (dstResource->GetBuffer() && srcResource->GetImage()) {
 			auto srcDesc = src._resource->GetDesc();
 		    auto dstDesc = dstResource->GetDesc();
@@ -1163,50 +1179,56 @@ namespace RenderCore { namespace Metal_Vulkan
 
             auto srcAspectMask = AsImageAspectMask(srcDesc._textureDesc._format);
 
-            VkBufferImageCopy copyOp;
-
-			auto srcSubResDesc = CalculateMipMapDesc(srcDesc._textureDesc, src._subResource._mip);
-            unsigned 
-				width = srcSubResDesc._width, 
-				height = srcSubResDesc._height, 
-				depth = srcSubResDesc._depth;
-            auto minDims = (GetCompressionType(srcSubResDesc._format) == FormatCompressionType::BlockCompression) ? 4u : 1u;
-
-			unsigned dstBaseOffset = 0;
+			unsigned mipCopyCount = src._mipLevelCount;
+			unsigned arrayCopyCount = src._arrayLayerCount;
+			mipCopyCount = std::min(mipCopyCount, srcDesc._textureDesc._mipCount - src._subResource._mip);
+			arrayCopyCount = std::min(arrayCopyCount, std::max(1u,(unsigned)srcDesc._textureDesc._arrayCount) - src._subResource._arrayLayer);
 			if (dstDesc._type == Resource::Desc::Type::Texture) {
-				auto destMipOffset = GetSubResourceOffset(dstDesc._textureDesc, dst._subResource._mip, dst._subResource._arrayLayer);
-				destMipOffset._offset += dstBaseOffset;
-
-				auto dstSubResDesc = CalculateMipMapDesc(dstDesc._textureDesc, dst._subResource._mip);
-
-				copyOp.bufferOffset = destMipOffset._offset + destMipOffset._pitches._arrayPitch * dst._subResource._arrayLayer;
-				copyOp.bufferOffset += 
-					  dst._leftTopFront[2] * destMipOffset._pitches._slicePitch
-					+ dst._leftTopFront[1] * destMipOffset._pitches._rowPitch
-					+ dst._leftTopFront[0] * BitsPerPixel(dstDesc._textureDesc._format) / 8;
-				copyOp.bufferRowLength = std::max(dstSubResDesc._width, minDims);
-				copyOp.bufferImageHeight = std::max(dstSubResDesc._height, minDims);
-
-			} else {
-				// arrangement of subresources in desc should just match src
-				// in this case
-				assert(dst._subResource == SubResourceId{});		// buffers have no subresources, so this must be zeroed out
-				copyOp.bufferOffset = dst._leftTopFront[0];		// this is considered just a byte offset when 'dst' is a buffer
-				copyOp.bufferRowLength = std::max(srcSubResDesc._width, minDims);
-				copyOp.bufferImageHeight = std::max(srcSubResDesc._height, minDims);
+				mipCopyCount = std::min(mipCopyCount, dstDesc._textureDesc._mipCount - dst._subResource._mip);
+				arrayCopyCount = std::min(arrayCopyCount, std::max(1u,(unsigned)dstDesc._textureDesc._arrayCount) - dst._subResource._arrayLayer);
 			}
 
-			copyOp.imageSubresource = VkImageSubresourceLayers{ srcAspectMask, src._subResource._mip, src._subResource._arrayLayer, 1 };
-			copyOp.imageOffset = VkOffset3D{(int32_t)src._leftTopFront[0], (int32_t)src._leftTopFront[1], (int32_t)src._leftTopFront[2]};
-			copyOp.imageExtent = VkExtent3D{
-				std::min(src._rightBottomBack[0], srcSubResDesc._width) - src._leftTopFront[0],
-				std::min(src._rightBottomBack[1], srcSubResDesc._height) - src._leftTopFront[1],
-				std::min(src._rightBottomBack[2], std::max(srcSubResDesc._depth, 1u)) - src._leftTopFront[2]};
+            VkBufferImageCopy copyOps[arrayCopyCount*mipCopyCount];
+
+			for (unsigned m=0; m<mipCopyCount; ++m)
+				for (unsigned a=0; a<arrayCopyCount; ++a) {
+					auto& copyOp = copyOps[m*arrayCopyCount+a];
+
+					auto srcSubResDesc = CalculateMipMapDesc(srcDesc._textureDesc, src._subResource._mip+m);
+					auto minDims = (GetCompressionType(srcSubResDesc._format) == FormatCompressionType::BlockCompression) ? 4u : 1u;
+
+					if (dstDesc._type == Resource::Desc::Type::Texture) {
+						auto destMipOffset = GetSubResourceOffset(dstDesc._textureDesc, dst._subResource._mip+m, dst._subResource._arrayLayer+a);
+						copyOp.bufferOffset = destMipOffset._offset;
+						copyOp.bufferOffset += 
+							dst._leftTopFront[2] * destMipOffset._pitches._slicePitch
+							+ dst._leftTopFront[1] * destMipOffset._pitches._rowPitch
+							+ dst._leftTopFront[0] * BitsPerPixel(dstDesc._textureDesc._format) / 8;
+						auto dstSubResDesc = CalculateMipMapDesc(dstDesc._textureDesc, dst._subResource._mip+m);
+						copyOp.bufferRowLength = std::max(dstSubResDesc._width, minDims);
+						copyOp.bufferImageHeight = std::max(dstSubResDesc._height, minDims);
+					} else {
+						// arrangement of subresources in desc should just match src
+						// in this case
+						auto destMipOffset = GetSubResourceOffset(srcDesc._textureDesc, dst._subResource._mip+m, dst._subResource._arrayLayer+a);
+						copyOp.bufferOffset = destMipOffset._offset;
+						copyOp.bufferOffset += dst._leftTopFront[0];		// this is considered just a byte offset when 'dst' is a buffer
+						copyOp.bufferRowLength = std::max(srcSubResDesc._width, minDims);
+						copyOp.bufferImageHeight = std::max(srcSubResDesc._height, minDims);
+					}
+
+					copyOp.imageSubresource = VkImageSubresourceLayers{ srcAspectMask, src._subResource._mip+m, src._subResource._arrayLayer+a, 1 };
+					copyOp.imageOffset = VkOffset3D{(int32_t)src._leftTopFront[0], (int32_t)src._leftTopFront[1], (int32_t)src._leftTopFront[2]};
+					copyOp.imageExtent = VkExtent3D{
+						std::min(src._rightBottomBack[0], srcSubResDesc._width) - src._leftTopFront[0],
+						std::min(src._rightBottomBack[1], srcSubResDesc._height) - src._leftTopFront[1],
+						std::min(src._rightBottomBack[2], std::max(srcSubResDesc._depth, 1u)) - src._leftTopFront[2]};
+				}
 
             context.GetActiveCommandList().CopyImageToBuffer(
                 srcResource->GetImage(), (VkImageLayout)Internal::AsVkImageLayout(srcLayout),
                 dstResource->GetBuffer(),
-                1, &copyOp);
+                arrayCopyCount*mipCopyCount, copyOps);
         } else {
             Throw(::Exceptions::BasicLabel("Blit copy operation not supported"));
         }
