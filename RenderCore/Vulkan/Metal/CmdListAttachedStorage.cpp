@@ -16,64 +16,6 @@
 
 namespace RenderCore { namespace Metal_Vulkan
 {
-	class CircularHeap
-	{
-	public:
-		unsigned	AllocateBack(unsigned size);
-		void		ResetFront(unsigned newFront);
-		unsigned	Back() const { return _end; }
-		unsigned	Front() const { return _start; }
-		unsigned	HeapSize() const { return _heapSize; }
-
-		CircularHeap(unsigned heapSize);
-		~CircularHeap();
-	private:
-		unsigned	_start;
-		unsigned	_end;
-		unsigned	_heapSize;
-	};
-
-	unsigned	CircularHeap::AllocateBack(unsigned size)
-	{
-		if (_start == _end) return ~0u;
-		if (_start > _end) {
-			if ((_start - _end) >= size) {
-				auto result = _end;
-				_end += size;
-				return result;
-			}
-		} else if ((_end + size) <= _heapSize) {
-			auto result = _end;
-			_end = _end + size;
-			return result;
-		} else if (_start >= size) { // this is the wrap around case
-			_end = size;
-			return 0u;
-		}
-
-		return ~0u;
-	}
-
-	void		CircularHeap::ResetFront(unsigned newFront)
-	{
-		_start = newFront;
-		if (_start == _end) {
-			_start = _heapSize;
-			_end = 0;
-		}
-	}
-
-	CircularHeap::CircularHeap(unsigned heapSize)
-	{
-		_start = heapSize;
-		_end = 0;
-		_heapSize = heapSize;
-	}
-
-	CircularHeap::~CircularHeap() {}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 	struct MarkedDestroys
 	{
 		IAsyncTracker::Marker	_marker;

@@ -768,5 +768,59 @@ namespace Utility
 
     template class SpanningHeap<uint16_t>;
     template class SpanningHeap<uint32_t>;
+
+    unsigned	CircularHeap::AllocateBack(unsigned size)
+	{
+		if (_start == _end) return ~0u;
+		if (_start > _end) {
+			if ((_start - _end) >= size) {
+				auto result = _end;
+				_end += size;
+				return result;
+			}
+		} else if ((_end + size) <= _heapSize) {
+			auto result = _end;
+			_end += size;
+			return result;
+		} else if (_start >= size) { // this is the wrap around case
+			_end = size;
+			return 0u;
+		}
+
+		return ~0u;
+	}
+
+    void		CircularHeap::UndoLastAllocation(unsigned size)
+    {
+        // Roll back the last allocation we performed with AllocateBack
+        // This can also be used to shrink the size of the last allocation
+        // (for example, if it was an estimate) by giving the number of bytes
+        // we want to give back to the heap
+        assert(_end >= size);
+        _end -= size;
+    }
+
+	void		CircularHeap::ResetFront(unsigned newFront)
+	{
+		_start = newFront;
+		if (_start == _end) {
+			_start = _heapSize;
+			_end = 0;
+		}
+	}
+
+	CircularHeap::CircularHeap(unsigned heapSize)
+	{
+		_start = heapSize;
+		_end = 0;
+		_heapSize = heapSize;
+	}
+
+	CircularHeap::CircularHeap()
+    {
+        _start = _end = _heapSize = 0;
+    }
+
+	CircularHeap::~CircularHeap() {}
 }
 

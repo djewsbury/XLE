@@ -782,6 +782,26 @@ namespace Utility
     {
         return _activePages.size();
     }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    class CircularHeap
+	{
+	public:
+		unsigned	AllocateBack(unsigned size);
+		void		ResetFront(unsigned newFront);
+		void		UndoLastAllocation(unsigned size);
+		unsigned	Back() const { return _end; }
+		unsigned	Front() const { return _start; }
+		unsigned	HeapSize() const { return _heapSize; }
+
+		CircularHeap(unsigned heapSize);
+		CircularHeap();
+		~CircularHeap();
+	private:
+		unsigned	_start, _end, _heapSize;
+	};
+
 }
 
 using namespace Utility;

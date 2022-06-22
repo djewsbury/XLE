@@ -408,7 +408,7 @@ namespace UnitTests
 
 		struct StagingBufferMan
 		{
-			SpanningHeap<uint32_t> _stagingBufferHeap;
+			CircularHeap _stagingBufferHeap;
 			std::shared_ptr<RenderCore::IResource> _stagingBuffer;
 
 			std::shared_ptr<RenderCore::IResource> CreateAndTransferData(
@@ -419,8 +419,7 @@ namespace UnitTests
 			struct AllocationPendingRelease
 			{
 				RenderCore::Metal_Vulkan::IAsyncTracker::Marker _releaseMarker;
-				unsigned _stagingAllocation = 0;
-				unsigned _stagingSize = 0;
+				unsigned _pendingNewFront = ~0u;
 			};
 			std::vector<AllocationPendingRelease> _allocationsPendingRelease;
 
@@ -510,7 +509,7 @@ namespace UnitTests
 		if (!(modifiedDesc._allocationRules & (AllocationRules::HostVisibleRandomAccess|AllocationRules::HostVisibleSequentialWrite))) {
 			modifiedDesc._bindFlags |= BindFlag::TransferDst;
 
-			stagingAllocation = _stagingBufferHeap.Allocate(byteCount);
+			stagingAllocation = _stagingBufferHeap.AllocateBack(byteCount);
 			if (stagingAllocation == ~0u) return {};
 			stagingSize = byteCount;
 		}
@@ -519,7 +518,7 @@ namespace UnitTests
 		if (false) { // Metal::ResourceMap::CanMap(result._resource, Metal::ResourceMap::Mode::WriteDiscardPrevious)) {
 			if (stagingAllocation) {
 				// didn't need to make this allocation after all
-				_stagingBufferHeap.Deallocate(stagingAllocation, stagingSize);
+				_stagingBufferHeap.UndoLastAllocation(stagingSize);
 				stagingAllocation = stagingSize = 0;
 			}
 
@@ -551,7 +550,7 @@ namespace UnitTests
 			checked_cast<RenderCore::Metal_Vulkan::Resource*>(resource.get())->ChangeSteadyState(finalResourceState);
 
 			auto producerMarker = GetProducerMarker(threadContext);
-			_allocationsPendingRelease.push_back({producerMarker, stagingAllocation, stagingSize});
+			_allocationsPendingRelease.push_back({producerMarker, stagingAllocation+stagingSize});
 		}
 
 		auto finalContainingGuid = resource->GetGUID();
@@ -564,7 +563,8 @@ namespace UnitTests
 	{
 		auto consumerMarker = GetConsumerMarker(threadContext);
 		while (!_allocationsPendingRelease.empty() && _allocationsPendingRelease.front()._releaseMarker <= consumerMarker) {
-			_stagingBufferHeap.Deallocate(_allocationsPendingRelease.front()._stagingAllocation, _allocationsPendingRelease.front()._stagingSize);
+			assert(_allocationsPendingRelease.front()._pendingNewFront != ~0u);
+			_stagingBufferHeap.ResetFront(_allocationsPendingRelease.front()._pendingNewFront);
 			_allocationsPendingRelease.erase(_allocationsPendingRelease.begin());
 		}
 	}
@@ -580,7 +580,7 @@ namespace UnitTests
 		};
 
 		const unsigned stagingHeapSize = 32*1024*1024;
-		_stagingBufferMan._stagingBufferHeap = SpanningHeap<uint32_t>(stagingHeapSize);
+		_stagingBufferMan._stagingBufferHeap = CircularHeap(stagingHeapSize);
 		_stagingBufferMan._stagingBuffer = device->CreateResource(
 			CreateDesc(BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc::Create(stagingHeapSize),
 			"main-staging-buffer"));
