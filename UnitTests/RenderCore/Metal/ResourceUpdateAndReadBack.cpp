@@ -530,12 +530,12 @@ namespace UnitTests
 			assert(stagingSize);
 
 			{
-				Metal::ResourceMap mapping { *threadContext.GetDevice(), *_stagingBuffer, Metal::ResourceMap::Mode::WriteDiscardPrevious };
-				auto uploadRange = MakeIteratorRange(PtrAdd(mapping.GetData().begin(), stagingAllocation), PtrAdd(mapping.GetData().begin(), stagingAllocation+stagingSize));
+				Metal::ResourceMap mapping { *threadContext.GetDevice(), *_stagingBuffer, Metal::ResourceMap::Mode::WriteDiscardPrevious, stagingAllocation, stagingSize };
+				auto uploadRange = mapping.GetData();
 				uint8_t iterator = 0;
 				for (auto& i:uploadRange.Cast<uint8_t*>()) 
 					i = iterator++;
-				// mapping.FlushRange(result._stagingAllocation, result._stagingSize);
+				mapping.FlushCache();
 			}
 
 			// During the transfer, the images must be in either TransferSrcOptimal, TransferDstOptimal or General
@@ -582,8 +582,10 @@ namespace UnitTests
 		const unsigned stagingHeapSize = 32*1024*1024;
 		_stagingBufferMan._stagingBufferHeap = CircularHeap(stagingHeapSize);
 		_stagingBufferMan._stagingBuffer = device->CreateResource(
-			CreateDesc(BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc::Create(stagingHeapSize),
-			"main-staging-buffer"));
+			CreateDesc(
+				BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite | AllocationRules::PermanentlyMapped | AllocationRules::DisableAutoCacheCoherency,
+				LinearBufferDesc::Create(stagingHeapSize),
+				"main-staging-buffer"));
 
 		_workerThread = std::thread{[device, this]() {
 			auto bkThreadContext = device->CreateDeferredContext();
@@ -682,8 +684,7 @@ namespace UnitTests
 		auto sampler = testHelper->_device->CreateSampler({});
 
 		//
-		// todo -- 	permanently mapped staging buffer
-		//			resizable BAR resources
+		// todo -- 	resizable BAR resources
 		//			buffers & textures uploading
 		//			textures with mipmaps, and textures without them
 		//			set the device alignment to the correct value for transfer src

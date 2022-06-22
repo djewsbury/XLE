@@ -505,6 +505,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		_steadyStateAccessMask = 0;
 
 		const bool allocateDirectFromVulkan = false;
+		VmaAllocationInfo allocationInfo;
 		VkMemoryRequirements mem_reqs = {}; 
 		if (desc._type == Desc::Type::LinearBuffer) {
 			assert(desc._linearBufferDesc._sizeInBytes);	// zero sized buffer is can cause Vulkan to crash (and is silly, anyway)
@@ -522,7 +523,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			assert(buf_info.usage != 0);
 			if (!allocateDirectFromVulkan) {
-				_underlyingBuffer = factory.CreateBufferWithAutoMemory(buf_info, allocationRules, _vmaMem);
+				_underlyingBuffer = factory.CreateBufferWithAutoMemory(_vmaMem, allocationInfo, buf_info, allocationRules);
 			} else {
 				_underlyingBuffer = factory.CreateBuffer(buf_info);
 				vkGetBufferMemoryRequirements(factory.GetDevice().get(), _underlyingBuffer.get(), &mem_reqs);
@@ -623,14 +624,14 @@ namespace RenderCore { namespace Metal_Vulkan
 			    buf_info.flags = 0;
 
                 if (!allocateDirectFromVulkan) {
-					_underlyingBuffer = factory.CreateBufferWithAutoMemory(buf_info, allocationRules, _vmaMem);
+					_underlyingBuffer = factory.CreateBufferWithAutoMemory(_vmaMem, allocationInfo, buf_info, allocationRules);
 				} else {
 					_underlyingBuffer = factory.CreateBuffer(buf_info);
     				vkGetBufferMemoryRequirements(factory.GetDevice().get(), _underlyingBuffer.get(), &mem_reqs);
 				}
             } else {
 				if (!allocateDirectFromVulkan) {
-					_underlyingImage = factory.CreateImageWithAutoMemory(image_create_info, allocationRules, _vmaMem, _guid);
+					_underlyingImage = factory.CreateImageWithAutoMemory(_vmaMem, allocationInfo, image_create_info, allocationRules, _guid);
 				} else {
 					_underlyingImage = factory.CreateImage(image_create_info, _guid);
 					vkGetImageMemoryRequirements(factory.GetDevice().get(), _underlyingImage.get(), &mem_reqs);
@@ -662,6 +663,9 @@ namespace RenderCore { namespace Metal_Vulkan
 				assert(_underlyingImage);
 				_mem = AttachDedicatedMemory(factory, desc, mem_reqs, _underlyingImage.get(), hasInitData);
 			}
+		} else {
+			if (allocationRules & AllocationRules::PermanentlyMapped && allocationInfo.pMappedData)
+				_permanentlyMappedRange = MakeIteratorRange(allocationInfo.pMappedData, PtrAdd(allocationInfo.pMappedData, allocationInfo.size));
 		}
 
 		// Upload the init data now. Generally this isn't an ideal path, prefer to use more explicit synchronization
@@ -1391,6 +1395,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
         // we don't actually know the size or pitches in this case
         _dataSize = 0;
+		_resourceOffset = 0;
 		TexturePitches pitches { (unsigned)_dataSize, (unsigned)_dataSize, (unsigned)_dataSize };
 		_subResources.push_back(std::make_pair(SubResourceId{}, SubResourceOffset{ 0, _dataSize, pitches }));
 	}
@@ -1405,6 +1410,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		// we don't actually know the size or pitches in this case
         _dataSize = 0;
+		_resourceOffset = 0;
 		TexturePitches pitches { (unsigned)_dataSize, (unsigned)_dataSize, (unsigned)_dataSize };
 		_subResources.push_back(std::make_pair(SubResourceId{}, SubResourceOffset{ 0, _dataSize, pitches }));
 	}
@@ -1427,8 +1433,17 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		_dataSize = std::min(desc._linearBufferDesc._sizeInBytes - offset, size);
 		TexturePitches pitches { (unsigned)_dataSize, (unsigned)_dataSize, (unsigned)_dataSize };
-			
-		if ((_vmaMem = resource.GetVmaMemory())) {
+
+		if (!resource.GetPermanentlyMappedRange().empty()) {
+			if ((offset + _dataSize) > resource.GetPermanentlyMappedRange().size())
+				Throw(std::runtime_error("Mapping range for permanently mapped resource exceeds resource size"));
+			_data = PtrAdd(resource.GetPermanentlyMappedRange().begin(), offset);
+			_vmaMem = resource.GetVmaMemory();
+			_vmaAllocator = factory.GetVmaAllocator();
+			_dev = factory.GetDevice().get();
+			_mem = resource.GetMemory();
+			_permanentlyMappedResource = true;
+		} else if ((_vmaMem = resource.GetVmaMemory())) {
 			if (offset != 0 || desc._linearBufferDesc._sizeInBytes != _dataSize)
 				Throw(std::runtime_error("vma based Vulkan resources only support whole-resource mapping. Avoid mapping a subrange of the resource"));
 			auto res = vmaMapMemory(factory.GetVmaAllocator(), _vmaMem, &_data);
@@ -1445,6 +1460,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 
 		_subResources.push_back(std::make_pair(SubResourceId{}, SubResourceOffset{ 0, _dataSize, pitches }));
+		_resourceOffset = offset;
 	}
 
 	ResourceMap::ResourceMap(
@@ -1461,6 +1477,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto& resource = *checked_cast<Resource*>(&iresource);
 		if (resource.GetVmaMemory())
 			Throw(std::runtime_error("vma based Vulkan resources only support whole-resource mapping. Avoid mapping a subrange of the resource"));
+		if (resource.GetPermanentlyMappedRange().empty())
+			Throw(std::runtime_error("Unsupported mapping range for permanently mapped resource"));
 
         // special case for images, where we need to take into account the requested "subresource"
 		_dev = factory.GetDevice().get();
@@ -1495,6 +1513,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
         _mem = resource.GetMemory();
 		_subResources.push_back(std::make_pair(subResource, SubResourceOffset{ 0, _dataSize, pitches }));
+		_resourceOffset = finalOffset;
     }
 
 	ResourceMap::ResourceMap(
@@ -1505,8 +1524,18 @@ namespace RenderCore { namespace Metal_Vulkan
 			// Map all subresources
 		///////////////////
 		auto& resource = *checked_cast<Resource*>(&iresource);
+		_dataSize = 0;
+		_resourceOffset = 0;
 
-		if ((_vmaMem = resource.GetVmaMemory())) {
+		if (!resource.GetPermanentlyMappedRange().empty()) {
+			_data = resource.GetPermanentlyMappedRange().begin();
+			_dataSize = resource.GetPermanentlyMappedRange().size();
+			_vmaMem = resource.GetVmaMemory();
+			_vmaAllocator = factory.GetVmaAllocator();
+			_dev = factory.GetDevice().get();
+			_mem = resource.GetMemory();
+			_permanentlyMappedResource = true;
+		} else  if ((_vmaMem = resource.GetVmaMemory())) {
 			auto res = vmaMapMemory(factory.GetVmaAllocator(), _vmaMem, &_data);
 			if (res != VK_SUCCESS)
 				Throw(VulkanAPIFailure(res, "Failed while mapping device memory"));
@@ -1520,9 +1549,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 
 		_subResources = FindSubresources(factory.GetDevice().get(), resource);
-		_dataSize = 0;
-		for (const auto& subRes:_subResources)
-			_dataSize = std::max(_dataSize, subRes.second._offset + subRes.second._size);
+		if (!_dataSize)
+			for (const auto& subRes:_subResources)
+				_dataSize = std::max(_dataSize, subRes.second._offset + subRes.second._size);
 	}
 
 	ResourceMap::ResourceMap(
@@ -1573,10 +1602,46 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void ResourceMap::TryUnmap()
 	{
-        if (_vmaAllocator && _vmaMem) {
-			vmaUnmapMemory(_vmaAllocator, _vmaMem);
-		} else if (_dev && _mem)
-		    vkUnmapMemory(_dev, _mem);
+		if (!_permanentlyMappedResource) {
+			if (_vmaAllocator && _vmaMem) {
+				vmaUnmapMemory(_vmaAllocator, _vmaMem);
+			} else if (_dev && _mem)
+				vkUnmapMemory(_dev, _mem);
+		}
+	}
+
+	void ResourceMap::FlushCache()
+	{
+		assert(_dataSize);
+		if (_vmaMem) {
+			assert(_vmaAllocator);
+			auto res = vmaFlushAllocation(_vmaAllocator, _vmaMem, _resourceOffset, _dataSize);
+			if (res != VK_SUCCESS)
+				Throw(std::runtime_error("Failure while flushing cache for resource"));
+		} else if (_mem) {
+			assert(_dev);
+			VkMappedMemoryRange mappedRange[] {
+				{ VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, nullptr, _mem, _resourceOffset, _dataSize }
+			};
+			vkFlushMappedMemoryRanges(_dev, 1, mappedRange);
+		}
+	}
+
+	void ResourceMap::InvalidateCache() 
+	{
+		assert(_dataSize);
+		if (_vmaMem) {
+			assert(_vmaAllocator);
+			auto res = vmaInvalidateAllocation(_vmaAllocator, _vmaMem, _resourceOffset, _dataSize);
+			if (res != VK_SUCCESS)
+				Throw(std::runtime_error("Failure while flushing cache for resource"));
+		} else if (_mem) {
+			assert(_dev);
+			VkMappedMemoryRange mappedRange[] {
+				{ VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, nullptr, _mem, _resourceOffset, _dataSize }
+			};
+			vkInvalidateMappedMemoryRanges(_dev, 1, mappedRange);
+		}
 	}
 
 	#define FIND(v, X)					\

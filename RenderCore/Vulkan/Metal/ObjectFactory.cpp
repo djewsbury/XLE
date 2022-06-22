@@ -344,18 +344,23 @@ namespace RenderCore { namespace Metal_Vulkan
             if (!(allocationRules & AllocationRules::DisableAutoCacheCoherency))
                 allocCreateInfo.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
         }
+
+        if (allocationRules & AllocationRules::PermanentlyMapped)
+            allocCreateInfo.flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT;
         return allocCreateInfo;
     }
 
-    VulkanUniquePtr<VkBuffer> ObjectFactory::CreateBufferWithAutoMemory(const VkBufferCreateInfo& createInfo, AllocationRules::BitField allocationRules, VmaAllocation& allocationResult) const
+    VulkanUniquePtr<VkBuffer> ObjectFactory::CreateBufferWithAutoMemory(
+        /* out */ VmaAllocation& allocationResult,
+        /* out */ VmaAllocationInfo& allocInfoResult,
+        const VkBufferCreateInfo& createInfo, AllocationRules::BitField allocationRules) const
     {
         // Using vma, create a buffer and automatically allocate the memory
         // doesn't seem to be any particular benefit to separating buffer & memory allocation with this library, so let's
         // go ahead and simplify it
         auto allocCreateInfo = SetupAllocationCreateInfo(allocationRules);
         VkBuffer rawBuffer = nullptr;
-        VmaAllocationInfo allocInfo;
-        auto res = vmaCreateBuffer(_vmaAllocator, &createInfo, &allocCreateInfo, &rawBuffer, &allocationResult, &allocInfo);
+        auto res = vmaCreateBuffer(_vmaAllocator, &createInfo, &allocCreateInfo, &rawBuffer, &allocationResult, &allocInfoResult);
         auto buffer = VulkanUniquePtr<VkBuffer>(
             rawBuffer,
             [d=_destruction.get(), allocationResult](VkBuffer buffer)
@@ -367,12 +372,14 @@ namespace RenderCore { namespace Metal_Vulkan
         return std::move(buffer);
     }
 
-    VulkanUniquePtr<VkImage> ObjectFactory::CreateImageWithAutoMemory(const VkImageCreateInfo& createInfo, AllocationRules::BitField allocationRules, VmaAllocation& allocationResult, uint64_t guidForVisibilityTracking) const
+    VulkanUniquePtr<VkImage> ObjectFactory::CreateImageWithAutoMemory(
+        /* out */ VmaAllocation& allocationResult,
+        /* out */ VmaAllocationInfo& allocInfoResult,
+        const VkImageCreateInfo& createInfo, AllocationRules::BitField allocationRules, uint64_t guidForVisibilityTracking) const
     {
         auto allocCreateInfo = SetupAllocationCreateInfo(allocationRules);
         VkImage rawImage = nullptr;
-        VmaAllocationInfo allocInfo;
-        auto res = vmaCreateImage(_vmaAllocator, &createInfo, &allocCreateInfo, &rawImage, &allocationResult, &allocInfo);
+        auto res = vmaCreateImage(_vmaAllocator, &createInfo, &allocCreateInfo, &rawImage, &allocationResult, &allocInfoResult);
         VulkanUniquePtr<VkImage> image;
         #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
             if (guidForVisibilityTracking) {

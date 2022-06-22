@@ -62,6 +62,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkImage GetImage() const            { return _underlyingImage.get(); }
 		VkBuffer GetBuffer() const          { return _underlyingBuffer.get(); }
 		VmaAllocation GetVmaMemory() const	{ return _vmaMem; }
+		IteratorRange<void*> GetPermanentlyMappedRange() const { return _permanentlyMappedRange; }
 
 		const VulkanSharedPtr<VkImage>& ShareImage() const { return _underlyingImage; }
 		const VulkanSharedPtr<VkBuffer>& ShareBuffer() const { return _underlyingBuffer; }
@@ -88,6 +89,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		VulkanSharedPtr<VkBuffer> _underlyingBuffer;
 		VulkanSharedPtr<VkDeviceMemory> _mem;
 		VmaAllocation _vmaMem = nullptr;
+		IteratorRange<void*> _permanentlyMappedRange;
 
 		Desc _desc;
 		uint64_t _guid;
@@ -119,6 +121,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		IteratorRange<void*>        GetData(SubResourceId);
 		IteratorRange<const void*>  GetData(SubResourceId) const;
 		TexturePitches				GetPitches(SubResourceId) const;
+
+		void FlushCache();
+		void InvalidateCache();
 
 		enum class Mode { Read, WriteDiscardPrevious };
 
@@ -180,6 +185,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		VmaAllocation       _vmaMem = nullptr;
 		void*               _data;
 		size_t              _dataSize;
+		VkDeviceSize		_resourceOffset = 0;
+		bool 				_permanentlyMappedResource = false;
 
 		std::vector<std::pair<SubResourceId, SubResourceOffset>> _subResources;
 
