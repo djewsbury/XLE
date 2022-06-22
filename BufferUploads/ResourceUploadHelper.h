@@ -95,6 +95,8 @@ namespace BufferUploads { namespace PlatformInterface
 
             ////////   F U N C T I O N A L I T Y   F L A G S   ////////
 
+#if 0
+
         //          Use these to customise behaviour for platforms
         //          without lots of #if defined(...) type code
     #if GFXAPI_TARGET == GFXAPI_DX11
@@ -137,6 +139,7 @@ namespace BufferUploads { namespace PlatformInterface
 	#else
         #error Unsupported platform!
     #endif
+#endif
 
         /////////////////////////////////////////////////////////////////////
 

@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ThreadContext.h"
+#include "Metrics.h"
 #include "../RenderCore/IDevice.h"
 #include "../RenderCore/IAnnotator.h"
 #include "../RenderCore/Metal/DeviceContext.h"
@@ -11,49 +12,90 @@
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/PtrUtils.h"
 #include "../Utility/HeapUtils.h"
+#include "../Utility/Threading/LockFree.h"
+#include <atomic>
 
 namespace BufferUploads
 {
+    struct ThreadContext::Pimpl
+    {
+        CommandListMetrics _commandListUnderConstruction;
+        DeferredOperations _deferredOperationsUnderConstruction;
+        struct QueuedCommandList
+        {
+            std::shared_ptr<RenderCore::Metal::CommandList> _deviceCommandList;
+            mutable CommandListMetrics _metrics;
+            DeferredOperations _deferredOperations;
+            CommandListID _id;
+        };
+        LockFreeFixedSizeQueue<QueuedCommandList, 32> _queuedCommandLists;
+        #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
+            LockFreeFixedSizeQueue<CommandListMetrics, 32> _recentRetirements;
+        #endif
+        bool _isImmediateContext;
+
+        TimeMarker  _lastResolve;
+        unsigned    _commitCountCurrent, _commitCountLastResolve;
+
+        CommandListID _commandListIDUnderConstruction, _commandListIDCommittedToImmediate;
+
+        struct EventList
+        {
+            volatile IManager::EventListID _id;
+            Event_ResourceReposition _evnt;
+            std::atomic<unsigned> _clientReferences;
+            EventList() : _id(~IManager::EventListID(0x0)), _clientReferences(0) {}
+        };
+        IManager::EventListID   _currentEventListId;
+        IManager::EventListID   _currentEventListPublishedId;
+        std::atomic<IManager::EventListID>   _currentEventListProcessedId;
+        EventList               _eventBuffers[4];
+        unsigned                _eventListWritingIndex;
+
+        Pimpl() : _currentEventListId(0), _eventListWritingIndex(0), _currentEventListProcessedId(0), _currentEventListPublishedId(0) {}
+    };
+
     void ThreadContext::ResolveCommandList()
     {
         int64_t currentTime = OSServices::GetPerformanceCounter();
-        CommandList newCommandList;
-        newCommandList._metrics = _commandListUnderConstruction;
+        Pimpl::QueuedCommandList newCommandList;
+        newCommandList._metrics = _pimpl->_commandListUnderConstruction;
         newCommandList._metrics._resolveTime = currentTime;
         newCommandList._metrics._processingEnd = currentTime;
-        newCommandList._id = _commandListIDUnderConstruction;
+        newCommandList._id = _pimpl->_commandListIDUnderConstruction;
 
-        if (!_isImmediateContext) {
+        if (!_pimpl->_isImmediateContext) {
             newCommandList._deviceCommandList = RenderCore::Metal::DeviceContext::Get(*_underlyingContext)->ResolveCommandList();
-            newCommandList._commitStep.swap(_commitStepUnderConstruction);
-            _queuedCommandLists.push_overflow(std::move(newCommandList));
+            newCommandList._deferredOperations.swap(_pimpl->_deferredOperationsUnderConstruction);
+            _pimpl->_queuedCommandLists.push_overflow(std::move(newCommandList));
         } else {
                     // immediate resolve -- skip the render thread resolve step...
-            _commitStepUnderConstruction.CommitToImmediate_PreCommandList(*_underlyingContext);
-            _commitStepUnderConstruction.CommitToImmediate_PostCommandList(*_underlyingContext);
-            _commandListIDCommittedToImmediate = std::max(_commandListIDCommittedToImmediate, _commandListIDUnderConstruction);
+            _pimpl->_deferredOperationsUnderConstruction.CommitToImmediate_PreCommandList(*_underlyingContext);
+            _pimpl->_deferredOperationsUnderConstruction.CommitToImmediate_PostCommandList(*_underlyingContext);
+            _pimpl->_commandListIDCommittedToImmediate = std::max(_pimpl->_commandListIDCommittedToImmediate, _pimpl->_commandListIDUnderConstruction);
 
             newCommandList._metrics._frameId = _underlyingContext->GetStateDesc()._frameId;
             newCommandList._metrics._commitTime = currentTime;
-            #if defined(XL_BUFFER_UPLOAD_RECORD_THREAD_CONTEXT_METRICS)
-                while (!_recentRetirements.push(newCommandList._metrics)) {
-                    _recentRetirements.pop();   // note -- this might violate the single-popping-thread rule!
+            #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
+                while (!_pimpl->_recentRetirements.push(newCommandList._metrics)) {
+                    _pimpl->_recentRetirements.pop();   // note -- this might violate the single-popping-thread rule!
                 }
             #endif
         }
 
-        _commandListUnderConstruction = CommandListMetrics();
-        _commandListUnderConstruction._processingStart = currentTime;
-        CommitStep().swap(_commitStepUnderConstruction);
-        ++_commandListIDUnderConstruction;
+        _pimpl->_commandListUnderConstruction = CommandListMetrics();
+        _pimpl->_commandListUnderConstruction._processingStart = currentTime;
+        DeferredOperations().swap(_pimpl->_deferredOperationsUnderConstruction);
+        ++_pimpl->_commandListIDUnderConstruction;
     }
 
     void ThreadContext::CommitToImmediate(
         RenderCore::IThreadContext& commitTo,
         LockFreeFixedSizeQueue<unsigned, 4>* framePriorityQueue)
     {
-        if (_isImmediateContext) {
-            ++_commitCountCurrent;
+        if (_pimpl->_isImmediateContext) {
+            assert(&commitTo == _underlyingContext.get());
+            ++_pimpl->_commitCountCurrent;
             return;
         }
 
@@ -71,15 +113,15 @@ namespace BufferUploads
 
             const bool currentlyUncommitedFramePriorityCommandLists = framePriorityQueue && framePriorityQueue->size()!=0;
 
-            CommandList* commandList = 0;
-            while (_queuedCommandLists.try_front(commandList)) {
+            Pimpl::QueuedCommandList* commandList = 0;
+            while (_pimpl->_queuedCommandLists.try_front(commandList)) {
                 TimeMarker stallEnd = OSServices::GetPerformanceCounter();
                 if (!gotStart) {
                     commitTo.GetAnnotator().Event("BufferUploads", RenderCore::IAnnotator::EventTypes::MarkerBegin);
                     gotStart = true;
                 }
 
-                commandList->_commitStep.CommitToImmediate_PreCommandList(commitTo);
+                commandList->_deferredOperations.CommitToImmediate_PreCommandList(commitTo);
                 if (commandList->_deviceCommandList) {
                     auto* deviceVulkan = (RenderCore::IThreadContextVulkan*)commitTo.QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code());
                     if (deviceVulkan) {
@@ -89,19 +131,19 @@ namespace BufferUploads
                         immContext->ExecuteCommandList(std::move(*commandList->_deviceCommandList));
                     }
                 }
-                commandList->_commitStep.CommitToImmediate_PostCommandList(commitTo);
-                _commandListIDCommittedToImmediate = std::max(_commandListIDCommittedToImmediate, commandList->_id);
+                commandList->_deferredOperations.CommitToImmediate_PostCommandList(commitTo);
+                _pimpl->_commandListIDCommittedToImmediate = std::max(_pimpl->_commandListIDCommittedToImmediate, commandList->_id);
             
                 commandList->_metrics._frameId                  = commitTo.GetStateDesc()._frameId;
                 commandList->_metrics._commitTime               = OSServices::GetPerformanceCounter();
                 commandList->_metrics._framePriorityStallTime   = stallEnd - stallStart;    // this should give us very small numbers, when we're not actually stalling for frame priority commits
-                #if defined(XL_BUFFER_UPLOAD_RECORD_THREAD_CONTEXT_METRICS)
-                    while (!_recentRetirements.push(commandList->_metrics))
-                        _recentRetirements.pop();   // note -- this might violate the single-popping-thread rule!
+                #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
+                    while (!_pimpl->_recentRetirements.push(commandList->_metrics))
+                        _pimpl->_recentRetirements.pop();   // note -- this might violate the single-popping-thread rule!
                 #endif
-                _queuedCommandLists.pop();
+                _pimpl->_queuedCommandLists.pop();
 
-                stallStart = OSServices::GetPerformanceCounter();                
+                stallStart = OSServices::GetPerformanceCounter();
             }
                 
             if (!currentlyUncommitedFramePriorityCommandLists)
@@ -114,16 +156,16 @@ namespace BufferUploads
             commitTo.GetAnnotator().Event("BufferUploads", RenderCore::IAnnotator::EventTypes::MarkerEnd);
         }
         
-        ++_commitCountCurrent;
+        ++_pimpl->_commitCountCurrent;
     }
 
     CommandListMetrics ThreadContext::PopMetrics()
     {
-        #if defined(XL_BUFFER_UPLOAD_RECORD_THREAD_CONTEXT_METRICS)
+        #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
             CommandListMetrics* ptr;
-            if (_recentRetirements.try_front(ptr)) {
+            if (_pimpl->_recentRetirements.try_front(ptr)) {
                 CommandListMetrics result = *ptr;
-                _recentRetirements.pop();
+                _pimpl->_recentRetirements.pop();
                 return result;
             }
         #endif
@@ -132,33 +174,33 @@ namespace BufferUploads
 
     IManager::EventListID   ThreadContext::EventList_GetWrittenID() const
     {
-        return _currentEventListId;
+        return _pimpl->_currentEventListId;
     }
 
     IManager::EventListID   ThreadContext::EventList_GetPublishedID() const
     {
-        return _currentEventListPublishedId;
+        return _pimpl->_currentEventListPublishedId;
     }
 
     IManager::EventListID   ThreadContext::EventList_GetProcessedID() const
     {
-        return _currentEventListProcessedId;
+        return _pimpl->_currentEventListProcessedId;
     }
 
     void                    ThreadContext::EventList_Get(IManager::EventListID id, Event_ResourceReposition*& begin, Event_ResourceReposition*& end)
     {
         begin = end = nullptr;
         if (!id) return;
-        for (unsigned c=0; c<dimof(_eventBuffers); ++c) {
-            if (_eventBuffers[c]._id == id) {
-                ++_eventBuffers[c]._clientReferences;
+        for (unsigned c=0; c<dimof(_pimpl->_eventBuffers); ++c) {
+            if (_pimpl->_eventBuffers[c]._id == id) {
+                ++_pimpl->_eventBuffers[c]._clientReferences;
                     //  have to check again after the increment... because the client references value acts
                     //  as a lock.
-                if (_eventBuffers[c]._id == id) {
-                    begin = &_eventBuffers[c]._evnt;
+                if (_pimpl->_eventBuffers[c]._id == id) {
+                    begin = &_pimpl->_eventBuffers[c]._evnt;
                     end = begin+1;
                 } else {
-                    --_eventBuffers[c]._clientReferences;
+                    --_pimpl->_eventBuffers[c]._clientReferences;
                         // in this case, the event has just be freshly overwritten
                 }
                 return;
@@ -169,16 +211,16 @@ namespace BufferUploads
     void                    ThreadContext::EventList_Release(IManager::EventListID id, bool silent)
     {
         if (!id) return;
-        for (unsigned c=0; c<dimof(_eventBuffers); ++c) {
-            if (_eventBuffers[c]._id == id) {
-                auto newValue = --_eventBuffers[c]._clientReferences;
+        for (unsigned c=0; c<dimof(_pimpl->_eventBuffers); ++c) {
+            if (_pimpl->_eventBuffers[c]._id == id) {
+                auto newValue = --_pimpl->_eventBuffers[c]._clientReferences;
                 assert(signed(newValue) >= 0);
                     
                 if (!silent) {
                     for (;;) {      // lock-free max...
-                        auto originalProcessedId = _currentEventListProcessedId.load();
-                        auto newProcessedId = std::max(originalProcessedId, (IManager::EventListID)_eventBuffers[c]._id);
-                        if (_currentEventListProcessedId.compare_exchange_strong(originalProcessedId, newProcessedId))
+                        auto originalProcessedId = _pimpl->_currentEventListProcessedId.load();
+                        auto newProcessedId = std::max(originalProcessedId, (IManager::EventListID)_pimpl->_eventBuffers[c]._id);
+                        if (_pimpl->_currentEventListProcessedId.compare_exchange_strong(originalProcessedId, newProcessedId))
                             break;
                     }
                 }
@@ -193,11 +235,11 @@ namespace BufferUploads
             //      try to push this event into the small queue... but don't overwrite anything that
             //      currently has a client reference on it.
             //
-        if (!_eventBuffers[_eventListWritingIndex]._clientReferences.load()) {
-            IManager::EventListID id = ++_currentEventListId;
-            _eventBuffers[_eventListWritingIndex]._id = id;
-            _eventBuffers[_eventListWritingIndex]._evnt = evnt;
-            _eventListWritingIndex = (_eventListWritingIndex+1)%dimof(_eventBuffers);   // single writing thread, so it's ok
+        if (!_pimpl->_eventBuffers[_pimpl->_eventListWritingIndex]._clientReferences.load()) {
+            IManager::EventListID id = ++_pimpl->_currentEventListId;
+            _pimpl->_eventBuffers[_pimpl->_eventListWritingIndex]._id = id;
+            _pimpl->_eventBuffers[_pimpl->_eventListWritingIndex]._evnt = evnt;
+            _pimpl->_eventListWritingIndex = (_pimpl->_eventListWritingIndex+1)%dimof(_pimpl->_eventBuffers);   // single writing thread, so it's ok
             return id;
         }
         assert(0);
@@ -206,32 +248,29 @@ namespace BufferUploads
 
     void ThreadContext::EventList_Publish(IManager::EventListID toEvent)
     {
-        _currentEventListPublishedId = toEvent;
+        _pimpl->_currentEventListPublishedId = toEvent;
     }
-   
-    void ThreadContext::OnLostDevice()
-    {
-        for (unsigned c=0; c<dimof(_eventBuffers); ++c) {
-                //      Clear out these pointers because the things they point to have probably
-                //      been destroyed.
-            _eventBuffers[c]._evnt._newResource = 0;
-            _eventBuffers[c]._evnt._originalResource = 0;
-            _eventBuffers[c]._evnt._defragSteps.clear();
-            _eventBuffers[c]._id = 0;
-        }
-    }
+
+    CommandListID           ThreadContext::CommandList_GetUnderConstruction() const        { return _pimpl->_commandListIDUnderConstruction; }
+    CommandListID           ThreadContext::CommandList_GetCommittedToImmediate() const     { return _pimpl->_commandListIDCommittedToImmediate; }
+
+    CommandListMetrics&     ThreadContext::GetMetricsUnderConstruction()                   { return _pimpl->_commandListUnderConstruction; }
+
+    auto                    ThreadContext::GetDeferredOperationsUnderConstruction() -> DeferredOperations&        { return _pimpl->_deferredOperationsUnderConstruction; }
+
+    unsigned                ThreadContext::CommitCount_Current()                           { return _pimpl->_commitCountCurrent; }
+    unsigned&               ThreadContext::CommitCount_LastResolve()                       { return _pimpl->_commitCountLastResolve; }
 
     ThreadContext::ThreadContext(std::shared_ptr<RenderCore::IThreadContext> underlyingContext) 
     : _resourceUploadHelper(*underlyingContext)
-    , _currentEventListId(0), _eventListWritingIndex(0), _currentEventListProcessedId(0)
-    , _currentEventListPublishedId(0)
     {
         _underlyingContext = std::move(underlyingContext);
-        _lastResolve = 0;
-        _commitCountCurrent = _commitCountLastResolve = 0;
-        _isImmediateContext = _underlyingContext->IsImmediate();
-        _commandListIDUnderConstruction = 1;
-        _commandListIDCommittedToImmediate = 0;
+        _pimpl = std::make_unique<Pimpl>();
+        _pimpl->_lastResolve = 0;
+        _pimpl->_commitCountCurrent = _pimpl->_commitCountLastResolve = 0;
+        _pimpl->_isImmediateContext = _underlyingContext->IsImmediate();
+        _pimpl->_commandListIDUnderConstruction = 1;
+        _pimpl->_commandListIDCommittedToImmediate = 0;
     }
 
     ThreadContext::~ThreadContext()
@@ -240,30 +279,30 @@ namespace BufferUploads
 
         //////////////////////////////////////////////////////////////////////////////////////////////
 
-    CommitStep::DeferredDefragCopy::DeferredDefragCopy(
+    ThreadContext::DeferredOperations::DeferredDefragCopy::DeferredDefragCopy(
 		std::shared_ptr<IResource> destination, std::shared_ptr<IResource> source, const std::vector<DefragStep>& steps)
     : _destination(std::move(destination)), _source(std::move(source)), _steps(steps)
     {}
 
-    CommitStep::DeferredDefragCopy::~DeferredDefragCopy()
+    ThreadContext::DeferredOperations::DeferredDefragCopy::~DeferredDefragCopy()
     {}
 
-    void CommitStep::Add(CommitStep::DeferredCopy&& copy)
+    void ThreadContext::DeferredOperations::Add(DeferredOperations::DeferredCopy&& copy)
     {
-        _deferredCopies.push_back(std::forward<CommitStep::DeferredCopy>(copy));
+        _deferredCopies.push_back(std::forward<DeferredOperations::DeferredCopy>(copy));
     }
 
-    void CommitStep::Add(CommitStep::DeferredDefragCopy&& copy)
+    void ThreadContext::DeferredOperations::Add(DeferredOperations::DeferredDefragCopy&& copy)
     {
-        _deferredDefragCopies.push_back(std::forward<CommitStep::DeferredDefragCopy>(copy));
+        _deferredDefragCopies.push_back(std::forward<DeferredOperations::DeferredDefragCopy>(copy));
     }
 
-    void CommitStep::AddDelayedDelete(ResourceLocator&& locator)
+    void ThreadContext::DeferredOperations::AddDelayedDelete(ResourceLocator&& locator)
     {
         _delayedDeletes.push_back(std::move(locator));
     }
 
-    void CommitStep::CommitToImmediate_PreCommandList(RenderCore::IThreadContext& immContext)
+    void ThreadContext::DeferredOperations::CommitToImmediate_PreCommandList(RenderCore::IThreadContext& immContext)
     {
         // D3D11 has some issues with mapping and writing to linear buffers from a background thread
         // we get around this by defering some write operations to the main thread, at the point
@@ -276,7 +315,7 @@ namespace BufferUploads
         }
     }
 
-    void CommitStep::CommitToImmediate_PostCommandList(RenderCore::IThreadContext& immContext)
+    void ThreadContext::DeferredOperations::CommitToImmediate_PostCommandList(RenderCore::IThreadContext& immContext)
     {
         if (!_deferredDefragCopies.empty()) {
             PlatformInterface::ResourceUploadHelper immediateContext(immContext);
@@ -286,23 +325,23 @@ namespace BufferUploads
         }
     }
 
-    bool CommitStep::IsEmpty() const 
+    bool ThreadContext::DeferredOperations::IsEmpty() const 
     {
         return _deferredCopies.empty() && _deferredDefragCopies.empty() && _delayedDeletes.empty();
     }
 
-    void CommitStep::swap(CommitStep& other)
+    void ThreadContext::DeferredOperations::swap(DeferredOperations& other)
     {
         _deferredCopies.swap(other._deferredCopies);
         _deferredDefragCopies.swap(other._deferredDefragCopies);
         _delayedDeletes.swap(other._delayedDeletes);
     }
 
-    CommitStep::CommitStep()
+    ThreadContext::DeferredOperations::DeferredOperations()
     {
     }
 
-    CommitStep::~CommitStep()
+    ThreadContext::DeferredOperations::~DeferredOperations()
     {
     }
 

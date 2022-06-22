@@ -206,6 +206,8 @@ namespace BufferUploads { namespace PlatformInterface
         ResourceDesc result = desc;
         result._bindFlags = BindFlag::TransferSrc;
         result._allocationRules = AllocationRules::HostVisibleSequentialWrite;
+        XlCopyString(result._name, "[stage]");
+        XlCatString(result._name, desc._name);
         return result;
     }
 
