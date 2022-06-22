@@ -70,19 +70,20 @@ namespace RenderCore { namespace LightingEngine
 
 	void ForwardPlusLightScene::FinalizeConfiguration()
 	{
+		AllocationRules::BitField allocationRulesForDynamicCBs = AllocationRules::HostVisibleRandomAccess|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped;
 		auto& device = *_pipelineAccelerators->GetDevice();
 		auto tilerConfig = _lightTiler->GetConfiguration();
 		for (unsigned c=0; c<dimof(_uniforms); c++) {
 			_uniforms[c]._propertyCB = device.CreateResource(
-				CreateDesc(BindFlag::ConstantBuffer, CPUAccess::Write, 0, LinearBufferDesc::Create(sizeof(Internal::CB_EnvironmentProps)), "env-props"));
+				CreateDesc(BindFlag::ConstantBuffer, allocationRulesForDynamicCBs, LinearBufferDesc::Create(sizeof(Internal::CB_EnvironmentProps)), "env-props"));
 			_uniforms[c]._propertyCBView = _uniforms[c]._propertyCB->CreateBufferView(BindFlag::ConstantBuffer);
 
 			_uniforms[c]._lightList = device.CreateResource(
-				CreateDesc(BindFlag::UnorderedAccess, CPUAccess::Write, 0, LinearBufferDesc::Create(sizeof(Internal::CB_Light)*tilerConfig._maxLightsPerView, sizeof(Internal::CB_Light)), "light-list"));
+				CreateDesc(BindFlag::UnorderedAccess, allocationRulesForDynamicCBs, LinearBufferDesc::Create(sizeof(Internal::CB_Light)*tilerConfig._maxLightsPerView, sizeof(Internal::CB_Light)), "light-list"));
 			_uniforms[c]._lightListUAV = _uniforms[c]._lightList->CreateBufferView(BindFlag::UnorderedAccess);
 
 			_uniforms[c]._lightDepthTable = device.CreateResource(
-				CreateDesc(BindFlag::UnorderedAccess, CPUAccess::Write, 0, LinearBufferDesc::Create(sizeof(unsigned)*tilerConfig._depthLookupGradiations, sizeof(unsigned)), "light-depth-table"));
+				CreateDesc(BindFlag::UnorderedAccess, allocationRulesForDynamicCBs, LinearBufferDesc::Create(sizeof(unsigned)*tilerConfig._depthLookupGradiations, sizeof(unsigned)), "light-depth-table"));
 			_uniforms[c]._lightDepthTableUAV = _uniforms[c]._lightDepthTable->CreateBufferView(BindFlag::UnorderedAccess);
 		}
 		_pingPongCounter = 0;
@@ -246,6 +247,7 @@ namespace RenderCore { namespace LightingEngine
 				Metal::ResourceMap::Mode::WriteDiscardPrevious, 
 				0, sizeof(unsigned)*tilerOutputs._lightDepthTable.size());
 			std::memcpy(map.GetData().begin(), tilerOutputs._lightDepthTable.data(), sizeof(unsigned)*tilerOutputs._lightDepthTable.size());
+			map.FlushCache();
 		}
 		if (tilerOutputs._lightCount) {
 			Metal::ResourceMap map(
@@ -260,6 +262,7 @@ namespace RenderCore { namespace LightingEngine
 				auto& lightDesc = *(ForwardPlusLightDesc*)_tileableLightSets[set]._lights[light]._desc.get();
 				*i = MakeLightUniforms(lightDesc, _positionalLightOperators[op]);
 			}
+			map.FlushCache();
 		}
 
 		{
@@ -280,6 +283,7 @@ namespace RenderCore { namespace LightingEngine
 			i->_lightCount = tilerOutputs._lightCount;
 			i->_enableSSR = _ambientLight->_ambientLightOperator._ssrOperator.has_value() && lastFrameBuffersPrimed;
 			std::memcpy(i->_diffuseSHCoefficients, _diffuseSHCoefficients, sizeof(_diffuseSHCoefficients));
+			map.FlushCache();
 		}
 
 		if (_completionCommandListID)

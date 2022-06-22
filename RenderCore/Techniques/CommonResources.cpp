@@ -88,19 +88,19 @@ namespace RenderCore { namespace Techniques
         _unnormalizedBilinearClampSampler = device.CreateSampler(SamplerDesc{FilterMode::Bilinear, AddressMode::Clamp, AddressMode::Clamp, AddressMode::Clamp, CompareOp::Never, SamplerDescFlags::UnnormalizedCoordinates});
         _defaultSampler = _linearWrapSampler;
 
-        _black2DSRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::Plain2D(32, 32, Format::R8_UNORM), "black2d"))->CreateTextureView();
-        _black2DArraySRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::Plain2D(32, 32, Format::R8_UNORM, 1, 1), "black2darray"))->CreateTextureView();
-        _black3DSRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::Plain3D(8, 8, 8, Format::R8_UNORM), "black3d"))->CreateTextureView();
-        _blackCubeSRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::PlainCube(32, 32, Format::R8_UNORM), "blackCube"))->CreateTextureView();
-        _blackCubeArraySRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::PlainCube(32, 32, Format::R8_UNORM, 1, 6), "blackCubeArray"))->CreateTextureView();
-        _blackCB = CreateBlackResource(device, CreateDesc(BindFlag::ConstantBuffer, 0, GPUAccess::Read, LinearBufferDesc{256}, "blackbuffer"));
-        _blackBufferUAV = CreateBlackResource(device, CreateDesc(BindFlag::UnorderedAccess, 0, GPUAccess::Read, LinearBufferDesc{256, 16}, "blackbufferuav"))->CreateBufferView(BindFlag::UnorderedAccess);
+        _black2DSRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM), "black2d"))->CreateTextureView();
+        _black2DArraySRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM, 1, 1), "black2darray"))->CreateTextureView();
+        _black3DSRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain3D(8, 8, 8, Format::R8_UNORM), "black3d"))->CreateTextureView();
+        _blackCubeSRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM), "blackCube"))->CreateTextureView();
+        _blackCubeArraySRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM, 1, 6), "blackCubeArray"))->CreateTextureView();
+        _blackCB = CreateBlackResource(device, CreateDesc(BindFlag::ConstantBuffer, LinearBufferDesc{256}, "blackbuffer"));
+        _blackBufferUAV = CreateBlackResource(device, CreateDesc(BindFlag::UnorderedAccess, LinearBufferDesc{256, 16}, "blackbufferuav"))->CreateBufferView(BindFlag::UnorderedAccess);
 
-        _white2DSRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::Plain2D(32, 32, Format::R8_UNORM), "white2d"))->CreateTextureView();
-        _white2DArraySRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::Plain2D(32, 32, Format::R8_UNORM, 1, 1), "white2darray"))->CreateTextureView();
-        _white3DSRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::Plain3D(8, 8, 8, Format::R8_UNORM), "white3d"))->CreateTextureView();
-        _whiteCubeSRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::PlainCube(32, 32, Format::R8_UNORM), "whiteCube"))->CreateTextureView();
-        _whiteCubeArraySRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::PlainCube(32, 32, Format::R8_UNORM, 1, 6), "whiteCubeArray"))->CreateTextureView();
+        _white2DSRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM), "white2d"))->CreateTextureView();
+        _white2DArraySRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM, 1, 1), "white2darray"))->CreateTextureView();
+        _white3DSRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain3D(8, 8, 8, Format::R8_UNORM), "white3d"))->CreateTextureView();
+        _whiteCubeSRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM), "whiteCube"))->CreateTextureView();
+        _whiteCubeArraySRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM, 1, 6), "whiteCubeArray"))->CreateTextureView();
 
         _pendingCompleteInitialization = true;
     }
@@ -140,13 +140,13 @@ namespace RenderCore { namespace Techniques
             largest = std::max(largest, (size_t)ByteCount(res->GetDesc()));
 
         {
-            auto staging = CreateBlackResource(*threadContext.GetDevice(), CreateDesc(BindFlag::TransferSrc, 0, 0, LinearBufferDesc{(unsigned)largest}, "staging"));
+            auto staging = CreateBlackResource(*threadContext.GetDevice(), CreateDesc(BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc{(unsigned)largest}, "staging"));
             auto encoder = metalContext.BeginBlitEncoder();
             for (const auto& res:blackTextures)
                 encoder.Copy(*res, *staging);
         }
         {
-            auto staging = CreateWhiteResource(*threadContext.GetDevice(), CreateDesc(BindFlag::TransferSrc, 0, 0, LinearBufferDesc{(unsigned)largest}, "staging"));
+            auto staging = CreateWhiteResource(*threadContext.GetDevice(), CreateDesc(BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc{(unsigned)largest}, "staging"));
             auto encoder = metalContext.BeginBlitEncoder();
             for (const auto& res:whiteTextures)
                 encoder.Copy(*res, *staging);

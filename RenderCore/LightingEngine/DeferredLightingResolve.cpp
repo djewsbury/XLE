@@ -379,7 +379,7 @@ namespace RenderCore { namespace LightingEngine
 		std::memcpy(geoInitBuffer.data(), cubeGeo.data(), cubeGeo.size() * sizeof(Float3));
 		std::memcpy(PtrAdd(geoInitBuffer.data(), cubeGeo.size() * sizeof(Float3)), sphereGeo.data(), sphereGeo.size() * sizeof(Float3));
 		_geo = device.CreateResource(
-			CreateDesc(BindFlag::VertexBuffer, 0, 0, LinearBufferDesc::Create(geoInitBuffer.size()), "light-stenciling-geometry"),
+			CreateDesc(BindFlag::VertexBuffer, LinearBufferDesc::Create(geoInitBuffer.size()), "light-stenciling-geometry"),
 			SubResourceInitData{MakeIteratorRange(geoInitBuffer)});
 		_cubeOffsetAndCount = {0u, (unsigned)cubeGeo.size()};
 		_sphereOffsetAndCount = {(unsigned)cubeGeo.size(), (unsigned)sphereGeo.size()};
@@ -392,12 +392,12 @@ namespace RenderCore { namespace LightingEngine
 		float underestimationFactor = std::sin(gPI/3.0f) * std::cos(gPI/6.0f);
 		for (auto& pt:lowDetailHemi.second) pt /= underestimationFactor;
 		_lowDetailHemiSphereVB = device.CreateResource(
-			CreateDesc(BindFlag::VertexBuffer, 0, 0, LinearBufferDesc::Create(sizeof(decltype(lowDetailHemi.second)::value_type)*lowDetailHemi.second.size()), "light-stenciling-geometry"),
+			CreateDesc(BindFlag::VertexBuffer, LinearBufferDesc::Create(sizeof(decltype(lowDetailHemi.second)::value_type)*lowDetailHemi.second.size()), "light-stenciling-geometry"),
 			SubResourceInitData{MakeIteratorRange(lowDetailHemi.second)});
 		std::vector<uint16_t> ib; ib.reserve(lowDetailHemi.first.size());
 		std::copy(lowDetailHemi.first.begin(), lowDetailHemi.first.end(), std::back_inserter(ib));
 		_lowDetailHemiSphereIB = device.CreateResource(
-			CreateDesc(BindFlag::IndexBuffer, 0, 0, LinearBufferDesc::Create(sizeof(uint16_t)*ib.size()), "light-stenciling-geometry"),
+			CreateDesc(BindFlag::IndexBuffer, LinearBufferDesc::Create(sizeof(uint16_t)*ib.size()), "light-stenciling-geometry"),
 			SubResourceInitData{MakeIteratorRange(ib)});
 		_lowDetailHemiSphereIndexCount = (unsigned)ib.size();
 	} 

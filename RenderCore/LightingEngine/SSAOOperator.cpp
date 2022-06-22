@@ -187,7 +187,7 @@ namespace RenderCore { namespace LightingEngine
             Techniques::PreregisteredAttachment {
                 Hash_AOAccumulation0,
                 CreateDesc(
-                    BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+                    BindFlag::UnorderedAccess | BindFlag::ShaderResource,
                     TextureDesc::Plain2D(fbSize[0]/2, fbSize[1]/2, s_aoFormat),
                     "ao-accumulation-0"),
                 Techniques::PreregisteredAttachment::State::Initialized
@@ -196,7 +196,7 @@ namespace RenderCore { namespace LightingEngine
             Techniques::PreregisteredAttachment {
                 Hash_AOAccumulation1,
                 CreateDesc(
-                    BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+                    BindFlag::UnorderedAccess | BindFlag::ShaderResource,
                     TextureDesc::Plain2D(fbSize[0]/2, fbSize[1]/2, s_aoFormat),
                     "ao-accumulation-1"),
                 Techniques::PreregisteredAttachment::State::Initialized
@@ -205,7 +205,7 @@ namespace RenderCore { namespace LightingEngine
             Techniques::PreregisteredAttachment {
                 Hash_AOOutput,
                 CreateDesc(
-                    BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+                    BindFlag::UnorderedAccess | BindFlag::ShaderResource,
                     TextureDesc::Plain2D(fbSize[0], fbSize[1], s_aoFormat),
                     "ao-output"),
                 Techniques::PreregisteredAttachment::State::Uninitialized
@@ -292,7 +292,7 @@ namespace RenderCore { namespace LightingEngine
         auto ditherTable = pipelinePool->GetDevice()->CreateResource(
             CreateDesc(
                 BindFlag::ShaderResource | BindFlag::TexelBuffer,
-                0, 0, LinearBufferDesc::Create(sizeof(s_ditherTable)),
+                LinearBufferDesc::Create(sizeof(s_ditherTable)),
                 "ao-dither-table"),
             SubResourceInitData{MakeIteratorRange(s_ditherTable)});
         auto ditherTableView = ditherTable->CreateTextureView(BindFlag::ShaderResource, {Format::R32_UINT});

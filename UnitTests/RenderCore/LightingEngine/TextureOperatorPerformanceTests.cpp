@@ -346,7 +346,7 @@ namespace UnitTests
 
 		UInt2 workingRes { 2560, 1440 };
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::ShaderResource, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::ShaderResource,
 			TextureDesc::Plain2D(workingRes[0], workingRes[1], Format::R8G8B8A8_UNORM /*Format::R11G11B10_FLOAT*/ /*Format::R32G32B32A32_FLOAT*/ ),
 			"temporary-out");
 
@@ -402,7 +402,7 @@ namespace UnitTests
 					Techniques::PreregisteredAttachment {
 						downsampledResult,
 						CreateDesc(
-							BindFlag::RenderTarget, 0, 0, 
+							BindFlag::RenderTarget,
 							TextureDesc::Plain2D(workingRes[0]/3, workingRes[1]/3, Format::R8_UNORM),
 							"downsampled-attachment"),
 						Techniques::PreregisteredAttachment::State::Uninitialized
@@ -423,7 +423,7 @@ namespace UnitTests
 
 			if (0) {
 				auto downsampledDesc = CreateDesc(
-					BindFlag::UnorderedAccess, 0, GPUAccess::Write,
+					BindFlag::UnorderedAccess,
 					TextureDesc::Plain2D(workingRes[0] / 4, workingRes[1] / 4, Format::R8_UNORM),
 					"downsampled");
 				downsampledResource = testApparatus._metalTestHelper->_device->CreateResource(downsampledDesc);

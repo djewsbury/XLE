@@ -331,7 +331,7 @@ namespace PlatformRig
         using namespace RenderCore;
         auto targetDesc = CreateDesc(
             desc->_bindFlags, 
-            0, GPUAccess::Write,
+            AllocationRules::ResizeableRenderTarget,
             TextureDesc::Plain2D(desc->_width, desc->_height, desc->_format, 1, 0, desc->_samples),
             "presentation-target");
 

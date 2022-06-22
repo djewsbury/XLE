@@ -14,8 +14,6 @@
 
 namespace BufferUploads
 {
-    namespace CPUAccess = RenderCore::CPUAccess;
-	namespace GPUAccess = RenderCore::GPUAccess;
 	namespace BindFlag = RenderCore::BindFlag;
 	namespace AllocationRules = RenderCore::AllocationRules;
 
@@ -637,10 +635,8 @@ namespace BufferUploads
     ,       _activeDefragHeap(nullptr)
     {
         ResourceDesc copyBufferDesc = prototype;
-        copyBufferDesc._cpuAccess = CPUAccess::Read;
-        copyBufferDesc._gpuAccess = 0;
-        copyBufferDesc._allocationRules = AllocationRules::Staging;
-        copyBufferDesc._bindFlags = 0;
+        copyBufferDesc._allocationRules = AllocationRules::HostVisibleRandomAccess;
+        copyBufferDesc._bindFlags = BindFlag::TransferDst;
 
         _temporaryCopyBuffer = {};
         _temporaryCopyBufferCountDown = 0;
@@ -898,16 +894,17 @@ namespace BufferUploads
 
         /////   R E S O U R C E   S O U R C E   /////
 
-    static bool UsePooling(const ResourceDesc& input)     { return (input._type == ResourceDesc::Type::LinearBuffer) && (input._linearBufferDesc._sizeInBytes < (32*1024)) && (input._allocationRules & AllocationRules::Pooled); }
-    static bool UseBatching(const ResourceDesc& input)    { return (input._type == ResourceDesc::Type::LinearBuffer) && !!(input._allocationRules & AllocationRules::Batched) && (input._bindFlags == BindFlag::IndexBuffer); }
+    // static bool UsePooling(const ResourceDesc& input)     { return (input._type == ResourceDesc::Type::LinearBuffer) && (input._linearBufferDesc._sizeInBytes < (32*1024)) && (input._allocationRules & AllocationRules::Pooled); }
+    // static bool UseBatching(const ResourceDesc& input)    { return (input._type == ResourceDesc::Type::LinearBuffer) && !!(input._allocationRules & AllocationRules::Batched) && (input._bindFlags == BindFlag::IndexBuffer); }
 
-    static ResourceDesc AdjustDescForReusableResource(const ResourceDesc& input)
+    static ResourceDesc AsStagingDesc(const ResourceDesc& input)
     {
         ResourceDesc result = input;
-        if (result._type == ResourceDesc::Type::LinearBuffer) {
+        /*if (result._type == ResourceDesc::Type::LinearBuffer) {
             result._linearBufferDesc._sizeInBytes = RoundUpBufferSize(result._linearBufferDesc._sizeInBytes);
-            result._cpuAccess = CPUAccess::Write;
-        }
+        }*/
+        result._allocationRules = AllocationRules::HostVisibleSequentialWrite;
+        result._bindFlags = BindFlag::TransferSrc;
         XlCopyString(result._name, "[stage]");
         XlCatString(result._name, input._name);
         return result;
@@ -916,17 +913,18 @@ namespace BufferUploads
     ResourceSource::ResourceConstruction        ResourceSource::Create(const ResourceDesc& desc, IDataPacket* initialisationData, CreationOptions::BitField options)
     {
         bool allowDeviceCreation     = (options & CreationOptions::PreventDeviceCreation) == 0;
-        const bool usePooling        = UsePooling(desc);
-        const bool useBatching       = UseBatching(desc) && initialisationData;
-        const bool useStaging        = !!(desc._allocationRules & AllocationRules::Staging);
+        const bool usePooling        = false; // UsePooling(desc);
+        const bool useBatching       = false; // UseBatching(desc) && initialisationData;
+        const bool useStaging        = !!(options & CreationOptions::Staging);
         const unsigned objectSize    = RenderCore::ByteCount(desc);
 
         ResourceConstruction result;
         if (useStaging) {
-            result._locator = _stagingBufferPool->CreateResource(AdjustDescForReusableResource(desc), objectSize, allowDeviceCreation);
+            result._locator = _stagingBufferPool->CreateResource(AsStagingDesc(desc), objectSize, allowDeviceCreation);
         } else if (usePooling) {
-            result._locator = _pooledGeometryBuffers->CreateResource(AdjustDescForReusableResource(desc), objectSize, allowDeviceCreation);
-            result._flags |= allowDeviceCreation?ResourceConstruction::Flags::DeviceConstructionInvoked:0;
+            assert(0);
+            // result._locator = _pooledGeometryBuffers->CreateResource(AdjustDescForReusableResource(desc), objectSize, allowDeviceCreation);
+            // result._flags |= allowDeviceCreation?ResourceConstruction::Flags::DeviceConstructionInvoked:0;
         } else if (allowDeviceCreation) {
             auto supportInit = 
                 (desc._type == ResourceDesc::Type::Texture)
@@ -954,21 +952,28 @@ namespace BufferUploads
 
     BatchedResources::ResultFlags::BitField ResourceSource::IsBatchedResource(const ResourceLocator& locator, const ResourceDesc& desc)
     {
-        const bool mightBeBatched = UsePooling(desc) && UseBatching(desc);
-        if (mightBeBatched) {
-            return _batchedIndexBuffers->IsBatchedResource(locator.GetContainingResource().get());
-        }
+        assert(0);
+        #if 0
+            const bool mightBeBatched = UsePooling(desc) && UseBatching(desc);
+            if (mightBeBatched) {
+                return _batchedIndexBuffers->IsBatchedResource(locator.GetContainingResource().get());
+            }
+        #endif
         return 0;
     }
 
     bool ResourceSource::CanBeBatched(const ResourceDesc& desc)
     {
-        return UseBatching(desc); 
+        #if 0
+            return UseBatching(desc);
+        #else
+            return false;
+        #endif
     }
 
     void ResourceSource::Validate(const ResourceLocator& locator)
     {
-        #if defined(_DEBUG)
+        #if 0 // defined(_DEBUG)
             if (_batchedIndexBuffers->Validate(locator)==0) {
                 ResourceDesc desc = locator.GetContainingResource()->GetDesc();
                 assert(!(UsePooling(desc) && UseBatching(desc)));
@@ -1011,20 +1016,22 @@ namespace BufferUploads
         _stagingBufferPool = std::make_shared<ResourcesPool<ResourceDesc>>(device, 5*60);
         _pooledGeometryBuffers = std::make_shared<ResourcesPool<ResourceDesc>>(device);
 
-        ResourceDesc batchableIndexBuffers;
-        batchableIndexBuffers._type = ResourceDesc::Type::LinearBuffer;
-        batchableIndexBuffers._cpuAccess = CPUAccess::Write;
-        batchableIndexBuffers._gpuAccess = GPUAccess::Read;
-        batchableIndexBuffers._bindFlags = BindFlag::IndexBuffer;
-        if (PlatformInterface::UseMapBasedDefrag) {
-            batchableIndexBuffers._cpuAccess = CPUAccess::Write|CPUAccess::Read;
-        }
+        #if 0       // broken when updating ResourceDesc allocation rules
+            ResourceDesc batchableIndexBuffers;
+            batchableIndexBuffers._type = ResourceDesc::Type::LinearBuffer;
+            batchableIndexBuffers._allocationRules = CPUAccess::Write;
+            batchableIndexBuffers._gpuAccess = GPUAccess::Read;
+            batchableIndexBuffers._bindFlags = BindFlag::IndexBuffer;
+            if (PlatformInterface::UseMapBasedDefrag) {
+                batchableIndexBuffers._cpuAccess = CPUAccess::Write|CPUAccess::Read;
+            }
 
-        batchableIndexBuffers._linearBufferDesc._sizeInBytes = 256 * 1024;
-        XlCopyNString(batchableIndexBuffers._name, "BatchedBuffer", 13);
-        batchableIndexBuffers._name[13] = '\0';
+            batchableIndexBuffers._linearBufferDesc._sizeInBytes = 256 * 1024;
+            XlCopyNString(batchableIndexBuffers._name, "BatchedBuffer", 13);
+            batchableIndexBuffers._name[13] = '\0';
 
-        _batchedIndexBuffers = std::make_shared<BatchedResources>(device, batchableIndexBuffers);
+            _batchedIndexBuffers = std::make_shared<BatchedResources>(device, batchableIndexBuffers);
+        #endif
     }
 
     ResourceSource::~ResourceSource()

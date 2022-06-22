@@ -336,14 +336,14 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::MultisampleDepth,
 				CreateDesc(
-					BindFlag::DepthStencil | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
+					BindFlag::DepthStencil | BindFlag::ShaderResource | BindFlag::InputAttachment,
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], stitchingContext.GetSystemAttachmentFormat(Techniques::SystemAttachmentFormat::MainDepthStencil)),
 					"main-depth")
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::ColorHDR,
 				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
+					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment,
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT),
 					"color-hdr")
 			},
@@ -358,21 +358,21 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferDiffuse,
 				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
+					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment,
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R8G8B8A8_UNORM_SRGB : Format::R32G32B32A32_FLOAT),
 					"gbuffer-diffuse")
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferNormal,
 				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
+					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment,
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_SNORM),
 					"gbuffer-diffuse")
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferParameter,
 				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
+					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment,
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_UNORM),
 					"gbuffer-parameter")
 			}

@@ -129,10 +129,11 @@ namespace RenderCore { namespace LightingEngine
 				_outputs._lightOrdering[c] = intermediateLights[c]._srcIdx;
 
 			if (_outputs._lightCount) {
-				Metal::ResourceMap map(
+				Metal::ResourceMap map{
 					metalContext, *_tileableLightBuffer[_pingPongCounter], Metal::ResourceMap::Mode::WriteDiscardPrevious,
-					0, sizeof(IntermediateLight)*_outputs._lightCount);
+					0, sizeof(IntermediateLight)*_outputs._lightCount};
 				std::memcpy(map.GetData().begin(), intermediateLights, sizeof(IntermediateLight)*_outputs._lightCount);
+				map.FlushCache();
 			}
 		}
 
@@ -227,7 +228,7 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::TiledLightBitField,
 				CreateDesc(
-					BindFlag::UnorderedAccess|BindFlag::ShaderResource|BindFlag::TransferDst, 0, 0, 
+					BindFlag::UnorderedAccess|BindFlag::ShaderResource|BindFlag::TransferDst,
 					TextureDesc::Plain3D(_lightTileBufferSize[0], _lightTileBufferSize[1], planesRequired, Format::R32_UINT),
 					"tiled-light-bit-field")
 			}/*,
@@ -270,7 +271,7 @@ namespace RenderCore { namespace LightingEngine
 		_prepareBitFieldBoundUniforms = Metal::BoundUniforms(*_prepareBitFieldPipeline, usi);
 
 		auto tileableLightBufferDesc = CreateDesc(
-			BindFlag::UnorderedAccess, CPUAccess::Write, GPUAccess::Read|GPUAccess::Write,
+			BindFlag::UnorderedAccess, AllocationRules::HostVisibleRandomAccess|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped,
 			LinearBufferDesc::Create(sizeof(IntermediateLight)*_config._maxLightsPerView),
 			"tileable-lights");
 		for (unsigned c=0; c<2; ++c) {
@@ -279,7 +280,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		auto metricsBufferDesc = CreateDesc(
-			BindFlag::UnorderedAccess|BindFlag::ShaderResource, 0, GPUAccess::Read|GPUAccess::Write,
+			BindFlag::UnorderedAccess|BindFlag::ShaderResource,
 			LinearBufferDesc::Create(sizeof(unsigned)*16),
 			"metrics");
 		auto buffer = _pipelinePool->GetDevice()->CreateResource(metricsBufferDesc);

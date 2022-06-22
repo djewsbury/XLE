@@ -177,12 +177,12 @@ namespace UnitTests
 				const unsigned stripeHeight= 8;
 
 				auto stripeTargetDesc = CreateDesc(
-					BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+					BindFlag::RenderTarget | BindFlag::TransferSrc,
 					TextureDesc::Plain2D(2048, stripeHeight, RenderCore::Format::R8G8B8A8_UNORM),
 					"temporary-out");
 
 				auto stitchedImageDesc = CreateDesc(
-					BindFlag::TransferDst, CPUAccess::Read, 0,
+					BindFlag::TransferDst, AllocationRules::HostVisibleRandomAccess,
 					TextureDesc::Plain2D(2048, stripes*stripeHeight, RenderCore::Format::R8G8B8A8_UNORM),
 					"saved-image");
 				auto stitchedImage = testHelper->_device->CreateResource(stitchedImageDesc);
@@ -219,7 +219,7 @@ namespace UnitTests
 							*stitchedImage, {}, UInt3{0,c*stripeHeight,0}
 						},
 						CopyPartial_Src {
-							*fbHelper.GetMainTarget(), {}, UInt3{0,0,0}, UInt3{2048,stripeHeight,1}
+							*fbHelper.GetMainTarget(), {}, 1, 1, UInt3{0,0,0}, UInt3{2048,stripeHeight,1}
 						});
 
 					lightScene.DestroyLightSource(lightId);
@@ -233,7 +233,7 @@ namespace UnitTests
 			SECTION("contact precision")
 			{
 				auto targetDesc = CreateDesc(
-					BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+					BindFlag::RenderTarget | BindFlag::TransferSrc,
 					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
 					"temporary-out");
 
@@ -476,7 +476,7 @@ namespace UnitTests
 
 			{
 				auto targetDesc = CreateDesc(
-					BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+					BindFlag::RenderTarget | BindFlag::TransferSrc,
 					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
 					"temporary-out");
 

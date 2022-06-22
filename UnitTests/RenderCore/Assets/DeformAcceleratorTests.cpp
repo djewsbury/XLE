@@ -173,7 +173,7 @@ namespace UnitTests
 		}
 		return device.CreateResource(
 			CreateDesc(
-				BindFlag::UnorderedAccess|BindFlag::TransferSrc, 0, GPUAccess::Read|GPUAccess::Write,
+				BindFlag::UnorderedAccess|BindFlag::TransferSrc,
 				LinearBufferDesc::Create(unsigned(vb._size)),
 				"vb"),
 			SubResourceInitData{MakeIteratorRange(buffer.get(), PtrAdd(buffer.get(), vb._size))});

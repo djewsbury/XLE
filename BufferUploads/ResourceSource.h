@@ -240,7 +240,8 @@ namespace BufferUploads
         struct CreationOptions
         {
             enum Enum {
-                PreventDeviceCreation = 1<<0
+                PreventDeviceCreation = 1<<0,
+                Staging = 1<<1
             };
             typedef unsigned BitField;
         };

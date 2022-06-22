@@ -170,7 +170,7 @@ namespace UnitTests
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
 			"temporary-out");
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
@@ -376,7 +376,6 @@ namespace UnitTests
 			auto textureResource = dev.CreateResource(
 				CreateDesc(
 					BindFlag::ShaderResource, 
-					0, GPUAccess::Read,
 					TextureDesc::Plain2D(32, 32, RenderCore::Format::R8G8B8A8_UNORM),
 					name + "-tex0"),
 				SubResourceInitData{MakeIteratorRange(dummyData)});

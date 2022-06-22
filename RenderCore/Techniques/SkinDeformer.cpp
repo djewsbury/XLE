@@ -646,14 +646,14 @@ namespace RenderCore { namespace Techniques
 		auto iaParamsBuffer = _pipelineCollection->_pipelineCollection->GetDevice()->CreateResource(
 			CreateDesc(
 				BindFlag::UnorderedAccess,
-				0, GPUAccess::Read, LinearBufferDesc::Create(_iaParams.size() * sizeof(Internal::GPUDeformerIAParams)), "skin-ia-data"),
+				LinearBufferDesc::Create(_iaParams.size() * sizeof(Internal::GPUDeformerIAParams)), "skin-ia-data"),
 			SubResourceInitData{MakeIteratorRange(_iaParams)});
 		_iaParamsView = iaParamsBuffer->CreateBufferView(BindFlag::UnorderedAccess);
 
 		auto skinIAParamsBuffer = _pipelineCollection->_pipelineCollection->GetDevice()->CreateResource(
 			CreateDesc(
 				BindFlag::UnorderedAccess,
-				0, GPUAccess::Read, LinearBufferDesc::Create(_skinIAParams.size() * sizeof(SkinIAParams)), "skin-ia-data"),
+				LinearBufferDesc::Create(_skinIAParams.size() * sizeof(SkinIAParams)), "skin-ia-data"),
 			SubResourceInitData{MakeIteratorRange(_skinIAParams)});
 		_skinIAParamsView = skinIAParamsBuffer->CreateBufferView(BindFlag::UnorderedAccess);
 	}

@@ -305,7 +305,6 @@ namespace ToolsRig
         _pimpl->_cubeLocator = bufferUploads.Transaction_Immediate(
             CreateDesc( 
                 BindFlag::DepthStencil | BindFlag::ShaderResource,
-                0, GPUAccess::Read|GPUAccess::Write,
                 TextureDesc::Plain2D(
                     settings._renderResolution, settings._renderResolution, 
                     typelessFormat, 1, cubeFaces),
@@ -316,7 +315,6 @@ namespace ToolsRig
         _pimpl->_miniLocator = bufferUploads.Transaction_Immediate(
             CreateDesc( 
                 BindFlag::UnorderedAccess,
-                0, GPUAccess::Write,
                 TextureDesc::Plain2D(4, 4, Format::R32_FLOAT, 1, cubeFaces),
                 "AoGenMini"));
         _pimpl->_miniUAV = Metal::UnorderedAccessView(_pimpl->_miniLocator->GetUnderlying());

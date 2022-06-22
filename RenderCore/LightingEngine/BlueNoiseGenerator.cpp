@@ -30,7 +30,7 @@ namespace RenderCore { namespace LightingEngine
 		auto sobolBuffer = device.CreateResource(
 			CreateDesc(
 				BindFlag::TransferDst | BindFlag::ShaderResource | BindFlag::TexelBuffer,
-				0, 0, LinearBufferDesc::Create(sizeof(g_blue_noise_sampler_state.sobol_buffer_)),
+				LinearBufferDesc::Create(sizeof(g_blue_noise_sampler_state.sobol_buffer_)),
 				"blue-noise-sobol"
 			),
 			SubResourceInitData{MakeIteratorRange(g_blue_noise_sampler_state.sobol_buffer_)});
@@ -39,7 +39,7 @@ namespace RenderCore { namespace LightingEngine
 		auto rankingTileBuffer = device.CreateResource(
 			CreateDesc(
 				BindFlag::TransferDst | BindFlag::ShaderResource | BindFlag::TexelBuffer,
-				0, 0, LinearBufferDesc::Create(sizeof(g_blue_noise_sampler_state.ranking_tile_buffer_)),
+				LinearBufferDesc::Create(sizeof(g_blue_noise_sampler_state.ranking_tile_buffer_)),
 				"blue-noise-ranking"
 			),
 			SubResourceInitData{MakeIteratorRange(g_blue_noise_sampler_state.ranking_tile_buffer_)});
@@ -48,7 +48,7 @@ namespace RenderCore { namespace LightingEngine
 		auto scramblingTileBuffer = device.CreateResource(
 			CreateDesc(
 				BindFlag::TransferDst | BindFlag::ShaderResource | BindFlag::TexelBuffer,
-				0, 0, LinearBufferDesc::Create(sizeof(g_blue_noise_sampler_state.scrambling_tile_buffer_)),
+				LinearBufferDesc::Create(sizeof(g_blue_noise_sampler_state.scrambling_tile_buffer_)),
 				"blue-noise-scrambling"
 			),
 			SubResourceInitData{MakeIteratorRange(g_blue_noise_sampler_state.scrambling_tile_buffer_)});

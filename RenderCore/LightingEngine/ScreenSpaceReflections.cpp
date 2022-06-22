@@ -71,7 +71,7 @@ namespace RenderCore { namespace LightingEngine
 			_rayLengthsTexture = device.CreateResource(
 				CreateDesc(
 					BindFlag::TransferDst | BindFlag::UnorderedAccess | BindFlag::ShaderResource,
-					0, 0, TextureDesc::Plain2D(fbProps._outputWidth, fbProps._outputHeight, Format::R16_FLOAT),
+					TextureDesc::Plain2D(fbProps._outputWidth, fbProps._outputHeight, Format::R16_FLOAT),
 					"ssr-ray-lengths"
 				));
 			_rayLengthsUAV = _rayLengthsTexture->CreateTextureView(BindFlag::UnorderedAccess);
@@ -85,7 +85,7 @@ namespace RenderCore { namespace LightingEngine
 			_rayListBuffer = device.CreateResource(
 				CreateDesc(
 					BindFlag::TexelBuffer | BindFlag::UnorderedAccess | BindFlag::ShaderResource,
-					0, 0, LinearBufferDesc::Create(ray_list_element_count*sizeof(uint32_t)),
+					LinearBufferDesc::Create(ray_list_element_count*sizeof(uint32_t)),
 					"ssr-ray-list"
 				));
 			_rayListBufferUAV = _rayListBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
@@ -94,7 +94,7 @@ namespace RenderCore { namespace LightingEngine
 			_tileMetaDataMask = device.CreateResource(
 				CreateDesc(
 					BindFlag::UnorderedAccess | BindFlag::ShaderResource,
-					0, 0, LinearBufferDesc::Create(tileCount*sizeof(uint32_t)),
+					LinearBufferDesc::Create(tileCount*sizeof(uint32_t)),
 					"ssr-tile-meta-data"
 				));
 			_tileMetaDataMaskUAV = _tileMetaDataMask->CreateBufferView(BindFlag::UnorderedAccess);
@@ -103,7 +103,7 @@ namespace RenderCore { namespace LightingEngine
 			_tileTemporalVarianceMask = device.CreateResource(
 				CreateDesc(
 					BindFlag::UnorderedAccess | BindFlag::ShaderResource,
-					0, 0, LinearBufferDesc::Create(tileCount*2*sizeof(uint32_t)),
+					LinearBufferDesc::Create(tileCount*2*sizeof(uint32_t)),
 					"ssr-tile-temporal-variance"
 				));
 			_tileTemporalVarianceMaskUAV = _tileTemporalVarianceMask->CreateBufferView(BindFlag::UnorderedAccess);
@@ -369,7 +369,7 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::PreregisteredAttachment {
 					SSRReflections,
 					CreateDesc(
-						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource,
 						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
 						"ssr-reflections"),
 					Techniques::PreregisteredAttachment::State::Uninitialized
@@ -377,7 +377,7 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::PreregisteredAttachment {
 					SSRInt,
 					CreateDesc(
-						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource,
 						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
 						"ssr-intermediate"),
 					Techniques::PreregisteredAttachment::State::Uninitialized
@@ -391,7 +391,7 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::PreregisteredAttachment {
 					SSRReflections,
 					CreateDesc(
-						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource,
 						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
 						"ssr-reflections0"),
 					Techniques::PreregisteredAttachment::State::Uninitialized
@@ -399,7 +399,7 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::PreregisteredAttachment {
 					SSRInt,
 					CreateDesc(
-						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource,
 						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
 						"ssr-intermediate"),
 					Techniques::PreregisteredAttachment::State::Uninitialized
@@ -415,7 +415,7 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::PreregisteredAttachment {
 					SSRConfidence,
 					CreateDesc(
-						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource,
 						TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R8_UNORM),
 						"ssr-confidence0"),
 					Techniques::PreregisteredAttachment::State::Uninitialized
@@ -423,7 +423,7 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::PreregisteredAttachment {
 					SSRConfidenceInt,
 					CreateDesc(
-						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource,
 						TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R8_UNORM),
 						"ssr-confidence-intermediate"),
 					Techniques::PreregisteredAttachment::State::Uninitialized
@@ -438,7 +438,7 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::PreregisteredAttachment {
 				SSRDebug,
 				CreateDesc(
-					BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+					BindFlag::UnorderedAccess | BindFlag::ShaderResource,
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R32G32B32A32_FLOAT),
 					"ssr-debug"),
 				Techniques::PreregisteredAttachment::State::Uninitialized
@@ -499,7 +499,7 @@ namespace RenderCore { namespace LightingEngine
 			ParameterBox params;
 			auto cbInitializer = configCBLayout.BuildCBDataAsVector(params, Techniques::GetDefaultShaderLanguage());
 			_configCB = _device->CreateResource(
-				CreateDesc(BindFlag::ConstantBuffer, 0, 0, LinearBufferDesc::Create(cbInitializer.size()), "ssr-config"),
+				CreateDesc(BindFlag::ConstantBuffer, LinearBufferDesc::Create(cbInitializer.size()), "ssr-config"),
 				SubResourceInitData{MakeIteratorRange(cbInitializer)})->CreateBufferView();
 		}
 
@@ -508,7 +508,7 @@ namespace RenderCore { namespace LightingEngine
 		auto rayCounterBuffer = _device->CreateResource(
 			CreateDesc(
 				BindFlag::TransferDst | BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TexelBuffer,
-				0, 0, LinearBufferDesc::Create(2*sizeof(uint32_t)),
+				LinearBufferDesc::Create(2*sizeof(uint32_t)),
 				"ssr-ray-counter"
 			));
 		_rayCounterBufferUAV = rayCounterBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
@@ -519,7 +519,7 @@ namespace RenderCore { namespace LightingEngine
 		_indirectArgsBuffer = _device->CreateResource(
 			CreateDesc(
 				BindFlag::DrawIndirectArgs | BindFlag::UnorderedAccess | BindFlag::TexelBuffer,
-				0, 0, LinearBufferDesc::Create(3*sizeof(uint32_t)),
+				LinearBufferDesc::Create(3*sizeof(uint32_t)),
 				"ssr-indirect-args"
 			));
 		_indirectArgsBufferUAV = _indirectArgsBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});

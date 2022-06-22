@@ -652,15 +652,7 @@ namespace RenderOverlays
 	: _format(pixelFormat)
 	{
 		using namespace RenderCore;
-		ResourceDesc desc;
-		desc._type = ResourceDesc::Type::Texture;
-		desc._bindFlags = BindFlag::ShaderResource | BindFlag::TransferDst;
-		desc._cpuAccess = CPUAccess::Write;
-		desc._gpuAccess = GPUAccess::Read;
-		desc._allocationRules = 0;
-		desc._textureDesc = TextureDesc::Plain2D(width, height, pixelFormat, 1);
-		XlCopyString(desc._name, "Font");
-		_resource = dev.CreateResource(desc);
+		_resource = dev.CreateResource(CreateDesc(BindFlag::ShaderResource | BindFlag::TransferDst, TextureDesc::Plain2D(width, height, pixelFormat, 1), "Font"));
 		_srv = _resource->CreateTextureView();
 	}
 

@@ -97,7 +97,7 @@ namespace RenderCore { namespace LightingEngine
 				staticDatabaseDesc._arrayCount = 6*_pimpl->_probes.size();
 				Techniques::PreregisteredAttachment preregisteredAttachments[] {
 					semanticProbePrepare,
-					CreateDesc(BindFlag::ShaderResource | BindFlag::DepthStencil, 0, 0, staticDatabaseDesc, "probe-prepare")
+					CreateDesc(BindFlag::ShaderResource | BindFlag::DepthStencil, staticDatabaseDesc, "probe-prepare")
 				};
 
 				_techContext._attachmentPool = std::make_shared<Techniques::AttachmentPool>(threadContext.GetDevice());
@@ -256,7 +256,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 		auto& device = *threadContext.GetDevice();
 		auto probeUniformsRes = device.CreateResource(
-			CreateDesc(BindFlag::UnorderedAccess, 0, 0, LinearBufferDesc::Create(sizeof(CB_StaticShadowProbeDesc)*probeUniforms.size(), sizeof(CB_StaticShadowProbeDesc)), "shadow-probe-list"),
+			CreateDesc(BindFlag::UnorderedAccess, LinearBufferDesc::Create(sizeof(CB_StaticShadowProbeDesc)*probeUniforms.size(), sizeof(CB_StaticShadowProbeDesc)), "shadow-probe-list"),
 			SubResourceInitData{probeUniforms});
 		_pimpl->_probeUniformsUAV = probeUniformsRes->CreateBufferView(BindFlag::UnorderedAccess);
 		return result;

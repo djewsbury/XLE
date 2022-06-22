@@ -109,14 +109,11 @@ namespace SceneEngine
         lbDesc._structureByteSize = elementSize;
         lbDesc._sizeInBytes = elementSize * elementCount;
 
-        auto bufferDesc = CreateDesc(
-            BindFlag::StreamOutput | BindFlag::TransferSrc, 0, GPUAccess::Read | GPUAccess::Write,
-            lbDesc, "ModelIntersectionBuffer");
-        
-        _streamOutputBuffer = device.CreateResource(bufferDesc);
+        _streamOutputBuffer = device.CreateResource(
+			CreateDesc(BindFlag::StreamOutput | BindFlag::TransferSrc, lbDesc, "ModelIntersectionBuffer"));
 
         _cpuAccessBuffer = device.CreateResource(
-            CreateDesc(BindFlag::TransferDst, CPUAccess::Read, 0, lbDesc, "ModelIntersectionCopyBuffer"));
+            CreateDesc(BindFlag::TransferDst, AllocationRules::HostVisibleRandomAccess, lbDesc, "ModelIntersectionCopyBuffer"));
 
 		_streamOutputQueryPool = std::make_unique<RenderCore::Metal::QueryPool>(
 			Metal::GetObjectFactory(device), 
@@ -202,6 +199,7 @@ namespace SceneEngine
 
 		if (hitEventsWritten!=0) {
 			// note -- we may not have to readback the entire buffer here, if we use the hitEventsWritten value
+			// todo -- copy to _cpuAccessBuffer, rather than just calling ReadBackSynchronized() directly
 			auto readback = _pimpl->_res->_streamOutputBuffer->ReadBackSynchronized(*_pimpl->_threadContext);
 			if (!readback.empty()) {
 				const auto* mappedData = (const ResultEntry*)readback.data();

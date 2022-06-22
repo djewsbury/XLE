@@ -51,6 +51,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		TemporaryStorageResourceMap(TemporaryStorageResourceMap&&);
 		TemporaryStorageResourceMap& operator=(TemporaryStorageResourceMap&&);
 		TemporaryStorageResourceMap();
+		~TemporaryStorageResourceMap();
 		
 		TemporaryStorageResourceMap(ResourceMap&&) = delete;
 		TemporaryStorageResourceMap& operator=(ResourceMap&&) = delete;

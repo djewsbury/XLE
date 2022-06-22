@@ -24,7 +24,7 @@ namespace UnitTests
 		stitchingContext.DefineAttachment(
 			AttachmentSemantics::ColorLDR + semanticOffset,
 			CreateDesc(
-				BindFlag::RenderTarget | BindFlag::TransferSrc | BindFlag::PresentationSrc, 0, 0, 
+				BindFlag::RenderTarget | BindFlag::TransferSrc | BindFlag::PresentationSrc,
 				TextureDesc::Plain2D(dims[0], dims[1], Format::R8G8B8A8_UNORM_SRGB),
 				"color-ldr"),
 			PreregisteredAttachment::State::Uninitialized,
@@ -33,7 +33,7 @@ namespace UnitTests
 		stitchingContext.DefineAttachment(
 			AttachmentSemantics::MultisampleDepth + semanticOffset,
 			CreateDesc(
-				BindFlag::DepthStencil | BindFlag::InputAttachment, 0, 0, 
+				BindFlag::DepthStencil | BindFlag::InputAttachment,
 				TextureDesc::Plain2D(dims[0], dims[1], Format::D24_UNORM_S8_UINT),
 				"depth-stencil"),
 			PreregisteredAttachment::State::Uninitialized,
@@ -42,7 +42,7 @@ namespace UnitTests
 		stitchingContext.DefineAttachment(
 			AttachmentSemantics::ShadowDepthMap + semanticOffset,
 			CreateDesc(
-				BindFlag::DepthStencil | BindFlag::ShaderResource, 0, 0, 
+				BindFlag::DepthStencil | BindFlag::ShaderResource,
 				TextureDesc::Plain2D(dims[0], dims[1], Format::D16_UNORM),
 				"depth-stencil"),
 			PreregisteredAttachment::State::Initialized,

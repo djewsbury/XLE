@@ -73,14 +73,14 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::ColorHDR,
 				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::InputAttachment, 0, GPUAccess::Write|GPUAccess::Read,
+					BindFlag::RenderTarget | BindFlag::InputAttachment,
 					TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
 					"color-hdr")
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::ColorLDR,
 				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+					BindFlag::RenderTarget | BindFlag::TransferSrc,
 					TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
 					"color-ldr")
 			}

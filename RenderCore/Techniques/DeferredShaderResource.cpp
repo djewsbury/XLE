@@ -503,8 +503,7 @@ namespace RenderCore { namespace Techniques
         dataFuture.wait();
 
         auto stagingDesc = desc;
-        stagingDesc._cpuAccess = CPUAccess::Read|CPUAccess::Write;
-        stagingDesc._gpuAccess = 0;
+        stagingDesc._allocationRules = AllocationRules::HostVisibleSequentialWrite;
         stagingDesc._bindFlags = BindFlag::TransferSrc;
         auto stagingResource = device->CreateResource(
             stagingDesc,
@@ -528,12 +527,11 @@ namespace RenderCore { namespace Techniques
         const std::shared_ptr<IResource>& input)
     {
         auto inputDesc = input->GetDesc();
-        if (inputDesc._gpuAccess == 0)
+        if (inputDesc._allocationRules & AllocationRules::HostVisibleRandomAccess)
             return input;
 
         auto destagingDesc = inputDesc;
-        destagingDesc._cpuAccess = CPUAccess::Read|CPUAccess::Write;
-        destagingDesc._gpuAccess = 0;
+        destagingDesc._allocationRules = AllocationRules::HostVisibleRandomAccess;
         destagingDesc._bindFlags = BindFlag::TransferDst;
         auto destagingResource = threadContext.GetDevice()->CreateResource(destagingDesc);
         auto& devContext = *Metal::DeviceContext::Get(threadContext);

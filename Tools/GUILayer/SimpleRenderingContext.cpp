@@ -230,7 +230,7 @@ namespace GUILayer
     uint64  RetainedRenderResources::CreateVertexBuffer(void* data, size_t size, unsigned format)
     {
         using namespace RenderCore;
-        auto desc = CreateDesc(BindFlag::VertexBuffer, 0, GPUAccess::Read, LinearBufferDesc::Create((unsigned)size), "retained-render-resources");
+        auto desc = CreateDesc(BindFlag::VertexBuffer, LinearBufferDesc::Create((unsigned)size), "retained-render-resources");
 		auto newBuffer = _pimpl->_device->CreateResource(
             desc,
             SubResourceInitData{MakeIteratorRange(data, PtrAdd(data, size))});
@@ -242,7 +242,7 @@ namespace GUILayer
     uint64  RetainedRenderResources::CreateIndexBuffer(void* data, size_t size)
     {
 		using namespace RenderCore;
-        auto desc = CreateDesc(BindFlag::IndexBuffer, 0, GPUAccess::Read, LinearBufferDesc::Create((unsigned)size), "retained-render-resources");
+        auto desc = CreateDesc(BindFlag::IndexBuffer, LinearBufferDesc::Create((unsigned)size), "retained-render-resources");
 		auto newBuffer = _pimpl->_device->CreateResource(
             desc,
             SubResourceInitData{MakeIteratorRange(data, PtrAdd(data, size))});

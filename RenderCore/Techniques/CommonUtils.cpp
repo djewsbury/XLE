@@ -27,9 +27,10 @@ namespace RenderCore { namespace Techniques
 
 	RenderCore::IResourcePtr CreateStaticVertexBuffer(IDevice& device, IteratorRange<const void*> data)
 	{
+		assert(0);	// this is non-ideal because it will result in a host visible vertex buffer
 		return device.CreateResource(
 			CreateDesc(
-				BindFlag::VertexBuffer, 0, GPUAccess::Read,
+				BindFlag::VertexBuffer,
 				LinearBufferDesc::Create(unsigned(data.size())),
 				"vb"),
 			[data](SubResourceId subres) {
@@ -40,9 +41,10 @@ namespace RenderCore { namespace Techniques
 
 	RenderCore::IResourcePtr CreateStaticIndexBuffer(IDevice& device, IteratorRange<const void*> data)
 	{
+		assert(0);	// this is non-ideal because it will result in a host visible index buffer
 		return device.CreateResource(
 			CreateDesc(
-				BindFlag::IndexBuffer, 0, GPUAccess::Read,
+				BindFlag::IndexBuffer,
 				LinearBufferDesc::Create(unsigned(data.size())),
 				"ib"),
 			[data](SubResourceId subres) {
@@ -63,7 +65,7 @@ namespace RenderCore { namespace Techniques
 		// todo -- avoid the need for a host access buffer here
 		auto result = device.CreateResource(
 			CreateDesc(
-				bindFlags, CPUAccess::Write, GPUAccess::Read,
+				bindFlags, AllocationRules::HostVisibleSequentialWrite,
 				LinearBufferDesc::Create(resourceSize),
 				resourceName));
 		Metal::ResourceMap map{device, *result, Metal::ResourceMap::Mode::WriteDiscardPrevious};
@@ -195,7 +197,7 @@ namespace RenderCore { namespace Techniques
 	{
 		auto dataSource = std::make_shared<Internal::ModelScaffoldDataSource>();
 		dataSource->_resourceDesc = CreateDesc(
-			bindFlags | BindFlag::TransferDst, 0, GPUAccess::Read,
+			bindFlags | BindFlag::TransferDst,
 			LinearBufferDesc::Create(resourceSize),
 			resourceName);
 		dataSource->_loadRequests = Internal::AsLoadRequests(modelScaffold, loadRequests);
@@ -212,7 +214,7 @@ namespace RenderCore { namespace Techniques
 	{
 		auto dataSource = std::make_shared<Internal::ModelScaffoldDataSource>();
 		dataSource->_resourceDesc = CreateDesc(
-			bindFlags | BindFlag::TransferDst, 0, GPUAccess::Read,
+			bindFlags | BindFlag::TransferDst,
 			LinearBufferDesc::Create(resourceSize),
 			resourceName);
 		dataSource->_loadRequests = Internal::AsLoadRequests(loadRequests);

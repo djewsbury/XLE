@@ -57,8 +57,8 @@ namespace SceneEngine
 			};
 
 			auto& uploads = Techniques::Services::GetBufferUploads();
-			auto gradDesc = CreateDesc(BufferUploads::BindFlag::ShaderResource, 0, 0, BufferUploads::TextureDesc::Plain1D(dimof(g), Format::R32G32B32A32_TYPELESS), "NoiseGrad");
-			auto permDesc = CreateDesc(BufferUploads::BindFlag::ShaderResource, 0, 0, BufferUploads::TextureDesc::Plain1D(dimof(perm), Format::R8_TYPELESS), "NoisePerm");
+			auto gradDesc = CreateDesc(BufferUploads::BindFlag::ShaderResource, BufferUploads::TextureDesc::Plain1D(dimof(g), Format::R32G32B32A32_TYPELESS), "NoiseGrad");
+			auto permDesc = CreateDesc(BufferUploads::BindFlag::ShaderResource, BufferUploads::TextureDesc::Plain1D(dimof(perm), Format::R8_TYPELESS), "NoisePerm");
 			auto gradMarker = uploads.Transaction_Begin(gradDesc, BufferUploads::CreateBasicPacket(MakeIteratorRange(g)));
 			auto permMarker = uploads.Transaction_Begin(permDesc, BufferUploads::CreateBasicPacket(MakeIteratorRange(perm)));
 

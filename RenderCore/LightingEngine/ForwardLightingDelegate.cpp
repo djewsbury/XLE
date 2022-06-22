@@ -171,14 +171,14 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::MultisampleDepth,
 				CreateDesc(
-					BindFlag::DepthStencil | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
+					BindFlag::DepthStencil | BindFlag::ShaderResource | BindFlag::InputAttachment,
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], stitchingContext.GetSystemAttachmentFormat(Techniques::SystemAttachmentFormat::MainDepthStencil)),
 					"main-depth")
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::ColorHDR,
 				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
+					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment,
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT),
 					"color-hdr"),
 				Techniques::PreregisteredAttachment::State::Initialized			// we have to register this as initialized, because some effects can use the contents from the previous frame
@@ -186,14 +186,14 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferNormal,
 				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
+					BindFlag::RenderTarget | BindFlag::ShaderResource,
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_SNORM),
 					"gbuffer-normal")
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferMotion,
 				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
+					BindFlag::RenderTarget | BindFlag::ShaderResource,
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8_SINT),
 					"gbuffer-motion")
 			}

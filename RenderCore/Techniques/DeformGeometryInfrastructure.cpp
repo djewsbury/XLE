@@ -238,7 +238,7 @@ namespace RenderCore { namespace Techniques
 
 			result->_gpuTemporariesBuffer = device.CreateResource(
 				RenderCore::CreateDesc(
-					BindFlag::UnorderedAccess, 0, GPUAccess::Read|GPUAccess::Write,
+					BindFlag::UnorderedAccess,
 					LinearBufferDesc::Create(bufferIterators._bufferIterators[Internal::VB_GPUDeformTemporaries]),
 					bufferName.AsStringSection()));
 			result->_gpuTemporariesBufferView = result->_gpuTemporariesBuffer->CreateBufferView(BindFlag::UnorderedAccess);

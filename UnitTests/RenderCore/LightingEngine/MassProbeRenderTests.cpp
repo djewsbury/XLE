@@ -250,7 +250,7 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				s_attachmentProbeTarget,
 				CreateDesc(
-					BindFlag::TransferSrc | BindFlag::RenderTarget, 0, 0, 
+					BindFlag::TransferSrc | BindFlag::RenderTarget,
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::B8G8R8A8_UNORM_SRGB, 1, 64),
 					"probe-target"
 				),
@@ -259,7 +259,7 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				s_attachmentProbeDepth,
 				CreateDesc(
-					BindFlag::TransferSrc | BindFlag::DepthStencil, 0, 0, 
+					BindFlag::TransferSrc | BindFlag::DepthStencil,
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::D16_UNORM, 1, 64),
 					"probe-depth"
 				),

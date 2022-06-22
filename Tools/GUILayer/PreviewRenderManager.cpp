@@ -125,7 +125,6 @@ namespace GUILayer
 				_resource = threadContext.GetDevice()->CreateResource(
 					CreateDesc(
 						BindFlag::RenderTarget,
-						0, GPUAccess::Write,
 						TextureDesc::Plain2D(_width, _height, Format::R8G8B8A8_UNORM_SRGB),
 						"PreviewBuilderTarget"));
 

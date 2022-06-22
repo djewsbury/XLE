@@ -118,7 +118,7 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferDiffuse,
 				CreateDesc(
-					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
+					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::ShaderResource,
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::B8G8R8A8_UNORM_SRGB),
 					"gbuffer-diffuse"
 				),
@@ -127,7 +127,7 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferNormal,
 				CreateDesc(
-					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
+					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::ShaderResource,
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::R8G8B8A8_SNORM),
 					"gbuffer-normals"
 				),
@@ -136,7 +136,7 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferParameter,
 				CreateDesc(
-					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
+					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::ShaderResource,
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::R8G8B8A8_UNORM),
 					"gbuffer-parameters"
 				),
@@ -145,7 +145,7 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				Hash64("ReconstructedWorldPosition"),
 				CreateDesc(
-					BindFlag::TransferSrc | BindFlag::RenderTarget, 0, 0, 
+					BindFlag::TransferSrc | BindFlag::RenderTarget,
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::R32G32B32A32_FLOAT),
 					"reconstructed-world-position"
 				),
@@ -154,7 +154,7 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				Hash64("ReconstructedWorldNormal"),
 				CreateDesc(
-					BindFlag::TransferSrc | BindFlag::RenderTarget, 0, 0, 
+					BindFlag::TransferSrc | BindFlag::RenderTarget,
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::R32G32B32A32_FLOAT),
 					"reconstructed-world-normal"
 				),
@@ -163,7 +163,7 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				Hash64("DirectWorldPosition"),
 				CreateDesc(
-					BindFlag::TransferSrc | BindFlag::RenderTarget, 0, 0, 
+					BindFlag::TransferSrc | BindFlag::RenderTarget,
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::R32G32B32A32_FLOAT),
 					"direct-world-position"
 				),
@@ -172,7 +172,7 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				Hash64("DirectWorldNormal"),
 				CreateDesc(
-					BindFlag::TransferSrc | BindFlag::RenderTarget, 0, 0, 
+					BindFlag::TransferSrc | BindFlag::RenderTarget,
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::R32G32B32A32_FLOAT),
 					"direct-world-normal"
 				),

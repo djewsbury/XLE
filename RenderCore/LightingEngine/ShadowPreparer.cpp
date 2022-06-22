@@ -273,12 +273,12 @@ namespace RenderCore { namespace LightingEngine
 		pregAttach._state = Techniques::PreregisteredAttachment::State::Uninitialized;
 		if (desc._projectionMode == ShadowProjectionMode::ArbitraryCubeMap) {
 			pregAttach._desc = CreateDesc(
-				BindFlag::ShaderResource | BindFlag::DepthStencil, 0, GPUAccess::Read|GPUAccess::Write, 
+				BindFlag::ShaderResource | BindFlag::DepthStencil,
 				TextureDesc::PlainCube(desc._width, desc._height, desc._format),
 				"shadow-map-cube");
 		} else {
 			pregAttach._desc = CreateDesc(
-				BindFlag::ShaderResource | BindFlag::DepthStencil, 0, GPUAccess::Read|GPUAccess::Write, 
+				BindFlag::ShaderResource | BindFlag::DepthStencil,
 				TextureDesc::Plain2D(desc._width, desc._height, desc._format, 1, arrayCount),
 				"shadow-map");
 		}

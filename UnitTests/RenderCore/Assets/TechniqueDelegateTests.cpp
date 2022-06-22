@@ -498,7 +498,7 @@ namespace UnitTests
 			using namespace RenderCore;
 			auto threadContext = testHelper->_device->GetImmediateContext();
 			auto targetDesc = CreateDesc(
-				BindFlag::RenderTarget | BindFlag::TransferSrc | BindFlag::TransferDst, 0, GPUAccess::Write,
+				BindFlag::RenderTarget | BindFlag::TransferSrc | BindFlag::TransferDst,
 				TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 				"temporary-out");
 

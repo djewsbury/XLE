@@ -88,19 +88,16 @@ namespace BufferUploads { namespace PlatformInterface
                 blitEncoder.Copy(*finalResource.GetContainingResource().get(), *stagingResource.GetContainingResource().get());
             } else {
                 auto& dstBox = stagingToFinalMapping._dstBox;
-                for (unsigned a=stagingToFinalMapping._dstArrayLayerMin; a<=dstArrayLayerMax; ++a) {
-                    for (unsigned mip=stagingToFinalMapping._dstLodLevelMin; mip<=dstLodLevelMax; ++mip) {
-                        blitEncoder.Copy(
-                            CopyPartial_Dest{
-                                *finalResource.GetContainingResource(), 
-                                SubResourceId{mip, a}, {(unsigned)dstBox._left, (unsigned)dstBox._top, 0}},
-                            CopyPartial_Src{
-                                *stagingResource.GetContainingResource(), 
-                                SubResourceId{mip-stagingToFinalMapping._stagingLODOffset, a-stagingToFinalMapping._stagingArrayOffset},
-                                {(unsigned)dstBox._left - stagingToFinalMapping._stagingXYOffset[0], (unsigned)dstBox._top - stagingToFinalMapping._stagingXYOffset[1], 0u},
-                                {(unsigned)dstBox._right - stagingToFinalMapping._stagingXYOffset[0], (unsigned)dstBox._bottom - stagingToFinalMapping._stagingXYOffset[1], 1u}});
-                    }
-                }
+                blitEncoder.Copy(
+                    CopyPartial_Dest{
+                        *finalResource.GetContainingResource(), 
+                        SubResourceId{stagingToFinalMapping._dstLodLevelMin, stagingToFinalMapping._dstArrayLayerMin}, {(unsigned)dstBox._left, (unsigned)dstBox._top, 0}},
+                    CopyPartial_Src{
+                        *stagingResource.GetContainingResource(), 
+                        SubResourceId{stagingToFinalMapping._dstLodLevelMin-stagingToFinalMapping._stagingLODOffset, stagingToFinalMapping._dstArrayLayerMin-stagingToFinalMapping._stagingArrayOffset},
+                        dstLodLevelMax-stagingToFinalMapping._dstLodLevelMin+1, dstArrayLayerMax-stagingToFinalMapping._dstArrayLayerMin+1,
+                        {(unsigned)dstBox._left - stagingToFinalMapping._stagingXYOffset[0], (unsigned)dstBox._top - stagingToFinalMapping._stagingXYOffset[1], 0u},
+                        {(unsigned)dstBox._right - stagingToFinalMapping._stagingXYOffset[0], (unsigned)dstBox._bottom - stagingToFinalMapping._stagingXYOffset[1], 1u}});
             }
         } else {
             assert(destinationDesc._type == ResourceDesc::Type::LinearBuffer);
@@ -207,10 +204,8 @@ namespace BufferUploads { namespace PlatformInterface
     static ResourceDesc AsStagingDesc(const ResourceDesc& desc)
     {
         ResourceDesc result = desc;
-        result._cpuAccess = CPUAccess::Write|CPUAccess::Read;
-        result._gpuAccess = 0;
         result._bindFlags = BindFlag::TransferSrc;
-        result._allocationRules |= AllocationRules::Staging;
+        result._allocationRules = AllocationRules::HostVisibleSequentialWrite;
         return result;
     }
 

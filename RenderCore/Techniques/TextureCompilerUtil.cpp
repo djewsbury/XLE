@@ -113,7 +113,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		auto inputRes = CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
-		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, 0, GPUAccess::Read|GPUAccess::Write, targetDesc, "texture-compiler"));
+		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc, "texture-compiler"));
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
 		computeOpFuture->StallWhilePending();
 		auto computeOp = computeOpFuture->Actualize();
@@ -217,7 +217,7 @@ namespace RenderCore { namespace Techniques
 		result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState(shader));
 		result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState(TOOLSHELPER_OPERATORS_PIPELINE));
 
-		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, 0, GPUAccess::Read|GPUAccess::Write, targetDesc, "texture-compiler"));
+		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc, "texture-compiler"));
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
 		computeOpFuture->StallWhilePending();
 		auto computeOp = computeOpFuture->Actualize();

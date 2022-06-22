@@ -70,18 +70,16 @@ namespace UnitTests
 	TEST_CASE( "BufferUploads-TextureInitialization", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
 		auto bu = BufferUploads::CreateManager(*metalHelper->_device);
 
 		std::vector<unsigned> rawData;
 		rawData.resize(256*256, 0xff7fff7f);
 		auto desc = CreateDesc(
-			BindFlag::ShaderResource, 0, GPUAccess::Read, TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
+			BindFlag::ShaderResource, TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
 			"bu-test-texture");
 
-		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
-				
 		SECTION("Prepared data packet")
 		{
 			
@@ -200,9 +198,7 @@ namespace UnitTests
 			// Copy to a destaging buffer and then read the data
 			auto destagingDesc = finalResourceDesc;
 			destagingDesc._bindFlags = BindFlag::TransferDst;
-			destagingDesc._cpuAccess = CPUAccess::Read;
-			destagingDesc._gpuAccess = 0;
-			destagingDesc._allocationRules = AllocationRules::Staging;
+			destagingDesc._allocationRules = AllocationRules::HostVisibleRandomAccess;
 			auto destaging = metalHelper->_device->CreateResource(destagingDesc);
 			{
 				auto blitEncoder = Metal::DeviceContext::Get(*metalHelper->_device->GetImmediateContext())->BeginBlitEncoder();
@@ -211,9 +207,8 @@ namespace UnitTests
 			metalHelper->_device->GetImmediateContext()->CommitCommands(CommitCommandsFlags::WaitForCompletion);
 			Metal::ResourceMap map(
 				*Metal::DeviceContext::Get(*metalHelper->_device->GetImmediateContext()),
-				*destaging, Metal::ResourceMap::Mode::Read,
-				SubResourceId{0,0});
-			auto data = map.GetData();
+				*destaging, Metal::ResourceMap::Mode::Read);
+			auto data = map.GetData(SubResourceId{});
 			std::stringstream str;
 			for (unsigned c=0; c<64; ++c)
 				str << std::hex << (unsigned)((uint8_t*)data.begin())[c] << " ";
@@ -266,7 +261,7 @@ namespace UnitTests
 		: _rngSeed(rngSeed)
 		{
 			_desc = RenderCore::CreateDesc(
-				0, 0, 0, RenderCore::TextureDesc::Plain2D(width, height, RenderCore::Format::R8G8B8A8_UNORM),
+				0, RenderCore::TextureDesc::Plain2D(width, height, RenderCore::Format::R8G8B8A8_UNORM),
 				"rng");
 		}
 	};
@@ -318,8 +313,7 @@ namespace UnitTests
 	TEST_CASE( "BufferUploads-TextureConstructionThrash", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
-		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
 		auto bu = BufferUploads::CreateManager(*metalHelper->_device);
 
@@ -358,8 +352,7 @@ namespace UnitTests
 	TEST_CASE( "BufferUploads-LinearBufferAllocation", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
-		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
 		auto bu = BufferUploads::CreateManager(*metalHelper->_device);
 
@@ -377,10 +370,10 @@ namespace UnitTests
 				auto size = 1024 * std::uniform_int_distribution<>(8, 64)(rng);
 				auto pkt = BufferUploads::CreateEmptyLinearBufferPacket(size);
 				FillWithRandomData(rng(), pkt->GetData());
-				auto desc = CreateDesc(BindFlag::IndexBuffer, 0, GPUAccess::Read, LinearBufferDesc::Create(size, size), "rng-buffer");
+				auto desc = CreateDesc(BindFlag::IndexBuffer, LinearBufferDesc::Create(size, size), "rng-buffer");
 				if (std::uniform_int_distribution<>(0, 1)(rng) == 0)
 					desc._bindFlags = BindFlag::VertexBuffer;
-				desc._allocationRules |= AllocationRules::Batched | AllocationRules::Pooled;
+				// desc._allocationRules |= AllocationRules::Batched | AllocationRules::Pooled;
 				
 				transactionHelper.AddTransaction(bu->Transaction_Begin(desc, pkt));
 			}
@@ -406,6 +399,7 @@ namespace UnitTests
 		// simple and controlled way. This can help us isolate issues between the metal
 		// layer and with buffer uploads
 		using namespace RenderCore;
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
 		std::shared_ptr<IThreadContext> backgroundContext = metalHelper->_device->CreateDeferredContext();
 
@@ -430,11 +424,11 @@ namespace UnitTests
 				[backgroundContext, dev = metalHelper->_device, seed = rng(), &queue]() {
 					auto& metalContext = *Metal::DeviceContext::Get(*backgroundContext);
 					auto finalResourceDesc = CreateDesc(
-						BindFlag::ShaderResource | BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
+						BindFlag::ShaderResource | BindFlag::TransferDst, TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
 						"bu-test-texture");
 
 					auto stagingResourceDesc = CreateDesc(
-						BindFlag::TransferSrc, CPUAccess::Write, 0, TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
+						BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite, TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
 						"bu-test-staging");
 
 					Queue::Item item;

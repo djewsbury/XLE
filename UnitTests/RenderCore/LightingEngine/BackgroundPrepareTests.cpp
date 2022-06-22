@@ -251,7 +251,7 @@ namespace UnitTests
 		testHelper->BeginFrameCapture();
 
 		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, RenderCore::Format::R8G8B8A8_UNORM),
 			"temporary-out");
 		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, Techniques::CameraDesc{});

@@ -1829,7 +1829,7 @@ namespace RenderCore { namespace Techniques
         auto bindFlags = usageBindFlags | attachmentDesc._initialLayout | attachmentDesc._finalLayout | attachmentDesc._matchingRules._requiredBindFlags;
 
         PreregisteredAttachment result;
-        result._desc = CreateDesc(bindFlags, 0, 0, tDesc, "attachment-pool");
+        result._desc = CreateDesc(bindFlags, AllocationRules::ResizeableRenderTarget, tDesc, "attachment-pool");
         assert(result._desc._textureDesc._format != Format::Unknown);       // at this point we must have a resolved format. If it's still unknown, we can't created a preregistered attachment
         result._semantic = attachmentDesc._semantic;
         result._state = PreregisteredAttachment::State::Uninitialized;

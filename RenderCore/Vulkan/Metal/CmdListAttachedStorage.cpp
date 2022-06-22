@@ -214,7 +214,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		return CreateDesc(
 			bindingFlags,
-			cpuMappable ? AllocationRules::HostVisibleSequentialWrite : 0,
+			cpuMappable ? AllocationRules::HostVisibleSequentialWrite|AllocationRules::PermanentlyMapped|AllocationRules::DisableAutoCacheCoherency : 0,
 			LinearBufferDesc::Create(unsigned(byteCount)),
 			"RollingTempBuf");
 	}
@@ -486,6 +486,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	TemporaryStorageResourceMap& TemporaryStorageResourceMap::operator=(TemporaryStorageResourceMap&& moveFrom)
 	{
+		FlushCache();
 		ResourceMap::operator=(std::move(moveFrom));
 		_resource = std::move(moveFrom._resource);
 		_pageId = moveFrom._pageId;
@@ -496,6 +497,11 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	TemporaryStorageResourceMap::TemporaryStorageResourceMap() {}
+	TemporaryStorageResourceMap::~TemporaryStorageResourceMap()
+	{
+		// ensure that any cached changes get flushed
+		FlushCache();
+	}
 
 	VertexBufferView BufferAndRange::AsVertexBufferView() { return { _resource.get(), _offset}; }
 	IndexBufferView BufferAndRange::AsIndexBufferView(Format indexFormat) { return { _resource.get(), indexFormat, _offset}; }

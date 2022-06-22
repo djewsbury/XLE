@@ -174,7 +174,7 @@ namespace RenderCore { namespace Assets
 							}
 
 							auto textureDesc = BuildTextureDesc(that->_texMetadata);
-							that->_resourceDesc = CreateDesc(0, 0, 0, textureDesc, that->_filename);
+							that->_resourceDesc = CreateDesc(0, textureDesc, that->_filename);
 							that->_hasReadMetadata = true;
 						}
 
@@ -386,7 +386,7 @@ namespace RenderCore { namespace Assets
 						}
 
 						auto textureDesc = BuildTextureDesc(that->_texMetadata);
-						auto resourceDesc = CreateDesc(0, 0, 0, textureDesc, that->_filename);
+						auto resourceDesc = CreateDesc(0, textureDesc, that->_filename);
 						captures->_promise.set_value(resourceDesc);
 					} catch(...) {
 						captures->_promise.set_exception(std::current_exception());
@@ -518,7 +518,7 @@ namespace RenderCore { namespace Assets
 
 							// The real file format is R8G8B8E8 (8 bit shared exponent)
 							that->_desc = CreateDesc(
-								0, 0, 0, TextureDesc::Plain2D(width, height, Format::R32G32B32A32_FLOAT),
+								0, TextureDesc::Plain2D(width, height, Format::R32G32B32A32_FLOAT),
 								that->_filename);
 							that->_dataBegin = (uint8_t*)i;
 							that->_hasBeenInitialized = true;

@@ -202,7 +202,7 @@ namespace UnitTests
 			auto scene = std::make_shared<BasicScene>(*_device, *mainPool);
 
 			auto targetDesc = CreateDesc(
-				BindFlag::RenderTarget, 0, GPUAccess::Write,
+				BindFlag::RenderTarget,
 				TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_TYPELESS),
 				"temporary-out");
 

@@ -537,7 +537,7 @@ namespace BufferUploads
             PlatformInterface::StagingToFinalMapping stagingToFinalMapping;
             std::tie(stagingDesc, stagingToFinalMapping) = PlatformInterface::CalculatePartialStagingDesc(desc, part);
 
-            auto stagingConstruction = _resourceSource.Create(stagingDesc, &initialisationData);
+            auto stagingConstruction = _resourceSource.Create(stagingDesc, &initialisationData, ResourceSource::CreationOptions::Staging);
             assert(!stagingConstruction._locator.IsEmpty());
             if (stagingConstruction._locator.IsEmpty())
                 return {};
@@ -1257,7 +1257,6 @@ namespace BufferUploads
                 return true;
             }
 
-            assert(!(transaction->_desc._allocationRules & AllocationRules::Staging));
             finalConstruction = _resourceSource.Create(
                 transaction->_desc, resourceCreateStep._initialisationData.get(), 
                 ((metricsUnderConstruction._deviceCreateOperations+1) <= budgetUnderConstruction._limit_DeviceCreates)?0:ResourceSource::CreationOptions::PreventDeviceCreation);
@@ -1276,7 +1275,7 @@ namespace BufferUploads
             PlatformInterface::StagingToFinalMapping stagingToFinalMapping;
             std::tie(stagingDesc, stagingToFinalMapping) = PlatformInterface::CalculatePartialStagingDesc(transaction->_desc, resourceCreateStep._part);
 
-            auto stagingConstruction = _resourceSource.Create(stagingDesc, resourceCreateStep._initialisationData.get());
+            auto stagingConstruction = _resourceSource.Create(stagingDesc, resourceCreateStep._initialisationData.get(), ResourceSource::CreationOptions::Staging);
             assert(!stagingConstruction._locator.IsEmpty());
             if (stagingConstruction._locator.IsEmpty())
                 return false;
@@ -1354,7 +1353,7 @@ namespace BufferUploads
             PlatformInterface::StagingToFinalMapping stagingToFinalMapping;
             std::tie(stagingDesc, stagingToFinalMapping) = PlatformInterface::CalculatePartialStagingDesc(desc, prepareStagingStep._part);
 
-            auto stagingConstruction = _resourceSource.Create(stagingDesc);
+            auto stagingConstruction = _resourceSource.Create(stagingDesc, nullptr, ResourceSource::CreationOptions::Staging);
             assert(!stagingConstruction._locator.IsEmpty());
             if (stagingConstruction._locator.IsEmpty())
                 return false;

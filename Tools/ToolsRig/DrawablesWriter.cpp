@@ -24,7 +24,7 @@ namespace ToolsRig
 		using namespace RenderCore;
 		return device.CreateResource(
 			CreateDesc(
-				BindFlag::VertexBuffer, 0, GPUAccess::Read,
+				BindFlag::VertexBuffer,
 				LinearBufferDesc::Create((unsigned)data.size()),
 				"vertex-buffer"),
 			SubResourceInitData { data });
