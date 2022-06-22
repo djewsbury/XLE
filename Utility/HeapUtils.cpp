@@ -7,6 +7,7 @@
 #include "HeapUtils.h"
 #include "PtrUtils.h"
 #include "MemoryUtils.h"
+#include "BitUtils.h"
 #include <assert.h>
 
 namespace Utility
@@ -789,6 +790,29 @@ namespace Utility
 
 		return ~0u;
 	}
+
+    unsigned	CircularHeap::AllocateBack(unsigned size, unsigned alignment)
+    {
+        assert(alignment);
+        if (_start == _end) return ~0u;
+		auto alignedEnd = CeilToMultiple(_end, alignment);
+        if (_start > _end) {
+			if ((_start - alignedEnd) >= size) {
+				auto result = alignedEnd;
+				_end = alignedEnd + size;
+				return result;
+			}
+		} else if ((alignedEnd + size) <= _heapSize) {
+			auto result = alignedEnd;
+			_end = alignedEnd + size;
+			return result;
+		} else if (_start >= size) {
+			_end = size;
+			return 0u;
+		}
+
+		return ~0u;
+    }
 
     void		CircularHeap::UndoLastAllocation(unsigned size)
     {

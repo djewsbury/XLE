@@ -29,6 +29,7 @@
 #include <deque>
 #include <queue>
 #include <future>
+#include <random>
 
 using namespace Catch::literals;
 
@@ -424,8 +425,6 @@ namespace UnitTests
 			std::vector<AllocationPendingRelease> _allocationsPendingRelease;
 
 			void UpdateConsumerMarker(RenderCore::IThreadContext& threadContext);
-
-			unsigned _alignment = 1;
 		};
 		StagingBufferMan _stagingBufferMan;
 	};
@@ -494,6 +493,26 @@ namespace UnitTests
 		return vulkanDevice->GetAsyncTracker()->GetConsumerMarker();
 	}
 
+	static unsigned CalculateBufferOffsetAlignment(const RenderCore::ResourceDesc& desc)
+	{
+		using namespace RenderCore;
+		auto& objectFactory = Metal::GetObjectFactory();
+		unsigned alignment = 1u;
+		#if GFXAPI_TARGET == GFXAPI_VULKAN
+			alignment = std::max(alignment, (unsigned)objectFactory.GetPhysicalDeviceProperties().limits.optimalBufferCopyOffsetAlignment);
+		#endif
+		if (desc._type == ResourceDesc::Type::Texture) {
+			auto compressionParam = GetCompressionParameters(desc._textureDesc._format);
+			if (compressionParam._blockWidth != 1) {
+				alignment = std::max(alignment, compressionParam._blockBytes);
+			} else {
+				// non-blocked format -- alignment requirement is a multiple of the texel size
+				alignment = std::max(alignment, BitsPerPixel(desc._textureDesc._format)/8u);
+			}
+		}
+		return alignment;
+	}
+
 	auto BackgroundTextureUploader::StagingBufferMan::CreateAndTransferData(
 		RenderCore::IThreadContext& threadContext,
 		const RenderCore::ResourceDesc& desc,
@@ -501,7 +520,7 @@ namespace UnitTests
 	{
 		using namespace RenderCore;
 		auto byteCount = ByteCount(desc);
-		byteCount = CeilToMultiple(byteCount, _alignment);
+		unsigned alignment = CalculateBufferOffsetAlignment(desc);
 		assert(finalResourceState);
 
 		unsigned stagingAllocation = 0, stagingSize = 0;
@@ -509,7 +528,7 @@ namespace UnitTests
 		if (!(modifiedDesc._allocationRules & (AllocationRules::HostVisibleRandomAccess|AllocationRules::HostVisibleSequentialWrite))) {
 			modifiedDesc._bindFlags |= BindFlag::TransferDst;
 
-			stagingAllocation = _stagingBufferHeap.AllocateBack(byteCount);
+			stagingAllocation = _stagingBufferHeap.AllocateBack(byteCount, alignment);
 			if (stagingAllocation == ~0u) return {};
 			stagingSize = byteCount;
 		}
@@ -540,6 +559,7 @@ namespace UnitTests
 
 			// During the transfer, the images must be in either TransferSrcOptimal, TransferDstOptimal or General
 			Metal::BarrierHelper(threadContext).Add(*resource, Metal::BarrierResourceUsage::NoState(), BindFlag::TransferDst);
+			checked_cast<RenderCore::Metal_Vulkan::Resource*>(resource.get())->ChangeSteadyState(BindFlag::TransferDst);
 
 			UpdateFinalResourceFromStaging(
 				threadContext,
@@ -685,9 +705,6 @@ namespace UnitTests
 
 		//
 		// todo -- 	resizable BAR resources
-		//			buffers & textures uploading
-		//			textures with mipmaps, and textures without them
-		//			set the device alignment to the correct value for transfer src
 		//
 
 		BackgroundTextureUploader uploads{testHelper->_device};
@@ -698,10 +715,18 @@ namespace UnitTests
 		testHelper->BeginFrameCapture();
 
 		const unsigned uploadCount = 100;
+		std::mt19937_64 rng{4629462984};
 		for (unsigned c=0; c<uploadCount; ++c) {
-			auto future = uploads.Queue(
-				CreateDesc(BindFlag::ShaderResource, TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM_SRGB, 11), "upload-test"),
-				BindFlag::ShaderResource);
+			std::future<std::shared_ptr<RenderCore::IResource>> future;
+			if (std::uniform_int_distribution<>(0, 3)(rng) >= 1) {
+				auto dims = std::uniform_int_distribution<>(3, 11)(rng);
+				future = uploads.Queue(
+					CreateDesc(BindFlag::ShaderResource, TextureDesc::Plain2D(1<<dims, 1<<dims, Format::R8G8B8A8_UNORM_SRGB, dims+1), "upload-test"),
+					BindFlag::ShaderResource);
+			} else {
+				auto bufferSize = std::uniform_int_distribution<>(8*1024, 256*1024)(rng);
+				future = uploads.Queue(CreateDesc(BindFlag::VertexBuffer, LinearBufferDesc::Create(bufferSize), "upload-test"), BindFlag::VertexBuffer);
+			}
 			futureResources.emplace_back(std::move(future));
 
 			if ((c % 4) == 0) {

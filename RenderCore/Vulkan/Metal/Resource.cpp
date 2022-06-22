@@ -247,7 +247,6 @@ namespace RenderCore { namespace Metal_Vulkan
 			case BindFlag::DepthStencil:
 				return { ImageLayout::DepthStencilAttachmentOptimal, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT };
 			default:
-				assert(0);
 				return { ImageLayout::General, 0, 0 };
 			}
 		}
@@ -259,6 +258,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				context._captureForBindRecords = std::make_shared<Internal::CaptureForBindRecords>();
 
 			auto newMode = Internal::GetLayoutForBindType(bindType);
+			assert(newMode._accessFlags != 0 && newMode._pipelineStageFlags != 0);
 			auto* res = checked_cast<Resource*>(&resource);
 
 			bool pendingInit = (bool)res->_pendingInitialization;
@@ -1055,6 +1055,22 @@ namespace RenderCore { namespace Metal_Vulkan
         const CopyPartial_Dest& dst, const CopyPartial_Src& src,
         Internal::ImageLayout dstLayout, Internal::ImageLayout srcLayout)
     {
+		// Memory alignment rules:
+		//
+		// offsets & sizes must be multiples of the byte width of the texel format
+		// For compressed block formats, offsets must be multiples of the compressed block size
+		// 		also, image offsets must be on block boundaries
+		//		also width/height/depth must be multiplies of the block size, except for blocks along the right and bottom edge
+		// for depth/stencil formats, buffer offsets must be a multiple of 4
+		// 
+		// use VkPhysicalDeviceLimits.optimalBufferCopyOffsetAlignment & VkPhysicalDeviceLimits.optimalBufferCopyRowPitchAlignment
+		// for optimizing the alignment for buffer sources
+		//
+		// VkQueueFamilyProperties can impose special rules on image transfer, via the 
+		// 		minImageTransferGranularity property. See the entry in the vk spec for more details. Queues
+		// 		with this set to (1,1,1) are ideal, because that means no limitations -- however some queues
+		// 		can require that only full miplevels be copied at a time
+
         assert(src._resource && dst._resource);
 		auto dstResource = checked_cast<Resource*>(dst._resource);
 		auto srcResource = checked_cast<Resource*>(src._resource);
@@ -1101,12 +1117,13 @@ namespace RenderCore { namespace Metal_Vulkan
             // buffer to buffer copy
             const auto& srcDesc = src._resource->GetDesc();
 		    const auto& dstDesc = dst._resource->GetDesc();
-			assert(src._mipLevelCount == 0 && src._arrayLayerCount == 0);
+			assert(src._mipLevelCount == 1 && src._arrayLayerCount == 1);		// defaults for these values
             VkBufferCopy c;
             c.srcOffset = src._leftTopFront._values[0];
             c.dstOffset = dst._leftTopFront._values[0];
-            auto end = std::min(src._rightBottomBack._values[0], std::min(srcDesc._linearBufferDesc._sizeInBytes, dstDesc._linearBufferDesc._sizeInBytes));
+            auto end = std::min(src._rightBottomBack._values[0], srcDesc._linearBufferDesc._sizeInBytes);
             c.size = end - src._leftTopFront._values[0];
+			assert(c.size <= dstDesc._linearBufferDesc._sizeInBytes);
             context.GetActiveCommandList().CopyBuffer(
                 srcResource->GetBuffer(),
                 dstResource->GetBuffer(),
@@ -1941,7 +1958,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		BarrierResourceUsage result;
 		result._accessFlags =  0;
-		result._pipelineStageFlags = 0;
+		result._pipelineStageFlags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 		result._imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		return result;
 	}
@@ -1950,7 +1967,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		BarrierResourceUsage result;
 		result._accessFlags =  0;
-		result._pipelineStageFlags = 0;
+		result._pipelineStageFlags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 		result._imageLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
 		return result;
 	}
@@ -1959,6 +1976,13 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		auto* res = checked_cast<Resource*>(&resource);
 		if (res->GetBuffer()) {
+			// barriers from BarrierResourceUsage::NoState() -> some state are not required for buffers (but they are for textures)
+			// for API simplicity, let's just bail here for an unrequired buffer initial barrier
+			if (preBarrierUsage._accessFlags == 0)
+				return *this;
+			assert(preBarrierUsage._pipelineStageFlags);
+			assert(postBarrierUsage._accessFlags && postBarrierUsage._pipelineStageFlags);
+
 			if (_bufferBarrierCount == dimof(_bufferBarriers)) Flush();
 			_bufferBarriers[_bufferBarrierCount++] = {
 				VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
@@ -1980,6 +2004,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			barrier.srcAccessMask = preBarrierUsage._accessFlags;
 			barrier.dstAccessMask = postBarrierUsage._accessFlags;
 			barrier.image = checked_cast<Resource*>(&resource)->GetImage();
+			barrier.dstQueueFamilyIndex = barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			barrier.subresourceRange.aspectMask = AsImageAspectMask(resource.GetDesc()._textureDesc._format);
 			barrier.subresourceRange.baseMipLevel = 0;
 			barrier.subresourceRange.baseArrayLayer = 0;
@@ -1992,7 +2017,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 	void BarrierHelper::Flush()
 	{
-		if (!_bufferBarrierCount) return;
+		if (!_bufferBarrierCount && !_imageBarrierCount) return;
 		assert(_deviceContext);
 		vkCmdPipelineBarrier(
 			_deviceContext->GetActiveCommandList().GetUnderlying().get(),

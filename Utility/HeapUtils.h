@@ -789,6 +789,7 @@ namespace Utility
 	{
 	public:
 		unsigned	AllocateBack(unsigned size);
+        unsigned	AllocateBack(unsigned size, unsigned alignment);
 		void		ResetFront(unsigned newFront);
 		void		UndoLastAllocation(unsigned size);
 		unsigned	Back() const { return _end; }
