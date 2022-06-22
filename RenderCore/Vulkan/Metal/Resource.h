@@ -67,6 +67,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		const VulkanSharedPtr<VkImage>& ShareImage() const { return _underlyingImage; }
 		const VulkanSharedPtr<VkBuffer>& ShareBuffer() const { return _underlyingBuffer; }
 		const VulkanSharedPtr<VkDeviceMemory>& ShareDeviceMemory() const { return _mem; }
+		unsigned GetMemoryType() const { return _memoryType; }
+
+		const Desc& AccessDesc() const { return _desc; }
 
 		void ChangeSteadyState(BindFlag::Enum);
 
@@ -90,6 +93,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		VulkanSharedPtr<VkDeviceMemory> _mem;
 		VmaAllocation _vmaMem = nullptr;
 		IteratorRange<void*> _permanentlyMappedRange;
+		unsigned _memoryType = 0;
 
 		Desc _desc;
 		uint64_t _guid;
@@ -126,6 +130,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		void InvalidateCache();
 
 		enum class Mode { Read, WriteDiscardPrevious };
+
+		static bool CanMap(IDevice& device, IResource& resource, Mode mode);
 
 		ResourceMap(
 			DeviceContext& context, IResource& resource,

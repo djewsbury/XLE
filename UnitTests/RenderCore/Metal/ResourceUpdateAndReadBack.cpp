@@ -534,7 +534,7 @@ namespace UnitTests
 		}
 		
 		auto resource = threadContext.GetDevice()->CreateResource(modifiedDesc);
-		if (false) { // Metal::ResourceMap::CanMap(result._resource, Metal::ResourceMap::Mode::WriteDiscardPrevious)) {
+		if (Metal::ResourceMap::CanMap(*threadContext.GetDevice(), *resource, Metal::ResourceMap::Mode::WriteDiscardPrevious)) {
 			if (stagingAllocation) {
 				// didn't need to make this allocation after all
 				_stagingBufferHeap.UndoLastAllocation(stagingSize);
@@ -702,10 +702,6 @@ namespace UnitTests
 		usi.BindSampler(0, Hash64("Texture_sampler"));
 		Metal::BoundUniforms uniforms { shaderProgram, usi };
 		auto sampler = testHelper->_device->CreateSampler({});
-
-		//
-		// todo -- 	resizable BAR resources
-		//
 
 		BackgroundTextureUploader uploads{testHelper->_device};
 

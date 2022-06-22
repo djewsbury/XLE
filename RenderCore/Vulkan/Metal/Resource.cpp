@@ -153,7 +153,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			unsigned barrierCount = 0;
 			for (unsigned c=0; c<(unsigned)changes.size(); ++c) {
 				auto& r = *changes[c]._res;
-				assert(r.GetDesc()._type == ResourceDesc::Type::Texture);
+				assert(r.AccessDesc()._type == ResourceDesc::Type::Texture);
 				if (!r.GetImage()) continue;   // (staging buffer case)
 
 				auto& b = barriers[barrierCount++];
@@ -161,7 +161,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				// unforunately, we can't just blanket aspectMask with all bits enabled.
 				// We must select a correct aspect mask. The nvidia drivers seem to be fine with all
 				// bits enabled, but the documentation says that this is not allowed
-				const auto& desc = r.GetDesc();
+				const auto& desc = r.AccessDesc();
 
 				b = {};
 				b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -425,13 +425,13 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 	}
 
-    static VulkanUniquePtr<VkDeviceMemory> AllocateDeviceMemory(
+    static std::pair<VulkanUniquePtr<VkDeviceMemory>, unsigned> AllocateDeviceMemory(
         const Metal_Vulkan::ObjectFactory& factory, VkMemoryRequirements memReqs, VkMemoryPropertyFlags requirementMask)
     {
         auto type = factory.FindMemoryType(memReqs.memoryTypeBits, requirementMask);
         if (type >= 32)
             Throw(Exceptions::BasicLabel("Could not find compatible memory type for image"));
-        return factory.AllocateMemoryDirectFromVulkan(memReqs.size, type);
+        return {factory.AllocateMemoryDirectFromVulkan(memReqs.size, type), type};
     }
 
 	static void WriteInitDataViaMap(ObjectFactory& factory, const ResourceDesc& desc, Resource& resource, const std::function<SubResourceInitData(SubResourceId)>& initData)
@@ -466,23 +466,23 @@ namespace RenderCore { namespace Metal_Vulkan
 		return result;
 	}
 
-	static VulkanUniquePtr<VkDeviceMemory> AttachDedicatedMemory(ObjectFactory& factory, const ResourceDesc& desc, const VkMemoryRequirements& mem_reqs, VkBuffer underlyingBuffer, bool hasInitData)
+	static std::pair<VulkanUniquePtr<VkDeviceMemory>, unsigned> AttachDedicatedMemory(ObjectFactory& factory, const ResourceDesc& desc, const VkMemoryRequirements& mem_reqs, VkBuffer underlyingBuffer, bool hasInitData)
 	{
 		auto memoryRequirements = AsMemoryPropertyFlags(desc._allocationRules);
 		if (hasInitData) memoryRequirements |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 		auto result = AllocateDeviceMemory(factory, mem_reqs, memoryRequirements);
-		auto res = vkBindBufferMemory(factory.GetDevice().get(), underlyingBuffer, result.get(), 0);
+		auto res = vkBindBufferMemory(factory.GetDevice().get(), underlyingBuffer, result.first.get(), 0);
 		if (res != VK_SUCCESS)
 			Throw(VulkanAPIFailure(res, "Failed while binding a buffer to device memory"));
 		return result;
 	}
 
-	static VulkanUniquePtr<VkDeviceMemory> AttachDedicatedMemory(ObjectFactory& factory, const ResourceDesc& desc, const VkMemoryRequirements& mem_reqs, VkImage underlyingImage, bool hasInitData)
+	static std::pair<VulkanUniquePtr<VkDeviceMemory>, unsigned> AttachDedicatedMemory(ObjectFactory& factory, const ResourceDesc& desc, const VkMemoryRequirements& mem_reqs, VkImage underlyingImage, bool hasInitData)
 	{
 		auto memoryRequirements = AsMemoryPropertyFlags(desc._allocationRules);
 		if (hasInitData) memoryRequirements |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 		auto result = AllocateDeviceMemory(factory, mem_reqs, memoryRequirements);
-		auto res = vkBindImageMemory(factory.GetDevice().get(), underlyingImage, result.get(), 0);
+		auto res = vkBindImageMemory(factory.GetDevice().get(), underlyingImage, result.first.get(), 0);
 		if (res != VK_SUCCESS)
 			Throw(VulkanAPIFailure(res, "Failed while binding an image to device memory"));
 		return result;
@@ -642,10 +642,10 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			// queue transition into our steady-state
 			_pendingInitialization = [](Internal::ResourceInitializationHelper& helper, Resource& res) {
-					helper.SetImageLayout(
+					/*helper.SetImageLayout(
 						res,
 						Internal::ImageLayout::Undefined, 0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-						res._steadyStateLayout, res._steadyStateAccessMask, res._steadyStateAssociatedStageMask);
+						res._steadyStateLayout, res._steadyStateAccessMask, res._steadyStateAssociatedStageMask);*/
 					helper.MakeResourceVisible(res.GetGUID());
 				};
 
@@ -658,18 +658,26 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		if (allocateDirectFromVulkan) {
 			if (_underlyingBuffer) {
-				_mem = AttachDedicatedMemory(factory, desc, mem_reqs, _underlyingBuffer.get(), hasInitData);
+				auto p = AttachDedicatedMemory(factory, desc, mem_reqs, _underlyingBuffer.get(), hasInitData);
+				_mem = std::move(p.first);
+				_memoryType = p.second;
 			} else {
 				assert(_underlyingImage);
-				_mem = AttachDedicatedMemory(factory, desc, mem_reqs, _underlyingImage.get(), hasInitData);
+				auto p = AttachDedicatedMemory(factory, desc, mem_reqs, _underlyingImage.get(), hasInitData);
+				_mem = std::move(p.first);
+				_memoryType = p.second;
 			}
 		} else {
 			if (allocationRules & AllocationRules::PermanentlyMapped && allocationInfo.pMappedData)
 				_permanentlyMappedRange = MakeIteratorRange(allocationInfo.pMappedData, PtrAdd(allocationInfo.pMappedData, allocationInfo.size));
+			_memoryType = allocationInfo.memoryType;
 		}
 
 		// Upload the init data now. Generally this isn't an ideal path, prefer to use more explicit synchronization
-		if (hasInitData) WriteInitDataViaMap(factory, desc, *this, initData);
+		if (hasInitData) {
+			_desc._allocationRules |= AllocationRules::HostVisibleSequentialWrite;		// we effectively added on this flag in order to support this init data upload
+			WriteInitDataViaMap(factory, _desc, *this, initData);
+		}
 	}
 
 	void Resource::ConfigureDefaultSteadyState(BindFlag::BitField bindFlags)
@@ -978,8 +986,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		    //		When copying between compressed and uncompressed images, the uncompressed pixel size must
 		    //		be equal to the compressed block size.
 
-		    const auto& srcDesc = src.GetDesc();
-		    const auto& dstDesc = dst.GetDesc();
+		    const auto& srcDesc = src.AccessDesc();
+		    const auto& dstDesc = dst.AccessDesc();
 		    assert(srcDesc._type == Resource::Desc::Type::Texture);
 		    assert(dstDesc._type == Resource::Desc::Type::Texture);
 
@@ -1021,8 +1029,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
         } else if (dst.GetBuffer() && src.GetBuffer()) {
             // buffer to buffer copy
-            const auto& srcDesc = src.GetDesc();
-		    const auto& dstDesc = dst.GetDesc();
+            const auto& srcDesc = src.AccessDesc();
+		    const auto& dstDesc = dst.AccessDesc();
             assert(srcDesc._type == Resource::Desc::Type::LinearBuffer);
 		    assert(dstDesc._type == Resource::Desc::Type::LinearBuffer);
             VkBufferCopy copyOps[] = 
@@ -1036,13 +1044,13 @@ namespace RenderCore { namespace Metal_Vulkan
         } else if (dst.GetImage() && src.GetBuffer()) {
             // This copy operation is typically used when initializing a texture via staging
             // resource.
-            auto copyOps = GenerateBufferImageCopyOps(dst.GetDesc(), src.GetDesc());
+            auto copyOps = GenerateBufferImageCopyOps(dst.AccessDesc(), src.AccessDesc());
             context.GetActiveCommandList().CopyBufferToImage(
                 src.GetBuffer(),
                 dst.GetImage(), (VkImageLayout)Internal::AsVkImageLayout(dstLayout),
                 (uint32_t)copyOps.size(), copyOps.data());
         } else {
-            auto copyOps = GenerateBufferImageCopyOps(src.GetDesc(), dst.GetDesc());
+            auto copyOps = GenerateBufferImageCopyOps(src.AccessDesc(), dst.AccessDesc());
             context.GetActiveCommandList().CopyImageToBuffer(
                 src.GetImage(), (VkImageLayout)Internal::AsVkImageLayout(srcLayout),
 				dst.GetBuffer(),
@@ -1079,8 +1087,8 @@ namespace RenderCore { namespace Metal_Vulkan
             // In this case, we're going to generate only a single copy operation. This is 
             // similar to CopySubresourceRegion in D3D
 
-            const auto& srcDesc = srcResource->GetDesc();
-		    const auto& dstDesc = dstResource->GetDesc();
+            const auto& srcDesc = srcResource->AccessDesc();
+		    const auto& dstDesc = dstResource->AccessDesc();
 		    assert(srcDesc._type == Resource::Desc::Type::Texture);
 		    assert(dstDesc._type == Resource::Desc::Type::Texture);
 			assert(src._mipLevelCount > 0);
@@ -1115,8 +1123,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			    mipLevelCount, copies);
         } else if (dstResource->GetBuffer() && srcResource->GetBuffer()) {
             // buffer to buffer copy
-            const auto& srcDesc = src._resource->GetDesc();
-		    const auto& dstDesc = dst._resource->GetDesc();
+            const auto& srcDesc = srcResource->AccessDesc();
+		    const auto& dstDesc = dstResource->AccessDesc();
 			assert(src._mipLevelCount == 1 && src._arrayLayerCount == 1);		// defaults for these values
             VkBufferCopy c;
             c.srcOffset = src._leftTopFront._values[0];
@@ -1131,8 +1139,8 @@ namespace RenderCore { namespace Metal_Vulkan
         } else if (dstResource->GetImage() && srcResource->GetBuffer()) {
             // This copy operation is typically used when initializing a texture via staging
             // resource.
-            const auto& srcDesc = src._resource->GetDesc();
-		    const auto& dstDesc = dstResource->GetDesc();
+            const auto& srcDesc = srcResource->AccessDesc();
+		    const auto& dstDesc = dstResource->AccessDesc();
 		    assert(dstDesc._type == Resource::Desc::Type::Texture);
 
             auto dstAspectMask = AsImageAspectMask(dstDesc._textureDesc._format);
@@ -1199,8 +1207,8 @@ namespace RenderCore { namespace Metal_Vulkan
                 dstResource->GetImage(), (VkImageLayout)Internal::AsVkImageLayout(dstLayout),
                 arrayCopyCount*mipCopyCount, copyOps);
 		} else if (dstResource->GetBuffer() && srcResource->GetImage()) {
-			auto srcDesc = src._resource->GetDesc();
-		    auto dstDesc = dstResource->GetDesc();
+			const auto& srcDesc = srcResource->AccessDesc();
+		    const auto& dstDesc = dstResource->AccessDesc();
 		    assert(srcDesc._type == Resource::Desc::Type::Texture);
 
             auto srcAspectMask = AsImageAspectMask(srcDesc._textureDesc._format);
@@ -1313,18 +1321,18 @@ namespace RenderCore { namespace Metal_Vulkan
 			IDevice& dev, Resource& resource,
 			const std::function<SubResourceInitData(SubResourceId)>& initData)
 		{
-			assert(resource.GetDesc()._type == ResourceDesc::Type::Texture);
+			assert(resource.AccessDesc()._type == ResourceDesc::Type::Texture);
 			auto& factory = GetObjectFactory(dev);
 			if (resource.GetVmaMemory()) {
 				ResourceMap map{factory.GetVmaAllocator(), resource.GetVmaMemory()};
 				return Metal_Vulkan::CopyViaMemoryMap(
 					factory.GetDevice().get(), resource.GetImage(), map,
-					resource.GetDesc()._textureDesc, initData);
+					resource.AccessDesc()._textureDesc, initData);
 			} else {
 				ResourceMap map{factory.GetDevice().get(), resource.GetMemory()};
 				return Metal_Vulkan::CopyViaMemoryMap(
 					factory.GetDevice().get(), resource.GetImage(), map,
-					resource.GetDesc()._textureDesc, initData);
+					resource.AccessDesc()._textureDesc, initData);
 			}
 		}
 	}
@@ -1353,7 +1361,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::vector<std::pair<SubResourceId, SubResourceOffset>> result;
 		auto& resource = *checked_cast<Resource*>(&iresource);
 
-		auto desc = resource.GetDesc();
+		auto desc = resource.AccessDesc();
 		auto actualArrayCount = ActualArrayLayerCount(desc._textureDesc);
 		if (desc._textureDesc._dimensionality == TextureDesc::Dimensionality::CubeMap) {
 			assert(actualArrayCount == 6u);
@@ -1393,6 +1401,20 @@ namespace RenderCore { namespace Metal_Vulkan
 			result.push_back(std::make_pair(SubResourceId{}, sub));
 		}
 		return result;
+	}
+
+	static bool ResourceMapViable(Resource& res, ResourceMap::Mode mode)
+	{
+		// check this resource's compatibility with this mapping mode
+		auto* memType = GetObjectFactory().GetMemoryTypeInfo(res.GetMemoryType());
+		if (!memType || !(memType->propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) return false;
+
+		auto& desc = res.AccessDesc();
+		if (mode == ResourceMap::Mode::WriteDiscardPrevious && !(desc._allocationRules & (AllocationRules::HostVisibleSequentialWrite|AllocationRules::HostVisibleRandomAccess)))
+			return false;
+		if (mode == ResourceMap::Mode::Read && !(desc._allocationRules & AllocationRules::HostVisibleRandomAccess))
+			return false;
+		return true;
 	}
 
 	ResourceMap::ResourceMap(
@@ -1441,7 +1463,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			// Map a range in a linear buffer (makes less sense for textures)
 		///////////////////
 		auto& resource = *checked_cast<Resource*>(&iresource);
-		auto desc = resource.GetDesc();
+		assert(ResourceMapViable(resource, mapMode));
+		auto desc = resource.AccessDesc();
 		if (desc._type != ResourceDesc::Type::LinearBuffer)
 			Throw(std::runtime_error("Attempting to map a linear range in a non-linear buffer resource"));
 
@@ -1492,6 +1515,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		TexturePitches pitches;
 
 		auto& resource = *checked_cast<Resource*>(&iresource);
+		assert(ResourceMapViable(resource, mapMode));
 		if (resource.GetVmaMemory())
 			Throw(std::runtime_error("vma based Vulkan resources only support whole-resource mapping. Avoid mapping a subrange of the resource"));
 		if (resource.GetPermanentlyMappedRange().empty())
@@ -1500,7 +1524,7 @@ namespace RenderCore { namespace Metal_Vulkan
         // special case for images, where we need to take into account the requested "subresource"
 		_dev = factory.GetDevice().get();
         auto* image = resource.GetImage();
-        auto desc = resource.GetDesc();
+        auto desc = resource.AccessDesc();
         if (image) {
 			assert(desc._type == ResourceDesc::Type::Texture);
             auto aspectMask = AsImageAspectMask(desc._textureDesc._format);
@@ -1541,6 +1565,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			// Map all subresources
 		///////////////////
 		auto& resource = *checked_cast<Resource*>(&iresource);
+		assert(ResourceMapViable(resource, mapMode));
 		_dataSize = 0;
 		_resourceOffset = 0;
 
@@ -1615,6 +1640,13 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkDeviceSize offset, VkDeviceSize size)
 	: ResourceMap{GetObjectFactory(device), iresource, mapMode, offset, size}		// only non-vma
 	{
+	}
+
+	bool ResourceMap::CanMap(IDevice& device, IResource& resource, Mode mode)
+	{
+		auto* res = checked_cast<Resource*>(&resource);
+		assert(res);
+		return ResourceMapViable(*res, mode);
 	}
 
 	void ResourceMap::TryUnmap()
@@ -2005,7 +2037,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			barrier.dstAccessMask = postBarrierUsage._accessFlags;
 			barrier.image = checked_cast<Resource*>(&resource)->GetImage();
 			barrier.dstQueueFamilyIndex = barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barrier.subresourceRange.aspectMask = AsImageAspectMask(resource.GetDesc()._textureDesc._format);
+			barrier.subresourceRange.aspectMask = AsImageAspectMask(res->AccessDesc()._textureDesc._format);
 			barrier.subresourceRange.baseMipLevel = 0;
 			barrier.subresourceRange.baseArrayLayer = 0;
 			barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;

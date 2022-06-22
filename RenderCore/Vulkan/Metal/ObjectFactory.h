@@ -138,6 +138,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		unsigned FindMemoryType(
             VkFlags memoryTypeBits, 
             VkMemoryPropertyFlags requirementsMask = 0) const;
+        const VkMemoryType* GetMemoryTypeInfo(unsigned memoryType) const;
 
         // device & capabilities query
         VkPhysicalDevice GetPhysicalDevice() const { return _physDev; }

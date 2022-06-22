@@ -466,6 +466,13 @@ namespace RenderCore { namespace Metal_Vulkan
         return ~0x0u;
     }
 
+    const VkMemoryType* ObjectFactory::GetMemoryTypeInfo(unsigned memoryType) const
+    {
+        if (memoryType >= dimof(_memProps->memoryTypes))
+            return nullptr;
+        return &_memProps->memoryTypes[memoryType];
+    }
+
 	VkFormatProperties ObjectFactory::GetFormatProperties(VkFormat_ fmt) const
 	{
 		VkFormatProperties formatProps;
