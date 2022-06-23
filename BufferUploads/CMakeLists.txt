@@ -7,6 +7,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         DataPacket.cpp
         ResourceUploadHelper.cpp
         ResourceSource.cpp
+        BatchedResources.cpp
         ThreadContext.cpp)
 
     list(APPEND Src

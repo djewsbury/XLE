@@ -499,8 +499,8 @@ namespace BufferUploads
 		if (!_steps.empty() && GetHeap()->_heapResource && !_doneResourceCopy) {
 				// -----<   Copy from the old resource into the new resource   >----- //
 			if (PlatformInterface::UseMapBasedDefrag && !PlatformInterface::CanDoNooverwriteMapInBackground) {
-				context.GetCommitStepUnderConstruction().Add(
-					CommitStep::DeferredDefragCopy(GetHeap()->_heapResource, sourceResource, _steps));
+				context.GetDeferredOperationsUnderConstruction().Add(
+					ThreadContext::DeferredOperations::DeferredDefragCopy(GetHeap()->_heapResource, sourceResource, _steps));
 			} else {
 				context.GetResourceUploadHelper().ResourceCopy_DefragSteps(GetHeap()->_heapResource, sourceResource, _steps);
 			}

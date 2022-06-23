@@ -524,7 +524,7 @@ namespace PlatformRig { namespace Overlays
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Transaction count"),
-                std::make_pair("Value", XlDynFormatString("%i/%i/%i", mostRecentResults._assemblyLineMetrics._transactionCount, mostRecentResults._assemblyLineMetrics._temporaryTransactionsAllocated, mostRecentResults._assemblyLineMetrics._longTermTransactionsAllocated)) });
+                std::make_pair("Value", XlDynFormatString("%i/%i", mostRecentResults._assemblyLineMetrics._transactionCount, mostRecentResults._assemblyLineMetrics._temporaryTransactionsAllocated)) });
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         DrawTableHeaders(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), headerColor, &interactables);

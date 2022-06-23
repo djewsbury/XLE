@@ -310,7 +310,7 @@ namespace BufferUploads
         if (!_deferredCopies.empty()) {
             PlatformInterface::ResourceUploadHelper immediateContext(immContext);
             for (const auto&copy:_deferredCopies)
-                immediateContext.WriteToBufferViaMap(copy._destination, copy._resourceDesc, 0, MakeIteratorRange(copy._temporaryBuffer));
+                immediateContext.WriteViaMap(copy._destination, MakeIteratorRange(copy._temporaryBuffer));
             _deferredCopies.clear();
         }
     }

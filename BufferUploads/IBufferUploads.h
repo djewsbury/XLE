@@ -145,10 +145,6 @@ namespace BufferUploads
 
         virtual void            Transaction_Release      (TransactionID id) = 0;
 
-            /// <summary>Validates a transaction</summary>
-            /// This is a tool for debugging. Checks a transaction for common problems.
-            /// Only implemented in _DEBUG builds. Errors will invoke an assert.
-        virtual void            Transaction_Validate (TransactionID id) = 0;
             /// @}
 
             /// \name Immediate creation
@@ -175,11 +171,6 @@ namespace BufferUploads
         virtual EventListID     EventList_GetLatestID   () = 0;
         virtual void            EventList_Get           (EventListID id, Event_ResourceReposition*&begin, Event_ResourceReposition*&end) = 0;
         virtual void            EventList_Release       (EventListID id) = 0;
-            /// @}
-
-            /// \name Resource references
-            /// @{
-        virtual void            Resource_Validate           (const ResourceLocator& locator) = 0;
             /// @}
 
             /// \name Frame management

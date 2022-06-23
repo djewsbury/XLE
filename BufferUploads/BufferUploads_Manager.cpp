@@ -93,7 +93,6 @@ namespace BufferUploads
         TransactionMarker       Transaction_Begin(ResourceLocator destinationResource, const std::shared_ptr<IAsyncDataSource>& data, TransactionOptions::BitField flags);
         void                    Transaction_AddRef(TransactionID id);
         void                    Transaction_Release(TransactionID id);
-        void                    Transaction_Validate(TransactionID id);
 
         ResourceLocator         Transaction_Immediate(
                                     RenderCore::IThreadContext& threadContext,
@@ -106,7 +105,6 @@ namespace BufferUploads
         void                Resource_Release(ResourceLocator& locator);
         void                Resource_AddRef(const ResourceLocator& locator);
         void                Resource_AddRef_IndexBuffer(const ResourceLocator& locator);
-        void                Resource_Validate(const ResourceLocator& locator);
 
         AssemblyLineMetrics CalculateMetrics();
         PoolSystemMetrics   CalculatePoolMetrics() const;
@@ -126,7 +124,7 @@ namespace BufferUploads
             uint32_t _idTopPart;
             std::atomic<unsigned> _referenceCount;
             ResourceLocator _finalResource;
-            // ResourceDesc _desc;
+            ResourceDesc _desc;
             TimeMarker _requestTime;
             std::promise<ResourceLocator> _promise;
             std::future<void> _waitingFuture;
@@ -301,14 +299,15 @@ namespace BufferUploads
         TransactionID transactionID = AllocateTransaction(flags);
         Transaction* transaction = GetTransaction(transactionID);
         assert(transaction);
-        transaction->_desc = destinationResource.GetContainingResource()->GetDesc();
-        if (data) ValidatePacketSize(transaction->_desc, *data);
-        _currentQueuedBytes[(unsigned)AsUploadDataType(transaction->_desc)] += RenderCore::ByteCount(transaction->_desc);
+        auto desc = destinationResource.GetContainingResource()->GetDesc();
+        transaction->_desc = desc;
+        if (data) ValidatePacketSize(desc, *data);
+        _currentQueuedBytes[(unsigned)AsUploadDataType(desc)] += RenderCore::ByteCount(desc);
 
         PushStep(
             GetQueueSet(flags),
             *transaction,
-            CreateFromDataPacketStep { transactionID, transaction->_desc, data, PartialResource_All() });
+            CreateFromDataPacketStep { transactionID, desc, data, PartialResource_All() });
 
         TransactionMarker result { transaction->_promise.get_future(), transactionID, *this };
         --transaction->_referenceCount;     // todo -- can't stay like this
@@ -559,21 +558,6 @@ namespace BufferUploads
         }
     
         return finalResourceConstruction._locator;
-    }
-
-    void AssemblyLine::Transaction_Validate(TransactionID id)
-    {
-        #if defined(_DEBUG)
-            Transaction* transaction = GetTransaction(id);
-            assert(transaction);
-            if (transaction) {
-                    //  make sure this transaction will be complete in time to use 
-                    //  for the the next render frame
-                if (transaction->_finalResource.IsEmpty()) {
-                    assert(transaction->_creationOptions & TransactionOptions::FramePriority);
-                }
-            }
-        #endif
     }
 
     void AssemblyLine::Transaction_AddRef(TransactionID id)
@@ -842,7 +826,6 @@ namespace BufferUploads
 
                     ResourceLocator oldLocator = std::move(transaction._finalResource);
                     unsigned oldOffset = oldLocator.GetRangeInContainingResource().first;
-                    Resource_Validate(oldLocator);
 
                     unsigned newOffsetValue = ResolveOffsetValue(oldOffset, RenderCore::ByteCount(transaction._desc), e->_defragSteps);
                     transaction._finalResource = ResourceLocator{
@@ -1094,11 +1077,18 @@ namespace BufferUploads
                 if (!stagingConstruction)
                     return false;
 
-                helper.WriteToBufferViaMap(
-                    context.GetStagingPage().GetStagingResource(),
-                    stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize(),
-                    resourceCreateStep._creationDesc,
-                    *resourceCreateStep._initialisationData);
+                if (resourceCreateStep._creationDesc._type == ResourceDesc::Type::Texture) {
+                    helper.WriteViaMap(
+                        context.GetStagingPage().GetStagingResource(),
+                        stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize(),
+                        resourceCreateStep._creationDesc._textureDesc,
+                        PlatformInterface::AsResourceInitializer(*resourceCreateStep._initialisationData));
+                } else {
+                    helper.WriteViaMap(
+                        context.GetStagingPage().GetStagingResource(),
+                        stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize(),
+                        resourceCreateStep._initialisationData->GetData());
+                }
         
                 helper.UpdateFinalResourceFromStaging(
                     finalConstruction._locator, 
@@ -1111,9 +1101,8 @@ namespace BufferUploads
 
                 // destination is in host-visible memory, we can just write directly to it
                 if (resourceCreateStep._creationDesc._type == ResourceDesc::Type::Texture) {
-                    helper.WriteToTextureViaMap(
-                        finalConstruction._locator,
-                        resourceCreateStep._creationDesc, Box2D(),
+                    helper.WriteViaMap(
+                        *finalConstruction._locator.AsIndependentResource(),
                         [part{resourceCreateStep._part}, initialisationData{resourceCreateStep._initialisationData.get()}](RenderCore::SubResourceId sr) -> RenderCore::SubResourceInitData
                         {
                             RenderCore::SubResourceInitData result = {};
@@ -1123,7 +1112,7 @@ namespace BufferUploads
                             return result;
                         });
                 } else {
-                    helper.WriteToBufferViaMap(
+                    helper.WriteViaMap(
                         finalConstruction._locator,
                         resourceCreateStep._initialisationData->GetData());
                 }
@@ -1326,8 +1315,8 @@ namespace BufferUploads
             return true;
         }*/
 
-        if ((metricsUnderConstruction._bytesUploadTotal+transferStagingToFinalStep._stagingByteCount) > budgetUnderConstruction._limit_BytesUploaded && metricsUnderConstruction._bytesUploadTotal !=0)
-            return false;
+        //if ((metricsUnderConstruction._bytesUploadTotal+transferStagingToFinalStep._stagingByteCount) > budgetUnderConstruction._limit_BytesUploaded && metricsUnderConstruction._bytesUploadTotal !=0)
+            // return false;
 
         try {
             if (transaction->_finalResource.IsEmpty()) {
@@ -1357,10 +1346,11 @@ namespace BufferUploads
             // Embue the final resource with the completion command list information
             transaction->_finalResource = ResourceLocator { std::move(transaction->_finalResource), context.CommandList_GetUnderConstruction() };
 
-            metricsUnderConstruction._bytesUploadTotal += transferStagingToFinalStep._stagingByteCount;
-            metricsUnderConstruction._bytesUploaded[dataType] += transferStagingToFinalStep._stagingByteCount;
+            auto stagingByteCount = transferStagingToFinalStep._stagingResource.GetAllocationSize();
+            metricsUnderConstruction._bytesUploadTotal += stagingByteCount;
+            metricsUnderConstruction._bytesUploaded[dataType] += stagingByteCount;
             metricsUnderConstruction._countUploaded[dataType] += 1;
-            _currentQueuedBytes[dataType] -= transferStagingToFinalStep._stagingByteCount;
+            _currentQueuedBytes[dataType] -= stagingByteCount;
             ++metricsUnderConstruction._contextOperations;
             transaction->_promise.set_value(transaction->_finalResource);
         } catch (...) {
@@ -1519,7 +1509,7 @@ namespace BufferUploads
         const bool somethingToResolve = 
                 (metricsUnderConstruction._contextOperations!=0)
             ||  _batchPreparation_Main._batchedAllocationSize
-            || !context.GetCommitStepUnderConstruction().IsEmpty()
+            || !context.GetDeferredOperationsUnderConstruction().IsEmpty()
             ||  publishableEventList > context.EventList_GetPublishedID();
         
         // The commit count is a scheduling scheme
@@ -1550,7 +1540,7 @@ namespace BufferUploads
 
     PoolSystemMetrics   AssemblyLine::CalculatePoolMetrics() const
     {
-        return _resourceSource.CalculatePoolMetrics();
+        return {};
     }
 
     AssemblyLineMetrics AssemblyLine::CalculateMetrics()
@@ -1579,11 +1569,6 @@ namespace BufferUploads
         ScopedLock(_transactionsRepositionLock);
         Transaction* transaction = GetTransaction(id);
         return transaction ? transaction->_finalResource : ResourceLocator{};
-    }
-
-    void                    AssemblyLine::Resource_Validate(const ResourceLocator& locator)
-    {
-        _resourceSource.Validate(locator);
     }
 
     AssemblyLine::QueueSet& AssemblyLine::GetQueueSet(TransactionOptions::BitField transactionOptions)
@@ -1636,7 +1621,6 @@ namespace BufferUploads
         TransactionMarker       Transaction_Begin(const std::shared_ptr<IAsyncDataSource>& data, BindFlag::BitField bindFlags, TransactionOptions::BitField flags) override;
         TransactionMarker       Transaction_Begin(ResourceLocator destinationResource, const std::shared_ptr<IAsyncDataSource>& data, TransactionOptions::BitField flags) override;
         void                    Transaction_Release(TransactionID id) override;
-        void                    Transaction_Validate(TransactionID id) override;
 
         ResourceLocator         Transaction_Immediate(
                                     RenderCore::IThreadContext& threadContext,
@@ -1644,7 +1628,6 @@ namespace BufferUploads
                                     const PartialResource&) override;
         
         ResourceLocator         GetResource(TransactionID id);
-        void                    Resource_Validate(const ResourceLocator& locator) override;
         bool                    IsComplete(CommandListID id) override;
         void                    StallUntilCompletion(RenderCore::IThreadContext& immediateContext, CommandListID id) override;
 
@@ -1704,21 +1687,11 @@ namespace BufferUploads
         return _assemblyLine->GetResource(id);
     }
 
-    void                    Manager::Resource_Validate(const ResourceLocator& locator)
-    {
-        _assemblyLine->Resource_Validate(locator);
-    }
-
         /////////////////////////////////////////////
 
     void                    Manager::Transaction_Release(TransactionID id)
     {
         _assemblyLine->Transaction_Release(id);
-    }
-
-    void                    Manager::Transaction_Validate(TransactionID id)
-    {
-        _assemblyLine->Transaction_Validate(id);
     }
 
     ResourceLocator         Manager::Transaction_Immediate(

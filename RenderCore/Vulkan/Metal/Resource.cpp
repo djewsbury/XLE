@@ -32,12 +32,8 @@ namespace RenderCore { namespace Metal_Vulkan
     }
 
 	static unsigned CopyViaMemoryMap(
-		VkDevice device, VkImage image, ResourceMap& map,
-		const TextureDesc& desc,
-		const std::function<SubResourceInitData(SubResourceId)>& initData);
-
-	static unsigned CopyViaMemoryMap(
-		IDevice& dev, Resource& resource,
+		VkDevice device, ResourceMap& map,
+		VkImage imageForLayout, const TextureDesc& descForLayout,
 		const std::function<SubResourceInitData(SubResourceId)>& initData);
 
 	static void CopyPartial(
@@ -450,8 +446,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			// the VkImage, we specify it ourselves.
 			ResourceMap map{factory, resource, ResourceMap::Mode::WriteDiscardPrevious};
 			CopyViaMemoryMap(
-				factory.GetDevice().get(), nullptr, map, 
-				desc._textureDesc, initData);
+				factory.GetDevice().get(), map, 
+				resource.GetImage(), desc._textureDesc, initData);
 		}
 	}
 
@@ -1110,11 +1106,11 @@ namespace RenderCore { namespace Metal_Vulkan
 				c.srcSubresource.aspectMask = srcAspectMask;
 				c.srcSubresource.mipLevel = src._subResource._mip;
 				c.srcSubresource.baseArrayLayer = src._subResource._arrayLayer;
-				c.srcSubresource.layerCount = ((src._subResource._arrayLayer + src._arrayLayerCount) < std::max(1u,(unsigned)srcDesc._textureDesc._arrayCount)) ? src._arrayLayerCount : VK_REMAINING_ARRAY_LAYERS;
+				c.srcSubresource.layerCount = ((src._subResource._arrayLayer + src._arrayLayerCount) < ActualArrayLayerCount(srcDesc._textureDesc)) ? src._arrayLayerCount : VK_REMAINING_ARRAY_LAYERS;
 				c.dstSubresource.aspectMask = dstAspectMask;
 				c.dstSubresource.mipLevel = dst._subResource._mip;
 				c.dstSubresource.baseArrayLayer = dst._subResource._arrayLayer;
-				c.dstSubresource.layerCount = ((dst._subResource._arrayLayer + src._arrayLayerCount) < std::max(1u,(unsigned)dstDesc._textureDesc._arrayCount)) ? src._arrayLayerCount : VK_REMAINING_ARRAY_LAYERS;
+				c.dstSubresource.layerCount = ((dst._subResource._arrayLayer + src._arrayLayerCount) < ActualArrayLayerCount(dstDesc._textureDesc)) ? src._arrayLayerCount : VK_REMAINING_ARRAY_LAYERS;
 			}
 
 			context.GetActiveCommandList().CopyImage(
@@ -1148,10 +1144,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			unsigned mipCopyCount = src._mipLevelCount;
 			unsigned arrayCopyCount = src._arrayLayerCount;
 			mipCopyCount = std::min(mipCopyCount, dstDesc._textureDesc._mipCount - dst._subResource._mip);
-			arrayCopyCount = std::min(arrayCopyCount, std::max(1u,(unsigned)dstDesc._textureDesc._arrayCount) - dst._subResource._arrayLayer);
+			arrayCopyCount = std::min(arrayCopyCount, ActualArrayLayerCount(dstDesc._textureDesc) - dst._subResource._arrayLayer);
 			if (srcDesc._type == Resource::Desc::Type::Texture) {
 				mipCopyCount = std::min(mipCopyCount, srcDesc._textureDesc._mipCount - src._subResource._mip);
-				arrayCopyCount = std::min(arrayCopyCount, std::max(1u,(unsigned)srcDesc._textureDesc._arrayCount) - src._subResource._arrayLayer);
+				arrayCopyCount = std::min(arrayCopyCount, ActualArrayLayerCount(srcDesc._textureDesc) - src._subResource._arrayLayer);
 			}
 			assert(arrayCopyCount > 0 && mipCopyCount > 0);
 
@@ -1216,10 +1212,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			unsigned mipCopyCount = src._mipLevelCount;
 			unsigned arrayCopyCount = src._arrayLayerCount;
 			mipCopyCount = std::min(mipCopyCount, srcDesc._textureDesc._mipCount - src._subResource._mip);
-			arrayCopyCount = std::min(arrayCopyCount, std::max(1u,(unsigned)srcDesc._textureDesc._arrayCount) - src._subResource._arrayLayer);
+			arrayCopyCount = std::min(arrayCopyCount, ActualArrayLayerCount(srcDesc._textureDesc) - src._subResource._arrayLayer);
 			if (dstDesc._type == Resource::Desc::Type::Texture) {
 				mipCopyCount = std::min(mipCopyCount, dstDesc._textureDesc._mipCount - dst._subResource._mip);
-				arrayCopyCount = std::min(arrayCopyCount, std::max(1u,(unsigned)dstDesc._textureDesc._arrayCount) - dst._subResource._arrayLayer);
+				arrayCopyCount = std::min(arrayCopyCount, ActualArrayLayerCount(dstDesc._textureDesc) - dst._subResource._arrayLayer);
 			}
 
             VkBufferImageCopy copyOps[arrayCopyCount*mipCopyCount];
@@ -1269,8 +1265,8 @@ namespace RenderCore { namespace Metal_Vulkan
     }
 
     static unsigned CopyViaMemoryMap(
-        VkDevice device, VkImage image, ResourceMap& map,
-        const TextureDesc& desc,
+        VkDevice device, ResourceMap& map,
+        VkImage imageForLayout, const TextureDesc& descForLayout,
         const std::function<SubResourceInitData(SubResourceId)>& initData)
     {
         // Copy all of the subresources to device member, using a MemoryMap path.
@@ -1278,23 +1274,23 @@ namespace RenderCore { namespace Metal_Vulkan
         // the images. Otherwise, we will use a default arrangement of subresources.
         unsigned bytesUploaded = 0;
 
-		auto mipCount = unsigned(desc._mipCount);
-		auto arrayCount = ActualArrayLayerCount(desc);
-		auto aspectFlags = AsImageAspectMask(desc._format);
+		auto mipCount = unsigned(descForLayout._mipCount);
+		auto arrayCount = ActualArrayLayerCount(descForLayout);
+		auto aspectFlags = AsImageAspectMask(descForLayout._format);
 		for (unsigned m = 0; m < mipCount; ++m) {
-            auto mipDesc = CalculateMipMapDesc(desc, m);
+            auto mipDesc = CalculateMipMapDesc(descForLayout, m);
 			for (unsigned a = 0; a < arrayCount; ++a) {
                 auto subResData = initData({m, a});
 				if (!subResData._data.size()) continue;
 
 				VkSubresourceLayout layout = {};
-                if (image) {
+                if (imageForLayout) {
                     VkImageSubresource subRes = { aspectFlags, m, a };
 				    vkGetImageSubresourceLayout(
-					    device, image,
+					    device, imageForLayout,
 					    &subRes, &layout);
                 } else {
-                    auto offset = GetSubResourceOffset(desc, m, a);
+                    auto offset = GetSubResourceOffset(descForLayout, m, a);
                     layout = VkSubresourceLayout { 
                         offset._offset, offset._size, 
                         offset._pitches._rowPitch, offset._pitches._arrayPitch, offset._pitches._slicePitch };
@@ -1318,21 +1314,23 @@ namespace RenderCore { namespace Metal_Vulkan
     namespace Internal
 	{
 		unsigned CopyViaMemoryMap(
-			IDevice& dev, Resource& resource,
+			IDevice& dev, IResource& resource, unsigned resourceOffset, unsigned resourceSize,
+			const TextureDesc& descForLayout,
 			const std::function<SubResourceInitData(SubResourceId)>& initData)
 		{
-			assert(resource.AccessDesc()._type == ResourceDesc::Type::Texture);
+			auto& res = *checked_cast<Resource*>(&resource);
+			assert(res.AccessDesc()._type == ResourceDesc::Type::Texture);
 			auto& factory = GetObjectFactory(dev);
-			if (resource.GetVmaMemory()) {
-				ResourceMap map{factory.GetVmaAllocator(), resource.GetVmaMemory()};
+			if (res.GetVmaMemory()) {
+				ResourceMap map{factory.GetVmaAllocator(), res.GetVmaMemory()};
 				return Metal_Vulkan::CopyViaMemoryMap(
-					factory.GetDevice().get(), resource.GetImage(), map,
-					resource.AccessDesc()._textureDesc, initData);
+					factory.GetDevice().get(), map,
+					res.GetImage(), descForLayout, initData);
 			} else {
-				ResourceMap map{factory.GetDevice().get(), resource.GetMemory()};
+				ResourceMap map{factory.GetDevice().get(), res.GetMemory()};
 				return Metal_Vulkan::CopyViaMemoryMap(
-					factory.GetDevice().get(), resource.GetImage(), map,
-					resource.AccessDesc()._textureDesc, initData);
+					factory.GetDevice().get(), map,
+					res.GetImage(), descForLayout, initData);
 			}
 		}
 	}

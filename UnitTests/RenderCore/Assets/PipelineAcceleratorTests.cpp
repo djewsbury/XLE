@@ -32,7 +32,6 @@
 #include "../../../RenderCore/ResourceDesc.h"
 #include "../../../RenderCore/FrameBufferDesc.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
-#include "../../../BufferUploads/BufferUploads_Manager.h"
 #include "../../../BufferUploads/IBufferUploads.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/IFileSystem.h"

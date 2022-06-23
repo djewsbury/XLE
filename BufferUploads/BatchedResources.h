@@ -2,11 +2,14 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#include "IBufferUploads.h"
 #include "ResourceSource.h"
+#include "../Utility/HeapUtils.h"
 
 namespace BufferUploads
 {
 	class ThreadContext;
+	using IResource = RenderCore::IResource;
 
 	class BatchedResources : public IResourcePool, public std::enable_shared_from_this<BatchedResources>
 	{

@@ -57,26 +57,36 @@ namespace BufferUploads { namespace PlatformInterface
     {
     public:
             ////////   P U S H   T O   R E S O U R C E   ////////
-        unsigned WriteToBufferViaMap(
-            const IResource& resource, unsigned resourceOffset, unsigned resourceSize,
+        unsigned WriteViaMap(
+            IResource& resource, unsigned resourceOffset, unsigned resourceSize,
             IteratorRange<const void*> data);
 
-        unsigned WriteToBufferViaMap(
+        unsigned WriteViaMap(
             const ResourceLocator& locator,
             IteratorRange<const void*> data);
 
-        unsigned WriteToBufferViaMap(
-            const IResource& resource, unsigned resourceOffset, unsigned resourceSize,
-            const RenderCore::ResourceDesc& dstDesc,
-            IDataPacket& dataPacket);
+        // Write to a buffer using the correct arrangement of subresources required for copying from here to a texture
+        // This is used in the staging texture case (ie, there will be a subsequent staging linear buffer to device local texture copy)
+        // resourceOffset & resourceSize describe the part of resource that will be written to
+        unsigned WriteViaMap(
+            IResource& resource, unsigned resourceOffset, unsigned resourceSize,
+            const RenderCore::TextureDesc& descForLayout,
+            const RenderCore::IDevice::ResourceInitializer& multiSubresourceInitializer);
 
-        unsigned WriteToTextureViaMap(
-            const ResourceLocator& resource, const ResourceDesc& desc,
-            const RenderCore::Box2D& box, 
-            const RenderCore::IDevice::ResourceInitializer& data);
+        // Write directly to a resource that may have subresources with the given initializer
+        // This can be used with either linear buffers or textures, but must write to the entire
+        // destination resource
+        unsigned WriteViaMap(
+            IResource& resource,
+            const RenderCore::IDevice::ResourceInitializer& multiSubresourceInitializer);
 
         void UpdateFinalResourceFromStaging(
             const ResourceLocator& finalResource,
+            RenderCore::IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize);
+
+        void UpdateFinalResourceFromStaging(
+            const ResourceLocator& finalResource,
+            const RenderCore::Box2D& box, SubResourceId subRes,
             RenderCore::IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize);
 
         bool CanDirectlyMap(RenderCore::IResource& resource);

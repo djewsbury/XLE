@@ -6,7 +6,6 @@
 #include "../../EmbeddedRes.h"
 #include "../../UnitTestHelper.h"
 #include "../../../BufferUploads/IBufferUploads.h"
-#include "../../../BufferUploads/MemoryManagement.h"
 #include "../../../BufferUploads/Metrics.h"
 #include "../../../RenderCore/Assets/TextureLoaders.h"
 #include "../../../RenderCore/ResourceDesc.h"

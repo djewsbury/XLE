@@ -334,7 +334,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		void SetupInitialLayout(DeviceContext&, IResource&);
 
 		unsigned CopyViaMemoryMap(
-			IDevice& dev, Resource& resource,
+			IDevice& dev, IResource& resource, unsigned resourceOffset, unsigned resourceSize,
+			const TextureDesc& descForLayout,
 			const std::function<SubResourceInitData(SubResourceId)>& initData);
 	}
 
