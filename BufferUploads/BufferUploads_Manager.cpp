@@ -475,26 +475,15 @@ namespace BufferUploads
         }
     }
 
-    struct ResourceCreation
-    {
-        enum Flags { InitialisationSuccessful = 1<<0 };
-        ResourceLocator _locator;
-        unsigned _flags = 0;
-    };
-
-    static ResourceCreation CreateResource(
+    static std::shared_ptr<IResource> CreateResource(
         RenderCore::IDevice& device,
         const RenderCore::ResourceDesc& desc,
         IDataPacket* initPkt = nullptr)
     {
-        auto supportInit = 
-            (desc._type == ResourceDesc::Type::Texture)
-            ? PlatformInterface::SupportsResourceInitialisation_Texture
-            : PlatformInterface::SupportsResourceInitialisation_Buffer;
-        if (supportInit && initPkt) {
-            return { device.CreateResource(desc, PlatformInterface::AsResourceInitializer(*initPkt)), ResourceCreation::InitialisationSuccessful };
+        if (initPkt) {
+            return device.CreateResource(desc, PlatformInterface::AsResourceInitializer(*initPkt));
         } else {
-            return { device.CreateResource(desc), 0 };
+            return device.CreateResource(desc);
         }
     }
 
@@ -513,10 +502,11 @@ namespace BufferUploads
         }
     
         auto finalResourceConstruction = CreateResource(*threadContext.GetDevice(), desc, &initialisationData);
-        if (finalResourceConstruction._locator.IsEmpty())
+        if (!finalResourceConstruction)
             return {};
     
-        if (!(finalResourceConstruction._flags & ResourceCreation::InitialisationSuccessful)) {
+        bool didInitialisationDuringConstruction = false;
+        if (!didInitialisationDuringConstruction) {
 
             assert(0);      // do we need a separate staging page for immediate/main thread initializations?
 #if 0
@@ -557,7 +547,7 @@ namespace BufferUploads
 #endif
         }
     
-        return finalResourceConstruction._locator;
+        return finalResourceConstruction;
     }
 
     void AssemblyLine::Transaction_AddRef(TransactionID id)
@@ -1021,7 +1011,7 @@ namespace BufferUploads
         assert(transaction);
 
         assert(resourceCreateStep._initialisationData);
-        const unsigned objectSize = RenderCore::ByteCount(resourceCreateStep._creationDesc);
+        auto objectSize = RenderCore::ByteCount(resourceCreateStep._creationDesc);
         auto uploadRequestSize = objectSize;
         auto uploadDataType = (unsigned)AsUploadDataType(resourceCreateStep._creationDesc);
 
@@ -1036,8 +1026,9 @@ namespace BufferUploads
         if ((metricsUnderConstruction._bytesUploadTotal+uploadRequestSize) > budgetUnderConstruction._limit_BytesUploaded && metricsUnderConstruction._bytesUploadTotal !=0)
             return false;
 
-        ResourceCreation finalConstruction;
+        ResourceLocator finalConstruction;
         bool deviceConstructionInvoked = false;
+        bool didInitialisationDuringCreation = false;
         if (transaction->_finalResource.IsEmpty()) {
             // No resource provided beforehand -- have to create it now
             #if 0       // batching path
@@ -1051,31 +1042,45 @@ namespace BufferUploads
                 }
             #endif
 
-            finalConstruction = CreateResource(
-                context.GetRenderCoreDevice(),
-                resourceCreateStep._creationDesc, resourceCreateStep._initialisationData.get());
+            auto supportInit = 
+                (resourceCreateStep._creationDesc._type == ResourceDesc::Type::Texture)
+                ? PlatformInterface::SupportsResourceInitialisation_Texture
+                : PlatformInterface::SupportsResourceInitialisation_Buffer;
+
+            if (resourceCreateStep._initialisationData && supportInit) {
+                finalConstruction = CreateResource(
+                    context.GetRenderCoreDevice(),
+                    resourceCreateStep._creationDesc, resourceCreateStep._initialisationData.get());
+                didInitialisationDuringCreation = true;
+            } else {
+                auto modifiedDesc = resourceCreateStep._creationDesc;
+                modifiedDesc._bindFlags |= BindFlag::TransferDst;
+                finalConstruction = CreateResource(context.GetRenderCoreDevice(), modifiedDesc);
+            }
             deviceConstructionInvoked = true;
 
-            if (finalConstruction._locator.IsEmpty())
+            if (finalConstruction.IsEmpty())
                 return false;
         } else {
-            finalConstruction._locator = transaction->_finalResource;
+            finalConstruction = transaction->_finalResource;
         }
 
-        bool initializedDuringCreate = finalConstruction._flags & ResourceCreation::InitialisationSuccessful;
-        if (!initializedDuringCreate) {
-            assert(finalConstruction._locator.GetContainingResource()->GetDesc()._bindFlags & BindFlag::TransferDst);    // need TransferDst to recieve staging data
+        if (!didInitialisationDuringCreation) {
+            assert(finalConstruction.GetContainingResource()->GetDesc()._bindFlags & BindFlag::TransferDst);    // need TransferDst to recieve staging data
 
             auto& helper = context.GetResourceUploadHelper();
-            if (!helper.CanDirectlyMap(*finalConstruction._locator.GetContainingResource())) {
+            if (!helper.CanDirectlyMap(*finalConstruction.GetContainingResource())) {
 
                 auto stagingByteCount = objectSize;
                 auto alignment = helper.CalculateStagingBufferOffsetAlignment(resourceCreateStep._creationDesc);
 
                 auto stagingConstruction = context.GetStagingPage().Allocate(stagingByteCount, alignment);
                 assert(stagingConstruction);
-                if (!stagingConstruction)
+                if (!stagingConstruction) {
+                    // we will return, so keep the resource until then
+                    transaction->_finalResource = finalConstruction;
                     return false;
+                }
 
                 if (resourceCreateStep._creationDesc._type == ResourceDesc::Type::Texture) {
                     helper.WriteViaMap(
@@ -1091,7 +1096,7 @@ namespace BufferUploads
                 }
         
                 helper.UpdateFinalResourceFromStaging(
-                    finalConstruction._locator, 
+                    finalConstruction,
                     context.GetStagingPage().GetStagingResource(),
                     stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize());
 
@@ -1102,7 +1107,7 @@ namespace BufferUploads
                 // destination is in host-visible memory, we can just write directly to it
                 if (resourceCreateStep._creationDesc._type == ResourceDesc::Type::Texture) {
                     helper.WriteViaMap(
-                        *finalConstruction._locator.AsIndependentResource(),
+                        *finalConstruction.AsIndependentResource(),
                         [part{resourceCreateStep._part}, initialisationData{resourceCreateStep._initialisationData.get()}](RenderCore::SubResourceId sr) -> RenderCore::SubResourceInitData
                         {
                             RenderCore::SubResourceInitData result = {};
@@ -1113,7 +1118,7 @@ namespace BufferUploads
                         });
                 } else {
                     helper.WriteViaMap(
-                        finalConstruction._locator,
+                        finalConstruction,
                         resourceCreateStep._initialisationData->GetData());
                 }
             }
@@ -1134,7 +1139,7 @@ namespace BufferUploads
         }
 
         // Embue the final resource with the completion command list information
-        transaction->_finalResource = ResourceLocator { std::move(finalConstruction._locator), context.CommandList_GetUnderConstruction() };
+        transaction->_finalResource = ResourceLocator { std::move(finalConstruction), context.CommandList_GetUnderConstruction() };
         transaction->_promise.set_value(transaction->_finalResource);
 
         SystemReleaseTransaction(transaction, context);
@@ -1321,10 +1326,10 @@ namespace BufferUploads
         try {
             if (transaction->_finalResource.IsEmpty()) {
                 auto finalConstruction = CreateResource(context.GetRenderCoreDevice(), transferStagingToFinalStep._finalResourceDesc);
-                if (finalConstruction._locator.IsEmpty())
+                if (!finalConstruction)
                     return false;                   // failed to allocate the resource. Return false and We'll try again later...
 
-                transaction->_finalResource = finalConstruction._locator;
+                transaction->_finalResource = finalConstruction;
 
                 metricsUnderConstruction._bytesCreated[dataType] += RenderCore::ByteCount(transferStagingToFinalStep._finalResourceDesc);
                 metricsUnderConstruction._countCreations[dataType] += 1;

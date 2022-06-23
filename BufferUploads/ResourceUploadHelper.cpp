@@ -8,6 +8,7 @@
 #include "../RenderCore/Metal/Resource.h"
 #include "../RenderCore/Metal/DeviceContext.h"
 #include "../RenderCore/IDevice.h"
+#include "../RenderCore/Vulkan/IDeviceVulkan.h"
 #include "../OSServices/Log.h"
 #include "../Utility/StringFormat.h"
 #include <assert.h>
@@ -115,6 +116,7 @@ namespace BufferUploads { namespace PlatformInterface
         IResource& resource,
         const RenderCore::IDevice::ResourceInitializer& multiSubresourceInitializer)
     {
+        unsigned copyAmount = 0;
         Metal::ResourceMap map{*_renderCoreContext->GetDevice(), resource, Metal::ResourceMap::Mode::WriteDiscardPrevious};
         auto desc = resource.GetDesc();
         if (desc._type == ResourceDesc::Type::Texture) {
@@ -125,14 +127,42 @@ namespace BufferUploads { namespace PlatformInterface
                     auto src = multiSubresourceInitializer({m, a});
                     auto dst = map.GetData({m, a});
                     std::memcpy(dst.begin(), src._data.begin(), std::min(dst.size(), src._data.size()));
+                    copyAmount += (unsigned)std::min(dst.size(), src._data.size());
                 }
         } else {
             auto src = multiSubresourceInitializer({});
             auto dst = map.GetData();
             std::memcpy(dst.begin(), src._data.begin(), std::min(dst.size(), src._data.size()));
+            copyAmount += (unsigned)std::min(dst.size(), src._data.size());
 
         }
         map.FlushCache();
+        return copyAmount;
+    }
+
+    bool ResourceUploadHelper::CanDirectlyMap(RenderCore::IResource& resource)
+    {
+        return Metal::ResourceMap::CanMap(*_renderCoreContext->GetDevice(), resource, Metal::ResourceMap::Mode::WriteDiscardPrevious);
+    }
+
+    unsigned ResourceUploadHelper::CalculateStagingBufferOffsetAlignment(const RenderCore::ResourceDesc& desc)
+    {
+        using namespace RenderCore;
+		auto& objectFactory = Metal::GetObjectFactory();
+		unsigned alignment = 1u;
+		#if GFXAPI_TARGET == GFXAPI_VULKAN
+			alignment = std::max(alignment, (unsigned)objectFactory.GetPhysicalDeviceProperties().limits.optimalBufferCopyOffsetAlignment);
+		#endif
+		if (desc._type == ResourceDesc::Type::Texture) {
+			auto compressionParam = GetCompressionParameters(desc._textureDesc._format);
+			if (compressionParam._blockWidth != 1) {
+				alignment = std::max(alignment, compressionParam._blockBytes);
+			} else {
+				// non-blocked format -- alignment requirement is a multiple of the texel size
+				alignment = std::max(alignment, BitsPerPixel(desc._textureDesc._format)/8u);
+			}
+		}
+		return alignment;
     }
 
 #if 0
@@ -314,6 +344,7 @@ namespace BufferUploads { namespace PlatformInterface
 
     auto StagingPage::Allocate(unsigned byteCount, unsigned alignment) -> Allocation
     {
+        UpdateConsumerMarker();
         auto stagingAllocation = _stagingBufferHeap.AllocateBack(byteCount, alignment);
         if (stagingAllocation == ~0u) return {};
 
@@ -322,8 +353,10 @@ namespace BufferUploads { namespace PlatformInterface
         return {*this, stagingAllocation, byteCount, allocationId};
     }
 
-    void StagingPage::UpdateConsumerMarker(QueueMarker queueMarker)
+    void StagingPage::UpdateConsumerMarker()
     {
+        assert(_asyncTracker);
+        QueueMarker queueMarker = _asyncTracker->GetConsumerMarker();
         while (!_allocationsWaitingOnDevice.empty() && _allocationsWaitingOnDevice.front()._releaseMarker <= queueMarker) {
 			assert(_allocationsWaitingOnDevice.front()._pendingNewFront != ~0u);
 			_stagingBufferHeap.ResetFront(_allocationsWaitingOnDevice.front()._pendingNewFront);
@@ -377,13 +410,18 @@ namespace BufferUploads { namespace PlatformInterface
 				BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite | AllocationRules::PermanentlyMapped | AllocationRules::DisableAutoCacheCoherency,
 				LinearBufferDesc::Create(size),
 				"staging-page"));
+
+        auto* deviceVulkan = (RenderCore::IDeviceVulkan*)device.QueryInterface(typeid(RenderCore::IDeviceVulkan).hash_code());
+        if (deviceVulkan)
+            _asyncTracker = deviceVulkan->GetAsyncTracker();
     }
 
     StagingPage::~StagingPage()
     {
-        // ideally everything should be released before we get here
+        // Ideally everything should be released before we get here
+        // However, having some "_allocationsWaitingOnDevice" is ok, because it probably just means we haven't updated
+        // the consumer marker
         assert(_activeAllocations.empty());
-        assert(_allocationsWaitingOnDevice.empty());
     }
 
     void StagingPage::Allocation::Release(QueueMarker queueMarker)

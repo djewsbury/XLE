@@ -1652,8 +1652,13 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (!_permanentlyMappedResource) {
 			if (_vmaAllocator && _vmaMem) {
 				vmaUnmapMemory(_vmaAllocator, _vmaMem);
-			} else if (_dev && _mem)
+				_vmaAllocator = nullptr;
+				_vmaMem = nullptr;
+			} else if (_dev && _mem) {
 				vkUnmapMemory(_dev, _mem);
+				_dev = nullptr;
+				_mem = nullptr;
+			}
 		}
 	}
 
@@ -1744,6 +1749,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		_vmaMem = moveFrom._vmaMem; moveFrom._vmaMem = nullptr;
 		_vmaAllocator = moveFrom._vmaAllocator; moveFrom._vmaAllocator = nullptr;
 		_subResources = std::move(moveFrom._subResources);
+		_permanentlyMappedResource = moveFrom._permanentlyMappedResource; moveFrom._permanentlyMappedResource = false;
+		_resourceOffset = moveFrom._resourceOffset; moveFrom._resourceOffset = 0;
 	}
 
 	ResourceMap& ResourceMap::operator=(ResourceMap&& moveFrom) never_throws
@@ -1756,6 +1763,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		_vmaMem = moveFrom._vmaMem; moveFrom._vmaMem = nullptr;
 		_vmaAllocator = moveFrom._vmaAllocator; moveFrom._vmaAllocator = nullptr;
 		_subResources = std::move(moveFrom._subResources);
+		_permanentlyMappedResource = moveFrom._permanentlyMappedResource; moveFrom._permanentlyMappedResource = false;
+		_resourceOffset = moveFrom._resourceOffset; moveFrom._resourceOffset = 0;
 		return *this;
 	}
 

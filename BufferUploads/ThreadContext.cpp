@@ -52,6 +52,9 @@ namespace BufferUploads
         EventList               _eventBuffers[4];
         unsigned                _eventListWritingIndex;
 
+        std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
+        std::unique_ptr<PlatformInterface::StagingPage> _stagingPage;
+
         Pimpl() : _currentEventListId(0), _eventListWritingIndex(0), _currentEventListProcessedId(0), _currentEventListPublishedId(0) {}
     };
 
@@ -261,6 +264,18 @@ namespace BufferUploads
     unsigned                ThreadContext::CommitCount_Current()                           { return _pimpl->_commitCountCurrent; }
     unsigned&               ThreadContext::CommitCount_LastResolve()                       { return _pimpl->_commitCountLastResolve; }
 
+    PlatformInterface::StagingPage&     ThreadContext::GetStagingPage()
+    {
+        assert(_pimpl->_stagingPage);
+        return *_pimpl->_stagingPage;
+    }
+
+    PlatformInterface::QueueMarker      ThreadContext::GetProducerQueueMarker()
+    {
+        if (_pimpl->_asyncTracker) return _pimpl->_asyncTracker->GetProducerMarker();
+        return 0;
+    }
+
     ThreadContext::ThreadContext(std::shared_ptr<RenderCore::IThreadContext> underlyingContext) 
     : _resourceUploadHelper(*underlyingContext)
     {
@@ -271,6 +286,15 @@ namespace BufferUploads
         _pimpl->_isImmediateContext = _underlyingContext->IsImmediate();
         _pimpl->_commandListIDUnderConstruction = 1;
         _pimpl->_commandListIDCommittedToImmediate = 0;
+
+        if (!_pimpl->_isImmediateContext) {
+            const unsigned stagingPageSize = 16*1024*1024;
+            _pimpl->_stagingPage = std::make_unique<PlatformInterface::StagingPage>(*_underlyingContext->GetDevice(), stagingPageSize);
+        }
+
+        auto* deviceVulkan = (RenderCore::IDeviceVulkan*)_underlyingContext->GetDevice()->QueryInterface(typeid(RenderCore::IDeviceVulkan).hash_code());
+        if (deviceVulkan)
+            _pimpl->_asyncTracker = deviceVulkan->GetAsyncTracker();
     }
 
     ThreadContext::~ThreadContext()

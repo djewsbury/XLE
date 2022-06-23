@@ -12,6 +12,7 @@
 #include <utility>
 
 namespace Utility { class DefragStep; }
+namespace RenderCore { namespace Metal_Vulkan { class IAsyncTracker; } }
 
 namespace BufferUploads { namespace PlatformInterface
 {
@@ -139,7 +140,6 @@ namespace BufferUploads { namespace PlatformInterface
 
         Allocation Allocate(unsigned byteCount, unsigned alignment);
         RenderCore::IResource& GetStagingResource() { return *_stagingBuffer; }
-        void UpdateConsumerMarker(QueueMarker);
 
         StagingPage(RenderCore::IDevice& device, unsigned size);
         ~StagingPage();
@@ -149,6 +149,7 @@ namespace BufferUploads { namespace PlatformInterface
     private:
         CircularHeap _stagingBufferHeap;
 		std::shared_ptr<RenderCore::IResource> _stagingBuffer;
+        std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
 
         struct ActiveAllocation
         {
@@ -168,6 +169,8 @@ namespace BufferUploads { namespace PlatformInterface
 
         void Release(unsigned allocationId, QueueMarker releaseMarker);
         void Abandon(unsigned allocationId);
+
+        void UpdateConsumerMarker();
     };
 
         ///////////////////////////////////////////////////////////////////

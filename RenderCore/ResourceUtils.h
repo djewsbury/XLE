@@ -71,7 +71,7 @@ namespace RenderCore
             IResource& source,
             unsigned bufferStart, unsigned bufferEnd = ~0u,
             unsigned mipLeveCount = 1, unsigned arrayLayerCount = 1)
-        : _resource(&source), _subResource(), _leftTopFront(bufferStart, 0, 0), _rightBottomBack(bufferEnd, ~0u, ~0u), _mipLevelCount(mipLeveCount), _arrayLayerCount(arrayLayerCount) {}
+        : _resource(&source), _subResource(), _leftTopFront(bufferStart, 0, 0), _rightBottomBack(bufferStart+bufferEnd, ~0u, ~0u), _mipLevelCount(mipLeveCount), _arrayLayerCount(arrayLayerCount) {}
     };
 
     class Box2D
