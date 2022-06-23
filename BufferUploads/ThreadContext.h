@@ -57,8 +57,12 @@ namespace BufferUploads
         unsigned                CommitCount_Current();
         unsigned&               CommitCount_LastResolve();
 
+        PlatformInterface::StagingPage&     GetStagingPage();
+        PlatformInterface::QueueMarker      GetProducerQueueMarker();
+
         PlatformInterface::ResourceUploadHelper& GetResourceUploadHelper() { return _resourceUploadHelper; }
-        const std::shared_ptr<RenderCore::IThreadContext>& GetRenderCoreThreadContext() { return _underlyingContext; }
+        const RenderCore::IThreadContext& GetRenderCoreThreadContext() { return *_underlyingContext; }
+        RenderCore::IDevice& GetRenderCoreDevice() { return *_underlyingContext->GetDevice(); }
 
         ThreadContext(std::shared_ptr<RenderCore::IThreadContext> underlyingContext);
         ~ThreadContext();

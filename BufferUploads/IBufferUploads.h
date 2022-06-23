@@ -55,8 +55,7 @@ namespace BufferUploads
     namespace TransactionOptions
     {
         enum {
-            LongTerm         = 1<<0,
-            FramePriority    = 1<<1
+            FramePriority    = 1<<0
         };
         using BitField = unsigned;
     }

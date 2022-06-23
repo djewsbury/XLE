@@ -7,7 +7,8 @@
 #include "IBufferUploads.h"
 #include "../RenderCore/IDevice.h"
 #include "../Utility/IntrusivePtr.h"
-#include "../RenderCore/Metal/Forward.h"
+#include "../Utility/HeapUtils.h"
+#include "../RenderCore/Metal/Forward.h"        // for GFXAPI_TARGET
 #include <utility>
 
 namespace Utility { class DefragStep; }
@@ -15,9 +16,6 @@ namespace Utility { class DefragStep; }
 namespace BufferUploads { namespace PlatformInterface
 {
         /////////////////////////////////////////////////////////////////////
-
-	using UnderlyingResource = RenderCore::IResource;
-	using UnderlyingResourcePtr = RenderCore::IResourcePtr;
 
     struct BufferMetrics : public RenderCore::ResourceDesc
     {
@@ -27,10 +25,10 @@ namespace BufferUploads { namespace PlatformInterface
         const char*     _pixelFormatName;
     };
 
-    void            Resource_Register(UnderlyingResource& resource, const char name[]);
+    void            Resource_Register(RenderCore::IResource& resource, const char name[]);
     void            Resource_Report(bool justVolatiles);
-    void            Resource_SetName(UnderlyingResource& resource, const char name[]);
-    void            Resource_GetName(UnderlyingResource& resource, char buffer[], int bufferSize);
+    void            Resource_SetName(RenderCore::IResource& resource, const char name[]);
+    void            Resource_GetName(RenderCore::IResource& resource, char buffer[], int bufferSize);
     size_t          Resource_GetAll(BufferMetrics** bufferDescs);
 
     size_t          Resource_GetVideoMemoryHeadroom();
@@ -53,28 +51,41 @@ namespace BufferUploads { namespace PlatformInterface
     };
 
     std::pair<ResourceDesc, StagingToFinalMapping> CalculatePartialStagingDesc(const ResourceDesc& dstDesc, const PartialResource& part);
+    using QueueMarker = unsigned;
 
     class ResourceUploadHelper
     {
     public:
             ////////   P U S H   T O   R E S O U R C E   ////////
         unsigned WriteToBufferViaMap(
-            const ResourceLocator& resource, const ResourceDesc& desc, unsigned offset,
+            const IResource& resource, unsigned resourceOffset, unsigned resourceSize,
             IteratorRange<const void*> data);
-        
+
+        unsigned WriteToBufferViaMap(
+            const ResourceLocator& locator,
+            IteratorRange<const void*> data);
+
+        unsigned WriteToBufferViaMap(
+            const IResource& resource, unsigned resourceOffset, unsigned resourceSize,
+            const RenderCore::ResourceDesc& dstDesc,
+            IDataPacket& dataPacket);
+
         unsigned WriteToTextureViaMap(
             const ResourceLocator& resource, const ResourceDesc& desc,
             const RenderCore::Box2D& box, 
             const RenderCore::IDevice::ResourceInitializer& data);
 
         void UpdateFinalResourceFromStaging(
-            const ResourceLocator& finalResource, const ResourceLocator& staging,
-            const ResourceDesc& destinationDesc, 
-            const StagingToFinalMapping& stagingToFinalMapping);
+            const ResourceLocator& finalResource,
+            RenderCore::IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize);
+
+        bool CanDirectlyMap(RenderCore::IResource& resource);
+
+        unsigned CalculateStagingBufferOffsetAlignment(const RenderCore::ResourceDesc& desc);
 
             ////////   R E S O U R C E   C O P Y   ////////
-        void ResourceCopy_DefragSteps(const UnderlyingResourcePtr& destination, const UnderlyingResourcePtr& source, const std::vector<Utility::DefragStep>& steps);
-        void ResourceCopy(UnderlyingResource& destination, UnderlyingResource& source);
+        void ResourceCopy_DefragSteps(const std::shared_ptr<RenderCore::IResource>& destination, const std::shared_ptr<RenderCore::IResource>& source, const std::vector<Utility::DefragStep>& steps);
+        void ResourceCopy(RenderCore::IResource& destination, RenderCore::IResource& source);
 
             ////////   C O N S T R U C T I O N   ////////
         ResourceUploadHelper(RenderCore::IThreadContext& renderCoreContext);
@@ -91,11 +102,69 @@ namespace BufferUploads { namespace PlatformInterface
         RenderCore::IThreadContext*         _renderCoreContext;
     };
 
+
+    class StagingPage
+    {
+    public:
+        struct Allocation
+        {
+            void Release(QueueMarker queueMarker);
+            unsigned GetResourceOffset() const { return _resourceOffset; }
+            unsigned GetAllocationSize() const { return _allocationSize; }
+            operator bool() const { return Valid(); }
+            bool Valid() const { return _allocationSize != 0; }
+
+            Allocation() = default;
+            ~Allocation();
+            Allocation(Allocation&&);
+            Allocation& operator=(Allocation&&);
+        private:
+            unsigned _resourceOffset = 0;
+            unsigned _allocationSize = 0;
+            unsigned _allocationId = ~0u;
+            StagingPage* _page = nullptr;
+            Allocation(StagingPage& page, unsigned resourceOffset, unsigned allocationSize, unsigned allocationId);
+            friend class StagingPage;
+        };
+
+        Allocation Allocate(unsigned byteCount, unsigned alignment);
+        RenderCore::IResource& GetStagingResource() { return *_stagingBuffer; }
+        void UpdateConsumerMarker(QueueMarker);
+
+        StagingPage(RenderCore::IDevice& device, unsigned size);
+        ~StagingPage();
+        StagingPage(StagingPage&&) = default;
+        StagingPage& operator=(StagingPage&&) = default;
+
+    private:
+        CircularHeap _stagingBufferHeap;
+		std::shared_ptr<RenderCore::IResource> _stagingBuffer;
+
+        struct ActiveAllocation
+        {
+            unsigned _allocationId, _pendingNewFront;
+            bool _unreleased;
+            QueueMarker _releaseMarker;
+        };
+        std::vector<ActiveAllocation> _activeAllocations;
+        unsigned _nextAllocationId = 1;
+
+        struct AllocationWaitingOnDevice
+        {
+            QueueMarker _releaseMarker;
+            unsigned _pendingNewFront = ~0u;
+        };
+        std::vector<AllocationWaitingOnDevice> _allocationsWaitingOnDevice;
+
+        void Release(unsigned allocationId, QueueMarker releaseMarker);
+        void Abandon(unsigned allocationId);
+    };
+
         ///////////////////////////////////////////////////////////////////
 
             ////////   F U N C T I O N A L I T Y   F L A G S   ////////
 
-#if 0
+#if 1
 
         //          Use these to customise behaviour for platforms
         //          without lots of #if defined(...) type code

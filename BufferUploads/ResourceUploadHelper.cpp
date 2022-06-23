@@ -142,13 +142,13 @@ namespace BufferUploads { namespace PlatformInterface
     }
 
     void ResourceUploadHelper::ResourceCopy_DefragSteps(
-        const UnderlyingResourcePtr& destination, const UnderlyingResourcePtr& source, 
+        const std::shared_ptr<IResource>& destination, const std::shared_ptr<IResource>& source, 
         const std::vector<DefragStep>& steps)
     {
         assert(0);
     }
 
-    void ResourceUploadHelper::ResourceCopy(UnderlyingResource& destination, UnderlyingResource& source)
+    void ResourceUploadHelper::ResourceCopy(IResource& destination, IResource& source)
     {
         assert(0);
     }
@@ -292,6 +292,127 @@ namespace BufferUploads { namespace PlatformInterface
         }
 
         return std::make_pair(stagingDesc, mapping);
+    }
+
+    auto StagingPage::Allocate(unsigned byteCount, unsigned alignment) -> Allocation
+    {
+        auto stagingAllocation = _stagingBufferHeap.AllocateBack(byteCount, alignment);
+        if (stagingAllocation == ~0u) return {};
+
+        auto allocationId = _nextAllocationId++;
+        _activeAllocations.push_back({allocationId, stagingAllocation+byteCount, true});
+        return {*this, stagingAllocation, byteCount, allocationId};
+    }
+
+    void StagingPage::UpdateConsumerMarker(QueueMarker queueMarker)
+    {
+        while (!_allocationsWaitingOnDevice.empty() && _allocationsWaitingOnDevice.front()._releaseMarker <= queueMarker) {
+			assert(_allocationsWaitingOnDevice.front()._pendingNewFront != ~0u);
+			_stagingBufferHeap.ResetFront(_allocationsWaitingOnDevice.front()._pendingNewFront);
+			_allocationsWaitingOnDevice.erase(_allocationsWaitingOnDevice.begin());
+		}
+    }
+
+    void StagingPage::Release(unsigned allocationId, QueueMarker releaseMarker)
+    {
+        bool found = false;
+        for (auto& a:_activeAllocations)
+            if (a._allocationId == allocationId) {
+                assert(a._unreleased);
+                a._unreleased = false;
+                a._releaseMarker = releaseMarker;
+                found = true;
+                break;
+            }
+        if (!found) {
+            assert(0);
+            return;
+        }
+
+        auto i = _activeAllocations.begin();
+        while (i != _activeAllocations.end() && i->_unreleased == false) {
+            assert(!releaseMarker || i->_releaseMarker <= releaseMarker); // a previously released allocation can't have a later releaseMarker
+            releaseMarker = std::max(releaseMarker, i->_releaseMarker);
+            ++i;
+        }
+        if (i != _activeAllocations.begin()) {
+            // remove allocations from _activeAllocations and place into _allocationsWaitingOnDevice
+            auto newFront = (i-1)->_pendingNewFront;
+            _activeAllocations.erase(_activeAllocations.begin(), i);
+            // We append to _allocationsWaitingOnDevice, even for abandoned allocations. This is because
+            // we want to release abandoned allocations in order with non-abandoned allocations
+            if (!_allocationsWaitingOnDevice.empty() && _allocationsWaitingOnDevice.back()._releaseMarker == releaseMarker) {
+                _allocationsWaitingOnDevice.back()._pendingNewFront = newFront;
+            } else {
+                _allocationsWaitingOnDevice.push_back({releaseMarker, newFront});
+            }
+        }
+    }
+
+    void StagingPage::Abandon(unsigned allocationId) { Release(allocationId, 0); }
+
+    StagingPage::StagingPage(RenderCore::IDevice& device, unsigned size)
+    {
+		_stagingBufferHeap = CircularHeap(size);
+		_stagingBuffer = device.CreateResource(
+			CreateDesc(
+				BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite | AllocationRules::PermanentlyMapped | AllocationRules::DisableAutoCacheCoherency,
+				LinearBufferDesc::Create(size),
+				"staging-page"));
+    }
+
+    StagingPage::~StagingPage()
+    {
+        // ideally everything should be released before we get here
+        assert(_activeAllocations.empty());
+        assert(_allocationsWaitingOnDevice.empty());
+    }
+
+    void StagingPage::Allocation::Release(QueueMarker queueMarker)
+    {
+        if (_page)
+            _page->Release(_allocationId, queueMarker);
+        _page = nullptr;
+        _allocationId = ~0u;
+        _resourceOffset = _allocationSize = 0;
+    }
+
+    StagingPage::Allocation::Allocation(StagingPage& page, unsigned resourceOffset, unsigned allocationSize, unsigned allocationId)
+    : _page(&page), _resourceOffset(resourceOffset), _allocationSize(allocationSize), _allocationId(allocationId) {}
+
+    StagingPage::Allocation::~Allocation()
+    {
+        if (_page) {
+            assert(_allocationId != ~0u);
+            _page->Abandon(_allocationId);
+        }
+    }
+    StagingPage::Allocation::Allocation(Allocation&& moveFrom)
+    {
+        _resourceOffset = moveFrom._resourceOffset;
+        _allocationSize = moveFrom._allocationSize;
+        _allocationId = moveFrom._allocationId;
+        _page = moveFrom._page;
+        moveFrom._resourceOffset = moveFrom._allocationSize = 0;
+        moveFrom._allocationId = ~0u;
+        moveFrom._page = nullptr;
+    }
+
+    StagingPage::Allocation& StagingPage::Allocation::operator=(Allocation&& moveFrom)
+    {
+        if (_page) {
+            assert(_allocationId != ~0u);
+            _page->Abandon(_allocationId);
+        }
+
+        _resourceOffset = moveFrom._resourceOffset;
+        _allocationSize = moveFrom._allocationSize;
+        _allocationId = moveFrom._allocationId;
+        _page = moveFrom._page;
+        moveFrom._resourceOffset = moveFrom._allocationSize = 0;
+        moveFrom._allocationId = ~0u;
+        moveFrom._page = nullptr;
+        return *this;
     }
 
     #if defined(INTRUSIVE_D3D_PROFILING)
@@ -564,7 +685,7 @@ namespace BufferUploads { namespace PlatformInterface
 
     #else
 
-        void    Resource_Register(const UnderlyingResource& resource, const char name[])
+        void    Resource_Register(const IResource& resource, const char name[])
         {
         }
 
@@ -572,11 +693,11 @@ namespace BufferUploads { namespace PlatformInterface
         {
         }
 
-        void    Resource_SetName(const UnderlyingResource& resource, const char name[])
+        void    Resource_SetName(const IResource& resource, const char name[])
         {
         }
 
-        void    Resource_GetName(const UnderlyingResource& resource, char buffer[], int bufferSize)
+        void    Resource_GetName(const IResource& resource, char buffer[], int bufferSize)
         {
         }
 
