@@ -297,54 +297,10 @@ namespace BufferUploads { namespace PlatformInterface
         return (arrayLayerMin == 0 && max == resDesc._textureDesc._arrayCount-1);
     }
 
-    std::pair<ResourceDesc, PlatformInterface::StagingToFinalMapping> CalculatePartialStagingDesc(
-        const ResourceDesc& dstDesc,
-        const PartialResource& part)
-    {
-        ResourceDesc stagingDesc = AsStagingDesc(dstDesc);
-        PlatformInterface::StagingToFinalMapping mapping;
-
-        if (dstDesc._type == ResourceDesc::Type::Texture) {
-            mapping._dstBox = part._box;
-            if (IsFull2DPlane(dstDesc, mapping._dstBox)) {
-                // When writing to the full 2d plane, we can selectively update only some lod levels
-                if (!IsAllLodLevels(dstDesc, part._lodLevelMin, part._lodLevelMax)) {
-                    mapping._stagingLODOffset = part._lodLevelMin;
-                    mapping._dstLodLevelMin = part._lodLevelMin;
-                    mapping._dstLodLevelMax = std::min(part._lodLevelMax, (unsigned)dstDesc._textureDesc._mipCount-1);
-                    stagingDesc = ApplyLODOffset(stagingDesc, mapping._stagingLODOffset);
-                }
-            } else {
-                // We need this restriction because otherwise (assuming the mip chain goes to 1x1) we
-                // would have to recalculate all mips
-                if (!IsAllLodLevels(dstDesc, part._lodLevelMin, part._lodLevelMax))
-                    Throw(std::runtime_error("When updating texture data for only part of the 2d plane, you must update all lod levels"));
-
-                // Shrink the size of the staging texture to just the parts we want
-                assert(mapping._dstBox._right > mapping._dstBox._left);
-                assert(mapping._dstBox._bottom > mapping._dstBox._top);
-                mapping._stagingXYOffset = { (unsigned)mapping._dstBox._left, (unsigned)mapping._dstBox._top };
-                stagingDesc._textureDesc._width = mapping._dstBox._right - mapping._dstBox._left;
-                stagingDesc._textureDesc._height = mapping._dstBox._bottom - mapping._dstBox._top;
-            }
-
-            if (!IsAllArrayLayers(dstDesc, part._arrayIndexMin, part._arrayIndexMax)) {
-                assert(part._arrayIndexMax > part._arrayIndexMin);
-                mapping._stagingArrayOffset = part._arrayIndexMin;
-                mapping._dstArrayLayerMin = part._arrayIndexMin;
-                mapping._dstArrayLayerMax = std::min(part._arrayIndexMax, (unsigned)dstDesc._textureDesc._arrayCount-1);
-                stagingDesc._textureDesc._arrayCount = mapping._dstArrayLayerMax + 1 - mapping._dstArrayLayerMin;
-                if (stagingDesc._textureDesc._arrayCount == 1)
-                    stagingDesc._textureDesc._arrayCount = 0;
-            }
-        }
-
-        return std::make_pair(stagingDesc, mapping);
-    }
-
     auto StagingPage::Allocate(unsigned byteCount, unsigned alignment) -> Allocation
     {
         UpdateConsumerMarker();
+        assert(byteCount <= _stagingBufferHeap.HeapSize());
         auto stagingAllocation = _stagingBufferHeap.AllocateBack(byteCount, alignment);
         if (stagingAllocation == ~0u) return {};
 
@@ -407,7 +363,7 @@ namespace BufferUploads { namespace PlatformInterface
 		_stagingBufferHeap = CircularHeap(size);
 		_stagingBuffer = device.CreateResource(
 			CreateDesc(
-				BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite | AllocationRules::PermanentlyMapped | AllocationRules::DisableAutoCacheCoherency,
+				BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite | AllocationRules::PermanentlyMapped | AllocationRules::DisableAutoCacheCoherency | AllocationRules::DedicatedPage,
 				LinearBufferDesc::Create(size),
 				"staging-page"));
 

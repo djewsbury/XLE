@@ -347,6 +347,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
         if (allocationRules & AllocationRules::PermanentlyMapped)
             allocCreateInfo.flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT;
+        if (allocationRules & AllocationRules::DedicatedPage)
+            allocCreateInfo.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
         return allocCreateInfo;
     }
 

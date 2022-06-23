@@ -90,7 +90,9 @@ namespace RenderCore
             /// when the caller wants to affect the caches for only a part of the resource.
             DisableAutoCacheCoherency       = 1<<4,
             /// Set as a hint to the allocator that this is a large resizable render target (which can be a source of fragmentation)
-            ResizeableRenderTarget          = 1<<5
+            ResizeableRenderTarget          = 1<<5,
+            // Ask the memory allocator to make a dedicated page for this allocation (ResizeableRenderTarget may do something similar, but this is a stronger hint)
+            DedicatedPage                   = 1<<6
         };
         typedef unsigned BitField;
     }

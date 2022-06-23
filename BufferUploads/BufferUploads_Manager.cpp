@@ -1075,7 +1075,6 @@ namespace BufferUploads
                 auto alignment = helper.CalculateStagingBufferOffsetAlignment(resourceCreateStep._creationDesc);
 
                 auto stagingConstruction = context.GetStagingPage().Allocate(stagingByteCount, alignment);
-                assert(stagingConstruction);
                 if (!stagingConstruction) {
                     // we will return, so keep the resource until then
                     transaction->_finalResource = finalConstruction;
@@ -1338,8 +1337,7 @@ namespace BufferUploads
 
             // Do the actual data copy step here
             assert(transferStagingToFinalStep._stagingResource);
-            PlatformInterface::ResourceUploadHelper& deviceContext = context.GetResourceUploadHelper();
-            deviceContext.UpdateFinalResourceFromStaging(
+            context.GetResourceUploadHelper().UpdateFinalResourceFromStaging(
                 transaction->_finalResource,
                 context.GetStagingPage().GetStagingResource(),
                 transferStagingToFinalStep._stagingResource.GetResourceOffset(), transferStagingToFinalStep._stagingResource.GetAllocationSize());
@@ -1421,30 +1419,31 @@ namespace BufferUploads
     bool AssemblyLine::ProcessQueueSet(QueueSet& queueSet, unsigned stepMask, ThreadContext& context, const CommandListBudget& budgetUnderConstruction)
     {
         bool didSomething = false;
+        bool prepareStagingBlocked = false;
+        bool transferStagingBlocked = false;
 
             /////////////// ~~~~ /////////////// ~~~~ ///////////////
         for (;;) {
+            // Continue looping until both prepare staging & transfer staging have nothing to do
+            // try to alternate prepare staging then transfer staging to final. But if one queue
+            // gets blocked (eg, can't allocate staging space), then stop checking it
             bool continueLooping = false;
-            if (stepMask & Step_PrepareStaging) {
-                PrepareStagingStep* step = 0;
-                if (queueSet._prepareStagingSteps.try_front(step)) {
-                    if (Process(*step, context, budgetUnderConstruction)) {
-                        didSomething = true;
-                        queueSet._prepareStagingSteps.pop();
-                    }
-                    continueLooping = true;
-                }
+            PrepareStagingStep* prepareStaging = nullptr;
+            if ((stepMask & Step_PrepareStaging) && !prepareStagingBlocked && queueSet._prepareStagingSteps.try_front(prepareStaging)) {
+                if (Process(*prepareStaging, context, budgetUnderConstruction)) {
+                    didSomething = continueLooping = true;
+                    queueSet._prepareStagingSteps.pop();
+                } else
+                    prepareStagingBlocked = true;
             }
 
-            if (stepMask & Step_TransferStagingToFinal) {
-                TransferStagingToFinalStep* step = 0;
-                if (queueSet._transferStagingToFinalSteps.try_front(step)) {
-                    if (Process(*step, context, budgetUnderConstruction)) {
-                        didSomething = true;
-                        queueSet._transferStagingToFinalSteps.pop();
-                    }
-                    continueLooping = true;
-                }
+            TransferStagingToFinalStep* transferStaging = nullptr;
+            if ((stepMask & Step_TransferStagingToFinal) && !transferStagingBlocked && queueSet._transferStagingToFinalSteps.try_front(transferStaging)) {
+                if (Process(*transferStaging, context, budgetUnderConstruction)) {
+                    didSomething = continueLooping = true;
+                    queueSet._transferStagingToFinalSteps.pop();
+                } else
+                    transferStagingBlocked = true;
             }
             if (!continueLooping) break;
         }
@@ -1452,11 +1451,12 @@ namespace BufferUploads
             /////////////// ~~~~ /////////////// ~~~~ ///////////////
         if (stepMask & Step_CreateFromDataPacket) {
             CreateFromDataPacketStep* step = 0;
-            if (queueSet._createFromDataPacketSteps.try_front(step)) {
+            while (queueSet._createFromDataPacketSteps.try_front(step)) {
                 if (Process(*step, context, budgetUnderConstruction)) {
                     didSomething = true;
                     queueSet._createFromDataPacketSteps.pop();
-                }
+                } else
+                    break;
             }
         }
 

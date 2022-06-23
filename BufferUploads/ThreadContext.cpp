@@ -288,7 +288,7 @@ namespace BufferUploads
         _pimpl->_commandListIDCommittedToImmediate = 0;
 
         if (!_pimpl->_isImmediateContext) {
-            const unsigned stagingPageSize = 16*1024*1024;
+            const unsigned stagingPageSize = 64*1024*1024;
             _pimpl->_stagingPage = std::make_unique<PlatformInterface::StagingPage>(*_underlyingContext->GetDevice(), stagingPageSize);
         }
 

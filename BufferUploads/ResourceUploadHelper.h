@@ -16,44 +16,6 @@ namespace RenderCore { namespace Metal_Vulkan { class IAsyncTracker; } }
 
 namespace BufferUploads { namespace PlatformInterface
 {
-        /////////////////////////////////////////////////////////////////////
-
-    struct BufferMetrics : public RenderCore::ResourceDesc
-    {
-    public:
-        unsigned        _systemMemorySize;
-        unsigned        _videoMemorySize;
-        const char*     _pixelFormatName;
-    };
-
-    void            Resource_Register(RenderCore::IResource& resource, const char name[]);
-    void            Resource_Report(bool justVolatiles);
-    void            Resource_SetName(RenderCore::IResource& resource, const char name[]);
-    void            Resource_GetName(RenderCore::IResource& resource, char buffer[], int bufferSize);
-    size_t          Resource_GetAll(BufferMetrics** bufferDescs);
-
-    size_t          Resource_GetVideoMemoryHeadroom();
-    void            Resource_RecalculateVideoMemoryHeadroom();
-    void            Resource_ScheduleVideoMemoryHeadroomCalculation();
-
-        /////////////////////////////////////////////////////////////////////
-
-    RenderCore::IDevice::ResourceInitializer AsResourceInitializer(IDataPacket& pkt);
-    
-    struct StagingToFinalMapping
-    {
-        RenderCore::Box2D _dstBox;
-        unsigned _dstLodLevelMin=0, _dstLodLevelMax=~unsigned(0x0);
-        unsigned _dstArrayLayerMin=0, _dstArrayLayerMax=~unsigned(0x0);
-        
-        unsigned _stagingLODOffset = 0;
-        unsigned _stagingArrayOffset = 0;
-        VectorPattern<unsigned, 2> _stagingXYOffset = {0,0};
-    };
-
-    std::pair<ResourceDesc, StagingToFinalMapping> CalculatePartialStagingDesc(const ResourceDesc& dstDesc, const PartialResource& part);
-    using QueueMarker = unsigned;
-
     class ResourceUploadHelper
     {
     public:
@@ -113,6 +75,7 @@ namespace BufferUploads { namespace PlatformInterface
         RenderCore::IThreadContext*         _renderCoreContext;
     };
 
+    using QueueMarker = unsigned;
 
     class StagingPage
     {
@@ -172,6 +135,28 @@ namespace BufferUploads { namespace PlatformInterface
 
         void UpdateConsumerMarker();
     };
+
+    RenderCore::IDevice::ResourceInitializer AsResourceInitializer(IDataPacket& pkt);
+
+        /////////////////////////////////////////////////////////////////////
+
+    struct BufferMetrics : public RenderCore::ResourceDesc
+    {
+    public:
+        unsigned        _systemMemorySize;
+        unsigned        _videoMemorySize;
+        const char*     _pixelFormatName;
+    };
+
+    void            Resource_Register(RenderCore::IResource& resource, const char name[]);
+    void            Resource_Report(bool justVolatiles);
+    void            Resource_SetName(RenderCore::IResource& resource, const char name[]);
+    void            Resource_GetName(RenderCore::IResource& resource, char buffer[], int bufferSize);
+    size_t          Resource_GetAll(BufferMetrics** bufferDescs);
+
+    size_t          Resource_GetVideoMemoryHeadroom();
+    void            Resource_RecalculateVideoMemoryHeadroom();
+    void            Resource_ScheduleVideoMemoryHeadroomCalculation();
 
         ///////////////////////////////////////////////////////////////////
 

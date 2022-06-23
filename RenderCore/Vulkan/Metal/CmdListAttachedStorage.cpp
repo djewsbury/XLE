@@ -214,7 +214,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		return CreateDesc(
 			bindingFlags,
-			cpuMappable ? AllocationRules::HostVisibleSequentialWrite|AllocationRules::PermanentlyMapped|AllocationRules::DisableAutoCacheCoherency : 0,
+			cpuMappable ? AllocationRules::HostVisibleSequentialWrite|AllocationRules::PermanentlyMapped|AllocationRules::DisableAutoCacheCoherency|AllocationRules::DedicatedPage : 0,
 			LinearBufferDesc::Create(unsigned(byteCount)),
 			"RollingTempBuf");
 	}
