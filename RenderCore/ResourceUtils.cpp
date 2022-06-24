@@ -142,11 +142,15 @@ namespace RenderCore
 
     TextureDesc  CalculateMipMapDesc(const TextureDesc& topMostMipDesc, unsigned mipMapIndex)
     {
+        // note -- limit mipmap size for lowest mipmaps based on compression block params here.
+        // We'll consider the 1x1 & 2x2 mipmaps to be that size, even if they actually end up
+        // consuming a whole compression block
+        // ByteCount, GetSubResourceOffset & MakeTexturePitches all have the pitch rules for
+        // compressed texel formats built in, anyway
         assert(mipMapIndex<topMostMipDesc._mipCount);
-        auto compressionParam = GetCompressionParameters(topMostMipDesc._format);
         TextureDesc result = topMostMipDesc;
-        result._width    = std::max(result._width  >> mipMapIndex, compressionParam._blockWidth);
-        result._height   = std::max(result._height >> mipMapIndex, compressionParam._blockHeight);
+        result._width    = std::max(result._width  >> mipMapIndex, 1u);
+        result._height   = std::max(result._height >> mipMapIndex, 1u);
         result._depth    = std::max(result._depth  >> mipMapIndex, 1u);
         result._mipCount -= uint8(mipMapIndex);
         return result;
