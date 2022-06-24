@@ -94,6 +94,8 @@ namespace PlatformRig { namespace Overlays
         } else if (desc._type == RenderCore::ResourceDesc::Type::LinearBuffer) {
             if (desc._bindFlags & BindFlag::VertexBuffer) return "VB";
             else if (desc._bindFlags & BindFlag::IndexBuffer) return "IB";
+            else if (desc._bindFlags & BindFlag::ConstantBuffer) return "CB";
+            else if (desc._bindFlags & BindFlag::UnorderedAccess) return "UOB";
         }
         return "Unknown";
     }
@@ -510,21 +512,37 @@ namespace PlatformRig { namespace Overlays
             {   std::make_pair("Name", "Thread activity"), 
                 std::make_pair("Value", XlDynFormatString("%6.3f%% (%i)", (float(processingTimeSum))?(100.f * (1.0f-(waitTimeSum/float(processingTimeSum)))):0.f, wakeCountSum)) });
 
-        /*DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
-            {   std::make_pair("Name", "Pending creates (peak)"), 
-                std::make_pair("Value", XlDynFormatString("%i (%i)", mostRecentResults._assemblyLineMetrics._queuedCreates, mostRecentResults._assemblyLineMetrics._queuedPeakCreates)) });
+        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+            {   std::make_pair("Name", "Prepare staging steps (peak)"), 
+                std::make_pair("Value", XlDynFormatString("%i (%i)", mostRecentResults._assemblyLineMetrics._queuedPrepareStaging, mostRecentResults._assemblyLineMetrics._peakPrepareStaging)) });
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
-            {   std::make_pair("Name", "Pending uploads (peak)"),
-                std::make_pair("Value", XlDynFormatString("%i (%i)", mostRecentResults._assemblyLineMetrics._queuedUploads, mostRecentResults._assemblyLineMetrics._queuedPeakUploads)) });
+            {   std::make_pair("Name", "Transfer staging steps (peak)"),
+                std::make_pair("Value", XlDynFormatString("%i (%i)", mostRecentResults._assemblyLineMetrics._queuedTransferStagingToFinal, mostRecentResults._assemblyLineMetrics._peakTransferStagingToFinal)) });
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
-            {   std::make_pair("Name", "Pending staging creates (peak)"),
-                std::make_pair("Value", XlDynFormatString("%i (%i)", mostRecentResults._assemblyLineMetrics._queuedStagingCreates, mostRecentResults._assemblyLineMetrics._queuedPeakStagingCreates)) });*/
+            {   std::make_pair("Name", "Create from pkt steps (peak)"),
+                std::make_pair("Value", XlDynFormatString("%i (%i)", mostRecentResults._assemblyLineMetrics._queuedCreateFromDataPacket, mostRecentResults._assemblyLineMetrics._peakCreateFromDataPacket)) });
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Transaction count"),
                 std::make_pair("Value", XlDynFormatString("%i/%i", mostRecentResults._assemblyLineMetrics._transactionCount, mostRecentResults._assemblyLineMetrics._temporaryTransactionsAllocated)) });
+
+        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+            {   std::make_pair("Name", "Staging allocated"),
+                std::make_pair("Value", XlDynFormatString("%8.3f MB", mostRecentResults._assemblyLineMetrics._stagingPageMetrics._bytesAllocated / (1024.f*1024.f))) });
+
+        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+            {   std::make_pair("Name", "Staging max next block"),
+                std::make_pair("Value", XlDynFormatString("%8.3f MB", mostRecentResults._assemblyLineMetrics._stagingPageMetrics._maxNextBlockBytes / (1024.f*1024.f))) });
+
+        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+            {   std::make_pair("Name", "Staging awaiting device"),
+                std::make_pair("Value", XlDynFormatString("%8.3f MB", mostRecentResults._assemblyLineMetrics._stagingPageMetrics._bytesAwaitingDevice / (1024.f*1024.f))) });
+
+        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+            {   std::make_pair("Name", "Staging locked on ordering"),
+                std::make_pair("Value", XlDynFormatString("%8.3f MB", mostRecentResults._assemblyLineMetrics._stagingPageMetrics._bytesLockedDueToOrdering / (1024.f*1024.f))) });
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         DrawTableHeaders(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), headerColor, &interactables);

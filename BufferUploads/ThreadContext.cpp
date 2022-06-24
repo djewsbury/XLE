@@ -51,6 +51,7 @@ namespace BufferUploads
         std::atomic<IManager::EventListID>   _currentEventListProcessedId;
         EventList               _eventBuffers[4];
         unsigned                _eventListWritingIndex;
+        unsigned                _immediateContextLastFrameId = 0;
 
         std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
         std::unique_ptr<PlatformInterface::StagingPage> _stagingPage;
@@ -77,7 +78,7 @@ namespace BufferUploads
             _pimpl->_deferredOperationsUnderConstruction.CommitToImmediate_PostCommandList(*_underlyingContext);
             _pimpl->_commandListIDCommittedToImmediate = std::max(_pimpl->_commandListIDCommittedToImmediate, _pimpl->_commandListIDUnderConstruction);
 
-            newCommandList._metrics._frameId = _underlyingContext->GetStateDesc()._frameId;
+            newCommandList._metrics._frameId = _pimpl->_immediateContextLastFrameId+1;  // ie, assume it's just the next one after the last call to CommitToImmediate()
             newCommandList._metrics._commitTime = currentTime;
             #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
                 while (!_pimpl->_recentRetirements.push(newCommandList._metrics)) {
@@ -94,11 +95,13 @@ namespace BufferUploads
 
     void ThreadContext::CommitToImmediate(
         RenderCore::IThreadContext& commitTo,
+        unsigned frameId,
         LockFreeFixedSizeQueue<unsigned, 4>* framePriorityQueue)
     {
         if (_pimpl->_isImmediateContext) {
             assert(&commitTo == _underlyingContext.get());
             ++_pimpl->_commitCountCurrent;
+            _pimpl->_immediateContextLastFrameId = frameId;
             return;
         }
 
@@ -137,7 +140,7 @@ namespace BufferUploads
                 commandList->_deferredOperations.CommitToImmediate_PostCommandList(commitTo);
                 _pimpl->_commandListIDCommittedToImmediate = std::max(_pimpl->_commandListIDCommittedToImmediate, commandList->_id);
             
-                commandList->_metrics._frameId                  = commitTo.GetStateDesc()._frameId;
+                commandList->_metrics._frameId                  = frameId;
                 commandList->_metrics._commitTime               = OSServices::GetPerformanceCounter();
                 commandList->_metrics._framePriorityStallTime   = stallEnd - stallStart;    // this should give us very small numbers, when we're not actually stalling for frame priority commits
                 #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)

@@ -60,18 +60,6 @@ namespace BufferUploads
         using BitField = unsigned;
     }
 
-    /// <summary>Specifies a limited part of a resource</summary>
-    /// When we want to upload new data for only part of a resource
-    /// (for example, just one mip map), we can use PartialResource
-    /// to define a limited area within a resource
-    class PartialResource
-    {
-    public:
-        RenderCore::Box2D _box;
-        unsigned _lodLevelMin = 0, _lodLevelMax = ~0u;
-        unsigned _arrayIndexMin = 0, _arrayIndexMax = ~0u;
-    };
-
     class IResourcePool;
 
     class ResourceLocator
@@ -156,8 +144,7 @@ namespace BufferUploads
             /// the call. Use these methods when uploads can't be delayed.
         virtual ResourceLocator
             Transaction_Immediate(  RenderCore::IThreadContext& threadContext,
-                                    const ResourceDesc& desc, IDataPacket& data,
-                                    const PartialResource& = PartialResource()) = 0;
+                                    const ResourceDesc& desc, IDataPacket& data) = 0;
             /// @}
 
             /// <summary>Checks for completion</summary>

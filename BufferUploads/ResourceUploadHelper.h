@@ -14,6 +14,7 @@
 namespace Utility { class DefragStep; }
 namespace RenderCore { namespace Metal_Vulkan { class IAsyncTracker; } }
 
+namespace BufferUploads { struct StagingPageMetrics; }
 namespace BufferUploads { namespace PlatformInterface
 {
     class ResourceUploadHelper
@@ -103,6 +104,8 @@ namespace BufferUploads { namespace PlatformInterface
 
         Allocation Allocate(unsigned byteCount, unsigned alignment);
         RenderCore::IResource& GetStagingResource() { return *_stagingBuffer; }
+
+        StagingPageMetrics GetQuickMetrics() const;
 
         StagingPage(RenderCore::IDevice& device, unsigned size);
         ~StagingPage();

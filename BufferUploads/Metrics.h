@@ -20,12 +20,18 @@ namespace BufferUploads
         Max
     };
 
+    struct StagingPageMetrics
+    {
+        unsigned _bytesAllocated = 0, _maxNextBlockBytes = 0, _bytesAwaitingDevice = 0, _bytesLockedDueToOrdering = 0;
+    };
+
     struct AssemblyLineMetrics
     {
         unsigned _transactionCount, _temporaryTransactionsAllocated;
         unsigned _queuedPrepareStaging, _queuedTransferStagingToFinal, _queuedCreateFromDataPacket;
         unsigned _peakPrepareStaging, _peakTransferStagingToFinal, _peakCreateFromDataPacket;
         size_t _queuedBytes[(unsigned)UploadDataType::Max];
+        StagingPageMetrics _stagingPageMetrics;
         AssemblyLineMetrics();
     };
 

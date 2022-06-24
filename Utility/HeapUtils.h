@@ -796,6 +796,9 @@ namespace Utility
 		unsigned	Front() const { return _start; }
 		unsigned	HeapSize() const { return _heapSize; }
 
+        struct QuickMetrics { unsigned _bytesAllocated, _maxNextBlockBytes, _front, _back; };
+        QuickMetrics GetQuickMetrics() const;
+
 		CircularHeap(unsigned heapSize);
 		CircularHeap();
 		~CircularHeap();

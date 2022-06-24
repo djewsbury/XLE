@@ -824,6 +824,24 @@ namespace Utility
         _end -= size;
     }
 
+    auto CircularHeap::GetQuickMetrics() const -> QuickMetrics
+    {
+        QuickMetrics result;
+        if (_start == _end) {
+            result._bytesAllocated = _heapSize;
+            result._maxNextBlockBytes = 0;
+        } else if (_start > _end) {
+            result._maxNextBlockBytes = _start - _end;
+            result._bytesAllocated = _heapSize - result._maxNextBlockBytes;
+        } else {
+            result._maxNextBlockBytes = std::max(_heapSize - _end, _start);
+            result._bytesAllocated = _end - _start;
+        }
+        result._front = _start;
+        result._back = _end;
+        return result;
+    }
+
 	void		CircularHeap::ResetFront(unsigned newFront)
 	{
 		_start = newFront;

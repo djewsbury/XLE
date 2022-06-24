@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ResourceUploadHelper.h"
+#include "Metrics.h"
 #include "../RenderCore/Format.h"
 #include "../RenderCore/Metal/Metal.h"
 #include "../RenderCore/Metal/Resource.h"
@@ -357,6 +358,41 @@ namespace BufferUploads { namespace PlatformInterface
     }
 
     void StagingPage::Abandon(unsigned allocationId) { Release(allocationId, 0); }
+
+    auto StagingPage::GetQuickMetrics() const -> StagingPageMetrics
+    {
+        auto heapMetrics = _stagingBufferHeap.GetQuickMetrics();
+        StagingPageMetrics result;
+        result._bytesAllocated = heapMetrics._bytesAllocated;
+        result._maxNextBlockBytes = heapMetrics._maxNextBlockBytes;
+        result._bytesAwaitingDevice = 0;
+        if (!_allocationsWaitingOnDevice.empty()) {
+            auto newFront = _allocationsWaitingOnDevice.back()._pendingNewFront;
+            if (newFront > heapMetrics._front) {
+                result._bytesAwaitingDevice = newFront - heapMetrics._front;
+            } else {
+                result._bytesAwaitingDevice = _stagingBufferHeap.HeapSize() - heapMetrics._front + newFront;
+            }
+        }
+        result._bytesLockedDueToOrdering = 0;
+        for (auto a=_activeAllocations.begin(); a!=_activeAllocations.end(); ++a) {
+            if (a == _activeAllocations.begin()) {
+                assert(a->_unreleased);
+                continue;
+            }
+
+            if (!a->_unreleased) {  // ie -- if this is released, but still considered an "active allocation", not yet waiting on device
+                auto prevFront = (a-1)->_pendingNewFront;
+                auto newFront = a->_pendingNewFront;
+                if (newFront > prevFront) {
+                    result._bytesLockedDueToOrdering = newFront - prevFront;
+                } else {
+                    result._bytesLockedDueToOrdering = _stagingBufferHeap.HeapSize() - prevFront + newFront;
+                }
+            }
+        }
+        return result;
+    }
 
     StagingPage::StagingPage(RenderCore::IDevice& device, unsigned size)
     {

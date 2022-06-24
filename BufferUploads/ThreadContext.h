@@ -33,7 +33,10 @@ namespace BufferUploads
     {
     public:
         void                    ResolveCommandList();
-        void                    CommitToImmediate(RenderCore::IThreadContext& commitTo, LockFreeFixedSizeQueue<unsigned, 4>* framePriorityQueue = nullptr);
+        void                    CommitToImmediate(
+            RenderCore::IThreadContext& commitTo,
+            unsigned frameId,
+            LockFreeFixedSizeQueue<unsigned, 4>* framePriorityQueue = nullptr);
 
         CommandListMetrics      PopMetrics();
 
