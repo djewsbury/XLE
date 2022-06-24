@@ -127,15 +127,16 @@ namespace PlatformRig { namespace Overlays
     {
         enum Enum
         {
-            Uploads, 
-            CreatesMB, CreatesCount, DeviceCreatesCount, 
-            Latency, PendingBuffers, CommandListCount, 
-            GPUCost, GPUBytesPerSecond, AveGPUCost, 
-            ThreadActivity, BatchedCopy, FramePriorityStall,
+            Uploads,
+            CreatesMB, CreatesCount, DeviceCreatesCount,
+            FramePriorityStall,     // FillValuesBuffer requires this and the above be in this order
+            Latency, PendingBuffers, CommandListCount,
+            GPUCost, GPUBytesPerSecond, AveGPUCost,
+            ThreadActivity, BatchedCopy,
             Statistics, RecentRetirements
         };
         static const char* Names[] = {
-            "Uploads (MB)", "Creates (MB)", "Creates (count)", "Device creates (count)", "Latency (ms)", "Pending Buffers (MB)", "Command List Count", "GPU Cost", "GPU bytes/second", "Ave GPU cost", "Thread Activity", "Batched copy", "Frame Priority Stalls", "Statistics", "Recent Retirements"
+            "Uploads (MB)", "Creates (MB)", "Creates (count)", "Device creates (count)", "Frame Priority Stalls", "Latency (s)", "Pending Buffers (MB)", "Command List Count", "GPU Cost", "GPU bytes/second", "Ave GPU cost", "Thread Activity %", "Batched copy", "Statistics", "Recent Retirements"
         };
 
         std::pair<const char*, std::vector<Enum>> Groups[] = 
@@ -468,20 +469,17 @@ namespace PlatformRig { namespace Overlays
         TimeMarker processingTimeSum = 0, waitTimeSum = 0;
         unsigned wakeCountSum = 0;
             
-        size_t validFrameIndex = _frames.size()-1;
-        for (std::deque<FrameRecord>::reverse_iterator i=_frames.rbegin(); i!=_frames.rend(); ++i, --validFrameIndex) {
-            if (i->_gpuCost != 0.f && i->_commandListStart != i->_commandListEnd) {
+        size_t lastValidFrameIndex = _frames.size()-1;
+        for (std::deque<FrameRecord>::reverse_iterator i=_frames.rbegin(); i!=_frames.rend(); ++i, --lastValidFrameIndex)
+            if (i->_commandListStart != i->_commandListEnd)
                 break;
-            }
-        }
-        if (validFrameIndex < _frames.size()) {
-            for (unsigned cl=_frames[validFrameIndex]._commandListStart; cl<_frames[validFrameIndex]._commandListEnd; ++cl) {
+        if (lastValidFrameIndex < _frames.size())
+            for (unsigned cl=_frames[lastValidFrameIndex]._commandListStart; cl<_frames[lastValidFrameIndex]._commandListEnd; ++cl) {
                 BufferUploads::CommandListMetrics& commandList = _recentHistory[cl];
                 processingTimeSum += commandList._processingEnd - commandList._processingStart;
                 waitTimeSum += commandList._waitTime;
                 wakeCountSum += commandList._wakeCount;
             }
-        }
 
         float averageTransactionLatency = transactionLatencyCount?float(double(transactionLatencySum/TimeMarker(transactionLatencyCount)) * _reciprocalTimerFrequency):0.f;
         float averageCommandListLatency = commandListLatencyCount?float(double(commandListLatencySum/TimeMarker(commandListLatencyCount)) * _reciprocalTimerFrequency):0.f;

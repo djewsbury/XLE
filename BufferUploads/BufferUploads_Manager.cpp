@@ -1340,7 +1340,7 @@ namespace BufferUploads
                     if (Process(*step, context, budgetUnderConstruction)) {
                         didSomething = true;
                     } else {
-                        _queueSet_Main._prepareStagingSteps.push(std::move(*step));
+                        _queueSet_Main._prepareStagingSteps.push_overflow(std::move(*step));
                     }
                     continueLooping = true;
                     queueSet._prepareStagingSteps.pop();
@@ -1353,7 +1353,7 @@ namespace BufferUploads
                     if (Process(*step, context, budgetUnderConstruction)) {
                         didSomething = true;
                     } else {
-                        _queueSet_Main._transferStagingToFinalSteps.push(std::move(*step));
+                        _queueSet_Main._transferStagingToFinalSteps.push_overflow(std::move(*step));
                     }
                     continueLooping = true;
                     queueSet._transferStagingToFinalSteps.pop();
@@ -1369,7 +1369,7 @@ namespace BufferUploads
                 if (Process(*step, context, budgetUnderConstruction)) {
                     didSomething = true;
                 } else {
-                    _queueSet_Main._createFromDataPacketSteps.push(std::move(*step));
+                    _queueSet_Main._createFromDataPacketSteps.push_overflow(std::move(*step));
                 }
                 queueSet._createFromDataPacketSteps.pop();
             }
@@ -1551,21 +1551,21 @@ namespace BufferUploads
     void AssemblyLine::PushStep(QueueSet& queueSet, Transaction& transaction, PrepareStagingStep&& step)
     {
         ++transaction._referenceCount;
-        queueSet._prepareStagingSteps.push(std::move(step));
+        queueSet._prepareStagingSteps.push_overflow(std::move(step));
         _wakeupEvent.Increment();
     }
 
     void AssemblyLine::PushStep(QueueSet& queueSet, Transaction& transaction, TransferStagingToFinalStep&& step)
     {
         ++transaction._referenceCount;
-        queueSet._transferStagingToFinalSteps.push(std::move(step));
+        queueSet._transferStagingToFinalSteps.push_overflow(std::move(step));
         _wakeupEvent.Increment();
     }
 
     void AssemblyLine::PushStep(QueueSet& queueSet, Transaction& transaction, CreateFromDataPacketStep&& step)
     {
         ++transaction._referenceCount;
-        queueSet._createFromDataPacketSteps.push(std::move(step));
+        queueSet._createFromDataPacketSteps.push_overflow(std::move(step));
         _wakeupEvent.Increment();
     }
 
