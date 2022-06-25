@@ -56,7 +56,11 @@ namespace PlatformRig { namespace Overlays
         unsigned        _mostRecentGPUFrameId;
         unsigned        _lockedFrameId;
 
-        std::optional<float>    _graphMinValueHistory, _graphMaxValueHistory;
+        struct GraphSlot {
+            std::optional<float>    _minHistory, _maxHistory;
+        };
+        std::vector<GraphSlot> _graphSlots;
+
         unsigned        _accumulatedCreateCount[(unsigned)BufferUploads::UploadDataType::Max];
         unsigned        _accumulatedCreateBytes[(unsigned)BufferUploads::UploadDataType::Max];
         unsigned        _accumulatedUploadCount[(unsigned)BufferUploads::UploadDataType::Max];
@@ -79,6 +83,11 @@ namespace PlatformRig { namespace Overlays
         void    DrawStatistics(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState, const BufferUploads::CommandListMetrics& mostRecentResults);
         void    DrawRecentRetirements(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState);
         size_t  FillValuesBuffer(unsigned graphType, unsigned uploadType, float valuesBuffer[], size_t valuesMaxCount);
+        void    DrawDoubleGraph(
+            IOverlayContext& context, Interactables& interactables, InterfaceState& interfaceState,
+            const Rect& rect, unsigned topGraphSlotIdx, unsigned bottomGraphSlotIdx,
+            StringSection<> topGraphName, unsigned topGraphType, unsigned topUploadType,
+            StringSection<> bottomGraphName, unsigned bottomGraphType, unsigned bottomUploadType);
     };
 
     class ResourcePoolDisplay : public IWidget ///////////////////////////////////////////////////////////

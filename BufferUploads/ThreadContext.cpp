@@ -30,7 +30,7 @@ namespace BufferUploads
         };
         LockFreeFixedSizeQueue<QueuedCommandList, 32> _queuedCommandLists;
         #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
-            LockFreeFixedSizeQueue<CommandListMetrics, 32> _recentRetirements;
+            LockFreeFixedSizeQueue<CommandListMetrics, 256> _recentRetirements;
         #endif
         bool _isImmediateContext;
 

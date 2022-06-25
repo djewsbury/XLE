@@ -15,7 +15,7 @@ namespace BufferUploads
 	{
 		XlZeroMemory(_bytesUploaded);
 		XlZeroMemory(_bytesCreated);
-		XlZeroMemory(_stagingBytesUsed);
+		XlZeroMemory(_stagingBytesAllocated);
 		XlZeroMemory(_countCreations);
 		XlZeroMemory(_countDeviceCreations);
 		XlZeroMemory(_countUploaded);
@@ -38,7 +38,7 @@ namespace BufferUploads
 	{
 		std::copy(cloneFrom._bytesUploaded, &cloneFrom._bytesUploaded[dimof(cloneFrom._bytesUploaded)], _bytesUploaded);
 		std::copy(cloneFrom._bytesCreated, &cloneFrom._bytesCreated[dimof(cloneFrom._bytesCreated)], _bytesCreated);
-		std::copy(cloneFrom._stagingBytesUsed, &cloneFrom._stagingBytesUsed[dimof(cloneFrom._stagingBytesUsed)], _stagingBytesUsed);
+		std::copy(cloneFrom._stagingBytesAllocated, &cloneFrom._stagingBytesAllocated[dimof(cloneFrom._stagingBytesAllocated)], _stagingBytesAllocated);
 		_bytesUploadTotal = cloneFrom._bytesUploadTotal;
 		std::copy(cloneFrom._countCreations, &cloneFrom._countCreations[dimof(cloneFrom._countCreations)], _countCreations);
 		std::copy(cloneFrom._countDeviceCreations, &cloneFrom._countDeviceCreations[dimof(cloneFrom._countDeviceCreations)], _countDeviceCreations);
@@ -71,38 +71,38 @@ namespace BufferUploads
 
 		str << " "; str.width(20); str << "Bytes Uploaded";
 		str << " | "; str.width(20); str << ByteCount{metrics._bytesUploaded[(unsigned)UploadDataType::Texture]};
-		str << " | "; str.width(20); str << ByteCount{metrics._bytesUploaded[(unsigned)UploadDataType::Vertex]};
-		str << " | "; str.width(20); str << ByteCount{metrics._bytesUploaded[(unsigned)UploadDataType::Index]};
+		str << " | "; str.width(20); str << ByteCount{metrics._bytesUploaded[(unsigned)UploadDataType::GeometryBuffer]};
+		str << " | "; str.width(20); str << ByteCount{metrics._bytesUploaded[(unsigned)UploadDataType::UniformBuffer]};
 		str << std::endl;
 
 		str << " "; str.width(20); str << "Bytes Created";
 		str << " | "; str.width(20); str << ByteCount{metrics._bytesCreated[(unsigned)UploadDataType::Texture]};
-		str << " | "; str.width(20); str << ByteCount{metrics._bytesCreated[(unsigned)UploadDataType::Vertex]};
-		str << " | "; str.width(20); str << ByteCount{metrics._bytesCreated[(unsigned)UploadDataType::Index]};
+		str << " | "; str.width(20); str << ByteCount{metrics._bytesCreated[(unsigned)UploadDataType::GeometryBuffer]};
+		str << " | "; str.width(20); str << ByteCount{metrics._bytesCreated[(unsigned)UploadDataType::UniformBuffer]};
 		str << std::endl;
 
 		str << " "; str.width(20); str << "Staging Bytes";
-		str << " | "; str.width(20); str << ByteCount{metrics._stagingBytesUsed[(unsigned)UploadDataType::Texture]};
-		str << " | "; str.width(20); str << ByteCount{metrics._stagingBytesUsed[(unsigned)UploadDataType::Vertex]};
-		str << " | "; str.width(20); str << ByteCount{metrics._stagingBytesUsed[(unsigned)UploadDataType::Index]};
+		str << " | "; str.width(20); str << ByteCount{metrics._stagingBytesAllocated[(unsigned)UploadDataType::Texture]};
+		str << " | "; str.width(20); str << ByteCount{metrics._stagingBytesAllocated[(unsigned)UploadDataType::GeometryBuffer]};
+		str << " | "; str.width(20); str << ByteCount{metrics._stagingBytesAllocated[(unsigned)UploadDataType::UniformBuffer]};
 		str << std::endl;
 
 		str << " "; str.width(20); str << "Creations";
 		str << " | "; str.width(20); str << metrics._countCreations[(unsigned)UploadDataType::Texture];
-		str << " | "; str.width(20); str << metrics._countCreations[(unsigned)UploadDataType::Vertex];
-		str << " | "; str.width(20); str << metrics._countCreations[(unsigned)UploadDataType::Index];
+		str << " | "; str.width(20); str << metrics._countCreations[(unsigned)UploadDataType::GeometryBuffer];
+		str << " | "; str.width(20); str << metrics._countCreations[(unsigned)UploadDataType::UniformBuffer];
 		str << std::endl;
 
 		str << " "; str.width(20); str << "Dev Creations";
 		str << " | "; str.width(20); str << metrics._countDeviceCreations[(unsigned)UploadDataType::Texture];
-		str << " | "; str.width(20); str << metrics._countDeviceCreations[(unsigned)UploadDataType::Vertex];
-		str << " | "; str.width(20); str << metrics._countDeviceCreations[(unsigned)UploadDataType::Index];
+		str << " | "; str.width(20); str << metrics._countDeviceCreations[(unsigned)UploadDataType::GeometryBuffer];
+		str << " | "; str.width(20); str << metrics._countDeviceCreations[(unsigned)UploadDataType::UniformBuffer];
 		str << std::endl;
 
 		str << " "; str.width(20); str << "Uploaded";
 		str << " | "; str.width(20); str << metrics._countUploaded[(unsigned)UploadDataType::Texture];
-		str << " | "; str.width(20); str << metrics._countUploaded[(unsigned)UploadDataType::Vertex];
-		str << " | "; str.width(20); str << metrics._countUploaded[(unsigned)UploadDataType::Index];
+		str << " | "; str.width(20); str << metrics._countUploaded[(unsigned)UploadDataType::GeometryBuffer];
+		str << " | "; str.width(20); str << metrics._countUploaded[(unsigned)UploadDataType::UniformBuffer];
 		str << std::endl;
 
 		str << "Batched Bytes Uploaded: " << ByteCount{metrics._batchedUploadBytes} << " in " << metrics._batchedUploadCount << " steps " << std::endl;

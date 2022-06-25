@@ -16,7 +16,7 @@ namespace BufferUploads
 
     enum class UploadDataType
     {
-        Texture, Vertex, Index,
+        Texture, GeometryBuffer, UniformBuffer,
         Max
     };
 
@@ -47,7 +47,7 @@ namespace BufferUploads
         size_t _bytesCreated[(unsigned)UploadDataType::Max];
         unsigned _bytesUploadTotal;
 
-        size_t _stagingBytesUsed[(unsigned)UploadDataType::Max];
+        size_t _stagingBytesAllocated[(unsigned)UploadDataType::Max];
 
         unsigned _countCreations[(unsigned)UploadDataType::Max];
         unsigned _countDeviceCreations[(unsigned)UploadDataType::Max];

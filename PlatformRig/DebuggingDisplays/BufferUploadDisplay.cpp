@@ -47,7 +47,6 @@ namespace PlatformRig { namespace Overlays
     BufferUploadDisplay::BufferUploadDisplay(BufferUploads::IManager* manager)
     : _manager(manager)
     {
-        _graphMinValueHistory = _graphMaxValueHistory = {};
         XlZeroMemory(_accumulatedCreateCount);
         XlZeroMemory(_accumulatedCreateBytes);
         XlZeroMemory(_accumulatedUploadCount);
@@ -75,9 +74,9 @@ namespace PlatformRig { namespace Overlays
     static const char* AsString(BufferUploads::UploadDataType value)
     {
         switch (value) {
-        case BufferUploads::UploadDataType::Texture:   return "Texture";
-        case BufferUploads::UploadDataType::Vertex:    return "Vertex";
-        case BufferUploads::UploadDataType::Index:     return "Index";
+        case BufferUploads::UploadDataType::Texture:            return "Texture";
+        case BufferUploads::UploadDataType::GeometryBuffer:     return "Geo";
+        case BufferUploads::UploadDataType::UniformBuffer:      return "Uniforms";
         default: return "<<unknown>>";
         }
     };
@@ -131,20 +130,21 @@ namespace PlatformRig { namespace Overlays
         enum Enum
         {
             Uploads,
-            CreatesMB, CreatesCount, DeviceCreatesCount,
+            CreatesMB, CreatesCount, DeviceCreatesCount, StagingBufferAllocated,
             FramePriorityStall,     // FillValuesBuffer requires this and the above be in this order
             Latency, PendingBuffers, CommandListCount,
             GPUCost, GPUBytesPerSecond, AveGPUCost,
             ThreadActivity, BatchedCopy,
-            Statistics, RecentRetirements
+            Statistics, RecentRetirements,
+            StagingMaxNextBlock, StagingAwaitingDevice
         };
         static const char* Names[] = {
-            "Uploads (MB)", "Creates (MB)", "Creates (count)", "Device creates (count)", "Frame Priority Stalls", "Latency (s)", "Pending Buffers (MB)", "Command List Count", "GPU Cost", "GPU bytes/second", "Ave GPU cost", "Thread Activity %", "Batched copy", "Statistics", "Recent Retirements"
+            "Uploads (MB)", "Creates (MB)", "Creates (count)", "Device creates (count)", "Stage Buffer Allocated (MB)", "Frame Priority Stalls", "Latency (s)", "Pending Buffers (MB)", "Command List Count", "GPU Cost", "GPU bytes/second", "Ave GPU cost", "Thread Activity %", "Batched copy", "Statistics", "Recent Retirements", "Stage Max Next Block (MB)", "Stage Awaiting Device (MB)"
         };
 
         std::pair<const char*, std::vector<Enum>> Groups[] = 
         {
-            std::pair<const char*, std::vector<Enum>>("Uploads",    { Uploads }),
+            std::pair<const char*, std::vector<Enum>>("Uploads",    { Uploads, StagingBufferAllocated, StagingMaxNextBlock, StagingAwaitingDevice }),
             std::pair<const char*, std::vector<Enum>>("Creations",  { CreatesMB, CreatesCount, DeviceCreatesCount }),
             std::pair<const char*, std::vector<Enum>>("GPU",        { GPUCost, GPUBytesPerSecond, AveGPUCost }),
             std::pair<const char*, std::vector<Enum>>("Threading",  { Latency, PendingBuffers, CommandListCount, ThreadActivity, BatchedCopy, FramePriorityStall }),
@@ -288,8 +288,9 @@ namespace PlatformRig { namespace Overlays
     }
 
     static const ColorB     GraphLabel(255, 255, 255, 128);
-    static const ColorB     GraphBorder(255, 128, 128, 128);
-    static const ColorB     GraphText(255, 128, 128, 128);
+    static const ColorB     GraphBorder(64, 128, 64, 196);
+    static const ColorB     GraphText(64, 128, 64, 196);
+    static const ColorB     GraphBkColor(16, 16, 16, 210);
 
     static Rect DrawUploadsGraph(
         IOverlayContext& context, const Rect& controlRect,
@@ -324,6 +325,8 @@ namespace PlatformRig { namespace Overlays
             Coord2{controlRect._topLeft[0] + Coord(border), chartBottomY },
             Coord2{topChartRect._bottomRight[0], chartMiddle }
         };
+
+        FillRectangle(context, controlRect, GraphBkColor);
 
         // draw the charts themselves
         DrawBarChartContents(context, topChartRect, topSeries, horizontalAllocation);
@@ -452,7 +455,7 @@ namespace PlatformRig { namespace Overlays
                 if (i->_commandListStart!=i->_commandListEnd) {
                     value = _recentHistory[i->_commandListEnd-1]._assemblyLineMetrics._queuedBytes[uploadType] / (1024.f*1024.f);
                 }
-            } else if (graphType >= Uploads && graphType <= FramePriorityStall) {
+            } else if ((graphType >= Uploads && graphType <= FramePriorityStall) || graphType == StagingMaxNextBlock || graphType == StagingAwaitingDevice) {
                 for (unsigned cl=i->_commandListStart; cl<i->_commandListEnd; ++cl) {
                     BufferUploads::CommandListMetrics& commandList = _recentHistory[cl];
                     if (_graphsMode == Uploads) { // bytes uploaded
@@ -463,8 +466,14 @@ namespace PlatformRig { namespace Overlays
                         value += commandList._countCreations[uploadType];
                     } else if (_graphsMode == DeviceCreatesCount) {
                         value += commandList._countDeviceCreations[uploadType];
+                    } else if (_graphsMode == StagingBufferAllocated) {
+                        value += commandList._stagingBytesAllocated[uploadType] / (1024.f*1024.f);
                     } else if (_graphsMode == FramePriorityStall) {
                         value += float(commandList._framePriorityStallTime * _reciprocalTimerFrequency * 1000.f);
+                    } else if (_graphsMode == StagingMaxNextBlock) {
+                        value += commandList._assemblyLineMetrics._stagingPageMetrics._maxNextBlockBytes / (1024.f*1024.f);
+                    } else if (_graphsMode == StagingAwaitingDevice) {
+                        value += commandList._assemblyLineMetrics._stagingPageMetrics._bytesAwaitingDevice / (1024.f*1024.f);
                     }
                 }
             } else if (_graphsMode == CommandListCount) {
@@ -494,87 +503,105 @@ namespace PlatformRig { namespace Overlays
         return valuesCount;
     }
 
+    void    BufferUploadDisplay::DrawDoubleGraph(
+        IOverlayContext& context, Interactables& interactables, InterfaceState& interfaceState,
+        const Rect& rect, unsigned topGraphSlotIdx, unsigned bottomGraphSlotIdx,
+        StringSection<> topGraphName, unsigned topGraphType, unsigned topUploadType,
+        StringSection<> bottomGraphName, unsigned bottomGraphType, unsigned bottomUploadType)
+    {
+        if (std::max(topGraphSlotIdx, bottomGraphSlotIdx) >= _graphSlots.size())
+            _graphSlots.resize(std::max(topGraphSlotIdx, bottomGraphSlotIdx)+1);
+
+        float valuesBuffer[s_MaxGraphSegments];
+        float valuesBuffer2[s_MaxGraphSegments];
+        XlZeroMemory(valuesBuffer);
+        XlZeroMemory(valuesBuffer2);
+
+        size_t valuesCount = FillValuesBuffer(topGraphType, topUploadType, valuesBuffer, dimof(valuesBuffer));
+        auto& topGraphSlot = _graphSlots[topGraphSlotIdx];
+        GraphSeries<float> topSeries{
+            MakeIteratorRange(&valuesBuffer[dimof(valuesBuffer)-valuesCount], &valuesBuffer[dimof(valuesBuffer)]),
+            topGraphSlot._minHistory, topGraphSlot._maxHistory };
+
+        size_t valuesCount2 = FillValuesBuffer(bottomGraphType, bottomUploadType, valuesBuffer2, dimof(valuesBuffer2));
+        auto& bottomGraphSlot = _graphSlots[bottomGraphSlotIdx];
+        GraphSeries<float> bottomSeries{
+            MakeIteratorRange(&valuesBuffer2[dimof(valuesBuffer2)-valuesCount2], &valuesBuffer2[dimof(valuesBuffer2)]),
+            bottomGraphSlot._minHistory, bottomGraphSlot._maxHistory };
+
+        bottomSeries._minValue = topSeries._minValue = std::min(topSeries._minValue, bottomSeries._minValue);
+        auto chartArea = DrawUploadsGraph(
+            context, rect,
+            topSeries, bottomSeries,
+            topGraphName, bottomGraphName,
+            s_MaxGraphSegments);
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            //  extra graph functionality....
+
+        {
+            const InteractableId framePicker = InteractableId_Make("FramePicker");
+            size_t iterator = 0;
+            unsigned frameLeft = (unsigned)std::max(int(_frames.size() - s_MaxGraphSegments), 0);
+            for (auto i =_frames.begin()+frameLeft; i!=_frames.end(); ++i) {
+                Rect graphPart{
+                    Coord2{LinearInterpolate(chartArea._topLeft[0], chartArea._bottomRight[0], iterator/float(s_MaxGraphSegments)), chartArea._topLeft[1]},
+                    Coord2{LinearInterpolate(chartArea._topLeft[0], chartArea._bottomRight[0], (iterator+1)/float(s_MaxGraphSegments)), chartArea._bottomRight[1]}};
+                InteractableId id = framePicker + std::distance(_frames.begin(), i);
+                if (i->_frameId == _lockedFrameId) {
+                    FillRectangle(context, graphPart, ColorB(0x3f7f3f7fu));
+                    HighlightChartPoint(
+                        context, Rect { graphPart._topLeft, {graphPart._bottomRight[0], (chartArea._topLeft[1] + chartArea._bottomRight[1])/2} },
+                        topSeries._values[iterator], topSeries._minValue, topSeries._maxValue);
+                    
+                    HighlightChartPoint(
+                        context, Rect { {graphPart._topLeft[0], graphPart._bottomRight[1]}, {graphPart._bottomRight[0], (chartArea._topLeft[1] + chartArea._bottomRight[1])/2} },
+                        bottomSeries._values[iterator], bottomSeries._minValue, bottomSeries._maxValue);
+                } else if (interfaceState.HasMouseOver(id)) {
+                    FillRectangle(context, graphPart, ColorB(0x3f7f7f7fu));
+                }
+                interactables.Register({graphPart, id});
+                ++iterator;
+            }
+        }
+    }
+
     void    BufferUploadDisplay::DrawDisplay(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState)
     {
         using namespace BufferUploads;
+        static unsigned GraphHeight = 196;
 
-        static ColorB graphBk(180,200,255,128);
-        static ColorB graphOutline(255,255,255,128);
+        switch (_graphsMode) {
+        case GraphTabs::Uploads:
+        case GraphTabs::CreatesMB:
+        case GraphTabs::CreatesCount:
+        case GraphTabs::DeviceCreatesCount:
+        case GraphTabs::PendingBuffers:
+        case GraphTabs::StagingBufferAllocated:
+            DrawDoubleGraph(
+                context, interactables, interfaceState,
+                layout.AllocateFullWidth(GraphHeight),
+                0, 1,
+                "Textures", _graphsMode, (unsigned)UploadDataType::Texture,
+                "Textures", _graphsMode, (unsigned)UploadDataType::Texture);
 
-        float valuesBuffer[s_MaxGraphSegments];
-        XlZeroMemory(valuesBuffer);
-
-        unsigned graphCount = (_graphsMode<=GraphTabs::PendingBuffers)?(unsigned)UploadDataType::Max:1;
-        for (unsigned c=0; c<graphCount; ++c) {
-            Layout section = layout.AllocateFullWidthFraction(1.f/float(graphCount));
-            Rect labelRect = section.AllocateFullHeightFraction( .25f );
-            Rect historyRect = section.AllocateFullHeightFraction( .75f );
-
-            // OutlineRectangle(context, section._maximumSize);
-            FillAndOutlineRoundedRectangle(context, section._maximumSize, ColorB(180,200,255,128), ColorB(255,255,255,128));
-
-            size_t valuesCount2 = FillValuesBuffer(_graphsMode, c, valuesBuffer, dimof(valuesBuffer));
-
-            if (graphCount == (unsigned)UploadDataType::Max) {
-                DrawText()
-                    .Alignment(TextAlignment::Left)
-                    .Draw(context, labelRect, StringMeld<256>() << GraphTabs::Names[_graphsMode] << " (" << AsString(UploadDataType(c)) << ")");
-            } else {
-                DrawText()
-                    .Alignment(TextAlignment::Left)
-                    .Draw(context, labelRect, GraphTabs::Names[_graphsMode]);
-            }
-
-			if (valuesCount2 > 0) {
-				float mostRecentValue = valuesBuffer[dimof(valuesBuffer) - valuesCount2];
-				DrawText()
-                    .Alignment(TextAlignment::Top)
-                    .Draw(context, historyRect, XlDynFormatString("%6.3f", mostRecentValue).c_str());
-			}
-
-            GraphSeries<float> topSeries{
-                MakeIteratorRange(&valuesBuffer[dimof(valuesBuffer)-valuesCount2], &valuesBuffer[dimof(valuesBuffer)]),
-                _graphMinValueHistory, _graphMaxValueHistory };
-            GraphSeries<float> bottomSeries{
-                MakeIteratorRange(&valuesBuffer[dimof(valuesBuffer)-valuesCount2], &valuesBuffer[dimof(valuesBuffer)]),
-                _graphMinValueHistory, _graphMaxValueHistory };
-            bottomSeries._minValue = topSeries._minValue = std::min(topSeries._minValue, bottomSeries._minValue);
-
-            auto chartArea = DrawUploadsGraph(
-                context, historyRect,
-                topSeries, bottomSeries,
-                "Top series", "Bottom series",
-                dimof(valuesBuffer));
-
-            /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-                //  extra graph functionality....
-
-            {
-                const InteractableId framePicker = InteractableId_Make("FramePicker");
-                size_t iterator = 0;
-                unsigned frameLeft = (unsigned)std::max(int(_frames.size() - s_MaxGraphSegments), 0);
-                for (auto i =_frames.begin()+frameLeft; i!=_frames.end(); ++i) {
-                    Rect graphPart{
-                        Coord2{LinearInterpolate(chartArea._topLeft[0], chartArea._bottomRight[0], iterator/float(s_MaxGraphSegments)), chartArea._topLeft[1]},
-                        Coord2{LinearInterpolate(chartArea._topLeft[0], chartArea._bottomRight[0], (iterator+1)/float(s_MaxGraphSegments)), chartArea._bottomRight[1]}};
-                    InteractableId id = framePicker + std::distance(_frames.begin(), i);
-                    if (i->_frameId == _lockedFrameId) {
-                        FillRectangle(context, graphPart, ColorB(0x3f7f3f7fu));
-                        HighlightChartPoint(
-                            context, Rect { graphPart._topLeft, {graphPart._bottomRight[0], (chartArea._topLeft[1] + chartArea._bottomRight[1])/2} },
-                            topSeries._values[iterator], topSeries._minValue, topSeries._maxValue);
-                        
-                        HighlightChartPoint(
-                            context, Rect { {graphPart._topLeft[0], graphPart._bottomRight[1]}, {graphPart._bottomRight[0], (chartArea._topLeft[1] + chartArea._bottomRight[1])/2} },
-                            bottomSeries._values[iterator], bottomSeries._minValue, bottomSeries._maxValue);
-                    } else if (interfaceState.HasMouseOver(id)) {
-                        FillRectangle(context, graphPart, ColorB(0x3f7f7f7fu));
-                    }
-                    interactables.Register({graphPart, id});
-                    ++iterator;
-                }
-            }
-        }
+            DrawDoubleGraph(
+                context, interactables, interfaceState,
+                layout.AllocateFullWidth(GraphHeight),
+                2, 3,
+                "Geometry", _graphsMode, (unsigned)UploadDataType::GeometryBuffer,
+                "Uniforms", _graphsMode, (unsigned)UploadDataType::UniformBuffer);
+            break;
+        
+        default:
+            DrawDoubleGraph(
+                context, interactables, interfaceState,
+                layout.AllocateFullWidth(GraphHeight),
+                0, 1,
+                GraphTabs::Names[_graphsMode], _graphsMode, (unsigned)UploadDataType::Texture,
+                GraphTabs::Names[_graphsMode], _graphsMode, (unsigned)UploadDataType::Texture);
+            break;
+        };
     }
 
     void    BufferUploadDisplay::DrawStatistics(
@@ -620,7 +647,8 @@ namespace PlatformRig { namespace Overlays
         const auto lineHeight = 20u;
         const ColorB headerColor = ColorB::Blue;
         std::pair<std::string, unsigned> headers0[] = { std::make_pair("Name", 300), std::make_pair("Value", 3000) };
-        std::pair<std::string, unsigned> headers1[] = { std::make_pair("Name", 300), std::make_pair("Tex", 150), std::make_pair("VB", 150), std::make_pair("IB", 300) };
+        std::pair<std::string, unsigned> headers1[] = { std::make_pair("Name", 300), std::make_pair("Tex", 150), std::make_pair("Geo", 150), std::make_pair("Uniforms", 300) };
+        char buffer[256];
             
         DrawTableHeaders(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), headerColor, &interactables);
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
@@ -661,51 +689,51 @@ namespace PlatformRig { namespace Overlays
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Staging allocated"),
-                std::make_pair("Value", XlDynFormatString("%8.3f MB", mostRecentResults._assemblyLineMetrics._stagingPageMetrics._bytesAllocated / (1024.f*1024.f))) });
+                std::make_pair("Value", (StringMeldInPlace(buffer) << ByteCount{mostRecentResults._assemblyLineMetrics._stagingPageMetrics._bytesAllocated}).AsString()) });
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Staging max next block"),
-                std::make_pair("Value", XlDynFormatString("%8.3f MB", mostRecentResults._assemblyLineMetrics._stagingPageMetrics._maxNextBlockBytes / (1024.f*1024.f))) });
+                std::make_pair("Value", (StringMeldInPlace(buffer) << ByteCount{mostRecentResults._assemblyLineMetrics._stagingPageMetrics._maxNextBlockBytes}).AsString()) });
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Staging awaiting device"),
-                std::make_pair("Value", XlDynFormatString("%8.3f MB", mostRecentResults._assemblyLineMetrics._stagingPageMetrics._bytesAwaitingDevice / (1024.f*1024.f))) });
+                std::make_pair("Value", (StringMeldInPlace(buffer) << ByteCount{mostRecentResults._assemblyLineMetrics._stagingPageMetrics._bytesAwaitingDevice}).AsString()) });
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Staging locked on ordering"),
-                std::make_pair("Value", XlDynFormatString("%8.3f MB", mostRecentResults._assemblyLineMetrics._stagingPageMetrics._bytesLockedDueToOrdering / (1024.f*1024.f))) });
+                std::make_pair("Value", (StringMeldInPlace(buffer) << ByteCount{mostRecentResults._assemblyLineMetrics._stagingPageMetrics._bytesLockedDueToOrdering}).AsString()) });
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         DrawTableHeaders(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), headerColor, &interactables);
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), 
             {   std::make_pair("Name", "Recent creates"), 
                 std::make_pair("Tex", XlDynFormatString("%i", mostRecentResults._countCreations[(unsigned)UploadDataType::Texture])),
-                std::make_pair("VB", XlDynFormatString("%i", mostRecentResults._countCreations[(unsigned)UploadDataType::Vertex])),
-                std::make_pair("IB", XlDynFormatString("%i", mostRecentResults._countCreations[(unsigned)UploadDataType::Index])) });
+                std::make_pair("Geo", XlDynFormatString("%i", mostRecentResults._countCreations[(unsigned)UploadDataType::GeometryBuffer])),
+                std::make_pair("Uniforms", XlDynFormatString("%i", mostRecentResults._countCreations[(unsigned)UploadDataType::UniformBuffer])) });
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), 
             {   std::make_pair("Name", "Acc creates"), 
                 std::make_pair("Tex", XlDynFormatString("%i", _accumulatedCreateCount[(unsigned)UploadDataType::Texture])),
-                std::make_pair("VB", XlDynFormatString("%i", _accumulatedCreateCount[(unsigned)UploadDataType::Vertex])),
-                std::make_pair("IB", XlDynFormatString("%i", _accumulatedCreateCount[(unsigned)UploadDataType::Index])) });
+                std::make_pair("Geo", XlDynFormatString("%i", _accumulatedCreateCount[(unsigned)UploadDataType::GeometryBuffer])),
+                std::make_pair("Uniforms", XlDynFormatString("%i", _accumulatedCreateCount[(unsigned)UploadDataType::UniformBuffer])) });
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), 
             {   std::make_pair("Name", "Acc creates (MB)"), 
-                std::make_pair("Tex", XlDynFormatString("%8.3f MB", _accumulatedCreateBytes[(unsigned)UploadDataType::Texture] / (1024.f*1024.f))),
-                std::make_pair("VB", XlDynFormatString("%8.3f MB", _accumulatedCreateBytes[(unsigned)UploadDataType::Vertex] / (1024.f*1024.f))),
-                std::make_pair("IB", XlDynFormatString("%8.3f MB", _accumulatedCreateBytes[(unsigned)UploadDataType::Index] / (1024.f*1024.f))) });
+                std::make_pair("Tex", (StringMeldInPlace(buffer) << ByteCount{_accumulatedCreateBytes[(unsigned)UploadDataType::Texture]}).AsString()),
+                std::make_pair("Geo", (StringMeldInPlace(buffer) << ByteCount{_accumulatedCreateBytes[(unsigned)UploadDataType::GeometryBuffer]}).AsString()),
+                std::make_pair("Uniforms", (StringMeldInPlace(buffer) << ByteCount{_accumulatedCreateBytes[(unsigned)UploadDataType::UniformBuffer]}).AsString()) });
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), 
             {   std::make_pair("Name", "Acc uploads"), 
                 std::make_pair("Tex", XlDynFormatString("%i", _accumulatedUploadCount[(unsigned)UploadDataType::Texture])),
-                std::make_pair("VB", XlDynFormatString("%i", _accumulatedUploadCount[(unsigned)UploadDataType::Vertex])),
-                std::make_pair("IB", XlDynFormatString("%i", _accumulatedUploadCount[(unsigned)UploadDataType::Index])) });
+                std::make_pair("Geo", XlDynFormatString("%i", _accumulatedUploadCount[(unsigned)UploadDataType::GeometryBuffer])),
+                std::make_pair("Uniforms", XlDynFormatString("%i", _accumulatedUploadCount[(unsigned)UploadDataType::UniformBuffer])) });
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), 
             {   std::make_pair("Name", "Acc uploads (MB)"), 
-                std::make_pair("Tex", XlDynFormatString("%8.3f MB", _accumulatedUploadBytes[(unsigned)UploadDataType::Texture] / (1024.f*1024.f))),
-                std::make_pair("VB", XlDynFormatString("%8.3f MB", _accumulatedUploadBytes[(unsigned)UploadDataType::Vertex] / (1024.f*1024.f))),
-                std::make_pair("IB", XlDynFormatString("%8.3f MB", _accumulatedUploadBytes[(unsigned)UploadDataType::Index] / (1024.f*1024.f))) });
+                std::make_pair("Tex", (StringMeldInPlace(buffer) << ByteCount{_accumulatedUploadBytes[(unsigned)UploadDataType::Texture]}).AsString()),
+                std::make_pair("Geo", (StringMeldInPlace(buffer) << ByteCount{_accumulatedUploadBytes[(unsigned)UploadDataType::GeometryBuffer]}).AsString()),
+                std::make_pair("Uniforms", (StringMeldInPlace(buffer) << ByteCount{_accumulatedUploadBytes[(unsigned)UploadDataType::UniformBuffer]}).AsString()) });
     }
 
     void    BufferUploadDisplay::DrawRecentRetirements(
@@ -810,7 +838,7 @@ namespace PlatformRig { namespace Overlays
                 for (unsigned c=0; c<dimof(GraphTabs::Names); ++c) {
                     if (topMostWidget == InteractableId_Make(GraphTabs::Names[c])) {
                         _graphsMode = c;
-                        _graphMinValueHistory = _graphMaxValueHistory = {};
+                        _graphSlots.clear();
                         return ProcessInputResult::Consumed;
                     }
                 }

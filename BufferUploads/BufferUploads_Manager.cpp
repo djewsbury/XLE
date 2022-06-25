@@ -45,7 +45,7 @@ namespace BufferUploads
     static UploadDataType AsUploadDataType(const ResourceDesc& desc) 
     {
         switch (desc._type) {
-        case ResourceDesc::Type::LinearBuffer:     return (desc._bindFlags&BindFlag::VertexBuffer)?(UploadDataType::Vertex):(UploadDataType::Index);
+        case ResourceDesc::Type::LinearBuffer:     return (desc._bindFlags&(BindFlag::VertexBuffer|BindFlag::IndexBuffer))?(UploadDataType::GeometryBuffer):(UploadDataType::UniformBuffer);
         default:
         case ResourceDesc::Type::Texture:          return UploadDataType::Texture;
         }
@@ -1041,7 +1041,7 @@ namespace BufferUploads
                     transaction->_finalResource = finalConstruction;
                     return false;
                 }
-                metricsUnderConstruction._stagingBytesUsed[uploadDataType] += stagingConstruction.GetAllocationSize();
+                metricsUnderConstruction._stagingBytesAllocated[uploadDataType] += stagingConstruction.GetAllocationSize();
 
                 if (resourceCreateStep._creationDesc._type == ResourceDesc::Type::Texture) {
                     helper.WriteViaMap(
@@ -1131,7 +1131,7 @@ namespace BufferUploads
             auto stagingConstruction = context.GetStagingPage().Allocate(byteCount, alignment);
             if (!stagingConstruction)   // hit our limit right now -- might have to wait until some of the scheduled uploads have completed
                 return false;
-            metricsUnderConstruction._stagingBytesUsed[(unsigned)AsUploadDataType(desc)] += stagingConstruction.GetAllocationSize();
+            metricsUnderConstruction._stagingBytesAllocated[(unsigned)AsUploadDataType(desc)] += stagingConstruction.GetAllocationSize();
 
             using namespace RenderCore;
             Metal::ResourceMap map{
