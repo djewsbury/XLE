@@ -2,6 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#pragma once
 #include "IBufferUploads.h"
 #include "ResourceSource.h"
 #include "../Utility/HeapUtils.h"
@@ -10,6 +11,35 @@ namespace BufferUploads
 {
 	class ThreadContext;
 	using IResource = RenderCore::IResource;
+	struct BatchingSystemMetrics;
+
+	class Event_ResourceReposition
+	{
+	public:
+		std::shared_ptr<IResource> _originalResource;
+		std::shared_ptr<IResource> _newResource;
+		std::shared_ptr<IResourcePool> _pool;
+		uint64_t _poolMarker;
+		std::vector<Utility::DefragStep> _defragSteps;
+	};
+	using EventListID = uint32_t;
+
+	struct BatchedHeapMetrics
+	{
+		std::vector<unsigned> _markers;
+		size_t _allocatedSpace, _unallocatedSpace;
+		size_t _heapSize;
+		size_t _largestFreeBlock;
+		unsigned _spaceInReferencedCountedBlocks;
+		unsigned _referencedCountedBlockCount;
+	};
+
+	struct BatchingSystemMetrics
+	{
+		std::vector<BatchedHeapMetrics> _heaps;
+		unsigned _recentDeviceCreateCount;
+		unsigned _totalDeviceCreateCount;
+	};
 
 	class BatchedResources : public IResourcePool, public std::enable_shared_from_this<BatchedResources>
 	{
@@ -35,7 +65,16 @@ namespace BufferUploads
 		BatchingSystemMetrics   CalculateMetrics() const;
 		const ResourceDesc&     GetPrototype() const { return _prototype; }
 
-		void                    TickDefrag(ThreadContext& deviceContext, IManager::EventListID processedEventList);
+		void                    TickDefrag(ThreadContext& deviceContext, EventListID processedEventList);
+
+		//////////// event lists //////////////
+		void          EventList_Get(EventListID id, Event_ResourceReposition*& begin, Event_ResourceReposition*& end);
+		void          EventList_Release(EventListID id, bool silent = false);
+
+		EventListID   EventList_GetWrittenID() const;
+		EventListID   EventList_GetPublishedID() const;
+		EventListID   EventList_GetProcessedID() const;
+		///////////////////////////////////////
 
 		BatchedResources(RenderCore::IDevice& device, const ResourceDesc& prototype);
 		~BatchedResources();
@@ -66,6 +105,24 @@ namespace BufferUploads
 			uint64_t _hashLastDefrag;
 		};
 
+		struct EventListManager
+		{
+			struct EventList
+			{
+				volatile EventListID _id = ~EventListID(0x0);
+				Event_ResourceReposition _evnt;
+				std::atomic<unsigned> _clientReferences{0};
+			};
+			EventListID _currentEventListId = 0;
+			EventListID _currentEventListPublishedId = 0;
+			std::atomic<EventListID> _currentEventListProcessedId{0};
+			EventList _eventBuffers[4];
+			unsigned _eventListWritingIndex = 0;
+
+			EventListID EventList_Push(const Event_ResourceReposition& evnt);
+			void EventList_Publish(EventListID toEvent);
+		};
+
 		class ActiveDefrag
 		{
 		public:
@@ -73,8 +130,8 @@ namespace BufferUploads
 			void                QueueOperation(Operation::Enum operation, unsigned start, unsigned end);
 			void                ApplyPendingOperations(HeapedResource& destination);
 
-			void                Tick(ThreadContext& context, const std::shared_ptr<IResource>& sourceResource);
-			bool                IsComplete(IManager::EventListID processedEventList, ThreadContext& context);
+			void                Tick(ThreadContext& context, EventListManager& evntListMan, const std::shared_ptr<IResource>& sourceResource);
+			bool                IsComplete(EventListID processedEventList, ThreadContext& context);
 
 			void                SetSteps(const SimpleSpanningHeap& sourceHeap, const std::vector<DefragStep>& steps);
 			void                ReleaseSteps();
@@ -91,7 +148,7 @@ namespace BufferUploads
 			std::vector<PendingOperation>   _pendingOperations;
 
 			bool                            _doneResourceCopy;
-			IManager::EventListID           _eventId;
+			EventListID           _eventId;
 			std::unique_ptr<HeapedResource>   _newHeap;
 			std::vector<DefragStep>         _steps;
 
@@ -115,6 +172,8 @@ namespace BufferUploads
 
 		mutable std::atomic<unsigned>   _recentDeviceCreateCount;
 		std::atomic<size_t>             _totalCreateCount;
+
+		EventListManager _eventListManager;
 
 		BatchedResources(const BatchedResources&);
 		BatchedResources& operator=(const BatchedResources&);

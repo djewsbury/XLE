@@ -43,10 +43,7 @@ namespace BufferUploads
     using CommandListID = uint32_t;
     static const CommandListID CommandListID_Invalid = ~CommandListID(0);
     static const TransactionID TransactionID_Invalid = ~TransactionID(0);
-    class Event_ResourceReposition;
 
-    struct BatchedHeapMetrics;
-    struct BatchingSystemMetrics;
     struct PoolSystemMetrics;
     struct CommandListMetrics;
 
@@ -54,65 +51,9 @@ namespace BufferUploads
 
     namespace TransactionOptions
     {
-        enum {
-            FramePriority    = 1<<0
-        };
+        enum { FramePriority    = 1<<0 };
         using BitField = unsigned;
     }
-
-    class IResourcePool;
-
-    class ResourceLocator
-    {
-    public:
-        std::shared_ptr<IResource> AsIndependentResource() const;
-
-        RenderCore::VertexBufferView CreateVertexBufferView() const;
-        RenderCore::IndexBufferView CreateIndexBufferView(RenderCore::Format indexFormat) const;
-        RenderCore::ConstantBufferView CreateConstantBufferView() const;
-        std::shared_ptr<RenderCore::IResourceView> CreateTextureView(BindFlag::Enum usage = BindFlag::ShaderResource, const RenderCore::TextureViewDesc& window = RenderCore::TextureViewDesc{}) const;
-        std::shared_ptr<RenderCore::IResourceView> CreateBufferView(BindFlag::Enum usage = BindFlag::ConstantBuffer, unsigned rangeOffset = 0, unsigned rangeSize = 0) const;
-
-        const std::shared_ptr<IResource>& GetContainingResource() const { return _resource; }
-        std::pair<size_t, size_t> GetRangeInContainingResource() const { return std::make_pair(_interiorOffset, _interiorOffset+_interiorSize); }
-
-        CommandListID GetCompletionCommandList() const { return _completionCommandList; }
-
-        ResourceLocator MakeSubLocator(size_t offset, size_t size);
-
-        bool IsEmpty() const { return _resource == nullptr; }
-        bool IsWholeResource() const;
-
-        ResourceLocator(
-            std::shared_ptr<IResource> independentResource);
-        ResourceLocator(
-            std::shared_ptr<IResource> containingResource,
-            size_t interiorOffset, size_t interiorSize,
-            std::weak_ptr<IResourcePool> pool, uint64_t poolMarker,
-            bool initialReferenceAlreadyTaken = false,
-            CommandListID completionCommandList = CommandListID_Invalid);
-        ResourceLocator(
-            std::shared_ptr<IResource> containingResource,
-            size_t interiorOffset, size_t interiorSize,
-            CommandListID completionCommandList = CommandListID_Invalid);
-        ResourceLocator(
-            ResourceLocator&& moveFrom,
-            CommandListID completionCommandList);
-        ResourceLocator();
-        ~ResourceLocator();
-
-        ResourceLocator(ResourceLocator&&) never_throws;
-        ResourceLocator& operator=(ResourceLocator&&) never_throws;
-        ResourceLocator(const ResourceLocator&);
-        ResourceLocator& operator=(const ResourceLocator&);
-    private:
-        std::shared_ptr<IResource> _resource;
-        size_t _interiorOffset = ~size_t(0), _interiorSize = ~size_t(0);
-        std::weak_ptr<IResourcePool> _pool;
-        uint64_t _poolMarker = ~0ull;
-        bool _managedByPool = false;
-        CommandListID _completionCommandList = CommandListID_Invalid;
-    };
 
         /////////////////////////////////////////////////
 
@@ -147,19 +88,6 @@ namespace BufferUploads
                                     const ResourceDesc& desc, IDataPacket& data) = 0;
             /// @}
 
-            /// <summary>Checks for completion</summary>
-            /// Returns true iff the given transaction has been completed.
-        virtual bool            IsComplete (CommandListID id) = 0;
-
-            /// \name Event queue
-            /// @{
-
-        typedef uint32_t EventListID;
-        virtual EventListID     EventList_GetLatestID   () = 0;
-        virtual void            EventList_Get           (EventListID id, Event_ResourceReposition*&begin, Event_ResourceReposition*&end) = 0;
-        virtual void            EventList_Release       (EventListID id) = 0;
-            /// @}
-
             /// \name Frame management
             /// @{
 
@@ -169,6 +97,7 @@ namespace BufferUploads
             /// @}
 
         virtual void                    StallUntilCompletion(RenderCore::IThreadContext& immediateContext, CommandListID id) = 0;
+        virtual bool                    IsComplete (CommandListID id) = 0;
 
             /// \name Utilities, profiling & debugging
             /// @{
@@ -221,6 +150,59 @@ namespace BufferUploads
         virtual Assets::DependencyValidation GetDependencyValidation() const = 0;
 
         virtual ~IAsyncDataSource();
+    };
+
+    class IResourcePool;
+    class ResourceLocator
+    {
+    public:
+        std::shared_ptr<IResource> AsIndependentResource() const;
+
+        RenderCore::VertexBufferView CreateVertexBufferView() const;
+        RenderCore::IndexBufferView CreateIndexBufferView(RenderCore::Format indexFormat) const;
+        RenderCore::ConstantBufferView CreateConstantBufferView() const;
+        std::shared_ptr<RenderCore::IResourceView> CreateTextureView(BindFlag::Enum usage = BindFlag::ShaderResource, const RenderCore::TextureViewDesc& window = RenderCore::TextureViewDesc{}) const;
+        std::shared_ptr<RenderCore::IResourceView> CreateBufferView(BindFlag::Enum usage = BindFlag::ConstantBuffer, unsigned rangeOffset = 0, unsigned rangeSize = 0) const;
+
+        const std::shared_ptr<IResource>& GetContainingResource() const { return _resource; }
+        std::pair<size_t, size_t> GetRangeInContainingResource() const { return std::make_pair(_interiorOffset, _interiorOffset+_interiorSize); }
+
+        CommandListID GetCompletionCommandList() const { return _completionCommandList; }
+
+        ResourceLocator MakeSubLocator(size_t offset, size_t size);
+
+        bool IsEmpty() const { return _resource == nullptr; }
+        bool IsWholeResource() const;
+
+        ResourceLocator(
+            std::shared_ptr<IResource> independentResource);
+        ResourceLocator(
+            std::shared_ptr<IResource> containingResource,
+            size_t interiorOffset, size_t interiorSize,
+            std::weak_ptr<IResourcePool> pool, uint64_t poolMarker,
+            bool initialReferenceAlreadyTaken = false,
+            CommandListID completionCommandList = CommandListID_Invalid);
+        ResourceLocator(
+            std::shared_ptr<IResource> containingResource,
+            size_t interiorOffset, size_t interiorSize,
+            CommandListID completionCommandList = CommandListID_Invalid);
+        ResourceLocator(
+            ResourceLocator&& moveFrom,
+            CommandListID completionCommandList);
+        ResourceLocator();
+        ~ResourceLocator();
+
+        ResourceLocator(ResourceLocator&&) never_throws;
+        ResourceLocator& operator=(ResourceLocator&&) never_throws;
+        ResourceLocator(const ResourceLocator&);
+        ResourceLocator& operator=(const ResourceLocator&);
+    private:
+        std::shared_ptr<IResource> _resource;
+        size_t _interiorOffset = ~size_t(0), _interiorSize = ~size_t(0);
+        std::weak_ptr<IResourcePool> _pool;
+        uint64_t _poolMarker = ~0ull;
+        bool _managedByPool = false;
+        CommandListID _completionCommandList = CommandListID_Invalid;
     };
 
     class TransactionMarker

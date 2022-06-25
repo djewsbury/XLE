@@ -39,24 +39,10 @@ namespace BufferUploads
 
         CommandListID _commandListIDUnderConstruction, _commandListIDCommittedToImmediate;
 
-        struct EventList
-        {
-            volatile IManager::EventListID _id;
-            Event_ResourceReposition _evnt;
-            std::atomic<unsigned> _clientReferences;
-            EventList() : _id(~IManager::EventListID(0x0)), _clientReferences(0) {}
-        };
-        IManager::EventListID   _currentEventListId;
-        IManager::EventListID   _currentEventListPublishedId;
-        std::atomic<IManager::EventListID>   _currentEventListProcessedId;
-        EventList               _eventBuffers[4];
-        unsigned                _eventListWritingIndex;
-        unsigned                _immediateContextLastFrameId = 0;
-
         std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
         std::unique_ptr<PlatformInterface::StagingPage> _stagingPage;
 
-        Pimpl() : _currentEventListId(0), _eventListWritingIndex(0), _currentEventListProcessedId(0), _currentEventListPublishedId(0) {}
+        unsigned _immediateContextLastFrameId = 0;
     };
 
     void ThreadContext::ResolveCommandList()
@@ -178,84 +164,6 @@ namespace BufferUploads
         return CommandListMetrics();
     }
 
-    IManager::EventListID   ThreadContext::EventList_GetWrittenID() const
-    {
-        return _pimpl->_currentEventListId;
-    }
-
-    IManager::EventListID   ThreadContext::EventList_GetPublishedID() const
-    {
-        return _pimpl->_currentEventListPublishedId;
-    }
-
-    IManager::EventListID   ThreadContext::EventList_GetProcessedID() const
-    {
-        return _pimpl->_currentEventListProcessedId;
-    }
-
-    void                    ThreadContext::EventList_Get(IManager::EventListID id, Event_ResourceReposition*& begin, Event_ResourceReposition*& end)
-    {
-        begin = end = nullptr;
-        if (!id) return;
-        for (unsigned c=0; c<dimof(_pimpl->_eventBuffers); ++c) {
-            if (_pimpl->_eventBuffers[c]._id == id) {
-                ++_pimpl->_eventBuffers[c]._clientReferences;
-                    //  have to check again after the increment... because the client references value acts
-                    //  as a lock.
-                if (_pimpl->_eventBuffers[c]._id == id) {
-                    begin = &_pimpl->_eventBuffers[c]._evnt;
-                    end = begin+1;
-                } else {
-                    --_pimpl->_eventBuffers[c]._clientReferences;
-                        // in this case, the event has just be freshly overwritten
-                }
-                return;
-            }
-        }
-    }
-
-    void                    ThreadContext::EventList_Release(IManager::EventListID id, bool silent)
-    {
-        if (!id) return;
-        for (unsigned c=0; c<dimof(_pimpl->_eventBuffers); ++c) {
-            if (_pimpl->_eventBuffers[c]._id == id) {
-                auto newValue = --_pimpl->_eventBuffers[c]._clientReferences;
-                assert(signed(newValue) >= 0);
-                    
-                if (!silent) {
-                    for (;;) {      // lock-free max...
-                        auto originalProcessedId = _pimpl->_currentEventListProcessedId.load();
-                        auto newProcessedId = std::max(originalProcessedId, (IManager::EventListID)_pimpl->_eventBuffers[c]._id);
-                        if (_pimpl->_currentEventListProcessedId.compare_exchange_strong(originalProcessedId, newProcessedId))
-                            break;
-                    }
-                }
-                return;
-            }
-        }
-    }
-
-    IManager::EventListID   ThreadContext::EventList_Push(const Event_ResourceReposition& evnt)
-    {
-            //
-            //      try to push this event into the small queue... but don't overwrite anything that
-            //      currently has a client reference on it.
-            //
-        if (!_pimpl->_eventBuffers[_pimpl->_eventListWritingIndex]._clientReferences.load()) {
-            IManager::EventListID id = ++_pimpl->_currentEventListId;
-            _pimpl->_eventBuffers[_pimpl->_eventListWritingIndex]._id = id;
-            _pimpl->_eventBuffers[_pimpl->_eventListWritingIndex]._evnt = evnt;
-            _pimpl->_eventListWritingIndex = (_pimpl->_eventListWritingIndex+1)%dimof(_pimpl->_eventBuffers);   // single writing thread, so it's ok
-            return id;
-        }
-        assert(0);
-        return ~IManager::EventListID(0x0);
-    }
-
-    void ThreadContext::EventList_Publish(IManager::EventListID toEvent)
-    {
-        _pimpl->_currentEventListPublishedId = toEvent;
-    }
 
     CommandListID           ThreadContext::CommandList_GetUnderConstruction() const        { return _pimpl->_commandListIDUnderConstruction; }
     CommandListID           ThreadContext::CommandList_GetCommittedToImmediate() const     { return _pimpl->_commandListIDCommittedToImmediate; }

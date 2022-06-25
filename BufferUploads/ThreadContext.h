@@ -15,16 +15,6 @@ namespace BufferUploads
 {
         //////   T H R E A D   C O N T E X T   //////
 
-    class Event_ResourceReposition
-    {
-    public:
-        std::shared_ptr<IResource> _originalResource;
-        std::shared_ptr<IResource> _newResource;
-        std::shared_ptr<IResourcePool> _pool;
-        uint64_t _poolMarker;
-        std::vector<Utility::DefragStep> _defragSteps;
-    };
-
     #if !defined(NDEBUG)
         #define RECORD_BU_THREAD_CONTEXT_METRICS
     #endif
@@ -39,15 +29,6 @@ namespace BufferUploads
             LockFreeFixedSizeQueue<unsigned, 4>* framePriorityQueue = nullptr);
 
         CommandListMetrics      PopMetrics();
-
-        void                    EventList_Get(IManager::EventListID id, Event_ResourceReposition*& begin, Event_ResourceReposition*& end);
-        void                    EventList_Release(IManager::EventListID id, bool silent = false);
-        IManager::EventListID   EventList_Push(const Event_ResourceReposition& evnt);
-        void                    EventList_Publish(IManager::EventListID toEvent);
-
-        IManager::EventListID   EventList_GetWrittenID() const;
-        IManager::EventListID   EventList_GetPublishedID() const;
-        IManager::EventListID   EventList_GetProcessedID() const;
 
         CommandListID           CommandList_GetUnderConstruction() const;
         CommandListID           CommandList_GetCommittedToImmediate() const;

@@ -6,6 +6,7 @@
 
 #include "BufferUploadDisplay.h"
 #include "../../BufferUploads/Metrics.h"
+#include "../../BufferUploads/BatchedResources.h"
 #include "../../RenderOverlays/CommonWidgets.h"
 #include "../../RenderOverlays/Font.h"
 #include "../../ConsoleRig/ResourceBox.h"
@@ -1152,98 +1153,94 @@ namespace PlatformRig { namespace Overlays
     void    BatchingDisplay::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
     {
         using namespace BufferUploads;
-        IManager* manager = _manager;
-        if (manager) {
-            PoolSystemMetrics poolMetrics = manager->CalculatePoolMetrics();
-            const BatchingSystemMetrics& metrics = poolMetrics._batchingSystemMetrics;
+        auto metrics = _batchedResources->CalculateMetrics();
 
-            layout.AllocateFullWidth(32);  // leave some space at the top
-            static ColorB textColour(192, 192, 192, 128);
-            static ColorB unallocatedLineColour(192, 192, 192, 128);
+        layout.AllocateFullWidth(32);  // leave some space at the top
+        static ColorB textColour(192, 192, 192, 128);
+        static ColorB unallocatedLineColour(192, 192, 192, 128);
 
-            size_t allocatedSpace = 0, unallocatedSpace = 0;
-            size_t largestFreeBlock = 0;
-            size_t largestHeapSize = 0;
-            size_t totalBlockCount = 0;
-            for (std::vector<BatchedHeapMetrics>::const_iterator i=metrics._heaps.begin(); i!=metrics._heaps.end(); ++i) {
-                allocatedSpace += i->_allocatedSpace;
-                unallocatedSpace += i->_unallocatedSpace;
-                largestFreeBlock = std::max(largestFreeBlock, i->_largestFreeBlock);
-                largestHeapSize = std::max(largestHeapSize, i->_heapSize);
-                totalBlockCount += i->_referencedCountedBlockCount;
-            }
+        size_t allocatedSpace = 0, unallocatedSpace = 0;
+        size_t largestFreeBlock = 0;
+        size_t largestHeapSize = 0;
+        size_t totalBlockCount = 0;
+        for (std::vector<BatchedHeapMetrics>::const_iterator i=metrics._heaps.begin(); i!=metrics._heaps.end(); ++i) {
+            allocatedSpace += i->_allocatedSpace;
+            unallocatedSpace += i->_unallocatedSpace;
+            largestFreeBlock = std::max(largestFreeBlock, i->_largestFreeBlock);
+            largestHeapSize = std::max(largestHeapSize, i->_heapSize);
+            totalBlockCount += i->_referencedCountedBlockCount;
+        }
 
-            {
-                DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), "Heap count: %i / Total allocated: %7.3fMb / Total unallocated: %7.3fMb",
-                    metrics._heaps.size(), allocatedSpace/(1024.f*1024.f), unallocatedSpace/(1024.f*1024.f));
-                DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), "Largest free block: %7.3fKb / Average unallocated: %7.3fKb",
-                    largestFreeBlock/1024.f, unallocatedSpace/(float(metrics._heaps.size())*1024.f));
-                DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), "Block count: %i / Ave block size: %7.3fKb",
-                    totalBlockCount, allocatedSpace/float(totalBlockCount*1024.f));
-            }
+        {
+            DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), "Heap count: %i / Total allocated: %7.3fMb / Total unallocated: %7.3fMb",
+                metrics._heaps.size(), allocatedSpace/(1024.f*1024.f), unallocatedSpace/(1024.f*1024.f));
+            DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), "Largest free block: %7.3fKb / Average unallocated: %7.3fKb",
+                largestFreeBlock/1024.f, unallocatedSpace/(float(metrics._heaps.size())*1024.f));
+            DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), "Block count: %i / Ave block size: %7.3fKb",
+                totalBlockCount, allocatedSpace/float(totalBlockCount*1024.f));
+        }
 
-            unsigned currentFrameId = GetFrameID();
+        unsigned currentFrameId = GetFrameID();
 
-            {
-                const unsigned lineHeight = 4;
-                Rect outsideRect = layout.AllocateFullWidth(Coord(metrics._heaps.size()*lineHeight + layout._paddingInternalBorder*2));
-                Rect heapAllocationDisplay = Layout(outsideRect).AllocateFullWidthFraction(100.f);
+        {
+            const unsigned lineHeight = 4;
+            Rect outsideRect = layout.AllocateFullWidth(Coord(metrics._heaps.size()*lineHeight + layout._paddingInternalBorder*2));
+            Rect heapAllocationDisplay = Layout(outsideRect).AllocateFullWidthFraction(100.f);
 
-                OutlineRectangle(context, outsideRect, 0xff000000);
+            OutlineRectangle(context, outsideRect, 0xff000000);
 
-                std::vector<Float3> lines;
-                std::vector<ColorB> lineColors;
-                lines.reserve(metrics._heaps.size()*lineHeight*2*10);
-                lineColors.reserve(metrics._heaps.size()*lineHeight*10);
+            std::vector<Float3> lines;
+            std::vector<ColorB> lineColors;
+            lines.reserve(metrics._heaps.size()*lineHeight*2*10);
+            lineColors.reserve(metrics._heaps.size()*lineHeight*10);
 
-                float X = heapAllocationDisplay.Width() / float(largestHeapSize);
-                unsigned y = heapAllocationDisplay._topLeft[1];
-                
-                for (std::vector<BatchedHeapMetrics>::const_iterator i=metrics._heaps.begin(); i!=metrics._heaps.end(); ++i) {
-                    unsigned heapIndex = (unsigned)std::distance(metrics._heaps.begin(), i);
+            float X = heapAllocationDisplay.Width() / float(largestHeapSize);
+            unsigned y = heapAllocationDisplay._topLeft[1];
 
-                    unsigned lastStart = 0;
-                    const bool drawAllocated = true;
-                    for (std::vector<unsigned>::const_iterator i2=i->_markers.begin(); (i2+1)<i->_markers.end(); i2+=2) {
-                        unsigned start, end;
-                        if (drawAllocated) {
-                            start = lastStart;
-                            end = *i2;
-                        } else {
-                            start = *i2;
-                            end = *(i2+1);
-                        }
-                        if (start != end) {
-                            float warmth = CalculateWarmth(heapIndex, start, end, drawAllocated);
-                            ColorB col = ColorB::FromNormalized(warmth, 0.f, 1.0f-warmth);
-                            for (unsigned c=0; c<lineHeight; ++c) {
-                                const Coord x = Coord(start*X + heapAllocationDisplay._topLeft[0]);
-                                lines.push_back(AsPixelCoords(Coord2(x, y+c)));
-                                lines.push_back(AsPixelCoords(Coord2(std::max(x+1, Coord(end*X + heapAllocationDisplay._topLeft[0])), y+c)));
-                                lineColors.push_back(col);
-                                lineColors.push_back(col);
-                            }
-                        }
-                        lastStart = *(i2+1);
+            for (auto i=metrics._heaps.begin(); i!=metrics._heaps.end(); ++i) {
+                unsigned heapIndex = (unsigned)std::distance(metrics._heaps.begin(), i);
+
+                unsigned lastStart = 0;
+                const bool drawAllocated = true;
+                for (std::vector<unsigned>::const_iterator i2=i->_markers.begin(); (i2+1)<i->_markers.end(); i2+=2) {
+                    unsigned start, end;
+                    if (drawAllocated) {
+                        start = lastStart;
+                        end = *i2;
+                    } else {
+                        start = *i2;
+                        end = *(i2+1);
                     }
-
-                    y += lineHeight;
+                    if (start != end) {
+                        float warmth = CalculateWarmth(heapIndex, start, end, drawAllocated);
+                        ColorB col = ColorB::FromNormalized(warmth, 0.f, 1.0f-warmth);
+                        for (unsigned c=0; c<lineHeight; ++c) {
+                            const Coord x = Coord(start*X + heapAllocationDisplay._topLeft[0]);
+                            lines.push_back(AsPixelCoords(Coord2(x, y+c)));
+                            lines.push_back(AsPixelCoords(Coord2(std::max(x+1, Coord(end*X + heapAllocationDisplay._topLeft[0])), y+c)));
+                            lineColors.push_back(col);
+                            lineColors.push_back(col);
+                        }
+                    }
+                    lastStart = *(i2+1);
                 }
 
-                if (!lines.empty()) {
-                    context.DrawLines(ProjectionMode::P2D, AsPointer(lines.begin()), (uint32)lines.size(), AsPointer(lineColors.begin()));
-                }
+                y += lineHeight;
             }
 
-            _lastFrameMetrics = metrics;
+            if (!lines.empty()) {
+                context.DrawLines(ProjectionMode::P2D, AsPointer(lines.begin()), (uint32)lines.size(), AsPointer(lineColors.begin()));
+            }
+        }
 
-                //      extinquish cooling spans
-            for (std::vector<WarmSpan>::iterator i=_warmSpans.begin(); i!=_warmSpans.end();) {
-                if (i->_frameStart <= (currentFrameId-FramesOfWarmth)) {
-                    i = _warmSpans.erase(i);
-                } else {
-                    ++i;
-                }
+        _lastFrameMetrics = metrics;
+
+            //      extinquish cooling spans
+        for (std::vector<WarmSpan>::iterator i=_warmSpans.begin(); i!=_warmSpans.end();) {
+            if (i->_frameStart <= (currentFrameId-FramesOfWarmth)) {
+                i = _warmSpans.erase(i);
+            } else {
+                ++i;
             }
         }
     }
@@ -1300,15 +1297,9 @@ namespace PlatformRig { namespace Overlays
         return ProcessInputResult::Passthrough;
     }
 
-    BatchingDisplay::BatchingDisplay(BufferUploads::IManager* manager)
-    : _manager(manager)
-    {
-    }
-
-    BatchingDisplay::~BatchingDisplay()
-    {
-
-    }
+    BatchingDisplay::BatchingDisplay(std::shared_ptr<BufferUploads::BatchedResources> batchedResources)
+    : _batchedResources(std::move(batchedResources)) {}
+    BatchingDisplay::~BatchingDisplay() = default;
 }}
 
 

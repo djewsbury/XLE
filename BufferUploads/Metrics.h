@@ -89,28 +89,10 @@ namespace BufferUploads
         unsigned _totalCreateCount;
     };
 
-    struct BatchedHeapMetrics
-    {
-        std::vector<unsigned> _markers;
-        size_t _allocatedSpace, _unallocatedSpace;
-        size_t _heapSize;
-        size_t _largestFreeBlock;
-        unsigned _spaceInReferencedCountedBlocks;
-        unsigned _referencedCountedBlockCount;
-    };
-
-    struct BatchingSystemMetrics
-    {
-        std::vector<BatchedHeapMetrics> _heaps;
-        unsigned _recentDeviceCreateCount;
-        unsigned _totalDeviceCreateCount;
-    };
-
     struct PoolSystemMetrics
     {
         std::vector<PoolMetrics> _resourcePools;
         std::vector<PoolMetrics> _stagingPools;
-        BatchingSystemMetrics _batchingSystemMetrics;
     };
 
     std::ostream& operator<<(std::ostream& str, const PoolSystemMetrics&);

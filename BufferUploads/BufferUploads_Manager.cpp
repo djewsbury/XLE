@@ -112,8 +112,6 @@ namespace BufferUploads
 
         unsigned            FlipWritingQueueSet();
         
-        IManager::EventListID TickResourceSource(unsigned stepMask, ThreadContext& context, bool isLoading);
-
         AssemblyLine(RenderCore::IDevice& device);
         ~AssemblyLine();
 
@@ -145,7 +143,6 @@ namespace BufferUploads
         Threading::Mutex        _transactionsLock;
         Threading::Mutex        _transactionsRepositionLock;
         std::atomic<unsigned>   _allocatedTransactionCount;
-        IManager::EventListID   _transactions_resolvedEventID, _transactions_postPublishResolvedEventID;
 
         RenderCore::IDevice*    _device;
 
@@ -195,13 +192,13 @@ namespace BufferUploads
         LockFreeFixedSizeQueue<std::function<void(AssemblyLine&, ThreadContext&)>, 256> _queuedFunctions;
         SimpleWakeupEvent _wakeupEvent;
 
-        class BatchPreparation
+        /*class BatchPreparation
         {
         public:
             std::vector<CreateFromDataPacketStep> _batchedSteps;
             unsigned _batchedAllocationSize = 0;
         };
-        BatchPreparation _batchPreparation_Main;
+        BatchPreparation _batchPreparation_Main;*/
 
         class CommandListBudget
         {
@@ -210,7 +207,7 @@ namespace BufferUploads
             CommandListBudget(bool isLoading);
         };
 
-        void    ResolveBatchOperation(BatchPreparation& batchOperation, ThreadContext& context, unsigned stepMask);
+        // void    ResolveBatchOperation(BatchPreparation& batchOperation, ThreadContext& context, unsigned stepMask);
         void    SystemReleaseTransaction(Transaction* transaction, ThreadContext& context, bool abort = false);
         void    ClientReleaseTransaction(Transaction* transaction);
 
@@ -221,9 +218,9 @@ namespace BufferUploads
         bool    ProcessQueueSet(QueueSet& queueSet, unsigned stepMask, ThreadContext& context, const CommandListBudget& budgetUnderConstruction);
         bool    DrainPriorityQueueSet(QueueSet& queueSet, unsigned stepMask, ThreadContext& context);
 
-        void            CopyIntoBatchedBuffer(IteratorRange<void*> destination, IteratorRange<const CreateFromDataPacketStep*> steps, IteratorRange<unsigned*> offsetList, CommandListMetrics& metricsUnderConstruction);
-        static bool     SortSize_LargestToSmallest(const CreateFromDataPacketStep& lhs, const CreateFromDataPacketStep& rhs);
-        static bool     SortSize_SmallestToLargest(const CreateFromDataPacketStep& lhs, const CreateFromDataPacketStep& rhs);
+        // void            CopyIntoBatchedBuffer(IteratorRange<void*> destination, IteratorRange<const CreateFromDataPacketStep*> steps, IteratorRange<unsigned*> offsetList, CommandListMetrics& metricsUnderConstruction);
+        // static bool     SortSize_LargestToSmallest(const CreateFromDataPacketStep& lhs, const CreateFromDataPacketStep& rhs);
+        // static bool     SortSize_SmallestToLargest(const CreateFromDataPacketStep& lhs, const CreateFromDataPacketStep& rhs);
 
         auto    GetQueueSet(TransactionOptions::BitField transactionOptions) -> QueueSet &;
         void    PushStep(QueueSet&, Transaction& transaction, PrepareStagingStep&& step);
@@ -627,7 +624,6 @@ namespace BufferUploads
         _peakPrepareStaging = _peakTransferStagingToFinal =_peakCreateFromDataPacket = 0;
         _allocatedTransactionCount = 0;
         XlZeroMemory(_currentQueuedBytes);
-        _transactions_resolvedEventID = _transactions_postPublishResolvedEventID = 0;
         _framePriority_WritingQueueSet = 0;
     }
 
@@ -702,6 +698,7 @@ namespace BufferUploads
         _wakeupEvent.Increment();
     }
 
+#if 0
     bool AssemblyLine::SortSize_LargestToSmallest(const CreateFromDataPacketStep& lhs, const CreateFromDataPacketStep& rhs)     { return RenderCore::ByteCount(lhs._creationDesc) > RenderCore::ByteCount(rhs._creationDesc); }
     bool AssemblyLine::SortSize_SmallestToLargest(const CreateFromDataPacketStep& lhs, const CreateFromDataPacketStep& rhs)     { return RenderCore::ByteCount(lhs._creationDesc) < RenderCore::ByteCount(rhs._creationDesc); }
 
@@ -738,7 +735,9 @@ namespace BufferUploads
             _currentQueuedBytes[c] += queuedBytesAdjustment[c];
         }
     }
+#endif
 
+#if 0
     static unsigned ResolveOffsetValue(unsigned inputOffset, unsigned size, const std::vector<DefragStep>& steps)
     {
         for (std::vector<DefragStep>::const_iterator i=steps.begin(); i!=steps.end(); ++i) {
@@ -750,9 +749,11 @@ namespace BufferUploads
         assert(0);
         return inputOffset;
     }
+#endif
 
     void AssemblyLine::ApplyRepositionEvent(ThreadContext& context, unsigned id)
     {
+#if 0
             //
             //      We need to prevent GetTransaction from returning a partial result while this is occuring
             //      Since we modify both transaction._finalResource & transaction._resourceOffsetValue, it's
@@ -785,8 +786,10 @@ namespace BufferUploads
             }
         }
         context.EventList_Release(id, true);
+#endif
     }
 
+#if 0
     IManager::EventListID AssemblyLine::TickResourceSource(unsigned stepMask, ThreadContext& context, bool isLoading)
     {
         IManager::EventListID processedEventList     = context.EventList_GetProcessedID();
@@ -836,7 +839,6 @@ namespace BufferUploads
 
     void AssemblyLine::ResolveBatchOperation(BatchPreparation& batchOperation, ThreadContext& context, unsigned stepMask)
     {
-#if 0
         CommandListMetrics& metricsUnderConstruction = context.GetMetricsUnderConstruction();
         if (!batchOperation._batchedSteps.empty() && batchOperation._batchedAllocationSize) {
 
@@ -947,8 +949,8 @@ namespace BufferUploads
                 }
             }
         }
-#endif
     }
+#endif
 
     AssemblyLine::CommandListBudget::CommandListBudget(bool isLoading)
     {
@@ -1434,8 +1436,6 @@ namespace BufferUploads
         bool atLeastOneRealAction = false;
 
             /////////////// ~~~~ /////////////// ~~~~ ///////////////
-        IManager::EventListID publishableEventList = TickResourceSource(stepMask, context, isLoading);
-
         {
             std::function<void(AssemblyLine&, ThreadContext&)>* fn;
             while (_queuedFunctions.try_front(fn)) {
@@ -1475,9 +1475,7 @@ namespace BufferUploads
             /////////////// ~~~~ /////////////// ~~~~ ///////////////
         const bool somethingToResolve = 
                 (metricsUnderConstruction._contextOperations!=0)
-            ||  _batchPreparation_Main._batchedAllocationSize
-            || !context.GetDeferredOperationsUnderConstruction().IsEmpty()
-            ||  publishableEventList > context.EventList_GetPublishedID();
+            || !context.GetDeferredOperationsUnderConstruction().IsEmpty();
         
         // The commit count is a scheduling scheme
         //    -- we will generally "resolve" a command list and queue it for submission
@@ -1489,20 +1487,15 @@ namespace BufferUploads
             commandListIdCommitted = context.CommandList_GetUnderConstruction();
             context.CommitCount_LastResolve() = commitCountCurrent;
 
-            ResolveBatchOperation(_batchPreparation_Main, context, stepMask);
-            _batchPreparation_Main = BatchPreparation();
             metricsUnderConstruction._assemblyLineMetrics = CalculateMetrics(context);
 
             context.ResolveCommandList();
-            context.EventList_Publish(publishableEventList);
 
             atLeastOneRealAction = true;
         }
 
-        if (popFromFramePriority) {
+        if (popFromFramePriority)
             pendingFramePriorityCommandLists.pop();
-            assert(!_batchPreparation_Main._batchedAllocationSize);
-        }
     }
 
     PoolSystemMetrics   AssemblyLine::CalculatePoolMetrics() const
@@ -1604,10 +1597,6 @@ namespace BufferUploads
         void                    Update(RenderCore::IThreadContext&) override;
         void                    FramePriority_Barrier() override;
 
-        EventListID             EventList_GetLatestID() override;
-        void                    EventList_Get(EventListID id, Event_ResourceReposition*&begin, Event_ResourceReposition*&end) override;
-        void                    EventList_Release(EventListID id) override;
-
         Manager(RenderCore::IDevice& renderDevice);
         ~Manager();
 
@@ -1705,30 +1694,6 @@ namespace BufferUploads
     PoolSystemMetrics       Manager::CalculatePoolMetrics() const
     {
         return _assemblyLine->CalculatePoolMetrics();
-    }
-
-    Manager::EventListID    Manager::EventList_GetLatestID()
-    {
-        if (_backgroundStepMask&AssemblyLine::Step_BatchedDefrag) {
-            return _backgroundContext->EventList_GetPublishedID();
-        }
-        return _foregroundContext->EventList_GetPublishedID();
-    }
-
-    void                    Manager::EventList_Get(EventListID id, Event_ResourceReposition*& begin, Event_ResourceReposition*& end)
-    {
-        if (_backgroundStepMask&AssemblyLine::Step_BatchedDefrag) {
-            return _backgroundContext->EventList_Get(id, begin, end);
-        }
-        return _foregroundContext->EventList_Get(id, begin, end);
-    }
-
-    void                    Manager::EventList_Release(EventListID id)
-    {
-        if (_backgroundStepMask&AssemblyLine::Step_BatchedDefrag) {
-            return _backgroundContext->EventList_Release(id);
-        }
-        return _foregroundContext->EventList_Release(id);
     }
 
     void                    Manager::Update(RenderCore::IThreadContext& immediateContext)

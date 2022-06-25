@@ -10,6 +10,7 @@
 #include "../../RenderCore/ResourceDesc.h"
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../BufferUploads/Metrics.h"
+#include "../../BufferUploads/BatchedResources.h"
 #include "../../Utility/Threading/Mutex.h"
 #include <deque>
 
@@ -109,7 +110,7 @@ namespace PlatformRig { namespace Overlays
     class BatchingDisplay : public IWidget ///////////////////////////////////////////////////////////
     {
     public:
-        BatchingDisplay(BufferUploads::IManager* manager);
+        BatchingDisplay(std::shared_ptr<BufferUploads::BatchedResources> batchedResources);
         ~BatchingDisplay();
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
         ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
@@ -127,7 +128,7 @@ namespace PlatformRig { namespace Overlays
 
         float CalculateWarmth(unsigned heapIndex, unsigned begin, unsigned end, bool allocatedMode);
         bool FindSpan(unsigned heapIndex, unsigned begin, unsigned end, bool allocatedMode);
-        BufferUploads::IManager* _manager;
+        std::shared_ptr<BufferUploads::BatchedResources> _batchedResources;
     };
 }}
 

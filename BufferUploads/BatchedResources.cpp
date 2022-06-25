@@ -206,7 +206,7 @@ namespace BufferUploads
 		return result;
 	}
 
-	void BatchedResources::TickDefrag(ThreadContext& context, IManager::EventListID processedEventList)
+	void BatchedResources::TickDefrag(ThreadContext& context, EventListID processedEventList)
 	{
 		return;
 
@@ -321,7 +321,7 @@ namespace BufferUploads
 					--_temporaryCopyBufferCountDown;
 				} else {
 					const bool useTemporaryCopyBuffer = PlatformInterface::UseMapBasedDefrag && !PlatformInterface::CanDoNooverwriteMapInBackground;
-					existingActiveDefrag->Tick(context, useTemporaryCopyBuffer?_temporaryCopyBuffer:_activeDefragHeap->_heapResource);
+					existingActiveDefrag->Tick(context, _eventListManager, useTemporaryCopyBuffer?_temporaryCopyBuffer:_activeDefragHeap->_heapResource);
 					if (existingActiveDefrag->IsComplete(processedEventList, context)) {
 
 							//
@@ -354,6 +354,85 @@ namespace BufferUploads
 			}
 		}
 	}
+
+    EventListID   BatchedResources::EventList_GetWrittenID() const
+    {
+        return _eventListManager._currentEventListId;
+    }
+
+    EventListID   BatchedResources::EventList_GetPublishedID() const
+    {
+        return _eventListManager._currentEventListPublishedId;
+    }
+
+    EventListID   BatchedResources::EventList_GetProcessedID() const
+    {
+        return _eventListManager._currentEventListProcessedId;
+    }
+
+    void                    BatchedResources::EventList_Get(EventListID id, Event_ResourceReposition*& begin, Event_ResourceReposition*& end)
+    {
+        begin = end = nullptr;
+        if (!id) return;
+        for (unsigned c=0; c<dimof(_eventListManager._eventBuffers); ++c) {
+            if (_eventListManager._eventBuffers[c]._id == id) {
+                ++_eventListManager._eventBuffers[c]._clientReferences;
+                    //  have to check again after the increment... because the client references value acts
+                    //  as a lock.
+                if (_eventListManager._eventBuffers[c]._id == id) {
+                    begin = &_eventListManager._eventBuffers[c]._evnt;
+                    end = begin+1;
+                } else {
+                    --_eventListManager._eventBuffers[c]._clientReferences;
+                        // in this case, the event has just be freshly overwritten
+                }
+                return;
+            }
+        }
+    }
+
+    void                    BatchedResources::EventList_Release(EventListID id, bool silent)
+    {
+        if (!id) return;
+        for (unsigned c=0; c<dimof(_eventListManager._eventBuffers); ++c) {
+            if (_eventListManager._eventBuffers[c]._id == id) {
+                auto newValue = --_eventListManager._eventBuffers[c]._clientReferences;
+                assert(signed(newValue) >= 0);
+                    
+                if (!silent) {
+                    for (;;) {      // lock-free max...
+                        auto originalProcessedId = _eventListManager._currentEventListProcessedId.load();
+                        auto newProcessedId = std::max(originalProcessedId, (EventListID)_eventListManager._eventBuffers[c]._id);
+                        if (_eventListManager._currentEventListProcessedId.compare_exchange_strong(originalProcessedId, newProcessedId))
+                            break;
+                    }
+                }
+                return;
+            }
+        }
+    }
+
+    EventListID   BatchedResources::EventListManager::EventList_Push(const Event_ResourceReposition& evnt)
+    {
+            //
+            //      try to push this event into the small queue... but don't overwrite anything that
+            //      currently has a client reference on it.
+            //
+        if (!_eventBuffers[_eventListWritingIndex]._clientReferences.load()) {
+            EventListID id = ++_currentEventListId;
+            _eventBuffers[_eventListWritingIndex]._id = id;
+            _eventBuffers[_eventListWritingIndex]._evnt = evnt;
+            _eventListWritingIndex = (_eventListWritingIndex+1)%dimof(_eventBuffers);   // single writing thread, so it's ok
+            return id;
+        }
+        assert(0);
+        return ~EventListID(0x0);
+    }
+
+    void BatchedResources::EventListManager::EventList_Publish(EventListID toEvent)
+    {
+        _currentEventListPublishedId = toEvent;
+    }
 
 	BatchedResources::BatchedResources(RenderCore::IDevice& device, const ResourceDesc& prototype)
 	:       _prototype(prototype)
@@ -491,7 +570,7 @@ namespace BufferUploads
 		_pendingOperations.push_back(op);
 	}
 
-	void BatchedResources::ActiveDefrag::Tick(ThreadContext& context, const std::shared_ptr<IResource>& sourceResource)
+	void BatchedResources::ActiveDefrag::Tick(ThreadContext& context, EventListManager& evntListMan, const std::shared_ptr<IResource>& sourceResource)
 	{
 		if (!_initialCommandListID) {
 			_initialCommandListID = context.CommandList_GetUnderConstruction();
@@ -512,7 +591,7 @@ namespace BufferUploads
 			result._originalResource = sourceResource;
 			result._newResource      = GetHeap()->_heapResource;
 			result._defragSteps      = _steps;
-			_eventId = context.EventList_Push(result);
+			_eventId = evntListMan.EventList_Push(result);
 		}
 	}
 
@@ -584,7 +663,7 @@ namespace BufferUploads
 		#endif
 	}
 
-	bool BatchedResources::ActiveDefrag::IsComplete(IManager::EventListID processedEventList, ThreadContext& context)
+	bool BatchedResources::ActiveDefrag::IsComplete(EventListID processedEventList, ThreadContext& context)
 	{
 		return  GetHeap()->_heapResource && _doneResourceCopy && (processedEventList >= _eventId);
 	}
