@@ -274,7 +274,8 @@ namespace RenderOverlays
 		pos[0] += indent;
 
 		// reposition "pos" to be on the base line for the first line
-		pos[1] += fontProps._ascenderExcludingAccent;
+		if (align != TextAlignment::BottomLeft && align != TextAlignment::Bottom && align != TextAlignment::BottomRight)
+			pos[1] += fontProps._ascenderExcludingAccent;
 		switch (align) {
 		case TextAlignment::TopLeft:
 		case TextAlignment::Top:

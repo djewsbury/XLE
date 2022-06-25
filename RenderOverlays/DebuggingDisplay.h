@@ -201,6 +201,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
         Type _minValue, _maxValue;
         IteratorRange<const Type*> _values;
+        unsigned _peakIndex = ~0u;
 
         GraphSeries(
             IteratorRange<const Type*> values,
@@ -209,11 +210,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
         {
             _maxValue = -std::numeric_limits<float>::max();
             _minValue = std::numeric_limits<float>::max();
-            unsigned peakIndex = 0;
             for (unsigned c=0; c<values.size(); ++c) {
-                _maxValue = std::max(values[c], _maxValue);
                 _minValue = std::min(values[c], _minValue);
-                if (values[c] > values[peakIndex]) {peakIndex = c;}
+                if (values[c] > _maxValue) { 
+                    _peakIndex = c; 
+                    _maxValue = values[c];
+                }
             }
 
             _minValue = std::min(_minValue, _maxValue*.75f);

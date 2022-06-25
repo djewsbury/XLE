@@ -15,7 +15,9 @@
 #include "../../Utility/PtrUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/StringUtils.h"
+#include "../../Utility/StreamUtils.h"
 #include "../../Utility/IteratorUtils.h"
+#include "../../Utility/BitUtils.h"
 #include <assert.h>
 
 #pragma warning(disable:4127)       // warning C4127: conditional expression is constant
@@ -285,43 +287,136 @@ namespace PlatformRig { namespace Overlays
         }
     }
 
-    static void DrawUploadsGraph(
+    static const ColorB     GraphLabel(255, 255, 255, 128);
+    static const ColorB     GraphBorder(255, 128, 128, 128);
+    static const ColorB     GraphText(255, 128, 128, 128);
+
+    static Rect DrawUploadsGraph(
         IOverlayContext& context, const Rect& controlRect,
         RenderOverlays::DebuggingDisplay::GraphSeries<float> topSeries,
         RenderOverlays::DebuggingDisplay::GraphSeries<float> bottomSeries,
         StringSection<> topSeriesName, StringSection<> bottomSeriesName,
-        unsigned horizontalAllocation,
-        std::optional<unsigned> selectedValue)
+        unsigned horizontalAllocation)
     {
         auto* fonts = ConsoleRig::TryActualizeCachedBox<BUFontBox>();
-        if (!fonts) return;
+        if (!fonts) return {Zero<Coord2>(), Zero<Coord2>()};
+
+        assert(topSeries._minValue == bottomSeries._minValue);
 
         auto border = fonts->_graphBorderFont->GetFontProperties()._lineHeight;
-        const auto innerChartSpacing = 5;
-        const auto infoBoxWidth = 160;
+        const auto innerChartSpacing = 10;
+        const auto infoBoxWidth = 50;
 
         int chartTopY = controlRect._topLeft[1] + Coord(border) + innerChartSpacing;
         int chartBottomY = controlRect._bottomRight[1] - Coord(border) - innerChartSpacing;
-        if (chartBottomY <= chartTopY) return;
+        if (chartBottomY <= chartTopY) return {Zero<Coord2>(), Zero<Coord2>()};
         int chartMiddle = (chartTopY + chartBottomY) / 2;
 
         Rect topChartRect {
             Coord2{controlRect._topLeft[0] + Coord(border), chartTopY },
             Coord2{controlRect._bottomRight[0] - Coord(border) - infoBoxWidth - 5u, chartMiddle }
         };
+
+        // Try to align the width of the chart so that each horizontal element gets an equal number of pixels
+        topChartRect._bottomRight[0] = topChartRect._topLeft[0] + int(topChartRect.Width()/horizontalAllocation) * horizontalAllocation;
+
         Rect bottomChartRect {
             Coord2{controlRect._topLeft[0] + Coord(border), chartBottomY },
-            Coord2{controlRect._bottomRight[0] - Coord(border) - infoBoxWidth - 5u, chartMiddle }
+            Coord2{topChartRect._bottomRight[0], chartMiddle }
         };
 
+        // draw the charts themselves
         DrawBarChartContents(context, topChartRect, topSeries, horizontalAllocation);
         DrawBarChartContents(context, bottomChartRect, bottomSeries, horizontalAllocation);
 
+        // draw the info bar on the right, showing the chart dimensions
+        Rect infoArea {
+            Coord2{topChartRect._bottomRight[0] + 5u, controlRect._topLeft[1] + Coord(border) },
+            Coord2{controlRect._bottomRight[0] - Coord(border), controlRect._bottomRight[1] - Coord(border) }
+        };
+        char buffer[256];
+        DrawText().Font(*fonts->_smallFont).Alignment(TextAlignment::TopRight).Color(GraphLabel).Draw(
+            context, infoArea, (StringMeldInPlace(buffer) << "(" << topSeriesName << ") " << topSeries._maxValue).AsStringSection());
+        DrawText().Font(*fonts->_smallFont).Alignment(TextAlignment::Right).Color(GraphLabel).Draw(
+            context, infoArea, (StringMeldInPlace(buffer) << topSeries._minValue).AsStringSection());
+        DrawText().Font(*fonts->_smallFont).Alignment(TextAlignment::BottomRight).Color(GraphLabel).Draw(
+            context, infoArea, (StringMeldInPlace(buffer) << "(" << bottomSeriesName << ") " << bottomSeries._maxValue).AsStringSection());
+
+        // draw the outline
         OutlineRoundedRectangle(
             context,
             { controlRect._topLeft + Coord2(border/2, border/2), controlRect._bottomRight - Coord2(border/2, border/2) },
-            RenderOverlays::ColorB::Red,
+            GraphBorder,
             2.f, 1.f/32.f);
+        
+        // highlight max values
+        {
+            // top series
+            unsigned valueLeft = (unsigned)std::max(int(topSeries._values.size() - horizontalAllocation), 0);
+            int A = topSeries._peakIndex - valueLeft;
+            if (A > 0 && A < horizontalAllocation) {
+                Coord px = topChartRect._topLeft[0] + topChartRect.Width() * A / float(horizontalAllocation);
+                Coord px2 = px + topChartRect.Width() / horizontalAllocation;
+                px -= 3; px2 += 2;
+                Coord py = LinearInterpolate(topChartRect._bottomRight[1], topChartRect._topLeft[1], (topSeries._values[topSeries._peakIndex] - topSeries._minValue) / float(topSeries._maxValue - topSeries._minValue));
+                Float3 lines[] { 
+                    AsPixelCoords(Coord2{px, py}), AsPixelCoords(Coord2{px2, py}),
+                    AsPixelCoords(Coord2{(px+px2)/2, py}), AsPixelCoords(Coord2{(px+px2)/2, controlRect._topLeft[1] + border})
+                };
+                context.DrawLines(ProjectionMode::P2D, lines, dimof(lines), GraphBorder);
+
+                auto section = (StringMeldInPlace(buffer) << topSeries._values[topSeries._peakIndex]).AsStringSection();
+                auto width = StringWidth(*fonts->_smallFont, section);
+                Rect bubble{Coord2{(px+px2-width)/2 - 3, controlRect._topLeft[1]}, Coord2{(px+px2+width)/2 + 3, controlRect._topLeft[1]+border + 3}};
+                if (bubble._topLeft[0] < controlRect._topLeft[0]) { auto shift = controlRect._topLeft[0] - bubble._topLeft[0]; bubble._topLeft[0] += shift; bubble._bottomRight[0] += shift; }
+                if (bubble._bottomRight[0] > controlRect._bottomRight[0]) { auto shift = bubble._bottomRight[0] - controlRect._bottomRight[0]; bubble._topLeft[0] -= shift; bubble._bottomRight[0] -= shift; }
+                FillAndOutlineRoundedRectangle(context, bubble, RenderOverlays::ColorB::Black, GraphBorder);
+                DrawText().Font(*fonts->_smallFont).Alignment(TextAlignment::Center).Color(GraphText).Draw(context, bubble, section);
+            }
+        }
+        {
+            // bottom series
+            unsigned valueLeft = (unsigned)std::max(int(bottomSeries._values.size() - horizontalAllocation), 0);
+            int A = bottomSeries._peakIndex - valueLeft;
+            if (A > 0 && A < horizontalAllocation) {
+                Coord px = bottomChartRect._topLeft[0] + bottomChartRect.Width() * A / float(horizontalAllocation);
+                Coord px2 = px + bottomChartRect.Width() / horizontalAllocation;
+                px -= 3; px2 += 2;
+                Coord py = LinearInterpolate(bottomChartRect._bottomRight[1], bottomChartRect._topLeft[1], (bottomSeries._values[bottomSeries._peakIndex] - bottomSeries._minValue) / float(bottomSeries._maxValue - bottomSeries._minValue));
+                Float3 lines[] { 
+                    AsPixelCoords(Coord2{px, py}), AsPixelCoords(Coord2{px2, py}),
+                    AsPixelCoords(Coord2{(px+px2)/2, py}), AsPixelCoords(Coord2{(px+px2)/2, controlRect._bottomRight[1] - border})
+                };
+                context.DrawLines(ProjectionMode::P2D, lines, dimof(lines), GraphBorder);
+
+                auto section = (StringMeldInPlace(buffer) << bottomSeries._values[bottomSeries._peakIndex]).AsStringSection();
+                auto width = StringWidth(*fonts->_smallFont, section);
+                Rect bubble{Coord2{(px+px2-width)/2 - 3, controlRect._bottomRight[1]-border-3}, Coord2{(px+px2+width)/2 + 3, controlRect._bottomRight[1]}};
+                if (bubble._topLeft[0] < controlRect._topLeft[0]) { auto shift = controlRect._topLeft[0] - bubble._topLeft[0]; bubble._topLeft[0] += shift; bubble._bottomRight[0] += shift; }
+                if (bubble._bottomRight[0] > controlRect._bottomRight[0]) { auto shift = bubble._bottomRight[0] - controlRect._bottomRight[0]; bubble._topLeft[0] -= shift; bubble._bottomRight[0] -= shift; }
+                FillAndOutlineRoundedRectangle(context, bubble, RenderOverlays::ColorB::Black, GraphBorder);
+                DrawText().Font(*fonts->_smallFont).Alignment(TextAlignment::Center).Color(GraphText).Draw(context, bubble, section);
+            }
+        }
+
+        return { topChartRect._topLeft, Coord2{bottomChartRect._bottomRight[0], bottomChartRect._topLeft[1]} };
+    }
+
+    static void HighlightChartPoint(IOverlayContext& context, const Rect& area, float value, float minValue, float maxValue)
+    {
+        auto* fonts = ConsoleRig::TryActualizeCachedBox<BUFontBox>();
+        if (!fonts) return;
+
+        Coord2 px = {
+            (area._topLeft[0] + area._bottomRight[0]) / 2,
+            LinearInterpolate(area._bottomRight[1], area._topLeft[1], (value-minValue)/(maxValue-minValue))
+        };
+        if (area._bottomRight[1] > area._topLeft[1]) px[1] -= 10;
+        else if (area._bottomRight[1] > area._topLeft[1]) px[1] += 10;
+
+        char buffer[256];
+        auto section = (StringMeldInPlace(buffer) << value).AsStringSection();
+        DrawText().Font(*fonts->_smallFont).Alignment(TextAlignment::Center).Color(GraphText).Draw(context, {px, px}, section);
     }
 
     size_t  BufferUploadDisplay::FillValuesBuffer(unsigned graphType, unsigned uploadType, float valuesBuffer[], size_t valuesMaxCount)
@@ -437,61 +532,46 @@ namespace PlatformRig { namespace Overlays
                     .Draw(context, historyRect, XlDynFormatString("%6.3f", mostRecentValue).c_str());
 			}
 
-            DrawUploadsGraph(
+            GraphSeries<float> topSeries{
+                MakeIteratorRange(&valuesBuffer[dimof(valuesBuffer)-valuesCount2], &valuesBuffer[dimof(valuesBuffer)]),
+                _graphMinValueHistory, _graphMaxValueHistory };
+            GraphSeries<float> bottomSeries{
+                MakeIteratorRange(&valuesBuffer[dimof(valuesBuffer)-valuesCount2], &valuesBuffer[dimof(valuesBuffer)]),
+                _graphMinValueHistory, _graphMaxValueHistory };
+            bottomSeries._minValue = topSeries._minValue = std::min(topSeries._minValue, bottomSeries._minValue);
+
+            auto chartArea = DrawUploadsGraph(
                 context, historyRect,
-                GraphSeries<float>{
-                    MakeIteratorRange(&valuesBuffer[dimof(valuesBuffer)-valuesCount2], &valuesBuffer[dimof(valuesBuffer)]),
-                    _graphMinValueHistory, _graphMaxValueHistory },
-                GraphSeries<float>{
-                    MakeIteratorRange(&valuesBuffer[dimof(valuesBuffer)-valuesCount2], &valuesBuffer[dimof(valuesBuffer)]),
-                    _graphMinValueHistory, _graphMaxValueHistory },
+                topSeries, bottomSeries,
                 "Top series", "Bottom series",
-                dimof(valuesBuffer), {});
+                dimof(valuesBuffer));
 
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
                 //  extra graph functionality....
 
-            if (_graphsMode == GraphTabs::GPUCost) {
-                    // GPU cost graph should also have the total bytes uploaded draw in
-                size_t valuesCount = 0;
-                for (std::deque<FrameRecord>::const_reverse_iterator i =_frames.rbegin(); i!=_frames.rend(); ++i) {
-                    if (valuesCount>=dimof(valuesBuffer)) {
-                        break;
-                    }
-                    ++valuesCount;
-                    valuesBuffer[dimof(valuesBuffer)-valuesCount] = 0;
-                    for (unsigned cl=i->_commandListStart; cl<i->_commandListEnd; ++cl) {
-                        BufferUploads::CommandListMetrics& commandList = _recentHistory[cl];
-                        for (unsigned c2=0; c2<(unsigned)UploadDataType::Max; ++c2) {
-                            valuesBuffer[dimof(valuesBuffer)-valuesCount] += (commandList._bytesUploaded[c2]) / (1024.f*1024.f);
-                        }
-                    }
-                }
-
-                DrawHistoryGraph_ExtraLine( 
-                    context, historyRect, &valuesBuffer[dimof(valuesBuffer)-valuesCount], (unsigned)valuesCount, (unsigned)dimof(valuesBuffer), 
-                    _graphMinValueHistory.value(), _graphMaxValueHistory.value());
-            }
-
             {
                 const InteractableId framePicker = InteractableId_Make("FramePicker");
-                size_t newValuesCount = 0;
-                for (std::deque<FrameRecord>::const_reverse_iterator i =_frames.rbegin(); i!=_frames.rend(); ++i) {
-                    if (newValuesCount>=dimof(valuesBuffer)) {
-                        break;
-                    }
-                    int graphPartIndex = int(dimof(valuesBuffer)-newValuesCount-1);
-                    Rect graphPart( 
-                        Coord2(LinearInterpolate(historyRect._topLeft[0], historyRect._bottomRight[0], (graphPartIndex)/float(dimof(valuesBuffer))), historyRect._topLeft[1]),
-                        Coord2(LinearInterpolate(historyRect._topLeft[0], historyRect._bottomRight[0], (graphPartIndex+1)/float(dimof(valuesBuffer))), historyRect._bottomRight[1]));
-                    InteractableId id = framePicker + newValuesCount;
-                    if (interfaceState.HasMouseOver(id)) {
-                        FillRectangle(context, graphPart, ColorB(0x3f7f7f7fu));
-                    } else if (i->_frameId == _lockedFrameId) {
+                size_t iterator = 0;
+                unsigned frameLeft = (unsigned)std::max(int(_frames.size() - s_MaxGraphSegments), 0);
+                for (auto i =_frames.begin()+frameLeft; i!=_frames.end(); ++i) {
+                    Rect graphPart{
+                        Coord2{LinearInterpolate(chartArea._topLeft[0], chartArea._bottomRight[0], iterator/float(s_MaxGraphSegments)), chartArea._topLeft[1]},
+                        Coord2{LinearInterpolate(chartArea._topLeft[0], chartArea._bottomRight[0], (iterator+1)/float(s_MaxGraphSegments)), chartArea._bottomRight[1]}};
+                    InteractableId id = framePicker + std::distance(_frames.begin(), i);
+                    if (i->_frameId == _lockedFrameId) {
                         FillRectangle(context, graphPart, ColorB(0x3f7f3f7fu));
+                        HighlightChartPoint(
+                            context, Rect { graphPart._topLeft, {graphPart._bottomRight[0], (chartArea._topLeft[1] + chartArea._bottomRight[1])/2} },
+                            topSeries._values[iterator], topSeries._minValue, topSeries._maxValue);
+                        
+                        HighlightChartPoint(
+                            context, Rect { {graphPart._topLeft[0], graphPart._bottomRight[1]}, {graphPart._bottomRight[0], (chartArea._topLeft[1] + chartArea._bottomRight[1])/2} },
+                            bottomSeries._values[iterator], bottomSeries._minValue, bottomSeries._maxValue);
+                    } else if (interfaceState.HasMouseOver(id)) {
+                        FillRectangle(context, graphPart, ColorB(0x3f7f7f7fu));
                     }
                     interactables.Register({graphPart, id});
-                    ++newValuesCount;
+                    ++iterator;
                 }
             }
         }
@@ -716,9 +796,17 @@ namespace PlatformRig { namespace Overlays
 
     auto    BufferUploadDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
     {
-        if (interfaceState.TopMostId()) {
+        if (auto topMostWidget = interfaceState.TopMostId()) {
+            if (input.IsHeld_LButton()) {
+                const InteractableId framePicker = InteractableId_Make("FramePicker");
+                if (topMostWidget >= framePicker && topMostWidget < (framePicker+s_MaxGraphSegments)) {
+                    unsigned graphIndex = unsigned(topMostWidget - framePicker);
+                    _lockedFrameId = _frames[graphIndex]._frameId;
+                    return ProcessInputResult::Consumed;
+                }
+            }
+
             if (input.IsRelease_LButton()) {
-                InteractableId topMostWidget = interfaceState.TopMostId();
                 for (unsigned c=0; c<dimof(GraphTabs::Names); ++c) {
                     if (topMostWidget == InteractableId_Make(GraphTabs::Names[c])) {
                         _graphsMode = c;
@@ -726,15 +814,6 @@ namespace PlatformRig { namespace Overlays
                         return ProcessInputResult::Consumed;
                     }
                 }
-
-                const InteractableId framePicker = InteractableId_Make("FramePicker");
-                if (topMostWidget >= framePicker && topMostWidget < (framePicker+s_MaxGraphSegments)) {
-                    unsigned graphIndex = unsigned(topMostWidget - framePicker);
-                    _lockedFrameId = _frames[std::max(0,signed(_frames.size())-signed(graphIndex)-1)]._frameId;
-                    return ProcessInputResult::Consumed;
-                }
-
-                return ProcessInputResult::Passthrough;
             }
         }
         return ProcessInputResult::Passthrough;
