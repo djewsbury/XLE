@@ -183,6 +183,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
     void        DrawHistoryGraph(IOverlayContext& context, const Rect& rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float& minValueHistory, float& maxValueHistory);
     void        DrawHistoryGraph_ExtraLine(IOverlayContext& context, const Rect& rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float minValue, float maxValue);
 
+    void        DrawBarGraph(IOverlayContext& context, const Rect & rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float& minValueHistory, float& maxValueHistory);
+
     void        DrawTriangles(IOverlayContext& context, const Coord2 triangleCoordinates[], const ColorB triangleColours[], unsigned triangleCount);
     void        DrawLines(IOverlayContext& context, const Coord2 lineCoordinates[], const ColorB lineColours[], unsigned lineCount);
 
@@ -191,6 +193,48 @@ namespace RenderOverlays { namespace DebuggingDisplay
     Float3      AsPixelCoords(Float2 input);
     Float3      AsPixelCoords(Float3 input);
     std::tuple<Float3, Float3> AsPixelCoords(const Rect& rect);
+
+    ///////////////////////////////////////////////////////////////////////////////////
+
+    template<typename Type>
+        struct GraphSeries
+    {
+        Type _minValue, _maxValue;
+        IteratorRange<const Type*> _values;
+
+        GraphSeries(
+            IteratorRange<const Type*> values,
+            std::optional<Type>& historicalMin, std::optional<Type>& historicalMax)
+        : _values(values)
+        {
+            _maxValue = -std::numeric_limits<float>::max();
+            _minValue = std::numeric_limits<float>::max();
+            unsigned peakIndex = 0;
+            for (unsigned c=0; c<values.size(); ++c) {
+                _maxValue = std::max(values[c], _maxValue);
+                _minValue = std::min(values[c], _minValue);
+                if (values[c] > values[peakIndex]) {peakIndex = c;}
+            }
+
+            _minValue = std::min(_minValue, _maxValue*.75f);
+
+            if (historicalMin.has_value())
+                _minValue = std::min(LinearInterpolate(historicalMin.value(), _minValue, 0.15f), _minValue);
+            historicalMin = _minValue;
+
+            if (historicalMax.has_value())
+                _maxValue = std::max(LinearInterpolate(historicalMax.value(), _maxValue, 0.15f), _maxValue);
+            historicalMax = _maxValue;
+        }
+    };
+
+    struct BarChartColoring
+    {
+        ColorB _blocks[4];
+    };
+
+    template<typename Type>
+        void DrawBarChartContents(IOverlayContext& context, const Rect& graphArea, GraphSeries<Type> series, unsigned horizontalAllocation);
 
     ///////////////////////////////////////////////////////////////////////////////////
     typedef std::tuple<Float3, Float3>      AABoundingBox;

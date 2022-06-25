@@ -7,6 +7,7 @@
 #include "BufferUploadDisplay.h"
 #include "../../BufferUploads/Metrics.h"
 #include "../../RenderOverlays/CommonWidgets.h"
+#include "../../RenderOverlays/Font.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Assets/Continuation.h"
 #include "../../OSServices/TimeUtils.h"
@@ -44,7 +45,7 @@ namespace PlatformRig { namespace Overlays
     BufferUploadDisplay::BufferUploadDisplay(BufferUploads::IManager* manager)
     : _manager(manager)
     {
-        _graphMinValueHistory = _graphMaxValueHistory = 0.f;
+        _graphMinValueHistory = _graphMaxValueHistory = {};
         XlZeroMemory(_accumulatedCreateCount);
         XlZeroMemory(_accumulatedCreateBytes);
         XlZeroMemory(_accumulatedUploadCount);
@@ -151,19 +152,22 @@ namespace PlatformRig { namespace Overlays
 
     static const unsigned s_MaxGraphSegments = 256;
 
-    class FontBox
+    class BUFontBox
     {
     public:
         std::shared_ptr<RenderOverlays::Font> _font;
 		std::shared_ptr<RenderOverlays::Font> _smallFont;
-        FontBox(std::shared_ptr<RenderOverlays::Font> font, std::shared_ptr<RenderOverlays::Font> smallFont)
-        : _font(std::move(font)), _smallFont(std::move(smallFont)) {}
+        std::shared_ptr<RenderOverlays::Font> _graphBorderFont;
 
-        static void ConstructToPromise(std::promise<std::shared_ptr<FontBox>>&& promise)
+        BUFontBox(std::shared_ptr<RenderOverlays::Font> font, std::shared_ptr<RenderOverlays::Font> smallFont, std::shared_ptr<RenderOverlays::Font> graphBorderFont)
+        : _font(std::move(font)), _smallFont(std::move(smallFont)), _graphBorderFont(std::move(graphBorderFont)) {}
+
+        static void ConstructToPromise(std::promise<std::shared_ptr<BUFontBox>>&& promise)
         {
             ::Assets::WhenAll(
                 RenderOverlays::MakeFont("OrbitronBlack", 18),
-                RenderOverlays::MakeFont("Vera", 16)).ThenConstructToPromise(std::move(promise));
+                RenderOverlays::MakeFont("Vera", 16),
+                RenderOverlays::MakeFont("Petra", 16)).ThenConstructToPromise(std::move(promise));
         }
     };
 
@@ -197,6 +201,9 @@ namespace PlatformRig { namespace Overlays
         static const ColorB text(220, 220, 220, 0xff);
         static const ColorB smallText(170, 170, 170, 0xff);
         auto fullSize = layout.GetMaximumSize();
+
+        auto* fonts = ConsoleRig::TryActualizeCachedBox<BUFontBox>();
+        if (!fonts) return;
 
             // bkgrnd
         FillRectangle(
@@ -237,7 +244,7 @@ namespace PlatformRig { namespace Overlays
             }
 
             DrawText()
-                .Font(*ConsoleRig::FindCachedBox<FontBox>()._font)
+                .Font(*fonts->_font)
                 .Flags(DrawTextFlags::Shadow)
                 .Alignment(TextAlignment::Center)
                 .Color(text)
@@ -262,7 +269,7 @@ namespace PlatformRig { namespace Overlays
                     col = ColorB::White;
 
                 DrawText()
-                    .Font(*ConsoleRig::FindCachedBox<FontBox>()._font)
+                    .Font(*fonts->_font)
                     .Flags(DrawTextFlags::Shadow)
                     .Alignment(TextAlignment::Left)
                     .Color(col)
@@ -276,6 +283,45 @@ namespace PlatformRig { namespace Overlays
                 interactables.Register({rect, hash});
             }
         }
+    }
+
+    static void DrawUploadsGraph(
+        IOverlayContext& context, const Rect& controlRect,
+        RenderOverlays::DebuggingDisplay::GraphSeries<float> topSeries,
+        RenderOverlays::DebuggingDisplay::GraphSeries<float> bottomSeries,
+        StringSection<> topSeriesName, StringSection<> bottomSeriesName,
+        unsigned horizontalAllocation,
+        std::optional<unsigned> selectedValue)
+    {
+        auto* fonts = ConsoleRig::TryActualizeCachedBox<BUFontBox>();
+        if (!fonts) return;
+
+        auto border = fonts->_graphBorderFont->GetFontProperties()._lineHeight;
+        const auto innerChartSpacing = 5;
+        const auto infoBoxWidth = 160;
+
+        int chartTopY = controlRect._topLeft[1] + Coord(border) + innerChartSpacing;
+        int chartBottomY = controlRect._bottomRight[1] - Coord(border) - innerChartSpacing;
+        if (chartBottomY <= chartTopY) return;
+        int chartMiddle = (chartTopY + chartBottomY) / 2;
+
+        Rect topChartRect {
+            Coord2{controlRect._topLeft[0] + Coord(border), chartTopY },
+            Coord2{controlRect._bottomRight[0] - Coord(border) - infoBoxWidth - 5u, chartMiddle }
+        };
+        Rect bottomChartRect {
+            Coord2{controlRect._topLeft[0] + Coord(border), chartBottomY },
+            Coord2{controlRect._bottomRight[0] - Coord(border) - infoBoxWidth - 5u, chartMiddle }
+        };
+
+        DrawBarChartContents(context, topChartRect, topSeries, horizontalAllocation);
+        DrawBarChartContents(context, bottomChartRect, bottomSeries, horizontalAllocation);
+
+        OutlineRoundedRectangle(
+            context,
+            { controlRect._topLeft + Coord2(border/2, border/2), controlRect._bottomRight - Coord2(border/2, border/2) },
+            RenderOverlays::ColorB::Red,
+            2.f, 1.f/32.f);
     }
 
     size_t  BufferUploadDisplay::FillValuesBuffer(unsigned graphType, unsigned uploadType, float valuesBuffer[], size_t valuesMaxCount)
@@ -391,9 +437,16 @@ namespace PlatformRig { namespace Overlays
                     .Draw(context, historyRect, XlDynFormatString("%6.3f", mostRecentValue).c_str());
 			}
 
-            DrawHistoryGraph(
-                context, historyRect, &valuesBuffer[dimof(valuesBuffer)-valuesCount2], (unsigned)valuesCount2, (unsigned)dimof(valuesBuffer), 
-                _graphMinValueHistory, _graphMaxValueHistory);
+            DrawUploadsGraph(
+                context, historyRect,
+                GraphSeries<float>{
+                    MakeIteratorRange(&valuesBuffer[dimof(valuesBuffer)-valuesCount2], &valuesBuffer[dimof(valuesBuffer)]),
+                    _graphMinValueHistory, _graphMaxValueHistory },
+                GraphSeries<float>{
+                    MakeIteratorRange(&valuesBuffer[dimof(valuesBuffer)-valuesCount2], &valuesBuffer[dimof(valuesBuffer)]),
+                    _graphMinValueHistory, _graphMaxValueHistory },
+                "Top series", "Bottom series",
+                dimof(valuesBuffer), {});
 
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
                 //  extra graph functionality....
@@ -417,7 +470,7 @@ namespace PlatformRig { namespace Overlays
 
                 DrawHistoryGraph_ExtraLine( 
                     context, historyRect, &valuesBuffer[dimof(valuesBuffer)-valuesCount], (unsigned)valuesCount, (unsigned)dimof(valuesBuffer), 
-                    _graphMinValueHistory, _graphMaxValueHistory);
+                    _graphMinValueHistory.value(), _graphMaxValueHistory.value());
             }
 
             {
@@ -669,7 +722,7 @@ namespace PlatformRig { namespace Overlays
                 for (unsigned c=0; c<dimof(GraphTabs::Names); ++c) {
                     if (topMostWidget == InteractableId_Make(GraphTabs::Names[c])) {
                         _graphsMode = c;
-                        _graphMinValueHistory = _graphMaxValueHistory = 0.f;
+                        _graphMinValueHistory = _graphMaxValueHistory = {};
                         return ProcessInputResult::Consumed;
                     }
                 }

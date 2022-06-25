@@ -598,6 +598,106 @@ namespace RenderOverlays { namespace DebuggingDisplay
         return result;
     }
 
+    static BarChartColoring MakeDefaultBarChartColoring()
+    {
+        BarChartColoring result;
+        result._blocks[0] = ColorB{ 86, 232, 110};
+        result._blocks[1] = ColorB{192, 220,  78};
+        result._blocks[2] = ColorB{216, 125,  73};
+        result._blocks[3] = ColorB{189,  57,  35};
+        return result;
+    }
+
+    static BarChartColoring s_defaultBarChartColoring = MakeDefaultBarChartColoring();
+
+    template<typename Type>
+        void DrawBarChartContents(IOverlayContext& context, const Rect& graphArea, GraphSeries<Type> series, unsigned horizontalAllocation)
+    {
+        if (series._values.empty() || !horizontalAllocation) return;
+        if (series._minValue >= series._maxValue) return;
+
+        const auto& coloring = s_defaultBarChartColoring;
+
+        const unsigned gapBetweenBlocks = 2;
+        if (unsigned(graphArea.Width() / horizontalAllocation) >= (gapBetweenBlocks+1)) {
+            // magnification horizontally
+            unsigned valueLeft = (unsigned)std::max(int(series._values.size() - horizontalAllocation), 0);
+            unsigned valueRight = series._values.size();
+            unsigned allocationRight = valueRight-valueLeft;
+
+            int blockSize = graphArea.Width() / horizontalAllocation;      // round down
+            int maxVerticalBlocks = std::abs(graphArea._bottomRight[1] - graphArea._topLeft[1]) / blockSize;
+
+            Float3 pts[6*4096];
+            ColorB colors[6*4096];
+            unsigned q = 0;
+            bool normalWinding = graphArea._bottomRight[1] > graphArea._topLeft[1];
+
+            for (unsigned a=0; a<allocationRight; ++a) {
+                float x = LinearInterpolate((float)graphArea._topLeft[0], (float)graphArea._bottomRight[0], a/float(horizontalAllocation));
+                float x2 = LinearInterpolate((float)graphArea._topLeft[0], (float)graphArea._bottomRight[0], (a+1)/float(horizontalAllocation));
+                float A = (series._values[valueLeft+a] - series._minValue) / float(series._maxValue - series._minValue);
+                A = std::clamp(A, 0.f, 1.f);
+                float yBottom = graphArea._bottomRight[1];
+                float yTop = LinearInterpolate(graphArea._bottomRight[1], graphArea._topLeft[1], A);
+                unsigned verticalBlocks = std::abs(yBottom - yTop) / blockSize;
+                if (!verticalBlocks) continue;
+
+                for (int b=0; b<verticalBlocks; ++b) {
+                    if (q >= dimof(pts)) {
+                        context.DrawTriangles(ProjectionMode::P2D, pts, q, colors);
+                        q = 0;
+                    }
+                    if (normalWinding) {
+                        int top = int(yBottom) - ((b+1)*blockSize - gapBetweenBlocks);
+                        int bottom = int(yBottom) - b*blockSize;
+                        pts[q+0] = AsPixelCoords(Coord2{x, top});
+                        pts[q+1] = AsPixelCoords(Coord2{x, bottom});
+                        pts[q+2] = AsPixelCoords(Coord2{x2-gapBetweenBlocks, top});
+                        pts[q+3] = AsPixelCoords(Coord2{x2-gapBetweenBlocks, top});
+                        pts[q+4] = AsPixelCoords(Coord2{x, bottom});
+                        pts[q+5] = AsPixelCoords(Coord2{x2-gapBetweenBlocks, bottom});
+                    } else {
+                        // opposite winding
+                        int top = int(yBottom) + ((b+1)*blockSize - gapBetweenBlocks);
+                        int bottom = int(yBottom) + b*blockSize;
+                        pts[q+0] = AsPixelCoords(Coord2{x, top});
+                        pts[q+1] = AsPixelCoords(Coord2{x2-gapBetweenBlocks, top});
+                        pts[q+2] = AsPixelCoords(Coord2{x, bottom});
+                        pts[q+3] = AsPixelCoords(Coord2{x, bottom});
+                        pts[q+4] = AsPixelCoords(Coord2{x2-gapBetweenBlocks, top});
+                        pts[q+5] = AsPixelCoords(Coord2{x2-gapBetweenBlocks, bottom});
+                    }
+                    auto color = coloring._blocks[std::min(3u, b * 4u / maxVerticalBlocks)];
+                    colors[q+0] = color;
+                    colors[q+1] = color;
+                    colors[q+2] = color;
+                    colors[q+3] = color;
+                    colors[q+4] = color;
+                    colors[q+5] = color;
+                    q+=6;
+                }
+            }
+
+            if (q)
+                context.DrawTriangles(ProjectionMode::P2D, pts, q, colors);
+        } else {
+            // minification horizontally (ie, some entries will be skipped)
+            assert(0);
+        }
+    }
+
+    template void DrawBarChartContents(IOverlayContext& context, const Rect& graphArea, GraphSeries<unsigned> series, unsigned horizontalAllocation);
+    template void DrawBarChartContents(IOverlayContext& context, const Rect& graphArea, GraphSeries<int> series, unsigned horizontalAllocation);
+    template void DrawBarChartContents(IOverlayContext& context, const Rect& graphArea, GraphSeries<float> series, unsigned horizontalAllocation);
+
+    void DrawBarGraph(IOverlayContext& context, const Rect & rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float& minValueHistory, float& maxValueHistory)
+    {
+        std::optional<float> t0 = minValueHistory, t1 = maxValueHistory;
+        DrawBarChartContents(context, rect, GraphSeries<float>{MakeIteratorRange(values, &values[valuesCount]), t0, t1}, maxValuesCount);
+        minValueHistory = t0.value(); maxValueHistory = t1.value();
+    }
+
     void DrawHistoryGraph(IOverlayContext& context, const Rect & rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float& minValueHistory, float& maxValueHistory)
     {
         context.DrawLine(
