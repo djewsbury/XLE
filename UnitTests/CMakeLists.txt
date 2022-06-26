@@ -172,6 +172,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         Interactive/InteractiveTestHelper.cpp
         Interactive/VolumeClipTests.cpp
         Interactive/StraightSkeletonTests.cpp
+        Interactive/BatchAndDefragTests.cpp
         EmbeddedRes.cpp
         RenderCore/Metal/MetalTestHelper.cpp
         ../Tools/ToolsRig/VisualisationGeo.cpp
