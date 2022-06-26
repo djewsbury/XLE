@@ -595,12 +595,12 @@ namespace BufferUploads
 		}
 	}
 
-	void BatchedResources::ActiveDefrag::SetSteps(const SimpleSpanningHeap& sourceHeap, const std::vector<DefragStep>& steps)
+	void BatchedResources::ActiveDefrag::SetSteps(const SpanningHeap<uint32_t>& sourceHeap, const std::vector<DefragStep>& steps)
 	{
 		assert(_steps.empty());      // can't change the steps once they're specified!
 		_steps = steps;
 		_newHeap->_size = sourceHeap.CalculateHeapSize();
-		_newHeap->_heap = SimpleSpanningHeap(_newHeap->_size);
+		_newHeap->_heap = SpanningHeap<uint32_t>{_newHeap->_size};
 
 		#if defined(_DEBUG)
 			for (std::vector<DefragStep>::const_iterator i=_steps.begin(); i!=_steps.end(); ++i) {

@@ -1144,8 +1144,6 @@ namespace PlatformRig { namespace Overlays
         return ProcessInputResult::Passthrough;
     }
 
-
-
         ////////////////////////////////////////////////////////////////////
 
     static const unsigned FramesOfWarmth = 60;
@@ -1202,31 +1200,32 @@ namespace PlatformRig { namespace Overlays
 
                 unsigned lastStart = 0;
                 const bool drawAllocated = true;
-                for (std::vector<unsigned>::const_iterator i2=i->_markers.begin(); (i2+1)<i->_markers.end(); i2+=2) {
-                    unsigned start, end;
-                    if (drawAllocated) {
-                        start = lastStart;
-                        end = *i2;
-                    } else {
-                        start = *i2;
-                        end = *(i2+1);
-                    }
-                    if (start != end) {
-                        float warmth = CalculateWarmth(heapIndex, start, end, drawAllocated);
-                        ColorB col = ColorB::FromNormalized(warmth, 0.f, 1.0f-warmth);
-                        for (unsigned c=0; c<lineHeight; ++c) {
-                            const Coord x = Coord(start*X + heapAllocationDisplay._topLeft[0]);
-                            lines.push_back(AsPixelCoords(Coord2(x, y+c)));
-                            lines.push_back(AsPixelCoords(Coord2(std::max(x+1, Coord(end*X + heapAllocationDisplay._topLeft[0])), y+c)));
-                            lineColors.push_back(col);
-                            lineColors.push_back(col);
+                if (!i->_markers.empty())
+                    for (auto i2=i->_markers.begin(); i2<i->_markers.end()-1; i2+=2) {
+                        unsigned start, end;
+                        if (drawAllocated) {
+                            start = lastStart;
+                            end = *i2;
+                        } else {
+                            start = *i2;
+                            end = *(i2+1);
                         }
+                        if (start != end) {
+                            float warmth = CalculateWarmth(heapIndex, start, end, drawAllocated);
+                            ColorB col = ColorB::FromNormalized(warmth, 0.f, 1.0f-warmth);
+                            for (unsigned c=0; c<lineHeight; ++c) {
+                                const Coord x = Coord(start*X + heapAllocationDisplay._topLeft[0]);
+                                lines.push_back(AsPixelCoords(Coord2(x, y+c)));
+                                lines.push_back(AsPixelCoords(Coord2(std::max(x+1, Coord(end*X + heapAllocationDisplay._topLeft[0])), y+c)));
+                                lineColors.push_back(col);
+                                lineColors.push_back(col);
+                            }
+                        }
+                        lastStart = *(i2+1);
                     }
-                    lastStart = *(i2+1);
-                }
 
-                y += lineHeight;
-            }
+                    y += lineHeight;
+                }
 
             if (!lines.empty()) {
                 context.DrawLines(ProjectionMode::P2D, AsPointer(lines.begin()), (uint32)lines.size(), AsPointer(lineColors.begin()));
@@ -1275,20 +1274,21 @@ namespace PlatformRig { namespace Overlays
         }
 
         unsigned lastStart = 0;
-        for (std::vector<unsigned>::const_iterator i2=_lastFrameMetrics._heaps[heapIndex]._markers.begin(); (i2+1)<_lastFrameMetrics._heaps[heapIndex]._markers.end(); i2+=2) {
-            unsigned spanBegin, spanEnd;
-            if (allocatedMode) {
-                spanBegin = lastStart;
-                spanEnd = *i2;
-            } else {
-                spanBegin = *i2;
-                spanEnd = *(i2+1);
+        if (!_lastFrameMetrics._heaps[heapIndex]._markers.empty())
+            for (auto i2=_lastFrameMetrics._heaps[heapIndex]._markers.begin(); i2<_lastFrameMetrics._heaps[heapIndex]._markers.end()-1; i2+=2) {
+                unsigned spanBegin, spanEnd;
+                if (allocatedMode) {
+                    spanBegin = lastStart;
+                    spanEnd = *i2;
+                } else {
+                    spanBegin = *i2;
+                    spanEnd = *(i2+1);
+                }
+                if (begin == spanBegin && end == spanEnd) {
+                    return true;
+                }
+                lastStart = *(i2+1);
             }
-            if (begin == spanBegin && end == spanEnd) {
-                return true;
-            }
-            lastStart = *(i2+1);
-        }
         return false;
     }
 

@@ -98,7 +98,7 @@ namespace BufferUploads
 			~HeapedResource();
 
 			std::shared_ptr<IResource> _heapResource;
-			SimpleSpanningHeap  _heap;
+			SpanningHeap<uint32_t>  _heap;
 			ReferenceCountingLayer _refCounts;
 			unsigned _size;
 			unsigned _defragCount;
@@ -133,7 +133,7 @@ namespace BufferUploads
 			void                Tick(ThreadContext& context, EventListManager& evntListMan, const std::shared_ptr<IResource>& sourceResource);
 			bool                IsComplete(EventListID processedEventList, ThreadContext& context);
 
-			void                SetSteps(const SimpleSpanningHeap& sourceHeap, const std::vector<DefragStep>& steps);
+			void                SetSteps(const SpanningHeap<uint32_t>& sourceHeap, const std::vector<DefragStep>& steps);
 			void                ReleaseSteps();
 			const std::vector<DefragStep>&  GetSteps() { return _steps; }
 

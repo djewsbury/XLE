@@ -160,7 +160,7 @@ namespace Utility
     public:
         struct QueryResult
         {
-            Type GetExisting();
+            Type& GetExisting();
             void Set(Type&& newValue);
             LRUCacheInsertType GetType() { return _type; }
 
@@ -177,6 +177,7 @@ namespace Utility
 
         struct Record { Type _value; unsigned _decayFrames = 0; };
         std::vector<Record> LogRecords() const;
+        bool UnrecordedTest(uint64_t hashName);        // check if something is cached, without recording the cache (usually for debugging)
 
         FrameByFrameLRUHeap(unsigned cacheSize, unsigned decayGracePeriod = 32);
         ~FrameByFrameLRUHeap();
@@ -264,9 +265,16 @@ namespace Utility
     }
 
     template<typename Type>
-        Type FrameByFrameLRUHeap<Type>::QueryResult::GetExisting()
+        bool FrameByFrameLRUHeap<Type>::UnrecordedTest(uint64_t hashName)
     {
-        assert(_type == LRUCacheInsertType::Update);
+        auto i = std::lower_bound(_lookupTable.begin(), _lookupTable.end(), hashName, CompareFirst<uint64_t, unsigned>());
+        return i != _lookupTable.cend() && i->first == hashName;
+    }
+
+    template<typename Type>
+        Type& FrameByFrameLRUHeap<Type>::QueryResult::GetExisting()
+    {
+        assert(_type == LRUCacheInsertType::Update || _type == LRUCacheInsertType::EvictAndReplace);
         return *_i;
     }
 
@@ -808,7 +816,7 @@ namespace Utility
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    class ReferenceCountingLayer : public MarkerHeap<uint16_t>
+    class ReferenceCountingLayer : public MarkerHeap<uint32_t>
     {
     public:
         std::pair<signed,signed> AddRef(unsigned start, unsigned size, const char name[] = NULL);
@@ -828,7 +836,7 @@ namespace Utility
         ReferenceCountingLayer(size_t size);
         ReferenceCountingLayer(const ReferenceCountingLayer& cloneFrom);
     protected:
-        using Marker = uint16_t;
+        using Marker = uint32_t;
         class Entry
         {
         public:

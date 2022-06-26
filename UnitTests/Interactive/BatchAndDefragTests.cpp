@@ -13,6 +13,8 @@
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
+#include "../../PlatformRig/DebuggingDisplays/BufferUploadDisplay.h"
+#include "../../BufferUploads/BatchedResources.h"
 #include "../../Math/ProjectionMath.h"
 #include "../../Math/Transformations.h"
 #include "../../Math/Geometry.h"
@@ -30,11 +32,14 @@ namespace UnitTests
 	public:
 		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
 
+		static constexpr int s_cameraRadiusCells = 16;
+
 		virtual void Render(
 			RenderCore::Techniques::ParsingContext& parserContext,
 			IInteractiveTestHelper& testHelper) override
 		{
 			Update();
+			AllocateResources();
 
 			using namespace RenderCore;
 			using namespace RenderOverlays;
@@ -60,14 +65,21 @@ namespace UnitTests
 					for (unsigned x=0; x<_gridWidth; ++x) {
 						Rect rect{Coord2{x*scale+translation[0], y*scale+translation[1]}, Coord2{(x+1)*scale+translation[0], (y+1)*scale+translation[1]}};
 						if (rect._topLeft[0] >= viewport[0] || rect._topLeft[1] >= viewport[1] || rect._bottomRight[0] <= 0 || rect._bottomRight[1] <= 0) continue;
-						DebuggingDisplay::DrawText().Alignment(TextAlignment::Center).Draw(
+						auto color = _allocatedResources.UnrecordedTest(uint64_t(y) << 32ull | x) ? ColorB{0x3f, 0x3f, 0xaf} : ColorB{0x3f, 0x3f, 0x3f};
+						DebuggingDisplay::DrawText().Alignment(TextAlignment::Center).Color(color).Draw(
 							*overlayContext, rect,
 							(StringMeldInPlace(buffer) << _gridAllocations[y*_gridWidth+x]/1024).AsStringSection());
 					}
 			}
 
-			const unsigned cameraRadiusCells = 16;
-			DebuggingDisplay::OutlineEllipse(*overlayContext, Rect{Coord2{(_cameraCenter[0]-cameraRadiusCells)*scale+translation[0], (_cameraCenter[1]-cameraRadiusCells)*scale+translation[1]}, Coord2{(_cameraCenter[0]+cameraRadiusCells)*scale+translation[0], (_cameraCenter[1]+cameraRadiusCells)*scale+translation[1]}}, ColorB::Red);
+			DebuggingDisplay::OutlineEllipse(*overlayContext, Rect{Coord2{(_cameraCenter[0]-s_cameraRadiusCells)*scale+translation[0], (_cameraCenter[1]-s_cameraRadiusCells)*scale+translation[1]}, Coord2{(_cameraCenter[0]+s_cameraRadiusCells)*scale+translation[0], (_cameraCenter[1]+s_cameraRadiusCells)*scale+translation[1]}}, ColorB::Red);
+
+			if (_batchingDisplay) {
+				RenderOverlays::DebuggingDisplay::Layout layout{Rect{Coord2{0, 0}, viewport}};
+				RenderOverlays::DebuggingDisplay::Interactables interactables;
+				RenderOverlays::DebuggingDisplay::InterfaceState interfaceState;
+				_batchingDisplay->Render(*overlayContext, layout, interactables, interfaceState);
+			}
 
 			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
 			testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
@@ -98,15 +110,53 @@ namespace UnitTests
 					std::uniform_int_distribution<>(0, _gridHeight-1)(_rng)};
 				_movementSpeed = std::uniform_real_distribution<float>(3.0f, 10.f)(_rng);
 			}
+
+			_allocatedResources.OnFrameBarrier();
+		}
+
+		void AllocateResources()
+		{
+			for (unsigned y=std::max(int(_cameraCenter[1]-s_cameraRadiusCells), 0); y<std::min(unsigned(_cameraCenter[1]+s_cameraRadiusCells), _gridHeight); ++y)
+				for (unsigned x=std::max(int(_cameraCenter[0]-s_cameraRadiusCells), 0); x<std::min(unsigned(_cameraCenter[0]+s_cameraRadiusCells), _gridHeight); ++x) {
+					if (Magnitude(Float2{x-_cameraCenter[0], y-_cameraCenter[1]}) > s_cameraRadiusCells) continue;
+					auto q = _allocatedResources.Query(uint64_t(y) << 32ull | x);
+					// REQUIRE(q.GetType() != LRUCacheInsertType::Fail);
+					if (q.GetType() == LRUCacheInsertType::Fail) continue;			// advancing too fast to let older allocations decay
+					if (q.GetType() == LRUCacheInsertType::Update) continue;		// already good
+
+					if (q.GetType() == LRUCacheInsertType::EvictAndReplace) {
+						auto existing = std::move(q.GetExisting());
+						existing = {};		// release the existing first
+					}
+
+					auto newAllocation = _batchedResources->Allocate(_gridAllocations[y*_gridWidth+x], "");
+					REQUIRE(!newAllocation.IsEmpty());
+					q.Set(std::move(newAllocation));
+				}
+
+			if (!_nextLongTermAllocationCountDown) {
+				// every now and again, allocate a medium size block that we will retain for some time
+				if (_longTermAllocations.size() >= 32) _longTermAllocations.erase(_longTermAllocations.begin());
+				_longTermAllocations.push_back(_batchedResources->Allocate(std::uniform_int_distribution<>(32*1024, 64*1024)(_rng), ""));
+				_nextLongTermAllocationCountDown = std::uniform_int_distribution<>(16, 64)(_rng);
+			} else
+				--_nextLongTermAllocationCountDown;
 		}
 
 		BatchedResourcesDefragOverlay()
 		: _rng{5492559264231}
+		, _allocatedResources(1024)
 		{
 			_gridWidth = _gridHeight = 128;
 			_gridAllocations.reserve(_gridWidth*_gridHeight);
-			for (unsigned c=0; c<_gridWidth*_gridHeight; ++c) _gridAllocations.push_back(std::uniform_int_distribution<>(4*1024, 64*1024)(_rng));
+			for (unsigned c=0; c<_gridWidth*_gridHeight; ++c) {
+				if (std::uniform_int_distribution<>(0, 16)(_rng) == 0) {
+					_gridAllocations.push_back(std::uniform_int_distribution<>(128*1024, 512*1024)(_rng));		// occasional very large allocation
+				} else
+					_gridAllocations.push_back(std::uniform_int_distribution<>(4*1024, 64*1024)(_rng));
+			}
 			_cameraCenter = Float2(_gridWidth/2, _gridHeight/2);
+			_nextLongTermAllocationCountDown = 0;
 		}
 
 		std::vector<unsigned> _gridAllocations;
@@ -116,6 +166,14 @@ namespace UnitTests
 		std::optional<Int2> _cameraTarget;
 		float _movementSpeed = 0.f;
 		std::mt19937_64 _rng;
+
+		std::shared_ptr<BufferUploads::BatchedResources> _batchedResources;
+		FrameByFrameLRUHeap<BufferUploads::ResourceLocator> _allocatedResources;
+
+		std::vector<BufferUploads::ResourceLocator> _longTermAllocations;
+		unsigned _nextLongTermAllocationCountDown;
+
+		std::shared_ptr<PlatformRig::Overlays::BatchingDisplay> _batchingDisplay;
 	};
 
 	TEST_CASE( "BatchedResourcesDefrag", "[math]" )
@@ -135,6 +193,9 @@ namespace UnitTests
 		visCamera._bottom = -100.f;
 
 		auto tester = std::make_shared<BatchedResourcesDefragOverlay>();
+		tester->_batchedResources = std::make_shared<BufferUploads::BatchedResources>(
+			*testHelper->GetDevice(), RenderCore::CreateDesc(BindFlag::VertexBuffer, LinearBufferDesc::Create(1024*1024), "batch-test"));
+		tester->_batchingDisplay = std::make_shared<PlatformRig::Overlays::BatchingDisplay>(tester->_batchedResources);
 		testHelper->Run(visCamera, tester);
 	}
 
