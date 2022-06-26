@@ -18,6 +18,7 @@
 #endif
 
 namespace Assets { class DependencyValidation; }
+namespace Utility { struct RepositionStep; }
 
 namespace BufferUploads
 {
@@ -71,6 +72,8 @@ namespace BufferUploads
 
         virtual TransactionMarker   Transaction_Begin    (const ResourceDesc& desc, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags=0) = 0;
         virtual TransactionMarker   Transaction_Begin    (ResourceLocator destinationResource, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags=0) = 0;
+
+        virtual std::future<CommandListID>   Transaction_Begin    (ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations) = 0;
 
         virtual void            Transaction_Release      (TransactionID id) = 0;
 

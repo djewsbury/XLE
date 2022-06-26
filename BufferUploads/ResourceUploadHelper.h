@@ -11,7 +11,7 @@
 #include "../RenderCore/Metal/Forward.h"        // for GFXAPI_TARGET
 #include <utility>
 
-namespace Utility { class DefragStep; }
+namespace Utility { struct RepositionStep; }
 namespace RenderCore { namespace Metal_Vulkan { class IAsyncTracker; } }
 
 namespace BufferUploads { struct StagingPageMetrics; }
@@ -58,7 +58,10 @@ namespace BufferUploads { namespace PlatformInterface
         unsigned CalculateStagingBufferOffsetAlignment(const RenderCore::ResourceDesc& desc);
 
             ////////   R E S O U R C E   C O P Y   ////////
-        void ResourceCopy_DefragSteps(const std::shared_ptr<RenderCore::IResource>& destination, const std::shared_ptr<RenderCore::IResource>& source, const std::vector<Utility::DefragStep>& steps);
+        void ResourceCopy_DefragSteps(
+            const std::shared_ptr<RenderCore::IResource>& destination,
+            const std::shared_ptr<RenderCore::IResource>& source,
+            const std::vector<Utility::RepositionStep>& steps);
         void ResourceCopy(RenderCore::IResource& destination, RenderCore::IResource& source);
 
             ////////   C O N S T R U C T I O N   ////////

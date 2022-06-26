@@ -215,7 +215,7 @@ namespace BufferUploads
         //////////////////////////////////////////////////////////////////////////////////////////////
 
     ThreadContext::DeferredOperations::DeferredDefragCopy::DeferredDefragCopy(
-		std::shared_ptr<IResource> destination, std::shared_ptr<IResource> source, const std::vector<DefragStep>& steps)
+		std::shared_ptr<IResource> destination, std::shared_ptr<IResource> source, const std::vector<RepositionStep>& steps)
     : _destination(std::move(destination)), _source(std::move(source)), _steps(steps)
     {}
 

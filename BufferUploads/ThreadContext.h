@@ -72,8 +72,8 @@ namespace BufferUploads
         {
             std::shared_ptr<IResource> _destination;
             std::shared_ptr<IResource> _source;
-            std::vector<DefragStep> _steps;
-            DeferredDefragCopy(std::shared_ptr<IResource> destination, std::shared_ptr<IResource> source, const std::vector<DefragStep>& steps);
+            std::vector<RepositionStep> _steps;
+            DeferredDefragCopy(std::shared_ptr<IResource> destination, std::shared_ptr<IResource> source, const std::vector<RepositionStep>& steps);
             ~DeferredDefragCopy();
         };
 

@@ -91,6 +91,7 @@ namespace BufferUploads
         TransactionMarker       Transaction_Begin(ResourceLocator destinationResource, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags);
         TransactionMarker       Transaction_Begin(const std::shared_ptr<IAsyncDataSource>& data, BindFlag::BitField bindFlags, TransactionOptions::BitField flags);
         TransactionMarker       Transaction_Begin(ResourceLocator destinationResource, const std::shared_ptr<IAsyncDataSource>& data, TransactionOptions::BitField flags);
+        std::future<CommandListID>   Transaction_Begin (ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations);
         void                    Transaction_AddRef(TransactionID id);
         void                    Transaction_Release(TransactionID id);
 
@@ -376,6 +377,11 @@ namespace BufferUploads
 
         --transaction->_referenceCount;     // todo -- can't stay like this
         return result;
+    }
+
+    std::future<CommandListID>   AssemblyLine::Transaction_Begin (ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations)
+    {
+        return {};
     }
 
     void AssemblyLine::SystemReleaseTransaction(Transaction* transaction, ThreadContext& context, bool abort)
@@ -1581,6 +1587,7 @@ namespace BufferUploads
         TransactionMarker       Transaction_Begin(ResourceLocator destinationResource, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags) override;
         TransactionMarker       Transaction_Begin(const std::shared_ptr<IAsyncDataSource>& data, BindFlag::BitField bindFlags, TransactionOptions::BitField flags) override;
         TransactionMarker       Transaction_Begin(ResourceLocator destinationResource, const std::shared_ptr<IAsyncDataSource>& data, TransactionOptions::BitField flags) override;
+        std::future<CommandListID>   Transaction_Begin (ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations) override;
         void                    Transaction_Release(TransactionID id) override;
 
         ResourceLocator         Transaction_Immediate(
@@ -1637,6 +1644,11 @@ namespace BufferUploads
     TransactionMarker           Manager::Transaction_Begin(ResourceLocator destinationResource, const std::shared_ptr<IAsyncDataSource>& data, TransactionOptions::BitField flags)
     {
         return _assemblyLine->Transaction_Begin(std::move(destinationResource), data, flags);
+    }
+
+    std::future<CommandListID>   Manager::Transaction_Begin(ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations)
+    {
+        return _assemblyLine->Transaction_Begin(destinationResource, sourceResource, repositionOperations);
     }
 
     ResourceLocator         Manager::GetResource(TransactionID id)

@@ -141,6 +141,8 @@ namespace UnitTests
 				_nextLongTermAllocationCountDown = std::uniform_int_distribution<>(16, 64)(_rng);
 			} else
 				--_nextLongTermAllocationCountDown;
+
+			_batchedResources->Tick();
 		}
 
 		BatchedResourcesDefragOverlay()
@@ -194,7 +196,8 @@ namespace UnitTests
 
 		auto tester = std::make_shared<BatchedResourcesDefragOverlay>();
 		tester->_batchedResources = std::make_shared<BufferUploads::BatchedResources>(
-			*testHelper->GetDevice(), RenderCore::CreateDesc(BindFlag::VertexBuffer, LinearBufferDesc::Create(1024*1024), "batch-test"));
+			*testHelper->GetDevice(), testHelper->GetPrimaryResourcesApparatus()->_bufferUploads,
+			RenderCore::CreateDesc(BindFlag::VertexBuffer|BindFlag::TransferDst|BindFlag::TransferSrc, LinearBufferDesc::Create(1024*1024), "batch-test"));
 		tester->_batchingDisplay = std::make_shared<PlatformRig::Overlays::BatchingDisplay>(tester->_batchedResources);
 		testHelper->Run(visCamera, tester);
 	}

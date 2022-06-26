@@ -47,6 +47,7 @@ namespace UnitTests
 	public:
 		virtual std::shared_ptr<RenderCore::Techniques::DrawingApparatus> GetDrawingApparatus() const override { return _drawingApparatus; }
 		virtual std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus> GetImmediateDrawingApparatus() const override { return _immediateDrawingApparatus; }
+		virtual std::shared_ptr<RenderCore::Techniques::PrimaryResourcesApparatus> GetPrimaryResourcesApparatus() const override { return _primaryResourcesApparatus; }
 		virtual std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> GetLightingEngineApparatus() const override { return _lightingEngineApparatus; }
 		virtual std::shared_ptr<RenderCore::IDevice> GetDevice() const override { return _device; }
 

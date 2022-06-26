@@ -192,7 +192,7 @@ namespace BufferUploads { namespace PlatformInterface
 
     void ResourceUploadHelper::ResourceCopy_DefragSteps(
         const std::shared_ptr<IResource>& destination, const std::shared_ptr<IResource>& source, 
-        const std::vector<DefragStep>& steps)
+        const std::vector<RepositionStep>& steps)
     {
         assert(0);
     }

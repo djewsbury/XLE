@@ -511,7 +511,7 @@ namespace UnitTests
 				}
 
 				SimpleSpanningHeap dupe = heap;
-				dupe.PerformDefrag(dupe.CalculateDefragSteps());
+				dupe.PerformDefrag(dupe.CalculateHeapCompression());
 			}
 
 			for (std::vector<std::pair<unsigned,unsigned>>::iterator i=allocations.begin(); i!=allocations.end(); ++i) {
@@ -529,7 +529,7 @@ namespace UnitTests
 					REQUIRE(abs(int(newSize - (originalSpace-size)))<=16);
 				}
 			}
-			heap.PerformDefrag(heap.CalculateDefragSteps());
+			heap.PerformDefrag(heap.CalculateHeapCompression());
 		}
 
 		SECTION("ReferenceCountingLayer")

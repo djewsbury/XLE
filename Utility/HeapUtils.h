@@ -454,9 +454,8 @@ namespace Utility
         static unsigned    AlignSize(unsigned size);
     };
 
-    class DefragStep
+    struct RepositionStep
     {
-    public:
         unsigned _sourceStart, _sourceEnd;
         unsigned _destination;
     };
@@ -481,14 +480,14 @@ namespace Utility
         unsigned            CalculateLargestFreeBlock() const;
         unsigned            CalculateAllocatedSpace() const;
         unsigned            CalculateHeapSize() const;
-        uint64_t              CalculateHash() const;
+        uint64_t            CalculateHash() const;
         bool                IsEmpty() const;
 
         unsigned            AppendNewBlock(unsigned size);
 
-        std::vector<unsigned>       CalculateMetrics() const;
-        std::vector<DefragStep>     CalculateDefragSteps() const;
-        void                        PerformDefrag(const std::vector<DefragStep>& defrag);
+        std::vector<unsigned>           CalculateMetrics() const;
+        std::vector<RepositionStep>     CalculateHeapCompression() const;
+        void                            PerformDefrag(const std::vector<RepositionStep>& defrag);
 
         std::pair<std::unique_ptr<uint8_t[]>, size_t> Flatten() const;
 
@@ -831,7 +830,7 @@ namespace Utility
         #endif
         bool        ValidateBlock(unsigned start, unsigned size) const;
 
-        void        PerformDefrag(const std::vector<DefragStep>& defrag);
+        void        PerformDefrag(const std::vector<RepositionStep>& defrag);
 
         ReferenceCountingLayer(size_t size);
         ReferenceCountingLayer(const ReferenceCountingLayer& cloneFrom);

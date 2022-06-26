@@ -531,7 +531,7 @@ namespace Utility
         for (; i!=_markers.end();++i) {
             result.push_back(MarkerHeap<Marker>::ToExternalSize(*i));
         }
-        #if defined(XL_DEBUG)
+        #if defined(_DEBUG)
             assert(!_largestFreeBlockValid || _largestFreeBlock==CalculateLargestFreeBlock_Internal());
         #endif
         return result;
@@ -550,18 +550,18 @@ namespace Utility
         return (lhs.second-lhs.first)<(rhs.second-rhs.first);
     }
 
-    static bool SortDefragStep_SourceStart(const DefragStep& lhs, const DefragStep& rhs)
+    static bool SortDefragStep_SourceStart(const RepositionStep& lhs, const RepositionStep& rhs)
     {
         return lhs._sourceStart < rhs._sourceEnd;
     }
 
-    static bool SortDefragStep_Destination(const DefragStep& lhs, const DefragStep& rhs)
+    static bool SortDefragStep_Destination(const RepositionStep& lhs, const RepositionStep& rhs)
     {
         return lhs._destination < rhs._destination;
     }
 
     template <typename Marker>
-        std::vector<DefragStep> SpanningHeap<Marker>::CalculateDefragSteps() const
+        std::vector<RepositionStep> SpanningHeap<Marker>::CalculateHeapCompression() const
     {
         #if defined(_DEBUG)
             std::unique_lock lockTest(_lock, std::try_to_lock);
@@ -591,17 +591,16 @@ namespace Utility
 
         std::sort(allocatedBlocks.begin(), allocatedBlocks.end(), SortAllocatedBlocks_SmallestToLargest<Marker>);
 
-        std::vector<DefragStep> result;
+        std::vector<RepositionStep> result;
         result.reserve(allocatedBlocks.size());
 
         Marker compressedPosition = 0;
         for (auto i=allocatedBlocks.begin(); i!=allocatedBlocks.end(); ++i) {
             assert(i->first < i->second);
-            DefragStep step;
+            RepositionStep step;
             step._sourceStart    = MarkerHeap<Marker>::ToExternalSize(i->first);
             step._sourceEnd      = MarkerHeap<Marker>::ToExternalSize(i->second);
             step._destination    = MarkerHeap<Marker>::ToExternalSize(compressedPosition);
-            assert(step._destination < 512*1024);
             assert((step._destination + step._sourceEnd - step._sourceStart) <= MarkerHeap<Marker>::ToExternalSize(_markers[_markers.size()-1]));
             assert(step._sourceStart < step._sourceEnd);
             compressedPosition += i->second - i->first;
@@ -610,18 +609,11 @@ namespace Utility
 
         std::sort(result.begin(), result.end(), SortDefragStep_SourceStart);
 
-            // check for sane boundary
-        #if defined(XL_DEBUG)
-            for (std::vector<DefragStep>::iterator i=result.begin(); i!=result.end(); ++i) {
-                assert(i->_destination < 512*1024);
-            }
-        #endif
-
         return result;
     }
 
     template <typename Marker>
-        void        SpanningHeap<Marker>::PerformDefrag(const std::vector<DefragStep>& defrag)
+        void        SpanningHeap<Marker>::PerformDefrag(const std::vector<RepositionStep>& defrag)
     {
         #if defined(_DEBUG)
             std::unique_lock lockTest(_lock, std::try_to_lock);
@@ -641,13 +633,13 @@ namespace Utility
         _markers.erase(_markers.begin(), _markers.end());
         _markers.push_back(0);
         if (!defrag.empty()) {
-            std::vector<DefragStep> defragByDestination(defrag);
+            std::vector<RepositionStep> defragByDestination(defrag);
             std::sort(defragByDestination.begin(), defragByDestination.end(), SortDefragStep_Destination);
 
             Marker currentAllocatedBlockBegin    = MarkerHeap<Marker>::ToInternalSize(defragByDestination.begin()->_destination);
             Marker currentAllocatedBlockEnd      = MarkerHeap<Marker>::ToInternalSize(defragByDestination.begin()->_destination + MarkerHeap<Marker>::AlignSize(defragByDestination.begin()->_sourceEnd-defragByDestination.begin()->_sourceStart));
 
-            for (std::vector<DefragStep>::const_iterator i=defragByDestination.begin()+1; i!=defragByDestination.end(); ++i) {
+            for (std::vector<RepositionStep>::const_iterator i=defragByDestination.begin()+1; i!=defragByDestination.end(); ++i) {
                 Marker blockBegin    = MarkerHeap<Marker>::ToInternalSize(i->_destination);
                 Marker blockEnd      = MarkerHeap<Marker>::ToInternalSize(i->_destination+MarkerHeap<Marker>::AlignSize(i->_sourceEnd-i->_sourceStart));
 
@@ -1010,10 +1002,10 @@ namespace Utility
         return result;
     }
 
-    void ReferenceCountingLayer::PerformDefrag(const std::vector<DefragStep>& defrag)
+    void ReferenceCountingLayer::PerformDefrag(const std::vector<RepositionStep>& defrag)
     {
         std::vector<Entry>::iterator entryIterator = _entries.begin();
-        for (   std::vector<DefragStep>::const_iterator s=defrag.begin(); 
+        for (   std::vector<RepositionStep>::const_iterator s=defrag.begin(); 
                 s!=defrag.end() && entryIterator!=_entries.end();) {
             unsigned entryStart  = ToExternalSize(entryIterator->_start);
             unsigned entryEnd    = ToExternalSize(entryIterator->_end);

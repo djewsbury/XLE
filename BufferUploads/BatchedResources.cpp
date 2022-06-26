@@ -22,29 +22,14 @@ namespace BufferUploads
 		{
 			std::unique_lock<decltype(_lock)> lk(_lock);
 			{
-				ScopedLock(_activeDefrag_Lock);  // prevent _activeDefragHeap from changing while doing this...
-												//  (we can't allocate from a heap that is currently being defragged)
-				// for (std::vector<HeapedResource*>::reverse_iterator i=_heaps.rbegin(); i!=_heaps.rend(); ++i) {
-				//     if ((*i) != _activeDefragHeap) {
-				//         assert(!_activeDefrag.get() || _activeDefrag->GetHeap()!=*i);
-				//         unsigned allocation = (*i)->Allocate(size);
-				//         if (allocation != ~unsigned(0x0)) {
-				//             assert((allocation+size)<=PlatformInterface::ByteCount(_prototype));
-				//             return ResourceLocator((*i)->_heapResource, allocation, size);
-				//         }
-				//     }
-				// }
-
 				HeapedResource* bestHeap = NULL;
 				unsigned bestHeapLargestBlock = ~unsigned(0x0);
 				for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i) {
-					if (i->get() != _activeDefragHeap) {
-						assert(!_activeDefrag.get() || _activeDefrag->GetHeap()!=i->get());
-						unsigned largestBlock = (*i)->_heap.CalculateLargestFreeBlock();
-						if (largestBlock >= size && largestBlock < bestHeapLargestBlock) {
-							bestHeap = i->get();
-							bestHeapLargestBlock = largestBlock;
-						}
+					if ((*i)->_lockedForDefrag) continue;
+					unsigned largestBlock = (*i)->_heap.CalculateLargestFreeBlock();
+					if (largestBlock >= size && largestBlock < bestHeapLargestBlock) {
+						bestHeap = i->get();
+						bestHeapLargestBlock = largestBlock;
 					}
 				}
 
@@ -93,22 +78,15 @@ namespace BufferUploads
 	{
 		ScopedReadLock(_lock);
 		HeapedResource* heap = NULL;
-		if (_activeDefrag.get() && _activeDefrag->GetHeap()->_heapResource.get() == &resource) {
-			heap = _activeDefrag->GetHeap();
-		} else {
-			for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i) {
-				if ((*i)->_heapResource.get() == &resource) {
-					heap = i->get();
-					break;
-				}
+		for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i) {
+			if ((*i)->_heapResource.get() == &resource) {
+				heap = i->get();
+				break;
 			}
 		}
 
-		if (heap) {
-			heap->AddRef(offset, size, "<<unknown>>");
-		} else {
-			assert(0);
-		}
+		assert(heap);
+		if (heap) heap->AddRef(offset, size, "<<unknown>>");
 	}
 
 	void BatchedResources::Release(
@@ -117,48 +95,32 @@ namespace BufferUploads
 	{
 		ScopedReadLock(_lock);
 		HeapedResource* heap = NULL;
-		if (_activeDefrag.get() && _activeDefrag->GetHeap()->_heapResource == resource) {
-			heap = _activeDefrag->GetHeap();
-		} else {
-			for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i) {
-				if ((*i)->_heapResource == resource) {
-					heap = i->get();
-					break;
-				}
+		for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i) {
+			if ((*i)->_heapResource == resource) {
+				heap = i->get();
+				break;
 			}
 		}
 
-		if (heap) {
-			if (heap->Deref(offset, size)) {
-				assert(!_activeDefrag.get() || heap != _activeDefrag->GetHeap());
-				if (_activeDefragHeap == heap) {
-					_activeDefrag->QueueOperation(
-						ActiveDefrag::Operation::Deallocate, offset, offset+size);
-				} else {
-					heap->Deallocate(offset, size);
-				}
-				#if defined(_DEBUG)
-					heap->ValidateRefsAndHeap();
-				#endif
-			}
-
-				// (prevent caller from performing extra derefs)
-			resource = nullptr;
+		assert(heap);
+		if (heap && heap->Deref(offset, size)) {
+			heap->Deallocate(offset, size);
+			#if defined(_DEBUG)
+				heap->ValidateRefsAndHeap();
+			#endif
 		}
+
+			// (prevent caller from performing extra derefs)
+		resource = nullptr;
 	}
 
 	BatchedResources::ResultFlags::BitField BatchedResources::IsBatchedResource(
 		IResource* resource) const
 	{
 		ScopedReadLock(_lock);
-		if (_activeDefrag.get() && _activeDefrag->GetHeap()->_heapResource.get() == resource) {
-			return ResultFlags::IsBatched;
-		}
-		for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i) {
-			if ((*i)->_heapResource.get() == resource) {
-				return ResultFlags::IsBatched|(i->get()==_activeDefragHeap?ResultFlags::IsCurrentlyDefragging:0);
-			}
-		}
+		for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i)
+			if ((*i)->_heapResource.get() == resource)
+				return ResultFlags::IsBatched|((*i)->_lockedForDefrag?ResultFlags::IsCurrentlyDefragging:0);
 		return 0;
 	}
 
@@ -175,16 +137,11 @@ namespace BufferUploads
 
 		BatchedResources::ResultFlags::BitField result = 0;
 		const HeapedResource* heapResource = NULL;
-		if (_activeDefrag.get() && _activeDefrag->GetHeap()->_heapResource.get() == locator.GetContainingResource().get()) {
-			heapResource = _activeDefrag->GetHeap();
-		} else {
-			for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i) {
-				if ((*i)->_heapResource.get() == locator.GetContainingResource().get()) {
-					heapResource = i->get();
-					break;
-				}
+		for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i)
+			if ((*i)->_heapResource.get() == locator.GetContainingResource().get()) {
+				heapResource = i->get();
+				break;
 			}
-		}
 		if (heapResource) {
 			result |= BatchedResources::ResultFlags::IsBatched;
 			auto range = locator.GetRangeInContainingResource();
@@ -206,13 +163,9 @@ namespace BufferUploads
 		return result;
 	}
 
-	void BatchedResources::TickDefrag(ThreadContext& context, EventListID processedEventList)
+	void BatchedResources::Tick()
 	{
-		return;
-
 		if (!_activeDefrag.get()) {
-
-			assert(!_activeDefragHeap);
 
 					//                            -                                 //
 					//                         -------                              //
@@ -236,7 +189,7 @@ namespace BufferUploads
 
 			const float minWeightToDoSomething = 20.f * 1024.f;   // only do something when there's a 20k difference between total available space and the largest block
 			float bestWeight = minWeightToDoSomething;
-			HeapedResource* bestHeap = NULL;
+			HeapedResource* bestHeapForCompression = nullptr;
 			{
 				ScopedReadLock(_lock);
 				for (auto i=_heaps.begin(); i!=_heaps.end(); ++i) {
@@ -244,7 +197,7 @@ namespace BufferUploads
 					if (weight > bestWeight && (*i)->_heapResource) {
 							//      if the heap hasn't changed since the last time this heap was used as a defrag source, then there's no use in picking it again
 						if ((*i)->_hashLastDefrag != (*i)->_heap.CalculateHash()) {
-							bestHeap = i->get();
+							bestHeapForCompression = i->get();
 							bestWeight = weight;
 							break;
 						}
@@ -254,35 +207,32 @@ namespace BufferUploads
 
 								//      -=-=-=-=-=-=-=-=-=-=-       //
 
-			if (bestHeap) {
+			if (bestHeapForCompression) {
+				auto compression = bestHeapForCompression->_heap.CalculateHeapCompression();
+				auto newDefrag = std::make_unique<ActiveReposition>(
+					*this, *_bufferUploads.lock(), *bestHeapForCompression, std::move(compression));
+
 				{
-					ScopedLock(_activeDefrag_Lock);  // must lock during the defrag commit & defrag create
-					_activeDefrag = std::make_unique<ActiveDefrag>();
-					_activeDefragHeap = bestHeap;
+					ScopedLock(_lock);  // must lock during the defrag commit & defrag create
+					assert(!_activeDefrag);
+					_activeDefrag = std::move(newDefrag);
+					bestHeapForCompression->_lockedForDefrag = true;
 				}
 
-					// Now that we've set bestHeap->_activeDefrag, bestHeap->_heap is immutable...
-				_activeDefrag->SetSteps(bestHeap->_heap, bestHeap->_heap.CalculateDefragSteps());
-				bestHeap->_hashLastDefrag = bestHeap->_heap.CalculateHash();
-
-					// Copy the resource into our copy buffer, and set the count down
-				if (PlatformInterface::UseMapBasedDefrag && !PlatformInterface::CanDoNooverwriteMapInBackground) {
-					context.GetResourceUploadHelper().ResourceCopy(
-						*_temporaryCopyBuffer, *bestHeap->_heapResource);
-					_temporaryCopyBufferCountDown = 10;
-				}
+				// Now that we've set bestHeap->_lockedForDefrag, bestHeap->_heap is immutable...
+				bestHeapForCompression->_hashLastDefrag = bestHeapForCompression->_heap.CalculateHash();
 
 				#if defined(_DEBUG)
-					unsigned blockCount = bestHeap->_refCounts.GetEntryCount();
+					// Validate that everything recorded in the _refCounts is part of the repositioning
+					unsigned blockCount = bestHeapForCompression->_refCounts.GetEntryCount();
 					for (unsigned b=0; b<blockCount; ++b) {
-						std::pair<unsigned,unsigned> block = bestHeap->_refCounts.GetEntry(b);
+						auto block = bestHeapForCompression->_refCounts.GetEntry(b);
 						bool foundOne = false;
-						for (std::vector<DefragStep>::const_iterator i =_activeDefrag->GetSteps().begin(); i!=_activeDefrag->GetSteps().end(); ++i) {
+						for (auto i =_activeDefrag->GetSteps().begin(); i!=_activeDefrag->GetSteps().end(); ++i)
 							if (block.first >= i->_sourceStart && block.second <= i->_sourceEnd) {
 								foundOne = true;
 								break;
 							}
-						}
 						assert(foundOne);
 					}
 				#endif
@@ -294,63 +244,13 @@ namespace BufferUploads
 				//      Check on the status of the defrag step; and commit to the 
 				//      active resource as necessary
 				//
-			ActiveDefrag* existingActiveDefrag = _activeDefrag.get();
-			if (!existingActiveDefrag->GetHeap()->_heapResource) {
-
-					//////      Try to find a heap that is 100% free. We'll remove        //
-					  //          this from the list, and use it as our new heap        //////
-
-				{
-					ScopedModifyLock(_lock);
-					for (auto i=_heaps.begin(); i!=_heaps.end(); ++i) {
-						if (i->get() != _activeDefragHeap && (*i)->_heap.IsEmpty()) {
-							existingActiveDefrag->GetHeap()->_heapResource = std::move((*i)->_heapResource);
-							_heaps.erase(i);
-							break;
-						}
-					}
-				}
-
-				if (!existingActiveDefrag->GetHeap()->_heapResource) {
-					existingActiveDefrag->GetHeap()->_heapResource = _device->CreateResource(_prototype);
-				}
-
-			} else {
-				
-				if (_temporaryCopyBufferCountDown > 0) {
-					--_temporaryCopyBufferCountDown;
-				} else {
-					const bool useTemporaryCopyBuffer = PlatformInterface::UseMapBasedDefrag && !PlatformInterface::CanDoNooverwriteMapInBackground;
-					existingActiveDefrag->Tick(context, _eventListManager, useTemporaryCopyBuffer?_temporaryCopyBuffer:_activeDefragHeap->_heapResource);
-					if (existingActiveDefrag->IsComplete(processedEventList, context)) {
-
-							//
-							//      Everything should be de-reffed from the original heap.
-							//          Sometimes there appears to be leaks here... We could just leave the old
-							//          heap as part of our list of heaps. It would then just be filled up
-							//          again with future allocations.
-							//
-						// assert(_activeDefragHeap->_refCounts.CalculatedReferencedSpace()==0);        it's ok now
-
-							//
-							//      Signal client which blocks that have moved; and change the 
-							//      _heapResource value of the real heap
-							//
-						_activeDefrag->ReleaseSteps();
-						_activeDefrag->ApplyPendingOperations(*_activeDefragHeap);
-						_activeDefrag->GetHeap()->_defragCount = _activeDefragHeap->_defragCount+1;
-						// assert(_activeDefragHeap->_heap.IsEmpty());      // it's ok now
-
-						ScopedModifyLock(_lock); // lock here to prevent any operations on _activeDefrag->GetHeap() while we do this...
-						_heaps.push_back(_activeDefrag->ReleaseHeap());
-
-						{
-							ScopedLock(_activeDefrag_Lock);
-							_activeDefrag.reset(NULL);
-							_activeDefragHeap = NULL;
-						}
-					}
-				}
+			ActiveReposition* existingActiveDefrag = _activeDefrag.get();
+			existingActiveDefrag->Tick(_eventListManager, *_bufferUploads.lock());
+			if (existingActiveDefrag->IsComplete(_eventListManager._currentEventListProcessedId.load())) {
+				ScopedModifyLock(_lock); // lock here to prevent any operations on _activeDefrag->GetHeap() while we do this...
+				assert(_activeDefrag->GetSourceHeap()->_lockedForDefrag);
+				_activeDefrag->GetSourceHeap()->_lockedForDefrag = false;
+				_activeDefrag = nullptr;
 			}
 		}
 	}
@@ -434,21 +334,21 @@ namespace BufferUploads
         _currentEventListPublishedId = toEvent;
     }
 
-	BatchedResources::BatchedResources(RenderCore::IDevice& device, const ResourceDesc& prototype)
-	:       _prototype(prototype)
-	,       _device(&device)
-	,       _activeDefrag(nullptr)
-	,       _activeDefragHeap(nullptr)
+	BatchedResources::BatchedResources(RenderCore::IDevice& device, std::shared_ptr<IManager>& bufferUploads, const ResourceDesc& prototype)
+	: _prototype(prototype), _device(&device)
+	, _bufferUploads(bufferUploads)
 	{
-		ResourceDesc copyBufferDesc = prototype;
-		copyBufferDesc._allocationRules = RenderCore::AllocationRules::HostVisibleRandomAccess;
-		copyBufferDesc._bindFlags = BindFlag::TransferDst;
+		assert(_prototype._bindFlags & BindFlag::TransferDst);
+		assert(_prototype._bindFlags & BindFlag::TransferSrc);
 
-		_temporaryCopyBuffer = {};
-		_temporaryCopyBufferCountDown = 0;
-		if (PlatformInterface::UseMapBasedDefrag && !PlatformInterface::CanDoNooverwriteMapInBackground) {
-			_temporaryCopyBuffer = _device->CreateResource(copyBufferDesc);
-		}
+		// ResourceDesc copyBufferDesc = prototype;
+		// copyBufferDesc._allocationRules = RenderCore::AllocationRules::HostVisibleRandomAccess;
+		// copyBufferDesc._bindFlags = BindFlag::TransferDst;
+		// _temporaryCopyBuffer = {};
+		// _temporaryCopyBufferCountDown = 0;
+		// if (PlatformInterface::UseMapBasedDefrag && !PlatformInterface::CanDoNooverwriteMapInBackground) {
+		// 	_temporaryCopyBuffer = _device->CreateResource(copyBufferDesc);
+		// }
 
 		_recentDeviceCreateCount = 0;
 		_totalCreateCount = 0;
@@ -517,9 +417,8 @@ namespace BufferUploads
 	{
 		unsigned largestBlock    = _heap.CalculateLargestFreeBlock();
 		unsigned availableSpace  = _heap.CalculateAvailableSpace();
-		if (largestBlock > .5f * availableSpace) {
+		if (largestBlock > .5f * availableSpace)
 			return 0.f;
-		}
 		return float(availableSpace - largestBlock);
 	}
 
@@ -538,7 +437,7 @@ namespace BufferUploads
 	}
 
 	BatchedResources::HeapedResource::HeapedResource()
-	: _size(0), _defragCount(0), _heap(0), _refCounts(0), _hashLastDefrag(0)
+	: _size(0), _heap(0), _refCounts(0), _hashLastDefrag(0)
 	{}
 
 	BatchedResources::HeapedResource::HeapedResource(const ResourceDesc& desc, const std::shared_ptr<IResource>& heapResource)
@@ -546,7 +445,6 @@ namespace BufferUploads
 	, _heap(RenderCore::ByteCount(desc))
 	, _refCounts(RenderCore::ByteCount(desc))
 	, _size(RenderCore::ByteCount(desc))
-	, _defragCount(0)
 	, _hashLastDefrag(0)
 	{}
 
@@ -560,22 +458,12 @@ namespace BufferUploads
 		#endif
 	}
 
-	void BatchedResources::ActiveDefrag::QueueOperation(Operation::Enum operation, unsigned start, unsigned end)
+	void BatchedResources::ActiveReposition::Tick(EventListManager& evntListMan, IManager& bufferUploads)
 	{
-		assert(end>start);
-		PendingOperation op;
-		op._operation = operation;
-		op._start = start;
-		op._end = end;
-		_pendingOperations.push_back(op);
-	}
-
-	void BatchedResources::ActiveDefrag::Tick(ThreadContext& context, EventListManager& evntListMan, const std::shared_ptr<IResource>& sourceResource)
-	{
-		if (!_initialCommandListID) {
-			_initialCommandListID = context.CommandList_GetUnderConstruction();
-		}
-		if (!_steps.empty() && GetHeap()->_heapResource && !_doneResourceCopy) {
+		if (_repositionCmdList.has_value() && _futureRepositionCmdList.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+			_repositionCmdList = _futureRepositionCmdList.get();
+		
+		/*if (!_steps.empty() && GetHeap()->_heapResource && !_doneResourceCopy) {
 				// -----<   Copy from the old resource into the new resource   >----- //
 			if (PlatformInterface::UseMapBasedDefrag && !PlatformInterface::CanDoNooverwriteMapInBackground) {
 				context.GetDeferredOperationsUnderConstruction().Add(
@@ -584,107 +472,50 @@ namespace BufferUploads
 				context.GetResourceUploadHelper().ResourceCopy_DefragSteps(GetHeap()->_heapResource, sourceResource, _steps);
 			}
 			_doneResourceCopy = true;
-		}
+		}*/
 
-		if (_doneResourceCopy && !_eventId && context.CommandList_GetCommittedToImmediate() >= _initialCommandListID) {
+		if (_repositionCmdList && !_eventId.has_value() && bufferUploads.IsComplete(_repositionCmdList.value())) {
+			// publish the changes to encourage the client to move across to the 
 			Event_ResourceReposition result;
-			result._originalResource = sourceResource;
-			result._newResource      = GetHeap()->_heapResource;
-			result._defragSteps      = _steps;
+			result._originalResource = _srcHeap->_heapResource;
+			result._newResource = _dstUberBlock.GetContainingResource();
+			result._defragSteps = _steps;
 			_eventId = evntListMan.EventList_Push(result);
 		}
 	}
 
-	void BatchedResources::ActiveDefrag::SetSteps(const SpanningHeap<uint32_t>& sourceHeap, const std::vector<DefragStep>& steps)
+	bool BatchedResources::ActiveReposition::IsComplete(EventListID processedEventList)
 	{
-		assert(_steps.empty());      // can't change the steps once they're specified!
-		_steps = steps;
-		_newHeap->_size = sourceHeap.CalculateHeapSize();
-		_newHeap->_heap = SpanningHeap<uint32_t>{_newHeap->_size};
-
-		#if defined(_DEBUG)
-			for (std::vector<DefragStep>::const_iterator i=_steps.begin(); i!=_steps.end(); ++i) {
-				unsigned end = i->_destination + i->_sourceEnd - i->_sourceStart;
-				assert(end<=_newHeap->_size);
-			}
-		#endif
+		return _eventId.has_value() && (processedEventList >= _eventId.value());
 	}
 
-	void BatchedResources::ActiveDefrag::ReleaseSteps()
+	BatchedResources::ActiveReposition::ActiveReposition(
+		BatchedResources& resourceSystem,
+		IManager& bufferUploads,
+		HeapedResource& srcHeap,
+		std::vector<RepositionStep>&& steps)
+	: _srcHeap(&srcHeap), _steps(std::move(steps))
 	{
-		_steps.clear();
-	}
-
-	void BatchedResources::ActiveDefrag::ApplyPendingOperations(HeapedResource& destination)
-	{
-		if (_pendingOperations.empty()) {
-			return;
+		size_t dstSizeRequired = 0;
+		for (const auto& s:_steps) {
+			assert(s._sourceEnd > s._sourceStart);
+			dstSizeRequired = std::max(dstSizeRequired, size_t(s._destination + s._sourceEnd - s._sourceStart));
 		}
+		assert(dstSizeRequired);
+		_dstUberBlock = resourceSystem.Allocate(dstSizeRequired, "reposition-uber-block");
+		assert(!_dstUberBlock.IsEmpty());
+		if (!_dstUberBlock.IsWholeResource())
+			for (auto& s:_steps)
+				s._destination += _dstUberBlock.GetRangeInContainingResource().first;
 
-		for (std::vector<ActiveDefrag::PendingOperation>::iterator deallocateIterator = _pendingOperations.begin(); deallocateIterator != _pendingOperations.end(); ++deallocateIterator) {
-			destination.Deallocate(deallocateIterator->_start, deallocateIterator->_end-deallocateIterator->_start);
-		}
-
-		assert(0);
-		#if 0
-			std::sort(_pendingOperations.begin(), _pendingOperations.end(), SortByPosition);
-			std::vector<ActiveDefrag::PendingOperation>::iterator deallocateIterator = _pendingOperations.begin();
-			for (std::vector<DefragStep>::const_iterator s=_steps.begin(); s!=_steps.end() && deallocateIterator!=_pendingOperations.end();) {
-				if (s->_sourceEnd <= deallocateIterator->_start) {
-					++s;
-					continue;
-				}
-
-				if (s->_sourceStart >= (deallocateIterator->_end)) {
-						//      This deallocate iterator doesn't have an adjustment
-					++deallocateIterator;
-					continue;
-				}
-
-					//
-					//      We shouldn't have any blocks that are stretched between multiple 
-					//      steps. If we've got a match it must match the entire deallocation block
-					//
-				assert(deallocateIterator->_start >= s->_sourceStart && deallocateIterator->_start < s->_sourceEnd);
-				assert((deallocateIterator->_end) > s->_sourceStart && (deallocateIterator->_end) <= s->_sourceEnd);
-
-				signed offset = s->_destination - signed(s->_sourceStart);
-				deallocateIterator->_start += offset;
-				++deallocateIterator;
-			}
-
-				//
-				//      Now just deallocate those blocks... But note we've just done a defrag pass, so this
-				//      will just create new gaps!
-				//
-			for (deallocateIterator = _pendingOperations.begin(); deallocateIterator != _pendingOperations.end(); ++deallocateIterator) {
-				GetHeap()->Deallocate(deallocateIterator->_start, deallocateIterator->_end-deallocateIterator->_start);
-			}
-		#endif
+		_futureRepositionCmdList = bufferUploads.Transaction_Begin(
+			srcHeap._heapResource,
+			_dstUberBlock.GetContainingResource(),
+			_steps);
+		if (!_futureRepositionCmdList.valid())
+			Throw(std::runtime_error("Failed while queuing reposition transaction"));
 	}
 
-	bool BatchedResources::ActiveDefrag::IsComplete(EventListID processedEventList, ThreadContext& context)
-	{
-		return  GetHeap()->_heapResource && _doneResourceCopy && (processedEventList >= _eventId);
-	}
-
-	auto BatchedResources::ActiveDefrag::ReleaseHeap() -> std::unique_ptr<HeapedResource>&&
-	{
-		return std::move(_newHeap);
-	}
-
-	BatchedResources::ActiveDefrag::ActiveDefrag()
-	: _doneResourceCopy(false), _eventId(0)
-	, _newHeap(std::make_unique<HeapedResource>())
-	, _initialCommandListID(0)
-	{
-	}
-
-	BatchedResources::ActiveDefrag::~ActiveDefrag()
-	{
-		ReleaseSteps();
-	}
-
-	bool BatchedResources::ActiveDefrag::SortByPosition(const PendingOperation& lhs, const PendingOperation& rhs) { return lhs._start < rhs._start; }
+	BatchedResources::ActiveReposition::~ActiveReposition() {}
 
 }

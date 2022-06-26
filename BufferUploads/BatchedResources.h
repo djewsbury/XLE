@@ -20,7 +20,7 @@ namespace BufferUploads
 		std::shared_ptr<IResource> _newResource;
 		std::shared_ptr<IResourcePool> _pool;
 		uint64_t _poolMarker;
-		std::vector<Utility::DefragStep> _defragSteps;
+		std::vector<Utility::RepositionStep> _defragSteps;
 	};
 	using EventListID = uint32_t;
 
@@ -65,7 +65,7 @@ namespace BufferUploads
 		BatchingSystemMetrics   CalculateMetrics() const;
 		const ResourceDesc&     GetPrototype() const { return _prototype; }
 
-		void                    TickDefrag(ThreadContext& deviceContext, EventListID processedEventList);
+		void                    Tick();
 
 		//////////// event lists //////////////
 		void          EventList_Get(EventListID id, Event_ResourceReposition*& begin, Event_ResourceReposition*& end);
@@ -76,7 +76,7 @@ namespace BufferUploads
 		EventListID   EventList_GetProcessedID() const;
 		///////////////////////////////////////
 
-		BatchedResources(RenderCore::IDevice& device, const ResourceDesc& prototype);
+		BatchedResources(RenderCore::IDevice&, std::shared_ptr<IManager>&, const ResourceDesc& prototype);
 		~BatchedResources();
 	private:
 		class HeapedResource
@@ -101,8 +101,8 @@ namespace BufferUploads
 			SpanningHeap<uint32_t>  _heap;
 			ReferenceCountingLayer _refCounts;
 			unsigned _size;
-			unsigned _defragCount;
 			uint64_t _hashLastDefrag;
+			bool _lockedForDefrag = false;
 		};
 
 		struct EventListManager
@@ -123,52 +123,41 @@ namespace BufferUploads
 			void EventList_Publish(EventListID toEvent);
 		};
 
-		class ActiveDefrag
+		class ActiveReposition
 		{
 		public:
-			struct Operation  { enum Enum { Deallocate }; };
-			void                QueueOperation(Operation::Enum operation, unsigned start, unsigned end);
-			void                ApplyPendingOperations(HeapedResource& destination);
+			void	Tick(EventListManager& evntListMan, IManager& bufferUploads);
+			bool	IsComplete(EventListID processedEventList);
 
-			void                Tick(ThreadContext& context, EventListManager& evntListMan, const std::shared_ptr<IResource>& sourceResource);
-			bool                IsComplete(EventListID processedEventList, ThreadContext& context);
+			HeapedResource*     GetSourceHeap() { return _srcHeap; }
+			IteratorRange<const RepositionStep*> GetSteps() const { return _steps; }
 
-			void                SetSteps(const SpanningHeap<uint32_t>& sourceHeap, const std::vector<DefragStep>& steps);
-			void                ReleaseSteps();
-			const std::vector<DefragStep>&  GetSteps() { return _steps; }
-
-			HeapedResource*     GetHeap() { return _newHeap.get(); }
-			std::unique_ptr<HeapedResource>&&    ReleaseHeap();
-
-			ActiveDefrag();
-			~ActiveDefrag();
-
+			ActiveReposition(
+				BatchedResources& resourceSystem,
+				IManager& bufferUploads,
+				HeapedResource& srcHeap,
+				std::vector<RepositionStep>&& steps);
+			~ActiveReposition();
 		private:
-			struct PendingOperation { unsigned _start, _end; Operation::Enum _operation; };
-			std::vector<PendingOperation>   _pendingOperations;
-
-			bool                            _doneResourceCopy;
-			EventListID           _eventId;
-			std::unique_ptr<HeapedResource>   _newHeap;
-			std::vector<DefragStep>         _steps;
-
-			CommandListID _initialCommandListID;
-
-			static bool SortByPosition(const PendingOperation& lhs, const PendingOperation& rhs);
+			std::optional<EventListID>			_eventId;
+			ResourceLocator						_dstUberBlock;
+			HeapedResource*						_srcHeap;
+			std::vector<RepositionStep>			_steps;
+			std::future<CommandListID>			_futureRepositionCmdList;
+			std::optional<CommandListID>		_repositionCmdList;
 		};
 
 		std::vector<std::unique_ptr<HeapedResource>> _heaps;
 		ResourceDesc _prototype;
 		RenderCore::IDevice* _device;
 		mutable Threading::ReadWriteMutex _lock;
+		std::weak_ptr<IManager> _bufferUploads;
 
 			//  Active defrag stuff...
-		std::unique_ptr<ActiveDefrag> _activeDefrag;
-		Threading::Mutex _activeDefrag_Lock;
-		HeapedResource* _activeDefragHeap;
+		std::unique_ptr<ActiveReposition> _activeDefrag;
 
-		std::shared_ptr<IResource> _temporaryCopyBuffer;
-		unsigned _temporaryCopyBufferCountDown;
+		// std::shared_ptr<IResource> _temporaryCopyBuffer;
+		// unsigned _temporaryCopyBufferCountDown;
 
 		mutable std::atomic<unsigned>   _recentDeviceCreateCount;
 		std::atomic<size_t>             _totalCreateCount;
