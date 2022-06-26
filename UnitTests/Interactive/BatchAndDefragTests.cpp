@@ -27,6 +27,24 @@ using namespace Catch::literals;
 using namespace std::chrono_literals;
 namespace UnitTests
 {
+	static void RepositionLocator(BufferUploads::ResourceLocator& locator, const std::shared_ptr<RenderCore::IResource>& newResource, IteratorRange<const RepositionStep*> repositionSteps)
+	{
+		assert(!locator.IsWholeResource());
+		auto range = locator.GetRangeInContainingResource();
+		for (auto& s:repositionSteps) {
+			if (range.second <= s._sourceStart || range.first >= s._sourceEnd) continue;
+			auto newStart = range.first - s._sourceStart + s._destination;
+				// if you hit this, it means the repositioning step only covers part of the allocated resource
+			assert((newStart + range.second - range.first) <= (s._destination + s._sourceEnd - s._sourceStart));
+			locator = BufferUploads::ResourceLocator{
+				newResource,
+				newStart, range.second-range.first,
+				locator.GetPool(), ~0ull};
+			return;
+		}
+		assert(0);
+	}
+
 	class BatchedResourcesDefragOverlay : public IInteractiveTestOverlay
 	{
 	public:
@@ -44,8 +62,10 @@ namespace UnitTests
 				static BufferUploads::EventListID lastProcessed = ~0u;
 				auto evnt = _batchedResources->EventList_GetPublishedID();
 				if (evnt != lastProcessed) {
-					BufferUploads::Event_ResourceReposition* begin, *end;
-					_batchedResources->EventList_Get(evnt, begin, end);
+					for (auto e:_batchedResources->EventList_Get(evnt))
+						for (auto& o:_allocatedResources.GetRawObjects())
+							if (o.GetContainingResource().get() == e._originalResource.get())
+								RepositionLocator(o, e._newResource, e._defragSteps);
 					_batchedResources->EventList_Release(evnt);
 					lastProcessed = evnt;
 				}

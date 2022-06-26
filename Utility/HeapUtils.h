@@ -178,6 +178,8 @@ namespace Utility
         struct Record { Type _value; unsigned _decayFrames = 0; };
         std::vector<Record> LogRecords() const;
         bool UnrecordedTest(uint64_t hashName);        // check if something is cached, without recording the cache (usually for debugging)
+        IteratorRange<Type*> GetRawObjects() { return MakeIteratorRange(_objects); }
+        IteratorRange<const Type*> GetRawObjects() const { return _objects; }
 
         FrameByFrameLRUHeap(unsigned cacheSize, unsigned decayGracePeriod = 32);
         ~FrameByFrameLRUHeap();

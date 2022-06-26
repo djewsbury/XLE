@@ -68,7 +68,7 @@ namespace BufferUploads
 		void                    Tick();
 
 		//////////// event lists //////////////
-		void          EventList_Get(EventListID id, Event_ResourceReposition*& begin, Event_ResourceReposition*& end);
+		IteratorRange<const Event_ResourceReposition*>	EventList_Get(EventListID id);
 		void          EventList_Release(EventListID id);
 
 		EventListID   EventList_GetWrittenID() const;
@@ -87,7 +87,6 @@ namespace BufferUploads
 			void                Deallocate(unsigned ptr, unsigned size);
 
 			bool                AddRef(unsigned ptr, unsigned size, const char name[]);
-			bool                Deref(unsigned ptr, unsigned size);
 			
 			BatchedHeapMetrics  CalculateMetrics() const;
 			float               CalculateFragmentationWeight() const;
@@ -102,7 +101,7 @@ namespace BufferUploads
 			ReferenceCountingLayer _refCounts;
 			unsigned _size;
 			uint64_t _hashLastDefrag;
-			bool _lockedForDefrag = false;
+			std::atomic<bool> _lockedForDefrag = false;
 		};
 
 		struct EventListManager

@@ -103,11 +103,52 @@ namespace BufferUploads
 		}
 
 		assert(heap);
-		if (heap && heap->Deref(offset, size)) {
-			heap->Deallocate(offset, size);
+		if (heap) {
+			std::pair<signed,signed> newRefCounts = heap->_refCounts.Release(offset, size);
+			assert(newRefCounts.first >= 0 && newRefCounts.second >= 0);
+			if (newRefCounts.first == 0) {
+				if (newRefCounts.second == 0) {
+					// Simple case -- entire block dealloced
+					heap->Deallocate(offset, size);
+				} else {
+					// Complex case -- some parts were left behind. We need to check what
+					// parts of the block are still have references, and what were released
+					// This should only happen when releasing the "uberblock" after a defrag
+					// operation -- because that is an umbrella for many smaller blocks, and
+					// some of those smaller blocks can be released before the defrag is fully
+					// complete
+					auto entryCount = heap->_refCounts.GetEntryCount();
+					auto i = 0;
+					while (i < entryCount) {
+						auto e = heap->_refCounts.GetEntry(i);
+						if ((e.first+e.second) > offset)
+							break;
+						++i;
+					}
+					unsigned start = offset, end = offset+size;
+					while (i != entryCount && heap->_refCounts.GetEntry(i).first < end) {
+						auto e = heap->_refCounts.GetEntry(i);
+						unsigned allocatedPartsStart = e.first;
+						if (allocatedPartsStart > start) heap->Deallocate(start, std::min(allocatedPartsStart, end)-start);
+						start = e.first+e.second;		// This is the first point were we're possibly unallocated
+						++i;
+					}
+					if (start < end) heap->Deallocate(start, end-start);	// last little bit
+				}
+			}
 			#if defined(_DEBUG)
 				heap->ValidateRefsAndHeap();
 			#endif
+
+			if (heap->_heap.IsEmpty()) {
+				// If we get down to completely empty, just remove and the page entirely. This can happen frequently
+				// after heap compression
+				for (auto i=_heaps.begin(); i!=_heaps.end(); ++i)
+					if (i->get() == heap) {
+						_heaps.erase(i);
+						break;
+					}
+			}
 		}
 
 			// (prevent caller from performing extra derefs)
@@ -208,7 +249,12 @@ namespace BufferUploads
 								//      -=-=-=-=-=-=-=-=-=-=-       //
 
 			if (bestHeapForCompression) {
+				auto oldLocked = bestHeapForCompression->_lockedForDefrag.exchange(true);
+				assert(!oldLocked);
+
+				// Now that we've set bestHeap->_lockedForDefrag, bestHeap->_heap is immutable...
 				auto compression = bestHeapForCompression->_heap.CalculateHeapCompression();
+				bestHeapForCompression->_hashLastDefrag = bestHeapForCompression->_heap.CalculateHash();
 				auto newDefrag = std::make_unique<ActiveReposition>(
 					*this, *_bufferUploads.lock(), *bestHeapForCompression, std::move(compression));
 
@@ -216,11 +262,7 @@ namespace BufferUploads
 					ScopedLock(_lock);  // must lock during the defrag commit & defrag create
 					assert(!_activeDefrag);
 					_activeDefrag = std::move(newDefrag);
-					bestHeapForCompression->_lockedForDefrag = true;
 				}
-
-				// Now that we've set bestHeap->_lockedForDefrag, bestHeap->_heap is immutable...
-				bestHeapForCompression->_hashLastDefrag = bestHeapForCompression->_heap.CalculateHash();
 
 				#if defined(_DEBUG)
 					// Validate that everything recorded in the _refCounts is part of the repositioning
@@ -247,91 +289,80 @@ namespace BufferUploads
 			ActiveReposition* existingActiveDefrag = _activeDefrag.get();
 			existingActiveDefrag->Tick(_eventListManager, *_bufferUploads.lock());
 			if (existingActiveDefrag->IsComplete(_eventListManager._currentEventListProcessedId.load())) {
-				assert(_activeDefrag->GetSourceHeap()->_lockedForDefrag);
-				_activeDefrag->GetSourceHeap()->_lockedForDefrag = false;
+				auto* sourceHeap = _activeDefrag->GetSourceHeap();
 				_activeDefrag->Clear();
+				auto oldLocked = sourceHeap->_lockedForDefrag.exchange(false);
+				assert(oldLocked);
 				ScopedModifyLock(_lock); // lock here to prevent any operations on _activeDefrag->GetHeap() while we do this...
 				_activeDefrag = nullptr;
 			}
 		}
 	}
 
-    EventListID   BatchedResources::EventList_GetWrittenID() const
-    {
-        return _eventListManager._currentEventListId;
-    }
+	EventListID   BatchedResources::EventList_GetWrittenID() const { return _eventListManager._currentEventListId; }
+	EventListID   BatchedResources::EventList_GetPublishedID() const { return _eventListManager._currentEventListPublishedId; }
+	EventListID   BatchedResources::EventList_GetProcessedID() const { return _eventListManager._currentEventListProcessedId; }
 
-    EventListID   BatchedResources::EventList_GetPublishedID() const
-    {
-        return _eventListManager._currentEventListPublishedId;
-    }
+	IteratorRange<const Event_ResourceReposition*> BatchedResources::EventList_Get(EventListID id)
+	{
+		if (!id) return {};
+		for (unsigned c=0; c<dimof(_eventListManager._eventBuffers); ++c) {
+			if (_eventListManager._eventBuffers[c]._id == id) {
+				++_eventListManager._eventBuffers[c]._clientReferences;
+					//  have to check again after the increment... because the client references value acts
+					//  as a lock.
+				if (_eventListManager._eventBuffers[c]._id == id) {
+					return {&_eventListManager._eventBuffers[c]._evnt, &_eventListManager._eventBuffers[c]._evnt+1};
+				} else {
+					--_eventListManager._eventBuffers[c]._clientReferences;
+						// in this case, the event has just be freshly overwritten
+				}
+				return {};
+			}
+		}
+		return {};
+	}
 
-    EventListID   BatchedResources::EventList_GetProcessedID() const
-    {
-        return _eventListManager._currentEventListProcessedId;
-    }
-
-    void                    BatchedResources::EventList_Get(EventListID id, Event_ResourceReposition*& begin, Event_ResourceReposition*& end)
-    {
-        begin = end = nullptr;
-        if (!id) return;
-        for (unsigned c=0; c<dimof(_eventListManager._eventBuffers); ++c) {
-            if (_eventListManager._eventBuffers[c]._id == id) {
-                ++_eventListManager._eventBuffers[c]._clientReferences;
-                    //  have to check again after the increment... because the client references value acts
-                    //  as a lock.
-                if (_eventListManager._eventBuffers[c]._id == id) {
-                    begin = &_eventListManager._eventBuffers[c]._evnt;
-                    end = begin+1;
-                } else {
-                    --_eventListManager._eventBuffers[c]._clientReferences;
-                        // in this case, the event has just be freshly overwritten
-                }
-                return;
-            }
-        }
-    }
-
-    void                    BatchedResources::EventList_Release(EventListID id)
-    {
-        if (!id) return;
-        for (unsigned c=0; c<dimof(_eventListManager._eventBuffers); ++c) {
-            if (_eventListManager._eventBuffers[c]._id == id) {
-                auto newValue = --_eventListManager._eventBuffers[c]._clientReferences;
-                assert(signed(newValue) >= 0);
-                    
+	void                    BatchedResources::EventList_Release(EventListID id)
+	{
+		if (!id) return;
+		for (unsigned c=0; c<dimof(_eventListManager._eventBuffers); ++c) {
+			if (_eventListManager._eventBuffers[c]._id == id) {
+				auto newValue = --_eventListManager._eventBuffers[c]._clientReferences;
+				assert(signed(newValue) >= 0);
+					
 				for (;;) {      // lock-free max...
 					auto originalProcessedId = _eventListManager._currentEventListProcessedId.load();
 					auto newProcessedId = std::max(originalProcessedId, (EventListID)_eventListManager._eventBuffers[c]._id);
 					if (_eventListManager._currentEventListProcessedId.compare_exchange_strong(originalProcessedId, newProcessedId))
 						break;
 				}
-                return;
-            }
-        }
-    }
+				return;
+			}
+		}
+	}
 
-    EventListID   BatchedResources::EventListManager::EventList_Push(const Event_ResourceReposition& evnt)
-    {
-            //
-            //      try to push this event into the small queue... but don't overwrite anything that
-            //      currently has a client reference on it.
-            //
-        if (!_eventBuffers[_eventListWritingIndex]._clientReferences.load()) {
-            EventListID id = ++_currentEventListId;
-            _eventBuffers[_eventListWritingIndex]._id = id;
-            _eventBuffers[_eventListWritingIndex]._evnt = evnt;
-            _eventListWritingIndex = (_eventListWritingIndex+1)%dimof(_eventBuffers);   // single writing thread, so it's ok
-            return id;
-        }
-        assert(0);
-        return ~EventListID(0x0);
-    }
+	EventListID   BatchedResources::EventListManager::EventList_Push(const Event_ResourceReposition& evnt)
+	{
+			//
+			//      try to push this event into the small queue... but don't overwrite anything that
+			//      currently has a client reference on it.
+			//
+		if (!_eventBuffers[_eventListWritingIndex]._clientReferences.load()) {
+			EventListID id = ++_currentEventListId;
+			_eventBuffers[_eventListWritingIndex]._id = id;
+			_eventBuffers[_eventListWritingIndex]._evnt = evnt;
+			_eventListWritingIndex = (_eventListWritingIndex+1)%dimof(_eventBuffers);   // single writing thread, so it's ok
+			return id;
+		}
+		assert(0);
+		return ~EventListID(0x0);
+	}
 
-    void BatchedResources::EventListManager::EventList_Publish(EventListID toEvent)
-    {
-        _currentEventListPublishedId = toEvent;
-    }
+	void BatchedResources::EventListManager::EventList_Publish(EventListID toEvent)
+	{
+		_currentEventListPublishedId = toEvent;
+	}
 
 	BatchedResources::BatchedResources(RenderCore::IDevice& device, std::shared_ptr<IManager>& bufferUploads, const ResourceDesc& prototype)
 	: _prototype(prototype), _device(&device)
@@ -339,16 +370,6 @@ namespace BufferUploads
 	{
 		assert(_prototype._bindFlags & BindFlag::TransferDst);
 		assert(_prototype._bindFlags & BindFlag::TransferSrc);
-
-		// ResourceDesc copyBufferDesc = prototype;
-		// copyBufferDesc._allocationRules = RenderCore::AllocationRules::HostVisibleRandomAccess;
-		// copyBufferDesc._bindFlags = BindFlag::TransferDst;
-		// _temporaryCopyBuffer = {};
-		// _temporaryCopyBufferCountDown = 0;
-		// if (PlatformInterface::UseMapBasedDefrag && !PlatformInterface::CanDoNooverwriteMapInBackground) {
-		// 	_temporaryCopyBuffer = _device->CreateResource(copyBufferDesc);
-		// }
-
 		_recentDeviceCreateCount = 0;
 		_totalCreateCount = 0;
 	}
@@ -368,14 +389,6 @@ namespace BufferUploads
 		assert(newRefCounts.first >= 0 && newRefCounts.second >= 0);
 		assert(newRefCounts.first == newRefCounts.second);
 		return newRefCounts.second==1;
-	}
-	
-	bool        BatchedResources::HeapedResource::Deref(unsigned ptr, unsigned size)
-	{
-		std::pair<signed,signed> newRefCounts = _refCounts.Release(ptr, size);
-		assert(newRefCounts.first >= 0 && newRefCounts.second >= 0);
-		assert(newRefCounts.first == newRefCounts.second);
-		return newRefCounts.second==0;
 	}
 
 	void    BatchedResources::HeapedResource::Allocate(unsigned ptr, unsigned size)
@@ -462,17 +475,6 @@ namespace BufferUploads
 		if (!_repositionCmdList.has_value() && _futureRepositionCmdList.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
 			_repositionCmdList = _futureRepositionCmdList.get();
 		
-		/*if (!_steps.empty() && GetHeap()->_heapResource && !_doneResourceCopy) {
-				// -----<   Copy from the old resource into the new resource   >----- //
-			if (PlatformInterface::UseMapBasedDefrag && !PlatformInterface::CanDoNooverwriteMapInBackground) {
-				context.GetDeferredOperationsUnderConstruction().Add(
-					ThreadContext::DeferredOperations::DeferredDefragCopy(GetHeap()->_heapResource, sourceResource, _steps));
-			} else {
-				context.GetResourceUploadHelper().ResourceCopy_DefragSteps(GetHeap()->_heapResource, sourceResource, _steps);
-			}
-			_doneResourceCopy = true;
-		}*/
-
 		if (_repositionCmdList && !_eventId.has_value() && bufferUploads.IsComplete(_repositionCmdList.value())) {
 			// publish the changes to encourage the client to move across to the 
 			Event_ResourceReposition result;
