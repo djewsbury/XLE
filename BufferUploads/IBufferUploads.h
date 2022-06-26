@@ -172,7 +172,7 @@ namespace BufferUploads
 
         CommandListID GetCompletionCommandList() const { return _completionCommandList; }
 
-        ResourceLocator MakeSubLocator(size_t offset, size_t size);
+        ResourceLocator MakeSubLocator(size_t offset, size_t size) const;
 
         bool IsEmpty() const { return _resource == nullptr; }
         bool IsWholeResource() const;

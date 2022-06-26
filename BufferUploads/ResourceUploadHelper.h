@@ -58,11 +58,11 @@ namespace BufferUploads { namespace PlatformInterface
         unsigned CalculateStagingBufferOffsetAlignment(const RenderCore::ResourceDesc& desc);
 
             ////////   R E S O U R C E   C O P Y   ////////
-        void ResourceCopy_DefragSteps(
-            const std::shared_ptr<RenderCore::IResource>& destination,
-            const std::shared_ptr<RenderCore::IResource>& source,
-            const std::vector<Utility::RepositionStep>& steps);
-        void ResourceCopy(RenderCore::IResource& destination, RenderCore::IResource& source);
+        void DeviceBasedCopy(
+            RenderCore::IResource& destination,
+            RenderCore::IResource& source,
+            IteratorRange<const Utility::RepositionStep*> steps);
+        void DeviceBasedCopy(RenderCore::IResource& destination, RenderCore::IResource& source);
 
             ////////   C O N S T R U C T I O N   ////////
         ResourceUploadHelper(RenderCore::IThreadContext& renderCoreContext);

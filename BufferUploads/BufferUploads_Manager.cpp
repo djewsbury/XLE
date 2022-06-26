@@ -100,7 +100,6 @@ namespace BufferUploads
                                     const ResourceDesc& desc, IDataPacket& data);
 
         void                Process(unsigned stepMask, ThreadContext& context, LockFreeFixedSizeQueue<unsigned, 4>& pendingFramePriorityCommandLists);
-        ResourceLocator     GetResource(TransactionID id);
 
         void                Resource_Release(ResourceLocator& locator);
         void                Resource_AddRef(const ResourceLocator& locator);
@@ -142,14 +141,13 @@ namespace BufferUploads
         SimpleSpanningHeap          _transactionsHeap;
 
         Threading::Mutex        _transactionsLock;
-        Threading::Mutex        _transactionsRepositionLock;
         std::atomic<unsigned>   _allocatedTransactionCount;
 
         RenderCore::IDevice*    _device;
 
         Transaction*            GetTransaction(TransactionID id);
         TransactionID           AllocateTransaction(TransactionOptions::BitField flags);
-        void                    ApplyRepositionEvent(ThreadContext& context, unsigned id);
+        void                    ApplyRepositions(const ResourceLocator& dst, IResource& src, IteratorRange<const RepositionStep*> steps);
 
         std::atomic<unsigned>   _currentQueuedBytes[(unsigned)UploadDataType::Max];
         unsigned                _nextTransactionIdTopPart;
@@ -379,9 +377,38 @@ namespace BufferUploads
         return result;
     }
 
-    std::future<CommandListID>   AssemblyLine::Transaction_Begin (ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations)
+    std::future<CommandListID>   AssemblyLine::Transaction_Begin (ResourceLocator dst, ResourceLocator src, IteratorRange<const Utility::RepositionStep*> repositionOperations)
     {
-        return {};
+        struct Helper
+        {
+            std::vector<Utility::RepositionStep> _steps;
+            ResourceLocator _dst, _src;
+            std::promise<CommandListID> _promise;
+        };
+        auto helper = std::make_shared<Helper>();
+        helper->_steps = {repositionOperations.begin(), repositionOperations.end()};
+        helper->_dst = std::move(dst);
+        helper->_src = std::move(src);
+
+        auto result = helper->_promise.get_future();
+        assert(dst.IsWholeResource() && src.IsWholeResource());
+        
+        _queuedFunctions.push_overflow(
+            [helper=std::move(helper)](AssemblyLine& assemblyLine, ThreadContext& context) mutable {
+                TRY {
+                    // Update any transactions that are pointing at one of the moved blocks
+                    assemblyLine.ApplyRepositions(helper->_dst.GetContainingResource(), *helper->_src.GetContainingResource(), helper->_steps);
+                    // Copy between the resources using the GPU
+                    context.GetResourceUploadHelper().DeviceBasedCopy(*helper->_dst.GetContainingResource(), *helper->_src.GetContainingResource(), helper->_steps);
+                    helper->_promise.set_value(context.CommandList_GetUnderConstruction());
+                    ++context.GetMetricsUnderConstruction()._contextOperations;
+                } CATCH (...) {
+                    helper->_promise.set_exception(std::current_exception());
+                } CATCH_END
+            });
+        _wakeupEvent.Increment();
+
+        return result;
     }
 
     void AssemblyLine::SystemReleaseTransaction(Transaction* transaction, ThreadContext& context, bool abort)
@@ -743,23 +770,18 @@ namespace BufferUploads
     }
 #endif
 
-#if 0
-    static unsigned ResolveOffsetValue(unsigned inputOffset, unsigned size, const std::vector<DefragStep>& steps)
+    static std::optional<unsigned> ResolveOffsetValue(unsigned inputOffset, unsigned size, IteratorRange<const RepositionStep*> steps)
     {
-        for (std::vector<DefragStep>::const_iterator i=steps.begin(); i!=steps.end(); ++i) {
-            if (inputOffset >= i->_sourceStart && inputOffset < i->_sourceEnd) {
-                assert((inputOffset+size) <= i->_sourceEnd);
-                return inputOffset + i->_destination - i->_sourceStart;
+        for (const auto& s:steps)
+            if (inputOffset >= s._sourceStart && inputOffset < s._sourceEnd) {
+                assert((inputOffset+size) <= s._sourceEnd);
+                return inputOffset + s._destination - s._sourceStart;
             }
-        }
-        assert(0);
-        return inputOffset;
+        return {};
     }
-#endif
 
-    void AssemblyLine::ApplyRepositionEvent(ThreadContext& context, unsigned id)
+    void AssemblyLine::ApplyRepositions(const ResourceLocator& dst, IResource& src, IteratorRange<const RepositionStep*> steps)
     {
-#if 0
             //
             //      We need to prevent GetTransaction from returning a partial result while this is occuring
             //      Since we modify both transaction._finalResource & transaction._resourceOffsetValue, it's
@@ -768,31 +790,27 @@ namespace BufferUploads
             //      of the transactions we're going to change first -- but there's still a tiny chance that
             //      that method would fail.
             //
-        ScopedLock(_transactionsRepositionLock);
+        ScopedLock(_transactionsLock);
+        assert(dst.IsWholeResource());
 
-        Event_ResourceReposition* begin = NULL, *end = NULL;
-        context.EventList_Get(id, begin, end);
         const size_t temporaryCount = _transactions.size();
-        for (const Event_ResourceReposition*e = begin; e!=end; ++e) {
-            assert(e->_newResource && e->_originalResource && !e->_defragSteps.empty());
-
-                // ... check temporary transactions ...
+        for (auto& s:steps) {
             for (unsigned c=0; c<temporaryCount; ++c) {
                 Transaction& transaction = _transactions[c];
-                if (transaction._finalResource.GetContainingResource().get() == e->_originalResource.get()) {
+                if (transaction._finalResource.GetContainingResource().get() == &src) {
                     auto size = RenderCore::ByteCount(transaction._desc);
+                    if (!transaction._finalResource.IsWholeResource())
+                        assert((transaction._finalResource.GetRangeInContainingResource().second-transaction._finalResource.GetRangeInContainingResource().first) == size);
 
                     ResourceLocator oldLocator = std::move(transaction._finalResource);
                     unsigned oldOffset = oldLocator.GetRangeInContainingResource().first;
 
-                    unsigned newOffsetValue = ResolveOffsetValue(oldOffset, RenderCore::ByteCount(transaction._desc), e->_defragSteps);
-                    transaction._finalResource = ResourceLocator{
-                        e->_newResource, newOffsetValue, size, e->_pool, e->_poolMarker};
+                    auto newOffsetValue = ResolveOffsetValue(oldOffset, RenderCore::ByteCount(transaction._desc), steps);
+                    if (newOffsetValue.has_value())
+                        transaction._finalResource = dst.MakeSubLocator(newOffsetValue.value(), size);
                 }
             }
         }
-        context.EventList_Release(id, true);
-#endif
     }
 
 #if 0
@@ -1531,13 +1549,6 @@ namespace BufferUploads
         return result;
     }
 
-    ResourceLocator     AssemblyLine::GetResource(TransactionID id)
-    {
-        ScopedLock(_transactionsRepositionLock);
-        Transaction* transaction = GetTransaction(id);
-        return transaction ? transaction->_finalResource : ResourceLocator{};
-    }
-
     AssemblyLine::QueueSet& AssemblyLine::GetQueueSet(TransactionOptions::BitField transactionOptions)
     {
         if (transactionOptions & TransactionOptions::FramePriority) {
@@ -1594,7 +1605,6 @@ namespace BufferUploads
                                     RenderCore::IThreadContext& threadContext,
                                     const ResourceDesc& desc, IDataPacket& data) override;
         
-        ResourceLocator         GetResource(TransactionID id);
         bool                    IsComplete(CommandListID id) override;
         void                    StallUntilCompletion(RenderCore::IThreadContext& immediateContext, CommandListID id) override;
 
@@ -1649,11 +1659,6 @@ namespace BufferUploads
     std::future<CommandListID>   Manager::Transaction_Begin(ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations)
     {
         return _assemblyLine->Transaction_Begin(destinationResource, sourceResource, repositionOperations);
-    }
-
-    ResourceLocator         Manager::GetResource(TransactionID id)
-    {
-        return _assemblyLine->GetResource(id);
     }
 
         /////////////////////////////////////////////

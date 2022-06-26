@@ -69,7 +69,7 @@ namespace BufferUploads
 
 		//////////// event lists //////////////
 		void          EventList_Get(EventListID id, Event_ResourceReposition*& begin, Event_ResourceReposition*& end);
-		void          EventList_Release(EventListID id, bool silent = false);
+		void          EventList_Release(EventListID id);
 
 		EventListID   EventList_GetWrittenID() const;
 		EventListID   EventList_GetPublishedID() const;
@@ -128,6 +128,7 @@ namespace BufferUploads
 		public:
 			void	Tick(EventListManager& evntListMan, IManager& bufferUploads);
 			bool	IsComplete(EventListID processedEventList);
+			void	Clear();
 
 			HeapedResource*     GetSourceHeap() { return _srcHeap; }
 			IteratorRange<const RepositionStep*> GetSteps() const { return _steps; }

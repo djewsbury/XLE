@@ -190,14 +190,14 @@ namespace BufferUploads { namespace PlatformInterface
     }
 #endif
 
-    void ResourceUploadHelper::ResourceCopy_DefragSteps(
-        const std::shared_ptr<IResource>& destination, const std::shared_ptr<IResource>& source, 
-        const std::vector<RepositionStep>& steps)
+    void ResourceUploadHelper::DeviceBasedCopy(
+        RenderCore::IResource& destination,
+        RenderCore::IResource& source,
+        IteratorRange<const Utility::RepositionStep*> steps)
     {
-        assert(0);
     }
 
-    void ResourceUploadHelper::ResourceCopy(IResource& destination, IResource& source)
+    void ResourceUploadHelper::DeviceBasedCopy(IResource& destination, IResource& source)
     {
         assert(0);
     }

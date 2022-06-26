@@ -40,6 +40,16 @@ namespace UnitTests
 		{
 			Update();
 			AllocateResources();
+			{
+				static BufferUploads::EventListID lastProcessed = ~0u;
+				auto evnt = _batchedResources->EventList_GetPublishedID();
+				if (evnt != lastProcessed) {
+					BufferUploads::Event_ResourceReposition* begin, *end;
+					_batchedResources->EventList_Get(evnt, begin, end);
+					_batchedResources->EventList_Release(evnt);
+					lastProcessed = evnt;
+				}
+			}
 
 			using namespace RenderCore;
 			using namespace RenderOverlays;

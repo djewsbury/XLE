@@ -255,7 +255,7 @@ namespace BufferUploads
         if (!_deferredDefragCopies.empty()) {
             PlatformInterface::ResourceUploadHelper immediateContext(immContext);
             for (auto i=_deferredDefragCopies.begin(); i!=_deferredDefragCopies.end(); ++i)
-                immediateContext.ResourceCopy_DefragSteps(i->_destination, i->_source, i->_steps);
+                immediateContext.DeviceBasedCopy(*i->_destination, *i->_source, i->_steps);
             _deferredDefragCopies.clear();
         }
     }

@@ -247,9 +247,10 @@ namespace BufferUploads
 			ActiveReposition* existingActiveDefrag = _activeDefrag.get();
 			existingActiveDefrag->Tick(_eventListManager, *_bufferUploads.lock());
 			if (existingActiveDefrag->IsComplete(_eventListManager._currentEventListProcessedId.load())) {
-				ScopedModifyLock(_lock); // lock here to prevent any operations on _activeDefrag->GetHeap() while we do this...
 				assert(_activeDefrag->GetSourceHeap()->_lockedForDefrag);
 				_activeDefrag->GetSourceHeap()->_lockedForDefrag = false;
+				_activeDefrag->Clear();
+				ScopedModifyLock(_lock); // lock here to prevent any operations on _activeDefrag->GetHeap() while we do this...
 				_activeDefrag = nullptr;
 			}
 		}
@@ -291,7 +292,7 @@ namespace BufferUploads
         }
     }
 
-    void                    BatchedResources::EventList_Release(EventListID id, bool silent)
+    void                    BatchedResources::EventList_Release(EventListID id)
     {
         if (!id) return;
         for (unsigned c=0; c<dimof(_eventListManager._eventBuffers); ++c) {
@@ -299,14 +300,12 @@ namespace BufferUploads
                 auto newValue = --_eventListManager._eventBuffers[c]._clientReferences;
                 assert(signed(newValue) >= 0);
                     
-                if (!silent) {
-                    for (;;) {      // lock-free max...
-                        auto originalProcessedId = _eventListManager._currentEventListProcessedId.load();
-                        auto newProcessedId = std::max(originalProcessedId, (EventListID)_eventListManager._eventBuffers[c]._id);
-                        if (_eventListManager._currentEventListProcessedId.compare_exchange_strong(originalProcessedId, newProcessedId))
-                            break;
-                    }
-                }
+				for (;;) {      // lock-free max...
+					auto originalProcessedId = _eventListManager._currentEventListProcessedId.load();
+					auto newProcessedId = std::max(originalProcessedId, (EventListID)_eventListManager._eventBuffers[c]._id);
+					if (_eventListManager._currentEventListProcessedId.compare_exchange_strong(originalProcessedId, newProcessedId))
+						break;
+				}
                 return;
             }
         }
@@ -460,7 +459,7 @@ namespace BufferUploads
 
 	void BatchedResources::ActiveReposition::Tick(EventListManager& evntListMan, IManager& bufferUploads)
 	{
-		if (_repositionCmdList.has_value() && _futureRepositionCmdList.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+		if (!_repositionCmdList.has_value() && _futureRepositionCmdList.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
 			_repositionCmdList = _futureRepositionCmdList.get();
 		
 		/*if (!_steps.empty() && GetHeap()->_heapResource && !_doneResourceCopy) {
@@ -481,12 +480,20 @@ namespace BufferUploads
 			result._newResource = _dstUberBlock.GetContainingResource();
 			result._defragSteps = _steps;
 			_eventId = evntListMan.EventList_Push(result);
+			evntListMan.EventList_Publish(_eventId.value());
 		}
 	}
 
 	bool BatchedResources::ActiveReposition::IsComplete(EventListID processedEventList)
 	{
 		return _eventId.has_value() && (processedEventList >= _eventId.value());
+	}
+
+	void BatchedResources::ActiveReposition::Clear()
+	{
+		_dstUberBlock = {};
+		_srcHeap = nullptr;
+		_steps.clear();
 	}
 
 	BatchedResources::ActiveReposition::ActiveReposition(

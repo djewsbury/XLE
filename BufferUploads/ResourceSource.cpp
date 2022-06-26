@@ -530,7 +530,7 @@ namespace BufferUploads
         return *this;
     }
 
-    ResourceLocator ResourceLocator::MakeSubLocator(size_t offset, size_t size)
+    ResourceLocator ResourceLocator::MakeSubLocator(size_t offset, size_t size) const
     {
         if (_managedByPool) {
             if (IsWholeResource()) {
