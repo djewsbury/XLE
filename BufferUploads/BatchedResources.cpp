@@ -206,83 +206,8 @@ namespace BufferUploads
 
 	void BatchedResources::Tick()
 	{
-		if (!_activeDefrag.get()) {
-
-					//                            -                                 //
-					//                         -------                              //
-					//                                                              //
-				//////////////////////////////////////////////////////////////////////////
-					//      Start a new defrag step on the most fragmented heap     //
-					//                            -                                 //
-					//        Note that we defrag the allocated spans, rather       //
-					//        than the blocks. This means that adjacent blocks      //
-					//        always move with each other, regardless of            //
-					//        their size, and ideal finish position.                //
-					//                            -                                 //
-					//        On slower PCs we can end up consuming a lot of        //
-					//        time just doing the defrags. So we need to            //
-					//        throttle it a bit, and so that we only do the         //
-					//        defrag when we really need it.                        //
-				//////////////////////////////////////////////////////////////////////////
-					//                                                              //
-					//                         -------                              //
-					//                            -                                 //
-
-			const float minWeightToDoSomething = 20.f * 1024.f;   // only do something when there's a 20k difference between total available space and the largest block
-			float bestWeight = minWeightToDoSomething;
-			HeapedResource* bestHeapForCompression = nullptr;
-			{
-				ScopedReadLock(_lock);
-				for (auto i=_heaps.begin(); i!=_heaps.end(); ++i) {
-					float weight = (*i)->CalculateFragmentationWeight();
-					if (weight > bestWeight && (*i)->_heapResource) {
-							//      if the heap hasn't changed since the last time this heap was used as a defrag source, then there's no use in picking it again
-						if ((*i)->_hashLastDefrag != (*i)->_heap.CalculateHash()) {
-							bestHeapForCompression = i->get();
-							bestWeight = weight;
-							break;
-						}
-					}
-				}
-			}
-
-								//      -=-=-=-=-=-=-=-=-=-=-       //
-
-			if (bestHeapForCompression) {
-				auto oldLocked = bestHeapForCompression->_lockedForDefrag.exchange(true);
-				assert(!oldLocked);
-
-				// Now that we've set bestHeap->_lockedForDefrag, bestHeap->_heap is immutable...
-				auto compression = bestHeapForCompression->_heap.CalculateHeapCompression();
-				bestHeapForCompression->_hashLastDefrag = bestHeapForCompression->_heap.CalculateHash();
-				auto newDefrag = std::make_unique<ActiveReposition>(
-					*this, *_bufferUploads.lock(), *bestHeapForCompression, std::move(compression));
-
-				{
-					ScopedLock(_lock);  // must lock during the defrag commit & defrag create
-					assert(!_activeDefrag);
-					_activeDefrag = std::move(newDefrag);
-				}
-
-				#if defined(_DEBUG)
-					// Validate that everything recorded in the _refCounts is part of the repositioning
-					unsigned blockCount = bestHeapForCompression->_refCounts.GetEntryCount();
-					for (unsigned b=0; b<blockCount; ++b) {
-						auto block = bestHeapForCompression->_refCounts.GetEntry(b);
-						bool foundOne = false;
-						for (auto i =_activeDefrag->GetSteps().begin(); i!=_activeDefrag->GetSteps().end(); ++i)
-							if (block.first >= i->_sourceStart && block.second <= i->_sourceEnd) {
-								foundOne = true;
-								break;
-							}
-						assert(foundOne);
-					}
-				#endif
-			}
-
-		} else {
-
-				//
+		if (_activeDefrag.get()) {
+							//
 				//      Check on the status of the defrag step; and commit to the 
 				//      active resource as necessary
 				//
@@ -296,6 +221,83 @@ namespace BufferUploads
 				ScopedModifyLock(_lock); // lock here to prevent any operations on _activeDefrag->GetHeap() while we do this...
 				_activeDefrag = nullptr;
 			}
+			return;
+		}
+
+
+				//                            -                                 //
+				//                         -------                              //
+				//                                                              //
+			//////////////////////////////////////////////////////////////////////////
+				//      Start a new defrag step on the most fragmented heap     //
+				//                            -                                 //
+				//        First decide if we want to do a full heap             //
+				//        compression on one of the heaps. We'll need some      //
+				//        heuristic to figure out when it's the right time      //
+				//        to do this.                                           //
+			//////////////////////////////////////////////////////////////////////////
+				//                                                              //
+				//                         -------                              //
+				//                            -                                 //
+
+		
+		const unsigned minWeightToDoSomething = _prototype._linearBufferDesc._sizeInBytes / 8; // only do something when there's X byte difference between total available space and the largest block
+		const unsigned largestBlockThreshold = _prototype._linearBufferDesc._sizeInBytes / 8;
+		unsigned bestWeight = minWeightToDoSomething;
+		HeapedResource* bestHeapForCompression = nullptr;
+		{
+			ScopedReadLock(_lock);
+			for (auto i=_heaps.begin(); i!=_heaps.end(); ++i) {
+				auto largestBlock = (*i)->_heap.CalculateLargestFreeBlock();
+				if (largestBlock > largestBlockThreshold) continue;		// only care about pages where the largest block has become small
+
+				auto availableSpace = (*i)->_heap.CalculateAvailableSpace();
+				if (largestBlock > availableSpace/2) continue;			// we want to at least double the largest block size in order to make this worthwhile
+
+				auto weight = availableSpace - largestBlock;
+				if (weight > bestWeight) {
+					assert((*i)->_heapResource);
+						//      if the heap hasn't changed since the last time this heap was used as a defrag source, then there's no use in picking it again
+					if ((*i)->_hashLastDefrag != (*i)->_heap.CalculateHash()) {
+						bestHeapForCompression = i->get();
+						bestWeight = weight;
+					}
+				}
+			}
+		}
+
+							//      -=-=-=-=-=-=-=-=-=-=-       //
+
+		if (bestHeapForCompression) {
+			auto oldLocked = bestHeapForCompression->_lockedForDefrag.exchange(true);
+			assert(!oldLocked);
+
+			// Now that we've set bestHeap->_lockedForDefrag, bestHeap->_heap is immutable...
+			auto compression = bestHeapForCompression->_heap.CalculateHeapCompression();
+			bestHeapForCompression->_hashLastDefrag = bestHeapForCompression->_heap.CalculateHash();
+			auto newDefrag = std::make_unique<ActiveReposition>(
+				*this, *_bufferUploads.lock(), *bestHeapForCompression, std::move(compression));
+
+			{
+				ScopedLock(_lock);  // must lock during the defrag commit & defrag create
+				assert(!_activeDefrag);
+				_activeDefrag = std::move(newDefrag);
+			}
+
+			#if defined(_DEBUG)
+				// Validate that everything recorded in the _refCounts is part of the repositioning
+				unsigned blockCount = bestHeapForCompression->_refCounts.GetEntryCount();
+				for (unsigned b=0; b<blockCount; ++b) {
+					auto block = bestHeapForCompression->_refCounts.GetEntry(b);
+					bool foundOne = false;
+					for (auto i =_activeDefrag->GetSteps().begin(); i!=_activeDefrag->GetSteps().end(); ++i)
+						if (block.first >= i->_sourceStart && block.second <= i->_sourceEnd) {
+							foundOne = true;
+							break;
+						}
+					assert(foundOne);
+				}
+			#endif
 		}
 	}
 
@@ -408,6 +410,7 @@ namespace BufferUploads
 		result._allocatedSpace   = result._unallocatedSpace = 0;
 		result._heapSize         = _size;
 		result._largestFreeBlock = result._spaceInReferencedCountedBlocks = result._referencedCountedBlockCount = 0;
+		result._guid = _heapResource->GetGUID();
 
 		if (!result._markers.empty()) {
 			unsigned previousStart = 0;
@@ -423,15 +426,6 @@ namespace BufferUploads
 		result._spaceInReferencedCountedBlocks   = _refCounts.CalculatedReferencedSpace();
 		result._referencedCountedBlockCount      = _refCounts.GetEntryCount();
 		return result;
-	}
-
-	float BatchedResources::HeapedResource::CalculateFragmentationWeight() const
-	{
-		unsigned largestBlock    = _heap.CalculateLargestFreeBlock();
-		unsigned availableSpace  = _heap.CalculateAvailableSpace();
-		if (largestBlock > .5f * availableSpace)
-			return 0.f;
-		return float(availableSpace - largestBlock);
 	}
 
 	void BatchedResources::HeapedResource::ValidateRefsAndHeap()

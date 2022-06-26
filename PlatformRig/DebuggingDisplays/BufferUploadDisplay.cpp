@@ -1211,7 +1211,7 @@ namespace PlatformRig { namespace Overlays
                             end = *(i2+1);
                         }
                         if (start != end) {
-                            float warmth = CalculateWarmth(heapIndex, start, end, drawAllocated);
+                            float warmth = CalculateWarmth(i->_guid, start, end, drawAllocated);
                             ColorB col = ColorB::FromNormalized(warmth, 0.f, 1.0f-warmth);
                             for (unsigned c=0; c<lineHeight; ++c) {
                                 const Coord x = Coord(start*X + heapAllocationDisplay._topLeft[0]);
@@ -1235,7 +1235,7 @@ namespace PlatformRig { namespace Overlays
         _lastFrameMetrics = metrics;
 
             //      extinquish cooling spans
-        for (std::vector<WarmSpan>::iterator i=_warmSpans.begin(); i!=_warmSpans.end();) {
+        for (auto i=_warmSpans.begin(); i!=_warmSpans.end();) {
             if (i->_frameStart <= (currentFrameId-FramesOfWarmth)) {
                 i = _warmSpans.erase(i);
             } else {
@@ -1244,19 +1244,17 @@ namespace PlatformRig { namespace Overlays
         }
     }
 
-    float BatchingDisplay::CalculateWarmth(unsigned heapIndex, unsigned begin, unsigned end, bool allocatedMode)
+    float BatchingDisplay::CalculateWarmth(uint64_t heapGuid, unsigned begin, unsigned end, bool allocatedMode)
     {
         const unsigned currentFrameId = GetFrameID();
-        for (std::vector<WarmSpan>::const_iterator i=_warmSpans.begin(); i!=_warmSpans.end(); ++i) {
-            if (i->_heapIndex == heapIndex && i->_begin == begin && i->_end == end) {
+        for (auto i=_warmSpans.begin(); i!=_warmSpans.end(); ++i)
+            if (i->_heapGuid == heapGuid && i->_begin == begin && i->_end == end)
                 return 1.f-std::min((currentFrameId-i->_frameStart)/float(FramesOfWarmth), 1.f);
-            }
-        }
 
-        const bool thereLastFrame = FindSpan(heapIndex, begin, end, allocatedMode);
+        const bool thereLastFrame = FindSpan(heapGuid, begin, end, allocatedMode);
         if (!thereLastFrame) {
             WarmSpan warmSpan;
-            warmSpan._heapIndex = heapIndex;
+            warmSpan._heapGuid = heapGuid;
             warmSpan._begin = begin;
             warmSpan._end = end;
             warmSpan._frameStart = currentFrameId;
@@ -1267,15 +1265,20 @@ namespace PlatformRig { namespace Overlays
         return 0.f;
     }
 
-    bool BatchingDisplay::FindSpan(unsigned heapIndex, unsigned begin, unsigned end, bool allocatedMode)
+    bool BatchingDisplay::FindSpan(uint64_t heapGuid, unsigned begin, unsigned end, bool allocatedMode)
     {
-        if (heapIndex >= _lastFrameMetrics._heaps.size()) {
+        const BufferUploads::BatchedHeapMetrics* lastFrameMetrics = nullptr;
+        for (const auto& m:_lastFrameMetrics._heaps)
+            if (m._guid == heapGuid) {
+                lastFrameMetrics = &m;
+                break;
+            }
+        if (!lastFrameMetrics)
             return false;
-        }
 
         unsigned lastStart = 0;
-        if (!_lastFrameMetrics._heaps[heapIndex]._markers.empty())
-            for (auto i2=_lastFrameMetrics._heaps[heapIndex]._markers.begin(); i2<_lastFrameMetrics._heaps[heapIndex]._markers.end()-1; i2+=2) {
+        if (!lastFrameMetrics->_markers.empty())
+            for (auto i2=lastFrameMetrics->_markers.begin(); i2<lastFrameMetrics->_markers.end()-1; i2+=2) {
                 unsigned spanBegin, spanEnd;
                 if (allocatedMode) {
                     spanBegin = lastStart;

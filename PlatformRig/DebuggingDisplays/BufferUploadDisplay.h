@@ -120,14 +120,14 @@ namespace PlatformRig { namespace Overlays
         class WarmSpan
         {
         public:
-            unsigned _heapIndex;
+            uint64_t _heapGuid;
             unsigned _begin, _end;
             unsigned _frameStart;
         };
         std::vector<WarmSpan> _warmSpans;
 
-        float CalculateWarmth(unsigned heapIndex, unsigned begin, unsigned end, bool allocatedMode);
-        bool FindSpan(unsigned heapIndex, unsigned begin, unsigned end, bool allocatedMode);
+        float CalculateWarmth(uint64_t heapGuid, unsigned begin, unsigned end, bool allocatedMode);
+        bool FindSpan(uint64_t heapGuid, unsigned begin, unsigned end, bool allocatedMode);
         std::shared_ptr<BufferUploads::BatchedResources> _batchedResources;
     };
 }}

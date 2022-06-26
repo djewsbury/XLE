@@ -150,7 +150,6 @@ namespace UnitTests
 				for (unsigned x=std::max(int(_cameraCenter[0]-s_cameraRadiusCells), 0); x<std::min(unsigned(_cameraCenter[0]+s_cameraRadiusCells), _gridHeight); ++x) {
 					if (Magnitude(Float2{x-_cameraCenter[0], y-_cameraCenter[1]}) > s_cameraRadiusCells) continue;
 					auto q = _allocatedResources.Query(uint64_t(y) << 32ull | x);
-					// REQUIRE(q.GetType() != LRUCacheInsertType::Fail);
 					if (q.GetType() == LRUCacheInsertType::Fail) continue;			// advancing too fast to let older allocations decay
 					if (q.GetType() == LRUCacheInsertType::Update) continue;		// already good
 
@@ -185,7 +184,7 @@ namespace UnitTests
 				if (std::uniform_int_distribution<>(0, 16)(_rng) == 0) {
 					_gridAllocations.push_back(std::uniform_int_distribution<>(128*1024, 512*1024)(_rng));		// occasional very large allocation
 				} else
-					_gridAllocations.push_back(std::uniform_int_distribution<>(4*1024, 64*1024)(_rng));
+					_gridAllocations.push_back(std::normal_distribution<>(48*1024, 12*1024)(_rng));
 			}
 			_cameraCenter = Float2(_gridWidth/2, _gridHeight/2);
 			_nextLongTermAllocationCountDown = 0;

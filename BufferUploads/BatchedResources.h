@@ -27,6 +27,7 @@ namespace BufferUploads
 	struct BatchedHeapMetrics
 	{
 		std::vector<unsigned> _markers;
+		uint64_t _guid;
 		size_t _allocatedSpace, _unallocatedSpace;
 		size_t _heapSize;
 		size_t _largestFreeBlock;
@@ -89,7 +90,6 @@ namespace BufferUploads
 			bool                AddRef(unsigned ptr, unsigned size, const char name[]);
 			
 			BatchedHeapMetrics  CalculateMetrics() const;
-			float               CalculateFragmentationWeight() const;
 			void                ValidateRefsAndHeap();
 
 			HeapedResource();
