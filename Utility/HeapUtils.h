@@ -489,7 +489,10 @@ namespace Utility
 
         std::vector<unsigned>           CalculateMetrics() const;
         std::vector<RepositionStep>     CalculateHeapCompression() const;
-        void                            PerformDefrag(const std::vector<RepositionStep>& defrag);
+        void                            PerformReposition(IteratorRange<const RepositionStep*> repositions);
+
+        struct IncrementalDefragCandidate { std::vector<RepositionStep> _steps; unsigned _newLargestFreeBlock; };
+        IncrementalDefragCandidate CalculateIncrementalDefragCandidate() const;
 
         std::pair<std::unique_ptr<uint8_t[]>, size_t> Flatten() const;
 

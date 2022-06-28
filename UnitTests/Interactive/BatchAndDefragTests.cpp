@@ -43,7 +43,9 @@ namespace UnitTests
 				locator.GetPool(), ~0ull};
 			return;
 		}
-		assert(0);
+		
+		// If we get here, it means we're in the source resource, but we weren't actually repositioned. This can happen in 
+		// a partial defrag operation
 	}
 
 	class BatchedResourcesDefragOverlay : public IInteractiveTestOverlay
@@ -63,10 +65,14 @@ namespace UnitTests
 				static BufferUploads::EventListID lastProcessed = ~0u;
 				auto evnt = _batchedResources0->EventList_GetPublishedID();
 				if (evnt != lastProcessed) {
-					for (auto e:_batchedResources0->EventList_Get(evnt))
+					for (auto e:_batchedResources0->EventList_Get(evnt)) {
 						for (auto& o:_allocatedResources.GetRawObjects())
 							if (o.first.GetContainingResource().get() == e._originalResource)
 								RepositionLocator(o.first, e._newResource, e._defragSteps);
+						for (auto& o:_longTermAllocations)
+							if (o.first.GetContainingResource().get() == e._originalResource)
+								RepositionLocator(o.first, e._newResource, e._defragSteps);
+					}
 					_batchedResources0->EventList_Release(evnt);
 					lastProcessed = evnt;
 				}
@@ -129,25 +135,28 @@ namespace UnitTests
 			const PlatformRig::InputSnapshot& evnt,
 			IInteractiveTestHelper& testHelper) override
 		{
+			if (evnt._pressedChar == ' ') { _pauseMovement = !_pauseMovement; return true; }
 			return false;
 		}
 
 		void Update()
 		{
-			if (_cameraTarget.has_value()) {
-				auto perFrameMovement = _movementSpeed / 60.f;
-				_cameraCenter += perFrameMovement*Normalize(_cameraTarget.value() - _cameraCenter);
-				if (Magnitude(_cameraCenter - _cameraTarget.value()) < perFrameMovement) {
-					_cameraCenter = _cameraTarget.value();
-					_cameraTarget = {};
+			if (!_pauseMovement) {
+				if (_cameraTarget.has_value()) {
+					auto perFrameMovement = _movementSpeed / 60.f;
+					_cameraCenter += perFrameMovement*Normalize(_cameraTarget.value() - _cameraCenter);
+					if (Magnitude(_cameraCenter - _cameraTarget.value()) < perFrameMovement) {
+						_cameraCenter = _cameraTarget.value();
+						_cameraTarget = {};
+					}
 				}
-			}
 
-			if (!_cameraTarget.has_value()) {
-				_cameraTarget = Int2{
-					std::uniform_int_distribution<>(0, _gridWidth-1)(_rng),
-					std::uniform_int_distribution<>(0, _gridHeight-1)(_rng)};
-				_movementSpeed = std::uniform_real_distribution<float>(3.0f, 10.f)(_rng);
+				if (!_cameraTarget.has_value()) {
+					_cameraTarget = Int2{
+						std::uniform_int_distribution<>(0, _gridWidth-1)(_rng),
+						std::uniform_int_distribution<>(0, _gridHeight-1)(_rng)};
+					_movementSpeed = std::uniform_real_distribution<float>(3.0f, 10.f)(_rng);
+				}
 			}
 
 			_allocatedResources.OnFrameBarrier();
@@ -174,15 +183,17 @@ namespace UnitTests
 					q.Set(std::make_pair(std::move(newAllocation0), std::move(newAllocation1)));
 				}
 
-			if (!_nextLongTermAllocationCountDown) {
-				// every now and again, allocate a medium size block that we will retain for some time
-				if (_longTermAllocations.size() >= 32) _longTermAllocations.erase(_longTermAllocations.begin());
-				auto alloc0 = _batchedResources0->Allocate(std::uniform_int_distribution<>(32*1024, 64*1024)(_rng), "");
-				auto alloc1 = _batchedResources1->Allocate(std::uniform_int_distribution<>(32*1024, 64*1024)(_rng), "");
-				_longTermAllocations.push_back(std::make_pair(std::move(alloc0), std::move(alloc1)));
-				_nextLongTermAllocationCountDown = std::uniform_int_distribution<>(16, 64)(_rng);
-			} else
-				--_nextLongTermAllocationCountDown;
+			if (!_pauseMovement) {
+				if (!_nextLongTermAllocationCountDown) {
+					// every now and again, allocate a medium size block that we will retain for some time
+					if (_longTermAllocations.size() >= 32) _longTermAllocations.erase(_longTermAllocations.begin());
+					auto alloc0 = _batchedResources0->Allocate(std::uniform_int_distribution<>(32*1024, 64*1024)(_rng), "");
+					auto alloc1 = _batchedResources1->Allocate(std::uniform_int_distribution<>(32*1024, 64*1024)(_rng), "");
+					_longTermAllocations.push_back(std::make_pair(std::move(alloc0), std::move(alloc1)));
+					_nextLongTermAllocationCountDown = std::uniform_int_distribution<>(16, 64)(_rng);
+				} else
+					--_nextLongTermAllocationCountDown;
+			}
 
 			// only defrag one -- 
 			_batchedResources0->TickDefrag();
@@ -221,6 +232,7 @@ namespace UnitTests
 
 		std::shared_ptr<PlatformRig::Overlays::BatchingDisplay> _batchingDisplay0;
 		std::shared_ptr<PlatformRig::Overlays::BatchingDisplay> _batchingDisplay1;
+		bool _pauseMovement = false;
 	};
 
 	TEST_CASE( "BatchedResourcesDefrag", "[rendercore_techniques, bufferuploads]" )

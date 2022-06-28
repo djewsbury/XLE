@@ -54,6 +54,10 @@ namespace BufferUploads
 		std::vector<BatchedHeapMetrics> _heaps;
 		unsigned _recentDeviceCreateCount;
 		unsigned _totalDeviceCreateCount;
+		unsigned _recentAllocateBytes;
+		unsigned _totalAllocateBytes;
+		unsigned _recentRepositionBytes;
+		unsigned _totalRepositionBytes;
 	};
 }
 

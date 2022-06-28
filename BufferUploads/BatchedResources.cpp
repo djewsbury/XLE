@@ -59,6 +59,11 @@ namespace BufferUploads
 		mutable std::atomic<unsigned>   _recentDeviceCreateCount;
 		std::atomic<size_t>             _totalCreateCount;
 
+		mutable std::atomic<size_t>		_recentAllocateBytes;
+		std::atomic<size_t>             _totalAllocateBytes;
+		mutable std::atomic<size_t>		_recentRepositionBytes;
+		std::atomic<size_t>             _totalRepositionBytes;
+
 		struct EventListManager
 		{
 			struct EventList
@@ -137,9 +142,11 @@ namespace BufferUploads
 	ResourceLocator    BatchedResources::Allocate(
 		size_t size, const char name[])
 	{
-		if (size > RenderCore::ByteCount(_prototype)) {
+		if (size >= RenderCore::ByteCount(_prototype))
 			return {};
-		}
+
+		_recentAllocateBytes += size;
+		_totalAllocateBytes += size;
 
 		{
 			std::unique_lock<decltype(_lock)> lk(_lock);
@@ -174,9 +181,8 @@ namespace BufferUploads
 		}
 
 		auto heapResource = _device->CreateResource(_prototype);
-		if (!heapResource) {
+		if (!heapResource)
 			return {};
-		}
 
 		++_recentDeviceCreateCount;
 		++_totalCreateCount;
@@ -320,6 +326,10 @@ namespace BufferUploads
 			result._heaps.push_back((*i)->CalculateMetrics());
 		result._recentDeviceCreateCount = _recentDeviceCreateCount.exchange(0);
 		result._totalDeviceCreateCount = _totalCreateCount.load();
+		result._recentAllocateBytes = _recentAllocateBytes.exchange(0);
+		result._totalAllocateBytes = _totalAllocateBytes.load();
+		result._recentRepositionBytes = _recentRepositionBytes.exchange(0);
+		result._totalRepositionBytes = _totalRepositionBytes.load();
 		return result;
 	}
 
@@ -365,6 +375,7 @@ namespace BufferUploads
 				//                            -                                 //
 
 		
+#if 0
 		const unsigned minWeightToDoSomething = _prototype._linearBufferDesc._sizeInBytes / 8; // only do something when there's X byte difference between total available space and the largest block
 		const unsigned largestBlockThreshold = _prototype._linearBufferDesc._sizeInBytes / 8;
 		unsigned bestWeight = minWeightToDoSomething;
@@ -398,6 +409,12 @@ namespace BufferUploads
 
 			// Now that we've set bestHeap->_lockedForDefrag, bestHeap->_heap is immutable...
 			auto compression = bestHeapForCompression->_heap.CalculateHeapCompression();
+
+			size_t byteCount = 0;
+			for (const auto& s:compression) byteCount += s._sourceEnd-s._sourceStart;
+			_recentRepositionBytes += byteCount;
+			_totalRepositionBytes += byteCount;
+
 			bestHeapForCompression->_hashLastDefrag = bestHeapForCompression->_heap.CalculateHash();
 			auto newDefrag = std::make_unique<ActiveReposition>(
 				*this, *_bufferUploads.lock(), *bestHeapForCompression, std::move(compression));
@@ -419,6 +436,42 @@ namespace BufferUploads
 					assert(foundOne);
 				}
 			#endif
+		}
+#endif
+
+		HeapedResource* bestIncrementalDefragHeap = nullptr;
+		std::vector<RepositionStep> bestIncrementalDefragSteps;
+		int bestIncrementalDefragQuant = 0;
+		{
+			ScopedReadLock(_lock);
+			for (auto i=_heaps.begin(); i!=_heaps.end(); ++i) {
+				auto steps = (*i)->_heap.CalculateIncrementalDefragCandidate();
+				if (steps._steps.empty()) continue;
+
+				int increase = steps._newLargestFreeBlock - (int)(*i)->_heap.CalculateLargestFreeBlock();
+				if (increase > bestIncrementalDefragQuant) {
+					bestIncrementalDefragQuant = increase;
+					bestIncrementalDefragSteps = std::move(steps._steps);
+					bestIncrementalDefragHeap = i->get();
+				}
+			}
+		}
+
+		if (bestIncrementalDefragHeap && bestIncrementalDefragQuant >= 16*1024) {
+			auto oldLocked = bestIncrementalDefragHeap->_lockedForDefrag.exchange(true);
+			assert(!oldLocked);
+
+			size_t byteCount = 0;
+			for (const auto& s:bestIncrementalDefragSteps) byteCount += s._sourceEnd-s._sourceStart;
+			_recentRepositionBytes += byteCount;
+			_totalRepositionBytes += byteCount;
+
+			// Now that we've set bestHeap->_lockedForDefrag, bestHeap->_heap is immutable...
+			auto newDefrag = std::make_unique<ActiveReposition>(
+				*this, *_bufferUploads.lock(), *bestIncrementalDefragHeap, std::move(bestIncrementalDefragSteps));
+
+			assert(!_activeDefrag);
+			_activeDefrag = std::move(newDefrag);
 		}
 	}
 

@@ -613,7 +613,58 @@ namespace Utility
     }
 
     template <typename Marker>
-        void        SpanningHeap<Marker>::PerformDefrag(const std::vector<RepositionStep>& defrag)
+        auto SpanningHeap<Marker>::CalculateIncrementalDefragCandidate() const -> IncrementalDefragCandidate
+    {
+        // Look for cases where we can move some data, and in doing so merge 2 unallocated blocks
+        // to form a larger unallocated block
+        // We're assuming there that the moved data will go to somewhere outside of this heap -- ie
+        // the returned "destinations" can overlap with non-repositioned data in this heap
+        if (_markers.size() <= 3) return {};
+
+        IncrementalDefragCandidate result;
+        result._newLargestFreeBlock = 0;
+        unsigned destinationIterator = 0;
+        auto meaningfulSizeThreshold = *(_markers.end()-1)/8;
+        auto jumpOverGapThreshold = MarkerHeap<Marker>::ToInternalSize(8*1024);
+
+        auto i = _markers.begin();
+        unsigned preceedingUnallocatedSpace = *(i+1)-*i;
+        ++i;
+        if (!preceedingUnallocatedSpace) {
+            ++i; // we never move a block allocated at 0 so skip directly over that and the next unallocated space
+            if ((i+1) == _markers.end()) return {};
+            preceedingUnallocatedSpace = *(i+1)-*i;
+            ++i;
+        }
+        for (;i<_markers.end()-2;) {
+            auto endRun = i+1;
+            auto successiveUnallocatedSpace = *(endRun+1) - *endRun;
+            while (successiveUnallocatedSpace < jumpOverGapThreshold && endRun < _markers.end()-3) {
+                // skip over tiny empty spaces
+                endRun += 2;
+                successiveUnallocatedSpace = *(endRun+1) - *endRun;
+            }
+            auto allocatedSpace = *endRun - *i;
+
+            // If moving this block will expand the contiguous unallocated space sufficiently,
+            // then let's do it
+            // In certain situations, this can even move all allocations from the heap
+            if (allocatedSpace < preceedingUnallocatedSpace && allocatedSpace < successiveUnallocatedSpace
+                && preceedingUnallocatedSpace+allocatedSpace+successiveUnallocatedSpace >= meaningfulSizeThreshold) {
+                result._steps.push_back(RepositionStep{*i, *endRun, destinationIterator});
+                destinationIterator += allocatedSpace;
+                preceedingUnallocatedSpace += allocatedSpace + successiveUnallocatedSpace;
+                result._newLargestFreeBlock = std::max(result._newLargestFreeBlock, preceedingUnallocatedSpace);
+            } else {
+                preceedingUnallocatedSpace = successiveUnallocatedSpace;
+            }
+            i = endRun+1;
+        }
+        return result;
+    }
+
+    template <typename Marker>
+        void        SpanningHeap<Marker>::PerformReposition(IteratorRange<const RepositionStep*> defrag)
     {
         #if defined(_DEBUG)
             std::unique_lock lockTest(_lock, std::try_to_lock);
@@ -633,13 +684,13 @@ namespace Utility
         _markers.erase(_markers.begin(), _markers.end());
         _markers.push_back(0);
         if (!defrag.empty()) {
-            std::vector<RepositionStep> defragByDestination(defrag);
+            std::vector<RepositionStep> defragByDestination(defrag.begin(), defrag.end());
             std::sort(defragByDestination.begin(), defragByDestination.end(), SortDefragStep_Destination);
 
             Marker currentAllocatedBlockBegin    = MarkerHeap<Marker>::ToInternalSize(defragByDestination.begin()->_destination);
             Marker currentAllocatedBlockEnd      = MarkerHeap<Marker>::ToInternalSize(defragByDestination.begin()->_destination + MarkerHeap<Marker>::AlignSize(defragByDestination.begin()->_sourceEnd-defragByDestination.begin()->_sourceStart));
 
-            for (std::vector<RepositionStep>::const_iterator i=defragByDestination.begin()+1; i!=defragByDestination.end(); ++i) {
+            for (auto i=defragByDestination.begin()+1; i!=defragByDestination.end(); ++i) {
                 Marker blockBegin    = MarkerHeap<Marker>::ToInternalSize(i->_destination);
                 Marker blockEnd      = MarkerHeap<Marker>::ToInternalSize(i->_destination+MarkerHeap<Marker>::AlignSize(i->_sourceEnd-i->_sourceStart));
 

@@ -1170,12 +1170,21 @@ namespace PlatformRig { namespace Overlays
         }
 
         {
-            DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), "Heap count: %i / Total allocated: %7.3fMb / Total unallocated: %7.3fMb",
-                metrics._heaps.size(), allocatedSpace/(1024.f*1024.f), unallocatedSpace/(1024.f*1024.f));
-            DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), "Largest free block: %7.3fKb / Average unallocated: %7.3fKb",
-                largestFreeBlock/1024.f, unallocatedSpace/(float(metrics._heaps.size())*1024.f));
-            DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), "Block count: %i / Ave block size: %7.3fKb",
-                totalBlockCount, allocatedSpace/float(totalBlockCount*1024.f));
+            char buffer[256];
+            DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), 
+                StringMeldInPlace(buffer) << "Heap count: " << metrics._heaps.size() << " / Total allocated: " << ByteCount{allocatedSpace} << " / Total unallocated: " << ByteCount{unallocatedSpace});
+            DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), 
+                StringMeldInPlace(buffer) << "Largest free block: " << ByteCount{largestFreeBlock} << " / Average unallocated: " << ByteCount{unallocatedSpace/metrics._heaps.size()});
+            DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16),
+                StringMeldInPlace(buffer) << "Block count: " << totalBlockCount << " / Ave block size: " << ByteCount{allocatedSpace/totalBlockCount});
+
+            _runningAveAllocs = LinearInterpolate(_runningAveAllocs, (float)metrics._recentAllocateBytes, 0.05f);
+            _runningAveRepositions = LinearInterpolate(_runningAveRepositions, (float)metrics._recentRepositionBytes, 0.05f);
+
+            DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16),
+                StringMeldInPlace(buffer) << "Total Alloc: " << ByteCount{metrics._totalAllocateBytes} << " / Ave per frame: " << ByteCount{(size_t)_runningAveAllocs});
+            DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16),
+                StringMeldInPlace(buffer) << "Total Reposition: " << ByteCount{metrics._totalRepositionBytes} << " / Ave per frame: " << ByteCount{(size_t)_runningAveRepositions});
         }
 
         unsigned currentFrameId = GetFrameID();

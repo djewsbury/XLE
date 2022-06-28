@@ -129,6 +129,9 @@ namespace PlatformRig { namespace Overlays
         float CalculateWarmth(uint64_t heapGuid, unsigned begin, unsigned end, bool allocatedMode);
         bool FindSpan(uint64_t heapGuid, unsigned begin, unsigned end, bool allocatedMode);
         std::shared_ptr<BufferUploads::IBatchedResources> _batchedResources;
+
+        float _runningAveAllocs = 0;
+        float _runningAveRepositions = 0;
     };
 }}
 
