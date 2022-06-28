@@ -61,13 +61,13 @@ namespace UnitTests
 			AllocateResources();
 			{
 				static BufferUploads::EventListID lastProcessed = ~0u;
-				auto evnt = _batchedResources->EventList_GetPublishedID();
+				auto evnt = _batchedResources0->EventList_GetPublishedID();
 				if (evnt != lastProcessed) {
-					for (auto e:_batchedResources->EventList_Get(evnt))
+					for (auto e:_batchedResources0->EventList_Get(evnt))
 						for (auto& o:_allocatedResources.GetRawObjects())
-							if (o.GetContainingResource().get() == e._originalResource)
-								RepositionLocator(o, e._newResource, e._defragSteps);
-					_batchedResources->EventList_Release(evnt);
+							if (o.first.GetContainingResource().get() == e._originalResource)
+								RepositionLocator(o.first, e._newResource, e._defragSteps);
+					_batchedResources0->EventList_Release(evnt);
 					lastProcessed = evnt;
 				}
 			}
@@ -105,11 +105,19 @@ namespace UnitTests
 
 			DebuggingDisplay::OutlineEllipse(*overlayContext, Rect{Coord2{(_cameraCenter[0]-s_cameraRadiusCells)*scale+translation[0], (_cameraCenter[1]-s_cameraRadiusCells)*scale+translation[1]}, Coord2{(_cameraCenter[0]+s_cameraRadiusCells)*scale+translation[0], (_cameraCenter[1]+s_cameraRadiusCells)*scale+translation[1]}}, ColorB::Red);
 
-			if (_batchingDisplay) {
-				RenderOverlays::DebuggingDisplay::Layout layout{Rect{Coord2{0, 0}, viewport}};
+			if (_batchingDisplay0) {
+				// draw on left
+				RenderOverlays::DebuggingDisplay::Layout layout{Rect{Coord2{0, 0}, Coord2{viewport[0]/2, viewport[1]}}};
 				RenderOverlays::DebuggingDisplay::Interactables interactables;
 				RenderOverlays::DebuggingDisplay::InterfaceState interfaceState;
-				_batchingDisplay->Render(*overlayContext, layout, interactables, interfaceState);
+				_batchingDisplay0->Render(*overlayContext, layout, interactables, interfaceState);
+			}
+			if (_batchingDisplay1) {
+				// draw on right
+				RenderOverlays::DebuggingDisplay::Layout layout{Rect{Coord2{viewport[0]/2, 0}, Coord2{viewport[0], viewport[1]}}};
+				RenderOverlays::DebuggingDisplay::Interactables interactables;
+				RenderOverlays::DebuggingDisplay::InterfaceState interfaceState;
+				_batchingDisplay1->Render(*overlayContext, layout, interactables, interfaceState);
 			}
 
 			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
@@ -159,20 +167,25 @@ namespace UnitTests
 						existing = {};		// release the existing first
 					}
 
-					auto newAllocation = _batchedResources->Allocate(_gridAllocations[y*_gridWidth+x], "");
-					REQUIRE(!newAllocation.IsEmpty());
-					q.Set(std::move(newAllocation));
+					auto newAllocation0 = _batchedResources0->Allocate(_gridAllocations[y*_gridWidth+x], "");
+					REQUIRE(!newAllocation0.IsEmpty());
+					auto newAllocation1 = _batchedResources1->Allocate(_gridAllocations[y*_gridWidth+x], "");
+					REQUIRE(!newAllocation1.IsEmpty());
+					q.Set(std::make_pair(std::move(newAllocation0), std::move(newAllocation1)));
 				}
 
 			if (!_nextLongTermAllocationCountDown) {
 				// every now and again, allocate a medium size block that we will retain for some time
 				if (_longTermAllocations.size() >= 32) _longTermAllocations.erase(_longTermAllocations.begin());
-				_longTermAllocations.push_back(_batchedResources->Allocate(std::uniform_int_distribution<>(32*1024, 64*1024)(_rng), ""));
+				auto alloc0 = _batchedResources0->Allocate(std::uniform_int_distribution<>(32*1024, 64*1024)(_rng), "");
+				auto alloc1 = _batchedResources1->Allocate(std::uniform_int_distribution<>(32*1024, 64*1024)(_rng), "");
+				_longTermAllocations.push_back(std::make_pair(std::move(alloc0), std::move(alloc1)));
 				_nextLongTermAllocationCountDown = std::uniform_int_distribution<>(16, 64)(_rng);
 			} else
 				--_nextLongTermAllocationCountDown;
 
-			_batchedResources->TickDefrag();
+			// only defrag one -- 
+			_batchedResources0->TickDefrag();
 		}
 
 		BatchedResourcesDefragOverlay()
@@ -199,13 +212,15 @@ namespace UnitTests
 		float _movementSpeed = 0.f;
 		std::mt19937_64 _rng;
 
-		std::shared_ptr<BufferUploads::IBatchedResources> _batchedResources;
-		FrameByFrameLRUHeap<BufferUploads::ResourceLocator> _allocatedResources;
+		std::shared_ptr<BufferUploads::IBatchedResources> _batchedResources0;
+		std::shared_ptr<BufferUploads::IBatchedResources> _batchedResources1;
+		FrameByFrameLRUHeap<std::pair<BufferUploads::ResourceLocator, BufferUploads::ResourceLocator>> _allocatedResources;
 
-		std::vector<BufferUploads::ResourceLocator> _longTermAllocations;
+		std::vector<std::pair<BufferUploads::ResourceLocator, BufferUploads::ResourceLocator>> _longTermAllocations;
 		unsigned _nextLongTermAllocationCountDown;
 
-		std::shared_ptr<PlatformRig::Overlays::BatchingDisplay> _batchingDisplay;
+		std::shared_ptr<PlatformRig::Overlays::BatchingDisplay> _batchingDisplay0;
+		std::shared_ptr<PlatformRig::Overlays::BatchingDisplay> _batchingDisplay1;
 	};
 
 	TEST_CASE( "BatchedResourcesDefrag", "[rendercore_techniques, bufferuploads]" )
@@ -225,10 +240,16 @@ namespace UnitTests
 		visCamera._bottom = -100.f;
 
 		auto tester = std::make_shared<BatchedResourcesDefragOverlay>();
-		tester->_batchedResources = BufferUploads::CreateBatchedResources(
+		tester->_batchedResources0 = BufferUploads::CreateBatchedResources(
 			*testHelper->GetDevice(), testHelper->GetPrimaryResourcesApparatus()->_bufferUploads,
 			BindFlag::VertexBuffer, 1024*1024);
-		tester->_batchingDisplay = std::make_shared<PlatformRig::Overlays::BatchingDisplay>(tester->_batchedResources);
+		tester->_batchingDisplay0 = std::make_shared<PlatformRig::Overlays::BatchingDisplay>(tester->_batchedResources0);
+
+		tester->_batchedResources1 = BufferUploads::CreateBatchedResources(
+			*testHelper->GetDevice(), testHelper->GetPrimaryResourcesApparatus()->_bufferUploads,
+			BindFlag::VertexBuffer, 1024*1024);
+		tester->_batchingDisplay1 = std::make_shared<PlatformRig::Overlays::BatchingDisplay>(tester->_batchedResources1);
+
 		testHelper->Run(visCamera, tester);
 	}
 
