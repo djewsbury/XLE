@@ -110,6 +110,7 @@ namespace BufferUploads
 		SpanningHeap<uint32_t>  _heap;
 		ReferenceCountingLayer _refCounts;
 		unsigned _size;
+		unsigned _allocatedSpace;
 		uint64_t _hashLastDefrag;
 		std::atomic<bool> _lockedForDefrag = false;
 	};
@@ -268,7 +269,7 @@ namespace BufferUploads
 				heap->ValidateRefsAndHeap();
 			#endif
 
-			if (heap->_heap.IsEmpty()) {
+			if (heap->_heap.IsEmpty() && !heap->_lockedForDefrag.load()) {
 				// If we get down to completely empty, just remove and the page entirely. This can happen frequently
 				// after heap compression
 				for (auto i=_heaps.begin(); i!=_heaps.end(); ++i)
@@ -342,7 +343,7 @@ namespace BufferUploads
 		#endif
 
 		if (_activeDefrag.get()) {
-							//
+				//
 				//      Check on the status of the defrag step; and commit to the 
 				//      active resource as necessary
 				//
@@ -351,43 +352,61 @@ namespace BufferUploads
 			if (existingActiveDefrag->IsComplete(_eventListManager._currentEventListProcessedId.load())) {
 				auto* sourceHeap = _activeDefrag->GetSourceHeap();
 				_activeDefrag->Clear();
-				auto oldLocked = sourceHeap->_lockedForDefrag.exchange(false);
-				assert(oldLocked);
+
+				if (sourceHeap->_heap.IsEmpty()) {
+					// we deferred destruction of this heap until now
+					ScopedReadLock(_lock);
+					for (auto i=_heaps.begin(); i!=_heaps.end(); ++i)
+						if (i->get() == sourceHeap) {
+							_heaps.erase(i);
+							break;
+						}
+				} else {
+					auto oldLocked = sourceHeap->_lockedForDefrag.exchange(false);
+					assert(oldLocked);
+				}
 				_activeDefrag = nullptr;
 			}
 			return;
 		}
 
 
-				//                            -                                 //
-				//                         -------                              //
-				//                                                              //
-			//////////////////////////////////////////////////////////////////////////
-				//      Start a new defrag step on the most fragmented heap     //
-				//                            -                                 //
-				//        First decide if we want to do a full heap             //
-				//        compression on one of the heaps. We'll need some      //
-				//        heuristic to figure out when it's the right time      //
-				//        to do this.                                           //
-			//////////////////////////////////////////////////////////////////////////
-				//                                                              //
-				//                         -------                              //
-				//                            -                                 //
-
-		
-#if 0
-		const unsigned minWeightToDoSomething = _prototype._linearBufferDesc._sizeInBytes / 8; // only do something when there's X byte difference between total available space and the largest block
+		const unsigned minWeightToDoSomething = _prototype._linearBufferDesc._sizeInBytes / 4; // only do something when there's X byte difference between total available space and the largest block
 		const unsigned largestBlockThreshold = _prototype._linearBufferDesc._sizeInBytes / 8;
 		unsigned bestWeight = minWeightToDoSomething;
+		unsigned largestBlockForHeapDrain = 0;
 		HeapedResource* bestHeapForCompression = nullptr;
+
+		const unsigned heapDrainThreshold = _prototype._linearBufferDesc._sizeInBytes / 4;
+
+		HeapedResource* bestIncrementalDefragHeap = nullptr;
+		std::vector<RepositionStep> bestIncrementalDefragSteps;
+		const unsigned minDefragQuant = 16*1024;
+		int bestIncrementalDefragQuant = minDefragQuant;
+
 		{
 			ScopedReadLock(_lock);
 			for (auto i=_heaps.begin(); i!=_heaps.end(); ++i) {
+
+				// evaluate candidacy for a small incremental move
+				if (((*i)->_size - (*i)->_allocatedSpace) > bestIncrementalDefragQuant) {
+					auto steps = (*i)->_heap.CalculateIncrementalDefragCandidate();
+					if (!steps._steps.empty()) {
+						int increase = steps._newLargestFreeBlock - (int)(*i)->_heap.CalculateLargestFreeBlock();
+						if (increase > bestIncrementalDefragQuant) {
+							bestIncrementalDefragQuant = increase;
+							bestIncrementalDefragSteps = std::move(steps._steps);
+							bestIncrementalDefragHeap = i->get();
+						}
+					}
+				}
+
 				auto largestBlock = (*i)->_heap.CalculateLargestFreeBlock();
+				if ((*i)->_allocatedSpace > heapDrainThreshold) largestBlockForHeapDrain = std::max(largestBlockForHeapDrain, largestBlock);
 				if (largestBlock > largestBlockThreshold) continue;		// only care about pages where the largest block has become small
 
-				auto availableSpace = (*i)->_heap.CalculateAvailableSpace();
-				if (largestBlock > availableSpace/2) continue;			// we want to at least double the largest block size in order to make this worthwhile
+				auto availableSpace = (*i)->_size - (*i)->_allocatedSpace;
+				if (largestBlock*2 > availableSpace) continue;			// we want to at least double the largest block size in order to make this worthwhile
 
 				auto weight = availableSpace - largestBlock;
 				if (weight > bestWeight) {
@@ -399,14 +418,46 @@ namespace BufferUploads
 					}
 				}
 			}
+
+			if (bestIncrementalDefragHeap) {
+				// set _lockedForDefrag before we exit _lock, because this prevents destroying this heap
+				auto oldLocked = bestIncrementalDefragHeap->_lockedForDefrag.exchange(true);
+				assert(!oldLocked); (void)oldLocked;
+			} else {
+				if (!bestHeapForCompression && largestBlockForHeapDrain > heapDrainThreshold) {
+					// Look for the first small heap that where we can move the entire contents to another heap
+					for (auto i=_heaps.begin(); i!=_heaps.end(); ++i) {
+						if ((*i)->_allocatedSpace < heapDrainThreshold) {
+							bestHeapForCompression = i->get();
+							break;
+						}
+					}
+				}
+
+				// set _lockedForDefrag before we exit _lock, because this prevents destroying this heap
+				if (bestHeapForCompression) {
+					auto oldLocked = bestHeapForCompression->_lockedForDefrag.exchange(true);
+					assert(!oldLocked); (void)oldLocked;
+				}
+			}
 		}
 
 							//      -=-=-=-=-=-=-=-=-=-=-       //
 
-		if (bestHeapForCompression) {
-			auto oldLocked = bestHeapForCompression->_lockedForDefrag.exchange(true);
-			assert(!oldLocked);
+		// prioritize the small incremental defrag op
+		if (bestIncrementalDefragHeap) {
+			size_t byteCount = 0;
+			for (const auto& s:bestIncrementalDefragSteps) byteCount += s._sourceEnd-s._sourceStart;
+			_recentRepositionBytes += byteCount;
+			_totalRepositionBytes += byteCount;
 
+			// Now that we've set bestHeap->_lockedForDefrag, bestHeap->_heap is immutable...
+			auto newDefrag = std::make_unique<ActiveReposition>(
+				*this, *_bufferUploads.lock(), *bestIncrementalDefragHeap, std::move(bestIncrementalDefragSteps));
+
+			assert(!_activeDefrag);
+			_activeDefrag = std::move(newDefrag);
+		} else if (bestHeapForCompression) {
 			// Now that we've set bestHeap->_lockedForDefrag, bestHeap->_heap is immutable...
 			auto compression = bestHeapForCompression->_heap.CalculateHeapCompression();
 
@@ -436,42 +487,6 @@ namespace BufferUploads
 					assert(foundOne);
 				}
 			#endif
-		}
-#endif
-
-		HeapedResource* bestIncrementalDefragHeap = nullptr;
-		std::vector<RepositionStep> bestIncrementalDefragSteps;
-		int bestIncrementalDefragQuant = 0;
-		{
-			ScopedReadLock(_lock);
-			for (auto i=_heaps.begin(); i!=_heaps.end(); ++i) {
-				auto steps = (*i)->_heap.CalculateIncrementalDefragCandidate();
-				if (steps._steps.empty()) continue;
-
-				int increase = steps._newLargestFreeBlock - (int)(*i)->_heap.CalculateLargestFreeBlock();
-				if (increase > bestIncrementalDefragQuant) {
-					bestIncrementalDefragQuant = increase;
-					bestIncrementalDefragSteps = std::move(steps._steps);
-					bestIncrementalDefragHeap = i->get();
-				}
-			}
-		}
-
-		if (bestIncrementalDefragHeap && bestIncrementalDefragQuant >= 16*1024) {
-			auto oldLocked = bestIncrementalDefragHeap->_lockedForDefrag.exchange(true);
-			assert(!oldLocked);
-
-			size_t byteCount = 0;
-			for (const auto& s:bestIncrementalDefragSteps) byteCount += s._sourceEnd-s._sourceStart;
-			_recentRepositionBytes += byteCount;
-			_totalRepositionBytes += byteCount;
-
-			// Now that we've set bestHeap->_lockedForDefrag, bestHeap->_heap is immutable...
-			auto newDefrag = std::make_unique<ActiveReposition>(
-				*this, *_bufferUploads.lock(), *bestIncrementalDefragHeap, std::move(bestIncrementalDefragSteps));
-
-			assert(!_activeDefrag);
-			_activeDefrag = std::move(newDefrag);
 		}
 	}
 
@@ -555,7 +570,9 @@ namespace BufferUploads
 	unsigned    BatchedResources::HeapedResource::Allocate(unsigned size, const char name[])
 	{
 		// note -- we start out with no ref count registered in _refCounts for this range. The first ref count will come when we create a ResourceLocator
-		return _heap.Allocate(size);
+		auto result = _heap.Allocate(size);
+		if (result != ~0u) _allocatedSpace += size;
+		return result;
 	}
 
 	bool        BatchedResources::HeapedResource::AddRef(unsigned ptr, unsigned size, const char name[])
@@ -568,12 +585,15 @@ namespace BufferUploads
 
 	void    BatchedResources::HeapedResource::Allocate(unsigned ptr, unsigned size)
 	{
-		_heap.Allocate(ptr, size);
+		if (_heap.Allocate(ptr, size))
+			_allocatedSpace += size;
 	}
 
 	void        BatchedResources::HeapedResource::Deallocate(unsigned ptr, unsigned size)
 	{
-		_heap.Deallocate(ptr, size);
+		if (_heap.Deallocate(ptr, size))
+			_allocatedSpace -= size;
+		assert(_heap.CalculateAllocatedSpace() == _allocatedSpace);
 	}
 
 	BatchedHeapMetrics BatchedResources::HeapedResource::CalculateMetrics() const
@@ -612,11 +632,12 @@ namespace BufferUploads
 			unsigned referencedSpace = _refCounts.CalculatedReferencedSpace();
 			unsigned heapAllocatedSpace = _heap.CalculateAllocatedSpace();
 			assert(heapAllocatedSpace == referencedSpace);
+			assert(_allocatedSpace == heapAllocatedSpace);
 		#endif
 	}
 
 	BatchedResources::HeapedResource::HeapedResource()
-	: _size(0), _heap(0), _refCounts(0), _hashLastDefrag(0)
+	: _size(0), _heap(0), _refCounts(0), _hashLastDefrag(0), _allocatedSpace(0)
 	{}
 
 	BatchedResources::HeapedResource::HeapedResource(const ResourceDesc& desc, const std::shared_ptr<RenderCore::IResource>& heapResource)
@@ -625,6 +646,7 @@ namespace BufferUploads
 	, _refCounts(RenderCore::ByteCount(desc))
 	, _size(RenderCore::ByteCount(desc))
 	, _hashLastDefrag(0)
+	, _allocatedSpace(0)
 	{}
 
 	BatchedResources::HeapedResource::~HeapedResource()
