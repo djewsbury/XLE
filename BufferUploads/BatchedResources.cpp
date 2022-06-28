@@ -6,11 +6,133 @@
 #include "Metrics.h"
 #include "ResourceUploadHelper.h"
 #include "ThreadContext.h"
+#include "../Utility/HeapUtils.h"
 
 namespace BufferUploads
 {
+	class BatchedResources : public IBatchedResources, public std::enable_shared_from_this<BatchedResources>
+	{
+	public:
+		ResourceLocator Allocate(size_t size, const char name[]) override;
 
-		/////   B A T C H E D   R E S O U R C E S   /////
+		virtual void AddRef(
+			uint64_t resourceMarker, RenderCore::IResource& resource, 
+			size_t offset, size_t size) override;
+
+		virtual void Release(
+			uint64_t resourceMarker, std::shared_ptr<RenderCore::IResource>&& resource, 
+			size_t offset, size_t size) override;
+
+		struct ResultFlags { enum Enum { IsBatched = 1<<0, ActiveReposition = 1<<1 }; using BitField=unsigned; };
+		ResultFlags::BitField   IsBatchedResource(RenderCore::IResource* resource) const;
+		ResultFlags::BitField   Validate(const ResourceLocator& locator) const;
+		BatchingSystemMetrics   CalculateMetrics() const override;
+		const ResourceDesc&     GetPrototype() const { return _prototype; }
+
+		void                    TickDefrag() override;
+
+		//////////// event lists //////////////
+		IteratorRange<const Event_ResourceReposition*>	EventList_Get(EventListID id) override;
+		void          EventList_Release(EventListID id) override;
+		EventListID   EventList_GetPublishedID() const override;
+		///////////////////////////////////////
+
+		BatchedResources(
+			RenderCore::IDevice&, std::shared_ptr<IManager>&, 
+			RenderCore::BindFlag::BitField bindFlags,
+			unsigned pageSizeInBytes);
+		~BatchedResources();
+	private:
+		class EventListManager;
+		class HeapedResource;
+		class ActiveReposition;
+
+		std::vector<std::unique_ptr<HeapedResource>> _heaps;
+		ResourceDesc _prototype;
+		RenderCore::IDevice* _device;
+		mutable Threading::ReadWriteMutex _lock;
+		std::weak_ptr<IManager> _bufferUploads;
+
+			//  Active defrag stuff...
+		std::unique_ptr<ActiveReposition> _activeDefrag;
+
+		mutable std::atomic<unsigned>   _recentDeviceCreateCount;
+		std::atomic<size_t>             _totalCreateCount;
+
+		struct EventListManager
+		{
+			struct EventList
+			{
+				volatile EventListID _id = ~EventListID(0x0);
+				Event_ResourceReposition _evnt;
+				std::atomic<unsigned> _clientReferences{0};
+			};
+			EventListID _currentEventListId = 0;
+			EventListID _currentEventListPublishedId = 0;
+			std::atomic<EventListID> _currentEventListProcessedId{0};
+			EventList _eventBuffers[4];
+			unsigned _eventListWritingIndex = 0;
+
+			EventListID EventList_Publish(const Event_ResourceReposition& evnt);
+		};
+		EventListManager _eventListManager;
+
+		#if defined(_DEBUG)
+			std::optional<std::thread::id> _tickThread;
+		#endif
+
+		BatchedResources(const BatchedResources&);
+		BatchedResources& operator=(const BatchedResources&);
+	};
+
+	class BatchedResources::HeapedResource
+	{
+	public:
+		unsigned            Allocate(unsigned size, const char name[]=nullptr);
+		void                Allocate(unsigned ptr, unsigned size);
+		void                Deallocate(unsigned ptr, unsigned size);
+
+		bool                AddRef(unsigned ptr, unsigned size, const char name[]=nullptr);
+		
+		BatchedHeapMetrics  CalculateMetrics() const;
+		void                ValidateRefsAndHeap();
+
+		HeapedResource();
+		HeapedResource(const ResourceDesc& desc, const std::shared_ptr<RenderCore::IResource>& heapResource);
+		~HeapedResource();
+
+		std::shared_ptr<RenderCore::IResource> _heapResource;
+		SpanningHeap<uint32_t>  _heap;
+		ReferenceCountingLayer _refCounts;
+		unsigned _size;
+		uint64_t _hashLastDefrag;
+		std::atomic<bool> _lockedForDefrag = false;
+	};
+
+	class BatchedResources::ActiveReposition
+	{
+	public:
+		void	Tick(EventListManager& evntListMan, IManager& bufferUploads);
+		bool	IsComplete(EventListID processedEventList);
+		void	Clear();
+
+		HeapedResource*     GetSourceHeap() { return _srcHeap; }
+		IteratorRange<const RepositionStep*> GetSteps() const { return _steps; }
+
+		ActiveReposition(
+			BatchedResources& resourceSystem,
+			IManager& bufferUploads,
+			HeapedResource& srcHeap,
+			std::vector<RepositionStep>&& steps);
+		~ActiveReposition();
+	private:
+		std::optional<EventListID>			_eventId;
+		ResourceLocator						_dstUberBlock;
+		HeapedResource*						_srcHeap;
+		std::vector<RepositionStep>			_steps;
+		std::future<CommandListID>			_futureRepositionCmdList;
+		std::optional<CommandListID>		_repositionCmdList;
+	};
 
 	ResourceLocator    BatchedResources::Allocate(
 		size_t size, const char name[])
@@ -40,7 +162,7 @@ namespace BufferUploads
 						// We take the reference count before the ResourceLocator is created in
 						// order to avoid looking up the HeapedResource a second time, and avoid
 						// issues with non-recursive mutex locks
-						bestHeap->AddRef(allocation, size, "<<unknown>>");
+						bestHeap->AddRef(allocation, size);
 						return ResourceLocator{
 							bestHeap->_heapResource, 
 							allocation, size, 
@@ -62,7 +184,7 @@ namespace BufferUploads
 		auto newHeap = std::make_unique<HeapedResource>(_prototype, heapResource);
 		unsigned allocation = newHeap->Allocate(size, name);
 		assert(allocation != ~unsigned(0x0));
-		newHeap->AddRef(allocation, size, "<<unknown>>");
+		newHeap->AddRef(allocation, size);
 
 		{
 			ScopedModifyLock(_lock);
@@ -73,7 +195,7 @@ namespace BufferUploads
 	}
 	
 	void BatchedResources::AddRef(
-		uint64_t resourceMarker, IResource& resource, 
+		uint64_t resourceMarker, RenderCore::IResource& resource, 
 		size_t offset, size_t size)
 	{
 		ScopedReadLock(_lock);
@@ -86,11 +208,11 @@ namespace BufferUploads
 		}
 
 		assert(heap);
-		if (heap) heap->AddRef(offset, size, "<<unknown>>");
+		if (heap) heap->AddRef(offset, size);
 	}
 
 	void BatchedResources::Release(
-		uint64_t resourceMarker, std::shared_ptr<IResource>&& resource, 
+		uint64_t resourceMarker, std::shared_ptr<RenderCore::IResource>&& resource, 
 		size_t offset, size_t size)
 	{
 		ScopedReadLock(_lock);
@@ -156,12 +278,12 @@ namespace BufferUploads
 	}
 
 	BatchedResources::ResultFlags::BitField BatchedResources::IsBatchedResource(
-		IResource* resource) const
+		RenderCore::IResource* resource) const
 	{
 		ScopedReadLock(_lock);
 		for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i)
 			if ((*i)->_heapResource.get() == resource)
-				return ResultFlags::IsBatched|((*i)->_lockedForDefrag?ResultFlags::IsCurrentlyDefragging:0);
+				return ResultFlags::IsBatched|((*i)->_lockedForDefrag?ResultFlags::ActiveReposition:0);
 		return 0;
 	}
 
@@ -170,11 +292,9 @@ namespace BufferUploads
 		ScopedReadLock(_lock);
 
 			//      check to make sure the same resource isn't showing up twice
-		for (auto i=_heaps.begin(); i!=_heaps.end(); ++i) {
-			for (auto i2=i+1; i2!=_heaps.end(); ++i2) {
+		for (auto i=_heaps.begin(); i!=_heaps.end(); ++i)
+			for (auto i2=i+1; i2!=_heaps.end(); ++i2)
 				assert((*i2)->_heapResource != (*i)->_heapResource);
-			}
-		}
 
 		BatchedResources::ResultFlags::BitField result = 0;
 		const HeapedResource* heapResource = NULL;
@@ -196,16 +316,21 @@ namespace BufferUploads
 		ScopedReadLock(_lock);
 		BatchingSystemMetrics result;
 		result._heaps.reserve(_heaps.size());
-		for (auto i=_heaps.begin(); i!=_heaps.end(); ++i) {
+		for (auto i=_heaps.begin(); i!=_heaps.end(); ++i)
 			result._heaps.push_back((*i)->CalculateMetrics());
-		}
 		result._recentDeviceCreateCount = _recentDeviceCreateCount.exchange(0);
 		result._totalDeviceCreateCount = _totalCreateCount.load();
 		return result;
 	}
 
-	void BatchedResources::Tick()
+	void BatchedResources::TickDefrag()
 	{
+		#if defined(_DEBUG)
+			// BatchedResources::TickDefrag() is not reentrant, we're assuming it's always done on the same thread
+			if (!_tickThread) _tickThread = std::this_thread::get_id();
+			else assert(_tickThread == std::this_thread::get_id());
+		#endif
+
 		if (_activeDefrag.get()) {
 							//
 				//      Check on the status of the defrag step; and commit to the 
@@ -218,7 +343,6 @@ namespace BufferUploads
 				_activeDefrag->Clear();
 				auto oldLocked = sourceHeap->_lockedForDefrag.exchange(false);
 				assert(oldLocked);
-				ScopedModifyLock(_lock); // lock here to prevent any operations on _activeDefrag->GetHeap() while we do this...
 				_activeDefrag = nullptr;
 			}
 			return;
@@ -278,11 +402,8 @@ namespace BufferUploads
 			auto newDefrag = std::make_unique<ActiveReposition>(
 				*this, *_bufferUploads.lock(), *bestHeapForCompression, std::move(compression));
 
-			{
-				ScopedLock(_lock);  // must lock during the defrag commit & defrag create
-				assert(!_activeDefrag);
-				_activeDefrag = std::move(newDefrag);
-			}
+			assert(!_activeDefrag);
+			_activeDefrag = std::move(newDefrag);
 
 			#if defined(_DEBUG)
 				// Validate that everything recorded in the _refCounts is part of the repositioning
@@ -301,9 +422,7 @@ namespace BufferUploads
 		}
 	}
 
-	EventListID   BatchedResources::EventList_GetWrittenID() const { return _eventListManager._currentEventListId; }
 	EventListID   BatchedResources::EventList_GetPublishedID() const { return _eventListManager._currentEventListPublishedId; }
-	EventListID   BatchedResources::EventList_GetProcessedID() const { return _eventListManager._currentEventListProcessedId; }
 
 	IteratorRange<const Event_ResourceReposition*> BatchedResources::EventList_Get(EventListID id)
 	{
@@ -344,7 +463,7 @@ namespace BufferUploads
 		}
 	}
 
-	EventListID   BatchedResources::EventListManager::EventList_Push(const Event_ResourceReposition& evnt)
+	EventListID   BatchedResources::EventListManager::EventList_Publish(const Event_ResourceReposition& evnt)
 	{
 			//
 			//      try to push this event into the small queue... but don't overwrite anything that
@@ -355,23 +474,24 @@ namespace BufferUploads
 			_eventBuffers[_eventListWritingIndex]._id = id;
 			_eventBuffers[_eventListWritingIndex]._evnt = evnt;
 			_eventListWritingIndex = (_eventListWritingIndex+1)%dimof(_eventBuffers);   // single writing thread, so it's ok
+			_currentEventListPublishedId = id;
 			return id;
 		}
 		assert(0);
 		return ~EventListID(0x0);
 	}
 
-	void BatchedResources::EventListManager::EventList_Publish(EventListID toEvent)
-	{
-		_currentEventListPublishedId = toEvent;
-	}
-
-	BatchedResources::BatchedResources(RenderCore::IDevice& device, std::shared_ptr<IManager>& bufferUploads, const ResourceDesc& prototype)
-	: _prototype(prototype), _device(&device)
+	BatchedResources::BatchedResources(
+		RenderCore::IDevice& device, std::shared_ptr<IManager>& bufferUploads,
+		RenderCore::BindFlag::BitField bindFlags,
+		unsigned pageSizeInBytes)
+	: _device(&device)
 	, _bufferUploads(bufferUploads)
 	{
-		assert(_prototype._bindFlags & BindFlag::TransferDst);
-		assert(_prototype._bindFlags & BindFlag::TransferSrc);
+		_prototype = CreateDesc(
+			bindFlags | BindFlag::TransferDst | BindFlag::TransferSrc, 0,
+			LinearBufferDesc::Create(pageSizeInBytes),
+			"batched-resources");
 		_recentDeviceCreateCount = 0;
 		_totalCreateCount = 0;
 	}
@@ -446,7 +566,7 @@ namespace BufferUploads
 	: _size(0), _heap(0), _refCounts(0), _hashLastDefrag(0)
 	{}
 
-	BatchedResources::HeapedResource::HeapedResource(const ResourceDesc& desc, const std::shared_ptr<IResource>& heapResource)
+	BatchedResources::HeapedResource::HeapedResource(const ResourceDesc& desc, const std::shared_ptr<RenderCore::IResource>& heapResource)
 	: _heapResource(heapResource)
 	, _heap(RenderCore::ByteCount(desc))
 	, _refCounts(RenderCore::ByteCount(desc))
@@ -472,11 +592,10 @@ namespace BufferUploads
 		if (_repositionCmdList && !_eventId.has_value() && bufferUploads.IsComplete(_repositionCmdList.value())) {
 			// publish the changes to encourage the client to move across to the 
 			Event_ResourceReposition result;
-			result._originalResource = _srcHeap->_heapResource;
+			result._originalResource = _srcHeap->_heapResource.get();
 			result._newResource = _dstUberBlock.GetContainingResource();
 			result._defragSteps = _steps;
-			_eventId = evntListMan.EventList_Push(result);
-			evntListMan.EventList_Publish(_eventId.value());
+			_eventId = evntListMan.EventList_Publish(result);
 		}
 	}
 
@@ -520,5 +639,13 @@ namespace BufferUploads
 	}
 
 	BatchedResources::ActiveReposition::~ActiveReposition() {}
+
+	std::shared_ptr<IBatchedResources> CreateBatchedResources(
+		RenderCore::IDevice& device, std::shared_ptr<IManager>& bufferUploads, 
+		RenderCore::BindFlag::BitField bindFlags,
+		unsigned pageSizeInBytes)
+	{
+		return std::make_shared<BatchedResources>(device, bufferUploads, bindFlags, pageSizeInBytes);
+	}
 
 }

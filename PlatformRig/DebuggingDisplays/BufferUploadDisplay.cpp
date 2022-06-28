@@ -1300,7 +1300,7 @@ namespace PlatformRig { namespace Overlays
         return ProcessInputResult::Passthrough;
     }
 
-    BatchingDisplay::BatchingDisplay(std::shared_ptr<BufferUploads::BatchedResources> batchedResources)
+    BatchingDisplay::BatchingDisplay(std::shared_ptr<BufferUploads::IBatchedResources> batchedResources)
     : _batchedResources(std::move(batchedResources)) {}
     BatchingDisplay::~BatchingDisplay() = default;
 }}

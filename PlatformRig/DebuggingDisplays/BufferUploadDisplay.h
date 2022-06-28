@@ -110,7 +110,7 @@ namespace PlatformRig { namespace Overlays
     class BatchingDisplay : public IWidget ///////////////////////////////////////////////////////////
     {
     public:
-        BatchingDisplay(std::shared_ptr<BufferUploads::BatchedResources> batchedResources);
+        BatchingDisplay(std::shared_ptr<BufferUploads::IBatchedResources> batchedResources);
         ~BatchingDisplay();
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
         ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
@@ -128,7 +128,7 @@ namespace PlatformRig { namespace Overlays
 
         float CalculateWarmth(uint64_t heapGuid, unsigned begin, unsigned end, bool allocatedMode);
         bool FindSpan(uint64_t heapGuid, unsigned begin, unsigned end, bool allocatedMode);
-        std::shared_ptr<BufferUploads::BatchedResources> _batchedResources;
+        std::shared_ptr<BufferUploads::IBatchedResources> _batchedResources;
     };
 }}
 

@@ -19,6 +19,7 @@
 #include "../../Math/Transformations.h"
 #include "../../Math/Geometry.h"
 #include "../../Utility/StringFormat.h"
+#include "../../Utility/HeapUtils.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 #include <random>
@@ -64,7 +65,7 @@ namespace UnitTests
 				if (evnt != lastProcessed) {
 					for (auto e:_batchedResources->EventList_Get(evnt))
 						for (auto& o:_allocatedResources.GetRawObjects())
-							if (o.GetContainingResource().get() == e._originalResource.get())
+							if (o.GetContainingResource().get() == e._originalResource)
 								RepositionLocator(o, e._newResource, e._defragSteps);
 					_batchedResources->EventList_Release(evnt);
 					lastProcessed = evnt;
@@ -171,7 +172,7 @@ namespace UnitTests
 			} else
 				--_nextLongTermAllocationCountDown;
 
-			_batchedResources->Tick();
+			_batchedResources->TickDefrag();
 		}
 
 		BatchedResourcesDefragOverlay()
@@ -198,7 +199,7 @@ namespace UnitTests
 		float _movementSpeed = 0.f;
 		std::mt19937_64 _rng;
 
-		std::shared_ptr<BufferUploads::BatchedResources> _batchedResources;
+		std::shared_ptr<BufferUploads::IBatchedResources> _batchedResources;
 		FrameByFrameLRUHeap<BufferUploads::ResourceLocator> _allocatedResources;
 
 		std::vector<BufferUploads::ResourceLocator> _longTermAllocations;
@@ -207,7 +208,7 @@ namespace UnitTests
 		std::shared_ptr<PlatformRig::Overlays::BatchingDisplay> _batchingDisplay;
 	};
 
-	TEST_CASE( "BatchedResourcesDefrag", "[math]" )
+	TEST_CASE( "BatchedResourcesDefrag", "[rendercore_techniques, bufferuploads]" )
 	{
 		using namespace RenderCore;
 
@@ -224,9 +225,9 @@ namespace UnitTests
 		visCamera._bottom = -100.f;
 
 		auto tester = std::make_shared<BatchedResourcesDefragOverlay>();
-		tester->_batchedResources = std::make_shared<BufferUploads::BatchedResources>(
+		tester->_batchedResources = BufferUploads::CreateBatchedResources(
 			*testHelper->GetDevice(), testHelper->GetPrimaryResourcesApparatus()->_bufferUploads,
-			RenderCore::CreateDesc(BindFlag::VertexBuffer|BindFlag::TransferDst|BindFlag::TransferSrc, LinearBufferDesc::Create(1024*1024), "batch-test"));
+			BindFlag::VertexBuffer, 1024*1024);
 		tester->_batchingDisplay = std::make_shared<PlatformRig::Overlays::BatchingDisplay>(tester->_batchedResources);
 		testHelper->Run(visCamera, tester);
 	}
