@@ -26,7 +26,7 @@ namespace BufferUploads
 		virtual ResourceLocator Allocate(size_t size, const char name[]) = 0;
 
 		virtual void TickDefrag() = 0;
-		virtual IteratorRange<const Event_ResourceReposition*>	EventList_Get(EventListID id) = 0;
+		virtual IteratorRange<const Event_ResourceReposition*> EventList_Get(EventListID id) = 0;
 		virtual void EventList_Release(EventListID id) = 0;
 		virtual EventListID EventList_GetPublishedID() const = 0;
 
@@ -34,7 +34,7 @@ namespace BufferUploads
 	};
 
 	std::shared_ptr<IBatchedResources> CreateBatchedResources(
-		RenderCore::IDevice&, std::shared_ptr<IManager>&, 
+		RenderCore::IDevice&, const std::shared_ptr<IManager>&, 
 		RenderCore::BindFlag::BitField bindFlags,
 		unsigned pageSizeInBytes);
 

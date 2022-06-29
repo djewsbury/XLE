@@ -17,6 +17,7 @@ namespace RenderCore { namespace Assets
 }}
 
 namespace Assets { class AssetHeapRecord; }
+namespace BufferUploads { class IManager; }
 
 namespace RenderCore { namespace Techniques
 {
@@ -71,6 +72,7 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<IDrawablesPool> drawablesPool, 
             std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool, 
             std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
+            std::shared_ptr<BufferUploads::IManager> bufferUploads,
 			const Config& cfg = Config());
         ~ModelCache();
     protected:

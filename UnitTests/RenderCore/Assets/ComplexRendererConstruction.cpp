@@ -90,7 +90,7 @@ namespace UnitTests
 			
 				SECTION("Create DrawableConstructor")
 				{
-					auto constructor = std::make_shared<Techniques::DrawableConstructor>(testApparatus._drawablesPool, testApparatus._pipelineAccelerators, *testApparatus._bufferUploads, *rendererConstruction);
+					auto constructor = std::make_shared<Techniques::DrawableConstructor>(testApparatus._drawablesPool, testApparatus._pipelineAccelerators, nullptr, *testApparatus._bufferUploads, *rendererConstruction);
 					std::promise<std::shared_ptr<Techniques::DrawableConstructor>> promise;
 					auto future = promise.get_future();
 					constructor->FulfillWhenNotPending(std::move(promise));

@@ -39,6 +39,7 @@ namespace RenderCore { namespace Techniques {
 		unsigned resourceSize,
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 		BindFlag::BitField bindFlags,
+		std::shared_ptr<BufferUploads::IResourcePool> resourceSource,
 		StringSection<> resourceName);
 
 	struct ModelScaffoldLoadRequest

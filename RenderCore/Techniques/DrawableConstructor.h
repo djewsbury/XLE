@@ -9,7 +9,7 @@
 #include <memory>
 
 namespace RenderCore { namespace Assets { class ScaffoldCmdIterator; }}
-namespace BufferUploads { class IManager; }
+namespace BufferUploads { class IManager; class IResourcePool; }
 namespace std { template<typename T> class promise; }
 namespace RenderCore { namespace Techniques
 {
@@ -22,6 +22,7 @@ namespace RenderCore { namespace Techniques
 	class IDeformAcceleratorPool;
 	class DeformAccelerator;
 	class ModelRendererConstruction;
+	class RepositionableGeometryConduit;
 
 	class DrawableConstructor : public std::enable_shared_from_this<DrawableConstructor>
 	{
@@ -72,6 +73,7 @@ namespace RenderCore { namespace Techniques
 		DrawableConstructor(
 			std::shared_ptr<IDrawablesPool> drawablesPool,
 			std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
+			std::shared_ptr<RepositionableGeometryConduit> repositionableGeometry,
 			BufferUploads::IManager& bufferUploads,
 			const ModelRendererConstruction&,
 			const std::shared_ptr<IDeformAcceleratorPool>& =nullptr,

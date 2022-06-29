@@ -5,6 +5,9 @@
 #include "ModelCache.h"
 #include "SimpleModelRenderer.h"
 #include "ModelRendererConstruction.h"
+#include "PipelineAccelerator.h"		// just so we can use GetDevice()
+#include "Drawables.h"
+#include "../BufferUploads/BatchedResources.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/MaterialScaffold.h"
 #include "../../Assets/AssetHeapLRU.h"
@@ -30,6 +33,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
 		std::shared_ptr<IDeformAcceleratorPool> _deformAcceleratorPool;
 		std::shared_ptr<IDrawablesPool> _drawablesPool;
+		std::shared_ptr<RepositionableGeometryConduit> _repositionalGeometry;
 
 		uint32_t _reloadId;
 
@@ -79,7 +83,7 @@ namespace RenderCore { namespace Techniques
 		auto construction = std::make_shared<ModelRendererConstruction>();
 		construction->AddElement().SetModelScaffold(modelScaffold).SetMaterialScaffold(materialScaffold);
 
-		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, construction);
+		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_repositionalGeometry, construction);
 		return newFuture;
 	}
 
@@ -113,7 +117,7 @@ namespace RenderCore { namespace Techniques
 		auto construction = std::make_shared<ModelRendererConstruction>();
 		construction->AddElement().SetModelScaffold(modelScaffold).SetMaterialScaffold(materialScaffold);
 
-		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, construction);
+		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_repositionalGeometry, construction);
 		return nullptr;	// implicitly not available immediately
 	}
 
@@ -150,12 +154,17 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IDrawablesPool> drawablesPool, 
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool,
 		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
+		std::shared_ptr<BufferUploads::IManager> bufferUploads,
 		const Config& cfg)
 	{
 		_pimpl = std::make_unique<Pimpl>(cfg);
 		_pimpl->_pipelineAcceleratorPool = std::move(pipelineAcceleratorPool);
 		_pimpl->_deformAcceleratorPool = std::move(deformAcceleratorPool);
 		_pimpl->_drawablesPool = std::move(drawablesPool);
+		if (bufferUploads)
+			_pimpl->_repositionalGeometry = std::make_shared<RepositionableGeometryConduit>(
+				BufferUploads::CreateBatchedResources(*_pimpl->_pipelineAcceleratorPool->GetDevice(), bufferUploads, BindFlag::VertexBuffer, 1024*1024),
+				BufferUploads::CreateBatchedResources(*_pimpl->_pipelineAcceleratorPool->GetDevice(), bufferUploads, BindFlag::IndexBuffer, 1024*1024));
 	}
 
 	ModelCache::~ModelCache()

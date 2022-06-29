@@ -580,6 +580,7 @@ namespace RenderCore { namespace Techniques
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 		std::shared_ptr<IDrawablesPool> drawablesPool,
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool,
+		std::shared_ptr<RepositionableGeometryConduit> repositionableGeometry,
 		std::shared_ptr<ModelRendererConstruction> construction,
 		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
 		std::shared_ptr<DeformAccelerator> deformAcceleratorInit,
@@ -590,7 +591,7 @@ namespace RenderCore { namespace Techniques
 		::Assets::WhenAll(ToFuture(*construction)).ThenConstructToPromise(
 			std::move(promise),
 			[pipelineAcceleratorPool=std::move(pipelineAcceleratorPool), deformAcceleratorPool=std::move(deformAcceleratorPool), drawablesPool=std::move(drawablesPool),
-			deformAccelerator=std::move(deformAcceleratorInit), uniformBufferBindings=std::move(uniformBufferBindings)](auto&& promise, auto completedConstruction) mutable {
+			deformAccelerator=std::move(deformAcceleratorInit), uniformBufferBindings=std::move(uniformBufferBindings), repositionableGeometry=std::move(repositionableGeometry)](auto&& promise, auto completedConstruction) mutable {
 
 				std::shared_ptr<DrawableConstructor> drawableConstructor;
 				std::shared_future<void> deformAcceleratorInitFuture;
@@ -612,7 +613,7 @@ namespace RenderCore { namespace Techniques
 					}
 
 					auto& bufferUploads = Services::GetInstance().GetBufferUploads();
-					drawableConstructor = std::make_shared<DrawableConstructor>(drawablesPool, pipelineAcceleratorPool, bufferUploads, *completedConstruction, deformAcceleratorPool, deformAccelerator);
+					drawableConstructor = std::make_shared<DrawableConstructor>(drawablesPool, pipelineAcceleratorPool, repositionableGeometry, bufferUploads, *completedConstruction, deformAcceleratorPool, deformAccelerator);
 				} CATCH(...) {
 					promise.set_exception(std::current_exception());
 					return;
@@ -660,7 +661,7 @@ namespace RenderCore { namespace Techniques
 		construction->AddElement().SetModelAndMaterialScaffolds(modelScaffoldName, materialScaffoldName);
 		return ConstructToPromise(
 			std::move(promise),
-			std::move(drawablesPool), std::move(pipelineAcceleratorPool), std::move(construction),
+			std::move(drawablesPool), std::move(pipelineAcceleratorPool), nullptr, std::move(construction),
 			nullptr, nullptr,
 			uniformBufferDelegates);
 	}

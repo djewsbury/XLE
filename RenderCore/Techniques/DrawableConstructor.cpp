@@ -102,6 +102,7 @@ namespace RenderCore { namespace Techniques
 			std::vector<InputLayout> _geosLayout;
 			std::vector<Topology> _geosTopologies;
 			std::shared_ptr<IDrawablesPool> _drawablesPool;
+			std::shared_ptr<RepositionableGeometryConduit> _repositionableGeometry;
 
 			enum class LoadBuffer { VB, IB };
 			enum class DrawableStream { IB, Vertex0, Vertex1, Vertex2, Vertex3 };
@@ -242,6 +243,7 @@ namespace RenderCore { namespace Techniques
 				struct PendingTransactions
 				{
 					std::vector<BufferUploads::TransactionMarker> _markers;
+					std::shared_ptr<RepositionableGeometryConduit> _repositionableGeometry;
 
 					struct ResAssignment
 					{
@@ -252,6 +254,7 @@ namespace RenderCore { namespace Techniques
 					std::vector<ResAssignment> _resAssignments;
 				};
 				auto pendingTransactions = std::make_shared<PendingTransactions>();
+				pendingTransactions->_repositionableGeometry = _repositionableGeometry;
 				for (auto i=_staticLoadRequests.begin(); i!=_staticLoadRequests.end();) {
 					auto start = i;
 					while (i!=_staticLoadRequests.end() && i->_loadBuffer == start->_loadBuffer && i->_scaffoldIdx == start->_scaffoldIdx) ++i;
@@ -280,12 +283,24 @@ namespace RenderCore { namespace Techniques
 							offset += i2->_srcSize;	// todo -- alignment?
 						}
 					}
-					auto transMarker = LoadStaticResourceFullyAsync(
-						bufferUploads,
-						MakeIteratorRange(localLoadRequests),
-						offset, _registeredScaffolds[start->_scaffoldIdx],
-						(start->_loadBuffer == LoadBuffer::IB) ? BindFlag::IndexBuffer : BindFlag::VertexBuffer,
-						(StringMeld<128>() << "[vb]" << _registeredScaffoldNames[start->_scaffoldIdx]).AsStringSection());
+					BufferUploads::TransactionMarker transMarker;
+					if (start->_loadBuffer == LoadBuffer::VB) {
+						transMarker = LoadStaticResourceFullyAsync(
+							bufferUploads,
+							MakeIteratorRange(localLoadRequests),
+							offset, _registeredScaffolds[start->_scaffoldIdx],
+							BindFlag::VertexBuffer,
+							pendingTransactions->_repositionableGeometry ? pendingTransactions->_repositionableGeometry->GetVBResourcePool() : nullptr,
+							(StringMeld<128>() << "[vb]" << _registeredScaffoldNames[start->_scaffoldIdx]).AsStringSection());
+					} else {
+						transMarker = LoadStaticResourceFullyAsync(
+							bufferUploads,
+							MakeIteratorRange(localLoadRequests),
+							offset, _registeredScaffolds[start->_scaffoldIdx],
+							BindFlag::IndexBuffer,
+							pendingTransactions->_repositionableGeometry ? pendingTransactions->_repositionableGeometry->GetIBResourcePool() : nullptr,
+							(StringMeld<128>() << "[ib]" << _registeredScaffoldNames[start->_scaffoldIdx]).AsStringSection());
+					}
 					pendingTransactions->_markers.emplace_back(std::move(transMarker));
 				}
 				_staticLoadRequests.clear();
@@ -327,6 +342,10 @@ namespace RenderCore { namespace Techniques
 							// record completion cmd list
 							if (locators[assign._markerIdx].GetCompletionCommandList() != BufferUploads::CommandListID_Invalid)
 								assign._drawableGeo->_completionCmdList = std::max(assign._drawableGeo->_completionCmdList, locators[assign._markerIdx].GetCompletionCommandList());
+							
+							// register in the RepositionableGeometryConduit now that the DrawableGeo is complete & not longer expecting any further writes
+							if (pendingTransactions->_repositionableGeometry)
+								assign._drawableGeo->Attach(pendingTransactions->_repositionableGeometry);
 						}
 
 						return largestCmdList;
@@ -778,11 +797,12 @@ namespace RenderCore { namespace Techniques
 			std::sort(dst._cmdStreams.begin(), dst._cmdStreams.begin(), [](const auto& lhs, const auto& rhs) { return lhs._guid < rhs._guid; });
 		}
 
-		Pimpl(std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
+		Pimpl(std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators, std::shared_ptr<RepositionableGeometryConduit> repositionableGeometry)
 		{
 			_pendingPipelines._drawablesPool = drawablesPool;
 			_pendingPipelines._pipelineAcceleratorPool = std::move(pipelineAccelerators);
 			_pendingGeos._drawablesPool = std::move(drawablesPool);
+			_pendingGeos._repositionableGeometry = std::move(repositionableGeometry);
 		}
 
 		~Pimpl()
@@ -833,13 +853,14 @@ namespace RenderCore { namespace Techniques
 	DrawableConstructor::DrawableConstructor(
 		std::shared_ptr<IDrawablesPool> drawablesPool,
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
+		std::shared_ptr<RepositionableGeometryConduit> repositionableGeometry,
 		BufferUploads::IManager& bufferUploads,
 		const ModelRendererConstruction& construction,
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator)
 	{
 		_completionCommandList = 0;
-		_pimpl = std::make_unique<Pimpl>(std::move(drawablesPool), std::move(pipelineAccelerators));
+		_pimpl = std::make_unique<Pimpl>(std::move(drawablesPool), std::move(pipelineAccelerators), std::move(repositionableGeometry));
 		TRY {
 			Add(construction, deformAcceleratorPool, deformAccelerator);
 			std::promise<BufferUploads::CommandListID> uploadPromise;

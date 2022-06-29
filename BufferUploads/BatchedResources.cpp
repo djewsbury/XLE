@@ -38,7 +38,7 @@ namespace BufferUploads
 		///////////////////////////////////////
 
 		BatchedResources(
-			RenderCore::IDevice&, std::shared_ptr<IManager>&, 
+			RenderCore::IDevice&, const std::shared_ptr<IManager>&, 
 			RenderCore::BindFlag::BitField bindFlags,
 			unsigned pageSizeInBytes);
 		~BatchedResources();
@@ -550,7 +550,7 @@ namespace BufferUploads
 	}
 
 	BatchedResources::BatchedResources(
-		RenderCore::IDevice& device, std::shared_ptr<IManager>& bufferUploads,
+		RenderCore::IDevice& device, const std::shared_ptr<IManager>& bufferUploads,
 		RenderCore::BindFlag::BitField bindFlags,
 		unsigned pageSizeInBytes)
 	: _device(&device)
@@ -716,7 +716,7 @@ namespace BufferUploads
 	BatchedResources::ActiveReposition::~ActiveReposition() {}
 
 	std::shared_ptr<IBatchedResources> CreateBatchedResources(
-		RenderCore::IDevice& device, std::shared_ptr<IManager>& bufferUploads, 
+		RenderCore::IDevice& device, const std::shared_ptr<IManager>& bufferUploads, 
 		RenderCore::BindFlag::BitField bindFlags,
 		unsigned pageSizeInBytes)
 	{

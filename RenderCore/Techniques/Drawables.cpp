@@ -13,12 +13,15 @@
 #include "CommonUtils.h"
 #include "CommonResources.h"
 #include "CompiledShaderPatchCollection.h"		// for DescriptorSetLayoutAndBinding
+#include "Services.h"
+#include "SubFrameEvents.h"
 #include "../UniformsStream.h"
 #include "../BufferView.h"
 #include "../IDevice.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
 #include "../Metal/Resource.h"
+#include "../../BufferUploads/BatchedResources.h"
 #include "../../Assets/AsyncMarkerGroup.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/ContinuationUtil.h"		// for PrepareResources
@@ -861,8 +864,66 @@ namespace RenderCore { namespace Techniques
 	}
 	DrawableInputAssembly::~DrawableInputAssembly() = default;
 
+	void DrawableGeo::Attach(const std::shared_ptr<RepositionableGeometryConduit>& conduit)
+	{
+		if (_repositionalGeometry) {
+			assert(_repositionalGeometry == conduit);
+			return;
+		}
+		_repositionalGeometry = conduit;
+		_repositionalGeometry->Add(*this);
+	}
 	DrawableGeo::DrawableGeo() = default;
-	DrawableGeo::~DrawableGeo() = default;
+	DrawableGeo::~DrawableGeo()
+	{
+		if (_repositionalGeometry) _repositionalGeometry->Remove(*this);
+	}
 	
+
+	void RepositionableGeometryConduit::Add(DrawableGeo& geo)
+	{
+		ScopedLock(_lock);
+		auto existing = std::find(_geos.begin(), _geos.end(), &geo); // [w=geo](const auto& q) { return !q.owner_before(w) && !w.owner_before(q); });
+		if (existing != _geos.end()) return;
+		_geos.emplace_back(&geo);
+	}
+
+	void RepositionableGeometryConduit::Remove(DrawableGeo& geo)
+	{
+		ScopedLock(_lock);
+		auto existing = std::find(_geos.begin(), _geos.end(), &geo);
+		if (existing != _geos.end())
+			_geos.erase(existing);
+	}
+
+	std::shared_ptr<BufferUploads::IResourcePool> RepositionableGeometryConduit::GetIBResourcePool() { return _vb; }
+	std::shared_ptr<BufferUploads::IResourcePool> RepositionableGeometryConduit::GetVBResourcePool() { return _ib; }
+
+	RepositionableGeometryConduit::RepositionableGeometryConduit(std::shared_ptr<BufferUploads::IBatchedResources> vb, std::shared_ptr<BufferUploads::IBatchedResources> ib)
+	: _vb(std::move(vb)), _ib(std::move(ib))
+	{
+		_frameBarrierMarker = Services::GetSubFrameEvents()._onFrameBarrier.Bind(
+			[this]() {
+				auto nextVb = _vb->EventList_GetPublishedID();
+				if (nextVb > _lastProcessedVB) {
+					auto evntList = _vb->EventList_Get(nextVb);
+					_vb->EventList_Release(nextVb);
+					_lastProcessedVB = nextVb;
+				}
+
+				auto nextIb = _ib->EventList_GetPublishedID();
+				if (nextIb > _lastProcessedIB) {
+					auto evntList = _ib->EventList_Get(nextIb);
+					_ib->EventList_Release(nextIb);
+					_lastProcessedIB = nextIb;
+				}
+			});
+	}
+
+	RepositionableGeometryConduit::~RepositionableGeometryConduit()
+	{
+		if (_frameBarrierMarker != ~0u)
+			Services::GetSubFrameEvents()._onFrameBarrier.Unbind(_frameBarrierMarker);
+	}
 
 }}
