@@ -3,7 +3,6 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "FontRendering.h"
-#include "FontRectanglePacking.h"
 #include "../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../RenderCore/Metal/DeviceContext.h"
@@ -14,9 +13,11 @@
 #include "../RenderCore/Format.h"
 #include "../Assets/Assets.h"
 #include "../Assets/Continuation.h"
+#include "../Math/RectanglePacking.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/PtrUtils.h"
+#include "../Utility/BitUtils.h"
 #include "../Math/Vector.h"
 #include <assert.h>
 #include <algorithm>
@@ -260,9 +261,9 @@ namespace RenderOverlays
 		}
 
 		auto* res = textureMan.GetFontTexture().GetUnderlying().get();
-		Metal::CompleteInitialization(
+		/*Metal::CompleteInitialization(
 			*Metal::DeviceContext::Get(threadContext),
-			{&res, &res+1});
+			{&res, &res+1});*/
 			
 		auto texDims = textureMan.GetTextureDimensions();
 		auto estimatedQuadCount = text.size();
@@ -472,9 +473,9 @@ namespace RenderOverlays
 		float xAtLineStart = x, yAtLineStart = y;
 
 		auto* res = textureMan.GetFontTexture().GetUnderlying().get();
-		Metal::CompleteInitialization(
+		/*Metal::CompleteInitialization(
 			*Metal::DeviceContext::Get(threadContext),
-			{&res, &res+1});
+			{&res, &res+1});*/
 			
 		auto texDims = textureMan.GetTextureDimensions();
 		auto estimatedQuadCount = text.size();		// note -- shadow & outline will throw this off
@@ -628,22 +629,46 @@ namespace RenderOverlays
 	class FontRenderingManager::Pimpl
 	{
 	public:
-		RectanglePacker_FontCharArray	_rectanglePacker;
 		std::unique_ptr<FontTexture2D>  _texture;
 
-		unsigned _texWidth, _texHeight;
-
-		Pimpl(RenderCore::IDevice& device, unsigned texWidth, unsigned texHeight)
-		: _rectanglePacker({texWidth, texHeight})
-		, _texWidth(texWidth), _texHeight(texHeight) 
+		struct Page
 		{
-			_texture = std::make_unique<FontTexture2D>(device, texWidth, texHeight, RenderCore::Format::R8_UNORM);
+			Rect _spaceInTexture;
+			RectanglePacker_MaxRects _packer;
+			unsigned _texelsAllocated = 0;
+		};
+		std::vector<Page> _activePages;
+		Page _reservedPage;
+		unsigned _texWidth, _texHeight;
+		unsigned _pageWidth, _pageHeight;
+
+		Pimpl(RenderCore::IDevice& device, unsigned pageWidth, unsigned pageHeight, unsigned pageCount)
+		: _pageWidth(pageWidth), _pageHeight(pageHeight)
+		{
+			assert(IsPowerOfTwo(pageCount));
+			auto pagesAcross = (unsigned)std::sqrt(pageCount);
+			auto pagesDown = pageCount / pagesAcross;
+			assert((pagesAcross*pagesDown) == pageCount);
+			_texture = std::make_unique<FontTexture2D>(device, pageWidth*pagesAcross, pageHeight*pagesDown, RenderCore::Format::R8_UNORM);
+			_texWidth = pageWidth*pagesAcross; _texHeight = pageHeight*pagesDown;
+			_activePages.reserve(pageCount-1);
+			for (unsigned y=0; y<pagesDown; ++y)
+				for (unsigned x=0; x<pagesAcross; ++x) {
+					Page newPage;
+					newPage._spaceInTexture = {Coord2{x*pageWidth, y*pageHeight}, Coord2{(x+1)*pageWidth, (y+1)*pageHeight}};
+					newPage._packer = UInt2{pageWidth, pageHeight};
+					newPage._texelsAllocated = 0;
+					if ((x+y)==0) {
+						_reservedPage = std::move(newPage);
+					} else
+						_activePages.emplace_back(std::move(newPage));
+				}
 		}
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	FontRenderingManager::FontRenderingManager(RenderCore::IDevice& device) { _pimpl = std::make_unique<Pimpl>(device, 512, 2048); }
+	FontRenderingManager::FontRenderingManager(RenderCore::IDevice& device) { _pimpl = std::make_unique<Pimpl>(device, 128, 256, 16); }
 	FontRenderingManager::~FontRenderingManager() {}
 
 	FontTexture2D::FontTexture2D(
@@ -652,13 +677,11 @@ namespace RenderOverlays
 	: _format(pixelFormat)
 	{
 		using namespace RenderCore;
-		_resource = dev.CreateResource(CreateDesc(BindFlag::ShaderResource | BindFlag::TransferDst, TextureDesc::Plain2D(width, height, pixelFormat, 1), "Font"));
+		_resource = dev.CreateResource(CreateDesc(BindFlag::ShaderResource | BindFlag::TransferDst | BindFlag::TransferSrc, TextureDesc::Plain2D(width, height, pixelFormat, 1), "Font"));
 		_srv = _resource->CreateTextureView();
 	}
 
-	FontTexture2D::~FontTexture2D()
-	{
-	}
+	FontTexture2D::~FontTexture2D() {}
 
 	void FontTexture2D::UpdateToTexture(
 		RenderCore::IThreadContext& threadContext,
@@ -666,6 +689,8 @@ namespace RenderOverlays
 	{
 		using namespace RenderCore;
 		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+		auto* res = _resource.get();
+		Metal::CompleteInitialization(*Metal::DeviceContext::Get(threadContext), {&res, &res+1});
 		auto blitEncoder = metalContext.BeginBlitEncoder();
 		blitEncoder.Write(
 			CopyPartial_Dest {
@@ -700,24 +725,49 @@ namespace RenderOverlays
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////
 
+	static const FontRenderingManager::Bitmap s_emptyBitmap;
+
 	auto FontRenderingManager::InitializeNewGlyph(
 		RenderCore::IThreadContext& threadContext,
 		const Font& font,
 		ucs4 ch,
 		std::vector<std::pair<uint64_t, Bitmap>>::iterator insertPoint,
-		uint64_t code) -> Bitmap
+		uint64_t code, bool alreadyAttemptedFree) -> const Bitmap&
 	{
 		auto newData = font.GetBitmap(ch);
 		if ((newData._width * newData._height) == 0) {
 			Bitmap result = {};
 			result._xAdvance = newData._xAdvance;		// still need xAdvance here for characters that aren't drawn (ie, whitespace)
-			_glyphs.insert(insertPoint, std::make_pair(code, result));
-			return result;
+			result._lastAccessFrame = _currentFrameIdx;
+			auto i = _glyphs.insert(insertPoint, std::make_pair(code, result));
+			return i->second;
 		}
 
-		auto rect = _pimpl->_rectanglePacker.Allocate({newData._width, newData._height});
-		if (rect.second[0] <= rect.first[0] || rect.second[1] <= rect.first[1])
-			return {};
+		unsigned bestPage = ~0u;
+		RectanglePacker_MaxRects::PreviewedAllocation bestAllocation;
+		bestAllocation._score = std::numeric_limits<int>::max();
+		for (unsigned c=0; c<_pimpl->_activePages.size(); ++c) {
+			auto allocation = _pimpl->_activePages[c]._packer.PreviewAllocation({newData._width, newData._height});
+			if (allocation._score < bestAllocation._score) {
+				bestPage = c;
+				bestAllocation = allocation;
+			}
+		}
+		if (bestPage == ~0u) {
+			// could not fit it in -- we need to release some space and try to do a defrag
+			if (alreadyAttemptedFree) return s_emptyBitmap;		// maybe too big to fit on a page?
+			FreeUpHeapSpace();
+			SynchronousDefrag(threadContext);
+			auto code = HashCombine(ch, font.GetHash());
+			insertPoint = LowerBound(_glyphs, code);		// FreeUpHeapSpace invalidates this vector
+			return InitializeNewGlyph(threadContext, font, ch, insertPoint, code, true);
+		}
+
+		_pimpl->_activePages[bestPage]._packer.Allocate(bestAllocation);
+		auto rect = bestAllocation._rectangle;
+		rect.first += _pimpl->_activePages[bestPage]._spaceInTexture._topLeft;
+		rect.second += _pimpl->_activePages[bestPage]._spaceInTexture._topLeft;
+		_pimpl->_activePages[bestPage]._texelsAllocated += (rect.second[0] - rect.first[0]) * (rect.second[1] - rect.first[1]);
 
 		assert((rect.second[0]-rect.first[0]) >= newData._width);
 		assert((rect.second[1]-rect.first[1]) >= newData._height);
@@ -728,7 +778,7 @@ namespace RenderOverlays
 			auto pkt = GlyphAsDataPacket(newData._width, newData._height, newData._data, rect.first[0], rect.first[1], rect.second[0]-rect.first[0], rect.second[1]-rect.first[1]);
 			_pimpl->_texture->UpdateToTexture(
 				threadContext,
-				pkt, 
+				pkt,
 				RenderCore::Box2D{
 					(int)rect.first[0], (int)rect.first[1], 
 					(int)rect.second[0], (int)rect.second[1]});
@@ -746,9 +796,159 @@ namespace RenderOverlays
 		result._tcBottomRight[1] = (rect.first[1] + newData._height) / float(_pimpl->_texHeight);
 		result._lsbDelta = newData._lsbDelta;
 		result._rsbDelta = newData._rsbDelta;
+		result._lastAccessFrame = _currentFrameIdx;
 
-		_glyphs.insert(insertPoint, std::make_pair(code, result));
-		return result;
+		auto i = _glyphs.insert(insertPoint, std::make_pair(code, result));
+		return i->second;
+	}
+
+	void FontRenderingManager::FreeUpHeapSpace()
+	{
+		// Attempt to free up some space in the heap...
+		// This is optimized for infrequent calls. We will erase many of the oldest glyphs, and prepare the heap for
+		// defrag operations
+		unsigned glyphsToErase = _pimpl->_activePages.size()+1;
+		if (_glyphs.size() < glyphsToErase) return;
+		
+		std::pair<unsigned, unsigned> glyphsByAge[_glyphs.size()];
+		for (unsigned c=0; c<_glyphs.size(); ++c)
+			glyphsByAge[c] = {c, _glyphs[c].second._lastAccessFrame};
+		std::sort(glyphsByAge, &glyphsByAge[_glyphs.size()], [](const auto&lhs, const auto& rhs) { return lhs.second < rhs.second; });
+		std::sort(glyphsByAge, &glyphsByAge[glyphsToErase], [](const auto&lhs, const auto& rhs) { return lhs.first > rhs.first; });
+		for (unsigned c=0; c<glyphsToErase; ++c) {
+			auto& glyph = _glyphs[glyphsByAge[c].first];
+			Rect rectangle {
+				{
+					unsigned(glyph.second._tcTopLeft[0] * _pimpl->_texWidth + 0.5f),
+					unsigned(glyph.second._tcTopLeft[1] * _pimpl->_texHeight + 0.5f)
+				},
+				{
+					unsigned(glyph.second._tcBottomRight[0] * _pimpl->_texWidth + 0.5f),
+					unsigned(glyph.second._tcBottomRight[1] * _pimpl->_texHeight + 0.5f)
+				}
+			};
+			// find the page and erase this from the rectangle packer
+			bool foundPage = false;
+			for (auto& p:_pimpl->_activePages)
+				if (Contains(p._spaceInTexture, rectangle)) {
+					p._packer.Deallocate({
+						rectangle._topLeft -= p._spaceInTexture._topLeft,
+						rectangle._bottomRight -= p._spaceInTexture._topLeft});
+					p._texelsAllocated -= (rectangle._bottomRight[0] - rectangle._topLeft[0]) * (rectangle._bottomRight[1] - rectangle._topLeft[1]);
+					foundPage = true;
+				}
+			assert(foundPage);
+			_glyphs.erase(_glyphs.begin()+glyphsByAge[c].first);
+		}
+		// caller should generally call SynchronousDefrag after this
+		// when we return, we should have space for a lot more glyphs
+	}
+
+	void FontRenderingManager::SynchronousDefrag(RenderCore::IThreadContext& threadContext)
+	{
+		// find the most fragmented page, and do a synchronous defragment
+		unsigned worstPage = ~0;
+		int worstPageScore = 0;
+		for (unsigned c=0; c<_pimpl->_activePages.size(); ++c) {
+			auto& page = _pimpl->_activePages[c];
+			auto freeBlock = page._packer.LargestFreeBlock();
+			auto freeSpace = (page._spaceInTexture._bottomRight[0] - page._spaceInTexture._topLeft[0]) * (page._spaceInTexture._bottomRight[1] - page._spaceInTexture._topLeft[1]) - page._texelsAllocated;
+			auto score = freeSpace - (freeBlock.second[0] - freeBlock.first[0]) * (freeBlock.second[1] - freeBlock.first[1]);
+			if (score > worstPageScore) {
+				worstPageScore = score;
+				worstPage = c;
+			}
+		}
+
+		if (worstPage == ~0u) return;
+
+		auto& srcPage = _pimpl->_activePages[worstPage];
+
+		// Find all of the glyphs & all of the rectangles that are on this page. We will reallocate them and try to get an optimal packing
+		std::vector<std::pair<unsigned, Rect>> associatedRectangles;
+		associatedRectangles.reserve(_glyphs.size() / (_pimpl->_activePages.size()) * 2);
+
+		for (unsigned g=0; g<_glyphs.size(); ++g) {
+			auto& glyph = _glyphs[g];
+			Rect rectangle {
+				{
+					unsigned(glyph.second._tcTopLeft[0] * _pimpl->_texWidth + 0.5f),
+					unsigned(glyph.second._tcTopLeft[1] * _pimpl->_texHeight + 0.5f)
+				},
+				{
+					unsigned(glyph.second._tcBottomRight[0] * _pimpl->_texWidth + 0.5f),
+					unsigned(glyph.second._tcBottomRight[1] * _pimpl->_texHeight + 0.5f)
+				}
+			};
+			if (!Contains(srcPage._spaceInTexture, rectangle)) continue;
+			associatedRectangles.emplace_back(g, rectangle);
+		}
+
+		// repack optimally
+		std::sort(
+			associatedRectangles.begin(), associatedRectangles.end(),
+			[](const auto& lhs, const auto& rhs)
+			{
+				auto lhsDims = lhs.second._bottomRight - lhs.second._topLeft;
+				auto rhsDims = rhs.second._bottomRight - rhs.second._topLeft;
+				return std::max(lhsDims[0], lhsDims[1]) > std::max(rhsDims[0], rhsDims[1]);
+			});
+		
+		std::vector<Rect> newPacking;
+		newPacking.reserve(associatedRectangles.size());
+		RectanglePacker_MaxRects packer{UInt2{_pimpl->_pageWidth, _pimpl->_pageHeight}};
+		unsigned allocatedTexels = 0;
+		for (const auto& r:associatedRectangles) {
+			auto dims = r.second._bottomRight - r.second._topLeft;
+			auto rect = packer.Allocate(dims);
+			assert(rect.second[0] > rect.first[0] && rect.second[1] > rect.first[1]);		// we must get a successful assignment
+			allocatedTexels += dims[0]*dims[1];
+			rect.first += _pimpl->_reservedPage._spaceInTexture._topLeft;
+			rect.second += _pimpl->_reservedPage._spaceInTexture._topLeft;
+			newPacking.emplace_back(rect.first, rect.second);
+		}
+
+		// copy from the old locations into the new destination positions
+		{
+			using namespace RenderCore;
+			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+			auto blitEncoder = metalContext.BeginBlitEncoder();
+			// Vulkan can do all of this copying with a single cmd -- would we better off with an interface
+			// that allows for multiple copies?
+			auto* res = _pimpl->_texture->GetUnderlying().get();
+			for (unsigned c=0; c<associatedRectangles.size(); ++c) {
+				auto srcRectangle = associatedRectangles[c].second;
+				auto dstRectangle = newPacking[c];
+				assert(srcRectangle.Width() == dstRectangle.Width() && srcRectangle.Height() == dstRectangle.Height());
+				blitEncoder.Copy(
+					CopyPartial_Dest {
+						*res, {}, VectorPattern<unsigned, 3>{ (unsigned)dstRectangle._topLeft[0], (unsigned)dstRectangle._topLeft[1], 0u }
+					},
+					CopyPartial_Src {
+						*res, {}, 1, 1,
+						VectorPattern<unsigned, 3>{ (unsigned)srcRectangle._topLeft[0], (unsigned)srcRectangle._topLeft[1], 0u },
+						VectorPattern<unsigned, 3>{ (unsigned)srcRectangle._bottomRight[0], (unsigned)srcRectangle._bottomRight[1], 1u }
+					});
+			}
+		}
+
+		// reassign glyphs table and make the new page active
+		for (unsigned c=0; c<associatedRectangles.size(); ++c) {
+			auto& glyph = _glyphs[associatedRectangles[c].first].second;
+			auto rect = newPacking[c];
+			glyph._tcTopLeft[0] = rect._topLeft[0] / float(_pimpl->_texWidth);
+			glyph._tcTopLeft[1] = rect._topLeft[1] / float(_pimpl->_texHeight);
+			glyph._tcBottomRight[0] = rect._bottomRight[0] / float(_pimpl->_texWidth);
+			glyph._tcBottomRight[1] = rect._bottomRight[1] / float(_pimpl->_texHeight);
+		}
+
+		_pimpl->_reservedPage._packer = std::move(packer);
+		_pimpl->_reservedPage._texelsAllocated = allocatedTexels;
+		auto A = std::move(srcPage);
+		srcPage = std::move(_pimpl->_reservedPage);
+		_pimpl->_reservedPage = std::move(A);
+		_pimpl->_reservedPage._packer = {};
+		_pimpl->_reservedPage._texelsAllocated = 0;	
 	}
 
 	const FontTexture2D& FontRenderingManager::GetFontTexture()
@@ -759,6 +959,16 @@ namespace RenderOverlays
 	UInt2 FontRenderingManager::GetTextureDimensions()
 	{
 		return UInt2{_pimpl->_texWidth, _pimpl->_texHeight};
+	}
+
+	void FontRenderingManager::OnFrameBarrier()
+	{
+		++_currentFrameIdx;
+	}
+
+	const std::shared_ptr<RenderCore::IResource>& FontRenderingManager::GetUnderlyingTextureResource()
+	{
+		return _pimpl->_texture->GetUnderlying();
 	}
 
 }

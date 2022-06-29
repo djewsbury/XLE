@@ -62,48 +62,57 @@ namespace RenderOverlays
 		{
 			float _xAdvance = 0.f;
 			signed _bitmapOffsetX = 0, _bitmapOffsetY = 0;
-			unsigned _width, _height;
+			unsigned _width = 0, _height = 0;
 			Float2 _tcTopLeft = Float2{0.f, 0.f};
 			Float2 _tcBottomRight = Float2{0.f, 0.f};
 			unsigned _lsbDelta = 0, _rsbDelta = 0;
+			unsigned _lastAccessFrame = 0;
 		};
 
-		Bitmap GetBitmap(
+		const Bitmap& GetBitmap(
 			RenderCore::IThreadContext& threadContext,
 			const Font& font,
 			ucs4 ch);
 
 		const FontTexture2D& GetFontTexture();
 		UInt2 GetTextureDimensions();
+		void OnFrameBarrier();
+
+		const std::shared_ptr<RenderCore::IResource>& GetUnderlyingTextureResource();		// intended for the debugging display
 	
 		FontRenderingManager(RenderCore::IDevice& device);
 		~FontRenderingManager();
 
 	private:
 		std::vector<std::pair<uint64_t, Bitmap>> _glyphs;
+		unsigned _currentFrameIdx = 0;
 		
 		class Pimpl;
 		std::shared_ptr<Pimpl> _pimpl;
 
-		Bitmap InitializeNewGlyph(
+		const Bitmap& InitializeNewGlyph(
 			RenderCore::IThreadContext& threadContext,
 			const Font& font,
 			ucs4 ch,
 			std::vector<std::pair<uint64_t, Bitmap>>::iterator insertPoint,
-			uint64_t code);
+			uint64_t code, bool alreadyAttemptedFree);
+		void FreeUpHeapSpace();
+		void SynchronousDefrag(RenderCore::IThreadContext&);
 	};
 
 	inline auto FontRenderingManager::GetBitmap(
 		RenderCore::IThreadContext& threadContext,
 		const Font& font,
-		ucs4 ch) -> Bitmap
+		ucs4 ch) -> const Bitmap&
 	{
 		auto code = HashCombine(ch, font.GetHash());
 		auto i = LowerBound(_glyphs, code);
-		if (__builtin_expect(i != _glyphs.end() && i->first == code, true))
+		if (__builtin_expect(i != _glyphs.end() && i->first == code, true)) {
+			i->second._lastAccessFrame = _currentFrameIdx;
 			return i->second;
+		}
 
-		return InitializeNewGlyph(threadContext, font, ch, i, code);
+		return InitializeNewGlyph(threadContext, font, ch, i, code, false);
 	}
 
 }

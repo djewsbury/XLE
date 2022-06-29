@@ -187,8 +187,10 @@ namespace XLEMath
         return (rect.second[0] > rect.first[0]) && (rect.second[1] > rect.first[1]);
     }
 
-    auto    RectanglePacker_MaxRects::Allocate(UInt2 dims) -> Rectangle
+    auto    RectanglePacker_MaxRects::PreviewAllocation(UInt2 dims) -> PreviewedAllocation
     {
+        assert(dims[0] != 0 && dims[1] != 0);
+
             // Search through to find the best free rectangle that can contain
             // this dimension.
             // As described here -- http://clb.demon.fi/files/RectangleBinPack.pdf 
@@ -239,32 +241,37 @@ namespace XLEMath
         }
 
         if (best0 == _freeRectangles.end() && best1 == _freeRectangles.end())
-            return s_emptyRect; // couldn't fit it in!
+            return {s_emptyRect, std::numeric_limits<int>::max()}; // couldn't fit it in!
 
-        Rectangle result;
+        PreviewedAllocation result;
         if (best0Score <= best1Score) {
                 // fit it within the top-left of the given space
-            result.first = best0->first;
-            result.second = result.first + dims;
-            assert(Contains(*best0, result));
+            result._rectangle.first = best0->first;
+            result._rectangle.second = result._rectangle.first + dims;
+            result._score = best0Score;
+            assert(Contains(*best0, result._rectangle));
         } /*else {
             result.first = best1->first;
             result.second = result.first + flippedDims;
             assert(Contains(*best1, result));
         }*/
+        return result;
+    }
 
+    void RectanglePacker_MaxRects::Allocate(PreviewedAllocation allocation)
+    {
             // Go through every free rectangle and split every rectangle that
             // intersects with the one we just cut out. We will build the
             // "maximal rectangle" created by the split
         for (auto i=_freeRectangles.begin(); i!=_freeRectangles.end();) {
-            if (Intersects(result, *i)) {
+            if (Intersects(allocation._rectangle, *i)) {
                 Rectangle splits[4];
                 unsigned splitsCount = 0;
 
-                Rectangle left(i->first, UInt2(result.first[0], i->second[1]));
-                Rectangle right(UInt2(result.second[0], i->first[1]), i->second);
-                Rectangle top(i->first, UInt2(i->second[0], result.first[1]));
-                Rectangle bottom(UInt2(i->first[0], result.second[1]), i->second);
+                Rectangle left(i->first, UInt2(allocation._rectangle.first[0], i->second[1]));
+                Rectangle right(UInt2(allocation._rectangle.second[0], i->first[1]), i->second);
+                Rectangle top(i->first, UInt2(i->second[0], allocation._rectangle.first[1]));
+                Rectangle bottom(UInt2(i->first[0], allocation._rectangle.second[1]), i->second);
 
                 if (IsGood(left))   splits[splitsCount++] = left;
                 if (IsGood(right))  splits[splitsCount++] = right;
@@ -273,7 +280,7 @@ namespace XLEMath
 
                 #if defined(_DEBUG)
                     for (unsigned c=0; c<splitsCount; ++c)
-                        assert(!Intersects(result, splits[c]));
+                        assert(!Intersects(allocation._rectangle, splits[c]));
                 #endif
 
                 if (splitsCount > 0) {
@@ -319,12 +326,19 @@ namespace XLEMath
 
         #if defined(_DEBUG)
             for (auto i=_freeRectangles.begin(); i!=_freeRectangles.end();++i)
-                assert(!Intersects(result, *i));
+                assert(!Intersects(allocation._rectangle, *i));
         #endif
 
         RebuildFreeRects();
+    }
 
-        return result;
+    auto RectanglePacker_MaxRects::Allocate(UInt2 dims) -> Rectangle
+    {
+        assert(dims[0] != 0 && dims[1] != 0);
+        auto preview = PreviewAllocation(dims);
+        if (preview._rectangle.first[0] != preview._rectangle.second[0])
+            Allocate(preview);
+        return preview._rectangle;
     }
 
     void    RectanglePacker_MaxRects::Deallocate(const Rectangle& iRect)
@@ -443,27 +457,11 @@ namespace XLEMath
     {
         Deallocate(std::make_pair(UInt2(0,0), initialSpace));
     }
-    RectanglePacker_MaxRects::RectanglePacker_MaxRects(RectanglePacker_MaxRects&& moveFrom) never_throws
-    : _freeRectangles(std::move(moveFrom._freeRectangles))
-    {
-    }
-    RectanglePacker_MaxRects& RectanglePacker_MaxRects::operator=(RectanglePacker_MaxRects&& moveFrom) never_throws
-    {
-        _freeRectangles = std::move(moveFrom._freeRectangles);
-        return *this;
-    }
-    RectanglePacker_MaxRects::~RectanglePacker_MaxRects() {}
-
-    RectanglePacker_MaxRects::RectanglePacker_MaxRects(const RectanglePacker_MaxRects& copyFrom)
-    : _freeRectangles(copyFrom._freeRectangles)
-    {
-    }
-
-    RectanglePacker_MaxRects& RectanglePacker_MaxRects::operator=(const RectanglePacker_MaxRects& copyFrom)
-    {
-        _freeRectangles = copyFrom._freeRectangles;
-        return *this;
-    }
+    RectanglePacker_MaxRects::RectanglePacker_MaxRects(RectanglePacker_MaxRects&& moveFrom) never_throws = default;
+    RectanglePacker_MaxRects& RectanglePacker_MaxRects::operator=(RectanglePacker_MaxRects&& moveFrom) never_throws = default;
+    RectanglePacker_MaxRects::~RectanglePacker_MaxRects() = default;
+    RectanglePacker_MaxRects::RectanglePacker_MaxRects(const RectanglePacker_MaxRects& copyFrom) = default;
+    RectanglePacker_MaxRects& RectanglePacker_MaxRects::operator=(const RectanglePacker_MaxRects& copyFrom) = default;
 
 }
 

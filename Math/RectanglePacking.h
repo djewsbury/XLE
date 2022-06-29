@@ -92,6 +92,14 @@ namespace XLEMath
         Rectangle   Allocate(UInt2 dims);
         void        Deallocate(const Rectangle& rect);
 
+        struct PreviewedAllocation
+        {
+            Rectangle _rectangle;
+            int _score;
+        };
+        PreviewedAllocation PreviewAllocation(UInt2 dims);
+        void Allocate(PreviewedAllocation);
+
         std::pair<UInt2, UInt2> LargestFreeBlock() const;
         unsigned FreeRectangleCount() const { return (unsigned)_freeRectangles.size(); }
         void RebuildFreeRects();
@@ -109,7 +117,6 @@ namespace XLEMath
         std::vector<Rectangle> _freeRectangles;
         std::vector<std::pair<unsigned, unsigned>> _freeRectsByWidth;
         std::vector<std::pair<unsigned, unsigned>> _freeRectsByHeight;
-
     };
 }
 

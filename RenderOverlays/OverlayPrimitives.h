@@ -63,6 +63,26 @@ namespace RenderOverlays
         Coord       Height() const    { return _bottomRight[1] - _topLeft[1]; }
     };
 
+    inline bool Intersects(const Rect& lhs, const Rect& rhs)
+    {
+        return 
+            !(  lhs._bottomRight[0] <= rhs._topLeft[0]
+            ||  lhs._bottomRight[1] <= rhs._topLeft[1]
+            ||  lhs._topLeft[0] >= rhs._bottomRight[0]
+            ||  lhs._topLeft[1] >= rhs._bottomRight[1]);
+    }
+
+    inline bool Contains(
+        const Rect& bigger, 
+        const Rect& smaller)
+    {
+        return
+            (   smaller._topLeft[0]  >= bigger._topLeft[0]
+            &&  smaller._topLeft[1]  >= bigger._topLeft[1]
+            &&  smaller._bottomRight[0] <= bigger._bottomRight[0]
+            &&  smaller._bottomRight[1] <= bigger._bottomRight[1]);
+    }
+
     class Font;
     ::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> path, int size);
 
