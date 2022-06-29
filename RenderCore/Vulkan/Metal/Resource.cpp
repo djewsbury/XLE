@@ -216,6 +216,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				return { ImageLayout::TransferSrcOptimal, VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT };
 			case BindFlag::TransferDst:
 				return { ImageLayout::TransferDstOptimal, VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT };
+			case (BindFlag::Enum)(BindFlag::TransferSrc|BindFlag::TransferDst):
+				return { ImageLayout::General, VK_ACCESS_TRANSFER_WRITE_BIT|VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT };
 			case BindFlag::ShaderResource:
 				// VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
 				// VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT
@@ -1106,11 +1108,11 @@ namespace RenderCore { namespace Metal_Vulkan
 				c.srcSubresource.aspectMask = srcAspectMask;
 				c.srcSubresource.mipLevel = src._subResource._mip;
 				c.srcSubresource.baseArrayLayer = src._subResource._arrayLayer;
-				c.srcSubresource.layerCount = ((src._subResource._arrayLayer + src._arrayLayerCount) < ActualArrayLayerCount(srcDesc._textureDesc)) ? src._arrayLayerCount : VK_REMAINING_ARRAY_LAYERS;
+				c.srcSubresource.layerCount = std::min(src._arrayLayerCount, ActualArrayLayerCount(srcDesc._textureDesc) - src._subResource._arrayLayer);
 				c.dstSubresource.aspectMask = dstAspectMask;
 				c.dstSubresource.mipLevel = dst._subResource._mip;
 				c.dstSubresource.baseArrayLayer = dst._subResource._arrayLayer;
-				c.dstSubresource.layerCount = ((dst._subResource._arrayLayer + src._arrayLayerCount) < ActualArrayLayerCount(dstDesc._textureDesc)) ? src._arrayLayerCount : VK_REMAINING_ARRAY_LAYERS;
+				c.dstSubresource.layerCount = std::min(src._arrayLayerCount, ActualArrayLayerCount(dstDesc._textureDesc) - dst._subResource._arrayLayer);
 			}
 
 			context.GetActiveCommandList().CopyImage(
@@ -1829,18 +1831,28 @@ namespace RenderCore { namespace Metal_Vulkan
 		const CopyPartial_Src& src)
 	{
 		assert(src._resource && dst._resource);
-		Internal::CaptureForBind captureSrc(*_devContext, *checked_cast<Resource*>(src._resource), BindFlag::TransferSrc);
-		Internal::CaptureForBind captureDst(*_devContext, *checked_cast<Resource*>(dst._resource), BindFlag::TransferDst);
-		CopyPartial(*_devContext, dst, src, captureDst.GetLayout(), captureSrc.GetLayout());
+		if (src._resource != dst._resource) {
+			Internal::CaptureForBind captureSrc(*_devContext, *checked_cast<Resource*>(src._resource), BindFlag::TransferSrc);
+			Internal::CaptureForBind captureDst(*_devContext, *checked_cast<Resource*>(dst._resource), BindFlag::TransferDst);
+			CopyPartial(*_devContext, dst, src, captureDst.GetLayout(), captureSrc.GetLayout());
+		} else {
+			Internal::CaptureForBind capture(*_devContext, *checked_cast<Resource*>(dst._resource), BindFlag::Enum(BindFlag::TransferSrc|BindFlag::TransferDst));
+			CopyPartial(*_devContext, dst, src, capture.GetLayout(), capture.GetLayout());
+		}
 	}
 
 	void BlitEncoder::Copy(
 		IResource& dst,
 		IResource& src)
 	{
-		Internal::CaptureForBind captureSrc(*_devContext, *checked_cast<Resource*>(&src), BindFlag::TransferSrc);
-		Internal::CaptureForBind captureDst(*_devContext, *checked_cast<Resource*>(&dst), BindFlag::TransferDst);
-		Metal_Vulkan::Copy(*_devContext, *checked_cast<Resource*>(&dst), *checked_cast<Resource*>(&src), captureDst.GetLayout(), captureSrc.GetLayout());
+		if (&dst != &src) {
+			Internal::CaptureForBind captureSrc(*_devContext, *checked_cast<Resource*>(&src), BindFlag::TransferSrc);
+			Internal::CaptureForBind captureDst(*_devContext, *checked_cast<Resource*>(&dst), BindFlag::TransferDst);
+			Metal_Vulkan::Copy(*_devContext, *checked_cast<Resource*>(&dst), *checked_cast<Resource*>(&src), captureDst.GetLayout(), captureSrc.GetLayout());
+		} else {
+			Internal::CaptureForBind capture(*_devContext, *checked_cast<Resource*>(&dst), BindFlag::Enum(BindFlag::TransferSrc|BindFlag::TransferDst));
+			Metal_Vulkan::Copy(*_devContext, *checked_cast<Resource*>(&dst), *checked_cast<Resource*>(&src), capture.GetLayout(), capture.GetLayout());
+		}
 	}
 
 	BlitEncoder::BlitEncoder(DeviceContext& devContext) : _devContext(&devContext)
