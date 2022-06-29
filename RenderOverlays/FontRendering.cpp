@@ -635,7 +635,7 @@ namespace RenderOverlays
 		{
 			Rect _spaceInTexture;
 			RectanglePacker_MaxRects _packer;
-			unsigned _texelsAllocated = 0;
+			int _texelsAllocated = 0;
 		};
 		std::vector<Page> _activePages;
 		Page _reservedPage;
@@ -669,6 +669,7 @@ namespace RenderOverlays
 	///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	FontRenderingManager::FontRenderingManager(RenderCore::IDevice& device) { _pimpl = std::make_unique<Pimpl>(device, 128, 256, 16); }
+	// FontRenderingManager::FontRenderingManager(RenderCore::IDevice& device) { _pimpl = std::make_unique<Pimpl>(device, 64, 128, 16); }
 	FontRenderingManager::~FontRenderingManager() {}
 
 	FontTexture2D::FontTexture2D(
@@ -743,6 +744,9 @@ namespace RenderOverlays
 			return i->second;
 		}
 
+		if (newData._width > _pimpl->_pageWidth || newData._height > _pimpl->_pageHeight)
+			return s_emptyBitmap;		// can't fit this glyph, even when using an entire page
+
 		unsigned bestPage = ~0u;
 		RectanglePacker_MaxRects::PreviewedAllocation bestAllocation;
 		bestAllocation._score = std::numeric_limits<int>::max();
@@ -756,7 +760,7 @@ namespace RenderOverlays
 		if (bestPage == ~0u) {
 			// could not fit it in -- we need to release some space and try to do a defrag
 			if (alreadyAttemptedFree) return s_emptyBitmap;		// maybe too big to fit on a page?
-			FreeUpHeapSpace();
+			FreeUpHeapSpace({newData._width, newData._height});
 			SynchronousDefrag(threadContext);
 			auto code = HashCombine(ch, font.GetHash());
 			insertPoint = LowerBound(_glyphs, code);		// FreeUpHeapSpace invalidates this vector
@@ -768,6 +772,7 @@ namespace RenderOverlays
 		rect.first += _pimpl->_activePages[bestPage]._spaceInTexture._topLeft;
 		rect.second += _pimpl->_activePages[bestPage]._spaceInTexture._topLeft;
 		_pimpl->_activePages[bestPage]._texelsAllocated += (rect.second[0] - rect.first[0]) * (rect.second[1] - rect.first[1]);
+		assert(_pimpl->_activePages[bestPage]._texelsAllocated >= 0);
 
 		assert((rect.second[0]-rect.first[0]) >= newData._width);
 		assert((rect.second[1]-rect.first[1]) >= newData._height);
@@ -802,19 +807,21 @@ namespace RenderOverlays
 		return i->second;
 	}
 
-	void FontRenderingManager::FreeUpHeapSpace()
+	void FontRenderingManager::FreeUpHeapSpace(UInt2 requestedSpace)
 	{
 		// Attempt to free up some space in the heap...
 		// This is optimized for infrequent calls. We will erase many of the oldest glyphs, and prepare the heap for
 		// defrag operations
-		unsigned glyphsToErase = _pimpl->_activePages.size()+1;
-		if (_glyphs.size() < glyphsToErase) return;
+		auto glyphsToErase = _glyphs.size() / _pimpl->_activePages.size();
+		if (glyphsToErase == 0) return;
 		
 		std::pair<unsigned, unsigned> glyphsByAge[_glyphs.size()];
 		for (unsigned c=0; c<_glyphs.size(); ++c)
 			glyphsByAge[c] = {c, _glyphs[c].second._lastAccessFrame};
 		std::sort(glyphsByAge, &glyphsByAge[_glyphs.size()], [](const auto&lhs, const auto& rhs) { return lhs.second < rhs.second; });
 		std::sort(glyphsByAge, &glyphsByAge[glyphsToErase], [](const auto&lhs, const auto& rhs) { return lhs.first > rhs.first; });
+
+		bool foundBigEnoughGap = false;
 		for (unsigned c=0; c<glyphsToErase; ++c) {
 			auto& glyph = _glyphs[glyphsByAge[c].first];
 			Rect rectangle {
@@ -827,6 +834,7 @@ namespace RenderOverlays
 					unsigned(glyph.second._tcBottomRight[1] * _pimpl->_texHeight + 0.5f)
 				}
 			};
+			if (!rectangle.Width()) continue;		// glyph with no bitmap content
 			// find the page and erase this from the rectangle packer
 			bool foundPage = false;
 			for (auto& p:_pimpl->_activePages)
@@ -836,9 +844,52 @@ namespace RenderOverlays
 						rectangle._bottomRight -= p._spaceInTexture._topLeft});
 					p._texelsAllocated -= (rectangle._bottomRight[0] - rectangle._topLeft[0]) * (rectangle._bottomRight[1] - rectangle._topLeft[1]);
 					foundPage = true;
+					break;
 				}
 			assert(foundPage);
 			_glyphs.erase(_glyphs.begin()+glyphsByAge[c].first);
+
+			foundBigEnoughGap |= (rectangle.Width() >= requestedSpace[0]) && (rectangle.Height() >= requestedSpace[1]);
+		}
+
+		if (!foundBigEnoughGap) {
+			// As a safety measure, let's try to release at least one glyph that is equal or larger than the requested
+			// one. This might not work (obviously the requested glyph might be the largest one ever requested), but 
+			// if it does, at least we know we'll find some space for it
+			// The issue here is it might start causing thrashing if there are only a few very large glyphs
+			// This is going to be a little expensive, because we have to do another sort & search
+			for (unsigned c=0; c<_glyphs.size(); ++c)
+				glyphsByAge[c] = {c, _glyphs[c].second._lastAccessFrame};
+			std::sort(glyphsByAge, &glyphsByAge[_glyphs.size()], [](const auto&lhs, const auto& rhs) { return lhs.second < rhs.second; });
+			for (unsigned c=0; c<_glyphs.size(); ++c) {
+				auto& glyph = _glyphs[glyphsByAge[c].first];
+				Rect rectangle {
+					{
+						unsigned(glyph.second._tcTopLeft[0] * _pimpl->_texWidth + 0.5f),
+						unsigned(glyph.second._tcTopLeft[1] * _pimpl->_texHeight + 0.5f)
+					},
+					{
+						unsigned(glyph.second._tcBottomRight[0] * _pimpl->_texWidth + 0.5f),
+						unsigned(glyph.second._tcBottomRight[1] * _pimpl->_texHeight + 0.5f)
+					}
+				};
+				if (rectangle.Width() >= requestedSpace[0] && rectangle.Height() >= requestedSpace[1]) {
+					bool foundPage = false;
+					for (auto& p:_pimpl->_activePages)
+						if (Contains(p._spaceInTexture, rectangle)) {
+							p._packer.Deallocate({
+								rectangle._topLeft -= p._spaceInTexture._topLeft,
+								rectangle._bottomRight -= p._spaceInTexture._topLeft});
+							p._texelsAllocated -= (rectangle._bottomRight[0] - rectangle._topLeft[0]) * (rectangle._bottomRight[1] - rectangle._topLeft[1]);
+							foundPage = true;
+							break;
+						}
+					assert(foundPage);
+					_glyphs.erase(_glyphs.begin()+glyphsByAge[c].first);
+					foundBigEnoughGap = true;
+					break;
+				}
+			}
 		}
 		// caller should generally call SynchronousDefrag after this
 		// when we return, we should have space for a lot more glyphs
@@ -880,7 +931,7 @@ namespace RenderOverlays
 					unsigned(glyph.second._tcBottomRight[1] * _pimpl->_texHeight + 0.5f)
 				}
 			};
-			if (!Contains(srcPage._spaceInTexture, rectangle)) continue;
+			if (!rectangle.Width() || !Contains(srcPage._spaceInTexture, rectangle)) continue;
 			associatedRectangles.emplace_back(g, rectangle);
 		}
 
@@ -895,16 +946,22 @@ namespace RenderOverlays
 			});
 		
 		std::vector<Rect> newPacking;
+		std::vector<unsigned> glyphsToDelete;
 		newPacking.reserve(associatedRectangles.size());
 		RectanglePacker_MaxRects packer{UInt2{_pimpl->_pageWidth, _pimpl->_pageHeight}};
 		unsigned allocatedTexels = 0;
 		for (const auto& r:associatedRectangles) {
 			auto dims = r.second._bottomRight - r.second._topLeft;
 			auto rect = packer.Allocate(dims);
-			assert(rect.second[0] > rect.first[0] && rect.second[1] > rect.first[1]);		// we must get a successful assignment
-			allocatedTexels += dims[0]*dims[1];
-			rect.first += _pimpl->_reservedPage._spaceInTexture._topLeft;
-			rect.second += _pimpl->_reservedPage._spaceInTexture._topLeft;
+			// In rare cases the Allocate() can fail -- we've effectively ended up with a less well packed result. We will just delete those glyphs
+			if (rect.second[0] > rect.first[0]) {
+				assert(rect.second[0] > rect.first[0] && rect.second[1] > rect.first[1]);
+				allocatedTexels += dims[0]*dims[1];
+				rect.first += _pimpl->_reservedPage._spaceInTexture._topLeft;
+				rect.second += _pimpl->_reservedPage._spaceInTexture._topLeft;
+			} else {
+				glyphsToDelete.push_back(r.first);
+			}
 			newPacking.emplace_back(rect.first, rect.second);
 		}
 
@@ -919,6 +976,7 @@ namespace RenderOverlays
 			for (unsigned c=0; c<associatedRectangles.size(); ++c) {
 				auto srcRectangle = associatedRectangles[c].second;
 				auto dstRectangle = newPacking[c];
+				if (!dstRectangle.Width()) continue;
 				assert(srcRectangle.Width() == dstRectangle.Width() && srcRectangle.Height() == dstRectangle.Height());
 				blitEncoder.Copy(
 					CopyPartial_Dest {
@@ -942,13 +1000,17 @@ namespace RenderOverlays
 			glyph._tcBottomRight[1] = rect._bottomRight[1] / float(_pimpl->_texHeight);
 		}
 
+		// delete any glyphs that didn't be successfully packed into the new texture
+		std::sort(glyphsToDelete.begin(), glyphsToDelete.end(), [](auto lhs, auto rhs) { return rhs > lhs; });
+		for (auto g:glyphsToDelete) _glyphs.erase(_glyphs.begin()+g);
+
 		_pimpl->_reservedPage._packer = std::move(packer);
 		_pimpl->_reservedPage._texelsAllocated = allocatedTexels;
-		auto A = std::move(srcPage);
+		auto srcSpaceInTexture = srcPage._spaceInTexture;
 		srcPage = std::move(_pimpl->_reservedPage);
-		_pimpl->_reservedPage = std::move(A);
 		_pimpl->_reservedPage._packer = {};
 		_pimpl->_reservedPage._texelsAllocated = 0;	
+		_pimpl->_reservedPage._spaceInTexture = srcSpaceInTexture;
 	}
 
 	const FontTexture2D& FontRenderingManager::GetFontTexture()

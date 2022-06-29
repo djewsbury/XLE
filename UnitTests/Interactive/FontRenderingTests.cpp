@@ -100,6 +100,8 @@ namespace UnitTests
 				auto chr = std::uniform_int_distribution<>(33, 126)(_rng);		// main displayable ascii characters [33-126]
 				auto& bitmap = _renderingManager->GetBitmap(threadContext, *_fonts[font], chr);
 				REQUIRE(bitmap._tcBottomRight[0] != bitmap._tcTopLeft[0]);
+				// if (bitmap._tcBottomRight[0] == bitmap._tcTopLeft[0])
+					// std::cout << "Failed allocation" << std::endl;
 			}
 			_renderingManager->OnFrameBarrier();
 		}

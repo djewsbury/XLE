@@ -96,7 +96,7 @@ namespace RenderOverlays
 			ucs4 ch,
 			std::vector<std::pair<uint64_t, Bitmap>>::iterator insertPoint,
 			uint64_t code, bool alreadyAttemptedFree);
-		void FreeUpHeapSpace();
+		void FreeUpHeapSpace(UInt2 requestedSpace);
 		void SynchronousDefrag(RenderCore::IThreadContext&);
 	};
 
