@@ -203,7 +203,10 @@ namespace RenderCore { namespace Techniques
 			resourceName);
 		dataSource->_loadRequests = Internal::AsLoadRequests(modelScaffold, loadRequests);
 
-		return bufferUploads.Transaction_Begin(dataSource, bindFlags);
+		if (resourceSource)
+			return bufferUploads.Transaction_Begin(dataSource, resourceSource);
+		else
+			return bufferUploads.Transaction_Begin(dataSource, bindFlags);
 	}
 
 	std::pair<std::shared_ptr<IResource>, BufferUploads::TransactionMarker> LoadStaticResourcePartialAsync(

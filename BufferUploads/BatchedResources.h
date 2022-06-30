@@ -23,8 +23,6 @@ namespace BufferUploads
 	class IBatchedResources : public IResourcePool
 	{
 	public:
-		virtual ResourceLocator Allocate(size_t size, const char name[]) = 0;
-
 		virtual void TickDefrag() = 0;
 		virtual IteratorRange<const Event_ResourceReposition*> EventList_Get(EventListID id) = 0;
 		virtual void EventList_Release(EventListID id) = 0;

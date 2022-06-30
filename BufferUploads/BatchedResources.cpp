@@ -13,7 +13,8 @@ namespace BufferUploads
 	class BatchedResources : public IBatchedResources, public std::enable_shared_from_this<BatchedResources>
 	{
 	public:
-		ResourceLocator Allocate(size_t size, const char name[]) override;
+		ResourceLocator Allocate(size_t size, StringSection<> name) override;
+		RenderCore::ResourceDesc MakeFallbackDesc(size_t size, StringSection<> name) override;
 
 		virtual void AddRef(
 			uint64_t resourceMarker, RenderCore::IResource& resource, 
@@ -52,6 +53,7 @@ namespace BufferUploads
 		RenderCore::IDevice* _device;
 		mutable Threading::ReadWriteMutex _lock;
 		std::weak_ptr<IManager> _bufferUploads;
+		RenderCore::BindFlag::BitField _fallbackBindFlags;
 
 			//  Active defrag stuff...
 		std::unique_ptr<ActiveReposition> _activeDefrag;
@@ -93,11 +95,11 @@ namespace BufferUploads
 	class BatchedResources::HeapedResource
 	{
 	public:
-		unsigned            Allocate(unsigned size, const char name[]=nullptr);
+		unsigned            Allocate(unsigned size, StringSection<> name = {});
 		void                Allocate(unsigned ptr, unsigned size);
 		void                Deallocate(unsigned ptr, unsigned size);
 
-		bool                AddRef(unsigned ptr, unsigned size, const char name[]=nullptr);
+		bool                AddRef(unsigned ptr, unsigned size, StringSection<> name = {});
 		
 		BatchedHeapMetrics  CalculateMetrics() const;
 		void                ValidateRefsAndHeap();
@@ -141,9 +143,9 @@ namespace BufferUploads
 	};
 
 	ResourceLocator    BatchedResources::Allocate(
-		size_t size, const char name[])
+		size_t size, StringSection<> name)
 	{
-		if (size >= RenderCore::ByteCount(_prototype))
+		if (size > _prototype._linearBufferDesc._sizeInBytes/2)
 			return {};
 
 		_recentAllocateBytes += size;
@@ -549,12 +551,18 @@ namespace BufferUploads
 		return ~EventListID(0x0);
 	}
 
+	RenderCore::ResourceDesc BatchedResources::MakeFallbackDesc(size_t size, StringSection<> name)
+	{
+		return CreateDesc(_fallbackBindFlags, LinearBufferDesc::Create(size), name);
+	}
+
 	BatchedResources::BatchedResources(
 		RenderCore::IDevice& device, const std::shared_ptr<IManager>& bufferUploads,
 		RenderCore::BindFlag::BitField bindFlags,
 		unsigned pageSizeInBytes)
 	: _device(&device)
 	, _bufferUploads(bufferUploads)
+	, _fallbackBindFlags(bindFlags)
 	{
 		_prototype = CreateDesc(
 			bindFlags | BindFlag::TransferDst | BindFlag::TransferSrc, 0,
@@ -567,7 +575,7 @@ namespace BufferUploads
 	BatchedResources::~BatchedResources()
 	{}
 
-	unsigned    BatchedResources::HeapedResource::Allocate(unsigned size, const char name[])
+	unsigned    BatchedResources::HeapedResource::Allocate(unsigned size, StringSection<>)
 	{
 		// note -- we start out with no ref count registered in _refCounts for this range. The first ref count will come when we create a ResourceLocator
 		auto result = _heap.Allocate(size);
@@ -575,7 +583,7 @@ namespace BufferUploads
 		return result;
 	}
 
-	bool        BatchedResources::HeapedResource::AddRef(unsigned ptr, unsigned size, const char name[])
+	bool        BatchedResources::HeapedResource::AddRef(unsigned ptr, unsigned size, StringSection<> name)
 	{
 		std::pair<signed,signed> newRefCounts = _refCounts.AddRef(ptr, size, name);
 		assert(newRefCounts.first >= 0 && newRefCounts.second >= 0);

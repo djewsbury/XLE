@@ -593,8 +593,13 @@ namespace RenderCore { namespace Techniques
 			[pipelineAcceleratorPool=std::move(pipelineAcceleratorPool), deformAcceleratorPool=std::move(deformAcceleratorPool), drawablesPool=std::move(drawablesPool),
 			deformAccelerator=std::move(deformAcceleratorInit), uniformBufferBindings=std::move(uniformBufferBindings), repositionableGeometry=std::move(repositionableGeometry)](auto&& promise, auto completedConstruction) mutable {
 
-				std::shared_ptr<DrawableConstructor> drawableConstructor;
-				std::shared_future<void> deformAcceleratorInitFuture;
+				struct Helper
+				{
+					std::shared_ptr<DrawableConstructor> _drawableConstructor;
+					std::future<std::shared_ptr<DrawableConstructor>> _drawableConstructorFuture;
+					std::shared_future<void> _deformAcceleratorInitFuture;
+				};
+				auto helper = std::make_shared<Helper>();
 
 				TRY {
 					// if we were given a deform accelerator pool, but no deform accelerator, go ahead and create the default accelerator
@@ -609,11 +614,12 @@ namespace RenderCore { namespace Techniques
 					if (deformAccelerator) {
 						auto* geoInfrastructure = deformAcceleratorPool->GetDeformGeoAttachment(*deformAccelerator).get();
 						if (geoInfrastructure)
-							deformAcceleratorInitFuture = geoInfrastructure->GetInitializationFuture();
+							helper->_deformAcceleratorInitFuture = geoInfrastructure->GetInitializationFuture();
 					}
 
 					auto& bufferUploads = Services::GetInstance().GetBufferUploads();
-					drawableConstructor = std::make_shared<DrawableConstructor>(drawablesPool, pipelineAcceleratorPool, repositionableGeometry, bufferUploads, *completedConstruction, deformAcceleratorPool, deformAccelerator);
+					helper->_drawableConstructor = std::make_shared<DrawableConstructor>(drawablesPool, pipelineAcceleratorPool, repositionableGeometry, bufferUploads, *completedConstruction, deformAcceleratorPool, deformAccelerator);
+					helper->_drawableConstructorFuture = ToFuture(*helper->_drawableConstructor);
 				} CATCH(...) {
 					promise.set_exception(std::current_exception());
 					return;
@@ -621,15 +627,15 @@ namespace RenderCore { namespace Techniques
 
 				::Assets::PollToPromise(
 					std::move(promise),
-					[constructorFuture=ToFuture(*drawableConstructor), deformAcceleratorInitFuture=std::move(deformAcceleratorInitFuture)](auto timeout) {
+					[helper](auto timeout) {
 						auto timeoutTime = std::chrono::steady_clock::now() + timeout;
-						auto status = constructorFuture.wait_until(timeoutTime);
+						auto status = helper->_drawableConstructorFuture.wait_until(timeoutTime);
 						if (status == std::future_status::timeout)
 							return ::Assets::PollStatus::Continue;
 
 						// Need to ensure IGeoDeformerInfrastructure::GetCompletionCommandList() is ready, if we have a deform accelerator with a geo attachment
-						if (deformAcceleratorInitFuture.valid()) {
-							auto status = deformAcceleratorInitFuture.wait_until(timeoutTime);
+						if (helper->_deformAcceleratorInitFuture.valid()) {
+							auto status = helper->_deformAcceleratorInitFuture.wait_until(timeoutTime);
 							if (status == std::future_status::timeout)
 								return ::Assets::PollStatus::Continue;
 						}
@@ -638,11 +644,15 @@ namespace RenderCore { namespace Techniques
 					},
 					[drawablesPool=std::move(drawablesPool), deformAcceleratorPool=std::move(deformAcceleratorPool), 
 					deformAccelerator=std::move(deformAccelerator), completedConstruction=std::move(completedConstruction), 
-					drawableConstructor, uniformBufferBindings=std::move(uniformBufferBindings)]() mutable {
+					helper, uniformBufferBindings=std::move(uniformBufferBindings)]() mutable {
+						// call "get" on these futures to propagate exceptions
+						helper->_drawableConstructorFuture.get();
+						if (helper->_deformAcceleratorInitFuture.valid()) helper->_deformAcceleratorInitFuture.get();
+
 						return std::make_shared<SimpleModelRenderer>(
 							*drawablesPool,
 							*completedConstruction,
-							std::move(drawableConstructor),
+							std::move(helper->_drawableConstructor),
 							std::move(deformAcceleratorPool), std::move(deformAccelerator),
 							uniformBufferBindings);
 					});

@@ -37,6 +37,7 @@ namespace BufferUploads
     class IAsyncDataSource;
     class ResourceLocator;
     class TransactionMarker;
+    class IResourcePool;
 
         /////////////////////////////////////////////////
 
@@ -67,11 +68,13 @@ namespace BufferUploads
             /// <summary>Begin a new transaction</summary>
             /// Begin a new transaction, either by creating a new resource, or by attaching
             /// to an existing resource.
-        virtual TransactionMarker   Transaction_Begin    (const std::shared_ptr<IAsyncDataSource>& data, BindFlag::BitField bindFlags = BindFlag::ShaderResource, TransactionOptions::BitField flags=0) = 0;
-        virtual TransactionMarker   Transaction_Begin    (ResourceLocator destinationResource, const std::shared_ptr<IAsyncDataSource>& data, TransactionOptions::BitField flags=0) = 0;
+        virtual TransactionMarker   Transaction_Begin    (std::shared_ptr<IAsyncDataSource> data, BindFlag::BitField bindFlags = BindFlag::ShaderResource, TransactionOptions::BitField flags=0) = 0;
+        virtual TransactionMarker   Transaction_Begin    (ResourceLocator destinationResource, std::shared_ptr<IAsyncDataSource> data, TransactionOptions::BitField flags=0) = 0;
+        virtual TransactionMarker   Transaction_Begin    (std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool>, TransactionOptions::BitField flags=0) = 0;
 
-        virtual TransactionMarker   Transaction_Begin    (const ResourceDesc& desc, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags=0) = 0;
-        virtual TransactionMarker   Transaction_Begin    (ResourceLocator destinationResource, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags=0) = 0;
+        virtual TransactionMarker   Transaction_Begin    (const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, TransactionOptions::BitField flags=0) = 0;
+        virtual TransactionMarker   Transaction_Begin    (ResourceLocator destinationResource, std::shared_ptr<IDataPacket> data, TransactionOptions::BitField flags=0) = 0;
+        virtual TransactionMarker   Transaction_Begin    (const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, std::shared_ptr<IResourcePool>, TransactionOptions::BitField flags=0) = 0;
 
         virtual std::future<CommandListID>   Transaction_Begin    (ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations) = 0;
 

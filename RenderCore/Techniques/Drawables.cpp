@@ -896,8 +896,8 @@ namespace RenderCore { namespace Techniques
 			_geos.erase(existing);
 	}
 
-	std::shared_ptr<BufferUploads::IResourcePool> RepositionableGeometryConduit::GetIBResourcePool() { return _vb; }
-	std::shared_ptr<BufferUploads::IResourcePool> RepositionableGeometryConduit::GetVBResourcePool() { return _ib; }
+	std::shared_ptr<BufferUploads::IResourcePool> RepositionableGeometryConduit::GetIBResourcePool() { return _ib; }
+	std::shared_ptr<BufferUploads::IResourcePool> RepositionableGeometryConduit::GetVBResourcePool() { return _vb; }
 
 	RepositionableGeometryConduit::RepositionableGeometryConduit(std::shared_ptr<BufferUploads::IBatchedResources> vb, std::shared_ptr<BufferUploads::IBatchedResources> ib)
 	: _vb(std::move(vb)), _ib(std::move(ib))

@@ -8,6 +8,7 @@
 
 #include "IteratorUtils.h"
 #include "ArithmeticUtils.h"
+#include "StringUtils.h"
 #include "Threading/Mutex.h"
 #include <vector>
 #include <algorithm>
@@ -823,7 +824,7 @@ namespace Utility
     class ReferenceCountingLayer : public MarkerHeap<uint32_t>
     {
     public:
-        std::pair<signed,signed> AddRef(unsigned start, unsigned size, const char name[] = NULL);
+        std::pair<signed,signed> AddRef(unsigned start, unsigned size, StringSection<> = {});
         std::pair<signed,signed> Release(unsigned start, unsigned size);
 
         size_t      Validate();

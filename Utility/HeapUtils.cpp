@@ -913,7 +913,7 @@ namespace Utility
             //////   R E F E R E N C E   C O U N T I N G   L A Y E R   //////
         /////////////////////////////////////////////////////////////////////////////////
 
-    std::pair<signed,signed> ReferenceCountingLayer::AddRef(unsigned start, unsigned size, const char name[])
+    std::pair<signed,signed> ReferenceCountingLayer::AddRef(unsigned start, unsigned size, StringSection<> name)
     {
         Marker internalStart = ToInternalSize(start);
         Marker internalSize = ToInternalSize(AlignSize(size));
@@ -923,7 +923,7 @@ namespace Utility
             newBlock._start = internalStart;
             newBlock._end = internalStart+internalSize;
             newBlock._refCount = 1;
-            DEBUG_ONLY(if (name) newBlock._name = name);
+            DEBUG_ONLY(if (!name.IsEmpty()) newBlock._name = name.AsString());
             _entries.insert(_entries.end(), newBlock);
             return std::make_pair(newBlock._refCount, newBlock._refCount);
         }
@@ -943,7 +943,7 @@ namespace Utility
                 newBlock._start = currentStart;
                 newBlock._end = std::min(internalEnd, Marker((i<_entries.end())?i->_start:INT_MAX));
                 newBlock._refCount = 1;
-                DEBUG_ONLY(if (name) newBlock._name = name);
+                DEBUG_ONLY(if (!name.IsEmpty()) newBlock._name = name.AsString());
                 assert(newBlock._start < newBlock._end);
                 assert(newBlock._end != 0xbaad);
                 bool end = i >= _entries.end() || internalEnd <= i->_start;
@@ -963,9 +963,7 @@ namespace Utility
                     assert(i->_start < i->_end);
                     assert(i->_end != 0xbaad);
                     currentStart = i->_end;
-                    if (name && name[0]) {
-                        DEBUG_ONLY(i->_name = name);     // we have to take on the new name here. Sometimes we'll get a number of sub blocks inside of a super block. The last sub block will allocate the entirely remaining part of the super block. When this happens, rename to the sub block name.
-                    }
+                    DEBUG_ONLY(if (!name.IsEmpty()) i->_name = name.AsString());     // we have to take on the new name here. Sometimes we'll get a number of sub blocks inside of a super block. The last sub block will allocate the entirely remaining part of the super block. When this happens, rename to the sub block name.
                     if (internalEnd == i->_end) {
                         break;  // it's the end
                     }
@@ -974,7 +972,7 @@ namespace Utility
                     Entry newBlock;
                     newBlock._start = i->_start;
                     newBlock._end = internalEnd;
-                    DEBUG_ONLY(if (name) newBlock._name = name);
+                    DEBUG_ONLY(if (!name.IsEmpty()) newBlock._name = name.AsString());
                     signed newRefCount = newBlock._refCount = i->_refCount+1;
                     i->_start = internalEnd;
                     assert(newBlock._start < newBlock._end && i->_start < i->_end);
@@ -994,7 +992,7 @@ namespace Utility
                     DEBUG_ONLY(newBlock[0]._name = i->_name);
                     newBlock[1]._start = currentStart;
                     newBlock[1]._end = internalEnd;
-                    DEBUG_ONLY(if (name) newBlock[1]._name = name);
+                    DEBUG_ONLY(if (!name.IsEmpty()) newBlock[1]._name = name.AsString());
                     signed newRefCount = newBlock[1]._refCount = i->_refCount+1;
                     i->_start = internalEnd;
                     assert(newBlock[0]._start < newBlock[0]._end && newBlock[1]._start < newBlock[1]._end&& i->_start < i->_end);
@@ -1010,7 +1008,7 @@ namespace Utility
                     newBlock._refCount = i->_refCount;
                     DEBUG_ONLY(newBlock._name.swap(i->_name));
                     i->_start = currentStart;
-                    DEBUG_ONLY(if (name) i->_name = name);
+                    DEBUG_ONLY(if (!name.IsEmpty()) i->_name = name.AsString());
                     signed newRefCount = ++i->_refCount;
                     assert(newBlock._start < newBlock._end && i->_start < i->_end);
                     assert(i->_end != 0xbaad && newBlock._end != 0xbaad);

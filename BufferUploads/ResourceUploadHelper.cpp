@@ -26,11 +26,11 @@ namespace BufferUploads { namespace PlatformInterface
         const ResourceLocator& finalResource,
         RenderCore::IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize)
     {
-        assert(finalResource.IsWholeResource());
         auto destinationDesc = finalResource.GetContainingResource()->GetDesc();
         auto& metalContext = *Metal::DeviceContext::Get(*_renderCoreContext);
 
         if (destinationDesc._type == ResourceDesc::Type::Texture) {
+            assert(finalResource.IsWholeResource());
             auto destinationSize = ByteCount(destinationDesc);
             assert(destinationSize <= stagingSize);
             auto size = std::min(stagingSize, destinationSize);
@@ -47,13 +47,20 @@ namespace BufferUploads { namespace PlatformInterface
                 CopyPartial_Src{stagingResource, stagingOffset, size, lodLevelCount, arrayLayerCount});
         } else {
             assert(destinationDesc._type == ResourceDesc::Type::LinearBuffer);
-            assert(destinationDesc._linearBufferDesc._sizeInBytes <= stagingSize);
+            assert(stagingSize <= destinationDesc._linearBufferDesc._sizeInBytes);
             auto size = std::min(stagingSize, destinationDesc._linearBufferDesc._sizeInBytes);
+            unsigned dstOffset = 0;
+            
+            if (!finalResource.IsWholeResource()) {
+                auto range = finalResource.GetRangeInContainingResource();
+                dstOffset = range.first;
+                assert(size <= range.second-range.first);
+            }
 
             Metal::Internal::CaptureForBind(metalContext, *finalResource.GetContainingResource(), BindFlag::TransferDst);
             auto blitEncoder = metalContext.BeginBlitEncoder();
             blitEncoder.Copy(
-                CopyPartial_Dest{*finalResource.GetContainingResource().get()},
+                CopyPartial_Dest{*finalResource.GetContainingResource().get(), dstOffset},
                 CopyPartial_Src{stagingResource, stagingOffset, size});
         }
 
@@ -337,9 +344,10 @@ namespace BufferUploads { namespace PlatformInterface
             return;
         }
 
+        bool abandonCase = releaseMarker == 0;
         auto i = _activeAllocations.begin();
         while (i != _activeAllocations.end() && i->_unreleased == false) {
-            assert(!releaseMarker || i->_releaseMarker <= releaseMarker); // a previously released allocation can't have a later releaseMarker
+            assert(abandonCase || i->_releaseMarker <= releaseMarker); // a previously released allocation can't have a later releaseMarker
             releaseMarker = std::max(releaseMarker, i->_releaseMarker);
             ++i;
         }

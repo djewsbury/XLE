@@ -331,11 +331,13 @@ namespace RenderCore { namespace Techniques
 						for (const auto& assign:pendingTransactions->_resAssignments) {
 							if (assign._drawableStream == DrawableStream::IB) {
 								assign._drawableGeo->_ib = locators[assign._markerIdx].GetContainingResource();
+								assert(assign._drawableGeo->_ib);
 								auto offset = locators[assign._markerIdx].GetRangeInContainingResource().first;
 								if (offset != ~size_t(0)) assign._drawableGeo->_ibOffset += offset;
 							} else {
 								auto& vertexStream = assign._drawableGeo->_vertexStreams[unsigned(assign._drawableStream)-unsigned(DrawableStream::Vertex0)];
 								vertexStream._resource = locators[assign._markerIdx].GetContainingResource();
+								assert(vertexStream._resource);
 								auto offset = locators[assign._markerIdx].GetRangeInContainingResource().first;
 								if (offset != ~size_t(0)) vertexStream._vbOffset += offset;
 							}
@@ -874,7 +876,6 @@ namespace RenderCore { namespace Techniques
 			depValMarkers.erase(std::unique(depValMarkers.begin(), depValMarkers.end()), depValMarkers.end());
 			auto depVal = ::Assets::GetDepValSys().MakeOrReuse(depValMarkers);
 			Throw(::Assets::Exceptions::ConstructionError(e, depVal));
-
 		} CATCH_END
 	}
 

@@ -6,14 +6,20 @@
 
 #pragma once
 
+#include "../Utility/StringFormat.h"
 #include <memory>
 
-namespace RenderCore { class IResource; }
+namespace RenderCore { class IResource; class ResourceDesc; }
 namespace BufferUploads
 {
+	class ResourceLocator;
+
 	class IResourcePool
 	{
 	public:
+		virtual ResourceLocator Allocate(size_t size, StringSection<> name) = 0;
+		virtual RenderCore::ResourceDesc MakeFallbackDesc(size_t size, StringSection<> name) = 0;
+
 		virtual void AddRef(
 			uint64_t resourceMarker, RenderCore::IResource& resource, 
 			size_t offset, size_t size) = 0;
