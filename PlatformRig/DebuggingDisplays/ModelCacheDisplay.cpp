@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ModelCacheDisplay.h"
+#include "BufferUploadDisplay.h"
 #include "../../RenderCore/Techniques/ModelCache.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/CommonWidgets.h"
@@ -175,6 +176,76 @@ namespace PlatformRig { namespace Overlays
     {
         return std::make_shared<ModelCacheDisplay>(std::move(modelCache));
     }
+
+	class ModelCacheGeoBufferDisplay : public RenderOverlays::DebuggingDisplay::IWidget
+	{
+	public:
+		void Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState) override;
+		ProcessInputResult ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) override;
+		ModelCacheGeoBufferDisplay(std::shared_ptr<RenderCore::Techniques::ModelCache> modelCache);
+	protected:
+		std::shared_ptr<BatchingDisplay> _vbDisplay, _ibDisplay;
+		::Assets::PtrToMarkerPtr<RenderOverlays::Font> _headingFont;
+	};
+
+	void ModelCacheGeoBufferDisplay::Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState)
+	{
+		const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
+		{
+			auto allocation = layout.AllocateFullWidth(30);
+			FillRectangle(context, allocation, titleBkground);
+			allocation._topLeft[0] += 8;
+			auto* font = _headingFont->TryActualize();
+			if (font)
+				DrawText()
+					.Font(**font)
+					.Color({ 191, 123, 0 })
+					.Alignment(RenderOverlays::TextAlignment::Left)
+					.Flags(RenderOverlays::DrawTextFlags::Shadow)
+					.Draw(context, allocation, "Model Cache Geobuffers");
+		}
+
+		auto leftRect = layout.AllocateFullHeightFraction(0.5f);
+		auto rightRect = layout.AllocateFullHeight(layout.GetWidthRemaining());
+		if (_vbDisplay) {
+			Layout l{leftRect};
+			_vbDisplay->Render(context, l, interactables, interfaceState);
+		}
+		if (_ibDisplay) {
+			Layout l{rightRect};
+			_ibDisplay->Render(context, l, interactables, interfaceState);
+		}
+	}
+
+	ProcessInputResult ModelCacheGeoBufferDisplay::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input)
+	{
+		if (_vbDisplay) {
+			auto res = _vbDisplay->ProcessInput(interfaceState, input);
+			if (res != ProcessInputResult::Passthrough) return res;
+		}
+		if (_ibDisplay) {
+			auto res = _ibDisplay->ProcessInput(interfaceState, input);
+			if (res != ProcessInputResult::Passthrough) return res;
+		}
+		return ProcessInputResult::Passthrough;
+	}
+
+	ModelCacheGeoBufferDisplay::ModelCacheGeoBufferDisplay(std::shared_ptr<RenderCore::Techniques::ModelCache> modelCache)
+	{
+		auto vb = modelCache->GetVBResources();
+		if (vb) _vbDisplay = std::make_shared<BatchingDisplay>(std::move(vb));
+
+		auto ib = modelCache->GetIBResources();
+		if (ib) _ibDisplay = std::make_shared<BatchingDisplay>(std::move(ib));
+
+		_headingFont = RenderOverlays::MakeFont("DosisExtraBold", 20);
+	}
+
+	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateModelCacheGeoBufferDisplay(
+		std::shared_ptr<RenderCore::Techniques::ModelCache> modelCache)
+	{
+		return std::make_shared<ModelCacheGeoBufferDisplay>(std::move(modelCache));
+	}
 
 }}
 

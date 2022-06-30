@@ -10,6 +10,7 @@
 #include "PipelineAccelerator.h"
 #include "CommonUtils.h"
 #include "ModelRendererConstruction.h"
+#include "../BufferUploads/BatchedResources.h"
 #include "../Assets/ModelMachine.h"
 #include "../Assets/MaterialMachine.h"
 #include "../Assets/ModelScaffold.h"

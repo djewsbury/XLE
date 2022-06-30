@@ -17,7 +17,7 @@ namespace RenderCore { namespace Assets
 }}
 
 namespace Assets { class AssetHeapRecord; }
-namespace BufferUploads { class IManager; }
+namespace BufferUploads { class IManager; class IBatchedResources; }
 
 namespace RenderCore { namespace Techniques
 {
@@ -67,6 +67,9 @@ namespace RenderCore { namespace Techniques
 
         struct Records;
         Records LogRecords() const;
+
+        std::shared_ptr<BufferUploads::IBatchedResources> GetVBResources();
+        std::shared_ptr<BufferUploads::IBatchedResources> GetIBResources();
 
         ModelCache(
 			std::shared_ptr<IDrawablesPool> drawablesPool, 

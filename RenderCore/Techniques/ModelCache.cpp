@@ -150,6 +150,20 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
+	std::shared_ptr<BufferUploads::IBatchedResources> ModelCache::GetVBResources()
+	{
+		if (_pimpl->_repositionalGeometry)
+			return _pimpl->_repositionalGeometry->GetVBResourcePool();
+		return nullptr;
+	}
+
+	std::shared_ptr<BufferUploads::IBatchedResources> ModelCache::GetIBResources()
+	{
+		if (_pimpl->_repositionalGeometry)
+			return _pimpl->_repositionalGeometry->GetIBResourcePool();
+		return nullptr;
+	}
+
 	ModelCache::ModelCache(
 		std::shared_ptr<IDrawablesPool> drawablesPool, 
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool,

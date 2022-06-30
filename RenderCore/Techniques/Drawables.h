@@ -246,8 +246,8 @@ namespace RenderCore { namespace Techniques
 	class RepositionableGeometryConduit : public std::enable_shared_from_this<RepositionableGeometryConduit>
 	{
 	public:
-		std::shared_ptr<BufferUploads::IResourcePool> GetIBResourcePool();
-		std::shared_ptr<BufferUploads::IResourcePool> GetVBResourcePool();
+		std::shared_ptr<BufferUploads::IBatchedResources> GetIBResourcePool();
+		std::shared_ptr<BufferUploads::IBatchedResources> GetVBResourcePool();
 
 		void Attach(DrawableGeo&, IteratorRange<BufferUploads::ResourceLocator*> attachedLocators);
 

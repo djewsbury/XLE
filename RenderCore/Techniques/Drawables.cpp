@@ -870,8 +870,8 @@ namespace RenderCore { namespace Techniques
 		if (_repositionalGeometry) _repositionalGeometry->Remove(*this);
 	}
 	
-	std::shared_ptr<BufferUploads::IResourcePool> RepositionableGeometryConduit::GetIBResourcePool() { return _ib; }
-	std::shared_ptr<BufferUploads::IResourcePool> RepositionableGeometryConduit::GetVBResourcePool() { return _vb; }
+	std::shared_ptr<BufferUploads::IBatchedResources> RepositionableGeometryConduit::GetIBResourcePool() { return _ib; }
+	std::shared_ptr<BufferUploads::IBatchedResources> RepositionableGeometryConduit::GetVBResourcePool() { return _vb; }
 
 	void RepositionableGeometryConduit::Attach(DrawableGeo& geo, IteratorRange<BufferUploads::ResourceLocator*> attachedLocators)
 	{
