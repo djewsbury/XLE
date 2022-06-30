@@ -40,7 +40,7 @@ namespace BufferUploads { namespace PlatformInterface
             // During the transfer, the images must be in either TransferSrcOptimal, TransferDstOptimal or General.
             // assuming we don't have to CaptureForBind stagingResource, because it should be from a StagingPool, which
             // will always be ready for a transfer
-            Metal::Internal::CaptureForBind(metalContext, *finalResource.GetContainingResource(), BindFlag::TransferDst);
+            Metal::Internal::CaptureForBind cap{metalContext, *finalResource.GetContainingResource(), BindFlag::TransferDst};
             auto blitEncoder = metalContext.BeginBlitEncoder();
             blitEncoder.Copy(
                 CopyPartial_Dest{*finalResource.GetContainingResource().get()},
@@ -48,20 +48,19 @@ namespace BufferUploads { namespace PlatformInterface
         } else {
             assert(destinationDesc._type == ResourceDesc::Type::LinearBuffer);
             assert(stagingSize <= destinationDesc._linearBufferDesc._sizeInBytes);
-            auto size = std::min(stagingSize, destinationDesc._linearBufferDesc._sizeInBytes);
             unsigned dstOffset = 0;
             
             if (!finalResource.IsWholeResource()) {
                 auto range = finalResource.GetRangeInContainingResource();
                 dstOffset = range.first;
-                assert(size <= range.second-range.first);
+                assert(stagingSize <= range.second-range.first);
             }
 
-            Metal::Internal::CaptureForBind(metalContext, *finalResource.GetContainingResource(), BindFlag::TransferDst);
+            Metal::Internal::CaptureForBind cap{metalContext, *finalResource.GetContainingResource(), BindFlag::TransferDst};
             auto blitEncoder = metalContext.BeginBlitEncoder();
             blitEncoder.Copy(
                 CopyPartial_Dest{*finalResource.GetContainingResource().get(), dstOffset},
-                CopyPartial_Src{stagingResource, stagingOffset, size});
+                CopyPartial_Src{stagingResource, stagingOffset, stagingSize});
         }
 
         auto finalContainingGuid = finalResource.GetContainingResource()->GetGUID();

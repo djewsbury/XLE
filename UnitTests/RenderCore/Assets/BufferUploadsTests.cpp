@@ -440,8 +440,8 @@ namespace UnitTests
 						Metal::ResourceMap map{metalContext, *stagingResource, Metal::ResourceMap::Mode::WriteDiscardPrevious};
 						FillWithRandomData(rng(), map.GetData());
 
-						Metal::Internal::CaptureForBind(metalContext, *stagingResource, BindFlag::TransferSrc);
-						Metal::Internal::CaptureForBind(metalContext, *finalResource, BindFlag::TransferDst);
+						Metal::Internal::CaptureForBind cap0{metalContext, *stagingResource, BindFlag::TransferSrc};
+						Metal::Internal::CaptureForBind cap1{metalContext, *finalResource, BindFlag::TransferDst};
 						auto blitEncoder = metalContext.BeginBlitEncoder();
 						blitEncoder.Copy(*finalResource, *stagingResource);
 

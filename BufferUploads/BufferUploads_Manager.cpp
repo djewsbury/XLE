@@ -1175,7 +1175,7 @@ namespace BufferUploads
             std::vector<IAsyncDataSource::SubResource> uploadList;
             if (desc._type == ResourceDesc::Type::Texture) {
 
-                // array the upload locations as per required for a staging texture
+                // arrange the upload locations as per required for a staging texture
                 auto arrayCount = ActualArrayLayerCount(desc._textureDesc);
                 auto mipCount = desc._textureDesc._mipCount;
                 assert(mipCount >= 1);
