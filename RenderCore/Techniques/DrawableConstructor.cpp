@@ -328,6 +328,8 @@ namespace RenderCore { namespace Techniques
 
 						// commit the resources back to the drawables, as needed
 						// note -- no threading protection for this
+						std::vector<std::pair<DrawableGeo*, BufferUploads::ResourceLocator>> locatorsToAttach;
+						locatorsToAttach.reserve(pendingTransactions->_resAssignments.size());
 						for (const auto& assign:pendingTransactions->_resAssignments) {
 							if (assign._drawableStream == DrawableStream::IB) {
 								assign._drawableGeo->_ib = locators[assign._markerIdx].GetContainingResource();
@@ -345,9 +347,42 @@ namespace RenderCore { namespace Techniques
 							if (locators[assign._markerIdx].GetCompletionCommandList() != BufferUploads::CommandListID_Invalid)
 								assign._drawableGeo->_completionCmdList = std::max(assign._drawableGeo->_completionCmdList, locators[assign._markerIdx].GetCompletionCommandList());
 							
+							// we have to record the ResourceLocators -- because if these are destroyed, they will end up releasing the allocation
+							// within the resource pool
+							if (!locators[assign._markerIdx].IsWholeResource())
+								locatorsToAttach.emplace_back(assign._drawableGeo.get(), locators[assign._markerIdx]);
+						}
+
+						if (pendingTransactions->_repositionableGeometry && !locatorsToAttach.empty()) {
 							// register in the RepositionableGeometryConduit now that the DrawableGeo is complete & not longer expecting any further writes
-							if (pendingTransactions->_repositionableGeometry)
-								assign._drawableGeo->Attach(pendingTransactions->_repositionableGeometry);
+							BufferUploads::ResourceLocator locBuffer[5];
+							std::sort(
+								locatorsToAttach.begin(), locatorsToAttach.end(),
+								[](const auto& lhs, const auto& rhs) {
+									if (lhs.first < rhs.first) return true;
+									if (lhs.first > rhs.first) return false;
+									if (lhs.second.GetContainingResource() < rhs.second.GetContainingResource()) return true;
+									if (lhs.second.GetContainingResource() > rhs.second.GetContainingResource()) return false;
+									return lhs.second.GetRangeInContainingResource().first < rhs.second.GetRangeInContainingResource().first;
+								});
+							auto i = locatorsToAttach.begin();
+							while (i != locatorsToAttach.end()) {
+								auto end = i+1;
+								while (end != locatorsToAttach.end() && end->first == i->first) ++end;
+
+								unsigned locatorCount = 0;
+								assert((end-i) <= dimof(locBuffer));
+								for (auto i2=i; i2<end; ++i2) {
+									if (	locatorCount != 0 
+										&& 	locBuffer[locatorCount-1].GetContainingResource() == i2->second.GetContainingResource()
+										&& 	locBuffer[locatorCount-1].GetRangeInContainingResource() == i2->second.GetRangeInContainingResource())
+										continue;
+									locBuffer[locatorCount++] = std::move(i2->second);
+								}
+
+								pendingTransactions->_repositionableGeometry->Attach(*i->first, MakeIteratorRange(locBuffer, &locBuffer[locatorCount]));
+								i = end;
+							}
 						}
 
 						return largestCmdList;

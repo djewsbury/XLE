@@ -864,40 +864,40 @@ namespace RenderCore { namespace Techniques
 	}
 	DrawableInputAssembly::~DrawableInputAssembly() = default;
 
-	void DrawableGeo::Attach(const std::shared_ptr<RepositionableGeometryConduit>& conduit)
-	{
-		if (_repositionalGeometry) {
-			assert(_repositionalGeometry == conduit);
-			return;
-		}
-		_repositionalGeometry = conduit;
-		_repositionalGeometry->Add(*this);
-	}
 	DrawableGeo::DrawableGeo() = default;
 	DrawableGeo::~DrawableGeo()
 	{
 		if (_repositionalGeometry) _repositionalGeometry->Remove(*this);
 	}
 	
-
-	void RepositionableGeometryConduit::Add(DrawableGeo& geo)
-	{
-		ScopedLock(_lock);
-		auto existing = std::find(_geos.begin(), _geos.end(), &geo); // [w=geo](const auto& q) { return !q.owner_before(w) && !w.owner_before(q); });
-		if (existing != _geos.end()) return;
-		_geos.emplace_back(&geo);
-	}
-
 	void RepositionableGeometryConduit::Remove(DrawableGeo& geo)
 	{
 		ScopedLock(_lock);
-		auto existing = std::find(_geos.begin(), _geos.end(), &geo);
-		if (existing != _geos.end())
+		auto existing = std::find_if(_geos.begin(), _geos.end(), [geo=&geo](const auto& q) { return q._geo == geo; });
+		if (existing != _geos.end()) {
+			// We have a bt of bookkeeping to do... We should be a little conscious of the costs here
+			if (existing->_locatorCount) {
+				for (auto& g:_geos)
+					if (g._firstLocator > existing->_firstLocator)
+						g._firstLocator -= existing->_locatorCount;
+				_locators.erase(_locators.begin()+existing->_firstLocator, _locators.begin()+existing->_firstLocator+existing->_locatorCount);
+			}
 			_geos.erase(existing);
+		}
 	}
 
 	std::shared_ptr<BufferUploads::IResourcePool> RepositionableGeometryConduit::GetIBResourcePool() { return _ib; }
 	std::shared_ptr<BufferUploads::IResourcePool> RepositionableGeometryConduit::GetVBResourcePool() { return _vb; }
+
+	void RepositionableGeometryConduit::Attach(DrawableGeo& geo, IteratorRange<BufferUploads::ResourceLocator*> attachedLocators)
+	{
+		ScopedLock(_lock);
+		assert(!geo._repositionalGeometry);
+		geo._repositionalGeometry = shared_from_this();
+		auto locatorStart = _locators.size();
+		for (auto& a:attachedLocators) _locators.emplace_back(std::move(a));
+		_geos.push_back({&geo, (unsigned)locatorStart, (unsigned)attachedLocators.size()});
+	}
 
 	RepositionableGeometryConduit::RepositionableGeometryConduit(std::shared_ptr<BufferUploads::IBatchedResources> vb, std::shared_ptr<BufferUploads::IBatchedResources> ib)
 	: _vb(std::move(vb)), _ib(std::move(ib))

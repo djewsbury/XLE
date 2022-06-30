@@ -18,7 +18,7 @@ namespace Utility { class ParameterBox; }
 namespace RenderCore { class IThreadContext; class MiniInputElementDesc; class InputElementDesc; class UniformsStreamInterface; class UniformsStream; class DescriptorSetSignature; }
 namespace RenderCore { namespace Assets { class ShaderPatchCollection; class PredefinedDescriptorSetLayout; } }
 namespace Assets { class IAsyncMarker; }
-namespace BufferUploads { using CommandListID = uint32_t; class IResourcePool; class IBatchedResources; }
+namespace BufferUploads { using CommandListID = uint32_t; class IResourcePool; class IBatchedResources; class ResourceLocator;}
 namespace std { template<typename Type> class promise; }
 
 namespace RenderCore { namespace Techniques
@@ -58,14 +58,13 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<DeformAccelerator> _deformAccelerator;
 		BufferUploads::CommandListID _completionCmdList = 0;
 
-		void Attach(const std::shared_ptr<RepositionableGeometryConduit>&);
-
 		// avoid constructing directly -- prefer IDrawablesPool::CreateGeo() or DrawablesPacket::CreateTemporaryGeo()
 		DrawableGeo();
 		~DrawableGeo();
 	protected:
 		friend class DrawablesPool;
 		friend class Internal::DrawableGeoHeap;
+		friend class RepositionableGeometryConduit;
 		std::shared_ptr<RepositionableGeometryConduit> _repositionalGeometry;
 	};
 
@@ -244,23 +243,26 @@ namespace RenderCore { namespace Techniques
 	}
 
 	/// <summary>Associate drawable geos with resource source so they can be updated after reposition operations</summary>
-	class RepositionableGeometryConduit
+	class RepositionableGeometryConduit : public std::enable_shared_from_this<RepositionableGeometryConduit>
 	{
 	public:
 		std::shared_ptr<BufferUploads::IResourcePool> GetIBResourcePool();
 		std::shared_ptr<BufferUploads::IResourcePool> GetVBResourcePool();
+
+		void Attach(DrawableGeo&, IteratorRange<BufferUploads::ResourceLocator*> attachedLocators);
 
 		RepositionableGeometryConduit(std::shared_ptr<BufferUploads::IBatchedResources> vb, std::shared_ptr<BufferUploads::IBatchedResources> ib);
 		~RepositionableGeometryConduit();
 	protected:
 		Threading::Mutex _lock;
 		std::shared_ptr<BufferUploads::IBatchedResources> _vb, _ib;
-		std::vector<DrawableGeo*> _geos;
+		struct AttachedGeo { DrawableGeo* _geo; unsigned _firstLocator, _locatorCount; };
+		std::vector<AttachedGeo> _geos;
+		std::vector<BufferUploads::ResourceLocator> _locators;
 		unsigned _frameBarrierMarker = ~0u;
 		unsigned _lastProcessedVB = 0, _lastProcessedIB = 0;
 
 		friend class DrawableGeo;
-		void Add(DrawableGeo& geo);
 		void Remove(DrawableGeo& geo);
 	};
 
