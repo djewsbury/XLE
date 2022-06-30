@@ -186,7 +186,7 @@ namespace BufferUploads
         ResourceLocator(
             std::shared_ptr<IResource> containingResource,
             size_t interiorOffset, size_t interiorSize,
-            std::weak_ptr<IResourcePool> pool, uint64_t poolMarker,
+            std::weak_ptr<IResourcePool> pool,
             bool initialReferenceAlreadyTaken = false,
             CommandListID completionCommandList = CommandListID_Invalid);
         ResourceLocator(
@@ -207,7 +207,6 @@ namespace BufferUploads
         std::shared_ptr<IResource> _resource;
         size_t _interiorOffset = ~size_t(0), _interiorSize = ~size_t(0);
         std::weak_ptr<IResourcePool> _pool;
-        uint64_t _poolMarker = ~0ull;
         bool _managedByPool = false;
         CommandListID _completionCommandList = CommandListID_Invalid;
     };

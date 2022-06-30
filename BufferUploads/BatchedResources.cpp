@@ -16,12 +16,12 @@ namespace BufferUploads
 		ResourceLocator Allocate(size_t size, StringSection<> name) override;
 		RenderCore::ResourceDesc MakeFallbackDesc(size_t size, StringSection<> name) override;
 
-		virtual void AddRef(
-			uint64_t resourceMarker, RenderCore::IResource& resource, 
+		virtual bool AddRef(
+			RenderCore::IResource& resource, 
 			size_t offset, size_t size) override;
 
-		virtual void Release(
-			uint64_t resourceMarker, std::shared_ptr<RenderCore::IResource>&& resource, 
+		virtual bool Release(
+			RenderCore::IResource& resource, 
 			size_t offset, size_t size) override;
 
 		struct ResultFlags { enum Enum { IsBatched = 1<<0, ActiveReposition = 1<<1 }; using BitField=unsigned; };
@@ -176,8 +176,8 @@ namespace BufferUploads
 						return ResourceLocator{
 							bestHeap->_heapResource, 
 							allocation, size, 
-							weak_from_this(), 0ull,
-							true};
+							weak_from_this(),
+							true, CommandListID_Invalid};
 					}
 				}
 			}
@@ -200,11 +200,11 @@ namespace BufferUploads
 			_heaps.push_back(std::move(newHeap));
 		}
 
-		return ResourceLocator{std::move(heapResource), allocation, size, weak_from_this(), 0ull, true};
+		return ResourceLocator{std::move(heapResource), allocation, size, weak_from_this(), true, CommandListID_Invalid};
 	}
 	
-	void BatchedResources::AddRef(
-		uint64_t resourceMarker, RenderCore::IResource& resource, 
+	bool BatchedResources::AddRef(
+		RenderCore::IResource& resource, 
 		size_t offset, size_t size)
 	{
 		ScopedReadLock(_lock);
@@ -216,74 +216,74 @@ namespace BufferUploads
 			}
 		}
 
-		assert(heap);
-		if (heap) heap->AddRef(offset, size);
+		if (!heap) return false;
+
+		heap->AddRef(offset, size);
+		return true;
 	}
 
-	void BatchedResources::Release(
-		uint64_t resourceMarker, std::shared_ptr<RenderCore::IResource>&& resource, 
+	bool BatchedResources::Release(
+		RenderCore::IResource& resource, 
 		size_t offset, size_t size)
 	{
 		ScopedReadLock(_lock);
 		HeapedResource* heap = NULL;
 		for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i) {
-			if ((*i)->_heapResource == resource) {
+			if ((*i)->_heapResource.get() == &resource) {
 				heap = i->get();
 				break;
 			}
 		}
 
-		assert(heap);
-		if (heap) {
-			std::pair<signed,signed> newRefCounts = heap->_refCounts.Release(offset, size);
-			assert(newRefCounts.first >= 0 && newRefCounts.second >= 0);
-			if (newRefCounts.first == 0) {
-				if (newRefCounts.second == 0) {
-					// Simple case -- entire block dealloced
-					heap->Deallocate(offset, size);
-				} else {
-					// Complex case -- some parts were left behind. We need to check what
-					// parts of the block are still have references, and what were released
-					// This should only happen when releasing the "uberblock" after a defrag
-					// operation -- because that is an umbrella for many smaller blocks, and
-					// some of those smaller blocks can be released before the defrag is fully
-					// complete
-					auto entryCount = heap->_refCounts.GetEntryCount();
-					auto i = 0;
-					while (i < entryCount) {
-						auto e = heap->_refCounts.GetEntry(i);
-						if ((e.first+e.second) > offset)
-							break;
-						++i;
-					}
-					unsigned start = offset, end = offset+size;
-					while (i != entryCount && heap->_refCounts.GetEntry(i).first < end) {
-						auto e = heap->_refCounts.GetEntry(i);
-						unsigned allocatedPartsStart = e.first;
-						if (allocatedPartsStart > start) heap->Deallocate(start, std::min(allocatedPartsStart, end)-start);
-						start = e.first+e.second;		// This is the first point were we're possibly unallocated
-						++i;
-					}
-					if (start < end) heap->Deallocate(start, end-start);	// last little bit
-				}
-			}
-			#if defined(_DEBUG)
-				heap->ValidateRefsAndHeap();
-			#endif
+		if (!heap) return false;
 
-			if (heap->_heap.IsEmpty() && !heap->_lockedForDefrag.load()) {
-				// If we get down to completely empty, just remove and the page entirely. This can happen frequently
-				// after heap compression
-				for (auto i=_heaps.begin(); i!=_heaps.end(); ++i)
-					if (i->get() == heap) {
-						_heaps.erase(i);
+		std::pair<signed,signed> newRefCounts = heap->_refCounts.Release(offset, size);
+		assert(newRefCounts.first >= 0 && newRefCounts.second >= 0);
+		if (newRefCounts.first == 0) {
+			if (newRefCounts.second == 0) {
+				// Simple case -- entire block dealloced
+				heap->Deallocate(offset, size);
+			} else {
+				// Complex case -- some parts were left behind. We need to check what
+				// parts of the block are still have references, and what were released
+				// This should only happen when releasing the "uberblock" after a defrag
+				// operation -- because that is an umbrella for many smaller blocks, and
+				// some of those smaller blocks can be released before the defrag is fully
+				// complete
+				auto entryCount = heap->_refCounts.GetEntryCount();
+				auto i = 0;
+				while (i < entryCount) {
+					auto e = heap->_refCounts.GetEntry(i);
+					if ((e.first+e.second) > offset)
 						break;
-					}
+					++i;
+				}
+				unsigned start = offset, end = offset+size;
+				while (i != entryCount && heap->_refCounts.GetEntry(i).first < end) {
+					auto e = heap->_refCounts.GetEntry(i);
+					unsigned allocatedPartsStart = e.first;
+					if (allocatedPartsStart > start) heap->Deallocate(start, std::min(allocatedPartsStart, end)-start);
+					start = e.first+e.second;		// This is the first point were we're possibly unallocated
+					++i;
+				}
+				if (start < end) heap->Deallocate(start, end-start);	// last little bit
 			}
 		}
+		#if defined(_DEBUG)
+			heap->ValidateRefsAndHeap();
+		#endif
 
-			// (prevent caller from performing extra derefs)
-		resource = nullptr;
+		if (heap->_heap.IsEmpty() && !heap->_lockedForDefrag.load()) {
+			// If we get down to completely empty, just remove and the page entirely. This can happen frequently
+			// after heap compression
+			for (auto i=_heaps.begin(); i!=_heaps.end(); ++i)
+				if (i->get() == heap) {
+					_heaps.erase(i);
+					break;
+				}
+		}
+
+		return true;
 	}
 
 	BatchedResources::ResultFlags::BitField BatchedResources::IsBatchedResource(
@@ -355,15 +355,16 @@ namespace BufferUploads
 				auto* sourceHeap = _activeDefrag->GetSourceHeap();
 				_activeDefrag->Clear();
 
+				ScopedReadLock(_lock);
 				if (sourceHeap->_heap.IsEmpty()) {
 					// we deferred destruction of this heap until now
-					ScopedReadLock(_lock);
 					for (auto i=_heaps.begin(); i!=_heaps.end(); ++i)
 						if (i->get() == sourceHeap) {
 							_heaps.erase(i);
 							break;
 						}
 				} else {
+					sourceHeap->_hashLastDefrag = sourceHeap->_heap.CalculateHash();	// while locked
 					auto oldLocked = sourceHeap->_lockedForDefrag.exchange(false);
 					assert(oldLocked);
 				}
@@ -378,6 +379,7 @@ namespace BufferUploads
 		unsigned bestWeight = minWeightToDoSomething;
 		unsigned largestBlockForHeapDrain = 0;
 		HeapedResource* bestHeapForCompression = nullptr;
+		std::vector<RepositionStep> compression;
 
 		const unsigned heapDrainThreshold = _prototype._linearBufferDesc._sizeInBytes / 4;
 
@@ -425,6 +427,10 @@ namespace BufferUploads
 				// set _lockedForDefrag before we exit _lock, because this prevents destroying this heap
 				auto oldLocked = bestIncrementalDefragHeap->_lockedForDefrag.exchange(true);
 				assert(!oldLocked); (void)oldLocked;
+				// If you hit the following assert it means we're triggering the same defrag multiple times
+				// This usually happens when non of the blocks from the defrag operation actually moved; meaning it most likely remains
+				// the most optimal defrag operation
+				assert(bestIncrementalDefragHeap->_heap.CalculateHash() != bestIncrementalDefragHeap->_hashLastDefrag);
 			} else {
 				if (!bestHeapForCompression && largestBlockForHeapDrain > heapDrainThreshold) {
 					// Look for the first small heap that where we can move the entire contents to another heap
@@ -440,6 +446,8 @@ namespace BufferUploads
 				if (bestHeapForCompression) {
 					auto oldLocked = bestHeapForCompression->_lockedForDefrag.exchange(true);
 					assert(!oldLocked); (void)oldLocked;
+
+					compression = bestHeapForCompression->_heap.CalculateHeapCompression();
 				}
 			}
 		}
@@ -453,22 +461,17 @@ namespace BufferUploads
 			_recentRepositionBytes += byteCount;
 			_totalRepositionBytes += byteCount;
 
-			// Now that we've set bestHeap->_lockedForDefrag, bestHeap->_heap is immutable...
 			auto newDefrag = std::make_unique<ActiveReposition>(
 				*this, *_bufferUploads.lock(), *bestIncrementalDefragHeap, std::move(bestIncrementalDefragSteps));
 
 			assert(!_activeDefrag);
 			_activeDefrag = std::move(newDefrag);
 		} else if (bestHeapForCompression) {
-			// Now that we've set bestHeap->_lockedForDefrag, bestHeap->_heap is immutable...
-			auto compression = bestHeapForCompression->_heap.CalculateHeapCompression();
-
 			size_t byteCount = 0;
 			for (const auto& s:compression) byteCount += s._sourceEnd-s._sourceStart;
 			_recentRepositionBytes += byteCount;
 			_totalRepositionBytes += byteCount;
 
-			bestHeapForCompression->_hashLastDefrag = bestHeapForCompression->_heap.CalculateHash();
 			auto newDefrag = std::make_unique<ActiveReposition>(
 				*this, *_bufferUploads.lock(), *bestHeapForCompression, std::move(compression));
 
@@ -477,16 +480,19 @@ namespace BufferUploads
 
 			#if defined(_DEBUG)
 				// Validate that everything recorded in the _refCounts is part of the repositioning
-				unsigned blockCount = bestHeapForCompression->_refCounts.GetEntryCount();
-				for (unsigned b=0; b<blockCount; ++b) {
-					auto block = bestHeapForCompression->_refCounts.GetEntry(b);
-					bool foundOne = false;
-					for (auto i =_activeDefrag->GetSteps().begin(); i!=_activeDefrag->GetSteps().end(); ++i)
-						if (block.first >= i->_sourceStart && block.second <= i->_sourceEnd) {
-							foundOne = true;
-							break;
-						}
-					assert(foundOne);
+				{
+					ScopedLock(_lock);
+					unsigned blockCount = bestHeapForCompression->_refCounts.GetEntryCount();
+					for (unsigned b=0; b<blockCount; ++b) {
+						auto block = bestHeapForCompression->_refCounts.GetEntry(b);
+						bool foundOne = false;
+						for (auto i =_activeDefrag->GetSteps().begin(); i!=_activeDefrag->GetSteps().end(); ++i)
+							if (block.first >= i->_sourceStart && block.second <= i->_sourceEnd) {
+								foundOne = true;
+								break;
+							}
+						assert(foundOne);
+					}
 				}
 			#endif
 		}
@@ -714,8 +720,8 @@ namespace BufferUploads
 				s._destination += _dstUberBlock.GetRangeInContainingResource().first;
 
 		_futureRepositionCmdList = bufferUploads.Transaction_Begin(
-			srcHeap._heapResource,
 			_dstUberBlock.GetContainingResource(),
+			srcHeap._heapResource,
 			_steps);
 		if (!_futureRepositionCmdList.valid())
 			Throw(std::runtime_error("Failed while queuing reposition transaction"));

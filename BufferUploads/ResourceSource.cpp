@@ -385,14 +385,13 @@ namespace BufferUploads
     : _resource(std::move(independentResource))
     {
         _interiorOffset = _interiorSize = ~size_t(0);
-        _poolMarker = ~0ull;
         _managedByPool = false;
         _completionCommandList = CommandListID_Invalid;
     }
     ResourceLocator::ResourceLocator(
         std::shared_ptr<IResource> containingResource,
         size_t interiorOffset, size_t interiorSize,
-        std::weak_ptr<IResourcePool> pool, uint64_t poolMarker,
+        std::weak_ptr<IResourcePool> pool,
         bool initialReferenceAlreadyTaken,
         CommandListID completionCommandList)
     : _resource(std::move(containingResource))
@@ -400,14 +399,13 @@ namespace BufferUploads
     {
         _interiorOffset = interiorOffset;
         _interiorSize = interiorSize;
-        _poolMarker = poolMarker;
         _managedByPool = true;
         _completionCommandList = completionCommandList;
 
         if (!initialReferenceAlreadyTaken) {
             auto strongPool = _pool.lock();
             if (strongPool && _resource)
-                strongPool->AddRef(_poolMarker, *_resource, _interiorOffset, _interiorSize);
+                strongPool->AddRef(*_resource, _interiorOffset, _interiorSize);
         }
     }
 
@@ -419,7 +417,6 @@ namespace BufferUploads
     {
         _interiorOffset = interiorOffset;
         _interiorSize = interiorSize;
-        _poolMarker = ~0ull;
         _managedByPool = false;
         _completionCommandList = completionCommandList;
     }
@@ -429,7 +426,7 @@ namespace BufferUploads
     {
         auto pool = _pool.lock();
         if (pool)
-            pool->Release(_poolMarker, std::move(_resource), _interiorOffset, _interiorSize);
+            pool->Release(*_resource, _interiorOffset, _interiorSize);
     }
 
     ResourceLocator::ResourceLocator(
@@ -439,12 +436,10 @@ namespace BufferUploads
     , _interiorOffset(moveFrom._interiorOffset)
     , _interiorSize(moveFrom._interiorSize)
     , _pool(std::move(moveFrom._pool))
-    , _poolMarker(moveFrom._poolMarker)
     , _managedByPool(moveFrom._managedByPool)
     , _completionCommandList(completionCommandList)
     {
         moveFrom._interiorOffset = moveFrom._interiorSize = ~size_t(0);
-        moveFrom._poolMarker = ~0ull;
         moveFrom._managedByPool = false;
         moveFrom._completionCommandList = CommandListID_Invalid;
     }
@@ -454,12 +449,10 @@ namespace BufferUploads
     , _interiorOffset(moveFrom._interiorOffset)
     , _interiorSize(moveFrom._interiorSize)
     , _pool(std::move(moveFrom._pool))
-    , _poolMarker(moveFrom._poolMarker)
     , _managedByPool(moveFrom._managedByPool)
     , _completionCommandList(moveFrom._completionCommandList)
     {
         moveFrom._interiorOffset = moveFrom._interiorSize = ~size_t(0);
-        moveFrom._poolMarker = ~0ull;
         moveFrom._managedByPool = false;
         moveFrom._completionCommandList = CommandListID_Invalid;
     }
@@ -471,18 +464,16 @@ namespace BufferUploads
         if (_managedByPool) {
             auto pool = _pool.lock();
             if (pool && _resource)
-                pool->Release(_poolMarker, std::move(_resource), _interiorOffset, _interiorSize);
+                pool->Release(*_resource, _interiorOffset, _interiorSize);
         }
 
         _resource = std::move(moveFrom._resource);
         _interiorOffset = moveFrom._interiorOffset;
         _interiorSize = moveFrom._interiorSize;
         _pool = std::move(moveFrom._pool);
-        _poolMarker = moveFrom._poolMarker;
         _managedByPool = moveFrom._managedByPool;
         _completionCommandList = moveFrom._completionCommandList;
         moveFrom._interiorOffset = moveFrom._interiorSize = ~size_t(0);
-        moveFrom._poolMarker = ~0ull;
         moveFrom._managedByPool = false;
         moveFrom._completionCommandList = CommandListID_Invalid;
         return *this;
@@ -493,14 +484,13 @@ namespace BufferUploads
     , _interiorOffset(copyFrom._interiorOffset)
     , _interiorSize(copyFrom._interiorSize)
     , _pool(copyFrom._pool)
-    , _poolMarker(copyFrom._poolMarker)
     , _managedByPool(copyFrom._managedByPool)
     , _completionCommandList(copyFrom._completionCommandList)
     {
         if (_managedByPool) {
             auto pool = _pool.lock();
             if (pool && _resource)
-                pool->AddRef(_poolMarker, *_resource, _interiorOffset, _interiorSize);
+                pool->AddRef(*_resource, _interiorOffset, _interiorSize);
         }
     }
 
@@ -511,21 +501,20 @@ namespace BufferUploads
         if (_managedByPool) {
             auto pool = _pool.lock();
             if (pool && _resource)
-                pool->Release(_poolMarker, std::move(_resource), _interiorOffset, _interiorSize);
+                pool->Release(*_resource, _interiorOffset, _interiorSize);
         }
 
         _resource = copyFrom._resource;
         _interiorOffset = copyFrom._interiorOffset;
         _interiorSize = copyFrom._interiorSize;
         _pool = copyFrom._pool;
-        _poolMarker = copyFrom._poolMarker;
         _managedByPool = copyFrom._managedByPool;
         _completionCommandList = copyFrom._completionCommandList;
 
         if (_managedByPool) {
             auto pool = _pool.lock();
             if (pool && _resource)
-                pool->AddRef(_poolMarker, *_resource, _interiorOffset, _interiorSize);
+                pool->AddRef(*_resource, _interiorOffset, _interiorSize);
         }
         return *this;
     }
@@ -537,13 +526,13 @@ namespace BufferUploads
                 return ResourceLocator {
                     _resource,
                     offset, size,
-                    _pool, _poolMarker,
+                    _pool,
                     false, _completionCommandList };
             } else {
                 return ResourceLocator {
                     _resource,
                     _interiorOffset + offset, size,
-                    _pool, _poolMarker,
+                    _pool,
                     false, _completionCommandList };
             }
         } else {

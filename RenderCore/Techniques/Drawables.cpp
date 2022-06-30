@@ -870,22 +870,6 @@ namespace RenderCore { namespace Techniques
 		if (_repositionalGeometry) _repositionalGeometry->Remove(*this);
 	}
 	
-	void RepositionableGeometryConduit::Remove(DrawableGeo& geo)
-	{
-		ScopedLock(_lock);
-		auto existing = std::find_if(_geos.begin(), _geos.end(), [geo=&geo](const auto& q) { return q._geo == geo; });
-		if (existing != _geos.end()) {
-			// We have a bt of bookkeeping to do... We should be a little conscious of the costs here
-			if (existing->_locatorCount) {
-				for (auto& g:_geos)
-					if (g._firstLocator > existing->_firstLocator)
-						g._firstLocator -= existing->_locatorCount;
-				_locators.erase(_locators.begin()+existing->_firstLocator, _locators.begin()+existing->_firstLocator+existing->_locatorCount);
-			}
-			_geos.erase(existing);
-		}
-	}
-
 	std::shared_ptr<BufferUploads::IResourcePool> RepositionableGeometryConduit::GetIBResourcePool() { return _ib; }
 	std::shared_ptr<BufferUploads::IResourcePool> RepositionableGeometryConduit::GetVBResourcePool() { return _vb; }
 
@@ -894,9 +878,118 @@ namespace RenderCore { namespace Techniques
 		ScopedLock(_lock);
 		assert(!geo._repositionalGeometry);
 		geo._repositionalGeometry = shared_from_this();
-		auto locatorStart = _locators.size();
-		for (auto& a:attachedLocators) _locators.emplace_back(std::move(a));
-		_geos.push_back({&geo, (unsigned)locatorStart, (unsigned)attachedLocators.size()});
+		
+		AttachedRange ranges[attachedLocators.size()];
+		unsigned rangeCount = 0;
+		for (const auto& l:attachedLocators) {
+			auto range = l.GetRangeInContainingResource();
+			bool local = _vb->AddRef(*l.GetContainingResource(), range.first, range.second-range.first)
+				|| _ib->AddRef(*l.GetContainingResource(), range.first, range.second-range.first);
+			assert(local);
+			if (!local) continue;
+			ranges[rangeCount++] = {&geo, l.GetContainingResource().get(), (unsigned)range.first, unsigned(range.second-range.first)};
+		}
+		auto i = std::lower_bound(_attachedRanges.begin(), _attachedRanges.end(), &geo, [](const auto& q, auto* w) { return q._geo < w; });
+		_attachedRanges.insert(i, ranges, &ranges[rangeCount]);
+	}
+
+	void RepositionableGeometryConduit::Remove(DrawableGeo& geo)
+	{
+		ScopedLock(_lock);
+		auto i = std::lower_bound(_attachedRanges.begin(), _attachedRanges.end(), &geo, [](const auto& q, auto* w) { return q._geo < w; });
+		if (i != _attachedRanges.end() && i->_geo == &geo) {
+			auto end = i+1;
+			while (end != _attachedRanges.end() && end->_geo == &geo) ++end;
+
+			for (auto i2=i; i2!=end; ++i2) {
+				bool goodRelease = _vb->Release(*i2->_batchResource, i2->_rangeBegin, i2->_rangeSize)
+					|| _ib->Release(*i2->_batchResource, i2->_rangeBegin, i2->_rangeSize);
+				assert(goodRelease);
+			}
+
+			_attachedRanges.erase(i, end);
+		}
+	}
+
+	void RepositionableGeometryConduit::HandleRepositions(IteratorRange<const BufferUploads::Event_ResourceReposition*> evnts)
+	{
+		ScopedLock(_lock);
+		auto attachedRangeByResource = _attachedRanges;
+		std::sort(attachedRangeByResource.begin(), attachedRangeByResource.end(),
+			[](const auto& lhs, const auto& rhs) {
+				if (lhs._batchResource < rhs._batchResource) return true;
+				if (lhs._batchResource > rhs._batchResource) return false;
+				return lhs._rangeBegin < rhs._rangeBegin;
+			});
+		for (const auto& evnt:evnts) {
+			// look through our attached ranges and find 
+			auto range = std::equal_range(
+				attachedRangeByResource.begin(), attachedRangeByResource.end(), 
+				AttachedRange{nullptr, evnt._originalResource, 0, 0},
+				[](const auto& q, const auto& w) { return q._batchResource < w._batchResource; });
+			if (range.first == range.second) continue;
+
+			// we're expecting evnt._defragSteps to be sorted by _sourceStart
+			#if defined(_DEBUG)
+				for (auto i=evnt._defragSteps.begin(); i!=evnt._defragSteps.end()-1; ++i)
+					assert(i->_sourceStart < (i+1)->_sourceStart);
+			#endif
+
+			auto evntIterator = evnt._defragSteps.begin();
+			auto r = range.first;
+			while (r != range.second) {
+				while (evntIterator != evnt._defragSteps.end() && evntIterator->_sourceEnd <= r->_rangeBegin) ++evntIterator;
+				if (evntIterator == evnt._defragSteps.end()) break;
+				while (r != range.second && (r->_rangeBegin+r->_rangeSize) <= evntIterator->_sourceStart) ++r;
+
+				while (r != range.second && r->_rangeBegin < evntIterator->_sourceEnd) {
+					// should be some overlap here -- check for repositioning
+					// evntIterator range should completely cover the range in 'r' -- otherwise we would end up splitting
+					// the resource into mutliple parts
+					assert(evntIterator->_sourceStart <= r->_rangeBegin && evntIterator->_sourceEnd >= (r->_rangeBegin+r->_rangeSize));
+					for (auto& stream:r->_geo->_vertexStreams)
+						if (stream._resource.get() == evnt._originalResource) {
+							stream._resource = evnt._newResource;
+							assert(stream._vbOffset >= evntIterator->_sourceStart && stream._vbOffset < evntIterator->_sourceEnd);
+							stream._vbOffset += evntIterator->_destination - evntIterator->_sourceStart;
+						}
+					if (r->_geo->_ib.get() == evnt._originalResource) {
+						r->_geo->_ib = evnt._newResource;
+						assert(r->_geo->_ibOffset >= evntIterator->_sourceStart && r->_geo->_ibOffset < evntIterator->_sourceEnd);
+						r->_geo->_ibOffset += evntIterator->_destination - evntIterator->_sourceStart;
+					}
+
+					// update our bookkeeping, and release the old range and addref the new range
+					bool goodOp = _vb->Release(*r->_batchResource, r->_rangeBegin, r->_rangeSize)
+						|| _ib->Release(*r->_batchResource, r->_rangeBegin, r->_rangeSize);
+					assert(goodOp);
+
+					r->_batchResource = evnt._newResource.get();
+					r->_rangeBegin += evntIterator->_destination - evntIterator->_sourceStart;
+
+					goodOp = _vb->AddRef(*r->_batchResource, r->_rangeBegin, r->_rangeSize)
+						|| _ib->AddRef(*r->_batchResource, r->_rangeBegin, r->_rangeSize);
+					assert(goodOp);
+
+					++r;
+				}
+			}
+
+			#if defined(_DEBUG)
+				// double check to ensure there are no geo references within the old range
+				for (auto i=evnt._defragSteps.begin(); i!=evnt._defragSteps.end()-1; ++i)
+					for (auto r=_attachedRanges.begin(); r!=_attachedRanges.end();) {
+						// we only know the offset to the start of the VB & IB ranges used by this geo 
+						// -- unfortunately we don't know where the range ends
+						for (auto& stream:r->_geo->_vertexStreams)
+							if (stream._resource.get() == evnt._originalResource)
+								assert(stream._vbOffset < i->_sourceStart || stream._vbOffset >= i->_sourceEnd);
+						assert(r->_geo->_ibOffset < i->_sourceStart || r->_geo->_ibOffset >= i->_sourceEnd);
+						r++;
+						while (r!=_attachedRanges.end() && r->_geo == (r-1)->_geo) ++r;
+					}
+			#endif
+		}
 	}
 
 	RepositionableGeometryConduit::RepositionableGeometryConduit(std::shared_ptr<BufferUploads::IBatchedResources> vb, std::shared_ptr<BufferUploads::IBatchedResources> ib)
@@ -904,9 +997,13 @@ namespace RenderCore { namespace Techniques
 	{
 		_frameBarrierMarker = Services::GetSubFrameEvents()._onFrameBarrier.Bind(
 			[this]() {
+				_vb->TickDefrag();	// todo -- move this into the background buffer uploads thread
+				_ib->TickDefrag();
+
 				auto nextVb = _vb->EventList_GetPublishedID();
 				if (nextVb > _lastProcessedVB) {
 					auto evntList = _vb->EventList_Get(nextVb);
+					HandleRepositions(evntList);
 					_vb->EventList_Release(nextVb);
 					_lastProcessedVB = nextVb;
 				}
@@ -914,6 +1011,7 @@ namespace RenderCore { namespace Techniques
 				auto nextIb = _ib->EventList_GetPublishedID();
 				if (nextIb > _lastProcessedIB) {
 					auto evntList = _ib->EventList_Get(nextIb);
+					HandleRepositions(evntList);
 					_ib->EventList_Release(nextIb);
 					_lastProcessedIB = nextIb;
 				}

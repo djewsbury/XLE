@@ -18,7 +18,7 @@ namespace Utility { class ParameterBox; }
 namespace RenderCore { class IThreadContext; class MiniInputElementDesc; class InputElementDesc; class UniformsStreamInterface; class UniformsStream; class DescriptorSetSignature; }
 namespace RenderCore { namespace Assets { class ShaderPatchCollection; class PredefinedDescriptorSetLayout; } }
 namespace Assets { class IAsyncMarker; }
-namespace BufferUploads { using CommandListID = uint32_t; class IResourcePool; class IBatchedResources; class ResourceLocator;}
+namespace BufferUploads { using CommandListID = uint32_t; class IResourcePool; class IBatchedResources; class ResourceLocator; class Event_ResourceReposition; }
 namespace std { template<typename Type> class promise; }
 
 namespace RenderCore { namespace Techniques
@@ -256,11 +256,11 @@ namespace RenderCore { namespace Techniques
 	protected:
 		Threading::Mutex _lock;
 		std::shared_ptr<BufferUploads::IBatchedResources> _vb, _ib;
-		struct AttachedGeo { DrawableGeo* _geo; unsigned _firstLocator, _locatorCount; };
-		std::vector<AttachedGeo> _geos;
-		std::vector<BufferUploads::ResourceLocator> _locators;
+		struct AttachedRange { DrawableGeo* _geo; IResource* _batchResource; unsigned _rangeBegin, _rangeSize; };
+		std::vector<AttachedRange> _attachedRanges;
 		unsigned _frameBarrierMarker = ~0u;
 		unsigned _lastProcessedVB = 0, _lastProcessedIB = 0;
+		void HandleRepositions(IteratorRange<const BufferUploads::Event_ResourceReposition*>);
 
 		friend class DrawableGeo;
 		void Remove(DrawableGeo& geo);

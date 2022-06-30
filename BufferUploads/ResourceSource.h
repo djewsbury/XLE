@@ -20,12 +20,8 @@ namespace BufferUploads
 		virtual ResourceLocator Allocate(size_t size, StringSection<> name) = 0;
 		virtual RenderCore::ResourceDesc MakeFallbackDesc(size_t size, StringSection<> name) = 0;
 
-		virtual void AddRef(
-			uint64_t resourceMarker, RenderCore::IResource& resource, 
-			size_t offset, size_t size) = 0;
-		virtual void Release(
-			uint64_t resourceMarker, std::shared_ptr<RenderCore::IResource>&& resource, 
-			size_t offset, size_t size) = 0;
+		virtual bool AddRef(RenderCore::IResource& resource, size_t offset, size_t size) = 0;
+		virtual bool Release(RenderCore::IResource& resource, size_t offset, size_t size) = 0;
 		virtual ~IResourcePool();
 	};
 }

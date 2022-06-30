@@ -201,6 +201,22 @@ namespace BufferUploads { namespace PlatformInterface
         RenderCore::IResource& source,
         IteratorRange<const Utility::RepositionStep*> steps)
     {
+        // this interface only works with linear buffers (because RepositionStep is specialized for 1D)
+        assert(destination.GetDesc()._type == RenderCore::ResourceDesc::Type::LinearBuffer);
+        assert(source.GetDesc()._type == RenderCore::ResourceDesc::Type::LinearBuffer);
+
+        auto& metalContext = *Metal::DeviceContext::Get(*_renderCoreContext);
+        Metal::Internal::CaptureForBind cap0{metalContext, destination, BindFlag::TransferDst};
+        Metal::Internal::CaptureForBind cap1{metalContext, source, BindFlag::TransferSrc};
+        auto blitEncoder = metalContext.BeginBlitEncoder();
+        // Vulkan allows for all of these copies to happen in a single cmd -- unfortunately our API doesn't support that, however
+        for (auto& s:steps) {
+            assert(s._sourceEnd > s._sourceStart);
+            assert((s._destination + s._sourceEnd - s._sourceStart) <= destination.GetDesc()._linearBufferDesc._sizeInBytes);
+            blitEncoder.Copy(
+                CopyPartial_Dest{destination, s._destination},
+                CopyPartial_Src{source, s._sourceStart, s._sourceEnd-s._sourceStart});
+        }
     }
 
     void ResourceUploadHelper::DeviceBasedCopy(IResource& destination, IResource& source)

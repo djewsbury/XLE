@@ -40,7 +40,7 @@ namespace UnitTests
 			locator = BufferUploads::ResourceLocator{
 				newResource,
 				newStart, range.second-range.first,
-				locator.GetPool(), ~0ull};
+				locator.GetPool(), true, BufferUploads::CommandListID_Invalid};
 			return;
 		}
 		
