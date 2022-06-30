@@ -6,6 +6,7 @@
 #include "Metrics.h"
 #include "ResourceUploadHelper.h"
 #include "ThreadContext.h"
+#include "../OSServices/Log.h"
 #include "../Utility/HeapUtils.h"
 
 namespace BufferUploads
@@ -145,7 +146,7 @@ namespace BufferUploads
 	ResourceLocator    BatchedResources::Allocate(
 		size_t size, StringSection<> name)
 	{
-		if (size > _prototype._linearBufferDesc._sizeInBytes/2)
+		if (size >= _prototype._linearBufferDesc._sizeInBytes)		// support allocating a reposition uber-buffer
 			return {};
 
 		_recentAllocateBytes += size;
@@ -364,7 +365,12 @@ namespace BufferUploads
 							break;
 						}
 				} else {
-					sourceHeap->_hashLastDefrag = sourceHeap->_heap.CalculateHash();	// while locked
+					#if defined(_DEBUG)
+						auto newState = sourceHeap->_heap.CalculateHash();
+						if (newState != sourceHeap->_hashLastDefrag)
+							Log(Warning) << "In BatchedResources defrag, no blocks were released after processing a defrag operation. This is not immediately an issue, but it does mean fragmentation was not reduced" << std::endl;	// if you hit this, it means that nothing actually changed in the heap allocations. The blocks we were moving were not deallocated. 
+					#endif
+					// note -- don't update "sourceHeap->_hashLastDefrag" here. We update it at the point we decide to defrag the heap. So can be valid to choose for defrag immediately following the a previous one, so long as the heap is in a different state when we select it
 					auto oldLocked = sourceHeap->_lockedForDefrag.exchange(false);
 					assert(oldLocked);
 				}
@@ -430,7 +436,9 @@ namespace BufferUploads
 				// If you hit the following assert it means we're triggering the same defrag multiple times
 				// This usually happens when non of the blocks from the defrag operation actually moved; meaning it most likely remains
 				// the most optimal defrag operation
-				assert(bestIncrementalDefragHeap->_heap.CalculateHash() != bestIncrementalDefragHeap->_hashLastDefrag);
+				auto newState = bestIncrementalDefragHeap->_heap.CalculateHash();
+				assert(newState != bestIncrementalDefragHeap->_hashLastDefrag);
+				bestIncrementalDefragHeap->_hashLastDefrag = newState;
 			} else {
 				if (!bestHeapForCompression && largestBlockForHeapDrain > heapDrainThreshold) {
 					// Look for the first small heap that where we can move the entire contents to another heap
@@ -448,6 +456,10 @@ namespace BufferUploads
 					assert(!oldLocked); (void)oldLocked;
 
 					compression = bestHeapForCompression->_heap.CalculateHeapCompression();
+
+					auto newState = bestHeapForCompression->_heap.CalculateHash();
+					assert(newState != bestHeapForCompression->_hashLastDefrag);
+					bestHeapForCompression->_hashLastDefrag = newState;
 				}
 			}
 		}
@@ -534,6 +546,10 @@ namespace BufferUploads
 					if (_eventListManager._currentEventListProcessedId.compare_exchange_strong(originalProcessedId, newProcessedId))
 						break;
 				}
+
+				#if defined(_DEBUG)
+					for (auto& h:_heaps) h->ValidateRefsAndHeap();
+				#endif
 				return;
 			}
 		}
@@ -713,6 +729,7 @@ namespace BufferUploads
 			dstSizeRequired = std::max(dstSizeRequired, size_t(s._destination + s._sourceEnd - s._sourceStart));
 		}
 		assert(dstSizeRequired);
+		assert(dstSizeRequired < srcHeap._size);		// can't be 100% of a heap -- that would require no defrag, and would fail the upcoming Allocate()
 		_dstUberBlock = resourceSystem.Allocate(dstSizeRequired, "reposition-uber-block");
 		assert(!_dstUberBlock.IsEmpty());
 		if (!_dstUberBlock.IsWholeResource())

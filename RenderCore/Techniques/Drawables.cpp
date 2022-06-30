@@ -879,55 +879,81 @@ namespace RenderCore { namespace Techniques
 		assert(!geo._repositionalGeometry);
 		geo._repositionalGeometry = shared_from_this();
 		
-		AttachedRange ranges[attachedLocators.size()];
-		unsigned rangeCount = 0;
+		AttachedRange ibRanges[attachedLocators.size()];
+		AttachedRange vbRanges[attachedLocators.size()];
+		unsigned ibRangeCount = 0, vbRangeCount = 0;
 		for (const auto& l:attachedLocators) {
+			assert(!l.IsWholeResource());
 			auto range = l.GetRangeInContainingResource();
-			bool local = _vb->AddRef(*l.GetContainingResource(), range.first, range.second-range.first)
-				|| _ib->AddRef(*l.GetContainingResource(), range.first, range.second-range.first);
-			assert(local);
-			if (!local) continue;
-			ranges[rangeCount++] = {&geo, l.GetContainingResource().get(), (unsigned)range.first, unsigned(range.second-range.first)};
+			if (_vb->AddRef(*l.GetContainingResource(), range.first, range.second-range.first)) {
+				vbRanges[vbRangeCount++] = {&geo, l.GetContainingResource().get(), (unsigned)range.first, unsigned(range.second-range.first)};
+			} else if (_ib->AddRef(*l.GetContainingResource(), range.first, range.second-range.first)) {
+				ibRanges[ibRangeCount++] = {&geo, l.GetContainingResource().get(), (unsigned)range.first, unsigned(range.second-range.first)};
+			} else {
+				assert(0);
+			}
 		}
-		auto i = std::lower_bound(_attachedRanges.begin(), _attachedRanges.end(), &geo, [](const auto& q, auto* w) { return q._geo < w; });
-		_attachedRanges.insert(i, ranges, &ranges[rangeCount]);
+
+		if (ibRangeCount) {
+			auto i = std::lower_bound(_ibAttachedRanges.begin(), _ibAttachedRanges.end(), &geo, [](const auto& q, auto* w) { return q._geo < w; });
+			_ibAttachedRanges.insert(i, ibRanges, &ibRanges[ibRangeCount]);
+		}
+		if (vbRangeCount) {
+			auto i = std::lower_bound(_vbAttachedRanges.begin(), _vbAttachedRanges.end(), &geo, [](const auto& q, auto* w) { return q._geo < w; });
+			_vbAttachedRanges.insert(i, vbRanges, &vbRanges[vbRangeCount]);
+		}
 	}
 
 	void RepositionableGeometryConduit::Remove(DrawableGeo& geo)
 	{
 		ScopedLock(_lock);
-		auto i = std::lower_bound(_attachedRanges.begin(), _attachedRanges.end(), &geo, [](const auto& q, auto* w) { return q._geo < w; });
-		if (i != _attachedRanges.end() && i->_geo == &geo) {
+		auto i = std::lower_bound(_vbAttachedRanges.begin(), _vbAttachedRanges.end(), &geo, [](const auto& q, auto* w) { return q._geo < w; });
+		if (i != _vbAttachedRanges.end() && i->_geo == &geo) {
 			auto end = i+1;
-			while (end != _attachedRanges.end() && end->_geo == &geo) ++end;
+			while (end != _vbAttachedRanges.end() && end->_geo == &geo) ++end;
 
 			for (auto i2=i; i2!=end; ++i2) {
-				bool goodRelease = _vb->Release(*i2->_batchResource, i2->_rangeBegin, i2->_rangeSize)
-					|| _ib->Release(*i2->_batchResource, i2->_rangeBegin, i2->_rangeSize);
+				bool goodRelease = _vb->Release(*i2->_batchResource, i2->_rangeBegin, i2->_rangeSize);
 				assert(goodRelease);
 			}
 
-			_attachedRanges.erase(i, end);
+			_vbAttachedRanges.erase(i, end);
+		}
+
+		i = std::lower_bound(_ibAttachedRanges.begin(), _ibAttachedRanges.end(), &geo, [](const auto& q, auto* w) { return q._geo < w; });
+		if (i != _ibAttachedRanges.end() && i->_geo == &geo) {
+			auto end = i+1;
+			while (end != _ibAttachedRanges.end() && end->_geo == &geo) ++end;
+
+			for (auto i2=i; i2!=end; ++i2) {
+				bool goodRelease = _ib->Release(*i2->_batchResource, i2->_rangeBegin, i2->_rangeSize);
+				assert(goodRelease);
+			}
+
+			_ibAttachedRanges.erase(i, end);
 		}
 	}
 
-	void RepositionableGeometryConduit::HandleRepositions(IteratorRange<const BufferUploads::Event_ResourceReposition*> evnts)
+	void RepositionableGeometryConduit::HandleRepositions(IteratorRange<const BufferUploads::Event_ResourceReposition*> evnts, bool vb)
 	{
 		ScopedLock(_lock);
-		auto attachedRangeByResource = _attachedRanges;
-		std::sort(attachedRangeByResource.begin(), attachedRangeByResource.end(),
-			[](const auto& lhs, const auto& rhs) {
-				if (lhs._batchResource < rhs._batchResource) return true;
-				if (lhs._batchResource > rhs._batchResource) return false;
-				return lhs._rangeBegin < rhs._rangeBegin;
-			});
+		auto& originalAttachedRanges = vb ? _vbAttachedRanges : _ibAttachedRanges;
+		std::vector<std::pair<AttachedRange*, unsigned>> attachedRanges;
+		attachedRanges.reserve(originalAttachedRanges.size());
+
 		for (const auto& evnt:evnts) {
 			// look through our attached ranges and find 
-			auto range = std::equal_range(
-				attachedRangeByResource.begin(), attachedRangeByResource.end(), 
-				AttachedRange{nullptr, evnt._originalResource, 0, 0},
-				[](const auto& q, const auto& w) { return q._batchResource < w._batchResource; });
-			if (range.first == range.second) continue;
+			attachedRanges.clear();
+			// The range list is not in a good sorted order to help us find the ranges within this resource, unfortunately
+			// we have to check each one
+			for (unsigned c=0; c<originalAttachedRanges.size(); c++)
+				if (originalAttachedRanges[c]._batchResource == evnt._originalResource)
+					attachedRanges.emplace_back(&originalAttachedRanges[c], originalAttachedRanges[c]._rangeBegin);
+			if (attachedRanges.empty()) continue;
+			std::sort(attachedRanges.begin(), attachedRanges.end(),
+				[](const auto& lhs, const auto& rhs) {
+					return lhs.second < rhs.second;
+				});
 
 			// we're expecting evnt._defragSteps to be sorted by _sourceStart
 			#if defined(_DEBUG)
@@ -936,39 +962,40 @@ namespace RenderCore { namespace Techniques
 			#endif
 
 			auto evntIterator = evnt._defragSteps.begin();
-			auto r = range.first;
-			while (r != range.second) {
-				while (evntIterator != evnt._defragSteps.end() && evntIterator->_sourceEnd <= r->_rangeBegin) ++evntIterator;
+			auto r = attachedRanges.begin();
+			while (r != attachedRanges.end()) {
+				while (evntIterator != evnt._defragSteps.end() && evntIterator->_sourceEnd <= r->first->_rangeBegin) ++evntIterator;
 				if (evntIterator == evnt._defragSteps.end()) break;
-				while (r != range.second && (r->_rangeBegin+r->_rangeSize) <= evntIterator->_sourceStart) ++r;
+				while (r != attachedRanges.end() && (r->first->_rangeBegin+r->first->_rangeSize) <= evntIterator->_sourceStart) ++r;
 
-				while (r != range.second && r->_rangeBegin < evntIterator->_sourceEnd) {
+				while (r != attachedRanges.end() && r->first->_rangeBegin < evntIterator->_sourceEnd) {
 					// should be some overlap here -- check for repositioning
 					// evntIterator range should completely cover the range in 'r' -- otherwise we would end up splitting
 					// the resource into mutliple parts
-					assert(evntIterator->_sourceStart <= r->_rangeBegin && evntIterator->_sourceEnd >= (r->_rangeBegin+r->_rangeSize));
-					for (auto& stream:r->_geo->_vertexStreams)
+					assert(evntIterator->_sourceStart <= r->first->_rangeBegin && evntIterator->_sourceEnd >= (r->first->_rangeBegin+r->first->_rangeSize));
+					auto* geo = r->first->_geo;
+					for (auto& stream:geo->_vertexStreams)
 						if (stream._resource.get() == evnt._originalResource) {
 							stream._resource = evnt._newResource;
 							assert(stream._vbOffset >= evntIterator->_sourceStart && stream._vbOffset < evntIterator->_sourceEnd);
 							stream._vbOffset += evntIterator->_destination - evntIterator->_sourceStart;
 						}
-					if (r->_geo->_ib.get() == evnt._originalResource) {
-						r->_geo->_ib = evnt._newResource;
-						assert(r->_geo->_ibOffset >= evntIterator->_sourceStart && r->_geo->_ibOffset < evntIterator->_sourceEnd);
-						r->_geo->_ibOffset += evntIterator->_destination - evntIterator->_sourceStart;
+					if (geo->_ib.get() == evnt._originalResource) {
+						geo->_ib = evnt._newResource;
+						assert(geo->_ibOffset >= evntIterator->_sourceStart && geo->_ibOffset < evntIterator->_sourceEnd);
+						geo->_ibOffset += evntIterator->_destination - evntIterator->_sourceStart;
 					}
 
 					// update our bookkeeping, and release the old range and addref the new range
-					bool goodOp = _vb->Release(*r->_batchResource, r->_rangeBegin, r->_rangeSize)
-						|| _ib->Release(*r->_batchResource, r->_rangeBegin, r->_rangeSize);
+					bool goodOp = _vb->Release(*r->first->_batchResource, r->first->_rangeBegin, r->first->_rangeSize)
+						|| _ib->Release(*r->first->_batchResource, r->first->_rangeBegin, r->first->_rangeSize);
 					assert(goodOp);
 
-					r->_batchResource = evnt._newResource.get();
-					r->_rangeBegin += evntIterator->_destination - evntIterator->_sourceStart;
+					r->first->_batchResource = evnt._newResource.get();
+					r->first->_rangeBegin += evntIterator->_destination - evntIterator->_sourceStart;
 
-					goodOp = _vb->AddRef(*r->_batchResource, r->_rangeBegin, r->_rangeSize)
-						|| _ib->AddRef(*r->_batchResource, r->_rangeBegin, r->_rangeSize);
+					goodOp = _vb->AddRef(*r->first->_batchResource, r->first->_rangeBegin, r->first->_rangeSize)
+						|| _ib->AddRef(*r->first->_batchResource, r->first->_rangeBegin, r->first->_rangeSize);
 					assert(goodOp);
 
 					++r;
@@ -978,15 +1005,17 @@ namespace RenderCore { namespace Techniques
 			#if defined(_DEBUG)
 				// double check to ensure there are no geo references within the old range
 				for (auto i=evnt._defragSteps.begin(); i!=evnt._defragSteps.end()-1; ++i)
-					for (auto r=_attachedRanges.begin(); r!=_attachedRanges.end();) {
+					for (auto r=attachedRanges.begin(); r!=attachedRanges.end();) {
 						// we only know the offset to the start of the VB & IB ranges used by this geo 
 						// -- unfortunately we don't know where the range ends
-						for (auto& stream:r->_geo->_vertexStreams)
+						auto* geo = r->first->_geo;
+						for (auto& stream:geo->_vertexStreams)
 							if (stream._resource.get() == evnt._originalResource)
 								assert(stream._vbOffset < i->_sourceStart || stream._vbOffset >= i->_sourceEnd);
-						assert(r->_geo->_ibOffset < i->_sourceStart || r->_geo->_ibOffset >= i->_sourceEnd);
+						if (geo->_ib.get() == evnt._originalResource)
+							assert(geo->_ibOffset < i->_sourceStart || geo->_ibOffset >= i->_sourceEnd);
 						r++;
-						while (r!=_attachedRanges.end() && r->_geo == (r-1)->_geo) ++r;
+						while (r!=attachedRanges.end() && r->first->_geo == (r-1)->first->_geo) ++r;
 					}
 			#endif
 		}
@@ -1003,7 +1032,7 @@ namespace RenderCore { namespace Techniques
 				auto nextVb = _vb->EventList_GetPublishedID();
 				if (nextVb > _lastProcessedVB) {
 					auto evntList = _vb->EventList_Get(nextVb);
-					HandleRepositions(evntList);
+					HandleRepositions(evntList, true);
 					_vb->EventList_Release(nextVb);
 					_lastProcessedVB = nextVb;
 				}
@@ -1011,7 +1040,7 @@ namespace RenderCore { namespace Techniques
 				auto nextIb = _ib->EventList_GetPublishedID();
 				if (nextIb > _lastProcessedIB) {
 					auto evntList = _ib->EventList_Get(nextIb);
-					HandleRepositions(evntList);
+					HandleRepositions(evntList, false);
 					_ib->EventList_Release(nextIb);
 					_lastProcessedIB = nextIb;
 				}

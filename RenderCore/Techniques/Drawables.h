@@ -257,10 +257,11 @@ namespace RenderCore { namespace Techniques
 		Threading::Mutex _lock;
 		std::shared_ptr<BufferUploads::IBatchedResources> _vb, _ib;
 		struct AttachedRange { DrawableGeo* _geo; IResource* _batchResource; unsigned _rangeBegin, _rangeSize; };
-		std::vector<AttachedRange> _attachedRanges;
+		std::vector<AttachedRange> _vbAttachedRanges;
+		std::vector<AttachedRange> _ibAttachedRanges;
 		unsigned _frameBarrierMarker = ~0u;
 		unsigned _lastProcessedVB = 0, _lastProcessedIB = 0;
-		void HandleRepositions(IteratorRange<const BufferUploads::Event_ResourceReposition*>);
+		void HandleRepositions(IteratorRange<const BufferUploads::Event_ResourceReposition*>, bool);
 
 		friend class DrawableGeo;
 		void Remove(DrawableGeo& geo);
