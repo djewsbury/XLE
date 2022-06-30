@@ -10,6 +10,7 @@
 #include "../RenderCore/BufferView.h"
 #include <memory>
 #include <future>
+#include <functional>
 
 #if OUTPUT_DLL
     #define buffer_upload_dll_export       dll_export
@@ -100,10 +101,15 @@ namespace BufferUploads
             /// <summary>Called every frame to update uploads</summary>
             /// Performs once-per-frame tasks. Normally called by the render device once per frame.
         virtual void                    Update  (RenderCore::IThreadContext& immediateContext) = 0;
-            /// @}
-
         virtual void                    StallUntilCompletion(RenderCore::IThreadContext& immediateContext, CommandListID id) = 0;
         virtual bool                    IsComplete (CommandListID id) = 0;
+            /// @}
+
+            /// <summary>Registers a function to be executed in the background thread on a semi-regular basis</summary>
+            /// The function will not be called more frequently than about once per frame, but will only be called when
+            /// the background thread is active with other operations
+        virtual unsigned                BindOnBackgroundFrame(std::function<void()>&&) = 0;
+        virtual void                    UnbindOnBackgroundFrame(unsigned) = 0;
 
             /// \name Utilities, profiling & debugging
             /// @{

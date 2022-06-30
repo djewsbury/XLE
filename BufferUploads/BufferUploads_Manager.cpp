@@ -21,6 +21,7 @@
 #include "../Utility/PtrUtils.h"
 #include "../Utility/BitUtils.h"
 #include "../Utility/HeapUtils.h"
+#include "../Utility/FunctionUtils.h"
 #include <assert.h>
 #include <utility>
 #include <algorithm>
@@ -85,7 +86,8 @@ namespace BufferUploads
             Step_TransferStagingToFinal = (1<<1),
             Step_CreateFromDataPacket   = (1<<2),
             Step_BatchingUpload         = (1<<3),
-            Step_BatchedDefrag          = (1<<4)
+            Step_BatchedDefrag          = (1<<4),
+            Step_BackgroundFrameFunctions = (1<<5)
         };
         
         TransactionMarker       Transaction_Begin(const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, std::shared_ptr<IResourcePool> pool, TransactionOptions::BitField flags);
@@ -112,6 +114,8 @@ namespace BufferUploads
         void                TriggerWakeupEvent();
 
         unsigned            FlipWritingQueueSet();
+        unsigned            BindOnBackgroundFrame(std::function<void()>&& fn);
+        void                UnbindOnBackgroundFrame(unsigned marker);
         
         AssemblyLine(RenderCore::IDevice& device);
         ~AssemblyLine();
@@ -194,6 +198,10 @@ namespace BufferUploads
 
         LockFreeFixedSizeQueue<std::function<void(AssemblyLine&, ThreadContext&)>, 256> _queuedFunctions;
         SimpleWakeupEvent _wakeupEvent;
+
+        Signal<> _onBackgroundFrame;
+        Threading::Mutex _onBackgroundFrameLock;
+        unsigned _commitCountLastOnBackgroundFrame = 0;
 
         /*class BatchPreparation
         {
@@ -1485,6 +1493,15 @@ namespace BufferUploads
             }
         }
 
+        if (stepMask & Step_BackgroundFrameFunctions) {
+            auto cc = context.CommitCount_Current();
+            if (cc > _commitCountLastOnBackgroundFrame) {
+                ScopedLock(_onBackgroundFrameLock);
+                _onBackgroundFrame.Invoke();
+                _commitCountLastOnBackgroundFrame = cc;
+            }
+        }
+
         bool framePriorityResolve = false;
         bool popFromFramePriority = false;
         unsigned *qs = NULL;
@@ -1606,6 +1623,18 @@ namespace BufferUploads
         return oldWritingQueueSet;
     }
 
+    unsigned AssemblyLine::BindOnBackgroundFrame(std::function<void()>&& fn)
+    {
+        ScopedLock(_onBackgroundFrameLock);
+        return _onBackgroundFrame.Bind(std::move(fn));
+    }
+
+    void AssemblyLine::UnbindOnBackgroundFrame(unsigned marker)
+    {
+        ScopedLock(_onBackgroundFrameLock);
+        _onBackgroundFrame.Unbind(marker);
+    }
+
         ///////////////////   M A N A G E R   ///////////////////
 
     class Manager : public IManager
@@ -1647,6 +1676,16 @@ namespace BufferUploads
         }
 
         void                    Transaction_Release(TransactionID id) override;
+
+        unsigned                BindOnBackgroundFrame(std::function<void()>&& fn) override
+        {
+            return _assemblyLine->BindOnBackgroundFrame(std::move(fn));
+        }
+
+        void                    UnbindOnBackgroundFrame(unsigned marker) override
+        {
+            _assemblyLine->UnbindOnBackgroundFrame(marker);
+        }
 
         ResourceLocator         Transaction_Immediate(
                                     RenderCore::IThreadContext& threadContext,
@@ -1820,6 +1859,7 @@ namespace BufferUploads
                 |   AssemblyLine::Step_TransferStagingToFinal
                 |   AssemblyLine::Step_CreateFromDataPacket
                 |   AssemblyLine::Step_BatchedDefrag
+                |   AssemblyLine::Step_BackgroundFrameFunctions
                 |   ((!doBatchingUploadInForeground)?AssemblyLine::Step_BatchingUpload:0)
                 ;
         } else {
@@ -1829,6 +1869,7 @@ namespace BufferUploads
                 |   AssemblyLine::Step_CreateFromDataPacket
                 |   AssemblyLine::Step_BatchingUpload
                 |   AssemblyLine::Step_BatchedDefrag
+                |   AssemblyLine::Step_BackgroundFrameFunctions
                 ;
             _backgroundStepMask = 0;
         }

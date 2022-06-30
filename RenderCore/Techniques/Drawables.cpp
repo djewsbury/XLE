@@ -1024,11 +1024,15 @@ namespace RenderCore { namespace Techniques
 	RepositionableGeometryConduit::RepositionableGeometryConduit(std::shared_ptr<BufferUploads::IBatchedResources> vb, std::shared_ptr<BufferUploads::IBatchedResources> ib)
 	: _vb(std::move(vb)), _ib(std::move(ib))
 	{
+		_backgroundFrameMarker = Services::GetBufferUploads().BindOnBackgroundFrame(
+			[this]() {
+				// TickDefrag in the buffer uploads thread since it's a little expensive
+				_vb->TickDefrag();
+				_ib->TickDefrag();
+			});
+
 		_frameBarrierMarker = Services::GetSubFrameEvents()._onFrameBarrier.Bind(
 			[this]() {
-				_vb->TickDefrag();	// todo -- move this into the background buffer uploads thread
-				_ib->TickDefrag();
-
 				auto nextVb = _vb->EventList_GetPublishedID();
 				if (nextVb > _lastProcessedVB) {
 					auto evntList = _vb->EventList_Get(nextVb);
@@ -1051,6 +1055,8 @@ namespace RenderCore { namespace Techniques
 	{
 		if (_frameBarrierMarker != ~0u)
 			Services::GetSubFrameEvents()._onFrameBarrier.Unbind(_frameBarrierMarker);
+		if (_backgroundFrameMarker != ~0u)
+			Services::GetBufferUploads().UnbindOnBackgroundFrame(_backgroundFrameMarker);
 	}
 
 }}

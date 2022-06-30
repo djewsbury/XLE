@@ -260,6 +260,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<AttachedRange> _vbAttachedRanges;
 		std::vector<AttachedRange> _ibAttachedRanges;
 		unsigned _frameBarrierMarker = ~0u;
+		unsigned _backgroundFrameMarker = ~0u;
 		unsigned _lastProcessedVB = 0, _lastProcessedIB = 0;
 		void HandleRepositions(IteratorRange<const BufferUploads::Event_ResourceReposition*>, bool);
 
