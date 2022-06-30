@@ -35,6 +35,7 @@
 namespace RenderCore { namespace Techniques
 {
 	using SequencerConfigId = uint64_t;
+	class PipelineAcceleratorPool;
 
 	struct PipelineLayoutMarker
 	{
@@ -57,6 +58,10 @@ namespace RenderCore { namespace Techniques
 		unsigned _subpassIdx = 0;
 		uint64_t _fbRelevanceValue = 0;
 		std::string _name;
+
+		#if defined(_DEBUG)
+			PipelineAcceleratorPool* _ownerPool = nullptr;
+		#endif
 	};
 
 	class PipelineAccelerator : public std::enable_shared_from_this<PipelineAccelerator>
@@ -381,6 +386,10 @@ namespace RenderCore { namespace Techniques
 		std::shared_future<ActualizedDescriptorSet> _pending;
 		::Assets::DependencyValidation _depVal;		// filled in after _pending has completed
 		DescriptorSetBindingInfo _bindingInfo;
+
+		#if defined(_DEBUG)
+			PipelineAcceleratorPool* _ownerPool = nullptr;
+		#endif
 	};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -444,6 +453,10 @@ namespace RenderCore { namespace Techniques
 		PipelineAcceleratorPool(const PipelineAcceleratorPool&) = delete;
 		PipelineAcceleratorPool& operator=(const PipelineAcceleratorPool&) = delete;
 
+		#if defined(_DEBUG)
+			mutable std::optional<std::thread::id> _lockForThreadingThread;
+		#endif
+
 	protected:
 		//
 		// Two main locks:
@@ -492,10 +505,6 @@ namespace RenderCore { namespace Techniques
 		std::vector<bool> _lastFrameSequencerConfigExpired;
 		unsigned _lastSequencerCfgHotReloadCheck = 0;
 		unsigned _lastPipelineAcceleratorHotReloadCheck = 0;
-
-		#if defined(_DEBUG)
-			mutable std::optional<std::thread::id> _lockForThreadingThread;
-		#endif
 
 		struct NewlyQueued
 		{
@@ -620,8 +629,9 @@ namespace RenderCore { namespace Techniques
 		const SequencerConfig& sequencerConfig,
 		VisibilityMarkerId visibilityMarker)
 	{
-		#if 0 // defined(_DEBUG) -- todo -- bring back this debugging
-			assert(_lockForThreadingThread.has_value() && _lockForThreadingThread.value() == std::this_thread::get_id());
+		#if defined(_DEBUG)
+			assert(sequencerConfig._ownerPool);
+			assert(sequencerConfig._ownerPool->_lockForThreadingThread.has_value() && sequencerConfig._ownerPool->_lockForThreadingThread.value() == std::this_thread::get_id());
 			unsigned poolId = unsigned(sequencerConfig._cfgId >> 32ull);
 			if (poolId != pipelineAccelerator._ownerPoolId)
 				Throw(std::runtime_error("Mixing a pipeline accelerator from an incorrect pool"));
@@ -632,8 +642,9 @@ namespace RenderCore { namespace Techniques
 
 	const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator, VisibilityMarkerId visibilityMarker)
 	{
-		#if 0 // defined(_DEBUG)
-			assert(_lockForThreadingThread.has_value() && _lockForThreadingThread.value() == std::this_thread::get_id());
+		#if defined(_DEBUG)
+			assert(accelerator._ownerPool);
+			assert(accelerator._ownerPool->_lockForThreadingThread.has_value() && accelerator._ownerPool->_lockForThreadingThread.value() == std::this_thread::get_id());
 		#endif
 		if (accelerator._visibilityMarker > visibilityMarker) return nullptr;
 		return &accelerator._completed;
@@ -641,8 +652,9 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<ICompiledPipelineLayout> TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig, VisibilityMarkerId visibilityMarker)
 	{
-		#if 0 // defined(_DEBUG)
-			assert(_lockForThreadingThread.has_value() && _lockForThreadingThread.value() == std::this_thread::get_id());
+		#if defined(_DEBUG)
+			assert(sequencerConfig._ownerPool);
+			assert(sequencerConfig._ownerPool->_lockForThreadingThread.has_value() && sequencerConfig._ownerPool->_lockForThreadingThread.value() == std::this_thread::get_id());
 		#endif
 		if (sequencerConfig._pipelineLayout._visibilityMarker > visibilityMarker) return nullptr;
 		if (!sequencerConfig._pipelineLayout._pipelineLayout) return nullptr;
@@ -828,6 +840,10 @@ namespace RenderCore { namespace Techniques
 				_descriptorSetAccelerators.insert(cachei, std::make_pair(hash, result));
 			}
 
+			#if defined(_DEBUG)
+				result->_ownerPool = this;
+			#endif
+
 			::Assets::WhenAll(result->_pending).Then(
 				[helper=_futuresToCheckHelper, hash](const auto&) {
 					ScopedLock(helper->_lock);
@@ -911,6 +927,9 @@ namespace RenderCore { namespace Techniques
 					result->_pipelineLayout._pending = _layoutPatcher->GetPatchedPipelineLayout(result->_delegate->GetPipelineLayout())->ShareFuture();
 					result->_cfgId = cfgId;
 					result->_name = name;
+					#if defined(_DEBUG)
+						result->_ownerPool = this;
+					#endif
 					i->second = result;
 
 					// If a pipeline accelerator was added while this sequencer config was expired, the pipeline
@@ -938,6 +957,9 @@ namespace RenderCore { namespace Techniques
 		result->_pipelineLayout._pending = _layoutPatcher->GetPatchedPipelineLayout(result->_delegate->GetPipelineLayout())->ShareFuture();
 		result->_cfgId = cfgId;
 		result->_name = name;
+		#if defined(_DEBUG)
+			result->_ownerPool = this;
+		#endif
 
 		_sequencerConfigById.emplace_back(std::make_pair(hash, result));		// (note; only holding onto a weak pointer here)
 
