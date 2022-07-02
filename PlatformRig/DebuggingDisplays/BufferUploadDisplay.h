@@ -91,22 +91,6 @@ namespace PlatformRig { namespace Overlays
             StringSection<> bottomGraphName, unsigned bottomGraphType, unsigned bottomUploadType);
     };
 
-    class ResourcePoolDisplay : public IWidget ///////////////////////////////////////////////////////////
-    {
-    public:
-        ResourcePoolDisplay(BufferUploads::IManager* manager);
-        ~ResourcePoolDisplay();
-        void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
-
-    protected:
-        unsigned _filter, _detailsIndex;
-        bool Filter(const RenderCore::ResourceDesc&);
-        std::vector<BufferUploads::PoolMetrics> _detailsHistory;
-        float _graphMin, _graphMax;
-        BufferUploads::IManager* _manager;
-    };
-
     class BatchingDisplay : public IWidget ///////////////////////////////////////////////////////////
     {
     public:

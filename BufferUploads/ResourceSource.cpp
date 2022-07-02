@@ -2,7 +2,6 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "ResourceSource.h"
 #include "IBufferUploads.h"
 #include "Metrics.h"
 #include "../RenderCore/ResourceUtils.h"
@@ -45,6 +44,18 @@ namespace BufferUploads
         /////   R E S O U R C E S   P O O L   /////
 
     using DescHash = uint64_t;
+
+    struct PoolMetrics
+    {
+        ResourceDesc _desc;
+        size_t _currentSize, _peakSize;
+        unsigned _topMostAge;
+        unsigned _recentDeviceCreateCount;
+        unsigned _recentPoolCreateCount;
+        unsigned _recentReleaseCount;
+        size_t _totalRealSize, _totalCreateSize;
+        unsigned _totalCreateCount;
+    };
 
     template <typename Desc> class ReusableResourcesPool : public IResourcePool, public std::enable_shared_from_this<ReusableResourcesPool<Desc>>
     {

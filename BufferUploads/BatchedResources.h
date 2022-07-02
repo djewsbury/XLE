@@ -4,7 +4,6 @@
 
 #pragma once
 #include "IBufferUploads.h"
-#include "ResourceSource.h"
 #include "../RenderCore/ResourceDesc.h"
 
 namespace BufferUploads

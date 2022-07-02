@@ -113,16 +113,5 @@ namespace BufferUploads
 
 		return str;
 	}
-
-	std::ostream& operator<<(std::ostream& str, const PoolSystemMetrics& metrics)
-	{
-		str << "Resource Pools:" << std::endl;
-		for (unsigned c=0; c<metrics._resourcePools.size(); ++c)
-			str << StreamIndent{4} << "[" << c << "] Current size: " << metrics._resourcePools[c]._currentSize << ", Peak size: " << metrics._resourcePools[c]._peakSize << std::endl;
-		str << "Staging Pools:" << std::endl;
-		for (unsigned c=0; c<metrics._stagingPools.size(); ++c)
-			str << StreamIndent{4} << "[" << c << "] Current size: " << metrics._stagingPools[c]._currentSize << ", Peak size: " << metrics._stagingPools[c]._peakSize << std::endl;
-		return str;
-	}
 }
 

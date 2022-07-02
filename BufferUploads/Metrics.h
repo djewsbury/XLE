@@ -75,26 +75,5 @@ namespace BufferUploads
 
     std::ostream& operator<<(std::ostream& str, const CommandListMetrics&);
 
-        /////////////////////////////////////////////////
-
-    struct PoolMetrics
-    {
-        ResourceDesc _desc;
-        size_t _currentSize, _peakSize;
-        unsigned _topMostAge;
-        unsigned _recentDeviceCreateCount;
-        unsigned _recentPoolCreateCount;
-        unsigned _recentReleaseCount;
-        size_t _totalRealSize, _totalCreateSize;
-        unsigned _totalCreateCount;
-    };
-
-    struct PoolSystemMetrics
-    {
-        std::vector<PoolMetrics> _resourcePools;
-        std::vector<PoolMetrics> _stagingPools;
-    };
-
-    std::ostream& operator<<(std::ostream& str, const PoolSystemMetrics&);
 }
 

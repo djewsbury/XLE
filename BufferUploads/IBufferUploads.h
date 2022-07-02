@@ -47,7 +47,6 @@ namespace BufferUploads
     static const CommandListID CommandListID_Invalid = ~CommandListID(0);
     static const TransactionID TransactionID_Invalid = ~TransactionID(0);
 
-    struct PoolSystemMetrics;
     struct CommandListMetrics;
 
         /////////////////////////////////////////////////
@@ -122,11 +121,6 @@ namespace BufferUploads
             /// PopMetrics() will remove the next item from the queue. If there
         /// no more items, "_commitTime" will be 0.
         virtual CommandListMetrics      PopMetrics              () = 0;
-            /// <summary>Returns metrics about pool memory</summary>
-            /// Returns some profiling metrics related to the resource pooling
-            /// buffers maintained by the system. Used by the BufferUploadDisplay
-            /// for presenting profiling information.
-        virtual PoolSystemMetrics       CalculatePoolMetrics    () const = 0;
             /// <summary>Sets a barrier for frame priority operations</summary>
             /// Sets a barrier, which determines the "end of frame" point for
             /// frame priority operations. This will normally be called from the same
@@ -236,6 +230,17 @@ namespace BufferUploads
         TransactionMarker(std::future<ResourceLocator>&&, TransactionID, AssemblyLine&);
         AssemblyLine* _assemblyLine = nullptr;
     };
+
+    class IResourcePool
+	{
+	public:
+		virtual ResourceLocator Allocate(size_t size, StringSection<> name) = 0;
+		virtual RenderCore::ResourceDesc MakeFallbackDesc(size_t size, StringSection<> name) = 0;
+
+		virtual bool AddRef(RenderCore::IResource& resource, size_t offset, size_t size) = 0;
+		virtual bool Release(RenderCore::IResource& resource, size_t offset, size_t size) = 0;
+		virtual ~IResourcePool();
+	};
 
         /////////////////////////////////////////////////
 

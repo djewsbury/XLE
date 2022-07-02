@@ -6,7 +6,6 @@
 #include "ResourceUploadHelper.h"
 #include "Metrics.h"
 #include "ThreadContext.h"
-#include "ResourceSource.h"
 #include "../RenderCore/IDevice.h"
 #include "../RenderCore/ResourceUtils.h"
 #include "../RenderCore/ResourceDesc.h"
@@ -109,7 +108,6 @@ namespace BufferUploads
         void                Resource_AddRef_IndexBuffer(const ResourceLocator& locator);
 
         AssemblyLineMetrics CalculateMetrics(ThreadContext& context);
-        PoolSystemMetrics   CalculatePoolMetrics() const;
         void                Wait(unsigned stepMask, ThreadContext& context);
         void                TriggerWakeupEvent();
 
@@ -203,14 +201,6 @@ namespace BufferUploads
         Threading::Mutex _onBackgroundFrameLock;
         unsigned _commitCountLastOnBackgroundFrame = 0;
 
-        /*class BatchPreparation
-        {
-        public:
-            std::vector<CreateFromDataPacketStep> _batchedSteps;
-            unsigned _batchedAllocationSize = 0;
-        };
-        BatchPreparation _batchPreparation_Main;*/
-
         class CommandListBudget
         {
         public:
@@ -218,7 +208,6 @@ namespace BufferUploads
             CommandListBudget(bool isLoading);
         };
 
-        // void    ResolveBatchOperation(BatchPreparation& batchOperation, ThreadContext& context, unsigned stepMask);
         void    SystemReleaseTransaction(Transaction* transaction, ThreadContext& context, bool abort = false);
         void    ClientReleaseTransaction(Transaction* transaction);
 
@@ -228,10 +217,6 @@ namespace BufferUploads
 
         bool    ProcessQueueSet(QueueSet& queueSet, unsigned stepMask, ThreadContext& context, const CommandListBudget& budgetUnderConstruction);
         bool    DrainPriorityQueueSet(QueueSet& queueSet, unsigned stepMask, ThreadContext& context);
-
-        // void            CopyIntoBatchedBuffer(IteratorRange<void*> destination, IteratorRange<const CreateFromDataPacketStep*> steps, IteratorRange<unsigned*> offsetList, CommandListMetrics& metricsUnderConstruction);
-        // static bool     SortSize_LargestToSmallest(const CreateFromDataPacketStep& lhs, const CreateFromDataPacketStep& rhs);
-        // static bool     SortSize_SmallestToLargest(const CreateFromDataPacketStep& lhs, const CreateFromDataPacketStep& rhs);
 
         auto    GetQueueSet(TransactionOptions::BitField transactionOptions) -> QueueSet &;
         void    PushStep(QueueSet&, Transaction& transaction, PrepareStagingStep&& step);
@@ -743,45 +728,6 @@ namespace BufferUploads
         _wakeupEvent.Increment();
     }
 
-#if 0
-    bool AssemblyLine::SortSize_LargestToSmallest(const CreateFromDataPacketStep& lhs, const CreateFromDataPacketStep& rhs)     { return RenderCore::ByteCount(lhs._creationDesc) > RenderCore::ByteCount(rhs._creationDesc); }
-    bool AssemblyLine::SortSize_SmallestToLargest(const CreateFromDataPacketStep& lhs, const CreateFromDataPacketStep& rhs)     { return RenderCore::ByteCount(lhs._creationDesc) < RenderCore::ByteCount(rhs._creationDesc); }
-
-    void AssemblyLine::CopyIntoBatchedBuffer(   
-        IteratorRange<void*> destination, 
-        IteratorRange<const CreateFromDataPacketStep*> steps,
-        IteratorRange<unsigned*> offsetList, 
-        CommandListMetrics& metricsUnderConstruction)
-    {
-        assert(offsetList.size() == steps.size());
-        unsigned queuedBytesAdjustment[dimof(_currentQueuedBytes)];
-        XlZeroMemory(queuedBytesAdjustment);
-
-        unsigned offset = 0;
-        unsigned* offsetWriteIterator=offsetList.begin();
-        for (const CreateFromDataPacketStep* i=steps.begin(); i!=steps.end(); ++i, ++offsetWriteIterator) {
-            Transaction* transaction = GetTransaction(i->_id);
-            assert(transaction);
-            unsigned size = RenderCore::ByteCount(transaction->_desc);
-            IteratorRange<void*> sourceData;
-            if (i->_initialisationData)
-                sourceData = i->_initialisationData->GetData();
-            if (!sourceData.empty() && !destination.empty()) {
-                assert(size == sourceData.size());
-                assert(offset+size <= destination.size());
-                XlCopyMemoryAlign16(PtrAdd(destination.begin(), offset), sourceData.begin(), size);
-            }
-            (*offsetWriteIterator) = offset;
-            queuedBytesAdjustment[(unsigned)AsUploadDataType(transaction->_desc)] -= size;
-            offset += MarkerHeap<uint16_t>::AlignSize(size);
-        }
-
-        for (unsigned c=0; c<dimof(queuedBytesAdjustment); ++c) {
-            _currentQueuedBytes[c] += queuedBytesAdjustment[c];
-        }
-    }
-#endif
-
     static std::optional<unsigned> ResolveOffsetValue(unsigned inputOffset, unsigned size, IteratorRange<const RepositionStep*> steps)
     {
         for (const auto& s:steps)
@@ -824,169 +770,6 @@ namespace BufferUploads
             }
         }
     }
-
-#if 0
-    IManager::EventListID AssemblyLine::TickResourceSource(unsigned stepMask, ThreadContext& context, bool isLoading)
-    {
-        IManager::EventListID processedEventList     = context.EventList_GetProcessedID();
-        IManager::EventListID publishableEventList   = context.EventList_GetWrittenID();
-
-        if ((stepMask & Step_BatchedDefrag) && !isLoading) {        // don't do the defrag while we're loading
-
-                //
-                //      It's annoying, but we have to do the repositioning of the transactions list twice...
-                //      Once to remove any new references to the old resource. And second to remove any 
-                //      references that might have been added by the client through Transaction_Begin
-                //
-            if (_transactions_postPublishResolvedEventID < processedEventList) {
-                for (unsigned c=_transactions_postPublishResolvedEventID+1; c<=processedEventList; ++c) { ApplyRepositionEvent(context, c); }
-                _transactions_postPublishResolvedEventID = processedEventList;
-            }
-
-            #if 0
-                static bool doDefrag = true;
-                if (doDefrag) {
-                    _resourceSource.Tick(context, processedEventList);
-                }
-            #endif
-
-            publishableEventList = context.EventList_GetWrittenID();
-
-                //
-                //      If we've got any completed/resolved reposition events, we need to modify any transactions in flight
-                //      But -- don't lock the transactions list for this. Any newly added transactions from this pointer
-                //          will be in the new coordinate system (because we're only resolving our references after the
-                //          client has also done so)
-                //
-
-            if (_transactions_resolvedEventID < publishableEventList) {
-                for (unsigned c=_transactions_resolvedEventID+1; c<=publishableEventList; ++c) { ApplyRepositionEvent(context, c); }
-                _transactions_resolvedEventID = publishableEventList;
-            }
-
-                //
-                //      Because we took EventList_GetProcessedID before we did FlushDelayedReleases(), all remaining releases in 
-                //      the delayed releases list should be pointing to the new resource, and in the new coordinate system
-                //
-        }
-
-        return publishableEventList;
-    }
-
-    void AssemblyLine::ResolveBatchOperation(BatchPreparation& batchOperation, ThreadContext& context, unsigned stepMask)
-    {
-        CommandListMetrics& metricsUnderConstruction = context.GetMetricsUnderConstruction();
-        if (!batchOperation._batchedSteps.empty() && batchOperation._batchedAllocationSize) {
-
-                //
-                //      Sort largest to smallest. This is an attempt to reduce fragmentation slightly by grouping
-                //      large and small allocations. Plus, this should guarantee good packing into the batch size limit.
-                //
-
-            std::sort(batchOperation._batchedSteps.begin(), batchOperation._batchedSteps.end(), SortSize_SmallestToLargest);
-
-                //
-                //      Perform all batched operations before resolving a command list...
-                //
-
-            const unsigned maxSingleBatch = RenderCore::ByteCount(_resourceSource.GetBatchedResources().GetPrototype());
-            auto batchingI      = batchOperation._batchedSteps.begin();
-            auto batchingStart  = batchOperation._batchedSteps.begin();
-            unsigned currentBatchSize = 0;
-            if (batchOperation._batchedAllocationSize <= maxSingleBatch) {
-                // If we know we can fit the whole thing with one go; just go ahead and do it
-                batchingI = batchOperation._batchedSteps.end();
-                currentBatchSize = batchOperation._batchedAllocationSize;
-            }
-
-            for (;;) {
-                unsigned nextSize = 0;
-                if (batchingI!=batchOperation._batchedSteps.end())
-                    nextSize = MarkerHeap<uint16_t>::AlignSize(RenderCore::ByteCount(batchingI->_creationDesc));
-
-                if (batchingI == batchOperation._batchedSteps.end() || (currentBatchSize+nextSize) > maxSingleBatch) {
-                    ResourceLocator batchedResource;
-                    for (;;) {
-                        batchedResource = _resourceSource.GetBatchedResources().Allocate(currentBatchSize, "SuperBlock");
-                        if (!batchedResource.IsEmpty()) {
-                            break;
-                        }
-                        Log(Warning) << "Resource creation failed in BatchedResources::Allocate(). Sleeping and attempting again" << std::endl;
-                        Threading::Sleep(16);
-                    }
-
-                    std::vector<unsigned> offsets;
-                    offsets.resize(std::distance(batchingStart, batchingI), 0);
-
-                        //
-                        //      Success! Map & memcpy the data in. Use just one Map for all of the batched buffers, but
-                        //      we can do separate memcpys.
-                        //      We're using no-overwrite memcpys... so let's hope we get immediate access to the GPU buffer,
-                        //      and can copy in the data (with a CPU-assisted copy, with no GPU cost associated)
-                        //
-                        //      We must do a discard map after a device creation on a D3D11 deferred context. But; there are some
-                        //      cases were we should do a discard map on the resource even when deviceAllocation is false
-                        //
-
-                    std::vector<uint8_t> midwayBuffer(currentBatchSize);
-                    CopyIntoBatchedBuffer(
-                        MakeIteratorRange(midwayBuffer),
-                        MakeIteratorRange(batchingStart, batchingI),
-                        MakeIteratorRange(offsets), 
-                        metricsUnderConstruction);
-                            
-                    if (stepMask & Step_BatchingUpload) {
-
-                        assert(_resourceSource.GetBatchedResources().GetPrototype()._type == ResourceDesc::Type::LinearBuffer);
-                        context.GetResourceUploadHelper().WriteToBufferViaMap(
-                            batchedResource, _resourceSource.GetBatchedResources().GetPrototype(), 
-                            0, MakeIteratorRange(midwayBuffer));
-                        midwayBuffer = {};
-
-                    } else {
-
-                            //
-                            //      This will offload the actual map & copy into another thread. This seems to be a little better for D3D when
-                            //      we want to write directly into video memory. Note that there's a copy step here, though -- so we don't get 
-                            //      the minimum number of copies
-                            //
-
-                        context.GetCommitStepUnderConstruction().Add(
-                            CommitStep::DeferredCopy{batchedResource, _resourceSource.GetBatchedResources().GetPrototype(), std::move(midwayBuffer)});
-
-                    }
-
-                    metricsUnderConstruction._batchedUploadBytes += currentBatchSize;
-                    metricsUnderConstruction._bytesUploadTotal += currentBatchSize;
-                    metricsUnderConstruction._batchedUploadCount ++;
-
-                        // now apply the result to the transactions, and release them...
-                    auto o=offsets.begin();
-                    for (auto i=batchingStart; i!=batchingI; ++i, ++o) {
-                        auto byteCount = RenderCore::ByteCount(i->_creationDesc);
-                        unsigned uploadDataType = (unsigned)AsUploadDataType(i->_creationDesc);
-                        metricsUnderConstruction._bytesUploaded[uploadDataType] += byteCount;
-                        metricsUnderConstruction._countUploaded[uploadDataType] += 1;
-
-                        Transaction* transaction = GetTransaction(i->_id);
-                        transaction->_finalResource = batchedResource.MakeSubLocator(*o, byteCount);
-                        transaction->_promise.set_value(transaction->_finalResource);
-                        SystemReleaseTransaction(transaction, context);
-                    }
-
-                    if (batchingI == batchOperation._batchedSteps.end()) {
-                        break;
-                    }
-                    batchingStart = batchingI;
-                    currentBatchSize = 0;
-                } else {
-                    ++batchingI;
-                    currentBatchSize += nextSize;
-                }
-            }
-        }
-    }
-#endif
 
     AssemblyLine::CommandListBudget::CommandListBudget(bool isLoading)
     {
@@ -1556,11 +1339,6 @@ namespace BufferUploads
             pendingFramePriorityCommandLists.pop();
     }
 
-    PoolSystemMetrics   AssemblyLine::CalculatePoolMetrics() const
-    {
-        return {};
-    }
-
     AssemblyLineMetrics AssemblyLine::CalculateMetrics(ThreadContext& context)
     {
         AssemblyLineMetrics result;
@@ -1695,7 +1473,6 @@ namespace BufferUploads
         void                    StallUntilCompletion(RenderCore::IThreadContext& immediateContext, CommandListID id) override;
 
         CommandListMetrics      PopMetrics() override;
-        PoolSystemMetrics       CalculatePoolMetrics() const override;
 
         void                    Update(RenderCore::IThreadContext&) override;
         void                    FramePriority_Barrier() override;
@@ -1767,11 +1544,6 @@ namespace BufferUploads
             return result;
         }
         return _foregroundContext->PopMetrics();
-    }
-
-    PoolSystemMetrics       Manager::CalculatePoolMetrics() const
-    {
-        return _assemblyLine->CalculatePoolMetrics();
     }
 
     void                    Manager::Update(RenderCore::IThreadContext& immediateContext)
@@ -1901,8 +1673,6 @@ namespace BufferUploads
     TransactionMarker::TransactionMarker() = default;
     TransactionMarker::~TransactionMarker()
     {
-        if (_assemblyLine)
-            _assemblyLine->Transaction_Release(_transactionID);
     }
     TransactionMarker::TransactionMarker(TransactionMarker&& moveFrom) never_throws
     : _future(std::move(moveFrom._future))
@@ -1915,8 +1685,6 @@ namespace BufferUploads
     TransactionMarker& TransactionMarker::operator=(TransactionMarker&& moveFrom) never_throws
     {
         if (&moveFrom == this) return *this;
-        if (_assemblyLine)
-            _assemblyLine->Transaction_Release(_transactionID);
         _future = std::move(moveFrom._future);
         _transactionID = std::move(moveFrom._transactionID);
         _assemblyLine = std::move(moveFrom._assemblyLine);
