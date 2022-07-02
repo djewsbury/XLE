@@ -303,7 +303,6 @@ namespace UnitTests
 		void Report(BufferUploads::IManager& bu)
 		{
 			Log(Verbose) << bu.PopMetrics() << std::endl;
-			Log(Verbose) << bu.CalculatePoolMetrics() << std::endl;
 			Log(Verbose) << "Live Transactions: " << _liveTransactions.size() << std::endl;
 			Log(Verbose) << "Incremental Transactions: " << _incrementalTransactionCounter << std::endl;
 		}

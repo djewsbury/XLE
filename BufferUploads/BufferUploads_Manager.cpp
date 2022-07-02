@@ -966,25 +966,54 @@ namespace BufferUploads
             // inc reference count for the lambda that waits on the future
             ++transaction->_referenceCount;
 
-            auto weakThis = weak_from_this();
+            struct Captures
+            {
+                Metal::ResourceMap _map;
+                BufferUploads::TransactionID _transactionID;
+                std::shared_ptr<IAsyncDataSource> _pkt;
+                PlatformInterface::StagingPage::Allocation _stagingConstruction;
+                std::shared_ptr<IResourcePool> _pool;
+                RenderCore::ResourceDesc _finalResourceDesc;
+                std::weak_ptr<AssemblyLine> _weakThis;
+
+                ~Captures()
+                {
+                    // If transaction->_waitingFuture (constructe below) is destroyed before calling get(),
+                    // we can end up here (there's another uncommon case if an exception is thrown from CompleteWaitForDataFuture, also)
+                    // We still have to ensure that _stagingConstruction is destroyed in the assembly line thread, since it's not thread safe
+                    if (_stagingConstruction)
+                        if (auto l = _weakThis.lock()) {
+                            auto helper = std::make_shared<PlatformInterface::StagingPage::Allocation>(std::move(_stagingConstruction));
+                            l->_queuedFunctions.push_overflow(
+                                [helper=std::move(helper)](auto&, auto&) {
+                                    // just holding onto _stagingConstruction to release it in the assembly line thread
+                                });
+                            l->_wakeupEvent.Increment();
+                        }
+                }
+                Captures() = default;
+                Captures(Captures&&) = default;
+                Captures& operator=(Captures&&) = default;
+            } captures;
+            captures._map = std::move(map);
+            captures._weakThis = weak_from_this();
+            captures._transactionID = prepareStagingStep._id;
+            captures._pkt = std::move(prepareStagingStep._packet);        // need to retain pkt until PrepareData completes
+            captures._stagingConstruction = std::move(stagingConstruction);
+            captures._pool = prepareStagingStep._pool;
+            captures._finalResourceDesc = finalResourceDesc;
+
             assert(!transaction->_waitingFuture.valid());
             transaction->_waitingFuture = thousandeyes::futures::then(
                 ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
                 std::move(future),
-                [   captureMap{std::move(map)}, 
-                    weakThis, 
-                    transactionID{prepareStagingStep._id}, 
-                    pkt{prepareStagingStep._packet},        // need to retain pkt until PrepareData completes
-                    stagingConstruction{std::move(stagingConstruction)},
-                    pool=prepareStagingStep._pool,
-                    finalResourceDesc]
-                (std::future<void> prepareFuture) mutable {
-                    auto t = weakThis.lock();
+                [captures=std::move(captures)](std::future<void> prepareFuture) mutable {
+                    auto t = captures._weakThis.lock();
                     if (!t)
                         Throw(std::runtime_error("Assembly line was destroyed before future completed"));
 
-                    captureMap = {};
-                    t->CompleteWaitForDataFuture(transactionID, std::move(prepareFuture), std::move(stagingConstruction), std::move(pool), finalResourceDesc);
+                    captures._map = {};
+                    t->CompleteWaitForDataFuture(captures._transactionID, std::move(prepareFuture), std::move(captures._stagingConstruction), std::move(captures._pool), captures._finalResourceDesc);
                 });
 
         } catch (...) {
@@ -1004,6 +1033,7 @@ namespace BufferUploads
         transaction->_waitingFuture = {};
 
         if (transaction->_cancelledByClient.load()) {
+            transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
             // don't release the transaction on this thread. It must be done in the assembly line thread
             _queuedFunctions.push_overflow(
                 [transactionID](auto& assemblyLine, auto& threadContext) {
@@ -1011,6 +1041,7 @@ namespace BufferUploads
                     assert(transaction);
                     assemblyLine.SystemReleaseTransaction(transaction, threadContext, true);
                 });
+            _wakeupEvent.Increment();
             return;
         }
         
@@ -1044,15 +1075,16 @@ namespace BufferUploads
         transaction->_waitingFuture = {};
 
         if (transaction->_cancelledByClient.load()) {
+            transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
             // don't destroy stagingAllocation or release the transaction on this thread. It must be done in the assembly line thread
             auto helper = std::make_shared<PlatformInterface::StagingPage::Allocation>(std::move(stagingAllocation));
             _queuedFunctions.push_overflow(
                 [transactionID, helper=std::move(helper)](auto& assemblyLine, auto& threadContext) {
                     auto* transaction = assemblyLine.GetTransaction(transactionID);
                     assert(transaction);
-                    transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
                     assemblyLine.SystemReleaseTransaction(transaction, threadContext, true);
                 });
+            _wakeupEvent.Increment();
             return;
         }
 
@@ -1068,11 +1100,8 @@ namespace BufferUploads
             transaction->_promise.set_exception(std::current_exception());
         }
 
-        std::shared_ptr<PlatformInterface::StagingPage::Allocation> helper;
-        if (stagingAllocation) 
-            helper = std::make_shared<PlatformInterface::StagingPage::Allocation>(std::move(stagingAllocation));
         _queuedFunctions.push_overflow(
-            [transactionID, helper=std::move(helper)](AssemblyLine& assemblyLine, ThreadContext& context) {
+            [transactionID](AssemblyLine& assemblyLine, ThreadContext& context) {
                 Transaction* transaction = assemblyLine.GetTransaction(transactionID);
                 assert(transaction);
                 assemblyLine.SystemReleaseTransaction(transaction, context);
