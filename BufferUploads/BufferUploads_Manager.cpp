@@ -84,9 +84,8 @@ namespace BufferUploads
             Step_PrepareStaging         = (1<<0),
             Step_TransferStagingToFinal = (1<<1),
             Step_CreateFromDataPacket   = (1<<2),
-            Step_BatchingUpload         = (1<<3),
             Step_BatchedDefrag          = (1<<4),
-            Step_BackgroundFrameFunctions = (1<<5)
+            Step_BackgroundMisc         = (1<<5)
         };
         
         TransactionMarker       Transaction_Begin(const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, std::shared_ptr<IResourcePool> pool, TransactionOptions::BitField flags);
@@ -140,6 +139,21 @@ namespace BufferUploads
             Transaction& operator=(const Transaction& cloneFrom) = delete;
         };
 
+        struct TransactionRefHolder
+        {
+            Transaction* _transaction = nullptr;
+            AssemblyLine* _assemblyLine = nullptr;
+            TransactionID GetID() const;
+            void SuccessfulRetirement();
+            TransactionRefHolder() = default;
+            TransactionRefHolder(Transaction& transaction, AssemblyLine& assemblyLine);
+            TransactionRefHolder(TransactionRefHolder&& moveFrom);
+            TransactionRefHolder(const TransactionRefHolder& copyFrom);
+            TransactionRefHolder& operator=(TransactionRefHolder&& moveFrom);
+            TransactionRefHolder& operator=(const TransactionRefHolder& copyFrom);
+            ~TransactionRefHolder();
+        };
+
         std::deque<Transaction>     _transactions;
         SimpleSpanningHeap          _transactionsHeap;
 
@@ -148,8 +162,8 @@ namespace BufferUploads
 
         RenderCore::IDevice*    _device;
 
-        Transaction*            GetTransaction(TransactionID id);
-        TransactionID           AllocateTransaction(TransactionOptions::BitField flags);
+        TransactionRefHolder    GetTransaction(TransactionID id);
+        TransactionRefHolder    AllocateTransaction(TransactionOptions::BitField flags);
         void                    ApplyRepositions(const ResourceLocator& dst, IResource& src, IteratorRange<const RepositionStep*> steps);
 
         std::atomic<unsigned>   _currentQueuedBytes[(unsigned)UploadDataType::Max];
@@ -159,7 +173,7 @@ namespace BufferUploads
 
         struct PrepareStagingStep
         {
-            TransactionID _id = ~TransactionID(0);
+            TransactionRefHolder _transactionRef;
             ResourceDesc _desc;
             std::shared_ptr<IAsyncDataSource> _packet;
             std::shared_ptr<IResourcePool> _pool;
@@ -168,7 +182,7 @@ namespace BufferUploads
 
         struct TransferStagingToFinalStep
         {
-            TransactionID _id = ~TransactionID(0);
+            TransactionRefHolder _transactionRef;
             std::shared_ptr<IResourcePool> _pool;
             ResourceDesc _finalResourceDesc;
             PlatformInterface::StagingPage::Allocation _stagingResource;
@@ -176,7 +190,7 @@ namespace BufferUploads
 
         struct CreateFromDataPacketStep
         {
-            TransactionID _id = ~TransactionID(0);
+            TransactionRefHolder _transactionRef;
             std::shared_ptr<IResourcePool> _pool;
             ResourceDesc _creationDesc;
             std::shared_ptr<IDataPacket> _initialisationData;
@@ -208,22 +222,24 @@ namespace BufferUploads
             CommandListBudget(bool isLoading);
         };
 
-        void    SystemReleaseTransaction(Transaction* transaction, ThreadContext& context, bool abort = false);
+        Threading::Mutex _pendingRetirementsLock;
+        std::vector<AssemblyLineRetirement> _pendingRetirements;
+        void    SystemReleaseTransaction(Transaction* transaction, bool abort = false);
 
-        bool    Process(const CreateFromDataPacketStep& resourceCreateStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction);
-        bool    Process(const PrepareStagingStep& prepareStagingStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction);
+        bool    Process(CreateFromDataPacketStep& resourceCreateStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction);
+        bool    Process(PrepareStagingStep& prepareStagingStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction);
         bool    Process(TransferStagingToFinalStep& transferStagingToFinalStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction);
 
         bool    ProcessQueueSet(QueueSet& queueSet, unsigned stepMask, ThreadContext& context, const CommandListBudget& budgetUnderConstruction);
         bool    DrainPriorityQueueSet(QueueSet& queueSet, unsigned stepMask, ThreadContext& context);
 
         auto    GetQueueSet(TransactionOptions::BitField transactionOptions) -> QueueSet &;
-        void    PushStep(QueueSet&, Transaction& transaction, PrepareStagingStep&& step);
-        void    PushStep(QueueSet&, Transaction& transaction, TransferStagingToFinalStep&& step);
-        void    PushStep(QueueSet&, Transaction& transaction, CreateFromDataPacketStep&& step);
+        void    PushStep(QueueSet&, PrepareStagingStep&& step);
+        void    PushStep(QueueSet&, TransferStagingToFinalStep&& step);
+        void    PushStep(QueueSet&, CreateFromDataPacketStep&& step);
 
-        void    CompleteWaitForDescFuture(TransactionID transactionID, std::future<ResourceDesc> descFuture, std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, BindFlag::BitField);
-        void    CompleteWaitForDataFuture(TransactionID transactionID, std::future<void> prepareFuture, PlatformInterface::StagingPage::Allocation&& stagingAllocation, std::shared_ptr<IResourcePool> pool, const ResourceDesc& finalResourceDesc);
+        void    CompleteWaitForDescFuture(TransactionRefHolder&& ref, std::future<ResourceDesc> descFuture, std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, BindFlag::BitField);
+        void    CompleteWaitForDataFuture(TransactionRefHolder&& ref, std::future<void> prepareFuture, PlatformInterface::StagingPage::Allocation&& stagingAllocation, std::shared_ptr<IResourcePool> pool, const ResourceDesc& finalResourceDesc);
     };
 
     static void ValidatePacketSize(const ResourceDesc& desc, IDataPacket& data)
@@ -247,12 +263,9 @@ namespace BufferUploads
     TransactionMarker AssemblyLine::Transaction_Begin(
         const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, std::shared_ptr<IResourcePool> pool, TransactionOptions::BitField flags)
     {
-        assert(desc._name[0]);
-        
-        TransactionID transactionID = AllocateTransaction(flags);
-        Transaction* transaction = GetTransaction(transactionID);
-        assert(transaction);
-        transaction->_desc = desc;
+        auto ref = AllocateTransaction(flags);
+        assert(ref._transaction);
+        ref._transaction->_desc = desc;
         if (data) ValidatePacketSize(desc, *data);
 
             //
@@ -262,13 +275,10 @@ namespace BufferUploads
             //  
         _currentQueuedBytes[(unsigned)AsUploadDataType(desc)] += RenderCore::ByteCount(desc);
 
+        TransactionMarker result { ref._transaction->_promise.get_future(), ref.GetID(), *this };
         PushStep(
             GetQueueSet(flags),
-            *transaction,
-            CreateFromDataPacketStep { transactionID, std::move(pool), desc, std::move(data) });
-
-        TransactionMarker result { transaction->_promise.get_future(), transactionID, *this };
-        --transaction->_referenceCount;     // todo -- can't stay like this
+            CreateFromDataPacketStep { std::move(ref), std::move(pool), desc, std::move(data) });
         return result;
     }
 
@@ -278,32 +288,27 @@ namespace BufferUploads
         if (rangeInDest.first != ~size_t(0))
             Throw(std::runtime_error("Attempting to begin IDataPacket upload on partial/internal resource. Only full resources are supported for this variation."));
         
-        TransactionID transactionID = AllocateTransaction(flags);
-        Transaction* transaction = GetTransaction(transactionID);
-        assert(transaction);
+        auto ref = AllocateTransaction(flags);
+        assert(ref._transaction);
         auto desc = destinationResource.GetContainingResource()->GetDesc();
-        transaction->_desc = desc;
+        ref._transaction->_desc = desc;
         if (data) ValidatePacketSize(desc, *data);
         _currentQueuedBytes[(unsigned)AsUploadDataType(desc)] += RenderCore::ByteCount(desc);
 
+        TransactionMarker result{ ref._transaction->_promise.get_future(), ref.GetID(), *this };
         PushStep(
             GetQueueSet(flags),
-            *transaction,
-            CreateFromDataPacketStep { transactionID, nullptr, desc, std::move(data) });
-
-        TransactionMarker result { transaction->_promise.get_future(), transactionID, *this };
-        --transaction->_referenceCount;     // todo -- can't stay like this
+            CreateFromDataPacketStep { std::move(ref), nullptr, desc, std::move(data) });
         return result;
     }
 
     TransactionMarker AssemblyLine::Transaction_Begin(
         std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, BindFlag::BitField bindFlags, TransactionOptions::BitField flags)
     {
-        TransactionID transactionID = AllocateTransaction(flags);
-        Transaction* transaction = GetTransaction(transactionID);
-        assert(transaction);
+        auto ref = AllocateTransaction(flags);
+        assert(ref._transaction);
 
-        TransactionMarker result { transaction->_promise.get_future(), transactionID, *this };
+        TransactionMarker result { ref._transaction->_promise.get_future(), ref.GetID(), *this };
 
         // Let's optimize the case where the desc is available immediately, since certain
         // usage patterns will allow for that
@@ -311,65 +316,60 @@ namespace BufferUploads
         auto status = descFuture.wait_for(0s);
         if (status == std::future_status::ready) {
 
-            ++transaction->_referenceCount;
-            CompleteWaitForDescFuture(transactionID, std::move(descFuture), std::move(data), std::move(pool), bindFlags);
+            CompleteWaitForDescFuture(std::move(ref), std::move(descFuture), std::move(data), std::move(pool), bindFlags);
 
         } else {
-            ++transaction->_referenceCount;
 
             auto weakThis = weak_from_this();
-            assert(!transaction->_waitingFuture.valid());
-            transaction->_waitingFuture = thousandeyes::futures::then(
+            auto* t = ref._transaction;
+            assert(!t->_waitingFuture.valid());
+            t->_waitingFuture = thousandeyes::futures::then(
                 ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
                 std::move(descFuture),
-                [weakThis, transactionID, data=std::move(data), pool=std::move(pool), bindFlags](std::future<ResourceDesc> completedFuture) mutable {
+                [weakThis, ref=std::move(ref), data=std::move(data), pool=std::move(pool), bindFlags](std::future<ResourceDesc> completedFuture) mutable {
                     auto t = weakThis.lock();
                     if (!t)
                         Throw(std::runtime_error("Assembly line was destroyed before future completed"));
 
-                    t->CompleteWaitForDescFuture(transactionID, std::move(completedFuture), std::move(data), std::move(pool), bindFlags);
+                    t->CompleteWaitForDescFuture(std::move(ref), std::move(completedFuture), std::move(data), std::move(pool), bindFlags);
                 });
         }
 
-        --transaction->_referenceCount;     // todo -- can't stay like this
         return result;
     }
 
     TransactionMarker AssemblyLine::Transaction_Begin(ResourceLocator destinationResource, std::shared_ptr<IAsyncDataSource> data, TransactionOptions::BitField flags)
     {
-        TransactionID transactionID = AllocateTransaction(flags);
-        Transaction* transaction = GetTransaction(transactionID);
-        assert(transaction);
-        transaction->_finalResource = std::move(destinationResource);
+        auto ref = AllocateTransaction(flags);
+        assert(ref._transaction);
+        ref._transaction->_finalResource = std::move(destinationResource);
 
-        TransactionMarker result { transaction->_promise.get_future(), transactionID, *this };
+        TransactionMarker result { ref._transaction->_promise.get_future(), ref.GetID(), *this };
 
         // Let's optimize the case where the desc is available immediately, since certain
         // usage patterns will allow for that
         auto descFuture = data->GetDesc();
         if (descFuture.wait_for(0s) == std::future_status::ready) {
 
-            ++transaction->_referenceCount;
-            CompleteWaitForDescFuture(transactionID, std::move(descFuture), data, nullptr, 0);
+            CompleteWaitForDescFuture(std::move(ref), std::move(descFuture), data, nullptr, 0);
 
         } else {
-            ++transaction->_referenceCount;
 
             auto weakThis = weak_from_this();
-            assert(!transaction->_waitingFuture.valid());
-            transaction->_waitingFuture = thousandeyes::futures::then(
+            auto *t = ref._transaction;
+            assert(!t->_waitingFuture.valid());
+            t->_waitingFuture = thousandeyes::futures::then(
                 ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
                 std::move(descFuture),
-                [weakThis, transactionID, data=std::move(data)](std::future<ResourceDesc> completedFuture) mutable {
+                [weakThis, ref=std::move(ref), data=std::move(data)](std::future<ResourceDesc> completedFuture) mutable {
                     auto t = weakThis.lock();
                     if (!t)
                         Throw(std::runtime_error("Assembly line was destroyed before future completed"));
 
-                    t->CompleteWaitForDescFuture(transactionID, std::move(completedFuture), std::move(data), nullptr, 0);
+                    t->CompleteWaitForDescFuture(std::move(ref), std::move(completedFuture), std::move(data), nullptr, 0);
                 });
         }
 
-        --transaction->_referenceCount;     // todo -- can't stay like this
         return result;
     }
 
@@ -407,17 +407,8 @@ namespace BufferUploads
         return result;
     }
 
-    void AssemblyLine::SystemReleaseTransaction(Transaction* transaction, ThreadContext& context, bool abort)
+    void AssemblyLine::SystemReleaseTransaction(Transaction* transaction, bool abort)
     {
-        AssemblyLineRetirement retirementBuffer;
-        AssemblyLineRetirement* retirement = &retirementBuffer;
-        CommandListMetrics& metrics = context.GetMetricsUnderConstruction();
-        if ((metrics._retirementCount+1) <= dimof(metrics._retirements))
-            retirement = &metrics._retirements[metrics._retirementCount];
-
-        retirement->_desc = transaction->_desc;
-        retirement->_requestTime = transaction->_requestTime;
-
         auto newRefCount = --transaction->_referenceCount;
         assert(newRefCount>=0);
 
@@ -428,16 +419,15 @@ namespace BufferUploads
             assert(transaction->_finalResource.IsEmpty());
         }
 
-        if ((newRefCount&0x00ffffff)==0) {
-                //      After the last system reference is released (regardless of client references) we call it retired...
-            retirement->_retirementTime = OSServices::GetPerformanceCounter();
-            if ((metrics._retirementCount+1) <= dimof(metrics._retirements)) {
-                metrics._retirementCount++;
-            } else
-                metrics._retirementsOverflow.push_back(*retirement);
-        }
-
-        if (newRefCount<=0) {
+        if (newRefCount==0) {
+            {
+                AssemblyLineRetirement retirement;
+                retirement._desc = transaction->_desc;
+                retirement._requestTime = transaction->_requestTime;
+                retirement._retirementTime = OSServices::GetPerformanceCounter();
+                ScopedLock(_pendingRetirementsLock);
+                _pendingRetirements.push_back(retirement);
+            }
             transaction->_finalResource = {};
 
             unsigned heapIndex   = transaction->_heapIndex;
@@ -448,12 +438,67 @@ namespace BufferUploads
                 //      But let's clear out the members, anyway. This will also free the textures (if they need freeing)
                 //
             *transaction = Transaction();
-            transaction->_referenceCount.store(~0x0u);    // set reference count to invalid value to signal that it's ok to reuse now. Note that this has to come after all other work has completed
             --_allocatedTransactionCount;
 
             ScopedLock(_transactionsLock);
             _transactionsHeap.Deallocate(heapIndex<<4, 1<<4);
         }
+    }
+
+    TransactionID AssemblyLine::TransactionRefHolder::GetID() const
+    {
+        assert(_transaction && _transaction->_heapIndex != ~0u);
+        return uint64_t(_transaction->_heapIndex) | uint64(_transaction->_idTopPart) << 32ull;
+    }
+
+    void AssemblyLine::TransactionRefHolder::SuccessfulRetirement()
+    {
+        if (_transaction) {
+            _assemblyLine->SystemReleaseTransaction(_transaction, false);
+            _transaction = nullptr; _assemblyLine = nullptr;
+        }
+    }
+
+    AssemblyLine::TransactionRefHolder::TransactionRefHolder(Transaction& transaction, AssemblyLine& assemblyLine)
+    : _transaction(&transaction), _assemblyLine(&assemblyLine)
+    {
+        if (_transaction)
+            ++_transaction->_referenceCount;
+    }
+    AssemblyLine::TransactionRefHolder::TransactionRefHolder(TransactionRefHolder&& moveFrom)
+    {
+        _transaction = moveFrom._transaction; moveFrom._transaction = nullptr;
+        _assemblyLine = moveFrom._assemblyLine; moveFrom._assemblyLine = nullptr;
+    }
+    AssemblyLine::TransactionRefHolder::TransactionRefHolder(const TransactionRefHolder& copyFrom)
+    {
+        _transaction = copyFrom._transaction;
+        _assemblyLine = copyFrom._assemblyLine;
+        if (_transaction)
+            ++_transaction->_referenceCount;
+    }
+    auto AssemblyLine::TransactionRefHolder::operator=(TransactionRefHolder&& moveFrom) -> TransactionRefHolder&
+    {
+        if (_transaction)
+            _assemblyLine->SystemReleaseTransaction(_transaction, true);
+        _transaction = moveFrom._transaction; moveFrom._transaction = nullptr;
+        _assemblyLine = moveFrom._assemblyLine; moveFrom._assemblyLine = nullptr;
+        return *this;
+    }
+    auto AssemblyLine::TransactionRefHolder::operator=(const TransactionRefHolder& copyFrom) -> TransactionRefHolder&
+    {
+        if (_transaction)
+            _assemblyLine->SystemReleaseTransaction(_transaction, true);
+        _transaction = copyFrom._transaction;
+        _assemblyLine = copyFrom._assemblyLine;
+        if (_transaction)
+            ++_transaction->_referenceCount;
+        return *this;
+    }
+    AssemblyLine::TransactionRefHolder::~TransactionRefHolder()
+    {
+        if (_transaction)
+            _assemblyLine->SystemReleaseTransaction(_transaction, true);
     }
 
     static std::shared_ptr<IResource> CreateResource(
@@ -604,12 +649,11 @@ namespace BufferUploads
     {
         _nextTransactionIdTopPart = 64;
         _transactions.resize(2*1024);
-        for (auto i=_transactions.begin(); i!=_transactions.end(); ++i)
-            i->_referenceCount.store(~0x0u);
         _peakPrepareStaging = _peakTransferStagingToFinal =_peakCreateFromDataPacket = 0;
         _allocatedTransactionCount = 0;
         XlZeroMemory(_currentQueuedBytes);
         _framePriority_WritingQueueSet = 0;
+        _pendingRetirements.reserve(64);
     }
 
     AssemblyLine::~AssemblyLine()
@@ -619,7 +663,7 @@ namespace BufferUploads
         _transactions.clear();
     }
 
-    TransactionID AssemblyLine::AllocateTransaction(TransactionOptions::BitField flags)
+    auto AssemblyLine::AllocateTransaction(TransactionOptions::BitField flags) -> TransactionRefHolder
     {
             //  Note; some of the vector code here is not thread safe... We can't have 
             //      two threads in AllocateTransaction at the same time. Let's just use a mutex.
@@ -642,20 +686,14 @@ namespace BufferUploads
         auto destinationPosition = _transactions.begin() + ptrdiff_t(result);
         result |= uint64_t(idTopPart)<<32ull;
 
-        Transaction newTransaction{idTopPart, uint32_t(result)};
-        newTransaction._requestTime = OSServices::GetPerformanceCounter();
-        newTransaction._creationOptions = flags;
-
-            // Start with a system ref count 1
-        destinationPosition->_referenceCount.store(1);
+        *destinationPosition = Transaction{idTopPart, uint32_t(result)};
+        destinationPosition->_requestTime = OSServices::GetPerformanceCounter();
+        destinationPosition->_creationOptions = flags;
         ++_allocatedTransactionCount;
-
-        *destinationPosition = std::move(newTransaction);
-
-        return result;
+        return TransactionRefHolder{*destinationPosition, *this};       // will increment refcount before we unlock _transactionsLock
     }
 
-    AssemblyLine::Transaction* AssemblyLine::GetTransaction(TransactionID id)
+    auto AssemblyLine::GetTransaction(TransactionID id) -> TransactionRefHolder
     {
         unsigned index = unsigned(id);
         unsigned key = unsigned(id>>32ull);
@@ -663,8 +701,11 @@ namespace BufferUploads
         ScopedLock(_transactionsLock);       // must be locked when using the deque method... if the deque is resized at the same time, operator[] can seem to fail
         if ((index < _transactions.size()) && (key == _transactions[index]._idTopPart))
             result = &_transactions[index];
-        if (result) assert(result->_referenceCount.load());     // this is only thread safe if there's some kind of reference on the transaction
-        return result;
+        if (result) {
+            assert(result->_referenceCount.load());     // this is only thread safe if there's some kind of reference on the transaction
+            return TransactionRefHolder{*result, *this};
+        }
+        return {};
     }
 
     void AssemblyLine::Transaction_Cancel(IteratorRange<const TransactionID*> ids)
@@ -749,13 +790,13 @@ namespace BufferUploads
         }
     }
 
-    bool AssemblyLine::Process(const CreateFromDataPacketStep& resourceCreateStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction)
+    bool AssemblyLine::Process(CreateFromDataPacketStep& resourceCreateStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction)
     {
         auto& metricsUnderConstruction = context.GetMetricsUnderConstruction();
         if ((metricsUnderConstruction._contextOperations+1) >= budgetUnderConstruction._limit_Operations)
             return false;
 
-        auto* transaction = GetTransaction(resourceCreateStep._id);
+        auto* transaction = resourceCreateStep._transactionRef._transaction;
         assert(transaction);
 
         assert(resourceCreateStep._initialisationData);
@@ -765,7 +806,6 @@ namespace BufferUploads
 
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
-            SystemReleaseTransaction(transaction, context, true);
             _currentQueuedBytes[uploadDataType] -= uploadRequestSize;
             return true;
         }
@@ -876,7 +916,6 @@ namespace BufferUploads
             metricsUnderConstruction._bytesUploaded[uploadDataType] += uploadRequestSize;
             metricsUnderConstruction._countUploaded[uploadDataType] += 1;
             metricsUnderConstruction._bytesUploadTotal += uploadRequestSize;
-            _currentQueuedBytes[uploadDataType] -= uploadRequestSize;
             metricsUnderConstruction._bytesCreated[uploadDataType] += objectSize;
             metricsUnderConstruction._countCreations[uploadDataType] += 1;
             if (deviceConstructionInvoked) {
@@ -887,15 +926,16 @@ namespace BufferUploads
             // Embue the final resource with the completion command list information
             transaction->_finalResource = ResourceLocator { std::move(finalConstruction), context.CommandList_GetUnderConstruction() };
             transaction->_promise.set_value(transaction->_finalResource);
+            resourceCreateStep._transactionRef.SuccessfulRetirement();
         } CATCH (...) {
             transaction->_promise.set_exception(std::current_exception());
         } CATCH_END
 
-        SystemReleaseTransaction(transaction, context);
+        _currentQueuedBytes[uploadDataType] -= uploadRequestSize;
         return true;
     }
 
-    bool AssemblyLine::Process(const PrepareStagingStep& prepareStagingStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction)
+    bool AssemblyLine::Process(PrepareStagingStep& prepareStagingStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction)
     {
         auto& metricsUnderConstruction = context.GetMetricsUnderConstruction();
         if ((metricsUnderConstruction._contextOperations+1) >= budgetUnderConstruction._limit_Operations)
@@ -904,12 +944,12 @@ namespace BufferUploads
         // todo -- should we limit this based on the number of items in the WaitForDataFutureStep
         //      stage?
 
-        auto* transaction = GetTransaction(prepareStagingStep._id);
+        auto* transaction = prepareStagingStep._transactionRef._transaction;
         assert(transaction);
 
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
-            SystemReleaseTransaction(transaction, context, true);
+            _currentQueuedBytes[(unsigned)AsUploadDataType(transaction->_desc)] -= RenderCore::ByteCount(transaction->_desc);
             return true;
         }
 
@@ -963,13 +1003,10 @@ namespace BufferUploads
             finalResourceDesc._bindFlags = prepareStagingStep._bindFlags;
             finalResourceDesc._bindFlags |= BindFlag::TransferDst;         // since we're using a staging buffer to prepare, we must allow for transfers
 
-            // inc reference count for the lambda that waits on the future
-            ++transaction->_referenceCount;
-
             struct Captures
             {
                 Metal::ResourceMap _map;
-                BufferUploads::TransactionID _transactionID;
+                TransactionRefHolder _transactionRef;
                 std::shared_ptr<IAsyncDataSource> _pkt;
                 PlatformInterface::StagingPage::Allocation _stagingConstruction;
                 std::shared_ptr<IResourcePool> _pool;
@@ -997,7 +1034,7 @@ namespace BufferUploads
             } captures;
             captures._map = std::move(map);
             captures._weakThis = weak_from_this();
-            captures._transactionID = prepareStagingStep._id;
+            captures._transactionRef = std::move(prepareStagingStep._transactionRef);
             captures._pkt = std::move(prepareStagingStep._packet);        // need to retain pkt until PrepareData completes
             captures._stagingConstruction = std::move(stagingConstruction);
             captures._pool = prepareStagingStep._pool;
@@ -1013,7 +1050,7 @@ namespace BufferUploads
                         Throw(std::runtime_error("Assembly line was destroyed before future completed"));
 
                     captures._map = {};
-                    t->CompleteWaitForDataFuture(captures._transactionID, std::move(prepareFuture), std::move(captures._stagingConstruction), std::move(captures._pool), captures._finalResourceDesc);
+                    t->CompleteWaitForDataFuture(std::move(captures._transactionRef), std::move(prepareFuture), std::move(captures._stagingConstruction), std::move(captures._pool), captures._finalResourceDesc);
                 });
 
         } catch (...) {
@@ -1021,27 +1058,18 @@ namespace BufferUploads
             _currentQueuedBytes[(unsigned)AsUploadDataType(transaction->_desc)] -= RenderCore::ByteCount(transaction->_desc);
         }
 
-        SystemReleaseTransaction(transaction, context);
         return true;
     }
 
-    void    AssemblyLine::CompleteWaitForDescFuture(TransactionID transactionID, std::future<ResourceDesc> descFuture, std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, BindFlag::BitField bindFlags)
+    void    AssemblyLine::CompleteWaitForDescFuture(TransactionRefHolder&& ref, std::future<ResourceDesc> descFuture, std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, BindFlag::BitField bindFlags)
     {
-        Transaction* transaction = GetTransaction(transactionID);
+        Transaction* transaction = ref._transaction;
         assert(transaction);
 
         transaction->_waitingFuture = {};
 
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
-            // don't release the transaction on this thread. It must be done in the assembly line thread
-            _queuedFunctions.push_overflow(
-                [transactionID](auto& assemblyLine, auto& threadContext) {
-                    auto* transaction = assemblyLine.GetTransaction(transactionID);
-                    assert(transaction);
-                    assemblyLine.SystemReleaseTransaction(transaction, threadContext, true);
-                });
-            _wakeupEvent.Increment();
             return;
         }
         
@@ -1051,24 +1079,15 @@ namespace BufferUploads
             _currentQueuedBytes[(unsigned)AsUploadDataType(desc)] += RenderCore::ByteCount(desc);
             PushStep(
                 GetQueueSet(transaction->_creationOptions),
-                *transaction,
-                PrepareStagingStep { transactionID, desc, std::move(data), std::move(pool), bindFlags });
+                PrepareStagingStep { std::move(ref), desc, std::move(data), std::move(pool), bindFlags });
         } catch (...) {
             transaction->_promise.set_exception(std::current_exception());
         }
-
-        _queuedFunctions.push_overflow(
-            [transactionID](AssemblyLine& assemblyLine, ThreadContext& context) {
-                Transaction* transaction = assemblyLine.GetTransaction(transactionID);
-                assert(transaction);
-                assemblyLine.SystemReleaseTransaction(transaction, context);
-            });
-        _wakeupEvent.Increment();
     }
 
-    void AssemblyLine::CompleteWaitForDataFuture(TransactionID transactionID, std::future<void> prepareFuture, PlatformInterface::StagingPage::Allocation&& stagingAllocation, std::shared_ptr<IResourcePool> pool, const ResourceDesc& finalResourceDesc)
+    void AssemblyLine::CompleteWaitForDataFuture(TransactionRefHolder&& ref, std::future<void> prepareFuture, PlatformInterface::StagingPage::Allocation&& stagingAllocation, std::shared_ptr<IResourcePool> pool, const ResourceDesc& finalResourceDesc)
     {
-        auto* transaction = GetTransaction(transactionID);
+        auto* transaction = ref._transaction;
         assert(transaction);
         assert(stagingAllocation);
 
@@ -1079,11 +1098,7 @@ namespace BufferUploads
             // don't destroy stagingAllocation or release the transaction on this thread. It must be done in the assembly line thread
             auto helper = std::make_shared<PlatformInterface::StagingPage::Allocation>(std::move(stagingAllocation));
             _queuedFunctions.push_overflow(
-                [transactionID, helper=std::move(helper)](auto& assemblyLine, auto& threadContext) {
-                    auto* transaction = assemblyLine.GetTransaction(transactionID);
-                    assert(transaction);
-                    assemblyLine.SystemReleaseTransaction(transaction, threadContext, true);
-                });
+                [helper=std::move(helper), ref=std::move(ref)](auto& assemblyLine, auto& threadContext) {});
             _wakeupEvent.Increment();
             return;
         }
@@ -1094,19 +1109,10 @@ namespace BufferUploads
             prepareFuture.get();
             PushStep(
                 GetQueueSet(transaction->_creationOptions),
-                *transaction,
-                TransferStagingToFinalStep { transactionID, std::move(pool), finalResourceDesc, std::move(stagingAllocation) });
+                TransferStagingToFinalStep { std::move(ref), std::move(pool), finalResourceDesc, std::move(stagingAllocation) });
         } catch(...) {
             transaction->_promise.set_exception(std::current_exception());
         }
-
-        _queuedFunctions.push_overflow(
-            [transactionID](AssemblyLine& assemblyLine, ThreadContext& context) {
-                Transaction* transaction = assemblyLine.GetTransaction(transactionID);
-                assert(transaction);
-                assemblyLine.SystemReleaseTransaction(transaction, context);
-            });
-        _wakeupEvent.Increment();
     }
 
     bool AssemblyLine::Process(TransferStagingToFinalStep& transferStagingToFinalStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction)
@@ -1115,14 +1121,14 @@ namespace BufferUploads
         if ((metricsUnderConstruction._contextOperations+1) >= budgetUnderConstruction._limit_Operations)
             return false;
 
-        Transaction* transaction = GetTransaction(transferStagingToFinalStep._id);
+        Transaction* transaction = transferStagingToFinalStep._transactionRef._transaction;
         assert(transaction);
         auto dataType = (unsigned)AsUploadDataType(transferStagingToFinalStep._finalResourceDesc);
+        auto descByteCount = RenderCore::ByteCount(transaction->_desc);     // needs to match CompleteWaitForDescFuture in order to reset _currentQueuedBytes correctly
 
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
-            _currentQueuedBytes[dataType] -= transferStagingToFinalStep._stagingResource.GetAllocationSize();
-            SystemReleaseTransaction(transaction, context, true);
+            _currentQueuedBytes[dataType] -= descByteCount;
             return true;
         }
 
@@ -1165,19 +1171,17 @@ namespace BufferUploads
             // Embue the final resource with the completion command list information
             transaction->_finalResource = ResourceLocator { std::move(transaction->_finalResource), context.CommandList_GetUnderConstruction() };
 
-            auto byteCount = RenderCore::ByteCount(transaction->_desc);     // needs to match CompleteWaitForDescFuture in order to reset _currentQueuedBytes correctly
-            metricsUnderConstruction._bytesUploadTotal += byteCount;
-            metricsUnderConstruction._bytesUploaded[dataType] += byteCount;
+            metricsUnderConstruction._bytesUploadTotal += descByteCount;
+            metricsUnderConstruction._bytesUploaded[dataType] += descByteCount;
             metricsUnderConstruction._countUploaded[dataType] += 1;
-            _currentQueuedBytes[dataType] -= byteCount;
             ++metricsUnderConstruction._contextOperations;
             transaction->_promise.set_value(transaction->_finalResource);
+            transferStagingToFinalStep._transactionRef.SuccessfulRetirement();
         } CATCH (...) {
             transaction->_promise.set_exception(std::current_exception());
-            _currentQueuedBytes[dataType] -= RenderCore::ByteCount(transaction->_desc);
         } CATCH_END
 
-        SystemReleaseTransaction(transaction, context);
+        _currentQueuedBytes[dataType] -= descByteCount;
         return true;
     }
 
@@ -1289,15 +1293,13 @@ namespace BufferUploads
         bool atLeastOneRealAction = false;
 
             /////////////// ~~~~ /////////////// ~~~~ ///////////////
-        {
+        if (stepMask & Step_BackgroundMisc) {
             std::function<void(AssemblyLine&, ThreadContext&)>* fn;
             while (_queuedFunctions.try_front(fn)) {
                 fn->operator()(*this, context);
                 _queuedFunctions.pop();
             }
-        }
 
-        if (stepMask & Step_BackgroundFrameFunctions) {
             auto cc = context.CommitCount_Current();
             if (cc > _commitCountLastOnBackgroundFrame) {
                 ScopedLock(_onBackgroundFrameLock);
@@ -1330,6 +1332,18 @@ namespace BufferUploads
             atLeastOneRealAction |= ProcessQueueSet(_queueSet_FramePriority[_framePriority_WritingQueueSet], stepMask, context, budgetUnderConstruction);
             atLeastOneRealAction |= ProcessQueueSet(_queueSet_Main, stepMask, context, budgetUnderConstruction);
 
+        }
+
+        if (stepMask & Step_BackgroundMisc) {
+            // move from _pendingRetirements into the 
+            ScopedLock(_pendingRetirementsLock);
+            auto& metrics = context.GetMetricsUnderConstruction();
+            auto nonOverflow = std::min(_pendingRetirements.size(), dimof(metrics._retirements) - metrics._retirementCount);
+            std::copy(_pendingRetirements.begin(), _pendingRetirements.begin()+nonOverflow, &metrics._retirements[metrics._retirementCount]);
+            metrics._retirementCount += nonOverflow;
+            if (_pendingRetirements.size() > nonOverflow)
+                metrics._retirementsOverflow.insert(metrics._retirementsOverflow.end(), _pendingRetirements.begin()+nonOverflow, _pendingRetirements.end());
+            _pendingRetirements.clear();
         }
 
         CommandListID commandListIdCommitted = ~unsigned(0x0);
@@ -1391,23 +1405,20 @@ namespace BufferUploads
         }
     }
 
-    void AssemblyLine::PushStep(QueueSet& queueSet, Transaction& transaction, PrepareStagingStep&& step)
+    void AssemblyLine::PushStep(QueueSet& queueSet, PrepareStagingStep&& step)
     {
-        ++transaction._referenceCount;
         queueSet._prepareStagingSteps.push_overflow(std::move(step));
         _wakeupEvent.Increment();
     }
 
-    void AssemblyLine::PushStep(QueueSet& queueSet, Transaction& transaction, TransferStagingToFinalStep&& step)
+    void AssemblyLine::PushStep(QueueSet& queueSet, TransferStagingToFinalStep&& step)
     {
-        ++transaction._referenceCount;
         queueSet._transferStagingToFinalSteps.push_overflow(std::move(step));
         _wakeupEvent.Increment();
     }
 
-    void AssemblyLine::PushStep(QueueSet& queueSet, Transaction& transaction, CreateFromDataPacketStep&& step)
+    void AssemblyLine::PushStep(QueueSet& queueSet, CreateFromDataPacketStep&& step)
     {
-        ++transaction._referenceCount;
         queueSet._createFromDataPacketSteps.push_overflow(std::move(step));
         _wakeupEvent.Increment();
     }
@@ -1567,9 +1578,9 @@ namespace BufferUploads
 
     void                    Manager::Update(RenderCore::IThreadContext& immediateContext)
     {
-        if (_foregroundStepMask & ~unsigned(AssemblyLine::Step_BatchingUpload)) {
+        if (_foregroundStepMask)
             _assemblyLine->Process(_foregroundStepMask, *_foregroundContext.get(), _pendingFramePriority_CommandLists);
-        }
+
             //  Commit both the foreground and background contexts here
         ++_frameId;
         _foregroundContext->CommitToImmediate(immediateContext, _frameId);
@@ -1609,7 +1620,6 @@ namespace BufferUploads
         _shutdownBackgroundThread = false;
 
         bool multithreadingOk = true;
-        bool doBatchingUploadInForeground = !PlatformInterface::CanDoNooverwriteMapInBackground;
 
         // multithreadingOk = false;
 
@@ -1644,23 +1654,21 @@ namespace BufferUploads
             //              parameter, we should do the same.
 
         if (multithreadingOk) {
-            _foregroundStepMask = doBatchingUploadInForeground?AssemblyLine::Step_BatchingUpload:0;        // (do this with the immediate context (main thread) in order to allow writing directly to video memory
+            _foregroundStepMask = 0;        // (do this with the immediate context (main thread) in order to allow writing directly to video memory
             _backgroundStepMask = 
                     AssemblyLine::Step_PrepareStaging
                 |   AssemblyLine::Step_TransferStagingToFinal
                 |   AssemblyLine::Step_CreateFromDataPacket
                 |   AssemblyLine::Step_BatchedDefrag
-                |   AssemblyLine::Step_BackgroundFrameFunctions
-                |   ((!doBatchingUploadInForeground)?AssemblyLine::Step_BatchingUpload:0)
+                |   AssemblyLine::Step_BackgroundMisc
                 ;
         } else {
             _foregroundStepMask = 
                     AssemblyLine::Step_PrepareStaging
                 |   AssemblyLine::Step_TransferStagingToFinal
                 |   AssemblyLine::Step_CreateFromDataPacket
-                |   AssemblyLine::Step_BatchingUpload
                 |   AssemblyLine::Step_BatchedDefrag
-                |   AssemblyLine::Step_BackgroundFrameFunctions
+                |   AssemblyLine::Step_BackgroundMisc
                 ;
             _backgroundStepMask = 0;
         }
