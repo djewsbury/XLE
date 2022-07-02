@@ -8,6 +8,7 @@
 #include "CommonResources.h"
 #include "DeformUniformsInfrastructure.h"
 #include "Services.h"
+#include "ConstructionContext.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedCBLayout.h"
 #include "../Assets/MaterialMachine.h"
@@ -122,6 +123,7 @@ namespace RenderCore { namespace Techniques
 
 	void ConstructDescriptorSetHelper::Construct(
 		std::promise<ActualizedDescriptorSet>&& promise,
+		ConstructionContext* context,
 		const Assets::PredefinedDescriptorSetLayout& layout,
 		IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 		const DeformerToDescriptorSetBinding* deformBinding)
@@ -168,7 +170,10 @@ namespace RenderCore { namespace Techniques
 				slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
 				slotInProgress._resourceIdx = (unsigned)working->_resources.size();
 				Internal::DescriptorSetInProgress::Resource res;
-				res._deferredShaderResource = ::Assets::MakeAssetPtr<DeferredShaderResource>(MakeStringSection(boundResource.value()))->ShareFuture();
+				if (context) {
+					res._deferredShaderResource = context->ConstructShaderResource(MakeStringSection(boundResource.value()));
+				} else
+					res._deferredShaderResource = ::Assets::MakeAssetPtr<DeferredShaderResource>(MakeStringSection(boundResource.value()))->ShareFuture();
 				working->_resources.push_back(res);
 				gotBinding = true;
 

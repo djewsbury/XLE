@@ -644,9 +644,8 @@ namespace UnitTests
 				auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(
 					constantBindings, resourceBindings, samplerBindings);
 				auto descriptorSetAccelerator = pipelinePool->CreateDescriptorSetAccelerator(
-					patchCollection,
-					matMachine->GetMaterialMachine(),
-					matMachine);
+					nullptr, patchCollection,
+					matMachine->GetMaterialMachine(), matMachine);
 
 				DrawViaPipelineAccelerator(
 					threadContext, fbHelper, globalTransform, pipelinePool,

@@ -78,7 +78,7 @@ namespace BufferUploads
 
         virtual std::future<CommandListID>   Transaction_Begin    (ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations) = 0;
 
-        virtual void            Transaction_Release      (TransactionID id) = 0;
+        virtual void            Transaction_Cancel      (IteratorRange<const TransactionID*>) = 0;
 
             /// @}
 

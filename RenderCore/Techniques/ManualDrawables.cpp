@@ -468,7 +468,7 @@ namespace RenderCore { namespace Techniques
 
 		auto materialMachine = std::make_shared<Techniques::ManualMaterialMachine>(material._uniforms, material._resources, MakeIteratorRange(samplers, &samplers[material._samplers.size()]));
 		auto pipelineAccelerator = pool.CreatePipelineAccelerator(patchCollectionPtr, material._selectors, inputAssembly, topology, material._stateSet);
-		auto descriptorSetAccelerator = pool.CreateDescriptorSetAccelerator(patchCollectionPtr, materialMachine->GetMaterialMachine(), materialMachine);
+		auto descriptorSetAccelerator = pool.CreateDescriptorSetAccelerator(nullptr, patchCollectionPtr, materialMachine->GetMaterialMachine(), materialMachine);
 		return {std::move(pipelineAccelerator), std::move(descriptorSetAccelerator)};
 	}
 

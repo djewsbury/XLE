@@ -118,7 +118,7 @@ namespace RenderCore { namespace Techniques
         return viewDesc;
     }
 
-	static void ConstructToPromiseImageFile(
+	static BufferUploads::TransactionID ConstructToPromiseImageFile(
 		std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
 		const FileNameSplitter<char>& splitter)
     {
@@ -145,13 +145,13 @@ namespace RenderCore { namespace Techniques
 		auto pkt = Services::GetInstance().CreateTextureDataSource(splitter.AllExceptParameters(), flags);
         if (!pkt) {
             promise.set_exception(std::make_exception_ptr(std::runtime_error("Could not find matching texture loader")));
-			return;
+			return BufferUploads::TransactionID_Invalid;
         }
 
         auto transactionMarker = RenderCore::Techniques::Services::GetBufferUploads().Transaction_Begin(pkt, BindFlag::ShaderResource);
 		if (!transactionMarker.IsValid()) {
 			promise.set_exception(std::make_exception_ptr(std::runtime_error("Could not begin buffer uploads transaction")));
-			return;
+			return BufferUploads::TransactionID_Invalid;
 		}
 
         if (metaDataFuture) {
@@ -218,6 +218,8 @@ namespace RenderCore { namespace Techniques
                         locator.GetCompletionCommandList(), depVal);
                 });
         }
+
+        return transactionMarker._transactionID;
     }
 
     static void ConstructToPromiseArtifact(
@@ -301,6 +303,18 @@ namespace RenderCore { namespace Techniques
         }
     }
 
+    BufferUploads::TransactionID DeferredShaderResource::ConstructToTrackablePromise(
+        std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
+        StringSection<> initializer)
+    {
+        auto splitter = MakeFileNameSplitter(initializer);
+        if (XlEqStringI(splitter.Extension(), "texture")) {
+            ConstructToPromiseTextureCompile(std::move(promise), splitter);
+            return BufferUploads::TransactionID_Invalid;
+        } else {
+            return ConstructToPromiseImageFile(std::move(promise), splitter);
+        }
+    }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

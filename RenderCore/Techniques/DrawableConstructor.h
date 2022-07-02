@@ -22,7 +22,7 @@ namespace RenderCore { namespace Techniques
 	class IDeformAcceleratorPool;
 	class DeformAccelerator;
 	class ModelRendererConstruction;
-	class RepositionableGeometryConduit;
+	class ConstructionContext;
 
 	class DrawableConstructor : public std::enable_shared_from_this<DrawableConstructor>
 	{
@@ -73,8 +73,7 @@ namespace RenderCore { namespace Techniques
 		DrawableConstructor(
 			std::shared_ptr<IDrawablesPool> drawablesPool,
 			std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
-			std::shared_ptr<RepositionableGeometryConduit> repositionableGeometry,
-			BufferUploads::IManager& bufferUploads,
+			std::shared_ptr<ConstructionContext> constructionContext,
 			const ModelRendererConstruction&,
 			const std::shared_ptr<IDeformAcceleratorPool>& =nullptr,
 			const std::shared_ptr<DeformAccelerator>& =nullptr);

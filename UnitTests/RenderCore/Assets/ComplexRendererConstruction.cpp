@@ -10,6 +10,7 @@
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
 #include "../../../RenderCore/Techniques/DrawableConstructor.h"
 #include "../../../RenderCore/Techniques/ModelRendererConstruction.h"
+#include "../../../RenderCore/Techniques/ConstructionContext.h"
 #include "../../../Assets/IntermediatesStore.h"
 #include "../../../Assets/IntermediateCompilers.h"
 #include "../../../Assets/CompileAndAsyncManager.h"
@@ -90,7 +91,8 @@ namespace UnitTests
 			
 				SECTION("Create DrawableConstructor")
 				{
-					auto constructor = std::make_shared<Techniques::DrawableConstructor>(testApparatus._drawablesPool, testApparatus._pipelineAccelerators, nullptr, *testApparatus._bufferUploads, *rendererConstruction);
+					auto constructionContext = std::make_shared<Techniques::ConstructionContext>(testApparatus._bufferUploads, nullptr);
+					auto constructor = std::make_shared<Techniques::DrawableConstructor>(testApparatus._drawablesPool, testApparatus._pipelineAccelerators, constructionContext, *rendererConstruction);
 					std::promise<std::shared_ptr<Techniques::DrawableConstructor>> promise;
 					auto future = promise.get_future();
 					constructor->FulfillWhenNotPending(std::move(promise));

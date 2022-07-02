@@ -42,6 +42,15 @@ namespace RenderCore { namespace Techniques {
 		std::shared_ptr<BufferUploads::IResourcePool> resourceSource,
 		StringSection<> resourceName);
 
+	class ConstructionContext;
+	std::future<BufferUploads::ResourceLocator> LoadStaticResourceFullyAsync(
+		ConstructionContext& constructionContext,
+		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
+		unsigned resourceSize,
+		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+		BindFlag::BitField bindFlags,
+		StringSection<> resourceName);
+
 	struct ModelScaffoldLoadRequest
 	{
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> _modelScaffold;

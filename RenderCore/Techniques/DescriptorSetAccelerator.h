@@ -67,10 +67,14 @@ namespace RenderCore { namespace Techniques
 		const uint64_t GetHash() const;
 	};
 
+	namespace Internal { struct DescriptorSetInProgress; }
+	class ConstructionContext;
+
 	struct ConstructDescriptorSetHelper
 	{
 		void Construct(
 			std::promise<ActualizedDescriptorSet>&& promise,
+			ConstructionContext* context,
 			const Assets::PredefinedDescriptorSetLayout& layout,
 			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 			const DeformerToDescriptorSetBinding* deformBinding);

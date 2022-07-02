@@ -197,9 +197,8 @@ namespace UnitTests
 			auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(
 				constantBindings, resourceBindings, samplerBindings);
 			auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
-				patches,
-				matMachine->GetMaterialMachine(),
-				matMachine);
+				nullptr, patches,
+				matMachine->GetMaterialMachine(), matMachine);
 
 			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(

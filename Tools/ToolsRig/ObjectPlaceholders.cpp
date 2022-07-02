@@ -228,7 +228,7 @@ namespace ToolsRig
 		for (const auto&i:geo._vb._ia._elements)
 			inputElements.push_back(InputElementDesc(i._semanticName, i._semanticIndex, i._nativeFormat, 0, i._alignedByteOffset));
 
-		_descriptorSetAccelerator = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, {}, {});
+		_descriptorSetAccelerator = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, nullptr, {}, {});
 
 		// The topology must be the same for all draw calls
 		assert(!_drawCalls.empty());
@@ -322,7 +322,7 @@ namespace ToolsRig
 				res._justPointsPipelineAccelerator = pipelineAcceleratorPool->CreatePipelineAccelerator(
 					nullptr, {}, GlobalInputLayouts::P, Topology::TriangleList, RenderCore::Assets::RenderStateSet{});
 
-				res._descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, {}, {});
+				res._descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, nullptr, {}, {});
 				return res;
 			});
     }

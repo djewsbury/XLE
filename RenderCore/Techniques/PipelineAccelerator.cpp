@@ -13,6 +13,7 @@
 #include "DeformAccelerator.h"		// for UniformDeformerToRendererBinding
 #include "CompiledLayoutPool.h"
 #include "Drawables.h"				// for IDrawablesPool & protected destroy
+#include "ConstructionContext.h"
 #include "../FrameBufferDesc.h"
 #include "../Format.h"
 #include "../Metal/DeviceContext.h"
@@ -390,6 +391,7 @@ namespace RenderCore { namespace Techniques
 		#if defined(_DEBUG)
 			PipelineAcceleratorPool* _ownerPool = nullptr;
 		#endif
+		uint64_t _constructionContextGuid = 0;
 	};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -414,6 +416,7 @@ namespace RenderCore { namespace Techniques
 			const RenderCore::Assets::RenderStateSet& stateSet) override;
 
 		virtual std::shared_ptr<DescriptorSetAccelerator> CreateDescriptorSetAccelerator(
+			const std::shared_ptr<ConstructionContext>& constructionContext,
 			const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& shaderPatches,
 			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 			std::shared_ptr<void> memoryHolder,
@@ -806,11 +809,13 @@ namespace RenderCore { namespace Techniques
 	}
 
 	std::shared_ptr<DescriptorSetAccelerator> PipelineAcceleratorPool::CreateDescriptorSetAccelerator(
+		const std::shared_ptr<ConstructionContext>& constructionContext,
 		const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& shaderPatches,
 		IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 		std::shared_ptr<void> memoryHolder,
 		const std::shared_ptr<DeformerToDescriptorSetBinding>& deformBinding)
 	{
+		auto constructionContextGuid = constructionContext ? constructionContext->GetGUID() : 0;
 		std::shared_ptr<DescriptorSetAccelerator> result;
 		std::promise<ActualizedDescriptorSet> promise;
 		{
@@ -825,8 +830,11 @@ namespace RenderCore { namespace Techniques
 			// If it already exists in the cache, just return it now
 			auto cachei = LowerBound(_descriptorSetAccelerators, hash);
 			if (cachei != _descriptorSetAccelerators.end() && cachei->first == hash)
-				if (auto l = cachei->second.lock())
+				if (auto l = cachei->second.lock()) {
+					if (l->_constructionContextGuid != constructionContextGuid)
+						Throw(std::runtime_error("Identical DescriptorSetAccelerator initialized for 2 different ConstructionContexts. This is unsafe, because either context could cancel the load"));
 					return l;
+				}
 
 			if (_drawablesPool) {
 				result = _drawablesPool->MakeProtectedPtr<DescriptorSetAccelerator>();
@@ -840,6 +848,7 @@ namespace RenderCore { namespace Techniques
 				_descriptorSetAccelerators.insert(cachei, std::make_pair(hash, result));
 			}
 
+			result->_constructionContextGuid = constructionContextGuid;
 			#if defined(_DEBUG)
 				result->_ownerPool = this;
 			#endif
@@ -865,13 +874,14 @@ namespace RenderCore { namespace Techniques
 				ConstructDescriptorSetHelper{_device, _samplerPool.get(), PipelineType::Graphics, generateBindingInfo}
 					.Construct(
 						std::move(promise),
+						constructionContext.get(),
 						patchCollection->GetInterface().GetMaterialDescriptorSet(),
 						materialMachine, deformBinding.get());
 			} else {
 				std::weak_ptr<IDevice> weakDevice = _device;
 				::Assets::WhenAll(patchCollectionFuture).ThenConstructToPromise(
 					std::move(promise),
-					[materialMachine, memoryHolder, weakDevice, generateBindingInfo, samplerPool=std::weak_ptr<SamplerPool>(_samplerPool), deformBinding](
+					[materialMachine, memoryHolder, weakDevice, generateBindingInfo, samplerPool=std::weak_ptr<SamplerPool>(_samplerPool), deformBinding, result, constructionContext](
 						std::promise<ActualizedDescriptorSet>&& promise,
 						std::shared_ptr<CompiledShaderPatchCollection> patchCollection) {
 
@@ -882,6 +892,7 @@ namespace RenderCore { namespace Techniques
 						ConstructDescriptorSetHelper{d, samplerPool.lock().get(), PipelineType::Graphics, generateBindingInfo}
 							.Construct(
 								std::move(promise),
+								constructionContext.get(),
 								patchCollection->GetInterface().GetMaterialDescriptorSet(),
 								materialMachine, deformBinding.get());
 					});
@@ -890,6 +901,7 @@ namespace RenderCore { namespace Techniques
 			ConstructDescriptorSetHelper{_device, _samplerPool.get(), PipelineType::Graphics, generateBindingInfo}
 				.Construct(
 					std::move(promise),
+					constructionContext.get(),
 					_layoutPatcher->GetBaseMaterialDescriptorSetLayout(),
 					materialMachine, deformBinding.get());
 		}

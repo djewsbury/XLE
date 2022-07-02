@@ -13,7 +13,6 @@
 #include "DeformGeometryInfrastructure.h"
 #include "DeformerConstruction.h"
 #include "SkinDeformer.h"
-#include "Services.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelMachine.h"		// for DrawCallDesc
 #include "../Assets/AnimationBindings.h"
@@ -580,7 +579,7 @@ namespace RenderCore { namespace Techniques
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 		std::shared_ptr<IDrawablesPool> drawablesPool,
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool,
-		std::shared_ptr<RepositionableGeometryConduit> repositionableGeometry,
+		std::shared_ptr<ConstructionContext> constructionContext,
 		std::shared_ptr<ModelRendererConstruction> construction,
 		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
 		std::shared_ptr<DeformAccelerator> deformAcceleratorInit,
@@ -591,7 +590,7 @@ namespace RenderCore { namespace Techniques
 		::Assets::WhenAll(ToFuture(*construction)).ThenConstructToPromise(
 			std::move(promise),
 			[pipelineAcceleratorPool=std::move(pipelineAcceleratorPool), deformAcceleratorPool=std::move(deformAcceleratorPool), drawablesPool=std::move(drawablesPool),
-			deformAccelerator=std::move(deformAcceleratorInit), uniformBufferBindings=std::move(uniformBufferBindings), repositionableGeometry=std::move(repositionableGeometry)](auto&& promise, auto completedConstruction) mutable {
+			deformAccelerator=std::move(deformAcceleratorInit), uniformBufferBindings=std::move(uniformBufferBindings), constructionContext=std::move(constructionContext)](auto&& promise, auto completedConstruction) mutable {
 
 				struct Helper
 				{
@@ -617,8 +616,7 @@ namespace RenderCore { namespace Techniques
 							helper->_deformAcceleratorInitFuture = geoInfrastructure->GetInitializationFuture();
 					}
 
-					auto& bufferUploads = Services::GetInstance().GetBufferUploads();
-					helper->_drawableConstructor = std::make_shared<DrawableConstructor>(drawablesPool, pipelineAcceleratorPool, repositionableGeometry, bufferUploads, *completedConstruction, deformAcceleratorPool, deformAccelerator);
+					helper->_drawableConstructor = std::make_shared<DrawableConstructor>(drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext), *completedConstruction, deformAcceleratorPool, deformAccelerator);
 					helper->_drawableConstructorFuture = ToFuture(*helper->_drawableConstructor);
 				} CATCH(...) {
 					promise.set_exception(std::current_exception());

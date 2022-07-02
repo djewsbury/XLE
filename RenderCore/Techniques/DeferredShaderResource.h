@@ -15,6 +15,7 @@ namespace Utility { class ParameterBox; }
 namespace Assets { class DirectorySearchRules; }
 namespace BufferUploads { using CommandListID = uint32_t; class IAsyncDataSource; }
 namespace RenderCore { namespace Assets { class TextureCompilationRequest; }}
+namespace BufferUploads { using TransactionID = uint64_t; }
 
 namespace RenderCore { namespace Techniques 
 {
@@ -68,6 +69,10 @@ namespace RenderCore { namespace Techniques
         static void ConstructToPromise(
 			std::promise<std::shared_ptr<DeferredShaderResource>>&&,
 			const Assets::TextureCompilationRequest& compileRequest);
+
+        static BufferUploads::TransactionID ConstructToTrackablePromise(
+			std::promise<std::shared_ptr<DeferredShaderResource>>&&,
+			StringSection<> initializer);
     private:
 		std::shared_ptr<IResourceView> _srv;
         std::string _initializer;

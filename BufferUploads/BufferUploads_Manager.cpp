@@ -95,7 +95,6 @@ namespace BufferUploads
         TransactionMarker       Transaction_Begin(ResourceLocator destinationResource, std::shared_ptr<IAsyncDataSource> data, TransactionOptions::BitField flags);
         std::future<CommandListID>   Transaction_Begin (ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations);
         void                    Transaction_AddRef(TransactionID id);
-        void                    Transaction_Release(TransactionID id);
 
         ResourceLocator         Transaction_Immediate(
                                     RenderCore::IThreadContext& threadContext,
@@ -480,15 +479,6 @@ namespace BufferUploads
 
             ScopedLock(_transactionsLock);
             _transactionsHeap.Deallocate(heapIndex<<4, 1<<4);
-        }
-    }
-
-    void AssemblyLine::Transaction_Release(TransactionID id)
-    {
-        Transaction* transaction = GetTransaction(id);
-        assert(transaction);
-        if (transaction) {
-            ClientReleaseTransaction(transaction);    // release the client ref count
         }
     }
 
@@ -1453,7 +1443,8 @@ namespace BufferUploads
             return _assemblyLine->Transaction_Begin(std::move(destinationResource), std::move(sourceResource), repositionOperations);
         }
 
-        void                    Transaction_Release(TransactionID id) override;
+        void                    Transaction_Cancel      (IteratorRange<const TransactionID*>) override
+        {}
 
         unsigned                BindOnBackgroundFrame(std::function<void()>&& fn) override
         {
@@ -1500,11 +1491,6 @@ namespace BufferUploads
     };
 
         /////////////////////////////////////////////
-
-    void                    Manager::Transaction_Release(TransactionID id)
-    {
-        _assemblyLine->Transaction_Release(id);
-    }
 
     ResourceLocator         Manager::Transaction_Immediate(
         RenderCore::IThreadContext& threadContext,

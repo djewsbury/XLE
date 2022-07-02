@@ -154,7 +154,7 @@ namespace ToolsRig
 				RenderCore::Assets::RenderStateSet{});
 
 			_descriptorSetAccelerator = pipelineAcceleratorPool.CreateDescriptorSetAccelerator(
-				nullptr,
+				nullptr, nullptr,
 				{}, {}, {});
 		}
 	};

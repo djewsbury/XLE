@@ -6,6 +6,7 @@
 #include "PipelineAccelerator.h"
 #include "CompiledShaderPatchCollection.h"
 #include "DescriptorSetAccelerator.h"
+#include "ConstructionContext.h"
 #include "Services.h"
 #include "../Assets/MaterialScaffold.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
@@ -204,9 +205,26 @@ namespace RenderCore { namespace Techniques
 		dataSource->_loadRequests = Internal::AsLoadRequests(modelScaffold, loadRequests);
 
 		if (resourceSource)
-			return bufferUploads.Transaction_Begin(dataSource, resourceSource);
+			return bufferUploads.Transaction_Begin(std::move(dataSource), resourceSource);
 		else
-			return bufferUploads.Transaction_Begin(dataSource, bindFlags);
+			return bufferUploads.Transaction_Begin(std::move(dataSource), bindFlags);
+	}
+
+	std::future<BufferUploads::ResourceLocator> LoadStaticResourceFullyAsync(
+		ConstructionContext& constructionContext,
+		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
+		unsigned resourceSize,
+		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+		BindFlag::BitField bindFlags,
+		StringSection<> resourceName)
+	{
+		auto dataSource = std::make_shared<Internal::ModelScaffoldDataSource>();
+		dataSource->_resourceDesc = CreateDesc(
+			bindFlags | BindFlag::TransferDst,
+			LinearBufferDesc::Create(resourceSize),
+			resourceName);
+		dataSource->_loadRequests = Internal::AsLoadRequests(modelScaffold, loadRequests);
+		return constructionContext.ConstructStaticGeometry(std::move(dataSource), bindFlags, resourceName);
 	}
 
 	std::pair<std::shared_ptr<IResource>, BufferUploads::TransactionMarker> LoadStaticResourcePartialAsync(

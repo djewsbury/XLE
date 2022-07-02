@@ -407,9 +407,8 @@ namespace UnitTests
 			ParameterBox resourceBindings;
 			auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(constantBindings, resourceBindings);
 			auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
-				patches,
-				matMachine->GetMaterialMachine(),
-				matMachine);
+				nullptr, patches,
+				matMachine->GetMaterialMachine(), matMachine);
 			auto descSet = StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator);
 			auto* bindingInfo = &descSet->_bindingInfo;
 
@@ -483,9 +482,8 @@ namespace UnitTests
 
 			auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(constantBindings, resourceBindings);
 			auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
-				patches,
-				matMachine->GetMaterialMachine(), 
-				matMachine);
+				nullptr, patches,
+				matMachine->GetMaterialMachine(),  matMachine);
 
 			// Put together the pieces we need to create a pipeline
 			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
@@ -596,9 +594,7 @@ namespace UnitTests
 			{
 				// Nothing is bound -- we can still render, but in this case we'll just get
 				// black output
-				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
-					patches,
-					{}, {});
+				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, patches, {}, {});
 				auto descSet = StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator);
 				REQUIRE(descSet);
 				auto* bindingInfo = &descSet->_bindingInfo;
@@ -625,9 +621,8 @@ namespace UnitTests
 				resourceBindings.SetParameter("ExtraneousTexture", "xleres/DefaultResources/waternoise.png");
 				auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(ParameterBox{}, resourceBindings);
 				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
-					patches,
-					matMachine->GetMaterialMachine(),
-					matMachine);
+					nullptr, patches,
+					matMachine->GetMaterialMachine(), matMachine);
 				REQUIRE_THROWS(StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator));
 			}
 
@@ -638,9 +633,8 @@ namespace UnitTests
 				resourceBindings.SetParameter("BoundTexture", "xleres/TechniqueLibrary/Config/Illum.tech");
 				auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(ParameterBox{}, resourceBindings);
 				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
-					patches,
-					matMachine->GetMaterialMachine(),
-					matMachine);
+					nullptr, patches,
+					matMachine->GetMaterialMachine(), matMachine);
 				REQUIRE_THROWS(StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator));
 			}
 
@@ -653,9 +647,8 @@ namespace UnitTests
 				constantBindings.SetParameter("Adder", -40);	// too few elements
 				auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(constantBindings, ParameterBox{});
 				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
-					patches,
-					matMachine->GetMaterialMachine(),
-					matMachine);
+					nullptr, patches,
+					matMachine->GetMaterialMachine(), matMachine);
 				auto descSet = StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator);
 				REQUIRE(descSet);
 				auto* bindingInfo = &descSet->_bindingInfo;
@@ -665,9 +658,8 @@ namespace UnitTests
 				// one returned
 				auto matMachine2 = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(constantBindings, ParameterBox{});
 				auto secondDescriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
-					patches,
-					matMachine2->GetMaterialMachine(),
-					matMachine2);
+					nullptr, patches,
+					matMachine2->GetMaterialMachine(), matMachine2);
 				REQUIRE(descriptorSetAccelerator == secondDescriptorSetAccelerator);
 			}
 			
@@ -681,9 +673,8 @@ namespace UnitTests
 				resourceBindings.SetParameter("Adder", "xleres/DefaultResources/waternoise.png");
 				auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(constantBindings, resourceBindings);
 				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
-					patches,
-					matMachine->GetMaterialMachine(),
-					matMachine);
+					nullptr, patches,
+					matMachine->GetMaterialMachine(), matMachine);
 				REQUIRE_THROWS(StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator));
 
 				// do the same, but messing up sampler configurations
@@ -696,9 +687,8 @@ namespace UnitTests
 				resourceBindings.SetParameter("BoundSampler", "xleres/DefaultResources/waternoise.png");
 				auto matMachine2 = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(ParameterBox{}, resourceBindings, samplerBindings);
 				descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
-					patches,
-					matMachine2->GetMaterialMachine(),
-					matMachine2);
+					nullptr, patches,
+					matMachine2->GetMaterialMachine(), matMachine2);
 				REQUIRE_THROWS(StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator));
 			}
 		}
