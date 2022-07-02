@@ -322,6 +322,9 @@ namespace BufferUploads { namespace PlatformInterface
 
     auto StagingPage::Allocate(unsigned byteCount, unsigned alignment) -> Allocation
     {
+        #if defined(_DEBUG)
+            assert(_boundThread == std::this_thread::get_id());
+        #endif
         UpdateConsumerMarker();
         assert(byteCount <= _stagingBufferHeap.HeapSize());
         auto stagingAllocation = _stagingBufferHeap.AllocateBack(byteCount, alignment);
@@ -334,6 +337,9 @@ namespace BufferUploads { namespace PlatformInterface
 
     void StagingPage::UpdateConsumerMarker()
     {
+        #if defined(_DEBUG)
+            assert(_boundThread == std::this_thread::get_id());
+        #endif
         assert(_asyncTracker);
         QueueMarker queueMarker = _asyncTracker->GetConsumerMarker();
         while (!_allocationsWaitingOnDevice.empty() && _allocationsWaitingOnDevice.front()._releaseMarker <= queueMarker) {
@@ -345,6 +351,10 @@ namespace BufferUploads { namespace PlatformInterface
 
     void StagingPage::Release(unsigned allocationId, QueueMarker releaseMarker)
     {
+        #if defined(_DEBUG)
+            assert(_boundThread == std::this_thread::get_id());
+        #endif
+
         bool found = false;
         for (auto& a:_activeAllocations)
             if (a._allocationId == allocationId) {
@@ -384,6 +394,10 @@ namespace BufferUploads { namespace PlatformInterface
 
     auto StagingPage::GetQuickMetrics() const -> StagingPageMetrics
     {
+        #if defined(_DEBUG)
+            assert(_boundThread == std::this_thread::get_id());
+        #endif
+
         auto heapMetrics = _stagingBufferHeap.GetQuickMetrics();
         StagingPageMetrics result;
         result._bytesAllocated = heapMetrics._bytesAllocated;
@@ -417,6 +431,13 @@ namespace BufferUploads { namespace PlatformInterface
         return result;
     }
 
+    void StagingPage::BindThread()
+    {
+        #if defined(_DEBUG)
+            _boundThread = std::this_thread::get_id();
+        #endif
+    }
+
     StagingPage::StagingPage(RenderCore::IDevice& device, unsigned size)
     {
 		_stagingBufferHeap = CircularHeap(size);
@@ -429,6 +450,10 @@ namespace BufferUploads { namespace PlatformInterface
         auto* deviceVulkan = (RenderCore::IDeviceVulkan*)device.QueryInterface(typeid(RenderCore::IDeviceVulkan).hash_code());
         if (deviceVulkan)
             _asyncTracker = deviceVulkan->GetAsyncTracker();
+
+        #if defined(_DEBUG)
+            _boundThread = std::this_thread::get_id();
+        #endif
     }
 
     StagingPage::~StagingPage()

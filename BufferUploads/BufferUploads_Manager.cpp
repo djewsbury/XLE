@@ -94,7 +94,7 @@ namespace BufferUploads
         TransactionMarker       Transaction_Begin(std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, BindFlag::BitField bindFlags, TransactionOptions::BitField flags);
         TransactionMarker       Transaction_Begin(ResourceLocator destinationResource, std::shared_ptr<IAsyncDataSource> data, TransactionOptions::BitField flags);
         std::future<CommandListID>   Transaction_Begin (ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations);
-        void                    Transaction_AddRef(TransactionID id);
+        void            Transaction_Cancel(IteratorRange<const TransactionID*>);
 
         ResourceLocator         Transaction_Immediate(
                                     RenderCore::IThreadContext& threadContext,
@@ -128,6 +128,7 @@ namespace BufferUploads
             std::promise<ResourceLocator> _promise;
             std::future<void> _waitingFuture;
 
+            std::atomic<bool> _cancelledByClient;
             std::atomic<bool> _statusLock;
             TransactionOptions::BitField _creationOptions;
             unsigned _heapIndex;
@@ -208,7 +209,6 @@ namespace BufferUploads
         };
 
         void    SystemReleaseTransaction(Transaction* transaction, ThreadContext& context, bool abort = false);
-        void    ClientReleaseTransaction(Transaction* transaction);
 
         bool    Process(const CreateFromDataPacketStep& resourceCreateStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction);
         bool    Process(const PrepareStagingStep& prepareStagingStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction);
@@ -412,16 +412,9 @@ namespace BufferUploads
         AssemblyLineRetirement retirementBuffer;
         AssemblyLineRetirement* retirement = &retirementBuffer;
         CommandListMetrics& metrics = context.GetMetricsUnderConstruction();
-        if ((metrics._retirementCount+1) <= dimof(metrics._retirements)) {
+        if ((metrics._retirementCount+1) <= dimof(metrics._retirements))
             retirement = &metrics._retirements[metrics._retirementCount];
-        }
-            
-            //
-            //      We still have to do this before doing the ref count decrement.
-            //      This is because we can decrement the reference count here, then the client might release it's
-            //      lock shortly afterwards in another thread. The other thread might then clear out the transaction
-            //      in ClientReleaseTransaction()
-            //
+
         retirement->_desc = transaction->_desc;
         retirement->_requestTime = transaction->_requestTime;
 
@@ -440,9 +433,8 @@ namespace BufferUploads
             retirement->_retirementTime = OSServices::GetPerformanceCounter();
             if ((metrics._retirementCount+1) <= dimof(metrics._retirements)) {
                 metrics._retirementCount++;
-            } else {
+            } else
                 metrics._retirementsOverflow.push_back(*retirement);
-            }
         }
 
         if (newRefCount<=0) {
@@ -457,24 +449,6 @@ namespace BufferUploads
                 //
             *transaction = Transaction();
             transaction->_referenceCount.store(~0x0u);    // set reference count to invalid value to signal that it's ok to reuse now. Note that this has to come after all other work has completed
-            --_allocatedTransactionCount;
-
-            ScopedLock(_transactionsLock);
-            _transactionsHeap.Deallocate(heapIndex<<4, 1<<4);
-        }
-    }
-
-    void AssemblyLine::ClientReleaseTransaction(Transaction* transaction)
-    {
-        auto newRefCount = (transaction->_referenceCount -= 0x01000000);
-        assert(newRefCount>=0);
-        if (newRefCount<=0) {
-            transaction->_finalResource = {};
-
-            unsigned heapIndex   = transaction->_heapIndex;
-
-            *transaction = Transaction();
-            transaction->_referenceCount.store(~0x0u);
             --_allocatedTransactionCount;
 
             ScopedLock(_transactionsLock);
@@ -547,15 +521,6 @@ namespace BufferUploads
         }
     
         return finalResourceConstruction;
-    }
-
-    void AssemblyLine::Transaction_AddRef(TransactionID id)
-    {
-        Transaction* transaction = GetTransaction(id);
-        assert(transaction);
-        if (transaction) {
-            transaction->_referenceCount += 0x01000000;
-        }
     }
 
         //////////////////////////////////////////////////////////////////////////////////////////////
@@ -672,18 +637,17 @@ namespace BufferUploads
         }
 
         result >>= 4;
-        if (result >= _transactions.size()) {
-            _transactions.resize((unsigned int)(result+1));
-        }
+        if (result >= _transactions.size())
+            _transactions.resize(result+1);
         auto destinationPosition = _transactions.begin() + ptrdiff_t(result);
         result |= uint64_t(idTopPart)<<32ull;
 
-        Transaction newTransaction(idTopPart, uint32_t(result));
+        Transaction newTransaction{idTopPart, uint32_t(result)};
         newTransaction._requestTime = OSServices::GetPerformanceCounter();
         newTransaction._creationOptions = flags;
 
-            // Start with a client ref count 1 & system ref count 1
-        destinationPosition->_referenceCount.store(0x01000001);
+            // Start with a system ref count 1
+        destinationPosition->_referenceCount.store(1);
         ++_allocatedTransactionCount;
 
         *destinationPosition = std::move(newTransaction);
@@ -701,6 +665,18 @@ namespace BufferUploads
             result = &_transactions[index];
         if (result) assert(result->_referenceCount.load());     // this is only thread safe if there's some kind of reference on the transaction
         return result;
+    }
+
+    void AssemblyLine::Transaction_Cancel(IteratorRange<const TransactionID*> ids)
+    {
+        ScopedLock(_transactionsLock);
+        for (auto i:ids) {
+            assert(i!=TransactionID_Invalid);
+            auto idx = uint32_t(i);
+            assert(idx < _transactions.size());
+            if (_transactions[idx]._idTopPart == i>>32ull)
+                _transactions[idx]._cancelledByClient = true;
+        }
     }
 
     void AssemblyLine::Wait(unsigned stepMask, ThreadContext& context)
@@ -787,13 +763,12 @@ namespace BufferUploads
         auto uploadRequestSize = objectSize;
         auto uploadDataType = (unsigned)AsUploadDataType(resourceCreateStep._creationDesc);
 
-        /*if (!(transaction->_referenceCount & 0xff000000)) {
-                //  If there are no client references, we can consider this cancelled...
-            transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Aborted because client references were released")));
-            ReleaseTransaction(transaction, context, true);
+        if (transaction->_cancelledByClient.load()) {
+            transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
+            SystemReleaseTransaction(transaction, context, true);
             _currentQueuedBytes[uploadDataType] -= uploadRequestSize;
             return true;
-        }*/
+        }
 
         if ((metricsUnderConstruction._bytesUploadTotal+uploadRequestSize) > budgetUnderConstruction._limit_BytesUploaded && metricsUnderConstruction._bytesUploadTotal !=0)
             return false;
@@ -932,11 +907,11 @@ namespace BufferUploads
         auto* transaction = GetTransaction(prepareStagingStep._id);
         assert(transaction);
 
-        /*if (!(transaction->_referenceCount & 0xff000000)) {
-            transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Aborted because client references were released")));
-            ReleaseTransaction(transaction, context, true);
+        if (transaction->_cancelledByClient.load()) {
+            transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
+            SystemReleaseTransaction(transaction, context, true);
             return true;
-        }*/
+        }
 
         try {
             const auto& desc = prepareStagingStep._desc;
@@ -1027,6 +1002,17 @@ namespace BufferUploads
         assert(transaction);
 
         transaction->_waitingFuture = {};
+
+        if (transaction->_cancelledByClient.load()) {
+            // don't release the transaction on this thread. It must be done in the assembly line thread
+            _queuedFunctions.push_overflow(
+                [transactionID](auto& assemblyLine, auto& threadContext) {
+                    auto* transaction = assemblyLine.GetTransaction(transactionID);
+                    assert(transaction);
+                    assemblyLine.SystemReleaseTransaction(transaction, threadContext, true);
+                });
+            return;
+        }
         
         try {
             auto desc = descFuture.get();
@@ -1057,6 +1043,19 @@ namespace BufferUploads
 
         transaction->_waitingFuture = {};
 
+        if (transaction->_cancelledByClient.load()) {
+            // don't destroy stagingAllocation or release the transaction on this thread. It must be done in the assembly line thread
+            auto helper = std::make_shared<PlatformInterface::StagingPage::Allocation>(std::move(stagingAllocation));
+            _queuedFunctions.push_overflow(
+                [transactionID, helper=std::move(helper)](auto& assemblyLine, auto& threadContext) {
+                    auto* transaction = assemblyLine.GetTransaction(transactionID);
+                    assert(transaction);
+                    transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
+                    assemblyLine.SystemReleaseTransaction(transaction, threadContext, true);
+                });
+            return;
+        }
+
         // Any exceptions get passed along to the transaction's future. Otherwise we just queue up the
         // next step
         try {
@@ -1069,8 +1068,11 @@ namespace BufferUploads
             transaction->_promise.set_exception(std::current_exception());
         }
 
+        std::shared_ptr<PlatformInterface::StagingPage::Allocation> helper;
+        if (stagingAllocation) 
+            helper = std::make_shared<PlatformInterface::StagingPage::Allocation>(std::move(stagingAllocation));
         _queuedFunctions.push_overflow(
-            [transactionID](AssemblyLine& assemblyLine, ThreadContext& context) {
+            [transactionID, helper=std::move(helper)](AssemblyLine& assemblyLine, ThreadContext& context) {
                 Transaction* transaction = assemblyLine.GetTransaction(transactionID);
                 assert(transaction);
                 assemblyLine.SystemReleaseTransaction(transaction, context);
@@ -1088,12 +1090,12 @@ namespace BufferUploads
         assert(transaction);
         auto dataType = (unsigned)AsUploadDataType(transferStagingToFinalStep._finalResourceDesc);
 
-        /*if (!(transaction->_referenceCount & 0xff000000)) {
-            transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Aborted because client references were released")));
-            ReleaseTransaction(transaction, context, true);
-            _currentQueuedBytes[dataType] -= transferStagingToFinalStep._stagingByteCount;
+        if (transaction->_cancelledByClient.load()) {
+            transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
+            _currentQueuedBytes[dataType] -= transferStagingToFinalStep._stagingResource.GetAllocationSize();
+            SystemReleaseTransaction(transaction, context, true);
             return true;
-        }*/
+        }
 
         //if ((metricsUnderConstruction._bytesUploadTotal+transferStagingToFinalStep._stagingByteCount) > budgetUnderConstruction._limit_BytesUploaded && metricsUnderConstruction._bytesUploadTotal !=0)
             // return false;
@@ -1443,8 +1445,10 @@ namespace BufferUploads
             return _assemblyLine->Transaction_Begin(std::move(destinationResource), std::move(sourceResource), repositionOperations);
         }
 
-        void                    Transaction_Cancel      (IteratorRange<const TransactionID*>) override
-        {}
+        void                    Transaction_Cancel      (IteratorRange<const TransactionID*> ids) override
+        {
+            _assemblyLine->Transaction_Cancel(ids);
+        }
 
         unsigned                BindOnBackgroundFrame(std::function<void()>&& fn) override
         {
@@ -1632,7 +1636,11 @@ namespace BufferUploads
             _backgroundStepMask = 0;
         }
         if (_backgroundStepMask) {
-            _backgroundThread = std::make_unique<std::thread>([this](){ return DoBackgroundThread(); });
+            _backgroundThread = std::make_unique<std::thread>(
+                [this](){ 
+                    _backgroundContext->GetStagingPage().BindThread();
+                    return DoBackgroundThread(); 
+                });
         }
     }
 

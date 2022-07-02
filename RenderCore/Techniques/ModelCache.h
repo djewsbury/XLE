@@ -70,6 +70,7 @@ namespace RenderCore { namespace Techniques
 
         std::shared_ptr<BufferUploads::IBatchedResources> GetVBResources();
         std::shared_ptr<BufferUploads::IBatchedResources> GetIBResources();
+        void CancelConstructions();
 
         ModelCache(
 			std::shared_ptr<IDrawablesPool> drawablesPool, 

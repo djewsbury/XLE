@@ -109,6 +109,7 @@ namespace BufferUploads { namespace PlatformInterface
         RenderCore::IResource& GetStagingResource() { return *_stagingBuffer; }
 
         StagingPageMetrics GetQuickMetrics() const;
+        void BindThread();
 
         StagingPage(RenderCore::IDevice& device, unsigned size);
         ~StagingPage();
@@ -140,6 +141,10 @@ namespace BufferUploads { namespace PlatformInterface
         void Abandon(unsigned allocationId);
 
         void UpdateConsumerMarker();
+
+        #if defined(_DEBUG)
+            std::thread::id _boundThread;
+        #endif
     };
 
     RenderCore::IDevice::ResourceInitializer AsResourceInitializer(IDataPacket& pkt);

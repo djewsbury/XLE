@@ -46,7 +46,7 @@ namespace RenderCore { namespace Techniques
 		ScopedLock(_pimpl->_lock);
 		auto hash = Hash64(initializer);
 		auto i = LowerBound(_pimpl->_shaderResources, hash);
-		if (i==_pimpl->_shaderResources.end() || i->first!=hash)
+		if (i!=_pimpl->_shaderResources.end() && i->first==hash)
 			return i->second;
 
 		std::promise<std::shared_ptr<DeferredShaderResource>> promise;

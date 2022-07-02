@@ -165,6 +165,12 @@ namespace RenderCore { namespace Techniques
 		return nullptr;
 	}
 
+	void ModelCache::CancelConstructions()
+	{
+		if (_pimpl->_constructionContext)
+			_pimpl->_constructionContext->Cancel();
+	}
+
 	ModelCache::ModelCache(
 		std::shared_ptr<IDrawablesPool> drawablesPool, 
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool,
