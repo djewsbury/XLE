@@ -47,6 +47,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		IndexBufferView AsIndexBufferView(Format indexFormat);
 		ConstantBufferView AsConstantBufferView();
 		std::shared_ptr<IResourceView> AsResourceView();
+		std::shared_ptr<IResourceView> AsResourceView(size_t subRangeBegin, size_t subRangeEnd);
 		CopyPartial_Src AsCopySource();
 
 		TemporaryStorageResourceMap(TemporaryStorageResourceMap&&);

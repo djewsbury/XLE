@@ -458,7 +458,18 @@ namespace RenderCore { namespace Metal_Vulkan
 		return std::make_shared<ResourceView>(
 			GetObjectFactory(),
 			_resource,
-			(unsigned)_beginAndEndInResource.first, (unsigned)(_beginAndEndInResource.second-_beginAndEndInResource.first));
+			unsigned(_beginAndEndInResource.first), unsigned(_beginAndEndInResource.second-_beginAndEndInResource.first));
+	}
+
+	std::shared_ptr<IResourceView> TemporaryStorageResourceMap::AsResourceView(size_t subRangeBegin, size_t subRangeEnd)
+	{
+		assert(subRangeBegin < _beginAndEndInResource.second);
+		assert(subRangeEnd <= _beginAndEndInResource.second);
+		assert(subRangeBegin < subRangeEnd);
+		return std::make_shared<ResourceView>(
+			GetObjectFactory(),
+			_resource,
+			unsigned(_beginAndEndInResource.first+subRangeBegin), unsigned(subRangeEnd - subRangeBegin));
 	}
 
 	CopyPartial_Src TemporaryStorageResourceMap::AsCopySource()

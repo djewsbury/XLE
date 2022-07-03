@@ -4,7 +4,7 @@
 
 #include "DeformAccelerator.h"
 #include "Services.h"
-#include "GPUTrackerHeap.h"
+#include "SubFrameUtil.h"
 #include "CommonUtils.h"
 #include "CommonResources.h"
 #include "Drawables.h"

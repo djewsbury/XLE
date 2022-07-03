@@ -4,7 +4,7 @@
 
 #include "../IDevice.h"
 #include "../Vulkan/IDeviceVulkan.h"
-#include "../Metal/ObjectFactory.h"
+#include "../Vulkan/Metal/ObjectFactory.h"		// for Metal_Vulkan::IAsyncTracker
 #include "../../Utility/HeapUtils.h"
 #include <vector>
 #include <memory>
@@ -56,6 +56,10 @@ namespace RenderCore { namespace Techniques
 				Throw(std::runtime_error("Requires vulkan device for GPU tracking"));
 			_tracker = vulkanDevice->GetAsyncTracker();
 		}
+
+		GPUTrackerHeap() = default;
+		GPUTrackerHeap(GPUTrackerHeap&&) = default;
+		GPUTrackerHeap& operator=(GPUTrackerHeap&&) = default;
 	private:
 		std::shared_ptr<Metal_Vulkan::IAsyncTracker> _tracker;
 
@@ -72,5 +76,41 @@ namespace RenderCore { namespace Techniques
 		};
 		std::vector<Page> _pages;
 	};
+
+	/// <summary>Maintains a small heap of descriptor sets with the same layout, each of which will be used for no more than one frame</summary>
+	/// Don't attempt to use the returned descriptor set after the current cmd list has been completed. There are no protections for this,
+	/// but the descriptor set may be rewritten
+	class SubFrameDescriptorSetHeap
+	{
+	public:
+		IDescriptorSet* Allocate();
+		const DescriptorSetSignature& GetSignature() const { return _signature; }
+		PipelineType GetPipelineType() const { return _pipelineType; }
+
+		SubFrameDescriptorSetHeap(
+			IDevice& device,
+			const DescriptorSetSignature& signature,
+			PipelineType pipelineType);
+		SubFrameDescriptorSetHeap();
+		~SubFrameDescriptorSetHeap();
+		SubFrameDescriptorSetHeap(SubFrameDescriptorSetHeap&&);
+		SubFrameDescriptorSetHeap& operator=(SubFrameDescriptorSetHeap&&);
+
+	private:
+		static constexpr unsigned s_poolPageSize = 8;
+		GPUTrackerHeap<s_poolPageSize> _trackerHeap;
+		std::vector<std::shared_ptr<IDescriptorSet>> _descriptorSetPool;
+
+		DescriptorSetSignature _signature;
+		PipelineType _pipelineType;
+		IDevice* _device = nullptr;
+	};
+
+	// Writes new values to a descriptor set, but uses cmd list bound storage for all "immediate" initializers
+	// This means that the descriptor set will only be valid for use with the current cmd list, and shouldn't be used on
+	// other command lists. But there's no explicit validation for this.
+	// Also note that updating descriptor sets happens immediately -- not synchronized with the commands in the cmd list
+	// Think of it as being like a ResourceMap
+	void WriteWithSubframeImmediates(IThreadContext&, IDescriptorSet&, const DescriptorSetInitializer&);
 }}
 

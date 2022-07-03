@@ -38,6 +38,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         LightWeightBuildDrawables.cpp
         ManualDrawables.cpp
         ConstructionContext.cpp
+        SubFrameUtil.cpp
         ../../Tools/ToolsRig/VisualisationGeo.cpp
         )
 

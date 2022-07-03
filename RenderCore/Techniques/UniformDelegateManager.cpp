@@ -10,7 +10,7 @@
 #include "Techniques.h"
 #include "CommonResources.h"
 #include "Services.h"
-#include "GPUTrackerHeap.h"
+#include "SubFrameUtil.h"
 #include "../BufferView.h"
 #include "../IDevice.h"
 #include "../Metal/InputLayout.h"
@@ -401,17 +401,12 @@ namespace RenderCore { namespace Techniques
 		_slotsQueried_ResourceViews = _slotsQueried_Samplers = _slotsQueried_ImmediateDatas = 0ull;
 	}
 
-	constexpr unsigned s_poolPageSize = 16;
 	class SemiConstantDescriptorSet
 	{
 	public:
+		IDescriptorSet* _currentDescriptorSet = nullptr;
 		RenderCore::Assets::PredefinedDescriptorSetLayout _descSetLayout;
-		DescriptorSetSignature _signature;
-
-		GPUTrackerHeap<s_poolPageSize> _trackerHeap;
-		std::vector<std::shared_ptr<IDescriptorSet>> _descriptorSetPool;
-		unsigned _currentDescriptorSet = ~0u;
-		PipelineType _pipelineType;
+		SubFrameDescriptorSetHeap _heap;
 
 		void RebuildDescriptorSet(
 			ParsingContext& parsingContext,
@@ -551,26 +546,14 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 
-		_currentDescriptorSet = _trackerHeap.GetNextFreeItem();
-		if (_currentDescriptorSet >= _descriptorSetPool.size()) {
-			// _trackerHeap allocated a new page -- we need to resize the pool of descriptor sets
-			auto initialSize = _descriptorSetPool.size();
-			auto newPageCount = 1+_currentDescriptorSet/s_poolPageSize;
-			_descriptorSetPool.resize(newPageCount*s_poolPageSize);
-			DescriptorSetInitializer creationInitializer;
-			creationInitializer._signature = &_signature;
-			creationInitializer._pipelineType = _pipelineType;
-			for (auto c=initialSize; c<_descriptorSetPool.size(); ++c)
-				_descriptorSetPool[c] = parsingContext.GetThreadContext().GetDevice()->CreateDescriptorSet(creationInitializer);
-		}
-
-		_descriptorSetPool[_currentDescriptorSet]->Write(initializer);
+		_currentDescriptorSet = _heap.Allocate();
+		_currentDescriptorSet->Write(initializer);
 	}
 
 	const IDescriptorSet* SemiConstantDescriptorSet::GetDescSet() const
 	{
-		assert(_currentDescriptorSet < _descriptorSetPool.size());
-		return _descriptorSetPool[_currentDescriptorSet].get();
+		assert(_currentDescriptorSet);
+		return _currentDescriptorSet;
 	}
 
 	SemiConstantDescriptorSet::SemiConstantDescriptorSet(
@@ -578,19 +561,9 @@ namespace RenderCore { namespace Techniques
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
 		PipelineType pipelineType,
 		CommonResourceBox& res)
-	: _trackerHeap(device)
-	, _descSetLayout(layout)
-	, _pipelineType(pipelineType)
-	{
-		_signature = layout.MakeDescriptorSetSignature(&res._samplerPool);
-
-		DescriptorSetInitializer initializer;
-		initializer._signature = &_signature;
-		initializer._pipelineType = _pipelineType;
-		_descriptorSetPool.reserve(s_poolPageSize);
-		for (unsigned c=0; c<s_poolPageSize; ++c)
-			_descriptorSetPool.push_back(device.CreateDescriptorSet(initializer));
-	}
+	: _descSetLayout(layout)
+	, _heap(device, layout.MakeDescriptorSetSignature(&res._samplerPool), pipelineType)
+	{}
 
 	SemiConstantDescriptorSet::~SemiConstantDescriptorSet() {}
 
