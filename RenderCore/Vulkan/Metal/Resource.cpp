@@ -1160,6 +1160,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			if (dst._leftTopFrontIsLinearBufferOffset) c.dstOffset += dst._leftTopFront._values[0];
             auto end = srcDesc._linearBufferDesc._sizeInBytes;
 			if (src._flags & CopyPartial_Src::Flags::EnableLinearBufferRange) {
+				assert(src._linearBufferRange.first < src._linearBufferRange.second);
 				c.srcOffset = src._linearBufferRange.first;
 				end = std::min(end, src._linearBufferRange.second);
 			}
@@ -1395,9 +1396,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				if (!subResData._pitches._rowPitch && !subResData._pitches._slicePitch && !subResData._pitches._arrayPitch)
 					subResData._pitches = defaultPitches;
 
-				auto dstSubresourceData = map.GetData({m, a});
                 CopyMipLevel(
-                    dstSubresourceData.begin(), dstSubresourceData.size(),
+                    PtrAdd(map.GetData().begin(), layout.offset), size_t(layout.size),		// assuming the map does not have multiple subresources here
                     TexturePitches{unsigned(layout.rowPitch), unsigned(layout.depthPitch), unsigned(layout.arrayPitch)},
                     mipDesc, subResData);
 			}

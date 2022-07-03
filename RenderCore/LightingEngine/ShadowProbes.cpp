@@ -15,6 +15,7 @@
 #include "../Techniques/Drawables.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedPipelineLayout.h"
+#include "../Metal/DeviceContext.h"
 #include "../IDevice.h"
 #include "../../Assets/Assets.h"
 #include "../../xleres/FileList.h"
@@ -139,9 +140,9 @@ namespace RenderCore { namespace LightingEngine
 		result.reserve(count);
 		for (unsigned c=0; c<count; ++c) {
 			const auto& p = probes[c/6];
-			float near = p._nearRadius;
-			float far = p._farRadius;
-			result.push_back(Techniques::BuildCubemapProjectionDesc(c%6, p._position, near, far));
+			float near_ = p._nearRadius;
+			float far_ = p._farRadius;
+			result.push_back(Techniques::BuildCubemapProjectionDesc(c%6, p._position, near_, far_));
 		}
 		return result;
 	}
@@ -256,8 +257,8 @@ namespace RenderCore { namespace LightingEngine
 		}
 		auto& device = *threadContext.GetDevice();
 		auto probeUniformsRes = device.CreateResource(
-			CreateDesc(BindFlag::UnorderedAccess, LinearBufferDesc::Create(sizeof(CB_StaticShadowProbeDesc)*probeUniforms.size(), sizeof(CB_StaticShadowProbeDesc)), "shadow-probe-list"),
-			SubResourceInitData{probeUniforms});
+			CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(CB_StaticShadowProbeDesc)*probeUniforms.size(), sizeof(CB_StaticShadowProbeDesc)), "shadow-probe-list"));
+		Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(*probeUniformsRes, MakeIteratorRange(probeUniforms));
 		_pimpl->_probeUniformsUAV = probeUniformsRes->CreateBufferView(BindFlag::UnorderedAccess);
 		return result;
 	}

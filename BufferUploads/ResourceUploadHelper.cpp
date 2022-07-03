@@ -42,7 +42,7 @@ namespace BufferUploads { namespace PlatformInterface
             auto blitEncoder = metalContext.BeginBlitEncoder();
             blitEncoder.Copy(
                 CopyPartial_Dest{*finalResource.GetContainingResource().get()},
-                CopyPartial_Src{stagingResource, stagingOffset, size});
+                CopyPartial_Src{stagingResource, stagingOffset, stagingOffset+size});
         } else {
             assert(destinationDesc._type == ResourceDesc::Type::LinearBuffer);
             assert(stagingSize <= destinationDesc._linearBufferDesc._sizeInBytes);
@@ -58,7 +58,7 @@ namespace BufferUploads { namespace PlatformInterface
             auto blitEncoder = metalContext.BeginBlitEncoder();
             blitEncoder.Copy(
                 CopyPartial_Dest{*finalResource.GetContainingResource().get(), dstOffset},
-                CopyPartial_Src{stagingResource, stagingOffset, stagingSize});
+                CopyPartial_Src{stagingResource, stagingOffset, stagingOffset+stagingSize});
         }
 
         auto finalContainingGuid = finalResource.GetContainingResource()->GetGUID();
@@ -213,7 +213,7 @@ namespace BufferUploads { namespace PlatformInterface
             assert((s._destination + s._sourceEnd - s._sourceStart) <= destination.GetDesc()._linearBufferDesc._sizeInBytes);
             blitEncoder.Copy(
                 CopyPartial_Dest{destination, s._destination},
-                CopyPartial_Src{source, s._sourceStart, s._sourceEnd-s._sourceStart});
+                CopyPartial_Src{source, s._sourceStart, s._sourceEnd});
         }
     }
 
