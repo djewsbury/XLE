@@ -215,12 +215,8 @@ namespace UnitTests
 
 					auto encoder = Metal::DeviceContext::Get(*threadContext)->BeginBlitEncoder();
 					encoder.Copy(
-						CopyPartial_Dest {
-							*stitchedImage, {}, UInt3{0,c*stripeHeight,0}
-						},
-						CopyPartial_Src {
-							*fbHelper.GetMainTarget(), {}, 1, 1, UInt3{0,0,0}, UInt3{2048,stripeHeight,1}
-						});
+						CopyPartial_Dest{ *stitchedImage, {}, UInt3{0,c*stripeHeight,0} },
+						CopyPartial_Src{ *fbHelper.GetMainTarget() }.PartialSubresource(UInt3{0,0,0}, UInt3{2048,stripeHeight,1}, MakeTexturePitches(stripeTargetDesc._textureDesc)));
 
 					lightScene.DestroyLightSource(lightId);
 				}

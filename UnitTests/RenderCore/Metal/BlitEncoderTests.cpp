@@ -119,7 +119,8 @@ namespace UnitTests
 				CopyPartial_Dest(*deviceResource),
 				SubResourceInitData{MakeIteratorRange(initData)},
 				desc._textureDesc._format,
-				{desc._textureDesc._width, desc._textureDesc._height, desc._textureDesc._depth});
+				{desc._textureDesc._width, desc._textureDesc._height, desc._textureDesc._depth},
+				MakeTexturePitches(desc._textureDesc));
 
 			// copy subrectangle deviceResource to a destaging texture
 			// first with a "partial" copy that is actually a full copy -- and then with a subcube
@@ -130,7 +131,7 @@ namespace UnitTests
 				unsigned srcRightBottomBack[] = {desc._textureDesc._width, desc._textureDesc._height, 1};
 				blitEncoder.Copy(
 					CopyPartial_Dest(*destaging, {}, destOffset),
-					CopyPartial_Src{*deviceResource, {}, 1, 1, srcLeftTopFront, srcRightBottomBack});
+					CopyPartial_Src{*deviceResource}.PartialSubresource(srcLeftTopFront, srcRightBottomBack, MakeTexturePitches(deviceResource->GetDesc()._textureDesc)));
 
 				auto readback = destaging->ReadBackSynchronized(*threadContext);
 				for (unsigned y=0; y<desc._textureDesc._height; ++y)
@@ -153,7 +154,7 @@ namespace UnitTests
 				unsigned srcRightBottomBack[] = {324, 493, 1};
 				blitEncoder.Copy(
 					CopyPartial_Dest(*destaging, {}, destOffset),
-					CopyPartial_Src{*deviceResource, {}, 1, 1, srcLeftTopFront, srcRightBottomBack});
+					CopyPartial_Src{*deviceResource}.PartialSubresource(srcLeftTopFront, srcRightBottomBack, MakeTexturePitches(deviceResource->GetDesc()._textureDesc)));
 
 				auto readback = destaging->ReadBackSynchronized(*threadContext);
 				for (unsigned y=0; y<desc._textureDesc._height; ++y)
@@ -210,7 +211,7 @@ namespace UnitTests
 				auto destaging = device.CreateResource(singleMipDesc);
 				blitEncoder.Copy(
 					CopyPartial_Dest{*destaging},
-					CopyPartial_Src{*deviceResource, {mipToGet, 0}});
+					CopyPartial_Src{*deviceResource}.SingleSubresource({mipToGet, 0}));
 
 				auto readback = destaging->ReadBackSynchronized(*threadContext);
 				auto srcInitDataOffset = GetSubResourceOffset(stagingDesc._textureDesc, mipToGet, 0);
@@ -232,7 +233,7 @@ namespace UnitTests
 				auto destaging = device.CreateResource(singleMipDesc);
 				blitEncoder.Copy(
 					CopyPartial_Dest{*destaging},
-					CopyPartial_Src{*deviceResource, {mipToGet, 0}});
+					CopyPartial_Src{*deviceResource}.SingleSubresource({mipToGet, 0}));
 
 				auto readback = destaging->ReadBackSynchronized(*threadContext);
 				auto srcInitDataOffset = GetSubResourceOffset(stagingDesc._textureDesc, mipToGet, 0);
@@ -251,14 +252,14 @@ namespace UnitTests
 				blitEncoder.Write(
 					CopyPartial_Dest(*deviceResource, {mipInDeviceResource, 0}),
 					SubResourceInitData{MakeIteratorRange(initData.begin(), initData.begin()+ByteCount(singleMipDesc))},
-					desc._textureDesc._format, {singleMipDesc._width, singleMipDesc._height, 1});
+					desc._textureDesc._format, {singleMipDesc._width, singleMipDesc._height, 1}, MakeTexturePitches(singleMipDesc));
 				
 				auto destaging = device.CreateResource(
 					AsStagingDesc(CreateDesc(0, CalculateMipMapDesc(desc._textureDesc, 1), "temp")));
 				unsigned mipInDestaging = 1;
 				blitEncoder.Copy(
-					CopyPartial_Dest(*destaging, {mipInDestaging, 0}),
-					CopyPartial_Src(*deviceResource, {mipInDeviceResource, 0}));
+					CopyPartial_Dest{*destaging, {mipInDestaging, 0}},
+					CopyPartial_Src{*deviceResource}.SingleSubresource({mipInDeviceResource, 0}));
 
 				auto readback = destaging->ReadBackSynchronized(*threadContext, {mipInDestaging, 0});
 				REQUIRE(readback.size() == ByteCount(singleMipDesc));
@@ -276,13 +277,13 @@ namespace UnitTests
 				blitEncoder.Write(
 					CopyPartial_Dest(*deviceResource, {mipInDeviceResource, 0}),
 					SubResourceInitData{MakeIteratorRange(initData.begin(), initData.begin()+ByteCount(singleMipDesc))},
-					desc._textureDesc._format, {singleMipDesc._width, singleMipDesc._height, 1});
+					desc._textureDesc._format, {singleMipDesc._width, singleMipDesc._height, 1}, MakeTexturePitches(singleMipDesc));
 				
 				auto destaging = device.CreateResource(
 					AsStagingDesc(CreateDesc(0, LinearBufferDesc{ByteCount(singleMipDesc)}, "temp")));
 				blitEncoder.Copy(
-					CopyPartial_Dest(*destaging),
-					CopyPartial_Src(*deviceResource, {mipInDeviceResource, 0}));
+					CopyPartial_Dest{*destaging},
+					CopyPartial_Src{*deviceResource}.SingleSubresource({mipInDeviceResource, 0}));
 
 				auto readback = destaging->ReadBackSynchronized(*threadContext);
 				REQUIRE(readback.size() == ByteCount(singleMipDesc));

@@ -34,8 +34,6 @@ namespace BufferUploads { namespace PlatformInterface
             auto destinationSize = ByteCount(destinationDesc);
             assert(destinationSize <= stagingSize);
             auto size = std::min(stagingSize, destinationSize);
-            auto lodLevelCount = destinationDesc._textureDesc._mipCount ? (unsigned)destinationDesc._textureDesc._mipCount : 1;
-			auto arrayLayerCount = ActualArrayLayerCount(destinationDesc._textureDesc);
 
             // During the transfer, the images must be in either TransferSrcOptimal, TransferDstOptimal or General.
             // assuming we don't have to CaptureForBind stagingResource, because it should be from a StagingPool, which
@@ -44,7 +42,7 @@ namespace BufferUploads { namespace PlatformInterface
             auto blitEncoder = metalContext.BeginBlitEncoder();
             blitEncoder.Copy(
                 CopyPartial_Dest{*finalResource.GetContainingResource().get()},
-                CopyPartial_Src{stagingResource, stagingOffset, size, lodLevelCount, arrayLayerCount});
+                CopyPartial_Src{stagingResource, stagingOffset, size});
         } else {
             assert(destinationDesc._type == ResourceDesc::Type::LinearBuffer);
             assert(stagingSize <= destinationDesc._linearBufferDesc._sizeInBytes);
@@ -147,6 +145,30 @@ namespace BufferUploads { namespace PlatformInterface
         return copyAmount;
     }
 
+#if 0
+        auto& metalContext = *Metal::DeviceContext::Get(*_renderCoreContext);
+
+        // When we have a box, we support writing to only a single subresource
+        // We will iterate through the subresources an mip a single one
+        auto dev = _renderCoreContext->GetDevice();
+        auto copiedBytes = 0u;
+        for (unsigned mip=0; mip<desc._textureDesc._mipCount; ++mip)
+            for (unsigned arrayLayer=0; arrayLayer<ActualArrayLayerCount(desc._textureDesc); ++arrayLayer) {
+                auto srd = data({mip, arrayLayer});
+                if (!srd._data.size()) continue;
+
+                SubResourceId sub{mip, arrayLayer};
+                Metal::ResourceMap map(metalContext, *metalResource, Metal::ResourceMap::Mode::WriteDiscardPrevious, sub);
+                copiedBytes += CopyMipLevel(
+                    map.GetData(sub).begin(), map.GetData(sub).size(), map.GetPitches(sub), 
+                    desc._textureDesc,
+                    box, srd);
+            }
+
+        return copiedBytes;
+    }
+#endif
+
     bool ResourceUploadHelper::CanDirectlyMap(RenderCore::IResource& resource)
     {
         return Metal::ResourceMap::CanMap(*_renderCoreContext->GetDevice(), resource, Metal::ResourceMap::Mode::WriteDiscardPrevious);
@@ -171,30 +193,6 @@ namespace BufferUploads { namespace PlatformInterface
 		}
 		return alignment;
     }
-
-#if 0
-        auto& metalContext = *Metal::DeviceContext::Get(*_renderCoreContext);
-
-        // When we have a box, we support writing to only a single subresource
-        // We will iterate through the subresources an mip a single one
-        auto dev = _renderCoreContext->GetDevice();
-        auto copiedBytes = 0u;
-        for (unsigned mip=0; mip<desc._textureDesc._mipCount; ++mip)
-            for (unsigned arrayLayer=0; arrayLayer<ActualArrayLayerCount(desc._textureDesc); ++arrayLayer) {
-                auto srd = data({mip, arrayLayer});
-                if (!srd._data.size()) continue;
-
-                SubResourceId sub{mip, arrayLayer};
-                Metal::ResourceMap map(metalContext, *metalResource, Metal::ResourceMap::Mode::WriteDiscardPrevious, sub);
-                copiedBytes += CopyMipLevel(
-                    map.GetData(sub).begin(), map.GetData(sub).size(), map.GetPitches(sub), 
-                    desc._textureDesc,
-                    box, srd);
-            }
-
-        return copiedBytes;
-    }
-#endif
 
     void ResourceUploadHelper::DeviceBasedCopy(
         RenderCore::IResource& destination,

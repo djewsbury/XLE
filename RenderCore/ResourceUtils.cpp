@@ -295,6 +295,11 @@ namespace RenderCore
 		return desc._arrayCount;
 	}
 
+    bool operator==(const TexturePitches& lhs, const TexturePitches& rhs)
+    {
+        return (lhs._rowPitch == rhs._rowPitch) && (lhs._slicePitch == rhs._slicePitch) && (lhs._arrayPitch == rhs._arrayPitch);
+    }
+
     static const char* AsString(TextureDesc::Dimensionality dims)
     {
         switch (dims) {

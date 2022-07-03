@@ -458,12 +458,10 @@ namespace UnitTests
 		using namespace RenderCore;
 		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 		if (destinationDesc._type == ResourceDesc::Type::Texture) {
-			auto lodLevelCount = destinationDesc._textureDesc._mipCount ? (unsigned)destinationDesc._textureDesc._mipCount : 1;
-			auto arrayLayerCount = ActualArrayLayerCount(destinationDesc._textureDesc);
 			auto blitEncoder = metalContext.BeginBlitEncoder();
 			blitEncoder.Copy(
 				CopyPartial_Dest{finalResource},
-				CopyPartial_Src{stagingResource, stagingResourceBegin, stagingResourceBegin+stagingResourceSize, lodLevelCount, arrayLayerCount});
+				CopyPartial_Src{stagingResource, stagingResourceBegin, stagingResourceBegin+stagingResourceSize});
 		} else {
 			assert(destinationDesc._type == ResourceDesc::Type::LinearBuffer);
 			assert(destinationDesc._linearBufferDesc._sizeInBytes <= stagingResource.GetDesc()._linearBufferDesc._sizeInBytes);

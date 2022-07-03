@@ -393,6 +393,8 @@ namespace RenderCore
         unsigned _rowPitch = 0u;
         unsigned _slicePitch = 0u;
         unsigned _arrayPitch = 0u;
+
+        friend bool operator==(const TexturePitches&, const TexturePitches&);
     };
 
 	class SubResourceInitData

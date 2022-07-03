@@ -33,6 +33,7 @@ namespace RenderCore
         IResource*          _resource;
         SubResourceId       _subResource;
         VectorPattern<unsigned, 3>      _leftTopFront;
+        bool                _leftTopFrontIsLinearBufferOffset = false;
 
         CopyPartial_Dest(
             IResource& destination,
@@ -43,35 +44,61 @@ namespace RenderCore
         CopyPartial_Dest(
             IResource& destination,
             unsigned bufferStart)
-        : _resource(&destination), _subResource(), _leftTopFront(bufferStart, 0, 0) {}
+        : _resource(&destination), _subResource(), _leftTopFront(bufferStart, 0, 0), _leftTopFrontIsLinearBufferOffset(true) {}
     };
 
     class CopyPartial_Src
     {
     public:
         IResource*                      _resource;
+        std::pair<unsigned, unsigned>   _linearBufferRange = { 0, 0 };
+
+        // Subresource range
         SubResourceId                   _subResource;
         unsigned                        _mipLevelCount = 1;
         unsigned                        _arrayLayerCount = 1;
+
+        // partial Subresource area
         VectorPattern<unsigned, 3>      _leftTopFront;
         VectorPattern<unsigned, 3>      _rightBottomBack;
+        TexturePitches                  _partialSubresourcePitches;     // only used we're transferring a partial subresource
 
-        CopyPartial_Src(
-            IResource& source,
-            SubResourceId subRes = {},
-            unsigned mipLeveCount = 1, unsigned arrayLayerCount = 1,
-            VectorPattern<unsigned, 3> leftTopFront = {0u,0u,0u},
-            VectorPattern<unsigned, 3> rightBottomBack = {~0u,~0u,~0u})
-        : _resource(&source), _subResource(subRes), _leftTopFront(leftTopFront), _rightBottomBack(rightBottomBack), _mipLevelCount(mipLeveCount), _arrayLayerCount(arrayLayerCount) {}
+        enum Flags { EnableSubresourceRange = 1<<0, EnablePartialSubresourceArea = 1<<1, EnableLinearBufferRange = 1<<2 };
+        unsigned _flags = 0;
 
-        // Note that there's no way to copy from a buffer to a subcube within a texture
-        // using this interface -- because rightBottomBack is only in CopyPartial_Src, and that's
-        // considered a linear begin/end. However we can copy a subcube in the opposite direction
-        CopyPartial_Src(
-            IResource& source,
-            unsigned bufferStart, unsigned bufferEnd = ~0u,
-            unsigned mipLeveCount = 1, unsigned arrayLayerCount = 1)
-        : _resource(&source), _subResource(), _leftTopFront(bufferStart, 0, 0), _rightBottomBack(bufferStart+bufferEnd, ~0u, ~0u), _mipLevelCount(mipLeveCount), _arrayLayerCount(arrayLayerCount) {}
+        CopyPartial_Src(IResource& source) : _resource(&source), _flags(0) {}
+        CopyPartial_Src(IResource& source, unsigned bufferStart, unsigned bufferEnd = ~0u)
+        : _resource(&source), _linearBufferRange(bufferStart, bufferEnd), _flags(Flags::EnableLinearBufferRange) {}
+
+        CopyPartial_Src& SubresourceRange(SubResourceId firstSubresource, unsigned mipLevelCount, unsigned arrayLayerCount)
+        {
+            _subResource = firstSubresource;
+            _mipLevelCount = mipLevelCount;
+            _arrayLayerCount = arrayLayerCount;
+            _flags |= Flags::EnableSubresourceRange;
+            return *this;
+        }
+
+        CopyPartial_Src& SingleSubresource(SubResourceId subresource)
+        {
+            _subResource = subresource;
+            _mipLevelCount = 1;
+            _arrayLayerCount = 1;
+            _flags |= Flags::EnableSubresourceRange;
+            return *this;
+        }
+
+        CopyPartial_Src& PartialSubresource(
+            VectorPattern<unsigned, 3> leftTopFront,
+            VectorPattern<unsigned, 3> rightBottomBack,
+            TexturePitches pitches)
+        {
+            _leftTopFront = leftTopFront;
+            _rightBottomBack = rightBottomBack;
+            _partialSubresourcePitches = pitches;
+            _flags |= Flags::EnablePartialSubresourceArea;
+            return *this;
+        }
     };
 
     class Box2D

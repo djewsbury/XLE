@@ -456,7 +456,7 @@ namespace UnitTests
 			auto blitPass = metalContext.BeginBlitEncoder();
 			blitPass.Copy(
 				CopyPartial_Dest { *fbHelper1.GetMainTarget() },
-				CopyPartial_Src { *fbHelper0.GetMainTarget(), {}, 1, 1, {0,0,0}, {64, 64, 1} });
+				CopyPartial_Src {*fbHelper0.GetMainTarget()}.PartialSubresource({0,0,0}, {64, 64, 1}, MakeTexturePitches(targetDesc0._textureDesc)));
 		}
 
 		// The data in fpHelper1 is should now be the same as what we got through the

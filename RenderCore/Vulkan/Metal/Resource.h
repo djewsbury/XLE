@@ -210,7 +210,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			const CopyPartial_Dest& dst,
 			const SubResourceInitData& srcData,
 			Format srcDataFormat,
-			VectorPattern<unsigned, 3> srcDataDimensions);
+			VectorPattern<unsigned, 3> srcDataDimensions,
+			TexturePitches srcDataPitches);
 
 		void    Copy(
 			const CopyPartial_Dest& dst,

@@ -687,13 +687,15 @@ namespace RenderOverlays
 		auto* res = _resource.get();
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(threadContext), {&res, &res+1});
 		auto blitEncoder = metalContext.BeginBlitEncoder();
+		TexturePitches pitches { (destBox._right - destBox._left) * BitsPerPixel(_format) / 8, (destBox._right - destBox._left) * (destBox._bottom - destBox._top) * BitsPerPixel(_format) / 8, (destBox._right - destBox._left) * (destBox._bottom - destBox._top) * BitsPerPixel(_format) / 8 };
 		blitEncoder.Write(
 			CopyPartial_Dest {
 				*_resource, {}, VectorPattern<unsigned, 3>{ unsigned(destBox._left), unsigned(destBox._top), 0u }
 			},
 			SubResourceInitData { data },
 			_format,
-			VectorPattern<unsigned, 3>{ unsigned(destBox._right - destBox._left), unsigned(destBox._bottom - destBox._top), 1u });
+			VectorPattern<unsigned, 3>{ unsigned(destBox._right - destBox._left), unsigned(destBox._bottom - destBox._top), 1u },
+			pitches);
 	}
 
 	static std::vector<uint8_t> GlyphAsDataPacket(
@@ -976,11 +978,11 @@ namespace RenderOverlays
 					CopyPartial_Dest {
 						*res, {}, VectorPattern<unsigned, 3>{ (unsigned)dstRectangle._topLeft[0], (unsigned)dstRectangle._topLeft[1], 0u }
 					},
-					CopyPartial_Src {
-						*res, {}, 1, 1,
+					CopyPartial_Src { *res }.PartialSubresource(
 						VectorPattern<unsigned, 3>{ (unsigned)srcRectangle._topLeft[0], (unsigned)srcRectangle._topLeft[1], 0u },
-						VectorPattern<unsigned, 3>{ (unsigned)srcRectangle._bottomRight[0], (unsigned)srcRectangle._bottomRight[1], 1u }
-					});
+						VectorPattern<unsigned, 3>{ (unsigned)srcRectangle._bottomRight[0], (unsigned)srcRectangle._bottomRight[1], 1u },
+						MakeTexturePitches(res->GetDesc()._textureDesc)
+					));
 			}
 		}
 
