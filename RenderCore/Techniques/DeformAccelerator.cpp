@@ -255,7 +255,7 @@ namespace RenderCore { namespace Techniques
 				assert(cpuVBV._resource);
 			}
 			if (reservationBytes[AllocationType::AllocationType_GPUVB]) {
-				gpuBufferAndRange = attachedStorage.AllocateRange(reservationBytes[AllocationType::AllocationType_GPUVB], BindFlag::VertexBuffer|BindFlag::UnorderedAccess, defaultPageSize);
+				gpuBufferAndRange = attachedStorage.AllocateDeviceOnlyRange(reservationBytes[AllocationType::AllocationType_GPUVB], BindFlag::VertexBuffer|BindFlag::UnorderedAccess, defaultPageSize);
 				gpuVBV = gpuBufferAndRange.AsVertexBufferView();
 				assert(gpuVBV._resource);
 			}

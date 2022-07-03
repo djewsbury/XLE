@@ -246,6 +246,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (type & BindFlag::VertexBuffer) return 1024 * 1024;
 		if (type & BindFlag::IndexBuffer) return 256 * 1024;
 		if (type & BindFlag::ShaderResource) return 256 * 1024;
+		if (type & BindFlag::TransferSrc) return 2 * 1024 * 1024;
 		return 256 * 1024;
 	}
 
@@ -289,7 +290,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			newPageAndAllocation.first->_resource, newPageAndAllocation.second, byteCount, newPageAndAllocation.first->_pageId };
 	}
 
-	BufferAndRange CmdListAttachedStorage::AllocateRange(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize)
+	BufferAndRange CmdListAttachedStorage::AllocateDeviceOnlyRange(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize)
 	{
 		assert(byteCount != 0);
 		for (auto page=_reservedPages.rbegin(); page!=_reservedPages.rend(); ++page) {
@@ -458,6 +459,12 @@ namespace RenderCore { namespace Metal_Vulkan
 			GetObjectFactory(),
 			_resource,
 			(unsigned)_beginAndEndInResource.first, (unsigned)(_beginAndEndInResource.second-_beginAndEndInResource.first));
+	}
+
+	CopyPartial_Src TemporaryStorageResourceMap::AsCopySource()
+	{
+		// assuming linear buffer
+		return CopyPartial_Src { *_resource, (unsigned)_beginAndEndInResource.first, (unsigned)_beginAndEndInResource.second };
 	}
 
 	TemporaryStorageResourceMap::TemporaryStorageResourceMap(

@@ -323,63 +323,35 @@ namespace RenderCore { namespace Metal_Vulkan
         return *this;
     }
 
-    static std::shared_ptr<Resource> CreateDummyTexture(ObjectFactory& factory)
-    {
-        auto desc = CreateDesc(
-            BindFlag::ShaderResource,
-            0, TextureDesc::Plain2D(32, 32, Format::R8G8B8A8_UNORM), "DummyTexture");
-        uint32 dummyData[32*32];
-        std::memset(dummyData, 0, sizeof(dummyData));
-        return Internal::CreateResource(
-            factory, desc, 
-            [&dummyData](SubResourceId)
-            {
-                return SubResourceInitData{MakeIteratorRange(dummyData), TexturePitches{32*4, 32*32*4}};
-            });
-    }
-
-    static std::shared_ptr<Resource> CreateDummyUAVImage(ObjectFactory& factory)
-    {
-        auto desc = CreateDesc(
-            BindFlag::UnorderedAccess, 
-            0, TextureDesc::Plain2D(32, 32, Format::R8G8B8A8_UNORM), "DummyUAVTexture");
-        return Internal::CreateResource(factory, desc);
-    }
-
-    static std::shared_ptr<Resource> CreateDummyUAVBuffer(ObjectFactory& factory)
-    {
-        auto desc = CreateDesc(
-            BindFlag::UnorderedAccess, 
-            0, LinearBufferDesc::Create(256, 256), "DummyBuffer");
-        return Internal::CreateResource(factory, desc);
-    }
-
 	void DummyResources::CompleteInitialization(DeviceContext& devContext)
 	{
-        // todo -- transfer the dummy buffer && dummyTexture data via a staging resource here!
 		IResource* res[] = { _blankTexture.get(), _blankUAVImageRes.get(), _blankUAVBufferRes.get() }; 
 		Metal_Vulkan::CompleteInitialization(devContext, MakeIteratorRange(res));
+
+        // _blankTexture -> 32*32*4 bytes of 0
+        // _blankUAVImageRes -> 32*32*4 bytes of 0
+        // _blankUAVBufferRes -> 4096 bytes of 0
+        // _blankBuffer -> 4096 bytes of 0
+
+        auto stagingSource = devContext.MapTemporaryStorage(4096, BindFlag::TransferSrc);
+        std::memset(stagingSource.GetData().begin(), 0, stagingSource.GetData().size());
+        auto encoder = devContext.BeginBlitEncoder();
+        encoder.Copy(CopyPartial_Dest{*_blankTexture}, stagingSource.AsCopySource());
+        encoder.Copy(CopyPartial_Dest{*_blankUAVImageRes}, stagingSource.AsCopySource());
+        encoder.Copy(CopyPartial_Dest{*_blankUAVBufferRes}, stagingSource.AsCopySource());
+        encoder.Copy(CopyPartial_Dest{*_blankBuffer}, stagingSource.AsCopySource());
 	}
 
     DummyResources::DummyResources(ObjectFactory& factory)
-    : _blankTexture(CreateDummyTexture(factory))
-    , _blankUAVImageRes(CreateDummyUAVImage(factory))
-    , _blankUAVBufferRes(CreateDummyUAVBuffer(factory))
-    , _blankSrv(factory, _blankTexture)
-    , _blankUavImage(factory, _blankUAVImageRes)
-    , _blankUavBuffer(factory, _blankUAVBufferRes)
-    , _blankSampler(std::make_unique<SamplerState>(factory, SamplerDesc{FilterMode::Point, AddressMode::Clamp, AddressMode::Clamp}))
+    : _blankSampler(std::make_unique<SamplerState>(factory, SamplerDesc{FilterMode::Point, AddressMode::Clamp, AddressMode::Clamp}))
     {
-        uint8 blankData[4096];
-        std::memset(blankData, 0, sizeof(blankData));
-		auto initData = MakeIteratorRange(blankData);
-        _blankBuffer = Internal::CreateResource(
-            factory, 
-            CreateDesc(BindFlag::ConstantBuffer, 0, LinearBufferDesc::Create(sizeof(blankData)), "DummyBuffer"),
-			[initData](SubResourceId subResId) -> SubResourceInitData {
-                assert(subResId._mip == 0 && subResId._arrayLayer == 0);
-            	return SubResourceInitData{initData};
-			});
+        _blankTexture = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8G8B8A8_UNORM), "DummyTexture"));
+        _blankUAVImageRes = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8G8B8A8_UNORM), "DummyUAVTexture"));
+        _blankUAVBufferRes = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc::Create(4096), "DummyUAVBuffer"));
+        _blankBuffer = Internal::CreateResource(factory, CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(4096), "DummyUniformBuffer"));
+        _blankSrv = ResourceView{factory, _blankTexture};
+        _blankUavImage = ResourceView{factory, _blankUAVImageRes};
+        _blankUavBuffer = ResourceView{factory, _blankUAVBufferRes};
     }
 
     DummyResources::DummyResources() {}

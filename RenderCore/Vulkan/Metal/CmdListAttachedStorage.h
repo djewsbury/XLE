@@ -47,6 +47,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		IndexBufferView AsIndexBufferView(Format indexFormat);
 		ConstantBufferView AsConstantBufferView();
 		std::shared_ptr<IResourceView> AsResourceView();
+		CopyPartial_Src AsCopySource();
 
 		TemporaryStorageResourceMap(TemporaryStorageResourceMap&&);
 		TemporaryStorageResourceMap& operator=(TemporaryStorageResourceMap&&);
@@ -105,9 +106,9 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 	public:
 		TemporaryStorageResourceMap	MapStorage(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize = 0);
-		BufferAndRange AllocateRange(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize = 0);
-
 		TemporaryStorageResourceMap	MapStorageFromNamedPage(size_t byteCount, NamedPage namedPage);
+		
+		BufferAndRange AllocateDeviceOnlyRange(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize = 0);
 
 		void OnSubmitToQueue(unsigned trackerMarker);		// IAsyncTracker::Marker
 		void AbandonAllocations();

@@ -21,6 +21,8 @@
 
 // #define TRACK_RESOURCE_GUIDS
 
+#pragma clang diagnostic ignored "-Wswitch"		// warning: case value not in enumerated type 'BindFlag::Enum'
+
 namespace RenderCore { namespace Metal_Vulkan
 {
 	static uint64_t s_nextResourceGUID = 1;
@@ -1129,7 +1131,7 @@ namespace RenderCore { namespace Metal_Vulkan
             c.dstOffset = dst._leftTopFront._values[0];
             auto end = std::min(src._rightBottomBack._values[0], srcDesc._linearBufferDesc._sizeInBytes);
             c.size = end - src._leftTopFront._values[0];
-			assert(c.size <= dstDesc._linearBufferDesc._sizeInBytes);
+			c.size = std::min(c.size, (VkDeviceSize)dstDesc._linearBufferDesc._sizeInBytes);
             context.GetActiveCommandList().CopyBuffer(
                 srcResource->GetBuffer(),
                 dstResource->GetBuffer(),

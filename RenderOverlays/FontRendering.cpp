@@ -261,9 +261,6 @@ namespace RenderOverlays
 		}
 
 		auto* res = textureMan.GetFontTexture().GetUnderlying().get();
-		/*Metal::CompleteInitialization(
-			*Metal::DeviceContext::Get(threadContext),
-			{&res, &res+1});*/
 			
 		auto texDims = textureMan.GetTextureDimensions();
 		auto estimatedQuadCount = text.size();
@@ -473,10 +470,7 @@ namespace RenderOverlays
 		float xAtLineStart = x, yAtLineStart = y;
 
 		auto* res = textureMan.GetFontTexture().GetUnderlying().get();
-		/*Metal::CompleteInitialization(
-			*Metal::DeviceContext::Get(threadContext),
-			{&res, &res+1});*/
-			
+
 		auto texDims = textureMan.GetTextureDimensions();
 		auto estimatedQuadCount = text.size();		// note -- shadow & outline will throw this off
 		WorkingVertexSetPCT workingVertices;
