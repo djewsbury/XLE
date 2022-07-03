@@ -1158,6 +1158,8 @@ namespace RenderCore { namespace Metal_Vulkan
             c.srcOffset = 0;
             c.dstOffset = 0;
 			if (dst._leftTopFrontIsLinearBufferOffset) c.dstOffset += dst._leftTopFront._values[0];
+			else assert(dst._leftTopFront._values[0] == 0 && dst._leftTopFront._values[1] == 0 && dst._leftTopFront._values[2] == 0);
+			assert(srcDesc._type == ResourceDesc::Type::LinearBuffer);
             auto end = srcDesc._linearBufferDesc._sizeInBytes;
 			if (src._flags & CopyPartial_Src::Flags::EnableLinearBufferRange) {
 				assert(src._linearBufferRange.first < src._linearBufferRange.second);
@@ -1165,6 +1167,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				end = std::min(end, src._linearBufferRange.second);
 			}
 			c.size = end - c.srcOffset;
+			assert(dstDesc._type == ResourceDesc::Type::LinearBuffer);
 			c.size = std::min(c.size, (VkDeviceSize)dstDesc._linearBufferDesc._sizeInBytes - c.dstOffset);
             context.GetActiveCommandList().CopyBuffer(
                 srcResource->GetBuffer(),
