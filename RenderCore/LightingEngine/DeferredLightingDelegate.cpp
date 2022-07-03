@@ -489,6 +489,7 @@ namespace RenderCore { namespace LightingEngine
 					lightingTechnique->CreateDynamicSequence(
 						[captures](LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence) {
 							captures->DoShadowPrepare(iterator, sequence);
+							captures->_lightResolveOperators->_stencilingGeometry.CompleteInitialization(*iterator._threadContext);
 						});
 
 					auto& mainSequence = lightingTechnique->CreateSequence();
@@ -611,7 +612,7 @@ namespace RenderCore { namespace LightingEngine
 		ImmediateDataStream immData { parsingContext.GetProjectionDesc()};
 		UniformsStream us;
 		us._resourceViews = MakeIteratorRange(srvs);
-		IDescriptorSet* shadowDescSets[] = { preparedShadowResult.GetDescriptorSet().get() };
+		IDescriptorSet* shadowDescSets[] = { preparedShadowResult.GetDescriptorSet() };
 
 		ParameterBox selectors;
 		Internal::MakeShadowResolveParam(shadowOpDesc).WriteShaderSelectors(selectors);

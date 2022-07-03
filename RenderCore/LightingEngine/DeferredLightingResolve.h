@@ -29,8 +29,13 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IResource> _lowDetailHemiSphereIB;
 		unsigned _lowDetailHemiSphereIndexCount;
 
+		void CompleteInitialization(IThreadContext&);
 		LightStencilingGeometry(IDevice& device);
 		LightStencilingGeometry() = default;
+	private:
+		std::vector<uint8_t> _pendingGeoInitBuffer;
+		std::vector<Float3> _pendingLowDetailHemisphereVB;
+		std::vector<uint16_t> _pendingLowDetailHemisphereIB;
 	};
 
 	namespace Internal { class ILightBase; }

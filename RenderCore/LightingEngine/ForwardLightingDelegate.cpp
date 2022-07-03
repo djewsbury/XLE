@@ -95,7 +95,7 @@ namespace RenderCore { namespace LightingEngine
 		if (_preparedDominantShadow) {
 			// find the prepared shadow associated with the dominant light (if it exists) and make sure it's descriptor set is accessible
 			assert(!parsingContext._extraSequencerDescriptorSet.second);
-			parsingContext._extraSequencerDescriptorSet = {s_shadowTemplate, _preparedDominantShadow->GetDescriptorSet().get()};
+			parsingContext._extraSequencerDescriptorSet = { s_shadowTemplate, _preparedDominantShadow->GetDescriptorSet() };
 		}
 	}
 

@@ -75,7 +75,7 @@ namespace RenderCore { namespace LightingEngine
 	class IPreparedShadowResult
 	{
 	public:
-		virtual const std::shared_ptr<IDescriptorSet>& GetDescriptorSet() const = 0;
+		virtual IDescriptorSet* GetDescriptorSet() const = 0;
 		virtual ~IPreparedShadowResult();
 	};
 

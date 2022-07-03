@@ -13,6 +13,7 @@
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/CommonResources.h"
+#include "../Techniques/SubFrameUtil.h"
 #include "../Techniques/Services.h"
 #include "../Metal/DeviceContext.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
@@ -26,8 +27,8 @@ namespace RenderCore { namespace LightingEngine
 	class PreparedShadowResult : public IPreparedShadowResult
 	{
 	public:
-		std::shared_ptr<IDescriptorSet> _descriptorSet;
-		virtual const std::shared_ptr<IDescriptorSet>& GetDescriptorSet() const override { return _descriptorSet; }
+		IDescriptorSet* _descriptorSet;
+		virtual IDescriptorSet* GetDescriptorSet() const override { return _descriptorSet; }
 		virtual ~PreparedShadowResult() {}
 	};
 
@@ -71,8 +72,9 @@ namespace RenderCore { namespace LightingEngine
 
 		Internal::PreparedDMShadowFrustum _workingDMFrustum;
 
-		DescriptorSetSignature _descSetSig;
+		Techniques::SubFrameDescriptorSetHeap _descSetHeap;
 		std::vector<DescriptorSetInitializer::BindTypeAndIdx> _descSetSlotBindings;
+		bool _descSetGood = false;
 		float _shadowTextureSize = 0.f;
 		unsigned _maxFrustumCount = 0;
 
@@ -181,9 +183,10 @@ namespace RenderCore { namespace LightingEngine
 		PipelineType descSetPipelineType,
 		IPreparedShadowResult& res)
 	{
-		auto& device = *threadContext.GetDevice();
+		assert(_descSetGood);
+
 		DescriptorSetInitializer descSetInit;
-		descSetInit._signature = &_descSetSig;
+		descSetInit._signature = &_descSetHeap.GetSignature();
 		descSetInit._slotBindings = _descSetSlotBindings;
 		const IResourceView* srvs[] = { rpi.GetDepthStencilAttachmentSRV({}).get() };
 		IteratorRange<const void*> immediateData[3];
@@ -199,8 +202,12 @@ namespace RenderCore { namespace LightingEngine
 		descSetInit._bindItems._resourceViews = MakeIteratorRange(srvs);
 		descSetInit._bindItems._immediateData = MakeIteratorRange(immediateData);
 		descSetInit._pipelineType = descSetPipelineType;
-		auto descSet = device.CreateDescriptorSet(descSetInit);
-		checked_cast<PreparedShadowResult*>(&res)->_descriptorSet = std::move(descSet);
+
+		// We can only use this descriptor set during this frame -- but there's no protections for this, we're on our own
+		auto* descSet = _descSetHeap.Allocate();
+		assert(descSet);
+		Techniques::WriteWithSubframeImmediates(threadContext, *descSet, descSetInit);
+		checked_cast<PreparedShadowResult*>(&res)->_descriptorSet = descSet;
 
 		parsingContext.GetProjectionDesc() = _savedProjectionDesc;
 	}
@@ -297,7 +304,10 @@ namespace RenderCore { namespace LightingEngine
 
 		if (descSetLayout) {
 			auto& commonResources = *Techniques::Services::GetCommonResources();
-			_descSetSig = descSetLayout->MakeDescriptorSetSignature(&commonResources._samplerPool);
+			_descSetHeap = Techniques::SubFrameDescriptorSetHeap {
+				*pipelineAccelerators->GetDevice(),
+				descSetLayout->MakeDescriptorSetSignature(&commonResources._samplerPool),
+				PipelineType::Graphics};
 			_descSetSlotBindings.reserve(descSetLayout->_slots.size());
 			for (const auto& s:descSetLayout->_slots) {
 				if (s._name == "DMShadow") {
@@ -311,6 +321,7 @@ namespace RenderCore { namespace LightingEngine
 				} else 
 					_descSetSlotBindings.push_back({});
 			}
+			_descSetGood = true;
 		}
 
 		_shadowTextureSize = (float)std::min(desc._width, desc._height);

@@ -44,6 +44,7 @@ namespace RenderCore { namespace Metal_Vulkan
         Internal::ImageLayout dstLayout, Internal::ImageLayout srcLayout);
 
 	static void Copy(DeviceContext& context, Resource& dst, Resource& src, Internal::ImageLayout dstLayout, Internal::ImageLayout srcLayout);
+	static bool ResourceMapViable(Resource& res, ResourceMap::Mode mode);
 
 	static VkBufferUsageFlags AsBufferUsageFlags(BindFlag::BitField bindFlags)
 	{
@@ -466,10 +467,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		return result;
 	}
 
-	static std::pair<VulkanUniquePtr<VkDeviceMemory>, unsigned> AttachDedicatedMemory(ObjectFactory& factory, const ResourceDesc& desc, const VkMemoryRequirements& mem_reqs, VkBuffer underlyingBuffer, bool hasInitData)
+	static std::pair<VulkanUniquePtr<VkDeviceMemory>, unsigned> AttachDedicatedMemory(ObjectFactory& factory, const ResourceDesc& desc, const VkMemoryRequirements& mem_reqs, VkBuffer underlyingBuffer)
 	{
 		auto memoryRequirements = AsMemoryPropertyFlags(desc._allocationRules);
-		if (hasInitData) memoryRequirements |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 		auto result = AllocateDeviceMemory(factory, mem_reqs, memoryRequirements);
 		auto res = vkBindBufferMemory(factory.GetDevice().get(), underlyingBuffer, result.first.get(), 0);
 		if (res != VK_SUCCESS)
@@ -477,10 +477,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		return result;
 	}
 
-	static std::pair<VulkanUniquePtr<VkDeviceMemory>, unsigned> AttachDedicatedMemory(ObjectFactory& factory, const ResourceDesc& desc, const VkMemoryRequirements& mem_reqs, VkImage underlyingImage, bool hasInitData)
+	static std::pair<VulkanUniquePtr<VkDeviceMemory>, unsigned> AttachDedicatedMemory(ObjectFactory& factory, const ResourceDesc& desc, const VkMemoryRequirements& mem_reqs, VkImage underlyingImage)
 	{
 		auto memoryRequirements = AsMemoryPropertyFlags(desc._allocationRules);
-		if (hasInitData) memoryRequirements |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 		auto result = AllocateDeviceMemory(factory, mem_reqs, memoryRequirements);
 		auto res = vkBindImageMemory(factory.GetDevice().get(), underlyingImage, result.first.get(), 0);
 		if (res != VK_SUCCESS)
@@ -498,8 +497,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		// These correspond to the 2 types of Desc
 		// We need to create the buffer/image first, so we can called vkGetXXXMemoryRequirements
 		const bool hasInitData = !!initData;
-		auto allocationRules = desc._allocationRules;
-		if (hasInitData) allocationRules |= AllocationRules::HostVisibleSequentialWrite;
 
 		_steadyStateLayout = Internal::ImageLayout::Undefined;
 		_steadyStateAccessMask = 0;
@@ -519,11 +516,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;   // sharing between queues
 			buf_info.flags = 0;     // flags for sparse buffers
 
-			if (hasInitData) buf_info.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
 			assert(buf_info.usage != 0);
 			if (!allocateDirectFromVulkan) {
-				_underlyingBuffer = factory.CreateBufferWithAutoMemory(_vmaMem, allocationInfo, buf_info, allocationRules);
+				_underlyingBuffer = factory.CreateBufferWithAutoMemory(_vmaMem, allocationInfo, buf_info, desc._allocationRules);
 			} else {
 				_underlyingBuffer = factory.CreateBuffer(buf_info);
 				vkGetBufferMemoryRequirements(factory.GetDevice().get(), _underlyingBuffer.get(), &mem_reqs);
@@ -569,13 +564,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			// set in the input desc (and also if we have initData provided)
 			// Tiling can only be OPTIMAL or LINEAR, 
 			// and initialLayout can only be UNDEFINED or PREINITIALIZED at this stage
-			bool requireHostVisibility = !!(allocationRules & (AllocationRules::HostVisibleRandomAccess|AllocationRules::HostVisibleSequentialWrite));
+			bool requireHostVisibility = !!(desc._allocationRules & (AllocationRules::HostVisibleRandomAccess|AllocationRules::HostVisibleSequentialWrite));
 			image_create_info.tiling = requireHostVisibility ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
 			image_create_info.initialLayout = hasInitData ? VK_IMAGE_LAYOUT_PREINITIALIZED : VK_IMAGE_LAYOUT_UNDEFINED;
 			image_create_info.usage = AsImageUsageFlags(desc._bindFlags);
-
-			if (hasInitData)
-				image_create_info.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
 			// minor validations
             if (image_create_info.tiling == VK_IMAGE_TILING_OPTIMAL && (image_create_info.usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) {
@@ -624,14 +616,14 @@ namespace RenderCore { namespace Metal_Vulkan
 			    buf_info.flags = 0;
 
                 if (!allocateDirectFromVulkan) {
-					_underlyingBuffer = factory.CreateBufferWithAutoMemory(_vmaMem, allocationInfo, buf_info, allocationRules);
+					_underlyingBuffer = factory.CreateBufferWithAutoMemory(_vmaMem, allocationInfo, buf_info, desc._allocationRules);
 				} else {
 					_underlyingBuffer = factory.CreateBuffer(buf_info);
     				vkGetBufferMemoryRequirements(factory.GetDevice().get(), _underlyingBuffer.get(), &mem_reqs);
 				}
             } else {
 				if (!allocateDirectFromVulkan) {
-					_underlyingImage = factory.CreateImageWithAutoMemory(_vmaMem, allocationInfo, image_create_info, allocationRules, _guid);
+					_underlyingImage = factory.CreateImageWithAutoMemory(_vmaMem, allocationInfo, image_create_info, desc._allocationRules, _guid);
 				} else {
 					_underlyingImage = factory.CreateImage(image_create_info, _guid);
 					vkGetImageMemoryRequirements(factory.GetDevice().get(), _underlyingImage.get(), &mem_reqs);
@@ -639,15 +631,6 @@ namespace RenderCore { namespace Metal_Vulkan
             }
 
 			ConfigureDefaultSteadyState(desc._bindFlags);
-
-			// queue transition into our steady-state
-			_pendingInitialization = [](Internal::ResourceInitializationHelper& helper, Resource& res) {
-					/*helper.SetImageLayout(
-						res,
-						Internal::ImageLayout::Undefined, 0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-						res._steadyStateLayout, res._steadyStateAccessMask, res._steadyStateAssociatedStageMask);*/
-					helper.MakeResourceVisible(res.GetGUID());
-				};
 
 			#if defined(TRACK_RESOURCE_GUIDS)
 				AssociateResourceGUID(_guid, desc._name);
@@ -658,25 +641,43 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		if (allocateDirectFromVulkan) {
 			if (_underlyingBuffer) {
-				auto p = AttachDedicatedMemory(factory, desc, mem_reqs, _underlyingBuffer.get(), hasInitData);
+				auto p = AttachDedicatedMemory(factory, desc, mem_reqs, _underlyingBuffer.get());
 				_mem = std::move(p.first);
 				_memoryType = p.second;
 			} else {
 				assert(_underlyingImage);
-				auto p = AttachDedicatedMemory(factory, desc, mem_reqs, _underlyingImage.get(), hasInitData);
+				auto p = AttachDedicatedMemory(factory, desc, mem_reqs, _underlyingImage.get());
 				_mem = std::move(p.first);
 				_memoryType = p.second;
 			}
 		} else {
-			if (allocationRules & AllocationRules::PermanentlyMapped && allocationInfo.pMappedData)
+			if (desc._allocationRules & AllocationRules::PermanentlyMapped && allocationInfo.pMappedData)
 				_permanentlyMappedRange = MakeIteratorRange(allocationInfo.pMappedData, PtrAdd(allocationInfo.pMappedData, allocationInfo.size));
 			_memoryType = allocationInfo.memoryType;
 		}
 
-		// Upload the init data now. Generally this isn't an ideal path, prefer to use more explicit synchronization
+		// Setup init data / initialization
 		if (hasInitData) {
-			_desc._allocationRules |= AllocationRules::HostVisibleSequentialWrite;		// we effectively added on this flag in order to support this init data upload
-			WriteInitDataViaMap(factory, _desc, *this, initData);
+
+			if (ResourceMapViable(*this, ResourceMap::Mode::WriteDiscardPrevious)) {
+				WriteInitDataViaMap(factory, _desc, *this, initData);
+			} else {
+				Throw(std::runtime_error("You must explicitly use a \"host visible\" allocation rule on resources that have init data"));
+			}
+
+		} else {
+
+			if (desc._type == Desc::Type::Texture) {
+				// queue transition into our steady-state
+				_pendingInitialization = [](Internal::ResourceInitializationHelper& helper, Resource& res) {
+						/*helper.SetImageLayout(
+							res,
+							Internal::ImageLayout::Undefined, 0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+							res._steadyStateLayout, res._steadyStateAccessMask, res._steadyStateAssociatedStageMask);*/
+						helper.MakeResourceVisible(res.GetGUID());
+					};
+			}
+
 		}
 	}
 
@@ -1878,17 +1879,17 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(dst._resource);
 		auto desc = dst._resource->GetDesc();
         if (desc._type != ResourceDesc::Type::Texture)
-            Throw(std::runtime_error("Non-texture resource type used with WriteSynchronized operation"));
+            Throw(std::runtime_error("Non-texture resource type used with texture form of BlitEncoder::Write operation"));
 
 		if (dst._subResource._mip >= desc._textureDesc._mipCount)
-            Throw(std::runtime_error("Mipmap index used in WriteSynchronized operation is too high"));
+            Throw(std::runtime_error("Mipmap index used in BlitEncoder::Write operation is too high"));
 
         if ((dst._leftTopFront[0]+srcDataDimensions[0]) > desc._textureDesc._width || (dst._leftTopFront[1]+srcDataDimensions[1]) > desc._textureDesc._height)
-            Throw(std::runtime_error("Rectangle dimensions used with WriteSynchronized operation are outside of the destination texture area"));
+            Throw(std::runtime_error("Rectangle dimensions used with BlitEncoder::Write operation are outside of the destination texture area"));
 
 		auto srcPixelCount = srcDataDimensions[0] * srcDataDimensions[1] * srcDataDimensions[2];
         if (!srcPixelCount)
-            Throw(std::runtime_error("No source pixels in WriteSynchronized operation. The depth of the srcDataDimensions field might need to be at least 1."));
+            Throw(std::runtime_error("No source pixels in BlitEncoder::Write operation. The depth of the srcDataDimensions field might need to be at least 1."));
 
 		auto expectedSize = BitsPerPixel(srcDataFormat)*srcPixelCount/8;
 		if (srcData._data.size() != expectedSize)
@@ -1903,6 +1904,27 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto src = staging.AsCopySource();
 		src.PartialSubresource({0,0,0}, srcDataDimensions, srcDataPitches);
 		CopyPartial(*_devContext, dst, src, captureDst.GetLayout(), Internal::ImageLayout::TransferSrcOptimal);
+	}
+
+	void BlitEncoder::Write(
+		const CopyPartial_Dest& dst,
+		IteratorRange<const void*> srcData)
+	{
+		assert(dst._resource);
+		auto desc = dst._resource->GetDesc();
+		if (desc._type != ResourceDesc::Type::LinearBuffer)
+			Throw(std::runtime_error("Non-linear buffer resource type used with linear buffer form of BlitEncoder::Write operation"));
+		
+		assert(dst._leftTopFrontIsLinearBufferOffset || (dst._leftTopFront[0] == 0 && dst._leftTopFront[1] == 0 && dst._leftTopFront[2] == 0));
+		assert(dst._subResource._mip == 0 && dst._subResource._arrayLayer == 0);
+
+		// We never map the destination resource directly here, because this write operation must happen in-order with DeviceContext commands
+		auto staging = _devContext->MapTemporaryStorage(srcData.size(), BindFlag::TransferSrc);
+		assert(staging.GetData().size() == srcData.size());
+		std::memcpy(staging.GetData().begin(), srcData.begin(), srcData.size());
+
+		Internal::CaptureForBind captureDst(*_devContext, *checked_cast<Resource*>(dst._resource), BindFlag::TransferDst);
+		CopyPartial(*_devContext, dst, staging.AsCopySource(), captureDst.GetLayout(), Internal::ImageLayout::TransferSrcOptimal);
 	}
 
 	void BlitEncoder::Copy(
@@ -2163,6 +2185,8 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 	BarrierHelper::BarrierHelper(IThreadContext& threadContext)
 	: _deviceContext{DeviceContext::Get(threadContext).get()} {}
+	BarrierHelper::BarrierHelper(DeviceContext& metalContext)
+	: _deviceContext{&metalContext} {}
 	BarrierHelper::~BarrierHelper() { Flush(); }
 
 }}

@@ -213,6 +213,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			VectorPattern<unsigned, 3> srcDataDimensions,
 			TexturePitches srcDataPitches);
 
+		void    Write(
+			const CopyPartial_Dest& dst,
+			IteratorRange<const void*> srcData);
+
 		void    Copy(
 			const CopyPartial_Dest& dst,
 			const CopyPartial_Src& src);
@@ -261,8 +265,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkPipelineStageFlags _dstStageMask = 0;
 		DeviceContext* _deviceContext;
 
-		BarrierHelper& Add(RenderCore::IResource& resource, BarrierResourceUsage preBarrierUsage, BarrierResourceUsage postBarrierUsage);
-		BarrierHelper(RenderCore::IThreadContext& threadContext);
+		BarrierHelper& Add(IResource& resource, BarrierResourceUsage preBarrierUsage, BarrierResourceUsage postBarrierUsage);
+		BarrierHelper(IThreadContext& threadContext);
+		BarrierHelper(DeviceContext& metalContext);
 		~BarrierHelper();
 		BarrierHelper(const BarrierHelper&) = delete;
 		BarrierHelper& operator=(const BarrierHelper&) = delete;

@@ -459,6 +459,7 @@ namespace RenderCore { namespace LightingEngine
 			checked_cast<Metal::Resource*>(_rayCounterBufferUAV->GetResource().get())->GetBuffer(), 
 			0, VK_WHOLE_SIZE, 0);
 		_res->CompleteInitialization(metalContext);
+		_blueNoiseRes->CompleteInitialization(threadContext);
 	}
 
 	void ScreenSpaceReflectionsOperator::SetSpecularIBL(std::shared_ptr<IResourceView> inputView)
@@ -499,7 +500,7 @@ namespace RenderCore { namespace LightingEngine
 			ParameterBox params;
 			auto cbInitializer = configCBLayout.BuildCBDataAsVector(params, Techniques::GetDefaultShaderLanguage());
 			_configCB = _device->CreateResource(
-				CreateDesc(BindFlag::ConstantBuffer, LinearBufferDesc::Create(cbInitializer.size()), "ssr-config"),
+				CreateDesc(BindFlag::ConstantBuffer, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc::Create(cbInitializer.size()), "ssr-config"),
 				SubResourceInitData{MakeIteratorRange(cbInitializer)})->CreateBufferView();
 		}
 

@@ -5,6 +5,7 @@
 #include "BlueNoiseGenerator.h"
 #include "../IDevice.h"
 #include "../ResourceDesc.h"
+#include "../Metal/DeviceContext.h"
 #include <cstdint>
 
 namespace RenderCore { namespace LightingEngine
@@ -25,6 +26,22 @@ namespace RenderCore { namespace LightingEngine
 	}
 	const g_blue_noise_sampler_state = { _1spp::sobol_256spp_256d,  _1spp::rankingTile,  _1spp::scramblingTile };
 
+	void BlueNoiseGeneratorTables::CompleteInitialization(IThreadContext& threadContext)
+	{
+		if (!_pendingInitialization) return;
+
+		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+		auto blitEncoder = metalContext.BeginBlitEncoder();
+		blitEncoder.Write(*_sobolBufferView->GetResource(), MakeIteratorRange(g_blue_noise_sampler_state.sobol_buffer_));
+		blitEncoder.Write(*_rankingTileBufferView->GetResource(), MakeIteratorRange(g_blue_noise_sampler_state.ranking_tile_buffer_));
+		blitEncoder.Write(*_scramblingTileBufferView->GetResource(), MakeIteratorRange(g_blue_noise_sampler_state.scrambling_tile_buffer_));
+		_pendingInitialization = false;
+
+		Metal::BarrierHelper(metalContext).Add(*_sobolBufferView->GetResource(), BindFlag::TransferDst, Metal::BarrierResourceUsage::AllCommandsRead());
+		Metal::BarrierHelper(metalContext).Add(*_rankingTileBufferView->GetResource(), BindFlag::TransferDst, Metal::BarrierResourceUsage::AllCommandsRead());
+		Metal::BarrierHelper(metalContext).Add(*_scramblingTileBufferView->GetResource(), BindFlag::TransferDst, Metal::BarrierResourceUsage::AllCommandsRead());
+	}
+
 	BlueNoiseGeneratorTables::BlueNoiseGeneratorTables(IDevice& device)
 	{
 		auto sobolBuffer = device.CreateResource(
@@ -32,8 +49,7 @@ namespace RenderCore { namespace LightingEngine
 				BindFlag::TransferDst | BindFlag::ShaderResource | BindFlag::TexelBuffer,
 				LinearBufferDesc::Create(sizeof(g_blue_noise_sampler_state.sobol_buffer_)),
 				"blue-noise-sobol"
-			),
-			SubResourceInitData{MakeIteratorRange(g_blue_noise_sampler_state.sobol_buffer_)});
+			));
 		_sobolBufferView = sobolBuffer->CreateTextureView(BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
 
 		auto rankingTileBuffer = device.CreateResource(
@@ -41,8 +57,7 @@ namespace RenderCore { namespace LightingEngine
 				BindFlag::TransferDst | BindFlag::ShaderResource | BindFlag::TexelBuffer,
 				LinearBufferDesc::Create(sizeof(g_blue_noise_sampler_state.ranking_tile_buffer_)),
 				"blue-noise-ranking"
-			),
-			SubResourceInitData{MakeIteratorRange(g_blue_noise_sampler_state.ranking_tile_buffer_)});
+			));
 		_rankingTileBufferView = rankingTileBuffer->CreateTextureView(BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
 
 		auto scramblingTileBuffer = device.CreateResource(
@@ -50,9 +65,9 @@ namespace RenderCore { namespace LightingEngine
 				BindFlag::TransferDst | BindFlag::ShaderResource | BindFlag::TexelBuffer,
 				LinearBufferDesc::Create(sizeof(g_blue_noise_sampler_state.scrambling_tile_buffer_)),
 				"blue-noise-scrambling"
-			),
-			SubResourceInitData{MakeIteratorRange(g_blue_noise_sampler_state.scrambling_tile_buffer_)});
+			));
 		_scramblingTileBufferView = scramblingTileBuffer->CreateTextureView(BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
+		_pendingInitialization = true;
 	}
 
 }}

@@ -6,7 +6,7 @@
 
 #include <memory>
 
-namespace RenderCore { class IResourceView; class IDevice; }
+namespace RenderCore { class IResourceView; class IDevice; class IThreadContext; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -16,7 +16,9 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IResourceView> _sobolBufferView;
 		std::shared_ptr<IResourceView> _rankingTileBufferView;
 		std::shared_ptr<IResourceView> _scramblingTileBufferView;
+		bool _pendingInitialization = false;
 
+		void CompleteInitialization(IThreadContext&);
 		BlueNoiseGeneratorTables(IDevice& device);
 	};
 }}
