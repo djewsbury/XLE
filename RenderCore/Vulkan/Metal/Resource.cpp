@@ -757,7 +757,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	std::vector<uint8_t>    Resource::ReadBackSynchronized(IThreadContext& context, SubResourceId subRes) const
 	{
-		bool requiresDestaging = !(_desc._allocationRules & AllocationRules::HostVisibleRandomAccess);		// only resources created with VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT can be read from
+		bool requiresDestaging = !ResourceMap::CanMap(*context.GetDevice(), *const_cast<Resource*>(this), ResourceMap::Mode::Read);
 		if (requiresDestaging) {
 			// todo -- we could destaging only a single sub resource...?
 			auto stagingCopyDesc = _desc;
@@ -789,10 +789,6 @@ namespace RenderCore { namespace Metal_Vulkan
 						0, nullptr,
 						0, nullptr);
 				}
-
-				// const_cast<Resource*>(this)->_steadyStateLayout = Internal::ImageLayout::ColorAttachmentOptimal;
-				// const_cast<Resource*>(this)->_steadyStateAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-				// const_cast<Resource*>(this)->_steadyStateAssociatedStageMask = VK_SHADER_STAGE_FRAGMENT_BIT;
 
 				Internal::CaptureForBind capture{ctx, *const_cast<Resource*>(this), BindFlag::TransferSrc};
 				Copy(ctx, destaging, *const_cast<Resource*>(this), destaging._steadyStateLayout, capture.GetLayout());
@@ -1031,11 +1027,9 @@ namespace RenderCore { namespace Metal_Vulkan
             // buffer to buffer copy
             const auto& srcDesc = src.AccessDesc();
 		    const auto& dstDesc = dst.AccessDesc();
-            assert(srcDesc._type == Resource::Desc::Type::LinearBuffer);
-		    assert(dstDesc._type == Resource::Desc::Type::LinearBuffer);
             VkBufferCopy copyOps[] = 
             {
-                VkBufferCopy{0, 0, std::min(srcDesc._linearBufferDesc._sizeInBytes, dstDesc._linearBufferDesc._sizeInBytes)}
+                VkBufferCopy{0, 0, std::min(ByteCount(srcDesc), ByteCount(dstDesc))}
             };
             context.GetActiveCommandList().CopyBuffer(
                 src.GetBuffer(),
@@ -1400,8 +1394,9 @@ namespace RenderCore { namespace Metal_Vulkan
 				if (!subResData._pitches._rowPitch && !subResData._pitches._slicePitch && !subResData._pitches._arrayPitch)
 					subResData._pitches = defaultPitches;
 
+				auto dstSubresourceData = map.GetData({m, a});
                 CopyMipLevel(
-                    PtrAdd(map.GetData().begin(), layout.offset), size_t(layout.size),
+                    dstSubresourceData.begin(), dstSubresourceData.size(),
                     TexturePitches{unsigned(layout.rowPitch), unsigned(layout.depthPitch), unsigned(layout.arrayPitch)},
                     mipDesc, subResData);
 			}

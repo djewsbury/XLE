@@ -92,9 +92,13 @@ namespace UnitTests
 			// copy from offset within larger buffer to offset within texture
 			unsigned offsetWithinLargeBuffer2 = 3727;
 			unsigned offsetToCopyTo[3] = { 78, 123, 0 };
+			TexturePitches stagingPitches;
+			stagingPitches._rowPitch = (desc._textureDesc._width - offsetToCopyTo[0]) * BitsPerPixel(desc._textureDesc._format) / 8;
+			stagingPitches._slicePitch = (desc._textureDesc._height - offsetToCopyTo[1]) * stagingPitches._rowPitch;
+			stagingPitches._arrayPitch = stagingPitches._slicePitch;
 			blitEncoder.Copy(
 				CopyPartial_Dest{*deviceResource, {}, offsetToCopyTo}, 
-				CopyPartial_Src{*largeStaging, offsetWithinLargeBuffer2});
+				CopyPartial_Src{*largeStaging, offsetWithinLargeBuffer2}.PartialSubresource({0,0,0}, {desc._textureDesc._width - offsetToCopyTo[0], desc._textureDesc._height - offsetToCopyTo[1], 1}, stagingPitches));
 
 			{
 				auto destaging = device.CreateResource(stagingDesc);
@@ -104,7 +108,7 @@ namespace UnitTests
 				for (unsigned y=0; y<desc._textureDesc._height; ++y)
 					for (unsigned x=0; x<desc._textureDesc._width; ++x) {
 						if (y >= offsetToCopyTo[1] && x >= offsetToCopyTo[0]) {
-							auto idxInBuffer = (x - offsetToCopyTo[0]) + (y - offsetToCopyTo[1]) * (desc._textureDesc._width - offsetToCopyTo[0]);
+							auto idxInBuffer = (x - offsetToCopyTo[0]) + (y - offsetToCopyTo[1]) * stagingPitches._rowPitch;
 							REQUIRE(largeInitData[offsetWithinLargeBuffer2+idxInBuffer] == readback[y*desc._textureDesc._width+x]);
 						} else {
 							// should still contain the data from the previous upload

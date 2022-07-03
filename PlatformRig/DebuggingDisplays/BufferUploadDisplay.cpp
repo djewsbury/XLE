@@ -828,7 +828,7 @@ namespace PlatformRig { namespace Overlays
         if (auto topMostWidget = interfaceState.TopMostId()) {
             if (input.IsHeld_LButton()) {
                 const InteractableId framePicker = InteractableId_Make("FramePicker");
-                if (topMostWidget >= framePicker && topMostWidget < (framePicker+s_MaxGraphSegments)) {
+                if (topMostWidget >= framePicker && topMostWidget < (framePicker+_frames.size())) {
                     unsigned graphIndex = unsigned(topMostWidget - framePicker);
                     _lockedFrameId = _frames[graphIndex]._frameId;
                     return ProcessInputResult::Consumed;
