@@ -12,7 +12,6 @@
 #include "../RenderCore/Metal/Resource.h"
 #include "../OSServices/Log.h"
 #include "../OSServices/TimeUtils.h"
-#include "../ConsoleRig/GlobalServices.h"
 #include "../ConsoleRig/AttachablePtr.h"
 #include "../Utility/Threading/ThreadingUtils.h"
 #include "../Utility/Threading/LockFree.h"
@@ -27,6 +26,12 @@
 #include <chrono>
 #include <functional>
 #include "thousandeyes/futures/then.h"
+
+// #define BU_SEPARATELY_THREADED_CONTINUATIONS 1
+#if defined(BU_SEPARATELY_THREADED_CONTINUATIONS)
+    #include "../ConsoleRig/GlobalServices.h"
+    #include "../Assets/ContinuationExecutor.h"
+#endif
 
 #pragma warning(disable:4127)       // conditional expression is constant
 #pragma warning(disable:4018)       // signed/unsigned mismatch
@@ -59,7 +64,7 @@ namespace BufferUploads
     public:
         std::mutex _l;
         std::condition_variable _cv;
-        volatile unsigned _semaphoreCount = 0;
+        std::atomic<unsigned> _semaphoreCount;
 
         void Increment()
         {
@@ -69,14 +74,20 @@ namespace BufferUploads
         }
         void Wait()
         {
-            std::unique_lock<std::mutex> ul(_l);
-            if (!_semaphoreCount)
+            auto exchange = _semaphoreCount.exchange(0);
+            if (!exchange) {
+                std::unique_lock<std::mutex> ul(_l);
                 _cv.wait(ul);
-            _semaphoreCount = 0;
+                _semaphoreCount.store(0);
+            }
+        }
+        bool Peek()
+        {
+            return _semaphoreCount.load() != 0;
         }
     };
     
-    class AssemblyLine : public std::enable_shared_from_this<AssemblyLine>
+    class AssemblyLine : public std::enable_shared_from_this<AssemblyLine>, public thousandeyes::futures::Executor
     {
     public:
         enum 
@@ -112,6 +123,10 @@ namespace BufferUploads
         unsigned            FlipWritingQueueSet();
         unsigned            BindOnBackgroundFrame(std::function<void()>&& fn);
         void                UnbindOnBackgroundFrame(unsigned marker);
+        void                BindBackgroundThread();
+
+        virtual void watch(std::unique_ptr<thousandeyes::futures::Waitable> w) override;
+        virtual void stop() override;
         
         AssemblyLine(RenderCore::IDevice& device);
         ~AssemblyLine();
@@ -214,6 +229,17 @@ namespace BufferUploads
         Signal<> _onBackgroundFrame;
         Threading::Mutex _onBackgroundFrameLock;
         unsigned _commitCountLastOnBackgroundFrame = 0;
+
+        #if !defined(BU_SEPARATELY_THREADED_CONTINUATIONS)
+            std::vector<std::unique_ptr<thousandeyes::futures::Waitable>> _activeFutureWaitables;
+            unsigned _futureWaitablesIterator = 0;
+            std::thread::id _futureWaitablesThread;
+            Threading::Mutex _stagingFutureWaitablesLock;
+            std::vector<std::unique_ptr<thousandeyes::futures::Waitable>> _stagingFutureWaitables;
+        #else
+            std::shared_ptr<thousandeyes::futures::Executor> _continuationExecutor;
+        #endif
+        void StallWhileCheckingFutures();
 
         class CommandListBudget
         {
@@ -324,7 +350,7 @@ namespace BufferUploads
             auto* t = ref._transaction;
             assert(!t->_waitingFuture.valid());
             t->_waitingFuture = thousandeyes::futures::then(
-                ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
+                shared_from_this(),
                 std::move(descFuture),
                 [weakThis, ref=std::move(ref), data=std::move(data), pool=std::move(pool), bindFlags](std::future<ResourceDesc> completedFuture) mutable {
                     auto t = weakThis.lock();
@@ -359,7 +385,7 @@ namespace BufferUploads
             auto *t = ref._transaction;
             assert(!t->_waitingFuture.valid());
             t->_waitingFuture = thousandeyes::futures::then(
-                ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
+                shared_from_this(),
                 std::move(descFuture),
                 [weakThis, ref=std::move(ref), data=std::move(data)](std::future<ResourceDesc> completedFuture) mutable {
                     auto t = weakThis.lock();
@@ -568,6 +594,67 @@ namespace BufferUploads
         return finalResourceConstruction;
     }
 
+    void AssemblyLine::watch(std::unique_ptr<thousandeyes::futures::Waitable> w)
+    {
+        #if !defined(BU_SEPARATELY_THREADED_CONTINUATIONS)
+            if (std::this_thread::get_id() == _futureWaitablesThread) {
+                _activeFutureWaitables.push_back(std::move(w));
+            } else {
+                ScopedLock(_stagingFutureWaitablesLock);
+                _stagingFutureWaitables.push_back(std::move(w));
+                _wakeupEvent.Increment();
+            }
+        #else
+            _continuationExecutor->watch(std::move(w));
+        #endif
+    }
+
+    void AssemblyLine::stop()
+    {
+        assert(0);
+    }
+
+    void AssemblyLine::BindBackgroundThread()
+    {
+        #if !defined(BU_SEPARATELY_THREADED_CONTINUATIONS)
+            _futureWaitablesThread = std::this_thread::get_id();
+        #endif
+    }
+
+    void AssemblyLine::StallWhileCheckingFutures()
+    {
+        #if !defined(BU_SEPARATELY_THREADED_CONTINUATIONS)
+            assert(std::this_thread::get_id() == _futureWaitablesThread);
+
+            {
+                ScopedLock(_stagingFutureWaitablesLock);
+                _activeFutureWaitables.reserve(_activeFutureWaitables.size() + _stagingFutureWaitables.size());
+                for (auto& w:_stagingFutureWaitables) _activeFutureWaitables.emplace_back(std::move(w));
+                _stagingFutureWaitables.clear();
+            }
+
+            auto timeout = std::chrono::microseconds{500};
+            while (!_activeFutureWaitables.empty()) {
+                if (_wakeupEvent.Peek())
+                    break;      // still have to do _wakeupEvent.Wait() to clear out the signal
+
+                bool readyForDispatch = _activeFutureWaitables[_futureWaitablesIterator]->wait(timeout);
+                if (!readyForDispatch) {
+                    _futureWaitablesIterator = (_futureWaitablesIterator+1)%_activeFutureWaitables.size();
+                    continue;
+                }
+                auto w = std::move(_activeFutureWaitables[_futureWaitablesIterator]);
+                _activeFutureWaitables.erase(_activeFutureWaitables.begin()+_futureWaitablesIterator);
+                w->dispatch();
+                if (_futureWaitablesIterator >= _activeFutureWaitables.size()) _futureWaitablesIterator = 0;
+            }
+
+            _wakeupEvent.Wait();
+        #else
+            _wakeupEvent.Wait();
+        #endif
+    }
+
         //////////////////////////////////////////////////////////////////////////////////////////////
 
     AssemblyLine::Transaction::Transaction(unsigned idTopPart, unsigned heapIndex)
@@ -654,6 +741,16 @@ namespace BufferUploads
         XlZeroMemory(_currentQueuedBytes);
         _framePriority_WritingQueueSet = 0;
         _pendingRetirements.reserve(64);
+
+        #if !defined(BU_SEPARATELY_THREADED_CONTINUATIONS)
+            _activeFutureWaitables.reserve(2048);
+            _stagingFutureWaitables.reserve(2048);
+        #else
+            _continuationExecutor = std::make_shared<::Assets::ContinuationExecutor>(
+                std::chrono::microseconds(500),
+                thousandeyes::futures::detail::InvokerWithNewThread{},
+                ::Assets::InvokerToThreadPool{ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool()});
+        #endif
     }
 
     AssemblyLine::~AssemblyLine()
@@ -723,7 +820,7 @@ namespace BufferUploads
     void AssemblyLine::Wait(unsigned stepMask, ThreadContext& context)
     {
         int64_t startTime = OSServices::GetPerformanceCounter();
-        _wakeupEvent.Wait();
+        StallWhileCheckingFutures();
 
         CommandListMetrics& metricsUnderConstruction = context.GetMetricsUnderConstruction();
         metricsUnderConstruction._waitTime += OSServices::GetPerformanceCounter() - startTime;
@@ -1042,7 +1139,7 @@ namespace BufferUploads
 
             assert(!transaction->_waitingFuture.valid());
             transaction->_waitingFuture = thousandeyes::futures::then(
-                ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
+                shared_from_this(),
                 std::move(future),
                 [captures=std::move(captures)](std::future<void> prepareFuture) mutable {
                     auto t = captures._weakThis.lock();
@@ -1676,6 +1773,7 @@ namespace BufferUploads
             _backgroundThread = std::make_unique<std::thread>(
                 [this](){ 
                     _backgroundContext->GetStagingPage().BindThread();
+                    _assemblyLine->BindBackgroundThread();
                     return DoBackgroundThread(); 
                 });
         }
