@@ -29,5 +29,7 @@ namespace RenderCore { namespace Metal_Vulkan
     
     class FrameBuffer;
     class FrameBufferPool;
+
+    class ResourceMap;
 }}
 

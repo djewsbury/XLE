@@ -53,7 +53,16 @@ namespace BufferUploads { namespace PlatformInterface
             const RenderCore::Box2D& box, SubResourceId subRes,
             RenderCore::IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize);
 
+        void UpdateFinalResourceViaCmdListAttachedStaging(
+            RenderCore::IThreadContext& context,
+            const ResourceLocator& finalResource,
+            IDataPacket& initialisationData);
+
         bool CanDirectlyMap(RenderCore::IResource& resource);
+
+        std::vector<IAsyncDataSource::SubResource> CalculateUploadList(
+            RenderCore::Metal::ResourceMap& map,
+            const ResourceDesc& desc);
 
         unsigned CalculateStagingBufferOffsetAlignment(const RenderCore::ResourceDesc& desc);
 

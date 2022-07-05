@@ -546,52 +546,21 @@ namespace BufferUploads
     {
         ResourceDesc desc = descInit;
 
-        auto finalResourceConstruction = CreateResource(*threadContext.GetDevice(), desc, &initialisationData);
+        auto supportInit = 
+            (desc._type == ResourceDesc::Type::Texture)
+            ? PlatformInterface::SupportsResourceInitialisation_Texture
+            : PlatformInterface::SupportsResourceInitialisation_Buffer;
+
+        if (supportInit)
+            return CreateResource(*threadContext.GetDevice(), desc, &initialisationData);
+
+        desc._bindFlags |= BindFlag::TransferDst;
+        auto finalResourceConstruction = CreateResource(*threadContext.GetDevice(), desc);
         if (!finalResourceConstruction)
             return {};
-    
-        bool didInitialisationDuringConstruction = false;
-        if (!didInitialisationDuringConstruction) {
 
-            assert(0);      // do we need a separate staging page for immediate/main thread initializations?
-#if 0
-            assert(desc._bindFlags & BindFlag::TransferDst);    // need TransferDst to recieve staging data
-            
-            ResourceDesc stagingDesc;
-            PlatformInterface::StagingToFinalMapping stagingToFinalMapping;
-            std::tie(stagingDesc, stagingToFinalMapping) = PlatformInterface::CalculatePartialStagingDesc(desc, part);
-
-            auto stagingConstruction = _resourceSource.Create(stagingDesc, &initialisationData, ResourceSource::CreationOptions::Staging);
-            assert(!stagingConstruction._locator.IsEmpty());
-            if (stagingConstruction._locator.IsEmpty())
-                return {};
-    
-            PlatformInterface::ResourceUploadHelper helper(threadContext);
-            if (desc._type == ResourceDesc::Type::Texture) {
-                helper.WriteToTextureViaMap(
-                    stagingConstruction._locator,
-                    stagingDesc, Box2D(),
-                    [&part, &initialisationData](RenderCore::SubResourceId sr) -> RenderCore::SubResourceInitData
-                    {
-                        RenderCore::SubResourceInitData result = {};
-                        result._data = initialisationData.GetData(SubResourceId{sr._mip, sr._arrayLayer});
-                        assert(result._data.empty());
-                        result._pitches = initialisationData.GetPitches(SubResourceId{sr._mip, sr._arrayLayer});
-                        return result;
-                    });
-            } else {
-                helper.WriteToBufferViaMap(
-                    stagingConstruction._locator, stagingDesc,
-                    0, initialisationData.GetData());
-            }
-    
-            helper.UpdateFinalResourceFromStaging(
-                finalResourceConstruction._locator, 
-                stagingConstruction._locator, desc, 
-                stagingToFinalMapping);
-#endif
-        }
-    
+        PlatformInterface::ResourceUploadHelper helper{threadContext};
+        helper.UpdateFinalResourceViaCmdListAttachedStaging(threadContext, finalResourceConstruction, initialisationData);
         return finalResourceConstruction;
     }
 
@@ -1072,35 +1041,7 @@ namespace BufferUploads
                 context.GetStagingPage().GetStagingResource(),
                 Metal::ResourceMap::Mode::WriteDiscardPrevious,
                 stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize()};
-            std::vector<IAsyncDataSource::SubResource> uploadList;
-            if (desc._type == ResourceDesc::Type::Texture) {
-
-                // arrange the upload locations as per required for a staging texture
-                auto arrayCount = ActualArrayLayerCount(desc._textureDesc);
-                auto mipCount = desc._textureDesc._mipCount;
-                assert(mipCount >= 1);
-                assert(arrayCount >= 1);
-
-                uploadList.resize(mipCount*arrayCount);
-                for (unsigned a=0; a<arrayCount; ++a) {
-                    for (unsigned mip=0; mip<mipCount; ++mip) {
-                        SubResourceId subRes { mip, a };
-                        auto& upload = uploadList[subRes._arrayLayer*mipCount+subRes._mip];
-                        upload._id = subRes;
-                        auto offset = GetSubResourceOffset(desc._textureDesc, mip, a);
-                        upload._destination = { PtrAdd(map.GetData().begin(), offset._offset), PtrAdd(map.GetData().begin(), offset._offset+offset._size) };
-                        upload._pitches = offset._pitches;
-                    }
-                }
-
-            } else {
-                uploadList.resize(1);
-                auto& upload = uploadList[0];
-                upload._id = {};
-                upload._destination = map.GetData(upload._id);
-                upload._pitches = map.GetPitches(upload._id);
-            }
-
+            auto uploadList = context.GetResourceUploadHelper().CalculateUploadList(map, desc);
             auto future = prepareStagingStep._packet->PrepareData(uploadList);
 
             RenderCore::ResourceDesc finalResourceDesc = desc;

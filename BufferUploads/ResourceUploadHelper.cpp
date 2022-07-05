@@ -145,6 +145,80 @@ namespace BufferUploads { namespace PlatformInterface
         return copyAmount;
     }
 
+    void ResourceUploadHelper::UpdateFinalResourceViaCmdListAttachedStaging(
+        RenderCore::IThreadContext& threadContext,
+        const ResourceLocator& finalResource,
+        IDataPacket& initialisationData)
+    {
+        auto desc = finalResource.GetContainingResource()->GetDesc();
+        auto byteCount = RenderCore::ByteCount(desc);
+        if (!finalResource.IsWholeResource()) {
+            assert(desc._type == ResourceDesc::Type::LinearBuffer);
+            byteCount = finalResource.GetRangeInContainingResource().second - finalResource.GetRangeInContainingResource().first;
+            desc._linearBufferDesc._sizeInBytes = byteCount;
+        }
+        auto alignment = CalculateStagingBufferOffsetAlignment(desc);
+        
+        auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+
+        auto stagingSpace = metalContext.MapTemporaryStorage(byteCount, BindFlag::TransferSrc);
+        auto uploadList = CalculateUploadList(stagingSpace, desc);
+        for (const auto& upload:uploadList) {
+            RenderCore::SubResourceInitData srcSubResource = {};
+            srcSubResource._data = initialisationData.GetData(upload._id);
+            assert(!srcSubResource._data.empty());
+            srcSubResource._pitches = initialisationData.GetPitches(upload._id);
+
+            if (desc._type == RenderCore::ResourceDesc::Type::Texture) {
+                // probably just a straight memcpy, anyway
+                CopyMipLevel(upload._destination.begin(), upload._destination.size(), upload._pitches, CalculateMipMapDesc(desc._textureDesc, upload._id._mip), srcSubResource);
+            } else {
+                assert(upload._destination.size() == srcSubResource._data.size());
+                std::memcpy(upload._destination.begin(), srcSubResource._data.begin(), upload._destination.size());
+            }
+        }
+
+        auto beginAndEndInResource = stagingSpace.GetBeginAndEndInResource();
+        UpdateFinalResourceFromStaging(
+            finalResource, 
+            *stagingSpace.GetResource(), beginAndEndInResource.first, beginAndEndInResource.second-beginAndEndInResource.first);
+    }
+
+    std::vector<IAsyncDataSource::SubResource> ResourceUploadHelper::CalculateUploadList(
+        RenderCore::Metal::ResourceMap& map,
+        const ResourceDesc& desc)
+    {
+        std::vector<IAsyncDataSource::SubResource> uploadList;
+        if (desc._type == ResourceDesc::Type::Texture) {
+
+            // arrange the upload locations as per required for a staging texture
+            auto arrayCount = ActualArrayLayerCount(desc._textureDesc);
+            auto mipCount = desc._textureDesc._mipCount;
+            assert(mipCount >= 1);
+            assert(arrayCount >= 1);
+
+            uploadList.resize(mipCount*arrayCount);
+            for (unsigned a=0; a<arrayCount; ++a) {
+                for (unsigned mip=0; mip<mipCount; ++mip) {
+                    SubResourceId subRes { mip, a };
+                    auto& upload = uploadList[subRes._arrayLayer*mipCount+subRes._mip];
+                    upload._id = subRes;
+                    auto offset = GetSubResourceOffset(desc._textureDesc, mip, a);
+                    upload._destination = { PtrAdd(map.GetData().begin(), offset._offset), PtrAdd(map.GetData().begin(), offset._offset+offset._size) };
+                    upload._pitches = offset._pitches;
+                }
+            }
+
+        } else {
+            uploadList.resize(1);
+            auto& upload = uploadList[0];
+            upload._id = {};
+            upload._destination = map.GetData(upload._id);
+            upload._pitches = map.GetPitches(upload._id);
+        }
+        return uploadList;
+    }
+
 #if 0
         auto& metalContext = *Metal::DeviceContext::Get(*_renderCoreContext);
 

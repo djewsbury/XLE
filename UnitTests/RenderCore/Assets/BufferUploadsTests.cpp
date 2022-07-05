@@ -347,6 +347,66 @@ namespace UnitTests
 		}
 	}
 
+	TEST_CASE( "BufferUploads-ImmediateTransaction", "[rendercore_techniques]" )
+	{
+		using namespace RenderCore;
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto metalHelper = MakeTestHelper();
+		auto bu = BufferUploads::CreateManager(*metalHelper->_device);
+
+		auto threadContext = metalHelper->_device->GetImmediateContext();
+		auto testDesc = CreateDesc(BindFlag::ShaderResource|BindFlag::TransferSrc, TextureDesc::Plain2D(256, 256, RenderCore::Format::R8G8B8A8_UNORM, 9, 3), "immediate-upload-test");
+
+		class RandomTestPkt : public BufferUploads::IDataPacket
+		{
+		public:
+			IteratorRange<void*>    GetData         (SubResourceId subRes) override
+			{
+				for (auto& d:_data)
+					if (d.first == subRes) 
+						return MakeIteratorRange(d.second);
+				return {};
+			}
+			TexturePitches          GetPitches      (SubResourceId subRes) const override
+			{
+				return MakeTexturePitches(CalculateMipMapDesc(_desc._textureDesc, subRes._mip));
+			}
+			RandomTestPkt(const ResourceDesc& desc) : _desc(desc) 
+			{
+				assert(desc._type == ResourceDesc::Type::Texture);
+				std::mt19937 rng(62956294);
+				for (unsigned a=0; a<ActualArrayLayerCount(desc._textureDesc); ++a)
+					for (unsigned m=0; m<desc._textureDesc._mipCount; ++m) {
+						std::vector<uint8_t> d;
+						auto srDesc = CalculateMipMapDesc(desc._textureDesc, m);
+						srDesc._arrayCount = 0;
+						srDesc._mipCount = 1;
+						d.resize(ByteCount(srDesc));
+						FillWithRandomData(rng(), MakeIteratorRange(d));
+						_data.emplace_back(SubResourceId{m, a}, std::move(d));
+					}
+			}
+
+			std::vector<std::pair<SubResourceId, std::vector<uint8_t>>> _data;
+			ResourceDesc _desc;
+		};
+		auto pkt = std::make_shared<RandomTestPkt>(testDesc);
+		auto resource = bu->Transaction_Immediate(*threadContext, testDesc, *pkt).AsIndependentResource();
+		
+		auto destaging = metalHelper->_device->CreateResource(
+			CreateDesc(BindFlag::TransferDst, AllocationRules::HostVisibleRandomAccess, testDesc._textureDesc, "destaging"));
+		Metal::DeviceContext::Get(*threadContext)->BeginBlitEncoder().Copy(*destaging, *resource);
+		threadContext->CommitCommands(CommitCommandsFlags::WaitForCompletion);
+
+		Metal::ResourceMap map{*metalHelper->_device, *destaging, Metal::ResourceMap::Mode::Read};
+		for (auto& sr:pkt->_data) {
+			auto mappedData = map.GetData(sr.first);
+			REQUIRE(mappedData.size() == sr.second.size());
+			int cmd = std::memcmp(mappedData.begin(), sr.second.data(), mappedData.size());
+			REQUIRE(cmd == 0);
+		}
+	}
+
 	TEST_CASE( "BufferUploads-LinearBufferAllocation", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;

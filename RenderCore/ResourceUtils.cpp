@@ -70,7 +70,7 @@ namespace RenderCore
         } else {
             int nPitch = ByteCount(mipMapDesc._width, 1, 1, 1, mipMapDesc._format);
             assert(srcData._data.size() % nPitch == 0); (void)nPitch;
-            assert(size_t(destination) + srcData._data.size() <= size_t(originalDest) + destinationDataSize);
+            assert(srcData._data.size() <= destinationDataSize);
             XlCopyMemory/*Align16*/((uint8*)destination, srcData._data.begin(), srcData._data.size());
             copiedBytes = (unsigned)srcData._data.size();
         }
