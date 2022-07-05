@@ -105,6 +105,7 @@ namespace BufferUploads
         TransactionMarker       Transaction_Begin(ResourceLocator destinationResource, std::shared_ptr<IAsyncDataSource> data, TransactionOptions::BitField flags);
         std::future<CommandListID>   Transaction_Begin (ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations);
         void            Transaction_Cancel(IteratorRange<const TransactionID*>);
+        void            Transaction_OnCompletion(IteratorRange<const TransactionID*>, std::function<void()>&& fn);
 
         ResourceLocator         Transaction_Immediate(
                                     RenderCore::IThreadContext& threadContext,
@@ -132,6 +133,7 @@ namespace BufferUploads
         ~AssemblyLine();
 
     protected:
+        struct OnCompletionAttachment;
         struct Transaction
         {
             uint32_t _idTopPart;
@@ -146,6 +148,8 @@ namespace BufferUploads
             std::atomic<bool> _statusLock;
             TransactionOptions::BitField _creationOptions;
             unsigned _heapIndex;
+
+            std::shared_ptr<OnCompletionAttachment> _completionAttachment;
 
             Transaction(unsigned idTopPart, unsigned heapIndex);
             Transaction();
@@ -246,6 +250,12 @@ namespace BufferUploads
         public:
             unsigned _limit_BytesUploaded, _limit_Operations;
             CommandListBudget(bool isLoading);
+        };
+
+        struct OnCompletionAttachment
+        {
+            std::vector<TransactionID> _transactions;
+            std::function<void()> _fn;
         };
 
         Threading::Mutex _pendingRetirementsLock;
@@ -457,6 +467,16 @@ namespace BufferUploads
             }
             transaction->_finalResource = {};
 
+            // potentially call the completion attachment if it's now ready
+            if (transaction->_completionAttachment) {
+                auto i = std::find(transaction->_completionAttachment->_transactions.begin(), transaction->_completionAttachment->_transactions.end(), (uint64_t(transaction->_idTopPart) << 32ull) | transaction->_heapIndex);
+                assert(i != transaction->_completionAttachment->_transactions.end());
+                transaction->_completionAttachment->_transactions.erase(i);
+                if (transaction->_completionAttachment->_transactions.empty())
+                    transaction->_completionAttachment->_fn();
+                transaction->_completionAttachment = nullptr;
+            }
+
             unsigned heapIndex   = transaction->_heapIndex;
 
                 //
@@ -656,6 +676,7 @@ namespace BufferUploads
         _requestTime = moveFrom._requestTime;
         _promise = std::move(moveFrom._promise);
         _waitingFuture = std::move(moveFrom._waitingFuture);
+        _completionAttachment = std::move(moveFrom._completionAttachment);
 
         _creationOptions = moveFrom._creationOptions;
         _heapIndex = moveFrom._heapIndex;
@@ -681,6 +702,7 @@ namespace BufferUploads
         _requestTime = moveFrom._requestTime;
         _promise = std::move(moveFrom._promise);
         _waitingFuture = std::move(moveFrom._waitingFuture);
+        _completionAttachment = std::move(moveFrom._completionAttachment);
 
         _creationOptions = moveFrom._creationOptions;
         _heapIndex = moveFrom._heapIndex;
@@ -785,6 +807,32 @@ namespace BufferUploads
             if (_transactions[idx]._idTopPart == i>>32ull)
                 _transactions[idx]._cancelledByClient = true;
         }
+    }
+
+    void AssemblyLine::Transaction_OnCompletion(IteratorRange<const TransactionID*> transactionsInit, std::function<void()>&& fn)
+    {
+        std::vector<TransactionID> transactions{transactionsInit.begin(), transactionsInit.end()};
+        _queuedFunctions.push_overflow(
+            [transactions=std::move(transactions), fn=std::move(fn)](auto& assemblyLine, auto&) {
+                ScopedLock(assemblyLine._transactionsLock);
+                auto attachment = std::make_shared<OnCompletionAttachment>();
+                attachment->_transactions.reserve(transactions.size());
+                for (auto t:transactions) {
+                    assert(t!=TransactionID_Invalid);
+                    auto idx = uint32_t(t);
+                    assert(idx < assemblyLine._transactions.size());
+                    if (assemblyLine._transactions[idx]._idTopPart == t>>32ull) {
+                        attachment->_transactions.push_back(t); // not retired yet
+                        assert(!assemblyLine._transactions[idx]._completionAttachment);
+                        assemblyLine._transactions[idx]._completionAttachment = attachment;
+                    }
+                }
+                if (!attachment->_transactions.empty()) {
+                    attachment->_fn = std::move(fn);
+                } else {
+                    fn();       // everything completed already, can execute right now
+                }
+            });
     }
 
     void AssemblyLine::Wait(unsigned stepMask, ThreadContext& context)
@@ -1537,6 +1585,11 @@ namespace BufferUploads
         void                    Transaction_Cancel      (IteratorRange<const TransactionID*> ids) override
         {
             _assemblyLine->Transaction_Cancel(ids);
+        }
+
+        void                    Transaction_OnCompletion(IteratorRange<const TransactionID*> transactions, std::function<void()>&& fn) override
+        {
+            _assemblyLine->Transaction_OnCompletion(transactions, std::move(fn));
         }
 
         unsigned                BindOnBackgroundFrame(std::function<void()>&& fn) override

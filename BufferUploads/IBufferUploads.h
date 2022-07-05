@@ -80,6 +80,8 @@ namespace BufferUploads
 
         virtual void            Transaction_Cancel      (IteratorRange<const TransactionID*>) = 0;
 
+        virtual void            Transaction_OnCompletion(IteratorRange<const TransactionID*>, std::function<void()>&& fn) = 0;
+
             /// @}
 
             /// \name Immediate creation

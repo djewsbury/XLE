@@ -154,31 +154,46 @@ namespace RenderCore { namespace Techniques
 			return BufferUploads::TransactionID_Invalid;
 		}
 
-        if (metaDataFuture) {
-            WhenAll(std::move(transactionMarker._future), metaDataFuture).ThenConstructToPromiseWithFutures(
-                std::move(promise),
-                [   init, initializerStr = splitter.FullFilename().AsString(), 
-                    depVal = pkt->GetDependencyValidation()](std::future<BufferUploads::ResourceLocator> futureLocator, std::shared_future<TextureMetaData> metaDataFuture) {
+        struct Captures
+        {
+            std::future<BufferUploads::ResourceLocator> _futureLocator;
+            std::promise<std::shared_ptr<DeferredShaderResource>> _promise;
+            std::shared_ptr<::Assets::Marker<TextureMetaData>> _metaDataFuture;
+        };
+        auto cap = std::make_shared<Captures>();
+        cap->_futureLocator = std::move(transactionMarker._future);
+        cap->_promise = std::move(promise);
+        cap->_metaDataFuture = std::move(metaDataFuture);
+        auto id = transactionMarker._transactionID;
+        RenderCore::Techniques::Services::GetBufferUploads().Transaction_OnCompletion(
+            MakeIteratorRange(&id, &id+1),
+            [cap, init, initializerStr = splitter.FullFilename().AsString(), depVal = pkt->GetDependencyValidation()]() {
+                TRY {
 
                     BufferUploads::ResourceLocator locator;
                     TRY {
-                        locator = futureLocator.get();
+                        locator = cap->_futureLocator.get();
                     } CATCH(const std::exception& e) {
                         Throw(::Assets::Exceptions::ConstructionError(e, depVal));
                     } CATCH_END
                     
                     auto desc = locator.GetContainingResource()->GetDesc();
-                    auto metaData = metaDataFuture.get();
-
+                    TextureViewDesc viewDesc;
                     auto finalDepVal = depVal;
-                    if (metaData.GetDependencyValidation()) {
-                        auto parentDepVal = ::Assets::GetDepValSys().Make();
-                        parentDepVal.RegisterDependency(finalDepVal);
-                        parentDepVal.RegisterDependency(metaData.GetDependencyValidation());
-                        finalDepVal = parentDepVal;
+
+                    if (cap->_metaDataFuture) {
+                        cap->_metaDataFuture->StallWhilePending();      // we're stalling in the buffer uploads thread here, so we need this to be quick!
+                        auto metaData = cap->_metaDataFuture->Actualize();
+                        if (metaData.GetDependencyValidation()) {
+                            auto parentDepVal = ::Assets::GetDepValSys().Make();
+                            parentDepVal.RegisterDependency(finalDepVal);
+                            parentDepVal.RegisterDependency(metaData.GetDependencyValidation());
+                            finalDepVal = parentDepVal;
+                        }
+                    } else {
+                        viewDesc = MakeTextureViewDesc(desc._textureDesc, init);
                     }
 
-                    auto viewDesc = MakeTextureViewDesc(desc._textureDesc, init, &metaData);
                     auto view = locator.CreateTextureView(BindFlag::ShaderResource, viewDesc);
                     if (!view) {
                         Throw(::Assets::Exceptions::ConstructionError(
@@ -186,38 +201,14 @@ namespace RenderCore { namespace Techniques
                             finalDepVal, ::Assets::AsBlob("Buffer upload transaction completed, but with invalid resource")));
                     }
 
-                    return std::make_shared<DeferredShaderResource>(
+                    cap->_promise.set_value(std::make_shared<DeferredShaderResource>(
                         std::move(view), initializerStr,
-                        locator.GetCompletionCommandList(), finalDepVal);
-                });
-        } else {
-            ::Assets::WhenAll(std::move(transactionMarker._future)).ThenConstructToPromiseWithFutures(
-                std::move(promise),
-                [   init, initializerStr = splitter.FullFilename().AsString(), 
-                    depVal = pkt->GetDependencyValidation()](std::future<BufferUploads::ResourceLocator> futureLocator) {
-                        
-                    BufferUploads::ResourceLocator locator;
-                    TRY {
-                        locator = futureLocator.get();
-                    } CATCH(const std::exception& e) {
-                        Throw(::Assets::Exceptions::ConstructionError(e, depVal));
-                    } CATCH_END
+                        locator.GetCompletionCommandList(), finalDepVal));
                     
-                    auto desc = locator.GetContainingResource()->GetDesc();
-
-                    auto viewDesc = MakeTextureViewDesc(desc._textureDesc, init);
-                    auto view = locator.CreateTextureView(BindFlag::ShaderResource, viewDesc);
-                    if (!view) {
-                        Throw(::Assets::Exceptions::ConstructionError(
-                            ::Assets::Exceptions::ConstructionError::Reason::Unknown, 
-                            depVal, ::Assets::AsBlob("Buffer upload transaction completed, but with invalid resource")));
-                    }
-
-                    return std::make_shared<DeferredShaderResource>(
-                        std::move(view), initializerStr,
-                        locator.GetCompletionCommandList(), depVal);
-                });
-        }
+                } CATCH (...) {
+                    cap->_promise.set_exception(std::current_exception());
+                } CATCH_END
+            });
 
         return transactionMarker._transactionID;
     }
