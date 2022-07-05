@@ -91,8 +91,10 @@ namespace RenderCore
             DisableAutoCacheCoherency       = 1<<4,
             /// Set as a hint to the allocator that this is a large resizable render target (which can be a source of fragmentation)
             ResizeableRenderTarget          = 1<<5,
-            // Ask the memory allocator to make a dedicated page for this allocation (ResizeableRenderTarget may do something similar, but this is a stronger hint)
-            DedicatedPage                   = 1<<6
+            /// Ask the memory allocator to make a dedicated page for this allocation (ResizeableRenderTarget may do something similar, but this is a stronger hint)
+            DedicatedPage                   = 1<<6,
+            /// Disable the protections against destroying a resource before the GPU is done with it. Client must be responsible for tracking GPU progress, because memory will be freed up immediately when the object is destroyed
+            DisableSafeDestruction          = 1<<7
         };
         typedef unsigned BitField;
     }

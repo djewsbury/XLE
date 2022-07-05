@@ -286,7 +286,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	auto CommandList::OnSubmitToQueue() -> SubmissionResult
 	{
 		assert(!_asyncTrackerMarkers.empty());
-		_attachedStorage.OnSubmitToQueue(_asyncTrackerMarkers[0]);
+		_attachedStorage.OnSubmitToQueue(GetPrimaryTrackerMarker());
 		assert(!_asyncTrackerMarkers.empty());
 		std::sort(_asyncTrackerMarkers.begin(), _asyncTrackerMarkers.end());
 		auto fence = checked_cast<FenceBasedTracker*>(_asyncTracker.get())->OnSubmitToQueue(_asyncTrackerMarkers);

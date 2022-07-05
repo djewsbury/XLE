@@ -53,6 +53,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		Threading::Mutex _lock;
 		std::vector<std::unique_ptr<TemporaryStoragePage>> _pages;
 		std::vector<std::unique_ptr<TemporaryStoragePage>> _namedPages;
+		std::vector<std::unique_ptr<TemporaryStoragePage>> _oversizedAllocations;
 		BitHeap _pageReservations, _namedPageReservations;
 		unsigned _nextPageId = 1u;
 		std::atomic<unsigned> _cmdListAttachedStorageAlive = 0;
@@ -90,16 +91,28 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 		}
 
-		auto pageSize = std::max(1u<<(IntegerLog2(byteCount+byteCount/2)+1), (unsigned)defaultPageSize);
-		_pages.emplace_back(std::make_unique<TemporaryStoragePage>(*_factory, pageSize, bindFlags, cpuMapping, _nextPageId++));
-		_pageReservations.Allocate(_pages.size()-1);
+		const unsigned oversized = 8*1024*1024;
+		if (byteCount <= oversized) {
+			auto pageSize = std::max(1u<<(IntegerLog2(byteCount+byteCount/2)+1), (unsigned)defaultPageSize);
+			_pages.emplace_back(std::make_unique<TemporaryStoragePage>(*_factory, pageSize, bindFlags, cpuMapping, _nextPageId++));
+			_pageReservations.Allocate(_pages.size()-1);
 
-		auto& page = *_pages[_pages.size()-1];
-		auto alignedByteCount = CeilToMultiple((unsigned)byteCount, page._alignment);
-		auto space = page._heap.AllocateBack(alignedByteCount);
-		assert(space != ~0u);
-		page._pendingNewFront = space + alignedByteCount;
-		return std::make_pair(&page, space); 
+			auto& page = *_pages[_pages.size()-1];
+			auto alignedByteCount = CeilToMultiple((unsigned)byteCount, page._alignment);
+			auto space = page._heap.AllocateBack(alignedByteCount);
+			assert(space != ~0u);
+			page._pendingNewFront = space + alignedByteCount;
+			return std::make_pair(&page, space);
+		} else {
+			// Oversized allocation.. we will allocate from the main heap and attempt to return it as soon as possible
+			_oversizedAllocations.emplace_back(std::make_unique<TemporaryStoragePage>(*_factory, byteCount, bindFlags, cpuMapping, _nextPageId++));
+
+			auto& page = *_oversizedAllocations[_oversizedAllocations.size()-1];
+			auto space = page._heap.AllocateBack(byteCount);
+			assert(space != ~0u);
+			page._pendingNewFront = byteCount;
+			return std::make_pair(&page, space);
+		}
 	}
 
 	TemporaryStoragePage* TemporaryStorageManager::Pimpl::ReserveNamedPage(NamedPage namedPage)
@@ -127,6 +140,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			_namedPageReservations.Deallocate(i);
 			return;
 		}
+
+		for (auto i = 0u; i!=_oversizedAllocations.size(); ++i)
+			if (_oversizedAllocations[i].get() == &page)
+				return;
 
 		assert(0);	// not found in this manager
 	}
@@ -161,6 +178,18 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			if (newFront != ~0u)
 				page._heap.ResetFront(newFront);
+		}
+
+		for (auto i = _oversizedAllocations.begin(); i!=_oversizedAllocations.end();) {
+			auto& page = **i;
+			assert(!page._markedDestroys.empty());
+			if (_gpuTracker->GetSpecificMarkerStatus(page._markedDestroys.front()._marker) == IAsyncTracker::MarkerStatus::ConsumerCompleted) {
+				page._markedDestroys.pop_front();
+				assert(page._markedDestroys.empty());
+				// we use AllocationRules::DisableSafeDestruction, so the GPU memory should be immediately freed when we do this
+				i = _oversizedAllocations.erase(i);
+			} else 
+				++i;
 		}
 	}
 
@@ -209,12 +238,11 @@ namespace RenderCore { namespace Metal_Vulkan
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static ResourceDesc BuildBufferDesc(
-		BindFlag::BitField bindingFlags, size_t byteCount, bool cpuMappable)
+	static ResourceDesc BuildBufferDesc(BindFlag::BitField bindingFlags, size_t byteCount, bool cpuMappable)
 	{
 		return CreateDesc(
 			bindingFlags,
-			cpuMappable ? AllocationRules::HostVisibleSequentialWrite|AllocationRules::PermanentlyMapped|AllocationRules::DisableAutoCacheCoherency|AllocationRules::DedicatedPage : 0,
+			AllocationRules::DedicatedPage | AllocationRules::DisableSafeDestruction | (cpuMappable ? AllocationRules::HostVisibleSequentialWrite|AllocationRules::PermanentlyMapped|AllocationRules::DisableAutoCacheCoherency : 0),
 			LinearBufferDesc::Create(unsigned(byteCount)),
 			"RollingTempBuf");
 	}
