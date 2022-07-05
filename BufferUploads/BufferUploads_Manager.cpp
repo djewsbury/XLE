@@ -48,10 +48,10 @@ namespace BufferUploads
                 ///////////////////   M A N A G E R   ///////////////////
                     /////////////////////////////////////////////////
 
-    static UploadDataType AsUploadDataType(const ResourceDesc& desc) 
+    static UploadDataType AsUploadDataType(const ResourceDesc& desc, BindFlag::BitField extraBindFlags)
     {
         switch (desc._type) {
-        case ResourceDesc::Type::LinearBuffer:     return (desc._bindFlags&(BindFlag::VertexBuffer|BindFlag::IndexBuffer))?(UploadDataType::GeometryBuffer):(UploadDataType::UniformBuffer);
+        case ResourceDesc::Type::LinearBuffer:     return ((desc._bindFlags|extraBindFlags)&(BindFlag::VertexBuffer|BindFlag::IndexBuffer))?(UploadDataType::GeometryBuffer):(UploadDataType::UniformBuffer);
         default:
         case ResourceDesc::Type::Texture:          return UploadDataType::Texture;
         }
@@ -181,7 +181,7 @@ namespace BufferUploads
         TransactionRefHolder    AllocateTransaction(TransactionOptions::BitField flags);
         void                    ApplyRepositions(const ResourceLocator& dst, IResource& src, IteratorRange<const RepositionStep*> steps);
 
-        std::atomic<unsigned>   _currentQueuedBytes[(unsigned)UploadDataType::Max];
+        std::atomic<int>        _currentQueuedBytes[(unsigned)UploadDataType::Max];
         unsigned                _nextTransactionIdTopPart;
         unsigned                _peakPrepareStaging, _peakTransferStagingToFinal, _peakCreateFromDataPacket;
         int64_t                 _waitTime;
@@ -266,6 +266,7 @@ namespace BufferUploads
 
         void    CompleteWaitForDescFuture(TransactionRefHolder&& ref, std::future<ResourceDesc> descFuture, std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, BindFlag::BitField);
         void    CompleteWaitForDataFuture(TransactionRefHolder&& ref, std::future<void> prepareFuture, PlatformInterface::StagingPage::Allocation&& stagingAllocation, std::shared_ptr<IResourcePool> pool, const ResourceDesc& finalResourceDesc);
+        void    UnqueueBytes(UploadDataType type, unsigned bytes);
     };
 
     static void ValidatePacketSize(const ResourceDesc& desc, IDataPacket& data)
@@ -299,7 +300,7 @@ namespace BufferUploads
             //      step can actually happen first, causing _currentQueuedBytes to actually go negative! it actually
             //      happens frequently enough to create blips in the graph.
             //  
-        _currentQueuedBytes[(unsigned)AsUploadDataType(desc)] += RenderCore::ByteCount(desc);
+        _currentQueuedBytes[(unsigned)AsUploadDataType(desc, desc._bindFlags)] += RenderCore::ByteCount(desc);
 
         TransactionMarker result { ref._transaction->_promise.get_future(), ref.GetID(), *this };
         PushStep(
@@ -319,7 +320,7 @@ namespace BufferUploads
         auto desc = destinationResource.GetContainingResource()->GetDesc();
         ref._transaction->_desc = desc;
         if (data) ValidatePacketSize(desc, *data);
-        _currentQueuedBytes[(unsigned)AsUploadDataType(desc)] += RenderCore::ByteCount(desc);
+        _currentQueuedBytes[(unsigned)AsUploadDataType(desc, desc._bindFlags)] += RenderCore::ByteCount(desc);
 
         TransactionMarker result{ ref._transaction->_promise.get_future(), ref.GetID(), *this };
         PushStep(
@@ -887,6 +888,12 @@ namespace BufferUploads
         }
     }
 
+    void AssemblyLine::UnqueueBytes(UploadDataType type, unsigned bytes)
+    {
+        auto newValue = _currentQueuedBytes[(unsigned)type] -= bytes;
+        assert(newValue >= 0);
+    }
+
     bool AssemblyLine::Process(CreateFromDataPacketStep& resourceCreateStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction)
     {
         auto& metricsUnderConstruction = context.GetMetricsUnderConstruction();
@@ -899,11 +906,11 @@ namespace BufferUploads
         assert(resourceCreateStep._initialisationData);
         auto objectSize = RenderCore::ByteCount(resourceCreateStep._creationDesc);
         auto uploadRequestSize = objectSize;
-        auto uploadDataType = (unsigned)AsUploadDataType(resourceCreateStep._creationDesc);
+        auto uploadDataType = (unsigned)AsUploadDataType(resourceCreateStep._creationDesc, resourceCreateStep._creationDesc._bindFlags);
 
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
-            _currentQueuedBytes[uploadDataType] -= uploadRequestSize;
+            UnqueueBytes((UploadDataType)uploadDataType, uploadRequestSize);
             return true;
         }
 
@@ -1028,7 +1035,7 @@ namespace BufferUploads
             transaction->_promise.set_exception(std::current_exception());
         } CATCH_END
 
-        _currentQueuedBytes[uploadDataType] -= uploadRequestSize;
+        UnqueueBytes((UploadDataType)uploadDataType, uploadRequestSize);
         return true;
     }
 
@@ -1046,7 +1053,7 @@ namespace BufferUploads
 
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
-            _currentQueuedBytes[(unsigned)AsUploadDataType(transaction->_desc)] -= RenderCore::ByteCount(transaction->_desc);
+            UnqueueBytes((UploadDataType)AsUploadDataType(transaction->_desc, prepareStagingStep._bindFlags), RenderCore::ByteCount(transaction->_desc));
             return true;
         }
 
@@ -1057,7 +1064,7 @@ namespace BufferUploads
             auto stagingConstruction = context.GetStagingPage().Allocate(byteCount, alignment);
             if (!stagingConstruction)   // hit our limit right now -- might have to wait until some of the scheduled uploads have completed
                 return false;
-            metricsUnderConstruction._stagingBytesAllocated[(unsigned)AsUploadDataType(desc)] += stagingConstruction.GetAllocationSize();
+            metricsUnderConstruction._stagingBytesAllocated[(unsigned)AsUploadDataType(desc, prepareStagingStep._bindFlags)] += stagingConstruction.GetAllocationSize();
 
             using namespace RenderCore;
             Metal::ResourceMap map{
@@ -1097,7 +1104,7 @@ namespace BufferUploads
             auto future = prepareStagingStep._packet->PrepareData(uploadList);
 
             RenderCore::ResourceDesc finalResourceDesc = desc;
-            finalResourceDesc._bindFlags = prepareStagingStep._bindFlags;
+            finalResourceDesc._bindFlags |= prepareStagingStep._bindFlags;
             finalResourceDesc._bindFlags |= BindFlag::TransferDst;         // since we're using a staging buffer to prepare, we must allow for transfers
 
             struct Captures
@@ -1152,7 +1159,7 @@ namespace BufferUploads
 
         } catch (...) {
             transaction->_promise.set_exception(std::current_exception());
-            _currentQueuedBytes[(unsigned)AsUploadDataType(transaction->_desc)] -= RenderCore::ByteCount(transaction->_desc);
+            UnqueueBytes((UploadDataType)AsUploadDataType(transaction->_desc, prepareStagingStep._bindFlags), RenderCore::ByteCount(transaction->_desc));
         }
 
         return true;
@@ -1173,7 +1180,7 @@ namespace BufferUploads
         try {
             auto desc = descFuture.get();
             transaction->_desc = desc;
-            _currentQueuedBytes[(unsigned)AsUploadDataType(desc)] += RenderCore::ByteCount(desc);
+            _currentQueuedBytes[(unsigned)AsUploadDataType(desc, bindFlags)] += RenderCore::ByteCount(desc);
             PushStep(
                 GetQueueSet(transaction->_creationOptions),
                 PrepareStagingStep { std::move(ref), desc, std::move(data), std::move(pool), bindFlags });
@@ -1197,6 +1204,7 @@ namespace BufferUploads
             _queuedFunctions.push_overflow(
                 [helper=std::move(helper), ref=std::move(ref)](auto& assemblyLine, auto& threadContext) {});
             _wakeupEvent.Increment();
+            _currentQueuedBytes[(unsigned)AsUploadDataType(finalResourceDesc, finalResourceDesc._bindFlags)] += RenderCore::ByteCount(finalResourceDesc);
             return;
         }
 
@@ -1209,6 +1217,7 @@ namespace BufferUploads
                 TransferStagingToFinalStep { std::move(ref), std::move(pool), finalResourceDesc, std::move(stagingAllocation) });
         } catch(...) {
             transaction->_promise.set_exception(std::current_exception());
+            _currentQueuedBytes[(unsigned)AsUploadDataType(finalResourceDesc, finalResourceDesc._bindFlags)] += RenderCore::ByteCount(finalResourceDesc);
         }
     }
 
@@ -1220,12 +1229,12 @@ namespace BufferUploads
 
         Transaction* transaction = transferStagingToFinalStep._transactionRef._transaction;
         assert(transaction);
-        auto dataType = (unsigned)AsUploadDataType(transferStagingToFinalStep._finalResourceDesc);
+        auto dataType = (unsigned)AsUploadDataType(transferStagingToFinalStep._finalResourceDesc, transferStagingToFinalStep._finalResourceDesc._bindFlags);
         auto descByteCount = RenderCore::ByteCount(transaction->_desc);     // needs to match CompleteWaitForDescFuture in order to reset _currentQueuedBytes correctly
 
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
-            _currentQueuedBytes[dataType] -= descByteCount;
+            UnqueueBytes((UploadDataType)dataType, descByteCount);
             return true;
         }
 
@@ -1278,7 +1287,7 @@ namespace BufferUploads
             transaction->_promise.set_exception(std::current_exception());
         } CATCH_END
 
-        _currentQueuedBytes[dataType] -= descByteCount;
+        UnqueueBytes((UploadDataType)dataType, descByteCount);
         return true;
     }
 
