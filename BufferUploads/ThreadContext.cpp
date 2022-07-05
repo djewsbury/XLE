@@ -181,8 +181,12 @@ namespace BufferUploads
         return *_pimpl->_stagingPage;
     }
 
-    PlatformInterface::QueueMarker      ThreadContext::GetProducerQueueMarker()
+    PlatformInterface::QueueMarker      ThreadContext::GetProducerCmdListSpecificMarker()
     {
+        // Get the marker that is specific to the particular cmd list we're building
+        auto* vulkanThreadContext = (RenderCore::IThreadContextVulkan*)_underlyingContext->QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code());
+        if (vulkanThreadContext)
+            return vulkanThreadContext->GetCmdListSpecificMarker();
         if (_pimpl->_asyncTracker) return _pimpl->_asyncTracker->GetProducerMarker();
         return 0;
     }

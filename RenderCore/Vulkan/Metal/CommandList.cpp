@@ -300,6 +300,13 @@ namespace RenderCore { namespace Metal_Vulkan
 		return result;
 	}
 
+	IAsyncTracker::Marker CommandList::GetPrimaryTrackerMarker() const
+	{
+		assert(!_asyncTrackerMarkers.empty());
+		// the first one should be the main tracker associated with this cmd list -- additionals come from cmd lists executed via ExecuteSecondaryCommandList
+		return *_asyncTrackerMarkers.begin();
+	}
+
 	CommandList::CommandList(CommandList&&) = default;
 	
 	CommandList& CommandList::operator=(CommandList&& moveFrom)

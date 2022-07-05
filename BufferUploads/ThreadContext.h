@@ -42,7 +42,7 @@ namespace BufferUploads
         unsigned&               CommitCount_LastResolve();
 
         PlatformInterface::StagingPage&     GetStagingPage();
-        PlatformInterface::QueueMarker      GetProducerQueueMarker();
+        PlatformInterface::QueueMarker      GetProducerCmdListSpecificMarker();
 
         PlatformInterface::ResourceUploadHelper&    GetResourceUploadHelper() { return _resourceUploadHelper; }
         const RenderCore::IThreadContext&           GetRenderCoreThreadContext() { return *_underlyingContext; }

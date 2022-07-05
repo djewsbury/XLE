@@ -110,6 +110,7 @@ namespace BufferUploads { namespace PlatformInterface
 
         StagingPageMetrics GetQuickMetrics() const;
         void BindThread();
+        void UpdateConsumerMarker();
 
         StagingPage(RenderCore::IDevice& device, unsigned size);
         ~StagingPage();
@@ -139,8 +140,6 @@ namespace BufferUploads { namespace PlatformInterface
 
         void Release(unsigned allocationId, QueueMarker releaseMarker);
         void Abandon(unsigned allocationId);
-
-        void UpdateConsumerMarker();
 
         #if defined(_DEBUG)
             std::thread::id _boundThread;

@@ -323,10 +323,13 @@ namespace BufferUploads { namespace PlatformInterface
         #if defined(_DEBUG)
             assert(_boundThread == std::this_thread::get_id());
         #endif
-        UpdateConsumerMarker();
         assert(byteCount <= _stagingBufferHeap.HeapSize());
         auto stagingAllocation = _stagingBufferHeap.AllocateBack(byteCount, alignment);
-        if (stagingAllocation == ~0u) return {};
+        if (stagingAllocation == ~0u) {
+            UpdateConsumerMarker();
+            stagingAllocation = _stagingBufferHeap.AllocateBack(byteCount, alignment);
+            if (stagingAllocation == ~0u) return {};
+        }
 
         auto allocationId = _nextAllocationId++;
         _activeAllocations.push_back({allocationId, stagingAllocation+byteCount, true});
@@ -339,12 +342,29 @@ namespace BufferUploads { namespace PlatformInterface
             assert(_boundThread == std::this_thread::get_id());
         #endif
         assert(_asyncTracker);
-        QueueMarker queueMarker = _asyncTracker->GetConsumerMarker();
-        while (!_allocationsWaitingOnDevice.empty() && _allocationsWaitingOnDevice.front()._releaseMarker <= queueMarker) {
-			assert(_allocationsWaitingOnDevice.front()._pendingNewFront != ~0u);
-			_stagingBufferHeap.ResetFront(_allocationsWaitingOnDevice.front()._pendingNewFront);
-			_allocationsWaitingOnDevice.erase(_allocationsWaitingOnDevice.begin());
-		}
+
+        // The normal deallocation scheme checks all cmd lists that were alive at the time of the deallocation. We only
+        // care about a single cmd list, though, because we know that the staging page is only used with specific cmd
+        // lists.
+        const bool checkOnlyOurCmdList = true;
+        if (checkOnlyOurCmdList) {
+            while (!_allocationsWaitingOnDevice.empty()) {
+                auto status = _asyncTracker->GetSpecificMarkerStatus(_allocationsWaitingOnDevice.front()._releaseMarker);
+                if (status != Metal_Vulkan::IAsyncTracker::MarkerStatus::ConsumerCompleted)
+                    break;
+
+                assert(_allocationsWaitingOnDevice.front()._pendingNewFront != ~0u);
+                _stagingBufferHeap.ResetFront(_allocationsWaitingOnDevice.front()._pendingNewFront);
+                _allocationsWaitingOnDevice.erase(_allocationsWaitingOnDevice.begin());
+            }
+        } else {
+            QueueMarker queueMarker = _asyncTracker->GetConsumerMarker();
+            while (!_allocationsWaitingOnDevice.empty() && _allocationsWaitingOnDevice.front()._releaseMarker <= queueMarker) {
+                assert(_allocationsWaitingOnDevice.front()._pendingNewFront != ~0u);
+                _stagingBufferHeap.ResetFront(_allocationsWaitingOnDevice.front()._pendingNewFront);
+                _allocationsWaitingOnDevice.erase(_allocationsWaitingOnDevice.begin());
+            }
+        }
     }
 
     void StagingPage::Release(unsigned allocationId, QueueMarker releaseMarker)
@@ -352,6 +372,7 @@ namespace BufferUploads { namespace PlatformInterface
         #if defined(_DEBUG)
             assert(_boundThread == std::this_thread::get_id());
         #endif
+        assert(releaseMarker != 0);
 
         bool found = false;
         for (auto& a:_activeAllocations)
@@ -384,6 +405,8 @@ namespace BufferUploads { namespace PlatformInterface
                 _allocationsWaitingOnDevice.back()._pendingNewFront = newFront;
             } else {
                 _allocationsWaitingOnDevice.push_back({releaseMarker, newFront});
+                if (_allocationsWaitingOnDevice.size() > 16)        // try to avoid this getting too long, since we update it lazily
+                    UpdateConsumerMarker();
             }
         }
     }
@@ -464,6 +487,7 @@ namespace BufferUploads { namespace PlatformInterface
 
     void StagingPage::Allocation::Release(QueueMarker queueMarker)
     {
+        assert(queueMarker != 0);
         if (_page)
             _page->Release(_allocationId, queueMarker);
         _page = nullptr;

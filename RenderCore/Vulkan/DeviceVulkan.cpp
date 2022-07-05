@@ -1148,6 +1148,13 @@ namespace RenderCore { namespace ImplVulkan
 		return _submissionQueue->GetTracker()->GetThreadingPressure();
 	}
 
+	unsigned ThreadContext::GetCmdListSpecificMarker()
+	{
+		if (!_metalContext || !_metalContext->HasActiveCommandList())
+			return 0;
+		return _metalContext->GetActiveCommandList().GetPrimaryTrackerMarker();
+	}
+
 	Metal_Vulkan::IAsyncTracker::Marker ThreadContext::CommitPrimaryCommandBufferToQueue_Internal(
 		Metal_Vulkan::CommandList& cmdList,
 		IteratorRange<const VkSemaphore*> completionSignals)

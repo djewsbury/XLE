@@ -119,6 +119,7 @@ namespace RenderCore { namespace ImplVulkan
 
         void CommitPrimaryCommandBufferToQueue(Metal_Vulkan::CommandList& cmdList) override;
         float GetThreadingPressure() override;
+        unsigned GetCmdListSpecificMarker() override;
 
         bool                        IsImmediate() const override;
         ThreadContextStateDesc      GetStateDesc() const override;

@@ -100,6 +100,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		};
 		SubmissionResult OnSubmitToQueue();
 		IAsyncTracker& GetAsyncTracker() { return *_asyncTracker; }
+		IAsyncTracker::Marker GetPrimaryTrackerMarker() const;
 
 		void RequireResourceVisbility(IteratorRange<const uint64_t*> resourceGuids);
 		void MakeResourcesVisible(IteratorRange<const uint64_t*> resourceGuids);

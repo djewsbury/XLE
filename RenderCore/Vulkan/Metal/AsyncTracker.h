@@ -18,8 +18,9 @@ namespace RenderCore { namespace Metal_Vulkan
 	class FenceBasedTracker : public IAsyncTracker
 	{
 	public:
-		virtual Marker GetConsumerMarker() const { return _lastCompletedConsumerFrameMarker; }
-		virtual Marker GetProducerMarker() const { return _currentProducerFrameMarker; }
+		virtual Marker GetConsumerMarker() const override { return _lastCompletedConsumerFrameMarker; }
+		virtual Marker GetProducerMarker() const override { return _currentProducerFrameMarker; }
+		virtual MarkerStatus GetSpecificMarkerStatus(Marker) const override;
 
 		Marker IncrementProducerFrame();
 		VkFence OnSubmitToQueue(IteratorRange<const Marker*> marker);

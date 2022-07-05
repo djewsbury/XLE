@@ -991,7 +991,7 @@ namespace BufferUploads
                         context.GetStagingPage().GetStagingResource(),
                         stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize());
 
-                    stagingConstruction.Release(context.GetProducerQueueMarker());
+                    stagingConstruction.Release(context.GetProducerCmdListSpecificMarker());
 
                 } else {
 
@@ -1272,7 +1272,7 @@ namespace BufferUploads
 
             // Don't delete the staging buffer immediately. It must stick around until the command list is resolved
             // and done with it
-            transferStagingToFinalStep._stagingResource.Release(context.GetProducerQueueMarker());
+            transferStagingToFinalStep._stagingResource.Release(context.GetProducerCmdListSpecificMarker());
 
             // Embue the final resource with the completion command list information
             transaction->_finalResource = ResourceLocator { std::move(transaction->_finalResource), context.CommandList_GetUnderConstruction() };
@@ -1412,6 +1412,8 @@ namespace BufferUploads
                 _onBackgroundFrame.Invoke();
                 _commitCountLastOnBackgroundFrame = cc;
             }
+
+            context.GetStagingPage().UpdateConsumerMarker();        // update at least once per frame, not strictly necessary, but improves metrics
         }
 
         bool framePriorityResolve = false;

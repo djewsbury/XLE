@@ -260,6 +260,63 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
+	auto FenceBasedTracker::GetSpecificMarkerStatus(Marker marker) const -> MarkerStatus
+	{
+		if (marker <= GetConsumerMarker())
+			return MarkerStatus::ConsumerCompleted;
+
+		{
+			ScopedLock(const_cast<FenceBasedTracker*>(this)->_trackersSubmittedToQueueLock);
+			for (const auto& next:_trackersSubmittedToQueue) {
+				if (next._frameMarker == marker) {
+					if (next._state == State::SubmittedToQueue) {
+						assert(next._fence);
+						auto res = vkGetFenceStatus(_device, next._fence);
+						if (res == VK_SUCCESS) {
+							return MarkerStatus::ConsumerCompleted;
+						} else {
+							if (res == VK_ERROR_DEVICE_LOST)
+								Throw(std::runtime_error("Vulkan device lost"));
+							assert(res == VK_NOT_READY);
+							return MarkerStatus::ConsumerPending;
+						}
+					} else if (next._state == State::Abandoned) {
+						return MarkerStatus::ConsumerCompleted;
+					} else {
+						break;
+					}
+				}
+			}
+
+			for (const auto& next:_trackersSubmittedPendingOrdering) {
+				if (next._frameMarker == marker) {
+					if (next._state == State::SubmittedToQueue) {
+						assert(next._fence);
+						auto res = vkGetFenceStatus(_device, next._fence);
+						if (res == VK_SUCCESS) {
+							return MarkerStatus::ConsumerCompleted;
+						} else {
+							if (res == VK_ERROR_DEVICE_LOST)
+								Throw(std::runtime_error("Vulkan device lost"));
+							assert(res == VK_NOT_READY);
+							return MarkerStatus::ConsumerPending;
+						}
+					} else if (next._state == State::Abandoned) {
+						return MarkerStatus::ConsumerCompleted;
+					} else {
+						break;
+					}
+				}
+			}
+
+			for (const auto& next:_trackersWritingCommands)
+				if (next.first == marker)
+					return MarkerStatus::NotSubmitted;
+		}
+
+		return MarkerStatus::Unknown;
+	}
+
 	bool FenceBasedTracker::WaitForFence(Marker marker, std::optional<std::chrono::nanoseconds> timeout)
 	{
 		auto start = std::chrono::steady_clock::now();
