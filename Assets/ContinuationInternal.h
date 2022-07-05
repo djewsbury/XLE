@@ -581,4 +581,26 @@ namespace Assets { namespace Internal
 		std::promise<PromisedType> _promise;
 		ContinuationFn _continuation;
 	};
+
+	template<typename ContinuationFn, typename... FutureTypes>
+		struct FlexTimedWaitableJustContinuation : public FlexTimedWaitable<FutureTypes...>
+	{
+	public:
+		using TupleOfFutures = std::tuple<FutureTypes...>;
+		FlexTimedWaitableJustContinuation(
+			std::chrono::microseconds waitLimit,
+			TupleOfFutures&& subFutures,
+			ContinuationFn&& continuation)
+		: FlexTimedWaitable<FutureTypes...>(waitLimit, std::move(subFutures)), _continuation(std::move(continuation))
+		{}
+
+		void dispatch(std::exception_ptr err) override
+		{
+			if (err)
+				return;
+			_continuation(std::move(FlexTimedWaitable<FutureTypes...>::_subFutures));
+		}
+
+		ContinuationFn _continuation;
+	};
 }}

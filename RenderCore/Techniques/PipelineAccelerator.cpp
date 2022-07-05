@@ -33,6 +33,12 @@
 #include <sstream>
 #include <iomanip>
 
+#define PA_SEPARATE_CONTINUATIONS 1		// Set to use a dedicated continuation executor for internal pipeline accelerator pool work. This can help by avoiding interfering with the continuation executor
+#if defined(PA_SEPARATE_CONTINUATIONS)
+	#include "../Assets/ContinuationExecutor.h"
+	#include "thousandeyes/futures/then.h"
+#endif
+
 namespace RenderCore { namespace Techniques
 {
 	using SequencerConfigId = uint64_t;
@@ -516,6 +522,10 @@ namespace RenderCore { namespace Techniques
 			NewlyQueued(std::shared_future<PipelineAccelerator::Pipeline> future, uint64_t acceleratorHash, SequencerConfigId cfgId) : _future(std::move(future)), _acceleratorHash(acceleratorHash), _cfgId(cfgId) {}
 		};
 		void SetupNewlyQueuedAlreadyLocked(IteratorRange<const NewlyQueued*>);
+
+		#if defined(PA_SEPARATE_CONTINUATIONS)
+			std::shared_ptr<thousandeyes::futures::Executor> _continuationExecutor;
+		#endif
 	};
 
 	void PipelineAcceleratorPool::LockForReading() const
@@ -536,6 +546,25 @@ namespace RenderCore { namespace Techniques
 		_pipelineUsageLock.unlock_shared();	
 	}
 
+	template<typename ContinuationFn, typename PromisedType, typename... FutureTypes>
+		static std::unique_ptr<::Assets::Internal::FlexTimedWaitableWithContinuation<ContinuationFn, PromisedType, std::decay_t<FutureTypes>...>> MakeTimedWaitable(
+			std::promise<PromisedType>&& p,
+			ContinuationFn&& continuation,
+			FutureTypes... futures)
+	{
+		return std::make_unique<::Assets::Internal::FlexTimedWaitableWithContinuation<ContinuationFn, PromisedType, std::decay_t<FutureTypes>...>>(
+			std::chrono::hours(1), std::tuple<std::decay_t<FutureTypes>...>{std::forward<FutureTypes>(futures)...}, std::move(continuation), std::move(p));
+	}
+
+	template<typename ContinuationFn, typename... FutureTypes>
+		static std::unique_ptr<::Assets::Internal::FlexTimedWaitableJustContinuation<ContinuationFn, std::decay_t<FutureTypes>...>> MakeTimedWaitableJustContinuation(
+			ContinuationFn&& continuation,
+			FutureTypes... futures)
+	{
+		return std::make_unique<::Assets::Internal::FlexTimedWaitableJustContinuation<ContinuationFn, std::decay_t<FutureTypes>...>>(
+			std::chrono::hours(1), std::tuple<std::decay_t<FutureTypes>...>{std::forward<FutureTypes>(futures)...}, std::move(continuation));
+	}
+
 	std::future<VisibilityMarkerId> PipelineAcceleratorPool::GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const
 	{
 		// We must lock the "_constructionLock" for this -- so it's less advisable to call this often
@@ -554,12 +583,23 @@ namespace RenderCore { namespace Techniques
 		if (pending != pipelineAccelerator._pendingPipelines.end()) {
 			std::promise<VisibilityMarkerId> newPromise;
 			auto result = newPromise.get_future();
-			::Assets::WhenAll(pending->second).ThenConstructToPromise(
-				std::move(newPromise),
-				[helper=_futuresToCheckHelper](const auto&) {
-					// the visibility marker should always be the next one
-					return helper->_lastPublishedVisibilityMarker.load()+1;
-				});
+			#if !defined(PA_SEPARATE_CONTINUATIONS)
+				::Assets::WhenAll(pending->second).ThenConstructToPromise(
+					std::move(newPromise),
+					[helper=_futuresToCheckHelper](const auto&) {
+						// the visibility marker should always be the next one
+						return helper->_lastPublishedVisibilityMarker.load()+1;
+					});
+			#else
+				_continuationExecutor->watch(
+					MakeTimedWaitable(
+						std::move(newPromise),
+						[helper=_futuresToCheckHelper](auto&& promise, auto&&) {
+							// the visibility marker should always be the next one
+							promise.set_value(helper->_lastPublishedVisibilityMarker.load()+1);
+						},
+						pending->second));
+			#endif
 			return result;
 		}
 		
@@ -580,14 +620,31 @@ namespace RenderCore { namespace Techniques
 		if (accelerator._pending.valid()) {
 			std::promise<std::pair<VisibilityMarkerId, BufferUploads::CommandListID>> newPromise;
 			auto result = newPromise.get_future();
-			::Assets::WhenAll(accelerator._pending).ThenConstructToPromise(
-				std::move(newPromise),
-				[helper=_futuresToCheckHelper](const auto& descSetActualQ) {
-					// the visibility marker should always be the next one
-					auto& descSetActual = *descSetActualQ.begin();
-					assert(descSetActual._completionCommandList != ~0u);		// use zero when not required
-					return std::make_pair(helper->_lastPublishedVisibilityMarker.load()+1, descSetActual._completionCommandList);
-				});
+			#if !defined(PA_SEPARATE_CONTINUATIONS)
+				::Assets::WhenAll(accelerator._pending).ThenConstructToPromise(
+					std::move(newPromise),
+					[helper=_futuresToCheckHelper](const auto& descSetActualQ) {
+						// the visibility marker should always be the next one
+						auto& descSetActual = *descSetActualQ.begin();
+						assert(descSetActual._completionCommandList != ~0u);		// use zero when not required
+						return std::make_pair(helper->_lastPublishedVisibilityMarker.load()+1, descSetActual._completionCommandList);
+					});
+			#else
+				_continuationExecutor->watch(
+					MakeTimedWaitable(
+						std::move(newPromise),
+						[helper=_futuresToCheckHelper](auto&& promise, auto&& descSetActualQ) {
+								// the visibility marker should always be the next one
+							TRY {
+								auto& descSetActual = *std::get<0>(descSetActualQ).get().begin();
+								assert(descSetActual._completionCommandList != ~0u);		// use zero when not required
+								promise.set_value(std::make_pair(helper->_lastPublishedVisibilityMarker.load()+1, descSetActual._completionCommandList));
+							} CATCH(...) {
+								promise.set_exception(std::current_exception());
+							} CATCH_END
+						},
+						accelerator._pending));
+			#endif
 			return result;
 		}
 
@@ -854,11 +911,21 @@ namespace RenderCore { namespace Techniques
 				result->_ownerPool = this;
 			#endif
 
-			::Assets::WhenAll(result->_pending).Then(
-				[helper=_futuresToCheckHelper, hash](const auto&) {
-					ScopedLock(helper->_lock);
-					helper->_descSetFuturesToCheck.emplace_back(hash);
-				});
+			#if !defined(PA_SEPARATE_CONTINUATIONS)
+				::Assets::WhenAll(result->_pending).Then(
+					[helper=_futuresToCheckHelper, hash](const auto&) {
+						ScopedLock(helper->_lock);
+						helper->_descSetFuturesToCheck.emplace_back(hash);
+					});
+			#else
+				_continuationExecutor->watch(
+					MakeTimedWaitableJustContinuation(
+						[helper=_futuresToCheckHelper, hash](auto&&) {
+							ScopedLock(helper->_lock);
+							helper->_descSetFuturesToCheck.emplace_back(hash);
+						},
+						result->_pending));
+			#endif
 		}
 
 		// We don't need to have "_constructionLock" after we've added the Marker to _descriptorSetAccelerators, so let's do the
@@ -1276,12 +1343,23 @@ namespace RenderCore { namespace Techniques
 	void PipelineAcceleratorPool::SetupNewlyQueuedAlreadyLocked(IteratorRange<const NewlyQueued*> newlyQueued)
 	{
 		// after the newly queued futures are completed, make a record so we know to come and check them
-		for (const auto& q:newlyQueued)
-			::Assets::WhenAll(std::move(q._future)).Then(
-				[helper=_futuresToCheckHelper, acceleratorHash=q._acceleratorHash, cfgId=q._cfgId](const auto&) {
-					ScopedLock(helper->_lock);
-					helper->_pipelineFuturesToCheck.emplace_back(acceleratorHash, cfgId);
-				});
+		for (const auto& q:newlyQueued) {
+			#if !defined(PA_SEPARATE_CONTINUATIONS)
+				::Assets::WhenAll(std::move(q._future)).Then(
+					[helper=_futuresToCheckHelper, acceleratorHash=q._acceleratorHash, cfgId=q._cfgId](const auto&) {
+						ScopedLock(helper->_lock);
+						helper->_pipelineFuturesToCheck.emplace_back(acceleratorHash, cfgId);
+					});
+			#else
+				_continuationExecutor->watch(
+					MakeTimedWaitableJustContinuation(
+						[helper=_futuresToCheckHelper, acceleratorHash=q._acceleratorHash, cfgId=q._cfgId](auto&&) {
+							ScopedLock(helper->_lock);
+							helper->_pipelineFuturesToCheck.emplace_back(acceleratorHash, cfgId);
+						},
+						std::move(q._future)));
+			#endif
+		}
 	}
 
 	void PipelineAcceleratorPool::SetGlobalSelector(StringSection<> name, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
@@ -1381,6 +1459,15 @@ namespace RenderCore { namespace Techniques
 				Throw(std::runtime_error(std::string{"Pipeline layout does not match the provided "} + descSetName + " layout. Slot type does not match for slot (" + std::to_string(s) + ")"));
 		}
 	}
+
+	namespace Internal
+	{
+		struct InvokerImmediate
+		{
+			template<typename Fn>
+				void operator()(Fn&& f) { f(); }
+		};
+	}
 	
 	PipelineAcceleratorPool::PipelineAcceleratorPool(
 		std::shared_ptr<IDevice> device,
@@ -1397,6 +1484,16 @@ namespace RenderCore { namespace Techniques
 		_pipelineCollection = std::make_shared<PipelineCollection>(_device);
 		_futuresToCheckHelper = std::make_shared<FuturesToCheckHelper>();
 		_futuresToCheckHelper->_lastPublishedVisibilityMarker.store(0);
+
+		#if defined(PA_SEPARATE_CONTINUATIONS)
+			using SimpleExecutor = thousandeyes::futures::PollingExecutor<
+				thousandeyes::futures::detail::InvokerWithNewThread,
+				Internal::InvokerImmediate>;
+			_continuationExecutor = std::make_shared<SimpleExecutor>(
+				std::chrono::microseconds(2000),
+				thousandeyes::futures::detail::InvokerWithNewThread{},
+				Internal::InvokerImmediate{});
+		#endif
 	}
 
 	PipelineAcceleratorPool::~PipelineAcceleratorPool() {}
