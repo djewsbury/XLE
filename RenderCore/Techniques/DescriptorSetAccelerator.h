@@ -73,7 +73,6 @@ namespace RenderCore { namespace Techniques
 	struct ConstructDescriptorSetHelper
 	{
 		void Construct(
-			std::promise<ActualizedDescriptorSet>&& promise,
 			ConstructionContext* context,
 			const Assets::PredefinedDescriptorSetLayout& layout,
 			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
@@ -84,10 +83,14 @@ namespace RenderCore { namespace Techniques
 			const UniformsStreamInterface& usi,
 			const UniformsStream& us);
 
+		void CompleteToPromise(
+			std::promise<std::vector<ActualizedDescriptorSet>>&& promise);
+
 		std::shared_ptr<IDevice> _device;
 		SamplerPool* _samplerPool = nullptr;
 		PipelineType _pipelineType = PipelineType::Graphics;
 		bool _generateBindingInfo = false;
+		std::shared_ptr<Internal::DescriptorSetInProgress> _working;
 	};
 
 	uint64_t HashMaterialMachine(IteratorRange<Assets::ScaffoldCmdIterator> materialMachine);

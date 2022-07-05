@@ -384,7 +384,7 @@ namespace RenderCore { namespace Techniques
 		volatile VisibilityMarkerId _visibilityMarker = ~VisibilityMarkerId(0);
 		ActualizedDescriptorSet _completed;
 
-		std::shared_future<ActualizedDescriptorSet> _pending;
+		std::shared_future<std::vector<ActualizedDescriptorSet>> _pending;
 		::Assets::DependencyValidation _depVal;		// filled in after _pending has completed
 		DescriptorSetBindingInfo _bindingInfo;
 
@@ -582,8 +582,9 @@ namespace RenderCore { namespace Techniques
 			auto result = newPromise.get_future();
 			::Assets::WhenAll(accelerator._pending).ThenConstructToPromise(
 				std::move(newPromise),
-				[helper=_futuresToCheckHelper](const auto& descSetActual) {
+				[helper=_futuresToCheckHelper](const auto& descSetActualQ) {
 					// the visibility marker should always be the next one
+					auto& descSetActual = *descSetActualQ.begin();
 					assert(descSetActual._completionCommandList != ~0u);		// use zero when not required
 					return std::make_pair(helper->_lastPublishedVisibilityMarker.load()+1, descSetActual._completionCommandList);
 				});
@@ -817,7 +818,7 @@ namespace RenderCore { namespace Techniques
 	{
 		auto constructionContextGuid = constructionContext ? constructionContext->GetGUID() : 0;
 		std::shared_ptr<DescriptorSetAccelerator> result;
-		std::promise<ActualizedDescriptorSet> promise;
+		std::promise<std::vector<ActualizedDescriptorSet>> promise;
 		{
 			ScopedLock(_constructionLock);
 
@@ -871,39 +872,39 @@ namespace RenderCore { namespace Techniques
 			// future continuation functions
 			std::shared_ptr<CompiledShaderPatchCollection> patchCollection; ::Assets::DependencyValidation patchCollectionDepVal; ::Assets::Blob patchCollectionLog;
 			if (patchCollectionFuture->CheckStatusBkgrnd(patchCollection, patchCollectionDepVal, patchCollectionLog) == ::Assets::AssetState::Ready) {
-				ConstructDescriptorSetHelper{_device, _samplerPool.get(), PipelineType::Graphics, generateBindingInfo}
-					.Construct(
-						std::move(promise),
-						constructionContext.get(),
-						patchCollection->GetInterface().GetMaterialDescriptorSet(),
-						materialMachine, deformBinding.get());
+				ConstructDescriptorSetHelper helper{_device, _samplerPool.get(), PipelineType::Graphics, generateBindingInfo};
+				helper.Construct(
+					constructionContext.get(),
+					patchCollection->GetInterface().GetMaterialDescriptorSet(),
+					materialMachine, deformBinding.get());
+				helper.CompleteToPromise(std::move(promise));
 			} else {
 				std::weak_ptr<IDevice> weakDevice = _device;
 				::Assets::WhenAll(patchCollectionFuture).ThenConstructToPromise(
 					std::move(promise),
 					[materialMachine, memoryHolder, weakDevice, generateBindingInfo, samplerPool=std::weak_ptr<SamplerPool>(_samplerPool), deformBinding, result, constructionContext](
-						std::promise<ActualizedDescriptorSet>&& promise,
+						std::promise<std::vector<ActualizedDescriptorSet>>&& promise,
 						std::shared_ptr<CompiledShaderPatchCollection> patchCollection) {
 
 						auto d = weakDevice.lock();
 						if (!d)
 							Throw(std::runtime_error("Device has been destroyed"));
 						
-						ConstructDescriptorSetHelper{d, samplerPool.lock().get(), PipelineType::Graphics, generateBindingInfo}
-							.Construct(
-								std::move(promise),
-								constructionContext.get(),
-								patchCollection->GetInterface().GetMaterialDescriptorSet(),
-								materialMachine, deformBinding.get());
+						ConstructDescriptorSetHelper helper{d, samplerPool.lock().get(), PipelineType::Graphics, generateBindingInfo};
+						helper.Construct(
+							constructionContext.get(),
+							patchCollection->GetInterface().GetMaterialDescriptorSet(),
+							materialMachine, deformBinding.get());
+						helper.CompleteToPromise(std::move(promise));
 					});
 			}
 		} else {
-			ConstructDescriptorSetHelper{_device, _samplerPool.get(), PipelineType::Graphics, generateBindingInfo}
-				.Construct(
-					std::move(promise),
-					constructionContext.get(),
-					_layoutPatcher->GetBaseMaterialDescriptorSetLayout(),
-					materialMachine, deformBinding.get());
+			ConstructDescriptorSetHelper helper{_device, _samplerPool.get(), PipelineType::Graphics, generateBindingInfo};
+			helper.Construct(
+				constructionContext.get(),
+				_layoutPatcher->GetBaseMaterialDescriptorSetLayout(),
+				materialMachine, deformBinding.get());
+			helper.CompleteToPromise(std::move(promise));
 		}
 
 		return result;
@@ -1242,8 +1243,8 @@ namespace RenderCore { namespace Techniques
 			TRY
 			{
 				auto completed = descSet->_pending.get();
-				descSet->_depVal = completed.GetDependencyValidation();
-				descSet->_completed = std::move(completed);
+				descSet->_depVal = completed.begin()->GetDependencyValidation();
+				descSet->_completed = std::move(*completed.begin());
 				descSet->_visibilityMarker = newVisibilityMarker;
 				descSet->_pending = {};
 			} CATCH(const ::Assets::Exceptions::ConstructionError& e) {

@@ -34,12 +34,13 @@ namespace RenderCore { namespace Techniques
 			{
 				std::shared_future<std::shared_ptr<DeferredShaderResource>> _deferredShaderResource;
 				std::pair<unsigned, unsigned> _cbResourceOffsetAndSize = {0,0};
+				unsigned _cbUploadIdx = ~0u;
 				std::shared_ptr<IResourceView> _fixedResource;
 			};
 			std::vector<Resource> _resources;
 			std::vector<std::shared_ptr<ISampler>> _samplers;
+			std::vector<BufferUploads::TransactionMarker> _cbUploadMarkers;
 			size_t _allReadyBefore = 0;
-			BufferUploads::TransactionMarker _cbUploadMarker;
 
 			struct Slot
 			{
@@ -48,12 +49,16 @@ namespace RenderCore { namespace Techniques
 				std::string _slotName;
 				DescriptorType _slotType;
 			};
-			std::vector<Slot> _slots;
 
-			DescriptorSetSignature _signature;
-			DescriptorSetBindingInfo _bindingInfo;
-
-			std::shared_ptr<AnimatedUniformBufferHelper> _animHelper;
+			struct DescriptorSet
+			{
+				std::vector<Slot> _slots;
+				DescriptorSetSignature _signature;
+				DescriptorSetBindingInfo _bindingInfo;
+				std::shared_ptr<AnimatedUniformBufferHelper> _animHelper;
+				bool _applyDeformAcceleratorOffset = false;
+			};
+			std::vector<DescriptorSet> _descriptorSets;
 
 			template<typename TimeMarker>
 				::Assets::PollStatus UpdatePollUntil(TimeMarker timeoutTime)
@@ -69,8 +74,12 @@ namespace RenderCore { namespace Techniques
 					}
 				}
 
-				if (_cbUploadMarker._future.wait_until(timeoutTime) == std::future_status::timeout) 
-					return ::Assets::PollStatus::Continue;
+				for (size_t c=_allReadyBefore-_resources.size(); c<_cbUploadMarkers.size(); ++c) {
+					if (_cbUploadMarkers[c]._future.wait_until(timeoutTime) == std::future_status::timeout) {
+						_allReadyBefore = _resources.size()+c;
+						return ::Assets::PollStatus::Continue;
+					}
+				}
 
 				return ::Assets::PollStatus::Finish;
 			}
@@ -122,7 +131,6 @@ namespace RenderCore { namespace Techniques
 	static const std::string s_multipleDescSetCBs = "DescSetCBs";
 
 	void ConstructDescriptorSetHelper::Construct(
-		std::promise<ActualizedDescriptorSet>&& promise,
 		ConstructionContext* context,
 		const Assets::PredefinedDescriptorSetLayout& layout,
 		IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
@@ -138,10 +146,13 @@ namespace RenderCore { namespace Techniques
 			maxSlotIdx = std::max(maxSlotIdx, int(slot._slotIdx));
 		assert(maxSlotIdx >= 0);
 		
-		auto working = std::make_shared<Internal::DescriptorSetInProgress>();
-		working->_slots.resize(maxSlotIdx+1);
+		if (!_working)
+			_working = std::make_shared<Internal::DescriptorSetInProgress>();
+
+		Internal::DescriptorSetInProgress::DescriptorSet ds;
+		ds._slots.resize(maxSlotIdx+1);
 		if (_generateBindingInfo)
-			working->_bindingInfo._slots.resize(working->_slots.size());
+			ds._bindingInfo._slots.resize(ds._slots.size());
 
 		Internal::InterpretMaterialMachineHelper machineHelper{materialMachine};
 		bool applyDeformAcceleratorOffset = false;
@@ -168,13 +179,13 @@ namespace RenderCore { namespace Techniques
 					Throw(std::runtime_error("Attempting to bind resource to non-texture descriptor slot for slot " + s._name));
 
 				slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
-				slotInProgress._resourceIdx = (unsigned)working->_resources.size();
+				slotInProgress._resourceIdx = (unsigned)_working->_resources.size();
 				Internal::DescriptorSetInProgress::Resource res;
 				if (context) {
 					res._deferredShaderResource = context->ConstructShaderResource(MakeStringSection(boundResource.value()));
 				} else
 					res._deferredShaderResource = ::Assets::MakeAssetPtr<DeferredShaderResource>(MakeStringSection(boundResource.value()))->ShareFuture();
-				working->_resources.push_back(res);
+				_working->_resources.push_back(res);
 				gotBinding = true;
 
 				if (_generateBindingInfo)
@@ -203,11 +214,12 @@ namespace RenderCore { namespace Techniques
 						}
 
 						slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
-						slotInProgress._resourceIdx = (unsigned)working->_resources.size();
+						slotInProgress._resourceIdx = (unsigned)_working->_resources.size();
 
 						Internal::DescriptorSetInProgress::Resource res;
 						res._cbResourceOffsetAndSize = {uploadBufferStart, cbSize};
-						working->_resources.push_back(res);
+						res._cbUploadIdx = (unsigned)_working->_cbUploadMarkers.size();		// upload marker added later
+						_working->_resources.push_back(res);
 
 						if (_generateBindingInfo) {
 							std::stringstream str;
@@ -219,11 +231,11 @@ namespace RenderCore { namespace Techniques
 				} else {
 					applyDeformAcceleratorOffset = true;
 					slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
-					slotInProgress._resourceIdx = (unsigned)working->_resources.size();
+					slotInProgress._resourceIdx = (unsigned)_working->_resources.size();
 
 					Internal::DescriptorSetInProgress::Resource res;
 					res._fixedResource = deformBinding->_dynamicPageResource->CreateBufferView(BindFlag::ConstantBuffer);
-					working->_resources.push_back(res);
+					_working->_resources.push_back(res);
 					
 					if (_generateBindingInfo)
 						slotBindingInfo._binding = "Animated Uniforms";
@@ -235,9 +247,9 @@ namespace RenderCore { namespace Techniques
 				auto i = std::find_if(machineHelper._samplerBindings.begin(), machineHelper._samplerBindings.end(), [hashName](const auto& c) { return c.first == hashName; });
 				if (i != machineHelper._samplerBindings.end()) {
 					slotInProgress._bindType = DescriptorSetInitializer::BindType::Sampler;
-					slotInProgress._resourceIdx = (unsigned)working->_samplers.size();
+					slotInProgress._resourceIdx = (unsigned)_working->_samplers.size();
 					auto metalSampler = _samplerPool->GetSampler(i->second);
-					working->_samplers.push_back(metalSampler);
+					_working->_samplers.push_back(metalSampler);
 					gotBinding = true;
 
 					if (_generateBindingInfo)
@@ -246,51 +258,63 @@ namespace RenderCore { namespace Techniques
 			} 
 			
 			if (gotBinding) {
-				if (working->_slots[s._slotIdx]._bindType != DescriptorSetInitializer::BindType::Empty)
+				if (ds._slots[s._slotIdx]._bindType != DescriptorSetInitializer::BindType::Empty)
 					Throw(std::runtime_error("Multiple resources bound to the same slot in ConstructDescriptorSet(). Attempting to bind slot " + s._name));
 
-				assert(s._slotIdx < working->_slots.size());
-				working->_slots[s._slotIdx] = slotInProgress;
+				assert(s._slotIdx < ds._slots.size());
+				ds._slots[s._slotIdx] = slotInProgress;
 				if (_generateBindingInfo) {
 					slotBindingInfo._bindType = slotInProgress._bindType;
-					working->_bindingInfo._slots[s._slotIdx] = slotBindingInfo;
+					ds._bindingInfo._slots[s._slotIdx] = slotBindingInfo;
 				}
 			}
 		}
 
-		working->_signature = layout.MakeDescriptorSetSignature(_samplerPool);
+		ds._signature = layout.MakeDescriptorSetSignature(_samplerPool);
+		ds._applyDeformAcceleratorOffset = applyDeformAcceleratorOffset;
 
 		if (!cbUploadBuffer.empty()) {
 			auto& bu = Services::GetBufferUploads();
 			auto size = cbUploadBuffer.size();
-			working->_cbUploadMarker = bu.Transaction_Begin(
-				CreateDesc(BindFlag::ConstantBuffer, LinearBufferDesc::Create((unsigned)size), cbName.value()),
-				BufferUploads::CreateBasicPacket(std::move(cbUploadBuffer)));
+			_working->_cbUploadMarkers.push_back(
+				bu.Transaction_Begin(
+					CreateDesc(BindFlag::ConstantBuffer, LinearBufferDesc::Create((unsigned)size), cbName.value()),
+					BufferUploads::CreateBasicPacket(std::move(cbUploadBuffer))));
 		}
 
+		_working->_descriptorSets.emplace_back(std::move(ds));
+	}
+
+	void ConstructDescriptorSetHelper::CompleteToPromise(
+		std::promise<std::vector<ActualizedDescriptorSet>>&& promise)
+	{
 		::Assets::PollToPromise(
 			std::move(promise),
-			[working](auto timeout) {
+			[working=_working](auto timeout) {
 				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
 				return working->UpdatePollUntil(timeoutTime);
 			},
-			[working, device=_device, pipelineType=_pipelineType, applyDeformAcceleratorOffset]() {
+			[working=_working, device=_device, pipelineType=_pipelineType]() {
 				std::vector<::Assets::DependencyValidation> subDepVals;
 				std::vector<std::shared_ptr<IResourceView>> finalResources;
 				finalResources.reserve(working->_resources.size());
 				subDepVals.reserve(working->_resources.size());
 				BufferUploads::CommandListID completionCommandList = 0;
 
-				BufferUploads::ResourceLocator uploadedCB;
-				if (working->_cbUploadMarker.IsValid()) {
-					uploadedCB = working->_cbUploadMarker._future.get();
-					completionCommandList = std::max(completionCommandList, uploadedCB.GetCompletionCommandList());
+				std::vector<BufferUploads::ResourceLocator> uploadedCBs;
+				uploadedCBs.reserve(working->_cbUploadMarkers.size());
+				for (auto& cb:working->_cbUploadMarkers) {
+					assert (cb.IsValid());
+					uploadedCBs.push_back(cb._future.get());
+					completionCommandList = std::max(completionCommandList, (uploadedCBs.end()-1)->GetCompletionCommandList());
 				}
 
 				// Construct the final descriptor set; even if we got some (or all) invalid assets
 				for (auto&d:working->_resources) {
 					if (d._cbResourceOffsetAndSize.second) {
-						finalResources.push_back(uploadedCB.CreateBufferView(BindFlag::ConstantBuffer, d._cbResourceOffsetAndSize.first, d._cbResourceOffsetAndSize.second));
+						assert(d._cbUploadIdx != ~0u);
+						finalResources.push_back(uploadedCBs[d._cbUploadIdx].CreateBufferView(BindFlag::ConstantBuffer, d._cbResourceOffsetAndSize.first, d._cbResourceOffsetAndSize.second));
+						subDepVals.push_back({});
 					} else if (!d._fixedResource) {
 						auto actualized = d._deferredShaderResource.get();		// note -- on invalidate, the only dep val returned will be the one that is invalid
 						finalResources.push_back(actualized->GetShaderResource());
@@ -299,53 +323,59 @@ namespace RenderCore { namespace Techniques
 						if (resCmdList != BufferUploads::CommandListID_Invalid)
 							completionCommandList = std::max(resCmdList, completionCommandList);
 
-						auto depVal = actualized->GetDependencyValidation();
-						if (depVal)
-							subDepVals.push_back(depVal);
+						subDepVals.push_back(actualized->GetDependencyValidation());
 					} else {
 						finalResources.push_back(d._fixedResource);
+						subDepVals.push_back({});
 					}
 				}
 
 				assert(completionCommandList != BufferUploads::CommandListID_Invalid);		// use zero when not required, instead
 
-				::Assets::DependencyValidation depVal;
-				{
-					// create a dep val for the subdepvals, removing any duplicates
+				std::vector<ActualizedDescriptorSet> finalDescriptorSets;
+				finalDescriptorSets.reserve(working->_descriptorSets.size());
+				for (auto&ds:working->_descriptorSets) {
+					std::vector<DescriptorSetInitializer::BindTypeAndIdx> bindTypesAndIdx;
 					std::vector<::Assets::DependencyValidationMarker> subDepValMarkers;
-					subDepValMarkers.reserve(subDepVals.size());
-					for (const auto&d:subDepVals) subDepValMarkers.emplace_back(d);
-					std::sort(subDepValMarkers.begin(), subDepValMarkers.end());
-					subDepValMarkers.erase(std::unique(subDepValMarkers.begin(), subDepValMarkers.end()), subDepValMarkers.end());
-					depVal = ::Assets::GetDepValSys().MakeOrReuse(subDepValMarkers);
+					subDepValMarkers.reserve(ds._slots.size());
+					bindTypesAndIdx.reserve(ds._slots.size());
+					for (const auto&s:ds._slots) {
+						bindTypesAndIdx.push_back(DescriptorSetInitializer::BindTypeAndIdx{s._bindType, s._resourceIdx});
+						if (s._bindType == DescriptorSetInitializer::BindType::ResourceView && subDepVals[s._resourceIdx])
+							subDepValMarkers.push_back(subDepVals[s._resourceIdx]);
+					}
+
+					::Assets::DependencyValidation depVal;
+					{
+						// create a dep val for the subdepvals, removing any duplicates
+						std::sort(subDepValMarkers.begin(), subDepValMarkers.end());
+						subDepValMarkers.erase(std::unique(subDepValMarkers.begin(), subDepValMarkers.end()), subDepValMarkers.end());
+						depVal = ::Assets::GetDepValSys().MakeOrReuse(subDepValMarkers);
+					}
+
+					std::vector<const IResourceView*> resourceViews;
+					std::vector<const ISampler*> samplers;
+					resourceViews.reserve(finalResources.size());
+					samplers.reserve(working->_samplers.size());
+					for (const auto&r:finalResources) resourceViews.push_back(r.get());
+					for (const auto&r:working->_samplers) samplers.push_back(r.get());
+
+					DescriptorSetInitializer initializer;
+					initializer._slotBindings = MakeIteratorRange(bindTypesAndIdx);
+					initializer._bindItems._resourceViews = MakeIteratorRange(resourceViews);
+					initializer._bindItems._samplers = MakeIteratorRange(samplers);
+					initializer._signature = &ds._signature;
+					initializer._pipelineType = pipelineType;
+
+					ActualizedDescriptorSet actualized;
+					actualized._descriptorSet = device->CreateDescriptorSet(initializer);
+					actualized._depVal = std::move(depVal);
+					actualized._bindingInfo = std::move(ds._bindingInfo);
+					actualized._completionCommandList = completionCommandList;
+					actualized._applyDeformAcceleratorOffset = ds._applyDeformAcceleratorOffset;
+					finalDescriptorSets.emplace_back(actualized);
 				}
-
-				std::vector<DescriptorSetInitializer::BindTypeAndIdx> bindTypesAndIdx;
-				bindTypesAndIdx.reserve(working->_slots.size());
-				for (const auto&s:working->_slots) {
-					bindTypesAndIdx.push_back(DescriptorSetInitializer::BindTypeAndIdx{s._bindType, s._resourceIdx});
-				}
-				std::vector<const IResourceView*> resourceViews;
-				std::vector<const ISampler*> samplers;
-				resourceViews.reserve(finalResources.size());
-				samplers.reserve(working->_samplers.size());
-				for (const auto&r:finalResources) resourceViews.push_back(r.get());
-				for (const auto&r:working->_samplers) samplers.push_back(r.get());
-
-				DescriptorSetInitializer initializer;
-				initializer._slotBindings = MakeIteratorRange(bindTypesAndIdx);
-				initializer._bindItems._resourceViews = MakeIteratorRange(resourceViews);
-				initializer._bindItems._samplers = MakeIteratorRange(samplers);
-				initializer._signature = &working->_signature;
-				initializer._pipelineType = pipelineType;
-
-				ActualizedDescriptorSet actualized;
-				actualized._descriptorSet = device->CreateDescriptorSet(initializer);
-				actualized._depVal = std::move(depVal);
-				actualized._bindingInfo = std::move(working->_bindingInfo);
-				actualized._completionCommandList = completionCommandList;
-				actualized._applyDeformAcceleratorOffset = applyDeformAcceleratorOffset;
-				return actualized;
+				return finalDescriptorSets;
 			});
 	}
 
