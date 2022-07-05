@@ -270,9 +270,9 @@ namespace BufferUploads
 				if (start < end) heap->Deallocate(start, end-start);	// last little bit
 			}
 		}
-		#if defined(_DEBUG)
-			heap->ValidateRefsAndHeap();
-		#endif
+		// #if defined(_DEBUG)
+		//	heap->ValidateRefsAndHeap();
+		// #endif
 
 		if (heap->_heap.IsEmpty() && !heap->_lockedForDefrag.load()) {
 			// If we get down to completely empty, just remove and the page entirely. This can happen frequently
@@ -548,7 +548,10 @@ namespace BufferUploads
 				}
 
 				#if defined(_DEBUG)
-					for (auto& h:_heaps) h->ValidateRefsAndHeap();
+					{
+						ScopedLock(_lock);
+						for (auto& h:_heaps) h->ValidateRefsAndHeap();
+					}
 				#endif
 				return;
 			}

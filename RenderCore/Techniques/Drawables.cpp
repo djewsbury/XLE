@@ -885,6 +885,7 @@ namespace RenderCore { namespace Techniques
 		for (const auto& l:attachedLocators) {
 			assert(!l.IsWholeResource());
 			auto range = l.GetRangeInContainingResource();
+			// might be ideal if we just stole the reference count from the resource locator passed in -- but we're just re-reffing here
 			if (_vb->AddRef(*l.GetContainingResource(), range.first, range.second-range.first)) {
 				vbRanges[vbRangeCount++] = {&geo, l.GetContainingResource().get(), (unsigned)range.first, unsigned(range.second-range.first)};
 			} else if (_ib->AddRef(*l.GetContainingResource(), range.first, range.second-range.first)) {
