@@ -205,6 +205,7 @@ namespace BufferUploads
             std::shared_ptr<IResourcePool> _pool;
             ResourceDesc _finalResourceDesc;
             PlatformInterface::StagingPage::Allocation _stagingResource;
+            std::shared_ptr<IResource> _oversizeResource;
         };
 
         struct CreateFromDataPacketStep
@@ -275,7 +276,7 @@ namespace BufferUploads
         void    PushStep(QueueSet&, CreateFromDataPacketStep&& step);
 
         void    CompleteWaitForDescFuture(TransactionRefHolder&& ref, std::future<ResourceDesc> descFuture, std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, BindFlag::BitField);
-        void    CompleteWaitForDataFuture(TransactionRefHolder&& ref, std::future<void> prepareFuture, PlatformInterface::StagingPage::Allocation&& stagingAllocation, std::shared_ptr<IResourcePool> pool, const ResourceDesc& finalResourceDesc);
+        void    CompleteWaitForDataFuture(TransactionRefHolder&& ref, std::future<void> prepareFuture, PlatformInterface::StagingPage::Allocation&& stagingAllocation, std::shared_ptr<IResource> oversizeResource, std::shared_ptr<IResourcePool> pool, const ResourceDesc& finalResourceDesc);
         void    UnqueueBytes(UploadDataType type, unsigned bytes);
     };
 
@@ -982,33 +983,40 @@ namespace BufferUploads
                     auto stagingByteCount = objectSize;
                     auto alignment = helper.CalculateStagingBufferOffsetAlignment(desc);
 
-                    auto stagingConstruction = context.GetStagingPage().Allocate(stagingByteCount, alignment);
-                    if (!stagingConstruction) {
-                        // we will return, so keep the resource until then
-                        transaction->_finalResource = finalConstruction;
-                        return false;
-                    }
-                    metricsUnderConstruction._stagingBytesAllocated[uploadDataType] += stagingConstruction.GetAllocationSize();
+                    if (stagingByteCount <= context.GetStagingPage().MaxSize()) {
+                        auto stagingConstruction = context.GetStagingPage().Allocate(stagingByteCount, alignment);
+                        if (!stagingConstruction) {
+                            // we will return, so keep the resource until then
+                            transaction->_finalResource = finalConstruction;
+                            return false;
+                        }
+                        metricsUnderConstruction._stagingBytesAllocated[uploadDataType] += stagingConstruction.GetAllocationSize();
 
-                    if (desc._type == ResourceDesc::Type::Texture) {
-                        helper.WriteViaMap(
+                        if (desc._type == ResourceDesc::Type::Texture) {
+                            helper.WriteViaMap(
+                                context.GetStagingPage().GetStagingResource(),
+                                stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize(),
+                                desc._textureDesc,
+                                PlatformInterface::AsResourceInitializer(*resourceCreateStep._initialisationData));
+                        } else {
+                            helper.WriteViaMap(
+                                context.GetStagingPage().GetStagingResource(),
+                                stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize(),
+                                resourceCreateStep._initialisationData->GetData());
+                        }
+                
+                        helper.UpdateFinalResourceFromStaging(
+                            finalConstruction,
                             context.GetStagingPage().GetStagingResource(),
-                            stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize(),
-                            desc._textureDesc,
-                            PlatformInterface::AsResourceInitializer(*resourceCreateStep._initialisationData));
+                            stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize());
+
+                        stagingConstruction.Release(context.GetProducerCmdListSpecificMarker());
                     } else {
-                        helper.WriteViaMap(
-                            context.GetStagingPage().GetStagingResource(),
-                            stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize(),
-                            resourceCreateStep._initialisationData->GetData());
+                        // oversized allocations will go via a cmd list staging allocation, which has provisions
+                        // to create short-lived large staging buffers
+                        helper.UpdateFinalResourceViaCmdListAttachedStaging(
+                            context.GetRenderCoreThreadContext(), finalConstruction, *resourceCreateStep._initialisationData);
                     }
-            
-                    helper.UpdateFinalResourceFromStaging(
-                        finalConstruction,
-                        context.GetStagingPage().GetStagingResource(),
-                        stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize());
-
-                    stagingConstruction.Release(context.GetProducerCmdListSpecificMarker());
 
                 } else {
 
@@ -1078,27 +1086,12 @@ namespace BufferUploads
             const auto& desc = prepareStagingStep._desc;
             auto byteCount = RenderCore::ByteCount(desc);
             auto alignment = context.GetResourceUploadHelper().CalculateStagingBufferOffsetAlignment(desc);
-            auto stagingConstruction = context.GetStagingPage().Allocate(byteCount, alignment);
-            if (!stagingConstruction)   // hit our limit right now -- might have to wait until some of the scheduled uploads have completed
-                return false;
-            metricsUnderConstruction._stagingBytesAllocated[(unsigned)AsUploadDataType(desc, prepareStagingStep._bindFlags)] += stagingConstruction.GetAllocationSize();
 
             using namespace RenderCore;
-            Metal::ResourceMap map{
-                context.GetRenderCoreDevice(),      // we can also get the device context with *Metal::DeviceContext::Get(*context.GetRenderCoreThreadContext())
-                context.GetStagingPage().GetStagingResource(),
-                Metal::ResourceMap::Mode::WriteDiscardPrevious,
-                stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize()};
-            auto uploadList = context.GetResourceUploadHelper().CalculateUploadList(map, desc);
-            auto future = prepareStagingStep._packet->PrepareData(uploadList);
-
-            RenderCore::ResourceDesc finalResourceDesc = desc;
-            finalResourceDesc._bindFlags |= prepareStagingStep._bindFlags;
-            finalResourceDesc._bindFlags |= BindFlag::TransferDst;         // since we're using a staging buffer to prepare, we must allow for transfers
-
             struct Captures
             {
                 Metal::ResourceMap _map;
+                std::shared_ptr<IResource> _oversizeResource;
                 TransactionRefHolder _transactionRef;
                 std::shared_ptr<IAsyncDataSource> _pkt;
                 PlatformInterface::StagingPage::Allocation _stagingConstruction;
@@ -1125,25 +1118,62 @@ namespace BufferUploads
                 Captures(Captures&&) = default;
                 Captures& operator=(Captures&&) = default;
             } captures;
-            captures._map = std::move(map);
             captures._weakThis = weak_from_this();
+
+            std::vector<IAsyncDataSource::SubResource> uploadList;
+            if (byteCount < context.GetStagingPage().MaxSize()) {
+                auto stagingConstruction = context.GetStagingPage().Allocate(byteCount, alignment);
+                if (!stagingConstruction)   // hit our limit right now -- might have to wait until some of the scheduled uploads have completed
+                    return false;
+                metricsUnderConstruction._stagingBytesAllocated[(unsigned)AsUploadDataType(desc, prepareStagingStep._bindFlags)] += stagingConstruction.GetAllocationSize();
+
+                Metal::ResourceMap map{
+                    context.GetRenderCoreDevice(),      // we can also get the device context with *Metal::DeviceContext::Get(*context.GetRenderCoreThreadContext())
+                    context.GetStagingPage().GetStagingResource(),
+                    Metal::ResourceMap::Mode::WriteDiscardPrevious,
+                    stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize()};
+                uploadList = context.GetResourceUploadHelper().CalculateUploadList(map, desc);
+
+                captures._map = std::move(map);
+                captures._stagingConstruction = std::move(stagingConstruction);
+            } else {
+                auto oversizeDesc = CreateDesc(
+                    BindFlag::TransferSrc,
+                    AllocationRules::PermanentlyMapped | AllocationRules::HostVisibleSequentialWrite | AllocationRules::DedicatedPage,
+                    LinearBufferDesc::Create(byteCount), "oversize-staging");
+                captures._oversizeResource = context.GetRenderCoreDevice().CreateResource(oversizeDesc);
+                Metal::ResourceMap map{context.GetRenderCoreDevice(), *captures._oversizeResource, Metal::ResourceMap::Mode::WriteDiscardPrevious};
+                uploadList = context.GetResourceUploadHelper().CalculateUploadList(map, desc);
+                captures._map = std::move(map);
+            }
+
+            captures._finalResourceDesc = desc;
+            captures._finalResourceDesc._bindFlags |= prepareStagingStep._bindFlags;
+            captures._finalResourceDesc._bindFlags |= BindFlag::TransferDst;         // since we're using a staging buffer to prepare, we must allow for transfers
+
+            auto future = prepareStagingStep._packet->PrepareData(uploadList);
             captures._transactionRef = std::move(prepareStagingStep._transactionRef);
             captures._pkt = std::move(prepareStagingStep._packet);        // need to retain pkt until PrepareData completes
-            captures._stagingConstruction = std::move(stagingConstruction);
-            captures._pool = prepareStagingStep._pool;
-            captures._finalResourceDesc = finalResourceDesc;
+            captures._pool = std::move(prepareStagingStep._pool);
 
             assert(!transaction->_waitingFuture.valid());
             transaction->_waitingFuture = thousandeyes::futures::then(
                 shared_from_this(),
                 std::move(future),
                 [captures=std::move(captures)](std::future<void> prepareFuture) mutable {
-                    auto t = captures._weakThis.lock();
-                    if (!t)
-                        Throw(std::runtime_error("Assembly line was destroyed before future completed"));
+                    TRY {
+                        auto t = captures._weakThis.lock();
+                        if (!t)
+                            Throw(std::runtime_error("Assembly line was destroyed before future completed"));
 
-                    captures._map = {};
-                    t->CompleteWaitForDataFuture(std::move(captures._transactionRef), std::move(prepareFuture), std::move(captures._stagingConstruction), std::move(captures._pool), captures._finalResourceDesc);
+                        captures._map = {};
+                        t->CompleteWaitForDataFuture(std::move(captures._transactionRef), std::move(prepareFuture), std::move(captures._stagingConstruction), std::move(captures._oversizeResource), std::move(captures._pool), captures._finalResourceDesc);
+                    } CATCH (...) {
+                        if (captures._transactionRef._transaction) {
+                            captures._transactionRef._transaction->_promise.set_exception(std::current_exception());
+                            captures._transactionRef._transaction->_promisePending = false;
+                        }
+                    } CATCH_END
                 });
 
         } catch (...) {
@@ -1178,11 +1208,11 @@ namespace BufferUploads
         }
     }
 
-    void AssemblyLine::CompleteWaitForDataFuture(TransactionRefHolder&& ref, std::future<void> prepareFuture, PlatformInterface::StagingPage::Allocation&& stagingAllocation, std::shared_ptr<IResourcePool> pool, const ResourceDesc& finalResourceDesc)
+    void AssemblyLine::CompleteWaitForDataFuture(TransactionRefHolder&& ref, std::future<void> prepareFuture, PlatformInterface::StagingPage::Allocation&& stagingAllocation, std::shared_ptr<IResource> oversizeResource, std::shared_ptr<IResourcePool> pool, const ResourceDesc& finalResourceDesc)
     {
         auto* transaction = ref._transaction;
         assert(transaction);
-        assert(stagingAllocation);
+        assert(stagingAllocation || oversizeResource);
 
         transaction->_waitingFuture = {};
 
@@ -1203,7 +1233,7 @@ namespace BufferUploads
             prepareFuture.get();
             PushStep(
                 GetQueueSet(transaction->_creationOptions),
-                TransferStagingToFinalStep { std::move(ref), std::move(pool), finalResourceDesc, std::move(stagingAllocation) });
+                TransferStagingToFinalStep { std::move(ref), std::move(pool), finalResourceDesc, std::move(stagingAllocation), std::move(oversizeResource) });
         } catch(...) {
             transaction->_promise.set_exception(std::current_exception());
             _currentQueuedBytes[(unsigned)AsUploadDataType(finalResourceDesc, finalResourceDesc._bindFlags)] += RenderCore::ByteCount(finalResourceDesc);
@@ -1253,15 +1283,23 @@ namespace BufferUploads
             }
 
             // Do the actual data copy step here
-            assert(transferStagingToFinalStep._stagingResource);
-            context.GetResourceUploadHelper().UpdateFinalResourceFromStaging(
-                transaction->_finalResource,
-                context.GetStagingPage().GetStagingResource(),
-                transferStagingToFinalStep._stagingResource.GetResourceOffset(), transferStagingToFinalStep._stagingResource.GetAllocationSize());
+            if (transferStagingToFinalStep._stagingResource) {
+                context.GetResourceUploadHelper().UpdateFinalResourceFromStaging(
+                    transaction->_finalResource,
+                    context.GetStagingPage().GetStagingResource(),
+                    transferStagingToFinalStep._stagingResource.GetResourceOffset(), transferStagingToFinalStep._stagingResource.GetAllocationSize());
 
-            // Don't delete the staging buffer immediately. It must stick around until the command list is resolved
-            // and done with it
-            transferStagingToFinalStep._stagingResource.Release(context.GetProducerCmdListSpecificMarker());
+                // Don't delete the staging buffer immediately. It must stick around until the command list is resolved
+                // and done with it
+                transferStagingToFinalStep._stagingResource.Release(context.GetProducerCmdListSpecificMarker());
+            } else {
+                assert(transferStagingToFinalStep._oversizeResource);
+                auto stagingSize = ByteCount(transferStagingToFinalStep._oversizeResource->GetDesc());
+                context.GetResourceUploadHelper().UpdateFinalResourceFromStaging(
+                    transaction->_finalResource, *transferStagingToFinalStep._oversizeResource, 0, stagingSize);
+                // we'd ideally like to destroy transferStagingToFinalStep._oversizeResource with a cmd list specific destruction order
+                // but that can't be done without adding a whole bunch of extra infrastructure
+            }
 
             // Embue the final resource with the completion command list information
             transaction->_finalResource = ResourceLocator { std::move(transaction->_finalResource), context.CommandList_GetUnderConstruction() };

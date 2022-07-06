@@ -1417,18 +1417,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		{
 			auto& res = *checked_cast<Resource*>(&resource);
 			assert(res.AccessDesc()._type == ResourceDesc::Type::Texture);
-			auto& factory = GetObjectFactory(dev);
-			if (res.GetVmaMemory()) {
-				ResourceMap map{factory.GetVmaAllocator(), res.GetVmaMemory()};
-				return Metal_Vulkan::CopyViaMemoryMap(
-					factory.GetDevice().get(), map,
-					res.GetImage(), descForLayout, initData);
-			} else {
-				ResourceMap map{factory.GetDevice().get(), res.GetMemory()};
-				return Metal_Vulkan::CopyViaMemoryMap(
-					factory.GetDevice().get(), map,
-					res.GetImage(), descForLayout, initData);
-			}
+			ResourceMap map{dev, resource, ResourceMap::Mode::WriteDiscardPrevious};
+			return Metal_Vulkan::CopyViaMemoryMap(
+				GetObjectFactory(dev).GetDevice().get(), map,
+				res.GetImage(), descForLayout, initData);
 		}
 	}
 
@@ -1761,13 +1753,14 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void ResourceMap::FlushCache()
 	{
-		assert(_dataSize);
 		if (_vmaMem) {
+			assert(_dataSize);
 			assert(_vmaAllocator);
 			auto res = vmaFlushAllocation(_vmaAllocator, _vmaMem, _resourceOffset, _dataSize);
 			if (res != VK_SUCCESS)
 				Throw(std::runtime_error("Failure while flushing cache for resource"));
 		} else if (_mem) {
+			assert(_dataSize);
 			assert(_dev);
 			VkMappedMemoryRange mappedRange[] {
 				{ VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, nullptr, _mem, _resourceOffset, _dataSize }
@@ -1778,13 +1771,14 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void ResourceMap::InvalidateCache() 
 	{
-		assert(_dataSize);
 		if (_vmaMem) {
+			assert(_dataSize);
 			assert(_vmaAllocator);
 			auto res = vmaInvalidateAllocation(_vmaAllocator, _vmaMem, _resourceOffset, _dataSize);
 			if (res != VK_SUCCESS)
 				Throw(std::runtime_error("Failure while flushing cache for resource"));
 		} else if (_mem) {
+			assert(_dataSize);
 			assert(_dev);
 			VkMappedMemoryRange mappedRange[] {
 				{ VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, nullptr, _mem, _resourceOffset, _dataSize }

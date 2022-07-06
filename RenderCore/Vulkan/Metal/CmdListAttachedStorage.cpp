@@ -62,17 +62,17 @@ namespace RenderCore { namespace Metal_Vulkan
 		Pimpl(ObjectFactory& factory, std::shared_ptr<IAsyncTracker> gpuTracker);
 		~Pimpl();
 
-		std::pair<TemporaryStoragePage*, unsigned> ReserveNewPageForAllocation(size_t byteCode, BindFlag::BitField bindFlags, bool cpuMapping, size_t defaultPageSize);
+		std::pair<TemporaryStoragePage*, unsigned> ReserveNewPageForAllocation(size_t byteCode, BindFlag::BitField bindFlags, bool cpuMapping, size_t pageSize);
 		TemporaryStoragePage* ReserveNamedPage(NamedPage namedPage);
 		void ReleaseReservation(TemporaryStoragePage& page);
 		void FlushDestroys();
 	};
 
-	std::pair<TemporaryStoragePage*, unsigned> TemporaryStorageManager::Pimpl::ReserveNewPageForAllocation(size_t byteCount, BindFlag::BitField bindFlags, bool cpuMapping, size_t defaultPageSize)
+	std::pair<TemporaryStoragePage*, unsigned> TemporaryStorageManager::Pimpl::ReserveNewPageForAllocation(size_t byteCount, BindFlag::BitField bindFlags, bool cpuMapping, size_t pageSize)
 	{
 		assert(byteCount != 0);
 		assert(bindFlags != 0);
-		assert(defaultPageSize != 0);
+		assert(pageSize != 0);
 		// Find a page with at least the given amount of free space (hopefully significantly more) and the 
 		// given binding type
 		ScopedLock(_lock);
@@ -91,9 +91,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 		}
 
-		const unsigned oversized = 8*1024*1024;
-		if (byteCount <= oversized) {
-			auto pageSize = std::max(1u<<(IntegerLog2(byteCount+byteCount/2)+1), (unsigned)defaultPageSize);
+		if (byteCount <= pageSize) {
+			// pageSize = std::max(1u<<(IntegerLog2(byteCount+byteCount/2)+1), (unsigned)pageSize);
 			_pages.emplace_back(std::make_unique<TemporaryStoragePage>(*_factory, pageSize, bindFlags, cpuMapping, _nextPageId++));
 			_pageReservations.Allocate(_pages.size()-1);
 
@@ -268,13 +267,13 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	TemporaryStoragePage::~TemporaryStoragePage() {}
 
-	static unsigned GetDefaultPageSize(BindFlag::BitField type)
+	static unsigned GetPageSize(BindFlag::BitField type)
 	{
 		if (type & BindFlag::ConstantBuffer) return 256 * 1024;
-		if (type & BindFlag::VertexBuffer) return 1024 * 1024;
+		if (type & BindFlag::VertexBuffer) return 8 * 1024 * 1024;		// need a fair amount of room for deform accelerators
 		if (type & BindFlag::IndexBuffer) return 256 * 1024;
 		if (type & BindFlag::ShaderResource) return 256 * 1024;
-		if (type & BindFlag::TransferSrc) return 2 * 1024 * 1024;
+		if (type & BindFlag::TransferSrc) return 8 * 1024 * 1024;
 		return 256 * 1024;
 	}
 
@@ -294,7 +293,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		return space;
 	}
 
-	TemporaryStorageResourceMap CmdListAttachedStorage::MapStorage(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize)
+	TemporaryStorageResourceMap CmdListAttachedStorage::MapStorage(size_t byteCount, BindFlag::BitField bindFlags)
 	{
 		assert(byteCount != 0);
 		for (auto page=_reservedPages.rbegin(); page!=_reservedPages.rend(); ++page) {
@@ -307,18 +306,15 @@ namespace RenderCore { namespace Metal_Vulkan
 					(*page)->_resource, space, byteCount, (*page)->_pageId };
 		}
 
-		if (!defaultPageSize)
-			defaultPageSize = GetDefaultPageSize(bindFlags);
-
 		const bool cpuMappable = true;
-		auto newPageAndAllocation = _manager->ReserveNewPageForAllocation(byteCount, bindFlags, cpuMappable, defaultPageSize);
+		auto newPageAndAllocation = _manager->ReserveNewPageForAllocation(byteCount, bindFlags, cpuMappable, GetPageSize(bindFlags));
 		_reservedPages.push_back(newPageAndAllocation.first);
 		return TemporaryStorageResourceMap {
 			*_manager->_factory, 
 			newPageAndAllocation.first->_resource, newPageAndAllocation.second, byteCount, newPageAndAllocation.first->_pageId };
 	}
 
-	BufferAndRange CmdListAttachedStorage::AllocateDeviceOnlyRange(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize)
+	BufferAndRange CmdListAttachedStorage::AllocateDeviceOnlyRange(size_t byteCount, BindFlag::BitField bindFlags)
 	{
 		assert(byteCount != 0);
 		for (auto page=_reservedPages.rbegin(); page!=_reservedPages.rend(); ++page) {
@@ -329,11 +325,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				return BufferAndRange { (*page)->_resource, space, (unsigned)byteCount };
 		}
 
-		if (!defaultPageSize)
-			defaultPageSize = GetDefaultPageSize(bindFlags);
-
 		const bool cpuMappable = false;
-		auto newPageAndAllocation = _manager->ReserveNewPageForAllocation(byteCount, bindFlags, cpuMappable, defaultPageSize);
+		auto newPageAndAllocation = _manager->ReserveNewPageForAllocation(byteCount, bindFlags, cpuMappable, GetPageSize(bindFlags));
 		_reservedPages.push_back(newPageAndAllocation.first);
 		return BufferAndRange { newPageAndAllocation.first->_resource, newPageAndAllocation.second, (unsigned)byteCount };
 	}

@@ -106,10 +106,10 @@ namespace RenderCore { namespace Metal_Vulkan
 	class CmdListAttachedStorage
 	{
 	public:
-		TemporaryStorageResourceMap	MapStorage(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize = 0);
+		TemporaryStorageResourceMap	MapStorage(size_t byteCount, BindFlag::BitField bindFlags);
 		TemporaryStorageResourceMap	MapStorageFromNamedPage(size_t byteCount, NamedPage namedPage);
 		
-		BufferAndRange AllocateDeviceOnlyRange(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize = 0);
+		BufferAndRange AllocateDeviceOnlyRange(size_t byteCount, BindFlag::BitField bindFlags);
 
 		void OnSubmitToQueue(unsigned trackerMarker);		// IAsyncTracker::Marker
 		void AbandonAllocations();

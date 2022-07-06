@@ -231,7 +231,6 @@ namespace RenderCore { namespace Techniques
 		if (!activeAcceleratorCount)
 			return;
 
-		const auto defaultPageSize = 8*1024*1024;
 		bool atLeastOneGPUOperator = false;
 
 		{
@@ -249,13 +248,13 @@ namespace RenderCore { namespace Techniques
 			unsigned uniformBufferPageOffset = 0;
 
 			if (reservationBytes[AllocationType::AllocationType_CPUVB]) {
-				cpuMap = attachedStorage.MapStorage(reservationBytes[AllocationType::AllocationType_CPUVB], BindFlag::VertexBuffer, defaultPageSize);
+				cpuMap = attachedStorage.MapStorage(reservationBytes[AllocationType::AllocationType_CPUVB], BindFlag::VertexBuffer);
 				cpuVBV = cpuMap.AsVertexBufferView();
 				cpuDst = cpuMap.GetData();
 				assert(cpuVBV._resource);
 			}
 			if (reservationBytes[AllocationType::AllocationType_GPUVB]) {
-				gpuBufferAndRange = attachedStorage.AllocateDeviceOnlyRange(reservationBytes[AllocationType::AllocationType_GPUVB], BindFlag::VertexBuffer|BindFlag::UnorderedAccess, defaultPageSize);
+				gpuBufferAndRange = attachedStorage.AllocateDeviceOnlyRange(reservationBytes[AllocationType::AllocationType_GPUVB], BindFlag::VertexBuffer|BindFlag::UnorderedAccess);
 				gpuVBV = gpuBufferAndRange.AsVertexBufferView();
 				assert(gpuVBV._resource);
 			}

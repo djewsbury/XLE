@@ -245,9 +245,8 @@ namespace UnitTests
 			return std::async(
 				std::launch::async,
 				[rngSeed = _rngSeed, subResourceDst{std::move(subResourceDst_)}]() {
-					std::mt19937 rng(rngSeed);
 					for (const auto&subRes:subResourceDst)
-						FillWithRandomData(rng(), subRes._destination);
+						FillWithRandomData(rngSeed + subRes._id._mip + (subRes._id._arrayLayer << 16u), subRes._destination);
 				});
 		}
 
@@ -256,13 +255,8 @@ namespace UnitTests
 		RenderCore::ResourceDesc _desc;
 		uint32_t _rngSeed;
 
-		RandomNoiseGenerator(unsigned width, unsigned height, uint32_t rngSeed)
-		: _rngSeed(rngSeed)
-		{
-			_desc = RenderCore::CreateDesc(
-				0, RenderCore::TextureDesc::Plain2D(width, height, RenderCore::Format::R8G8B8A8_UNORM),
-				"rng");
-		}
+		RandomNoiseGenerator(const RenderCore::ResourceDesc& desc, uint32_t rngSeed)
+		: _desc(desc), _rngSeed(rngSeed) {}
 	};
 
 	struct TransactionTestHelper
@@ -326,8 +320,12 @@ namespace UnitTests
 			unsigned texturesToSpawn = (unsigned)std::sqrt(steadyPoint - transactionHelper._liveTransactions.size());
 			for (unsigned t=0; t<texturesToSpawn; ++t) {
 				auto asyncSource = std::make_shared<RandomNoiseGenerator>(
-					1 << std::uniform_int_distribution<>(5, 10)(rng),
-					1 << std::uniform_int_distribution<>(5, 10)(rng),
+					RenderCore::CreateDesc(
+						0, RenderCore::TextureDesc::Plain2D(
+							1 << std::uniform_int_distribution<>(5, 10)(rng),
+							1 << std::uniform_int_distribution<>(5, 10)(rng),
+							RenderCore::Format::R8G8B8A8_UNORM),
+						"rng"),
 					rng());
 				transactionHelper.AddTransaction(bu->Transaction_Begin(asyncSource, BindFlag::ShaderResource));
 			}
@@ -411,6 +409,38 @@ namespace UnitTests
 		}
 	}
 
+	static void DestageAndCompare(RenderCore::IThreadContext& threadContext, RenderCore::IResource& resource, RandomNoiseGenerator& pkt)
+	{
+		using namespace RenderCore;
+		auto destagingDesc = resource.GetDesc();
+		destagingDesc._allocationRules = AllocationRules::HostVisibleRandomAccess;
+		destagingDesc._bindFlags = BindFlag::TransferDst;
+		XlCopyString(destagingDesc._name, "destaging");
+		auto destaging = threadContext.GetDevice()->CreateResource(destagingDesc);
+		Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Copy(*destaging, resource);
+		threadContext.CommitCommands(CommitCommandsFlags::WaitForCompletion);
+
+		Metal::ResourceMap map{*threadContext.GetDevice(), *destaging, Metal::ResourceMap::Mode::Read};
+		for (unsigned a=0; a<ActualArrayLayerCount(destagingDesc._textureDesc); ++a)
+			for (unsigned m=0; m<destagingDesc._textureDesc._mipCount; ++m) {
+				auto mappedData = map.GetData(SubResourceId{m, a});
+				auto mipDesc = CalculateMipMapDesc(destagingDesc._textureDesc, m);
+				mipDesc._arrayCount = 0; mipDesc._mipCount = 1;
+				std::vector<uint8_t> buffer;
+				buffer.resize(ByteCount(mipDesc));
+				BufferUploads::IAsyncDataSource::SubResource sr;
+				sr._id = {m, a};
+				sr._destination = MakeIteratorRange(buffer);
+				sr._pitches = MakeTexturePitches(destagingDesc._textureDesc);
+				REQUIRE(mappedData.size() == buffer.size());
+				auto future = pkt.PrepareData(MakeIteratorRange(&sr, &sr+1));
+				future.wait();
+				future.get();
+				int cmd = std::memcmp(mappedData.begin(), buffer.data(), mappedData.size());
+				REQUIRE(cmd == 0);
+			}
+	}
+
 	TEST_CASE( "BufferUploads-ImmediateTransaction", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
@@ -445,6 +475,50 @@ namespace UnitTests
 		{
 			auto pkt = std::make_shared<RandomTestPkt>(massiveLinearBuffer);
 			auto resource = bu->Transaction_Immediate(*threadContext, massiveLinearBuffer, *pkt).AsIndependentResource();
+			DestageAndCompare(*threadContext, *resource, *pkt);
+		}
+
+		{
+			// background via IDataPacket
+			auto pkt = std::make_shared<RandomTestPkt>(massiveTexture);
+			auto futureLocator = bu->Transaction_Begin(massiveTexture, pkt);
+			futureLocator._future.wait();
+			auto locator = futureLocator._future.get();
+			bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
+			auto resource = locator.AsIndependentResource();
+			DestageAndCompare(*threadContext, *resource, *pkt);
+		}
+
+		{
+			// background via IDataPacket
+			auto pkt = std::make_shared<RandomTestPkt>(massiveLinearBuffer);
+			auto futureLocator = bu->Transaction_Begin(massiveLinearBuffer, pkt);
+			futureLocator._future.wait();
+			auto locator = futureLocator._future.get();
+			bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
+			auto resource = locator.AsIndependentResource();
+			DestageAndCompare(*threadContext, *resource, *pkt);
+		}
+
+		{
+			// background via IAsyncDataSource
+			auto pkt = std::make_shared<RandomNoiseGenerator>(massiveTexture, 264945628462ull);
+			auto futureLocator = bu->Transaction_Begin(pkt, BindFlag::ShaderResource|BindFlag::TransferSrc);
+			futureLocator._future.wait();
+			auto locator = futureLocator._future.get();
+			bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
+			auto resource = locator.AsIndependentResource();
+			DestageAndCompare(*threadContext, *resource, *pkt);
+		}
+
+		{
+			// background via IAsyncDataSource
+			auto pkt = std::make_shared<RandomNoiseGenerator>(massiveLinearBuffer, 264945628462ull);
+			auto futureLocator = bu->Transaction_Begin(pkt, BindFlag::ShaderResource|BindFlag::TransferSrc);
+			futureLocator._future.wait();
+			auto locator = futureLocator._future.get();
+			bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
+			auto resource = locator.AsIndependentResource();
 			DestageAndCompare(*threadContext, *resource, *pkt);
 		}
 	}

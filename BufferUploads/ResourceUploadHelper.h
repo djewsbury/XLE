@@ -120,6 +120,7 @@ namespace BufferUploads { namespace PlatformInterface
         StagingPageMetrics GetQuickMetrics() const;
         void BindThread();
         void UpdateConsumerMarker();
+        size_t MaxSize() const { return _stagingBufferHeap.HeapSize(); }
 
         StagingPage(RenderCore::IDevice& device, unsigned size);
         ~StagingPage();
