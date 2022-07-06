@@ -301,20 +301,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(_sharedState->_commandList.GetUnderlying());
 		ValidateFlushedBoundUniforms();
 		if (BindGraphicsPipeline()) {
-			VkDrawIndirectCommand indirectCommands[] {
-				VkDrawIndirectCommand { vertexCount, instanceCount, startVertexLocation, 0 }
-			};
-			Resource temporaryBuffer(
-				*_factory,
-				CreateDesc(
-					BindFlag::DrawIndirectArgs, 0, GPUAccess::Read,
-					LinearBufferDesc::Create(sizeof(indirectCommands)),
-					"temp-DrawInstances-buffer"),
-				SubResourceInitData{MakeIteratorRange(indirectCommands)});
-			vkCmdDrawIndirect(
+			vkCmdDraw(
 				_sharedState->_commandList.GetUnderlying().get(),
-				temporaryBuffer.GetBuffer(),
-				0, 1, sizeof(VkDrawIndirectCommand));
+				vertexCount, instanceCount,
+				startVertexLocation, 0);
 		}
 	}
 
@@ -324,20 +314,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(_sharedState->_commandList.GetUnderlying());
 		ValidateFlushedBoundUniforms();
 		if (BindGraphicsPipeline()) {
-			VkDrawIndexedIndirectCommand indirectCommands[] {
-				VkDrawIndexedIndirectCommand { indexCount, instanceCount, startIndexLocation, 0, 0 }
-			};
-			Resource temporaryBuffer(
-				*_factory,
-				CreateDesc(
-					BindFlag::DrawIndirectArgs, 0, GPUAccess::Read,
-					LinearBufferDesc::Create(sizeof(indirectCommands)),
-					"temp-DrawInstances-buffer"),
-				SubResourceInitData{MakeIteratorRange(indirectCommands)});
-			vkCmdDrawIndexedIndirect(
+			vkCmdDrawIndexed(
 				_sharedState->_commandList.GetUnderlying().get(),
-				temporaryBuffer.GetBuffer(),
-				0, 1, sizeof(VkDrawIndexedIndirectCommand));
+				indexCount, instanceCount,
+				startIndexLocation, 0,
+				0);
 		}
 	}
 
@@ -395,6 +376,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void GraphicsEncoder_Optimized::DrawInstances(const GraphicsPipeline& pipeline, unsigned vertexCount, unsigned instanceCount, unsigned startVertexLocation)
 	{
+		assert(vertexCount);
+		assert(instanceCount);
 		ValidateFlushedBoundUniforms();
 		BindPipeline(pipeline);
 		vkCmdDraw(
@@ -405,6 +388,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void GraphicsEncoder_Optimized::DrawIndexedInstances(const GraphicsPipeline& pipeline, unsigned indexCount, unsigned instanceCount, unsigned startIndexLocation)
 	{
+		assert(indexCount);
+		assert(instanceCount);
 		ValidateFlushedBoundUniforms();
 		BindPipeline(pipeline);
 		vkCmdDrawIndexed(

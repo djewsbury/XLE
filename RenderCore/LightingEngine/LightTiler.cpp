@@ -244,6 +244,11 @@ namespace RenderCore { namespace LightingEngine
 			stitchingContext.DefineAttachment(a);
 	}
 
+	void RasterizationLightTileOperator::CompleteInitialization(IThreadContext& threadContext)
+	{
+		_stencilingGeo.CompleteInitialization(threadContext);
+	}
+
 	void RasterizationLightTileOperator::SetLightScene(Internal::StandardLightScene& lightScene)
 	{
 		_lightScene = &lightScene;

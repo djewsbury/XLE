@@ -56,6 +56,7 @@ namespace RenderCore { namespace LightingEngine
 		RenderStepFragmentInterface CreateInitFragment(const FrameBufferProperties& fbProps);
 
 		void PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext);
+		void CompleteInitialization(IThreadContext& threadContext);
 
 		::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
 

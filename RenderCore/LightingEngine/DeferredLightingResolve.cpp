@@ -412,8 +412,8 @@ namespace RenderCore { namespace LightingEngine
 		std::vector<uint16_t> ib; ib.reserve(lowDetailHemi.first.size());
 		std::copy(lowDetailHemi.first.begin(), lowDetailHemi.first.end(), std::back_inserter(ib));
 		_lowDetailHemiSphereIB = device.CreateResource(CreateDesc(BindFlag::IndexBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(uint16_t)*ib.size()), "light-stenciling-geometry"));
-		_pendingLowDetailHemisphereIB = std::move(ib);
 		_lowDetailHemiSphereIndexCount = (unsigned)ib.size();
+		_pendingLowDetailHemisphereIB = std::move(ib);
 	} 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

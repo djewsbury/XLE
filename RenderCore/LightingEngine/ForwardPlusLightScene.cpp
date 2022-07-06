@@ -290,6 +290,11 @@ namespace RenderCore { namespace LightingEngine
 			parsingContext.RequireCommandList(_completionCommandListID);
 	}
 
+	void ForwardPlusLightScene::CompleteInitialization(IThreadContext& threadContext)
+	{
+		_lightTiler->CompleteInitialization(threadContext);
+	}
+
 	class ForwardPlusLightScene::ShaderResourceDelegate : public Techniques::IShaderResourceDelegate
 	{
 	public:

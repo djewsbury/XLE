@@ -433,6 +433,7 @@ namespace RenderCore { namespace LightingEngine
 					lightingTechnique->CreateDynamicSequence(
 						[captures](LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence) {
 							captures->DoShadowPrepare(iterator, sequence);
+							captures->_lightScene->CompleteInitialization(*iterator._threadContext);
 						});
 
 					auto& mainSequence = lightingTechnique->CreateSequence();

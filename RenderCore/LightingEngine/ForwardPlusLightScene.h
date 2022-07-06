@@ -30,6 +30,7 @@ namespace RenderCore { namespace LightingEngine
 
 		void FinalizeConfiguration();
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext);
+		void CompleteInitialization(IThreadContext&);
 
 		std::optional<LightSourceOperatorDesc> GetDominantLightOperator() const;
 		std::optional<ShadowOperatorDesc> GetDominantShadowOperator() const;
