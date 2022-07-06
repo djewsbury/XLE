@@ -15,7 +15,7 @@ namespace RenderCore
 }
 
 namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelineCollection; }}
-namespace BufferUploads { using CommandListID = uint32_t; }
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 
 namespace RenderCore { namespace LightingEngine
 {

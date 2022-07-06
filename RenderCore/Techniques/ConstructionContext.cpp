@@ -5,8 +5,8 @@
 #include "ConstructionContext.h"
 #include "DeferredShaderResource.h"
 #include "Drawables.h"
-#include "../../BufferUploads/IBufferUploads.h"
-#include "../../BufferUploads/BatchedResources.h"
+#include "../BufferUploads/IBufferUploads.h"
+#include "../BufferUploads/BatchedResources.h"
 #include "../../Utility/Threading/Mutex.h"
 #include "../../Utility/MemoryUtils.h"
 

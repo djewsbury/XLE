@@ -8,9 +8,9 @@
 
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderCore/ResourceDesc.h"
-#include "../../BufferUploads/IBufferUploads.h"
-#include "../../BufferUploads/Metrics.h"
-#include "../../BufferUploads/BatchedResources.h"
+#include "../../RenderCore/BufferUploads/IBufferUploads.h"
+#include "../../RenderCore/BufferUploads/Metrics.h"
+#include "../../RenderCore/BufferUploads/BatchedResources.h"
 #include "../../Utility/Threading/Mutex.h"
 #include <deque>
 
@@ -22,14 +22,14 @@ namespace PlatformRig { namespace Overlays
     class BufferUploadDisplay : public IWidget ///////////////////////////////////////////////////////////
     {
     public:
-        BufferUploadDisplay(BufferUploads::IManager* manager);
+        BufferUploadDisplay(RenderCore::BufferUploads::IManager* manager);
         ~BufferUploadDisplay();
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
         ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
 
     protected:
-        std::deque<BufferUploads::CommandListMetrics> _recentHistory;
-        BufferUploads::IManager* _manager;
+        std::deque<RenderCore::BufferUploads::CommandListMetrics> _recentHistory;
+        RenderCore::BufferUploads::IManager* _manager;
 
         struct GPUMetrics
         {
@@ -62,10 +62,10 @@ namespace PlatformRig { namespace Overlays
         };
         std::vector<GraphSlot> _graphSlots;
 
-        unsigned        _accumulatedCreateCount[(unsigned)BufferUploads::UploadDataType::Max];
-        unsigned        _accumulatedCreateBytes[(unsigned)BufferUploads::UploadDataType::Max];
-        unsigned        _accumulatedUploadCount[(unsigned)BufferUploads::UploadDataType::Max];
-        unsigned        _accumulatedUploadBytes[(unsigned)BufferUploads::UploadDataType::Max];
+        unsigned        _accumulatedCreateCount[(unsigned)RenderCore::BufferUploads::UploadDataType::Max];
+        unsigned        _accumulatedCreateBytes[(unsigned)RenderCore::BufferUploads::UploadDataType::Max];
+        unsigned        _accumulatedUploadCount[(unsigned)RenderCore::BufferUploads::UploadDataType::Max];
+        unsigned        _accumulatedUploadBytes[(unsigned)RenderCore::BufferUploads::UploadDataType::Max];
 
         double          _reciprocalTimerFrequency;
         unsigned        _graphsMode;
@@ -81,7 +81,7 @@ namespace PlatformRig { namespace Overlays
 
         void    DrawMenuBar(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState);
         void    DrawDisplay(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState);
-        void    DrawStatistics(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState, const BufferUploads::CommandListMetrics& mostRecentResults);
+        void    DrawStatistics(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState, const RenderCore::BufferUploads::CommandListMetrics& mostRecentResults);
         void    DrawRecentRetirements(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState);
         size_t  FillValuesBuffer(unsigned graphType, unsigned uploadType, float valuesBuffer[], size_t valuesMaxCount);
         void    DrawDoubleGraph(
@@ -94,13 +94,13 @@ namespace PlatformRig { namespace Overlays
     class BatchingDisplay : public IWidget ///////////////////////////////////////////////////////////
     {
     public:
-        BatchingDisplay(std::shared_ptr<BufferUploads::IBatchedResources> batchedResources);
+        BatchingDisplay(std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> batchedResources);
         ~BatchingDisplay();
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
         ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
 
     protected:
-        BufferUploads::BatchingSystemMetrics _lastFrameMetrics;
+        RenderCore::BufferUploads::BatchingSystemMetrics _lastFrameMetrics;
         class WarmSpan
         {
         public:
@@ -112,7 +112,7 @@ namespace PlatformRig { namespace Overlays
 
         float CalculateWarmth(uint64_t heapGuid, unsigned begin, unsigned end, bool allocatedMode);
         bool FindSpan(uint64_t heapGuid, unsigned begin, unsigned end, bool allocatedMode);
-        std::shared_ptr<BufferUploads::IBatchedResources> _batchedResources;
+        std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> _batchedResources;
 
         float _runningAveAllocs = 0;
         float _runningAveRepositions = 0;

@@ -11,7 +11,7 @@
 namespace RenderCore { namespace LightingEngine { class CompiledLightingTechnique; class LightingTechniqueSequence; class LightingTechniqueIterator; class ILightScene; }}
 namespace RenderCore { namespace Techniques { class PreregisteredAttachment; class DrawingApparatus; class FragmentStitchingContext; class ImmediateDrawingApparatus; struct DoubleBufferAttachment; }}
 namespace RenderCore { class FrameBufferProperties; }
-namespace BufferUploads { class IManager; }
+namespace RenderCore { namespace BufferUploads { class IManager; }}
 namespace Formatters { class IDynamicFormatter; }
 
 namespace ToolsRig
@@ -61,7 +61,7 @@ namespace ToolsRig
 			std::vector<DynamicSequenceFunction> _dynamicSequenceFunctions;
 			RenderCore::Techniques::FragmentStitchingContext _stitchingContext;
 			std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
-			std::shared_ptr<BufferUploads::IManager> _bufferUploads;
+			std::shared_ptr<RenderCore::BufferUploads::IManager> _bufferUploads;
 			std::shared_ptr<RenderCore::LightingEngine::ILightScene> _lightScene;
 			unsigned _completionCommandList = 0;
 			::Assets::DependencyValidation _depVal;
@@ -78,13 +78,13 @@ namespace ToolsRig
 
 		ShaderLab(
 			std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
-			std::shared_ptr<BufferUploads::IManager> bufferUploads);
+			std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads);
 		~ShaderLab();
 	private:
 		std::vector<std::pair<std::string, OperationConstructor>> _operationConstructors;
 		std::vector<std::pair<std::string, VisualizeStepConstructor>> _visualizeStepConstructors;
 		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
-		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
+		std::shared_ptr<RenderCore::BufferUploads::IManager> _bufferUploads;
 	};
 
 	void RegisterVisualizeAttachment(ShaderLab&);

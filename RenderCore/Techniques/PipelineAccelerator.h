@@ -22,7 +22,7 @@ namespace RenderCore
 
 namespace RenderCore { namespace Assets { class RenderStateSet; class ShaderPatchCollection; class PredefinedDescriptorSetLayout; class ScaffoldCmdIterator; } }
 namespace RenderCore { class IDevice; class IDescriptorSet; class UniformsStreamInterface; class IResourceView; }
-namespace BufferUploads { using CommandListID = uint32_t; }
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 namespace std { template<typename Type> class future; }
 
 namespace RenderCore { namespace Techniques

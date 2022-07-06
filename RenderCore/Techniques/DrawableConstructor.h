@@ -3,13 +3,13 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../Assets/ScaffoldCmdStream.h"		// for MakeScaffoldCmdRange
-#include "../../BufferUploads/IBufferUploads.h"
+#include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/DepVal.h"
 #include "../../Math/Matrix.h"
 #include <memory>
 
 namespace RenderCore { namespace Assets { class ScaffoldCmdIterator; }}
-namespace BufferUploads { class IManager; class IResourcePool; }
+namespace RenderCore { namespace BufferUploads { class IManager; class IResourcePool; }}
 namespace std { template<typename T> class promise; }
 namespace RenderCore { namespace Techniques
 {

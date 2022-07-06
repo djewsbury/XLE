@@ -18,7 +18,7 @@ namespace Utility { class ParameterBox; }
 namespace RenderCore { class IThreadContext; class MiniInputElementDesc; class InputElementDesc; class UniformsStreamInterface; class UniformsStream; class DescriptorSetSignature; }
 namespace RenderCore { namespace Assets { class ShaderPatchCollection; class PredefinedDescriptorSetLayout; } }
 namespace Assets { class IAsyncMarker; }
-namespace BufferUploads { using CommandListID = uint32_t; class IResourcePool; class IBatchedResources; class ResourceLocator; class Event_ResourceReposition; }
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; class IResourcePool; class IBatchedResources; class ResourceLocator; class Event_ResourceReposition; }}
 namespace std { template<typename Type> class promise; }
 
 namespace RenderCore { namespace Techniques

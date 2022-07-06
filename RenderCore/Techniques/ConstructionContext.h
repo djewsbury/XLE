@@ -10,7 +10,7 @@
 #include <memory>
 #include <future>
 
-namespace BufferUploads { using TransactionID = uint64_t; class ResourceLocator; class IAsyncDataSource; class IManager; }
+namespace RenderCore { namespace BufferUploads { using TransactionID = uint64_t; class ResourceLocator; class IAsyncDataSource; class IManager; }}
 namespace RenderCore { namespace Assets { class TextureCompilationRequest; class ModelScaffold; }}
 
 namespace RenderCore { namespace Techniques

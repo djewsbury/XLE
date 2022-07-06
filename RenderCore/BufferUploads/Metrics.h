@@ -10,7 +10,7 @@
 #include <vector>
 #include <iosfwd>
 
-namespace BufferUploads
+namespace RenderCore { namespace BufferUploads
 {
     using TimeMarker = int64_t;
 
@@ -75,5 +75,5 @@ namespace BufferUploads
 
     std::ostream& operator<<(std::ostream& str, const CommandListMetrics&);
 
-}
+}}
 

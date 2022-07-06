@@ -33,7 +33,7 @@
 #include "../../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../../RenderCore/Techniques/Services.h"
 #include "../../RenderCore/Techniques/Drawables.h"
-#include "../../BufferUploads/IBufferUploads.h"
+#include "../../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/ResourceDesc.h"
 #include "../../Assets/ConfigFileContainer.h"

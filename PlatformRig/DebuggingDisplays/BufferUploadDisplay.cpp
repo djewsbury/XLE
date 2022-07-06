@@ -5,8 +5,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "BufferUploadDisplay.h"
-#include "../../BufferUploads/Metrics.h"
-#include "../../BufferUploads/BatchedResources.h"
+#include "../../RenderCore/BufferUploads/Metrics.h"
+#include "../../RenderCore/BufferUploads/BatchedResources.h"
 #include "../../RenderOverlays/CommonWidgets.h"
 #include "../../RenderOverlays/Font.h"
 #include "../../ConsoleRig/ResourceBox.h"
@@ -45,7 +45,7 @@ namespace PlatformRig { namespace Overlays
         _commandListStart = _commandListEnd = ~unsigned(0x0);
     }
 
-    BufferUploadDisplay::BufferUploadDisplay(BufferUploads::IManager* manager)
+    BufferUploadDisplay::BufferUploadDisplay(RenderCore::BufferUploads::IManager* manager)
     : _manager(manager)
     {
         XlZeroMemory(_accumulatedCreateCount);
@@ -72,19 +72,19 @@ namespace PlatformRig { namespace Overlays
         s_gpuListenerDisplay = NULL;
     }
 
-    static const char* AsString(BufferUploads::UploadDataType value)
+    static const char* AsString(RenderCore::BufferUploads::UploadDataType value)
     {
         switch (value) {
-        case BufferUploads::UploadDataType::Texture:            return "Texture";
-        case BufferUploads::UploadDataType::GeometryBuffer:     return "Geo";
-        case BufferUploads::UploadDataType::UniformBuffer:      return "Uniforms";
+        case RenderCore::BufferUploads::UploadDataType::Texture:            return "Texture";
+        case RenderCore::BufferUploads::UploadDataType::GeometryBuffer:     return "Geo";
+        case RenderCore::BufferUploads::UploadDataType::UniformBuffer:      return "Uniforms";
         default: return "<<unknown>>";
         }
     };
 
     static const char* TypeString(const RenderCore::ResourceDesc& desc)
     {
-        using namespace BufferUploads;
+        using namespace RenderCore;
         if (desc._type == RenderCore::ResourceDesc::Type::Texture) {
             const TextureDesc& tDesc = desc._textureDesc;
             switch (tDesc._dimensionality) {
@@ -105,7 +105,7 @@ namespace PlatformRig { namespace Overlays
 
     static std::string BuildDescription(const RenderCore::ResourceDesc& desc)
     {
-        using namespace BufferUploads;
+        using namespace RenderCore;
         char buffer[2048];
         if (desc._type == RenderCore::ResourceDesc::Type::Texture) {
             const TextureDesc& tDesc = desc._textureDesc;
@@ -425,7 +425,6 @@ namespace PlatformRig { namespace Overlays
 
     size_t  BufferUploadDisplay::FillValuesBuffer(unsigned graphType, unsigned uploadType, float valuesBuffer[], size_t valuesMaxCount)
     {
-        using namespace BufferUploads;
         size_t valuesCount = 0;
         for (std::deque<FrameRecord>::const_reverse_iterator i =_frames.rbegin(); i!=_frames.rend(); ++i) {
             if (valuesCount>=valuesMaxCount) {
@@ -439,18 +438,18 @@ namespace PlatformRig { namespace Overlays
                 // Calculate the requested value ... 
 
             if (graphType == Latency) { // latency (ms)
-                TimeMarker transactionLatencySum = 0;
+                RenderCore::BufferUploads::TimeMarker transactionLatencySum = 0;
                 unsigned transactionLatencyCount = 0;
                 for (unsigned cl=i->_commandListStart; cl<i->_commandListEnd; ++cl) {
-                    BufferUploads::CommandListMetrics& commandList = _recentHistory[cl];
+                    RenderCore::BufferUploads::CommandListMetrics& commandList = _recentHistory[cl];
                     for (unsigned i2=0; i2<commandList.RetirementCount(); ++i2) {
-                        const AssemblyLineRetirement& retirement = commandList.Retirement(i2);
+                        const RenderCore::BufferUploads::AssemblyLineRetirement& retirement = commandList.Retirement(i2);
                         transactionLatencySum += retirement._retirementTime - retirement._requestTime;
                         ++transactionLatencyCount;
                     }
                 }
 
-                float averageTransactionLatency = transactionLatencyCount?float(double(transactionLatencySum/TimeMarker(transactionLatencyCount)) * _reciprocalTimerFrequency):0.f;
+                float averageTransactionLatency = transactionLatencyCount?float(double(transactionLatencySum/RenderCore::BufferUploads::TimeMarker(transactionLatencyCount)) * _reciprocalTimerFrequency):0.f;
                 value = averageTransactionLatency;
             } else if (graphType == PendingBuffers) { // pending buffers
                 if (i->_commandListStart!=i->_commandListEnd) {
@@ -458,7 +457,7 @@ namespace PlatformRig { namespace Overlays
                 }
             } else if ((graphType >= Uploads && graphType <= FramePriorityStall) || graphType == StagingMaxNextBlock || graphType == StagingAwaitingDevice) {
                 for (unsigned cl=i->_commandListStart; cl<i->_commandListEnd; ++cl) {
-                    BufferUploads::CommandListMetrics& commandList = _recentHistory[cl];
+                    auto& commandList = _recentHistory[cl];
                     if (_graphsMode == Uploads) { // bytes uploaded
                         value += (commandList._bytesUploaded[uploadType]) / (1024.f*1024.f);
                     } else if (_graphsMode == CreatesMB) { // creations (bytes)
@@ -486,9 +485,9 @@ namespace PlatformRig { namespace Overlays
             } else if (_graphsMode == AveGPUCost) {
                 value = i->_gpuMetrics._slidingAverageCostMS;
             } else if (_graphsMode == ThreadActivity) {
-                TimeMarker processingTimeSum = 0, waitTimeSum = 0;
+                RenderCore::BufferUploads::TimeMarker processingTimeSum = 0, waitTimeSum = 0;
                 for (unsigned cl=i->_commandListStart; cl<i->_commandListEnd; ++cl) {
-                    BufferUploads::CommandListMetrics& commandList = _recentHistory[cl];
+                    auto& commandList = _recentHistory[cl];
                     processingTimeSum += commandList._processingEnd - commandList._processingStart;
                     waitTimeSum += commandList._waitTime;
                 }
@@ -569,8 +568,8 @@ namespace PlatformRig { namespace Overlays
 
     void    BufferUploadDisplay::DrawDisplay(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState)
     {
-        using namespace BufferUploads;
         static unsigned GraphHeight = 196;
+        using UploadDataType = RenderCore::BufferUploads::UploadDataType;
 
         switch (_graphsMode) {
         case GraphTabs::Uploads:
@@ -608,10 +607,9 @@ namespace PlatformRig { namespace Overlays
     void    BufferUploadDisplay::DrawStatistics(
         IOverlayContext& context, Layout& layout, 
         Interactables& interactables, InterfaceState& interfaceState,
-        const BufferUploads::CommandListMetrics& mostRecentResults)
+        const RenderCore::BufferUploads::CommandListMetrics& mostRecentResults)
     {
-        using namespace BufferUploads;
-
+        using namespace RenderCore::BufferUploads;
         GPUMetrics gpuMetrics = CalculateGPUMetrics();
 
             //////
@@ -636,7 +634,7 @@ namespace PlatformRig { namespace Overlays
                 break;
         if (lastValidFrameIndex < _frames.size())
             for (unsigned cl=_frames[lastValidFrameIndex]._commandListStart; cl<_frames[lastValidFrameIndex]._commandListEnd; ++cl) {
-                BufferUploads::CommandListMetrics& commandList = _recentHistory[cl];
+                auto& commandList = _recentHistory[cl];
                 processingTimeSum += commandList._processingEnd - commandList._processingStart;
                 waitTimeSum += commandList._waitTime;
                 wakeCountSum += commandList._wakeCount;
@@ -772,12 +770,12 @@ namespace PlatformRig { namespace Overlays
 
     void    BufferUploadDisplay::Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState)
     {
-        using namespace BufferUploads;
+        using namespace RenderCore::BufferUploads;
         CommandListMetrics mostRecentResults;
         unsigned commandListCount = 0;
 
             //      Keep popping metrics from the upload manager until we stop getting valid ones            
-        BufferUploads::IManager* manager = _manager;
+        IManager* manager = _manager;
         if (manager) {
             for (;;) {
                 CommandListMetrics metrics = manager->PopMetrics();
@@ -787,7 +785,7 @@ namespace PlatformRig { namespace Overlays
                 mostRecentResults = metrics;
                 _recentHistory.push_back(metrics);
                 AddCommandListToFrame(metrics._frameId, unsigned(_recentHistory.size()-1));
-                for (unsigned c=0; c<(unsigned)BufferUploads::UploadDataType::Max; ++c) {
+                for (unsigned c=0; c<(unsigned)UploadDataType::Max; ++c) {
                     _accumulatedCreateCount[c] += metrics._countCreations[c];
                     _accumulatedCreateBytes[c] += metrics._bytesCreated[c];
                     _accumulatedUploadCount[c] += metrics._countUploaded[c];
@@ -928,8 +926,8 @@ namespace PlatformRig { namespace Overlays
         for (unsigned c=0; c<samples; ++c, ++gI) {
             float gpuCost = gI->_gpuCost; unsigned bytesUploaded = 0;
             for (unsigned cl=gI->_commandListStart; cl<gI->_commandListEnd; ++cl) {
-                BufferUploads::CommandListMetrics& commandList = _recentHistory[cl];
-                for (unsigned c2=0; c2<(unsigned)BufferUploads::UploadDataType::Max; ++c2) {
+                auto& commandList = _recentHistory[cl];
+                for (unsigned c2=0; c2<(unsigned)RenderCore::BufferUploads::UploadDataType::Max; ++c2) {
                     bytesUploaded += commandList._bytesUploaded[c2];
                 }
             }
@@ -999,7 +997,6 @@ namespace PlatformRig { namespace Overlays
 
     void    BatchingDisplay::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
     {
-        using namespace BufferUploads;
         auto metrics = _batchedResources->CalculateMetrics();
 
         layout.AllocateFullWidth(32);  // leave some space at the top
@@ -1010,7 +1007,7 @@ namespace PlatformRig { namespace Overlays
         size_t largestFreeBlock = 0;
         size_t largestHeapSize = 0;
         size_t totalBlockCount = 0;
-        for (std::vector<BatchedHeapMetrics>::const_iterator i=metrics._heaps.begin(); i!=metrics._heaps.end(); ++i) {
+        for (auto i=metrics._heaps.begin(); i!=metrics._heaps.end(); ++i) {
             allocatedSpace += i->_allocatedSpace;
             unallocatedSpace += i->_unallocatedSpace;
             largestFreeBlock = std::max(largestFreeBlock, i->_largestFreeBlock);
@@ -1125,7 +1122,7 @@ namespace PlatformRig { namespace Overlays
 
     bool BatchingDisplay::FindSpan(uint64_t heapGuid, unsigned begin, unsigned end, bool allocatedMode)
     {
-        const BufferUploads::BatchedHeapMetrics* lastFrameMetrics = nullptr;
+        const RenderCore::BufferUploads::BatchedHeapMetrics* lastFrameMetrics = nullptr;
         for (const auto& m:_lastFrameMetrics._heaps)
             if (m._guid == heapGuid) {
                 lastFrameMetrics = &m;
@@ -1158,7 +1155,7 @@ namespace PlatformRig { namespace Overlays
         return ProcessInputResult::Passthrough;
     }
 
-    BatchingDisplay::BatchingDisplay(std::shared_ptr<BufferUploads::IBatchedResources> batchedResources)
+    BatchingDisplay::BatchingDisplay(std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> batchedResources)
     : _batchedResources(std::move(batchedResources)) {}
     BatchingDisplay::~BatchingDisplay() = default;
 }}

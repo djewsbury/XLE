@@ -5,7 +5,7 @@
 #include "TextureLoaders.h"
 #include "../ResourceDesc.h"
 #include "../Format.h"
-#include "../../BufferUploads/IBufferUploads.h"
+#include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/DepVal.h"
 #include "../../ConsoleRig/GlobalServices.h"

@@ -4,17 +4,17 @@
 
 #pragma once
 #include "IBufferUploads.h"
-#include "../RenderCore/ResourceDesc.h"
+#include "../ResourceDesc.h"
 
-namespace BufferUploads
+namespace RenderCore { namespace BufferUploads
 {
 	class UploadsThreadContext;
 	struct BatchingSystemMetrics;
 
 	struct Event_ResourceReposition
 	{
-		RenderCore::IResource* _originalResource;
-		std::shared_ptr<RenderCore::IResource> _newResource;
+		IResource* _originalResource;
+		std::shared_ptr<IResource> _newResource;
 		std::vector<Utility::RepositionStep> _defragSteps;
 	};
 	using EventListID = uint32_t;
@@ -31,8 +31,8 @@ namespace BufferUploads
 	};
 
 	std::shared_ptr<IBatchedResources> CreateBatchedResources(
-		RenderCore::IDevice&, const std::shared_ptr<IManager>&, 
-		RenderCore::BindFlag::BitField bindFlags,
+		IDevice&, const std::shared_ptr<IManager>&, 
+		BindFlag::BitField bindFlags,
 		unsigned pageSizeInBytes);
 
 	struct BatchedHeapMetrics
@@ -56,5 +56,5 @@ namespace BufferUploads
 		unsigned _recentRepositionBytes;
 		unsigned _totalRepositionBytes;
 	};
-}
+}}
 

@@ -5,7 +5,7 @@
 #include "Services.h"
 #include "CommonResources.h"
 #include "SubFrameEvents.h"
-#include "../../BufferUploads/IBufferUploads.h"
+#include "../BufferUploads/IBufferUploads.h"
 #include "../../ConsoleRig/AttachablePtr.h"
 #include <vector>
 #include <regex>

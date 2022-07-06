@@ -5,7 +5,7 @@
 #include "TextureCompiler.h"
 #include "../Techniques/Services.h"
 #include "../Techniques/TextureCompilerUtil.h"
-#include "../../BufferUploads/IBufferUploads.h"
+#include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/IntermediatesStore.h"
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Assets/IFileSystem.h"

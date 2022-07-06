@@ -5,7 +5,7 @@
 #pragma once
 
 #include "TextureLoaders.h"
-#include "../../BufferUploads/IBufferUploads.h"
+#include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Assets/IArtifact.h"
 #include "../../Utility/MemoryUtils.h"

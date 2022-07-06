@@ -14,7 +14,7 @@
 
 namespace RenderCore { class FrameBufferDesc; }
 namespace RenderCore { namespace Techniques { class RenderPassInstance; }}
-namespace BufferUploads { using CommandListID = uint32_t; }
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 
 namespace RenderCore { namespace LightingEngine
 {

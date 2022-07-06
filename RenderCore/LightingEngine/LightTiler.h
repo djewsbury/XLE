@@ -20,7 +20,7 @@ namespace RenderCore
 }
 
 namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelineCollection; class ParsingContext; }}
-namespace BufferUploads { using CommandListID = uint32_t; }
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 
 namespace RenderCore { namespace LightingEngine
 {

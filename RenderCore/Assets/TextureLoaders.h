@@ -8,7 +8,7 @@
 #include <functional>
 #include <memory>
 
-namespace BufferUploads { class IAsyncDataSource; }
+namespace RenderCore { namespace BufferUploads { class IAsyncDataSource; }}
 
 namespace RenderCore { namespace Assets
 {

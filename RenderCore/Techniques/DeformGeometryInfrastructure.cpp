@@ -12,7 +12,7 @@
 #include "../IDevice.h"
 #include "../Assets/ModelScaffold.h"
 #include "../GeoProc/MeshDatabase.h"        // for GeoProc::Copy
-#include "../../BufferUploads/IBufferUploads.h"
+#include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/StringFormat.h"

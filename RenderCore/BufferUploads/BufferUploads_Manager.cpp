@@ -5,20 +5,20 @@
 #include "IBufferUploads.h"
 #include "ResourceUploadHelper.h"
 #include "Metrics.h"
-#include "../RenderCore/IDevice.h"
-#include "../RenderCore/ResourceUtils.h"
-#include "../RenderCore/ResourceDesc.h"
-#include "../RenderCore/Metal/Resource.h"
-#include "../OSServices/Log.h"
-#include "../OSServices/TimeUtils.h"
-#include "../ConsoleRig/AttachablePtr.h"
-#include "../Utility/Threading/ThreadingUtils.h"
-#include "../Utility/Threading/LockFree.h"
-#include "../Utility/MemoryUtils.h"
-#include "../Utility/PtrUtils.h"
-#include "../Utility/BitUtils.h"
-#include "../Utility/HeapUtils.h"
-#include "../Utility/FunctionUtils.h"
+#include "../IDevice.h"
+#include "../ResourceUtils.h"
+#include "../ResourceDesc.h"
+#include "../Metal/Resource.h"
+#include "../../OSServices/Log.h"
+#include "../../OSServices/TimeUtils.h"
+#include "../../ConsoleRig/AttachablePtr.h"
+#include "../../Utility/Threading/ThreadingUtils.h"
+#include "../../Utility/Threading/LockFree.h"
+#include "../../Utility/MemoryUtils.h"
+#include "../../Utility/PtrUtils.h"
+#include "../../Utility/BitUtils.h"
+#include "../../Utility/HeapUtils.h"
+#include "../../Utility/FunctionUtils.h"
 #include <assert.h>
 #include <utility>
 #include <algorithm>
@@ -37,12 +37,8 @@
 
 using namespace std::chrono_literals;
 
-namespace BufferUploads
+namespace RenderCore { namespace BufferUploads
 {
-    using Box2D = RenderCore::Box2D;
-	namespace BindFlag = RenderCore::BindFlag;
-	namespace AllocationRules = RenderCore::AllocationRules;
-
                     /////////////////////////////////////////////////
                 ///////////////////   M A N A G E R   ///////////////////
                     /////////////////////////////////////////////////
@@ -107,7 +103,7 @@ namespace BufferUploads
         void            OnCompletion(IteratorRange<const TransactionID*>, std::function<void()>&& fn);
 
         ResourceLocator         ImmediateTransaction(
-                                    RenderCore::IThreadContext& threadContext,
+                                    IThreadContext& threadContext,
                                     const ResourceDesc& desc, IDataPacket& data);
 
         void                Process(unsigned stepMask, PlatformInterface::UploadsThreadContext& context, LockFreeFixedSizeQueue<unsigned, 4>& pendingFramePriorityCommandLists);
@@ -128,7 +124,7 @@ namespace BufferUploads
         virtual void watch(std::unique_ptr<thousandeyes::futures::Waitable> w) override;
         virtual void stop() override;
         
-        AssemblyLine(RenderCore::IDevice& device);
+        AssemblyLine(IDevice& device);
         ~AssemblyLine();
 
     protected:
@@ -179,7 +175,7 @@ namespace BufferUploads
         Threading::Mutex        _transactionsLock;
         std::atomic<unsigned>   _allocatedTransactionCount;
 
-        RenderCore::IDevice*    _device;
+        IDevice*    _device;
 
         TransactionRefHolder    GetTransaction(TransactionID id);
         TransactionRefHolder    AllocateTransaction(TransactionOptions::BitField flags);
@@ -553,8 +549,8 @@ namespace BufferUploads
     }
 
     static std::shared_ptr<IResource> CreateResource(
-        RenderCore::IDevice& device,
-        const RenderCore::ResourceDesc& desc,
+        IDevice& device,
+        const ResourceDesc& desc,
         IDataPacket* initPkt = nullptr)
     {
         if (initPkt) {
@@ -565,7 +561,7 @@ namespace BufferUploads
     }
 
     ResourceLocator AssemblyLine::ImmediateTransaction(
-        RenderCore::IThreadContext& threadContext,
+        IThreadContext& threadContext,
         const ResourceDesc& descInit, IDataPacket& initialisationData)
     {
         ResourceDesc desc = descInit;
@@ -731,7 +727,7 @@ namespace BufferUploads
         return *this;
     }
 
-    AssemblyLine::AssemblyLine(RenderCore::IDevice& device)
+    AssemblyLine::AssemblyLine(IDevice& device)
     :   _device(&device)
     ,   _transactionsHeap((2*1024)<<4)
     {
@@ -1030,9 +1026,9 @@ namespace BufferUploads
                     if (desc._type == ResourceDesc::Type::Texture) {
                         helper.WriteViaMap(
                             *finalConstruction.AsIndependentResource(),
-                            [initialisationData{resourceCreateStep._initialisationData.get()}](RenderCore::SubResourceId sr) -> RenderCore::SubResourceInitData
+                            [initialisationData{resourceCreateStep._initialisationData.get()}](SubResourceId sr) -> SubResourceInitData
                             {
-                                RenderCore::SubResourceInitData result = {};
+                                SubResourceInitData result = {};
                                 result._data = initialisationData->GetData(SubResourceId{sr._mip, sr._arrayLayer});
                                 assert(!result._data.empty());
                                 result._pitches = initialisationData->GetPitches(SubResourceId{sr._mip, sr._arrayLayer});
@@ -1105,7 +1101,7 @@ namespace BufferUploads
                 std::shared_ptr<IAsyncDataSource> _pkt;
                 PlatformInterface::StagingPage::Allocation _stagingConstruction;
                 std::shared_ptr<IResourcePool> _pool;
-                RenderCore::ResourceDesc _finalResourceDesc;
+                ResourceDesc _finalResourceDesc;
                 std::weak_ptr<AssemblyLine> _weakThis;
 
                 ~Captures()
@@ -1653,21 +1649,21 @@ namespace BufferUploads
         }
 
         ResourceLocator         ImmediateTransaction(
-                                    RenderCore::IThreadContext& threadContext,
+                                    IThreadContext& threadContext,
                                     const ResourceDesc& desc, IDataPacket& data) override
         {
             return _assemblyLine->ImmediateTransaction(threadContext, desc, data);
         }
         
         bool                    IsComplete(CommandListID id) override;
-        void                    StallUntilCompletion(RenderCore::IThreadContext& immediateContext, CommandListID id) override;
+        void                    StallUntilCompletion(IThreadContext& immediateContext, CommandListID id) override;
 
         CommandListMetrics      PopMetrics() override;
 
-        void                    Update(RenderCore::IThreadContext&) override;
+        void                    Update(IThreadContext&) override;
         void                    FramePriority_Barrier() override;
 
-        Manager(RenderCore::IDevice& renderDevice);
+        Manager(IDevice& renderDevice);
         ~Manager();
 
     private:
@@ -1693,7 +1689,7 @@ namespace BufferUploads
         return id <= (_backgroundStepMask ? _backgroundContext.get() : _foregroundContext.get())->CommandList_GetCommittedToImmediate();
     }
 
-    void                    Manager::StallUntilCompletion(RenderCore::IThreadContext& immediateContext, CommandListID id)
+    void                    Manager::StallUntilCompletion(IThreadContext& immediateContext, CommandListID id)
     {
         if (!id || id == CommandListID_Invalid) return;
         while (!IsComplete(id)) {
@@ -1711,7 +1707,7 @@ namespace BufferUploads
         return _foregroundContext->PopMetrics();
     }
 
-    void                    Manager::Update(RenderCore::IThreadContext& immediateContext)
+    void                    Manager::Update(IThreadContext& immediateContext)
     {
         if (_foregroundStepMask)
             _assemblyLine->Process(_foregroundStepMask, *_foregroundContext.get(), _pendingFramePriority_CommandLists);
@@ -1750,7 +1746,7 @@ namespace BufferUploads
         return 0;
     }
 
-    Manager::Manager(RenderCore::IDevice& renderDevice) : _assemblyLine(std::make_shared<AssemblyLine>(renderDevice))
+    Manager::Manager(IDevice& renderDevice) : _assemblyLine(std::make_shared<AssemblyLine>(renderDevice))
     {
         _shutdownBackgroundThread = false;
 
@@ -1860,12 +1856,12 @@ namespace BufferUploads
         return *this;
     }
 
-    std::unique_ptr<IManager> CreateManager(RenderCore::IDevice& renderDevice)
+    std::unique_ptr<IManager> CreateManager(IDevice& renderDevice)
     {
         return std::make_unique<Manager>(renderDevice);
     }
 
     IManager::~IManager() {}
-}
+}}
 
 

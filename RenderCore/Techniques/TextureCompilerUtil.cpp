@@ -11,7 +11,7 @@
 #include "../Metal/DeviceContext.h"
 #include "../IDevice.h"
 #include "../Vulkan/IDeviceVulkan.h"
-#include "../../BufferUploads/IBufferUploads.h"
+#include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/IntermediatesStore.h"
 #include "../../Utility/BitUtils.h"

@@ -9,7 +9,7 @@
 #include <memory>
 #include <future>
 
-namespace BufferUploads { class IDataPacket; class IAsyncDataSource; class IManager; using CommandListID = uint32_t; }
+namespace RenderCore { namespace BufferUploads { class IDataPacket; class IAsyncDataSource; class IManager; using CommandListID = uint32_t; }}
 namespace RenderCore { namespace Assets { class RawMaterial; class ScaffoldCmdIterator; }}
 
 namespace RenderCore { namespace Techniques 

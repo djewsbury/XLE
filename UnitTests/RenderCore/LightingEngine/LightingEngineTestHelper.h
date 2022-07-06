@@ -5,7 +5,7 @@
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/Techniques/Drawables.h"
 #include "../../../RenderCore/Techniques/Services.h"
-#include "../../../BufferUploads/IBufferUploads.h"
+#include "../../../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../../../Math/Vector.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
 #include "../../../ConsoleRig/GlobalServices.h"
@@ -38,7 +38,7 @@ namespace UnitTests
 		uint32_t _xleresmnt;
 		std::unique_ptr<MetalTestHelper> _metalTestHelper;
 		ConsoleRig::AttachablePtr<RenderCore::Techniques::Services> _techniqueServices;
-		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
+		std::shared_ptr<RenderCore::BufferUploads::IManager> _bufferUploads;
 
 		std::vector<::Assets::CompilerRegistration> _compilerRegistrations;
 

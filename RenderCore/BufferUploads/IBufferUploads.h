@@ -4,10 +4,10 @@
 
 #pragma once
 
-#include "../RenderCore/IDevice_Forward.h"
-#include "../RenderCore/ResourceDesc.h"
-#include "../RenderCore/ResourceUtils.h"
-#include "../RenderCore/BufferView.h"
+#include "../IDevice_Forward.h"
+#include "../ResourceDesc.h"
+#include "../ResourceUtils.h"
+#include "../BufferView.h"
 #include <memory>
 #include <future>
 #include <functional>
@@ -21,17 +21,8 @@
 namespace Assets { class DependencyValidation; }
 namespace Utility { struct RepositionStep; }
 
-namespace BufferUploads
+namespace RenderCore { namespace BufferUploads
 {
-	using LinearBufferDesc = RenderCore::LinearBufferDesc;
-	using TextureSamples = RenderCore::TextureSamples;
-	using TextureDesc = RenderCore::TextureDesc;
-    using ResourceDesc = RenderCore::ResourceDesc;
-    using IResource = RenderCore::IResource;
-    using TexturePitches = RenderCore::TexturePitches;
-    using SubResourceId = RenderCore::SubResourceId;
-    namespace BindFlag = RenderCore::BindFlag;
-
         /////////////////////////////////////////////////
 
     class IDataPacket;
@@ -92,7 +83,7 @@ namespace BufferUploads
             /// execute in the current thread, and a new resource will be returned from
             /// the call. Use these methods when uploads can't be delayed.
         virtual ResourceLocator
-            ImmediateTransaction(  RenderCore::IThreadContext& threadContext,
+            ImmediateTransaction(  IThreadContext& threadContext,
                                     const ResourceDesc& desc, IDataPacket& data) = 0;
             /// @}
 
@@ -101,8 +92,8 @@ namespace BufferUploads
 
             /// <summary>Called every frame to update uploads</summary>
             /// Performs once-per-frame tasks. Normally called by the render device once per frame.
-        virtual void                    Update  (RenderCore::IThreadContext& immediateContext) = 0;
-        virtual void                    StallUntilCompletion(RenderCore::IThreadContext& immediateContext, CommandListID id) = 0;
+        virtual void                    Update  (IThreadContext& immediateContext) = 0;
+        virtual void                    StallUntilCompletion(IThreadContext& immediateContext, CommandListID id) = 0;
         virtual bool                    IsComplete (CommandListID id) = 0;
             /// @}
 
@@ -155,7 +146,7 @@ namespace BufferUploads
 
         virtual std::future<void> PrepareData(IteratorRange<const SubResource*> subResources) = 0;
 
-        virtual Assets::DependencyValidation GetDependencyValidation() const = 0;
+        virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 
         virtual ~IAsyncDataSource();
     };
@@ -166,11 +157,11 @@ namespace BufferUploads
     public:
         std::shared_ptr<IResource> AsIndependentResource() const;
 
-        RenderCore::VertexBufferView CreateVertexBufferView() const;
-        RenderCore::IndexBufferView CreateIndexBufferView(RenderCore::Format indexFormat) const;
-        RenderCore::ConstantBufferView CreateConstantBufferView() const;
-        std::shared_ptr<RenderCore::IResourceView> CreateTextureView(BindFlag::Enum usage = BindFlag::ShaderResource, const RenderCore::TextureViewDesc& window = RenderCore::TextureViewDesc{}) const;
-        std::shared_ptr<RenderCore::IResourceView> CreateBufferView(BindFlag::Enum usage = BindFlag::ConstantBuffer, unsigned rangeOffset = 0, unsigned rangeSize = 0) const;
+        VertexBufferView CreateVertexBufferView() const;
+        IndexBufferView CreateIndexBufferView(Format indexFormat) const;
+        ConstantBufferView CreateConstantBufferView() const;
+        std::shared_ptr<IResourceView> CreateTextureView(BindFlag::Enum usage = BindFlag::ShaderResource, const TextureViewDesc& window = TextureViewDesc{}) const;
+        std::shared_ptr<IResourceView> CreateBufferView(BindFlag::Enum usage = BindFlag::ConstantBuffer, unsigned rangeOffset = 0, unsigned rangeSize = 0) const;
 
         const std::shared_ptr<IResource>& GetContainingResource() const { return _resource; }
         std::pair<size_t, size_t> GetRangeInContainingResource() const { return std::make_pair(_interiorOffset, _interiorOffset+_interiorSize); }
@@ -237,10 +228,10 @@ namespace BufferUploads
 	{
 	public:
 		virtual ResourceLocator Allocate(size_t size, StringSection<> name) = 0;
-		virtual RenderCore::ResourceDesc MakeFallbackDesc(size_t size, StringSection<> name) = 0;
+		virtual ResourceDesc MakeFallbackDesc(size_t size, StringSection<> name) = 0;
 
-		virtual bool AddRef(RenderCore::IResource& resource, size_t offset, size_t size) = 0;
-		virtual bool Release(RenderCore::IResource& resource, size_t offset, size_t size) = 0;
+		virtual bool AddRef(IResource& resource, size_t offset, size_t size) = 0;
+		virtual bool Release(IResource& resource, size_t offset, size_t size) = 0;
 		virtual ~IResourcePool();
 	};
 
@@ -256,7 +247,7 @@ namespace BufferUploads
 
     buffer_upload_dll_export std::shared_ptr<IDataPacket> CreateEmptyPacket(const ResourceDesc& desc);
     buffer_upload_dll_export std::shared_ptr<IDataPacket> CreateEmptyLinearBufferPacket(size_t size);
-    buffer_upload_dll_export std::unique_ptr<IManager> CreateManager(RenderCore::IDevice& renderDevice);
+    buffer_upload_dll_export std::unique_ptr<IManager> CreateManager(IDevice& renderDevice);
 
-}
+}}
 

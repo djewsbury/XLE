@@ -390,7 +390,7 @@ namespace SceneEngine
             CullMetrics* metrics = nullptr);
 
         template<bool DoFilter>
-            BufferUploads::CommandListID BuildDrawables(
+            RenderCore::BufferUploads::CommandListID BuildDrawables(
                 IteratorRange<RenderCore::Techniques::DrawablesPacket**const> pkts,
                 const Placements& placements,
                 IteratorRange<const unsigned*> objects,
@@ -398,7 +398,7 @@ namespace SceneEngine
                 const uint64_t* filterStart = nullptr, const uint64_t* filterEnd = nullptr,
                 BuildDrawablesMetrics* metrics = nullptr);
 
-        BufferUploads::CommandListID BuildDrawablesViewMasks(
+        RenderCore::BufferUploads::CommandListID BuildDrawablesViewMasks(
             IteratorRange<RenderCore::Techniques::DrawablesPacket**const> pkts,
             const Placements& placements,
             IteratorRange<const std::pair<unsigned, uint32_t>*> objects,
@@ -794,7 +794,7 @@ namespace SceneEngine
     }
 
     template<bool DoFilter>
-        BufferUploads::CommandListID PlacementsRenderer::Pimpl::BuildDrawables(
+        RenderCore::BufferUploads::CommandListID PlacementsRenderer::Pimpl::BuildDrawables(
             IteratorRange<RenderCore::Techniques::DrawablesPacket**const> pkts,
             const Placements& placements,
             IteratorRange<const unsigned*> objects,
@@ -839,7 +839,7 @@ namespace SceneEngine
         // auto cameraPositionCell = ExtractTranslation(executeContext._view._projection._cameraToWorld);
         // cameraPositionCell = TransformPointByOrthonormalInverse(cellToWorld, cameraPositionCell);
         
-        BufferUploads::CommandListID completionCmdList = 0;
+        RenderCore::BufferUploads::CommandListID completionCmdList = 0;
         const auto* filenamesBuffer = placements.GetFilenamesBuffer();
         const auto* objRef = placements.GetObjectReferences();
 
@@ -899,14 +899,14 @@ namespace SceneEngine
         return completionCmdList;
     }
 
-    BufferUploads::CommandListID PlacementsRenderer::Pimpl::BuildDrawablesViewMasks(
+    RenderCore::BufferUploads::CommandListID PlacementsRenderer::Pimpl::BuildDrawablesViewMasks(
         IteratorRange<RenderCore::Techniques::DrawablesPacket**const> pkts,
         const Placements& placements,
         IteratorRange<const std::pair<unsigned, uint32_t>*> objects,
         const Float3x4& cellToWorld,
         BuildDrawablesMetrics* metrics)
     {
-        BufferUploads::CommandListID completionCmdList = 0;
+        RenderCore::BufferUploads::CommandListID completionCmdList = 0;
         const auto* filenamesBuffer = placements.GetFilenamesBuffer();
         const auto* objRef = placements.GetObjectReferences();
 
@@ -1027,7 +1027,7 @@ namespace SceneEngine
 
         static std::vector<unsigned> visibleObjects;
         BuildDrawablesMetricsHelper metricsHelper { "AABB test", &executeContext };
-        BufferUploads::CommandListID completionCmdList = 0;
+        RenderCore::BufferUploads::CommandListID completionCmdList = 0;
 
             // Render every registered cell
             // We catch exceptions on a cell based level (so pending cells won't cause other cells to flicker)
@@ -1072,7 +1072,7 @@ namespace SceneEngine
         const auto& view = executeContext._view;
 
         BuildDrawablesMetricsHelper metricsHelper { "Arbitrary AABB test", &executeContext };
-        BufferUploads::CommandListID completionCmdList = 0;
+        RenderCore::BufferUploads::CommandListID completionCmdList = 0;
 
         auto& cells = cellSet._pimpl->_cells;
         for (auto i=cells.begin(); i!=cells.end(); ++i) {
@@ -1107,7 +1107,7 @@ namespace SceneEngine
         const PlacementCellSet& cellSet)
     {
         static std::vector<std::pair<unsigned, uint32_t>> visibleObjects;
-        BufferUploads::CommandListID completionCmdList = 0;
+        RenderCore::BufferUploads::CommandListID completionCmdList = 0;
         auto* arbitraryVolume = executeContext._view._complexVolumeTester;
 
             // Render every registered cell
@@ -1146,7 +1146,7 @@ namespace SceneEngine
         const std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate>& preDrawDelegate)
     {
         static std::vector<unsigned> visibleObjects;
-        BufferUploads::CommandListID completionCmdList = 0;
+        RenderCore::BufferUploads::CommandListID completionCmdList = 0;
 
             //  We need to take a copy, so we don't overwrite
             //  and reorder the caller's version.

@@ -8,7 +8,7 @@
 #include "../Assets/ScaffoldCmdStream.h"
 #include "../Assets/AssetUtils.h"
 #include "../Assets/MaterialMachine.h"
-#include "../../BufferUploads/IBufferUploads.h"
+#include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/DepVal.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Assets/BlockSerializer.h"

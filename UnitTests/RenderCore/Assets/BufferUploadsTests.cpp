@@ -5,8 +5,8 @@
 #include "../Metal/MetalTestHelper.h"
 #include "../../EmbeddedRes.h"
 #include "../../UnitTestHelper.h"
-#include "../../../BufferUploads/IBufferUploads.h"
-#include "../../../BufferUploads/Metrics.h"
+#include "../../../RenderCore/BufferUploads/IBufferUploads.h"
+#include "../../../RenderCore/BufferUploads/Metrics.h"
 #include "../../../RenderCore/Assets/TextureLoaders.h"
 #include "../../../RenderCore/ResourceDesc.h"
 #include "../../../RenderCore/Format.h"
@@ -31,7 +31,7 @@ using namespace Catch::literals;
 using namespace std::chrono_literals;
 namespace UnitTests
 {
-	class AsyncDataSource : public BufferUploads::IAsyncDataSource
+	class AsyncDataSource : public RenderCore::BufferUploads::IAsyncDataSource
 	{
 	public:
 		std::future<RenderCore::ResourceDesc> GetDesc () override
@@ -228,7 +228,7 @@ namespace UnitTests
 			dst = rng();
 	}
 
-	class RandomNoiseGenerator : public BufferUploads::IAsyncDataSource
+	class RandomNoiseGenerator : public RenderCore::BufferUploads::IAsyncDataSource
 	{
 	public:
 		std::future<RenderCore::ResourceDesc> GetDesc () override
@@ -263,13 +263,13 @@ namespace UnitTests
 	{
 		struct Marker
 		{
-			std::future<BufferUploads::ResourceLocator> _future;
-			BufferUploads::ResourceLocator _retrieved;
+			std::future<RenderCore::BufferUploads::ResourceLocator> _future;
+			RenderCore::BufferUploads::ResourceLocator _retrieved;
 		};
 		std::vector<Marker> _liveTransactions;
 		unsigned _incrementalTransactionCounter = 0;
 
-		void RemoveCompletedTransactions(BufferUploads::IManager& manager)
+		void RemoveCompletedTransactions(RenderCore::BufferUploads::IManager& manager)
 		{
 			// Note -- some of the transactions may fail (eg, out of the device space). However, they
 			// are stil considered complete and we should be able to continue on
@@ -287,14 +287,14 @@ namespace UnitTests
 			_liveTransactions.erase(i, _liveTransactions.end());
 		}
 
-		void AddTransaction(BufferUploads::TransactionMarker&& marker)
+		void AddTransaction(RenderCore::BufferUploads::TransactionMarker&& marker)
 		{
 			REQUIRE(marker.IsValid());
-			_liveTransactions.push_back(Marker{std::move(marker._future), BufferUploads::ResourceLocator{}});
+			_liveTransactions.push_back(Marker{std::move(marker._future), RenderCore::BufferUploads::ResourceLocator{}});
 			++_incrementalTransactionCounter;
 		}
 
-		void Report(BufferUploads::IManager& bu)
+		void Report(RenderCore::BufferUploads::IManager& bu)
 		{
 			Log(Verbose) << bu.PopMetrics() << std::endl;
 			Log(Verbose) << "Live Transactions: " << _liveTransactions.size() << std::endl;
@@ -345,7 +345,7 @@ namespace UnitTests
 		}
 	}
 
-	class RandomTestPkt : public BufferUploads::IDataPacket
+	class RandomTestPkt : public RenderCore::BufferUploads::IDataPacket
 	{
 	public:
 		IteratorRange<void*>    GetData         (RenderCore::SubResourceId subRes) override
@@ -709,7 +709,7 @@ namespace UnitTests
 
 		SECTION("ReferenceCountingLayer")
 		{
-			using namespace BufferUploads;
+			using namespace RenderCore::BufferUploads;
 			ReferenceCountingLayer layer(0x8000);
 
 			layer.AddRef(0x1c0, 0x10);

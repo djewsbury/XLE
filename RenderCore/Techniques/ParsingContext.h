@@ -14,7 +14,7 @@
 namespace Assets { namespace Exceptions { class RetrievalError; }}
 namespace Utility { class ParameterBox; }
 namespace RenderCore { class IResource; class IThreadContext; class ViewportDesc; class IDescriptorSet; }
-namespace BufferUploads { using CommandListID = uint32_t; }
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 
 namespace RenderCore { namespace Techniques 
 {

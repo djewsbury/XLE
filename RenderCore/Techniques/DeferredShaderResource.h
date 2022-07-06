@@ -13,9 +13,8 @@
 
 namespace Utility { class ParameterBox; }
 namespace Assets { class DirectorySearchRules; }
-namespace BufferUploads { using CommandListID = uint32_t; class IAsyncDataSource; }
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; class IAsyncDataSource; using TransactionID = uint64_t; }}
 namespace RenderCore { namespace Assets { class TextureCompilationRequest; }}
-namespace BufferUploads { using TransactionID = uint64_t; }
 
 namespace RenderCore { namespace Techniques 
 {

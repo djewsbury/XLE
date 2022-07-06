@@ -5,18 +5,18 @@
 #pragma once
 
 #include "IBufferUploads.h"
-#include "../RenderCore/IDevice.h"
-#include "../Utility/IntrusivePtr.h"
-#include "../Utility/HeapUtils.h"
-#include "../RenderCore/Metal/Forward.h"        // for GFXAPI_TARGET
+#include "../IDevice.h"
+#include "../Metal/Forward.h"        // for GFXAPI_TARGET
+#include "../../Utility/IntrusivePtr.h"
+#include "../../Utility/HeapUtils.h"
 #include <utility>
 
 namespace Utility { struct RepositionStep; }
 namespace Utility { template<typename Type, int Count> class LockFreeFixedSizeQueue; }
 namespace RenderCore { namespace Metal_Vulkan { class IAsyncTracker; } }
 
-namespace BufferUploads { struct StagingPageMetrics; }
-namespace BufferUploads { namespace PlatformInterface
+namespace RenderCore { namespace BufferUploads { struct StagingPageMetrics; } }
+namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 {
     class ResourceUploadHelper
     {
@@ -35,50 +35,50 @@ namespace BufferUploads { namespace PlatformInterface
         // resourceOffset & resourceSize describe the part of resource that will be written to
         unsigned WriteViaMap(
             IResource& resource, unsigned resourceOffset, unsigned resourceSize,
-            const RenderCore::TextureDesc& descForLayout,
-            const RenderCore::IDevice::ResourceInitializer& multiSubresourceInitializer);
+            const TextureDesc& descForLayout,
+            const IDevice::ResourceInitializer& multiSubresourceInitializer);
 
         // Write directly to a resource that may have subresources with the given initializer
         // This can be used with either linear buffers or textures, but must write to the entire
         // destination resource
         unsigned WriteViaMap(
             IResource& resource,
-            const RenderCore::IDevice::ResourceInitializer& multiSubresourceInitializer);
+            const IDevice::ResourceInitializer& multiSubresourceInitializer);
 
         void UpdateFinalResourceFromStaging(
             const ResourceLocator& finalResource,
-            RenderCore::IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize);
+            IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize);
 
         void UpdateFinalResourceFromStaging(
             const ResourceLocator& finalResource,
-            const RenderCore::Box2D& box, SubResourceId subRes,
-            RenderCore::IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize);
+            const Box2D& box, SubResourceId subRes,
+            IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize);
 
         void UpdateFinalResourceViaCmdListAttachedStaging(
-            RenderCore::IThreadContext& context,
+            IThreadContext& context,
             const ResourceLocator& finalResource,
             IDataPacket& initialisationData);
 
-        bool CanDirectlyMap(RenderCore::IResource& resource);
+        bool CanDirectlyMap(IResource& resource);
 
         std::vector<IAsyncDataSource::SubResource> CalculateUploadList(
-            RenderCore::Metal::ResourceMap& map,
+            Metal::ResourceMap& map,
             const ResourceDesc& desc);
 
-        unsigned CalculateStagingBufferOffsetAlignment(const RenderCore::ResourceDesc& desc);
+        unsigned CalculateStagingBufferOffsetAlignment(const ResourceDesc& desc);
 
             ////////   R E S O U R C E   C O P Y   ////////
         void DeviceBasedCopy(
-            RenderCore::IResource& destination,
-            RenderCore::IResource& source,
+            IResource& destination,
+            IResource& source,
             IteratorRange<const Utility::RepositionStep*> steps);
-        void DeviceBasedCopy(RenderCore::IResource& destination, RenderCore::IResource& source);
+        void DeviceBasedCopy(IResource& destination, IResource& source);
 
             ////////   C O N S T R U C T I O N   ////////
-        ResourceUploadHelper(RenderCore::IThreadContext& renderCoreContext);
+        ResourceUploadHelper(IThreadContext& renderCoreContext);
         ~ResourceUploadHelper();
 
-        RenderCore::IThreadContext& GetUnderlying() { return *_renderCoreContext; }
+        IThreadContext& GetUnderlying() { return *_renderCoreContext; }
 
         #if GFXAPI_TARGET == GFXAPI_DX11
             private: 
@@ -86,7 +86,7 @@ namespace BufferUploads { namespace PlatformInterface
         #endif
 
     private:
-        RenderCore::IThreadContext*         _renderCoreContext;
+        IThreadContext*         _renderCoreContext;
     };
 
     using QueueMarker = unsigned;
@@ -116,22 +116,22 @@ namespace BufferUploads { namespace PlatformInterface
         };
 
         Allocation Allocate(unsigned byteCount, unsigned alignment);
-        RenderCore::IResource& GetStagingResource() { return *_stagingBuffer; }
+        IResource& GetStagingResource() { return *_stagingBuffer; }
 
         StagingPageMetrics GetQuickMetrics() const;
         void BindThread();
         void UpdateConsumerMarker();
         size_t MaxSize() const { return _stagingBufferHeap.HeapSize(); }
 
-        StagingPage(RenderCore::IDevice& device, unsigned size);
+        StagingPage(IDevice& device, unsigned size);
         ~StagingPage();
         StagingPage(StagingPage&&) = default;
         StagingPage& operator=(StagingPage&&) = default;
 
     private:
         CircularHeap _stagingBufferHeap;
-		std::shared_ptr<RenderCore::IResource> _stagingBuffer;
-        std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
+		std::shared_ptr<IResource> _stagingBuffer;
+        std::shared_ptr<Metal_Vulkan::IAsyncTracker> _asyncTracker;
 
         struct ActiveAllocation
         {
@@ -157,7 +157,7 @@ namespace BufferUploads { namespace PlatformInterface
         #endif
     };
 
-    RenderCore::IDevice::ResourceInitializer AsResourceInitializer(IDataPacket& pkt);
+    IDevice::ResourceInitializer AsResourceInitializer(IDataPacket& pkt);
 
         //////   T H R E A D   C O N T E X T   //////
 
@@ -166,7 +166,7 @@ namespace BufferUploads { namespace PlatformInterface
     public:
         void                    ResolveCommandList();
         void                    CommitToImmediate(
-            RenderCore::IThreadContext& commitTo,
+            IThreadContext& commitTo,
             unsigned frameId,
             LockFreeFixedSizeQueue<unsigned, 4>* framePriorityQueue = nullptr);
 
@@ -187,13 +187,13 @@ namespace BufferUploads { namespace PlatformInterface
         PlatformInterface::QueueMarker      GetProducerCmdListSpecificMarker();
 
         PlatformInterface::ResourceUploadHelper&    GetResourceUploadHelper() { return _resourceUploadHelper; }
-        RenderCore::IThreadContext&                 GetRenderCoreThreadContext() { return *_underlyingContext; }
-        RenderCore::IDevice&                        GetRenderCoreDevice() { return *_underlyingContext->GetDevice(); }
+        IThreadContext&                 GetRenderCoreThreadContext() { return *_underlyingContext; }
+        IDevice&                        GetRenderCoreDevice() { return *_underlyingContext->GetDevice(); }
 
-        UploadsThreadContext(std::shared_ptr<RenderCore::IThreadContext> underlyingContext);
+        UploadsThreadContext(std::shared_ptr<IThreadContext> underlyingContext);
         ~UploadsThreadContext();
     private:
-        std::shared_ptr<RenderCore::IThreadContext> _underlyingContext;
+        std::shared_ptr<IThreadContext> _underlyingContext;
         PlatformInterface::ResourceUploadHelper _resourceUploadHelper;
 
         struct Pimpl;
@@ -222,8 +222,8 @@ namespace BufferUploads { namespace PlatformInterface
         void Add(DeferredCopy&& copy);
         void Add(DeferredDefragCopy&& copy);
         void AddDelayedDelete(ResourceLocator&& locator);
-        void CommitToImmediate_PreCommandList(RenderCore::IThreadContext& immediateContext);
-        void CommitToImmediate_PostCommandList(RenderCore::IThreadContext& immediateContext);
+        void CommitToImmediate_PreCommandList(IThreadContext& immediateContext);
+        void CommitToImmediate_PostCommandList(IThreadContext& immediateContext);
         bool IsEmpty() const;
 
         void swap(DeferredOperations& other);
@@ -240,7 +240,7 @@ namespace BufferUploads { namespace PlatformInterface
 
         /////////////////////////////////////////////////////////////////////
 
-    struct BufferMetrics : public RenderCore::ResourceDesc
+    struct BufferMetrics : public ResourceDesc
     {
     public:
         unsigned        _systemMemorySize;
@@ -248,10 +248,10 @@ namespace BufferUploads { namespace PlatformInterface
         const char*     _pixelFormatName;
     };
 
-    void            Resource_Register(RenderCore::IResource& resource, const char name[]);
+    void            Resource_Register(IResource& resource, const char name[]);
     void            Resource_Report(bool justVolatiles);
-    void            Resource_SetName(RenderCore::IResource& resource, const char name[]);
-    void            Resource_GetName(RenderCore::IResource& resource, char buffer[], int bufferSize);
+    void            Resource_SetName(IResource& resource, const char name[]);
+    void            Resource_GetName(IResource& resource, char buffer[], int bufferSize);
     size_t          Resource_GetAll(BufferMetrics** bufferDescs);
 
     size_t          Resource_GetVideoMemoryHeadroom();
@@ -310,4 +310,4 @@ namespace BufferUploads { namespace PlatformInterface
 
         /////////////////////////////////////////////////////////////////////
 
-}}
+}}}

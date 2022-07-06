@@ -13,7 +13,7 @@ namespace RenderCore { namespace Techniques { class ProjectionDesc; class Drawab
 namespace RenderCore { namespace LightingEngine { class ILightScene; class LightSourceOperatorDesc; class ShadowOperatorDesc; class IProbeRenderingInstance; }}
 namespace Assets { class DependencyValidation; }
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
-namespace BufferUploads { using CommandListID = uint32_t; }
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 
 namespace SceneEngine
 {
@@ -35,7 +35,7 @@ namespace SceneEngine
         SceneView _view;
         IteratorRange<RenderCore::Techniques::DrawablesPacket**> _destinationPkts;
         mutable char _quickMetrics[4096];
-        mutable BufferUploads::CommandListID _completionCmdList = 0;
+        mutable RenderCore::BufferUploads::CommandListID _completionCmdList = 0;
 
         ExecuteSceneContext(const SceneView& view, IteratorRange<RenderCore::Techniques::DrawablesPacket**> destinationPkts)
         :  _view(view), _destinationPkts(destinationPkts)

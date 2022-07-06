@@ -8,7 +8,7 @@
 #include "../RenderCore/Techniques/DrawableDelegates.h"
 #include "../RenderCore/Techniques/Services.h"
 #include "../RenderCore/Format.h"
-#include "../BufferUploads/IBufferUploads.h"
+#include "../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../Assets/Continuation.h"
 #include "../Math/Vector.h"
 
@@ -57,8 +57,8 @@ namespace SceneEngine
 			};
 
 			auto& uploads = Techniques::Services::GetBufferUploads();
-			auto gradDesc = CreateDesc(BufferUploads::BindFlag::ShaderResource, BufferUploads::TextureDesc::Plain1D(dimof(g), Format::R32G32B32A32_TYPELESS), "NoiseGrad");
-			auto permDesc = CreateDesc(BufferUploads::BindFlag::ShaderResource, BufferUploads::TextureDesc::Plain1D(dimof(perm), Format::R8_TYPELESS), "NoisePerm");
+			auto gradDesc = CreateDesc(RenderCore::BindFlag::ShaderResource, RenderCore::TextureDesc::Plain1D(dimof(g), Format::R32G32B32A32_TYPELESS), "NoiseGrad");
+			auto permDesc = CreateDesc(RenderCore::BindFlag::ShaderResource, RenderCore::TextureDesc::Plain1D(dimof(perm), Format::R8_TYPELESS), "NoisePerm");
 			auto gradMarker = uploads.Begin(gradDesc, BufferUploads::CreateBasicPacket(MakeIteratorRange(g)));
 			auto permMarker = uploads.Begin(permDesc, BufferUploads::CreateBasicPacket(MakeIteratorRange(perm)));
 

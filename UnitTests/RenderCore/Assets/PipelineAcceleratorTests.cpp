@@ -32,7 +32,7 @@
 #include "../../../RenderCore/ResourceDesc.h"
 #include "../../../RenderCore/FrameBufferDesc.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
-#include "../../../BufferUploads/IBufferUploads.h"
+#include "../../../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/IFileSystem.h"
 #include "../../../Assets/OSFileSystem.h"
@@ -216,7 +216,7 @@ namespace UnitTests
 
 	static const RenderCore::Techniques::ActualizedDescriptorSet* StallForDescriptorSet(
 		RenderCore::Techniques::IPipelineAcceleratorPool& pool,
-		BufferUploads::IManager& bu,
+		RenderCore::BufferUploads::IManager& bu,
 		RenderCore::Techniques::DescriptorSetAccelerator& accelerator)
 	{
 		auto descSetMarker = pool.GetDescriptorSetMarker(accelerator);

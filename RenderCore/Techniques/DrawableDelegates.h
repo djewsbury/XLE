@@ -15,7 +15,7 @@
 
 namespace Utility { class ParameterBox; }
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
-namespace BufferUploads { using CommandListID = uint32_t; }
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 
 namespace RenderCore { namespace Techniques 
 {

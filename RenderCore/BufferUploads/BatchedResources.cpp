@@ -5,27 +5,27 @@
 #include "BatchedResources.h"
 #include "Metrics.h"
 #include "ResourceUploadHelper.h"
-#include "../OSServices/Log.h"
-#include "../Utility/HeapUtils.h"
+#include "../../OSServices/Log.h"
+#include "../../Utility/HeapUtils.h"
 
-namespace BufferUploads
+namespace RenderCore { namespace BufferUploads
 {
 	class BatchedResources : public IBatchedResources, public std::enable_shared_from_this<BatchedResources>
 	{
 	public:
 		ResourceLocator Allocate(size_t size, StringSection<> name) override;
-		RenderCore::ResourceDesc MakeFallbackDesc(size_t size, StringSection<> name) override;
+		ResourceDesc MakeFallbackDesc(size_t size, StringSection<> name) override;
 
 		virtual bool AddRef(
-			RenderCore::IResource& resource, 
+			IResource& resource, 
 			size_t offset, size_t size) override;
 
 		virtual bool Release(
-			RenderCore::IResource& resource, 
+			IResource& resource, 
 			size_t offset, size_t size) override;
 
 		struct ResultFlags { enum Enum { IsBatched = 1<<0, ActiveReposition = 1<<1 }; using BitField=unsigned; };
-		ResultFlags::BitField   IsBatchedResource(RenderCore::IResource* resource) const;
+		ResultFlags::BitField   IsBatchedResource(IResource* resource) const;
 		ResultFlags::BitField   Validate(const ResourceLocator& locator) const;
 		BatchingSystemMetrics   CalculateMetrics() const override;
 		const ResourceDesc&     GetPrototype() const { return _prototype; }
@@ -39,8 +39,8 @@ namespace BufferUploads
 		///////////////////////////////////////
 
 		BatchedResources(
-			RenderCore::IDevice&, const std::shared_ptr<IManager>&, 
-			RenderCore::BindFlag::BitField bindFlags,
+			IDevice&, const std::shared_ptr<IManager>&, 
+			BindFlag::BitField bindFlags,
 			unsigned pageSizeInBytes);
 		~BatchedResources();
 	private:
@@ -50,10 +50,10 @@ namespace BufferUploads
 
 		std::vector<std::unique_ptr<HeapedResource>> _heaps;
 		ResourceDesc _prototype;
-		RenderCore::IDevice* _device;
+		IDevice* _device;
 		mutable Threading::ReadWriteMutex _lock;
 		std::weak_ptr<IManager> _bufferUploads;
-		RenderCore::BindFlag::BitField _fallbackBindFlags;
+		BindFlag::BitField _fallbackBindFlags;
 
 			//  Active defrag stuff...
 		std::unique_ptr<ActiveReposition> _activeDefrag;
@@ -105,10 +105,10 @@ namespace BufferUploads
 		void                ValidateRefsAndHeap();
 
 		HeapedResource();
-		HeapedResource(const ResourceDesc& desc, const std::shared_ptr<RenderCore::IResource>& heapResource);
+		HeapedResource(const ResourceDesc& desc, const std::shared_ptr<IResource>& heapResource);
 		~HeapedResource();
 
-		std::shared_ptr<RenderCore::IResource> _heapResource;
+		std::shared_ptr<IResource> _heapResource;
 		SpanningHeap<uint32_t>  _heap;
 		ReferenceCountingLayer _refCounts;
 		unsigned _size;
@@ -168,7 +168,7 @@ namespace BufferUploads
 				if (bestHeap) {
 					unsigned allocation = bestHeap->Allocate(size, name);
 					if (allocation != ~unsigned(0x0)) {
-						assert((allocation+size)<=RenderCore::ByteCount(_prototype));
+						assert((allocation+size)<=ByteCount(_prototype));
 						// We take the reference count before the ResourceLocator is created in
 						// order to avoid looking up the HeapedResource a second time, and avoid
 						// issues with non-recursive mutex locks
@@ -204,7 +204,7 @@ namespace BufferUploads
 	}
 	
 	bool BatchedResources::AddRef(
-		RenderCore::IResource& resource, 
+		IResource& resource, 
 		size_t offset, size_t size)
 	{
 		ScopedReadLock(_lock);
@@ -223,7 +223,7 @@ namespace BufferUploads
 	}
 
 	bool BatchedResources::Release(
-		RenderCore::IResource& resource, 
+		IResource& resource, 
 		size_t offset, size_t size)
 	{
 		ScopedReadLock(_lock);
@@ -287,7 +287,7 @@ namespace BufferUploads
 	}
 
 	BatchedResources::ResultFlags::BitField BatchedResources::IsBatchedResource(
-		RenderCore::IResource* resource) const
+		IResource* resource) const
 	{
 		ScopedReadLock(_lock);
 		for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i)
@@ -575,14 +575,14 @@ namespace BufferUploads
 		return ~EventListID(0x0);
 	}
 
-	RenderCore::ResourceDesc BatchedResources::MakeFallbackDesc(size_t size, StringSection<> name)
+	ResourceDesc BatchedResources::MakeFallbackDesc(size_t size, StringSection<> name)
 	{
 		return CreateDesc(_fallbackBindFlags, LinearBufferDesc::Create(size), name);
 	}
 
 	BatchedResources::BatchedResources(
-		RenderCore::IDevice& device, const std::shared_ptr<IManager>& bufferUploads,
-		RenderCore::BindFlag::BitField bindFlags,
+		IDevice& device, const std::shared_ptr<IManager>& bufferUploads,
+		BindFlag::BitField bindFlags,
 		unsigned pageSizeInBytes)
 	: _device(&device)
 	, _bufferUploads(bufferUploads)
@@ -672,11 +672,11 @@ namespace BufferUploads
 	: _size(0), _heap(0), _refCounts(0), _hashLastDefrag(0), _allocatedSpace(0)
 	{}
 
-	BatchedResources::HeapedResource::HeapedResource(const ResourceDesc& desc, const std::shared_ptr<RenderCore::IResource>& heapResource)
+	BatchedResources::HeapedResource::HeapedResource(const ResourceDesc& desc, const std::shared_ptr<IResource>& heapResource)
 	: _heapResource(heapResource)
-	, _heap(RenderCore::ByteCount(desc))
-	, _refCounts(RenderCore::ByteCount(desc))
-	, _size(RenderCore::ByteCount(desc))
+	, _heap(ByteCount(desc))
+	, _refCounts(ByteCount(desc))
+	, _size(ByteCount(desc))
 	, _hashLastDefrag(0)
 	, _allocatedSpace(0)
 	{}
@@ -749,11 +749,11 @@ namespace BufferUploads
 	BatchedResources::ActiveReposition::~ActiveReposition() {}
 
 	std::shared_ptr<IBatchedResources> CreateBatchedResources(
-		RenderCore::IDevice& device, const std::shared_ptr<IManager>& bufferUploads, 
-		RenderCore::BindFlag::BitField bindFlags,
+		IDevice& device, const std::shared_ptr<IManager>& bufferUploads, 
+		BindFlag::BitField bindFlags,
 		unsigned pageSizeInBytes)
 	{
 		return std::make_shared<BatchedResources>(device, bufferUploads, bindFlags, pageSizeInBytes);
 	}
 
-}
+}}

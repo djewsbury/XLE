@@ -21,7 +21,7 @@
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
 #include "../Metal/Resource.h"
-#include "../../BufferUploads/BatchedResources.h"
+#include "../BufferUploads/BatchedResources.h"
 #include "../../Assets/AsyncMarkerGroup.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/ContinuationUtil.h"		// for PrepareResources

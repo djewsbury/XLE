@@ -15,7 +15,7 @@
 namespace RenderCore { class IDevice; class IThreadContext; class VertexBufferView; class IResourceView; class IResource; }
 namespace Assets { class DependencyValidation; }
 namespace Utility { class ParameterBox; }
-namespace BufferUploads { using CommandListID = uint32_t; }
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 
 namespace RenderCore { namespace Techniques
 {

@@ -7,7 +7,7 @@
 #include "../../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
-#include "../../../BufferUploads/IBufferUploads.h"
+#include "../../../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../../../ShaderParser/AutomaticSelectorFiltering.h"
 #include "../../../Assets/CompileAndAsyncManager.h"
 #include "../../../Assets/AssetServices.h"
@@ -22,7 +22,7 @@ namespace UnitTests
 	{
 	public:
 		ConsoleRig::AttachablePtr<RenderCore::Techniques::Services> _techniqueServices;
-		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
+		std::shared_ptr<RenderCore::BufferUploads::IManager> _bufferUploads;
 		std::shared_ptr<RenderCore::Techniques::CommonResourceBox> _commonResources;
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<RenderCore::Techniques::TechniqueContext> _techniqueContext;

@@ -17,7 +17,7 @@
 #include "../../../RenderCore/Techniques/SystemUniformsDelegate.h"
 #include "../../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../../RenderCore/Assets/PredefinedDescriptorSetLayout.h"
-#include "../../../BufferUploads/IBufferUploads.h"
+#include "../../../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../RenderCore/Format.h"
 #include "../../../RenderCore/IDevice.h"

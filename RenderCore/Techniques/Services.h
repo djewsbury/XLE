@@ -14,7 +14,7 @@ namespace std {
 	template<typename CharT> class regex_traits;
 	template<typename CharT, typename Traits> class basic_regex; 
 }
-namespace BufferUploads { class IManager; }
+namespace RenderCore { namespace BufferUploads { class IManager; }}
 
 namespace RenderCore { namespace Techniques
 {

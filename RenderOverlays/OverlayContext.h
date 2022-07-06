@@ -70,8 +70,8 @@ namespace RenderOverlays
 			ColorB shadowColor) override;
 
         RenderCore::Techniques::IImmediateDrawables& GetImmediateDrawables() override { return *_immediateDrawables; }
-        BufferUploads::CommandListID GetRequiredBufferUploadsCommandList() const override;
-        void RequireCommandList(BufferUploads::CommandListID) override;
+        RenderCore::BufferUploads::CommandListID GetRequiredBufferUploadsCommandList() const override;
+        void RequireCommandList(RenderCore::BufferUploads::CommandListID) override;
 
         void CaptureState() override;
         void ReleaseState() override;
@@ -94,7 +94,7 @@ namespace RenderOverlays
         FontRenderingManager* _fontRenderingManager;
         OverlayState _currentState;
         std::shared_ptr<RenderCore::UniformsStreamInterface> _texturedUSI;
-        BufferUploads::CommandListID _requiredBufferUploadsCommandList = 0;
+        RenderCore::BufferUploads::CommandListID _requiredBufferUploadsCommandList = 0;
 
         class DrawCall;
         IteratorRange<void*>    BeginDrawCall(const DrawCall& drawCall);

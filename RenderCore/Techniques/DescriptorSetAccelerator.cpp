@@ -16,7 +16,7 @@
 #include "../IDevice.h"
 #include "../UniformsStream.h"
 #include "../StateDesc.h"
-#include "../../BufferUploads/IBufferUploads.h"
+#include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/ContinuationUtil.h"

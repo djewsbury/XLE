@@ -3,18 +3,18 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ResourceUploadHelper.h"
-#include "../RenderCore/Format.h"
-#include "../RenderCore/ResourceUtils.h"
-#include "../Assets/IFileSystem.h"
-#include "../Assets/IAsyncMarker.h"
-#include "../Assets/AssetsCore.h"
-#include "../OSServices/Log.h"
-#include "../ConsoleRig/GlobalServices.h"
-#include "../Utility/Threading/CompletionThreadPool.h"
-#include "../Utility/Streams/PathUtils.h"
-#include "../Utility/Conversion.h"
-#include "../Utility/StringUtils.h"
-#include "../OSServices/RawFS.h"
+#include "../Format.h"
+#include "../ResourceUtils.h"
+#include "../../Assets/IFileSystem.h"
+#include "../../Assets/IAsyncMarker.h"
+#include "../../Assets/AssetsCore.h"
+#include "../../OSServices/Log.h"
+#include "../../ConsoleRig/GlobalServices.h"
+#include "../../Utility/Threading/CompletionThreadPool.h"
+#include "../../Utility/Streams/PathUtils.h"
+#include "../../Utility/Conversion.h"
+#include "../../Utility/StringUtils.h"
+#include "../../OSServices/RawFS.h"
 #include <queue>
 #include <thread>
 
@@ -28,7 +28,7 @@
 // However, Windows should technically expect UTF16 (not UCS2) encoding for WCHAR. Maybe in our usage patterns it's not a big
 // deal... But we should be careful!
 
-namespace BufferUploads
+namespace RenderCore { namespace BufferUploads
 {
 
     class BasicRawDataPacket : public IDataPacket
@@ -145,7 +145,7 @@ namespace BufferUploads
             assert(desc._textureDesc._mipCount <= 1);
             assert(desc._textureDesc._arrayCount <= 1);
 
-            auto pitches = RenderCore::MakeTexturePitches(desc._textureDesc);
+            auto pitches = MakeTexturePitches(desc._textureDesc);
             return std::make_shared<BasicRawDataPacket>(pitches._slicePitch, IteratorRange<const void*>{}, pitches);
         }
 
@@ -295,4 +295,4 @@ namespace BufferUploads
     IDataPacket::~IDataPacket() {}
     IAsyncDataSource::~IAsyncDataSource() {}
     
-}
+}}

@@ -4,20 +4,20 @@
 
 #include "ResourceUploadHelper.h"
 #include "Metrics.h"
-#include "../RenderCore/Format.h"
-#include "../RenderCore/Metal/Metal.h"
-#include "../RenderCore/Metal/Resource.h"
-#include "../RenderCore/Metal/DeviceContext.h"
-#include "../RenderCore/IDevice.h"
-#include "../RenderCore/IAnnotator.h"
-#include "../RenderCore/Vulkan/IDeviceVulkan.h"
-#include "../OSServices/Log.h"
-#include "../OSServices/TimeUtils.h"
-#include "../Utility/StringFormat.h"
-#include "../Utility/MemoryUtils.h"
-#include "../Utility/PtrUtils.h"
-#include "../Utility/HeapUtils.h"
-#include "../Utility/Threading/LockFree.h"
+#include "../Format.h"
+#include "../Metal/Metal.h"
+#include "../Metal/Resource.h"
+#include "../Metal/DeviceContext.h"
+#include "../IDevice.h"
+#include "../IAnnotator.h"
+#include "../Vulkan/IDeviceVulkan.h"
+#include "../../OSServices/Log.h"
+#include "../../OSServices/TimeUtils.h"
+#include "../../Utility/StringFormat.h"
+#include "../../Utility/MemoryUtils.h"
+#include "../../Utility/PtrUtils.h"
+#include "../../Utility/HeapUtils.h"
+#include "../../Utility/Threading/LockFree.h"
 #include <assert.h>
 
 #if GFXAPI_TARGET == GFXAPI_DX11
@@ -28,13 +28,13 @@
     #define RECORD_BU_THREAD_CONTEXT_METRICS
 #endif
 
-namespace BufferUploads { namespace PlatformInterface
+namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 {
 	using namespace RenderCore;
 
     void ResourceUploadHelper::UpdateFinalResourceFromStaging(
         const ResourceLocator& finalResource,
-        RenderCore::IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize)
+        IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize)
     {
         auto destinationDesc = finalResource.GetContainingResource()->GetDesc();
         auto& metalContext = *Metal::DeviceContext::Get(*_renderCoreContext);
@@ -77,8 +77,8 @@ namespace BufferUploads { namespace PlatformInterface
 
     void ResourceUploadHelper::UpdateFinalResourceFromStaging(
         const ResourceLocator& finalResource,
-        const RenderCore::Box2D& box, SubResourceId subRes,
-        RenderCore::IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize)
+        const Box2D& box, SubResourceId subRes,
+        IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize)
     {
         // copy a partial subresource (but only a single subresource)
         assert(0);
@@ -102,7 +102,7 @@ namespace BufferUploads { namespace PlatformInterface
         IResource& resource, unsigned resourceOffset, unsigned resourceSize,
         IteratorRange<const void*> data)
     {
-        assert(resource.GetDesc()._type == RenderCore::ResourceDesc::Type::LinearBuffer);
+        assert(resource.GetDesc()._type == ResourceDesc::Type::LinearBuffer);
         Metal::ResourceMap map{*_renderCoreContext->GetDevice(), resource, Metal::ResourceMap::Mode::WriteDiscardPrevious, resourceOffset, resourceSize};
         auto copyAmount = std::min(map.GetData().size(), data.size());
         if (copyAmount > 0) {
@@ -118,8 +118,8 @@ namespace BufferUploads { namespace PlatformInterface
 
     unsigned ResourceUploadHelper::WriteViaMap(
         IResource& resource, unsigned resourceOffset, unsigned resourceSize,
-        const RenderCore::TextureDesc& descForLayout,
-        const RenderCore::IDevice::ResourceInitializer& multiSubresourceInitializer)
+        const TextureDesc& descForLayout,
+        const IDevice::ResourceInitializer& multiSubresourceInitializer)
     {
         return Metal::Internal::CopyViaMemoryMap(
             *_renderCoreContext->GetDevice(), 
@@ -129,7 +129,7 @@ namespace BufferUploads { namespace PlatformInterface
 
     unsigned ResourceUploadHelper::WriteViaMap(
         IResource& resource,
-        const RenderCore::IDevice::ResourceInitializer& multiSubresourceInitializer)
+        const IDevice::ResourceInitializer& multiSubresourceInitializer)
     {
         unsigned copyAmount = 0;
         Metal::ResourceMap map{*_renderCoreContext->GetDevice(), resource, Metal::ResourceMap::Mode::WriteDiscardPrevious};
@@ -156,12 +156,12 @@ namespace BufferUploads { namespace PlatformInterface
     }
 
     void ResourceUploadHelper::UpdateFinalResourceViaCmdListAttachedStaging(
-        RenderCore::IThreadContext& threadContext,
+        IThreadContext& threadContext,
         const ResourceLocator& finalResource,
         IDataPacket& initialisationData)
     {
         auto desc = finalResource.GetContainingResource()->GetDesc();
-        auto byteCount = RenderCore::ByteCount(desc);
+        auto byteCount = ByteCount(desc);
         if (!finalResource.IsWholeResource()) {
             assert(desc._type == ResourceDesc::Type::LinearBuffer);
             byteCount = finalResource.GetRangeInContainingResource().second - finalResource.GetRangeInContainingResource().first;
@@ -174,12 +174,12 @@ namespace BufferUploads { namespace PlatformInterface
         auto stagingSpace = metalContext.MapTemporaryStorage(byteCount, BindFlag::TransferSrc);
         auto uploadList = CalculateUploadList(stagingSpace, desc);
         for (const auto& upload:uploadList) {
-            RenderCore::SubResourceInitData srcSubResource = {};
+            SubResourceInitData srcSubResource = {};
             srcSubResource._data = initialisationData.GetData(upload._id);
             assert(!srcSubResource._data.empty());
             srcSubResource._pitches = initialisationData.GetPitches(upload._id);
 
-            if (desc._type == RenderCore::ResourceDesc::Type::Texture) {
+            if (desc._type == ResourceDesc::Type::Texture) {
                 // probably just a straight memcpy, anyway
                 CopyMipLevel(upload._destination.begin(), upload._destination.size(), upload._pitches, CalculateMipMapDesc(desc._textureDesc, upload._id._mip), srcSubResource);
             } else {
@@ -195,7 +195,7 @@ namespace BufferUploads { namespace PlatformInterface
     }
 
     std::vector<IAsyncDataSource::SubResource> ResourceUploadHelper::CalculateUploadList(
-        RenderCore::Metal::ResourceMap& map,
+        Metal::ResourceMap& map,
         const ResourceDesc& desc)
     {
         std::vector<IAsyncDataSource::SubResource> uploadList;
@@ -253,12 +253,12 @@ namespace BufferUploads { namespace PlatformInterface
     }
 #endif
 
-    bool ResourceUploadHelper::CanDirectlyMap(RenderCore::IResource& resource)
+    bool ResourceUploadHelper::CanDirectlyMap(IResource& resource)
     {
         return Metal::ResourceMap::CanMap(*_renderCoreContext->GetDevice(), resource, Metal::ResourceMap::Mode::WriteDiscardPrevious);
     }
 
-    unsigned ResourceUploadHelper::CalculateStagingBufferOffsetAlignment(const RenderCore::ResourceDesc& desc)
+    unsigned ResourceUploadHelper::CalculateStagingBufferOffsetAlignment(const ResourceDesc& desc)
     {
         using namespace RenderCore;
 		auto& objectFactory = Metal::GetObjectFactory();
@@ -279,13 +279,13 @@ namespace BufferUploads { namespace PlatformInterface
     }
 
     void ResourceUploadHelper::DeviceBasedCopy(
-        RenderCore::IResource& destination,
-        RenderCore::IResource& source,
+        IResource& destination,
+        IResource& source,
         IteratorRange<const Utility::RepositionStep*> steps)
     {
         // this interface only works with linear buffers (because RepositionStep is specialized for 1D)
-        assert(destination.GetDesc()._type == RenderCore::ResourceDesc::Type::LinearBuffer);
-        assert(source.GetDesc()._type == RenderCore::ResourceDesc::Type::LinearBuffer);
+        assert(destination.GetDesc()._type == ResourceDesc::Type::LinearBuffer);
+        assert(source.GetDesc()._type == ResourceDesc::Type::LinearBuffer);
 
         auto& metalContext = *Metal::DeviceContext::Get(*_renderCoreContext);
         Metal::Internal::CaptureForBind cap0{metalContext, destination, BindFlag::TransferDst};
@@ -306,11 +306,11 @@ namespace BufferUploads { namespace PlatformInterface
         assert(0);
     }
 
-    RenderCore::IDevice::ResourceInitializer AsResourceInitializer(IDataPacket& pkt)
+    IDevice::ResourceInitializer AsResourceInitializer(IDataPacket& pkt)
     {
-        return [&pkt](SubResourceId sr) -> RenderCore::SubResourceInitData
+        return [&pkt](SubResourceId sr) -> SubResourceInitData
             {
-                RenderCore::SubResourceInitData result;
+                SubResourceInitData result;
 				result._data = pkt.GetData(sr);
                 result._pitches = pkt.GetPitches(sr);
                 return result;
@@ -333,7 +333,6 @@ namespace BufferUploads { namespace PlatformInterface
 
     static std::string BuildDescription(const ResourceDesc& desc)
     {
-        using namespace BufferUploads;
         char buffer[2048];
         if (desc._type == ResourceDesc::Type::Texture) {
             const TextureDesc& tDesc = desc._textureDesc;
@@ -369,12 +368,12 @@ namespace BufferUploads { namespace PlatformInterface
             //  Remove the top few LODs from the desc...
         ResourceDesc result = desc;
         if (result._type == ResourceDesc::Type::Texture) {
-            result._textureDesc = RenderCore::CalculateMipMapDesc(desc._textureDesc, lodOffset);
+            result._textureDesc = CalculateMipMapDesc(desc._textureDesc, lodOffset);
         }
         return result;
     }
     
-    static bool IsFull2DPlane(const ResourceDesc& resDesc, const RenderCore::Box2D& box)
+    static bool IsFull2DPlane(const ResourceDesc& resDesc, const Box2D& box)
     {
         assert(resDesc._type == ResourceDesc::Type::Texture);
         if (box == Box2D{}) return true;
@@ -543,7 +542,7 @@ namespace BufferUploads { namespace PlatformInterface
         #endif
     }
 
-    StagingPage::StagingPage(RenderCore::IDevice& device, unsigned size)
+    StagingPage::StagingPage(IDevice& device, unsigned size)
     {
 		_stagingBufferHeap = CircularHeap(size);
 		_stagingBuffer = device.CreateResource(
@@ -552,7 +551,7 @@ namespace BufferUploads { namespace PlatformInterface
 				LinearBufferDesc::Create(size),
 				"staging-page"));
 
-        auto* deviceVulkan = (RenderCore::IDeviceVulkan*)device.QueryInterface(typeid(RenderCore::IDeviceVulkan).hash_code());
+        auto* deviceVulkan = (IDeviceVulkan*)device.QueryInterface(typeid(IDeviceVulkan).hash_code());
         if (deviceVulkan)
             _asyncTracker = deviceVulkan->GetAsyncTracker();
 
@@ -625,7 +624,7 @@ namespace BufferUploads { namespace PlatformInterface
         DeferredOperations _deferredOperationsUnderConstruction;
         struct QueuedCommandList
         {
-            std::shared_ptr<RenderCore::Metal::CommandList> _deviceCommandList;
+            std::shared_ptr<Metal::CommandList> _deviceCommandList;
             mutable CommandListMetrics _metrics;
             DeferredOperations _deferredOperations;
             CommandListID _id;
@@ -641,7 +640,7 @@ namespace BufferUploads { namespace PlatformInterface
 
         CommandListID _commandListIDUnderConstruction, _commandListIDCommittedToImmediate;
 
-        std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
+        std::shared_ptr<Metal_Vulkan::IAsyncTracker> _asyncTracker;
         std::unique_ptr<PlatformInterface::StagingPage> _stagingPage;
 
         unsigned _immediateContextLastFrameId = 0;
@@ -657,7 +656,7 @@ namespace BufferUploads { namespace PlatformInterface
         newCommandList._id = _pimpl->_commandListIDUnderConstruction;
 
         if (!_pimpl->_isImmediateContext) {
-            newCommandList._deviceCommandList = RenderCore::Metal::DeviceContext::Get(*_underlyingContext)->ResolveCommandList();
+            newCommandList._deviceCommandList = Metal::DeviceContext::Get(*_underlyingContext)->ResolveCommandList();
             newCommandList._deferredOperations.swap(_pimpl->_deferredOperationsUnderConstruction);
             _pimpl->_queuedCommandLists.push_overflow(std::move(newCommandList));
         } else {
@@ -682,7 +681,7 @@ namespace BufferUploads { namespace PlatformInterface
     }
 
     void UploadsThreadContext::CommitToImmediate(
-        RenderCore::IThreadContext& commitTo,
+        IThreadContext& commitTo,
         unsigned frameId,
         LockFreeFixedSizeQueue<unsigned, 4>* framePriorityQueue)
     {
@@ -693,7 +692,7 @@ namespace BufferUploads { namespace PlatformInterface
             return;
         }
 
-        auto immContext = RenderCore::Metal::DeviceContext::Get(commitTo);
+        auto immContext = Metal::DeviceContext::Get(commitTo);
         
         TimeMarker stallStart = OSServices::GetPerformanceCounter();
         bool gotStart = false;
@@ -711,13 +710,13 @@ namespace BufferUploads { namespace PlatformInterface
             while (_pimpl->_queuedCommandLists.try_front(commandList)) {
                 TimeMarker stallEnd = OSServices::GetPerformanceCounter();
                 if (!gotStart) {
-                    commitTo.GetAnnotator().Event("BufferUploads", RenderCore::IAnnotator::EventTypes::MarkerBegin);
+                    commitTo.GetAnnotator().Event("BufferUploads", IAnnotator::EventTypes::MarkerBegin);
                     gotStart = true;
                 }
 
                 commandList->_deferredOperations.CommitToImmediate_PreCommandList(commitTo);
                 if (commandList->_deviceCommandList) {
-                    auto* deviceVulkan = (RenderCore::IThreadContextVulkan*)commitTo.QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code());
+                    auto* deviceVulkan = (IThreadContextVulkan*)commitTo.QueryInterface(typeid(IThreadContextVulkan).hash_code());
                     if (deviceVulkan) {
                         deviceVulkan->CommitPrimaryCommandBufferToQueue(*commandList->_deviceCommandList);
                         commandList->_deviceCommandList = {};
@@ -747,7 +746,7 @@ namespace BufferUploads { namespace PlatformInterface
         }
 
         if (gotStart) {
-            commitTo.GetAnnotator().Event("BufferUploads", RenderCore::IAnnotator::EventTypes::MarkerEnd);
+            commitTo.GetAnnotator().Event("BufferUploads", IAnnotator::EventTypes::MarkerEnd);
         }
         
         ++_pimpl->_commitCountCurrent;
@@ -786,14 +785,14 @@ namespace BufferUploads { namespace PlatformInterface
     PlatformInterface::QueueMarker      UploadsThreadContext::GetProducerCmdListSpecificMarker()
     {
         // Get the marker that is specific to the particular cmd list we're building
-        auto* vulkanThreadContext = (RenderCore::IThreadContextVulkan*)_underlyingContext->QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code());
+        auto* vulkanThreadContext = (IThreadContextVulkan*)_underlyingContext->QueryInterface(typeid(IThreadContextVulkan).hash_code());
         if (vulkanThreadContext)
             return vulkanThreadContext->GetCmdListSpecificMarker();
         if (_pimpl->_asyncTracker) return _pimpl->_asyncTracker->GetProducerMarker();
         return 0;
     }
 
-    UploadsThreadContext::UploadsThreadContext(std::shared_ptr<RenderCore::IThreadContext> underlyingContext) 
+    UploadsThreadContext::UploadsThreadContext(std::shared_ptr<IThreadContext> underlyingContext) 
     : _resourceUploadHelper(*underlyingContext)
     {
         _underlyingContext = std::move(underlyingContext);
@@ -809,7 +808,7 @@ namespace BufferUploads { namespace PlatformInterface
             _pimpl->_stagingPage = std::make_unique<PlatformInterface::StagingPage>(*_underlyingContext->GetDevice(), stagingPageSize);
         }
 
-        auto* deviceVulkan = (RenderCore::IDeviceVulkan*)_underlyingContext->GetDevice()->QueryInterface(typeid(RenderCore::IDeviceVulkan).hash_code());
+        auto* deviceVulkan = (IDeviceVulkan*)_underlyingContext->GetDevice()->QueryInterface(typeid(IDeviceVulkan).hash_code());
         if (deviceVulkan)
             _pimpl->_asyncTracker = deviceVulkan->GetAsyncTracker();
     }
@@ -843,7 +842,7 @@ namespace BufferUploads { namespace PlatformInterface
         _delayedDeletes.push_back(std::move(locator));
     }
 
-    void UploadsThreadContext::DeferredOperations::CommitToImmediate_PreCommandList(RenderCore::IThreadContext& immContext)
+    void UploadsThreadContext::DeferredOperations::CommitToImmediate_PreCommandList(IThreadContext& immContext)
     {
         // D3D11 has some issues with mapping and writing to linear buffers from a background thread
         // we get around this by defering some write operations to the main thread, at the point
@@ -856,7 +855,7 @@ namespace BufferUploads { namespace PlatformInterface
         }
     }
 
-    void UploadsThreadContext::DeferredOperations::CommitToImmediate_PostCommandList(RenderCore::IThreadContext& immContext)
+    void UploadsThreadContext::DeferredOperations::CommitToImmediate_PostCommandList(IThreadContext& immContext)
     {
         if (!_deferredDefragCopies.empty()) {
             PlatformInterface::ResourceUploadHelper immediateContext(immContext);
@@ -1193,5 +1192,5 @@ namespace BufferUploads { namespace PlatformInterface
 
     #endif
 
-}}
+}}}
 

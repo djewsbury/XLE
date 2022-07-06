@@ -13,7 +13,7 @@
 
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class IPipelineAcceleratorPool; }}
 namespace RenderCore { class IResourceView; class IThreadContext; }
-namespace BufferUploads { using CommandListID = uint32_t; }
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 namespace RenderCore { namespace LightingEngine
 {
 	class IProbeRenderingInstance

@@ -8,7 +8,7 @@
 #include <memory>
 #include <vector>
 
-namespace BufferUploads { class IAsyncDataSource; }
+namespace RenderCore { namespace BufferUploads { class IAsyncDataSource; }}
 namespace Assets { class DependentFileState; }
 namespace RenderCore { class TextureDesc; }
 

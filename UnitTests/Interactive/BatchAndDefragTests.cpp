@@ -14,7 +14,7 @@
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../PlatformRig/DebuggingDisplays/BufferUploadDisplay.h"
-#include "../../BufferUploads/BatchedResources.h"
+#include "../../RenderCore/BufferUploads/BatchedResources.h"
 #include "../../Math/ProjectionMath.h"
 #include "../../Math/Transformations.h"
 #include "../../Math/Geometry.h"
@@ -28,7 +28,7 @@ using namespace Catch::literals;
 using namespace std::chrono_literals;
 namespace UnitTests
 {
-	static void RepositionLocator(BufferUploads::ResourceLocator& locator, const std::shared_ptr<RenderCore::IResource>& newResource, IteratorRange<const RepositionStep*> repositionSteps)
+	static void RepositionLocator(RenderCore::BufferUploads::ResourceLocator& locator, const std::shared_ptr<RenderCore::IResource>& newResource, IteratorRange<const RepositionStep*> repositionSteps)
 	{
 		assert(!locator.IsWholeResource());
 		auto range = locator.GetRangeInContainingResource();
@@ -37,10 +37,10 @@ namespace UnitTests
 			auto newStart = range.first - s._sourceStart + s._destination;
 				// if you hit this, it means the repositioning step only covers part of the allocated resource
 			assert((newStart + range.second - range.first) <= (s._destination + s._sourceEnd - s._sourceStart));
-			locator = BufferUploads::ResourceLocator{
+			locator = RenderCore::BufferUploads::ResourceLocator{
 				newResource,
 				newStart, range.second-range.first,
-				locator.GetPool(), true, BufferUploads::CommandListID_Invalid};
+				locator.GetPool(), true, RenderCore::BufferUploads::CommandListID_Invalid};
 			return;
 		}
 		
@@ -62,7 +62,7 @@ namespace UnitTests
 			Update();
 			AllocateResources();
 			{
-				static BufferUploads::EventListID lastProcessed = ~0u;
+				static RenderCore::BufferUploads::EventListID lastProcessed = ~0u;
 				auto evnt = _batchedResources0->EventList_GetPublishedID();
 				if (evnt != lastProcessed) {
 					for (auto e:_batchedResources0->EventList_Get(evnt)) {
@@ -223,11 +223,11 @@ namespace UnitTests
 		float _movementSpeed = 0.f;
 		std::mt19937_64 _rng;
 
-		std::shared_ptr<BufferUploads::IBatchedResources> _batchedResources0;
-		std::shared_ptr<BufferUploads::IBatchedResources> _batchedResources1;
-		FrameByFrameLRUHeap<std::pair<BufferUploads::ResourceLocator, BufferUploads::ResourceLocator>> _allocatedResources;
+		std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> _batchedResources0;
+		std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> _batchedResources1;
+		FrameByFrameLRUHeap<std::pair<RenderCore::BufferUploads::ResourceLocator, RenderCore::BufferUploads::ResourceLocator>> _allocatedResources;
 
-		std::vector<std::pair<BufferUploads::ResourceLocator, BufferUploads::ResourceLocator>> _longTermAllocations;
+		std::vector<std::pair<RenderCore::BufferUploads::ResourceLocator, RenderCore::BufferUploads::ResourceLocator>> _longTermAllocations;
 		unsigned _nextLongTermAllocationCountDown;
 
 		std::shared_ptr<PlatformRig::Overlays::BatchingDisplay> _batchingDisplay0;

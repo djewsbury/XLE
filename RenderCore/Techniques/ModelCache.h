@@ -17,7 +17,7 @@ namespace RenderCore { namespace Assets
 }}
 
 namespace Assets { class AssetHeapRecord; }
-namespace BufferUploads { class IManager; class IBatchedResources; }
+namespace RenderCore { namespace BufferUploads { class IManager; class IBatchedResources; }}
 
 namespace RenderCore { namespace Techniques
 {

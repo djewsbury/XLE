@@ -16,7 +16,7 @@ namespace RenderCore { namespace Assets { class ModelScaffold; class MaterialSca
 
 namespace RenderCore { namespace Assets { class DrawCallDesc; }}
 namespace RenderCore { class UniformsStreamInterface; }
-namespace BufferUploads { using CommandListID = uint32_t; }
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 namespace std { template<typename T> class future; }
 
 namespace RenderCore { namespace Techniques 

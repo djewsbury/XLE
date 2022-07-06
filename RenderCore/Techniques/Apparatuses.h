@@ -25,7 +25,7 @@ namespace RenderCore
 
 namespace RenderOverlays { class FontRenderingManager; }
 namespace Assets { class Services; }
-namespace BufferUploads { class IManager; }
+namespace RenderCore { namespace BufferUploads { class IManager; }}
 namespace Utility { class HierarchicalCPUProfiler; }
 
 namespace RenderCore { namespace Techniques

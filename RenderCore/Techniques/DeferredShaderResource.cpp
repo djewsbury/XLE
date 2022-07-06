@@ -8,7 +8,7 @@
 #include "../Assets/TextureCompiler.h"
 #include "../Format.h"
 #include "../IDevice.h"
-#include "../../BufferUploads/IBufferUploads.h"
+#include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/IFileSystem.h"
@@ -139,7 +139,6 @@ namespace RenderCore { namespace Techniques
 				metaDataFuture = ::Assets::MakeAsset<TextureMetaData>(filename);
         }
 
-        using namespace BufferUploads;
         Assets::TextureLoaderFlags::BitField flags = init._generateMipmaps ? Assets::TextureLoaderFlags::GenerateMipmaps : 0;
 
 		auto pkt = Services::GetInstance().CreateTextureDataSource(splitter.AllExceptParameters(), flags);
@@ -219,7 +218,6 @@ namespace RenderCore { namespace Techniques
 		const RenderCore::Assets::TextureArtifact& artifact,
         std::string originalRequest)
     {
-        using namespace BufferUploads;
 		auto pkt = artifact.BeginDataSource();
         if (!pkt) {
             promise.set_exception(std::make_exception_ptr(::Assets::Exceptions::InvalidAsset{{}, artifact.GetDependencyValidation(), ::Assets::AsBlob("Could not find matching texture loader")}));

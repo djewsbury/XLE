@@ -4,21 +4,19 @@
 
 #include "IBufferUploads.h"
 #include "Metrics.h"
-#include "../RenderCore/ResourceUtils.h"
-#include "../RenderCore/ResourceDesc.h"
-#include "../RenderCore/IDevice.h"
-#include "../OSServices/Log.h"
-#include "../Utility/BitUtils.h"
-#include "../Utility/StringUtils.h"
-#include "../Utility/MemoryUtils.h"
-#include "../Utility/PtrUtils.h"
-#include "../Utility/Threading/LockFree.h"
+#include "../ResourceUtils.h"
+#include "../ResourceDesc.h"
+#include "../IDevice.h"
+#include "../../OSServices/Log.h"
+#include "../../Utility/BitUtils.h"
+#include "../../Utility/StringUtils.h"
+#include "../../Utility/MemoryUtils.h"
+#include "../../Utility/PtrUtils.h"
+#include "../../Utility/Threading/LockFree.h"
 #include <algorithm>
 
-namespace BufferUploads
+namespace RenderCore { namespace BufferUploads
 {
-	namespace BindFlag = RenderCore::BindFlag;
-	namespace AllocationRules = RenderCore::AllocationRules;
 
     // ~~~~~~~~~~~~ // ~~~~~~<   >~~~~~~ // ~~~~~~~~~~~~ //
 
@@ -73,7 +71,7 @@ namespace BufferUploads
         std::vector<PoolMetrics>    CalculateMetrics() const;
         void                        Update(unsigned newFrameID);
 
-        ReusableResourcesPool(RenderCore::IDevice& device, unsigned retainFrames = ~unsigned(0x0));
+        ReusableResourcesPool(IDevice& device, unsigned retainFrames = ~unsigned(0x0));
         ~ReusableResourcesPool();
     protected:
         std::shared_ptr<IResource> MakeReturnToPoolPointer(std::shared_ptr<IResource>&& resource, uint64_t poolMarker);
@@ -88,7 +86,7 @@ namespace BufferUploads
             void        Update(unsigned newFrameID);
             void        ReturnToPool(std::shared_ptr<IResource>&& resource);
 
-            PoolOfLikeResources(RenderCore::IDevice& underlyingDevice, const Desc&, unsigned retainFrames = ~unsigned(0x0));
+            PoolOfLikeResources(IDevice& underlyingDevice, const Desc&, unsigned retainFrames = ~unsigned(0x0));
             ~PoolOfLikeResources();
         private:
             struct Entry
@@ -103,7 +101,7 @@ namespace BufferUploads
             std::atomic<size_t>         _totalCreateSize, _totalCreateCount, _totalRealSize;
             unsigned                    _currentFrameID;
             unsigned                    _retainFrames;
-			RenderCore::IDevice*        _underlyingDevice;
+			IDevice*        _underlyingDevice;
         };
 
             //
@@ -117,7 +115,7 @@ namespace BufferUploads
         unsigned                        _hashTableIndex;
         mutable Threading::Mutex        _writerLock;
         unsigned                        _retainFrames;
-		RenderCore::IDevice*            _underlyingDevice;
+		IDevice*            _underlyingDevice;
 
         struct CompareFirst
         {
@@ -176,7 +174,7 @@ namespace BufferUploads
         }
 
     tdesc ReusableResourcesPool<Desc>::PoolOfLikeResources::PoolOfLikeResources(
-			RenderCore::IDevice& underlyingDevice, const Desc& desc, unsigned retainFrames) : _desc(desc)
+			IDevice& underlyingDevice, const Desc& desc, unsigned retainFrames) : _desc(desc)
         {
             _peakSize = 0;
             _recentDeviceCreateCount = _recentPoolCreateCount = _recentReleaseCount = 0;
@@ -209,7 +207,7 @@ namespace BufferUploads
         return result;
     }
 
-    tdesc ReusableResourcesPool<Desc>::ReusableResourcesPool(RenderCore::IDevice& device, unsigned retainFrames) 
+    tdesc ReusableResourcesPool<Desc>::ReusableResourcesPool(IDevice& device, unsigned retainFrames) 
 	: _hashTableIndex(0), _retainFrames(retainFrames), _underlyingDevice(&device)
     {
         _readerCount[0] = _readerCount[1] = 0;
@@ -352,36 +350,36 @@ namespace BufferUploads
         return (!_managedByPool && IsWholeResource()) ? _resource : nullptr;
     }
 
-    RenderCore::VertexBufferView ResourceLocator::CreateVertexBufferView() const
+    VertexBufferView ResourceLocator::CreateVertexBufferView() const
     {
-        return RenderCore::VertexBufferView {
+        return VertexBufferView {
             _resource,
             (_interiorOffset != ~size_t(0)) ? unsigned(_interiorOffset) : 0u
         };
     }
 
-    RenderCore::IndexBufferView ResourceLocator::CreateIndexBufferView(RenderCore::Format indexFormat) const
+    IndexBufferView ResourceLocator::CreateIndexBufferView(Format indexFormat) const
     {
-        return RenderCore::IndexBufferView { _resource, indexFormat, (_interiorOffset != ~size_t(0)) ? unsigned(_interiorOffset) : 0u };
+        return IndexBufferView { _resource, indexFormat, (_interiorOffset != ~size_t(0)) ? unsigned(_interiorOffset) : 0u };
     }
 
-    RenderCore::ConstantBufferView ResourceLocator::CreateConstantBufferView() const
+    ConstantBufferView ResourceLocator::CreateConstantBufferView() const
     {
         if (_interiorOffset != ~size_t(0)) {
-            return RenderCore::ConstantBufferView { _resource, unsigned(_interiorOffset), unsigned(_interiorOffset + _interiorSize) };
+            return ConstantBufferView { _resource, unsigned(_interiorOffset), unsigned(_interiorOffset + _interiorSize) };
         } else {
-            return RenderCore::ConstantBufferView { _resource };
+            return ConstantBufferView { _resource };
         }
     }
 
-    std::shared_ptr<RenderCore::IResourceView> ResourceLocator::CreateTextureView(BindFlag::Enum usage, const RenderCore::TextureViewDesc& window) const
+    std::shared_ptr<IResourceView> ResourceLocator::CreateTextureView(BindFlag::Enum usage, const TextureViewDesc& window) const
     {
         if (!IsWholeResource() || _managedByPool)
             Throw(std::runtime_error("Cannot create a texture view from a partial resource locator"));
         return _resource->CreateTextureView(usage, window);
     }
 
-    std::shared_ptr<RenderCore::IResourceView> ResourceLocator::CreateBufferView(BindFlag::Enum usage, unsigned rangeOffset, unsigned rangeSize) const
+    std::shared_ptr<IResourceView> ResourceLocator::CreateBufferView(BindFlag::Enum usage, unsigned rangeOffset, unsigned rangeSize) const
     {
         return _resource->CreateBufferView(usage, rangeOffset + ((_interiorOffset != ~size_t(0)) ? unsigned(_interiorOffset) : 0u), rangeSize);
     }
@@ -563,4 +561,4 @@ namespace BufferUploads
 
     IResourcePool::~IResourcePool() {}
 
-}
+}}

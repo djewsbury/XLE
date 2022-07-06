@@ -4,12 +4,12 @@
 
 #include "Metrics.h"
 #include "IBufferUploads.h"
-#include "../Utility/MemoryUtils.h"
-#include "../Utility/StreamUtils.h"
-#include "../Core/Prefix.h"  // for dimof
+#include "../../Utility/MemoryUtils.h"
+#include "../../Utility/StreamUtils.h"
+#include "../../Core/Prefix.h"  // for dimof
 #include <algorithm>
 
-namespace BufferUploads
+namespace RenderCore { namespace BufferUploads
 {
 	CommandListMetrics::CommandListMetrics()
 	{
@@ -70,21 +70,21 @@ namespace BufferUploads
 		str << " Metric               | Texture              | Vertex               | Index" << std::endl;
 
 		str << " "; str.width(20); str << "Bytes Uploaded";
-		str << " | "; str.width(20); str << ByteCount{metrics._bytesUploaded[(unsigned)UploadDataType::Texture]};
-		str << " | "; str.width(20); str << ByteCount{metrics._bytesUploaded[(unsigned)UploadDataType::GeometryBuffer]};
-		str << " | "; str.width(20); str << ByteCount{metrics._bytesUploaded[(unsigned)UploadDataType::UniformBuffer]};
+		str << " | "; str.width(20); str << Utility::ByteCount{metrics._bytesUploaded[(unsigned)UploadDataType::Texture]};
+		str << " | "; str.width(20); str << Utility::ByteCount{metrics._bytesUploaded[(unsigned)UploadDataType::GeometryBuffer]};
+		str << " | "; str.width(20); str << Utility::ByteCount{metrics._bytesUploaded[(unsigned)UploadDataType::UniformBuffer]};
 		str << std::endl;
 
 		str << " "; str.width(20); str << "Bytes Created";
-		str << " | "; str.width(20); str << ByteCount{metrics._bytesCreated[(unsigned)UploadDataType::Texture]};
-		str << " | "; str.width(20); str << ByteCount{metrics._bytesCreated[(unsigned)UploadDataType::GeometryBuffer]};
-		str << " | "; str.width(20); str << ByteCount{metrics._bytesCreated[(unsigned)UploadDataType::UniformBuffer]};
+		str << " | "; str.width(20); str << Utility::ByteCount{metrics._bytesCreated[(unsigned)UploadDataType::Texture]};
+		str << " | "; str.width(20); str << Utility::ByteCount{metrics._bytesCreated[(unsigned)UploadDataType::GeometryBuffer]};
+		str << " | "; str.width(20); str << Utility::ByteCount{metrics._bytesCreated[(unsigned)UploadDataType::UniformBuffer]};
 		str << std::endl;
 
 		str << " "; str.width(20); str << "Staging Bytes";
-		str << " | "; str.width(20); str << ByteCount{metrics._stagingBytesAllocated[(unsigned)UploadDataType::Texture]};
-		str << " | "; str.width(20); str << ByteCount{metrics._stagingBytesAllocated[(unsigned)UploadDataType::GeometryBuffer]};
-		str << " | "; str.width(20); str << ByteCount{metrics._stagingBytesAllocated[(unsigned)UploadDataType::UniformBuffer]};
+		str << " | "; str.width(20); str << Utility::ByteCount{metrics._stagingBytesAllocated[(unsigned)UploadDataType::Texture]};
+		str << " | "; str.width(20); str << Utility::ByteCount{metrics._stagingBytesAllocated[(unsigned)UploadDataType::GeometryBuffer]};
+		str << " | "; str.width(20); str << Utility::ByteCount{metrics._stagingBytesAllocated[(unsigned)UploadDataType::UniformBuffer]};
 		str << std::endl;
 
 		str << " "; str.width(20); str << "Creations";
@@ -105,13 +105,13 @@ namespace BufferUploads
 		str << " | "; str.width(20); str << metrics._countUploaded[(unsigned)UploadDataType::UniformBuffer];
 		str << std::endl;
 
-		str << "Batched Bytes Uploaded: " << ByteCount{metrics._batchedUploadBytes} << " in " << metrics._batchedUploadCount << " steps " << std::endl;
-		str << "Total Bytes Uploaded: " << ByteCount{metrics._bytesUploadTotal} << std::endl;
+		str << "Batched Bytes Uploaded: " << Utility::ByteCount{metrics._batchedUploadBytes} << " in " << metrics._batchedUploadCount << " steps " << std::endl;
+		str << "Total Bytes Uploaded: " << Utility::ByteCount{metrics._bytesUploadTotal} << std::endl;
 		str << "Context Operations: " << metrics._contextOperations << std::endl;
 		str << "Dev create operations: " << metrics._deviceCreateOperations << std::endl;
 		str << "Wake count: " << metrics._wakeCount << std::endl;
 
 		return str;
 	}
-}
+}}
 

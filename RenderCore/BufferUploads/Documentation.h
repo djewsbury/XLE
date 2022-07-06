@@ -4,6 +4,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+namespace RenderCore { 
+
 /*!
     \brief Interface for uploading data to the GPU
 
@@ -23,9 +25,10 @@
     small buffers per frame. But this can be done more efficiently by batching 
     uploads into larger buffers.
 
-    For more information, start with BufferUploads::IManager.
+    For more information, start with RenderCore::BufferUploads::IManager.
 
-    \sa BufferUploads::IManager
+    \sa RenderCore::BufferUploads::IManager
 */
 namespace BufferUploads {}
 
+}
