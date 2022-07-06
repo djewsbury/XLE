@@ -8,7 +8,7 @@
 
 namespace BufferUploads
 {
-	class ThreadContext;
+	class UploadsThreadContext;
 	struct BatchingSystemMetrics;
 
 	struct Event_ResourceReposition

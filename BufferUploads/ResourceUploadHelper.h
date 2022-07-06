@@ -12,6 +12,7 @@
 #include <utility>
 
 namespace Utility { struct RepositionStep; }
+namespace Utility { template<typename Type, int Count> class LockFreeFixedSizeQueue; }
 namespace RenderCore { namespace Metal_Vulkan { class IAsyncTracker; } }
 
 namespace BufferUploads { struct StagingPageMetrics; }
@@ -157,6 +158,85 @@ namespace BufferUploads { namespace PlatformInterface
     };
 
     RenderCore::IDevice::ResourceInitializer AsResourceInitializer(IDataPacket& pkt);
+
+        //////   T H R E A D   C O N T E X T   //////
+
+    class UploadsThreadContext
+    {
+    public:
+        void                    ResolveCommandList();
+        void                    CommitToImmediate(
+            RenderCore::IThreadContext& commitTo,
+            unsigned frameId,
+            LockFreeFixedSizeQueue<unsigned, 4>* framePriorityQueue = nullptr);
+
+        CommandListMetrics      PopMetrics();
+
+        CommandListID           CommandList_GetUnderConstruction() const;
+        CommandListID           CommandList_GetCommittedToImmediate() const;
+
+        CommandListMetrics&     GetMetricsUnderConstruction();
+
+        class DeferredOperations;
+        DeferredOperations&     GetDeferredOperationsUnderConstruction();
+
+        unsigned                CommitCount_Current();
+        unsigned&               CommitCount_LastResolve();
+
+        PlatformInterface::StagingPage&     GetStagingPage();
+        PlatformInterface::QueueMarker      GetProducerCmdListSpecificMarker();
+
+        PlatformInterface::ResourceUploadHelper&    GetResourceUploadHelper() { return _resourceUploadHelper; }
+        RenderCore::IThreadContext&                 GetRenderCoreThreadContext() { return *_underlyingContext; }
+        RenderCore::IDevice&                        GetRenderCoreDevice() { return *_underlyingContext->GetDevice(); }
+
+        UploadsThreadContext(std::shared_ptr<RenderCore::IThreadContext> underlyingContext);
+        ~UploadsThreadContext();
+    private:
+        std::shared_ptr<RenderCore::IThreadContext> _underlyingContext;
+        PlatformInterface::ResourceUploadHelper _resourceUploadHelper;
+
+        struct Pimpl;
+        std::unique_ptr<Pimpl> _pimpl;
+    };
+
+    class UploadsThreadContext::DeferredOperations
+    {
+    public:
+        struct DeferredCopy
+        {
+            ResourceLocator _destination;
+            ResourceDesc _resourceDesc;
+            std::vector<uint8_t> _temporaryBuffer;
+        };
+
+        struct DeferredDefragCopy
+        {
+            std::shared_ptr<IResource> _destination;
+            std::shared_ptr<IResource> _source;
+            std::vector<RepositionStep> _steps;
+            DeferredDefragCopy(std::shared_ptr<IResource> destination, std::shared_ptr<IResource> source, const std::vector<RepositionStep>& steps);
+            ~DeferredDefragCopy();
+        };
+
+        void Add(DeferredCopy&& copy);
+        void Add(DeferredDefragCopy&& copy);
+        void AddDelayedDelete(ResourceLocator&& locator);
+        void CommitToImmediate_PreCommandList(RenderCore::IThreadContext& immediateContext);
+        void CommitToImmediate_PostCommandList(RenderCore::IThreadContext& immediateContext);
+        bool IsEmpty() const;
+
+        void swap(DeferredOperations& other);
+
+        DeferredOperations();
+        DeferredOperations(DeferredOperations&& moveFrom) = default;
+        DeferredOperations& operator=(DeferredOperations&& moveFrom) = default;
+        ~DeferredOperations();
+    private:
+        std::vector<DeferredCopy>       _deferredCopies;
+        std::vector<DeferredDefragCopy> _deferredDefragCopies;
+        std::vector<ResourceLocator>    _delayedDeletes;
+    };
 
         /////////////////////////////////////////////////////////////////////
 

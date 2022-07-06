@@ -5,7 +5,6 @@
 #include "IBufferUploads.h"
 #include "ResourceUploadHelper.h"
 #include "Metrics.h"
-#include "ThreadContext.h"
 #include "../RenderCore/IDevice.h"
 #include "../RenderCore/ResourceUtils.h"
 #include "../RenderCore/ResourceDesc.h"
@@ -111,14 +110,14 @@ namespace BufferUploads
                                     RenderCore::IThreadContext& threadContext,
                                     const ResourceDesc& desc, IDataPacket& data);
 
-        void                Process(unsigned stepMask, ThreadContext& context, LockFreeFixedSizeQueue<unsigned, 4>& pendingFramePriorityCommandLists);
+        void                Process(unsigned stepMask, PlatformInterface::UploadsThreadContext& context, LockFreeFixedSizeQueue<unsigned, 4>& pendingFramePriorityCommandLists);
 
         void                Resource_Release(ResourceLocator& locator);
         void                Resource_AddRef(const ResourceLocator& locator);
         void                Resource_AddRef_IndexBuffer(const ResourceLocator& locator);
 
-        AssemblyLineMetrics CalculateMetrics(ThreadContext& context);
-        void                Wait(unsigned stepMask, ThreadContext& context);
+        AssemblyLineMetrics CalculateMetrics(PlatformInterface::UploadsThreadContext& context);
+        void                Wait(unsigned stepMask, PlatformInterface::UploadsThreadContext& context);
         void                TriggerWakeupEvent();
 
         unsigned            FlipWritingQueueSet();
@@ -232,7 +231,7 @@ namespace BufferUploads
         QueueSet _queueSet_FramePriority[4];
         unsigned _framePriority_WritingQueueSet;
 
-        LockFreeFixedSizeQueue<std::function<void(AssemblyLine&, ThreadContext&)>, 256> _queuedFunctions;
+        LockFreeFixedSizeQueue<std::function<void(AssemblyLine&, PlatformInterface::UploadsThreadContext&)>, 256> _queuedFunctions;
         SimpleWakeupEvent _wakeupEvent;
 
         Signal<> _onBackgroundFrame;
@@ -265,12 +264,12 @@ namespace BufferUploads
 
         void    SystemReleaseTransaction(Transaction* transaction, bool abort = false);
 
-        bool    Process(CreateFromDataPacketStep& resourceCreateStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction);
-        bool    Process(PrepareStagingStep& prepareStagingStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction);
-        bool    Process(TransferStagingToFinalStep& transferStagingToFinalStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction);
+        bool    Process(CreateFromDataPacketStep& resourceCreateStep, PlatformInterface::UploadsThreadContext& context, const CommandListBudget& budgetUnderConstruction);
+        bool    Process(PrepareStagingStep& prepareStagingStep, PlatformInterface::UploadsThreadContext& context, const CommandListBudget& budgetUnderConstruction);
+        bool    Process(TransferStagingToFinalStep& transferStagingToFinalStep, PlatformInterface::UploadsThreadContext& context, const CommandListBudget& budgetUnderConstruction);
 
-        bool    ProcessQueueSet(QueueSet& queueSet, unsigned stepMask, ThreadContext& context, const CommandListBudget& budgetUnderConstruction);
-        bool    DrainPriorityQueueSet(QueueSet& queueSet, unsigned stepMask, ThreadContext& context);
+        bool    ProcessQueueSet(QueueSet& queueSet, unsigned stepMask, PlatformInterface::UploadsThreadContext& context, const CommandListBudget& budgetUnderConstruction);
+        bool    DrainPriorityQueueSet(QueueSet& queueSet, unsigned stepMask, PlatformInterface::UploadsThreadContext& context);
 
         auto    GetQueueSet(TransactionOptions::BitField transactionOptions) -> QueueSet &;
         void    PushStep(QueueSet&, PrepareStagingStep&& step);
@@ -434,7 +433,7 @@ namespace BufferUploads
         assert(dst.IsWholeResource() && src.IsWholeResource());
         
         _queuedFunctions.push_overflow(
-            [helper=std::move(helper)](AssemblyLine& assemblyLine, ThreadContext& context) mutable {
+            [helper=std::move(helper)](AssemblyLine& assemblyLine, PlatformInterface::UploadsThreadContext& context) mutable {
                 TRY {
                     // Update any transactions that are pointing at one of the moved blocks
                     assemblyLine.ApplyRepositions(helper->_dst.GetContainingResource(), *helper->_src.GetContainingResource(), helper->_steps);
@@ -842,7 +841,7 @@ namespace BufferUploads
             });
     }
 
-    void AssemblyLine::Wait(unsigned stepMask, ThreadContext& context)
+    void AssemblyLine::Wait(unsigned stepMask, PlatformInterface::UploadsThreadContext& context)
     {
         int64_t startTime = OSServices::GetPerformanceCounter();
         StallWhileCheckingFutures();
@@ -918,7 +917,7 @@ namespace BufferUploads
         assert(newValue >= 0);
     }
 
-    bool AssemblyLine::Process(CreateFromDataPacketStep& resourceCreateStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction)
+    bool AssemblyLine::Process(CreateFromDataPacketStep& resourceCreateStep, PlatformInterface::UploadsThreadContext& context, const CommandListBudget& budgetUnderConstruction)
     {
         auto& metricsUnderConstruction = context.GetMetricsUnderConstruction();
         if ((metricsUnderConstruction._contextOperations+1) >= budgetUnderConstruction._limit_Operations)
@@ -1073,7 +1072,7 @@ namespace BufferUploads
         return true;
     }
 
-    bool AssemblyLine::Process(PrepareStagingStep& prepareStagingStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction)
+    bool AssemblyLine::Process(PrepareStagingStep& prepareStagingStep, PlatformInterface::UploadsThreadContext& context, const CommandListBudget& budgetUnderConstruction)
     {
         auto& metricsUnderConstruction = context.GetMetricsUnderConstruction();
         if ((metricsUnderConstruction._contextOperations+1) >= budgetUnderConstruction._limit_Operations)
@@ -1250,7 +1249,7 @@ namespace BufferUploads
         }
     }
 
-    bool AssemblyLine::Process(TransferStagingToFinalStep& transferStagingToFinalStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction)
+    bool AssemblyLine::Process(TransferStagingToFinalStep& transferStagingToFinalStep, PlatformInterface::UploadsThreadContext& context, const CommandListBudget& budgetUnderConstruction)
     {
         CommandListMetrics& metricsUnderConstruction = context.GetMetricsUnderConstruction();
         if ((metricsUnderConstruction._contextOperations+1) >= budgetUnderConstruction._limit_Operations)
@@ -1331,7 +1330,7 @@ namespace BufferUploads
         return true;
     }
 
-    bool        AssemblyLine::DrainPriorityQueueSet(QueueSet& queueSet, unsigned stepMask, ThreadContext& context)
+    bool        AssemblyLine::DrainPriorityQueueSet(QueueSet& queueSet, unsigned stepMask, PlatformInterface::UploadsThreadContext& context)
     {
         bool didSomething = false;
         CommandListBudget budgetUnderConstruction(true);
@@ -1383,7 +1382,7 @@ namespace BufferUploads
         return didSomething;
     }
 
-    bool AssemblyLine::ProcessQueueSet(QueueSet& queueSet, unsigned stepMask, ThreadContext& context, const CommandListBudget& budgetUnderConstruction)
+    bool AssemblyLine::ProcessQueueSet(QueueSet& queueSet, unsigned stepMask, PlatformInterface::UploadsThreadContext& context, const CommandListBudget& budgetUnderConstruction)
     {
         bool didSomething = false;
         bool prepareStagingBlocked = false;
@@ -1430,7 +1429,7 @@ namespace BufferUploads
         return didSomething;
     }
 
-    void AssemblyLine::Process(unsigned stepMask, ThreadContext& context, LockFreeFixedSizeQueue<unsigned, 4>& pendingFramePriorityCommandLists)
+    void AssemblyLine::Process(unsigned stepMask, PlatformInterface::UploadsThreadContext& context, LockFreeFixedSizeQueue<unsigned, 4>& pendingFramePriorityCommandLists)
     {
         const bool          isLoading = false;
         CommandListMetrics& metricsUnderConstruction = context.GetMetricsUnderConstruction();
@@ -1440,7 +1439,7 @@ namespace BufferUploads
 
             /////////////// ~~~~ /////////////// ~~~~ ///////////////
         if (stepMask & Step_BackgroundMisc) {
-            std::function<void(AssemblyLine&, ThreadContext&)>* fn;
+            std::function<void(AssemblyLine&, PlatformInterface::UploadsThreadContext&)>* fn;
             while (_queuedFunctions.try_front(fn)) {
                 fn->operator()(*this, context);
                 _queuedFunctions.pop();
@@ -1522,7 +1521,7 @@ namespace BufferUploads
             pendingFramePriorityCommandLists.pop();
     }
 
-    AssemblyLineMetrics AssemblyLine::CalculateMetrics(ThreadContext& context)
+    AssemblyLineMetrics AssemblyLine::CalculateMetrics(PlatformInterface::UploadsThreadContext& context)
     {
         AssemblyLineMetrics result;
         result._queuedPrepareStaging            = (unsigned)_queueSet_Main._prepareStagingSteps.size();
@@ -1673,8 +1672,8 @@ namespace BufferUploads
         unsigned _foregroundStepMask, _backgroundStepMask;
 
         std::unique_ptr<std::thread> _backgroundThread;
-        std::unique_ptr<ThreadContext> _backgroundContext;
-        std::unique_ptr<ThreadContext> _foregroundContext;
+        std::unique_ptr<PlatformInterface::UploadsThreadContext> _backgroundContext;
+        std::unique_ptr<PlatformInterface::UploadsThreadContext> _foregroundContext;
 
         volatile bool _shutdownBackgroundThread;
 
@@ -1682,9 +1681,6 @@ namespace BufferUploads
         unsigned _frameId = 0;
 
         uint32_t DoBackgroundThread();
-
-        ThreadContext* MainContext();
-        const ThreadContext* MainContext() const;
     };
 
         /////////////////////////////////////////////
@@ -1696,19 +1692,9 @@ namespace BufferUploads
         return _assemblyLine->Transaction_Immediate(threadContext, desc, data);
     }
 
-    inline ThreadContext*          Manager::MainContext() 
-    { 
-        return _backgroundStepMask ? _backgroundContext.get() : _foregroundContext.get(); 
-    }
-
-    inline const ThreadContext*          Manager::MainContext() const
-    { 
-        return _backgroundStepMask ? _backgroundContext.get() : _foregroundContext.get(); 
-    }
-
     bool                    Manager::IsComplete(CommandListID id)
     {
-        return id <= MainContext()->CommandList_GetCommittedToImmediate();
+        return id <= (_backgroundStepMask ? _backgroundContext.get() : _foregroundContext.get())->CommandList_GetCommittedToImmediate();
     }
 
     void                    Manager::StallUntilCompletion(RenderCore::IThreadContext& immediateContext, CommandListID id)
@@ -1799,8 +1785,8 @@ namespace BufferUploads
         }
 
         multithreadingOk = !backgroundDeviceContext->IsImmediate() && (backgroundDeviceContext != immediateDeviceContext);
-        _backgroundContext   = std::make_unique<ThreadContext>(backgroundDeviceContext);
-        _foregroundContext   = std::make_unique<ThreadContext>(std::move(immediateDeviceContext));
+        _backgroundContext   = std::make_unique<PlatformInterface::UploadsThreadContext>(backgroundDeviceContext);
+        _foregroundContext   = std::make_unique<PlatformInterface::UploadsThreadContext>(std::move(immediateDeviceContext));
 
             //  todo --     if we don't have driver support for concurrent creates, we should try to do this
             //              in the main render thread. Also, if we've created the device with the single threaded

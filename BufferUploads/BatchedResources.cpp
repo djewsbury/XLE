@@ -5,7 +5,6 @@
 #include "BatchedResources.h"
 #include "Metrics.h"
 #include "ResourceUploadHelper.h"
-#include "ThreadContext.h"
 #include "../OSServices/Log.h"
 #include "../Utility/HeapUtils.h"
 
