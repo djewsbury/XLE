@@ -54,6 +54,7 @@ namespace RenderCore
 		virtual void CommitPrimaryCommandBufferToQueue(Metal_Vulkan::CommandList& cmdList) = 0;
 		virtual float GetThreadingPressure() = 0;
 		virtual unsigned GetCmdListSpecificMarker() = 0;		// Metal_Vulkan::IAsyncTracker::Marker
+		virtual void AttachNameToCmdList(std::string name) = 0;
 		~IThreadContextVulkan();
 	};
 

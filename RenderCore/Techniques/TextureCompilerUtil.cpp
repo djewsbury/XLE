@@ -62,6 +62,9 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depVal;
 	};
 
+	static std::string s_equRectFilterName { "texture-compiler (EquRectFilter)" };
+	static std::string s_fromComputeShaderName { "texture-compiler (GenerateFromComputeShader)" };
+
 	ProcessedTexture EquRectFilter(BufferUploads::IAsyncDataSource& dataSrc, const TextureDesc& targetDesc, EquRectFilterMode filter)
 	{
 		// We need to create a texture from the data source and run a shader process on it to generate
@@ -115,6 +118,9 @@ namespace RenderCore { namespace Techniques
 		auto inputRes = CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
 		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc, "texture-compiler"));
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
+		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code()))
+			threadContextVulkan->AttachNameToCmdList(s_equRectFilterName);
+
 		computeOpFuture->StallWhilePending();
 		auto computeOp = computeOpFuture->Actualize();
 
@@ -150,6 +156,8 @@ namespace RenderCore { namespace Techniques
 						dispatchGroup = {};
 						threadContext->CommitCommands();
 						dispatchGroup = computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
+						if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code()))
+							threadContextVulkan->AttachNameToCmdList(s_equRectFilterName);
 					} else {
 						/* 	We shouldn't need a barrier here, because we won't write to the same pixel in the same
 							cmd list. The pixel we're writing to is based on 'd' -- and this won't wrap around back to
@@ -219,6 +227,9 @@ namespace RenderCore { namespace Techniques
 
 		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc, "texture-compiler"));
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
+		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code()))
+			threadContextVulkan->AttachNameToCmdList(s_equRectFilterName);
+
 		computeOpFuture->StallWhilePending();
 		auto computeOp = computeOpFuture->Actualize();
 

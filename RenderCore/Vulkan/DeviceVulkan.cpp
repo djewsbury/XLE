@@ -1155,6 +1155,15 @@ namespace RenderCore { namespace ImplVulkan
 		return _metalContext->GetActiveCommandList().GetPrimaryTrackerMarker();
 	}
 
+	void ThreadContext::AttachNameToCmdList(std::string name)
+	{
+		assert(_metalContext && _metalContext->HasActiveCommandList());
+		if (!_metalContext || !_metalContext->HasActiveCommandList())
+			return;
+		checked_cast<Metal_Vulkan::FenceBasedTracker*>(&_metalContext->GetActiveCommandList().GetAsyncTracker())->
+			AttachName(_metalContext->GetActiveCommandList().GetPrimaryTrackerMarker(), std::move(name));
+	}
+
 	Metal_Vulkan::IAsyncTracker::Marker ThreadContext::CommitPrimaryCommandBufferToQueue_Internal(
 		Metal_Vulkan::CommandList& cmdList,
 		IteratorRange<const VkSemaphore*> completionSignals)

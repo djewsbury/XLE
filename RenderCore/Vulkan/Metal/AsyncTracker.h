@@ -30,6 +30,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		bool WaitForFence(Marker marker, std::optional<std::chrono::nanoseconds> timeout = {});	///< returns true iff the marker has completed, or false if we timed out waiting for it
 
 		float GetThreadingPressure();
+		void AttachName(Marker marker, std::string name);
 
 		FenceBasedTracker(ObjectFactory& factory, unsigned queueDepth);
 		~FenceBasedTracker();
@@ -49,7 +50,13 @@ namespace RenderCore { namespace Metal_Vulkan
 		Marker _nextSubmittedToQueueMarker = Marker_Invalid;		// protected by _trackersSubmittedToQueueLock
 		Threading::Mutex _trackersSubmittedToQueueLock;
 
-		std::vector<std::pair<unsigned, std::chrono::steady_clock::time_point>> _trackersWritingCommands;				// protected by _trackersWritingCommandsLock
+		struct TrackerWritingCommands
+		{
+			Marker _marker;
+			std::chrono::steady_clock::time_point _beginTime;
+			std::string _name;
+		};
+		std::vector<TrackerWritingCommands> _trackersWritingCommands;				// protected by _trackersWritingCommandsLock
 		std::vector<unsigned> _trackersPendingAbandon;				// protected by _trackersWritingCommandsLock
 		bool _initialMarker = false;								// protected by _trackersWritingCommandsLock
 		Threading::Mutex _trackersWritingCommandsLock;

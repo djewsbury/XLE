@@ -134,7 +134,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			ScopedLock(_trackersWritingCommandsLock);
 			auto i = std::remove_if(
 				_trackersWritingCommands.begin(), _trackersWritingCommands.end(),
-				[markers](const auto& c) { return std::find(markers.begin(), markers.end(), c.first) != markers.end(); });
+				[markers](const auto& c) { return std::find(markers.begin(), markers.end(), c._marker) != markers.end(); });
 			_trackersWritingCommands.erase(i, _trackersWritingCommands.end());
 
 			// process _trackersPendingAbandon now
@@ -181,10 +181,21 @@ namespace RenderCore { namespace Metal_Vulkan
 		ScopedLock(_trackersWritingCommandsLock);
 		auto i = std::find_if(
 			_trackersWritingCommands.begin(), _trackersWritingCommands.end(),
-			[marker](const auto& c) { return c.first == marker; });
+			[marker](const auto& c) { return c._marker == marker; });
 		assert(i != _trackersWritingCommands.end());
 		_trackersWritingCommands.erase(i);
 		_trackersPendingAbandon.push_back(marker);
+	}
+
+	void FenceBasedTracker::AttachName(Marker marker, std::string name)
+	{
+		ScopedLock(_trackersWritingCommandsLock);
+		auto i = std::find_if(
+			_trackersWritingCommands.begin(), _trackersWritingCommands.end(),
+			[marker](const auto& c) { return c._marker == marker; });
+		assert(i != _trackersWritingCommands.end());
+		if (i != _trackersWritingCommands.end())
+			i->_name = std::move(name);
 	}
 
 	void FenceBasedTracker::CheckFenceResetAlreadyLocked(VkFence fence)
@@ -250,9 +261,12 @@ namespace RenderCore { namespace Metal_Vulkan
 			ScopedLock(_trackersWritingCommandsLock);
 			const auto warningAge = std::chrono::seconds(1);
 			if (!_trackersWritingCommands.empty()) {
-				auto age = std::chrono::steady_clock::now() - _trackersWritingCommands.begin()->second;
+				auto age = std::chrono::steady_clock::now() - _trackersWritingCommands.begin()->_beginTime;
 				if (age > warningAge) {
-					Log(Warning) << "Command list (" << _trackersWritingCommands.begin()->first << ") has been in the writing state for (" << std::chrono::duration_cast<std::chrono::seconds>(age).count() << ") seconds." << std::endl;
+					Log(Warning) << "Command list (";
+					if (!_trackersWritingCommands.begin()->_name.empty()) Log(Warning) << _trackersWritingCommands.begin()->_name;
+					else Log(Warning) << _trackersWritingCommands.begin()->_marker;
+					Log(Warning) << ") has been in the writing state for (" << std::chrono::duration_cast<std::chrono::seconds>(age).count() << ") seconds." << std::endl;
 					Log(Warning) << "Command lists that say in this state for a long time reduce destruction queue efficiency. GPU objects cannot be destroyed until all command lists that were present during the object's lifetime have completed" << std::endl;
 					Log(Warning) << "So even single command lists that stay in the writing state will prevent all objects from being destroyed" << std::endl;
 				}
