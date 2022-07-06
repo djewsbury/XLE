@@ -10,6 +10,7 @@
 #include "../Metal/Resource.h"
 #include "../Metal/DeviceContext.h"
 #include "../IDevice.h"
+#include "../Vulkan/IDeviceVulkan.h"
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/IntermediatesStore.h"
@@ -31,10 +32,8 @@ namespace RenderCore { namespace Techniques
 
 		virtual std::future<void> PrepareData(IteratorRange<const SubResource*> subResources) override
 		{
-			for (const auto& sr:subResources) {
-				Metal::ResourceMap map {
-					*_device, *_resource, Metal::ResourceMap::Mode::Read,
-					sr._id};
+			Metal::ResourceMap map {*_device, *_resource, Metal::ResourceMap::Mode::Read};
+			for (const auto& sr:subResources) {				
 				auto data = map.GetData(sr._id);
 				assert(sr._destination.size() == data.size());
 				std::memcpy(sr._destination.begin(), data.data(), std::min(sr._destination.size(), data.size()));
@@ -42,6 +41,7 @@ namespace RenderCore { namespace Techniques
 			std::promise<void> promise;
 			auto result = promise.get_future(); 
 			promise.set_value();
+
 			return result;
 		}
 

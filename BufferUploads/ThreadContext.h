@@ -45,7 +45,7 @@ namespace BufferUploads
         PlatformInterface::QueueMarker      GetProducerCmdListSpecificMarker();
 
         PlatformInterface::ResourceUploadHelper&    GetResourceUploadHelper() { return _resourceUploadHelper; }
-        const RenderCore::IThreadContext&           GetRenderCoreThreadContext() { return *_underlyingContext; }
+        RenderCore::IThreadContext&                 GetRenderCoreThreadContext() { return *_underlyingContext; }
         RenderCore::IDevice&                        GetRenderCoreDevice() { return *_underlyingContext->GetDevice(); }
 
         ThreadContext(std::shared_ptr<RenderCore::IThreadContext> underlyingContext);

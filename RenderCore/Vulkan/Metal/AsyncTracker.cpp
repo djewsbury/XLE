@@ -323,9 +323,12 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 			}
 
+			/*
+				Don't check _trackersWritingCommands because we don't have the correct lock for it
 			for (const auto& next:_trackersWritingCommands)
-				if (next.first == marker)
+				if (next._marker == marker)
 					return MarkerStatus::NotSubmitted;
+			*/
 		}
 
 		return MarkerStatus::Unknown;
