@@ -143,6 +143,7 @@ namespace BufferUploads
             TimeMarker _requestTime;
             std::promise<ResourceLocator> _promise;
             std::future<void> _waitingFuture;
+            bool _promisePending = false;
 
             std::atomic<bool> _cancelledByClient;
             std::atomic<bool> _statusLock;
@@ -189,6 +190,9 @@ namespace BufferUploads
         unsigned                _nextTransactionIdTopPart;
         unsigned                _peakPrepareStaging, _peakTransferStagingToFinal, _peakCreateFromDataPacket;
         int64_t                 _waitTime;
+
+        Threading::Mutex _pendingRetirementsLock;
+        std::vector<AssemblyLineRetirement> _pendingRetirements;
 
         struct PrepareStagingStep
         {
@@ -259,8 +263,6 @@ namespace BufferUploads
             std::function<void()> _fn;
         };
 
-        Threading::Mutex _pendingRetirementsLock;
-        std::vector<AssemblyLineRetirement> _pendingRetirements;
         void    SystemReleaseTransaction(Transaction* transaction, bool abort = false);
 
         bool    Process(CreateFromDataPacketStep& resourceCreateStep, ThreadContext& context, const CommandListBudget& budgetUnderConstruction);
@@ -314,6 +316,7 @@ namespace BufferUploads
         _currentQueuedBytes[(unsigned)AsUploadDataType(desc, desc._bindFlags)] += RenderCore::ByteCount(desc);
 
         TransactionMarker result { ref._transaction->_promise.get_future(), ref.GetID(), *this };
+        ref._transaction->_promisePending = true;
         PushStep(
             GetQueueSet(flags),
             CreateFromDataPacketStep { std::move(ref), std::move(pool), desc, std::move(data) });
@@ -334,6 +337,7 @@ namespace BufferUploads
         _currentQueuedBytes[(unsigned)AsUploadDataType(desc, desc._bindFlags)] += RenderCore::ByteCount(desc);
 
         TransactionMarker result{ ref._transaction->_promise.get_future(), ref.GetID(), *this };
+        ref._transaction->_promisePending = true;
         PushStep(
             GetQueueSet(flags),
             CreateFromDataPacketStep { std::move(ref), nullptr, desc, std::move(data) });
@@ -347,6 +351,7 @@ namespace BufferUploads
         assert(ref._transaction);
 
         TransactionMarker result { ref._transaction->_promise.get_future(), ref.GetID(), *this };
+        ref._transaction->_promisePending = true;
 
         // Let's optimize the case where the desc is available immediately, since certain
         // usage patterns will allow for that
@@ -383,6 +388,7 @@ namespace BufferUploads
         ref._transaction->_finalResource = std::move(destinationResource);
 
         TransactionMarker result { ref._transaction->_promise.get_future(), ref.GetID(), *this };
+        ref._transaction->_promisePending = true;
 
         // Let's optimize the case where the desc is available immediately, since certain
         // usage patterns will allow for that
@@ -450,13 +456,6 @@ namespace BufferUploads
         auto newRefCount = --transaction->_referenceCount;
         assert(newRefCount>=0);
 
-        if (abort) {
-            // If we abort with a final resource registered in the transaction, then destruction order
-            // will not be controlled correctly (ie, the _retirementCommandList is set to 0, and so any
-            // commands pending on a command list will not be taken into account)
-            assert(transaction->_finalResource.IsEmpty());
-        }
-
         if (newRefCount==0) {
             {
                 AssemblyLineRetirement retirement;
@@ -467,6 +466,11 @@ namespace BufferUploads
                 _pendingRetirements.push_back(retirement);
             }
             transaction->_finalResource = {};
+
+            if (transaction->_promisePending) {
+                transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Transactions aborted")));
+                transaction->_promisePending = false;
+            }
 
             // potentially call the completion attachment if it's now ready
             if (transaction->_completionAttachment) {
@@ -676,6 +680,7 @@ namespace BufferUploads
         _desc = moveFrom._desc;
         _requestTime = moveFrom._requestTime;
         _promise = std::move(moveFrom._promise);
+        _promisePending = moveFrom._promisePending;
         _waitingFuture = std::move(moveFrom._waitingFuture);
         _completionAttachment = std::move(moveFrom._completionAttachment);
 
@@ -687,6 +692,7 @@ namespace BufferUploads
         moveFrom._referenceCount = 0;
         moveFrom._creationOptions = 0;
         moveFrom._heapIndex = ~unsigned(0x0);
+        moveFrom._promisePending = false;
     }
 
     auto AssemblyLine::Transaction::operator=(Transaction&& moveFrom) never_throws -> Transaction&
@@ -696,12 +702,14 @@ namespace BufferUploads
             if (_statusLock.compare_exchange_strong(expected, true)) break;
             Threading::Pause();
         }
+        assert(!_promisePending);
 
         _idTopPart = moveFrom._idTopPart;
         _finalResource = std::move(moveFrom._finalResource);
         _desc = moveFrom._desc;
         _requestTime = moveFrom._requestTime;
         _promise = std::move(moveFrom._promise);
+        _promisePending = moveFrom._promisePending;
         _waitingFuture = std::move(moveFrom._waitingFuture);
         _completionAttachment = std::move(moveFrom._completionAttachment);
 
@@ -713,6 +721,7 @@ namespace BufferUploads
         moveFrom._referenceCount = 0;
         moveFrom._creationOptions = 0;
         moveFrom._heapIndex = ~unsigned(0x0);
+        moveFrom._promisePending = false;
 
         auto lockRelease = _statusLock.exchange(false);
         assert(lockRelease==1); (void)lockRelease;
@@ -748,9 +757,6 @@ namespace BufferUploads
 
     AssemblyLine::~AssemblyLine()
     {
-        // Ensure we destroy all transactions before we destroy the resource source
-        // (otherwise the resource source will consider allocations left in transactions as leaks)
-        _transactions.clear();
     }
 
     auto AssemblyLine::AllocateTransaction(TransactionOptions::BitField flags) -> TransactionRefHolder
@@ -928,6 +934,7 @@ namespace BufferUploads
 
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
+            transaction->_promisePending = false;
             UnqueueBytes((UploadDataType)uploadDataType, uploadRequestSize);
             return true;
         }
@@ -1055,9 +1062,11 @@ namespace BufferUploads
             // Embue the final resource with the completion command list information
             transaction->_finalResource = ResourceLocator { std::move(finalConstruction), context.CommandList_GetUnderConstruction() };
             transaction->_promise.set_value(transaction->_finalResource);
+            transaction->_promisePending = false;
             resourceCreateStep._transactionRef.SuccessfulRetirement();
         } CATCH (...) {
             transaction->_promise.set_exception(std::current_exception());
+            transaction->_promisePending = false;
         } CATCH_END
 
         UnqueueBytes((UploadDataType)uploadDataType, uploadRequestSize);
@@ -1078,6 +1087,7 @@ namespace BufferUploads
 
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
+            transaction->_promisePending = false;
             UnqueueBytes((UploadDataType)AsUploadDataType(transaction->_desc, prepareStagingStep._bindFlags), RenderCore::ByteCount(transaction->_desc));
             return true;
         }
@@ -1178,6 +1188,7 @@ namespace BufferUploads
 
         } catch (...) {
             transaction->_promise.set_exception(std::current_exception());
+            transaction->_promisePending = false;
             UnqueueBytes((UploadDataType)AsUploadDataType(transaction->_desc, prepareStagingStep._bindFlags), RenderCore::ByteCount(transaction->_desc));
         }
 
@@ -1193,6 +1204,7 @@ namespace BufferUploads
 
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
+            transaction->_promisePending = false;
             return;
         }
         
@@ -1205,6 +1217,7 @@ namespace BufferUploads
                 PrepareStagingStep { std::move(ref), desc, std::move(data), std::move(pool), bindFlags });
         } catch (...) {
             transaction->_promise.set_exception(std::current_exception());
+            transaction->_promisePending = false;
         }
     }
 
@@ -1218,11 +1231,7 @@ namespace BufferUploads
 
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
-            // don't destroy stagingAllocation or release the transaction on this thread. It must be done in the assembly line thread
-            auto helper = std::make_shared<PlatformInterface::StagingPage::Allocation>(std::move(stagingAllocation));
-            _queuedFunctions.push_overflow(
-                [helper=std::move(helper), ref=std::move(ref)](auto& assemblyLine, auto& threadContext) {});
-            _wakeupEvent.Increment();
+            transaction->_promisePending = false;
             _currentQueuedBytes[(unsigned)AsUploadDataType(finalResourceDesc, finalResourceDesc._bindFlags)] += RenderCore::ByteCount(finalResourceDesc);
             return;
         }
@@ -1236,6 +1245,7 @@ namespace BufferUploads
                 TransferStagingToFinalStep { std::move(ref), std::move(pool), finalResourceDesc, std::move(stagingAllocation), std::move(oversizeResource) });
         } catch(...) {
             transaction->_promise.set_exception(std::current_exception());
+            transaction->_promisePending = false;
             _currentQueuedBytes[(unsigned)AsUploadDataType(finalResourceDesc, finalResourceDesc._bindFlags)] += RenderCore::ByteCount(finalResourceDesc);
         }
     }
@@ -1253,6 +1263,7 @@ namespace BufferUploads
 
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
+            transaction->_promisePending = false;
             UnqueueBytes((UploadDataType)dataType, descByteCount);
             return true;
         }
@@ -1309,9 +1320,11 @@ namespace BufferUploads
             metricsUnderConstruction._countUploaded[dataType] += 1;
             ++metricsUnderConstruction._contextOperations;
             transaction->_promise.set_value(transaction->_finalResource);
+            transaction->_promisePending = false;
             transferStagingToFinalStep._transactionRef.SuccessfulRetirement();
         } CATCH (...) {
             transaction->_promise.set_exception(std::current_exception());
+            transaction->_promisePending = false;
         } CATCH_END
 
         UnqueueBytes((UploadDataType)dataType, descByteCount);

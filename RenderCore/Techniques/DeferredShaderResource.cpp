@@ -172,6 +172,7 @@ namespace RenderCore { namespace Techniques
 
                     BufferUploads::ResourceLocator locator;
                     TRY {
+                        assert(cap->_futureLocator.wait_for(std::chrono::seconds(0)) == std::future_status::ready);       // must be ready here
                         locator = cap->_futureLocator.get();
                     } CATCH(const std::exception& e) {
                         Throw(::Assets::Exceptions::ConstructionError(e, depVal));
