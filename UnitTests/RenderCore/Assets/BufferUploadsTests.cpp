@@ -83,7 +83,7 @@ namespace UnitTests
 		{
 			
 			auto dataPacket = BufferUploads::CreateBasicPacket(MakeIteratorRange(rawData), MakeTexturePitches(desc._textureDesc));
-			auto transaction = bu->Transaction_Begin(desc, dataPacket);
+			auto transaction = bu->Begin(desc, dataPacket);
 			REQUIRE(transaction.IsValid());
 
 			auto start = std::chrono::steady_clock::now();
@@ -113,7 +113,7 @@ namespace UnitTests
 			dataSource->_desc = desc;
 			dataSource->_rawData = rawData;
 
-			auto transaction = bu->Transaction_Begin(dataSource);
+			auto transaction = bu->Begin(dataSource);
 			REQUIRE(transaction.IsValid());
 
 			auto start = std::chrono::steady_clock::now();
@@ -163,7 +163,7 @@ namespace UnitTests
 				asyncSource = wicLoader(texturesToTry[c], RenderCore::Assets::TextureLoaderFlags::GenerateMipmaps);
 			}
 
-			auto transaction = bu->Transaction_Begin(asyncSource, BindFlag::ShaderResource | BindFlag::TransferSrc);
+			auto transaction = bu->Begin(asyncSource, BindFlag::ShaderResource | BindFlag::TransferSrc);
 			REQUIRE(transaction.IsValid());
 
 			auto start = std::chrono::steady_clock::now();
@@ -327,7 +327,7 @@ namespace UnitTests
 							RenderCore::Format::R8G8B8A8_UNORM),
 						"rng"),
 					rng());
-				transactionHelper.AddTransaction(bu->Transaction_Begin(asyncSource, BindFlag::ShaderResource));
+				transactionHelper.AddTransaction(bu->Begin(asyncSource, BindFlag::ShaderResource));
 			}
 
 			bu->Update(*metalHelper->_device->GetImmediateContext());
@@ -451,7 +451,7 @@ namespace UnitTests
 
 		auto testDesc = CreateDesc(BindFlag::ShaderResource|BindFlag::TransferSrc, TextureDesc::Plain2D(256, 256, RenderCore::Format::R8G8B8A8_UNORM, 9, 3), "immediate-upload-test");
 		auto pkt = std::make_shared<RandomTestPkt>(testDesc);
-		auto resource = bu->Transaction_Immediate(*threadContext, testDesc, *pkt).AsIndependentResource();
+		auto resource = bu->ImmediateTransaction(*threadContext, testDesc, *pkt).AsIndependentResource();
 		DestageAndCompare(*threadContext, *resource, *pkt);
 	}
 
@@ -468,20 +468,20 @@ namespace UnitTests
 
 		{
 			auto pkt = std::make_shared<RandomTestPkt>(massiveTexture);
-			auto resource = bu->Transaction_Immediate(*threadContext, massiveTexture, *pkt).AsIndependentResource();
+			auto resource = bu->ImmediateTransaction(*threadContext, massiveTexture, *pkt).AsIndependentResource();
 			DestageAndCompare(*threadContext, *resource, *pkt);
 		}
 
 		{
 			auto pkt = std::make_shared<RandomTestPkt>(massiveLinearBuffer);
-			auto resource = bu->Transaction_Immediate(*threadContext, massiveLinearBuffer, *pkt).AsIndependentResource();
+			auto resource = bu->ImmediateTransaction(*threadContext, massiveLinearBuffer, *pkt).AsIndependentResource();
 			DestageAndCompare(*threadContext, *resource, *pkt);
 		}
 
 		{
 			// background via IDataPacket
 			auto pkt = std::make_shared<RandomTestPkt>(massiveTexture);
-			auto futureLocator = bu->Transaction_Begin(massiveTexture, pkt);
+			auto futureLocator = bu->Begin(massiveTexture, pkt);
 			futureLocator._future.wait();
 			auto locator = futureLocator._future.get();
 			bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
@@ -492,7 +492,7 @@ namespace UnitTests
 		{
 			// background via IDataPacket
 			auto pkt = std::make_shared<RandomTestPkt>(massiveLinearBuffer);
-			auto futureLocator = bu->Transaction_Begin(massiveLinearBuffer, pkt);
+			auto futureLocator = bu->Begin(massiveLinearBuffer, pkt);
 			futureLocator._future.wait();
 			auto locator = futureLocator._future.get();
 			bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
@@ -503,7 +503,7 @@ namespace UnitTests
 		{
 			// background via IAsyncDataSource
 			auto pkt = std::make_shared<RandomNoiseGenerator>(massiveTexture, 264945628462ull);
-			auto futureLocator = bu->Transaction_Begin(pkt, BindFlag::ShaderResource|BindFlag::TransferSrc);
+			auto futureLocator = bu->Begin(pkt, BindFlag::ShaderResource|BindFlag::TransferSrc);
 			futureLocator._future.wait();
 			auto locator = futureLocator._future.get();
 			bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
@@ -514,7 +514,7 @@ namespace UnitTests
 		{
 			// background via IAsyncDataSource
 			auto pkt = std::make_shared<RandomNoiseGenerator>(massiveLinearBuffer, 264945628462ull);
-			auto futureLocator = bu->Transaction_Begin(pkt, BindFlag::ShaderResource|BindFlag::TransferSrc);
+			auto futureLocator = bu->Begin(pkt, BindFlag::ShaderResource|BindFlag::TransferSrc);
 			futureLocator._future.wait();
 			auto locator = futureLocator._future.get();
 			bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
@@ -549,7 +549,7 @@ namespace UnitTests
 					desc._bindFlags = BindFlag::VertexBuffer;
 				// desc._allocationRules |= AllocationRules::Batched | AllocationRules::Pooled;
 				
-				transactionHelper.AddTransaction(bu->Transaction_Begin(desc, pkt));
+				transactionHelper.AddTransaction(bu->Begin(desc, pkt));
 			}
 
 			bu->Update(*metalHelper->_device->GetImmediateContext());

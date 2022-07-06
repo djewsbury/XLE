@@ -205,9 +205,9 @@ namespace RenderCore { namespace Techniques
 		dataSource->_loadRequests = Internal::AsLoadRequests(modelScaffold, loadRequests);
 
 		if (resourceSource)
-			return bufferUploads.Transaction_Begin(std::move(dataSource), resourceSource);
+			return bufferUploads.Begin(std::move(dataSource), resourceSource);
 		else
-			return bufferUploads.Transaction_Begin(std::move(dataSource), bindFlags);
+			return bufferUploads.Begin(std::move(dataSource), bindFlags);
 	}
 
 	std::future<BufferUploads::ResourceLocator> LoadStaticResourceFullyAsync(
@@ -242,7 +242,7 @@ namespace RenderCore { namespace Techniques
 		dataSource->_loadRequests = Internal::AsLoadRequests(loadRequests);
 
 		auto resource = device.CreateResource(dataSource->_resourceDesc);
-		auto marker = Services::GetBufferUploads().Transaction_Begin(resource, dataSource, bindFlags);
+		auto marker = Services::GetBufferUploads().Begin(resource, dataSource, bindFlags);
 		return {std::move(resource), std::move(marker)};
 	}
 

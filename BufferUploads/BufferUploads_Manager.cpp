@@ -98,15 +98,15 @@ namespace BufferUploads
             Step_BackgroundMisc         = (1<<5)
         };
         
-        TransactionMarker       Transaction_Begin(const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, std::shared_ptr<IResourcePool> pool, TransactionOptions::BitField flags);
-        TransactionMarker       Transaction_Begin(ResourceLocator destinationResource, std::shared_ptr<IDataPacket> data, TransactionOptions::BitField flags);
-        TransactionMarker       Transaction_Begin(std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, BindFlag::BitField bindFlags, TransactionOptions::BitField flags);
-        TransactionMarker       Transaction_Begin(ResourceLocator destinationResource, std::shared_ptr<IAsyncDataSource> data, TransactionOptions::BitField flags);
-        std::future<CommandListID>   Transaction_Begin (ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations);
-        void            Transaction_Cancel(IteratorRange<const TransactionID*>);
-        void            Transaction_OnCompletion(IteratorRange<const TransactionID*>, std::function<void()>&& fn);
+        TransactionMarker       Begin(const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, std::shared_ptr<IResourcePool> pool, TransactionOptions::BitField flags);
+        TransactionMarker       Begin(ResourceLocator destinationResource, std::shared_ptr<IDataPacket> data, TransactionOptions::BitField flags);
+        TransactionMarker       Begin(std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, BindFlag::BitField bindFlags, TransactionOptions::BitField flags);
+        TransactionMarker       Begin(ResourceLocator destinationResource, std::shared_ptr<IAsyncDataSource> data, TransactionOptions::BitField flags);
+        std::future<CommandListID>   Begin (ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations);
+        void            Cancel(IteratorRange<const TransactionID*>);
+        void            OnCompletion(IteratorRange<const TransactionID*>, std::function<void()>&& fn);
 
-        ResourceLocator         Transaction_Immediate(
+        ResourceLocator         ImmediateTransaction(
                                     RenderCore::IThreadContext& threadContext,
                                     const ResourceDesc& desc, IDataPacket& data);
 
@@ -299,7 +299,7 @@ namespace BufferUploads
         #endif
     }
 
-    TransactionMarker AssemblyLine::Transaction_Begin(
+    TransactionMarker AssemblyLine::Begin(
         const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, std::shared_ptr<IResourcePool> pool, TransactionOptions::BitField flags)
     {
         auto ref = AllocateTransaction(flags);
@@ -322,7 +322,7 @@ namespace BufferUploads
         return result;
     }
 
-    TransactionMarker AssemblyLine::Transaction_Begin(ResourceLocator destinationResource, std::shared_ptr<IDataPacket> data, TransactionOptions::BitField flags)
+    TransactionMarker AssemblyLine::Begin(ResourceLocator destinationResource, std::shared_ptr<IDataPacket> data, TransactionOptions::BitField flags)
     {
         auto rangeInDest = destinationResource.GetRangeInContainingResource();
         if (rangeInDest.first != ~size_t(0))
@@ -343,7 +343,7 @@ namespace BufferUploads
         return result;
     }
 
-    TransactionMarker AssemblyLine::Transaction_Begin(
+    TransactionMarker AssemblyLine::Begin(
         std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, BindFlag::BitField bindFlags, TransactionOptions::BitField flags)
     {
         auto ref = AllocateTransaction(flags);
@@ -380,7 +380,7 @@ namespace BufferUploads
         return result;
     }
 
-    TransactionMarker AssemblyLine::Transaction_Begin(ResourceLocator destinationResource, std::shared_ptr<IAsyncDataSource> data, TransactionOptions::BitField flags)
+    TransactionMarker AssemblyLine::Begin(ResourceLocator destinationResource, std::shared_ptr<IAsyncDataSource> data, TransactionOptions::BitField flags)
     {
         auto ref = AllocateTransaction(flags);
         assert(ref._transaction);
@@ -416,7 +416,7 @@ namespace BufferUploads
         return result;
     }
 
-    std::future<CommandListID>   AssemblyLine::Transaction_Begin (ResourceLocator dst, ResourceLocator src, IteratorRange<const Utility::RepositionStep*> repositionOperations)
+    std::future<CommandListID>   AssemblyLine::Begin (ResourceLocator dst, ResourceLocator src, IteratorRange<const Utility::RepositionStep*> repositionOperations)
     {
         struct Helper
         {
@@ -564,7 +564,7 @@ namespace BufferUploads
         }
     }
 
-    ResourceLocator AssemblyLine::Transaction_Immediate(
+    ResourceLocator AssemblyLine::ImmediateTransaction(
         RenderCore::IThreadContext& threadContext,
         const ResourceDesc& descInit, IDataPacket& initialisationData)
     {
@@ -803,7 +803,7 @@ namespace BufferUploads
         return {};
     }
 
-    void AssemblyLine::Transaction_Cancel(IteratorRange<const TransactionID*> ids)
+    void AssemblyLine::Cancel(IteratorRange<const TransactionID*> ids)
     {
         ScopedLock(_transactionsLock);
         for (auto i:ids) {
@@ -815,7 +815,7 @@ namespace BufferUploads
         }
     }
 
-    void AssemblyLine::Transaction_OnCompletion(IteratorRange<const TransactionID*> transactionsInit, std::function<void()>&& fn)
+    void AssemblyLine::OnCompletion(IteratorRange<const TransactionID*> transactionsInit, std::function<void()>&& fn)
     {
         std::vector<TransactionID> transactions{transactionsInit.begin(), transactionsInit.end()};
         _queuedFunctions.push_overflow(
@@ -1597,49 +1597,49 @@ namespace BufferUploads
     class Manager : public IManager
     {
     public:
-        TransactionMarker           Transaction_Begin(const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, TransactionOptions::BitField flags) override
+        TransactionMarker           Begin(const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, TransactionOptions::BitField flags) override
         {
-            return _assemblyLine->Transaction_Begin(desc, std::move(data), nullptr, flags);
+            return _assemblyLine->Begin(desc, std::move(data), nullptr, flags);
         }
 
-        TransactionMarker           Transaction_Begin(ResourceLocator destinationResource, std::shared_ptr<IDataPacket> data, TransactionOptions::BitField flags) override
+        TransactionMarker           Begin(ResourceLocator destinationResource, std::shared_ptr<IDataPacket> data, TransactionOptions::BitField flags) override
         {
-            return _assemblyLine->Transaction_Begin(destinationResource, std::move(data), flags);
+            return _assemblyLine->Begin(destinationResource, std::move(data), flags);
         }
 
-        TransactionMarker           Transaction_Begin(const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, std::shared_ptr<IResourcePool> pool, TransactionOptions::BitField flags) override
+        TransactionMarker           Begin(const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, std::shared_ptr<IResourcePool> pool, TransactionOptions::BitField flags) override
         {
-            return _assemblyLine->Transaction_Begin(desc, std::move(data), std::move(pool), flags);
+            return _assemblyLine->Begin(desc, std::move(data), std::move(pool), flags);
         }
 
-        TransactionMarker           Transaction_Begin(std::shared_ptr<IAsyncDataSource> data, BindFlag::BitField bindFlags, TransactionOptions::BitField flags) override
+        TransactionMarker           Begin(std::shared_ptr<IAsyncDataSource> data, BindFlag::BitField bindFlags, TransactionOptions::BitField flags) override
         {
-            return _assemblyLine->Transaction_Begin(std::move(data), nullptr, bindFlags, flags);
+            return _assemblyLine->Begin(std::move(data), nullptr, bindFlags, flags);
         }
 
-        TransactionMarker           Transaction_Begin(std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, TransactionOptions::BitField flags) override
+        TransactionMarker           Begin(std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, TransactionOptions::BitField flags) override
         {
-            return _assemblyLine->Transaction_Begin(std::move(data), std::move(pool), 0, flags);
+            return _assemblyLine->Begin(std::move(data), std::move(pool), 0, flags);
         }
 
-        TransactionMarker           Transaction_Begin(ResourceLocator destinationResource, std::shared_ptr<IAsyncDataSource> data, TransactionOptions::BitField flags) override
+        TransactionMarker           Begin(ResourceLocator destinationResource, std::shared_ptr<IAsyncDataSource> data, TransactionOptions::BitField flags) override
         {
-            return _assemblyLine->Transaction_Begin(std::move(destinationResource), std::move(data), flags);
+            return _assemblyLine->Begin(std::move(destinationResource), std::move(data), flags);
         }
 
-        std::future<CommandListID>  Transaction_Begin(ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations) override
+        std::future<CommandListID>  Begin(ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations) override
         {
-            return _assemblyLine->Transaction_Begin(std::move(destinationResource), std::move(sourceResource), repositionOperations);
+            return _assemblyLine->Begin(std::move(destinationResource), std::move(sourceResource), repositionOperations);
         }
 
-        void                    Transaction_Cancel      (IteratorRange<const TransactionID*> ids) override
+        void                    Cancel      (IteratorRange<const TransactionID*> ids) override
         {
-            _assemblyLine->Transaction_Cancel(ids);
+            _assemblyLine->Cancel(ids);
         }
 
-        void                    Transaction_OnCompletion(IteratorRange<const TransactionID*> transactions, std::function<void()>&& fn) override
+        void                    OnCompletion(IteratorRange<const TransactionID*> transactions, std::function<void()>&& fn) override
         {
-            _assemblyLine->Transaction_OnCompletion(transactions, std::move(fn));
+            _assemblyLine->OnCompletion(transactions, std::move(fn));
         }
 
         unsigned                BindOnBackgroundFrame(std::function<void()>&& fn) override
@@ -1652,9 +1652,12 @@ namespace BufferUploads
             _assemblyLine->UnbindOnBackgroundFrame(marker);
         }
 
-        ResourceLocator         Transaction_Immediate(
+        ResourceLocator         ImmediateTransaction(
                                     RenderCore::IThreadContext& threadContext,
-                                    const ResourceDesc& desc, IDataPacket& data) override;
+                                    const ResourceDesc& desc, IDataPacket& data) override
+        {
+            return _assemblyLine->ImmediateTransaction(threadContext, desc, data);
+        }
         
         bool                    IsComplete(CommandListID id) override;
         void                    StallUntilCompletion(RenderCore::IThreadContext& immediateContext, CommandListID id) override;
@@ -1684,13 +1687,6 @@ namespace BufferUploads
     };
 
         /////////////////////////////////////////////
-
-    ResourceLocator         Manager::Transaction_Immediate(
-        RenderCore::IThreadContext& threadContext,
-        const ResourceDesc& desc, IDataPacket& data)
-    {
-        return _assemblyLine->Transaction_Immediate(threadContext, desc, data);
-    }
 
     bool                    Manager::IsComplete(CommandListID id)
     {

@@ -31,7 +31,7 @@ namespace RenderCore { namespace Techniques
 		_pimpl->_uploadMarkers.erase(
 			std::unique(_pimpl->_uploadMarkers.begin(), _pimpl->_uploadMarkers.end()),
 			_pimpl->_uploadMarkers.end());
-		_pimpl->_bufferUploads->Transaction_Cancel(_pimpl->_uploadMarkers);
+		_pimpl->_bufferUploads->Cancel(_pimpl->_uploadMarkers);
 		_pimpl->_uploadMarkers.clear();
 	}
 
@@ -80,14 +80,14 @@ namespace RenderCore { namespace Techniques
 		}
 
 		if (resourceSource) {
-			auto res = _pimpl->_bufferUploads->Transaction_Begin(std::move(dataSource), std::move(resourceSource));
+			auto res = _pimpl->_bufferUploads->Begin(std::move(dataSource), std::move(resourceSource));
 			{
 				ScopedLock(_pimpl->_lock);
 				_pimpl->_uploadMarkers.push_back(res._transactionID);
 			}
 			return std::move(res._future);
 		} else {
-			auto res = _pimpl->_bufferUploads->Transaction_Begin(std::move(dataSource), bindFlags);
+			auto res = _pimpl->_bufferUploads->Begin(std::move(dataSource), bindFlags);
 			{
 				ScopedLock(_pimpl->_lock);
 				_pimpl->_uploadMarkers.push_back(res._transactionID);

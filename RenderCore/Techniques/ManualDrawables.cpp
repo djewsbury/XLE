@@ -362,13 +362,13 @@ namespace RenderCore { namespace Techniques
 		if (_pimpl->_vb->_uploadTotal != 0) {
 			auto vbSize = _pimpl->_vb->_uploadTotal;
 			_pimpl->_vb->_desc = CreateDesc(BindFlag::VertexBuffer, LinearBufferDesc::Create(vbSize), "[vb]");
-			waitingParts->_vbUploadMarker = _pimpl->_bufferUploads->Transaction_Begin(_pimpl->_vb, _pimpl->_vb->_desc._bindFlags);
+			waitingParts->_vbUploadMarker = _pimpl->_bufferUploads->Begin(_pimpl->_vb, _pimpl->_vb->_desc._bindFlags);
 		}
 
 		if (_pimpl->_ib->_uploadTotal != 0) {
 			auto ibSize = _pimpl->_ib->_uploadTotal;
 			_pimpl->_ib->_desc = CreateDesc(BindFlag::IndexBuffer, LinearBufferDesc::Create(ibSize), "[ib]");
-			waitingParts->_ibUploadMarker = _pimpl->_bufferUploads->Transaction_Begin(_pimpl->_ib, _pimpl->_ib->_desc._bindFlags);
+			waitingParts->_ibUploadMarker = _pimpl->_bufferUploads->Begin(_pimpl->_ib, _pimpl->_ib->_desc._bindFlags);
 		}
 
 		if (!waitingParts->_vbUploadMarker.IsValid() && !waitingParts->_ibUploadMarker.IsValid()) {

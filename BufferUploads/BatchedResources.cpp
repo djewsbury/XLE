@@ -738,7 +738,7 @@ namespace BufferUploads
 			for (auto& s:_steps)
 				s._destination += _dstUberBlock.GetRangeInContainingResource().first;
 
-		_futureRepositionCmdList = bufferUploads.Transaction_Begin(
+		_futureRepositionCmdList = bufferUploads.Begin(
 			_dstUberBlock.GetContainingResource(),
 			srcHeap._heapResource,
 			_steps);

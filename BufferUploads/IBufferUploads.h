@@ -68,19 +68,19 @@ namespace BufferUploads
             /// <summary>Begin a new transaction</summary>
             /// Begin a new transaction, either by creating a new resource, or by attaching
             /// to an existing resource.
-        virtual TransactionMarker   Transaction_Begin    (std::shared_ptr<IAsyncDataSource> data, BindFlag::BitField bindFlags = BindFlag::ShaderResource, TransactionOptions::BitField flags=0) = 0;
-        virtual TransactionMarker   Transaction_Begin    (ResourceLocator destinationResource, std::shared_ptr<IAsyncDataSource> data, TransactionOptions::BitField flags=0) = 0;
-        virtual TransactionMarker   Transaction_Begin    (std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool>, TransactionOptions::BitField flags=0) = 0;
+        virtual TransactionMarker   Begin    (std::shared_ptr<IAsyncDataSource> data, BindFlag::BitField bindFlags = BindFlag::ShaderResource, TransactionOptions::BitField flags=0) = 0;
+        virtual TransactionMarker   Begin    (ResourceLocator destinationResource, std::shared_ptr<IAsyncDataSource> data, TransactionOptions::BitField flags=0) = 0;
+        virtual TransactionMarker   Begin    (std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool>, TransactionOptions::BitField flags=0) = 0;
 
-        virtual TransactionMarker   Transaction_Begin    (const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, TransactionOptions::BitField flags=0) = 0;
-        virtual TransactionMarker   Transaction_Begin    (ResourceLocator destinationResource, std::shared_ptr<IDataPacket> data, TransactionOptions::BitField flags=0) = 0;
-        virtual TransactionMarker   Transaction_Begin    (const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, std::shared_ptr<IResourcePool>, TransactionOptions::BitField flags=0) = 0;
+        virtual TransactionMarker   Begin    (const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, TransactionOptions::BitField flags=0) = 0;
+        virtual TransactionMarker   Begin    (ResourceLocator destinationResource, std::shared_ptr<IDataPacket> data, TransactionOptions::BitField flags=0) = 0;
+        virtual TransactionMarker   Begin    (const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, std::shared_ptr<IResourcePool>, TransactionOptions::BitField flags=0) = 0;
 
-        virtual std::future<CommandListID>   Transaction_Begin    (ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations) = 0;
+        virtual std::future<CommandListID>   Begin    (ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations) = 0;
 
-        virtual void            Transaction_Cancel      (IteratorRange<const TransactionID*>) = 0;
+        virtual void            Cancel      (IteratorRange<const TransactionID*>) = 0;
 
-        virtual void            Transaction_OnCompletion(IteratorRange<const TransactionID*>, std::function<void()>&& fn) = 0;
+        virtual void            OnCompletion(IteratorRange<const TransactionID*>, std::function<void()>&& fn) = 0;
 
             /// @}
 
@@ -92,7 +92,7 @@ namespace BufferUploads
             /// execute in the current thread, and a new resource will be returned from
             /// the call. Use these methods when uploads can't be delayed.
         virtual ResourceLocator
-            Transaction_Immediate(  RenderCore::IThreadContext& threadContext,
+            ImmediateTransaction(  RenderCore::IThreadContext& threadContext,
                                     const ResourceDesc& desc, IDataPacket& data) = 0;
             /// @}
 

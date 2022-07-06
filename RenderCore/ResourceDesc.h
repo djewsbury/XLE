@@ -155,7 +155,7 @@ namespace RenderCore
     /// <summary>Description of a buffer</summary>
     /// Description of a buffer, used during creation operations.
     /// Usually, BufferDesc is filled with a description of a new buffer to create,
-    /// and passed to IManager::Transaction_Begin.
+    /// and passed to IManager::Begin.
     class ResourceDesc
     {
     public:

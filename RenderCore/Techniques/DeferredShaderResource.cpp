@@ -148,7 +148,7 @@ namespace RenderCore { namespace Techniques
 			return BufferUploads::TransactionID_Invalid;
         }
 
-        auto transactionMarker = RenderCore::Techniques::Services::GetBufferUploads().Transaction_Begin(pkt, BindFlag::ShaderResource);
+        auto transactionMarker = RenderCore::Techniques::Services::GetBufferUploads().Begin(pkt, BindFlag::ShaderResource);
 		if (!transactionMarker.IsValid()) {
 			promise.set_exception(std::make_exception_ptr(std::runtime_error("Could not begin buffer uploads transaction")));
 			return BufferUploads::TransactionID_Invalid;
@@ -165,7 +165,7 @@ namespace RenderCore { namespace Techniques
         cap->_promise = std::move(promise);
         cap->_metaDataFuture = std::move(metaDataFuture);
         auto id = transactionMarker._transactionID;
-        RenderCore::Techniques::Services::GetBufferUploads().Transaction_OnCompletion(
+        RenderCore::Techniques::Services::GetBufferUploads().OnCompletion(
             MakeIteratorRange(&id, &id+1),
             [cap, init, initializerStr = splitter.FullFilename().AsString(), depVal = pkt->GetDependencyValidation()]() {
                 TRY {
@@ -226,7 +226,7 @@ namespace RenderCore { namespace Techniques
 			return;
         }
 
-        auto transactionMarker = RenderCore::Techniques::Services::GetBufferUploads().Transaction_Begin(pkt, BindFlag::ShaderResource);
+        auto transactionMarker = RenderCore::Techniques::Services::GetBufferUploads().Begin(pkt, BindFlag::ShaderResource);
 		if (!transactionMarker.IsValid()) {
 			promise.set_exception(std::make_exception_ptr(::Assets::Exceptions::InvalidAsset{{}, artifact.GetDependencyValidation(), ::Assets::AsBlob("Could not begin buffer uploads transaction")}));
 			return;
