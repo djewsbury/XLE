@@ -121,6 +121,8 @@ namespace RenderCore { namespace BufferUploads
         virtual void                    FramePriority_Barrier   () = 0;
             /// @}
 
+        virtual unsigned GetGUID() const = 0;
+
         virtual ~IManager();
     };
 

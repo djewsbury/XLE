@@ -13,7 +13,7 @@
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; class ScaffoldCmdIterator; }}
 namespace RenderCore { class IDevice; class IDescriptorSet; class SamplerPool; class IResource; }
 namespace Utility { class ParameterBox; }
-namespace BufferUploads { using CommandListID = uint32_t; }
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; } }
 
 namespace RenderCore { namespace Techniques 
 {

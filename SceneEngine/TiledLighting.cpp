@@ -84,7 +84,7 @@ namespace SceneEngine
 
     static ResourceDesc BuildTextureResourceDesc(BindFlag::BitField bindFlags, TextureDesc tDesc, const char name[])
     {
-        return CreateDesc(bindFlags, 0, GPUAccess::Read|GPUAccess::Write, tDesc, name);
+        return CreateDesc(bindFlags, tDesc, name);
     }
 
     TileLightingResources::TileLightingResources(IDevice& device, unsigned width, unsigned height, unsigned bitDepth)
@@ -124,7 +124,7 @@ namespace SceneEngine
         _lightOutputTextureSRV = _lightOutputResource->CreateTextureView(BindFlag::ShaderResource);
 
         auto bufferDesc = CreateDesc(
-            BindFlag::UnorderedAccess, 0, GPUAccess::Read|GPUAccess::Write,
+            BindFlag::UnorderedAccess,
             LinearBufferDesc::Create(1024*24, 24),
             "temporary-projected-lights");
         _temporaryProjectedLights = device.CreateResource(bufferDesc);

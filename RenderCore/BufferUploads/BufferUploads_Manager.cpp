@@ -1663,6 +1663,8 @@ namespace RenderCore { namespace BufferUploads
         void                    Update(IThreadContext&) override;
         void                    FramePriority_Barrier() override;
 
+        unsigned GetGUID() const override { return _guid; }
+
         Manager(IDevice& renderDevice);
         ~Manager();
 
@@ -1678,6 +1680,7 @@ namespace RenderCore { namespace BufferUploads
 
         LockFreeFixedSizeQueue<unsigned, 4> _pendingFramePriority_CommandLists;
         unsigned _frameId = 0;
+        unsigned _guid = 0;
 
         uint32_t DoBackgroundThread();
     };
@@ -1746,9 +1749,12 @@ namespace RenderCore { namespace BufferUploads
         return 0;
     }
 
+    static unsigned s_nextManagerGuid = 1;
+
     Manager::Manager(IDevice& renderDevice) : _assemblyLine(std::make_shared<AssemblyLine>(renderDevice))
     {
         _shutdownBackgroundThread = false;
+        _guid = s_nextManagerGuid++;
 
         bool multithreadingOk = true;
 

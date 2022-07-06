@@ -91,7 +91,7 @@ namespace UnitTests
 
 	static RenderCore::Techniques::VisibilityMarkerId StallForDescriptorSet(
 		RenderCore::IThreadContext& threadContext, 
-		std::future<std::pair<RenderCore::Techniques::VisibilityMarkerId, BufferUploads::CommandListID>>& descriptorSetFuture)
+		std::future<std::pair<RenderCore::Techniques::VisibilityMarkerId, RenderCore::BufferUploads::CommandListID>>& descriptorSetFuture)
 	{
 		auto state = descriptorSetFuture.get();
 		RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(threadContext, state.second);
