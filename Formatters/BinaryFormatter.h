@@ -109,7 +109,6 @@ namespace Formatters
 
 		void SetGlobalParameter(StringSection<> name, int64_t value);
 		ParameterBox& GetGlobalParameterBox();
-		std::optional<int64_t> GetGlobalParameter(uint64_t hash);
 
 		const BinarySchemata& GetSchemata() const { return *_definitions; }
 
@@ -217,8 +216,8 @@ namespace Formatters
 
 		const std::string& GetStringName() const { return _i->second._stringName; }
 		IteratorRange<const void*> GetData() const { return _i->second._data; }
-		bool IsArray() const { return _i->second._isArray; }
-		unsigned GetArrayCount() const { return _i->second._arrayCount; }
+		bool IsArray() const;
+		unsigned GetArrayCount() const;
 		const EvaluationContext& GetEvaluationContext() const { return *_evalContext; }
 
 		template<typename Result>

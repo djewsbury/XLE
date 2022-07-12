@@ -187,29 +187,45 @@ namespace Formatters
 					cmds.first += length;
 					bool usingDynamicVariable = false;
 					const auto& evalType = _evaluatedTypes[evalTypeId];
-					auto exprResult = def._tokenDictionary.EvaluateExpression(
-						range,
-						[&evalType, &def, &usingDynamicVariable, &localVariables, this](const Utility::Internal::TokenDictionary::TokenDefinition& token, Utility::Internal::Token tokenIdx) -> std::optional<int64_t> {
-							uint64_t hash = Hash64(token._value);
+					Utility::Internal::ExpressionEvaluator exprEval{def._tokenDictionary, range};
+					while (auto nextStep = exprEval.GetNextStep()) {
+						assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
 
-							// ------------------------- previously evaluated members --------------------
-							if (std::find(localVariables.begin(), localVariables.end(), tokenIdx) != localVariables.end()) {
-								usingDynamicVariable = true;
-								return 1;	// we use 1 as a default stand-in
+						uint64_t hash = Hash64(nextStep._name);
+
+						// ------------------------- previously evaluated members --------------------
+						if (std::find(localVariables.begin(), localVariables.end(), nextStep._nameTokenIndex) != localVariables.end()) {
+							usingDynamicVariable = true;
+							static const unsigned dummy = 1;
+							nextStep.SetQueryResult(dummy);	// we use 1 as a default stand-in
+							continue;
+						}
+
+						// ------------------------- template variables --------------------
+						for (unsigned p=0; p<(unsigned)def._templateParameterNames.size(); ++p)
+							if (def._templateParameterNames[p] == nextStep._nameTokenIndex) {
+								nextStep.SetQueryResult(evalType._params[p]);
+								continue;
 							}
 
-							// ------------------------- template variables --------------------
-							for (unsigned p=0; p<(unsigned)def._templateParameterNames.size(); ++p)
-								if (def._templateParameterNames[p] == tokenIdx)
-									return evalType._params[p];
+						auto globalType = this->_globalState.GetParameterType(hash);
+						if (globalType._type != ImpliedTyping::TypeCat::Void) {
+							nextStep.SetQueryResult(globalType, this->_globalState.GetParameterRawValue(hash));
+							continue;
+						}
+					}
 
-							return this->_globalState.GetParameter<int64_t>(hash);
-						});
 					if (usingDynamicVariable) {
 						_calculatedSizeStates[evalTypeId]._state = CalculatedSizeState::DynamicSize;
 						return {};
 					}
-					valueStack.push(exprResult);
+
+					auto result = exprEval.GetResult();
+					int64_t resultValue = 0;
+					if (!ImpliedTyping::Cast(MakeOpaqueIteratorRange(resultValue), ImpliedTyping::TypeOf<int64_t>(), result._data, result._type))
+						Throw(std::runtime_error("Invalid expression or returned value that could not be cast to scalar integral in formatter expression evaluation"));
+
+					valueStack.push(resultValue);
 					break;
 				}
 
@@ -313,11 +329,6 @@ namespace Formatters
 		return _globalState;
 	}
 
-	std::optional<int64_t> EvaluationContext::GetGlobalParameter(uint64_t hash)
-	{
-		return _globalState.GetParameter<int64_t>(hash);
-	}
-
 	EvaluationContext::EvaluationContext(const BinarySchemata& schemata)
 	: _definitions(&schemata) {}
 	EvaluationContext::~EvaluationContext() {}
@@ -386,31 +397,46 @@ namespace Formatters
 					assert(cmds.size() >= length);
 					auto range = MakeIteratorRange(cmds.begin(), cmds.begin()+length);
 					cmds.first += length;
-					auto exprResult = def._tokenDictionary.EvaluateExpression(
-						range,
-						[&workingBlock, this](const Utility::Internal::TokenDictionary::TokenDefinition& token, Utility::Internal::Token tokenIdx) -> std::optional<int64_t> {
-							// Try to lookup the value in a number of places --
-							// - previously evaluated variables
-							// - template values
-							// - context state
-							uint64_t hash = Hash64(token._value);		// (we could just store this hash in the Token object)
+					Utility::Internal::ExpressionEvaluator exprEval{def._tokenDictionary, range};
+					while (auto nextStep = exprEval.GetNextStep()) {
+						assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
 
-							// ------------------------- previously evaluated members --------------------
-							auto localContext = workingBlock._localEvalContext.GetParameter<int64_t>(hash);
-							if (localContext.has_value())
-								return localContext.value();
+						// Try to lookup the value in a number of places --
+						// - previously evaluated variables
+						// - template values
+						// - context state
+						uint64_t hash = Hash64(nextStep._name);		// (we could just store this hash in the Token object)
 
-							if (std::find(workingBlock._nonIntegerLocalVariables.begin(), workingBlock._nonIntegerLocalVariables.end(), hash) != workingBlock._nonIntegerLocalVariables.end())
-								Throw(std::runtime_error("Attempting to non-numeric local variable (" + token._value + ") in an expression. This isn't supported"));
+						// ------------------------- previously evaluated members --------------------
+						auto localType = workingBlock._localEvalContext.GetParameterType(hash);
+						if (localType._type != ImpliedTyping::TypeCat::Void) {
+							nextStep.SetQueryResult(localType, workingBlock._localEvalContext.GetParameterRawValue(hash));
+							continue;
+						}
 
-							// ------------------------- template variables --------------------
-							for (unsigned p=0; p<(unsigned)workingBlock._definition->_templateParameterNames.size(); ++p)
-								if (workingBlock._definition->_templateParameterNames[p] == tokenIdx)
-									return workingBlock._parsingTemplateParams[p];
+						if (std::find(workingBlock._nonIntegerLocalVariables.begin(), workingBlock._nonIntegerLocalVariables.end(), hash) != workingBlock._nonIntegerLocalVariables.end())
+							Throw(std::runtime_error("Attempting to non-numeric local variable (" + nextStep._name.AsString() + ") in an expression. This isn't supported"));
 
-							return this->_evalContext->GetGlobalParameter(hash);
-						}); 
-					workingBlock._valueStack.push(exprResult);
+						// ------------------------- template variables --------------------
+						for (unsigned p=0; p<(unsigned)workingBlock._definition->_templateParameterNames.size(); ++p)
+							if (workingBlock._definition->_templateParameterNames[p] == nextStep._nameTokenIndex) {
+								nextStep.SetQueryResult(workingBlock._parsingTemplateParams[p]);
+								continue;
+							}
+
+						auto globalType = this->_evalContext->GetGlobalParameterBox().GetParameterType(hash);
+						if (globalType._type != ImpliedTyping::TypeCat::Void) {
+							nextStep.SetQueryResult(globalType, this->_evalContext->GetGlobalParameterBox().GetParameterRawValue(hash));
+							continue;
+						}
+					}
+
+					auto result = exprEval.GetResult();
+					int64_t resultValue = 0;
+					if (!ImpliedTyping::Cast(MakeOpaqueIteratorRange(resultValue), ImpliedTyping::TypeOf<int64_t>(), result._data, result._type))
+						Throw(std::runtime_error("Invalid expression or returned value that could not be cast to scalar integral in formatter expression evaluation"));
+
+					workingBlock._valueStack.push(resultValue);
 					break;
 				}
 
@@ -569,7 +595,9 @@ namespace Formatters
 				if (evalType._alias != ~0u && _evalContext->GetSchemata().GetAliasName(evalType._alias) == "char") isCharType = true;		// hack -- special case for "char" alias
 				bool isCompressable = evalType._blockDefinition == ~0u && (evalType._alias == ~0u || isCharType) && finalTypeDesc._arrayCount <= 1;
 				if (!isCompressable) return false;
-				finalTypeDesc._arrayCount = workingBlock._valueStack.top();
+				auto arrayCount = workingBlock._valueStack.top();
+				assert(arrayCount <= std::numeric_limits<decltype(finalTypeDesc._arrayCount)>::max());
+				finalTypeDesc._arrayCount = arrayCount;
 				if (isCharType) finalTypeDesc._typeHint = ImpliedTyping::TypeHint::String;
 			}
 
@@ -588,7 +616,7 @@ namespace Formatters
 			if (resultTypeDesc._typeHint == ImpliedTyping::TypeHint::String && (resultTypeDesc._type == ImpliedTyping::TypeCat::UInt8 || resultTypeDesc._type == ImpliedTyping::TypeCat::Int8)) {
 				asInt = ImpliedTyping::ConvertFullMatch<int64_t>(MakeStringSection((const char*)resultData.begin(), (const char*)resultData.end()));
 			} else {
-				int64_t buffer;
+				int64_t buffer = 0;
 				if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(buffer), ImpliedTyping::TypeOf<int64_t>(), resultData, resultTypeDesc))
 					asInt = buffer;
 			}
@@ -843,6 +871,20 @@ namespace Formatters
 			return GetEvaluationContext().GetSchemata().GetBlockDefinitionName(type._blockDefinition);
 		static std::string dummy;
 		return dummy;
+	}
+
+	bool BinaryMemberToken::IsArray() const
+	{
+		return _i->second._isArray || (_i->second._typeDesc._type != ImpliedTyping::TypeCat::Void && _i->second._typeDesc._arrayCount > 1);
+	}
+
+	unsigned BinaryMemberToken::GetArrayCount() const
+	{
+		if (_i->second._isArray)
+			return _i->second._arrayCount;
+		if (_i->second._typeDesc._type != ImpliedTyping::TypeCat::Void && _i->second._typeDesc._arrayCount > 1)
+			return _i->second._typeDesc._arrayCount;
+		return 0;
 	}
 
 	void SkipUntilEndBlock(BinaryFormatter& formatter)

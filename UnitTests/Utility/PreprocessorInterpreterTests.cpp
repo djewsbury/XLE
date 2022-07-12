@@ -310,6 +310,25 @@ struct VSOUT /////////////////////////////////////////////////////
 #endif
 )--";
 
+	static int64_t EvaluateExpressionToInteger(const Utility::Internal::TokenDictionary& tokenDictionary, IteratorRange<const Utility::Internal::Token*> expr, const ParameterBox& paramBox)
+	{
+		Utility::Internal::ExpressionEvaluator exprEval{tokenDictionary, expr};
+		while (auto nextStep = exprEval.GetNextStep()) {
+			assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
+
+			ParameterBox::ParameterName nameHash { nextStep._name };
+			nextStep._queryResult->_type = paramBox.GetParameterType(nameHash);
+			if (nextStep._queryResult->_type._type != ImpliedTyping::TypeCat::Void)
+				nextStep._queryResult->_data = paramBox.GetParameterRawValue(nameHash);
+		}
+
+		auto result = exprEval.GetResult();
+		int64_t resultValue;
+		bool goodCast = ImpliedTyping::Cast(MakeOpaqueIteratorRange(resultValue), ImpliedTyping::TypeOf<int64_t>(), result._data, result._type);
+		REQUIRE(goodCast);
+		return resultValue;
+	}
+
 	TEST_CASE( "Utilities-FileRelevance", "[utility]" )
 	{
 		auto preprocAnalysis = GeneratePreprocessorAnalysisFromString(s_testFile);
@@ -322,18 +341,17 @@ struct VSOUT /////////////////////////////////////////////////////
 		INFO(expr);
 
 		ParameterBox env;
-		const ParameterBox* envBoxes[] = { &env };
-		REQUIRE(!preprocAnalysis._tokenDictionary.EvaluateExpression(autoCotangentRelevance, envBoxes));
+		REQUIRE(!EvaluateExpressionToInteger(preprocAnalysis._tokenDictionary, autoCotangentRelevance, env));
 		
 		env.SetParameter("GEO_HAS_NORMAL", 1);
-		REQUIRE(preprocAnalysis._tokenDictionary.EvaluateExpression(autoCotangentRelevance, envBoxes));
+		REQUIRE(EvaluateExpressionToInteger(preprocAnalysis._tokenDictionary, autoCotangentRelevance, env));
 
 		env.SetParameter("GEO_HAS_NORMAL", 2);
 		env.SetParameter("GEO_HAS_TEXTANGENT", 1);
-		REQUIRE(preprocAnalysis._tokenDictionary.EvaluateExpression(autoCotangentRelevance, envBoxes));
+		REQUIRE(EvaluateExpressionToInteger(preprocAnalysis._tokenDictionary, autoCotangentRelevance, env));
 
 		env.SetParameter("GEO_HAS_TEXTANGENT", "nothing");
-		REQUIRE(!preprocAnalysis._tokenDictionary.EvaluateExpression(autoCotangentRelevance, envBoxes));
+		REQUIRE_THROWS(EvaluateExpressionToInteger(preprocAnalysis._tokenDictionary, autoCotangentRelevance, env));
 	}
 
 	static std::string SimplifyExpression(StringSection<> input)
@@ -395,5 +413,57 @@ struct VSOUT /////////////////////////////////////////////////////
 		REQUIRE(std::string("(SELECTOR_0 || SELECTOR_1)") == tokenizer._preprocessorContext.GetCurrentConditionString());
 
 		REQUIRE(tokenizer.PeekNextToken()._value.IsEmpty());
+	}
+
+
+	TEST_CASE( "Utilities-BasicExpressionParsing", "[utility]" )
+	{
+		Utility::Internal::TokenDictionary tokenDictionary;
+
+		{
+			auto parsedExpression = AsExpressionTokenList(tokenDictionary, "A + B + C * D");
+			Utility::Internal::ExpressionEvaluator eval { tokenDictionary, parsedExpression };
+
+			unsigned A = 3, B = 6, C = 2, D = 5;
+			while (auto nextStep = eval.GetNextStep()) {
+				REQUIRE(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
+				if (XlEqString(nextStep._name, "A")) {
+					nextStep.SetQueryResult(A);
+				} else if (XlEqString(nextStep._name, "B")) {
+					nextStep.SetQueryResult(B);
+				} else if (XlEqString(nextStep._name, "C")) {
+					nextStep.SetQueryResult(C);
+				} else if (XlEqString(nextStep._name, "D")) {
+					nextStep.SetQueryResult(D);
+				} else {
+					FAIL("Base value: " + nextStep._name.AsString());
+				}
+			}
+			auto result = eval.GetResult();
+			REQUIRE(*(unsigned*)result._data.begin() == 19);		// 3 + 6 + 2 * 5
+		}
+
+		{
+			auto parsedExpression = AsExpressionTokenList(tokenDictionary, "array[index1] + array[index2]");
+			Utility::Internal::ExpressionEvaluator eval { tokenDictionary, parsedExpression };
+
+			unsigned array[] { 2783, 1235, 3975, 2492 };
+			unsigned index1=1, index2=2;
+
+			while (auto nextStep = eval.GetNextStep()) {
+				REQUIRE(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
+				if (XlEqString(nextStep._name, "array")) {
+					nextStep.SetQueryResult(array);
+				} else if (XlEqString(nextStep._name, "index1")) {
+					nextStep.SetQueryResult(index1);
+				} else if (XlEqString(nextStep._name, "index2")) {
+					nextStep.SetQueryResult(index2);
+				}
+			}
+
+			auto result = eval.GetResult();
+			REQUIRE(*(unsigned*)result._data.begin() == (array[index1]+array[index2]));
+
+		}
 	}
 }

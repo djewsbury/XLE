@@ -9,14 +9,6 @@
 #include <sstream>
 #include <charconv>
 
-#if defined(_DEBUG)
-    // #define VERIFY_NEW_IMPLEMENTATION
-#endif
-
-#if defined(VERIFY_NEW_IMPLEMENTATION)
-    #include <regex>
-#endif
-
 namespace Utility { namespace ImpliedTyping
 {
     uint32_t TypeDesc::GetSize() const
@@ -720,32 +712,12 @@ namespace Utility { namespace ImpliedTyping
         return {expression.begin()};
     }
 
-    #if defined(VERIFY_NEW_IMPLEMENTATION)
-        template<typename CharType>
-            TypeDesc Parse_OldImplementation(
-                StringSection<CharType> expression,
-                void* dest, size_t destSize);
-    #endif
-
     template<typename CharType>
         TypeDesc ParseFullMatch(
             StringSection<CharType> expression,
             IteratorRange<void*> destinationBuffer)
     {
         auto parse = Parse(expression, destinationBuffer);
-
-        #if defined(VERIFY_NEW_IMPLEMENTATION)
-            {
-                uint8_t testBuffer[destSize];
-                auto verifyType = Parse_OldImplementation(expression, testBuffer, destSize);
-                if (parse._end == expression.end()) {
-                    assert(verifyType == parse._type);
-                    assert(memcmp(dest, testBuffer, verifyType.GetSize()) == 0);
-                } else {
-                    assert(verifyType._type == TypeCat::Void);
-                }
-            }
-        #endif
 
         while (parse._end != expression.end() && (*parse._end == ' ' || *parse._end == '\t')) ++parse._end;
         if (parse._end == expression.end())
@@ -1134,249 +1106,373 @@ namespace Utility { namespace ImpliedTyping
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if defined(VERIFY_NEW_IMPLEMENTATION)
-    template<typename CharType>
-        class ParsingRegex
+    template<typename Value>
+        static ImpliedTyping::TypeDesc MakeVariant_(IteratorRange<void*> dst, Value value)
     {
-    public:
-        std::basic_regex<CharType> s_booleanTrue;
-        std::basic_regex<CharType> s_booleanFalse;
-        std::basic_regex<CharType> s_unsignedPattern;
-        std::basic_regex<CharType> s_signedPattern;
-        std::basic_regex<CharType> s_floatPattern;
-        std::basic_regex<CharType> s_arrayPattern;
-        std::basic_regex<CharType> s_arrayElementPattern;
-    
-        ParsingRegex()
-        : s_booleanTrue((const CharType*)R"(^(true)|(True)|(y)|(Y)|(yes)|(Yes)|(TRUE)|(Y)|(YES)$)")
-        , s_booleanFalse((const CharType*)R"(^(false)|(False)|(n)|(N)|(no)|(No)|(FALSE)|(N)|(NO)$)")
-        , s_unsignedPattern((const CharType*)R"(^\+?(([\d]+)|(0x[\da-fA-F]+))(u|U|(u8)|(u16)|(u32)|(u64)|(U8)|(U16)|(U32)|(U64))?$)")
-        , s_signedPattern((const CharType*)R"(^[-\+]?(([\d]+)|(0x[\da-fA-F]+))(i|I|(i8)|(i16)|(i32)|(i64)|(I8)|(I16)|(I32)|(I64))?$)")
-        , s_floatPattern((const CharType*)R"(^[-\+]?(([\d]*\.?[\d]+)|([\d]+\.))([eE][-\+]?[\d]+)?(f|F|(f32)|(F32)|(f64)|(F64))?$)")
-        , s_arrayPattern((const CharType*)R"(\{\s*([^,\s]+(?:\s*,\s*[^,\s]+)*)\s*\}([vcVC]?))")
-        , s_arrayElementPattern((const CharType*)R"(\s*([^,\s]+)\s*(?:,|$))")
-        {}
-        ~ParsingRegex() {}
-    };
-    
-    static std::unique_ptr<ParsingRegex<char>> s_parsingChar;
-
-    void Cleanup()
-    {
-        s_parsingChar.reset();
+        assert(dst.size() >= sizeof(Value));
+        *(Value*)dst.begin() = value;
+        return ImpliedTyping::TypeOf<Value>();
     }
 
-    template<typename CharType>
-        TypeDesc Parse_OldImplementation(
-            StringSection<CharType> expression,
-            void* dest, size_t destSize)
+    template<typename LHS, typename RHS>
+        static ImpliedTyping::TypeDesc TryBinaryOperator_(
+            IteratorRange<void*> dst,
+            StringSection<> op,
+            LHS lhs, RHS rhs)
     {
-        if (!s_parsingChar) {
-            s_parsingChar = std::make_unique<ParsingRegex<char>>();
-        }
-            // parse string expression into native types.
-            // We'll write the native object into _tthe buffer and return a type desc
-        if (std::regex_match(expression.begin(), expression.end(), s_parsingChar->s_booleanTrue)) {
-            assert(destSize >= sizeof(bool));
-            *(bool*)dest = true;
-            return TypeDesc{TypeCat::Bool};
-        } else if (std::regex_match(expression.begin(), expression.end(), s_parsingChar->s_booleanFalse)) {
-            assert(destSize >= sizeof(bool));
-            *(bool*)dest = false;
-            return TypeDesc{TypeCat::Bool};
-        }
-
-        std::match_results<const CharType*> cm; 
-        if (std::regex_match(expression.begin(), expression.end(), s_parsingChar->s_unsignedPattern)) {
-            unsigned precision = 32;
-            if (cm.size() >= 4 && cm[4].length() > 1)
-                precision = XlAtoUI32(&cm[2].str()[1]);
-
-            uint64_t value;
-            auto len = expression.size();
-            if (len > 2 && (expression.begin()[0] == '0' && expression.begin()[1] == 'x')) {
-                    // hex form
-                value = XlAtoUI64(&expression.begin()[2], nullptr, 16);
-            } else {
-                value = XlAtoUI64(expression.begin());
+        if (op.size() == 1) {
+            switch (op[0]) {
+            case '+': return MakeVariant_(dst, lhs + rhs);
+            case '*': return MakeVariant_(dst, lhs * rhs);
+            case '-': return MakeVariant_(dst, lhs - rhs);
+            case '/': return MakeVariant_(dst, lhs / rhs);
+            case '<': return MakeVariant_(dst, lhs < rhs);
+            case '>': return MakeVariant_(dst, lhs > rhs);
+            case '&':
+                if constexpr (std::is_floating_point<LHS>() || std::is_floating_point<RHS>()) {
+                    break;		// bitwise op on floating point type
+                } else
+                    return MakeVariant_(dst, lhs & rhs);
+            case '^':
+                if constexpr (std::is_floating_point<LHS>() || std::is_floating_point<RHS>()) {
+                    break;		// bitwise op on floating point type
+                } else
+                    return MakeVariant_(dst, lhs ^ rhs);
+            case '|':
+                if constexpr (std::is_floating_point<LHS>() || std::is_floating_point<RHS>()) {
+                    break;		// bitwise op on floating point type
+                } else
+                    return MakeVariant_(dst, lhs | rhs);
+            case '%':
+                if constexpr (std::is_floating_point<LHS>() || std::is_floating_point<RHS>()) {
+                    break;		// % can't be used with floating point types
+                } else
+                    return MakeVariant_(dst, lhs % rhs);
+            default:
+                break;
             }
-
-            if (precision == 8) {
-                assert(destSize >= sizeof(uint8_t));
-                *(uint8_t*)dest = (uint8_t)value;
-                return TypeDesc{TypeCat::UInt8};
-            } else if (precision == 16) {
-                assert(destSize >= sizeof(uint16_t));
-                *(uint16_t*)dest = (uint16_t)value;
-                return TypeDesc{TypeCat::UInt16};
-            } else if (precision == 32) {
-                assert(destSize >= sizeof(uint32_t));
-                *(uint32_t*)dest = (uint32_t)value;
-                return TypeDesc{TypeCat::UInt32};
-            } else if (precision == 64) {
-                assert(destSize >= sizeof(uint64_t));
-                *(uint64_t*)dest = (uint64_t)value;
-                return TypeDesc{TypeCat::UInt64};
-            }
-
-            assert(0);
-        }
-
-        if (std::regex_match(expression.begin(), expression.end(), cm, s_parsingChar->s_signedPattern)) {
-            unsigned precision = 32;
-            if (cm.size() >= 4 && cm[4].length() > 1)
-                precision = XlAtoUI32(&cm[2].str()[1]);
-
-            int64_t value;
-            auto len = expression.end() - expression.begin();
-            if (len > 2 && (expression.begin()[0] == '0' && expression.begin()[1] == 'x')) {
-                    // hex form
-                value = XlAtoI64(&expression.begin()[2], nullptr, 16);
-            } else {
-                value = XlAtoI64(expression.begin());
-            }
-
-            if (precision == 8) {
-                assert(destSize >= sizeof(int8_t));
-                *(int8_t*)dest = (int8_t)value;
-                return TypeDesc{TypeCat::Int8};
-            } else if (precision == 16) {
-                assert(destSize >= sizeof(int16_t));
-                *(int16_t*)dest = (int16_t)value;
-                return TypeDesc{TypeCat::Int16};
-            } else if (precision == 32) {
-                assert(destSize >= sizeof(int32_t));
-                *(int32_t*)dest = (int32_t)value;
-                return TypeDesc{TypeCat::Int32};
-            } else if (precision == 64) {
-                assert(destSize >= sizeof(int64_t));
-                *(int64_t*)dest = (int64_t)value;
-                return TypeDesc{TypeCat::Int64};
-            }
-
-            assert(0);
-        }
-
-        if (std::regex_match(expression.begin(), expression.end(), s_parsingChar->s_floatPattern)) {
-            bool doublePrecision = false;
-            if (cm.size() >= 4 && cm[4].length() > 1) {
-                auto precision = XlAtoUI32(&cm[2].str()[1]);
-                doublePrecision = precision == 64;
-            }
-
-            if (doublePrecision) {
-                assert(destSize >= sizeof(double));
-                *(double*)dest = Conversion::Convert<double>(expression);
-                return TypeDesc{TypeCat::Double};
-            } else {
-                assert(destSize >= sizeof(float));
-                *(float*)dest = Conversion::Convert<float>(expression);
-                return TypeDesc{TypeCat::Float};
+        } else if (op.size() == 2) {
+            switch (op[0]) {
+            case '<':
+                if (op[1] == '<') {
+                    if constexpr (std::is_floating_point<LHS>() || std::is_floating_point<RHS>()) {
+                        return ImpliedTyping::TypeCat::Void;		// shifting by float
+                    } else
+                        return MakeVariant_(dst, lhs << rhs);
+                } else if (op[1] == '=') {
+                    return MakeVariant_(dst, lhs <= rhs);
+                } else
+                    break;
+            case '>':
+                if (op[1] == '>') {
+                    if constexpr (std::is_floating_point<LHS>() || std::is_floating_point<RHS>()) {
+                        return ImpliedTyping::TypeCat::Void;		// shifting by float
+                    } else
+                        return MakeVariant_(dst, lhs >> rhs);
+                } else if (op[1] == '=') {
+                    return MakeVariant_(dst, lhs >= rhs);
+                } else 
+                    break;
+            case '*':
+                if (op[1] == '*')
+                    return MakeVariant_(dst, pow(lhs, rhs));
+                break;
+            case '&':
+                if (op[1] == '&')
+                    return MakeVariant_(dst, lhs && rhs);
+                break;
+            case '|':
+                if (op[1] == '|')
+                    return MakeVariant_(dst, lhs || rhs);
+                break;
+            case '=':
+                if (op[1] == '=')
+                    return MakeVariant_(dst, lhs == rhs);
+                break;
+            case '!':
+                if (op[1] == '=')
+                    return MakeVariant_(dst, lhs != rhs);
+                break;
+            default:
+                break;
             }
         }
 
-        {
-                // match for float array:
-            // R"(^\{\s*[-\+]?(([\d]*\.?[\d]+)|([\d]+\.))([eE][-\+]?[\d]+)?[fF]\s*(\s*,\s*([-\+]?(([\d]*\.?[\d]+)|([\d]+\.))([eE][-\+]?[\d]+)?[fF]))*\s*\}[vc]?$)"
+        return ImpliedTyping::TypeCat::Void;
+    }
 
-            // std::match_results<typename std::basic_string<CharType>::const_iterator> cm;
-            if (std::regex_match(expression.begin(), expression.end(), cm, s_parsingChar->s_arrayPattern)) {
-                const auto& subMatch = cm[1];
-                std::regex_iterator<const CharType*> rit(
-                    subMatch.first, subMatch.second,
-                    s_parsingChar->s_arrayElementPattern);
-                std::regex_iterator<const CharType*> rend;
+    template<typename Operand>
+        static ImpliedTyping::TypeDesc TryUnaryOperator_(
+            IteratorRange<void*> dst,
+            StringSection<> op,
+            Operand operand)
+    {
+        if (op.size() != 1) return ImpliedTyping::TypeCat::Void;
+
+        switch (op[0]) {
+        case '+':
+            return MakeVariant_(dst, operand);
+        case '-':
+            return MakeVariant_(dst, -operand);
+        case '!':
+            return MakeVariant_(dst, !operand);
+        default:
+            return ImpliedTyping::TypeCat::Void;
+        }
+    }
+
+    ImpliedTyping::TypeDesc TryBinaryOperator(
+        IteratorRange<void*> dst,
+        StringSection<> op,
+        const ImpliedTyping::VariantNonRetained& lhs,
+        const ImpliedTyping::VariantNonRetained& rhs)
+    {
+        if (lhs._type._arrayCount > 1 || rhs._type._arrayCount > 1)
+            return ImpliedTyping::TypeCat::Void;
+
+        using namespace ImpliedTyping;
+        switch (lhs._type._type) {
+        case TypeCat::Bool:
+            {
+                switch (rhs._type._type) {
+                case TypeCat::Bool: return TryBinaryOperator_(dst, op, *(bool*)lhs._data.begin(), *(bool*)rhs._data.begin());
+                case TypeCat::Int8: return TryBinaryOperator_(dst, op, *(bool*)lhs._data.begin(), *(int8_t*)rhs._data.begin());
+                case TypeCat::UInt8: return TryBinaryOperator_(dst, op, *(bool*)lhs._data.begin(), *(uint8_t*)rhs._data.begin());
+                case TypeCat::Int16: return TryBinaryOperator_(dst, op, *(bool*)lhs._data.begin(), *(int16_t*)rhs._data.begin());
+                case TypeCat::UInt16: return TryBinaryOperator_(dst, op, *(bool*)lhs._data.begin(), *(uint16_t*)rhs._data.begin());
+                case TypeCat::Int32: return TryBinaryOperator_(dst, op, *(bool*)lhs._data.begin(), *(int32_t*)rhs._data.begin());
+                case TypeCat::UInt32: return TryBinaryOperator_(dst, op, *(bool*)lhs._data.begin(), *(uint32_t*)rhs._data.begin());
+                case TypeCat::Int64: return TryBinaryOperator_(dst, op, *(bool*)lhs._data.begin(), *(int64_t*)rhs._data.begin());
+                case TypeCat::UInt64: return TryBinaryOperator_(dst, op, *(bool*)lhs._data.begin(), *(uint64_t*)rhs._data.begin());
+                case TypeCat::Float: return TryBinaryOperator_(dst, op, *(bool*)lhs._data.begin(), *(float*)rhs._data.begin());
+                case TypeCat::Double: return TryBinaryOperator_(dst, op, *(bool*)lhs._data.begin(), *(double*)rhs._data.begin());
+                case TypeCat::Void: break;
+                }
+            }
+            break;
+
+        case TypeCat::Int8:
+            {
+                switch (rhs._type._type) {
+                case TypeCat::Bool: return TryBinaryOperator_(dst, op, *(int8_t*)lhs._data.begin(), *(bool*)rhs._data.begin());
+                case TypeCat::Int8: return TryBinaryOperator_(dst, op, *(int8_t*)lhs._data.begin(), *(int8_t*)rhs._data.begin());
+                case TypeCat::UInt8: return TryBinaryOperator_(dst, op, *(int8_t*)lhs._data.begin(), *(uint8_t*)rhs._data.begin());
+                case TypeCat::Int16: return TryBinaryOperator_(dst, op, *(int8_t*)lhs._data.begin(), *(int16_t*)rhs._data.begin());
+                case TypeCat::UInt16: return TryBinaryOperator_(dst, op, *(int8_t*)lhs._data.begin(), *(uint16_t*)rhs._data.begin());
+                case TypeCat::Int32: return TryBinaryOperator_(dst, op, *(int8_t*)lhs._data.begin(), *(int32_t*)rhs._data.begin());
+                case TypeCat::UInt32: return TryBinaryOperator_(dst, op, *(int8_t*)lhs._data.begin(), *(uint32_t*)rhs._data.begin());
+                case TypeCat::Int64: return TryBinaryOperator_(dst, op, *(int8_t*)lhs._data.begin(), *(int64_t*)rhs._data.begin());
+                case TypeCat::UInt64: return TryBinaryOperator_(dst, op, *(int8_t*)lhs._data.begin(), *(uint64_t*)rhs._data.begin());
+                case TypeCat::Float: return TryBinaryOperator_(dst, op, *(int8_t*)lhs._data.begin(), *(float*)rhs._data.begin());
+                case TypeCat::Double: return TryBinaryOperator_(dst, op, *(int8_t*)lhs._data.begin(), *(double*)rhs._data.begin());
+                case TypeCat::Void: break;
+                }
+            }
+            break;
+
+        case TypeCat::UInt8:
+            {
+                switch (rhs._type._type) {
+                case TypeCat::Bool: return TryBinaryOperator_(dst, op, *(uint8_t*)lhs._data.begin(), *(bool*)rhs._data.begin());
+                case TypeCat::Int8: return TryBinaryOperator_(dst, op, *(uint8_t*)lhs._data.begin(), *(int8_t*)rhs._data.begin());
+                case TypeCat::UInt8: return TryBinaryOperator_(dst, op, *(uint8_t*)lhs._data.begin(), *(uint8_t*)rhs._data.begin());
+                case TypeCat::Int16: return TryBinaryOperator_(dst, op, *(uint8_t*)lhs._data.begin(), *(int16_t*)rhs._data.begin());
+                case TypeCat::UInt16: return TryBinaryOperator_(dst, op, *(uint8_t*)lhs._data.begin(), *(uint16_t*)rhs._data.begin());
+                case TypeCat::Int32: return TryBinaryOperator_(dst, op, *(uint8_t*)lhs._data.begin(), *(int32_t*)rhs._data.begin());
+                case TypeCat::UInt32: return TryBinaryOperator_(dst, op, *(uint8_t*)lhs._data.begin(), *(uint32_t*)rhs._data.begin());
+                case TypeCat::Int64: return TryBinaryOperator_(dst, op, *(uint8_t*)lhs._data.begin(), *(int64_t*)rhs._data.begin());
+                case TypeCat::UInt64: return TryBinaryOperator_(dst, op, *(uint8_t*)lhs._data.begin(), *(uint64_t*)rhs._data.begin());
+                case TypeCat::Float: return TryBinaryOperator_(dst, op, *(uint8_t*)lhs._data.begin(), *(float*)rhs._data.begin());
+                case TypeCat::Double: return TryBinaryOperator_(dst, op, *(uint8_t*)lhs._data.begin(), *(double*)rhs._data.begin());
+                case TypeCat::Void: break;
+                }
+            }
+            break;
+        
+        case TypeCat::Int16:
+            {
+                switch (rhs._type._type) {
+                case TypeCat::Bool: return TryBinaryOperator_(dst, op, *(int16_t*)lhs._data.begin(), *(bool*)rhs._data.begin());
+                case TypeCat::Int8: return TryBinaryOperator_(dst, op, *(int16_t*)lhs._data.begin(), *(int8_t*)rhs._data.begin());
+                case TypeCat::UInt8: return TryBinaryOperator_(dst, op, *(int16_t*)lhs._data.begin(), *(uint8_t*)rhs._data.begin());
+                case TypeCat::Int16: return TryBinaryOperator_(dst, op, *(int16_t*)lhs._data.begin(), *(int16_t*)rhs._data.begin());
+                case TypeCat::UInt16: return TryBinaryOperator_(dst, op, *(int16_t*)lhs._data.begin(), *(uint16_t*)rhs._data.begin());
+                case TypeCat::Int32: return TryBinaryOperator_(dst, op, *(int16_t*)lhs._data.begin(), *(int32_t*)rhs._data.begin());
+                case TypeCat::UInt32: return TryBinaryOperator_(dst, op, *(int16_t*)lhs._data.begin(), *(uint32_t*)rhs._data.begin());
+                case TypeCat::Int64: return TryBinaryOperator_(dst, op, *(int16_t*)lhs._data.begin(), *(int64_t*)rhs._data.begin());
+                case TypeCat::UInt64: return TryBinaryOperator_(dst, op, *(int16_t*)lhs._data.begin(), *(uint64_t*)rhs._data.begin());
+                case TypeCat::Float: return TryBinaryOperator_(dst, op, *(int16_t*)lhs._data.begin(), *(float*)rhs._data.begin());
+                case TypeCat::Double: return TryBinaryOperator_(dst, op, *(int16_t*)lhs._data.begin(), *(double*)rhs._data.begin());
+                case TypeCat::Void: break;
+                }
+            }
+            break;
+
+        case TypeCat::UInt16:
+            {
+                switch (rhs._type._type) {
+                case TypeCat::Bool: return TryBinaryOperator_(dst, op, *(uint16_t*)lhs._data.begin(), *(bool*)rhs._data.begin());
+                case TypeCat::Int8: return TryBinaryOperator_(dst, op, *(uint16_t*)lhs._data.begin(), *(int8_t*)rhs._data.begin());
+                case TypeCat::UInt8: return TryBinaryOperator_(dst, op, *(uint16_t*)lhs._data.begin(), *(uint8_t*)rhs._data.begin());
+                case TypeCat::Int16: return TryBinaryOperator_(dst, op, *(uint16_t*)lhs._data.begin(), *(int16_t*)rhs._data.begin());
+                case TypeCat::UInt16: return TryBinaryOperator_(dst, op, *(uint16_t*)lhs._data.begin(), *(uint16_t*)rhs._data.begin());
+                case TypeCat::Int32: return TryBinaryOperator_(dst, op, *(uint16_t*)lhs._data.begin(), *(int32_t*)rhs._data.begin());
+                case TypeCat::UInt32: return TryBinaryOperator_(dst, op, *(uint16_t*)lhs._data.begin(), *(uint32_t*)rhs._data.begin());
+                case TypeCat::Int64: return TryBinaryOperator_(dst, op, *(uint16_t*)lhs._data.begin(), *(int64_t*)rhs._data.begin());
+                case TypeCat::UInt64: return TryBinaryOperator_(dst, op, *(uint16_t*)lhs._data.begin(), *(uint64_t*)rhs._data.begin());
+                case TypeCat::Float: return TryBinaryOperator_(dst, op, *(uint16_t*)lhs._data.begin(), *(float*)rhs._data.begin());
+                case TypeCat::Double: return TryBinaryOperator_(dst, op, *(uint16_t*)lhs._data.begin(), *(double*)rhs._data.begin());
+                case TypeCat::Void: break;
+                }
+            }
+            break;
+        
+        case TypeCat::Int32:
+            {
+                switch (rhs._type._type) {
+                case TypeCat::Bool: return TryBinaryOperator_(dst, op, *(int32_t*)lhs._data.begin(), *(bool*)rhs._data.begin());
+                case TypeCat::Int8: return TryBinaryOperator_(dst, op, *(int32_t*)lhs._data.begin(), *(int8_t*)rhs._data.begin());
+                case TypeCat::UInt8: return TryBinaryOperator_(dst, op, *(int32_t*)lhs._data.begin(), *(uint8_t*)rhs._data.begin());
+                case TypeCat::Int16: return TryBinaryOperator_(dst, op, *(int32_t*)lhs._data.begin(), *(int16_t*)rhs._data.begin());
+                case TypeCat::UInt16: return TryBinaryOperator_(dst, op, *(int32_t*)lhs._data.begin(), *(uint16_t*)rhs._data.begin());
+                case TypeCat::Int32: return TryBinaryOperator_(dst, op, *(int32_t*)lhs._data.begin(), *(int32_t*)rhs._data.begin());
+                case TypeCat::UInt32: return TryBinaryOperator_(dst, op, *(int32_t*)lhs._data.begin(), *(uint32_t*)rhs._data.begin());
+                case TypeCat::Int64: return TryBinaryOperator_(dst, op, *(int32_t*)lhs._data.begin(), *(int64_t*)rhs._data.begin());
+                case TypeCat::UInt64: return TryBinaryOperator_(dst, op, *(int32_t*)lhs._data.begin(), *(uint64_t*)rhs._data.begin());
+                case TypeCat::Float: return TryBinaryOperator_(dst, op, *(int32_t*)lhs._data.begin(), *(float*)rhs._data.begin());
+                case TypeCat::Double: return TryBinaryOperator_(dst, op, *(int32_t*)lhs._data.begin(), *(double*)rhs._data.begin());
+                case TypeCat::Void: break;
+                }
+            }
+            break;
+
+        case TypeCat::UInt32:
+            {
+                switch (rhs._type._type) {
+                case TypeCat::Bool: return TryBinaryOperator_(dst, op, *(uint32_t*)lhs._data.begin(), *(bool*)rhs._data.begin());
+                case TypeCat::Int8: return TryBinaryOperator_(dst, op, *(uint32_t*)lhs._data.begin(), *(int8_t*)rhs._data.begin());
+                case TypeCat::UInt8: return TryBinaryOperator_(dst, op, *(uint32_t*)lhs._data.begin(), *(uint8_t*)rhs._data.begin());
+                case TypeCat::Int16: return TryBinaryOperator_(dst, op, *(uint32_t*)lhs._data.begin(), *(int16_t*)rhs._data.begin());
+                case TypeCat::UInt16: return TryBinaryOperator_(dst, op, *(uint32_t*)lhs._data.begin(), *(uint16_t*)rhs._data.begin());
+                case TypeCat::Int32: return TryBinaryOperator_(dst, op, *(uint32_t*)lhs._data.begin(), *(int32_t*)rhs._data.begin());
+                case TypeCat::UInt32: return TryBinaryOperator_(dst, op, *(uint32_t*)lhs._data.begin(), *(uint32_t*)rhs._data.begin());
+                case TypeCat::Int64: return TryBinaryOperator_(dst, op, *(uint32_t*)lhs._data.begin(), *(int64_t*)rhs._data.begin());
+                case TypeCat::UInt64: return TryBinaryOperator_(dst, op, *(uint32_t*)lhs._data.begin(), *(uint64_t*)rhs._data.begin());
+                case TypeCat::Float: return TryBinaryOperator_(dst, op, *(uint32_t*)lhs._data.begin(), *(float*)rhs._data.begin());
+                case TypeCat::Double: return TryBinaryOperator_(dst, op, *(uint32_t*)lhs._data.begin(), *(double*)rhs._data.begin());
+                case TypeCat::Void: break;
+                }
+            }
+            break;
+
+        case TypeCat::Int64:
+            {
+                switch (rhs._type._type) {
+                case TypeCat::Bool: return TryBinaryOperator_(dst, op, *(int64_t*)lhs._data.begin(), *(bool*)rhs._data.begin());
+                case TypeCat::Int8: return TryBinaryOperator_(dst, op, *(int64_t*)lhs._data.begin(), *(int8_t*)rhs._data.begin());
+                case TypeCat::UInt8: return TryBinaryOperator_(dst, op, *(int64_t*)lhs._data.begin(), *(uint8_t*)rhs._data.begin());
+                case TypeCat::Int16: return TryBinaryOperator_(dst, op, *(int64_t*)lhs._data.begin(), *(int16_t*)rhs._data.begin());
+                case TypeCat::UInt16: return TryBinaryOperator_(dst, op, *(int64_t*)lhs._data.begin(), *(uint16_t*)rhs._data.begin());
+                case TypeCat::Int32: return TryBinaryOperator_(dst, op, *(int64_t*)lhs._data.begin(), *(int32_t*)rhs._data.begin());
+                case TypeCat::UInt32: return TryBinaryOperator_(dst, op, *(int64_t*)lhs._data.begin(), *(uint32_t*)rhs._data.begin());
+                case TypeCat::Int64: return TryBinaryOperator_(dst, op, *(int64_t*)lhs._data.begin(), *(int64_t*)rhs._data.begin());
+                case TypeCat::UInt64: return TryBinaryOperator_(dst, op, *(int64_t*)lhs._data.begin(), *(uint64_t*)rhs._data.begin());
+                case TypeCat::Float: return TryBinaryOperator_(dst, op, *(int64_t*)lhs._data.begin(), *(float*)rhs._data.begin());
+                case TypeCat::Double: return TryBinaryOperator_(dst, op, *(int64_t*)lhs._data.begin(), *(double*)rhs._data.begin());
+                case TypeCat::Void: break;
+                }
+            }
+            break;
+
+        case TypeCat::UInt64:
+            {
+                switch (rhs._type._type) {
+                case TypeCat::Bool: return TryBinaryOperator_(dst, op, *(uint64_t*)lhs._data.begin(), *(bool*)rhs._data.begin());
+                case TypeCat::Int8: return TryBinaryOperator_(dst, op, *(uint64_t*)lhs._data.begin(), *(int8_t*)rhs._data.begin());
+                case TypeCat::UInt8: return TryBinaryOperator_(dst, op, *(uint64_t*)lhs._data.begin(), *(uint8_t*)rhs._data.begin());
+                case TypeCat::Int16: return TryBinaryOperator_(dst, op, *(uint64_t*)lhs._data.begin(), *(int16_t*)rhs._data.begin());
+                case TypeCat::UInt16: return TryBinaryOperator_(dst, op, *(uint64_t*)lhs._data.begin(), *(uint16_t*)rhs._data.begin());
+                case TypeCat::Int32: return TryBinaryOperator_(dst, op, *(uint64_t*)lhs._data.begin(), *(int32_t*)rhs._data.begin());
+                case TypeCat::UInt32: return TryBinaryOperator_(dst, op, *(uint64_t*)lhs._data.begin(), *(uint32_t*)rhs._data.begin());
+                case TypeCat::Int64: return TryBinaryOperator_(dst, op, *(uint64_t*)lhs._data.begin(), *(int64_t*)rhs._data.begin());
+                case TypeCat::UInt64: return TryBinaryOperator_(dst, op, *(uint64_t*)lhs._data.begin(), *(uint64_t*)rhs._data.begin());
+                case TypeCat::Float: return TryBinaryOperator_(dst, op, *(uint64_t*)lhs._data.begin(), *(float*)rhs._data.begin());
+                case TypeCat::Double: return TryBinaryOperator_(dst, op, *(uint64_t*)lhs._data.begin(), *(double*)rhs._data.begin());
+                case TypeCat::Void: break;
+                }
+            }
+            break;
+
+        case TypeCat::Float:
+            {
+                switch (rhs._type._type) {
+                case TypeCat::Bool: return TryBinaryOperator_(dst, op, *(float*)lhs._data.begin(), *(bool*)rhs._data.begin());
+                case TypeCat::Int8: return TryBinaryOperator_(dst, op, *(float*)lhs._data.begin(), *(int8_t*)rhs._data.begin());
+                case TypeCat::UInt8: return TryBinaryOperator_(dst, op, *(float*)lhs._data.begin(), *(uint8_t*)rhs._data.begin());
+                case TypeCat::Int16: return TryBinaryOperator_(dst, op, *(float*)lhs._data.begin(), *(int16_t*)rhs._data.begin());
+                case TypeCat::UInt16: return TryBinaryOperator_(dst, op, *(float*)lhs._data.begin(), *(uint16_t*)rhs._data.begin());
+                case TypeCat::Int32: return TryBinaryOperator_(dst, op, *(float*)lhs._data.begin(), *(int32_t*)rhs._data.begin());
+                case TypeCat::UInt32: return TryBinaryOperator_(dst, op, *(float*)lhs._data.begin(), *(uint32_t*)rhs._data.begin());
+                case TypeCat::Int64: return TryBinaryOperator_(dst, op, *(float*)lhs._data.begin(), *(int64_t*)rhs._data.begin());
+                case TypeCat::UInt64: return TryBinaryOperator_(dst, op, *(float*)lhs._data.begin(), *(uint64_t*)rhs._data.begin());
+                case TypeCat::Float: return TryBinaryOperator_(dst, op, *(float*)lhs._data.begin(), *(float*)rhs._data.begin());
+                case TypeCat::Double: return TryBinaryOperator_(dst, op, *(float*)lhs._data.begin(), *(double*)rhs._data.begin());
+                case TypeCat::Void: break;
+                }
+            }
+            break;
+
+        case TypeCat::Double:
+            {
+                switch (rhs._type._type) {
+                case TypeCat::Bool: return TryBinaryOperator_(dst, op, *(double*)lhs._data.begin(), *(bool*)rhs._data.begin());
+                case TypeCat::Int8: return TryBinaryOperator_(dst, op, *(double*)lhs._data.begin(), *(int8_t*)rhs._data.begin());
+                case TypeCat::UInt8: return TryBinaryOperator_(dst, op, *(double*)lhs._data.begin(), *(uint8_t*)rhs._data.begin());
+                case TypeCat::Int16: return TryBinaryOperator_(dst, op, *(double*)lhs._data.begin(), *(int16_t*)rhs._data.begin());
+                case TypeCat::UInt16: return TryBinaryOperator_(dst, op, *(double*)lhs._data.begin(), *(uint16_t*)rhs._data.begin());
+                case TypeCat::Int32: return TryBinaryOperator_(dst, op, *(double*)lhs._data.begin(), *(int32_t*)rhs._data.begin());
+                case TypeCat::UInt32: return TryBinaryOperator_(dst, op, *(double*)lhs._data.begin(), *(uint32_t*)rhs._data.begin());
+                case TypeCat::Int64: return TryBinaryOperator_(dst, op, *(double*)lhs._data.begin(), *(int64_t*)rhs._data.begin());
+                case TypeCat::UInt64: return TryBinaryOperator_(dst, op, *(double*)lhs._data.begin(), *(uint64_t*)rhs._data.begin());
+                case TypeCat::Float: return TryBinaryOperator_(dst, op, *(double*)lhs._data.begin(), *(float*)rhs._data.begin());
+                case TypeCat::Double: return TryBinaryOperator_(dst, op, *(double*)lhs._data.begin(), *(double*)rhs._data.begin());
+                case TypeCat::Void: break;
+                }
+            }
+            break;
                 
-                auto startIt = rit;
-
-                auto dstIterator = dest;
-                auto dstIteratorSize = ptrdiff_t(destSize);
-
-                TypeCat cat = TypeCat::Void;
-                unsigned count = 0;
-                if (rit != rend) {
-                    assert(rit->size() >= 1);
-                    const auto& eleMatch = (*rit)[1];
-
-                    auto subType = Parse_OldImplementation(
-                        MakeStringSection(eleMatch.first, eleMatch.second),
-                        dstIterator, dstIteratorSize);
-
-                    assert(subType._arrayCount <= 1);
-                    assert(subType._type != TypeCat::Void);
-                    cat = subType._type;
-
-                    auto size = subType.GetSize();
-                    dstIterator = PtrAdd(dstIterator, size);
-                    dstIteratorSize -= size;
-                    ++rit;
-                    ++count;
-                }
-
-                assert(cat != TypeCat::Void);
-                for (;rit != rend; ++rit) {
-                    assert(rit->size() >= 1);
-                    const auto& eleMatch = (*rit)[1];
-
-                    auto subType = Parse_OldImplementation(
-                        MakeStringSection(eleMatch.first, eleMatch.second),
-                        dstIterator, dstIteratorSize);
-
-                    if (CalculateCastType(subType._type, cat) != CastType::Narrowing) {
-                        bool castSuccess = Cast(   
-                            { dstIterator, PtrAdd(dstIterator, TypeDesc{cat}.GetSize()) }, TypeDesc{cat},
-                            { dstIterator, PtrAdd(dstIterator, subType.GetSize()) }, subType);
-                        (void)castSuccess;
-                        subType._type = cat;
-                    } else {
-                        // If the cast would narrow the type, we would corrupt the input
-                        // Therefore, instead we modify the type we are reading and cast
-                        // the previously read values to the new type
-                        assert(CalculateCastType(cat, subType._type) == CastType::Widening);
-                        const auto catType = TypeDesc{cat};
-                        const size_t cpySize = catType.GetSize() * count;
-                        std::unique_ptr<uint8_t[]> tempCpy = std::make_unique<uint8_t[]>(cpySize);
-                        auto tempCpyIterator = tempCpy.get();
-                        std::memcpy(tempCpy.get(), dest, cpySize);
-                        
-                        dstIterator = dest;
-                        assert(ptrdiff_t(destSize) - dstIteratorSize == ptrdiff_t(cpySize));
-                        dstIteratorSize = ptrdiff_t(destSize);
-                        for (auto redoIt = startIt; redoIt != rit; ++redoIt) {
-                            bool castSuccess = Cast(
-                                { dstIterator, PtrAdd(dstIterator, subType.GetSize()) }, subType, 
-                                { tempCpyIterator, PtrAdd(tempCpyIterator, catType.GetSize()) }, catType);
-                            assert(castSuccess);
-                            (void)castSuccess;
-                            
-                            dstIterator = PtrAdd(dstIterator, subType.GetSize());
-                            dstIteratorSize -= subType.GetSize();
-                            
-                            tempCpyIterator = tempCpyIterator + catType.GetSize();
-                        }
-                        
-                        cat = subType._type;
-                    }
-
-                    assert(subType._arrayCount <= 1);
-                    dstIterator = PtrAdd(dstIterator, subType.GetSize());
-                    dstIteratorSize -= subType.GetSize();
-                    ++count;
-                }
-
-                TypeHint hint = TypeHint::None;
-                if (cm.size() >= 2 && cm[2].length() >= 1) {
-                    if (tolower(cm[2].str()[0]) == 'v') hint = TypeHint::Vector;
-                    if (tolower(cm[2].str()[0]) == 'c') hint = TypeHint::Color;
-                }
-
-                return TypeDesc{cat, uint16_t(count), hint};
-            }
+        case TypeCat::Void: break;
         }
 
-        return TypeDesc{TypeCat::Void};
+        return ImpliedTyping::TypeCat::Void;
     }
-#endif
+
+    ImpliedTyping::TypeDesc TryUnaryOperator(
+        IteratorRange<void*> dst,
+        StringSection<> op,
+        const ImpliedTyping::VariantNonRetained& operand)
+    {
+        if (operand._type._arrayCount > 1)
+            return ImpliedTyping::TypeCat::Void;
+
+        using namespace ImpliedTyping;
+        switch (operand._type._type) {
+        case TypeCat::Bool: return TryUnaryOperator_(dst, op, *(bool*)operand._data.begin());
+        case TypeCat::Int8: return TryUnaryOperator_(dst, op, *(int8_t*)operand._data.begin());
+        case TypeCat::UInt8: return TryUnaryOperator_(dst, op, *(uint8_t*)operand._data.begin());
+        case TypeCat::Int16: return TryUnaryOperator_(dst, op, *(int16_t*)operand._data.begin());
+        case TypeCat::UInt16: return TryUnaryOperator_(dst, op, *(uint16_t*)operand._data.begin());
+        case TypeCat::Int32: return TryUnaryOperator_(dst, op, *(int32_t*)operand._data.begin());
+        case TypeCat::UInt32: return TryUnaryOperator_(dst, op, *(uint32_t*)operand._data.begin());
+        case TypeCat::Int64: return TryUnaryOperator_(dst, op, *(int64_t*)operand._data.begin());
+        case TypeCat::UInt64: return TryUnaryOperator_(dst, op, *(uint64_t*)operand._data.begin());
+        case TypeCat::Float: return TryUnaryOperator_(dst, op, *(float*)operand._data.begin());
+        case TypeCat::Double: return TryUnaryOperator_(dst, op, *(double*)operand._data.begin());
+        case TypeCat::Void: break;
+        }
+
+        return ImpliedTyping::TypeCat::Void;
+    }
 
 }}
 

@@ -11,6 +11,7 @@
 #include "../ParameterBox.h"
 #include "../Threading/ThreadingUtils.h"
 #include "../MemoryUtils.h"
+#include "../BitUtils.h"
 #include "../../Core/Exceptions.h"
 #include "../../Foreign/cparse/shunting-yard.h"
 #include "../../Foreign/cparse/shunting-yard-exceptions.h"
@@ -397,7 +398,7 @@ namespace Utility
 						auto op = static_cast<::Token<std::string>*>(&base)->val;
 
 						if (op == "()") {
-							Throw(std::runtime_error("Only defined() is supported in relevance checks. Other functions are not supported"));
+							Throw(std::runtime_error("Only defined() is supported in expression parser. Other functions are not supported"));
 						} else {
 							dictionary.PushBack(reversePolishOrdering, TokenDictionary::TokenType::Operation, op);
 						}
@@ -440,7 +441,7 @@ namespace Utility
 
 						auto* resolvedRef = static_cast<RefToken*>(&base)->resolve();
 						if (!resolvedRef || static_cast<CppFunction*>(resolvedRef)->name() != "defined()")
-							Throw(std::runtime_error("Only defined() is supported in relevance checks. Other functions are not supported"));
+							Throw(std::runtime_error("Only defined() is supported in expression parser. Other functions are not supported"));
 						delete resolvedRef;
 
 						delete input.front();
@@ -799,100 +800,6 @@ namespace Utility
 			return evaluation.top().first;
 		}
 
-		int64_t TokenDictionary::EvaluateExpression(
-			IteratorRange<const Token*> tokenList,
-			const std::function<std::optional<int64_t>(const TokenDefinition&, Token)>& lookupVariableFn) const
-		{
-			struct IntToken
-			{
-				TokenType _type;
-				int64_t _value;
-			};
-
-			IntToken evaluatedVariables[_tokenDefinitions.size()];
-			bool hasBeenEvaluated[_tokenDefinitions.size()];
-			for (unsigned c=0; c<_tokenDefinitions.size(); ++c)
-				hasBeenEvaluated[c] = false;
-
-			std::stack<IntToken> evaluation;
-			for (auto tokenIdx:tokenList) {
-				const auto& token = _tokenDefinitions[tokenIdx];
-
-				if (token._type == TokenType::Operation) {
-
-					auto r_token = std::move(evaluation.top()); evaluation.pop();
-					auto l_token = std::move(evaluation.top()); evaluation.pop();
-					if (l_token._type == TokenType::UnaryMarker) {
-						auto val = preprocessor_operations::UnaryNumeralOperation_Internal(
-							packToken(r_token._value), token._value);
-						evaluation.push(IntToken { TokenType::Literal, (int64_t)val.asInt() });
-					} else {
-						auto val = preprocessor_operations::NumeralOperation_Internal(
-							packToken{l_token._value}, packToken{r_token._value}, token._value);
-						evaluation.push(IntToken { TokenType::Literal, (int64_t)val.asInt() });
-					}
-
-				} else if (token._type == TokenType::Variable) {
-
-					if (!hasBeenEvaluated[tokenIdx]) {
-						
-						auto lookup = lookupVariableFn(token, tokenIdx);
-						if (lookup.has_value()) {
-							evaluatedVariables[tokenIdx] = IntToken { TokenType::Literal, lookup.value() };
-						} else {
-							// undefined variables treated as 0
-							evaluatedVariables[tokenIdx] = IntToken { TokenType::Literal, 0 };
-						}
-						hasBeenEvaluated[tokenIdx] = true;
-					}
-
-					evaluation.push(evaluatedVariables[tokenIdx]);
-					
-				} else if (token._type == TokenType::IsDefinedTest) {
-
-					if (!hasBeenEvaluated[tokenIdx]) {
-						auto lookup = lookupVariableFn(token, tokenIdx);
-						evaluatedVariables[tokenIdx] = IntToken { TokenType::Literal, !!lookup.has_value() };
-					}
-
-					evaluation.push(evaluatedVariables[tokenIdx]);
-
-				} else if (token._type == TokenType::Literal) {
-
-					int intValue = 0;
-					auto* end = FastParseValue(MakeStringSection(token._value), intValue);
-					if (end != AsPointer(token._value.end()))
-						Throw(std::runtime_error("Expression uses non-integer literal"));
-
-					evaluation.push({token._type, intValue});
-					
-				} else {
-					assert(token._value.empty());
-					evaluation.push({token._type, 0});
-				}
-			}
-
-			assert(evaluation.size() == 1);
-			auto res = evaluation.top();
-			assert(res._type == TokenType::Literal);
-			return res._value;
-		}
-
-		int64_t TokenDictionary::EvaluateExpression(
-			IteratorRange<const Token*> tokenList,
-			IteratorRange<ParameterBox const*const*> environment) const
-		{
-			auto lookupVariableFn = [environment](const TokenDefinition& token, Token) -> std::optional<int64_t> {
-				for (const auto&b:environment) {
-					auto val = b->GetParameter<int>(MakeStringSection(token._value));
-					if (val.has_value())
-						return val.value();
-				}
-				return {};
-			};
-			return EvaluateExpression(tokenList, lookupVariableFn);
-		}
-
 		Token TokenDictionary::GetToken(TokenType type, const std::string& value)
 		{
 			TokenDictionary::TokenDefinition token { type, value };
@@ -965,6 +872,221 @@ namespace Utility
 		}
 
 		TokenDictionary::~TokenDictionary() {}
+
+		struct ExpressionEvaluator::EvaluatedValue
+		{
+			ImpliedTyping::TypeDesc _type = ImpliedTyping::TypeCat::Void;
+			bool _useRetainedValue = false;
+			uint64_t _retainedValue;		// can't hold arrays
+			IteratorRange<const void*> _nonRetainedValue;
+
+			#if defined(_DEBUG)
+				uint64_t _validationBuffer = 0;
+			#endif
+
+			operator ImpliedTyping::VariantNonRetained() const
+			{
+				#if defined(_DEBUG)
+					if (!_useRetainedValue) {
+						if (_nonRetainedValue.size() <= sizeof(_validationBuffer))
+							assert(std::memcmp(&_validationBuffer, _nonRetainedValue.begin(), _nonRetainedValue.size()) == 0);
+						assert(_type.GetSize() == _nonRetainedValue.size());
+					}
+				#endif
+				return ImpliedTyping::VariantNonRetained{ _type, _useRetainedValue ? MakeOpaqueIteratorRange(_retainedValue) : _nonRetainedValue };
+			}
+			EvaluatedValue() = default;
+			EvaluatedValue(const ImpliedTyping::VariantNonRetained& copyFrom)
+			: _type(copyFrom._type), _useRetainedValue(false), _nonRetainedValue(copyFrom._data) 
+			{
+				assert(_type.GetSize() == _nonRetainedValue.size());
+				#if defined(_DEBUG)
+					if (_nonRetainedValue.size() <= sizeof(_validationBuffer))
+						std::memcpy(&_validationBuffer, _nonRetainedValue.begin(), _nonRetainedValue.size());
+				#endif
+			}
+			EvaluatedValue(const EvaluatedValue& copyFrom) = default;
+			EvaluatedValue& operator=(const EvaluatedValue& copyFrom) = default;
+
+			template<typename Type>
+				EvaluatedValue(Type value)
+				:_type{ImpliedTyping::TypeOf<Type>()}
+				, _useRetainedValue{true}
+				, _retainedValue{0}	// clear for clarity
+				{
+					assert(_type._type != ImpliedTyping::TypeCat::Void);
+					assert(_type.GetSize() <= sizeof(_retainedValue));
+					*(Type*)&_retainedValue = value;
+				}
+		};
+
+		static bool EvalBlock_HasBeenEvaluated(IteratorRange<const uint8_t*> evalBlock, unsigned tokenIdx)
+		{
+			auto idx = tokenIdx / 8;
+			auto bit = tokenIdx % 8;
+			return (evalBlock[idx] >> bit) & 1;
+		}
+
+		static void EvalBlock_Set(IteratorRange<uint8_t*> evalBlock, unsigned tokenIdx, unsigned tokenCount, const ExpressionEvaluator::EvaluatedValue& value)
+		{
+			assert(tokenIdx < tokenCount);
+			auto idx = tokenIdx / 8;
+			auto bit = tokenIdx % 8;
+			evalBlock[idx] |= 1<<bit;
+			auto valuesOffset = CeilToMultiplePow2(tokenCount, 8) / 8;
+			((ExpressionEvaluator::EvaluatedValue*)PtrAdd(evalBlock.begin(), valuesOffset))[tokenIdx] = value;
+		}
+
+		static const ExpressionEvaluator::EvaluatedValue& EvalBlock_Get(IteratorRange<const uint8_t*> evalBlock, unsigned tokenIdx, unsigned tokenCount)
+		{
+			assert(tokenIdx < tokenCount);
+			assert(EvalBlock_HasBeenEvaluated(evalBlock, tokenIdx));
+			auto valuesOffset = CeilToMultiplePow2(tokenCount, 8) / 8;
+			return ((ExpressionEvaluator::EvaluatedValue*)PtrAdd(evalBlock.begin(), valuesOffset))[tokenIdx];
+		}
+
+		static std::vector<uint8_t> EvalBlock_Initialize(unsigned tokenCount)
+		{
+			std::vector<uint8_t> result;
+			auto valuesOffset = CeilToMultiplePow2(tokenCount, 8) / 8;
+			result.resize(tokenCount * sizeof(ExpressionEvaluator::EvaluatedValue) + valuesOffset);
+			for (unsigned c=0; c<valuesOffset; ++c) result[c] = 0;
+			return result;
+		}
+
+		auto ExpressionEvaluator::GetNextStep() -> Step
+		{
+			// advance the expression evaluation until there's some IO...
+			using TokenType = TokenDictionary::TokenType;
+			while (!_remainingExpression.empty()) {
+				auto tokenIdx = *_remainingExpression.begin();
+				const auto& token = _dictionary->_tokenDefinitions[tokenIdx];
+
+				if (token._type == TokenType::Operation) {
+
+					auto r_token = std::move(_evaluation.back()); _evaluation.erase(_evaluation.end()-1);
+					auto l_token = std::move(_evaluation.back()); _evaluation.erase(_evaluation.end()-1);
+					assert(r_token.first == TokenType::Literal);
+					if (l_token.first == TokenType::UnaryMarker) {
+						EvaluatedValue v;
+						v._useRetainedValue = true;
+						v._type = ImpliedTyping::TryUnaryOperator(MakeOpaqueIteratorRange(v._retainedValue), token._value, r_token.second);
+						if (v._type == ImpliedTyping::TypeCat::Void)
+							Throw(std::runtime_error("Could not evaluate operator (" + token._value + ") in expression evaluator"));
+						_evaluation.emplace_back(TokenType::Literal, v);
+					} else if (XlEqString(token._value, "[]")) {
+						// array lookup
+						ImpliedTyping::VariantNonRetained indexor_ = r_token.second;
+						unsigned indexor;
+						if (indexor_._type._type == ImpliedTyping::TypeCat::Float || indexor_._type._type == ImpliedTyping::TypeCat::Double
+							|| !ImpliedTyping::Cast(MakeOpaqueIteratorRange(indexor), ImpliedTyping::TypeOf<unsigned>(), indexor_._data, indexor_._type))
+							Throw(std::runtime_error("Indexor could not be interpreted as integer value"));
+						ImpliedTyping::VariantNonRetained array = l_token.second;
+						if (array._type._arrayCount == 0 || indexor >= array._type._arrayCount)
+							Throw(std::runtime_error("Attempting to index a non-array, or index out of array bounds"));
+						if (indexor == 0 && array._type._arrayCount <= 1) {
+							_evaluation.emplace_back(TokenType::Literal, l_token.second);
+						} else {
+							EvaluatedValue v;
+							v._type = array._type;
+							v._type._arrayCount = 1;
+							v._useRetainedValue = true;
+							auto src = MakeIteratorRange(PtrAdd(array._data.begin(), indexor*v._type.GetSize()), PtrAdd(array._data.begin(), (indexor+1)*v._type.GetSize()));
+							assert(src.size() <= sizeof(v._retainedValue));
+							v._retainedValue = 0;
+							std::memcpy(&v._retainedValue, src.begin(), src.size());
+							_evaluation.emplace_back(TokenType::Literal, v);
+						}
+					} else {
+						assert(l_token.first == TokenType::Literal);
+						EvaluatedValue v;
+						v._useRetainedValue = true;
+						v._type = ImpliedTyping::TryBinaryOperator(MakeOpaqueIteratorRange(v._retainedValue), token._value, l_token.second, r_token.second);
+						if (v._type == ImpliedTyping::TypeCat::Void)
+							Throw(std::runtime_error("Could not evaluate operator (" + token._value + ") in expression evaluator"));
+						_evaluation.emplace_back(TokenType::Literal, v);
+					}
+
+				} else if (token._type == TokenType::Variable) {
+
+					if (!EvalBlock_HasBeenEvaluated(_evalBlock, tokenIdx)) {
+						
+						if (_lastReturnedStep.has_value()) {
+							// the caller just returned us a value
+							if (_lastReturnedStep->_type._type != ImpliedTyping::TypeCat::Void) {
+								EvalBlock_Set(MakeIteratorRange(_evalBlock), tokenIdx, _dictionary->_tokenDefinitions.size(), EvaluatedValue { *_lastReturnedStep });
+							} else {
+								// undefined variables treated as 0
+								EvalBlock_Set(MakeIteratorRange(_evalBlock), tokenIdx, _dictionary->_tokenDefinitions.size(), EvaluatedValue { 0u });
+							}
+
+						} else {
+							_lastReturnedStep = ImpliedTyping::VariantNonRetained{};
+							return Step { StepType::LookupVariable, MakeStringSection(token._value), tokenIdx, &_lastReturnedStep.value() };
+						}
+
+					}
+
+					_evaluation.emplace_back(TokenType::Literal, EvalBlock_Get(_evalBlock, tokenIdx, _dictionary->_tokenDefinitions.size()));
+					
+				} else if (token._type == TokenType::IsDefinedTest) {
+
+					if (!EvalBlock_HasBeenEvaluated(_evalBlock, tokenIdx)) {
+
+						if (_lastReturnedStep.has_value()) {
+							bool isDefined = _lastReturnedStep->_type._type != ImpliedTyping::TypeCat::Void;
+							EvalBlock_Set(MakeIteratorRange(_evalBlock), tokenIdx, _dictionary->_tokenDefinitions.size(), EvaluatedValue { isDefined });
+						} else {
+							_lastReturnedStep = ImpliedTyping::VariantNonRetained{};
+							return Step { StepType::LookupVariable, MakeStringSection(token._value), tokenIdx, &_lastReturnedStep.value() };
+						}
+
+					}
+
+					_evaluation.emplace_back(TokenType::Literal, EvalBlock_Get(_evalBlock, tokenIdx, _dictionary->_tokenDefinitions.size()));
+
+				} else if (token._type == TokenType::Literal) {
+
+					EvaluatedValue v;
+					v._retainedValue = 0;
+					v._useRetainedValue = true;
+					v._type = ImpliedTyping::ParseFullMatch(
+						MakeStringSection(token._value),
+						MakeOpaqueIteratorRange(v._retainedValue));
+					if (v._type._type == ImpliedTyping::TypeCat::Void)
+						Throw(std::runtime_error("Literal not understood in expression (" + token._value + ")"));
+
+					_evaluation.emplace_back(TokenType::Literal, v);
+					
+				} else {
+					assert(token._value.empty());
+					_evaluation.emplace_back(token._type, EvaluatedValue{});
+				}
+
+				_lastReturnedStep = {};
+				++_remainingExpression.first;
+			}
+
+			return {};
+		}
+
+		auto ExpressionEvaluator::GetResult() const -> ImpliedTyping::VariantNonRetained
+		{
+			assert(_remainingExpression.empty());
+			assert(_evaluation.size() == 1);
+			auto& res = _evaluation.back();
+			assert(res.first == TokenDictionary::TokenType::Literal);
+			return res.second;
+		}
+
+		ExpressionEvaluator::ExpressionEvaluator(const TokenDictionary& dictionary, IteratorRange<const Token*> expression)
+		: _dictionary(&dictionary), _remainingExpression(expression)
+		{
+			assert(!expression.empty());
+			_evalBlock = EvalBlock_Initialize(_dictionary->_tokenDefinitions.size());
+		}
+
+		ExpressionEvaluator::~ExpressionEvaluator() {}
 
 		WorkingRelevanceTable CalculatePreprocessorExpressionRevelance(
 			TokenDictionary& tokenDictionary,
@@ -1055,16 +1177,5 @@ namespace Utility
 	}
 
 	IPreprocessorIncludeHandler::~IPreprocessorIncludeHandler() {}
-
-	/* TokenMap vars;
-	vars["__VERSION__"] = 300;
-	vars["DEFINED_NO_VALUE"] = packToken(nullptr, NONE);        // tokens with no value can't be part of expressions
-	bool undefinedIsDefined = calculator::calculate("defined(NOT_DEFINED)", &vars).asBool();
-	bool noValueIsDefined = calculator::calculate("defined(DEFINED_NO_VALUE)", &vars).asBool();
-	bool noValueIsZero = calculator::calculate("NOT_DEFINED == 0", &vars).asBool();
-	bool res = calculator::calculate("defined(__VERSION__) && defined(DEFINED_NO_VALUE) && !defined(NOT_DEFINED) && (__VERSION__ >= 300)", &vars).asBool();
-
-	(void)res; (void)undefinedIsDefined; (void)noValueIsDefined; (void)noValueIsZero;
-	return res;*/
 }
 

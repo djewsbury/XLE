@@ -128,10 +128,21 @@ namespace Utility
             IteratorRange<const void*> src, TypeDesc srcType);
         
         CastType CalculateCastType(TypeCat testType, TypeCat againstType);
-        
-        void Cleanup();
 
-        static constexpr const unsigned NativeRepMaxSize = MaxPath * 4;
+        struct VariantNonRetained
+        {
+            ImpliedTyping::TypeDesc _type = ImpliedTyping::TypeCat::Void;
+            IteratorRange<const void*> _data;
+        };
+        ImpliedTyping::TypeDesc TryBinaryOperator(
+            IteratorRange<void*> dst,
+            StringSection<> op,
+            const VariantNonRetained& lhs,
+            const VariantNonRetained& rhs);
+        ImpliedTyping::TypeDesc TryUnaryOperator(
+            IteratorRange<void*> dst,
+            StringSection<> op,
+            const ImpliedTyping::VariantNonRetained& operand);
 
         //////////////////////////////////////////////////////////////////////////////////////
             // Template implementations //

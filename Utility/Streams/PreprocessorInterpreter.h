@@ -4,10 +4,12 @@
 
 #pragma once
 
+#include "../ImpliedTyping.h"
 #include "../StringUtils.h"
 #include "../IteratorUtils.h"
 #include <unordered_map>
 #include <map>
+#include <stack>
 #include <functional>
 
 namespace Utility
@@ -52,12 +54,6 @@ namespace Utility
 			Token GetToken(TokenType type, const std::string& value = {});
 			std::optional<Token> TryGetToken(TokenType type, StringSection<> value) const;
 
-			int64_t EvaluateExpression(
-				IteratorRange<const Token*> tokenList,
-				IteratorRange<ParameterBox const*const*> environment) const;
-			int64_t EvaluateExpression(
-				IteratorRange<const Token*> tokenList,
-				const std::function<std::optional<int64_t>(const TokenDefinition&, Token)>& lookupVariableFn) const;
 			std::string AsString(IteratorRange<const Token*> tokenList) const;
 			void Simplify(ExpressionTokenList&);
 
@@ -66,6 +62,61 @@ namespace Utility
 			TokenDictionary();
 			~TokenDictionary();
 		};
+
+		class ExpressionEvaluator
+		{
+		public:
+			enum class StepType { LookupVariable, End };
+			struct Step
+			{ 
+				StepType _type = StepType::End;
+				StringSection<> _name; unsigned _nameTokenIndex = ~0u;
+				ImpliedTyping::VariantNonRetained* _queryResult = nullptr;
+				operator bool() const  { return _type != StepType::End; }
+
+				// Note that values blocks passed to *all* variants of SetQueryResult must be retained
+				// throughout the entire lifetime of the ExpressionEvaluator.
+				// It's a special restriction, but it allows us to avoid copies across the interface for
+				// larger values (such as arrays)
+				template<typename Type> void SetQueryResult(const Type& value);
+				template<typename Type, int N> void SetQueryResult(Type (&value)[N]);
+				void SetQueryResult(const ImpliedTyping::TypeDesc& typeDesc, IteratorRange<const void*> data);
+			};
+
+			Step GetNextStep();
+			ImpliedTyping::VariantNonRetained GetResult() const;
+
+			ExpressionEvaluator(const TokenDictionary&, IteratorRange<const Token*>);
+			~ExpressionEvaluator();
+			ExpressionEvaluator& operator=(ExpressionEvaluator&&) = delete;
+			ExpressionEvaluator(ExpressionEvaluator&&) = delete;
+
+			struct EvaluatedValue;
+		private:
+			std::vector<uint8_t> _evalBlock;
+			const TokenDictionary* _dictionary;
+			IteratorRange<const Token*> _remainingExpression;
+			std::vector<std::pair<TokenDictionary::TokenType, EvaluatedValue>> _evaluation;
+			std::optional<ImpliedTyping::VariantNonRetained> _lastReturnedStep;
+		};
+
+		template<typename Type>
+			void ExpressionEvaluator::Step::SetQueryResult(const Type& value)
+			{
+				_queryResult->_type = ImpliedTyping::TypeOf<Type>();
+				_queryResult->_data = MakeOpaqueIteratorRange(value);
+			}
+		template<typename Type, int N>
+			void ExpressionEvaluator::Step::SetQueryResult(Type (&value)[N])
+			{
+				_queryResult->_type = { ImpliedTyping::TypeOf<Type>()._type, N};
+				_queryResult->_data = MakeOpaqueIteratorRange(value);
+			}
+		inline void ExpressionEvaluator::Step::SetQueryResult(const ImpliedTyping::TypeDesc& typeDesc, IteratorRange<const void*> data)
+		{
+			_queryResult->_type = typeDesc;
+			_queryResult->_data = {const_cast<void*>(data.begin()), const_cast<void*>(data.end())};		// we promise to be good
+		}
 
 		const char* AsString(TokenDictionary::TokenType);
 		TokenDictionary::TokenType AsTokenType(StringSection<>);

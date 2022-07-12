@@ -52,6 +52,35 @@ namespace ShaderSourceParser
 		formatter.EndElement(e);
 	}
 
+	static int64_t PreprocessorExpressionEvaluation(
+		const Utility::Internal::TokenDictionary& tokenDictionary,
+		IteratorRange<const Utility::Internal::Token*> expr,
+		IteratorRange<const ParameterBox*const*> paramBoxes)
+	{
+		Utility::Internal::ExpressionEvaluator exprEval{tokenDictionary, expr};
+		while (auto nextStep = exprEval.GetNextStep()) {
+			assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
+
+			ParameterBox::ParameterName nameHash { nextStep._name };
+			for (auto& p:paramBoxes) {
+				nextStep._queryResult->_type = p->GetParameterType(nameHash);
+				if (nextStep._queryResult->_type._type != ImpliedTyping::TypeCat::Void) {
+					nextStep._queryResult->_data = p->GetParameterRawValue(nameHash);
+					break;
+				}
+			}
+		}
+
+		auto result = exprEval.GetResult();
+		if (result._type._type == ImpliedTyping::TypeCat::Void)
+			return 0;
+		
+		int64_t resultValue;
+		bool goodCast = ImpliedTyping::Cast(MakeOpaqueIteratorRange(resultValue), ImpliedTyping::TypeOf<int64_t>(), result._data, result._type);
+		assert(goodCast);
+		return goodCast ? resultValue : 0;
+	}
+
 	bool SelectorFilteringRules::IsRelevant(
 		StringSection<> symbol, StringSection<> value,
 		IteratorRange<const ParameterBox*const*> environment) const
@@ -62,7 +91,7 @@ namespace ShaderSourceParser
 		if (t.has_value()) {
 			auto i = _relevanceTable.find(t.value());
 			if (i!=_relevanceTable.end()) {
-				int relevanceCheck = _tokenDictionary.EvaluateExpression(i->second, environment);
+				int relevanceCheck = PreprocessorExpressionEvaluation(_tokenDictionary, i->second, environment);
 				passesRelevanceCheck |= relevanceCheck != 0;
 			}
 		}
@@ -72,7 +101,7 @@ namespace ShaderSourceParser
 			if (isDefinedT.has_value()) {
 				auto i = _relevanceTable.find(isDefinedT.value());
 				if (i!=_relevanceTable.end()) {
-					int relevanceCheck = _tokenDictionary.EvaluateExpression(i->second, environment);
+					int relevanceCheck = PreprocessorExpressionEvaluation(_tokenDictionary, i->second, environment);
 					passesRelevanceCheck |= relevanceCheck != 0;
 				}
 			}
@@ -86,7 +115,7 @@ namespace ShaderSourceParser
 			if (end == value.end()) {
 				auto i = _defaultSets.find(t.value());
 				if (i!=_defaultSets.end()) {
-					int defaultValue = _tokenDictionary.EvaluateExpression(i->second, environment);
+					int defaultValue = PreprocessorExpressionEvaluation(_tokenDictionary, i->second, environment);
 					passesRelevanceCheck &= valueAsInt != defaultValue;
 				}
 			}
@@ -372,11 +401,11 @@ namespace ShaderSourceParser
 		ParameterBox output = std::move(input);
 		for (const auto&subst:_preconfigurationSideEffects._substitutions) {
 			const ParameterBox* o = &output;
-			auto conditionEval = _preconfigurationSideEffects._dictionary.EvaluateExpression(subst._condition, MakeIteratorRange(&o, &o+1));
+			auto conditionEval = PreprocessorExpressionEvaluation(_preconfigurationSideEffects._dictionary, subst._condition, MakeIteratorRange(&o, &o+1));
 			if (!conditionEval) continue;
 
 			if (subst._type == Utility::Internal::PreprocessorSubstitutions::Type::Define || subst._type == Utility::Internal::PreprocessorSubstitutions::Type::DefaultDefine) {
-				auto evaluated = _preconfigurationSideEffects._dictionary.EvaluateExpression(subst._substitution, MakeIteratorRange(&o, &o+1));
+				auto evaluated = PreprocessorExpressionEvaluation(_preconfigurationSideEffects._dictionary, subst._substitution, MakeIteratorRange(&o, &o+1));
 				output.SetParameter(subst._symbol, evaluated);
 			} else {
 				assert(subst._type == Utility::Internal::PreprocessorSubstitutions::Type::Undefine);
