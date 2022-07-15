@@ -34,10 +34,11 @@ namespace Formatters
 		if (lhs._alias != rhs._alias) return false;
 		if (lhs._paramTypeField != rhs._paramTypeField) return false;
 		if (!Match(MakeIteratorRange(lhs._params), MakeIteratorRange(rhs._params))) return false;
+		if (lhs._schemata != rhs._schemata) return false;
 		return lhs._valueTypeDesc == rhs._valueTypeDesc; 
 	}
 
-	auto EvaluationContext::GetEvaluatedType(StringSection<> baseName, IteratorRange<const int64_t*> parameters, unsigned typeBitField) -> EvaluatedTypeToken
+	auto EvaluationContext::GetEvaluatedType(const std::shared_ptr<BinarySchemata>& schemata, StringSection<> baseName, IteratorRange<const int64_t*> parameters, unsigned typeBitField) -> EvaluatedTypeToken
 	{
 		if (parameters.empty()) {
 			if (XlEqString(baseName, "void")) return GetEvaluatedType(ImpliedTyping::TypeCat::Void);
@@ -55,19 +56,20 @@ namespace Formatters
 			if (XlEqString(baseName, "char")) return GetEvaluatedType(EvaluatedType{ImpliedTyping::TypeDesc{ImpliedTyping::TypeCat::UInt8, 1, ImpliedTyping::TypeHint::String}});
 		}
 
-		auto ai = _definitions->FindAlias(baseName);
+		auto ai = schemata->FindAlias(baseName);
 		if (ai != BinarySchemata::AliasId_Invalid) {
-			auto& alias = _definitions->GetAlias(ai);
-			auto aliasedType = GetEvaluatedType(alias._aliasedType);
+			auto& alias = schemata->GetAlias(ai);
+			auto aliasedType = GetEvaluatedType(schemata, alias._aliasedType);
 			EvaluatedType type;
 			type._alias = ai;
 			type._params = {parameters.begin(), parameters.end()};
 			type._paramTypeField = typeBitField;
 			type._valueTypeDesc = _evaluatedTypes[aliasedType]._valueTypeDesc;
+			type._schemata = schemata;
 			return GetEvaluatedType(type);
 		}
 
-		auto i = _definitions->FindBlockDefinition(baseName);
+		auto i = schemata->FindBlockDefinition(baseName);
 		if (i == BinarySchemata::BlockDefinitionId_Invalid)
 			Throw(std::runtime_error("Unknown type while looking up (" + baseName.AsString() + ")"));
 
@@ -76,6 +78,7 @@ namespace Formatters
 		type._blockDefinition = i;
 		type._params = {parameters.begin(), parameters.end()};
 		type._paramTypeField = typeBitField;
+		type._schemata = schemata;
 		return GetEvaluatedType(type);
 	}
 
@@ -90,6 +93,7 @@ namespace Formatters
 	}
 
 	EvaluationContext::EvaluatedTypeToken EvaluationContext::GetEvaluatedType(
+		const std::shared_ptr<BinarySchemata>& schemata,
 		unsigned baseNameToken, IteratorRange<const unsigned*> paramTypeCodes, 
 		const BlockDefinition& blockDef, 
 		std::stack<unsigned>& typeStack, std::stack<int64_t>& valueStack, 
@@ -121,9 +125,9 @@ namespace Formatters
 					valueStack.pop();
 				}
 			}
-			return GetEvaluatedType(baseName, MakeIteratorRange(params, &params[paramCount]), typeBitField);
+			return GetEvaluatedType(schemata, baseName, MakeIteratorRange(params, &params[paramCount]), typeBitField);
 		} else {
-			return GetEvaluatedType(baseName);
+			return GetEvaluatedType(schemata, baseName);
 		}
 	}
 
@@ -155,7 +159,7 @@ namespace Formatters
 			return res;
 		}
 
-		auto& def = _definitions->GetBlockDefinition(_evaluatedTypes[evalTypeId]._blockDefinition);
+		auto& def = _evaluatedTypes[evalTypeId]._schemata->GetBlockDefinition(_evaluatedTypes[evalTypeId]._blockDefinition);
 		auto cmds = MakeIteratorRange(def._cmdList);
 
 		std::stack<unsigned> typeStack;
@@ -175,7 +179,10 @@ namespace Formatters
 					cmds.first += paramCount;
 
 					typeStack.push(
-						GetEvaluatedType(baseNameToken, paramTypeCodes, def, typeStack, valueStack, _evaluatedTypes[evalTypeId]._params, _evaluatedTypes[evalTypeId]._paramTypeField));
+						GetEvaluatedType(
+							_evaluatedTypes[evalTypeId]._schemata,
+							baseNameToken, paramTypeCodes, def, 
+							typeStack, valueStack, _evaluatedTypes[evalTypeId]._params, _evaluatedTypes[evalTypeId]._paramTypeField));
 				}
 				break;
 
@@ -297,9 +304,9 @@ namespace Formatters
 	{
 		const auto& type = _evaluatedTypes[typeId];
 		if (type._blockDefinition != ~0u) {
-			str << _definitions->GetBlockDefinitionName(type._blockDefinition);
+			str << type._schemata->GetBlockDefinitionName(type._blockDefinition);
 		} else if (type._alias != ~0u) {
-			str << _definitions->GetAliasName(type._alias);
+			str << type._schemata->GetAliasName(type._alias);
 		} else {
 			assert(type._params.empty());
 			str << AsString(type._valueTypeDesc._type);
@@ -333,9 +340,8 @@ namespace Formatters
 		return _globalState;
 	}
 
-	EvaluationContext::EvaluationContext(const BinarySchemata& schemata)
-	: _definitions(&schemata) {}
-	EvaluationContext::~EvaluationContext() {}
+	EvaluationContext::EvaluationContext() = default;
+	EvaluationContext::~EvaluationContext() = default;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -346,15 +352,16 @@ namespace Formatters
 		_queuedNext = Blob::None;
 	}
 
-	void BinaryFormatter::PushPattern(BinarySchemata::BlockDefinitionId blockDefId, IteratorRange<const int64_t*> templateParams, uint32_t templateParamsTypeField)
+	void BinaryFormatter::PushPattern(std::shared_ptr<BinarySchemata> schemata, BinarySchemata::BlockDefinitionId blockDefId, IteratorRange<const int64_t*> templateParams, uint32_t templateParamsTypeField)
 	{
 		_queuedNext = Blob::None;
 		BlockContext newContext;
-		newContext._definition = &_evalContext->GetSchemata().GetBlockDefinition(blockDefId);
+		newContext._definition = &schemata->GetBlockDefinition(blockDefId);
 		newContext._parsingTemplateParams = {templateParams.begin(), templateParams.end()};
 		newContext._parsingTemplateParamsTypeField = templateParamsTypeField;
 		newContext._cmdsIterator = MakeIteratorRange(newContext._definition->_cmdList);
-		newContext._parsingBlockName = _evalContext->GetSchemata().GetBlockDefinitionName(blockDefId);
+		newContext._parsingBlockName = schemata->GetBlockDefinitionName(blockDefId);
+		newContext._schemata = std::move(schemata);
 		_blockStack.push(std::move(newContext));
 	}
 
@@ -388,6 +395,7 @@ namespace Formatters
 
 					workingBlock._typeStack.push(
 						_evalContext->GetEvaluatedType(
+							workingBlock._schemata,
 							baseNameToken, paramTypeCodes, def, 
 							workingBlock._typeStack, workingBlock._valueStack,
 							workingBlock._parsingTemplateParams, workingBlock._parsingTemplateParamsTypeField));
@@ -516,7 +524,7 @@ namespace Formatters
 
 			// Sometimes we can just compress the "array count" into the basic value description, as so...
 			bool isCharType = false;
-			if (evalType._alias != ~0u && _evalContext->GetSchemata().GetAliasName(evalType._alias) == "char") isCharType = true;		// hack -- special case for "char" alias
+			if (evalType._alias != ~0u && workingBlock._schemata->GetAliasName(evalType._alias) == "char") isCharType = true;		// hack -- special case for "char" alias
 			bool isCompressable = evalType._blockDefinition == ~0u && (evalType._alias == ~0u || isCharType) && evalType._valueTypeDesc._arrayCount <= 1;
 			_queuedNext = isCompressable ? Blob::ValueMember : Blob::BeginArray;
 
@@ -558,12 +566,12 @@ namespace Formatters
 			if (evalType._blockDefinition == ~0u) return false;
 
 			BlockContext newContext;
-			newContext._definition = &_evalContext->GetSchemata().GetBlockDefinition(evalType._blockDefinition);
+			newContext._definition = &workingBlock._schemata->GetBlockDefinition(evalType._blockDefinition);
 			newContext._parsingBlockName = workingBlock._definition->_tokenDictionary._tokenDefinitions[cmds[1]]._value;
 			newContext._parsingTemplateParams = evalType._params;
 			newContext._parsingTemplateParamsTypeField = evalType._paramTypeField;
 			newContext._cmdsIterator = MakeIteratorRange(newContext._definition->_cmdList);
-			newContext._parsingBlockName = _evalContext->GetSchemata().GetBlockDefinitionName(evalType._blockDefinition);
+			newContext._parsingBlockName = workingBlock._schemata->GetBlockDefinitionName(evalType._blockDefinition);
 			_blockStack.push(std::move(newContext));
 
 			evaluatedTypeId = type;
@@ -574,11 +582,11 @@ namespace Formatters
 			if (evalType._blockDefinition == ~0u) return false;
 
 			BlockContext newContext;
-			newContext._definition = &_evalContext->GetSchemata().GetBlockDefinition(evalType._blockDefinition);
+			newContext._definition = &workingBlock._schemata->GetBlockDefinition(evalType._blockDefinition);
 			newContext._parsingTemplateParams = evalType._params;
 			newContext._parsingTemplateParamsTypeField = evalType._paramTypeField;
 			newContext._cmdsIterator = MakeIteratorRange(newContext._definition->_cmdList);
-			newContext._parsingBlockName = _evalContext->GetSchemata().GetBlockDefinitionName(evalType._blockDefinition);
+			newContext._parsingBlockName = workingBlock._schemata->GetBlockDefinitionName(evalType._blockDefinition);
 			_blockStack.push(std::move(newContext));
 
 			evaluatedTypeId = workingBlock._pendingArrayType;
@@ -619,7 +627,7 @@ namespace Formatters
 
 			if (cmds[0] == (unsigned)Cmd::InlineArrayMember) {
 				bool isCharType = false;
-				if (evalType._alias != ~0u && _evalContext->GetSchemata().GetAliasName(evalType._alias) == "char") isCharType = true;		// hack -- special case for "char" alias
+				if (evalType._alias != ~0u && workingBlock._schemata->GetAliasName(evalType._alias) == "char") isCharType = true;		// hack -- special case for "char" alias
 				bool isCompressable = evalType._blockDefinition == ~0u && (evalType._alias == ~0u || isCharType) && finalTypeDesc._arrayCount <= 1;
 				if (!isCompressable) return false;
 				auto arrayCount = workingBlock._valueStack.top();
@@ -877,9 +885,9 @@ namespace Formatters
 	{
 		const auto& type = GetType();
 		if (type._alias != BinarySchemata::BlockDefinitionId_Invalid)
-			return GetEvaluationContext().GetSchemata().GetAliasName(type._alias);
+			return type._schemata->GetAliasName(type._alias);
 		if (type._blockDefinition != BinarySchemata::BlockDefinitionId_Invalid)
-			return GetEvaluationContext().GetSchemata().GetBlockDefinitionName(type._blockDefinition);
+			return type._schemata->GetBlockDefinitionName(type._blockDefinition);
 		static std::string dummy;
 		return dummy;
 	}
@@ -1017,7 +1025,7 @@ namespace Formatters
 			bool serializedViaDecoder = false;
 			auto& evalType = formatter.GetEvaluationContext().GetEvaluatedTypeDesc(evaluatedTypeId);
 			if (evalType._alias != ~0u) {
-				auto& schemata = formatter.GetEvaluationContext().GetSchemata();
+				auto& schemata = *evalType._schemata;
 				auto& alias = schemata.GetAlias(evalType._alias);
 				if (alias._bitFieldDecoder != ~0u) {
 					SerializeValueWithDecoder(str, valueData, valueTypeDesc, schemata.GetBitFieldDecoder(alias._bitFieldDecoder));

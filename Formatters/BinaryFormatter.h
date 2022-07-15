@@ -35,7 +35,7 @@ namespace Formatters
 		IteratorRange<const void*> SkipArrayElements(unsigned count);
 		IteratorRange<const void*> SkipNextBlob();
 
-		void PushPattern(BinarySchemata::BlockDefinitionId blockDefId, IteratorRange<const int64_t*> templateParams = {}, uint32_t templateParamsTypeField = 0u);
+		void PushPattern(std::shared_ptr<BinarySchemata> schemata, BinarySchemata::BlockDefinitionId blockDefId, IteratorRange<const int64_t*> templateParams = {}, uint32_t templateParamsTypeField = 0u);
 
 		EvaluationContext& GetEvaluationContext() const { return *_evalContext; }
 		IteratorRange<const void*> GetRemainingData() const { return _dataIterator; }
@@ -47,6 +47,7 @@ namespace Formatters
 			std::stack<int64_t> _valueStack;
 			std::stack<unsigned> _typeStack;
 			const BlockDefinition* _definition;
+			std::shared_ptr<BinarySchemata> _schemata;
 			IteratorRange<const unsigned*> _cmdsIterator;
 			unsigned _pendingArrayMembers = 0;
 			unsigned _pendingArrayType = ~0u;
@@ -88,19 +89,24 @@ namespace Formatters
 			BinarySchemata::AliasId _alias = ~0u;
 			std::vector<int64_t> _params;
 			uint32_t _paramTypeField = 0;
+			std::shared_ptr<BinarySchemata> _schemata;
 
 			friend bool operator==(const EvaluatedType& lhs, const EvaluatedType& rhs);
 		};
 
 		using EvaluatedTypeToken = unsigned;
-		EvaluatedTypeToken GetEvaluatedType(StringSection<> baseName, IteratorRange<const int64_t*> parameters = {}, unsigned typeBitField = 0);
-		EvaluatedTypeToken GetEvaluatedType(ImpliedTyping::TypeCat typeCat);
-		EvaluatedTypeToken GetEvaluatedType(const EvaluatedType& evalType);
 		EvaluatedTypeToken GetEvaluatedType(
+			const std::shared_ptr<BinarySchemata>& schemata,
+			StringSection<> baseName, IteratorRange<const int64_t*> parameters = {}, unsigned typeBitField = 0);
+		EvaluatedTypeToken GetEvaluatedType(
+			const std::shared_ptr<BinarySchemata>& schemata,
 			unsigned baseNameToken, IteratorRange<const unsigned*> paramTypeCodes, 
 			const BlockDefinition& blockDef, 
 			std::stack<unsigned>& typeStack, std::stack<int64_t>& valueStack, 
 			IteratorRange<const int64_t*> parsingTemplateParams, uint32_t parsingTemplateParamsTypeField);
+
+		EvaluatedTypeToken GetEvaluatedType(ImpliedTyping::TypeCat typeCat);
+		EvaluatedTypeToken GetEvaluatedType(const EvaluatedType& evalType);
 
 		const EvaluatedType& GetEvaluatedTypeDesc(EvaluatedTypeToken evalTypeId) const;
 		std::optional<size_t> TryCalculateFixedSize(EvaluatedTypeToken evalTypeId);
@@ -110,14 +116,11 @@ namespace Formatters
 		void SetGlobalParameter(StringSection<> name, int64_t value);
 		ParameterBox& GetGlobalParameterBox();
 
-		const BinarySchemata& GetSchemata() const { return *_definitions; }
-
-		EvaluationContext(const BinarySchemata& schemata);
+		EvaluationContext();
 		~EvaluationContext();
 
 	private:
 		std::vector<EvaluatedType> _evaluatedTypes;
-		const BinarySchemata* _definitions = nullptr;
 		ParameterBox _globalState;
 
 		struct CalculatedSizeState
