@@ -208,24 +208,31 @@ namespace Formatters
 			}
 
 			PushComplexType(workingDefinition, tokenizer);
-			auto name = tokenizer.GetNextToken();
-			auto nameAsToken = workingDefinition._tokenDictionary.GetToken(Utility::Internal::TokenDictionary::TokenType::Variable, name._value.AsString());
 
-			auto next = tokenizer.GetNextToken();
-			if (next == "[") {
-				PushExpression(workingDefinition, tokenizer);
-				Require(tokenizer, "]");
+			for (;;) {
+				auto name = tokenizer.GetNextToken();
+				auto nameAsToken = workingDefinition._tokenDictionary.GetToken(Utility::Internal::TokenDictionary::TokenType::Variable, name._value.AsString());
+
 				next = tokenizer.GetNextToken();
+				if (next == "[") {
+					PushExpression(workingDefinition, tokenizer);
+					Require(tokenizer, "]");
+					next = tokenizer.GetNextToken();
 
-				workingDefinition._cmdList.push_back((unsigned)Cmd::InlineArrayMember);
-				workingDefinition._cmdList.push_back(nameAsToken);
-			} else {
-				workingDefinition._cmdList.push_back((unsigned)Cmd::InlineIndividualMember);
-				workingDefinition._cmdList.push_back(nameAsToken);
+					workingDefinition._cmdList.push_back((unsigned)Cmd::InlineArrayMember);
+					workingDefinition._cmdList.push_back(nameAsToken);
+				} else {
+					workingDefinition._cmdList.push_back((unsigned)Cmd::InlineIndividualMember);
+					workingDefinition._cmdList.push_back(nameAsToken);
+				}
+
+				if (next != ",") break;		// use comma to separate a list of variables with the same type
 			}
-			
+
 			if (next != ";")
 				Throw(FormatException("Expecting ';'", next._start));
+
+			workingDefinition._cmdList.push_back((unsigned)Cmd::PopTypeStack);
 
 			if (writeJumpHere)
 				workingDefinition._cmdList[writeJumpHere] = (unsigned)workingDefinition._cmdList.size();

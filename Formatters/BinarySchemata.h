@@ -90,6 +90,7 @@ namespace Formatters
     enum class Cmd
 	{
 		LookupType,
+		PopTypeStack,
 		EvaluateExpression,
 		InlineIndividualMember,
 		InlineArrayMember,

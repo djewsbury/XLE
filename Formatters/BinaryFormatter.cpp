@@ -179,6 +179,10 @@ namespace Formatters
 				}
 				break;
 
+			case Cmd::PopTypeStack:
+				typeStack.pop();
+				break;
+
 			case Cmd::EvaluateExpression:
 				{
 					auto length = *cmds.first++;
@@ -390,6 +394,11 @@ namespace Formatters
 					break;
 				}
 
+			case Cmd::PopTypeStack:
+				cmds.first++;
+				workingBlock._typeStack.pop();
+				break;
+
 			case Cmd::EvaluateExpression:
 				{
 					cmds.first++;
@@ -481,6 +490,7 @@ namespace Formatters
 			}
 		}
 
+		assert(workingBlock._typeStack.empty());
 		if (_blockStack.size() == 1)
 			return Blob::None;
 		return _queuedNext = Blob::EndBlock;
@@ -558,7 +568,6 @@ namespace Formatters
 
 			evaluatedTypeId = type;
 			cmds.first+=2;
-			workingBlock._typeStack.pop();
 			_queuedNext = Blob::None;
 		} else {
 			const auto& evalType = _evalContext->GetEvaluatedTypeDesc(workingBlock._pendingArrayType);
@@ -632,7 +641,6 @@ namespace Formatters
 			
 			evaluatedTypeId = type;
 			cmds.first+=2;
-			workingBlock._typeStack.pop();
 			if (cmds[0] == (unsigned)Cmd::InlineArrayMember)
 				workingBlock._valueStack.pop();
 			_dataIterator.first = PtrAdd(_dataIterator.first, size);
@@ -679,7 +687,6 @@ namespace Formatters
 		const auto& evalType = _evalContext->GetEvaluatedTypeDesc(evaluatedTypeId);
 
 		cmds.first += 2;
-		workingBlock._typeStack.pop();
 		workingBlock._valueStack.pop();
 		if (workingBlock._pendingArrayMembers) {
 			_queuedNext = (evalType._blockDefinition == ~0u) ? Blob::KeyedItem : Blob::BeginBlock;
