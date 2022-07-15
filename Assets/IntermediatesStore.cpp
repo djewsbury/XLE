@@ -32,7 +32,8 @@ namespace Assets
 	class IntermediatesStore::Pimpl
 	{
 	public:
-		Threading::Mutex _lock;
+		// in very occasional cases, IFileSystem implementations may use IntermediatesStore during another IntermediatesStore operation
+		std::shared_timed_mutex _lock;
 		mutable std::string _resolvedBaseDirectory;
 		mutable std::unique_ptr<IFileInterface> _markerFile;
 		std::shared_ptr<IFileSystem> _filesystem;
@@ -205,7 +206,7 @@ namespace Assets
 		StringSection<> archivableName,
 		CompileProductsGroupId groupId)
 	{
-		ScopedLock(_pimpl->_lock);
+		std::shared_lock<std::shared_timed_mutex> l(_pimpl->_lock);
 		auto hashCode = _pimpl->MakeHashCode(archivableName, groupId);
 		Pimpl::ReadRefCountLock readRef(_pimpl.get(), hashCode, archivableName);
 
@@ -223,7 +224,7 @@ namespace Assets
 		::Assets::AssetState state,
 		IteratorRange<const DependentFileState*> dependencies)
 	{
-		ScopedLock(_pimpl->_lock);
+		std::unique_lock<std::shared_timed_mutex> l(_pimpl->_lock);
 		auto hashCode = _pimpl->MakeHashCode(archivableName, groupId);
 		Pimpl::WriteRefCountLock writeRef(_pimpl.get(), hashCode, archivableName);
 
@@ -244,7 +245,7 @@ namespace Assets
 		ArchiveEntryId entryId,
 		CompileProductsGroupId groupId)
 	{
-		ScopedLock(_pimpl->_lock);
+		std::shared_lock<std::shared_timed_mutex> l(_pimpl->_lock);
 		auto hashCode = _pimpl->MakeHashCode(archiveName, entryId, groupId);
 		Pimpl::ReadRefCountLock readRef(_pimpl.get(), hashCode, (StringMeld<256>() << archiveName << "-" << std::hex << entryId).AsStringSection());
 
@@ -268,7 +269,7 @@ namespace Assets
 		::Assets::AssetState state,
 		IteratorRange<const DependentFileState*> dependencies)
 	{
-		ScopedLock(_pimpl->_lock);
+		std::unique_lock<std::shared_timed_mutex> l(_pimpl->_lock);
 		auto hashCode = _pimpl->MakeHashCode(archiveName, entryId, groupId);
 		Pimpl::WriteRefCountLock writeRef(_pimpl.get(), hashCode, entryDescriptiveName);
 
@@ -293,7 +294,7 @@ namespace Assets
 
 	void IntermediatesStore::FlushToDisk()
 	{
-		ScopedLock(_pimpl->_lock);
+		std::unique_lock<std::shared_timed_mutex> l(_pimpl->_lock);
 		for (const auto&group:_pimpl->_groups)
 			if (group.second._archiveCacheSet)
 				group.second._archiveCacheSet->FlushToDisk();
@@ -378,7 +379,7 @@ namespace Assets
 		const ConsoleRig::LibVersionDesc& compilerVersionInfo,
 		bool enableArchiveCacheSet) -> CompileProductsGroupId
 	{
-		ScopedLock(_pimpl->_lock);
+		std::unique_lock<std::shared_timed_mutex> l(_pimpl->_lock);
 		auto id = Hash64(name.begin(), name.end());
 		auto existing = _pimpl->_groups.find(id);
 		if (existing == _pimpl->_groups.end()) {
