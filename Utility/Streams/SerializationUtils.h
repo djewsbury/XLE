@@ -216,7 +216,7 @@ namespace Utility
 		{
 			assert(first >= _begin && first <= _end);
 			assert(last >= _begin && last <= _end);
-			assert(first != last);
+			if (first == last) return const_cast<iterator>(first);
 			assert(OwnsHeapBlock());
 			auto cnt = last-first;
 			// note -- assuming move operators never throw! If we get an exception during

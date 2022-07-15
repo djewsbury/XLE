@@ -125,6 +125,7 @@ namespace Assets
 		std::shared_ptr<IntermediatesStore> _intermediateStore;
         InitializerPack _initializers;
 		RegisteredCompilerId _registeredCompilerId;
+		Threading::Mutex _lock;
 
 		static void PerformCompile(
 			const ExtensionAndDelegate& delegate,
@@ -299,6 +300,10 @@ namespace Assets
 
     std::shared_ptr<ArtifactCollectionFuture> IntermediateCompilers::Marker::InvokeCompile()
     {
+		// if multiple threads request the same compile at the same time, ensure that we return the same future
+		// this will happen because a single compile operation can return multiple artifacts, which are required for
+		// different assets/systems
+		ScopedLock(_lock);
 		auto activeFuture = _activeFuture.lock();
 		if (activeFuture)
 			return activeFuture;
