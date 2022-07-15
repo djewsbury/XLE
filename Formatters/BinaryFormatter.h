@@ -56,8 +56,8 @@ namespace Formatters
 			IteratorRange<const int64_t*> _parsingTemplateParams;
 			uint32_t _parsingTemplateParamsTypeField;
 
-			ParameterBox _localEvalContext;
-			std::vector<uint64_t> _nonIntegerLocalVariables;
+			std::vector<std::pair<unsigned, ImpliedTyping::VariantNonRetained>> _localEvalContext;
+			std::vector<unsigned> _nonIntegerLocalVariables;
 		};
 		std::stack<BlockContext> _blockStack;
 		EvaluationContext* _evalContext = nullptr;

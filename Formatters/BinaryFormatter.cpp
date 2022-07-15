@@ -397,6 +397,8 @@ namespace Formatters
 					assert(cmds.size() >= length);
 					auto range = MakeIteratorRange(cmds.begin(), cmds.begin()+length);
 					cmds.first += length;
+					uint8_t stringParseOutputBuffer[1024];
+					unsigned stringParseOutputIterator = 0;
 					Utility::Internal::ExpressionEvaluator exprEval{def._tokenDictionary, range};
 					while (auto nextStep = exprEval.GetNextStep()) {
 						assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
@@ -405,17 +407,33 @@ namespace Formatters
 						// - previously evaluated variables
 						// - template values
 						// - context state
-						uint64_t hash = Hash64(nextStep._name);		// (we could just store this hash in the Token object)
 
 						// ------------------------- previously evaluated members --------------------
-						auto localType = workingBlock._localEvalContext.GetParameterType(hash);
-						if (localType._type != ImpliedTyping::TypeCat::Void) {
-							nextStep.SetQueryResult(localType, workingBlock._localEvalContext.GetParameterRawValue(hash));
+						auto localValue = std::find_if(workingBlock._localEvalContext.begin(), workingBlock._localEvalContext.end(), [t=nextStep._nameTokenIndex](const auto& q) {return q.first==t;});
+						if (localValue != workingBlock._localEvalContext.end()) {
+
+							// If the value is a string; let's attempt to parse it before we send the results to the 
+							if (localValue->second._type._typeHint == ImpliedTyping::TypeHint::String && (localValue->second._type._type == ImpliedTyping::TypeCat::UInt8 || localValue->second._type._type == ImpliedTyping::TypeCat::Int8)) {
+								if (stringParseOutputIterator == dimof(stringParseOutputBuffer))
+									Throw(std::runtime_error("Parsing buffer exceeded in expression evaluation in BinaryFormatter."));		// This occurs when we're parsing a lot of strings or large arrays from the source data. Consider an alternative approach, because the system isn't optimized for this
+								auto parsedType = ImpliedTyping::ParseFullMatch(
+									MakeStringSection((const char*)localValue->second._data.begin(), (const char*)localValue->second._data.end()),
+									MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[dimof(stringParseOutputBuffer)]));
+								if (parsedType._type != ImpliedTyping::TypeCat::Void) {
+									nextStep.SetQueryResult(parsedType, MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[stringParseOutputIterator+parsedType.GetSize()]));
+									stringParseOutputIterator += parsedType.GetSize();
+									continue;
+								}
+							}
+							
+							nextStep.SetQueryResult(localValue->second._type, localValue->second._data);
 							continue;
 						}
 
-						if (std::find(workingBlock._nonIntegerLocalVariables.begin(), workingBlock._nonIntegerLocalVariables.end(), hash) != workingBlock._nonIntegerLocalVariables.end())
+						if (std::find(workingBlock._nonIntegerLocalVariables.begin(), workingBlock._nonIntegerLocalVariables.end(), nextStep._nameTokenIndex) != workingBlock._nonIntegerLocalVariables.end())
 							Throw(std::runtime_error("Attempting to non-numeric local variable (" + nextStep._name.AsString() + ") in an expression. This isn't supported"));
+
+						uint64_t hash = Hash64(nextStep._name);		// (we could just store this hash in the Token object)
 
 						// ------------------------- template variables --------------------
 						for (unsigned p=0; p<(unsigned)workingBlock._definition->_templateParameterNames.size(); ++p)
@@ -610,22 +628,8 @@ namespace Formatters
 			resultData = MakeIteratorRange(_dataIterator.begin(), PtrAdd(_dataIterator.begin(), size));
 			resultTypeDesc = finalTypeDesc;
 			
-			// If the value can be interpretted as an integer, add it to our local eval context
-			// (we could also use ParseFullMatch here if we wanted to be able to work with more different types -- such as floats, etc)
-			std::optional<int64_t> asInt;
-			if (resultTypeDesc._typeHint == ImpliedTyping::TypeHint::String && (resultTypeDesc._type == ImpliedTyping::TypeCat::UInt8 || resultTypeDesc._type == ImpliedTyping::TypeCat::Int8)) {
-				asInt = ImpliedTyping::ConvertFullMatch<int64_t>(MakeStringSection((const char*)resultData.begin(), (const char*)resultData.end()));
-			} else {
-				int64_t buffer = 0;
-				if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(buffer), ImpliedTyping::TypeOf<int64_t>(), resultData, resultTypeDesc))
-					asInt = buffer;
-			}
-			if (asInt) {
-				workingBlock._localEvalContext.SetParameter(memberName, asInt.value());
-			} else {
-				workingBlock._nonIntegerLocalVariables.push_back(Hash64(memberName));
-			}
-
+			workingBlock._localEvalContext.emplace_back(nameToken, ImpliedTyping::VariantNonRetained{resultTypeDesc, resultData});
+			
 			evaluatedTypeId = type;
 			cmds.first+=2;
 			workingBlock._typeStack.pop();
