@@ -19,6 +19,7 @@ namespace Utility
 {
     class OutputStreamFormatter;
     template<typename CharType> class InputStreamFormatter;
+    static constexpr const unsigned NativeRepMaxSize = MaxPath * 4;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

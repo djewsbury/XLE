@@ -118,7 +118,7 @@ namespace Utility
 
         // If the input is a string, and we can parse it into a simplier type, then let's store it as that simplier type instead
         if (insertType._typeHint == ImpliedTyping::TypeHint::String && checkStringConversion) {
-            uint8_t parsedTypeBuffer[ImpliedTyping::NativeRepMaxSize];
+            uint8_t parsedTypeBuffer[NativeRepMaxSize];
             if (insertType._type == ImpliedTyping::TypeCat::UInt8 || insertType._type == ImpliedTyping::TypeCat::Int8) {
                 auto parsedType = ImpliedTyping::ParseFullMatch(MakeStringSection((const char*)value.begin(), (const char*)value.end()), MakeIteratorRange(parsedTypeBuffer));
                 if (parsedType._type != ImpliedTyping::TypeCat::Void) {
