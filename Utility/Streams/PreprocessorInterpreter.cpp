@@ -953,6 +953,16 @@ namespace Utility
 			for (unsigned c=0; c<valuesOffset; ++c) result[c] = 0;
 			return result;
 		}
+		
+		static ImpliedTyping::VariantNonRetained UndefinedToZero(const ExpressionEvaluator::EvaluatedValue& value)
+		{
+			// undefined variables treated as 0, as per pre-processor rules
+			if (value._type._type == ImpliedTyping::TypeCat::Void) {
+				static int32_t zero = 0;
+				return ImpliedTyping::VariantNonRetained{ ImpliedTyping::TypeOf<decltype(zero)>(), MakeOpaqueIteratorRange(zero) };
+			}
+			return value;
+		}
 
 		auto ExpressionEvaluator::GetNextStep() -> Step
 		{
@@ -970,7 +980,7 @@ namespace Utility
 					if (l_token.first == TokenType::UnaryMarker) {
 						EvaluatedValue v;
 						v._useRetainedValue = true;
-						v._type = ImpliedTyping::TryUnaryOperator(MakeOpaqueIteratorRange(v._retainedValue), token._value, r_token.second);
+						v._type = ImpliedTyping::TryUnaryOperator(MakeOpaqueIteratorRange(v._retainedValue), token._value, UndefinedToZero(r_token.second));
 						if (v._type == ImpliedTyping::TypeCat::Void)
 							Throw(std::runtime_error("Could not evaluate operator (" + token._value + ") in expression evaluator"));
 						_evaluation.emplace_back(TokenType::Literal, v);
@@ -981,27 +991,32 @@ namespace Utility
 						if (indexor_._type._type == ImpliedTyping::TypeCat::Float || indexor_._type._type == ImpliedTyping::TypeCat::Double
 							|| !ImpliedTyping::Cast(MakeOpaqueIteratorRange(indexor), ImpliedTyping::TypeOf<unsigned>(), indexor_._data, indexor_._type))
 							Throw(std::runtime_error("Indexor could not be interpreted as integer value"));
-						ImpliedTyping::VariantNonRetained array = l_token.second;
-						if (array._type._arrayCount == 0 || indexor >= array._type._arrayCount)
-							Throw(std::runtime_error("Attempting to index a non-array, or index out of array bounds"));
-						if (indexor == 0 && array._type._arrayCount <= 1) {
-							_evaluation.emplace_back(TokenType::Literal, l_token.second);
+						if (l_token.second._type._type != ImpliedTyping::TypeCat::Void) {
+							ImpliedTyping::VariantNonRetained array = l_token.second;
+							if (array._type._arrayCount == 0 || indexor >= array._type._arrayCount)
+								Throw(std::runtime_error("Attempting to index a non-array, or index out of array bounds"));
+							if (indexor == 0 && array._type._arrayCount <= 1) {
+								_evaluation.emplace_back(TokenType::Literal, l_token.second);
+							} else {
+								EvaluatedValue v;
+								v._type = array._type;
+								v._type._arrayCount = 1;
+								v._useRetainedValue = true;
+								auto src = MakeIteratorRange(PtrAdd(array._data.begin(), indexor*v._type.GetSize()), PtrAdd(array._data.begin(), (indexor+1)*v._type.GetSize()));
+								assert(src.size() <= sizeof(v._retainedValue));
+								v._retainedValue = 0;
+								std::memcpy(&v._retainedValue, src.begin(), src.size());
+								_evaluation.emplace_back(TokenType::Literal, v);
+							}
 						} else {
-							EvaluatedValue v;
-							v._type = array._type;
-							v._type._arrayCount = 1;
-							v._useRetainedValue = true;
-							auto src = MakeIteratorRange(PtrAdd(array._data.begin(), indexor*v._type.GetSize()), PtrAdd(array._data.begin(), (indexor+1)*v._type.GetSize()));
-							assert(src.size() <= sizeof(v._retainedValue));
-							v._retainedValue = 0;
-							std::memcpy(&v._retainedValue, src.begin(), src.size());
-							_evaluation.emplace_back(TokenType::Literal, v);
+							// Our array could potentially be undefined. The BinaryFormatter requires that lookups on undefined array evaluates to undefined
+							_evaluation.emplace_back(TokenType::Literal, EvaluatedValue{});
 						}
 					} else {
 						assert(l_token.first == TokenType::Literal);
 						EvaluatedValue v;
 						v._useRetainedValue = true;
-						v._type = ImpliedTyping::TryBinaryOperator(MakeOpaqueIteratorRange(v._retainedValue), token._value, l_token.second, r_token.second);
+						v._type = ImpliedTyping::TryBinaryOperator(MakeOpaqueIteratorRange(v._retainedValue), token._value, UndefinedToZero(l_token.second), UndefinedToZero(r_token.second));
 						if (v._type == ImpliedTyping::TypeCat::Void)
 							Throw(std::runtime_error("Could not evaluate operator (" + token._value + ") in expression evaluator"));
 						_evaluation.emplace_back(TokenType::Literal, v);
@@ -1013,13 +1028,7 @@ namespace Utility
 						
 						if (_lastReturnedStep.has_value()) {
 							// the caller just returned us a value
-							if (_lastReturnedStep->_type._type != ImpliedTyping::TypeCat::Void) {
-								EvalBlock_Set(MakeIteratorRange(_evalBlock), tokenIdx, _dictionary->_tokenDefinitions.size(), EvaluatedValue { *_lastReturnedStep });
-							} else {
-								// undefined variables treated as 0
-								EvalBlock_Set(MakeIteratorRange(_evalBlock), tokenIdx, _dictionary->_tokenDefinitions.size(), EvaluatedValue { 0u });
-							}
-
+							EvalBlock_Set(MakeIteratorRange(_evalBlock), tokenIdx, _dictionary->_tokenDefinitions.size(), EvaluatedValue { *_lastReturnedStep });
 						} else {
 							_lastReturnedStep = ImpliedTyping::VariantNonRetained{};
 							return Step { StepType::LookupVariable, MakeStringSection(token._value), tokenIdx, &_lastReturnedStep.value() };
