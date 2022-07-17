@@ -50,16 +50,16 @@ namespace UnitTests
 			float AnotherValue;
 		};
 
-		Formatters::BinarySchemata decl(testBlock, {}, {});
+		auto decl = std::make_shared<Formatters::BinarySchemata>(testBlock, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
 		std::vector<uint64_t> bigBuffer(1024, 0);
 		((templ*)bigBuffer.data())->SomeValue = 5 + 0x30;
 		((templ*)bigBuffer.data())->AnotherValue = 32.5f;
-		Formatters::EvaluationContext context(decl);
+		Formatters::EvaluationContext context;
 		context.SetGlobalParameter("Version", 48);
 
 		Formatters::BinaryFormatter formatter(context, bigBuffer);
-		formatter.PushPattern(decl.FindBlockDefinition("TestBlock"));
+		formatter.PushPattern(decl, decl->FindBlockDefinition("TestBlock"));
         std::stringstream str;
 		Formatters::SerializeBlock(str, formatter);
 
@@ -68,7 +68,7 @@ namespace UnitTests
         REQUIRE(out.find("butThisShouldBeHere") != std::string::npos);
 
 		Formatters::BinaryFormatter formatter2(context, bigBuffer);
-		formatter2.PushPattern(decl.FindBlockDefinition("TestBlock"));
+		formatter2.PushPattern(decl, decl->FindBlockDefinition("TestBlock"));
 		Formatters::BinaryBlockMatch blockMatch(formatter2);
 		REQUIRE(blockMatch["SomeValue"].As<int64_t>() == ((templ*)bigBuffer.data())->SomeValue);
 		REQUIRE(blockMatch["NestedTemplate2"]["InternalMember3"]["InternalMember1"].As<int64_t>() == 0);
