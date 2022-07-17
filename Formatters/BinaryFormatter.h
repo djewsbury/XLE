@@ -52,6 +52,7 @@ namespace Formatters
 			unsigned _pendingArrayMembers = 0;
 			unsigned _pendingArrayType = ~0u;
 			bool _pendingEndArray = false;
+			bool _terminateWithEndBlock = false;
 
 			std::string _parsingBlockName;
 			IteratorRange<const int64_t*> _parsingTemplateParams;

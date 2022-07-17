@@ -349,6 +349,7 @@ namespace Formatters
 	: _evalContext(&evalContext)
 	, _dataIterator(data)
 	{
+		assert(_dataIterator.begin() <= _dataIterator.end());
 		_queuedNext = Blob::None;
 	}
 
@@ -369,6 +370,7 @@ namespace Formatters
 	{
 		if (_blockStack.empty()) return Blob::None;
 		if (_queuedNext != Blob::None) return _queuedNext;
+		assert(_dataIterator.begin() <= _dataIterator.end());
 
 		auto& workingBlock = _blockStack.top();
 		auto& cmds = workingBlock._cmdsIterator;
@@ -499,9 +501,12 @@ namespace Formatters
 		}
 
 		assert(workingBlock._typeStack.empty());
-		if (_blockStack.size() == 1)
-			return Blob::None;
-		return _queuedNext = Blob::EndBlock;
+		if (_blockStack.top()._terminateWithEndBlock) {
+			return _queuedNext = Blob::EndBlock;
+		} else {
+			_blockStack.pop();
+			return PeekNext();
+		}
 	}
 
 	bool BinaryFormatter::TryKeyedItem(StringSection<>& name)
@@ -572,6 +577,8 @@ namespace Formatters
 			newContext._parsingTemplateParamsTypeField = evalType._paramTypeField;
 			newContext._cmdsIterator = MakeIteratorRange(newContext._definition->_cmdList);
 			newContext._parsingBlockName = workingBlock._schemata->GetBlockDefinitionName(evalType._blockDefinition);
+			newContext._schemata = workingBlock._schemata;
+			newContext._terminateWithEndBlock = true;
 			_blockStack.push(std::move(newContext));
 
 			evaluatedTypeId = type;
@@ -587,6 +594,8 @@ namespace Formatters
 			newContext._parsingTemplateParamsTypeField = evalType._paramTypeField;
 			newContext._cmdsIterator = MakeIteratorRange(newContext._definition->_cmdList);
 			newContext._parsingBlockName = workingBlock._schemata->GetBlockDefinitionName(evalType._blockDefinition);
+			newContext._schemata = workingBlock._schemata;
+			newContext._terminateWithEndBlock = true;
 			_blockStack.push(std::move(newContext));
 
 			evaluatedTypeId = workingBlock._pendingArrayType;
@@ -602,6 +611,7 @@ namespace Formatters
 		if (_blockStack.top()._pendingArrayMembers || _blockStack.top()._pendingEndArray) return false;
 		auto next = PeekNext();
 		if (next != Blob::EndBlock) return false;
+		assert(_blockStack.top()._terminateWithEndBlock);
 		_blockStack.pop();
 		_queuedNext = Blob::None;
 		return true;
@@ -637,11 +647,9 @@ namespace Formatters
 			}
 
 			auto nameToken = cmds[1];
-			const auto& memberName = def._tokenDictionary._tokenDefinitions[nameToken]._value;
-
 			auto size = finalTypeDesc.GetSize();
 			if (size > _dataIterator.size())
-				Throw(std::runtime_error("Binary Schemata reads past the end of data while reading block " + workingBlock._parsingBlockName + ", member: " + memberName));
+				Throw(std::runtime_error("Binary Schemata reads past the end of data while reading block " + workingBlock._parsingBlockName + ", member: " + def._tokenDictionary._tokenDefinitions[nameToken]._value));
 			resultData = MakeIteratorRange(_dataIterator.begin(), PtrAdd(_dataIterator.begin(), size));
 			resultTypeDesc = finalTypeDesc;
 			
@@ -658,9 +666,10 @@ namespace Formatters
 			const auto& evalType = _evalContext->GetEvaluatedTypeDesc(workingBlock._pendingArrayType);
 			if (evalType._blockDefinition != ~0u) return false;
 
+			auto nameToken = cmds[1];
 			auto size = evalType._valueTypeDesc.GetSize();
 			if (size > _dataIterator.size())
-				Throw(std::runtime_error("Binary Schemata reads past the end of data while reading array in block " + workingBlock._parsingBlockName));
+				Throw(std::runtime_error("Binary Schemata reads past the end of data while reading array in block " + workingBlock._parsingBlockName + ", member: " + def._tokenDictionary._tokenDefinitions[nameToken]._value));
 			resultData = MakeIteratorRange(_dataIterator.begin(), PtrAdd(_dataIterator.begin(), size));
 			resultTypeDesc = evalType._valueTypeDesc;
 
@@ -694,6 +703,7 @@ namespace Formatters
 		workingBlock._pendingEndArray = true;
 		const auto& evalType = _evalContext->GetEvaluatedTypeDesc(evaluatedTypeId);
 
+		auto nameToken = cmds[1];
 		cmds.first += 2;
 		workingBlock._valueStack.pop();
 		if (workingBlock._pendingArrayMembers) {
@@ -701,6 +711,12 @@ namespace Formatters
 		} else {
 			_queuedNext = Blob::EndArray;
 		}
+
+		if (evalType._valueTypeDesc._type != ImpliedTyping::TypeCat::Void) {
+			auto arrayData = MakeIteratorRange(_dataIterator.begin(), PtrAdd(_dataIterator.begin(), evalType._valueTypeDesc.GetSize()));
+			workingBlock._localEvalContext.emplace_back(nameToken, ImpliedTyping::VariantNonRetained{evalType._valueTypeDesc, arrayData});
+		}
+
 		return true;
 	}
 
@@ -764,6 +780,8 @@ namespace Formatters
 			TryBeginBlock(evalBlockId);
 			auto fixedSize = _evalContext->TryCalculateFixedSize(evalBlockId);
 			if (fixedSize.has_value()) {
+				if (fixedSize.value() > _dataIterator.size())
+					Throw(std::runtime_error("Binary Schemata reads past the end of data while reading block " + _blockStack.top()._parsingBlockName));
 				_dataIterator.first = PtrAdd(_dataIterator.first, fixedSize.value());
 				_blockStack.pop();
 				_queuedNext = Blob::None;
