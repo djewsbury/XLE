@@ -137,26 +137,28 @@ namespace RenderCore { namespace LightingEngine
 			}
 		}
 
-		auto encoder = metalContext.BeginGraphicsEncoder(_prepareBitFieldLayout);
-		ViewportDesc viewport { 0, 0, (float)_lightTileBufferSize[0], (float)_lightTileBufferSize[1] };
-		ScissorRect scissorRect { 0, 0, _lightTileBufferSize[0], _lightTileBufferSize[1] };
-		encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
+		if (_outputs._lightCount) {
+			auto encoder = metalContext.BeginGraphicsEncoder(_prepareBitFieldLayout);
+			ViewportDesc viewport { 0, 0, (float)_lightTileBufferSize[0], (float)_lightTileBufferSize[1] };
+			ScissorRect scissorRect { 0, 0, _lightTileBufferSize[0], _lightTileBufferSize[1] };
+			encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
 
-		UniformsStream us;
-		const IResourceView* resView[] { iterator._rpi.GetNonFrameBufferAttachmentView(0).get(), _tileableLightBufferUAV[_pingPongCounter].get(), iterator._rpi.GetNonFrameBufferAttachmentView(1).get() };
-		us._resourceViews = MakeIteratorRange(resView);
+			UniformsStream us;
+			const IResourceView* resView[] { iterator._rpi.GetNonFrameBufferAttachmentView(0).get(), _tileableLightBufferUAV[_pingPongCounter].get(), iterator._rpi.GetNonFrameBufferAttachmentView(1).get() };
+			us._resourceViews = MakeIteratorRange(resView);
 
-		auto globalUniforms = Techniques::BuildGlobalTransformConstants(iterator._parsingContext->GetProjectionDesc());
-		UniformsStream::ImmediateData immData[] { MakeOpaqueIteratorRange(globalUniforms) };
-		us._immediateData = MakeIteratorRange(immData);
+			auto globalUniforms = Techniques::BuildGlobalTransformConstants(iterator._parsingContext->GetProjectionDesc());
+			UniformsStream::ImmediateData immData[] { MakeOpaqueIteratorRange(globalUniforms) };
+			us._immediateData = MakeIteratorRange(immData);
 
-		_prepareBitFieldBoundUniforms.ApplyLooseUniforms(metalContext, encoder, us);
+			_prepareBitFieldBoundUniforms.ApplyLooseUniforms(metalContext, encoder, us);
 
-		VertexBufferView vbvs[] = {
-			VertexBufferView { _stencilingGeo._lowDetailHemiSphereVB.get() }
-		};
-		encoder.Bind(MakeIteratorRange(vbvs), IndexBufferView{ _stencilingGeo._lowDetailHemiSphereIB.get(), Format::R16_UINT });
-		encoder.DrawIndexedInstances(*_prepareBitFieldPipeline, _stencilingGeo._lowDetailHemiSphereIndexCount, _outputs._lightCount);
+			VertexBufferView vbvs[] = {
+				VertexBufferView { _stencilingGeo._lowDetailHemiSphereVB.get() }
+			};
+			encoder.Bind(MakeIteratorRange(vbvs), IndexBufferView{ _stencilingGeo._lowDetailHemiSphereIB.get(), Format::R16_UINT });
+			encoder.DrawIndexedInstances(*_prepareBitFieldPipeline, _stencilingGeo._lowDetailHemiSphereIndexCount, _outputs._lightCount);
+		}
 
 		_outputs._tiledLightBitFieldSRV = iterator._rpi.GetNonFrameBufferAttachmentView(2);
 	}
