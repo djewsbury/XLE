@@ -449,7 +449,6 @@ namespace Assets
 	MountingTree::MountingTree(FilenameRules& rules)
 	{
 		_pimpl = std::make_unique<Pimpl>(rules);
-		_pimpl->_changeId = 0;
 	}
 
 	MountingTree::~MountingTree() {}

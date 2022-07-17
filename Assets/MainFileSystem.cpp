@@ -490,7 +490,7 @@ namespace Assets
 	FileSystemWalker BeginWalk(const std::shared_ptr<ISearchableFileSystem>& fs, StringSection<> initialSubDirectory)
 	{
 		std::vector<FileSystemWalker::StartingFS> startingFS;
-		startingFS.push_back({{}, initialSubDirectory.AsString(), fs, 0});
+		startingFS.push_back({{}, initialSubDirectory.AsString(), fs, 0});		// here, relying on 0 being a sentinel in the mounting tree than doesn't correspond to any mountId
 		return FileSystemWalker(std::move(startingFS));
 	}
 
