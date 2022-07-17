@@ -30,10 +30,10 @@ namespace ToolsRig
 			return nullptr;
 		}
 
-		RegistrySetId Register(const std::shared_ptr<IPreviewSceneRegistrySet>& registrySet)
+		RegistrySetId Register(std::shared_ptr<IPreviewSceneRegistrySet> registrySet)
 		{
 			auto result = _nextRegistrySetId+1;
-			_registrySet.push_back(std::make_pair(result, registrySet));
+			_registrySet.push_back(std::make_pair(result, std::move(registrySet)));
 			return result;
 		}
 
@@ -46,11 +46,38 @@ namespace ToolsRig
 				}
 		}
 
+		virtual std::shared_ptr<IConfigurablePlugin> GetConfigurablePlugin(
+			StringSection<> name)
+		{
+			for (auto i=_configurablePlugins.begin(); i!=_configurablePlugins.end(); ++i)
+				if (XlEqString(name, std::get<1>(*i)))
+					return std::get<2>(*i);
+			return nullptr;
+		}
+
+		ConfigurablePluginId Register(StringSection<> name, std::shared_ptr<IConfigurablePlugin> plugin)
+		{
+			auto result = _nextConfigurablePluginId+1;
+			_configurablePlugins.emplace_back(result, name.AsString(), std::move(plugin));
+			return result;
+		}
+
+		void DeregisterConfigurablePlugin(ConfigurablePluginId id)
+		{
+			for (auto i=_configurablePlugins.begin(); i!=_configurablePlugins.end(); ++i)
+				if (std::get<0>(*i) == id) {
+					_configurablePlugins.erase(i);
+					break;
+				}
+		}
+
 		MainPreviewSceneRegistry() {}
 		~MainPreviewSceneRegistry() {}
 
 		std::vector<std::pair<RegistrySetId, std::shared_ptr<IPreviewSceneRegistrySet>>> _registrySet;
+		std::vector<std::tuple<ConfigurablePluginId, std::string, std::shared_ptr<IConfigurablePlugin>>> _configurablePlugins;
 		RegistrySetId _nextRegistrySetId = 1;
+		RegistrySetId _nextConfigurablePluginId = 1;
 	};
 
 	std::shared_ptr<IPreviewSceneRegistry> CreatePreviewSceneRegistry()
@@ -58,7 +85,6 @@ namespace ToolsRig
 		return std::make_shared<MainPreviewSceneRegistry>();
 	}
 
-	IPreviewSceneRegistrySet::~IPreviewSceneRegistrySet() {}
 	IPreviewSceneRegistry::~IPreviewSceneRegistry() {}
 
 }

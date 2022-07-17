@@ -4,8 +4,9 @@
 
 #pragma once
 
-#include "../Assets/Marker.h"
-#include "../Utility/StringUtils.h"
+#include "../EntityInterface/EntityInterface.h"
+#include "../../Assets/Marker.h"
+#include "../../Utility/StringUtils.h"
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -25,7 +26,14 @@ namespace ToolsRig
 			const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>&,
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>&,
 			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>&) = 0;
-		virtual ~IPreviewSceneRegistrySet();
+		virtual ~IPreviewSceneRegistrySet() = default;
+	};
+
+	class IConfigurablePlugin : public EntityInterface::IMutableEntityDocument
+	{
+	public:
+		virtual void ApplyConfiguration() = 0;
+		virtual ~IConfigurablePlugin() = default;
 	};
 
 	class IPreviewSceneRegistry
@@ -38,9 +46,17 @@ namespace ToolsRig
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>&,
 			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>&) = 0;
 
+		virtual std::shared_ptr<IConfigurablePlugin> GetConfigurablePlugin(
+			StringSection<>) = 0;
+
 		using RegistrySetId = uint64_t;
-		virtual RegistrySetId Register(const std::shared_ptr<IPreviewSceneRegistrySet>&) = 0;
+		virtual RegistrySetId Register(std::shared_ptr<IPreviewSceneRegistrySet>) = 0;
 		virtual void Deregister(RegistrySetId) = 0;
+
+		using ConfigurablePluginId = uint64_t;
+		virtual ConfigurablePluginId Register(StringSection<>, std::shared_ptr<IConfigurablePlugin>) = 0;
+		virtual void DeregisterConfigurablePlugin(ConfigurablePluginId) = 0;
+
 		virtual ~IPreviewSceneRegistry();
 	};
 
