@@ -124,15 +124,29 @@ namespace Assets
 		FileSystem_OS(
 			StringSection<utf8> root,
 			const std::shared_ptr<OSServices::PollingThread>& pollingThread,
-			bool ignorePaths);
+			OSFileSystemFlags::BitField flags);
 		~FileSystem_OS();
 
 	protected:
 		std::basic_string<utf8> _rootUTF8;
 		std::basic_string<utf16> _rootUTF16;
-		bool _ignorePaths;
+		OSFileSystemFlags::BitField _flags;
 		std::shared_ptr<OSServices::RawFSMonitor> _fileSystemMonitor;
 	};
+
+	template<typename CharType>
+		static bool IsAbsolutePath(StringSection<CharType> filename)
+	{
+		if (filename.IsEmpty()) return false;
+		if (*filename.begin() == '/' || *filename.begin() == '\\' || *filename.begin() == ':') return true;
+		++filename._start;
+		while (!filename.IsEmpty()) {
+			if (*filename.begin() == '/' || *filename.begin() == '\\') return false;
+			if (*filename.begin() == ':') return true;		// hit ':' before separator
+			++filename._start;
+		}
+		return false;
+	}
 
 	auto FileSystem_OS::TryTranslate(Marker& result, StringSection<utf8> filename) -> TranslateResult
 	{
@@ -154,7 +168,10 @@ namespace Assets
 		//		1. prepending the root dir
 		//		2. adding a null terminator to the end of the string
 		StringSection<utf8> name = filename;
-		if (_ignorePaths) {
+		if (!(_flags * OSFileSystemFlags::AllowAbsolute)) {
+			if (IsAbsolutePath(filename))
+				return TranslateResult::Invalid;
+		} else if (_flags & OSFileSystemFlags::IgnorePaths) {
 			auto splitName = MakeFileNameSplitter(filename);
 			name = splitName.FileAndExtension();
 		}
@@ -174,7 +191,10 @@ namespace Assets
 			return TranslateResult::Invalid;
 
 		StringSection<utf16> name = filename;
-		if (_ignorePaths) {
+		if (!(_flags * OSFileSystemFlags::AllowAbsolute)) {
+			if (IsAbsolutePath(filename))
+				return TranslateResult::Invalid;
+		} else if (_flags & OSFileSystemFlags::IgnorePaths) {
 			auto splitName = MakeFileNameSplitter(filename);
 			name = splitName.FileAndExtension();
 		}
@@ -337,6 +357,8 @@ namespace Assets
     {
         std::string dir;
 		if (!baseDirectory.IsEmpty()) {
+			if (!(_flags * OSFileSystemFlags::AllowAbsolute) && IsAbsolutePath(baseDirectory))
+				return {};
 			dir = _rootUTF8 + baseDirectory.AsString();
 			if (baseDirectory[baseDirectory.size()-1] != '/' && baseDirectory[baseDirectory.size()-1] != '\\')
 				dir += '/';
@@ -371,6 +393,8 @@ namespace Assets
     {
         std::string dir;
 		if (!baseDirectory.IsEmpty()) {
+			if (!(_flags * OSFileSystemFlags::AllowAbsolute) && IsAbsolutePath(baseDirectory))
+				return {};
 			dir = _rootUTF8 + baseDirectory.AsString();
 			if (baseDirectory[baseDirectory.size()-1] != '/' && baseDirectory[baseDirectory.size()-1] != '\\')
 				dir += '/';
@@ -393,8 +417,8 @@ namespace Assets
 	FileSystem_OS::FileSystem_OS(
 		StringSection<utf8> root, 
 		const std::shared_ptr<OSServices::PollingThread>& pollingThread, 
-		bool ignorePaths)
-	: _ignorePaths(ignorePaths)
+		OSFileSystemFlags::BitField flags)
+	: _flags(flags)
 	{
 		if (!root.IsEmpty()) {
 			_rootUTF8 = root.AsString() + "/";
@@ -414,9 +438,9 @@ namespace Assets
 	FileSystem_OS::~FileSystem_OS() {}
 
 
-	std::shared_ptr<IFileSystem>	CreateFileSystem_OS(StringSection<utf8> root, const std::shared_ptr<OSServices::PollingThread>& pollingThread, bool flattenPaths)
+	std::shared_ptr<IFileSystem>	CreateFileSystem_OS(StringSection<utf8> root, const std::shared_ptr<OSServices::PollingThread>& pollingThread, OSFileSystemFlags::BitField flags)
 	{
-		return std::make_shared<FileSystem_OS>(root, pollingThread, flattenPaths);
+		return std::make_shared<FileSystem_OS>(root, pollingThread, flags);
 	}
 
 }

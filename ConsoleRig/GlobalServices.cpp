@@ -228,7 +228,7 @@ namespace ConsoleRig
         if (!_pimpl->_depValSys)
             _pimpl->_depValSys = ::Assets::CreateDepValSys();
 
-        _pimpl->_defaultFilesystem = ::Assets::CreateFileSystem_OS({}, _pimpl->_pollingThread);
+        _pimpl->_defaultFilesystem = ::Assets::CreateFileSystem_OS({}, _pimpl->_pollingThread, ::Assets::OSFileSystemFlags::AllowAbsolute);
         _pimpl->_mountingTree = std::make_shared<::Assets::MountingTree>(s_defaultFilenameRules);
 
         if (!_pimpl->_compileAndAsyncManager)
