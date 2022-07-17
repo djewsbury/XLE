@@ -1065,6 +1065,14 @@ namespace Utility
 					if (v._type._type == ImpliedTyping::TypeCat::Void)
 						Throw(std::runtime_error("Literal not understood in expression (" + token._value + ")"));
 
+					switch (v._type._type) {
+					case ImpliedTyping::TypeCat::UInt8: v._type._type = ImpliedTyping::TypeCat::Int8; break;
+					case ImpliedTyping::TypeCat::UInt16: v._type._type = ImpliedTyping::TypeCat::Int16; break;
+					case ImpliedTyping::TypeCat::UInt32: v._type._type = ImpliedTyping::TypeCat::Int32; break;
+					case ImpliedTyping::TypeCat::UInt64: v._type._type = ImpliedTyping::TypeCat::Int64; break;
+					default: break;
+					}
+
 					_evaluation.emplace_back(TokenType::Literal, v);
 					
 				} else {
