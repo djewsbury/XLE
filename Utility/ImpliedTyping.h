@@ -7,7 +7,7 @@
 #include "IteratorUtils.h"
 #include "StringUtils.h"            // for StringSection
 #include "Optional.h"
-        
+
 namespace Utility
 {
     namespace ImpliedTyping
@@ -15,24 +15,20 @@ namespace Utility
         enum class TypeCat : uint8_t { Void, Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float, Double };
         enum class TypeHint : uint8_t { None, Vector, Matrix, Color, String };
         enum class CastType : uint8_t { Narrowing, Equal, Widening};
-#pragma pack(push,1)
-        class 
-            #if COMPILER_ACTIVE == COMPILER_TYPE_CLANG
-                __attribute__((packed)) 
-            #endif
-            TypeDesc
+        class alignas(uint64_t) TypeDesc
         {
         public:
             TypeCat     _type = TypeCat::UInt32;
-            uint16_t    _arrayCount = 1;
             TypeHint    _typeHint = TypeHint::None;
+            uint32_t    _arrayCount = 1;
 
             uint32_t GetSize() const;
+            constexpr TypeDesc() = default;
+            constexpr TypeDesc(TypeCat typeCat, uint32_t arrayCount = 1, TypeHint typeHint = TypeHint::None) : _type(typeCat), _typeHint(typeHint), _arrayCount(arrayCount) {}
 
             template<typename Stream> void SerializeMethod(Stream& serializer) const;
             friend bool operator==(const TypeDesc& lhs, const TypeDesc& rhs);
         };
-#pragma pack(pop)
 
         /// Calculate type of an object given in string form.
         /// Object should be formatted in one of the following C++ like patterns:
@@ -162,15 +158,15 @@ namespace Utility
         constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(float const*)           { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::Float}; }
         constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(double const*)          { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::Double}; }
 
-        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const utf8* const*)     { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt8, (uint16_t)~uint16_t(0), Utility::ImpliedTyping::TypeHint::String}; }
-        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const utf16* const*)    { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt16, (uint16_t)~uint16_t(0), Utility::ImpliedTyping::TypeHint::String}; }
-        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const utf32* const*)    { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt32, (uint16_t)~uint16_t(0), Utility::ImpliedTyping::TypeHint::String}; }
-        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const ucs4* const*)     { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt32, (uint16_t)~uint16_t(0), Utility::ImpliedTyping::TypeHint::String}; }
+        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const utf8* const*)     { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt8, (uint32_t)~uint32_t(0), Utility::ImpliedTyping::TypeHint::String}; }
+        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const utf16* const*)    { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt16, (uint32_t)~uint32_t(0), Utility::ImpliedTyping::TypeHint::String}; }
+        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const utf32* const*)    { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt32, (uint32_t)~uint32_t(0), Utility::ImpliedTyping::TypeHint::String}; }
+        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const ucs4* const*)     { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt32, (uint32_t)~uint32_t(0), Utility::ImpliedTyping::TypeHint::String}; }
 
-        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const std::basic_string<utf8>*)     { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt8, (uint16_t)~uint16_t(0), Utility::ImpliedTyping::TypeHint::String}; }
-        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const std::basic_string<utf16>*)    { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt16, (uint16_t)~uint16_t(0), Utility::ImpliedTyping::TypeHint::String}; }
-        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const std::basic_string<utf32>*)    { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt32, (uint16_t)~uint16_t(0), Utility::ImpliedTyping::TypeHint::String}; }
-        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const std::basic_string<ucs4>*)     { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt32, (uint16_t)~uint16_t(0), Utility::ImpliedTyping::TypeHint::String}; }
+        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const std::basic_string<utf8>*)     { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt8, (uint32_t)~uint32_t(0), Utility::ImpliedTyping::TypeHint::String}; }
+        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const std::basic_string<utf16>*)    { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt16, (uint32_t)~uint32_t(0), Utility::ImpliedTyping::TypeHint::String}; }
+        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const std::basic_string<utf32>*)    { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt32, (uint32_t)~uint32_t(0), Utility::ImpliedTyping::TypeHint::String}; }
+        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const std::basic_string<ucs4>*)     { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt32, (uint32_t)~uint32_t(0), Utility::ImpliedTyping::TypeHint::String}; }
 
         template<typename Type> 
             decltype(InternalTypeOf(std::declval<Type const*>())) TypeOf() { return InternalTypeOf((Type const*)nullptr); }
@@ -192,8 +188,8 @@ namespace Utility
         template<typename Stream>
             void TypeDesc::SerializeMethod(Stream& serializer) const
         {
-            static_assert(sizeof(TypeDesc) == sizeof(uint32_t));
-            SerializationOperator(serializer, *(uint32_t*)this);
+            static_assert(sizeof(TypeDesc) == sizeof(uint64_t));
+            SerializationOperator(serializer, *(uint64_t*)this);
         }
     }
 }
