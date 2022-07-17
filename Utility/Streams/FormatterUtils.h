@@ -162,9 +162,9 @@ namespace Utility
 			return value;
 		} else {
 			typename Formatter::InteriorSection stringValue;
-			if (!formatter.TryStringValue(stringValue, typeDesc))
+			if (!formatter.TryStringValue(stringValue))
 				Throw(Utility::FormatException("Expecting value", formatter.GetLocation()));
-			typeDesc = {ImpliedTyping::TypeOf<Formatter::InteriorSection::value_type>()._typeCat, (uint16_t)stringValue.size(), ImpliedTyping::TypeHint::String};
+			typeDesc = {ImpliedTyping::TypeOf<typename Formatter::InteriorSection::value_type>()._type, (uint32_t)stringValue.size(), ImpliedTyping::TypeHint::String};
 			return {stringValue.begin(), stringValue.end()};
 		}
 	}

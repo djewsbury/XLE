@@ -48,6 +48,22 @@ namespace Utility
             inline bool operator()(const Second& lhs, const std::pair<First, Second>& rhs) const                     { return lhs < rhs.second; }
         };
 
+    struct CompareFirst2
+    {
+        template <typename LHS, typename RHS, typename std::enable_if_t<std::is_same_v<LHS, RHS>>* =nullptr>
+            inline bool operator()(const LHS& lhs, const RHS& rhs) const    { return lhs.first < rhs.first; }
+        template <typename LHS, typename RHS, typename std::enable_if_t<!std::is_same_v<LHS, RHS>>* =nullptr>
+            inline bool operator()(const LHS& lhs, const RHS& rhs) const    { return lhs.first < rhs; }
+    };
+
+    struct CompareSecond2
+    {
+        template <typename LHS, typename RHS, typename std::enable_if_t<std::is_same_v<LHS, RHS>>* =nullptr>
+            inline bool operator()(const LHS& lhs, const RHS& rhs) const    { return lhs.second < rhs.second; }
+        template <typename LHS, typename RHS, typename std::enable_if_t<!std::is_same_v<LHS, RHS>>* =nullptr>
+            inline bool operator()(const LHS& lhs, const RHS& rhs) const    { return lhs.second < rhs; }
+    };
+
     template <typename First, typename Second, typename Allocator>
         typename std::vector<std::pair<First, Second>, Allocator>::iterator LowerBound(
             std::vector<std::pair<First, Second>, Allocator>&v, First compareToFirst)

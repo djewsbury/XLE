@@ -113,6 +113,7 @@ namespace Utility
     public:
         const CharType* _start;
         const CharType* _end;
+        using value_type = CharType;
 
         size_t Length() const                           { return size_t(_end - _start); }
         bool IsEmpty() const                            { return _end <= _start; }
