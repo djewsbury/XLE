@@ -74,6 +74,7 @@ namespace Assets
 			StringSection<> name,
 			const ConsoleRig::LibVersionDesc& compilerVersionInfo,
 			bool enableArchiveCacheSet = false);
+		void DeregisterCompileProductsGroup(CompileProductsGroupId);
 
 		void FlushToDisk();
 

@@ -51,6 +51,7 @@ namespace Assets
 			std::shared_ptr<LooseFilesStorage> _looseFilesStorage;
 			std::shared_ptr<ArchiveCacheSet> _archiveCacheSet;
 			std::string _archiveCacheBase;
+			int _refCount = 1;
 		};
 
 		std::unordered_map<uint64_t, Group> _groups;
@@ -392,9 +393,24 @@ namespace Assets
 				newGroup._archiveCacheSet = std::make_shared<ArchiveCacheSet>(_pimpl->_filesystem, compilerVersionInfo);
 				newGroup._archiveCacheBase = looseFilesBase;
 			}
-			_pimpl->_groups.insert({id, std::move(newGroup)});
-		}
+			_pimpl->_groups.insert({id, std::move(newGroup)});		// ref count starts at 1
+		} else
+			++existing->second._refCount;
 		return id;
+	}
+
+	void IntermediatesStore::DeregisterCompileProductsGroup(CompileProductsGroupId id)
+	{
+		std::unique_lock<std::shared_timed_mutex> l(_pimpl->_lock);
+		auto existing = _pimpl->_groups.find(id);
+		if (existing != _pimpl->_groups.end()) {
+			--existing->second._refCount;
+			if (!existing->second._refCount) {
+				if (existing->second._archiveCacheSet)
+					existing->second._archiveCacheSet->FlushToDisk();
+				_pimpl->_groups.erase(existing);
+			}
+		}
 	}
 
 	IntermediatesStore::IntermediatesStore(
