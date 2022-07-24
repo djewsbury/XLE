@@ -137,7 +137,7 @@ namespace Formatters
 		return _evaluatedTypes[evalTypeId];
 	}
 
-	std::optional<size_t> EvaluationContext::TryCalculateFixedSize(unsigned evalTypeId)
+	std::optional<size_t> EvaluationContext::TryCalculateFixedSize(unsigned evalTypeId, IteratorRange<const uint64_t*> dynamicLocalVars)
 	{
 		if (_calculatedSizeStates.size() < _evaluatedTypes.size())
 			_calculatedSizeStates.resize(_evaluatedTypes.size());
@@ -205,8 +205,6 @@ namespace Formatters
 						while (auto nextStep = exprEval.GetNextStep()) {
 							assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
 
-							uint64_t hash = Hash64(nextStep._name);
-
 							// ------------------------- previously evaluated members --------------------
 							if (std::find(localVariables.begin(), localVariables.end(), nextStep._nameTokenIndex) != localVariables.end()) {
 								usingDynamicVariable = true;
@@ -221,6 +219,15 @@ namespace Formatters
 									nextStep.SetQueryResult(evalType._params[p]);
 									continue;
 								}
+
+							uint64_t hash = Hash64(nextStep._name);
+							
+							if (std::find(dynamicLocalVars.begin(), dynamicLocalVars.end(), hash)) {
+								usingDynamicVariable = true;
+								static const unsigned dummy = 1;
+								nextStep.SetQueryResult(dummy);	// we use 1 as a default stand-in
+								continue;
+							}
 
 							auto globalType = this->_globalState.GetParameterType(hash);
 							if (globalType._type != ImpliedTyping::TypeCat::Void) {
@@ -250,7 +257,7 @@ namespace Formatters
 			case Cmd::InlineArrayMember:
 				{
 					auto type = typeStack.top();
-					auto memberSize = TryCalculateFixedSize(type);
+					auto memberSize = TryCalculateFixedSize(type, dynamicLocalVars);	// todo -- needs our local variables as well
 					if (!memberSize.has_value())
 						return {};
 					if ((Cmd)cmd == Cmd::InlineArrayMember) {
@@ -372,7 +379,7 @@ namespace Formatters
 		newContext._cmdsIterator = MakeIteratorRange(newContext._definition->_cmdList);
 		newContext._parsingBlockName = schemata->GetBlockDefinitionName(blockDefId);
 		newContext._schemata = std::move(schemata);
-		_blockStack.push(std::move(newContext));
+		_blockStack.emplace_back(std::move(newContext));
 	}
 
 	BinaryFormatter::Blob BinaryFormatter::PeekNext()
@@ -381,7 +388,7 @@ namespace Formatters
 		if (_queuedNext != Blob::None) return _queuedNext;
 		assert(_dataIterator.begin() <= _dataIterator.end());
 
-		auto& workingBlock = _blockStack.top();
+		auto& workingBlock = _blockStack.back();
 		auto& cmds = workingBlock._cmdsIterator;
 		auto& def = *workingBlock._definition;
 
@@ -438,44 +445,55 @@ namespace Formatters
 							// - template values
 							// - context state
 
-							// ------------------------- previously evaluated members --------------------
-							auto localValue = std::find_if(workingBlock._localEvalContext.begin(), workingBlock._localEvalContext.end(), [t=nextStep._nameTokenIndex](const auto& q) {return q.first==t;});
-							if (localValue != workingBlock._localEvalContext.end()) {
+							// (we could just store this hash in the Token object)
+							// unfortunately we can't look up by token index any more, because each eval context can have a different dictionary
+							uint64_t hash = Hash64(nextStep._name);
+							bool gotValue = false;
 
-								// If the value is a string; let's attempt to parse it before we send the results to the 
-								if (localValue->second._type._typeHint == ImpliedTyping::TypeHint::String && (localValue->second._type._type == ImpliedTyping::TypeCat::UInt8 || localValue->second._type._type == ImpliedTyping::TypeCat::Int8)) {
-									if (stringParseOutputIterator == dimof(stringParseOutputBuffer))
-										Throw(std::runtime_error("Parsing buffer exceeded in expression evaluation in BinaryFormatter."));		// This occurs when we're parsing a lot of strings or large arrays from the source data. Consider an alternative approach, because the system isn't optimized for this
-									auto parsedType = ImpliedTyping::ParseFullMatch(
-										MakeStringSection((const char*)localValue->second._data.begin(), (const char*)localValue->second._data.end()),
-										MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[dimof(stringParseOutputBuffer)]));
-									if (parsedType._type != ImpliedTyping::TypeCat::Void) {
-										nextStep.SetQueryResult(parsedType, MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[stringParseOutputIterator+parsedType.GetSize()]));
-										stringParseOutputIterator += parsedType.GetSize();
-										continue;
+							// ------------------------- previously evaluated members --------------------
+							for (auto block=_blockStack.rbegin(); block!=_blockStack.rend(); ++block) {
+								auto localValue = std::find_if(block->_localEvalContext.begin(), block->_localEvalContext.end(), [hash](const auto& q) {return q.first==hash;});
+								if (localValue != block->_localEvalContext.end()) {
+
+									// If the value is a string; let's attempt to parse it before we send the results to the 
+									if (localValue->second._type._typeHint == ImpliedTyping::TypeHint::String && (localValue->second._type._type == ImpliedTyping::TypeCat::UInt8 || localValue->second._type._type == ImpliedTyping::TypeCat::Int8)) {
+										if (stringParseOutputIterator == dimof(stringParseOutputBuffer))
+											Throw(std::runtime_error("Parsing buffer exceeded in expression evaluation in BinaryFormatter."));		// This occurs when we're parsing a lot of strings or large arrays from the source data. Consider an alternative approach, because the system isn't optimized for this
+										auto parsedType = ImpliedTyping::ParseFullMatch(
+											MakeStringSection((const char*)localValue->second._data.begin(), (const char*)localValue->second._data.end()),
+											MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[dimof(stringParseOutputBuffer)]));
+										if (parsedType._type != ImpliedTyping::TypeCat::Void) {
+											nextStep.SetQueryResult(parsedType, MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[stringParseOutputIterator+parsedType.GetSize()]));
+											stringParseOutputIterator += parsedType.GetSize();
+											gotValue = true;
+											break;
+										}
 									}
+									
+									nextStep.SetQueryResult(localValue->second._type, localValue->second._data);
+									gotValue = true;
+									break;
 								}
-								
-								nextStep.SetQueryResult(localValue->second._type, localValue->second._data);
-								continue;
+
+								if (std::find(block->_nonIntegerLocalVariables.begin(), block->_nonIntegerLocalVariables.end(), hash) != block->_nonIntegerLocalVariables.end())
+									Throw(std::runtime_error("Attempting to non-numeric local variable (" + nextStep._name.AsString() + ") in an expression. This isn't supported"));
+
+								// ------------------------- template variables --------------------
+								if (block == _blockStack.rbegin())	// (only for the immediately enclosing context)
+									for (unsigned p=0; p<(unsigned)block->_definition->_templateParameterNames.size(); ++p)
+										if (block->_definition->_templateParameterNames[p] == nextStep._nameTokenIndex) {
+											nextStep.SetQueryResult(block->_parsingTemplateParams[p]);
+											gotValue = true;
+											break;
+										}
 							}
 
-							if (std::find(workingBlock._nonIntegerLocalVariables.begin(), workingBlock._nonIntegerLocalVariables.end(), nextStep._nameTokenIndex) != workingBlock._nonIntegerLocalVariables.end())
-								Throw(std::runtime_error("Attempting to non-numeric local variable (" + nextStep._name.AsString() + ") in an expression. This isn't supported"));
-
-							uint64_t hash = Hash64(nextStep._name);		// (we could just store this hash in the Token object)
-
-							// ------------------------- template variables --------------------
-							for (unsigned p=0; p<(unsigned)workingBlock._definition->_templateParameterNames.size(); ++p)
-								if (workingBlock._definition->_templateParameterNames[p] == nextStep._nameTokenIndex) {
-									nextStep.SetQueryResult(workingBlock._parsingTemplateParams[p]);
-									continue;
+							if (!gotValue) {
+								auto globalType = this->_evalContext->GetGlobalParameterBox().GetParameterType(hash);
+								if (globalType._type != ImpliedTyping::TypeCat::Void) {
+									nextStep.SetQueryResult(globalType, this->_evalContext->GetGlobalParameterBox().GetParameterRawValue(hash));
+									gotValue = true;
 								}
-
-							auto globalType = this->_evalContext->GetGlobalParameterBox().GetParameterType(hash);
-							if (globalType._type != ImpliedTyping::TypeCat::Void) {
-								nextStep.SetQueryResult(globalType, this->_evalContext->GetGlobalParameterBox().GetParameterRawValue(hash));
-								continue;
 							}
 						}
 
@@ -518,10 +536,10 @@ namespace Formatters
 		}
 
 		assert(workingBlock._typeStack.empty());
-		if (_blockStack.top()._terminateWithEndBlock) {
+		if (_blockStack.back()._terminateWithEndBlock) {
 			return _queuedNext = Blob::EndBlock;
 		} else {
-			_blockStack.pop();
+			_blockStack.pop_back();
 			return PeekNext();
 		}
 	}
@@ -529,7 +547,7 @@ namespace Formatters
 	bool BinaryFormatter::TryKeyedItem(StringSection<>& name)
 	{
 		if (_blockStack.empty()) return false;
-		auto& workingBlock = _blockStack.top();
+		auto& workingBlock = _blockStack.back();
 		auto& cmds = workingBlock._cmdsIterator;
 		if (cmds.empty()) return false;
 
@@ -575,7 +593,7 @@ namespace Formatters
 
 		auto next = PeekNext();
 		if (next != Blob::BeginBlock) return false;
-		auto& workingBlock = _blockStack.top();
+		auto& workingBlock = _blockStack.back();
 		auto& cmds = workingBlock._cmdsIterator;
 		auto& def = *workingBlock._definition;
 		if (!workingBlock._pendingArrayMembers) {
@@ -583,6 +601,7 @@ namespace Formatters
 			if (cmds.empty()) return false;
 			if (*cmds.first != (unsigned)Cmd::InlineIndividualMember) return false;
 
+			assert(!workingBlock._typeStack.empty());
 			auto type = workingBlock._typeStack.top();
 			const auto& evalType = _evalContext->GetEvaluatedTypeDesc(type);
 			if (evalType._blockDefinition == ~0u) return false;
@@ -597,7 +616,7 @@ namespace Formatters
 			newContext._parsingBlockName = workingBlock._schemata->GetBlockDefinitionName(evalType._blockDefinition);
 			newContext._schemata = workingBlock._schemata;
 			newContext._terminateWithEndBlock = true;
-			_blockStack.push(std::move(newContext));
+			_blockStack.emplace_back(std::move(newContext));
 
 			evaluatedTypeId = type;
 			cmds.first+=2;
@@ -615,7 +634,7 @@ namespace Formatters
 			newContext._parsingBlockName = workingBlock._schemata->GetBlockDefinitionName(evalType._blockDefinition);
 			newContext._schemata = workingBlock._schemata;
 			newContext._terminateWithEndBlock = true;
-			_blockStack.push(std::move(newContext));
+			_blockStack.emplace_back(std::move(newContext));
 
 			evaluatedTypeId = workingBlock._pendingArrayType;
 			--workingBlock._pendingArrayMembers;
@@ -627,11 +646,11 @@ namespace Formatters
 	bool BinaryFormatter::TryEndBlock()
 	{
 		if (_blockStack.size() <= 1) return false;
-		if (_blockStack.top()._pendingArrayMembers || _blockStack.top()._pendingEndArray) return false;
+		if (_blockStack.back()._pendingArrayMembers || _blockStack.back()._pendingEndArray) return false;
 		auto next = PeekNext();
 		if (next != Blob::EndBlock) return false;
-		assert(_blockStack.top()._terminateWithEndBlock);
-		_blockStack.pop();
+		assert(_blockStack.back()._terminateWithEndBlock);
+		_blockStack.pop_back();
 		_queuedNext = Blob::None;
 		return true;
 	}
@@ -641,7 +660,7 @@ namespace Formatters
 		if (_blockStack.empty()) return false;
 
 		PeekNext();
-		auto& workingBlock = _blockStack.top();
+		auto& workingBlock = _blockStack.back();
 		auto& cmds = workingBlock._cmdsIterator;
 		auto& def = *workingBlock._definition;
 		if (!workingBlock._pendingArrayMembers) {
@@ -672,7 +691,7 @@ namespace Formatters
 			resultData = MakeIteratorRange(_dataIterator.begin(), PtrAdd(_dataIterator.begin(), size));
 			resultTypeDesc = finalTypeDesc;
 			
-			workingBlock._localEvalContext.emplace_back(nameToken, ImpliedTyping::VariantNonRetained{resultTypeDesc, resultData});
+			workingBlock._localEvalContext.emplace_back(Hash64(def._tokenDictionary._tokenDefinitions[nameToken]._value), ImpliedTyping::VariantNonRetained{resultTypeDesc, resultData});
 			
 			evaluatedTypeId = type;
 			cmds.first+=2;
@@ -708,7 +727,7 @@ namespace Formatters
 		if (_blockStack.empty()) return false;
 
 		PeekNext();
-		auto& workingBlock = _blockStack.top();
+		auto& workingBlock = _blockStack.back();
 		auto& cmds = workingBlock._cmdsIterator;
 		auto& def = *workingBlock._definition;
 		if (cmds.empty()) return false;
@@ -733,7 +752,7 @@ namespace Formatters
 
 		if (evalType._valueTypeDesc._type != ImpliedTyping::TypeCat::Void) {
 			auto arrayData = MakeIteratorRange(_dataIterator.begin(), PtrAdd(_dataIterator.begin(), evalType._valueTypeDesc.GetSize()));
-			workingBlock._localEvalContext.emplace_back(nameToken, ImpliedTyping::VariantNonRetained{evalType._valueTypeDesc, arrayData});
+			workingBlock._localEvalContext.emplace_back(Hash64(def._tokenDictionary._tokenDefinitions[nameToken]._value), ImpliedTyping::VariantNonRetained{evalType._valueTypeDesc, arrayData});
 		}
 
 		return true;
@@ -742,7 +761,7 @@ namespace Formatters
 	bool BinaryFormatter::TryEndArray()
 	{
 		if (_blockStack.empty()) return false;
-		auto& workingBlock = _blockStack.top();
+		auto& workingBlock = _blockStack.back();
 		if (!workingBlock._pendingEndArray) return false;
 		if (workingBlock._pendingArrayMembers != 0) return false;
 
@@ -755,11 +774,11 @@ namespace Formatters
 	{
 		if (_blockStack.empty())
 			Throw(std::runtime_error("SkipArrayElements called on uninitialized formatter"));
-		auto& workingBlock = _blockStack.top();
+		auto& workingBlock = _blockStack.back();
 		if (count > workingBlock._pendingArrayMembers)
 			Throw(std::runtime_error("Attempting to skip more array elements than what are remaining in SkipArrayElement"));
 
-		auto fixedSize = _evalContext->TryCalculateFixedSize(workingBlock._pendingArrayType);
+		auto fixedSize = TryCalculateFixedSize(workingBlock._pendingArrayType);
 		if (fixedSize.has_value()) {
 			auto totalSize = count * fixedSize.value();
 			if (totalSize > _dataIterator.size())
@@ -797,12 +816,12 @@ namespace Formatters
 		} else if (next == BinaryFormatter::Blob::BeginBlock) {
 			unsigned evalBlockId;
 			TryBeginBlock(evalBlockId);
-			auto fixedSize = _evalContext->TryCalculateFixedSize(evalBlockId);
+			auto fixedSize = TryCalculateFixedSize(evalBlockId);
 			if (fixedSize.has_value()) {
 				if (fixedSize.value() > _dataIterator.size())
-					Throw(std::runtime_error("Binary Schemata reads past the end of data while reading block " + _blockStack.top()._parsingBlockName));
+					Throw(std::runtime_error("Binary Schemata reads past the end of data while reading block " + _blockStack.back()._parsingBlockName));
 				_dataIterator.first = PtrAdd(_dataIterator.first, fixedSize.value());
-				_blockStack.pop();
+				_blockStack.pop_back();
 				_queuedNext = Blob::None;
 			} else {
 				while (PeekNext() != BinaryFormatter::Blob::EndBlock)
@@ -825,6 +844,15 @@ namespace Formatters
 			Throw(std::runtime_error("Expecting array, block or member while skipping binary blob"));
 	}
 
+	std::optional<size_t> BinaryFormatter::TryCalculateFixedSize(unsigned evalTypeId)
+	{
+		// we need to tell the eval context what local variables will be in scope for this type
+		std::vector<uint64_t> localVars;
+		for (const auto& b:_blockStack)
+			for (const auto& q:b._localEvalContext)
+				localVars.push_back(q.first);
+		return _evalContext->TryCalculateFixedSize(evalTypeId, localVars);
+	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

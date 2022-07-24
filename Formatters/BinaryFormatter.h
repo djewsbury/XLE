@@ -60,15 +60,16 @@ namespace Formatters
 			uint32_t _parsingTemplateParamsTypeField;
 			BinarySchemata::BlockDefinitionId _scope = BinarySchemata::BlockDefinitionId_Invalid;
 
-			std::vector<std::pair<unsigned, ImpliedTyping::VariantNonRetained>> _localEvalContext;
-			std::vector<unsigned> _nonIntegerLocalVariables;
+			std::vector<std::pair<uint64_t, ImpliedTyping::VariantNonRetained>> _localEvalContext;
+			std::vector<uint64_t> _nonIntegerLocalVariables;
 		};
-		std::stack<BlockContext> _blockStack;
+		std::deque<BlockContext> _blockStack;
 		EvaluationContext* _evalContext = nullptr;
 		IteratorRange<const void*> _dataIterator;
 		std::vector<unsigned> _passedConditionSymbols;
 
 		Blob _queuedNext = Blob::None;
+		std::optional<size_t> TryCalculateFixedSize(unsigned evalTypeId);
 	};
 
 	void SkipUntilEndBlock(BinaryFormatter&);
@@ -113,7 +114,7 @@ namespace Formatters
 		EvaluatedTypeToken GetEvaluatedType(const EvaluatedType& evalType);
 
 		const EvaluatedType& GetEvaluatedTypeDesc(EvaluatedTypeToken evalTypeId) const;
-		std::optional<size_t> TryCalculateFixedSize(EvaluatedTypeToken evalTypeId);
+		std::optional<size_t> TryCalculateFixedSize(EvaluatedTypeToken evalTypeId, IteratorRange<const uint64_t*> dynamicLocalVars={});
 
 		std::ostream& SerializeEvaluatedType(std::ostream& str, unsigned typeId) const;
 
