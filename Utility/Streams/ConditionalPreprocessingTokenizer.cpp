@@ -374,7 +374,7 @@ namespace Utility
 
             auto negCondition = prevCondition._positiveCond;
             if (!prevCondition._negativeCond.empty())
-                negCondition = "(" + negCondition + ") && (" + prevCondition._negativeCond +  ")";
+                negCondition = "(" + negCondition + ") || (" + prevCondition._negativeCond +  ")";
 
             if (XlEqStringI(directive._value, "elif")) {
                 auto remainingLine = ReadUntilEndOfLine();
