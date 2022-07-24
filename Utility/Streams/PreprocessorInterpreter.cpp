@@ -991,10 +991,8 @@ namespace Utility
 						if (indexor_._type._type == ImpliedTyping::TypeCat::Float || indexor_._type._type == ImpliedTyping::TypeCat::Double
 							|| !ImpliedTyping::Cast(MakeOpaqueIteratorRange(indexor), ImpliedTyping::TypeOf<unsigned>(), indexor_._data, indexor_._type))
 							Throw(std::runtime_error("Indexor could not be interpreted as integer value"));
-						if (l_token.second._type._type != ImpliedTyping::TypeCat::Void) {
+						if (l_token.second._type._type != ImpliedTyping::TypeCat::Void && l_token.second._type._arrayCount != 0 && indexor < l_token.second._type._arrayCount) {
 							ImpliedTyping::VariantNonRetained array = l_token.second;
-							if (array._type._arrayCount == 0 || indexor >= array._type._arrayCount)
-								Throw(std::runtime_error("Attempting to index a non-array, or index out of array bounds"));
 							if (indexor == 0 && array._type._arrayCount <= 1) {
 								_evaluation.emplace_back(TokenType::Literal, l_token.second);
 							} else {
