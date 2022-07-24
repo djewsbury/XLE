@@ -9,36 +9,44 @@
 
 namespace Formatters
 {
-	auto BinarySchemata::FindBlockDefinition(StringSection<> name) const -> BlockDefinitionId
+	auto BinarySchemata::FindBlockDefinition(StringSection<> name, BlockDefinitionId scope) const -> BlockDefinitionId
 	{
-		auto i = std::find_if(_blockDefinitions.begin(), _blockDefinitions.end(), [name](const auto& c) { return XlEqString(name, c.first); });
-		if (i == _blockDefinitions.end())
-			return BlockDefinitionId_Invalid;
-		return (BlockDefinitionId)std::distance(_blockDefinitions.begin(), i);
+		auto i = std::find_if(_blockDefinitions.begin(), _blockDefinitions.end(), [name, scope](const auto& c) { return c._scope == scope && XlEqString(name, c._name); });
+		if (i != _blockDefinitions.end())
+			return (BlockDefinitionId)std::distance(_blockDefinitions.begin(), i);
+		if (scope != BlockDefinitionId_Invalid)
+			return FindBlockDefinition(name, _blockDefinitions[scope]._scope);	// check parent's scope
+		return BlockDefinitionId_Invalid;
 	}
 
-	auto BinarySchemata::FindAlias(StringSection<> name) const -> AliasId
+	auto BinarySchemata::FindAlias(StringSection<> name, BlockDefinitionId scope) const -> AliasId
 	{
-		auto i = std::find_if(_aliases.begin(), _aliases.end(), [name](const auto& c) { return XlEqString(name, c.first); });
-		if (i == _aliases.end())
-			return AliasId_Invalid;
-		return (AliasId)std::distance(_aliases.begin(), i);
+		auto i = std::find_if(_aliases.begin(), _aliases.end(), [name, scope](const auto& c) { return c._scope == scope && XlEqString(name, c._name); });
+		if (i != _aliases.end())
+			return (AliasId)std::distance(_aliases.begin(), i);
+		if (scope != BlockDefinitionId_Invalid)
+			return FindAlias(name, _blockDefinitions[scope]._scope);	// check parent's scope
+		return AliasId_Invalid;
 	}
 
-	auto BinarySchemata::FindBitField(StringSection<> name) const -> BitFieldId
+	auto BinarySchemata::FindBitField(StringSection<> name, BlockDefinitionId scope) const -> BitFieldId
 	{
-		auto i = std::find_if(_bitFields.begin(), _bitFields.end(), [name](const auto& c) { return XlEqString(name, c.first); });
-		if (i == _bitFields.end())
-			return ~0u;
-		return (BitFieldId)std::distance(_bitFields.begin(), i);
+		auto i = std::find_if(_bitFields.begin(), _bitFields.end(), [name, scope](const auto& c) { return c._scope == scope && XlEqString(name, c._name); });
+		if (i != _bitFields.end())
+			return (BitFieldId)std::distance(_bitFields.begin(), i);
+		if (scope != BlockDefinitionId_Invalid)
+			return FindBitField(name, _blockDefinitions[scope]._scope);	// check parent's scope
+		return ~0u;
 	}
 
-	auto BinarySchemata::FindLiterals(StringSection<> name) const -> LiteralsId
+	auto BinarySchemata::FindLiterals(StringSection<> name, BlockDefinitionId scope) const -> LiteralsId
 	{
-		auto i = std::find_if(_literals.begin(), _literals.end(), [name](const auto& c) { return XlEqString(name, c.first); });
-		if (i == _literals.end())
-			return ~0u;
-		return (BitFieldId)std::distance(_literals.begin(), i);
+		auto i = std::find_if(_literals.begin(), _literals.end(), [name, scope](const auto& c) { return c._scope == scope && XlEqString(name, c._name); });
+		if (i != _literals.end())
+			return (LiteralsId)std::distance(_literals.begin(), i);
+		if (scope != BlockDefinitionId_Invalid)
+			return FindLiterals(name, _blockDefinitions[scope]._scope);	// check parent's scope
+		return ~0u;
 	}
 
 	static void Require(ConditionalProcessingTokenizer& tokenizer, StringSection<> next)
@@ -70,9 +78,6 @@ namespace Formatters
 
 		std::stack<const char*> openBraces;
 		for (;;) {
-			if (tokenizer.PeekNextToken() == ";")
-				break;
-
 			auto next = tokenizer.PeekNextToken();
 			if (next == ";") {
 				break;
@@ -173,7 +178,7 @@ namespace Formatters
 		}
 	}
 
-	void BinarySchemata::ParseBlock(ConditionalProcessingTokenizer& tokenizer)
+	void BinarySchemata::ParseBlock(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope)
 	{
 		BlockDefinition workingDefinition;
 
@@ -187,64 +192,74 @@ namespace Formatters
 		if (next != "{")
 			Throw(FormatException("Expecting '{'", next._start));
 
+		auto reservedBlockId = (unsigned)_blockDefinitions.size();
+		_blockDefinitions.push_back({});
+
 		for (;;) {
-			if (tokenizer.PeekNextToken() == "}") {
+			auto peekNext = tokenizer.PeekNextToken();
+			if (peekNext == "}") {
 				tokenizer.GetNextToken();
 				break;
 			}
 
-			size_t writeJumpHere = 0;
-			auto currentCondition = tokenizer._preprocessorContext.GetCurrentConditionString();
-			if (!currentCondition.empty()) {
-				auto tokenList = Utility::Internal::AsExpressionTokenList(workingDefinition._tokenDictionary, currentCondition);
-				if (tokenList.empty())
-					Throw(FormatException("Could not parse condition as expression", tokenizer.GetLocation()));
-				workingDefinition._cmdList.push_back((unsigned)Cmd::EvaluateExpression);
-				workingDefinition._cmdList.push_back(tokenList.size());
-				workingDefinition._cmdList.insert(workingDefinition._cmdList.end(), tokenList.begin(), tokenList.end());
-				workingDefinition._cmdList.push_back((unsigned)Cmd::IfFalseThenJump);
-				writeJumpHere = workingDefinition._cmdList.size();
-				workingDefinition._cmdList.push_back(0);
+			if (TryDeclaration(tokenizer, reservedBlockId, peekNext)) {
+				// we don't allow embedded declaration within template types because the scoping rules would just get too complicated
+				if (!workingDefinition._templateParameterNames.empty())
+					Throw(FormatException("Embedded declarations within template types are not supported", peekNext._start));
+			} else {
+				size_t writeJumpHere = 0;
+				auto currentCondition = tokenizer._preprocessorContext.GetCurrentConditionString();
+				if (!currentCondition.empty()) {
+					auto tokenList = Utility::Internal::AsExpressionTokenList(workingDefinition._tokenDictionary, currentCondition);
+					if (tokenList.empty())
+						Throw(FormatException("Could not parse condition as expression", tokenizer.GetLocation()));
+					workingDefinition._cmdList.push_back((unsigned)Cmd::EvaluateExpression);
+					workingDefinition._cmdList.push_back(tokenList.size());
+					workingDefinition._cmdList.insert(workingDefinition._cmdList.end(), tokenList.begin(), tokenList.end());
+					workingDefinition._cmdList.push_back((unsigned)Cmd::IfFalseThenJump);
+					writeJumpHere = workingDefinition._cmdList.size();
+					workingDefinition._cmdList.push_back(0);
 					workingDefinition._cmdList.push_back((unsigned)_conditionSymbolLines.size());
 					_conditionSymbolLines.push_back(peekNext._start._lineIndex);
-			}
-
-			PushComplexType(workingDefinition, tokenizer);
-
-			for (;;) {
-				auto name = tokenizer.GetNextToken();
-				auto nameAsToken = workingDefinition._tokenDictionary.GetToken(Utility::Internal::TokenDictionary::TokenType::Variable, name._value.AsString());
-
-				next = tokenizer.GetNextToken();
-				if (next == "[") {
-					PushExpression(workingDefinition, tokenizer);
-					Require(tokenizer, "]");
-					next = tokenizer.GetNextToken();
-
-					workingDefinition._cmdList.push_back((unsigned)Cmd::InlineArrayMember);
-					workingDefinition._cmdList.push_back(nameAsToken);
-				} else {
-					workingDefinition._cmdList.push_back((unsigned)Cmd::InlineIndividualMember);
-					workingDefinition._cmdList.push_back(nameAsToken);
 				}
 
-				if (next != ",") break;		// use comma to separate a list of variables with the same type
+				PushComplexType(workingDefinition, tokenizer);
+
+				for (;;) {
+					auto name = tokenizer.GetNextToken();
+					auto nameAsToken = workingDefinition._tokenDictionary.GetToken(Utility::Internal::TokenDictionary::TokenType::Variable, name._value.AsString());
+
+					next = tokenizer.GetNextToken();
+					if (next == "[") {
+						PushExpression(workingDefinition, tokenizer);
+						Require(tokenizer, "]");
+						next = tokenizer.GetNextToken();
+
+						workingDefinition._cmdList.push_back((unsigned)Cmd::InlineArrayMember);
+						workingDefinition._cmdList.push_back(nameAsToken);
+					} else {
+						workingDefinition._cmdList.push_back((unsigned)Cmd::InlineIndividualMember);
+						workingDefinition._cmdList.push_back(nameAsToken);
+					}
+
+					if (next != ",") break;		// use comma to separate a list of variables with the same type
+				}
+
+				if (next != ";")
+					Throw(FormatException("Expecting ';'", next._start));
+
+				workingDefinition._cmdList.push_back((unsigned)Cmd::PopTypeStack);
+
+				if (writeJumpHere)
+					workingDefinition._cmdList[writeJumpHere] = (unsigned)workingDefinition._cmdList.size();
 			}
-
-			if (next != ";")
-				Throw(FormatException("Expecting ';'", next._start));
-
-			workingDefinition._cmdList.push_back((unsigned)Cmd::PopTypeStack);
-
-			if (writeJumpHere)
-				workingDefinition._cmdList[writeJumpHere] = (unsigned)workingDefinition._cmdList.size();
 		}
 		Require(tokenizer, ";");
 
-		_blockDefinitions.push_back(std::make_pair(blockName._value.AsString(), std::move(workingDefinition)));
+		_blockDefinitions[reservedBlockId] = {blockName._value.AsString(), scope, std::move(workingDefinition)};
 	}
 
-	void BinarySchemata::ParseLiterals(ConditionalProcessingTokenizer& tokenizer)
+	void BinarySchemata::ParseLiterals(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope)
 	{
 		auto condition = tokenizer._preprocessorContext.GetCurrentConditionString();
 		auto name = tokenizer.GetNextToken();
@@ -260,10 +275,10 @@ namespace Formatters
 		}
 		Require(tokenizer, ";");
 
-		_literals.push_back(std::make_pair(name._value.AsString(), std::move(literals)));
+		_literals.push_back({name._value.AsString(), scope, std::move(literals)});
 	}
 
-	void BinarySchemata::ParseAlias(ConditionalProcessingTokenizer& tokenizer)
+	void BinarySchemata::ParseAlias(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope)
 	{
 		auto condition = tokenizer._preprocessorContext.GetCurrentConditionString();
 
@@ -300,7 +315,7 @@ namespace Formatters
 		workingDefinition._aliasedType = ParseTypeBaseName(tokenizer);
 
 		Require(tokenizer, ";");
-		_aliases.push_back(std::make_pair(name._value.AsString(), workingDefinition));
+		_aliases.push_back({name._value.AsString(), scope, workingDefinition});
 	}
 
 	static uint64_t RequireIntegerLiteral(ConditionalProcessingTokenizer& tokenizer)
@@ -323,7 +338,7 @@ namespace Formatters
 		return tokenizer.GetNextToken()._value.AsString();
 	}
 
-	void BinarySchemata::ParseBitField(ConditionalProcessingTokenizer& tokenizer)
+	void BinarySchemata::ParseBitField(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope)
 	{
 		auto condition = tokenizer._preprocessorContext.GetCurrentConditionString();
 		auto name = tokenizer.GetNextToken();
@@ -377,27 +392,42 @@ namespace Formatters
 		}
 		Require(tokenizer, ";");
 
-		_bitFields.push_back(std::make_pair(name._value.AsString(), std::move(bitField)));
+		_bitFields.push_back({name._value.AsString(), scope, std::move(bitField)});
+	}
+
+	bool BinarySchemata::TryDeclaration(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope, const ConditionalProcessingTokenizer::Token& peekNext)
+	{
+		if (peekNext == "block") {
+			tokenizer.GetNextToken();
+			ParseBlock(tokenizer, scope);
+			return true;
+		} else if (peekNext == "literals") {
+			tokenizer.GetNextToken();
+			ParseLiterals(tokenizer, scope);
+			return true;
+		} else if (peekNext == "alias") {
+			tokenizer.GetNextToken();
+			ParseAlias(tokenizer, scope);
+			return true;
+		} else if (peekNext == "bitfield") {
+			tokenizer.GetNextToken();
+			ParseBitField(tokenizer, scope);
+			return true;
+		}
+		return false;
 	}
 
 	void BinarySchemata::Parse(ConditionalProcessingTokenizer& tokenizer)
 	{
 		for (;;) {
-			auto token = tokenizer.GetNextToken();
-			if (token._value.IsEmpty())
+			auto peekNext = tokenizer.PeekNextToken();
+			if (peekNext._value.IsEmpty()) {
+				tokenizer.GetNextToken();
 				break;
-
-			if (token == "block") {
-				ParseBlock(tokenizer);
-			} else if (token == "literals") {
-				ParseLiterals(tokenizer);
-			} else if (token == "alias") {
-				ParseAlias(tokenizer);
-			} else if (token == "bitfield") {
-				ParseBitField(tokenizer);
-			} else {
-				Throw(FormatException("Expecting a top-level declaration", token._start));
 			}
+
+			if (!TryDeclaration(tokenizer, BlockDefinitionId_Invalid, peekNext))
+				Throw(FormatException("Expecting a top-level declaration", peekNext._start));
 		}
 
 		if (!tokenizer.Remaining().IsEmpty())

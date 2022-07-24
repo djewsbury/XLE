@@ -55,31 +55,42 @@ namespace Formatters
 		static constexpr BlockDefinitionId BlockDefinitionId_Invalid = ~0u;
 		static constexpr AliasId AliasId_Invalid = ~0u;
 
-		BlockDefinitionId FindBlockDefinition(StringSection<> name) const;
-		AliasId FindAlias(StringSection<> name) const;
-		BitFieldId FindBitField(StringSection<> name) const;
-		LiteralsId FindLiterals(StringSection<> name) const;
+		BlockDefinitionId FindBlockDefinition(StringSection<> name, BlockDefinitionId scope=~0u) const;
+		AliasId FindAlias(StringSection<> name, BlockDefinitionId scope=~0u) const;
+		BitFieldId FindBitField(StringSection<> name, BlockDefinitionId scope=~0u) const;
+		LiteralsId FindLiterals(StringSection<> name, BlockDefinitionId scope=~0u) const;
 
-		const Alias& GetAlias(AliasId id) const { return _aliases[id].second; }
-		const BlockDefinition& GetBlockDefinition(BlockDefinitionId id) const { return _blockDefinitions[id].second; }
-		const BitFieldDefinition& GetBitFieldDecoder(BitFieldId id) const { return _bitFields[id].second; }
-		const ParameterBox& GetLiterals(LiteralsId id) const { return _literals[id].second; }
+		const Alias& GetAlias(AliasId id) const { return _aliases[id]._def; }
+		const BlockDefinition& GetBlockDefinition(BlockDefinitionId id) const { return _blockDefinitions[id]._def; }
+		const BitFieldDefinition& GetBitFieldDecoder(BitFieldId id) const { return _bitFields[id]._def; }
+		const ParameterBox& GetLiterals(LiteralsId id) const { return _literals[id]._def; }
+
+		const std::string& GetAliasName(AliasId id) const { return _aliases[id]._name; }
+		const std::string& GetBlockDefinitionName(BlockDefinitionId id) const { return _blockDefinitions[id]._name; }
+		const std::string& GetBitFieldName(BitFieldId id) const { return _bitFields[id]._name; }
+		const std::string& GetLiteralsName(LiteralsId id) const { return _literals[id]._name; }
 
 		struct ConditionSymbol { unsigned _lineIdx; };
 		ConditionSymbol GetConditionSymbol(unsigned idx) const;
 		unsigned GetConditionSymbolCount() const { return _conditionSymbolLines.size(); }
 		
 	private:
-		void ParseBlock(ConditionalProcessingTokenizer& tokenizer);
-		void ParseLiterals(ConditionalProcessingTokenizer& tokenizer);
-		void ParseAlias(ConditionalProcessingTokenizer& tokenizer);
-		void ParseBitField(ConditionalProcessingTokenizer& tokenizer);
+		void ParseBlock(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope);
+		void ParseLiterals(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope);
+		void ParseAlias(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope);
+		void ParseBitField(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope);
 		std::string ParseTypeBaseName(ConditionalProcessingTokenizer& tokenizer);
 		std::string ParseExpressionStr(ConditionalProcessingTokenizer& tokenizer);
 		void PushExpression(BlockDefinition& workingDefinition, ConditionalProcessingTokenizer& tokenizer);
 		void PushComplexType(BlockDefinition& workingDefinition, ConditionalProcessingTokenizer& tokenizer);
 		void Parse(ConditionalProcessingTokenizer& tokenizer);
+		bool TryDeclaration(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope, const ConditionalProcessingTokenizer::Token& peekNext);
 
+		template<typename T> struct Def { std::string _name; BlockDefinitionId _scope = BlockDefinitionId_Invalid; T _def; };
+		std::vector<Def<Alias>> _aliases;
+		std::vector<Def<BlockDefinition>> _blockDefinitions;
+		std::vector<Def<ParameterBox>> _literals;
+		std::vector<Def<BitFieldDefinition>> _bitFields;
 		std::vector<unsigned> _conditionSymbolLines;
 	};
 

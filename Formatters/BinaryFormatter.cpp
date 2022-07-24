@@ -38,7 +38,7 @@ namespace Formatters
 		return lhs._valueTypeDesc == rhs._valueTypeDesc; 
 	}
 
-	auto EvaluationContext::GetEvaluatedType(const std::shared_ptr<BinarySchemata>& schemata, StringSection<> baseName, IteratorRange<const int64_t*> parameters, unsigned typeBitField) -> EvaluatedTypeToken
+	auto EvaluationContext::GetEvaluatedType(const std::shared_ptr<BinarySchemata>& schemata, StringSection<> baseName, BinarySchemata::BlockDefinitionId scope, IteratorRange<const int64_t*> parameters, unsigned typeBitField) -> EvaluatedTypeToken
 	{
 		if (parameters.empty()) {
 			if (XlEqString(baseName, "void")) return GetEvaluatedType(ImpliedTyping::TypeCat::Void);
@@ -56,10 +56,10 @@ namespace Formatters
 			if (XlEqString(baseName, "char")) return GetEvaluatedType(EvaluatedType{ImpliedTyping::TypeDesc{ImpliedTyping::TypeCat::UInt8, 1, ImpliedTyping::TypeHint::String}});
 		}
 
-		auto ai = schemata->FindAlias(baseName);
+		auto ai = schemata->FindAlias(baseName, scope);
 		if (ai != BinarySchemata::AliasId_Invalid) {
 			auto& alias = schemata->GetAlias(ai);
-			auto aliasedType = GetEvaluatedType(schemata, alias._aliasedType);
+			auto aliasedType = GetEvaluatedType(schemata, alias._aliasedType, BinarySchemata::BlockDefinitionId_Invalid);		// todo -- how should scoping work for aliases?
 			EvaluatedType type;
 			type._alias = ai;
 			type._params = {parameters.begin(), parameters.end()};
@@ -69,7 +69,7 @@ namespace Formatters
 			return GetEvaluatedType(type);
 		}
 
-		auto i = schemata->FindBlockDefinition(baseName);
+		auto i = schemata->FindBlockDefinition(baseName, scope);
 		if (i == BinarySchemata::BlockDefinitionId_Invalid)
 			Throw(std::runtime_error("Unknown type while looking up (" + baseName.AsString() + ")"));
 
@@ -94,7 +94,7 @@ namespace Formatters
 
 	EvaluationContext::EvaluatedTypeToken EvaluationContext::GetEvaluatedType(
 		const std::shared_ptr<BinarySchemata>& schemata,
-		unsigned baseNameToken, IteratorRange<const unsigned*> paramTypeCodes, 
+		unsigned baseNameToken, BinarySchemata::BlockDefinitionId scope, IteratorRange<const unsigned*> paramTypeCodes, 
 		const BlockDefinition& blockDef, 
 		std::stack<unsigned>& typeStack, std::stack<int64_t>& valueStack, 
 		IteratorRange<const int64_t*> parsingTemplateParams, uint32_t parsingTemplateParamsTypeField)
@@ -125,9 +125,9 @@ namespace Formatters
 					valueStack.pop();
 				}
 			}
-			return GetEvaluatedType(schemata, baseName, MakeIteratorRange(params, &params[paramCount]), typeBitField);
+			return GetEvaluatedType(schemata, baseName, scope, MakeIteratorRange(params, &params[paramCount]), typeBitField);
 		} else {
-			return GetEvaluatedType(schemata, baseName);
+			return GetEvaluatedType(schemata, baseName, scope);
 		}
 	}
 
@@ -160,6 +160,7 @@ namespace Formatters
 		}
 
 		auto& def = _evaluatedTypes[evalTypeId]._schemata->GetBlockDefinition(_evaluatedTypes[evalTypeId]._blockDefinition);
+		auto scope = _evaluatedTypes[evalTypeId]._blockDefinition;
 		auto cmds = MakeIteratorRange(def._cmdList);
 
 		std::stack<unsigned> typeStack;
@@ -181,7 +182,7 @@ namespace Formatters
 					typeStack.push(
 						GetEvaluatedType(
 							_evaluatedTypes[evalTypeId]._schemata,
-							baseNameToken, paramTypeCodes, def, 
+							baseNameToken, scope, paramTypeCodes, def, 
 							typeStack, valueStack, _evaluatedTypes[evalTypeId]._params, _evaluatedTypes[evalTypeId]._paramTypeField));
 				}
 				break;
@@ -365,6 +366,7 @@ namespace Formatters
 		_queuedNext = Blob::None;
 		BlockContext newContext;
 		newContext._definition = &schemata->GetBlockDefinition(blockDefId);
+		newContext._scope = blockDefId;
 		newContext._parsingTemplateParams = {templateParams.begin(), templateParams.end()};
 		newContext._parsingTemplateParamsTypeField = templateParamsTypeField;
 		newContext._cmdsIterator = MakeIteratorRange(newContext._definition->_cmdList);
@@ -405,7 +407,7 @@ namespace Formatters
 					workingBlock._typeStack.push(
 						_evalContext->GetEvaluatedType(
 							workingBlock._schemata,
-							baseNameToken, paramTypeCodes, def, 
+							baseNameToken, workingBlock._scope, paramTypeCodes, def, 
 							workingBlock._typeStack, workingBlock._valueStack,
 							workingBlock._parsingTemplateParams, workingBlock._parsingTemplateParamsTypeField));
 					break;
@@ -587,6 +589,7 @@ namespace Formatters
 
 			BlockContext newContext;
 			newContext._definition = &workingBlock._schemata->GetBlockDefinition(evalType._blockDefinition);
+			newContext._scope = evalType._blockDefinition;
 			newContext._parsingBlockName = workingBlock._definition->_tokenDictionary._tokenDefinitions[cmds[1]]._value;
 			newContext._parsingTemplateParams = evalType._params;
 			newContext._parsingTemplateParamsTypeField = evalType._paramTypeField;
@@ -605,6 +608,7 @@ namespace Formatters
 
 			BlockContext newContext;
 			newContext._definition = &workingBlock._schemata->GetBlockDefinition(evalType._blockDefinition);
+			newContext._scope = evalType._blockDefinition;
 			newContext._parsingTemplateParams = evalType._params;
 			newContext._parsingTemplateParamsTypeField = evalType._paramTypeField;
 			newContext._cmdsIterator = MakeIteratorRange(newContext._definition->_cmdList);

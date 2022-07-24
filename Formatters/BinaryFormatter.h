@@ -58,6 +58,7 @@ namespace Formatters
 			std::string _parsingBlockName;
 			IteratorRange<const int64_t*> _parsingTemplateParams;
 			uint32_t _parsingTemplateParamsTypeField;
+			BinarySchemata::BlockDefinitionId _scope = BinarySchemata::BlockDefinitionId_Invalid;
 
 			std::vector<std::pair<unsigned, ImpliedTyping::VariantNonRetained>> _localEvalContext;
 			std::vector<unsigned> _nonIntegerLocalVariables;
@@ -100,10 +101,10 @@ namespace Formatters
 		using EvaluatedTypeToken = unsigned;
 		EvaluatedTypeToken GetEvaluatedType(
 			const std::shared_ptr<BinarySchemata>& schemata,
-			StringSection<> baseName, IteratorRange<const int64_t*> parameters = {}, unsigned typeBitField = 0);
+			StringSection<> baseName, BinarySchemata::BlockDefinitionId scope, IteratorRange<const int64_t*> parameters = {}, unsigned typeBitField = 0);
 		EvaluatedTypeToken GetEvaluatedType(
 			const std::shared_ptr<BinarySchemata>& schemata,
-			unsigned baseNameToken, IteratorRange<const unsigned*> paramTypeCodes, 
+			unsigned baseNameToken, BinarySchemata::BlockDefinitionId scope, IteratorRange<const unsigned*> paramTypeCodes, 
 			const BlockDefinition& blockDef, 
 			std::stack<unsigned>& typeStack, std::stack<int64_t>& valueStack, 
 			IteratorRange<const int64_t*> parsingTemplateParams, uint32_t parsingTemplateParamsTypeField);
