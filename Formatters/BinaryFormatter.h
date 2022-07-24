@@ -39,6 +39,7 @@ namespace Formatters
 
 		EvaluationContext& GetEvaluationContext() const { return *_evalContext; }
 		IteratorRange<const void*> GetRemainingData() const { return _dataIterator; }
+		IteratorRange<const unsigned*> GetPassedConditionSymbols() const { return _passedConditionSymbols; }
 
 		BinaryFormatter(EvaluationContext& evalContext, IteratorRange<const void*> data);
 	private:
@@ -64,6 +65,7 @@ namespace Formatters
 		std::stack<BlockContext> _blockStack;
 		EvaluationContext* _evalContext = nullptr;
 		IteratorRange<const void*> _dataIterator;
+		std::vector<unsigned> _passedConditionSymbols;
 
 		Blob _queuedNext = Blob::None;
 	};

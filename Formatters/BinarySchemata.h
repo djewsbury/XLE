@@ -65,11 +65,10 @@ namespace Formatters
 		const BitFieldDefinition& GetBitFieldDecoder(BitFieldId id) const { return _bitFields[id].second; }
 		const ParameterBox& GetLiterals(LiteralsId id) const { return _literals[id].second; }
 
-		const std::string& GetAliasName(AliasId id) const { return _aliases[id].first; }
-		const std::string& GetBlockDefinitionName(BlockDefinitionId id) const { return _blockDefinitions[id].first; }
-		const std::string& GetBitFieldName(BitFieldId id) const { return _bitFields[id].first; }
-		const std::string& GetLiteralsName(LiteralsId id) const { return _literals[id].first; }
-
+		struct ConditionSymbol { unsigned _lineIdx; };
+		ConditionSymbol GetConditionSymbol(unsigned idx) const;
+		unsigned GetConditionSymbolCount() const { return _conditionSymbolLines.size(); }
+		
 	private:
 		void ParseBlock(ConditionalProcessingTokenizer& tokenizer);
 		void ParseLiterals(ConditionalProcessingTokenizer& tokenizer);
@@ -81,10 +80,7 @@ namespace Formatters
 		void PushComplexType(BlockDefinition& workingDefinition, ConditionalProcessingTokenizer& tokenizer);
 		void Parse(ConditionalProcessingTokenizer& tokenizer);
 
-		std::vector<std::pair<std::string, Alias>> _aliases;
-		std::vector<std::pair<std::string, BlockDefinition>> _blockDefinitions;
-		std::vector<std::pair<std::string, ParameterBox>> _literals;
-		std::vector<std::pair<std::string, BitFieldDefinition>> _bitFields;
+		std::vector<unsigned> _conditionSymbolLines;
 	};
 
     enum class Cmd

@@ -205,6 +205,8 @@ namespace Formatters
 				workingDefinition._cmdList.push_back((unsigned)Cmd::IfFalseThenJump);
 				writeJumpHere = workingDefinition._cmdList.size();
 				workingDefinition._cmdList.push_back(0);
+					workingDefinition._cmdList.push_back((unsigned)_conditionSymbolLines.size());
+					_conditionSymbolLines.push_back(peekNext._start._lineIndex);
 			}
 
 			PushComplexType(workingDefinition, tokenizer);
@@ -400,6 +402,12 @@ namespace Formatters
 
 		if (!tokenizer.Remaining().IsEmpty())
 			Throw(FormatException("Additional tokens found, expecting end of file", tokenizer.GetLocation()));
+	}
+
+	BinarySchemata::ConditionSymbol BinarySchemata::GetConditionSymbol(unsigned idx) const
+	{
+		assert(idx < _conditionSymbolLines.size());
+		return { _conditionSymbolLines[idx] };
 	}
 
 	BinarySchemata::BinarySchemata(

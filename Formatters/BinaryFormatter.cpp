@@ -271,8 +271,10 @@ namespace Formatters
 					auto jumpPt = *cmds.first++;
 					if (jumpPt > def._cmdList.size())
 						Throw(std::runtime_error("Jump point in conditional is invalid"));
-					if (!expressionEval)
+					if (!expressionEval) {
 						cmds.first = def._cmdList.begin() + jumpPt;
+					} else
+						cmds.first++;
 					break;
 				}
 
@@ -501,8 +503,10 @@ namespace Formatters
 					auto jumpPt = *cmds.first++;
 					if (jumpPt > def._cmdList.size())
 						Throw(std::runtime_error("Jump point in conditional is invalid"));
-					if (!expressionEval)
+					if (!expressionEval) {
 						cmds.first = AsPointer(def._cmdList.begin() + jumpPt);
+					} else
+						_passedConditionSymbols.push_back(*cmds.first++);
 					break;
 				}
 
