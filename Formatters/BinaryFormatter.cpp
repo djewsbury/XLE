@@ -196,47 +196,52 @@ namespace Formatters
 					assert(cmds.size() >= length);
 					auto range = MakeIteratorRange(cmds.begin(), cmds.begin()+length);
 					cmds.first += length;
-					bool usingDynamicVariable = false;
-					const auto& evalType = _evaluatedTypes[evalTypeId];
-					Utility::Internal::ExpressionEvaluator exprEval{def._tokenDictionary, range};
-					while (auto nextStep = exprEval.GetNextStep()) {
-						assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
 
-						uint64_t hash = Hash64(nextStep._name);
+					TRY {
+						bool usingDynamicVariable = false;
+						const auto& evalType = _evaluatedTypes[evalTypeId];
+						Utility::Internal::ExpressionEvaluator exprEval{def._tokenDictionary, range};
+						while (auto nextStep = exprEval.GetNextStep()) {
+							assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
 
-						// ------------------------- previously evaluated members --------------------
-						if (std::find(localVariables.begin(), localVariables.end(), nextStep._nameTokenIndex) != localVariables.end()) {
-							usingDynamicVariable = true;
-							static const unsigned dummy = 1;
-							nextStep.SetQueryResult(dummy);	// we use 1 as a default stand-in
-							continue;
-						}
+							uint64_t hash = Hash64(nextStep._name);
 
-						// ------------------------- template variables --------------------
-						for (unsigned p=0; p<(unsigned)def._templateParameterNames.size(); ++p)
-							if (def._templateParameterNames[p] == nextStep._nameTokenIndex) {
-								nextStep.SetQueryResult(evalType._params[p]);
+							// ------------------------- previously evaluated members --------------------
+							if (std::find(localVariables.begin(), localVariables.end(), nextStep._nameTokenIndex) != localVariables.end()) {
+								usingDynamicVariable = true;
+								static const unsigned dummy = 1;
+								nextStep.SetQueryResult(dummy);	// we use 1 as a default stand-in
 								continue;
 							}
 
-						auto globalType = this->_globalState.GetParameterType(hash);
-						if (globalType._type != ImpliedTyping::TypeCat::Void) {
-							nextStep.SetQueryResult(globalType, this->_globalState.GetParameterRawValue(hash));
-							continue;
+							// ------------------------- template variables --------------------
+							for (unsigned p=0; p<(unsigned)def._templateParameterNames.size(); ++p)
+								if (def._templateParameterNames[p] == nextStep._nameTokenIndex) {
+									nextStep.SetQueryResult(evalType._params[p]);
+									continue;
+								}
+
+							auto globalType = this->_globalState.GetParameterType(hash);
+							if (globalType._type != ImpliedTyping::TypeCat::Void) {
+								nextStep.SetQueryResult(globalType, this->_globalState.GetParameterRawValue(hash));
+								continue;
+							}
 						}
-					}
 
-					if (usingDynamicVariable) {
-						_calculatedSizeStates[evalTypeId]._state = CalculatedSizeState::DynamicSize;
-						return {};
-					}
+						if (usingDynamicVariable) {
+							_calculatedSizeStates[evalTypeId]._state = CalculatedSizeState::DynamicSize;
+							return {};
+						}
 
-					auto result = exprEval.GetResult();
-					int64_t resultValue = 0;
-					if (!ImpliedTyping::Cast(MakeOpaqueIteratorRange(resultValue), ImpliedTyping::TypeOf<int64_t>(), result._data, result._type))
-						Throw(std::runtime_error("Invalid expression or returned value that could not be cast to scalar integral in formatter expression evaluation"));
-
-					valueStack.push(resultValue);
+						auto result = exprEval.GetResult();
+						int64_t resultValue = 0;
+						if (!ImpliedTyping::Cast(MakeOpaqueIteratorRange(resultValue), ImpliedTyping::TypeOf<int64_t>(), result._data, result._type))
+							Throw(std::runtime_error("Invalid expression or returned value that could not be cast to scalar integral in formatter expression evaluation"));
+						valueStack.push(resultValue);
+					} CATCH(const std::exception& e) {
+						auto exprString = def._tokenDictionary.AsString(range);
+						Throw(std::runtime_error(e.what() + std::string{", while evaluating ["} + exprString + "]"));
+					} CATCH_END
 					break;
 				}
 
@@ -416,64 +421,70 @@ namespace Formatters
 					assert(cmds.size() >= length);
 					auto range = MakeIteratorRange(cmds.begin(), cmds.begin()+length);
 					cmds.first += length;
-					uint8_t stringParseOutputBuffer[1024];
-					unsigned stringParseOutputIterator = 0;
-					Utility::Internal::ExpressionEvaluator exprEval{def._tokenDictionary, range};
-					while (auto nextStep = exprEval.GetNextStep()) {
-						assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
 
-						// Try to lookup the value in a number of places --
-						// - previously evaluated variables
-						// - template values
-						// - context state
+					TRY {
+						uint8_t stringParseOutputBuffer[1024];
+						unsigned stringParseOutputIterator = 0;
+						Utility::Internal::ExpressionEvaluator exprEval{def._tokenDictionary, range};
+						while (auto nextStep = exprEval.GetNextStep()) {
+							assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
 
-						// ------------------------- previously evaluated members --------------------
-						auto localValue = std::find_if(workingBlock._localEvalContext.begin(), workingBlock._localEvalContext.end(), [t=nextStep._nameTokenIndex](const auto& q) {return q.first==t;});
-						if (localValue != workingBlock._localEvalContext.end()) {
+							// Try to lookup the value in a number of places --
+							// - previously evaluated variables
+							// - template values
+							// - context state
 
-							// If the value is a string; let's attempt to parse it before we send the results to the 
-							if (localValue->second._type._typeHint == ImpliedTyping::TypeHint::String && (localValue->second._type._type == ImpliedTyping::TypeCat::UInt8 || localValue->second._type._type == ImpliedTyping::TypeCat::Int8)) {
-								if (stringParseOutputIterator == dimof(stringParseOutputBuffer))
-									Throw(std::runtime_error("Parsing buffer exceeded in expression evaluation in BinaryFormatter."));		// This occurs when we're parsing a lot of strings or large arrays from the source data. Consider an alternative approach, because the system isn't optimized for this
-								auto parsedType = ImpliedTyping::ParseFullMatch(
-									MakeStringSection((const char*)localValue->second._data.begin(), (const char*)localValue->second._data.end()),
-									MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[dimof(stringParseOutputBuffer)]));
-								if (parsedType._type != ImpliedTyping::TypeCat::Void) {
-									nextStep.SetQueryResult(parsedType, MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[stringParseOutputIterator+parsedType.GetSize()]));
-									stringParseOutputIterator += parsedType.GetSize();
-									continue;
+							// ------------------------- previously evaluated members --------------------
+							auto localValue = std::find_if(workingBlock._localEvalContext.begin(), workingBlock._localEvalContext.end(), [t=nextStep._nameTokenIndex](const auto& q) {return q.first==t;});
+							if (localValue != workingBlock._localEvalContext.end()) {
+
+								// If the value is a string; let's attempt to parse it before we send the results to the 
+								if (localValue->second._type._typeHint == ImpliedTyping::TypeHint::String && (localValue->second._type._type == ImpliedTyping::TypeCat::UInt8 || localValue->second._type._type == ImpliedTyping::TypeCat::Int8)) {
+									if (stringParseOutputIterator == dimof(stringParseOutputBuffer))
+										Throw(std::runtime_error("Parsing buffer exceeded in expression evaluation in BinaryFormatter."));		// This occurs when we're parsing a lot of strings or large arrays from the source data. Consider an alternative approach, because the system isn't optimized for this
+									auto parsedType = ImpliedTyping::ParseFullMatch(
+										MakeStringSection((const char*)localValue->second._data.begin(), (const char*)localValue->second._data.end()),
+										MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[dimof(stringParseOutputBuffer)]));
+									if (parsedType._type != ImpliedTyping::TypeCat::Void) {
+										nextStep.SetQueryResult(parsedType, MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[stringParseOutputIterator+parsedType.GetSize()]));
+										stringParseOutputIterator += parsedType.GetSize();
+										continue;
+									}
 								}
-							}
-							
-							nextStep.SetQueryResult(localValue->second._type, localValue->second._data);
-							continue;
-						}
-
-						if (std::find(workingBlock._nonIntegerLocalVariables.begin(), workingBlock._nonIntegerLocalVariables.end(), nextStep._nameTokenIndex) != workingBlock._nonIntegerLocalVariables.end())
-							Throw(std::runtime_error("Attempting to non-numeric local variable (" + nextStep._name.AsString() + ") in an expression. This isn't supported"));
-
-						uint64_t hash = Hash64(nextStep._name);		// (we could just store this hash in the Token object)
-
-						// ------------------------- template variables --------------------
-						for (unsigned p=0; p<(unsigned)workingBlock._definition->_templateParameterNames.size(); ++p)
-							if (workingBlock._definition->_templateParameterNames[p] == nextStep._nameTokenIndex) {
-								nextStep.SetQueryResult(workingBlock._parsingTemplateParams[p]);
+								
+								nextStep.SetQueryResult(localValue->second._type, localValue->second._data);
 								continue;
 							}
 
-						auto globalType = this->_evalContext->GetGlobalParameterBox().GetParameterType(hash);
-						if (globalType._type != ImpliedTyping::TypeCat::Void) {
-							nextStep.SetQueryResult(globalType, this->_evalContext->GetGlobalParameterBox().GetParameterRawValue(hash));
-							continue;
+							if (std::find(workingBlock._nonIntegerLocalVariables.begin(), workingBlock._nonIntegerLocalVariables.end(), nextStep._nameTokenIndex) != workingBlock._nonIntegerLocalVariables.end())
+								Throw(std::runtime_error("Attempting to non-numeric local variable (" + nextStep._name.AsString() + ") in an expression. This isn't supported"));
+
+							uint64_t hash = Hash64(nextStep._name);		// (we could just store this hash in the Token object)
+
+							// ------------------------- template variables --------------------
+							for (unsigned p=0; p<(unsigned)workingBlock._definition->_templateParameterNames.size(); ++p)
+								if (workingBlock._definition->_templateParameterNames[p] == nextStep._nameTokenIndex) {
+									nextStep.SetQueryResult(workingBlock._parsingTemplateParams[p]);
+									continue;
+								}
+
+							auto globalType = this->_evalContext->GetGlobalParameterBox().GetParameterType(hash);
+							if (globalType._type != ImpliedTyping::TypeCat::Void) {
+								nextStep.SetQueryResult(globalType, this->_evalContext->GetGlobalParameterBox().GetParameterRawValue(hash));
+								continue;
+							}
 						}
-					}
 
-					auto result = exprEval.GetResult();
-					int64_t resultValue = 0;
-					if (!ImpliedTyping::Cast(MakeOpaqueIteratorRange(resultValue), ImpliedTyping::TypeOf<int64_t>(), result._data, result._type))
-						Throw(std::runtime_error("Invalid expression or returned value that could not be cast to scalar integral in formatter expression evaluation"));
+						auto result = exprEval.GetResult();
+						int64_t resultValue = 0;
+						if (!ImpliedTyping::Cast(MakeOpaqueIteratorRange(resultValue), ImpliedTyping::TypeOf<int64_t>(), result._data, result._type))
+							Throw(std::runtime_error("Invalid expression or returned value that could not be cast to scalar integral in formatter expression evaluation"));
 
-					workingBlock._valueStack.push(resultValue);
+						workingBlock._valueStack.push(resultValue);
+					} CATCH(const std::exception& e) {
+						auto exprString = def._tokenDictionary.AsString(range);
+						Throw(std::runtime_error(e.what() + std::string{", while evaluating ["} + exprString + "]"));
+					} CATCH_END
 					break;
 				}
 
