@@ -437,21 +437,5 @@ namespace RenderCore { namespace Assets
 
 	RawAnimationCurve::~RawAnimationCurve() {}
 
-	RawAnimationCurve::RawAnimationCurve(const RawAnimationCurve& copyFrom)
-	: _timeMarkers(copyFrom._timeMarkers)
-	, _keyData(copyFrom._keyData)
-	, _keyDataDesc(copyFrom._keyDataDesc)
-	, _interpolationType(copyFrom._interpolationType) 
-	{}
-
-	RawAnimationCurve& RawAnimationCurve::operator=(const RawAnimationCurve& copyFrom) 
-	{
-		_timeMarkers = copyFrom._timeMarkers;
-		_keyData = copyFrom._keyData;
-		_keyDataDesc = copyFrom._keyDataDesc;
-		_interpolationType = copyFrom._interpolationType;
-		return *this;
-	}
-
 }}
 

@@ -86,9 +86,9 @@ namespace RenderCore { namespace Assets
 			const AnimationState& animState,
 			IteratorRange<const ParameterBindingRules*> parameterBindingRules) const;
 
-		Animation				FindAnimation(uint64_t animation) const;
-		unsigned				FindParameter(uint64_t parameterName, AnimSamplerComponent component) const;
-		StringSection<>			LookupStringName(uint64_t animation) const;
+		std::optional<Animation>	FindAnimation(uint64_t animation) const;
+		unsigned					FindParameter(uint64_t parameterName, AnimSamplerComponent component) const;
+		StringSection<>				LookupStringName(uint64_t animation) const;
 
 		IteratorRange<const AnimationDriver*> GetAnimationDrivers() const { return MakeIteratorRange(_animationDrivers); }
 		IteratorRange<const ConstantDriver*> GetConstantDrivers() const { return MakeIteratorRange(_constantDrivers); }

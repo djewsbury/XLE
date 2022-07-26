@@ -50,8 +50,8 @@ namespace RenderCore { namespace Assets
                             CurveInterpolationType	interpolationType);
         RawAnimationCurve(RawAnimationCurve&& moveFrom) = default;
         RawAnimationCurve& operator=(RawAnimationCurve&& moveFrom) = default;
-		RawAnimationCurve(const RawAnimationCurve& copyFrom);
-		RawAnimationCurve& operator=(const RawAnimationCurve& copyFrom);
+		RawAnimationCurve(const RawAnimationCurve& copyFrom) = default;
+		RawAnimationCurve& operator=(const RawAnimationCurve& copyFrom) = default;
 		~RawAnimationCurve();
 
     protected:

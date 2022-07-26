@@ -83,7 +83,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         std::vector<ConstantDriver>     _constantDrivers;
         std::vector<std::pair<std::string, Animation>>              _animations;
         std::vector<std::pair<StringOrHash, AnimSamplerComponent>>  _parameterInterfaceDefinition;
-        std::vector<uint8>              _constantData;
+        std::vector<uint8_t>            _constantData;
 		std::vector<RenderCore::Assets::RawAnimationCurve> _curves;
 
         AnimSamplerType FindSamplerType(unsigned parameterIndex) const;

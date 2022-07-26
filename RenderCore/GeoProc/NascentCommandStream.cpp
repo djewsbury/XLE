@@ -48,7 +48,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		unsigned dataOffset = unsigned(_constantData.size());
 		std::copy(
-			(uint8*)constantValue, PtrAdd((uint8*)constantValue, valueSize),
+			(uint8_t*)constantValue, PtrAdd((uint8_t*)constantValue, valueSize),
 			std::back_inserter(_constantData));
 
 		_constantDrivers.push_back({dataOffset, (unsigned)parameterIndex, format, samplerType, samplerOffset});
@@ -114,20 +114,18 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		size_t startIndex = _animationDrivers.size();
 		size_t constantStartIndex = _constantDrivers.size();
 		for (auto i=copyFrom._animationDrivers.cbegin(); i!=copyFrom._animationDrivers.end(); ++i) {
-			if (i->_curveIndex >= copyFrom._curves.size()) continue;
-			const auto* animCurve = &copyFrom._curves[i->_curveIndex];
-			if (animCurve) {
-				float curveStart = animCurve->StartTime();
-				float curveEnd = animCurve->EndTime();
-				minTime = std::min(minTime, curveStart);
-				maxTime = std::max(maxTime, curveEnd);
+			assert(i->_curveIndex < copyFrom._curves.size());
+			const auto& animCurve = copyFrom._curves[i->_curveIndex];
+			float curveStart = animCurve.StartTime();
+			float curveEnd = animCurve.EndTime();
+			minTime = std::min(minTime, curveStart);
+			maxTime = std::max(maxTime, curveEnd);
 
-				auto param = copyFrom._parameterInterfaceDefinition[i->_parameterIndex];
-				_curves.emplace_back(Assets::RawAnimationCurve(*animCurve));
-				AddAnimationDriver(
-					param.first, param.second, unsigned(_curves.size()-1), 
-					i->_samplerType, i->_samplerOffset);
-			}
+			auto param = copyFrom._parameterInterfaceDefinition[i->_parameterIndex];
+			_curves.emplace_back(Assets::RawAnimationCurve(animCurve));
+			AddAnimationDriver(
+				param.first, param.second, unsigned(_curves.size()-1), 
+				i->_samplerType, i->_samplerOffset);
 		}
 
 		for (auto i=copyFrom._constantDrivers.cbegin(); i!=copyFrom._constantDrivers.end(); ++i) {
@@ -202,7 +200,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				newAnim._beginConstantDriver += (unsigned)constantDriverOffset;
 				newAnim._endConstantDriver += (unsigned)constantDriverOffset;
 			}
-			_animations.push_back(std::make_pair(a.first, newAnim));
+			_animations.push_back(std::make_pair(namePrefix+a.first, newAnim));
 		}
 	}
 

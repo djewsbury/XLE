@@ -19,15 +19,14 @@ namespace RenderCore { namespace Assets
 		AnimationState animState = animState__;
 
 		size_t driverStart = 0, driverEnd = 0;
-		size_t constantDriverStartIndex = 0, constantDriverEndIndex = 0;
+		size_t constantDriverStart = 0, constantDriverEnd = 0;
 		if (animState._animation!=0x0) {
-			auto end = _animations.end();
-			auto i = std::lower_bound(_animations.begin(), end, animState._animation, CompareFirst<uint64_t, Animation>());
-			if (i!=end && i->first == animState._animation) {
+			auto i = std::lower_bound(_animations.begin(), _animations.end(), animState._animation, CompareFirst<uint64_t, Animation>());
+			if (i!=_animations.end() && i->first == animState._animation) {
 				driverStart = i->second._beginDriver;
 				driverEnd = i->second._endDriver;
-				constantDriverStartIndex = i->second._beginConstantDriver;
-				constantDriverEndIndex = i->second._endConstantDriver;
+				constantDriverStart = i->second._beginConstantDriver;
+				constantDriverEnd = i->second._endConstantDriver;
 				animState._time += i->second._beginTime;
 			}
 		}
@@ -68,7 +67,7 @@ namespace RenderCore { namespace Assets
 			}
 		}
 
-		for (   size_t c=constantDriverStartIndex; c<constantDriverEndIndex; ++c) {
+		for (   size_t c=constantDriverStart; c<constantDriverEnd; ++c) {
 			const ConstantDriver& driver = _constantDrivers[c];
 			auto& br = bindingRules[driver._parameterIndex];
 			if (br._outputOffset  == ~0x0) continue;   // (unbound output)
@@ -96,19 +95,14 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
-	AnimationSet::Animation AnimationSet::FindAnimation(uint64_t animation) const
+	std::optional<AnimationSet::Animation> AnimationSet::FindAnimation(uint64_t animation) const
 	{
 		auto i = std::lower_bound(
 			_animations.begin(), _animations.end(),
 			animation, CompareFirst<uint64_t, Animation>());
 		if (i!=_animations.end() && i->first == animation)
 			return i->second;
-
-		Animation result;
-		result._beginDriver = result._endDriver = 0;
-		result._beginTime = result._endTime = 0.f;
-		result._beginConstantDriver = result._endConstantDriver = 0;
-		return result;
+		return {};
 	}
 
 	unsigned                AnimationSet::FindParameter(uint64_t parameterName, AnimSamplerComponent component) const

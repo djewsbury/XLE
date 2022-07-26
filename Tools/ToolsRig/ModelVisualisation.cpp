@@ -248,7 +248,7 @@ namespace ToolsRig
 				auto& animData = _actualized->_animationScaffold->ImmutableData();
 
 				auto animHash = Hash64(_animationState->_activeAnimation);
-				auto foundAnimation = animData._animationSet.FindAnimation(animHash);
+				auto foundAnimation = animData._animationSet.FindAnimation(animHash).value();
 				float time = _animationState->_animationTime;
 				if (_animationState->_state == VisAnimationState::State::Playing) {
 					time += std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - _animationState->_anchorTime).count() / 1000.f;
@@ -333,7 +333,7 @@ namespace ToolsRig
 				auto& animData = _actualized->_animationScaffold->ImmutableData();
 
 				auto animHash = Hash64(_animationState->_activeAnimation);
-				auto foundAnimation = animData._animationSet.FindAnimation(animHash);
+				auto foundAnimation = animData._animationSet.FindAnimation(animHash).value();
 				float time = _animationState->_animationTime;
 				if (_animationState->_state == VisAnimationState::State::Playing)
 					time += std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - _animationState->_anchorTime).count() / 1000.f;

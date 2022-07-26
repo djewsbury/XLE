@@ -169,8 +169,8 @@ namespace RenderCore { namespace Assets
 			unsigned componentCount = 0;
 			switch ((TransformCommand)*cmd) {
 			case TransformCommand::BindingPoint_1: componentCount = 1; break;
-			case TransformCommand::BindingPoint_2: componentCount = 1; break;
-			case TransformCommand::BindingPoint_3: componentCount = 1; break;
+			case TransformCommand::BindingPoint_2: componentCount = 2; break;
+			case TransformCommand::BindingPoint_3: componentCount = 3; break;
 			case TransformCommand::BindingPoint_0:
 			default: break;
 			}
