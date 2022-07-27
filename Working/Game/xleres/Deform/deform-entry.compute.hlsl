@@ -6,6 +6,8 @@
 #define R16G16B16A16_FLOAT 10
 #define R32_UINT 42
 #define R16_UINT 57
+#define R8G8B8A8_UNORM 28
+#define R8G8B8_UNORM 1001
 
 #if !IN_POSITION_FORMAT
 	#define IN_POSITION_FORMAT R32G32B32_FLOAT
@@ -167,13 +169,20 @@ void StoreVertex(DeformVertex vertex, uint vertexIdx, uint instanceIdx, DeformIn
 	#endif
 }
 
+uint FloatToUNorm8(float x) { return (uint)clamp((x + 1.0) * float(0xff) / 2.0, 0.0, float(0xff)); }
+float UNorm8ToFloat(uint x) { return x * (2.0 / float(0xff)) - 1.0; }
+
 float3 LoadAsFloat3(ByteAddressBuffer buffer, uint format, uint byteOffset)
 {
+	// requires that byteOffset be mutliple of 4
 	if (format == R32G32B32_FLOAT || format == R32G32B32A32_FLOAT) {
 		return asfloat(buffer.Load3(byteOffset));
 	} else if (format == R16G16B16A16_FLOAT) {
 		uint2 A = buffer.Load2(byteOffset);
 		return f16tof32(uint3(A.x&0xffff, A.x>>16, A.y&0xffff));
+	} else if (format == R8G8B8A8_UNORM || format == R8G8B8_UNORM) {
+		uint A = buffer.Load(byteOffset);
+		return float3(UNorm8ToFloat(A & 0xff), UNorm8ToFloat((A>>8) & 0xff), UNorm8ToFloat((A>>16) & 0xff));
 	} else {
 		return 0;	// trouble
 	}
@@ -181,6 +190,7 @@ float3 LoadAsFloat3(ByteAddressBuffer buffer, uint format, uint byteOffset)
 
 float4 LoadAsFloat4(ByteAddressBuffer buffer, uint format, uint byteOffset)
 {
+	// requires that byteOffset be mutliple of 4
 	if (format == R32G32B32_FLOAT) {
 		return float4(asfloat(buffer.Load3(byteOffset)), 1);
 	} else if (format == R32G32B32A32_FLOAT) {
@@ -188,6 +198,9 @@ float4 LoadAsFloat4(ByteAddressBuffer buffer, uint format, uint byteOffset)
 	} else if (format == R16G16B16A16_FLOAT) {
 		uint2 A = buffer.Load2(byteOffset);
 		return f16tof32(uint4(A.x&0xffff, A.x>>16, A.y&0xffff, A.y>>16));
+	} else if (format == R8G8B8A8_UNORM || format == R8G8B8_UNORM) {
+		uint A = buffer.Load(byteOffset);
+		return float4(UNorm8ToFloat(A & 0xff), UNorm8ToFloat((A>>8) & 0xff), UNorm8ToFloat((A>>16) & 0xff), UNorm8ToFloat((A>>24) & 0xff));
 	} else {
 		return 0;	// trouble
 	}
@@ -195,11 +208,15 @@ float4 LoadAsFloat4(ByteAddressBuffer buffer, uint format, uint byteOffset)
 
 float3 LoadAsFloat3(RWByteAddressBuffer buffer, uint format, uint byteOffset)
 {
+	// requires that byteOffset be mutliple of 4
 	if (format == R32G32B32_FLOAT || format == R32G32B32A32_FLOAT) {
 		return asfloat(buffer.Load3(byteOffset));
 	} else if (format == R16G16B16A16_FLOAT) {
 		uint2 A = buffer.Load2(byteOffset);
 		return f16tof32(uint3(A.x&0xffff, A.x>>16, A.y&0xffff));
+	} else if (format == R8G8B8A8_UNORM || format == R8G8B8_UNORM) {
+		uint A = buffer.Load(byteOffset);
+		return float3(UNorm8ToFloat(A & 0xff), UNorm8ToFloat((A>>8) & 0xff), UNorm8ToFloat((A>>16) & 0xff));
 	} else {
 		return 0;	// trouble
 	}
@@ -207,6 +224,7 @@ float3 LoadAsFloat3(RWByteAddressBuffer buffer, uint format, uint byteOffset)
 
 float4 LoadAsFloat4(RWByteAddressBuffer buffer, uint format, uint byteOffset)
 {
+	// requires that byteOffset be mutliple of 4
 	if (format == R32G32B32_FLOAT) {
 		return float4(asfloat(buffer.Load3(byteOffset)), 1);
 	} else if (format == R32G32B32A32_FLOAT) {
@@ -214,6 +232,9 @@ float4 LoadAsFloat4(RWByteAddressBuffer buffer, uint format, uint byteOffset)
 	} else if (format == R16G16B16A16_FLOAT) {
 		uint2 A = buffer.Load2(byteOffset);
 		return f16tof32(uint4(A.x&0xffff, A.x>>16, A.y&0xffff, A.y>>16));
+	} else if (format == R8G8B8A8_UNORM || format == R8G8B8_UNORM) {
+		uint A = buffer.Load(byteOffset);
+		return float4(UNorm8ToFloat(A & 0xff), UNorm8ToFloat((A>>8) & 0xff), UNorm8ToFloat((A>>16) & 0xff), UNorm8ToFloat((A>>24) & 0xff));
 	} else {
 		return 0;	// trouble
 	}
@@ -254,6 +275,8 @@ void StoreFloat3(float3 value, RWByteAddressBuffer buffer, uint format, uint byt
 	} else if (format == R16G16B16A16_FLOAT) {
 		uint3 A = f32tof16(value);
 		buffer.Store2(byteOffset, uint2((A.x&0xffff)|(A.y<<16), A.z&0xffff));
+	} else if (format == R8G8B8A8_UNORM) {
+		buffer.Store(byteOffset, FloatToUNorm8(value.z)|(FloatToUNorm8(value.y) << 8u)|(FloatToUNorm8(value.z) << 16u));
 	} else {
 		// trouble
 	}
@@ -268,6 +291,8 @@ void StoreFloat4(float4 value, RWByteAddressBuffer buffer, uint format, uint byt
 	} else if (format == R16G16B16A16_FLOAT) {
 		uint4 A = f32tof16(value);
 		buffer.Store2(byteOffset, uint2((A.x&0xffff)|(A.y<<16), (A.z&0xffff)|(A.w<<16)));
+	} else if (format == R8G8B8A8_UNORM) {
+		buffer.Store(byteOffset, FloatToUNorm8(value.z)|(FloatToUNorm8(value.y) << 8u)|(FloatToUNorm8(value.z) << 16u)|(FloatToUNorm8(value.w) << 24));
 	} else {
 		// trouble
 	}
