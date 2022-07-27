@@ -12,7 +12,7 @@
 #include <vector>
 #include <string>
 
-namespace ConsoleRig { class LibVersionDesc; }
+namespace OSServices { class LibVersionDesc; }
 
 namespace Assets
 {
@@ -36,7 +36,7 @@ namespace Assets
 		virtual RegisteredCompilerId RegisterCompiler(
 			const std::string& name,										///< string name for the compiler, usually something user-presentable
 			const std::string& shortName,									///< shortened name, for the intermediate assets store
-			ConsoleRig::LibVersionDesc srcVersion,							///< version information for the module (propagated onto any assets written to disk)
+			OSServices::LibVersionDesc srcVersion,							///< version information for the module (propagated onto any assets written to disk)
 			const DependencyValidation& compilerDepVal,						///< dependency validation for the compiler shared library itself. Can trigger recompiles if the compiler changes
 			CompileOperationDelegate&& delegate,							///< delegate that can create the ICompileOperation for a given asset
 			ArchiveNameDelegate&& archiveNameDelegate = {}					///< delegate used to store the artifacts with in ArchiveCache, rather than individual files (optional)
@@ -78,7 +78,7 @@ namespace Assets
 			IIntermediateCompilers& compilers,
 			const std::string& name,
 			const std::string& shortName,
-			ConsoleRig::LibVersionDesc srcVersion,
+			OSServices::LibVersionDesc srcVersion,
 			const DependencyValidation& compilerDepVal,
 			IIntermediateCompilers::CompileOperationDelegate&& delegate,
 			IIntermediateCompilers::ArchiveNameDelegate&& archiveNameDelegate = {});

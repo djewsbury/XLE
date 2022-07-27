@@ -4,19 +4,19 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "AttachableLibrary.h"
-#include "GlobalServices.h"
-#include "AttachablePtr.h"
-#include "../OSServices/RawFS.h"
-#include "../OSServices/WinAPI/IncludeWindows.h"
-#include "../OSServices/WinAPI/System_WinAPI.h"
+#include "../AttachableLibrary.h"
+#include "../../ConsoleRig/GlobalServices.h"
+#include "../../ConsoleRig/AttachablePtr.h"
+#include "../RawFS.h"
 #include <string>
 #include <sstream>
 #include <assert.h>
 
-#include "../OSServices/WinAPI/WinAPIWrapper.h"
+#include "IncludeWindows.h"
+#include "System_WinAPI.h"
+#include "WinAPIWrapper.h"
 
-namespace ConsoleRig
+namespace OSServices
 {
     typedef HMODULE LibraryHandle;
     static const LibraryHandle LibraryHandle_Invalid = (LibraryHandle)INVALID_HANDLE_VALUE;

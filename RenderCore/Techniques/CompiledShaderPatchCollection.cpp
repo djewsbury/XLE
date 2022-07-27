@@ -12,6 +12,7 @@
 #include "../Assets/IntermediatesStore.h"
 #include "../MinimalShaderSource.h"
 #include "../../ConsoleRig/GlobalServices.h"
+#include "../../OSServices/AttachableLibrary.h"
 #include "../../ShaderParser/ShaderPatcher.h"
 #include "../../ShaderParser/NodeGraphProvider.h"
 #include "../../ShaderParser/ShaderAnalysis.h"

@@ -17,7 +17,7 @@
 #include "../../Assets/MemoryFile.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/CompileAndAsyncManager.h"
-#include "../../ConsoleRig/GlobalServices.h"
+#include "../../OSServices/AttachableLibrary.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Streams/StreamFormatter.h"
 #include "../../Utility/Streams/OutputStreamFormatter.h"

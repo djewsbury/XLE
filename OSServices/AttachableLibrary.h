@@ -10,9 +10,14 @@
 #include "../Core/Prefix.h"
 #include <memory>
 
-namespace ConsoleRig
+namespace OSServices
 {
-	class LibVersionDesc;
+	class LibVersionDesc
+    {
+    public:
+        const char* _versionString;
+        const char* _buildDateString;
+    };
 
     class AttachableLibrary
     {

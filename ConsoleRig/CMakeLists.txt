@@ -8,11 +8,6 @@ set(Src
     AttachablePtr.cpp
     ${CMAKE_BINARY_DIR}/ConsoleRig/Version.cpp)
 
-if (WIN32)
-    list(APPEND Src AttachableLibrary_WinAPI.cpp)
-else()
-    list(APPEND Src AttachableLibrary_Posix.cpp)
-endif()
 add_library(ConsoleRig STATIC ${Src})
 xle_configure_library(ConsoleRig)
 

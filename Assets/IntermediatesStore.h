@@ -14,7 +14,7 @@
 
 namespace Utility { class OutputStream; }
 namespace OSServices { class BasicFile; }
-namespace ConsoleRig { class LibVersionDesc; }
+namespace OSServices { class LibVersionDesc; }
 
 namespace Assets
 {
@@ -72,7 +72,7 @@ namespace Assets
 		// --------- Registration & utilities ---------
 		CompileProductsGroupId RegisterCompileProductsGroup(
 			StringSection<> name,
-			const ConsoleRig::LibVersionDesc& compilerVersionInfo,
+			const OSServices::LibVersionDesc& compilerVersionInfo,
 			bool enableArchiveCacheSet = false);
 		void DeregisterCompileProductsGroup(CompileProductsGroupId);
 

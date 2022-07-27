@@ -7,7 +7,7 @@
 #include "IntermediatesStore.h"
 #include "ICompileOperation.h"
 #include "AssetsCore.h"
-#include "../ConsoleRig/GlobalServices.h"
+#include "../OSServices/AttachableLibrary.h"
 #include "../Utility/IteratorUtils.h"
 #include <string>
 
@@ -34,11 +34,11 @@ namespace Assets
 
 		LooseFilesStorage(
 			std::shared_ptr<IFileSystem> filesystem,
-			StringSection<> baseDirectory, const ConsoleRig::LibVersionDesc& compilerVersionInfo);
+			StringSection<> baseDirectory, const OSServices::LibVersionDesc& compilerVersionInfo);
 		~LooseFilesStorage();
 	private:
 		std::string _baseDirectory;
-		ConsoleRig::LibVersionDesc _compilerVersionInfo;
+		OSServices::LibVersionDesc _compilerVersionInfo;
 		std::shared_ptr<IFileSystem> _filesystem;
 		std::string MakeProductsFileName(StringSection<>);
 	};

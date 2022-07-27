@@ -377,7 +377,7 @@ namespace Assets
 
 	auto IntermediatesStore::RegisterCompileProductsGroup(
 		StringSection<> name, 
-		const ConsoleRig::LibVersionDesc& compilerVersionInfo,
+		const OSServices::LibVersionDesc& compilerVersionInfo,
 		bool enableArchiveCacheSet) -> CompileProductsGroupId
 	{
 		std::unique_lock<std::shared_timed_mutex> l(_pimpl->_lock);

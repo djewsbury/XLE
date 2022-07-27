@@ -16,7 +16,7 @@
 
 namespace Utility { class OutputStream; }
 namespace Assets { class IFileInterface; }
-namespace ConsoleRig { class LibVersionDesc; }
+namespace OSServices { class LibVersionDesc; }
 
 namespace Assets { namespace ChunkFile
 {
@@ -90,7 +90,7 @@ namespace Assets { namespace ChunkFile
     void BuildChunkFile(
 		IFileInterface& file,
 		IteratorRange<const ICompileOperation::SerializedArtifact*> chunks,
-		const ConsoleRig::LibVersionDesc& versionInfo,
+		const OSServices::LibVersionDesc& versionInfo,
 		std::function<bool(const ICompileOperation::SerializedArtifact&)> predicate = {});
 
     namespace Internal

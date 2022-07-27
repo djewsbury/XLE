@@ -8,7 +8,7 @@
 
 #include "AssetsCore.h"
 #include "IArtifact.h"
-#include "../ConsoleRig/GlobalServices.h"		// for LibVersionDesc
+#include "../OSServices/AttachableLibrary.h"		// for LibVersionDesc
 #include "../Utility/Threading/Mutex.h"
 #include "../Utility/UTFUtils.h"
 #include "../Core/Types.h"
@@ -58,7 +58,7 @@ namespace Assets
 
 		ArchiveCache(
 			std::shared_ptr<IFileSystem> filesystem,
-			StringSection<char> archiveName, const ConsoleRig::LibVersionDesc&);
+			StringSection<char> archiveName, const OSServices::LibVersionDesc&);
 		~ArchiveCache();
 
 		ArchiveCache(const ArchiveCache&) = delete;
@@ -100,14 +100,14 @@ namespace Assets
 		std::shared_ptr<::Assets::ArchiveCache> GetArchive(StringSection<char> archiveFilename);
 		void FlushToDisk();
 		
-		ArchiveCacheSet(std::shared_ptr<IFileSystem> filesystem, const ConsoleRig::LibVersionDesc&);
+		ArchiveCacheSet(std::shared_ptr<IFileSystem> filesystem, const OSServices::LibVersionDesc&);
 		~ArchiveCacheSet();
 	protected:
 		typedef std::pair<uint64, std::shared_ptr<::Assets::ArchiveCache>> Archive;
 		std::vector<Archive>    _archives;
 		Threading::Mutex        _archivesLock;
 		std::shared_ptr<IFileSystem> _filesystem;
-		ConsoleRig::LibVersionDesc	_versionDesc;
+		OSServices::LibVersionDesc	_versionDesc;
 	};
 
 }

@@ -19,6 +19,7 @@
 #include "Metal/SubmissionQueue.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../OSServices/Log.h"
+#include "../../OSServices/AttachableLibrary.h"
 #include "../../ConsoleRig/AttachablePtr.h"
 #include "../../Utility/Threading/ThreadingUtils.h"
 #include "../../Utility/MemoryUtils.h"

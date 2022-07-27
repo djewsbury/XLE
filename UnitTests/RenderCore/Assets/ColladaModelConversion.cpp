@@ -15,7 +15,7 @@
 #include "../../../ConsoleRig/Console.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
 #include "../../../ConsoleRig/GlobalServices.h"
-#include "../../../ConsoleRig/AttachableLibrary.h"
+#include "../../../OSServices/AttachableLibrary.h"
 #include "../../../OSServices/Log.h"
 #include "../../../OSServices/RawFS.h"
 #include "../../../OSServices/TimeUtils.h"
@@ -61,7 +61,7 @@ namespace UnitTests
 		auto xlresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 
         {
-            ConsoleRig::AttachableLibrary lib("ColladaConversion.dll");
+            OSServices::AttachableLibrary lib("ColladaConversion.dll");
             std::string attachError;
             bool attachResult = lib.TryAttach(attachError);
             INFO(attachError);
@@ -134,9 +134,9 @@ namespace UnitTests
 
         {
             #if defined(_DEBUG)
-                ConsoleRig::AttachableLibrary lib("../Finals_Debug32/ColladaConversion.dll");
+                OSServices::AttachableLibrary lib("../Finals_Debug32/ColladaConversion.dll");
             #else
-                ConsoleRig::AttachableLibrary lib("../Finals_Profile32/ColladaConversion.dll");
+                OSServices::AttachableLibrary lib("../Finals_Profile32/ColladaConversion.dll");
             #endif
             std::string attachError;
             lib.TryAttach(attachError);

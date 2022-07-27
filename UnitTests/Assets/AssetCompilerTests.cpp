@@ -16,6 +16,7 @@
 #include "../../Assets/AssetServices.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../ConsoleRig/AttachablePtr.h"
+#include "../../OSServices/AttachableLibrary.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringUtils.h"

@@ -2,15 +2,14 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "AttachableLibrary.h"
-#include "GlobalServices.h"
-#include "AttachablePtr.h"
-#include "../OSServices/Log.h"
-#include "../Utility/Streams/PathUtils.h"
+#include "../AttachableLibrary.h"
+#include "../Log.h"
+#include "../../ConsoleRig/GlobalServices.h"
+#include "../../Utility/Streams/PathUtils.h"
 #include <dlfcn.h>
 #include <assert.h>
 
-namespace ConsoleRig
+namespace OSServices
 {
     class AttachableLibrary::Pimpl
     {

@@ -11,6 +11,7 @@
 #include "../../Assets/Assets.h"
 #include "../../Assets/BlockSerializer.h"
 #include "../../Assets/Assets.h"
+#include "../../OSServices/AttachableLibrary.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Core/Prefix.h"
 #include <regex>

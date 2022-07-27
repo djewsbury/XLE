@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "CrossModuleTestHelper.h"
-#include "../../ConsoleRig/AttachableLibrary.h"
+#include "../../OSServices/AttachableLibrary.h"
 #include "../../ConsoleRig/AttachablePtr.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../OSServices/Log.h"
@@ -50,7 +50,7 @@ dll_export std::string CheckWeakAttachable()
 
 extern "C" 
 {
-	dll_export ConsoleRig::LibVersionDesc GetVersionInformation()
+	dll_export OSServices::LibVersionDesc GetVersionInformation()
 	{
 		return ConsoleRig::GetLibVersionDesc();
 	}

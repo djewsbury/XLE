@@ -12,7 +12,7 @@
 #include "InitializerPack.h"
 #include "CompilerLibrary.h"
 #include "ArchiveCache.h"
-#include "../ConsoleRig/AttachableLibrary.h"
+#include "../OSServices/AttachableLibrary.h"
 #include "../ConsoleRig/GlobalServices.h"
 #include "../ConsoleRig/Plugins.h"
 #include "../OSServices/Log.h"
@@ -33,7 +33,7 @@ namespace Assets
 	struct ExtensionAndDelegate
 	{
 		std::string _name;
-		ConsoleRig::LibVersionDesc _srcVersion = {nullptr, nullptr};
+		OSServices::LibVersionDesc _srcVersion = {nullptr, nullptr};
 		IIntermediateCompilers::CompileOperationDelegate _delegate;
 		IIntermediateCompilers::ArchiveNameDelegate _archiveNameDelegate;
 		DependencyValidation _compilerLibraryDepVal;
@@ -69,7 +69,7 @@ namespace Assets
 		virtual RegisteredCompilerId RegisterCompiler(
 			const std::string& name,
 			const std::string& shortName,
-			ConsoleRig::LibVersionDesc srcVersion,
+			OSServices::LibVersionDesc srcVersion,
 			const DependencyValidation& compilerDepVal,
 			CompileOperationDelegate&& delegate,
 			ArchiveNameDelegate&& archiveNameDelegate
@@ -418,7 +418,7 @@ namespace Assets
 	auto IntermediateCompilers::RegisterCompiler(
 		const std::string& name,
 		const std::string& shortName,
-		ConsoleRig::LibVersionDesc srcVersion,
+		OSServices::LibVersionDesc srcVersion,
 		const DependencyValidation& compilerDepVal,
 		CompileOperationDelegate&& delegate,
 		ArchiveNameDelegate&& archiveNameDelegate
@@ -573,7 +573,7 @@ namespace Assets
 	{
 	public:
 		CreateCompileOperationFn* _createCompileOpFunction;
-		std::shared_ptr<ConsoleRig::AttachableLibrary> _library;
+		std::shared_ptr<OSServices::AttachableLibrary> _library;
 
 		struct Kind 
 		{ 
@@ -644,7 +644,7 @@ namespace Assets
 			TRY {
 				CompilerLibrary library{c};
 
-				ConsoleRig::LibVersionDesc srcVersion;
+				OSServices::LibVersionDesc srcVersion;
 				if (!library._library->TryGetVersion(srcVersion))
 					Throw(std::runtime_error("Querying version returned an error"));
 
@@ -688,7 +688,7 @@ namespace Assets
 		IIntermediateCompilers& compilers,
 		const std::string& name,
 		const std::string& shortName,
-		ConsoleRig::LibVersionDesc srcVersion,
+		OSServices::LibVersionDesc srcVersion,
 		const DependencyValidation& compilerDepVal,
 		IIntermediateCompilers::CompileOperationDelegate&& delegate,
 		IIntermediateCompilers::ArchiveNameDelegate&& archiveNameDelegate)

@@ -11,7 +11,7 @@
 #include <assert.h>
 
 namespace Utility { class ThreadPool; }
-namespace OSServices { class PollingThread; }
+namespace OSServices { class PollingThread; class LibVersionDesc; }
 namespace thousandeyes { namespace futures { class Executor; }}
 
 namespace ConsoleRig
@@ -63,12 +63,5 @@ namespace ConsoleRig
         std::unique_ptr<Pimpl> _pimpl;
     };
 
-	class LibVersionDesc
-    {
-    public:
-        const char* _versionString;
-        const char* _buildDateString;
-    };
-
-	LibVersionDesc GetLibVersionDesc();
+	OSServices::LibVersionDesc GetLibVersionDesc();
 }

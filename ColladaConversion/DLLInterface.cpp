@@ -5,7 +5,7 @@
 #include "ColladaConversion.h"
 #include "../Assets/ICompileOperation.h"
 #include "../Assets/CompilerLibrary.h"
-#include "../ConsoleRig/AttachableLibrary.h"
+#include "../OSServices/AttachableLibrary.h"
 #include "../ConsoleRig/AttachablePtr.h"
 #include "../ConsoleRig/GlobalServices.h"
 #include "../OSServices/Log.h"
@@ -56,7 +56,7 @@ namespace ColladaConversion
 extern "C" 
 {
 
-	dll_export ConsoleRig::LibVersionDesc GetVersionInformation()
+	dll_export OSServices::LibVersionDesc GetVersionInformation()
 	{
 		return ConsoleRig::GetLibVersionDesc();
 	}

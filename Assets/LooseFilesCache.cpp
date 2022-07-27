@@ -362,7 +362,7 @@ namespace Assets
 		return result;
 	}
 
-	LooseFilesStorage::LooseFilesStorage(std::shared_ptr<IFileSystem> filesystem, StringSection<> baseDirectory, const ConsoleRig::LibVersionDesc& compilerVersionInfo)
+	LooseFilesStorage::LooseFilesStorage(std::shared_ptr<IFileSystem> filesystem, StringSection<> baseDirectory, const OSServices::LibVersionDesc& compilerVersionInfo)
 	: _baseDirectory(baseDirectory.AsString())
 	, _compilerVersionInfo(compilerVersionInfo)
 	, _filesystem(std::move(filesystem))

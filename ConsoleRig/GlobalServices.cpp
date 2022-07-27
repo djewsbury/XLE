@@ -23,6 +23,7 @@
 #include "../OSServices/RawFS.h"
 #include "../OSServices/FileSystemMonitor.h"
 #include "../OSServices/PollingThread.h"
+#include "../OSServices/AttachableLibrary.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/Streams/StreamFormatter.h"
 #include "../Utility/StringFormat.h"
@@ -354,9 +355,9 @@ namespace ConsoleRig
         _applicationName = applicationName;
     }
 
-	LibVersionDesc GetLibVersionDesc()
+	OSServices::LibVersionDesc GetLibVersionDesc()
 	{
-		return LibVersionDesc { ConsoleRig_VersionString, ConsoleRig_BuildDateString };
+		return OSServices::LibVersionDesc { ConsoleRig_VersionString, ConsoleRig_BuildDateString };
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

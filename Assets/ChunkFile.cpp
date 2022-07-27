@@ -7,7 +7,7 @@
 #include "ChunkFile.h"
 #include "AssetsCore.h"
 #include "IFileSystem.h"
-#include "../ConsoleRig/GlobalServices.h"
+#include "../OSServices/AttachableLibrary.h"
 #include "../OSServices/RawFS.h"
 #include "../Utility/Streams/Stream.h"
 #include "../Utility/PtrUtils.h"
@@ -96,7 +96,7 @@ namespace Assets { namespace ChunkFile
     void BuildChunkFile(
         IFileInterface& file,
         IteratorRange<const ICompileOperation::SerializedArtifact*> chunks,
-        const ConsoleRig::LibVersionDesc& versionInfo,
+        const OSServices::LibVersionDesc& versionInfo,
         std::function<bool(const ICompileOperation::SerializedArtifact&)> predicate)
     {
         unsigned chunksForMainFile = 0;

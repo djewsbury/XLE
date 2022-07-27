@@ -4,7 +4,7 @@
 
 #include "Plugins.h"
 #include "AttachablePtr.h"
-#include "AttachableLibrary.h"
+#include "../OSServices/AttachableLibrary.h"
 #include "../OSServices/Log.h"
 #include "../OSServices/RawFS.h"
 #include "../Utility/Streams/PathUtils.h"
@@ -17,12 +17,12 @@ namespace ConsoleRig
 	class PluginSet::Pimpl
 	{
 	public:
-		std::unordered_map<std::string, std::shared_ptr<AttachableLibrary>> _pluginLibraries;
+		std::unordered_map<std::string, std::shared_ptr<OSServices::AttachableLibrary>> _pluginLibraries;
 		std::unordered_map<std::string, std::string> _failedPlugins;
 		std::vector<std::shared_ptr<IStartupShutdownPlugin>> _plugins;
 	};
 
-	std::shared_ptr<AttachableLibrary> PluginSet::LoadLibrary(std::string name)
+	std::shared_ptr<OSServices::AttachableLibrary> PluginSet::LoadLibrary(std::string name)
 	{
 		auto simplified = MakeSplitPath(name).Rebuild();
 
@@ -33,7 +33,7 @@ namespace ConsoleRig
 		if (i2 != _pimpl->_failedPlugins.end())
 			Throw(std::runtime_error(i2->second));
 
-		auto library = std::make_shared<ConsoleRig::AttachableLibrary>(simplified);
+		auto library = std::make_shared<OSServices::AttachableLibrary>(simplified);
 		std::string errorMsg;
 		if (library->TryAttach(errorMsg)) {
 			_pimpl->_pluginLibraries.insert(std::make_pair(simplified, library));
@@ -62,7 +62,7 @@ namespace ConsoleRig
 			candidatePlugins.insert(MakeSplitPath(c).Rebuild());
 
 		for (auto& c:candidatePlugins) {
-			auto library = std::make_shared<ConsoleRig::AttachableLibrary>(c);
+			auto library = std::make_shared<OSServices::AttachableLibrary>(c);
 			std::string errorMsg;
 			if (library->TryAttach(errorMsg)) {
 				TRY {
@@ -94,9 +94,13 @@ namespace ConsoleRig
 		for (auto& p:_pimpl->_plugins)
 			p->Deinitialize();
 		_pimpl->_plugins.clear();
-		for (auto&a:_pimpl->_pluginLibraries)
-			a.second->Detach();
-		_pimpl->_pluginLibraries.clear();
+
+		const bool actuallyDetachLibraries = false;
+		if (actuallyDetachLibraries) {
+			for (auto&a:_pimpl->_pluginLibraries)
+				a.second->Detach();
+			_pimpl->_pluginLibraries.clear();
+		}
 	}
 
 	PluginSet::PluginSet()

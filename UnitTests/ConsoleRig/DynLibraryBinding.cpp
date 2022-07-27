@@ -4,7 +4,7 @@
 
 #include "CrossModuleTestHelper.h"
 #include "../UnitTestHelper.h"
-#include "../../ConsoleRig/AttachableLibrary.h"
+#include "../../OSServices/AttachableLibrary.h"
 #include "../../ConsoleRig/AttachablePtr.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../OSServices/Log.h"
@@ -35,7 +35,7 @@ namespace UnitTests
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		Verbose.SetConfiguration(OSServices::MessageTargetConfiguration{"<<configured-template>>"});
 
-		ConsoleRig::AttachableLibrary testLibrary(GetUnitTestLibraryName());
+		OSServices::AttachableLibrary testLibrary(GetUnitTestLibraryName());
 		std::string attachErrorMsg;
 		auto tryAttachResult = testLibrary.TryAttach(attachErrorMsg);
 		REQUIRE(tryAttachResult == true);
@@ -75,7 +75,7 @@ namespace UnitTests
 		ConsoleRig::AttachablePtr<SingletonSharedFromAttachedModule> singletonFromAttachedModule;
 
 		{
-			ConsoleRig::AttachableLibrary testLibrary(GetUnitTestLibraryName());
+			OSServices::AttachableLibrary testLibrary(GetUnitTestLibraryName());
 			std::string attachErrorMsg;
 			auto tryAttachResult = testLibrary.TryAttach(attachErrorMsg);
 			REQUIRE(tryAttachResult == true);

@@ -7,6 +7,8 @@
 #include <string>
 #include <memory>
 
+namespace OSServices { class AttachableLibrary; }
+
 namespace ConsoleRig
 {
     class IStartupShutdownPlugin
@@ -18,12 +20,10 @@ namespace ConsoleRig
 		virtual ~IStartupShutdownPlugin();
 	};
 
-	class AttachableLibrary;
-
 	class PluginSet
 	{
 	public:
-		std::shared_ptr<AttachableLibrary> LoadLibrary(std::string name);
+		std::shared_ptr<OSServices::AttachableLibrary> LoadLibrary(std::string name);
 		void LoadDefaultPlugins();
 		void DeinitializePlugins();
 

@@ -42,7 +42,7 @@
 #include "../../Math/ProjectionMath.h"
 
 #include "../../Assets/ChunkFile.h"
-#include "../../ConsoleRig/AttachableLibrary.h"
+#include "../../OSServices/AttachableLibrary.h"
 #include "../../OSServices/Log.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../RenderCore/Assets/AssetUtils.h"

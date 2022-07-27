@@ -29,6 +29,7 @@
 
 #include "../OSServices/Log.h"
 #include "../ConsoleRig/GlobalServices.h"       // for GetLibVersionDesc()
+#include "../OSServices/AttachableLibrary.h"
 #include "../Math/Matrix.h"
 #include "../Math/Transformations.h"
 #include "../Math/ProjectionMath.h"

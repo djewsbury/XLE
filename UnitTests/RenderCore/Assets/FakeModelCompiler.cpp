@@ -12,6 +12,7 @@
 #include "../../../RenderCore/GeoProc/MeshDatabase.h"
 #include "../../../RenderCore/StateDesc.h"
 #include "../../../ConsoleRig/GlobalServices.h"			// for ConsoleRig::GetLibVersionDesc()
+#include "../../../OSServices/AttachableLibrary.h"
 #include "../../../Utility/Streams/StreamTypes.h"
 #include "../../../Utility/Streams/StreamFormatter.h"
 #include "../../../Utility/Streams/OutputStreamFormatter.h"

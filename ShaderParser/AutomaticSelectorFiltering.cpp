@@ -11,6 +11,7 @@
 #include "../Assets/DepVal.h"
 #include "../Assets/PreprocessorIncludeHandler.h"
 #include "../ConsoleRig/GlobalServices.h"		// for GetLibVersionDesc
+#include "../OSServices/AttachableLibrary.h"
 #include "../Utility/Streams/ConditionalPreprocessingTokenizer.h"
 #include "../Utility/Streams/OutputStreamFormatter.h"
 #include "../Utility/Streams/StreamTypes.h"

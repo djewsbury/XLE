@@ -10,6 +10,7 @@
 #include "../Assets/IntermediateCompilers.h"
 #include "../Assets/InitializerPack.h"
 #include "../ConsoleRig/GlobalServices.h"		// for ConsoleRig::GetLibVersionDesc()
+#include "../OSServices/AttachableLibrary.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/Streams/PathUtils.h"

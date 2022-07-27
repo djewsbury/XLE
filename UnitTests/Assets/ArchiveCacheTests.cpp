@@ -114,7 +114,7 @@ namespace UnitTests
 		std::filesystem::remove_all(tempDirPath);	// ensure we're starting from an empty temporary directory
 		std::filesystem::create_directories(tempDirPath);
 
-		ConsoleRig::LibVersionDesc dummyVersionDesc { "unit-test-version-str", "unit-test-build-date-string" };
+		OSServices::LibVersionDesc dummyVersionDesc { "unit-test-version-str", "unit-test-build-date-string" };
 		auto archiveFileName = (tempDirPath / "ArchiveCacheTests" / "archive").string();
 		{
 			::Assets::ArchiveCacheSet cacheSet(::Assets::MainFileSystem::GetDefaultFileSystem(), dummyVersionDesc);

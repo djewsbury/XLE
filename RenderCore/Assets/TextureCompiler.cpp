@@ -12,7 +12,7 @@
 #include "../../Assets/InitializerPack.h"
 #include "../../Assets/IArtifact.h"
 #include "../../Assets/DeferredConstruction.h"
-#include "../../ConsoleRig/GlobalServices.h"
+#include "../../OSServices/AttachableLibrary.h"
 #include "../../Utility/Streams/StreamDOM.h"
 #include "../../Utility/Streams/StreamFormatter.h"
 #include "../../Utility/Streams/PathUtils.h"

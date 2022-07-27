@@ -15,6 +15,7 @@
 #include "../OSServices/Log.h"
 #include "../OSServices/RawFS.h"
 #include "../OSServices/LegacyFileStreams.h"
+#include "../OSServices/AttachableLibrary.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/Streams/StreamFormatter.h"
 #include "../Utility/Streams/OutputStreamFormatter.h"
@@ -1014,7 +1015,7 @@ namespace Assets
 	ArchiveCache::ArchiveCache(
 		std::shared_ptr<IFileSystem> filesystem,
 		StringSection<> archiveName, 
-		const ConsoleRig::LibVersionDesc& versionDesc) 
+		const OSServices::LibVersionDesc& versionDesc) 
 	: _mainFileName(archiveName.AsString())
 	, _buildVersionString(versionDesc._versionString)
 	, _buildDateString(versionDesc._buildDateString)
@@ -1064,7 +1065,7 @@ namespace Assets
 			a.second->FlushToDisk();
 	}
 
-	ArchiveCacheSet::ArchiveCacheSet(std::shared_ptr<IFileSystem> filesystem, const ConsoleRig::LibVersionDesc& versionDesc) : _versionDesc(versionDesc), _filesystem(std::move(filesystem)) {}
+	ArchiveCacheSet::ArchiveCacheSet(std::shared_ptr<IFileSystem> filesystem, const OSServices::LibVersionDesc& versionDesc) : _versionDesc(versionDesc), _filesystem(std::move(filesystem)) {}
 	ArchiveCacheSet::~ArchiveCacheSet() {}
 }
 
