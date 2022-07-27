@@ -156,89 +156,322 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			std::move(adjacencyIndexBuffer) };
 	}
 
-	class NascentGeometryObjects
+	enum class CmdStreamMode { Normal, Topological };
+	struct NascentGeometryObjects
 	{
-	public:
-		std::vector<std::pair<NascentObjectGuid, NascentRawGeometry>> _rawGeos;
-		std::vector<std::pair<uint64_t, NascentBoundSkinnedGeometry>> _skinnedGeos;
+		struct RawGeoEntry { NascentObjectGuid _srcGuid; CmdStreamMode _cmdStreamMode; NascentRawGeometry _geo; unsigned _id = ~0u; };
+		struct SkinnedGeoEntry { uint64_t _srcGuid; CmdStreamMode _cmdStreamMode; NascentBoundSkinnedGeometry _geo; unsigned _id = ~0u; };
+		std::vector<RawGeoEntry> _rawGeos;
+		std::vector<SkinnedGeoEntry> _skinnedGeos;
+		unsigned _nextId = 0;
 	};
 
-	static std::pair<Float3, Float3> CalculateBoundingBox
-		(
-			const NascentGeometryObjects& geoObjects,
-			const NascentModelCommandStream& scene,
-			IteratorRange<const Float4x4*> transforms
-		);
+    static std::ostream& SerializationOperator(std::ostream& stream, const NascentGeometryObjects& geos)
+    {
+        stream << " --- Geos:" << std::endl;
+        for (const auto& g:geos._rawGeos)
+            stream << "[" << g._id << "] (0x" << std::hex << g._srcGuid._objectId << std::dec << ") Geo" << (g._cmdStreamMode == CmdStreamMode::Topological ? "[Topological]" : "") << " --- " << std::endl << g._geo << std::endl;
 
-	static unsigned SerializeSkin(
-		::Assets::BlockSerializer& serializer, 
-		LargeResourceBlockConstructor& largeResourcesConstructor,
-		const NascentGeometryObjects& objs)
+        stream << " --- Skinned Geos:" << std::endl;
+        for (const auto& g:geos._skinnedGeos)
+            stream << "[" << g._id << "] (0x" << std::hex << g._srcGuid << std::dec << ") Skinned geo" << (g._cmdStreamMode == CmdStreamMode::Topological ? "[Topological]" : "") << " --- " << std::endl << g._geo << std::endl;
+        return stream;
+    }
+
+	static void TraceCommandStream(std::ostream& stream, IteratorRange<ScaffoldCmdIterator> cmdStream)
 	{
-		unsigned geoBlocksWritten = 0;
-		for (const auto& geo:objs._rawGeos) {
-			::Assets::BlockSerializer tempBlock;
-			geo.second.SerializeWithResourceBlock(tempBlock, largeResourcesConstructor);
+		for (auto cmd:cmdStream) {
+			switch (cmd.Cmd()) {
+			case (uint32_t)Assets::ModelCommand::GeoCall:
+				{
+					auto& geoCallDesc = cmd.As<Assets::GeoCallDesc>();
+					stream << "Geo call (" << geoCallDesc._geoId << ")" << std::endl;
+				}
+				break;
 
-			serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
-			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
-			serializer << tempBlock.SizePrimaryBlock();
-			serializer.SerializeSubBlock(tempBlock);
-			++geoBlocksWritten;
-		}
-		for (const auto& geo:objs._skinnedGeos) {
-			::Assets::BlockSerializer tempBlock;
-			geo.second.SerializeWithResourceBlock(tempBlock, largeResourcesConstructor);
+			case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
+				{
+					stream << "Material assignments (";
+					bool pendingComma = false;
+					for (auto m:cmd.RawData().Cast<const uint64_t*>()) {
+						if (pendingComma) stream << ", ";
+						pendingComma = true;
+						stream << std::hex << "0x" << m;
+					}
+					stream << ")" << std::dec << std::endl;
+				}
+				break;
 
-			serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
-			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
-			serializer << tempBlock.SizePrimaryBlock();
-			serializer.SerializeSubBlock(tempBlock);
-			++geoBlocksWritten;
+			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
+				stream << "Transform marker (" << cmd.As<unsigned>() << ")" << std::endl;
+				break;
+
+			default:
+				stream << "Unknown command (" << cmd.Cmd() << ")" << std::endl;
+			}
 		}
-		return geoBlocksWritten;
 	}
 
-	static unsigned SerializeSkinTopological(
-		::Assets::BlockSerializer& serializer, 
-		LargeResourceBlockConstructor& largeResourcesConstructor,
-		const NascentGeometryObjects& objs)
+	static void TraceMetrics(std::ostream& stream, const NascentGeometryObjects& geoObjects, IteratorRange<const ::Assets::BlockSerializer*> cmdStreams, const NascentSkeleton& skeleton)
 	{
-		unsigned geoBlocksWritten = 0;
-		for (const auto& geo:objs._rawGeos) {
-			::Assets::BlockSerializer tempBlock;
-			geo.second.SerializeTopologicalWithResourceBlock(tempBlock, largeResourcesConstructor);
-
-			serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
-			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
-			serializer << tempBlock.SizePrimaryBlock();
-			serializer.SerializeSubBlock(tempBlock);
-			++geoBlocksWritten;
+		stream << "============== Geometry Objects ==============" << std::endl;
+		stream << geoObjects;
+		stream << std::endl;
+		stream << "============== Command stream ==============" << std::endl;
+		for (unsigned c=0; c<cmdStreams.size(); ++c) {
+			stream << "Command stream [" << c << "]" << std::endl;
+			auto block = cmdStreams[c].AsMemoryBlock();
+			::Assets::Block_Initialize(block.get());
+			auto* start = ::Assets::Block_GetFirstObject(block.get());
+			auto range = MakeIteratorRange(start, (const void*)PtrAdd(start, cmdStreams[c].SizePrimaryBlock()));
+			TraceCommandStream(stream, MakeScaffoldCmdRange(range));
 		}
-		for (const auto& geo:objs._skinnedGeos) {
-			::Assets::BlockSerializer tempBlock;
-			geo.second.SerializeTopologicalWithResourceBlock(tempBlock, largeResourcesConstructor);
-
-			serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
-			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
-			serializer << tempBlock.SizePrimaryBlock();
-			serializer.SerializeSubBlock(tempBlock);
-			++geoBlocksWritten;
-		}
-		return geoBlocksWritten;
+		stream << std::endl;
+		stream << "============== Transformation Machine ==============" << std::endl;
+		SerializationOperator(stream, skeleton.GetSkeletonMachine());
 	}
 
-    static ModelDefaultPoseData CalculateDefaultPoseData(
+	static uint64_t HashOfGeoAndSkinControllerIds(const NascentModel::Command& cmd)
+	{
+		uint64_t result = HashCombine(cmd._geometryBlock._objectId, cmd._geometryBlock._namespaceId);
+		for (const auto&ctrl:cmd._skinControllerBlocks) {
+			result = HashCombine(ctrl._objectId, result);
+			result = HashCombine(ctrl._namespaceId, result);
+		}
+		return result;
+	}
+
+	struct CmdStreamSerializationHelper
+	{
+		unsigned RegisterInputInterfaceMarker(const std::string& skeleton, const std::string& name)
+		{
+			auto j = std::make_pair(skeleton, name);
+			auto existing = std::find(_inputInterfaceNames.begin(), _inputInterfaceNames.end(), j);
+			if (existing != _inputInterfaceNames.end()) {
+				return (unsigned)std::distance(_inputInterfaceNames.begin(), existing);
+			}
+
+			auto result = (unsigned)_inputInterfaceNames.size();
+			_inputInterfaceNames.push_back({skeleton, name});
+			return result;
+		}
+
+		std::vector<uint64_t> BuildHashedInputInterface() const
+		{
+			std::vector<uint64_t> hashedInterface;
+			hashedInterface.reserve(_inputInterfaceNames.size());
+			for (const auto&j:_inputInterfaceNames) hashedInterface.push_back(HashCombine(Hash64(j.first), Hash64(j.second)));
+			return hashedInterface;
+		}
+
+		std::vector<std::pair<std::string, std::string>>	_inputInterfaceNames;
+	};
+
+	std::vector<::Assets::ICompileOperation::SerializedArtifact> NascentModel::SerializeToChunks(const std::string& name, const NascentSkeleton& embeddedSkeleton, const NativeVBSettings& nativeSettings) const
+	{
+		::Assets::BlockSerializer serializer;
+		auto recall = serializer.CreateRecall(sizeof(unsigned));
+		
+		CmdStreamSerializationHelper mainStreamHelper;
+		std::vector<::Assets::BlockSerializer> generatedCmdStreams;
+		NascentGeometryObjects geoObjects;
+		for (auto mode:{CmdStreamMode::Normal, CmdStreamMode::Topological}) {
+			::Assets::BlockSerializer cmdStreamSerializer;
+			CmdStreamSerializationHelper helper;
+
+			std::optional<unsigned> currentTransformMarker;
+			using MaterialGuid = uint64_t;
+			std::optional<std::vector<MaterialGuid>> currentMaterialAssignment;
+
+			for (const auto&cmd:_commands) {
+				auto* geoBlock = FindGeometryBlock(cmd.second._geometryBlock);
+				if (!geoBlock)
+					Throw(std::runtime_error("Missing geometry block referenced by command list in NascentModel::SerializeToChunks"));
+
+				std::vector<MaterialGuid> materials;
+				materials.reserve(cmd.second._materialBindingSymbols.size());
+				for (const auto&mat:cmd.second._materialBindingSymbols) {
+					MaterialGuid guid = 0;
+					const char* parseEnd = FastParseValue(MakeStringSection(mat), guid);
+					if (parseEnd == AsPointer(mat.end())) {
+						materials.push_back(guid);
+					} else
+						materials.push_back(Hash64(mat));
+				}
+
+				auto localToWorld = helper.RegisterInputInterfaceMarker({}, cmd.second._localToModel);
+
+				if (!currentTransformMarker.has_value() || localToWorld != currentTransformMarker.value()) {
+					cmdStreamSerializer << MakeCmdAndRawData(ModelCommand::SetTransformMarker, localToWorld);
+					currentTransformMarker = localToWorld;
+				}
+				if (!currentMaterialAssignment || *currentMaterialAssignment != materials) {
+					cmdStreamSerializer << MakeCmdAndRanged(ModelCommand::SetMaterialAssignments, materials);
+					currentMaterialAssignment = std::move(materials);
+				}
+
+				if (cmd.second._skinControllerBlocks.empty()) {
+					auto i = std::find_if(geoObjects._rawGeos.begin(), geoObjects._rawGeos.end(),
+						[&cmd, mode](const auto& p) { return p._srcGuid == cmd.second._geometryBlock && p._cmdStreamMode == mode; });
+					if (i == geoObjects._rawGeos.end()) {
+						auto rawGeo = CompleteInstantiation(*geoBlock, nativeSettings);
+						geoObjects._rawGeos.push_back({cmd.second._geometryBlock, mode, std::move(rawGeo), geoObjects._nextId++});
+						i = geoObjects._rawGeos.end()-1;
+					}
+
+					cmdStreamSerializer << MakeCmdAndRawData(ModelCommand::GeoCall, i->_id);
+				} else {
+					auto hashedId = HashOfGeoAndSkinControllerIds(cmd.second);
+					auto i = std::find_if(geoObjects._skinnedGeos.begin(), geoObjects._skinnedGeos.end(),
+						[hashedId, mode](const auto& p) { return p._srcGuid == hashedId && p._cmdStreamMode == mode; });
+					if (i == geoObjects._skinnedGeos.end()) {
+						auto rawGeo = CompleteInstantiation(*geoBlock, nativeSettings);
+
+						std::vector<UnboundSkinControllerAndJointMatrices> controllers;
+						controllers.reserve(cmd.second._skinControllerBlocks.size());
+						for (auto ctrllerId:cmd.second._skinControllerBlocks) {
+							const auto* controllerBlock = FindSkinControllerBlock(ctrllerId);
+							assert(controllerBlock);
+							const auto& controller = *controllerBlock->_controller;
+
+							std::vector<uint16_t> jointMatrices(controller.GetJointNames().size());
+							for (unsigned c=0; c<controller.GetJointNames().size(); ++c)
+								jointMatrices[c] = (uint16_t)helper.RegisterInputInterfaceMarker(controllerBlock->_skeleton, controller.GetJointNames()[c]);
+
+							controllers.emplace_back(UnboundSkinControllerAndJointMatrices { &controller, std::move(jointMatrices) });
+						}
+
+						auto boundController = BindController(std::move(rawGeo), MakeIteratorRange(controllers), "");
+						geoObjects._skinnedGeos.push_back({hashedId, mode, std::move(boundController), geoObjects._nextId++});
+						i = geoObjects._skinnedGeos.end()-1;
+					}
+
+					assert(currentMaterialAssignment.value().size() == i->_geo._unanimatedBase._mainDrawCalls.size());
+					cmdStreamSerializer << MakeCmdAndRawData(ModelCommand::GeoCall, i->_id);
+				}
+			}
+
+			auto hashedInterface = helper.BuildHashedInputInterface();
+			cmdStreamSerializer << CmdAndRawData{(uint32_t)ModelCommand::InputInterface, hashedInterface};
+
+			serializer << (uint32_t)Assets::ScaffoldCommand::ModelCommandStream;
+			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t) + sizeof(uint64_t));
+			if (mode == CmdStreamMode::Normal) {
+				serializer << 0ull;	// default cmd stream id (s_CmdStreamGuid_Default)
+			} else {
+				assert(mode == CmdStreamMode::Topological);
+				serializer << Hash64("adjacency");
+			}
+			serializer << cmdStreamSerializer.SizePrimaryBlock();
+			serializer.SerializeSubBlock(cmdStreamSerializer);
+
+			if (mode == CmdStreamMode::Normal)
+				mainStreamHelper = std::move(helper);
+			generatedCmdStreams.emplace_back(std::move(cmdStreamSerializer));
+		}
+
+		// "large resources" --> created from the objects in geoObjects
+		auto largeResourcesBlock = std::make_shared<std::vector<uint8_t>>();
+		{
+			LargeResourceBlockConstructor largeResourcesConstructor;
+			for (unsigned c=0; c<geoObjects._nextId; ++c) {
+				auto i = std::find_if(geoObjects._rawGeos.begin(), geoObjects._rawGeos.end(), [c](const auto&q) { return q._id == c; });
+				if (i != geoObjects._rawGeos.end()) {
+					::Assets::BlockSerializer tempBlock;
+					if (i->_cmdStreamMode == CmdStreamMode::Normal) {
+						i->_geo.SerializeWithResourceBlock(tempBlock, largeResourcesConstructor);
+					} else {
+						assert(i->_cmdStreamMode == CmdStreamMode::Topological);
+						i->_geo.SerializeTopologicalWithResourceBlock(tempBlock, largeResourcesConstructor);
+					}
+
+					serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
+					serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
+					serializer << tempBlock.SizePrimaryBlock();
+					serializer.SerializeSubBlock(tempBlock);
+				} else {
+					auto i2 = std::find_if(geoObjects._skinnedGeos.begin(), geoObjects._skinnedGeos.end(), [c](const auto&q) { return q._id == c; });
+					assert(i2 != geoObjects._skinnedGeos.end());
+
+					::Assets::BlockSerializer tempBlock;
+					if (i2->_cmdStreamMode == CmdStreamMode::Normal) {
+						i2->_geo.SerializeWithResourceBlock(tempBlock, largeResourcesConstructor);
+					} else {
+						assert(i2->_cmdStreamMode == CmdStreamMode::Topological);
+						i2->_geo.SerializeTopologicalWithResourceBlock(tempBlock, largeResourcesConstructor);
+					}
+
+					serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
+					serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
+					serializer << tempBlock.SizePrimaryBlock();
+					serializer.SerializeSubBlock(tempBlock);
+				}
+			}
+
+			largeResourcesBlock->resize(largeResourcesConstructor.CalculateSize());
+			auto i = largeResourcesBlock->begin();
+			for (const auto& e:largeResourcesConstructor._elements) {
+				std::memcpy(AsPointer(i), e.begin(), e.size());
+				i += e.size();
+			}
+			assert(i == largeResourcesBlock->end());
+		}
+
+		{
+			::Assets::BlockSerializer tempBlock;
+			tempBlock << embeddedSkeleton;
+
+			serializer << (uint32_t)Assets::ScaffoldCommand::Skeleton;
+			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
+			serializer << tempBlock.SizePrimaryBlock();
+			serializer.SerializeSubBlock(tempBlock);
+		}
+
+		{
+			auto defaultPoseData = CalculateDefaultPoseData(embeddedSkeleton, geoObjects, mainStreamHelper);
+			serializer << MakeCmdAndSerializable(ScaffoldCommand::DefaultPoseData, defaultPoseData);
+		}
+
+		{
+			ModelRootData rootData;
+			rootData._maxLOD = 0;
+			serializer << MakeCmdAndSerializable(ScaffoldCommand::ModelRootData, rootData);
+		}
+
+		serializer.PushSizeValueAtRecall(recall);
+
+		// SerializationOperator human-readable metrics information
+		std::stringstream metricsStream;
+		TraceMetrics(metricsStream, geoObjects, generatedCmdStreams, embeddedSkeleton);
+
+		auto scaffoldBlock = ::Assets::AsBlob(serializer);
+		auto metricsBlock = ::Assets::AsBlob(metricsStream);
+
+		return
+			{
+				::Assets::ICompileOperation::SerializedArtifact{
+					RenderCore::Assets::ChunkType_ModelScaffold, ModelScaffoldVersion, name,
+					std::move(scaffoldBlock)},
+				::Assets::ICompileOperation::SerializedArtifact{
+					RenderCore::Assets::ChunkType_ModelScaffoldLargeBlocks, ModelScaffoldLargeBlocksVersion, name,
+					std::move(largeResourcesBlock)},
+				::Assets::ICompileOperation::SerializedArtifact{
+					RenderCore::Assets::ChunkType_Metrics, 0, "skin-" + name, 
+					std::move(metricsBlock)}
+			};
+	}
+
+	ModelDefaultPoseData NascentModel::CalculateDefaultPoseData(
         const NascentSkeleton& skeleton,
-        const NascentModelCommandStream& cmdStream,
-        const NascentGeometryObjects& geoObjects)
+        const NascentGeometryObjects& geoObjects,
+		const CmdStreamSerializationHelper& helper) const
     {
         ModelDefaultPoseData result;
 
         auto skeletonOutput = skeleton.GetSkeletonMachine().GenerateOutputTransforms();
 
         auto skelOutputInterface = skeleton.GetSkeletonMachine().BuildHashedOutputInterface();
-        auto streamInputInterface = cmdStream.BuildHashedInputInterface();
+        auto streamInputInterface = helper.BuildHashedInputInterface();
         RenderCore::Assets::SkeletonBinding skelBinding(
             RenderCore::Assets::SkeletonMachine::OutputInterface{AsPointer(skelOutputInterface.begin()), skelOutputInterface.size()},
 			MakeIteratorRange(streamInputInterface));
@@ -268,305 +501,74 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             result._defaultTransforms.erase(result._defaultTransforms.begin(), result._defaultTransforms.end());
         }
 
-        result._boundingBox = CalculateBoundingBox(
-            geoObjects, cmdStream, MakeIteratorRange(result._defaultTransforms));
+		// calculate bounding box
+		{
+			//
+			//      For all the parts of the model, calculate the bounding box.
+			//      We just have to go through each vertex in the model, and
+			//      transform it into model space, and calculate the min and max values
+			//      found
+			//		We could do this with the mesh databases in GeoBlock, but we've
+			//		also got the converted geo
+			//
+			auto boundingBox = InvalidBoundingBox();
+			auto helperCopy = helper;
+			for (const auto&cmd:_commands) {
+				auto localToWorldId = helperCopy.RegisterInputInterfaceMarker({}, cmd.second._localToModel);
+				Float4x4 localToWorld = Identity<Float4x4>();
+				if (localToWorldId < result._defaultTransforms.size())
+					localToWorld = result._defaultTransforms[localToWorldId];
+
+				if (cmd.second._skinControllerBlocks.empty()) {
+					auto i = std::find_if(geoObjects._rawGeos.begin(), geoObjects._rawGeos.end(), [id=cmd.second._geometryBlock](const auto& q) { return q._srcGuid == id && q._cmdStreamMode == CmdStreamMode::Normal; });
+					if (i == geoObjects._rawGeos.end()) continue;
+
+					localToWorld = Combine(i->_geo._geoSpaceToNodeSpace, localToWorld);
+
+					const void*         vertexBuffer = i->_geo._vertices.data();
+					const unsigned      vertexStride = i->_geo._mainDrawInputAssembly._vertexStride;
+
+					auto positionDesc = FindPositionElement(
+						AsPointer(i->_geo._mainDrawInputAssembly._elements.begin()),
+						i->_geo._mainDrawInputAssembly._elements.size());
+
+					if (positionDesc._nativeFormat != Format::Unknown && vertexStride) {
+						AddToBoundingBox(
+							boundingBox, vertexBuffer, vertexStride, 
+							i->_geo._vertices.size() / vertexStride, positionDesc, localToWorld);
+					}
+				} else {
+					auto hashedId = HashOfGeoAndSkinControllerIds(cmd.second);
+					auto i = std::find_if(geoObjects._skinnedGeos.begin(), geoObjects._skinnedGeos.end(), [hashedId](const auto& q) { return q._srcGuid == hashedId && q._cmdStreamMode == CmdStreamMode::Normal; });
+					if (i == geoObjects._skinnedGeos.end()) continue;
+
+					localToWorld = Combine(i->_geo._unanimatedBase._geoSpaceToNodeSpace, localToWorld);
+
+					//  We can't get the vertex position data directly from the vertex buffer, because
+					//  the "bound" object is already using an opaque hardware object. However, we can
+					//  transform the local space bounding box and use that.
+
+					const unsigned indices[][3] = 
+					{
+						{0,0,0}, {0,1,0}, {1,0,0}, {1,1,0},
+						{0,0,1}, {0,1,1}, {1,0,1}, {1,1,1}
+					};
+
+					const Float3* A = (const Float3*)&i->_geo._localBoundingBox.first;
+					for (unsigned c=0; c<dimof(indices); ++c) {
+						Float3 position(A[indices[c][0]][0], A[indices[c][1]][1], A[indices[c][2]][2]);
+						AddToBoundingBox(boundingBox, position, localToWorld);
+					}
+				}
+			}
+
+			assert(!std::isinf(boundingBox.first[0]) && !std::isinf(boundingBox.first[1]) && !std::isinf(boundingBox.first[2]));
+			assert(!std::isinf(boundingBox.second[0]) && !std::isinf(boundingBox.second[1]) && !std::isinf(boundingBox.second[2]));
+			result._boundingBox = boundingBox;
+		}
 
         return result;
     }
-
-    static std::ostream& SerializationOperator(std::ostream& stream, const NascentGeometryObjects& geos)
-    {
-        stream << " --- Geos:" << std::endl;
-        unsigned c=0;
-        for (const auto& g:geos._rawGeos)
-            stream << "[" << c++ << "] (0x" << std::hex << g.first._objectId << std::dec << ") Geo --- " << std::endl << g.second << std::endl;
-
-        stream << " --- Skinned Geos:" << std::endl;
-        c=0;
-        for (const auto& g:geos._skinnedGeos)
-            stream << "[" << c++ << "] (0x" << std::hex << g.first << std::dec << ") Skinned geo --- " << std::endl << g.second << std::endl;
-        return stream;
-    }
-
-	static void TraceMetrics(std::ostream& stream, const NascentGeometryObjects& geoObjects, const NascentModelCommandStream& cmdStream, const NascentSkeleton& skeleton)
-	{
-		stream << "============== Geometry Objects ==============" << std::endl;
-		stream << geoObjects;
-		stream << std::endl;
-		stream << "============== Command stream ==============" << std::endl;
-		stream << cmdStream;
-		stream << std::endl;
-		stream << "============== Transformation Machine ==============" << std::endl;
-		SerializationOperator(stream, skeleton.GetSkeletonMachine());
-	}
-
-	std::vector<::Assets::ICompileOperation::SerializedArtifact> SerializeSkinToChunks(const std::string& name, const NascentGeometryObjects& geoObjects, const NascentModelCommandStream& cmdStream, const NascentSkeleton& skeleton)
-	{
-		::Assets::BlockSerializer serializer;
-		auto recall = serializer.CreateRecall(sizeof(unsigned));
-
-		LargeResourceBlockConstructor largeResourcesConstructor;
-		unsigned geoBlocksWritten = 0;
-
-		// main command streams
-		{
-			geoBlocksWritten += SerializeSkin(serializer, largeResourcesConstructor, geoObjects);
-
-			::Assets::BlockSerializer tempBlock;
-			tempBlock << cmdStream;
-
-			serializer << (uint32_t)Assets::ScaffoldCommand::ModelCommandStream;
-			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t) + sizeof(uint64_t));
-			serializer << 0ull;	// default cmd stream id (s_CmdStreamGuid_Default)
-			serializer << tempBlock.SizePrimaryBlock();
-			serializer.SerializeSubBlock(tempBlock);
-		}
-
-		// topological command streams
-		{
-			auto geoBlockOffset = geoBlocksWritten;
-			geoBlocksWritten += SerializeSkinTopological(serializer, largeResourcesConstructor, geoObjects);
-
-			::Assets::BlockSerializer tempBlock;
-			SerializationOperator(tempBlock, cmdStream, geoBlockOffset);
-
-			serializer << (uint32_t)Assets::ScaffoldCommand::ModelCommandStream;
-			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t) + sizeof(uint64_t));
-			serializer << Hash64("adjacency");
-			serializer << tempBlock.SizePrimaryBlock();
-			serializer.SerializeSubBlock(tempBlock);
-		}
-
-		{
-			::Assets::BlockSerializer tempBlock;
-			tempBlock << skeleton;
-
-			serializer << (uint32_t)Assets::ScaffoldCommand::Skeleton;
-			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
-			serializer << tempBlock.SizePrimaryBlock();
-			serializer.SerializeSubBlock(tempBlock);
-		}
-
-		{
-			auto defaultPoseData = CalculateDefaultPoseData(skeleton, cmdStream, geoObjects);
-			serializer << MakeCmdAndSerializable(ScaffoldCommand::DefaultPoseData, defaultPoseData);
-		}
-
-		{
-			ModelRootData rootData;
-			rootData._maxLOD = cmdStream.GetMaxLOD();
-			serializer << MakeCmdAndSerializable(ScaffoldCommand::ModelRootData, rootData);
-		}
-
-		serializer.PushSizeValueAtRecall(recall);
-
-		auto largeResourcesBlock = std::make_shared<std::vector<uint8_t>>();
-		largeResourcesBlock->resize(largeResourcesConstructor.CalculateSize());
-		auto i = largeResourcesBlock->begin();
-		for (const auto& e:largeResourcesConstructor._elements) {
-			std::memcpy(AsPointer(i), e.begin(), e.size());
-			i += e.size();
-		}
-		assert(i == largeResourcesBlock->end());
-
-		// SerializationOperator human-readable metrics information
-		std::stringstream metricsStream;
-		TraceMetrics(metricsStream, geoObjects, cmdStream, skeleton);
-
-		auto scaffoldBlock = ::Assets::AsBlob(serializer);
-		auto metricsBlock = ::Assets::AsBlob(metricsStream);
-
-		return
-			{
-				::Assets::ICompileOperation::SerializedArtifact{
-					RenderCore::Assets::ChunkType_ModelScaffold, ModelScaffoldVersion, name,
-					std::move(scaffoldBlock)},
-				::Assets::ICompileOperation::SerializedArtifact{
-					RenderCore::Assets::ChunkType_ModelScaffoldLargeBlocks, ModelScaffoldLargeBlocksVersion, name,
-					std::move(largeResourcesBlock)},
-				::Assets::ICompileOperation::SerializedArtifact{
-					RenderCore::Assets::ChunkType_Metrics, 0, "skin-" + name, 
-					std::move(metricsBlock)}
-			};
-	}
-
-	static uint64_t HashOfGeoAndSkinControllerIds(const NascentModel::Command& cmd)
-	{
-		uint64_t result = HashCombine(cmd._geometryBlock._objectId, cmd._geometryBlock._namespaceId);
-		for (const auto&ctrl:cmd._skinControllerBlocks) {
-			result = HashCombine(ctrl._objectId, result);
-			result = HashCombine(ctrl._namespaceId, result);
-		}
-		return result;
-	}
-
-	std::vector<::Assets::ICompileOperation::SerializedArtifact> NascentModel::SerializeToChunks(const std::string& name, const NascentSkeleton& embeddedSkeleton, const NativeVBSettings& nativeSettings) const
-	{
-		NascentGeometryObjects geoObjects;
-		NascentModelCommandStream cmdStream;
-
-		for (const auto&cmd:_commands) {
-			auto* geoBlock = FindGeometryBlock(cmd.second._geometryBlock);
-			if (!geoBlock) continue;
-
-			std::vector<uint64_t> materialGuid;
-			materialGuid.reserve(cmd.second._materialBindingSymbols.size());
-			for (const auto&mat:cmd.second._materialBindingSymbols) {
-				NascentModelCommandStream::MaterialGuid guid = 0;
-				const char* parseEnd = FastParseValue(MakeStringSection(mat), guid);
-				if (parseEnd == AsPointer(mat.end())) {
-					materialGuid.push_back(guid);
-				} else
-					materialGuid.push_back(Hash64(mat));
-			}
-
-			if (cmd.second._skinControllerBlocks.empty()) {
-				auto i = std::find_if(geoObjects._rawGeos.begin(), geoObjects._rawGeos.end(),
-					[&cmd](const std::pair<NascentObjectGuid, NascentRawGeometry>& p) { return p.first == cmd.second._geometryBlock; });
-				if (i == geoObjects._rawGeos.end()) {
-					auto rawGeo = CompleteInstantiation(*geoBlock, nativeSettings);
-					geoObjects._rawGeos.emplace_back(
-						std::make_pair(cmd.second._geometryBlock, std::move(rawGeo)));
-					i = geoObjects._rawGeos.end ()-1;
-				}
-
-				cmdStream.Add(
-					NascentModelCommandStream::GeometryInstance {
-						(unsigned)std::distance(geoObjects._rawGeos.begin(), i),
-						cmdStream.RegisterInputInterfaceMarker({}, cmd.second._localToModel),
-						std::move(materialGuid),
-						cmd.second._levelOfDetail
-					});
-			} else {
-				auto hashedId = HashOfGeoAndSkinControllerIds(cmd.second);
-				auto i = std::find_if(geoObjects._skinnedGeos.begin(), geoObjects._skinnedGeos.end(),
-					[hashedId](const std::pair<uint64_t, NascentBoundSkinnedGeometry>& p) { return p.first == hashedId; });
-				if (i == geoObjects._skinnedGeos.end()) {
-					auto rawGeo = CompleteInstantiation(*geoBlock, nativeSettings);
-
-					std::vector<UnboundSkinControllerAndJointMatrices> controllers;
-					controllers.reserve(cmd.second._skinControllerBlocks.size());
-					for (auto ctrllerId:cmd.second._skinControllerBlocks) {
-						const auto* controllerBlock = FindSkinControllerBlock(ctrllerId);
-						assert(controllerBlock);
-						const auto& controller = *controllerBlock->_controller;
-
-						std::vector<uint16_t> jointMatrices(controller.GetJointNames().size());
-						for (unsigned c=0; c<controller.GetJointNames().size(); ++c)
-							jointMatrices[c] = (uint16_t)cmdStream.RegisterInputInterfaceMarker(controllerBlock->_skeleton, controller.GetJointNames()[c]);
-
-						controllers.emplace_back(UnboundSkinControllerAndJointMatrices { &controller, std::move(jointMatrices) });
-					}
-
-					auto boundController = BindController(std::move(rawGeo), MakeIteratorRange(controllers), "");
-					geoObjects._skinnedGeos.emplace_back(std::make_pair(hashedId, std::move(boundController)));
-					i = geoObjects._skinnedGeos.end()-1;
-				}
-
-				cmdStream.Add(
-					NascentModelCommandStream::SkinControllerInstance {
-						(unsigned)std::distance(geoObjects._skinnedGeos.begin(), i),
-						cmdStream.RegisterInputInterfaceMarker({}, cmd.second._localToModel),
-						std::move(materialGuid),
-						cmd.second._levelOfDetail
-					});
-			}
-		}
-
-		return SerializeSkinToChunks(name, geoObjects, cmdStream, embeddedSkeleton);
-	}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-	static std::pair<Float3, Float3> CalculateBoundingBox
-		(
-			const NascentGeometryObjects& geoObjects,
-			const NascentModelCommandStream& scene,
-			IteratorRange<const Float4x4*> transforms
-		)
-	{
-		//
-		//      For all the parts of the model, calculate the bounding box.
-		//      We just have to go through each vertex in the model, and
-		//      transform it into model space, and calculate the min and max values
-		//      found;
-		//
-		auto result = InvalidBoundingBox();
-		// const auto finalMatrices = 
-		//     _skeleton.GetSkeletonMachine().GenerateOutputTransforms(
-		//         _animationSet.BuildTransformationParameterSet(0.f, nullptr, _skeleton, _objects));
-
-		//
-		//      Do the unskinned geometry first
-		//
-
-		for (auto i=scene._geometryInstances.cbegin(); i!=scene._geometryInstances.cend(); ++i) {
-			const NascentModelCommandStream::GeometryInstance& inst = *i;
-
-			if (inst._id >= geoObjects._rawGeos.size()) continue;
-			const auto* geo = &geoObjects._rawGeos[inst._id].second;
-
-			Float4x4 localToWorld = Identity<Float4x4>();
-			if (inst._localToWorldId < transforms.size())
-				localToWorld = transforms[inst._localToWorldId];
-
-			localToWorld = Combine(geo->_geoSpaceToNodeSpace, localToWorld);
-
-			const void*         vertexBuffer = geo->_vertices.data();
-			const unsigned      vertexStride = geo->_mainDrawInputAssembly._vertexStride;
-
-			auto positionDesc = FindPositionElement(
-				AsPointer(geo->_mainDrawInputAssembly._elements.begin()),
-				geo->_mainDrawInputAssembly._elements.size());
-
-			if (positionDesc._nativeFormat != Format::Unknown && vertexStride) {
-				AddToBoundingBox(
-					result, vertexBuffer, vertexStride, 
-					geo->_vertices.size() / vertexStride, positionDesc, localToWorld);
-			}
-		}
-
-		//
-		//      Now also do the skinned geometry. But use the default pose for
-		//      skinned geometry (ie, don't apply the skinning transforms to the bones).
-		//      Obvious this won't give the correct result post-animation.
-		//
-
-		for (auto i=scene._skinControllerInstances.cbegin(); i!=scene._skinControllerInstances.cend(); ++i) {
-			const NascentModelCommandStream::SkinControllerInstance& inst = *i;
-
-			if (inst._id >= geoObjects._skinnedGeos.size()) continue;
-			const auto* controller = &geoObjects._skinnedGeos[inst._id].second;
-			if (!controller) continue;
-
-			Float4x4 localToWorld = Identity<Float4x4>();
-			if (inst._localToWorldId < transforms.size())
-				localToWorld = transforms[inst._localToWorldId];
-
-			localToWorld = Combine(controller->_unanimatedBase._geoSpaceToNodeSpace, localToWorld);
-
-			//  We can't get the vertex position data directly from the vertex buffer, because
-			//  the "bound" object is already using an opaque hardware object. However, we can
-			//  transform the local space bounding box and use that.
-
-			const unsigned indices[][3] = 
-			{
-				{0,0,0}, {0,1,0}, {1,0,0}, {1,1,0},
-				{0,0,1}, {0,1,1}, {1,0,1}, {1,1,1}
-			};
-
-			const Float3* A = (const Float3*)&controller->_localBoundingBox.first;
-			for (unsigned c=0; c<dimof(indices); ++c) {
-				Float3 position(A[indices[c][0]][0], A[indices[c][1]][1], A[indices[c][2]][2]);
-				AddToBoundingBox(result, position, localToWorld);
-			}
-		}
-
-		assert(!std::isinf(result.first[0]) && !std::isinf(result.first[1]) && !std::isinf(result.first[2]));
-		assert(!std::isinf(result.second[0]) && !std::isinf(result.second[1]) && !std::isinf(result.second[2]));
-
-		return result;
-	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

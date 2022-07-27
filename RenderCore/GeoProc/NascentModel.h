@@ -17,12 +17,16 @@
 #include <string>
 #include <vector>
 
+namespace RenderCore { namespace Assets { struct ModelDefaultPoseData; }}
+
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
 	class MeshDatabase;
 	class UnboundSkinController;
 	class NascentSkeleton;
 	struct NativeVBSettings;
+	class NascentGeometryObjects;
+	struct CmdStreamSerializationHelper;
 
 	class NascentModel
 	{
@@ -103,6 +107,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		std::vector<std::pair<Indexor,SkinControllerBlock>>	_skinBlocks;
 		std::vector<std::pair<Indexor,Command>>				_commands;
 		uint64_t _nextAvailableNamespace0Id = 1;
+
+		ModelDefaultPoseData CalculateDefaultPoseData(
+			const NascentSkeleton& skeleton,
+			const NascentGeometryObjects& geoObjects,
+			const CmdStreamSerializationHelper& helper) const;
 	};
 
 	class ModelTransMachineOptimizer : public ITransformationMachineOptimizer
