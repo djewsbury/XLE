@@ -20,10 +20,10 @@ namespace EntityInterface
         RetainedEntity& dest, const RegisteredObjectType& type, const PropertyInitializer& prop) const
     {
         if (prop._prop == 0 || prop._prop > type._properties.size()) return false;
-        if (prop._src.empty()) return false;
+        if (prop._data.empty()) return false;
 
         const auto& propertyName = type._properties[prop._prop-1];
-        dest._properties.SetParameter(MakeStringSection(propertyName), prop._src, prop._type);
+        dest._properties.SetParameter(MakeStringSection(propertyName), prop._data, prop._type);
         return true;
     }
 
@@ -564,7 +564,7 @@ namespace EntityInterface
 
                 PropertyInitializer i;
                 i._prop = id;
-                i._src = { (void*)bufferOffset, (void*)initsBuffer.size() };		// note -- temporarily storing the offset here, because we convert to a pointer in just below before calling CreateObject
+                i._data = { (void*)bufferOffset, (void*)initsBuffer.size() };		// note -- temporarily storing the offset here, because we convert to a pointer in just below before calling CreateObject
                 i._type = type;
 
                 inits.push_back(i);
@@ -573,7 +573,7 @@ namespace EntityInterface
 
         if (typeId != ~EntityTypeId(0x0)) {
             for (auto&i : inits)
-                i._src = { PtrAdd(AsPointer(initsBuffer.cbegin()), size_t(i._src.first)), PtrAdd(AsPointer(initsBuffer.cbegin()), size_t(i._src.second)) };
+                i._data = { PtrAdd(AsPointer(initsBuffer.cbegin()), size_t(i._data.first)), PtrAdd(AsPointer(initsBuffer.cbegin()), size_t(i._data.second)) };
 
             auto id = interf.CreateEntity(typeId, inits);
             if (!id)

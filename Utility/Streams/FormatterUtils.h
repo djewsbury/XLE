@@ -191,9 +191,7 @@ namespace Utility
 			ImpliedTyping::TypeDesc typeDesc;
 			if (!formatter.TryRawValue(value, typeDesc))
 				Throw(Utility::FormatException(StringMeld<256>() << "Expecting value of type " << typeid(Type).name(), formatter.GetLocation()));
-			Type result;
-			ImpliedTyping::Cast(MakeOpaqueIteratorRange(result), ImpliedTyping::TypeOf<Type>(), value, typeDesc);
-			return result;
+			return ImpliedTyping::VariantNonRetained{typeDesc, value}.RequireCastValue<Type>();
 		} else {
 			typename Formatter::InteriorSection value;
 			Type result;

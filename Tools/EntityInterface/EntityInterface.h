@@ -28,12 +28,9 @@ namespace EntityInterface
     using DocumentId = uint64_t;
     using EntityId = uint64_t;
 
-    class PropertyInitializer
+    struct PropertyInitializer : public ImpliedTyping::VariantNonRetained
     {
-    public:
         PropertyId _prop = 0;
-        IteratorRange<const void*> _src;
-        ImpliedTyping::TypeDesc _type;
     };
 
     class IEntityDocument
