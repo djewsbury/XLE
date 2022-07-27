@@ -537,6 +537,12 @@ namespace OSServices
 		auto mapping = CreateFileMappingA(
 			fileHandle, nullptr, pageAccessMode, DWORD(size>>32), DWORD(size), nullptr);
 		if (!mapping || mapping == INVALID_HANDLE_VALUE) {
+			if (!mapping && (GetFileSize(fileHandle) == 0) && (!size || !(underlyingOpenMode._underlyingAccessMode & FILE_WRITE_DATA))) {
+				// If we attempt to open a zero sized file in read mode (or with size 0 in write mode), we will get here
+				// Let's not consider this an error, we'll just return with an empty result
+				_closeFn = [fileHandle](IteratorRange<const void*>){ CloseHandle(fileHandle); };
+				return Exceptions::IOException::Reason::Success;
+			}
 			CloseHandle(fileHandle);
 			return AsExceptionReason(GetLastError());
 		}
@@ -584,6 +590,12 @@ namespace OSServices
 		auto mapping = CreateFileMappingA(
 			fileHandle, nullptr, pageAccessMode, DWORD(size>>32), DWORD(size), nullptr);
 		if (!mapping || mapping == INVALID_HANDLE_VALUE) {
+			if (!mapping && (GetFileSize(fileHandle) == 0) && (!size || !(underlyingOpenMode._underlyingAccessMode & FILE_WRITE_DATA))) {
+				// If we attempt to open a zero sized file in read mode (or with size 0 in write mode), we will get here
+				// Let's not consider this an error, we'll just return with an empty result
+				_closeFn = [fileHandle](IteratorRange<const void*>){ CloseHandle(fileHandle); };
+				return Exceptions::IOException::Reason::Success;
+			}
 			CloseHandle(fileHandle);
 			return AsExceptionReason(GetLastError());
 		}
