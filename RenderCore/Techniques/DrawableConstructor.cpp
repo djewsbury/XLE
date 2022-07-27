@@ -710,7 +710,8 @@ namespace RenderCore { namespace Techniques
 
 								auto& pendingGeo = _pendingGeos._geos[pendingGeoIdx];
 								unsigned materialIterator = 0;
-								assert(rawGeometry->_drawCalls.size() == currentMaterialAssignments.size());
+								auto drawCallCount = rawGeometry->_drawCalls.size();
+								assert(drawCallCount == currentMaterialAssignments.size());
 								for (const auto& dc:rawGeometry->_drawCalls) {
 									// note -- there's some redundancy here, because we'll end up calling 
 									// AddMaterial & MakePipeline over and over again for the same parameters. There's

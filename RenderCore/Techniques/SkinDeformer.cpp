@@ -743,7 +743,7 @@ namespace RenderCore { namespace Techniques
 			auto geoCount = modelScaffold->GetGeoCount();
 			for (unsigned c=0; c<geoCount; ++c) {
 				auto* skinningData = FindSkinningData(modelScaffold->GetGeoMachine(c));
-				if (!skinningData) break;
+				if (!skinningData) continue;
 
 				auto& animVB = skinningData->_animatedVertexElements;
 				auto positionElement = Internal::FindElement(MakeIteratorRange(animVB._ia._elements), s_positionEleName);
