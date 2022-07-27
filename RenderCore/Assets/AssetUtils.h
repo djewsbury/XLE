@@ -12,7 +12,7 @@
 #include <vector>
 #include <iosfwd>
 
-namespace RenderCore { class InputElementDesc; }
+namespace RenderCore { class InputElementDesc; enum class Topology; }
 
 namespace RenderCore { namespace Assets
 {
@@ -25,9 +25,12 @@ namespace RenderCore { namespace Assets
 
 	struct GeoInputAssembly;
 	struct DrawCallDesc;
-	GeoInputAssembly CreateGeoInputAssembly(   
+	GeoInputAssembly CreateGeoInputAssembly(
 		const std::vector<InputElementDesc>& vertexInputLayout,
 		unsigned vertexStride);
+
+	template<typename IndexType>
+		void FlipIndexBufferWinding(IteratorRange<IndexType*>, Topology);
 	
 	std::ostream& SerializationOperator(std::ostream& stream, const GeoInputAssembly& ia);
 	std::ostream& SerializationOperator(std::ostream& stream, const DrawCallDesc& dc);

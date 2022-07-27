@@ -98,5 +98,20 @@ namespace RenderCore { namespace Assets
 		elementsHash ^= uint64_t(_vertexStride);
 		return elementsHash;
 	}
+
+	template<typename IndexType>
+		void FlipIndexBufferWinding(IteratorRange<IndexType*> indices, Topology topology)
+	{
+		if (topology != Topology::TriangleList)
+			Throw(std::runtime_error("Only triangle list topology type supported in FlipIndexBufferWinding"));
+
+		assert((indices.size() % 3) == 0);
+		for (auto i=indices.begin(); (i+3)<=indices.end(); i+=3)
+			std::swap(i[1], i[2]);
+	}
+
+	template void FlipIndexBufferWinding(IteratorRange<uint8_t*>, Topology);
+	template void FlipIndexBufferWinding(IteratorRange<uint16_t*>, Topology);
+	template void FlipIndexBufferWinding(IteratorRange<uint32_t*>, Topology);
 }}
 
