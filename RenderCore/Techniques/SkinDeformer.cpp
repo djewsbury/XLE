@@ -728,6 +728,25 @@ namespace RenderCore { namespace Techniques
 		return nullptr;
 	}
 
+	static Format PostSkinningPositionFormat(Format inputFormat)
+	{
+		auto compType = GetComponentType(inputFormat);
+		switch (compType) {
+		default: return inputFormat;
+
+		case FormatComponentType::UNorm:
+		case FormatComponentType::SNorm:
+			// We can't realistically return to a UNorm/SNorm format after
+			// skinning -- because these are usually used to fit the pre-skinned
+			// data exactly to the range, and skinning will just shift out of that range
+			auto compCount = GetComponentCount(GetComponents(inputFormat));
+			if (compCount == 1) return Format::R32_FLOAT;
+			else if (compCount == 2) return Format::R32G32_FLOAT;
+			else if (compCount == 3) return Format::R32G32B32_FLOAT;
+			else return Format::R32G32B32A32_FLOAT;
+		}
+	}
+
 	void SkinDeformerSystem::ConfigureGPUSkinDeformers(
 		DeformerConstruction& deformerConstruction,
 		const ModelRendererConstruction& rendererConstruction)
@@ -754,7 +773,7 @@ namespace RenderCore { namespace Techniques
 
 				DeformOperationInstantiation deformOp;
 				deformOp._upstreamSourceElements.push_back({s_positionEleName, 0});
-				deformOp._generatedElements.push_back({s_positionEleName, 0, positionElement->_nativeFormat});
+				deformOp._generatedElements.push_back({s_positionEleName, 0, PostSkinningPositionFormat(positionElement->_nativeFormat)});
 				if (normalsElement) {
 					deformOp._upstreamSourceElements.push_back({s_normalEleName, 0});
 					deformOp._generatedElements.push_back({s_normalEleName, 0, normalsElement->_nativeFormat});
