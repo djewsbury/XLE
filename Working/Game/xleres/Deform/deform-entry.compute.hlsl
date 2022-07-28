@@ -7,7 +7,9 @@
 #define R32_UINT 42
 #define R16_UINT 57
 #define R8G8B8A8_UNORM 28
+#define R8G8B8A8_SNORM 31
 #define R8G8B8_UNORM 1001
+#define R8G8B8_SNORM 1004
 #define R16G16B16A16_SNORM 13
 
 #if !IN_POSITION_FORMAT
@@ -116,14 +118,14 @@ LoadVertexResult LoadVertex(uint dispatchIdx, DeformInvocationStruct invocationP
 	LoadVertexResult result;
 	result.vertex.position = 
 		(BUFFER_FLAGS & 0x1)
-		? LoadAsFloat3(DeformTemporaryAttributes, IN_POSITION_FORMAT, vertexIdx * iaParams.DeformTemporariesStride + iaParams.InPositionsOffset)
-		: LoadAsFloat3(InputAttributes, IN_POSITION_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InPositionsOffset);
+		? LoadAsFloat4(DeformTemporaryAttributes, IN_POSITION_FORMAT, vertexIdx * iaParams.DeformTemporariesStride + iaParams.InPositionsOffset)
+		: LoadAsFloat4(InputAttributes, IN_POSITION_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InPositionsOffset);
 
 	#if IN_NORMAL_FORMAT
 		result.vertex.normal = 
 			(BUFFER_FLAGS & 0x2)
-			? LoadAsFloat3(DeformTemporaryAttributes, IN_NORMAL_FORMAT, vertexIdx * iaParams.DeformTemporariesStride + iaParams.InNormalsOffset)
-			: LoadAsFloat3(InputAttributes, IN_NORMAL_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InNormalsOffset);
+			? LoadAsFloat4(DeformTemporaryAttributes, IN_NORMAL_FORMAT, vertexIdx * iaParams.DeformTemporariesStride + iaParams.InNormalsOffset)
+			: LoadAsFloat4(InputAttributes, IN_NORMAL_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InNormalsOffset);
 	#else
 		result.vertex.normal = 0;
 	#endif
@@ -150,15 +152,15 @@ void StoreVertex(DeformVertex vertex, uint vertexIdx, uint instanceIdx, DeformIn
 	uint temporariesOutputLoc = vertexIdx * iaParams.DeformTemporariesStride + instanceIdx * invocationParams.DeformTemporariesInstanceStride;
 
 	#if BUFFER_FLAGS & (0x1<<16)
-		StoreFloat3(vertex.position, DeformTemporaryAttributes, OUT_POSITION_FORMAT, temporariesOutputLoc + iaParams.OutPositionsOffset);
+		StoreFloat4(vertex.position, DeformTemporaryAttributes, OUT_POSITION_FORMAT, temporariesOutputLoc + iaParams.OutPositionsOffset);
 	#else
-		StoreFloat3(vertex.position, OutputAttributes, OUT_POSITION_FORMAT, outputLoc + iaParams.OutPositionsOffset);
+		StoreFloat4(vertex.position, OutputAttributes, OUT_POSITION_FORMAT, outputLoc + iaParams.OutPositionsOffset);
 	#endif
 	#if OUT_NORMAL_FORMAT
 		#if BUFFER_FLAGS & (0x2<<16)
-			StoreFloat3(vertex.normal, DeformTemporaryAttributes, OUT_NORMAL_FORMAT, temporariesOutputLoc + iaParams.OutNormalsOffset);
+			StoreFloat4(vertex.normal, DeformTemporaryAttributes, OUT_NORMAL_FORMAT, temporariesOutputLoc + iaParams.OutNormalsOffset);
 		#else
-			StoreFloat3(vertex.normal, OutputAttributes, OUT_NORMAL_FORMAT, outputLoc + iaParams.OutNormalsOffset);
+			StoreFloat4(vertex.normal, OutputAttributes, OUT_NORMAL_FORMAT, outputLoc + iaParams.OutNormalsOffset);
 		#endif
 	#endif
 	#if OUT_TEXTANGENT_FORMAT
@@ -170,11 +172,19 @@ void StoreVertex(DeformVertex vertex, uint vertexIdx, uint instanceIdx, DeformIn
 	#endif
 }
 
-uint FloatToUNorm8(float x) { return (uint)clamp((x + 1.0) * float(0xff) / 2.0, 0.0, float(0xff)); }
-float UNorm8ToFloat(uint x) { return x * (2.0 / float(0xff)) - 1.0; }
+// For the SNorm formats here, we're assuming that both -1 and +1 can be represented -- in effect there are 2 representations of -1
+// UNorm is mapped onto -1 -> 1; since this just tends to be a more useful mapping than 0 -> 1
+int SignExtend8(uint byteValue) { return byteValue + (byteValue >> 7) * 0xffffff00; }
 int SignExtend16(uint shortValue) { return shortValue + (shortValue >> 15) * 0xffff0000; }
-float SNorm16ToFloat(uint x) { return SignExtend16(x) / float(0x7fff); }
-uint FloatToSNorm16(float x) { return uint(clamp(x, -1, 1)*float(0x7fff)) & 0xffff; }
+
+float UNorm8ToFloat(uint x) { return x * (2.0 / float(0xff)) - 1.0; }
+uint FloatToUNorm8(float x) { return (uint)clamp((x + 1.0) * float(0xff) / 2.0, 0.0, float(0xff)); }
+
+float SNorm8ToFloat(uint x) { return clamp(SignExtend8(x) / float(0x7f), -1.0, 1.0); }
+uint FloatToSNorm8(float x) { return int(clamp(x, -1.0, 1.0) * float(0x7f)) & 0xff; }
+
+float SNorm16ToFloat(uint x) { return clamp(SignExtend16(x) / float(0x7fff), -1.0, 1.0); }
+uint FloatToSNorm16(float x) { return int(clamp(x, -1.0, 1.0) * float(0x7fff)) & 0xffff; }
 
 float3 LoadAsFloat3(ByteAddressBuffer buffer, uint format, uint byteOffset)
 {
@@ -190,6 +200,9 @@ float3 LoadAsFloat3(ByteAddressBuffer buffer, uint format, uint byteOffset)
 	} else if (format == R8G8B8A8_UNORM || format == R8G8B8_UNORM) {
 		uint A = buffer.Load(byteOffset);
 		return float3(UNorm8ToFloat(A & 0xff), UNorm8ToFloat((A>>8) & 0xff), UNorm8ToFloat((A>>16) & 0xff));
+	} else if (format == R8G8B8A8_SNORM || format == R8G8B8_SNORM) {
+		uint A = buffer.Load(byteOffset);
+		return float3(SNorm8ToFloat(A & 0xff), SNorm8ToFloat((A>>8) & 0xff), SNorm8ToFloat((A>>16) & 0xff));
 	} else {
 		return 0;	// trouble
 	}
@@ -211,6 +224,9 @@ float4 LoadAsFloat4(ByteAddressBuffer buffer, uint format, uint byteOffset)
 	} else if (format == R8G8B8A8_UNORM || format == R8G8B8_UNORM) {
 		uint A = buffer.Load(byteOffset);
 		return float4(UNorm8ToFloat(A & 0xff), UNorm8ToFloat((A>>8) & 0xff), UNorm8ToFloat((A>>16) & 0xff), UNorm8ToFloat((A>>24) & 0xff));
+	} else if (format == R8G8B8A8_SNORM || format == R8G8B8_SNORM) {
+		uint A = buffer.Load(byteOffset);
+		return float4(SNorm8ToFloat(A & 0xff), SNorm8ToFloat((A>>8) & 0xff), SNorm8ToFloat((A>>16) & 0xff), SNorm8ToFloat((A>>24) & 0xff));
 	} else {
 		return 0;	// trouble
 	}
@@ -230,6 +246,9 @@ float3 LoadAsFloat3(RWByteAddressBuffer buffer, uint format, uint byteOffset)
 	} else if (format == R8G8B8A8_UNORM || format == R8G8B8_UNORM) {
 		uint A = buffer.Load(byteOffset);
 		return float3(UNorm8ToFloat(A & 0xff), UNorm8ToFloat((A>>8) & 0xff), UNorm8ToFloat((A>>16) & 0xff));
+	} else if (format == R8G8B8A8_SNORM || format == R8G8B8_SNORM) {
+		uint A = buffer.Load(byteOffset);
+		return float3(SNorm8ToFloat(A & 0xff), SNorm8ToFloat((A>>8) & 0xff), SNorm8ToFloat((A>>16) & 0xff));
 	} else {
 		return 0;	// trouble
 	}
@@ -251,6 +270,9 @@ float4 LoadAsFloat4(RWByteAddressBuffer buffer, uint format, uint byteOffset)
 	} else if (format == R8G8B8A8_UNORM || format == R8G8B8_UNORM) {
 		uint A = buffer.Load(byteOffset);
 		return float4(UNorm8ToFloat(A & 0xff), UNorm8ToFloat((A>>8) & 0xff), UNorm8ToFloat((A>>16) & 0xff), UNorm8ToFloat((A>>24) & 0xff));
+	} else if (format == R8G8B8A8_SNORM || format == R8G8B8_SNORM) {
+		uint A = buffer.Load(byteOffset);
+		return float4(SNorm8ToFloat(A & 0xff), SNorm8ToFloat((A>>8) & 0xff), SNorm8ToFloat((A>>16) & 0xff), SNorm8ToFloat((A>>24) & 0xff));
 	} else {
 		return 0;	// trouble
 	}
@@ -294,7 +316,9 @@ void StoreFloat3(float3 value, RWByteAddressBuffer buffer, uint format, uint byt
 	} else if (format == R16G16B16A16_SNORM) {
 		buffer.Store2(byteOffset, uint2(FloatToSNorm16(value.x)|(FloatToSNorm16(value.y)<<16), FloatToSNorm16(value.z)));
 	} else if (format == R8G8B8A8_UNORM) {
-		buffer.Store(byteOffset, FloatToUNorm8(value.z)|(FloatToUNorm8(value.y) << 8u)|(FloatToUNorm8(value.z) << 16u));
+		buffer.Store(byteOffset, FloatToUNorm8(value.x)|(FloatToUNorm8(value.y) << 8u)|(FloatToUNorm8(value.z) << 16u));
+	} else if (format == R8G8B8A8_SNORM) {
+		buffer.Store(byteOffset, FloatToSNorm8(value.x)|(FloatToSNorm8(value.y) << 8u)|(FloatToSNorm8(value.z) << 16u));
 	} else {
 		// trouble
 	}
@@ -312,7 +336,9 @@ void StoreFloat4(float4 value, RWByteAddressBuffer buffer, uint format, uint byt
 	} else if (format == R16G16B16A16_SNORM) {
 		buffer.Store2(byteOffset, uint2(FloatToSNorm16(value.x)|(FloatToSNorm16(value.y)<<16), FloatToSNorm16(value.z)|(FloatToSNorm16(value.w)<<16)));
 	} else if (format == R8G8B8A8_UNORM) {
-		buffer.Store(byteOffset, FloatToUNorm8(value.z)|(FloatToUNorm8(value.y) << 8u)|(FloatToUNorm8(value.z) << 16u)|(FloatToUNorm8(value.w) << 24));
+		buffer.Store(byteOffset, FloatToUNorm8(value.x)|(FloatToUNorm8(value.y) << 8u)|(FloatToUNorm8(value.z) << 16u)|(FloatToUNorm8(value.w) << 24u));
+	} else if (format == R8G8B8A8_SNORM) {
+		buffer.Store(byteOffset, FloatToSNorm8(value.x)|(FloatToSNorm8(value.y) << 8u)|(FloatToSNorm8(value.z) << 16u)|(FloatToSNorm8(value.w) << 24u));
 	} else {
 		// trouble
 	}

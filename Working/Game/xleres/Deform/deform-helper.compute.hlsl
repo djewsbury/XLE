@@ -4,8 +4,8 @@
 
 struct DeformVertex
 {
-	float3 position;
-	float3 normal;
+	float4 position;
+	float4 normal;
 	float4 tangent;
 };
 

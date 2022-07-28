@@ -79,7 +79,7 @@ DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
 				float weight = (packedWeights&0xff) / 255.f;
 				packedWeights >>= 8;
 
-				outputPosition += weight * mul(JointTransforms[boneIndex], float4(input.position, 1)).xyz;
+				outputPosition += weight * mul(JointTransforms[boneIndex], float4(input.position.xyz, 1)).xyz;
 				float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
 				outputNormal += weight * mul(rotationPart, input.normal);
 				outputTangent += weight * mul(rotationPart, input.tangent.xyz);
@@ -96,9 +96,9 @@ DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
 					float weight = (packedWeights&0xff) / 255.f;
 					packedWeights >>= 8;
 
-					outputPosition += weight * mul(JointTransforms[boneIndex], float4(input.position, 1)).xyz;
+					outputPosition += weight * mul(JointTransforms[boneIndex], float4(input.position.xyz, 1)).xyz;
 					float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
-					outputNormal += weight * mul(rotationPart, input.normal);
+					outputNormal += weight * mul(rotationPart, input.normal.xyz);
 					outputTangent += weight * mul(rotationPart, input.tangent.xyz);
 
 					++c;
@@ -113,9 +113,9 @@ DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
 						float weight = (packedWeights&0xff) / 255.f;
 						packedWeights >>= 8;
 
-						outputPosition += weight * mul(JointTransforms[boneIndex], float4(input.position, 1)).xyz;
+						outputPosition += weight * mul(JointTransforms[boneIndex], float4(input.position.xyz, 1)).xyz;
 						float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
-						outputNormal += weight * mul(rotationPart, input.normal);
+						outputNormal += weight * mul(rotationPart, input.normal.xyz);
 						outputTangent += weight * mul(rotationPart, input.tangent.xyz);
 
 						++c;
@@ -129,9 +129,9 @@ DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
 						float weight = (packedWeights&0xff) / 255.f;
 						packedWeights >>= 8;
 
-						outputPosition += weight * mul(JointTransforms[boneIndex], float4(input.position, 1)).xyz;
+						outputPosition += weight * mul(JointTransforms[boneIndex], float4(input.position.xyz, 1)).xyz;
 						float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
-						outputNormal += weight * mul(rotationPart, input.normal);
+						outputNormal += weight * mul(rotationPart, input.normal.xyz);
 						outputTangent += weight * mul(rotationPart, input.tangent.xyz);
 
 						++c;
@@ -147,9 +147,9 @@ DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
 	#endif
 
 	DeformVertex output;
-	output.position = outputPosition;
+	output.position = float4(outputPosition, input.position.w);
 	#if OUT_NORMAL_FORMAT
-		output.normal = outputNormal;
+		output.normal = float4(outputNormal, input.normal.w);
 	#endif
 	#if OUT_TEXTANGENT_FORMAT
 		// assume handiness of the tangent frame hasn't changed as a result of skinning
