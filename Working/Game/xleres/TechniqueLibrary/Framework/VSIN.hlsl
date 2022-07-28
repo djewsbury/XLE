@@ -44,7 +44,11 @@ struct VSIN //////////////////////////////////////////////////////
 	#endif
 
 	#if GEO_HAS_NORMAL
-		float3 normal : NORMAL;
+		#if GEO_NORMAL_HAS_W
+			float4 normal : NORMAL;
+		#else
+			float3 normal : NORMAL;
+		#endif
 	#endif
 
 	#if GEO_HAS_BONEWEIGHTS
