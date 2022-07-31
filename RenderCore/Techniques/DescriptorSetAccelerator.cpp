@@ -8,7 +8,7 @@
 #include "CommonResources.h"
 #include "DeformUniformsInfrastructure.h"
 #include "Services.h"
-#include "ConstructionContext.h"
+#include "ResourceConstructionContext.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedCBLayout.h"
 #include "../Assets/MaterialMachine.h"
@@ -131,7 +131,7 @@ namespace RenderCore { namespace Techniques
 	static const std::string s_multipleDescSetCBs = "DescSetCBs";
 
 	void ConstructDescriptorSetHelper::Construct(
-		ConstructionContext* context,
+		ResourceConstructionContext* context,
 		const Assets::PredefinedDescriptorSetLayout& layout,
 		IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 		const DeformerToDescriptorSetBinding* deformBinding)

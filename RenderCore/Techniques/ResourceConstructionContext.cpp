@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "ConstructionContext.h"
+#include "ResourceConstructionContext.h"
 #include "DeferredShaderResource.h"
 #include "Drawables.h"
 #include "../BufferUploads/IBufferUploads.h"
@@ -13,7 +13,7 @@
 namespace RenderCore { namespace Techniques
 {
 
-	class ConstructionContext::Pimpl
+	class ResourceConstructionContext::Pimpl
 	{
 	public:
 		Threading::Mutex _lock;
@@ -24,7 +24,7 @@ namespace RenderCore { namespace Techniques
 		uint64_t _guid;
 	};
 
-	void ConstructionContext::Cancel()
+	void ResourceConstructionContext::Cancel()
 	{
 		ScopedLock(_pimpl->_lock);
 		std::sort(_pimpl->_uploadMarkers.begin(), _pimpl->_uploadMarkers.end());
@@ -35,13 +35,13 @@ namespace RenderCore { namespace Techniques
 		_pimpl->_uploadMarkers.clear();
 	}
 
-	void ConstructionContext::ReleaseWithoutCancel()
+	void ResourceConstructionContext::ReleaseWithoutCancel()
 	{
 		ScopedLock(_pimpl->_lock);
 		_pimpl->_uploadMarkers.clear();
 	}
 
-	std::shared_future<std::shared_ptr<DeferredShaderResource>> ConstructionContext::ConstructShaderResource(StringSection<> initializer)
+	std::shared_future<std::shared_ptr<DeferredShaderResource>> ResourceConstructionContext::ConstructShaderResource(StringSection<> initializer)
 	{
 		ScopedLock(_pimpl->_lock);
 		auto hash = Hash64(initializer);
@@ -58,13 +58,13 @@ namespace RenderCore { namespace Techniques
 		return i->second;
 	}
 
-	std::shared_future<std::shared_ptr<DeferredShaderResource>> ConstructionContext::ConstructShaderResource(const Assets::TextureCompilationRequest& compileRequest)
+	std::shared_future<std::shared_ptr<DeferredShaderResource>> ResourceConstructionContext::ConstructShaderResource(const Assets::TextureCompilationRequest& compileRequest)
 	{
 		assert(0);	// todo -- implement
 		return {};
 	}
 
-	std::future<BufferUploads::ResourceLocator> ConstructionContext::ConstructStaticGeometry(
+	std::future<BufferUploads::ResourceLocator> ResourceConstructionContext::ConstructStaticGeometry(
 		std::shared_ptr<BufferUploads::IAsyncDataSource> dataSource,
 		BindFlag::BitField bindFlags,
 		StringSection<> resourceName)
@@ -96,25 +96,25 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	std::shared_ptr<RepositionableGeometryConduit> ConstructionContext::GetRepositionableGeometryConduit()
+	std::shared_ptr<RepositionableGeometryConduit> ResourceConstructionContext::GetRepositionableGeometryConduit()
 	{
 		return _pimpl->_repositionableGeometry;
 	}
 
-	void ConstructionContext::AddUploads(IteratorRange<const BufferUploads::TransactionID*> transactions)
+	void ResourceConstructionContext::AddUploads(IteratorRange<const BufferUploads::TransactionID*> transactions)
 	{
 		ScopedLock(_pimpl->_lock);
 		_pimpl->_uploadMarkers.insert(_pimpl->_uploadMarkers.end(), transactions.begin(), transactions.end());
 	}
 
-	uint64_t ConstructionContext::GetGUID() const
+	uint64_t ResourceConstructionContext::GetGUID() const
 	{
 		return _pimpl->_guid;
 	}
 
 	static uint64_t s_nextConstructionContextGuid = 1;
 
-	ConstructionContext::ConstructionContext(
+	ResourceConstructionContext::ResourceConstructionContext(
 		std::shared_ptr<BufferUploads::IManager> bufferUploads,
 		std::shared_ptr<RepositionableGeometryConduit> repositionableGeo)
 	{
@@ -124,7 +124,7 @@ namespace RenderCore { namespace Techniques
 		_pimpl->_guid = s_nextConstructionContextGuid++;
 	}
 
-	ConstructionContext::~ConstructionContext()
+	ResourceConstructionContext::~ResourceConstructionContext()
 	{
 		Cancel();
 	}

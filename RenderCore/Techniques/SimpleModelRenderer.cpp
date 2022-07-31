@@ -579,7 +579,7 @@ namespace RenderCore { namespace Techniques
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 		std::shared_ptr<IDrawablesPool> drawablesPool,
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool,
-		std::shared_ptr<ConstructionContext> constructionContext,
+		std::shared_ptr<ResourceConstructionContext> constructionContext,
 		std::shared_ptr<ModelRendererConstruction> construction,
 		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
 		std::shared_ptr<DeformAccelerator> deformAcceleratorInit,

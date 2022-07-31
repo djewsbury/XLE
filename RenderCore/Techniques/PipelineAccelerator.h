@@ -38,7 +38,7 @@ namespace RenderCore { namespace Techniques
 	class DeformerToDescriptorSetBinding;
 	class ICompiledLayoutPool;
 	class IDrawablesPool;
-	class ConstructionContext;
+	class ResourceConstructionContext;
 	using VisibilityMarkerId = uint32_t;
 
 	// Switching this to a virtual interface style class in order to better support multiple DLLs/modules
@@ -64,7 +64,7 @@ namespace RenderCore { namespace Techniques
 			const RenderCore::Assets::RenderStateSet& stateSet) = 0;
 
 		virtual std::shared_ptr<DescriptorSetAccelerator> CreateDescriptorSetAccelerator(
-			const std::shared_ptr<ConstructionContext>& constructionContext,
+			const std::shared_ptr<ResourceConstructionContext>& constructionContext,
 			const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& shaderPatches,
 			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 			std::shared_ptr<void> memoryHolder,								// retained while we need access to materialMachine

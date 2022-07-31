@@ -7,7 +7,7 @@
 #include "ModelRendererConstruction.h"
 #include "PipelineAccelerator.h"		// just so we can use GetDevice()
 #include "Drawables.h"
-#include "ConstructionContext.h"
+#include "ResourceConstructionContext.h"
 #include "../BufferUploads/BatchedResources.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/MaterialScaffold.h"
@@ -34,7 +34,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
 		std::shared_ptr<IDeformAcceleratorPool> _deformAcceleratorPool;
 		std::shared_ptr<IDrawablesPool> _drawablesPool;
-		std::shared_ptr<ConstructionContext> _constructionContext;
+		std::shared_ptr<ResourceConstructionContext> _constructionContext;
 
 		uint32_t _reloadId;
 
@@ -186,7 +186,7 @@ namespace RenderCore { namespace Techniques
 			auto repositionableGeometry = std::make_shared<RepositionableGeometryConduit>(
 				BufferUploads::CreateBatchedResources(*_pimpl->_pipelineAcceleratorPool->GetDevice(), bufferUploads, BindFlag::VertexBuffer, 1024*1024),
 				BufferUploads::CreateBatchedResources(*_pimpl->_pipelineAcceleratorPool->GetDevice(), bufferUploads, BindFlag::IndexBuffer, 1024*1024));
-			_pimpl->_constructionContext = std::make_shared<ConstructionContext>(bufferUploads, std::move(repositionableGeometry));
+			_pimpl->_constructionContext = std::make_shared<ResourceConstructionContext>(bufferUploads, std::move(repositionableGeometry));
 		}
 	}
 

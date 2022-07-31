@@ -6,7 +6,7 @@
 #include "PipelineAccelerator.h"
 #include "CompiledShaderPatchCollection.h"
 #include "DescriptorSetAccelerator.h"
-#include "ConstructionContext.h"
+#include "ResourceConstructionContext.h"
 #include "Services.h"
 #include "../Assets/MaterialScaffold.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
@@ -211,7 +211,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	std::future<BufferUploads::ResourceLocator> LoadStaticResourceFullyAsync(
-		ConstructionContext& constructionContext,
+		ResourceConstructionContext& constructionContext,
 		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
 		unsigned resourceSize,
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,

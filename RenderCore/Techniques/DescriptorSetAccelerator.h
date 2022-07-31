@@ -68,12 +68,12 @@ namespace RenderCore { namespace Techniques
 	};
 
 	namespace Internal { struct DescriptorSetInProgress; }
-	class ConstructionContext;
+	class ResourceConstructionContext;
 
 	struct ConstructDescriptorSetHelper
 	{
 		void Construct(
-			ConstructionContext* context,
+			ResourceConstructionContext* context,
 			const Assets::PredefinedDescriptorSetLayout& layout,
 			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 			const DeformerToDescriptorSetBinding* deformBinding);

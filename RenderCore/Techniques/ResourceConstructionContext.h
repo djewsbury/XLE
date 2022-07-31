@@ -18,7 +18,7 @@ namespace RenderCore { namespace Techniques
 	class RepositionableGeometryConduit;
 	class DeferredShaderResource;
 	
-	class ConstructionContext
+	class ResourceConstructionContext
 	{
 	public:
 		// Cancel any operations were previously queued via this context, but haven't completed yet
@@ -42,10 +42,10 @@ namespace RenderCore { namespace Techniques
 
 		uint64_t GetGUID() const;
 
-		ConstructionContext(
+		ResourceConstructionContext(
 			std::shared_ptr<BufferUploads::IManager>,
 			std::shared_ptr<RepositionableGeometryConduit>);
-		~ConstructionContext();
+		~ResourceConstructionContext();
 	private:
 		class Pimpl;
 		std::unique_ptr<Pimpl> _pimpl;

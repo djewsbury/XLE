@@ -10,7 +10,7 @@
 #include "PipelineAccelerator.h"
 #include "CommonUtils.h"
 #include "ModelRendererConstruction.h"
-#include "ConstructionContext.h"
+#include "ResourceConstructionContext.h"
 #include "Services.h"
 #include "../BufferUploads/BatchedResources.h"
 #include "../Assets/ModelMachine.h"
@@ -229,7 +229,7 @@ namespace RenderCore { namespace Techniques
 
 			void LoadPendingStaticResources(
 				std::promise<BufferUploads::CommandListID>&& completionCmdListPromise,
-				ConstructionContext* constructionContext)
+				ResourceConstructionContext* constructionContext)
 			{
 				// collect all of the various uploads we need to make, and engage!
 				std::sort(
@@ -420,7 +420,7 @@ namespace RenderCore { namespace Techniques
 		public:
 			std::shared_ptr<IDrawablesPool> _drawablesPool;
 			std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
-			std::shared_ptr<ConstructionContext> _constructionContext;
+			std::shared_ptr<ResourceConstructionContext> _constructionContext;
 			std::vector<std::shared_ptr<PipelineAccelerator>> _pipelineAccelerators;
 			std::vector<std::shared_ptr<DescriptorSetAccelerator>> _descriptorSetAccelerators;
 
@@ -862,7 +862,7 @@ namespace RenderCore { namespace Techniques
 			std::sort(dst._cmdStreams.begin(), dst._cmdStreams.begin(), [](const auto& lhs, const auto& rhs) { return lhs._guid < rhs._guid; });
 		}
 
-		Pimpl(std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators, std::shared_ptr<ConstructionContext> constructionContext)
+		Pimpl(std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators, std::shared_ptr<ResourceConstructionContext> constructionContext)
 		{
 			_pendingPipelines._drawablesPool = drawablesPool;
 			_pendingPipelines._pipelineAcceleratorPool = std::move(pipelineAccelerators);
@@ -918,7 +918,7 @@ namespace RenderCore { namespace Techniques
 	DrawableConstructor::DrawableConstructor(
 		std::shared_ptr<IDrawablesPool> drawablesPool,
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
-		std::shared_ptr<ConstructionContext> constructionContext,
+		std::shared_ptr<ResourceConstructionContext> constructionContext,
 		const ModelRendererConstruction& construction,
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator)

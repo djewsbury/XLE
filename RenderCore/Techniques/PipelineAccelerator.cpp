@@ -13,7 +13,7 @@
 #include "DeformAccelerator.h"		// for UniformDeformerToRendererBinding
 #include "CompiledLayoutPool.h"
 #include "Drawables.h"				// for IDrawablesPool & protected destroy
-#include "ConstructionContext.h"
+#include "ResourceConstructionContext.h"
 #include "../FrameBufferDesc.h"
 #include "../Format.h"
 #include "../Metal/DeviceContext.h"
@@ -422,7 +422,7 @@ namespace RenderCore { namespace Techniques
 			const RenderCore::Assets::RenderStateSet& stateSet) override;
 
 		virtual std::shared_ptr<DescriptorSetAccelerator> CreateDescriptorSetAccelerator(
-			const std::shared_ptr<ConstructionContext>& constructionContext,
+			const std::shared_ptr<ResourceConstructionContext>& constructionContext,
 			const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& shaderPatches,
 			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 			std::shared_ptr<void> memoryHolder,
@@ -867,7 +867,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	std::shared_ptr<DescriptorSetAccelerator> PipelineAcceleratorPool::CreateDescriptorSetAccelerator(
-		const std::shared_ptr<ConstructionContext>& constructionContext,
+		const std::shared_ptr<ResourceConstructionContext>& constructionContext,
 		const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& shaderPatches,
 		IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 		std::shared_ptr<void> memoryHolder,
