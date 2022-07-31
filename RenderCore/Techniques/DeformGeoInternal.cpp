@@ -167,7 +167,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 	{
 		_pendingCreateSharedResources = false;
 		_preparedSharedResources = ::Assets::Marker<PreparedSharedResources>{};
-		auto predefinedPipelineLayout = ::Assets::MakeAsset<std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>>(_predefinedPipelineInitializer);
+		auto predefinedPipelineLayout = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(_predefinedPipelineInitializer);
 		::Assets::WhenAll(predefinedPipelineLayout).ThenConstructToPromise(
 			_preparedSharedResources.AdoptPromise(),
 			[device=_pipelineCollection->GetDevice(), usi0=_usi0, usi1=_usi1, instRequest=_instRequest](auto predefinedPipelineLayoutActual) mutable {

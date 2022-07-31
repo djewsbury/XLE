@@ -18,6 +18,7 @@
 #include "../../Assets/Assets.h"
 #include "../../Assets/Continuation.h"
 #include "../../Utility/Streams/PreprocessorInterpreter.h"
+#include <future>
 
 namespace RenderCore { namespace Techniques
 {
@@ -107,10 +108,10 @@ namespace RenderCore { namespace Techniques
 	class TechniqueShaderVariationSet::Variation
 	{
 	public:
-		::Assets::PtrToMarkerPtr<Metal::ShaderProgram> _shaderFuture;
+		std::shared_future<std::shared_ptr<Metal::ShaderProgram>> _shaderFuture;
 	};
 
-	::Assets::PtrToMarkerPtr<Metal::ShaderProgram> TechniqueShaderVariationSet::FindVariation(
+	std::shared_future<std::shared_ptr<Metal::ShaderProgram>> TechniqueShaderVariationSet::FindVariation(
 		int techniqueIndex,
 		const ParameterBox* shaderSelectors[SelectorStages::Max])
 	{

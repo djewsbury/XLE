@@ -161,7 +161,7 @@ namespace RenderCore { namespace LightingEngine
 		const Techniques::FrameBufferTarget& fbTarget,
 		const SkyOperatorDesc& desc)
 	{
-		return ::Assets::MakeFuturePtr<SkyOperator>(desc, pipelinePool, fbTarget);
+		return ::Assets::NewMarkerPtr<SkyOperator>(desc, pipelinePool, fbTarget);
 	}
 
 	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, bool precisionTargets = false)
@@ -389,10 +389,10 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		auto balancedNoiseTexture = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
-		auto hierarchicalDepthsOperatorFuture = ::Assets::MakeFuturePtr<HierarchicalDepthsOperator>(pipelinePool);
+		auto hierarchicalDepthsOperatorFuture = ::Assets::NewMarkerPtr<HierarchicalDepthsOperator>(pipelinePool);
 		::Assets::PtrToMarkerPtr<ScreenSpaceReflectionsOperator> ssrFuture;
 		if (forwardLightScene->GetAmbientLightOperatorDesc()._ssrOperator.has_value())
-			ssrFuture = ::Assets::MakeFuturePtr<ScreenSpaceReflectionsOperator>(pipelinePool, forwardLightScene->GetAmbientLightOperatorDesc()._ssrOperator.value());
+			ssrFuture = ::Assets::NewMarkerPtr<ScreenSpaceReflectionsOperator>(pipelinePool, forwardLightScene->GetAmbientLightOperatorDesc()._ssrOperator.value());
 
 		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
 

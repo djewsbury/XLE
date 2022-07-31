@@ -33,7 +33,7 @@ namespace RenderCore { namespace Techniques
 	class ImmediateRendererTechniqueDelegate : public ITechniqueDelegate
 	{
 	public:
-		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
+		FutureGraphicsPipelineDesc GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
@@ -64,9 +64,9 @@ namespace RenderCore { namespace Techniques
 				nascentDesc->_patchExpansions.emplace_back(s_patchOutline, ShaderStage::Pixel);
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
-				auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("immediate-renderer");
-				result->SetAsset(std::move(nascentDesc));
-				return result;
+				std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
+				promise.set_value(std::move(nascentDesc));
+				return promise.get_future();
 			} else if (shaderPatches.HasPatchType(s_patchTwoLayersShader)) {
 				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 				*nascentDesc = *_pipelineDesc[dsMode];
@@ -75,11 +75,13 @@ namespace RenderCore { namespace Techniques
 				nascentDesc->_patchExpansions.emplace_back(s_patchTwoLayersShader, ShaderStage::Pixel);
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
-				auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("immediate-renderer");
-				result->SetAsset(std::move(nascentDesc));
-				return result;
+				std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
+				promise.set_value(std::move(nascentDesc));
+				return promise.get_future();
 			} else {
-				return _pipelineDescFuture[dsMode];
+				std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
+				promise.set_value(_pipelineDesc[dsMode]);
+				return promise.get_future();
 			}
 		}
 
@@ -106,14 +108,10 @@ namespace RenderCore { namespace Techniques
 			for (unsigned c=0; c<dimof(dsModes); ++c) {
 				_pipelineDesc[c] = std::make_shared<GraphicsPipelineDesc>(*templateDesc);
 				_pipelineDesc[c]->_depthStencil = dsModes[c];
-
-				_pipelineDescFuture[c] = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("immediate-renderer");
-				_pipelineDescFuture[c]->SetAsset(std::shared_ptr<GraphicsPipelineDesc>{_pipelineDesc[c]});
 			}
 		}
 		~ImmediateRendererTechniqueDelegate() {}
 	private:
-		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> _pipelineDescFuture[3];
 		std::shared_ptr<GraphicsPipelineDesc> _pipelineDesc[3];
 	};
 
@@ -364,9 +362,8 @@ namespace RenderCore { namespace Techniques
 		ImmediateDrawables(const std::shared_ptr<IDevice>& device)
 		{
 			_techniqueDelegate = std::make_shared<ImmediateRendererTechniqueDelegate>();
-			auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(_techniqueDelegate->GetPipelineLayout());
-			pipelineLayout->StallWhilePending();
-			auto matDescSetLayout = FindLayout(*pipelineLayout->Actualize(), "Material", PipelineType::Graphics);
+			auto pipelineLayout = ::Assets::ActualizeAssetPtr<Assets::PredefinedPipelineLayout>(_techniqueDelegate->GetPipelineLayout());
+			auto matDescSetLayout = FindLayout(*pipelineLayout, "Material", PipelineType::Graphics);
 			auto compiledLayoutPool = CreateCompiledLayoutPool(device, matDescSetLayout);
 			_pipelineAcceleratorPool = CreatePipelineAcceleratorPool(device, nullptr, compiledLayoutPool, 0);
 			_lastQueuedDrawable = nullptr;

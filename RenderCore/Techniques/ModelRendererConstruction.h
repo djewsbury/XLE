@@ -9,7 +9,7 @@
 #include "../../Utility/StringUtils.h"
 #include <memory>
 
-namespace std { template<typename T> class promise; }
+namespace std { template<typename T> class promise; template<typename T> class shared_future; }
 
 namespace RenderCore { namespace Assets
 {
@@ -29,11 +29,11 @@ namespace RenderCore { namespace Techniques
 		public:
 			ElementConstructor& SetModelAndMaterialScaffolds(StringSection<> model, StringSection<> material);
 			
-			ElementConstructor& SetModelScaffold(const ::Assets::PtrToMarkerPtr<Assets::ModelScaffold>&);
-			ElementConstructor& SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<Assets::MaterialScaffold>&);
+			ElementConstructor& SetModelScaffold(std::shared_future<std::shared_ptr<Assets::ModelScaffold>>, std::string initializer={});
+			ElementConstructor& SetMaterialScaffold(std::shared_future<std::shared_ptr<Assets::MaterialScaffold>>, std::string initializer={});
 			
-			ElementConstructor& SetModelScaffold(const std::shared_ptr<Assets::ModelScaffold>&);
-			ElementConstructor& SetMaterialScaffold(const std::shared_ptr<Assets::MaterialScaffold>&);
+			ElementConstructor& SetModelScaffold(const std::shared_ptr<Assets::ModelScaffold>&, std::string initializer={});
+			ElementConstructor& SetMaterialScaffold(const std::shared_ptr<Assets::MaterialScaffold>&, std::string initializer={});
 
 			ElementConstructor& SetRootTransform(const Float4x4&);
 
@@ -55,7 +55,7 @@ namespace RenderCore { namespace Techniques
 		unsigned GetElementCount() const;
 
 		void SetSkeletonScaffold(StringSection<>);
-		void SetSkeletonScaffold(const ::Assets::PtrToMarkerPtr<Assets::SkeletonScaffold>&);
+		void SetSkeletonScaffold(std::shared_future<std::shared_ptr<Assets::SkeletonScaffold>>, std::string initializer={});
 		void SetSkeletonScaffold(const std::shared_ptr<Assets::SkeletonScaffold>&);
 		std::shared_ptr<Assets::SkeletonScaffold> GetSkeletonScaffold() const;
 
@@ -71,33 +71,6 @@ namespace RenderCore { namespace Techniques
 		const Internal& GetInternal() const { return *_internal; }
 	protected:
 		std::unique_ptr<Internal> _internal;
-	};
-
-	class ModelRendererConstruction::Internal
-	{
-	public:
-		using ElementId = unsigned;
-		using ModelScaffoldMarker = ::Assets::PtrToMarkerPtr<Assets::ModelScaffold>;
-		using ModelScaffoldPtr = std::shared_ptr<Assets::ModelScaffold>;
-		using MaterialScaffoldMarker = ::Assets::PtrToMarkerPtr<Assets::MaterialScaffold>;
-		using MaterialScaffoldPtr = std::shared_ptr<Assets::MaterialScaffold>;
-
-		std::vector<std::pair<ElementId, ModelScaffoldMarker>> _modelScaffoldMarkers;
-		std::vector<std::pair<ElementId, ModelScaffoldPtr>> _modelScaffoldPtrs;
-		std::vector<std::pair<ElementId, MaterialScaffoldMarker>> _materialScaffoldMarkers;
-		std::vector<std::pair<ElementId, MaterialScaffoldPtr>> _materialScaffoldPtrs;
-		std::vector<std::pair<ElementId, std::string>> _names;
-		unsigned _elementCount = 0;
-
-		::Assets::PtrToMarkerPtr<Assets::SkeletonScaffold> _skeletonScaffoldMarker;
-		std::shared_ptr<Assets::SkeletonScaffold> _skeletonScaffoldPtr;
-		uint64_t _skeletonScaffoldHashValue = 0u;
-
-		bool _sealed = false;
-
-		std::vector<uint64_t> _elementHashValues;
-		mutable uint64_t _hash = 0ull;
-		bool _disableHash = false;
 	};
 
 	class ModelRendererConstruction::ElementIterator
@@ -116,10 +89,14 @@ namespace RenderCore { namespace Techniques
 			Value();
 			template<typename Type>
 				using Iterator = typename std::vector<std::pair<unsigned, Type>>::iterator;
-			Iterator<ModelRendererConstruction::Internal::ModelScaffoldMarker> _msmi;
-			Iterator<ModelRendererConstruction::Internal::ModelScaffoldPtr> _mspi;
-			Iterator<ModelRendererConstruction::Internal::MaterialScaffoldMarker> _matsmi;
-			Iterator<ModelRendererConstruction::Internal::MaterialScaffoldPtr> _matspi;
+			using ModelScaffoldMarker = std::shared_future<std::shared_ptr<Assets::ModelScaffold>>;
+			using ModelScaffoldPtr = std::shared_ptr<Assets::ModelScaffold>;
+			using MaterialScaffoldMarker = std::shared_future<std::shared_ptr<Assets::MaterialScaffold>>;
+			using MaterialScaffoldPtr = std::shared_ptr<Assets::MaterialScaffold>;
+			Iterator<ModelScaffoldMarker> _msmi;
+			Iterator<ModelScaffoldPtr> _mspi;
+			Iterator<MaterialScaffoldMarker> _matsmi;
+			Iterator<MaterialScaffoldPtr> _matspi;
 			Iterator<std::string> _ni;
 			unsigned _elementId = 0;
 			Internal* _internal = nullptr;

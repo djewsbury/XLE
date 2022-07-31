@@ -13,7 +13,6 @@
 #include "../Metal/ObjectFactory.h"
 #include "../Metal/DeviceContext.h"
 #include "../../ShaderParser/AutomaticSelectorFiltering.h"
-#include "../../Assets/Marker.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
 #include "../../Utility/Streams/PathUtils.h"
@@ -27,22 +26,20 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		std::shared_ptr<ShaderSourceParser::SelectorPreconfiguration> _preconfiguration;
 		std::shared_ptr<GraphicsPipelineDesc> _pipelineDesc;
 
-		static ::Assets::PtrToMarkerPtr<GraphicsPipelineDescWithFilteringRules> CreateFuture(
-			const ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc>& pipelineDescFuture)
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<GraphicsPipelineDescWithFilteringRules>> promise,
+			std::shared_future<std::shared_ptr<GraphicsPipelineDesc>> pipelineDescFuture)
 		{
-			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDescWithFilteringRules>>(pipelineDescFuture->Initializer());
-			::Assets::WhenAll(pipelineDescFuture).CheckImmediately().ThenConstructToPromise(
-				result->AdoptPromise(), 
+			::Assets::WhenAll(std::move(pipelineDescFuture)).CheckImmediately().ThenConstructToPromise(
+				std::move(promise), 
 				[](std::promise<std::shared_ptr<GraphicsPipelineDescWithFilteringRules>>&& resultPromise, auto pipelineDesc) { InitializePromise(std::move(resultPromise), pipelineDesc); });
-			return result;
 		}
 
-		static ::Assets::PtrToMarkerPtr<GraphicsPipelineDescWithFilteringRules> CreateFuture(
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<GraphicsPipelineDescWithFilteringRules>> promise,
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc)
 		{
-			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDescWithFilteringRules>>();
-			InitializePromise(result->AdoptPromise(), pipelineDesc);
-			return result;
+			InitializePromise(std::move(promise), pipelineDesc);
 		}
 
 		static void InitializePromise(
@@ -50,17 +47,17 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc)
 		{
 			TRY {
-				::Assets::PtrToMarkerPtr<ShaderSourceParser::SelectorFilteringRules> filteringFuture[3];
+				std::shared_future<std::shared_ptr<ShaderSourceParser::SelectorFilteringRules>> filteringFuture[3];
 				for (unsigned c=0; c<3; ++c) {
 					auto fn = MakeFileNameSplitter(pipelineDesc->_shaders[c]).AllExceptParameters();
 					if (!fn.IsEmpty())
 						filteringFuture[c] = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorFilteringRules>(fn);
 				}
 
-				if (!filteringFuture[(unsigned)ShaderStage::Vertex])
+				if (!filteringFuture[(unsigned)ShaderStage::Vertex].valid())
 					Throw(std::runtime_error("Missing vertex shader stage while building filtering rules"));
 
-				if (filteringFuture[(unsigned)ShaderStage::Pixel] && !filteringFuture[(unsigned)ShaderStage::Geometry]) {
+				if (filteringFuture[(unsigned)ShaderStage::Pixel].valid() && !filteringFuture[(unsigned)ShaderStage::Geometry].valid()) {
 
 					if (pipelineDesc->_techniquePreconfigurationFile.empty() && pipelineDesc->_materialPreconfigurationFile.empty()) {
 						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel]).CheckImmediately().ThenConstructToPromise(
@@ -69,8 +66,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> psFiltering) {
 								
 								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = vsFiltering;
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Pixel] = psFiltering;
+								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = std::move(vsFiltering);
+								finalObject->_automaticFiltering[(unsigned)ShaderStage::Pixel] = std::move(psFiltering);
 								finalObject->_pipelineDesc = pipelineDesc;
 								return finalObject;
 							});
@@ -83,15 +80,15 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								std::shared_ptr<ShaderSourceParser::SelectorPreconfiguration> preconfiguration) {
 								
 								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = vsFiltering;
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Pixel] = psFiltering;
+								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = std::move(vsFiltering);
+								finalObject->_automaticFiltering[(unsigned)ShaderStage::Pixel] = std::move(psFiltering);
 								finalObject->_preconfiguration = preconfiguration;
 								finalObject->_pipelineDesc = pipelineDesc;
 								return finalObject;
 							});
 					}
 
-				} else if (filteringFuture[(unsigned)ShaderStage::Pixel] && filteringFuture[(unsigned)ShaderStage::Geometry]) {
+				} else if (filteringFuture[(unsigned)ShaderStage::Pixel].valid() && filteringFuture[(unsigned)ShaderStage::Geometry].valid()) {
 
 					if (pipelineDesc->_techniquePreconfigurationFile.empty() && pipelineDesc->_materialPreconfigurationFile.empty()) {
 						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], filteringFuture[(unsigned)ShaderStage::Geometry]).CheckImmediately().ThenConstructToPromise(
@@ -101,9 +98,9 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> gsFiltering) {
 								
 								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = vsFiltering;
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Pixel] = psFiltering;
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Geometry] = gsFiltering;
+								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = std::move(vsFiltering);
+								finalObject->_automaticFiltering[(unsigned)ShaderStage::Pixel] = std::move(psFiltering);
+								finalObject->_automaticFiltering[(unsigned)ShaderStage::Geometry] = std::move(gsFiltering);
 								finalObject->_pipelineDesc = pipelineDesc;
 								return finalObject;
 							});
@@ -117,16 +114,16 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								std::shared_ptr<ShaderSourceParser::SelectorPreconfiguration> preconfiguration) {
 								
 								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = vsFiltering;
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Pixel] = psFiltering;
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Geometry] = gsFiltering;
+								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = std::move(vsFiltering);
+								finalObject->_automaticFiltering[(unsigned)ShaderStage::Pixel] = std::move(psFiltering);
+								finalObject->_automaticFiltering[(unsigned)ShaderStage::Geometry] = std::move(gsFiltering);
 								finalObject->_preconfiguration = preconfiguration;
 								finalObject->_pipelineDesc = pipelineDesc;
 								return finalObject;
 							});
 					}
 
-				} else if (!filteringFuture[(unsigned)ShaderStage::Pixel] && filteringFuture[(unsigned)ShaderStage::Geometry]) {
+				} else if (!filteringFuture[(unsigned)ShaderStage::Pixel].valid() && filteringFuture[(unsigned)ShaderStage::Geometry].valid()) {
 
 					if (pipelineDesc->_techniquePreconfigurationFile.empty() && pipelineDesc->_materialPreconfigurationFile.empty()) {
 						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Geometry]).CheckImmediately().ThenConstructToPromise(
@@ -135,8 +132,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> gsFiltering) {
 								
 								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = vsFiltering;
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Geometry] = gsFiltering;
+								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = std::move(vsFiltering);
+								finalObject->_automaticFiltering[(unsigned)ShaderStage::Geometry] = std::move(gsFiltering);
 								finalObject->_pipelineDesc = pipelineDesc;
 								return finalObject;
 							});
@@ -149,8 +146,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								std::shared_ptr<ShaderSourceParser::SelectorPreconfiguration> preconfiguration) {
 								
 								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = vsFiltering;
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Geometry] = gsFiltering;
+								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = std::move(vsFiltering);
+								finalObject->_automaticFiltering[(unsigned)ShaderStage::Geometry] = std::move(gsFiltering);
 								finalObject->_preconfiguration = preconfiguration;
 								finalObject->_pipelineDesc = pipelineDesc;
 								return finalObject;
@@ -276,7 +273,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		return str.str();
 	}
 
-	static std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>> MakeByteCodeFuture(
+	static std::shared_future<CompiledShaderByteCode> MakeByteCodeFuture(
 		ShaderStage stage, StringSection<> initializer, const std::string& definesTable,
 		const std::shared_ptr<CompiledShaderPatchCollection>& patchCollection,
 		IteratorRange<const uint64_t*> patchExpansions,
@@ -321,7 +318,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			std::vector<uint64_t> patchExpansionsCopy(patchExpansions.begin(), patchExpansions.end());
 			auto res = ::Assets::MakeAsset<CompiledShaderByteCode_InstantiateShaderGraph>(
 				MakeStringSection(temp), adjustedDefinesTable, patchCollection, patchExpansionsCopy);
-			return *reinterpret_cast<std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>>*>(&res);
+			return *reinterpret_cast<std::shared_future<CompiledShaderByteCode>*>(&res);
 		} else {
 			return ::Assets::MakeAsset<CompiledShaderByteCode>(MakeStringSection(temp), adjustedDefinesTable);
 		}
@@ -381,15 +378,15 @@ namespace RenderCore { namespace Techniques { namespace Internal
 	static void MakeGraphicsPipelineFuture0(
 		std::promise<GraphicsPipelineAndLayout>&& promise,
 		const std::shared_ptr<IDevice>& device,
-		std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>> byteCodeFuture[3],
+		std::shared_future<CompiledShaderByteCode> byteCodeFuture[3],
 		PipelineLayoutOptions&& pipelineLayout,
 		GraphicsPipelineRetainedConstructionParams&& params)
 	{
-		if (!byteCodeFuture[(unsigned)ShaderStage::Vertex])
+		if (!byteCodeFuture[(unsigned)ShaderStage::Vertex].valid())
 			Throw(std::runtime_error("Missing vertex shader stage while building shader program"));
 
-		if (byteCodeFuture[(unsigned)ShaderStage::Pixel] && !byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
-			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel]).CheckImmediately().ThenConstructToPromise(
+		if (byteCodeFuture[(unsigned)ShaderStage::Pixel].valid() && !byteCodeFuture[(unsigned)ShaderStage::Geometry].valid()) {
+			::Assets::WhenAll(std::move(byteCodeFuture[(unsigned)ShaderStage::Vertex]), std::move(byteCodeFuture[(unsigned)ShaderStage::Pixel])).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
 				[pipelineLayout=std::move(pipelineLayout), weakDevice=std::weak_ptr<IDevice>{device}, params=std::move(params)](
 					const CompiledShaderByteCode& vsCode, 
@@ -403,8 +400,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 						pipelineLayoutActual, vsCode, psCode};
 					return MakeGraphicsPipelineAndLayout(shaderProgram, params);
 				});
-		} else if (byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
-			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel], byteCodeFuture[(unsigned)ShaderStage::Geometry]).CheckImmediately().ThenConstructToPromise(
+		} else if (byteCodeFuture[(unsigned)ShaderStage::Pixel].valid() && byteCodeFuture[(unsigned)ShaderStage::Geometry].valid()) {
+			::Assets::WhenAll(std::move(byteCodeFuture[(unsigned)ShaderStage::Vertex]), std::move(byteCodeFuture[(unsigned)ShaderStage::Pixel]), std::move(byteCodeFuture[(unsigned)ShaderStage::Geometry])).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
 				[pipelineLayout=std::move(pipelineLayout), weakDevice=std::weak_ptr<IDevice>{device}, params=std::move(params)](
 					const CompiledShaderByteCode& vsCode, 
@@ -420,8 +417,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 						StreamOutputInitializers{params._pipelineDesc->_soElements, params._pipelineDesc->_soBufferStrides});
 					return MakeGraphicsPipelineAndLayout(shaderProgram, params);
 				});
-		} else if (!byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
-			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Geometry]).CheckImmediately().ThenConstructToPromise(
+		} else if (!byteCodeFuture[(unsigned)ShaderStage::Pixel].valid() && byteCodeFuture[(unsigned)ShaderStage::Geometry].valid()) {
+			::Assets::WhenAll(std::move(byteCodeFuture[(unsigned)ShaderStage::Vertex]), std::move(byteCodeFuture[(unsigned)ShaderStage::Geometry])).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
 				[pipelineLayout=std::move(pipelineLayout), weakDevice=std::weak_ptr<IDevice>{device}, params=std::move(params)](
 					const CompiledShaderByteCode& vsCode, 
@@ -483,15 +480,15 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		std::promise<GraphicsPipelineAndLayout>&& promise,
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<SamplerPool>& samplerPool,
-		std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>> byteCodeFuture[3],
+		std::shared_future<CompiledShaderByteCode> byteCodeFuture[3],
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>&& pipelineLayout,
 		const GraphicsPipelineRetainedConstructionParams& params)
 	{
-		if (!byteCodeFuture[(unsigned)ShaderStage::Vertex])
+		if (!byteCodeFuture[(unsigned)ShaderStage::Vertex].valid())
 			Throw(std::runtime_error("Missing vertex shader stage while building shader program"));
 
-		if (byteCodeFuture[(unsigned)ShaderStage::Pixel] && !byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
-			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel]).CheckImmediately().ThenConstructToPromise(
+		if (byteCodeFuture[(unsigned)ShaderStage::Pixel].valid() && !byteCodeFuture[(unsigned)ShaderStage::Geometry].valid()) {
+			::Assets::WhenAll(std::move(byteCodeFuture[(unsigned)ShaderStage::Vertex]), std::move(byteCodeFuture[(unsigned)ShaderStage::Pixel])).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
 				[pipelineLayout=std::move(pipelineLayout), weakDevice=std::weak_ptr<IDevice>{device}, samplerPool, params=std::move(params)](
 					const CompiledShaderByteCode& vsCode, 
@@ -505,8 +502,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 						pipelineLayoutActual, vsCode, psCode};
 					return MakeGraphicsPipelineAndLayout(shaderProgram, params);
 				});
-		} else if (byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
-			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel], byteCodeFuture[(unsigned)ShaderStage::Geometry]).CheckImmediately().ThenConstructToPromise(
+		} else if (byteCodeFuture[(unsigned)ShaderStage::Pixel].valid() && byteCodeFuture[(unsigned)ShaderStage::Geometry].valid()) {
+			::Assets::WhenAll(std::move(byteCodeFuture[(unsigned)ShaderStage::Vertex]), std::move(byteCodeFuture[(unsigned)ShaderStage::Pixel]), std::move(byteCodeFuture[(unsigned)ShaderStage::Geometry])).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
 				[pipelineLayout=std::move(pipelineLayout), weakDevice=std::weak_ptr<IDevice>{device}, samplerPool, params=std::move(params)](
 					const CompiledShaderByteCode& vsCode, 
@@ -522,8 +519,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 						StreamOutputInitializers{params._pipelineDesc->_soElements, params._pipelineDesc->_soBufferStrides});
 					return MakeGraphicsPipelineAndLayout(shaderProgram, params);
 				});
-		} else if (!byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
-			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Geometry]).CheckImmediately().ThenConstructToPromise(
+		} else if (!byteCodeFuture[(unsigned)ShaderStage::Pixel].valid() && byteCodeFuture[(unsigned)ShaderStage::Geometry].valid()) {
+			::Assets::WhenAll(std::move(byteCodeFuture[(unsigned)ShaderStage::Vertex]), std::move(byteCodeFuture[(unsigned)ShaderStage::Geometry])).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
 				[pipelineLayout=std::move(pipelineLayout), weakDevice=std::weak_ptr<IDevice>{device}, samplerPool, params=std::move(params)](
 					const CompiledShaderByteCode& vsCode, 
@@ -566,11 +563,11 @@ namespace RenderCore { namespace Techniques { namespace Internal
 	static void MakeComputePipelineFuture0(
 		std::promise<ComputePipelineAndLayout>&& promise,
 		const std::shared_ptr<IDevice>& device,
-		const std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>>& csCode,
+		std::shared_future<CompiledShaderByteCode> csCode,
 		PipelineLayoutOptions&& pipelineLayout)
 	{
 		// Variation without a PredefinedPipelineLayout
-		::Assets::WhenAll(csCode).CheckImmediately().ThenConstructToPromise(
+		::Assets::WhenAll(std::move(csCode)).CheckImmediately().ThenConstructToPromise(
 			std::move(promise),
 			[pipelineLayout=std::move(pipelineLayout), weakDevice=std::weak_ptr<IDevice>{device}](const auto& csCodeActual) mutable {
 				auto d = weakDevice.lock();
@@ -584,11 +581,11 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		std::promise<ComputePipelineAndLayout>&& promise,
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<SamplerPool>& samplerPool,
-		const std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>>& csCode,
+		std::shared_future<CompiledShaderByteCode> csCode,
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>&& pipelineLayout)
 	{
 		// Variation for MakePipelineLayoutInitializerWithAutoMatching
-		::Assets::WhenAll(csCode).CheckImmediately().ThenConstructToPromise(
+		::Assets::WhenAll(std::move(csCode)).CheckImmediately().ThenConstructToPromise(
 			std::move(promise),
 			[weakDevice=std::weak_ptr<IDevice>{device}, samplerPool=samplerPool, predefinedPipelineLayout=std::move(pipelineLayout)](const auto& csCodeActual) {
 				auto d = weakDevice.lock();
@@ -645,6 +642,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		UniqueShaderVariationSet _selectorVariationsSet;
 		std::shared_ptr<SamplerPool> _samplerPool;
 		std::shared_ptr<IDevice> _device;
+		using PendingUpdateId = unsigned;
 
 		struct WeakGraphicsPipelineAndLayout
 		{
@@ -656,9 +654,9 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			#endif
 		};
 		std::vector<std::pair<uint64_t, WeakGraphicsPipelineAndLayout>> _completedGraphicsPipelines;
-		std::vector<std::pair<uint64_t, std::shared_ptr<::Assets::Marker<GraphicsPipelineAndLayout>>>> _pendingGraphicsPipelines;
+		std::vector<std::pair<uint64_t, std::pair<PendingUpdateId, std::shared_future<GraphicsPipelineAndLayout>>>> _pendingGraphicsPipelines;
 
-		std::shared_ptr<::Assets::Marker<GraphicsPipelineAndLayout>> CreateGraphicsPipelineAlreadyLocked(
+		std::shared_future<GraphicsPipelineAndLayout> CreateGraphicsPipelineAlreadyLocked(
 			const VertexInputStates& ia,
 			const std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules>& pipelineDescWithFiltering,
 			PipelineLayoutOptions&& pipelineLayout,
@@ -688,20 +686,19 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				auto layout = completedi->second._layout.lock();
 				if (pipeline && pipeline->GetDependencyValidation().GetValidationIndex() == 0 && layout) {
 					// we can return an already completed pipeline
-					auto result = std::make_shared<::Assets::Marker<GraphicsPipelineAndLayout>>("pipeline-accelerator");
+					std::promise<GraphicsPipelineAndLayout> promise;
 					GraphicsPipelineAndLayout pipelineAndLayout{std::move(pipeline), std::move(layout), completedi->second._depVal};
 					#if defined(_DEBUG)
 						pipelineAndLayout._debugInfo = completedi->second._debugInfo;
 					#endif
-					result->SetAsset(std::move(pipelineAndLayout));
-					return result;
+					promise.set_value(std::move(pipelineAndLayout));
+					return promise.get_future();
 				}
 			}
 
 			auto i = LowerBound(_pendingGraphicsPipelines, hash);
 			if (i!=_pendingGraphicsPipelines.end() && i->first == hash)
-				if (!::Assets::IsInvalidated(*i->second))
-					return i->second;
+				return i->second.second;
 
 			#if 0
 				Log(Verbose) << "Building pipeline for pipeline accelerator: " << std::endl;
@@ -721,7 +718,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			StreamOutputInitializers so;
 			so._outputElements = MakeIteratorRange(pipelineDesc->_soElements);
 			so._outputBufferStrides = MakeIteratorRange(pipelineDesc->_soBufferStrides);
-			std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>> byteCodeFutures[3];
+			std::shared_future<CompiledShaderByteCode> byteCodeFutures[3];
 			for (unsigned c=0; c<3; ++c) {
 				if (pipelineDesc->_shaders[c].empty())
 					continue;
@@ -742,28 +739,30 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				constructionParams._debugInfo._gsDescription = Internal::MakeShaderDescription(ShaderStage::Geometry, *pipelineDesc, compiledPatchCollection, filteredSelectors[(unsigned)ShaderStage::Geometry]);
 			#endif
 
-			auto result = std::make_shared<::Assets::Marker<GraphicsPipelineAndLayout>>("pipeline-accelerator");
+			std::promise<GraphicsPipelineAndLayout> promise;
+			std::shared_future<GraphicsPipelineAndLayout> result = promise.get_future();
 			if (pipelineLayout._predefinedPipelineLayout) {
-				MakeGraphicsPipelineFuture1(result->AdoptPromise(), _device, _samplerPool, byteCodeFutures, std::move(pipelineLayout._predefinedPipelineLayout), std::move(constructionParams));
+				MakeGraphicsPipelineFuture1(std::move(promise), _device, _samplerPool, byteCodeFutures, std::move(pipelineLayout._predefinedPipelineLayout), std::move(constructionParams));
 			} else {
-				MakeGraphicsPipelineFuture0(result->AdoptPromise(), _device, byteCodeFutures, std::move(pipelineLayout), std::move(constructionParams));
+				MakeGraphicsPipelineFuture0(std::move(promise), _device, byteCodeFutures, std::move(pipelineLayout), std::move(constructionParams));
 			}
 
 			AddGraphicsPipelineFuture(result, hash);
 			return result;
 		}
 
-		void AddGraphicsPipelineFuture(const std::shared_ptr<::Assets::Marker<GraphicsPipelineAndLayout>>& future, uint64_t hash)
+		void AddGraphicsPipelineFuture(const std::shared_future<GraphicsPipelineAndLayout>& future, uint64_t hash)
 		{
+			auto updateId = _nextPendingUpdateId++;
 			auto i = LowerBound(_pendingGraphicsPipelines, hash);
 			if (i!=_pendingGraphicsPipelines.end() && i->first == hash) {
-				i->second = future;
+				i->second.first = updateId;
+				i->second.second = future;
 			} else
-				_pendingGraphicsPipelines.insert(i, std::make_pair(hash, future));
+				_pendingGraphicsPipelines.insert(i, std::make_pair(hash, std::make_pair(updateId, future)));
 
-			std::weak_ptr<::Assets::Marker<GraphicsPipelineAndLayout>> capturedFuture = future;	
-			::Assets::WhenAll(future->ShareFuture()).Then(
-				[weakThis=weak_from_this(), hash, capturedFuture=std::move(capturedFuture)](std::shared_future<GraphicsPipelineAndLayout> completedFuture) {
+			::Assets::WhenAll(future).Then(
+				[weakThis=weak_from_this(), hash, updateId](std::shared_future<GraphicsPipelineAndLayout> completedFuture) {
 					auto t = weakThis.lock();
 					if (!t) return;
 					
@@ -773,15 +772,12 @@ namespace RenderCore { namespace Techniques { namespace Internal
 						auto actualized = completedFuture.get();
 
 						{
-							auto f = capturedFuture.lock();
-							if (f) {
-								auto i = LowerBound(t->_pendingGraphicsPipelines, hash);
-								assert(i!=t->_pendingGraphicsPipelines.end() && i->first == hash);
-								if (i!=t->_pendingGraphicsPipelines.end() && i->first == hash) {
-									if (i->second.get() != f.get())
-										return;		// possibly scheduled a replacement while the first was still pending
-									t->_pendingGraphicsPipelines.erase(i);
-								}
+							auto i = LowerBound(t->_pendingGraphicsPipelines, hash);
+							assert(i!=t->_pendingGraphicsPipelines.end() && i->first == hash);
+							if (i!=t->_pendingGraphicsPipelines.end() && i->first == hash) {
+								if (i->second.first != updateId)
+									return;		// possibly scheduled a replacement while the first was still pending
+								t->_pendingGraphicsPipelines.erase(i);
 							}
 						}
 
@@ -804,7 +800,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				});
 		}
 
-		std::shared_ptr<::Assets::Marker<ComputePipelineAndLayout>> CreateComputePipelineAlreadyLocked(
+		std::shared_future<ComputePipelineAndLayout> CreateComputePipelineAlreadyLocked(
 			StringSection<> shader,
 			PipelineLayoutOptions&& pipelineLayout,
 			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
@@ -827,40 +823,41 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				auto layout = completedi->second._layout.lock();
 				if (pipeline && completedi->second._depVal.GetValidationIndex() == 0 && layout) {
 					// we can return an already completed pipeline
-					auto result = std::make_shared<::Assets::Marker<ComputePipelineAndLayout>>("compute-pipeline");
-					result->SetAsset(ComputePipelineAndLayout{std::move(pipeline), std::move(layout), completedi->second._depVal});
-					return result;
+					std::promise<ComputePipelineAndLayout> result;
+					result.set_value(ComputePipelineAndLayout{std::move(pipeline), std::move(layout), completedi->second._depVal});
+					return result.get_future();
 				}
 			}
 
 			auto i = LowerBound(_pendingComputePipelines, hash);
 			if (i!=_pendingComputePipelines.end() && i->first == hash)
-				if (!::Assets::IsInvalidated(*i->second))
-					return i->second;
+				return i->second.second;
 
 			// Make the futures and setup caching
 			auto byteCodeFuture = MakeByteCodeFuture(ShaderStage::Compute, shader, filteredSelectors, compiledPatchCollection, patchExpansions);
-			auto result = std::make_shared<::Assets::Marker<ComputePipelineAndLayout>>("compute-pipeline");
+			std::promise<ComputePipelineAndLayout> promise;
+			std::shared_future<ComputePipelineAndLayout> result = promise.get_future();
 			if (pipelineLayout._predefinedPipelineLayout) {
-				MakeComputePipelineFuture1(result->AdoptPromise(), _device, _samplerPool, byteCodeFuture, std::move(pipelineLayout._predefinedPipelineLayout));
+				MakeComputePipelineFuture1(std::move(promise), _device, _samplerPool, byteCodeFuture, std::move(pipelineLayout._predefinedPipelineLayout));
 			} else {
-				MakeComputePipelineFuture0(result->AdoptPromise(), _device, byteCodeFuture, std::move(pipelineLayout));
+				MakeComputePipelineFuture0(std::move(promise), _device, byteCodeFuture, std::move(pipelineLayout));
 			}
 			AddComputePipelineFuture(result, hash);
 			return result;
 		};
 
-		void AddComputePipelineFuture(const std::shared_ptr<::Assets::Marker<ComputePipelineAndLayout>>& future, uint64_t hash)
+		void AddComputePipelineFuture(const std::shared_future<ComputePipelineAndLayout>& future, uint64_t hash)
 		{
+			auto updateId = _nextPendingUpdateId++;
 			auto i = LowerBound(_pendingComputePipelines, hash);
 			if (i!=_pendingComputePipelines.end() && i->first == hash) {
-				i->second = future;
+				i->second.first = updateId;
+				i->second.second = future;
 			} else
-				_pendingComputePipelines.insert(i, std::make_pair(hash, future));
+				_pendingComputePipelines.insert(i, std::make_pair(hash, std::make_pair(updateId, future)));
 
-			std::weak_ptr<::Assets::Marker<ComputePipelineAndLayout>> capturedFuture = future;
-			::Assets::WhenAll(future->ShareFuture()).Then(
-				[weakThis=weak_from_this(), hash, capturedFuture=std::move(capturedFuture)](std::shared_future<ComputePipelineAndLayout> completedFuture) {
+			::Assets::WhenAll(future).Then(
+				[weakThis=weak_from_this(), hash, updateId](std::shared_future<ComputePipelineAndLayout> completedFuture) {
 					auto t = weakThis.lock();
 					if (!t) return;
 
@@ -870,15 +867,12 @@ namespace RenderCore { namespace Techniques { namespace Internal
 						auto actualized = completedFuture.get();
 
 						{
-							auto f = capturedFuture.lock();
-							if (f) {
-								auto i = LowerBound(t->_pendingComputePipelines, hash);
-								assert(i!=t->_pendingComputePipelines.end() && i->first == hash);
-								if (i!=t->_pendingComputePipelines.end() && i->first == hash) {
-									if (i->second.get() != f.get())
-										return;		// possibly scheduled a replacement while the first was still pending
-									t->_pendingComputePipelines.erase(i);
-								}
+							auto i = LowerBound(t->_pendingComputePipelines, hash);
+							assert(i!=t->_pendingComputePipelines.end() && i->first == hash);
+							if (i!=t->_pendingComputePipelines.end() && i->first == hash) {
+								if (i->second.first != updateId)
+									return;		// possibly scheduled a replacement while the first was still pending
+								t->_pendingComputePipelines.erase(i);
 							}
 						}
 
@@ -906,7 +900,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			::Assets::DependencyValidation _depVal;
 		};
 		std::vector<std::pair<uint64_t, WeakComputePipelineAndLayout>> _completedComputePipelines;
-		std::vector<std::pair<uint64_t, std::shared_ptr<::Assets::Marker<ComputePipelineAndLayout>>>> _pendingComputePipelines;
+		std::vector<std::pair<uint64_t, std::pair<PendingUpdateId, std::shared_future<ComputePipelineAndLayout>>>> _pendingComputePipelines;
 
 		UniqueShaderVariationSet::FilteredSelectorSet FilterSelectorsAlreadyLocked(
 			ShaderStage shaderStage,
@@ -957,7 +951,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		}
 
 	private:
-		std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>> MakeByteCodeFuture(
+		std::shared_future<CompiledShaderByteCode> MakeByteCodeFuture(
 			ShaderStage shaderStage,
 			StringSection<> shader,
 			const UniqueShaderVariationSet::FilteredSelectorSet& filteredSelectors,
@@ -979,6 +973,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				MakeIteratorRange(patchExpansionsBuffer, &patchExpansionsBuffer[patchExpansionCount]), 
 				so);
 		};
+
+		PendingUpdateId _nextPendingUpdateId = 1;
 	};
 
 }}}

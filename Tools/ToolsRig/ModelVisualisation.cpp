@@ -370,7 +370,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
 		const ModelVisSettings& settings)
 	{
-		auto rendererFuture = ::Assets::MakeFuturePtr<ModelSceneRendererState>(drawablesPool, pipelineAcceleratorPool, deformAcceleratorPool, settings);
+		auto rendererFuture = ::Assets::NewMarkerPtr<ModelSceneRendererState>(drawablesPool, pipelineAcceleratorPool, deformAcceleratorPool, settings);
 		auto result = std::make_shared<Assets::MarkerPtr<SceneEngine::IScene>>();
 		::Assets::WhenAll(rendererFuture).ThenConstructToPromise(
 			result->AdoptPromise(),

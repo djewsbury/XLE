@@ -91,7 +91,7 @@ namespace RenderCore { namespace Techniques
 		void CreateGraphicsPipeline(
 			std::promise<GraphicsPipelineAndLayout>&& promise,
 			PipelineLayoutOptions&& pipelineLayout,
-			const ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc>& pipelineDescFuture,
+			std::shared_future<std::shared_ptr<GraphicsPipelineDesc>> pipelineDescFuture,
 			IteratorRange<const ParameterBox*const*> selectors,
 			const VertexInputStates& inputStates,
 			const FrameBufferTarget& fbTarget,
@@ -125,7 +125,7 @@ namespace RenderCore { namespace Techniques
 		void CreateGraphicsPipelineInternal(
 			std::promise<GraphicsPipelineAndLayout>&& promise,
 			PipelineLayoutOptions&& pipelineLayout,
-			const ::Assets::PtrToMarkerPtr<Internal::GraphicsPipelineDescWithFilteringRules>& pipelineDescWithFilteringFuture,
+			std::shared_future<std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules>> pipelineDescWithFilteringFuture,
 			IteratorRange<const ParameterBox*const*> selectors,
 			const VertexInputStates& inputStates,
 			const FrameBufferTarget& fbTarget,

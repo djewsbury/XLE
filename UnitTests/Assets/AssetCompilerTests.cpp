@@ -516,10 +516,10 @@ namespace UnitTests
 			MakeIteratorRange(outputTypes),
 			"unit-test-asset-.*");
 
-		// start a compile via MakeFuture, and ensure that it gets propagated to the registered compiler and generates
+		// start a compile via NewMarkerPtr, and ensure that it gets propagated to the registered compiler and generates
 		// the asset as expected
 		{
-			auto futureByPtr = ::Assets::MakeFuturePtr<TestChunkRequestsAssetWithCompileProcessType>("unit-test-asset-implicit");
+			auto futureByPtr = ::Assets::NewMarkerPtr<TestChunkRequestsAssetWithCompileProcessType>("unit-test-asset-implicit");
 			futureByPtr->StallWhilePending();
 			auto actualPtr = futureByPtr->Actualize();
 			REQUIRE(actualPtr != nullptr);

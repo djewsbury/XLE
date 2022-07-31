@@ -125,7 +125,7 @@ namespace RenderCore { namespace Techniques
         DecodedInitializer init(splitter);
 		assert(!splitter.File().IsEmpty());
 
-		std::shared_ptr<::Assets::Marker<TextureMetaData>> metaDataFuture;
+		std::shared_future<TextureMetaData> metaDataFuture;
 		{
             ::Assets::ResChar filename[MaxPath];
                 // Some resources might have a little xml ".metadata" file attached. This 
@@ -157,7 +157,7 @@ namespace RenderCore { namespace Techniques
         {
             std::future<BufferUploads::ResourceLocator> _futureLocator;
             std::promise<std::shared_ptr<DeferredShaderResource>> _promise;
-            std::shared_ptr<::Assets::Marker<TextureMetaData>> _metaDataFuture;
+            std::shared_future<TextureMetaData> _metaDataFuture;
         };
         auto cap = std::make_shared<Captures>();
         cap->_futureLocator = std::move(transactionMarker._future);
@@ -181,15 +181,15 @@ namespace RenderCore { namespace Techniques
                     TextureViewDesc viewDesc;
                     auto finalDepVal = depVal;
 
-                    if (cap->_metaDataFuture) {
-                        cap->_metaDataFuture->StallWhilePending();      // we're stalling in the buffer uploads thread here, so we need this to be quick!
-                        auto metaData = cap->_metaDataFuture->Actualize();
+                    if (cap->_metaDataFuture.valid()) {
+                        auto metaData = cap->_metaDataFuture.get();      // we're stalling in the buffer uploads thread here, so we need this to be quick!
                         if (metaData.GetDependencyValidation()) {
                             auto parentDepVal = ::Assets::GetDepValSys().Make();
                             parentDepVal.RegisterDependency(finalDepVal);
                             parentDepVal.RegisterDependency(metaData.GetDependencyValidation());
                             finalDepVal = parentDepVal;
                         }
+                        viewDesc = MakeTextureViewDesc(desc._textureDesc, init, &metaData);
                     } else {
                         viewDesc = MakeTextureViewDesc(desc._textureDesc, init);
                     }
@@ -261,7 +261,7 @@ namespace RenderCore { namespace Techniques
 		const FileNameSplitter<char>& splitter)
     {
         auto containerInitializer = splitter.AllExceptParameters();
-		auto containerFuture = ::Assets::MakeFuturePtr<Assets::TextureArtifact>(containerInitializer);
+		auto containerFuture = ::Assets::NewMarkerPtr<Assets::TextureArtifact>(containerInitializer);
         ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
             std::move(promise),
             [originalRequest=splitter.FullFilename().AsString()](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
@@ -273,7 +273,7 @@ namespace RenderCore { namespace Techniques
         std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
         const Assets::TextureCompilationRequest& compileRequest)
     {
-        auto containerFuture = ::Assets::MakeFuturePtr<Assets::TextureArtifact>(compileRequest);
+        auto containerFuture = ::Assets::NewMarkerPtr<Assets::TextureArtifact>(compileRequest);
         ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
             std::move(promise),
             [originalRequest=compileRequest._srcFile](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {

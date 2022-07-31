@@ -56,7 +56,7 @@ namespace RenderCore { namespace LightingEngine
 			request._srcFile = _sourceImage;
 			request._format = Format::BC6H_UF16;
 			request._faceDim = 512;
-			_specularIBL = ::Assets::MakeFuturePtr<Techniques::DeferredShaderResource>(request);
+			_specularIBL = ::Assets::NewMarkerPtr<Techniques::DeferredShaderResource>(request);
 
 			Assets::TextureCompilationRequest request2;
 			request2._operation = Assets::TextureCompilationRequest::Operation::EquRectToCubeMap; 
@@ -64,7 +64,7 @@ namespace RenderCore { namespace LightingEngine
 			request2._format = Format::BC6H_UF16;
 			request2._faceDim = 1024;
 			request2._mipMapFilter = Assets::TextureCompilationRequest::MipMapFilter::FromSource;
-			_ambientRawCubemap = ::Assets::MakeFuturePtr<Techniques::DeferredShaderResource>(request2);
+			_ambientRawCubemap = ::Assets::NewMarkerPtr<Techniques::DeferredShaderResource>(request2);
 		}
 	};
 
@@ -483,7 +483,7 @@ namespace RenderCore { namespace LightingEngine
 				pipelineAccelerators, techDelBox, shadowDescSet);
 		}
 
-		auto lightTilerFuture = ::Assets::MakeFuturePtr<RasterizationLightTileOperator>(pipelinePool, tilerCfg);
+		auto lightTilerFuture = ::Assets::NewMarkerPtr<RasterizationLightTileOperator>(pipelinePool, tilerCfg);
 		std::vector<LightSourceOperatorDesc> positionalLightOperators { positionalLightOperatorsInit.begin(), positionalLightOperatorsInit.end() };
 		std::vector<ShadowOperatorDesc> shadowOperatorsDesc { shadowGenerators.begin(), shadowGenerators.end() };
 

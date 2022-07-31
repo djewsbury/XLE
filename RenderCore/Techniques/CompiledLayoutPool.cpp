@@ -79,7 +79,7 @@ namespace RenderCore { namespace Techniques
 	::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> CompiledLayoutPool::GetPatchedPipelineLayout(
 		StringSection<> techniquePipelineLayoutSrc)
 	{
-		return ::Assets::MakeAssetPtr<CompiledPipelineLayoutAsset>(_device, techniquePipelineLayoutSrc, _matDescSetLayout);
+		return ::Assets::MakeAssetMarker<std::shared_ptr<CompiledPipelineLayoutAsset>>(_device, techniquePipelineLayoutSrc, _matDescSetLayout);
 	}
 
 	const RenderCore::Assets::PredefinedDescriptorSetLayout& CompiledLayoutPool::GetBaseMaterialDescriptorSetLayout() const

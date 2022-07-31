@@ -303,7 +303,7 @@ namespace Assets
 	}
 
 	template<typename AssetType, typename... Params>
-		std::shared_ptr<Marker<AssetType>> MakeFuture(Params... initialisers)
+		std::shared_ptr<Marker<AssetType>> NewMarker(Params... initialisers)
 	{
 		auto future = std::make_shared<Marker<AssetType>>(Internal::AsString(initialisers...));
 		AutoConstructToPromise(future->AdoptPromise(), std::forward<Params>(initialisers)...);
@@ -311,7 +311,7 @@ namespace Assets
 	}
 
 	template<typename AssetType, typename... Params>
-		std::shared_ptr<MarkerPtr<AssetType>> MakeFuturePtr(Params... initialisers)
+		std::shared_ptr<MarkerPtr<AssetType>> NewMarkerPtr(Params... initialisers)
 	{
 		auto future = std::make_shared<MarkerPtr<AssetType>>(Internal::AsString(initialisers...));
 		AutoConstructToPromise(future->AdoptPromise(), std::forward<Params>(initialisers)...);

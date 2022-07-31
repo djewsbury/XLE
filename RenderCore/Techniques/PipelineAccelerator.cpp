@@ -22,7 +22,6 @@
 #include "../Assets/RawMaterial.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/ScaffoldCmdStream.h"
-#include "../../Assets/Marker.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/AssetHeapLRU.h"
@@ -151,7 +150,7 @@ namespace RenderCore { namespace Techniques
 			&globalSelectors
 		};
 
-		auto pipelineDescFuture = cfg->_delegate->GetPipelineDesc(compiledPatchCollection->GetInterface(), _stateSet);
+		std::shared_future<std::shared_ptr<GraphicsPipelineDesc>> pipelineDescFuture = cfg->_delegate->GetPipelineDesc(compiledPatchCollection->GetInterface(), _stateSet);
 		VertexInputStates vis { _inputAssembly, _miniInputAssembly, _topology };
 		auto metalPipelineFuture = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
 		pipelineCollection.CreateGraphicsPipeline(
@@ -161,7 +160,7 @@ namespace RenderCore { namespace Techniques
 			vis, FrameBufferTarget{&cfg->_fbDesc, cfg->_subpassIdx}, compiledPatchCollection);
 
 		std::weak_ptr<PipelineAccelerator> weakThis = shared_from_this();
-		::Assets::WhenAll(metalPipelineFuture, pipelineDescFuture).ThenConstructToPromise(
+		::Assets::WhenAll(metalPipelineFuture, std::move(pipelineDescFuture)).ThenConstructToPromise(
 			std::move(resultPromise),
 			[cfg=std::move(cfg), weakThis](
 				GraphicsPipelineAndLayout metalPipeline, auto pipelineDesc) {

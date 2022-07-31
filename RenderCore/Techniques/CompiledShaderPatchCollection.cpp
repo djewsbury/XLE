@@ -21,6 +21,7 @@
 #include "../../Assets/Assets.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/Streams/PathUtils.h"
+#include "../../Utility/Threading/CompletionThreadPool.h"
 
 namespace RenderCore { namespace Techniques
 {
@@ -43,10 +44,12 @@ namespace RenderCore { namespace Techniques
 		_interface._preconfiguration = src.GetPreconfigurationFileName().AsString();
 
 		if (!src.GetDescriptorSetFileName().IsEmpty()) {
-			auto layoutFileFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(src.GetDescriptorSetFileName());
-			layoutFileFuture->StallWhilePending();
+			::Assets::DependencyValidation additionalDepVal;
 			TRY {
-				auto actualLayoutFile = layoutFileFuture->Actualize();
+				auto layoutFileFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(src.GetDescriptorSetFileName());
+				YieldToPool(layoutFileFuture);
+				auto actualLayoutFile = layoutFileFuture.get();
+				additionalDepVal = actualLayoutFile->GetDependencyValidation();
 				auto i = actualLayoutFile->_descriptorSets.find("Material");
 				if (i == actualLayoutFile->_descriptorSets.end())
 					Throw(std::runtime_error("Expecting to find a descriptor set layout called 'Material' in pipeline layout file (" + src.GetDescriptorSetFileName().AsString() + "), but it was not found"));
@@ -57,11 +60,11 @@ namespace RenderCore { namespace Techniques
 				_interface._descriptorSet = ShaderSourceParser::LinkToFixedLayout(*i->second, *_interface._descriptorSet, false);
 				_depVal.RegisterDependency(actualLayoutFile->GetDependencyValidation());
 			} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
-				::Assets::DependencyValidationMarker depVals[] { layoutFileFuture->GetDependencyValidation(), src.GetDependencyValidation() };
+				::Assets::DependencyValidationMarker depVals[] { additionalDepVal, src.GetDependencyValidation() };
 				auto newDepVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
 				Throw(::Assets::Exceptions::ConstructionError(e, newDepVal));
 			} CATCH(const std::exception& e) {
-				::Assets::DependencyValidationMarker depVals[] { layoutFileFuture->GetDependencyValidation(), src.GetDependencyValidation() };
+				::Assets::DependencyValidationMarker depVals[] { additionalDepVal, src.GetDependencyValidation() };
 				auto newDepVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
 				Throw(::Assets::Exceptions::ConstructionError(e, newDepVal));
 			} CATCH_END
@@ -173,9 +176,7 @@ namespace RenderCore { namespace Techniques
 
 		ShaderSourceParser::SelectorFilteringRules filteringRules = inst._selectorRelevance;
 		for (const auto& rawShader:inst._rawShaderFileIncludes) {
-			auto rawIncludeFilteringRules = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorFilteringRules>(rawShader);
-			rawIncludeFilteringRules->StallWhilePending();
-			filteringRules.MergeIn(*rawIncludeFilteringRules->Actualize());
+			filteringRules.MergeIn(*::Assets::ActualizeAssetPtr<ShaderSourceParser::SelectorFilteringRules>(rawShader));
 		}
 		_interface._filteringRules.push_back(filteringRules);
 		if (filteringRules.GetDependencyValidation())

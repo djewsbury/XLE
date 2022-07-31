@@ -135,7 +135,7 @@ namespace RenderCore { namespace Assets
 
 				AddDep(_dependencies, sourceModel);        // we need need a dependency (even if it's a missing file)
 
-				auto modelMatFuture = ::Assets::MakeAsset<RawMatConfigurations>(sourceModel);
+				auto modelMatFuture = ::Assets::MakeAssetMarker<RawMatConfigurations>(sourceModel);
 				auto modelMatState = modelMatFuture->StallWhilePending();
 				if (modelMatState == ::Assets::AssetState::Invalid) {
 					Throw(::Assets::Exceptions::ConstructionError(
@@ -190,7 +190,7 @@ namespace RenderCore { namespace Assets
 						meld << ";" << sourceMaterial << ":" << Conversion::Convert<::Assets::rstring>(cfg);
 					}
 
-					auto futureMaterial = ::Assets::MakeAsset<ResolvedMaterial>(meld.AsStringSection());
+					auto futureMaterial = ::Assets::MakeAssetMarker<ResolvedMaterial>(meld.AsStringSection());
 					materialFutures.push_back(std::make_pair(guid, std::move(futureMaterial)));
 
 					auto resNameStr = meld.AsString();

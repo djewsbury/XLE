@@ -13,13 +13,13 @@ namespace Assets
 {
 
 	template<typename AssetType, typename... Params>
-		std::shared_ptr<Marker<AssetType>> MakeAsset(Params... initialisers)
+		std::shared_future<AssetType> MakeAsset(Params... initialisers)
 	{
-		return Services::GetAssetSets().GetSetForType<AssetType>().Get(std::forward<Params>(initialisers)...);
+		return Services::GetAssetSets().GetSetForType<AssetType>().Get(std::forward<Params>(initialisers)...)->ShareFuture();
 	}
 
 	template<typename AssetType, typename... Params>
-		std::shared_ptr<Marker<std::shared_ptr<AssetType>>> MakeAssetPtr(Params... initialisers)
+		std::shared_future<std::shared_ptr<AssetType>> MakeAssetPtr(Params... initialisers)
 	{
 		return MakeAsset<std::shared_ptr<AssetType>>(std::forward<Params>(initialisers)...);
 	}
@@ -27,7 +27,7 @@ namespace Assets
 	template<typename AssetType, typename... Params>
 		const AssetType& ActualizeAsset(Params... initialisers)
 	{
-		auto future = MakeAsset<AssetType>(std::forward<Params>(initialisers)...);
+		auto future = Services::GetAssetSets().GetSetForType<AssetType>().Get(std::forward<Params>(initialisers)...);
 		future->StallWhilePending();
 		return future->Actualize();
 	}
@@ -35,16 +35,16 @@ namespace Assets
 	template<typename AssetType, typename... Params>
 		const std::shared_ptr<AssetType>& ActualizeAssetPtr(Params... initialisers)
 	{
-		auto future = MakeAsset<std::shared_ptr<AssetType>>(std::forward<Params>(initialisers)...);
+		auto future = Services::GetAssetSets().GetSetForType<std::shared_ptr<AssetType>>().Get(std::forward<Params>(initialisers)...);
 		future->StallWhilePending();
 		return future->Actualize();
 	}
 
 	template<typename AssetType, typename... Params>
-		std::shared_ptr<Marker<AssetType>> MakeFuture(Params... initialisers);		// (implemented in DeferredConstruction.h)
-
-	template<typename AssetType, typename... Params>
-		std::shared_ptr<MarkerPtr<AssetType>> MakeFuturePtr(Params... initialisers);		// (implemented in DeferredConstruction.h)
+		std::shared_ptr<Marker<AssetType>> MakeAssetMarker(Params... initialisers)
+	{
+		return Services::GetAssetSets().GetSetForType<AssetType>().Get(std::forward<Params>(initialisers)...);
+	}
 
 	namespace Legacy
 	{

@@ -87,15 +87,14 @@ namespace RenderCore { namespace Techniques
 	void PipelineCollection::CreateGraphicsPipelineInternal(
 		std::promise<GraphicsPipelineAndLayout>&& promise,
 		PipelineLayoutOptions&& pipelineLayout,
-		const ::Assets::PtrToMarkerPtr<Internal::GraphicsPipelineDescWithFilteringRules>& pipelineDescWithFilteringFuture,
+		std::shared_future<std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules>> pipelineDescWithFilteringFuture,
 		IteratorRange<const ParameterBox*const*> selectors,
 		const VertexInputStates& inputStates,
 		const FrameBufferTarget& fbTarget,
 		const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection)
 	{
-		auto result = std::make_shared<::Assets::Marker<GraphicsPipelineAndLayout>>("graphics-pipeline");
 		std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules> immediatePipelineDesc; ::Assets::DependencyValidation pipelineDescDepVal; ::Assets::Blob pipelineDescLog;
-		if (pipelineDescWithFilteringFuture->CheckStatusBkgrnd(immediatePipelineDesc, pipelineDescDepVal, pipelineDescLog) == ::Assets::AssetState::Ready) {
+		if (pipelineDescWithFilteringFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
 			TRY {
 				auto cfgDepVal = MakeConfigurationDepVal(*immediatePipelineDesc);
 
@@ -124,7 +123,7 @@ namespace RenderCore { namespace Techniques
 				promise.set_exception(std::current_exception());
 			} CATCH_END
 		} else {
-			::Assets::WhenAll(pipelineDescWithFilteringFuture).ThenConstructToPromise(
+			::Assets::WhenAll(std::move(pipelineDescWithFilteringFuture)).ThenConstructToPromise(
 				std::move(promise),
 				[sharedPools=_sharedPools, selectorsCopy=RetainedSelectors{selectors}, pipelineLayout=std::move(pipelineLayout), compiledPatchCollection,
 					inputAssembly=Internal::AsVector(inputStates._inputAssembly), miniInputAssembly=Internal::AsVector(inputStates._miniInputAssembly), topology=inputStates._topology,
@@ -177,26 +176,34 @@ namespace RenderCore { namespace Techniques
 		const FrameBufferTarget& fbTarget,
 		const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection)
 	{
+		std::promise<std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules>> pipelinePromise;
+		auto pipelineFuture = pipelinePromise.get_future();
+		Internal::GraphicsPipelineDescWithFilteringRules::ConstructToPromise(std::move(pipelinePromise), pipelineDesc);
+
 		CreateGraphicsPipelineInternal(
 			std::move(promise),
 			std::move(pipelineLayout), 
-			Internal::GraphicsPipelineDescWithFilteringRules::CreateFuture(pipelineDesc),
+			std::move(pipelineFuture),
 			selectors, inputStates, fbTarget, compiledPatchCollection);
 	}
 
 	void PipelineCollection::CreateGraphicsPipeline(
 		std::promise<GraphicsPipelineAndLayout>&& promise,
 		PipelineLayoutOptions&& pipelineLayout,
-		const ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc>& pipelineDescFuture,
+		const std::shared_future<std::shared_ptr<GraphicsPipelineDesc>> pipelineDescFuture,
 		IteratorRange<const ParameterBox*const*> selectors,
 		const VertexInputStates& inputStates,
 		const FrameBufferTarget& fbTarget,
 		const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection)
 	{
+		std::promise<std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules>> pipelinePromise;
+		auto pipelineFuture = pipelinePromise.get_future();
+		Internal::GraphicsPipelineDescWithFilteringRules::ConstructToPromise(std::move(pipelinePromise), pipelineDescFuture);
+
 		CreateGraphicsPipelineInternal(
 			std::move(promise),
 			std::move(pipelineLayout), 
-			Internal::GraphicsPipelineDescWithFilteringRules::CreateFuture(pipelineDescFuture),
+			std::move(pipelineFuture),
 			selectors, inputStates, fbTarget, compiledPatchCollection);
 	}
 

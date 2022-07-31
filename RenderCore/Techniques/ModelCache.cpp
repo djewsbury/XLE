@@ -82,7 +82,7 @@ namespace RenderCore { namespace Techniques
 		auto modelScaffold = _pimpl->_modelScaffolds.Get(modelFilename);
 		auto materialScaffold = _pimpl->_materialScaffolds.Get(materialFilename, modelFilename);
 		auto construction = std::make_shared<ModelRendererConstruction>();
-		construction->AddElement().SetModelScaffold(modelScaffold).SetMaterialScaffold(materialScaffold);
+		construction->AddElement().SetModelScaffold(modelScaffold->ShareFuture(), modelFilename.AsString()).SetMaterialScaffold(materialScaffold->ShareFuture(), materialFilename.AsString());
 
 		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_constructionContext, construction);
 		return newFuture;
@@ -116,7 +116,7 @@ namespace RenderCore { namespace Techniques
 		auto modelScaffold = _pimpl->_modelScaffolds.Get(modelFilename);
 		auto materialScaffold = _pimpl->_materialScaffolds.Get(materialFilename, modelFilename);
 		auto construction = std::make_shared<ModelRendererConstruction>();
-		construction->AddElement().SetModelScaffold(modelScaffold).SetMaterialScaffold(materialScaffold);
+		construction->AddElement().SetModelScaffold(modelScaffold->ShareFuture(), modelFilename.AsString()).SetMaterialScaffold(materialScaffold->ShareFuture(), materialFilename.AsString());
 
 		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_constructionContext, construction);
 		return nullptr;	// implicitly not available immediately

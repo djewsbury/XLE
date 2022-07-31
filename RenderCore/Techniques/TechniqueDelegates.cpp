@@ -27,7 +27,7 @@ namespace RenderCore { namespace Techniques
 	class TechniqueDelegate_Legacy : public ITechniqueDelegate
 	{
 	public:
-		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
+		FutureGraphicsPipelineDesc GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& input) override;
 
@@ -44,7 +44,7 @@ namespace RenderCore { namespace Techniques
 		AttachmentBlendDesc _blend;
 		RasterizationDesc _rasterization;
 		DepthStencilDesc _depthStencil;
-		::Assets::PtrToMarkerPtr<Technique> _techniqueFuture;
+		std::shared_future<std::shared_ptr<Technique>> _techniqueFuture;
 	};
 
 	static void PrepareShadersFromTechniqueEntry(
@@ -60,9 +60,10 @@ namespace RenderCore { namespace Techniques
 
 	auto TechniqueDelegate_Legacy::GetPipelineDesc(
 		const CompiledShaderPatchCollection::Interface& shaderPatches,
-		const RenderCore::Assets::RenderStateSet& input) -> ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc>
+		const RenderCore::Assets::RenderStateSet& input) -> FutureGraphicsPipelineDesc
 	{
-		auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("resolved-technique");
+		std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
+		auto result = promise.get_future();
 
 		auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 		nascentDesc->_blend.push_back(_blend);
@@ -70,19 +71,18 @@ namespace RenderCore { namespace Techniques
 		nascentDesc->_depthStencil = _depthStencil;
 		nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
-		auto technique = _techniqueFuture->TryActualize();
-		if (technique) {
-			auto& actualTechnique = *technique->get();
+		if (_techniqueFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+			auto& actualTechnique = *_techniqueFuture.get();
 			nascentDesc->_depVal = actualTechnique.GetDependencyValidation();
 			auto& entry = actualTechnique.GetEntry(_techniqueIndex);
 			PrepareShadersFromTechniqueEntry(nascentDesc, entry);
-			result->SetAsset(std::move(nascentDesc));
+			promise.set_value(std::move(nascentDesc));
 		} else {
 			// We need to poll until the technique file is ready, and then continue on to figuring out the shader
 			// information as usual
 			::Assets::WhenAll(_techniqueFuture).ThenConstructToPromise(
-				result->AdoptPromise(),
-				[techniqueIndex = _techniqueIndex, nascentDesc](std::shared_ptr<Technique> technique) {
+				std::move(promise),
+				[techniqueIndex = _techniqueIndex, nascentDesc](const std::shared_ptr<Technique>& technique) {
 					nascentDesc->_depVal = technique->GetDependencyValidation();
 					auto& entry = technique->GetEntry(techniqueIndex);
 					PrepareShadersFromTechniqueEntry(nascentDesc, entry);
@@ -191,18 +191,16 @@ namespace RenderCore { namespace Techniques
 				_vsNoPatchesSrc = *vsNoPatchesSrc;
 				_vsDeformVertexSrc = *vsDeformVertexSrc;
 			}
+
+			TechniqueFileHelper() = default;
 		};
 
-		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
+		FutureGraphicsPipelineDesc GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			#if defined(_DEBUG)
-				if (_techniqueFileHelper->GetDependencyValidation().GetValidationIndex() != 0)
-					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-			#endif
-
-			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-deferred-delegate");
+			std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
+			auto result = promise.get_future();
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
 			bool deferredDecal = 
@@ -218,31 +216,35 @@ namespace RenderCore { namespace Techniques
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
-				result->AdoptPromise(),
-				[nascentDesc, illumType, hasDeformVertex](
-					std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
+				std::move(promise),
+				[nascentDesc, illumType, hasDeformVertex](const TechniqueFileHelper& techniqueFileHelper) {
 
-					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_noPatches;
+					#if defined(_DEBUG)
+						if (techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
+							Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+					#endif
+
+					const TechniqueEntry* psTechEntry = &techniqueFileHelper._noPatches;
 					switch (illumType) {
 					case IllumType::PerPixel:
-						psTechEntry = &techniqueFileHelper->_perPixel;
+						psTechEntry = &techniqueFileHelper._perPixel;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
 						break;
 					case IllumType::PerPixelAndEarlyRejection:
-						psTechEntry = &techniqueFileHelper->_perPixelAndEarlyRejection;
+						psTechEntry = &techniqueFileHelper._perPixelAndEarlyRejection;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
 						break;
 					default:
 						break;
 					}
 
-					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
+					const TechniqueEntry* vsTechEntry = &techniqueFileHelper._vsNoPatchesSrc;
 					if (hasDeformVertex) {
-						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
+						vsTechEntry = &techniqueFileHelper._vsDeformVertexSrc;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
 					}
 
-					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
+					nascentDesc->_depVal = techniqueFileHelper.GetDependencyValidation();
 					
 					// note -- we could premerge all of the combinations in the constructor, to cut down on cost here
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
@@ -261,17 +263,18 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_Deferred(
-			const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet)
+			const TechniqueSetFileFuture& techniqueSet)
 		{
-			_techniqueFileHelper = std::make_shared<::Assets::MarkerPtr<TechniqueFileHelper>>();
-			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(_techniqueFileHelper->AdoptPromise());
+			std::promise<TechniqueFileHelper> helperPromise;
+			_techniqueFileHelper = helperPromise.get_future();
+			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(std::move(helperPromise));
 		}
 	private:
-		::Assets::PtrToMarkerPtr<TechniqueFileHelper> _techniqueFileHelper;
+		std::shared_future<TechniqueFileHelper> _techniqueFileHelper;
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Deferred(
-		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet)
+		const TechniqueSetFileFuture& techniqueSet)
 	{
 		return std::make_shared<TechniqueDelegate_Deferred>(techniqueSet);
 	}
@@ -319,18 +322,15 @@ namespace RenderCore { namespace Techniques
 				_vsNoPatchesSrc = *vsNoPatchesSrc;
 				_vsDeformVertexSrc = *vsDeformVertexSrc;
 			}
+			TechniqueFileHelper() = default;
 		};
 
-		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
+		FutureGraphicsPipelineDesc GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			#if defined(_DEBUG)
-				if (_techniqueFileHelper->GetDependencyValidation().GetValidationIndex() != 0)
-					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-			#endif
-
-			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-forward-delegate");
+			std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
+			auto result = promise.get_future();
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
 
@@ -348,34 +348,38 @@ namespace RenderCore { namespace Techniques
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
-				result->AdoptPromise(),
-				[nascentDesc, illumType, hasDeformVertex](
-					std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
+				std::move(promise),
+				[nascentDesc, illumType, hasDeformVertex](const TechniqueFileHelper& techniqueFileHelper) {
 
-					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_noPatches;
+					#if defined(_DEBUG)
+						if (techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
+							Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+					#endif
+
+					const TechniqueEntry* psTechEntry = &techniqueFileHelper._noPatches;
 					switch (illumType) {
 					case IllumType::PerPixel:
-						psTechEntry = &techniqueFileHelper->_perPixel;
+						psTechEntry = &techniqueFileHelper._perPixel;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
 						break;
 					case IllumType::PerPixelAndEarlyRejection:
-						psTechEntry = &techniqueFileHelper->_perPixelAndEarlyRejection;
+						psTechEntry = &techniqueFileHelper._perPixelAndEarlyRejection;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
 						break;
 					case IllumType::PerPixelCustomLighting:
-						psTechEntry = &techniqueFileHelper->_perPixelCustomLighting;
+						psTechEntry = &techniqueFileHelper._perPixelCustomLighting;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelCustomLighting, &s_patchExp_perPixelCustomLighting[dimof(s_patchExp_perPixelCustomLighting)]);
 					default:
 						break;
 					}
 
-					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
+					const TechniqueEntry* vsTechEntry = &techniqueFileHelper._vsNoPatchesSrc;
 					if (hasDeformVertex) {
-						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
+						vsTechEntry = &techniqueFileHelper._vsDeformVertexSrc;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
 					}
 
-					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
+					nascentDesc->_depVal = techniqueFileHelper.GetDependencyValidation();
 
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
 					mergedTechEntry.MergeIn(*psTechEntry);
@@ -392,11 +396,12 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_Forward(
-			const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
+			const TechniqueSetFileFuture& techniqueSet,
 			TechniqueDelegateForwardFlags::BitField flags)
 		{
-			_techniqueFileHelper = std::make_shared<::Assets::MarkerPtr<TechniqueFileHelper>>();
-			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(_techniqueFileHelper->AdoptPromise());
+			std::promise<TechniqueFileHelper> helperPromise;
+			_techniqueFileHelper = helperPromise.get_future();
+			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(std::move(helperPromise));
 
 			if (flags & TechniqueDelegateForwardFlags::DisableDepthWrite) {
 				_depthStencil = CommonResourceBox::s_dsReadOnly;
@@ -405,12 +410,12 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 	private:
-		::Assets::PtrToMarkerPtr<TechniqueFileHelper> _techniqueFileHelper;
+		std::shared_future<TechniqueFileHelper> _techniqueFileHelper;
 		DepthStencilDesc _depthStencil;
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Forward(
-		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
+		const TechniqueSetFileFuture& techniqueSet,
 		TechniqueDelegateForwardFlags::BitField flags)
 	{
 		return std::make_shared<TechniqueDelegate_Forward>(techniqueSet, flags);
@@ -461,18 +466,15 @@ namespace RenderCore { namespace Techniques
 				_vsNoPatchesSrc = *vsNoPatchesSrc;
 				_vsDeformVertexSrc = *vsDeformVertexSrc;
 			}
+			TechniqueFileHelper() = default;
 		};
 
-		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
+		FutureGraphicsPipelineDesc GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			#if defined(_DEBUG)
-				if (_techniqueFileHelper->GetDependencyValidation().GetValidationIndex() != 0)
-					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-			#endif
-
-			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-forward-delegate");
+			std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
+			auto result = promise.get_future();
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 
 			unsigned cullDisable = 0;
@@ -488,21 +490,27 @@ namespace RenderCore { namespace Techniques
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
-				result->AdoptPromise(),
-				[nascentDesc, hasEarlyRejectionTest, hasDeformVertex](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
-					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_noPatches;
+				std::move(promise),
+				[nascentDesc, hasEarlyRejectionTest, hasDeformVertex](const TechniqueFileHelper& techniqueFileHelper) {
+
+					#if defined(_DEBUG)
+						if (techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
+							Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+					#endif
+
+					const TechniqueEntry* psTechEntry = &techniqueFileHelper._noPatches;
 					if (hasEarlyRejectionTest) {
-						psTechEntry = &techniqueFileHelper->_earlyRejectionSrc;
+						psTechEntry = &techniqueFileHelper._earlyRejectionSrc;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_earlyRejection[dimof(s_patchExp_earlyRejection)]);
 					}
 
-					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
+					const TechniqueEntry* vsTechEntry = &techniqueFileHelper._vsNoPatchesSrc;
 					if (hasDeformVertex) {
-						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
+						vsTechEntry = &techniqueFileHelper._vsDeformVertexSrc;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
 					}
 
-					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
+					nascentDesc->_depVal = techniqueFileHelper.GetDependencyValidation();
 
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
 					mergedTechEntry.MergeIn(*psTechEntry);
@@ -519,27 +527,28 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_DepthOnly(
-			const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
+			const TechniqueSetFileFuture& techniqueSet,
 			const RSDepthBias& singleSidedBias,
 			const RSDepthBias& doubleSidedBias,
 			CullMode cullMode, FaceWinding faceWinding,
 			std::optional<ShadowGenType> shadowGen)
 		{
-			_techniqueFileHelper = std::make_shared<::Assets::MarkerPtr<TechniqueFileHelper>>();
+			std::promise<TechniqueFileHelper> helperPromise;
+			_techniqueFileHelper = helperPromise.get_future();
 			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
-				_techniqueFileHelper->AdoptPromise(), 
-				[shadowGen](std::shared_ptr<TechniqueSetFile> techniqueSet) { return std::make_shared<TechniqueFileHelper>(techniqueSet, shadowGen); });
+				std::move(helperPromise), 
+				[shadowGen](std::shared_ptr<TechniqueSetFile> techniqueSet) { return TechniqueFileHelper{techniqueSet, shadowGen}; });
 
 			_rs[0x0] = RasterizationDesc{cullMode,        faceWinding, (float)singleSidedBias._depthBias, singleSidedBias._depthBiasClamp, singleSidedBias._slopeScaledBias};
             _rs[0x1] = RasterizationDesc{CullMode::None,  faceWinding, (float)doubleSidedBias._depthBias, doubleSidedBias._depthBiasClamp, doubleSidedBias._slopeScaledBias};			
 		}
 	private:
-		::Assets::PtrToMarkerPtr<TechniqueFileHelper> _techniqueFileHelper;
+		std::shared_future<TechniqueFileHelper> _techniqueFileHelper;
 		RasterizationDesc _rs[2];
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_DepthOnly(
-		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
+		const TechniqueSetFileFuture& techniqueSet,
 		const RSDepthBias& singleSidedBias,
         const RSDepthBias& doubleSidedBias,
         CullMode cullMode, FaceWinding faceWinding)
@@ -548,7 +557,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ShadowGen(
-		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
+		const TechniqueSetFileFuture& techniqueSet,
 		ShadowGenType shadowGenType,
 		const RSDepthBias& singleSidedBias,
         const RSDepthBias& doubleSidedBias,
@@ -605,18 +614,15 @@ namespace RenderCore { namespace Techniques
 				_vsNoPatchesSrc = *vsNoPatchesSrc;
 				_vsDeformVertexSrc = *vsDeformVertexSrc;
 			}
+			TechniqueFileHelper() = default;
 		};
 
-		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
+		FutureGraphicsPipelineDesc GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			#if defined(_DEBUG)
-				if (_techniqueFileHelper->GetDependencyValidation().GetValidationIndex() != 0)
-					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-			#endif
-			
-			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-predepth-delegate");
+			std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
+			auto result = promise.get_future();
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 
 			unsigned cullDisable = 0;
@@ -639,30 +645,35 @@ namespace RenderCore { namespace Techniques
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
-				result->AdoptPromise(),
-				[nascentDesc, illumType, hasDeformVertex, preDepthType=_preDepthType](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
+				std::move(promise),
+				[nascentDesc, illumType, hasDeformVertex, preDepthType=_preDepthType](const TechniqueFileHelper& techniqueFileHelper) {
 
-					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_psNoPatchesSrc;
+					#if defined(_DEBUG)
+						if (techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
+							Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+					#endif
+
+					const TechniqueEntry* psTechEntry = &techniqueFileHelper._psNoPatchesSrc;
 					switch (illumType) {
 					case IllumType::PerPixel:
-						psTechEntry = &techniqueFileHelper->_psPerPixelSrc;
+						psTechEntry = &techniqueFileHelper._psPerPixelSrc;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
 						break;
 					case IllumType::PerPixelAndEarlyRejection:
-						psTechEntry = &techniqueFileHelper->_psPerPixelAndEarlyRejection;
+						psTechEntry = &techniqueFileHelper._psPerPixelAndEarlyRejection;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
 						break;
 					default:
 						break;
 					}
 
-					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
+					const TechniqueEntry* vsTechEntry = &techniqueFileHelper._vsNoPatchesSrc;
 					if (hasDeformVertex) {
-						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
+						vsTechEntry = &techniqueFileHelper._vsDeformVertexSrc;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
 					}
 
-					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
+					nascentDesc->_depVal = techniqueFileHelper.GetDependencyValidation();
 
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
 					mergedTechEntry.MergeIn(*psTechEntry);
@@ -690,26 +701,27 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_PreDepth(
-			const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
+			const TechniqueSetFileFuture& techniqueSet,
 			PreDepthType preDepthType)
 		: _preDepthType(preDepthType)
 		{
-			_techniqueFileHelper = std::make_shared<::Assets::MarkerPtr<TechniqueFileHelper>>();
+			std::promise<TechniqueFileHelper> helperPromise;
+			_techniqueFileHelper = helperPromise.get_future();
 			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
-				_techniqueFileHelper->AdoptPromise(),
-				[preDepthType](auto techSet) { return std::make_shared<TechniqueFileHelper>(techSet, preDepthType); });
+				std::move(helperPromise),
+				[preDepthType](auto techSet) { return TechniqueFileHelper{techSet, preDepthType}; });
 
 			_rs[0x0] = CommonResourceBox::s_rsDefault;
             _rs[0x1] = CommonResourceBox::s_rsCullDisable;			
 		}
 	private:
-		::Assets::PtrToMarkerPtr<TechniqueFileHelper> _techniqueFileHelper;
+		std::shared_future<TechniqueFileHelper> _techniqueFileHelper;
 		RasterizationDesc _rs[2];
 		PreDepthType _preDepthType;
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_PreDepth(
-		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
+		const TechniqueSetFileFuture& techniqueSet,
 		PreDepthType preDepthType)
 	{
 		return std::make_shared<TechniqueDelegate_PreDepth>(techniqueSet, preDepthType);
@@ -764,18 +776,15 @@ namespace RenderCore { namespace Techniques
 				_vsNoPatchesSrc = *vsNoPatchesSrc;
 				_vsDeformVertexSrc = *vsDeformVertexSrc;
 			}
+			TechniqueFileHelper() = default;
 		};
 
-		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
+		FutureGraphicsPipelineDesc GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			#if defined(_DEBUG)
-				if (_techniqueFileHelper->GetDependencyValidation().GetValidationIndex() != 0)
-					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-			#endif
-
-			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-utility-delegate");
+			std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
+			auto result = promise.get_future();
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 
 			unsigned cullDisable = 0;
@@ -790,30 +799,35 @@ namespace RenderCore { namespace Techniques
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
-				result->AdoptPromise(),
-				[nascentDesc, illumType, hasDeformVertex](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
+				std::move(promise),
+				[nascentDesc, illumType, hasDeformVertex](const TechniqueFileHelper& techniqueFileHelper) {
 
-					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_psNoPatchesSrc;
+					#if defined(_DEBUG)
+						if (techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
+							Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+					#endif
+
+					const TechniqueEntry* psTechEntry = &techniqueFileHelper._psNoPatchesSrc;
 					switch (illumType) {
 					case IllumType::PerPixel:
-						psTechEntry = &techniqueFileHelper->_psPerPixelSrc;
+						psTechEntry = &techniqueFileHelper._psPerPixelSrc;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
 						break;
 					case IllumType::PerPixelAndEarlyRejection:
-						psTechEntry = &techniqueFileHelper->_psPerPixelAndEarlyRejection;
+						psTechEntry = &techniqueFileHelper._psPerPixelAndEarlyRejection;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
 						break;
 					default:
 						break;
 					}
 
-					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
+					const TechniqueEntry* vsTechEntry = &techniqueFileHelper._vsNoPatchesSrc;
 					if (hasDeformVertex) {
-						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
+						vsTechEntry = &techniqueFileHelper._vsDeformVertexSrc;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
 					}
 
-					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
+					nascentDesc->_depVal = techniqueFileHelper.GetDependencyValidation();
 
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
 					mergedTechEntry.MergeIn(*psTechEntry);
@@ -830,26 +844,27 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_Utility(
-			const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
+			const TechniqueSetFileFuture& techniqueSet,
 			UtilityDelegateType utilityType)
 		: _utilityType(utilityType)
 		{
-			_techniqueFileHelper = std::make_shared<::Assets::MarkerPtr<TechniqueFileHelper>>();
+			std::promise<TechniqueFileHelper> helperPromise;
+			_techniqueFileHelper = helperPromise.get_future();
 			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
-				_techniqueFileHelper->AdoptPromise(),
-				[utilityType](auto techSet) { return std::make_shared<TechniqueFileHelper>(techSet, utilityType); });
+				std::move(helperPromise),
+				[utilityType](auto techSet) { return TechniqueFileHelper{techSet, utilityType}; });
 
 			_rs[0x0] = CommonResourceBox::s_rsDefault;
             _rs[0x1] = CommonResourceBox::s_rsCullDisable;			
 		}
 	private:
-		::Assets::PtrToMarkerPtr<TechniqueFileHelper> _techniqueFileHelper;
+		std::shared_future<TechniqueFileHelper> _techniqueFileHelper;
 		RasterizationDesc _rs[2];
 		UtilityDelegateType _utilityType;
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Utility(
-		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
+		const TechniqueSetFileFuture& techniqueSet,
 		UtilityDelegateType type)
 	{
 		return std::make_shared<TechniqueDelegate_Utility>(techniqueSet, type);
@@ -895,18 +910,15 @@ namespace RenderCore { namespace Techniques
 				_vsNoPatchesSrc = *vsNoPatchesSrc;
 				_vsDeformVertexSrc = *vsDeformVertexSrc;
 			}
+			TechniqueFileHelper() = default;
 		};
 
-		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
+		FutureGraphicsPipelineDesc GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			#if defined(_DEBUG)
-				if (_techniqueFileHelper->GetDependencyValidation().GetValidationIndex() != 0)
-					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-			#endif
-
-			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
+			std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
+			auto result = promise.get_future();
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
 
@@ -924,29 +936,35 @@ namespace RenderCore { namespace Techniques
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
-				result->AdoptPromise(),
-				[nascentDesc, illumType, hasDeformVertex](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
-					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_noPatches;
+				std::move(promise),
+				[nascentDesc, illumType, hasDeformVertex](const TechniqueFileHelper& techniqueFileHelper) {
+
+					#if defined(_DEBUG)
+						if (techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
+							Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+					#endif
+
+					const TechniqueEntry* psTechEntry = &techniqueFileHelper._noPatches;
 					switch (illumType) {
 					case IllumType::PerPixel:
-						psTechEntry = &techniqueFileHelper->_perPixel;
+						psTechEntry = &techniqueFileHelper._perPixel;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
 						break;
 					case IllumType::PerPixelAndEarlyRejection:
-						psTechEntry = &techniqueFileHelper->_perPixelAndEarlyRejection;
+						psTechEntry = &techniqueFileHelper._perPixelAndEarlyRejection;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
 						break;
 					default:
 						break;
 					}
 
-					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
+					const TechniqueEntry* vsTechEntry = &techniqueFileHelper._vsNoPatchesSrc;
 					if (hasDeformVertex) {
-						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
+						vsTechEntry = &techniqueFileHelper._vsDeformVertexSrc;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
 					}
 
-					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
+					nascentDesc->_depVal = techniqueFileHelper.GetDependencyValidation();
 
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
 					mergedTechEntry.MergeIn(*psTechEntry);
@@ -963,17 +981,18 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_ProbePrepare(
-			const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet)
+			const TechniqueSetFileFuture& techniqueSet)
 		{
-			_techniqueFileHelper = std::make_shared<::Assets::MarkerPtr<TechniqueFileHelper>>();
-			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(_techniqueFileHelper->AdoptPromise());
+			std::promise<TechniqueFileHelper> helperPromise;
+			_techniqueFileHelper = helperPromise.get_future();
+			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(std::move(helperPromise));
 		}
 	private:
-		::Assets::PtrToMarkerPtr<TechniqueFileHelper> _techniqueFileHelper;
+		std::shared_future<TechniqueFileHelper> _techniqueFileHelper;
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ProbePrepare(
-		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet)
+		const TechniqueSetFileFuture& techniqueSet)
 	{
 		return std::make_shared<TechniqueDelegate_ProbePrepare>(techniqueSet);
 	}
@@ -1014,18 +1033,15 @@ namespace RenderCore { namespace Techniques
 				_vsNoPatchesSrc = *vsNoPatchesSrc;
 				_vsDeformVertexSrc = *vsDeformVertexSrc;
 			}
+			TechniqueFileHelper() = default;
 		};
 
-		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
+		FutureGraphicsPipelineDesc GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			#if defined(_DEBUG)
-				if (_techniqueFileHelper->GetDependencyValidation().GetValidationIndex() != 0)
-					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-			#endif
-
-			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-forward-delegate");
+			std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
+			auto result = promise.get_future();
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsDisable;
 			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
@@ -1037,21 +1053,27 @@ namespace RenderCore { namespace Techniques
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
-				result->AdoptPromise(),
-				[nascentDesc, hasEarlyRejectionTest, hasDeformVertex, testType=_testTypeParameter](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
-					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_noPatches;
+				std::move(promise),
+				[nascentDesc, hasEarlyRejectionTest, hasDeformVertex, testType=_testTypeParameter](const TechniqueFileHelper& techniqueFileHelper) {
+
+					#if defined(_DEBUG)
+						if (techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
+							Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+					#endif
+
+					const TechniqueEntry* psTechEntry = &techniqueFileHelper._noPatches;
 					if (hasEarlyRejectionTest) {
-						psTechEntry = &techniqueFileHelper->_earlyRejectionSrc;
+						psTechEntry = &techniqueFileHelper._earlyRejectionSrc;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_earlyRejection[dimof(s_patchExp_earlyRejection)]);
 					}
 
-					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
+					const TechniqueEntry* vsTechEntry = &techniqueFileHelper._vsNoPatchesSrc;
 					if (hasDeformVertex) {
-						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
+						vsTechEntry = &techniqueFileHelper._vsDeformVertexSrc;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
 					}
 
-					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
+					nascentDesc->_depVal = techniqueFileHelper.GetDependencyValidation();
 
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
 					mergedTechEntry.MergeIn(*psTechEntry);
@@ -1069,26 +1091,27 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_RayTest(
-			const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
+			const TechniqueSetFileFuture& techniqueSet,
 			unsigned testTypeParameter,
 			const StreamOutputInitializers& soInit)
 		: _testTypeParameter(testTypeParameter)
 		{
-			_techniqueFileHelper = std::make_shared<::Assets::MarkerPtr<TechniqueFileHelper>>();
-			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(_techniqueFileHelper->AdoptPromise());
+			std::promise<TechniqueFileHelper> helperPromise;
+			_techniqueFileHelper = helperPromise.get_future();
+			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(std::move(helperPromise));
 
 			_soElements = NormalizeInputAssembly(soInit._outputElements);
 			_soStrides = std::vector<unsigned>(soInit._outputBufferStrides.begin(), soInit._outputBufferStrides.end());
 		}
 	private:
-		::Assets::PtrToMarkerPtr<TechniqueFileHelper> _techniqueFileHelper;
+		std::shared_future<TechniqueFileHelper> _techniqueFileHelper;
 		std::vector<InputElementDesc> _soElements;
 		std::vector<unsigned> _soStrides;
 		unsigned _testTypeParameter;
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_RayTest(
-		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
+		const TechniqueSetFileFuture& techniqueSet,
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit)
 	{

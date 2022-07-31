@@ -520,11 +520,7 @@ namespace RenderCore { namespace Metal_DX11
         //      Also, there is a potential chance that the source shader code could change twice in rapid succession, which
         //      could cause the CompilerShaderByteCode object to be destroyed while we still have a pointer to it. Actually,
         //      this case of one compiled asset being dependent on another compile asset introduces a lot of complications!
-        auto future = ::Assets::MakeAsset<CompiledShaderByteCode>(initializer, defines);
-        auto state = future->StallWhilePending();
-        if (state != ::Assets::AssetState::Ready)
-            Throw(::Exceptions::BasicLabel("Shader compile failure while building function linking module (%s)", initializer));
-		const auto& byteCode = future->Actualize();
+        const auto& byteCode = ::Assets::ActualizeAsset<CompiledShaderByteCode>(initializer, defines);
         auto code = byteCode.GetByteCode();
 
         ID3D11Module* rawModule = nullptr;

@@ -90,8 +90,8 @@ namespace Assets
 
 		const ConfigFileContainer<InputStreamFormatter<utf8>>& GetConfigFileContainer(StringSection<> identifier);
 		const ChunkFileContainer& GetChunkFileContainer(StringSection<> identifier);
-		PtrToMarkerPtr<ConfigFileContainer<InputStreamFormatter<utf8>>> GetConfigFileContainerFuture(StringSection<> identifier);
-		PtrToMarkerPtr<ChunkFileContainer> GetChunkFileContainerFuture(StringSection<> identifier);
+		std::shared_future<std::shared_ptr<ConfigFileContainer<InputStreamFormatter<utf8>>>> GetConfigFileContainerFuture(StringSection<> identifier);
+		std::shared_future<std::shared_ptr<ChunkFileContainer>> GetChunkFileContainerFuture(StringSection<> identifier);
 
         template <typename... Params> uint64_t BuildParamHash(Params... initialisers);
 

@@ -651,7 +651,7 @@ namespace RenderCore { namespace Assets
             if (i2==i) break;
 
             AddDep(pendingTree->_deps, MakeFileNameSplitter(MakeStringSection(i, i2)).AllExceptParameters());
-            pendingTree->_subFutures.push_back(std::make_pair(0, ::Assets::MakeAssetPtr<RawMaterial>(MakeStringSection(i, i2))));
+            pendingTree->_subFutures.push_back(std::make_pair(0, ::Assets::MakeAssetMarker<std::shared_ptr<RawMaterial>>(MakeStringSection(i, i2))));
             i = i2;
         }
         assert(!pendingTree->_subFutures.empty());
@@ -699,7 +699,7 @@ namespace RenderCore { namespace Assets
                         auto inheritted = m.second->ResolveInherited(m.second->GetDirectorySearchRules());
                         for (const auto&i:inheritted) {
                             AddDep(pendingTree->_deps, MakeFileNameSplitter(i).AllExceptParameters());
-                            pendingTree->_subFutures.push_back(std::make_pair(newParentId, ::Assets::MakeAssetPtr<RawMaterial>(i)));
+                            pendingTree->_subFutures.push_back(std::make_pair(newParentId, ::Assets::MakeAssetMarker<std::shared_ptr<RawMaterial>>(i)));
                         }
                     }
 

@@ -17,6 +17,7 @@ namespace ShaderSourceParser
 }
 
 namespace RenderCore { class ICompiledPipelineLayout; }
+namespace std { template<typename T> class shared_future; }
 
 namespace RenderCore { namespace Techniques 
 {
@@ -54,7 +55,7 @@ namespace RenderCore { namespace Techniques
     class TechniqueShaderVariationSet
     {
     public:
-		::Assets::PtrToMarkerPtr<Metal::ShaderProgram> FindVariation(
+		std::shared_future<std::shared_ptr<Metal::ShaderProgram>> FindVariation(
 			int techniqueIndex,
 			const ParameterBox* shaderSelectors[SelectorStages::Max]);
 
