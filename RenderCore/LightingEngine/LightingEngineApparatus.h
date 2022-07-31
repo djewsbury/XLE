@@ -9,6 +9,7 @@
 #include "../../Assets/InitializerPack.h"
 #include <memory>
 #include <map>
+#include <future>
 
 namespace RenderCore { namespace Techniques 
 {
@@ -27,7 +28,7 @@ namespace RenderCore { namespace LightingEngine
 	class SharedTechniqueDelegateBox
 	{
 	public:
-		::Assets::PtrToMarkerPtr<Techniques::TechniqueSetFile> _techniqueSetFile;
+		std::shared_future<std::shared_ptr<Techniques::TechniqueSetFile>> _techniqueSetFile;
 		std::shared_ptr<Techniques::ITechniqueDelegate> _forwardIllumDelegate_DisableDepthWrite;
 		std::shared_ptr<Techniques::ITechniqueDelegate> _depthOnlyDelegate;
 		std::shared_ptr<Techniques::ITechniqueDelegate> _depthMotionDelegate;

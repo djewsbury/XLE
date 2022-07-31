@@ -40,9 +40,7 @@ namespace RenderCore { namespace LightingEngine
 		_pipelineAccelerators = drawingApparatus->_pipelineAccelerators;
 		_sharedDelegates = std::make_shared<SharedTechniqueDelegateBox>(*drawingApparatus);
 
-		auto pipelineLayoutFileFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
-		pipelineLayoutFileFuture->StallWhilePending();
-		_lightingOperatorsPipelineLayoutFile = pipelineLayoutFileFuture->Actualize();
+		_lightingOperatorsPipelineLayoutFile = ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
 		_depVal.RegisterDependency(_lightingOperatorsPipelineLayoutFile->GetDependencyValidation());
 
 		const std::string pipelineLayoutName = "LightingOperator";

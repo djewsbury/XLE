@@ -377,7 +377,7 @@ namespace ToolsRig
 		const Float4x4& localToWorld, 
 		const ParameterBox& matParams = {})
     {
-		auto* asset = ::Assets::MakeAsset<SimpleModel>(drawablesPool, pipelineAcceleratorPool, "game/model/simple/spherestandin.dae")->TryActualize();
+		auto* asset = ::Assets::MakeAssetMarker<SimpleModel>(drawablesPool, pipelineAcceleratorPool, "game/model/simple/spherestandin.dae")->TryActualize();
 		if (asset)
 			asset->BuildDrawables(pkts, matParams, localToWorld);
     }
@@ -389,7 +389,7 @@ namespace ToolsRig
 		const Float4x4& localToWorld, 
 		const ParameterBox& matParams = {})
 	{
-		auto* asset = ::Assets::MakeAsset<SimpleModel>(drawablesPool, pipelineAcceleratorPool, "game/model/simple/pointerstandin.dae")->TryActualize();
+		auto* asset = ::Assets::MakeAssetMarker<SimpleModel>(drawablesPool, pipelineAcceleratorPool, "game/model/simple/pointerstandin.dae")->TryActualize();
 		if (asset)
 			asset->BuildDrawables(pkts, matParams, localToWorld);
 	}
@@ -467,7 +467,7 @@ namespace ToolsRig
 	{
 		auto pkts = executeContext._destinationPkts;
 		if (Tweakable("DrawMarkers", true)) {
-			auto* visBox = ::Assets::MakeAsset<VisGeoBox>(_drawablesPool, _pipelineAcceleratorPool)->TryActualize();
+			auto* visBox = ::Assets::MakeAssetMarker<VisGeoBox>(_drawablesPool, _pipelineAcceleratorPool)->TryActualize();
 			for (const auto& a:_cubeAnnotations) {
 				auto objects = _objects->FindEntitiesOfType(a._typeId);
 				for (const auto&o:objects) {

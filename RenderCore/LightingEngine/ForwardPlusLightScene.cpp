@@ -33,9 +33,9 @@ namespace RenderCore { namespace LightingEngine
 	class ForwardPlusLightScene::AmbientLightConfig
 	{
 	public:
-		::Assets::PtrToMarkerPtr<Techniques::DeferredShaderResource> _specularIBL;
-		::Assets::PtrToMarkerPtr<Techniques::DeferredShaderResource> _ambientRawCubemap;
-		std::shared_ptr<::Assets::Marker<SHCoefficientsAsset>> _diffuseIBL;
+		std::shared_future<std::shared_ptr<Techniques::DeferredShaderResource>> _specularIBL;
+		std::shared_future<std::shared_ptr<Techniques::DeferredShaderResource>> _ambientRawCubemap;
+		std::shared_future<SHCoefficientsAsset> _diffuseIBL;
 
 		enum class SourceImageType { Equirectangular };
 		SourceImageType _sourceImageType = SourceImageType::Equirectangular;
@@ -56,7 +56,7 @@ namespace RenderCore { namespace LightingEngine
 			request._srcFile = _sourceImage;
 			request._format = Format::BC6H_UF16;
 			request._faceDim = 512;
-			_specularIBL = ::Assets::NewMarkerPtr<Techniques::DeferredShaderResource>(request);
+			_specularIBL = ::Assets::NewMarkerPtr<Techniques::DeferredShaderResource>(request)->ShareFuture();
 
 			Assets::TextureCompilationRequest request2;
 			request2._operation = Assets::TextureCompilationRequest::Operation::EquRectToCubeMap; 
@@ -64,7 +64,7 @@ namespace RenderCore { namespace LightingEngine
 			request2._format = Format::BC6H_UF16;
 			request2._faceDim = 1024;
 			request2._mipMapFilter = Assets::TextureCompilationRequest::MipMapFilter::FromSource;
-			_ambientRawCubemap = ::Assets::NewMarkerPtr<Techniques::DeferredShaderResource>(request2);
+			_ambientRawCubemap = ::Assets::NewMarkerPtr<Techniques::DeferredShaderResource>(request2)->ShareFuture();
 		}
 	};
 

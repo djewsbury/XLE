@@ -89,13 +89,13 @@ namespace ToolsRig
 		::Assets::PtrToMarkerPtr<RenderCore::Techniques::TechniqueSetFile> _techniqueSetFile;
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _forwardIllumDelegate;
 
-		const ::Assets::DependencyValidation& GetDependencyValidation() { return _techniqueSetFile->GetDependencyValidation(); }
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSetFile->GetDependencyValidation(); }
 
 		TechniqueBox()
 		{
-			_techniqueSetFile = ::Assets::MakeAssetPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
+			_techniqueSetFile = ::Assets::MakeAssetMarkerPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
 			_forwardIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Utility(
-                _techniqueSetFile, RenderCore::Techniques::UtilityDelegateType::FlatColor);
+                _techniqueSetFile->ShareFuture(), RenderCore::Techniques::UtilityDelegateType::FlatColor);
 		}
 	};
 
@@ -219,7 +219,7 @@ namespace ToolsRig
             } highlightParameters = { centre, radius };
             auto cbs = RenderCore::ImmediateDataStream { highlightParameters };
 
-            auto& circleHighlight = *::Assets::MakeAssetPtr<RenderCore::Techniques::DeferredShaderResource>("xleres/DefaultResources/circlehighlight.png:L")->Actualize();
+            auto& circleHighlight = *::Assets::MakeAssetMarkerPtr<RenderCore::Techniques::DeferredShaderResource>("xleres/DefaultResources/circlehighlight.png:L")->Actualize();
             const IResourceView* resources[] = { depthSrv.get(), circleHighlight.GetShaderResource().get() };
 
 			UniformsStreamInterface usi;
@@ -232,7 +232,7 @@ namespace ToolsRig
                 //          tools, so the easy way should be fine.            
             DrawAutoFullscreenImmediately(
                 parserContext.GetThreadContext(),
-                *::Assets::MakeAssetPtr<Metal::ShaderProgram>(      // note -- we might need access to the MSAA defines for this shader
+                *::Assets::MakeAssetMarkerPtr<Metal::ShaderProgram>(      // note -- we might need access to the MSAA defines for this shader
                     ::Assets::ActualizeAssetPtr<Techniques::CompiledPipelineLayoutAsset>(parserContext.GetThreadContext().GetDevice(), MAIN_PIPELINE ":GraphicsMain")->GetPipelineLayout(),
                     BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector:vs_*",
                     "xleres/ui/terrainmanipulators.hlsl:ps_circlehighlight:ps_*"),
@@ -275,7 +275,7 @@ namespace ToolsRig
             };
             auto cbs = RenderCore::ImmediateDataStream { highlightParameters };
 
-            auto& circleHighlight = *::Assets::MakeAssetPtr<RenderCore::Techniques::DeferredShaderResource>("xleres/DefaultResources/circlehighlight.png:L")->Actualize();
+            auto& circleHighlight = *::Assets::MakeAssetMarkerPtr<RenderCore::Techniques::DeferredShaderResource>("xleres/DefaultResources/circlehighlight.png:L")->Actualize();
             const IResourceView* resources[] = { depthSrv.get(), circleHighlight.GetShaderResource().get() };
 
 			UniformsStreamInterface usi;
@@ -288,7 +288,7 @@ namespace ToolsRig
                 //          tools, so the easy way should be fine.
             DrawAutoFullscreenImmediately(
                 parserContext.GetThreadContext(),
-                *::Assets::MakeAssetPtr<Metal::ShaderProgram>(      // note -- we might need access to the MSAA defines for this shader
+                *::Assets::MakeAssetMarkerPtr<Metal::ShaderProgram>(      // note -- we might need access to the MSAA defines for this shader
                     ::Assets::ActualizeAssetPtr<Techniques::CompiledPipelineLayoutAsset>(parserContext.GetThreadContext().GetDevice(), MAIN_PIPELINE ":GraphicsMain")->GetPipelineLayout(),
                     BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector:vs_*",
                     (type == RectangleHighlightType::Tool)

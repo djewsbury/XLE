@@ -71,7 +71,7 @@ namespace PlatformRig
     {
         static KeyId ctrlKey = KeyId_Make("control");
         if (evnt.IsHeld(ctrlKey)) {
-            auto* t = Assets::MakeAsset<TableOfKeys>(MakeStringSection(_filename))->TryActualize();
+            auto* t = Assets::MakeAssetMarker<TableOfKeys>(MakeStringSection(_filename))->TryActualize();
             if (t) {
                 for (auto i=t->GetTable().cbegin(); i!=t->GetTable().cend(); ++i) {
                     if (evnt.IsPress(i->first)) {

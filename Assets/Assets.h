@@ -46,6 +46,12 @@ namespace Assets
 		return Services::GetAssetSets().GetSetForType<AssetType>().Get(std::forward<Params>(initialisers)...);
 	}
 
+	template<typename AssetType, typename... Params>
+		std::shared_ptr<Marker<std::shared_ptr<AssetType>>> MakeAssetMarkerPtr(Params... initialisers)
+	{
+		return Services::GetAssetSets().GetSetForType<std::shared_ptr<AssetType>>().Get(std::forward<Params>(initialisers)...);
+	}
+
 	namespace Legacy
 	{
 		template<typename AssetType, typename... Params>

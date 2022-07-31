@@ -292,9 +292,7 @@ namespace RenderCore { namespace LightingEngine
 		_pimpl->_pipelineAccelerators = std::move(pipelineAccelerators);
 		_pimpl->_multiViewUniformsDelegate = std::make_shared<MultiViewUniformsDelegate>();
 
-		auto descSetLayoutFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(SEQUENCER_DS);
-		descSetLayoutFuture->StallWhilePending();
-		auto descSetLayoutContainer = descSetLayoutFuture->Actualize();
+		auto descSetLayoutContainer = ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(SEQUENCER_DS);
 		auto i = descSetLayoutContainer->_descriptorSets.find("Sequencer");
 		if (i == descSetLayoutContainer->_descriptorSets.end())
 			Throw(std::runtime_error("Missing 'Sequencer' descriptor set entry in sequencer pipeline file"));

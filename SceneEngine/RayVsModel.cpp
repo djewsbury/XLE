@@ -36,7 +36,7 @@ namespace SceneEngine
     using namespace RenderCore;
 
 	static std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> CreateTechniqueDelegate(
-		const ::Assets::PtrToMarkerPtr<RenderCore::Techniques::TechniqueSetFile>& techniqueSet,
+		const std::shared_future<std::shared_ptr<RenderCore::Techniques::TechniqueSetFile>>& techniqueSet,
 		unsigned testTypeParameter);
 
 	class RayDefinitionUniformDelegate : public Techniques::IShaderResourceDelegate
@@ -235,21 +235,20 @@ namespace SceneEngine
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _frustumTechniqueDelegate;
 		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _rayTestSequencerCfg;
 		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _frustumTestSequencerCfg;
-		::Assets::DependencyValidation _depVal;
+		::Assets::PtrToMarkerPtr<RenderCore::Techniques::TechniqueSetFile> _techniqueSetFile;
 
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSetFile->GetDependencyValidation(); }
 
 		ModelIntersectionTechniqueBox(Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		{
 			auto device = RenderCore::Techniques::Services::GetDevicePtr();
-			auto techniqueSetFile = ::Assets::MakeAssetPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
-			_rayTestTechniqueDelegate = CreateTechniqueDelegate(techniqueSetFile, 0);
-			_frustumTechniqueDelegate = CreateTechniqueDelegate(techniqueSetFile, 1);
+			_techniqueSetFile = ::Assets::MakeAssetMarkerPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
+			_rayTestTechniqueDelegate = CreateTechniqueDelegate(_techniqueSetFile->ShareFuture(), 0);
+			_frustumTechniqueDelegate = CreateTechniqueDelegate(_techniqueSetFile->ShareFuture(), 1);
 
 			std::vector<SubpassDesc> subpasses;
 			subpasses.emplace_back(SubpassDesc{});
 			_fbDesc = FrameBufferDesc { {}, std::move(subpasses) };
-			_depVal = techniqueSetFile->GetDependencyValidation();
 
 			_frustumTestSequencerCfg = pipelineAcceleratorPool.CreateSequencerConfig(
 				"frustum-test",
@@ -374,7 +373,7 @@ namespace SceneEngine
     static const unsigned s_soStrides[] = { sizeof(ModelIntersectionStateContext::ResultEntry) };
 
 	static std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> CreateTechniqueDelegate(
-		const ::Assets::PtrToMarkerPtr<RenderCore::Techniques::TechniqueSetFile>& techniqueSet,
+		const std::shared_future<std::shared_ptr<RenderCore::Techniques::TechniqueSetFile>>& techniqueSet,
 		unsigned testTypeParameter)
 	{
 		return RenderCore::Techniques::CreateTechniqueDelegate_RayTest(

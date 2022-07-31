@@ -147,7 +147,7 @@ namespace RenderCore { namespace Techniques
 		{
 			assert(pool);
 			auto futurePipelineLayout = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
-			::Assets::WhenAll(futurePipelineLayout).ThenConstructToPromise(
+			::Assets::WhenAll(std::move(futurePipelineLayout)).ThenConstructToPromise(
 				std::move(promise),
 				[pool, selectors, usi, plan=Hash64(pipelineLayoutAssetName), pipelineDesc, fbTarget](auto&& promise, const auto& predefinedPipelineLayout) {
 					
@@ -202,7 +202,7 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(!pixelShader.IsEmpty());
 		auto pipelineDesc = CreatePipelineDesc(pixelShader, subType, po);
-		auto op = ::Assets::MakeAssetPtr<FullViewportOperator>(pool, pipelineDesc, selectors, pipelineLayout, FrameBufferTarget{po._fbDesc, po._subpassIdx}, usi);
+		auto op = ::Assets::MakeAssetMarkerPtr<FullViewportOperator>(pool, pipelineDesc, selectors, pipelineLayout, FrameBufferTarget{po._fbDesc, po._subpassIdx}, usi);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
 	}
 
@@ -217,7 +217,7 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(!pixelShader.IsEmpty());
 		auto pipelineDesc = CreatePipelineDesc(pixelShader, subType, po);
-		auto op = ::Assets::MakeAssetPtr<FullViewportOperator>(pool, pipelineDesc, selectors, pipelineLayoutAssetName, FrameBufferTarget{po._fbDesc, po._subpassIdx}, usi);
+		auto op = ::Assets::MakeAssetMarkerPtr<FullViewportOperator>(pool, pipelineDesc, selectors, pipelineLayoutAssetName, FrameBufferTarget{po._fbDesc, po._subpassIdx}, usi);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
 	}
 
@@ -408,7 +408,7 @@ namespace RenderCore { namespace Techniques
 		{
 			assert(pool);
 			auto futurePipelineLayout = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
-			::Assets::WhenAll(futurePipelineLayout).ThenConstructToPromise(
+			::Assets::WhenAll(std::move(futurePipelineLayout)).ThenConstructToPromise(
 				std::move(promise),
 				[pool, selectors, plan=Hash64(pipelineLayoutAssetName), computeShader=computeShader.AsString(), usi](auto&& promise, auto pipelineLayout) mutable {
 					const ParameterBox* selectorList[] { &selectors };
@@ -442,7 +442,7 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(pipelineLayout);
 		assert(!computeShader.IsEmpty());
-		auto op = ::Assets::MakeAssetPtr<ComputeOperator>(pool, pipelineLayout, computeShader, selectors, usi);
+		auto op = ::Assets::MakeAssetMarkerPtr<ComputeOperator>(pool, pipelineLayout, computeShader, selectors, usi);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 
@@ -453,7 +453,7 @@ namespace RenderCore { namespace Techniques
 		StringSection<> pipelineLayoutAssetName,
 		const UniformsStreamInterface& usi)
 	{
-		auto op = ::Assets::MakeAssetPtr<ComputeOperator>(
+		auto op = ::Assets::MakeAssetMarkerPtr<ComputeOperator>(
 			pool, pipelineLayoutAssetName,
 			computeShader, selectors, usi);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
@@ -465,7 +465,7 @@ namespace RenderCore { namespace Techniques
 		const ParameterBox& selectors,
 		const UniformsStreamInterface& usi)
 	{
-		auto op = ::Assets::MakeAssetPtr<ComputeOperator>(pool, computeShader, selectors, usi);
+		auto op = ::Assets::MakeAssetMarkerPtr<ComputeOperator>(pool, computeShader, selectors, usi);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 

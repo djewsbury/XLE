@@ -93,9 +93,9 @@ namespace RenderCore { namespace Techniques
 		const FrameBufferTarget& fbTarget,
 		const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection)
 	{
-		std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules> immediatePipelineDesc; ::Assets::DependencyValidation pipelineDescDepVal; ::Assets::Blob pipelineDescLog;
 		if (pipelineDescWithFilteringFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
 			TRY {
+				auto immediatePipelineDesc = pipelineDescWithFilteringFuture.get();
 				auto cfgDepVal = MakeConfigurationDepVal(*immediatePipelineDesc);
 
 				ScopedLock(_sharedPools->_lock);
