@@ -605,7 +605,7 @@ namespace RenderCore { namespace Techniques
 					if (deformAcceleratorPool && !deformAccelerator) {
 						auto deformAcceleratorFuture = CreateDefaultDeformAccelerator(deformAcceleratorPool, completedConstruction);
 						if (deformAcceleratorFuture.valid()) {
-							deformAcceleratorFuture.wait();
+							YieldToPool(deformAcceleratorFuture);
 							deformAccelerator = deformAcceleratorFuture.get();
 						}
 					}

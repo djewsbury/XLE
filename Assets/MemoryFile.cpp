@@ -230,6 +230,7 @@ namespace Assets
 
 	size_t      ArchiveSubFile::Read(void *buffer, size_t size, size_t count) const never_throws 
 	{ 
+		if (!(size*count)) return 0;
 		auto remainingSpace = ptrdiff_t(_dataEnd) - ptrdiff_t(_tellp);
 		auto objectsToRead = (size_t)std::max(ptrdiff_t(0), std::min(remainingSpace / ptrdiff_t(size), ptrdiff_t(count)));
 		std::memcpy(buffer, _tellp, objectsToRead*size);
