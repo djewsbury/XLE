@@ -23,6 +23,7 @@ set(Src
     RawFileAsset.cpp
     LooseFilesCache.cpp
     PreprocessorIncludeHandler.cpp
+    OperationContext.cpp
     Legacy/AssetsLegacy.cpp)
 
 add_library(Assets STATIC ${Src})

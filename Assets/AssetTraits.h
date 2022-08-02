@@ -75,16 +75,16 @@ namespace Assets
 		template<typename AssetType>
 			using AssetTraits = AssetTraits_<std::decay_t<RemoveSmartPtrType<AssetType>>>;
 
-		template<typename AssetType, typename... Params>
+		template<typename AssetOrPtrType, typename... Params>
 			static auto HasConstructToPromiseOverride_Helper(int) -> decltype(
-				Internal::RemoveSmartPtrType<AssetType>::ConstructToPromise(std::declval<std::promise<AssetType>&&>(), std::declval<Params>()...), 
+				Internal::RemoveSmartPtrType<AssetOrPtrType>::ConstructToPromise(std::declval<std::promise<AssetOrPtrType>&&>(), std::declval<Params>()...), 
 				std::true_type{});
 
 		template<typename...>
 			static auto HasConstructToPromiseOverride_Helper(...) -> std::false_type;
 
-		template<typename AssetType, typename... Params>
-			struct HasConstructToPromiseOverride : decltype(HasConstructToPromiseOverride_Helper<AssetType, Params...>(0)) {};
+		template<typename AssetOrPtrType, typename... Params>
+			struct HasConstructToPromiseOverride : decltype(HasConstructToPromiseOverride_Helper<AssetOrPtrType, Params...>(0)) {};		// outside of AssetTraits because the ptr type is important
 
 			///////////////////////////////////////////////////////////////////////////////////////////////////
 

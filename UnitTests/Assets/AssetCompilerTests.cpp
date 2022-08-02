@@ -50,8 +50,12 @@ namespace UnitTests
 		static unsigned s_serializeTargetCount;
 		static unsigned s_constructionCount;
 
+		static std::mutex s_pauseCompilationLock;
+
 		virtual std::vector<SerializedArtifact>	SerializeTarget(unsigned idx) override
 		{
+			ScopedLock(s_pauseCompilationLock);
+
 			assert(idx == 0);
 			++s_serializeTargetCount;
 
@@ -107,6 +111,8 @@ namespace UnitTests
 				Throw(std::runtime_error("Throw from constructor requested"));
 		}
 	};
+
+	std::mutex TestCompileOperation::s_pauseCompilationLock;
 
 	unsigned TestCompileOperation::s_serializeTargetCount = 0;
 	unsigned TestCompileOperation::s_constructionCount = 0;
@@ -523,6 +529,51 @@ namespace UnitTests
 			futureByPtr->StallWhilePending();
 			auto actualPtr = futureByPtr->Actualize();
 			REQUIRE(actualPtr != nullptr);
+		}
+	}
+
+	TEST_CASE( "AssetCompilers-OperationContextTracking", "[assets]" )
+	{
+		UnitTest_SetWorkingDirectory();
+		auto cfg = GetStartupConfig();
+		cfg._inMemoryOnlyIntermediates = true;
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(cfg);
+
+		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		uint64_t outputTypes[] = { Type_UnitTestArtifact };
+		auto registration = compilers.RegisterCompiler(
+			"UnitTestCompiler",
+			"UnitTestCompiler",
+			ConsoleRig::GetLibVersionDesc(),
+			{},
+			[](auto initializers) {
+				assert(!initializers.IsEmpty());
+				return std::make_shared<TestCompileOperation>(initializers);
+			});
+
+		compilers.AssociateRequest(
+			registration,
+			MakeIteratorRange(outputTypes),
+			"unit-test-asset-.*");
+
+		auto opContext = std::make_shared<::Assets::OperationContext>();
+
+		{
+			std::unique_lock<std::mutex> pauseLock { TestCompileOperation::s_pauseCompilationLock };
+
+			// begin a compile (it don't complete yet because of the pause lock)
+			auto futureByPtr = ::Assets::NewMarkerPtr<TestChunkRequestsAssetWithCompileProcessType>(opContext, "unit-test-asset-op-context");
+			
+			// now that we have begun the compile, we should get an active operation in the operation context shortly. We don't know exactly
+			// when, because it's queued a background pool. But the compilation itself is paused, so it should appear eventually
+			while (opContext->GetActiveOperations().empty()) {}
+
+			pauseLock = {};
+			futureByPtr->StallWhilePending();
+			auto actualPtr = futureByPtr->Actualize();
+			REQUIRE(actualPtr != nullptr);
+
+			REQUIRE(opContext->GetActiveOperations().empty());		// op context should be empty again now the compile is done
 		}
 	}
 

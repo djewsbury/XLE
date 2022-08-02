@@ -10,6 +10,7 @@
 #include "Continuation.h"
 #include "IArtifact.h"
 #include "IntermediateCompilers.h"
+#include "OperationContext.h"
 #include "../ConsoleRig/GlobalServices.h"
 #include "../OSServices/Log.h"
 #include "../Utility/Threading/CompletionThreadPool.h"
@@ -18,6 +19,7 @@
 namespace Assets
 {
 	class IIntermediateCompileMarker;
+	class OperationContext;
 
 	namespace Internal 
 	{
@@ -81,7 +83,7 @@ namespace Assets
 			if (!reqRes.empty()) {
 				AutoConstructToPromiseSynchronously(
 					promise,
-					reqRes[0]._sharedBlob, 
+					std::move(reqRes[0]._sharedBlob),
 					artifactCollection.GetDependencyValidation(),
 					artifactCollection.GetRequestParameters());
 			} else {
@@ -146,7 +148,8 @@ namespace Assets
 		static void DefaultCompilerConstructionSynchronously(
 			Promise&& promise,
 			CompileRequestCode targetCode, 		// typically Internal::RemoveSmartPtrType<AssetType>::CompileProcessType,
-			InitializerPack&& initializerPack)
+			InitializerPack&& initializerPack,
+			OperationContext* operationContext = nullptr)
 	{
 		// Begin a compilation operation via the registered compilers for this type.
 		// Our deferred constructor will wait for the completion of that compilation operation,
@@ -155,14 +158,17 @@ namespace Assets
 		// from a precompiled result is quick, but actual compilation would take much longer
 
 		TRY {
+			std::string initializerLabel;
 			#if defined(_DEBUG)
-				std::string debugLabel = initializerPack.ArchivableName();
+				initializerLabel = initializerPack.ArchivableName();
+			#else
+				if (operationContext) initializerLabel = initializerPack.ArchivableName();
 			#endif
 
 			auto marker = Internal::BeginCompileOperation(targetCode, std::move(initializerPack));
 			if (!marker) {
 				#if defined(_DEBUG)
-					Throw(std::runtime_error("No compiler found for asset " + debugLabel));
+					Throw(std::runtime_error("No compiler found for asset " + initializerLabel));
 				#else
 					Throw(std::runtime_error("No compiler found for asset"));
 				#endif
@@ -179,6 +185,9 @@ namespace Assets
 		
 			auto pendingCompile = marker->InvokeCompile();
 			AutoConstructToPromiseFromPendingCompile(std::move(promise), *pendingCompile, targetCode);
+
+			if (operationContext)
+				operationContext->Begin(pendingCompile->ShareFuture(), initializerLabel);
 		} CATCH(...) {
 			promise.set_exception(std::current_exception());
 		} CATCH_END
@@ -193,6 +202,18 @@ namespace Assets
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
 			[initPack=InitializerPack{initialisers...}, promise=std::move(promise)]() mutable {
 				DefaultCompilerConstructionSynchronously(std::move(promise), Internal::PromisedTypeRemPtr<Promise>::CompileProcessType, std::move(initPack));
+			});
+	}
+
+	template<
+		typename Promise, typename... Params, 
+		typename std::enable_if<	Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
+								&& !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params...>::value>::type* = nullptr>
+		void AutoConstructToPromise(Promise&& promise, std::shared_ptr<OperationContext> opContext, Params... initialisers)
+	{
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[initPack=InitializerPack{initialisers...}, promise=std::move(promise), opContext=std::move(opContext)]() mutable {
+				DefaultCompilerConstructionSynchronously(std::move(promise), Internal::PromisedTypeRemPtr<Promise>::CompileProcessType, std::move(initPack), opContext.get());
 			});
 	}
 
