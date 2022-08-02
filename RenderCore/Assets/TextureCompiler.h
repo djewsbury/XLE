@@ -9,7 +9,10 @@
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Assets/IArtifact.h"
 #include "../../Utility/MemoryUtils.h"
+#include "../../Utility/StringUtils.h"
 #include "../../Utility/Streams/SerializationUtils.h"
+
+namespace Assets { class OperationContext; }
 
 namespace RenderCore { namespace Assets
 {
@@ -61,6 +64,16 @@ namespace RenderCore { namespace Assets
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<TextureArtifact>>&&,
+			const TextureCompilationRequest& request);
+
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<TextureArtifact>>&&,
+			std::shared_ptr<::Assets::OperationContext> opContext,
+			StringSection<> initializer);
+
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<TextureArtifact>>&&,
+			std::shared_ptr<::Assets::OperationContext> opContext,
 			const TextureCompilationRequest& request);
 
 		TextureArtifact();

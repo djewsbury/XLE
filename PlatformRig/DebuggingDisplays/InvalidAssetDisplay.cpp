@@ -6,6 +6,7 @@
 #include "../../Assets/AssetSetManager.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/AssetHeap.h"
+#include "../../Assets/OperationContext.h"
 #include <sstream>
 
 namespace PlatformRig { namespace Overlays
@@ -39,13 +40,23 @@ namespace PlatformRig { namespace Overlays
 		}
 	}
 
-	InvalidAssetDisplay::InvalidAssetDisplay()
+	InvalidAssetDisplay::InvalidAssetDisplay() { _currentRecordsCountDown = 0; }
+	InvalidAssetDisplay::~InvalidAssetDisplay() {}
+
+
+	void OperationContextDisplay::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
 	{
-		_currentRecordsCountDown = 0;
+		const unsigned lineHeight = 20;
+		auto activeOperations = _opContext->GetActiveOperations();
+
+		RenderOverlays::DebuggingDisplay::DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "Asset Operation Context");
+
+		for (const auto&op:activeOperations)
+			RenderOverlays::DebuggingDisplay::DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), op);
 	}
 
-	InvalidAssetDisplay::~InvalidAssetDisplay()
-	{}
+	OperationContextDisplay::OperationContextDisplay(std::shared_ptr<::Assets::OperationContext> opContext) : _opContext(opContext) {}
+	OperationContextDisplay::~OperationContextDisplay() {}
 
 }}
 

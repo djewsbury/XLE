@@ -17,6 +17,7 @@ namespace RenderCore { namespace Assets
 	class MaterialScaffold;
 	class SkeletonScaffold;
 }}
+namespace Assets { class OperationContext; }
 
 namespace RenderCore { namespace Techniques
 {
@@ -28,6 +29,7 @@ namespace RenderCore { namespace Techniques
 		{
 		public:
 			ElementConstructor& SetModelAndMaterialScaffolds(StringSection<> model, StringSection<> material);
+			ElementConstructor& SetModelAndMaterialScaffolds(std::shared_ptr<::Assets::OperationContext> opContext, StringSection<> model, StringSection<> material);
 			
 			ElementConstructor& SetModelScaffold(std::shared_future<std::shared_ptr<Assets::ModelScaffold>>, std::string initializer={});
 			ElementConstructor& SetMaterialScaffold(std::shared_future<std::shared_ptr<Assets::MaterialScaffold>>, std::string initializer={});
@@ -55,8 +57,9 @@ namespace RenderCore { namespace Techniques
 		unsigned GetElementCount() const;
 
 		void SetSkeletonScaffold(StringSection<>);
+		void SetSkeletonScaffold(std::shared_ptr<::Assets::OperationContext>, StringSection<>);
 		void SetSkeletonScaffold(std::shared_future<std::shared_ptr<Assets::SkeletonScaffold>>, std::string initializer={});
-		void SetSkeletonScaffold(const std::shared_ptr<Assets::SkeletonScaffold>&);
+		void SetSkeletonScaffold(const std::shared_ptr<Assets::SkeletonScaffold>&);		
 		std::shared_ptr<Assets::SkeletonScaffold> GetSkeletonScaffold() const;
 
 		uint64_t GetHash() const;

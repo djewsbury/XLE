@@ -54,6 +54,19 @@ namespace RenderCore { namespace Techniques
 		_internal->_hash = 0;
 		return *this;
 	}
+	auto ModelRendererConstruction::ElementConstructor::SetModelAndMaterialScaffolds(std::shared_ptr<::Assets::OperationContext> opContext, StringSection<> model, StringSection<> material) -> ElementConstructor&
+	{
+		assert(_internal && !_internal->_sealed);
+		auto originalDisableHash = _internal->_disableHash;
+		SetModelScaffold(::Assets::MakeAsset<Internal::ModelScaffoldPtr>(opContext, model), model.AsString());
+		SetMaterialScaffold(::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(std::move(opContext), material, model), material.AsString());
+		_internal->_disableHash = originalDisableHash;
+		if (_internal->_elementHashValues.size() < _internal->_elementCount)
+			_internal->_elementHashValues.resize(_internal->_elementCount, 0);
+		_internal->_elementHashValues[_elementId] = Hash64(model, Hash64(material));
+		_internal->_hash = 0;
+		return *this;
+	}
 	auto ModelRendererConstruction::ElementConstructor::SetModelScaffold(std::shared_future<std::shared_ptr<Assets::ModelScaffold>> scaffoldMarker, std::string initializer) -> ElementConstructor&
 	{
 		assert(_internal && !_internal->_sealed);
@@ -141,6 +154,12 @@ namespace RenderCore { namespace Techniques
 		_internal->_skeletonScaffoldHashValue = Hash64(skeleton);
 		_internal->_skeletonScaffoldPtr = nullptr;
 		_internal->_skeletonScaffoldMarker = ::Assets::MakeAsset<std::shared_ptr<Assets::SkeletonScaffold>>(skeleton);
+	}
+	void ModelRendererConstruction::SetSkeletonScaffold(std::shared_ptr<::Assets::OperationContext> opContext, StringSection<> skeleton)
+	{
+		_internal->_skeletonScaffoldHashValue = Hash64(skeleton);
+		_internal->_skeletonScaffoldPtr = nullptr;
+		_internal->_skeletonScaffoldMarker = ::Assets::MakeAsset<std::shared_ptr<Assets::SkeletonScaffold>>(std::move(opContext), skeleton);
 	}
 	void ModelRendererConstruction::SetSkeletonScaffold(std::shared_future<std::shared_ptr<Assets::SkeletonScaffold>> skeleton, std::string)
 	{

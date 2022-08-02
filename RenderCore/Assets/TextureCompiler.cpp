@@ -524,5 +524,40 @@ namespace RenderCore { namespace Assets
 				} CATCH_END
 			});
 	}
+
+	void TextureArtifact::ConstructToPromise(
+		std::promise<std::shared_ptr<TextureArtifact>>&& promise,
+		std::shared_ptr<::Assets::OperationContext> opContext,
+		StringSection<> initializer)
+	{
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[promise=std::move(promise), init=initializer.AsString(), opContext=std::move(opContext)]() mutable {
+				auto splitter = MakeFileNameSplitter(init);
+				if (XlEqStringI(splitter.Extension(), "texture")) {
+					::Assets::DefaultCompilerConstructionSynchronously(std::move(promise), TextureCompilerProcessType, ::Assets::InitializerPack{0u, init}, opContext.get());
+				} else {
+					TRY {
+						promise.set_value(std::make_shared<TextureArtifact>(init));
+					} CATCH (...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				}
+			});
+	}
+
+	void TextureArtifact::ConstructToPromise(
+		std::promise<std::shared_ptr<TextureArtifact>>&& promise,
+		std::shared_ptr<::Assets::OperationContext> opContext,
+		const TextureCompilationRequest& request)
+	{
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[request, promise=std::move(promise), opContext=std::move(opContext)]() mutable {
+				TRY {
+					::Assets::DefaultCompilerConstructionSynchronously(std::move(promise), TextureCompilerProcessType, ::Assets::InitializerPack{1u, request}, opContext.get());
+				} CATCH(...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			});
+	}
 }}
 

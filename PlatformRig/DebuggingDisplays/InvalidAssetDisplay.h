@@ -8,7 +8,7 @@
 #include <vector>
 
 namespace Utility { class IHierarchicalProfiler; }
-namespace Assets { class AssetHeapRecord; }
+namespace Assets { class AssetHeapRecord; class OperationContext; }
 
 namespace PlatformRig { namespace Overlays
 {
@@ -28,5 +28,22 @@ namespace PlatformRig { namespace Overlays
 	private:
 		std::vector<::Assets::AssetHeapRecord> _currentRecords;
 		unsigned _currentRecordsCountDown;
+	};
+
+	class OperationContextDisplay : public RenderOverlays::DebuggingDisplay::IWidget ///////////////////////////////////////////////////////////
+	{
+	public:
+		using IOverlayContext = RenderOverlays::IOverlayContext;
+		using Layout = RenderOverlays::DebuggingDisplay::Layout;
+		using Interactables = RenderOverlays::DebuggingDisplay::Interactables;
+		using InterfaceState = RenderOverlays::DebuggingDisplay::InterfaceState;
+		using InputSnapshot = PlatformRig::InputSnapshot;
+
+		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
+
+		OperationContextDisplay(std::shared_ptr<::Assets::OperationContext>);
+		~OperationContextDisplay();
+	private:
+		std::shared_ptr<::Assets::OperationContext> _opContext;
 	};
 }}
