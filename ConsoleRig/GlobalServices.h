@@ -23,6 +23,7 @@ namespace ConsoleRig
         std::string _logConfigFile;
         bool _setWorkingDir;
         bool _redirectCout;
+        bool _inMemoryOnlyIntermediates;
         unsigned _longTaskThreadPoolCount;
         unsigned _shortTaskThreadPoolCount;
 

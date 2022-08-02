@@ -215,7 +215,14 @@ namespace Assets
 		if (groupi == _pimpl->_groups.end())
 			Throw(std::runtime_error("GroupId has not be registered in intermediates store during retrieve operation"));
 
-		return groupi->second._looseFilesStorage->RetrieveCompileProducts(archivableName, _pimpl->_storeRefCounts, hashCode);
+		if (groupi->second._looseFilesStorage)
+			return groupi->second._looseFilesStorage->RetrieveCompileProducts(archivableName, _pimpl->_storeRefCounts, hashCode);
+		if (groupi->second._archiveCacheSet) {
+			auto archive = groupi->second._archiveCacheSet->GetArchive(groupi->second._archiveCacheBase + archivableName.AsString());
+			if (archive)
+				return archive->TryOpenFromCache(0);
+		}
+		return nullptr;
 	}
 
 	std::shared_ptr<IArtifactCollection> IntermediatesStore::StoreCompileProducts(
@@ -238,7 +245,21 @@ namespace Assets
 		std::sort(uniqueDependencies.begin(), uniqueDependencies.end());
 		auto i = std::unique(uniqueDependencies.begin(), uniqueDependencies.end());
 
-		return groupi->second._looseFilesStorage->StoreCompileProducts(archivableName, artifacts, state, {uniqueDependencies.begin(), i}, _pimpl->_storeRefCounts, hashCode);
+		if (groupi->second._looseFilesStorage)
+			return groupi->second._looseFilesStorage->StoreCompileProducts(archivableName, artifacts, state, {uniqueDependencies.begin(), i}, _pimpl->_storeRefCounts, hashCode);
+		if (groupi->second._archiveCacheSet) {
+			auto archive = groupi->second._archiveCacheSet->GetArchive(groupi->second._archiveCacheBase + archivableName.AsString());
+			if (!archive)
+				Throw(std::runtime_error("Failed to create archive when storing compile products"));
+
+			// Make sure the dependencies are unique, because we tend to get a lot of dupes from certain compile operations
+			std::vector<DependentFileState> uniqueDependencies { dependencies.begin(), dependencies.end() };
+			std::sort(uniqueDependencies.begin(), uniqueDependencies.end());
+			auto i = std::unique(uniqueDependencies.begin(), uniqueDependencies.end());
+
+			archive->Commit(0, {}, artifacts, state, {uniqueDependencies.begin(), i});
+		}
+		return nullptr;
 	}
 
 	std::shared_ptr<IArtifactCollection> IntermediatesStore::RetrieveCompileProducts(
@@ -296,6 +317,7 @@ namespace Assets
 	void IntermediatesStore::FlushToDisk()
 	{
 		std::unique_lock<std::shared_timed_mutex> l(_pimpl->_lock);
+		if (!_pimpl->_filesystem) return;	// if there's no backing filesystem, we never flush
 		for (const auto&group:_pimpl->_groups)
 			if (group.second._archiveCacheSet)
 				group.second._archiveCacheSet->FlushToDisk();
@@ -304,6 +326,7 @@ namespace Assets
 	void IntermediatesStore::Pimpl::ResolveBaseDirectory() const
 	{
 		if (!_resolvedBaseDirectory.empty()) return;
+		assert(_filesystem);
 
 			//  First, we need to find an output directory to use.
 			//  We want a directory that isn't currently being used, and
@@ -384,14 +407,19 @@ namespace Assets
 		auto id = Hash64(name.begin(), name.end());
 		auto existing = _pimpl->_groups.find(id);
 		if (existing == _pimpl->_groups.end()) {
-			auto safeGroupName = MakeSafeName(name);
-			_pimpl->ResolveBaseDirectory();
-			std::string looseFilesBase = Concatenate(_pimpl->_resolvedBaseDirectory, "/", safeGroupName, "/");
 			Pimpl::Group newGroup;
-			newGroup._looseFilesStorage = std::make_shared<LooseFilesStorage>(_pimpl->_filesystem, looseFilesBase, compilerVersionInfo);
-			if (enableArchiveCacheSet) {
-				newGroup._archiveCacheSet = std::make_shared<ArchiveCacheSet>(_pimpl->_filesystem, compilerVersionInfo);
-				newGroup._archiveCacheBase = looseFilesBase;
+			if (_pimpl->_filesystem) {
+				auto safeGroupName = MakeSafeName(name);
+				_pimpl->ResolveBaseDirectory();
+				std::string looseFilesBase = Concatenate(_pimpl->_resolvedBaseDirectory, "/", safeGroupName, "/");
+				newGroup._looseFilesStorage = std::make_shared<LooseFilesStorage>(_pimpl->_filesystem, looseFilesBase, compilerVersionInfo);
+				if (enableArchiveCacheSet) {
+					newGroup._archiveCacheSet = std::make_shared<ArchiveCacheSet>(_pimpl->_filesystem, compilerVersionInfo);
+					newGroup._archiveCacheBase = looseFilesBase;
+				}
+			} else {
+				// in-memory only group
+				newGroup._archiveCacheSet = std::make_shared<ArchiveCacheSet>(nullptr, compilerVersionInfo);
 			}
 			_pimpl->_groups.insert({id, std::move(newGroup)});		// ref count starts at 1
 		} else
@@ -429,6 +457,12 @@ namespace Assets
 			_pimpl->_constructorOptions._versionString = versionString.AsString();
 			_pimpl->_constructorOptions._configString = configString.AsString();
 		}
+		_pimpl->_storeRefCounts = std::make_shared<StoreReferenceCounts>();
+	}
+
+	IntermediatesStore::IntermediatesStore()
+	{
+		_pimpl = std::make_unique<Pimpl>();
 		_pimpl->_storeRefCounts = std::make_shared<StoreReferenceCounts>();
 	}
 

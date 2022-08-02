@@ -233,7 +233,7 @@ namespace ConsoleRig
         _pimpl->_mountingTree = std::make_shared<::Assets::MountingTree>(s_defaultFilenameRules);
 
         if (!_pimpl->_compileAndAsyncManager)
-            _pimpl->_compileAndAsyncManager = std::make_shared<::Assets::CompileAndAsyncManager>(_pimpl->_defaultFilesystem);
+            _pimpl->_compileAndAsyncManager = std::make_shared<::Assets::CompileAndAsyncManager>(cfg._inMemoryOnlyIntermediates ? nullptr : _pimpl->_defaultFilesystem);
 
         if (!_pimpl->_assetsSetsManager)
             _pimpl->_assetsSetsManager = std::make_shared<::Assets::AssetSetManager>();
@@ -346,6 +346,7 @@ namespace ConsoleRig
         _logConfigFile = "log.dat";
         _setWorkingDir = false;
         _redirectCout = true;
+        _inMemoryOnlyIntermediates = false;
         _longTaskThreadPoolCount = 4;
         _shortTaskThreadPoolCount = 2;
     }

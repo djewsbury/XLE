@@ -91,6 +91,7 @@ namespace Assets
 			StringSection<> versionString,
 			StringSection<> configString,
 			bool universal = false);
+		IntermediatesStore();		// default is an in-memory-only intermediates store
 		~IntermediatesStore();
 		IntermediatesStore(const IntermediatesStore&) = delete;
 		IntermediatesStore& operator=(const IntermediatesStore&) = delete;

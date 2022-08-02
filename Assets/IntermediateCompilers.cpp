@@ -239,8 +239,8 @@ namespace Assets
 							auto str = nameWithTargetCode.AsString();
 							// If you hit the following assert, it means that multiple targets from this compile operation would be written
 							// to the same output file. That probably means that there are mulitple targets with the name target code and name
-							assert(compileProductNamesWritten.find(str) == compileProductNamesWritten.end());		
-							compileProductNamesWritten.insert(str);				
+							assert(compileProductNamesWritten.find(str) == compileProductNamesWritten.end());
+							compileProductNamesWritten.insert(str);
 						#endif
 						artifactCollection = destinationStore->StoreCompileProducts(
 							nameWithTargetCode.AsStringSection(),

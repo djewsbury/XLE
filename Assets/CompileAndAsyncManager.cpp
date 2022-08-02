@@ -77,8 +77,12 @@ namespace Assets
         auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests";
 
 		_pimpl = std::make_unique<Pimpl>();
-		_pimpl->_intStore = std::make_shared<IntermediatesStore>(intermediatesFilesystem, tempDirPath.string(), storeVersionString, storeConfigString);
-		_pimpl->_shadowingStore = std::make_shared<IntermediatesStore>(intermediatesFilesystem, tempDirPath.string(), storeVersionString, storeConfigString, true);
+        if (intermediatesFilesystem) {
+            _pimpl->_intStore = std::make_shared<IntermediatesStore>(intermediatesFilesystem, tempDirPath.string(), storeVersionString, storeConfigString);
+            _pimpl->_shadowingStore = std::make_shared<IntermediatesStore>(intermediatesFilesystem, tempDirPath.string(), storeVersionString, storeConfigString, true);
+        } else {
+            _pimpl->_intStore = std::make_shared<IntermediatesStore>();
+        }
 
 		_pimpl->_intMan = CreateIntermediateCompilers(_pimpl->_intStore);
     }

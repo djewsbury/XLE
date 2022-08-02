@@ -170,8 +170,9 @@ namespace Assets
 	{
 		if (!_cachedBlockListValid) {
 			// note that on failure, we will continue to attempt to open the file each time
-			if (!LoadArtifactBlockList(*_filesystem, _directoryFileName.c_str(), _cachedBlockList))
-				return nullptr;
+			if (_filesystem)
+				if (!LoadArtifactBlockList(*_filesystem, _directoryFileName.c_str(), _cachedBlockList))
+					return nullptr;
 
 			_cachedBlockListValid = true;
 		}
@@ -203,8 +204,9 @@ namespace Assets
 	{
 		if (!_cachedCollectionBlockListValid) {
 			// note that on failure, we will continue to attempt to open the file each time
-			if (!LoadCollectionBlockList(*_filesystem, _directoryFileName.c_str(), _cachedCollectionBlockList))
-				return nullptr;
+			if (_filesystem)
+				if (!LoadCollectionBlockList(*_filesystem, _directoryFileName.c_str(), _cachedCollectionBlockList))
+					return nullptr;
 
 			_cachedCollectionBlockListValid = true;
 		}
@@ -300,9 +302,11 @@ namespace Assets
 			XlCopyString(depsFilename, _mainFileName);
 			XlCatString(depsFilename, ".deps");
 			
-			size_t existingFileSize = 0;
-			auto existingFile = TryLoadFileAsMemoryBlock(*_filesystem, depsFilename, &existingFileSize);
-			_cachedDependencyTable = TryParseDependenciesTable(MakeIteratorRange(existingFile.get(), PtrAdd(existingFile.get(), existingFileSize)));
+			if (_filesystem) {
+				size_t existingFileSize = 0;
+				auto existingFile = TryLoadFileAsMemoryBlock(*_filesystem, depsFilename, &existingFileSize);
+				_cachedDependencyTable = TryParseDependenciesTable(MakeIteratorRange(existingFile.get(), PtrAdd(existingFile.get(), existingFileSize)));
+			}
 			_cachedDependencyTableValid = true;
 		}
 		return &_cachedDependencyTable;
@@ -312,6 +316,7 @@ namespace Assets
 	{
 		ScopedLock(_pendingCommitsLock);
 		if (_pendingCommits.empty()) { return; }
+		if (!_filesystem) return;
 
 		_cachedBlockListValid = false;
 		_cachedDependencyTableValid = false;
@@ -644,6 +649,7 @@ namespace Assets
 	auto ArchiveCache::GetMetrics() const -> Metrics
 	{
 		using namespace Assets::ChunkFile;
+		if (!_filesystem) return {};
 
 			// We need to open the file and get metrics information
 			// for the blocks contained within
@@ -750,7 +756,7 @@ namespace Assets
 				Throw(std::runtime_error("Object in ArchiveCache changed while attempting to read it at the same time"));
 		}
 
-		std::vector<ArtifactRequestResult> 	ResolveRequests(IteratorRange<const ArtifactRequest*> requests) const
+		std::vector<ArtifactRequestResult> 	ResolveRequests(IteratorRange<const ArtifactRequest*> requests) const override
 		{
 			ScopedLock(_archiveCache->_pendingCommitsLock);
 			VerifyChangeId_AlreadyLocked(*_archiveCache, _objectId, _changeId);
@@ -780,13 +786,13 @@ namespace Assets
 				if (i == pendingCommit._data.end())
 					Throw(Exceptions::ConstructionError(
 						Exceptions::ConstructionError::Reason::MissingFile,
-						GetDependencyValidation_AlreadyLocked(),
+						GetDependencyValidation_AlreadyLocked().first,
 						StringMeld<128>() << "Missing chunk (" << r->_name << ")"));
 
 				if (r->_expectedVersion != ~0u && (i->_version != r->_expectedVersion))
 					Throw(::Assets::Exceptions::ConstructionError(
 						Exceptions::ConstructionError::Reason::UnsupportedVersion,
-						GetDependencyValidation_AlreadyLocked(),
+						GetDependencyValidation_AlreadyLocked().first,
 						StringMeld<256>() 
 							<< "Data chunk is incorrect version for chunk (" 
 							<< r->_name << ") expected: " << r->_expectedVersion << ", got: " << i->_version));
@@ -805,6 +811,12 @@ namespace Assets
 
 		std::vector<ArtifactRequestResult> ResolveViaArchiveFile(IteratorRange<const ArtifactRequest*> requests) const
 		{
+			if (!_archiveCache->_filesystem)		// without an attached filesystem, only the artifacts stored in memory are valid
+				Throw(Exceptions::ConstructionError(
+					Exceptions::ConstructionError::Reason::MissingFile,
+					GetDependencyValidation_AlreadyLocked().first,
+					"Missing chunks"));
+
 			std::vector<ArtifactRequestResult> result;
 			result.reserve(requests.size());
 
@@ -838,13 +850,13 @@ namespace Assets
 				if (i == range.second)
 					Throw(Exceptions::ConstructionError(
 						Exceptions::ConstructionError::Reason::MissingFile,
-						GetDependencyValidation_AlreadyLocked(),
+						GetDependencyValidation_AlreadyLocked().first,
 						StringMeld<128>() << "Missing chunk (" << r->_name << ")"));
 
 				if (r->_expectedVersion != ~0u && (i->_version != r->_expectedVersion))
 					Throw(::Assets::Exceptions::ConstructionError(
 						Exceptions::ConstructionError::Reason::UnsupportedVersion,
-						GetDependencyValidation_AlreadyLocked(),
+						GetDependencyValidation_AlreadyLocked().first,
 						StringMeld<256>() 
 							<< "Data chunk is incorrect version for chunk (" 
 							<< r->_name << ") expected: " << r->_expectedVersion << ", got: " << i->_version));
@@ -869,7 +881,7 @@ namespace Assets
 					Throw(std::runtime_error("Attempting to load log or metrics data for an object, but no attached strings exist for this object"));
 			}
 
-			std::unique_ptr<IFileInterface> archiveFile; 
+			std::unique_ptr<IFileInterface> archiveFile;
 			TryOpen(archiveFile, *_archiveCache->_filesystem, MakeStringSection(_archiveCache->_mainFileName), "rb");
 			if (!archiveFile)
 				Throw(std::runtime_error("Failed while opening archive cache data file: " + _archiveCache->_mainFileName));
@@ -930,48 +942,48 @@ namespace Assets
 			return result;
 		}
 
-		DependencyValidation GetDependencyValidation() const
+		DependencyValidation GetDependencyValidation() const override
 		{
 			ScopedLock(_archiveCache->_pendingCommitsLock);
-			return GetDependencyValidation_AlreadyLocked();
+			return GetDependencyValidation_AlreadyLocked().first;
 		}
 
-		DependencyValidation GetDependencyValidation_AlreadyLocked() const
+		std::pair<DependencyValidation, bool> GetDependencyValidation_AlreadyLocked() const
 		{
 			VerifyChangeId_AlreadyLocked(*_archiveCache, _objectId, _changeId);
 
 			auto i = std::lower_bound(_archiveCache->_pendingCommits.begin(), _archiveCache->_pendingCommits.end(), _objectId, ComparePendingCommit());
 			if (i!=_archiveCache->_pendingCommits.end() && i->_objectId == _objectId)
-				return i->_depValPtr;
+				return {i->_depValPtr, i->_depValPtr.GetValidationIndex() == 0};
 
 			// If the item doesn't exist in the archive at all (either because the item is missing or the whole archive is
 			// missing), we will return nullptr
 			const auto* collections = _archiveCache->GetCollectionBlockList();
 			if (!collections)
-				return {};
+				return {{}, false};
 
 			auto collectioni = std::lower_bound(collections->begin(), collections->end(), _objectId, CompareCollectionDirectoryBlock{});
 			if (collectioni == collections->end() || collectioni->_objectId != _objectId)
-				return {};
+				return {{}, false};
 
 			auto* depTable = _archiveCache->GetDependencyTable();
-			if (!depTable) return {};
+			if (!depTable) return {{}, false};
 
+			bool stillValid = true;
 			auto result = GetDepValSys().Make();
 			auto depRange = EqualRange(*depTable, _objectId);
 			for (auto r=depRange.first; r!=depRange.second; ++r)
-				if (!IntermediatesStore::TryRegisterDependency(result, r->second, "ArchivedAsset"))
-					return {};
+				stillValid &= IntermediatesStore::TryRegisterDependency(result, r->second, "ArchivedAsset");
 
-			return result;
+			return {result, stillValid};
 		}
 
-		StringSection<ResChar>				GetRequestParameters() const
+		StringSection<ResChar>				GetRequestParameters() const override
 		{
 			return {};
 		}
 
-		AssetState							GetAssetState() const
+		AssetState							GetAssetState() const override
 		{
 			ScopedLock(_archiveCache->_pendingCommitsLock);
 			auto i = std::lower_bound(_archiveCache->_pendingCommits.begin(), _archiveCache->_pendingCommits.end(), _objectId, ComparePendingCommit());
@@ -997,19 +1009,20 @@ namespace Assets
 
 	auto ArchiveCache::TryOpenFromCache(uint64_t id) -> std::shared_ptr<IArtifactCollection>
 	{
-		auto result = std::make_shared<ArchivedFileArtifactCollection>();
-		result->_archiveCache = this;
-		result->_objectId = id;
-
+		// we must return null for non-existing or out-of-date entry, to match behaviour in LooseFilesCache
 		ScopedLock(_pendingCommitsLock);
 		auto changeI = LowerBound(_changeIds, id);
 		if (changeI != _changeIds.end() && changeI->first == id) {
+			auto result = std::make_shared<ArchivedFileArtifactCollection>();
+			result->_archiveCache = this;
+			result->_objectId = id;
 			result->_changeId = changeI->second;
-		} else {
-			result->_changeId = 0;
+			if (!result->GetDependencyValidation_AlreadyLocked().second)
+				return nullptr;
+			return result;
 		}
 
-		return result;
+		return nullptr;
 	}
 	
 	ArchiveCache::ArchiveCache(

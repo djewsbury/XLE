@@ -42,7 +42,7 @@ namespace UnitTests
 
 		using FnSig = std::string(*)(std::string);
 		auto fn = testLibrary.GetFunction<FnSig>("ExampleFunctionReturnsString");
-		REQUIRE(fn);
+		REQUIRE((void*)fn);		// casting to void* here to because unit test library uses the parameter as pointer-to-object (as opposed to pointer-to-function)
 		auto interfaceTest = (*fn)("Passed Over Interface");
 		REQUIRE(interfaceTest == "This is a string from ExampleFunctionReturnsString <<Passed Over Interface>>");
 	}

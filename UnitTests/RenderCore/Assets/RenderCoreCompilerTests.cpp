@@ -65,13 +65,10 @@ namespace UnitTests
 	TEST_CASE( "RenderCoreCompilation-Materials", "[rendercore_assets]" )
 	{
 		UnitTest_SetWorkingDirectory();
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto cfg = GetStartupConfig();
+		cfg._inMemoryOnlyIntermediates = true;
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(cfg);
 		auto mnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
-		// auto assetServices = ConsoleRig::MakeAttachablePtr<::Assets::Services>(0);
-
-		auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests";
-		std::filesystem::remove_all(tempDirPath);	// ensure we're starting from an empty temporary directory
-		std::filesystem::create_directories(tempDirPath);
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 
@@ -173,12 +170,9 @@ namespace UnitTests
 	TEST_CASE( "RenderCoreCompilation-Models", "[rendercore_assets]" )
 	{
 		UnitTest_SetWorkingDirectory();
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
-		// auto assetServices = ConsoleRig::MakeAttachablePtr<::Assets::Services>(0);
-
-		auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests";
-		std::filesystem::remove_all(tempDirPath);	// ensure we're starting from an empty temporary directory
-		std::filesystem::create_directories(tempDirPath);
+		auto cfg = GetStartupConfig();
+		cfg._inMemoryOnlyIntermediates = true;
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(cfg);
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 
