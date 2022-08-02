@@ -13,33 +13,47 @@ namespace Assets
 		struct RegisteredOp
 		{
 			Internal::VariantFutureSet::Id _future = ~0u;
-			std::string _description;
+			std::string _description, _msg;
 		};
 		std::vector<std::pair<OperationId, RegisteredOp>> _ops;
 		OperationId _nextOperationId = 1u;
 	};
 
-	auto OperationContext::RegisterInternalAlreadyLocked(Internal::VariantFutureSet::Id futureId, StringSection<> desc) -> OperationId
+	void OperationContext::EndWithFutureAlreadyLocked(OperationId opId, Internal::VariantFutureSet::Id futureId)
 	{
-		auto id = _pimpl->_nextOperationId++;
-		_pimpl->_ops.emplace_back(id, Pimpl::RegisteredOp{futureId, desc.AsString()});
-		return id;
+		for (auto i=_pimpl->_ops.begin(); i!=_pimpl->_ops.end(); ++i)
+			if (i->first == opId) {
+				i->second._future = futureId;
+				return;
+			}
+		assert(0);
 	}
 
-	auto OperationContext::Begin(StringSection<> desc) -> OperationId
+	auto OperationContext::Begin(std::string desc) -> OperationHelper
 	{
 		ScopedLock(_mutex);
 		auto id = _pimpl->_nextOperationId++;
-		_pimpl->_ops.emplace_back(id, Pimpl::RegisteredOp{~0u, desc.AsString()});
-		return id;
+		_pimpl->_ops.emplace_back(id, Pimpl::RegisteredOp{~0u, desc});
+		return {id, *this};
 	}
 
-	void OperationContext::Remove(OperationId id)
+	void OperationContext::End(OperationId id)
 	{
 		ScopedLock(_mutex);
 		for (auto i=_pimpl->_ops.begin(); i!=_pimpl->_ops.end(); ++i)
 			if (i->first == id) {
 				_pimpl->_ops.erase(i);
+				return;
+			}
+		assert(0);		// didn't find it
+	}
+
+	void OperationContext::SetMessage(OperationId id, std::string str)
+	{
+		ScopedLock(_mutex);
+		for (auto i=_pimpl->_ops.begin(); i!=_pimpl->_ops.end(); ++i)
+			if (i->first == id) {
+				i->second._msg = std::move(str);
 				return;
 			}
 		assert(0);		// didn't find it
@@ -56,7 +70,8 @@ namespace Assets
 				if (status == std::future_status::ready)
 					continue;		// already completed, implicitly removed
 			}
-			result.push_back(i->second._description);
+			if (!i->second._msg.empty()) result.push_back(i->second._description + "; " + i->second._msg);
+			else result.push_back(i->second._description);
 		}
 		return result;
 	}
@@ -70,6 +85,36 @@ namespace Assets
 
 	OperationContext::~OperationContext()
 	{}
+
+	void OperationContext::OperationHelper::SetMessage(std::string str)
+	{
+		assert(_context);
+		_context->SetMessage(_opId, std::move(str));
+	}
+
+	OperationContext::OperationHelper::OperationHelper() = default;
+	OperationContext::OperationHelper::~OperationHelper()
+	{
+		if (_context) _context->End(_opId);
+	}
+	OperationContext::OperationHelper::OperationHelper(OperationHelper&& moveFrom)
+	{
+		_context = moveFrom._context;
+		_opId = moveFrom._opId;
+		moveFrom._context = nullptr;
+		moveFrom._opId = ~0u;
+	}
+	OperationContext::OperationHelper& OperationContext::OperationHelper::operator=(OperationHelper&& moveFrom)
+	{
+		if (_context) _context->End(_opId);
+		_context = moveFrom._context;
+		_opId = moveFrom._opId;
+		moveFrom._context = nullptr;
+		moveFrom._opId = ~0u;
+		return *this;
+	}
+	OperationContext::OperationHelper::OperationHelper(OperationId id, OperationContext& context)
+	: _context(&context), _opId(id) {}
 
 
 	namespace Internal

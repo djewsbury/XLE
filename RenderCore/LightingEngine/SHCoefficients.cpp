@@ -28,7 +28,7 @@ namespace RenderCore { namespace LightingEngine
 		request._srcFile = srcTexture.AsString();
 		request._format = Format::R32G32B32A32_FLOAT;
 		request._coefficientCount = 25;
-		auto srcFuture = ::Assets::NewMarkerPtr<RenderCore::Assets::TextureArtifact>(request);
+		auto srcFuture = ::Assets::ConstructToMarkerPtr<RenderCore::Assets::TextureArtifact>(request);
 		::Assets::WhenAll(srcFuture).ThenConstructToPromise(
 			std::move(promise),
 			[](std::promise<SHCoefficientsAsset>&& thatPromise, std::shared_ptr<RenderCore::Assets::TextureArtifact> textureArtifact) {

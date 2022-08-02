@@ -44,7 +44,7 @@ namespace RenderCore { namespace LightingEngine
 		AmbientLightOperatorDesc _ambientLightOperator;
 		bool _ambientLightEnabled = false;
 
-		void SetEquirectangularSource(StringSection<> input)
+		void SetEquirectangularSource(std::shared_ptr<::Assets::OperationContext> loadingContext, StringSection<> input)
 		{
 			if (XlEqString(input, _sourceImage)) return;
 			_sourceImage = input.AsString();
@@ -56,7 +56,7 @@ namespace RenderCore { namespace LightingEngine
 			request._srcFile = _sourceImage;
 			request._format = Format::BC6H_UF16;
 			request._faceDim = 512;
-			_specularIBL = ::Assets::NewMarkerPtr<Techniques::DeferredShaderResource>(request)->ShareFuture();
+			_specularIBL = ::Assets::ConstructToFuturePtr<Techniques::DeferredShaderResource>(loadingContext, request);
 
 			Assets::TextureCompilationRequest request2;
 			request2._operation = Assets::TextureCompilationRequest::Operation::EquRectToCubeMap; 
@@ -64,7 +64,7 @@ namespace RenderCore { namespace LightingEngine
 			request2._format = Format::BC6H_UF16;
 			request2._faceDim = 1024;
 			request2._mipMapFilter = Assets::TextureCompilationRequest::MipMapFilter::FromSource;
-			_ambientRawCubemap = ::Assets::NewMarkerPtr<Techniques::DeferredShaderResource>(request2)->ShareFuture();
+			_ambientRawCubemap = ::Assets::ConstructToFuturePtr<Techniques::DeferredShaderResource>(loadingContext, request2);
 		}
 	};
 
@@ -195,10 +195,10 @@ namespace RenderCore { namespace LightingEngine
 		} 
 	}
 
-	void ForwardPlusLightScene::SetEquirectangularSource(StringSection<> input)
+	void ForwardPlusLightScene::SetEquirectangularSource(std::shared_ptr<::Assets::OperationContext> loadingContext, StringSection<> input)
 	{
 		if (XlEqString(input, _ambientLight->_sourceImage)) return;
-		_ambientLight->SetEquirectangularSource(input);
+		_ambientLight->SetEquirectangularSource(loadingContext, input);
 		auto weakThis = weak_from_this();
 		::Assets::WhenAll(_ambientLight->_specularIBL, _ambientLight->_diffuseIBL, _ambientLight->_ambientRawCubemap).Then(
 			[weakThis](auto specularIBLFuture, auto diffuseIBLFuture, auto ambientRawCubemapFuture) {
@@ -483,7 +483,7 @@ namespace RenderCore { namespace LightingEngine
 				pipelineAccelerators, techDelBox, shadowDescSet);
 		}
 
-		auto lightTilerFuture = ::Assets::NewMarkerPtr<RasterizationLightTileOperator>(pipelinePool, tilerCfg);
+		auto lightTilerFuture = ::Assets::ConstructToMarkerPtr<RasterizationLightTileOperator>(pipelinePool, tilerCfg);
 		std::vector<LightSourceOperatorDesc> positionalLightOperators { positionalLightOperatorsInit.begin(), positionalLightOperatorsInit.end() };
 		std::vector<ShadowOperatorDesc> shadowOperatorsDesc { shadowGenerators.begin(), shadowGenerators.end() };
 

@@ -10,6 +10,8 @@
 #include "../../Utility/StringUtils.h"
 #include <cstdint>
 
+namespace Assets { class OperationContext; }
+
 namespace RenderCore { namespace LightingEngine
 {
 	class ILightScene
@@ -78,7 +80,7 @@ namespace RenderCore { namespace LightingEngine
 	class IDistantIBLSource
 	{
 	public:
-		virtual void SetEquirectangularSource(StringSection<> input) = 0;
+		virtual void SetEquirectangularSource(std::shared_ptr<::Assets::OperationContext>, StringSection<> input) = 0;
 		virtual ~IDistantIBLSource();
 	};
 

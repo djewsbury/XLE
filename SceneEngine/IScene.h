@@ -14,6 +14,7 @@ namespace RenderCore { namespace LightingEngine { class ILightScene; class Light
 namespace Assets { class DependencyValidation; }
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
+namespace Assets { class OperationContext; }
 
 namespace SceneEngine
 {
@@ -86,7 +87,7 @@ namespace SceneEngine
             const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc, 
             RenderCore::LightingEngine::ILightScene& lightScene) = 0;
         virtual void        PostRender(RenderCore::LightingEngine::ILightScene& lightScene) = 0;
-        virtual void        BindScene(RenderCore::LightingEngine::ILightScene& lightScene) = 0;
+        virtual void        BindScene(RenderCore::LightingEngine::ILightScene& lightScene, std::shared_ptr<::Assets::OperationContext> =nullptr) = 0;
         virtual void        UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) = 0;
         virtual std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> BeginPrepareStep(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext) = 0;
 

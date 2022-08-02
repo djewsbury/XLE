@@ -225,7 +225,7 @@ namespace ToolsRig
 					request2._format = Format::BC6H_UF16;
 					request2._faceDim = 1024;
 					request2._mipMapFilter = RenderCore::Assets::TextureCompilationRequest::MipMapFilter::FromSource;
-					auto ambientRawCubemap = ::Assets::NewMarkerPtr<Techniques::DeferredShaderResource>(request2);
+					auto ambientRawCubemap = ::Assets::ConstructToMarkerPtr<Techniques::DeferredShaderResource>(request2);
 
 					std::weak_ptr<RenderCore::LightingEngine::ScreenSpaceReflectionsOperator> weakOp = opStep;
 					::Assets::WhenAll(ambientRawCubemap).Then(

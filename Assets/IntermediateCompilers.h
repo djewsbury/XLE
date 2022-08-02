@@ -110,6 +110,7 @@ namespace Assets
 	public:
 		virtual std::shared_ptr<IArtifactCollection> GetExistingAsset(ArtifactTargetCode) const = 0;
 		virtual std::shared_ptr<ArtifactCollectionFuture> InvokeCompile() = 0;
+		virtual std::string GetCompilerDescription() const = 0;
 		virtual ~IIntermediateCompileMarker();
 	};
 }

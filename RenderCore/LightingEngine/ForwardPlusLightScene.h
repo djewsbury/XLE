@@ -54,7 +54,7 @@ namespace RenderCore { namespace LightingEngine
 		virtual void* TryGetShadowProjectionInterface(ShadowProjectionId projectionid, uint64_t interfaceTypeCode) override;
 
 		// IDistantIBLSource
-		virtual void SetEquirectangularSource(StringSection<> input) override;
+		virtual void SetEquirectangularSource(std::shared_ptr<::Assets::OperationContext>, StringSection<> input) override;
 
 		bool IsCompatible(
 			IteratorRange<const LightSourceOperatorDesc*> resolveOperators,

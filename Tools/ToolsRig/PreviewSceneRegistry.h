@@ -14,6 +14,7 @@
 
 namespace SceneEngine { class IScene; }
 namespace RenderCore { namespace Techniques { class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; }}
+namespace Assets { class OperationContext; }
 
 namespace ToolsRig
 {
@@ -32,7 +33,7 @@ namespace ToolsRig
 	class IConfigurablePlugin : public EntityInterface::IMutableEntityDocument
 	{
 	public:
-		virtual void ApplyConfiguration() = 0;
+		virtual void ApplyConfiguration(std::shared_ptr<::Assets::OperationContext> =nullptr) = 0;
 		virtual ~IConfigurablePlugin() = default;
 	};
 

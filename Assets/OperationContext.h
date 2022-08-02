@@ -58,16 +58,35 @@ namespace Assets
 	{
 	public:
 		using OperationId = uint32_t;
-		template<typename FutureObj>
-			OperationId Begin(std::shared_future<FutureObj>, StringSection<> desc = {});
-		OperationId Begin(StringSection<> description);
+		struct OperationHelper;
+		OperationHelper Begin(std::string description);
+		struct OperationHelper
+		{
+			template<typename FutureObj>
+				void EndWithFuture(std::shared_future<FutureObj>);
+			operator bool() const { return _context != nullptr; }
+			void SetMessage(std::string);
 
-		void Remove(OperationId);
+			OperationHelper();
+			~OperationHelper();
+			OperationHelper(OperationHelper&&);
+			OperationHelper& operator=(OperationHelper&&);
+		private:
+			OperationHelper(OperationId, OperationContext&);
+			OperationContext* _context = nullptr;
+			OperationId _opId = ~0u;
+			friend class OperationContext;
+		};
 
 		template<typename Service>
 			std::shared_ptr<Service> GetService();
 
 		std::vector<std::string> GetActiveOperations();
+
+		void End(OperationId);
+		template<typename FutureObj>
+			void EndWithFuture(OperationId, std::shared_future<FutureObj>);
+		void SetMessage(OperationId, std::string);
 
 		OperationContext();
 		~OperationContext();
@@ -81,8 +100,25 @@ namespace Assets
 		Internal::VariantFutureSet _futures;
 		Threading::Mutex _mutex;
 		uint64_t _guid = 0;
-		OperationId RegisterInternalAlreadyLocked(Internal::VariantFutureSet::Id futureId, StringSection<>);
+		void EndWithFutureAlreadyLocked(OperationId opId, Internal::VariantFutureSet::Id futureId);
 	};
+
+	template<typename FutureObj>
+		void OperationContext::OperationHelper::EndWithFuture(std::shared_future<FutureObj> future)
+	{
+		assert(_context);
+		_context->EndWithFuture(_opId, std::move(future));
+		// we now release our reference this to operation, because it's tracked alongside the future
+		_context = nullptr;
+		_opId = ~0u;
+	}
+
+	template<typename FutureObj>
+		void OperationContext::EndWithFuture(OperationId opId, std::shared_future<FutureObj> future)
+	{
+		ScopedLock(_mutex);
+		return EndWithFutureAlreadyLocked(opId, _futures.Add(future));
+	}
 
 	namespace Internal
 	{
@@ -118,13 +154,6 @@ namespace Assets
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-	template<typename FutureObj>
-		auto OperationContext::Begin(std::shared_future<FutureObj> future, StringSection<> desc) -> OperationId
-	{
-		ScopedLock(_mutex);
-		return RegisterInternalAlreadyLocked(_futures.Add(future), desc);
-	}
 
 }
 

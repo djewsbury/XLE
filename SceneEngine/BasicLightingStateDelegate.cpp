@@ -106,7 +106,7 @@ namespace SceneEngine
     public:
         void        PreRender(const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc, RenderCore::LightingEngine::ILightScene& lightScene) override;
         void        PostRender(RenderCore::LightingEngine::ILightScene& lightScene) override;
-        void        BindScene(RenderCore::LightingEngine::ILightScene& lightScene) override;
+        void        BindScene(RenderCore::LightingEngine::ILightScene& lightScene, std::shared_ptr<::Assets::OperationContext>) override;
         void        UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) override;
         auto        BeginPrepareStep(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext) -> std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> override;
 
@@ -213,7 +213,7 @@ namespace SceneEngine
         }
     }
 
-    void        BasicLightingStateDelegate::BindScene(RenderCore::LightingEngine::ILightScene& lightScene)
+    void        BasicLightingStateDelegate::BindScene(RenderCore::LightingEngine::ILightScene& lightScene, std::shared_ptr<::Assets::OperationContext> operationContext)
     {
         const ParameterBox::ParameterName SkyTexture = "SkyTexture";
 
@@ -241,7 +241,7 @@ namespace SceneEngine
 
                 auto* distanceIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IDistantIBLSource>(newLight);
                 if (distanceIBL) {
-                    distanceIBL->SetEquirectangularSource(light._parameters.GetParameterAsString(SkyTexture).value());
+                    distanceIBL->SetEquirectangularSource(operationContext, light._parameters.GetParameterAsString(SkyTexture).value());
                 }
                 continue;
             }

@@ -522,10 +522,10 @@ namespace UnitTests
 			MakeIteratorRange(outputTypes),
 			"unit-test-asset-.*");
 
-		// start a compile via NewMarkerPtr, and ensure that it gets propagated to the registered compiler and generates
+		// start a compile via ConstructToMarkerPtr, and ensure that it gets propagated to the registered compiler and generates
 		// the asset as expected
 		{
-			auto futureByPtr = ::Assets::NewMarkerPtr<TestChunkRequestsAssetWithCompileProcessType>("unit-test-asset-implicit");
+			auto futureByPtr = ::Assets::ConstructToMarkerPtr<TestChunkRequestsAssetWithCompileProcessType>("unit-test-asset-implicit");
 			futureByPtr->StallWhilePending();
 			auto actualPtr = futureByPtr->Actualize();
 			REQUIRE(actualPtr != nullptr);
@@ -562,7 +562,7 @@ namespace UnitTests
 			std::unique_lock<std::mutex> pauseLock { TestCompileOperation::s_pauseCompilationLock };
 
 			// begin a compile (it don't complete yet because of the pause lock)
-			auto futureByPtr = ::Assets::NewMarkerPtr<TestChunkRequestsAssetWithCompileProcessType>(opContext, "unit-test-asset-op-context");
+			auto futureByPtr = ::Assets::ConstructToMarkerPtr<TestChunkRequestsAssetWithCompileProcessType>(opContext, "unit-test-asset-op-context");
 			
 			// now that we have begun the compile, we should get an active operation in the operation context shortly. We don't know exactly
 			// when, because it's queued a background pool. But the compilation itself is paused, so it should appear eventually

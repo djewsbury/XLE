@@ -186,8 +186,10 @@ namespace Assets
 			auto pendingCompile = marker->InvokeCompile();
 			AutoConstructToPromiseFromPendingCompile(std::move(promise), *pendingCompile, targetCode);
 
-			if (operationContext)
-				operationContext->Begin(pendingCompile->ShareFuture(), initializerLabel);
+			if (operationContext) {
+				auto operation = operationContext->Begin(Concatenate("Compiling (", initializerLabel, ") with compiler (", marker->GetCompilerDescription(), ")"));
+				operation.EndWithFuture(pendingCompile->ShareFuture());
+			}
 		} CATCH(...) {
 			promise.set_exception(std::current_exception());
 		} CATCH_END
@@ -324,7 +326,7 @@ namespace Assets
 	}
 
 	template<typename AssetType, typename... Params>
-		std::shared_ptr<Marker<AssetType>> NewMarker(Params... initialisers)
+		std::shared_ptr<Marker<AssetType>> ConstructToMarker(Params... initialisers)
 	{
 		auto future = std::make_shared<Marker<AssetType>>(Internal::AsString(initialisers...));
 		AutoConstructToPromise(future->AdoptPromise(), std::forward<Params>(initialisers)...);
@@ -332,10 +334,28 @@ namespace Assets
 	}
 
 	template<typename AssetType, typename... Params>
-		std::shared_ptr<MarkerPtr<AssetType>> NewMarkerPtr(Params... initialisers)
+		std::shared_ptr<MarkerPtr<AssetType>> ConstructToMarkerPtr(Params... initialisers)
 	{
 		auto future = std::make_shared<MarkerPtr<AssetType>>(Internal::AsString(initialisers...));
 		AutoConstructToPromise(future->AdoptPromise(), std::forward<Params>(initialisers)...);
+		return future;
+	}
+
+	template<typename AssetType, typename... Params>
+		std::future<AssetType> ConstructToFuture(Params... initialisers)
+	{
+		std::promise<AssetType> promise;
+		auto future = promise.get_future();
+		AutoConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
+		return future;
+	}
+
+	template<typename AssetType, typename... Params>
+		std::future<std::shared_ptr<AssetType>> ConstructToFuturePtr(Params... initialisers)
+	{
+		std::promise<std::shared_ptr<AssetType>> promise;
+		auto future = promise.get_future();
+		AutoConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
 		return future;
 	}
 }

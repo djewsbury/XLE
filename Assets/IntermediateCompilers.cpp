@@ -110,6 +110,7 @@ namespace Assets
 		using IdentifiersList = IteratorRange<const StringSection<>*>;
         std::shared_ptr<IArtifactCollection> GetExistingAsset(CompileRequestCode) const override;
         std::shared_ptr<ArtifactCollectionFuture> InvokeCompile() override;
+		std::string GetCompilerDescription() const override;
 		RegisteredCompilerId GetRegisteredCompilerId() { return _registeredCompilerId; }
 		void StallForActiveFuture();
 
@@ -272,6 +273,12 @@ namespace Assets
 			Throw(Exceptions::ConstructionError(Exceptions::ConstructionError::Reason::Unknown, depVal, "%s", "unknown exception"));
 		} CATCH_END
     }
+
+	std::string IntermediateCompilers::Marker::GetCompilerDescription() const
+	{
+		if (auto d = _delegate.lock()) return d->_name;
+		return {};
+	}
 
 	static void QueueCompileOperation(
 		const std::shared_ptr<::Assets::ArtifactCollectionFuture>& future,

@@ -166,7 +166,7 @@ namespace UnitTests
 			const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc, 
 			RenderCore::LightingEngine::ILightScene& lightScene) override {}
 		void PostRender(RenderCore::LightingEngine::ILightScene& lightScene) override {}
-		void BindScene(RenderCore::LightingEngine::ILightScene& lightScene) override 
+		void BindScene(std::shared_ptr<::Assets::OperationContext>, RenderCore::LightingEngine::ILightScene& lightScene) override 
 		{
 			REQUIRE(_lightSourcesId.empty()); REQUIRE(!_shadowProjectionId);
 			_lightSourcesId.emplace_back(lightScene.CreateLightSource(0));
