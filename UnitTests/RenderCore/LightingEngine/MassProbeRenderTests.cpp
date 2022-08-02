@@ -306,21 +306,21 @@ namespace UnitTests
 		class TechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 		{
 		public:
-			virtual ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
+			virtual FutureGraphicsPipelineDesc GetPipelineDesc(
 				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 				const RenderCore::Assets::RenderStateSet& renderStates)
 			{
 				using namespace RenderCore;
-				auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
-				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
+				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteCloserThan;
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/simple.hlsl:vs_main";
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/simple.hlsl:ps_main";
 				nascentDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
-				result->SetAsset(std::move(nascentDesc));
-				return result;
+				std::promise<std::shared_ptr<Techniques::GraphicsPipelineDesc>> promise;
+				promise.set_value(std::move(nascentDesc));
+				return promise.get_future();
 			}
 
 			virtual std::string GetPipelineLayout()
@@ -412,13 +412,12 @@ namespace UnitTests
 		class TechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 		{
 		public:
-			virtual ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
+			virtual FutureGraphicsPipelineDesc GetPipelineDesc(
 				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 				const RenderCore::Assets::RenderStateSet& renderStates)
 			{
 				using namespace RenderCore;
-				auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
-				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
+				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteCloserThan;
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/amplifying_geo_shader.hlsl:vs_main";
@@ -427,8 +426,9 @@ namespace UnitTests
 				nascentDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 				nascentDesc->_manualSelectorFiltering._setValues.SetParameter("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
-				result->SetAsset(std::move(nascentDesc));
-				return result;
+				std::promise<std::shared_ptr<Techniques::GraphicsPipelineDesc>> promise;
+				promise.set_value(std::move(nascentDesc));
+				return promise.get_future();
 			}
 
 			virtual std::string GetPipelineLayout()
@@ -528,13 +528,12 @@ namespace UnitTests
 		class TechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 		{
 		public:
-			virtual ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
+			virtual FutureGraphicsPipelineDesc GetPipelineDesc(
 				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 				const RenderCore::Assets::RenderStateSet& renderStates)
 			{
 				using namespace RenderCore;
-				auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
-				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
+				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteCloserThan;
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/instancing_multiprobe_shader.hlsl:vs_main";
@@ -542,8 +541,9 @@ namespace UnitTests
 				nascentDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 				nascentDesc->_manualSelectorFiltering._setValues.SetParameter("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
-				result->SetAsset(std::move(nascentDesc));
-				return result;
+				std::promise<std::shared_ptr<Techniques::GraphicsPipelineDesc>> promise;
+				promise.set_value(std::move(nascentDesc));
+				return promise.get_future();
 			}
 
 			virtual std::string GetPipelineLayout()
@@ -729,21 +729,21 @@ namespace UnitTests
 		class TechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 		{
 		public:
-			virtual ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
+			virtual FutureGraphicsPipelineDesc GetPipelineDesc(
 				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 				const RenderCore::Assets::RenderStateSet& renderStates)
 			{
 				using namespace RenderCore;
-				auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
-				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
+				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteCloserThan;
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/multiview_shader.hlsl:vs_main:vs_6_1";
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/multiview_shader.hlsl:ps_main:ps_6_1";
 				nascentDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
-				result->SetAsset(std::move(nascentDesc));
-				return result;
+				std::promise<std::shared_ptr<Techniques::GraphicsPipelineDesc>> promise;
+				promise.set_value(std::move(nascentDesc));
+				return promise.get_future();
 			}
 
 			virtual std::string GetPipelineLayout()

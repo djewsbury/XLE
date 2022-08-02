@@ -407,13 +407,13 @@ namespace UnitTests
 		};
 		auto utdatamnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 
-		auto futureAsset = ::Assets::MakeAsset<ExampleAsset>("ut-data/file.dat");
+		auto futureAsset = ::Assets::MakeAssetMarker<ExampleAsset>("ut-data/file.dat");
 		futureAsset->StallWhilePending();
 		auto& actualAsset = futureAsset->Actualize();
 		REQUIRE(actualAsset._contents == fileContents);
 
 		// Expecting a failure for this one -- we should get InvalidAsset with something useful in the actualization log 
-		auto failedAsset = ::Assets::MakeAsset<ExampleAsset>("ut-data/no-file.data");
+		auto failedAsset = ::Assets::MakeAssetMarker<ExampleAsset>("ut-data/no-file.data");
 		failedAsset->StallWhilePending();
 		REQUIRE(failedAsset->GetAssetState() == ::Assets::AssetState::Invalid);
 		auto log = ::Assets::AsString(failedAsset->GetActualizationLog());

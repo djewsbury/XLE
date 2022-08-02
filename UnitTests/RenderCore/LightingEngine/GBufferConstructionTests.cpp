@@ -82,12 +82,12 @@ namespace UnitTests
 	class WriteWorldCoordsDelegate : public RenderCore::Techniques::ITechniqueDelegate
 	{
 	public:
-		virtual ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
+		FutureGraphicsPipelineDesc GetPipelineDesc(
 			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
 			using namespace RenderCore;
-			auto pipelineDesc = std::make_shared<GraphicsPipelineDesc>();
+			auto pipelineDesc = std::make_shared<RenderCore::Techniques::GraphicsPipelineDesc>();
 			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = NO_PATCHES_VERTEX_HLSL ":main";
 			pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/write_world_coords.pixel.hlsl:frameworkEntry";
 			pipelineDesc->_manualSelectorFiltering._setValues.SetParameter("VSOUT_HAS_WORLD_POSITION", 1);
@@ -97,9 +97,9 @@ namespace UnitTests
 			pipelineDesc->_rasterization = Techniques::CommonResourceBox::s_rsDefault;
 			pipelineDesc->_depthStencil = Techniques::CommonResourceBox::s_dsDisable;
 
-			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>();
-			result->SetAsset(std::move(pipelineDesc));
-			return result;
+			std::promise<std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc>> promise;
+			promise.set_value(std::move(pipelineDesc));
+			return promise.get_future();
 		}
 
 		virtual std::string GetPipelineLayout() override { return MAIN_PIPELINE ":GraphicsMain"; }

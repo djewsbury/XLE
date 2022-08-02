@@ -243,7 +243,7 @@ namespace UnitTests
 			REQUIRE(!discoveredCompilations.empty());
 
 			const char* testModelFile = "xleres/DefaultResources/materialsphere.dae";
-			auto scaffoldFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::ModelScaffold>(testModelFile);
+			auto scaffoldFuture = ::Assets::MakeAssetMarkerPtr<RenderCore::Assets::ModelScaffold>(testModelFile);
 			scaffoldFuture->StallWhilePending();
 			INFO(::Assets::AsString(scaffoldFuture->GetActualizationLog()));
 			REQUIRE(scaffoldFuture->GetAssetState() == ::Assets::AssetState::Ready);
@@ -252,7 +252,7 @@ namespace UnitTests
 			REQUIRE(scaffold->GetGeoCount() != 0);
 			REQUIRE(!scaffold->CommandStream().empty());
 
-			auto matScaffoldFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::MaterialScaffold>(testModelFile, testModelFile);
+			auto matScaffoldFuture = ::Assets::MakeAssetMarkerPtr<RenderCore::Assets::MaterialScaffold>(testModelFile, testModelFile);
 			matScaffoldFuture->StallWhilePending();
 			INFO(::Assets::AsString(matScaffoldFuture->GetActualizationLog()));
 			REQUIRE(matScaffoldFuture->GetAssetState() == ::Assets::AssetState::Ready);

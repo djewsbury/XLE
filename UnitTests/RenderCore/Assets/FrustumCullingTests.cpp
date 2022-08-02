@@ -64,12 +64,12 @@ namespace UnitTests
 	class SimpleTechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 	{
 	public:
-		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
+		FutureGraphicsPipelineDesc GetPipelineDesc(
 			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
 			using namespace RenderCore;
-			auto templateDesc = std::make_shared<GraphicsPipelineDesc>();
+			auto templateDesc = std::make_shared<RenderCore::Techniques::GraphicsPipelineDesc>();
 			templateDesc->_shaders[(unsigned)ShaderStage::Vertex] = NO_PATCHES_VERTEX_HLSL ":main:vs_*";
 			templateDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/local.pixel.hlsl:main:ps_*";
 			templateDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Config/Preconfiguration.hlsl";
@@ -79,9 +79,9 @@ namespace UnitTests
 			templateDesc->_blend.push_back(Techniques::CommonResourceBox::s_abStraightAlpha);
 			templateDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWrite;
 
-			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("unit-test-delegate");
-			result->SetAsset(std::move(templateDesc));
-			return result;
+			std::promise<std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc>> promise;
+			promise.set_value(std::move(templateDesc));
+			return promise.get_future();
 		}
 
 		std::string GetPipelineLayout() override

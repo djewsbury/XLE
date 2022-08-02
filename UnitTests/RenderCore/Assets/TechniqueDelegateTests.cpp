@@ -304,7 +304,7 @@ namespace UnitTests
 	class UnitTestTechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 	{
 	public:
-		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
+		FutureGraphicsPipelineDesc GetPipelineDesc(
 			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& input) override
 		{
@@ -321,7 +321,7 @@ namespace UnitTests
 				shaderPatches.GetPatches().begin(), shaderPatches.GetPatches().end(),
 				[deformPositionPatchName](const auto& c) { return c._implementsHash == deformPositionPatchName; }) != shaderPatches.GetPatches().end();
 
-			auto desc = std::make_shared<GraphicsPipelineDesc>();
+			auto desc = std::make_shared<RenderCore::Techniques::GraphicsPipelineDesc>();
 			if (hasDeformPosition) {
 				desc->_shaders[(unsigned)RenderCore::ShaderStage::Vertex] = "ut-data/framework-entry.vertex.hlsl:frameworkEntryWithDeform";
 			} else
@@ -335,9 +335,9 @@ namespace UnitTests
 			if (hasDeformPosition)
 				desc->_patchExpansions.emplace_back(deformPositionPatchName, RenderCore::ShaderStage::Vertex);
 
-			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("pipeline-for-unit-test");
-			result->SetAsset(std::move(desc));
-			return result;
+			std::promise<std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc>> promise;
+			promise.set_value(std::move(desc));
+			return promise.get_future();
 		}
 
 		std::string GetPipelineLayout() override
@@ -478,18 +478,11 @@ namespace UnitTests
 					RenderCore::Techniques::CommonResourceBox::s_dsReadWrite);
 
 				RenderCore::Assets::RenderStateSet stateSet;
-				auto pipelineDescFuture = delegate->GetPipelineDesc(
+				auto pipelineDesc = delegate->GetPipelineDesc(
 					compiledPatchCollection->GetInterface(),
-					stateSet);
-				pipelineDescFuture->StallWhilePending();
-				auto* pipelineDesc = pipelineDescFuture->TryActualize();
-				if (!pipelineDesc) {
-					auto log = ::Assets::AsString(pipelineDescFuture->GetActualizationLog());
-					std::cout << "Failed to get pipeline from technique delegate; with exception message: " << std::endl << log << std::endl;
-				}
+					stateSet).get();
 				REQUIRE(pipelineDesc);
-				REQUIRE(*pipelineDesc);
-				REQUIRE(!(*pipelineDesc)->_shaders[0].empty());
+				REQUIRE(!pipelineDesc->_shaders[0].empty());
 			}
 		}
 

@@ -273,7 +273,7 @@ namespace UnitTests
 				ParameterBox {},
 				fbHelper.GetDesc());
 
-			auto renderer = ::Assets::MakeAssetPtr<Techniques::SimpleModelRenderer>(
+			auto renderer = ::Assets::MakeAssetMarkerPtr<Techniques::SimpleModelRenderer>(
 				techniqueTestApparatus._drawablesPool,
 				pipelineAcceleratorPool,
 				"xleres/DefaultResources/materialsphere.dae",

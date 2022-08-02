@@ -154,14 +154,13 @@ namespace UnitTests
 		// Try drawing with a texture and a little bit of material information
 		{
 			auto tex = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>("xleres/DefaultResources/waternoise.png");
-			tex->StallWhilePending();
-			bufferUploads->StallUntilCompletion(*threadContext, tex->Actualize()->GetCompletionCommandList());
+			bufferUploads->StallUntilCompletion(*threadContext, tex.get()->GetCompletionCommandList());
 
 			Techniques::ImmediateDrawableMaterial material;
 			RenderCore::UniformsStreamInterface inputTextureUSI;
 			inputTextureUSI.BindResourceView(0, Hash64("InputTexture"));
 			material._uniformStreamInterface = &inputTextureUSI;
-			material._uniforms._resourceViews.push_back(tex->Actualize()->GetShaderResource());
+			material._uniforms._resourceViews.push_back(tex.get()->GetShaderResource());
 			auto data = immediateDrawables->QueueDraw(
 				sphereGeo.size(),
 				ToolsRig::Vertex3D_MiniInputLayout,
