@@ -81,6 +81,7 @@ namespace RenderCore { namespace Techniques
 		static const auto BONEWEIGHTS = Utility::Hash64("BONEWEIGHTS");
 		static const auto PER_VERTEX_AO = Utility::Hash64("PER_VERTEX_AO");
         static const auto RADIUS = Utility::Hash64("RADIUS");
+        static const auto FONTTABLE = Utility::Hash64("FONTTABLE");
 
         std::pair<const char*, unsigned> TryDehash(uint64_t);
     }

@@ -198,6 +198,7 @@ namespace RenderCore { namespace Techniques
             else if ((hashValue - BONEWEIGHTS) < 16) return std::make_pair("BONEWEIGHTS", unsigned(hashValue - BONEWEIGHTS));
             else if ((hashValue - PER_VERTEX_AO) < 16) return std::make_pair("PER_VERTEX_AO", unsigned(hashValue - PER_VERTEX_AO));
             else if ((hashValue - RADIUS) < 16) return std::make_pair("RADIUS", unsigned(hashValue - RADIUS));
+            else if ((hashValue - FONTTABLE) < 16) return std::make_pair("FONTTABLE", unsigned(hashValue - FONTTABLE));
             else return std::make_pair(nullptr, ~0u);
         }
     }

@@ -77,14 +77,35 @@ namespace UnitTests
 				parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables,
 				testHelper.GetImmediateDrawingApparatus()->_fontRenderingManager.get());
 
+			Int2 viewport {parserContext.GetViewport()._width, parserContext.GetViewport()._height};
+			RenderOverlays::DebuggingDisplay::Layout layout{Rect{Coord2{0, 0}, Coord2{viewport[0], viewport[1]}}};
+
 			// draw....
-			{
-				Int2 viewport {parserContext.GetViewport()._width, parserContext.GetViewport()._height};
-				RenderOverlays::DebuggingDisplay::Layout layout{Rect{Coord2{0, 0}, Coord2{viewport[0], viewport[1]}}};
+			if (_mode == Mode::ShowFontTexture) {
 				RenderOverlays::DebuggingDisplay::Interactables interactables;
 				RenderOverlays::DebuggingDisplay::InterfaceState interfaceState;
 				_display->Render(*overlayContext, layout, interactables, interfaceState);
+			} else if (_mode == Mode::ScrollInfiniteText) {
+				// stress out the system by continuously rendering full screens of random text with different fonts
+				for (;;) {
+					auto& font = _fonts[std::uniform_int_distribution<>(0, _fonts.size()-1)(_rng)];
+					auto fontProps = font->GetFontProperties();
+					auto rect = layout.AllocateFullWidth(fontProps._lineHeight);
+					if (rect.Height() <= 0) break;
+					const auto chrCount = 64;
+					ucs4 chrs[chrCount];
+					for (auto& c:chrs) c = std::uniform_int_distribution<>(33, 126)(_rng);
+					DrawTextFlags::BitField flags = 0;
+					RenderOverlays:Draw(
+						parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables,
+						*_renderingManager, *font, flags,
+						rect._topLeft[0], rect._topLeft[1] + fontProps._ascender, rect._bottomRight[0], rect._bottomRight[1],
+						MakeStringSection(chrs, &chrs[chrCount]),
+						1.0f, 1.0f, ColorB::White);
+				}
 			}
+
+			_renderingManager->AddUploadBarrier(parserContext.GetThreadContext());
 
 			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
 			testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
@@ -94,14 +115,18 @@ namespace UnitTests
 		{
 			if (_pause) return;
 			
-			const unsigned glyphsPerFrame = 8;
-			for (unsigned c=0; c<glyphsPerFrame; ++c) {
-				auto font = std::uniform_int_distribution<>(0, _fonts.size()-1)(_rng);
-				auto chr = std::uniform_int_distribution<>(33, 126)(_rng);		// main displayable ascii characters [33-126]
-				auto& bitmap = _renderingManager->GetBitmap(threadContext, *_fonts[font], chr);
-				REQUIRE(bitmap._tcBottomRight[0] != bitmap._tcTopLeft[0]);
-				// if (bitmap._tcBottomRight[0] == bitmap._tcTopLeft[0])
-					// std::cout << "Failed allocation" << std::endl;
+			if (_mode == Mode::ShowFontTexture) {
+				const unsigned glyphsPerFrame = 8;
+				for (unsigned c=0; c<glyphsPerFrame; ++c) {
+					auto font = std::uniform_int_distribution<>(0, _fonts.size()-1)(_rng);
+					auto chr = std::uniform_int_distribution<>(33, 126)(_rng);		// main displayable ascii characters [33-126]
+					auto& bitmap = _renderingManager->GetBitmap(threadContext, *_fonts[font], chr);
+
+					// REQUIRE(bitmap._tcBottomRight[0] != bitmap._tcTopLeft[0]);
+
+					// if (bitmap._tcBottomRight[0] == bitmap._tcTopLeft[0])
+						// std::cout << "Failed allocation" << std::endl;
+				}
 			}
 			_renderingManager->OnFrameBarrier();
 		}
@@ -162,6 +187,9 @@ namespace UnitTests
 		std::vector<std::shared_ptr<RenderOverlays::Font>> _fonts;
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _renderingManager;
 		std::shared_ptr<FontRenderingManagerDisplay> _display;
+
+		enum class Mode { ShowFontTexture, ScrollInfiniteText };
+		Mode _mode = Mode::ScrollInfiniteText;
 	};
 
 	TEST_CASE( "FontThrashTest", "[renderoverlays]" )

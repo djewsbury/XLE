@@ -67,7 +67,7 @@ namespace RenderOverlays
 			// Float2 _tcBottomRight = Float2{0.f, 0.f};
 			unsigned _lsbDelta = 0, _rsbDelta = 0;
 			unsigned _lastAccessFrame = 0;
-			uint16_t _encodingOffset = 0;
+			uint32_t _encodingOffset = 0;
 		};
 
 		const Bitmap& GetBitmap(
@@ -75,9 +75,16 @@ namespace RenderOverlays
 			const Font& font,
 			ucs4 ch);
 
+		bool GetBitmaps(
+			const Bitmap* bitmaps[],
+			RenderCore::IThreadContext& threadContext,
+			const Font& font,
+			IteratorRange<const ucs4*> chrs);
+
 		const FontTexture2D& GetFontTexture();
 		UInt2 GetTextureDimensions();
 		void OnFrameBarrier();
+		void AddUploadBarrier(RenderCore::IThreadContext& threadContext);
 
 		const std::shared_ptr<RenderCore::IResource>& GetUnderlyingTextureResource();		// intended for the debugging display
 	
@@ -97,8 +104,15 @@ namespace RenderOverlays
 			ucs4 ch,
 			std::vector<std::pair<uint64_t, Bitmap>>::iterator insertPoint,
 			uint64_t code, bool alreadyAttemptedFree);
+		bool InitializeNewGlyphs(
+			RenderCore::IThreadContext& threadContext,
+			const Font& font,
+			IteratorRange<const ucs4*> chrs, bool alreadyAttemptedFree);
 		void FreeUpHeapSpace(UInt2 requestedSpace);
 		void SynchronousDefrag(RenderCore::IThreadContext&);
+
+		void FreeUpHeapSpace_Linear(size_t requestedSpace);
+		void SynchronousDefrag_Linear(RenderCore::IThreadContext&);
 	};
 
 	inline auto FontRenderingManager::GetBitmap(

@@ -22,6 +22,7 @@ float4 frameworkEntry(VSOUT vsout) : SV_Target0
 	float4 result = 1.0.rrrr;
 
 	#if VSOUT_HAS_FONTTABLE && defined(FONT_RENDERER)
+		// we could do morton order style swizzling here -- but I'm not sure how useful it would be, given the src should be fairly small...? Might be better off just try to compress the src as much as possible
 		uint2 xy = uint2(vsout.fontTable.y * vsout.texCoord.x, vsout.fontTable.z * vsout.texCoord.y);
 		uint idx = vsout.fontTable.x + (xy.y * vsout.fontTable.y + xy.x);
 		result.a *= FontResource[idx].r;

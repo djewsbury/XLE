@@ -248,17 +248,6 @@ namespace RenderOverlays
 		using namespace RenderCore;
 		if (text.IsEmpty()) return {0.f, 0.f};
 
-		int prevGlyph = 0;
-		float xScale = scale;
-		float yScale = scale;
-
-		float xAtLineStart = x, yAtLineStart = y;
-
-		if (flags & DrawTextFlags::Snap) {
-			x = xScale * (int)(0.5f + x / xScale);
-			y = yScale * (int)(0.5f + y / yScale);
-		}
-
 		auto* res = textureMan.GetFontTexture().GetUnderlying().get();
 			
 		auto texDims = textureMan.GetTextureDimensions();
@@ -274,65 +263,129 @@ namespace RenderOverlays
 		ColorB colorOverride = 0x0;
 		unsigned prev_rsb_delta = 0;
 
-		while (!text.IsEmpty()) {
-			auto ch = GetNext(text);
+		struct Instance
+		{
+			ucs4 _chr;
+			Float2 _xy;
+			ColorB _color;
+			unsigned _lineIdx = 0;
+			unsigned _glyphIdx = ~0u;
+		};
+		Instance instances[text.size()];
+		unsigned instanceCount = 0;
 
-			// \n, \r\n, \r all considered new lines
-			if (ch == '\n' || ch == '\r') {
-				if (ch == '\r' && text._start!=text.end() && *text._start=='\n') ++text._start;
-				x = xAtLineStart;
-				prevGlyph = 0;
-				y = yAtLineStart = yAtLineStart + yScale * font.GetFontProperties()._lineHeight;
-				if (flags & DrawTextFlags::Snap) {
-					x = xScale * (int)(0.5f + x / xScale);
-					y = yScale * (int)(0.5f + y / yScale);
-				}
-				continue;
+		float xScale = scale;
+		float yScale = scale;
+		{
+			int prevGlyph = 0;
+			float xAtLineStart = x, yAtLineStart = y;
+			unsigned lineIdx = 0;
+
+			if (flags & DrawTextFlags::Snap) {
+				x = xScale * (int)(0.5f + x / xScale);
+				y = yScale * (int)(0.5f + y / yScale);
 			}
+			while (!text.IsEmpty()) {
+				auto ch = GetNext(text);
 
-			if (__builtin_expect(ch == '{', false)) {
-				if (text.size() > 6 && XlEqStringI({text.begin(), text.begin()+6}, DrawingTags<CharType>::s_changeColor)) {
-					unsigned newColorOverride = 0;
-					unsigned parseLength = ParseColorValue(text._start+6, &newColorOverride);
-					if (parseLength) {
-						colorOverride = newColorOverride;
-						text._start += 6 + parseLength;
-						while (text._start!=text.end() && *text._start != '}') ++text._start;
-						if (text._start!=text.end()) ++text._start;
-						continue;
+				// \n, \r\n, \r all considered new lines
+				if (ch == '\n' || ch == '\r') {
+					if (ch == '\r' && text._start!=text.end() && *text._start=='\n') ++text._start;
+					x = xAtLineStart;
+					prevGlyph = 0;
+					y = yAtLineStart = yAtLineStart + yScale * font.GetFontProperties()._lineHeight;
+					if (flags & DrawTextFlags::Snap) {
+						x = xScale * (int)(0.5f + x / xScale);
+						y = yScale * (int)(0.5f + y / yScale);
+					}
+					++lineIdx;
+					continue;
+				}
+
+				if (__builtin_expect(ch == '{', false)) {
+					if (text.size() > 6 && XlEqStringI({text.begin(), text.begin()+6}, DrawingTags<CharType>::s_changeColor)) {
+						unsigned newColorOverride = 0;
+						unsigned parseLength = ParseColorValue(text._start+6, &newColorOverride);
+						if (parseLength) {
+							colorOverride = newColorOverride;
+							text._start += 6 + parseLength;
+							while (text._start!=text.end() && *text._start != '}') ++text._start;
+							if (text._start!=text.end()) ++text._start;
+							continue;
+						}
 					}
 				}
+
+				int curGlyph;
+				Float2 v = font.GetKerning(prevGlyph, ch, &curGlyph);
+				x += xScale * v[0];
+				y += yScale * v[1];
+				prevGlyph = curGlyph;
+
+				instances[instanceCount++] = { ch, Float2{x, y}, colorOverride.a?colorOverride:color, lineIdx };
 			}
+		}
 
-			int curGlyph;
-			Float2 v = font.GetKerning(prevGlyph, ch, &curGlyph);
-			x += xScale * v[0];
-			y += yScale * v[1];
-			prevGlyph = curGlyph;
+		if (!instanceCount) return {x, y};
 
-			auto bitmap = textureMan.GetBitmap(threadContext, font, ch);
+		Instance* sortedInstances[instanceCount];
+		for (unsigned c=0; c<instanceCount; ++c) sortedInstances[c] = &instances[c];
+		std::sort(sortedInstances, &sortedInstances[instanceCount], [](auto* lhs, auto* rhs) { return lhs->_chr < rhs->_chr; });
 
-			/*
-			The freetype library suggests 2 different ways to use the lsb & rsb delta values. This method is
-			sounds like it is intended when for maintaining pixel alignment is needed
-			if (prev_rsb_delta - bitmap._lsbDelta > 32)
-				x -= 1.0f;
-			else if (prev_rsb_delta - bitmap._lsbDelta < -31)
-				x += 1.0f;
-			prev_rsb_delta = bitmap._rsbDelta;
-			*/
+		ucs4 chrsToLookup[instanceCount];
+		unsigned chrsToLookupCount = 0;
+		ucs4 lastChar = ~ucs4(0);
+		for (auto* i:sortedInstances) {
+			if (i->_chr != lastChar)
+				chrsToLookup[chrsToLookupCount++] = lastChar = i->_chr;		// get unique chars
+			i->_glyphIdx = chrsToLookupCount-1;
+		}
 
-			float thisX = x;
-			x += bitmap._xAdvance * xScale;
-			x += float(bitmap._lsbDelta - bitmap._rsbDelta) / 64.f;
-			if (flags & DrawTextFlags::Outline) {
-				x += 2 * xScale;
+		assert(chrsToLookupCount);
+		const FontRenderingManager::Bitmap* bitmaps[chrsToLookupCount];
+		bool queryResult = textureMan.GetBitmaps(bitmaps, threadContext, font, MakeIteratorRange(chrsToLookup, &chrsToLookup[chrsToLookupCount]));
+		if (!queryResult)
+			return {0.f, 0.f};
+
+		// update the x values for each instance, now we know the set of bitmaps
+		float xIterator = 0;
+		{
+			unsigned lineIdx = 0;
+			for (auto& inst:MakeIteratorRange(instances, &instances[instanceCount])) {
+				auto& bitmap = *bitmaps[inst._glyphIdx];
+
+				/*
+				The freetype library suggests 2 different ways to use the lsb & rsb delta values. This method is
+				sounds like it is intended when for maintaining pixel alignment is needed
+				if (prev_rsb_delta - bitmap._lsbDelta > 32)
+					x -= 1.0f;
+				else if (prev_rsb_delta - bitmap._lsbDelta < -31)
+					x += 1.0f;
+				prev_rsb_delta = bitmap._rsbDelta;
+				*/
+
+				if (inst._lineIdx != lineIdx) {
+					lineIdx = inst._lineIdx;
+					xIterator = 0;		// reset because we just had a line break
+				}
+
+				inst._xy[0] += xIterator;
+
+				xIterator += bitmap._xAdvance * xScale;
+				xIterator += float(bitmap._lsbDelta - bitmap._rsbDelta) / 64.f;
+				if (flags & DrawTextFlags::Outline) {
+					xIterator += 2 * xScale;
+				}
 			}
-			
+		}
+
+		for (auto* inst:MakeIteratorRange(sortedInstances, &sortedInstances[instanceCount])) {
+
+			auto& bitmap = *bitmaps[inst->_glyphIdx];
 			if (!bitmap._width || !bitmap._height) continue;
 
-			float baseX = thisX + bitmap._bitmapOffsetX * xScale;
-			float baseY = y + bitmap._bitmapOffsetY * yScale;
+			float baseX = inst->_xy[0] + bitmap._bitmapOffsetX * xScale;
+			float baseY = inst->_xy[1] + bitmap._bitmapOffsetY * yScale;
 			if (flags & DrawTextFlags::Snap) {
 				baseX = xScale * (int)(0.5f + baseX / xScale);
 				baseY = yScale * (int)(0.5f + baseY / yScale);
@@ -414,13 +467,13 @@ namespace RenderOverlays
 				}
 #endif
 
-				workingVertices.PushQuad(pos, colorOverride.a?colorOverride:color, bitmap._encodingOffset, bitmap._width, bitmap._height, depth);
+				workingVertices.PushQuad(pos, inst->_color, bitmap._encodingOffset, bitmap._width, bitmap._height, depth);
 			}
 		}
 
 		if (began)
 			workingVertices.Complete();
-		return { x, y };		// y is at the baseline here
+		return { x + xIterator, y };		// y is at the baseline here
 	}
 
 	Float2		Draw(   RenderCore::IThreadContext& threadContext,
@@ -632,7 +685,7 @@ namespace RenderOverlays
 		{
 			Rect _spaceInTexture;
 			// RectanglePacker_MaxRects _packer;
-			SimpleSpanningHeap _spanningHeap;
+			SpanningHeap<unsigned> _spanningHeap;
 			int _texelsAllocated = 0;
 		};
 		std::vector<Page> _activePages;
@@ -669,7 +722,7 @@ namespace RenderOverlays
 				for (unsigned p=0; p<pageCount; ++p) {
 					Page newPage;
 					newPage._spaceInTexture = {Coord2{p*pageWidth*pageHeight, 0}, Coord2{(p+1)*pageWidth*pageHeight, 1u}};
-					newPage._spanningHeap = SimpleSpanningHeap { pageWidth*pageHeight };
+					newPage._spanningHeap = SpanningHeap<unsigned> { pageWidth*pageHeight };
 					newPage._texelsAllocated = 0;
 					if (p==(pageCount-1)) {
 						_reservedPage = std::move(newPage);
@@ -682,8 +735,9 @@ namespace RenderOverlays
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	FontRenderingManager::FontRenderingManager(RenderCore::IDevice& device) { _pimpl = std::make_unique<Pimpl>(device, 128, 256, 16); }
+	// FontRenderingManager::FontRenderingManager(RenderCore::IDevice& device) { _pimpl = std::make_unique<Pimpl>(device, 128, 256, 16); }
 	// FontRenderingManager::FontRenderingManager(RenderCore::IDevice& device) { _pimpl = std::make_unique<Pimpl>(device, 64, 128, 16); }
+	FontRenderingManager::FontRenderingManager(RenderCore::IDevice& device) { _pimpl = std::make_unique<Pimpl>(device, 128, 256, 12); }
 	FontRenderingManager::~FontRenderingManager() {}
 
 	FontTexture2D::FontTexture2D(
@@ -731,12 +785,6 @@ namespace RenderOverlays
 		auto* res = _resource.get();
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(threadContext), {&res, &res+1});
 		auto blitEncoder = metalContext.BeginBlitEncoder();
-		/*blitEncoder.Write(
-			CopyPartial_Dest { *_resource, {}, VectorPattern<unsigned, 3>{ offset, 0u, 0u } },
-			SubResourceInitData { data },
-			_format,
-			VectorPattern<unsigned, 3>{ unsigned(data.size()), 1u, 1u },
-			TexturePitches { (unsigned)data.size(), (unsigned)data.size() });*/
 		blitEncoder.Write(CopyPartial_Dest { *_resource, offset }, data);
 	}
 
@@ -886,6 +934,78 @@ namespace RenderOverlays
 		auto i = _glyphs.insert(insertPoint, std::make_pair(code, result));
 		return i->second;
 #endif
+	}
+
+	bool FontRenderingManager::InitializeNewGlyphs(
+		RenderCore::IThreadContext& threadContext,
+		const Font& font,
+		IteratorRange<const ucs4*> chrs, bool alreadyAttemptedFree)
+	{
+		assert(!chrs.empty());
+
+		// Initialize multiple new glyphs at once. We'll allocate all of the space for the new glyphs in one go
+		// only works with linear buffer resources
+
+		RenderOverlays::Font::Bitmap bitmaps[chrs.size()];
+		std::vector<uint8_t> storageBuffer;
+		storageBuffer.reserve(32*1024);
+		unsigned cnt=0;
+		for (auto chr:chrs) {
+			bitmaps[cnt] = font.GetBitmap(chr);
+			auto start = storageBuffer.size();
+			storageBuffer.insert(storageBuffer.end(), (const uint8_t*)bitmaps[cnt]._data.begin(), (const uint8_t*)bitmaps[cnt]._data.end());
+			bitmaps[cnt]._data = MakeIteratorRange((const void*)start, (const void*)(start+bitmaps[cnt]._data.size()));
+			++cnt;
+		}
+
+		unsigned bestPage = ~0u;
+		unsigned allocationSize = storageBuffer.size(), bestFreeBlock = ~0u;
+		for (unsigned c=0; c<_pimpl->_activePages.size(); ++c) {
+			auto largestBlock = _pimpl->_activePages[c]._spanningHeap.CalculateLargestFreeBlock();
+			if (largestBlock >= allocationSize && largestBlock < bestFreeBlock) {
+				bestPage = c;
+				bestFreeBlock = largestBlock;
+			}
+		}
+
+		if (bestPage == ~0u) {
+			// could not fit it in -- we need to release some space and try to do a defrag
+			if (alreadyAttemptedFree)
+				return false;		// maybe too big to fit on a page?
+			FreeUpHeapSpace_Linear(storageBuffer.size());
+			SynchronousDefrag_Linear(threadContext);
+			return InitializeNewGlyphs(threadContext, font, chrs, true);
+		}
+
+		auto allocation = _pimpl->_activePages[bestPage]._spanningHeap.Allocate(allocationSize);
+		assert(allocation != ~0u);
+		_pimpl->_activePages[bestPage]._texelsAllocated += allocationSize;
+
+		// no strong guarantee on exception from here, because allocation already completed
+
+		if (_pimpl->_texture)
+			_pimpl->_texture->UpdateToTexture(threadContext, storageBuffer, _pimpl->_activePages[bestPage]._spaceInTexture._topLeft[0] + allocation);
+
+		uint64_t fontHash = (font.GetHash() & 0xffffffffull) << 32ull;
+		auto i = _glyphs.begin();
+		for (unsigned c=0; c<chrs.size(); ++c) {
+			Bitmap result;
+			result._xAdvance = bitmaps[c]._xAdvance;
+			result._bitmapOffsetX = bitmaps[c]._bitmapOffsetX;
+			result._bitmapOffsetY = bitmaps[c]._bitmapOffsetY;
+			result._lsbDelta = bitmaps[c]._lsbDelta;
+			result._rsbDelta = bitmaps[c]._rsbDelta;
+			result._lastAccessFrame = _currentFrameIdx;
+			result._encodingOffset = _pimpl->_activePages[bestPage]._spaceInTexture._topLeft[0] + allocation + (size_t)bitmaps[c]._data.begin();
+			result._width = bitmaps[c]._width;
+			result._height = bitmaps[c]._height;
+
+			// expecting 'chrs' in sorted order, so we always move 'i' forward
+			i = LowerBound2(MakeIteratorRange(i, _glyphs.end()), fontHash | chrs[c]);
+			i = _glyphs.insert(i, std::make_pair(fontHash | chrs[c], result));
+		}
+
+		return true;
 	}
 
 	void FontRenderingManager::FreeUpHeapSpace(UInt2 requestedSpace)
@@ -1096,6 +1216,163 @@ namespace RenderOverlays
 		_pimpl->_reservedPage._texelsAllocated = 0;	
 		_pimpl->_reservedPage._spaceInTexture = srcSpaceInTexture;
 #endif
+	}
+
+	void FontRenderingManager::FreeUpHeapSpace_Linear(size_t requestedSpace)
+	{
+		// Attempt to free up some space in the heap...
+		// This is optimized for infrequent calls. We will erase many of the oldest glyphs, and prepare the heap for
+		// defrag operations
+		unsigned desiredGlyphsToErase = _glyphs.size() / _pimpl->_activePages.size();
+		if (desiredGlyphsToErase == 0) return;
+
+		std::vector<unsigned> glyphsToErase;
+		glyphsToErase.reserve(_glyphs.size());
+		unsigned glyphsErased = 0;
+		for (;;) {
+			auto oldestFrame = _currentFrameIdx;
+			for (auto& glyph:_glyphs)
+				if (glyph.second._lastAccessFrame < oldestFrame)
+					oldestFrame = glyph.second._lastAccessFrame;
+
+			const unsigned gracePeriod = 4;
+			if (_currentFrameIdx < gracePeriod || oldestFrame > _currentFrameIdx-gracePeriod) return;
+
+			glyphsToErase.clear();
+			for (unsigned g=0; g<_glyphs.size();) {
+				auto idx = _glyphs.size() - g - 1;
+				if (_glyphs[idx].second._lastAccessFrame == oldestFrame) {
+
+					auto start = _glyphs[idx].second._encodingOffset;
+					auto end = start+_glyphs[idx].second._width*_glyphs[idx].second._height;
+					bool foundPage = false;
+					for (auto& p:_pimpl->_activePages)
+						if (start >= p._spaceInTexture._topLeft[0] && end <= p._spaceInTexture._bottomRight[0]) {
+							p._spanningHeap.Deallocate(start-p._spaceInTexture._topLeft[0], end-start);
+							p._texelsAllocated -= end-start;
+							foundPage = true;
+							break;
+						}
+					assert(foundPage);
+
+					_glyphs.erase(_glyphs.begin()+idx);
+					++glyphsErased;
+				} else
+					++g;
+			}
+
+			if (glyphsErased >= desiredGlyphsToErase) {
+				unsigned largestEmptyBlock = 0;
+				for (auto& p:_pimpl->_activePages)
+					largestEmptyBlock = std::min(largestEmptyBlock, p._spanningHeap.CalculateLargestFreeBlock());
+				if (largestEmptyBlock >= requestedSpace) break;		// got enough space for the request
+			}
+		}
+	}
+
+	void FontRenderingManager::SynchronousDefrag_Linear(RenderCore::IThreadContext& threadContext)
+	{
+		// find the most fragmented page, and do a synchronous defragment
+		unsigned worstPage = ~0;
+		int worstPageScore = 0;
+		for (unsigned c=0; c<_pimpl->_activePages.size(); ++c) {
+			auto& page = _pimpl->_activePages[c];
+			auto freeBlock = page._spanningHeap.CalculateLargestFreeBlock();
+			auto freeSpace = page._spanningHeap.CalculateAvailableSpace();
+			auto score = freeSpace - freeBlock;
+			if (score > worstPageScore) {
+				worstPageScore = score;
+				worstPage = c;
+			}
+		}
+
+		if (worstPage == ~0u) return;
+
+		auto& srcPage = _pimpl->_activePages[worstPage];
+		auto srcPageStart = srcPage._spaceInTexture._topLeft[0];
+		auto srcPageEnd = srcPage._spaceInTexture._bottomRight[0];
+		auto dstPageStart = _pimpl->_reservedPage._spaceInTexture._topLeft[0];
+
+		// Find all of the glyphs & all of the rectangles that are on this page. We will reallocate them and try to get an optimal packing
+		auto compression = srcPage._spanningHeap.CalculateHeapCompression();
+
+		// copy from the old locations into the new destination positions
+		if (_pimpl->_texture) {
+			using namespace RenderCore;
+			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+			auto blitEncoder = metalContext.BeginBlitEncoder();
+			// Vulkan can do all of this copying with a single cmd -- would we better off with an interface
+			// that allows for multiple copies?
+			auto* res = _pimpl->_texture->GetUnderlying().get();
+			for (auto reposition:compression)
+				blitEncoder.Copy(
+					CopyPartial_Dest { *res, dstPageStart + reposition._destination },
+					CopyPartial_Src { *res, srcPageStart + reposition._sourceStart, srcPageStart + reposition._sourceEnd });
+		}
+
+		// reassign glyphs table and make the new page active
+		for (unsigned g=0; g<_glyphs.size(); ++g) {
+			auto& glyph = _glyphs[g].second;
+			if (glyph._encodingOffset >= srcPageStart && glyph._encodingOffset < srcPageEnd) {
+				auto startInSrcHeap = glyph._encodingOffset - srcPageStart;
+				auto endInSrcHeap = startInSrcHeap + glyph._width*glyph._height;
+				bool foundReposition = false;
+				for (auto& c:compression) {
+					if (startInSrcHeap >= c._sourceStart && startInSrcHeap < c._sourceEnd) {
+						assert(endInSrcHeap <= c._sourceEnd);	// if you hit this it means that the compression has split a block so this character is no longer contiguous
+						glyph._encodingOffset = dstPageStart + c._destination + startInSrcHeap - c._sourceStart;
+						foundReposition = true;
+					}
+				}
+				assert(foundReposition);
+			}
+		}
+
+		srcPage._spanningHeap.PerformReposition(compression);
+		std::swap(srcPage._spaceInTexture, _pimpl->_reservedPage._spaceInTexture);
+	}
+
+	bool FontRenderingManager::GetBitmaps(
+		const Bitmap* bitmaps[],
+		RenderCore::IThreadContext& threadContext,
+		const Font& font,
+		IteratorRange<const ucs4*> chrs)
+	{
+		// first - check if all of the characters are already in the glyphs list
+		// expecting "chrs" to be in sorted order already
+		uint64_t fontHash = (font.GetHash() & 0xffffffffull) << 32ull;	// we only use the lower 32 bits of the font hash (because we're going to use the fact that the input chrs are in sorted order)
+		auto chrIterator = chrs.begin();
+		auto begini = LowerBound(_glyphs, fontHash|uint64_t(*chrIterator));
+		auto endi = LowerBound(_glyphs, fontHash|0xffffffffull);
+		ucs4 missingGlyphs[chrs.size()];
+		unsigned missingGlyphCount = 0;
+		const Bitmap** bitmapIterator = bitmaps;
+		auto i = begini;
+		while (chrIterator != chrs.end()) {
+			auto code = fontHash | *chrIterator;
+			i = LowerBound2(MakeIteratorRange(i, endi), code);
+			if (i == endi) break;
+			if (i->first != code) {
+				missingGlyphs[missingGlyphCount++] = *chrIterator;
+			} else {
+				*bitmapIterator++ = &i->second;
+				i->second._lastAccessFrame = _currentFrameIdx;	// update _lastAccessFrame before we call InitializeNewGlyphs below
+			}
+			++chrIterator;
+		}
+		for (; chrIterator != chrs.end(); ++chrIterator) missingGlyphs[missingGlyphCount++] = *chrIterator;
+
+		if (missingGlyphCount) {
+			if (!InitializeNewGlyphs(threadContext, font, MakeIteratorRange(missingGlyphs, &missingGlyphs[missingGlyphCount]), false))
+				return false;
+			return GetBitmaps(bitmaps, threadContext, font, chrs);
+		}
+		return true;
+	}
+
+	void FontRenderingManager::AddUploadBarrier(RenderCore::IThreadContext& threadContext)
+	{
+		RenderCore::Metal::BarrierHelper(threadContext).Add(*_pimpl->_texture->GetUnderlying(), RenderCore::BindFlag::TransferDst, RenderCore::BindFlag::ShaderResource);
 	}
 
 	const FontTexture2D& FontRenderingManager::GetFontTexture()
