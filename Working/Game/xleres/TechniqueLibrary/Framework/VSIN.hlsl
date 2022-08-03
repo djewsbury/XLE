@@ -83,6 +83,11 @@ struct VSIN //////////////////////////////////////////////////////
 		half4 instanceToLocalB : INSTANCE_TO_LOCAL1;
 		half4 instanceToLocalC : INSTANCE_TO_LOCAL2;
 	#endif
+
+	#if GEO_HAS_FONTTABLE
+		uint4 fontTable : FONTTABLE;
+		uint fontTableOffset : FONTTABLE1;
+	#endif
 }; //////////////////////////////////////////////////////////////////
 
 #if GEO_HAS_COLOR ////////////////////////////////////////////////
@@ -99,6 +104,8 @@ struct VSIN //////////////////////////////////////////////////////
 
 #if GEO_HAS_TEXCOORD /////////////////////////////////////////////
 	float2 VSIN_GetTexCoord0(VSIN input) { return input.texCoord; }
+#elif GEO_HAS_FONTTABLE
+	float2 VSIN_GetTexCoord0(VSIN input) { return float2((input.fontTable.x & 0xff) / float(0xff), (input.fontTable.x >> 8) / float(0xff)); }
 #else
 	float2 VSIN_GetTexCoord0(VSIN input) { return 0.0.xx; }
 #endif //////////////////////////////////////////////////////////////

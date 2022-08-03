@@ -139,6 +139,10 @@ VSOUT frameworkEntry(VSIN vsin)
 		output.localNormal = DeriveGetLocalNormal(vsin);
 	#endif
 
+	#if VSOUT_HAS_FONTTABLE
+		output.fontTable.xyz = uint3(vsin.fontTableOffset, vsin.fontTable.yz);
+	#endif
+
 	return output;
 }
 

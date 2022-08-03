@@ -11,22 +11,29 @@
 
 Texture2D		InputTexture;
 [[vk::input_attachment_index(0)]] SubpassInput<float4> SubpassInputAttachment;
+#if VSOUT_HAS_FONTTABLE && defined(FONT_RENDERER)
+	Buffer<float> 	FontResource : register(t5);
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-float4 frameworkEntry(VSOUT vsin) : SV_Target0
+float4 frameworkEntry(VSOUT vsout) : SV_Target0
 {
 	float4 result = 1.0.rrrr;
 
-	#if VSOUT_HAS_TEXCOORD
+	#if VSOUT_HAS_FONTTABLE && defined(FONT_RENDERER)
+		uint2 xy = uint2(vsout.fontTable.y * vsout.texCoord.x, vsout.fontTable.z * vsout.texCoord.y);
+		uint idx = vsout.fontTable.x + (xy.y * vsout.fontTable.y + xy.x);
+		result.a *= FontResource[idx].r;
+	#elif VSOUT_HAS_TEXCOORD
 		#if defined(FONT_RENDERER)
-			result.a *= InputTexture.Sample(PointClampSampler, VSOUT_GetTexCoord0(vsin)).r;
+			result.a *= InputTexture.Sample(PointClampSampler, VSOUT_GetTexCoord0(vsout)).r;
 		#else
-			result *= InputTexture.Sample(DefaultSampler, VSOUT_GetTexCoord0(vsin));
+			result *= InputTexture.Sample(DefaultSampler, VSOUT_GetTexCoord0(vsout));
 		#endif
 	#endif
 
-	result *= VSOUT_GetColor0(vsin);
+	result *= VSOUT_GetColor0(vsout);
 	return result;
 }
 

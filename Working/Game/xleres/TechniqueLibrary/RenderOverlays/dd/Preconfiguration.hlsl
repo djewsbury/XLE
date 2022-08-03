@@ -22,3 +22,11 @@
 	#endif
 #endif
 
+#if GEO_HAS_FONTTABLE
+	#if !defined(VSOUT_HAS_TEXCOORD)
+		#define VSOUT_HAS_TEXCOORD 1
+	#endif
+	#if !defined(VSOUT_HAS_FONTTABLE)
+		#define VSOUT_HAS_FONTTABLE 1
+	#endif
+#endif

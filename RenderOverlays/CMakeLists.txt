@@ -5,7 +5,6 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         AnimationVisualization.cpp
         DebuggingDisplay.cpp
         Font.cpp
-        FontRectanglePacking.cpp
         FontRendering.cpp
         FT_Font.cpp
         HighlightEffects.cpp

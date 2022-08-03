@@ -6,4 +6,5 @@ DescriptorSet Numeric
 
 	UniformBuffer b3;					// 3
 	UniformBuffer DrawCallProperties;	// 4
+	UniformTexelBuffer FontResource;	// 5
 };

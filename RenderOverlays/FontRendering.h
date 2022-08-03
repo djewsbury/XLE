@@ -63,10 +63,11 @@ namespace RenderOverlays
 			float _xAdvance = 0.f;
 			signed _bitmapOffsetX = 0, _bitmapOffsetY = 0;
 			unsigned _width = 0, _height = 0;
-			Float2 _tcTopLeft = Float2{0.f, 0.f};
-			Float2 _tcBottomRight = Float2{0.f, 0.f};
+			// Float2 _tcTopLeft = Float2{0.f, 0.f};
+			// Float2 _tcBottomRight = Float2{0.f, 0.f};
 			unsigned _lsbDelta = 0, _rsbDelta = 0;
 			unsigned _lastAccessFrame = 0;
+			uint16_t _encodingOffset = 0;
 		};
 
 		const Bitmap& GetBitmap(

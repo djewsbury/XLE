@@ -5,6 +5,7 @@
 #include "FontRendering.h"
 #include "../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
+#include "../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../RenderCore/Metal/DeviceContext.h"
 #include "../RenderCore/Metal/Resource.h"
 #include "../RenderCore/RenderUtils.h"
@@ -27,7 +28,8 @@ namespace RenderOverlays
 	class FontTexture2D
 	{
 	public:
-		void UpdateToTexture(RenderCore::IThreadContext& threadContext, IteratorRange<const uint8_t*> data, const RenderCore::Box2D& destBox);
+		void UpdateToTexture(RenderCore::IThreadContext& threadContext, IteratorRange<const void*> data, const RenderCore::Box2D& destBox);
+		void UpdateToTexture(RenderCore::IThreadContext& threadContext, IteratorRange<const void*> data, unsigned offset);
 		const std::shared_ptr<RenderCore::IResource>& GetUnderlying() const { return _resource; }
 		const std::shared_ptr<RenderCore::IResourceView>& GetSRV() const { return _srv; }
 
@@ -52,14 +54,13 @@ namespace RenderOverlays
 		{
 			Float3      p;
 			unsigned    c;
-			Float2      t;
-
-			Vertex() {}
-			Vertex(Float3 ip, unsigned ic, Float2 it) : p(ip), c(ic), t(it) {}
+			uint8_t     u, v;
+			uint16_t 	width, height, spacer;
+			uint32_t	offset;
 		};
 		static const int VertexSize = sizeof(Vertex);
 
-		void PushQuad(const Quad& positions, ColorB color, const Quad& textureCoords, float depth, bool snap=true);
+		void PushQuad(const Quad& positions, ColorB color, uint32_t offset, uint16_t width, uint16_t height, float depth, bool snap=true);
 		void Complete();
 
 		WorkingVertexSetPCT(
@@ -79,16 +80,17 @@ namespace RenderOverlays
 	{
 		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
 		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM },
-		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT }
+		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::FONTTABLE, RenderCore::Format::R16G16B16A16_UINT },
+		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::FONTTABLE+1, RenderCore::Format::R32_UINT }
 	};
 
-	static inline unsigned  HardwareColor(ColorB input)
+	static inline unsigned HardwareColor(ColorB input)
 	{
 		// see duplicate in OverlayContext.cpp
 		return (uint32_t(input.a) << 24) | (uint32_t(input.b) << 16) | (uint32_t(input.g) << 8) | uint32_t(input.r);
 	}
 
-	void WorkingVertexSetPCT::PushQuad(const Quad& positions, ColorB color, const Quad& textureCoords, float depth, bool snap)
+	void WorkingVertexSetPCT::PushQuad(const Quad& positions, ColorB color, uint32_t offset, uint16_t width, uint16_t height, float depth, bool snap)
 	{
 		if (__builtin_expect((_currentIterator + 6) > _currentAllocation.end(), false)) {
 			auto reserveVertexCount = _currentAllocation.size() + 6 + (_currentAllocation.size() + 6)/2;
@@ -120,16 +122,13 @@ namespace RenderOverlays
 			p3[1] = (float)(int)(0.5f + p3[1]);
 		}
 
-			//
-			//      Following behaviour from DrawQuad in Archeage display_list.cpp
-			//
 		auto col = HardwareColor(color);
-		*_currentIterator++ = Vertex(p0, col, Float2( textureCoords.min[0], textureCoords.min[1] ));
-		*_currentIterator++ = Vertex(p2, col, Float2( textureCoords.min[0], textureCoords.max[1] ));
-		*_currentIterator++ = Vertex(p1, col, Float2( textureCoords.max[0], textureCoords.min[1] ));
-		*_currentIterator++ = Vertex(p1, col, Float2( textureCoords.max[0], textureCoords.min[1] ));
-		*_currentIterator++ = Vertex(p2, col, Float2( textureCoords.min[0], textureCoords.max[1] ));
-		*_currentIterator++ = Vertex(p3, col, Float2( textureCoords.max[0], textureCoords.max[1] ));
+		*_currentIterator++ = Vertex{p0, col, 0x00, 0x00, width, height, 0, offset};
+		*_currentIterator++ = Vertex{p2, col, 0x00, 0xff, width, height, 0, offset};
+		*_currentIterator++ = Vertex{p1, col, 0xff, 0x00, width, height, 0, offset};
+		*_currentIterator++ = Vertex{p1, col, 0xff, 0x00, width, height, 0, offset};
+		*_currentIterator++ = Vertex{p2, col, 0x00, 0xff, width, height, 0, offset};
+		*_currentIterator++ = Vertex{p3, col, 0xff, 0xff, width, height, 0, offset};
 	}
 
 	void WorkingVertexSetPCT::Complete()
@@ -144,7 +143,7 @@ namespace RenderOverlays
 		RenderCore::UniformsStreamInterface CreateInputTextureUSI()
 		{
 			RenderCore::UniformsStreamInterface result;
-			result.BindResourceView(0, Hash64("InputTexture"));
+			result.BindResourceView(0, Hash64("FontResource"));
 			return result;
 		}
 		ParameterBox CreateFontRendererSelectorBox()
@@ -342,9 +341,9 @@ namespace RenderOverlays
 			Quad pos = Quad::MinMax(
 				baseX, baseY, 
 				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
-			Quad tc = Quad::MinMax(
+			/*Quad tc = Quad::MinMax(
 				bitmap._tcTopLeft[0], bitmap._tcTopLeft[1], 
-				bitmap._tcBottomRight[0], bitmap._tcBottomRight[1]);
+				bitmap._tcBottomRight[0], bitmap._tcBottomRight[1]);*/
 
 			if (__builtin_expect((maxX == 0.0f || pos.max[0] <= maxX) && (maxY == 0.0f || pos.max[1] <= maxY), true)) {
 
@@ -353,6 +352,7 @@ namespace RenderOverlays
 					began = true;
 				}
 
+#if 0
 				if (flags & DrawTextFlags::Outline) {
 					Quad shadowPos;
 					shadowPos = pos;
@@ -412,8 +412,9 @@ namespace RenderOverlays
 					shadowPos.max[1] += yScale;
 					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
 				}
+#endif
 
-				workingVertices.PushQuad(pos, colorOverride.a?colorOverride:color, tc, depth);
+				workingVertices.PushQuad(pos, colorOverride.a?colorOverride:color, bitmap._encodingOffset, bitmap._width, bitmap._height, depth);
 			}
 		}
 
@@ -528,10 +529,11 @@ namespace RenderOverlays
 			Quad pos = Quad::MinMax(
 				baseX, baseY, 
 				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
-			Quad tc = Quad::MinMax(
+			/*Quad tc = Quad::MinMax(
 				bitmap._tcTopLeft[0], bitmap._tcTopLeft[1], 
-				bitmap._tcBottomRight[0], bitmap._tcBottomRight[1]);
+				bitmap._tcBottomRight[0], bitmap._tcBottomRight[1]);*/
 
+#if 0
 			if (flags & DrawTextFlags::Outline) {
 				Quad shadowPos;
 				shadowPos = pos;
@@ -591,8 +593,9 @@ namespace RenderOverlays
 				shadowPos.max[1] += yScale;
 				workingVertices.PushQuad(shadowPos, shadowC, tc, depth);
 			}
+#endif
 
-			workingVertices.PushQuad(pos, color, tc, depth);
+			workingVertices.PushQuad(pos, color, depth, bitmap._encodingOffset, bitmap._width, bitmap._height);
 		}
 
 		if (began)
@@ -628,7 +631,8 @@ namespace RenderOverlays
 		struct Page
 		{
 			Rect _spaceInTexture;
-			RectanglePacker_MaxRects _packer;
+			// RectanglePacker_MaxRects _packer;
+			SimpleSpanningHeap _spanningHeap;
 			int _texelsAllocated = 0;
 		};
 		std::vector<Page> _activePages;
@@ -639,24 +643,40 @@ namespace RenderOverlays
 		Pimpl(RenderCore::IDevice& device, unsigned pageWidth, unsigned pageHeight, unsigned pageCount)
 		: _pageWidth(pageWidth), _pageHeight(pageHeight)
 		{
-			assert(IsPowerOfTwo(pageCount));
-			auto pagesAcross = (unsigned)std::sqrt(pageCount);
-			auto pagesDown = pageCount / pagesAcross;
-			assert((pagesAcross*pagesDown) == pageCount);
-			_texture = std::make_unique<FontTexture2D>(device, pageWidth*pagesAcross, pageHeight*pagesDown, RenderCore::Format::R8_UNORM);
-			_texWidth = pageWidth*pagesAcross; _texHeight = pageHeight*pagesDown;
-			_activePages.reserve(pageCount-1);
-			for (unsigned y=0; y<pagesDown; ++y)
-				for (unsigned x=0; x<pagesAcross; ++x) {
+			#if 0
+				assert(IsPowerOfTwo(pageCount));
+				auto pagesAcross = (unsigned)std::sqrt(pageCount);
+				auto pagesDown = pageCount / pagesAcross;
+				assert((pagesAcross*pagesDown) == pageCount);
+				_texture = std::make_unique<FontTexture2D>(device, pageWidth*pagesAcross, pageHeight*pagesDown, RenderCore::Format::R8_UNORM);
+				_texWidth = pageWidth*pagesAcross; _texHeight = pageHeight*pagesDown;
+				_activePages.reserve(pageCount-1);
+				for (unsigned y=0; y<pagesDown; ++y)
+					for (unsigned x=0; x<pagesAcross; ++x) {
+						Page newPage;
+						newPage._spaceInTexture = {Coord2{x*pageWidth, y*pageHeight}, Coord2{(x+1)*pageWidth, (y+1)*pageHeight}};
+						newPage._packer = UInt2{pageWidth, pageHeight};
+						newPage._texelsAllocated = 0;
+						if ((x+y)==0) {
+							_reservedPage = std::move(newPage);
+						} else
+							_activePages.emplace_back(std::move(newPage));
+					}
+			#else
+				_texture = std::make_unique<FontTexture2D>(device, pageWidth*pageHeight*pageCount, 1u, RenderCore::Format::R8_UNORM);
+				_texWidth = pageWidth*pageHeight*pageCount; _texHeight = 1u;
+				_activePages.reserve(pageCount-1);
+				for (unsigned p=0; p<pageCount; ++p) {
 					Page newPage;
-					newPage._spaceInTexture = {Coord2{x*pageWidth, y*pageHeight}, Coord2{(x+1)*pageWidth, (y+1)*pageHeight}};
-					newPage._packer = UInt2{pageWidth, pageHeight};
+					newPage._spaceInTexture = {Coord2{p*pageWidth*pageHeight, 0}, Coord2{(p+1)*pageWidth*pageHeight, 1u}};
+					newPage._spanningHeap = SimpleSpanningHeap { pageWidth*pageHeight };
 					newPage._texelsAllocated = 0;
-					if ((x+y)==0) {
+					if (p==(pageCount-1)) {
 						_reservedPage = std::move(newPage);
 					} else
 						_activePages.emplace_back(std::move(newPage));
 				}
+			#endif
 		}
 	};
 
@@ -672,15 +692,21 @@ namespace RenderOverlays
 	: _format(pixelFormat)
 	{
 		using namespace RenderCore;
-		_resource = dev.CreateResource(CreateDesc(BindFlag::ShaderResource | BindFlag::TransferDst | BindFlag::TransferSrc, TextureDesc::Plain2D(width, height, pixelFormat, 1), "Font"));
-		_srv = _resource->CreateTextureView();
+		if (height != 1) {
+			_resource = dev.CreateResource(CreateDesc(BindFlag::ShaderResource | BindFlag::TransferDst | BindFlag::TransferSrc, TextureDesc::Plain2D(width, height, pixelFormat, 1), "Font"));
+			_srv = _resource->CreateTextureView();
+		} else {
+			assert(BitsPerPixel(pixelFormat) == 8);
+			_resource = dev.CreateResource(CreateDesc(BindFlag::ShaderResource | BindFlag::TexelBuffer, LinearBufferDesc::Create(width*height), "Font"));
+			_srv = _resource->CreateTextureView(BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::FormatFilter{pixelFormat}});
+		}
 	}
 
 	FontTexture2D::~FontTexture2D() {}
 
 	void FontTexture2D::UpdateToTexture(
 		RenderCore::IThreadContext& threadContext,
-		IteratorRange<const uint8_t*> data, const RenderCore::Box2D& destBox)
+		IteratorRange<const void*> data, const RenderCore::Box2D& destBox)
 	{
 		using namespace RenderCore;
 		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
@@ -696,6 +722,22 @@ namespace RenderOverlays
 			_format,
 			VectorPattern<unsigned, 3>{ unsigned(destBox._right - destBox._left), unsigned(destBox._bottom - destBox._top), 1u },
 			pitches);
+	}
+
+	void FontTexture2D::UpdateToTexture(RenderCore::IThreadContext& threadContext, IteratorRange<const void*> data, unsigned offset)
+	{
+		using namespace RenderCore;
+		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+		auto* res = _resource.get();
+		Metal::CompleteInitialization(*Metal::DeviceContext::Get(threadContext), {&res, &res+1});
+		auto blitEncoder = metalContext.BeginBlitEncoder();
+		/*blitEncoder.Write(
+			CopyPartial_Dest { *_resource, {}, VectorPattern<unsigned, 3>{ offset, 0u, 0u } },
+			SubResourceInitData { data },
+			_format,
+			VectorPattern<unsigned, 3>{ unsigned(data.size()), 1u, 1u },
+			TexturePitches { (unsigned)data.size(), (unsigned)data.size() });*/
+		blitEncoder.Write(CopyPartial_Dest { *_resource, offset }, data);
 	}
 
 	static std::vector<uint8_t> GlyphAsDataPacket(
@@ -743,6 +785,7 @@ namespace RenderOverlays
 		if (newData._width > _pimpl->_pageWidth || newData._height > _pimpl->_pageHeight)
 			return s_emptyBitmap;		// can't fit this glyph, even when using an entire page
 
+#if 0
 		unsigned bestPage = ~0u;
 		RectanglePacker_MaxRects::PreviewedAllocation bestAllocation;
 		bestAllocation._score = std::numeric_limits<int>::max();
@@ -801,10 +844,53 @@ namespace RenderOverlays
 
 		auto i = _glyphs.insert(insertPoint, std::make_pair(code, result));
 		return i->second;
+#else
+		unsigned bestPage = ~0u;
+		unsigned allocationSize = newData._width * newData._height, bestFreeBlock = ~0u;
+		for (unsigned c=0; c<_pimpl->_activePages.size(); ++c) {
+			auto largestBlock = _pimpl->_activePages[c]._spanningHeap.CalculateLargestFreeBlock();
+			if (largestBlock >= allocationSize && largestBlock < bestFreeBlock) {
+				bestPage = c;
+				bestFreeBlock = largestBlock;
+			}
+		}
+		if (bestPage == ~0u) {
+			// could not fit it in -- we need to release some space and try to do a defrag
+			if (alreadyAttemptedFree) return s_emptyBitmap;		// maybe too big to fit on a page?
+			FreeUpHeapSpace({newData._width, newData._height});
+			SynchronousDefrag(threadContext);
+			auto code = HashCombine(ch, font.GetHash());
+			insertPoint = LowerBound(_glyphs, code);		// FreeUpHeapSpace invalidates this vector
+			return InitializeNewGlyph(threadContext, font, ch, insertPoint, code, true);
+		}
+
+		auto allocation = _pimpl->_activePages[bestPage]._spanningHeap.Allocate(allocationSize);
+		assert(allocation != ~0u);
+
+		// no strong guarantee on exception from here, because allocation already completed
+
+		if (_pimpl->_texture)
+			_pimpl->_texture->UpdateToTexture(threadContext, newData._data, _pimpl->_activePages[bestPage]._spaceInTexture._topLeft[0] + allocation);
+
+		Bitmap result;
+		result._xAdvance = newData._xAdvance;
+		result._bitmapOffsetX = newData._bitmapOffsetX;
+		result._bitmapOffsetY = newData._bitmapOffsetY;
+		result._lsbDelta = newData._lsbDelta;
+		result._rsbDelta = newData._rsbDelta;
+		result._lastAccessFrame = _currentFrameIdx;
+		result._encodingOffset = _pimpl->_activePages[bestPage]._spaceInTexture._topLeft[0] + allocation;
+		result._width = newData._width;
+		result._height = newData._height;
+
+		auto i = _glyphs.insert(insertPoint, std::make_pair(code, result));
+		return i->second;
+#endif
 	}
 
 	void FontRenderingManager::FreeUpHeapSpace(UInt2 requestedSpace)
 	{
+#if 0
 		// Attempt to free up some space in the heap...
 		// This is optimized for infrequent calls. We will erase many of the oldest glyphs, and prepare the heap for
 		// defrag operations
@@ -889,10 +975,12 @@ namespace RenderOverlays
 		}
 		// caller should generally call SynchronousDefrag after this
 		// when we return, we should have space for a lot more glyphs
+#endif
 	}
 
 	void FontRenderingManager::SynchronousDefrag(RenderCore::IThreadContext& threadContext)
 	{
+#if 0
 		// find the most fragmented page, and do a synchronous defragment
 		unsigned worstPage = ~0;
 		int worstPageScore = 0;
@@ -1007,6 +1095,7 @@ namespace RenderOverlays
 		_pimpl->_reservedPage._packer = {};
 		_pimpl->_reservedPage._texelsAllocated = 0;	
 		_pimpl->_reservedPage._spaceInTexture = srcSpaceInTexture;
+#endif
 	}
 
 	const FontTexture2D& FontRenderingManager::GetFontTexture()

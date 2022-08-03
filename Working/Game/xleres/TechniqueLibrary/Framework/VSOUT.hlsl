@@ -95,6 +95,10 @@ struct VSOUT /////////////////////////////////////////////////////
 	#if VSOUT_HAS_VERTEX_ID
 		uint vertexId : VERTEX_ID;
 	#endif
+
+	#if VSOUT_HAS_FONTTABLE
+		nointerpolation uint3 fontTable : FONTTABLE;
+	#endif
 }; //////////////////////////////////////////////////////////////////
 
 float2 VSOUT_GetTexCoord0(VSOUT geo)
