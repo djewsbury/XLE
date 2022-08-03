@@ -110,6 +110,7 @@ namespace RenderCore { namespace Techniques
 		void Bind(const DeformerInputBinding& binding) override;
 		bool IsCPUDeformer() const override;
 		std::future<void> GetInitializationFuture() const override;
+		BufferUploads::CommandListID GetCompletionCmdList() const override;
 	
 		GPUSkinDeformer(
 			std::shared_ptr<Internal::DeformerPipelineCollection> pipelineCollection,
@@ -167,5 +168,6 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> _modelScaffold;
 		std::shared_ptr<Internal::DeformerPipelineCollection> _pipelineCollection;
+		std::shared_future<RenderCore::BufferUploads::ResourceLocator> _linearBufferCompletion;
 	};
 }}

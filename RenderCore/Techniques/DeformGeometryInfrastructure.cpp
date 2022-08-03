@@ -37,7 +37,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<IResource> _gpuStaticDataBuffer, _gpuTemporariesBuffer;
 		std::shared_ptr<IResourceView> _gpuStaticDataBufferView, _gpuTemporariesBufferView;
-		BufferUploads::CommandListID _gpuStaticDataCompletionList;
+		BufferUploads::CommandListID _completionList = 0;
 		std::shared_future<void> _initializationFuture;
 
 		bool _isCPUDeformer = false;
@@ -101,7 +101,7 @@ namespace RenderCore { namespace Techniques
 		{
 			// we must have waited on the initialization future before doing this
 			assert(_initializationFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);
-			return _gpuStaticDataCompletionList;
+			return _completionList;
 		}
 
 		virtual std::shared_future<void> GetInitializationFuture() const override
@@ -280,10 +280,15 @@ namespace RenderCore { namespace Techniques
 				return ::Assets::PollStatus::Finish;
 			},
 			[weakResult=std::weak_ptr<DeformGeoInfrastructure>{result}, gpuStaticDataCompletionListFuture]() {
-				// fill in _gpuStaticDataCompletionList, now the future is complete
+				// fill in _completionList, now the future is complete
 				auto l = weakResult.lock();
-				if (l && gpuStaticDataCompletionListFuture.valid())
-					l->_gpuStaticDataCompletionList = gpuStaticDataCompletionListFuture.get();
+				if (l) {
+					if (gpuStaticDataCompletionListFuture.valid())
+						l->_completionList = gpuStaticDataCompletionListFuture.get();
+					// deformers might also have completion cmd lists, which should be ready now the initialization futures are done
+					for (auto& deformer:l->_deformOps)
+						l->_completionList = std::max(l->_completionList, deformer->GetCompletionCmdList());
+				}
 			});
 
 		return result;
@@ -749,6 +754,8 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(0);
 	}
+
+	BufferUploads::CommandListID IGeoDeformer::GetCompletionCmdList() const { return 0; }
 
 	IGeoDeformer::~IGeoDeformer() {}
 

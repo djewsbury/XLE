@@ -327,7 +327,7 @@ namespace RenderCore { namespace BufferUploads
         auto ref = AllocateTransaction(flags);
         assert(ref._transaction);
         auto desc = destinationResource.GetContainingResource()->GetDesc();
-        ref._transaction->_desc = desc;
+        ref._transaction->_finalResource = std::move(destinationResource);
         if (data) ValidatePacketSize(desc, *data);
         _currentQueuedBytes[(unsigned)AsUploadDataType(desc, desc._bindFlags)] += RenderCore::ByteCount(desc);
 

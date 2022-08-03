@@ -464,17 +464,24 @@ namespace RenderCore { namespace Techniques
 		auto result = promise.get_future();
 		::Assets::PollToPromise(
 			std::move(promise),
-			[pipelineCollection=std::weak_ptr<Internal::DeformerPipelineCollection>(_pipelineCollection), pipelineMarkers](auto timeout) {
+			[pipelineCollection=std::weak_ptr<Internal::DeformerPipelineCollection>(_pipelineCollection), pipelineMarkers, linearBufferCompletion=_linearBufferCompletion](auto timeout) {
 				auto l = pipelineCollection.lock();
 				if (!l) return ::Assets::PollStatus::Finish;
 				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
 				if (MarkerTimesOut(l->_preparedSharedResources, timeoutTime)) return ::Assets::PollStatus::Continue;
 				for (auto m:pipelineMarkers)
 					if (MarkerTimesOut(*l->_pipelines[m], timeoutTime)) return ::Assets::PollStatus::Continue;
+				if (linearBufferCompletion.wait_until(timeoutTime) == std::future_status::timeout) return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
 			},
 			[]() {});
 		return result;
+	}
+
+	BufferUploads::CommandListID GPUSkinDeformer::GetCompletionCmdList() const
+	{
+		assert(_linearBufferCompletion.valid());	// must have called Bind() beforehand
+		return _linearBufferCompletion.get().GetCompletionCommandList();
 	}
 
 	GPUSkinDeformer::GPUSkinDeformer(
@@ -643,19 +650,22 @@ namespace RenderCore { namespace Techniques
 				return lhs._pipelineMarker < rhs._pipelineMarker;
 			});
 
-		auto iaParamsBuffer = _pipelineCollection->_pipelineCollection->GetDevice()->CreateResource(
-			CreateDesc(
-				BindFlag::UnorderedAccess,
-				LinearBufferDesc::Create(_iaParams.size() * sizeof(Internal::GPUDeformerIAParams)), "skin-ia-data"),
-			SubResourceInitData{MakeIteratorRange(_iaParams)});
-		_iaParamsView = iaParamsBuffer->CreateBufferView(BindFlag::UnorderedAccess);
+		std::vector<uint8_t> uploadBuffer;
+		uploadBuffer.reserve(_iaParams.size() * sizeof(Internal::GPUDeformerIAParams) + _skinIAParams.size() * sizeof(SkinIAParams));
+		uploadBuffer.insert(uploadBuffer.end(), (const uint8_t*)AsPointer(_iaParams.begin()), (const uint8_t*)AsPointer(_iaParams.end()));
+		uploadBuffer.insert(uploadBuffer.end(), (const uint8_t*)AsPointer(_skinIAParams.begin()), (const uint8_t*)AsPointer(_skinIAParams.end()));
 
-		auto skinIAParamsBuffer = _pipelineCollection->_pipelineCollection->GetDevice()->CreateResource(
+		auto utilitiesBuffer = _pipelineCollection->_pipelineCollection->GetDevice()->CreateResource(
 			CreateDesc(
-				BindFlag::UnorderedAccess,
-				LinearBufferDesc::Create(_skinIAParams.size() * sizeof(SkinIAParams)), "skin-ia-data"),
-			SubResourceInitData{MakeIteratorRange(_skinIAParams)});
-		_skinIAParamsView = skinIAParamsBuffer->CreateBufferView(BindFlag::UnorderedAccess);
+				BindFlag::ShaderResource | BindFlag::UnorderedAccess | BindFlag::TransferDst,
+				LinearBufferDesc::Create(uploadBuffer.size()), "skin-ia-data"));
+
+		auto& bufferUploads = Techniques::Services::GetBufferUploads();
+		auto transaction = bufferUploads.Begin(utilitiesBuffer, BufferUploads::CreateBasicPacket(std::move(uploadBuffer)));
+		_linearBufferCompletion = std::move(transaction._future);
+
+		_iaParamsView = utilitiesBuffer->CreateBufferView(BindFlag::ShaderResource, 0, _iaParams.size() * sizeof(Internal::GPUDeformerIAParams));
+		_skinIAParamsView = utilitiesBuffer->CreateBufferView(BindFlag::ShaderResource, _iaParams.size() * sizeof(Internal::GPUDeformerIAParams), _skinIAParams.size() * sizeof(SkinIAParams));
 	}
 
 	bool GPUSkinDeformer::IsCPUDeformer() const { return false; }

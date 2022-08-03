@@ -50,6 +50,7 @@ namespace RenderCore { namespace Techniques
 		virtual void Bind(const DeformerInputBinding& binding) = 0;
 		virtual bool IsCPUDeformer() const = 0;
 		virtual std::future<void> GetInitializationFuture() const = 0;
+		virtual BufferUploads::CommandListID GetCompletionCmdList() const;
 
 		virtual void* QueryInterface(size_t) = 0;
 		virtual ~IGeoDeformer();
