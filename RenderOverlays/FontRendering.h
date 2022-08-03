@@ -63,8 +63,8 @@ namespace RenderOverlays
 			float _xAdvance = 0.f;
 			signed _bitmapOffsetX = 0, _bitmapOffsetY = 0;
 			unsigned _width = 0, _height = 0;
-			// Float2 _tcTopLeft = Float2{0.f, 0.f};
-			// Float2 _tcBottomRight = Float2{0.f, 0.f};
+			Float2 _tcTopLeft = Float2{0.f, 0.f};
+			Float2 _tcBottomRight = Float2{0.f, 0.f};
 			unsigned _lsbDelta = 0, _rsbDelta = 0;
 			unsigned _lastAccessFrame = 0;
 			uint32_t _encodingOffset = 0;
@@ -88,7 +88,10 @@ namespace RenderOverlays
 
 		const std::shared_ptr<RenderCore::IResource>& GetUnderlyingTextureResource();		// intended for the debugging display
 	
-		FontRenderingManager(RenderCore::IDevice& device);
+		enum class Mode { Texture2D, LinearBuffer };
+		Mode GetMode() const;
+
+		FontRenderingManager(RenderCore::IDevice& device, Mode mode = Mode::LinearBuffer);
 		~FontRenderingManager();
 
 	private:
@@ -108,8 +111,8 @@ namespace RenderOverlays
 			RenderCore::IThreadContext& threadContext,
 			const Font& font,
 			IteratorRange<const ucs4*> chrs, bool alreadyAttemptedFree);
-		void FreeUpHeapSpace(UInt2 requestedSpace);
-		void SynchronousDefrag(RenderCore::IThreadContext&);
+		void FreeUpHeapSpace_2D(UInt2 requestedSpace);
+		void SynchronousDefrag_2D(RenderCore::IThreadContext&);
 
 		void FreeUpHeapSpace_Linear(size_t requestedSpace);
 		void SynchronousDefrag_Linear(RenderCore::IThreadContext&);
@@ -120,7 +123,9 @@ namespace RenderOverlays
 		const Font& font,
 		ucs4 ch) -> const Bitmap&
 	{
-		auto code = HashCombine(ch, font.GetHash());
+		// we only use the bottom 32 bits of the font so that glyphs from the same font remain contiguous
+		uint64_t fontHash = (font.GetHash() & 0xffffffffull) << 32ull;
+		auto code = fontHash|uint64_t(ch);
 		auto i = LowerBound(_glyphs, code);
 		if (__builtin_expect(i != _glyphs.end() && i->first == code, true)) {
 			i->second._lastAccessFrame = _currentFrameIdx;

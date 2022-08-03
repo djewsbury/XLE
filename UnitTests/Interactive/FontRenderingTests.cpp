@@ -82,9 +82,11 @@ namespace UnitTests
 
 			// draw....
 			if (_mode == Mode::ShowFontTexture) {
-				RenderOverlays::DebuggingDisplay::Interactables interactables;
-				RenderOverlays::DebuggingDisplay::InterfaceState interfaceState;
-				_display->Render(*overlayContext, layout, interactables, interfaceState);
+				if (_renderingManager->GetMode() == RenderOverlays::FontRenderingManager::Mode::Texture2D) {
+					RenderOverlays::DebuggingDisplay::Interactables interactables;
+					RenderOverlays::DebuggingDisplay::InterfaceState interfaceState;
+					_display->Render(*overlayContext, layout, interactables, interfaceState);
+				}
 			} else if (_mode == Mode::ScrollInfiniteText) {
 				// stress out the system by continuously rendering full screens of random text with different fonts
 				for (;;) {
@@ -116,16 +118,17 @@ namespace UnitTests
 			if (_pause) return;
 			
 			if (_mode == Mode::ShowFontTexture) {
-				const unsigned glyphsPerFrame = 8;
-				for (unsigned c=0; c<glyphsPerFrame; ++c) {
-					auto font = std::uniform_int_distribution<>(0, _fonts.size()-1)(_rng);
-					auto chr = std::uniform_int_distribution<>(33, 126)(_rng);		// main displayable ascii characters [33-126]
-					auto& bitmap = _renderingManager->GetBitmap(threadContext, *_fonts[font], chr);
+				if (_renderingManager->GetMode() == RenderOverlays::FontRenderingManager::Mode::Texture2D) {
+					const unsigned glyphsPerFrame = 8;
+					for (unsigned c=0; c<glyphsPerFrame; ++c) {
+						auto font = std::uniform_int_distribution<>(0, _fonts.size()-1)(_rng);
+						auto chr = std::uniform_int_distribution<>(33, 126)(_rng);		// main displayable ascii characters [33-126]
+						auto& bitmap = _renderingManager->GetBitmap(threadContext, *_fonts[font], chr);
+						REQUIRE(bitmap._tcBottomRight[0] != bitmap._tcTopLeft[0]);
 
-					// REQUIRE(bitmap._tcBottomRight[0] != bitmap._tcTopLeft[0]);
-
-					// if (bitmap._tcBottomRight[0] == bitmap._tcTopLeft[0])
-						// std::cout << "Failed allocation" << std::endl;
+						// if (bitmap._tcBottomRight[0] == bitmap._tcTopLeft[0])
+							// std::cout << "Failed allocation" << std::endl;
+					}
 				}
 			}
 			_renderingManager->OnFrameBarrier();
@@ -137,10 +140,17 @@ namespace UnitTests
 			IInteractiveTestHelper& testHelper) override
 		{
 			if (evnt._pressedChar == ' ') { _pause = !_pause; return true; }
+			else if (evnt._pressedChar == 'm') {
+				if (_mode == Mode::ShowFontTexture) {
+					_mode = Mode::ScrollInfiniteText;
+				} else {
+					_mode = Mode::ShowFontTexture;
+				}
+			}
 			return false;
 		}
 
-		FontThrashTestDisplay(RenderCore::IDevice& device)
+		FontThrashTestDisplay(RenderCore::IDevice& device, RenderOverlays::FontRenderingManager::Mode fontRenderingMode)
 		: _rng{5492559264231}
 		{
 			std::pair<StringSection<>, int> fonts[] {
@@ -178,7 +188,7 @@ namespace UnitTests
 				_fonts.push_back(m->Actualize());
 			}
 
-			_renderingManager = std::make_shared<RenderOverlays::FontRenderingManager>(device);
+			_renderingManager = std::make_shared<RenderOverlays::FontRenderingManager>(device, fontRenderingMode);
 			_display = std::make_shared<FontRenderingManagerDisplay>(_renderingManager);
 		}
 
@@ -192,7 +202,7 @@ namespace UnitTests
 		Mode _mode = Mode::ScrollInfiniteText;
 	};
 
-	TEST_CASE( "FontThrashTest", "[renderoverlays]" )
+	TEST_CASE( "FontThrashTest-2D", "[renderoverlays]" )
 	{
 		using namespace RenderCore;
 
@@ -208,7 +218,27 @@ namespace UnitTests
 		visCamera._top = 0.f;
 		visCamera._bottom = -100.f;
 
-		auto tester = std::make_shared<FontThrashTestDisplay>(*testHelper->GetDevice());
+		auto tester = std::make_shared<FontThrashTestDisplay>(*testHelper->GetDevice(), RenderOverlays::FontRenderingManager::Mode::Texture2D);
+		testHelper->Run(visCamera, tester);
+	}
+
+	TEST_CASE( "FontThrashTest-LinearBuffer", "[renderoverlays]" )
+	{
+		using namespace RenderCore;
+
+		auto testHelper = CreateInteractiveTestHelper(IInteractiveTestHelper::EnabledComponents::RenderCoreTechniques);
+
+		RenderCore::Techniques::CameraDesc visCamera;
+		visCamera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, -1.0f}), Float3{0.0f, 200.0f, 0.0f});
+		visCamera._projection = Techniques::CameraDesc::Projection::Orthogonal;
+		visCamera._nearClip = 0.f;
+		visCamera._farClip = 400.f;
+		visCamera._left = 0.f;
+		visCamera._right = 100.f;
+		visCamera._top = 0.f;
+		visCamera._bottom = -100.f;
+
+		auto tester = std::make_shared<FontThrashTestDisplay>(*testHelper->GetDevice(), RenderOverlays::FontRenderingManager::Mode::LinearBuffer);
 		testHelper->Run(visCamera, tester);
 	}
 
