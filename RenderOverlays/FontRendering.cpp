@@ -372,7 +372,7 @@ namespace RenderOverlays
 	template<> const StringSection<ucs4> DrawingTags<ucs4>::s_changeColor = (const ucs4*)"C\0\0\0o\0\0\0l\0\0\0o\0\0\0r\0\0\0:\0\0\0";
 	template<> const StringSection<utf8> DrawingTags<utf8>::s_changeColor = "Color:";
 
-	template<typename CharType, typename WorkingSetType>
+	template<typename CharType, typename WorkingSetType, bool CheckMaxXY, bool SnapCoords>
 		static Float2 DrawTemplate(
 			RenderCore::IThreadContext& threadContext,
 			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
@@ -388,18 +388,11 @@ namespace RenderOverlays
 
 		auto* res = textureMan.GetFontTexture().GetUnderlying().get();
 			
-		auto texDims = textureMan.GetTextureDimensions();
-		auto estimatedQuadCount = text.size();
-		if (flags & DrawTextFlags::Shadow)
-			estimatedQuadCount += text.size();
-		if (flags & DrawTextFlags::Outline)
-			estimatedQuadCount += 8 * text.size();
-		WorkingSetType workingVertices;
-		bool began = false;
-
-		auto shadowColor = ColorB{0, 0, 0, color.a};
 		ColorB colorOverride = 0x0;
-		unsigned prev_rsb_delta = 0;
+
+		auto estimatedQuadCount = text.size();
+		if (flags & DrawTextFlags::Shadow) estimatedQuadCount += text.size();
+		if (flags & DrawTextFlags::Outline) estimatedQuadCount += 8 * text.size();
 
 		struct Instance
 		{
@@ -419,7 +412,7 @@ namespace RenderOverlays
 			float xAtLineStart = x, yAtLineStart = y;
 			unsigned lineIdx = 0;
 
-			if (flags & DrawTextFlags::Snap) {
+			if (SnapCoords) {
 				x = xScale * (int)(0.5f + x / xScale);
 				y = yScale * (int)(0.5f + y / yScale);
 			}
@@ -432,7 +425,7 @@ namespace RenderOverlays
 					x = xAtLineStart;
 					prevGlyph = 0;
 					y = yAtLineStart = yAtLineStart + yScale * font.GetFontProperties()._lineHeight;
-					if (flags & DrawTextFlags::Snap) {
+					if (SnapCoords) {
 						x = xScale * (int)(0.5f + x / xScale);
 						y = yScale * (int)(0.5f + y / yScale);
 					}
@@ -488,6 +481,7 @@ namespace RenderOverlays
 		// update the x values for each instance, now we know the set of bitmaps
 		float xIterator = 0;
 		{
+			// unsigned prev_rsb_delta = 0;
 			unsigned lineIdx = 0;
 			for (auto& inst:MakeIteratorRange(instances, &instances[instanceCount])) {
 				auto& bitmap = *bitmaps[inst._glyphIdx];
@@ -517,14 +511,17 @@ namespace RenderOverlays
 			}
 		}
 
-		for (auto* inst:MakeIteratorRange(sortedInstances, &sortedInstances[instanceCount])) {
-
+		// Advance until we find the first character that is actually going to render
+		// this is important because we don't want to start the WorkingSetType if absolutely nothing renders (eg, all whitespace)
+		unsigned firstRenderInstance = 0;
+		for (; firstRenderInstance<instanceCount; ++firstRenderInstance) {
+			auto* inst = sortedInstances[firstRenderInstance];
 			auto& bitmap = *bitmaps[inst->_glyphIdx];
 			if (!bitmap._width || !bitmap._height) continue;
 
 			float baseX = inst->_xy[0] + bitmap._bitmapOffsetX * xScale;
 			float baseY = inst->_xy[1] + bitmap._bitmapOffsetY * yScale;
-			if (flags & DrawTextFlags::Snap) {
+			if (SnapCoords) {
 				baseX = xScale * (int)(0.5f + baseX / xScale);
 				baseY = yScale * (int)(0.5f + baseY / yScale);
 			}
@@ -533,81 +530,132 @@ namespace RenderOverlays
 				baseX, baseY, 
 				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
 
-			if (__builtin_expect((maxX == 0.0f || pos.max[0] <= maxX) && (maxY == 0.0f || pos.max[1] <= maxY), true)) {
+			if (__builtin_expect(!CheckMaxXY || (pos.max[0] <= maxX && pos.max[1] <= maxY), true))
+				break;		// this one will render
+		}
 
-				if (!began) {
-					workingVertices = WorkingSetType{immediateDrawables, textureMan.GetFontTexture().GetSRV(), (unsigned)estimatedQuadCount};
-					began = true;
+		if (firstRenderInstance == instanceCount)
+			return { x + xIterator, y };
+
+		WorkingSetType workingVertices{immediateDrawables, textureMan.GetFontTexture().GetSRV(), (unsigned)estimatedQuadCount};
+		
+		auto shadowColor = ColorB{0, 0, 0, color.a};
+		if (flags & DrawTextFlags::Outline) {
+			for (auto* inst:MakeIteratorRange(&sortedInstances[firstRenderInstance], &sortedInstances[instanceCount])) {
+				auto& bitmap = *bitmaps[inst->_glyphIdx];
+				if (!bitmap._width || !bitmap._height) continue;
+
+				float baseX = inst->_xy[0] + bitmap._bitmapOffsetX * xScale;
+				float baseY = inst->_xy[1] + bitmap._bitmapOffsetY * yScale;
+				if (SnapCoords) {
+					baseX = xScale * (int)(0.5f + baseX / xScale);
+					baseY = yScale * (int)(0.5f + baseY / yScale);
 				}
 
-#if 0
-				if (flags & DrawTextFlags::Outline) {
+				Quad pos = Quad::MinMax(
+					baseX, baseY, 
+					baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
+
+				if (__builtin_expect(!CheckMaxXY || (pos.max[0] <= maxX && pos.max[1] <= maxY), true)) {
 					Quad shadowPos;
 					shadowPos = pos;
 					shadowPos.min[0] -= xScale;
 					shadowPos.max[0] -= xScale;
 					shadowPos.min[1] -= yScale;
 					shadowPos.max[1] -= yScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+					workingVertices.PushQuad(shadowPos, shadowColor, bitmap, depth);
 
 					shadowPos = pos;
 					shadowPos.min[1] -= yScale;
 					shadowPos.max[1] -= yScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+					workingVertices.PushQuad(shadowPos, shadowColor, bitmap, depth);
 
 					shadowPos = pos;
 					shadowPos.min[0] += xScale;
 					shadowPos.max[0] += xScale;
 					shadowPos.min[1] -= yScale;
 					shadowPos.max[1] -= yScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+					workingVertices.PushQuad(shadowPos, shadowColor, bitmap, depth);
 
 					shadowPos = pos;
 					shadowPos.min[0] -= xScale;
 					shadowPos.max[0] -= xScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+					workingVertices.PushQuad(shadowPos, shadowColor, bitmap, depth);
 
 					shadowPos = pos;
 					shadowPos.min[0] += xScale;
 					shadowPos.max[0] += xScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+					workingVertices.PushQuad(shadowPos, shadowColor, bitmap, depth);
 
 					shadowPos = pos;
 					shadowPos.min[0] -= xScale;
 					shadowPos.max[0] -= xScale;
 					shadowPos.min[1] += yScale;
 					shadowPos.max[1] += yScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+					workingVertices.PushQuad(shadowPos, shadowColor, bitmap, depth);
 
 					shadowPos = pos;
 					shadowPos.min[1] += yScale;
 					shadowPos.max[1] += yScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+					workingVertices.PushQuad(shadowPos, shadowColor, bitmap, depth);
 
 					shadowPos = pos;
 					shadowPos.min[0] += xScale;
 					shadowPos.max[0] += xScale;
 					shadowPos.min[1] += yScale;
 					shadowPos.max[1] += yScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+					workingVertices.PushQuad(shadowPos, shadowColor, bitmap, depth);
+				}
+			}
+		}
+
+		if (flags & DrawTextFlags::Shadow) {
+			for (auto* inst:MakeIteratorRange(&sortedInstances[firstRenderInstance], &sortedInstances[instanceCount])) {
+				auto& bitmap = *bitmaps[inst->_glyphIdx];
+				if (!bitmap._width || !bitmap._height) continue;
+
+				float baseX = inst->_xy[0] + bitmap._bitmapOffsetX * xScale;
+				float baseY = inst->_xy[1] + bitmap._bitmapOffsetY * yScale;
+				if (SnapCoords) {
+					baseX = xScale * (int)(0.5f + baseX / xScale);
+					baseY = yScale * (int)(0.5f + baseY / yScale);
 				}
 
-				if (flags & DrawTextFlags::Shadow) {
+				Quad pos = Quad::MinMax(
+					baseX, baseY, 
+					baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
+
+				if (__builtin_expect(!CheckMaxXY || (pos.max[0] <= maxX && pos.max[1] <= maxY), true)) {
 					Quad shadowPos = pos;
 					shadowPos.min[0] += xScale;
 					shadowPos.max[0] += xScale;
 					shadowPos.min[1] += yScale;
 					shadowPos.max[1] += yScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+					workingVertices.PushQuad(shadowPos, shadowColor, bitmap, depth);
 				}
-#endif
-
-				workingVertices.PushQuad(pos, inst->_color, bitmap, depth);
 			}
 		}
 
-		if (began)
-			workingVertices.Complete();
+		for (auto* inst:MakeIteratorRange(&sortedInstances[firstRenderInstance], &sortedInstances[instanceCount])) {
+			auto& bitmap = *bitmaps[inst->_glyphIdx];
+			if (!bitmap._width || !bitmap._height) continue;
+
+			float baseX = inst->_xy[0] + bitmap._bitmapOffsetX * xScale;
+			float baseY = inst->_xy[1] + bitmap._bitmapOffsetY * yScale;
+			if (SnapCoords) {
+				baseX = xScale * (int)(0.5f + baseX / xScale);
+				baseY = yScale * (int)(0.5f + baseY / yScale);
+			}
+
+			Quad pos = Quad::MinMax(
+				baseX, baseY, 
+				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
+
+			if (__builtin_expect(!CheckMaxXY || (pos.max[0] <= maxX && pos.max[1] <= maxY), true))
+				workingVertices.PushQuad(pos, inst->_color, bitmap, depth);
+		}
+
+		workingVertices.Complete();
 		return { x + xIterator, y };		// y is at the baseline here
 	}
 
@@ -620,11 +668,20 @@ namespace RenderOverlays
                         float scale, float depth,
                         ColorB col)
 	{
-		if (__builtin_expect(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
-			return DrawTemplate<utf8, WorkingVertexSetFontResource>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
+		assert(!(flags & DrawTextFlags::Snap));		// we could support this by using the SnapCoords template parameter to DrawTemplate<>
+		if (maxX || maxY) {
+			// checking maximum extents
+			if (__builtin_expect(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
+				return DrawTemplate<utf8, WorkingVertexSetFontResource, true, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
+			} else {
+				return DrawTemplate<utf8, WorkingVertexSetPCT, true, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
+			}
 		} else {
-			return DrawTemplate<utf8, WorkingVertexSetPCT>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
-			
+			if (__builtin_expect(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
+				return DrawTemplate<utf8, WorkingVertexSetFontResource, false, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
+			} else {
+				return DrawTemplate<utf8, WorkingVertexSetPCT, false, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
+			}
 		}
 	}
 
@@ -637,10 +694,20 @@ namespace RenderOverlays
                         float scale, float depth,
                         ColorB col)
 	{
-		if (__builtin_expect(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
-			return DrawTemplate<ucs4, WorkingVertexSetFontResource>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
+		assert(!(flags & DrawTextFlags::Snap));
+		if (maxX || maxY) {
+			// checking maximum extents
+			if (__builtin_expect(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
+				return DrawTemplate<ucs4, WorkingVertexSetFontResource, true, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
+			} else {
+				return DrawTemplate<ucs4, WorkingVertexSetPCT, true, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
+			}
 		} else {
-			return DrawTemplate<ucs4, WorkingVertexSetPCT>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
+			if (__builtin_expect(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
+				return DrawTemplate<ucs4, WorkingVertexSetFontResource, false, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
+			} else {
+				return DrawTemplate<ucs4, WorkingVertexSetPCT, false, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
+			}
 		}
 	}
 
@@ -669,7 +736,6 @@ namespace RenderOverlays
 
 		auto* res = textureMan.GetFontTexture().GetUnderlying().get();
 
-		auto texDims = textureMan.GetTextureDimensions();
 		auto estimatedQuadCount = text.size();		// note -- shadow & outline will throw this off
 		WorkingVertexSetFontResource workingVertices;
 		bool began = false;
