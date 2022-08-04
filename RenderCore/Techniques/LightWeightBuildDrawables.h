@@ -24,5 +24,12 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<DrawablesPacket** const> pkts,
 			IteratorRange<const Float3x4*> objectToWorlds,
 			IteratorRange<const unsigned*> viewMasks);
+
+		static void SingleInstance(
+			DrawableConstructor& constructor,
+			IteratorRange<DrawablesPacket** const> pkts,
+			const Float3x4& objectToWorld,
+			unsigned deformInstanceIdx = 0,
+			uint32_t viewMask= 1);
 	};
 }}

@@ -275,4 +275,103 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 	}
+
+	namespace Internal
+	{
+		struct SingleInstanceViewMask_Drawable : public RenderCore::Techniques::Drawable
+		{
+			unsigned _firstIndex, _indexCount;
+			Float3x4 _localToWorld;
+			uint32_t _viewMask;
+		};
+
+		static void DrawFn_SingleInstanceViewMask(
+			RenderCore::Techniques::ParsingContext& parserContext,
+			const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext,
+			const SingleInstanceViewMask_Drawable& drawable)
+		{
+			assert(drawFnContext.GetBoundLooseImmediateDatas());
+			LocalTransformConstants localTransform;
+			localTransform._localSpaceView = {0,0,0};
+			RenderCore::UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(localTransform) };
+
+			auto viewCount = CountBitsSet(drawable._viewMask);
+			assert(viewCount);
+			localTransform._localToWorld = drawable._localToWorld;
+			localTransform._viewMask = drawable._viewMask;
+			drawFnContext.ApplyLooseUniforms(RenderCore::UniformsStream{{}, immDatas});
+			drawFnContext.DrawIndexedInstances(drawable._indexCount, viewCount, drawable._firstIndex);
+		}
+	}
+
+	void LightWeightBuildDrawables::SingleInstance(
+		DrawableConstructor& constructor,
+		IteratorRange<DrawablesPacket** const> pkts,
+		const Float3x4& objectToWorld,
+		unsigned deformInstanceIdx,
+		uint32_t viewMask)
+	{
+		using namespace RenderCore;
+		assert(viewMask);
+		assert(!constructor._cmdStreams.empty());
+		auto& cmdStream = constructor._cmdStreams.front();		// first is always the default
+		Internal::SingleInstanceViewMask_Drawable* drawables[dimof(cmdStream._drawCallCounts)];
+		RenderCore::Techniques::DrawablesPacket* pktForAllocations = nullptr;
+		for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c) {
+			if (cmdStream._drawCallCounts[c] && pkts[c]) {
+				drawables[c] = pkts[c]->_drawables.Allocate<Internal::SingleInstanceViewMask_Drawable>(cmdStream._drawCallCounts[c]);
+				pktForAllocations = pkts[c];
+			} else {
+				drawables[c] = nullptr;
+			}
+		}
+		if (!pktForAllocations) return;		// no overlap between our output pkts and what's in 'pkts'
+
+		auto nodeSpaceToWorld = Identity<Float3x4>();
+		const Float4x4* geoSpaceToNodeSpace = nullptr;
+		unsigned transformMarker = ~0u;
+		for (auto cmd:cmdStream.GetCmdStream()) {
+			switch (cmd.Cmd()) {
+			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
+				transformMarker = cmd.As<unsigned>();
+				assert(constructor._baseTransformsPerElement.size() == 1);
+				assert(transformMarker < constructor._baseTransforms.size());
+				break;
+			case (uint32_t)DrawableConstructor::Command::BeginElement:
+				assert(cmd.As<unsigned>() == 0);    // expecting only a single element
+				break;
+			case (uint32_t)DrawableConstructor::Command::SetGeoSpaceToNodeSpace:
+				geoSpaceToNodeSpace = (!cmd.RawData().empty()) ? &cmd.As<Float4x4>() : nullptr;
+				break;
+			case (uint32_t)DrawableConstructor::Command::ExecuteDrawCalls:
+				{
+					struct DrawCallsRef { unsigned _start, _end; };
+					auto& drawCallsRef = cmd.As<DrawCallsRef>();
+					assert(transformMarker != ~0u);		// SetTransformMarker must come first
+					Float3x4 localToWorld;
+					if (geoSpaceToNodeSpace) {
+						localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker], objectToWorld));
+					} else
+						localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker], objectToWorld);
+
+					for (const auto& dc:MakeIteratorRange(cmdStream._drawCalls.begin()+drawCallsRef._start, cmdStream._drawCalls.begin()+drawCallsRef._end)) {
+						if (!drawables[dc._batchFilter]) continue;
+						auto& drawable = *drawables[dc._batchFilter]++;
+						drawable._geo = constructor._drawableGeos[dc._drawableGeoIdx].get();
+						drawable._pipeline = constructor._pipelineAccelerators[dc._pipelineAcceleratorIdx].get();
+						drawable._descriptorSet = constructor._descriptorSetAccelerators[dc._descriptorSetAcceleratorIdx].get();
+						drawable._drawFn = (Techniques::ExecuteDrawableFn*)&Internal::DrawFn_InstancedFixedSkeletonViewMask;
+						drawable._looseUniformsInterface = &Internal::s_localTransformUSI;
+						assert(dc._firstVertex == 0);
+						drawable._firstIndex = dc._firstIndex;
+						drawable._indexCount = dc._indexCount;
+						drawable._localToWorld = localToWorld;
+						drawable._deformInstanceIdx = deformInstanceIdx;
+						drawable._viewMask = viewMask;
+					}
+				}
+				break;
+			}
+		}
+	}
 }}
