@@ -141,9 +141,9 @@ namespace SceneEngine
             Techniques::DrawablesPacket* pktPtr[(unsigned)Techniques::Batch::Max];
             for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c) pktPtr[c] = &pkt[c];
 			ExecuteSceneContext sceneExeContext;
-            sceneExeContext._view = {SceneView::Type::Other, parsingContext.GetProjectionDesc()};
+            sceneExeContext._views = {&parsingContext.GetProjectionDesc(), &parsingContext.GetProjectionDesc()+1};
             sceneExeContext._destinationPkts = {pktPtr, &pktPtr[(unsigned)Techniques::Batch::Max]};
-			placementsRenderer.BuildDrawables(
+			placementsRenderer.BuildDrawablesSingleView(
 				sceneExeContext,
 				cellSet, &object, &object+1);
             for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c)

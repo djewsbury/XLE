@@ -163,7 +163,7 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(viewMask != 0);
 		if (_deformAcceleratorPool && _deformAccelerator)
-			_deformAcceleratorPool->EnableInstance(*_deformAccelerator, deformInstanceIdx);
+			EnableInstanceDeform(*_deformAccelerator, deformInstanceIdx);
 
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
 		assert(cmdStream);
@@ -255,7 +255,7 @@ namespace RenderCore { namespace Techniques
 
 		assert(viewMask != 0);
 		if (_deformAcceleratorPool && _deformAccelerator)
-			_deformAcceleratorPool->EnableInstance(*_deformAccelerator, deformInstanceIdx);
+			EnableInstanceDeform(*_deformAccelerator, deformInstanceIdx);
 
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
 		assert(cmdStream);

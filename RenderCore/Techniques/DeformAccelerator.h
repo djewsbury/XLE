@@ -40,7 +40,6 @@ namespace RenderCore { namespace Techniques
 		virtual std::shared_ptr<IDeformGeoAttachment> GetDeformGeoAttachment(DeformAccelerator& deformAccelerator) = 0;
 		virtual std::shared_ptr<IDeformUniformsAttachment> GetDeformUniformsAttachment(DeformAccelerator& deformAccelerator) = 0;
 
-		virtual void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) = 0;
 		virtual void ReadyInstances(IThreadContext&) = 0;
 		virtual void SetVertexInputBarrier(IThreadContext&) const = 0;
 		virtual void OnFrameBarrier() = 0;
@@ -61,6 +60,8 @@ namespace RenderCore { namespace Techniques
 	};
 
 	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<IDrawablesPool>, std::shared_ptr<ICompiledLayoutPool>);
+
+	void EnableInstanceDeform(DeformAccelerator& accelerator, unsigned instanceIdx);
 
 	class IGeoDeformer;
 	class DeformerToRendererBinding;

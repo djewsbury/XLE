@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "CharacterScene.h"
+#include "IScene.h"
 #include "../../RenderCore/Techniques/ModelRendererConstruction.h"
 #include "../../RenderCore/Techniques/DeformerConstruction.h"
 #include "../../RenderCore/Techniques/ResourceConstructionContext.h"
@@ -14,6 +15,7 @@
 #include "../../RenderCore/Techniques/Drawables.h"
 #include "../../RenderCore/Techniques/LightWeightBuildDrawables.h"
 #include "../../RenderCore/Techniques/SkinDeformer.h"
+#include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../../RenderCore/BufferUploads/BatchedResources.h"
 #include "../../RenderCore/Assets/ModelScaffold.h"
@@ -21,7 +23,9 @@
 #include "../../RenderCore/Assets/AnimationScaffoldInternal.h"
 #include "../../Assets/AssetTraits.h"
 #include "../../Assets/DeferredConstruction.h"
+#include "../../Math/ProjectionMath.h"
 #include "../../Utility/Threading/Mutex.h"
+#include "../../Utility/BitUtils.h"
 #include <future>
 
 namespace SceneEngine
@@ -52,6 +56,7 @@ namespace SceneEngine
 			std::shared_ptr<RenderCore::Assets::SkeletonScaffold> _skeletonScaffold;
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> _firstModelScaffold;
 			RenderCore::BufferUploads::CommandListID _completionCmdList;
+			std::pair<Float3, Float3> _aabb;
 
 			const RenderCore::Assets::SkeletonMachine& GetSkeletonMachine() const
 			{
@@ -76,12 +81,28 @@ namespace SceneEngine
 			std::shared_ptr<ModelEntry> _model;
 			std::shared_ptr<DeformerEntry> _deformer;
 			std::shared_ptr<AnimSetEntry> _animSet;
-			::Assets::Marker<Renderer> _rendererMarker;
-			::Assets::Marker<Animator> _animatorMarker;
+			Renderer _renderer;
+			Animator _animator;
+			BitHeap _allocatedInstances;
+			::Assets::DependencyValidation _depVal;
+		};
+
+		struct PendingUpdate
+		{
+			std::weak_ptr<RendererEntry> _dst;
+			Renderer _renderer;
+			Animator _animator;
+		};
+
+		struct PendingExceptionUpdate
+		{
+			std::weak_ptr<RendererEntry> _dst;
+			::Assets::Blob _log;
+			::Assets::DependencyValidation _depVal;
 		};
 	}
 
-	class CharacterScene : public ICharacterScene
+	class CharacterScene : public ICharacterScene, public std::enable_shared_from_this<CharacterScene>
 	{
 	public:
 		OpaquePtr CreateModel(std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>) override;
@@ -89,11 +110,10 @@ namespace SceneEngine
 		OpaquePtr CreateAnimationSet(StringSection<>) override;
 		OpaquePtr CreateRenderer(OpaquePtr model, OpaquePtr deformers, OpaquePtr animationSet) override;
 
-		std::unique_ptr<CmdListBuilder, void(*)(CmdListBuilder*)> BeginCmdList(
-			RenderCore::IThreadContext& threadContext,
-			IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts) override;
 		void OnFrameBarrier() override;
 		void CancelConstructions() override;
+
+		std::shared_ptr<Assets::OperationContext> GetLoadingContext() override;
 
 		CharacterScene(
 			std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
@@ -115,6 +135,8 @@ namespace SceneEngine
 		std::vector<std::weak_ptr<Internal::DeformerEntry>> _deformerEntries;
 		std::vector<std::pair<uint64_t, std::weak_ptr<Internal::AnimSetEntry>>> _animSetEntries;
 		std::vector<std::weak_ptr<Internal::RendererEntry>> _renderers;
+		std::vector<Internal::PendingUpdate> _pendingUpdates;
+		std::vector<Internal::PendingExceptionUpdate> _pendingExceptionUpdates;
 	};
 
 
@@ -239,8 +261,13 @@ namespace SceneEngine
 			deformerConstructionFuture = CreateDefaultDeformerConstruction(newEntry->_model->_completedConstruction);
 		}
 
+		std::promise<Internal::Renderer> rendererPromise;
+		std::promise<Internal::Animator> animatorPromise;
+		std::shared_future<Internal::Renderer> rendererFuture = rendererPromise.get_future();
+		auto animatorFuture = animatorPromise.get_future();
+
 		::Assets::WhenAll(newEntry->_model->_completedConstruction, deformerConstructionFuture).ThenConstructToPromise(
-			newEntry->_rendererMarker.AdoptPromise(),
+			std::move(rendererPromise),
 			[drawablesPool=_drawablesPool, pipelineAcceleratorPool=_pipelineAcceleratorPool, constructionContext=_constructionContext, deformAcceleratorPool=_deformAcceleratorPool](
 				auto&& promise, 
 				auto completedConstruction, auto completedDeformerConstruction) mutable {
@@ -269,8 +296,12 @@ namespace SceneEngine
 							renderer._completionCmdList = std::max(renderer._drawableConstructor->_completionCommandList, geoDeformer->GetCompletionCommandList());
 							renderer._deformAccelerator = deformAccelerator;
 							renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
-							if (completedConstruction->GetElementCount() != 0)
+							if (completedConstruction->GetElementCount() != 0) {
 								renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
+								renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
+							} else {
+								renderer._aabb = {Zero<Float3>(), Zero<Float3>()};
+							}
 							return renderer;
 						});
 				} else {
@@ -288,8 +319,8 @@ namespace SceneEngine
 				}
 			});
 
-		::Assets::WhenAll(newEntry->_rendererMarker.ShareFuture(), newEntry->_animSet->_animSetFuture).ThenConstructToPromise(
-			newEntry->_animatorMarker.AdoptPromise(),
+		::Assets::WhenAll(rendererFuture, newEntry->_animSet->_animSetFuture).ThenConstructToPromise(
+			std::move(animatorPromise),
 			[deformAcceleratorPool=_deformAcceleratorPool](const auto& renderer, auto animSet) mutable {
 				Internal::Animator result;
 
@@ -308,9 +339,29 @@ namespace SceneEngine
 				return result;
 			});
 
+		::Assets::WhenAll(rendererFuture, std::move(animatorFuture)).Then(
+			[dstEntryWeak=std::weak_ptr<Internal::RendererEntry>(newEntry), sceneWeak=weak_from_this()](auto rendererFuture, auto animatorFuture) {
+				auto scene = sceneWeak.lock();
+				if (scene) {
+					ScopedLock(scene->_poolLock);
+					TRY {
+						auto renderer = rendererFuture.get();
+						auto animator = animatorFuture.get();
+						scene->_pendingUpdates.emplace_back(Internal::PendingUpdate { dstEntryWeak, std::move(renderer), std::move(animator) });
+					} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
+						scene->_pendingExceptionUpdates.emplace_back(Internal::PendingExceptionUpdate { dstEntryWeak, e.GetActualizationLog(), e.GetDependencyValidation() });
+					} CATCH(const ::Assets::Exceptions::InvalidAsset& e) {
+						scene->_pendingExceptionUpdates.emplace_back(Internal::PendingExceptionUpdate { dstEntryWeak, e.GetActualizationLog(), e.GetDependencyValidation() });
+					} CATCH(const std::exception& e) {
+						scene->_pendingExceptionUpdates.emplace_back(Internal::PendingExceptionUpdate { dstEntryWeak, ::Assets::AsBlob(e.what()) });
+					} CATCH_END
+				}
+			});
+
 		return newEntry;
 	}
 
+#if 0
 	namespace Internal
 	{
 		class CharacterSceneRealCmdListBuilder
@@ -401,14 +452,155 @@ namespace SceneEngine
 			(CmdListBuilder*)new Internal::CharacterSceneRealCmdListBuilder(threadContext, pkts),
 			[](CmdListBuilder* ptr) { delete (Internal::CharacterSceneRealCmdListBuilder*)ptr; });
 	}
+#endif
+
+	unsigned CharacterInstanceAllocate(void* renderer)
+	{
+		auto* realRenderer = (Internal::RendererEntry*)renderer;
+		return realRenderer->_allocatedInstances.Allocate();
+	}
+
+	void CharacterInstanceRelease(void* renderer, unsigned instanceIdx)
+	{
+		auto* realRenderer = (Internal::RendererEntry*)renderer;
+		realRenderer->_allocatedInstances.Deallocate(instanceIdx);
+	}
+
+	void ICharacterScene::BuildDrawablesHelper::BuildDrawables(
+		unsigned instanceIdx,
+		const Float3x4& localToWorld, uint32_t viewMask, uint64_t cmdStream)
+	{
+		assert(cmdStream == 0);
+		RenderCore::Techniques::LightWeightBuildDrawables::SingleInstance(
+			*_activeRenderer->_drawableConstructor,
+			_pkts,
+			localToWorld, instanceIdx, viewMask);
+		EnableInstanceDeform(*_activeRenderer->_deformAccelerator, instanceIdx);
+	}
+
+	void ICharacterScene::BuildDrawablesHelper::CullAndBuildDrawables(
+		unsigned instanceIdx, const Float3x4& localToWorld)
+	{
+		if (_complexCullingVolume && _complexCullingVolume->TestAABB(localToWorld, _activeRenderer->_aabb.first, _activeRenderer->_aabb.second) == CullTestResult::Culled)
+			return;
+		uint32_t viewMask = 0;
+		for (unsigned v=0; v<_views.size(); ++v) {
+			auto localToClip = Combine(localToWorld, _views[v]._worldToProjection);
+			viewMask |= (!CullAABB(localToClip, _activeRenderer->_aabb.first, _activeRenderer->_aabb.second, RenderCore::Techniques::GetDefaultClipSpaceType())) << v;
+		}
+		if (!viewMask) return;
+
+		RenderCore::Techniques::LightWeightBuildDrawables::SingleInstance(
+			*_activeRenderer->_drawableConstructor,
+			_pkts,
+			localToWorld, instanceIdx, viewMask);
+		EnableInstanceDeform(*_activeRenderer->_deformAccelerator, instanceIdx);
+	}
+
+	bool ICharacterScene::BuildDrawablesHelper::SetRenderer(void* renderer)
+	{
+		auto* rendererEntry = (Internal::RendererEntry*)renderer;
+		_activeRenderer = &rendererEntry->_renderer;
+		return _activeRenderer->_drawableConstructor != nullptr;
+	}
+
+	ICharacterScene::BuildDrawablesHelper::BuildDrawablesHelper(
+		RenderCore::IThreadContext& threadContext,
+		ICharacterScene& scene,
+		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
+		IteratorRange<const RenderCore::Techniques::ProjectionDesc*> views,
+		const XLEMath::ArbitraryConvexVolumeTester* complexCullingVolume)
+	: _pkts(pkts)
+	, _activeRenderer(nullptr)
+	, _views(views), _complexCullingVolume(complexCullingVolume)
+	{}
+
+	ICharacterScene::BuildDrawablesHelper::BuildDrawablesHelper(
+		RenderCore::IThreadContext& threadContext,
+		ICharacterScene& scene,
+		SceneEngine::ExecuteSceneContext& executeContext)
+	: _pkts(executeContext._destinationPkts)
+	, _activeRenderer(nullptr)
+	, _views(executeContext._views), _complexCullingVolume(executeContext._complexCullingVolume)
+	{
+		
+	}
+
+	bool ICharacterScene::AnimationConfigureHelper::SetRenderer(void* renderer)
+	{
+		auto* realRenderer = (Internal::RendererEntry*)renderer;
+		if (realRenderer->_renderer._drawableConstructor) {
+			_activeAnimator = &realRenderer->_animator;
+			_activeSkeletonMachine = &realRenderer->_renderer.GetSkeletonMachine();
+			return true;
+		} else {
+			_activeAnimator = nullptr;
+			_activeSkeletonMachine = nullptr;
+			return false;
+		}
+	}
+
+	void ICharacterScene::AnimationConfigureHelper::ApplySingleAnimation(unsigned instanceIdx, uint64_t id, float time)
+	{
+		assert(_activeAnimator);
+
+		// Get the animation parameter set for this anim state, and run the skeleton machine with those parameters
+		auto parameterBlockSize = _activeAnimator->_animSetBinding.GetParameterDefaultsBlock().size();
+		uint8_t parameterBlock[parameterBlockSize];
+		std::memcpy(parameterBlock, _activeAnimator->_animSetBinding.GetParameterDefaultsBlock().begin(), parameterBlockSize);
+
+		// calculate animated parameters
+		_activeAnimator->_animSet->ImmutableData()._animationSet.CalculateOutput(
+			MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]),
+			RenderCore::Assets::AnimationState{time, id},
+			_activeAnimator->_animSetBinding.GetParameterBindingRules());
+
+		// generate the joint transforms based on the animation parameters
+		Float4x4 skeletonMachineOutput[_activeSkeletonMachine->GetOutputMatrixCount()];
+		_activeAnimator->_animSetBinding.GenerateOutputTransforms(
+			MakeIteratorRange(skeletonMachineOutput, &skeletonMachineOutput[_activeSkeletonMachine->GetOutputMatrixCount()]),
+			MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]));
+
+		// set the skeleton machine output to the deformer
+		_activeAnimator->_skeletonInterface->FeedInSkeletonMachineResults(
+			instanceIdx, MakeIteratorRange(skeletonMachineOutput, &skeletonMachineOutput[_activeSkeletonMachine->GetOutputMatrixCount()]));
+	}
+
+	ICharacterScene::AnimationConfigureHelper::AnimationConfigureHelper(ICharacterScene& scene)
+	: _scene(&scene), _activeAnimator(nullptr), _activeSkeletonMachine(nullptr)
+	{}
 
 	void CharacterScene::OnFrameBarrier()
-	{}
+	{
+		// flush out any pending updates
+		ScopedLock(_poolLock);
+		for (auto&u:_pendingUpdates) {
+			auto l = u._dst.lock();
+			if (!l) continue;
+			l->_renderer = std::move(u._renderer);
+			l->_animator = std::move(u._animator);
+			// todo -- set dep val
+		}
+		_pendingUpdates.clear();
+		for (auto&u:_pendingExceptionUpdates) {
+			auto l = u._dst.lock();
+			if (!l) continue;
+			l->_depVal = std::move(u._depVal);
+			// todo -- record exception msg
+		}
+		_pendingExceptionUpdates.clear();
+		// todo -- check invalidations
+	}
 
 	void CharacterScene::CancelConstructions()
 	{
 		if (_constructionContext)
 			_constructionContext->Cancel();
+	}
+
+	std::shared_ptr<Assets::OperationContext> CharacterScene::GetLoadingContext()
+	{
+		return _loadingContext;
 	}
 
 	CharacterScene::CharacterScene(

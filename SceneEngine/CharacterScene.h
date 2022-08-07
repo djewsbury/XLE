@@ -9,12 +9,16 @@
 #include "../Utility/IteratorUtils.h"
 #include <memory>
 
-namespace RenderCore { namespace Techniques { class ModelRendererConstruction; class DeformerConstruction; class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class DrawablesPacket; }}
+namespace RenderCore { namespace Techniques { class ModelRendererConstruction; class DeformerConstruction; class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class DrawablesPacket; class ProjectionDesc; }}
 namespace RenderCore { namespace BufferUploads { class IManager; }}
 namespace RenderCore { class IThreadContext; }
+namespace RenderCore { namespace Assets { class SkeletonMachine; }}
 namespace Assets { class OperationContext; }
+namespace XLEMath { class ArbitraryConvexVolumeTester; }
 namespace SceneEngine
 {
+	class ExecuteSceneContext;
+
 	class ICharacterScene
 	{
 	public:
@@ -24,12 +28,21 @@ namespace SceneEngine
 		virtual OpaquePtr CreateAnimationSet(StringSection<>) = 0;
 		virtual OpaquePtr CreateRenderer(OpaquePtr model, OpaquePtr deformers, OpaquePtr animationSet) = 0;
 
-		class CmdListBuilder;
-		virtual std::unique_ptr<CmdListBuilder, void(*)(CmdListBuilder*)> BeginCmdList(
-			RenderCore::IThreadContext& threadContext,
-			IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts) = 0;
 		virtual void OnFrameBarrier() = 0;
 		virtual void CancelConstructions() = 0;
+
+		struct BuildDrawablesHelper;
+		BuildDrawablesHelper BeginBuildDrawables(
+			RenderCore::IThreadContext&, IteratorRange<RenderCore::Techniques::DrawablesPacket** const>,
+			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> = {},
+			const XLEMath::ArbitraryConvexVolumeTester* = nullptr);
+
+		BuildDrawablesHelper BeginBuildDrawables(RenderCore::IThreadContext&, ExecuteSceneContext&);
+
+		struct AnimationConfigureHelper;
+		AnimationConfigureHelper BeginAnimationConfigure();
+
+		virtual std::shared_ptr<Assets::OperationContext> GetLoadingContext() = 0;
 
 		virtual ~ICharacterScene();
 	};
@@ -41,14 +54,67 @@ namespace SceneEngine
 		std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
 		std::shared_ptr<Assets::OperationContext> loadingContext);
 
-	class ICharacterScene::CmdListBuilder
+	namespace Internal { struct Renderer; struct Animator; }
+	struct ICharacterScene::BuildDrawablesHelper
+	{
+		bool SetRenderer(void* renderer);
+		void BuildDrawables(
+			unsigned instanceIdx,
+			const Float3x4& localToWorld, uint32_t viewMask = 1, uint64_t cmdStream = 0);
+
+		void CullAndBuildDrawables(
+			unsigned instanceIdx, const Float3x4& localToWorld);
+
+		BuildDrawablesHelper(
+			RenderCore::IThreadContext& threadContext,
+			ICharacterScene& scene,
+			IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
+			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> views = {},
+			const XLEMath::ArbitraryConvexVolumeTester* complexCullingVolume = nullptr);
+
+		BuildDrawablesHelper(
+			RenderCore::IThreadContext& threadContext,
+			ICharacterScene& scene,
+			SceneEngine::ExecuteSceneContext& executeContext);
+	private:
+		Internal::Renderer* _activeRenderer;
+		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> _pkts;
+		IteratorRange<const RenderCore::Techniques::ProjectionDesc*> _views;
+		const XLEMath::ArbitraryConvexVolumeTester* _complexCullingVolume;
+	};
+
+	unsigned CharacterInstanceAllocate(void* renderer);
+	void CharacterInstanceRelease(void* renderer, unsigned instanceIdx);
+
+	class ICharacterScene::AnimationConfigureHelper
 	{
 	public:
-		void BeginRenderer(void*);
-
-		void ApplyAnimation(uint64_t id, float time);
-		void RenderInstance(const Float3x4& localToWorld, uint32_t viewMask=1, uint64_t cmdStream=0);
-		void NextInstance();
+		bool SetRenderer(void* renderer);
+		void ApplySingleAnimation(unsigned instanceIdx, uint64_t id, float time);
+		AnimationConfigureHelper(ICharacterScene& scene);
+	private:
+		ICharacterScene* _scene;
+		Internal::Animator* _activeAnimator;
+		const RenderCore::Assets::SkeletonMachine* _activeSkeletonMachine;
 	};
+
+	inline auto ICharacterScene::BeginBuildDrawables(
+		RenderCore::IThreadContext& threadContext, IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkt,
+		IteratorRange<const RenderCore::Techniques::ProjectionDesc*> viewDesc,
+		const XLEMath::ArbitraryConvexVolumeTester* complexCullingTester) -> BuildDrawablesHelper
+	{
+		return BuildDrawablesHelper { threadContext, *this, pkt, viewDesc, complexCullingTester };
+	}
+
+	inline auto ICharacterScene::BeginBuildDrawables(
+		RenderCore::IThreadContext& threadContext, ExecuteSceneContext& executeContext) -> BuildDrawablesHelper
+	{
+		return BuildDrawablesHelper { threadContext, *this, executeContext };
+	}
+
+	inline auto ICharacterScene::BeginAnimationConfigure() -> AnimationConfigureHelper
+	{
+		return AnimationConfigureHelper { *this };
+	}
 
 }

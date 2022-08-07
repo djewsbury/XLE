@@ -67,14 +67,14 @@ namespace ToolsRig
         for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c)
             pktPtrs[c] = &pkts[c];
         sceneExeContext._destinationPkts = MakeIteratorRange(pktPtrs);
-        sceneExeContext._view = {SceneView::Type::Normal, parserContext.GetProjectionDesc()};
+        sceneExeContext._views = {&parserContext.GetProjectionDesc(), &parserContext.GetProjectionDesc()+1};
 		if (materialGuid == ~0ull) {
-			renderer.BuildDrawables(
+			renderer.BuildDrawablesSingleView(
 				sceneExeContext,
 				cellSet, filterBegin, filterEnd);
 		} else {
 			auto del = std::make_shared<PreDrawDelegate>(materialGuid);
-			renderer.BuildDrawables(sceneExeContext, cellSet, filterBegin, filterEnd, del);
+			renderer.BuildDrawablesSingleView(sceneExeContext, cellSet, filterBegin, filterEnd, del);
 		}
 
         for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c) {

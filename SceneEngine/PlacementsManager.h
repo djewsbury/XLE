@@ -77,22 +77,12 @@ namespace SceneEngine
     public:
             // -------------- Rendering --------------
         void BuildDrawables(
-            const ExecuteSceneContext& executeContext,
-			const PlacementCellSet& cellSet);
-
-        void BuildDrawables(
-            const ExecuteSceneContext& executeContext,
-            IteratorRange<const Float4x4*> worldToCullingFrustums,
-			const PlacementCellSet& cellSet);
-
-        void BuildDrawables(
-            const ExecuteSceneContext& executeContext,
-            const XLEMath::ArbitraryConvexVolumeTester& volumeTester,
+            ExecuteSceneContext& executeContext,
 			const PlacementCellSet& cellSet);
 
             // -------------- Render filtered --------------
-        void BuildDrawables(
-            const ExecuteSceneContext& executeContext,
+        void BuildDrawablesSingleView(
+            ExecuteSceneContext& executeContext,
             const PlacementCellSet& cellSet,
             const PlacementGUID* begin, const PlacementGUID* end,
 			const std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate>& preDrawDelegate = nullptr);
@@ -119,6 +109,10 @@ namespace SceneEngine
     protected:
         class Pimpl;
         std::unique_ptr<Pimpl> _pimpl;
+
+        void BuildDrawablesComplex(
+            ExecuteSceneContext& executeContext,
+			const PlacementCellSet& cellSet);
     };
 
     class PlacementsIntersections

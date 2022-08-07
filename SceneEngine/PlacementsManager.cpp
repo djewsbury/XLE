@@ -360,14 +360,16 @@ namespace SceneEngine
             const ArbitraryConvexVolumeTester* volumeTester,
             IteratorRange<const Float4x4*> worldToCullingFrustums,
             uint32_t viewMask,
-            const PlacementCell& cell);
+            const PlacementCell& cell,
+            CullMetrics* metrics = nullptr);
 
         void CullCell(
             std::vector<std::pair<unsigned, uint32_t>>& visiblePlacements,
             IteratorRange<const Float4x4*> cellToCullingFrustums,
             uint32_t viewMask,
             const Placements& placements,
-            const GenericQuadTree* quadTree);
+            const GenericQuadTree* quadTree,
+            CullMetrics* metrics = nullptr);
 
         void CullCell(
             std::vector<std::pair<unsigned, uint32_t>>& visiblePlacements,
@@ -376,7 +378,8 @@ namespace SceneEngine
             IteratorRange<const Float4x4*> cellToCullingFrustums,
             uint32_t viewMask,
             const Placements& placements,
-            const GenericQuadTree* quadTree);
+            const GenericQuadTree* quadTree,
+            CullMetrics* metrics = nullptr);
 
         const Placements* CullCell(
             std::vector<unsigned>& visiblePlacements,
@@ -533,7 +536,8 @@ namespace SceneEngine
         const ArbitraryConvexVolumeTester* arbitraryVolume,
         IteratorRange<const Float4x4*> worldToCullingFrustums,
         uint32_t viewMask,
-        const PlacementCell& cell)
+        const PlacementCell& cell,
+        CullMetrics* metrics)
     {
         if (cell._filename[0] == '[') return nullptr;
 
@@ -561,14 +565,16 @@ namespace SceneEngine
                 MakeIteratorRange(cellToCullingFrustums, &cellToCullingFrustums[worldToCullingFrustums.size()]),
                 viewMask,
                 *placements, 
-                renderInfo._quadTree.get());
+                renderInfo._quadTree.get(),
+                metrics);
 
         } else {
             CullCell(
                 visibleObjects, MakeIteratorRange(cellToCullingFrustums, &cellToCullingFrustums[worldToCullingFrustums.size()]),
                 viewMask,
                 *placements, 
-                renderInfo._quadTree.get());
+                renderInfo._quadTree.get(),
+                metrics);
         }
 
         return placements;
@@ -597,8 +603,8 @@ namespace SceneEngine
         }
 
         CullCell(
-            visibleObjects, tester, cell._cellToWorld, 
-            *placements, 
+            visibleObjects, tester, cell._cellToWorld,
+            *placements,
             renderInfo._quadTree.get(),
             metrics);
 
@@ -613,7 +619,7 @@ namespace SceneEngine
             supplementsBuffer+supplementsOffset+1+supplementsBuffer[supplementsOffset]);
     }
 
-    static Utility::Internal::StringMeldInPlace<char> QuickMetrics(const ExecuteSceneContext& executeContext)
+    static Utility::Internal::StringMeldInPlace<char> QuickMetrics(ExecuteSceneContext& executeContext)
     {
         return StringMeldAppend(executeContext._quickMetrics);
     }
@@ -669,7 +675,8 @@ namespace SceneEngine
         IteratorRange<const Float4x4*> cellToCullingFrustums,
         uint32_t viewMask,
         const Placements& placements,
-        const GenericQuadTree* quadTree)
+        const GenericQuadTree* quadTree,
+        CullMetrics* metrics)
     {
         auto placementCount = placements.GetObjectReferenceCount();
         if (!placementCount)
@@ -681,15 +688,19 @@ namespace SceneEngine
             auto cullResults = quadTree->GetMaxResults();
             assert(cullResults);
             visiblePlacements.resize(cullResults);
-            GenericQuadTree::Metrics metrics;
 			assert(placementCount < (1<<28));
             quadTree->CalculateVisibleObjects(
                 cellToCullingFrustums, viewMask, RenderCore::Techniques::GetDefaultClipSpaceType(),
                 &objRef->_cellSpaceBoundary,
                 sizeof(Placements::ObjectReference),
                 AsPointer(visiblePlacements.begin()), cullResults, cullResults,
-                &metrics);
+                metrics ? &metrics->_qtMetrics : nullptr);
             visiblePlacements.resize(cullResults);
+
+            if (metrics) {
+                metrics->_qtObjectCount += quadTree->GetMaxResults();
+                metrics->_qtTotalNodeCount += quadTree->GetNodeCount();
+            }
 
                 // we have to sort to return to our expected order
             std::sort(
@@ -709,7 +720,8 @@ namespace SceneEngine
         IteratorRange<const Float4x4*> cellToCullingFrustums,
         uint32_t viewMask,
         const Placements& placements,
-        const GenericQuadTree* quadTree)
+        const GenericQuadTree* quadTree,
+        CullMetrics* metrics)
     {
         auto placementCount = placements.GetObjectReferenceCount();
         if (!placementCount)
@@ -721,7 +733,6 @@ namespace SceneEngine
             auto cullResults = quadTree->GetMaxResults();
             assert(cullResults);
             visiblePlacements.resize(cullResults);
-            GenericQuadTree::Metrics metrics;
 			assert(placementCount < (1<<28));
             quadTree->CalculateVisibleObjects(
                 arbitraryVolume, cellToArbitraryVolume,
@@ -729,8 +740,13 @@ namespace SceneEngine
                 &objRef->_cellSpaceBoundary,
                 sizeof(Placements::ObjectReference),
                 AsPointer(visiblePlacements.begin()), cullResults, cullResults,
-                &metrics);
+                metrics ? &metrics->_qtMetrics : nullptr);
             visiblePlacements.resize(cullResults);
+
+            if (metrics) {
+                metrics->_qtObjectCount += quadTree->GetMaxResults();
+                metrics->_qtTotalNodeCount += quadTree->GetNodeCount();
+            }
 
                 // we have to sort to return to our expected order
             std::sort(
@@ -995,7 +1011,7 @@ namespace SceneEngine
     struct BuildDrawablesMetricsHelper
     {
         const char* _testName;
-        const ExecuteSceneContext* _executeContext;
+        ExecuteSceneContext* _executeContext;
         CullMetrics _overallCullMetrics;
         BuildDrawablesMetrics _overallBDMetrics;
 
@@ -1019,14 +1035,16 @@ namespace SceneEngine
     };
 
     void PlacementsRenderer::BuildDrawables(
-        const ExecuteSceneContext& executeContext,
+        ExecuteSceneContext& executeContext,
         const PlacementCellSet& cellSet)
     {
-        const auto& view = executeContext._view;
-        if (view._complexVolumeTester) {
-            BuildDrawables(executeContext, *view._complexVolumeTester, cellSet);
+        if (executeContext._complexCullingVolume || executeContext._views.size() > 1) {
+            BuildDrawablesComplex(executeContext, cellSet);
             return;
         }
+        // what follows is the "simplier" mode that have only one view & no complex culling volume
+        assert(executeContext._views.size() == 1);
+        auto worldToProjection =  executeContext._views[0]._worldToProjection;
 
         static std::vector<unsigned> visibleObjects;
         BuildDrawablesMetricsHelper metricsHelper { "AABB test", &executeContext };
@@ -1037,7 +1055,7 @@ namespace SceneEngine
             // non-asset exceptions will throw back to the caller and bypass EndRender()
         auto& cells = cellSet._pimpl->_cells;
         for (auto i=cells.begin(); i!=cells.end(); ++i) {
-            if (CullAABB_Aligned(view._projection._worldToProjection, i->_aabbMin, i->_aabbMax, RenderCore::Techniques::GetDefaultClipSpaceType()))
+            if (CullAABB_Aligned(worldToProjection, i->_aabbMin, i->_aabbMax, RenderCore::Techniques::GetDefaultClipSpaceType()))
 				continue;
 
                 //  We need to look in the "_cellOverride" list first.
@@ -1049,12 +1067,12 @@ namespace SceneEngine
             BuildDrawablesMetrics bdMetrics;
 
 			if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == i->_filenameHash) {
-                __declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, view._projection._worldToProjection);
+                __declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, worldToProjection);
                 _pimpl->CullCell(visibleObjects, cellToCullSpace, *ovr->second.get(), nullptr, &cullMetrics);
 				auto cmdList = _pimpl->BuildDrawables<false>(executeContext._destinationPkts, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
                 completionCmdList = std::max(cmdList, completionCmdList);
 			} else {
-				auto* plc = _pimpl->CullCell(visibleObjects, view._projection._worldToProjection, *i, &cullMetrics);
+				auto* plc = _pimpl->CullCell(visibleObjects, worldToProjection, *i, &cullMetrics);
 				if (plc) {
 					auto cmdList = _pimpl->BuildDrawables<false>(executeContext._destinationPkts, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
                     completionCmdList = std::max(cmdList, completionCmdList);
@@ -1066,52 +1084,19 @@ namespace SceneEngine
         executeContext._completionCmdList = std::max(executeContext._completionCmdList, completionCmdList);
     }
 
-    void PlacementsRenderer::BuildDrawables(
-        const ExecuteSceneContext& executeContext,
-        const XLEMath::ArbitraryConvexVolumeTester& volumeTester,
-        const PlacementCellSet& cellSet)
-    {
-        static std::vector<unsigned> visibleObjects;
-        const auto& view = executeContext._view;
-
-        BuildDrawablesMetricsHelper metricsHelper { "Arbitrary AABB test", &executeContext };
-        RenderCore::BufferUploads::CommandListID completionCmdList = 0;
-
-        auto& cells = cellSet._pimpl->_cells;
-        for (auto i=cells.begin(); i!=cells.end(); ++i) {
-            if (volumeTester.TestAABB(i->_aabbMin, i->_aabbMax) == CullTestResult::Culled)
-				continue;
-
-            visibleObjects.clear();
-			auto ovr = LowerBound(cellSet._pimpl->_cellOverrides, i->_filenameHash);
-            CullMetrics cullMetrics;
-            BuildDrawablesMetrics bdMetrics;
-
-			if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == i->_filenameHash) {
-                _pimpl->CullCell(visibleObjects, volumeTester, i->_cellToWorld, *ovr->second.get(), nullptr, &cullMetrics);
-				auto cmdList = _pimpl->BuildDrawables<false>(executeContext._destinationPkts, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
-                completionCmdList = std::max(cmdList, completionCmdList);
-			} else {
-				auto* plc = _pimpl->CullCell(visibleObjects, volumeTester, *i, &cullMetrics);
-				if (plc) {
-					auto cmdList = _pimpl->BuildDrawables<false>(executeContext._destinationPkts, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
-                    completionCmdList = std::max(cmdList, completionCmdList);
-                }
-			}
-
-            metricsHelper.AddMetrics(i->_filename, cullMetrics, bdMetrics);
-        }
-        executeContext._completionCmdList = std::max(executeContext._completionCmdList, completionCmdList);
-    }
-
-    void PlacementsRenderer::BuildDrawables(
-        const ExecuteSceneContext& executeContext,
-        IteratorRange<const Float4x4*> worldToCullingFrustums,
+    void PlacementsRenderer::BuildDrawablesComplex(
+        ExecuteSceneContext& executeContext,
         const PlacementCellSet& cellSet)
     {
         static std::vector<std::pair<unsigned, uint32_t>> visibleObjects;
         RenderCore::BufferUploads::CommandListID completionCmdList = 0;
-        auto* arbitraryVolume = executeContext._view._complexVolumeTester;
+        auto* arbitraryVolume = executeContext._complexCullingVolume;
+        BuildDrawablesMetricsHelper metricsHelper { "Arbitrary AABB test", &executeContext };
+
+        Float4x4 worldToCullingFrustums[executeContext._views.size()];
+        for (unsigned v=0; v<executeContext._views.size(); ++v)
+            worldToCullingFrustums[v] = executeContext._views[v]._worldToProjection;
+        auto worldToCullingFrustumsRange = MakeIteratorRange(worldToCullingFrustums, &worldToCullingFrustums[executeContext._views.size()]);
 
             // Render every registered cell
             // We catch exceptions on a cell based level (so pending cells won't cause other cells to flicker)
@@ -1122,7 +1107,7 @@ namespace SceneEngine
 				continue;
 
             uint32_t partialMask = 0;
-            for (unsigned c=0; c<worldToCullingFrustums.size(); ++c)
+            for (unsigned c=0; c<executeContext._views.size(); ++c)
                 if (!CullAABB_Aligned(worldToCullingFrustums[c], i->_aabbMin, i->_aabbMax, RenderCore::Techniques::GetDefaultClipSpaceType())) {
                     partialMask |= 1u<<c;
                     continue;
@@ -1132,24 +1117,42 @@ namespace SceneEngine
             visibleObjects.clear();
 			auto ovr = LowerBound(cellSet._pimpl->_cellOverrides, i->_filenameHash);
             assert(ovr == cellSet._pimpl->_cellOverrides.end() || ovr->first != i->_filenameHash);
+            CullMetrics cullMetrics;
+            BuildDrawablesMetrics bdMetrics;
 
-            auto* plc = _pimpl->CullCell(visibleObjects, arbitraryVolume, worldToCullingFrustums, partialMask, *i);
-            if (plc) {
-                auto cmdList = _pimpl->BuildDrawablesViewMasks(executeContext._destinationPkts, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld);
+            if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == i->_filenameHash) {
+                Float4x4 cellToCullingFrustums[worldToCullingFrustumsRange.size()];
+                for (unsigned c=0; c<worldToCullingFrustumsRange.size(); ++c)
+                    cellToCullingFrustums[c] = Combine(i->_cellToWorld, worldToCullingFrustumsRange[c]);
+                if (arbitraryVolume)
+                    _pimpl->CullCell(visibleObjects, *arbitraryVolume, i->_cellToWorld, MakeIteratorRange(cellToCullingFrustums, &cellToCullingFrustums[worldToCullingFrustumsRange.size()]), partialMask, *ovr->second.get(), nullptr, &cullMetrics);
+                else
+                    _pimpl->CullCell(visibleObjects, MakeIteratorRange(cellToCullingFrustums, &cellToCullingFrustums[worldToCullingFrustumsRange.size()]), partialMask, *ovr->second.get(), nullptr, &cullMetrics);
+				auto cmdList = _pimpl->BuildDrawablesViewMasks(executeContext._destinationPkts, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, &bdMetrics);
                 completionCmdList = std::max(cmdList, completionCmdList);
+			} else {
+                auto* plc = _pimpl->CullCell(visibleObjects, arbitraryVolume, worldToCullingFrustumsRange, partialMask, *i, &cullMetrics);
+                if (plc) {
+                    auto cmdList = _pimpl->BuildDrawablesViewMasks(executeContext._destinationPkts, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld, &bdMetrics);
+                    completionCmdList = std::max(cmdList, completionCmdList);
+                }
             }
+
+            metricsHelper.AddMetrics(i->_filename, cullMetrics, bdMetrics);
         }
         executeContext._completionCmdList = std::max(executeContext._completionCmdList, completionCmdList);
     }
 
-    void PlacementsRenderer::BuildDrawables(
-        const ExecuteSceneContext& executeContext,
+    void PlacementsRenderer::BuildDrawablesSingleView(
+        ExecuteSceneContext& executeContext,
         const PlacementCellSet& cellSet,
         const PlacementGUID* begin, const PlacementGUID* end,
         const std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate>& preDrawDelegate)
     {
         static std::vector<unsigned> visibleObjects;
         RenderCore::BufferUploads::CommandListID completionCmdList = 0;
+        assert(executeContext._views.size() == 1);
+        const auto& worldToProjection = executeContext._views[0]._worldToProjection;
 
             //  We need to take a copy, so we don't overwrite
             //  and reorder the caller's version.
@@ -1171,15 +1174,14 @@ namespace SceneEngine
 
                     visibleObjects.clear();
 
-					const auto& view = executeContext._view;
                     auto ovr = LowerBound(cellSet._pimpl->_cellOverrides, ci->_filenameHash);
 					if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == ci->_filenameHash) {
-                        __declspec(align(16)) auto cellToCullSpace = Combine(ci->_cellToWorld, view._projection._worldToProjection);
+                        __declspec(align(16)) auto cellToCullSpace = Combine(ci->_cellToWorld, worldToProjection);
                         _pimpl->CullCell(visibleObjects, cellToCullSpace, *ovr->second.get(), nullptr);
 						auto cmdList = _pimpl->BuildDrawables<true>(executeContext._destinationPkts, *ovr->second, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
                         completionCmdList = std::max(cmdList, completionCmdList);
 					} else {
-						auto* plcmnts = _pimpl->CullCell(visibleObjects, view._projection._worldToProjection, *ci);
+						auto* plcmnts = _pimpl->CullCell(visibleObjects, worldToProjection, *ci);
 						if (plcmnts) {
 							auto cmdList = _pimpl->BuildDrawables<true>(executeContext._destinationPkts, *plcmnts, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
                             completionCmdList = std::max(cmdList, completionCmdList);
@@ -1195,16 +1197,15 @@ namespace SceneEngine
             for (auto i=cellSet._pimpl->_cells.begin(); i!=cellSet._pimpl->_cells.end(); ++i) {
                 visibleObjects.clear();
 
-				const auto& view = executeContext._view;
                 auto ovr = LowerBound(cellSet._pimpl->_cellOverrides, i->_filenameHash);
 				if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == i->_filenameHash) {
-                    __declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, view._projection._worldToProjection);
+                    __declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, worldToProjection);
                 
                     _pimpl->CullCell(visibleObjects, cellToCullSpace, *ovr->second.get(), nullptr);
 					auto cmdList = _pimpl->BuildDrawables<false>(executeContext._destinationPkts, *ovr->second, MakeIteratorRange(visibleObjects), i->_cellToWorld);
                     completionCmdList = std::max(cmdList, completionCmdList);
 				} else {
-					auto* plcmnts = _pimpl->CullCell(visibleObjects, view._projection._worldToProjection, *i);
+					auto* plcmnts = _pimpl->CullCell(visibleObjects, worldToProjection, *i);
 					if (plcmnts) {
 						auto cmdList = _pimpl->BuildDrawables<false>(executeContext._destinationPkts, *plcmnts, MakeIteratorRange(visibleObjects), i->_cellToWorld);
                         completionCmdList = std::max(cmdList, completionCmdList);

@@ -38,7 +38,6 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IDeformGeoAttachment> GetDeformGeoAttachment(DeformAccelerator& deformAccelerator) override;
 		std::shared_ptr<IDeformUniformsAttachment> GetDeformUniformsAttachment(DeformAccelerator& deformAccelerator) override;
 
-		void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) override;
 		void ReadyInstances(IThreadContext&) override;
 		void SetVertexInputBarrier(IThreadContext&) const override;
 		void OnFrameBarrier() override;
@@ -175,12 +174,9 @@ namespace RenderCore { namespace Techniques
 		return deformAccelerator._parametersAttachment;
 	}
 
-	void DeformAcceleratorPool::EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx)
+	void EnableInstanceDeform(DeformAccelerator& accelerator, unsigned instanceIdx)
 	{
 		assert(instanceIdx!=~0u);
-		#if defined(_DEBUG)
-			assert(accelerator._containingPool == this);
-		#endif
 		auto field = instanceIdx / 64;
 		if (accelerator._enabledInstances.size() <= field)
 			accelerator._enabledInstances.resize(field+1, 0);

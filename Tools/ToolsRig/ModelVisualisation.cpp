@@ -194,26 +194,18 @@ namespace ToolsRig
     public:
 		virtual void ExecuteScene(
             RenderCore::IThreadContext& threadContext,
-			const SceneEngine::ExecuteSceneContext& executeContext) const override
+			SceneEngine::ExecuteSceneContext& executeContext) const override
 		{
 			const auto instanceIdx = 0u;
 			UpdateSkeletonInterface(instanceIdx);
 			auto localToWorld = Identity<Float4x4>();
-			_actualized->_renderer->BuildDrawables(executeContext._destinationPkts, localToWorld, instanceIdx, _preDrawDelegate);
-			executeContext._completionCmdList = std::max(executeContext._completionCmdList, _actualized->_renderer->GetCompletionCommandList());
-		}
-
-		void ExecuteScene(
-			RenderCore::IThreadContext& threadContext,
-			const SceneEngine::ExecuteSceneContext& executeContext,
-			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> multiViews) const override
-		{
-			const auto instanceIdx = 0u;
-			UpdateSkeletonInterface(instanceIdx);
-			auto localToWorld = Identity<Float4x4>();
-			assert(multiViews.size() > 0 && multiViews.size() < 32);
-			uint32_t viewMask = (1 << unsigned(multiViews.size()))-1;
-			_actualized->_renderer->BuildDrawables(executeContext._destinationPkts, localToWorld, instanceIdx, _preDrawDelegate, viewMask);
+			if (executeContext._views.size() == 1) {
+				_actualized->_renderer->BuildDrawables(executeContext._destinationPkts, localToWorld, instanceIdx, _preDrawDelegate);
+			} else {
+				assert(executeContext._views.size() > 0 && executeContext._views.size() < 32);
+				uint32_t viewMask = (1 << unsigned(executeContext._views.size()))-1;
+				_actualized->_renderer->BuildDrawables(executeContext._destinationPkts, localToWorld, instanceIdx, _preDrawDelegate, viewMask);
+			}
 			executeContext._completionCmdList = std::max(executeContext._completionCmdList, _actualized->_renderer->GetCompletionCommandList());
 		}
 

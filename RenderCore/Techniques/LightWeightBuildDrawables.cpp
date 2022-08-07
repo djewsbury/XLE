@@ -360,7 +360,7 @@ namespace RenderCore { namespace Techniques
 						drawable._geo = constructor._drawableGeos[dc._drawableGeoIdx].get();
 						drawable._pipeline = constructor._pipelineAccelerators[dc._pipelineAcceleratorIdx].get();
 						drawable._descriptorSet = constructor._descriptorSetAccelerators[dc._descriptorSetAcceleratorIdx].get();
-						drawable._drawFn = (Techniques::ExecuteDrawableFn*)&Internal::DrawFn_InstancedFixedSkeletonViewMask;
+						drawable._drawFn = (Techniques::ExecuteDrawableFn*)&Internal::DrawFn_SingleInstanceViewMask;
 						drawable._looseUniformsInterface = &Internal::s_localTransformUSI;
 						assert(dc._firstVertex == 0);
 						drawable._firstIndex = dc._firstIndex;

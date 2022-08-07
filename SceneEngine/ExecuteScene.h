@@ -13,6 +13,7 @@ namespace RenderCore { namespace Techniques
     class IPipelineAcceleratorPool;
 	class ParsingContext;
 	class SequencerConfig;
+	class ProjectionDesc;
 	enum class Batch;
 	struct PreparedResourcesVisibility;
 }}
@@ -32,7 +33,7 @@ namespace SceneEngine
 		RenderCore::Techniques::ParsingContext& parserContext,
 		const RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		RenderCore::Techniques::SequencerConfig& sequencerConfig,
-		const SceneView& view, RenderCore::Techniques::Batch batch,
+		const RenderCore::Techniques::ProjectionDesc& view, RenderCore::Techniques::Batch batch,
 		IScene& scene);
 
     RenderCore::LightingEngine::LightingTechniqueInstance BeginLightingTechnique(

@@ -230,12 +230,7 @@ namespace ToolsRig
 			}
 
 			auto cam = AsCameraDesc(*_camera);
-			SceneEngine::SceneView sceneView {
-				SceneEngine::SceneView::Type::Normal,
-				RenderCore::Techniques::BuildProjectionDesc(cam, {parserContext.GetViewport()._width, parserContext.GetViewport()._height})
-			};
-			
-			parserContext.GetProjectionDesc() = sceneView._projection;
+			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(cam, {parserContext.GetViewport()._width, parserContext.GetViewport()._height});
 			{
 				auto& lightScene = RenderCore::LightingEngine::GetLightScene(*actualizedScene->_compiledLightingTechnique);
 				actualizedScene->_envSettings->PreRender(parserContext.GetProjectionDesc(), lightScene);
@@ -249,14 +244,14 @@ namespace ToolsRig
 						if (next._type == RenderCore::LightingEngine::StepType::None || next._type == RenderCore::LightingEngine::StepType::Abort) break;
 						if (next._type == RenderCore::LightingEngine::StepType::ParseScene) {
 							assert(!next._pkts.empty());
-							SceneEngine::ExecuteSceneContext executeContext{SceneEngine::SceneView{}, MakeIteratorRange(next._pkts)};
+							SceneEngine::ExecuteSceneContext executeContext{MakeIteratorRange(next._pkts), MakeIteratorRange(&parserContext.GetProjectionDesc(), &parserContext.GetProjectionDesc()+1), next._complexCullingVolume};
 							actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), executeContext);
 							parserContext.RequireCommandList(executeContext._completionCmdList);
 						} else if (next._type == RenderCore::LightingEngine::StepType::MultiViewParseScene) {
 							assert(!next._pkts.empty());
 							assert(!next._multiViewDesc.empty());
-							SceneEngine::ExecuteSceneContext executeContext{SceneEngine::SceneView{}, MakeIteratorRange(next._pkts)};
-							actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), executeContext, next._multiViewDesc);
+							SceneEngine::ExecuteSceneContext executeContext{MakeIteratorRange(next._pkts), next._multiViewDesc, next._complexCullingVolume};
+							actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), executeContext);
 							parserContext.RequireCommandList(executeContext._completionCmdList);
 						} else if (next._type == RenderCore::LightingEngine::StepType::ReadyInstances) {
 							_deformAccelerators->ReadyInstances(parserContext.GetThreadContext());
@@ -690,10 +685,7 @@ namespace ToolsRig
 		UInt2 viewportDims(parserContext.GetViewport()._width, parserContext.GetViewport()._height);
 		assert(viewportDims[0] && viewportDims[1]);
 		auto cam = AsCameraDesc(*_pimpl->_cameraSettings);
-		SceneEngine::SceneView sceneView {
-			SceneEngine::SceneView::Type::Normal,
-			Techniques::BuildProjectionDesc(cam, viewportDims),
-		};
+		auto sceneView = Techniques::BuildProjectionDesc(cam, viewportDims);
 
 		bool doColorByMaterial = 
 			(_pimpl->_settings._colourByMaterial == 1)
@@ -943,7 +935,8 @@ namespace ToolsRig
 		RenderCore::Techniques::DrawablesPacket pkt;
 		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max];
 		pkts[(unsigned)RenderCore::Techniques::Batch::Opaque] = &pkt;
-        scene.ExecuteScene(threadContext, SceneEngine::ExecuteSceneContext{{SceneEngine::SceneView::Type::Other}, MakeIteratorRange(pkts)});
+		SceneEngine::ExecuteSceneContext sceneExecuteContext{MakeIteratorRange(pkts), {}};
+        scene.ExecuteScene(threadContext, sceneExecuteContext);
 		
 		SceneEngine::ModelIntersectionStateContext stateContext {
             SceneEngine::ModelIntersectionStateContext::RayTest,

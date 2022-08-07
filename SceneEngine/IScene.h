@@ -18,28 +18,20 @@ namespace Assets { class OperationContext; }
 
 namespace SceneEngine
 {
-#pragma warning(push)
-#pragma warning(disable:4324) //  'SceneEngine::SceneView': structure was padded due to alignment specifier
-	class SceneView
-	{
-	public:
-		enum class Type { Normal, Shadow, PrepareResources, ShadowStatic, Other };
-		Type _type = SceneView::Type::Normal;
-		RenderCore::Techniques::ProjectionDesc _projection;
-        ArbitraryConvexVolumeTester* _complexVolumeTester = nullptr;
-	};
-#pragma warning(pop)
-
     class ExecuteSceneContext
     {
     public:
-        SceneView _view;
         IteratorRange<RenderCore::Techniques::DrawablesPacket**> _destinationPkts;
-        mutable char _quickMetrics[4096];
-        mutable RenderCore::BufferUploads::CommandListID _completionCmdList = 0;
+        IteratorRange<const RenderCore::Techniques::ProjectionDesc*> _views;
+		const XLEMath::ArbitraryConvexVolumeTester* _complexCullingVolume = nullptr;
+        char _quickMetrics[4096];
+        RenderCore::BufferUploads::CommandListID _completionCmdList = 0;
 
-        ExecuteSceneContext(const SceneView& view, IteratorRange<RenderCore::Techniques::DrawablesPacket**> destinationPkts)
-        :  _view(view), _destinationPkts(destinationPkts)
+        ExecuteSceneContext(
+            IteratorRange<RenderCore::Techniques::DrawablesPacket**> destinationPkts,
+            IteratorRange<const RenderCore::Techniques::ProjectionDesc*> views,
+		    const XLEMath::ArbitraryConvexVolumeTester* complexCullingVolume = nullptr)
+        :  _destinationPkts(destinationPkts), _views(views), _complexCullingVolume(complexCullingVolume)
         { _quickMetrics[0] = '\0'; }
         ExecuteSceneContext() { _quickMetrics[0] = '\0'; }
     };
@@ -49,11 +41,7 @@ namespace SceneEngine
     public:
         virtual void ExecuteScene(
             RenderCore::IThreadContext& threadContext,
-            const ExecuteSceneContext& executeContext) const = 0;
-        virtual void ExecuteScene(
-			RenderCore::IThreadContext& threadContext,
-			const SceneEngine::ExecuteSceneContext& executeContext,
-			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> multiViews) const = 0;
+            ExecuteSceneContext& executeContext) const = 0;
 		virtual ~IScene() = default;
 	};
 

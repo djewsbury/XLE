@@ -17,13 +17,13 @@ namespace SceneEngine
 		RenderCore::Techniques::ParsingContext& parserContext,
 		const RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		RenderCore::Techniques::SequencerConfig& sequencerConfig,
-		const SceneView& view, RenderCore::Techniques::Batch batch,
+		const RenderCore::Techniques::ProjectionDesc& view, RenderCore::Techniques::Batch batch,
 		IScene& scene)
     {
 		RenderCore::Techniques::DrawablesPacket pkt;
 		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max];
 		pkts[(unsigned)batch] = &pkt;
-		ExecuteSceneContext executeContext{view, MakeIteratorRange(pkts)};
+		ExecuteSceneContext executeContext{MakeIteratorRange(pkts), MakeIteratorRange(&view, &view+1)};
         scene.ExecuteScene(parserContext.GetThreadContext(), executeContext);
 		parserContext.RequireCommandList(executeContext._completionCmdList);
 		RenderCore::Techniques::Draw(parserContext, pipelineAccelerators, sequencerConfig, pkt);
@@ -54,8 +54,8 @@ namespace SceneEngine
 			assert(next._type == LightingEngine::StepType::ParseScene);
 			assert(!next._pkts.empty());
 
-			SceneView view { SceneView::Type::PrepareResources };
-			scene.ExecuteScene(threadContext, ExecuteSceneContext{view, MakeIteratorRange(next._pkts)});
+			ExecuteSceneContext sceneExecuteContext{MakeIteratorRange(next._pkts), next._multiViewDesc, next._complexCullingVolume};
+			scene.ExecuteScene(threadContext, sceneExecuteContext);
 		}
 
 		return prepareLightingIterator.GetResourcePreparationMarker();
