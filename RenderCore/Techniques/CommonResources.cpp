@@ -101,11 +101,11 @@ namespace RenderCore { namespace Techniques
             _blackBufferUAV->GetResource().get()
         };
         IResource* whiteResources[] {
-            // _white2DSRV->GetResource().get(),
-            // _white2DArraySRV->GetResource().get(),
-            // _white3DSRV->GetResource().get(),
+            _white2DSRV->GetResource().get(),
+            _white2DArraySRV->GetResource().get(),
+            _white3DSRV->GetResource().get(),
             _whiteCubeSRV->GetResource().get(),
-            // _whiteCubeArraySRV->GetResource().get()
+            _whiteCubeArraySRV->GetResource().get()
         };
         auto& metalContext = *Metal::DeviceContext::Get(threadContext);
         Metal::CompleteInitialization(metalContext, MakeIteratorRange(blackResources));

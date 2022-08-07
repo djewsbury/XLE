@@ -1015,22 +1015,24 @@ namespace PlatformRig { namespace Overlays
             totalBlockCount += i->_referencedCountedBlockCount;
         }
 
+        _runningAveAllocs = LinearInterpolate(_runningAveAllocs, (float)metrics._recentAllocateBytes, 0.05f);
+        _runningAveRepositions = LinearInterpolate(_runningAveRepositions, (float)metrics._recentRepositionBytes, 0.05f);
+
         {
             char buffer[256];
             DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), 
                 StringMeldInPlace(buffer) << "Heap count: " << metrics._heaps.size() << " / Total allocated: " << ByteCount{allocatedSpace} << " / Total unallocated: " << ByteCount{unallocatedSpace});
-            DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), 
-                StringMeldInPlace(buffer) << "Largest free block: " << ByteCount{largestFreeBlock} << " / Average unallocated: " << ByteCount{unallocatedSpace/metrics._heaps.size()});
-            DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16),
-                StringMeldInPlace(buffer) << "Block count: " << totalBlockCount << " / Ave block size: " << ByteCount{allocatedSpace/totalBlockCount});
+            if (!metrics._heaps.empty()) {
+                DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), 
+                    StringMeldInPlace(buffer) << "Largest free block: " << ByteCount{largestFreeBlock} << " / Average unallocated: " << ByteCount{unallocatedSpace/metrics._heaps.size()});
+                DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16),
+                    StringMeldInPlace(buffer) << "Block count: " << totalBlockCount << " / Ave block size: " << ByteCount{allocatedSpace/totalBlockCount});
 
-            _runningAveAllocs = LinearInterpolate(_runningAveAllocs, (float)metrics._recentAllocateBytes, 0.05f);
-            _runningAveRepositions = LinearInterpolate(_runningAveRepositions, (float)metrics._recentRepositionBytes, 0.05f);
-
-            DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16),
-                StringMeldInPlace(buffer) << "Total Alloc: " << ByteCount{metrics._totalAllocateBytes} << " / Ave per frame: " << ByteCount{(size_t)_runningAveAllocs});
-            DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16),
-                StringMeldInPlace(buffer) << "Total Reposition: " << ByteCount{metrics._totalRepositionBytes} << " / Ave per frame: " << ByteCount{(size_t)_runningAveRepositions});
+                DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16),
+                    StringMeldInPlace(buffer) << "Total Alloc: " << ByteCount{metrics._totalAllocateBytes} << " / Ave per frame: " << ByteCount{(size_t)_runningAveAllocs});
+                DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16),
+                    StringMeldInPlace(buffer) << "Total Reposition: " << ByteCount{metrics._totalRepositionBytes} << " / Ave per frame: " << ByteCount{(size_t)_runningAveRepositions});
+            }
         }
 
         unsigned currentFrameId = GetFrameID();

@@ -121,6 +121,10 @@ namespace RenderCore { namespace Techniques
 					currentLooseUniformsInterface = drawable._looseUniformsInterface;
 					++boundUniformLookupCount;
 					++pipelineLookupCount;
+
+					// update the "extra" desc set if we changed bound uniforms
+					if (parserContext._extraSequencerDescriptorSet.second)
+						currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *parserContext._extraSequencerDescriptorSet.second, s_uniformGroupMaterial, 1);
 				} else if (currentLooseUniformsInterface != drawable._looseUniformsInterface) {
 					currentBoundUniforms = &currentPipeline->_boundUniformsPool.Get(
 						*currentPipeline->_metalPipeline,
@@ -128,6 +132,10 @@ namespace RenderCore { namespace Techniques
 						*(drawable._looseUniformsInterface ? drawable._looseUniformsInterface : &emptyUSI));
 					currentLooseUniformsInterface = drawable._looseUniformsInterface;
 					++boundUniformLookupCount;
+
+					// update the "extra" desc set if we changed bound uniforms
+					if (parserContext._extraSequencerDescriptorSet.second)
+						currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *parserContext._extraSequencerDescriptorSet.second, s_uniformGroupMaterial, 1);
 				}
 
 				const ActualizedDescriptorSet* matDescSet = nullptr;
@@ -180,13 +188,9 @@ namespace RenderCore { namespace Techniques
 					currentSequencerUniformRules = currentBoundUniforms->GetGroupRulesHash(0);
 					++fullDescSetCount;
 				} 
-				{
-					if (matDescSet) {
-						unsigned dynamicOffset = Internal::GetMaterialDescSetDynamicOffset(*drawable._geo->_deformAccelerator, *matDescSet, drawable._deformInstanceIdx);
-						currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *matDescSet->GetDescriptorSet(), s_uniformGroupMaterial, 0, MakeIteratorRange(&dynamicOffset, &dynamicOffset+1));
-					}
-					if (parserContext._extraSequencerDescriptorSet.second)
-						currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *parserContext._extraSequencerDescriptorSet.second, s_uniformGroupMaterial, 1);
+				if (matDescSet) {
+					unsigned dynamicOffset = Internal::GetMaterialDescSetDynamicOffset(*drawable._geo->_deformAccelerator, *matDescSet, drawable._deformInstanceIdx);
+					currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *matDescSet->GetDescriptorSet(), s_uniformGroupMaterial, 0, MakeIteratorRange(&dynamicOffset, &dynamicOffset+1));
 					++justMatDescSetCount;
 				}
 
