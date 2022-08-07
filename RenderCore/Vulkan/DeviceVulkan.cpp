@@ -1185,15 +1185,14 @@ namespace RenderCore { namespace ImplVulkan
 			waitStages[waitCount] = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 			++waitCount;
 		}
+		_nextQueueShouldWaitOnAcquire = VK_NULL_HANDLE;
+		_nextQueueShouldWaitOnInterimBuffer = false;
 
 		auto result = _submissionQueue->Submit(
 			cmdList,
 			completionSignals,
 			MakeIteratorRange(waitSema, &waitSema[waitCount]),
 			MakeIteratorRange(waitStages, &waitStages[waitCount]));
-
-		_nextQueueShouldWaitOnAcquire = VK_NULL_HANDLE;
-		_nextQueueShouldWaitOnInterimBuffer = false;
 		return result;
 	}
 
@@ -1218,9 +1217,14 @@ namespace RenderCore { namespace ImplVulkan
 		if (_metalContext->HasActiveCommandList()) {
 			if (!_interimCommandBufferComplete)
 				_interimCommandBufferComplete = _factory->CreateSemaphore();
-			VkSemaphore signalSema[] = { _interimCommandBufferComplete.get() };
-			QueuePrimaryContext(MakeIteratorRange(signalSema));
-			_nextQueueShouldWaitOnInterimBuffer = true;
+			TRY {
+				VkSemaphore signalSema[] = { _interimCommandBufferComplete.get() };
+				QueuePrimaryContext(MakeIteratorRange(signalSema));
+				_nextQueueShouldWaitOnInterimBuffer = true;
+			} CATCH (const std::exception& e) {
+				Log(Warning) << "Failure while submitting queue in BeginFrame(): " << e.what() << std::endl;
+				_nextQueueShouldWaitOnInterimBuffer = false;
+			} CATCH_END
 		}
 
 		PresentationChain* swapChain = checked_cast<PresentationChain*>(&presentationChain);
@@ -1246,7 +1250,11 @@ namespace RenderCore { namespace ImplVulkan
 		//////////////////////////////////////////////////////////////////
 
 		VkSemaphore signalSema[] = { syncs._onCommandBufferComplete.get() };
-		syncs._presentFence = QueuePrimaryContext(MakeIteratorRange(signalSema));
+		TRY {
+			syncs._presentFence = QueuePrimaryContext(MakeIteratorRange(signalSema));
+		} CATCH(const std::exception& e) {
+			Log(Warning) << "Failure during queue submission for present: " << e.what() << std::endl;
+		} CATCH_END
 
 		PumpDestructionQueues();
 
@@ -1270,12 +1278,18 @@ namespace RenderCore { namespace ImplVulkan
 				_interimCommandBufferComplete = _factory->CreateSemaphore();
 
 			VkSemaphore signalSema[] = { _interimCommandBufferComplete.get() };
-			auto fenceToWaitFor = QueuePrimaryContext(MakeIteratorRange(signalSema));
-			_nextQueueShouldWaitOnInterimBuffer = true;
+			Metal_Vulkan::IAsyncTracker::Marker fenceToWaitFor;
+			TRY {
+				fenceToWaitFor = QueuePrimaryContext(MakeIteratorRange(signalSema));
+				_nextQueueShouldWaitOnInterimBuffer = true;
+			} CATCH (const std::exception& e) {
+				Log(Warning) << "Failure during queue submission in CommitCommands:" << e.what() << std::endl;
+				_nextQueueShouldWaitOnInterimBuffer = false;
+				waitForCompletion = false;
+			} CATCH_END
 
-			if (waitForCompletion) {
+			if (waitForCompletion)
 				_submissionQueue->WaitForFence(fenceToWaitFor);
-			}
 		} else {
 			// note tht if we don't have an active command list, and flags is WaitForCompletion, we still don't actually wait for the GPU to catchup to any previously committed command lists
 			// however, we still flush out the destruction queues, etc
