@@ -59,6 +59,7 @@ namespace Formatters
 			IteratorRange<const int64_t*> _parsingTemplateParams;
 			uint32_t _parsingTemplateParamsTypeField;
 			BinarySchemata::BlockDefinitionId _scope = BinarySchemata::BlockDefinitionId_Invalid;
+			void* _cachedEvals = nullptr;		// EvaluationContext::CachedSubEvals
 
 			std::vector<std::pair<uint64_t, ImpliedTyping::VariantNonRetained>> _localEvalContext;
 			std::vector<uint64_t> _nonIntegerLocalVariables;
@@ -100,15 +101,19 @@ namespace Formatters
 		};
 
 		using EvaluatedTypeToken = unsigned;
+		struct CachedSubEvals;
 		EvaluatedTypeToken GetEvaluatedType(
 			const std::shared_ptr<BinarySchemata>& schemata,
 			StringSection<> baseName, BinarySchemata::BlockDefinitionId scope, IteratorRange<const int64_t*> parameters = {}, unsigned typeBitField = 0);
 		EvaluatedTypeToken GetEvaluatedType(
 			const std::shared_ptr<BinarySchemata>& schemata,
+			CachedSubEvals* cachedEvals,
 			unsigned baseNameToken, BinarySchemata::BlockDefinitionId scope, IteratorRange<const unsigned*> paramTypeCodes, 
 			const BlockDefinition& blockDef, 
 			std::stack<unsigned>& typeStack, std::stack<int64_t>& valueStack, 
 			IteratorRange<const int64_t*> parsingTemplateParams, uint32_t parsingTemplateParamsTypeField);
+
+		CachedSubEvals& GetCachedEvals(BinarySchemata& schemata, BinarySchemata::BlockDefinitionId scope);
 
 		EvaluatedTypeToken GetEvaluatedType(ImpliedTyping::TypeCat typeCat);
 		EvaluatedTypeToken GetEvaluatedType(const EvaluatedType& evalType);
@@ -135,6 +140,7 @@ namespace Formatters
 			size_t _fixedSize = 0;
 		};
 		mutable std::vector<CalculatedSizeState> _calculatedSizeStates;
+		std::vector<std::pair<uint64_t, std::unique_ptr<CachedSubEvals>>> _cachedSubEvals;
 	};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

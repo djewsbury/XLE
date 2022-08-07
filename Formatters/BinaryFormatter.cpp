@@ -92,8 +92,10 @@ namespace Formatters
 		return (unsigned)_evaluatedTypes.size()-1;
 	}
 
+	struct EvaluationContext::CachedSubEvals { std::vector<EvaluatedTypeToken> _subEvals; };
+
 	EvaluationContext::EvaluatedTypeToken EvaluationContext::GetEvaluatedType(
-		const std::shared_ptr<BinarySchemata>& schemata,
+		const std::shared_ptr<BinarySchemata>& schemata, CachedSubEvals* cachedEvals,
 		unsigned baseNameToken, BinarySchemata::BlockDefinitionId scope, IteratorRange<const unsigned*> paramTypeCodes, 
 		const BlockDefinition& blockDef, 
 		std::stack<unsigned>& typeStack, std::stack<int64_t>& valueStack, 
@@ -107,10 +109,9 @@ namespace Formatters
 					Throw(std::runtime_error("Using partial templates as template parameters is unsupported"));
 				return parsingTemplateParams[c];
 			}
-			
-		StringSection<> baseName = blockDef._tokenDictionary._tokenDefinitions[baseNameToken]._value;
+
 		auto paramCount = paramTypeCodes.size();
-		if (paramCount) {
+		if (__builtin_expect(paramCount, 0)) {
 			// params end up in reverse order, so we have to reverse them as we're looking them up
 			int64_t params[paramCount];
 			unsigned typeBitField = 0;
@@ -125,9 +126,19 @@ namespace Formatters
 					valueStack.pop();
 				}
 			}
+			StringSection<> baseName = blockDef._tokenDictionary._tokenDefinitions[baseNameToken]._value;
 			return GetEvaluatedType(schemata, baseName, scope, MakeIteratorRange(params, &params[paramCount]), typeBitField);
 		} else {
-			return GetEvaluatedType(schemata, baseName, scope);
+			// check if it's already cached, to try to reduce the number of times we have to lookup the same value
+			assert(baseNameToken < cachedEvals->_subEvals.size());
+			if (cachedEvals && cachedEvals->_subEvals[baseNameToken] != ~0u)
+				return cachedEvals->_subEvals[baseNameToken];
+
+			StringSection<> baseName = blockDef._tokenDictionary._tokenDefinitions[baseNameToken]._value;
+			auto result = GetEvaluatedType(schemata, baseName, scope);
+			if (cachedEvals)
+				cachedEvals->_subEvals[baseNameToken] = result;
+			return result;
 		}
 	}
 
@@ -135,6 +146,20 @@ namespace Formatters
 	{
 		assert(evalTypeId < _evaluatedTypes.size());
 		return _evaluatedTypes[evalTypeId];
+	}
+
+	auto EvaluationContext::GetCachedEvals(BinarySchemata& schemata, BinarySchemata::BlockDefinitionId scope) -> CachedSubEvals&
+	{
+		auto hash = HashCombine(uint64_t(&schemata), scope);	// hack using pointer as hash
+		auto i = LowerBound(_cachedSubEvals, hash);
+		if (i != _cachedSubEvals.end() && i->first == hash)
+			return *i->second;
+		
+		auto& def = schemata.GetBlockDefinition(scope);
+		auto subEvals = std::make_unique<CachedSubEvals>();
+		subEvals->_subEvals.resize(def._tokenDictionary._tokenDefinitions.size(), ~0u);
+		i=_cachedSubEvals.insert(i, std::make_pair(hash, std::move(subEvals)));
+		return *i->second;
 	}
 
 	std::optional<size_t> EvaluationContext::TryCalculateFixedSize(unsigned evalTypeId, IteratorRange<const uint64_t*> dynamicLocalVars)
@@ -162,6 +187,7 @@ namespace Formatters
 		auto& def = _evaluatedTypes[evalTypeId]._schemata->GetBlockDefinition(_evaluatedTypes[evalTypeId]._blockDefinition);
 		auto scope = _evaluatedTypes[evalTypeId]._blockDefinition;
 		auto cmds = MakeIteratorRange(def._cmdList);
+		auto& cachedEvals = GetCachedEvals(*_evaluatedTypes[evalTypeId]._schemata, scope);
 
 		std::stack<unsigned> typeStack;
 		std::stack<int64_t> valueStack;
@@ -181,7 +207,7 @@ namespace Formatters
 
 					typeStack.push(
 						GetEvaluatedType(
-							_evaluatedTypes[evalTypeId]._schemata,
+							_evaluatedTypes[evalTypeId]._schemata, &cachedEvals,
 							baseNameToken, scope, paramTypeCodes, def, 
 							typeStack, valueStack, _evaluatedTypes[evalTypeId]._params, _evaluatedTypes[evalTypeId]._paramTypeField));
 				}
@@ -378,6 +404,7 @@ namespace Formatters
 		BlockContext newContext;
 		newContext._definition = &schemata->GetBlockDefinition(blockDefId);
 		newContext._scope = blockDefId;
+		newContext._cachedEvals = &_evalContext->GetCachedEvals(*schemata, newContext._scope);
 		newContext._parsingTemplateParams = {templateParams.begin(), templateParams.end()};
 		newContext._parsingTemplateParamsTypeField = templateParamsTypeField;
 		newContext._cmdsIterator = MakeIteratorRange(newContext._definition->_cmdList);
@@ -417,7 +444,7 @@ namespace Formatters
 
 					workingBlock._typeStack.push(
 						_evalContext->GetEvaluatedType(
-							workingBlock._schemata,
+							workingBlock._schemata, (EvaluationContext::CachedSubEvals*)workingBlock._cachedEvals,
 							baseNameToken, workingBlock._scope, paramTypeCodes, def, 
 							workingBlock._typeStack, workingBlock._valueStack,
 							workingBlock._parsingTemplateParams, workingBlock._parsingTemplateParamsTypeField));
@@ -486,6 +513,7 @@ namespace Formatters
 								if (block == _blockStack.rbegin())	// (only for the immediately enclosing context)
 									for (unsigned p=0; p<(unsigned)block->_definition->_templateParameterNames.size(); ++p)
 										if (block->_definition->_templateParameterNames[p] == nextStep._nameTokenIndex) {
+											assert(!(block->_parsingTemplateParamsTypeField & (1<<p)));		// assert value, not type parameter
 											nextStep.SetQueryResult(block->_parsingTemplateParams[p]);
 											gotValue = true;
 											break;
@@ -613,6 +641,7 @@ namespace Formatters
 			BlockContext newContext;
 			newContext._definition = &workingBlock._schemata->GetBlockDefinition(evalType._blockDefinition);
 			newContext._scope = evalType._blockDefinition;
+			newContext._cachedEvals = &_evalContext->GetCachedEvals(*workingBlock._schemata, newContext._scope);
 			newContext._parsingBlockName = workingBlock._definition->_tokenDictionary._tokenDefinitions[cmds[1]]._value;
 			newContext._parsingTemplateParams = evalType._params;
 			newContext._parsingTemplateParamsTypeField = evalType._paramTypeField;
@@ -632,6 +661,7 @@ namespace Formatters
 			BlockContext newContext;
 			newContext._definition = &workingBlock._schemata->GetBlockDefinition(evalType._blockDefinition);
 			newContext._scope = evalType._blockDefinition;
+			newContext._cachedEvals = &_evalContext->GetCachedEvals(*workingBlock._schemata, newContext._scope);
 			newContext._parsingTemplateParams = evalType._params;
 			newContext._parsingTemplateParamsTypeField = evalType._paramTypeField;
 			newContext._cmdsIterator = MakeIteratorRange(newContext._definition->_cmdList);
