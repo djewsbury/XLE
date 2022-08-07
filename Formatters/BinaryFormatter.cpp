@@ -214,11 +214,15 @@ namespace Formatters
 							}
 
 							// ------------------------- template variables --------------------
+							bool foundTemplateParam = false;
 							for (unsigned p=0; p<(unsigned)def._templateParameterNames.size(); ++p)
 								if (def._templateParameterNames[p] == nextStep._nameTokenIndex) {
+									assert(!(evalType._paramTypeField & (1<<p)));		// assert value, not type parameter
 									nextStep.SetQueryResult(evalType._params[p]);
-									continue;
+									foundTemplateParam = true;
+									break;
 								}
+							if (foundTemplateParam) continue;
 
 							uint64_t hash = Hash64(nextStep._name);
 							
@@ -451,7 +455,7 @@ namespace Formatters
 							bool gotValue = false;
 
 							// ------------------------- previously evaluated members --------------------
-							for (auto block=_blockStack.rbegin(); block!=_blockStack.rend(); ++block) {
+							for (auto block=_blockStack.rbegin(); block!=_blockStack.rend() && !gotValue; ++block) {
 								auto localValue = std::find_if(block->_localEvalContext.begin(), block->_localEvalContext.end(), [hash](const auto& q) {return q.first==hash;});
 								if (localValue != block->_localEvalContext.end()) {
 
