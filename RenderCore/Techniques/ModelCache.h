@@ -16,7 +16,7 @@ namespace RenderCore { namespace Assets
     class MaterialScaffold;
 }}
 
-namespace Assets { class AssetHeapRecord; }
+namespace Assets { class AssetHeapRecord; class OperationContext; }
 namespace RenderCore { namespace BufferUploads { class IManager; class IBatchedResources; }}
 
 namespace RenderCore { namespace Techniques
@@ -77,6 +77,7 @@ namespace RenderCore { namespace Techniques
             std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool, 
             std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
             std::shared_ptr<BufferUploads::IManager> bufferUploads,
+            std::shared_ptr<::Assets::OperationContext> loadingContext,
 			const Config& cfg = Config());
         ~ModelCache();
     protected:

@@ -274,16 +274,18 @@ namespace SceneEngine
     {
     public:
         std::shared_ptr<::Assets::Marker<Placements>> GetPlacements(uint64_t filenameHash, StringSection<> filename);
-        PlacementsCache();
+        PlacementsCache(std::shared_ptr<::Assets::OperationContext>);
         ~PlacementsCache();
+    private:
+        std::shared_ptr<::Assets::OperationContext> _loadingContext;
     };
 
     std::shared_ptr<::Assets::Marker<Placements>> PlacementsCache::GetPlacements(uint64_t filenameHash, StringSection<> filename)
     {
-        return ::Assets::AssetHeapLRU<Placements>::Get(filenameHash, filename);
+        return ::Assets::AssetHeapLRU<Placements>::Get(filenameHash, _loadingContext, filename);
     }
 
-    PlacementsCache::PlacementsCache() : ::Assets::AssetHeapLRU<Placements>(128) {}
+    PlacementsCache::PlacementsCache(std::shared_ptr<::Assets::OperationContext> loadingContext) : ::Assets::AssetHeapLRU<Placements>(128), _loadingContext(std::move(loadingContext)) {}
     PlacementsCache::~PlacementsCache() {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1399,12 +1401,12 @@ namespace SceneEngine
             _pimpl->_placementsCache, _pimpl->_modelCache);
     }
 
-    PlacementsManager::PlacementsManager(std::shared_ptr<PlacementsModelCache> modelCache)
+    PlacementsManager::PlacementsManager(std::shared_ptr<PlacementsModelCache> modelCache, std::shared_ptr<::Assets::OperationContext> loadingContext)
     {
             //  Using the given config file, let's construct the list of 
             //  placement cells
         _pimpl = std::make_unique<Pimpl>();
-        _pimpl->_placementsCache = std::make_shared<PlacementsCache>();
+        _pimpl->_placementsCache = std::make_shared<PlacementsCache>(std::move(loadingContext));
         _pimpl->_modelCache = modelCache;
         _pimpl->_renderer = std::make_shared<PlacementsRenderer>(_pimpl->_placementsCache, modelCache);
         _pimpl->_intersections = std::make_shared<PlacementsIntersections>(_pimpl->_placementsCache, modelCache);

@@ -20,6 +20,7 @@ namespace Utility { class OutputStream; template<typename CharType> class InputS
 namespace Assets { class DirectorySearchRules; class IAsyncMarker; }
 namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
+namespace Assets { class OperationContext; }
 
 namespace SceneEngine
 {
@@ -57,7 +58,7 @@ namespace SceneEngine
         const std::shared_ptr<PlacementsIntersections>& GetIntersections();
         std::shared_ptr<PlacementsEditor> CreateEditor(const std::shared_ptr<PlacementCellSet>& cellSet);
 
-        PlacementsManager(std::shared_ptr<PlacementsModelCache> modelCache);
+        PlacementsManager(std::shared_ptr<PlacementsModelCache> modelCache, std::shared_ptr<::Assets::OperationContext> loadingContext);
         ~PlacementsManager();
     protected:
         class Pimpl;
@@ -228,7 +229,7 @@ namespace SceneEngine
         PlacementsEditor(
             std::shared_ptr<PlacementCellSet> cellSet,
             std::shared_ptr<PlacementsManager> manager,
-            std::shared_ptr<PlacementsCache> placementsCache, 
+            std::shared_ptr<PlacementsCache> placementsCache,
             std::shared_ptr<PlacementsModelCache> modelCache);
         ~PlacementsEditor();
     protected:

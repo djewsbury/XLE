@@ -35,6 +35,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IDeformAcceleratorPool> _deformAcceleratorPool;
 		std::shared_ptr<IDrawablesPool> _drawablesPool;
 		std::shared_ptr<ResourceConstructionContext> _constructionContext;
+		std::shared_ptr<::Assets::OperationContext> _loadingContext;
 
 		uint32_t _reloadId;
 
@@ -79,8 +80,8 @@ namespace RenderCore { namespace Techniques
 			query.Set(std::move(r));
 		}
 
-		auto modelScaffold = _pimpl->_modelScaffolds.Get(modelFilename);
-		auto materialScaffold = _pimpl->_materialScaffolds.Get(materialFilename, modelFilename);
+		auto modelScaffold = _pimpl->_modelScaffolds.Get(_pimpl->_loadingContext, modelFilename);
+		auto materialScaffold = _pimpl->_materialScaffolds.Get(_pimpl->_loadingContext, materialFilename, modelFilename);
 		auto construction = std::make_shared<ModelRendererConstruction>();
 		construction->AddElement().SetModelScaffold(modelScaffold->ShareFuture(), modelFilename.AsString()).SetMaterialScaffold(materialScaffold->ShareFuture(), materialFilename.AsString());
 
@@ -113,8 +114,8 @@ namespace RenderCore { namespace Techniques
 			query.Set(std::move(r));
 		}
 
-		auto modelScaffold = _pimpl->_modelScaffolds.Get(modelFilename);
-		auto materialScaffold = _pimpl->_materialScaffolds.Get(materialFilename, modelFilename);
+		auto modelScaffold = _pimpl->_modelScaffolds.Get(_pimpl->_loadingContext, modelFilename);
+		auto materialScaffold = _pimpl->_materialScaffolds.Get(_pimpl->_loadingContext, materialFilename, modelFilename);
 		auto construction = std::make_shared<ModelRendererConstruction>();
 		construction->AddElement().SetModelScaffold(modelScaffold->ShareFuture(), modelFilename.AsString()).SetMaterialScaffold(materialScaffold->ShareFuture(), materialFilename.AsString());
 
@@ -124,12 +125,12 @@ namespace RenderCore { namespace Techniques
 
 	auto ModelCache::GetModelScaffold(StringSection<ResChar> name) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>
 	{
-		return _pimpl->_modelScaffolds.Get(name);
+		return _pimpl->_modelScaffolds.Get(_pimpl->_loadingContext, name);
 	}
 
 	auto ModelCache::GetMaterialScaffold(StringSection<ResChar> materialName, StringSection<ResChar> modelName) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>
 	{
-		return _pimpl->_materialScaffolds.Get(materialName, modelName);
+		return _pimpl->_materialScaffolds.Get(_pimpl->_loadingContext, materialName, modelName);
 	}
 
 	void ModelCache::OnFrameBarrier()
@@ -176,12 +177,14 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool,
 		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
 		std::shared_ptr<BufferUploads::IManager> bufferUploads,
+		std::shared_ptr<::Assets::OperationContext> loadingContext,
 		const Config& cfg)
 	{
 		_pimpl = std::make_unique<Pimpl>(cfg);
 		_pimpl->_pipelineAcceleratorPool = std::move(pipelineAcceleratorPool);
 		_pimpl->_deformAcceleratorPool = std::move(deformAcceleratorPool);
 		_pimpl->_drawablesPool = std::move(drawablesPool);
+		_pimpl->_loadingContext = std::move(loadingContext);
 		if (bufferUploads) {
 			auto repositionableGeometry = std::make_shared<RepositionableGeometryConduit>(
 				BufferUploads::CreateBatchedResources(*_pimpl->_pipelineAcceleratorPool->GetDevice(), bufferUploads, BindFlag::VertexBuffer, 1024*1024),
