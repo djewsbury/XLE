@@ -13,6 +13,7 @@
 #include "../../RenderCore/Techniques/DeformGeometryInfrastructure.h"
 #include "../../RenderCore/Techniques/Drawables.h"
 #include "../../RenderCore/Techniques/LightWeightBuildDrawables.h"
+#include "../../RenderCore/Techniques/SkinDeformer.h"
 #include "../../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../../RenderCore/BufferUploads/BatchedResources.h"
 #include "../../RenderCore/Assets/ModelScaffold.h"
@@ -89,7 +90,7 @@ namespace SceneEngine
 		OpaquePtr CreateRenderer(OpaquePtr model, OpaquePtr deformers, OpaquePtr animationSet) override;
 
 		std::unique_ptr<CmdListBuilder, void(*)(CmdListBuilder*)> BeginCmdList(
-			RenderCore::Techniques::ParsingContext& parsingContext,
+			RenderCore::IThreadContext& threadContext,
 			IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts) override;
 		void OnFrameBarrier() override;
 		void CancelConstructions() override;
@@ -188,6 +189,22 @@ namespace SceneEngine
 		return result;
 	}
 
+	static std::future<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> CreateDefaultDeformerConstruction(
+		std::shared_future<std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>> rendererConstruction)
+	{
+		std::promise<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> promise;
+		auto result = promise.get_future();
+		::Assets::WhenAll(std::move(rendererConstruction)).ThenConstructToPromise(
+			std::move(promise),
+			[](auto completedRendererConstruction) {
+				auto deformerConstruction = std::make_shared<RenderCore::Techniques::DeformerConstruction>();
+				RenderCore::Techniques::SkinDeformerSystem::GetInstance()->ConfigureGPUSkinDeformers(
+					*deformerConstruction, *completedRendererConstruction);
+				return deformerConstruction;
+			});
+		return result;
+	}
+
 	std::shared_ptr<void> CharacterScene::CreateRenderer(
 		std::shared_ptr<void> model,
 		std::shared_ptr<void> deformers,
@@ -211,38 +228,64 @@ namespace SceneEngine
 
 		auto newEntry = std::make_shared<Internal::RendererEntry>();
 		newEntry->_model = std::static_pointer_cast<Internal::ModelEntry>(model);
-		newEntry->_deformer = std::static_pointer_cast<Internal::DeformerEntry>(deformers);
 		newEntry->_animSet = std::static_pointer_cast<Internal::AnimSetEntry>(animationSet);
 
-		::Assets::WhenAll(newEntry->_model->_completedConstruction, newEntry->_deformer->_completedConstruction).ThenConstructToPromise(
+		std::shared_future<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> deformerConstructionFuture;
+		if (deformers) {
+			newEntry->_deformer = std::static_pointer_cast<Internal::DeformerEntry>(deformers);
+			deformerConstructionFuture = newEntry->_deformer->_completedConstruction;
+		} else {
+			// no explicit deformers -- we must use the defaults
+			deformerConstructionFuture = CreateDefaultDeformerConstruction(newEntry->_model->_completedConstruction);
+		}
+
+		::Assets::WhenAll(newEntry->_model->_completedConstruction, deformerConstructionFuture).ThenConstructToPromise(
 			newEntry->_rendererMarker.AdoptPromise(),
 			[drawablesPool=_drawablesPool, pipelineAcceleratorPool=_pipelineAcceleratorPool, constructionContext=_constructionContext, deformAcceleratorPool=_deformAcceleratorPool](
 				auto&& promise, 
 				auto completedConstruction, auto completedDeformerConstruction) mutable {
 
-				auto geoDeformer = RenderCore::Techniques::CreateDeformGeoAttachment(
-					*pipelineAcceleratorPool->GetDevice(), *completedConstruction, *completedDeformerConstruction);
-				auto deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator();
-				deformAcceleratorPool->Attach(*deformAccelerator, geoDeformer);
+				std::shared_ptr<RenderCore::Techniques::DeformAccelerator> deformAccelerator;
+				std::shared_ptr<RenderCore::Techniques::IDeformGeoAttachment> geoDeformer;
+				if (completedDeformerConstruction && !completedDeformerConstruction->IsEmpty()) {
+					geoDeformer = RenderCore::Techniques::CreateDeformGeoAttachment(
+						*pipelineAcceleratorPool->GetDevice(), *completedConstruction, *completedDeformerConstruction);
+					deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator();
+					deformAcceleratorPool->Attach(*deformAccelerator, geoDeformer);
+				}
 
 				auto drawableConstructor = std::make_shared<RenderCore::Techniques::DrawableConstructor>(
 					drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext),
 					*completedConstruction, deformAcceleratorPool, deformAccelerator);
 
-				::Assets::WhenAll(ToFuture(*drawableConstructor), geoDeformer->GetInitializationFuture()).ThenConstructToPromiseWithFutures(
-					std::move(promise),
-					[geoDeformer, deformAccelerator, completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture, std::shared_future<void>&& deformerInitFuture) mutable {
-						deformerInitFuture.get();	// propagate exceptions
+				if (geoDeformer) {
+					::Assets::WhenAll(ToFuture(*drawableConstructor), geoDeformer->GetInitializationFuture()).ThenConstructToPromiseWithFutures(
+						std::move(promise),
+						[geoDeformer, deformAccelerator, completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture, std::shared_future<void>&& deformerInitFuture) mutable {
+							deformerInitFuture.get();	// propagate exceptions
 
-						Internal::Renderer renderer;
-						renderer._drawableConstructor = drawableConstructorFuture.get();
-						renderer._completionCmdList = std::max(renderer._drawableConstructor->_completionCommandList, geoDeformer->GetCompletionCommandList());
-						renderer._deformAccelerator = deformAccelerator;
-						renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
-						if (completedConstruction->GetElementCount() != 0)
-							renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
-						return renderer;
-					});
+							Internal::Renderer renderer;
+							renderer._drawableConstructor = drawableConstructorFuture.get();
+							renderer._completionCmdList = std::max(renderer._drawableConstructor->_completionCommandList, geoDeformer->GetCompletionCommandList());
+							renderer._deformAccelerator = deformAccelerator;
+							renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
+							if (completedConstruction->GetElementCount() != 0)
+								renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
+							return renderer;
+						});
+				} else {
+					::Assets::WhenAll(ToFuture(*drawableConstructor)).ThenConstructToPromiseWithFutures(
+						std::move(promise),
+						[completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture) mutable {
+							Internal::Renderer renderer;
+							renderer._drawableConstructor = drawableConstructorFuture.get();
+							renderer._completionCmdList = renderer._drawableConstructor->_completionCommandList;
+							renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
+							if (completedConstruction->GetElementCount() != 0)
+								renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
+							return renderer;
+						});
+				}
 			});
 
 		::Assets::WhenAll(newEntry->_rendererMarker.ShareFuture(), newEntry->_animSet->_animSetFuture).ThenConstructToPromise(
@@ -250,11 +293,13 @@ namespace SceneEngine
 			[deformAcceleratorPool=_deformAcceleratorPool](const auto& renderer, auto animSet) mutable {
 				Internal::Animator result;
 
-				auto* geoDeformers = deformAcceleratorPool->GetDeformGeoAttachment(*renderer._deformAccelerator).get();
-				if (geoDeformers) {
-					result._skeletonInterface = std::make_shared<RenderCore::Techniques::RendererSkeletonInterface>(
-						renderer.GetSkeletonMachine().GetOutputInterface(),
-						*geoDeformers);
+				if (renderer._deformAccelerator) {
+					auto* geoDeformers = deformAcceleratorPool->GetDeformGeoAttachment(*renderer._deformAccelerator).get();
+					if (geoDeformers) {
+						result._skeletonInterface = std::make_shared<RenderCore::Techniques::RendererSkeletonInterface>(
+							renderer.GetSkeletonMachine().GetOutputInterface(),
+							*geoDeformers);
+					}
 				}
 
 				auto& animImmData = animSet->ImmutableData();
@@ -274,10 +319,10 @@ namespace SceneEngine
 			const Renderer* _activeRenderer = nullptr;
 			const Animator* _activeAnimator = nullptr;
 			unsigned _currentInstanceIdx = 0;
-			CharacterSceneRealCmdListBuilder(RenderCore::Techniques::ParsingContext& parsingContext, IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts) 
-			: _parsingContext(&parsingContext), _pkts(pkts.begin(), pkts.end()) {}
+			CharacterSceneRealCmdListBuilder(RenderCore::IThreadContext& threadContext, IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts) 
+			: _threadContext(&threadContext), _pkts(pkts.begin(), pkts.end()) {}
 			~CharacterSceneRealCmdListBuilder() = default;
-			RenderCore::Techniques::ParsingContext* _parsingContext = nullptr;
+			RenderCore::IThreadContext* _threadContext = nullptr;
 			std::vector<RenderCore::Techniques::DrawablesPacket*> _pkts;
 
 			#if defined(_DEBUG)
@@ -350,10 +395,10 @@ namespace SceneEngine
 		that->_currentInstanceIdx = 0;
 	}
 
-	auto CharacterScene::BeginCmdList(RenderCore::Techniques::ParsingContext& parsingContext, IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts) -> std::unique_ptr<CmdListBuilder, void(*)(CmdListBuilder*)>
+	auto CharacterScene::BeginCmdList(RenderCore::IThreadContext& threadContext, IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts) -> std::unique_ptr<CmdListBuilder, void(*)(CmdListBuilder*)>
 	{
 		return std::unique_ptr<CmdListBuilder, void(*)(CmdListBuilder*)>(
-			(CmdListBuilder*)new Internal::CharacterSceneRealCmdListBuilder(parsingContext, pkts),
+			(CmdListBuilder*)new Internal::CharacterSceneRealCmdListBuilder(threadContext, pkts),
 			[](CmdListBuilder* ptr) { delete (Internal::CharacterSceneRealCmdListBuilder*)ptr; });
 	}
 
@@ -372,6 +417,10 @@ namespace SceneEngine
 		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
 		std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
 		std::shared_ptr<Assets::OperationContext> loadingContext)
+	: _drawablesPool(std::move(drawablesPool))
+	, _pipelineAcceleratorPool(std::move(pipelineAcceleratorPool))
+	, _deformAcceleratorPool(std::move(deformAcceleratorPool))
+	, _loadingContext(std::move(loadingContext))
 	{
 		using namespace RenderCore;
 		if (bufferUploads) {
@@ -382,6 +431,17 @@ namespace SceneEngine
 		}
 	}
 	CharacterScene::~CharacterScene() = default;
+	ICharacterScene::~ICharacterScene() = default;
+
+	std::shared_ptr<ICharacterScene> CreateCharacterScene(
+		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
+		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
+		std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
+		std::shared_ptr<Assets::OperationContext> loadingContext)
+	{
+		return std::make_shared<CharacterScene>(std::move(drawablesPool), std::move(pipelineAcceleratorPool), std::move(deformAcceleratorPool), std::move(bufferUploads), std::move(loadingContext));
+	}
 
 }
 

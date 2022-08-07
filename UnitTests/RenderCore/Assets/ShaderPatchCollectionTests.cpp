@@ -312,14 +312,13 @@ namespace UnitTests
 			};
 			auto compileMarker = ::Assets::Internal::BeginCompileOperation(CompileProcess_InstantiateShaderGraph, std::move(initializers));
 			REQUIRE(compileMarker != nullptr);
-			auto compiledFromFile = compileMarker->InvokeCompile();
-			REQUIRE(compiledFromFile != nullptr);
-			compiledFromFile->StallWhilePending();
-			REQUIRE(compiledFromFile->GetAssetState() == ::Assets::AssetState::Ready);
-			auto artifacts = compiledFromFile->GetArtifactCollection(CompileProcess_InstantiateShaderGraph);
-			REQUIRE(artifacts != nullptr);
-			REQUIRE((bool)artifacts->GetDependencyValidation());
-			REQUIRE(artifacts->GetAssetState() == ::Assets::AssetState::Ready);
+			auto compiledFromFile = compileMarker->InvokeCompile(CompileProcess_InstantiateShaderGraph);
+			REQUIRE(compiledFromFile.Valid());
+			compiledFromFile.StallWhilePending();
+			REQUIRE(compiledFromFile.GetAssetState() == ::Assets::AssetState::Ready);
+			auto& artifacts = compiledFromFile.GetArtifactCollection();
+			REQUIRE((bool)artifacts.GetDependencyValidation());
+			REQUIRE(artifacts.GetAssetState() == ::Assets::AssetState::Ready);
 		}
 
 		SECTION( "CompileShaderPatchCollection1" )

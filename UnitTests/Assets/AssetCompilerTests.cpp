@@ -155,6 +155,15 @@ namespace UnitTests
 		#endif
 	}
 
+	static std::shared_ptr<::Assets::IArtifactCollection> GetExistingArtifact(::Assets::IIntermediateCompileMarker& marker, uint64_t typeCode)
+	{
+		auto artifactQuery = marker.GetArtifact(typeCode);
+		if (artifactQuery.first)
+			return artifactQuery.first;
+		REQUIRE(artifactQuery.second.StallWhilePending(std::chrono::microseconds(1)).value() == ::Assets::AssetState::Ready);
+		return artifactQuery.second.GetArtifactCollectionPtr();
+	}
+
 	TEST_CASE( "AssetCompilers-BasicCompilers", "[assets]" )
 	{
 		//
@@ -186,13 +195,14 @@ namespace UnitTests
 
 			auto marker = compilers->Prepare(Type_UnitTestArtifact, ::Assets::InitializerPack { "unit-test-asset-one" });
 			REQUIRE(marker != nullptr);
-			REQUIRE(marker->GetExistingAsset(Type_UnitTestArtifact) == nullptr);
+			auto artifactQuery = marker->GetArtifact(Type_UnitTestArtifact);
+			REQUIRE(artifactQuery.first == nullptr);
 
-			auto compile = marker->InvokeCompile();
-			REQUIRE(compile != nullptr);
+			auto compile = artifactQuery.second;
+			REQUIRE(compile.Valid());
 
-			compile->StallWhilePending();
-			REQUIRE(compile->GetAssetState() == ::Assets::AssetState::Ready);
+			compile.StallWhilePending();
+			REQUIRE(compile.GetAssetState() == ::Assets::AssetState::Ready);
 
 			SECTION("SuccessfulResolveRequests")
 			{
@@ -209,7 +219,7 @@ namespace UnitTests
 						::Assets::ArtifactRequest::DataType::SharedBlob
 					}
 				};
-				auto artifacts = compile->GetArtifactCollection(Type_UnitTestArtifact)->ResolveRequests(MakeIteratorRange(requests));
+				auto artifacts = compile.GetArtifactCollection().ResolveRequests(MakeIteratorRange(requests));
 				REQUIRE(artifacts.size() == 2);
 				REQUIRE(::Assets::AsString(artifacts[0]._sharedBlob) == "This is file data from TestCompileOperation for unit-test-asset-one");
 				REQUIRE(::Assets::AsString(artifacts[1]._sharedBlob) == "This is extra file data");
@@ -218,7 +228,7 @@ namespace UnitTests
 				// Resolve artifacts implicitly via calling ::Assets::AutoConstructAsset
 				// The ChunkRequests array within TestChunkRequestsAsset is used to bind input artifacts
 				//
-				auto implicitlyConstructed = ::Assets::AutoConstructAsset<std::unique_ptr<TestChunkRequestsAsset>>(*compile->GetArtifactCollection(Type_UnitTestArtifact));
+				auto implicitlyConstructed = ::Assets::AutoConstructAsset<std::unique_ptr<TestChunkRequestsAsset>>(compile.GetArtifactCollection());
 				REQUIRE(implicitlyConstructed->_data0 == "This is file data from TestCompileOperation for unit-test-asset-one");
 				REQUIRE(implicitlyConstructed->_data1 == "This is extra file data");
 			}
@@ -234,7 +244,7 @@ namespace UnitTests
 							::Assets::ArtifactRequest::DataType::SharedBlob
 						}
 					};
-					compile->GetArtifactCollection(Type_UnitTestArtifact)->ResolveRequests(MakeIteratorRange(requests));
+					compile.GetArtifactCollection().ResolveRequests(MakeIteratorRange(requests));
 				}());
 				REQUIRE_THROWS([&]() {
 					// Fails because the type code requested doesn't match (note name ignored)
@@ -244,7 +254,7 @@ namespace UnitTests
 							::Assets::ArtifactRequest::DataType::SharedBlob
 						}
 					};
-					compile->GetArtifactCollection(Type_UnitTestArtifact)->ResolveRequests(MakeIteratorRange(requests));
+					compile.GetArtifactCollection().ResolveRequests(MakeIteratorRange(requests));
 				}());
 				REQUIRE_THROWS([&]() {
 					// Fails because the same type code is repeated multiple times in the request
@@ -258,7 +268,7 @@ namespace UnitTests
 							::Assets::ArtifactRequest::DataType::SharedBlob
 						}
 					};
-					compile->GetArtifactCollection(Type_UnitTestArtifact)->ResolveRequests(MakeIteratorRange(requests));
+					compile.GetArtifactCollection().ResolveRequests(MakeIteratorRange(requests));
 				}());
 			}
 
@@ -358,22 +368,23 @@ namespace UnitTests
 			auto initializer = "unit-test-asset-one";
 			auto marker = compilers->Prepare(Type_UnitTestArtifact, ::Assets::InitializerPack { initializer } );
 			REQUIRE(marker != nullptr);
-			REQUIRE(marker->GetExistingAsset(Type_UnitTestArtifact) == nullptr);
+			auto artifactQuery = marker->GetArtifact(Type_UnitTestArtifact);
+			REQUIRE(artifactQuery.first == nullptr);
 
-			auto compile = marker->InvokeCompile();
-			REQUIRE(compile != nullptr);
+			auto compile = artifactQuery.second;
+			REQUIRE(compile.Valid());
 
-			compile->StallWhilePending();
-			REQUIRE(compile->GetAssetState() == ::Assets::AssetState::Ready);
+			compile.StallWhilePending();
+			REQUIRE(compile.GetAssetState() == ::Assets::AssetState::Ready);
 			
-			auto artifacts = compile->GetArtifactCollection(Type_UnitTestArtifact)->ResolveRequests(MakeIteratorRange(requests));
+			auto artifacts = compile.GetArtifactCollection().ResolveRequests(MakeIteratorRange(requests));
 			REQUIRE(artifacts.size() == 2);
 			REQUIRE(::Assets::AsString(artifacts[0]._sharedBlob) == "This is file data from TestCompileOperation for unit-test-asset-one");
 			REQUIRE(::Assets::AsString(artifacts[1]._sharedBlob) == "This is extra file data");
 			REQUIRE(TestCompileOperation::s_serializeTargetCount == initialSerializeTargetCount+1);
 
-			// Now GetExistingAsset() on the same marker should give us something immediately
-			auto existingAsset = marker->GetExistingAsset(Type_UnitTestArtifact);
+			// Now GetArtifact() on the same marker should give us something immediately
+			auto existingAsset = GetExistingArtifact(*marker, Type_UnitTestArtifact);
 			REQUIRE(existingAsset != nullptr);
 			REQUIRE(existingAsset->GetDependencyValidation().GetValidationIndex() == 0);	// still clean
 			artifacts = existingAsset->ResolveRequests(MakeIteratorRange(requests));
@@ -382,11 +393,11 @@ namespace UnitTests
 			REQUIRE(TestCompileOperation::s_serializeTargetCount == initialSerializeTargetCount+1);
 
 			// We can also go all the way back to the Prepare() function and expect an existing asset this time
-			compile = nullptr;
+			compile = {};
 			marker = nullptr;
 			marker = compilers->Prepare(Type_UnitTestArtifact, ::Assets::InitializerPack { initializer } );
 			REQUIRE(marker != nullptr);
-			existingAsset = marker->GetExistingAsset(Type_UnitTestArtifact);
+			existingAsset = GetExistingArtifact(*marker, Type_UnitTestArtifact);
 			REQUIRE(existingAsset != nullptr);
 			REQUIRE(existingAsset->GetDependencyValidation().GetValidationIndex() == 0);	// still clean
 			artifacts = existingAsset->ResolveRequests(MakeIteratorRange(requests));
@@ -419,34 +430,36 @@ namespace UnitTests
 			{
 				auto marker = compilers->Prepare(Type_UnitTestArtifact, ::Assets::InitializerPack { "unit-test-asset-throw-from-constructor" } );
 				REQUIRE(marker != nullptr);
-				REQUIRE(marker->GetExistingAsset(Type_UnitTestArtifact) == nullptr);
+				auto artifactQuery = marker->GetArtifact(Type_UnitTestArtifact);
+				REQUIRE(artifactQuery.first == nullptr);
 
 				// If the ICompileOperation throws from a constructor, then GetArtifactCollection
 				// will throw when we try to access it. This is because the compiler infrastructure
 				// gets no information about the compile targets, etc, when the ICompileOperation
 				// constructor can not be completed
-				auto compile = marker->InvokeCompile();
-				REQUIRE(compile != nullptr);
-				compile->StallWhilePending();
-				REQUIRE(compile->GetAssetState() == ::Assets::AssetState::Invalid);
-				REQUIRE_THROWS(compile->GetArtifactCollection(Type_UnitTestArtifact));
+				auto compile = artifactQuery.second;
+				REQUIRE(compile.Valid());
+				compile.StallWhilePending();
+				REQUIRE(compile.GetAssetState() == ::Assets::AssetState::Invalid);
+				REQUIRE_THROWS(compile.GetArtifactCollection());
 			}
 
 			{
 				auto marker = compilers->Prepare(Type_UnitTestArtifact, ::Assets::InitializerPack { "unit-test-asset-throw-from-serialize-target" } );
 				REQUIRE(marker != nullptr);
-				REQUIRE(marker->GetExistingAsset(Type_UnitTestArtifact) == nullptr);
+				auto artifactQuery = marker->GetArtifact(Type_UnitTestArtifact);
+				REQUIRE(artifactQuery.first == nullptr);
 
 				// Note that the future gets set to "ready" state, but the ArtifactCollection gets "invalid" state in this case. This is because
 				// the future can contain multiple ArtifactCollection, which can each have separate states
-				auto compile = marker->InvokeCompile();
-				REQUIRE(compile != nullptr);
-				compile->StallWhilePending();
-				REQUIRE(compile->GetAssetState() == ::Assets::AssetState::Ready);
-				REQUIRE(compile->GetArtifactCollection(Type_UnitTestArtifact)->GetAssetState() == ::Assets::AssetState::Invalid);
-				auto log = ::Assets::AsString(::Assets::GetErrorMessage(*compile->GetArtifactCollection(Type_UnitTestArtifact)));
+				auto compile = artifactQuery.second;
+				REQUIRE(compile.Valid());
+				compile.StallWhilePending();
+				REQUIRE(compile.GetAssetState() == ::Assets::AssetState::Ready);
+				REQUIRE(compile.GetArtifactCollection().GetAssetState() == ::Assets::AssetState::Invalid);
+				auto log = ::Assets::AsString(::Assets::GetErrorMessage(compile.GetArtifactCollection()));
 				REQUIRE(XlFindString(MakeStringSection(log), "Throw from serialize target requested"));
-				REQUIRE(compile->GetArtifactCollection(Type_UnitTestArtifact)->GetDependencyValidation());
+				REQUIRE(compile.GetArtifactCollection().GetDependencyValidation());
 			}
 		}
 
@@ -457,18 +470,18 @@ namespace UnitTests
 			auto initialCompileCount = TestCompileOperation::s_constructionCount;
 			for (unsigned c=0; c<2; ++c) {
 				auto marker = compilers->Prepare(Type_UnitTestArtifact, ::Assets::InitializerPack { "unit-test-asset-throw-from-serialize-target" } );
-				auto existing = marker->GetExistingAsset(Type_UnitTestArtifact);
-				if (existing && existing->GetDependencyValidation().GetValidationIndex() == 0) {
-					REQUIRE(existing->GetAssetState() == ::Assets::AssetState::Invalid);
-					auto log = ::Assets::AsString(::Assets::GetErrorMessage(*existing));
+				auto artifactQuery = marker->GetArtifact(Type_UnitTestArtifact);
+				if (artifactQuery.first) {
+					REQUIRE(artifactQuery.first->GetAssetState() == ::Assets::AssetState::Invalid);
+					auto log = ::Assets::AsString(::Assets::GetErrorMessage(*artifactQuery.first));
 					REQUIRE(XlFindString(MakeStringSection(log), "Throw from serialize target requested"));
 					continue;	
 				}
-				auto compile = marker->InvokeCompile();
-				compile->StallWhilePending();
-				REQUIRE(compile->GetAssetState() == ::Assets::AssetState::Ready);
-				REQUIRE(compile->GetArtifactCollection(Type_UnitTestArtifact)->GetAssetState() == ::Assets::AssetState::Invalid);
-				auto log = ::Assets::AsString(::Assets::GetErrorMessage(*compile->GetArtifactCollection(Type_UnitTestArtifact)));
+				auto compile = artifactQuery.second;
+				compile.StallWhilePending();
+				REQUIRE(compile.GetAssetState() == ::Assets::AssetState::Ready);
+				REQUIRE(compile.GetArtifactCollection().GetAssetState() == ::Assets::AssetState::Invalid);
+				auto log = ::Assets::AsString(::Assets::GetErrorMessage(compile.GetArtifactCollection()));
 				REQUIRE(XlFindString(MakeStringSection(log), "Throw from serialize target requested"));
 			}
 			REQUIRE(TestCompileOperation::s_constructionCount == initialCompileCount+1);
@@ -481,7 +494,7 @@ namespace UnitTests
 			registration = RegisterUnitTestCompiler(*compilers);
 
 			auto marker = compilers->Prepare(Type_UnitTestArtifact, ::Assets::InitializerPack { "unit-test-asset-throw-from-serialize-target" } );
-			auto existing = marker->GetExistingAsset(Type_UnitTestArtifact);
+			auto existing = GetExistingArtifact(*marker, Type_UnitTestArtifact);
 			REQUIRE(existing);
 			REQUIRE(existing->GetDependencyValidation().GetValidationIndex() == 0);
 			REQUIRE(existing->GetAssetState() == ::Assets::AssetState::Invalid);

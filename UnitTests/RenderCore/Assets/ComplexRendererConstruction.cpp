@@ -38,34 +38,34 @@ namespace UnitTests
 		TechniqueTestApparatus testApparatus(*testHelper);
 
 		// compile a fake scaffold using some simple input data
-		std::shared_ptr<::Assets::ArtifactCollectionFuture> modelCompile;
-		std::shared_ptr<::Assets::ArtifactCollectionFuture> materialCompile;
+		::Assets::ArtifactCollectionFuture modelCompile;
+		::Assets::ArtifactCollectionFuture materialCompile;
 		{
 			auto targetCode = RenderCore::Assets::ModelScaffold::CompileProcessType;
 			auto marker = compilers.Prepare(targetCode, ::Assets::InitializerPack { "fake-model" });
 			REQUIRE(marker != nullptr);
 
-			modelCompile = marker->InvokeCompile();
-			REQUIRE(modelCompile != nullptr);
+			modelCompile = marker->InvokeCompile(RenderCore::Assets::ModelScaffold::CompileProcessType);
+			REQUIRE(modelCompile.Valid());
 		}
 		{
 			auto targetCode = RenderCore::Assets::MaterialScaffold::CompileProcessType;
 			auto marker = compilers.Prepare(targetCode, ::Assets::InitializerPack { "fake-model", "fake-model" });
 			REQUIRE(marker != nullptr);
 
-			materialCompile = marker->InvokeCompile();
-			REQUIRE(materialCompile != nullptr);
+			materialCompile = marker->InvokeCompile(RenderCore::Assets::MaterialScaffold::CompileProcessType);
+			REQUIRE(materialCompile.Valid());
 		}
 
-		modelCompile->StallWhilePending();
-		materialCompile->StallWhilePending();
+		modelCompile.StallWhilePending();
+		materialCompile.StallWhilePending();
 		
 		SECTION("Load as scaffold")
 		{
-			auto modelCollection = modelCompile->GetArtifactCollection(RenderCore::Assets::ModelScaffold::CompileProcessType);
-			REQUIRE(modelCompile->GetAssetState() == ::Assets::AssetState::Ready);
+			auto& modelCollection = modelCompile.GetArtifactCollection();
+			REQUIRE(modelCompile.GetAssetState() == ::Assets::AssetState::Ready);
 
-			auto modelScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ModelScaffold>>(*modelCollection);
+			auto modelScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ModelScaffold>>(modelCollection);
 			auto cmdStream = modelScaffold->CommandStream();
 			REQUIRE(!cmdStream.empty());
 			for (auto cmd:cmdStream) {
@@ -74,7 +74,7 @@ namespace UnitTests
 			}
 
 			auto materialScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>(
-				*materialCompile->GetArtifactCollection(RenderCore::Assets::MaterialScaffold::CompileProcessType));
+				materialCompile.GetArtifactCollection());
 
 			SECTION("Create ModelRendererConstruction")
 			{

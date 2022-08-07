@@ -74,31 +74,34 @@ namespace Assets
     class ArtifactCollectionFuture : public IAsyncMarker
     {
     public:
-		const std::shared_ptr<IArtifactCollection>& GetArtifactCollection(ArtifactTargetCode);
+		const IArtifactCollection& GetArtifactCollection() const;
+		std::shared_ptr<IArtifactCollection> GetArtifactCollectionPtr() const;
 
 		using ArtifactCollectionSet = std::vector<std::pair<ArtifactTargetCode, std::shared_ptr<IArtifactCollection>>>;
-		auto ShareFuture() -> std::shared_future<ArtifactCollectionSet>;
+		bool Valid() const { return _rootSharedFuture != nullptr; }
+		std::shared_future<ArtifactCollectionSet> ShareFuture() { return *_rootSharedFuture; }
 
-        ArtifactCollectionFuture();
+        ArtifactCollectionFuture(std::shared_ptr<std::shared_future<ArtifactCollectionSet>> rootSharedFuture, ArtifactTargetCode targetCode);
+		ArtifactCollectionFuture();
         ~ArtifactCollectionFuture();
 
-		ArtifactCollectionFuture(ArtifactCollectionFuture&&) = delete;
-		ArtifactCollectionFuture& operator=(ArtifactCollectionFuture&&) = delete;
-		ArtifactCollectionFuture(const ArtifactCollectionFuture&) = delete;
-		ArtifactCollectionFuture& operator=(const ArtifactCollectionFuture&) = delete;
+		ArtifactCollectionFuture(ArtifactCollectionFuture&&) = default;
+		ArtifactCollectionFuture& operator=(ArtifactCollectionFuture&&) = default;
+		ArtifactCollectionFuture(const ArtifactCollectionFuture&) = default;
+		ArtifactCollectionFuture& operator=(const ArtifactCollectionFuture&) = default;
 
-		void SetArtifactCollections(IteratorRange<const std::pair<ArtifactTargetCode, std::shared_ptr<IArtifactCollection>>*> artifacts);
-		void StoreException(std::exception_ptr);
 		const char* GetDebugLabel() const;  // GetDebugLabel only provided in debug builds, and only intended for debugging
-		void SetDebugLabel(StringSection<char> initializer);
+		void SetDebugLabel(StringSection<> initializer);
 
 		virtual AssetState		            GetAssetState() const override;
 		virtual std::optional<AssetState>   StallWhilePending(std::chrono::microseconds timeout = std::chrono::microseconds(0)) const override;
 
 	private:
-		std::promise<ArtifactCollectionSet> _promise;
-		std::shared_future<ArtifactCollectionSet> _rootSharedFuture;
-		DEBUG_ONLY(ResChar _initializer[MaxPath];)
+		// awkwardly we use shared ptrs to a shared future, because we need to track the reference counts
+		// with a weak ptr in the compiler infrastructure
+		std::shared_ptr<std::shared_future<ArtifactCollectionSet>> _rootSharedFuture;
+		ArtifactTargetCode _targetCode;
+		DEBUG_ONLY(std::string _initializer;)
     };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

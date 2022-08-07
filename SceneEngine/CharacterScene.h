@@ -9,7 +9,9 @@
 #include "../Utility/IteratorUtils.h"
 #include <memory>
 
-namespace RenderCore { namespace Techniques { class ModelRendererConstruction; class DeformerConstruction; class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class ParsingContext; class DrawablesPacket; }}
+namespace RenderCore { namespace Techniques { class ModelRendererConstruction; class DeformerConstruction; class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class DrawablesPacket; }}
+namespace RenderCore { namespace BufferUploads { class IManager; }}
+namespace RenderCore { class IThreadContext; }
 namespace Assets { class OperationContext; }
 namespace SceneEngine
 {
@@ -20,11 +22,11 @@ namespace SceneEngine
 		virtual OpaquePtr CreateModel(std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>) = 0;
 		virtual OpaquePtr CreateDeformers(std::shared_ptr<RenderCore::Techniques::DeformerConstruction>) = 0;
 		virtual OpaquePtr CreateAnimationSet(StringSection<>) = 0;
-		virtual OpaquePtr CreateRenderer(OpaquePtr model, OpaquePtr deformers, OpaquePtr animationSet);
+		virtual OpaquePtr CreateRenderer(OpaquePtr model, OpaquePtr deformers, OpaquePtr animationSet) = 0;
 
 		class CmdListBuilder;
 		virtual std::unique_ptr<CmdListBuilder, void(*)(CmdListBuilder*)> BeginCmdList(
-			RenderCore::Techniques::ParsingContext& parsingContext,
+			RenderCore::IThreadContext& threadContext,
 			IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts) = 0;
 		virtual void OnFrameBarrier() = 0;
 		virtual void CancelConstructions() = 0;
@@ -36,6 +38,7 @@ namespace SceneEngine
 		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
 		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
+		std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
 		std::shared_ptr<Assets::OperationContext> loadingContext);
 
 	class ICharacterScene::CmdListBuilder

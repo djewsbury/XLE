@@ -108,8 +108,8 @@ namespace Assets
     {
     public:
 		using IdentifiersList = IteratorRange<const StringSection<>*>;
-        std::shared_ptr<IArtifactCollection> GetExistingAsset(CompileRequestCode) const override;
-        std::shared_ptr<ArtifactCollectionFuture> InvokeCompile() override;
+        std::pair<std::shared_ptr<IArtifactCollection>, ArtifactCollectionFuture> GetArtifact(CompileRequestCode) override;
+		ArtifactCollectionFuture InvokeCompile(CompileRequestCode targetCode) override;
 		std::string GetCompilerDescription() const override;
 		RegisteredCompilerId GetRegisteredCompilerId() { return _registeredCompilerId; }
 		void StallForActiveFuture();
@@ -121,43 +121,79 @@ namespace Assets
 			std::shared_ptr<IntermediatesStore> intermediateStore);
         ~Marker();
     private:
-		std::weak_ptr<ArtifactCollectionFuture> _activeFuture;
         std::weak_ptr<ExtensionAndDelegate> _delegate;
 		std::shared_ptr<IntermediatesStore> _intermediateStore;
         InitializerPack _initializers;
 		RegisteredCompilerId _registeredCompilerId;
-		Threading::Mutex _lock;
+
+		Threading::Mutex _activeFutureLock;
+		std::weak_ptr<std::shared_future<ArtifactCollectionFuture::ArtifactCollectionSet>> _activeFuture;
 
 		static void PerformCompile(
 			const ExtensionAndDelegate& delegate,
 			const InitializerPack& initializers,
-			ArtifactCollectionFuture& compileMarker,
+			std::promise<ArtifactCollectionFuture::ArtifactCollectionSet>&& compileMarker,
 			IntermediatesStore* destinationStore);
+		std::future<ArtifactCollectionFuture::ArtifactCollectionSet> InvokeCompileInternal();
     };
 
-    std::shared_ptr<IArtifactCollection> IntermediateCompilers::Marker::GetExistingAsset(CompileRequestCode targetCode) const
+    std::pair<std::shared_ptr<IArtifactCollection>, ArtifactCollectionFuture> IntermediateCompilers::Marker::GetArtifact(CompileRequestCode targetCode)
     {
-        if (!_intermediateStore) return nullptr;
-
 		auto d = _delegate.lock();
-		if (!d)
-			return nullptr;
+		if (!d) return {};
 
-		if (d->_archiveNameDelegate) {
-			auto archiveEntry = d->_archiveNameDelegate(targetCode, _initializers);
-			if (!archiveEntry._archive.empty())
-				return _intermediateStore->RetrieveCompileProducts(archiveEntry._archive, archiveEntry._entryId, d->_storeGroupId);
+		// do everything in a lock, to avoid issues with _activeFuture
+		ScopedLock(_activeFutureLock);
+
+		// if multiple threads request the same compile at the same time, ensure that we return the same future
+		// this will happen because a single compile operation can return multiple artifacts, which are required for
+		// different assets/systems
+		if (auto f = _activeFuture.lock())
+			return { nullptr, ArtifactCollectionFuture{std::move(f), targetCode} };
+
+		if (_intermediateStore) {
+			std::shared_ptr<IArtifactCollection> existingCollection;
+			if (d->_archiveNameDelegate) {
+				auto archiveEntry = d->_archiveNameDelegate(targetCode, _initializers);
+				if (!archiveEntry._archive.empty())
+					existingCollection = _intermediateStore->RetrieveCompileProducts(archiveEntry._archive, archiveEntry._entryId, d->_storeGroupId);
+			} else {
+				StringMeld<MaxPath> nameWithTargetCode;
+				nameWithTargetCode << _initializers.ArchivableName() << "-" << std::hex << targetCode;
+				existingCollection = _intermediateStore->RetrieveCompileProducts(nameWithTargetCode.AsStringSection(), d->_storeGroupId);
+			}
+
+			if (existingCollection)
+				return {std::move(existingCollection), ArtifactCollectionFuture{}};
 		}
 
-		StringMeld<MaxPath> nameWithTargetCode;
-		nameWithTargetCode << _initializers.ArchivableName() << "-" << std::hex << targetCode;
-		return _intermediateStore->RetrieveCompileProducts(nameWithTargetCode.AsStringSection(), d->_storeGroupId);
+		auto invokedCompile = InvokeCompileInternal();
+		// awkward ptr setup so we can track references on _activeFuture
+		auto newFuture = std::make_shared<std::shared_future<ArtifactCollectionFuture::ArtifactCollectionSet>>(std::move(invokedCompile));
+		_activeFuture = newFuture;
+		ArtifactCollectionFuture result{std::move(newFuture), targetCode};
+		DEBUG_ONLY(result.SetDebugLabel(_initializers.ArchivableName()));
+		return { nullptr, std::move(result) };
     }
+
+	ArtifactCollectionFuture IntermediateCompilers::Marker::InvokeCompile(CompileRequestCode targetCode)
+	{
+		ScopedLock(_activeFutureLock);
+		if (auto f = _activeFuture.lock())
+			return ArtifactCollectionFuture{std::move(f), targetCode};
+
+		auto invokedCompile = InvokeCompileInternal();
+		auto newFuture = std::make_shared<std::shared_future<ArtifactCollectionFuture::ArtifactCollectionSet>>(std::move(invokedCompile));
+		_activeFuture = newFuture;
+		ArtifactCollectionFuture result{std::move(newFuture), targetCode};
+		DEBUG_ONLY(result.SetDebugLabel(_initializers.ArchivableName()));
+		return result;
+	}
 
 	void IntermediateCompilers::Marker::PerformCompile(
 		const ExtensionAndDelegate& delegate,
 		const InitializerPack& initializers, 
-		ArtifactCollectionFuture& compileMarker,
+		std::promise<ArtifactCollectionFuture::ArtifactCollectionSet>&& promise,
 		IntermediatesStore* destinationStore)
     {
 		std::vector<DependentFileState> deps;
@@ -260,17 +296,17 @@ namespace Assets
 				finalCollections.push_back(std::make_pair(target._targetCode, artifactCollection));
 			}
        
-			compileMarker.SetArtifactCollections(MakeIteratorRange(finalCollections));
+			promise.set_value(std::move(finalCollections));
 
 		} CATCH(const Exceptions::ConstructionError& e) {
 			auto depVal = MakeDepVal(MakeIteratorRange(deps), delegate._compilerLibraryDepVal);
-			Throw(Exceptions::ConstructionError(e, depVal));
+			promise.set_exception(std::make_exception_ptr(Exceptions::ConstructionError(e, depVal)));
 		} CATCH(const std::exception& e) {
 			auto depVal = MakeDepVal(MakeIteratorRange(deps), delegate._compilerLibraryDepVal);
-			Throw(Exceptions::ConstructionError(e, depVal));
+			promise.set_exception(std::make_exception_ptr(Exceptions::ConstructionError(e, depVal)));
 		} CATCH(...) {
 			auto depVal = MakeDepVal(MakeIteratorRange(deps), delegate._compilerLibraryDepVal);
-			Throw(Exceptions::ConstructionError(Exceptions::ConstructionError::Reason::Unknown, depVal, "%s", "unknown exception"));
+			promise.set_exception(std::make_exception_ptr(Exceptions::ConstructionError(Exceptions::ConstructionError::Reason::Unknown, depVal, "%s", "unknown exception")));
 		} CATCH_END
     }
 
@@ -280,95 +316,37 @@ namespace Assets
 		return {};
 	}
 
-	static void QueueCompileOperation(
-		const std::shared_ptr<::Assets::ArtifactCollectionFuture>& future,
-		std::function<void(::Assets::ArtifactCollectionFuture&)>&& operation)
-	{
-        if (!ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().IsGood()) {
-            operation(*future);
-            return;
-        }
-
-		auto fn = std::move(operation);
-		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[future, fn]() {
-				TRY
-				{
-					fn(*future);
-				}
-				CATCH(...)
-				{
-					future->StoreException(std::current_exception());
-				}
-				CATCH_END
-				assert(future->GetAssetState() != ::Assets::AssetState::Pending);	// if it is still marked "pending" at this stage, it will never change state
-		});
-	}
-
-    std::shared_ptr<ArtifactCollectionFuture> IntermediateCompilers::Marker::InvokeCompile()
+    std::future<ArtifactCollectionFuture::ArtifactCollectionSet> IntermediateCompilers::Marker::InvokeCompileInternal()
     {
-		// if multiple threads request the same compile at the same time, ensure that we return the same future
-		// this will happen because a single compile operation can return multiple artifacts, which are required for
-		// different assets/systems
-		ScopedLock(_lock);
-		auto activeFuture = _activeFuture.lock();
-		if (activeFuture)
-			return activeFuture;
+		std::promise<ArtifactCollectionFuture::ArtifactCollectionSet> promise;
+		auto result = promise.get_future();
 
-        auto backgroundOp = std::make_shared<ArtifactCollectionFuture>();
-        backgroundOp->SetDebugLabel(_initializers.ArchivableName());
-
-		const bool allowBackgroundOps = true;
-		if (allowBackgroundOps) {
-			// Unfortunately we have to copy _initializers here, because we 
-			// must allow for this marker to be reused (and both InvokeCompile 
-			// and GetExistingAsset use _initializers)
-			std::weak_ptr<ExtensionAndDelegate> weakDelegate = _delegate;
-			std::shared_ptr<IntermediatesStore> store = _intermediateStore;
-			QueueCompileOperation(
-				backgroundOp,
-				[weakDelegate, store, inits=_initializers](ArtifactCollectionFuture& op) {
-				auto d = weakDelegate.lock();
-				if (!d) {
-					op.StoreException(std::make_exception_ptr(std::runtime_error("Request expired before it was completed")));
-					return;
-				}
-
-				++d->_activeOperationCount;
-				if (!d->_shuttingDown) {
-					TRY {
-						PerformCompile(*d, inits, op, store.get());
-					} CATCH (...) {
-						--d->_activeOperationCount;
-						throw;
-					} CATCH_END
-				} else {
-					op.StoreException(std::make_exception_ptr(std::runtime_error("System shutdown before compile request was completed")));
-				}
-				--d->_activeOperationCount;
-			});
-		} else {
-			auto d = _delegate.lock();
+		// Unfortunately we have to copy _initializers here, because we 
+		// must allow for this marker to be reused (and both InvokeCompile 
+		// and GetExistingAsset use _initializers)
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[weakDelegate=std::weak_ptr<ExtensionAndDelegate>{_delegate}, store=_intermediateStore, inits=_initializers, promise=std::move(promise)]() mutable {
+			auto d = weakDelegate.lock();
 			if (!d) {
-				backgroundOp->StoreException(std::make_exception_ptr(std::runtime_error("Request expired before it was completed")));
-			} else {
-				++d->_activeOperationCount;
-				if (!d->_shuttingDown) {
-					TRY {
-						PerformCompile(*d, _initializers, *backgroundOp, _intermediateStore.get());
-					} CATCH (...) {
-						--d->_activeOperationCount;
-						throw;
-					} CATCH_END
-				} else {
-					backgroundOp->StoreException(std::make_exception_ptr(std::runtime_error("System shutdown before compile request was completed")));
-				}
-				--d->_activeOperationCount;
+				promise.set_exception(std::make_exception_ptr(std::runtime_error("Request expired before it was completed")));
+				return;
 			}
-		}
-        
-		_activeFuture = backgroundOp;
-        return std::move(backgroundOp);
+
+			++d->_activeOperationCount;
+			if (!d->_shuttingDown) {
+				TRY {
+					PerformCompile(*d, inits, std::move(promise), store.get());
+				} CATCH (...) {
+					--d->_activeOperationCount;
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			} else {
+				promise.set_exception(std::make_exception_ptr(std::runtime_error("System shutdown before compile request was completed")));
+			}
+			--d->_activeOperationCount;
+		});
+
+        return result;
     }
 
 	IntermediateCompilers::Marker::Marker(

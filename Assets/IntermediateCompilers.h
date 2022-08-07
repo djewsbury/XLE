@@ -103,13 +103,20 @@ namespace Assets
 	class ArtifactCollectionFuture;
 
 	/// <summary>Returned from a IAssetCompiler on response to a compile request</summary>
-	/// After receiving a compile marker, the caller can choose to either retrieve an existing
-	/// artifact from a previous compile, or begin a new asynchronous compile operation.
+	/// After receiving a compile marker, the caller can choose to either attempt to 
+	/// retrieve an existing artifact from a previous compile, or begin a new 
+	/// asynchronous compile operation.
+	/// GetArtifact() will retrieve and existing, but if it can't be found, or is out of
+	///		date, will start a new compile
+	/// InvokeCompile() will always begin a new compile, even if there's a valid completed
+	///		artifact. If the same compile has been begun by another caller during this same
+	///		session, then there is a chance that the compile isn't begun again and we return
+	///		a future to the same result
 	class IIntermediateCompileMarker
 	{
 	public:
-		virtual std::shared_ptr<IArtifactCollection> GetExistingAsset(ArtifactTargetCode) const = 0;
-		virtual std::shared_ptr<ArtifactCollectionFuture> InvokeCompile() = 0;
+		virtual std::pair<std::shared_ptr<IArtifactCollection>, ArtifactCollectionFuture> GetArtifact(ArtifactTargetCode) = 0;
+		virtual ArtifactCollectionFuture InvokeCompile(CompileRequestCode targetCode) = 0;
 		virtual std::string GetCompilerDescription() const = 0;
 		virtual ~IIntermediateCompileMarker();
 	};

@@ -35,46 +35,37 @@ namespace Assets
 	
 	IArtifactCollection::~IArtifactCollection() {}
 
-	void ArtifactCollectionFuture::SetArtifactCollections(
-		IteratorRange<const std::pair<ArtifactTargetCode, std::shared_ptr<IArtifactCollection>>*> artifacts)
+	const IArtifactCollection& ArtifactCollectionFuture::GetArtifactCollection() const
 	{
-		assert(!artifacts.empty());
-		_promise.set_value(
-			std::vector<std::pair<ArtifactTargetCode, std::shared_ptr<IArtifactCollection>>>{
-				artifacts.begin(), artifacts.end()
-			});
-	}
-
-	void ArtifactCollectionFuture::StoreException(std::exception_ptr excpt)
-	{
-		_promise.set_exception(excpt);
-	}
-
-	const std::shared_ptr<IArtifactCollection>& ArtifactCollectionFuture::GetArtifactCollection(ArtifactTargetCode targetCode)
-	{
-		const auto& collections = _rootSharedFuture.get();
+		const auto& collections = _rootSharedFuture->get();
 		for (const auto&col:collections)
-			if (col.first == targetCode)
-				return col.second;
-		static std::shared_ptr<IArtifactCollection> dummy;
-		return dummy;
+			if (col.first == _targetCode)
+				return *col.second;
+		Throw(std::runtime_error("No artifact collection of the requested type was found"));
 	}
 
-	auto ArtifactCollectionFuture::ShareFuture() -> std::shared_future<ArtifactCollectionSet>
+	std::shared_ptr<IArtifactCollection> ArtifactCollectionFuture::GetArtifactCollectionPtr() const
 	{
-		return _rootSharedFuture;
+		const auto& collections = _rootSharedFuture->get();
+		for (const auto&col:collections)
+			if (col.first == _targetCode)
+				return col.second;
+		Throw(std::runtime_error("No artifact collection of the requested type was found"));
 	}
 
 	AssetState ArtifactCollectionFuture::GetAssetState() const
 	{
 		// Unfortunately we can't implement this safely and efficiently without a lot of extra
 		// infrastructure in this class
-		auto s = _rootSharedFuture.wait_for(std::chrono::seconds(0));
+		auto s = _rootSharedFuture->wait_for(std::chrono::seconds(0));
 		if (s == std::future_status::timeout)
 			return AssetState::Pending;
 		TRY {
-			(void)_rootSharedFuture.get();
-			return AssetState::Ready;
+			const auto& collections = _rootSharedFuture->get();
+			for (const auto&col:collections)
+				if (col.first == _targetCode)
+					return AssetState::Ready;
+			return AssetState::Invalid;	// didn't find the artifact requested, considered invalid
 		} CATCH(...) {
 			return AssetState::Invalid;
 		} CATCH_END
@@ -83,10 +74,10 @@ namespace Assets
 	std::optional<AssetState> ArtifactCollectionFuture::StallWhilePending(std::chrono::microseconds timeout) const
 	{
 		if (timeout.count() == 0) {
-			_rootSharedFuture.wait();
+			_rootSharedFuture->wait();
 			return AssetState::Ready;		// we don't know if it's invalid or ready at this point
 		} else {
-			auto s = _rootSharedFuture.wait_for(timeout);
+			auto s = _rootSharedFuture->wait_for(timeout);
 			if (s == std::future_status::ready) return AssetState::Ready;
 			return {};
 		}
@@ -95,22 +86,23 @@ namespace Assets
     const char* ArtifactCollectionFuture::GetDebugLabel() const
     {
         #if defined(_DEBUG)
-            return _initializer;
+            return _initializer.c_str();
         #else
             return "";
         #endif
     }
 
-    void ArtifactCollectionFuture::SetDebugLabel(StringSection<char> initializer)
+    void ArtifactCollectionFuture::SetDebugLabel(StringSection<> initializer)
     {
-        DEBUG_ONLY(XlCopyString(_initializer, initializer));
+        DEBUG_ONLY(_initializer = initializer.AsString());
     }
 
-	ArtifactCollectionFuture::ArtifactCollectionFuture()
+	ArtifactCollectionFuture::ArtifactCollectionFuture(std::shared_ptr<std::shared_future<ArtifactCollectionSet>> rootSharedFuture, ArtifactTargetCode targetCode)
+	: _rootSharedFuture(std::move(rootSharedFuture)), _targetCode(targetCode)
 	{
-		DEBUG_ONLY(_initializer[0] = '\0');
-		_rootSharedFuture = _promise.get_future().share();
 	}
+	ArtifactCollectionFuture::ArtifactCollectionFuture()
+	: _targetCode(0) {}
 	ArtifactCollectionFuture::~ArtifactCollectionFuture()  {}
 
 			////////////////////////////////////////////////////////////

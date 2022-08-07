@@ -82,16 +82,17 @@ namespace UnitTests
 				targetCode, 
 				::Assets::InitializerPack { "ut-data/test.material", "fake-model" });
 			REQUIRE(marker != nullptr);
-			REQUIRE(marker->GetExistingAsset(targetCode) == nullptr);
+			auto artifactQuery = marker->GetArtifact(targetCode);
+			REQUIRE(artifactQuery.first == nullptr);
 
-			auto compile = marker->InvokeCompile();
-			REQUIRE(compile != nullptr);
+			auto compile = artifactQuery.second;
+			REQUIRE(compile.Valid());
 
-			compile->StallWhilePending();
-			REQUIRE(compile->GetAssetState() == ::Assets::AssetState::Ready);
+			compile.StallWhilePending();
+			REQUIRE(compile.GetAssetState() == ::Assets::AssetState::Ready);
 
 			auto newScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>(
-				*compile->GetArtifactCollection(targetCode));
+				compile.GetArtifactCollection());
 			auto material0 = newScaffold->GetMaterialMachine(Hash64("Material0"));
 			REQUIRE(!material0.empty());
 
@@ -183,20 +184,21 @@ namespace UnitTests
 			auto targetCode = RenderCore::Assets::ModelScaffold::CompileProcessType;
 			auto marker = compilers.Prepare(targetCode, ::Assets::InitializerPack { "fake-model" });
 			REQUIRE(marker != nullptr);
-			REQUIRE(marker->GetExistingAsset(targetCode) == nullptr);
+			auto artifactQuery = marker->GetArtifact(targetCode);
+			REQUIRE(artifactQuery.first == nullptr);
 
-			auto compile = marker->InvokeCompile();
-			REQUIRE(compile != nullptr);
+			auto compile = artifactQuery.second;
+			REQUIRE(compile.Valid());
 
-			compile->StallWhilePending();
-			auto collection = compile->GetArtifactCollection(targetCode);
-			INFO(::Assets::AsString(::Assets::GetErrorMessage(*collection)));		// exception here is normal -- it's expected when there is no output log
-			REQUIRE(compile->GetAssetState() == ::Assets::AssetState::Ready);
+			compile.StallWhilePending();
+			auto& collection = compile.GetArtifactCollection();
+			INFO(::Assets::AsString(::Assets::GetErrorMessage(collection)));		// exception here is normal -- it's expected when there is no output log
+			REQUIRE(compile.GetAssetState() == ::Assets::AssetState::Ready);
 
 			SECTION("Load into scaffold")
 			{
 				auto newScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ModelScaffold>>(
-					*compile->GetArtifactCollection(targetCode));
+					compile.GetArtifactCollection());
 
 				auto geoMachine = newScaffold->GetGeoMachine(0);
 				REQUIRE(!geoMachine.empty());

@@ -8,6 +8,7 @@
 #include "Marker.h"
 #include "AssetTraits.h"
 #include "Continuation.h"
+#include "ContinuationUtil.h"
 #include "IArtifact.h"
 #include "IntermediateCompilers.h"
 #include "OperationContext.h"
@@ -127,20 +128,24 @@ namespace Assets
 	}
 
 	template<typename Promise>
-		void AutoConstructToPromiseFromPendingCompile(Promise&& promise, ArtifactCollectionFuture& pendingCompile, CompileRequestCode targetCode = Internal::RemoveSmartPtrType<Internal::PromisedType<Promise>>::CompileProcessType)
+		void AutoConstructToPromiseFromPendingCompile(Promise&& promise, const ArtifactCollectionFuture& pendingCompile, CompileRequestCode targetCode = Internal::RemoveSmartPtrType<Internal::PromisedType<Promise>>::CompileProcessType)
 	{
 		// We must poll the compile operation every frame, and construct the asset when it is ready. Note that we're
 		// still going to end up constructing the asset in the main thread.
-		WhenAll(pendingCompile.ShareFuture()).ThenConstructToPromise(
+		::Assets::PollToPromise(
 			std::move(promise),
-			[targetCode](Promise&& promise, const ArtifactCollectionFuture::ArtifactCollectionSet& collections) mutable {
-				for (const auto&artifactCollection:collections)
-					if (artifactCollection.first == targetCode) {
-						AutoConstructToPromiseSynchronously(std::move(promise), *artifactCollection.second, targetCode);
-						return;
-					}
-
-				promise.set_exception(std::make_exception_ptr(std::runtime_error("No artifact collection of the requested type was found")));
+			[pendingCompile](auto timeout) {
+				auto stallResult = pendingCompile.StallWhilePending(timeout);
+				if (stallResult.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Pending)
+					return ::Assets::PollStatus::Continue;
+				return ::Assets::PollStatus::Finish;
+			},
+			[pendingCompile, targetCode](Promise&& promise) {
+				TRY {
+					AutoConstructToPromiseSynchronously(std::move(promise), pendingCompile.GetArtifactCollection(), targetCode);
+				} CATCH (...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
 			});
 	}
 
@@ -177,18 +182,17 @@ namespace Assets
 			// Attempt to load the existing asset immediately. In some cases we should fall back to a recompile (such as, if the
 			// version number is bad). We could attempt to push this into a background thread, also
 
-			auto existingArtifact = marker->GetExistingAsset(targetCode);
-			if (existingArtifact && existingArtifact->GetDependencyValidation() && existingArtifact->GetDependencyValidation().GetValidationIndex()==0) {
-				AutoConstructToPromiseSynchronously(std::move(promise), *existingArtifact, targetCode);
-				return;
-			}
-		
-			auto pendingCompile = marker->InvokeCompile();
-			AutoConstructToPromiseFromPendingCompile(std::move(promise), *pendingCompile, targetCode);
+			auto artifactQuery = marker->GetArtifact(targetCode);
+			if (artifactQuery.first) {
+				AutoConstructToPromiseSynchronously(std::move(promise), *artifactQuery.first, targetCode);
+			} else {
+				assert(artifactQuery.second.Valid());
+				AutoConstructToPromiseFromPendingCompile(std::move(promise), artifactQuery.second, targetCode);
 
-			if (operationContext) {
-				auto operation = operationContext->Begin(Concatenate("Compiling (", initializerLabel, ") with compiler (", marker->GetCompilerDescription(), ")"));
-				operation.EndWithFuture(pendingCompile->ShareFuture());
+				if (operationContext) {
+					auto operation = operationContext->Begin(Concatenate("Compiling (", initializerLabel, ") with compiler (", marker->GetCompilerDescription(), ")"));
+					operation.EndWithFuture(artifactQuery.second.ShareFuture());
+				}
 			}
 		} CATCH(...) {
 			promise.set_exception(std::current_exception());

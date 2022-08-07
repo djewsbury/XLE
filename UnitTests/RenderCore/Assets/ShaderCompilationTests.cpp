@@ -98,23 +98,22 @@ namespace UnitTests
 				RenderCore::CompiledShaderByteCode::CompileProcessType,
 				::Assets::InitializerPack { "ut-data/IncludeDirective.hlsl:main:vs_*", "SOME_DEFINE=1" });
 			REQUIRE(compileMarker != nullptr);
-			auto compiledFromFile = compileMarker->InvokeCompile();
-			REQUIRE(compiledFromFile != nullptr);
-			compiledFromFile->StallWhilePending();
-			REQUIRE(compiledFromFile->GetAssetState() == ::Assets::AssetState::Ready);
-			auto artifacts = compiledFromFile->GetArtifactCollection(RenderCore::CompiledShaderByteCode::CompileProcessType);
-			REQUIRE(artifacts != nullptr);
-			REQUIRE((bool)artifacts->GetDependencyValidation());
-			REQUIRE(artifacts->GetAssetState() == ::Assets::AssetState::Ready);
+			auto compiledFromFile = compileMarker->InvokeCompile(RenderCore::CompiledShaderByteCode::CompileProcessType);
+			REQUIRE(compiledFromFile.Valid());
+			compiledFromFile.StallWhilePending();
+			REQUIRE(compiledFromFile.GetAssetState() == ::Assets::AssetState::Ready);
+			auto& artifacts = compiledFromFile.GetArtifactCollection();
+			REQUIRE((bool)artifacts.GetDependencyValidation());
+			REQUIRE(artifacts.GetAssetState() == ::Assets::AssetState::Ready);
 			::Assets::ArtifactRequest request { "", RenderCore::CompiledShaderByteCode::CompileProcessType, ~0u, ::Assets::ArtifactRequest::DataType::SharedBlob };
-			auto reqRes = artifacts->ResolveRequests(MakeIteratorRange(&request, &request+1));
+			auto reqRes = artifacts.ResolveRequests(MakeIteratorRange(&request, &request+1));
 			REQUIRE(reqRes.size() == 1);
 			auto blob = reqRes[0]._sharedBlob;
 			REQUIRE(blob != nullptr);
 			REQUIRE(blob->size() >= sizeof(ShaderService::ShaderHeader));
 			const auto& hdr = *(const ShaderService::ShaderHeader*)blob->data();
 			REQUIRE(hdr._version == ShaderService::ShaderHeader::Version);
-			REQUIRE(hdr._identifier == std::string{"ut-data/IncludeDirective.hlsl-main[SOME_DEFINE=1]"});
+			REQUIRE(hdr._identifier == std::string{"ut-data/IncludeDirective.hlsl-main[SOME_DEFINE=1;VS=1]"});
 		}
 
 		SECTION("Catch errors") {
@@ -124,18 +123,16 @@ namespace UnitTests
 					RenderCore::CompiledShaderByteCode::CompileProcessType,
 					::Assets::InitializerPack { "ut-data/ShaderWithError.hlsl:main:vs_*" });
 				REQUIRE(compileMarker != nullptr);
-				auto collection = compileMarker->GetExistingAsset(RenderCore::CompiledShaderByteCode::CompileProcessType);
-				if (!collection->GetDependencyValidation() || collection->GetDependencyValidation().GetValidationIndex()!=0) {
-					auto compiledFromFile = compileMarker->InvokeCompile();
-					REQUIRE(compiledFromFile != nullptr);
-					compiledFromFile->StallWhilePending();
+				auto collection = compileMarker->GetArtifact(RenderCore::CompiledShaderByteCode::CompileProcessType);
+				if (!collection.first) {
+					collection.second.StallWhilePending();
 					// The marker itself is marked as ready, but the artifact collection should be marked as invalid
-					REQUIRE(compiledFromFile->GetAssetState() == ::Assets::AssetState::Ready);
-					collection = compiledFromFile->GetArtifactCollection(RenderCore::CompiledShaderByteCode::CompileProcessType);
+					REQUIRE(collection.second.GetAssetState() == ::Assets::AssetState::Ready);
+					collection.first = collection.second.GetArtifactCollectionPtr();
 				}
-				REQUIRE(collection);
-				REQUIRE(collection->GetAssetState() == ::Assets::AssetState::Invalid);
-				auto errorLog = ::Assets::AsString(::Assets::GetErrorMessage(*collection));
+				REQUIRE(collection.first);
+				REQUIRE(collection.first->GetAssetState() == ::Assets::AssetState::Invalid);
+				auto errorLog = ::Assets::AsString(::Assets::GetErrorMessage(*collection.first));
 				INFO(errorLog);
 				REQUIRE(XlFindString(errorLog, MakeStringSection("Intentional compilation error")));
 			}
