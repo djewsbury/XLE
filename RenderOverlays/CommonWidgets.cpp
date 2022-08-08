@@ -116,6 +116,7 @@ namespace RenderOverlays { namespace CommonWidgets
 
 	void Draw::ButtonBasic(const Rect& rect, uint64_t interactable, StringSection<> label) const
 	{
+		if (!_fonts) return;
 		using namespace DebuggingDisplay;
 		auto formatting = FormatButton(*_interfaceState, interactable, s_buttonNormal, s_buttonMouseOver, s_buttonPressed);
 		if (formatting._depressed)
