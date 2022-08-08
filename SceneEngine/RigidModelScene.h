@@ -5,94 +5,144 @@
 #pragma once
 
 #include "../Assets/AssetsCore.h"
-#include "../Math/Vector.h"
+#include "../Math/Matrix.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Core/Types.h"
 #include <utility>
+#include <future>
 
 namespace RenderCore { namespace Assets
 {
-    class ModelScaffold;
-    class MaterialScaffold;
+	class ModelScaffold;
+	class MaterialScaffold;
 }}
 
 namespace Assets { class AssetHeapRecord; class OperationContext; }
-namespace RenderCore { namespace BufferUploads { class IManager; class IBatchedResources; }}
-
+namespace RenderCore { namespace BufferUploads { class IManager; class IBatchedResources; using CommandListID = uint32_t; }}
+namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques
 {
-    class SimpleModelRenderer;
-    class DrawableConstructor;
+	class DrawableConstructor;
 	class IPipelineAcceleratorPool;
-    class IDeformAcceleratorPool;
-    class IDrawablesPool;
+	class IDeformAcceleratorPool;
+	class IDrawablesPool;
+	class ModelRendererConstruction;
+	class DeformerConstruction;
+	class ProjectionDesc;
+	class DrawablesPacket;
 }}
+namespace XLEMath { class ArbitraryConvexVolumeTester; }
 
 namespace SceneEngine
 {
-    class ModelCache
-    {
-    public:
-        class Config
-        {
-        public:
-            unsigned _modelScaffoldCount;
-            unsigned _materialScaffoldCount;
-            unsigned _rendererCount;
+	class ExecuteSceneContext;
+	class IRigidModelScene
+	{
+	public:
+		using OpaquePtr = std::shared_ptr<void>;
+		virtual OpaquePtr CreateModel(std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>) = 0;
+		virtual OpaquePtr CreateDeformers(std::shared_ptr<RenderCore::Techniques::DeformerConstruction>) = 0;
+		virtual OpaquePtr CreateRenderer(OpaquePtr model, OpaquePtr deformers) = 0;
 
-            Config()
-            : _modelScaffoldCount(2000), _materialScaffoldCount(2000)
-            , _rendererCount(200) {}
-        };
+		struct BuildDrawablesHelper;
+		BuildDrawablesHelper BeginBuildDrawables(
+			IteratorRange<RenderCore::Techniques::DrawablesPacket** const>,
+			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> = {},
+			const XLEMath::ArbitraryConvexVolumeTester* = nullptr);
 
-        using SupplementGUID = uint64_t;
-        using SupplementRange = IteratorRange<const SupplementGUID*>;
+		BuildDrawablesHelper BeginBuildDrawables(ExecuteSceneContext&);
 
-		auto GetRendererMarker(
-            StringSection<> modelFilename, 
-            StringSection<> materialFilename) -> ::Assets::PtrToMarkerPtr<RenderCore::Techniques::SimpleModelRenderer>;
-        auto TryGetRendererActual(
-            uint64_t modelFilenameHash, StringSection<> modelFilename, 
-            uint64_t materialFilenameHash, StringSection<> materialFilename) -> const RenderCore::Techniques::SimpleModelRenderer*;
+		virtual void OnFrameBarrier() = 0;
+		virtual void CancelConstructions() = 0;
+		virtual std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> GetVBResources() = 0;
+		virtual std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> GetIBResources() = 0;
+		virtual std::shared_ptr<Assets::OperationContext> GetLoadingContext() = 0;
 
-        auto GetModelScaffold(StringSection<>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>;
-		auto GetMaterialScaffold(StringSection<>, StringSection<>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>;
+		virtual std::future<void> FutureForRenderer(void* renderer) = 0;
+		virtual RenderCore::BufferUploads::CommandListID GetCompletionCommandList(void* renderer) = 0;
 
-        uint32_t GetReloadId() const;
-        void OnFrameBarrier();
+		struct Records;
+		virtual Records LogRecords() const = 0;
 
-        struct Records;
-        Records LogRecords() const;
+		struct Config
+		{
+			unsigned _modelScaffoldCount = 2000;
+			unsigned _materialScaffoldCount = 2000;
+			unsigned _rendererCount = 200;
+		};
+		virtual ~IRigidModelScene();
+	};
 
-        std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> GetVBResources();
-        std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> GetIBResources();
-        void CancelConstructions();
+	std::shared_ptr<IRigidModelScene> CreateRigidModelScene(
+		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool, 
+		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool, 
+		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
+		std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
+		std::shared_ptr<::Assets::OperationContext> loadingContext,
+		const IRigidModelScene::Config& cfg = IRigidModelScene::Config{});
 
-        ModelCache(
-			std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool, 
-            std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool, 
-            std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
-            std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
-            std::shared_ptr<::Assets::OperationContext> loadingContext,
-			const Config& cfg = Config());
-        ~ModelCache();
-    protected:
-        class Pimpl;
-        std::unique_ptr<Pimpl> _pimpl;
-    };
+	struct IRigidModelScene::Records
+	{
+		std::vector<::Assets::AssetHeapRecord> _modelScaffolds;
+		std::vector<::Assets::AssetHeapRecord> _materialScaffolds;
 
-    struct ModelCache::Records
-    {
-        std::vector<::Assets::AssetHeapRecord> _modelScaffolds;
-        std::vector<::Assets::AssetHeapRecord> _materialScaffolds;
+		struct Renderer
+		{
+			std::string _model, _material;
+			unsigned _decayFrames = 0;
+		};
+		std::vector<Renderer> _modelRenderers;
+	};
 
-        struct Renderer
-        {
-            std::string _model, _material;
-            unsigned _decayFrames = 0;
-        };
-        std::vector<Renderer> _modelRenderers;
-    };
+	namespace RigidModelSceneInternal { struct Renderer; struct Animator; }
+	struct IRigidModelScene::BuildDrawablesHelper
+	{
+		bool SetRenderer(void* renderer);
+		void BuildDrawables(
+			unsigned instanceIdx,
+			const Float3x4& localToWorld, uint32_t viewMask = 1, uint64_t cmdStream = 0);
+
+		void BuildDrawablesInstancedFixedSkeleton(
+			IteratorRange<const Float3x4*> objectToWorlds,
+			IteratorRange<const unsigned*> viewMasks,
+			uint64_t cmdStream = 0);
+
+		void BuildDrawablesInstancedFixedSkeleton(
+			IteratorRange<const Float3x4*> objectToWorlds,
+			uint64_t cmdStream = 0);
+
+		void CullAndBuildDrawables(
+			unsigned instanceIdx, const Float3x4& localToWorld);
+
+		BuildDrawablesHelper(
+			IRigidModelScene& scene,
+			IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
+			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> views = {},
+			const XLEMath::ArbitraryConvexVolumeTester* complexCullingVolume = nullptr);
+
+		BuildDrawablesHelper(
+			IRigidModelScene& scene,
+			SceneEngine::ExecuteSceneContext& executeContext);
+	private:
+		RigidModelSceneInternal::Renderer* _activeRenderer;
+		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> _pkts;
+		IteratorRange<const RenderCore::Techniques::ProjectionDesc*> _views;
+		const XLEMath::ArbitraryConvexVolumeTester* _complexCullingVolume;
+	};
+
+	inline auto IRigidModelScene::BeginBuildDrawables(
+		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkt,
+		IteratorRange<const RenderCore::Techniques::ProjectionDesc*> viewDesc,
+		const XLEMath::ArbitraryConvexVolumeTester* complexCullingTester) -> BuildDrawablesHelper
+	{
+		return BuildDrawablesHelper { *this, pkt, viewDesc, complexCullingTester };
+	}
+
+	inline auto IRigidModelScene::BeginBuildDrawables(
+		ExecuteSceneContext& executeContext) -> BuildDrawablesHelper
+	{
+		return BuildDrawablesHelper { *this, executeContext };
+	}
 
 }
 

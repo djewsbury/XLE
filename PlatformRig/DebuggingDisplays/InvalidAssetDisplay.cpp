@@ -51,8 +51,11 @@ namespace PlatformRig { namespace Overlays
 
 		RenderOverlays::DebuggingDisplay::DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "Asset Operation Context");
 
-		for (const auto&op:activeOperations)
-			RenderOverlays::DebuggingDisplay::DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), op);
+		for (const auto&op:activeOperations) {
+			auto allocation = layout.AllocateFullWidth(lineHeight);
+			if (allocation.Height() <= 0) break;
+			RenderOverlays::DebuggingDisplay::DrawText().Draw(context, allocation, op);
+		}
 	}
 
 	OperationContextDisplay::OperationContextDisplay(std::shared_ptr<::Assets::OperationContext> opContext) : _opContext(opContext) {}

@@ -16,13 +16,13 @@ namespace PlatformRig { namespace Overlays
     class ModelCacheDisplay : public RenderOverlays::DebuggingDisplay::IWidget
 	{
 	public:
-		ModelCacheDisplay(std::shared_ptr<SceneEngine::ModelCache> modelCache);
+		ModelCacheDisplay(std::shared_ptr<SceneEngine::IRigidModelScene> modelCache);
 		~ModelCacheDisplay();
 	protected:
 		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState) override;
 		ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) override;
 		
-		std::shared_ptr<SceneEngine::ModelCache> _modelCache;
+		std::shared_ptr<SceneEngine::IRigidModelScene> _modelCache;
 
 		RenderOverlays::DebuggingDisplay::ScrollBar _scrollBar;
 		float _scrollOffsets[3];
@@ -157,7 +157,7 @@ namespace PlatformRig { namespace Overlays
 		return ProcessInputResult::Passthrough;
 	}
 
-	ModelCacheDisplay::ModelCacheDisplay(std::shared_ptr<SceneEngine::ModelCache> modelCache)
+	ModelCacheDisplay::ModelCacheDisplay(std::shared_ptr<SceneEngine::IRigidModelScene> modelCache)
     : _modelCache(std::move(modelCache))
 	{
         for (auto&so:_scrollOffsets) so = 0.f;
@@ -172,7 +172,7 @@ namespace PlatformRig { namespace Overlays
 	}
 
     std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateModelCacheDisplay(
-        std::shared_ptr<SceneEngine::ModelCache> modelCache)
+        std::shared_ptr<SceneEngine::IRigidModelScene> modelCache)
     {
         return std::make_shared<ModelCacheDisplay>(std::move(modelCache));
     }
@@ -182,7 +182,7 @@ namespace PlatformRig { namespace Overlays
 	public:
 		void Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState) override;
 		ProcessInputResult ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) override;
-		ModelCacheGeoBufferDisplay(std::shared_ptr<SceneEngine::ModelCache> modelCache);
+		ModelCacheGeoBufferDisplay(std::shared_ptr<SceneEngine::IRigidModelScene> modelCache);
 	protected:
 		std::shared_ptr<BatchingDisplay> _vbDisplay, _ibDisplay;
 		::Assets::PtrToMarkerPtr<RenderOverlays::Font> _headingFont;
@@ -230,7 +230,7 @@ namespace PlatformRig { namespace Overlays
 		return ProcessInputResult::Passthrough;
 	}
 
-	ModelCacheGeoBufferDisplay::ModelCacheGeoBufferDisplay(std::shared_ptr<SceneEngine::ModelCache> modelCache)
+	ModelCacheGeoBufferDisplay::ModelCacheGeoBufferDisplay(std::shared_ptr<SceneEngine::IRigidModelScene> modelCache)
 	{
 		auto vb = modelCache->GetVBResources();
 		if (vb) _vbDisplay = std::make_shared<BatchingDisplay>(std::move(vb));
@@ -242,7 +242,7 @@ namespace PlatformRig { namespace Overlays
 	}
 
 	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateModelCacheGeoBufferDisplay(
-		std::shared_ptr<SceneEngine::ModelCache> modelCache)
+		std::shared_ptr<SceneEngine::IRigidModelScene> modelCache)
 	{
 		return std::make_shared<ModelCacheGeoBufferDisplay>(std::move(modelCache));
 	}

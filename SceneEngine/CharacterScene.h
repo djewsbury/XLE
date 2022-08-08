@@ -28,9 +28,6 @@ namespace SceneEngine
 		virtual OpaquePtr CreateAnimationSet(StringSection<>) = 0;
 		virtual OpaquePtr CreateRenderer(OpaquePtr model, OpaquePtr deformers, OpaquePtr animationSet) = 0;
 
-		virtual void OnFrameBarrier() = 0;
-		virtual void CancelConstructions() = 0;
-
 		struct BuildDrawablesHelper;
 		BuildDrawablesHelper BeginBuildDrawables(
 			RenderCore::IThreadContext&, IteratorRange<RenderCore::Techniques::DrawablesPacket** const>,
@@ -42,6 +39,8 @@ namespace SceneEngine
 		struct AnimationConfigureHelper;
 		AnimationConfigureHelper BeginAnimationConfigure();
 
+		virtual void OnFrameBarrier() = 0;
+		virtual void CancelConstructions() = 0;
 		virtual std::shared_ptr<Assets::OperationContext> GetLoadingContext() = 0;
 
 		virtual ~ICharacterScene();
@@ -54,7 +53,7 @@ namespace SceneEngine
 		std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
 		std::shared_ptr<Assets::OperationContext> loadingContext);
 
-	namespace Internal { struct Renderer; struct Animator; }
+	namespace CharacterSceneInternal { struct Renderer; struct Animator; }
 	struct ICharacterScene::BuildDrawablesHelper
 	{
 		bool SetRenderer(void* renderer);
@@ -77,7 +76,7 @@ namespace SceneEngine
 			ICharacterScene& scene,
 			SceneEngine::ExecuteSceneContext& executeContext);
 	private:
-		Internal::Renderer* _activeRenderer;
+		CharacterSceneInternal::Renderer* _activeRenderer;
 		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> _pkts;
 		IteratorRange<const RenderCore::Techniques::ProjectionDesc*> _views;
 		const XLEMath::ArbitraryConvexVolumeTester* _complexCullingVolume;
@@ -94,7 +93,7 @@ namespace SceneEngine
 		AnimationConfigureHelper(ICharacterScene& scene);
 	private:
 		ICharacterScene* _scene;
-		Internal::Animator* _activeAnimator;
+		CharacterSceneInternal::Animator* _activeAnimator;
 		const RenderCore::Assets::SkeletonMachine* _activeSkeletonMachine;
 	};
 

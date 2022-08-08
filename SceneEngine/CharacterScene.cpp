@@ -4,33 +4,33 @@
 
 #include "CharacterScene.h"
 #include "IScene.h"
-#include "../../RenderCore/Techniques/ModelRendererConstruction.h"
-#include "../../RenderCore/Techniques/DeformerConstruction.h"
-#include "../../RenderCore/Techniques/ResourceConstructionContext.h"
-#include "../../RenderCore/Techniques/PipelineAccelerator.h"
-#include "../../RenderCore/Techniques/DeformAccelerator.h"
-#include "../../RenderCore/Techniques/DrawableConstructor.h"
-#include "../../RenderCore/Techniques/SimpleModelRenderer.h"		// for RendererSkeletonInterface
-#include "../../RenderCore/Techniques/DeformGeometryInfrastructure.h"
-#include "../../RenderCore/Techniques/Drawables.h"
-#include "../../RenderCore/Techniques/LightWeightBuildDrawables.h"
-#include "../../RenderCore/Techniques/SkinDeformer.h"
-#include "../../RenderCore/Techniques/TechniqueUtils.h"
-#include "../../RenderCore/BufferUploads/IBufferUploads.h"
-#include "../../RenderCore/BufferUploads/BatchedResources.h"
-#include "../../RenderCore/Assets/ModelScaffold.h"
-#include "../../RenderCore/Assets/MaterialScaffold.h"
-#include "../../RenderCore/Assets/AnimationScaffoldInternal.h"
-#include "../../Assets/AssetTraits.h"
-#include "../../Assets/DeferredConstruction.h"
-#include "../../Math/ProjectionMath.h"
-#include "../../Utility/Threading/Mutex.h"
-#include "../../Utility/BitUtils.h"
+#include "../RenderCore/Techniques/ModelRendererConstruction.h"
+#include "../RenderCore/Techniques/DeformerConstruction.h"
+#include "../RenderCore/Techniques/ResourceConstructionContext.h"
+#include "../RenderCore/Techniques/PipelineAccelerator.h"
+#include "../RenderCore/Techniques/DeformAccelerator.h"
+#include "../RenderCore/Techniques/DrawableConstructor.h"
+#include "../RenderCore/Techniques/SimpleModelRenderer.h"		// for RendererSkeletonInterface
+#include "../RenderCore/Techniques/DeformGeometryInfrastructure.h"
+#include "../RenderCore/Techniques/Drawables.h"
+#include "../RenderCore/Techniques/LightWeightBuildDrawables.h"
+#include "../RenderCore/Techniques/SkinDeformer.h"
+#include "../RenderCore/Techniques/TechniqueUtils.h"
+#include "../RenderCore/BufferUploads/IBufferUploads.h"
+#include "../RenderCore/BufferUploads/BatchedResources.h"
+#include "../RenderCore/Assets/ModelScaffold.h"
+#include "../RenderCore/Assets/MaterialScaffold.h"
+#include "../RenderCore/Assets/AnimationScaffoldInternal.h"
+#include "../Assets/AssetTraits.h"
+#include "../Assets/DeferredConstruction.h"
+#include "../Math/ProjectionMath.h"
+#include "../Utility/Threading/Mutex.h"
+#include "../Utility/BitUtils.h"
 #include <future>
 
 namespace SceneEngine
 {
-	namespace Internal
+	namespace CharacterSceneInternal
 	{
 		struct ModelEntry
 		{
@@ -133,12 +133,12 @@ namespace SceneEngine
 
 		Threading::Mutex _poolLock;
 		
-		std::vector<std::pair<uint64_t, std::weak_ptr<Internal::ModelEntry>>> _modelEntries;
-		std::vector<std::weak_ptr<Internal::DeformerEntry>> _deformerEntries;
-		std::vector<std::pair<uint64_t, std::weak_ptr<Internal::AnimSetEntry>>> _animSetEntries;
-		std::vector<std::weak_ptr<Internal::RendererEntry>> _renderers;
-		std::vector<Internal::PendingUpdate> _pendingUpdates;
-		std::vector<Internal::PendingExceptionUpdate> _pendingExceptionUpdates;
+		std::vector<std::pair<uint64_t, std::weak_ptr<CharacterSceneInternal::ModelEntry>>> _modelEntries;
+		std::vector<std::weak_ptr<CharacterSceneInternal::DeformerEntry>> _deformerEntries;
+		std::vector<std::pair<uint64_t, std::weak_ptr<CharacterSceneInternal::AnimSetEntry>>> _animSetEntries;
+		std::vector<std::weak_ptr<CharacterSceneInternal::RendererEntry>> _renderers;
+		std::vector<CharacterSceneInternal::PendingUpdate> _pendingUpdates;
+		std::vector<CharacterSceneInternal::PendingExceptionUpdate> _pendingExceptionUpdates;
 	};
 
 
@@ -152,7 +152,7 @@ namespace SceneEngine
 			if (l) return std::move(l);
 		}
 
-		auto newEntry = std::make_shared<Internal::ModelEntry>();
+		auto newEntry = std::make_shared<CharacterSceneInternal::ModelEntry>();
 		std::promise<std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>> promise;
 		newEntry->_completedConstruction = promise.get_future();
 		construction->FulfillWhenNotPending(std::move(promise));
@@ -170,7 +170,7 @@ namespace SceneEngine
 	{
 		// we can't hash this, so we always allocate a new one
 
-		auto newEntry = std::make_shared<Internal::DeformerEntry>();
+		auto newEntry = std::make_shared<CharacterSceneInternal::DeformerEntry>();
 		std::promise<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> promise;
 		newEntry->_completedConstruction = promise.get_future();
 		construction->FulfillWhenNotPending(std::move(promise));
@@ -192,7 +192,7 @@ namespace SceneEngine
 			if (l) return std::move(l);
 		}
 
-		auto newEntry = std::make_shared<Internal::AnimSetEntry>();
+		auto newEntry = std::make_shared<CharacterSceneInternal::AnimSetEntry>();
 		std::promise<std::shared_ptr<RenderCore::Assets::AnimationSetScaffold>> promise;
 		newEntry->_animSetFuture = promise.get_future();
 		::Assets::AutoConstructToPromise(std::move(promise), str);
@@ -250,22 +250,22 @@ namespace SceneEngine
 				return l;		// can potentially decide to just share the Renderer part here
 		}
 
-		auto newEntry = std::make_shared<Internal::RendererEntry>();
-		newEntry->_model = std::static_pointer_cast<Internal::ModelEntry>(model);
-		newEntry->_animSet = std::static_pointer_cast<Internal::AnimSetEntry>(animationSet);
+		auto newEntry = std::make_shared<CharacterSceneInternal::RendererEntry>();
+		newEntry->_model = std::static_pointer_cast<CharacterSceneInternal::ModelEntry>(model);
+		newEntry->_animSet = std::static_pointer_cast<CharacterSceneInternal::AnimSetEntry>(animationSet);
 
 		std::shared_future<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> deformerConstructionFuture;
 		if (deformers) {
-			newEntry->_deformer = std::static_pointer_cast<Internal::DeformerEntry>(deformers);
+			newEntry->_deformer = std::static_pointer_cast<CharacterSceneInternal::DeformerEntry>(deformers);
 			deformerConstructionFuture = newEntry->_deformer->_completedConstruction;
 		} else {
 			// no explicit deformers -- we must use the defaults
 			deformerConstructionFuture = CreateDefaultDeformerConstruction(newEntry->_model->_completedConstruction);
 		}
 
-		std::promise<Internal::Renderer> rendererPromise;
-		std::promise<Internal::Animator> animatorPromise;
-		std::shared_future<Internal::Renderer> rendererFuture = rendererPromise.get_future();
+		std::promise<CharacterSceneInternal::Renderer> rendererPromise;
+		std::promise<CharacterSceneInternal::Animator> animatorPromise;
+		std::shared_future<CharacterSceneInternal::Renderer> rendererFuture = rendererPromise.get_future();
 		auto animatorFuture = animatorPromise.get_future();
 
 		::Assets::WhenAll(newEntry->_model->_completedConstruction, deformerConstructionFuture).ThenConstructToPromise(
@@ -293,7 +293,7 @@ namespace SceneEngine
 						[geoDeformer, deformAccelerator, completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture, std::shared_future<void>&& deformerInitFuture) mutable {
 							deformerInitFuture.get();	// propagate exceptions
 
-							Internal::Renderer renderer;
+							CharacterSceneInternal::Renderer renderer;
 							renderer._drawableConstructor = drawableConstructorFuture.get();
 							renderer._completionCmdList = std::max(renderer._drawableConstructor->_completionCommandList, geoDeformer->GetCompletionCommandList());
 							renderer._deformAccelerator = deformAccelerator;
@@ -310,7 +310,7 @@ namespace SceneEngine
 					::Assets::WhenAll(ToFuture(*drawableConstructor)).ThenConstructToPromiseWithFutures(
 						std::move(promise),
 						[completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture) mutable {
-							Internal::Renderer renderer;
+							CharacterSceneInternal::Renderer renderer;
 							renderer._drawableConstructor = drawableConstructorFuture.get();
 							renderer._completionCmdList = renderer._drawableConstructor->_completionCommandList;
 							renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
@@ -324,7 +324,7 @@ namespace SceneEngine
 		::Assets::WhenAll(rendererFuture, newEntry->_animSet->_animSetFuture, newEntry->_model->_completedConstruction).ThenConstructToPromise(
 			std::move(animatorPromise),
 			[deformAcceleratorPool=_deformAcceleratorPool](const auto& renderer, auto animSet, auto modelConstruction) mutable {
-				Internal::Animator result;
+				CharacterSceneInternal::Animator result;
 
 				if (renderer._deformAccelerator) {
 					auto* geoDeformers = deformAcceleratorPool->GetDeformGeoAttachment(*renderer._deformAccelerator).get();
@@ -347,36 +347,37 @@ namespace SceneEngine
 			});
 
 		::Assets::WhenAll(rendererFuture, std::move(animatorFuture)).Then(
-			[dstEntryWeak=std::weak_ptr<Internal::RendererEntry>(newEntry), sceneWeak=weak_from_this()](auto rendererFuture, auto animatorFuture) {
+			[dstEntryWeak=std::weak_ptr<CharacterSceneInternal::RendererEntry>(newEntry), sceneWeak=weak_from_this()](auto rendererFuture, auto animatorFuture) {
 				auto scene = sceneWeak.lock();
 				if (scene) {
 					ScopedLock(scene->_poolLock);
 					TRY {
 						auto renderer = rendererFuture.get();
 						auto animator = animatorFuture.get();
-						scene->_pendingUpdates.emplace_back(Internal::PendingUpdate { dstEntryWeak, std::move(renderer), std::move(animator) });
+						scene->_pendingUpdates.emplace_back(CharacterSceneInternal::PendingUpdate { dstEntryWeak, std::move(renderer), std::move(animator) });
 					} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
-						scene->_pendingExceptionUpdates.emplace_back(Internal::PendingExceptionUpdate { dstEntryWeak, e.GetActualizationLog(), e.GetDependencyValidation() });
+						scene->_pendingExceptionUpdates.emplace_back(CharacterSceneInternal::PendingExceptionUpdate { dstEntryWeak, e.GetActualizationLog(), e.GetDependencyValidation() });
 					} CATCH(const ::Assets::Exceptions::InvalidAsset& e) {
-						scene->_pendingExceptionUpdates.emplace_back(Internal::PendingExceptionUpdate { dstEntryWeak, e.GetActualizationLog(), e.GetDependencyValidation() });
+						scene->_pendingExceptionUpdates.emplace_back(CharacterSceneInternal::PendingExceptionUpdate { dstEntryWeak, e.GetActualizationLog(), e.GetDependencyValidation() });
 					} CATCH(const std::exception& e) {
-						scene->_pendingExceptionUpdates.emplace_back(Internal::PendingExceptionUpdate { dstEntryWeak, ::Assets::AsBlob(e.what()) });
+						scene->_pendingExceptionUpdates.emplace_back(CharacterSceneInternal::PendingExceptionUpdate { dstEntryWeak, ::Assets::AsBlob(e.what()) });
 					} CATCH_END
 				}
 			});
 
+		_renderers.emplace_back(newEntry);
 		return newEntry;
 	}
 
 	unsigned CharacterInstanceAllocate(void* renderer)
 	{
-		auto* realRenderer = (Internal::RendererEntry*)renderer;
+		auto* realRenderer = (CharacterSceneInternal::RendererEntry*)renderer;
 		return realRenderer->_allocatedInstances.Allocate();
 	}
 
 	void CharacterInstanceRelease(void* renderer, unsigned instanceIdx)
 	{
-		auto* realRenderer = (Internal::RendererEntry*)renderer;
+		auto* realRenderer = (CharacterSceneInternal::RendererEntry*)renderer;
 		realRenderer->_allocatedInstances.Deallocate(instanceIdx);
 	}
 
@@ -413,7 +414,7 @@ namespace SceneEngine
 
 	bool ICharacterScene::BuildDrawablesHelper::SetRenderer(void* renderer)
 	{
-		auto* rendererEntry = (Internal::RendererEntry*)renderer;
+		auto* rendererEntry = (CharacterSceneInternal::RendererEntry*)renderer;
 		_activeRenderer = &rendererEntry->_renderer;
 		return _activeRenderer->_drawableConstructor != nullptr;
 	}
@@ -442,7 +443,7 @@ namespace SceneEngine
 
 	bool ICharacterScene::AnimationConfigureHelper::SetRenderer(void* renderer)
 	{
-		auto* realRenderer = (Internal::RendererEntry*)renderer;
+		auto* realRenderer = (CharacterSceneInternal::RendererEntry*)renderer;
 		if (realRenderer->_renderer._drawableConstructor) {
 			_activeAnimator = &realRenderer->_animator;
 			_activeSkeletonMachine = &realRenderer->_renderer.GetSkeletonMachine();

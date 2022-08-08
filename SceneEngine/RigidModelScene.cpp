@@ -3,14 +3,21 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "RigidModelScene.h"
+#include "IScene.h"
 #include "../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../RenderCore/Techniques/ModelRendererConstruction.h"
 #include "../RenderCore/Techniques/PipelineAccelerator.h"		// just so we can use GetDevice()
 #include "../RenderCore/Techniques/Drawables.h"
 #include "../RenderCore/Techniques/ResourceConstructionContext.h"
+#include "../RenderCore/Techniques/DeformAccelerator.h"
+#include "../RenderCore/Techniques/DeformGeometryInfrastructure.h"
+#include "../RenderCore/Techniques/DeformerConstruction.h"
+#include "../RenderCore/Techniques/DrawableConstructor.h"
+#include "../RenderCore/Techniques/LightWeightBuildDrawables.h"
 #include "../RenderCore/BufferUploads/BatchedResources.h"
 #include "../RenderCore/Assets/ModelScaffold.h"
 #include "../RenderCore/Assets/MaterialScaffold.h"
+#include "../Math/ProjectionMath.h"
 #include "../Assets/AssetHeapLRU.h"
 #include "../Utility/HeapUtils.h"
 #include <unordered_map>
@@ -18,183 +25,456 @@
 namespace SceneEngine
 {
 	using BoundingBox = std::pair<Float3, Float3>;
-	class ModelCache::Pimpl
+	namespace RigidModelSceneInternal
 	{
-	public:
-		std::vector<std::pair<uint64_t, BoundingBox>> _boundingBoxes;
+		struct ModelEntry
+		{
+			std::shared_future<std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>> _completedConstruction;
+			std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction> _referenceHolder;
+		};
 
-		::Assets::AssetHeapLRU<std::shared_ptr<RenderCore::Assets::ModelScaffold>> _modelScaffolds;
-		::Assets::AssetHeapLRU<std::shared_ptr<RenderCore::Assets::MaterialScaffold>> _materialScaffolds;
+		struct DeformerEntry
+		{
+			std::shared_future<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> _completedConstruction;
+			std::shared_ptr<RenderCore::Techniques::DeformerConstruction> _referenceHolder;
+		};
+
 		struct Renderer
 		{
-			::Assets::PtrToMarkerPtr<RenderCore::Techniques::SimpleModelRenderer> _rendererMarker;
-			std::string _modelScaffoldName, _materialScaffoldName;
+			std::shared_ptr<RenderCore::Techniques::DrawableConstructor> _drawableConstructor;
+			std::shared_ptr<RenderCore::Techniques::DeformAccelerator> _deformAccelerator;
+			std::shared_ptr<RenderCore::Assets::SkeletonScaffold> _skeletonScaffold;
+			std::shared_ptr<RenderCore::Assets::ModelScaffold> _firstModelScaffold;
+			RenderCore::BufferUploads::CommandListID _completionCmdList;
+			std::pair<Float3, Float3> _aabb;
+
+			const RenderCore::Assets::SkeletonMachine& GetSkeletonMachine() const
+			{
+				if (_skeletonScaffold) {
+					return _skeletonScaffold->GetSkeletonMachine();
+				} else {
+					assert(_firstModelScaffold->EmbeddedSkeleton());
+					return *_firstModelScaffold->EmbeddedSkeleton();
+				}
+			}
 		};
-		FrameByFrameLRUHeap<Renderer> _modelRenderers;
+
+		struct RendererEntry
+		{
+			std::shared_ptr<ModelEntry> _model;
+			std::shared_ptr<DeformerEntry> _deformer;
+			Renderer _renderer;
+			std::shared_future<RigidModelSceneInternal::Renderer> _pendingRenderer;
+			::Assets::DependencyValidation _depVal;
+		};
+
+		struct PendingUpdate
+		{
+			std::weak_ptr<RendererEntry> _dst;
+			Renderer _renderer;
+		};
+
+		struct PendingExceptionUpdate
+		{
+			std::weak_ptr<RendererEntry> _dst;
+			::Assets::Blob _log;
+			::Assets::DependencyValidation _depVal;
+		};
+	}
+
+	static std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>> ToFuture(RenderCore::Techniques::DrawableConstructor& construction)
+	{
+		std::promise<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>> promise;
+		auto result = promise.get_future();
+		construction.FulfillWhenNotPending(std::move(promise));
+		return result;
+	}
+
+	template<typename T>
+		std::future<void> AsOpaqueFuture(T inputFuture)
+		{
+			std::promise<void> promise;
+			auto result = promise.get_future();
+			::Assets::WhenAll(std::move(inputFuture)).Then(
+				[promise=std::move(promise)](auto&& future) mutable {
+					TRY {
+						future.get();
+						promise.set_value();
+					} CATCH(...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+			return result;
+		}
+
+	class RigidModelScene : public IRigidModelScene, public std::enable_shared_from_this<RigidModelScene>
+	{
+	public:
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
 		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> _deformAcceleratorPool;
 		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> _drawablesPool;
 		std::shared_ptr<RenderCore::Techniques::ResourceConstructionContext> _constructionContext;
 		std::shared_ptr<::Assets::OperationContext> _loadingContext;
+		Config _cfg;
 
-		uint32_t _reloadId;
-
-		Pimpl(const ModelCache::Config& cfg);
-		~Pimpl();
-	};
+		Threading::Mutex _poolLock;
 		
-	ModelCache::Pimpl::Pimpl(const ModelCache::Config& cfg)
-	: _modelScaffolds(cfg._modelScaffoldCount)
-	, _materialScaffolds(cfg._materialScaffoldCount)
-	, _modelRenderers(cfg._rendererCount)
-	, _reloadId(0)
+		std::vector<std::pair<uint64_t, std::weak_ptr<RigidModelSceneInternal::ModelEntry>>> _modelEntries;
+		std::vector<std::weak_ptr<RigidModelSceneInternal::DeformerEntry>> _deformerEntries;
+		std::vector<std::weak_ptr<RigidModelSceneInternal::RendererEntry>> _renderers;
+		std::vector<RigidModelSceneInternal::PendingUpdate> _pendingUpdates;
+		std::vector<RigidModelSceneInternal::PendingExceptionUpdate> _pendingExceptionUpdates;
+
+		OpaquePtr CreateModel(std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction> construction) override
+		{
+			auto hash = construction->GetHash();
+			ScopedLock(_poolLock);
+			auto i = LowerBound(_modelEntries, hash);
+			if (i != _modelEntries.end() && i->first == hash) {
+				auto l = i->second.lock();
+				if (l) return std::move(l);
+			}
+
+			auto newEntry = std::make_shared<RigidModelSceneInternal::ModelEntry>();
+			std::promise<std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>> promise;
+			newEntry->_completedConstruction = promise.get_future();
+			construction->FulfillWhenNotPending(std::move(promise));
+			newEntry->_referenceHolder = std::move(construction);
+
+			if (i != _modelEntries.end() && i->first == hash) {
+				i->second = newEntry;		// rebuilding after previously expiring
+			} else {
+				_modelEntries.insert(i, {hash, newEntry});
+			}
+			return std::move(newEntry);
+		}
+
+		std::shared_ptr<void> CreateDeformers(std::shared_ptr<RenderCore::Techniques::DeformerConstruction> construction) override
+		{
+			// we can't hash this, so we always allocate a new one
+
+			auto newEntry = std::make_shared<RigidModelSceneInternal::DeformerEntry>();
+			std::promise<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> promise;
+			newEntry->_completedConstruction = promise.get_future();
+			construction->FulfillWhenNotPending(std::move(promise));
+			newEntry->_referenceHolder = std::move(construction);
+			
+			ScopedLock(_poolLock);
+			_deformerEntries.emplace_back(newEntry);
+			return std::move(newEntry);
+		}
+
+		std::shared_ptr<void> CreateRenderer(std::shared_ptr<void> model, OpaquePtr deformers) override
+		{
+			ScopedLock(_poolLock);
+			for (const auto& renderer:_renderers) {
+				auto l = renderer.lock();
+				if (!l) continue;
+				if (l->_model == model && l->_deformer == deformers)
+					return l;
+			}
+
+			auto newEntry = std::make_shared<RigidModelSceneInternal::RendererEntry>();
+			newEntry->_model = std::static_pointer_cast<RigidModelSceneInternal::ModelEntry>(model);
+
+			std::promise<RigidModelSceneInternal::Renderer> rendererPromise;
+			newEntry->_pendingRenderer = rendererPromise.get_future();
+			if (deformers) {
+				newEntry->_deformer = std::static_pointer_cast<RigidModelSceneInternal::DeformerEntry>(deformers);
+
+				::Assets::WhenAll(newEntry->_model->_completedConstruction, newEntry->_deformer->_completedConstruction).ThenConstructToPromise(
+					std::move(rendererPromise),
+					[drawablesPool=_drawablesPool, pipelineAcceleratorPool=_pipelineAcceleratorPool, constructionContext=_constructionContext, deformAcceleratorPool=_deformAcceleratorPool](
+						auto&& promise, 
+						auto completedConstruction, auto completedDeformerConstruction) mutable {
+
+						std::shared_ptr<RenderCore::Techniques::DeformAccelerator> deformAccelerator;
+						std::shared_ptr<RenderCore::Techniques::IDeformGeoAttachment> geoDeformer;
+						if (completedDeformerConstruction && !completedDeformerConstruction->IsEmpty()) {
+							geoDeformer = RenderCore::Techniques::CreateDeformGeoAttachment(
+								*pipelineAcceleratorPool->GetDevice(), *completedConstruction, *completedDeformerConstruction);
+							deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator();
+							deformAcceleratorPool->Attach(*deformAccelerator, geoDeformer);
+						}
+
+						auto drawableConstructor = std::make_shared<RenderCore::Techniques::DrawableConstructor>(
+							drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext),
+							*completedConstruction, deformAcceleratorPool, deformAccelerator);
+
+						if (geoDeformer) {
+							::Assets::WhenAll(ToFuture(*drawableConstructor), geoDeformer->GetInitializationFuture()).ThenConstructToPromiseWithFutures(
+								std::move(promise),
+								[geoDeformer, deformAccelerator, completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture, std::shared_future<void>&& deformerInitFuture) mutable {
+									deformerInitFuture.get();	// propagate exceptions
+
+									RigidModelSceneInternal::Renderer renderer;
+									renderer._drawableConstructor = drawableConstructorFuture.get();
+									renderer._completionCmdList = std::max(renderer._drawableConstructor->_completionCommandList, geoDeformer->GetCompletionCommandList());
+									renderer._deformAccelerator = deformAccelerator;
+									renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
+									if (completedConstruction->GetElementCount() != 0) {
+										renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
+										renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
+									} else {
+										renderer._aabb = {Zero<Float3>(), Zero<Float3>()};
+									}
+									return renderer;
+								});
+						} else {
+							::Assets::WhenAll(ToFuture(*drawableConstructor)).ThenConstructToPromiseWithFutures(
+								std::move(promise),
+								[completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture) mutable {
+									RigidModelSceneInternal::Renderer renderer;
+									renderer._drawableConstructor = drawableConstructorFuture.get();
+									renderer._completionCmdList = renderer._drawableConstructor->_completionCommandList;
+									renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
+									if (completedConstruction->GetElementCount() != 0)
+										renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
+									return renderer;
+								});
+						}
+					});
+			} else {
+				// When no deformers explicitly specified, we don't apply the defaults -- just use the no-deformers case
+				::Assets::WhenAll(newEntry->_model->_completedConstruction).ThenConstructToPromise(
+					std::move(rendererPromise),
+					[drawablesPool=_drawablesPool, pipelineAcceleratorPool=_pipelineAcceleratorPool, constructionContext=_constructionContext](
+						auto&& promise, 
+						auto completedConstruction) mutable {
+
+						auto drawableConstructor = std::make_shared<RenderCore::Techniques::DrawableConstructor>(
+							drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext),
+							*completedConstruction);
+
+						::Assets::WhenAll(ToFuture(*drawableConstructor)).ThenConstructToPromiseWithFutures(
+							std::move(promise),
+							[completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture) mutable {
+								RigidModelSceneInternal::Renderer renderer;
+								renderer._drawableConstructor = drawableConstructorFuture.get();
+								renderer._completionCmdList = renderer._drawableConstructor->_completionCommandList;
+								renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
+								if (completedConstruction->GetElementCount() != 0)
+									renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
+								return renderer;
+							});
+					});
+			}
+
+			::Assets::WhenAll(newEntry->_pendingRenderer).Then(
+				[dstEntryWeak=std::weak_ptr<RigidModelSceneInternal::RendererEntry>(newEntry), sceneWeak=weak_from_this()](auto rendererFuture) {
+					auto scene = sceneWeak.lock();
+					if (scene) {
+						ScopedLock(scene->_poolLock);
+						TRY {
+							auto renderer = rendererFuture.get();
+							scene->_pendingUpdates.emplace_back(RigidModelSceneInternal::PendingUpdate { dstEntryWeak, std::move(renderer) });
+						} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
+							scene->_pendingExceptionUpdates.emplace_back(RigidModelSceneInternal::PendingExceptionUpdate { dstEntryWeak, e.GetActualizationLog(), e.GetDependencyValidation() });
+						} CATCH(const ::Assets::Exceptions::InvalidAsset& e) {
+							scene->_pendingExceptionUpdates.emplace_back(RigidModelSceneInternal::PendingExceptionUpdate { dstEntryWeak, e.GetActualizationLog(), e.GetDependencyValidation() });
+						} CATCH(const std::exception& e) {
+							scene->_pendingExceptionUpdates.emplace_back(RigidModelSceneInternal::PendingExceptionUpdate { dstEntryWeak, ::Assets::AsBlob(e.what()) });
+						} CATCH_END
+					}
+				});
+
+			_renderers.emplace_back(newEntry);
+			return newEntry;
+		}
+
+		void OnFrameBarrier() override
+		{
+			// flush out any pending updates
+			ScopedLock(_poolLock);
+			for (auto&u:_pendingUpdates) {
+				auto l = u._dst.lock();
+				if (!l) continue;
+				l->_renderer = std::move(u._renderer);
+				l->_pendingRenderer = {};
+				// todo -- set dep val
+			}
+			_pendingUpdates.clear();
+			for (auto&u:_pendingExceptionUpdates) {
+				auto l = u._dst.lock();
+				if (!l) continue;
+				l->_depVal = std::move(u._depVal);
+				l->_pendingRenderer = {};
+				// todo -- record exception msg
+			}
+			_pendingExceptionUpdates.clear();
+			// todo -- check invalidations
+		}
+
+		Records LogRecords() const override
+		{
+			Records result;
+			/*result._modelScaffolds = _pimpl->_modelScaffolds.LogRecords();
+			result._materialScaffolds = _pimpl->_materialScaffolds.LogRecords();
+
+			auto rendererRecords = _pimpl->_modelRenderers.LogRecords();
+			result._modelRenderers.reserve(rendererRecords.size());
+			for (const auto& r:rendererRecords)
+				if (r._value._rendererMarker->TryActualize())
+					result._modelRenderers.push_back({r._value._modelScaffoldName, r._value._materialScaffoldName, r._decayFrames});*/
+			return result;
+		}
+
+		std::future<void> FutureForRenderer(void* renderer) override
+		{
+			ScopedLock(_poolLock);
+			auto& rendererEntry = *(const RigidModelSceneInternal::RendererEntry*)renderer;
+			return AsOpaqueFuture(rendererEntry._pendingRenderer);
+		}
+
+		RenderCore::BufferUploads::CommandListID GetCompletionCommandList(void* renderer) override
+		{
+			return ((const RigidModelSceneInternal::RendererEntry*)renderer)->_renderer._completionCmdList;
+		}
+
+		std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> GetVBResources() override
+		{
+			if (_constructionContext)
+				return _constructionContext->GetRepositionableGeometryConduit()->GetVBResourcePool();
+			return nullptr;
+		}
+
+		std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> GetIBResources() override
+		{
+			if (_constructionContext)
+				return _constructionContext->GetRepositionableGeometryConduit()->GetIBResourcePool();
+			return nullptr;
+		}
+
+		std::shared_ptr<Assets::OperationContext> GetLoadingContext() override
+		{
+			return _loadingContext;
+		}
+
+		void CancelConstructions() override
+		{
+			if (_constructionContext)
+				_constructionContext->Cancel();
+		}
+
+		RigidModelScene(
+			std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool, 
+			std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+			std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
+			std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
+			std::shared_ptr<::Assets::OperationContext> loadingContext,
+			const Config& cfg)
+		: _cfg(cfg)
+		{
+			_pipelineAcceleratorPool = std::move(pipelineAcceleratorPool);
+			_deformAcceleratorPool = std::move(deformAcceleratorPool);
+			_drawablesPool = std::move(drawablesPool);
+			_loadingContext = std::move(loadingContext);
+			if (bufferUploads) {
+				auto repositionableGeometry = std::make_shared<RenderCore::Techniques::RepositionableGeometryConduit>(
+					RenderCore::BufferUploads::CreateBatchedResources(*_pipelineAcceleratorPool->GetDevice(), bufferUploads, RenderCore::BindFlag::VertexBuffer, 1024*1024),
+					RenderCore::BufferUploads::CreateBatchedResources(*_pipelineAcceleratorPool->GetDevice(), bufferUploads, RenderCore::BindFlag::IndexBuffer, 1024*1024));
+				_constructionContext = std::make_shared<RenderCore::Techniques::ResourceConstructionContext>(bufferUploads, std::move(repositionableGeometry));
+			}
+		}
+
+		~RigidModelScene()
+		{}
+	};
+
+	void IRigidModelScene::BuildDrawablesHelper::BuildDrawables(
+		unsigned instanceIdx,
+		const Float3x4& localToWorld, uint32_t viewMask, uint64_t cmdStream)
+	{
+		assert(cmdStream == 0);
+		RenderCore::Techniques::LightWeightBuildDrawables::SingleInstance(
+			*_activeRenderer->_drawableConstructor,
+			_pkts,
+			localToWorld, instanceIdx, viewMask);
+		EnableInstanceDeform(*_activeRenderer->_deformAccelerator, instanceIdx);
+	}
+
+	void IRigidModelScene::BuildDrawablesHelper::BuildDrawablesInstancedFixedSkeleton(
+		IteratorRange<const Float3x4*> objectToWorlds,
+		IteratorRange<const unsigned*> viewMasks,
+		uint64_t cmdStream)
+	{
+		assert(cmdStream == 0);
+		RenderCore::Techniques::LightWeightBuildDrawables::InstancedFixedSkeleton(
+			*_activeRenderer->_drawableConstructor,
+			_pkts,
+			objectToWorlds, viewMasks);
+	}
+
+	void IRigidModelScene::BuildDrawablesHelper::BuildDrawablesInstancedFixedSkeleton(
+		IteratorRange<const Float3x4*> objectToWorlds,
+		uint64_t cmdStream)
+	{
+		assert(cmdStream == 0);
+		RenderCore::Techniques::LightWeightBuildDrawables::InstancedFixedSkeleton(
+			*_activeRenderer->_drawableConstructor,
+			_pkts,
+			objectToWorlds);
+	}
+
+	void IRigidModelScene::BuildDrawablesHelper::CullAndBuildDrawables(
+		unsigned instanceIdx, const Float3x4& localToWorld)
+	{
+		if (_complexCullingVolume && _complexCullingVolume->TestAABB(localToWorld, _activeRenderer->_aabb.first, _activeRenderer->_aabb.second) == CullTestResult::Culled)
+			return;
+		uint32_t viewMask = 0;
+		for (unsigned v=0; v<_views.size(); ++v) {
+			auto localToClip = Combine(localToWorld, _views[v]._worldToProjection);
+			viewMask |= (!CullAABB(localToClip, _activeRenderer->_aabb.first, _activeRenderer->_aabb.second, RenderCore::Techniques::GetDefaultClipSpaceType())) << v;
+		}
+		if (!viewMask) return;
+
+		RenderCore::Techniques::LightWeightBuildDrawables::SingleInstance(
+			*_activeRenderer->_drawableConstructor,
+			_pkts,
+			localToWorld, instanceIdx, viewMask);
+		EnableInstanceDeform(*_activeRenderer->_deformAccelerator, instanceIdx);
+	}
+
+	bool IRigidModelScene::BuildDrawablesHelper::SetRenderer(void* renderer)
+	{
+		auto* rendererEntry = (RigidModelSceneInternal::RendererEntry*)renderer;
+		_activeRenderer = &rendererEntry->_renderer;
+		return _activeRenderer->_drawableConstructor != nullptr;
+	}
+
+	IRigidModelScene::BuildDrawablesHelper::BuildDrawablesHelper(
+		IRigidModelScene& scene,
+		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
+		IteratorRange<const RenderCore::Techniques::ProjectionDesc*> views,
+		const XLEMath::ArbitraryConvexVolumeTester* complexCullingVolume)
+	: _pkts(pkts)
+	, _activeRenderer(nullptr)
+	, _views(views), _complexCullingVolume(complexCullingVolume)
 	{}
 
-	ModelCache::Pimpl::~Pimpl() {}
-
-	uint32_t ModelCache::GetReloadId() const { return _pimpl->_reloadId; }
-
-	auto ModelCache::GetRendererMarker(
-		StringSection<> modelFilename,
-		StringSection<> materialFilename) -> ::Assets::PtrToMarkerPtr<RenderCore::Techniques::SimpleModelRenderer>
-	{
-		auto hash = HashCombine(Hash64(modelFilename), Hash64(materialFilename));
-
-		::Assets::PtrToMarkerPtr<RenderCore::Techniques::SimpleModelRenderer> newFuture;
-		{
-			auto query = _pimpl->_modelRenderers.Query(hash);
-			if (query.GetType() == LRUCacheInsertType::Update) {
-				if (!::Assets::IsInvalidated(*query.GetExisting()._rendererMarker))
-					return query.GetExisting()._rendererMarker;
-				++_pimpl->_reloadId;
-			} else if (query.GetType() == LRUCacheInsertType::Fail) {
-				return nullptr; // cache blown during this frame
-			}
-
-			auto stringInitializer = ::Assets::Internal::AsString(modelFilename, materialFilename);	// (used for tracking/debugging purposes)
-			newFuture = std::make_shared<::Assets::MarkerPtr<RenderCore::Techniques::SimpleModelRenderer>>(stringInitializer);
-			Pimpl::Renderer r;
-			r._rendererMarker = newFuture;
-			r._modelScaffoldName = modelFilename.AsString();
-			r._materialScaffoldName = materialFilename.AsString();
-			query.Set(std::move(r));
-		}
-
-		auto modelScaffold = _pimpl->_modelScaffolds.Get(_pimpl->_loadingContext, modelFilename);
-		auto materialScaffold = _pimpl->_materialScaffolds.Get(_pimpl->_loadingContext, materialFilename, modelFilename);
-		auto construction = std::make_shared<RenderCore::Techniques::ModelRendererConstruction>();
-		construction->AddElement().SetModelScaffold(modelScaffold->ShareFuture(), modelFilename.AsString()).SetMaterialScaffold(materialScaffold->ShareFuture(), materialFilename.AsString());
-
-		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_constructionContext, construction);
-		return newFuture;
+	IRigidModelScene::BuildDrawablesHelper::BuildDrawablesHelper(
+		IRigidModelScene& scene,
+		SceneEngine::ExecuteSceneContext& executeContext)
+	: _pkts(executeContext._destinationPkts)
+	, _activeRenderer(nullptr)
+	, _views(executeContext._views), _complexCullingVolume(executeContext._complexCullingVolume)
+	{	
 	}
 
-	auto ModelCache::TryGetRendererActual(
-		uint64_t modelFilenameHash, StringSection<> modelFilename,
-		uint64_t materialFilenameHash, StringSection<> materialFilename) -> const RenderCore::Techniques::SimpleModelRenderer*
-	{
-		auto hash = HashCombine(modelFilenameHash, materialFilenameHash);
+	IRigidModelScene::~IRigidModelScene() = default;
 
-		::Assets::PtrToMarkerPtr<RenderCore::Techniques::SimpleModelRenderer> newFuture;
-		{
-			auto query = _pimpl->_modelRenderers.Query(hash);
-			if (query.GetType() == LRUCacheInsertType::Update) {
-				auto attempt = query.GetExisting()._rendererMarker->TryActualize();
-				return attempt ? attempt->get() : nullptr;
-			} else if (query.GetType() == LRUCacheInsertType::Fail) {
-				return nullptr; // cache blown during this frame
-			}
-
-			auto stringInitializer = ::Assets::Internal::AsString(modelFilename, materialFilename);	// (used for tracking/debugging purposes)
-			newFuture = std::make_shared<::Assets::MarkerPtr<RenderCore::Techniques::SimpleModelRenderer>>(stringInitializer);
-			Pimpl::Renderer r;
-			r._rendererMarker = newFuture;
-			r._modelScaffoldName = modelFilename.AsString();
-			r._materialScaffoldName = materialFilename.AsString();
-			query.Set(std::move(r));
-		}
-
-		auto modelScaffold = _pimpl->_modelScaffolds.Get(_pimpl->_loadingContext, modelFilename);
-		auto materialScaffold = _pimpl->_materialScaffolds.Get(_pimpl->_loadingContext, materialFilename, modelFilename);
-		auto construction = std::make_shared<RenderCore::Techniques::ModelRendererConstruction>();
-		construction->AddElement().SetModelScaffold(modelScaffold->ShareFuture(), modelFilename.AsString()).SetMaterialScaffold(materialScaffold->ShareFuture(), materialFilename.AsString());
-
-		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_constructionContext, construction);
-		return nullptr;	// implicitly not available immediately
-	}
-
-	auto ModelCache::GetModelScaffold(StringSection<> name) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>
-	{
-		return _pimpl->_modelScaffolds.Get(_pimpl->_loadingContext, name);
-	}
-
-	auto ModelCache::GetMaterialScaffold(StringSection<> materialName, StringSection<> modelName) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>
-	{
-		return _pimpl->_materialScaffolds.Get(_pimpl->_loadingContext, materialName, modelName);
-	}
-
-	void ModelCache::OnFrameBarrier()
-	{
-		_pimpl->_modelRenderers.OnFrameBarrier();
-	}
-
-	ModelCache::Records ModelCache::LogRecords() const
-	{
-		ModelCache::Records result;
-		result._modelScaffolds = _pimpl->_modelScaffolds.LogRecords();
-		result._materialScaffolds = _pimpl->_materialScaffolds.LogRecords();
-
-		auto rendererRecords = _pimpl->_modelRenderers.LogRecords();
-		result._modelRenderers.reserve(rendererRecords.size());
-		for (const auto& r:rendererRecords)
-			if (r._value._rendererMarker->TryActualize())
-				result._modelRenderers.push_back({r._value._modelScaffoldName, r._value._materialScaffoldName, r._decayFrames});
-		return result;
-	}
-
-	std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> ModelCache::GetVBResources()
-	{
-		if (_pimpl->_constructionContext)
-			return _pimpl->_constructionContext->GetRepositionableGeometryConduit()->GetVBResourcePool();
-		return nullptr;
-	}
-
-	std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> ModelCache::GetIBResources()
-	{
-		if (_pimpl->_constructionContext)
-			return _pimpl->_constructionContext->GetRepositionableGeometryConduit()->GetIBResourcePool();
-		return nullptr;
-	}
-
-	void ModelCache::CancelConstructions()
-	{
-		if (_pimpl->_constructionContext)
-			_pimpl->_constructionContext->Cancel();
-	}
-
-	ModelCache::ModelCache(
+	std::shared_ptr<IRigidModelScene> CreateRigidModelScene(
 		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool, 
-		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool, 
 		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
 		std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
 		std::shared_ptr<::Assets::OperationContext> loadingContext,
-		const Config& cfg)
+		const IRigidModelScene::Config& cfg)
 	{
-		_pimpl = std::make_unique<Pimpl>(cfg);
-		_pimpl->_pipelineAcceleratorPool = std::move(pipelineAcceleratorPool);
-		_pimpl->_deformAcceleratorPool = std::move(deformAcceleratorPool);
-		_pimpl->_drawablesPool = std::move(drawablesPool);
-		_pimpl->_loadingContext = std::move(loadingContext);
-		if (bufferUploads) {
-			auto repositionableGeometry = std::make_shared<RenderCore::Techniques::RepositionableGeometryConduit>(
-				RenderCore::BufferUploads::CreateBatchedResources(*_pimpl->_pipelineAcceleratorPool->GetDevice(), bufferUploads, RenderCore::BindFlag::VertexBuffer, 1024*1024),
-				RenderCore::BufferUploads::CreateBatchedResources(*_pimpl->_pipelineAcceleratorPool->GetDevice(), bufferUploads, RenderCore::BindFlag::IndexBuffer, 1024*1024));
-			_pimpl->_constructionContext = std::make_shared<RenderCore::Techniques::ResourceConstructionContext>(bufferUploads, std::move(repositionableGeometry));
-		}
+		return std::make_shared<RigidModelScene>(
+			std::move(drawablesPool), std::move(pipelineAcceleratorPool), std::move(deformAcceleratorPool),
+			std::move(bufferUploads), std::move(loadingContext),
+			cfg);
 	}
-
-	ModelCache::~ModelCache()
-	{}
-
 
 }
