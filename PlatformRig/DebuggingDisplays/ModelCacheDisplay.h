@@ -7,13 +7,13 @@
 #include <memory>
 
 namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}
-namespace RenderCore { namespace Techniques { class ModelCache; }}
+namespace SceneEngine { class ModelCache; }
 
 namespace PlatformRig { namespace Overlays
 {
 	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateModelCacheDisplay(
-		std::shared_ptr<RenderCore::Techniques::ModelCache> modelCache);
+		std::shared_ptr<SceneEngine::ModelCache> modelCache);
 
 	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateModelCacheGeoBufferDisplay(
-		std::shared_ptr<RenderCore::Techniques::ModelCache> modelCache);
+		std::shared_ptr<SceneEngine::ModelCache> modelCache);
 }}

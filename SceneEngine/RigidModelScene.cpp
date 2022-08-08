@@ -2,20 +2,20 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "ModelCache.h"
-#include "SimpleModelRenderer.h"
-#include "ModelRendererConstruction.h"
-#include "PipelineAccelerator.h"		// just so we can use GetDevice()
-#include "Drawables.h"
-#include "ResourceConstructionContext.h"
-#include "../BufferUploads/BatchedResources.h"
-#include "../Assets/ModelScaffold.h"
-#include "../Assets/MaterialScaffold.h"
-#include "../../Assets/AssetHeapLRU.h"
-#include "../../Utility/HeapUtils.h"
+#include "RigidModelScene.h"
+#include "../RenderCore/Techniques/SimpleModelRenderer.h"
+#include "../RenderCore/Techniques/ModelRendererConstruction.h"
+#include "../RenderCore/Techniques/PipelineAccelerator.h"		// just so we can use GetDevice()
+#include "../RenderCore/Techniques/Drawables.h"
+#include "../RenderCore/Techniques/ResourceConstructionContext.h"
+#include "../RenderCore/BufferUploads/BatchedResources.h"
+#include "../RenderCore/Assets/ModelScaffold.h"
+#include "../RenderCore/Assets/MaterialScaffold.h"
+#include "../Assets/AssetHeapLRU.h"
+#include "../Utility/HeapUtils.h"
 #include <unordered_map>
 
-namespace RenderCore { namespace Techniques
+namespace SceneEngine
 {
 	using BoundingBox = std::pair<Float3, Float3>;
 	class ModelCache::Pimpl
@@ -23,18 +23,18 @@ namespace RenderCore { namespace Techniques
 	public:
 		std::vector<std::pair<uint64_t, BoundingBox>> _boundingBoxes;
 
-		::Assets::AssetHeapLRU<std::shared_ptr<Assets::ModelScaffold>> _modelScaffolds;
-		::Assets::AssetHeapLRU<std::shared_ptr<Assets::MaterialScaffold>> _materialScaffolds;
+		::Assets::AssetHeapLRU<std::shared_ptr<RenderCore::Assets::ModelScaffold>> _modelScaffolds;
+		::Assets::AssetHeapLRU<std::shared_ptr<RenderCore::Assets::MaterialScaffold>> _materialScaffolds;
 		struct Renderer
 		{
-			::Assets::PtrToMarkerPtr<SimpleModelRenderer> _rendererMarker;
+			::Assets::PtrToMarkerPtr<RenderCore::Techniques::SimpleModelRenderer> _rendererMarker;
 			std::string _modelScaffoldName, _materialScaffoldName;
 		};
 		FrameByFrameLRUHeap<Renderer> _modelRenderers;
-		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
-		std::shared_ptr<IDeformAcceleratorPool> _deformAcceleratorPool;
-		std::shared_ptr<IDrawablesPool> _drawablesPool;
-		std::shared_ptr<ResourceConstructionContext> _constructionContext;
+		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
+		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> _deformAcceleratorPool;
+		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> _drawablesPool;
+		std::shared_ptr<RenderCore::Techniques::ResourceConstructionContext> _constructionContext;
 		std::shared_ptr<::Assets::OperationContext> _loadingContext;
 
 		uint32_t _reloadId;
@@ -55,12 +55,12 @@ namespace RenderCore { namespace Techniques
 	uint32_t ModelCache::GetReloadId() const { return _pimpl->_reloadId; }
 
 	auto ModelCache::GetRendererMarker(
-		StringSection<ResChar> modelFilename,
-		StringSection<ResChar> materialFilename) -> ::Assets::PtrToMarkerPtr<SimpleModelRenderer>
+		StringSection<> modelFilename,
+		StringSection<> materialFilename) -> ::Assets::PtrToMarkerPtr<RenderCore::Techniques::SimpleModelRenderer>
 	{
 		auto hash = HashCombine(Hash64(modelFilename), Hash64(materialFilename));
 
-		::Assets::PtrToMarkerPtr<SimpleModelRenderer> newFuture;
+		::Assets::PtrToMarkerPtr<RenderCore::Techniques::SimpleModelRenderer> newFuture;
 		{
 			auto query = _pimpl->_modelRenderers.Query(hash);
 			if (query.GetType() == LRUCacheInsertType::Update) {
@@ -72,7 +72,7 @@ namespace RenderCore { namespace Techniques
 			}
 
 			auto stringInitializer = ::Assets::Internal::AsString(modelFilename, materialFilename);	// (used for tracking/debugging purposes)
-			newFuture = std::make_shared<::Assets::MarkerPtr<SimpleModelRenderer>>(stringInitializer);
+			newFuture = std::make_shared<::Assets::MarkerPtr<RenderCore::Techniques::SimpleModelRenderer>>(stringInitializer);
 			Pimpl::Renderer r;
 			r._rendererMarker = newFuture;
 			r._modelScaffoldName = modelFilename.AsString();
@@ -82,7 +82,7 @@ namespace RenderCore { namespace Techniques
 
 		auto modelScaffold = _pimpl->_modelScaffolds.Get(_pimpl->_loadingContext, modelFilename);
 		auto materialScaffold = _pimpl->_materialScaffolds.Get(_pimpl->_loadingContext, materialFilename, modelFilename);
-		auto construction = std::make_shared<ModelRendererConstruction>();
+		auto construction = std::make_shared<RenderCore::Techniques::ModelRendererConstruction>();
 		construction->AddElement().SetModelScaffold(modelScaffold->ShareFuture(), modelFilename.AsString()).SetMaterialScaffold(materialScaffold->ShareFuture(), materialFilename.AsString());
 
 		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_constructionContext, construction);
@@ -90,12 +90,12 @@ namespace RenderCore { namespace Techniques
 	}
 
 	auto ModelCache::TryGetRendererActual(
-		uint64_t modelFilenameHash, StringSection<ResChar> modelFilename,
-		uint64_t materialFilenameHash, StringSection<ResChar> materialFilename) -> const SimpleModelRenderer*
+		uint64_t modelFilenameHash, StringSection<> modelFilename,
+		uint64_t materialFilenameHash, StringSection<> materialFilename) -> const RenderCore::Techniques::SimpleModelRenderer*
 	{
 		auto hash = HashCombine(modelFilenameHash, materialFilenameHash);
 
-		::Assets::PtrToMarkerPtr<SimpleModelRenderer> newFuture;
+		::Assets::PtrToMarkerPtr<RenderCore::Techniques::SimpleModelRenderer> newFuture;
 		{
 			auto query = _pimpl->_modelRenderers.Query(hash);
 			if (query.GetType() == LRUCacheInsertType::Update) {
@@ -106,7 +106,7 @@ namespace RenderCore { namespace Techniques
 			}
 
 			auto stringInitializer = ::Assets::Internal::AsString(modelFilename, materialFilename);	// (used for tracking/debugging purposes)
-			newFuture = std::make_shared<::Assets::MarkerPtr<SimpleModelRenderer>>(stringInitializer);
+			newFuture = std::make_shared<::Assets::MarkerPtr<RenderCore::Techniques::SimpleModelRenderer>>(stringInitializer);
 			Pimpl::Renderer r;
 			r._rendererMarker = newFuture;
 			r._modelScaffoldName = modelFilename.AsString();
@@ -116,19 +116,19 @@ namespace RenderCore { namespace Techniques
 
 		auto modelScaffold = _pimpl->_modelScaffolds.Get(_pimpl->_loadingContext, modelFilename);
 		auto materialScaffold = _pimpl->_materialScaffolds.Get(_pimpl->_loadingContext, materialFilename, modelFilename);
-		auto construction = std::make_shared<ModelRendererConstruction>();
+		auto construction = std::make_shared<RenderCore::Techniques::ModelRendererConstruction>();
 		construction->AddElement().SetModelScaffold(modelScaffold->ShareFuture(), modelFilename.AsString()).SetMaterialScaffold(materialScaffold->ShareFuture(), materialFilename.AsString());
 
 		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_constructionContext, construction);
 		return nullptr;	// implicitly not available immediately
 	}
 
-	auto ModelCache::GetModelScaffold(StringSection<ResChar> name) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>
+	auto ModelCache::GetModelScaffold(StringSection<> name) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>
 	{
 		return _pimpl->_modelScaffolds.Get(_pimpl->_loadingContext, name);
 	}
 
-	auto ModelCache::GetMaterialScaffold(StringSection<ResChar> materialName, StringSection<ResChar> modelName) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>
+	auto ModelCache::GetMaterialScaffold(StringSection<> materialName, StringSection<> modelName) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>
 	{
 		return _pimpl->_materialScaffolds.Get(_pimpl->_loadingContext, materialName, modelName);
 	}
@@ -152,14 +152,14 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	std::shared_ptr<BufferUploads::IBatchedResources> ModelCache::GetVBResources()
+	std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> ModelCache::GetVBResources()
 	{
 		if (_pimpl->_constructionContext)
 			return _pimpl->_constructionContext->GetRepositionableGeometryConduit()->GetVBResourcePool();
 		return nullptr;
 	}
 
-	std::shared_ptr<BufferUploads::IBatchedResources> ModelCache::GetIBResources()
+	std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> ModelCache::GetIBResources()
 	{
 		if (_pimpl->_constructionContext)
 			return _pimpl->_constructionContext->GetRepositionableGeometryConduit()->GetIBResourcePool();
@@ -173,10 +173,10 @@ namespace RenderCore { namespace Techniques
 	}
 
 	ModelCache::ModelCache(
-		std::shared_ptr<IDrawablesPool> drawablesPool, 
-		std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool,
-		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
-		std::shared_ptr<BufferUploads::IManager> bufferUploads,
+		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool, 
+		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
+		std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
 		std::shared_ptr<::Assets::OperationContext> loadingContext,
 		const Config& cfg)
 	{
@@ -186,10 +186,10 @@ namespace RenderCore { namespace Techniques
 		_pimpl->_drawablesPool = std::move(drawablesPool);
 		_pimpl->_loadingContext = std::move(loadingContext);
 		if (bufferUploads) {
-			auto repositionableGeometry = std::make_shared<RepositionableGeometryConduit>(
-				BufferUploads::CreateBatchedResources(*_pimpl->_pipelineAcceleratorPool->GetDevice(), bufferUploads, BindFlag::VertexBuffer, 1024*1024),
-				BufferUploads::CreateBatchedResources(*_pimpl->_pipelineAcceleratorPool->GetDevice(), bufferUploads, BindFlag::IndexBuffer, 1024*1024));
-			_pimpl->_constructionContext = std::make_shared<ResourceConstructionContext>(bufferUploads, std::move(repositionableGeometry));
+			auto repositionableGeometry = std::make_shared<RenderCore::Techniques::RepositionableGeometryConduit>(
+				RenderCore::BufferUploads::CreateBatchedResources(*_pimpl->_pipelineAcceleratorPool->GetDevice(), bufferUploads, RenderCore::BindFlag::VertexBuffer, 1024*1024),
+				RenderCore::BufferUploads::CreateBatchedResources(*_pimpl->_pipelineAcceleratorPool->GetDevice(), bufferUploads, RenderCore::BindFlag::IndexBuffer, 1024*1024));
+			_pimpl->_constructionContext = std::make_shared<RenderCore::Techniques::ResourceConstructionContext>(bufferUploads, std::move(repositionableGeometry));
 		}
 	}
 
@@ -197,4 +197,4 @@ namespace RenderCore { namespace Techniques
 	{}
 
 
-}}
+}

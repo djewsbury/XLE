@@ -15,7 +15,7 @@
 #include <functional>
 #include <future>
 
-namespace RenderCore { namespace Techniques { class ParsingContext; class ModelCache; class DrawablesPacket; class ICustomDrawDelegate; } }
+namespace RenderCore { namespace Techniques { class ParsingContext; class DrawablesPacket; class ICustomDrawDelegate; } }
 namespace Utility { class OutputStream; template<typename CharType> class InputStreamFormatter; }
 namespace Assets { class DirectorySearchRules; class IAsyncMarker; }
 namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}
@@ -24,7 +24,8 @@ namespace Assets { class OperationContext; }
 
 namespace SceneEngine
 {
-	using PlacementsModelCache = RenderCore::Techniques::ModelCache;
+    class ModelCache;
+	using PlacementsModelCache = ModelCache;
 
 
     class PlacementsRenderer;

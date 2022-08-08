@@ -24,7 +24,6 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         Techniques.cpp
         TechniqueUtils.cpp
         Services.cpp
-        ModelCache.cpp
         UniformDelegateManager.cpp
         PipelineCollection.cpp
         TextureCompilerUtil.cpp

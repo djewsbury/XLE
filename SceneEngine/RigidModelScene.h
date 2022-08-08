@@ -4,10 +4,10 @@
 
 #pragma once
 
-#include "../../Assets/AssetsCore.h"
-#include "../../Math/Vector.h"
-#include "../../Utility/IteratorUtils.h"
-#include "../../Core/Types.h"
+#include "../Assets/AssetsCore.h"
+#include "../Math/Vector.h"
+#include "../Utility/IteratorUtils.h"
+#include "../Core/Types.h"
 #include <utility>
 
 namespace RenderCore { namespace Assets
@@ -26,13 +26,10 @@ namespace RenderCore { namespace Techniques
 	class IPipelineAcceleratorPool;
     class IDeformAcceleratorPool;
     class IDrawablesPool;
+}}
 
-	class ModelCacheModel
-    {
-    public:
-		SimpleModelRenderer* _renderer;
-    };
-
+namespace SceneEngine
+{
     class ModelCache
     {
     public:
@@ -48,19 +45,18 @@ namespace RenderCore { namespace Techniques
             , _rendererCount(200) {}
         };
 
-        using ResChar = ::Assets::ResChar;
-        using SupplementGUID = uint64;
+        using SupplementGUID = uint64_t;
         using SupplementRange = IteratorRange<const SupplementGUID*>;
 
 		auto GetRendererMarker(
-            StringSection<ResChar> modelFilename, 
-            StringSection<ResChar> materialFilename) -> ::Assets::PtrToMarkerPtr<SimpleModelRenderer>;
+            StringSection<> modelFilename, 
+            StringSection<> materialFilename) -> ::Assets::PtrToMarkerPtr<RenderCore::Techniques::SimpleModelRenderer>;
         auto TryGetRendererActual(
-            uint64_t modelFilenameHash, StringSection<ResChar> modelFilename, 
-            uint64_t materialFilenameHash, StringSection<ResChar> materialFilename) -> const SimpleModelRenderer*;
+            uint64_t modelFilenameHash, StringSection<> modelFilename, 
+            uint64_t materialFilenameHash, StringSection<> materialFilename) -> const RenderCore::Techniques::SimpleModelRenderer*;
 
-        auto GetModelScaffold(StringSection<ResChar>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>;
-		auto GetMaterialScaffold(StringSection<ResChar>, StringSection<ResChar>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>;
+        auto GetModelScaffold(StringSection<>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>;
+		auto GetMaterialScaffold(StringSection<>, StringSection<>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>;
 
         uint32_t GetReloadId() const;
         void OnFrameBarrier();
@@ -68,15 +64,15 @@ namespace RenderCore { namespace Techniques
         struct Records;
         Records LogRecords() const;
 
-        std::shared_ptr<BufferUploads::IBatchedResources> GetVBResources();
-        std::shared_ptr<BufferUploads::IBatchedResources> GetIBResources();
+        std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> GetVBResources();
+        std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> GetIBResources();
         void CancelConstructions();
 
         ModelCache(
-			std::shared_ptr<IDrawablesPool> drawablesPool, 
-            std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool, 
-            std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
-            std::shared_ptr<BufferUploads::IManager> bufferUploads,
+			std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool, 
+            std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool, 
+            std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
+            std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
             std::shared_ptr<::Assets::OperationContext> loadingContext,
 			const Config& cfg = Config());
         ~ModelCache();
@@ -98,5 +94,5 @@ namespace RenderCore { namespace Techniques
         std::vector<Renderer> _modelRenderers;
     };
 
-}}
+}
 

@@ -9,8 +9,8 @@
 #include "WorldPlacementsConfig.h"
 #include "GenericQuadTree.h"
 #include "DynamicImposters.h"
+#include "RigidModelScene.h"
 
-#include "../RenderCore/Techniques/ModelCache.h"
 #include "../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../RenderCore/Assets/ModelScaffold.h"
 #include "../RenderCore/Assets/MaterialScaffold.h"
