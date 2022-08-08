@@ -192,10 +192,8 @@ namespace RenderCore { namespace Techniques
 				transformMarker = cmd.As<unsigned>();
 				{
 					assert(elementIdx != ~0u);
-					auto& ele = _elements[elementIdx];
-					auto machineOutput = ele._skeletonBinding.ModelJointToMachineOutput(transformMarker);
-					assert(machineOutput < ele._baseTransformCount);
-					nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&ele._baseTransforms[machineOutput], localToWorld3x4);
+					auto& baseTransform = _skeletonBinding.ModelJointToUnanimatedTransform(elementIdx, transformMarker);
+					nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
 				}
 				break;
 			case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
@@ -243,13 +241,105 @@ namespace RenderCore { namespace Techniques
 	void SimpleModelRenderer::BuildDrawables(
 		IteratorRange<DrawablesPacket** const> pkts,
 		const Float4x4& localToWorld,
+		IteratorRange<const Float4x4*> animatedSkeletonOutput,
+		unsigned deformInstanceIdx,
+		uint32_t viewMask,
+		uint64_t cmdStreamGuid) const
+	{
+		assert(viewMask != 0);
+		if (_deformAcceleratorPool && _deformAccelerator)
+			EnableInstanceDeform(*_deformAccelerator, deformInstanceIdx);
+
+		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
+		assert(cmdStream);
+		SimpleModelDrawable* drawables[dimof(cmdStream->_drawCallCounts)];
+		for (unsigned c=0; c<dimof(cmdStream->_drawCallCounts); ++c) {
+			if (!cmdStream->_drawCallCounts[c]) {
+				drawables[c] = nullptr;
+				continue;
+			}
+			drawables[c] = pkts[c] ? pkts[c]->_drawables.Allocate<SimpleModelDrawable>(cmdStream->_drawCallCounts[c]) : nullptr;
+		}
+
+		auto* drawableFn = (viewMask==1) ? (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelStatic : (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelStaticMultiView; 
+
+		auto localToWorld3x4 = AsFloat3x4(localToWorld);
+		auto nodeSpaceToWorld = Identity<Float3x4>();
+		const Float4x4* geoSpaceToNodeSpace = nullptr;
+		IteratorRange<const uint64_t*> materialGuids;
+		unsigned materialGuidsIterator = 0;
+		unsigned transformMarker = ~0u;
+		unsigned elementIdx = ~0u;
+		unsigned drawCallCounter = 0;
+		for (auto cmd:cmdStream->GetCmdStream()) {
+			switch (cmd.Cmd()) {
+			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
+				transformMarker = cmd.As<unsigned>();
+				{
+					assert(elementIdx != ~0u);
+					auto animatedIdx =_skeletonBinding.ModelJointToMachineOutput(elementIdx, transformMarker);
+					if (animatedIdx < animatedSkeletonOutput.size()) {
+						auto& animatedTransform = animatedSkeletonOutput[animatedIdx];
+						nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&animatedTransform, localToWorld3x4);
+					} else {
+						auto& baseTransform = _skeletonBinding.ModelJointToUnanimatedTransform(elementIdx, transformMarker);
+						nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
+					}
+				}
+				break;
+			case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
+				materialGuids = cmd.RawData().Cast<const uint64_t*>();
+				materialGuidsIterator = 0;
+				break;
+			case (uint32_t)DrawableConstructor::Command::BeginElement:
+				elementIdx = cmd.As<unsigned>();
+				break;
+			case (uint32_t)DrawableConstructor::Command::SetGeoSpaceToNodeSpace:
+				geoSpaceToNodeSpace = (!cmd.RawData().empty()) ? &cmd.As<Float4x4>() : nullptr;
+				break;
+			case (uint32_t)DrawableConstructor::Command::ExecuteDrawCalls:
+				{
+					struct DrawCallsRef { unsigned _start, _end; };
+					auto& drawCallsRef = cmd.As<DrawCallsRef>();
+					auto localTransform = geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
+					for (const auto& dc:MakeIteratorRange(cmdStream->_drawCalls.begin()+drawCallsRef._start, cmdStream->_drawCalls.begin()+drawCallsRef._end)) {
+						if (!drawables[dc._batchFilter]) continue;
+						auto& drawable = *drawables[dc._batchFilter]++;
+						drawable._geo = _drawableConstructor->_drawableGeos[dc._drawableGeoIdx].get();
+						drawable._pipeline = _drawableConstructor->_pipelineAccelerators[dc._pipelineAcceleratorIdx].get();
+						drawable._descriptorSet = _drawableConstructor->_descriptorSetAccelerators[dc._descriptorSetAcceleratorIdx].get();
+						drawable._drawFn = drawableFn;
+						drawable._drawCall = RenderCore::Assets::DrawCallDesc { dc._firstIndex, dc._indexCount, dc._firstVertex };
+						drawable._looseUniformsInterface = _usi.get();
+						drawable._materialGuid = materialGuids[materialGuidsIterator++];
+						drawable._drawCallIdx = drawCallCounter;
+						drawable._localTransform._localToWorld = localTransform;
+						drawable._localTransform._localSpaceView = Float3{0,0,0};
+						drawable._localTransform._viewMask = viewMask;
+						drawable._deformInstanceIdx = deformInstanceIdx;
+						++drawCallCounter;
+					}
+				}
+				break;
+			}
+		}
+
+		// if we need the topological batch, make sure to draw the appropriate cmd stream
+		if (pkts[(unsigned)Batch::Topological] && cmdStreamGuid != s_topologicalCmdStream)
+			BuildDrawables(pkts, localToWorld, deformInstanceIdx, viewMask, s_topologicalCmdStream);
+	}
+
+	void SimpleModelRenderer::BuildDrawables(
+		IteratorRange<DrawablesPacket** const> pkts,
+		const Float4x4& localToWorld,
+		IteratorRange<const Float4x4*> animatedSkeletonOutput,
 		unsigned deformInstanceIdx,
 		const std::shared_ptr<ICustomDrawDelegate>& delegate,
 		uint32_t viewMask,
 		uint64_t cmdStreamGuid) const
 	{
 		if (!delegate) {
-			BuildDrawables(pkts, localToWorld, deformInstanceIdx, viewMask, cmdStreamGuid);
+			BuildDrawables(pkts, localToWorld, animatedSkeletonOutput, deformInstanceIdx, viewMask, cmdStreamGuid);
 			return;
 		}
 
@@ -282,10 +372,14 @@ namespace RenderCore { namespace Techniques
 				transformMarker = cmd.As<unsigned>();
 				{
 					assert(elementIdx != ~0u);
-					auto& ele = _elements[elementIdx];
-					auto machineOutput = ele._skeletonBinding.ModelJointToMachineOutput(transformMarker);
-					assert(machineOutput < ele._baseTransformCount);
-					nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&ele._baseTransforms[machineOutput], localToWorld3x4);
+					auto animatedIdx =_skeletonBinding.ModelJointToMachineOutput(elementIdx, transformMarker);
+					if (animatedIdx < animatedSkeletonOutput.size()) {
+						auto& animatedTransform = animatedSkeletonOutput[animatedIdx];
+						nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&animatedTransform, localToWorld3x4);
+					} else {
+						auto& baseTransform = _skeletonBinding.ModelJointToUnanimatedTransform(elementIdx, transformMarker);
+						nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
+					}
 				}
 				break;
 			case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
@@ -327,7 +421,7 @@ namespace RenderCore { namespace Techniques
 
 		// if we need the topological batch, make sure to draw the appropriate cmd stream
 		if (pkts[(unsigned)Batch::Topological] && cmdStreamGuid != s_topologicalCmdStream)
-			BuildDrawables(pkts, localToWorld, deformInstanceIdx, delegate, viewMask, s_topologicalCmdStream);
+			BuildDrawables(pkts, localToWorld, animatedSkeletonOutput, deformInstanceIdx, delegate, viewMask, s_topologicalCmdStream);
 	}
 
 	void SimpleModelRenderer::BuildGeometryProcables(
@@ -360,10 +454,8 @@ namespace RenderCore { namespace Techniques
 				transformMarker = cmd.As<unsigned>();
 				{
 					assert(elementIdx != ~0u);
-					auto& ele = _elements[elementIdx];
-					auto machineOutput = ele._skeletonBinding.ModelJointToMachineOutput(transformMarker);
-					assert(machineOutput < ele._baseTransformCount);
-					nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&ele._baseTransforms[machineOutput], localToWorld3x4);
+					auto& baseTransform = _skeletonBinding.ModelJointToUnanimatedTransform(elementIdx, transformMarker);
+					nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
 				}
 				break;
 			case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
@@ -451,72 +543,7 @@ namespace RenderCore { namespace Techniques
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
 
-		_elements.reserve(construction.GetElementCount());
-		for (auto ele:construction) {
-			auto modelScaffold = ele.GetModelScaffold();
-			if (modelScaffold) {
-				const SkeletonMachine* primarySkeleton = externalSkeletonScaffold ? &externalSkeletonScaffold->GetSkeletonMachine() : nullptr;
-				const SkeletonMachine* secondarySkeleton = modelScaffold->EmbeddedSkeleton();
-				
-				// support 2 skeletons -- in this way if there are nodes that are not matched to the external skeleton,
-				// we can drop back to the embedded skeleton. Since the embedded skeleton always comes from the model
-				// source file itself, it should always have the transforms we need
-				if (!primarySkeleton) {
-					primarySkeleton = secondarySkeleton;
-					secondarySkeleton = nullptr;
-				}
-					
-				if (primarySkeleton && secondarySkeleton) {
-					Element ele;
-					ele._skeletonBinding = SkeletonBinding(
-						primarySkeleton->GetOutputInterface(),
-						secondarySkeleton->GetOutputInterface(),
-						modelScaffold->FindCommandStreamInputInterface());
-					ele._baseTransformCount = primarySkeleton->GetOutputMatrixCount() + secondarySkeleton->GetOutputMatrixCount();
-					ele._baseTransforms = std::make_unique<Float4x4[]>(ele._baseTransformCount);
-					primarySkeleton->GenerateOutputTransforms(MakeIteratorRange(ele._baseTransforms.get(), ele._baseTransforms.get() + primarySkeleton->GetOutputMatrixCount()));
-					secondarySkeleton->GenerateOutputTransforms(MakeIteratorRange(ele._baseTransforms.get() + primarySkeleton->GetOutputMatrixCount(), ele._baseTransforms.get() + primarySkeleton->GetOutputMatrixCount() + secondarySkeleton->GetOutputMatrixCount()));
-					_elements.emplace_back(std::move(ele));
-				} else if (primarySkeleton) {
-					Element ele;
-					ele._skeletonBinding = SkeletonBinding(
-						primarySkeleton->GetOutputInterface(),
-						modelScaffold->FindCommandStreamInputInterface());
-					ele._baseTransformCount = primarySkeleton->GetOutputMatrixCount();
-					ele._baseTransforms = std::make_unique<Float4x4[]>(ele._baseTransformCount);
-					primarySkeleton->GenerateOutputTransforms(MakeIteratorRange(ele._baseTransforms.get(), ele._baseTransforms.get() + primarySkeleton->GetOutputMatrixCount()));
-					_elements.emplace_back(std::move(ele));
-				} else {
-					_elements.emplace_back(Element{});
-				}
-			} else {
-				_elements.emplace_back(Element{});
-			}
-		}
-
-		// Check to make sure we've got a skeleton binding for each referenced geo call to world referenced
-		{
-			std::optional<unsigned> currentElementIdx;
-			for (const auto& cmdStream:_drawableConstructor->_cmdStreams) {
-				for (auto cmd:cmdStream.GetCmdStream()) {
-					switch (cmd.Cmd()) {
-					case (uint32_t)DrawableConstructor::Command::BeginElement:
-						currentElementIdx = cmd.As<unsigned>();
-						break;
-					case (uint32_t)Assets::ModelCommand::SetTransformMarker:
-						if (!currentElementIdx.has_value() || currentElementIdx.value() >= _elements.size())
-							Throw(std::runtime_error("Bad or missing element index in DrawableConstructor command stream"));
-						auto& element = _elements[*currentElementIdx];
-						unsigned machineOutput = ~0u;
-						if (cmd.As<unsigned>() < element._skeletonBinding.GetModelJointCount())
-							machineOutput = element._skeletonBinding.ModelJointToMachineOutput(cmd.As<unsigned>());
-						if (machineOutput >= element._baseTransformCount)
-							Throw(std::runtime_error("Geocall to world unbound in skeleton binding"));
-						break;
-					}
-				}
-			}
-		}
+		_skeletonBinding = ModelConstructionSkeletonBinding{construction};
 	}
 
 	SimpleModelRenderer::~SimpleModelRenderer() {}
@@ -686,6 +713,91 @@ namespace RenderCore { namespace Techniques
 	ICustomDrawDelegate::~ICustomDrawDelegate() {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	ModelConstructionSkeletonBinding::ModelConstructionSkeletonBinding(
+		const ModelRendererConstruction& construction)
+	{
+		auto externalSkeletonScaffold = construction.GetSkeletonScaffold();
+
+		for (auto ele:construction) {
+			_elementStarts.push_back(_modelJointIndexToMachineOutput.size());
+			
+			auto modelScaffold = ele.GetModelScaffold();
+			if (modelScaffold) {
+				const auto* primarySkeleton = externalSkeletonScaffold ? &externalSkeletonScaffold->GetSkeletonMachine() : nullptr;
+				const auto* secondarySkeleton = modelScaffold->EmbeddedSkeleton();
+
+				auto cmdStreamInput = modelScaffold->FindCommandStreamInputInterface();
+				_modelJointIndexToMachineOutput.resize(_modelJointIndexToMachineOutput.size()+cmdStreamInput.size(), ~0u);
+				auto elementBindingRange = MakeIteratorRange(_modelJointIndexToMachineOutput.end()-cmdStreamInput.size(), _modelJointIndexToMachineOutput.end());
+				_unanimatedTransforms.resize(_unanimatedTransforms.size()+cmdStreamInput.size(), Identity<Float4x4>());
+				auto unanimatedTransformsRange = MakeIteratorRange(_unanimatedTransforms.end()-cmdStreamInput.size(), _unanimatedTransforms.end());
+				
+				// support 2 skeletons -- in this way if there are nodes that are not matched to the external skeleton,
+				// we can drop back to the embedded skeleton. Since the embedded skeleton always comes from the model
+				// source file itself, it should always have the transforms we need
+				if (!primarySkeleton) {
+					primarySkeleton = secondarySkeleton;
+					secondarySkeleton = nullptr;
+				}
+					
+				if (primarySkeleton && secondarySkeleton) {
+
+					///////
+					Float4x4 primaryOutputs[primarySkeleton->GetOutputMatrixCount()];
+					Float4x4 secondaryOutputs[secondarySkeleton->GetOutputMatrixCount()];
+					primarySkeleton->GenerateOutputTransforms(MakeIteratorRange(primaryOutputs, &primaryOutputs[primarySkeleton->GetOutputMatrixCount()]));
+					secondarySkeleton->GenerateOutputTransforms(MakeIteratorRange(secondaryOutputs, &secondaryOutputs[secondarySkeleton->GetOutputMatrixCount()]));
+
+					///////
+					auto& primaryInterface = primarySkeleton->GetOutputInterface();
+					auto& secondaryInterface = secondarySkeleton->GetOutputInterface();
+					for (size_t c=0; c<cmdStreamInput.size(); ++c) {
+						uint64_t name = cmdStreamInput[c];
+						bool gotMatch = false;
+						for (size_t c2=0; c2<primaryInterface._outputMatrixNameCount; ++c2)
+							if (primaryInterface._outputMatrixNames[c2] == name) {
+								elementBindingRange[c] = unsigned(c2);
+								unanimatedTransformsRange[c] = primaryOutputs[c2];
+								gotMatch = true;
+								break;
+							}
+
+						if (!gotMatch)
+							for (size_t c2=0; c2<secondaryInterface._outputMatrixNameCount; ++c2)
+								if (secondaryInterface._outputMatrixNames[c2] == name) {
+									unanimatedTransformsRange[c] = secondaryOutputs[c2];
+									gotMatch = true;
+									break;
+								}
+
+						if (!gotMatch)
+							Throw(std::runtime_error("Geocall to world unbound in skeleton binding"));
+					}
+					
+				} else if (primarySkeleton) {
+					Float4x4 primaryOutputs[primarySkeleton->GetOutputMatrixCount()];
+					primarySkeleton->GenerateOutputTransforms(MakeIteratorRange(primaryOutputs, &primaryOutputs[primarySkeleton->GetOutputMatrixCount()]));
+					
+					///////
+					auto& primaryInterface = primarySkeleton->GetOutputInterface();
+					for (size_t c=0; c<cmdStreamInput.size(); ++c) {
+						uint64_t name = cmdStreamInput[c];
+						for (size_t c2=0; c2<primaryInterface._outputMatrixNameCount; ++c2)
+							if (primaryInterface._outputMatrixNames[c2] == name) {
+								elementBindingRange[c] = unsigned(c2);
+								unanimatedTransformsRange[c] = primaryOutputs[c2];
+								break;
+							}
+						if (elementBindingRange[c] == ~0u)
+							Throw(std::runtime_error("Geocall to world unbound in skeleton binding"));
+					}
+				}
+			}
+		}
+	}
+
+	ModelConstructionSkeletonBinding::ModelConstructionSkeletonBinding() = default;
 
 	void RendererSkeletonInterface::FeedInSkeletonMachineResults(
 		unsigned instanceIdx,

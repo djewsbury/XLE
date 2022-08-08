@@ -51,6 +51,20 @@ namespace RenderCore { namespace Techniques
 		static void ExecuteStandardDraw(ParsingContext&, const ExecuteDrawableContext&, const Drawable&);
 		virtual ~ICustomDrawDelegate();
 	};
+
+	struct ModelConstructionSkeletonBinding
+	{
+	public:
+		unsigned ModelJointToMachineOutput(unsigned elementIdx, unsigned modelJointIdx) const;
+		const Float4x4& ModelJointToUnanimatedTransform(unsigned elementIdx, unsigned modelJointIdx) const;
+
+		ModelConstructionSkeletonBinding(const ModelRendererConstruction& construction);
+		ModelConstructionSkeletonBinding();
+
+		std::vector<unsigned>	_modelJointIndexToMachineOutput;
+		std::vector<Float4x4>	_unanimatedTransforms;
+		std::vector<unsigned>	_elementStarts;
+	};
 	
 	class SimpleModelRenderer
 	{
@@ -65,6 +79,15 @@ namespace RenderCore { namespace Techniques
 		void BuildDrawables(
 			IteratorRange<DrawablesPacket** const> pkts,
 			const Float4x4& localToWorld,
+			IteratorRange<const Float4x4*> animatedSkeletonOutput,
+			unsigned deformInstanceIdx = 0,
+			uint32_t viewMask = 1,
+			uint64_t cmdStream = 0) const;		/* s_CmdStreamGuid_Default */
+
+		void BuildDrawables(
+			IteratorRange<DrawablesPacket** const> pkts,
+			const Float4x4& localToWorld,
+			IteratorRange<const Float4x4*> animatedSkeletonOutput,
 			unsigned deformInstanceIdx,
 			const std::shared_ptr<ICustomDrawDelegate>& delegate,
 			uint32_t viewMask = 1,
@@ -120,15 +143,7 @@ namespace RenderCore { namespace Techniques
 
 	private:
 		std::shared_ptr<DrawableConstructor> _drawableConstructor;
-
-		struct Element
-		{
-			RenderCore::Assets::SkeletonBinding _skeletonBinding;
-			std::unique_ptr<Float4x4[]> _baseTransforms;
-			unsigned _baseTransformCount;
-		};
-		std::vector<Element> _elements;
-
+		ModelConstructionSkeletonBinding _skeletonBinding;
 		std::shared_ptr<UniformsStreamInterface> _usi;
 
 		std::shared_ptr<IDeformAcceleratorPool> _deformAcceleratorPool;
@@ -203,4 +218,14 @@ namespace RenderCore { namespace Techniques
 		};
 		std::vector<Section> _sections;
 	};
+
+	inline unsigned ModelConstructionSkeletonBinding::ModelJointToMachineOutput(unsigned elementIdx, unsigned modelJointIdx) const
+	{
+		return _modelJointIndexToMachineOutput[_elementStarts[elementIdx] + modelJointIdx];
+	}
+
+	inline const Float4x4& ModelConstructionSkeletonBinding::ModelJointToUnanimatedTransform(unsigned elementIdx, unsigned modelJointIdx) const
+	{
+		return _unanimatedTransforms[_elementStarts[elementIdx] + modelJointIdx];
+	}
 }}

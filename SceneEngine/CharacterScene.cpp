@@ -71,9 +71,11 @@ namespace SceneEngine
 
 		struct Animator
 		{
-			std::shared_ptr<RenderCore::Techniques::RendererSkeletonInterface> _skeletonInterface;
+			std::shared_ptr<RenderCore::Techniques::RendererSkeletonInterface> _deformerSkeletonInterface;
 			std::shared_ptr<RenderCore::Assets::AnimationSetScaffold> _animSet;
 			RenderCore::Assets::AnimationSetBinding _animSetBinding;
+			RenderCore::Techniques::ModelConstructionSkeletonBinding _modelToSkeletonBinding;
+			std::vector<Float4x4> _skeletonMachineOutput;
 		};
 
 		struct RendererEntry
@@ -319,15 +321,15 @@ namespace SceneEngine
 				}
 			});
 
-		::Assets::WhenAll(rendererFuture, newEntry->_animSet->_animSetFuture).ThenConstructToPromise(
+		::Assets::WhenAll(rendererFuture, newEntry->_animSet->_animSetFuture, newEntry->_model->_completedConstruction).ThenConstructToPromise(
 			std::move(animatorPromise),
-			[deformAcceleratorPool=_deformAcceleratorPool](const auto& renderer, auto animSet) mutable {
+			[deformAcceleratorPool=_deformAcceleratorPool](const auto& renderer, auto animSet, auto modelConstruction) mutable {
 				Internal::Animator result;
 
 				if (renderer._deformAccelerator) {
 					auto* geoDeformers = deformAcceleratorPool->GetDeformGeoAttachment(*renderer._deformAccelerator).get();
 					if (geoDeformers) {
-						result._skeletonInterface = std::make_shared<RenderCore::Techniques::RendererSkeletonInterface>(
+						result._deformerSkeletonInterface = std::make_shared<RenderCore::Techniques::RendererSkeletonInterface>(
 							renderer.GetSkeletonMachine().GetOutputInterface(),
 							*geoDeformers);
 					}
@@ -336,6 +338,11 @@ namespace SceneEngine
 				auto& animImmData = animSet->ImmutableData();
 				result._animSetBinding = { animImmData._animationSet.GetOutputInterface(), renderer.GetSkeletonMachine() };
 				result._animSet = std::move(animSet);
+
+				// setup skeleton binding & initial pose for rigid parts
+				result._modelToSkeletonBinding = RenderCore::Techniques::ModelConstructionSkeletonBinding { *modelConstruction };
+				result._skeletonMachineOutput.resize(renderer.GetSkeletonMachine().GetOutputMatrixCount());
+				renderer.GetSkeletonMachine().GenerateOutputTransforms(MakeIteratorRange(result._skeletonMachineOutput));
 				return result;
 			});
 
@@ -360,99 +367,6 @@ namespace SceneEngine
 
 		return newEntry;
 	}
-
-#if 0
-	namespace Internal
-	{
-		class CharacterSceneRealCmdListBuilder
-		{
-		public:
-			const Renderer* _activeRenderer = nullptr;
-			const Animator* _activeAnimator = nullptr;
-			unsigned _currentInstanceIdx = 0;
-			CharacterSceneRealCmdListBuilder(RenderCore::IThreadContext& threadContext, IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts) 
-			: _threadContext(&threadContext), _pkts(pkts.begin(), pkts.end()) {}
-			~CharacterSceneRealCmdListBuilder() = default;
-			RenderCore::IThreadContext* _threadContext = nullptr;
-			std::vector<RenderCore::Techniques::DrawablesPacket*> _pkts;
-
-			#if defined(_DEBUG)
-				std::vector<const Renderer*> _alreadyVisitedRenderers;
-			#endif
-		};
-	}
-
-	void CharacterScene::CmdListBuilder::BeginRenderer(void* renderer)
-	{
-		auto* that = (Internal::CharacterSceneRealCmdListBuilder*)this;
-		auto* rendererEntry = (Internal::RendererEntry*)renderer;
-		that->_activeRenderer = rendererEntry->_rendererMarker.TryActualize();
-		that->_activeAnimator = rendererEntry->_animatorMarker.TryActualize();
-		that->_currentInstanceIdx = 0;
-
-		#if defined(_DEBUG)
-			// ensure that we haven't used this renderer before in this cmd list. This isn't supported because the instance idx
-			// is reset to 0 each time
-			assert(std::find(that->_alreadyVisitedRenderers.begin(), that->_alreadyVisitedRenderers.end(), that->_activeRenderer) == that->_alreadyVisitedRenderers.end());
-			that->_alreadyVisitedRenderers.push_back(that->_activeRenderer);
-		#endif
-	}
-
-	void CharacterScene::CmdListBuilder::ApplyAnimation(uint64_t id, float time)
-	{
-		auto* that = (Internal::CharacterSceneRealCmdListBuilder*)this;
-		auto* animator = that->_activeAnimator;
-		if (!animator || !that->_activeRenderer) return;
-
-		// Get the animation parameter set for this anim state, and run the skeleton machine with those parameters
-		const auto& skelMachine = that->_activeRenderer->GetSkeletonMachine();
-
-		auto parameterBlockSize = animator->_animSetBinding.GetParameterDefaultsBlock().size();
-		uint8_t parameterBlock[parameterBlockSize];
-		std::memcpy(parameterBlock, animator->_animSetBinding.GetParameterDefaultsBlock().begin(), parameterBlockSize);
-
-		// calculate animated parameters
-		animator->_animSet->ImmutableData()._animationSet.CalculateOutput(
-			MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]),
-			RenderCore::Assets::AnimationState{time, id},
-			animator->_animSetBinding.GetParameterBindingRules());
-
-		// generate the joint transforms based on the animation parameters
-		Float4x4 skeletonMachineOutput[skelMachine.GetOutputMatrixCount()];
-		animator->_animSetBinding.GenerateOutputTransforms(
-			MakeIteratorRange(skeletonMachineOutput, &skeletonMachineOutput[skelMachine.GetOutputMatrixCount()]),
-			MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]));
-
-		// set the skeleton machine output to the deformer
-		animator->_skeletonInterface->FeedInSkeletonMachineResults(
-			that->_currentInstanceIdx, MakeIteratorRange(skeletonMachineOutput, &skeletonMachineOutput[skelMachine.GetOutputMatrixCount()]));
-	}
-
-	void CharacterScene::CmdListBuilder::RenderInstance(const Float3x4& localToWorld, uint32_t viewMask, uint64_t cmdStream)
-	{
-		auto* that = (Internal::CharacterSceneRealCmdListBuilder*)this;
-		if (!that->_activeRenderer) return;
-
-		assert(cmdStream == 0);
-		RenderCore::Techniques::LightWeightBuildDrawables::SingleInstance(
-			*that->_activeRenderer->_drawableConstructor,
-			MakeIteratorRange(that->_pkts),
-			localToWorld, that->_currentInstanceIdx, viewMask);
-	}
-
-	void CharacterScene::CmdListBuilder::NextInstance()
-	{
-		auto* that = (Internal::CharacterSceneRealCmdListBuilder*)this;
-		that->_currentInstanceIdx = 0;
-	}
-
-	auto CharacterScene::BeginCmdList(RenderCore::IThreadContext& threadContext, IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts) -> std::unique_ptr<CmdListBuilder, void(*)(CmdListBuilder*)>
-	{
-		return std::unique_ptr<CmdListBuilder, void(*)(CmdListBuilder*)>(
-			(CmdListBuilder*)new Internal::CharacterSceneRealCmdListBuilder(threadContext, pkts),
-			[](CmdListBuilder* ptr) { delete (Internal::CharacterSceneRealCmdListBuilder*)ptr; });
-	}
-#endif
 
 	unsigned CharacterInstanceAllocate(void* renderer)
 	{
@@ -556,14 +470,14 @@ namespace SceneEngine
 			_activeAnimator->_animSetBinding.GetParameterBindingRules());
 
 		// generate the joint transforms based on the animation parameters
-		Float4x4 skeletonMachineOutput[_activeSkeletonMachine->GetOutputMatrixCount()];
+		assert(_activeAnimator->_skeletonMachineOutput.size() == _activeSkeletonMachine->GetOutputMatrixCount());
 		_activeAnimator->_animSetBinding.GenerateOutputTransforms(
-			MakeIteratorRange(skeletonMachineOutput, &skeletonMachineOutput[_activeSkeletonMachine->GetOutputMatrixCount()]),
+			MakeIteratorRange(_activeAnimator->_skeletonMachineOutput),
 			MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]));
 
 		// set the skeleton machine output to the deformer
-		_activeAnimator->_skeletonInterface->FeedInSkeletonMachineResults(
-			instanceIdx, MakeIteratorRange(skeletonMachineOutput, &skeletonMachineOutput[_activeSkeletonMachine->GetOutputMatrixCount()]));
+		_activeAnimator->_deformerSkeletonInterface->FeedInSkeletonMachineResults(
+			instanceIdx, MakeIteratorRange(_activeAnimator->_skeletonMachineOutput));
 	}
 
 	ICharacterScene::AnimationConfigureHelper::AnimationConfigureHelper(ICharacterScene& scene)

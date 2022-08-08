@@ -11,6 +11,7 @@ namespace RenderCore { namespace Techniques
 {
 	class DrawableConstructor;
 	class DrawablesPacket;
+	class ModelConstructionSkeletonBinding;
 
 	struct LightWeightBuildDrawables
 	{
@@ -29,6 +30,15 @@ namespace RenderCore { namespace Techniques
 			DrawableConstructor& constructor,
 			IteratorRange<DrawablesPacket** const> pkts,
 			const Float3x4& objectToWorld,
+			unsigned deformInstanceIdx = 0,
+			uint32_t viewMask= 1);
+
+		static void SingleInstance(
+			DrawableConstructor& constructor,
+			IteratorRange<DrawablesPacket** const> pkts,
+			const Float3x4& objectToWorld,
+			const ModelConstructionSkeletonBinding& skeletonBinding,
+			IteratorRange<const Float4x4*> animatedSkeletonOutput,
 			unsigned deformInstanceIdx = 0,
 			uint32_t viewMask= 1);
 	};
