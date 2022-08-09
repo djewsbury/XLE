@@ -420,7 +420,6 @@ namespace SceneEngine
 	}
 
 	ICharacterScene::BuildDrawablesHelper::BuildDrawablesHelper(
-		RenderCore::IThreadContext& threadContext,
 		ICharacterScene& scene,
 		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
 		IteratorRange<const RenderCore::Techniques::ProjectionDesc*> views,
@@ -431,7 +430,6 @@ namespace SceneEngine
 	{}
 
 	ICharacterScene::BuildDrawablesHelper::BuildDrawablesHelper(
-		RenderCore::IThreadContext& threadContext,
 		ICharacterScene& scene,
 		SceneEngine::ExecuteSceneContext& executeContext)
 	: _pkts(executeContext._destinationPkts)

@@ -249,6 +249,8 @@ namespace Assets
 				assert(_entries[marker]._refCount != 0);
 				++_entries[marker]._validationIndex;
 			}
+
+			++_globalChangeIndex;	// ensure this is done last
 		}
 
 		void IncreaseValidationIndex(DependencyValidationMarker marker) override
@@ -281,6 +283,8 @@ namespace Assets
 				assert(_entries[marker]._refCount != 0);
 				++_entries[marker]._validationIndex;
 			}
+
+			++_globalChangeIndex;	// ensure this is done last
 		}
 
 		DependentFileState GetDependentFileState(StringSection<> filename) override
@@ -302,7 +306,13 @@ namespace Assets
 			PropagateFileChange(fileMonitor._marker);
 		}
 
+		unsigned GlobalChangeIndex() override
+		{
+			return _globalChangeIndex.load();
+		}
+
 		DependencyValidationSystem()
+		: _globalChangeIndex(0)
 		{
 		}
 
@@ -319,6 +329,7 @@ namespace Assets
 		std::vector<std::pair<DependencyValidationMarker, DependencyValidationMarker>> _assetLinks;
 		std::vector<std::pair<DependencyValidationMarker, std::pair<MonitoredFileId, unsigned>>> _fileLinks;
 		Threading::Mutex _lock;
+		std::atomic<unsigned> _globalChangeIndex;
 	};
 
 	static ConsoleRig::WeakAttachablePtr<IDependencyValidationSystem> s_depValSystem;

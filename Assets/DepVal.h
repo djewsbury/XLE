@@ -119,6 +119,8 @@ namespace Assets
         virtual void AddRef(DependencyValidationMarker) = 0;
         virtual void Release(DependencyValidationMarker) = 0;
 
+        virtual unsigned GlobalChangeIndex() = 0;
+
         virtual ~IDependencyValidationSystem() = default;
     };
 

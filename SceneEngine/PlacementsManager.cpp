@@ -1414,7 +1414,7 @@ namespace SceneEngine
                     for (const auto&renderInfoFuture:helper->_readyFutures) {
                         auto& renderInfo = renderInfoFuture.get();
                         for (const auto& renderer:renderInfo._renderers) {
-                            auto future = placementsCache->GetRigidModelScene().FutureForRenderer(renderer.get());
+                            auto future = placementsCache->GetRigidModelScene().FutureForRenderer(renderer);
                             if (future.valid())
                                 helper2->_pendingFutures.emplace_back(std::move(future));
                         }

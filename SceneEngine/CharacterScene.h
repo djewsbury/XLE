@@ -30,11 +30,11 @@ namespace SceneEngine
 
 		struct BuildDrawablesHelper;
 		BuildDrawablesHelper BeginBuildDrawables(
-			RenderCore::IThreadContext&, IteratorRange<RenderCore::Techniques::DrawablesPacket** const>,
+			IteratorRange<RenderCore::Techniques::DrawablesPacket** const>,
 			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> = {},
 			const XLEMath::ArbitraryConvexVolumeTester* = nullptr);
 
-		BuildDrawablesHelper BeginBuildDrawables(RenderCore::IThreadContext&, ExecuteSceneContext&);
+		BuildDrawablesHelper BeginBuildDrawables(ExecuteSceneContext&);
 
 		struct AnimationConfigureHelper;
 		AnimationConfigureHelper BeginAnimationConfigure();
@@ -65,14 +65,12 @@ namespace SceneEngine
 			unsigned instanceIdx, const Float3x4& localToWorld);
 
 		BuildDrawablesHelper(
-			RenderCore::IThreadContext& threadContext,
 			ICharacterScene& scene,
 			IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
 			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> views = {},
 			const XLEMath::ArbitraryConvexVolumeTester* complexCullingVolume = nullptr);
 
 		BuildDrawablesHelper(
-			RenderCore::IThreadContext& threadContext,
 			ICharacterScene& scene,
 			SceneEngine::ExecuteSceneContext& executeContext);
 	private:
@@ -98,17 +96,17 @@ namespace SceneEngine
 	};
 
 	inline auto ICharacterScene::BeginBuildDrawables(
-		RenderCore::IThreadContext& threadContext, IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkt,
+		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkt,
 		IteratorRange<const RenderCore::Techniques::ProjectionDesc*> viewDesc,
 		const XLEMath::ArbitraryConvexVolumeTester* complexCullingTester) -> BuildDrawablesHelper
 	{
-		return BuildDrawablesHelper { threadContext, *this, pkt, viewDesc, complexCullingTester };
+		return BuildDrawablesHelper { *this, pkt, viewDesc, complexCullingTester };
 	}
 
 	inline auto ICharacterScene::BeginBuildDrawables(
-		RenderCore::IThreadContext& threadContext, ExecuteSceneContext& executeContext) -> BuildDrawablesHelper
+		ExecuteSceneContext& executeContext) -> BuildDrawablesHelper
 	{
-		return BuildDrawablesHelper { threadContext, *this, executeContext };
+		return BuildDrawablesHelper { *this, executeContext };
 	}
 
 	inline auto ICharacterScene::BeginAnimationConfigure() -> AnimationConfigureHelper

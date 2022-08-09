@@ -63,20 +63,20 @@ namespace SceneEngine
 		{
 			std::shared_ptr<ModelEntry> _model;
 			std::shared_ptr<DeformerEntry> _deformer;
-			Renderer _renderer;
-			std::shared_future<RigidModelSceneInternal::Renderer> _pendingRenderer;
+			std::weak_ptr<Renderer> _renderer;
+			std::shared_future<Renderer> _pendingRenderer;
 			::Assets::DependencyValidation _depVal;
 		};
 
 		struct PendingUpdate
 		{
-			std::weak_ptr<RendererEntry> _dst;
+			std::weak_ptr<Renderer> _dst;
 			Renderer _renderer;
 		};
 
 		struct PendingExceptionUpdate
 		{
-			std::weak_ptr<RendererEntry> _dst;
+			std::weak_ptr<Renderer> _dst;
 			::Assets::Blob _log;
 			::Assets::DependencyValidation _depVal;
 		};
@@ -157,10 +157,11 @@ namespace SceneEngine
 		
 		std::vector<std::pair<uint64_t, std::weak_ptr<RigidModelSceneInternal::ModelEntry>>> _modelEntries;
 		std::vector<std::weak_ptr<RigidModelSceneInternal::DeformerEntry>> _deformerEntries;
-		std::vector<std::weak_ptr<RigidModelSceneInternal::RendererEntry>> _renderers;
+		std::vector<RigidModelSceneInternal::RendererEntry> _renderers;
 		std::vector<RigidModelSceneInternal::PendingUpdate> _pendingUpdates;
 		std::vector<RigidModelSceneInternal::PendingExceptionUpdate> _pendingExceptionUpdates;
 		Signal<IteratorRange<const std::pair<uint64_t, ::Assets::AssetHeapRecord>*>> _updateSignal;
+		unsigned _lastDepValGlobalChangeIndex = 0;
 
 		OpaquePtr CreateModel(std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction> construction) override
 		{
@@ -205,22 +206,22 @@ namespace SceneEngine
 		std::shared_ptr<void> CreateRenderer(std::shared_ptr<void> model, OpaquePtr deformers) override
 		{
 			ScopedLock(_poolLock);
-			for (const auto& renderer:_renderers) {
-				auto l = renderer.lock();
-				if (!l) continue;
-				if (l->_model == model && l->_deformer == deformers)
+			auto i = std::find_if(_renderers.begin(), _renderers.end(), [m=model.get(), d=deformers.get()](const auto& q) { return q._model.get()==m && q._deformer.get()==d; });
+			if (i != _renderers.end() && i->_depVal.GetValidationIndex() == 0)
+				if (auto l = i->_renderer.lock())
 					return l;
-			}
 
-			auto newEntry = std::make_shared<RigidModelSceneInternal::RendererEntry>();
-			newEntry->_model = std::static_pointer_cast<RigidModelSceneInternal::ModelEntry>(model);
+			RigidModelSceneInternal::RendererEntry newEntry;
+			newEntry._model = std::static_pointer_cast<RigidModelSceneInternal::ModelEntry>(model);
+			auto newRenderer = std::make_shared<RigidModelSceneInternal::Renderer>();
+			newEntry._renderer = newRenderer;
 
 			std::promise<RigidModelSceneInternal::Renderer> rendererPromise;
-			newEntry->_pendingRenderer = rendererPromise.get_future();
+			newEntry._pendingRenderer = rendererPromise.get_future();
 			if (deformers) {
-				newEntry->_deformer = std::static_pointer_cast<RigidModelSceneInternal::DeformerEntry>(deformers);
+				newEntry._deformer = std::static_pointer_cast<RigidModelSceneInternal::DeformerEntry>(deformers);
 
-				::Assets::WhenAll(newEntry->_model->_completedConstruction, newEntry->_deformer->_completedConstruction).ThenConstructToPromise(
+				::Assets::WhenAll(newEntry._model->_completedConstruction, newEntry._deformer->_completedConstruction).ThenConstructToPromise(
 					std::move(rendererPromise),
 					[drawablesPool=_drawablesPool, pipelineAcceleratorPool=_pipelineAcceleratorPool, constructionContext=_constructionContext, deformAcceleratorPool=_deformAcceleratorPool](
 						auto&& promise, 
@@ -274,7 +275,7 @@ namespace SceneEngine
 					});
 			} else {
 				// When no deformers explicitly specified, we don't apply the defaults -- just use the no-deformers case
-				::Assets::WhenAll(newEntry->_model->_completedConstruction).ThenConstructToPromise(
+				::Assets::WhenAll(newEntry._model->_completedConstruction).ThenConstructToPromise(
 					std::move(rendererPromise),
 					[drawablesPool=_drawablesPool, pipelineAcceleratorPool=_pipelineAcceleratorPool, constructionContext=_constructionContext](
 						auto&& promise, 
@@ -298,8 +299,8 @@ namespace SceneEngine
 					});
 			}
 
-			::Assets::WhenAll(newEntry->_pendingRenderer).Then(
-				[dstEntryWeak=std::weak_ptr<RigidModelSceneInternal::RendererEntry>(newEntry), sceneWeak=weak_from_this()](auto rendererFuture) {
+			::Assets::WhenAll(newEntry._pendingRenderer).Then(
+				[dstEntryWeak=std::weak_ptr<RigidModelSceneInternal::Renderer>(newRenderer), sceneWeak=weak_from_this()](auto rendererFuture) {
 					auto scene = sceneWeak.lock();
 					if (scene) {
 						ScopedLock(scene->_poolLock);
@@ -319,15 +320,19 @@ namespace SceneEngine
 			// asset tracking
 			{
 				std::pair<uint64_t, ::Assets::AssetHeapRecord> rendererRecord;
-				rendererRecord.first = newEntry->_model->_referenceHolder->GetHash();
-				rendererRecord.second._initializer = GetShortDescription(*newEntry->_model->_referenceHolder);
+				rendererRecord.first = newEntry._model->_referenceHolder->GetHash();
+				rendererRecord.second._initializer = GetShortDescription(*newEntry._model->_referenceHolder);
 				rendererRecord.second._state = ::Assets::AssetState::Pending;
 				rendererRecord.second._typeCode = 0;
 				_updateSignal.Invoke(MakeIteratorRange(&rendererRecord, &rendererRecord+1));
 			}
 
-			_renderers.emplace_back(newEntry);
-			return newEntry;
+			if (i == _renderers.end()) {
+				_renderers.emplace_back(std::move(newEntry));
+			} else {
+				*i = std::move(newEntry);		// overwrite an existing one (eg, because of invalidation)
+			}
+			return newRenderer;
 		}
 
 		void OnFrameBarrier() override
@@ -337,35 +342,55 @@ namespace SceneEngine
 			std::vector<std::pair<uint64_t, ::Assets::AssetHeapRecord>> updateRecords;
 			updateRecords.reserve(_pendingUpdates.size() + _pendingExceptionUpdates.size());
 			for (auto&u:_pendingUpdates) {
-				auto l = u._dst.lock();
-				if (!l) continue;
-				l->_renderer = std::move(u._renderer);
-				l->_pendingRenderer = {};
-				// todo -- set dep val
+
+				auto dst = std::find_if(_renderers.begin(), _renderers.end(), [dst=u._dst](const auto& q) { return !q._renderer.owner_before(dst) && !dst.owner_before(q._renderer); });
+				if (dst == _renderers.end()) continue;	// couldn't find 'dst', have to ignore
+
+				auto dstLock = dst->_renderer.lock();
+				if (dstLock)
+					*dstLock = std::move(u._renderer);
+				dst->_pendingRenderer = {};
+				// todo -- set dep val (make sure we check it to see if we're immediately invalidated)
 
 				::Assets::AssetHeapRecord rendererRecord;
-				rendererRecord._initializer = GetShortDescription(*l->_model->_referenceHolder);;
+				rendererRecord._initializer = GetShortDescription(*dst->_model->_referenceHolder);;
 				rendererRecord._state = ::Assets::AssetState::Ready;
 				rendererRecord._typeCode = 0;
-				updateRecords.emplace_back(l->_model->_referenceHolder->GetHash(), std::move(rendererRecord));
+				updateRecords.emplace_back(dst->_model->_referenceHolder->GetHash(), std::move(rendererRecord));
 			}
 			_pendingUpdates.clear();
 			for (auto&u:_pendingExceptionUpdates) {
-				auto l = u._dst.lock();
-				if (!l) continue;
-				l->_depVal = std::move(u._depVal);
-				l->_pendingRenderer = {};
+
+				auto dst = std::find_if(_renderers.begin(), _renderers.end(), [dst=u._dst](const auto& q) { return !q._renderer.owner_before(dst) && !dst.owner_before(q._renderer); });
+				if (dst == _renderers.end()) continue;	// couldn't find 'dst', have to ignore
+
+				auto dstLock = dst->_renderer.lock();
+				if (dstLock)
+					*dstLock = {};
+
+				dst->_depVal = std::move(u._depVal);
+				dst->_pendingRenderer = {};
 				// todo -- record exception msg
 
 				::Assets::AssetHeapRecord rendererRecord;
-				rendererRecord._initializer = GetShortDescription(*l->_model->_referenceHolder);;
+				rendererRecord._initializer = GetShortDescription(*dst->_model->_referenceHolder);;
 				rendererRecord._state = ::Assets::AssetState::Invalid;
 				rendererRecord._typeCode = 0;
 				rendererRecord._actualizationLog = u._log;
-				updateRecords.emplace_back(l->_model->_referenceHolder->GetHash(), std::move(rendererRecord));
+				updateRecords.emplace_back(dst->_model->_referenceHolder->GetHash(), std::move(rendererRecord));
 			}
 			_pendingExceptionUpdates.clear();
-			// todo -- check invalidations
+			
+			// Check invalidations, and attempt hotreload. Only check if there's been at least one change recently, though
+			auto depValGlobalChangeIndex = ::Assets::GetDepValSys().GlobalChangeIndex();
+			if (depValGlobalChangeIndex > _lastDepValGlobalChangeIndex) {	// todo -- also have to do this if a renderer we just completed is invalidated
+				_lastDepValGlobalChangeIndex = depValGlobalChangeIndex;
+				for (const auto& r:_renderers) {
+					if (r._depVal.GetValidationIndex() != 0) {
+						// 
+					}
+				}
+			}
 
 			if (!updateRecords.empty())
 				_updateSignal.Invoke(updateRecords);
@@ -389,31 +414,34 @@ namespace SceneEngine
 		{
 			std::vector<std::pair<uint64_t, ::Assets::AssetHeapRecord>> result;
 			for (const auto&rendererEntry:_renderers) {
-				auto l = rendererEntry.lock();
+				auto l = rendererEntry._renderer.lock();
 				if (!l) continue;
-				if (!l->_renderer._drawableConstructor) continue;
+				if (!l->_drawableConstructor) continue;
 
 				::Assets::AssetHeapRecord rendererRecord;
-				rendererRecord._initializer = GetShortDescription(*l->_model->_referenceHolder);;
+				rendererRecord._initializer = GetShortDescription(*rendererEntry._model->_referenceHolder);;
 				rendererRecord._state = ::Assets::AssetState::Ready;
 				rendererRecord._typeCode = 0;
-				result.emplace_back(l->_model->_referenceHolder->GetHash(), std::move(rendererRecord));
+				result.emplace_back(rendererEntry._model->_referenceHolder->GetHash(), std::move(rendererRecord));
 			}
 
 			std::sort(result.begin(), result.end(), CompareFirst2());
 			return result;
 		}
 
-		std::future<void> FutureForRenderer(void* renderer) override
+		std::future<void> FutureForRenderer(OpaquePtr renderer) override
 		{
 			ScopedLock(_poolLock);
-			auto& rendererEntry = *(const RigidModelSceneInternal::RendererEntry*)renderer;
-			return AsOpaqueFuture(rendererEntry._pendingRenderer);
+			// we have to search for this renderer in our list
+			for (const auto& r:_renderers)
+				if (!r._renderer.owner_before(renderer) && !renderer.owner_before(r._renderer))
+					return AsOpaqueFuture(r._pendingRenderer);
+			return {};
 		}
 
 		RenderCore::BufferUploads::CommandListID GetCompletionCommandList(void* renderer) override
 		{
-			return ((const RigidModelSceneInternal::RendererEntry*)renderer)->_renderer._completionCmdList;
+			return ((const RigidModelSceneInternal::Renderer*)renderer)->_completionCmdList;
 		}
 
 		std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> GetVBResources() override
@@ -522,8 +550,7 @@ namespace SceneEngine
 
 	bool IRigidModelScene::BuildDrawablesHelper::SetRenderer(void* renderer)
 	{
-		auto* rendererEntry = (RigidModelSceneInternal::RendererEntry*)renderer;
-		_activeRenderer = &rendererEntry->_renderer;
+		_activeRenderer = (RigidModelSceneInternal::Renderer*)renderer;
 		return _activeRenderer->_drawableConstructor != nullptr;
 	}
 
