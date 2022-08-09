@@ -252,7 +252,7 @@ namespace Formatters
 
 							uint64_t hash = Hash64(nextStep._name);
 							
-							if (std::find(dynamicLocalVars.begin(), dynamicLocalVars.end(), hash)) {
+							if (std::find(dynamicLocalVars.begin(), dynamicLocalVars.end(), hash) != dynamicLocalVars.end()) {
 								usingDynamicVariable = true;
 								static const unsigned dummy = 1;
 								nextStep.SetQueryResult(dummy);	// we use 1 as a default stand-in
