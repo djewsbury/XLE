@@ -8,27 +8,11 @@
 #include <vector>
 
 namespace Utility { class IHierarchicalProfiler; }
-namespace Assets { class AssetHeapRecord; class OperationContext; }
+namespace Assets { class AssetHeapRecord; class OperationContext; class IAssetTracking; }
 
 namespace PlatformRig { namespace Overlays
 {
-	class InvalidAssetDisplay : public RenderOverlays::DebuggingDisplay::IWidget ///////////////////////////////////////////////////////////
-	{
-	public:
-		using IOverlayContext = RenderOverlays::IOverlayContext;
-		using Layout = RenderOverlays::DebuggingDisplay::Layout;
-		using Interactables = RenderOverlays::DebuggingDisplay::Interactables;
-		using InterfaceState = RenderOverlays::DebuggingDisplay::InterfaceState;
-		using InputSnapshot = PlatformRig::InputSnapshot;
-
-		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-
-		InvalidAssetDisplay();
-		~InvalidAssetDisplay();
-	private:
-		std::vector<::Assets::AssetHeapRecord> _currentRecords;
-		unsigned _currentRecordsCountDown;
-	};
+	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateInvalidAssetDisplay(std::shared_ptr<Assets::IAssetTracking> tracking);
 
 	class OperationContextDisplay : public RenderOverlays::DebuggingDisplay::IWidget ///////////////////////////////////////////////////////////
 	{

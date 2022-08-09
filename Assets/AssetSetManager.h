@@ -6,11 +6,14 @@
 
 #pragma once
 
+#include "AssetHeap.h"
 #include "../Core/Types.h"
 #include <memory>
 #include <string>
 #include <vector>
 #include <functional>
+
+namespace Utility { template<typename T> class IteratorRange; }
 
 namespace Assets
 {
@@ -18,14 +21,13 @@ namespace Assets
 	class AssetHeapRecord;
     template <typename AssetType> class DefaultAssetHeap;
 
-    class AssetSetManager
+    class AssetSetManager : public IAssetTracking
     {
     public:
         template<typename Type>
 			DefaultAssetHeap<Type>& GetSetForType();
 
         void Clear();
-        std::vector<AssetHeapRecord> LogRecords() const;
 
         unsigned GetAssetSetCount();
         const IDefaultAssetHeap* GetAssetSet(unsigned index);
@@ -35,8 +37,12 @@ namespace Assets
         void Lock();
         void Unlock();
 
+        SignalId BindUpdateSignal(std::function<UpdateSignalSig>&& fn) override;
+		void UnbindUpdateSignal(SignalId) override;
+
 		unsigned RegisterFrameBarrierCallback(std::function<void()>&& fn);
 		void DeregisterFrameBarrierCallback(unsigned);
+        void HintMarkerUpdated(uint64_t typeId);
 
         AssetSetManager();
         ~AssetSetManager();

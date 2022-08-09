@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <memory>
+
 namespace Assets
 {
     class AssetSetManager;
@@ -13,6 +15,7 @@ namespace Assets
     {
     public:
         static AssetSetManager& GetAssetSets();
+        static std::shared_ptr<AssetSetManager> GetAssetSetsPtr();
         static CompileAndAsyncManager& GetAsyncMan();
         static bool HasAssetSets();
     };

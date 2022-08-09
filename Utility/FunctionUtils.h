@@ -491,6 +491,7 @@ namespace Utility
         public:
             void operator()(Args... args) const;
             void Invoke(Args... args) const { operator()(std::forward<Args>(args)...); }
+            bool AtLeastOneBind() const { return _atLeastOneBind.load(); }
 
             SignalDelegateId Bind(std::function<void(Args...)>&& fn);
             std::function<void(Args...)> Unbind(SignalDelegateId);
@@ -513,6 +514,7 @@ namespace Utility
             SignalDelegateId _nextDelegateId = 0;
             mutable Threading::RecursiveMutex _delegatesLock;
             mutable bool _preventChangesToDelegates = false;
+            mutable std::atomic<bool> _atLeastOneBind;
         };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -544,6 +546,7 @@ namespace Utility
                     ++i;
                 }
                 _independentDelegates.erase(targetSpot, _independentDelegates.end());
+                _atLeastOneBind = !_independentDelegates.empty() || !_delegates.empty();
             }
             catch (...)
             {
@@ -560,6 +563,7 @@ namespace Utility
             assert(!_preventChangesToDelegates);
             auto delegateId = _nextDelegateId++;
             _delegates.emplace_back(AttachedDelegate{std::move(fn), delegateId});
+            _atLeastOneBind = true;
             return delegateId;
         }
 
@@ -569,6 +573,7 @@ namespace Utility
             ScopedLock(_delegatesLock);
             assert(!_preventChangesToDelegates);
             _independentDelegates.emplace_back(std::move(fn));
+            _atLeastOneBind = true;
         }
 
     template<typename... Args>
@@ -584,6 +589,7 @@ namespace Utility
             assert(i!=_delegates.end());
             auto result = std::move(i->_function);
             _delegates.erase(i);
+            _atLeastOneBind = !_independentDelegates.empty() || !_delegates.empty();
             return result;
         }
 

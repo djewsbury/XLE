@@ -37,8 +37,8 @@ namespace Assets
 			mutable std::shared_ptr<CallbackMarker> _frameBarrierCallbackMarker;
 
 			void RegisterFrameBarrierCallbackAlreadyLocked();
-			void DisableFrameBarrierCallbackAlreadyLocked() const;
-			void EnsureFrameBarrierCallbackStopped() const;
+			void DisableFrameBarrierCallbackAlreadyLocked(uint64_t typeHint) const;
+			void EnsureFrameBarrierCallbackStopped(uint64_t typeHint) const;
 			virtual void OnFrameBarrier(std::unique_lock<Threading::Mutex>& lock) = 0;
 
 			std::string _initializer;	// stored for debugging purposes
@@ -130,7 +130,7 @@ namespace Assets
 			inline const DependencyValidation& GetDependencyValidation(const Type&) { static DependencyValidation dummy; return dummy; }
 
 		unsigned RegisterFrameBarrierCallback(std::function<void()>&& fn);
-		void DeregisterFrameBarrierCallback(unsigned);
+		void DeregisterFrameBarrierCallback(unsigned, uint64_t);
 
 		void CheckMainThreadStall(std::chrono::steady_clock::time_point& stallStartTime);
 
@@ -334,7 +334,7 @@ namespace Assets
 			_state = newState;
 
 			assert(!_pollingFunction);
-			DisableFrameBarrierCallbackAlreadyLocked();
+			DisableFrameBarrierCallbackAlreadyLocked(typeid(Type).hash_code());
 		}
 	}
 
@@ -346,7 +346,7 @@ namespace Assets
 		//		2. move background state into foreground state
 		// If neither of these are relevant now, we can go ahead and clear it
 		if (_state != ::Assets::AssetState::Pending && !_pollingFunction)
-			DisableFrameBarrierCallbackAlreadyLocked();
+			DisableFrameBarrierCallbackAlreadyLocked(typeid(Type).hash_code());
 	}
 
 	template<typename Type>
@@ -472,7 +472,7 @@ namespace Assets
 				#endif
 			}
 
-			that->DisableFrameBarrierCallbackAlreadyLocked();
+			that->DisableFrameBarrierCallbackAlreadyLocked(typeid(Type).hash_code());
 			DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
 			return (AssetState)that->_state;
 		}
@@ -526,7 +526,7 @@ namespace Assets
 			#endif
 		}
 
-		that->DisableFrameBarrierCallbackAlreadyLocked();
+		that->DisableFrameBarrierCallbackAlreadyLocked(typeid(Type).hash_code());
 		DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
 		return (AssetState)that->_state;
 	}
@@ -551,11 +551,11 @@ namespace Assets
 		// asset and goes immediately into ready state
 		_pendingPromise.set_value(newAsset);
 		ScopedLock(_lock);
-		DisableFrameBarrierCallbackAlreadyLocked();
 		_actualized = std::move(newAsset);
 		_actualizationLog = {};
 		_actualizedDepVal = Internal::GetDependencyValidation(newAsset);
 		_state = _actualized ? AssetState::Ready : AssetState::Invalid;
+		DisableFrameBarrierCallbackAlreadyLocked(typeid(Type).hash_code());
 	}
 
 	template<typename Type>
@@ -579,8 +579,6 @@ namespace Assets
 			// have completely immediately as well, and actually hit this same codeblock and moved the asset into 
 			// ready/invalid state already.
 			// assert(_state == AssetState::Pending);
-			if (!_pollingFunction)		// "newFunction" might actually set a new polling function on the future
-				DisableFrameBarrierCallbackAlreadyLocked();
 			if (_state == AssetState::Pending && _pendingFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
 				AssetState newState;
 				Internal::TryGetAssetFromFuture(_pendingFuture, newState, _actualized, _actualizationLog, _actualizedDepVal);
@@ -589,6 +587,8 @@ namespace Assets
 				// we should also consider a cache flush here to ensure the CPU commits in the correct order
 				_state = newState;
 			}
+			if (!_pollingFunction)		// "newFunction" might actually set a new polling function on the future
+				DisableFrameBarrierCallbackAlreadyLocked(typeid(Type).hash_code());
 			return;
 		}
 
@@ -605,7 +605,7 @@ namespace Assets
 		Marker<Type>::Marker(Marker&& moveFrom)
 	{
 		// Note calls to EnsureFrameBarrierCallbackStopped outside of the main lock
-		moveFrom.EnsureFrameBarrierCallbackStopped();
+		moveFrom.EnsureFrameBarrierCallbackStopped(typeid(Type).hash_code());
 
 		ScopedLock(moveFrom._lock);
 
@@ -632,8 +632,8 @@ namespace Assets
 		Marker<Type>& Marker<Type>::operator=(Marker&& moveFrom)
 	{
 		// Note calls to EnsureFrameBarrierCallbackStopped outside of the main lock
-		EnsureFrameBarrierCallbackStopped();
-		moveFrom.EnsureFrameBarrierCallbackStopped();
+		EnsureFrameBarrierCallbackStopped(typeid(Type).hash_code());
+		moveFrom.EnsureFrameBarrierCallbackStopped(typeid(Type).hash_code());
 
 		std::lock(_lock, moveFrom._lock);
         std::lock_guard<Threading::Mutex> lk1(_lock, std::adopt_lock);
@@ -678,7 +678,7 @@ namespace Assets
 	template<typename Type>
 		Marker<Type>::~Marker() 
 	{
-		EnsureFrameBarrierCallbackStopped();		// stop the frame barrier callback early, before we start destroying any members
+		EnsureFrameBarrierCallbackStopped(typeid(Type).hash_code());		// stop the frame barrier callback early, before we start destroying any members
 
 		// note -- if you get a broken_promise exception from here, it means that the future is begin
 		// destroyed without anyone adopting the promise to fulfill it
@@ -721,7 +721,7 @@ namespace Assets
 				});
 		}
 
-		inline void MarkerShared::DisableFrameBarrierCallbackAlreadyLocked() const
+		inline void MarkerShared::DisableFrameBarrierCallbackAlreadyLocked(uint64_t typeHint) const
 		{
 			// Deregistered the callback, but don't stall waiting if we're currently within a callback. That callback
 			// might be waiting on _lock right now, and so could complete when _lock is released
@@ -730,10 +730,10 @@ namespace Assets
 
 			auto* oldParent = _frameBarrierCallbackMarker->_parent.exchange(nullptr);
 			if (oldParent)
-				Internal::DeregisterFrameBarrierCallback(_frameBarrierCallbackMarker->_markerId);
+				Internal::DeregisterFrameBarrierCallback(_frameBarrierCallbackMarker->_markerId, typeHint);
 		}
 
-		inline void MarkerShared::EnsureFrameBarrierCallbackStopped() const
+		inline void MarkerShared::EnsureFrameBarrierCallbackStopped(uint64_t typeHint) const
 		{
 			// This is similar to DisableFrameBarrierCallbackAlreadyLocked(), except it also stalls waiting
 			// for the callback if it is currently running in a different thread.
@@ -750,7 +750,7 @@ namespace Assets
 			std::shared_ptr<CallbackMarker> callbackMarker;
 			{
 				ScopedLock(_lock);
-				DisableFrameBarrierCallbackAlreadyLocked();
+				DisableFrameBarrierCallbackAlreadyLocked(typeHint);
 				callbackMarker = std::move(_frameBarrierCallbackMarker);
 			}
 			if (callbackMarker) {
@@ -762,7 +762,7 @@ namespace Assets
 				// another callback as it completes.
 				// It should be unlikely for this to chain more than once more, because that would require the new
 				// callback to also be running at the same time we're processing on this thread
-				EnsureFrameBarrierCallbackStopped();
+				EnsureFrameBarrierCallbackStopped(typeHint);
 			}
 		}
 
@@ -772,7 +772,7 @@ namespace Assets
 
 		inline MarkerShared::~MarkerShared() 
 		{
-			EnsureFrameBarrierCallbackStopped();
+			EnsureFrameBarrierCallbackStopped(0);
 		}
 	}
 }

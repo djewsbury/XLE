@@ -17,6 +17,11 @@ namespace Assets
 		return *s_assetSetsManagerInstance.lock();
 	}
 
+	std::shared_ptr<AssetSetManager> Services::GetAssetSetsPtr()
+	{
+		return s_assetSetsManagerInstance.lock();
+	}
+
 	CompileAndAsyncManager& Services::GetAsyncMan()
 	{
 		return *s_compileAndAsyncManager.lock();

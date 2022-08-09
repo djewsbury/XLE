@@ -19,11 +19,10 @@
 #include "../RenderOverlays/DebuggingDisplay.h"
 #include "../ConsoleRig/AttachablePtr.h"
 #include "../Assets/DepVal.h"
+#include "../Assets/AssetServices.h"
+#include "../Assets/AssetSetManager.h"
 #include "../Utility/Profiling/CPUProfiler.h"
 #include "../Utility/MemoryUtils.h"
-
-/*#include "../RenderCore/Techniques/Services.h"
-#include "DebuggingDisplays/BufferUploadDisplay.h"*/
 
 namespace PlatformRig
 {
@@ -118,7 +117,7 @@ namespace PlatformRig
 			std::make_shared<PlatformRig::Overlays::BufferUploadDisplay>(&RenderCore::Techniques::Services::GetBufferUploads()),
 			"[Profiler] Buffer uploads");*/
 
-		debugSys.Register(std::make_shared<PlatformRig::Overlays::InvalidAssetDisplay>(), "[Console] Invalid asset display");
+		debugSys.Register(PlatformRig::Overlays::CreateInvalidAssetDisplay(::Assets::Services::GetAssetSetsPtr()), "[Console] Invalid asset display");
 		debugSys.SwitchToScreen("[Console] Invalid asset display");
 		// debugSys.SwitchToScreen("[Profiler] GPU Profiler");
 	}

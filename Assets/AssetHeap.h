@@ -7,6 +7,7 @@
 #include "../Utility/Threading/Mutex.h"
 #endif
 #include <memory>
+#include <functional>
 
 namespace Assets
 {
@@ -20,18 +21,27 @@ namespace Assets
 		DependencyValidation	_depVal;
 		Blob		_actualizationLog; 
 		uint64_t	_typeCode;
-		uint64_t	_idInAssetHeap;
         unsigned    _initializationCount = 0;
 	};
 
-	class IDefaultAssetHeap
+	class IAssetTracking
+	{
+	public:
+		using SignalId = unsigned;
+		using UpdateSignalSig = void(IteratorRange<const std::pair<uint64_t, AssetHeapRecord>*>);
+		virtual SignalId BindUpdateSignal(std::function<UpdateSignalSig>&& fn) = 0;
+		virtual void UnbindUpdateSignal(SignalId) = 0;
+		virtual ~IAssetTracking();
+	};
+
+	class IDefaultAssetHeap : public IAssetTracking
 	{
 	public:
 		virtual uint64_t		GetTypeCode() const = 0;
 		virtual std::string		GetTypeName() const = 0;
 		virtual void            Clear() = 0;
 
-		virtual std::vector<AssetHeapRecord>	LogRecords() const = 0;
+		virtual void UpdateMarkerStates() = 0;
 
 		virtual ~IDefaultAssetHeap();
 	};
@@ -51,11 +61,13 @@ namespace Assets
 		template<typename... Params>
 			uint64_t SetShadowingAsset(AssetType&& newShadowingAsset, Params...);
 
-		void            Clear();
-		uint64_t		GetTypeCode() const;
-		std::string		GetTypeName() const;
+		void            Clear() override;
+		uint64_t		GetTypeCode() const override;
+		std::string		GetTypeName() const override;
 
-		std::vector<AssetHeapRecord>		LogRecords() const;
+		SignalId BindUpdateSignal(std::function<UpdateSignalSig>&& fn) override;
+		void UnbindUpdateSignal(SignalId) override;
+		void UpdateMarkerStates() override;
 
 		DefaultAssetHeap();
 		~DefaultAssetHeap();
@@ -65,6 +77,10 @@ namespace Assets
 		mutable Threading::Mutex _lock;		
 		std::vector<std::pair<uint64_t, PtrToFuture>> _assets;
 		std::vector<std::pair<uint64_t, PtrToFuture>> _shadowingAssets;
+
+		std::vector<AssetState> _lastKnownAssetStates;
+		std::vector<std::pair<uint64_t, AssetHeapRecord>> LogRecordsAlreadyLocked() const;
+		Signal<IteratorRange<const std::pair<uint64_t, AssetHeapRecord>*>> _updateSignal;
 	};
 
 	template<typename AssetType>
@@ -105,8 +121,11 @@ namespace Assets
 			newFuture = std::make_shared<Marker<AssetType>>(stringInitializer);
 			if (i != _assets.end() && i->first == hash) {
 				i->second = newFuture;
-			} else 
+				_lastKnownAssetStates[std::distance(_assets.begin(), i)] = AssetState::Pending;
+			} else {
+				_lastKnownAssetStates.insert(_lastKnownAssetStates.begin() + std::distance(_assets.begin(), i), AssetState::Pending);
 				_assets.insert(i, std::make_pair(hash, newFuture));
+			}
 		}
 
 		// note -- call AutoConstructToPromise outside of the mutex lock, because this operation can be expensive
@@ -162,20 +181,57 @@ namespace Assets
     {
         ScopedLock(_lock);
         _assets.clear();
+		_lastKnownAssetStates.clear();
         _shadowingAssets.clear();
     }
 
 	template<typename AssetType>
-		auto DefaultAssetHeap<AssetType>::LogRecords() const -> std::vector<AssetHeapRecord>
+		auto DefaultAssetHeap<AssetType>::BindUpdateSignal(std::function<UpdateSignalSig>&& fn) -> SignalId
 	{
 		ScopedLock(_lock);
-		std::vector<AssetHeapRecord> result;
+		auto existingRecords = LogRecordsAlreadyLocked();
+		fn(MakeIteratorRange(existingRecords));	// catchup with the current state of the heap
+		auto res = _updateSignal.Bind(std::move(fn));
+		return res;
+	}
+
+	template<typename AssetType>
+		void DefaultAssetHeap<AssetType>::UnbindUpdateSignal(SignalId signalId)
+	{
+		ScopedLock(_lock);
+		_updateSignal.Unbind(signalId);
+	}
+
+	template<typename AssetType>
+		void DefaultAssetHeap<AssetType>::UpdateMarkerStates()
+	{
+		if (!_updateSignal.AtLeastOneBind()) return;
+		ScopedLock(_lock);
+		assert(_assets.size() == _lastKnownAssetStates.size());
+		std::pair<uint64_t, AssetHeapRecord> updates[_assets.size()];
+		unsigned updateCount = 0;
+		for (unsigned c=0; c<_assets.size(); ++c) {
+			auto& a = _assets[c];
+			auto newState = a.second->GetAssetState();
+			if (newState != _lastKnownAssetStates[c]) {
+				updates[updateCount++] = {a.first, AssetHeapRecord{ a.second->Initializer(), a.second->GetAssetState(), a.second->GetDependencyValidation(), a.second->GetActualizationLog(), GetTypeCode() }};
+				_lastKnownAssetStates[c] = newState;
+			}
+		}
+		if (updateCount)
+			_updateSignal.Invoke(MakeIteratorRange(updates, &updates[updateCount]));
+	}
+
+	template<typename AssetType>
+		auto DefaultAssetHeap<AssetType>::LogRecordsAlreadyLocked() const -> std::vector<std::pair<uint64_t, AssetHeapRecord>>
+	{
+		std::vector<std::pair<uint64_t, AssetHeapRecord>> result;
 		result.reserve(_assets.size() + _shadowingAssets.size());
 		auto typeCode = GetTypeCode();
 		for (const auto&a : _assets)
-			result.push_back({ a.second->Initializer(), a.second->GetAssetState(), a.second->GetDependencyValidation(), a.second->GetActualizationLog(), typeCode, a.first });
+			result.emplace_back(a.first, AssetHeapRecord{ a.second->Initializer(), a.second->GetAssetState(), a.second->GetDependencyValidation(), a.second->GetActualizationLog(), typeCode });
 		for (const auto&a : _shadowingAssets)
-			result.push_back({ a.second->Initializer(), a.second->GetAssetState(), a.second->GetDependencyValidation(), a.second->GetActualizationLog(), typeCode, a.first });
+			result.emplace_back(a.first, AssetHeapRecord{ a.second->Initializer(), a.second->GetAssetState(), a.second->GetDependencyValidation(), a.second->GetActualizationLog(), typeCode });
 		return result;
 	}
 
