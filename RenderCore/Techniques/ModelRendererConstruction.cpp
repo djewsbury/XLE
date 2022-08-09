@@ -32,6 +32,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_future<std::shared_ptr<Assets::SkeletonScaffold>> _skeletonScaffoldMarker;
 		std::shared_ptr<Assets::SkeletonScaffold> _skeletonScaffoldPtr;
+		std::string _skeletonScaffoldInitializer;
 		uint64_t _skeletonScaffoldHashValue = 0u;
 
 		bool _sealed = false;
@@ -46,7 +47,10 @@ namespace RenderCore { namespace Techniques
 		assert(_internal && !_internal->_sealed);
 		auto originalDisableHash = _internal->_disableHash;
 		SetModelScaffold(::Assets::MakeAsset<Internal::ModelScaffoldPtr>(model), model.AsString());
-		SetMaterialScaffold(::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(material, model), material.AsString());
+		if (!material.IsEmpty()) {
+			SetMaterialScaffold(::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(material, model), material.AsString());
+		} else
+			SetMaterialScaffold(::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(model, model), {});
 		_internal->_disableHash = originalDisableHash;
 		if (_internal->_elementHashValues.size() < _internal->_elementCount)
 			_internal->_elementHashValues.resize(_internal->_elementCount, 0);
@@ -59,7 +63,10 @@ namespace RenderCore { namespace Techniques
 		assert(_internal && !_internal->_sealed);
 		auto originalDisableHash = _internal->_disableHash;
 		SetModelScaffold(::Assets::MakeAsset<Internal::ModelScaffoldPtr>(opContext, model), model.AsString());
-		SetMaterialScaffold(::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(std::move(opContext), material, model), material.AsString());
+		if (!material.IsEmpty()) {
+			SetMaterialScaffold(::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(std::move(opContext), material, model), material.AsString());
+		} else
+			SetMaterialScaffold(::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(std::move(opContext), model, model), {});
 		_internal->_disableHash = originalDisableHash;
 		if (_internal->_elementHashValues.size() < _internal->_elementCount)
 			_internal->_elementHashValues.resize(_internal->_elementCount, 0);
@@ -160,12 +167,14 @@ namespace RenderCore { namespace Techniques
 		_internal->_skeletonScaffoldHashValue = Hash64(skeleton);
 		_internal->_skeletonScaffoldPtr = nullptr;
 		_internal->_skeletonScaffoldMarker = ::Assets::MakeAsset<std::shared_ptr<Assets::SkeletonScaffold>>(std::move(opContext), skeleton);
+		_internal->_skeletonScaffoldInitializer = skeleton.AsString();
 	}
-	void ModelRendererConstruction::SetSkeletonScaffold(std::shared_future<std::shared_ptr<Assets::SkeletonScaffold>> skeleton, std::string)
+	void ModelRendererConstruction::SetSkeletonScaffold(std::shared_future<std::shared_ptr<Assets::SkeletonScaffold>> skeleton, std::string initializer)
 	{
 		_internal->_disableHash = true;
 		_internal->_skeletonScaffoldPtr = nullptr;
 		_internal->_skeletonScaffoldMarker = std::move(skeleton);
+		_internal->_skeletonScaffoldInitializer = initializer;
 	}
 	void ModelRendererConstruction::SetSkeletonScaffold(const std::shared_ptr<Assets::SkeletonScaffold>& skeleton)
 	{
@@ -216,6 +225,10 @@ namespace RenderCore { namespace Techniques
 			},
 			[strongThis]() mutable {
 				assert(strongThis->GetAssetState() != ::Assets::AssetState::Pending);
+				// query futures to propagate exceptions
+				for (auto& f:strongThis->_internal->_modelScaffoldMarkers) f.second.get();
+				for (auto& f:strongThis->_internal->_materialScaffoldMarkers) f.second.get();
+				if (strongThis->_internal->_skeletonScaffoldMarker.valid()) strongThis->_internal->_skeletonScaffoldMarker.get();
 				return std::move(strongThis);
 			});
 	}
@@ -237,7 +250,99 @@ namespace RenderCore { namespace Techniques
 			}
 			hasPending |= state == std::future_status::timeout;
 		}
+		if (_internal->_skeletonScaffoldMarker.valid()) {
+			auto state = _internal->_skeletonScaffoldMarker.wait_for(std::chrono::seconds(0));
+			if (state == std::future_status::ready) {
+				// only way to check for invalid assets, unfortunately. not super efficient!
+				TRY { _internal->_skeletonScaffoldMarker.get();
+				} CATCH(...) {
+					return ::Assets::AssetState::Invalid;
+				} CATCH_END
+			}
+			hasPending |= state == std::future_status::timeout;
+		}
 		return hasPending ? ::Assets::AssetState::Pending : ::Assets::AssetState::Ready;
+	}
+
+	bool ModelRendererConstruction::IsInvalidated() const
+	{
+		// expecting to have already waited on this construction -- because we're querying all of the futures here
+		for (const auto& m:_internal->_modelScaffoldMarkers)
+			if (m.second.valid() && m.second.get()->GetDependencyValidation().GetValidationIndex() != 0)
+				return true;
+		for (const auto& m:_internal->_modelScaffoldPtrs)
+			if (m.second && m.second->GetDependencyValidation().GetValidationIndex() != 0)
+				return true;
+		for (const auto& m:_internal->_materialScaffoldMarkers)
+			if (m.second.valid() && m.second.get()->GetDependencyValidation().GetValidationIndex() != 0)
+				return true;
+		for (const auto& m:_internal->_materialScaffoldPtrs)
+			if (m.second && m.second->GetDependencyValidation().GetValidationIndex() != 0)
+				return true;
+		if (_internal->_skeletonScaffoldMarker.valid() && _internal->_skeletonScaffoldMarker.get()->GetDependencyValidation().GetValidationIndex() != 0)
+			return true;
+		if (_internal->_skeletonScaffoldPtr && _internal->_skeletonScaffoldPtr->GetDependencyValidation().GetValidationIndex() != 0)
+			return true;
+		return false;
+	}
+
+	std::shared_ptr<ModelRendererConstruction> ModelRendererConstruction::Reconstruct(const ModelRendererConstruction& src, std::shared_ptr<::Assets::OperationContext> opContext)
+	{
+		// rebuild the construction, querying all resources again, incase they need hot reloading
+		auto result = std::make_shared<ModelRendererConstruction>();
+
+		// skeleton
+		result->_internal->_skeletonScaffoldPtr = src._internal->_skeletonScaffoldPtr;
+		result->_internal->_skeletonScaffoldInitializer = src._internal->_skeletonScaffoldInitializer;
+		result->_internal->_skeletonScaffoldHashValue = src._internal->_skeletonScaffoldHashValue;
+		if (src._internal->_skeletonScaffoldMarker.valid() && !src._internal->_skeletonScaffoldInitializer.empty())
+			result->_internal->_skeletonScaffoldMarker = ::Assets::MakeAsset<std::shared_ptr<Assets::SkeletonScaffold>>(std::move(opContext), result->_internal->_skeletonScaffoldInitializer);
+
+		// model & material markers
+		result->_internal->_modelScaffoldPtrs = src._internal->_modelScaffoldPtrs;
+		result->_internal->_materialScaffoldPtrs = src._internal->_materialScaffoldPtrs;
+		result->_internal->_modelScaffoldInitializers = src._internal->_modelScaffoldInitializers;
+		result->_internal->_materialScaffoldInitializers = src._internal->_materialScaffoldInitializers;
+
+		for (unsigned eleIdx=0; eleIdx<src._internal->_elementCount; ++eleIdx) {
+			auto modelName = LowerBound(src._internal->_modelScaffoldInitializers, eleIdx);
+			auto modelMarker = LowerBound(src._internal->_modelScaffoldMarkers, eleIdx);
+			auto materialName = LowerBound(src._internal->_materialScaffoldInitializers, eleIdx);
+			auto materialMarker = LowerBound(src._internal->_materialScaffoldMarkers, eleIdx);
+
+			if (modelMarker != src._internal->_modelScaffoldMarkers.end() && modelMarker->first == eleIdx && modelMarker->second.valid()) {
+				if (modelName != src._internal->_modelScaffoldInitializers.end() && modelName->first == eleIdx) {
+					if (opContext) result->_internal->_modelScaffoldMarkers.emplace_back(eleIdx, ::Assets::MakeAsset<Internal::ModelScaffoldPtr>(opContext, modelName->second));
+					else result->_internal->_modelScaffoldMarkers.emplace_back(eleIdx, ::Assets::MakeAsset<Internal::ModelScaffoldPtr>(modelName->second));
+				} else {
+					result->_internal->_modelScaffoldMarkers.emplace_back(*modelMarker);
+				}
+			}
+
+			if (materialMarker != src._internal->_materialScaffoldMarkers.end() && materialMarker->first == eleIdx && materialMarker->second.valid()) {
+				if (modelName != src._internal->_modelScaffoldInitializers.end() && modelName->first == eleIdx) {
+					if (materialName != src._internal->_materialScaffoldInitializers.end() && materialName->first == eleIdx) {
+						if (opContext) result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(opContext, materialName->second, modelName->second));
+						else result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(materialName->second, modelName->second));
+					} else {
+						if (opContext) result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(opContext, modelName->second, modelName->second));
+						else result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(modelName->second, modelName->second));
+					}
+				} else {
+					result->_internal->_materialScaffoldMarkers.emplace_back(*materialMarker);
+				}
+			}
+		}
+
+		// etc
+		result->_internal->_elementCount = src._internal->_elementCount;
+		result->_internal->_elementHashValues = src._internal->_elementHashValues;
+		result->_internal->_hash = src._internal->_hash;
+		result->_internal->_disableHash = src._internal->_disableHash;
+		result->_internal->_names = src._internal->_names;
+		result->_internal->_sealed = false;
+
+		return result;
 	}
 
 	auto ModelRendererConstruction::AddElement() -> ElementConstructor

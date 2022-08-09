@@ -72,6 +72,7 @@ namespace SceneEngine
 		{
 			std::weak_ptr<Renderer> _dst;
 			Renderer _renderer;
+			::Assets::DependencyValidation _depVal;
 		};
 
 		struct PendingExceptionUpdate
@@ -153,7 +154,7 @@ namespace SceneEngine
 		std::shared_ptr<::Assets::OperationContext> _loadingContext;
 		Config _cfg;
 
-		Threading::Mutex _poolLock;
+		Threading::RecursiveMutex _poolLock;
 		
 		std::vector<std::pair<uint64_t, std::weak_ptr<RigidModelSceneInternal::ModelEntry>>> _modelEntries;
 		std::vector<std::weak_ptr<RigidModelSceneInternal::DeformerEntry>> _deformerEntries;
@@ -213,7 +214,19 @@ namespace SceneEngine
 
 			RigidModelSceneInternal::RendererEntry newEntry;
 			newEntry._model = std::static_pointer_cast<RigidModelSceneInternal::ModelEntry>(model);
-			auto newRenderer = std::make_shared<RigidModelSceneInternal::Renderer>();
+
+			if (newEntry._model->_completedConstruction.wait_for(std::chrono::seconds(0)) == std::future_status::ready && newEntry._model->_referenceHolder->IsInvalidated()) {
+				// scaffolds invalidated -- 
+				auto rebuiltConstruction = RenderCore::Techniques::ModelRendererConstruction::Reconstruct(*newEntry._model->_referenceHolder, _loadingContext);
+				std::promise<std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>> promise;
+				newEntry._model->_completedConstruction = promise.get_future();
+				rebuiltConstruction->FulfillWhenNotPending(std::move(promise));
+				newEntry._model->_referenceHolder = std::move(rebuiltConstruction);
+			}
+
+			std::shared_ptr<RigidModelSceneInternal::Renderer> newRenderer;
+			if (i != _renderers.end()) newRenderer = i->_renderer.lock();		// attempt to use the existing one if we're rebuilding and invalidated renderer
+			if (!newRenderer) newRenderer = std::make_shared<RigidModelSceneInternal::Renderer>();
 			newEntry._renderer = newRenderer;
 
 			std::promise<RigidModelSceneInternal::Renderer> rendererPromise;
@@ -306,7 +319,8 @@ namespace SceneEngine
 						ScopedLock(scene->_poolLock);
 						TRY {
 							auto renderer = rendererFuture.get();
-							scene->_pendingUpdates.emplace_back(RigidModelSceneInternal::PendingUpdate { dstEntryWeak, std::move(renderer) });
+							auto depVal = renderer._drawableConstructor->GetDependencyValidation();
+							scene->_pendingUpdates.emplace_back(RigidModelSceneInternal::PendingUpdate { dstEntryWeak, std::move(renderer), std::move(depVal) });
 						} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
 							scene->_pendingExceptionUpdates.emplace_back(RigidModelSceneInternal::PendingExceptionUpdate { dstEntryWeak, e.GetActualizationLog(), e.GetDependencyValidation() });
 						} CATCH(const ::Assets::Exceptions::InvalidAsset& e) {
@@ -341,6 +355,7 @@ namespace SceneEngine
 			ScopedLock(_poolLock);
 			std::vector<std::pair<uint64_t, ::Assets::AssetHeapRecord>> updateRecords;
 			updateRecords.reserve(_pendingUpdates.size() + _pendingExceptionUpdates.size());
+			bool hasImmediateInvalidation = false;
 			for (auto&u:_pendingUpdates) {
 
 				auto dst = std::find_if(_renderers.begin(), _renderers.end(), [dst=u._dst](const auto& q) { return !q._renderer.owner_before(dst) && !dst.owner_before(q._renderer); });
@@ -350,7 +365,8 @@ namespace SceneEngine
 				if (dstLock)
 					*dstLock = std::move(u._renderer);
 				dst->_pendingRenderer = {};
-				// todo -- set dep val (make sure we check it to see if we're immediately invalidated)
+				dst->_depVal = std::move(u._depVal);
+				hasImmediateInvalidation |= dst->_depVal.GetValidationIndex() != 0;
 
 				::Assets::AssetHeapRecord rendererRecord;
 				rendererRecord._initializer = GetShortDescription(*dst->_model->_referenceHolder);;
@@ -368,9 +384,9 @@ namespace SceneEngine
 				if (dstLock)
 					*dstLock = {};
 
-				dst->_depVal = std::move(u._depVal);
 				dst->_pendingRenderer = {};
-				// todo -- record exception msg
+				dst->_depVal = std::move(u._depVal);
+				hasImmediateInvalidation |= dst->_depVal.GetValidationIndex() != 0;
 
 				::Assets::AssetHeapRecord rendererRecord;
 				rendererRecord._initializer = GetShortDescription(*dst->_model->_referenceHolder);;
@@ -382,12 +398,15 @@ namespace SceneEngine
 			_pendingExceptionUpdates.clear();
 			
 			// Check invalidations, and attempt hotreload. Only check if there's been at least one change recently, though
+			// we also have to do it if a completion came back immediately in the invalidated state
 			auto depValGlobalChangeIndex = ::Assets::GetDepValSys().GlobalChangeIndex();
-			if (depValGlobalChangeIndex > _lastDepValGlobalChangeIndex) {	// todo -- also have to do this if a renderer we just completed is invalidated
+			if (depValGlobalChangeIndex > _lastDepValGlobalChangeIndex || hasImmediateInvalidation) {
 				_lastDepValGlobalChangeIndex = depValGlobalChangeIndex;
 				for (const auto& r:_renderers) {
 					if (r._depVal.GetValidationIndex() != 0) {
-						// 
+						// call CreateRenderer again to reconstruct this renderer
+						auto res = CreateRenderer(r._model, r._deformer);
+						assert(!res.owner_before(r._renderer) && !r._renderer.owner_before(res)); (void)res;
 					}
 				}
 			}

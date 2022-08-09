@@ -66,6 +66,8 @@ namespace RenderCore { namespace Techniques
 
 		void FulfillWhenNotPending(std::promise<std::shared_ptr<ModelRendererConstruction>>&& promise);
 		::Assets::AssetState GetAssetState() const;
+		bool IsInvalidated() const;
+		static std::shared_ptr<ModelRendererConstruction> Reconstruct(const ModelRendererConstruction& src, std::shared_ptr<::Assets::OperationContext> opContext = nullptr);
 
 		ModelRendererConstruction();
 		~ModelRendererConstruction();
