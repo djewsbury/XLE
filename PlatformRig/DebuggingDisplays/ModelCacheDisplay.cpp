@@ -24,6 +24,12 @@ namespace PlatformRig { namespace Overlays
 		
 		std::shared_ptr<SceneEngine::IRigidModelScene> _modelCache;
 
+		Threading::Mutex _currentRecordsLock;
+		std::vector<std::pair<uint64_t,::Assets::AssetHeapRecord>> _modelRecords;
+		std::vector<std::pair<uint64_t,::Assets::AssetHeapRecord>> _materialRecords;
+		std::vector<std::pair<uint64_t,::Assets::AssetHeapRecord>> _rendererRecords;
+		unsigned _signalId;
+
 		RenderOverlays::DebuggingDisplay::ScrollBar _scrollBar;
 		float _scrollOffsets[3];
 		unsigned _tab = 0;
@@ -52,7 +58,7 @@ namespace PlatformRig { namespace Overlays
                 DrawButton(context, s_tabNames[t], buttonsLayout.AllocateFullHeightFraction(1.f/float(dimof(s_tabNames))), interactables, interfaceState);
 		}
 
-    	auto records = _modelCache->LogRecords();
+		ScopedLock(_currentRecordsLock);
 		{
 			auto oldBetweenAllocations = layout._paddingBetweenAllocations;
 			layout._paddingBetweenAllocations = 0;
@@ -60,7 +66,7 @@ namespace PlatformRig { namespace Overlays
 			tableArea._paddingInternalBorder = 2;
 			auto scrollBarLocation = layout.AllocateFullHeight(layout.GetWidthRemaining());
 			layout._paddingBetweenAllocations = oldBetweenAllocations;
-			unsigned entryCount = 0, sourceEntryCount = 0;
+			unsigned entryCount = 0, sourceEntryCount = 0, totalHeightUsedByEntries = 0;
 
 			// fill in the background now, so it doesn't have to be interleaved with rendering the entry text elements
 			context.DrawQuad(
@@ -69,21 +75,20 @@ namespace PlatformRig { namespace Overlays
                     
 			const auto headerColor = RenderOverlays::ColorB::Blue;
             std::vector<Float3> lines;
+			auto tableAreaHeight = tableArea.GetMaximumSize().Height() - tableArea._paddingInternalBorder;
 			if (_tab == 0) {
 				std::pair<std::string, unsigned> headers0[] = { 
-					std::make_pair("Model", 900), std::make_pair("Material", 900), std::make_pair("Decay", 50) };
+					std::make_pair("Model", 900), std::make_pair("Material", 900) };
 
 				DrawTableHeaders(context, tableArea.AllocateFullWidth(28), MakeIteratorRange(headers0), headerColor, &interactables);
-				std::sort(records._modelRenderers.begin(),records._modelRenderers.end(), [](const auto& lhs, const auto& rhs) { return lhs._model < rhs._model; });
-				for (const auto& r:records._modelRenderers) {
+				for (const auto& r:_rendererRecords) {
 					if (entryCount < _scrollOffsets[_tab]) {
 						++entryCount;
 						continue;
 					}
 					std::map<std::string, TableElement> entries;
-					entries["Model"] = r._model;
-					entries["Material"] = r._material;
-					entries["Decay"] = std::to_string(r._decayFrames);
+					entries["Model"] = r.second._initializer;
+					// entries["Material"] = r._material;
 					Layout sizingLayout = tableArea;
 					auto rect = sizingLayout.AllocateFullWidthFraction(1.f);
 					if (rect.Height() <= 0) break;
@@ -93,24 +98,24 @@ namespace PlatformRig { namespace Overlays
 					lines.push_back(AsPixelCoords(Coord2(lineRect._topLeft[0]+8, lineRect._topLeft[1]+4)));
 					lines.push_back(AsPixelCoords(Coord2(lineRect._bottomRight[0]-8, lineRect._topLeft[1]+4)));
 					++entryCount;
+					totalHeightUsedByEntries += usedSpace + 8 + 2 * tableArea._paddingInternalBorder;
 				}
-				sourceEntryCount = (unsigned)records._modelRenderers.size();
+				sourceEntryCount = (unsigned)_rendererRecords.size();
 			} else if (_tab == 1 || _tab == 2) {
 				std::pair<std::string, unsigned> headers0[] = { 
 					std::make_pair("Name", 3000)
 				};
 
 				DrawTableHeaders(context, tableArea.AllocateFullWidth(28), MakeIteratorRange(headers0), headerColor, &interactables);
-                auto& recordList = (_tab == 1) ? records._modelScaffolds : records._materialScaffolds;
-				std::sort(recordList.begin(), recordList.end(), [](const auto& lhs, const auto& rhs) { return lhs._initializer < rhs._initializer; });
+                auto recordList = (_tab == 1) ? MakeIteratorRange(_modelRecords) : MakeIteratorRange(_materialRecords);
 				for (const auto& r:recordList) {
 					if (entryCount < _scrollOffsets[_tab]) {
 						++entryCount;
 						continue;
 					}
 					std::map<std::string, TableElement> entries;
-                    entries["Name"] = r._initializer;
-                    if (r._state != ::Assets::AssetState::Ready) entries["Name"]._bkColour = 0xffff3f3f;
+                    entries["Name"] = r.second._initializer;
+                    if (r.second._state != ::Assets::AssetState::Ready) entries["Name"]._bkColour = 0xffff3f3f;
 					Layout sizingLayout = tableArea;
 					auto rect = sizingLayout.AllocateFullWidthFraction(1.f);
 					if (rect.Height() <= 0) break;
@@ -120,6 +125,7 @@ namespace PlatformRig { namespace Overlays
 					lines.push_back(AsPixelCoords(Coord2(lineRect._topLeft[0]+8, lineRect._topLeft[1]+4)));
 					lines.push_back(AsPixelCoords(Coord2(lineRect._bottomRight[0]-8, lineRect._topLeft[1]+4)));
 					++entryCount;
+					totalHeightUsedByEntries += usedSpace + 8 + 2 * tableArea._paddingInternalBorder;
 				}
 				sourceEntryCount = (unsigned)recordList.size();
 			}
@@ -127,7 +133,9 @@ namespace PlatformRig { namespace Overlays
 			context.DrawLines(RenderOverlays::ProjectionMode::P2D, lines.data(), lines.size(), RenderOverlays::ColorB::White);
 			auto& scrollOffset = _scrollOffsets[_tab];
 
-			ScrollBar::Coordinates scrollCoordinates(scrollBarLocation, 0.f, sourceEntryCount, entryCount-(unsigned)scrollOffset);
+			// calculate how many entries can appear within tableArea, even if not all rows are drawn this time...
+			auto averageEntryHeight = totalHeightUsedByEntries ? (totalHeightUsedByEntries / (entryCount-(unsigned)scrollOffset)) : lineHeight;
+			ScrollBar::Coordinates scrollCoordinates(scrollBarLocation, 0.f, sourceEntryCount, tableAreaHeight / averageEntryHeight);
 			scrollOffset = _scrollBar.CalculateCurrentOffset(scrollCoordinates, scrollOffset);
 			DrawScrollBar(context, scrollCoordinates, scrollOffset, interfaceState.HasMouseOver(_scrollBar.GetID()) ? RenderOverlays::ColorB(120, 120, 120) : RenderOverlays::ColorB(51, 51, 51));
 			interactables.Register({scrollCoordinates.InteractableRect(), _scrollBar.GetID()});
@@ -165,10 +173,47 @@ namespace PlatformRig { namespace Overlays
 		auto scrollBarId = RenderOverlays::DebuggingDisplay::InteractableId_Make("ModelCache_ScrollBar");
 		scrollBarId += IntegerHash64((uint64_t)this);
 		_scrollBar = RenderOverlays::DebuggingDisplay::ScrollBar(scrollBarId);
+
+		static auto modelTypeId = ConstHash64<'Mode', 'l'>::Value;
+		static auto materialTypeId = ConstHash64<'ResM', 'at'>::Value;
+		static auto rendererTypeId = 0;
+
+		_signalId = _modelCache->BindUpdateSignal(
+			[this](IteratorRange<const std::pair<uint64_t, ::Assets::AssetHeapRecord>*> updates) {
+				ScopedLock(_currentRecordsLock);
+				
+				auto modelIterator = _modelRecords.begin();
+				auto materialIterator = _materialRecords.begin();
+				auto rendererIterator = _rendererRecords.begin();
+
+				for (const auto& u:updates) {
+					if (u.second._typeCode == modelTypeId) {
+						while (modelIterator != _modelRecords.end() && modelIterator->first < u.first) ++modelIterator;
+						if (modelIterator != _modelRecords.end() && modelIterator->first == u.first) {
+							modelIterator->second = u.second;
+						} else
+							modelIterator = _modelRecords.insert(modelIterator, u);
+					} else if (u.second._typeCode == materialTypeId) {
+						while (materialIterator != _materialRecords.end() && materialIterator->first < u.first) ++materialIterator;
+						if (materialIterator != _materialRecords.end() && materialIterator->first == u.first) {
+							materialIterator->second = u.second;
+						} else
+							materialIterator = _materialRecords.insert(materialIterator, u);
+					} else {
+						assert(u.second._typeCode == rendererTypeId);
+						while (rendererIterator != _rendererRecords.end() && rendererIterator->first < u.first) ++rendererIterator;
+						if (rendererIterator != _rendererRecords.end() && rendererIterator->first == u.first) {
+							rendererIterator->second = u.second;
+						} else
+							rendererIterator = _rendererRecords.insert(rendererIterator, u);
+					}
+				}
+			});
 	}
 
 	ModelCacheDisplay::~ModelCacheDisplay()
 	{
+		_modelCache->UnbindUpdateSignal(_signalId);
 	}
 
     std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateModelCacheDisplay(

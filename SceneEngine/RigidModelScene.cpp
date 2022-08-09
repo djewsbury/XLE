@@ -107,6 +107,42 @@ namespace SceneEngine
 			return result;
 		}
 
+#if 0
+	static void CollateAssetRecords(
+		std::vector<std::pair<uint64_t, ::Assets::AssetHeapRecord>>& records,
+		const RenderCore::Techniques::ModelRendererConstruction& rendererConstruction)
+	{
+		for (unsigned e=0; e<rendererConstruction.GetElementCount(); ++e) {
+			auto ele = rendererConstruction.GetElement(e);
+			::Assets::AssetHeapRecord materialRecord;
+			materialRecord._initializer = ele->GetMaterialScaffoldName();
+			if (materialRecord._initializer.empty())
+				materialRecord._initializer = ele->GetModelScaffoldName();
+			materialRecord._state = ::Assets::AssetState::Ready;		// we can't check the status without querying the future -- which would be a little too inefficient
+			materialRecord._typeCode = RenderCore::Assets::MaterialScaffold::CompileProcessType;
+			records.emplace_back(Hash64(materialRecord._initializer), std::move(materialRecord));
+
+			::Assets::AssetHeapRecord modelRecord;
+			modelRecord._initializer = ele->GetModelScaffoldName();
+			modelRecord._state = ::Assets::AssetState::Ready;
+			modelRecord._typeCode = RenderCore::Assets::ModelScaffold::CompileProcessType;
+			records.emplace_back(Hash64(modelRecord._initializer), std::move(modelRecord));
+		}
+	}
+#endif
+
+	static std::string GetShortDescription(const RenderCore::Techniques::ModelRendererConstruction& construction)
+	{
+		std::stringstream result;
+		if (construction.GetElementCount() != 1)
+			result << "(Multi-element)";
+		result << construction.GetElement(0)->GetModelScaffoldName();
+		auto matName = construction.GetElement(0)->GetMaterialScaffoldName();
+		if (!matName.empty())
+			result << "[" << matName << "]";
+		return result.str();
+	}
+
 	class RigidModelScene : public IRigidModelScene, public std::enable_shared_from_this<RigidModelScene>
 	{
 	public:
@@ -124,6 +160,7 @@ namespace SceneEngine
 		std::vector<std::weak_ptr<RigidModelSceneInternal::RendererEntry>> _renderers;
 		std::vector<RigidModelSceneInternal::PendingUpdate> _pendingUpdates;
 		std::vector<RigidModelSceneInternal::PendingExceptionUpdate> _pendingExceptionUpdates;
+		Signal<IteratorRange<const std::pair<uint64_t, ::Assets::AssetHeapRecord>*>> _updateSignal;
 
 		OpaquePtr CreateModel(std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction> construction) override
 		{
@@ -146,6 +183,7 @@ namespace SceneEngine
 			} else {
 				_modelEntries.insert(i, {hash, newEntry});
 			}
+
 			return std::move(newEntry);
 		}
 
@@ -278,6 +316,16 @@ namespace SceneEngine
 					}
 				});
 
+			// asset tracking
+			{
+				std::pair<uint64_t, ::Assets::AssetHeapRecord> rendererRecord;
+				rendererRecord.first = newEntry->_model->_referenceHolder->GetHash();
+				rendererRecord.second._initializer = GetShortDescription(*newEntry->_model->_referenceHolder);
+				rendererRecord.second._state = ::Assets::AssetState::Pending;
+				rendererRecord.second._typeCode = 0;
+				_updateSignal.Invoke(MakeIteratorRange(&rendererRecord, &rendererRecord+1));
+			}
+
 			_renderers.emplace_back(newEntry);
 			return newEntry;
 		}
@@ -286,12 +334,20 @@ namespace SceneEngine
 		{
 			// flush out any pending updates
 			ScopedLock(_poolLock);
+			std::vector<std::pair<uint64_t, ::Assets::AssetHeapRecord>> updateRecords;
+			updateRecords.reserve(_pendingUpdates.size() + _pendingExceptionUpdates.size());
 			for (auto&u:_pendingUpdates) {
 				auto l = u._dst.lock();
 				if (!l) continue;
 				l->_renderer = std::move(u._renderer);
 				l->_pendingRenderer = {};
 				// todo -- set dep val
+
+				::Assets::AssetHeapRecord rendererRecord;
+				rendererRecord._initializer = GetShortDescription(*l->_model->_referenceHolder);;
+				rendererRecord._state = ::Assets::AssetState::Ready;
+				rendererRecord._typeCode = 0;
+				updateRecords.emplace_back(l->_model->_referenceHolder->GetHash(), std::move(rendererRecord));
 			}
 			_pendingUpdates.clear();
 			for (auto&u:_pendingExceptionUpdates) {
@@ -300,22 +356,51 @@ namespace SceneEngine
 				l->_depVal = std::move(u._depVal);
 				l->_pendingRenderer = {};
 				// todo -- record exception msg
+
+				::Assets::AssetHeapRecord rendererRecord;
+				rendererRecord._initializer = GetShortDescription(*l->_model->_referenceHolder);;
+				rendererRecord._state = ::Assets::AssetState::Invalid;
+				rendererRecord._typeCode = 0;
+				rendererRecord._actualizationLog = u._log;
+				updateRecords.emplace_back(l->_model->_referenceHolder->GetHash(), std::move(rendererRecord));
 			}
 			_pendingExceptionUpdates.clear();
 			// todo -- check invalidations
+
+			if (!updateRecords.empty())
+				_updateSignal.Invoke(updateRecords);
 		}
 
-		Records LogRecords() const override
+		SignalId BindUpdateSignal(std::function<UpdateSignalSig>&& fn) override
 		{
-			Records result;
-			/*result._modelScaffolds = _pimpl->_modelScaffolds.LogRecords();
-			result._materialScaffolds = _pimpl->_materialScaffolds.LogRecords();
+			ScopedLock(_poolLock);
+			auto recordsOnBind = LogRecordsAlreadyLocked();
+			if (!recordsOnBind.empty())
+				fn(MakeIteratorRange(recordsOnBind));
+			return _updateSignal.Bind(std::move(fn));
+		}
 
-			auto rendererRecords = _pimpl->_modelRenderers.LogRecords();
-			result._modelRenderers.reserve(rendererRecords.size());
-			for (const auto& r:rendererRecords)
-				if (r._value._rendererMarker->TryActualize())
-					result._modelRenderers.push_back({r._value._modelScaffoldName, r._value._materialScaffoldName, r._decayFrames});*/
+		void UnbindUpdateSignal(SignalId signal) override
+		{
+			_updateSignal.Unbind(signal);
+		}
+
+		std::vector<std::pair<uint64_t, ::Assets::AssetHeapRecord>> LogRecordsAlreadyLocked()
+		{
+			std::vector<std::pair<uint64_t, ::Assets::AssetHeapRecord>> result;
+			for (const auto&rendererEntry:_renderers) {
+				auto l = rendererEntry.lock();
+				if (!l) continue;
+				if (!l->_renderer._drawableConstructor) continue;
+
+				::Assets::AssetHeapRecord rendererRecord;
+				rendererRecord._initializer = GetShortDescription(*l->_model->_referenceHolder);;
+				rendererRecord._state = ::Assets::AssetState::Ready;
+				rendererRecord._typeCode = 0;
+				result.emplace_back(l->_model->_referenceHolder->GetHash(), std::move(rendererRecord));
+			}
+
+			std::sort(result.begin(), result.end(), CompareFirst2());
 			return result;
 		}
 

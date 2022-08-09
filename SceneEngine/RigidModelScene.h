@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../Assets/AssetsCore.h"
+#include "../Assets/AssetHeap.h"		// for IAssetTracking
 #include "../Math/Matrix.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Core/Types.h"
@@ -36,7 +37,7 @@ namespace XLEMath { class ArbitraryConvexVolumeTester; }
 namespace SceneEngine
 {
 	class ExecuteSceneContext;
-	class IRigidModelScene
+	class IRigidModelScene : public ::Assets::IAssetTracking
 	{
 	public:
 		using OpaquePtr = std::shared_ptr<void>;
@@ -61,9 +62,6 @@ namespace SceneEngine
 		virtual std::future<void> FutureForRenderer(void* renderer) = 0;
 		virtual RenderCore::BufferUploads::CommandListID GetCompletionCommandList(void* renderer) = 0;
 
-		struct Records;
-		virtual Records LogRecords() const = 0;
-
 		struct Config
 		{
 			unsigned _modelScaffoldCount = 2000;
@@ -80,19 +78,6 @@ namespace SceneEngine
 		std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
 		std::shared_ptr<::Assets::OperationContext> loadingContext,
 		const IRigidModelScene::Config& cfg = IRigidModelScene::Config{});
-
-	struct IRigidModelScene::Records
-	{
-		std::vector<::Assets::AssetHeapRecord> _modelScaffolds;
-		std::vector<::Assets::AssetHeapRecord> _materialScaffolds;
-
-		struct Renderer
-		{
-			std::string _model, _material;
-			unsigned _decayFrames = 0;
-		};
-		std::vector<Renderer> _modelRenderers;
-	};
 
 	namespace RigidModelSceneInternal { struct Renderer; struct Animator; }
 	struct IRigidModelScene::BuildDrawablesHelper
