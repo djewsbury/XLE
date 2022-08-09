@@ -190,7 +190,8 @@ namespace Assets
 	{
 		ScopedLock(_lock);
 		auto existingRecords = LogRecordsAlreadyLocked();
-		fn(MakeIteratorRange(existingRecords));	// catchup with the current state of the heap
+		if (!existingRecords.empty())
+			fn(MakeIteratorRange(existingRecords));	// catchup with the current state of the heap
 		auto res = _updateSignal.Bind(std::move(fn));
 		return res;
 	}

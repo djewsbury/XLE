@@ -28,7 +28,7 @@ namespace RenderCore { namespace LightingEngine
 		{
 			StepType _type = StepType::Abort;
 			std::vector<Techniques::DrawablesPacket*> _pkts;			// todo -- candidate for subframe heap
-			XLEMath::ArbitraryConvexVolumeTester* _complexCullingVolume;
+			XLEMath::ArbitraryConvexVolumeTester* _complexCullingVolume = nullptr;
 			std::vector<Techniques::ProjectionDesc> _multiViewDesc;		// todo -- candidate for subframe heap
 			Techniques::ParsingContext* _parsingContext = nullptr;
 

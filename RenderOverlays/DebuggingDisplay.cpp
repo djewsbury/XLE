@@ -85,8 +85,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
             const Coord thumbBottom    = std::min(_scrollAreaRect._bottomRight[1], thumbCentre+_thumbHeight/2);
             return Rect( Coord2(_scrollAreaRect._topLeft[0], thumbTop), Coord2(_scrollAreaRect._bottomRight[0], thumbBottom) );
         } else {
-            const Coord thumbTop       = std::max(_scrollAreaRect._topLeft[1], thumbCentre-_thumbHeight/2);
-            const Coord thumbBottom    = std::min(_scrollAreaRect._bottomRight[1], thumbCentre+_thumbHeight/2);
+            const Coord thumbTop       = std::max(_scrollAreaRect._topLeft[0], thumbCentre-_thumbHeight/2);
+            const Coord thumbBottom    = std::min(_scrollAreaRect._bottomRight[0], thumbCentre+_thumbHeight/2);
             return Rect( Coord2(thumbTop, _scrollAreaRect._topLeft[1]), Coord2(thumbBottom, _scrollAreaRect._bottomRight[1]) );
         }
     }

@@ -199,12 +199,12 @@ namespace ToolsRig
 			const auto instanceIdx = 0u;
 			UpdateSkeletonInterface(instanceIdx);
 			auto localToWorld = Identity<Float4x4>();
-			if (executeContext._views.size() == 1) {
-				_actualized->_renderer->BuildDrawables(executeContext._destinationPkts, localToWorld, instanceIdx, _preDrawDelegate);
+			if (executeContext._views.size() <= 1) {
+				_actualized->_renderer->BuildDrawables(executeContext._destinationPkts, localToWorld, {}, instanceIdx, _preDrawDelegate);
 			} else {
 				assert(executeContext._views.size() > 0 && executeContext._views.size() < 32);
 				uint32_t viewMask = (1 << unsigned(executeContext._views.size()))-1;
-				_actualized->_renderer->BuildDrawables(executeContext._destinationPkts, localToWorld, instanceIdx, _preDrawDelegate, viewMask);
+				_actualized->_renderer->BuildDrawables(executeContext._destinationPkts, localToWorld, {}, instanceIdx, _preDrawDelegate, viewMask);
 			}
 			executeContext._completionCmdList = std::max(executeContext._completionCmdList, _actualized->_renderer->GetCompletionCommandList());
 		}
