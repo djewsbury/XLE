@@ -82,7 +82,7 @@ namespace PlatformRig { namespace Overlays
 
 				DrawTableHeaders(context, tableArea.AllocateFullWidth(28), MakeIteratorRange(headers0), headerColor, &interactables);
 				for (const auto& r:_rendererRecords) {
-					if (entryCount < _scrollOffsets[_tab]) {
+					if (entryCount < (unsigned)_scrollOffsets[_tab]) {
 						++entryCount;
 						continue;
 					}
@@ -109,7 +109,7 @@ namespace PlatformRig { namespace Overlays
 				DrawTableHeaders(context, tableArea.AllocateFullWidth(28), MakeIteratorRange(headers0), headerColor, &interactables);
                 auto recordList = (_tab == 1) ? MakeIteratorRange(_modelRecords) : MakeIteratorRange(_materialRecords);
 				for (const auto& r:recordList) {
-					if (entryCount < _scrollOffsets[_tab]) {
+					if (entryCount < (unsigned)_scrollOffsets[_tab]) {
 						++entryCount;
 						continue;
 					}

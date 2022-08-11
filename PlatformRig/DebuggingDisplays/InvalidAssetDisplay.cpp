@@ -94,7 +94,7 @@ namespace PlatformRig { namespace Overlays
 
 		for (const auto&op:activeOperations) {
 			auto allocation = layout.AllocateFullWidth(lineHeight);
-			if (allocation.Height() <= 0) break;
+			if (allocation.Height() < lineHeight) break;
 			RenderOverlays::DebuggingDisplay::DrawText().Draw(context, allocation, op);
 		}
 	}

@@ -154,7 +154,7 @@ namespace SceneEngine
 		std::shared_ptr<::Assets::OperationContext> _loadingContext;
 		Config _cfg;
 
-		Threading::RecursiveMutex _poolLock;
+		Threading::Mutex _poolLock;
 		
 		std::vector<std::pair<uint64_t, std::weak_ptr<RigidModelSceneInternal::ModelEntry>>> _modelEntries;
 		std::vector<std::weak_ptr<RigidModelSceneInternal::DeformerEntry>> _deformerEntries;
@@ -207,6 +207,11 @@ namespace SceneEngine
 		std::shared_ptr<void> CreateRenderer(std::shared_ptr<void> model, OpaquePtr deformers) override
 		{
 			ScopedLock(_poolLock);
+			return CreateRendererAlreadyLocked(std::move(model), std::move(deformers));
+		}
+
+		std::shared_ptr<void> CreateRendererAlreadyLocked(std::shared_ptr<void> model, OpaquePtr deformers)
+		{
 			auto i = std::find_if(_renderers.begin(), _renderers.end(), [m=model.get(), d=deformers.get()](const auto& q) { return q._model.get()==m && q._deformer.get()==d; });
 			if (i != _renderers.end() && i->_depVal.GetValidationIndex() == 0)
 				if (auto l = i->_renderer.lock())
@@ -218,6 +223,8 @@ namespace SceneEngine
 			if (newEntry._model->_completedConstruction.wait_for(std::chrono::seconds(0)) == std::future_status::ready && newEntry._model->_referenceHolder->IsInvalidated()) {
 				// scaffolds invalidated -- 
 				auto rebuiltConstruction = RenderCore::Techniques::ModelRendererConstruction::Reconstruct(*newEntry._model->_referenceHolder, _loadingContext);
+				newEntry._model->_completedConstruction = {};
+				newEntry._model->_referenceHolder = nullptr;
 				std::promise<std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>> promise;
 				newEntry._model->_completedConstruction = promise.get_future();
 				rebuiltConstruction->FulfillWhenNotPending(std::move(promise));
@@ -405,7 +412,7 @@ namespace SceneEngine
 				for (const auto& r:_renderers) {
 					if (r._depVal.GetValidationIndex() != 0) {
 						// call CreateRenderer again to reconstruct this renderer
-						auto res = CreateRenderer(r._model, r._deformer);
+						auto res = CreateRendererAlreadyLocked(r._model, r._deformer);
 						assert(!res.owner_before(r._renderer) && !r._renderer.owner_before(res)); (void)res;
 					}
 				}

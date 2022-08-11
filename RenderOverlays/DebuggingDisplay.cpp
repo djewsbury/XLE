@@ -52,12 +52,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
         if (maxValue > minValue) {
             if (!(flags&Flags::Horizontal)) {
-                _thumbHeight = Coord(_scrollAreaRect.Height() * visibleWindowSize / (maxValue-minValue));
+                _thumbHeight = Coord(_scrollAreaRect.Height() * std::min(1.f, visibleWindowSize / (maxValue-minValue)));
                 _valueToPixels = float(_scrollAreaRect._bottomRight[1]-_scrollAreaRect._topLeft[1]-_thumbHeight) / (maxValue-minValue);
                 _pixelsBase = _scrollAreaRect._topLeft[1] + _thumbHeight/2;
                 _windowHeight = _scrollAreaRect.Height();
             } else {
-                _thumbHeight = Coord(_scrollAreaRect.Width() * visibleWindowSize / (maxValue-minValue));
+                _thumbHeight = Coord(_scrollAreaRect.Width() * std::min(1.f, visibleWindowSize / (maxValue-minValue)));
                 _valueToPixels = float(_scrollAreaRect._bottomRight[0]-_scrollAreaRect._topLeft[0]-_thumbHeight) / (maxValue-minValue);
                 _pixelsBase = _scrollAreaRect._topLeft[0] + _thumbHeight/2;
                 _windowHeight = _scrollAreaRect.Width();
