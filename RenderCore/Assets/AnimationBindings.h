@@ -12,7 +12,7 @@ namespace RenderCore { namespace Assets
 	class AnimationSetBinding
 	{
 	public:
-		IteratorRange<const AnimationSet::ParameterBindingRules*> GetParameterBindingRules() { return _animBindingRules; }
+		IteratorRange<const AnimationSet::ParameterBindingRules*> GetParameterBindingRules() const { return _animBindingRules; }
 		IteratorRange<const uint8_t*> GetParameterDefaultsBlock() const { return _parameterDefaultsBlock; }
 
 		void GenerateOutputTransforms   (   IteratorRange<Float4x4*> output,
@@ -35,6 +35,7 @@ namespace RenderCore { namespace Assets
 	public:
 		unsigned GetModelJointCount() const { return (unsigned)_modelJointIndexToMachineOutput.size(); }
 		unsigned ModelJointToMachineOutput(unsigned index) const { return _modelJointIndexToMachineOutput[index]; }
+		IteratorRange<const unsigned*> ModelJointToMachineOutput() const { return _modelJointIndexToMachineOutput; }
 
 		SkeletonBinding(    const SkeletonMachine::OutputInterface&		output,
 							IteratorRange<const uint64_t*> 				input);

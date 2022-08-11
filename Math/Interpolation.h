@@ -9,6 +9,7 @@
 #include "Vector.h"
 #include "Matrix.h"
 #include "Quaternion.h"
+#include "../Utility/IteratorUtils.h"
 
 namespace XLEMath
 {
@@ -41,5 +42,15 @@ namespace XLEMath
     Float4      SphericalCatmullRomInterpolate(const Float4& P0n1, const Float4& P0, const Float4& P1, const Float4& P1p1, float P0n1t, float P1p1t, float alpha);
     Float4x4    SphericalCatmullRomInterpolate(const Float4x4& P0n1, const Float4x4& P0, const Float4x4& P1, const Float4x4& P1p1, float P0n1t, float P1p1t, float alpha);
 	Quaternion  SphericalCatmullRomInterpolate(const Quaternion& P0n1, const Quaternion& P0, const Quaternion& P1, const Quaternion& P1p1, float P0n1t, float P1p1t, float alpha);
+
+    Float3      CubicNURBSInterpolate(
+        IteratorRange<const Float3*> controlPoints,
+        IteratorRange<const uint16_t*> knots,
+        float time);
+
+    Float4      CubicNURBSInterpolate(
+        IteratorRange<const Float4*> controlPoints,
+        IteratorRange<const uint16_t*> knots,
+        float time);
 }
 

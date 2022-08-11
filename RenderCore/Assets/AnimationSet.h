@@ -32,7 +32,7 @@ namespace RenderCore { namespace Assets
 	};
 
 	enum class AnimSamplerType { Float1, Float3, Float4, Float4x4, Quaternion };
-	enum class AnimSamplerComponent { None, Translation, Rotation, Scale, FullTransform };
+	enum class AnimSamplerComponent { None, Translation, Rotation, Scale, FullTransform, TranslationGeoSpace };
 	const char* AsString(AnimSamplerType value);
 	const char* AsString(AnimSamplerComponent value);
 

@@ -51,6 +51,8 @@ namespace RenderCore { namespace Assets
         RotateQuaternion_Parameter,
         UniformScale_Parameter,
         ArbitraryScale_Parameter,
+        
+        Translate_ParameterGeoSpace,
 
             //
             //      Binding point

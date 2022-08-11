@@ -162,6 +162,7 @@ namespace RenderCore { namespace Assets
 		case AnimSamplerComponent::Rotation: return "Rotation";
 		case AnimSamplerComponent::Scale: return "Scale";
 		case AnimSamplerComponent::FullTransform: return "FullTransform";
+		case AnimSamplerComponent::TranslationGeoSpace: return "TranslationGeoSpace";
 		}
 		return "<<unknown>>";
 	}

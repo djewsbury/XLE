@@ -304,28 +304,25 @@ namespace RenderCore { namespace Assets
 										CurveInterpolationType interpolationType,
 										const Decomp& decomp) never_throws 
 	{
-		// reminder -- lower_bound returns a pointer to the first key that is not smaller than inputTime (eg, equal or larger)
 		uint16_t evalFrame = evalTime / keyDataDesc._frameDuration;
-		auto* key = std::lower_bound(timeMarkers.begin(), timeMarkers.end(), evalFrame);
+		auto* keyUpper = std::upper_bound(timeMarkers.begin(), timeMarkers.end(), evalFrame);
 
 			// note -- clamping at start and end positions of the curve
-		if (key == timeMarkers.end())
-			return decomp(0, timeMarkers[0]);
-
-		if (*key != evalFrame) {
-			assert(key != timeMarkers.begin());
-			--key;	// (back one, to the first key that is smaller)
+		if (__builtin_expect(keyUpper == timeMarkers.end() || keyUpper == timeMarkers.begin(), false)) {
+			assert(!timeMarkers.empty());
+			if (evalFrame == 0) return decomp(0, *timeMarkers.begin());
+			else return decomp(timeMarkers.size()-1, *(timeMarkers.end()-1));
 		}
-		auto keyIndex = key-timeMarkers.begin();
-		auto alpha = LerpParameter(key[0] * keyDataDesc._frameDuration, key[1] * keyDataDesc._frameDuration, evalTime);
+
+		auto keyUpperIndex = keyUpper-timeMarkers.begin();
+		auto alpha = LerpParameter(*(keyUpper-1) * keyDataDesc._frameDuration, *keyUpper * keyDataDesc._frameDuration, evalTime);
 		auto keyCount = timeMarkers.size();
-		assert(decomp.KeyCount() == keyCount);
+		assert(interpolationType == CurveInterpolationType::NURBS || decomp.KeyCount() == keyCount);
+		auto* key = keyUpper-1;
+		auto keyIndex = keyUpperIndex-1; assert(keyUpperIndex != 0);
+		assert(key[0] <= evalFrame && key[1] >= evalFrame);
 
         if (interpolationType == CurveInterpolationType::Linear) {
-
-			// (need at least one key greater than the interpolation point, to perform interpolation correctly)
-			if ((key+1) >= timeMarkers.end())
-				return decomp(keyCount-1, timeMarkers[keyCount-1]);
 
             assert(key[1] >= key[0]);		// (validating sorting assumption)
             
@@ -337,10 +334,6 @@ namespace RenderCore { namespace Assets
 
             assert(keyDataDesc._flags & CurveKeyDataDesc::Flags::HasInTangent);
 			assert(keyDataDesc._flags & CurveKeyDataDesc::Flags::HasOutTangent);
-
-			// (need at least one key greater than the interpolation point, to perform interpolation correctly)
-			if ((key+1) >= timeMarkers.end())
-				return decomp(keyCount-1, timeMarkers[keyCount-1]);
 
 			assert(key[1] >= key[0]);		// (validating sorting assumption)
             const auto inTangentOffset = BitsPerPixel(keyDataDesc._elementFormat)/8;
@@ -377,6 +370,8 @@ namespace RenderCore { namespace Assets
 			return SphericalCatmullRomInterpolate(
 				P0n1, P0, P1, P1p1, 
 				(P0n1T - key[0]) / float(key[1] - key[0]), (P1p1T - key[0]) / float(key[1] - key[0]),
+				// ((evalTime / keyDataDesc._frameDuration) - P0n1T) / (key[0] - P0n1T),
+				// ((evalTime / keyDataDesc._frameDuration) - key[1]) / (P1p1T - key[1]),
 				alpha);
 
         } else if (interpolationType == CurveInterpolationType::Hermite) {
@@ -384,6 +379,27 @@ namespace RenderCore { namespace Assets
 			//  -- but it's similar to both the Bezier and Catmull Rom implementations, nad
 			//		could be easily hooked up
 			assert(0);      
+		} else if (interpolationType == CurveInterpolationType::NURBS) {
+			if constexpr(std::is_same_v<Float3, OutType>) {
+				Float3 decompressedPositions[timeMarkers.size()-3];
+				for (unsigned c=0; c<timeMarkers.size()-3; c++)
+					decompressedPositions[c] = decomp(c, timeMarkers[c]);
+				return CubicNURBSInterpolate(
+					MakeIteratorRange(decompressedPositions, &decompressedPositions[timeMarkers.size()-3]),
+					timeMarkers, evalTime / float(keyDataDesc._frameDuration));
+			} else if constexpr(std::is_same_v<Quaternion, OutType>) {
+				Float4 decompressedPositions[timeMarkers.size()-3];
+				for (unsigned c=0; c<timeMarkers.size()-3; c++) {
+					auto q = decomp(c, timeMarkers[c]);
+					decompressedPositions[c] = {q[0], q[1], q[2], q[3] };
+				}
+				Float4 f4 = CubicNURBSInterpolate(
+					MakeIteratorRange(decompressedPositions, &decompressedPositions[timeMarkers.size()-3]),
+					timeMarkers, evalTime / float(keyDataDesc._frameDuration));
+				return Quaternion{f4[0], f4[1], f4[2], f4[3]}.normalize();
+			} else {
+				assert(0);
+			}
 		}
 
         return decomp(0, timeMarkers[0]);

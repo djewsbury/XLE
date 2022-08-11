@@ -184,11 +184,156 @@ namespace XLEMath
 
 	Quaternion  SphericalCatmullRomInterpolate(const Quaternion& P0n1, const Quaternion& P0, const Quaternion& P1, const Quaternion& P1p1, float P0n1t, float P1p1t, float alpha)
 	{
-		/*assert( Equivalent(MagnitudeSquared(P0n1), 1.0f, 1e-5f)
-			&&	Equivalent(MagnitudeSquared(P0), 1.0f, 1e-5f)
-			&&	Equivalent(MagnitudeSquared(P1), 1.0f, 1e-5f)
-			&&	Equivalent(MagnitudeSquared(P1p1), 1.0f, 1e-5f));*/
-		return P0;   // (not implemented)
+        // based on "Using Geometric Constructions to Interpolate Orientations with Quaternions" from Graphics Gems II
+        // This is derived from Shoemake's work on scalars.
+        // However there are multiple ways to approach this problem, and the results here may not be perfect from the
+        // point of view of continuity and smoothness
+        // also, here we're assuming that all of the keyframes are spaced evenly, which might not actually be true
+		auto q10 = SphericalInterpolate(P0n1, P0, alpha+1);
+        auto q11 = SphericalInterpolate(P0, P1, alpha);
+        auto q12 = SphericalInterpolate(P1, P1p1, alpha-1);
+        auto q20 = SphericalInterpolate(q10, q11, (alpha+1)/2);
+        auto q21 = SphericalInterpolate(q11, q12, alpha/2);
+        return SphericalInterpolate(q20, q21, alpha).normalize();
 	}
+
+    template<typename T>
+        static T Bn(IteratorRange<const T*> controlPoints, IteratorRange<const uint16_t*> knots, unsigned n)
+    {
+        auto denom = knots[n+5] - knots[n+2];
+        assert(denom != 0);
+        float A = (knots[n+5] - knots[n+3]) / float(denom);
+        float B = (knots[n+3] - knots[n+2]) / float(denom);
+        return A * controlPoints[n+1] + B * controlPoints[n+2];
+    }
+
+    template<typename T>
+        static T Cn(IteratorRange<const T*> controlPoints, IteratorRange<const uint16_t*> knots, unsigned n)
+    {
+        auto denom = knots[n+5] - knots[n+2];
+        assert(denom != 0);
+        float A = (knots[n+5] - knots[n+4]) / float(denom);
+        float B = (knots[n+4] - knots[n+2]) / float(denom);
+        return A * controlPoints[n+1] + B * controlPoints[n+2];
+    }
+
+    template<typename T>
+        static T Vn(IteratorRange<const uint16_t*> knots, unsigned n, T cnm1, T bn)
+    {
+        auto denom = knots[n+4] - knots[n+2];
+        assert(denom != 0);
+        float A = (knots[n+4] - knots[n+3]) / float(denom);
+        float B = (knots[n+3] - knots[n+2]) / float(denom);
+        return A * cnm1 + B * bn;
+    }
+
+    static void CalculateBSplineBasisForNURBS(
+        float output[],          // should be an array of degree + 1 elements
+        IteratorRange<const uint16_t*> knots,
+        unsigned i,
+        float time,
+        unsigned degree)
+    {
+        // based on implementation from https://github.com/pradeep-pyro/tinynurbs/blob/master/include/tinynurbs/core/basis.h, but this
+        // algorithm can be found on wikipedia as well as other places
+        assert(degree >= 1);
+        float left[degree+1], right[degree+1];
+        output[0] = 1.f;
+        left[0] = right[1] = 0.f;
+
+        for (unsigned j=1; j<=degree; ++j) {
+            left[j] = time - knots[i+1-j];
+            right[j] = knots[i+j] - time;
+            float saved = 0.f;
+            for (unsigned r=0; r<j; ++r) {
+                float temp = output[r] / (right[r+1] + left[j-r]);
+                output[r] = saved + right[r+1] * temp;
+                saved = left[j-r] * temp;
+            }
+            output[j] = saved;
+        }
+    }
+
+    Float3      CubicNURBSInterpolate(
+        IteratorRange<const Float3*> controlPoints,
+        IteratorRange<const uint16_t*> knots,
+        float time)
+    {
+        const unsigned degree = 3;
+        // Some background here:
+        //      https://www.codeproject.com/Articles/996281/NURBS-curve-made-easy
+        //      https://github.com/pradeep-pyro/tinynurbs (unfortunately though it's called "tiny" it's still a little too heavy to use practically here)
+        //      & the wikipedia page
+        auto i = std::upper_bound(knots.begin() + degree, knots.end(), (unsigned)time) - 1 - knots.begin();
+        assert(i >= degree-1);
+
+        float basis[degree+1];
+        CalculateBSplineBasisForNURBS(basis, knots, i, time, degree);
+        assert(Equivalent(basis[0]+basis[1]+basis[2]+basis[3], 1.f, 1e-4f));
+        Float3 result = Zero<Float3>();
+        for (unsigned c=0; c<degree+1; ++c) {
+            auto ctrlIdx = int(i-degree+c);
+            ctrlIdx = std::clamp(ctrlIdx+1, 0, int(controlPoints.size()-1));
+            assert(ctrlIdx < controlPoints.size());
+            result += basis[c] * controlPoints[i+degree+c];
+        }
+        return result;
+
+#if 0
+        // This method is inefficient, but convenient. We can generate equivalent bezier control points for the nurbs
+        // curve by looking at the knots.
+        auto bn = Bn<Float3>(controlPoints, knots, n);
+        auto cn = Cn<Float3>(controlPoints, knots, n);
+        Float3 cnm1 = cn;
+        if (n!=0) cnm1 = Cn<Float3>(controlPoints, knots, n-1);
+        auto bnp1 = Bn<Float3>(controlPoints, knots, n+1);
+        auto vn = Vn<Float3>(knots, n, cnm1, bn);
+        auto vnp1 = Vn<Float3>(knots, n+1, cn, bnp1);
+
+        return BezierInterpolate(vn, bn, cn, vnp1, 0.5f);
+#endif
+
+    }
+
+    Float4      CubicNURBSInterpolate(
+        IteratorRange<const Float4*> controlPoints,
+        IteratorRange<const uint16_t*> knots,
+        float time)
+    {
+        const unsigned degree = 3;
+        // Some background here:
+        //      https://www.codeproject.com/Articles/996281/NURBS-curve-made-easy (though the derivations there might only be partially accurate)
+        //      https://github.com/pradeep-pyro/tinynurbs (unfortunately though it's called "tiny" it's still a little too heavy to use practically here)
+        //      & the wikipedia page
+        auto i = std::upper_bound(knots.begin() + degree, knots.end(), (unsigned)time) - 1 - knots.begin();
+        assert(i >= degree-1);
+        
+        float basis[degree+1];
+        CalculateBSplineBasisForNURBS(basis, knots, i, time, degree);
+        assert(Equivalent(basis[0]+basis[1]+basis[2]+basis[3], 1.f, 1e-4f));
+        Float4 result = Zero<Float4>();
+        for (unsigned c=0; c<degree+1; ++c) {
+            auto ctrlIdx = int(i-degree+c);
+            ctrlIdx = std::clamp(ctrlIdx+1, 0, int(controlPoints.size()-1));
+            assert(ctrlIdx < controlPoints.size());
+            result += basis[c] * controlPoints[ctrlIdx];
+        }
+        return result;
+
+#if 0
+        // This method is inefficient, but convenient. We can generate equivalent bezier control points for the nurbs
+        // curve by looking at the knots.
+        auto bn = Bn<Float4>(controlPoints, knots, n);
+        auto cn = Cn<Float4>(controlPoints, knots, n);
+        Float4 cnm1 = cn;
+        if (n!=0) cnm1 = Cn<Float4>(controlPoints, knots, n-1);
+        auto bnp1 = Bn<Float4>(controlPoints, knots, n+1);
+        auto vn = Vn<Float4>(knots, n, cnm1, bn);
+        auto vnp1 = Vn<Float4>(knots, n+1, cn, bnp1);
+
+        return BezierInterpolate(vn, bn, cn, vnp1, 0.5f);
+#endif
+
+    }
 
 }

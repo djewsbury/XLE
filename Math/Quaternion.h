@@ -47,11 +47,13 @@ namespace XLEMath
 
     inline Quaternion SphericalInterpolate(const Quaternion& lhs, const Quaternion& rhs, float alpha)
     {
+        // Note that in many cases a simplier linear interpolate + normalize may be preferable
+        // See, http://number-none.com/product/Understanding%20Slerp,%20Then%20Not%20Using%20It/
 		float tolerance = 1e-4f;
 
 		Quaternion qr = rhs;
 		float c = cml::dot(lhs,qr);
-		if (c < 0.f) {
+		if (c < 0.f) {  // negating the quaternion here ensures that we always take the shorter path (so called torque-minimal)
 			qr = -qr;
 			c = -c;
 		}

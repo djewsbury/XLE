@@ -30,7 +30,7 @@ namespace RenderCore { namespace Assets
 		float _mins[4], _maxs[4];
 	};
 
-	enum class CurveInterpolationType : unsigned { Linear, Bezier, Hermite, CatmullRom };
+	enum class CurveInterpolationType : unsigned { Linear, Bezier, Hermite, CatmullRom, NURBS };
 
     class RawAnimationCurve 
     {

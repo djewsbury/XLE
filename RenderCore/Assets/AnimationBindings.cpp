@@ -259,6 +259,24 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
+	static void SetupTranslationGeoSpaceBinding(
+		std::vector<uint32_t>& result,
+		std::vector<AnimationSet::ParameterBindingRules>& bindingRules, 
+		std::vector<uint8_t>& outputBlockItemsDefaults,
+		unsigned animParameterIndex, AnimSamplerType samplerType)
+	{
+		if (samplerType == AnimSamplerType::Float3) {
+			result.push_back((uint32_t)TransformCommand::Translate_ParameterGeoSpace);
+			result.push_back(
+				ConfigureBindingRules(
+					bindingRules, outputBlockItemsDefaults, 
+					Float3{0,0,0},		// normal defaults won't work here, unless we calculate the transforms up to geo space
+					animParameterIndex, samplerType));
+		} else {
+			assert(0);
+		}
+	}
+
 	static void SetupRotationBinding(
 		std::vector<uint32_t>& result,
 		std::vector<AnimationSet::ParameterBindingRules>& bindingRules, 
@@ -333,6 +351,7 @@ namespace RenderCore { namespace Assets
 			switch ((TransformCommand)*cmd) {
 			case TransformCommand::TransformFloat4x4_Parameter:
 			case TransformCommand::Translate_Parameter:
+			case TransformCommand::Translate_ParameterGeoSpace:
 			case TransformCommand::RotateX_Parameter:
 			case TransformCommand::RotateY_Parameter:
 			case TransformCommand::RotateZ_Parameter:
@@ -354,7 +373,7 @@ namespace RenderCore { namespace Assets
 					uint64_t bindName = *cmd | (uint64_t(*(cmd+1)) << 32ull);
 					cmd += 2;
 					std::optional<unsigned> rotationParam, translationParam, scaleParam, fullTransformParam;
-					std::optional<unsigned> noneParam;
+					std::optional<unsigned> noneParam, translationGeoSpace;
 
 					for (unsigned c=0; c<animSetOutput.size(); ++c) {
 						if (animSetOutput[c]._name == bindName) {
@@ -375,6 +394,10 @@ namespace RenderCore { namespace Assets
 								assert(!fullTransformParam);
 								fullTransformParam = c;
 								break;
+							case AnimSamplerComponent::TranslationGeoSpace:
+								assert(!translationGeoSpace);
+								translationGeoSpace = c;
+								break;
 							case AnimSamplerComponent::None:
 								assert(!noneParam);
 								noneParam = c;
@@ -383,10 +406,13 @@ namespace RenderCore { namespace Assets
 					}
 
 					if (fullTransformParam) {
-						assert(!rotationParam && !translationParam && !scaleParam && !noneParam);
+						assert(!rotationParam && !translationParam && !scaleParam && !noneParam && !translationGeoSpace);
 					}
 					if (noneParam) {
-						assert(!rotationParam && !translationParam && !scaleParam && !fullTransformParam);
+						assert(!rotationParam && !translationParam && !scaleParam && !fullTransformParam && !translationGeoSpace);
+					}
+					if (translationGeoSpace) {
+						assert(!translationParam);
 					}
 
 					if (rotationParam || translationParam || scaleParam || fullTransformParam) {
@@ -404,6 +430,10 @@ namespace RenderCore { namespace Assets
 								SetupTranslationBinding(
 									result, parameterBindingRules, parameterDefaultsBlock,
 									defaults,
+									translationParam.value(), animSetOutput[translationParam.value()]._samplerType);
+							} else if (translationGeoSpace) {
+								SetupTranslationGeoSpaceBinding(
+									result, parameterBindingRules, parameterDefaultsBlock,
 									translationParam.value(), animSetOutput[translationParam.value()]._samplerType);
 							} else if (!defaults._defaultTranslationCmds.empty()) {
 								result.insert(result.end(), defaults._defaultTranslationCmds.begin(), defaults._defaultTranslationCmds.end());

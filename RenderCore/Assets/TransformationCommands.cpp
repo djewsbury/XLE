@@ -44,6 +44,7 @@ namespace RenderCore { namespace Assets
 
         case TransformCommand::TransformFloat4x4_Parameter:
         case TransformCommand::Translate_Parameter:
+        case TransformCommand::Translate_ParameterGeoSpace:
         case TransformCommand::RotateX_Parameter:
         case TransformCommand::RotateY_Parameter:
         case TransformCommand::RotateZ_Parameter:
@@ -1004,6 +1005,13 @@ namespace RenderCore { namespace Assets
                 }
                 break;
 
+            case TransformCommand::Translate_ParameterGeoSpace:
+                {
+                    uint32_t parameterOffset = *i++;
+                    SetTranslation(*workingTransform, GetParameter<Float3>(parameterBlock, parameterOffset));
+                }
+                break;
+
             case TransformCommand::RotateX_Parameter:
                 {
                     uint32_t parameterOffset = *i++;
@@ -1371,6 +1379,11 @@ namespace RenderCore { namespace Assets
 
             case TransformCommand::Translate_Parameter:
                 stream << indentBuffer << "Translate_Parameter at offset (0x" << std::hex << *i << std::dec << ")" << std::endl;
+                i++;
+                break;
+
+            case TransformCommand::Translate_ParameterGeoSpace:
+                stream << indentBuffer << "Translate_ParameterGeoSpace at offset (0x" << std::hex << *i << std::dec << ")" << std::endl;
                 i++;
                 break;
 
