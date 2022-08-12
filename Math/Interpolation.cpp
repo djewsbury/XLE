@@ -182,50 +182,31 @@ namespace XLEMath
 			alpha);
 	}
 
-	Quaternion  SphericalCatmullRomInterpolate(const Quaternion& P0n1, const Quaternion& P0, const Quaternion& P1, const Quaternion& P1p1, float P0n1t, float P1p1t, float alpha)
-	{
+    static Quaternion SphericalQuaternionInterpolationTrick(const Quaternion& P0n1, const Quaternion& P0, const Quaternion& P1, const Quaternion& P1p1, float P0n1t, float P1p1t, float alpha)
+    {
         // based on "Using Geometric Constructions to Interpolate Orientations with Quaternions" from Graphics Gems II
         // This is derived from Shoemake's work on scalars.
         // However there are multiple ways to approach this problem, and the results here may not be perfect from the
         // point of view of continuity and smoothness
         // also, here we're assuming that all of the keyframes are spaced evenly, which might not actually be true
+        // This is similar to (but not exactly the same as) "squad" interpolation. See details on that here:
+        //      https://www.geometrictools.com/Documentation/Quaternions.pdf
 		auto q10 = SphericalInterpolate(P0n1, P0, alpha+1);
         auto q11 = SphericalInterpolate(P0, P1, alpha);
         auto q12 = SphericalInterpolate(P1, P1p1, alpha-1);
         auto q20 = SphericalInterpolate(q10, q11, (alpha+1)/2);
         auto q21 = SphericalInterpolate(q11, q12, alpha/2);
         return SphericalInterpolate(q20, q21, alpha).normalize();
+    }
+
+	Quaternion  SphericalCatmullRomInterpolate(const Quaternion& P0n1, const Quaternion& P0, const Quaternion& P1, const Quaternion& P1p1, float P0n1t, float P1p1t, float alpha)
+	{
+        // Following http://number-none.com/product/Understanding%20Slerp,%20Then%20Not%20Using%20It/ (and extending this idea), we're going to do
+        // the interpolation on each element separately, and just renormalize. For short arcs (at least) this should be accurate enough, particularly
+        // given that the operation isn't perfectly defined, anyway -- and we'd get different results with euler angle keyframes, etc
+        auto q = SphericalCatmullRomInterpolate(*(Float4*)&P0n1, *(Float4*)&P0, *(Float4*)&P1, *(Float4*)&P1p1, P0n1t, P1p1t, alpha);
+        return ((Quaternion*)&q)->normalize();
 	}
-
-    template<typename T>
-        static T Bn(IteratorRange<const T*> controlPoints, IteratorRange<const uint16_t*> knots, unsigned n)
-    {
-        auto denom = knots[n+5] - knots[n+2];
-        assert(denom != 0);
-        float A = (knots[n+5] - knots[n+3]) / float(denom);
-        float B = (knots[n+3] - knots[n+2]) / float(denom);
-        return A * controlPoints[n+1] + B * controlPoints[n+2];
-    }
-
-    template<typename T>
-        static T Cn(IteratorRange<const T*> controlPoints, IteratorRange<const uint16_t*> knots, unsigned n)
-    {
-        auto denom = knots[n+5] - knots[n+2];
-        assert(denom != 0);
-        float A = (knots[n+5] - knots[n+4]) / float(denom);
-        float B = (knots[n+4] - knots[n+2]) / float(denom);
-        return A * controlPoints[n+1] + B * controlPoints[n+2];
-    }
-
-    template<typename T>
-        static T Vn(IteratorRange<const uint16_t*> knots, unsigned n, T cnm1, T bn)
-    {
-        auto denom = knots[n+4] - knots[n+2];
-        assert(denom != 0);
-        float A = (knots[n+4] - knots[n+3]) / float(denom);
-        float B = (knots[n+3] - knots[n+2]) / float(denom);
-        return A * cnm1 + B * bn;
-    }
 
     static void CalculateBSplineBasisForNURBS(
         float output[],          // should be an array of degree + 1 elements
@@ -254,11 +235,41 @@ namespace XLEMath
         }
     }
 
+    static float NURBSNin(IteratorRange<const uint16_t*> knots, int i, int n, float u)
+    {
+        if (n == 0) {
+            if (knots[i] <= u && (i >= knots.size() || knots[i+1] > u)) return 1;
+            return 0;
+        }
+        assert((i+n+1) < knots.size());
+        float fi = (knots[i+n] - knots[i]) ? (u - knots[i]) / float(knots[i+n] - knots[i]) : 0.f;
+        float gip1 = (knots[i+n+1] - knots[i+1]) ? (knots[i+n+1] - u) / float(knots[i+n+1] - knots[i+1]) : 0.f;
+        return fi * NURBSNin(knots, i, n-1, u) + gip1 * NURBSNin(knots, i+1, n-1, u);
+    }
+
+    static void NURBSBasisVerification(
+        float output[],
+        IteratorRange<const uint16_t*> knots,
+        float u,
+        unsigned degree)
+    {
+        // to verify our implementation, we'll do the calculations in a way that's more similar to how it's expressed mathematically
+        // See https://en.wikipedia.org/wiki/Non-uniform_rational_B-spline
+        for (unsigned i=0; i<knots.size() - degree - 1; ++i)
+            output[i] = NURBSNin(knots, i, degree, u);
+        for (unsigned i=knots.size() - degree - 1; i<knots.size(); ++i)
+            output[i] = 0.f;
+    }
+
     Float3      CubicNURBSInterpolate(
         IteratorRange<const Float3*> controlPoints,
         IteratorRange<const uint16_t*> knots,
         float time)
     {
+        // ensure we're not reading beyond the ends of the knots
+        if (time >= *(knots.end()-1)) return *(controlPoints.end()-1);
+        if (time <= *knots.begin()) return *controlPoints.begin();
+
         const unsigned degree = 3;
         // Some background here:
         //      https://www.codeproject.com/Articles/996281/NURBS-curve-made-easy
@@ -273,26 +284,11 @@ namespace XLEMath
         Float3 result = Zero<Float3>();
         for (unsigned c=0; c<degree+1; ++c) {
             auto ctrlIdx = int(i-degree+c);
-            ctrlIdx = std::clamp(ctrlIdx+1, 0, int(controlPoints.size()-1));
+            ctrlIdx = std::clamp(ctrlIdx, 0, int(controlPoints.size()-1));
             assert(ctrlIdx < controlPoints.size());
-            result += basis[c] * controlPoints[i+degree+c];
+            result += basis[c] * controlPoints[ctrlIdx];
         }
         return result;
-
-#if 0
-        // This method is inefficient, but convenient. We can generate equivalent bezier control points for the nurbs
-        // curve by looking at the knots.
-        auto bn = Bn<Float3>(controlPoints, knots, n);
-        auto cn = Cn<Float3>(controlPoints, knots, n);
-        Float3 cnm1 = cn;
-        if (n!=0) cnm1 = Cn<Float3>(controlPoints, knots, n-1);
-        auto bnp1 = Bn<Float3>(controlPoints, knots, n+1);
-        auto vn = Vn<Float3>(knots, n, cnm1, bn);
-        auto vnp1 = Vn<Float3>(knots, n+1, cn, bnp1);
-
-        return BezierInterpolate(vn, bn, cn, vnp1, 0.5f);
-#endif
-
     }
 
     Float4      CubicNURBSInterpolate(
@@ -300,6 +296,10 @@ namespace XLEMath
         IteratorRange<const uint16_t*> knots,
         float time)
     {
+        // ensure we're not reading beyond the ends of the knots
+        if (time >= *(knots.end()-1)) return *(controlPoints.end()-1);
+        if (time <= *knots.begin()) return *controlPoints.begin();
+
         const unsigned degree = 3;
         // Some background here:
         //      https://www.codeproject.com/Articles/996281/NURBS-curve-made-easy (though the derivations there might only be partially accurate)
@@ -314,26 +314,19 @@ namespace XLEMath
         Float4 result = Zero<Float4>();
         for (unsigned c=0; c<degree+1; ++c) {
             auto ctrlIdx = int(i-degree+c);
-            ctrlIdx = std::clamp(ctrlIdx+1, 0, int(controlPoints.size()-1));
+            ctrlIdx = std::clamp(ctrlIdx, 0, int(controlPoints.size()-1));
             assert(ctrlIdx < controlPoints.size());
             result += basis[c] * controlPoints[ctrlIdx];
         }
+
+        /*
+        std::vector<float> basisVerification;
+        basisVerification.resize(knots.size());
+        NURBSBasisVerification(basisVerification.data(), knots, time, degree);
+        (void)basisVerification;
+        */
+
         return result;
-
-#if 0
-        // This method is inefficient, but convenient. We can generate equivalent bezier control points for the nurbs
-        // curve by looking at the knots.
-        auto bn = Bn<Float4>(controlPoints, knots, n);
-        auto cn = Cn<Float4>(controlPoints, knots, n);
-        Float4 cnm1 = cn;
-        if (n!=0) cnm1 = Cn<Float4>(controlPoints, knots, n-1);
-        auto bnp1 = Bn<Float4>(controlPoints, knots, n+1);
-        auto vn = Vn<Float4>(knots, n, cnm1, bn);
-        auto vnp1 = Vn<Float4>(knots, n+1, cn, bnp1);
-
-        return BezierInterpolate(vn, bn, cn, vnp1, 0.5f);
-#endif
-
     }
 
 }

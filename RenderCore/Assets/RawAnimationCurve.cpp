@@ -382,15 +382,16 @@ namespace RenderCore { namespace Assets
 		} else if (interpolationType == CurveInterpolationType::NURBS) {
 			if constexpr(std::is_same_v<Float3, OutType>) {
 				Float3 decompressedPositions[timeMarkers.size()-3];
-				for (unsigned c=0; c<timeMarkers.size()-3; c++)
-					decompressedPositions[c] = decomp(c, timeMarkers[c]);
+				for (unsigned c=0; c<timeMarkers.size()-4; c++)
+					decompressedPositions[c] = decomp(c+1, timeMarkers[c]);	// with the data I'm using we get a better result after offsetting the keyframe positions as so...
 				return CubicNURBSInterpolate(
 					MakeIteratorRange(decompressedPositions, &decompressedPositions[timeMarkers.size()-3]),
 					timeMarkers, evalTime / float(keyDataDesc._frameDuration));
 			} else if constexpr(std::is_same_v<Quaternion, OutType>) {
 				Float4 decompressedPositions[timeMarkers.size()-3];
-				for (unsigned c=0; c<timeMarkers.size()-3; c++) {
-					auto q = decomp(c, timeMarkers[c]);
+				for (unsigned c=0; c<timeMarkers.size()-4; c++) {
+					// with the data I'm using we get a better result after offsetting the keyframe positions as so...
+					auto q = decomp(c+1, timeMarkers[c]);
 					decompressedPositions[c] = {q[0], q[1], q[2], q[3] };
 				}
 				Float4 f4 = CubicNURBSInterpolate(
