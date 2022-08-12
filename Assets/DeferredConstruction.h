@@ -173,7 +173,7 @@ namespace Assets
 			auto marker = Internal::BeginCompileOperation(targetCode, std::move(initializerPack));
 			if (!marker) {
 				#if defined(_DEBUG)
-					Throw(std::runtime_error("No compiler found for asset " + initializerLabel));
+					Throw(std::runtime_error("No compiler found for asset (" + initializerLabel + ")"));
 				#else
 					Throw(std::runtime_error("No compiler found for asset"));
 				#endif

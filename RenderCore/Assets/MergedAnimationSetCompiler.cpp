@@ -20,6 +20,7 @@ namespace RenderCore { namespace Assets
 {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 	static const uint64_t Type_AnimationSet = ConstHash64<'Anim', 'Set'>::Value;
+	static const auto ChunkType_Log = ConstHash64<'Log'>::Value;
 
 	static void AddDep(
 		std::vector<::Assets::DependentFileState>& deps,
@@ -135,15 +136,31 @@ namespace RenderCore { namespace Assets
 						files.push_back(f);
 				}
 
+				std::stringstream log;
+
 				// merge all of the source files into a single output animation set
 				RenderCore::Assets::GeoProc::NascentAnimationSet animSet;
 				for (const auto& f:files) {
-					auto part = ::Assets::ActualizeAssetPtr<AnimationSetScaffold>(f);
-					MergeInAsManyAnimations(animSet, part->ImmutableData(), MakeFileNameSplitter(f).File().AsString());
+					TRY {
+						auto part = ::Assets::ActualizeAssetPtr<AnimationSetScaffold>(f);
+						MergeInAsManyAnimations(animSet, part->ImmutableData(), MakeFileNameSplitter(f).File().AsString());
+					} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
+						// todo -- grab dep val
+						log << "Failed to include animation (" << MakeFileNameSplitter(f).File() << ") in animation set because of exception: (" << e.what() << ")" << std::endl;
+					} CATCH(const ::Assets::Exceptions::InvalidAsset& e) {
+						// todo -- grab dep val
+						log << "Failed to include animation (" << MakeFileNameSplitter(f).File() << ") in animation set because of exception: (" << e.what() << ")" << std::endl;
+					} CATCH(const std::exception& e) {
+						log << "Failed to include animation (" << MakeFileNameSplitter(f).File() << ") in animation set because of exception: (" << e.what() << ")" << std::endl;
+					} CATCH_END
 				}
 
 				std::string finalName = splitPath.GetSection(splitPath.GetSectionCount()-2).AsString();
 				_serializedArtifacts = GeoProc::SerializeAnimationsToChunks(finalName, animSet);
+
+				auto logStr = log.str();
+				if (!logStr.empty())
+					_serializedArtifacts.push_back({ ChunkType_Log, 0, "log", ::Assets::AsBlob(std::move(logStr)) });
 
 			} CATCH(...) {
 				_compilationException = std::current_exception();
