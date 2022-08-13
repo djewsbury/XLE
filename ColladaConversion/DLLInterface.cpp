@@ -23,17 +23,10 @@ namespace ColladaConversion
 	public:
 		std::string			Description() const override { return "Compiler and converter for Collada asset files"; }
 
-		unsigned	FileKindCount() const override { return 3; }
+		unsigned	FileKindCount() const override { return 1; }
 		FileKind	GetFileKind(unsigned index) const override
 		{
-			assert(index == 0 || index == 1 || index == 2);
-			if (index == 0)
-				return FileKind { MakeIteratorRange(s_knownAssetTypes), R"(.*\.dae)", "Collada XML asset", "dae", "dae" };
-
-			if (index == 1)
-				return FileKind { MakeIteratorRange(s_animSetAssetTypes), R"(.*\.daelst)", "Animation List", "daelst", "daelst" };
-
-			return FileKind { MakeIteratorRange(s_animSetAssetTypes), R"(.*[\\/]alldae)", "All collada animations in a directory", "dae-folder", "folder" };
+			return FileKind { MakeIteratorRange(s_knownAssetTypes), R"(.*\.dae)", "Collada XML asset", "dae", "dae" };
 		}
 
 		CompilerDesc() {}

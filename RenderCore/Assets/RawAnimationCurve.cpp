@@ -12,7 +12,6 @@
 #include "../../Math/Quaternion.h"
 #include "../../Math/Interpolation.h"
 #include "../../Utility/IteratorUtils.h"
-#include "../../Core/Exceptions.h"
 #include <cmath>
 
 namespace RenderCore { namespace Assets
@@ -199,13 +198,12 @@ namespace RenderCore { namespace Assets
 			OutType operator()(unsigned idx, unsigned timeMarkerValue, unsigned componentOffset=0) const;
 			unsigned KeyCount() const;
 
-			CurveElementDequantDecompressor(IteratorRange<const void*> data, unsigned stride, Format fmt, unsigned blockCount)
-			: _fmt(fmt), _data(data), _stride(stride), _blockCount(blockCount) { assert(_blockCount); }
+			CurveElementDequantDecompressor(IteratorRange<const void*> data, unsigned stride, Format fmt)
+			: _fmt(fmt), _data(data), _stride(stride) {}
 		private:
 			Format _fmt;
 			IteratorRange<const void*> _data;
 			unsigned _stride;
-			unsigned _blockCount;
 
 			std::pair<const CurveDequantizationBlock*, const void*> FindKey(unsigned idx, unsigned timeMarkerValue) const;
 		};
@@ -213,7 +211,7 @@ namespace RenderCore { namespace Assets
 	template <typename Type>
 		unsigned CurveElementDequantDecompressor<Type>::KeyCount() const
 	{
-		return (_data.size()-_blockCount*sizeof(CurveDequantizationBlock))/_stride;
+		return (_data.size()-sizeof(CurveDequantizationBlock))/_stride;
 	}
 
 	template <typename Type>
@@ -223,12 +221,10 @@ namespace RenderCore { namespace Assets
 		// This will contain the reconstructed min & max, and other parameters that
 		// help with dequantization.
 		const unsigned framesPerDequantBlock = 256;
-		unsigned dequantBlockIdx = timeMarkerValue/framesPerDequantBlock;
-		assert(dequantBlockIdx < _blockCount);
-		auto* dequantBlock = (const CurveDequantizationBlock*)PtrAdd(_data.begin(), dequantBlockIdx*sizeof(CurveDequantizationBlock));
+		auto* dequantBlock = (const CurveDequantizationBlock*)_data.begin();
 		assert(PtrAdd(dequantBlock, sizeof(CurveDequantizationBlock)) <= _data.end());
 		assert(dequantBlock->_mins[3] == 0.f && dequantBlock->_maxs[3] == 0.f);
-		return {dequantBlock, PtrAdd(_data.begin(), _blockCount*sizeof(CurveDequantizationBlock)+idx*_stride)};
+		return {dequantBlock, PtrAdd(_data.begin(), sizeof(CurveDequantizationBlock)+idx*_stride)};
 	}
 
 	template <>
@@ -298,95 +294,102 @@ namespace RenderCore { namespace Assets
 	}
 
 	template<typename OutType, typename Decomp>
-        OutType        EvaluateCurve(	float evalTime, 
+        OutType        EvaluateCurve(	float evalFrame, 
 										IteratorRange<const uint16_t*> timeMarkers,
-										const CurveKeyDataDesc& keyDataDesc,
+										const CurveDesc& curveDesc,
 										CurveInterpolationType interpolationType,
 										const Decomp& decomp) never_throws 
 	{
-		uint16_t evalFrame = evalTime / keyDataDesc._frameDuration;
-		auto* keyUpper = std::upper_bound(timeMarkers.begin(), timeMarkers.end(), evalFrame);
+		if (curveDesc._timeMarkerType == TimeMarkerType::Default) {
+			auto* keyUpper = std::upper_bound(timeMarkers.begin(), timeMarkers.end(), (uint16_t)evalFrame);
 
-			// note -- clamping at start and end positions of the curve
-		if (__builtin_expect(keyUpper == timeMarkers.end() || keyUpper == timeMarkers.begin(), false)) {
-			assert(!timeMarkers.empty());
-			if (evalFrame == 0) return decomp(0, *timeMarkers.begin());
-			else return decomp(timeMarkers.size()-1, *(timeMarkers.end()-1));
-		}
+				// note -- clamping at start and end positions of the curve
+			if (__builtin_expect(keyUpper == timeMarkers.end() || keyUpper == timeMarkers.begin(), false)) {
+				assert(!timeMarkers.empty());
+				if (evalFrame == 0) return decomp(0, *timeMarkers.begin());
+				else return decomp(timeMarkers.size()-1, *(timeMarkers.end()-1));
+			}
 
-		auto keyUpperIndex = keyUpper-timeMarkers.begin();
-		auto alpha = LerpParameter(*(keyUpper-1) * keyDataDesc._frameDuration, *keyUpper * keyDataDesc._frameDuration, evalTime);
-		auto keyCount = timeMarkers.size();
-		assert(interpolationType == CurveInterpolationType::NURBS || decomp.KeyCount() == keyCount);
-		auto* key = keyUpper-1;
-		auto keyIndex = keyUpperIndex-1; assert(keyUpperIndex != 0);
-		assert(key[0] <= evalFrame && key[1] >= evalFrame);
+			auto keyUpperIndex = keyUpper-timeMarkers.begin();
+			auto alpha = LerpParameter(*(keyUpper-1), *keyUpper, evalFrame);
+			auto keyCount = timeMarkers.size();
+			assert(interpolationType == CurveInterpolationType::NURBS || decomp.KeyCount() == keyCount);
+			auto* key = keyUpper-1;
+			auto keyIndex = keyUpperIndex-1; assert(keyUpperIndex != 0);
+			assert(key[0] <= evalFrame && key[1] >= evalFrame);
 
-        if (interpolationType == CurveInterpolationType::Linear) {
+			if (interpolationType == CurveInterpolationType::Linear) {
 
-            assert(key[1] >= key[0]);		// (validating sorting assumption)
-            
-            auto P0 = decomp(keyIndex, key[0]);
-            auto P1 = decomp(keyIndex+1, key[1]);
-            return SphericalInterpolate(P0, P1, alpha);
+				assert(key[1] >= key[0]);		// (validating sorting assumption)
+				
+				auto P0 = decomp(keyIndex, key[0]);
+				auto P1 = decomp(keyIndex+1, key[1]);
+				return SphericalInterpolate(P0, P1, alpha);
 
-        } else if (interpolationType == CurveInterpolationType::Bezier) {
+			} else if (interpolationType == CurveInterpolationType::Bezier) {
 
-            assert(keyDataDesc._flags & CurveKeyDataDesc::Flags::HasInTangent);
-			assert(keyDataDesc._flags & CurveKeyDataDesc::Flags::HasOutTangent);
+				assert(curveDesc._flags & CurveDesc::Flags::HasInTangent);
+				assert(curveDesc._flags & CurveDesc::Flags::HasOutTangent);
 
-			assert(key[1] >= key[0]);		// (validating sorting assumption)
-            const auto inTangentOffset = BitsPerPixel(keyDataDesc._elementFormat)/8;
-            const auto outTangentOffset = inTangentOffset + BitsPerPixel(keyDataDesc._elementFormat)/8;
+				assert(key[1] >= key[0]);		// (validating sorting assumption)
+				const auto inTangentOffset = BitsPerPixel(curveDesc._elementFormat)/8;
+				const auto outTangentOffset = inTangentOffset + BitsPerPixel(curveDesc._elementFormat)/8;
 
-            auto P0 = decomp(keyIndex, key[0]);
-            auto P1 = decomp(keyIndex+1, key[1]);
+				auto P0 = decomp(keyIndex, key[0]);
+				auto P1 = decomp(keyIndex+1, key[1]);
 
-			// This is a convention of the Collada format
-			// (see Collada spec 1.4.1, page 4-4)
-			//		the first control point is stored under the semantic "OUT_TANGENT" for P0
-			//		and second control point is stored under the semantic "IN_TANGENT" for P1
-            auto C0 = decomp(keyIndex, key[0], outTangentOffset);
-			auto C1 = decomp(keyIndex+1, key[1], inTangentOffset);
+				// This is a convention of the Collada format
+				// (see Collada spec 1.4.1, page 4-4)
+				//		the first control point is stored under the semantic "OUT_TANGENT" for P0
+				//		and second control point is stored under the semantic "IN_TANGENT" for P1
+				auto C0 = decomp(keyIndex, key[0], outTangentOffset);
+				auto C1 = decomp(keyIndex+1, key[1], inTangentOffset);
 
-            return SphericalBezierInterpolate(P0, C0, C1, P1, alpha);
+				return SphericalBezierInterpolate(P0, C0, C1, P1, alpha);
 
-		} else if (interpolationType == CurveInterpolationType::CatmullRom) {
+			} else if (interpolationType == CurveInterpolationType::CatmullRom) {
 
-			// (need at least one key greater than the interpolation point, to perform interpolation correctly)
-			if ((key+2) >= timeMarkers.end())
-				return decomp(keyCount-1, timeMarkers[keyCount-1]);
+				// (need at least one key greater than the interpolation point, to perform interpolation correctly)
+				if ((key+2) >= timeMarkers.end())
+					return decomp(keyCount-1, timeMarkers[keyCount-1]);
 
-			auto P0 = decomp(keyIndex, key[0]);
-            auto P1 = decomp(keyIndex+1, key[1]);
-			// (note the clamp here that can result in P0 == P0n1 at the start of the curve)
-			auto kn1 = std::max(0, signed(keyIndex)-1);
-			auto kp1 = std::min(unsigned(keyIndex+2), unsigned(keyCount-1));
-			auto P0n1T = timeMarkers[kn1];
-			auto P1p1T = timeMarkers[kp1];
-			auto P0n1 = decomp(kn1, P0n1T);
-			auto P1p1 = decomp(kp1, P1p1T);
+				auto P0 = decomp(keyIndex, key[0]);
+				auto P1 = decomp(keyIndex+1, key[1]);
+				// (note the clamp here that can result in P0 == P0n1 at the start of the curve)
+				auto kn1 = std::max(0, signed(keyIndex)-1);
+				auto kp1 = std::min(unsigned(keyIndex+2), unsigned(keyCount-1));
+				auto P0n1T = timeMarkers[kn1];
+				auto P1p1T = timeMarkers[kp1];
+				auto P0n1 = decomp(kn1, P0n1T);
+				auto P1p1 = decomp(kp1, P1p1T);
 
-			return SphericalCatmullRomInterpolate(
-				P0n1, P0, P1, P1p1, 
-				(P0n1T - key[0]) / float(key[1] - key[0]), (P1p1T - key[0]) / float(key[1] - key[0]),
-				// ((evalTime / keyDataDesc._frameDuration) - P0n1T) / (key[0] - P0n1T),
-				// ((evalTime / keyDataDesc._frameDuration) - key[1]) / (P1p1T - key[1]),
-				alpha);
+				return SphericalCatmullRomInterpolate(
+					P0n1, P0, P1, P1p1, 
+					(P0n1T - key[0]) / float(key[1] - key[0]), (P1p1T - key[0]) / float(key[1] - key[0]),
+					// ((evalTime / keyDataDesc._frameDuration) - P0n1T) / (key[0] - P0n1T),
+					// ((evalTime / keyDataDesc._frameDuration) - key[1]) / (P1p1T - key[1]),
+					alpha);
 
-        } else if (interpolationType == CurveInterpolationType::Hermite) {
-			// hermite version not implemented
-			//  -- but it's similar to both the Bezier and Catmull Rom implementations, nad
-			//		could be easily hooked up
-			assert(0);      
-		} else if (interpolationType == CurveInterpolationType::NURBS) {
+			} else if (interpolationType == CurveInterpolationType::Hermite) {
+				// hermite version not implemented
+				//  -- but it's similar to both the Bezier and Catmull Rom implementations, nad
+				//		could be easily hooked up
+				assert(0);      
+			} else if (interpolationType == CurveInterpolationType::NURBS) {
+				// We need NURBSKnots to interpolate using NURBS math
+				assert(0);
+			} else {
+				assert(0);
+			}
+		} else if (curveDesc._timeMarkerType == TimeMarkerType::NURBSKnots) {
+			assert(interpolationType == CurveInterpolationType::NURBS);
 			if constexpr(std::is_same_v<Float3, OutType>) {
 				Float3 decompressedPositions[timeMarkers.size()-3];
 				for (unsigned c=0; c<timeMarkers.size()-4; c++)
 					decompressedPositions[c] = decomp(c+1, timeMarkers[c]);	// with the data I'm using we get a better result after offsetting the keyframe positions as so...
 				return CubicNURBSInterpolate(
 					MakeIteratorRange(decompressedPositions, &decompressedPositions[timeMarkers.size()-3]),
-					timeMarkers, evalTime / float(keyDataDesc._frameDuration));
+					timeMarkers, evalFrame);
 			} else if constexpr(std::is_same_v<Quaternion, OutType>) {
 				Float4 decompressedPositions[timeMarkers.size()-3];
 				for (unsigned c=0; c<timeMarkers.size()-4; c++) {
@@ -396,60 +399,60 @@ namespace RenderCore { namespace Assets
 				}
 				Float4 f4 = CubicNURBSInterpolate(
 					MakeIteratorRange(decompressedPositions, &decompressedPositions[timeMarkers.size()-3]),
-					timeMarkers, evalTime / float(keyDataDesc._frameDuration));
+					timeMarkers, evalFrame);
 				return Quaternion{f4[0], f4[1], f4[2], f4[3]}.normalize();
 			} else {
 				assert(0);
 			}
+		} else {
+			assert(0);	// no time markers
 		}
 
         return decomp(0, timeMarkers[0]);
     }
 
 	template<typename OutType>
-        OutType        RawAnimationCurve::Calculate(float inputTime) const never_throws
+        OutType        RawAnimationCurve::Calculate(float inputTime, CurveInterpolationType interpolationType) const never_throws
     {
-		if (_keyDataDesc._flags & CurveKeyDataDesc::Flags::Quantized) {
+		if (_desc._flags & CurveDesc::Flags::HasDequantBlock) {
 			return EvaluateCurve<OutType>(	
 				inputTime, 
 				MakeIteratorRange(_timeMarkers.begin(), _timeMarkers.end()),
-				_keyDataDesc, _interpolationType,
-				CurveElementDequantDecompressor<OutType>(MakeIteratorRange(_keyData.begin(), _keyData.end()), _keyDataDesc._elementStride, _keyDataDesc._elementFormat, _keyDataDesc._blockCount));
+				_desc, interpolationType,
+				CurveElementDequantDecompressor<OutType>(MakeIteratorRange(_keyData.begin(), _keyData.end()), _desc._elementStride, _desc._elementFormat));
 		} else {
 			return EvaluateCurve<OutType>(	
 				inputTime, 
 				MakeIteratorRange(_timeMarkers.begin(), _timeMarkers.end()),
-				_keyDataDesc, _interpolationType,
-				CurveElementDecompressor<OutType>(MakeIteratorRange(_keyData.begin(), _keyData.end()), _keyDataDesc._elementStride, _keyDataDesc._elementFormat));
+				_desc, interpolationType,
+				CurveElementDecompressor<OutType>(MakeIteratorRange(_keyData.begin(), _keyData.end()), _desc._elementStride, _desc._elementFormat));
 		}
 	}
 
-    float       RawAnimationCurve::StartTime() const
+    uint16_t       RawAnimationCurve::StartFrame() const
     {
-        if (_timeMarkers.empty()) { return std::numeric_limits<float>::max(); }
-        return _timeMarkers[0] * _keyDataDesc._frameDuration;
+        if (_timeMarkers.empty()) { return std::numeric_limits<uint16_t>::max(); }
+        return _timeMarkers[0];
     }
 
-    float       RawAnimationCurve::EndTime() const
+    uint16_t       RawAnimationCurve::EndFrame() const
     {
-        if (_timeMarkers.empty()) return -std::numeric_limits<float>::max();
-        return _timeMarkers[_timeMarkers.size()-1] * _keyDataDesc._frameDuration;
+        if (_timeMarkers.empty()) return 0;
+        return _timeMarkers[_timeMarkers.size()-1];
     }
 
-    template float      RawAnimationCurve::Calculate(float inputTime) const never_throws;
-    template Float3     RawAnimationCurve::Calculate(float inputTime) const never_throws;
-    template Float4     RawAnimationCurve::Calculate(float inputTime) const never_throws;
-    template Float4x4   RawAnimationCurve::Calculate(float inputTime) const never_throws;
-	template Quaternion RawAnimationCurve::Calculate(float inputTime) const never_throws;
+    template float      RawAnimationCurve::Calculate(float, CurveInterpolationType) const never_throws;
+    template Float3     RawAnimationCurve::Calculate(float, CurveInterpolationType) const never_throws;
+    template Float4     RawAnimationCurve::Calculate(float, CurveInterpolationType) const never_throws;
+    template Float4x4   RawAnimationCurve::Calculate(float, CurveInterpolationType) const never_throws;
+	template Quaternion RawAnimationCurve::Calculate(float, CurveInterpolationType) const never_throws;
 
     RawAnimationCurve::RawAnimationCurve(   SerializableVector<uint16_t>&& timeMarkers, 
 											SerializableVector<uint8>&& keyData,
-											const CurveKeyDataDesc&	keyDataDesc,
-											CurveInterpolationType interpolationType)
+											const CurveDesc& curveDesc)
     :       _timeMarkers(std::move(timeMarkers))
     ,       _keyData(std::move(keyData))
-    ,       _keyDataDesc(keyDataDesc)
-    ,       _interpolationType(interpolationType)
+    ,       _desc(curveDesc)
     {}
 
 	RawAnimationCurve::~RawAnimationCurve() {}

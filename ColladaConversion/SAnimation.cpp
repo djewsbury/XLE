@@ -281,7 +281,8 @@ namespace ColladaConversion
 
     UnboundAnimation Convert(
         const Animation& animation, 
-        const URIResolveContext& resolveContext)
+        const URIResolveContext& resolveContext,
+        float framesPerSecond)
     {
         UnboundAnimation result;
 
@@ -440,35 +441,35 @@ namespace ColladaConversion
                 firstChannel._inputSource, 
                 firstChannel._inputSource->FindAccessorForTechnique()->GetStride()-1);
 
-            const float frameDuration = 1.f/120.f;
             SerializableVector<uint16_t> inputTimeBlock;
             inputTimeBlock.reserve(inputTimeBlockAsFloats.size());
             for (auto t:inputTimeBlockAsFloats)
-                inputTimeBlock.push_back(t/frameDuration);
+                inputTimeBlock.push_back(t*framesPerSecond);
 
                 // todo -- we need to find the correct animation curve type
             auto interpolationType = RenderCore::Assets::CurveInterpolationType::Linear;
             if (firstChannel._interpolationSource)
                 interpolationType = AsInterpolationType(*firstChannel._interpolationSource);
 
-			RenderCore::Assets::CurveKeyDataDesc keyDataDesc { 0, elementBytes, positionFormat, frameDuration };
+			RenderCore::Assets::CurveDesc keyDataDesc { 0, elementBytes, positionFormat };
 			if (inTangentFormat != Format::Unknown) {
 				assert(inTangentFormat == positionFormat);
-				keyDataDesc._flags |= RenderCore::Assets::CurveKeyDataDesc::Flags::HasInTangent;
+				keyDataDesc._flags |= RenderCore::Assets::CurveDesc::Flags::HasInTangent;
 			}
 			if (outTangentFormat != Format::Unknown) {
 				assert(outTangentFormat == positionFormat);
-				keyDataDesc._flags |= RenderCore::Assets::CurveKeyDataDesc::Flags::HasOutTangent;
+				keyDataDesc._flags |= RenderCore::Assets::CurveDesc::Flags::HasOutTangent;
 			}
 			RenderCore::Assets::RawAnimationCurve curve(
                 std::move(inputTimeBlock),
                 std::move(keyBlock),
-				keyDataDesc, interpolationType);
+				keyDataDesc);
             result._curves.emplace_back(
 				UnboundAnimation::Curve {
-                    i->first, std::move(curve), samplerType, 0, 
-                    RenderCore::Assets::AnimSamplerComponent::None      // we don't know the component type here -- it has be implied by where we're binding it to
-                } );
+                    i->first, std::move(curve), samplerType,
+                    RenderCore::Assets::AnimSamplerComponent::None,      // we don't know the component type here -- it has be implied by where we're binding it to
+                    interpolationType
+                });
             
             i = i2;
         }

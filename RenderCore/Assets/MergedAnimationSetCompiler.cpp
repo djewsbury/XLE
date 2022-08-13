@@ -52,45 +52,43 @@ namespace RenderCore { namespace Assets
 			dst.AddCurve(RawAnimationCurve{c});
 
 		auto outputInterface = src._animationSet.GetOutputInterface();
-		auto constantDriverOffset = dst.GetConstantDrivers().size();
-		for (auto& constantDriver:src._animationSet.GetConstantDrivers()) {
-			dst.AddConstantDriver(
-				outputInterface[constantDriver._parameterIndex]._name,
-				outputInterface[constantDriver._parameterIndex]._component,
-				PtrAdd(src._animationSet.GetConstantData().begin(), constantDriver._dataOffset),
-				BitsPerPixel(constantDriver._format) / 8,
-				constantDriver._format, constantDriver._samplerType, constantDriver._samplerOffset);
-		}
-
-		auto animationDriverOffset = dst.GetAnimationDrivers().size();
-		for (auto& animDriver:src._animationSet.GetAnimationDrivers()) {
-			dst.AddAnimationDriver(
-				outputInterface[animDriver._parameterIndex]._name,
-				outputInterface[animDriver._parameterIndex]._component,
-				animDriver._curveIndex + curveOffset,
-				animDriver._samplerType, animDriver._samplerOffset);
-		}
+		
 
 		for (auto& animation:src._animationSet.GetAnimations()) {
-			auto newAnim = animation.second;
-			if (newAnim._beginDriver != newAnim._endDriver) {
-				newAnim._beginDriver += (unsigned)animationDriverOffset;
-				newAnim._endDriver += (unsigned)animationDriverOffset;
-			}
-			if (newAnim._beginConstantDriver != newAnim._endConstantDriver) {
-				newAnim._beginConstantDriver += (unsigned)constantDriverOffset;
-				newAnim._endConstantDriver += (unsigned)constantDriverOffset;
-			}
-			auto name = src._animationSet.LookupStringName(animation.first).AsString();
+			auto name = src._animationSet.FindAnimation(animation.first)->_stringName.AsString();
 			if (src._animationSet.GetAnimations().size() == 1) {
 				name = namePrefix;
 			} else
 				name = namePrefix + name;
-			dst.AddAnimation(
-				name,
-				newAnim._beginDriver, newAnim._endDriver,
-				newAnim._beginConstantDriver, newAnim._endConstantDriver,
-				newAnim._beginTime, newAnim._endTime);
+			auto srcAnim = animation.second;
+			GeoProc::NascentAnimationSet::BlockSpan blockSpans[srcAnim._endBlock-srcAnim._startBlock];
+			for (unsigned b=0; b<(srcAnim._endBlock-srcAnim._startBlock); ++b)
+				blockSpans[b] = { src._animationSet.GetAnimationBlocks()[srcAnim._startBlock+b]._beginFrame, src._animationSet.GetAnimationBlocks()[srcAnim._startBlock+b]._endFrame };
+			auto newBlocks = dst.AddAnimation(name, MakeIteratorRange(blockSpans, &blockSpans[srcAnim._endBlock-srcAnim._startBlock]), srcAnim._framesPerSecond);
+
+			for (unsigned b=0; b<(srcAnim._endBlock-srcAnim._startBlock); ++b) {
+				auto& srcBlock = src._animationSet.GetAnimationBlocks()[srcAnim._startBlock+b];
+
+				for (unsigned idx=srcBlock._beginConstantDriver; idx != srcBlock._endConstantDriver; ++idx) {
+					auto& constantDriver=src._animationSet.GetConstantDrivers()[idx];
+					newBlocks[b].AddConstantDriver(
+						outputInterface[constantDriver._parameterIndex]._name,
+						outputInterface[constantDriver._parameterIndex]._component,
+						outputInterface[constantDriver._parameterIndex]._samplerType,
+						PtrAdd(src._animationSet.GetConstantData().begin(), constantDriver._dataOffset),
+						BitsPerPixel(constantDriver._format) / 8,
+						constantDriver._format);
+				}
+
+				for (unsigned idx=srcBlock._beginDriver; idx != srcBlock._endDriver; ++idx) {
+					auto& animDriver=src._animationSet.GetAnimationDrivers()[idx];
+					newBlocks[b].AddAnimationDriver(
+						outputInterface[animDriver._parameterIndex]._name,
+						outputInterface[animDriver._parameterIndex]._component,
+						outputInterface[animDriver._parameterIndex]._samplerType,
+						animDriver._curveIndex + curveOffset, animDriver._interpolationType);
+				}
+			}
 		}
 	}
 

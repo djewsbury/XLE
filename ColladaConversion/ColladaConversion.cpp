@@ -494,21 +494,28 @@ namespace ColladaConversion
 		const auto& animations = input._doc->_animations;
         for (auto i=animations.cbegin(); i!=animations.cend(); ++i) {
             TRY {
-                auto anim = Convert(*i, input._resolveContext); 
-                for (auto c=anim._curves.begin(); c!=anim._curves.end(); ++c) {
-                    unsigned curveIndex = result.AddCurve(std::move(c->_curve));
-                    result.AddAnimationDriver(
-                        c->_parameterName, c->_parameterComponent, curveIndex,
-                        c->_samplerType, c->_samplerOffset);
-                }
+				const float framesPerSecond = 120.f;
+                auto anim = Convert(*i, input._resolveContext, framesPerSecond); 
+				if (!anim._curves.empty()) {
+					unsigned maxFrame = 0, minFrame = std::numeric_limits<unsigned>::max();
+					for (const auto& c:anim._curves) {
+						minFrame = std::min(minFrame, (unsigned)c._curve.StartFrame());
+						maxFrame = std::max(maxFrame, (unsigned)c._curve.EndFrame());
+					}
+					NascentAnimationSet::BlockSpan blocks[1] {
+						{minFrame, maxFrame+1}
+					};
+					auto nascentBlocks = result.AddAnimation("main", MakeIteratorRange(blocks), framesPerSecond);
+					for (auto c=anim._curves.begin(); c!=anim._curves.end(); ++c) {
+						unsigned curveIndex = result.AddCurve(std::move(c->_curve));
+						nascentBlocks[0].AddAnimationDriver(
+							c->_parameterName, c->_parameterComponent, c->_samplerType, curveIndex,
+							c->_interpolationType);
+					}
+				}
             } CATCH (...) {
             } CATCH_END
         }
-
-		// Add a default animation containing all of the drivers in this file
-		if (!result.GetAnimationDrivers().empty() || !result.GetConstantDrivers().empty()) {
-			result.MakeIndividualAnimation("main");
-		}
 
 		return result;
     }
@@ -578,83 +585,6 @@ namespace ColladaConversion
 		return std::move(result);
 	}
 
-	class MergedAnimCompileOp : public ::Assets::ICompileOperation
-    {
-    public:
-		std::vector<TargetDesc> _targets;
-		std::vector<::Assets::DependentFileState> _dependencies;
-
-		NascentAnimationSet _animationSet;
-        SerializableVector<RenderCore::Assets::RawAnimationCurve> _curves;
-
-		std::vector<TargetDesc> GetTargets() const { return _targets; }
-		std::vector<::Assets::DependentFileState> GetDependencies() const { return _dependencies; }
-
-		std::vector<SerializedArtifact> SerializeTarget(unsigned idx)
-		{
-			return SerializeAnimationsToChunks("MergedAnimSet", _animationSet);
-		}
-    };
-
-	static std::shared_ptr<::Assets::ICompileOperation> CreateMergedAnimSetCompileOperation(StringSection<::Assets::ResChar> identifier, bool folderSearch)
-	{
-		// Search the given directory for all .dae files. We'll merge them all together as a single animation set
-		std::vector<std::pair<std::string, std::string>> sourceFiles;
-		if (folderSearch) {
-			auto rawFiles = OSServices::FindFiles(identifier.AsString() + "/*.dae", OSServices::FindFilesFilter::File);
-			for (const auto&filePath:rawFiles)
-				sourceFiles.push_back(std::make_pair(filePath, MakeFileNameSplitter(filePath).File().AsString()));
-		} else {
-			auto cfgFileData = ::Assets::MainFileSystem::OpenMemoryMappedFile(identifier, 0, "r", OSServices::FileShareMode::Read);
-			InputStreamFormatter<utf8> formatter { 
-				MakeStringSection((const char*)cfgFileData.GetData().begin(), (const char*)cfgFileData.GetData().end()) };
-			auto searchRules = ::Assets::DefaultDirectorySearchRules(identifier);
-			for (;;) {
-				auto next = formatter.PeekNext();
-				if (next == FormatterBlob::KeyedItem) {
-					auto name = RequireKeyedItem(formatter);
-					auto value = RequireStringValue(formatter);
-					char foundFile[MaxPath];
-					searchRules.ResolveFile(foundFile, value);
-					sourceFiles.push_back(std::make_pair(foundFile, name.AsString()));
-					continue;
-				} else if (next == InputStreamFormatter<utf8>::Blob::EndElement || next == InputStreamFormatter<utf8>::Blob::None)
-					break;
-
-				Throw(FormatException("Unexpected blob", formatter.GetLocation()));
-			}
-		}
-
-		std::shared_ptr<MergedAnimCompileOp> result = std::make_shared<MergedAnimCompileOp>();
-		result->_dependencies.push_back(::Assets::IntermediatesStore::GetDependentFileState(s_cfgName));
-
-		ImportConfiguration cfg(s_cfgName);
-
-		for (const auto&filePath:sourceFiles) {
-			result->_dependencies.push_back(::Assets::IntermediatesStore::GetDependentFileState(filePath.first));
-
-			ColladaCompileOp subResult;
-			subResult._cfg = cfg;
-			subResult._fileData = ::Assets::MainFileSystem::OpenMemoryMappedFile(MakeStringSection(filePath.first), 0, "r", OSServices::FileShareMode::Read);
-			XmlInputStreamFormatter<utf8> formatter(
-				MakeStringSection((const char*)subResult._fileData.GetData().begin(), (const char*)subResult._fileData.GetData().end()));
-			formatter._allowCharacterData = true;
-
-			subResult._name = identifier.AsString();
-			subResult._doc = std::make_shared<ColladaConversion::DocumentScaffold>();
-			subResult._doc->Parse(formatter);
-
-			subResult._resolveContext = ::ColladaConversion::URIResolveContext(subResult._doc);
-
-			result->_animationSet.MergeInAsAnIndividualAnimation(
-				ConvertAnimationSet(subResult), 
-				filePath.second);
-		}
-
-		result->_targets.push_back(ColladaCompileOp::TargetDesc{Type_AnimationSet, "Animations"});
-		return result;
-	}
-
 #if COMPILER_ACTIVE == COMPILER_TYPE_MSVC
 	std::shared_ptr<::Assets::ICompileOperation> CreateCompileOperation(const ::Assets::InitializerPack& initPack)
 	{
@@ -665,14 +595,7 @@ namespace ColladaConversion
 	{
 #endif
 		auto identifier = initPack.GetInitializer<std::string>(0);
-		auto splitter = MakeFileNameSplitter(identifier);
-		if (XlEqStringI(splitter.FileAndExtension(), "alldae")) {
-			return CreateMergedAnimSetCompileOperation(splitter.DriveAndPath(), true);
-		} else if (XlEqStringI(splitter.Extension(), "daelst")) {
-			return CreateMergedAnimSetCompileOperation(identifier, false);
-		} else {
-			return CreateNormalCompileOperation(identifier);
-		}
+		return CreateNormalCompileOperation(identifier);
 	}
 }
 

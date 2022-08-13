@@ -23,14 +23,14 @@ namespace ColladaConversion
             std::string                 _parameterName;
             RenderCore::Assets::RawAnimationCurve   _curve;
 			RenderCore::Assets::AnimSamplerType _samplerType;
-            unsigned                    _samplerOffset;
             RenderCore::Assets::AnimSamplerComponent _parameterComponent;
+            RenderCore::Assets::CurveInterpolationType _interpolationType;
         };
 
         std::vector<Curve> _curves;
     };
 
     class Animation; class URIResolveContext;
-	UnboundAnimation Convert(const Animation& animation, const URIResolveContext& resolveContext);
+	UnboundAnimation Convert(const Animation& animation, const URIResolveContext& resolveContext, float framesPerSecond);
 }
 

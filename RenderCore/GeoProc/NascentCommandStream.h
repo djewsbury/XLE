@@ -24,13 +24,14 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         //      and some information to bind these animations to
         //      a skeleton
         //
-	
+
     class NascentAnimationSet
     {
     public:
 		using AnimationDriver = RenderCore::Assets::AnimationSet::AnimationDriver;
 		using ConstantDriver = RenderCore::Assets::AnimationSet::ConstantDriver;
-		using Animation = RenderCore::Assets::AnimationSet::Animation;
+		using AnimationBlock = RenderCore::Assets::AnimationSet::AnimationBlock;
+        using Animation = RenderCore::Assets::AnimationSet::Animation;
 
         struct StringOrHash
         {
@@ -42,34 +43,43 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             friend bool operator==(const StringOrHash& lhs, const StringOrHash& rhs);
         };
 
-        void    AddAnimationDriver(
-            StringOrHash            parameterName, 
-            AnimSamplerComponent    parameterComponent,
-            unsigned                curveIndex, 
-            AnimSamplerType         samplerType, 
-            unsigned                samplerOffset);
+        struct BlockSpan { unsigned _beginFrame, _endFrame; };
+        class NascentBlock;
+        std::vector<NascentBlock> AddAnimation(const std::string& name, IteratorRange<const BlockSpan*>, float framesPerSecond);
 
-        void    AddConstantDriver(  
-            StringOrHash            parameterName, 
-            AnimSamplerComponent    parameterComponent,
-            const void*             constantValue,
-            size_t                  constantValueSize,
-            Format                  format,
-            AnimSamplerType         samplerType, 
-            unsigned                samplerOffset);
+        class NascentBlock
+        {
+        public:
+            unsigned AddCurve(RenderCore::Assets::RawAnimationCurve&& curve);
+
+            void    AddAnimationDriver(
+                StringOrHash            parameterName, 
+                AnimSamplerComponent    parameterComponent,
+                AnimSamplerType         samplerType,
+                unsigned                curveIndex,
+                CurveInterpolationType 	interpolationType);
+
+            void    AddConstantDriver(  
+                StringOrHash            parameterName, 
+                AnimSamplerComponent    parameterComponent,
+                AnimSamplerType         samplerType,
+                const void*             constantValue,
+                size_t                  constantValueSize,
+                Format                  format);
+        private:
+            NascentAnimationSet* _animSet = nullptr;
+            unsigned _blockIdx = 0;
+            NascentBlock(NascentAnimationSet& animSet, unsigned blockIdx) : _animSet(&animSet), _blockIdx(blockIdx) {}
+            NascentBlock() = default;
+            friend class NascentAnimationSet;
+        };
+
+        unsigned  AddParameter(StringOrHash parameterName, AnimSamplerComponent parameterComponent, AnimSamplerType samplerType);
 
         bool    HasAnimationDriver(StringOrHash parameterName) const;
-        void    MergeInAsAnIndividualAnimation(const NascentAnimationSet& copyFrom, const std::string& name);
 		void    MergeInAsManyAnimations(const NascentAnimationSet& copyFrom, const std::string& namePrefix = {});
-		void	MakeIndividualAnimation(const std::string& name);
-
-		void	AddAnimation(
-			const std::string& name, 
-			unsigned driverBegin, unsigned driverEnd,
-			unsigned constantBegin, unsigned constantEnd,
-			float minTime, float maxTime);
-
-		unsigned AddCurve(RenderCore::Assets::RawAnimationCurve&& curve);
+		void	MakeIndividualAnimation(const std::string& name, float framesPerSecond);
+        unsigned AddCurve(RenderCore::Assets::RawAnimationCurve&& curve);
 
 		IteratorRange<const AnimationDriver*> GetAnimationDrivers() const { return MakeIteratorRange(_animationDrivers); }
 		IteratorRange<const ConstantDriver*> GetConstantDrivers() const { return MakeIteratorRange(_constantDrivers); }
@@ -81,12 +91,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     private:
         std::vector<AnimationDriver>    _animationDrivers;
         std::vector<ConstantDriver>     _constantDrivers;
+        std::vector<AnimationBlock>     _animationBlocks;
         std::vector<std::pair<std::string, Animation>>              _animations;
-        std::vector<std::pair<StringOrHash, AnimSamplerComponent>>  _parameterInterfaceDefinition;
+        struct Param { StringOrHash _name; AnimSamplerComponent _component; AnimSamplerType _samplerType; };
+        std::vector<Param>              _parameterInterfaceDefinition;
         std::vector<uint8_t>            _constantData;
 		std::vector<RenderCore::Assets::RawAnimationCurve> _curves;
 
-        AnimSamplerType FindSamplerType(unsigned parameterIndex) const;
+        void AppendAnimationDriverToBlock(unsigned blockIdx, unsigned driverIdx);
+        void AppendConstantDriverToBlock(unsigned blockIdx, unsigned driverIdx);
     };
 
         //

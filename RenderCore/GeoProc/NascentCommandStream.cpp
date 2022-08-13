@@ -23,61 +23,84 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	NascentAnimationSet::StringOrHash::StringOrHash(uint64_t h) : _hashForm(h) {}
 	bool operator==(const NascentAnimationSet::StringOrHash& lhs, const NascentAnimationSet::StringOrHash& rhs) { return lhs._hashForm == rhs._hashForm; }
 
-	void    NascentAnimationSet::AddConstantDriver( 
-									StringOrHash  			parameterName, 
-									AnimSamplerComponent    parameterComponent,
-									const void*         	constantValue, 
-									size_t					valueSize,
-									Format					format,
-									AnimSamplerType     	samplerType, 
-									unsigned            	samplerOffset)
+	unsigned    NascentAnimationSet::AddParameter(StringOrHash parameterName, AnimSamplerComponent parameterComponent, AnimSamplerType samplerType)
 	{
 		size_t parameterIndex = _parameterInterfaceDefinition.size();
 		auto i = std::find_if( 
 			_parameterInterfaceDefinition.cbegin(), _parameterInterfaceDefinition.cend(), 
-			[parameterName, parameterComponent](const auto& q) { return q.first == parameterName && q.second == parameterComponent; });
+			[parameterName, parameterComponent](const auto& q) { return q._name == parameterName && q._component == parameterComponent; });
 		if (i!=_parameterInterfaceDefinition.end()) {
+			assert(i->_samplerType == samplerType);
 			parameterIndex = (unsigned)std::distance(_parameterInterfaceDefinition.cbegin(), i);
 		} else {
-			_parameterInterfaceDefinition.emplace_back(parameterName, parameterComponent);
+			_parameterInterfaceDefinition.push_back({parameterName, parameterComponent, samplerType});
 		}
+		return parameterIndex;
+	}
+
+	void    NascentAnimationSet::NascentBlock::AddConstantDriver( 
+									StringOrHash  			parameterName, 
+									AnimSamplerComponent    parameterComponent,
+									AnimSamplerType         samplerType,
+									const void*         	constantValue, 
+									size_t					valueSize,
+									Format					format)
+	{
+		auto parameterIndex = _animSet->AddParameter(parameterName, parameterComponent, samplerType);
 
 		// Expecting a single value -- it should match the bits per pixel value
 		// associated with the given format
 		assert(unsigned(valueSize) == RenderCore::BitsPerPixel(format)/8);
 
-		unsigned dataOffset = unsigned(_constantData.size());
+		unsigned dataOffset = unsigned(_animSet->_constantData.size());
 		std::copy(
 			(uint8_t*)constantValue, PtrAdd((uint8_t*)constantValue, valueSize),
-			std::back_inserter(_constantData));
-
-		_constantDrivers.push_back({dataOffset, (unsigned)parameterIndex, format, samplerType, samplerOffset});
+			std::back_inserter(_animSet->_constantData));
+		_animSet->_constantDrivers.push_back({dataOffset, (unsigned)parameterIndex, format});
+		_animSet->AppendConstantDriverToBlock(_blockIdx, _animSet->_constantDrivers.size()-1);
 	}
 
-	void    NascentAnimationSet::AddAnimationDriver( 
+	void    NascentAnimationSet::NascentBlock::AddAnimationDriver( 
 		StringOrHash parameterName, 
 		AnimSamplerComponent parameterComponent,
-		unsigned curveId, 
-		AnimSamplerType samplerType, unsigned samplerOffset)
+		AnimSamplerType samplerType,
+		unsigned curveId,
+		CurveInterpolationType interpolationType)
 	{
-		size_t parameterIndex = _parameterInterfaceDefinition.size();
-		auto i = std::find_if( 
-			_parameterInterfaceDefinition.cbegin(), _parameterInterfaceDefinition.cend(), 
-			[parameterName, parameterComponent](const auto& q) { return q.first == parameterName && q.second == parameterComponent; });
-		if (i!=_parameterInterfaceDefinition.end()) {
-			parameterIndex = (unsigned)std::distance(_parameterInterfaceDefinition.cbegin(), i);
-		} else {
-			_parameterInterfaceDefinition.emplace_back(parameterName, parameterComponent);
-		}
+		auto parameterIndex = _animSet->AddParameter(parameterName, parameterComponent, samplerType);
+		_animSet->_animationDrivers.push_back({curveId, (unsigned)parameterIndex, interpolationType});
+		_animSet->AppendAnimationDriverToBlock(_blockIdx, _animSet->_animationDrivers.size()-1);
+	}
 
-		_animationDrivers.push_back({curveId, (unsigned)parameterIndex, samplerType, samplerOffset});
+	void NascentAnimationSet::AppendAnimationDriverToBlock(unsigned blockIdx, unsigned driverIdx)
+	{
+		auto& block = _animationBlocks[blockIdx];
+		if (block._beginDriver == block._endDriver) {
+			block._beginDriver = driverIdx;
+			block._endDriver = driverIdx+1;
+		} else {
+			assert(block._endDriver == driverIdx);		// must be appended in order
+			++block._endDriver;
+		}
+	}
+
+    void NascentAnimationSet::AppendConstantDriverToBlock(unsigned blockIdx, unsigned driverIdx)
+	{
+		auto& block = _animationBlocks[blockIdx];
+		if (block._beginConstantDriver == block._endConstantDriver) {
+			block._beginConstantDriver = driverIdx;
+			block._endConstantDriver = driverIdx+1;
+		} else {
+			assert(block._endConstantDriver == driverIdx);		// must be appended in order
+			++block._endConstantDriver;
+		}
 	}
 
 	unsigned NascentAnimationSet::GetParameterIndex(const std::string& parameterName, AnimSamplerComponent parameterComponent) const
 	{
 		auto i2 = std::find_if( 
 			_parameterInterfaceDefinition.cbegin(), _parameterInterfaceDefinition.cend(), 
-			[parameterName, parameterComponent](const auto& q) { return q.first == parameterName && q.second == parameterComponent; });
+			[parameterName, parameterComponent](const auto& q) { return q._name == parameterName && q._component == parameterComponent; });
 		if (i2==_parameterInterfaceDefinition.end()) 
 			return ~0u;
 		return (unsigned)std::distance(_parameterInterfaceDefinition.cbegin(), i2);
@@ -86,7 +109,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	bool    NascentAnimationSet::HasAnimationDriver(StringOrHash parameterName) const
 	{
 		for (auto i2=_parameterInterfaceDefinition.cbegin(); i2!=_parameterInterfaceDefinition.cend(); ++i2) {
-			if (!(i2->first == parameterName)) continue;
+			if (!(i2->_name == parameterName)) continue;
 
 			auto parameterIndex = (unsigned)std::distance(_parameterInterfaceDefinition.cbegin(), i2);
 
@@ -103,55 +126,17 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return false;
 	}
 
-	void    NascentAnimationSet::MergeInAsAnIndividualAnimation(
-		const NascentAnimationSet& copyFrom, const std::string& name)
-	{
-			//
-			//      Merge the animation drivers in the given input animation, and give 
-			//      them the supplied name
-			//
-		float minTime = std::numeric_limits<float>::max(), maxTime = -std::numeric_limits<float>::max();
-		size_t startIndex = _animationDrivers.size();
-		size_t constantStartIndex = _constantDrivers.size();
-		for (auto i=copyFrom._animationDrivers.cbegin(); i!=copyFrom._animationDrivers.end(); ++i) {
-			assert(i->_curveIndex < copyFrom._curves.size());
-			const auto& animCurve = copyFrom._curves[i->_curveIndex];
-			float curveStart = animCurve.StartTime();
-			float curveEnd = animCurve.EndTime();
-			minTime = std::min(minTime, curveStart);
-			maxTime = std::max(maxTime, curveEnd);
-
-			auto param = copyFrom._parameterInterfaceDefinition[i->_parameterIndex];
-			_curves.emplace_back(Assets::RawAnimationCurve(animCurve));
-			AddAnimationDriver(
-				param.first, param.second, unsigned(_curves.size()-1), 
-				i->_samplerType, i->_samplerOffset);
-		}
-
-		for (auto i=copyFrom._constantDrivers.cbegin(); i!=copyFrom._constantDrivers.end(); ++i) {
-			auto param = copyFrom._parameterInterfaceDefinition[i->_parameterIndex];
-			AddConstantDriver(
-				param.first, param.second, PtrAdd(AsPointer(copyFrom._constantData.begin()), i->_dataOffset), 
-				BitsPerPixel(i->_format)/8, i->_format,
-				i->_samplerType, i->_samplerOffset);
-		}
-
-		_animations.push_back(
-			std::make_pair(
-				name,
-				Animation{
-					(unsigned)startIndex, (unsigned)_animationDrivers.size(), 
-					(unsigned)constantStartIndex, (unsigned)_constantDrivers.size(),
-					minTime, maxTime}));
-	}
-
 	void    NascentAnimationSet::MergeInAsManyAnimations(const NascentAnimationSet& copyFrom, const std::string& namePrefix)
 	{
 		std::vector<unsigned> parameterRemapping;
 		parameterRemapping.reserve(copyFrom._parameterInterfaceDefinition.size());
 		for (const auto&p:copyFrom._parameterInterfaceDefinition) {
-			auto i2 = std::find(_parameterInterfaceDefinition.cbegin(), _parameterInterfaceDefinition.cend(), p);
+			auto i2 = std::find_if( 
+				_parameterInterfaceDefinition.cbegin(), _parameterInterfaceDefinition.cend(), 
+				[parameterName=p._name, parameterComponent=p._component](const auto& q) { return q._name == parameterName && q._component == parameterComponent; });
+
 			if (i2 != _parameterInterfaceDefinition.cend()) {
+				assert(i2->_samplerType == p._samplerType);
 				parameterRemapping.push_back(unsigned(i2-_parameterInterfaceDefinition.cbegin()));
 			} else {
 				parameterRemapping.push_back(unsigned(_parameterInterfaceDefinition.size()));
@@ -171,9 +156,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				ConstantDriver {
 					unsigned(dataOffset + d._dataOffset),
 					parameterRemapping[d._parameterIndex],
-					d._format,
-					d._samplerType,
-					d._samplerOffset
+					d._format
 				});
 		}
 
@@ -184,64 +167,87 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				AnimationDriver {
 					unsigned(curveOffset + d._curveIndex),
 					parameterRemapping[d._parameterIndex],
-					d._samplerType,
-					d._samplerOffset
+					d._interpolationType
 				});
+		}
+
+		size_t animationBlockOffset = _animationBlocks.size();
+		_animationBlocks.reserve(_animationBlocks.size()+copyFrom._animationBlocks.size());
+		for (const auto&a:copyFrom._animationBlocks) {
+			auto newBlock = a;
+			if (newBlock._beginDriver != newBlock._endDriver) {
+				newBlock._beginDriver += (unsigned)animationDriverOffset;
+				newBlock._endDriver += (unsigned)animationDriverOffset;
+			}
+			if (newBlock._beginConstantDriver != newBlock._endConstantDriver) {
+				newBlock._beginConstantDriver += (unsigned)constantDriverOffset;
+				newBlock._endConstantDriver += (unsigned)constantDriverOffset;
+			}
+			_animationBlocks.push_back(newBlock);
 		}
 
 		_animations.reserve(_animations.size()+copyFrom._animations.size());
 		for (const auto&a:copyFrom._animations) {
 			auto newAnim = a.second;
-			if (newAnim._beginDriver != newAnim._endDriver) {
-				newAnim._beginDriver += (unsigned)animationDriverOffset;
-				newAnim._endDriver += (unsigned)animationDriverOffset;
-			}
-			if (newAnim._beginConstantDriver != newAnim._endConstantDriver) {
-				newAnim._beginConstantDriver += (unsigned)constantDriverOffset;
-				newAnim._endConstantDriver += (unsigned)constantDriverOffset;
-			}
+			newAnim._startBlock += animationBlockOffset;
+			newAnim._endBlock += animationBlockOffset;
 			_animations.push_back(std::make_pair(namePrefix+a.first, newAnim));
 		}
 	}
 
-	void	NascentAnimationSet::MakeIndividualAnimation(const std::string& name)
+	void	NascentAnimationSet::MakeIndividualAnimation(const std::string& name, float framesPerSecond)
 	{
 		// Make an Animation record that covers all of the curves registered.
 		// This is intended for cases where there's only a single animation within the NascentAnimationSet
-		float minTime = std::numeric_limits<float>::max(), maxTime = -std::numeric_limits<float>::max();
+		unsigned minFrame = std::numeric_limits<unsigned>::max(), maxFrame = 0;
 		for (auto i=_animationDrivers.cbegin(); i!=_animationDrivers.end(); ++i) {
 			if (i->_curveIndex >= _curves.size()) continue;
 			const auto* animCurve = &_curves[i->_curveIndex];
 			if (animCurve) {
-				float curveStart = animCurve->StartTime();
-				float curveEnd = animCurve->EndTime();
-				minTime = std::min(minTime, curveStart);
-				maxTime = std::max(maxTime, curveEnd);
+				minFrame = std::min(minFrame, (unsigned)animCurve->StartFrame());
+				maxFrame = std::max(maxFrame, (unsigned)animCurve->EndFrame());
 			}
 		}
 
+		_animationBlocks.push_back(
+			AnimationBlock{
+				(unsigned)0, (unsigned)_animationDrivers.size(), 
+				(unsigned)0, (unsigned)_constantDrivers.size(),
+				minFrame, maxFrame});
+
 		_animations.push_back(
 			std::make_pair(
 				name,
 				Animation{
-					(unsigned)0, (unsigned)_animationDrivers.size(), 
-					(unsigned)0, (unsigned)_constantDrivers.size(),
-					minTime, maxTime}));
+					(unsigned)_animationBlocks.size()-1,
+					(unsigned)_animationBlocks.size(),
+					framesPerSecond}));
 	}
 
-	void	NascentAnimationSet::AddAnimation(
-			const std::string& name, 
-			unsigned driverBegin, unsigned driverEnd,
-			unsigned constantBegin, unsigned constantEnd,
-			float minTime, float maxTime)
+	auto NascentAnimationSet::AddAnimation(const std::string& name, IteratorRange<const BlockSpan*> blocks, float framesPerSecond) -> std::vector<NascentBlock>
 	{
-		_animations.push_back(
-			std::make_pair(
-				name,
-				Animation{
-					driverBegin, driverEnd, 
-					constantBegin, constantEnd,
-					minTime, maxTime}));
+		assert(!blocks.empty());
+		assert(framesPerSecond != 0.f);
+		Animation newAnimation;
+		newAnimation._startBlock = _animationBlocks.size();
+		newAnimation._endBlock = _animationBlocks.size() + blocks.size();
+		newAnimation._framesPerSecond = framesPerSecond;
+		_animations.emplace_back(name, newAnimation);
+
+		_animationBlocks.reserve(_animationBlocks.size() + blocks.size());
+		for (auto b:blocks)
+			_animationBlocks.push_back(AnimationBlock{0, 0, 0, 0, b._beginFrame, b._endFrame});
+
+		std::vector<NascentBlock> result;
+		result.reserve(blocks.size());
+		for (unsigned c=0; c<blocks.size(); ++c)
+			result.push_back(NascentBlock{*this, newAnimation._startBlock+c});
+		return result;
+	}
+
+	unsigned NascentAnimationSet::NascentBlock::AddCurve(RenderCore::Assets::RawAnimationCurve&& curve)
+	{
+		return _animSet->AddCurve(std::move(curve));
 	}
 
 	unsigned NascentAnimationSet::AddCurve(RenderCore::Assets::RawAnimationCurve&& curve)
@@ -249,29 +255,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		auto result = (unsigned)_curves.size();
 		_curves.emplace_back(std::move(curve));
 		return result;
-	}
-
-	AnimSamplerType NascentAnimationSet::FindSamplerType(unsigned parameterIndex) const
-	{
-		std::optional<AnimSamplerType> result;
-
-		for (const auto&d:_animationDrivers) {
-			if (d._parameterIndex != parameterIndex) continue;
-			if (result.value_or(d._samplerType) != d._samplerType)
-				Throw(std::runtime_error("Different drivers use different sampler types for the same parameter found while serializing NascentAnimationSet"));
-			result = d._samplerType;
-		}
-
-		for (const auto&d:_constantDrivers) {
-			if (d._parameterIndex != parameterIndex) continue;
-			if (result.value_or(d._samplerType) != d._samplerType)
-				Throw(std::runtime_error("Different drivers use different sampler types for the same parameter found while serializing NascentAnimationSet"));
-			result = d._samplerType;
-		}
-
-		if (!result)
-			Throw(std::runtime_error("Redundant animation parameter found while serializing NascentAnimationSet"));
-		return result.value();
 	}
 
 	void SerializationOperator(::Assets::BlockSerializer& serializer, const NascentAnimationSet& obj)
@@ -284,12 +267,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		for (const auto&a:obj._animations)
 			finalAnimationSet._animations.push_back(std::make_pair(Hash64(a.first), a.second));
 		std::sort(finalAnimationSet._animations.begin(), finalAnimationSet._animations.end(), CompareFirst<uint64_t, AnimationSet::Animation>());
+		finalAnimationSet._animationBlocks.insert(finalAnimationSet._animationBlocks.end(), obj._animationBlocks.begin(), obj._animationBlocks.end());
 
 		finalAnimationSet._outputInterface.reserve(obj._parameterInterfaceDefinition.size());
 		for (unsigned c=0; c<obj._parameterInterfaceDefinition.size(); ++c) {
-			auto samplerType = obj.FindSamplerType(c);
 			auto& p = obj._parameterInterfaceDefinition[c];
-			finalAnimationSet._outputInterface.push_back({p.first._hashForm, p.second, samplerType});
+			finalAnimationSet._outputInterface.push_back({p._name._hashForm, p._component, p._samplerType});
 		}
 
 		finalAnimationSet._curves.insert(finalAnimationSet._curves.end(), obj._curves.begin(), obj._curves.end());
@@ -323,36 +306,38 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 	std::ostream& SerializationOperator(
 		std::ostream& stream, 
-		const std::pair<NascentAnimationSet::StringOrHash, AnimSamplerComponent>& p)
-	{
-		return stream << p.first << "[" << AsString(p.second) << "]";
-	}
-
-	std::ostream& SerializationOperator(
-		std::ostream& stream, 
 		const NascentAnimationSet& animSet)
 	{
 		// write out some metrics / debugging information
 		stream << "--- Output animation parameters (" << animSet._parameterInterfaceDefinition.size() << ")" << std::endl;
 		for (unsigned c=0; c<animSet._parameterInterfaceDefinition.size(); ++c)
-			stream << "[" << c << "] " << animSet._parameterInterfaceDefinition[c] << std::endl;
+			stream << "[" << c << "] " << animSet._parameterInterfaceDefinition[c]._name << "[" << AsString(animSet._parameterInterfaceDefinition[c]._component) << "] " << AsString(animSet._parameterInterfaceDefinition[c]._samplerType) << std::endl;
 
 		stream << "--- Animations (" << animSet._animations.size() << ")" << std::endl;
 		for (unsigned c=0; c<animSet._animations.size(); ++c) {
 			auto& anim = animSet._animations[c];
-			stream << "[" << c << "] " << anim.first << " " << anim.second._beginTime << " to " << anim.second._endTime << std::endl;
+			stream << "[" << c << "] " << anim.first << " " << anim.second._framesPerSecond << " fps ";
+			for (unsigned b=anim.second._startBlock; b!=anim.second._endBlock; ++b) {
+				auto& block = animSet._animationBlocks[b];
+				stream << " block {" << block._beginFrame << " to " << block._endFrame << "}";
+			}
+			stream << std::endl;
 		}
 
 		stream << "--- Animations drivers (" << animSet._animationDrivers.size() << ")" << std::endl;
 		for (unsigned c=0; c<animSet._animationDrivers.size(); ++c) {
 			auto& driver = animSet._animationDrivers[c];
-			stream << "[" << c << "] Curve index: " << driver._curveIndex << " Parameter index: " << driver._parameterIndex << " (" << animSet._parameterInterfaceDefinition[driver._parameterIndex] << ") with sampler: " << AsString(driver._samplerType) << " and sampler offset " << driver._samplerOffset << std::endl;
+			stream << "[" << c << "] Curve index: " << driver._curveIndex << " Parameter index: " << driver._parameterIndex << " (" 
+				<< animSet._parameterInterfaceDefinition[driver._parameterIndex]._name << "[" << AsString(animSet._parameterInterfaceDefinition[driver._parameterIndex]._component) << "]" 
+				<< ") interpolation: " << AsString(driver._interpolationType) << std::endl;
 		}
 
 		stream << "--- Constant drivers (" << animSet._constantDrivers.size() << ")" << std::endl;
 		for (unsigned c=0; c<animSet._constantDrivers.size(); ++c) {
 			auto& driver = animSet._constantDrivers[c];
-			stream << "[" << c << "] Parameter index: " << driver._parameterIndex << " (" << animSet._parameterInterfaceDefinition[driver._parameterIndex] << ") with sampler: " << AsString(driver._samplerType) << " and sampler offset " << driver._samplerOffset << std::endl;
+			stream << "[" << c << "] Parameter index: " << driver._parameterIndex << " (" 
+				<< animSet._parameterInterfaceDefinition[driver._parameterIndex]._name << "[" << AsString(animSet._parameterInterfaceDefinition[driver._parameterIndex]._component) << "]" 
+				<< ")" << std::endl;
 		}
 
 		return stream;

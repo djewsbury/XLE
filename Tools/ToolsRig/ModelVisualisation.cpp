@@ -95,13 +95,14 @@ namespace ToolsRig
 			animState._animationList.clear();
 			if (_animationScaffold) {
 				for (const auto&anim:_animationScaffold->ImmutableData()._animationSet.GetAnimations()) {
-					auto name = _animationScaffold->ImmutableData()._animationSet.LookupStringName(anim.first);
-					if (!name.IsEmpty()) {
-						animState._animationList.push_back({name.AsString(), anim.second._beginTime, anim.second._endTime});
+					auto query = _animationScaffold->ImmutableData()._animationSet.FindAnimation(anim.first);
+					assert(query.has_value());
+					if (!query->_stringName.IsEmpty()) {
+						animState._animationList.push_back({query->_stringName.AsString(), 0.f, query->_durationInFrames / query->_framesPerSecond});
 					} else {
 						char buffer[64];
 						XlUI64toA(anim.first, buffer, dimof(buffer), 16);
-						animState._animationList.push_back({buffer, anim.second._beginTime, anim.second._endTime});
+						animState._animationList.push_back({buffer, 0.f, query->_durationInFrames / query->_framesPerSecond});
 					}
 				}
 			}
@@ -244,7 +245,7 @@ namespace ToolsRig
 				float time = _animationState->_animationTime;
 				if (_animationState->_state == VisAnimationState::State::Playing) {
 					time += std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - _animationState->_anchorTime).count() / 1000.f;
-					time = fmodf(time - foundAnimation._beginTime, foundAnimation._endTime - foundAnimation._beginTime) + foundAnimation._beginTime;
+					time = fmodf(time, foundAnimation._durationInFrames / foundAnimation._framesPerSecond);
 				}
 
 				auto parameterBlockSize = _actualized->_animSetBinding.GetParameterDefaultsBlock().size();
@@ -329,7 +330,7 @@ namespace ToolsRig
 				float time = _animationState->_animationTime;
 				if (_animationState->_state == VisAnimationState::State::Playing)
 					time += std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - _animationState->_anchorTime).count() / 1000.f;
-				time = fmodf(time - foundAnimation._beginTime, foundAnimation._endTime - foundAnimation._beginTime) + foundAnimation._beginTime;
+				time = fmodf(time, foundAnimation._durationInFrames / foundAnimation._framesPerSecond);
 
 				auto parameterBlockSize = _actualized->_animSetBinding.GetParameterDefaultsBlock().size();
 				uint8_t parameterBlock[parameterBlockSize];
