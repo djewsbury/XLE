@@ -33,7 +33,7 @@ namespace RenderOverlays
 	};
 
 	void DrawBasisAxes(
-		IOverlayContext& overlayContext, RenderCore::Techniques::ParsingContext& parserContext, 
+		RenderCore::Techniques::IImmediateDrawables& immDrawables, RenderCore::Techniques::ParsingContext& parserContext, 
 		Float2 ssMins, Float2 ssMaxs)
 	{
 			//
@@ -54,7 +54,7 @@ namespace RenderOverlays
 
 		using namespace RenderCore;
 		Techniques::ImmediateDrawableMaterial material;
-		auto workingVertices = overlayContext.GetImmediateDrawables().QueueDraw(
+		auto workingVertices = immDrawables.QueueDraw(
 			dimof(vertices), MakeIteratorRange(s_vertexInputLayout), 
 			material, Topology::LineList).Cast<InternalVertex*>();
 
@@ -88,7 +88,7 @@ namespace RenderOverlays
 	}
 
 	void DrawGrid(
-		IOverlayContext& overlayContext, RenderCore::Techniques::ParsingContext& parserContext, 
+		RenderCore::Techniques::IImmediateDrawables& immDrawables, RenderCore::Techniques::ParsingContext& parserContext, 
 		float gridScale, Float3 origin)
 	{
 		// draw a grid to give some sense of scale
@@ -98,7 +98,7 @@ namespace RenderOverlays
 
 		using namespace RenderCore;
 		Techniques::ImmediateDrawableMaterial material;
-		auto workingVertices = overlayContext.GetImmediateDrawables().QueueDraw(
+		auto workingVertices = immDrawables.QueueDraw(
 			lineCount*2, MakeIteratorRange(s_vertexInputLayout), 
 			material, Topology::LineList).Cast<InternalVertex*>();
 

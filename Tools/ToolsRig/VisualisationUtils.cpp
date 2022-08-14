@@ -780,9 +780,9 @@ namespace ToolsRig
 				Rect rect { Coord2{0, 0}, Coord2(viewportDims[0], viewportDims[1]) };
 				RenderTrackingOverlay(overlays, rect, *_pimpl->_mouseOver, **scene);
 				if (_pimpl->_settings._drawBasisAxis)
-					RenderOverlays::DrawBasisAxes(overlays, parserContext);
+					RenderOverlays::DrawBasisAxes(overlays.GetImmediateDrawables(), parserContext);
 				if (_pimpl->_settings._drawGrid)
-					RenderOverlays::DrawGrid(overlays, parserContext, 100.f);
+					RenderOverlays::DrawGrid(overlays.GetImmediateDrawables(), parserContext, 100.f);
 				overlays.ReleaseState();
 
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithDepthStencil(parserContext);

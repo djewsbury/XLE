@@ -9,7 +9,7 @@
 #include "../Math/Vector.h"
 #include "../Utility/StringFormat.h"
 
-namespace RenderCore { namespace Techniques { class ParsingContext; class ImmediateDrawingApparatus; }}
+namespace RenderCore { namespace Techniques { class ParsingContext; class ImmediateDrawingApparatus; class IImmediateDrawables; }}
 namespace RenderCore { class IThreadContext; }
 namespace RenderOverlays { class Rect; }
 
@@ -17,11 +17,11 @@ namespace RenderOverlays
 {
 	class IOverlayContext;
 	void DrawBasisAxes(
-		IOverlayContext& overlayContext, RenderCore::Techniques::ParsingContext& parserContext, 
+		RenderCore::Techniques::IImmediateDrawables&, RenderCore::Techniques::ParsingContext& parserContext, 
 		Float2 ssMins = Float2(8,8), Float2 ssMaxs = Float2(64+8,64+8));
 
 	void DrawGrid(
-		IOverlayContext& overlayContext, RenderCore::Techniques::ParsingContext& parserContext, 
+		RenderCore::Techniques::IImmediateDrawables&, RenderCore::Techniques::ParsingContext& parserContext, 
 		float gridScale = 1.0f, Float3 origin = Float3(0,0,0));
 
 	void FillScreenWithMsg(

@@ -9,7 +9,7 @@
 #include "../RenderCore/LightingEngine/StandardLightScene.h"
 
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; } }
+namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; class ParsingContext; class IImmediateDrawables; } }
 namespace RenderCore { namespace LightingEngine { class ILightScene; class LightSourceOperatorDesc; class ShadowOperatorDesc; class IProbeRenderingInstance; }}
 namespace Assets { class DependencyValidation; }
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
@@ -44,6 +44,15 @@ namespace SceneEngine
             ExecuteSceneContext& executeContext) const = 0;
 		virtual ~IScene() = default;
 	};
+
+    class ISceneOverlay
+    {
+    public:
+        virtual void ExecuteOverlay(
+            RenderCore::Techniques::ParsingContext&,
+            RenderCore::Techniques::IImmediateDrawables&) = 0;
+        virtual ~ISceneOverlay() = default;
+    };
 
     class ToneMapSettings;
 
