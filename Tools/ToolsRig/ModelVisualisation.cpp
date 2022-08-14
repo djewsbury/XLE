@@ -14,7 +14,7 @@
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderCore/Techniques/DeformAccelerator.h"
 #include "../../RenderCore/Techniques/DeformGeometryInfrastructure.h"
-#include "../../RenderCore/Techniques/ModelRendererConstruction.h"
+#include "../../RenderCore/Assets/ModelRendererConstruction.h"
 #include "../../RenderCore/Techniques/Drawables.h"
 #include "../../RenderOverlays/AnimationVisualization.h"
 #include "../../SceneEngine/IScene.h"
@@ -70,7 +70,7 @@ namespace ToolsRig
 	struct ModelSceneRendererState
 	{
 		std::shared_ptr<SimpleModelRenderer>		_renderer;
-		std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction> _rendererConstruction;
+		std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> _rendererConstruction;
 		std::shared_ptr<ModelScaffold>	_modelScaffoldForEmbeddedSkeleton;
 		std::shared_ptr<SkeletonScaffold>			_skeletonScaffold;
 		std::shared_ptr<AnimationSetScaffold>		_animationScaffold;
@@ -116,7 +116,7 @@ namespace ToolsRig
 			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators,
 			const ModelVisSettings& settings)
 		{
-			auto construction = std::make_shared<RenderCore::Techniques::ModelRendererConstruction>();
+			auto construction = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
 			construction->AddElement().SetModelAndMaterialScaffolds(settings._modelName, settings._materialName);
 			auto rendererFuture = ::Assets::MakeAssetPtr<SimpleModelRenderer>(drawablesPool, pipelineAcceleratorPool, nullptr, construction, deformAccelerators);
 

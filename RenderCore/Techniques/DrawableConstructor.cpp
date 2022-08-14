@@ -9,10 +9,10 @@
 #include "DescriptorSetAccelerator.h"
 #include "PipelineAccelerator.h"
 #include "CommonUtils.h"
-#include "ModelRendererConstruction.h"
 #include "ResourceConstructionContext.h"
 #include "Services.h"
 #include "../BufferUploads/BatchedResources.h"
+#include "../Assets/ModelRendererConstruction.h"
 #include "../Assets/ModelMachine.h"
 #include "../Assets/MaterialMachine.h"
 #include "../Assets/ModelScaffold.h"
@@ -875,7 +875,7 @@ namespace RenderCore { namespace Techniques
 	};
 
 	void DrawableConstructor::Add(
-		const ModelRendererConstruction& construction,
+		const Assets::ModelRendererConstruction& construction,
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator)
 	{
@@ -919,7 +919,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IDrawablesPool> drawablesPool,
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
 		std::shared_ptr<ResourceConstructionContext> constructionContext,
-		const ModelRendererConstruction& construction,
+		const Assets::ModelRendererConstruction& construction,
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator)
 	{

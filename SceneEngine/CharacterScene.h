@@ -9,10 +9,10 @@
 #include "../Utility/IteratorUtils.h"
 #include <memory>
 
-namespace RenderCore { namespace Techniques { class ModelRendererConstruction; class DeformerConstruction; class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class DrawablesPacket; class ProjectionDesc; }}
+namespace RenderCore { namespace Techniques { class DeformerConstruction; class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class DrawablesPacket; class ProjectionDesc; }}
 namespace RenderCore { namespace BufferUploads { class IManager; }}
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Assets { class SkeletonMachine; }}
+namespace RenderCore { namespace Assets { class SkeletonMachine; class ModelRendererConstruction;  }}
 namespace Assets { class OperationContext; }
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
 namespace SceneEngine
@@ -23,7 +23,7 @@ namespace SceneEngine
 	{
 	public:
 		using OpaquePtr = std::shared_ptr<void>;
-		virtual OpaquePtr CreateModel(std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>) = 0;
+		virtual OpaquePtr CreateModel(std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>) = 0;
 		virtual OpaquePtr CreateDeformers(std::shared_ptr<RenderCore::Techniques::DeformerConstruction>) = 0;
 		virtual OpaquePtr CreateAnimationSet(StringSection<>) = 0;
 		virtual OpaquePtr CreateRenderer(OpaquePtr model, OpaquePtr deformers, OpaquePtr animationSet) = 0;

@@ -16,6 +16,7 @@ namespace RenderCore { namespace Assets
 {
 	class ModelScaffold;
 	class MaterialScaffold;
+	class ModelRendererConstruction;
 }}
 
 namespace Assets { class AssetHeapRecord; class OperationContext; }
@@ -27,7 +28,6 @@ namespace RenderCore { namespace Techniques
 	class IPipelineAcceleratorPool;
 	class IDeformAcceleratorPool;
 	class IDrawablesPool;
-	class ModelRendererConstruction;
 	class DeformerConstruction;
 	class ProjectionDesc;
 	class DrawablesPacket;
@@ -41,7 +41,7 @@ namespace SceneEngine
 	{
 	public:
 		using OpaquePtr = std::shared_ptr<void>;
-		virtual OpaquePtr CreateModel(std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>) = 0;
+		virtual OpaquePtr CreateModel(std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>) = 0;
 		virtual OpaquePtr CreateDeformers(std::shared_ptr<RenderCore::Techniques::DeformerConstruction>) = 0;
 		virtual OpaquePtr CreateRenderer(OpaquePtr model, OpaquePtr deformers) = 0;
 

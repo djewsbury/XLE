@@ -8,7 +8,7 @@
 #include "../../Math/Matrix.h"
 #include <memory>
 
-namespace RenderCore { namespace Assets { class ScaffoldCmdIterator; }}
+namespace RenderCore { namespace Assets { class ScaffoldCmdIterator; class ModelRendererConstruction; }}
 namespace RenderCore { namespace BufferUploads { class IManager; class IResourcePool; }}
 namespace std { template<typename T> class promise; }
 namespace RenderCore { namespace Techniques
@@ -21,7 +21,6 @@ namespace RenderCore { namespace Techniques
 	class DrawableInputAssembly;
 	class IDeformAcceleratorPool;
 	class DeformAccelerator;
-	class ModelRendererConstruction;
 	class ResourceConstructionContext;
 
 	class DrawableConstructor : public std::enable_shared_from_this<DrawableConstructor>
@@ -74,7 +73,7 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<IDrawablesPool> drawablesPool,
 			std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
 			std::shared_ptr<ResourceConstructionContext> constructionContext,
-			const ModelRendererConstruction&,
+			const Assets::ModelRendererConstruction&,
 			const std::shared_ptr<IDeformAcceleratorPool>& =nullptr,
 			const std::shared_ptr<DeformAccelerator>& =nullptr);
 		~DrawableConstructor();
@@ -84,7 +83,7 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depVal;
 
 		void Add(
-			const ModelRendererConstruction&, 
+			const Assets::ModelRendererConstruction&, 
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator);
 	};

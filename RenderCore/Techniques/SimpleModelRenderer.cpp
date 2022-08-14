@@ -3,7 +3,6 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "SimpleModelRenderer.h"
-#include "ModelRendererConstruction.h"
 #include "DrawableConstructor.h"
 #include "Drawables.h"
 #include "TechniqueUtils.h"
@@ -13,6 +12,7 @@
 #include "DeformGeometryInfrastructure.h"
 #include "DeformerConstruction.h"
 #include "SkinDeformer.h"
+#include "../Assets/ModelRendererConstruction.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelMachine.h"		// for DrawCallDesc
 #include "../Assets/AnimationBindings.h"
@@ -497,7 +497,7 @@ namespace RenderCore { namespace Techniques
 
 	SimpleModelRenderer::SimpleModelRenderer(
 		IDrawablesPool& drawablesPool,
-		const ModelRendererConstruction& construction,
+		const Assets::ModelRendererConstruction& construction,
 		std::shared_ptr<DrawableConstructor> drawableConstructor,
 		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
 		std::shared_ptr<DeformAccelerator> deformAccelerator,
@@ -548,9 +548,9 @@ namespace RenderCore { namespace Techniques
 
 	SimpleModelRenderer::~SimpleModelRenderer() {}
 
-	static std::future<std::shared_ptr<ModelRendererConstruction>> ToFuture(ModelRendererConstruction& construction)
+	static std::future<std::shared_ptr<Assets::ModelRendererConstruction>> ToFuture(Assets::ModelRendererConstruction& construction)
 	{
-		std::promise<std::shared_ptr<ModelRendererConstruction>> promise;
+		std::promise<std::shared_ptr<Assets::ModelRendererConstruction>> promise;
 		auto result = promise.get_future();
 		construction.FulfillWhenNotPending(std::move(promise));
 		return result;
@@ -574,7 +574,7 @@ namespace RenderCore { namespace Techniques
 
 	std::future<std::shared_ptr<DeformAccelerator>> CreateDefaultDeformAccelerator(
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
-		const std::shared_ptr<ModelRendererConstruction>& rendererConstruction)
+		const std::shared_ptr<Assets::ModelRendererConstruction>& rendererConstruction)
 	{
 		// The default deform accelerators just contains a skinning deform operation
 		auto deformerConstruction = std::make_shared<DeformerConstruction>();
@@ -607,7 +607,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IDrawablesPool> drawablesPool,
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool,
 		std::shared_ptr<ResourceConstructionContext> constructionContext,
-		std::shared_ptr<ModelRendererConstruction> construction,
+		std::shared_ptr<Assets::ModelRendererConstruction> construction,
 		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
 		std::shared_ptr<DeformAccelerator> deformAcceleratorInit,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
@@ -692,7 +692,7 @@ namespace RenderCore { namespace Techniques
 		StringSection<> materialScaffoldName,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
 	{
-		auto construction = std::make_shared<ModelRendererConstruction>();
+		auto construction = std::make_shared<Assets::ModelRendererConstruction>();
 		construction->AddElement().SetModelAndMaterialScaffolds(modelScaffoldName, materialScaffoldName);
 		return ConstructToPromise(
 			std::move(promise),
@@ -715,7 +715,7 @@ namespace RenderCore { namespace Techniques
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	ModelConstructionSkeletonBinding::ModelConstructionSkeletonBinding(
-		const ModelRendererConstruction& construction)
+		const Assets::ModelRendererConstruction& construction)
 	{
 		auto externalSkeletonScaffold = construction.GetSkeletonScaffold();
 
@@ -843,7 +843,7 @@ namespace RenderCore { namespace Techniques
 		std::promise<std::shared_ptr<RendererSkeletonInterface>>&& promise,
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator,
-		const std::shared_ptr<ModelRendererConstruction>& construction)
+		const std::shared_ptr<Assets::ModelRendererConstruction>& construction)
 	{
 		::Assets::WhenAll(ToFuture(*construction)).ThenConstructToPromise(
 			std::move(promise),

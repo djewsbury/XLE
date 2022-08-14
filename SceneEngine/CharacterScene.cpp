@@ -4,7 +4,6 @@
 
 #include "CharacterScene.h"
 #include "IScene.h"
-#include "../RenderCore/Techniques/ModelRendererConstruction.h"
 #include "../RenderCore/Techniques/DeformerConstruction.h"
 #include "../RenderCore/Techniques/ResourceConstructionContext.h"
 #include "../RenderCore/Techniques/PipelineAccelerator.h"
@@ -18,6 +17,7 @@
 #include "../RenderCore/Techniques/TechniqueUtils.h"
 #include "../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../RenderCore/BufferUploads/BatchedResources.h"
+#include "../RenderCore/Assets/ModelRendererConstruction.h"
 #include "../RenderCore/Assets/ModelScaffold.h"
 #include "../RenderCore/Assets/MaterialScaffold.h"
 #include "../RenderCore/Assets/AnimationScaffoldInternal.h"
@@ -34,8 +34,8 @@ namespace SceneEngine
 	{
 		struct ModelEntry
 		{
-			std::shared_future<std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>> _completedConstruction;
-			std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction> _referenceHolder;
+			std::shared_future<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> _completedConstruction;
+			std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> _referenceHolder;
 		};
 
 		struct DeformerEntry
@@ -107,7 +107,7 @@ namespace SceneEngine
 	class CharacterScene : public ICharacterScene, public std::enable_shared_from_this<CharacterScene>
 	{
 	public:
-		OpaquePtr CreateModel(std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>) override;
+		OpaquePtr CreateModel(std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>) override;
 		OpaquePtr CreateDeformers(std::shared_ptr<RenderCore::Techniques::DeformerConstruction>) override;
 		OpaquePtr CreateAnimationSet(StringSection<>) override;
 		OpaquePtr CreateRenderer(OpaquePtr model, OpaquePtr deformers, OpaquePtr animationSet) override;
@@ -142,7 +142,7 @@ namespace SceneEngine
 	};
 
 
-	std::shared_ptr<void> CharacterScene::CreateModel(std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction> construction)
+	std::shared_ptr<void> CharacterScene::CreateModel(std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> construction)
 	{
 		auto hash = construction->GetHash();	// todo -- what to do if the hash is disabled within ModelRendererConstruction?
 		ScopedLock(_poolLock);
@@ -153,7 +153,7 @@ namespace SceneEngine
 		}
 
 		auto newEntry = std::make_shared<CharacterSceneInternal::ModelEntry>();
-		std::promise<std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>> promise;
+		std::promise<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> promise;
 		newEntry->_completedConstruction = promise.get_future();
 		construction->FulfillWhenNotPending(std::move(promise));
 		newEntry->_referenceHolder = std::move(construction);
@@ -214,7 +214,7 @@ namespace SceneEngine
 	}
 
 	static std::future<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> CreateDefaultDeformerConstruction(
-		std::shared_future<std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>> rendererConstruction)
+		std::shared_future<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> rendererConstruction)
 	{
 		std::promise<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> promise;
 		auto result = promise.get_future();

@@ -10,10 +10,10 @@
 #include <memory>
 
 namespace RenderCore { class IDevice; }
+namespace RenderCore { namespace Assets { class ModelRendererConstruction; }}
 namespace RenderCore { namespace Techniques
 {
 	class DeformerConstruction;
-	class ModelRendererConstruction;
 	class PipelineCollection;
 	namespace Internal { class DeformerPipelineCollection; }
 
@@ -22,11 +22,11 @@ namespace RenderCore { namespace Techniques
 	public:
 		void ConfigureCPUSkinDeformers(
 			DeformerConstruction&,
-			const ModelRendererConstruction&);
+			const Assets::ModelRendererConstruction&);
 
 		void ConfigureGPUSkinDeformers(
 			DeformerConstruction&,
-			const ModelRendererConstruction&);
+			const Assets::ModelRendererConstruction&);
 
 		static SkinDeformerSystem* GetInstance();
 

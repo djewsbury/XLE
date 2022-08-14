@@ -9,7 +9,7 @@
 #include "../../../RenderCore/Assets/MaterialScaffold.h"
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
 #include "../../../RenderCore/Techniques/DrawableConstructor.h"
-#include "../../../RenderCore/Techniques/ModelRendererConstruction.h"
+#include "../../../RenderCore/Assets/ModelRendererConstruction.h"
 #include "../../../RenderCore/Techniques/ResourceConstructionContext.h"
 #include "../../../Assets/IntermediatesStore.h"
 #include "../../../Assets/IntermediateCompilers.h"
@@ -78,11 +78,11 @@ namespace UnitTests
 
 			SECTION("Create ModelRendererConstruction")
 			{
-				auto rendererConstruction = std::make_shared<RenderCore::Techniques::ModelRendererConstruction>();
+				auto rendererConstruction = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
 				auto& ele = rendererConstruction->AddElement().SetModelScaffold(modelScaffold).SetName("test-element");
 				ele.SetMaterialScaffold(materialScaffold);
 				
-				std::promise<std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>> promise;
+				std::promise<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> promise;
 				auto future = promise.get_future();
 				rendererConstruction->FulfillWhenNotPending(std::move(promise));
 				future.wait();

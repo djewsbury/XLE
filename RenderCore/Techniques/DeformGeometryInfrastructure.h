@@ -8,15 +8,15 @@
 #include "../../Assets/AssetsCore.h"
 #include <future>
 
+namespace RenderCore { namespace Assets { class ModelRendererConstruction; }}
 namespace RenderCore { namespace Techniques
 {
 	class DeformerConstruction;
-	class ModelRendererConstruction;
 	struct DeformerInputBinding;
 
 	std::shared_ptr<IDeformGeoAttachment> CreateDeformGeoAttachment(
 		IDevice& device,
-		const ModelRendererConstruction&,
+		const RenderCore::Assets::ModelRendererConstruction&,
 		const DeformerConstruction&);
 
 	class IGeoDeformer

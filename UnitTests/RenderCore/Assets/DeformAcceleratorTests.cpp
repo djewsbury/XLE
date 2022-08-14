@@ -16,7 +16,7 @@
 #include "../../../RenderCore/Techniques/Services.h"
 #include "../../../RenderCore/Techniques/CommonUtils.h"
 #include "../../../RenderCore/Techniques/PipelineCollection.h"
-#include "../../../RenderCore/Techniques/ModelRendererConstruction.h"
+#include "../../../RenderCore/Assets/ModelRendererConstruction.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"		// required for memory barrier
 #include "../../../RenderCore/GeoProc/MeshDatabase.h"
 #include "../../../RenderCore/GeoProc/NascentModel.h"
@@ -392,9 +392,9 @@ namespace UnitTests
 		globalServices->PrepareForDestruction();
 	}
 
-	static void StallWhilePending(RenderCore::Techniques::ModelRendererConstruction& construction)
+	static void StallWhilePending(RenderCore::Assets::ModelRendererConstruction& construction)
 	{
-		std::promise<std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>> promise;
+		std::promise<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> promise;
 		auto future = promise.get_future();
 		construction.FulfillWhenNotPending(std::move(promise));
 		future.wait();
@@ -421,7 +421,7 @@ namespace UnitTests
 		SkinDeformerSystem skinDeformerSystem{pipelineCollection};
 		
 		auto modelScaffold = MakeTestAnimatedModel();
-		auto rendererConstruction = std::make_shared<RenderCore::Techniques::ModelRendererConstruction>();
+		auto rendererConstruction = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
 		rendererConstruction->AddElement().SetModelScaffold(modelScaffold);
 		StallWhilePending(*rendererConstruction);
 		

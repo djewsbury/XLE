@@ -8,8 +8,8 @@
 #include "CommonUtils.h"
 #include "Services.h"
 #include "SubFrameEvents.h"
-#include "ModelRendererConstruction.h"
 #include "DeformerConstruction.h"
+#include "../Assets/ModelRendererConstruction.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/ModelMachine.h"
@@ -277,7 +277,7 @@ namespace RenderCore { namespace Techniques
 		
 	void SkinDeformerSystem::ConfigureCPUSkinDeformers(
 		DeformerConstruction& deformerConstruction,
-		const ModelRendererConstruction& rendererConstruction)
+		const Assets::ModelRendererConstruction& rendererConstruction)
 	{
 		// We'll create one CPUSkinDeformer per element with skinned meshes. Each deformer will animate all of the meshes
 		// within that one element
@@ -759,7 +759,7 @@ namespace RenderCore { namespace Techniques
 
 	void SkinDeformerSystem::ConfigureGPUSkinDeformers(
 		DeformerConstruction& deformerConstruction,
-		const ModelRendererConstruction& rendererConstruction)
+		const Assets::ModelRendererConstruction& rendererConstruction)
 	{
 		// We'll create one GPUSkinDeformer per element with skinned meshes. Each deformer will animate all of the meshes
 		// within that one element

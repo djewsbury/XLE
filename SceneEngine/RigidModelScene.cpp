@@ -5,7 +5,7 @@
 #include "RigidModelScene.h"
 #include "IScene.h"
 #include "../RenderCore/Techniques/SimpleModelRenderer.h"
-#include "../RenderCore/Techniques/ModelRendererConstruction.h"
+#include "../RenderCore/Assets/ModelRendererConstruction.h"
 #include "../RenderCore/Techniques/PipelineAccelerator.h"		// just so we can use GetDevice()
 #include "../RenderCore/Techniques/Drawables.h"
 #include "../RenderCore/Techniques/ResourceConstructionContext.h"
@@ -29,8 +29,8 @@ namespace SceneEngine
 	{
 		struct ModelEntry
 		{
-			std::shared_future<std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>> _completedConstruction;
-			std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction> _referenceHolder;
+			std::shared_future<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> _completedConstruction;
+			std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> _referenceHolder;
 		};
 
 		struct DeformerEntry
@@ -111,7 +111,7 @@ namespace SceneEngine
 #if 0
 	static void CollateAssetRecords(
 		std::vector<std::pair<uint64_t, ::Assets::AssetHeapRecord>>& records,
-		const RenderCore::Techniques::ModelRendererConstruction& rendererConstruction)
+		const RenderCore::Assets::ModelRendererConstruction& rendererConstruction)
 	{
 		for (unsigned e=0; e<rendererConstruction.GetElementCount(); ++e) {
 			auto ele = rendererConstruction.GetElement(e);
@@ -132,7 +132,7 @@ namespace SceneEngine
 	}
 #endif
 
-	static std::string GetShortDescription(const RenderCore::Techniques::ModelRendererConstruction& construction)
+	static std::string GetShortDescription(const RenderCore::Assets::ModelRendererConstruction& construction)
 	{
 		std::stringstream result;
 		if (construction.GetElementCount() != 1)
@@ -164,7 +164,7 @@ namespace SceneEngine
 		Signal<IteratorRange<const std::pair<uint64_t, ::Assets::AssetHeapRecord>*>> _updateSignal;
 		unsigned _lastDepValGlobalChangeIndex = 0;
 
-		OpaquePtr CreateModel(std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction> construction) override
+		OpaquePtr CreateModel(std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> construction) override
 		{
 			auto hash = construction->GetHash();
 			ScopedLock(_poolLock);
@@ -175,7 +175,7 @@ namespace SceneEngine
 			}
 
 			auto newEntry = std::make_shared<RigidModelSceneInternal::ModelEntry>();
-			std::promise<std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>> promise;
+			std::promise<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> promise;
 			newEntry->_completedConstruction = promise.get_future();
 			construction->FulfillWhenNotPending(std::move(promise));
 			newEntry->_referenceHolder = std::move(construction);
@@ -222,10 +222,10 @@ namespace SceneEngine
 
 			if (newEntry._model->_completedConstruction.wait_for(std::chrono::seconds(0)) == std::future_status::ready && newEntry._model->_referenceHolder->IsInvalidated()) {
 				// scaffolds invalidated -- 
-				auto rebuiltConstruction = RenderCore::Techniques::ModelRendererConstruction::Reconstruct(*newEntry._model->_referenceHolder, _loadingContext);
+				auto rebuiltConstruction = RenderCore::Assets::ModelRendererConstruction::Reconstruct(*newEntry._model->_referenceHolder, _loadingContext);
 				newEntry._model->_completedConstruction = {};
 				newEntry._model->_referenceHolder = nullptr;
-				std::promise<std::shared_ptr<RenderCore::Techniques::ModelRendererConstruction>> promise;
+				std::promise<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> promise;
 				newEntry._model->_completedConstruction = promise.get_future();
 				rebuiltConstruction->FulfillWhenNotPending(std::move(promise));
 				newEntry._model->_referenceHolder = std::move(rebuiltConstruction);

@@ -3,14 +3,14 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ModelRendererConstruction.h"
-#include "../Assets/ModelMachine.h"
-#include "../Assets/AssetUtils.h"
-#include "../Assets/ModelScaffold.h"
-#include "../Assets/MaterialScaffold.h"
+#include "ModelMachine.h"
+#include "AssetUtils.h"
+#include "ModelScaffold.h"
+#include "MaterialScaffold.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/ContinuationUtil.h"
 
-namespace RenderCore { namespace Techniques
+namespace RenderCore { namespace Assets
 {
 	class ModelRendererConstruction::Internal
 	{

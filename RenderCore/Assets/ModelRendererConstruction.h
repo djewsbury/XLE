@@ -10,17 +10,14 @@
 #include <memory>
 
 namespace std { template<typename T> class promise; template<typename T> class shared_future; }
+namespace Assets { class OperationContext; }
 
 namespace RenderCore { namespace Assets
 {
 	class ModelScaffold;
 	class MaterialScaffold;
 	class SkeletonScaffold;
-}}
-namespace Assets { class OperationContext; }
 
-namespace RenderCore { namespace Techniques
-{
 	class ModelRendererConstruction : public std::enable_shared_from_this<ModelRendererConstruction>
 	{
 	public:

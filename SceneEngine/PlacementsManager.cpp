@@ -16,7 +16,7 @@
 #include "../RenderCore/Assets/MaterialScaffold.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/LightWeightBuildDrawables.h"
-#include "../RenderCore/Techniques/ModelRendererConstruction.h"
+#include "../RenderCore/Assets/ModelRendererConstruction.h"
 
 #include "../Assets/IFileSystem.h"
 #include "../Assets/AssetTraits.h"
@@ -312,7 +312,7 @@ namespace SceneEngine
             auto endi = i+1;
             while (endi!=sortedObjectReferences.end() && (*endi)->_modelFilenameOffset == (*i)->_modelFilenameOffset  && (*endi)->_materialFilenameOffset == (*i)->_materialFilenameOffset) ++endi;
 
-            auto model = std::make_shared<RenderCore::Techniques::ModelRendererConstruction>();
+            auto model = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
             model->AddElement().SetModelAndMaterialScaffolds(cache.GetLoadingContext(), 
                 (const char*)PtrAdd(filenamesBuffer, (*i)->_modelFilenameOffset + sizeof(uint64_t)),
                 (const char*)PtrAdd(filenamesBuffer, (*i)->_materialFilenameOffset + sizeof(uint64_t)));

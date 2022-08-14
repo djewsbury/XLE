@@ -8,8 +8,8 @@
 #include "Services.h"
 #include "CommonUtils.h"
 #include "CommonResources.h"
-#include "ModelRendererConstruction.h"
 #include "../IDevice.h"
+#include "../Assets/ModelRendererConstruction.h"
 #include "../Assets/ModelScaffold.h"
 #include "../GeoProc/MeshDatabase.h"        // for GeoProc::Copy
 #include "../BufferUploads/IBufferUploads.h"
@@ -112,7 +112,7 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<IDeformGeoAttachment> CreateDeformGeoAttachment(
 		IDevice& device,
-		const ModelRendererConstruction& rendererConstruction,
+		const Assets::ModelRendererConstruction& rendererConstruction,
 		const DeformerConstruction& deformerConstruction)
 	{
 		auto result = std::make_shared<DeformGeoInfrastructure>();
