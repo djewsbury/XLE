@@ -499,8 +499,8 @@ namespace ColladaConversion
 				if (!anim._curves.empty()) {
 					unsigned maxFrame = 0, minFrame = std::numeric_limits<unsigned>::max();
 					for (const auto& c:anim._curves) {
-						minFrame = std::min(minFrame, (unsigned)c._curve.StartFrame());
-						maxFrame = std::max(maxFrame, (unsigned)c._curve.EndFrame());
+						minFrame = std::min(minFrame, (unsigned)c._curve.TimeAtFirstKeyframe());
+						maxFrame = std::max(maxFrame, (unsigned)c._curve.TimeAtLastKeyframe());
 					}
 					NascentAnimationSet::BlockSpan blocks[1] {
 						{minFrame, maxFrame+1}

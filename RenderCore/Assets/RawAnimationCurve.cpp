@@ -313,7 +313,7 @@ namespace RenderCore { namespace Assets
 			auto keyUpperIndex = keyUpper-timeMarkers.begin();
 			auto alpha = LerpParameter(*(keyUpper-1), *keyUpper, evalFrame);
 			auto keyCount = timeMarkers.size();
-			assert(interpolationType == CurveInterpolationType::NURBS || decomp.KeyCount() == keyCount);
+			assert(decomp.KeyCount() == keyCount);
 			auto* key = keyUpper-1;
 			auto keyIndex = keyUpperIndex-1; assert(keyUpperIndex != 0);
 			assert(key[0] <= evalFrame && key[1] >= evalFrame);
@@ -378,9 +378,80 @@ namespace RenderCore { namespace Assets
 			} else if (interpolationType == CurveInterpolationType::NURBS) {
 				// We need NURBSKnots to interpolate using NURBS math
 				assert(0);
+			} else if (interpolationType == CurveInterpolationType::None) {
+				// clamp time to the first keyframe before it
+				return decomp(keyIndex, key[0]);
 			} else {
 				assert(0);
 			}
+		} else if (curveDesc._timeMarkerType == TimeMarkerType::None) {
+
+			// assume a keyframe at every frame
+			assert(evalFrame >= 0.f);		// fractional calculation won't work for negative values here
+			unsigned key = (unsigned)evalFrame;
+			auto alpha = evalFrame - key;
+			auto keyCount = decomp.KeyCount();
+			unsigned nextKey = std::min(keyCount-1, key+1);
+			assert(key < keyCount);
+
+			if (interpolationType == CurveInterpolationType::Linear) {
+
+				auto P0 = decomp(key, key);
+				auto P1 = decomp(nextKey, nextKey);
+				return SphericalInterpolate(P0, P1, alpha);
+
+			} else if (interpolationType == CurveInterpolationType::Bezier) {
+
+				assert(curveDesc._flags & CurveDesc::Flags::HasInTangent);
+				assert(curveDesc._flags & CurveDesc::Flags::HasOutTangent);
+
+				const auto inTangentOffset = BitsPerPixel(curveDesc._elementFormat)/8;
+				const auto outTangentOffset = inTangentOffset + BitsPerPixel(curveDesc._elementFormat)/8;
+
+				auto P0 = decomp(key, key);
+				auto P1 = decomp(nextKey, nextKey);
+
+				// This is a convention of the Collada format
+				// (see Collada spec 1.4.1, page 4-4)
+				//		the first control point is stored under the semantic "OUT_TANGENT" for P0
+				//		and second control point is stored under the semantic "IN_TANGENT" for P1
+				auto C0 = decomp(key, key, outTangentOffset);
+				auto C1 = decomp(nextKey, nextKey, inTangentOffset);
+
+				return SphericalBezierInterpolate(P0, C0, C1, P1, alpha);
+
+			} else if (interpolationType == CurveInterpolationType::CatmullRom) {
+
+				// (need at least one key greater than the interpolation point, to perform interpolation correctly)
+				if ((key+2) >= keyCount)
+					return decomp(keyCount-1, keyCount-1);
+
+				auto P0 = decomp(key, key);
+				auto P1 = decomp(nextKey, nextKey);
+				// (note the clamp here that can result in P0 == P0n1 at the start of the curve)
+				auto kn1 = std::max(0, signed(key)-1);
+				auto kp1 = std::min(unsigned(key+2), unsigned(keyCount-1));
+				auto P0n1 = decomp(kn1, kn1);
+				auto P1p1 = decomp(kp1, kp1);
+
+				return SphericalCatmullRomInterpolate(
+					P0n1, P0, P1, P1p1, 
+					-1, +2, alpha);
+
+			} else if (interpolationType == CurveInterpolationType::Hermite) {
+				// hermite version not implemented
+				//  -- but it's similar to both the Bezier and Catmull Rom implementations, nad
+				//		could be easily hooked up
+				assert(0);      
+			} else if (interpolationType == CurveInterpolationType::NURBS) {
+				// We need NURBSKnots to interpolate using NURBS math
+				assert(0);
+			} else if (interpolationType == CurveInterpolationType::None) {
+				return decomp(key, key);
+			} else {
+				assert(0);
+			}
+
 		} else if (curveDesc._timeMarkerType == TimeMarkerType::NURBSKnots) {
 			assert(interpolationType == CurveInterpolationType::NURBS);
 			if constexpr(std::is_same_v<Float3, OutType>) {
@@ -401,6 +472,14 @@ namespace RenderCore { namespace Assets
 					MakeIteratorRange(decompressedPositions, &decompressedPositions[timeMarkers.size()-3]),
 					timeMarkers, evalFrame);
 				return Quaternion{f4[0], f4[1], f4[2], f4[3]}.normalize();
+			} else if (interpolationType == CurveInterpolationType::None) {
+				// clamp time to the first keyframe before it
+				if (evalFrame >= *(timeMarkers.end()-1)) return decomp(0, 0);
+        		if (evalFrame <= *timeMarkers.begin()) return decomp(timeMarkers.size()-1, timeMarkers.size()-1);
+
+				auto* keyUpper = std::upper_bound(timeMarkers.begin(), timeMarkers.end(), (uint16_t)evalFrame);
+				auto keyIndex = keyUpper-1-timeMarkers.begin();
+				return decomp(keyIndex, *(keyUpper-1));
 			} else {
 				assert(0);
 			}
@@ -429,16 +508,29 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
-    uint16_t       RawAnimationCurve::StartFrame() const
+    uint16_t       RawAnimationCurve::TimeAtFirstKeyframe() const
     {
-        if (_timeMarkers.empty()) { return std::numeric_limits<uint16_t>::max(); }
-        return _timeMarkers[0];
+		if (_desc._timeMarkerType == TimeMarkerType::None) {
+			return 0;
+		} else {
+			if (_timeMarkers.empty()) { return std::numeric_limits<uint16_t>::max(); }
+			return _timeMarkers[0];
+		}
     }
 
-    uint16_t       RawAnimationCurve::EndFrame() const
+    uint16_t       RawAnimationCurve::TimeAtLastKeyframe() const
     {
-        if (_timeMarkers.empty()) return 0;
-        return _timeMarkers[_timeMarkers.size()-1];
+		if (_desc._timeMarkerType == TimeMarkerType::None) {
+			// no time markers -- just get from number of keyframes in _keyData
+			if (_desc._flags & CurveDesc::Flags::HasDequantBlock) {
+				return ((_keyData.size() - sizeof(CurveDequantizationBlock)) / _desc._elementStride) - 1;
+			} else {
+				return (_keyData.size() / _desc._elementStride) - 1;
+			}
+		} else {
+			if (_timeMarkers.empty()) return 0;
+			return _timeMarkers[_timeMarkers.size()-1];
+		}
     }
 
     template float      RawAnimationCurve::Calculate(float, CurveInterpolationType) const never_throws;

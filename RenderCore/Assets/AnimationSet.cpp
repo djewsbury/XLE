@@ -29,12 +29,14 @@ namespace RenderCore { namespace Assets
 			if (i!=_animations.end() && i->first == animState._animation) {
 				timeInFramesFromBlockBegin = animState._time * i->second._framesPerSecond;
 				auto b = i->second._startBlock;
-				while (b != i->second._endBlock && timeInFramesFromBlockBegin >= _animationBlocks[b]._endFrame) ++b;
+				while ((b+1) != i->second._endBlock && timeInFramesFromBlockBegin >= _animationBlocks[b+1]._beginFrame) ++b;
 				timeInFramesFromBlockBegin -= _animationBlocks[b]._beginFrame;	// we can end up with a negative here if there's a gap between blocks
 				driverStart = _animationBlocks[b]._beginDriver;
 				driverEnd = _animationBlocks[b]._endDriver;
 				constantDriverStart = _animationBlocks[b]._beginConstantDriver;
 				constantDriverEnd = _animationBlocks[b]._endConstantDriver;
+				// Note that we never interpolate between blocks. We're assuming that the first & last keyframes from each block are duplicated
+				// in the surrounding blocks (likewise first & last keyframes in the animation should be identical in looping animations)
 			}
 		}
 
@@ -73,7 +75,7 @@ namespace RenderCore { namespace Assets
 			}
 		}
 
-		for (   size_t c=constantDriverStart; c<constantDriverEnd; ++c) {
+		for (size_t c=constantDriverStart; c<constantDriverEnd; ++c) {
 			const ConstantDriver& driver = _constantDrivers[c];
 			auto& br = bindingRules[driver._parameterIndex];
 			if (br._outputOffset  == ~0x0) continue;   // (unbound output)
@@ -114,8 +116,9 @@ namespace RenderCore { namespace Assets
 			result._framesPerSecond = i->second._framesPerSecond;
 			if (i->second._startBlock != i->second._endBlock) {
 				// assuming start frame is zero for this duration
-				result._durationInFrames = _animationBlocks[(i->second._endBlock-1)]._endFrame;
-			}
+				result._durationInFrames = _animationBlocks[(i->second._endBlock-1)]._endFrame-1;
+			} else
+				result._durationInFrames = 0;
 
 			auto idx = std::distance(_animations.begin(), i);
 			result._stringName = MakeStringSection(
@@ -178,6 +181,7 @@ namespace RenderCore { namespace Assets
 	const char* AsString(CurveInterpolationType value)
 	{
 		switch (value) {
+		case CurveInterpolationType::None: return "None";
 		case CurveInterpolationType::Linear: return "Linear";
 		case CurveInterpolationType::Bezier: return "Bezier";
 		case CurveInterpolationType::Hermite: return "Hermite";

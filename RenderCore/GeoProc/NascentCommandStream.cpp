@@ -204,8 +204,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			if (i->_curveIndex >= _curves.size()) continue;
 			const auto* animCurve = &_curves[i->_curveIndex];
 			if (animCurve) {
-				minFrame = std::min(minFrame, (unsigned)animCurve->StartFrame());
-				maxFrame = std::max(maxFrame, (unsigned)animCurve->EndFrame());
+				minFrame = std::min(minFrame, (unsigned)animCurve->TimeAtFirstKeyframe());
+				maxFrame = std::max(maxFrame, (unsigned)animCurve->TimeAtLastKeyframe());
 			}
 		}
 
@@ -213,7 +213,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			AnimationBlock{
 				(unsigned)0, (unsigned)_animationDrivers.size(), 
 				(unsigned)0, (unsigned)_constantDrivers.size(),
-				minFrame, maxFrame});
+				minFrame, maxFrame+1});
 
 		_animations.push_back(
 			std::make_pair(

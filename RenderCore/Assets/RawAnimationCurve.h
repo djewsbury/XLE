@@ -13,7 +13,7 @@
 
 namespace RenderCore { namespace Assets
 {
-    enum class CurveInterpolationType : unsigned { Linear, Bezier, Hermite, CatmullRom, NURBS };
+    enum class CurveInterpolationType : unsigned { None, Linear, Bezier, Hermite, CatmullRom, NURBS };
     enum class TimeMarkerType : unsigned { None, Default, NURBSKnots };
 
 	struct CurveDesc
@@ -31,8 +31,9 @@ namespace RenderCore { namespace Assets
         template<typename Serializer>
             void        SerializeMethod(Serializer& outputSerializer) const;
 
-        uint16_t    StartFrame() const;
-        uint16_t    EndFrame() const;
+        uint16_t    TimeAtFirstKeyframe() const;
+        uint16_t    TimeAtLastKeyframe() const;
+        const CurveDesc& Desc() const { return _desc; }
 
         template<typename OutType>
             OutType        Calculate(float inputTime, CurveInterpolationType interpolationType) const never_throws;
