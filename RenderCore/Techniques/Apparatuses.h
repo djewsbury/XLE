@@ -136,7 +136,7 @@ namespace RenderCore { namespace Techniques
 
 		ConsoleRig::AttachablePtr<Services> _techniqueServices;
 		ConsoleRig::AttachablePtr<::Assets::Services> _assetServices;
-		ConsoleRig::AttachablePtr<SkinDeformerSystem> _skinDeformerSystem;
+		unsigned _skinDeformerSystemRegistration = ~0u;
 
 		PrimaryResourcesApparatus(std::shared_ptr<IDevice> device);
 		~PrimaryResourcesApparatus();

@@ -15,6 +15,7 @@
 #include "../RenderCore/Techniques/LightWeightBuildDrawables.h"
 #include "../RenderCore/Techniques/SkinDeformer.h"
 #include "../RenderCore/Techniques/TechniqueUtils.h"
+#include "../RenderCore/Techniques/Services.h"
 #include "../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../RenderCore/BufferUploads/BatchedResources.h"
 #include "../RenderCore/Assets/ModelRendererConstruction.h"
@@ -214,17 +215,23 @@ namespace SceneEngine
 	}
 
 	static std::future<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> CreateDefaultDeformerConstruction(
+		std::shared_ptr<RenderCore::IDevice> device,
 		std::shared_future<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> rendererConstruction)
 	{
 		std::promise<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> promise;
 		auto result = promise.get_future();
 		::Assets::WhenAll(std::move(rendererConstruction)).ThenConstructToPromise(
 			std::move(promise),
-			[](auto completedRendererConstruction) {
-				auto deformerConstruction = std::make_shared<RenderCore::Techniques::DeformerConstruction>();
-				RenderCore::Techniques::SkinDeformerSystem::GetInstance()->ConfigureGPUSkinDeformers(
-					*deformerConstruction, *completedRendererConstruction);
-				return deformerConstruction;
+			[device=std::move(device)](auto&& promise, auto completedRendererConstruction) {
+				auto deformerConstruction = std::make_shared<RenderCore::Techniques::DeformerConstruction>(device, completedRendererConstruction);
+				if (auto* skinConfigure = RenderCore::Techniques::Services::GetInstance().FindDeformConfigure("gpu_skin"))
+					skinConfigure->Configure(*deformerConstruction);
+				if (!deformerConstruction->IsEmpty()) {
+					// fulfill directly into the original promise
+					deformerConstruction->FulfillWhenNotPending(std::move(promise));
+				} else {
+					promise.set_value(nullptr);
+				}
 			});
 		return result;
 	}
@@ -260,7 +267,7 @@ namespace SceneEngine
 			deformerConstructionFuture = newEntry->_deformer->_completedConstruction;
 		} else {
 			// no explicit deformers -- we must use the defaults
-			deformerConstructionFuture = CreateDefaultDeformerConstruction(newEntry->_model->_completedConstruction);
+			deformerConstructionFuture = CreateDefaultDeformerConstruction(_pipelineAcceleratorPool->GetDevice(), newEntry->_model->_completedConstruction);
 		}
 
 		std::promise<CharacterSceneInternal::Renderer> rendererPromise;
@@ -277,10 +284,11 @@ namespace SceneEngine
 				std::shared_ptr<RenderCore::Techniques::DeformAccelerator> deformAccelerator;
 				std::shared_ptr<RenderCore::Techniques::IDeformGeoAttachment> geoDeformer;
 				if (completedDeformerConstruction && !completedDeformerConstruction->IsEmpty()) {
-					geoDeformer = RenderCore::Techniques::CreateDeformGeoAttachment(
-						*pipelineAcceleratorPool->GetDevice(), *completedConstruction, *completedDeformerConstruction);
 					deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator();
-					deformAcceleratorPool->Attach(*deformAccelerator, geoDeformer);
+					if (auto geoAttachment = completedDeformerConstruction->GetGeoAttachment())
+						deformAcceleratorPool->Attach(*deformAccelerator, std::move(geoAttachment));
+					if (auto uniformsAttachment = completedDeformerConstruction->GetUniformsAttachment())
+						deformAcceleratorPool->Attach(*deformAccelerator, std::move(uniformsAttachment));
 				}
 
 				auto drawableConstructor = std::make_shared<RenderCore::Techniques::DrawableConstructor>(

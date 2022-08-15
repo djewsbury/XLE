@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "DeformerConstruction.h"
+#include "DeformGeometryInfrastructure.h"
 #include "Services.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/ContinuationUtil.h"
@@ -77,18 +78,9 @@ namespace RenderCore { namespace Techniques
 
 	void DeformerConstruction::Add(std::shared_ptr<IDeformUniformsAttachment> deformer)
 	{
+		assert(!_sealed);
 		assert(!_storedUniformsEntry._deformer);
 		_storedUniformsEntry._deformer = std::move(deformer);
-	}
-
-	std::shared_ptr<IDeformUniformsAttachment> DeformerConstruction::GetUniformsAttachment() const
-	{
-		return _storedUniformsEntry._deformer;
-	}
-
-	bool DeformerConstruction::IsEmpty() const
-	{
-		return _storedGeoEntries.empty() && !_storedUniformsEntry._deformer;
 	}
 
 	void DeformerConstruction::FulfillWhenNotPending(std::promise<std::shared_ptr<DeformerConstruction>>&& promise)
@@ -126,10 +118,31 @@ namespace RenderCore { namespace Techniques
 					strongThis->_deformers[c] = std::move(newFinishedDeformers[c]);
 					strongThis->_deformerMarkers[c] = nullptr;
 				}
+
+				strongThis->_completedGeoAttachment = CreateDeformGeoAttachment(
+					*strongThis->_device, *strongThis->_rendererConstruction, *strongThis);
+
 				return std::move(strongThis);
 			});
 	}
 
+	uint64_t DeformerConstruction::GetHash() const
+	{
+		// This is used in the SimpleModelRenderer asset interface, so we need a GetHash() function
+		// ... however we can't easily create a good hash for it
+		return 0;
+	}
+
+	DeformerConstruction::DeformerConstruction(std::shared_ptr<IDevice> device, std::shared_ptr<Assets::ModelRendererConstruction> rendererConstruction)
+	: _device(device), _rendererConstruction(rendererConstruction) {}
 	DeformerConstruction::DeformerConstruction() = default;
 	DeformerConstruction::~DeformerConstruction() = default;
+
+	InputStreamFormatter<char>& IDeformConfigure::EmptyFormatter()
+	{
+		static InputStreamFormatter<char> dummy;
+		return dummy;
+	}
+
+	IDeformConfigure::~IDeformConfigure() = default;
 }}

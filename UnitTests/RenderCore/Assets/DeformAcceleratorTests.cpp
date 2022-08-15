@@ -418,7 +418,8 @@ namespace UnitTests
 		TechniqueTestApparatus techniqueTestHelper{*testHelper};
 
 		auto pipelineCollection = std::make_shared<Techniques::PipelineCollection>(testHelper->_device);
-		SkinDeformerSystem skinDeformerSystem{pipelineCollection};
+		auto cpuConfigure = RenderCore::Techniques::CreateCPUSkinDeformerConfigure();
+		auto gpuConfigure = RenderCore::Techniques::CreateGPUSkinDeformerConfigure(pipelineCollection);
 		
 		auto modelScaffold = MakeTestAnimatedModel();
 		auto rendererConstruction = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
@@ -431,8 +432,8 @@ namespace UnitTests
 			auto cpuAccelerator = pool->CreateDeformAccelerator();
 			REQUIRE(cpuAccelerator);
 
-			auto deformerConstruction = std::make_shared<Techniques::DeformerConstruction>();
-			skinDeformerSystem.ConfigureCPUSkinDeformers(*deformerConstruction, *rendererConstruction);
+			auto deformerConstruction = std::make_shared<Techniques::DeformerConstruction>(testHelper->_device, rendererConstruction);
+			cpuConfigure->ConfigureAllElements(*deformerConstruction);
 			StallWhilePending(*deformerConstruction);
 
 			auto cpuGeoDeformAttachment = Techniques::CreateDeformGeoAttachment(*testHelper->_device, *rendererConstruction, *deformerConstruction);
@@ -448,9 +449,8 @@ namespace UnitTests
 			auto gpuAccelerator = pool->CreateDeformAccelerator();
 			REQUIRE(gpuAccelerator);
 
-			auto deformerConstruction = std::make_shared<Techniques::DeformerConstruction>();
-			skinDeformerSystem.ConfigureGPUSkinDeformers(
-				*deformerConstruction, *rendererConstruction);
+			auto deformerConstruction = std::make_shared<Techniques::DeformerConstruction>(testHelper->_device, rendererConstruction);
+			gpuConfigure->ConfigureAllElements(*deformerConstruction);
 			StallWhilePending(*deformerConstruction);
 			
 			auto gpuGeoDeformAttachment = Techniques::CreateDeformGeoAttachment(*testHelper->_device, *rendererConstruction, *deformerConstruction);

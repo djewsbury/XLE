@@ -25,6 +25,8 @@ namespace RenderCore { namespace Assets
 		std::vector<std::pair<ElementId, ModelScaffoldPtr>> _modelScaffoldPtrs;
 		std::vector<std::pair<ElementId, MaterialScaffoldMarker>> _materialScaffoldMarkers;
 		std::vector<std::pair<ElementId, MaterialScaffoldPtr>> _materialScaffoldPtrs;
+		std::vector<std::pair<ElementId, Float4x4>> _elementToObjects;
+		std::vector<std::pair<ElementId, uint64_t>> _deformerBindPoints;
 		std::vector<std::pair<ElementId, std::string>> _names;
 		std::vector<std::pair<ElementId, std::string>> _modelScaffoldInitializers;
 		std::vector<std::pair<ElementId, std::string>> _materialScaffoldInitializers;
@@ -139,9 +141,21 @@ namespace RenderCore { namespace Assets
 		return *this; 
 	}
 
-	auto ModelRendererConstruction::ElementConstructor::SetRootTransform(const Float4x4&) -> ElementConstructor&
+	auto ModelRendererConstruction::ElementConstructor::SetElementToObject(const Float4x4& modelToObject) -> ElementConstructor&
 	{ 
-		assert(0);
+		assert(_internal && !_internal->_sealed);
+		auto i = LowerBound(_internal->_elementToObjects, _elementId);
+		if (i != _internal->_elementToObjects.end() && i->first == _elementId) i->second = modelToObject;
+		else _internal->_elementToObjects.insert(i, {_elementId, modelToObject});
+		return *this;
+	}
+
+	auto ModelRendererConstruction::ElementConstructor::SetDeformerBindPoint(uint64_t deformerBindPoint) -> ElementConstructor&
+	{ 
+		assert(_internal && !_internal->_sealed);
+		auto i = LowerBound(_internal->_deformerBindPoints, _elementId);
+		if (i != _internal->_deformerBindPoints.end() && i->first == _elementId) i->second = deformerBindPoint;
+		else _internal->_deformerBindPoints.insert(i, {_elementId, deformerBindPoint});
 		return *this;
 	}
 
@@ -360,6 +374,8 @@ namespace RenderCore { namespace Assets
 		result._value._mspi = _internal->_modelScaffoldPtrs.begin();
 		result._value._matsmi = _internal->_materialScaffoldMarkers.begin();
 		result._value._matspi = _internal->_materialScaffoldPtrs.begin();
+		result._value._etoi = _internal->_elementToObjects.begin();
+		result._value._dbpi = _internal->_deformerBindPoints.begin();
 		result._value._ni = _internal->_names.begin();
 		result._value._elementId = 0;
 		result._value._internal = _internal.get();
@@ -373,6 +389,8 @@ namespace RenderCore { namespace Assets
 		result._value._mspi = _internal->_modelScaffoldPtrs.end();
 		result._value._matsmi = _internal->_materialScaffoldMarkers.end();
 		result._value._matspi = _internal->_materialScaffoldPtrs.end();
+		result._value._etoi = _internal->_elementToObjects.begin();
+		result._value._dbpi = _internal->_deformerBindPoints.begin();
 		result._value._ni = _internal->_names.end();
 		result._value._elementId = _internal->_elementCount;
 		result._value._internal = _internal.get();
@@ -399,6 +417,8 @@ namespace RenderCore { namespace Assets
 			Throw(std::runtime_error("Attempting to generate a hash for a ModelRendererConstruction that cannot be hashed"));
 		if (!_internal->_hash) {
 			_internal->_hash = Hash64(AsPointer(_internal->_elementHashValues.begin()), AsPointer(_internal->_elementHashValues.end()));
+			_internal->_hash = Hash64(AsPointer(_internal->_elementToObjects.begin()), AsPointer(_internal->_elementToObjects.end()));
+			_internal->_hash = Hash64(AsPointer(_internal->_deformerBindPoints.begin()), AsPointer(_internal->_deformerBindPoints.end()));
 			_internal->_hash = _internal->_skeletonScaffoldHashValue ? HashCombine(_internal->_hash, _internal->_skeletonScaffoldHashValue) : _internal->_hash;
 		}
 
@@ -427,6 +447,8 @@ namespace RenderCore { namespace Assets
 		while (_value._mspi!=_value._internal->_modelScaffoldPtrs.end() && _value._mspi->first < e) ++_value._mspi;
 		while (_value._matsmi!=_value._internal->_materialScaffoldMarkers.end() && _value._matsmi->first < e) ++_value._matsmi;
 		while (_value._matspi!=_value._internal->_materialScaffoldPtrs.end() && _value._matspi->first < e) ++_value._matspi;
+		while (_value._etoi!=_value._internal->_elementToObjects.end() && _value._etoi->first < e) ++_value._etoi;
+		while (_value._dbpi!=_value._internal->_deformerBindPoints.end() && _value._dbpi->first < e) ++_value._dbpi;
 		while (_value._ni!=_value._internal->_names.end() && _value._ni->first < e) ++_value._ni;
 	}
 
@@ -454,6 +476,20 @@ namespace RenderCore { namespace Assets
 			return _matsmi->second.get();
 		}
 		return nullptr;
+	}
+
+	std::optional<Float4x4> ModelRendererConstruction::ElementIterator::Value::GetElementToObject() const
+	{
+		if (_etoi!=_internal->_elementToObjects.end() && _etoi->first == _elementId)
+			return _etoi->second;
+		return {};
+	}
+
+	std::optional<uint64_t> ModelRendererConstruction::ElementIterator::Value::GetDeformerBindPoint() const
+	{
+		if (_dbpi!=_internal->_deformerBindPoints.end() && _dbpi->first == _elementId)
+			return _dbpi->second;
+		return {};
 	}
 
 	std::string ModelRendererConstruction::ElementIterator::Value::GetModelScaffoldName() const

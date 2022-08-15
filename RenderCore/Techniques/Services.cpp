@@ -7,6 +7,7 @@
 #include "SubFrameEvents.h"
 #include "../BufferUploads/IBufferUploads.h"
 #include "../../ConsoleRig/AttachablePtr.h"
+#include "../../Utility/Threading/Mutex.h"
 #include <vector>
 #include <regex>
 
@@ -24,12 +25,24 @@ namespace RenderCore { namespace Techniques
 		std::vector<TexturePlugin> _texturePlugins;
 		std::function<Assets::TextureLoaderSignature> _fallbackTextureLoader;
 		unsigned _nextTexturePluginId = 1;
+
+		struct DeformConfigure
+		{
+			std::string _name;
+			unsigned _id;
+			std::shared_ptr<IDeformConfigure> _interface;
+		};
+		std::vector<DeformConfigure> _deformConfigures;
+		unsigned _nextDeformConfigureId = 1;
+
+		Threading::Mutex _lock;
 	};
 
 	unsigned Services::RegisterTextureLoader(
 		const std::basic_regex<char, std::regex_traits<char>>& initializerMatcher, 
 		std::function<Assets::TextureLoaderSignature>&& loader)
 	{
+		ScopedLock(_pimpl->_lock);
 		auto res = _pimpl->_nextTexturePluginId++;
 
 		Pimpl::TexturePlugin plugin;
@@ -42,6 +55,7 @@ namespace RenderCore { namespace Techniques
 
 	void Services::DeregisterTextureLoader(unsigned pluginId)
 	{
+		ScopedLock(_pimpl->_lock);
 		auto i = std::find_if(_pimpl->_texturePlugins.begin(), _pimpl->_texturePlugins.end(), [pluginId](const auto& c) { return c._id == pluginId; });
 		if (i != _pimpl->_texturePlugins.end())
 			_pimpl->_texturePlugins.erase(i);
@@ -49,11 +63,13 @@ namespace RenderCore { namespace Techniques
 
 	void Services::SetFallbackTextureLoader(std::function<Assets::TextureLoaderSignature>&& loader)
 	{
+		ScopedLock(_pimpl->_lock);
 		_pimpl->_fallbackTextureLoader = std::move(loader);
 	}
 
 	std::shared_ptr<BufferUploads::IAsyncDataSource> Services::CreateTextureDataSource(StringSection<> identifier, Assets::TextureLoaderFlags::BitField flags)
 	{
+		ScopedLock(_pimpl->_lock);
 		for (const auto& plugin:_pimpl->_texturePlugins)
 			if (std::regex_match(identifier.begin(), identifier.end(), plugin._initializerMatcher))
 				return plugin._loader(identifier, flags);
@@ -70,6 +86,32 @@ namespace RenderCore { namespace Techniques
 	void Services::SetCommonResources(const std::shared_ptr<CommonResourceBox>& res)
 	{
 		_commonResources = res;
+	}
+
+	IDeformConfigure* Services::FindDeformConfigure(StringSection<> name)
+	{
+		ScopedLock(_pimpl->_lock);
+		for (auto& r:_pimpl->_deformConfigures)
+			if (XlEqString(name, r._name)) return r._interface.get();
+		return nullptr;
+	}
+	unsigned Services::RegisterDeformConfigure(StringSection<> name, std::shared_ptr<IDeformConfigure> interface)
+	{
+		ScopedLock(_pimpl->_lock);
+		for (auto& r:_pimpl->_deformConfigures) assert(!XlEqString(name, r._name));
+		unsigned id = _pimpl->_nextDeformConfigureId++;
+		_pimpl->_deformConfigures.push_back({name.AsString(), id, std::move(interface)});
+		return id;
+	}
+	void Services::DeregisterDeformConfigure(unsigned id)
+	{
+		ScopedLock(_pimpl->_lock);
+		for (auto r=_pimpl->_deformConfigures.begin(); r!=_pimpl->_deformConfigures.end(); ++r)
+			if (r->_id == id) {
+				_pimpl->_deformConfigures.erase(r);
+				return;
+			}
+		assert(0);		// didn't find it
 	}
 
 	Services::Services(const std::shared_ptr<RenderCore::IDevice>& device)

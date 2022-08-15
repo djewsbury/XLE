@@ -198,8 +198,7 @@ namespace RenderCore { namespace Techniques
 
 		_textureCompilerRegistration = RenderCore::Assets::RegisterTextureCompiler(compilers);
 
-		_skinDeformerSystem = std::make_shared<SkinDeformerSystem>(
-			std::make_shared<PipelineCollection>(device));
+		_skinDeformerSystemRegistration = _techniqueServices->RegisterDeformConfigure("gpu_skin", CreateGPUSkinDeformerConfigure(std::make_shared<PipelineCollection>(device)));
 		
 		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
 		_prePresentBinding = subFrameEvents._onPrePresent.Bind(
@@ -217,6 +216,10 @@ namespace RenderCore { namespace Techniques
 
 	PrimaryResourcesApparatus::~PrimaryResourcesApparatus()
 	{
+		if (_skinDeformerSystemRegistration != ~0u) {
+			_techniqueServices->DeregisterDeformConfigure(_skinDeformerSystemRegistration);
+		}
+
 		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
 		subFrameEvents._onFrameBarrier.Unbind(_frameBarrierBinding);
 		subFrameEvents._onPrePresent.Unbind(_prePresentBinding);

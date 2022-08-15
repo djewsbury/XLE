@@ -20,11 +20,13 @@ namespace RenderCore { namespace Techniques
 {
 	class CommonResourceBox;
 	class SubFrameEvents;
+	class IDeformConfigure;
 
 	class Services
 	{
 	public:
 		static BufferUploads::IManager& GetBufferUploads() { return *GetInstance()._bufferUploads; }
+		static std::shared_ptr<BufferUploads::IManager> GetBufferUploadsPtr() { return GetInstance()._bufferUploads; }
 		static RenderCore::IDevice& GetDevice() { return *GetInstance()._device; }
 		static std::shared_ptr<RenderCore::IDevice> GetDevicePtr() { return GetInstance()._device; }
 		static std::shared_ptr<CommonResourceBox> GetCommonResources() { return GetInstance()._commonResources; }
@@ -38,6 +40,13 @@ namespace RenderCore { namespace Techniques
 		void 		DeregisterTextureLoader(unsigned pluginId);
 		void 		SetFallbackTextureLoader(std::function<Assets::TextureLoaderSignature>&& loader);
 		std::shared_ptr<BufferUploads::IAsyncDataSource> CreateTextureDataSource(StringSection<> identifier, Assets::TextureLoaderFlags::BitField flags);
+
+		/////////////////////////////
+		//   D E F O R M   C O N F I G U R E
+		////////////////////////////////////////////
+		IDeformConfigure* 	FindDeformConfigure(StringSection<>);
+		unsigned 			RegisterDeformConfigure(StringSection<>, std::shared_ptr<IDeformConfigure>);
+		void 				DeregisterDeformConfigure(unsigned);
 
 		void 		SetBufferUploads(const std::shared_ptr<BufferUploads::IManager>&);
 		void 		SetCommonResources(const std::shared_ptr<CommonResourceBox>&);

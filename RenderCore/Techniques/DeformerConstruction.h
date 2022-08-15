@@ -12,7 +12,8 @@
 #include <functional>
 #include <future>
 
-namespace RenderCore { namespace Assets { class ModelScaffold; }}
+namespace RenderCore { namespace Assets { class ModelRendererConstruction; }}
+namespace Utility { template<typename T> class InputStreamFormatter; }
 
 namespace RenderCore { namespace Techniques 
 {
@@ -49,6 +50,8 @@ namespace RenderCore { namespace Techniques
 		void Add(
 			std::shared_ptr<IDeformUniformsAttachment> deformer);
 
+		Assets::ModelRendererConstruction& GetModelRendererConstruction() const;
+
 		struct GeoEntry
 		{
 			std::shared_ptr<IGeoDeformer> _deformer;
@@ -59,16 +62,21 @@ namespace RenderCore { namespace Techniques
 		std::vector<GeoEntry> GetGeoEntries() const;
 
 		std::shared_ptr<IDeformUniformsAttachment> GetUniformsAttachment() const;
+		std::shared_ptr<IDeformGeoAttachment> GetGeoAttachment() const;
 
 		void FulfillWhenNotPending(std::promise<std::shared_ptr<DeformerConstruction>>&& promise);
 		bool IsEmpty() const;
+		uint64_t GetHash() const;
 
+		DeformerConstruction(std::shared_ptr<IDevice> device, std::shared_ptr<Assets::ModelRendererConstruction> rendererConstruction);
 		DeformerConstruction();
 		~DeformerConstruction();
 	private:
 		bool _sealed = false;
 		std::vector<::Assets::PtrToMarkerPtr<IGeoDeformer>> _deformerMarkers;
 		std::vector<std::shared_ptr<IGeoDeformer>> _deformers;
+		std::shared_ptr<IDevice> _device;
+		std::shared_ptr<Assets::ModelRendererConstruction> _rendererConstruction;
 
 		struct StoredGeoEntry
 		{
@@ -83,7 +91,46 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<IDeformUniformsAttachment> _deformer = nullptr;
 		};
 		StoredUniformsEntry _storedUniformsEntry;
+
+		std::shared_ptr<IDeformGeoAttachment> _completedGeoAttachment;
 	};
+
+	class IDeformConfigure
+	{
+	public:
+		virtual void Configure(
+			DeformerConstruction& construction,
+			InputStreamFormatter<char>& fmttr = EmptyFormatter()) = 0;
+		virtual ~IDeformConfigure();
+
+		static InputStreamFormatter<char>& EmptyFormatter();
+	};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	inline std::shared_ptr<IDeformUniformsAttachment> DeformerConstruction::GetUniformsAttachment() const
+	{
+		// must have called FulfillWhenNotPending and waited on it before calling this
+		return _storedUniformsEntry._deformer;
+	}
+
+	inline std::shared_ptr<IDeformGeoAttachment> DeformerConstruction::GetGeoAttachment() const
+	{
+		// must have called FulfillWhenNotPending and waited on it before calling this
+		assert(_sealed);
+		return _completedGeoAttachment;
+	}
+
+	inline bool DeformerConstruction::IsEmpty() const
+	{
+		return _storedGeoEntries.empty() && !_storedUniformsEntry._deformer;
+	}
+
+	inline Assets::ModelRendererConstruction& DeformerConstruction::GetModelRendererConstruction() const
+	{
+		assert(_rendererConstruction);
+		return *_rendererConstruction;
+	}
 
 }}
 

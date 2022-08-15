@@ -34,7 +34,8 @@ namespace RenderCore { namespace Assets
 			ElementConstructor& SetModelScaffold(const std::shared_ptr<Assets::ModelScaffold>&, std::string initializer={});
 			ElementConstructor& SetMaterialScaffold(const std::shared_ptr<Assets::MaterialScaffold>&, std::string initializer={});
 
-			ElementConstructor& SetRootTransform(const Float4x4&);
+			ElementConstructor& SetElementToObject(const Float4x4&);
+			ElementConstructor& SetDeformerBindPoint(uint64_t);
 
 			ElementConstructor& SetName(const std::string&);
 		private:
@@ -83,9 +84,11 @@ namespace RenderCore { namespace Assets
 		public:
 			std::shared_ptr<Assets::ModelScaffold> GetModelScaffold() const;
 			std::shared_ptr<Assets::MaterialScaffold> GetMaterialScaffold() const;
+			std::optional<Float4x4> GetElementToObject() const;
 			std::string GetModelScaffoldName() const;
 			std::string GetMaterialScaffoldName() const;
 			std::string GetElementName() const;
+			std::optional<uint64_t> GetDeformerBindPoint() const;
 			unsigned ElementId() const;
 		private:
 			Value();
@@ -99,6 +102,8 @@ namespace RenderCore { namespace Assets
 			Iterator<ModelScaffoldPtr> _mspi;
 			Iterator<MaterialScaffoldMarker> _matsmi;
 			Iterator<MaterialScaffoldPtr> _matspi;
+			Iterator<Float4x4> _etoi;
+			Iterator<uint64_t> _dbpi;
 			Iterator<std::string> _ni;
 			unsigned _elementId = 0;
 			Internal* _internal = nullptr;

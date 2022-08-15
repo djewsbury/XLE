@@ -36,6 +36,7 @@ namespace RenderCore { namespace Techniques
 	class DrawableConstructor;
 	class ExecuteDrawableContext;
 	class ResourceConstructionContext;
+	class DeformerConstruction;
 
 	class ICustomDrawDelegate
 	{
@@ -63,6 +64,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<unsigned>	_modelJointIndexToMachineOutput;
 		std::vector<Float4x4>	_unanimatedTransforms;
 		std::vector<unsigned>	_elementStarts;
+		std::vector<Float3x4>	_elementToObject;
 	};
 	
 	class SimpleModelRenderer
@@ -123,7 +125,7 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<ResourceConstructionContext> constructionContext,
 			std::shared_ptr<Assets::ModelRendererConstruction> construction,
 			std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool = nullptr,
-			std::shared_ptr<DeformAccelerator> deformAccelerator = nullptr,
+			std::shared_ptr<DeformerConstruction> deformerConstruction = nullptr,
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {});
 		
 		static void ConstructToPromise(

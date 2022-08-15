@@ -12,6 +12,7 @@
 #include "DeformGeometryInfrastructure.h"
 #include "DeformerConstruction.h"
 #include "SkinDeformer.h"
+#include "Services.h"
 #include "../Assets/ModelRendererConstruction.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelMachine.h"		// for DrawCallDesc
@@ -202,6 +203,7 @@ namespace RenderCore { namespace Techniques
 				break;
 			case (uint32_t)DrawableConstructor::Command::BeginElement:
 				elementIdx = cmd.As<unsigned>();
+				localToWorld3x4 = Combine(_skeletonBinding._elementToObject[elementIdx], AsFloat3x4(localToWorld));
 				break;
 			case (uint32_t)DrawableConstructor::Command::SetGeoSpaceToNodeSpace:
 				geoSpaceToNodeSpace = (!cmd.RawData().empty()) ? &cmd.As<Float4x4>() : nullptr;
@@ -293,6 +295,7 @@ namespace RenderCore { namespace Techniques
 				break;
 			case (uint32_t)DrawableConstructor::Command::BeginElement:
 				elementIdx = cmd.As<unsigned>();
+				localToWorld3x4 = Combine(_skeletonBinding._elementToObject[elementIdx], AsFloat3x4(localToWorld));
 				break;
 			case (uint32_t)DrawableConstructor::Command::SetGeoSpaceToNodeSpace:
 				geoSpaceToNodeSpace = (!cmd.RawData().empty()) ? &cmd.As<Float4x4>() : nullptr;
@@ -388,6 +391,7 @@ namespace RenderCore { namespace Techniques
 				break;
 			case (uint32_t)DrawableConstructor::Command::BeginElement:
 				elementIdx = cmd.As<unsigned>();
+				localToWorld3x4 = Combine(_skeletonBinding._elementToObject[elementIdx], AsFloat3x4(localToWorld));
 				break;
 			case (uint32_t)DrawableConstructor::Command::SetGeoSpaceToNodeSpace:
 				geoSpaceToNodeSpace = (!cmd.RawData().empty()) ? &cmd.As<Float4x4>() : nullptr;
@@ -464,6 +468,7 @@ namespace RenderCore { namespace Techniques
 				break;
 			case (uint32_t)DrawableConstructor::Command::BeginElement:
 				elementIdx = cmd.As<unsigned>();
+				localToWorld3x4 = Combine(_skeletonBinding._elementToObject[elementIdx], AsFloat3x4(localToWorld));
 				break;
 			case (uint32_t)DrawableConstructor::Command::SetGeoSpaceToNodeSpace:
 				geoSpaceToNodeSpace = (!cmd.RawData().empty()) ? &cmd.As<Float4x4>() : nullptr;
@@ -513,7 +518,6 @@ namespace RenderCore { namespace Techniques
 			_deformAcceleratorPool = std::move(deformAcceleratorPool);
 			geoDeformerInfrastructure = std::dynamic_pointer_cast<IDeformGeoAttachment>(_deformAcceleratorPool->GetDeformGeoAttachment(*_deformAccelerator));
 		}
-
 
 		if (!uniformBufferDelegates.empty()) {
 			UniformsStreamInterface usi;
@@ -572,30 +576,36 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	std::future<std::shared_ptr<DeformAccelerator>> CreateDefaultDeformAccelerator(
+	std::shared_ptr<DeformerConstruction> CreateDefaultDeformConstruction(
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<Assets::ModelRendererConstruction>& rendererConstruction)
 	{
 		// The default deform accelerators just contains a skinning deform operation
-		auto deformerConstruction = std::make_shared<DeformerConstruction>();
-		SkinDeformerSystem::GetInstance()->ConfigureGPUSkinDeformers(
-			*deformerConstruction, *rendererConstruction);
+		auto deformerConstruction = std::make_shared<DeformerConstruction>(deformAcceleratorPool->GetDevice(), rendererConstruction);
+		if (auto* skinConfigure = Services::GetInstance().FindDeformConfigure("gpu_skin"))
+			skinConfigure->Configure(*deformerConstruction);
 		if (deformerConstruction->IsEmpty()) return {};
+		return deformerConstruction;
+	}
 
+	static std::future<std::shared_ptr<DeformAccelerator>> CreateDeformAccelerator(
+		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
+		DeformerConstruction& deformConstruction)
+	{
 		std::promise<std::shared_ptr<DeformAccelerator>> promise;
 		auto result = promise.get_future();
 
-		::Assets::WhenAll(ToFuture(*deformerConstruction)).ThenConstructToPromise(
+		::Assets::WhenAll(ToFuture(deformConstruction)).ThenConstructToPromise(
 			std::move(promise),
-			[pool=std::weak_ptr<IDeformAcceleratorPool>(deformAcceleratorPool), rendererConstruction](auto deformerConstructionActual) {
+			[pool=std::weak_ptr<IDeformAcceleratorPool>(deformAcceleratorPool)](auto deformerConstructionActual) {
 				auto l = pool.lock();
 				if (!l) Throw(std::runtime_error("DeformAcceleratorPool expired"));
 
-				auto geometryInfrastructure = CreateDeformGeoAttachment(
-					*l->GetDevice(), *rendererConstruction, *deformerConstructionActual);
-				
 				auto result = l->CreateDeformAccelerator();
-				l->Attach(*result, geometryInfrastructure);
+				if (auto geoAttachment = deformerConstructionActual->GetGeoAttachment())
+					l->Attach(*result, std::move(geoAttachment));
+				if (auto uniformsAttachment = deformerConstructionActual->GetUniformsAttachment())
+					l->Attach(*result, std::move(uniformsAttachment));
 				return result;
 			});
 
@@ -609,7 +619,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<ResourceConstructionContext> constructionContext,
 		std::shared_ptr<Assets::ModelRendererConstruction> construction,
 		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
-		std::shared_ptr<DeformAccelerator> deformAcceleratorInit,
+		std::shared_ptr<DeformerConstruction> deformerConstruction,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
 	{
 		std::vector<UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
@@ -617,7 +627,7 @@ namespace RenderCore { namespace Techniques
 		::Assets::WhenAll(ToFuture(*construction)).ThenConstructToPromise(
 			std::move(promise),
 			[pipelineAcceleratorPool=std::move(pipelineAcceleratorPool), deformAcceleratorPool=std::move(deformAcceleratorPool), drawablesPool=std::move(drawablesPool),
-			deformAccelerator=std::move(deformAcceleratorInit), uniformBufferBindings=std::move(uniformBufferBindings), constructionContext=std::move(constructionContext)](auto&& promise, auto completedConstruction) mutable {
+			deformerConstruction=std::move(deformerConstruction), uniformBufferBindings=std::move(uniformBufferBindings), constructionContext=std::move(constructionContext)](auto&& promise, auto completedConstruction) mutable {
 
 				struct Helper
 				{
@@ -626,14 +636,19 @@ namespace RenderCore { namespace Techniques
 					std::shared_future<void> _deformAcceleratorInitFuture;
 				};
 				auto helper = std::make_shared<Helper>();
+				std::shared_ptr<DeformAccelerator> deformAccelerator;
 
 				TRY {
 					// if we were given a deform accelerator pool, but no deform accelerator, go ahead and create the default accelerator
-					if (deformAcceleratorPool && !deformAccelerator) {
-						auto deformAcceleratorFuture = CreateDefaultDeformAccelerator(deformAcceleratorPool, completedConstruction);
-						if (deformAcceleratorFuture.valid()) {
-							YieldToPool(deformAcceleratorFuture);
-							deformAccelerator = deformAcceleratorFuture.get();
+					if (deformAcceleratorPool) {
+						if (!deformerConstruction)
+							deformerConstruction = CreateDefaultDeformConstruction(deformAcceleratorPool, completedConstruction);
+						if (deformerConstruction) {
+							auto deformAcceleratorFuture = CreateDeformAccelerator(deformAcceleratorPool, *deformerConstruction);
+							if (deformAcceleratorFuture.valid()) {
+								YieldToPool(deformAcceleratorFuture);
+								deformAccelerator = deformAcceleratorFuture.get();
+							}
 						}
 					}
 					
@@ -718,9 +733,12 @@ namespace RenderCore { namespace Techniques
 		const Assets::ModelRendererConstruction& construction)
 	{
 		auto externalSkeletonScaffold = construction.GetSkeletonScaffold();
+		_elementToObject.reserve(construction.GetElementCount());
 
 		for (auto ele:construction) {
 			_elementStarts.push_back(_modelJointIndexToMachineOutput.size());
+
+			_elementToObject.push_back(AsFloat3x4(ele.GetElementToObject().value_or(Identity<Float4x4>())));
 			
 			auto modelScaffold = ele.GetModelScaffold();
 			if (modelScaffold) {
