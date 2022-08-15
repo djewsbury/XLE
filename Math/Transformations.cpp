@@ -852,20 +852,9 @@ namespace XLEMath
         // const float lhs33 = 1.f;
         const float lhs03 = translate[0], lhs13 = translate[1], lhs23 = translate[2];
 
-        rhs(0,0) = rhs(0,0) + lhs03 * rhs(3,0);
-        rhs(0,1) = rhs(0,1) + lhs03 * rhs(3,1);
-        rhs(0,2) = rhs(0,2) + lhs03 * rhs(3,2);
-        rhs(0,3) = rhs(0,3) + lhs03 * rhs(3,3);
-        
-        rhs(1,0) = rhs(1,0) + lhs13 * rhs(3,0);
-        rhs(1,1) = rhs(1,1) + lhs13 * rhs(3,1);
-        rhs(1,2) = rhs(1,2) + lhs13 * rhs(3,2);
-        rhs(1,3) = rhs(1,3) + lhs13 * rhs(3,3);
-        
-        rhs(2,0) = rhs(2,0) + lhs23 * rhs(3,0);
-        rhs(2,1) = rhs(2,1) + lhs23 * rhs(3,1);
-        rhs(2,2) = rhs(2,2) + lhs23 * rhs(3,2);
-        rhs(2,3) = rhs(2,3) + lhs23 * rhs(3,3);
+        rhs(0,3) += lhs03;
+        rhs(1,3) += lhs13;
+        rhs(2,3) += lhs23;
     }
 
     void Combine_IntoRHS(const UniformScale& scale, Float3x4& transform)
@@ -1271,6 +1260,26 @@ namespace XLEMath
             input._scale * sinTheta, input._scale * cosTheta, 0.0f, input._translation[1],
             0.0f, 0.0f, input._scale, input._translation[2],
             0.0f, 0.0f, 0.0f, 1.0f);
+    }
+
+    Float3x4    AsFloat3x4(const UniformScaleYRotTranslation& input)
+    {
+        float sinTheta, cosTheta;
+        std::tie(sinTheta, cosTheta) = XlSinCos(input._yRotation);
+        return MakeFloat3x4(
+            input._scale * cosTheta, 0.0f, input._scale * sinTheta, input._translation[0],
+            0.0f, input._scale, 0.0f, input._translation[1],
+            input._scale * -sinTheta, 0.0f, input._scale * cosTheta, input._translation[2]);
+    }
+
+    Float3x4    AsFloat3x4(const UniformScaleZRotTranslation& input)
+    {
+        float sinTheta, cosTheta;
+        std::tie(sinTheta, cosTheta) = XlSinCos(input._zRotation);
+        return MakeFloat3x4(
+            input._scale * cosTheta, input._scale * -sinTheta, 0.0f, input._translation[0],
+            input._scale * sinTheta, input._scale * cosTheta, 0.0f, input._translation[1],
+            0.0f, 0.0f, input._scale, input._translation[2]);
     }
 
     Float4x4   AsFloat4x4(const ScaleRotationTranslationQ& input)

@@ -130,8 +130,6 @@ namespace Assets
 	template<typename Promise>
 		void AutoConstructToPromiseFromPendingCompile(Promise&& promise, const ArtifactCollectionFuture& pendingCompile, CompileRequestCode targetCode = Internal::RemoveSmartPtrType<Internal::PromisedType<Promise>>::CompileProcessType)
 	{
-		// We must poll the compile operation every frame, and construct the asset when it is ready. Note that we're
-		// still going to end up constructing the asset in the main thread.
 		::Assets::PollToPromise(
 			std::move(promise),
 			[pendingCompile](auto timeout) {
