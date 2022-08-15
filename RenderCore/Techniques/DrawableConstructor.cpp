@@ -238,7 +238,7 @@ namespace RenderCore { namespace Techniques
 						if (lhs._loadBuffer < rhs._loadBuffer) return true;
 						if (lhs._loadBuffer > rhs._loadBuffer) return false;
 						if (lhs._scaffoldIdx < rhs._scaffoldIdx) return true;
-						if (lhs._scaffoldIdx < rhs._scaffoldIdx) return false;
+						if (lhs._scaffoldIdx > rhs._scaffoldIdx) return false;
 						return lhs._srcOffset < rhs._srcOffset;
 					});
 
