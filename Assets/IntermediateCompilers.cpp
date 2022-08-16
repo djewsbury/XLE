@@ -77,6 +77,8 @@ namespace Assets
 
 		virtual void DeregisterCompiler(RegisteredCompilerId id) override;
 
+		virtual bool HasAssociatedCompiler(CompileRequestCode targetCode, StringSection<> firstInitializer) override;
+
 		virtual void AssociateRequest(
 			RegisteredCompilerId compiler,
 			IteratorRange<const uint64_t*> outputAssetTypes,
@@ -399,6 +401,19 @@ namespace Assets
 
 		return nullptr;
     }
+
+	bool IntermediateCompilers::HasAssociatedCompiler(CompileRequestCode targetCode, StringSection<> firstInitializer)
+	{
+		ScopedLock(_delegatesLock);
+		for (const auto&a:_requestAssociations) {
+			auto i = std::find(a.second._compileRequestCodes.begin(), a.second._compileRequestCodes.end(), targetCode);
+			if (i == a.second._compileRequestCodes.end())
+				continue;
+			if (a.second._regexFilter.has_value() && std::regex_match(firstInitializer.begin(), firstInitializer.end(), a.second._regexFilter.value()))
+				return true;
+		}
+		return false;
+	}
 
 	auto IntermediateCompilers::RegisterCompiler(
 		const std::string& name,

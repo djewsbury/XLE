@@ -17,6 +17,8 @@
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelMachine.h"		// for DrawCallDesc
 #include "../Assets/AnimationBindings.h"
+#include "../Assets/CompoundObject.h"
+#include "../Assets/CompileAndAsyncManager.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/IFileSystem.h"
@@ -624,7 +626,7 @@ namespace RenderCore { namespace Techniques
 	{
 		std::vector<UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
 
-		::Assets::WhenAll(ToFuture(*construction)).ThenConstructToPromise(
+		::Assets::WhenAll(ToFuture(*construction)).CheckImmediately().ThenConstructToPromise(
 			std::move(promise),
 			[pipelineAcceleratorPool=std::move(pipelineAcceleratorPool), deformAcceleratorPool=std::move(deformAcceleratorPool), drawablesPool=std::move(drawablesPool),
 			deformerConstruction=std::move(deformerConstruction), uniformBufferBindings=std::move(uniformBufferBindings), constructionContext=std::move(constructionContext)](auto&& promise, auto completedConstruction) mutable {
@@ -720,9 +722,36 @@ namespace RenderCore { namespace Techniques
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 		std::shared_ptr<IDrawablesPool> drawablesPool,
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
 		StringSection<> modelScaffoldName)
 	{
-		ConstructToPromise(std::move(promise), std::move(drawablesPool), std::move(pipelineAcceleratorPool), modelScaffoldName, modelScaffoldName);
+		if (::Assets::Services::GetAsyncMan().GetIntermediateCompilers().HasAssociatedCompiler(Assets::CompoundObjectScaffold::CompileProcessType, modelScaffoldName)) {
+			// This is a compound object
+			::Assets::WhenAll(::Assets::MakeAsset<Assets::CompoundObjectScaffold>(modelScaffoldName)).ThenConstructToPromise(
+				std::move(promise),
+				[pipelineAcceleratorPool=std::move(pipelineAcceleratorPool), drawablesPool=std::move(drawablesPool), deformAcceleratorPool=std::move(deformAcceleratorPool)](auto&& promise, const Assets::CompoundObjectScaffold& actualCompoundObject) mutable {
+					// have to wait on the model renderer construction before we can call DeserializeDeformerConstruction
+					auto rendererConstruction = actualCompoundObject.GetModelRendererConstruction();
+					auto rendererConstructionFuture = ToFuture(*rendererConstruction);
+					YieldToPool(rendererConstructionFuture);
+					rendererConstructionFuture.get();
+
+					auto cfg = actualCompoundObject.OpenConfiguration();
+					auto deformerConstruction = DeserializeDeformerConstruction(pipelineAcceleratorPool->GetDevice(), rendererConstruction, cfg);
+
+					ConstructToPromise(
+						std::move(promise),
+						std::move(drawablesPool), std::move(pipelineAcceleratorPool), nullptr, std::move(rendererConstruction),
+						std::move(deformAcceleratorPool), std::move(deformerConstruction));
+				});
+		} else {
+			auto construction = std::make_shared<Assets::ModelRendererConstruction>();
+			construction->AddElement().SetModelAndMaterialScaffolds(modelScaffoldName, {});
+			ConstructToPromise(
+				std::move(promise),
+				std::move(drawablesPool), std::move(pipelineAcceleratorPool), nullptr, std::move(construction),
+				std::move(deformAcceleratorPool), nullptr);
+		}
 	}
 
 	ICustomDrawDelegate::~ICustomDrawDelegate() {}

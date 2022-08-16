@@ -44,6 +44,8 @@ namespace Assets
 
 		virtual void DeregisterCompiler(RegisteredCompilerId id) = 0;
 
+		virtual bool HasAssociatedCompiler(CompileRequestCode, StringSection<>) = 0;
+
 		// AssociateRequest associates a pattern with a compiler (previously registered with RegisterCompiler)
 		// When requests are made (via Prepare) that match the pattern, that compiler can be selected to
 		// handle the request
