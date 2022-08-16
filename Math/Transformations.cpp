@@ -1441,6 +1441,13 @@ namespace XLEMath
             0.f, 0.f, 0.f, 1.f);
     }
 
+    Quaternion  AsQuaternion(const Float3x3& input)
+    {
+        Quaternion result;
+        cml::quaternion_rotation_matrix(result, input);
+        return result;
+    }
+
     Float4x4 MakeCameraToWorld(const Float3& forward, const Float3& up, const Float3& right, const Float3& position)
     {
         return Float4x4(

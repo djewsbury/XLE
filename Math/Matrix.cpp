@@ -5,6 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "Matrix.h"
+#include "Quaternion.h"
 
 /*!
    \page cmlAutoExp CML library and AutoExp.dat
@@ -189,6 +190,14 @@ namespace XLEMath
 
         float           Determinant(const Float3x3& input)      { return cml::determinant(input); }
         float           Determinant(const Float4x4& input)      { return cml::determinant(input); }
+
+        static Quaternion MakeIdentityQuaternion() { Quaternion temp; temp.identity(); return temp; }
+        template<> const Quaternion& Identity<Quaternion>()
+        {
+            static Quaternion result = MakeIdentityQuaternion();
+            return result;
+        }
+
     #endif
     
 }

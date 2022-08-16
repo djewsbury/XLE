@@ -289,6 +289,8 @@ namespace XLEMath
 
     Float4x4    AsFloat4x4(const Float2x3& input);
 
+    Quaternion  AsQuaternion(const Float3x3& input);
+
     inline Float4x4     Combine(const Float3x4& firstTransform, const Float4x4& secondTransform)
     {
             // placeholder for better implementation!
