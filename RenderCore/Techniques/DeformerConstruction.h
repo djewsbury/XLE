@@ -95,6 +95,16 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IDeformGeoAttachment> _completedGeoAttachment;
 	};
 
+	// caller should wait on the renderer construction before calling DeserializeDeformerConstruction();
+	std::shared_ptr<RenderCore::Techniques::DeformerConstruction> DeserializeDeformerConstruction(
+		std::shared_ptr<RenderCore::IDevice>, std::shared_ptr<Assets::ModelRendererConstruction>, InputStreamFormatter<char>& cfg);
+
+	template<typename Formatter>
+		void DeserializeDeformerConstruction(
+			RenderCore::Techniques::DeformerConstruction& dst,
+			const RenderCore::Assets::ModelRendererConstruction&,
+			Formatter&);
+
 	class IDeformConfigure
 	{
 	public:

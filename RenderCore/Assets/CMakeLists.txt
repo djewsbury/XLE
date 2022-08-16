@@ -22,6 +22,7 @@ add_library(
     AnimationSet.cpp
     SkeletonMachine.cpp
     ModelRendererConstruction.cpp
+    CompoundObject.cpp
     ../GeoProc/GeometryAlgorithm.cpp
     ../GeoProc/GeoProcUtil.cpp
     ../GeoProc/MeshDatabase.cpp

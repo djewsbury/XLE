@@ -8,6 +8,8 @@
 #include "../../Assets/Marker.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/MemoryUtils.h"
+#include "../../Utility/Streams/FormatterUtils.h"
+#include "../../Utility/Streams/StreamFormatter.h"
 
 namespace RenderCore { namespace Techniques
 {
@@ -137,6 +139,61 @@ namespace RenderCore { namespace Techniques
 	: _device(device), _rendererConstruction(rendererConstruction) {}
 	DeformerConstruction::DeformerConstruction() = default;
 	DeformerConstruction::~DeformerConstruction() = default;
+
+	template<typename Formatter>
+		void DeserializeDeformerConstruction(
+			RenderCore::Techniques::DeformerConstruction& result,
+			const RenderCore::Assets::ModelRendererConstruction& rendererConstruction,
+			Formatter& fmttr)
+	{
+		auto& techniqueServices = Services::GetInstance();
+
+		StringSection<> keyname;
+		while (fmttr.TryKeyedItem(keyname)) {
+			switch (fmttr.PeekNext()) {
+			case FormatterBlob::BeginElement:
+				RequireBeginElement(fmttr);
+				if (XlEqStringI(keyname, "DeformConfigure")) {
+					keyname = RequireKeyedItem(fmttr);
+					if (!XlEqString(keyname, "Name")) Throw(Utility::FormatException("Expecting Name key", fmttr.GetLocation()));
+					auto name = RequireStringValue(fmttr);
+
+					auto* configure = techniqueServices.FindDeformConfigure(name);
+					if (configure) {
+						configure->Configure(result, fmttr);
+					} else
+						SkipElement(fmttr);		// unknown deformer type
+				} else {
+					SkipElement(fmttr);    // skip the whole element; it's not required
+				}
+				RequireEndElement(fmttr);
+				break;
+
+			case FormatterBlob::Value:
+				SkipValueOrElement(fmttr);
+				break;
+
+			default:
+				Throw(Utility::FormatException("Expecting element or value", fmttr.GetLocation()));
+			}
+		}
+	}
+
+	template void DeserializeDeformerConstruction(
+		DeformerConstruction& dst,
+		const Assets::ModelRendererConstruction&,
+		InputStreamFormatter<>&);
+
+	auto DeserializeDeformerConstruction(std::shared_ptr<IDevice> device, std::shared_ptr<Assets::ModelRendererConstruction> modelRendererConstruction, InputStreamFormatter<>& cfg) -> std::shared_ptr<DeformerConstruction>
+	{
+		auto deformerConstruction = std::make_shared<DeformerConstruction>(device, modelRendererConstruction);
+		DeserializeDeformerConstruction(*deformerConstruction, *modelRendererConstruction, cfg);
+
+		if (auto* skinConfigure = Services::GetInstance().FindDeformConfigure("gpu_skin"))
+			skinConfigure->Configure(*deformerConstruction);
+
+		return deformerConstruction;
+	}
 
 	InputStreamFormatter<char>& IDeformConfigure::EmptyFormatter()
 	{
