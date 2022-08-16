@@ -433,7 +433,7 @@ namespace UnitTests
 			REQUIRE(cpuAccelerator);
 
 			auto deformerConstruction = std::make_shared<Techniques::DeformerConstruction>(testHelper->_device, rendererConstruction);
-			cpuConfigure->ConfigureAllElements(*deformerConstruction);
+			cpuConfigure->Configure(*deformerConstruction);
 			StallWhilePending(*deformerConstruction);
 
 			auto cpuGeoDeformAttachment = Techniques::CreateDeformGeoAttachment(*testHelper->_device, *rendererConstruction, *deformerConstruction);
@@ -450,7 +450,7 @@ namespace UnitTests
 			REQUIRE(gpuAccelerator);
 
 			auto deformerConstruction = std::make_shared<Techniques::DeformerConstruction>(testHelper->_device, rendererConstruction);
-			gpuConfigure->ConfigureAllElements(*deformerConstruction);
+			gpuConfigure->Configure(*deformerConstruction);
 			StallWhilePending(*deformerConstruction);
 			
 			auto gpuGeoDeformAttachment = Techniques::CreateDeformGeoAttachment(*testHelper->_device, *rendererConstruction, *deformerConstruction);

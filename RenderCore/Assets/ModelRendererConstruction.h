@@ -9,7 +9,7 @@
 #include "../../Utility/StringUtils.h"
 #include <memory>
 
-namespace std { template<typename T> class promise; template<typename T> class shared_future; }
+namespace std { template<typename T> class promise; template<typename T> class shared_future; template<typename T> class future; }
 namespace Assets { class OperationContext; }
 
 namespace RenderCore { namespace Assets
@@ -75,6 +75,8 @@ namespace RenderCore { namespace Assets
 	protected:
 		std::unique_ptr<Internal> _internal;
 	};
+
+	std::future<std::shared_ptr<Assets::ModelRendererConstruction>> ToFuture(Assets::ModelRendererConstruction& construction);
 
 	class ModelRendererConstruction::ElementIterator
 	{

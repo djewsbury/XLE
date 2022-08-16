@@ -515,4 +515,12 @@ namespace RenderCore { namespace Assets
 	
 	ModelRendererConstruction::ElementIterator::Value::Value() = default;
 
+	std::future<std::shared_ptr<Assets::ModelRendererConstruction>> ToFuture(Assets::ModelRendererConstruction& construction)
+	{
+		std::promise<std::shared_ptr<Assets::ModelRendererConstruction>> promise;
+		auto result = promise.get_future();
+		construction.FulfillWhenNotPending(std::move(promise));
+		return result;
+	}
+
 }}

@@ -554,14 +554,6 @@ namespace RenderCore { namespace Techniques
 
 	SimpleModelRenderer::~SimpleModelRenderer() {}
 
-	static std::future<std::shared_ptr<Assets::ModelRendererConstruction>> ToFuture(Assets::ModelRendererConstruction& construction)
-	{
-		std::promise<std::shared_ptr<Assets::ModelRendererConstruction>> promise;
-		auto result = promise.get_future();
-		construction.FulfillWhenNotPending(std::move(promise));
-		return result;
-	}
-
 	static std::future<std::shared_ptr<DrawableConstructor>> ToFuture(DrawableConstructor& construction)
 	{
 		std::promise<std::shared_ptr<DrawableConstructor>> promise;
@@ -626,7 +618,7 @@ namespace RenderCore { namespace Techniques
 	{
 		std::vector<UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
 
-		::Assets::WhenAll(ToFuture(*construction)).CheckImmediately().ThenConstructToPromise(
+		::Assets::WhenAll(RenderCore::Assets::ToFuture(*construction)).CheckImmediately().ThenConstructToPromise(
 			std::move(promise),
 			[pipelineAcceleratorPool=std::move(pipelineAcceleratorPool), deformAcceleratorPool=std::move(deformAcceleratorPool), drawablesPool=std::move(drawablesPool),
 			deformerConstruction=std::move(deformerConstruction), uniformBufferBindings=std::move(uniformBufferBindings), constructionContext=std::move(constructionContext)](auto&& promise, auto completedConstruction) mutable {
