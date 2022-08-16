@@ -107,6 +107,10 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const Float4x4*> skeletonMachineOutput,
 			const RenderCore::Assets::SkeletonBinding& binding) override;
 
+		void SetDefaultSkeletonMachineResults(
+			IteratorRange<const Float4x4*> skeletonMachineOutput,
+			const RenderCore::Assets::SkeletonBinding& binding);
+
 		void Bind(const DeformerInputBinding& binding) override;
 		bool IsCPUDeformer() const override;
 		std::future<void> GetInitializationFuture() const override;
@@ -165,9 +169,15 @@ namespace RenderCore { namespace Techniques
 
 		std::vector<Float3x4> _jointMatrices;
 		unsigned _jointMatricesInstanceStride = 0;
+		std::vector<Float3x4> _defaultInstanceJointMatrices;
 
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> _modelScaffold;
 		std::shared_ptr<Internal::DeformerPipelineCollection> _pipelineCollection;
 		std::shared_future<RenderCore::BufferUploads::ResourceLocator> _linearBufferCompletion;
+
+		void CopySkeletonMachineResults(
+			IteratorRange<Float3x4*> dst,
+			IteratorRange<const Float4x4*> skeletonMachineOutput,
+			const RenderCore::Assets::SkeletonBinding& binding);
 	};
 }}

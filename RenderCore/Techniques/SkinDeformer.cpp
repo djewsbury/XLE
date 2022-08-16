@@ -338,14 +338,31 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<const Float4x4*> skeletonMachineOutput,
 		const RenderCore::Assets::SkeletonBinding& binding)
 	{
-		if (_jointMatrices.size() < (instanceIdx+1)*_jointMatricesInstanceStride)
-			_jointMatrices.resize((instanceIdx+1)*_jointMatricesInstanceStride, Identity<Float3x4>());
+		if (_jointMatrices.size() < (instanceIdx+1)*_jointMatricesInstanceStride) {
+			assert(!_defaultInstanceJointMatrices.empty());
+			_jointMatrices.reserve((instanceIdx+1)*_jointMatricesInstanceStride);
+			while (_jointMatrices.size() < (instanceIdx+1)*_jointMatricesInstanceStride)
+				_jointMatrices.insert(_jointMatrices.end(), _defaultInstanceJointMatrices.begin(), _defaultInstanceJointMatrices.end());
+		}
 
+		CopySkeletonMachineResults(
+			MakeIteratorRange(
+				_jointMatrices.begin()+instanceIdx*_jointMatricesInstanceStride, 
+				_jointMatrices.begin()+(instanceIdx+1)*_jointMatricesInstanceStride),
+			skeletonMachineOutput, binding);
+	}
+
+	void GPUSkinDeformer::CopySkeletonMachineResults(
+		IteratorRange<Float3x4*> dst,
+		IteratorRange<const Float4x4*> skeletonMachineOutput,
+		const RenderCore::Assets::SkeletonBinding& binding)
+	{
+		assert(dst.size() == _jointMatricesInstanceStride);
 		for (unsigned sectionIdx=0; sectionIdx<_sections.size(); ++sectionIdx) {
 			auto& section = _sections[sectionIdx];
 			auto destination = MakeIteratorRange(
-				_jointMatrices.begin()+instanceIdx*_jointMatricesInstanceStride+section._rangeInJointMatrices.first, 
-				_jointMatrices.begin()+instanceIdx*_jointMatricesInstanceStride+section._rangeInJointMatrices.second);
+				dst.begin()+section._rangeInJointMatrices.first, 
+				dst.begin()+section._rangeInJointMatrices.second);
 
 			unsigned c=0;
 			if (binding.GetModelJointCount()) {
@@ -365,6 +382,15 @@ namespace RenderCore { namespace Techniques
 			for (; c<destination.size(); ++c)
 				destination[c] = Identity<Float3x4>();
 		}
+	}
+
+	void GPUSkinDeformer::SetDefaultSkeletonMachineResults(
+		IteratorRange<const Float4x4*> skeletonMachineOutput,
+		const RenderCore::Assets::SkeletonBinding& binding)
+	{
+		// note that this won't effect any instances that have previously recieved skeleton machine results,
+		// or even any instances with lower instanceIdx's than those that have previously received results
+		CopySkeletonMachineResults(MakeIteratorRange(_defaultInstanceJointMatrices), skeletonMachineOutput, binding);
 	}
 
 	void GPUSkinDeformer::ExecuteGPU(
@@ -394,13 +420,17 @@ namespace RenderCore { namespace Techniques
 		auto jmTemporaryDataSize = instanceIndices.size()*sizeof(Float3x4)*_jointMatricesInstanceStride;
 		{
 			auto temporaryMapping = metalContext.MapTemporaryStorage(jmTemporaryDataSize, BindFlag::UnorderedAccess);
-
 			for (unsigned c=0; c<instanceIndices.size(); ++c) {
-				if ((instanceIndices[c]+1)*_jointMatricesInstanceStride > _jointMatrices.size())
-					Throw(std::runtime_error("Instance data was not provided before ExecuteGPU in skinning deformer"));
+				// fallback to the default instance data if FeedInSkeletonMachineResults() has never been called for this instance
+				const Float3x4* jointMatrixSrc;
+				if ((instanceIndices[c]+1)*_jointMatricesInstanceStride <= _jointMatrices.size())
+					jointMatrixSrc = PtrAdd(_jointMatrices.data(), instanceIndices[c]*sizeof(Float3x4)*_jointMatricesInstanceStride);
+				else
+					jointMatrixSrc = _defaultInstanceJointMatrices.data();
+
 				std::memcpy(
 					PtrAdd(temporaryMapping.GetData().begin(), c*sizeof(Float3x4)*_jointMatricesInstanceStride), 
-					PtrAdd(_jointMatrices.data(), instanceIndices[c]*sizeof(Float3x4)*_jointMatricesInstanceStride),
+					jointMatrixSrc,
 					sizeof(Float3x4)*_jointMatricesInstanceStride);
 			}
 			auto beginAndEndInResource = temporaryMapping.GetBeginAndEndInResource();
@@ -600,7 +630,7 @@ namespace RenderCore { namespace Techniques
 			skelVBIterator += skelVb._size;
 		}
 		_jointMatricesInstanceStride = jointMatrixBufferCount;
-		_jointMatrices.resize(1*_jointMatricesInstanceStride, Identity<Float3x4>());
+		_defaultInstanceJointMatrices.resize(_jointMatricesInstanceStride, Identity<Float3x4>());
 
 		assert(!staticDataLoadRequests.empty());
 		_staticVertexAttachments = LoadStaticResourcePartialAsync(
@@ -772,6 +802,25 @@ namespace RenderCore { namespace Techniques
 				// create the deformer if necessary and add the instantiations we just find
 				if (!instantiations.empty()) {
 					auto deformer = std::make_shared<GPUSkinDeformer>(_pipelineCollection, modelScaffold, ele.GetModelScaffoldName());
+
+					// if there's a skeleton attached to the ModelRendererConstruction, then we should pass in a default set of joint matrices
+					const Assets::SkeletonMachine* skeletonMachine = nullptr;
+					if (auto* skeleton=deformerConstruction.GetModelRendererConstruction().GetSkeletonScaffold().get())
+						skeletonMachine = &skeleton->GetSkeletonMachine();
+					if (!skeletonMachine)
+						skeletonMachine = modelScaffold->EmbeddedSkeleton();
+					if (skeletonMachine) {
+						RenderCore::Assets::SkeletonBinding defaultSkeletonBinding;
+						std::vector<Float4x4> defaultSkeletonMachineOutput;
+						if (skeletonMachine) {
+							defaultSkeletonBinding = {skeletonMachine->GetOutputInterface(), modelScaffold->FindCommandStreamInputInterface()};
+							defaultSkeletonMachineOutput.resize(skeletonMachine->GetOutputMatrixCount(), Identity<Float4x4>());
+							skeletonMachine->GenerateOutputTransforms(MakeIteratorRange(defaultSkeletonMachineOutput));
+						}
+
+						deformer->SetDefaultSkeletonMachineResults(defaultSkeletonMachineOutput, defaultSkeletonBinding);
+					}
+
 					for (auto& inst:instantiations)
 						deformerConstruction.Add(deformer, std::move(inst.second), elementIdx, inst.first);
 				}
