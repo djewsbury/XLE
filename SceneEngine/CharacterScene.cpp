@@ -22,6 +22,7 @@
 #include "../RenderCore/Assets/ModelScaffold.h"
 #include "../RenderCore/Assets/MaterialScaffold.h"
 #include "../RenderCore/Assets/AnimationScaffoldInternal.h"
+#include "../RenderCore/Assets/CompoundObject.h"
 #include "../Assets/AssetTraits.h"
 #include "../Assets/DeferredConstruction.h"
 #include "../Math/ProjectionMath.h"
@@ -36,7 +37,12 @@ namespace SceneEngine
 		struct ModelEntry
 		{
 			std::shared_future<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> _completedConstruction;
+
+			// Construction direct from ModelRendererConstruction
 			std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> _referenceHolder;
+
+			// Construction via CompoundObjectScaffold by filename
+			std::shared_future<RenderCore::Assets::CompoundObjectScaffold> _compoundObjectScaffold;
 		};
 
 		struct DeformerEntry
@@ -109,6 +115,7 @@ namespace SceneEngine
 	{
 	public:
 		OpaquePtr CreateModel(std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>) override;
+		OpaquePtr CreateModel(StringSection<> compoundObjectSrc) override;
 		OpaquePtr CreateDeformers(std::shared_ptr<RenderCore::Techniques::DeformerConstruction>) override;
 		OpaquePtr CreateAnimationSet(StringSection<>) override;
 		OpaquePtr CreateRenderer(OpaquePtr model, OpaquePtr deformers, OpaquePtr animationSet) override;
@@ -164,6 +171,36 @@ namespace SceneEngine
 		} else {
 			_modelEntries.insert(i, {hash, newEntry});
 		}
+		return std::move(newEntry);
+	}
+
+	std::shared_ptr<void> CharacterScene::CreateModel(StringSection<> compoundObjectSrc)
+	{
+		auto hash = Hash64(compoundObjectSrc);
+		ScopedLock(_poolLock);
+		auto i = LowerBound(_modelEntries, hash);
+		if (i != _modelEntries.end() && i->first == hash) {
+			auto l = i->second.lock();
+			if (l) return std::move(l);
+		}
+
+		auto newEntry = std::make_shared<CharacterSceneInternal::ModelEntry>();
+		newEntry->_compoundObjectScaffold = ::Assets::ConstructToFuture<RenderCore::Assets::CompoundObjectScaffold>(_loadingContext, compoundObjectSrc);
+
+		std::promise<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> promise;
+		newEntry->_completedConstruction = promise.get_future();
+		::Assets::WhenAll(newEntry->_compoundObjectScaffold).ThenConstructToPromise(
+			std::move(promise),
+			[](auto&& promise, const auto& compoundObjectScaffold) {
+				compoundObjectScaffold.GetModelRendererConstruction()->FulfillWhenNotPending(std::move(promise));
+			});
+
+		if (i != _modelEntries.end() && i->first == hash) {
+			i->second = newEntry;		// rebuilding after previously expiring
+		} else {
+			_modelEntries.insert(i, {hash, newEntry});
+		}
+
 		return std::move(newEntry);
 	}
 
@@ -236,6 +273,26 @@ namespace SceneEngine
 		return result;
 	}
 
+	static std::future<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> CreateDeformerConstruction(
+		std::shared_ptr<RenderCore::IDevice> device,
+		std::shared_future<RenderCore::Assets::CompoundObjectScaffold> compoundObjectFuture)
+	{
+		std::promise<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> promise;
+		auto result = promise.get_future();
+		::Assets::WhenAll(std::move(compoundObjectFuture)).ThenConstructToPromise(
+			std::move(promise),
+			[device=std::move(device)](auto&& promise, auto actualCompoundObject) mutable {
+				auto futureConstruction = RenderCore::Assets::ToFuture(*actualCompoundObject.GetModelRendererConstruction());
+				YieldToPool(futureConstruction);
+
+				auto cfg = actualCompoundObject.OpenConfiguration();
+				auto deformerConstruction = RenderCore::Techniques::DeserializeDeformerConstruction(std::move(device), futureConstruction.get(), cfg);
+				// Note -- relying on the promise holding a strong reference while it's completing
+				deformerConstruction->FulfillWhenNotPending(std::move(promise));
+			});
+		return result;
+	}
+
 	std::shared_ptr<void> CharacterScene::CreateRenderer(
 		std::shared_ptr<void> model,
 		std::shared_ptr<void> deformers,
@@ -253,6 +310,7 @@ namespace SceneEngine
 			if (!l) continue;
 			bool compatibleModel = l->_model == model && l->_deformer == deformers;
 			bool compatibleAnimSet = l->_animSet == animationSet;
+			// todo -- check invalidations
 			if (compatibleModel && compatibleAnimSet)
 				return l;		// can potentially decide to just share the Renderer part here
 		}
@@ -261,10 +319,16 @@ namespace SceneEngine
 		newEntry->_model = std::static_pointer_cast<CharacterSceneInternal::ModelEntry>(model);
 		newEntry->_animSet = std::static_pointer_cast<CharacterSceneInternal::AnimSetEntry>(animationSet);
 
+		// todo -- check invalidations of compound object version of ModelEntry
+
 		std::shared_future<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> deformerConstructionFuture;
 		if (deformers) {
+			// custom deformers given by caller
 			newEntry->_deformer = std::static_pointer_cast<CharacterSceneInternal::DeformerEntry>(deformers);
 			deformerConstructionFuture = newEntry->_deformer->_completedConstruction;
+		} else if (newEntry->_model->_compoundObjectScaffold.valid()) {
+			// deformer configuration out the compound object scaffold
+			deformerConstructionFuture = CreateDeformerConstruction(_pipelineAcceleratorPool->GetDevice(), newEntry->_model->_compoundObjectScaffold);
 		} else {
 			// no explicit deformers -- we must use the defaults
 			deformerConstructionFuture = CreateDefaultDeformerConstruction(_pipelineAcceleratorPool->GetDevice(), newEntry->_model->_completedConstruction);
@@ -282,11 +346,12 @@ namespace SceneEngine
 				auto completedConstruction, auto completedDeformerConstruction) mutable {
 
 				std::shared_ptr<RenderCore::Techniques::DeformAccelerator> deformAccelerator;
-				std::shared_ptr<RenderCore::Techniques::IDeformGeoAttachment> geoDeformer;
+				std::shared_ptr<RenderCore::Techniques::IDeformGeoAttachment> geoAttachment;
 				if (completedDeformerConstruction && !completedDeformerConstruction->IsEmpty()) {
 					deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator();
-					if (auto geoAttachment = completedDeformerConstruction->GetGeoAttachment())
-						deformAcceleratorPool->Attach(*deformAccelerator, std::move(geoAttachment));
+					geoAttachment = completedDeformerConstruction->GetGeoAttachment();
+					if (geoAttachment)
+						deformAcceleratorPool->Attach(*deformAccelerator, geoAttachment);
 					if (auto uniformsAttachment = completedDeformerConstruction->GetUniformsAttachment())
 						deformAcceleratorPool->Attach(*deformAccelerator, std::move(uniformsAttachment));
 				}
@@ -295,15 +360,15 @@ namespace SceneEngine
 					drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext),
 					*completedConstruction, deformAcceleratorPool, deformAccelerator);
 
-				if (geoDeformer) {
-					::Assets::WhenAll(ToFuture(*drawableConstructor), geoDeformer->GetInitializationFuture()).ThenConstructToPromiseWithFutures(
+				if (geoAttachment) {
+					::Assets::WhenAll(ToFuture(*drawableConstructor), geoAttachment->GetInitializationFuture()).ThenConstructToPromiseWithFutures(
 						std::move(promise),
-						[geoDeformer, deformAccelerator, completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture, std::shared_future<void>&& deformerInitFuture) mutable {
+						[geoAttachment, deformAccelerator, completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture, std::shared_future<void>&& deformerInitFuture) mutable {
 							deformerInitFuture.get();	// propagate exceptions
 
 							CharacterSceneInternal::Renderer renderer;
 							renderer._drawableConstructor = drawableConstructorFuture.get();
-							renderer._completionCmdList = std::max(renderer._drawableConstructor->_completionCommandList, geoDeformer->GetCompletionCommandList());
+							renderer._completionCmdList = std::max(renderer._drawableConstructor->_completionCommandList, geoAttachment->GetCompletionCommandList());
 							renderer._deformAccelerator = deformAccelerator;
 							renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
 							if (completedConstruction->GetElementCount() != 0) {
@@ -464,6 +529,7 @@ namespace SceneEngine
 	void ICharacterScene::AnimationConfigureHelper::ApplySingleAnimation(unsigned instanceIdx, uint64_t id, float time)
 	{
 		assert(_activeAnimator);
+		assert(_activeAnimator->_deformerSkeletonInterface);
 
 		// Get the animation parameter set for this anim state, and run the skeleton machine with those parameters
 		auto parameterBlockSize = _activeAnimator->_animSetBinding.GetParameterDefaultsBlock().size();
