@@ -139,7 +139,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         const Internal::NascentSkeletonHelper&      GetSkeletonMachine() const		{ return _skeletonMachine; }
     private:
         Internal::NascentSkeletonHelper		_skeletonMachine;
-        std::vector<std::pair<uint64_t, std::string>> _dehashTable;
 
         std::vector<uint32_t> TransformToCmds(const Transform& transform, unsigned& cmdCount);
     };

@@ -398,7 +398,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	void	NascentSkeleton::WriteParameterizedTransform(StringSection<> parameterName, const Transform& transform)
 	{
 		auto hashName = Hash64(parameterName);
-		_dehashTable.emplace_back(hashName, parameterName.AsString());
+		auto i = LowerBound(_skeletonMachine._parameterDehashTable, hashName);
+		if (i == _skeletonMachine._parameterDehashTable.end() || i->first != hashName)
+			_skeletonMachine._parameterDehashTable.insert(i, std::make_pair(hashName, parameterName.AsString()));
 
 		unsigned cmdCount = 0;
 		auto cmds = TransformToCmds(transform, cmdCount);

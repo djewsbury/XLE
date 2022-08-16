@@ -176,6 +176,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc { namespace Internal
 				if (outputMatrixIndex < transMachine._jointTags.size())
 					return transMachine._jointTags[outputMatrixIndex].first + " : " + transMachine._jointTags[outputMatrixIndex].second;
 				return {};
+			},
+			[paramDehashTable=MakeIteratorRange(transMachine._parameterDehashTable)](uint64_t parameterHash) -> std::string
+			{
+				auto i = LowerBound2(paramDehashTable, parameterHash);
+				if (i != paramDehashTable.end() && i->first == parameterHash)
+					return i->second;
+				StringMeld<64> meld;
+				meld << "0x" << std::hex << parameterHash;
+				return meld.AsString();
 			});
 
 		{

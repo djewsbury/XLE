@@ -41,6 +41,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc { namespace Internal
 
         const std::vector<uint32_t>&		GetCommandStream() const { return _commandStream; }
 
+        std::vector<std::pair<uint64_t, std::string>> _parameterDehashTable;
+
         friend std::ostream& SerializationOperator(
 			std::ostream& stream, 
 			const NascentSkeletonHelper& transMachine);
