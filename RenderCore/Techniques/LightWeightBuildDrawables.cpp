@@ -108,15 +108,16 @@ namespace RenderCore { namespace Techniques
 		auto nodeSpaceToWorld = Identity<Float3x4>();
 		const Float4x4* geoSpaceToNodeSpace = nullptr;
 		unsigned transformMarker = ~0u;
+		std::pair<unsigned, unsigned> baseTransformsRange { 0, 0 };
 		for (auto cmd:cmdStream.GetCmdStream()) {
 			switch (cmd.Cmd()) {
 			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
 				transformMarker = cmd.As<unsigned>();
-				assert(constructor._baseTransformsPerElement.size() == 1);
-				assert(transformMarker < constructor._baseTransforms.size());
+				assert(transformMarker+baseTransformsRange.first < baseTransformsRange.second);
+				assert(transformMarker+baseTransformsRange.first < constructor._baseTransforms.size());
 				break;
 			case (uint32_t)DrawableConstructor::Command::BeginElement:
-				assert(cmd.As<unsigned>() == 0);    // expecting only a single element
+				baseTransformsRange = constructor._elementBaseTransformRanges[cmd.As<unsigned>()];
 				break;
 			case (uint32_t)DrawableConstructor::Command::SetGeoSpaceToNodeSpace:
 				geoSpaceToNodeSpace = (!cmd.RawData().empty()) ? &cmd.As<Float4x4>() : nullptr;
@@ -129,10 +130,10 @@ namespace RenderCore { namespace Techniques
 					assert(transformMarker != ~0u);		// SetTransformMarker must come first
 					if (geoSpaceToNodeSpace) {
 						for (unsigned c=0; c<objectToWorlds.size(); ++c)
-							transformsPkt[c] = Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker], objectToWorlds[c]));
+							transformsPkt[c] = Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker+baseTransformsRange.first], objectToWorlds[c]));
 					} else
 						for (unsigned c=0; c<objectToWorlds.size(); ++c)
-							transformsPkt[c] = Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker], objectToWorlds[c]);
+							transformsPkt[c] = Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker+baseTransformsRange.first], objectToWorlds[c]);
 
 					for (const auto& dc:MakeIteratorRange(cmdStream._drawCalls.begin()+drawCallsRef._start, cmdStream._drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
@@ -225,15 +226,16 @@ namespace RenderCore { namespace Techniques
 		auto nodeSpaceToWorld = Identity<Float3x4>();
 		const Float4x4* geoSpaceToNodeSpace = nullptr;
 		unsigned transformMarker = ~0u;
+		std::pair<unsigned, unsigned> baseTransformsRange { 0, 0 };
 		for (auto cmd:cmdStream.GetCmdStream()) {
 			switch (cmd.Cmd()) {
 			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
 				transformMarker = cmd.As<unsigned>();
-				assert(constructor._baseTransformsPerElement.size() == 1);
-				assert(transformMarker < constructor._baseTransforms.size());
+				assert(transformMarker+baseTransformsRange.first < baseTransformsRange.second);
+				assert(transformMarker+baseTransformsRange.first < constructor._baseTransforms.size());
 				break;
 			case (uint32_t)DrawableConstructor::Command::BeginElement:
-				assert(cmd.As<unsigned>() == 0);    // expecting only a single element
+				baseTransformsRange = constructor._elementBaseTransformRanges[cmd.As<unsigned>()];
 				break;
 			case (uint32_t)DrawableConstructor::Command::SetGeoSpaceToNodeSpace:
 				geoSpaceToNodeSpace = (!cmd.RawData().empty()) ? &cmd.As<Float4x4>() : nullptr;
@@ -247,10 +249,10 @@ namespace RenderCore { namespace Techniques
 					assert(transformMarker != ~0u);		// SetTransformMarker must come first
 					if (geoSpaceToNodeSpace) {
 						for (unsigned c=0; c<objectToWorlds.size(); ++c)
-							transformsPkt[c] = Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker], objectToWorlds[c]));
+							transformsPkt[c] = Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker+baseTransformsRange.first], objectToWorlds[c]));
 					} else
 						for (unsigned c=0; c<objectToWorlds.size(); ++c)
-							transformsPkt[c] = Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker], objectToWorlds[c]);
+							transformsPkt[c] = Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker+baseTransformsRange.first], objectToWorlds[c]);
 
 					auto* viewMasksPkt = (uint32_t*)PtrAdd(extraData, sizeof(Float3x4)*objectToWorlds.size());
 					for (unsigned c=0; c<viewMasks.size(); ++c) viewMasksPkt[c] = viewMasks[c];
@@ -323,15 +325,16 @@ namespace RenderCore { namespace Techniques
 		auto nodeSpaceToWorld = Identity<Float3x4>();
 		const Float4x4* geoSpaceToNodeSpace = nullptr;
 		unsigned transformMarker = ~0u;
+		std::pair<unsigned, unsigned> baseTransformsRange { 0, 0 };
 		for (auto cmd:cmdStream.GetCmdStream()) {
 			switch (cmd.Cmd()) {
 			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
 				transformMarker = cmd.As<unsigned>();
-				assert(constructor._baseTransformsPerElement.size() == 1);
-				assert(transformMarker < constructor._baseTransforms.size());
+				assert(transformMarker+baseTransformsRange.first < baseTransformsRange.second);
+				assert(transformMarker+baseTransformsRange.first < constructor._baseTransforms.size());
 				break;
 			case (uint32_t)DrawableConstructor::Command::BeginElement:
-				assert(cmd.As<unsigned>() == 0);    // expecting only a single element
+				baseTransformsRange = constructor._elementBaseTransformRanges[cmd.As<unsigned>()];
 				break;
 			case (uint32_t)DrawableConstructor::Command::SetGeoSpaceToNodeSpace:
 				geoSpaceToNodeSpace = (!cmd.RawData().empty()) ? &cmd.As<Float4x4>() : nullptr;
@@ -343,9 +346,9 @@ namespace RenderCore { namespace Techniques
 					assert(transformMarker != ~0u);		// SetTransformMarker must come first
 					Float3x4 localToWorld;
 					if (geoSpaceToNodeSpace) {
-						localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker], objectToWorld));
+						localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker+baseTransformsRange.first], objectToWorld));
 					} else
-						localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker], objectToWorld);
+						localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker+baseTransformsRange.first], objectToWorld);
 
 					for (const auto& dc:MakeIteratorRange(cmdStream._drawCalls.begin()+drawCallsRef._start, cmdStream._drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;

@@ -804,8 +804,20 @@ namespace RenderCore { namespace Techniques
 			dst._pipelineAccelerators.insert(dst._pipelineAccelerators.end(), _pendingPipelines._pipelineAccelerators.begin(), _pendingPipelines._pipelineAccelerators.end());
 			dst._descriptorSetAccelerators.insert(dst._descriptorSetAccelerators.end(), _pendingPipelines._descriptorSetAccelerators.begin(), _pendingPipelines._descriptorSetAccelerators.end());
 			dst._drawableInputAssemblies.insert(dst._drawableInputAssemblies.end(), _pendingPipelines._pendingInputAssemblies.begin(), _pendingPipelines._pendingInputAssemblies.end());
+			auto initialBaseTransformsCount = dst._baseTransforms.size();
 			dst._baseTransforms.insert(dst._baseTransforms.end(), _pendingBaseTransforms.begin(), _pendingBaseTransforms.end());
-			dst._baseTransformsPerElement.insert(dst._baseTransformsPerElement.end(), _pendingBaseTransformsPerElement.begin(), _pendingBaseTransformsPerElement.end());
+
+			{
+				unsigned maxElement = 0;
+				for (auto e:_pendingBaseTransformsPerElement) maxElement = std::max(maxElement, e.first);
+				dst._elementBaseTransformRanges.resize(maxElement+1, std::make_pair(0, 0));
+				unsigned baseTransformsIterator = initialBaseTransformsCount;
+				for (auto e:_pendingBaseTransformsPerElement) {
+					assert(dst._elementBaseTransformRanges[e.first].first == dst._elementBaseTransformRanges[e.first].second);		// if you hit this, the same element is referenced multiple times
+					dst._elementBaseTransformRanges[e.first] = { baseTransformsIterator, baseTransformsIterator + e.second };
+					baseTransformsIterator += e.second;
+				}
+			}
 
 			if (!dst._depVal) {
 				std::vector<::Assets::DependencyValidationMarker> depValMarkers;

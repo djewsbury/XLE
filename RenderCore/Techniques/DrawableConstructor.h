@@ -62,7 +62,7 @@ namespace RenderCore { namespace Techniques
 		const CommandStream* FindCmdStream(uint64_t guid) const;
 
 		std::vector<Float4x4> _baseTransforms;
-		std::vector<std::pair<unsigned, unsigned>> _baseTransformsPerElement;
+		std::vector<std::pair<unsigned, unsigned>> _elementBaseTransformRanges;		// for each element, start and end in the _baseTransforms array
 
 		BufferUploads::CommandListID _completionCommandList;
 
