@@ -85,7 +85,7 @@ namespace Assets
                 if (!thisOp) return;
 
 				auto translated = MainFileSystem::TryGetDesc(thisOp->_filename);
-				if (translated._state != FileDesc::State::Normal || translated._naturalName.empty()) {
+				if (translated._state != FileSnapshot::State::Normal || translated._naturalName.empty()) {
 					thisOp->OnFailure();
 					return;
 				}

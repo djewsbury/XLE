@@ -25,10 +25,11 @@ namespace Assets
         unsigned        GetValidationIndex() const;
 
         void            RegisterDependency(const DependencyValidation&);
-        void            RegisterDependency(StringSection<>);
-        void            RegisterDependency(DependentFileState& state);
+        void            RegisterDependency(const DependentFileState& state);
 
         void            IncreaseValidationIndex();      // (also increases validation index for any depvals dependent on this one)
+
+        std::vector<DependentFileState> AsDependentFileStates() const;
 
         operator bool() const { return _marker != DependencyValidationMarker_Invalid; }
         operator DependencyValidationMarker() const { return _marker; }
@@ -52,36 +53,6 @@ namespace Assets
         DependencyValidationMarker _marker = DependencyValidationMarker_Invalid;
     };
 
-    class DependentFileState
-    {
-    public:
-        std::string _filename;
-        
-        enum class Status { Normal, Shadowed, DoesNotExist };
-        uint64_t _timeMarker;
-        Status _status;
-
-        DependentFileState() : _timeMarker(0ull), _status(Status::Normal) {}
-        DependentFileState(StringSection<ResChar> filename, uint64_t timeMarker, Status status=Status::Normal)
-        : _filename(filename.AsString()), _timeMarker(timeMarker), _status(status) {}
-		DependentFileState(const std::basic_string<ResChar>& filename, uint64_t timeMarker, Status status=Status::Normal)
-		: _filename(filename), _timeMarker(timeMarker), _status(status) {}
-
-		friend bool operator<(const DependentFileState& lhs, const DependentFileState& rhs)
-		{
-			if (lhs._filename < rhs._filename) return true;
-			if (lhs._filename > rhs._filename) return false;
-			if (lhs._timeMarker < rhs._timeMarker) return true;
-			if (lhs._timeMarker > rhs._timeMarker) return false;
-			return (int)lhs._status < (int)rhs._status;
-		}
-
-		friend bool operator==(const DependentFileState& lhs, const DependentFileState& rhs)
-		{
-			return lhs._filename == rhs._filename && lhs._timeMarker == rhs._timeMarker && lhs._status == rhs._status;
-		}
-    };
-
     class IDependencyValidationSystem
     {
     public:
@@ -90,12 +61,13 @@ namespace Assets
         virtual DependencyValidation MakeOrReuse(IteratorRange<const DependencyValidationMarker*> dependencyAssets) = 0;
         virtual DependencyValidation Make() = 0;
 
-        inline DependencyValidation Make(StringSection<> filename);
-        inline DependencyValidation Make(const DependentFileState& filestate);
+        DependencyValidation Make(StringSection<> filename);
+        DependencyValidation Make(const DependentFileState& filestate);
 
         virtual unsigned GetValidationIndex(DependencyValidationMarker marker) = 0;
         virtual DependentFileState GetDependentFileState(StringSection<> filename) = 0;
         virtual void ShadowFile(StringSection<> filename) = 0;
+        virtual std::vector<DependentFileState> GetDependentFileStates(DependencyValidationMarker) const = 0;
 
         /// <summary>Registers a dependency on a file on disk</summary>
         /// Registers a dependency on a file. The system will monitor that file for changes.
@@ -103,7 +75,7 @@ namespace Assets
         /// <param name="filename">Normally formatted filename</param>
         virtual void RegisterFileDependency(
             DependencyValidationMarker validationMarker, 
-            StringSection<> filename) = 0;
+            const DependentFileState& fileState) = 0;
 
         /// <summary>Registers a dependency on another resource</summary>
         /// Sometimes resources are dependent on other resources. This function helps registers a 
@@ -126,13 +98,4 @@ namespace Assets
 
     IDependencyValidationSystem& GetDepValSys();
     std::shared_ptr<IDependencyValidationSystem> CreateDepValSys();
-
-    inline DependencyValidation IDependencyValidationSystem::Make(StringSection<> filename)
-    {
-        return Make(MakeIteratorRange(&filename, &filename+1));
-    }
-    inline DependencyValidation IDependencyValidationSystem::Make(const DependentFileState& filestate)
-    {
-        return Make(MakeIteratorRange(&filestate, &filestate+1));
-    }
 }

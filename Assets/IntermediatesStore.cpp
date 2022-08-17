@@ -165,25 +165,25 @@ namespace Assets
 		auto mostRecentState = GetDependentFileState(fileState._filename);
 		target.RegisterDependency(mostRecentState);
 
-		if (mostRecentState._status == DependentFileState::Status::Shadowed) {
+		/*if (mostRecentState._snapshot._state == FileSnapshot::State::Shadowed) {
 			Log(Verbose) << "Asset (" << assetName << ") is invalidated because dependency (" << fileState._filename << ") is marked shadowed" << std::endl;
 			return false;
-		}
+		}*/
 
-		if (mostRecentState._status == fileState._status) {
+		if (mostRecentState._snapshot._state == fileState._snapshot._state) {
 			// If the status on both is "DoesNotExist", then we do not consider this as invalidating the asset
-			if (fileState._status != DependentFileState::Status::DoesNotExist && mostRecentState._timeMarker != fileState._timeMarker) {
+			if (fileState._snapshot._state != FileSnapshot::State::DoesNotExist && mostRecentState._snapshot._modificationTime != fileState._snapshot._modificationTime) {
 				Log(Verbose)
 					<< "Asset (" << assetName
 					<< ") is invalidated because of file data on dependency (" << fileState._filename << ")" << std::endl;
 				return false;
 			}
 		} else {
-			if (mostRecentState._status == DependentFileState::Status::DoesNotExist && fileState._status != DependentFileState::Status::DoesNotExist) {
+			if (mostRecentState._snapshot._state == FileSnapshot::State::DoesNotExist && fileState._snapshot._state != FileSnapshot::State::DoesNotExist) {
 				Log(Verbose)
 					<< "Asset (" << assetName
 					<< ") is invalidated because of missing dependency (" << fileState._filename << ")" << std::endl;
-			} else if (mostRecentState._status != DependentFileState::Status::DoesNotExist && fileState._status == DependentFileState::Status::DoesNotExist) {
+			} else if (mostRecentState._snapshot._state != FileSnapshot::State::DoesNotExist && fileState._snapshot._state == FileSnapshot::State::DoesNotExist) {
 				Log(Verbose)
 					<< "Asset (" << assetName
 					<< ") is invalidated because dependency (" << fileState._filename << ") was not present previously, but now exists" << std::endl;

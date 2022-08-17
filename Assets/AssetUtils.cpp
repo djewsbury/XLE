@@ -109,7 +109,7 @@ namespace Assets
 
 	static bool DoesFileExist(StringSection<ResChar> fn)
 	{
-		return MainFileSystem::TryGetDesc(fn)._state == FileDesc::State::Normal;
+		return MainFileSystem::TryGetDesc(fn)._snapshot._state == FileSnapshot::State::Normal;
 	}
 
 	static std::vector<std::basic_string<ResChar>> FindFiles(
@@ -382,6 +382,12 @@ namespace Assets
             _actualizationLog = copyFrom._actualizationLog;
             _whatString = copyFrom._whatString;
             return *this;
+        }
+
+        const DependencyValidation& PendingAsset::GetDependencyValidation() const
+        {
+            static DependencyValidation dummy;
+            return dummy;
         }
 
         PendingAsset::PendingAsset(StringSection<ResChar> initializer) never_throws

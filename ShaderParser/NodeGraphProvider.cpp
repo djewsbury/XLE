@@ -210,7 +210,7 @@ namespace GraphLanguage
 		auto attachedFileName = MakeStringSection(graphArchiveName.begin(), scopingOperator).AsString() + ".py";
 		attachedFileName = nodeGraphProvider.TryFindAttachedFile(attachedFileName);
 		if (	!attachedFileName.empty()
-			&&	::Assets::MainFileSystem::TryGetDesc(attachedFileName)._state == ::Assets::FileDesc::State::Normal) {
+			&&	::Assets::MainFileSystem::TryGetDesc(attachedFileName)._snapshot._state == ::Assets::FileSnapshot::State::Normal) {
 
 			while (scopingOperator < graphArchiveName.end() && *scopingOperator == ':')
 				++scopingOperator;

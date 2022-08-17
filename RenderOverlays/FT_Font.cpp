@@ -60,8 +60,9 @@ namespace RenderOverlays
 		_hashCode = Hash64(finalPath, DefaultSeed64 + faceSize);
 		_pBuffer = ::Assets::MainFileSystem::TryLoadFileAsBlob(finalPath);
 
-		_depVal = ::Assets::GetDepValSys().Make();
-		_depVal.RegisterDependency(finalPath);
+		auto& depValSys = ::Assets::GetDepValSys();
+		_depVal = depValSys.Make();
+		_depVal.RegisterDependency(depValSys.GetDependentFileState(finalPath));
 		_depVal.RegisterDependency(_resources->_nameMapDepVal);
 
 		if (!_pBuffer)

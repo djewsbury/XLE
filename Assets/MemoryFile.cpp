@@ -91,7 +91,7 @@ namespace Assets
 		return FileDesc
 			{
 				"<<in memory>>", {},
-				FileDesc::State::Normal,
+				FileSnapshot::State::Normal,
 				_modificationTime, uint64_t(_blob ? _blob->size() : 0)
 			};
 	}
@@ -184,7 +184,7 @@ namespace Assets
 		return FileDesc
 			{
 				"<<in memory>>", {},
-				FileDesc::State::Normal,
+				FileSnapshot::State::Normal,
 				_modificationTime, uint64_t(_data.size())
 			};
 	}
@@ -359,7 +359,7 @@ namespace Assets
 	{
 		// Throw(::Exceptions::BasicLabel("BSAFileDecompressOnRead::GetDesc() unimplemented"));
 		return {
-			{}, {}, FileDesc::State::Normal, 0,
+			{}, {}, FileSnapshot::State::Normal, 0,
 			_decompressedSize
 		};
 	}
@@ -433,15 +433,15 @@ namespace Assets
 	class FileSystem_Memory : public IFileSystem
 	{
 	public:
-		virtual TranslateResult		TryTranslate(Marker& result, StringSection<utf8> filename);
-		virtual TranslateResult		TryTranslate(Marker& result, StringSection<utf16> filename);
+		virtual TranslateResult		TryTranslate(Marker& result, StringSection<utf8> filename) override;
+		virtual TranslateResult		TryTranslate(Marker& result, StringSection<utf16> filename) override;
 
-		virtual IOReason	TryOpen(std::unique_ptr<IFileInterface>& result, const Marker& uri, const char openMode[], OSServices::FileShareMode::BitField shareMode);
-		virtual IOReason	TryOpen(OSServices::BasicFile& result, const Marker& uri, const char openMode[], OSServices::FileShareMode::BitField shareMode);
-		virtual IOReason	TryOpen(OSServices::MemoryMappedFile& result, const Marker& uri, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode);
-		virtual IOReason	TryMonitor(const Marker& marker, const std::shared_ptr<IFileMonitor>& evnt);
-		virtual IOReason	TryFakeFileChange(const Marker& marker);
-		virtual	FileDesc	TryGetDesc(const Marker& marker);
+		virtual IOReason	TryOpen(std::unique_ptr<IFileInterface>& result, const Marker& uri, const char openMode[], OSServices::FileShareMode::BitField shareMode) override;
+		virtual IOReason	TryOpen(OSServices::BasicFile& result, const Marker& uri, const char openMode[], OSServices::FileShareMode::BitField shareMode) override;
+		virtual IOReason	TryOpen(OSServices::MemoryMappedFile& result, const Marker& uri, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode) override;
+		virtual IOReason	TryMonitor(FileSnapshot&, const Marker& marker, const std::shared_ptr<IFileMonitor>& evnt) override;
+		virtual IOReason	TryFakeFileChange(const Marker& marker) override;
+		virtual	FileDesc	TryGetDesc(const Marker& marker) override;
 
 		FileSystem_Memory(
 			const std::unordered_map<std::string, Blob>& filesAndContents, 
@@ -580,8 +580,10 @@ namespace Assets
 		}
 	}
 
-	auto FileSystem_Memory::TryMonitor(const Marker& marker, const std::shared_ptr<IFileMonitor>& evnt) -> IOReason
+	auto FileSystem_Memory::TryMonitor(FileSnapshot& snapshot, const Marker& marker, const std::shared_ptr<IFileMonitor>& evnt) -> IOReason
 	{
+		snapshot._state = FileSnapshot::State::DoesNotExist;
+
 		// Monitors are only really needed for unit tests and debugging purposes
 		// when not needed, we should disable them
 		if (!(_flags & FileSystemMemoryFlags::EnableChangeMonitoring))
@@ -604,6 +606,8 @@ namespace Assets
 					return IOReason::Invalid;
 
 			_staticAttachedMonitors.insert(range.second, std::make_pair(idx, evnt));
+			snapshot._state = FileSnapshot::State::Normal;
+			snapshot._modificationTime = _modificationTime;
 			return IOReason::Success;
 		} else {
 			if (idx >= _filesAndContents.size())
@@ -618,6 +622,8 @@ namespace Assets
 					return IOReason::Invalid;
 
 			_attachedMonitors.insert(range.second, std::make_pair(idx, evnt));
+			snapshot._state = FileSnapshot::State::Normal;
+			snapshot._modificationTime = _modificationTime;
 			return IOReason::Success;
 		}
 	}
@@ -660,13 +666,13 @@ namespace Assets
 
 	FileDesc FileSystem_Memory::TryGetDesc(const Marker& marker)
 	{
-		if (marker.size() < sizeof(MarkerStruct)) return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileDesc::State::DoesNotExist };;
+		if (marker.size() < sizeof(MarkerStruct)) return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };;
 
 		const auto& m = *(const MarkerStruct*)AsPointer(marker.begin());
 		if (m._fileIdx & 1) {
 			auto idx = m._fileIdx >> size_t(1);
 			if (idx >= _staticFilesAndContents.size())
-				return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileDesc::State::DoesNotExist };;
+				return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };;
 
 			auto i = _staticFilesAndContents.begin();
 			std::advance(i, idx);
@@ -675,13 +681,13 @@ namespace Assets
 			return FileDesc
 				{
 					name, name,
-					FileDesc::State::Normal,
+					FileSnapshot::State::Normal,
 					_modificationTime, (uint64_t)i->second.size()
 				};
 		} else {
 			auto idx = m._fileIdx >> size_t(1);
 			if (idx >= _filesAndContents.size())
-				return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileDesc::State::DoesNotExist };;
+				return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };;
 
 			auto i = _filesAndContents.begin();
 			std::advance(i, idx);
@@ -690,7 +696,7 @@ namespace Assets
 			return FileDesc
 				{
 					name, name,
-					FileDesc::State::Normal,
+					FileSnapshot::State::Normal,
 					_modificationTime, (uint64_t)i->second->size()
 				};
 		}

@@ -7,6 +7,7 @@
 #pragma once
 
 #include "DepVal.h"     // require for exception types below
+#include "../Core/Exceptions.h"
 #include <string>
 #include <memory>
 #include <vector>
@@ -43,13 +44,19 @@ namespace Assets
     /// <summary>Exceptions related to rendering</summary>
     namespace Exceptions
     {
+        class ExceptionWithDepVal : public ::Exceptions::CustomReportableException
+        {
+        public:
+            virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
+        };
+
 		/// <summary>An error occurred while attempting to retreive and assert from an asset heap</summary>
 		/// This is usually caused by either an invalid asset, or an asset that is still pending.
 		///
 		/// This type of exception (including InvalidAsset and PendingAsset) should only be thrown
 		/// from an asset heap implementation. Asset types can use standard exceptions, or ConstructionError
 		/// to signal errors during asset construction.
-        class RetrievalError : public std::exception
+        class RetrievalError : public ExceptionWithDepVal
         {
         public:
             const ResChar* Initializer() const { return _initializer; }
@@ -72,11 +79,11 @@ namespace Assets
         class InvalidAsset : public RetrievalError
         {
         public: 
-            virtual bool CustomReport() const;
-            virtual AssetState State() const;
-			const DependencyValidation& GetDependencyValidation() const { return _depVal; }
+            virtual bool CustomReport() const override;
+            virtual AssetState State() const override;
+			const DependencyValidation& GetDependencyValidation() const override { return _depVal; }
 			const Blob& GetActualizationLog() const { return _actualizationLog; }
-			virtual const char* what() const noexcept;
+			virtual const char* what() const noexcept override;
 
             InvalidAsset(StringSection<ResChar> initializer, const DependencyValidation&, const Blob& actualizationLog) never_throws;
             InvalidAsset(InvalidAsset&&) = default;
@@ -99,9 +106,10 @@ namespace Assets
         class PendingAsset : public RetrievalError
         {
         public: 
-            virtual bool CustomReport() const;
-            virtual AssetState State() const;
-			virtual const char* what() const noexcept;
+            virtual bool CustomReport() const override;
+            virtual AssetState State() const override;
+			virtual const char* what() const noexcept override;
+            const DependencyValidation& GetDependencyValidation() const override;
 
             PendingAsset(StringSection<ResChar> initializer) never_throws;
         };
@@ -114,7 +122,7 @@ namespace Assets
 		/// changes, and reattempt if those files change.
 		///
 		/// Furthermore, on UnsupportedVersion errors, the system can attempt a recompile of the asset.
-        class ConstructionError : public std::exception
+        class ConstructionError : public ExceptionWithDepVal
         {
         public:
             enum class Reason
@@ -126,11 +134,11 @@ namespace Assets
             };
 
             Reason				GetReason() const { return _reason; }
-			const DependencyValidation&	GetDependencyValidation() const { return _depVal; }
+			const DependencyValidation&	GetDependencyValidation() const override { return _depVal; }
 			const Blob&			GetActualizationLog() const { return _actualizationLog; }
 
-			virtual bool CustomReport() const;
-            virtual const char* what() const noexcept;
+			virtual bool CustomReport() const override;
+            virtual const char* what() const noexcept override;
 
 			ConstructionError(Reason reason, const DependencyValidation&, const Blob& actualizationLog) never_throws;
 			ConstructionError(Reason reason, const DependencyValidation&, const char format[], ...) never_throws;

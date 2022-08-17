@@ -12,6 +12,7 @@
 #include "InitializerPack.h"
 #include "CompilerLibrary.h"
 #include "ArchiveCache.h"
+#include "IFileSystem.h"
 #include "../OSServices/AttachableLibrary.h"
 #include "../ConsoleRig/GlobalServices.h"
 #include "../ConsoleRig/Plugins.h"

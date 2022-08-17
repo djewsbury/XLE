@@ -257,7 +257,7 @@ namespace Assets
 					return result;
 
 				if (XlEqString(value, "doesnotexist")) {
-					result.push_back({objectId, DependentFileState{name, 0, DependentFileState::Status::DoesNotExist}});
+					result.push_back({objectId, DependentFileState{name, 0, FileSnapshot::State::DoesNotExist}});
 				} else {
 					uint64_t timeCode = 0;
 					auto end = FastParseValue(value, timeCode, 16);
@@ -621,12 +621,12 @@ namespace Assets
 						XlUI64toA(i->first, buffer, dimof(buffer), 16);
 						auto ele = formatter.BeginKeyedElement(buffer);
 						for (auto i2=i; i2!=objEnd; ++i2) {
-							if (i2->second._status == DependentFileState::Status::DoesNotExist) {
+							if (i2->second._snapshot._state == FileSnapshot::State::DoesNotExist) {
 								formatter.WriteKeyedValue(MakeStringSection(i2->second._filename), "doesnotexist");
-							} else if (i2->second._status == DependentFileState::Status::Shadowed) {
-								formatter.WriteKeyedValue(MakeStringSection(i2->second._filename), "shadowed");
+							/*} else if (i2->second._snapshot._state == FileSnapshot::State::Shadowed) {
+								formatter.WriteKeyedValue(MakeStringSection(i2->second._filename), "shadowed");*/
 							} else {
-								XlUI64toA(i2->second._timeMarker, buffer, dimof(buffer), 16);
+								XlUI64toA(i2->second._snapshot._modificationTime, buffer, dimof(buffer), 16);
 								formatter.WriteKeyedValue(MakeStringSection(i2->second._filename), MakeStringSection(buffer));
 							}
 						}

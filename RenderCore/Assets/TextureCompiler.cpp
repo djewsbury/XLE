@@ -478,8 +478,8 @@ namespace RenderCore { namespace Assets
 	}
 	TextureArtifact::TextureArtifact(std::string file) : _artifactFile(file)
 	{
-		_depVal = ::Assets::GetDepValSys().Make();
-		_depVal.RegisterDependency(file);
+		StringSection<> fns[] { MakeStringSection(file) };
+		_depVal = ::Assets::GetDepValSys().Make(fns);
 	}
 	TextureArtifact::TextureArtifact() = default;
 	TextureArtifact::~TextureArtifact() = default;

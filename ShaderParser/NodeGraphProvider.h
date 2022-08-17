@@ -7,6 +7,7 @@
 #include "NodeGraph.h"
 #include "NodeGraphSignature.h"
 #include "../Assets/AssetsCore.h"
+#include "../Assets/IFileSystem.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/Optional.h"
 #include <unordered_map>

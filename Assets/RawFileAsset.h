@@ -7,6 +7,7 @@
 #include "AssetsCore.h"
 #include "AssetUtils.h"
 #include "DepVal.h"
+#include "IFileSystem.h"
 #include "../Utility/IteratorUtils.h"
 #include <string>
 

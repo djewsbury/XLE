@@ -27,18 +27,19 @@ namespace Assets
 	static IFileSystem::IOReason AsIOReason(IFileSystem::TranslateResult transResult)
 	{
 		switch (transResult) {
-		case IFileSystem::TranslateResult::Mounting: return IFileSystem::IOReason::Mounting;
+		case IFileSystem::TranslateResult::Pending: return IFileSystem::IOReason::Mounting;
 		case IFileSystem::TranslateResult::Invalid: return IFileSystem::IOReason::Invalid;
 		default: return IFileSystem::IOReason::Invalid;
 		}
 	}
 
-	static FileDesc::State AsFileState(IFileSystem::TranslateResult transResult)
+	static FileSnapshot::State AsSnapshotState(IFileSystem::TranslateResult transResult)
 	{
 		switch (transResult) {
-		case IFileSystem::TranslateResult::Mounting: return FileDesc::State::Mounting;
-		case IFileSystem::TranslateResult::Invalid: return FileDesc::State::Invalid;
-		default: return FileDesc::State::Invalid;
+		case IFileSystem::TranslateResult::Pending: return FileSnapshot::State::Pending;
+		case IFileSystem::TranslateResult::Invalid: return FileSnapshot::State::DoesNotExist;
+		case IFileSystem::TranslateResult::Success: return FileSnapshot::State::Normal;
+		default: return FileSnapshot::State::DoesNotExist;
 		}
 	}
 
@@ -119,7 +120,7 @@ namespace Assets
 		}
 
 		template<typename CharType>
-			IFileSystem::IOReason TryMonitor(StringSection<CharType> filename, const std::shared_ptr<IFileMonitor>& evnt)
+			IFileSystem::IOReason TryMonitor(FileSnapshot& snapshot, StringSection<CharType> filename, const std::shared_ptr<IFileMonitor>& evnt)
 		{
 			MountingTree::CandidateObject candidateObject;
 			auto& ptrs = GetPtrs();
@@ -127,7 +128,7 @@ namespace Assets
 			if (lookup.IsAbsolutePath() && ptrs.s_mainMountingTree->GetAbsolutePathMode() == MountingTree::AbsolutePathMode::RawOS) {
 					// attempt opening with the default file system...
 				if (ptrs.s_defaultFileSystem)
-					return ::Assets::TryMonitor(*ptrs.s_defaultFileSystem, filename, evnt);
+					return ::Assets::TryMonitor(*ptrs.s_defaultFileSystem, snapshot, filename, evnt);
 				return IFileSystem::IOReason::FileNotFound;
 			}
 
@@ -146,7 +147,7 @@ namespace Assets
 				// "success" even if the file doesn't exist. So if we stop early, on the first
 				// filesystem will be monitored
 				assert(candidateObject._fileSystem);
-				auto ioRes = candidateObject._fileSystem->TryMonitor(candidateObject._marker, evnt);
+				auto ioRes = candidateObject._fileSystem->TryMonitor(snapshot, candidateObject._marker, evnt);
 				(void)ioRes;
 			}
 
@@ -197,7 +198,7 @@ namespace Assets
 					// attempt opening with the default file system...
 				if (ptrs.s_defaultFileSystem)
 					return ::Assets::TryGetDesc(*ptrs.s_defaultFileSystem, filename);
-				return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileDesc::State::DoesNotExist };
+				return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };
 			}
 
 			for (;;) {
@@ -213,13 +214,13 @@ namespace Assets
 
 				assert(candidateObject._fileSystem);
 				auto res = candidateObject._fileSystem->TryGetDesc(candidateObject._marker);
-				if (res._state != FileDesc::State::DoesNotExist) {
+				if (res._snapshot._state != FileSnapshot::State::DoesNotExist) {
 					res._mountedName = candidateObject._mountPoint + res._mountedName;
 					return res;
 				}
 			}
 
-			return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileDesc::State::DoesNotExist };
+			return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };
 		}
 	}
 
@@ -248,9 +249,9 @@ namespace Assets
 		return Internal::TryOpen(result, filename, size, openMode, shareMode);
 	}
 
-	IFileSystem::IOReason MainFileSystem::TryMonitor(StringSection<utf8> filename, const std::shared_ptr<IFileMonitor>& evnt)
+	IFileSystem::IOReason MainFileSystem::TryMonitor(FileSnapshot& snapshot, StringSection<utf8> filename, const std::shared_ptr<IFileMonitor>& evnt)
 	{
-		return Internal::TryMonitor(filename, evnt);
+		return Internal::TryMonitor(snapshot, filename, evnt);
 	}
 
 	IFileSystem::IOReason MainFileSystem::TryFakeFileChange(StringSection<utf8> filename)
@@ -278,9 +279,9 @@ namespace Assets
 		return Internal::TryOpen(result, filename, size, openMode, shareMode);
 	}
 
-	IFileSystem::IOReason MainFileSystem::TryMonitor(StringSection<utf16> filename, const std::shared_ptr<IFileMonitor>& evnt)
+	IFileSystem::IOReason MainFileSystem::TryMonitor(FileSnapshot& snapshot, StringSection<utf16> filename, const std::shared_ptr<IFileMonitor>& evnt)
 	{
-		return Internal::TryMonitor(filename, evnt);
+		return Internal::TryMonitor(snapshot, filename, evnt);
 	}
 
 	IFileSystem::IOReason MainFileSystem::TryFakeFileChange(StringSection<utf16> filename)
@@ -380,12 +381,12 @@ namespace Assets
 		return AsIOReason(transResult);
 	}
 
-	T1(CharType) IFileSystem::IOReason TryMonitor(IFileSystem& fs, StringSection<CharType> fn, const std::shared_ptr<IFileMonitor>& evnt)
+	T1(CharType) IFileSystem::IOReason TryMonitor(IFileSystem& fs, FileSnapshot& snapshot, StringSection<CharType> fn, const std::shared_ptr<IFileMonitor>& evnt)
 	{
 		IFileSystem::Marker marker;
 		auto transResult = fs.TryTranslate(marker, fn);
 		if (transResult == IFileSystem::TranslateResult::Success)
-			return fs.TryMonitor(marker, evnt);
+			return fs.TryMonitor(snapshot, marker, evnt);
 		return AsIOReason(transResult);
 	}
 
@@ -404,18 +405,18 @@ namespace Assets
 		auto transResult = fs.TryTranslate(marker, fn);
 		if (transResult == IFileSystem::TranslateResult::Success)
 			return fs.TryGetDesc(marker);
-		return FileDesc{std::basic_string<utf8>(), std::basic_string<utf8>(), AsFileState(transResult)};
+		return FileDesc{std::basic_string<utf8>(), std::basic_string<utf8>(), AsSnapshotState(transResult)};
 	}
 
 	template IFileSystem::IOReason TryOpen<utf8, std::unique_ptr<IFileInterface>>(std::unique_ptr<IFileInterface>& result, IFileSystem& fs, StringSection<utf8> fn, const char openMode[], OSServices::FileShareMode::BitField shareMode);
 	template IFileSystem::IOReason TryOpen<utf8, OSServices::BasicFile>(OSServices::BasicFile& result, IFileSystem& fs, StringSection<utf8> fn, const char openMode[], OSServices::FileShareMode::BitField shareMode);
 	template IFileSystem::IOReason TryOpen<utf8, OSServices::MemoryMappedFile>(OSServices::MemoryMappedFile& result, IFileSystem& fs, StringSection<utf8> fn, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode);
-	template IFileSystem::IOReason TryMonitor<utf8>(IFileSystem& fs, StringSection<utf8> fn, const std::shared_ptr<IFileMonitor>& evnt);
+	template IFileSystem::IOReason TryMonitor<utf8>(IFileSystem& fs, FileSnapshot&, StringSection<utf8> fn, const std::shared_ptr<IFileMonitor>& evnt);
 	template FileDesc TryGetDesc<utf8>(IFileSystem& fs, StringSection<utf8> fn);
 	template IFileSystem::IOReason TryOpen<utf16, std::unique_ptr<IFileInterface>>(std::unique_ptr<IFileInterface>& result, IFileSystem& fs, StringSection<utf16> fn, const char openMode[], OSServices::FileShareMode::BitField shareMode);
 	template IFileSystem::IOReason TryOpen<utf16, OSServices::BasicFile>(OSServices::BasicFile& result, IFileSystem& fs, StringSection<utf16> fn, const char openMode[], OSServices::FileShareMode::BitField shareMode);
 	template IFileSystem::IOReason TryOpen<utf16, OSServices::MemoryMappedFile>(OSServices::MemoryMappedFile& result, IFileSystem& fs, StringSection<utf16> fn, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode);
-	template IFileSystem::IOReason TryMonitor<utf16>(IFileSystem& fs, StringSection<utf16> fn, const std::shared_ptr<IFileMonitor>& evnt);
+	template IFileSystem::IOReason TryMonitor<utf16>(IFileSystem& fs, FileSnapshot&, StringSection<utf16> fn, const std::shared_ptr<IFileMonitor>& evnt);
 	template FileDesc TryGetDesc<utf16>(IFileSystem& fs, StringSection<utf16> fn);
 
 	std::unique_ptr<uint8[]> MainFileSystem::TryLoadFileAsMemoryBlock(StringSection<char> sourceFileName, size_t* sizeResult)
@@ -430,8 +431,7 @@ namespace Assets
 
 			if (fileState) {
 				fileState->_filename = sourceFileName.AsString();
-				fileState->_status = DependentFileState::Status::Normal;
-				fileState->_timeMarker = file->GetDesc()._modificationTime;
+				fileState->_snapshot = file->GetDesc()._snapshot;
 			}
 
 			size_t size = file->GetSize();
@@ -449,8 +449,7 @@ namespace Assets
 		if (sizeResult) { *sizeResult = 0; }
 		if (fileState) {
 			fileState->_filename = sourceFileName.AsString();
-			fileState->_status = DependentFileState::Status::DoesNotExist;
-			fileState->_timeMarker = 0;
+			fileState->_snapshot = { FileSnapshot::State::DoesNotExist, 0 };
 		}
 		return nullptr;
 	}
@@ -467,8 +466,7 @@ namespace Assets
 
 			if (fileState) {
 				fileState->_filename = sourceFileName.AsString();
-				fileState->_status = DependentFileState::Status::Normal;
-				fileState->_timeMarker = file->GetDesc()._modificationTime;
+				fileState->_snapshot = file->GetDesc()._snapshot;
 			}
 
 			size_t size = file->GetSize();
@@ -481,8 +479,7 @@ namespace Assets
 
 		if (fileState) {
 			fileState->_filename = sourceFileName.AsString();
-			fileState->_status = DependentFileState::Status::DoesNotExist;
-			fileState->_timeMarker = 0;
+			fileState->_snapshot = { FileSnapshot::State::DoesNotExist, 0 };
 		}
 		return nullptr;
 	}
@@ -542,7 +539,7 @@ namespace Assets
 					// But we're probably more interested in the natural name of the file; but we'll have
 					// to query that from the filesystem again
 					auto desc = baseFS->TryGetDesc(m);
-					if (desc._state != FileDesc::State::Normal) {
+					if (desc._snapshot._state != FileSnapshot::State::Normal) {
 						Log(Warning) << "Unexpected file state found while searching directory tree" << std::endl;
 						continue;
 					}
@@ -743,8 +740,7 @@ namespace Assets
 
 				if (fileState) {
 					fileState->_filename = sourceFileName.AsString();
-					fileState->_status = DependentFileState::Status::Normal;
-					fileState->_timeMarker = file->GetDesc()._modificationTime;
+					fileState->_snapshot = file->GetDesc()._snapshot;
 				}
 
                 size_t size = file->GetSize();
@@ -775,8 +771,7 @@ namespace Assets
         if (sizeResult) { *sizeResult = 0; }
 		if (fileState) {
 			fileState->_filename = sourceFileName.AsString();
-			fileState->_status = DependentFileState::Status::DoesNotExist;
-			fileState->_timeMarker = 0;
+			fileState->_snapshot = { FileSnapshot::State::DoesNotExist, 0 };
 		}
         return nullptr;
 	}
@@ -790,8 +785,7 @@ namespace Assets
 			if (openResult == IFileSystem::IOReason::Success) {
 				if (fileState) {
 					fileState->_filename = sourceFileName.AsString();
-					fileState->_status = DependentFileState::Status::Normal;
-					fileState->_timeMarker = file->GetDesc()._modificationTime;
+					fileState->_snapshot = file->GetDesc()._snapshot;
 				}
 
 				size_t size = file->GetSize();
@@ -814,8 +808,7 @@ namespace Assets
 
 		if (fileState) {
 			fileState->_filename = sourceFileName.AsString();
-			fileState->_status = DependentFileState::Status::DoesNotExist;
-			fileState->_timeMarker = 0;
+			fileState->_snapshot = { FileSnapshot::State::DoesNotExist, 0 };
 		}
 		return nullptr;
 	}

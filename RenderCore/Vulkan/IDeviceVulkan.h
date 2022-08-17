@@ -8,6 +8,7 @@
 
 #include "../IDevice.h"
 #include "../UniformsStream.h"
+#include "../../Assets/IFileSystem.h"		// for DependentFileState
 #include "Metal/VulkanForward.h"
 #include <memory>
 

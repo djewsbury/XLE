@@ -67,14 +67,14 @@ namespace Assets
 	FileDesc File_OS::GetDesc() const never_throws
 	{
 		if (!_file.IsGood()) 
-			return FileDesc { std::basic_string<utf8>(), std::basic_string<utf8>(), FileDesc::State::DoesNotExist };
+			return FileDesc { std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };
 
 		auto size = _file.GetSize();
 		auto ft = _file.GetFileTime();
 
 		return FileDesc
 		{ 
-			_fn, _fn, FileDesc::State::Normal, 
+			_fn, _fn, FileSnapshot::State::Normal, 
 			ft, size
 		};
 	}
@@ -111,7 +111,7 @@ namespace Assets
 		virtual IOReason	TryOpen(std::unique_ptr<IFileInterface>& result, const Marker& uri, const char openMode[], OSServices::FileShareMode::BitField shareMode);
 		virtual IOReason	TryOpen(OSServices::BasicFile& result, const Marker& uri, const char openMode[], OSServices::FileShareMode::BitField shareMode);
 		virtual IOReason	TryOpen(OSServices::MemoryMappedFile& result, const Marker& uri, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode);
-		virtual IOReason	TryMonitor(const Marker& marker, const std::shared_ptr<IFileMonitor>& evnt);
+		virtual IOReason	TryMonitor(FileSnapshot&, const Marker& marker, const std::shared_ptr<IFileMonitor>& evnt);
 		virtual IOReason	TryFakeFileChange(const Marker& marker);
 		virtual	FileDesc	TryGetDesc(const Marker& marker);
 
@@ -262,8 +262,30 @@ namespace Assets
 		return IOReason::FileNotFound;
 	}
 
-	auto FileSystem_OS::TryMonitor(const Marker& marker, const std::shared_ptr<IFileMonitor>& evnt) -> IOReason
+	static FileSnapshot GetCurrentSnapshot(StringSection<> fn)
 	{
+		char temp[MaxPath];
+		XlCopyString(temp, fn);
+		auto attrib = OSServices::TryGetFileAttributes(temp);
+		if (attrib)
+			return FileSnapshot { FileSnapshot::State::Normal, attrib->_lastWriteTime };
+		return FileSnapshot { FileSnapshot::State::DoesNotExist, 0 };
+	}
+
+	static FileSnapshot GetCurrentSnapshot(StringSection<utf16> fn)
+	{
+		utf16 temp[MaxPath];
+		XlCopyString(temp, fn);
+		auto attrib = OSServices::TryGetFileAttributes(temp);
+		if (attrib)
+			return FileSnapshot { FileSnapshot::State::Normal, attrib->_lastWriteTime };
+		return FileSnapshot { FileSnapshot::State::DoesNotExist, 0 };
+	}
+
+	auto FileSystem_OS::TryMonitor(FileSnapshot& snapshot, const Marker& marker, const std::shared_ptr<IFileMonitor>& evnt) -> IOReason
+	{
+		snapshot._state = FileSnapshot::State::DoesNotExist;
+
 		if (!_fileSystemMonitor)
 			return IOReason::Complex;
 
@@ -274,12 +296,14 @@ namespace Assets
 			auto fn = MakeStringSection(
 				(const utf8*)PtrAdd(AsPointer(marker.cbegin()), 2),
 				(const utf8*)PtrAdd(AsPointer(marker.cend()), -(ptrdiff_t)sizeof(utf8)));
+			snapshot = GetCurrentSnapshot(fn);
 			_fileSystemMonitor->Attach(fn, evnt);
 			return IOReason::Success;
 		} else if (type == 2) {
 			auto fn = MakeStringSection(
 				(const utf16*)PtrAdd(AsPointer(marker.cbegin()), 2),
 				(const utf16*)PtrAdd(AsPointer(marker.cend()), -(ptrdiff_t)sizeof(utf16)));
+			snapshot = GetCurrentSnapshot(fn);
 			_fileSystemMonitor->Attach(fn, evnt);
 			return IOReason::Success;
 		}
@@ -320,21 +344,21 @@ namespace Assets
 			std::basic_string<utf8> str((const utf8*)PtrAdd(AsPointer(marker.begin()), 2));
 			auto attrib = OSServices::TryGetFileAttributes(str.c_str());
 			if (!attrib)
-				return FileDesc { std::basic_string<utf8>(), std::basic_string<utf8>(), FileDesc::State::DoesNotExist };
+				return FileDesc { std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };
 
 			std::basic_string<utf8> mountedName((const utf8*)PtrAdd(AsPointer(marker.begin()), 2 + _rootUTF8.size()));
 
             auto attribv = *attrib;
 			return FileDesc
 				{
-					str, mountedName, FileDesc::State::Normal,
+					str, mountedName, FileSnapshot::State::Normal,
 					attribv._lastWriteTime, attribv._size
 				};
 		} else if (type == 2) {
 			std::basic_string<utf16> str((const utf16*)PtrAdd(AsPointer(marker.begin()), 2));
 			auto attrib = OSServices::TryGetFileAttributes(str.c_str());
 			if (!attrib)
-				return FileDesc { std::basic_string<utf8>(), std::basic_string<utf8>(), FileDesc::State::DoesNotExist };
+				return FileDesc { std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };
 
 			std::basic_string<utf16> mountedName((const utf16*)PtrAdd(AsPointer(marker.begin()), 2 + 2*_rootUTF16.size()));
 
@@ -343,12 +367,12 @@ namespace Assets
 				{
 					Conversion::Convert<std::basic_string<utf8>>(str), 
 					Conversion::Convert<std::basic_string<utf8>>(mountedName),
-					FileDesc::State::Normal,
+					FileSnapshot::State::Normal,
 					attribv._lastWriteTime, attribv._size
 				};
 		} 
 
-		return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileDesc::State::DoesNotExist };
+		return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };
 	}
 
     std::vector<IFileSystem::Marker> FileSystem_OS::FindFiles(

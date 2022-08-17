@@ -12,6 +12,8 @@
 
 namespace Assets
 {
+	#define SEALED sealed
+
 	class DependencyValidationSystem : public IDependencyValidationSystem
 	{
 	public:
@@ -20,7 +22,9 @@ namespace Assets
 		{
 		public:
 			MonitoredFileId _marker;
-			std::vector<DependentFileState> _states;
+			std::vector<FileSnapshot> _snapshots;
+			unsigned _mostRecentSnapshotIdx =0 ;
+			std::string _filename;
 
 			virtual void OnChange() override;
 		};
@@ -31,7 +35,7 @@ namespace Assets
 			unsigned _validationIndex = 0;
 		};
 
-		DependencyValidation Make(IteratorRange<const StringSection<>*> filenames) override
+		DependencyValidation Make(IteratorRange<const StringSection<>*> filenames) override SEALED
 		{
 			ScopedLock(_lock);
 			DependencyValidation result = MakeAlreadyLocked();
@@ -40,16 +44,16 @@ namespace Assets
 			return result;
 		}
 		
-		DependencyValidation Make(IteratorRange<const DependentFileState*> filestates) override
+		DependencyValidation Make(IteratorRange<const DependentFileState*> filestates) override SEALED
 		{
 			ScopedLock(_lock);
 			DependencyValidation result = MakeAlreadyLocked();
 			for (const auto& state:filestates)
-				RegisterFileDependencyAlreadyLocked(result._marker, state._filename);
+				RegisterFileDependencyAlreadyLocked(result._marker, state._filename, state._snapshot);
 			return result;
 		}
 
-		DependencyValidation MakeOrReuse(IteratorRange<const DependencyValidationMarker*> dependencyAssets) override
+		DependencyValidation MakeOrReuse(IteratorRange<const DependencyValidationMarker*> dependencyAssets) override SEALED
 		{
 			unsigned validCount = 0;
 			for (auto marker:dependencyAssets)
@@ -72,7 +76,7 @@ namespace Assets
 			return result;
 		}
 
-		DependencyValidation Make() override
+		DependencyValidation Make() override SEALED
 		{
 			ScopedLock(_lock);
 			return MakeAlreadyLocked();
@@ -92,7 +96,7 @@ namespace Assets
 			return newDepVal;
 		}
 
-		unsigned GetValidationIndex(DependencyValidationMarker marker) override
+		unsigned GetValidationIndex(DependencyValidationMarker marker) override SEALED
 		{
 			ScopedLock(_lock);
 			assert(marker < _entries.size());
@@ -100,7 +104,7 @@ namespace Assets
 			return _entries[marker]._validationIndex;
 		}
 
-		void AddRef(DependencyValidationMarker marker) override
+		void AddRef(DependencyValidationMarker marker) override SEALED
 		{
 			ScopedLock(_lock);
 			assert(marker < _entries.size());
@@ -108,7 +112,7 @@ namespace Assets
 			++_entries[marker]._refCount;
 		}
 
-		void Release(DependencyValidationMarker marker) override
+		void Release(DependencyValidationMarker marker) override SEALED
 		{
 			ScopedLock(_lock);
 			ReleaseAlreadyLocked(marker);
@@ -144,15 +148,13 @@ namespace Assets
 
 			if (existing == _monitoredFiles.end() || existing->first != hash) {
 				auto newMonitoredFile = std::make_shared<MonitoredFile>();
-				MainFileSystem::TryMonitor(filename, newMonitoredFile);
-				auto fileDesc = MainFileSystem::TryGetDesc(filename);
-				assert(fileDesc._state != FileDesc::State::Invalid);
-				DependentFileState fs;
-				fs._filename = filename.AsString();		// (consider using the mounted name instead? translated marker & fs idx would be better)
-				fs._timeMarker = fileDesc._modificationTime;
-				fs._status = (fileDesc._state == FileDesc::State::DoesNotExist) ? DependentFileState::Status::DoesNotExist : DependentFileState::Status::Normal;
-				newMonitoredFile->_states.push_back(fs);
+				FileSnapshot snapshot{FileSnapshot::State::DoesNotExist, 0};
+				auto monitoringResult = MainFileSystem::TryMonitor(snapshot, filename, newMonitoredFile);
+				(void)monitoringResult;		// allow this to fail silently
+				newMonitoredFile->_snapshots.push_back(snapshot);
 				newMonitoredFile->_marker = (MonitoredFileId)_monitoredFiles.size();
+				newMonitoredFile->_filename = filename.AsString();
+				newMonitoredFile->_mostRecentSnapshotIdx = 0;
 				existing = _monitoredFiles.insert(existing, std::make_pair(hash, newMonitoredFile));
 			}
 
@@ -161,10 +163,36 @@ namespace Assets
 
 		void RegisterFileDependency(
 			DependencyValidationMarker validationMarker, 
-			StringSection<> filename) override
+			const DependentFileState& fileState) override
 		{
 			ScopedLock(_lock);
-			RegisterFileDependencyAlreadyLocked(validationMarker, filename);
+			RegisterFileDependencyAlreadyLocked(validationMarker, fileState._filename, fileState._snapshot);
+		}
+
+		static unsigned FindOrAddSnapshot(std::vector<FileSnapshot>& snapshots, const FileSnapshot& search)
+		{
+			for (unsigned c=0; c<snapshots.size(); ++c)
+				if (snapshots[c] == search) return c;
+			snapshots.push_back(search);
+			return (unsigned)snapshots.size()-1;
+		}
+
+		void RegisterFileDependencyAlreadyLocked(
+			DependencyValidationMarker validationMarker, 
+			StringSection<> filename,
+			const FileSnapshot& snapshot)
+		{
+			auto& fileMonitor = GetMonitoredFileAlreadyLocked(filename);
+			unsigned snapshotIndex = FindOrAddSnapshot(fileMonitor._snapshots, snapshot);
+			auto insertRange = EqualRange(_fileLinks, validationMarker);
+			for (auto r=insertRange.first; r!=insertRange.second; ++r)
+				if (r->second.first == fileMonitor._marker) {
+					// pick the snapshot with the earlier modification time
+					if (fileMonitor._snapshots[snapshotIndex]._modificationTime < fileMonitor._snapshots[r->second.second]._modificationTime)
+						r->second.second = snapshotIndex;
+					return;	// already registered
+				}
+			_fileLinks.insert(insertRange.second, std::make_pair(validationMarker, std::make_pair(fileMonitor._marker, snapshotIndex)));
 		}
 
 		void RegisterFileDependencyAlreadyLocked(
@@ -172,14 +200,11 @@ namespace Assets
 			StringSection<> filename)
 		{
 			auto& fileMonitor = GetMonitoredFileAlreadyLocked(filename);
-			unsigned mostRecentState = unsigned(fileMonitor._states.size()-1);
 			auto insertRange = EqualRange(_fileLinks, validationMarker);
 			for (auto r=insertRange.first; r!=insertRange.second; ++r)
-				if (r->second.first == fileMonitor._marker) {
-					r->second.second = mostRecentState;
+				if (r->second.first == fileMonitor._marker)
 					return;	// already registered
-				}
-			_fileLinks.insert(insertRange.second, std::make_pair(validationMarker, std::make_pair(fileMonitor._marker, mostRecentState)));
+			_fileLinks.insert(insertRange.second, std::make_pair(validationMarker, std::make_pair(fileMonitor._marker, fileMonitor._mostRecentSnapshotIdx)));
 		}
 
 		void RegisterAssetDependencyAlreadyLocked(
@@ -291,19 +316,27 @@ namespace Assets
 		{
 			ScopedLock(_lock);
 			auto& fileMonitor = GetMonitoredFileAlreadyLocked(filename);
-			assert(!fileMonitor._states.empty());
-			return *(fileMonitor._states.end()-1);
+			assert(!fileMonitor._snapshots.empty());
+			const auto& snapshot = fileMonitor._snapshots[fileMonitor._mostRecentSnapshotIdx];
+			return { fileMonitor._filename, snapshot };
 		}
 
 		void ShadowFile(StringSection<ResChar> filename) override
 		{
-			ScopedLock(_lock);
+			assert(0);
+			/*ScopedLock(_lock);
 			auto& fileMonitor = GetMonitoredFileAlreadyLocked(filename);
 			DependentFileState newState = *(fileMonitor._states.end()-1);
 			newState._status = DependentFileState::Status::Shadowed;
 			fileMonitor._states.push_back(newState);
 			MainFileSystem::TryFakeFileChange(filename);
-			PropagateFileChange(fileMonitor._marker);
+			PropagateFileChange(fileMonitor._marker);*/
+		}
+
+		std::vector<DependentFileState> GetDependentFileStates(DependencyValidationMarker marker) const override
+		{
+			assert(0);	// todo -- implement
+			return {};
 		}
 
 		unsigned GlobalChangeIndex() override
@@ -337,13 +370,8 @@ namespace Assets
 	void    DependencyValidationSystem::MonitoredFile::OnChange()
 	{
 			// on change, update the modification time record
-		auto filename = (_states.end()-1)->_filename;
-		auto fileDesc = MainFileSystem::TryGetDesc(filename);
-		DependentFileState newState;
-		newState._filename = filename;
-		newState._timeMarker = fileDesc._modificationTime;
-		newState._status = (fileDesc._state == FileDesc::State::DoesNotExist) ? DependentFileState::Status::DoesNotExist : DependentFileState::Status::Normal;
-		_states.push_back(newState);
+		auto fileDesc = MainFileSystem::TryGetDesc(_filename);
+		_mostRecentSnapshotIdx = FindOrAddSnapshot(_snapshots, fileDesc._snapshot);
 		checked_cast<DependencyValidationSystem*>(&GetDepValSys())->PropagateFileChange(_marker);
 	}
 
@@ -360,21 +388,22 @@ namespace Assets
 		return checked_cast<DependencyValidationSystem*>(&GetDepValSys())->RegisterAssetDependency(_marker, dependency._marker);
 	}
 
-	void            DependencyValidation::RegisterDependency(StringSection<> filename)
+	void            DependencyValidation::RegisterDependency(const DependentFileState& state)
 	{
 		assert(_marker != DependencyValidationMarker_Invalid);
-		return checked_cast<DependencyValidationSystem*>(&GetDepValSys())->RegisterFileDependency(_marker, filename);
-	}
-
-	void            DependencyValidation::RegisterDependency(DependentFileState& state)
-	{
-		RegisterDependency(state._filename);
+		return checked_cast<DependencyValidationSystem*>(&GetDepValSys())->RegisterFileDependency(_marker, state);
 	}
 
 	void            DependencyValidation::IncreaseValidationIndex()
 	{
 		assert(_marker != DependencyValidationMarker_Invalid);
 		return checked_cast<DependencyValidationSystem*>(&GetDepValSys())->IncreaseValidationIndex(_marker);
+	}
+
+	std::vector<DependentFileState> DependencyValidation::AsDependentFileStates() const
+	{
+		if (_marker == DependencyValidationMarker_Invalid) return {};
+		return checked_cast<DependencyValidationSystem*>(&GetDepValSys())->GetDependentFileStates(_marker);
 	}
 
 	DependencyValidation::DependencyValidation() : _marker(DependencyValidationMarker_Invalid) {}
@@ -434,6 +463,15 @@ namespace Assets
 			return result;
 		}
 		return {};
+	}
+
+	DependencyValidation IDependencyValidationSystem::Make(StringSection<> filename)
+	{
+		return Make(MakeIteratorRange(&filename, &filename+1));
+	}
+	DependencyValidation IDependencyValidationSystem::Make(const DependentFileState& filestate)
+	{
+		return Make(MakeIteratorRange(&filestate, &filestate+1));
 	}
 
 	IDependencyValidationSystem& GetDepValSys()

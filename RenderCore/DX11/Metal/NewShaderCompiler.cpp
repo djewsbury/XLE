@@ -95,7 +95,7 @@ namespace RenderCore { namespace Metal_DX11
 					if (ioResult == ::Assets::IFileSystem::IOReason::Success && fileInterface) {
 						auto desc = fileInterface->GetDesc();
 						size = (size_t)desc._size;
-						timeMarker._timeMarker = desc._modificationTime;
+						timeMarker._snapshot = desc._snapshot;
 
 						file = std::make_unique<uint8[]>(size);
 						if (size) {

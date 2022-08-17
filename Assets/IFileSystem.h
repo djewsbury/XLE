@@ -17,6 +17,7 @@ namespace OSServices { class OnChangeCallback; }
 namespace Assets
 {
 	class FileDesc;
+	struct FileSnapshot;
 	class MountingTree;
 	class IFileInterface;
 	class DependentFileState;
@@ -64,9 +65,9 @@ namespace Assets
 	class IFileSystem
 	{
 	public:
-		using Marker = std::vector<uint8>;
+		using Marker = std::vector<uint8_t>;
 
-		enum class TranslateResult { Success, Mounting, Invalid };
+		enum class TranslateResult { Success, Pending, Invalid };
 		virtual TranslateResult		TryTranslate(Marker& result, StringSection<utf8> filename) = 0;
 		virtual TranslateResult		TryTranslate(Marker& result, StringSection<utf16> filename) = 0;
 
@@ -74,9 +75,9 @@ namespace Assets
 
 		virtual IOReason	TryOpen(std::unique_ptr<IFileInterface>& result, const Marker& marker, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default) = 0;
 		virtual IOReason	TryOpen(OSServices::BasicFile& result, const Marker& marker, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default) = 0;
-		virtual IOReason	TryOpen(OSServices::MemoryMappedFile& result, const Marker& marker, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default) = 0;
+		virtual IOReason	TryOpen(OSServices::MemoryMappedFile& result, const Marker& marker, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default) = 0;
 
-		virtual	IOReason	TryMonitor(const Marker& marker, const std::shared_ptr<IFileMonitor>& evnt) = 0;
+		virtual	IOReason	TryMonitor(/* out */ FileSnapshot&, const Marker& marker, const std::shared_ptr<IFileMonitor>& evnt) = 0;
 		virtual IOReason	TryFakeFileChange(const Marker& marker) = 0;
 		virtual	FileDesc	TryGetDesc(const Marker& marker) = 0;
 		virtual				~IFileSystem();
@@ -179,6 +180,15 @@ namespace Assets
 		friend FileSystemWalker BeginWalk(const std::shared_ptr<ISearchableFileSystem>&, StringSection<>);
 	};
 
+	struct FileSnapshot
+	{
+		enum class State { DoesNotExist, Normal, Pending };
+		State					_state;
+		OSServices::FileTime	_modificationTime;
+		friend bool operator==(const FileSnapshot& lhs, const FileSnapshot& rhs);
+		friend bool operator<(const FileSnapshot& lhs, const FileSnapshot& rhs);
+	};
+
 	/// <summary>Description of a file object within a filesystem</summary>
 	/// Typically files have a few basic properties that can be queried.
 	/// But note the "files" in this sense can mean more than just files on disk.
@@ -191,33 +201,10 @@ namespace Assets
 	class FileDesc
 	{
 	public:
-		/// <summary>State of a file</summary>
-		/// There are a few basic states that apply to all files. Here, DoesNotExist and
-		/// Normal are clear. Mounting means that the file is not currently accessible, but
-		/// is expected to be available later. This can happen if the filesystem is still
-		/// mounting in a background thread, or there is some background operation that 
-		/// must be completed before the resource can be used.
-		/// Invalid is used in rare cases where the resource does not currently exist, and
-		/// can never exist. This is typically required by filesystems that processing source
-		/// resources into output resources.
-		///
-		/// Consider a filesystem that performs texture compression. A filesystem request may
-		/// load a source texture and attempt to compile it. In this case "Mounting" will be
-		/// returned while the texture is being compiled in a background thread. When the 
-		/// compression is completed, "Normal" will be returned. If an appropriate source
-		/// file does not exist, then "DoesNotExist" will be returned. If a source file does
-		/// exist, but that source file is corrupt or invalid, then "Invalid" will be returned.
-		///
-		/// However, note that this is not a complete list of states for all files. Even if
-		/// a file returns state "Normal", open operations may still fail. They can fail for
-		/// filesystem specific problems (such as a permissions error)
-		enum class State { DoesNotExist, Normal, Mounting, Invalid };
-
 		std::basic_string<utf8>	_naturalName;
 		std::basic_string<utf8>	_mountedName;
-		State					_state;
-		OSServices::FileTime	_modificationTime;
-		uint64					_size;
+		FileSnapshot 			_snapshot;
+		uint64_t				_size;
 	};
 
 	/// <summary>Provides access to the global mounting tree</summary>
@@ -235,19 +222,19 @@ namespace Assets
 
 		static IOReason	TryOpen(std::unique_ptr<IFileInterface>& result, StringSection<utf8> filename, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
 		static IOReason	TryOpen(OSServices::BasicFile& result, StringSection<utf8> filename, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
-		static IOReason	TryOpen(OSServices::MemoryMappedFile& result, StringSection<utf8> filename, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
-		static IOReason	TryMonitor(StringSection<utf8> filename, const std::shared_ptr<IFileMonitor>& evnt);
+		static IOReason	TryOpen(OSServices::MemoryMappedFile& result, StringSection<utf8> filename, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
+		static IOReason	TryMonitor(FileSnapshot&, StringSection<utf8> filename, const std::shared_ptr<IFileMonitor>& evnt);
 		static IOReason	TryFakeFileChange(StringSection<utf8> filename);
 		static FileDesc	TryGetDesc(StringSection<utf8> filename);
 
 		static OSServices::BasicFile OpenBasicFile(StringSection<utf8> filename, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
-		static OSServices::MemoryMappedFile OpenMemoryMappedFile(StringSection<utf8> filename, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
+		static OSServices::MemoryMappedFile OpenMemoryMappedFile(StringSection<utf8> filename, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
 		static std::unique_ptr<IFileInterface> OpenFileInterface(StringSection<utf8> filename, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
 
 		static IOReason	TryOpen(std::unique_ptr<IFileInterface>& result, StringSection<utf16> filename, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
 		static IOReason	TryOpen(OSServices::BasicFile& result, StringSection<utf16> filename, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
-		static IOReason	TryOpen(OSServices::MemoryMappedFile& result, StringSection<utf16> filename, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
-		static IOReason	TryMonitor(StringSection<utf16> filename, const std::shared_ptr<IFileMonitor>& evnt);
+		static IOReason	TryOpen(OSServices::MemoryMappedFile& result, StringSection<utf16> filename, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
+		static IOReason	TryMonitor(FileSnapshot&, StringSection<utf16> filename, const std::shared_ptr<IFileMonitor>& evnt);
 		static IOReason	TryFakeFileChange(StringSection<utf16> filename);
 		static FileDesc	TryGetDesc(StringSection<utf16> filename);
 
@@ -261,21 +248,60 @@ namespace Assets
 		static void Init(const std::shared_ptr<MountingTree>& mountingTree, const std::shared_ptr<IFileSystem>& defaultFileSystem);
         static void Shutdown();
 
-		static std::unique_ptr<uint8[]> TryLoadFileAsMemoryBlock(StringSection<char> sourceFileName, size_t* sizeResult = nullptr);
-		static std::unique_ptr<uint8[]> TryLoadFileAsMemoryBlock(StringSection<char> sourceFileName, size_t* sizeResult, DependentFileState* fileState);
+		static std::unique_ptr<uint8_t[]> TryLoadFileAsMemoryBlock(StringSection<char> sourceFileName, size_t* sizeResult = nullptr);
+		static std::unique_ptr<uint8_t[]> TryLoadFileAsMemoryBlock(StringSection<char> sourceFileName, size_t* sizeResult, DependentFileState* fileState);
 		static Blob TryLoadFileAsBlob(StringSection<char> sourceFileName);
 		static Blob TryLoadFileAsBlob(StringSection<char> sourceFileName, DependentFileState* fileState);
 
-		static std::unique_ptr<uint8[]> TryLoadFileAsMemoryBlock_TolerateSharingErrors(StringSection<char> sourceFileName, size_t* sizeResult);
-		static std::unique_ptr<uint8[]> TryLoadFileAsMemoryBlock_TolerateSharingErrors(StringSection<char> sourceFileName, size_t* sizeResult, DependentFileState* fileState);
+		static std::unique_ptr<uint8_t[]> TryLoadFileAsMemoryBlock_TolerateSharingErrors(StringSection<char> sourceFileName, size_t* sizeResult);
+		static std::unique_ptr<uint8_t[]> TryLoadFileAsMemoryBlock_TolerateSharingErrors(StringSection<char> sourceFileName, size_t* sizeResult, DependentFileState* fileState);
 		static Blob TryLoadFileAsBlob_TolerateSharingErrors(StringSection<char> sourceFileName);
 		static Blob TryLoadFileAsBlob_TolerateSharingErrors(StringSection<char> sourceFileName, DependentFileState* fileState);
 	};
 
 	T2(CharType, FileObject) IFileSystem::IOReason TryOpen(FileObject& result, IFileSystem& fs, StringSection<CharType> fn, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
-	T2(CharType, FileObject) IFileSystem::IOReason TryOpen(FileObject& result, IFileSystem& fs, StringSection<CharType> fn, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
-	T1(CharType) IFileSystem::IOReason TryMonitor(IFileSystem& fs, StringSection<CharType> fn, const std::shared_ptr<IFileMonitor>& evnt);
+	T2(CharType, FileObject) IFileSystem::IOReason TryOpen(FileObject& result, IFileSystem& fs, StringSection<CharType> fn, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
+	T1(CharType) IFileSystem::IOReason TryMonitor(IFileSystem& fs, FileSnapshot&, StringSection<CharType> fn, const std::shared_ptr<IFileMonitor>& evnt);
 	T1(CharType) IFileSystem::IOReason TryFakeFileChange(IFileSystem& fs, StringSection<CharType> fn);
 	T1(CharType) FileDesc TryGetDesc(IFileSystem& fs, StringSection<CharType> fn);
 	FileSystemWalker BeginWalk(const std::shared_ptr<ISearchableFileSystem>& fs, StringSection<> initialSubDirectory = "");
+
+	class DependentFileState
+    {
+    public:
+        std::string _filename;
+        FileSnapshot _snapshot;
+
+        DependentFileState() : _snapshot({FileSnapshot::State::Normal, 0}) {}
+        DependentFileState(StringSection<char> filename, uint64_t timeMarker, FileSnapshot::State status=FileSnapshot::State::Normal)
+        : _filename(filename.AsString()), _snapshot({status, timeMarker}) {}
+		DependentFileState(const std::string& filename, uint64_t timeMarker, FileSnapshot::State status=FileSnapshot::State::Normal)
+		: _filename(filename), _snapshot({status, timeMarker}) {}
+		DependentFileState(const std::string& filename, const FileSnapshot& snapshot)
+		: _filename(filename), _snapshot(snapshot) {}
+
+		friend bool operator<(const DependentFileState& lhs, const DependentFileState& rhs)
+		{
+			if (lhs._filename < rhs._filename) return true;
+			if (lhs._filename > rhs._filename) return false;
+			return lhs._snapshot < rhs._snapshot;
+		}
+
+		friend bool operator==(const DependentFileState& lhs, const DependentFileState& rhs)
+		{
+			return lhs._filename == rhs._filename && lhs._snapshot == rhs._snapshot;
+		}
+    };
+
+	inline bool operator==(const FileSnapshot& lhs, const FileSnapshot& rhs)
+	{
+		return lhs._modificationTime == rhs._modificationTime && lhs._state == rhs._state;
+	}
+
+	inline bool operator<(const FileSnapshot& lhs, const FileSnapshot& rhs)
+	{
+		if (lhs._modificationTime < rhs._modificationTime) return true;
+		if (lhs._modificationTime > rhs._modificationTime) return false;
+		return (int)lhs._state < (int)rhs._state;
+	}
 }

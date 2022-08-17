@@ -135,7 +135,7 @@ namespace RenderCore { namespace Techniques
                 // as a hint that they are in linear space. 
             XlCopyString(filename, splitter.AllExceptParameters());
             XlCatString(filename, ".metadata");
-			if (::Assets::MainFileSystem::TryGetDesc(filename)._state == ::Assets::FileDesc::State::Normal)
+			if (::Assets::MainFileSystem::TryGetDesc(filename)._snapshot._state == ::Assets::FileSnapshot::State::Normal)
 				metaDataFuture = ::Assets::MakeAsset<TextureMetaData>(filename);
         }
 

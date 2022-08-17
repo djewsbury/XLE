@@ -42,7 +42,6 @@ namespace Assets
 		std::vector<DependentFileState> _dependencies;
 
 		::Assets::AssetState _state = AssetState::Ready;
-		std::string _basePath;
 
 		const Product* FindProduct(uint64_t type) const
 		{
@@ -62,7 +61,6 @@ namespace Assets
 
 	static void SerializationOperator(OutputStreamFormatter& formatter, const CompileProductsFile& compileProducts)
 	{
-		formatter.WriteKeyedValue("BasePath", compileProducts._basePath);
 		formatter.WriteKeyedValue("Invalid", compileProducts._state == AssetState::Ready ? "0" : "1");
 
 		for (const auto&product:compileProducts._compileProducts) {
@@ -74,18 +72,18 @@ namespace Assets
 		{
 			auto ele = formatter.BeginKeyedElement("Dependencies");
 			for (const auto&product:compileProducts._dependencies) {
-				if (product._status == DependentFileState::Status::DoesNotExist) {
+				if (product._snapshot._state == FileSnapshot::State::DoesNotExist) {
 					formatter.WriteKeyedValue(
 						MakeStringSection(product._filename), 
 						"doesnotexist");
-				} else if (product._status == DependentFileState::Status::Shadowed) {
+				/*} else if (product._snapshot._state == DependentFileState::Status::Shadowed) {
 					formatter.WriteKeyedValue(
 						MakeStringSection(product._filename), 
-						"shadowed");
+						"shadowed");*/
 				} else {
 					formatter.WriteKeyedValue(
 						MakeStringSection(product._filename), 
-						MakeStringSection(std::to_string(product._timeMarker)));
+						MakeStringSection(std::to_string(product._snapshot._modificationTime)));
 				}
 			}
 			formatter.EndElement(ele);
@@ -112,16 +110,10 @@ namespace Assets
 			if (!formatter.TryKeyedItem(name) || !formatter.TryStringValue(value))
 				Throw(Utility::FormatException("Poorly formed attribute in CompileProductsFile", formatter.GetLocation()));
 			if (XlEqString(value, "doesnotexist")) {
-				result._dependencies.push_back(DependentFileState {
-					name.AsString(),
-					0, DependentFileState::Status::DoesNotExist
-				});
+				result._dependencies.push_back(DependentFileState { name.AsString(), 0ull, FileSnapshot::State::DoesNotExist });
 			} else if (XlEqString(value, "shadowed")) {
 			} else {
-				result._dependencies.push_back(DependentFileState {
-					name.AsString(),
-					Conversion::Convert<uint64_t>(value)
-				});
+				result._dependencies.push_back(DependentFileState { name.AsString(), Conversion::Convert<uint64_t>(value) });
 			}
 		}
 	}
@@ -145,8 +137,6 @@ namespace Assets
 				RequireBeginElement(formatter);
 				DerializeDependencies(formatter, result);
 				RequireEndElement(formatter);
-			} else if (XlEqString(name, "BasePath")) {
-				result._basePath = DeserializeValue(formatter).AsString();
 			} else if (XlEqString(name, "Invalid")) {
 				if (XlEqString(DeserializeValue(formatter), "1")) {
 					result._state = AssetState::Invalid;
@@ -164,20 +154,30 @@ namespace Assets
 		}
 	}
 
+	template<typename CharType>
+		static bool	IsSeparator(CharType chr)
+	{
+		return chr == CharType('/') || chr == CharType('\\');
+	}
+
+	static bool LooksLikeAbsolutePath(StringSection<> filename)
+	{
+		assert(!filename.IsEmpty());
+		if (IsSeparator(filename[0])) return true;
+		for (auto i:filename) {
+			if (IsSeparator(i)) return false;
+			if (i == ':') return true;	// drive indicator
+		}
+		return false;
+	}
+
 	static std::pair<::Assets::DependencyValidation, bool> GetDepVal(const CompileProductsFile& finalProductsFile, StringSection<> archivableName)
 	{
 		bool stillValid = true;
 		auto depVal = GetDepValSys().Make();
 		for (const auto&dep:finalProductsFile._dependencies) {
-			if (!finalProductsFile._basePath.empty()) {
-				auto adjustedDep = dep;
-				char buffer[MaxPath];
-				Legacy::XlConcatPath(buffer, dimof(buffer), finalProductsFile._basePath.c_str(), AsPointer(dep._filename.begin()), AsPointer(dep._filename.end()));
-				adjustedDep._filename = buffer;
-				stillValid &= IntermediatesStore::TryRegisterDependency(depVal, adjustedDep, archivableName);
-			} else {
-				stillValid &= IntermediatesStore::TryRegisterDependency(depVal, dep, archivableName);
-			}
+			assert(!archivableName.IsEmpty());
+			stillValid &= IntermediatesStore::TryRegisterDependency(depVal, dep, archivableName);
 		}
 		return std::make_pair(std::move(depVal), stillValid);
 	}
@@ -205,6 +205,14 @@ namespace Assets
 		auto depVal = GetDepVal(finalProductsFile, archivableName);
 		if (!depVal.second)
 			return nullptr;
+
+		{
+			auto compileProductsDirectory = MakeFileNameSplitter(intermediateName).DriveAndPath();
+			if (!compileProductsDirectory.IsEmpty())
+				for (auto& artifacts:finalProductsFile._compileProducts)
+					if (!LooksLikeAbsolutePath(artifacts._intermediateArtifact))
+						artifacts._intermediateArtifact = Concatenate(compileProductsDirectory, "/", artifacts._intermediateArtifact);
+		}
 		return MakeArtifactCollection(finalProductsFile, _filesystem, depVal.first, storeRefCounts, hashCode);
 	}
 
@@ -304,16 +312,12 @@ namespace Assets
 			renameOps.push_back({mainBlobName + ".s", mainBlobName});
 		}
 
-		// note -- we can set compileProductsFile._basePath here, and then make the dependencies
-		// 			within the compiler products file into relative filenames
-		/*
-			auto basePathSplitPath = MakeSplitPath(compileProductsFile._basePath);
-			if (!compileProductsFile._basePath.empty()) {
-				filename = MakeRelativePath(basePathSplitPath, MakeSplitPath(filename));
-			} else {
-		*/
-
+		auto compileProductsDirectory = MakeFileNameSplitter(productsName).DriveAndPath();
 		{
+			// convert filenames in compileProductsFile to be relative to the file we're about to write out
+			auto compileProductsDirectorySplit = MakeSplitPath(compileProductsDirectory);
+			for (auto&c:compileProductsFile._compileProducts)
+				c._intermediateArtifact = MakeRelativePath(compileProductsDirectorySplit, MakeSplitPath(c._intermediateArtifact));
 			std::shared_ptr<IFileInterface> productsFile = OpenFileInterface(*_filesystem, productsName + ".s", "wb", 0); // note -- no sharing allowed on this file. We take an exclusive lock on it
 			FileOutputStream stream(productsFile);
 			OutputStreamFormatter fmtter(stream);
