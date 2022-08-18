@@ -14,10 +14,10 @@ namespace GraphLanguage
 {
     static std::pair<std::string, ::Assets::DependentFileState> LoadSourceFile(StringSection<char> sourceFileName)
     {
-		::Assets::DependentFileState fileState;
+		::Assets::FileSnapshot snapshot;
 		size_t size = 0;
-		auto data = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(sourceFileName.AsString().c_str(), &size, &fileState);
-		return std::make_pair(std::string((const char*)data.get(), (const char*)PtrAdd(data.get(), size)), fileState);
+		auto data = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(sourceFileName, &size, &snapshot);
+		return std::make_pair(std::string((const char*)data.get(), (const char*)PtrAdd(data.get(), size)), ::Assets::DependentFileState{sourceFileName.AsString(), snapshot});
     }
 
 	class ShaderFragment
@@ -72,7 +72,7 @@ namespace GraphLanguage
 			Throw(::Assets::Exceptions::ConstructionError(
 				::Assets::Exceptions::ConstructionError::Reason::MissingFile,
 				_depVal,
-				"Missing or empty file while loading: %s", fn.AsString().c_str()));
+				StringMeld<256>() << "Missing or empty file while loading: " << fn));
 
 		TRY {
 			if (XlEqStringI(MakeFileNameSplitter(fn).Extension(), "graph")) {

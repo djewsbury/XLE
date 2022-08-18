@@ -408,7 +408,7 @@ namespace RenderCore { namespace Assets
 			Throw(::Assets::Exceptions::ConstructionError(
 				::Assets::Exceptions::ConstructionError::Reason::MissingFile,
 				srcFile.GetDependencyValidation(),
-				"No pipeline layout entry with the name (%s)", name.c_str()));
+				StringMeld<256>() << "No pipeline layout entry with the name (" << name << ")"));
 
 		if (!i->second->_descriptorSets.empty()) {
 			_descriptorSets.reserve(i->second->_descriptorSets.size());

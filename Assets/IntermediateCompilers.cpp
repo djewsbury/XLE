@@ -193,13 +193,19 @@ namespace Assets
 		return result;
 	}
 
+	static DependencyValidation AsSingleDepVal(IteratorRange<const DependencyValidation*> depVals)
+	{
+		DependencyValidationMarker markers[depVals.size()];
+		for (unsigned c=0; c<depVals.size(); ++c) markers[c] = depVals[c];
+		return GetDepValSys().MakeOrReuse(MakeIteratorRange(markers, &markers[depVals.size()]));
+	}
+
 	void IntermediateCompilers::Marker::PerformCompile(
 		const ExtensionAndDelegate& delegate,
 		const InitializerPack& initializers, 
 		std::promise<ArtifactCollectionFuture::ArtifactCollectionSet>&& promise,
 		IntermediatesStore* destinationStore)
     {
-		std::vector<DependentFileState> deps;
 		assert(!initializers.IsEmpty());
 
         TRY
@@ -208,8 +214,11 @@ namespace Assets
 			if (!model)
 				Throw(std::runtime_error("Compiler library returned null to compile request on " + initializers.ArchivableName()));
 
-			deps = model->GetDependencies();
+			auto oldDependencies = model->GetDependencies();
 			std::vector<std::pair<CompileRequestCode, std::shared_ptr<IArtifactCollection>>> finalCollections;
+
+			std::vector<DependencyValidation> compilerDepVals;
+			compilerDepVals.push_back(delegate._compilerLibraryDepVal);
 
 			#if defined(_DEBUG)
 				std::set<std::string> compileProductNamesWritten;
@@ -230,6 +239,8 @@ namespace Assets
 
 				std::vector<ICompileOperation::SerializedArtifact> serializedArtifacts;
 				AssetState state = AssetState::Pending;
+				std::vector<DependencyValidation> targetDependencies = compilerDepVals;
+				targetDependencies.push_back(model->GetDependencyValidation());
 
 				TRY {
 					serializedArtifacts = model->SerializeTarget(t);
@@ -239,6 +250,10 @@ namespace Assets
 					// this target to be invalid
 					if (serializedArtifacts.empty() || (serializedArtifacts.size() == 1 && serializedArtifacts[0]._chunkTypeCode == ChunkType_Log))
 						state = AssetState::Invalid;
+				} CATCH(const Exceptions::ExceptionWithDepVal& e) {
+					serializedArtifacts.push_back({ChunkType_Log, 0, "compiler-exception", AsBlob(e)});
+					targetDependencies.push_back(e.GetDependencyValidation());
+					state = AssetState::Invalid;
 				} CATCH(const std::exception& e) {
 					serializedArtifacts.push_back({ChunkType_Log, 0, "compiler-exception", AsBlob(e)});
 					state = AssetState::Invalid;
@@ -262,7 +277,7 @@ namespace Assets
 								delegate._storeGroupId,
 								MakeIteratorRange(serializedArtifacts),
 								state,
-								MakeIteratorRange(deps));
+								MakeIteratorRange(targetDependencies));
 							storedInArchive = true;
 						}
 					}
@@ -287,29 +302,26 @@ namespace Assets
 							delegate._storeGroupId,
 							MakeIteratorRange(serializedArtifacts),
 							state,
-							MakeIteratorRange(deps));
+							MakeIteratorRange(targetDependencies));
 					}
 				}
 
 				if (!artifactCollection)
 					artifactCollection = std::make_shared<BlobArtifactCollection>(
 						MakeIteratorRange(serializedArtifacts), state,
-						::Assets::MakeDepVal(MakeIteratorRange(deps), delegate._compilerLibraryDepVal));
+						AsSingleDepVal(targetDependencies));
 
 				finalCollections.push_back(std::make_pair(target._targetCode, artifactCollection));
 			}
        
 			promise.set_value(std::move(finalCollections));
 
-		} CATCH(const Exceptions::ConstructionError& e) {
-			auto depVal = MakeDepVal(MakeIteratorRange(deps), delegate._compilerLibraryDepVal);
-			promise.set_exception(std::make_exception_ptr(Exceptions::ConstructionError(e, depVal)));
+		} CATCH(const Exceptions::ExceptionWithDepVal& e) {
+			promise.set_exception(std::make_exception_ptr(Exceptions::ConstructionError(e, delegate._compilerLibraryDepVal)));
 		} CATCH(const std::exception& e) {
-			auto depVal = MakeDepVal(MakeIteratorRange(deps), delegate._compilerLibraryDepVal);
-			promise.set_exception(std::make_exception_ptr(Exceptions::ConstructionError(e, depVal)));
+			promise.set_exception(std::make_exception_ptr(Exceptions::ConstructionError(e, delegate._compilerLibraryDepVal)));
 		} CATCH(...) {
-			auto depVal = MakeDepVal(MakeIteratorRange(deps), delegate._compilerLibraryDepVal);
-			promise.set_exception(std::make_exception_ptr(Exceptions::ConstructionError(Exceptions::ConstructionError::Reason::Unknown, depVal, "%s", "unknown exception")));
+			promise.set_exception(std::make_exception_ptr(Exceptions::ConstructionError(delegate._compilerLibraryDepVal, "unknown exception")));
 		} CATCH_END
     }
 

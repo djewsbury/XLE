@@ -141,9 +141,12 @@ namespace Assets
             virtual const char* what() const noexcept override;
 
 			ConstructionError(Reason reason, const DependencyValidation&, const Blob& actualizationLog) never_throws;
-			ConstructionError(Reason reason, const DependencyValidation&, const char format[], ...) never_throws;
+            ConstructionError(Reason reason, const DependencyValidation&, StringSection<>) never_throws;
+            ConstructionError(const DependencyValidation&, const Blob& actualizationLog) never_throws;
+            ConstructionError(const DependencyValidation&, StringSection<>) never_throws;
 			ConstructionError(const std::exception&, const DependencyValidation&) never_throws;
 			ConstructionError(const ConstructionError&, const DependencyValidation&) never_throws;
+            ConstructionError(const ExceptionWithDepVal&, const DependencyValidation&) never_throws;
             ConstructionError(ConstructionError&&) = default;
             ConstructionError& operator=(ConstructionError&&) = default;
             ConstructionError(const ConstructionError&);
@@ -153,6 +156,21 @@ namespace Assets
 			Reason _reason;
 			DependencyValidation _depVal;
 			Blob _actualizationLog;
+        };
+
+        class IOResourceError : public ExceptionWithDepVal
+        {
+        public:
+            using IOReason = unsigned; // OSServices::Exceptions::IOException::Reason;
+            IOReason GetIOReason() const;
+            virtual const char* what() const noexcept override;
+            virtual const ::Assets::DependencyValidation& GetDependencyValidation() const override;
+
+            IOResourceError(IOReason reason, const DependencyValidation&, const char format[], ...) never_throws;
+        private:
+            std::string _what;
+            ::Assets::DependencyValidation _depVal;
+            IOReason _reason;
         };
     }
 }

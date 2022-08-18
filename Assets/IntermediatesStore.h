@@ -18,7 +18,6 @@ namespace OSServices { class LibVersionDesc; }
 
 namespace Assets
 {
-	class DependentFileState;
 	class DependencyValidation;
 	class IArtifactCollection;
 	class IFileSystem;
@@ -48,7 +47,7 @@ namespace Assets
 			CompileProductsGroupId groupId,
 			IteratorRange<const ICompileOperation::SerializedArtifact*> artifacts,
 			::Assets::AssetState state,
-			IteratorRange<const DependentFileState*> dependencies);
+			IteratorRange<const DependencyValidation*> dependencies);
 
 		std::shared_ptr<IArtifactCollection> RetrieveCompileProducts(
             StringSection<> archivableName,
@@ -62,7 +61,7 @@ namespace Assets
 			CompileProductsGroupId groupId,
 			IteratorRange<const ICompileOperation::SerializedArtifact*> artifacts,
 			::Assets::AssetState state,
-			IteratorRange<const DependentFileState*> dependencies);
+			IteratorRange<const DependencyValidation*> dependencies);
 
 		std::shared_ptr<IArtifactCollection> RetrieveCompileProducts(
             StringSection<> archiveName,
@@ -77,13 +76,6 @@ namespace Assets
 		void DeregisterCompileProductsGroup(CompileProductsGroupId);
 
 		void FlushToDisk();
-
-		static auto GetDependentFileState(StringSection<> filename) -> DependentFileState;
-		static void ShadowFile(StringSection<> filename);
-		static bool TryRegisterDependency(
-			DependencyValidation& target,
-			const DependentFileState& fileState,
-			const StringSection<> assetName);
 
 		IntermediatesStore(
 			std::shared_ptr<IFileSystem> intermediatesFilesystem,
@@ -108,4 +100,6 @@ namespace Assets
 		std::set<uint64_t> _storeOperationsInFlight;
 		std::vector<std::pair<uint64_t, unsigned>> _readReferenceCount;
 	};
+
+	std::pair<::Assets::DependencyValidation, bool> ConstructDepVal(IteratorRange<const DependentFileState*> files, StringSection<> archivableName);
 }

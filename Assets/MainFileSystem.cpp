@@ -298,8 +298,13 @@ namespace Assets
 	{
 		OSServices::BasicFile result;
 		auto ioRes = TryOpen(result, filename, openMode, shareMode);
-		if (ioRes != IOReason::Success)
-			Throw(OSServices::Exceptions::IOException(ioRes, "Failure while opening file (%s) in mode (%s)", std::string((const char*)filename.begin(), (const char*)filename.end()).c_str(), openMode));
+		if (ioRes != IOReason::Success) {
+			auto& depValSys = ::Assets::GetDepValSys();
+			Throw(::Assets::Exceptions::IOResourceError(
+				(unsigned)ioRes,
+				depValSys.Make(filename),
+				"Failure while opening file (%s) in mode (%s)", std::string((const char*)filename.begin(), (const char*)filename.end()).c_str(), openMode));
+		}
 		return result;
 	}
 
@@ -307,8 +312,13 @@ namespace Assets
 	{
 		OSServices::MemoryMappedFile result;
 		auto ioRes = TryOpen(result, filename, size, openMode, shareMode);
-		if (ioRes != IOReason::Success)
-			Throw(OSServices::Exceptions::IOException(ioRes, "Failure while opening file (%s) in mode (%s)", std::string((const char*)filename.begin(), (const char*)filename.end()).c_str(), openMode));
+		if (ioRes != IOReason::Success) {
+			auto& depValSys = ::Assets::GetDepValSys();
+			Throw(::Assets::Exceptions::IOResourceError(
+				(unsigned)ioRes,
+				depValSys.Make(filename),
+				"Failure while opening file (%s) in mode (%s)", std::string((const char*)filename.begin(), (const char*)filename.end()).c_str(), openMode));
+		}
 		return result;
 	}
 
@@ -316,8 +326,13 @@ namespace Assets
 	{
 		std::unique_ptr<IFileInterface> result;
 		auto ioRes = TryOpen(result, filename, openMode, shareMode);
-		if (ioRes != IOReason::Success)
-			Throw(OSServices::Exceptions::IOException(ioRes, "Failure while opening file (%s) in mode (%s)", std::string((const char*)filename.begin(), (const char*)filename.end()).c_str(), openMode));
+		if (ioRes != IOReason::Success) {
+			auto& depValSys = ::Assets::GetDepValSys();
+			Throw(::Assets::Exceptions::IOResourceError(
+				(unsigned)ioRes, 
+				depValSys.Make(filename),
+				"Failure while opening file (%s) in mode (%s)", std::string((const char*)filename.begin(), (const char*)filename.end()).c_str(), openMode));
+		}
 		return result;
 	}
 
@@ -424,15 +439,13 @@ namespace Assets
 		return MainFileSystem::TryLoadFileAsMemoryBlock(sourceFileName, sizeResult, nullptr);
 	}
 
-	std::unique_ptr<uint8[]> MainFileSystem::TryLoadFileAsMemoryBlock(StringSection<char> sourceFileName, size_t* sizeResult, DependentFileState* fileState)
+	std::unique_ptr<uint8[]> MainFileSystem::TryLoadFileAsMemoryBlock(StringSection<char> sourceFileName, size_t* sizeResult, FileSnapshot* fileState)
 	{
 		std::unique_ptr<IFileInterface> file;
 		if (MainFileSystem::TryOpen(file, sourceFileName, "rb", OSServices::FileShareMode::Read) == IFileSystem::IOReason::Success) {
 
-			if (fileState) {
-				fileState->_filename = sourceFileName.AsString();
-				fileState->_snapshot = file->GetDesc()._snapshot;
-			}
+			if (fileState)
+				*fileState = file->GetSnapshot();
 
 			size_t size = file->GetSize();
 			if (size) {
@@ -447,10 +460,8 @@ namespace Assets
 
 		// on missing file (or failed load), we return the equivalent of an empty file
 		if (sizeResult) { *sizeResult = 0; }
-		if (fileState) {
-			fileState->_filename = sourceFileName.AsString();
-			fileState->_snapshot = { FileSnapshot::State::DoesNotExist, 0 };
-		}
+		if (fileState)
+			*fileState = { FileSnapshot::State::DoesNotExist, 0 };
 		return nullptr;
 	}
 
@@ -459,15 +470,13 @@ namespace Assets
 		return MainFileSystem::TryLoadFileAsBlob(sourceFileName, nullptr);
 	}
 
-	Blob MainFileSystem::TryLoadFileAsBlob(StringSection<char> sourceFileName, DependentFileState* fileState)
+	Blob MainFileSystem::TryLoadFileAsBlob(StringSection<char> sourceFileName, FileSnapshot* fileState)
 	{
 		std::unique_ptr<IFileInterface> file;
 		if (MainFileSystem::TryOpen(file, sourceFileName, "rb", OSServices::FileShareMode::Read) == IFileSystem::IOReason::Success) {
 
-			if (fileState) {
-				fileState->_filename = sourceFileName.AsString();
-				fileState->_snapshot = file->GetDesc()._snapshot;
-			}
+			if (fileState)
+				*fileState = file->GetSnapshot();
 
 			size_t size = file->GetSize();
 			if (size) {
@@ -477,10 +486,8 @@ namespace Assets
 			}
 		}
 
-		if (fileState) {
-			fileState->_filename = sourceFileName.AsString();
-			fileState->_snapshot = { FileSnapshot::State::DoesNotExist, 0 };
-		}
+		if (fileState)
+			*fileState = { FileSnapshot::State::DoesNotExist, 0 };
 		return nullptr;
 	}
 
@@ -729,7 +736,7 @@ namespace Assets
 		return MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(sourceFileName, sizeResult, nullptr);
 	}
 
-	std::unique_ptr<uint8[]> MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(StringSection<char> sourceFileName, size_t* sizeResult, DependentFileState* fileState)
+	std::unique_ptr<uint8[]> MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(StringSection<char> sourceFileName, size_t* sizeResult, FileSnapshot* fileState)
 	{
 		std::unique_ptr<::Assets::IFileInterface> file;
 
@@ -738,10 +745,8 @@ namespace Assets
             auto openResult = ::Assets::MainFileSystem::TryOpen(file, sourceFileName, "rb", OSServices::FileShareMode::Read);
             if (openResult == ::Assets::IFileSystem::IOReason::Success) {
 
-				if (fileState) {
-					fileState->_filename = sourceFileName.AsString();
-					fileState->_snapshot = file->GetDesc()._snapshot;
-				}
+				if (fileState)
+					*fileState = file->GetSnapshot();
 
                 size_t size = file->GetSize();
                 if (sizeResult) {
@@ -769,24 +774,20 @@ namespace Assets
 
         // on missing file (or failed load), we return the equivalent of an empty file
         if (sizeResult) { *sizeResult = 0; }
-		if (fileState) {
-			fileState->_filename = sourceFileName.AsString();
-			fileState->_snapshot = { FileSnapshot::State::DoesNotExist, 0 };
-		}
+		if (fileState)
+			*fileState = { FileSnapshot::State::DoesNotExist, 0 };
         return nullptr;
 	}
 
-	Blob MainFileSystem::TryLoadFileAsBlob_TolerateSharingErrors(StringSection<char> sourceFileName, DependentFileState* fileState)
+	Blob MainFileSystem::TryLoadFileAsBlob_TolerateSharingErrors(StringSection<char> sourceFileName, FileSnapshot* fileState)
 	{
 		std::unique_ptr<IFileInterface> file;
 		unsigned retryCount = 0;
         for (;;) {
 			auto openResult = MainFileSystem::TryOpen(file, sourceFileName, "rb", OSServices::FileShareMode::Read);
 			if (openResult == IFileSystem::IOReason::Success) {
-				if (fileState) {
-					fileState->_filename = sourceFileName.AsString();
-					fileState->_snapshot = file->GetDesc()._snapshot;
-				}
+				if (fileState)
+					*fileState = file->GetSnapshot();
 
 				size_t size = file->GetSize();
 				if (size) {
@@ -806,10 +807,8 @@ namespace Assets
             Threading::Sleep(retryCount*retryCount*15);
 		}
 
-		if (fileState) {
-			fileState->_filename = sourceFileName.AsString();
-			fileState->_snapshot = { FileSnapshot::State::DoesNotExist, 0 };
-		}
+		if (fileState)
+			*fileState = { FileSnapshot::State::DoesNotExist, 0 };
 		return nullptr;
 	}
 

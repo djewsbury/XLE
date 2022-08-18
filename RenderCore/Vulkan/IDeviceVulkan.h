@@ -12,7 +12,7 @@
 #include "Metal/VulkanForward.h"
 #include <memory>
 
-namespace Assets { class DependentFileState; }
+namespace Assets { struct DependentFileState; }
 
 namespace RenderCore
 {

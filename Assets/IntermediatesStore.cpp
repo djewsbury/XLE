@@ -157,52 +157,6 @@ namespace Assets
 		return HashCombine(entryId, Hash64(archiveName.begin(), archiveName.end(), groupId));
 	}
 
-	bool IntermediatesStore::TryRegisterDependency(
-		DependencyValidation& target,
-		const DependentFileState& fileState,
-		const StringSection<> assetName)
-	{
-		auto mostRecentState = GetDependentFileState(fileState._filename);
-		target.RegisterDependency(mostRecentState);
-
-		/*if (mostRecentState._snapshot._state == FileSnapshot::State::Shadowed) {
-			Log(Verbose) << "Asset (" << assetName << ") is invalidated because dependency (" << fileState._filename << ") is marked shadowed" << std::endl;
-			return false;
-		}*/
-
-		if (mostRecentState._snapshot._state == fileState._snapshot._state) {
-			// If the status on both is "DoesNotExist", then we do not consider this as invalidating the asset
-			if (fileState._snapshot._state != FileSnapshot::State::DoesNotExist && mostRecentState._snapshot._modificationTime != fileState._snapshot._modificationTime) {
-				Log(Verbose)
-					<< "Asset (" << assetName
-					<< ") is invalidated because of file data on dependency (" << fileState._filename << ")" << std::endl;
-				return false;
-			}
-		} else {
-			if (mostRecentState._snapshot._state == FileSnapshot::State::DoesNotExist && fileState._snapshot._state != FileSnapshot::State::DoesNotExist) {
-				Log(Verbose)
-					<< "Asset (" << assetName
-					<< ") is invalidated because of missing dependency (" << fileState._filename << ")" << std::endl;
-			} else if (mostRecentState._snapshot._state != FileSnapshot::State::DoesNotExist && fileState._snapshot._state == FileSnapshot::State::DoesNotExist) {
-				Log(Verbose)
-					<< "Asset (" << assetName
-					<< ") is invalidated because dependency (" << fileState._filename << ") was not present previously, but now exists" << std::endl;
-			} else {
-				Log(Verbose)
-					<< "Asset (" << assetName
-					<< ") is invalidated because dependency (" << fileState._filename << ") state does not match expected" << std::endl;
-			}
-			return false;
-		}
-
-		return true;
-	}
-
-	DependentFileState IntermediatesStore::GetDependentFileState(StringSection<ResChar> filename)
-	{
-		return GetDepValSys().GetDependentFileState(filename);
-	}
-
 	std::shared_ptr<IArtifactCollection> IntermediatesStore::RetrieveCompileProducts(
 		StringSection<> archivableName,
 		CompileProductsGroupId groupId)
@@ -230,7 +184,7 @@ namespace Assets
 		CompileProductsGroupId groupId,
 		IteratorRange<const ICompileOperation::SerializedArtifact*> artifacts,
 		::Assets::AssetState state,
-		IteratorRange<const DependentFileState*> dependencies)
+		IteratorRange<const DependencyValidation*> depVals)
 	{
 		std::unique_lock<std::shared_timed_mutex> l(_pimpl->_lock);
 		auto hashCode = _pimpl->MakeHashCode(archivableName, groupId);
@@ -241,23 +195,19 @@ namespace Assets
 			Throw(std::runtime_error("GroupId has not be registered in intermediates store during retrieve operation"));
 
 		// Make sure the dependencies are unique, because we tend to get a lot of dupes from certain compile operations
-		std::vector<DependentFileState> uniqueDependencies { dependencies.begin(), dependencies.end() };
-		std::sort(uniqueDependencies.begin(), uniqueDependencies.end());
-		auto i = std::unique(uniqueDependencies.begin(), uniqueDependencies.end());
+		std::vector<::Assets::DependentFileState> dependencies;
+		for (const auto&d:depVals) d.CollateDependentFileStates(dependencies);
+		std::sort(dependencies.begin(), dependencies.end());
+		auto i = std::unique(dependencies.begin(), dependencies.end());
 
 		if (groupi->second._looseFilesStorage)
-			return groupi->second._looseFilesStorage->StoreCompileProducts(archivableName, artifacts, state, {uniqueDependencies.begin(), i}, _pimpl->_storeRefCounts, hashCode);
+			return groupi->second._looseFilesStorage->StoreCompileProducts(archivableName, artifacts, state, {dependencies.begin(), i}, _pimpl->_storeRefCounts, hashCode);
 		if (groupi->second._archiveCacheSet) {
 			auto archive = groupi->second._archiveCacheSet->GetArchive(groupi->second._archiveCacheBase + archivableName.AsString());
 			if (!archive)
 				Throw(std::runtime_error("Failed to create archive when storing compile products"));
 
-			// Make sure the dependencies are unique, because we tend to get a lot of dupes from certain compile operations
-			std::vector<DependentFileState> uniqueDependencies { dependencies.begin(), dependencies.end() };
-			std::sort(uniqueDependencies.begin(), uniqueDependencies.end());
-			auto i = std::unique(uniqueDependencies.begin(), uniqueDependencies.end());
-
-			archive->Commit(0, {}, artifacts, state, {uniqueDependencies.begin(), i});
+			archive->Commit(0, {}, artifacts, state, {dependencies.begin(), i});
 		}
 		return nullptr;
 	}
@@ -289,7 +239,7 @@ namespace Assets
 		CompileProductsGroupId groupId,
 		IteratorRange<const ICompileOperation::SerializedArtifact*> artifacts,
 		::Assets::AssetState state,
-		IteratorRange<const DependentFileState*> dependencies)
+		IteratorRange<const DependencyValidation*> depVals)
 	{
 		std::unique_lock<std::shared_timed_mutex> l(_pimpl->_lock);
 		auto hashCode = _pimpl->MakeHashCode(archiveName, entryId, groupId);
@@ -307,11 +257,12 @@ namespace Assets
 			Throw(std::runtime_error("Failed to create archive when storing compile products"));
 
 		// Make sure the dependencies are unique, because we tend to get a lot of dupes from certain compile operations
-		std::vector<DependentFileState> uniqueDependencies { dependencies.begin(), dependencies.end() };
-		std::sort(uniqueDependencies.begin(), uniqueDependencies.end());
-		auto i = std::unique(uniqueDependencies.begin(), uniqueDependencies.end());
+		std::vector<::Assets::DependentFileState> dependencies;
+		for (const auto&d:depVals) d.CollateDependentFileStates(dependencies);
+		std::sort(dependencies.begin(), dependencies.end());
+		auto i = std::unique(dependencies.begin(), dependencies.end());
 
-		archive->Commit(entryId, entryDescriptiveName.AsString(), artifacts, state, {uniqueDependencies.begin(), i});
+		archive->Commit(entryId, entryDescriptiveName.AsString(), artifacts, state, {dependencies.begin(), i});
 	}
 
 	void IntermediatesStore::FlushToDisk()
@@ -468,5 +419,34 @@ namespace Assets
 
 	IntermediatesStore::~IntermediatesStore() 
 	{
+	}
+
+	std::pair<::Assets::DependencyValidation, bool> ConstructDepVal(IteratorRange<const DependentFileState*> files, StringSection<> archivableName)
+	{
+		if (files.empty())
+			return {::Assets::DependencyValidation{}, false};
+		auto depVal = GetDepValSys().Make(files);
+		bool stillValid = depVal.GetValidationIndex() == 0;
+		if (!stillValid && Verbose.IsEnabled()) {
+			std::vector<DependencyUpdateReport> dependencyUpdates;
+			depVal.CollateDependentFileUpdates(dependencyUpdates);
+
+			for (const auto&update:dependencyUpdates) {
+				if (update._currentStateSnapshot._state == FileSnapshot::State::DoesNotExist && update._registeredSnapshot._state != FileSnapshot::State::DoesNotExist) {
+					Log(Verbose)
+						<< "Asset (" << archivableName
+						<< ") is invalidated because of missing dependency (" << update._filename << ")" << std::endl;
+				} else if (update._currentStateSnapshot._state != FileSnapshot::State::DoesNotExist && update._registeredSnapshot._state == FileSnapshot::State::DoesNotExist) {
+					Log(Verbose)
+						<< "Asset (" << archivableName
+						<< ") is invalidated because dependency (" << update._filename << ") was not present previously, but now exists" << std::endl;
+				} else {
+					Log(Verbose)
+						<< "Asset (" << archivableName
+						<< ") is invalidated because dependency (" << update._filename << ") state does not match expected" << std::endl;
+				}
+			}
+		}
+		return std::make_pair(std::move(depVal), stillValid);
 	}
 }

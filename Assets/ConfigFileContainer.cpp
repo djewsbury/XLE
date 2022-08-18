@@ -88,11 +88,11 @@ namespace Assets
 	template<typename Formatter>
 		ConfigFileContainer<Formatter>::ConfigFileContainer(StringSection<ResChar> initializer)
 	{
-        DependentFileState fileState;
-		_fileData = ::Assets::MainFileSystem::TryLoadFileAsBlob_TolerateSharingErrors(initializer, &fileState);
-        _validationCallback = GetDepValSys().Make(fileState);
+        FileSnapshot snapshot;
+		_fileData = ::Assets::MainFileSystem::TryLoadFileAsBlob_TolerateSharingErrors(initializer, &snapshot);
+        _validationCallback = GetDepValSys().Make(DependentFileState{initializer.AsString(), snapshot});
 		if (!_fileData)
-			Throw(Exceptions::ConstructionError(Exceptions::ConstructionError::Reason::MissingFile, _validationCallback, "Error loading config file container for %s", initializer.AsString().c_str()));
+			Throw(Exceptions::ConstructionError(Exceptions::ConstructionError::Reason::MissingFile, _validationCallback, StringMeld<256>() << "Error loading config file container for " << initializer));
 	}
 
 	template<typename Formatter>

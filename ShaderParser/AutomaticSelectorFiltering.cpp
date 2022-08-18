@@ -303,6 +303,8 @@ namespace ShaderSourceParser
 			return _depFileStates;
 		}
 
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return ::Assets::GetDepValSys().Make(_depFileStates); }
+
 		ShaderSelectorFilteringCompileOperation(::Assets::InitializerPack& initializer)
 		{
 			auto fn = initializer.GetInitializer<std::string>(0);

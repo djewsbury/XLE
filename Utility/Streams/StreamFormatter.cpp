@@ -11,6 +11,7 @@
 #include "../PtrUtils.h"
 #include "../StringFormat.h"
 #include "../Conversion.h"
+#include "../../Assets/IFileSystem.h"       // for DependentFileState
 #include "../../Core/Exceptions.h"
 #include <assert.h>
 #include <algorithm>
@@ -241,9 +242,20 @@ namespace Utility
     }
 
 
-    
-    FormatException::FormatException(const char label[], StreamLocation location)
-        : ::Exceptions::BasicLabel("Format Exception: (%s) in file (%s) at line (%i), char (%i)", label, location._filename.c_str(), location._lineIndex, location._charIndex) {}
+    const ::Assets::DependencyValidation& FormatException::GetDependencyValidation() const { return _depVal; }
+	const char* FormatException::what() const { return _msg.c_str(); }
+
+    FormatException::FormatException(StringSection<> label, StreamLocation location)
+    : _depVal(std::move(location._depVal))
+    {
+        std::vector<::Assets::DependentFileState> files;
+        _depVal.CollateDependentFileStates(files);
+        std::stringstream str;
+        if (!files.empty())
+            str << files[0]._filename;
+        str << ":" << location._lineIndex << ":" << location._charIndex << ":" << label;
+        _msg = str.str();
+    }
 
     template<typename CharType, int Count>
         bool TryEat(TextStreamMarker<CharType>& marker, const CharType (&pattern)[Count])
@@ -723,7 +735,7 @@ namespace Utility
         StreamLocation result;
         result._charIndex = 1 + unsigned(_ptr - _lineStart);
         result._lineIndex = 1 + _lineIndex;
-        result._filename = _filename;
+        result._depVal = _depVal;
         return result;
     }
 
@@ -743,20 +755,20 @@ namespace Utility
     }
 
     template<typename CharType>
-        TextStreamMarker<CharType>::TextStreamMarker(StringSection<CharType> source, const std::string& filename)
+        TextStreamMarker<CharType>::TextStreamMarker(StringSection<CharType> source, ::Assets::DependencyValidation depVal)
     : _ptr(source.begin())
     , _end(source.end())
-    , _filename(filename)
+    , _depVal(std::move(depVal))
     {
         _lineIndex = 0;
         _lineStart = _ptr;
     }
 
     template<typename CharType>
-        TextStreamMarker<CharType>::TextStreamMarker(IteratorRange<const void*> source, const std::string& filename)
+        TextStreamMarker<CharType>::TextStreamMarker(IteratorRange<const void*> source, ::Assets::DependencyValidation depVal)
     : _ptr((const CharType*)source.begin())
     , _end((const CharType*)source.end())
-    , _filename(filename)
+    , _depVal(std::move(depVal))
     {
         assert((source.size() % sizeof(CharType)) == 0);
         _lineIndex = 0;

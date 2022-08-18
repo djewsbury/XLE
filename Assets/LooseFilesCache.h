@@ -13,7 +13,7 @@
 
 namespace Assets
 {
-	class DependentFileState;
+	struct DependentFileState;
 	class IFileSystem;
 
 	class LooseFilesStorage

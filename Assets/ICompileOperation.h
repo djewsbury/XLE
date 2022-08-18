@@ -11,7 +11,7 @@
 
 namespace Assets
 {
-	class DependentFileState;
+	struct DependentFileState;
 	class InitializerPack;
 	using ArtifactTargetCode = uint64_t;
 
@@ -29,10 +29,12 @@ namespace Assets
 			unsigned		_version;
 			std::string		_name;
 			::Assets::Blob	_data;
+			::Assets::DependencyValidation _depVal;
 		};
-		virtual std::vector<TargetDesc>			GetTargets() const = 0;
-		virtual std::vector<SerializedArtifact>	SerializeTarget(unsigned idx) = 0;
+		virtual std::vector<TargetDesc> GetTargets() const = 0;
+		virtual std::vector<SerializedArtifact> SerializeTarget(unsigned idx) = 0;
 		virtual std::vector<DependentFileState> GetDependencies() const = 0;
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 
 		virtual ~ICompileOperation();
 	};

@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "../Assets/AssetsCore.h"		// require for assets exceptions
 #include "../StringUtils.h"
 #include "../PtrUtils.h"
 #include "../IteratorUtils.h"
@@ -12,7 +13,7 @@
 
 namespace Utility
 {
-	struct StreamLocation { unsigned _charIndex, _lineIndex; std::string _filename; };
+	struct StreamLocation { unsigned _charIndex, _lineIndex; ::Assets::DependencyValidation _depVal; };
 
 	template<typename CharType>
 		class TextStreamMarker;
@@ -52,6 +53,8 @@ namespace Utility
 		using Blob = FormatterBlob;
 
 		InputStreamFormatter(const TextStreamMarker<CharType>& marker);
+		InputStreamFormatter(StringSection<CharType> source, ::Assets::DependencyValidation = {});
+		InputStreamFormatter(IteratorRange<const void*> source, ::Assets::DependencyValidation = {});
 		~InputStreamFormatter();
 
 		InputStreamFormatter();
@@ -76,10 +79,15 @@ namespace Utility
 		void ReadHeader();
 	};
 
-	class FormatException : public ::Exceptions::BasicLabel
+	class FormatException : public ::Assets::Exceptions::ExceptionWithDepVal
 	{
 	public:
-		FormatException(const char message[], StreamLocation location);
+		virtual const ::Assets::DependencyValidation& GetDependencyValidation() const override;
+		virtual const char* what() const override;
+		FormatException(StringSection<> msg, StreamLocation location);
+	private:
+		std::string _msg;
+		::Assets::DependencyValidation _depVal;
 	};
 
 	template<typename CharType>
@@ -98,8 +106,8 @@ namespace Utility
 		StreamLocation GetLocation() const;
 		void AdvanceCheckNewLine();
 
-		TextStreamMarker(StringSection<CharType> source, const std::string& filename = {});
-		TextStreamMarker(IteratorRange<const void*> source, const std::string& filename = {});
+		TextStreamMarker(StringSection<CharType> source, ::Assets::DependencyValidation = {});
+		TextStreamMarker(IteratorRange<const void*> source, ::Assets::DependencyValidation = {});
 		TextStreamMarker();
 		~TextStreamMarker();
 	protected:
@@ -109,8 +117,16 @@ namespace Utility
 		unsigned _lineIndex;
 		const CharType* _lineStart;
 
-		std::string _filename;
+		::Assets::DependencyValidation _depVal;
 	};
+
+
+	template<typename CharType>
+		inline InputStreamFormatter<CharType>::InputStreamFormatter(StringSection<CharType> source, ::Assets::DependencyValidation depVal)
+		: InputStreamFormatter(TextStreamMarker<CharType>{source, std::move(depVal)}) {}
+	template<typename CharType>
+		inline InputStreamFormatter<CharType>::InputStreamFormatter(IteratorRange<const void*> source, ::Assets::DependencyValidation depVal)
+		: InputStreamFormatter(TextStreamMarker<CharType>{source, std::move(depVal)}) {}
 }
 
 using namespace Utility;

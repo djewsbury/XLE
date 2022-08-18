@@ -14,11 +14,7 @@
 #include <vector>
 #include <string>
 
-namespace Assets 
-{ 
-    class DependencyValidation; class DirectorySearchRules; 
-	class DependentFileState;
-}
+namespace Assets { class DependencyValidation; class DirectorySearchRules; }
 namespace Utility { class OutputStreamFormatter; }
 
 namespace RenderCore { namespace Assets
@@ -224,7 +220,6 @@ namespace RenderCore { namespace Assets
         std::vector<std::pair<std::string, SamplerDesc>> _samplers;
         
 		ShaderPatchCollection _patchCollection;
-        std::vector<::Assets::DependentFileState> _depFileStates;
 
 		const ::Assets::DependencyValidation&	GetDependencyValidation() const { return _depVal; }
 

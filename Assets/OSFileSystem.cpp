@@ -32,7 +32,7 @@ namespace Assets
 		void        Flush() const never_throws;
 
 		size_t		GetSize() const never_throws override;
-		FileDesc	GetDesc() const never_throws override;
+		FileSnapshot	GetSnapshot() const never_throws override;
 
 		IOReason TryOpen(const utf8 filename[], const char openMode[], OSServices::FileShareMode::BitField shareMode) never_throws;
 		IOReason TryOpen(const utf16 filename[], const char openMode[], OSServices::FileShareMode::BitField shareMode) never_throws;
@@ -64,19 +64,15 @@ namespace Assets
 		return result;
 	}
 
-	FileDesc File_OS::GetDesc() const never_throws
+	FileSnapshot File_OS::GetSnapshot() const never_throws
 	{
 		if (!_file.IsGood()) 
-			return FileDesc { std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };
+			return { FileSnapshot::State::DoesNotExist, 0 };
 
 		auto size = _file.GetSize();
 		auto ft = _file.GetFileTime();
 
-		return FileDesc
-		{ 
-			_fn, _fn, FileSnapshot::State::Normal, 
-			ft, size
-		};
+		return { FileSnapshot::State::Normal, ft };
 	}
 
 	IOReason File_OS::TryOpen(const utf8 filename[], const char openMode[], OSServices::FileShareMode::BitField shareMode) never_throws

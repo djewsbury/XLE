@@ -182,7 +182,7 @@ namespace EntityInterface
 		: _stream(std::move(stream))
 		, _depVal(std::move(depVal))
 		{
-			_fmttr = TextStreamMarker<char>{MakeIteratorRange(_stream.GetBuffer().Begin(), _stream.GetBuffer().End()), "memory"};
+			_fmttr = TextStreamMarker<char>{MakeIteratorRange(_stream.GetBuffer().Begin(), _stream.GetBuffer().End()), _depVal};
 		}
 
 	private:

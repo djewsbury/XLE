@@ -6,7 +6,6 @@
 #include "../Techniques/Services.h"
 #include "../Techniques/TextureCompilerUtil.h"
 #include "../BufferUploads/IBufferUploads.h"
-#include "../../Assets/IntermediatesStore.h"
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/InitializerPack.h"
@@ -237,6 +236,7 @@ namespace RenderCore { namespace Assets
 			return _serializedArtifacts;
 		}
 		std::vector<::Assets::DependentFileState> GetDependencies() const { return _dependencies; }
+		::Assets::DependencyValidation GetDependencyValidation() const { return ::Assets::GetDepValSys().Make(_dependencies); }
 
 		void Initialize(TextureCompilationRequest request, std::string srcFN)
 		{
@@ -245,7 +245,7 @@ namespace RenderCore { namespace Assets
 				if (request._srcFile.empty())
 					Throw(std::runtime_error("Expecting 'SourceFile' fields in texture compiler file: " + srcFN));
 				srcPkt = Techniques::Services::GetInstance().CreateTextureDataSource(request._srcFile, 0);
-				_dependencies.push_back(::Assets::IntermediatesStore::GetDependentFileState(request._srcFile));
+				_dependencies.push_back(::Assets::GetDepValSys().GetDependentFileState(request._srcFile));
 			}
 
 			if (request._operation == TextureCompilationRequest::Operation::EquRectToCubeMap) {
@@ -353,9 +353,9 @@ namespace RenderCore { namespace Assets
 			{
 				// load the given file and perform texture processing operations
 				size_t inputBlockSize = 0;
-				::Assets::DependentFileState fileState;
-				auto dataHolder = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(srcFN, &inputBlockSize, &fileState);
-				_dependencies.push_back(fileState);
+				::Assets::FileSnapshot snapshot;
+				auto dataHolder = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(srcFN, &inputBlockSize, &snapshot);
+				_dependencies.push_back(::Assets::DependentFileState{srcFN, snapshot});
 				if (!inputBlockSize)
 					Throw(std::runtime_error("Empty or missing file while loading: " + srcFN));
 				auto inputData = MakeStringSection((const char*)dataHolder.get(), (const char*)PtrAdd(dataHolder.get(), inputBlockSize));
@@ -435,7 +435,7 @@ namespace RenderCore { namespace Assets
 				::Assets::Exceptions::ConstructionError(
 					::Assets::Exceptions::ConstructionError::Reason::FormatNotUnderstood,
 					GetDependencyValidation(),
-					"Could not find matching texture loader for file: %s",_artifactFile.c_str())));
+					StringMeld<256>() << "Could not find matching texture loader for file: " << _artifactFile)));
 			return promise.get_future();
 		}
 

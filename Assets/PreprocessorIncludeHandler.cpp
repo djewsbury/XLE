@@ -22,16 +22,14 @@ namespace Assets
 			result._filename = requestString.AsString();
 		}
 
-		::Assets::DependentFileState mainFileState;
-		
-		result._fileContents = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(result._filename, &result._fileContentsSize, &mainFileState);
-		_depFileStates.insert(mainFileState);
+		::Assets::FileSnapshot snapshot;	
+		result._fileContents = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(result._filename, &result._fileContentsSize, &snapshot);
+		_depFileStates.insert(DependentFileState{result._filename, snapshot});
 		if (!result._fileContentsSize) {
 			if (!fileIncludedFrom.IsEmpty())
 				Throw(std::runtime_error("Missing or empty file when loading: " + result._filename + " (included from: " + fileIncludedFrom.AsString() + ")"));
 			Throw(std::runtime_error("Missing or empty file when loading: " + result._filename));
 		}
-		assert(!mainFileState._filename.empty());
 		return result;
 	}
 

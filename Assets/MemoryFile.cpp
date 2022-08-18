@@ -24,7 +24,7 @@ namespace Assets
 		size_t			TellP() const never_throws override;
 
 		size_t			GetSize() const never_throws override;
-		FileDesc		GetDesc() const never_throws override;
+		FileSnapshot	GetSnapshot() const never_throws override;
 
 		MemoryFile(const Blob& blob, OSServices::FileTime modificationTime = 0);
 		~MemoryFile();
@@ -86,14 +86,9 @@ namespace Assets
 		return _blob->size();
 	}
 
-	FileDesc		MemoryFile::GetDesc() const never_throws
+	FileSnapshot	MemoryFile::GetSnapshot() const never_throws
 	{
-		return FileDesc
-			{
-				"<<in memory>>", {},
-				FileSnapshot::State::Normal,
-				_modificationTime, uint64_t(_blob ? _blob->size() : 0)
-			};
+		return { FileSnapshot::State::Normal, _modificationTime };
 	}
 
 	MemoryFile::MemoryFile(const Blob& blob, OSServices::FileTime modificationTime)
@@ -122,7 +117,7 @@ namespace Assets
 		size_t			TellP() const never_throws override;
 
 		size_t			GetSize() const never_throws override;
-		FileDesc		GetDesc() const never_throws override;
+		FileSnapshot	GetSnapshot() const never_throws override;
 
 		MemoryFileStatic(IteratorRange<const void*> data, OSServices::FileTime modificationTime = 0);
 		~MemoryFileStatic();
@@ -179,14 +174,9 @@ namespace Assets
 		return _data.size();
 	}
 
-	FileDesc		MemoryFileStatic::GetDesc() const never_throws
+	FileSnapshot		MemoryFileStatic::GetSnapshot() const never_throws
 	{
-		return FileDesc
-			{
-				"<<in memory>>", {},
-				FileSnapshot::State::Normal,
-				_modificationTime, uint64_t(_data.size())
-			};
+		return { FileSnapshot::State::Normal, _modificationTime };
 	}
 
 	MemoryFileStatic::MemoryFileStatic(IteratorRange<const void*> data, OSServices::FileTime modificationTime)
@@ -214,18 +204,20 @@ namespace Assets
 		ptrdiff_t	Seek(ptrdiff_t seekOffset, OSServices::FileSeekAnchor) never_throws override;
 		size_t      TellP() const never_throws override;
 
-		size_t				GetSize() const never_throws override;
-		::Assets::FileDesc	GetDesc() const never_throws override;
+		size_t			GetSize() const never_throws override;
+		FileSnapshot	GetSnapshot() const never_throws override;
 
 		ArchiveSubFile(
 			const std::shared_ptr<OSServices::MemoryMappedFile>& archiveFile,
-			const IteratorRange<const void*> memoryRange);
+			IteratorRange<const void*> memoryRange,
+			uint64_t modificationTime);
 		~ArchiveSubFile();
 	protected:
 		std::shared_ptr<OSServices::MemoryMappedFile> _archiveFile;
 		const void*			_dataStart;
 		const void*			_dataEnd;
 		mutable const void*	_tellp;
+		uint64_t 			_modificationTime;
 	};
 
 	size_t      ArchiveSubFile::Read(void *buffer, size_t size, size_t count) const never_throws 
@@ -266,13 +258,13 @@ namespace Assets
 		return PtrDiff(_dataEnd, _dataStart);
 	}
 
-	::Assets::FileDesc ArchiveSubFile::GetDesc() const never_throws
+	::Assets::FileSnapshot ArchiveSubFile::GetSnapshot() const never_throws
 	{
-		Throw(::Exceptions::BasicLabel("BSAFile::GetDesc() unimplemented"));
+		return { FileSnapshot::State::Normal, _modificationTime };
 	}
 
-	ArchiveSubFile::ArchiveSubFile(const std::shared_ptr<OSServices::MemoryMappedFile>& archiveFile, const IteratorRange<const void*> memoryRange)
-	: _archiveFile(archiveFile)
+	ArchiveSubFile::ArchiveSubFile(const std::shared_ptr<OSServices::MemoryMappedFile>& archiveFile, IteratorRange<const void*> memoryRange, uint64_t modificationTime)
+	: _archiveFile(archiveFile), _modificationTime(modificationTime)
 	{
 		_dataStart = memoryRange.begin();
 		_dataEnd = memoryRange.end();
@@ -283,9 +275,10 @@ namespace Assets
 
 	std::unique_ptr<IFileInterface> CreateSubFile(
 		const std::shared_ptr<OSServices::MemoryMappedFile>& archiveFile,
-		const IteratorRange<const void*> memoryRange)
+		const IteratorRange<const void*> memoryRange,
+		uint64_t modificationTime)
 	{
-		return std::make_unique<ArchiveSubFile>(archiveFile, memoryRange);
+		return std::make_unique<ArchiveSubFile>(archiveFile, memoryRange, modificationTime);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -298,12 +291,13 @@ namespace Assets
 		ptrdiff_t	Seek(ptrdiff_t seekOffset, OSServices::FileSeekAnchor) never_throws override;
 		size_t      TellP() const never_throws override;
 
-		size_t				GetSize() const never_throws override;
-		::Assets::FileDesc	GetDesc() const never_throws override;
+		size_t			GetSize() const never_throws override;
+		FileSnapshot	GetSnapshot() const never_throws override;
 
 		FileDecompressOnRead(
 			const std::shared_ptr<OSServices::MemoryMappedFile>& archiveFile,
 			const IteratorRange<const void*> memoryRange,
+			uint64_t modificationTime,
 			size_t decompressedSize,
 			unsigned fixedWindowSize);
 		~FileDecompressOnRead();
@@ -314,6 +308,7 @@ namespace Assets
         #endif
 		size_t				_decompressedSize;
 		mutable size_t		_tellp = 0;
+		uint64_t 			_modificationTime;
 	};
 
 	size_t      FileDecompressOnRead::Write(const void *buffer, size_t size, size_t count) never_throws
@@ -355,13 +350,9 @@ namespace Assets
 		return _decompressedSize;
 	}
 
-	::Assets::FileDesc	FileDecompressOnRead::GetDesc() const never_throws
+	FileSnapshot	FileDecompressOnRead::GetSnapshot() const never_throws
 	{
-		// Throw(::Exceptions::BasicLabel("BSAFileDecompressOnRead::GetDesc() unimplemented"));
-		return {
-			{}, {}, FileSnapshot::State::Normal, 0,
-			_decompressedSize
-		};
+		return { FileSnapshot::State::Normal, _modificationTime };
 	}
 
 	size_t      FileDecompressOnRead::Read(void *buffer, size_t size, size_t count) const never_throws
@@ -382,10 +373,12 @@ namespace Assets
 	FileDecompressOnRead::FileDecompressOnRead(
 		const std::shared_ptr<OSServices::MemoryMappedFile>& archiveFile,
 		const IteratorRange<const void*> memoryRange,
+		uint64_t modificationTime,
 		size_t decompressedSize,
 		unsigned fixedWindowSize)
 	: _archiveFile(archiveFile)
 	, _decompressedSize(decompressedSize)
+	, _modificationTime(modificationTime)
 	{
         #if !defined(EXCLUDE_Z_LIB)
             _stream.next_in = (z_const Bytef *)memoryRange.begin();
@@ -422,10 +415,11 @@ namespace Assets
 	std::unique_ptr<IFileInterface> CreateDecompressOnReadFile(
 		const std::shared_ptr<OSServices::MemoryMappedFile>& archiveFile,
 		const IteratorRange<const void*> memoryRange,
+		uint64_t modificationTime,
 		size_t decompressedSize,
 		unsigned fixedWindowSize)
 	{
-		return std::make_unique<FileDecompressOnRead>(archiveFile, memoryRange, decompressedSize, fixedWindowSize);
+		return std::make_unique<FileDecompressOnRead>(archiveFile, memoryRange, modificationTime, decompressedSize, fixedWindowSize);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -438,7 +432,7 @@ namespace Assets
 
 		virtual IOReason	TryOpen(std::unique_ptr<IFileInterface>& result, const Marker& uri, const char openMode[], OSServices::FileShareMode::BitField shareMode) override;
 		virtual IOReason	TryOpen(OSServices::BasicFile& result, const Marker& uri, const char openMode[], OSServices::FileShareMode::BitField shareMode) override;
-		virtual IOReason	TryOpen(OSServices::MemoryMappedFile& result, const Marker& uri, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode) override;
+		virtual IOReason	TryOpen(OSServices::MemoryMappedFile& result, const Marker& uri, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode) override;
 		virtual IOReason	TryMonitor(FileSnapshot&, const Marker& marker, const std::shared_ptr<IFileMonitor>& evnt) override;
 		virtual IOReason	TryFakeFileChange(const Marker& marker) override;
 		virtual	FileDesc	TryGetDesc(const Marker& marker) override;

@@ -28,6 +28,7 @@ namespace UnitTests
 	{
 	public:
 		std::vector<::Assets::DependentFileState> GetDependencies() const override { return _dependencies; }
+		::Assets::DependencyValidation GetDependencyValidation() const override { return ::Assets::GetDepValSys().Make(_dependencies); }
 		std::vector<TargetDesc> GetTargets() const override { return _targets; }
 		std::vector<SerializedArtifact> SerializeTarget(unsigned idx) override
 		{

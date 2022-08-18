@@ -19,23 +19,17 @@ namespace ColladaConversion
 
     ImportConfiguration::ImportConfiguration(StringSection<::Assets::ResChar> filename)
     {
-        TRY 
-        {
-            size_t fileSize = 0;
-            auto sourceFile = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(filename, &fileSize);
-            InputStreamFormatter<utf8> formatter(
-                MakeStringSection((const char*)sourceFile.get(), (const char*)PtrAdd(sourceFile.get(), fileSize)));
-            StreamDOM<InputStreamFormatter<utf8>> doc(formatter);
+        size_t fileSize = 0;
+        ::Assets::FileSnapshot snapshot;
+        auto sourceFile = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(filename, &fileSize, &snapshot);
+        InputStreamFormatter<utf8> formatter{
+            MakeIteratorRange(sourceFile.get(), PtrAdd(sourceFile.get(), fileSize)),
+            ::Assets::GetDepValSys().Make(::Assets::DependentFileState{filename.AsString(), snapshot})};
+        StreamDOM<InputStreamFormatter<utf8>> doc(formatter);
 
-            _resourceBindings = BindingConfig(doc.RootElement().Element("Resources"));
-            _constantsBindings = BindingConfig(doc.RootElement().Element("Constants"));
-            _vertexSemanticBindings = BindingConfig(doc.RootElement().Element("VertexSemantics"));
-
-        } CATCH(...) {
-            Log(Warning) << "Problem while loading configuration file (" << filename << "). Using defaults." << std::endl;
-        } CATCH_END
-
-        _depVal = ::Assets::GetDepValSys().Make(filename);
+        _resourceBindings = BindingConfig(doc.RootElement().Element("Resources"));
+        _constantsBindings = BindingConfig(doc.RootElement().Element("Constants"));
+        _vertexSemanticBindings = BindingConfig(doc.RootElement().Element("VertexSemantics"));
     }
     ImportConfiguration::ImportConfiguration() {}
     ImportConfiguration::~ImportConfiguration()

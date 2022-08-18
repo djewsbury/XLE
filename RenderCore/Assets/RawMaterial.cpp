@@ -7,7 +7,6 @@
 #include "RawMaterial.h"
 #include "../StateDesc.h"
 #include "../../Assets/Assets.h"
-#include "../../Assets/IntermediatesStore.h"		// (for GetDependentFileState)
 #include "../../Assets/DeferredConstruction.h"
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/Continuation.h"
@@ -569,11 +568,11 @@ namespace RenderCore { namespace Assets
         _validationCallback = depVal;
     }
 
-	static bool IsMaterialFile(StringSection<::Assets::ResChar> extension) { return XlEqStringI(extension, "material") || XlEqStringI(extension, "hlsl"); }
+	static bool IsMaterialFile(StringSection<> extension) { return XlEqStringI(extension, "material") || XlEqStringI(extension, "hlsl"); }
 
 	void RawMaterial::ConstructToPromise(
 		std::promise<std::shared_ptr<RawMaterial>>&& promise,
-		StringSection<::Assets::ResChar> initializer)
+		StringSection<> initializer)
 	{
 		// If we're loading from a .material file, then just go head and use the
 		// default asset construction
@@ -622,7 +621,6 @@ namespace RenderCore { namespace Assets
     ResolvedMaterial::~ResolvedMaterial() {}
     
     static void MergeIn(ResolvedMaterial& dest, const RawMaterial& source);
-    static void AddDep(std::vector<::Assets::DependentFileState>& deps, StringSection<> newDep);
 
     void ResolvedMaterial::ConstructToPromise(
         std::promise<ResolvedMaterial>&& promisedMaterial,
@@ -639,7 +637,6 @@ namespace RenderCore { namespace Assets
             unsigned _nextId = 1;
             std::vector<std::pair<unsigned, ::Assets::PtrToMarkerPtr<RawMaterial>>> _subFutures;
             std::vector<std::pair<unsigned, std::shared_ptr<RawMaterial>>> _loadedSubMaterials;
-            std::vector<::Assets::DependentFileState> _deps;
         };
         auto pendingTree = std::make_shared<PendingRawMaterialTree>();
 
@@ -650,7 +647,6 @@ namespace RenderCore { namespace Assets
             while (i2 != initializer.end() && *i2 != ';') ++i2;
             if (i2==i) break;
 
-            AddDep(pendingTree->_deps, MakeFileNameSplitter(MakeStringSection(i, i2)).AllExceptParameters());
             pendingTree->_subFutures.push_back(std::make_pair(0, ::Assets::MakeAssetMarker<std::shared_ptr<RawMaterial>>(MakeStringSection(i, i2))));
             i = i2;
         }
@@ -698,7 +694,6 @@ namespace RenderCore { namespace Assets
 
                         auto inheritted = m.second->ResolveInherited(m.second->GetDirectorySearchRules());
                         for (const auto&i:inheritted) {
-                            AddDep(pendingTree->_deps, MakeFileNameSplitter(i).AllExceptParameters());
                             pendingTree->_subFutures.push_back(std::make_pair(newParentId, ::Assets::MakeAssetMarker<std::shared_ptr<RawMaterial>>(i)));
                         }
                     }
@@ -724,7 +719,6 @@ namespace RenderCore { namespace Assets
                     for (const auto& m:pendingTree->_loadedSubMaterials)
                         finalMaterial._depVal.RegisterDependency(m.second->GetDependencyValidation());
                 }
-                finalMaterial._depFileStates = std::move(pendingTree->_deps);
                 return finalMaterial;
             });
     }
@@ -756,20 +750,6 @@ namespace RenderCore { namespace Assets
         }
 
 		dest._patchCollection.MergeIn(source._patchCollection);
-    }
-
-	static void AddDep(
-        std::vector<::Assets::DependentFileState>& deps,
-        StringSection<::Assets::ResChar> newDep)
-    {
-            // we need to call "GetDependentFileState" first, because this can change the
-            // format of the filename. String compares alone aren't working well for us here
-        auto depState = ::Assets::IntermediatesStore::GetDependentFileState(newDep);
-        auto existing = std::find_if(
-            deps.cbegin(), deps.cend(),
-            [&](const ::Assets::DependentFileState& test) { return test._filename == depState._filename; });
-        if (existing == deps.cend())
-            deps.push_back(depState);
     }
 
 }}

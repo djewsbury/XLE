@@ -54,7 +54,7 @@ namespace Assets
                 Throw(Exceptions::ConstructionError(
 					Exceptions::ConstructionError::Reason::MissingFile,
 					_validationCallback,
-                    StringMeld<128>() << "Missing chunk (" << r->_name << ")", _filename.c_str()));
+                    StringMeld<128>() << "Missing chunk (" << r->_name << ") in (" << _filename << ")"));
 
             if (r->_expectedVersion != ~0u && (i->_chunkVersion != r->_expectedVersion))
                 Throw(::Assets::Exceptions::ConstructionError(
@@ -62,8 +62,7 @@ namespace Assets
 					_validationCallback,
                     StringMeld<256>() 
                         << "Data chunk is incorrect version for chunk (" 
-                        << r->_name << ") expected: " << r->_expectedVersion << ", got: " << i->_chunkVersion, 
-						_filename.c_str()));
+                        << r->_name << ") expected: " << r->_expectedVersion << ", got: " << i->_chunkVersion << " in (" << _filename << ")"));
         }
 
         for (const auto& r:requests) {

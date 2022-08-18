@@ -17,7 +17,8 @@ namespace Assets
 
 	std::unique_ptr<IFileInterface> CreateSubFile(
 		const std::shared_ptr<OSServices::MemoryMappedFile>& archiveFile,
-		const IteratorRange<const void*> memoryRange);
+		IteratorRange<const void*> memoryRange,
+		uint64_t modificationTime);
 
 	/// Pass 0 to fixedWindowSize for a non-fixed-window-size compressed block
 	/// (in other words, there's expected to be a header that contains the window size)
@@ -25,6 +26,7 @@ namespace Assets
 	std::unique_ptr<IFileInterface> CreateDecompressOnReadFile(
 		const std::shared_ptr<OSServices::MemoryMappedFile>& archiveFile,
 		const IteratorRange<const void*> memoryRange,
+		uint64_t modificationTime,
 		size_t decompressedSize,
 		unsigned fixedWindowSize = 0);
 

@@ -215,6 +215,7 @@ namespace Utility
             StringSection<CharType> AsStringSection() const { return MakeStringSection(get()); }
             std::basic_string<CharType> AsString() const { return AsStringSection().AsString(); }
             IteratorRange<CharType*> AsIteratorRange() { return MakeIteratorRange(get(), XlStringEnd(get())); }
+            operator StringSection<CharType>() const { return AsStringSection(); }
 
             std::ostream& AsOStream() { return _stream; }
 

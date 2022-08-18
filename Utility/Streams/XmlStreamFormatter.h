@@ -45,6 +45,8 @@ namespace Utility
         bool _allowCharacterData = false;
 
         XmlInputStreamFormatter(const TextStreamMarker<CharType>& marker);
+        XmlInputStreamFormatter(StringSection<CharType> source, ::Assets::DependencyValidation = {});
+		XmlInputStreamFormatter(IteratorRange<const void*> source, ::Assets::DependencyValidation = {});
         ~XmlInputStreamFormatter();
     protected:
         TextStreamMarker<CharType> _marker;
@@ -62,6 +64,13 @@ namespace Utility
 
         std::stack<Scope> _scopeStack;
     };
+
+    template<typename CharType>
+		inline XmlInputStreamFormatter<CharType>::XmlInputStreamFormatter(StringSection<CharType> source, ::Assets::DependencyValidation depVal)
+		: XmlInputStreamFormatter(TextStreamMarker<CharType>{source, std::move(depVal)}) {}
+	template<typename CharType>
+		inline XmlInputStreamFormatter<CharType>::XmlInputStreamFormatter(IteratorRange<const void*> source, ::Assets::DependencyValidation depVal)
+		: XmlInputStreamFormatter(TextStreamMarker<CharType>{source, std::move(depVal)}) {}
 }
 
 using namespace Utility;

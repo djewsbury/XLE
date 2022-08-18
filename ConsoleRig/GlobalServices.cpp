@@ -366,9 +366,9 @@ namespace ConsoleRig
     static std::pair<std::shared_ptr<OSServices::LogConfigurationSet>, ::Assets::DependencyValidation> LoadConfigSet(StringSection<> fn)
     {
         size_t fileSize = 0;
-        ::Assets::DependentFileState fileState;
-        auto file = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(fn, &fileSize, &fileState);
-        auto depVal = ::Assets::GetDepValSys().Make(fileState);
+        ::Assets::FileSnapshot snapshot;
+        auto file = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(fn, &fileSize, &snapshot);
+        auto depVal = ::Assets::GetDepValSys().Make(::Assets::DependentFileState{fn.AsString(), snapshot});
         if (!file.get() || !fileSize)
             return std::make_pair(nullptr, depVal);
         

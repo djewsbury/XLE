@@ -12,7 +12,6 @@
 #include "../../../Assets/AssetUtils.h"
 #include "../../../Assets/ConfigFileContainer.h"
 #include "../../../Assets/Assets.h"
-#include "../../../Assets/IntermediatesStore.h"		// (for GetDependentFileState)
 #include "../../../Assets/IFileSystem.h"
 #include "../../../Utility/Streams/PathUtils.h"
 #include "../../../Utility/Threading/Mutex.h"
@@ -209,9 +208,8 @@ namespace RenderCore { namespace Metal_DX11
 				std::unique_ptr<::Assets::IFileInterface> fileInterface;
 				auto ioResult = ::Assets::MainFileSystem::TryOpen(fileInterface, path, "rb", OSServices::FileShareMode::Read | OSServices::FileShareMode::Write);
 				if (ioResult == ::Assets::IFileSystem::IOReason::Success && fileInterface) {
-					auto desc = fileInterface->GetDesc();
-                    size = (size_t)desc._size;
-                    timeMarker._snapshot = desc._snapshot;
+                    size = fileInterface->GetSize();
+                    timeMarker._snapshot = fileInterface->GetSnapshot();
 
                     file = std::make_unique<uint8[]>(size);
 					if (size) {
@@ -1095,7 +1093,7 @@ namespace RenderCore { namespace Metal_DX11
             // Note that this isn't really enough -- we need dependencies on
             // this file, and any dependencies it has! Really, our dependency
             // is on the product asset, not the source asset.
-        _depFiles.push_back(::Assets::IntermediatesStore::GetDependentFileState(resolvedName));
+        _depFiles.push_back(::Assets::GetDepValSys().GetDependentFileState(resolvedName));
 
         XlCatString(resolvedName, ":null:lib_");
         XlCatString(resolvedName, _shaderProfile.c_str());

@@ -969,13 +969,13 @@ namespace Assets
 			auto* depTable = _archiveCache->GetDependencyTable();
 			if (!depTable) return {{}, false};
 
-			bool stillValid = true;
 			auto result = GetDepValSys().Make();
 			auto depRange = EqualRange(*depTable, _objectId);
-			for (auto r=depRange.first; r!=depRange.second; ++r)
-				stillValid &= IntermediatesStore::TryRegisterDependency(result, r->second, "ArchivedAsset");
 
-			return {result, stillValid};
+			std::vector<DependentFileState> fileStates;
+			fileStates.reserve(depRange.second - depRange.first);
+			for (auto i=depRange.first; i!=depRange.second; ++i) fileStates.push_back(i->second);
+			return ConstructDepVal(fileStates, "ArchivedAsset");
 		}
 
 		StringSection<ResChar>				GetRequestParameters() const override

@@ -126,17 +126,17 @@ namespace RenderCore
 		StringSection<::Assets::ResChar> definesTable) const
 		-> ShaderByteCodeBlob
 	{
-		::Assets::DependentFileState fileState;
+		::Assets::FileSnapshot snapshot;
 		size_t fileSize = 0;
-		auto fileData = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(resId._filename, &fileSize, &fileState);
+		auto fileData = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(resId._filename, &fileSize, &snapshot);
 		if (fileData.get() && fileSize) {
 			auto result = Compile({(const char*)fileData.get(), (const char*)fileData.get() + fileSize}, resId, definesTable);
-			result._deps.push_back(std::move(fileState));
+			result._deps.push_back(::Assets::DependentFileState{resId._filename, snapshot});
 			return result;
 		} else {
 			ShaderByteCodeBlob result;
 			result._errors = ::Assets::AsBlob(std::string{"Empty or missing shader file: "} + resId._filename);
-			result._deps.push_back(std::move(fileState));
+			result._deps.push_back(::Assets::DependentFileState{resId._filename, snapshot});
 			return result;
 		}
 	}
@@ -238,6 +238,11 @@ namespace RenderCore
 			return _byteCode._deps;
 		}
 
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const override
+		{
+			return _depVal;
+		}
+
 		ShaderCompileOperation(
 			IShaderSource& shaderSource,
 			const ILowLevelCompiler::ResId& resId,
@@ -249,6 +254,7 @@ namespace RenderCore
 				auto metrics = shaderSource.GenerateMetrics(MakeIteratorRange(*_byteCode._payload));
 				_metrics = ::Assets::AsBlob(metrics);
 			}
+			_depVal = ::Assets::GetDepValSys().Make(_byteCode._deps);
 		}
 		
 		~ShaderCompileOperation()
@@ -256,6 +262,7 @@ namespace RenderCore
 		}
 
 		IShaderSource::ShaderByteCodeBlob _byteCode;
+		::Assets::DependencyValidation _depVal;
 		::Assets::Blob _metrics;
 	};
 

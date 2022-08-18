@@ -69,7 +69,7 @@ namespace RenderOverlays
 			Throw(::Assets::Exceptions::ConstructionError(
 				::Assets::Exceptions::ConstructionError::Reason::MissingFile,
 				_depVal,
-				"Failed to load font (%s)", finalPath.c_str()));
+				StringMeld<256>() << "Failed to load font (" << finalPath << ")"));
 
 		FT_Face face;
 		FT_New_Memory_Face(_resources->_ftLib, _pBuffer->data(), (FT_Long)_pBuffer->size(), 0, &face);
@@ -82,7 +82,7 @@ namespace RenderOverlays
 			Throw(::Assets::Exceptions::ConstructionError(
 				::Assets::Exceptions::ConstructionError::Reason::FormatNotUnderstood,
 				_depVal,
-				"Failed to set pixel size while initializing font (%s)", finalPath.c_str()));
+				StringMeld<256>() << "Failed to set pixel size while initializing font (" << finalPath << ")"));
 
 		_fontProperties._descender = _face->size->metrics.descender / 64.0f;
 		_fontProperties._ascender = _face->size->metrics.ascender / 64.0f;

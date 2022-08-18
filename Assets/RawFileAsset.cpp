@@ -10,7 +10,9 @@ namespace Assets
 	RawFileAsset::RawFileAsset(StringSection<> fname)
 	: _fname(fname.AsString())
 	{
-		_data = MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(fname, &_dataSize, &_fileState);
+		FileSnapshot snapshot;
+		_data = MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(fname, &_dataSize, &snapshot);
+		_fileState = {fname.AsString(), snapshot};
 		_depVal = GetDepValSys().Make(_fileState);
 	}
 

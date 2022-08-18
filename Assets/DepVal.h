@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "IFileSystem.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/StringUtils.h"
 
@@ -12,7 +13,8 @@ namespace Assets
     using ResChar = char;
     using DependencyValidationMarker = unsigned;
     constexpr DependencyValidationMarker DependencyValidationMarker_Invalid = ~DependencyValidationMarker(0);
-    class DependentFileState;
+    struct DependentFileState;
+    struct DependencyUpdateReport;
 
     /// <summary>Handles resource invalidation events</summary>
     /// Utility class used for detecting resource invalidation events (for example, if
@@ -29,7 +31,8 @@ namespace Assets
 
         void            IncreaseValidationIndex();      // (also increases validation index for any depvals dependent on this one)
 
-        std::vector<DependentFileState> AsDependentFileStates() const;
+        void            CollateDependentFileStates(std::vector<DependentFileState>&) const;
+        void            CollateDependentFileUpdates(std::vector<DependencyUpdateReport>&) const;
 
         operator bool() const { return _marker != DependencyValidationMarker_Invalid; }
         operator DependencyValidationMarker() const { return _marker; }
@@ -67,7 +70,8 @@ namespace Assets
         virtual unsigned GetValidationIndex(DependencyValidationMarker marker) = 0;
         virtual DependentFileState GetDependentFileState(StringSection<> filename) = 0;
         virtual void ShadowFile(StringSection<> filename) = 0;
-        virtual std::vector<DependentFileState> GetDependentFileStates(DependencyValidationMarker) const = 0;
+        virtual void CollateDependentFileStates(std::vector<DependentFileState>&, DependencyValidationMarker) = 0;
+        virtual void CollateDependentFileUpdates(std::vector<DependencyUpdateReport>&, DependencyValidationMarker) = 0;
 
         /// <summary>Registers a dependency on a file on disk</summary>
         /// Registers a dependency on a file. The system will monitor that file for changes.
@@ -98,4 +102,36 @@ namespace Assets
 
     IDependencyValidationSystem& GetDepValSys();
     std::shared_ptr<IDependencyValidationSystem> CreateDepValSys();
+
+    struct DependentFileState
+    {
+        std::string _filename;
+        FileSnapshot _snapshot;
+
+        DependentFileState() : _snapshot({FileSnapshot::State::Normal, 0}) {}
+        DependentFileState(StringSection<char> filename, uint64_t timeMarker, FileSnapshot::State status=FileSnapshot::State::Normal)
+        : _filename(filename.AsString()), _snapshot({status, timeMarker}) {}
+		DependentFileState(const std::string& filename, uint64_t timeMarker, FileSnapshot::State status=FileSnapshot::State::Normal)
+		: _filename(filename), _snapshot({status, timeMarker}) {}
+		DependentFileState(const std::string& filename, const FileSnapshot& snapshot)
+		: _filename(filename), _snapshot(snapshot) {}
+
+		friend bool operator<(const DependentFileState& lhs, const DependentFileState& rhs)
+		{
+			if (lhs._filename < rhs._filename) return true;
+			if (lhs._filename > rhs._filename) return false;
+			return lhs._snapshot < rhs._snapshot;
+		}
+
+		friend bool operator==(const DependentFileState& lhs, const DependentFileState& rhs)
+		{
+			return lhs._filename == rhs._filename && lhs._snapshot == rhs._snapshot;
+		}
+    };
+
+    struct DependencyUpdateReport
+    {
+        std::string _filename;
+        FileSnapshot _registeredSnapshot, _currentStateSnapshot;
+    };
 }

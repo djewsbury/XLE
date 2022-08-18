@@ -20,10 +20,7 @@
 #include <assert.h>
 #include <functional>
 
-namespace Assets
-{
-	class DependencyValidation; class DependentFileState; 
-}
+namespace Assets { class DependencyValidation; struct DependentFileState; }
 
 namespace RenderCore
 {

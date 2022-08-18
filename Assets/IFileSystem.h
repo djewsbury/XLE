@@ -20,7 +20,6 @@ namespace Assets
 	struct FileSnapshot;
 	class MountingTree;
 	class IFileInterface;
-	class DependentFileState;
 	using IFileMonitor = OSServices::OnChangeCallback;
 	using Blob = std::shared_ptr<std::vector<uint8_t>>;
 	using FileSystemId = unsigned;
@@ -44,7 +43,7 @@ namespace Assets
 		virtual size_t			TellP() const never_throws = 0;
 
 		virtual size_t			GetSize() const never_throws = 0;
-		virtual FileDesc		GetDesc() const never_throws = 0;
+		virtual FileSnapshot	GetSnapshot() const never_throws = 0;
 
 		virtual 			   ~IFileInterface();
 	};
@@ -249,14 +248,14 @@ namespace Assets
         static void Shutdown();
 
 		static std::unique_ptr<uint8_t[]> TryLoadFileAsMemoryBlock(StringSection<char> sourceFileName, size_t* sizeResult = nullptr);
-		static std::unique_ptr<uint8_t[]> TryLoadFileAsMemoryBlock(StringSection<char> sourceFileName, size_t* sizeResult, DependentFileState* fileState);
+		static std::unique_ptr<uint8_t[]> TryLoadFileAsMemoryBlock(StringSection<char> sourceFileName, size_t* sizeResult, FileSnapshot* fileState);
 		static Blob TryLoadFileAsBlob(StringSection<char> sourceFileName);
-		static Blob TryLoadFileAsBlob(StringSection<char> sourceFileName, DependentFileState* fileState);
+		static Blob TryLoadFileAsBlob(StringSection<char> sourceFileName, FileSnapshot* fileState);
 
 		static std::unique_ptr<uint8_t[]> TryLoadFileAsMemoryBlock_TolerateSharingErrors(StringSection<char> sourceFileName, size_t* sizeResult);
-		static std::unique_ptr<uint8_t[]> TryLoadFileAsMemoryBlock_TolerateSharingErrors(StringSection<char> sourceFileName, size_t* sizeResult, DependentFileState* fileState);
+		static std::unique_ptr<uint8_t[]> TryLoadFileAsMemoryBlock_TolerateSharingErrors(StringSection<char> sourceFileName, size_t* sizeResult, FileSnapshot* fileState);
 		static Blob TryLoadFileAsBlob_TolerateSharingErrors(StringSection<char> sourceFileName);
-		static Blob TryLoadFileAsBlob_TolerateSharingErrors(StringSection<char> sourceFileName, DependentFileState* fileState);
+		static Blob TryLoadFileAsBlob_TolerateSharingErrors(StringSection<char> sourceFileName, FileSnapshot* fileState);
 	};
 
 	T2(CharType, FileObject) IFileSystem::IOReason TryOpen(FileObject& result, IFileSystem& fs, StringSection<CharType> fn, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
@@ -265,33 +264,6 @@ namespace Assets
 	T1(CharType) IFileSystem::IOReason TryFakeFileChange(IFileSystem& fs, StringSection<CharType> fn);
 	T1(CharType) FileDesc TryGetDesc(IFileSystem& fs, StringSection<CharType> fn);
 	FileSystemWalker BeginWalk(const std::shared_ptr<ISearchableFileSystem>& fs, StringSection<> initialSubDirectory = "");
-
-	class DependentFileState
-    {
-    public:
-        std::string _filename;
-        FileSnapshot _snapshot;
-
-        DependentFileState() : _snapshot({FileSnapshot::State::Normal, 0}) {}
-        DependentFileState(StringSection<char> filename, uint64_t timeMarker, FileSnapshot::State status=FileSnapshot::State::Normal)
-        : _filename(filename.AsString()), _snapshot({status, timeMarker}) {}
-		DependentFileState(const std::string& filename, uint64_t timeMarker, FileSnapshot::State status=FileSnapshot::State::Normal)
-		: _filename(filename), _snapshot({status, timeMarker}) {}
-		DependentFileState(const std::string& filename, const FileSnapshot& snapshot)
-		: _filename(filename), _snapshot(snapshot) {}
-
-		friend bool operator<(const DependentFileState& lhs, const DependentFileState& rhs)
-		{
-			if (lhs._filename < rhs._filename) return true;
-			if (lhs._filename > rhs._filename) return false;
-			return lhs._snapshot < rhs._snapshot;
-		}
-
-		friend bool operator==(const DependentFileState& lhs, const DependentFileState& rhs)
-		{
-			return lhs._filename == rhs._filename && lhs._snapshot == rhs._snapshot;
-		}
-    };
 
 	inline bool operator==(const FileSnapshot& lhs, const FileSnapshot& rhs)
 	{

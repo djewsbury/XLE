@@ -6,7 +6,6 @@
 #include "AutomaticSelectorFiltering.h"
 #include "../RenderCore/MinimalShaderSource.h"
 #include "../Assets/IFileSystem.h"
-#include "../Assets/IntermediatesStore.h"		// (for GetDependentFileState)
 #include "../Assets/AssetUtils.h"
 #include "../OSServices/Log.h"
 #include "../Utility/Streams/StreamFormatter.h"
@@ -251,7 +250,7 @@ namespace ShaderSourceParser
 						result._dependencies.insert(
 							result._dependencies.end(),
 							expanded._dependencies.begin(), expanded._dependencies.end());
-						result._dependencies.push_back(::Assets::IntermediatesStore::GetDependentFileState(resolvedFN));
+						result._dependencies.push_back({resolvedFN, subFile->GetSnapshot()});
 					}
 				}
 			}

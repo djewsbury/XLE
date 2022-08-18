@@ -9,7 +9,6 @@
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/IntermediateCompilers.h"
-#include "../Assets/IntermediatesStore.h"
 #include "../MinimalShaderSource.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../OSServices/AttachableLibrary.h"
@@ -336,7 +335,7 @@ namespace RenderCore { namespace Techniques
 
 		// Fall back to loading the file directly (without any real preprocessing)
 		SourceCodeWithRemapping result;
-		result._dependencies.push_back(::Assets::IntermediatesStore::GetDependentFileState(filename));
+		result._dependencies.push_back(::Assets::GetDepValSys().GetDependentFileState(filename));
 
 		size_t sizeResult = 0;
 		auto blob = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(filename, &sizeResult);
@@ -395,6 +394,11 @@ namespace RenderCore { namespace Techniques
 			return _byteCode._deps;
 		}
 
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const override
+		{
+			return _depVal;
+		}
+
 		ShaderGraphCompileOperation(
 			IShaderSource& shaderSource,
 			const ILowLevelCompiler::ResId& resId,
@@ -405,6 +409,7 @@ namespace RenderCore { namespace Techniques
 			InstantiateShaderGraph_CompileFromFile(shaderSource, resId, definesTable, patchCollection, redirectedPatchFunctions) 
 		}
 		{
+			_depVal = ::Assets::GetDepValSys().Make(_byteCode._deps);
 		}
 		
 		~ShaderGraphCompileOperation()
@@ -412,6 +417,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		IShaderSource::ShaderByteCodeBlob _byteCode;
+		::Assets::DependencyValidation _depVal;
 	};
 
 	::Assets::CompilerRegistration RegisterInstantiateShaderGraphCompiler(

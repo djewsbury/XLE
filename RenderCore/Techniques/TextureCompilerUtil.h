@@ -9,7 +9,7 @@
 #include <vector>
 
 namespace RenderCore { namespace BufferUploads { class IAsyncDataSource; }}
-namespace Assets { class DependentFileState; }
+namespace Assets { struct DependentFileState; }
 namespace RenderCore { class TextureDesc; }
 
 namespace RenderCore { namespace Techniques

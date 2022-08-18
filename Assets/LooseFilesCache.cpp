@@ -173,13 +173,7 @@ namespace Assets
 
 	static std::pair<::Assets::DependencyValidation, bool> GetDepVal(const CompileProductsFile& finalProductsFile, StringSection<> archivableName)
 	{
-		bool stillValid = true;
-		auto depVal = GetDepValSys().Make();
-		for (const auto&dep:finalProductsFile._dependencies) {
-			assert(!archivableName.IsEmpty());
-			stillValid &= IntermediatesStore::TryRegisterDependency(depVal, dep, archivableName);
-		}
-		return std::make_pair(std::move(depVal), stillValid);
+		return ConstructDepVal(finalProductsFile._dependencies, archivableName);
 	}
 
 	std::shared_ptr<IArtifactCollection> LooseFilesStorage::RetrieveCompileProducts(
@@ -315,13 +309,14 @@ namespace Assets
 		auto compileProductsDirectory = MakeFileNameSplitter(productsName).DriveAndPath();
 		{
 			// convert filenames in compileProductsFile to be relative to the file we're about to write out
+			auto simplifedCompileProducts = compileProductsFile;
 			auto compileProductsDirectorySplit = MakeSplitPath(compileProductsDirectory);
-			for (auto&c:compileProductsFile._compileProducts)
+			for (auto&c:simplifedCompileProducts._compileProducts)
 				c._intermediateArtifact = MakeRelativePath(compileProductsDirectorySplit, MakeSplitPath(c._intermediateArtifact));
 			std::shared_ptr<IFileInterface> productsFile = OpenFileInterface(*_filesystem, productsName + ".s", "wb", 0); // note -- no sharing allowed on this file. We take an exclusive lock on it
 			FileOutputStream stream(productsFile);
 			OutputStreamFormatter fmtter(stream);
-			fmtter << compileProductsFile;
+			fmtter << simplifedCompileProducts;
 			renameOps.push_back({productsName + ".s", productsName});
 		}
 

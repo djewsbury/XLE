@@ -445,17 +445,23 @@ namespace Assets
 		{
 		}
 
-		ConstructionError::ConstructionError(Reason reason, const DependencyValidation& depVal, const char format[], ...) never_throws
+		ConstructionError::ConstructionError(Reason reason, const DependencyValidation& depVal, StringSection<> msg) never_throws
 		: _reason(reason), _depVal(depVal)
 		{
-			char buffer[512];
-			va_list args;
-			va_start(args, format);
-			std::vsnprintf(buffer, dimof(buffer), format, args);
-			va_end(args);
-
-			_actualizationLog = AsBlob(MakeIteratorRange(buffer, XlStringEnd(buffer)));
+			_actualizationLog = AsBlob(msg);
 		}
+
+        ConstructionError::ConstructionError(const DependencyValidation& depVal, const Blob& actualizationLog) never_throws
+        : _reason(Reason::Unknown), _depVal(depVal)
+		, _actualizationLog(actualizationLog)
+        {
+        }
+
+        ConstructionError::ConstructionError(const DependencyValidation& depVal, StringSection<> msg) never_throws
+        : _reason(Reason::Unknown), _depVal(depVal)
+        {
+            _actualizationLog = AsBlob(msg);
+        }
 
 		ConstructionError::ConstructionError(const std::exception& e, const DependencyValidation& depVal) never_throws
 		: _reason(Reason::Unknown)
@@ -465,19 +471,21 @@ namespace Assets
 
 		ConstructionError::ConstructionError(const ConstructionError& copyFrom, const DependencyValidation& depVal) never_throws
 		: _reason(copyFrom._reason)
-		, _depVal(copyFrom._depVal)
 		, _actualizationLog(copyFrom._actualizationLog)
 		{
 			// merge the depvals by creating a tree
-			if (_depVal && depVal && _depVal != depVal) {
-				auto parentDepVal = GetDepValSys().Make();
-				parentDepVal.RegisterDependency(_depVal);
-				parentDepVal.RegisterDependency(depVal);
-				_depVal = std::move(parentDepVal);
-			} else if (depVal) {
-				_depVal = depVal;
-			}
+            DependencyValidationMarker depVals[] { copyFrom.GetDependencyValidation(), depVal };
+            _depVal = GetDepValSys().MakeOrReuse(depVals);
 		}
+
+        ConstructionError::ConstructionError(const ExceptionWithDepVal& copyFrom, const DependencyValidation& depVal) never_throws
+        : _depVal(copyFrom.GetDependencyValidation())
+        , _actualizationLog(AsBlob(copyFrom))
+        {
+            // merge the depvals by creating a tree
+            DependencyValidationMarker depVals[] { copyFrom.GetDependencyValidation(), depVal };
+            _depVal = GetDepValSys().MakeOrReuse(depVals);
+        }
 
         ConstructionError::ConstructionError(const ConstructionError& copyFrom)
         : _reason(copyFrom._reason)
@@ -491,6 +499,21 @@ namespace Assets
             _depVal = DependencyValidation::SafeCopy(copyFrom._depVal);
             _actualizationLog = copyFrom._actualizationLog;
             return *this;
+        }
+
+        auto IOResourceError::GetIOReason() const -> IOReason { return _reason; }
+        const char* IOResourceError::what() const noexcept { return _what.c_str(); }
+        const ::Assets::DependencyValidation& IOResourceError::GetDependencyValidation() const { return _depVal; }
+
+        IOResourceError::IOResourceError(IOReason reason, const DependencyValidation& depVal, const char format[], ...) never_throws
+        : _depVal(depVal), _reason(reason)
+        {
+            va_list args;
+			va_start(args, format);
+            char buffer[2048];
+            xl_vsnprintf(buffer, dimof(buffer), format, args);
+            _what = buffer;
+            va_end(args);
         }
 
     }

@@ -185,14 +185,21 @@ namespace Assets
 			auto& fileMonitor = GetMonitoredFileAlreadyLocked(filename);
 			unsigned snapshotIndex = FindOrAddSnapshot(fileMonitor._snapshots, snapshot);
 			auto insertRange = EqualRange(_fileLinks, validationMarker);
+			bool alreadyRegistered = false;
 			for (auto r=insertRange.first; r!=insertRange.second; ++r)
 				if (r->second.first == fileMonitor._marker) {
 					// pick the snapshot with the earlier modification time
 					if (fileMonitor._snapshots[snapshotIndex]._modificationTime < fileMonitor._snapshots[r->second.second]._modificationTime)
 						r->second.second = snapshotIndex;
-					return;	// already registered
+					alreadyRegistered = true;
 				}
-			_fileLinks.insert(insertRange.second, std::make_pair(validationMarker, std::make_pair(fileMonitor._marker, snapshotIndex)));
+			if (!alreadyRegistered)
+				_fileLinks.insert(insertRange.second, std::make_pair(validationMarker, std::make_pair(fileMonitor._marker, snapshotIndex)));
+
+			if (snapshotIndex != fileMonitor._mostRecentSnapshotIdx) {
+				// registering a snapshot that is already invalidated -- we must increase the validation index
+				IncreaseValidationIndexAlreadyLocked(validationMarker);
+			}
 		}
 
 		void RegisterFileDependencyAlreadyLocked(
@@ -281,6 +288,11 @@ namespace Assets
 		void IncreaseValidationIndex(DependencyValidationMarker marker) override
 		{
 			ScopedLock(_lock);
+			IncreaseValidationIndexAlreadyLocked(marker);
+		}
+
+		void IncreaseValidationIndexAlreadyLocked(DependencyValidationMarker marker)
+		{
 			std::vector<DependencyValidationMarker> newMarkers;
 			for (const auto&l:_assetLinks)
 				if (l.second == marker)
@@ -333,10 +345,101 @@ namespace Assets
 			PropagateFileChange(fileMonitor._marker);*/
 		}
 
-		std::vector<DependentFileState> GetDependentFileStates(DependencyValidationMarker marker) const override
+		void CollateDependentFileStates(std::vector<DependentFileState>& result, DependencyValidationMarker marker) override
 		{
-			assert(0);	// todo -- implement
-			return {};
+			// track down the files in the tree underneath the given marker
+			ScopedLock(_lock);
+			std::vector<std::pair<MonitoredFileId, unsigned>> fileList;
+			std::vector<DependencyValidationMarker> searchQueue;
+			searchQueue.push_back(marker);
+			while (!searchQueue.empty()) {
+				auto node = searchQueue.back();
+				searchQueue.erase(searchQueue.end()-1);
+
+				auto dependencies = EqualRange(_assetLinks, node);
+				for (const auto& d:MakeIteratorRange(dependencies.first, dependencies.second)) searchQueue.push_back(d.second);
+
+				auto files = EqualRange(_fileLinks, node);
+				for (const auto& d:MakeIteratorRange(files.first, files.second)) fileList.push_back(d.second);
+			}
+
+			// Tiny bit of processing to ensure we can support the same file being referenced mutliple times, possibly with
+			// different snapshots. Since we could be looking at a complex tree of assets, it's possible we might hit these
+			// edge conditions sometimes
+			result.reserve(fileList.size());
+			std::sort(fileList.begin(), fileList.end(), CompareFirst2{});
+
+			for (auto i=fileList.begin(); i!=fileList.end();) {
+				auto endi = i+1;
+				while (endi!=fileList.end() && endi->first == i->first) ++endi;
+
+				auto file = _monitoredFiles.begin();
+				for (; file != _monitoredFiles.end(); ++file)
+					if (file->second->_marker == i->first) break;
+
+				if (file != _monitoredFiles.end()) {
+					// We might end up with multiple references to the same file -- if so, back only the oldest one
+					// If there are multiples, they must all have the same state
+					uint64_t modificationTime = ~0ull;
+					for (auto i2=i; i2!=endi; ++i2) {
+						modificationTime = std::min(modificationTime, file->second->_snapshots[i2->second]._modificationTime);
+						assert(file->second->_snapshots[i2->second]._state == file->second->_snapshots[i->second]._state);
+					}
+					result.emplace_back(file->second->_filename, FileSnapshot{file->second->_snapshots[i->second]._state, modificationTime});
+				}
+
+				i = endi;
+			}
+		}
+
+		void CollateDependentFileUpdates(std::vector<DependencyUpdateReport>& result, DependencyValidationMarker marker) override
+		{
+			// track down the files in the tree underneath the given marker, and find which of them are not at their most
+			// recent snapshot
+			ScopedLock(_lock);
+			std::vector<std::pair<MonitoredFileId, unsigned>> fileList;
+			std::vector<DependencyValidationMarker> searchQueue;
+			searchQueue.push_back(marker);
+			while (!searchQueue.empty()) {
+				auto node = searchQueue.back();
+				searchQueue.erase(searchQueue.end()-1);
+
+				auto dependencies = EqualRange(_assetLinks, node);
+				for (const auto& d:MakeIteratorRange(dependencies.first, dependencies.second)) searchQueue.push_back(d.second);
+
+				auto files = EqualRange(_fileLinks, node);
+				for (const auto& d:MakeIteratorRange(files.first, files.second)) fileList.push_back(d.second);
+			}
+
+			// Tiny bit of processing to ensure we can support the same file being referenced mutliple times, possibly with
+			// different snapshots. Since we could be looking at a complex tree of assets, it's possible we might hit these
+			// edge conditions sometimes
+			result.reserve(fileList.size());
+			std::sort(fileList.begin(), fileList.end(), CompareFirst2{});
+
+			for (auto i=fileList.begin(); i!=fileList.end();) {
+				auto endi = i+1;
+				while (endi!=fileList.end() && endi->first == i->first) ++endi;
+
+				auto file = _monitoredFiles.begin();
+				for (; file != _monitoredFiles.end(); ++file)
+					if (file->second->_marker == i->first) break;
+
+				if (file != _monitoredFiles.end()) {
+					// We might end up with multiple references to the same file -- if so, back only the oldest one
+					// If there are multiples, they must all have the same state
+					uint64_t modificationTime = ~0ull;
+					for (auto i2=i; i2!=endi; ++i2) {
+						modificationTime = std::min(modificationTime, file->second->_snapshots[i2->second]._modificationTime);
+						assert(file->second->_snapshots[i2->second]._state == file->second->_snapshots[i->second]._state);
+					}
+					FileSnapshot dependentSnapshot{file->second->_snapshots[i->second]._state, modificationTime};
+					if (!(dependentSnapshot == file->second->_snapshots[file->second->_mostRecentSnapshotIdx]))
+						result.push_back({file->second->_filename, dependentSnapshot, file->second->_snapshots[file->second->_mostRecentSnapshotIdx]});
+				}
+
+				i = endi;
+			}
 		}
 
 		unsigned GlobalChangeIndex() override
@@ -400,10 +503,16 @@ namespace Assets
 		return checked_cast<DependencyValidationSystem*>(&GetDepValSys())->IncreaseValidationIndex(_marker);
 	}
 
-	std::vector<DependentFileState> DependencyValidation::AsDependentFileStates() const
+	void DependencyValidation::CollateDependentFileStates(std::vector<DependentFileState>& result) const
 	{
-		if (_marker == DependencyValidationMarker_Invalid) return {};
-		return checked_cast<DependencyValidationSystem*>(&GetDepValSys())->GetDependentFileStates(_marker);
+		if (_marker == DependencyValidationMarker_Invalid) return;
+		checked_cast<DependencyValidationSystem*>(&GetDepValSys())->CollateDependentFileStates(result, _marker);
+	}
+
+	void DependencyValidation::CollateDependentFileUpdates(std::vector<DependencyUpdateReport>& result) const
+	{
+		if (_marker == DependencyValidationMarker_Invalid) return;
+		checked_cast<DependencyValidationSystem*>(&GetDepValSys())->CollateDependentFileUpdates(result, _marker);
 	}
 
 	DependencyValidation::DependencyValidation() : _marker(DependencyValidationMarker_Invalid) {}

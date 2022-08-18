@@ -104,6 +104,11 @@ namespace UnitTests
 			};
 		}
 
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const override
+		{
+			return ::Assets::GetDepValSys().Make(GetDependencies());
+		}
+
 		TestCompileOperation(::Assets::InitializerPack& initializer) : _initializer(initializer.GetInitializer<std::string>(0)) 
 		{
 			++s_constructionCount;

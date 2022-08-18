@@ -57,11 +57,12 @@ namespace ColladaConversion
         std::shared_ptr<DocumentScaffold> _doc;
         ::ColladaConversion::URIResolveContext _resolveContext;
 		std::vector<TargetDesc> _targets;
-		std::vector<::Assets::DependentFileState> _dependencies;
+		::Assets::DependencyValidation _depVal;
 
-		std::vector<TargetDesc> GetTargets() const;
-		std::vector<SerializedArtifact> SerializeTarget(unsigned idx);
-		std::vector<::Assets::DependentFileState> GetDependencies() const;
+		std::vector<TargetDesc> GetTargets() const override;
+		std::vector<SerializedArtifact> SerializeTarget(unsigned idx) override;
+		std::vector<::Assets::DependentFileState> GetDependencies() const override;
+		::Assets::DependencyValidation GetDependencyValidation() const override;
 
 		ColladaCompileOp();
 		~ColladaCompileOp();
@@ -536,19 +537,31 @@ namespace ColladaConversion
 	{
 		if (idx >= _targets.size()) return {};
 
-		switch (_targets[idx]._targetCode) {
-		case Type_Model:			return SerializeSkin(*this, MakeStringSection(_rootNode).Cast<utf8>());
-		case Type_Skeleton:			return SerializeSkeleton(*this, MakeStringSection(_rootNode).Cast<utf8>());
-		case Type_RawMat:			return SerializeMaterials(*this, MakeStringSection(_rootNode).Cast<utf8>());
-		case Type_AnimationSet:		return SerializeAnimations(*this, MakeStringSection(_rootNode).Cast<utf8>());
-		default:
-			Throw(::Exceptions::BasicLabel("Cannot serialize target (%s)", _targets[idx]._name));
-		}
+		TRY
+		{
+			switch (_targets[idx]._targetCode) {
+			case Type_Model:			return SerializeSkin(*this, MakeStringSection(_rootNode).Cast<utf8>());
+			case Type_Skeleton:			return SerializeSkeleton(*this, MakeStringSection(_rootNode).Cast<utf8>());
+			case Type_RawMat:			return SerializeMaterials(*this, MakeStringSection(_rootNode).Cast<utf8>());
+			case Type_AnimationSet:		return SerializeAnimations(*this, MakeStringSection(_rootNode).Cast<utf8>());
+			default:
+				Throw(::Exceptions::BasicLabel("Cannot serialize target (%s)", _targets[idx]._name));
+			}
+		} CATCH(const ::Assets::Exceptions::ExceptionWithDepVal& e) {
+			Throw(::Assets::Exceptions::ConstructionError(e, GetDependencyValidation()));
+		} CATCH(const std::exception& e) {
+			Throw(::Assets::Exceptions::ConstructionError(e, GetDependencyValidation()));
+		} CATCH_END
 	}
 
 	std::vector<::Assets::DependentFileState> ColladaCompileOp::GetDependencies() const
 	{
-		return _dependencies;
+		return {};
+	}
+
+	::Assets::DependencyValidation ColladaCompileOp::GetDependencyValidation() const
+	{
+		return _depVal;
 	}
 
 	ColladaCompileOp::ColladaCompileOp() {}
@@ -561,13 +574,11 @@ namespace ColladaConversion
 		auto split = MakeFileNameSplitter(identifier);
 		auto filePath = split.AllExceptParameters().AsString();
 
-		result->_dependencies.push_back(::Assets::IntermediatesStore::GetDependentFileState(s_cfgName));
-		result->_dependencies.push_back(::Assets::IntermediatesStore::GetDependentFileState(filePath));
-
 		result->_cfg = ImportConfiguration(s_cfgName);
-		result->_fileData = ::Assets::MainFileSystem::OpenMemoryMappedFile(MakeStringSection(filePath), 0, "r", OSServices::FileShareMode::Read);
-		XmlInputStreamFormatter<utf8> formatter(
-			MakeStringSection((const char*)result->_fileData.GetData().begin(), (const char*)result->_fileData.GetData().end()));
+
+		auto mainFileDepVal = ::Assets::GetDepValSys().Make(filePath);
+		result->_fileData = ::Assets::MainFileSystem::OpenMemoryMappedFile(filePath, 0, "r", OSServices::FileShareMode::Read);
+		XmlInputStreamFormatter<utf8> formatter { result->_fileData.GetData(), mainFileDepVal };
 		formatter._allowCharacterData = true;
 
 		result->_name = identifier.AsString();
@@ -581,6 +592,9 @@ namespace ColladaConversion
 		result->_targets.push_back(ColladaCompileOp::TargetDesc{Type_RawMat, "RawMat"});
 		result->_targets.push_back(ColladaCompileOp::TargetDesc{Type_Skeleton, "Skeleton"});
 		result->_targets.push_back(ColladaCompileOp::TargetDesc{Type_AnimationSet, "Animations"});
+
+		::Assets::DependencyValidationMarker depVals[] { mainFileDepVal, result->_cfg.GetDependencyValidation() };
+		result->_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 
 		return std::move(result);
 	}
