@@ -637,6 +637,7 @@ namespace RenderCore { namespace Assets
             unsigned _nextId = 1;
             std::vector<std::pair<unsigned, ::Assets::PtrToMarkerPtr<RawMaterial>>> _subFutures;
             std::vector<std::pair<unsigned, std::shared_ptr<RawMaterial>>> _loadedSubMaterials;
+            std::vector<::Assets::DependencyValidation> _depVals;
         };
         auto pendingTree = std::make_shared<PendingRawMaterialTree>();
 
@@ -675,6 +676,7 @@ namespace RenderCore { namespace Assets
                             subMaterials.push_back(std::make_pair(f.first, std::move(subMat)));
                     }
                     pendingTree->_subFutures.clear();
+                    pendingTree->_depVals.insert(pendingTree->_depVals.end(), subDepVals.begin(), subDepVals.end());
 
                     // merge these RawMats into _loadedSubMaterials in the right places
                     // also queue the next level of loads as we go
@@ -709,16 +711,12 @@ namespace RenderCore { namespace Assets
                 // All of the RawMaterials in the tree are loaded; and we can just merge them together
                 // into a final resolved material
                 ResolvedMaterial finalMaterial;
-                assert(!pendingTree->_loadedSubMaterials.empty());
                 for (const auto& m:pendingTree->_loadedSubMaterials)
                     MergeIn(finalMaterial, *m.second);
-                if (pendingTree->_loadedSubMaterials.size() == 1) {
-                    finalMaterial._depVal = pendingTree->_loadedSubMaterials[0].second->GetDependencyValidation();
-                } else {
-                    finalMaterial._depVal = ::Assets::GetDepValSys().Make();
-                    for (const auto& m:pendingTree->_loadedSubMaterials)
-                        finalMaterial._depVal.RegisterDependency(m.second->GetDependencyValidation());
-                }
+
+                ::Assets::DependencyValidationMarker depVals[pendingTree->_depVals.size()];
+                for (unsigned c=0; c<pendingTree->_depVals.size(); c++) depVals[c] = pendingTree->_depVals[c];
+                finalMaterial._depVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals, &depVals[pendingTree->_depVals.size()]));
                 return finalMaterial;
             });
     }

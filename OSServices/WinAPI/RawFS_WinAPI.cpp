@@ -400,7 +400,8 @@ namespace OSServices
 	FileTime	BasicFile::GetFileTime() const never_throws
 	{
 		FILETIME ft;
-		::GetFileTime(_file, nullptr, nullptr, &ft);
+		bool res = ::GetFileTime(_file, nullptr, nullptr, &ft);
+		assert(res); (void)res;
 		return AsUInt64(ft);
 	}
 
