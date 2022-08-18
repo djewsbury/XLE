@@ -389,11 +389,6 @@ namespace RenderCore { namespace Techniques
 			return result;
 		}
 
-		virtual std::vector<::Assets::DependentFileState> GetDependencies() const override
-		{
-			return _byteCode._deps;
-		}
-
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const override
 		{
 			return _depVal;

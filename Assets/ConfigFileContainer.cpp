@@ -25,7 +25,7 @@ namespace Assets
 		Formatter ConfigFileContainer<Formatter>::GetRootFormatter() const
 	{
 		if (!_fileData) return Formatter {};
-		return Formatter(MakeIteratorRange(*_fileData).template Cast<const void*>());
+		return Formatter{MakeIteratorRange(*_fileData).template Cast<const void*>(), _validationCallback};
 	}
 
 	template<typename Formatter>
@@ -34,7 +34,7 @@ namespace Assets
 		if (!_fileData) return Formatter {};
 
 		// search through for the specific element we need (ignoring other elements)
-		Formatter formatter(MakeIteratorRange(*_fileData).template Cast<const void*>());
+		Formatter formatter{MakeIteratorRange(*_fileData).template Cast<const void*>(), _validationCallback};
 
 		auto immediateConfigName = configName;
 		immediateConfigName._end = std::find(immediateConfigName.begin(), configName.end(), ':');
@@ -92,7 +92,7 @@ namespace Assets
 		_fileData = ::Assets::MainFileSystem::TryLoadFileAsBlob_TolerateSharingErrors(initializer, &snapshot);
         _validationCallback = GetDepValSys().Make(DependentFileState{initializer.AsString(), snapshot});
 		if (!_fileData)
-			Throw(Exceptions::ConstructionError(Exceptions::ConstructionError::Reason::MissingFile, _validationCallback, StringMeld<256>() << "Error loading config file container for " << initializer));
+			Throw(Exceptions::ConstructionError(Exceptions::ConstructionError::Reason::MissingFile, _validationCallback, StringMeld<256>() << "Missing or empty file loading config file container for " << initializer));
 	}
 
 	template<typename Formatter>

@@ -298,11 +298,6 @@ namespace ShaderSourceParser
 			return _artifacts;
 		}
 
-		virtual std::vector<::Assets::DependentFileState> GetDependencies() const override
-		{
-			return _depFileStates;
-		}
-
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return ::Assets::GetDepValSys().Make(_depFileStates); }
 
 		ShaderSelectorFilteringCompileOperation(::Assets::InitializerPack& initializer)

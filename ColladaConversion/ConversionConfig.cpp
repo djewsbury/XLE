@@ -15,16 +15,9 @@
 
 namespace ColladaConversion
 {
-    bool ImportCameras = true;
-
-    ImportConfiguration::ImportConfiguration(StringSection<::Assets::ResChar> filename)
+    ImportConfiguration::ImportConfiguration(InputStreamFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules&, const ::Assets::DependencyValidation& depVal)
+    : _depVal(depVal)
     {
-        size_t fileSize = 0;
-        ::Assets::FileSnapshot snapshot;
-        auto sourceFile = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(filename, &fileSize, &snapshot);
-        InputStreamFormatter<utf8> formatter{
-            MakeIteratorRange(sourceFile.get(), PtrAdd(sourceFile.get(), fileSize)),
-            ::Assets::GetDepValSys().Make(::Assets::DependentFileState{filename.AsString(), snapshot})};
         StreamDOM<InputStreamFormatter<utf8>> doc(formatter);
 
         _resourceBindings = BindingConfig(doc.RootElement().Element("Resources"));

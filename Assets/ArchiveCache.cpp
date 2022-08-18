@@ -1011,18 +1011,19 @@ namespace Assets
 	{
 		// we must return null for non-existing or out-of-date entry, to match behaviour in LooseFilesCache
 		ScopedLock(_pendingCommitsLock);
-		auto changeI = LowerBound(_changeIds, id);
-		if (changeI != _changeIds.end() && changeI->first == id) {
-			auto result = std::make_shared<ArchivedFileArtifactCollection>();
-			result->_archiveCache = this;
-			result->_objectId = id;
-			result->_changeId = changeI->second;
-			if (!result->GetDependencyValidation_AlreadyLocked().second)
-				return nullptr;
-			return result;
-		}
 
-		return nullptr;
+		auto result = std::make_shared<ArchivedFileArtifactCollection>();
+		result->_archiveCache = this;
+		result->_objectId = id;
+		result->_changeId = 0;
+
+		auto changeI = LowerBound(_changeIds, id);
+		if (changeI != _changeIds.end() && changeI->first == id)
+			result->_changeId = changeI->second;
+			
+		if (!result->GetDependencyValidation_AlreadyLocked().second)
+			return nullptr;
+		return result;
 	}
 	
 	ArchiveCache::ArchiveCache(

@@ -315,11 +315,13 @@ namespace Assets
 			}
 
 			// Finally update the validation index on all of the entries we reached
+			// (also increase for the specific marker passed in)
 			for (auto marker:recursedMarkers) {
 				assert(marker < _entries.size());
 				assert(_entries[marker]._refCount != 0);
 				++_entries[marker]._validationIndex;
 			}
+			++_entries[marker]._validationIndex;
 
 			++_globalChangeIndex;	// ensure this is done last
 		}

@@ -1429,9 +1429,11 @@ namespace RenderCore { namespace Assets
             case TransformCommand::BindingPoint_3:
                 {
                     uint64_t param = (*i) | (uint64_t(*(i+1)) << 32ull);
-                    stream << indentBuffer << "Binding point for parameter [0x" << std::hex << param << std::dec << "]";
+                    stream << indentBuffer << "Binding point for parameter ";
                     if (parameterToName) 
-                        stream << " (" << parameterToName(param) << ")" << std::endl;
+                        stream << "(" << parameterToName(param) << ")";
+                    else
+                        stream << "[0x" << std::hex << param << std::dec << "]";
                     i+=2;
 
                     // handle defaults

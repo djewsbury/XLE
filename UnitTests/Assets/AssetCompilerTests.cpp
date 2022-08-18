@@ -95,7 +95,7 @@ namespace UnitTests
 			return result;
 		}
 
-		virtual std::vector<::Assets::DependentFileState> GetDependencies() const override
+		std::vector<::Assets::DependentFileState> GetDependencies() const
 		{
 			// We can declare a non-existant file as one of our dependencies. This is like saying that 
 			// the compile would be invalidated if this file appeared at a later time

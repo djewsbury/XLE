@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "IntermediateCompilers.h"
 #include "AssetsCore.h"
 #include "../Utility/IteratorUtils.h"
 #include <vector>
@@ -33,12 +34,26 @@ namespace Assets
 		};
 		virtual std::vector<TargetDesc> GetTargets() const = 0;
 		virtual std::vector<SerializedArtifact> SerializeTarget(unsigned idx) = 0;
-		virtual std::vector<DependentFileState> GetDependencies() const = 0;
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 
 		virtual ~ICompileOperation();
 	};
 
 	using CreateCompileOperationFn = std::shared_ptr<ICompileOperation>(const InitializerPack&);
+
+	struct SimpleCompilerResult
+	{
+		std::vector<::Assets::ICompileOperation::SerializedArtifact> _artifacts;
+		uint64_t _targetCode;
+		::Assets::DependencyValidation _depVal;
+	};
+	using SimpleCompilerSig = ::Assets::SimpleCompilerResult(const ::Assets::InitializerPack&);
+
+	CompilerRegistration RegisterSimpleCompiler(
+		IIntermediateCompilers& compilers,
+		const std::string& name,
+		const std::string& shortName,
+		std::function<SimpleCompilerSig>&& fn,
+		IIntermediateCompilers::ArchiveNameDelegate&& archiveNameDelegate = {});
 }
 

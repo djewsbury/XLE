@@ -24,6 +24,7 @@
 #include "../Assets/IFileSystem.h"
 #include "../Assets/InitializerPack.h"
 #include "../Assets/IntermediatesStore.h"
+#include "../Assets/AssetTraits.h"
 
 #include "../OSServices/Log.h"
 #include "../Utility/Streams/StreamTypes.h"
@@ -61,7 +62,6 @@ namespace ColladaConversion
 
 		std::vector<TargetDesc> GetTargets() const override;
 		std::vector<SerializedArtifact> SerializeTarget(unsigned idx) override;
-		std::vector<::Assets::DependentFileState> GetDependencies() const override;
 		::Assets::DependencyValidation GetDependencyValidation() const override;
 
 		ColladaCompileOp();
@@ -554,11 +554,6 @@ namespace ColladaConversion
 		} CATCH_END
 	}
 
-	std::vector<::Assets::DependentFileState> ColladaCompileOp::GetDependencies() const
-	{
-		return {};
-	}
-
 	::Assets::DependencyValidation ColladaCompileOp::GetDependencyValidation() const
 	{
 		return _depVal;
@@ -574,7 +569,7 @@ namespace ColladaConversion
 		auto split = MakeFileNameSplitter(identifier);
 		auto filePath = split.AllExceptParameters().AsString();
 
-		result->_cfg = ImportConfiguration(s_cfgName);
+		result->_cfg = ::Assets::AutoConstructAsset<ImportConfiguration>(s_cfgName);
 
 		auto mainFileDepVal = ::Assets::GetDepValSys().Make(filePath);
 		result->_fileData = ::Assets::MainFileSystem::OpenMemoryMappedFile(filePath, 0, "r", OSServices::FileShareMode::Read);

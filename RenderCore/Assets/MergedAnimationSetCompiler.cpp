@@ -85,7 +85,6 @@ namespace RenderCore { namespace Assets
 			assert(idx == 0);
 			return _serializedArtifacts;
 		}
-		std::vector<::Assets::DependentFileState> GetDependencies() const override { return {}; }
 		::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
 
 		MergedAnimSetCompileOperation(const ::Assets::InitializerPack& initializers)

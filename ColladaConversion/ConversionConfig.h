@@ -11,7 +11,7 @@
 #include <string>
 #include <memory>
 
-namespace Assets { class DependencyValidation; }
+namespace Assets { class DependencyValidation; class DirectorySearchRules; }
 
 namespace Utility
 {
@@ -46,7 +46,7 @@ namespace ColladaConversion
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
-		ImportConfiguration(StringSection<::Assets::ResChar> filename);
+		ImportConfiguration(InputStreamFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules&, const ::Assets::DependencyValidation&);
 		ImportConfiguration();
 		~ImportConfiguration();
 	private:

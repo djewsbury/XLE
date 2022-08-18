@@ -214,7 +214,6 @@ namespace Assets
 			if (!model)
 				Throw(std::runtime_error("Compiler library returned null to compile request on " + initializers.ArchivableName()));
 
-			auto oldDependencies = model->GetDependencies();
 			std::vector<std::pair<CompileRequestCode, std::shared_ptr<IArtifactCollection>>> finalCollections;
 
 			std::vector<DependencyValidation> compilerDepVals;
@@ -739,6 +738,52 @@ namespace Assets
 
 	ICompileOperation::~ICompileOperation() {}
 	ICompilerDesc::~ICompilerDesc() {}
+
+	class SimpleCompilerAdapter : public ::Assets::ICompileOperation
+	{
+	public:
+		std::vector<TargetDesc> GetTargets() const override
+		{
+			if (_serializedArtifacts.empty()) return {};
+			return {
+				TargetDesc { _targetCode, _serializedArtifacts[0]._name.c_str() }
+			};
+		}
+		std::vector<SerializedArtifact>	SerializeTarget(unsigned idx) override
+		{
+			assert(idx == 0);
+			return _serializedArtifacts;
+		}
+		::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
+
+		SimpleCompilerAdapter(SimpleCompilerResult&& compilerResult)
+		: _serializedArtifacts(std::move(compilerResult._artifacts))
+		, _depVal(std::move(compilerResult._depVal))
+		, _targetCode(compilerResult._targetCode)
+		{}
+
+	private:
+		std::vector<SerializedArtifact> _serializedArtifacts;
+		::Assets::DependencyValidation _depVal;
+		::Assets::ArtifactTargetCode _targetCode;
+	};
+
+	CompilerRegistration RegisterSimpleCompiler(
+		IIntermediateCompilers& compilers,
+		const std::string& name,
+		const std::string& shortName,
+		std::function<SimpleCompilerSig>&& fn,
+		IIntermediateCompilers::ArchiveNameDelegate&& archiveNameDelegate)
+	{
+		return CompilerRegistration{
+			compilers,
+			name, shortName,
+			ConsoleRig::GetLibVersionDesc(),
+			{},
+			[fn=std::move(fn)](const auto& initializers) {
+				return std::make_shared<SimpleCompilerAdapter>(fn(initializers));
+			}};
+	}
 
 }
 
