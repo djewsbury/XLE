@@ -122,6 +122,7 @@ namespace Assets
 		template<typename CharType>
 			IFileSystem::IOReason TryMonitor(FileSnapshot& snapshot, StringSection<CharType> filename, const std::shared_ptr<IFileMonitor>& evnt)
 		{
+			snapshot = { FileSnapshot::State::DoesNotExist, 0 };
 			MountingTree::CandidateObject candidateObject;
 			auto& ptrs = GetPtrs();
 			auto lookup = ptrs.s_mainMountingTree->Lookup(filename);
@@ -132,6 +133,8 @@ namespace Assets
 				return IFileSystem::IOReason::FileNotFound;
 			}
 
+			std::optional<FileSnapshot> firstExistingSnapshot;
+			bool gotSuccessfulMonitor = false;
 			for (;;) {
 				auto r = lookup.TryGetNext(candidateObject);
 				if (r == LookupResult::Invalidated) {
@@ -147,11 +150,20 @@ namespace Assets
 				// "success" even if the file doesn't exist. So if we stop early, on the first
 				// filesystem will be monitored
 				assert(candidateObject._fileSystem);
-				auto ioRes = candidateObject._fileSystem->TryMonitor(snapshot, candidateObject._marker, evnt);
+				FileSnapshot thisSnapshot;
+				auto ioRes = candidateObject._fileSystem->TryMonitor(thisSnapshot, candidateObject._marker, evnt);
 				(void)ioRes;
+				if (!firstExistingSnapshot && thisSnapshot._state == FileSnapshot::State::Normal)
+					firstExistingSnapshot = thisSnapshot;
+				gotSuccessfulMonitor |= ioRes == IFileSystem::IOReason::Success;
 			}
 
-			return IFileSystem::IOReason::FileNotFound;
+			if (firstExistingSnapshot) {
+				snapshot = firstExistingSnapshot.value();
+				return gotSuccessfulMonitor ? IFileSystem::IOReason::Success : IFileSystem::IOReason::Invalid;
+			} else {
+				return gotSuccessfulMonitor ? IFileSystem::IOReason::Success : IFileSystem::IOReason::FileNotFound;
+			}
 		}
 
 		template<typename CharType>
