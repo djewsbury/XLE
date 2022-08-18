@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "../../Assets/DepVal.h"
 #include "../../Utility/StringFormat.h"
 #include <memory>
 #include <vector>
@@ -14,14 +15,13 @@ namespace RenderCore { class TextureDesc; }
 
 namespace RenderCore { namespace Techniques
 {
-    struct ProcessedTexture
-    {
-    public:
-        std::shared_ptr<BufferUploads::IAsyncDataSource> _newDataSource;
-        std::vector<::Assets::DependentFileState> _depFileStates;
-    };
-    enum class EquRectFilterMode { ToCubeMap, ToGlossySpecular, ProjectToSphericalHarmonic };
-    ProcessedTexture EquRectFilter(BufferUploads::IAsyncDataSource& dataSrc, const TextureDesc& targetDesc, EquRectFilterMode filter = EquRectFilterMode::ToCubeMap);
+	enum class EquRectFilterMode { ToCubeMap, ToGlossySpecular, ProjectToSphericalHarmonic };
+	std::shared_ptr<BufferUploads::IAsyncDataSource> EquRectFilter(
+		BufferUploads::IAsyncDataSource& dataSrc,
+		const TextureDesc& targetDesc,
+		EquRectFilterMode filter = EquRectFilterMode::ToCubeMap);
 
-    ProcessedTexture GenerateFromComputeShader(StringSection<> shader, const TextureDesc& targetDesc);
+	std::shared_ptr<BufferUploads::IAsyncDataSource> GenerateFromComputeShader(
+		StringSection<> shader,
+		const TextureDesc& targetDesc);
 }}

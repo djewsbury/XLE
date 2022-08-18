@@ -219,10 +219,6 @@ namespace RenderCore { namespace Assets
 	public:
 		std::vector<TargetDesc> GetTargets() const
 		{
-			if (_compilationException)
-				return { 
-					TargetDesc { TextureCompilerProcessType, "compilation-exception" }
-				};
 			if (_serializedArtifacts.empty()) return {};
 			return {
 				TargetDesc { TextureCompilerProcessType, _serializedArtifacts[0]._name.c_str() }
@@ -231,21 +227,23 @@ namespace RenderCore { namespace Assets
 		std::vector<SerializedArtifact>	SerializeTarget(unsigned idx)
 		{
 			assert(idx == 0);
-			if (_compilationException)
-				std::rethrow_exception(_compilationException);
 			return _serializedArtifacts;
 		}
-		std::vector<::Assets::DependentFileState> GetDependencies() const { return _dependencies; }
-		::Assets::DependencyValidation GetDependencyValidation() const { return ::Assets::GetDepValSys().Make(_dependencies); }
+		::Assets::DependencyValidation GetDependencyValidation() const
+		{
+			std::vector<::Assets::DependencyValidationMarker> markers;
+			markers.insert(markers.end(), _dependencies.begin(), _dependencies.end());
+			return ::Assets::GetDepValSys().MakeOrReuse(markers);
+		}
 
 		void Initialize(TextureCompilationRequest request, std::string srcFN)
 		{
 			std::shared_ptr<BufferUploads::IAsyncDataSource> srcPkt;
 			if (request._operation != TextureCompilationRequest::Operation::ComputeShader) {
 				if (request._srcFile.empty())
-					Throw(std::runtime_error("Expecting 'SourceFile' fields in texture compiler file: " + srcFN));
+					Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Expecting 'SourceFile' fields in texture compiler file: " + srcFN));
 				srcPkt = Techniques::Services::GetInstance().CreateTextureDataSource(request._srcFile, 0);
-				_dependencies.push_back(::Assets::GetDepValSys().GetDependentFileState(request._srcFile));
+				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			}
 
 			if (request._operation == TextureCompilationRequest::Operation::EquRectToCubeMap) {
@@ -258,9 +256,8 @@ namespace RenderCore { namespace Assets
 				targetDesc._arrayCount = 0u;
 				targetDesc._mipCount = (request._mipMapFilter == TextureCompilationRequest::MipMapFilter::FromSource) ? IntegerLog2(targetDesc._width)+1 : 1;
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-				auto processed = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ToCubeMap);
-				srcPkt = processed._newDataSource;
-				_dependencies.insert(_dependencies.end(), processed._depFileStates.begin(), processed._depFileStates.end());
+				srcPkt = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ToCubeMap);
+				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::EquiRectFilterGlossySpecular) {
 				auto srcDst = srcPkt->GetDesc();
 				srcDst.wait();
@@ -272,14 +269,12 @@ namespace RenderCore { namespace Assets
 				targetDesc._mipCount = IntegerLog2(targetDesc._width)+1;
 				targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-				auto processed = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ToGlossySpecular);
-				srcPkt = processed._newDataSource;
-				_dependencies.insert(_dependencies.end(), processed._depFileStates.begin(), processed._depFileStates.end());
+				srcPkt = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ToGlossySpecular);
+				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::ProjectToSphericalHarmonic) {
 				auto targetDesc = TextureDesc::Plain2D(request._coefficientCount, 1, Format::R32G32B32A32_FLOAT);
-				auto processed = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ProjectToSphericalHarmonic);
-				srcPkt = processed._newDataSource;
-				_dependencies.insert(_dependencies.end(), processed._depFileStates.begin(), processed._depFileStates.end());
+				srcPkt = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ProjectToSphericalHarmonic);
+				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::ComputeShader) {
 				auto targetDesc = TextureDesc::Plain2D(
 					request._width,
@@ -287,10 +282,9 @@ namespace RenderCore { namespace Assets
 					Format::R32G32B32A32_FLOAT); // use full float precision for the pre-compression format
 				auto shader = request._shader;
 				if (shader.empty())
-					Throw(std::runtime_error("Expecting 'Shader' field in texture compiler file: " + srcFN));
-				auto processed = Techniques::GenerateFromComputeShader(shader, targetDesc);
-				srcPkt = processed._newDataSource;
-				_dependencies.insert(_dependencies.end(), processed._depFileStates.begin(), processed._depFileStates.end());
+					Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Expecting 'Shader' field in texture compiler file: " + srcFN));
+				srcPkt = Techniques::GenerateFromComputeShader(shader, targetDesc);
+				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			}
 			CompressonatorTexture input{*srcPkt};
 
@@ -349,46 +343,37 @@ namespace RenderCore { namespace Assets
 
 		TextureCompileOperation(std::string srcFN)
 		{
-			TRY
-			{
-				// load the given file and perform texture processing operations
-				size_t inputBlockSize = 0;
-				::Assets::FileSnapshot snapshot;
-				auto dataHolder = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(srcFN, &inputBlockSize, &snapshot);
-				_dependencies.push_back(::Assets::DependentFileState{srcFN, snapshot});
-				if (!inputBlockSize)
-					Throw(std::runtime_error("Empty or missing file while loading: " + srcFN));
-				auto inputData = MakeStringSection((const char*)dataHolder.get(), (const char*)PtrAdd(dataHolder.get(), inputBlockSize));
-				InputStreamFormatter<> inputFormatter{inputData};
-				StreamDOM<InputStreamFormatter<>> dom(inputFormatter);
-				if (dom.RootElement().children().empty())
-					Throw(std::runtime_error("Missing compilation operation in file: " + srcFN));
+			// load the given file and perform texture processing operations
+			size_t inputBlockSize = 0;
+			::Assets::FileSnapshot snapshot;
+			auto dataHolder = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(srcFN, &inputBlockSize, &snapshot);
+			_cfgFileDepVal = ::Assets::GetDepValSys().Make(::Assets::DependentFileState{srcFN, snapshot});
+			_dependencies.push_back(_cfgFileDepVal);
+			if (!inputBlockSize)
+				Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Empty or missing file while loading: " + srcFN));
+			auto inputData = MakeStringSection((const char*)dataHolder.get(), (const char*)PtrAdd(dataHolder.get(), inputBlockSize));
+			InputStreamFormatter<> inputFormatter{inputData};
+			StreamDOM<InputStreamFormatter<>> dom(inputFormatter);
+			if (dom.RootElement().children().empty())
+				Throw(std::runtime_error("Missing compilation operation in file: " + srcFN));
 
-				auto operationElement = *dom.RootElement().children().begin();
-				auto request = MakeTextureCompilationRequest(operationElement, srcFN);
+			auto operationElement = *dom.RootElement().children().begin();
+			auto request = MakeTextureCompilationRequest(operationElement, srcFN);
 
-				Initialize(request, srcFN);
-			} CATCH(...) {
-				_compilationException = std::current_exception();
-			} CATCH_END
+			Initialize(request, srcFN);
 		}
 
 		TextureCompileOperation(TextureCompilationRequest request)
 		{
-			TRY
-			{
-				std::stringstream str;
-				str << request;
-				Initialize(request, str.str());
-			} CATCH(...) {
-				_compilationException = std::current_exception();
-			} CATCH_END
+			std::stringstream str;
+			str << request;
+			Initialize(request, str.str());
 		}
 
 	private:
-		std::vector<::Assets::DependentFileState> _dependencies;
+		std::vector<::Assets::DependencyValidation> _dependencies;
+		::Assets::DependencyValidation _cfgFileDepVal;
 		std::vector<SerializedArtifact> _serializedArtifacts;
-		std::exception_ptr _compilationException;
 	};
 
 	::Assets::CompilerRegistration RegisterTextureCompiler(

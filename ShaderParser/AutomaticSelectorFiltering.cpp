@@ -280,102 +280,75 @@ namespace ShaderSourceParser
 		return str;
 	}
 
-	class ShaderSelectorFilteringCompileOperation : public ::Assets::ICompileOperation
+	static ::Assets::SimpleCompilerResult ShaderSelectorFilteringCompileOperation(const ::Assets::InitializerPack& initializer)
 	{
-	public:
-		virtual std::vector<TargetDesc>			GetTargets() const override
-		{
-			return {
-				TargetDesc { SelectorFilteringRules::CompileProcessType, "filtering-rules" }
-			};
+		auto fn = initializer.GetInitializer<std::string>(0);
+
+		::Assets::PreprocessorIncludeHandler handler;
+		auto analysis = GeneratePreprocessorAnalysisFromFile(fn, &handler);
+
+		SelectorFilteringRules filteringRules;
+		filteringRules._tokenDictionary = analysis._tokenDictionary;
+		filteringRules._relevanceTable = analysis._relevanceTable;
+
+		for (auto& s:filteringRules._relevanceTable)
+			filteringRules._tokenDictionary.Simplify(s.second);
+
+		for (const auto&s:analysis._sideEffects._substitutions) {
+			if (s._type != Utility::Internal::PreprocessorSubstitutions::Type::DefaultDefine
+				|| !IsTrue(s._condition))
+				continue;
+
+			auto trans = filteringRules._tokenDictionary.Translate(analysis._sideEffects._dictionary, s._substitution);
+			filteringRules._tokenDictionary.Simplify(trans);
+			filteringRules._defaultSets.insert(std::make_pair(
+				filteringRules._tokenDictionary.GetToken(Utility::Internal::TokenDictionary::TokenType::Variable, s._symbol),
+				trans));
 		}
 
-		virtual std::vector<SerializedArtifact>	SerializeTarget(unsigned idx) override
+		MemoryOutputStream<> memStream;
+		OutputStreamFormatter fmttr(memStream);
+		fmttr << filteringRules;
+
+		std::vector<::Assets::ICompileOperation::SerializedArtifact> artifacts;
 		{
-			assert(idx == 0);
-			if (_compilationException)
-				std::rethrow_exception(_compilationException);
-			return _artifacts;
+			::Assets::ICompileOperation::SerializedArtifact artifact;
+			artifact._chunkTypeCode = SelectorFilteringRules::CompileProcessType;
+			artifact._name = "filtering-rules";
+			artifact._version = 1;
+			artifact._data = ::Assets::AsBlob(memStream.AsString());
+			artifacts.push_back(std::move(artifact));
 		}
 
-		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return ::Assets::GetDepValSys().Make(_depFileStates); }
-
-		ShaderSelectorFilteringCompileOperation(::Assets::InitializerPack& initializer)
 		{
-			auto fn = initializer.GetInitializer<std::string>(0);
-
-			::Assets::PreprocessorIncludeHandler handler;
-			TRY {
-				auto analysis = GeneratePreprocessorAnalysisFromFile(fn, &handler);
-
-				SelectorFilteringRules filteringRules;
-				filteringRules._tokenDictionary = analysis._tokenDictionary;
-				filteringRules._relevanceTable = analysis._relevanceTable;
-
-				for (auto& s:filteringRules._relevanceTable)
-					filteringRules._tokenDictionary.Simplify(s.second);
-
-				for (const auto&s:analysis._sideEffects._substitutions) {
-					if (s._type != Utility::Internal::PreprocessorSubstitutions::Type::DefaultDefine
-						|| !IsTrue(s._condition))
-						continue;
-
-					auto trans = filteringRules._tokenDictionary.Translate(analysis._sideEffects._dictionary, s._substitution);
-					filteringRules._tokenDictionary.Simplify(trans);
-					filteringRules._defaultSets.insert(std::make_pair(
-						filteringRules._tokenDictionary.GetToken(Utility::Internal::TokenDictionary::TokenType::Variable, s._symbol),
-						trans));
-				}
-
-				MemoryOutputStream<> memStream;
-				OutputStreamFormatter fmttr(memStream);
-				fmttr << filteringRules;
-
-				{
-					SerializedArtifact artifact;
-					artifact._chunkTypeCode = SelectorFilteringRules::CompileProcessType;
-					artifact._name = "filtering-rules";
-					artifact._version = 1;
-					artifact._data = ::Assets::AsBlob(memStream.AsString());
-					_artifacts.push_back(std::move(artifact));
-				}
-
-				{
-					SerializedArtifact artifact;
-					artifact._chunkTypeCode = ChunkType_Metrics;
-					artifact._name = "metrics";
-					artifact._version = 1;
-					std::stringstream str;
-					str << filteringRules;
-					artifact._data = ::Assets::AsBlob(str.str());
-					_artifacts.push_back(std::move(artifact));
-				}
-
-				_depFileStates.insert(_depFileStates.begin(), handler._depFileStates.begin(), handler._depFileStates.end());
-			} CATCH(...) {
-				_depFileStates.clear();
-				_depFileStates.insert(_depFileStates.begin(), handler._depFileStates.begin(), handler._depFileStates.end());
-				_compilationException = std::current_exception();
-			} CATCH_END
+			::Assets::ICompileOperation::SerializedArtifact artifact;
+			artifact._chunkTypeCode = ChunkType_Metrics;
+			artifact._name = "metrics";
+			artifact._version = 1;
+			std::stringstream str;
+			str << filteringRules;
+			artifact._data = ::Assets::AsBlob(str.str());
+			artifacts.push_back(std::move(artifact));
 		}
 
-		std::vector<::Assets::DependentFileState> _depFileStates;
-		std::vector<SerializedArtifact> _artifacts;
-		std::exception_ptr _compilationException;
-	};
+		std::vector<::Assets::DependentFileState> depFileStates;
+		depFileStates.insert(depFileStates.begin(), handler._depFileStates.begin(), handler._depFileStates.end());
+
+		return {
+			std::move(artifacts),
+			SelectorFilteringRules::CompileProcessType,
+			::Assets::GetDepValSys().Make(depFileStates)
+		};
+	}
 
 	::Assets::CompilerRegistration RegisterShaderSelectorFilteringCompiler(
 		::Assets::IIntermediateCompilers& intermediateCompilers)
 	{
-		::Assets::CompilerRegistration result{
+		auto result = ::Assets::RegisterSimpleCompiler(
 			intermediateCompilers,
 			"shader-selector-filtering-compiler",
 			"shader-selector-filtering-compiler",
-			ConsoleRig::GetLibVersionDesc(),
-			{},
-			[](auto initializers) {
-				return std::make_shared<ShaderSelectorFilteringCompileOperation>(initializers);
-			},
+			ShaderSelectorFilteringCompileOperation,
 			[](::Assets::ArtifactTargetCode targetCode, const ::Assets::InitializerPack& initializers) {
 				assert(targetCode == SelectorFilteringRules::CompileProcessType);
 				::Assets::IIntermediateCompilers::SplitArchiveName result;
@@ -385,7 +358,7 @@ namespace ShaderSourceParser
 				result._archive = "filtering";
 				result._descriptiveName = fn;
 				return result;
-			}};
+			});
 
 		uint64_t outputAssetTypes[] = { SelectorFilteringRules::CompileProcessType };
 		intermediateCompilers.AssociateRequest(

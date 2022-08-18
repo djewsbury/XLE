@@ -95,18 +95,14 @@ namespace UnitTests
 			return result;
 		}
 
-		std::vector<::Assets::DependentFileState> GetDependencies() const
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const override
 		{
 			// We can declare a non-existant file as one of our dependencies. This is like saying that 
 			// the compile would be invalidated if this file appeared at a later time
-			return {
+			std::vector<::Assets::DependentFileState> dependencies {
 				::Assets::DependentFileState{MakeStringSection("fake-file-state"), 0, ::Assets::FileSnapshot::State::DoesNotExist}
 			};
-		}
-
-		virtual ::Assets::DependencyValidation GetDependencyValidation() const override
-		{
-			return ::Assets::GetDepValSys().Make(GetDependencies());
+			return ::Assets::GetDepValSys().Make(dependencies);
 		}
 
 		TestCompileOperation(::Assets::InitializerPack& initializer) : _initializer(initializer.GetInitializer<std::string>(0)) 

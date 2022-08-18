@@ -70,86 +70,59 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
-	class MergedAnimSetCompileOperation : public ::Assets::ICompileOperation
+	static ::Assets::SimpleCompilerResult MergedAnimSetCompileOperation(const ::Assets::InitializerPack& initializers)
 	{
-	public:
-		std::vector<TargetDesc> GetTargets() const override
-		{
-			if (_serializedArtifacts.empty()) return {};
-			return {
-				TargetDesc { Type_AnimationSet, _serializedArtifacts[0]._name.c_str() }
-			};
-		}
-		std::vector<SerializedArtifact>	SerializeTarget(unsigned idx) override
-		{
-			assert(idx == 0);
-			return _serializedArtifacts;
-		}
-		::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
+		auto baseFolderSrc = initializers.GetInitializer<std::string>(0);
+		auto splitPath = MakeSplitPath(baseFolderSrc);
+		if (splitPath.GetSectionCount() < 2 || !XlEqString(splitPath.GetSection(splitPath.GetSectionCount()-1), "*"))
+			Throw(std::runtime_error("Expecting merged anim set request to end with '/*'"));
+		auto baseFolder = MakeStringSection((const char*)AsPointer(baseFolderSrc.begin()), splitPath.GetSection(splitPath.GetSectionCount()-2).end()).AsString();
 
-		MergedAnimSetCompileOperation(const ::Assets::InitializerPack& initializers)
-		{
-			auto baseFolderSrc = initializers.GetInitializer<std::string>(0);
-			auto splitPath = MakeSplitPath(baseFolderSrc);
-			if (splitPath.GetSectionCount() < 2 || !XlEqString(splitPath.GetSection(splitPath.GetSectionCount()-1), "*"))
-				Throw(std::runtime_error("Expecting merged anim set request to end with '/*'"));
-			auto baseFolder = MakeStringSection((const char*)AsPointer(baseFolderSrc.begin()), splitPath.GetSection(splitPath.GetSectionCount()-2).end()).AsString();
-
-			auto walk = ::Assets::MainFileSystem::BeginWalk(baseFolder);
-			std::vector<std::string> files;
-			std::regex fileMatcher{R"(.*\.(([hH][kK][xX])|([dD][aA][eE])))"};
-			for (auto w=walk.begin_files(); w!=walk.end_files(); ++w) {
-				auto f = w.Desc()._mountedName;
-				if (std::regex_match(f.begin(), f.end(), fileMatcher))
-					files.push_back(f);
-			}
-
-			std::stringstream log;
-			std::vector<::Assets::DependencyValidationMarker> depVals;
-
-			// merge all of the source files into a single output animation set
-			RenderCore::Assets::GeoProc::NascentAnimationSet animSet;
-			for (const auto& f:files) {
-				TRY {
-					auto part = ::Assets::ActualizeAssetPtr<AnimationSetScaffold>(f);
-					depVals.push_back(part->GetDependencyValidation());
-					MergeInAsManyAnimations(animSet, part->ImmutableData(), MakeFileNameSplitter(f).File().AsString());
-				} CATCH(const ::Assets::Exceptions::ExceptionWithDepVal& e) {
-					depVals.push_back(e.GetDependencyValidation());
-					log << "Failed to include animation (" << MakeFileNameSplitter(f).File() << ") in animation set because of exception: (" << e.what() << ")" << std::endl;
-				} CATCH(const std::exception& e) {
-					log << "Failed to include animation (" << MakeFileNameSplitter(f).File() << ") in animation set because of exception: (" << e.what() << ")" << std::endl;
-				} CATCH_END
-			}
-
-			std::string finalName = splitPath.GetSection(splitPath.GetSectionCount()-2).AsString();
-			_serializedArtifacts = GeoProc::SerializeAnimationsToChunks(finalName, animSet);
-
-			auto logStr = log.str();
-			if (!logStr.empty())
-				_serializedArtifacts.push_back({ ChunkType_Log, 0, "log", ::Assets::AsBlob(std::move(logStr)) });
-
-			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
+		auto walk = ::Assets::MainFileSystem::BeginWalk(baseFolder);
+		std::vector<std::string> files;
+		std::regex fileMatcher{R"(.*\.(([hH][kK][xX])|([dD][aA][eE])))"};
+		for (auto w=walk.begin_files(); w!=walk.end_files(); ++w) {
+			auto f = w.Desc()._mountedName;
+			if (std::regex_match(f.begin(), f.end(), fileMatcher))
+				files.push_back(f);
 		}
 
-	private:
-		std::vector<SerializedArtifact> _serializedArtifacts;
-		::Assets::DependencyValidation _depVal;
-	};
+		std::stringstream log;
+		std::vector<::Assets::DependencyValidationMarker> depVals;
+
+		// merge all of the source files into a single output animation set
+		RenderCore::Assets::GeoProc::NascentAnimationSet animSet;
+		for (const auto& f:files) {
+			TRY {
+				auto part = ::Assets::ActualizeAssetPtr<AnimationSetScaffold>(f);
+				depVals.push_back(part->GetDependencyValidation());
+				MergeInAsManyAnimations(animSet, part->ImmutableData(), MakeFileNameSplitter(f).File().AsString());
+			} CATCH(const ::Assets::Exceptions::ExceptionWithDepVal& e) {
+				depVals.push_back(e.GetDependencyValidation());
+				log << "Failed to include animation (" << MakeFileNameSplitter(f).File() << ") in animation set because of exception: (" << e.what() << ")" << std::endl;
+			} CATCH(const std::exception& e) {
+				log << "Failed to include animation (" << MakeFileNameSplitter(f).File() << ") in animation set because of exception: (" << e.what() << ")" << std::endl;
+			} CATCH_END
+		}
+
+		std::string finalName = splitPath.GetSection(splitPath.GetSectionCount()-2).AsString();
+		auto serializedArtifacts = GeoProc::SerializeAnimationsToChunks(finalName, animSet);
+
+		auto logStr = log.str();
+		if (!logStr.empty())
+			serializedArtifacts.push_back({ ChunkType_Log, 0, "log", ::Assets::AsBlob(std::move(logStr)) });
+
+		return {
+			std::move(serializedArtifacts),
+			Type_AnimationSet,
+			::Assets::GetDepValSys().MakeOrReuse(depVals)
+		};
+	}
 
 	::Assets::CompilerRegistration RegisterMergedAnimationSetCompiler(
 		::Assets::IIntermediateCompilers& intermediateCompilers)
 	{
-		::Assets::CompilerRegistration result{
-			intermediateCompilers,
-			"merged-animset-compiler",
-			"merged-animset-compiler",
-			ConsoleRig::GetLibVersionDesc(),
-			{},
-			[](auto initializers) {
-				return std::make_shared<MergedAnimSetCompileOperation>(initializers);
-			}};
-
+		auto result = ::Assets::RegisterSimpleCompiler(intermediateCompilers, "merged-animset-compiler", "merged-animset-compiler", MergedAnimSetCompileOperation);
 		uint64_t outputAssetTypes[] = { Type_AnimationSet };
 		intermediateCompilers.AssociateRequest(
 			result.RegistrationId(),

@@ -13,7 +13,7 @@
 #include <iosfwd>
 
 namespace Utility { class OutputStreamFormatter; }
-namespace Assets { class ICompileOperation; class DirectorySearchRules; }
+namespace Assets { class DirectorySearchRules; }
 
 namespace ShaderSourceParser
 {

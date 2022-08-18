@@ -64,7 +64,7 @@ namespace RenderCore { namespace Assets
 		return { std::move(result), strmBuffer.size() };
 	}
 	
-	::Assets::SimpleCompilerResult MaterialCompileOperation(const ::Assets::InitializerPack& initializers)
+	static ::Assets::SimpleCompilerResult MaterialCompileOperation(const ::Assets::InitializerPack& initializers)
 	{
 		std::string sourceMaterial, sourceModel;
 		sourceMaterial = initializers.GetInitializer<std::string>(0);
@@ -249,12 +249,7 @@ namespace RenderCore { namespace Assets
 	::Assets::CompilerRegistration RegisterMaterialCompiler(
 		::Assets::IIntermediateCompilers& intermediateCompilers)
 	{
-		auto result = ::Assets::RegisterSimpleCompiler(
-			intermediateCompilers,
-			"material-scaffold-compiler",
-			"material-scaffold-compiler",
-			MaterialCompileOperation);
-
+		auto result = ::Assets::RegisterSimpleCompiler(intermediateCompilers, "material-scaffold-compiler", "material-scaffold-compiler", MaterialCompileOperation);
 		uint64_t outputAssetTypes[] = { MaterialScaffold::CompileProcessType };
 		intermediateCompilers.AssociateRequest(
 			result.RegistrationId(),

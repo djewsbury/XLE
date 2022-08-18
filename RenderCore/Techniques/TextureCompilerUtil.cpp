@@ -64,7 +64,7 @@ namespace RenderCore { namespace Techniques
 	static std::string s_equRectFilterName { "texture-compiler (EquRectFilter)" };
 	static std::string s_fromComputeShaderName { "texture-compiler (GenerateFromComputeShader)" };
 
-	ProcessedTexture EquRectFilter(BufferUploads::IAsyncDataSource& dataSrc, const TextureDesc& targetDesc, EquRectFilterMode filter)
+	std::shared_ptr<BufferUploads::IAsyncDataSource> EquRectFilter(BufferUploads::IAsyncDataSource& dataSrc, const TextureDesc& targetDesc, EquRectFilterMode filter)
 	{
 		// We need to create a texture from the data source and run a shader process on it to generate
 		// an output cubemap. We'll do this on the GPU and copy the results back into a new IAsyncDataSource
@@ -72,8 +72,6 @@ namespace RenderCore { namespace Techniques
 			assert(ActualArrayLayerCount(targetDesc) == 6 && targetDesc._dimensionality == TextureDesc::Dimensionality::CubeMap);
 		auto threadContext = GetThreadContext();
 		
-		ProcessedTexture result;
-
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, Hash64("Input"));
 		const auto pushConstantsBinding = Hash64("FilterPassParams");
@@ -87,9 +85,6 @@ namespace RenderCore { namespace Techniques
 				{},
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
-			// todo -- we really want to extract the full set of dependencies from the depVal
-			result._depFileStates.push_back(::Assets::GetDepValSys().GetDependentFileState(EQUIRECTANGULAR_TO_CUBE_HLSL));
-			result._depFileStates.push_back(::Assets::GetDepValSys().GetDependentFileState(TOOLSHELPER_OPERATORS_PIPELINE));
 		} else if (filter == EquRectFilterMode::ToGlossySpecular) {
 			usi.BindResourceView(1, Hash64("OutputArray"));
 			computeOpFuture = CreateComputeOperator(
@@ -99,8 +94,6 @@ namespace RenderCore { namespace Techniques
 				{},
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
-			result._depFileStates.push_back(::Assets::GetDepValSys().GetDependentFileState(IBL_PREFILTER_HLSL));
-			result._depFileStates.push_back(::Assets::GetDepValSys().GetDependentFileState(TOOLSHELPER_OPERATORS_PIPELINE));
 		} else {
 			assert(filter == EquRectFilterMode::ProjectToSphericalHarmonic);
 			usi.BindResourceView(1, Hash64("Output"));
@@ -110,8 +103,6 @@ namespace RenderCore { namespace Techniques
 				{},
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
-			result._depFileStates.push_back(::Assets::GetDepValSys().GetDependentFileState(IBL_PREFILTER_HLSL));
-			result._depFileStates.push_back(::Assets::GetDepValSys().GetDependentFileState(TOOLSHELPER_OPERATORS_PIPELINE));
 		}
 
 		auto inputRes = CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
@@ -204,15 +195,13 @@ namespace RenderCore { namespace Techniques
 		auto depVal = ::Assets::GetDepValSys().Make();
 		depVal.RegisterDependency(computeOp->GetDependencyValidation());
 		depVal.RegisterDependency(dataSrc.GetDependencyValidation());
-		result._newDataSource = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
-		return result;
+		return std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
 	}
 
-	ProcessedTexture GenerateFromComputeShader(StringSection<> shader, const TextureDesc& targetDesc)
+	std::shared_ptr<BufferUploads::IAsyncDataSource> GenerateFromComputeShader(StringSection<> shader, const TextureDesc& targetDesc)
 	{
 		auto threadContext = GetThreadContext();
 		
-		ProcessedTexture result;
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, Hash64("Output"));
 		usi.BindImmediateData(0, Hash64("FilterPassParams"));
@@ -220,9 +209,6 @@ namespace RenderCore { namespace Techniques
  		auto computeOpFuture = CreateComputeOperator(
 			std::make_shared<PipelineCollection>(threadContext->GetDevice()),
 			shader, {}, TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain", usi);
-		// todo -- we really want to extract the full set of dependencies from the depVal
-		result._depFileStates.push_back(::Assets::GetDepValSys().GetDependentFileState(shader));
-		result._depFileStates.push_back(::Assets::GetDepValSys().GetDependentFileState(TOOLSHELPER_OPERATORS_PIPELINE));
 
 		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc, "texture-compiler"));
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
@@ -263,10 +249,7 @@ namespace RenderCore { namespace Techniques
 				0, nullptr);
 		}
 
-		auto depVal = ::Assets::GetDepValSys().Make();
-		depVal.RegisterDependency(computeOp->GetDependencyValidation());
-		result._newDataSource = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
-		return result;
+		return std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, computeOp->GetDependencyValidation());
 	}
 
 }}
