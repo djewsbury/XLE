@@ -96,6 +96,7 @@ namespace SceneEngine
 		{
 			std::promise<void> promise;
 			auto result = promise.get_future();
+			assert(inputFuture.valid());
 			::Assets::WhenAll(std::move(inputFuture)).Then(
 				[promise=std::move(promise)](auto&& future) mutable {
 					TRY {
@@ -241,6 +242,7 @@ namespace SceneEngine
 			if (deformers) {
 				newEntry._deformer = std::static_pointer_cast<RigidModelSceneInternal::DeformerEntry>(deformers);
 
+				assert(newEntry._model->_completedConstruction.valid() && newEntry._deformer->_completedConstruction.valid());
 				::Assets::WhenAll(newEntry._model->_completedConstruction, newEntry._deformer->_completedConstruction).ThenConstructToPromise(
 					std::move(rendererPromise),
 					[drawablesPool=_drawablesPool, pipelineAcceleratorPool=_pipelineAcceleratorPool, constructionContext=_constructionContext, deformAcceleratorPool=_deformAcceleratorPool](
@@ -295,6 +297,7 @@ namespace SceneEngine
 					});
 			} else {
 				// When no deformers explicitly specified, we don't apply the defaults -- just use the no-deformers case
+				assert(newEntry._model->_completedConstruction.valid());
 				::Assets::WhenAll(newEntry._model->_completedConstruction).ThenConstructToPromise(
 					std::move(rendererPromise),
 					[drawablesPool=_drawablesPool, pipelineAcceleratorPool=_pipelineAcceleratorPool, constructionContext=_constructionContext](
@@ -319,6 +322,7 @@ namespace SceneEngine
 					});
 			}
 
+			assert(newEntry._pendingRenderer.valid());
 			::Assets::WhenAll(newEntry._pendingRenderer).Then(
 				[dstEntryWeak=std::weak_ptr<RigidModelSceneInternal::Renderer>(newRenderer), sceneWeak=weak_from_this()](auto rendererFuture) {
 					auto scene = sceneWeak.lock();
@@ -460,8 +464,10 @@ namespace SceneEngine
 			ScopedLock(_poolLock);
 			// we have to search for this renderer in our list
 			for (const auto& r:_renderers)
-				if (!r._renderer.owner_before(renderer) && !renderer.owner_before(r._renderer))
+				if (!r._renderer.owner_before(renderer) && !renderer.owner_before(r._renderer)) {
+					if (!r._pendingRenderer.valid()) return {};
 					return AsOpaqueFuture(r._pendingRenderer);
+				}
 			return {};
 		}
 
