@@ -14,18 +14,6 @@ namespace Assets { class BlockSerializer; }
 
 namespace Assets
 {
-	// todo -- NascentChunk client should use ICompileOperation::SerializedArtifact instead
-	
-	class NascentChunk
-	{
-	public:
-		ChunkFile::ChunkHeader _hdr;
-		Blob _data;
-	};
-
-	using NascentChunkArray = std::shared_ptr<std::vector<NascentChunk>>;
-	NascentChunkArray MakeNascentChunkArray(const std::initializer_list<NascentChunk>& inits);
-
 	Blob AsBlob(const BlockSerializer& serializer);
 	Blob AsBlob(IteratorRange<const void*>);
 

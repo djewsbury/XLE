@@ -232,7 +232,7 @@ namespace Assets
 
 	size_t      ArchiveSubFile::Write(const void *buffer, size_t size, size_t count) never_throws 
 	{ 
-		Throw(::Exceptions::BasicLabel("BSAFile::Write() unimplemented"));
+		Throw(::Exceptions::BasicLabel("ArchiveSubFile::Write() unimplemented"));
 	}
 
 	ptrdiff_t	ArchiveSubFile::Seek(ptrdiff_t seekOffset, OSServices::FileSeekAnchor anchor) never_throws 
@@ -243,7 +243,7 @@ namespace Assets
 		case OSServices::FileSeekAnchor::Current: _tellp = PtrAdd(_tellp, seekOffset); break;
 		case OSServices::FileSeekAnchor::End: _tellp = PtrAdd(_dataEnd, -ptrdiff_t(seekOffset)); break;
 		default:
-			Throw(::Exceptions::BasicLabel("Unknown seek anchor in BSAFile::Seek(). Only Start/Current/End supported"));
+			Throw(::Exceptions::BasicLabel("Unknown seek anchor in ArchiveSubFile::Seek(). Only Start/Current/End supported"));
 		}
 		return result;
 	}
@@ -313,7 +313,7 @@ namespace Assets
 
 	size_t      FileDecompressOnRead::Write(const void *buffer, size_t size, size_t count) never_throws
 	{
-		Throw(::Exceptions::BasicLabel("BSAFileDecompressOnRead::Seek() unimplemented"));
+		Throw(::Exceptions::BasicLabel("FileDecompressOnRead::Seek() unimplemented"));
 	}
 
 	ptrdiff_t	FileDecompressOnRead::Seek(ptrdiff_t seekOffset, OSServices::FileSeekAnchor anchor) never_throws
@@ -332,7 +332,7 @@ namespace Assets
 			return _tellp;
 
 		if (size_t(offset) < _tellp)	//(we could reset and restart from the top here, but that would be inefficient)
-			Throw(::Exceptions::BasicLabel("BSAFileDecompressOnRead::Seek() unimplemented"));
+			Throw(::Exceptions::BasicLabel("FileDecompressOnRead::Seek() unimplemented"));
 
 		// Move the pointer forward by just reading in dummy bytes
 		auto dummyBuffer = std::make_unique<uint8_t[]>(offset-_tellp);

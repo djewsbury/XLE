@@ -434,7 +434,7 @@ namespace PlatformRig { namespace Camera
         const bool isUnitAlignedToCamera = rightButton;
         if (isUnitAlignedToCamera) {
             deltaRot[2] = 0;
-            //_unitCam.yaw = 0;
+            _unitCam.yaw = 0;
         }
 
         bool dived = _dived;

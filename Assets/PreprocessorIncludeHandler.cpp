@@ -27,8 +27,8 @@ namespace Assets
 		_depFileStates.insert(DependentFileState{result._filename, snapshot});
 		if (!result._fileContentsSize) {
 			if (!fileIncludedFrom.IsEmpty())
-				Throw(std::runtime_error("Missing or empty file when loading: " + result._filename + " (included from: " + fileIncludedFrom.AsString() + ")"));
-			Throw(std::runtime_error("Missing or empty file when loading: " + result._filename));
+				Throw(Exceptions::ConstructionError(GetDepValSys().Make(DependentFileState{result._filename, snapshot}), "Missing or empty file when loading: " + result._filename + " (included from: " + fileIncludedFrom.AsString() + ")"));
+			Throw(Exceptions::ConstructionError(GetDepValSys().Make(DependentFileState{result._filename, snapshot}), "Missing or empty file when loading: " + result._filename));
 		}
 		return result;
 	}
