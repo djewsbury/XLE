@@ -796,9 +796,9 @@ namespace RenderCore { namespace LightingEngine
 		return Step { StepType::None };
 	}
 
-	std::future<Techniques::PreparedResourcesVisibility> LightingTechniqueInstance::GetResourcePreparationMarker()
+	void LightingTechniqueInstance::FulfillWhenNotPending(std::promise<Techniques::PreparedResourcesVisibility>&& promise)
 	{
-		if (!_prepareResourcesIterator || _prepareResourcesIterator->_requiredResources.empty()) return {};
+		if (!_prepareResourcesIterator || _prepareResourcesIterator->_requiredResources.empty()) return;
 		
 		TRY {
 			struct Futures
@@ -822,7 +822,6 @@ namespace RenderCore { namespace LightingEngine
 			}
 			_prepareResourcesIterator->_requiredResources.clear();	// have to clear, can only query the futures once
 			
-			std::promise<Techniques::PreparedResourcesVisibility> promise;
 			auto future = promise.get_future();
 			if (futures->_pendingFutures.empty()) {
 				promise.set_value(futures->_starterVisibility);
@@ -850,11 +849,8 @@ namespace RenderCore { namespace LightingEngine
 						return result;
 					});
 			}
-			return future;
 		} CATCH(...) {
-			std::promise<Techniques::PreparedResourcesVisibility> exceptionPromise;
-			exceptionPromise.set_exception(std::current_exception());
-			return exceptionPromise.get_future();
+			promise.set_exception(std::current_exception());
 		} CATCH_END
 	}
 

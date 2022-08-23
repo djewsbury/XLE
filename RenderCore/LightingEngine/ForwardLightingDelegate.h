@@ -10,6 +10,7 @@
 namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; class PipelineCollection; class IPipelineAcceleratorPool; } }
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
 namespace RenderCore { class IDevice; class FrameBufferProperties; }
+namespace std { template<typename T> class future; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -37,7 +38,7 @@ namespace RenderCore { namespace LightingEngine
 		const AmbientLightOperatorDesc& ambientLightOperator);
 
 	// Simplified construction --
-	::Assets::PtrToMarkerPtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
+	std::future<std::shared_ptr<CompiledLightingTechnique>> CreateForwardLightingTechnique(
 		const std::shared_ptr<LightingEngineApparatus>& apparatus,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,

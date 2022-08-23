@@ -10,6 +10,7 @@
 namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; class PipelineCollection; class IPipelineAcceleratorPool; } }
 namespace RenderCore { class IDevice; class FrameBufferProperties; class ICompiledPipelineLayout; }
 namespace RenderCore { namespace Assets { class PredefinedPipelineLayoutFile; class PredefinedDescriptorSetLayout; }}
+namespace std { template<typename T> class future; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -22,7 +23,7 @@ namespace RenderCore { namespace LightingEngine
 		using BitField = unsigned;
 	};
 
-	::Assets::PtrToMarkerPtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
+	std::future<std::shared_ptr<CompiledLightingTechnique>> CreateDeferredLightingTechnique(
 		const std::shared_ptr<LightingEngineApparatus>& apparatus,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
@@ -30,7 +31,7 @@ namespace RenderCore { namespace LightingEngine
 		const FrameBufferProperties& fbProps,
 		DeferredLightingTechniqueFlags::BitField flags = 0);
 
-	::Assets::PtrToMarkerPtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
+	std::future<std::shared_ptr<CompiledLightingTechnique>> CreateDeferredLightingTechnique(
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelineCollection,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,

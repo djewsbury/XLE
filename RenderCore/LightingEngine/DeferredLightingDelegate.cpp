@@ -47,6 +47,11 @@ namespace RenderCore { namespace LightingEngine
 			return AddLightSource(opId, std::move(desc));
 		}
 
+		LightSourceId CreateAmbientLightSource() override
+		{
+			Throw(std::runtime_error("Configurable ambient light source not supported"));
+		}
+
 		ShadowProjectionId CreateShadowProjection(ShadowOperatorId opId, LightSourceId associatedLight) override
 		{
 			auto preparerId = _shadowOperatorIdMapping._operatorToShadowPreparerId[opId];
@@ -438,7 +443,7 @@ namespace RenderCore { namespace LightingEngine
 			});
 	}
 
-	::Assets::PtrToMarkerPtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
+	std::future<std::shared_ptr<CompiledLightingTechnique>> CreateDeferredLightingTechnique(
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelineCollection,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
@@ -458,10 +463,11 @@ namespace RenderCore { namespace LightingEngine
 		auto lightSceneFuture = lightScenePromise.get_future();
 		BeginLightSceneConstruction(std::move(lightScenePromise), pipelineAccelerators, techDelBox, shadowDescSet, shadowOperatorsInit);
 
-		auto result = std::make_shared<::Assets::MarkerPtr<CompiledLightingTechnique>>("deferred-lighting-technique");
+		std::promise<std::shared_ptr<CompiledLightingTechnique>> promisedTechnique;
+		auto result = promisedTechnique.get_future();
 		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
 		::Assets::WhenAll(std::move(buildGBufferFragment), std::move(lightSceneFuture)).ThenConstructToPromise(
-			result->AdoptPromise(),
+			std::move(promisedTechnique),
 			[pipelineAccelerators, techDelBox, fbProps, 
 			preregisteredAttachments=std::move(preregisteredAttachments),
 			resolveOperators=std::move(resolveOperators), shadowOperators=std::move(shadowOperators), pipelineCollection, lightingOperatorLayout, flags](
@@ -561,7 +567,7 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	::Assets::PtrToMarkerPtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
+	std::future<std::shared_ptr<CompiledLightingTechnique>> CreateDeferredLightingTechnique(
 		const std::shared_ptr<LightingEngineApparatus>& apparatus,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,

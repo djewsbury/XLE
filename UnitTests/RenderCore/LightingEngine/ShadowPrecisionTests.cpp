@@ -104,21 +104,15 @@ namespace UnitTests
 		return srcId;
 	}
 
-	template<typename Type>
-		static std::shared_ptr<Type> StallAndRequireReady(::Assets::MarkerPtr<Type>& future)
-	{
-		future.StallWhilePending();
-		INFO(::Assets::AsString(future.GetActualizationLog()));
-		REQUIRE(future.GetAssetState() == ::Assets::AssetState::Ready);
-		return future.Actualize();
-	}
-
 	static RenderCore::Techniques::PreparedResourcesVisibility PrepareResources(ToolsRig::IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
 	{
 		// stall until all resources are ready
 		RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(lightingTechnique);
 		ParseScene(prepareLightingIterator, drawablesWriter);
-		return PrepareAndStall(testApparatus, prepareLightingIterator.GetResourcePreparationMarker());
+		std::promise<RenderCore::Techniques::PreparedResourcesVisibility> preparePromise;
+		auto prepareFuture = preparePromise.get_future();
+		prepareLightingIterator.FulfillWhenNotPending(std::move(preparePromise));
+		return PrepareAndStall(testApparatus, std::move(prepareFuture));
 	}
 
 	static void PumpBufferUploads(LightingEngineTestApparatus& testApparatus)
@@ -195,7 +189,7 @@ namespace UnitTests
 					testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
-				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
+				auto lightingTechnique = lightingTechniqueFuture.get();
 				PumpBufferUploads(testApparatus);
 
 				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateFlatPlaneDrawableWriter();
@@ -239,7 +233,7 @@ namespace UnitTests
 					testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
-				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
+				auto lightingTechnique = lightingTechniqueFuture.get();
 				PumpBufferUploads(testApparatus);
 
 				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateSharpContactDrawableWriter();
@@ -483,7 +477,7 @@ namespace UnitTests
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps,
 					LightingEngine::DeferredLightingTechniqueFlags::GenerateDebuggingTextures);
-				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
+				auto lightingTechnique = lightingTechniqueFuture.get();
 				PumpBufferUploads(testApparatus);
 
 				const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};

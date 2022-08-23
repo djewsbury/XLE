@@ -58,7 +58,10 @@ namespace SceneEngine
 			scene.ExecuteScene(threadContext, sceneExecuteContext);
 		}
 
-		return prepareLightingIterator.GetResourcePreparationMarker();
+		std::promise<RenderCore::Techniques::PreparedResourcesVisibility> promise;
+		auto result = promise.get_future();
+		prepareLightingIterator.FulfillWhenNotPending(std::move(promise));
+		return result;
 	}
 
 	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> StallAndActualize(::Assets::MarkerPtr<RenderCore::LightingEngine::CompiledLightingTechnique>& future)

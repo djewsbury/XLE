@@ -108,14 +108,16 @@ namespace RenderCore { namespace LightingEngine
 
 	ILightScene::LightSourceId ForwardPlusLightScene::CreateLightSource(ILightScene::LightOperatorId opId)
 	{
-		if (opId == _positionalLightOperators.size()) {
-			if (_ambientLight->_ambientLightEnabled)
-				Throw(std::runtime_error("Attempting to create multiple ambient light sources. Only one is supported at a time"));
-			_ambientLight->_ambientLightEnabled = true;
-			return 0;
-		}
 		auto desc = std::make_unique<ForwardPlusLightDesc>(Internal::StandardPositionalLight::Flags::SupportFiniteRange);
 		return AddLightSource(opId, std::move(desc));
+	}
+
+	ILightScene::LightSourceId ForwardPlusLightScene::CreateAmbientLightSource()
+	{
+		if (_ambientLight->_ambientLightEnabled)
+			Throw(std::runtime_error("Attempting to create multiple ambient light sources. Only one is supported at a time"));
+		_ambientLight->_ambientLightEnabled = true;
+		return 0;
 	}
 
 	void ForwardPlusLightScene::DestroyLightSource(LightSourceId sourceId)

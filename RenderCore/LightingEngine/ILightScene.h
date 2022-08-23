@@ -21,6 +21,7 @@ namespace RenderCore { namespace LightingEngine
 		using LightOperatorId = unsigned;
 		virtual void* TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) = 0; 
 		virtual LightSourceId CreateLightSource(LightOperatorId op) = 0;
+		virtual LightSourceId CreateAmbientLightSource() = 0;
 		virtual void DestroyLightSource(LightSourceId) = 0;
 
 		using ShadowProjectionId = unsigned;

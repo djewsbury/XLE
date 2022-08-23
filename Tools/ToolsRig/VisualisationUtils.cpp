@@ -352,27 +352,28 @@ namespace ToolsRig
 				std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) {
 
 				TRY {
-					RenderCore::LightingEngine::AmbientLightOperatorDesc ambientLightOperatorDesc;
-					ambientLightOperatorDesc._ssrOperator = RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc{};
-					auto operators = envSettings->GetOperators();
-					::Assets::PtrToMarkerPtr<RenderCore::LightingEngine::CompiledLightingTechnique> compiledLightingTechniqueFuture;
+					SceneEngine::MergedLightingEngineCfg lightingEngineCfg;
+					RenderCore::LightingEngine::AmbientLightOperatorDesc ambientOp;
+					ambientOp._ssrOperator = RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc{};
+					lightingEngineCfg.SetAmbientOperator(ambientOp);
+					std::future<std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique>> compiledLightingTechniqueFuture;
 					const bool forwardLighting = true;
 					if (forwardLighting) {
 						compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateForwardLightingTechnique(
 							lightingApparatus,
-							operators._lightResolveOperators,
-							operators._shadowResolveOperators,
-							ambientLightOperatorDesc,
+							lightingEngineCfg.GetLightOperators(),
+							lightingEngineCfg.GetShadowOperators(),
+							lightingEngineCfg.GetAmbientOperator(),
 							targets, fbProps);
 					} else {
 						compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
 							lightingApparatus,
-							operators._lightResolveOperators,
-							operators._shadowResolveOperators,
+							lightingEngineCfg.GetLightOperators(),
+							lightingEngineCfg.GetShadowOperators(),
 							targets, fbProps);
 					}
 
-					::Assets::WhenAll(sceneFuture, compiledLightingTechniqueFuture).ThenConstructToPromise(
+					::Assets::WhenAll(sceneFuture, std::move(compiledLightingTechniqueFuture)).ThenConstructToPromise(
 						std::move(thatPromise),
 						[pipelineAccelerators, envSettings, sceneIsRefreshable, envSettingsIsRefreshable, sceneDepVal=sceneFuture->GetDependencyValidation()](std::promise<std::shared_ptr<PreparedScene>>&& thatPromise, auto scene, auto compiledLightingTechnique) {
 							

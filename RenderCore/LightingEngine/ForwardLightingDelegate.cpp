@@ -340,7 +340,7 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	::Assets::PtrToMarkerPtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
+	std::future<std::shared_ptr<CompiledLightingTechnique>> CreateForwardLightingTechnique(
 		const std::shared_ptr<LightingEngineApparatus>& apparatus,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
@@ -356,10 +356,11 @@ namespace RenderCore { namespace LightingEngine
 			apparatus->_dmShadowDescSetTemplate,
 			resolveOperators, shadowGenerators, ambientLightOperator);
 
-		auto result = std::make_shared<::Assets::MarkerPtr<CompiledLightingTechnique>>("forward-lighting-technique");
+		std::promise<std::shared_ptr<CompiledLightingTechnique>> promisedTechnique;
+		auto result = promisedTechnique.get_future();
 		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
 		::Assets::WhenAll(std::move(lightSceneFuture)).ThenConstructToPromise(
-			result->AdoptPromise(),
+			std::move(promisedTechnique),
 			[
 				A=apparatus->_pipelineAccelerators, B=apparatus->_lightingOperatorCollection, C=apparatus->_sharedDelegates,
 				preregisteredAttachments=std::move(preregisteredAttachments), fbProps

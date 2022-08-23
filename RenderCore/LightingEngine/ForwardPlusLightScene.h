@@ -45,6 +45,7 @@ namespace RenderCore { namespace LightingEngine
 
 		// ILightScene
 		virtual LightSourceId CreateLightSource(ILightScene::LightOperatorId opId) override;
+		virtual LightSourceId CreateAmbientLightSource() override;
 		virtual void DestroyLightSource(LightSourceId sourceId) override;
 		virtual void Clear() override;
 		virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId opId, LightSourceId associatedLight) override;

@@ -10,7 +10,7 @@ namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class IDeformAcceleratorPool; class DrawablesPacket; class ParsingContext; struct PreparedResourcesVisibility; }}
 namespace Assets { class IAsyncMarker; class DependencyValidation; }
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
-namespace std { template<typename Type> class future; }
+namespace std { template<typename Type> class promise; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -44,7 +44,7 @@ namespace RenderCore { namespace LightingEngine
 		~LightingTechniqueInstance();
 
 		// For ensuring that required resources are prepared/loaded
-		std::future<Techniques::PreparedResourcesVisibility> GetResourcePreparationMarker();
+		void FulfillWhenNotPending(std::promise<Techniques::PreparedResourcesVisibility>&& promise);
 		LightingTechniqueInstance(
 			CompiledLightingTechnique&);
 	private:

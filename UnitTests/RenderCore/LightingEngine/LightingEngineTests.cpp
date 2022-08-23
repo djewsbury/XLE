@@ -116,15 +116,6 @@ namespace UnitTests
 		return shadowId;
 	}
 
-	template<typename Type>
-		static std::shared_ptr<Type> StallAndRequireReady(::Assets::MarkerPtr<Type>& future)
-	{
-		future.StallWhilePending();
-		INFO(::Assets::AsString(future.GetActualizationLog()));
-		REQUIRE(future.GetAssetState() == ::Assets::AssetState::Ready);
-		return future.Actualize();
-	}
-
 	TEST_CASE( "LightingEngine-ExecuteTechnique", "[rendercore_lighting_engine]" )
 	{
 		using namespace RenderCore;
@@ -223,7 +214,7 @@ namespace UnitTests
 				testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
-			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
+			auto lightingTechnique = lightingTechniqueFuture.get();
 			ConfigureLightScene(LightingEngine::GetLightScene(*lightingTechnique));
 
 			testApparatus._bufferUploads->Update(*threadContext);
@@ -232,15 +223,18 @@ namespace UnitTests
 
 			// stall until all resources are ready
 			{
-				RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*lightingTechnique);
+				LightingEngine::LightingTechniqueInstance prepareLightingIterator(*lightingTechnique);
 				ParseScene(prepareLightingIterator, *drawableWriter);
-				auto newVisibility = PrepareAndStall(testApparatus, prepareLightingIterator.GetResourcePreparationMarker());
+				std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
+				auto prepareFuture = preparePromise.get_future();
+				prepareLightingIterator.FulfillWhenNotPending(std::move(preparePromise));
+				auto newVisibility = PrepareAndStall(testApparatus, std::move(prepareFuture));
 				parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
 				parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 			}
 
 			{
-				RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
+				LightingEngine::LightingTechniqueInstance lightingIterator(
 					parsingContext, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}
@@ -297,7 +291,7 @@ namespace UnitTests
 				testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
-			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
+			auto lightingTechnique = lightingTechniqueFuture.get();
 
 			auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
 			auto lightId = CreateTestLight(lightScene);
@@ -311,7 +305,10 @@ namespace UnitTests
 			{
 				RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*lightingTechnique);
 				ParseScene(prepareLightingIterator, *drawableWriter);
-				auto newVisibility = PrepareAndStall(testApparatus, prepareLightingIterator.GetResourcePreparationMarker());
+				std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
+				auto prepareFuture = preparePromise.get_future();
+				prepareLightingIterator.FulfillWhenNotPending(std::move(preparePromise));
+				auto newVisibility = PrepareAndStall(testApparatus, std::move(prepareFuture));
 				parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
 				parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 			}

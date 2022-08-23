@@ -110,16 +110,15 @@ namespace UnitTests
 			IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
 			const RenderCore::FrameBufferProperties& fbProps)
 		{
-			SceneEngine::ILightingStateDelegate::Operators operators;
-			if (lightingDelegate)
-				operators = lightingDelegate->GetOperators();
+			SceneEngine::MergedLightingEngineCfg lightingEngineCfg;
+			lightingDelegate->BindCfg(lightingEngineCfg);
 
 			LightingOperatorsPipelineLayout pipelineLayout(*lightingApparatus._metalTestHelper);
 
 			auto techniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
 				lightingApparatus._pipelineAccelerators, lightingApparatus._pipelinePool, lightingApparatus._sharedDelegates,
 				pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
-				operators._lightResolveOperators, operators._shadowResolveOperators,
+				lightingEngineCfg.GetLightOperators(), lightingEngineCfg.GetShadowOperators(),
 				preregAttachments, fbProps);
 
 			::Assets::WhenAll(std::move(techniqueFuture)).ThenConstructToPromise(
@@ -168,11 +167,12 @@ namespace UnitTests
 		void PostRender(RenderCore::LightingEngine::ILightScene& lightScene) override {}
 		void BindScene(RenderCore::LightingEngine::ILightScene& lightScene, std::shared_ptr<::Assets::OperationContext>) override 
 		{
+			REQUIRE(_lightOperatorId != ~0u); REQUIRE(_shadowOperatorId != ~0u);
 			REQUIRE(_lightSourcesId.empty()); REQUIRE(!_shadowProjectionId);
-			_lightSourcesId.emplace_back(lightScene.CreateLightSource(0));
-			_lightSourcesId.emplace_back(lightScene.CreateLightSource(0));
-			_lightSourcesId.emplace_back(lightScene.CreateLightSource(0));
-			_shadowProjectionId = lightScene.CreateShadowProjection(0, MakeIteratorRange(_lightSourcesId));
+			_lightSourcesId.emplace_back(lightScene.CreateLightSource(_lightOperatorId));
+			_lightSourcesId.emplace_back(lightScene.CreateLightSource(_lightOperatorId));
+			_lightSourcesId.emplace_back(lightScene.CreateLightSource(_lightOperatorId));
+			_shadowProjectionId = lightScene.CreateShadowProjection(_shadowOperatorId, MakeIteratorRange(_lightSourcesId));
 
 			// red
 			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(_lightSourcesId[0])->SetLocalToWorld(AsFloat4x4(Float3(50, 5, 50)));
@@ -209,10 +209,12 @@ namespace UnitTests
 			return nullptr;
 		}
 
-		Operators GetOperators() override
+		void BindCfg(SceneEngine::MergedLightingEngineCfg& cfg) override
 		{
 			RenderCore::LightingEngine::LightSourceOperatorDesc lightOp;
 			lightOp._shape = RenderCore::LightingEngine::LightSourceShape::Sphere;
+			_lightOperatorId = cfg.Register(lightOp);
+
 			RenderCore::LightingEngine::ShadowOperatorDesc shadowOp;
 			shadowOp._resolveType = RenderCore::LightingEngine::ShadowResolveType::Probe;
 			// we need some bias to avoid rampant acne
@@ -220,17 +222,13 @@ namespace UnitTests
 			shadowOp._singleSidedBias._slopeScaledBias = -0.75f;
 			shadowOp._doubleSidedBias = shadowOp._singleSidedBias;
 			shadowOp._width = shadowOp._height = 128;
-			Operators result;
-			result._lightResolveOperators.emplace_back(lightOp);
-			result._shadowResolveOperators.emplace_back(shadowOp);
-			return result;
+			_shadowOperatorId = cfg.Register(shadowOp);
 		}
-
-		auto GetEnvironmentalLightingDesc() -> SceneEngine::EnvironmentalLightingDesc override { return {}; }
-		auto GetToneMapSettings() -> SceneEngine::ToneMapSettings override { return {}; }
 
 		std::vector<RenderCore::LightingEngine::ILightScene::LightSourceId> _lightSourcesId;
 		std::optional<RenderCore::LightingEngine::ILightScene::ShadowProjectionId> _shadowProjectionId;
+
+		unsigned _lightOperatorId = ~0u, _shadowOperatorId = ~0u;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const override { return _depVal; }
 		::Assets::DependencyValidation _depVal;
@@ -267,14 +265,16 @@ namespace UnitTests
 		PreparedSceneForShadowProbe::ConstructToPromise(
 			std::move(promise),
 			lightingDelegate, drawablesWriter,
-			testApparatus, 
+			testApparatus,
 			parsingContext.GetFragmentStitchingContext().GetPreregisteredAttachments(), parsingContext.GetFragmentStitchingContext()._workingProps);
 		auto scene = futureScene.get();		// consider drawing some frames in the foreground while we wait for this
 
 		{
 			LightingEngine::LightingTechniqueInstance prepareInstance{*scene._compiledLightingTechnique};
 			ParseScene(prepareInstance, *scene._drawablesWriter);
-			auto marker = prepareInstance.GetResourcePreparationMarker();
+			std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
+			auto marker = preparePromise.get_future();
+			prepareInstance.FulfillWhenNotPending(std::move(preparePromise));
 			auto newVisibility = marker.get();		// stall
 			if (newVisibility._bufferUploadsVisibility)
 				testApparatus._bufferUploads->StallUntilCompletion(*threadContext, newVisibility._bufferUploadsVisibility);

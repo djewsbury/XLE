@@ -35,7 +35,6 @@ namespace SceneEngine
     class SwirlingPointLights
     {
     public:
-        RenderCore::LightingEngine::LightSourceOperatorDesc _operator;
         std::vector<RenderCore::LightingEngine::ILightScene::LightSourceId> _lightSources;
         void UpdateLights(RenderCore::LightingEngine::ILightScene& lightScene)
         {
@@ -73,12 +72,13 @@ namespace SceneEngine
             _time += 1.0f/60.f;
         }
 
-        void BindScene(RenderCore::LightingEngine::ILightScene& lightScene, unsigned opId)
+        void BindScene(RenderCore::LightingEngine::ILightScene& lightScene)
         {
+            assert(_operatorId != ~0u);
             assert(_lightSources.empty());
             const auto tileLightCount = 32u;
             for (unsigned c=0; c<tileLightCount; ++c) {
-                auto lightId = lightScene.CreateLightSource(opId);
+                auto lightId = lightScene.CreateLightSource(_operatorId);
                 _lightSources.push_back(lightId);
             }
         }
@@ -90,16 +90,22 @@ namespace SceneEngine
             _lightSources.clear();
         }
 
+        void        BindCfg(MergedLightingEngineCfg& cfg)
+        {
+            RenderCore::LightingEngine::LightSourceOperatorDesc opDesc;
+            opDesc._shape = RenderCore::LightingEngine::LightSourceShape::Sphere;
+            _operatorId = cfg.Register(opDesc);
+        }
+
         SwirlingPointLights()
         {
-            _operator._shape = RenderCore::LightingEngine::LightSourceShape::Sphere;
             _time = 0.f;
         }
         float _time;
+        unsigned _operatorId = ~0u;
     };
 
     static SwirlingPointLights s_swirlingLights;
-    static unsigned s_swirlingLightsOp = ~0u;
 
     class BasicLightingStateDelegate : public ILightingStateDelegate
     {
@@ -110,10 +116,7 @@ namespace SceneEngine
         void        UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) override;
         auto        BeginPrepareStep(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext) -> std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> override;
 
-        auto        GetEnvironmentalLightingDesc() -> EnvironmentalLightingDesc override;
-        auto        GetToneMapSettings() -> ToneMapSettings override;
-
-        Operators   GetOperators() override;        
+        void        BindCfg(MergedLightingEngineCfg& cfg) override;
 
 		BasicLightingStateDelegate(Formatters::IDynamicFormatter& formatter);
 		~BasicLightingStateDelegate();
@@ -143,7 +146,7 @@ namespace SceneEngine
         std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::LightOperatorId>> _lightOperatorHashToId;
         std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::ShadowOperatorId>> _shadowOperatorHashToId;
         std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::ShadowOperatorId>> _sunSourceHashToShadowOperatorId;
-        std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::LightOperatorId>> _ambientOperatorHashToId;        
+        uint64_t _ambientOperator = ~0ull;
 
         ::Assets::DependencyValidation _depVal;
 
@@ -233,10 +236,8 @@ namespace SceneEngine
                 continue;
             }
 
-            lightOperator = LowerBound(_ambientOperatorHashToId, light._operatorHash);
-            if (lightOperator != _ambientOperatorHashToId.end() && lightOperator->first == light._operatorHash) {
-
-                auto newLight = lightScene.CreateLightSource(lightOperator->second);
+            if (light._operatorHash == _ambientOperator) {
+                auto newLight = lightScene.CreateAmbientLightSource();
                 _lightSourcesInBoundScene.push_back(newLight);
 
                 auto* distanceIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IDistantIBLSource>(newLight);
@@ -266,7 +267,7 @@ namespace SceneEngine
             _shadowProjectionsInBoundScene.push_back(newShadow);
         }
 
-        s_swirlingLights.BindScene(lightScene, s_swirlingLightsOp);
+        s_swirlingLights.BindScene(lightScene);
     }
 
     void        BasicLightingStateDelegate::UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene)
@@ -285,67 +286,34 @@ namespace SceneEngine
         return nullptr;
     }
 
-    auto BasicLightingStateDelegate::GetOperators() -> Operators
+    void BasicLightingStateDelegate::BindCfg(MergedLightingEngineCfg& cfg)
     {
         _lightOperatorHashToId.clear();
         _shadowOperatorHashToId.clear();
-        _ambientOperatorHashToId.clear();
+        _ambientOperator = ~0ull;
         _sunSourceHashToShadowOperatorId.clear();
 
-        Operators result;
-        result._lightResolveOperators.reserve(_operatorResolveContext._lightSourceOperators._objects.size());
-        result._shadowResolveOperators.reserve(_operatorResolveContext._shadowOperators._objects.size());
         _lightOperatorHashToId.reserve(_operatorResolveContext._lightSourceOperators._objects.size());
         _shadowOperatorHashToId.reserve(_operatorResolveContext._lightSourceOperators._objects.size());
-        for (const auto& c:_operatorResolveContext._lightSourceOperators._objects) {
-            auto h = c.second.GetHash();
-            auto i = std::find_if(result._lightResolveOperators.begin(), result._lightResolveOperators.end(), [h](const auto& c) { return c.GetHash() == h; });
-            if (i==result._lightResolveOperators.end())
-                i = result._lightResolveOperators.insert(i, c.second);
-            _lightOperatorHashToId.emplace_back(c.first, (unsigned)std::distance(result._lightResolveOperators.begin(), i));
-        }
-        for (const auto& c:_operatorResolveContext._shadowOperators._objects) {
-            auto h = c.second.GetHash();
-            auto i = std::find_if(result._shadowResolveOperators.begin(), result._shadowResolveOperators.end(), [h](const auto& c) { return c.GetHash() == h; });
-            if (i==result._shadowResolveOperators.end())
-                i = result._shadowResolveOperators.insert(i, c.second);
-            _shadowOperatorHashToId.emplace_back(c.first, (unsigned)std::distance(result._shadowResolveOperators.begin(), i));
-        }
+        for (const auto& c:_operatorResolveContext._lightSourceOperators._objects)
+            _lightOperatorHashToId.emplace_back(c.first, cfg.Register(c.second));
+        for (const auto& c:_operatorResolveContext._shadowOperators._objects)
+            _shadowOperatorHashToId.emplace_back(c.first, cfg.Register(c.second));
         for (const auto& c:_sunSourceFrustumSettingsInCfgFile._objects) {
             auto shadowOperator = RenderCore::LightingEngine::CalculateShadowOperatorDesc(c.second);
-            auto h = shadowOperator.GetHash();
-            auto i = std::find_if(result._shadowResolveOperators.begin(), result._shadowResolveOperators.end(), [h](const auto& c) { return c.GetHash() == h; });
-            if (i==result._shadowResolveOperators.end())
-                i = result._shadowResolveOperators.insert(i, shadowOperator);
-            _sunSourceHashToShadowOperatorId.emplace_back(c.first, (unsigned)std::distance(result._shadowResolveOperators.begin(), i));
+            _sunSourceHashToShadowOperatorId.emplace_back(c.first, cfg.Register(shadowOperator));
         }
 
-        {
-            auto h = s_swirlingLights._operator.GetHash();
-            auto i = std::find_if(result._lightResolveOperators.begin(), result._lightResolveOperators.end(), [h](const auto& c) { return c.GetHash() == h; });
-            s_swirlingLightsOp = (unsigned)std::distance(result._lightResolveOperators.begin(), i);
-            if (i == result._lightResolveOperators.end())
-                result._lightResolveOperators.push_back(s_swirlingLights._operator);
-        }
+        s_swirlingLights.BindCfg(cfg);
 
-        if (!_operatorResolveContext._ambientOperators._objects.empty())
-            _ambientOperatorHashToId.emplace_back(_operatorResolveContext._ambientOperators._objects[0].first, (unsigned)result._lightResolveOperators.size());
+        if (!_operatorResolveContext._ambientOperators._objects.empty()) {
+            cfg.SetAmbientOperator(_operatorResolveContext._ambientOperators._objects[0].second);
+            _ambientOperator = _operatorResolveContext._ambientOperators._objects[0].first;
+        }
 
         std::sort(_lightOperatorHashToId.begin(), _lightOperatorHashToId.end(), CompareFirst<uint64_t, unsigned>());
         std::sort(_shadowOperatorHashToId.begin(), _shadowOperatorHashToId.end(), CompareFirst<uint64_t, unsigned>());
         std::sort(_sunSourceHashToShadowOperatorId.begin(), _sunSourceHashToShadowOperatorId.end(), CompareFirst<uint64_t, unsigned>());
-
-        return result;
-    }
-
-    auto BasicLightingStateDelegate::GetEnvironmentalLightingDesc() -> RenderCore::LightingEngine::EnvironmentalLightingDesc
-    {
-        return {};
-    }
-
-    ToneMapSettings BasicLightingStateDelegate::GetToneMapSettings()
-    {
-        return {};
     }
 
     const ::Assets::DependencyValidation& BasicLightingStateDelegate::GetDependencyValidation() const
@@ -455,6 +423,7 @@ namespace SceneEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+#if 0
     LightDesc::LightDesc()
     {
         _orientation = Identity<Float3x3>();
@@ -483,6 +452,7 @@ namespace SceneEngine
         result._doAtmosphereBlur = false;
         return result;
     }
+#endif
 
     SunSourceFrustumSettings DefaultSunSourceFrustumSettings()
     {
@@ -582,6 +552,39 @@ namespace SceneEngine
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+    unsigned MergedLightingEngineCfg::Register(const RenderCore::LightingEngine::LightSourceOperatorDesc& operatorDesc)
+    {
+        assert(_lightHashes.size() == _lightResolveOperators.size());
+        auto hash = operatorDesc.GetHash();
+        auto i = std::find(_lightHashes.begin(), _lightHashes.end(), hash);
+        if (i != _lightHashes.end())
+            return (unsigned)std::distance(_lightHashes.begin(), i);
+        _lightResolveOperators.push_back(operatorDesc);
+        _lightHashes.push_back(hash);
+        return _lightHashes.size()-1;
+    }
+
+    unsigned MergedLightingEngineCfg::Register(const RenderCore::LightingEngine::ShadowOperatorDesc& operatorDesc)
+    {
+        assert(_shadowHashes.size() == _shadowResolveOperators.size());
+        auto hash = operatorDesc.GetHash();
+        auto i = std::find(_shadowHashes.begin(), _shadowHashes.end(), hash);
+        if (i != _shadowHashes.end())
+            return (unsigned)std::distance(_shadowHashes.begin(), i);
+        _shadowResolveOperators.push_back(operatorDesc);
+        _shadowHashes.push_back(hash);
+        return _shadowHashes.size()-1;
+    }
+
+    void MergedLightingEngineCfg::SetAmbientOperator(const RenderCore::LightingEngine::AmbientLightOperatorDesc& operatorDesc)
+    {
+        _ambientOperator = operatorDesc;
+    }
+
+    std::future<void> IScene::PrepareForView(PrepareForViewContext& prepareContext) const { return {}; }
+    IScene::~IScene() {}
+    ISceneOverlay::~ISceneOverlay() {}
 }
 
 #if 1
