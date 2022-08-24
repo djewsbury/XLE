@@ -24,11 +24,20 @@ namespace RenderCore { namespace LightingEngine
 		virtual ~IProbeRenderingInstance() = default;
 	};
 
-	class IPreparable
+	class ISemiStaticShadowProbeScheduler
 	{
 	public:
-		virtual std::shared_ptr<IProbeRenderingInstance> BeginPrepare(IThreadContext& threadContext) = 0;
-		virtual ~IPreparable() = default;
+		enum OnFrameBarrierResult { NoChange, QueuedRenders };
+		virtual OnFrameBarrierResult OnFrameBarrier(const Float3& newViewPosition, float drawDistance) = 0;
+
+		virtual std::shared_ptr<IProbeRenderingInstance> BeginPrepare(
+			IThreadContext& threadContext, unsigned maxProbeCount) = 0;
+		virtual void EndPrepare(IThreadContext& threadContext) = 0;
+
+		virtual void SetNearRadius(float) = 0;
+		virtual float GetNearRadius(float) = 0;
+
+		virtual ~ISemiStaticShadowProbeScheduler();
 	};
 
 	class LightingEngineApparatus;
@@ -46,6 +55,7 @@ namespace RenderCore { namespace LightingEngine
 		{
 			unsigned _staticFaceDims = 256;
 			unsigned _dynamicFaceDims = 128;
+			unsigned _maxStaticProbes = 32;
 			unsigned _maxDynamicProbes = 32;
 			Format _staticFormat = Format::D16_UNORM;
 
@@ -57,17 +67,16 @@ namespace RenderCore { namespace LightingEngine
 
 		using AABB = std::pair<Float3, Float3>;
 
-		std::shared_ptr<IProbeRenderingInstance> PrepareDynamicProbes(
-			IThreadContext& threadContext,
-			const Techniques::ProjectionDesc& projDesc,
-			IteratorRange<const AABB*> dynamicObjects);
 		std::shared_ptr<IProbeRenderingInstance> PrepareStaticProbes(
-			IThreadContext& threadContext);
+			IThreadContext& threadContext,
+			IteratorRange<const std::pair<unsigned, Probe>*> probesAndIndices);
+
 		IResourceView& GetStaticProbesTable() const;
 		IResourceView& GetShadowProbeUniforms() const;
 		bool IsReady() const;
+		unsigned GetReservedProbeCount();
 
-		void AddProbes(IteratorRange<const Probe*>);
+		void CompleteInitialization(IThreadContext& threadContext);
 
 		ShadowProbes(
 			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
@@ -84,11 +93,6 @@ namespace RenderCore { namespace LightingEngine
 		std::unique_ptr<Pimpl> _pimpl;
 		class ProbeRenderingInstance;
 	};
-
-	std::shared_ptr<IPreparable> CreateShadowProbePrepareDelegate(
-		std::shared_ptr<ShadowProbes> shadowProbes,
-		IteratorRange<const uint32_t*> associatedLights, 
-		ILightScene* lightScene);
 
 }}
 

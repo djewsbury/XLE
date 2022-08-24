@@ -67,12 +67,16 @@ namespace RenderCore { namespace LightingEngine
 		ShadowProjectionId CreateShadowProjection(ShadowOperatorId opId, IteratorRange<const LightSourceId*> associatedLights) override
 		{
 			if (opId == _shadowOperatorIdMapping._operatorForStaticProbes) {
-				if (_shadowProbes)
-					Throw(std::runtime_error("Cannot create multiple shadow probe databases in on light scene."));
-				
-				_shadowProbes = std::make_shared<ShadowProbes>(
-					_pipelineAccelerators, *_techDelBox, _shadowOperatorIdMapping._shadowProbesCfg);
-				_spPrepareDelegate = Internal::CreateShadowProbePrepareDelegate(_shadowProbes, associatedLights, this);
+				if (!_shadowProbes) {
+					_shadowProbes = std::make_shared<ShadowProbes>(
+						_pipelineAccelerators, *_techDelBox, _shadowOperatorIdMapping._shadowProbesCfg);
+					_shadowProbesManager = std::make_shared<Internal::SemiStaticShadowProbeScheduler>(_shadowProbes, this);
+				}
+
+				assert(_shadowProbesManager);
+				for (auto l:associatedLights)
+					_shadowProbesManager->AddLight(l);
+
 				ChangeLightsShadowOperator(associatedLights, opId);
 				_lightsAssignedToShadowProbes = {associatedLights.begin(), associatedLights.end()};
 				return s_shadowProbeShadowFlag;
@@ -86,7 +90,7 @@ namespace RenderCore { namespace LightingEngine
 		{
 			if (projectionId == s_shadowProbeShadowFlag) {
 				_shadowProbes.reset();
-				_spPrepareDelegate.reset();
+				_shadowProbesManager.reset();
 				ChangeLightsShadowOperator(_lightsAssignedToShadowProbes, ~0u);
 				_lightsAssignedToShadowProbes.clear();
 			} else {
@@ -97,8 +101,7 @@ namespace RenderCore { namespace LightingEngine
 		void* TryGetShadowProjectionInterface(ShadowProjectionId projectionid, uint64_t interfaceTypeCode) override
 		{
 			if (projectionid == s_shadowProbeShadowFlag) {
-				if (interfaceTypeCode == typeid(IPreparable).hash_code()) return (IPreparable*)_spPrepareDelegate.get();
-				else if (interfaceTypeCode == typeid(IShadowProbeDatabase).hash_code()) return dynamic_cast<IShadowProbeDatabase*>(_spPrepareDelegate.get());
+				if (interfaceTypeCode == typeid(ISemiStaticShadowProbeScheduler).hash_code()) return _shadowProbesManager.get();
 				return nullptr;
 			} else {
 				return Internal::StandardLightScene::TryGetShadowProjectionInterface(projectionid, interfaceTypeCode);
@@ -114,7 +117,7 @@ namespace RenderCore { namespace LightingEngine
 
 		ShadowPreparerIdMapping _shadowOperatorIdMapping;
 		std::shared_ptr<ShadowProbes> _shadowProbes;
-		std::shared_ptr<IPreparable> _spPrepareDelegate;
+		std::shared_ptr<Internal::SemiStaticShadowProbeScheduler> _shadowProbesManager;
 		std::vector<LightSourceId> _lightsAssignedToShadowProbes;
 
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;

@@ -20,6 +20,7 @@ namespace RenderCore { namespace LightingEngine
 	class SkyOperator;
 	class DynamicShadowPreparers;
 	class SHCoefficientsAsset;
+	namespace Internal { class SemiStaticShadowProbeScheduler; }
 
 	class ForwardPlusLightScene : public Internal::StandardLightScene, public IDistantIBLSource, public ISSAmbientOcclusion, public std::enable_shared_from_this<ForwardPlusLightScene>
 	{
@@ -53,6 +54,7 @@ namespace RenderCore { namespace LightingEngine
 		virtual void DestroyShadowProjection(ShadowProjectionId) override;
 		virtual void* TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode) override;
 		virtual void* TryGetShadowProjectionInterface(ShadowProjectionId projectionid, uint64_t interfaceTypeCode) override;
+		virtual void* QueryInterface(uint64_t typeCode) override;
 
 		// IDistantIBLSource
 		virtual void SetEquirectangularSource(std::shared_ptr<::Assets::OperationContext>, StringSection<> input) override;
@@ -93,7 +95,7 @@ namespace RenderCore { namespace LightingEngine
 		ShadowPreparerIdMapping _shadowPreparerIdMapping;
 
 		std::shared_ptr<ShadowProbes> _shadowProbes;
-		std::shared_ptr<IPreparable> _spPrepareDelegate;
+		std::shared_ptr<Internal::SemiStaticShadowProbeScheduler> _shadowProbesManager;
 
 		class AmbientLightConfig;
 		std::shared_ptr<AmbientLightConfig> _ambientLight;

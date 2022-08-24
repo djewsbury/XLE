@@ -144,7 +144,14 @@ namespace RenderCore { namespace LightingEngine
 			auto desc = _shadowPreparers->CreateShadowProjection(preparerId);
 			return AddShadowProjection(opId, associatedLight, std::move(desc));
 		} else if (opId == _shadowPreparerIdMapping._operatorForStaticProbes) {
-			Throw(std::runtime_error("Use the multi-light shadow projection constructor for shadow probes"));
+			if (!_shadowProbes) {
+				_shadowProbes = std::make_shared<ShadowProbes>(
+					_pipelineAccelerators, *_techDelBox, _shadowPreparerIdMapping._shadowProbesCfg);
+				_shadowProbesManager = std::make_shared<Internal::SemiStaticShadowProbeScheduler>(_shadowProbes, this);
+			}
+			assert(_shadowProbesManager);
+			_shadowProbesManager->AddLight(associatedLight);
+			return s_shadowProbeShadowFlag;
 		}
 		return ~0u;
 	}
@@ -152,12 +159,16 @@ namespace RenderCore { namespace LightingEngine
 	ILightScene::ShadowProjectionId ForwardPlusLightScene::CreateShadowProjection(ShadowOperatorId opId, IteratorRange<const LightSourceId*> associatedLights)
 	{
 		if (opId == _shadowPreparerIdMapping._operatorForStaticProbes) {
-			if (_shadowProbes)
-				Throw(std::runtime_error("Cannot create multiple shadow probe databases in on light scene."));
-			
-			_shadowProbes = std::make_shared<ShadowProbes>(
-				_pipelineAccelerators, *_techDelBox, _shadowPreparerIdMapping._shadowProbesCfg);
-			_spPrepareDelegate = Internal::CreateShadowProbePrepareDelegate(_shadowProbes, associatedLights, this);
+			if (!_shadowProbes) {
+				_shadowProbes = std::make_shared<ShadowProbes>(
+					_pipelineAccelerators, *_techDelBox, _shadowPreparerIdMapping._shadowProbesCfg);
+				_shadowProbesManager = std::make_shared<Internal::SemiStaticShadowProbeScheduler>(_shadowProbes, this);
+			}
+
+			assert(_shadowProbesManager);
+			for (auto l:associatedLights)
+				_shadowProbesManager->AddLight(l);
+
 			return s_shadowProbeShadowFlag;
 		} else {
 			Throw(std::runtime_error("This shadow projection operation can't be used with the multi-light constructor variation"));
@@ -169,7 +180,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (projectionId == s_shadowProbeShadowFlag) {
 			_shadowProbes.reset();
-			_spPrepareDelegate.reset();
+			_shadowProbesManager.reset();
 		} else {
 			return Internal::StandardLightScene::DestroyShadowProjection(projectionId);
 		}
@@ -189,12 +200,18 @@ namespace RenderCore { namespace LightingEngine
 	void* ForwardPlusLightScene::TryGetShadowProjectionInterface(ShadowProjectionId projectionid, uint64_t interfaceTypeCode)
 	{
 		if (projectionid == s_shadowProbeShadowFlag) {
-			if (interfaceTypeCode == typeid(IPreparable).hash_code()) return (IPreparable*)_spPrepareDelegate.get();
-			else if (interfaceTypeCode == typeid(IShadowProbeDatabase).hash_code()) return dynamic_cast<IShadowProbeDatabase*>(_spPrepareDelegate.get());
+			if (interfaceTypeCode == typeid(ISemiStaticShadowProbeScheduler).hash_code()) return (ISemiStaticShadowProbeScheduler*)_shadowProbesManager.get();
 			return nullptr;
 		} else {
 			return Internal::StandardLightScene::TryGetShadowProjectionInterface(projectionid, interfaceTypeCode);
 		} 
+	}
+
+	void* ForwardPlusLightScene::QueryInterface(uint64_t typeCode)
+	{
+		if (typeCode == typeid(ISemiStaticShadowProbeScheduler).hash_code())
+			return (ISemiStaticShadowProbeScheduler*)_shadowProbesManager.get();
+		return nullptr;
 	}
 
 	void ForwardPlusLightScene::SetEquirectangularSource(std::shared_ptr<::Assets::OperationContext> loadingContext, StringSection<> input)
@@ -295,6 +312,8 @@ namespace RenderCore { namespace LightingEngine
 	void ForwardPlusLightScene::CompleteInitialization(IThreadContext& threadContext)
 	{
 		_lightTiler->CompleteInitialization(threadContext);
+		if (_shadowProbes)
+			_shadowProbes->CompleteInitialization(threadContext);
 	}
 
 	class ForwardPlusLightScene::ShaderResourceDelegate : public Techniques::IShaderResourceDelegate

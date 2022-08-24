@@ -113,62 +113,210 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class ShadowProbePrepareDelegate : public IPreparable, public IShadowProbeDatabase
+	static ShadowProbes::Probe GetProbeDesc(ILightScene& lightScene, ILightScene::LightSourceId lightId)
 	{
-	public:
-		static std::vector<ShadowProbes::Probe> MakeProbes(ILightScene& lightScene, IteratorRange<const ILightScene::LightSourceId*> lights, float defaultNearRadius)
+		ShadowProbes::Probe probe;
+		probe._position = Zero<Float3>();
+		probe._nearRadius = 1.f;
+		probe._farRadius = 1024.f;
+		auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(lightId);
+		assert(positional);
+		if (positional) {
+			probe._position = ExtractTranslation(positional->GetLocalToWorld());
+			probe._nearRadius = ExtractUniformScaleFast(AsFloat3x4(positional->GetLocalToWorld()));
+		}
+		auto* finite = lightScene.TryGetLightSourceInterface<IFiniteLightSource>(lightId);
+		if (finite)
+			probe._farRadius = finite->GetCutoffRange();
+		return probe;
+	}
+
+	std::shared_ptr<IProbeRenderingInstance> SemiStaticShadowProbeScheduler::BeginPrepare(IThreadContext& threadContext, unsigned maxProbeCount)
+	{
+		// Can be called in a background thread -- begins prepare for the most important queued probes, as 
+		// calculated in the last OnFrameBarrier
+
+		std::vector<std::pair<unsigned, ShadowProbes::Probe>> probesToPrepare;
 		{
-			std::vector<ShadowProbes::Probe> result;
-			result.reserve(lights.size());
-			for (auto pending:lights) {
-				ShadowProbes::Probe probe;
-				probe._position = Zero<Float3>();
-				probe._nearRadius = 1.f;
-				probe._farRadius = 1024.f;
-				float lightSourceRadius = 0.f;
-				auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(pending);
-				if (positional) {
-					probe._position = ExtractTranslation(positional->GetLocalToWorld());
-					lightSourceRadius = ExtractUniformScaleFast(AsFloat3x4(positional->GetLocalToWorld()));
-				}
-				auto* finite = lightScene.TryGetLightSourceInterface<IFiniteLightSource>(pending);
-				if (finite) {
-					probe._nearRadius = std::max(lightSourceRadius, defaultNearRadius);
-					probe._farRadius = finite->GetCutoffRange();
-				}
+			ScopedLock(_lock);
+			if (_lastEvalBestRenders.empty()) return nullptr;
 
-				auto* databaseEntry = lightScene.TryGetLightSourceInterface<IAttachedShadowProbe>(pending);
-				if (databaseEntry) {
-					// we use zero as a sentinal, so add one to the actual index
-					databaseEntry->SetDatabaseEntry(unsigned(result.size()+1));
-				}
+			probesToPrepare.reserve(_lastEvalBestRenders.size());
+			uint64_t probeSlotsToUse = _lastEvalAvailableProbeSlots;
+			assert(_probeSlotsReservedInBackground == 0);
+			assert(_probeSlotsPreparedInBackground.empty());
+			_probeSlotsReservedInBackground = 0;
+			_probeSlotsPreparedInBackground.clear();
 
-				result.push_back(probe);
+			for (auto q:_lastEvalBestRenders) {
+				if (probesToPrepare.size() >= maxProbeCount) break;
+
+				auto i = LowerBound(_associatedLights, q);
+				assert(i!=_associatedLights.end() && i->first == q);
+
+				auto instanceProbeSlot = xl_clz8(probeSlotsToUse);
+				assert(instanceProbeSlot < 64);
+
+				auto probeDesc = i->second._probeDesc;
+				probeDesc._nearRadius = std::max(probeDesc._nearRadius, _defaultNearRadius);
+				probesToPrepare.emplace_back(instanceProbeSlot, probeDesc);
+
+				_probeSlotsReservedInBackground |= 1ull << uint64_t(instanceProbeSlot);
+				_probeSlotsPreparedInBackground.emplace_back(i->first, instanceProbeSlot);
 			}
-			return result;
+
+			// Ensure that none of the current lights are using any of the probes we're going to rewrite now
+			// Scheduling here is a little complicated, since we're going to rewrite this probe instance pretty very
+			// soon, we don't want it to be read from
+			for (auto& l:_associatedLights) {
+				if (l.second._attachedProbe == ~0u) continue;
+				if (std::find_if(probesToPrepare.begin(), probesToPrepare.end(), [p=l.second._attachedProbe](const auto& q) { return q.first == p; }) != probesToPrepare.end())
+					l.second._attachedProbe = ~0u;
+			}
+
+			assert(!probesToPrepare.empty());
 		}
 
-		std::shared_ptr<IProbeRenderingInstance> BeginPrepare(IThreadContext& threadContext) override
-		{
-			auto probes = MakeProbes(*_lightScene, _associatedLights, _defaultNearRadius);
-			_shadowProbes->AddProbes(probes);
-			return _shadowProbes->PrepareStaticProbes(threadContext);
-		}
+		return _shadowProbes->PrepareStaticProbes(threadContext, MakeIteratorRange(probesToPrepare));
+	}
 
-		void SetNearRadius(float nearRadius) override { _defaultNearRadius = nearRadius; }
-		float GetNearRadius(float) override { return _defaultNearRadius; }
-
-		std::shared_ptr<ShadowProbes> _shadowProbes;
-		ShadowProbePrepareDelegate(std::shared_ptr<ShadowProbes> shadowProbes, IteratorRange<const ILightScene::LightSourceId*> associatedLights, ILightScene* lightScene) 
-		: _shadowProbes(std::move(shadowProbes)), _associatedLights(associatedLights.begin(), associatedLights.end()), _lightScene(lightScene) {}
-		std::vector<ILightScene::LightSourceId> _associatedLights;
-		ILightScene* _lightScene;
-		float _defaultNearRadius = 1.f;
-	};
-
-	std::shared_ptr<IPreparable> CreateShadowProbePrepareDelegate(std::shared_ptr<ShadowProbes> shadowProbes, IteratorRange<const ILightScene::LightSourceId*> associatedLights, ILightScene* lightScene)
+	void SemiStaticShadowProbeScheduler::EndPrepare(IThreadContext& threadContext)
 	{
-		return std::make_shared<ShadowProbePrepareDelegate>(shadowProbes, associatedLights, lightScene);
+		ScopedLock(_lock);
+		assert(!_probeSlotsPreparedInBackground.empty());
+		assert(_probeSlotsReservedInBackground != 0);
+
+		// Assign the probes we just completed into the main list
+		// note -- scheduling is complicated here, since we've just completed and queued the GPU commands
+
+		for (auto q:_probeSlotsPreparedInBackground) {
+			auto i = LowerBound(_associatedLights, q.first);
+			if (i->first == q.first) {
+				assert(i->second._attachedProbe == ~0u);
+				i->second._attachedProbe = q.second;
+				i->second._fading = 1;		// begins at minimum fade in
+				_unassociatedProbeSlots &= ~(1ull << uint64_t(q.second));
+			} else {
+				// Light was removed while begin prepared. The probe slot should just become unassociated
+				_unassociatedProbeSlots |= 1ull << uint64_t(q.second);
+			}
+		}
+
+		_probeSlotsReservedInBackground = 0;
+		_probeSlotsPreparedInBackground.clear();
+	}
+
+	void SemiStaticShadowProbeScheduler::SetNearRadius(float nearRadius) { _defaultNearRadius = nearRadius; }
+	float SemiStaticShadowProbeScheduler::GetNearRadius(float) { return _defaultNearRadius; }
+
+	auto SemiStaticShadowProbeScheduler::OnFrameBarrier(const Float3& newViewPosition, float drawDistance) -> OnFrameBarrierResult
+	{
+		ScopedLock(_lock);
+
+		// Given the current set of lights, calculate the optimal use of a finite number of shadow probe database entries
+		// The easiest way to do this is to just the sort the list of lights we have by distance
+		// but ideally this should really be tied into some visibility solution -- and perhaps avoid updating every frame
+		std::vector<std::pair<ILightScene::LightSourceId, float>> lightsAndDistance;
+		lightsAndDistance.reserve(_associatedLights.size());
+		for (unsigned c=0; c<_associatedLights.size(); ++c)
+			lightsAndDistance.emplace_back(_associatedLights[c].first, Magnitude(_associatedLights[c].second._probeDesc._position-newViewPosition) - _associatedLights[c].second._probeDesc._farRadius);
+
+		if (lightsAndDistance.size() > _probeSlotsCount) {
+			// find the smallest N items and then restore sort order
+			std::nth_element(lightsAndDistance.begin(), lightsAndDistance.begin()+_probeSlotsCount, lightsAndDistance.end(), CompareSecond2{});
+			lightsAndDistance.erase(lightsAndDistance.begin()+_probeSlotsCount, lightsAndDistance.end());
+			std::sort(lightsAndDistance.begin(), lightsAndDistance.end(), CompareFirst2{});
+		}
+		
+		const int fadeTransitionInFrames = 16;
+
+		// compare to the list lights currently in the database and figure out
+		// evictions and new renderings
+		std::pair<ILightScene::LightSourceId, float> potentialNewRenders[lightsAndDistance.size()];
+		unsigned potentialRenderCount = 0;
+
+		auto li = _associatedLights.begin();
+		auto newStateIterator = lightsAndDistance.begin();
+		assert(_probeSlotsCount <= 64u);	// has to be small, because we're 
+		uint64_t availableProbeSlots = _unassociatedProbeSlots;
+		while (newStateIterator != lightsAndDistance.end()) {
+			while (li != _associatedLights.end() && li->first < newStateIterator->first) {
+				// This light fell out of the close lights list
+				li->second._fading = std::max(li->second._fading-1, 0);
+				if (!li->second._fading && li->second._attachedProbe != ~0u)
+					availableProbeSlots |= 1ull << uint64_t(li->second._attachedProbe);
+				++li;
+			}
+			assert(li != _associatedLights.end());		// shouldn't happen so long as all lights in lightsAndDistance are in _associatedLights
+			assert(li->first == newStateIterator->first);
+			if (li->second._attachedProbe != ~0u) {
+				li->second._fading = std::min(li->second._fading+1, fadeTransitionInFrames);
+			} else {
+				// This light is new to the close lights list. Note that newStateIterator->second is distance - cutoff range
+				if (newStateIterator->second < drawDistance)
+					potentialNewRenders[potentialRenderCount++] = *newStateIterator;
+			}
+			++li;
+			++newStateIterator;
+		}
+
+		// all remaining lights fell off the close lights list
+		for (; li!=_associatedLights.end(); ++li) {
+			li->second._fading = std::max(li->second._fading-1, 0);
+			if (!li->second._fading && li->second._attachedProbe != ~0u)
+				availableProbeSlots |= 1ull << uint64_t(li->second._attachedProbe);
+		}
+
+		// avoid stealing something begin written to in the background right now
+		availableProbeSlots &= ~_probeSlotsReservedInBackground;
+
+		// If we have some lights to render, we need to prioritize them and record
+		auto freeSlotCount =  countbits(availableProbeSlots);
+		if (potentialRenderCount && freeSlotCount) {
+			if (freeSlotCount < potentialRenderCount) {
+				std::partial_sort(potentialNewRenders, potentialNewRenders+freeSlotCount, potentialNewRenders+potentialRenderCount, CompareSecond2{});
+				potentialRenderCount = freeSlotCount;
+			} else {
+				std::sort(potentialNewRenders, potentialNewRenders+potentialRenderCount, CompareSecond2{});
+			}
+			_lastEvalBestRenders.clear();
+			_lastEvalBestRenders.reserve(potentialRenderCount);
+			for (unsigned c=0; c<potentialRenderCount; ++c) _lastEvalBestRenders.push_back(potentialNewRenders[c].first);
+		} else {
+			_lastEvalBestRenders.clear();
+		}
+		_lastEvalAvailableProbeSlots = availableProbeSlots;
+
+		return _lastEvalBestRenders.empty() ? OnFrameBarrierResult::NoChange : OnFrameBarrierResult::QueuedRenders;
+	}
+
+	void SemiStaticShadowProbeScheduler::AddLight(ILightScene::LightSourceId lightId)
+	{
+		ScopedLock(_lock);
+		auto i = LowerBound(_associatedLights, lightId);
+		assert(i == _associatedLights.end() || i->first != lightId);		// attempting to add the same light twice
+
+		AssociatedLight light;
+		light._probeDesc = GetProbeDesc(*_lightScene, lightId);
+		_associatedLights.emplace_back(lightId, light);
+	}
+
+	void SemiStaticShadowProbeScheduler::RemoveLight(ILightScene::LightSourceId lightId)
+	{
+		ScopedLock(_lock);
+		auto i = LowerBound(_associatedLights, lightId);
+		assert(i != _associatedLights.end() && i->first != lightId);		// attempt to remove a light that hasn't previously been added
+		if (i != _associatedLights.end() && i->first != lightId) return;
+		_associatedLights.erase(i);
+	}
+
+	SemiStaticShadowProbeScheduler::SemiStaticShadowProbeScheduler(std::shared_ptr<ShadowProbes> shadowProbes, ILightScene* lightScene) 
+	: _shadowProbes(std::move(shadowProbes)), _lightScene(lightScene)
+	{
+		_probeSlotsCount = _shadowProbes->GetReservedProbeCount();
+		assert(_probeSlotsCount <= 64);
+		_unassociatedProbeSlots = (_probeSlotsCount == 64u) ? ~0ull : (1ull << uint64_t(_probeSlotsCount));
+		_lastEvalBestRenders.reserve(_probeSlotsCount);
 	}
 
 }}}

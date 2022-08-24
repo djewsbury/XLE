@@ -201,10 +201,10 @@ namespace UnitTests
 			RenderCore::IThreadContext& threadContext) override
 		{ 
 			if (_shadowProjectionId.has_value()) {
-				if (auto* props = lightScene.TryGetShadowProjectionInterface<RenderCore::LightingEngine::IShadowProbeDatabase>(*_shadowProjectionId))
+				if (auto* props = lightScene.TryGetShadowProjectionInterface<RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler>(*_shadowProjectionId))
 					props->SetNearRadius(0.2f);
-				if (auto* prepareable = lightScene.TryGetShadowProjectionInterface<RenderCore::LightingEngine::IPreparable>(*_shadowProjectionId))
-					return prepareable->BeginPrepare(threadContext);
+				if (auto* prepareable = lightScene.TryGetShadowProjectionInterface<RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler>(*_shadowProjectionId))
+					return prepareable->BeginPrepare(threadContext, 64);
 			}
 			return nullptr;
 		}

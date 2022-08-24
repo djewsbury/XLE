@@ -5,6 +5,7 @@
 #pragma once
 
 #include "ILightScene.h"
+#include "ShadowProbes.h"
 #include "../Types.h"
 #include "../../Assets/Marker.h"
 #include <memory>
@@ -19,11 +20,12 @@ namespace RenderCore { namespace Techniques
 namespace RenderCore { namespace LightingEngine
 {
 	class IPreparedShadowResult;
-	class IPreparable;
 	class ShadowProbes;
 	class LightingTechniqueIterator;
 	class LightingTechniqueSequence;
+	class IProbeRenderingInstance;
 }}
+namespace RenderCore { class IThreadContext; }
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
@@ -39,6 +41,44 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	::Assets::MarkerPtr<Techniques::IShaderResourceDelegate> CreateBuildGBufferResourceDelegate();
 
-	std::shared_ptr<IPreparable> CreateShadowProbePrepareDelegate(std::shared_ptr<ShadowProbes> shadowProbes, IteratorRange<const ILightScene::LightSourceId*> associatedLights, ILightScene* lightScene);
+	class SemiStaticShadowProbeScheduler : public ISemiStaticShadowProbeScheduler
+	{
+	public:
+		void AddLight(ILightScene::LightSourceId);
+		void RemoveLight(ILightScene::LightSourceId);
+
+		OnFrameBarrierResult OnFrameBarrier(const Float3& newViewPosition, float drawDistance) override;
+		void SetNearRadius(float nearRadius) override;
+		float GetNearRadius(float) override;
+
+		std::shared_ptr<IProbeRenderingInstance> BeginPrepare(IThreadContext& threadContext, unsigned maxProbeCount) override;
+		void EndPrepare(IThreadContext& threadContext) override;
+
+		SemiStaticShadowProbeScheduler(
+			std::shared_ptr<ShadowProbes> shadowProbes,
+			ILightScene* lightScene) ;
+	private:
+		Threading::Mutex _lock;
+		std::vector<ILightScene::LightSourceId> _lastEvalBestRenders;
+		uint64_t _lastEvalAvailableProbeSlots = 0;
+		uint64_t _unassociatedProbeSlots = 0ull;
+		unsigned _probeSlotsCount = 0;
+
+		uint64_t _probeSlotsReservedInBackground = 0ull;
+		std::vector<std::pair<ILightScene::LightSourceId, unsigned>> _probeSlotsPreparedInBackground;
+
+		struct AssociatedLight
+		{
+			ShadowProbes::Probe _probeDesc;
+			unsigned _attachedProbe = ~0u;
+			int _fading = 0;
+		};
+		std::vector<std::pair<ILightScene::LightSourceId, AssociatedLight>> _associatedLights;
+
+		std::shared_ptr<ShadowProbes> _shadowProbes;
+		ILightScene* _lightScene;
+		float _defaultNearRadius = 1.f;
+	};
+	
 }}}
 

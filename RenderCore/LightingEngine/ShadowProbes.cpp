@@ -81,7 +81,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Assets::PredefinedDescriptorSetLayout> _sequencerDescSetLayout;
 		std::shared_ptr<MultiViewUniformsDelegate> _multiViewUniformsDelegate;
 		std::shared_ptr<Techniques::IDeformAcceleratorPool> _deformAccelerators;
-		bool _pendingRebuild = false;
+		std::atomic<bool> _activeUpdate;
 
 		struct StaticProbePrepareHelper
 		{
@@ -94,7 +94,6 @@ namespace RenderCore { namespace LightingEngine
 			: _pimpl(&pimpl)
 			{
 				auto staticDatabaseDesc = TextureDesc::PlainCube(_pimpl->_config._staticFaceDims, _pimpl->_config._staticFaceDims, Format::D16_UNORM);
-				// auto staticDatabaseDesc = TextureDesc::Plain2D(_pimpl->_config._staticFaceDims, _pimpl->_config._staticFaceDims, Format::D16_UNORM);
 				staticDatabaseDesc._arrayCount = 6*_pimpl->_probes.size();
 				Techniques::PreregisteredAttachment preregisteredAttachments[] {
 					semanticProbePrepare,
@@ -125,6 +124,8 @@ namespace RenderCore { namespace LightingEngine
 				sp.SetName("static-shadow-prepare");
 				fragment.AddSubpass(std::move(sp));
 
+				_techContext._attachmentPool->Bind(semanticProbePrepare, _pimpl->_staticTable);
+
 				Techniques::RenderPassBeginDesc beginInfo;
 				return Techniques::RenderPassInstance{*_parsingContext, fragment, beginInfo};
 			}
@@ -142,19 +143,37 @@ namespace RenderCore { namespace LightingEngine
 			const auto& p = probes[c/6];
 			float near_ = p._nearRadius;
 			float far_ = p._farRadius;
+			assert(near_ > 0 && far_ > 0);
 			result.push_back(Techniques::BuildCubemapProjectionDesc(c%6, p._position, near_, far_));
 		}
 		return result;
+	}
+
+	static std::shared_ptr<IResource> CreateStaticShadowProbeTable(IThreadContext& threadContext, IteratorRange<const ShadowProbes::Probe*> probes)
+	{
+		std::vector<CB_StaticShadowProbeDesc> probeUniforms;
+		auto projDescs = CreateProjectionDescs(probes);
+		probeUniforms.reserve(projDescs.size());
+		for (const auto& projDesc:projDescs) {
+			auto miniProj = ExtractMinimalProjection(projDesc._cameraToProjection);
+			probeUniforms.push_back(CB_StaticShadowProbeDesc{miniProj[2], miniProj[3]});
+		}
+		auto& device = *threadContext.GetDevice();
+		auto probeUniformsRes = device.CreateResource(
+			CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(CB_StaticShadowProbeDesc)*probeUniforms.size(), sizeof(CB_StaticShadowProbeDesc)), "shadow-probe-list"));
+		Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(*probeUniformsRes, MakeIteratorRange(probeUniforms));
+		return probeUniformsRes;
 	}
 
 	class ShadowProbes::ProbeRenderingInstance : public IProbeRenderingInstance
 	{
 	public:
 		unsigned _probeIterator = 0;
-		std::vector<Float4x4> _pendingViews;	// candidate for subframe heap
+		std::vector<Float4x4> _pendingViews;
 		std::unique_ptr<ShadowProbes::Pimpl::StaticProbePrepareHelper> _staticPrepareHelper;
 		ShadowProbes::Pimpl* _pimpl = nullptr;
 		Techniques::DrawablesPacket _drawablePkt;
+		std::vector<std::pair<unsigned, Probe>> _probesToRender;
 
 		LightingTechniqueInstance::Step GetNextStep() override
 		{
@@ -162,18 +181,12 @@ namespace RenderCore { namespace LightingEngine
 				if (!_pendingViews.empty()) {
 					// Commit the objects that were prepared for rendering
 					if (!_drawablePkt._drawables.empty()) {
-						std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
-						auto prepareFuture = preparePromise.get_future();
-						Techniques::PrepareResources(std::move(preparePromise), *_pimpl->_pipelineAccelerators, *_pimpl->_probePrepareCfg, _drawablePkt);
-						YieldToPool(prepareFuture);
-						auto requiredVisibility = prepareFuture.get();
-						_staticPrepareHelper->_parsingContext->SetPipelineAcceleratorsVisibility(
-							_pimpl->_pipelineAccelerators->VisibilityBarrier(requiredVisibility._pipelineAcceleratorsVisibility));
-						_staticPrepareHelper->_parsingContext->RequireCommandList(requiredVisibility._bufferUploadsVisibility);
+
+						YieldForRequiredResources();
 
 						_pimpl->_multiViewUniformsDelegate->SetWorldToProjections(MakeIteratorRange(_pendingViews));
 						_staticPrepareHelper->_parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
-						auto rpi = _staticPrepareHelper->BeginRPI(_probeIterator*6, _pendingViews.size());
+						auto rpi = _staticPrepareHelper->BeginRPI(_probesToRender[_probeIterator].first*6, _pendingViews.size());
 						TRY {
 							Techniques::Draw(
 								*_staticPrepareHelper->_parsingContext, *_pimpl->_pipelineAccelerators,
@@ -182,26 +195,27 @@ namespace RenderCore { namespace LightingEngine
 						} CATCH_END
 						_drawablePkt.Reset();
 
-						auto staticTable = rpi.GetDepthStencilAttachmentResource();
-						assert(!_pimpl->_staticTable || _pimpl->_staticTable == staticTable);
-						_pimpl->_staticTable = staticTable;
+						#if defined(_DEBUG)
+							auto staticTable = rpi.GetDepthStencilAttachmentResource();
+							assert(_pimpl->_staticTable == staticTable);
+						#endif
 					}
 					_probeIterator += _pendingViews.size()/6;
 					_pendingViews.clear();
 				}
 
-				auto probeCount = _pimpl->_probes.size();
+				auto probeCount = _probesToRender.size();
 				auto nextBatchCount = std::min(probeCount -_probeIterator, s_maxProbesPerBatch);
 				if (!nextBatchCount) {
 					// Completed all of the probes
-					if (_pimpl->_staticTable)		// (this will be null if all probes had no drawables)
-						_pimpl->_staticTableSRV = _pimpl->_staticTable->CreateTextureView(BindFlag::ShaderResource);
+					UpdateUniforms(_staticPrepareHelper->_parsingContext->GetThreadContext());
 					return { LightingEngine::StepType::None };
 				}
 				LightingTechniqueInstance::Step result;
 				result._type = LightingEngine::StepType::MultiViewParseScene;
-				result._multiViewDesc = CreateProjectionDescs(
-					MakeIteratorRange(_pimpl->_probes.begin()+_probeIterator, _pimpl->_probes.begin()+_probeIterator+nextBatchCount));
+				Probe probesThisStep[nextBatchCount];
+				for (unsigned p=0; p<nextBatchCount; ++p) probesThisStep[p] = _probesToRender[_probeIterator+p].second;
+				result._multiViewDesc = CreateProjectionDescs(MakeIteratorRange(probesThisStep, probesThisStep+nextBatchCount));
 				result._pkts.resize((unsigned)Techniques::Batch::Max);
 				result._pkts[(unsigned)Techniques::Batch::Opaque] = &_drawablePkt;
 				_pendingViews.reserve(result._multiViewDesc.size());
@@ -216,70 +230,85 @@ namespace RenderCore { namespace LightingEngine
 		{
 			return _staticPrepareHelper->_parsingContext->_requiredBufferUploadsCommandList;
 		}
+
+		void UpdateUniforms(IThreadContext& threadContext)
+		{
+			for (const auto&p:_probesToRender)
+				_pimpl->_probes[p.first] = p.second;
+			auto probeUniformsRes = CreateStaticShadowProbeTable(threadContext, _pimpl->_probes);
+			// todo -- we should really flip this into visibility in the main thread
+			_pimpl->_probeUniformsUAV = probeUniformsRes->CreateBufferView(BindFlag::UnorderedAccess);
+		}
+
+		void YieldForRequiredResources()
+		{
+			// wait for resources (shaders, etc)
+			std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
+			auto prepareFuture = preparePromise.get_future();
+			Techniques::PrepareResources(std::move(preparePromise), *_pimpl->_pipelineAccelerators, *_pimpl->_probePrepareCfg, _drawablePkt);
+			YieldToPool(prepareFuture);
+			auto requiredVisibility = prepareFuture.get();
+
+			// update parsing context with required visibility
+			auto currentVisibilityBarrier = _pimpl->_pipelineAccelerators->VisibilityBarrier(requiredVisibility._pipelineAcceleratorsVisibility);
+			_staticPrepareHelper->_parsingContext->SetPipelineAcceleratorsVisibility(currentVisibilityBarrier);
+			_staticPrepareHelper->_parsingContext->RequireCommandList(requiredVisibility._bufferUploadsVisibility);
+		}
+
+		ProbeRenderingInstance(ProbeRenderingInstance&&) = delete;
+		ProbeRenderingInstance&operator=(ProbeRenderingInstance&&) = delete;
+		ProbeRenderingInstance() = default;
+		~ProbeRenderingInstance()
+		{
+			if (_pimpl) {
+				auto prevActiveUpdate = _pimpl->_activeUpdate.exchange(false);
+				assert(prevActiveUpdate);
+			}
+		}
 	};
 
-	std::shared_ptr<IProbeRenderingInstance> ShadowProbes::PrepareDynamicProbes(
-		IThreadContext& threadContext,
-		const Techniques::ProjectionDesc& projDesc,
-		IteratorRange<const AABB*> dynamicObjects)
+	unsigned ShadowProbes::GetReservedProbeCount()
 	{
-		return nullptr;
+		return _pimpl->_probes.size();
 	}
 
-	void ShadowProbes::AddProbes(IteratorRange<const Probe*> probeLocations)
+	std::shared_ptr<IProbeRenderingInstance> ShadowProbes::PrepareStaticProbes(IThreadContext& threadContext, IteratorRange<const std::pair<unsigned, Probe>*> probesAndIndices)
 	{
-		assert(!probeLocations.empty());
-		_pimpl->_probes.insert(_pimpl->_probes.end(), probeLocations.begin(), probeLocations.end());
-		_pimpl->_pendingRebuild = true;
-	}
-
-	std::shared_ptr<IProbeRenderingInstance> ShadowProbes::PrepareStaticProbes(IThreadContext& threadContext)
-	{
-		_pimpl->_staticTable = nullptr;
-		_pimpl->_staticTableSRV = nullptr;
-		_pimpl->_probeUniformsUAV = nullptr;
-		_pimpl->_pendingRebuild = false;
-
-		if (_pimpl->_probes.empty())
+		if (probesAndIndices.empty())
 			return nullptr;
+
+		for (const auto& p:probesAndIndices) assert(p.first < _pimpl->_probes.size());
 
 		auto result = std::make_shared<ProbeRenderingInstance>();
 		result->_pimpl = _pimpl.get();
 		result->_staticPrepareHelper = std::make_unique<ShadowProbes::Pimpl::StaticProbePrepareHelper>(threadContext, *_pimpl);
-
-		// Build the StaticShadowProbeDesc table
-		std::vector<CB_StaticShadowProbeDesc> probeUniforms;
-		auto projDescs = CreateProjectionDescs(_pimpl->_probes);
-		probeUniforms.reserve(projDescs.size());
-		for (const auto& projDesc:projDescs) {
-			auto miniProj = ExtractMinimalProjection(projDesc._cameraToProjection);
-			probeUniforms.push_back(CB_StaticShadowProbeDesc{miniProj[2], miniProj[3]});
-		}
-		auto& device = *threadContext.GetDevice();
-		auto probeUniformsRes = device.CreateResource(
-			CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(CB_StaticShadowProbeDesc)*probeUniforms.size(), sizeof(CB_StaticShadowProbeDesc)), "shadow-probe-list"));
-		Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(*probeUniformsRes, MakeIteratorRange(probeUniforms));
-		_pimpl->_probeUniformsUAV = probeUniformsRes->CreateBufferView(BindFlag::UnorderedAccess);
+		result->_probesToRender.insert(result->_probesToRender.end(), probesAndIndices.begin(), probesAndIndices.end());
+		auto prevActiveUpdate = _pimpl->_activeUpdate.exchange(true);
+		assert(!prevActiveUpdate);
 		return result;
 	}
 
 	IResourceView& ShadowProbes::GetStaticProbesTable() const
 	{
 		assert(_pimpl->_staticTableSRV);
-		assert(!_pimpl->_pendingRebuild);
 		return *_pimpl->_staticTableSRV;
 	}
 
 	IResourceView& ShadowProbes::GetShadowProbeUniforms() const
 	{
 		assert(_pimpl->_probeUniformsUAV);
-		assert(!_pimpl->_pendingRebuild);
 		return *_pimpl->_probeUniformsUAV;
 	}
 
 	bool ShadowProbes::IsReady() const
 	{
-		return _pimpl->_staticTableSRV && !_pimpl->_pendingRebuild;
+		return !!_pimpl->_probeUniformsUAV;
+	}
+
+	void ShadowProbes::CompleteInitialization(IThreadContext& threadContext)
+	{
+		auto tableRes = _pimpl->_staticTable.get();
+		Metal::CompleteInitialization(*Metal::DeviceContext::Get(threadContext), MakeIteratorRange(&tableRes, &tableRes+1));
 	}
 
 	ShadowProbes::ShadowProbes(
@@ -320,6 +349,13 @@ namespace RenderCore { namespace LightingEngine
 					CullMode::Back, flipCulling ? FaceWinding::CW : FaceWinding::CCW),
 				{}, fbDesc, 0);
 		}
+
+		_pimpl->_probes.resize(config._maxStaticProbes, Probe{Zero<Float3>(), 1.f, 1024.f});
+
+		auto staticDatabaseDesc = TextureDesc::PlainCube(_pimpl->_config._staticFaceDims, _pimpl->_config._staticFaceDims, Format::D16_UNORM);
+		staticDatabaseDesc._arrayCount = 6*_pimpl->_probes.size();
+		_pimpl->_staticTable = _pimpl->_pipelineAccelerators->GetDevice()->CreateResource(CreateDesc(BindFlag::ShaderResource | BindFlag::DepthStencil | BindFlag::TransferDst, staticDatabaseDesc, "probe-prepare"));
+		_pimpl->_staticTableSRV = _pimpl->_staticTable->CreateTextureView(BindFlag::ShaderResource);
 	}
 
 	ShadowProbes::ShadowProbes(LightingEngineApparatus& apparatus, const Configuration& config)
@@ -343,5 +379,7 @@ namespace RenderCore { namespace LightingEngine
 			&& lhs._doubleSidedBias._depthBias == rhs._doubleSidedBias._depthBias
 			;
 	}
+
+	ISemiStaticShadowProbeScheduler::~ISemiStaticShadowProbeScheduler() {}
 
 }}
