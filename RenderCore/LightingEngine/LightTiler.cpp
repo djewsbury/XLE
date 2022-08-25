@@ -83,25 +83,32 @@ namespace RenderCore { namespace LightingEngine
 
 			unsigned lightSetIdx = 0;
 			for (auto& lightSet:_lightScene->_tileableLightSets) {
-				for (auto light=lightSet._lights.begin(); light!=lightSet._lights.end(); ++light) {
-					auto& lightDesc = *(Internal::StandardPositionalLight*)light->get();
-					if (frustumTester.TestSphere(lightDesc._position, lightDesc._cutoffRange) == CullTestResult::Culled) continue;
-					
-					float zMin = Dot(Float4{lightDesc._position, 1}, zRow);
-					// take the negative for convenience --> convert to -Z forward into +Z forward
-					zMin = -zMin;
-					float zMax = zMin + lightDesc._cutoffRange * zRowMag;
-					zMin -= lightDesc._cutoffRange * zRowMag;
+				
+				unsigned idxOffset = 0;
+				for (auto q:lightSet._allocatedLights.InternalArray()) {
+					q = ~q;		// bit heap inverts allocations
+					while (q) {
+						auto idx = xl_ctz8(q);
+						q ^= 1ull << uint64_t(idx);
+						idx += idxOffset;
 
-					if (intLight < intLightEnd) {
-						auto lightIdx = unsigned(light-lightSet._lights.begin());
-						assert(lightIdx < 0xffff);
+						auto& lightDesc = *(Internal::StandardPositionalLight*)lightSet._lights[idx].get();
+						if (frustumTester.TestSphere(lightDesc._position, lightDesc._cutoffRange) == CullTestResult::Culled) continue;
+						
+						float zMin = Dot(Float4{lightDesc._position, 1}, zRow);
+						// take the negative for convenience --> convert to -Z forward into +Z forward
+						zMin = -zMin;
+						float zMax = zMin + lightDesc._cutoffRange * zRowMag;
+						zMin -= lightDesc._cutoffRange * zRowMag;
 
-						*intLight++ = IntermediateLight {
-							lightDesc._position, lightDesc._cutoffRange,
-							zMin/farClip, zMax/farClip,
-							(lightSetIdx << 16) | lightIdx };
+						if (intLight < intLightEnd) {
+							*intLight++ = IntermediateLight {
+								lightDesc._position, lightDesc._cutoffRange,
+								zMin/farClip, zMax/farClip,
+								(lightSetIdx << 16) | idx };
+						}
 					}
+					idxOffset += 64;
 				}
 				++lightSetIdx;
 			}

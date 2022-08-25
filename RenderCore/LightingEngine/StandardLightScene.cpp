@@ -19,8 +19,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				return (IFiniteLightSource*)this;
 		} else if (interfaceTypeCode == typeid(StandardPositionalLight).hash_code()) {
 			return this;
-		} else if (interfaceTypeCode == typeid(IAttachedShadowProbe).hash_code()) {
-			return (IAttachedShadowProbe*)this;
 		}
 		return nullptr;
 	}
@@ -45,7 +43,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		assert(set._lights[i->second._lightIndex]);
 
 		// test components first
-		for (auto& comp:set._components)
+		for (auto& comp:set._boundComponents)
 			if (void* interf = comp->QueryInterface(interfaceTypeCode, i->second._lightIndex))
 				return interf;
 
@@ -76,8 +74,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		AddToLookupTable(result, {lightSetIdx, newLightIdx});
 
 		// call components to register this light
-		for (auto& comp:lightSet->_components)
-			comp->RegisterLight(newLightIdx, *lightSet->_lights[newLightIdx]);
+		for (auto& comp:lightSet->_boundComponents)
+			comp->RegisterLight(lightSetIdx, newLightIdx, *lightSet->_lights[newLightIdx]);
 
 		return result;
 	}
@@ -93,8 +91,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		auto* set = (i->second._lightSet == s_dominantLightSetIdx) ? &_dominantLightSet : &_tileableLightSets[i->second._lightSet];
 
 		auto lightDesc = std::move(set->_lights[i->second._lightIndex]);
-		for (const auto& comp:set->_components)
-			comp->DeregisterLight(i->second._lightIndex);
+		for (const auto& comp:set->_boundComponents)
+			comp->DeregisterLight(i->second._lightSet, i->second._lightIndex);
 
 		// Also destroy a shadow projection associated with this light, if it exists
 		if (set->_shadowOperatorId != ~0u) {
@@ -130,19 +128,20 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		unsigned dstSetIdx)
 	{
 		auto* dstSet = &_tileableLightSets[dstSetIdx];
-		auto* srcSet = &_tileableLightSets[i->second._lightSet];	// lookup again
+		auto* srcSet = &_tileableLightSets[i->second._lightSet];
+		assert(dstSetIdx != i->second._lightSet);
 
 		auto l = std::move(srcSet->_lights[i->second._lightIndex]);
 		srcSet->_allocatedLights.Deallocate(i->second._lightIndex);
-		for (const auto& comp:srcSet->_components)
-			comp->DeregisterLight(i->second._lightIndex);
+		for (const auto& comp:srcSet->_boundComponents)
+			comp->DeregisterLight(i->second._lightSet, i->second._lightIndex);
 
 		auto newLightIdx = dstSet->_allocatedLights.Allocate();
 		if (dstSet->_lights.size() <= newLightIdx)
 			dstSet->_lights.resize(newLightIdx+1);
 		dstSet->_lights[newLightIdx] = std::move(l);
-		for (const auto& comp:srcSet->_components)
-			comp->RegisterLight(newLightIdx, *dstSet->_lights[newLightIdx]);
+		for (const auto& comp:srcSet->_boundComponents)
+			comp->RegisterLight(dstSetIdx, newLightIdx, *dstSet->_lights[newLightIdx]);
 
 		i->second = {dstSetIdx, newLightIdx};
 	}
@@ -244,7 +243,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			if (s->_operatorId == lightOperator && s->_shadowOperatorId == shadowOperator)
 				return std::distance(_tileableLightSets.begin(), s);
 		_tileableLightSets.push_back(LightSet{lightOperator, shadowOperator});
-		return _tileableLightSets.size()-1;
+		auto newSetIdx =  (unsigned)_tileableLightSets.size()-1;
+		auto& newSet = _tileableLightSets.back();
+		newSet._boundComponents.reserve(_components.size());
+		for (auto& comp:_components)
+			if (comp->BindToSet(newSet._operatorId, newSet._shadowOperatorId, newSetIdx))
+				newSet._boundComponents.push_back(comp);
+		return newSetIdx;
 	}
 
 	void StandardLightScene::Clear()
@@ -255,6 +260,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		_dominantShadowProjection = {};
 		_dominantLightSet._lights.clear();
 		_dominantLightId = ~0u;
+		_components.clear();		// we have to clear components, because we don't actually remove all lights from the components
 	}
 
 	void StandardLightScene::ReserveLightSourceIds(unsigned idCount)
@@ -269,13 +275,42 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		return nullptr;
 	}
 
+	void StandardLightScene::RegisterComponent(std::shared_ptr<ILightSceneComponent> comp)
+	{
+		_components.push_back(std::move(comp));
+		auto& newComp = _components.back();
+
+		for (unsigned setIdx=0; setIdx<_tileableLightSets.size(); ++setIdx) {
+			auto& set = _tileableLightSets[setIdx];
+			if (newComp->BindToSet(set._operatorId, set._shadowOperatorId, setIdx)) {
+				set._boundComponents.push_back(newComp);
+				for (unsigned lightIdx=0; lightIdx<set._lights.size(); ++lightIdx)
+					newComp->RegisterLight(setIdx, lightIdx, *set._lights[lightIdx]);
+			}
+		}
+	}
+
+	void StandardLightScene::DeregisterComponent(ILightSceneComponent& comp)
+	{
+		for (auto& set:_tileableLightSets)
+			for (auto i=set._boundComponents.begin(); i!=set._boundComponents.end(); ++i) {
+				if (i->get() == &comp) set._boundComponents.erase(i);
+				break;
+			}
+
+		for (auto i=_components.begin(); i!=_components.end(); ++i) {
+			_components.erase(i);
+			break;
+		}
+	}
+
 	StandardLightScene::StandardLightScene()
 	{}
 	StandardLightScene::~StandardLightScene()
 	{}
 
 	ILightBase::~ILightBase() {}
-	ILightComponent::~ILightComponent() {}
+	ILightSceneComponent::~ILightSceneComponent() {}
 }}}
 
 namespace RenderCore { namespace LightingEngine
@@ -334,5 +369,4 @@ namespace RenderCore { namespace LightingEngine
 	IArbitraryShadowProjections::~IArbitraryShadowProjections() {}
 	IOrthoShadowProjections::~IOrthoShadowProjections() {}
 	INearShadowProjection::~INearShadowProjection() {}
-	IAttachedShadowProbe::~IAttachedShadowProbe() {}
 }}

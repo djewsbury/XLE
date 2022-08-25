@@ -138,11 +138,4 @@ namespace RenderCore { namespace LightingEngine
 		virtual void SetProjection(const Float4x4&) = 0;
 		virtual ~INearShadowProjection();
 	};
-
-	class IAttachedShadowProbe
-	{
-	public:
-		virtual void SetDatabaseEntry(unsigned) = 0;
-		virtual ~IAttachedShadowProbe();
-	};
 }}

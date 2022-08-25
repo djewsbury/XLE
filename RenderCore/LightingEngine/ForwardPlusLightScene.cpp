@@ -104,6 +104,12 @@ namespace RenderCore { namespace LightingEngine
 				_dominantLightSet._shadowOperatorId = c;
 			}
 		}
+
+		if (_shadowPreparerIdMapping._operatorForStaticProbes != ~0u) {
+			_shadowProbes = std::make_shared<ShadowProbes>(_pipelineAccelerators, *_techDelBox, _shadowPreparerIdMapping._shadowProbesCfg);
+			_shadowProbesManager = std::make_shared<Internal::SemiStaticShadowProbeScheduler>(_shadowProbes, _shadowPreparerIdMapping._operatorForStaticProbes);
+			RegisterComponent(_shadowProbesManager);
+		}
 	}
 
 	ILightScene::LightSourceId ForwardPlusLightScene::CreateLightSource(ILightScene::LightOperatorId opId)
@@ -144,13 +150,7 @@ namespace RenderCore { namespace LightingEngine
 			auto desc = _shadowPreparers->CreateShadowProjection(preparerId);
 			return AddShadowProjection(opId, associatedLight, std::move(desc));
 		} else if (opId == _shadowPreparerIdMapping._operatorForStaticProbes) {
-			if (!_shadowProbes) {
-				_shadowProbes = std::make_shared<ShadowProbes>(
-					_pipelineAccelerators, *_techDelBox, _shadowPreparerIdMapping._shadowProbesCfg);
-				_shadowProbesManager = std::make_shared<Internal::SemiStaticShadowProbeScheduler>(_shadowProbes, this);
-			}
-			assert(_shadowProbesManager);
-			_shadowProbesManager->AddLight(associatedLight);
+			ChangeLightsShadowOperator(MakeIteratorRange(&associatedLight, &associatedLight+1), _shadowPreparerIdMapping._operatorForStaticProbes);
 			return s_shadowProbeShadowFlag;
 		}
 		return ~0u;
@@ -159,16 +159,7 @@ namespace RenderCore { namespace LightingEngine
 	ILightScene::ShadowProjectionId ForwardPlusLightScene::CreateShadowProjection(ShadowOperatorId opId, IteratorRange<const LightSourceId*> associatedLights)
 	{
 		if (opId == _shadowPreparerIdMapping._operatorForStaticProbes) {
-			if (!_shadowProbes) {
-				_shadowProbes = std::make_shared<ShadowProbes>(
-					_pipelineAccelerators, *_techDelBox, _shadowPreparerIdMapping._shadowProbesCfg);
-				_shadowProbesManager = std::make_shared<Internal::SemiStaticShadowProbeScheduler>(_shadowProbes, this);
-			}
-
-			assert(_shadowProbesManager);
-			for (auto l:associatedLights)
-				_shadowProbesManager->AddLight(l);
-
+			ChangeLightsShadowOperator(associatedLights, _shadowPreparerIdMapping._operatorForStaticProbes);
 			return s_shadowProbeShadowFlag;
 		} else {
 			Throw(std::runtime_error("This shadow projection operation can't be used with the multi-light constructor variation"));
@@ -280,6 +271,9 @@ namespace RenderCore { namespace LightingEngine
 				auto op = _tileableLightSets[set]._operatorId;
 				auto& lightDesc = *(ForwardPlusLightDesc*)_tileableLightSets[set]._lights[light].get();
 				*i = MakeLightUniforms(lightDesc, _positionalLightOperators[op]);
+				auto probe = _shadowProbesManager->GetAllocatedDatabaseEntry(set, light);
+				i->_staticProbeDatabaseEntry = probe._databaseIndex;
+				++i->_staticProbeDatabaseEntry;		// ~0u becomes zero, or add one --> because we want zero to be the sentinal
 			}
 			map.FlushCache();
 		}

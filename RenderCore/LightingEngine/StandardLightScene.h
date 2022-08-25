@@ -22,13 +22,14 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		virtual ~ILightBase();
 	};
 
-	class ILightComponent
+	class ILightSceneComponent
 	{
 	public:
-		virtual void RegisterLight(unsigned index, ILightBase& light) = 0;
-		virtual void DeregisterLight(unsigned index);
+		virtual void RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light) = 0;
+		virtual void DeregisterLight(unsigned setIdx, unsigned lightIdx) = 0;
+		virtual bool BindToSet(ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned setIdx) = 0;
 		virtual void* QueryInterface(unsigned lightIdx, uint64_t interfaceTypeCode) = 0;
-		virtual ~ILightComponent();
+		virtual ~ILightSceneComponent();
 	};
 
 	class StandardLightScene : public ILightScene
@@ -39,7 +40,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			LightOperatorId _operatorId = ~0u;
 			ShadowOperatorId _shadowOperatorId = ~0u;
 			std::vector<std::unique_ptr<ILightBase>> _lights;
-			std::vector<std::shared_ptr<ILightComponent>> _components;
+			std::vector<std::shared_ptr<ILightSceneComponent>> _boundComponents;
 			BitHeap _allocatedLights;
 		};
 		std::vector<LightSet> _tileableLightSets;
@@ -62,6 +63,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		LightSourceId _nextLightSource = 0;
 		ShadowProjectionId _nextShadow = 0;
+
+		std::vector<std::shared_ptr<ILightSceneComponent>> _components;
+
+		void RegisterComponent(std::shared_ptr<ILightSceneComponent>);
+		void DeregisterComponent(ILightSceneComponent&);
 
 		virtual void* TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) override;
 		virtual void DestroyLightSource(LightSourceId) override;
@@ -96,7 +102,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			unsigned newSetIdx);
 	};
 
-	class StandardPositionalLight : public ILightBase, public IPositionalLightSource, public IUniformEmittance, public IFiniteLightSource, public IAttachedShadowProbe
+	class StandardPositionalLight : public ILightBase, public IPositionalLightSource, public IUniformEmittance, public IFiniteLightSource
 	{
 	public:
 		Float3x3    _orientation;
@@ -107,8 +113,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		Float3      _brightness;
 		float       _diffuseWideningMin;
 		float       _diffuseWideningMax;
-
-		unsigned _staticProbeDatabaseEntry = 0;
 
  		virtual void SetLocalToWorld(const Float4x4& localToWorld) override
 		{
@@ -155,9 +159,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		{
 			return Float2 { _diffuseWideningMin, _diffuseWideningMax };
 		}
-		
-		virtual void SetDatabaseEntry(unsigned newEntry) override { _staticProbeDatabaseEntry = newEntry; };
-		
+	
 		virtual void* QueryInterface(uint64_t interfaceTypeCode) override;
 
 		struct Flags

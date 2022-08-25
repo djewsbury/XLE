@@ -5,6 +5,7 @@
 #pragma once
 
 #include "ILightScene.h"
+#include "StandardLightScene.h"
 #include "ShadowProbes.h"
 #include "../Types.h"
 #include "../../Assets/Marker.h"
@@ -30,6 +31,8 @@ namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
 	class ILightBase;
+	class ILightSceneComponent;
+
 	std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
 		LightingTechniqueIterator& iterator,
 		LightingTechniqueSequence& sequence,
@@ -41,12 +44,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	::Assets::MarkerPtr<Techniques::IShaderResourceDelegate> CreateBuildGBufferResourceDelegate();
 
-	class SemiStaticShadowProbeScheduler : public ISemiStaticShadowProbeScheduler
+	class SemiStaticShadowProbeScheduler : public ISemiStaticShadowProbeScheduler, public ILightSceneComponent
 	{
 	public:
-		void AddLight(ILightScene::LightSourceId);
-		void RemoveLight(ILightScene::LightSourceId);
-
 		OnFrameBarrierResult OnFrameBarrier(const Float3& newViewPosition, float drawDistance) override;
 		void SetNearRadius(float nearRadius) override;
 		float GetNearRadius(float) override;
@@ -54,33 +54,45 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::shared_ptr<IProbeRenderingInstance> BeginPrepare(IThreadContext& threadContext, unsigned maxProbeCount) override;
 		void EndPrepare(IThreadContext& threadContext) override;
 
+		struct AllocatedDatabaseEntry
+		{
+			unsigned _databaseIndex = ~0u;
+			int _fading = 0;
+		};
+		AllocatedDatabaseEntry GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx);
+
 		SemiStaticShadowProbeScheduler(
 			std::shared_ptr<ShadowProbes> shadowProbes,
-			ILightScene* lightScene) ;
+			ILightScene::ShadowOperatorId operatorId);
+		~SemiStaticShadowProbeScheduler();
 	private:
 		Threading::Mutex _lock;
-		std::vector<ILightScene::LightSourceId> _lastEvalBestRenders;
+
+		using LightIndex = uint64_t;		// encoded set index and light index within that set
+		std::vector<LightIndex> _lastEvalBestRenders;
 		uint64_t _lastEvalAvailableProbeSlots = 0;
 		uint64_t _unassociatedProbeSlots = 0ull;
 		unsigned _probeSlotsCount = 0;
 
 		uint64_t _probeSlotsReservedInBackground = 0ull;
-		std::vector<std::pair<ILightScene::LightSourceId, unsigned>> _probeSlotsPreparedInBackground;
+		std::vector<std::pair<LightIndex, unsigned>> _probeSlotsPreparedInBackground;
 		bool _readyToCommitBackgroundChanges = false;
 		void CommitBackgroundChangesAlreadyLocked();
 
-		std::vector<std::pair<ILightScene::LightSourceId, ShadowProbes::Probe>> _registeredLights;
-
-		struct AllocatedProbe
-		{
-			unsigned _attachedProbe = ~0u;
-			int _fading = 0;
-		};
-		std::vector<std::pair<ILightScene::LightSourceId, AllocatedProbe>> _allocatedProbes;
+		std::vector<std::pair<LightIndex, AllocatedDatabaseEntry>> _allocatedDatabaseEntries;
 
 		std::shared_ptr<ShadowProbes> _shadowProbes;
-		ILightScene* _lightScene;
+
+		class SceneSet;
+		std::vector<SceneSet> _sceneSets;
+		ILightScene::ShadowOperatorId _operatorId;
 		float _defaultNearRadius = 1.f;
+
+		// ILightSceneComponent
+		void RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light) override;
+		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
+		bool BindToSet(ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned setIdx) override;
+		void* QueryInterface(unsigned lightIdx, uint64_t interfaceTypeCode) override;
 	};
 	
 }}}

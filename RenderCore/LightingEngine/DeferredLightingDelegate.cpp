@@ -67,6 +67,7 @@ namespace RenderCore { namespace LightingEngine
 		ShadowProjectionId CreateShadowProjection(ShadowOperatorId opId, IteratorRange<const LightSourceId*> associatedLights) override
 		{
 			if (opId == _shadowOperatorIdMapping._operatorForStaticProbes) {
+				#if 0
 				if (!_shadowProbes) {
 					_shadowProbes = std::make_shared<ShadowProbes>(
 						_pipelineAccelerators, *_techDelBox, _shadowOperatorIdMapping._shadowProbesCfg);
@@ -79,6 +80,8 @@ namespace RenderCore { namespace LightingEngine
 
 				ChangeLightsShadowOperator(associatedLights, opId);
 				_lightsAssignedToShadowProbes = {associatedLights.begin(), associatedLights.end()};
+				#endif
+				assert(0);
 				return s_shadowProbeShadowFlag;
 			} else {
 				Throw(std::runtime_error("This shadow projection operation can't be used with the multi-light constructor variation"));
