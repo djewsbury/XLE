@@ -822,7 +822,6 @@ namespace RenderCore { namespace LightingEngine
 			}
 			_prepareResourcesIterator->_requiredResources.clear();	// have to clear, can only query the futures once
 			
-			auto future = promise.get_future();
 			if (futures->_pendingFutures.empty()) {
 				promise.set_value(futures->_starterVisibility);
 			} else {
