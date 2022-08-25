@@ -8,6 +8,7 @@
 #include "StandardLightOperators.h"
 #include "../../Math/Transformations.h"
 #include "../../Math/ProjectionMath.h"
+#include "../../Utility/BitUtils.h"
 
 namespace RenderCore { namespace Techniques { class ParsingContext; }}
 namespace RenderCore { namespace LightingEngine { class ShadowProbes; }}
@@ -21,21 +22,30 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		virtual ~ILightBase();
 	};
 
+	class ILightComponent
+	{
+	public:
+		virtual void RegisterLight(unsigned index, ILightBase& light) = 0;
+		virtual void DeregisterLight(unsigned index);
+		virtual void* QueryInterface(unsigned lightIdx, uint64_t interfaceTypeCode) = 0;
+		virtual ~ILightComponent();
+	};
+
 	class StandardLightScene : public ILightScene
 	{
 	public:
-		struct Light
-		{
-			LightSourceId _id;
-			std::unique_ptr<ILightBase> _desc;
-		};
 		struct LightSet
 		{
 			LightOperatorId _operatorId = ~0u;
 			ShadowOperatorId _shadowOperatorId = ~0u;
-			std::vector<Light> _lights;
+			std::vector<std::unique_ptr<ILightBase>> _lights;
+			std::vector<std::shared_ptr<ILightComponent>> _components;
+			BitHeap _allocatedLights;
 		};
 		std::vector<LightSet> _tileableLightSets;
+
+		struct LightSetAndIndex { unsigned _lightSet, _lightIndex; };
+		std::vector<std::pair<LightSourceId, LightSetAndIndex>> _lookupTable;
 
 		struct DynamicShadowProjection
 		{
@@ -47,6 +57,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::vector<DynamicShadowProjection> _dynamicShadowProjections;
 		
 		LightSet _dominantLightSet;
+		LightSourceId _dominantLightId = ~0u;
 		DynamicShadowProjection _dominantShadowProjection;
 
 		LightSourceId _nextLightSource = 0;
@@ -77,7 +88,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			ShadowOperatorId shadowOperatorId);
 
 		void ReserveLightSourceIds(unsigned idCount); 
-		LightSet& GetLightSet(LightOperatorId, ShadowOperatorId);
+		unsigned GetLightSet(LightOperatorId, ShadowOperatorId);
+
+		void AddToLookupTable(LightSourceId, LightSetAndIndex);
+		void ChangeLightSet(
+			std::vector<std::pair<LightSourceId, LightSetAndIndex>>::iterator i,
+			unsigned newSetIdx);
 	};
 
 	class StandardPositionalLight : public ILightBase, public IPositionalLightSource, public IUniformEmittance, public IFiniteLightSource, public IAttachedShadowProbe

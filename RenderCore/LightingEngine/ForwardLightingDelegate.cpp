@@ -83,7 +83,7 @@ namespace RenderCore { namespace LightingEngine
 				Internal::SetupShadowPrepare(
 					iterator, sequence, 
 					*_lightScene->_dominantShadowProjection._desc, 
-					*_lightScene, _lightScene->_dominantLightSet._lights[0]._id,
+					*_lightScene, _lightScene->_dominantLightId,
 					PipelineType::Graphics,
 					*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool);
 		}

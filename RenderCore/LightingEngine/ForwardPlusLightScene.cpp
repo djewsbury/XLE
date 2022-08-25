@@ -261,33 +261,33 @@ namespace RenderCore { namespace LightingEngine
 		auto& tilerOutputs = _lightTiler->_outputs;
 		auto& device = *_pipelineAccelerators->GetDevice();
 		{
-			Metal::ResourceMap map(
+			Metal::ResourceMap map{
 				device, *uniforms._lightDepthTable,
 				Metal::ResourceMap::Mode::WriteDiscardPrevious, 
-				0, sizeof(unsigned)*tilerOutputs._lightDepthTable.size());
+				0, sizeof(unsigned)*tilerOutputs._lightDepthTable.size()};
 			std::memcpy(map.GetData().begin(), tilerOutputs._lightDepthTable.data(), sizeof(unsigned)*tilerOutputs._lightDepthTable.size());
 			map.FlushCache();
 		}
 		if (tilerOutputs._lightCount) {
-			Metal::ResourceMap map(
+			Metal::ResourceMap map{
 				device, *uniforms._lightList,
 				Metal::ResourceMap::Mode::WriteDiscardPrevious, 
-				0, sizeof(Internal::CB_Light)*tilerOutputs._lightCount);
+				0, sizeof(Internal::CB_Light)*tilerOutputs._lightCount};
 			auto* i = (Internal::CB_Light*)map.GetData().begin();
 			auto end = tilerOutputs._lightOrdering.begin() + tilerOutputs._lightCount;
 			for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
 				auto set = *idx >> 16, light = (*idx)&0xffff;
 				auto op = _tileableLightSets[set]._operatorId;
-				auto& lightDesc = *(ForwardPlusLightDesc*)_tileableLightSets[set]._lights[light]._desc.get();
+				auto& lightDesc = *(ForwardPlusLightDesc*)_tileableLightSets[set]._lights[light].get();
 				*i = MakeLightUniforms(lightDesc, _positionalLightOperators[op]);
 			}
 			map.FlushCache();
 		}
 
 		{
-			Metal::ResourceMap map(
+			Metal::ResourceMap map{
 				device, *uniforms._propertyCB,
-				Metal::ResourceMap::Mode::WriteDiscardPrevious);
+				Metal::ResourceMap::Mode::WriteDiscardPrevious};
 			auto* i = (Internal::CB_EnvironmentProps*)map.GetData().begin();
 			i->_dominantLight = {};
 
@@ -295,7 +295,7 @@ namespace RenderCore { namespace LightingEngine
 				if (_dominantLightSet._lights.size() > 1)
 					Throw(std::runtime_error("Multiple lights in the non-tiled dominant light category. There can be only one dominant light, but it can support more features than the tiled lights"));
 				i->_dominantLight = Internal::MakeLightUniforms(
-					*checked_cast<ForwardPlusLightDesc*>(_dominantLightSet._lights[0]._desc.get()),
+					*checked_cast<ForwardPlusLightDesc*>(_dominantLightSet._lights[0].get()),
 					_positionalLightOperators[_dominantLightSet._operatorId]);
 			}
 

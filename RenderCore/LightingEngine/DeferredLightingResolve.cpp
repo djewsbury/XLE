@@ -516,8 +516,18 @@ namespace RenderCore { namespace LightingEngine
 					continue;	// this is the ambient light
 				}
 
-				assert(i._desc->QueryInterface(typeid(Internal::StandardPositionalLight).hash_code()) == i._desc.get());
-				auto& standardLightDesc = *(Internal::StandardPositionalLight*)i._desc.get();
+				assert(i->QueryInterface(typeid(Internal::StandardPositionalLight).hash_code()) == i.get());
+				auto& standardLightDesc = *(Internal::StandardPositionalLight*)i.get();
+
+				// hack -- 	we need to lookup the light id, because the shadow projections use this to associate the shadow
+				// 			with the light. But we only have a mapping going the other way
+				// we really need a better way to manage the association between the light and the shadow (perhaps similar to
+				// how the shadow probe database does it?)
+				unsigned lightId = ~0u;
+				for (auto lookup:lightScene._lookupTable)
+					if (lookup.second._lightSet == &set - lightScene._tileableLightSets.data() && lookup.second._lightIndex == l)
+						lightId = lookup.first;
+				assert(lightId != ~0u);
 
 				if (lightShape == LightSourceShape::Sphere) {
 					// Lights can require a bit of setup and fiddling around on the GPU; so we'll try to
@@ -534,8 +544,8 @@ namespace RenderCore { namespace LightingEngine
 				
 				assert(set._operatorId < lightResolveOperators._pipelines.size());
 
-				while (shadowIterator != preparedShadows.end() && shadowIterator->_lightId < i._id) ++shadowIterator;
-				if (shadowIterator != preparedShadows.end() && shadowIterator->_lightId == i._id) {
+				while (shadowIterator != preparedShadows.end() && shadowIterator->_lightId < lightId) ++shadowIterator;
+				if (shadowIterator != preparedShadows.end() && shadowIterator->_lightId == lightId) {
 					IDescriptorSet* shadowDescSets[] = { shadowIterator->_preparedResult->GetDescriptorSet() };
 					boundUniforms.ApplyDescriptorSets(metalContext, encoder, MakeIteratorRange(shadowDescSets));
 					++shadowIterator;
@@ -543,7 +553,7 @@ namespace RenderCore { namespace LightingEngine
 					// If you hit the following assert it probably means the preparedShadows are not sorted by lightId,
 					// or the lights in the light scene are not sorted in id order, or there's a prepared shadow
 					// generated for a light that doesn't exist
-					assert(shadowIterator == preparedShadows.end() || shadowIterator->_lightId > i._id);
+					assert(shadowIterator == preparedShadows.end() || shadowIterator->_lightId > lightId);
 				}
 
 				UniformsStream uniformsStream;
