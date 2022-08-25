@@ -27,7 +27,7 @@ namespace RenderCore { namespace LightingEngine
 	class ISemiStaticShadowProbeScheduler
 	{
 	public:
-		enum OnFrameBarrierResult { NoChange, QueuedRenders };
+		enum OnFrameBarrierResult { NoChange, QueuedRenders, BackgroundOperationOngoing };
 		virtual OnFrameBarrierResult OnFrameBarrier(const Float3& newViewPosition, float drawDistance) = 0;
 
 		virtual std::shared_ptr<IProbeRenderingInstance> BeginPrepare(

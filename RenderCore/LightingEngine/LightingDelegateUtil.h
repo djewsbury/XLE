@@ -66,14 +66,17 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		uint64_t _probeSlotsReservedInBackground = 0ull;
 		std::vector<std::pair<ILightScene::LightSourceId, unsigned>> _probeSlotsPreparedInBackground;
+		bool _readyToCommitBackgroundChanges = false;
+		void CommitBackgroundChangesAlreadyLocked();
 
-		struct AssociatedLight
+		std::vector<std::pair<ILightScene::LightSourceId, ShadowProbes::Probe>> _registeredLights;
+
+		struct AllocatedProbe
 		{
-			ShadowProbes::Probe _probeDesc;
 			unsigned _attachedProbe = ~0u;
 			int _fading = 0;
 		};
-		std::vector<std::pair<ILightScene::LightSourceId, AssociatedLight>> _associatedLights;
+		std::vector<std::pair<ILightScene::LightSourceId, AllocatedProbe>> _allocatedProbes;
 
 		std::shared_ptr<ShadowProbes> _shadowProbes;
 		ILightScene* _lightScene;
