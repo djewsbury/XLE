@@ -70,7 +70,6 @@ namespace RenderCore { namespace LightingEngine
 	class IPreparedShadowResult;
 	class ShadowOperatorDesc;
 	namespace Internal { class StandardLightScene; }
-	struct PreparedShadow { ILightScene::LightSourceId _lightId; ILightScene::ShadowOperatorId _shadowOpId; std::shared_ptr<IPreparedShadowResult> _preparedResult; };
 	class ShadowProbes;
 
     void ResolveLights(

@@ -28,7 +28,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		virtual void RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light) = 0;
 		virtual void DeregisterLight(unsigned setIdx, unsigned lightIdx) = 0;
 		virtual bool BindToSet(ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned setIdx) = 0;
-		virtual void* QueryInterface(unsigned lightIdx, uint64_t interfaceTypeCode) = 0;
+		virtual void* QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode) = 0;
 		virtual ~ILightSceneComponent();
 	};
 
@@ -48,18 +48,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		struct LightSetAndIndex { unsigned _lightSet, _lightIndex; };
 		std::vector<std::pair<LightSourceId, LightSetAndIndex>> _lookupTable;
 
-		struct DynamicShadowProjection
-		{
-			ShadowProjectionId _id = ~0u;
-			ShadowOperatorId _operatorId = ~0u;
-			LightSourceId _lightId = ~0u;
-			std::unique_ptr<ILightBase> _desc;
-		};
-		std::vector<DynamicShadowProjection> _dynamicShadowProjections;
-		
 		LightSet _dominantLightSet;
 		LightSourceId _dominantLightId = ~0u;
-		DynamicShadowProjection _dominantShadowProjection;
 
 		LightSourceId _nextLightSource = 0;
 		ShadowProjectionId _nextShadow = 0;
@@ -83,10 +73,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			LightOperatorId operatorId,
 			std::unique_ptr<ILightBase> desc);
 
-		ShadowProjectionId AddShadowProjection(
+		/*ShadowProjectionId AddShadowProjection(
 			ShadowOperatorId shadowOperatorId,
 			LightSourceId associatedLight,
-			std::unique_ptr<ILightBase> desc);
+			std::unique_ptr<ILightBase> desc);*/
 
 		// move the given lights into a set with the given shadow operator assignment (but do nothing else)
 		void ChangeLightsShadowOperator(

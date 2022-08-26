@@ -133,6 +133,124 @@ namespace RenderCore { namespace LightingEngine
 
 	ICompiledShadowPreparer::~ICompiledShadowPreparer() {}
 
+	namespace Internal
+	{
+		class StandardShadowProjection : public Internal::ILightBase, public IDepthTextureResolve, public IArbitraryShadowProjections, public IOrthoShadowProjections, public INearShadowProjection
+		{
+		public:
+			using Projections = MultiProjection<MaxShadowTexturesPerLight>;
+			Projections     _projections;
+
+			float           _worldSpaceResolveBias = 0.f;
+			float           _tanBlurAngle = 0.00436f;
+			float           _minBlurSearchPixels = 0.5f, _maxBlurSearchPixels = 25.f;
+			float			_casterDistanceExtraBias = 0.f;
+
+			bool 			_multiViewInstancingPath = false;
+
+			virtual void SetDesc(const Desc& newDesc) override
+			{
+				_worldSpaceResolveBias = newDesc._worldSpaceResolveBias;
+				_tanBlurAngle = newDesc._tanBlurAngle;
+				_minBlurSearchPixels = newDesc._minBlurSearch;
+				_maxBlurSearchPixels = newDesc._maxBlurSearch;
+				_casterDistanceExtraBias = newDesc._casterDistanceExtraBias;
+			}
+			virtual Desc GetDesc() const override
+			{
+				return Desc { _worldSpaceResolveBias, _tanBlurAngle, _minBlurSearchPixels, _maxBlurSearchPixels, _casterDistanceExtraBias };
+			}
+
+			virtual void SetArbitrarySubProjections(
+				IteratorRange<const Float4x4*> worldToCamera,
+				IteratorRange<const Float4x4*> cameraToProjection) override
+			{
+				assert(_projections._mode == ShadowProjectionMode::Arbitrary || _projections._mode == ShadowProjectionMode::ArbitraryCubeMap);
+				assert(worldToCamera.size() <= Internal::MaxShadowTexturesPerLight);
+				assert(!worldToCamera.empty());
+				assert(worldToCamera.size() == cameraToProjection.size());
+				auto projCount = std::min((size_t)Internal::MaxShadowTexturesPerLight, worldToCamera.size());
+				assert(projCount <= _projections._operatorNormalProjCount);     // a mis-match here means it does not agree with the operator
+				for (unsigned c=0; c<projCount; ++c) {
+					_projections._fullProj[c]._worldToProjTransform = Combine(worldToCamera[c], cameraToProjection[c]);
+					_projections._minimalProjection[c] = ExtractMinimalProjection(cameraToProjection[c]);
+				}
+				_projections._normalProjCount = projCount;
+			}
+
+			virtual void SetWorldToOrthoView(const Float4x4& worldToCamera) override
+			{
+				assert(_projections._mode == ShadowProjectionMode::Ortho);
+				assert(IsOrthonormal(Truncate3x3(worldToCamera)));
+				_projections._definitionViewMatrix = worldToCamera;
+			}
+
+			virtual void SetOrthoSubProjections(IteratorRange<const OrthoSubProjection*> projections) override
+			{
+				assert(_projections._mode == ShadowProjectionMode::Ortho);
+				assert(projections.size() < Internal::MaxShadowTexturesPerLight);
+				assert(!projections.empty());
+				auto projCount = std::min((size_t)Internal::MaxShadowTexturesPerLight, projections.size());
+				assert(projCount <= _projections._operatorNormalProjCount);     // a mis-match here means it does not agree with the operator
+				for (unsigned c=0; c<projCount; ++c) {
+					_projections._orthoSub[c]._leftTopFront = projections[c]._leftTopFront;
+					_projections._orthoSub[c]._rightBottomBack = projections[c]._rightBottomBack;
+
+					auto projTransform = OrthogonalProjection(
+						projections[c]._leftTopFront[0], projections[c]._leftTopFront[1], 
+						projections[c]._rightBottomBack[0], projections[c]._rightBottomBack[1], 
+						projections[c]._leftTopFront[2], projections[c]._rightBottomBack[2],
+						GeometricCoordinateSpace::RightHanded, Techniques::GetDefaultClipSpaceType());
+					_projections._fullProj[c]._worldToProjTransform = Combine(_projections._definitionViewMatrix, projTransform);
+					_projections._minimalProjection[c] = ExtractMinimalProjection(projTransform);
+				}
+				_projections._normalProjCount = projCount;
+			}
+
+			virtual Float4x4 GetWorldToOrthoView() const override
+			{
+				assert(_projections._mode == ShadowProjectionMode::Ortho);
+				return _projections._definitionViewMatrix;
+			}
+
+			virtual std::vector<OrthoSubProjection> GetOrthoSubProjections() const override
+			{
+				assert(_projections._mode == ShadowProjectionMode::Ortho);
+				std::vector<OrthoSubProjection> result;
+				result.reserve(_projections._normalProjCount);
+				for (unsigned c=0; c<_projections._normalProjCount; ++c)
+					result.push_back(OrthoSubProjection{_projections._orthoSub[c]._leftTopFront, _projections._orthoSub[c]._rightBottomBack});
+				return result;
+			}
+
+			virtual void SetProjection(const Float4x4& nearWorldToProjection) override
+			{
+				assert(_projections._useNearProj);
+				_projections._specialNearProjection = nearWorldToProjection;
+				_projections._specialNearMinimalProjection = ExtractMinimalProjection(nearWorldToProjection);
+			}
+
+			virtual void* QueryInterface(uint64_t interfaceTypeCode) override
+			{
+				if (interfaceTypeCode == typeid(IDepthTextureResolve).hash_code()) {
+					return (IDepthTextureResolve*)this;
+				} else if (interfaceTypeCode == typeid(IArbitraryShadowProjections).hash_code()) {
+					if (_projections._mode == ShadowProjectionMode::Arbitrary || _projections._mode == ShadowProjectionMode::ArbitraryCubeMap)
+						return (IArbitraryShadowProjections*)this;
+				} else if (interfaceTypeCode == typeid(IOrthoShadowProjections).hash_code()) {
+					if (_projections._mode == ShadowProjectionMode::Ortho)
+						return (IOrthoShadowProjections*)this;
+				} else if (interfaceTypeCode == typeid(INearShadowProjection).hash_code()) {
+					if (_projections._useNearProj)
+						return (INearShadowProjection*)this;
+				} else if (interfaceTypeCode == typeid(StandardShadowProjection).hash_code()) {
+					return this;
+				}
+				return nullptr;
+			}
+		};
+	}
+
 	static Internal::PreparedDMShadowFrustum SetupPreparedDMShadowFrustum(
 		Internal::ILightBase& projectionBase, float shadowTextureSize, unsigned operatorMaxFrustumCount)
 	{
@@ -330,7 +448,7 @@ namespace RenderCore { namespace LightingEngine
 
 	DMShadowPreparer::~DMShadowPreparer() {}
 
-	std::unique_ptr<Internal::ILightBase> DynamicShadowPreparers::CreateShadowProjection(unsigned operatorIdx)
+	std::pair<std::unique_ptr<Internal::ILightBase>, std::shared_ptr<ICompiledShadowPreparer>> DynamicShadowPreparers::CreateShadowProjection(unsigned operatorIdx)
 	{
 		assert(operatorIdx <= _preparers.size());
 		auto result = std::make_unique<Internal::StandardShadowProjection>();
@@ -338,9 +456,8 @@ namespace RenderCore { namespace LightingEngine
 		result->_projections._mode = op._desc._projectionMode;
 		result->_projections._useNearProj = op._desc._enableNearCascade;
 		result->_projections._operatorNormalProjCount = op._desc._normalProjCount;
-		result->_preparer = op._preparer;
 		result->_multiViewInstancingPath = op._desc._multiViewInstancingPath;
-		return result;
+		return { std::move(result), op._preparer };
 	}
 
 	::Assets::PtrToMarkerPtr<ICompiledShadowPreparer> CreateCompiledShadowPreparer(

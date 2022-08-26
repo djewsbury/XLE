@@ -120,7 +120,7 @@ namespace RenderCore { namespace LightingEngine
 		};
 		std::vector<Preparer> _preparers;
 
-		std::unique_ptr<Internal::ILightBase> CreateShadowProjection(unsigned operatorIdx);
+		std::pair<std::unique_ptr<Internal::ILightBase>, std::shared_ptr<ICompiledShadowPreparer>> CreateShadowProjection(unsigned operatorIdx);
 	};
 	::Assets::PtrToMarkerPtr<DynamicShadowPreparers> CreateDynamicShadowPreparers(
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 

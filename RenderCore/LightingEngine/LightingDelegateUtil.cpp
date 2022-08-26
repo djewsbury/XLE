@@ -19,26 +19,177 @@
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
+	class SequencerAddendums : public IAttachDriver
+	{
+	public:
+		std::shared_ptr<Internal::ILightBase> _driver;
+		std::shared_ptr<ICompiledShadowPreparer> _preparer;
+
+		virtual void AttachDriver(std::shared_ptr<Internal::ILightBase> driver) override
+		{
+			_driver = std::move(driver);
+		}
+	};
+
+	static std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
+		LightingTechniqueIterator& iterator,
+		LightingTechniqueSequence& sequence,
+		ILightBase& proj,
+		SequencerAddendums& addenums,
+		ILightScene& lightScene, ILightScene::LightSourceId associatedLightId,
+		PipelineType descSetPipelineType,
+		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
+		Techniques::AttachmentPool& shadowGenAttachmentPool);
+
+	struct DynamicShadowProjectionScheduler::SceneSet
+	{
+		using ShadowProjectionBasePtr = std::unique_ptr<ILightBase>;
+		std::vector<ShadowProjectionBasePtr> _projections;
+		std::vector<std::shared_ptr<IPreparedShadowResult>> _preparedResult;
+		std::vector<SequencerAddendums> _addendums;
+		BitHeap _activeProjections;
+		bool _activeSet = false;
+		DynamicShadowProjectionScheduler* _parent;
+
+		void RegisterLight(unsigned index, ILightBase& light)
+		{
+			if (_projections.size() <= index) {
+				_projections.resize(index+1);
+				_preparedResult.resize(index+1);
+				_addendums.resize(index+1);
+			}
+			assert(!_activeProjections.IsAllocated(index));
+			assert(!_projections[index]);
+			std::tie(_projections[index], _addendums[index]._preparer) = _parent->_shadowPreparers->CreateShadowProjection(_parent->_preparerId);
+			_activeProjections.Allocate(index);
+		}
+		void DeregisterLight(unsigned index)
+		{
+			_activeProjections.Deallocate(index);
+			_projections[index] = {};
+			_addendums[index] = {};
+		}
+
+		SceneSet() = default;
+		SceneSet(SceneSet&&) = default;
+		SceneSet& operator=(SceneSet&&) = default;
+	};
+
+	void DynamicShadowProjectionScheduler::DoShadowPrepare(
+		LightingTechniqueIterator& iterator,
+		LightingTechniqueSequence& sequence)
+	{
+		sequence.Reset();
+		if (_shadowPreparers->_preparers.empty()) return;
+
+		ILightScene::LightSourceId prevLightId = ~0u; 
+		for (const auto& comp:_sceneSets) {
+			if (!comp._activeSet) continue;
+			unsigned offset = 0;
+			for (auto q:comp._activeProjections.InternalArray()) {
+				q = ~q;		// bit heap inverts allocations
+				while (q) {
+					auto idx = xl_ctz8(q);
+					q ^= 1ull << uint64_t(idx);
+					idx += offset;
+
+					comp._preparedResult[idx] = SetupShadowPrepare(
+						iterator, sequence, *comp._projections[idx], comp._addendums[idx],
+						*_lightScene, _lightScene->_dynamicShadowProjections[c]._lightId,
+						PipelineType::Graphics,
+						*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool);
+				}
+				offset += 64;
+			}
+		}
+	}
+
+	void DynamicShadowProjectionScheduler::ClearPreparedShadows()
+	{
+		for (auto& comp:_sceneSets) {
+			if (!comp._activeSet) continue;
+			for (auto& p:comp._preparedResult)
+				p = {};
+		}
+	}
+
+	void DynamicShadowProjectionScheduler::RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light)
+	{
+		assert(setIdx < _sceneSets.size() && _sceneSets[setIdx]._activeSet);
+		_sceneSets[setIdx].RegisterLight(lightIdx, light);
+		++_totalProjectionCount;
+	}
+
+	void DynamicShadowProjectionScheduler::DeregisterLight(unsigned setIdx, unsigned lightIdx)
+	{
+		assert(setIdx < _sceneSets.size() && _sceneSets[setIdx]._activeSet);
+		_sceneSets[setIdx].DeregisterLight(lightIdx);
+		assert(_totalProjectionCount > 0);
+		--_totalProjectionCount;
+	}
+
+	bool DynamicShadowProjectionScheduler::BindToSet(ILightScene::LightOperatorId, ILightScene::ShadowOperatorId shadowOperator, unsigned setIdx)
+	{
+		if (shadowOperator != _operatorId) return false;
+		if (_sceneSets.size() <= setIdx)
+			_sceneSets.resize(setIdx+1);
+		_sceneSets[setIdx]._activeSet = true;
+		return true;
+	}
+
+	void* DynamicShadowProjectionScheduler::QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode)
+	{
+		if (setIdx < _sceneSets.size() && _sceneSets[setIdx]._activeSet)
+			if (_sceneSets[setIdx]._activeProjections.IsAllocated(lightIdx)) {
+				if (interfaceTypeCode == typeid(IAttachDriver).hash_code())
+					return &_sceneSets[setIdx]._addendums[lightIdx];
+				if (_sceneSets[setIdx]._addendums[lightIdx]._driver)
+					if (auto* res = _sceneSets[setIdx]._addendums[lightIdx]._driver->QueryInterface(interfaceTypeCode))
+						return res;
+				return _sceneSets[setIdx]._projections[lightIdx]->QueryInterface(interfaceTypeCode);
+			}
+		return nullptr;
+	}
+
+	auto DynamicShadowProjectionScheduler::GetPreparedShadow(unsigned setIdx, unsigned lightIdx) -> const IPreparedShadowResult*
+	{
+		if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]._activeSet) return {};
+		assert(_sceneSets[setIdx]._activeProjections.IsAllocated(lightIdx));
+		return _sceneSets[setIdx]._preparedResult[lightIdx].get();
+	}
+
+	DynamicShadowProjectionScheduler::DynamicShadowProjectionScheduler(std::shared_ptr<IDevice> device, std::shared_ptr<DynamicShadowPreparers> shadowPreparers, ILightScene::ShadowOperatorId operatorId, unsigned preparerId)
+	: _shadowPreparers(std::move(shadowPreparers)), _operatorId(operatorId), _preparerId(preparerId), _totalProjectionCount(0)
+	{
+		_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(device);
+		_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
+	}
+	DynamicShadowProjectionScheduler::~DynamicShadowProjectionScheduler() {}
+
 	static TechniqueSequenceParseId SetupShadowParse(
 		LightingTechniqueIterator& iterator,
 		LightingTechniqueSequence& sequence,
 		Internal::ILightBase& proj,
+		SequencerAddendums& addenums,
 		ILightScene& lightScene, ILightScene::LightSourceId associatedLightId)
 	{
-		auto& standardProj = *checked_cast<Internal::StandardShadowProjection*>(&proj);
 		std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> volumeTester;
 
 		// Call the driver if one exists
-		if (standardProj._driver) {
+		if (addenums._driver) {
 			// Note the TryGetLightSourceInterface is expensive particular, and scales poorly with the number of
 			// lights in the scene
 			auto* positionalLight = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(associatedLightId);
-			if (positionalLight)
-				volumeTester = ((Internal::IShadowProjectionDriver*)standardProj._driver->QueryInterface(typeid(Internal::IShadowProjectionDriver).hash_code()))->UpdateProjections(
-					*iterator._parsingContext, *positionalLight, standardProj);
+			if (positionalLight) {
+				auto* orthoShadowProjections = (IOrthoShadowProjections*)proj.QueryInterface(typeid(IOrthoShadowProjections).hash_code());
+				assert(orthoShadowProjections);
+				volumeTester = ((Internal::IShadowProjectionDriver*)addenums._driver->QueryInterface(typeid(Internal::IShadowProjectionDriver).hash_code()))->UpdateProjections(
+					*iterator._parsingContext, *positionalLight, *orthoShadowProjections);
+			}
 		}
 
 		// todo - cull out any offscreen projections
+		// auto& standardProj = *checked_cast<Internal::StandardShadowProjection*>(&proj);
 		if (standardProj._multiViewInstancingPath) {
 			std::vector<Techniques::ProjectionDesc> projDescs;
 			projDescs.resize(standardProj._projections.Count());
@@ -55,16 +206,16 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
 		LightingTechniqueIterator& iterator,
 		LightingTechniqueSequence& sequence,
-		Internal::ILightBase& proj,
+		ILightBase& proj,
+		SequencerAddendums& addenums,
 		ILightScene& lightScene, ILightScene::LightSourceId associatedLightId,
 		PipelineType descSetPipelineType,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::AttachmentPool& shadowGenAttachmentPool)
 	{
-		auto parseId = SetupShadowParse(iterator, sequence, proj, lightScene, associatedLightId);
+		auto parseId = SetupShadowParse(iterator, sequence, proj, addenums, lightScene, associatedLightId);
 
-		auto& standardProj = *checked_cast<Internal::StandardShadowProjection*>(&proj);
-		auto& preparer = *standardProj._preparer;
+		auto& preparer = *addenums._preparer;
 		auto res = preparer.CreatePreparedShadowResult();
 		sequence.CreateStep_CallFunction(
 			[&preparer, &proj, &shadowGenFrameBufferPool, &shadowGenAttachmentPool, parseId, res, descSetPipelineType](LightingTechniqueIterator& iterator) {
@@ -131,9 +282,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		return probe;
 	}
 
-	class SemiStaticShadowProbeScheduler::SceneSet
+	struct SemiStaticShadowProbeScheduler::SceneSet
 	{
-	public:
 		// we just maintain a parallel list of the light probes we're interested in
 		struct ProbeEntry
 		{
@@ -143,6 +293,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		};
 		std::vector<ProbeEntry> _probes;
 		BitHeap _activeProbes;
+		bool _activeSet = false;
 
 		void RegisterLight(unsigned index, ILightBase& light)
 		{
@@ -154,6 +305,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void DeregisterLight(unsigned index)
 		{
 			_activeProbes.Deallocate(index);
+			_probes[index] = {};
 		}
 
 		SceneSet() = default;
@@ -242,8 +394,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			i = _allocatedDatabaseEntries.insert(i, {q.first, p});
 			_unassociatedProbeSlots &= ~(1ull << uint64_t(q.second));
 
-			comp._probes[GetLightIndex(q.first)]._attachedDatabaseIndex = ~0u;
-			comp._probes[GetLightIndex(q.first)]._fading = 0;
+			comp._probes[GetLightIndex(q.first)]._attachedDatabaseIndex = p._databaseIndex;
+			comp._probes[GetLightIndex(q.first)]._fading = p._fading;
 		}
 
 		_probeSlotsReservedInBackground = 0;
@@ -294,10 +446,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		// Given the current set of lights, calculate the optimal use of a finite number of shadow probe database entries
 		// The easiest way to do this is to just the sort the list of lights we have by distance
 		// but ideally this should really be tied into some visibility solution -- and perhaps avoid updating every frame
-		std::vector<std::pair<ILightScene::LightSourceId, float>> lightsAndDistance;
+		std::vector<std::pair<LightIndex, float>> lightsAndDistance;
 		lightsAndDistance.reserve(256);
 		for (unsigned compIdx=0; compIdx<_sceneSets.size(); ++compIdx) {
 			auto& comp = _sceneSets[compIdx];
+			if (!comp._activeSet) continue;
 			unsigned offset = 0;
 			for (auto q:comp._activeProbes.InternalArray()) {
 				q = ~q;		// bit heap inverts allocations
@@ -321,7 +474,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		
 		// compare to the list lights currently in the database and figure out
 		// evictions and new renderings
-		std::pair<ILightScene::LightSourceId, float> potentialNewRenders[lightsAndDistance.size()];
+		std::pair<LightIndex, float> potentialNewRenders[lightsAndDistance.size()];
 		unsigned potentialRenderCount = 0;
 
 		auto currentStateIterator = _allocatedDatabaseEntries.begin();
@@ -352,6 +505,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				currentStateIterator->second._fading = std::min(currentStateIterator->second._fading+1, fadeTransitionInFrames);
 				auto& inComponent = _sceneSets[GetSetIndex(currentStateIterator->first)]._probes[GetLightIndex(currentStateIterator->first)];
 				inComponent._fading = currentStateIterator->second._fading;
+				assert(inComponent._attachedDatabaseIndex == currentStateIterator->second._databaseIndex);
 				++currentStateIterator;
 				++newStateIterator;
 			}
@@ -408,17 +562,18 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		if (shadowOperator != _operatorId) return false;
 		if (_sceneSets.size() <= setIdx)
 			_sceneSets.resize(setIdx+1);
+		_sceneSets[setIdx]._activeSet = true;
 		return true;
 	}
 
-	void* SemiStaticShadowProbeScheduler::QueryInterface(unsigned lightIdx, uint64_t interfaceTypeCode)
+	void* SemiStaticShadowProbeScheduler::QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode)
 	{
 		return nullptr;
 	}
 
 	auto SemiStaticShadowProbeScheduler::GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx) -> AllocatedDatabaseEntry
 	{
-		assert(setIdx < _sceneSets.size());
+		if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]._activeSet) return {};
 		assert(_sceneSets[setIdx]._activeProbes.IsAllocated(lightIdx));
 		auto& p = _sceneSets[setIdx]._probes[lightIdx];
 		return { p._attachedDatabaseIndex, p._fading };

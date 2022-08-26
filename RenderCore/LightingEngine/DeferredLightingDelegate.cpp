@@ -33,7 +33,7 @@
 
 namespace RenderCore { namespace LightingEngine
 {
-	static const unsigned s_shadowProbeShadowFlag = 1u<<31u;
+	// static const unsigned s_shadowProbeShadowFlag = 1u<<31u;
 
 	class DeferredLightScene : public Internal::StandardLightScene
 	{
@@ -52,6 +52,7 @@ namespace RenderCore { namespace LightingEngine
 			Throw(std::runtime_error("Configurable ambient light source not supported"));
 		}
 
+#if 0
 		ShadowProjectionId CreateShadowProjection(ShadowOperatorId opId, LightSourceId associatedLight) override
 		{
 			auto preparerId = _shadowOperatorIdMapping._operatorToShadowPreparerId[opId];
@@ -110,6 +111,7 @@ namespace RenderCore { namespace LightingEngine
 				return Internal::StandardLightScene::TryGetShadowProjectionInterface(projectionid, interfaceTypeCode);
 			} 
 		}
+#endif
 
 		struct ShadowPreparerIdMapping
 		{
@@ -130,11 +132,12 @@ namespace RenderCore { namespace LightingEngine
 	class DeferredLightingCaptures
 	{
 	public:
-		std::vector<PreparedShadow> _preparedShadows;
+		// std::vector<PreparedShadow> _preparedShadows;
+		std::shared_ptr<Internal::DynamicShadowProjectionScheduler> _shadowScheduler;
 		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
 		std::shared_ptr<LightResolveOperators> _lightResolveOperators;
-		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
-		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
+		// std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
+		// std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
 		std::shared_ptr<DeferredLightScene> _lightScene;
 		std::shared_ptr<Techniques::PipelineCollection> _pipelineCollection;
 		std::shared_ptr<ICompiledPipelineLayout> _lightingOperatorLayout;
@@ -278,25 +281,7 @@ namespace RenderCore { namespace LightingEngine
 	
 	void DeferredLightingCaptures::DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence)
 	{
-		sequence.Reset();
-		if (_shadowPreparers->_preparers.empty()) return;
-
-		_preparedShadows.reserve(_lightScene->_dynamicShadowProjections.size());
-		ILightScene::LightSourceId prevLightId = ~0u; 
-		for (unsigned c=0; c<_lightScene->_dynamicShadowProjections.size(); ++c) {
-			_preparedShadows.push_back({
-				_lightScene->_dynamicShadowProjections[c]._lightId,
-				_lightScene->_dynamicShadowProjections[c]._operatorId,
-				Internal::SetupShadowPrepare(
-					iterator, sequence, *_lightScene->_dynamicShadowProjections[c]._desc, 
-					*_lightScene, _lightScene->_dynamicShadowProjections[c]._lightId,
-					PipelineType::Graphics,
-					*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool)});
-
-			// shadow entries must be sorted by light id
-			assert(prevLightId == ~0u || prevLightId < _lightScene->_dynamicShadowProjections[c]._lightId);
-			prevLightId = _lightScene->_dynamicShadowProjections[c]._lightId;
-		}
+		_shadowScheduler->DoShadowPrepare(iterator, sequence);
 	}
 
 	void DeferredLightingCaptures::DoLightResolve(LightingTechniqueIterator& iterator)
@@ -305,7 +290,7 @@ namespace RenderCore { namespace LightingEngine
 		ResolveLights(
 			*iterator._threadContext, *iterator._parsingContext, iterator._rpi,
 			*_lightResolveOperators, *_lightScene,
-			_preparedShadows, _lightScene->_shadowProbes.get());
+			*_shadowScheduler, _lightScene->_shadowProbes.get());
 	}
 
 	static ::Assets::PtrToMarkerPtr<Techniques::IShaderOperator> CreateToneMapOperator(
@@ -485,8 +470,6 @@ namespace RenderCore { namespace LightingEngine
 
 					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(lightScene);
 					auto captures = std::make_shared<DeferredLightingCaptures>();
-					captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(pipelineAccelerators->GetDevice());
-					captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
 					captures->_shadowPreparers = lightScene->_shadowPreparers;
 					captures->_lightScene = lightScene;
 					captures->_lightingOperatorLayout = lightingOperatorLayout;

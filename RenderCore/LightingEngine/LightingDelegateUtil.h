@@ -25,22 +25,14 @@ namespace RenderCore { namespace LightingEngine
 	class LightingTechniqueIterator;
 	class LightingTechniqueSequence;
 	class IProbeRenderingInstance;
+	class DynamicShadowPreparers;
 }}
-namespace RenderCore { class IThreadContext; }
+namespace RenderCore { class IThreadContext; class IDevice; }
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
 	class ILightBase;
 	class ILightSceneComponent;
-
-	std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
-		LightingTechniqueIterator& iterator,
-		LightingTechniqueSequence& sequence,
-		ILightBase& proj,
-		ILightScene& lightScene, ILightScene::LightSourceId associatedLightId,
-		PipelineType descSetPipelineType,
-		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
-		Techniques::AttachmentPool& shadowGenAttachmentPool);
 
 	::Assets::MarkerPtr<Techniques::IShaderResourceDelegate> CreateBuildGBufferResourceDelegate();
 
@@ -83,7 +75,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		std::shared_ptr<ShadowProbes> _shadowProbes;
 
-		class SceneSet;
+		struct SceneSet;
 		std::vector<SceneSet> _sceneSets;
 		ILightScene::ShadowOperatorId _operatorId;
 		float _defaultNearRadius = 1.f;
@@ -92,7 +84,38 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light) override;
 		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
 		bool BindToSet(ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned setIdx) override;
-		void* QueryInterface(unsigned lightIdx, uint64_t interfaceTypeCode) override;
+		void* QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode) override;
+	};
+
+	class DynamicShadowProjectionScheduler : public ILightSceneComponent
+	{
+	public:
+		const IPreparedShadowResult* GetPreparedShadow(unsigned setIdx, unsigned lightIdx);
+
+		void DoShadowPrepare(
+			LightingTechniqueIterator& iterator,
+			LightingTechniqueSequence& sequence);
+		void ClearPreparedShadows();
+
+		struct SceneSet;
+		std::vector<SceneSet> _sceneSets;
+
+		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
+		unsigned _preparerId;
+		ILightScene::ShadowOperatorId _operatorId;
+		unsigned _totalProjectionCount;
+
+		DynamicShadowProjectionScheduler(std::shared_ptr<IDevice> device, std::shared_ptr<DynamicShadowPreparers> shadowPreparers, ILightScene::ShadowOperatorId operatorId, unsigned preparerId);
+		~DynamicShadowProjectionScheduler();
+	private:
+		// ILightSceneComponent
+		void RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light) override;
+		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
+		bool BindToSet(ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned setIdx) override;
+		void* QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode) override;
+
+		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
+		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
 	};
 	
 }}}
