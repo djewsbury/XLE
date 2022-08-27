@@ -41,11 +41,13 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<LightResolveOperators> _lightResolveOperators;
 		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
 
+#if 0
 		LightSourceId CreateLightSource(LightOperatorId opId) override
 		{
 			auto desc = _lightResolveOperators->CreateLightSource(opId);
 			return AddLightSource(opId, std::move(desc));
 		}
+#endif
 
 		LightSourceId CreateAmbientLightSource() override
 		{
@@ -290,7 +292,7 @@ namespace RenderCore { namespace LightingEngine
 		ResolveLights(
 			*iterator._threadContext, *iterator._parsingContext, iterator._rpi,
 			*_lightResolveOperators, *_lightScene,
-			*_shadowScheduler, _lightScene->_shadowProbes.get());
+			_shadowScheduler.get(), _lightScene->_shadowProbes.get());
 	}
 
 	static ::Assets::PtrToMarkerPtr<Techniques::IShaderOperator> CreateToneMapOperator(
@@ -474,6 +476,10 @@ namespace RenderCore { namespace LightingEngine
 					captures->_lightScene = lightScene;
 					captures->_lightingOperatorLayout = lightingOperatorLayout;
 					captures->_pipelineCollection = pipelineCollection;
+					captures->_shadowScheduler = std::make_shared<Internal::DynamicShadowProjectionScheduler>(
+						pipelineAccelerators->GetDevice(), captures->_shadowPreparers,
+						lightScene->_shadowOperatorIdMapping._operatorToShadowPreparerId);
+					captures->_lightScene->RegisterComponent(captures->_shadowScheduler);
 
 					// Reset captures
 					lightingTechnique->PreSequenceSetup(
@@ -517,7 +523,7 @@ namespace RenderCore { namespace LightingEngine
 					// unbind operations
 					mainSequence.CreateStep_CallFunction(
 						[captures](LightingTechniqueIterator& iterator) {
-							captures->_preparedShadows.clear();
+							captures->_shadowScheduler->ClearPreparedShadows();
 						});
 
 					// prepare-only steps
@@ -629,15 +635,11 @@ namespace RenderCore { namespace LightingEngine
 	{
 		iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
 		unsigned c=0;
-		for (const auto& preparedShadow:_preparedShadows) {
-			auto opId = preparedShadow._shadowOpId;
-			auto preparerId = _lightScene->_shadowOperatorIdMapping._operatorToShadowPreparerId[opId];
-			if (preparerId == ~0u) continue;
-
+		for (auto preparedShadow:_shadowScheduler->GetAllPreparedShadows()) {
 			GenerateShadowingDebugTextures( 
 				*iterator._threadContext, *iterator._parsingContext, 
 				_pipelineCollection,
-				_shadowPreparers->_preparers[preparerId]._desc,
+				_shadowScheduler->_shadowPreparers->_preparers[preparedShadow._preparerIdx]._desc,
 				*preparedShadow._preparedResult, c);
 			++c;
 		}

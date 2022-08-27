@@ -92,6 +92,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	public:
 		const IPreparedShadowResult* GetPreparedShadow(unsigned setIdx, unsigned lightIdx);
 
+		struct PreparedShadow { unsigned _preparerIdx = ~0u; const IPreparedShadowResult* _preparedResult = nullptr; };
+		std::vector<PreparedShadow> GetAllPreparedShadows();		// intended for debugging
+
 		void DoShadowPrepare(
 			LightingTechniqueIterator& iterator,
 			LightingTechniqueSequence& sequence);
@@ -99,13 +102,14 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		struct SceneSet;
 		std::vector<SceneSet> _sceneSets;
+		std::unique_ptr<SceneSet> _dominantSet;
 
 		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
-		unsigned _preparerId;
-		ILightScene::ShadowOperatorId _operatorId;
 		unsigned _totalProjectionCount;
 
-		DynamicShadowProjectionScheduler(std::shared_ptr<IDevice> device, std::shared_ptr<DynamicShadowPreparers> shadowPreparers, ILightScene::ShadowOperatorId operatorId, unsigned preparerId);
+		DynamicShadowProjectionScheduler(
+			std::shared_ptr<IDevice> device, std::shared_ptr<DynamicShadowPreparers> shadowPreparers, 
+			IteratorRange<const unsigned*> operatorToPreparerIdMapping);
 		~DynamicShadowProjectionScheduler();
 	private:
 		// ILightSceneComponent
@@ -116,7 +120,40 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
 		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
+		std::vector<unsigned> _operatorToPreparerIdMapping;
 	};
+
+	/////////////////////////////// inlines //////////////////////////////////
+	class SequencerAddendums;
+	struct DynamicShadowProjectionScheduler::SceneSet
+	{
+		using ShadowProjectionBasePtr = std::unique_ptr<ILightBase>;
+		std::vector<ShadowProjectionBasePtr> _projections;
+		std::vector<std::shared_ptr<IPreparedShadowResult>> _preparedResult;
+		std::vector<SequencerAddendums> _addendums;
+		BitHeap _activeProjections;
+		bool _activeSet = false;
+		std::shared_ptr<DynamicShadowPreparers> _preparers;
+		unsigned _preparerId = ~0u;
+
+		void RegisterLight(unsigned index, ILightBase& light);
+		void DeregisterLight(unsigned index);
+		SceneSet();
+		SceneSet(SceneSet&&);
+		SceneSet& operator=(SceneSet&&);
+	};
+
+	inline auto DynamicShadowProjectionScheduler::GetPreparedShadow(unsigned setIdx, unsigned lightIdx) -> const IPreparedShadowResult*
+	{
+		if (setIdx != ~0u) {
+			if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]._activeSet) return {};
+			assert(_sceneSets[setIdx]._activeProjections.IsAllocated(lightIdx));
+			return _sceneSets[setIdx]._preparedResult[lightIdx].get();
+		} else {
+			assert(_dominantSet->_activeProjections.IsAllocated(lightIdx));
+			return _dominantSet->_preparedResult[lightIdx].get();
+		}
+	}
 	
 }}}
 

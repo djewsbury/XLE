@@ -7,6 +7,7 @@
 #pragma once
 
 #include "ArithmeticUtils.h"
+#include "IteratorUtils.h"
 #include "../Core/Types.h"
 
 namespace Utility
@@ -91,6 +92,7 @@ namespace Utility
         void    Reserve(uint32_t count);
         unsigned FirstUnallocated() const;
         unsigned AllocatedCount() const;
+        IteratorRange<const uint64_t*> InternalArray() const { return _heap; }
 
         BitHeap(unsigned slotCount = 8 * 64);
         BitHeap(BitHeap&& moveFrom) = default;
@@ -99,7 +101,7 @@ namespace Utility
         BitHeap& operator=(const BitHeap& cloneFrom) = default;;
         ~BitHeap();
     private:
-        std::vector<uint64>         _heap;
+        std::vector<uint64_t>         _heap;
     };
 }
 

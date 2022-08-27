@@ -1104,17 +1104,14 @@ namespace RenderCore { namespace LightingEngine
         }
     }
 
-    ILightScene::ShadowProjectionId CreateSunSourceShadows(
+    void SetupSunSourceShadows(
         ILightScene& lightScene,
-        ILightScene::ShadowOperatorId shadowOperatorId,
         ILightScene::LightSourceId associatedLightId,
         const SunSourceFrustumSettings& settings)
     {
-        auto shadowProjectionId = lightScene.CreateShadowProjection(shadowOperatorId, associatedLightId);
+        ApplyNonFrustumSettings(lightScene, associatedLightId, settings);
 
-        ApplyNonFrustumSettings(lightScene, shadowProjectionId, settings);
-
-        auto* attachDriver = lightScene.TryGetShadowProjectionInterface<Internal::IAttachDriver>(shadowProjectionId);
+        auto* attachDriver = lightScene.TryGetShadowProjectionInterface<Internal::IAttachDriver>(associatedLightId);
         if (attachDriver) {
             attachDriver->AttachDriver(
                 std::make_shared<SunSourceFrustumDriver>(settings));
@@ -1128,8 +1125,6 @@ namespace RenderCore { namespace LightingEngine
 		assert(result._shadowGeneratorDesc._projectionMode == result._projections._mode);
 
         return result;*/
-
-        return shadowProjectionId;
     }
 
     void ConfigureShadowProjectionImmediately(

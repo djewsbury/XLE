@@ -51,9 +51,8 @@ namespace RenderCore { namespace LightingEngine
         SunSourceFrustumSettings();
     };
 
-    ILightScene::ShadowProjectionId CreateSunSourceShadows(
+    void SetupSunSourceShadows(
         ILightScene& lightScene,
-        ILightScene::ShadowOperatorId shadowOperatorId,
         ILightScene::LightSourceId associatedLightId,
         const SunSourceFrustumSettings& settings);
 

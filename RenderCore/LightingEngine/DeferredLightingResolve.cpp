@@ -8,6 +8,7 @@
 #include "StandardLightScene.h"
 #include "ShadowPreparer.h"
 #include "ShadowProbes.h"
+#include "LightingDelegateUtil.h"
 
 #include "../Techniques/CommonResources.h"
 #include "../Techniques/Techniques.h"
@@ -35,13 +36,13 @@ static Int2 GetCursorPos();
 
 namespace RenderCore { namespace LightingEngine
 {
-	std::unique_ptr<Internal::ILightBase> LightResolveOperators::CreateLightSource(ILightScene::LightOperatorId opId)
+	/*std::unique_ptr<Internal::ILightBase> LightResolveOperators::CreateLightSource(ILightScene::LightOperatorId opId)
 	{
 		Internal::StandardPositionalLight::Flags::BitField flags = 0;
 		if (_pipelines[opId]._stencilingGeoShape != LightSourceShape::Directional && !(_pipelines[opId]._flags & LightSourceOperatorDesc::Flags::NeverStencil))
 			flags |= Internal::StandardPositionalLight::Flags::SupportFiniteRange;
 		return std::make_unique<Internal::StandardPositionalLight>(flags);
-	}
+	}*/
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -424,7 +425,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::RenderPassInstance& rpi,
 		const LightResolveOperators& lightResolveOperators,
 		Internal::StandardLightScene& lightScene,
-		IteratorRange<const PreparedShadow*> preparedShadows,
+		Internal::DynamicShadowProjectionScheduler* shadowProjectionScheduler,
 		ShadowProbes* shadowProbes)
 	{
 		GPUAnnotation anno(threadContext, "Lights");
@@ -486,7 +487,8 @@ namespace RenderCore { namespace LightingEngine
 		auto cameraPosition = ExtractTranslation(projectionDesc._cameraToWorld);
 		assert(Equivalent(MagnitudeSquared(cameraForward), 1.0f, 1e-3f));
 
-		for (const auto&set:lightScene._tileableLightSets) {
+		for (unsigned setIdx=0; setIdx<lightScene._tileableLightSets.size(); ++setIdx) {
+			auto& set = lightScene._tileableLightSets[setIdx];
 			auto lightShape = lightResolveOperators._pipelines[set._operatorId]._stencilingGeoShape;
 			auto shadowOperatorId = set._shadowOperatorId;
 			auto lightOperatorId = set._operatorId;
@@ -508,26 +510,13 @@ namespace RenderCore { namespace LightingEngine
 				pipeline = &lightResolveOperators._pipelines[lightOperatorId];
 			}
 
-			auto shadowIterator = preparedShadows.begin();
-			for (unsigned l=0; l<set._lights.size(); ++l) {
-				const auto& i = set._lights[l];
-
+			for (auto lightIterator=set._baseData.begin(); lightIterator!=set._baseData.end(); ++lightIterator) {
 				if (set._operatorId == lightResolveOperators._operatorDescs.size()) {
 					continue;	// this is the ambient light
 				}
 
-				assert(i->QueryInterface(typeid(Internal::StandardPositionalLight).hash_code()) == i.get());
-				auto& standardLightDesc = *(Internal::StandardPositionalLight*)i.get();
-
-				// hack -- 	we need to lookup the light id, because the shadow projections use this to associate the shadow
-				// 			with the light. But we only have a mapping going the other way
-				// we really need a better way to manage the association between the light and the shadow (perhaps similar to
-				// how the shadow probe database does it?)
-				unsigned lightId = ~0u;
-				for (auto lookup:lightScene._lookupTable)
-					if (lookup.second._lightSet == &set - lightScene._tileableLightSets.data() && lookup.second._lightIndex == l)
-						lightId = lookup.first;
-				assert(lightId != ~0u);
+				assert(lightIterator->QueryInterface(typeid(Internal::StandardPositionalLight).hash_code()) == &lightIterator.get());
+				auto& standardLightDesc = *lightIterator;
 
 				if (lightShape == LightSourceShape::Sphere) {
 					// Lights can require a bit of setup and fiddling around on the GPU; so we'll try to
@@ -544,16 +533,12 @@ namespace RenderCore { namespace LightingEngine
 				
 				assert(set._operatorId < lightResolveOperators._pipelines.size());
 
-				while (shadowIterator != preparedShadows.end() && shadowIterator->_lightId < lightId) ++shadowIterator;
-				if (shadowIterator != preparedShadows.end() && shadowIterator->_lightId == lightId) {
-					IDescriptorSet* shadowDescSets[] = { shadowIterator->_preparedResult->GetDescriptorSet() };
+				const IPreparedShadowResult* preparedShadow = nullptr;
+				if (shadowProjectionScheduler)
+					preparedShadow = shadowProjectionScheduler->GetPreparedShadow(setIdx, lightIterator.GetIndex());
+				if (preparedShadow) {
+					IDescriptorSet* shadowDescSets[] = { preparedShadow->GetDescriptorSet() };
 					boundUniforms.ApplyDescriptorSets(metalContext, encoder, MakeIteratorRange(shadowDescSets));
-					++shadowIterator;
-				} else {
-					// If you hit the following assert it probably means the preparedShadows are not sorted by lightId,
-					// or the lights in the light scene are not sorted in id order, or there's a prepared shadow
-					// generated for a light that doesn't exist
-					assert(shadowIterator == preparedShadows.end() || shadowIterator->_lightId > lightId);
 				}
 
 				UniformsStream uniformsStream;

@@ -55,7 +55,8 @@ namespace UnitTests
 	static RenderCore::LightingEngine::ILightScene::ShadowProjectionId CreateTestShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId)
 	{
 		using namespace RenderCore::LightingEngine;
-		auto shadowId = lightScene.CreateShadowProjection(0, lightSourceId);
+		lightScene.SetShadowOperator(lightSourceId, 0);
+		auto shadowId = lightSourceId;
 
 		auto* projections = lightScene.TryGetShadowProjectionInterface<IOrthoShadowProjections>(shadowId);
 		REQUIRE(projections);
@@ -89,7 +90,8 @@ namespace UnitTests
 	static RenderCore::LightingEngine::ILightScene::ShadowProjectionId CreateSphereShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId)
 	{
 		using namespace RenderCore::LightingEngine;
-		auto shadowId = lightScene.CreateShadowProjection(0, lightSourceId);
+		lightScene.SetShadowOperator(lightSourceId, 0);
+		auto shadowId = lightSourceId;
 		
 		auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(lightSourceId);
 		REQUIRE(positional);

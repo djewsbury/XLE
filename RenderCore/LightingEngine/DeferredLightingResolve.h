@@ -61,7 +61,7 @@ namespace RenderCore { namespace LightingEngine
 		bool _enableShadowProbes = false;
 		BufferUploads::CommandListID _completionCommandList = 0;
 
-		std::unique_ptr<Internal::ILightBase> CreateLightSource(ILightScene::LightOperatorId);
+		// std::unique_ptr<Internal::ILightBase> CreateLightSource(ILightScene::LightOperatorId);
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		::Assets::DependencyValidation _depVal;
@@ -71,6 +71,7 @@ namespace RenderCore { namespace LightingEngine
 	class ShadowOperatorDesc;
 	namespace Internal { class StandardLightScene; }
 	class ShadowProbes;
+	namespace Internal { class DynamicShadowProjectionScheduler; }
 
     void ResolveLights(
 		IThreadContext& threadContext,
@@ -78,7 +79,7 @@ namespace RenderCore { namespace LightingEngine
         Techniques::RenderPassInstance& rpi,
 		const LightResolveOperators& lightResolveOperators,
 		Internal::StandardLightScene& lightScene,
-		IteratorRange<const PreparedShadow*> preparedShadows,
+		Internal::DynamicShadowProjectionScheduler* shadowProjectionScheduler,
 		ShadowProbes* shadowProbes);
 
 	enum class GBufferType { PositionNormal, PositionNormalParameters };

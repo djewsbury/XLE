@@ -85,30 +85,22 @@ namespace RenderCore { namespace LightingEngine
 			for (auto& lightSet:_lightScene->_tileableLightSets) {
 				
 				unsigned idxOffset = 0;
-				for (auto q:lightSet._allocatedLights.InternalArray()) {
-					q = ~q;		// bit heap inverts allocations
-					while (q) {
-						auto idx = xl_ctz8(q);
-						q ^= 1ull << uint64_t(idx);
-						idx += idxOffset;
+				for (auto i=lightSet._baseData.begin(); i!=lightSet._baseData.end(); ++i) {
+					auto& lightDesc = *i;
+					if (frustumTester.TestSphere(lightDesc._position, lightDesc._cutoffRange) == CullTestResult::Culled) continue;
+					
+					float zMin = Dot(Float4{lightDesc._position, 1}, zRow);
+					// take the negative for convenience --> convert to -Z forward into +Z forward
+					zMin = -zMin;
+					float zMax = zMin + lightDesc._cutoffRange * zRowMag;
+					zMin -= lightDesc._cutoffRange * zRowMag;
 
-						auto& lightDesc = *(Internal::StandardPositionalLight*)lightSet._lights[idx].get();
-						if (frustumTester.TestSphere(lightDesc._position, lightDesc._cutoffRange) == CullTestResult::Culled) continue;
-						
-						float zMin = Dot(Float4{lightDesc._position, 1}, zRow);
-						// take the negative for convenience --> convert to -Z forward into +Z forward
-						zMin = -zMin;
-						float zMax = zMin + lightDesc._cutoffRange * zRowMag;
-						zMin -= lightDesc._cutoffRange * zRowMag;
-
-						if (intLight < intLightEnd) {
-							*intLight++ = IntermediateLight {
-								lightDesc._position, lightDesc._cutoffRange,
-								zMin/farClip, zMax/farClip,
-								(lightSetIdx << 16) | idx };
-						}
+					if (intLight < intLightEnd) {
+						*intLight++ = IntermediateLight {
+							lightDesc._position, lightDesc._cutoffRange,
+							zMin/farClip, zMax/farClip,
+							(lightSetIdx << 16) | i.GetIndex() };
 					}
-					idxOffset += 64;
 				}
 				++lightSetIdx;
 			}

@@ -6,6 +6,7 @@
 #include "ShadowUniforms.h"
 #include "RenderStepFragments.h"
 #include "LightingEngineApparatus.h"
+#include "LightingEngineInitialization.h"
 #include "../Techniques/PipelineAccelerator.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/RenderPass.h"
@@ -249,6 +250,26 @@ namespace RenderCore { namespace LightingEngine
 				return nullptr;
 			}
 		};
+	}
+
+	TechniqueSequenceParseId CreateShadowParseInSequence(
+		LightingTechniqueIterator& iterator,
+		LightingTechniqueSequence& sequence,
+		Internal::ILightBase& proj,
+		std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> volumeTester)
+	{
+		auto& standardProj = *checked_cast<Internal::StandardShadowProjection*>(&proj);
+		if (standardProj._multiViewInstancingPath) {
+			std::vector<Techniques::ProjectionDesc> projDescs;
+			projDescs.resize(standardProj._projections.Count());
+			CalculateProjections(MakeIteratorRange(projDescs), standardProj._projections);
+			return sequence.CreateMultiViewParseScene(Techniques::BatchFlags::Opaque, std::move(projDescs), std::move(volumeTester));
+		} else {
+			if (volumeTester) {
+				return sequence.CreateParseScene(Techniques::BatchFlags::Opaque, std::move(volumeTester));
+			} else
+				return sequence.CreateParseScene(Techniques::BatchFlags::Opaque);
+		}
 	}
 
 	static Internal::PreparedDMShadowFrustum SetupPreparedDMShadowFrustum(

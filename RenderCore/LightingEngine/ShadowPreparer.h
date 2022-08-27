@@ -128,6 +128,14 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout);
 
+	class LightingTechniqueSequence;
+	using TechniqueSequenceParseId = unsigned;
+	TechniqueSequenceParseId CreateShadowParseInSequence(
+		LightingTechniqueIterator& iterator,
+		LightingTechniqueSequence& sequence,
+		Internal::ILightBase& proj,
+		std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> volumeTester);
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	namespace Internal

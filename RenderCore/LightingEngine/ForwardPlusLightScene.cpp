@@ -28,8 +28,6 @@ namespace RenderCore { namespace LightingEngine
 {
 	static const unsigned s_shadowProbeShadowFlag = 1u<<31u;
 
-	using ForwardPlusLightDesc = Internal::StandardPositionalLight;
-
 	class ForwardPlusLightScene::AmbientLightConfig
 	{
 	public:
@@ -105,18 +103,31 @@ namespace RenderCore { namespace LightingEngine
 			}
 		}
 
+		// all lights get "SupportFiniteRange"
+		for (unsigned op=0; op<_positionalLightOperators.size(); ++op)
+			AssociateFlag(op, Internal::StandardPositionLightFlags::SupportFiniteRange);
+
 		if (_shadowPreparerIdMapping._operatorForStaticProbes != ~0u) {
 			_shadowProbes = std::make_shared<ShadowProbes>(_pipelineAccelerators, *_techDelBox, _shadowPreparerIdMapping._shadowProbesCfg);
 			_shadowProbesManager = std::make_shared<Internal::SemiStaticShadowProbeScheduler>(_shadowProbes, _shadowPreparerIdMapping._operatorForStaticProbes);
 			RegisterComponent(_shadowProbesManager);
 		}
+
+		if (!_shadowPreparerIdMapping._operatorToShadowPreparerId.empty()) {
+			_shadowScheduler = std::make_shared<Internal::DynamicShadowProjectionScheduler>(
+				_pipelineAccelerators->GetDevice(), _shadowPreparers,
+				_shadowPreparerIdMapping._operatorToShadowPreparerId);
+			RegisterComponent(_shadowScheduler);
+		}
 	}
 
+#if 0
 	ILightScene::LightSourceId ForwardPlusLightScene::CreateLightSource(ILightScene::LightOperatorId opId)
 	{
 		auto desc = std::make_unique<ForwardPlusLightDesc>(Internal::StandardPositionalLight::Flags::SupportFiniteRange);
 		return AddLightSource(opId, std::move(desc));
 	}
+#endif
 
 	ILightScene::LightSourceId ForwardPlusLightScene::CreateAmbientLightSource()
 	{
@@ -143,6 +154,7 @@ namespace RenderCore { namespace LightingEngine
 		Internal::StandardLightScene::Clear();
 	}
 
+#if 0
 	ILightScene::ShadowProjectionId ForwardPlusLightScene::CreateShadowProjection(ShadowOperatorId opId, LightSourceId associatedLight)
 	{
 		auto preparerId = _shadowPreparerIdMapping._operatorToShadowPreparerId[opId];
@@ -176,6 +188,7 @@ namespace RenderCore { namespace LightingEngine
 			return Internal::StandardLightScene::DestroyShadowProjection(projectionId);
 		}
 	}
+#endif
 
 	void* ForwardPlusLightScene::TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode)
 	{
@@ -267,13 +280,20 @@ namespace RenderCore { namespace LightingEngine
 			auto* i = (Internal::CB_Light*)map.GetData().begin();
 			auto end = tilerOutputs._lightOrdering.begin() + tilerOutputs._lightCount;
 			for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
-				auto set = *idx >> 16, light = (*idx)&0xffff;
-				auto op = _tileableLightSets[set]._operatorId;
-				auto& lightDesc = *(ForwardPlusLightDesc*)_tileableLightSets[set]._lights[light].get();
+				auto setIdx = *idx >> 16, lightIdx = (*idx)&0xffff;
+				auto op = _tileableLightSets[setIdx]._operatorId;
+				auto& lightDesc = _tileableLightSets[setIdx]._baseData.GetObject(lightIdx);
 				*i = MakeLightUniforms(lightDesc, _positionalLightOperators[op]);
-				auto probe = _shadowProbesManager->GetAllocatedDatabaseEntry(set, light);
-				i->_staticProbeDatabaseEntry = probe._databaseIndex;
-				++i->_staticProbeDatabaseEntry;		// ~0u becomes zero, or add one --> because we want zero to be the sentinal
+			}
+
+			if (_shadowProbesManager) {
+				i = (Internal::CB_Light*)map.GetData().begin();
+				for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
+					auto setIdx = *idx >> 16, lightIdx = (*idx)&0xffff;
+					auto probe = _shadowProbesManager->GetAllocatedDatabaseEntry(setIdx, lightIdx);
+					i->_staticProbeDatabaseEntry = probe._databaseIndex;
+					++i->_staticProbeDatabaseEntry;		// ~0u becomes zero, or add one --> because we want zero to be the sentinal
+				}
 			}
 			map.FlushCache();
 		}
@@ -285,11 +305,9 @@ namespace RenderCore { namespace LightingEngine
 			auto* i = (Internal::CB_EnvironmentProps*)map.GetData().begin();
 			i->_dominantLight = {};
 
-			if (!_dominantLightSet._lights.empty()) {
-				if (_dominantLightSet._lights.size() > 1)
-					Throw(std::runtime_error("Multiple lights in the non-tiled dominant light category. There can be only one dominant light, but it can support more features than the tiled lights"));
+			if (!_dominantLightSet._baseData.empty()) {
 				i->_dominantLight = Internal::MakeLightUniforms(
-					*checked_cast<ForwardPlusLightDesc*>(_dominantLightSet._lights[0].get()),
+					_dominantLightSet._baseData.GetObject(0),
 					_positionalLightOperators[_dominantLightSet._operatorId]);
 			}
 

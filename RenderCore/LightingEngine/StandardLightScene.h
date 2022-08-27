@@ -44,28 +44,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		BitHeap _allocationFlags;
 
 		using Indexor = unsigned;
-		struct Iterator
-		{
-			Indexor _idxOffset = ~0u;
-			uint64_t _q = 0;
-			IteratorRange<const uint64_t*> _allocationFlags;
-			PageHeap<T>* _parent = nullptr;
-
-			Indexor GetIndex() const;
-			T& get();
-			const T& get() const;
-			Iterator& operator++();
-
-			T& operator*();
-			T& operator->();
-			const T& operator*() const;
-			const T& operator->() const;
-			friend bool operator==(const Iterator& lhs, const Iterator& rhs);
-			friend bool operator!=(const Iterator& lhs, const Iterator& rhs);
-		};
+		struct Iterator;
 
 		template<typename... Params>
 			Iterator Allocate(Params&&...);
+		template<typename... Params>
+			Iterator AllocateAtIndex(Indexor index, Params&&...);
 		void Deallocate(Indexor);
 		Iterator Get(Indexor);
 		T& GetObject(Indexor);
@@ -82,7 +66,43 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		PageHeap& operator=(PageHeap&&);
 	};
 
+	template<typename T>
+		struct PageHeap<T>::Iterator
+	{
+		Indexor _idxOffset = ~0u;
+		uint64_t _q = 0;
+		IteratorRange<const uint64_t*> _allocationFlags;
+		PageHeap<T>* _owner = nullptr;
+
+		Indexor GetIndex() const;
+		T& get();
+		const T& get() const;
+		Iterator& operator++();
+
+		T& operator*();
+		T* operator->();
+		const T& operator*() const;
+		const T* operator->() const;
+
+		friend bool operator==(const typename PageHeap<T>::Iterator& lhs, const typename PageHeap<T>::Iterator& rhs)
+		{
+			assert(lhs._owner == rhs._owner);
+			return lhs._q == rhs._q && lhs._idxOffset == rhs._idxOffset && lhs._allocationFlags == rhs._allocationFlags;
+		}
+		friend bool operator!=(const typename PageHeap<T>::Iterator& lhs, const typename PageHeap<T>::Iterator& rhs)
+		{
+			assert(lhs._owner == rhs._owner);
+			return lhs._q != rhs._q || lhs._idxOffset != rhs._idxOffset || lhs._allocationFlags != rhs._allocationFlags;
+		}
+	};
+
 	class StandardPositionalLight;
+
+	struct StandardPositionLightFlags
+	{
+		enum Enum { SupportFiniteRange = 1<<0 };
+		using BitField = unsigned;
+	};
 
 	class StandardLightScene : public ILightScene
 	{
@@ -95,6 +115,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			std::vector<std::shared_ptr<ILightSceneComponent>> _boundComponents;
 			// std::vector<std::unique_ptr<ILightBase>> _lights;
 			// BitHeap _allocatedLights;
+			StandardPositionLightFlags::BitField _flags = 0;
 		};
 		std::vector<LightSet> _tileableLightSets;
 
@@ -111,19 +132,20 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		void RegisterComponent(std::shared_ptr<ILightSceneComponent>);
 		void DeregisterComponent(ILightSceneComponent&);
+		void AssociateFlag(LightOperatorId, StandardPositionLightFlags::BitField);
 
+		virtual LightSourceId CreateLightSource(LightOperatorId operatorId) override;
 		virtual void* TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) override;
 		virtual void DestroyLightSource(LightSourceId) override;
 		virtual void* TryGetShadowProjectionInterface(ShadowProjectionId, uint64_t interfaceTypeCode) override;
 		// virtual void DestroyShadowProjection(ShadowProjectionId) override;
+		virtual void SetShadowOperator(LightSourceId, ShadowOperatorId) override;
 		virtual void Clear() override;
 		virtual void* QueryInterface(uint64_t) override;
 		StandardLightScene();
 		~StandardLightScene();
 
 	protected:
-		LightSourceId AddLightSource(
-			LightOperatorId operatorId);
 
 		/*ShadowProjectionId AddShadowProjection(
 			ShadowOperatorId shadowOperatorId,
@@ -142,6 +164,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void ChangeLightSet(
 			std::vector<std::pair<LightSourceId, LightSetAndIndex>>::iterator i,
 			unsigned newSetIdx);
+
+		std::vector<std::pair<LightOperatorId, StandardPositionLightFlags::BitField>> _associatedFlags;
 	};
 
 	class StandardPositionalLight : public ILightBase, public IPositionalLightSource, public IUniformEmittance, public IFiniteLightSource
@@ -203,16 +227,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		}
 	
 		virtual void* QueryInterface(uint64_t interfaceTypeCode) override;
+		void* QueryInterface(uint64_t interfaceTypeCode, StandardPositionLightFlags::BitField flags);
 
-		struct Flags
-		{
-			enum Enum { SupportFiniteRange = 1<<0 };
-			using BitField = unsigned;
-		};
-		Flags::BitField _flags;
-
-		StandardPositionalLight(Flags::BitField flags =0)
-		: _flags(flags)
+		StandardPositionalLight()
 		{
 			_position = Normalize(Float3(-.1f, 0.33f, 1.f));
 			_orientation = Identity<Float3x3>();
@@ -237,6 +254,21 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		auto* data = &page._data[idxWithinPage*sizeof(T)];
 		new (data) T(std::forward<Params>(p)...);
 		return Get(index);
+	}
+
+	template<typename T>
+		template<typename... Params>
+			auto PageHeap<T>::AllocateAtIndex(Indexor index, Params&&...) -> Iterator
+	{
+		assert(!_allocationFlags.IsAllocated(index));
+		_allocationFlags.Allocate(index);
+		unsigned pageIdx = index >> 6;
+		unsigned idxWithinPage = index & 0x3f;
+		while (pageIdx >= _pages.size()) _pages.push_back(std::make_unique<Page>());
+		auto& page = *_pages[pageIdx];
+		auto* data = &page._data[idxWithinPage*sizeof(T)];
+		new (data) T(std::forward<Params>(p)...);
+		return Get(index);	
 	}
 
 	template<typename T>
@@ -265,7 +297,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		q |= (1ull << uint64_t(idxWithinPage)) - 1ull;	// clear all earlier entries from this "q"
 		q = ~q;
 		allocationFlagsArray.first += pageIdx+1;
-		return Iterator { pageIdx * 64, q, allocationFlagsArray };
+		return { pageIdx * 64, q, allocationFlagsArray, this };
 	}
 
 	template<typename T>
@@ -299,16 +331,16 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				if (q) break;
 			}
 			if (!allocationFlagsArray.empty())
-				return Iterator { 0, q, allocationFlagsArray, this };
+				return { 0, q, allocationFlagsArray, this };
 		}
 			
-		return {};
+		return { ~0u, 0, {}, this };
 	}
 
 	template<typename T>
 		auto PageHeap<T>::end() -> Iterator
 	{
-		return {};
+		return { ~0u, 0, {}, this };
 	}
 
 	template<typename T>
@@ -337,18 +369,18 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	template<typename T>
 		T& PageHeap<T>::Iterator::get()
 	{
-		assert(_parent && _idxOffset != ~0u);
+		assert(_owner && _idxOffset != ~0u);
 		auto pageIdx = _idxOffset >> 6;
 		auto indexInPage = xl_ctz8(_q);
-		return *(T*)&_parent->_pages[pageIdx]->_data[indexInPage*sizeof(T)];
+		return *(T*)&_owner->_pages[pageIdx]->_data[indexInPage*sizeof(T)];
 	}
 	template<typename T>
 		const T& PageHeap<T>::Iterator::get() const
 	{
-		assert(_parent && _idxOffset != ~0u);
+		assert(_owner && _idxOffset != ~0u);
 		auto pageIdx = _idxOffset >> 6;
 		auto indexInPage = xl_ctz8(_q);
-		return *(const T*)&_parent->_pages[pageIdx]->_data[indexInPage*sizeof(T)];
+		return *(const T*)&_owner->_pages[pageIdx]->_data[indexInPage*sizeof(T)];
 	}
 	template<typename T>
 		auto PageHeap<T>::Iterator::operator++() -> Iterator&
@@ -359,7 +391,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		while (!_q) {
 			if (_allocationFlags.empty()) {
 				// reached the end; reset
-				*this = {};
+				_idxOffset = ~0u;
+				_q = 0;
+				_allocationFlags = {};
 				return *this;
 			}
 			_q = ~_allocationFlags[0];
@@ -371,24 +405,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	template<typename T>
 		T& PageHeap<T>::Iterator::operator*() { return get(); }
 	template<typename T>
-		T& PageHeap<T>::Iterator::operator->() { return get(); }
+		T* PageHeap<T>::Iterator::operator->() { return &get(); }
 	template<typename T>
 		const T& PageHeap<T>::Iterator::operator*() const { return get(); }
 	template<typename T>
-		const T& PageHeap<T>::Iterator::operator->() const { return get(); }
-
-	template<typename T>
-		inline bool operator==(const typename PageHeap<T>::Iterator& lhs, const typename PageHeap<T>::Iterator& rhs)
-		{
-			assert(lhs._parent == rhs._parent);
-			return lhs._q == rhs._q && lhs._idxOffset == rhs._idxOfffset && lhs._allocationFlags == rhs._allocationFlags;
-		}
-	template<typename T> 
-		inline bool operator!=(const typename PageHeap<T>::Iterator& lhs, const typename PageHeap<T>::Iterator& rhs)
-		{
-			assert(lhs._parent == rhs._parent);
-			return lhs._q != rhs._q || lhs._idxOffset != rhs._idxOfffset || lhs._allocationFlags != rhs._allocationFlags;
-		}
+		const T* PageHeap<T>::Iterator::operator->() const { return &get(); }
 
 }}}
 

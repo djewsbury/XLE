@@ -14,8 +14,20 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			return (IPositionalLightSource*)this;
 		} else if (interfaceTypeCode == typeid(IUniformEmittance).hash_code()) {
 			return (IUniformEmittance*)this;
+		} else if (interfaceTypeCode == typeid(StandardPositionalLight).hash_code()) {
+			return this;
+		}
+		return nullptr;
+	}
+
+	void* StandardPositionalLight::QueryInterface(uint64_t interfaceTypeCode, StandardPositionLightFlags::BitField flags)
+	{
+		if (interfaceTypeCode == typeid(IPositionalLightSource).hash_code()) {
+			return (IPositionalLightSource*)this;
+		} else if (interfaceTypeCode == typeid(IUniformEmittance).hash_code()) {
+			return (IUniformEmittance*)this;
 		} else if (interfaceTypeCode == typeid(IFiniteLightSource).hash_code()) {
-			if (_flags & Flags::SupportFiniteRange)
+			if (flags & StandardPositionLightFlags::SupportFiniteRange)
 				return (IFiniteLightSource*)this;
 		} else if (interfaceTypeCode == typeid(StandardPositionalLight).hash_code()) {
 			return this;
@@ -33,8 +45,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		if (i->second._lightSet == s_dominantLightSetIdx) {
 			assert(_dominantLightId == sourceId);
 			assert(i->second._lightIndex == 0);
+			for (auto& comp:_dominantLightSet._boundComponents)
+				if (void* interf = comp->QueryInterface(i->second._lightSet, i->second._lightIndex, interfaceTypeCode))
+					return interf;
 			if (!_dominantLightSet._baseData.empty())
-				return _dominantLightSet._baseData.GetObject(0).QueryInterface(interfaceTypeCode);
+				return _dominantLightSet._baseData.GetObject(0).QueryInterface(interfaceTypeCode, _dominantLightSet._flags);
 			return nullptr;
 		}
 
@@ -47,10 +62,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				return interf;
 
 		// fallback to the ILightBase
-		return set._baseData.GetObject(i->second._lightIndex).QueryInterface(interfaceTypeCode);
+		return set._baseData.GetObject(i->second._lightIndex).QueryInterface(interfaceTypeCode, set._flags);
 	}
 
-	auto StandardLightScene::AddLightSource(LightOperatorId operatorId) -> LightSourceId
+	auto StandardLightScene::CreateLightSource(LightOperatorId operatorId) -> LightSourceId
 	{
 		auto result = _nextLightSource++;
 		LightSet* lightSet;
@@ -128,6 +143,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		return nullptr;
 		*/
+	}
+
+	void StandardLightScene::SetShadowOperator(LightSourceId lightSourceId, ShadowOperatorId shadowOperatorId)
+	{
+		ChangeLightsShadowOperator(MakeIteratorRange(&lightSourceId, &lightSourceId+1), shadowOperatorId);
 	}
 
 	void StandardLightScene::ChangeLightSet(
@@ -260,6 +280,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		for (auto& comp:_components)
 			if (comp->BindToSet(newSet._operatorId, newSet._shadowOperatorId, newSetIdx))
 				newSet._boundComponents.push_back(comp);
+		for (auto& a:_associatedFlags)
+			if (a.first == lightOperator)
+				newSet._flags |= a.second;
 		return newSetIdx;
 	}
 
@@ -301,6 +324,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					newComp->RegisterLight(setIdx, i.GetIndex(), *i);
 			}
 		}
+		if (newComp->BindToSet(_dominantLightSet._operatorId, _dominantLightSet._shadowOperatorId, ~0u)) {
+			_dominantLightSet._boundComponents.push_back(newComp);
+			for (auto i=_dominantLightSet._baseData.begin(); i!=_dominantLightSet._baseData.end(); ++i)
+				newComp->RegisterLight(~0u, i.GetIndex(), *i);
+		}
 	}
 
 	void StandardLightScene::DeregisterComponent(ILightSceneComponent& comp)
@@ -311,10 +339,29 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				break;
 			}
 
+		for (auto i=_dominantLightSet._boundComponents.begin(); i!=_dominantLightSet._boundComponents.end(); ++i) {
+			if (i->get() == &comp) _dominantLightSet._boundComponents.erase(i);
+			break;
+		}
+
 		for (auto i=_components.begin(); i!=_components.end(); ++i) {
 			_components.erase(i);
 			break;
 		}
+	}
+
+	void StandardLightScene::AssociateFlag(LightOperatorId operatorId, StandardPositionLightFlags::BitField flag)
+	{
+		auto i = _associatedFlags.begin();
+		for (;i!=_associatedFlags.end(); ++i) if (i->first == operatorId) break;
+		if (i != _associatedFlags.end()) i->second |= flag;
+		else _associatedFlags.emplace_back(operatorId, flag);
+
+		for (auto& set:_tileableLightSets)
+			if (set._operatorId == operatorId)
+				set._flags |= flag;
+		if (_dominantLightSet._operatorId == operatorId)
+			_dominantLightSet._flags |= flag;
 	}
 
 	StandardLightScene::StandardLightScene()

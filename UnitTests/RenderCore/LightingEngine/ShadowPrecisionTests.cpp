@@ -68,7 +68,8 @@ namespace UnitTests
 	static RenderCore::LightingEngine::ILightScene::ShadowProjectionId CreateTestShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId, float theta)
 	{
 		using namespace RenderCore::LightingEngine;
-		auto shadowId = lightScene.CreateShadowProjection(0, lightSourceId);
+		lightScene.SetShadowOperator(lightSourceId, 0);
+		auto shadowId = lightSourceId;
 
 		auto* projections = lightScene.TryGetShadowProjectionInterface<IOrthoShadowProjections>(shadowId);
 		REQUIRE(projections);
@@ -490,7 +491,8 @@ namespace UnitTests
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
 				auto lightId = lightScene.CreateLightSource(0);
 				lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(lightId)->SetLocalToWorld(AsFloat4x4(negativeLightDirection));
-				auto shadowProjectionId = LightingEngine::CreateSunSourceShadows(lightScene, 0, lightId, sunSourceFrustumSettings);
+				LightingEngine::SetupSunSourceShadows(lightScene, lightId, sunSourceFrustumSettings);
+				auto shadowProjectionId = lightId;
 				lightScene.TryGetShadowProjectionInterface<LightingEngine::ISunSourceShadows>(shadowProjectionId)->FixMainSceneCamera(
 					BuildProjectionDesc(sceneCamera, UInt2{2048, 2048}));
 
