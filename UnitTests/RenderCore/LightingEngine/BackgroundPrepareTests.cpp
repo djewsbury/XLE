@@ -168,11 +168,12 @@ namespace UnitTests
 		void BindScene(RenderCore::LightingEngine::ILightScene& lightScene, std::shared_ptr<::Assets::OperationContext>) override 
 		{
 			REQUIRE(_lightOperatorId != ~0u); REQUIRE(_shadowOperatorId != ~0u);
-			REQUIRE(_lightSourcesId.empty()); REQUIRE(!_shadowProjectionId);
+			REQUIRE(_lightSourcesId.empty());
 			_lightSourcesId.emplace_back(lightScene.CreateLightSource(_lightOperatorId));
 			_lightSourcesId.emplace_back(lightScene.CreateLightSource(_lightOperatorId));
 			_lightSourcesId.emplace_back(lightScene.CreateLightSource(_lightOperatorId));
-			_shadowProjectionId = lightScene.CreateShadowProjection(_shadowOperatorId, MakeIteratorRange(_lightSourcesId));
+			for (auto l:_lightSourcesId)
+				lightScene.SetShadowOperator(l, _shadowOperatorId);
 
 			// red
 			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(_lightSourcesId[0])->SetLocalToWorld(AsFloat4x4(Float3(50, 5, 50)));
@@ -191,20 +192,16 @@ namespace UnitTests
 		}
 		void UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) override
 		{
-			if (_shadowProjectionId) lightScene.DestroyShadowProjection(*_shadowProjectionId);
 			for (auto light:_lightSourcesId) lightScene.DestroyLightSource(light);
-			_shadowProjectionId = {};
 			_lightSourcesId.clear();
 		}
 		std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> BeginPrepareStep(
 			RenderCore::LightingEngine::ILightScene& lightScene,
 			RenderCore::IThreadContext& threadContext) override
 		{ 
-			if (_shadowProjectionId.has_value()) {
-				if (auto* props = lightScene.TryGetShadowProjectionInterface<RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler>(*_shadowProjectionId))
-					props->SetNearRadius(0.2f);
-				if (auto* prepareable = lightScene.TryGetShadowProjectionInterface<RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler>(*_shadowProjectionId))
-					return prepareable->BeginPrepare(threadContext, 64);
+			if (auto* scheduler = (RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler*)lightScene.QueryInterface(typeid(RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler).hash_code())) {
+				scheduler->SetNearRadius(0.2f);
+				return scheduler->BeginPrepare(threadContext, 64);
 			}
 			return nullptr;
 		}
@@ -226,7 +223,6 @@ namespace UnitTests
 		}
 
 		std::vector<RenderCore::LightingEngine::ILightScene::LightSourceId> _lightSourcesId;
-		std::optional<RenderCore::LightingEngine::ILightScene::ShadowProjectionId> _shadowProjectionId;
 
 		unsigned _lightOperatorId = ~0u, _shadowOperatorId = ~0u;
 

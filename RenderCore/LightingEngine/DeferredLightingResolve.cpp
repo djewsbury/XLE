@@ -36,14 +36,6 @@ static Int2 GetCursorPos();
 
 namespace RenderCore { namespace LightingEngine
 {
-	/*std::unique_ptr<Internal::ILightBase> LightResolveOperators::CreateLightSource(ILightScene::LightOperatorId opId)
-	{
-		Internal::StandardPositionalLight::Flags::BitField flags = 0;
-		if (_pipelines[opId]._stencilingGeoShape != LightSourceShape::Directional && !(_pipelines[opId]._flags & LightSourceOperatorDesc::Flags::NeverStencil))
-			flags |= Internal::StandardPositionalLight::Flags::SupportFiniteRange;
-		return std::make_unique<Internal::StandardPositionalLight>(flags);
-	}*/
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	struct CB

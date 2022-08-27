@@ -5,7 +5,6 @@
 #pragma once
 
 #include "ShadowPreparer.h"
-#include "StandardLightScene.h"			// for ILightBase
 #include "../Techniques/TechniqueUtils.h"
 #include "../../Math/Matrix.h"
 #include "../../Math/Vector.h"
@@ -153,21 +152,4 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	void CalculateProjections(
 		IteratorRange<Techniques::ProjectionDesc*> dst,
 		const MultiProjection<MaxShadowTexturesPerLight>& projections);
-
-	class IShadowProjectionDriver
-	{
-	public:
-		virtual std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> UpdateProjections(
-			const Techniques::ParsingContext&,
-			IPositionalLightSource& lightSource,
-			IOrthoShadowProjections& destination) = 0;
-		virtual ~IShadowProjectionDriver() = default;
-	};
-
-	class IAttachDriver
-	{
-	public:
-		virtual void AttachDriver(std::shared_ptr<Internal::ILightBase> driver) = 0;
-		virtual ~IAttachDriver() = default;
-	};
 }}}

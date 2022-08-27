@@ -5,7 +5,7 @@
 #pragma once
 
 #include "ILightScene.h"
-#include "StandardLightScene.h"
+#include "StandardLightScene.h"		// for ILightSceneComponent
 #include "ShadowProbes.h"
 #include "../Types.h"
 #include "../../Assets/Marker.h"

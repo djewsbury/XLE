@@ -4,14 +4,11 @@
 
 #pragma once
 
-#include "ILightScene.h"		// for IShadowProjectionFactory
 #include "../Techniques/TechniqueUtils.h"
 #include "../StateDesc.h"
 #include "../Format.h"
 #include "../Types.h"
-#include "../../Assets/AssetsCore.h"
 #include "../../Utility/MemoryUtils.h"
-#include "../../Utility/ParameterBox.h"
 #include <memory>
 
 namespace RenderCore { namespace Techniques
@@ -26,6 +23,7 @@ namespace RenderCore { namespace Techniques
 }}
 namespace RenderCore { class IThreadContext; class IDescriptorSet; }
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
+namespace std { template<typename T> class future; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -104,7 +102,7 @@ namespace RenderCore { namespace LightingEngine
 
 	class ShadowOperatorDesc;
 	class SharedTechniqueDelegateBox;
-	::Assets::PtrToMarkerPtr<ICompiledShadowPreparer> CreateCompiledShadowPreparer(
+	std::future<std::shared_ptr<ICompiledShadowPreparer>> CreateCompiledShadowPreparer(
 		const ShadowOperatorDesc& desc,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
@@ -122,7 +120,7 @@ namespace RenderCore { namespace LightingEngine
 
 		std::pair<std::unique_ptr<Internal::ILightBase>, std::shared_ptr<ICompiledShadowPreparer>> CreateShadowProjection(unsigned operatorIdx);
 	};
-	::Assets::PtrToMarkerPtr<DynamicShadowPreparers> CreateDynamicShadowPreparers(
+	std::future<std::shared_ptr<DynamicShadowPreparers>> CreateDynamicShadowPreparers(
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,

@@ -5,6 +5,7 @@
 #include "SunSourceConfiguration.h"
 #include "ShadowPreparer.h"
 #include "ShadowUniforms.h"     // for the attach driver infrastructure
+#include "ShadowProjectionDriver.h"
 #include "../Techniques/TechniqueUtils.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Format.h"

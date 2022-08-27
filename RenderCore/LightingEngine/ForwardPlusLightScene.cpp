@@ -451,7 +451,7 @@ namespace RenderCore { namespace LightingEngine
 
 		ShadowPreparerIdMapping shadowOperatorMapping;
 		shadowOperatorMapping._operatorToShadowPreparerId.resize(shadowGenerators.size(), ~0u);
-		::Assets::PtrToMarkerPtr<DynamicShadowPreparers> shadowPreparationOperatorsFuture;
+		std::future<std::shared_ptr<DynamicShadowPreparers>> shadowPreparationOperatorsFuture;
 
 		// Map the shadow operator ids onto the underlying type of shadow (dynamically generated, shadow probes, etc)
 		{
@@ -480,7 +480,7 @@ namespace RenderCore { namespace LightingEngine
 		std::vector<ShadowOperatorDesc> shadowOperatorsDesc { shadowGenerators.begin(), shadowGenerators.end() };
 
 		using namespace std::placeholders;
-		::Assets::WhenAll(shadowPreparationOperatorsFuture, lightTilerFuture).ThenConstructToPromise(
+		::Assets::WhenAll(std::move(shadowPreparationOperatorsFuture), lightTilerFuture).ThenConstructToPromise(
 			std::move(promise),
 			std::bind(CreateInternal, _1, _2, std::move(positionalLightOperators), std::move(shadowOperatorsDesc), ambientLightOperator, std::move(shadowOperatorMapping), pipelineAccelerators, techDelBox));
 	}

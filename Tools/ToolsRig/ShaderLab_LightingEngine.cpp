@@ -35,48 +35,24 @@ namespace ToolsRig
 	public:
 		void DoShadowPrepare(LightingEngine::LightingTechniqueIterator& iterator, LightingEngine::LightingTechniqueSequence& sequence)
 		{
-			sequence.Reset();
-			_preparedShadows.clear();
-			_preparedDominantShadow = nullptr;
-			if (_lightScene->_shadowPreparers->_preparers.empty()) return;
-
-			_preparedShadows.reserve(_lightScene->_dynamicShadowProjections.size());
-			LightingEngine::ILightScene::LightSourceId prevLightId = ~0u; 
-			for (unsigned c=0; c<_lightScene->_dynamicShadowProjections.size(); ++c) {
-				_preparedShadows.push_back(std::make_pair(
-					_lightScene->_dynamicShadowProjections[c]._lightId,
-					LightingEngine::Internal::SetupShadowPrepare(
-						iterator, sequence, 
-						*_lightScene->_dynamicShadowProjections[c]._desc, 
-						*_lightScene, _lightScene->_dynamicShadowProjections[c]._lightId,
-						_shadowDescSetPipelineType,
-						*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool)));
-
-				// shadow entries must be sorted by light id
-				assert(prevLightId == ~0u || prevLightId < _lightScene->_dynamicShadowProjections[c]._lightId);
-				prevLightId = _lightScene->_dynamicShadowProjections[c]._lightId;
-			}
-
-			if (_lightScene->_dominantShadowProjection._desc) {
-				assert(_lightScene->_dominantLightSet._lights.size() == 1);
-				_preparedDominantShadow =
-					LightingEngine::Internal::SetupShadowPrepare(
-						iterator, sequence, 
-						*_lightScene->_dominantShadowProjection._desc, 
-						*_lightScene, _lightScene->_dominantLightSet._lights[0]._id,
-						_shadowDescSetPipelineType,
-						*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool);
-			}
+			if (_lightScene->_shadowScheduler)
+				_lightScene->_shadowScheduler->DoShadowPrepare(iterator, sequence);
 		}
 
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext)
 		{
 			_lightScene->ConfigureParsingContext(parsingContext);
-			if (_preparedDominantShadow) {
-				// find the prepared shadow associated with the dominant light (if it exists) and make sure it's descriptor set is accessible
+			if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow()) {
 				assert(!parsingContext._extraSequencerDescriptorSet.second);
-				parsingContext._extraSequencerDescriptorSet = { s_shadowTemplate, _preparedDominantShadow->GetDescriptorSet() };
+				parsingContext._extraSequencerDescriptorSet = { s_shadowTemplate, dominantShadow->GetDescriptorSet() };
 			}
+		}
+
+		void ReleaseParsingContext(Techniques::ParsingContext& parsingContext)
+		{
+			parsingContext._extraSequencerDescriptorSet = {0ull, nullptr};
+			if (_lightScene->_shadowScheduler)
+				_lightScene->_shadowScheduler->ClearPreparedShadows();
 		}
 
 		std::shared_ptr<LightingEngine::ForwardPlusLightScene> _lightScene;
@@ -86,19 +62,7 @@ namespace ToolsRig
 			_lightScene = std::dynamic_pointer_cast<LightingEngine::ForwardPlusLightScene>(std::move(lightScene));
 			if (!_lightScene)
 				Throw(std::runtime_error("No light scene, or light scene is of wrong type (ForwardPlusLightScene required)"));
-
-			_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(device);
-			_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
-			_shadowDescSetPipelineType = shadowDescSetPipelineType;
 		}
-
-		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
-		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
-		PipelineType _shadowDescSetPipelineType;
-
-		// frame temporaries
-		std::vector<std::pair<unsigned, std::shared_ptr<LightingEngine::IPreparedShadowResult>>> _preparedShadows;
-		std::shared_ptr<LightingEngine::IPreparedShadowResult> _preparedDominantShadow;
 	};
 
 	void RegisterPrepareLightScene(ToolsRig::ShaderLab& shaderLab)

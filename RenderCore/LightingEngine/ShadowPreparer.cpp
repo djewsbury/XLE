@@ -4,6 +4,7 @@
 
 #include "ShadowPreparer.h"
 #include "ShadowUniforms.h"
+#include "StandardLightScene.h"
 #include "RenderStepFragments.h"
 #include "LightingEngineApparatus.h"
 #include "LightingEngineInitialization.h"
@@ -481,15 +482,16 @@ namespace RenderCore { namespace LightingEngine
 		return { std::move(result), op._preparer };
 	}
 
-	::Assets::PtrToMarkerPtr<ICompiledShadowPreparer> CreateCompiledShadowPreparer(
+	std::future<std::shared_ptr<ICompiledShadowPreparer>> CreateCompiledShadowPreparer(
 		const ShadowOperatorDesc& desc,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	{
-		auto result = std::make_shared<::Assets::MarkerPtr<ICompiledShadowPreparer>>();
+		std::promise<std::shared_ptr<ICompiledShadowPreparer>> promise;
+		auto result = promise.get_future();
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[desc, pipelineAccelerators, delegatesBox, descSetLayout, promise=result->AdoptPromise()]() mutable {
+			[desc, pipelineAccelerators, delegatesBox, descSetLayout, promise=std::move(promise)]() mutable {
 				TRY {
 					promise.set_value(std::make_shared<DMShadowPreparer>(desc, pipelineAccelerators, delegatesBox, descSetLayout));
 				} CATCH(...) {
@@ -499,43 +501,50 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	::Assets::PtrToMarkerPtr<DynamicShadowPreparers> CreateDynamicShadowPreparers(
+	std::future<std::shared_ptr<DynamicShadowPreparers>> CreateDynamicShadowPreparers(
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	{
-		auto result = std::make_shared<::Assets::MarkerPtr<DynamicShadowPreparers>>();
+		std::promise<std::shared_ptr<DynamicShadowPreparers>> promise;
+		auto result = promise.get_future();
 		if (shadowGenerators.empty()) {
-			result->SetAsset(std::make_shared<DynamicShadowPreparers>());
+			promise.set_value(std::make_shared<DynamicShadowPreparers>());
 			return result;
 		}
 
-		using PreparerFuture = ::Assets::PtrToMarkerPtr<ICompiledShadowPreparer>;
-		std::vector<PreparerFuture> futures;
-		futures.reserve(shadowGenerators.size());
+		struct Helper
+		{
+			using PreparerFuture = std::future<std::shared_ptr<ICompiledShadowPreparer>>;
+			std::vector<PreparerFuture> _futures;
+			unsigned _completedUpTo = 0;
+		};
+		auto helper = std::make_shared<Helper>();
+		helper->_futures.reserve(shadowGenerators.size());
 		for (unsigned operatorIdx=0; operatorIdx<shadowGenerators.size(); ++operatorIdx) {
 			assert(shadowGenerators[operatorIdx]._resolveType != ShadowResolveType::Probe);
 			auto preparer = CreateCompiledShadowPreparer(shadowGenerators[operatorIdx], pipelineAccelerators, delegatesBox, descSetLayout);
-			futures.push_back(std::move(preparer));
+			helper->_futures.push_back(std::move(preparer));
 		}
 
 		std::vector<ShadowOperatorDesc> shadowGeneratorCopy { shadowGenerators.begin(), shadowGenerators.end() };
 		::Assets::PollToPromise(
-			result->AdoptPromise(),
-			[futures]() {
-				for (const auto& p:futures)
-					if (p->IsBkgrndPending()) 
+			std::move(promise),
+			[helper](auto timeout) {
+				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+				for (;helper->_completedUpTo<helper->_futures.size(); ++helper->_completedUpTo)
+					if (helper->_futures[helper->_completedUpTo].wait_until(timeoutTime) == std::future_status::timeout)
 						return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
 			},
-			[futures,shadowGeneratorCopy=std::move(shadowGeneratorCopy)]() {
+			[helper,shadowGeneratorCopy=std::move(shadowGeneratorCopy)]() {
 				using namespace ::Assets;
 				std::vector<std::shared_ptr<ICompiledShadowPreparer>> actualized;
-				actualized.resize(futures.size());
+				actualized.resize(helper->_futures.size());
 				auto a=actualized.begin();
-				for (const auto& p:futures)
-					*a++ = p->ActualizeBkgrnd();
+				for (auto& p:helper->_futures)
+					*a++ = p.get();
 
 				auto finalResult = std::make_shared<DynamicShadowPreparers>();
 				finalResult->_preparers.reserve(actualized.size());

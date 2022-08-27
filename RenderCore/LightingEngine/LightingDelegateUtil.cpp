@@ -4,10 +4,11 @@
 
 #include "LightingDelegateUtil.h"
 #include "LightingEngineIterator.h"
+#include "LightingEngineInitialization.h"
 #include "ShadowUniforms.h"
 #include "ShadowPreparer.h"
 #include "ShadowProbes.h"
-#include "LightingEngineInitialization.h"
+#include "ShadowProjectionDriver.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/DeferredShaderResource.h"
@@ -158,7 +159,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	DynamicShadowProjectionScheduler::DynamicShadowProjectionScheduler(
 		std::shared_ptr<IDevice> device, std::shared_ptr<DynamicShadowPreparers> shadowPreparers,
-		// IteratorRange<const std::pair<ILightScene::ShadowOperatorId, unsigned>*> operatorToPreparerIdMapping)
 		IteratorRange<const unsigned*> operatorToPreparerIdMapping)
 	: _shadowPreparers(std::move(shadowPreparers)), _totalProjectionCount(0)
 	{
