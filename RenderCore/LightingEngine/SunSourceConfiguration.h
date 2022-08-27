@@ -64,7 +64,6 @@ namespace RenderCore { namespace LightingEngine
     /// is required for adapting the shadows projection to the main scene camera.</param>
     void ConfigureShadowProjectionImmediately(
         ILightScene& lightScene,
-        ILightScene::ShadowProjectionId shadowProjectionId,
         ILightScene::LightSourceId associatedLightId,
         const SunSourceFrustumSettings& settings,
         const Techniques::ProjectionDesc& mainSceneProjectionDesc);

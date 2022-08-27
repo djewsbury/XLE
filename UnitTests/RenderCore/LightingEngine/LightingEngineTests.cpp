@@ -52,13 +52,12 @@ namespace UnitTests
 	const float shadowDepthRange = 100.f;
 	const float shadowFrustumWidth = 4.0f;
 
-	static RenderCore::LightingEngine::ILightScene::ShadowProjectionId CreateTestShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId)
+	static void CreateTestShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId)
 	{
 		using namespace RenderCore::LightingEngine;
 		lightScene.SetShadowOperator(lightSourceId, 0);
-		auto shadowId = lightSourceId;
 
-		auto* projections = lightScene.TryGetShadowProjectionInterface<IOrthoShadowProjections>(shadowId);
+		auto* projections = lightScene.TryGetLightSourceInterface<IOrthoShadowProjections>(lightSourceId);
 		REQUIRE(projections);
 
 		auto camToWorld = MakeCameraToWorld(Float3{0.f, -1.0f, 0.f}, Float3{0.f, 0.0f, 1.f}, Float3{0.f, 10.0f, 0.f});
@@ -74,11 +73,9 @@ namespace UnitTests
         desc._tanBlurAngle = 0.00436f;
         desc._minBlurSearch = 0.5f;
         desc._maxBlurSearch = 25.f;
-		auto* preparer = lightScene.TryGetShadowProjectionInterface<IDepthTextureResolve>(shadowId);
+		auto* preparer = lightScene.TryGetLightSourceInterface<IDepthTextureResolve>(lightSourceId);
 		REQUIRE(preparer);
 		preparer->SetDesc(desc);
-
-		return shadowId;
 	}
 
 	static void ConfigureLightScene(RenderCore::LightingEngine::ILightScene& lightScene)
@@ -87,11 +84,10 @@ namespace UnitTests
 		CreateTestShadowProjection(lightScene, srcId);
 	}
 
-	static RenderCore::LightingEngine::ILightScene::ShadowProjectionId CreateSphereShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId)
+	static void CreateSphereShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId)
 	{
 		using namespace RenderCore::LightingEngine;
 		lightScene.SetShadowOperator(lightSourceId, 0);
-		auto shadowId = lightSourceId;
 		
 		auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(lightSourceId);
 		REQUIRE(positional);
@@ -112,10 +108,9 @@ namespace UnitTests
 					RenderCore::Techniques::GetDefaultClipSpaceType());
 		}
 
-		auto* projections = lightScene.TryGetShadowProjectionInterface<IArbitraryShadowProjections>(shadowId);
+		auto* projections = lightScene.TryGetLightSourceInterface<IArbitraryShadowProjections>(lightSourceId);
 		REQUIRE(projections);
 		projections->SetArbitrarySubProjections(MakeIteratorRange(worldToCamera), MakeIteratorRange(cameraToProjection));
-		return shadowId;
 	}
 
 	TEST_CASE( "LightingEngine-ExecuteTechnique", "[rendercore_lighting_engine]" )

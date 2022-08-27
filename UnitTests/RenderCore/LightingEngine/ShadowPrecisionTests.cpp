@@ -65,13 +65,12 @@ namespace UnitTests
 
     const float depthRange = 10.f;
 
-	static RenderCore::LightingEngine::ILightScene::ShadowProjectionId CreateTestShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId, float theta)
+	static void CreateTestShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId, float theta)
 	{
 		using namespace RenderCore::LightingEngine;
 		lightScene.SetShadowOperator(lightSourceId, 0);
-		auto shadowId = lightSourceId;
 
-		auto* projections = lightScene.TryGetShadowProjectionInterface<IOrthoShadowProjections>(shadowId);
+		auto* projections = lightScene.TryGetLightSourceInterface<IOrthoShadowProjections>(lightSourceId);
 		REQUIRE(projections);
 
         float distanceToLight = depthRange / 2.0f;
@@ -91,11 +90,9 @@ namespace UnitTests
         desc._tanBlurAngle = 0.00436f;
 		desc._minBlurSearch = 3.f;
         desc._maxBlurSearch = 35.f;
-		auto* preparer = lightScene.TryGetShadowProjectionInterface<IDepthTextureResolve>(shadowId);
+		auto* preparer = lightScene.TryGetLightSourceInterface<IDepthTextureResolve>(lightSourceId);
 		REQUIRE(preparer);
 		preparer->SetDesc(desc);
-
-		return shadowId;
 	}
 
 	static RenderCore::LightingEngine::ILightScene::LightSourceId ConfigureLightScene(RenderCore::LightingEngine::ILightScene& lightScene, float theta)
@@ -289,7 +286,7 @@ namespace UnitTests
 		ImmediateDrawingHelper& immediateDrawingHelper,
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		RenderCore::LightingEngine::ILightScene& lightScene,
-		unsigned shadowProjectionId,
+		RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId,
 		const RenderCore::Techniques::CameraDesc& sceneCamera)
 	{
 		using namespace RenderCore;
@@ -297,7 +294,7 @@ namespace UnitTests
 			threadContext, *immediateDrawingHelper._immediateDrawables, immediateDrawingHelper._fontRenderingManager.get());
 
 		unsigned colorIterator = 0;
-		auto* shadowProj = lightScene.TryGetShadowProjectionInterface<LightingEngine::IOrthoShadowProjections>(shadowProjectionId);
+		auto* shadowProj = lightScene.TryGetLightSourceInterface<LightingEngine::IOrthoShadowProjections>(lightSourceId);
 		if (shadowProj) {
 			auto worldToView = shadowProj->GetWorldToOrthoView();
 			auto subProjs = shadowProj->GetOrthoSubProjections();
@@ -492,8 +489,7 @@ namespace UnitTests
 				auto lightId = lightScene.CreateLightSource(0);
 				lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(lightId)->SetLocalToWorld(AsFloat4x4(negativeLightDirection));
 				LightingEngine::SetupSunSourceShadows(lightScene, lightId, sunSourceFrustumSettings);
-				auto shadowProjectionId = lightId;
-				lightScene.TryGetShadowProjectionInterface<LightingEngine::ISunSourceShadows>(shadowProjectionId)->FixMainSceneCamera(
+				lightScene.TryGetLightSourceInterface<LightingEngine::ISunSourceShadows>(lightId)->FixMainSceneCamera(
 					BuildProjectionDesc(sceneCamera, UInt2{2048, 2048}));
 
 				// draw once from the "scene camera"
@@ -538,7 +534,7 @@ namespace UnitTests
 					DrawCascadeColors(*threadContext, parsingContext, testApparatus._pipelinePool);
 
 					// draw the camera and shadow frustums into the output image
-					DrawCameraAndShadowFrustums(*threadContext, immediateDrawingHelper, parsingContext, lightScene, shadowProjectionId, sceneCamera);
+					DrawCameraAndShadowFrustums(*threadContext, immediateDrawingHelper, parsingContext, lightScene, lightId, sceneCamera);
 
 					auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
 					REQUIRE(colorLDR);
@@ -548,7 +544,7 @@ namespace UnitTests
 
 				std::vector<Float4x4> worldToProjs;
 				worldToProjs.push_back(BuildProjectionDesc(sceneCamera, UInt2{2048, 2048})._worldToProjection);
-				auto* orthoShadowProjections = lightScene.TryGetShadowProjectionInterface<RenderCore::LightingEngine::IOrthoShadowProjections>(shadowProjectionId);
+				auto* orthoShadowProjections = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IOrthoShadowProjections>(lightId);
 				REQUIRE(orthoShadowProjections);
 				auto subProjections = orthoShadowProjections->GetOrthoSubProjections();
 				REQUIRE(!subProjections.empty());

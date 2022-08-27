@@ -90,24 +90,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				offset += 64;
 			}
 		}
-
-		if (_dominantSet->_activeSet) {
-			unsigned offset = 0;
-			for (auto q:_dominantSet->_activeProjections.InternalArray()) {
-				q = ~q;		// bit heap inverts allocations
-				while (q) {
-					auto idx = xl_ctz8(q);
-					q ^= 1ull << uint64_t(idx);
-					idx += offset;
-
-					_dominantSet->_preparedResult[idx] = SetupShadowPrepare(
-						iterator, sequence, *_dominantSet->_projections[idx], _dominantSet->_addendums[idx],
-						PipelineType::Graphics,
-						*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool);
-				}
-				offset += 64;
-			}
-		}
 	}
 
 	void DynamicShadowProjectionScheduler::ClearPreparedShadows()
@@ -117,31 +99,21 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			for (auto& p:comp._preparedResult)
 				p = {};
 		}
-		for (auto& p:_dominantSet->_preparedResult)
-			p = {};
 	}
 
 	void DynamicShadowProjectionScheduler::RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light)
 	{
-		if (setIdx != ~0u) {
-			assert(setIdx < _sceneSets.size() && _sceneSets[setIdx]._activeSet);
-			_sceneSets[setIdx].RegisterLight(lightIdx, light);
-		} else {
-			_dominantSet->RegisterLight(lightIdx, light);
-		}
+		assert(setIdx < _sceneSets.size() && _sceneSets[setIdx]._activeSet);
+		_sceneSets[setIdx].RegisterLight(lightIdx, light);
 		++_totalProjectionCount;
 	}
 
 	void DynamicShadowProjectionScheduler::DeregisterLight(unsigned setIdx, unsigned lightIdx)
 	{
-		if (setIdx != ~0u) {
-			assert(setIdx < _sceneSets.size() && _sceneSets[setIdx]._activeSet);
-			_sceneSets[setIdx].DeregisterLight(lightIdx);
-			if (!_sceneSets[setIdx]._activeProjections.AllocatedCount())
-				_sceneSets[setIdx]._activeSet = false;
-		} else {
-			_dominantSet->DeregisterLight(lightIdx);
-		}
+		assert(setIdx < _sceneSets.size() && _sceneSets[setIdx]._activeSet);
+		_sceneSets[setIdx].DeregisterLight(lightIdx);
+		if (!_sceneSets[setIdx]._activeProjections.AllocatedCount())
+			_sceneSets[setIdx]._activeSet = false;
 		assert(_totalProjectionCount > 0);
 		--_totalProjectionCount;
 	}
@@ -149,17 +121,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	bool DynamicShadowProjectionScheduler::BindToSet(ILightScene::LightOperatorId, ILightScene::ShadowOperatorId shadowOperator, unsigned setIdx)
 	{
 		if (shadowOperator >= _operatorToPreparerIdMapping.size() || _operatorToPreparerIdMapping[shadowOperator] == ~0u) return false;
-		if (setIdx != ~0u) {
-			if (_sceneSets.size() <= setIdx)
-				_sceneSets.resize(setIdx+1);
-			_sceneSets[setIdx]._activeSet = true;
-			_sceneSets[setIdx]._preparers = _shadowPreparers;
-			_sceneSets[setIdx]._preparerId = _operatorToPreparerIdMapping[shadowOperator];
-		} else {
-			_dominantSet->_activeSet = true;
-			_dominantSet->_preparers = _shadowPreparers;
-			_dominantSet->_preparerId = _operatorToPreparerIdMapping[shadowOperator];
-		}
+		if (_sceneSets.size() <= setIdx)
+			_sceneSets.resize(setIdx+1);
+		_sceneSets[setIdx]._activeSet = true;
+		_sceneSets[setIdx]._preparers = _shadowPreparers;
+		_sceneSets[setIdx]._preparerId = _operatorToPreparerIdMapping[shadowOperator];
 		return true;
 	}
 
@@ -174,14 +140,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 						return res;
 				return _sceneSets[setIdx]._projections[lightIdx]->QueryInterface(interfaceTypeCode);
 			}
-		if (setIdx == ~0u && _dominantSet->_activeProjections.IsAllocated(lightIdx)) {
-			if (interfaceTypeCode == typeid(IAttachDriver).hash_code())
-				return &_dominantSet->_addendums[lightIdx];
-			if (_dominantSet->_addendums[lightIdx]._driver)
-				if (auto* res = _dominantSet->_addendums[lightIdx]._driver->QueryInterface(interfaceTypeCode))
-					return res;
-			return _dominantSet->_projections[lightIdx]->QueryInterface(interfaceTypeCode);
-		}
 		return nullptr;
 	}
 
@@ -195,11 +153,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				if (p)
 					result.push_back({sceneSet._preparerId, p.get()});
 		}
-		if (_dominantSet->_activeSet) {
-			for (auto& p:_dominantSet->_preparedResult)
-				if (p)
-					result.push_back({_dominantSet->_preparerId, p.get()});
-		}
 		return result;
 	}
 
@@ -211,17 +164,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 		_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(device);
 		_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
-		_dominantSet = std::make_unique<SceneSet>();
 
 		assert(!operatorToPreparerIdMapping.empty());
-		/*unsigned maxOp = 0;
-		for (auto c:operatorToPreparerIdMapping) maxOp = std::max(maxOp, c.first);
-		_operatorToPreparerIdMapping.resize(maxOp+1, ~0u);
-		for (auto c:operatorToPreparerIdMapping) {
-			assert(_operatorToPreparerIdMapping[c.first] == ~0u);		// if you hit this, it means multiple preparers associated with one operator id
-			assert(c.second != ~0u);
-			_operatorToPreparerIdMapping[c.first] = c.second;
-		}*/
 		_operatorToPreparerIdMapping.insert(_operatorToPreparerIdMapping.end(), operatorToPreparerIdMapping.begin(), operatorToPreparerIdMapping.end());
 	}
 	DynamicShadowProjectionScheduler::~DynamicShadowProjectionScheduler() {}
@@ -613,6 +557,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	void* SemiStaticShadowProbeScheduler::QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode)
 	{
+		if (interfaceTypeCode == typeid(ISemiStaticShadowProbeScheduler).hash_code() && _sceneSets[setIdx]._activeSet)
+			return (ISemiStaticShadowProbeScheduler*)this;
 		return nullptr;
 	}
 
@@ -637,6 +583,42 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	}
 
 	SemiStaticShadowProbeScheduler::~SemiStaticShadowProbeScheduler() {}
+
+
+	DominantLightSet::DominantLightSet(ILightScene::LightOperatorId lightOpId, ILightScene::ShadowOperatorId shadowOpId)
+	: _lightOpId(lightOpId), _shadowOpId(shadowOpId)
+	{}
+	DominantLightSet::~DominantLightSet() {}
+
+	void DominantLightSet::RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light)
+	{
+		assert(setIdx == _setIdx);
+		if (_hasLight) Throw(std::runtime_error("Attempting to add multiple dominant lights. Only one is supported."));
+		assert(lightIdx == 0);
+		_hasLight = true;
+	}
+
+	void DominantLightSet::DeregisterLight(unsigned setIdx, unsigned lightIdx)
+	{
+		assert(setIdx == _setIdx);
+		assert(_hasLight);
+		assert(lightIdx == 0);
+		_hasLight = false;
+	}
+
+	bool DominantLightSet::BindToSet(ILightScene::LightOperatorId opId, ILightScene::ShadowOperatorId shadowId, unsigned setIdx)
+	{
+		if (opId != _lightOpId || shadowId != _shadowOpId)
+			return false;
+		assert(_setIdx == ~0u);
+		_setIdx = setIdx;
+		return true;
+	}
+
+	void* DominantLightSet::QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode)
+	{
+		return nullptr;
+	}
 
 }}}
 

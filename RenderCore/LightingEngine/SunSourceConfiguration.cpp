@@ -1089,10 +1089,10 @@ namespace RenderCore { namespace LightingEngine
 
     static void ApplyNonFrustumSettings(
         ILightScene& lightScene,
-        ILightScene::ShadowProjectionId shadowProjectionId,
+        ILightScene::LightSourceId lightId,
         const SunSourceFrustumSettings& settings)
     {
-        auto* preparer = lightScene.TryGetShadowProjectionInterface<IDepthTextureResolve>(shadowProjectionId);
+        auto* preparer = lightScene.TryGetLightSourceInterface<IDepthTextureResolve>(lightId);
         if (preparer) {
             IDepthTextureResolve::Desc desc;
             desc._worldSpaceResolveBias = settings._worldSpaceResolveBias;
@@ -1111,7 +1111,7 @@ namespace RenderCore { namespace LightingEngine
     {
         ApplyNonFrustumSettings(lightScene, associatedLightId, settings);
 
-        auto* attachDriver = lightScene.TryGetShadowProjectionInterface<Internal::IAttachDriver>(associatedLightId);
+        auto* attachDriver = lightScene.TryGetLightSourceInterface<Internal::IAttachDriver>(associatedLightId);
         if (attachDriver) {
             attachDriver->AttachDriver(
                 std::make_shared<SunSourceFrustumDriver>(settings));
@@ -1129,7 +1129,6 @@ namespace RenderCore { namespace LightingEngine
 
     void ConfigureShadowProjectionImmediately(
         ILightScene& lightScene,
-        ILightScene::ShadowProjectionId shadowProjectionId,
         ILightScene::LightSourceId associatedLightId,
         const SunSourceFrustumSettings& settings,
         const Techniques::ProjectionDesc& mainSceneProjectionDesc)
@@ -1143,14 +1142,14 @@ namespace RenderCore { namespace LightingEngine
         assert(!(settings._flags & SunSourceFrustumSettings::Flags::ArbitraryCascades));
         auto t = BuildResolutionNormalizedOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings, RenderCore::Techniques::GetDefaultClipSpaceType());
         assert(t._normalProjCount);
-        auto* cascades = lightScene.TryGetShadowProjectionInterface<IOrthoShadowProjections>(shadowProjectionId);
+        auto* cascades = lightScene.TryGetLightSourceInterface<IOrthoShadowProjections>(associatedLightId);
         if (cascades) {
             cascades->SetOrthoSubProjections(
                 MakeIteratorRange(t._orthSubProjections, &t._orthSubProjections[t._normalProjCount]));
             cascades->SetWorldToOrthoView(t._worldToView);
         }
 
-        ApplyNonFrustumSettings(lightScene, shadowProjectionId, settings);
+        ApplyNonFrustumSettings(lightScene, associatedLightId, settings);
     }
 
     SunSourceFrustumSettings::SunSourceFrustumSettings()

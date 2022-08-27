@@ -141,7 +141,6 @@ namespace SceneEngine
         std::vector<PendingLightSource> _lightSourcesInCfgFile;
 
         std::vector<unsigned> _lightSourcesInBoundScene;
-        std::vector<unsigned> _shadowProjectionsInBoundScene;
 
         std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::LightOperatorId>> _lightOperatorHashToId;
         std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::ShadowOperatorId>> _shadowOperatorHashToId;
@@ -262,9 +261,9 @@ namespace SceneEngine
                 [lightAssociation](const auto& c) { return c.first == lightAssociation->second; });
             if (lightId == lightNameToId.end()) continue;        // couldn't find the associated light
             
-            auto newShadow = RenderCore::LightingEngine::CreateSunSourceShadows(
-                lightScene, op->second, lightId->second, sunSource.second);
-            _shadowProjectionsInBoundScene.push_back(newShadow);
+            lightScene.SetShadowOperator(lightId->second, op->second);
+            RenderCore::LightingEngine::SetupSunSourceShadows(
+                lightScene, lightId->second, sunSource.second);
         }
 
         s_swirlingLights.BindScene(lightScene);
@@ -273,11 +272,8 @@ namespace SceneEngine
     void        BasicLightingStateDelegate::UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene)
     {
         s_swirlingLights.UnbindScene(lightScene);
-        for (auto shadowId:_shadowProjectionsInBoundScene)
-            lightScene.DestroyShadowProjection(shadowId);
         for (auto lightSource:_lightSourcesInBoundScene)
             lightScene.DestroyLightSource(lightSource);
-        _shadowProjectionsInBoundScene.clear();
         _lightSourcesInBoundScene.clear();
     }
 

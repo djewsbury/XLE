@@ -35,23 +35,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		return nullptr;
 	}
 
-	static const unsigned s_dominantLightSetIdx = ~0u;
-
 	void* StandardLightScene::TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode)
 	{
 		auto i = LowerBound(_lookupTable, sourceId);
 		if (i == _lookupTable.end() || i->first != sourceId) return nullptr;		// not found
-
-		if (i->second._lightSet == s_dominantLightSetIdx) {
-			assert(_dominantLightId == sourceId);
-			assert(i->second._lightIndex == 0);
-			for (auto& comp:_dominantLightSet._boundComponents)
-				if (void* interf = comp->QueryInterface(i->second._lightSet, i->second._lightIndex, interfaceTypeCode))
-					return interf;
-			if (!_dominantLightSet._baseData.empty())
-				return _dominantLightSet._baseData.GetObject(0).QueryInterface(interfaceTypeCode, _dominantLightSet._flags);
-			return nullptr;
-		}
 
 		auto& set = _tileableLightSets[i->second._lightSet];
 		assert(set._baseData._allocationFlags.IsAllocated(i->second._lightIndex));
@@ -68,18 +55,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	auto StandardLightScene::CreateLightSource(LightOperatorId operatorId) -> LightSourceId
 	{
 		auto result = _nextLightSource++;
-		LightSet* lightSet;
-		unsigned lightSetIdx;
-		if (operatorId == _dominantLightSet._operatorId) {
-			assert(_dominantLightSet._baseData.empty());
-			lightSet = &_dominantLightSet;
-			lightSetIdx = s_dominantLightSetIdx;
-			assert(_dominantLightId == ~0u);
-			_dominantLightId = result;
-		} else {
-			lightSetIdx = GetLightSet(operatorId, ~0u);
-			lightSet = &_tileableLightSets[lightSetIdx];
-		}
+		auto lightSetIdx = GetLightSet(operatorId, ~0u);
+		auto lightSet = &_tileableLightSets[lightSetIdx];
 
 		auto newLight = lightSet->_baseData.Allocate();
 		auto newLightIdx = newLight.GetIndex();
@@ -100,49 +77,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			return;		// not found
 		}
 
-		auto* set = (i->second._lightSet == s_dominantLightSetIdx) ? &_dominantLightSet : &_tileableLightSets[i->second._lightSet];
+		auto* set =  &_tileableLightSets[i->second._lightSet];
 
 		for (const auto& comp:set->_boundComponents)
 			comp->DeregisterLight(i->second._lightSet, i->second._lightIndex);
 		set->_baseData.Deallocate(i->second._lightIndex);
 
-#if 0
-		// Also destroy a shadow projection associated with this light, if it exists
-		if (set->_shadowOperatorId != ~0u) {
-			auto i = std::find_if(
-				_dynamicShadowProjections.begin(), _dynamicShadowProjections.end(),
-				[sourceId](const auto& c) { return c._lightId == sourceId; });
-			if (i != _dynamicShadowProjections.end())
-				_dynamicShadowProjections.erase(i);
-		}
-#endif
-
-		if (i->second._lightSet == s_dominantLightSetIdx)
-			_dominantLightId = ~0u;
-
 		_lookupTable.erase(i);
-	}
-
-	void* StandardLightScene::TryGetShadowProjectionInterface(ShadowProjectionId preparerId, uint64_t interfaceTypeCode)
-	{
-		return TryGetLightSourceInterface(preparerId, interfaceTypeCode);
-		/*
-		// test components first
-		for (auto& comp:set._boundComponents)
-			if (void* interf = comp->QueryInterface(i->second._setIndex, i->second._lightIndex, interfaceTypeCode))
-				return interf;
-
-		auto i = std::find_if(
-			_dynamicShadowProjections.begin(), _dynamicShadowProjections.end(),
-			[preparerId](const auto& c) { return c._id == preparerId; });
-		if (i != _dynamicShadowProjections.end())
-			return i->_desc->QueryInterface(interfaceTypeCode);
-
-		if (_dominantShadowProjection._id == preparerId)
-			return _dominantShadowProjection._desc->QueryInterface(interfaceTypeCode);
-
-		return nullptr;
-		*/
 	}
 
 	void StandardLightScene::SetShadowOperator(LightSourceId lightSourceId, ShadowOperatorId shadowOperatorId)
@@ -182,42 +123,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			i->second = setAndIndex;
 		}
 	}
-	
-#if 0
-	auto StandardLightScene::AddShadowProjection(
-		ShadowOperatorId shadowOperatorId,
-		LightSourceId associatedLight,
-		std::unique_ptr<ILightBase> desc) -> ShadowProjectionId
-	{
-		auto i = LowerBound(_lookupTable, associatedLight);
-		if (i == _lookupTable.end() || i->first != associatedLight) {
-			assert(0);
-			return ~0u;
-		}
-
-		auto result = _nextShadow++;
-
-		// assuming just the one dominant light here
-		if (i->second._lightSet == s_dominantLightSetIdx) {
-			assert(_dominantLightId == associatedLight);
-			assert(_dominantLightSet._lights.size() <= 1);
-			assert(_dominantShadowProjection._id == ~0u);
-			assert(_dominantLightSet._shadowOperatorId == shadowOperatorId);		// the shadow operator is preset, and must agree with the shadow projection begin applied
-			_dominantShadowProjection = {result, shadowOperatorId, associatedLight, std::move(desc)};
-			return result;
-		}
-
-		_dynamicShadowProjections.push_back({result, shadowOperatorId, associatedLight, std::move(desc)});
-
-		auto* srcSet = &_tileableLightSets[i->second._lightSet];
-		auto dstSetIdx = GetLightSet(srcSet->_operatorId, shadowOperatorId);
-		assert(dstSetIdx != i->second._lightSet);
-		if (dstSetIdx != i->second._lightSet)
-			ChangeLightSet(i, dstSetIdx);
-		
-		return result;
-	}
-#endif
 
 	void StandardLightScene::ChangeLightsShadowOperator(IteratorRange<const LightSourceId*> lights, ShadowOperatorId shadowOperatorId)
 	{
@@ -229,7 +134,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				continue;
 			}
 
-			assert(i->second._lightSet != s_dominantLightSetIdx);
 			auto* srcSet = &_tileableLightSets[i->second._lightSet];
 			auto dstSetIdx = GetLightSet(srcSet->_operatorId, shadowOperatorId);
 			if (i->second._lightSet == dstSetIdx) continue;	// no actual change
@@ -237,36 +141,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			ChangeLightSet(i, dstSetIdx);
 		}
 	}
-
-#if 0
-	void StandardLightScene::DestroyShadowProjection(ShadowProjectionId preparerId)
-	{
-		assert(0);
-		auto i = std::find_if(
-			_dynamicShadowProjections.begin(), _dynamicShadowProjections.end(),
-			[preparerId](const auto& c) { return c._id == preparerId; });
-		if (i != _dynamicShadowProjections.end()) {
-			auto associatedLight = i->_lightId;
-			_dynamicShadowProjections.erase(i);
-			
-			auto lightLookup = LowerBound(_lookupTable, associatedLight);
-			assert(lightLookup != _lookupTable.end() && lightLookup->first == associatedLight);
-
-			auto* srcSet = &_tileableLightSets[lightLookup->second._lightSet];
-			auto dstSetIdx = GetLightSet(srcSet->_operatorId, ~0u);
-			if (lightLookup->second._lightSet != dstSetIdx)
-				ChangeLightSet(lightLookup, dstSetIdx);
-			return;
-		}
-
-		if (_dominantShadowProjection._id == preparerId) {
-			_dominantShadowProjection = {};
-			return;
-		}
-			
-		Throw(std::runtime_error("Invalid shadow preparer id: " + std::to_string(preparerId)));
-	}
-#endif
 
 	auto StandardLightScene::GetLightSet(LightOperatorId lightOperator, ShadowOperatorId shadowOperator) -> unsigned
 	{
@@ -293,9 +167,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			set._baseData = {};
 			set._boundComponents.clear();
 		}
-		_dominantLightSet._baseData = {};
-		_dominantLightSet._boundComponents.clear();
-		_dominantLightId = ~0u;
 		_components.clear();
 	}
 
@@ -324,11 +195,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					newComp->RegisterLight(setIdx, i.GetIndex(), *i);
 			}
 		}
-		if (newComp->BindToSet(_dominantLightSet._operatorId, _dominantLightSet._shadowOperatorId, ~0u)) {
-			_dominantLightSet._boundComponents.push_back(newComp);
-			for (auto i=_dominantLightSet._baseData.begin(); i!=_dominantLightSet._baseData.end(); ++i)
-				newComp->RegisterLight(~0u, i.GetIndex(), *i);
-		}
 	}
 
 	void StandardLightScene::DeregisterComponent(ILightSceneComponent& comp)
@@ -338,11 +204,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				if (i->get() == &comp) set._boundComponents.erase(i);
 				break;
 			}
-
-		for (auto i=_dominantLightSet._boundComponents.begin(); i!=_dominantLightSet._boundComponents.end(); ++i) {
-			if (i->get() == &comp) _dominantLightSet._boundComponents.erase(i);
-			break;
-		}
 
 		for (auto i=_components.begin(); i!=_components.end(); ++i) {
 			_components.erase(i);
@@ -360,8 +221,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		for (auto& set:_tileableLightSets)
 			if (set._operatorId == operatorId)
 				set._flags |= flag;
-		if (_dominantLightSet._operatorId == operatorId)
-			_dominantLightSet._flags |= flag;
 	}
 
 	StandardLightScene::StandardLightScene()

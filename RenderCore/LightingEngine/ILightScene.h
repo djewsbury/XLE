@@ -24,13 +24,8 @@ namespace RenderCore { namespace LightingEngine
 		virtual LightSourceId CreateAmbientLightSource() = 0;
 		virtual void DestroyLightSource(LightSourceId) = 0;
 
-		using ShadowProjectionId = unsigned;
 		using ShadowOperatorId = unsigned;
-		virtual void* TryGetShadowProjectionInterface(ShadowProjectionId, uint64_t interfaceTypeCode) = 0; 
 		virtual void SetShadowOperator(LightSourceId, ShadowOperatorId) = 0;
-		// virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId op, LightSourceId associatedLight) = 0;
-		// virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId op, IteratorRange<const LightSourceId*> associatedLights) = 0;
-		// virtual void DestroyShadowProjection(ShadowProjectionId) = 0;
 
 		virtual void Clear() = 0;
 
@@ -41,12 +36,6 @@ namespace RenderCore { namespace LightingEngine
 			Type* TryGetLightSourceInterface(LightSourceId sourceId)
 			{
 				return (Type*)TryGetLightSourceInterface(sourceId, typeid(Type).hash_code());
-			}
-
-		template<typename Type>
-			Type* TryGetShadowProjectionInterface(ShadowProjectionId shadowId)
-			{
-				return (Type*)TryGetShadowProjectionInterface(shadowId, typeid(Type).hash_code());
 			}
 	};
 

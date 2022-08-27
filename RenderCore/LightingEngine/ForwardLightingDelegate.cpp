@@ -38,13 +38,10 @@ namespace RenderCore { namespace LightingEngine
 	class ForwardLightingCaptures
 	{
 	public:
-		// std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
-		// std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
 		std::shared_ptr<ForwardPlusLightScene> _lightScene;
 		std::shared_ptr<SkyOperator> _skyOperator;
 		std::shared_ptr<HierarchicalDepthsOperator> _hierarchicalDepthsOperator;
 		std::shared_ptr<ScreenSpaceReflectionsOperator> _ssrOperator;
-		// std::shared_ptr<Internal::DynamicShadowProjectionScheduler> _shadowScheduler;
 
 		void DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence);
 		void DoToneMap(LightingTechniqueIterator& iterator);
@@ -56,42 +53,12 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (_lightScene->_shadowScheduler)
 			_lightScene->_shadowScheduler->DoShadowPrepare(iterator, sequence);
-		/*sequence.Reset();
-		if (_lightScene->_shadowPreparers->_preparers.empty()) return;
-
-		_preparedShadows.reserve(_lightScene->_dynamicShadowProjections.size());
-		ILightScene::LightSourceId prevLightId = ~0u; 
-		for (unsigned c=0; c<_lightScene->_dynamicShadowProjections.size(); ++c) {
-			_preparedShadows.push_back(std::make_pair(
-				_lightScene->_dynamicShadowProjections[c]._lightId,
-				Internal::SetupShadowPrepare(
-					iterator, sequence, 
-					*_lightScene->_dynamicShadowProjections[c]._desc, 
-					*_lightScene, _lightScene->_dynamicShadowProjections[c]._lightId,
-					PipelineType::Graphics,
-					*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool)));
-
-			// shadow entries must be sorted by light id
-			assert(prevLightId == ~0u || prevLightId < _lightScene->_dynamicShadowProjections[c]._lightId);
-			prevLightId = _lightScene->_dynamicShadowProjections[c]._lightId;
-		}
-
-		if (_lightScene->_dominantShadowProjection._desc) {
-			assert(_lightScene->_dominantLightSet._lights.size() == 1);
-			_preparedDominantShadow =
-				Internal::SetupShadowPrepare(
-					iterator, sequence, 
-					*_lightScene->_dominantShadowProjection._desc, 
-					*_lightScene, _lightScene->_dominantLightId,
-					PipelineType::Graphics,
-					*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool);
-		}*/
 	}
 
 	void ForwardLightingCaptures::ConfigureParsingContext(Techniques::ParsingContext& parsingContext)
 	{
 		_lightScene->ConfigureParsingContext(parsingContext);
-		if (auto* dominantShadow = _lightScene->_shadowScheduler->GetPreparedShadow(~0u, 0)) {
+		if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow()) {
 			// find the prepared shadow associated with the dominant light (if it exists) and make sure it's descriptor set is accessible
 			assert(!parsingContext._extraSequencerDescriptorSet.second);
 			parsingContext._extraSequencerDescriptorSet = { s_shadowTemplate, dominantShadow->GetDescriptorSet() };
@@ -101,7 +68,8 @@ namespace RenderCore { namespace LightingEngine
 	void ForwardLightingCaptures::ReleaseParsingContext(Techniques::ParsingContext& parsingContext)
 	{
 		parsingContext._extraSequencerDescriptorSet = {0ull, nullptr};
-		_lightScene->_shadowScheduler->ClearPreparedShadows();
+		if (_lightScene->_shadowScheduler)
+			_lightScene->_shadowScheduler->ClearPreparedShadows();
 	}
 
 	static ::Assets::PtrToMarkerPtr<Techniques::IShaderOperator> CreateToneMapOperator(
@@ -408,8 +376,6 @@ namespace RenderCore { namespace LightingEngine
 					}
 
 					auto captures = std::make_shared<ForwardLightingCaptures>();
-					// captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(pipelineAccelerators->GetDevice());
-					// captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
 					captures->_lightScene = forwardLightScene;
 					captures->_hierarchicalDepthsOperator = hierarchicalDepthsOperator;
 					captures->_ssrOperator = ssrActual;

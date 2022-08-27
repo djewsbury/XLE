@@ -102,7 +102,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		struct SceneSet;
 		std::vector<SceneSet> _sceneSets;
-		std::unique_ptr<SceneSet> _dominantSet;
 
 		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
 		unsigned _totalProjectionCount;
@@ -121,6 +120,24 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
 		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
 		std::vector<unsigned> _operatorToPreparerIdMapping;
+	};
+
+	class DominantLightSet : public ILightSceneComponent
+	{
+	public:
+		unsigned _setIdx = ~0u;
+		bool _hasLight = false;
+		ILightScene::LightOperatorId _lightOpId;
+		ILightScene::ShadowOperatorId _shadowOpId;
+
+		DominantLightSet(ILightScene::LightOperatorId lightOpId, ILightScene::ShadowOperatorId shadowOpId);
+		~DominantLightSet();
+	private:
+		// ILightSceneComponent
+		void RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light) override;
+		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
+		bool BindToSet(ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned setIdx) override;
+		void* QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode) override;
 	};
 
 	/////////////////////////////// inlines //////////////////////////////////
@@ -145,14 +162,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	inline auto DynamicShadowProjectionScheduler::GetPreparedShadow(unsigned setIdx, unsigned lightIdx) -> const IPreparedShadowResult*
 	{
-		if (setIdx != ~0u) {
-			if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]._activeSet) return {};
-			assert(_sceneSets[setIdx]._activeProjections.IsAllocated(lightIdx));
-			return _sceneSets[setIdx]._preparedResult[lightIdx].get();
-		} else {
-			assert(_dominantSet->_activeProjections.IsAllocated(lightIdx));
-			return _dominantSet->_preparedResult[lightIdx].get();
-		}
+		if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]._activeSet) return {};
+		assert(_sceneSets[setIdx]._activeProjections.IsAllocated(lightIdx));
+		return _sceneSets[setIdx]._preparedResult[lightIdx].get();
 	}
 	
 }}}

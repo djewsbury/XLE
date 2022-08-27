@@ -87,20 +87,24 @@ namespace RenderCore { namespace LightingEngine
 		_pingPongCounter = 0;
 
 		// Default to using the first light operator & first shadow operator for the dominant light
-		_dominantLightSet._operatorId = ~0u;
-		_dominantLightSet._shadowOperatorId = ~0u;
+		unsigned dominantOperatorId = ~0u;
+		unsigned dominantShadowOperatorId = ~0u;
 		for (unsigned c=0; c<_positionalLightOperators.size(); ++c)
 			if (_positionalLightOperators[c]._flags & LightSourceOperatorDesc::Flags::DominantLight) {
-				if (_dominantLightSet._operatorId != ~0u)
+				if (dominantOperatorId != ~0u)
 					Throw(std::runtime_error("Multiple dominant light operators detected. This isn't supported -- there must be either 0 or 1"));
-				_dominantLightSet._operatorId = c;
+				dominantOperatorId = c;
 			}
 		for (unsigned c=0; c<_shadowOperators.size(); ++c) {
 			if (_shadowOperators[c]._dominantLight) {
-				if (_dominantLightSet._shadowOperatorId != ~0u)
+				if (dominantShadowOperatorId != ~0u)
 					Throw(std::runtime_error("Multiple dominant shadow operators detected. This isn't supported -- there must be either 0 or 1"));
-				_dominantLightSet._shadowOperatorId = c;
+				dominantShadowOperatorId = c;
 			}
+		}
+		if (dominantOperatorId != ~0u) {
+			_dominantLightSet = std::make_shared<Internal::DominantLightSet>(dominantOperatorId, dominantShadowOperatorId);
+			RegisterComponent(_dominantLightSet);
 		}
 
 		// all lights get "SupportFiniteRange"
@@ -120,14 +124,6 @@ namespace RenderCore { namespace LightingEngine
 			RegisterComponent(_shadowScheduler);
 		}
 	}
-
-#if 0
-	ILightScene::LightSourceId ForwardPlusLightScene::CreateLightSource(ILightScene::LightOperatorId opId)
-	{
-		auto desc = std::make_unique<ForwardPlusLightDesc>(Internal::StandardPositionalLight::Flags::SupportFiniteRange);
-		return AddLightSource(opId, std::move(desc));
-	}
-#endif
 
 	ILightScene::LightSourceId ForwardPlusLightScene::CreateAmbientLightSource()
 	{
@@ -154,42 +150,6 @@ namespace RenderCore { namespace LightingEngine
 		Internal::StandardLightScene::Clear();
 	}
 
-#if 0
-	ILightScene::ShadowProjectionId ForwardPlusLightScene::CreateShadowProjection(ShadowOperatorId opId, LightSourceId associatedLight)
-	{
-		auto preparerId = _shadowPreparerIdMapping._operatorToShadowPreparerId[opId];
-		if (preparerId != ~0u) {
-			auto desc = _shadowPreparers->CreateShadowProjection(preparerId);
-			return AddShadowProjection(opId, associatedLight, std::move(desc));
-		} else if (opId == _shadowPreparerIdMapping._operatorForStaticProbes) {
-			ChangeLightsShadowOperator(MakeIteratorRange(&associatedLight, &associatedLight+1), _shadowPreparerIdMapping._operatorForStaticProbes);
-			return s_shadowProbeShadowFlag;
-		}
-		return ~0u;
-	}
-
-	ILightScene::ShadowProjectionId ForwardPlusLightScene::CreateShadowProjection(ShadowOperatorId opId, IteratorRange<const LightSourceId*> associatedLights)
-	{
-		if (opId == _shadowPreparerIdMapping._operatorForStaticProbes) {
-			ChangeLightsShadowOperator(associatedLights, _shadowPreparerIdMapping._operatorForStaticProbes);
-			return s_shadowProbeShadowFlag;
-		} else {
-			Throw(std::runtime_error("This shadow projection operation can't be used with the multi-light constructor variation"));
-		}
-		return ~0u;
-	}
-
-	void ForwardPlusLightScene::DestroyShadowProjection(ShadowProjectionId projectionId)
-	{
-		if (projectionId == s_shadowProbeShadowFlag) {
-			_shadowProbes.reset();
-			_shadowProbesManager.reset();
-		} else {
-			return Internal::StandardLightScene::DestroyShadowProjection(projectionId);
-		}
-	}
-#endif
-
 	void* ForwardPlusLightScene::TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode)
 	{
 		if (sourceId == 0) {
@@ -199,16 +159,6 @@ namespace RenderCore { namespace LightingEngine
 		} else {
 			return Internal::StandardLightScene::TryGetLightSourceInterface(sourceId, interfaceTypeCode);
 		}
-	}
-
-	void* ForwardPlusLightScene::TryGetShadowProjectionInterface(ShadowProjectionId projectionid, uint64_t interfaceTypeCode)
-	{
-		if (projectionid == s_shadowProbeShadowFlag) {
-			if (interfaceTypeCode == typeid(ISemiStaticShadowProbeScheduler).hash_code()) return (ISemiStaticShadowProbeScheduler*)_shadowProbesManager.get();
-			return nullptr;
-		} else {
-			return Internal::StandardLightScene::TryGetShadowProjectionInterface(projectionid, interfaceTypeCode);
-		} 
 	}
 
 	void* ForwardPlusLightScene::QueryInterface(uint64_t typeCode)
@@ -282,6 +232,8 @@ namespace RenderCore { namespace LightingEngine
 			for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
 				auto setIdx = *idx >> 16, lightIdx = (*idx)&0xffff;
 				auto op = _tileableLightSets[setIdx]._operatorId;
+				// we have to filter out the dominant light here -- but it would be better if we were just filtering in light sets for tiling explicitly
+				if (_positionalLightOperators[op]._flags & LightSourceOperatorDesc::Flags::DominantLight) continue;
 				auto& lightDesc = _tileableLightSets[setIdx]._baseData.GetObject(lightIdx);
 				*i = MakeLightUniforms(lightDesc, _positionalLightOperators[op]);
 			}
@@ -290,6 +242,7 @@ namespace RenderCore { namespace LightingEngine
 				i = (Internal::CB_Light*)map.GetData().begin();
 				for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
 					auto setIdx = *idx >> 16, lightIdx = (*idx)&0xffff;
+					if (_positionalLightOperators[_tileableLightSets[setIdx]._operatorId]._flags & LightSourceOperatorDesc::Flags::DominantLight) continue;
 					auto probe = _shadowProbesManager->GetAllocatedDatabaseEntry(setIdx, lightIdx);
 					i->_staticProbeDatabaseEntry = probe._databaseIndex;
 					++i->_staticProbeDatabaseEntry;		// ~0u becomes zero, or add one --> because we want zero to be the sentinal
@@ -305,10 +258,10 @@ namespace RenderCore { namespace LightingEngine
 			auto* i = (Internal::CB_EnvironmentProps*)map.GetData().begin();
 			i->_dominantLight = {};
 
-			if (!_dominantLightSet._baseData.empty()) {
+			if (_dominantLightSet && _dominantLightSet->_hasLight) {
 				i->_dominantLight = Internal::MakeLightUniforms(
-					_dominantLightSet._baseData.GetObject(0),
-					_positionalLightOperators[_dominantLightSet._operatorId]);
+					_tileableLightSets[_dominantLightSet->_setIdx]._baseData.GetObject(0),
+					_positionalLightOperators[_dominantLightSet->_lightOpId]);
 			}
 
 			i->_lightCount = tilerOutputs._lightCount;
@@ -326,6 +279,12 @@ namespace RenderCore { namespace LightingEngine
 		_lightTiler->CompleteInitialization(threadContext);
 		if (_shadowProbes)
 			_shadowProbes->CompleteInitialization(threadContext);
+	}
+
+	const IPreparedShadowResult* ForwardPlusLightScene::GetDominantPreparedShadow()
+	{
+		if (!_shadowScheduler || !_dominantLightSet || !_dominantLightSet->_hasLight) return nullptr;
+		return _shadowScheduler->GetPreparedShadow(_dominantLightSet->_setIdx, 0);
 	}
 
 	class ForwardPlusLightScene::ShaderResourceDelegate : public Techniques::IShaderResourceDelegate
@@ -377,16 +336,16 @@ namespace RenderCore { namespace LightingEngine
 
 	std::optional<LightSourceOperatorDesc> ForwardPlusLightScene::GetDominantLightOperator() const
 	{
-		if (_dominantLightSet._operatorId == ~0u)
+		if (!_dominantLightSet)
 			return {};
-		return _positionalLightOperators[_dominantLightSet._operatorId];
+		return _positionalLightOperators[_dominantLightSet->_lightOpId];
 	}
 
 	std::optional<ShadowOperatorDesc> ForwardPlusLightScene::GetDominantShadowOperator() const
 	{
-		if (_dominantLightSet._shadowOperatorId == ~0u)
+		if (!_dominantLightSet && _dominantLightSet->_shadowOpId == ~0u)
 			return {};
-		return _shadowOperators[_dominantLightSet._shadowOperatorId];
+		return _shadowOperators[_dominantLightSet->_shadowOpId];
 	}
 
 	const AmbientLightOperatorDesc& ForwardPlusLightScene::GetAmbientLightOperatorDesc() const

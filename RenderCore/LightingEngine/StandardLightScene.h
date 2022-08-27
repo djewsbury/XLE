@@ -113,8 +113,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			ShadowOperatorId _shadowOperatorId = ~0u;
 			PageHeap<StandardPositionalLight> _baseData;
 			std::vector<std::shared_ptr<ILightSceneComponent>> _boundComponents;
-			// std::vector<std::unique_ptr<ILightBase>> _lights;
-			// BitHeap _allocatedLights;
 			StandardPositionLightFlags::BitField _flags = 0;
 		};
 		std::vector<LightSet> _tileableLightSets;
@@ -122,11 +120,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		struct LightSetAndIndex { unsigned _lightSet, _lightIndex; };
 		std::vector<std::pair<LightSourceId, LightSetAndIndex>> _lookupTable;
 
-		LightSet _dominantLightSet;
-		LightSourceId _dominantLightId = ~0u;
-
 		LightSourceId _nextLightSource = 0;
-		ShadowProjectionId _nextShadow = 0;
 
 		std::vector<std::shared_ptr<ILightSceneComponent>> _components;
 
@@ -137,8 +131,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		virtual LightSourceId CreateLightSource(LightOperatorId operatorId) override;
 		virtual void* TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) override;
 		virtual void DestroyLightSource(LightSourceId) override;
-		virtual void* TryGetShadowProjectionInterface(ShadowProjectionId, uint64_t interfaceTypeCode) override;
-		// virtual void DestroyShadowProjection(ShadowProjectionId) override;
 		virtual void SetShadowOperator(LightSourceId, ShadowOperatorId) override;
 		virtual void Clear() override;
 		virtual void* QueryInterface(uint64_t) override;
@@ -146,11 +138,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		~StandardLightScene();
 
 	protected:
-
-		/*ShadowProjectionId AddShadowProjection(
-			ShadowOperatorId shadowOperatorId,
-			LightSourceId associatedLight,
-			std::unique_ptr<ILightBase> desc);*/
 
 		// move the given lights into a set with the given shadow operator assignment (but do nothing else)
 		void ChangeLightsShadowOperator(
