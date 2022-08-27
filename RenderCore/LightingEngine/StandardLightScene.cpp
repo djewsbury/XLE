@@ -32,15 +32,14 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		if (i->second._lightSet == s_dominantLightSetIdx) {
 			assert(_dominantLightId == sourceId);
-			assert(_dominantLightSet._lights.size() <= 1);
 			assert(i->second._lightIndex == 0);
-			if (!_dominantLightSet._lights.empty())
-				return _dominantLightSet._lights[0]->QueryInterface(interfaceTypeCode);
+			if (!_dominantLightSet._baseData.empty())
+				return _dominantLightSet._baseData.GetObject(0).QueryInterface(interfaceTypeCode);
 			return nullptr;
 		}
 
 		auto& set = _tileableLightSets[i->second._lightSet];
-		assert(set._lights[i->second._lightIndex]);
+		assert(set._baseData._allocationFlags.IsAllocated(i->second._lightIndex));
 
 		// test components first
 		for (auto& comp:set._boundComponents)
@@ -48,16 +47,16 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				return interf;
 
 		// fallback to the ILightBase
-		return set._lights[i->second._lightIndex]->QueryInterface(interfaceTypeCode);
+		return set._baseData.GetObject(i->second._lightIndex).QueryInterface(interfaceTypeCode);
 	}
 
-	auto StandardLightScene::AddLightSource(LightOperatorId operatorId, std::unique_ptr<ILightBase> desc) -> LightSourceId
+	auto StandardLightScene::AddLightSource(LightOperatorId operatorId) -> LightSourceId
 	{
 		auto result = _nextLightSource++;
 		LightSet* lightSet;
 		unsigned lightSetIdx;
 		if (operatorId == _dominantLightSet._operatorId) {
-			assert(_dominantLightSet._lights.empty() || (_dominantLightSet._lights.size() == 1 && !_dominantLightSet._lights[0]));
+			assert(_dominantLightSet._baseData.empty());
 			lightSet = &_dominantLightSet;
 			lightSetIdx = s_dominantLightSetIdx;
 			assert(_dominantLightId == ~0u);
@@ -67,15 +66,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			lightSet = &_tileableLightSets[lightSetIdx];
 		}
 
-		unsigned newLightIdx = lightSet->_allocatedLights.Allocate();
-		if (lightSet->_lights.size() <= newLightIdx)
-			lightSet->_lights.resize(newLightIdx+1);
-		lightSet->_lights[newLightIdx] = std::move(desc);
+		auto newLight = lightSet->_baseData.Allocate();
+		auto newLightIdx = newLight.GetIndex();
 		AddToLookupTable(result, {lightSetIdx, newLightIdx});
 
 		// call components to register this light
 		for (auto& comp:lightSet->_boundComponents)
-			comp->RegisterLight(lightSetIdx, newLightIdx, *lightSet->_lights[newLightIdx]);
+			comp->RegisterLight(lightSetIdx, newLightIdx, *newLight);
 
 		return result;
 	}
@@ -90,9 +87,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		auto* set = (i->second._lightSet == s_dominantLightSetIdx) ? &_dominantLightSet : &_tileableLightSets[i->second._lightSet];
 
-		auto lightDesc = std::move(set->_lights[i->second._lightIndex]);
 		for (const auto& comp:set->_boundComponents)
 			comp->DeregisterLight(i->second._lightSet, i->second._lightIndex);
+		set->_baseData.Deallocate(i->second._lightIndex);
 
 #if 0
 		// Also destroy a shadow projection associated with this light, if it exists
@@ -141,17 +138,16 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		auto* srcSet = &_tileableLightSets[i->second._lightSet];
 		assert(dstSetIdx != i->second._lightSet);
 
-		auto l = std::move(srcSet->_lights[i->second._lightIndex]);
-		srcSet->_allocatedLights.Deallocate(i->second._lightIndex);
+		auto l = std::move(srcSet->_baseData.GetObject(i->second._lightIndex));
 		for (const auto& comp:srcSet->_boundComponents)
 			comp->DeregisterLight(i->second._lightSet, i->second._lightIndex);
+		srcSet->_baseData.Deallocate(i->second._lightIndex);
 
-		auto newLightIdx = dstSet->_allocatedLights.Allocate();
-		if (dstSet->_lights.size() <= newLightIdx)
-			dstSet->_lights.resize(newLightIdx+1);
-		dstSet->_lights[newLightIdx] = std::move(l);
+		auto newLight = dstSet->_baseData.Allocate();
+		*newLight = std::move(l);
+		auto newLightIdx = newLight.GetIndex();
 		for (const auto& comp:dstSet->_boundComponents)
-			comp->RegisterLight(dstSetIdx, newLightIdx, *dstSet->_lights[newLightIdx]);
+			comp->RegisterLight(dstSetIdx, newLightIdx, *newLight);
 
 		i->second = {dstSetIdx, newLightIdx};
 	}
@@ -222,10 +218,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		}
 	}
 
+#if 0
 	void StandardLightScene::DestroyShadowProjection(ShadowProjectionId preparerId)
 	{
 		assert(0);
-		#if 0
 		auto i = std::find_if(
 			_dynamicShadowProjections.begin(), _dynamicShadowProjections.end(),
 			[preparerId](const auto& c) { return c._id == preparerId; });
@@ -249,8 +245,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		}
 			
 		Throw(std::runtime_error("Invalid shadow preparer id: " + std::to_string(preparerId)));
-		#endif
 	}
+#endif
 
 	auto StandardLightScene::GetLightSet(LightOperatorId lightOperator, ShadowOperatorId shadowOperator) -> unsigned
 	{
@@ -269,11 +265,15 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	void StandardLightScene::Clear()
 	{
-		for (auto& set:_tileableLightSets)
-			set._lights.clear();
-		_dominantLightSet._lights.clear();
+		// we have to clear components, because we don't actually remove all lights from the components
+		for (auto& set:_tileableLightSets) {
+			set._baseData = {};
+			set._boundComponents.clear();
+		}
+		_dominantLightSet._baseData = {};
+		_dominantLightSet._boundComponents.clear();
 		_dominantLightId = ~0u;
-		_components.clear();		// we have to clear components, because we don't actually remove all lights from the components
+		_components.clear();
 	}
 
 	void StandardLightScene::ReserveLightSourceIds(unsigned idCount)
@@ -297,8 +297,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			auto& set = _tileableLightSets[setIdx];
 			if (newComp->BindToSet(set._operatorId, set._shadowOperatorId, setIdx)) {
 				set._boundComponents.push_back(newComp);
-				for (unsigned lightIdx=0; lightIdx<set._lights.size(); ++lightIdx)
-					newComp->RegisterLight(setIdx, lightIdx, *set._lights[lightIdx]);
+				for (auto i=set._baseData.begin(); i!=set._baseData.end(); ++i)
+					newComp->RegisterLight(setIdx, i.GetIndex(), *i);
 			}
 		}
 	}
