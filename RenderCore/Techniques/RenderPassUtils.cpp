@@ -74,4 +74,16 @@ namespace RenderCore { namespace Techniques
         parserContext.GetTechniqueContext()._attachmentPool->Bind(AttachmentSemantics::ColorLDR, presentationTarget);
 		return RenderPassToPresentationTargetWithDepthStencil(parserContext, loadOperation, clearColor);
 	}
+
+	RenderPassInstance RenderPassToDepthStencil(
+        ParsingContext& parserContext,
+		LoadStore loadOperation,
+		ClearValue clearValue)
+	{
+		FrameBufferDescFragment frag;
+		SubpassDesc subpass;
+		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::MultisampleDepth).InitialState(loadOperation, 0));
+		frag.AddSubpass(std::move(subpass));
+        return RenderPassInstance{parserContext, frag, RenderPassBeginDesc{MakeIteratorRange(&clearValue, &clearValue+1)}};	
+	}
 }}

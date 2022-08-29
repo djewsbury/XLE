@@ -1277,7 +1277,9 @@ namespace RenderCore { namespace BufferUploads
                 }
                 
                 if (finalConstruction.IsEmpty()) {
-                    finalConstruction = CreateResource(context.GetRenderCoreDevice(), transferStagingToFinalStep._finalResourceDesc);
+                    auto desc = transferStagingToFinalStep._finalResourceDesc;
+                    desc._bindFlags |= BindFlag::TransferDst;       // we must have TransferDst, because we're just about to do a transfer -- might as well add it on, incase the caller forgot
+                    finalConstruction = CreateResource(context.GetRenderCoreDevice(), desc);
                     metricsUnderConstruction._countDeviceCreations[dataType] += 1;
                 }
 

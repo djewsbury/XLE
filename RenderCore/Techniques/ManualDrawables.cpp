@@ -361,13 +361,13 @@ namespace RenderCore { namespace Techniques
 		// create an upload future for both VB & IB
 		if (_pimpl->_vb->_uploadTotal != 0) {
 			auto vbSize = _pimpl->_vb->_uploadTotal;
-			_pimpl->_vb->_desc = CreateDesc(BindFlag::VertexBuffer, LinearBufferDesc::Create(vbSize), "[vb]");
+			_pimpl->_vb->_desc = CreateDesc(BindFlag::VertexBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(vbSize), "[vb]");
 			waitingParts->_vbUploadMarker = _pimpl->_bufferUploads->Begin(_pimpl->_vb, _pimpl->_vb->_desc._bindFlags);
 		}
 
 		if (_pimpl->_ib->_uploadTotal != 0) {
 			auto ibSize = _pimpl->_ib->_uploadTotal;
-			_pimpl->_ib->_desc = CreateDesc(BindFlag::IndexBuffer, LinearBufferDesc::Create(ibSize), "[ib]");
+			_pimpl->_ib->_desc = CreateDesc(BindFlag::IndexBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(ibSize), "[ib]");
 			waitingParts->_ibUploadMarker = _pimpl->_bufferUploads->Begin(_pimpl->_ib, _pimpl->_ib->_desc._bindFlags);
 		}
 

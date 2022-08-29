@@ -356,6 +356,7 @@ namespace ToolsRig
 					RenderCore::LightingEngine::AmbientLightOperatorDesc ambientOp;
 					ambientOp._ssrOperator = RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc{};
 					lightingEngineCfg.SetAmbientOperator(ambientOp);
+					envSettings->BindCfg(lightingEngineCfg);
 					std::future<std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique>> compiledLightingTechniqueFuture;
 					const bool forwardLighting = true;
 					if (forwardLighting) {
@@ -656,6 +657,19 @@ namespace ToolsRig
 		return fbDesc;
 	}
 
+	static RenderCore::Techniques::FrameBufferDescFragment CreateVisJustStencilFrag()
+	{
+		using namespace RenderCore;
+		Techniques::FrameBufferDescFragment fbDesc;
+		SubpassDesc mainPass;
+		mainPass.SetName("VisualisationOverlay");
+		mainPass.SetDepthStencil(
+			fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear, 0),
+			TextureViewDesc{TextureViewDesc::Aspect::Stencil});
+		fbDesc.AddSubpass(std::move(mainPass));
+		return fbDesc;
+	}
+
     void VisualisationOverlay::Render(
         RenderCore::Techniques::ParsingContext& parserContext)
     {
@@ -709,29 +723,34 @@ namespace ToolsRig
 				CATCH_ASSETS_END(parserContext)
 			}
 			
-			auto fbFrag = CreateVisFBFrag();
-			Techniques::RenderPassInstance rpi { parserContext, fbFrag };
+			{
+				auto fbFrag = CreateVisFBFrag();
+				Techniques::RenderPassInstance rpi { parserContext, fbFrag };
 
-			if (_pimpl->_settings._drawWireframe) {
-				SceneEngine::ExecuteSceneRaw(
-					parserContext, *_pimpl->_pipelineAccelerators,
-					*_pimpl->_visWireframeCfg,
-					sceneView, RenderCore::Techniques::Batch::Opaque,
-					**scene);
+				if (_pimpl->_settings._drawWireframe) {
+					SceneEngine::ExecuteSceneRaw(
+						parserContext, *_pimpl->_pipelineAccelerators,
+						*_pimpl->_visWireframeCfg,
+						sceneView, RenderCore::Techniques::Batch::Opaque,
+						**scene);
+				}
+
+				if (_pimpl->_settings._drawNormals) {
+					SceneEngine::ExecuteSceneRaw(
+						parserContext, *_pimpl->_pipelineAccelerators,
+						*_pimpl->_visNormalsCfg,
+						sceneView, RenderCore::Techniques::Batch::Opaque,
+						**scene);
+				}
+
+				if (drawImmediateDrawables)
+					_pimpl->_immediateDrawables->ExecuteDraws(parserContext, rpi);
 			}
-
-			if (_pimpl->_settings._drawNormals) {
-				SceneEngine::ExecuteSceneRaw(
-					parserContext, *_pimpl->_pipelineAccelerators,
-					*_pimpl->_visNormalsCfg,
-					sceneView, RenderCore::Techniques::Batch::Opaque,
-					**scene);
-			}
-
-			if (drawImmediateDrawables)
-				_pimpl->_immediateDrawables->ExecuteDraws(parserContext, rpi);
 
 			if (doColorByMaterial) {
+				auto fbFrag = CreateVisJustStencilFrag();
+				Techniques::RenderPassInstance rpi { parserContext, fbFrag };
+
 				auto *visContent = dynamic_cast<IVisContent*>(scene->get());
 				std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate> oldDelegate;
 				if (visContent)
@@ -870,10 +889,12 @@ namespace ToolsRig
 
 		auto fbFrag = CreateVisFBFrag();
 		auto stitched = stitching.TryStitchFrameBufferDesc({&fbFrag, &fbFrag+1});
-
 		_pimpl->_visWireframeCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig("vis-wireframe", _pimpl->_visWireframeDelegate, ParameterBox{}, stitched._fbDesc);
 		_pimpl->_visNormalsCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig("vis-normals", _pimpl->_visNormalsDelegate, ParameterBox{}, stitched._fbDesc);
-		_pimpl->_primeStencilCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig("vis-prime-stencil", _pimpl->_primeStencilBufferDelegate, ParameterBox{}, stitched._fbDesc);
+
+		auto justStencilFrag = CreateVisJustStencilFrag();
+		auto justStencilStitched = stitching.TryStitchFrameBufferDesc({&justStencilFrag, &justStencilFrag+1});
+		_pimpl->_primeStencilCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig("vis-prime-stencil", _pimpl->_primeStencilBufferDelegate, ParameterBox{}, justStencilStitched._fbDesc);
 	}
 
     VisualisationOverlay::VisualisationOverlay(

@@ -66,7 +66,8 @@ namespace RenderCore { namespace Techniques
 		auto result = promise.get_future();
 
 		auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
-		nascentDesc->_blend.push_back(_blend);
+		if (_techniqueIndex != Techniques::TechniqueIndex::DepthOnly)
+			nascentDesc->_blend.push_back(_blend);
 		nascentDesc->_rasterization = _rasterization;
 		nascentDesc->_depthStencil = _depthStencil;
 		nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
@@ -592,7 +593,6 @@ namespace RenderCore { namespace Techniques
 					psPerPixelHash = Hash64("DepthPlus_PerPixel");
 					perPixelAndEarlyRejectionHash = Hash64("DepthPlus_PerPixelAndEarlyRejection");
 				} else {
-					assert(preDepthType == PreDepthType::DepthOnly);
 					psNoPatchesHash = Hash64("DepthOnly_NoPatches");
 					psPerPixelHash = Hash64("DepthOnly_NoPatches");
 					perPixelAndEarlyRejectionHash = Hash64("DepthOnly_EarlyRejection");
@@ -712,7 +712,7 @@ namespace RenderCore { namespace Techniques
 				[preDepthType](auto techSet) { return TechniqueFileHelper{techSet, preDepthType}; });
 
 			_rs[0x0] = CommonResourceBox::s_rsDefault;
-            _rs[0x1] = CommonResourceBox::s_rsCullDisable;			
+			_rs[0x1] = CommonResourceBox::s_rsCullDisable;
 		}
 	private:
 		std::shared_future<TechniqueFileHelper> _techniqueFileHelper;

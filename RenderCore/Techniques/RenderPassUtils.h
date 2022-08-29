@@ -36,4 +36,9 @@ namespace RenderCore { namespace Techniques
         ParsingContext& parserContext,
 		LoadStore loadOperation = LoadStore::Retain,
 		unsigned clearColor = 0xff000000);
+
+	RenderPassInstance RenderPassToDepthStencil(
+        ParsingContext& parserContext,
+		LoadStore loadOperation = LoadStore::Retain,
+		ClearValue clearValue = MakeClearValue(0.f, 0));
 }}

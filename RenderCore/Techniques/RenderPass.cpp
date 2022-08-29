@@ -1022,6 +1022,7 @@ namespace RenderCore { namespace Techniques
 
     void AttachmentPool::Bind(uint64_t semantic, const IResourcePtr& resource)
     {
+        assert(resource);
         assert(semantic != 0);      // using zero as a semantic is not supported; this is used as a sentinel for "no semantic"
         {
             

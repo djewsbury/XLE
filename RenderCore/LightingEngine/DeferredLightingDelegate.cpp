@@ -161,7 +161,7 @@ namespace RenderCore { namespace LightingEngine
 		bool precisionTargets = false)
 	{
 		RenderStepFragmentInterface fragment { RenderCore::PipelineType::Graphics };
-		auto depthTarget = fragment.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear, 0);
+		auto depthTarget = fragment.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear, 0).FinalState(BindFlag::DepthStencil);
 		auto lightResolveTarget = fragment.DefineAttachment(
 			Techniques::AttachmentSemantics::ColorHDR).Clear().Discard()
 			.FixedFormat((!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT)

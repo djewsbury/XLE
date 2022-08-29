@@ -367,7 +367,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 		auto pipeline = builder.CreatePipeline(Metal::GetObjectFactory());
 		auto depVal = pipeline->GetDependencyValidation();
-		return GraphicsPipelineAndLayout { 
+		return GraphicsPipelineAndLayout {
 			std::move(pipeline), shader.GetPipelineLayout(), std::move(depVal)
 			#if defined(_DEBUG)
 				, params._debugInfo

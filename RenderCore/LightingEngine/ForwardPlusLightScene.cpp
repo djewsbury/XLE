@@ -343,7 +343,7 @@ namespace RenderCore { namespace LightingEngine
 
 	std::optional<ShadowOperatorDesc> ForwardPlusLightScene::GetDominantShadowOperator() const
 	{
-		if (!_dominantLightSet && _dominantLightSet->_shadowOpId == ~0u)
+		if (!_dominantLightSet || _dominantLightSet->_shadowOpId == ~0u)
 			return {};
 		return _shadowOperators[_dominantLightSet->_shadowOpId];
 	}

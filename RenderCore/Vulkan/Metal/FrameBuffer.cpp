@@ -371,9 +371,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
 				// If we're loading from general or storing to general, then we should encourage use of general
 				// within the render pass, also
-				if (HasRetain(i->second._desc._loadFromPreviousPhase) && LayoutFromBindFlagsAndUsage(i->second._desc._initialLayout, 0) == VK_IMAGE_LAYOUT_GENERAL)
+				if (HasRetain(i->second._desc._loadFromPreviousPhase) && i->second._desc._initialLayout && LayoutFromBindFlagsAndUsage(i->second._desc._initialLayout, 0) == VK_IMAGE_LAYOUT_GENERAL)
 					i->second._attachmentUsage |= Internal::AttachmentResourceUsageType::HintGeneral;
-				if (HasRetain(i->second._desc._storeToNextPhase) && LayoutFromBindFlagsAndUsage(i->second._desc._finalLayout, 0) == VK_IMAGE_LAYOUT_GENERAL)
+				if (HasRetain(i->second._desc._storeToNextPhase) && i->second._desc._finalLayout && LayoutFromBindFlagsAndUsage(i->second._desc._finalLayout, 0) == VK_IMAGE_LAYOUT_GENERAL)
 					i->second._attachmentUsage |= Internal::AttachmentResourceUsageType::HintGeneral;
 			}
 
