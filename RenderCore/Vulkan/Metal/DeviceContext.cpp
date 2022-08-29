@@ -876,8 +876,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void		DeviceContext::BeginCommandList(std::shared_ptr<IAsyncTracker> asyncTracker)
 	{
-		assert(_sharedState && _sharedState->_globalPools);
-		BeginCommandList(_sharedState->_globalPools->_commandBufferPool.Allocate(_cmdBufferType), std::move(asyncTracker));
+		assert(_sharedState && _sharedState->_globalPools && _cmdBufferPool);
+		BeginCommandList(_cmdBufferPool->Allocate(_cmdBufferType), std::move(asyncTracker));
 	}
 
 	void		DeviceContext::BeginCommandList(const VulkanSharedPtr<VkCommandBuffer>& cmdList, std::shared_ptr<IAsyncTracker> asyncTracker)
@@ -1165,8 +1165,9 @@ namespace RenderCore { namespace Metal_Vulkan
 	DeviceContext::DeviceContext(
 		ObjectFactory&			factory, 
 		GlobalPools&            globalPools,
+		std::shared_ptr<CommandBufferPool> cmdBufferPool,
 		CommandBufferType		cmdBufferType)
-	: _cmdBufferType(cmdBufferType)
+	: _cmdBufferPool(std::move(cmdBufferPool)), _cmdBufferType(cmdBufferType)
 	{
 		_sharedState = std::make_shared<VulkanEncoderSharedState>(factory, globalPools);
 	}
@@ -1180,7 +1181,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	VulkanEncoderSharedState::VulkanEncoderSharedState(
 		ObjectFactory&	factory, 
 		GlobalPools&	globalPools)
-	: _globalPools(&globalPools)	
+	: _globalPools(&globalPools)
 	, _objectFactory(&factory)
 	{
 		_renderPass = nullptr;

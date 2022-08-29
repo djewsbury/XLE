@@ -129,10 +129,12 @@ namespace RenderCore { namespace Metal_Vulkan
         std::unique_ptr<TemporaryStorageManager> _temporaryStorageManager;
         DescriptorPool                      _mainDescriptorPool;
 		DescriptorPool                      _longTermDescriptorPool;
-        CommandBufferPool                   _commandBufferPool;
         VulkanRenderPassPool                _renderPassPool;
         VulkanSharedPtr<VkPipelineCache>    _mainPipelineCache;
         DummyResources                      _dummyResources;
+
+        Threading::Mutex _idleCommandBufferPoolsLock;
+        std::vector<std::pair<unsigned, std::shared_ptr<CommandBufferPool>>> _idleCommandBufferPools;   // associated with a queue family index
 
         std::shared_ptr<Internal::CompiledDescriptorSetLayoutCache> _descriptorSetLayoutCache;
 

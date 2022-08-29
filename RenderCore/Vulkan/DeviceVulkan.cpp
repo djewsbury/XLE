@@ -17,6 +17,7 @@
 #include "Metal/ExtensionFunctions.h"
 #include "Metal/AsyncTracker.h"
 #include "Metal/SubmissionQueue.h"
+#include "../../Assets/IFileSystem.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../OSServices/Log.h"
 #include "../../OSServices/AttachableLibrary.h"
@@ -604,13 +605,12 @@ namespace RenderCore { namespace ImplVulkan
 
 			// Set up the object factory with a default destroyer that tracks the current
 			// GPU frame progress
-			_graphicsQueue = std::make_shared<Metal_Vulkan::SubmissionQueue>(objFactory, GetQueue(_underlying.get(), _physDev._renderingQueueFamily));
+			_graphicsQueue = std::make_shared<Metal_Vulkan::SubmissionQueue>(objFactory, GetQueue(_underlying.get(), _physDev._renderingQueueFamily), _physDev._renderingQueueFamily);
 			auto destroyer = objFactory.CreateMarkerTrackingDestroyer(_graphicsQueue->GetTracker());
 			objFactory.SetDefaultDestroyer(destroyer);
 
             pools._mainDescriptorPool = Metal_Vulkan::DescriptorPool(objFactory, _graphicsQueue->GetTracker());
 			pools._longTermDescriptorPool = Metal_Vulkan::DescriptorPool(objFactory, _graphicsQueue->GetTracker());
-			pools._commandBufferPool = Metal_Vulkan::CommandBufferPool(objFactory, _physDev._renderingQueueFamily, false, _graphicsQueue->GetTracker());
 			pools._renderPassPool = Metal_Vulkan::VulkanRenderPassPool(objFactory);
             pools._mainPipelineCache = objFactory.CreatePipelineCache();
             pools._dummyResources = Metal_Vulkan::DummyResources(objFactory);
@@ -1310,7 +1310,22 @@ namespace RenderCore { namespace ImplVulkan
 			_globalPools->_mainDescriptorPool.FlushDestroys();
 			_globalPools->_longTermDescriptorPool.FlushDestroys();
 			_globalPools->_temporaryStorageManager->FlushDestroys();
-			_globalPools->_commandBufferPool.FlushDestroys();
+			if (_commandBufferPool)
+				_commandBufferPool->FlushDestroys();
+
+			// we have to flush the "idle" command buffer pools, also, otherwise they may never actually
+			// release their resources
+			{
+				ScopedLock(_globalPools->_idleCommandBufferPoolsLock);
+				for (auto&p:_globalPools->_idleCommandBufferPools)
+					p.second->FlushDestroys();
+			}
+		} else {
+			// If we're don't have the _destrQueue, we're not the "immediate" context.
+			// In this case, we still want to flush destroys in our own command buffer pool, because it's
+			// unique to this thread context
+			if (_commandBufferPool)
+				_commandBufferPool->FlushDestroys();
 		}
 	}
 
@@ -1341,25 +1356,58 @@ namespace RenderCore { namespace ImplVulkan
 
 	void ThreadContext::AttachDestroyer(const std::shared_ptr<Metal_Vulkan::IDestructionQueue>& queue) { _destrQueue = queue; }
 
+	void ThreadContext::ReleaseCommandBufferPool()
+	{
+		if (_globalPools && _commandBufferPool) {
+			ScopedLock(_globalPools->_idleCommandBufferPoolsLock);
+			_globalPools->_idleCommandBufferPools.emplace_back(_submissionQueue->GetQueueFamilyIndex(), std::move(_commandBufferPool));
+		}
+		// we have to destroy the metal context, as well, because it holds a pointer to the command buffer pool
+		_metalContext = nullptr;
+	}
+
     ThreadContext::ThreadContext(
 		std::shared_ptr<Device> device,
 		std::shared_ptr<Metal_Vulkan::SubmissionQueue> submissionQueue)
-    : _device(device)
+    : _device(std::move(device))
 	, _frameId(0)
 	, _factory(&device->GetObjectFactory())
 	, _globalPools(&device->GetGlobalPools())
-	, _submissionQueue(submissionQueue)
+	, _submissionQueue(std::move(submissionQueue))
 	, _underlyingDevice(device->GetUnderlyingDevice())
     {
+		// look for compatible pool from the _idleCommandBufferPools
+		unsigned queueFamilyIndex = _submissionQueue->GetQueueFamilyIndex();
+		{
+			ScopedLock(_globalPools->_idleCommandBufferPoolsLock);
+			for (auto i=_globalPools->_idleCommandBufferPools.begin(); i!=_globalPools->_idleCommandBufferPools.end(); ++i)
+				if (i->first == queueFamilyIndex) {
+					_commandBufferPool = i->second;
+					_globalPools->_idleCommandBufferPools.erase(i);
+					break;
+				}
+		}
+
+		if (!_commandBufferPool) {
+			_commandBufferPool = std::make_shared<Metal_Vulkan::CommandBufferPool>(
+				*_factory, queueFamilyIndex, false, _submissionQueue->GetTracker());
+		}
+
 		_metalContext = std::make_shared<Metal_Vulkan::DeviceContext>(
-			device->GetObjectFactory(), device->GetGlobalPools(), 
+			*_factory, *_globalPools,
+			_commandBufferPool,
             Metal_Vulkan::CommandBufferType::Primary);
 	}
 
     ThreadContext::~ThreadContext() 
 	{
+		if (_globalPools && _commandBufferPool) {
+			ScopedLock(_globalPools->_idleCommandBufferPoolsLock);
+			_globalPools->_idleCommandBufferPools.emplace_back(_submissionQueue->GetQueueFamilyIndex(), std::move(_commandBufferPool));
+		}
 		_metalContext.reset();
 		_annotator.reset();
+		_commandBufferPool.reset();
 		_submissionQueue.reset();
 		_destrQueue.reset();
 	}

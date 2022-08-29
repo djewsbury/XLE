@@ -28,9 +28,12 @@ namespace RenderCore { namespace Metal_Vulkan
 			VkSwapchainKHR swapChain, unsigned imageIndex, 
 			IteratorRange<const VkSemaphore*> waitBeforePresent);
 
+		unsigned GetQueueFamilyIndex() const { return _queueFamilyIndex; }
+
 		SubmissionQueue(
 			ObjectFactory& factory,
-			VkQueue queue);
+			VkQueue queue,
+			unsigned queueFamilyIndex);
 		~SubmissionQueue();
 		SubmissionQueue(SubmissionQueue&&) = delete;
 		SubmissionQueue& operator=(SubmissionQueue&&) = delete;
@@ -39,6 +42,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::shared_ptr<Metal_Vulkan::FenceBasedTracker> _gpuTracker;
 		ObjectFactory* _factory;
 		Threading::Mutex _queueLock;
+		unsigned _queueFamilyIndex;
 	};
 }}
 

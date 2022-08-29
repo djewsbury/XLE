@@ -121,6 +121,7 @@ namespace RenderCore { namespace ImplVulkan
         float GetThreadingPressure() override;
         unsigned GetCmdListSpecificMarker() override;
         void AttachNameToCmdList(std::string name) override;
+        void ReleaseCommandBufferPool() override;
 
         bool                        IsImmediate() const override;
         ThreadContextStateDesc      GetStateDesc() const override;
@@ -146,6 +147,7 @@ namespace RenderCore { namespace ImplVulkan
         std::shared_ptr<Metal_Vulkan::SubmissionQueue> _submissionQueue;
 		std::unique_ptr<IAnnotator>		_annotator;
         std::shared_ptr<Metal_Vulkan::IDestructionQueue> _destrQueue;
+        std::shared_ptr<Metal_Vulkan::CommandBufferPool> _commandBufferPool;
 
 		VkDevice							_underlyingDevice;
 		Metal_Vulkan::ObjectFactory*	    _factory;

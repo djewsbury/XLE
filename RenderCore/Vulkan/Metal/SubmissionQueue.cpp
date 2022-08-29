@@ -70,9 +70,11 @@ namespace RenderCore { namespace Metal_Vulkan
 
     SubmissionQueue::SubmissionQueue(
         ObjectFactory& factory,
-		VkQueue queue)
+		VkQueue queue,
+		unsigned queueFamilyIndex)
     : _underlying(queue) 
     , _factory(&factory)
+	, _queueFamilyIndex(queueFamilyIndex)
     {
         _gpuTracker = std::make_shared<Metal_Vulkan::FenceBasedTracker>(*_factory, 32);
     }

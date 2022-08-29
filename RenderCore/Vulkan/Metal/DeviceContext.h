@@ -367,6 +367,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		DeviceContext(
 			ObjectFactory& factory, 
 			GlobalPools& globalPools,
+			std::shared_ptr<CommandBufferPool> cmdBufferPool,
 			CommandBufferType cmdBufferType);
 		~DeviceContext();
 		DeviceContext(const DeviceContext&) = delete;
@@ -380,6 +381,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	private:
 		std::shared_ptr<VulkanEncoderSharedState> _sharedState;
+		std::shared_ptr<CommandBufferPool> _cmdBufferPool;
 		CommandBufferType _cmdBufferType;
 
 		friend class BlitEncoder;
