@@ -199,9 +199,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		// set, or a property of the resource itself. Consider binding depthbuffers as read; they are always
 		// in General layout, rather that ShaderReadOnlyOptimal
 		return VkDescriptorImageInfo {
-			nullptr, 
-			resourceView.GetImageView(), 
-			(VkImageLayout)Internal::AsVkImageLayout(resourceView.GetVulkanResource()->_steadyStateLayout) 
+			nullptr,
+			resourceView.GetImageView(),
+			resourceView.GetVulkanResource()->_steadyStateImageLayout
 		};
 	}
 

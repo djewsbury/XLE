@@ -83,10 +83,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		Resource();
 		~Resource();
 		
-		Internal::ImageLayout _steadyStateLayout;
-		unsigned _steadyStateAccessMask;
-		unsigned _steadyStateAssociatedStageMask;
-		std::function<void(Internal::ResourceInitializationHelper&, Resource&)> _pendingInitialization;
+		VkImageLayout _steadyStateImageLayout = (VkImageLayout)0;
+		bool _pendingInit = false;
 	protected:
 		VulkanSharedPtr<VkImage> _underlyingImage;
 		VulkanSharedPtr<VkBuffer> _underlyingBuffer;
@@ -97,7 +95,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		Desc _desc;
 		uint64_t _guid;
-		void ConfigureDefaultSteadyState(BindFlag::BitField);
+		// void ConfigureDefaultSteadyState(BindFlag::BitField);
 	};
 
 	void CompleteInitialization(
@@ -251,6 +249,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		static BarrierResourceUsage HostWrite();
 		static BarrierResourceUsage AllCommandsRead();
 		static BarrierResourceUsage AllCommandsWrite();
+		static BarrierResourceUsage AllCommandsReadAndWrite();
 		static BarrierResourceUsage NoState();
 		static BarrierResourceUsage Preinitialized();
 	};
@@ -273,6 +272,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		BarrierHelper& operator=(const BarrierHelper&) = delete;
 	private:
 		void Flush();
+		std::pair<uint64_t, bool> _imageBarrierGuids[8];
 	};
 
 	namespace Internal
@@ -321,20 +321,18 @@ namespace RenderCore { namespace Metal_Vulkan
 		class CaptureForBind
 		{
 		public:
-			Internal::ImageLayout GetLayout() { return _capturedLayout; }
-			CaptureForBind(DeviceContext&, IResource&, BindFlag::Enum bindType);
+			VkImageLayout GetLayout() { return _capturedLayout; }
+			CaptureForBind(DeviceContext&, IResource&, BarrierResourceUsage usage);
 			~CaptureForBind();
 			CaptureForBind(const CaptureForBind&) = delete;
 			CaptureForBind& operator=(const CaptureForBind&) = delete;
 		private:
 			DeviceContext* _context;
 			IResource* _resource;
-			BindFlag::Enum _bindType;
-			Internal::ImageLayout _capturedLayout;
+			VkImageLayout _capturedLayout;
 			unsigned _capturedAccessMask;
 			unsigned _capturedStageMask;
-			bool _releaseCapture;
-			bool _usingCompatibleSteadyState;
+			std::optional<VkImageLayout> _restoreLayout;
 		};
 
 		void SetupInitialLayout(DeviceContext&, IResource&);

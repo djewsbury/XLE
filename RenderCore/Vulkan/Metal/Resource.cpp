@@ -41,9 +41,9 @@ namespace RenderCore { namespace Metal_Vulkan
 	static void CopyPartial(
         DeviceContext& context, 
         const CopyPartial_Dest& dst, const CopyPartial_Src& src,
-        Internal::ImageLayout dstLayout, Internal::ImageLayout srcLayout);
+        VkImageLayout dstLayout, VkImageLayout srcLayout);
 
-	static void Copy(DeviceContext& context, Resource& dst, Resource& src, Internal::ImageLayout dstLayout, Internal::ImageLayout srcLayout);
+	static void Copy(DeviceContext& context, Resource& dst, Resource& src, VkImageLayout dstLayout, VkImageLayout srcLayout);
 	static bool ResourceMapViable(Resource& res, ResourceMap::Mode mode);
 
 	static VkBufferUsageFlags AsBufferUsageFlags(BindFlag::BitField bindFlags)
@@ -135,265 +135,14 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-	///////////////////////////////////////////////////////////////////////////////////////////////////
-
 	namespace Internal
 	{
-		void SetImageLayouts(
-			DeviceContext& context, 
-			IteratorRange<const LayoutTransition*> changes)
-		{
-			VkImageMemoryBarrier barriers[16];
-			assert(changes.size() > 0 && changes.size() < dimof(barriers));
-
-			VkPipelineStageFlags src_stages = 0;
-			VkPipelineStageFlags dest_stages = 0;
-
-			unsigned barrierCount = 0;
-			for (unsigned c=0; c<(unsigned)changes.size(); ++c) {
-				auto& r = *changes[c]._res;
-				assert(r.AccessDesc()._type == ResourceDesc::Type::Texture);
-				if (!r.GetImage()) continue;   // (staging buffer case)
-
-				auto& b = barriers[barrierCount++];
-
-				// unforunately, we can't just blanket aspectMask with all bits enabled.
-				// We must select a correct aspect mask. The nvidia drivers seem to be fine with all
-				// bits enabled, but the documentation says that this is not allowed
-				const auto& desc = r.AccessDesc();
-
-				b = {};
-				b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-				b.pNext = nullptr;
-				b.oldLayout = (VkImageLayout)Internal::AsVkImageLayout(changes[c]._oldLayout);
-				b.newLayout = (VkImageLayout)Internal::AsVkImageLayout(changes[c]._newLayout);
-				b.srcAccessMask = changes[c]._oldAccessMask;
-				b.dstAccessMask = changes[c]._newAccessMask;
-				b.image = r.GetImage();
-				b.subresourceRange.aspectMask = AsImageAspectMask(desc._textureDesc._format);
-				b.subresourceRange.baseMipLevel = 0;
-				b.subresourceRange.baseArrayLayer = 0;
-				b.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-				b.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-
-				src_stages |= changes[c]._srcStages;
-				dest_stages |= changes[c]._dstStages;
-			}
-
-			if (barrierCount) {
-				context.GetActiveCommandList().PipelineBarrier(
-					src_stages, dest_stages,
-					0, 
-					0, nullptr, 0, nullptr,
-					barrierCount, barriers);
-			}
-		}
-
-		void SetImageLayout(
-			DeviceContext& context, Resource& res, 
-			ImageLayout oldLayout, unsigned oldAccessMask, unsigned srcStages, 
-			ImageLayout newLayout, unsigned newAccessMask, unsigned dstStages)
-		{
-			LayoutTransition transition { &res, oldLayout, oldAccessMask, srcStages, newLayout, newAccessMask, dstStages };
-			SetImageLayouts(context, MakeIteratorRange(&transition, &transition+1));
-		}
-
-		class CaptureForBindRecords
-		{
-		public:
-			struct Record { IResource* _resource; ImageLayout _layout; unsigned _accessMask; unsigned _stageMask; };
-			std::vector<Record> _captures;
-		};
-
-		struct ImageLayoutMode
-		{
-			ImageLayout _optimalLayout;
-			unsigned _accessFlags;
-			unsigned _pipelineStageFlags;
-		};
-
-		ImageLayoutMode GetLayoutForBindType(BindFlag::Enum bindType)
-		{
-			switch (bindType) {
-			case BindFlag::TransferSrc:
-				return { ImageLayout::TransferSrcOptimal, VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT };
-			case BindFlag::TransferDst:
-				return { ImageLayout::TransferDstOptimal, VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT };
-			case (BindFlag::Enum)(BindFlag::TransferSrc|BindFlag::TransferDst):
-				return { ImageLayout::General, VK_ACCESS_TRANSFER_WRITE_BIT|VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT };
-			case BindFlag::ShaderResource:
-				// VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
-				// VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT
-				// VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT
-				// VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT
-				// VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-				// VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
-				return { 
-					ImageLayout::ShaderReadOnlyOptimal,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_PIPELINE_STAGE_VERTEX_SHADER_BIT /*| VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT | VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT*/
-					| VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
-				};
-			case BindFlag::InputAttachment:
-				return { ImageLayout::ShaderReadOnlyOptimal, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT };	// can only read from input attachments from the fragment shader
-			case BindFlag::UnorderedAccess:
-				return { 
-					ImageLayout::General,
-					VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-					VK_PIPELINE_STAGE_VERTEX_SHADER_BIT /*| VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT | VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT*/
-					| VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
-				};
-			case BindFlag::RenderTarget:
-				return { ImageLayout::ColorAttachmentOptimal, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-			case BindFlag::DepthStencil:
-				return { ImageLayout::DepthStencilAttachmentOptimal, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT };
-			default:
-				return { ImageLayout::General, 0, 0 };
-			}
-		}
-
-		CaptureForBind::CaptureForBind(DeviceContext& context, IResource& resource, BindFlag::Enum bindType)
-		: _context(&context), _resource(&resource), _bindType(bindType), _releaseCapture(true), _usingCompatibleSteadyState(false)
-		{
-			if (!context._captureForBindRecords)
-				context._captureForBindRecords = std::make_shared<Internal::CaptureForBindRecords>();
-
-			auto newMode = Internal::GetLayoutForBindType(bindType);
-			assert(newMode._accessFlags != 0 && newMode._pipelineStageFlags != 0);
-			auto* res = checked_cast<Resource*>(&resource);
-
-			bool pendingInit = (bool)res->_pendingInitialization;
-
-			// try to mix this with the steady state from the resource
-			auto steadyLayout = res->_steadyStateLayout;
-			auto steadyAccessMask = res->_steadyStateAccessMask;
-			if (!pendingInit 
-				&& (steadyLayout == newMode._optimalLayout || steadyLayout == Internal::ImageLayout::General) 
-				&& (res->_steadyStateAccessMask & newMode._accessFlags) == newMode._accessFlags) {
-
-				// The steady state is already compatible with what we want
-				// we still consider this a capture, but we don't actually have to change the layout or
-				// access mode at all
-				_capturedLayout = steadyLayout;
-				_capturedAccessMask = steadyAccessMask;
-				_capturedStageMask = res->_steadyStateAssociatedStageMask;
-				_usingCompatibleSteadyState = true;
-			} else {
-				// We do have to change the layout. Prefer to swap to the optimal layout if we can
-				_capturedLayout = newMode._optimalLayout;
-				_capturedAccessMask = newMode._accessFlags;
-				_capturedStageMask = newMode._pipelineStageFlags;
-			}
-
-			auto existing = std::find_if(
-				context._captureForBindRecords->_captures.begin(), context._captureForBindRecords->_captures.end(),
-				[&resource](const auto& i) { return i._resource == &resource; });
-			if (existing != context._captureForBindRecords->_captures.end()) {
-				// We're allowed to nest captures so long as they are of the same type,
-				// and we release them in opposite order to creation order (ie shoes and socks order)
-				if (existing->_layout != _capturedLayout)
-					Throw(std::runtime_error("Attempting to CaptureForBind a resource that is already captured in another state"));
-				_capturedLayout = existing->_layout;
-				_capturedAccessMask = existing->_accessMask;
-				_capturedStageMask = existing->_stageMask;
-				_releaseCapture = false;
-				return;
-			}
-
-			context._captureForBindRecords->_captures.push_back(
-				{&resource, _capturedLayout, _capturedAccessMask, _capturedStageMask});
-
-			if (!_usingCompatibleSteadyState) {
-				if (!pendingInit) {
-					if (res->GetImage())
-						Internal::SetImageLayout(
-							*_context, *res,
-							res->_steadyStateLayout, res->_steadyStateAccessMask, res->_steadyStateAssociatedStageMask,
-							_capturedLayout, _capturedAccessMask, newMode._pipelineStageFlags);
-				} else {
-					// The init operation will normally shift from undefined layout -> steady state
-					// We're just going to skip that and jump directly to our captured layout
-					res->_pendingInitialization = {};
-					if (res->GetImage())
-						Internal::SetImageLayout(
-							*_context, *res,
-							Internal::ImageLayout::Undefined, 0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-							_capturedLayout, _capturedAccessMask, newMode._pipelineStageFlags);
-				}
-			}
-		}
-
-		CaptureForBind::~CaptureForBind()
-		{
-			if (!_context) return;
-
-			auto* res = checked_cast<Resource*>(_resource);
-			auto existing = std::find_if(
-				_context->_captureForBindRecords->_captures.begin(), _context->_captureForBindRecords->_captures.end(),
-				[res](const auto& i) { return i._resource == res; });
-			if (existing == _context->_captureForBindRecords->_captures.end()) {
-				// You might get here if you have multiple nested CaptureForBind with the same constructor parameters, 
-				// but they get destroyed in the wrong order
-				Log(Error) << "Missing capture record in CaptureForBind destructor" << std::endl;
-				assert(0);
-			} else {
-				if (existing->_layout != _capturedLayout || existing->_accessMask != _capturedAccessMask)
-					Log(Error) << "Capture record has unexpected type in CaptureForBind destructor" << std::endl;	// Likewise this might be caused by a complex set of nested captures that are destroyed in an incorrect order
-				if (_releaseCapture)
-					_context->_captureForBindRecords->_captures.erase(existing);
-			}
-
-			// always return back to the "steady state" layout for this resource
-			if (!_usingCompatibleSteadyState) {
-				if (res->GetImage())
-					Internal::SetImageLayout(
-						*_context, *res,
-						_capturedLayout, _capturedAccessMask, _capturedStageMask,
-						res->_steadyStateLayout, res->_steadyStateAccessMask, res->_steadyStateAssociatedStageMask);
-			}
-		}
-
-		void ValidateIsEmpty(CaptureForBindRecords& records)
-		{
-			assert(records._captures.empty());
-		}
-
-		class ResourceInitializationHelper
-		{
-		public:
-			DeviceContext& GetDeviceContext() { return *_devContext; }
-
-			void SetImageLayout(
-				Resource& res, 
-				ImageLayout oldLayout, unsigned oldAccessMask, unsigned srcStages, 
-				ImageLayout newLayout, unsigned newAccessMask, unsigned dstStages)
-			{
-				_transitions.push_back({
-					&res, 
-					oldLayout, oldAccessMask, srcStages,
-					newLayout, newAccessMask, dstStages});
-			}
-
-			void MakeResourceVisible(uint64_t res)
-			{
-				_makeResourcesVisible.push_back(res);
-			}
-
-			void CommitLayoutChanges()
-			{
-				if (!_transitions.empty())
-					SetImageLayouts(*_devContext, MakeIteratorRange(_transitions));
-				if (!_makeResourcesVisible.empty())
-					_devContext->GetActiveCommandList().MakeResourcesVisible(MakeIteratorRange(_makeResourcesVisible));
-			}
-
-			ResourceInitializationHelper(DeviceContext& devContext) : _devContext(&devContext) {}
-		private:
-			DeviceContext* _devContext;
-			std::vector<LayoutTransition> _transitions;
-			std::vector<uint64_t> _makeResourcesVisible;
-		};
+		static VkImageLayout GetLayoutForBindType(BindFlag::Enum bindType);
+		static VkImageLayout SelectDefaultSteadyStateLayout(BindFlag::BitField allBindFlags);
+		static BarrierResourceUsage DefaultBarrierResourceUsageFromLayout(VkImageLayout prevLayout);
 	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	#if defined(TRACK_RESOURCE_GUIDS)
 		static std::vector<std::pair<unsigned, std::string>> s_resourceGUIDToName;
@@ -498,8 +247,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		// We need to create the buffer/image first, so we can called vkGetXXXMemoryRequirements
 		const bool hasInitData = !!initData;
 
-		_steadyStateLayout = Internal::ImageLayout::Undefined;
-		_steadyStateAccessMask = 0;
+		_steadyStateImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		_pendingInit = false;
 
 		const bool allocateDirectFromVulkan = false;
 		VmaAllocationInfo allocationInfo;
@@ -630,7 +379,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
             }
 
-			ConfigureDefaultSteadyState(desc._bindFlags);
+			_steadyStateImageLayout = Internal::SelectDefaultSteadyStateLayout(desc._bindFlags);
 
 			#if defined(TRACK_RESOURCE_GUIDS)
 				AssociateResourceGUID(_guid, desc._name);
@@ -665,84 +414,15 @@ namespace RenderCore { namespace Metal_Vulkan
 				Throw(std::runtime_error("You must explicitly use a \"host visible\" allocation rule on resources that have init data"));
 			}
 
-		} else {
-
-			if (desc._type == Desc::Type::Texture) {
-				// queue transition into our steady-state
-				_pendingInitialization = [](Internal::ResourceInitializationHelper& helper, Resource& res) {
-						/*helper.SetImageLayout(
-							res,
-							Internal::ImageLayout::Undefined, 0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-							res._steadyStateLayout, res._steadyStateAccessMask, res._steadyStateAssociatedStageMask);*/
-						helper.MakeResourceVisible(res.GetGUID());
-					};
-			}
-
-		}
-	}
-
-	void Resource::ConfigureDefaultSteadyState(BindFlag::BitField bindFlags)
-	{
-		// Determine the steady state layout for this resource. If we have only one
-		// usage type selected, we will default to the optimal layout for that usage method.
-		// Otherwise we will fall back to "general"
-		// However, there's an exception for TransferDst; since most textures will have this just to
-		// fill with initial data
-		_steadyStateLayout = Internal::ImageLayout::Undefined;
-		_steadyStateAccessMask = 0;
-		_steadyStateAssociatedStageMask = 0;
-		using lyt = Internal::ImageLayout;
-		if (bindFlags & BindFlag::ShaderResource) {
-			_steadyStateLayout = lyt::ShaderReadOnlyOptimal;
-			_steadyStateAccessMask |= Internal::GetLayoutForBindType(BindFlag::ShaderResource)._accessFlags;
-			_steadyStateAssociatedStageMask |= Internal::GetLayoutForBindType(BindFlag::ShaderResource)._pipelineStageFlags;
-		}
-		if (bindFlags & BindFlag::InputAttachment) {
-			_steadyStateLayout = lyt::ShaderReadOnlyOptimal;
-			_steadyStateAccessMask |= Internal::GetLayoutForBindType(BindFlag::InputAttachment)._accessFlags;
-			_steadyStateAssociatedStageMask |= Internal::GetLayoutForBindType(BindFlag::InputAttachment)._pipelineStageFlags;
-		}
-		if (bindFlags & BindFlag::UnorderedAccess) {
-			_steadyStateLayout = lyt::General;
-			_steadyStateAccessMask |= Internal::GetLayoutForBindType(BindFlag::UnorderedAccess)._accessFlags;
-			_steadyStateAssociatedStageMask |= Internal::GetLayoutForBindType(BindFlag::UnorderedAccess)._pipelineStageFlags;
-		}
-		if (bindFlags & BindFlag::RenderTarget) {
-			// For BindFlag::RenderTarget|BindFlag::ShaderResource, we could pick either states to be the "steady state",
-			// but for now the shader resource state works better with the descriptor set binding in AsVkDescriptorImageInfo
-			// "General" is probably not really wanted in this case, though
-			if (_steadyStateLayout != lyt::ShaderReadOnlyOptimal) {
-				_steadyStateLayout = (_steadyStateLayout == lyt::Undefined) ? lyt::ColorAttachmentOptimal : lyt::General;
-				_steadyStateAccessMask |= Internal::GetLayoutForBindType(BindFlag::RenderTarget)._accessFlags;
-				_steadyStateAssociatedStageMask |= Internal::GetLayoutForBindType(BindFlag::RenderTarget)._pipelineStageFlags;
-			}
-		}
-		if (bindFlags & BindFlag::DepthStencil) {
-			// Note that DepthStencilReadOnlyOptimal can't be accessed here
-			_steadyStateLayout = (_steadyStateLayout == lyt::Undefined) ? lyt::DepthStencilAttachmentOptimal : lyt::General;
-			_steadyStateAccessMask |= Internal::GetLayoutForBindType(BindFlag::DepthStencil)._accessFlags;
-			_steadyStateAssociatedStageMask |= Internal::GetLayoutForBindType(BindFlag::DepthStencil)._pipelineStageFlags;
-		}
-		if (bindFlags & BindFlag::TransferSrc) {
-			if (_steadyStateLayout == lyt::Undefined) {
-				_steadyStateLayout = lyt::TransferSrcOptimal;
-				_steadyStateAccessMask |= Internal::GetLayoutForBindType(BindFlag::TransferSrc)._accessFlags;
-				_steadyStateAssociatedStageMask |= Internal::GetLayoutForBindType(BindFlag::TransferSrc)._pipelineStageFlags;
-			}
-		}
-		if (bindFlags & BindFlag::TransferDst) {
-			// Note the exception for _steadyStateLayout for TransferDst
-			if (_steadyStateLayout == lyt::Undefined) {
-				_steadyStateLayout = lyt::TransferDstOptimal;
-				_steadyStateAccessMask |= Internal::GetLayoutForBindType(BindFlag::TransferDst)._accessFlags;
-				_steadyStateAssociatedStageMask |= Internal::GetLayoutForBindType(BindFlag::TransferDst)._pipelineStageFlags;
-			}
+		} else if (desc._type == Desc::Type::Texture) {
+			// queue transition into our steady-state
+			_pendingInit = true;
 		}
 	}
 
 	void Resource::ChangeSteadyState(BindFlag::Enum usage)
 	{
-		ConfigureDefaultSteadyState(usage);
+		_steadyStateImageLayout = Internal::GetLayoutForBindType(usage);
 	}
 
 	std::shared_ptr<IResourceView>  Resource::CreateTextureView(BindFlag::Enum usage, const TextureViewDesc& window)
@@ -792,7 +472,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 
 				Internal::CaptureForBind capture{ctx, *const_cast<Resource*>(this), BindFlag::TransferSrc};
-				Copy(ctx, destaging, *const_cast<Resource*>(this), destaging._steadyStateLayout, capture.GetLayout());
+				Copy(ctx, destaging, *const_cast<Resource*>(this), destaging._steadyStateImageLayout, capture.GetLayout());
 
 				// "7.9. Host Write Ordering Guarantees" suggests we shouldn't need a transfer -> host barrier here
 			}
@@ -858,16 +538,8 @@ namespace RenderCore { namespace Metal_Vulkan
         //      released by the vulkan presentation chain itself
         _underlyingImage = VulkanSharedPtr<VkImage>(image, [](const VkImage) {});
 
-		ConfigureDefaultSteadyState(desc._bindFlags);
-		_steadyStateLayout = Internal::ImageLayout::PresentSrc;
-
-		_pendingInitialization = [](Internal::ResourceInitializationHelper& helper, Resource& res) {
-			helper.SetImageLayout(
-				res,
-				Internal::ImageLayout::Undefined, 0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-				res._steadyStateLayout, res._steadyStateAccessMask, res._steadyStateAssociatedStageMask);
-			helper.MakeResourceVisible(res.GetGUID());
-		};
+		_steadyStateImageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		_pendingInit = true;
     }
 
 	Resource::Resource() : _guid(s_nextResourceGUID++) {}
@@ -971,7 +643,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		return result;
 	}
 
-	static void Copy(DeviceContext& context, Resource& dst, Resource& src, Internal::ImageLayout dstLayout, Internal::ImageLayout srcLayout)
+	static void Copy(DeviceContext& context, Resource& dst, Resource& src, VkImageLayout dstLayout, VkImageLayout srcLayout)
 	{
         if (dst.GetImage() && src.GetImage()) {
             // image to image copy
@@ -1020,8 +692,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		    }
 
 		    context.GetActiveCommandList().CopyImage(
-			    src.GetImage(), (VkImageLayout)Internal::AsVkImageLayout(srcLayout),
-			    dst.GetImage(), (VkImageLayout)Internal::AsVkImageLayout(dstLayout),
+			    src.GetImage(), srcLayout,
+			    dst.GetImage(), dstLayout,
 			    copyOperations, copyOps);
 
         } else if (dst.GetBuffer() && src.GetBuffer()) {
@@ -1042,12 +714,12 @@ namespace RenderCore { namespace Metal_Vulkan
             auto copyOps = GenerateBufferImageCopyOps(dst.AccessDesc(), src.AccessDesc());
             context.GetActiveCommandList().CopyBufferToImage(
                 src.GetBuffer(),
-                dst.GetImage(), (VkImageLayout)Internal::AsVkImageLayout(dstLayout),
+                dst.GetImage(), dstLayout,
                 (uint32_t)copyOps.size(), copyOps.data());
         } else {
             auto copyOps = GenerateBufferImageCopyOps(src.AccessDesc(), dst.AccessDesc());
             context.GetActiveCommandList().CopyImageToBuffer(
-                src.GetImage(), (VkImageLayout)Internal::AsVkImageLayout(srcLayout),
+                src.GetImage(), srcLayout,
 				dst.GetBuffer(),
                 (uint32_t)copyOps.size(), copyOps.data());
         }
@@ -1056,7 +728,7 @@ namespace RenderCore { namespace Metal_Vulkan
     static void CopyPartial(
         DeviceContext& context, 
         const CopyPartial_Dest& dst, const CopyPartial_Src& src,
-        Internal::ImageLayout dstLayout, Internal::ImageLayout srcLayout)
+        VkImageLayout dstLayout, VkImageLayout srcLayout)
     {
 		// Memory alignment rules:
 		//
@@ -1145,8 +817,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 
 			context.GetActiveCommandList().CopyImage(
-			    srcResource->GetImage(), (VkImageLayout)Internal::AsVkImageLayout(srcLayout),
-			    dstResource->GetImage(), (VkImageLayout)Internal::AsVkImageLayout(dstLayout),
+			    srcResource->GetImage(), srcLayout,
+			    dstResource->GetImage(), dstLayout,
 			    mipLevelCount, copies);
         } else if (dstResource->GetBuffer() && srcResource->GetBuffer()) {
             // buffer to buffer copy
@@ -1276,7 +948,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
             context.GetActiveCommandList().CopyBufferToImage(
                 srcResource->GetBuffer(),
-                dstResource->GetImage(), (VkImageLayout)Internal::AsVkImageLayout(dstLayout),
+                dstResource->GetImage(), dstLayout,
                 arrayLayerCount*mipLevelCount, copyOps);
 		} else if (dstResource->GetBuffer() && srcResource->GetImage()) {
 			const auto& srcDesc = srcResource->AccessDesc();
@@ -1353,7 +1025,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 
             context.GetActiveCommandList().CopyImageToBuffer(
-                srcResource->GetImage(), (VkImageLayout)Internal::AsVkImageLayout(srcLayout),
+                srcResource->GetImage(), srcLayout,
                 dstResource->GetBuffer(),
                 arrayLayerCount*mipLevelCount, copyOps);
         } else {
@@ -1430,15 +1102,20 @@ namespace RenderCore { namespace Metal_Vulkan
 		DeviceContext& context,
 		IteratorRange<IResource* const*> resources)
 	{
-		Internal::ResourceInitializationHelper helper(context);
+		std::vector<uint64_t> makeResourcesVisible;
+		makeResourcesVisible.reserve(resources.size());
+		BarrierHelper barrierHelper{context};
 		for (auto r:resources) {
 			auto* res = checked_cast<Resource*>(r);
-			if (res->_pendingInitialization) {
-				res->_pendingInitialization(helper, *res);
-				res->_pendingInitialization = nullptr;
+			if (res->_pendingInit) {
+				if (res->_steadyStateImageLayout != VK_IMAGE_LAYOUT_UNDEFINED)
+					barrierHelper.Add(*res, BarrierResourceUsage::NoState(), Internal::DefaultBarrierResourceUsageFromLayout(res->_steadyStateImageLayout));
+				makeResourcesVisible.push_back(res->GetGUID());
+				res->_pendingInit = false;
 			}
 		}
-		helper.CommitLayoutChanges();
+		if (!makeResourcesVisible.empty())
+			context.GetActiveCommandList().MakeResourcesVisible(MakeIteratorRange(makeResourcesVisible));
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1900,7 +1577,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		Internal::CaptureForBind captureDst(*_devContext, *checked_cast<Resource*>(dst._resource), BindFlag::TransferDst);
 		auto src = staging.AsCopySource();
 		src.PartialSubresource({0,0,0}, srcDataDimensions, srcDataPitches);
-		CopyPartial(*_devContext, dst, src, captureDst.GetLayout(), Internal::ImageLayout::TransferSrcOptimal);
+		CopyPartial(*_devContext, dst, src, captureDst.GetLayout(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 	}
 
 	void BlitEncoder::Write(
@@ -1921,7 +1598,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::memcpy(staging.GetData().begin(), srcData.begin(), srcData.size());
 
 		Internal::CaptureForBind captureDst(*_devContext, *checked_cast<Resource*>(dst._resource), BindFlag::TransferDst);
-		CopyPartial(*_devContext, dst, staging.AsCopySource(), captureDst.GetLayout(), Internal::ImageLayout::TransferSrcOptimal);
+		CopyPartial(*_devContext, dst, staging.AsCopySource(), captureDst.GetLayout(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 	}
 
 	void BlitEncoder::Copy(
@@ -1963,6 +1640,270 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+	namespace Internal
+	{
+		void SetImageLayouts(
+			DeviceContext& context, 
+			IteratorRange<const LayoutTransition*> changes)
+		{
+			VkImageMemoryBarrier barriers[16];
+			assert(changes.size() > 0 && changes.size() < dimof(barriers));
+
+			VkPipelineStageFlags src_stages = 0;
+			VkPipelineStageFlags dest_stages = 0;
+
+			unsigned barrierCount = 0;
+			for (unsigned c=0; c<(unsigned)changes.size(); ++c) {
+				auto& r = *changes[c]._res;
+				assert(r.AccessDesc()._type == ResourceDesc::Type::Texture);
+				if (!r.GetImage()) continue;   // (staging buffer case)
+
+				auto& b = barriers[barrierCount++];
+
+				// unforunately, we can't just blanket aspectMask with all bits enabled.
+				// We must select a correct aspect mask. The nvidia drivers seem to be fine with all
+				// bits enabled, but the documentation says that this is not allowed
+				const auto& desc = r.AccessDesc();
+
+				b = {};
+				b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+				b.pNext = nullptr;
+				b.oldLayout = (VkImageLayout)Internal::AsVkImageLayout(changes[c]._oldLayout);
+				b.newLayout = (VkImageLayout)Internal::AsVkImageLayout(changes[c]._newLayout);
+				b.srcAccessMask = changes[c]._oldAccessMask;
+				b.dstAccessMask = changes[c]._newAccessMask;
+				b.image = r.GetImage();
+				b.subresourceRange.aspectMask = AsImageAspectMask(desc._textureDesc._format);
+				b.subresourceRange.baseMipLevel = 0;
+				b.subresourceRange.baseArrayLayer = 0;
+				b.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+				b.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+				src_stages |= changes[c]._srcStages;
+				dest_stages |= changes[c]._dstStages;
+			}
+
+			if (barrierCount) {
+				context.GetActiveCommandList().PipelineBarrier(
+					src_stages, dest_stages,
+					0, 
+					0, nullptr, 0, nullptr,
+					barrierCount, barriers);
+			}
+		}
+
+		void SetImageLayout(
+			DeviceContext& context, Resource& res, 
+			ImageLayout oldLayout, unsigned oldAccessMask, unsigned srcStages, 
+			ImageLayout newLayout, unsigned newAccessMask, unsigned dstStages)
+		{
+			LayoutTransition transition { &res, oldLayout, oldAccessMask, srcStages, newLayout, newAccessMask, dstStages };
+			SetImageLayouts(context, MakeIteratorRange(&transition, &transition+1));
+		}
+
+		class CaptureForBindRecords
+		{
+		public:
+			struct Record { VkImageLayout _layout; unsigned _accessMask; unsigned _stageMask; };
+			std::vector<std::pair<uint64_t, Record>> _captures;
+		};
+
+		static VkImageLayout GetLayoutForBindType(BindFlag::Enum bindType)
+		{
+			switch (bindType) {
+			case BindFlag::TransferSrc:
+				return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			case BindFlag::TransferDst:
+				return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+			case (BindFlag::Enum)(BindFlag::TransferSrc|BindFlag::TransferDst):
+				return VK_IMAGE_LAYOUT_GENERAL;
+			case BindFlag::ShaderResource:
+			case BindFlag::InputAttachment:
+				return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			case BindFlag::UnorderedAccess:
+				return VK_IMAGE_LAYOUT_GENERAL;
+			case BindFlag::RenderTarget:
+				return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			case BindFlag::DepthStencil:
+				return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			default:
+				return VK_IMAGE_LAYOUT_GENERAL;
+			}
+		}
+
+		static VkImageLayout SelectDefaultSteadyStateLayout(BindFlag::BitField allBindFlags)
+		{
+			// For an image with the given bind flags, what should we select as the default "steady state" layout
+			// This can be overridden on a per-resource basis, 
+			VkImageLayout result = VK_IMAGE_LAYOUT_UNDEFINED;
+			if (allBindFlags & BindFlag::ShaderResource) {
+				result = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			}
+			if (allBindFlags & BindFlag::InputAttachment) {
+				result = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			}
+			if (allBindFlags & BindFlag::UnorderedAccess) {
+				result = VK_IMAGE_LAYOUT_GENERAL;
+			}
+			if (allBindFlags & BindFlag::RenderTarget) {
+				// For BindFlag::RenderTarget|BindFlag::ShaderResource, we could pick either states to be the "steady state",
+				// but for now the shader resource state works better with the descriptor set binding in AsVkDescriptorImageInfo
+				// "General" is probably not really wanted in this case, though
+				if (result != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+					result = (result == VK_IMAGE_LAYOUT_UNDEFINED) ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL;
+				}
+			}
+			if (allBindFlags & BindFlag::DepthStencil) {
+				// Note that DepthStencilReadOnlyOptimal can't be accessed here
+				result = (result == VK_IMAGE_LAYOUT_UNDEFINED) ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL;
+			}
+			if (allBindFlags & BindFlag::TransferSrc) {
+				if (result == VK_IMAGE_LAYOUT_UNDEFINED) {
+					result = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+				}
+			}
+			if (allBindFlags & BindFlag::TransferDst) {
+				if (result == VK_IMAGE_LAYOUT_UNDEFINED) {
+					result = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+				}
+			}
+			return result;
+		}
+
+		static BarrierResourceUsage DefaultBarrierResourceUsageFromLayout(VkImageLayout prevLayout)
+		{
+			// If we know the layout for an image, what is the implied
+			// access flags & pipeline state flags to use as the preBarrierUsage in a pipeline barrier?
+			// We will sometimes end up with more broad flags here because we know only the layout, we don't
+			// have extra context about how the resource was used previously
+			BarrierResourceUsage preBarrierUsage;
+			preBarrierUsage._imageLayout = prevLayout;
+			preBarrierUsage._accessFlags = 0;
+			preBarrierUsage._pipelineStageFlags = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+			switch (prevLayout) {
+			default:
+				assert(0);
+				// intential fall-through
+			case VK_IMAGE_LAYOUT_GENERAL:
+				preBarrierUsage._accessFlags = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+				break;
+			case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+				preBarrierUsage._accessFlags = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+				preBarrierUsage._pipelineStageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+				break;
+			case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+				preBarrierUsage._accessFlags = VK_ACCESS_SHADER_READ_BIT;
+				break;
+			case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+				preBarrierUsage._accessFlags = VK_ACCESS_TRANSFER_READ_BIT;
+				preBarrierUsage._pipelineStageFlags = VK_PIPELINE_STAGE_TRANSFER_BIT;
+				break;
+			case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+				preBarrierUsage._accessFlags = VK_ACCESS_TRANSFER_WRITE_BIT;
+				preBarrierUsage._pipelineStageFlags = VK_PIPELINE_STAGE_TRANSFER_BIT;
+				break;
+
+			case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+			case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL:
+			case VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL:
+				preBarrierUsage._accessFlags = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+				preBarrierUsage._pipelineStageFlags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+				break;
+
+			case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL:
+			case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL:
+			case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL:
+			case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL:
+			case VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL:
+				preBarrierUsage._accessFlags = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+				preBarrierUsage._pipelineStageFlags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+				break;
+
+			case VK_IMAGE_LAYOUT_PREINITIALIZED:
+				preBarrierUsage = BarrierResourceUsage::Preinitialized();
+				break;
+			}
+			return preBarrierUsage;
+		}
+
+		CaptureForBind::CaptureForBind(DeviceContext& context, IResource& resource, BarrierResourceUsage usage)
+		: _context(&context), _resource(&resource)
+		{
+			auto* res = checked_cast<Resource*>(&resource);
+
+			bool pendingInit = res->_pendingInit;
+
+			// try to mix this with the steady state from the resource
+			auto steadyLayout = res->_steadyStateImageLayout;
+			bool usingCompatibleSteadyState = false;
+			if (!pendingInit 
+				&& (steadyLayout == usage._imageLayout || steadyLayout == VK_IMAGE_LAYOUT_GENERAL)) {
+
+				// The steady state is already compatible with what we want
+				// we still consider this a capture, but we don't actually have to change the layout or
+				// access mode at all
+				_capturedLayout = steadyLayout;
+				usingCompatibleSteadyState = true;
+			} else {
+				_capturedLayout = usage._imageLayout;
+			}
+
+			_capturedAccessMask = usage._accessFlags;
+			_capturedStageMask = usage._pipelineStageFlags;
+
+			if (!context._captureForBindRecords)
+				context._captureForBindRecords = std::make_shared<Internal::CaptureForBindRecords>();
+			auto existing = LowerBound(context._captureForBindRecords->_captures, res->GetGUID());
+			if (existing != context._captureForBindRecords->_captures.end() && existing->first == res->GetGUID()) {
+				// We're allowed to nest captures so long as they are of the same type,
+				// and we release them in opposite order to creation order (ie shoes and socks order)
+				if (existing->second._layout != _capturedLayout)
+					Throw(std::runtime_error("Attempting to CaptureForBind a resource that is already captured in another state"));
+				_capturedLayout = existing->second._layout;
+				return;
+			}
+
+			BarrierHelper barrierHelper(context);
+			if (pendingInit) {
+				// The init operation will normally shift from undefined layout -> steady state
+				// We're just going to skip that and jump directly to our captured layout
+				res->_pendingInit = false;
+				if (res->GetImage()) {
+					barrierHelper.Add(*res, BarrierResourceUsage::NoState(), usage);
+					_restoreLayout = steadyLayout;
+				}
+			} else if (!usingCompatibleSteadyState) {
+				if (res->GetImage()) {
+					barrierHelper.Add(*res, DefaultBarrierResourceUsageFromLayout(steadyLayout), usage);
+					_restoreLayout = steadyLayout;
+				} else {
+					barrierHelper.Add(*res, BarrierResourceUsage::AllCommandsReadAndWrite(), usage);
+				}
+			}
+		}
+
+		CaptureForBind::~CaptureForBind()
+		{
+			if (_context && _restoreLayout) {
+				auto* res = checked_cast<Resource*>(_resource);
+				BarrierHelper barrierHelper(*_context);
+				BarrierResourceUsage preUsage;
+				preUsage._imageLayout = _capturedLayout;
+				preUsage._accessFlags = _capturedAccessMask;
+				preUsage._pipelineStageFlags = _capturedStageMask;
+				barrierHelper.Add(*res, preUsage, DefaultBarrierResourceUsageFromLayout(res->_steadyStateImageLayout));
+			}
+		}
+
+		void ValidateIsEmpty(CaptureForBindRecords& records)
+		{
+			// normally we want to return all images to the "steady state" layout at the end of a command list
+			// If you hit this, it means the layout was changed via BarrierHelper or CaptureForBind, but wasn't
+			// reset before the command list was committed
+			assert(records._captures.empty());
+		}
+	}
 
 	BarrierResourceUsage::BarrierResourceUsage(BindFlag::Enum usage)
 	{
@@ -2024,7 +1965,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			_accessFlags = _pipelineStageFlags = 0;
 			break;
 		}
-		_imageLayout = (VkImageLayout)Internal::AsVkImageLayout(Internal::GetLayoutForBindType(usage)._optimalLayout);
+		_imageLayout = Internal::GetLayoutForBindType(usage);
 	}
 
 	static VkPipelineStageFlags AsPipelineStage(ShaderStage shaderStage)
@@ -2064,7 +2005,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			*this = BarrierResourceUsage{usage};		// shader stage not required
 			break;
 		}
-		_imageLayout = (VkImageLayout)Internal::AsVkImageLayout(Internal::GetLayoutForBindType(usage)._optimalLayout);
+		_imageLayout = Internal::GetLayoutForBindType(usage);
 	}
 
 	BarrierResourceUsage BarrierResourceUsage::HostRead()
@@ -2098,6 +2039,15 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		BarrierResourceUsage result;
 		result._accessFlags =  VK_ACCESS_MEMORY_WRITE_BIT;
+		result._pipelineStageFlags = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+		result._imageLayout = (VkImageLayout)0;
+		return result;
+	}
+
+	BarrierResourceUsage BarrierResourceUsage::AllCommandsReadAndWrite()
+	{
+		BarrierResourceUsage result;
+		result._accessFlags =  VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
 		result._pipelineStageFlags = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 		result._imageLayout = (VkImageLayout)0;
 		return result;
@@ -2144,6 +2094,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			};
 		} else {
 			if (_imageBarrierCount == dimof(_imageBarriers)) Flush();
+			_imageBarrierGuids[_imageBarrierCount] = { resource.GetGUID(), postBarrierUsage._imageLayout == res->_steadyStateImageLayout };
 			auto& barrier = _imageBarriers[_imageBarrierCount++];
 			barrier = {};
 			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -2175,6 +2126,28 @@ namespace RenderCore { namespace Metal_Vulkan
 			0, nullptr,
 			_bufferBarrierCount, _bufferBarriers,
 			_imageBarrierCount, _imageBarriers);
+
+		// record captured layouts for images
+		if (_imageBarrierCount) {
+			if (!_deviceContext->_captureForBindRecords)
+				_deviceContext->_captureForBindRecords = std::make_shared<Internal::CaptureForBindRecords>();
+			auto& captureRecords = _deviceContext->_captureForBindRecords->_captures;
+			for (unsigned c=0; c<_imageBarrierCount; ++c) {
+				auto& b = _imageBarriers[c];
+				auto i = LowerBound(captureRecords, _imageBarrierGuids[c].first);
+				if (i == captureRecords.end() || i->first != _imageBarrierGuids[c].first) {
+					if (!_imageBarrierGuids[c].second)
+						i = captureRecords.insert(i, {_imageBarrierGuids[c].first, {b.newLayout, b.dstAccessMask, _dstStageMask}});
+				} else {
+					if (_imageBarrierGuids[c].second) {
+						i = captureRecords.erase(i);
+					} else {
+						i->second = {b.newLayout, b.dstAccessMask, _dstStageMask};
+					}
+				}
+			}
+		}
+
 		_bufferBarrierCount = 0;
 		_imageBarrierCount = 0;
 		_srcStageMask = 0;

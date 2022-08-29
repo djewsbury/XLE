@@ -1050,7 +1050,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			VkImageSubresourceRange subResRange = resView.GetImageSubresourceRange();
 			_sharedState->_commandList.ClearColorImage(
 				res.GetImage(),
-				(VkImageLayout)Internal::AsVkImageLayout(res._steadyStateLayout),
+				res._steadyStateImageLayout,
 				&clearValue, 1, &subResRange);
 		} else {
 			Throw(std::runtime_error("Attempting to clear non-image resource with GraphicsEncoder::Clear"));
@@ -1073,7 +1073,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			if (!subResRange.aspectMask) return;
 			_sharedState->_commandList.ClearDepthStencilImage(
 				res.GetImage(),
-				(VkImageLayout)Internal::AsVkImageLayout(res._steadyStateLayout),
+				res._steadyStateImageLayout,
 				&clearValue, 1, &subResRange);
 		} else {
 			Throw(std::runtime_error("Attempting to clear non-image resource with GraphicsEncoder::Clear"));
@@ -1094,7 +1094,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			VkImageSubresourceRange subResRange = resView.GetImageSubresourceRange();
 			_sharedState->_commandList.ClearColorImage(
 				res.GetImage(),
-				(VkImageLayout)Internal::AsVkImageLayout(res._steadyStateLayout),
+				res._steadyStateImageLayout,
 				&clearValue, 1, &subResRange);
 		} else {
 			Throw(std::runtime_error("Attempting to clear non-image resource with GraphicsEncoder::Clear"));
@@ -1115,7 +1115,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			VkImageSubresourceRange subResRange = resView.GetImageSubresourceRange();
 			_sharedState->_commandList.ClearColorImage(
 				res.GetImage(),
-				(VkImageLayout)Internal::AsVkImageLayout(res._steadyStateLayout),
+				res._steadyStateImageLayout,
 				&clearValue, 1, &subResRange);
 		} else {
 			Throw(std::runtime_error("Attempting to clear non-image resource with GraphicsEncoder::Clear"));
