@@ -195,7 +195,13 @@ namespace RenderCore { namespace Techniques
 		auto depVal = ::Assets::GetDepValSys().Make();
 		depVal.RegisterDependency(computeOp->GetDependencyValidation());
 		depVal.RegisterDependency(dataSrc.GetDependencyValidation());
-		return std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
+		auto result = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
+		threadContext->CommitCommands();
+		// Release the command buffer pool, because Vulkan requires pumping the command buffer destroys regularly,
+		// and we may not be doing that in this thread for awhile
+		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code()))
+			threadContextVulkan->ReleaseCommandBufferPool();
+		return result;
 	}
 
 	std::shared_ptr<BufferUploads::IAsyncDataSource> GenerateFromComputeShader(StringSection<> shader, const TextureDesc& targetDesc)
@@ -249,7 +255,13 @@ namespace RenderCore { namespace Techniques
 				0, nullptr);
 		}
 
-		return std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, computeOp->GetDependencyValidation());
+		auto result = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, computeOp->GetDependencyValidation());
+		threadContext->CommitCommands();
+		// Release the command buffer pool, because Vulkan requires pumping the command buffer destroys regularly,
+		// and we may not be doing that in this thread for awhile
+		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code()))
+			threadContextVulkan->ReleaseCommandBufferPool();
+		return result;
 	}
 
 }}
