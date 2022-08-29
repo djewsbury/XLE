@@ -39,10 +39,10 @@ namespace Assets
 			static auto HasDirectAutoConstructAsset_Helper(...) -> std::false_type;
 
 		template<typename AssetType, typename... Params>
-			struct HasDirectAutoConstructAsset_ : decltype(HasDirectAutoConstructAsset_Helper<AssetType, Params...>(0)) {};
+			struct HasDirectAutoConstructAsset_ : decltype(HasDirectAutoConstructAsset_Helper<AssetType, Params&&...>(0)) {};
 
 		template<typename AssetType, typename... Params>
-			using HasDirectAutoConstructAsset = HasDirectAutoConstructAsset_<AssetType, Params...>;
+			using HasDirectAutoConstructAsset = HasDirectAutoConstructAsset_<AssetType, Params&&...>;
 
 		template<typename Promise>
 			using PromisedType = std::decay_t<decltype(std::declval<Promise>().get_future().get())>;
@@ -60,8 +60,8 @@ namespace Assets
 	// we don't need.
 	template<
 		typename Promise, typename... Params, 
-		typename std::enable_if<Internal::HasDirectAutoConstructAsset<Internal::PromisedType<Promise>, Params...>::value>::type* = nullptr>
-		void AutoConstructToPromiseSynchronously(Promise&& promise, Params... initialisers)
+		typename std::enable_if<Internal::HasDirectAutoConstructAsset<Internal::PromisedType<Promise>, Params&&...>::value>::type* = nullptr>
+		void AutoConstructToPromiseSynchronously(Promise&& promise, Params&&... initialisers)
 	{
 		TRY {
 			promise.set_value(AutoConstructAsset<Internal::PromisedType<Promise>>(std::forward<Params>(initialisers)...));
@@ -113,8 +113,8 @@ namespace Assets
 
 	template<
 		typename Promise, typename... Params, 
-		typename std::enable_if<Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params...>::value>::type* = nullptr>
-		void AutoConstructToPromiseSynchronously(Promise&& promise, Params... initialisers)
+		typename std::enable_if<Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value>::type* = nullptr>
+		void AutoConstructToPromiseSynchronously(Promise&& promise, Params&&... initialisers)
 	{
 		// Note that there are identical overrides for AutoConstructToPromise & AutoConstructToPromiseSynchronously
 		TRY {
@@ -200,8 +200,8 @@ namespace Assets
 	template<
 		typename Promise, typename... Params, 
 		typename std::enable_if<	Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
-								&& !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params...>::value>::type* = nullptr>
-		void AutoConstructToPromise(Promise&& promise, Params... initialisers)
+								&& !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value>::type* = nullptr>
+		void AutoConstructToPromise(Promise&& promise, Params&&... initialisers)
 	{
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
 			[initPack=InitializerPack{initialisers...}, promise=std::move(promise)]() mutable {
@@ -212,8 +212,8 @@ namespace Assets
 	template<
 		typename Promise, typename... Params, 
 		typename std::enable_if<	Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
-								&& !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params...>::value>::type* = nullptr>
-		void AutoConstructToPromise(Promise&& promise, std::shared_ptr<OperationContext> opContext, Params... initialisers)
+								&& !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value>::type* = nullptr>
+		void AutoConstructToPromise(Promise&& promise, std::shared_ptr<OperationContext> opContext, Params&&... initialisers)
 	{
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
 			[initPack=InitializerPack{initialisers...}, promise=std::move(promise), opContext=std::move(opContext)]() mutable {
@@ -224,14 +224,14 @@ namespace Assets
 	template<
 		typename Promise, typename... Params, 
 		typename std::enable_if<	!Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
-								&&  !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params...>::value>::type* = nullptr>
-		void AutoConstructToPromise(Promise&& promise, Params... initialisers)
+								&&  !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value>::type* = nullptr>
+		void AutoConstructToPromise(Promise&& promise, Params&&... initialisers)
 	{
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
 			[initializersTuple=std::tuple{MakeStoreableInAny(initialisers)...}, promise=std::move(promise)]() mutable {
 				TRY {
 					// Use std::apply to achieve AutoConstructToPromiseSynchronously(promise, initialisers...)
-					using OverrideType = void(*)(Promise&&, decltype(MakeStoreableInAny(std::declval<Params>()))...);
+					using OverrideType = void(*)(Promise&&, decltype(MakeStoreableInAny(std::declval<Params>()))&&...);
 					auto* ptr = (OverrideType)&AutoConstructToPromiseSynchronously;
 					std::apply(ptr, std::tuple_cat(std::make_tuple(std::move(promise)), std::move(initializersTuple)));
 				} CATCH(...) {
@@ -242,8 +242,8 @@ namespace Assets
 
 	template<
 		typename Promise, typename... Params, 
-		typename std::enable_if<Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params...>::value>::type* = nullptr>
-		void AutoConstructToPromise(Promise&& promise, Params... initialisers)
+		typename std::enable_if<Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value>::type* = nullptr>
+		void AutoConstructToPromise(Promise&& promise, Params&&... initialisers)
 	{
 		// Note that there are identical overrides for AutoConstructToPromise & AutoConstructToPromiseSynchronously
 		TRY {
@@ -328,7 +328,7 @@ namespace Assets
 	}
 
 	template<typename AssetType, typename... Params>
-		std::shared_ptr<Marker<AssetType>> ConstructToMarker(Params... initialisers)
+		std::shared_ptr<Marker<AssetType>> ConstructToMarker(Params&&... initialisers)
 	{
 		auto future = std::make_shared<Marker<AssetType>>(Internal::AsString(initialisers...));
 		AutoConstructToPromise(future->AdoptPromise(), std::forward<Params>(initialisers)...);
@@ -336,7 +336,7 @@ namespace Assets
 	}
 
 	template<typename AssetType, typename... Params>
-		std::shared_ptr<MarkerPtr<AssetType>> ConstructToMarkerPtr(Params... initialisers)
+		std::shared_ptr<MarkerPtr<AssetType>> ConstructToMarkerPtr(Params&&... initialisers)
 	{
 		auto future = std::make_shared<MarkerPtr<AssetType>>(Internal::AsString(initialisers...));
 		AutoConstructToPromise(future->AdoptPromise(), std::forward<Params>(initialisers)...);
@@ -344,7 +344,7 @@ namespace Assets
 	}
 
 	template<typename AssetType, typename... Params>
-		std::future<AssetType> ConstructToFuture(Params... initialisers)
+		std::future<AssetType> ConstructToFuture(Params&&... initialisers)
 	{
 		std::promise<AssetType> promise;
 		auto future = promise.get_future();
@@ -353,7 +353,7 @@ namespace Assets
 	}
 
 	template<typename AssetType, typename... Params>
-		std::future<std::shared_ptr<AssetType>> ConstructToFuturePtr(Params... initialisers)
+		std::future<std::shared_ptr<AssetType>> ConstructToFuturePtr(Params&&... initialisers)
 	{
 		std::promise<std::shared_ptr<AssetType>> promise;
 		auto future = promise.get_future();

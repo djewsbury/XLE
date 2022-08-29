@@ -12,13 +12,13 @@ namespace Assets
         using PtrToFuture = std::shared_ptr<Marker<AssetType>>;
 
         template<typename... Params>
-            PtrToFuture Get(Params...);
+            PtrToFuture Get(Params&&...);
 
         template<typename... Params>
-            PtrToFuture Get(uint64_t hash, Params...);
+            PtrToFuture Get(uint64_t hash, Params&&...);
 
         template<typename... Params>
-            uint64_t SetShadowingAsset(std::shared_ptr<AssetType>&& newShadowingAsset, Params...);
+            uint64_t SetShadowingAsset(std::shared_ptr<AssetType>&& newShadowingAsset, Params&&...);
 
         void            Clear();
         uint64_t        GetTypeCode() const;
@@ -46,7 +46,7 @@ namespace Assets
 
     template<typename AssetType>
         template<typename... Params>
-            auto AssetHeapLRU<AssetType>::Get(uint64_t hash, Params... initialisers) -> PtrToFuture
+            auto AssetHeapLRU<AssetType>::Get(uint64_t hash, Params&&... initialisers) -> PtrToFuture
     {
         PtrToFuture newFuture;
         {
@@ -92,7 +92,7 @@ namespace Assets
 
     template<typename AssetType>
         template<typename... Params>
-            auto AssetHeapLRU<AssetType>::Get(Params... initialisers) -> PtrToFuture
+            auto AssetHeapLRU<AssetType>::Get(Params&&... initialisers) -> PtrToFuture
     {
         auto hash = Internal::BuildParamHash(initialisers...);
         return Get(hash, std::forward<Params>(initialisers)...);
@@ -100,7 +100,7 @@ namespace Assets
 
     template<typename AssetType>
         template<typename... Params>
-            uint64_t AssetHeapLRU<AssetType>::SetShadowingAsset(std::shared_ptr<AssetType>&& newShadowingAsset, Params... initialisers)
+            uint64_t AssetHeapLRU<AssetType>::SetShadowingAsset(std::shared_ptr<AssetType>&& newShadowingAsset, Params&&... initialisers)
     {
         auto hash = Internal::BuildParamHash(initialisers...);
 

@@ -56,10 +56,10 @@ namespace Assets
 		using PtrToFuture = std::shared_ptr<Marker<AssetType>>;
 
 		template<typename... Params>
-			PtrToFuture Get(Params...);
+			PtrToFuture Get(Params&&...);
 
 		template<typename... Params>
-			uint64_t SetShadowingAsset(AssetType&& newShadowingAsset, Params...);
+			uint64_t SetShadowingAsset(AssetType&& newShadowingAsset, Params&&...);
 
 		void            Clear() override;
 		uint64_t		GetTypeCode() const override;
@@ -101,7 +101,7 @@ namespace Assets
 
 	template<typename AssetType>
 		template<typename... Params>
-			auto DefaultAssetHeap<AssetType>::Get(Params... initialisers) -> PtrToFuture
+			auto DefaultAssetHeap<AssetType>::Get(Params&&... initialisers) -> PtrToFuture
 	{
 		auto hash = Internal::BuildParamHash(initialisers...);
 
@@ -138,7 +138,7 @@ namespace Assets
 
 	template<typename AssetType>
 		template<typename... Params>
-			uint64_t DefaultAssetHeap<AssetType>::SetShadowingAsset(AssetType&& newShadowingAsset, Params... initialisers)
+			uint64_t DefaultAssetHeap<AssetType>::SetShadowingAsset(AssetType&& newShadowingAsset, Params&&... initialisers)
 	{
 		auto hash = Internal::BuildParamHash(initialisers...);
 

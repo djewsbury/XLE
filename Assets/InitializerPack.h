@@ -286,20 +286,28 @@ namespace Assets
 		bool IsEmpty() const { return _variantPack.empty(); }
 
 		template<typename... Args>
-			InitializerPack(Args... args)
+			InitializerPack(Args&&... args)
 		: _variantPack { MakeStoreableInAny(std::forward<Args>(args))... }
 		{
 			_nameFn = &Internal::MakeArchivableName_Pack<0, decltype(MakeStoreableInAny(std::declval<Args>()))...>;
 			_hashFn = &Internal::MakeArchivableHash_Pack<decltype(MakeStoreableInAny(std::declval<Args>()))...>;
 		}
 
+		InitializerPack() = default;
+		InitializerPack(InitializerPack&& moveFrom) = default;
+		InitializerPack& operator=(InitializerPack&& moveFrom) = default;
+		InitializerPack(const InitializerPack& copyFrom) = default;
+		InitializerPack& operator=(const InitializerPack& copyFrom) = default;
+		InitializerPack(InitializerPack& copyFrom) = default;
+		InitializerPack& operator=(InitializerPack& copyFrom) = default;
+
 	private:
 		std::vector<std::any> _variantPack;
 
 		using MakeArchivableNameFn = std::ostream& (*)(std::ostream&, const std::vector<std::any>&);
 		using MakeArchivableHashFn = uint64_t (*)(const std::vector<std::any>&, uint64_t);
-		MakeArchivableNameFn _nameFn;
-		MakeArchivableHashFn _hashFn;
+		MakeArchivableNameFn _nameFn = nullptr;
+		MakeArchivableHashFn _hashFn = nullptr;
 	};
 }
 

@@ -84,7 +84,7 @@ namespace Assets
 			static auto HasConstructToPromiseOverride_Helper(...) -> std::false_type;
 
 		template<typename AssetOrPtrType, typename... Params>
-			struct HasConstructToPromiseOverride : decltype(HasConstructToPromiseOverride_Helper<AssetOrPtrType, Params...>(0)) {};		// outside of AssetTraits because the ptr type is important
+			struct HasConstructToPromiseOverride : decltype(HasConstructToPromiseOverride_Helper<AssetOrPtrType, Params&&...>(0)) {};		// outside of AssetTraits because the ptr type is important
 
 			///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -93,7 +93,7 @@ namespace Assets
 		std::shared_future<std::shared_ptr<ConfigFileContainer<InputStreamFormatter<utf8>>>> GetConfigFileContainerFuture(StringSection<> identifier);
 		std::shared_future<std::shared_ptr<ChunkFileContainer>> GetChunkFileContainerFuture(StringSection<> identifier);
 
-        template <typename... Params> uint64_t BuildParamHash(Params... initialisers);
+        template <typename... Params> uint64_t BuildParamHash(const Params&... initialisers);
 
 		template<typename T> struct IsSharedPtr : std::false_type {};
 		template<typename T> struct IsSharedPtr<std::shared_ptr<T>> : std::true_type {};
@@ -305,8 +305,8 @@ namespace Assets
 	//
 	//		Auto construct entry point
 	//
-	template<typename AssetType, typename... Params, typename std::enable_if<std::is_constructible<Internal::RemoveSmartPtrType<AssetType>, Params...>::value>::type* = nullptr>
-		static AssetType AutoConstructAsset(Params... initialisers)
+	template<typename AssetType, typename... Params, typename std::enable_if<std::is_constructible<Internal::RemoveSmartPtrType<AssetType>, Params&&...>::value>::type* = nullptr>
+		static AssetType AutoConstructAsset(Params&&... initialisers)
 	{
 		return Internal::InvokeAssetConstructor<AssetType>(std::forward<Params>(initialisers)...);
 	}
