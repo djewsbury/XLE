@@ -89,12 +89,12 @@ namespace UnitTests
         }
     }
 
-    TEST_CASE( "BasicMath-MatrixAccumulationAndDecomposition", "[math]" )    
+    TEST_CASE( "BasicMath-MatrixAccumulationAndDecomposition", "[math]" )
     {
             // Compare 2 method of building scale/rotation/translation matrices
             // Also check the decomposition is accurate
         std::mt19937 rng(1638462987);
-        const unsigned tests = 500;
+        const unsigned tests = 50000;
         const float tolerance = 1e-4f;
         for (unsigned c2=0; c2<tests; ++c2) {
             auto rotationAxis = RandomUnitVector(rng);
@@ -135,7 +135,47 @@ namespace UnitTests
 
             auto rebuilt = AsFloat4x4(decomposed);
             REQUIRE(Equivalent(srtMatrix, rebuilt, tolerance)); // "Rebuilt matrix doesn't match ScaleRotationTranslationQ matrix");
+
+            // ensure that we can also decompose the rotation matrix part into axis/angle correctly
+            // this will only work if we reflection is begin moved from the "rotation" part into the "scale" part correctly
+            ArbitraryRotation rot(decomposed._rotation);
+            auto recomposedFromArbitraryRotation = AsFloat4x4(
+                ScaleRotationTranslationM{
+                    decomposed._scale,
+                    Truncate3x3(AsFloat4x4(rot)),
+                    decomposed._translation});
+            auto rebuilt2 = AsFloat4x4(decomposed);
+            REQUIRE(Equivalent(srtMatrix, rebuilt2, tolerance));
         }
+
+        // ensure that HasReflection() correctly identifies matrices with reflections, 
+        for (unsigned c=0; c<100000; ++c) {
+            auto rotationAxis = RandomUnitVector(rng);
+            auto rotationAngle = Deg2Rad(std::uniform_real_distribution<float>(-180.f, 180.f)(rng));
+            auto scale = RandomScaleVector(rng);
+            auto composed4x4 = AsFloat4x4(
+                ScaleRotationTranslationM{
+                    scale, 
+                    MakeRotationMatrix(rotationAxis, rotationAngle),
+                    Zero<Float3>()});
+
+            bool hasFlip0 = HasReflection(Truncate3x3(composed4x4));
+            bool hasFlip1 = (scale[0] < 0) ^ (scale[1] < 0) ^ (scale[2] < 0);
+            REQUIRE(hasFlip0 == hasFlip1);
+        }
+
+        // also test matrix with reflection but no rotation
+        Float3x3 matrixWithReflection{
+            0.f, 1.f, 0.f,
+            1.f, 0.f, 0.f,
+            0.f, 0.f, 1.f};
+        REQUIRE(HasReflection(matrixWithReflection));
+
+        Float3x3 matrixWithoutReflection{
+            0.f, 1.f, 0.f,
+            1.f, 0.f, 0.f,
+            0.f, 0.f, -1.f};
+        REQUIRE(!HasReflection(matrixWithoutReflection));
     }
 
     static bool IsReverseZType(ClipSpaceType clipSpaceType) { return (clipSpaceType == ClipSpaceType::Positive_ReverseZ) || (clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ); }

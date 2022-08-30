@@ -104,7 +104,7 @@ namespace XLEMath
     //      result(2,2) = lhs(2,0) * rhs(0,2) + lhs(2,1) * rhs(1,2) + lhs(2,2) * rhs(2,2)
 
 
-    Float3x3        LeftMultiplyByTranspose(Float3x3& input)
+    Float3x3        LeftMultiplyByTranspose(const Float3x3& input)
     {
             // Multiply the transpose of input
             // eg; result = Tranpose(input) * input

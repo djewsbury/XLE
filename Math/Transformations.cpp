@@ -999,7 +999,18 @@ namespace XLEMath
         // Assuming the input is a orthonormal rotation matrix, let's extract
         // the axis/angle form.
         assert(IsOrthonormal(rotationMatrix));
+        assert(!HasReflection(rotationMatrix));     // does not produce the correct result for matrices with a flip/rotation
         cml::matrix_to_axis_angle(rotationMatrix, _axis, _angle);
+
+        // When the matrix can't be decomposed to a rotation (eg, most likely there's a flip) -- we
+        // get a non-unit length axis vector. In these cases, the result isn't very useful
+        assert(Equivalent(MagnitudeSquared(_axis), 1.0f, 0.01f));
+    }
+
+    bool HasReflection(const Float3x3& rotationAndReflectionMatrix)
+    {
+        // This is similar to doing cross products across 2 basis vectors in order to check the direction of the last basis vector
+        return Determinant(rotationAndReflectionMatrix) < 0;
     }
 
         ////////////////////////////////////////////////////////////////
@@ -1108,20 +1119,22 @@ namespace XLEMath
             _scale = Float3(U(0,0), U(1,1), U(2,2));
         }
 
-            // If "rotPart" is equal to identity, apart from sign values, then 
-            // we should move the sign into "scale"
-            // This is required for common cases where we want to extract the
-            // scale from a matrix that has no rotation.
-        const float identityThreshold = 1e-4f;
-        if (    Equivalent(rotPart(0,1), 0.f, identityThreshold)
-            &&  Equivalent(rotPart(0,2), 0.f, identityThreshold)
-            &&  Equivalent(rotPart(1,0), 0.f, identityThreshold)
-            &&  Equivalent(rotPart(1,2), 0.f, identityThreshold)
-            &&  Equivalent(rotPart(2,0), 0.f, identityThreshold)
-            &&  Equivalent(rotPart(2,1), 0.f, identityThreshold)) {
-            if (rotPart(0,0)<0.f) { _scale[0] *= -1.f; rotPart(0,0) *= -1.f; }
-            if (rotPart(1,1)<0.f) { _scale[1] *= -1.f; rotPart(1,1) *= -1.f; }
-            if (rotPart(2,2)<0.f) { _scale[2] *= -1.f; rotPart(2,2) *= -1.f; }
+            // It's a little expensive, but we need to check for a reflection in the resulting
+            // rotation matrix. If there is a reflection, it won't work with common rotation matrix
+            // methods (such as extracting axis/angle)
+            // If there is a reflection, we can't determine how that reflection was originally 
+            // expressed, since different combinations of reflections and rotations can result
+            // in the same output.
+            // So, by convention, we'll always output a reflection in the X axis
+            // In effect, any input combination of reflections and rotations will end up being
+            // represented as either:
+            //      a) just a combination of rotations
+            //      b) a reflection in X + some combination of reflections
+        if (HasReflection(rotPart)) {
+            _scale[0] = -_scale[0];
+            rotPart(0,0) = -rotPart(0,0);
+            rotPart(1,0) = -rotPart(1,0);
+            rotPart(2,0) = -rotPart(2,0);
         }
 
         _rotation = Convert<RotationType>(rotPart);
@@ -1157,16 +1170,22 @@ namespace XLEMath
             goodDecomposition = AssumingSymmetricIsDiagonal(U, skewThreshold);
         }
 
-        const float identityThreshold = 1e-4f;
-        if (    Equivalent(rotPart(0,1), 0.f, identityThreshold)
-            &&  Equivalent(rotPart(0,2), 0.f, identityThreshold)
-            &&  Equivalent(rotPart(1,0), 0.f, identityThreshold)
-            &&  Equivalent(rotPart(1,2), 0.f, identityThreshold)
-            &&  Equivalent(rotPart(2,0), 0.f, identityThreshold)
-            &&  Equivalent(rotPart(2,1), 0.f, identityThreshold)) {
-            if (rotPart(0,0)<0.f) { _scale[0] *= -1.f; rotPart(0,0) *= -1.f; }
-            if (rotPart(1,1)<0.f) { _scale[1] *= -1.f; rotPart(1,1) *= -1.f; }
-            if (rotPart(2,2)<0.f) { _scale[2] *= -1.f; rotPart(2,2) *= -1.f; }
+            // It's a little expensive, but we need to check for a reflection in the resulting
+            // rotation matrix. If there is a reflection, it won't work with common rotation matrix
+            // methods (such as extracting axis/angle)
+            // If there is a reflection, we can't determine how that reflection was originally 
+            // expressed, since different combinations of reflections and rotations can result
+            // in the same output.
+            // So, by convention, we'll always output a reflection in the X axis
+            // In effect, any input combination of reflections and rotations will end up being
+            // represented as either:
+            //      a) just a combination of rotations
+            //      b) a reflection in X + some combination of reflections
+        if (HasReflection(rotPart)) {
+            _scale[0] = -_scale[0];
+            rotPart(0,0) = -rotPart(0,0);
+            rotPart(1,0) = -rotPart(1,0);
+            rotPart(2,0) = -rotPart(2,0);
         }
 
         _rotation = Convert<RotationType>(rotPart);

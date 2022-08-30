@@ -76,7 +76,7 @@ namespace XLEMath
     Float3x3        Transpose(const Float3x3& input);
     Float4x4        Transpose(const Float4x4& input);
 
-    Float3x3        LeftMultiplyByTranspose(Float3x3& input);
+    Float3x3        LeftMultiplyByTranspose(const Float3x3& input);
  
     inline Float3x4 Truncate(const Float4x4& input)
     {

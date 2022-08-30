@@ -129,6 +129,8 @@ namespace XLEMath
         float _zRotation = 0.f;
         Float3 _translation = Float3(0.f, 0.f, 0.f);
     };
+
+    bool HasReflection(const Float3x3& rotationAndReflectionMatrix);
         
         //
         //      "Combine" and "Combine_IntoLHS/Combine_IntoRHS" patterns.
