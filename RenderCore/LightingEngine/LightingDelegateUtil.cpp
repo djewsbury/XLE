@@ -113,8 +113,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 		assert(setIdx < _sceneSets.size() && _sceneSets[setIdx]._activeSet);
 		_sceneSets[setIdx].DeregisterLight(lightIdx);
-		if (!_sceneSets[setIdx]._activeProjections.AllocatedCount())
-			_sceneSets[setIdx]._activeSet = false;
 		assert(_totalProjectionCount > 0);
 		--_totalProjectionCount;
 	}
