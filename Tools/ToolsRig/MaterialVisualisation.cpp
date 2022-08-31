@@ -23,7 +23,6 @@
 #include "../../RenderCore/Techniques/DescriptorSetAccelerator.h"
 #include "../../RenderCore/Techniques/Drawables.h"
 #include "../../RenderCore/Metal/Shader.h" // (for CreateLowLevelShaderCompiler)
-#include "../../RenderCore/Assets/Services.h"
 #include "../../RenderCore/Assets/ShaderPatchCollection.h"
 #include "../../RenderCore/Assets/MaterialScaffold.h"
 #include "../../RenderCore/Assets/PredefinedDescriptorSetLayout.h"

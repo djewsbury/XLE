@@ -24,7 +24,6 @@
 #include "../../../RenderCore/Metal/State.h"
 #include "../../../RenderCore/Metal/PipelineLayout.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
-#include "../../../RenderCore/Assets/Services.h"
 #include "../../../RenderCore/Assets/MaterialScaffold.h"
 #include "../../../RenderCore/Assets/PredefinedCBLayout.h"
 #include "../../../RenderCore/Assets/RawMaterial.h"

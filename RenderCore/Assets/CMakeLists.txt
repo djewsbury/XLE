@@ -37,10 +37,6 @@ add_library(
 xle_configure_library(RenderCoreAssets)
 target_link_libraries(RenderCoreAssets PUBLIC ShaderParser RenderCore ConsoleRig Assets Math OSServices Utility ForeignMisc)
 
-add_library(RenderCoreAssetsServices STATIC "Services.cpp")
-xle_configure_library(RenderCoreAssetsServices)
-target_link_libraries(RenderCoreAssetsServices PUBLIC RenderCore ConsoleRig Assets Math OSServices Utility ForeignMisc)
-
 include(${FOREIGN_DIR}/Compressonator/FindCompressonator.cmake)
 find_compressonator()
 target_link_libraries(RenderCoreAssets PRIVATE compressonator)

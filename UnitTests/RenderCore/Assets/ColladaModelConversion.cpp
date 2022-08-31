@@ -5,7 +5,6 @@
 #include "../../UnitTestHelper.h"
 #include "../../EmbeddedRes.h"
 #include "../../../RenderCore/Assets/ModelScaffold.h"
-#include "../../../RenderCore/Assets/Services.h"
 #include "../../../Assets/Assets.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/ICompileOperation.h"
