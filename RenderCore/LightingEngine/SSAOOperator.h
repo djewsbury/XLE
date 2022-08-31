@@ -7,9 +7,12 @@
 #include "StandardLightOperators.h"
 #include "../../Assets/AssetsCore.h"
 #include <memory>
+#include <future>
 
 namespace RenderCore { class IResourceView; class IDevice; class FrameBufferProperties; }
 namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelineCollection; }}
+namespace RenderCore { namespace BufferUploads { class ResourceLocator; } }
+namespace RenderCore { class IThreadContext; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -36,13 +39,15 @@ namespace RenderCore { namespace LightingEngine
 
 		void ResetAccumulation();
 		::Assets::DependencyValidation GetDependencyValidation() const;
-		uint32_t GetCompletionCommandList() const { return 0; }
+
+		void CompleteInitialization(IThreadContext& threadContext);
+		uint32_t GetCompletionCommandList() const { assert(!_pendingCompleteInit); return _completionCmdList; }		// must be called after CompleteInitialization()
 
 		SSAOOperator(
+			std::shared_ptr<IDevice> device,
 			std::shared_ptr<Techniques::IComputeShaderOperator> perspectiveComputeOp,
 			std::shared_ptr<Techniques::IComputeShaderOperator> orthogonalComputeOp,
 			std::shared_ptr<Techniques::IComputeShaderOperator> upsampleOp,
-			std::shared_ptr<IResourceView> ditherTable,
 			const AmbientOcclusionOperatorDesc& opDesc,
 			bool hasHierarchicalDepths);
 		~SSAOOperator();
@@ -61,5 +66,8 @@ namespace RenderCore { namespace LightingEngine
 		unsigned _pingPongCounter = ~0u;
 		AmbientOcclusionOperatorDesc _opDesc;
 		bool _hasHierarchicalDepths = false;
+		bool _pendingCompleteInit = true;
+		unsigned _completionCmdList = 0;
+		std::future<BufferUploads::ResourceLocator> _completionCmdListFuture;
 	};
 }}

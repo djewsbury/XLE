@@ -153,7 +153,6 @@ namespace ToolsRig
 						sequence.CreateStep_RunFragments(opStep->CreateFragment(fbProps));
 					});
 				context._depVal.RegisterDependency(opStep->GetDependencyValidation());
-				context._completionCommandList = std::max(opStep->GetCompletionCommandList(), context._completionCommandList);
 			});
 
 		shaderLab.RegisterOperation(

@@ -10,6 +10,8 @@
 #include "../Techniques/PipelineOperators.h"
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/ParsingContext.h"
+#include "../Techniques/Services.h"
+#include "../BufferUploads/IBufferUploads.h"
 #include "../Format.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Continuation.h"
@@ -44,6 +46,10 @@ namespace RenderCore { namespace LightingEngine
         IResourceView& aoOutputUAV,
         IResourceView* hierarchicalDepths)
     {
+        if (_pendingCompleteInit)
+            CompleteInitialization(*iterator._threadContext);
+        iterator._parsingContext->RequireCommandList(_completionCmdList);
+        
         auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
         if (hierarchicalDepths) {
             // need to ensure the hierarchical depths compute step has finished
@@ -218,16 +224,20 @@ namespace RenderCore { namespace LightingEngine
     void SSAOOperator::ResetAccumulation() { _pingPongCounter = ~0u; }
     ::Assets::DependencyValidation SSAOOperator::GetDependencyValidation() const { return _depVal; }
 
+    void SSAOOperator::CompleteInitialization(IThreadContext& threadContext)
+	{
+		_completionCmdList = _completionCmdListFuture.get().GetCompletionCommandList(); // note stall
+	}
+
     SSAOOperator::SSAOOperator(
+        std::shared_ptr<IDevice> device,
         std::shared_ptr<Techniques::IComputeShaderOperator> perspectiveComputeOp,
         std::shared_ptr<Techniques::IComputeShaderOperator> orthogonalComputeOp,
         std::shared_ptr<Techniques::IComputeShaderOperator> upsampleOp,
-        std::shared_ptr<IResourceView> ditherTable,
         const AmbientOcclusionOperatorDesc& opDesc,
         bool hasHierarchicalDepths)
     : _perspectiveComputeOp(std::move(perspectiveComputeOp))
     , _orthogonalComputeOp(std::move(orthogonalComputeOp)), _upsampleOp(std::move(upsampleOp))
-    , _ditherTable(std::move(ditherTable))
     , _opDesc(opDesc)
     , _hasHierarchicalDepths(hasHierarchicalDepths)
     {
@@ -237,6 +247,15 @@ namespace RenderCore { namespace LightingEngine
             _upsampleOp->GetDependencyValidation()
         };
         _depVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
+
+        auto ditherTable = device->CreateResource(
+            CreateDesc(
+                BindFlag::ShaderResource | BindFlag::TexelBuffer | BindFlag::TransferDst,
+                LinearBufferDesc::Create(sizeof(s_ditherTable)),
+                "ao-dither-table"));                
+        _ditherTable = ditherTable->CreateTextureView(BindFlag::ShaderResource, {Format::R32_UINT});
+
+        _completionCmdListFuture = Techniques::Services::GetBufferUploads().Begin(ditherTable, BufferUploads::CreateBasicPacket(MakeIteratorRange(s_ditherTable)))._future;
     }
     SSAOOperator::~SSAOOperator() {}
 
@@ -246,61 +265,57 @@ namespace RenderCore { namespace LightingEngine
         const AmbientOcclusionOperatorDesc& opDesc,
 		bool hasHierarchicalDepths)
     {
-        assert(opDesc._searchSteps > 1 && opDesc._searchSteps < 1024);  // rationality check
-        assert(opDesc._maxWorldSpaceDistance > 0);
+        TRY {
+            assert(opDesc._searchSteps > 1 && opDesc._searchSteps < 1024);  // rationality check
+            assert(opDesc._maxWorldSpaceDistance > 0);
 
-        UniformsStreamInterface usi;
-        usi.BindResourceView(0, Hash64("InputTexture"));
-        usi.BindResourceView(1, Hash64("OutputTexture"));
-        usi.BindResourceView(2, Hash64("AccumulationAO"));
-        usi.BindResourceView(3, Hash64("AccumulationAOLast"));
-        usi.BindResourceView(4, Hash64("InputNormals"));
-        usi.BindResourceView(5, Hash64("GBufferMotion"));
-        usi.BindResourceView(6, Hash64("HistoryAcc"));
-        usi.BindResourceView(7, Hash64("HierarchicalDepths"));
-        usi.BindResourceView(8, Hash64("DitherTable"));
-        usi.BindImmediateData(0, Hash64("AOProps"));
+            UniformsStreamInterface usi;
+            usi.BindResourceView(0, Hash64("InputTexture"));
+            usi.BindResourceView(1, Hash64("OutputTexture"));
+            usi.BindResourceView(2, Hash64("AccumulationAO"));
+            usi.BindResourceView(3, Hash64("AccumulationAOLast"));
+            usi.BindResourceView(4, Hash64("InputNormals"));
+            usi.BindResourceView(5, Hash64("GBufferMotion"));
+            usi.BindResourceView(6, Hash64("HistoryAcc"));
+            usi.BindResourceView(7, Hash64("HierarchicalDepths"));
+            usi.BindResourceView(8, Hash64("DitherTable"));
+            usi.BindImmediateData(0, Hash64("AOProps"));
 
-        ParameterBox selectors;
-        if (opDesc._sampleBothDirections) selectors.SetParameter("BOTH_WAYS", 1);
-        if (opDesc._lateTemporalFiltering) selectors.SetParameter("DO_LATE_TEMPORAL_FILTERING", 1);
-        if (hasHierarchicalDepths) selectors.SetParameter("HAS_HIERARCHICAL_DEPTHS", 1);
-        if (opDesc._enableHierarchicalStepping) selectors.SetParameter("ENABLE_HIERARCHICAL_STEPPING", 1);
-        if (opDesc._enableFiltering) selectors.SetParameter("ENABLE_FILTERING", 1);
-        if (opDesc._thicknessHeuristicFactor < 1) selectors.SetParameter("ENABLE_THICKNESS_HEURISTIC", 1);
-        auto perspectiveComputeOp = Techniques::CreateComputeOperator(
-            pipelinePool,
-            AO_COMPUTE_HLSL ":main",
-            selectors, 
-            GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-            usi);
-        selectors.SetParameter("ORTHO_CAMERA", 1);
-        auto orthogonalComputeOp = Techniques::CreateComputeOperator(
-            pipelinePool,
-            AO_COMPUTE_HLSL ":main",
-            selectors, 
-            GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-            usi);
+            ParameterBox selectors;
+            if (opDesc._sampleBothDirections) selectors.SetParameter("BOTH_WAYS", 1);
+            if (opDesc._lateTemporalFiltering) selectors.SetParameter("DO_LATE_TEMPORAL_FILTERING", 1);
+            if (hasHierarchicalDepths) selectors.SetParameter("HAS_HIERARCHICAL_DEPTHS", 1);
+            if (opDesc._enableHierarchicalStepping) selectors.SetParameter("ENABLE_HIERARCHICAL_STEPPING", 1);
+            if (opDesc._enableFiltering) selectors.SetParameter("ENABLE_FILTERING", 1);
+            if (opDesc._thicknessHeuristicFactor < 1) selectors.SetParameter("ENABLE_THICKNESS_HEURISTIC", 1);
+            auto perspectiveComputeOp = Techniques::CreateComputeOperator(
+                pipelinePool,
+                AO_COMPUTE_HLSL ":main",
+                selectors, 
+                GENERAL_OPERATOR_PIPELINE ":ComputeMain",
+                usi);
+            selectors.SetParameter("ORTHO_CAMERA", 1);
+            auto orthogonalComputeOp = Techniques::CreateComputeOperator(
+                pipelinePool,
+                AO_COMPUTE_HLSL ":main",
+                selectors, 
+                GENERAL_OPERATOR_PIPELINE ":ComputeMain",
+                usi);
 
-        auto upsampleOp = Techniques::CreateComputeOperator(
-            pipelinePool,
-            AO_COMPUTE_HLSL ":UpsampleOp",
-            selectors, 
-            GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-            usi);
+            auto upsampleOp = Techniques::CreateComputeOperator(
+                pipelinePool,
+                AO_COMPUTE_HLSL ":UpsampleOp",
+                selectors, 
+                GENERAL_OPERATOR_PIPELINE ":ComputeMain",
+                usi);
 
-        auto ditherTable = pipelinePool->GetDevice()->CreateResource(
-            CreateDesc(
-                BindFlag::ShaderResource | BindFlag::TexelBuffer,
-                LinearBufferDesc::Create(sizeof(s_ditherTable)),
-                "ao-dither-table"),
-            SubResourceInitData{MakeIteratorRange(s_ditherTable)});
-        auto ditherTableView = ditherTable->CreateTextureView(BindFlag::ShaderResource, {Format::R32_UINT});
-
-        ::Assets::WhenAll(perspectiveComputeOp, orthogonalComputeOp, upsampleOp).ThenConstructToPromise(
-            std::move(promise),
-            [ditherTableView, od=opDesc, hd=hasHierarchicalDepths](auto perspectiveComputeOpActual, auto orthogonalComputeOpActual, auto upsampleOpActual) mutable
-            { return std::make_shared<SSAOOperator>(std::move(perspectiveComputeOpActual), std::move(orthogonalComputeOpActual), std::move(upsampleOpActual), std::move(ditherTableView), od, hd); });
+            ::Assets::WhenAll(perspectiveComputeOp, orthogonalComputeOp, upsampleOp).ThenConstructToPromise(
+                std::move(promise),
+                [od=opDesc, hd=hasHierarchicalDepths, d=pipelinePool->GetDevice()](auto perspectiveComputeOpActual, auto orthogonalComputeOpActual, auto upsampleOpActual) mutable
+                { return std::make_shared<SSAOOperator>(std::move(d), std::move(perspectiveComputeOpActual), std::move(orthogonalComputeOpActual), std::move(upsampleOpActual), od, hd); });
+        } CATCH(...) {
+            promise.set_exception(std::current_exception());
+        } CATCH_END
     }
 
     template<typename Type>

@@ -5,8 +5,9 @@
 #pragma once
 
 #include "StandardLightOperators.h"
-#include <memory>
 #include "../../Assets/AssetsCore.h"
+#include <memory>
+#include <future>
 
 namespace RenderCore
 {
@@ -25,6 +26,7 @@ namespace RenderCore { namespace Techniques
 	class DeferredShaderResource;
 }}
 namespace RenderCore { namespace Assets { class PredefinedCBLayout; } }
+namespace RenderCore { namespace BufferUploads { class ResourceLocator; } }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -45,7 +47,8 @@ namespace RenderCore { namespace LightingEngine
 		void ResetAccumulation();
 		::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
 
-		void CompleteInitialization(IThreadContext& threadContext);
+		void CompleteInitialization(IThreadContext& threadContext);		// must be called after CompleteInitialization()
+		uint32_t GetCompletionCommandList() const;
 
 		ScreenSpaceReflectionsOperator(
 			const ScreenSpaceReflectionsOperatorDesc& desc,
@@ -79,6 +82,8 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IResourceView> _skyCubeSRV;
 
 		std::shared_ptr<IResourceView> _configCB;
+		unsigned _completionCmdList = 0;
+		std::future<BufferUploads::ResourceLocator> _completionCmdListFuture;
 
 		class ResolutionDependentResources;
 		std::unique_ptr<ResolutionDependentResources> _res;

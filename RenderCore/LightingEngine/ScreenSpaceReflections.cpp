@@ -13,6 +13,7 @@
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/CommonResources.h"
 #include "../Techniques/Services.h"
+#include "../BufferUploads/IBufferUploads.h"
 #include "../Assets/PredefinedCBLayout.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Metal/DeviceContext.h"
@@ -152,6 +153,8 @@ namespace RenderCore { namespace LightingEngine
 			metalContext.Clear(*iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intUAV), Float4{0.f,0.f,0.f,0.f});
 			metalContext.Clear(*iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intPrevSRV), Float4{0.f,0.f,0.f,0.f});
 		}
+
+		iterator._parsingContext->RequireCommandList(_completionCmdList);
 
 		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
 
@@ -460,6 +463,14 @@ namespace RenderCore { namespace LightingEngine
 			0, VK_WHOLE_SIZE, 0);
 		_res->CompleteInitialization(metalContext);
 		_blueNoiseRes->CompleteInitialization(threadContext);
+
+		_completionCmdList = _completionCmdListFuture.get().GetCompletionCommandList(); // note stall
+	}
+
+	uint32_t ScreenSpaceReflectionsOperator::GetCompletionCommandList() const
+	{
+		assert(!_res->_pendingCompleteInitialization);
+		return _completionCmdList;
 	}
 
 	void ScreenSpaceReflectionsOperator::SetSpecularIBL(std::shared_ptr<IResourceView> inputView)
@@ -488,20 +499,21 @@ namespace RenderCore { namespace LightingEngine
 	{
 		_blueNoiseRes = std::make_unique<BlueNoiseGeneratorTables>(*_device);
 
-		_depVal = ::Assets::GetDepValSys().Make();
-		_depVal.RegisterDependency(_classifyTiles->GetDependencyValidation());
-		_depVal.RegisterDependency(_prepareIndirectArgs->GetDependencyValidation());
-		_depVal.RegisterDependency(_intersect->GetDependencyValidation());
-		_depVal.RegisterDependency(_resolveSpatial->GetDependencyValidation());
-		_depVal.RegisterDependency(_resolveTemporal->GetDependencyValidation());
-		_depVal.RegisterDependency(_reflectionsBlur->GetDependencyValidation());
+		::Assets::DependencyValidationMarker subDepVals[] {
+			_classifyTiles->GetDependencyValidation(),
+			_prepareIndirectArgs->GetDependencyValidation(),
+			_intersect->GetDependencyValidation(),
+			_resolveSpatial->GetDependencyValidation(),
+			_resolveTemporal->GetDependencyValidation(),
+			_reflectionsBlur->GetDependencyValidation()
+		};
+		_depVal = ::Assets::GetDepValSys().MakeOrReuse(subDepVals);
 
 		{
 			ParameterBox params;
 			auto cbInitializer = configCBLayout.BuildCBDataAsVector(params, Techniques::GetDefaultShaderLanguage());
-			_configCB = _device->CreateResource(
-				CreateDesc(BindFlag::ConstantBuffer, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc::Create(cbInitializer.size()), "ssr-config"),
-				SubResourceInitData{MakeIteratorRange(cbInitializer)})->CreateBufferView();
+			_configCB = _device->CreateResource(CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(cbInitializer.size()), "ssr-config"))->CreateBufferView();
+			_completionCmdListFuture = Techniques::Services::GetBufferUploads().Begin(_configCB->GetResource(), BufferUploads::CreateBasicPacket(MakeIteratorRange(cbInitializer)))._future;
 		}
 
 		///////////////////
