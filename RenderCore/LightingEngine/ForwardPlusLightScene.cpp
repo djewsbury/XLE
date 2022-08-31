@@ -165,6 +165,8 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (typeCode == typeid(ISemiStaticShadowProbeScheduler).hash_code())
 			return (ISemiStaticShadowProbeScheduler*)_shadowProbesManager.get();
+		else if (typeCode == typeid(IDynamicShadowProjectionScheduler).hash_code())
+			return (IDynamicShadowProjectionScheduler*)_shadowScheduler.get();
 		return nullptr;
 	}
 
@@ -440,7 +442,6 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
 		IteratorRange<const LightSourceOperatorDesc*> positionalLightOperatorsInit,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		const AmbientLightOperatorDesc& ambientLightOperator,
@@ -472,7 +473,7 @@ namespace RenderCore { namespace LightingEngine
 			}
 			shadowPreparationOperatorsFuture = CreateDynamicShadowPreparers(
 				MakeIteratorRange(preparers, &preparers[dynShadowCount]),
-				pipelineAccelerators, techDelBox, shadowDescSet);
+				pipelineAccelerators, techDelBox);
 		}
 
 		auto lightTilerFuture = ::Assets::ConstructToMarkerPtr<RasterizationLightTileOperator>(pipelinePool, tilerCfg);

@@ -330,7 +330,6 @@ namespace RenderCore { namespace LightingEngine
 		std::promise<std::shared_ptr<DeferredLightScene>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators)
 	{
 		DeferredLightScene::ShadowPreparerIdMapping shadowOperatorMapping;
@@ -356,7 +355,7 @@ namespace RenderCore { namespace LightingEngine
 			}
 			shadowPreparationOperatorsFuture = CreateDynamicShadowPreparers(
 				MakeIteratorRange(dynShadowGens, &dynShadowGens[dynShadowCount]),
-				pipelineAccelerators, techDelBox, shadowDescSet);
+				pipelineAccelerators, techDelBox);
 		}
 
 		using namespace std::placeholders;
@@ -391,7 +390,7 @@ namespace RenderCore { namespace LightingEngine
 
 		std::promise<std::shared_ptr<DeferredLightScene>> lightScenePromise;
 		auto lightSceneFuture = lightScenePromise.get_future();
-		BeginLightSceneConstruction(std::move(lightScenePromise), pipelineAccelerators, techDelBox, shadowDescSet, shadowOperatorsInit);
+		BeginLightSceneConstruction(std::move(lightScenePromise), pipelineAccelerators, techDelBox, shadowOperatorsInit);
 
 		std::promise<std::shared_ptr<CompiledLightingTechnique>> promisedTechnique;
 		auto result = promisedTechnique.get_future();
@@ -399,7 +398,7 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::WhenAll(std::move(buildGBufferFragment), std::move(lightSceneFuture)).ThenConstructToPromise(
 			std::move(promisedTechnique),
 			[pipelineAccelerators, techDelBox, fbProps, 
-			preregisteredAttachments=std::move(preregisteredAttachments),
+			preregisteredAttachments=std::move(preregisteredAttachments), shadowDescSet=shadowDescSet,
 			resolveOperators=std::move(resolveOperators), shadowOperators=std::move(shadowOperators), pipelineCollection, lightingOperatorLayout, flags](
 				auto&& thatPromise, auto buildGbuffer, auto lightScene) {
 
@@ -412,6 +411,9 @@ namespace RenderCore { namespace LightingEngine
 					captures->_lightScene = lightScene;
 					captures->_lightingOperatorLayout = lightingOperatorLayout;
 					captures->_pipelineCollection = pipelineCollection;
+
+					if (auto* shadowScheduler=(IDynamicShadowProjectionScheduler*)captures->_lightScene->QueryInterface(typeid(IDynamicShadowProjectionScheduler).hash_code()))
+						shadowScheduler->SetDescriptorSetLayout(shadowDescSet, PipelineType::Graphics);
 
 					// Reset captures
 					lightingTechnique->PreSequenceSetup(

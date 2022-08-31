@@ -155,6 +155,14 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		return result;
 	}
 
+	void DynamicShadowProjectionScheduler::SetDescriptorSetLayout(
+		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout,
+		PipelineType pipelineType)
+	{
+		for (const auto& preparer:_shadowPreparers->_preparers)
+			preparer._preparer->SetDescriptorSetLayout(descSetLayout, pipelineType);
+	}
+
 	DynamicShadowProjectionScheduler::DynamicShadowProjectionScheduler(
 		std::shared_ptr<IDevice> device, std::shared_ptr<DynamicShadowPreparers> shadowPreparers,
 		IteratorRange<const unsigned*> operatorToPreparerIdMapping)

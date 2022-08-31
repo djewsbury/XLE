@@ -319,7 +319,6 @@ namespace RenderCore { namespace LightingEngine
 		CreateForwardLightingScene(
 			std::move(lightScenePromise),
 			apparatus->_pipelineAccelerators, apparatus->_lightingOperatorCollection, apparatus->_sharedDelegates, 
-			apparatus->_dmShadowDescSetTemplate,
 			resolveOperators, shadowGenerators, ambientLightOperator);
 
 		std::promise<std::shared_ptr<CompiledLightingTechnique>> promisedTechnique;
@@ -329,8 +328,12 @@ namespace RenderCore { namespace LightingEngine
 			std::move(promisedTechnique),
 			[
 				A=apparatus->_pipelineAccelerators, B=apparatus->_lightingOperatorCollection, C=apparatus->_sharedDelegates,
+				shadowDescSet=apparatus->_dmShadowDescSetTemplate,
 				preregisteredAttachments=std::move(preregisteredAttachments), fbProps
 			](auto&& promise, auto lightSceneActual) {
+				if (auto* shadowScheduler=(IDynamicShadowProjectionScheduler*)lightSceneActual->QueryInterface(typeid(IDynamicShadowProjectionScheduler).hash_code()))
+					shadowScheduler->SetDescriptorSetLayout(shadowDescSet, PipelineType::Graphics);
+
 				CreateForwardLightingTechnique(
 					std::move(promise),
 					A, B, C,
@@ -495,7 +498,6 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
 		IteratorRange<const LightSourceOperatorDesc*> positionalLightOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		const AmbientLightOperatorDesc& ambientLightOperator)
@@ -504,7 +506,7 @@ namespace RenderCore { namespace LightingEngine
 		std::promise<std::shared_ptr<ForwardPlusLightScene>> specialisedPromise;
 		auto specializedFuture = specialisedPromise.get_future();
 		ForwardPlusLightScene::ConstructToPromise(
-			std::move(specialisedPromise), pipelineAccelerators, pipelinePool, techDelBox, shadowDescSet,
+			std::move(specialisedPromise), pipelineAccelerators, pipelinePool, techDelBox,
 			positionalLightOperators, shadowGenerators, ambientLightOperator, tilingConfig);
 
 		// transform from shared_ptr<ForwardPlusLightScene> -> shared_ptr<ILightScene>

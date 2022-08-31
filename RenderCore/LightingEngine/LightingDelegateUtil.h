@@ -7,6 +7,7 @@
 #include "ILightScene.h"
 #include "StandardLightScene.h"		// for ILightSceneComponent
 #include "ShadowProbes.h"
+#include "ShadowPreparer.h"
 #include "../Types.h"
 #include "../../Assets/Marker.h"
 #include <memory>
@@ -28,6 +29,7 @@ namespace RenderCore { namespace LightingEngine
 	class DynamicShadowPreparers;
 }}
 namespace RenderCore { class IThreadContext; class IDevice; }
+namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
@@ -87,13 +89,17 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void* QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode) override;
 	};
 
-	class DynamicShadowProjectionScheduler : public ILightSceneComponent
+	class DynamicShadowProjectionScheduler : public IDynamicShadowProjectionScheduler, public ILightSceneComponent
 	{
 	public:
 		const IPreparedShadowResult* GetPreparedShadow(unsigned setIdx, unsigned lightIdx);
 
 		struct PreparedShadow { unsigned _preparerIdx = ~0u; const IPreparedShadowResult* _preparedResult = nullptr; };
 		std::vector<PreparedShadow> GetAllPreparedShadows();		// intended for debugging
+
+		void SetDescriptorSetLayout(
+			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout,
+			PipelineType pipelineType) override;
 
 		void DoShadowPrepare(
 			LightingTechniqueIterator& iterator,

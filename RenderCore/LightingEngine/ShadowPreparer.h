@@ -97,6 +97,9 @@ namespace RenderCore { namespace LightingEngine
 			IPreparedShadowResult& res) = 0;
 		virtual std::pair<std::shared_ptr<Techniques::SequencerConfig>, std::shared_ptr<Techniques::IShaderResourceDelegate>> GetSequencerConfig() = 0;
 		virtual std::shared_ptr<IPreparedShadowResult> CreatePreparedShadowResult() = 0;
+		virtual void SetDescriptorSetLayout(
+			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout,
+			PipelineType pipelineType) = 0;
 		~ICompiledShadowPreparer();
 	};
 
@@ -105,8 +108,7 @@ namespace RenderCore { namespace LightingEngine
 	std::future<std::shared_ptr<ICompiledShadowPreparer>> CreateCompiledShadowPreparer(
 		const ShadowOperatorDesc& desc,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
-		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
-		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout);
+		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox);
 
 	class DynamicShadowPreparers
 	{
@@ -123,8 +125,7 @@ namespace RenderCore { namespace LightingEngine
 	std::future<std::shared_ptr<DynamicShadowPreparers>> CreateDynamicShadowPreparers(
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
-		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
-		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout);
+		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox);
 
 	class LightingTechniqueSequence;
 	using TechniqueSequenceParseId = unsigned;
@@ -133,6 +134,15 @@ namespace RenderCore { namespace LightingEngine
 		LightingTechniqueSequence& sequence,
 		Internal::ILightBase& proj,
 		std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> volumeTester);
+
+	class IDynamicShadowProjectionScheduler
+	{
+	public:
+		virtual void SetDescriptorSetLayout(
+			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout,
+			PipelineType pipelineType) = 0;
+		virtual ~IDynamicShadowProjectionScheduler() = default;
+	};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 

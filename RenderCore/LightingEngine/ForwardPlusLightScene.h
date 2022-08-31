@@ -67,7 +67,6 @@ namespace RenderCore { namespace LightingEngine
 			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 			const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 			const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
 			IteratorRange<const LightSourceOperatorDesc*> positionalLightOperators,
 			IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 			const AmbientLightOperatorDesc& ambientLightOperator,

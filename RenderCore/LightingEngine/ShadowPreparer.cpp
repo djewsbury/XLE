@@ -55,12 +55,12 @@ namespace RenderCore { namespace LightingEngine
 
 		std::pair<std::shared_ptr<Techniques::SequencerConfig>, std::shared_ptr<Techniques::IShaderResourceDelegate>> GetSequencerConfig() override;
 		std::shared_ptr<IPreparedShadowResult> CreatePreparedShadowResult() override;
+		void SetDescriptorSetLayout(const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout, PipelineType pipelineType) override;
 
 		DMShadowPreparer(
 			const ShadowOperatorDesc& desc,
 			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-			const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
-			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout);
+			const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox);
 		~DMShadowPreparer();
 
 	private:
@@ -367,11 +367,35 @@ namespace RenderCore { namespace LightingEngine
 	static const auto s_shadowSubProjectionCountString = "SHADOW_SUB_PROJECTION_COUNT";
 	static const auto s_shadowOrthogonalClipToNearString = "SHADOW_ORTHOGONAL_CLIP_TO_NEAR";
 
+	void DMShadowPreparer::SetDescriptorSetLayout(
+		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout,
+		PipelineType pipelineType)
+	{
+		auto& commonResources = *Techniques::Services::GetCommonResources();
+		_descSetHeap = Techniques::SubFrameDescriptorSetHeap {
+			*_pipelineAccelerators->GetDevice(),
+			descSetLayout->MakeDescriptorSetSignature(&commonResources._samplerPool),
+			pipelineType };
+		_descSetSlotBindings.reserve(descSetLayout->_slots.size());
+		for (const auto& s:descSetLayout->_slots) {
+			if (s._name == "DMShadow") {
+				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ResourceView, 0});
+			} else if (s._name == "ShadowProjection") {
+				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 0});
+			} else if (s._name == "ShadowResolveParameters") {
+				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 1});
+			} else if (s._name == "ScreenToShadowProjection") {
+				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 2});
+			} else 
+				_descSetSlotBindings.push_back({});
+		}
+		_descSetGood = true;
+	}
+
 	DMShadowPreparer::DMShadowPreparer(
 		const ShadowOperatorDesc& desc,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
-		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
+		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox)
 	: _pipelineAccelerators(pipelineAccelerators)
 	{
 		assert(desc._resolveType == ShadowResolveType::DepthTexture);
@@ -442,28 +466,7 @@ namespace RenderCore { namespace LightingEngine
 			0);
 		_uniformDelegate = std::make_shared<UniformDelegate>(*this);
 
-		if (descSetLayout) {
-			auto& commonResources = *Techniques::Services::GetCommonResources();
-			_descSetHeap = Techniques::SubFrameDescriptorSetHeap {
-				*pipelineAccelerators->GetDevice(),
-				descSetLayout->MakeDescriptorSetSignature(&commonResources._samplerPool),
-				PipelineType::Graphics};
-			_descSetSlotBindings.reserve(descSetLayout->_slots.size());
-			for (const auto& s:descSetLayout->_slots) {
-				if (s._name == "DMShadow") {
-					_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ResourceView, 0});
-				} else if (s._name == "ShadowProjection") {
-					_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 0});
-				} else if (s._name == "ShadowResolveParameters") {
-					_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 1});
-				} else if (s._name == "ScreenToShadowProjection") {
-					_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 2});
-				} else 
-					_descSetSlotBindings.push_back({});
-			}
-			_descSetGood = true;
-		}
-
+		_descSetGood = false;
 		_shadowTextureSize = (float)std::min(desc._width, desc._height);
 		_maxFrustumCount = desc._normalProjCount;
 	}
@@ -485,15 +488,14 @@ namespace RenderCore { namespace LightingEngine
 	std::future<std::shared_ptr<ICompiledShadowPreparer>> CreateCompiledShadowPreparer(
 		const ShadowOperatorDesc& desc,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
-		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
+		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox)
 	{
 		std::promise<std::shared_ptr<ICompiledShadowPreparer>> promise;
 		auto result = promise.get_future();
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[desc, pipelineAccelerators, delegatesBox, descSetLayout, promise=std::move(promise)]() mutable {
+			[desc, pipelineAccelerators, delegatesBox, promise=std::move(promise)]() mutable {
 				TRY {
-					promise.set_value(std::make_shared<DMShadowPreparer>(desc, pipelineAccelerators, delegatesBox, descSetLayout));
+					promise.set_value(std::make_shared<DMShadowPreparer>(desc, pipelineAccelerators, delegatesBox));
 				} CATCH(...) {
 					promise.set_exception(std::current_exception());
 				} CATCH_END
@@ -504,8 +506,7 @@ namespace RenderCore { namespace LightingEngine
 	std::future<std::shared_ptr<DynamicShadowPreparers>> CreateDynamicShadowPreparers(
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
-		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
+		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox)
 	{
 		std::promise<std::shared_ptr<DynamicShadowPreparers>> promise;
 		auto result = promise.get_future();
@@ -524,7 +525,7 @@ namespace RenderCore { namespace LightingEngine
 		helper->_futures.reserve(shadowGenerators.size());
 		for (unsigned operatorIdx=0; operatorIdx<shadowGenerators.size(); ++operatorIdx) {
 			assert(shadowGenerators[operatorIdx]._resolveType != ShadowResolveType::Probe);
-			auto preparer = CreateCompiledShadowPreparer(shadowGenerators[operatorIdx], pipelineAccelerators, delegatesBox, descSetLayout);
+			auto preparer = CreateCompiledShadowPreparer(shadowGenerators[operatorIdx], pipelineAccelerators, delegatesBox);
 			helper->_futures.push_back(std::move(preparer));
 		}
 
