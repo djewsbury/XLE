@@ -56,9 +56,13 @@ namespace RenderCore { namespace Metal_Vulkan
 		uint64_t	FlushChanges(
 			VkDevice device,
 			VkDescriptorSet destination,
-			VkDescriptorSet copyPrevDescriptors, uint64_t prevDescriptorMask,
-			std::vector<uint64_t>& resourceVisibilityList
+			VkDescriptorSet copyPrevDescriptors, uint64_t prevDescriptorMask
 			VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo& description));
+
+		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+			std::vector<uint64_t> _pendingResourceVisibilityChanges;
+			std::vector<std::pair<unsigned, unsigned>> _pendingResourceVisibilityChangesSlotAndCount;
+		#endif
 
 		struct Flags
 		{
@@ -93,11 +97,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		#if defined(VULKAN_VERBOSE_DEBUG)
 			DescriptorSetDebugInfo _verboseDescription;
-		#endif
-
-		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-			std::vector<uint64_t> _resourcesThatMustBeVisible;
-			void ValidateResourceVisibility(IResource& res);
 		#endif
 
 		template<typename BindingInfo> 
@@ -165,7 +164,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-			IteratorRange<const uint64_t*> GetResourcesThatMustBeVisible() const { return _resourcesThatMustBeVisible; }
+			IteratorRange<const uint64_t*> GetResourcesThatMustBeVisibleSorted() const { return _resourcesThatMustBeVisibleSorted; }
 		#endif
 
 		const CompiledDescriptorSetLayout& GetLayout() const { return *_layout; }
@@ -192,6 +191,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
 			std::vector<uint64_t> _resourcesThatMustBeVisible;
+			std::vector<std::pair<unsigned, unsigned>> _resourcesThatMustBeVisibleSlotAndCount;
+			std::vector<uint64_t> _resourcesThatMustBeVisibleSorted;
 		#endif
 
 		void WriteInternal(

@@ -163,11 +163,10 @@ namespace RenderCore { namespace Metal_Vulkan
 				builder.BindDummyDescriptors(*_globalPools, ds->_layout->GetDummyMask());
 				ds->_blankBindings = _globalPools->_longTermDescriptorPool.Allocate(ds->_layout->GetUnderlying());
 				VULKAN_VERBOSE_DEBUG_ONLY(ds->_blankBindingsDescription._descriptorSetInfo = s_dummyDescriptorString);
-				std::vector<uint64_t> resourceVisibilityList;
 				builder.FlushChanges(
 					_objectFactory->GetDevice().get(),
 					ds->_blankBindings.get(),
-					0, 0, resourceVisibilityList VULKAN_VERBOSE_DEBUG_ONLY(, ds->_blankBindingsDescription));
+					0, 0 VULKAN_VERBOSE_DEBUG_ONLY(, ds->_blankBindingsDescription));
 			}
 
 			VULKAN_VERBOSE_DEBUG_ONLY(ds->_name = name);

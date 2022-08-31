@@ -1331,9 +1331,15 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			if (doFlushNow) {
 				if (descSetSlots | dummyDescWriteMask) {
-					std::vector<uint64_t> resourceVisibilityList;
-					builder->FlushChanges(context.GetUnderlyingDevice(), descriptorSet.get(), nullptr, 0, resourceVisibilityList VULKAN_VERBOSE_DEBUG_ONLY(, verboseDescription));
-					context.GetActiveCommandList().RequireResourceVisbility(MakeIteratorRange(resourceVisibilityList));
+					#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+						// we don't care about which slots resources are assigned to, so ignore _pendingResourceVisibilityChangesSlotAndCount
+						if (!builder->_pendingResourceVisibilityChanges.empty())
+							context.GetActiveCommandList().RequireResourceVisbility(builder->_pendingResourceVisibilityChanges);
+					#endif
+
+					builder->FlushChanges(
+						context.GetUnderlyingDevice(), descriptorSet.get(), nullptr, 0
+						VULKAN_VERBOSE_DEBUG_ONLY(, verboseDescription));
 				}
 
 				unsigned dynamicOffsetCount = adaptiveSet._layoutDynamicOffsetCount;		// we should prefer this to be zero in the majority of cases
@@ -1383,7 +1389,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo{descSet->GetDescription()} ));
 
 			#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-				context.GetActiveCommandList().RequireResourceVisbility(descSet->GetResourcesThatMustBeVisible());
+				context.GetActiveCommandList().RequireResourceVisbilityAlreadySorted(descSet->GetResourcesThatMustBeVisibleSorted());
 			#endif
 		}
 	}
@@ -1416,7 +1422,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo{descSet->GetDescription()} ));
 
 				#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-					context.GetActiveCommandList().RequireResourceVisbility(descSet->GetResourcesThatMustBeVisible());
+					context.GetActiveCommandList().RequireResourceVisbilityAlreadySorted(descSet->GetResourcesThatMustBeVisibleSorted());
 				#endif
 				break;
 			}

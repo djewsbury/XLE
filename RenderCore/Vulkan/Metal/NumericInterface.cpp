@@ -265,15 +265,17 @@ namespace RenderCore { namespace Metal_Vulkan
 				VkDescriptorSetLayout layouts[1] = { d._layout->GetUnderlying() };
 				_pimpl->_descriptorPool->Allocate(MakeIteratorRange(newSets), MakeIteratorRange(layouts));
 
-				std::vector<uint64_t> resourceVisibilityList;
+				#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+					if (!d._builder._pendingResourceVisibilityChanges.empty())
+						context.GetActiveCommandList().RequireResourceVisbility(d._builder._pendingResourceVisibilityChanges);
+				#endif
+
 				auto written = d._builder.FlushChanges(
 					_pimpl->_descriptorPool->GetDevice(),
 					newSets[0].get(),
 					d._activeDescSet.get(),
-					d._slotsFilled,
-					resourceVisibilityList
+					d._slotsFilled
 					VULKAN_VERBOSE_DEBUG_ONLY(, d._description));
-				context.GetActiveCommandList().RequireResourceVisbility(MakeIteratorRange(resourceVisibilityList));
 
 				d._slotsFilled |= written;
 				d._activeDescSet = std::move(newSets[0]);

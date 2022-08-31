@@ -205,6 +205,16 @@ namespace RenderCore { namespace Metal_Vulkan
 		};
 	}
 
+	static uint64_t GetGuidForVisibility(const ResourceView& resourceView)
+	{
+		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+			auto& res = *resourceView.GetVulkanResource();
+			return res.GetImage() ? res.GetGUID() : 0;
+		#else
+			return 0;
+		#endif
+	}
+
 	void    ProgressiveDescriptorSetBuilder::Bind(unsigned descriptorSetBindPoint, const ResourceView& resourceView, StringSection<> shaderOrDescSetVariable)
 	{
 		#if defined(VULKAN_VERBOSE_DEBUG)
@@ -214,10 +224,6 @@ namespace RenderCore { namespace Metal_Vulkan
 			} else {
 				description = std::string{"ResourceView"};
 			}
-		#endif
-
-		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-			if (resourceView.GetVulkanResource()) ValidateResourceVisibility(*resourceView.GetVulkanResource());
 		#endif
 
 		assert(descriptorSetBindPoint < _signature.size());
@@ -288,6 +294,14 @@ namespace RenderCore { namespace Metal_Vulkan
 		default:
 			assert(0);
 		}
+
+		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+			auto guidForVisibility = GetGuidForVisibility(resourceView);
+			if (resourceView.GetType() == ResourceView::Type::ImageView && guidForVisibility) {
+				_pendingResourceVisibilityChanges.push_back(guidForVisibility);
+				_pendingResourceVisibilityChangesSlotAndCount.emplace_back(descriptorSetBindPoint, 1);
+			}
+		#endif
 	}
 
 	void    ProgressiveDescriptorSetBuilder::BindArray(unsigned descriptorSetBindPoint, IteratorRange<const ResourceView*const*> resources, StringSection<> shaderOrDescSetVariable)
@@ -296,10 +310,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(resources[0]);
 		#if defined(VULKAN_VERBOSE_DEBUG)
 			std::string description{"ArrayOfResourceViews"};
-		#endif
-
-		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-			for (auto v:resources) if (v->GetVulkanResource()) ValidateResourceVisibility(*v->GetVulkanResource());
 		#endif
 
 		assert(descriptorSetBindPoint < _signature.size());
@@ -363,6 +373,19 @@ namespace RenderCore { namespace Metal_Vulkan
 		default:
 			assert(0);
 		}
+
+		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+			if (resources[0]->GetType() == ResourceView::Type::ImageView) {
+				unsigned count = 0;
+				for (const auto& r:resources)
+					if (auto g=GetGuidForVisibility(*r)) {
+						_pendingResourceVisibilityChanges.push_back(g);
+						++count;
+					}
+				if (count)
+					_pendingResourceVisibilityChangesSlotAndCount.emplace_back(descriptorSetBindPoint, count);
+			}
+		#endif
 	}
 
 	void    ProgressiveDescriptorSetBuilder::Bind(unsigned descriptorSetBindPoint, VkDescriptorBufferInfo uniformBuffer, StringSection<> shaderOrDescSetVariable, StringSection<> bufferDescription)
@@ -548,8 +571,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	uint64_t	ProgressiveDescriptorSetBuilder::FlushChanges(
 		VkDevice device,
 		VkDescriptorSet destination,
-		VkDescriptorSet copyPrevDescriptors, uint64_t prevDescriptorMask,
-		std::vector<uint64_t>& resourceVisibilityList
+		VkDescriptorSet copyPrevDescriptors, uint64_t prevDescriptorMask
 		VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo& description))
 	{
 		// Flush out changes to the given descriptor set.
@@ -604,29 +626,12 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-			if (resourceVisibilityList.empty()) {
-				resourceVisibilityList = std::move(_resourcesThatMustBeVisible);
-			} else {
-				resourceVisibilityList.insert(resourceVisibilityList.end(), _resourcesThatMustBeVisible.begin(), _resourcesThatMustBeVisible.end());
-				_resourcesThatMustBeVisible.clear();
-			}
+			_pendingResourceVisibilityChanges.clear();
+			_pendingResourceVisibilityChangesSlotAndCount.clear();
 		#endif
 
 		return result;
 	}
-
-	#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-		void ProgressiveDescriptorSetBuilder::ValidateResourceVisibility(IResource& res)
-		{
-			auto& vres = *checked_cast<Resource*>(&res);
-			if (!vres.GetImage())		// we only care about images; they are the ones with awkward rules
-				return;
-
-			// If the resource is already on our _resourcesBecomingVisible list, then we're ok
-			// Otherwise, we remember the guid and validate that it's visible on commit
-			_resourcesThatMustBeVisible.push_back(vres.GetGUID());
-		}
-	#endif
 
 	bool    ProgressiveDescriptorSetBuilder::HasChanges() const
 	{
@@ -646,6 +651,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		XlZeroMemory(_bufferInfo);
 		XlZeroMemory(_imageInfo);
 		XlZeroMemory(_writes);
+		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+			_pendingResourceVisibilityChanges.clear();
+		#endif
 
 		_sinceLastFlush = 0x0u;
 	}
@@ -660,6 +668,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		XlZeroMemory(_bufferInfo);
 		XlZeroMemory(_imageInfo);
 		XlZeroMemory(_writes);
+		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+			_pendingResourceVisibilityChanges.clear();
+		#endif
 	}
 
 	ProgressiveDescriptorSetBuilder::~ProgressiveDescriptorSetBuilder()
@@ -686,6 +697,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		XlZeroMemory(moveFrom._bufferInfo);
 		XlZeroMemory(moveFrom._imageInfo);
 		XlZeroMemory(moveFrom._writes);
+
+		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+			_pendingResourceVisibilityChanges = std::move(moveFrom._pendingResourceVisibilityChanges);
+			_pendingResourceVisibilityChangesSlotAndCount = std::move(moveFrom._pendingResourceVisibilityChangesSlotAndCount);
+		#endif
 	}
 
 	ProgressiveDescriptorSetBuilder& ProgressiveDescriptorSetBuilder::operator=(ProgressiveDescriptorSetBuilder&& moveFrom)
@@ -709,6 +725,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		XlZeroMemory(moveFrom._bufferInfo);
 		XlZeroMemory(moveFrom._imageInfo);
 		XlZeroMemory(moveFrom._writes);
+
+		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+			_pendingResourceVisibilityChanges = std::move(moveFrom._pendingResourceVisibilityChanges);
+			_pendingResourceVisibilityChangesSlotAndCount = std::move(moveFrom._pendingResourceVisibilityChangesSlotAndCount);
+		#endif
 		return *this;
 	}
 
@@ -999,24 +1020,40 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		builder.BindDummyDescriptors(*_globalPools, _layout->GetDummyMask() & ~writtenMask);
 
-		#if !defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-			std::vector<uint64_t> resourceVisibilityList;
+		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+			// update resource visibility before we call FlushChanges()
+			// Remove guids that have been overwritten by new resources first...
+			// Note that this is complicated by array bindings, which allow for multiple resources to be bound to
+			// a single descriptor set slot
+			for (const auto& newAssignment:builder._pendingResourceVisibilityChangesSlotAndCount) {
+				unsigned idx=0;
+				for (auto c=_resourcesThatMustBeVisibleSlotAndCount.begin(); c!=_resourcesThatMustBeVisibleSlotAndCount.end(); ++c) {
+					if (c->first == newAssignment.first) {
+						_resourcesThatMustBeVisible.erase(_resourcesThatMustBeVisible.begin()+idx, _resourcesThatMustBeVisible.begin()+idx+c->second);
+						_resourcesThatMustBeVisibleSlotAndCount.erase(c);
+						break;
+					} else
+						idx += c->second;
+				}
+			}
+			// append new bindings
+			_resourcesThatMustBeVisible.insert(_resourcesThatMustBeVisible.end(), builder._pendingResourceVisibilityChanges.begin(), builder._pendingResourceVisibilityChanges.end());
+			_resourcesThatMustBeVisibleSlotAndCount.insert(_resourcesThatMustBeVisibleSlotAndCount.end(), builder._pendingResourceVisibilityChangesSlotAndCount.begin(), builder._pendingResourceVisibilityChangesSlotAndCount.end());
+
+			// rebuild the sorted copy -- and re-sort and remove duplicates
+			// this must be a second copy, because we may need to have to support overwriting some slots (but not all)
+			// in future Write() operations
+			_resourcesThatMustBeVisibleSorted.clear();
+			_resourcesThatMustBeVisibleSorted.insert(_resourcesThatMustBeVisibleSorted.end(), _resourcesThatMustBeVisible.begin(), _resourcesThatMustBeVisible.end());
+			std::sort(_resourcesThatMustBeVisibleSorted.begin(), _resourcesThatMustBeVisibleSorted.end());
+			_resourcesThatMustBeVisibleSorted.erase(std::unique(_resourcesThatMustBeVisibleSorted.begin(), _resourcesThatMustBeVisibleSorted.end()), _resourcesThatMustBeVisibleSorted.end());
 		#endif
+
 		builder.FlushChanges(
 			factory.GetDevice().get(),
 			_underlying.get(),
-			nullptr, 0,
-			#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-				_resourcesThatMustBeVisible
-			#else
-				resourceVisibilityList
-			#endif
+			nullptr, 0
 			VULKAN_VERBOSE_DEBUG_ONLY(, _description));
-
-		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-			std::sort(_resourcesThatMustBeVisible.begin(), _resourcesThatMustBeVisible.end());
-			_resourcesThatMustBeVisible.erase(std::unique(_resourcesThatMustBeVisible.begin(), _resourcesThatMustBeVisible.end()), _resourcesThatMustBeVisible.end());
-		#endif
 	}
 
 	void CompiledDescriptorSet::Write(const DescriptorSetInitializer& newDescriptors)
