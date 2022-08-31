@@ -363,10 +363,10 @@ namespace RenderCore { namespace Metal_Vulkan
         auto allocCreateInfo = SetupAllocationCreateInfo(allocationRules);
         VkBuffer rawBuffer = nullptr;
         auto res = vmaCreateBuffer(_vmaAllocator, &createInfo, &allocCreateInfo, &rawBuffer, &allocationResult, &allocInfoResult);
-        auto d = (allocationRules & AllocationRules::DisableSafeDestruction) ? _immediateDestruction : _destruction;
+        auto* d = (allocationRules & AllocationRules::DisableSafeDestruction) ? _immediateDestruction.get() : _destruction.get();
         auto buffer = VulkanUniquePtr<VkBuffer>(
             rawBuffer,
-            [d=std::move(d), allocationResult](VkBuffer buffer)
+            [d, allocationResult](VkBuffer buffer)
             {
                 d->Destroy(buffer, allocationResult); 
             });
@@ -384,18 +384,18 @@ namespace RenderCore { namespace Metal_Vulkan
         VkImage rawImage = nullptr;
         auto res = vmaCreateImage(_vmaAllocator, &createInfo, &allocCreateInfo, &rawImage, &allocationResult, &allocInfoResult);
         VulkanUniquePtr<VkImage> image;
-        auto d = (allocationRules & AllocationRules::DisableSafeDestruction) ? _immediateDestruction : _destruction;
+        auto* d = (allocationRules & AllocationRules::DisableSafeDestruction) ? _immediateDestruction.get() : _destruction.get();
         #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
             if (guidForVisibilityTracking) {
                 image = VulkanUniquePtr<VkImage>(
                     rawImage,
-                    [d=std::move(d), allocationResult, guidForVisibilityTracking, this](VkImage image) { d->Destroy(image, allocationResult); this->ForgetResource(guidForVisibilityTracking); });
+                    [d, allocationResult, guidForVisibilityTracking, this](VkImage image) { d->Destroy(image, allocationResult); this->ForgetResource(guidForVisibilityTracking); });
             } else
         #endif
         {
             image = VulkanUniquePtr<VkImage>(
                 rawImage,
-                [d=std::move(d), allocationResult](VkImage image) { d->Destroy(image, allocationResult); });
+                [d, allocationResult](VkImage image) { d->Destroy(image, allocationResult); });
         }
         if (res != VK_SUCCESS)
             Throw(VulkanAPIFailure(res, "Failed while creating image"));
