@@ -145,7 +145,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void ScreenSpaceReflectionsOperator::Execute(LightingEngine::LightingTechniqueIterator& iterator)
 	{
-		if (_res->_pendingCompleteInitialization) {
+		if (_pendingCompleteInit) {
 			CompleteInitialization(*iterator._threadContext);
 
 			// hack -- force clear here
@@ -153,8 +153,6 @@ namespace RenderCore { namespace LightingEngine
 			metalContext.Clear(*iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intUAV), Float4{0.f,0.f,0.f,0.f});
 			metalContext.Clear(*iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intPrevSRV), Float4{0.f,0.f,0.f,0.f});
 		}
-
-		iterator._parsingContext->RequireCommandList(_completionCmdList);
 
 		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
 
@@ -457,20 +455,24 @@ namespace RenderCore { namespace LightingEngine
 	void ScreenSpaceReflectionsOperator::CompleteInitialization(IThreadContext& threadContext)
 	{
 		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
-		vkCmdFillBuffer(
-			metalContext.GetActiveCommandList().GetUnderlying().get(),
-			checked_cast<Metal::Resource*>(_rayCounterBufferUAV->GetResource().get())->GetBuffer(), 
-			0, VK_WHOLE_SIZE, 0);
 		_res->CompleteInitialization(metalContext);
-		_blueNoiseRes->CompleteInitialization(threadContext);
 
-		_completionCmdList = _completionCmdListFuture.get().GetCompletionCommandList(); // note stall
-	}
+		if (_pendingCompleteInit) {
+			vkCmdFillBuffer(
+				metalContext.GetActiveCommandList().GetUnderlying().get(),
+				checked_cast<Metal::Resource*>(_rayCounterBufferUAV->GetResource().get())->GetBuffer(), 
+				0, VK_WHOLE_SIZE, 0);
+			
+			_blueNoiseRes->CompleteInitialization(threadContext);
 
-	uint32_t ScreenSpaceReflectionsOperator::GetCompletionCommandList() const
-	{
-		assert(!_res->_pendingCompleteInitialization);
-		return _completionCmdList;
+			assert(!_configCBData.empty());
+			if (!_configCBData.empty()) {
+				_configCB = _device->CreateResource(CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(_configCBData.size()), "ssr-config"))->CreateBufferView();
+				Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(*_configCB->GetResource(), MakeIteratorRange(_configCBData));
+			}
+
+			_pendingCompleteInit = false;
+		}
 	}
 
 	void ScreenSpaceReflectionsOperator::SetSpecularIBL(std::shared_ptr<IResourceView> inputView)
@@ -511,9 +513,7 @@ namespace RenderCore { namespace LightingEngine
 
 		{
 			ParameterBox params;
-			auto cbInitializer = configCBLayout.BuildCBDataAsVector(params, Techniques::GetDefaultShaderLanguage());
-			_configCB = _device->CreateResource(CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(cbInitializer.size()), "ssr-config"))->CreateBufferView();
-			_completionCmdListFuture = Techniques::Services::GetBufferUploads().Begin(_configCB->GetResource(), BufferUploads::CreateBasicPacket(MakeIteratorRange(cbInitializer)))._future;
+			_configCBData = configCBLayout.BuildCBDataAsVector(params, Techniques::GetDefaultShaderLanguage());
 		}
 
 		///////////////////

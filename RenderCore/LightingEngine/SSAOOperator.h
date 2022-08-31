@@ -41,10 +41,8 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::DependencyValidation GetDependencyValidation() const;
 
 		void CompleteInitialization(IThreadContext& threadContext);
-		uint32_t GetCompletionCommandList() const { assert(!_pendingCompleteInit); return _completionCmdList; }		// must be called after CompleteInitialization()
 
 		SSAOOperator(
-			std::shared_ptr<IDevice> device,
 			std::shared_ptr<Techniques::IComputeShaderOperator> perspectiveComputeOp,
 			std::shared_ptr<Techniques::IComputeShaderOperator> orthogonalComputeOp,
 			std::shared_ptr<Techniques::IComputeShaderOperator> upsampleOp,
@@ -67,7 +65,5 @@ namespace RenderCore { namespace LightingEngine
 		AmbientOcclusionOperatorDesc _opDesc;
 		bool _hasHierarchicalDepths = false;
 		bool _pendingCompleteInit = true;
-		unsigned _completionCmdList = 0;
-		std::future<BufferUploads::ResourceLocator> _completionCmdListFuture;
 	};
 }}

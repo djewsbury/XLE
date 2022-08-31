@@ -48,7 +48,6 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
 
 		void CompleteInitialization(IThreadContext& threadContext);		// must be called after CompleteInitialization()
-		uint32_t GetCompletionCommandList() const;
 
 		ScreenSpaceReflectionsOperator(
 			const ScreenSpaceReflectionsOperatorDesc& desc,
@@ -82,8 +81,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IResourceView> _skyCubeSRV;
 
 		std::shared_ptr<IResourceView> _configCB;
-		unsigned _completionCmdList = 0;
-		std::future<BufferUploads::ResourceLocator> _completionCmdListFuture;
+		std::vector<uint8_t> _configCBData;
 
 		class ResolutionDependentResources;
 		std::unique_ptr<ResolutionDependentResources> _res;
@@ -92,6 +90,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IDevice> _device;
 		::Assets::DependencyValidation _depVal;
 		unsigned _pingPongCounter = ~0u;
+		bool _pendingCompleteInit = true;
 	};
 
 }}

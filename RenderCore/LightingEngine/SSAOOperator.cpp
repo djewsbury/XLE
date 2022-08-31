@@ -46,10 +46,8 @@ namespace RenderCore { namespace LightingEngine
         IResourceView& aoOutputUAV,
         IResourceView* hierarchicalDepths)
     {
-        if (_pendingCompleteInit)
-            CompleteInitialization(*iterator._threadContext);
-        iterator._parsingContext->RequireCommandList(_completionCmdList);
-        
+        CompleteInitialization(*iterator._threadContext);
+
         auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
         if (hierarchicalDepths) {
             // need to ensure the hierarchical depths compute step has finished
@@ -226,11 +224,20 @@ namespace RenderCore { namespace LightingEngine
 
     void SSAOOperator::CompleteInitialization(IThreadContext& threadContext)
 	{
-		_completionCmdList = _completionCmdListFuture.get().GetCompletionCommandList(); // note stall
+        if (_pendingCompleteInit) {
+            auto ditherTable = threadContext.GetDevice()->CreateResource(
+                CreateDesc(
+                    BindFlag::ShaderResource | BindFlag::TexelBuffer | BindFlag::TransferDst,
+                    LinearBufferDesc::Create(sizeof(s_ditherTable)),
+                    "ao-dither-table"));                
+            _ditherTable = ditherTable->CreateTextureView(BindFlag::ShaderResource, {Format::R32_UINT});
+
+            Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(*ditherTable, MakeIteratorRange(s_ditherTable));
+            _pendingCompleteInit = false;
+        }
 	}
 
     SSAOOperator::SSAOOperator(
-        std::shared_ptr<IDevice> device,
         std::shared_ptr<Techniques::IComputeShaderOperator> perspectiveComputeOp,
         std::shared_ptr<Techniques::IComputeShaderOperator> orthogonalComputeOp,
         std::shared_ptr<Techniques::IComputeShaderOperator> upsampleOp,
@@ -247,15 +254,6 @@ namespace RenderCore { namespace LightingEngine
             _upsampleOp->GetDependencyValidation()
         };
         _depVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
-
-        auto ditherTable = device->CreateResource(
-            CreateDesc(
-                BindFlag::ShaderResource | BindFlag::TexelBuffer | BindFlag::TransferDst,
-                LinearBufferDesc::Create(sizeof(s_ditherTable)),
-                "ao-dither-table"));                
-        _ditherTable = ditherTable->CreateTextureView(BindFlag::ShaderResource, {Format::R32_UINT});
-
-        _completionCmdListFuture = Techniques::Services::GetBufferUploads().Begin(ditherTable, BufferUploads::CreateBasicPacket(MakeIteratorRange(s_ditherTable)))._future;
     }
     SSAOOperator::~SSAOOperator() {}
 
@@ -311,8 +309,8 @@ namespace RenderCore { namespace LightingEngine
 
             ::Assets::WhenAll(perspectiveComputeOp, orthogonalComputeOp, upsampleOp).ThenConstructToPromise(
                 std::move(promise),
-                [od=opDesc, hd=hasHierarchicalDepths, d=pipelinePool->GetDevice()](auto perspectiveComputeOpActual, auto orthogonalComputeOpActual, auto upsampleOpActual) mutable
-                { return std::make_shared<SSAOOperator>(std::move(d), std::move(perspectiveComputeOpActual), std::move(orthogonalComputeOpActual), std::move(upsampleOpActual), od, hd); });
+                [od=opDesc, hd=hasHierarchicalDepths](auto perspectiveComputeOpActual, auto orthogonalComputeOpActual, auto upsampleOpActual) mutable
+                { return std::make_shared<SSAOOperator>(std::move(perspectiveComputeOpActual), std::move(orthogonalComputeOpActual), std::move(upsampleOpActual), od, hd); });
         } CATCH(...) {
             promise.set_exception(std::current_exception());
         } CATCH_END
