@@ -1088,8 +1088,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			const std::function<SubResourceInitData(SubResourceId)>& initData)
 		{
 			auto& res = *checked_cast<Resource*>(&resource);
-			assert(res.AccessDesc()._type == ResourceDesc::Type::Texture);
-			ResourceMap map{dev, resource, ResourceMap::Mode::WriteDiscardPrevious};
+			ResourceMap map{dev, resource, ResourceMap::Mode::WriteDiscardPrevious, resourceOffset, resourceSize};
 			return Metal_Vulkan::CopyViaMemoryMap(
 				GetObjectFactory(dev).GetDevice().get(), map,
 				res.GetImage(), descForLayout, initData);
@@ -1102,20 +1101,24 @@ namespace RenderCore { namespace Metal_Vulkan
 		DeviceContext& context,
 		IteratorRange<IResource* const*> resources)
 	{
-		std::vector<uint64_t> makeResourcesVisible;
-		makeResourcesVisible.reserve(resources.size());
+		uint64_t makeResourcesVisibleExtra[resources.size()];
+		unsigned makeResourcesVisibleExtraCount = 0;
+
 		BarrierHelper barrierHelper{context};
 		for (auto r:resources) {
 			auto* res = checked_cast<Resource*>(r);
 			if (res->_pendingInit) {
-				if (res->_steadyStateImageLayout != VK_IMAGE_LAYOUT_UNDEFINED)
+				if (res->_steadyStateImageLayout != VK_IMAGE_LAYOUT_UNDEFINED) {
 					barrierHelper.Add(*res, BarrierResourceUsage::NoState(), Internal::DefaultBarrierResourceUsageFromLayout(res->_steadyStateImageLayout));
-				makeResourcesVisible.push_back(res->GetGUID());
+				} else {
+					// also make these resources visible, even though they don't get an actual barrier
+					makeResourcesVisibleExtra[makeResourcesVisibleExtraCount++] = res->GetGUID();
+				}
 				res->_pendingInit = false;
 			}
 		}
-		if (!makeResourcesVisible.empty())
-			context.GetActiveCommandList().MakeResourcesVisible(MakeIteratorRange(makeResourcesVisible));
+		if (makeResourcesVisibleExtraCount)
+			context.GetActiveCommandList().MakeResourcesVisible(MakeIteratorRange(makeResourcesVisibleExtra, &makeResourcesVisibleExtra[makeResourcesVisibleExtraCount]));
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2127,8 +2130,12 @@ namespace RenderCore { namespace Metal_Vulkan
 			_bufferBarrierCount, _bufferBarriers,
 			_imageBarrierCount, _imageBarriers);
 
-		// record captured layouts for images
+		// Call MakeResourcesVisible & record captured layouts for images
 		if (_imageBarrierCount) {
+			uint64_t makeVisibleGuids[dimof(_imageBarrierGuids)];
+			for (unsigned c=0; c<_imageBarrierCount; ++c) makeVisibleGuids[c] = _imageBarrierGuids[c].first;
+			_deviceContext->GetActiveCommandList().MakeResourcesVisible(MakeIteratorRange(makeVisibleGuids, &makeVisibleGuids[_imageBarrierCount]));
+
 			if (!_deviceContext->_captureForBindRecords)
 				_deviceContext->_captureForBindRecords = std::make_shared<Internal::CaptureForBindRecords>();
 			auto& captureRecords = _deviceContext->_captureForBindRecords->_captures;

@@ -370,7 +370,7 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::PreregisteredAttachment {
 					SSRReflections,
 					CreateDesc(
-						BindFlag::UnorderedAccess | BindFlag::ShaderResource,
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TransferDst,
 						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
 						"ssr-reflections"),
 					Techniques::PreregisteredAttachment::State::Uninitialized
@@ -378,7 +378,7 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::PreregisteredAttachment {
 					SSRInt,
 					CreateDesc(
-						BindFlag::UnorderedAccess | BindFlag::ShaderResource,
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TransferDst,
 						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
 						"ssr-intermediate"),
 					Techniques::PreregisteredAttachment::State::Uninitialized
@@ -392,7 +392,7 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::PreregisteredAttachment {
 					SSRReflections,
 					CreateDesc(
-						BindFlag::UnorderedAccess | BindFlag::ShaderResource,
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TransferDst,
 						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
 						"ssr-reflections0"),
 					Techniques::PreregisteredAttachment::State::Uninitialized
@@ -400,7 +400,7 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::PreregisteredAttachment {
 					SSRInt,
 					CreateDesc(
-						BindFlag::UnorderedAccess | BindFlag::ShaderResource,
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TransferDst,
 						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
 						"ssr-intermediate"),
 					Techniques::PreregisteredAttachment::State::Uninitialized

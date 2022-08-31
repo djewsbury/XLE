@@ -862,6 +862,7 @@ namespace RenderCore { namespace Techniques
         assert(attach->_desc._textureDesc._height > 0);
         assert(attach->_desc._textureDesc._depth > 0);
         attach->_resource = _device->CreateResource(attach->_desc);
+        attach->_pendingCompleteInitialization = true;
         return attach->_resource != nullptr;
     }
 
@@ -2409,6 +2410,7 @@ namespace RenderCore { namespace Techniques
         const FrameBufferProperties& fbProps,
         IteratorRange<const Format*> systemFormats)
     {
+        return false;       // don't check in
         TRY
         {
             std::vector<FrameBufferDescFragment> testFragments;
