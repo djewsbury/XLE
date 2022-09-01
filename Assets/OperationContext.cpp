@@ -156,6 +156,10 @@ namespace Assets
 		}
 
 		VariantFutureSet::VariantFutureSet() = default;
-		VariantFutureSet::~VariantFutureSet() = default;
+		VariantFutureSet::~VariantFutureSet()
+		{
+			for (const auto& e:_entries)
+				(*e._destructionFn)(PtrAdd(_storage.data(), e._begin));
+		}
 	}
 }
