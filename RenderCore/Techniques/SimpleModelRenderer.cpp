@@ -165,7 +165,7 @@ namespace RenderCore { namespace Techniques
 		uint64_t cmdStreamGuid) const
 	{
 		assert(viewMask != 0);
-		if (_deformAcceleratorPool && _deformAccelerator)
+		if (_deformAccelerator)
 			EnableInstanceDeform(*_deformAccelerator, deformInstanceIdx);
 
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
@@ -251,7 +251,7 @@ namespace RenderCore { namespace Techniques
 		uint64_t cmdStreamGuid) const
 	{
 		assert(viewMask != 0);
-		if (_deformAcceleratorPool && _deformAccelerator)
+		if (_deformAccelerator)
 			EnableInstanceDeform(*_deformAccelerator, deformInstanceIdx);
 
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
@@ -349,7 +349,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		assert(viewMask != 0);
-		if (_deformAcceleratorPool && _deformAccelerator)
+		if (_deformAccelerator)
 			EnableInstanceDeform(*_deformAccelerator, deformInstanceIdx);
 
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
@@ -517,8 +517,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IDeformGeoAttachment> geoDeformerInfrastructure;
 		if (deformAccelerator && deformAcceleratorPool) {  // need both or neither
 			_deformAccelerator = std::move(deformAccelerator);
-			_deformAcceleratorPool = std::move(deformAcceleratorPool);
-			geoDeformerInfrastructure = std::dynamic_pointer_cast<IDeformGeoAttachment>(_deformAcceleratorPool->GetDeformGeoAttachment(*_deformAccelerator));
+			geoDeformerInfrastructure = std::dynamic_pointer_cast<IDeformGeoAttachment>(deformAcceleratorPool->GetDeformGeoAttachment(*_deformAccelerator));
 		}
 
 		if (!uniformBufferDelegates.empty()) {

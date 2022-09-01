@@ -148,7 +148,6 @@ namespace RenderCore { namespace Techniques
 		ModelConstructionSkeletonBinding _skeletonBinding;
 		std::shared_ptr<UniformsStreamInterface> _usi;
 
-		std::shared_ptr<IDeformAcceleratorPool> _deformAcceleratorPool;
 		std::shared_ptr<DeformAccelerator> _deformAccelerator;
 
 		::Assets::DependencyValidation _depVal;
