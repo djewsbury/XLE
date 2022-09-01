@@ -550,6 +550,14 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	void SemiStaticShadowProbeScheduler::DeregisterLight(unsigned setIdx, unsigned lightIdx)
 	{
 		_sceneSets[setIdx].DeregisterLight(lightIdx);
+
+		// remove it from our allocated list, if it's there
+		for (auto i=_allocatedDatabaseEntries.begin(); i!=_allocatedDatabaseEntries.end(); ++i)
+			if (GetSetIndex(i->first) == setIdx && GetLightIndex(i->first) == lightIdx) {
+				_unassociatedProbeSlots |= 1ull << uint64_t(i->second._databaseIndex);
+				_allocatedDatabaseEntries.erase(i);
+				break;
+			}
 	}
 
 	bool SemiStaticShadowProbeScheduler::BindToSet(ILightScene::LightOperatorId, ILightScene::ShadowOperatorId shadowOperator, unsigned setIdx)
