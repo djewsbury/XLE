@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "InteractiveTestHelper.h"
+#include "HexGridUtils.h"
 #include "../RenderCore/Metal/MetalTestHelper.h"
 #include "../../PlatformRig/OverlaySystem.h"
 #include "../../PlatformRig/InputListener.h"
@@ -36,20 +37,7 @@ using namespace Catch::literals;
 using namespace std::chrono_literals;
 namespace UnitTests
 {
-	class HexCellField
-	{
-	public:
-		std::vector<Int2> _enabledCells;
-
-		struct BoundaryGroup
-		{
-			std::vector<Int2> _boundaryCells;
-		};
-		std::vector<BoundaryGroup> _interiorGroups;
-		BoundaryGroup _exteriorGroup;
-	};
-
-	void GetAdjacentCells(Int2 dst[6], Int2 centerCell)
+	static void GetAdjacentCells(Int2 dst[6], Int2 centerCell)
 	{
 		// in our coordinate cell, we imagine the hex cell having alternating
 		// rows as we preceed up the Y axis, each offset half a hex
@@ -72,57 +60,12 @@ namespace UnitTests
 		}
 	}
 
-	// counter clockwise
-	//      0
-	//     / \
-	//    1   5
-	//    |   |
-	//    2   4
-	//    \  /
-	//     3
-	//   ^
-	//   |
-	//   Y    X -->
-	static const float s_cos30 = std::sqrtf(3.f / 4.f);
-	static const float s_2cos30 = std::sqrtf(3.f);
-	static Float2 s_hexCornersEvens[] {
-		Float2 { 0.f, 1.0f },
-		Float2 { -s_cos30, 0.5f },
-		Float2 { -s_cos30, -0.5f },
-		Float2 { 0.f, -1.0f },
-		Float2 { s_cos30, -0.5f },
-		Float2 { s_cos30, 0.5f }
-	};
-
-	static Float2 s_hexCornersOdds[] {
-		Float2 { s_cos30, 1.0f },
-		Float2 { 0.f, 0.5f },
-		Float2 { 0.f, -0.5f },
-		Float2 { s_cos30, -1.0f },
-		Float2 { s_2cos30, -0.5f },
-		Float2 { s_2cos30, 0.5f }
-	};
-
-	// Matches order of adjacent cells from GetAdjacentCells
-	static const std::pair<unsigned, unsigned> s_hexEdges[] {
-		std::make_pair(0, 1),
-		std::make_pair(5, 0),
-		std::make_pair(1, 2),
-		std::make_pair(4, 5),
-		std::make_pair(2, 3),
-		std::make_pair(3, 4),
-	};
-
 	static bool IsInteriorBoundaryGroup(
-		const HexCellField::BoundaryGroup& group, 
+		const HexCellField::BoundaryGroup& group,
 		const std::vector<Int2>& enabledCells)
 	{
 		assert(!group._boundaryCells.empty());
 		assert(!enabledCells.empty());
-
-		// We need at least 6 cells to define an exterior group, so
-		// smaller groups can only be interior
-		if (group._boundaryCells.size() < 6) return true;
 
 		// We're going to use a the polygon line testing trick here (even intersections means a point is inside, odd intersections means it's inside)
 		// however, we'll only use lines parallel to the X axis, because the intersection tests become much simplier
@@ -143,7 +86,7 @@ namespace UnitTests
 				break;
 			}
 		}
-		assert(i != group._boundaryCells.end());
+		if (i == group._boundaryCells.end()) return false;		// nothing to either left or right, must be exterior group
 
 		auto i2 = i+1;
 		unsigned intersectionCount = 1;		// first intersection from the boundary cell through it's edge always counts 
@@ -170,7 +113,74 @@ namespace UnitTests
 		return intersectionCount & 1;		// odd == interior
 	}
 
-	static HexCellField CreateRandomHexCellField(unsigned cellCount, std::mt19937_64& rng)
+	static std::vector<Float2> CreateBoundaryLines(const HexCellField& cellField, IteratorRange<const Int2*> boundaryCellsList)
+	{
+		assert(!boundaryCellsList.empty());
+		std::vector<Float2> boundaryLines;
+		boundaryLines.reserve(boundaryCellsList.size() * 2 * 6);
+
+		// Super primitive; but.. for each boundary cell, check which neighbours are enabled and draw
+		// a line between them
+		for (auto cell:boundaryCellsList) {
+			Int2 adjacent[6];
+			GetAdjacentCells(adjacent, cell);
+			for (unsigned a=0; a<dimof(adjacent); ++a) {
+				if (std::find(cellField._enabledCells.begin(), cellField._enabledCells.end(), adjacent[a]) != cellField._enabledCells.end()) continue;
+				Float2 cellCenter { s_2cos30 * (float)cell[0], 1.5f * (float)cell[1] };
+				if (cell[1] & 1) {
+					// odd
+					boundaryLines.push_back(s_hexCornersOdds[s_hexEdges[a].first] + cellCenter);
+					boundaryLines.push_back(s_hexCornersOdds[s_hexEdges[a].second] + cellCenter);
+				} else {
+					// even
+					boundaryLines.push_back(s_hexCornersEvens[s_hexEdges[a].first] + cellCenter);
+					boundaryLines.push_back(s_hexCornersEvens[s_hexEdges[a].second] + cellCenter);
+				}
+			}
+		}
+		assert(!boundaryLines.empty());
+		return boundaryLines;
+	}
+
+	static void SeparateAndAssignBoundaryGroups(HexCellField& result, std::vector<Int2>& workingBoundaryCells)
+	{
+		// Separate the boundary cells by the groups they belong to by just walking through
+		// their connections
+		Int2 adjacent[6];
+		while (!workingBoundaryCells.empty()) {
+			std::vector<Int2> localNetwork;
+			localNetwork.push_back(workingBoundaryCells.back());
+			workingBoundaryCells.pop_back();
+
+			HexCellField::BoundaryGroup group;
+			while (!localNetwork.empty()) {
+				GetAdjacentCells(adjacent, localNetwork.back());
+				group._boundaryCells.push_back(localNetwork.back());
+				localNetwork.pop_back();
+
+				for (auto a:adjacent) {
+					auto i = std::find(workingBoundaryCells.begin(), workingBoundaryCells.end(), a);
+					if (i == workingBoundaryCells.end()) continue;
+					localNetwork.push_back(*i);
+					workingBoundaryCells.erase(i);
+				}
+			}
+
+			group._boundaryLineList = CreateBoundaryLines(result, group._boundaryCells);
+
+			// We need to know if each boundary group is interior or exterior
+			bool interior = IsInteriorBoundaryGroup(group, result._enabledCells);
+			if (interior) {
+				result._interiorGroups.push_back(std::move(group));
+			} else {
+				// We can only have one exterior group because we're creating a contiguous shape
+				assert(result._exteriorGroup._boundaryCells.empty());
+				result._exteriorGroup = std::move(group);
+			}
+		}
+	}
+
+	HexCellField CreateRandomHexCellField(unsigned cellCount, std::mt19937_64& rng)
 	{
 		assert(cellCount > 0);
 		HexCellField result;
@@ -201,42 +211,12 @@ namespace UnitTests
 			}
 		}
 
-		// Separate the boundary cells by the groups they belong to by just walking through
-		// their connections
-		while (!workingBoundaryCells.empty()) {
-			std::vector<Int2> localNetwork;
-			localNetwork.push_back(*(workingBoundaryCells.end()-1));
-			workingBoundaryCells.erase(workingBoundaryCells.end()-1);
+		SeparateAndAssignBoundaryGroups(result, workingBoundaryCells);
 
-			HexCellField::BoundaryGroup group;
-			while (!localNetwork.empty()) {
-				GetAdjacentCells(adjacent, *(localNetwork.end()-1));
-				group._boundaryCells.push_back(*(localNetwork.end()-1));
-				localNetwork.erase(localNetwork.end()-1);
-
-				for (auto a:adjacent) {
-					auto i = std::find(workingBoundaryCells.begin(), workingBoundaryCells.end(), a);
-					if (i == workingBoundaryCells.end()) continue;
-					localNetwork.push_back(*i);
-					workingBoundaryCells.erase(i);
-				}
-			}
-
-			// We need to know if each boundary group is interior or exterior
-			bool interior = IsInteriorBoundaryGroup(group, result._enabledCells);
-			if (interior) {
-				result._interiorGroups.push_back(std::move(group));
-			} else {
-				// We can only have one exterior group because we're creating a contiguous shape
-				assert(result._exteriorGroup._boundaryCells.empty());
-				result._exteriorGroup = std::move(group);
-			}
-		}
-		
 		return result;
 	}
 
-	static HexCellField CreateRegularHexField(unsigned radius)
+	HexCellField CreateRegularHexField(unsigned radius)
 	{
 		assert(radius > 0);
 		HexCellField result;
@@ -272,36 +252,113 @@ namespace UnitTests
 			}
 		}
 		result._exteriorGroup._boundaryCells = std::move(workingBoundaryCells);
+		result._exteriorGroup._boundaryLineList = CreateBoundaryLines(result, result._exteriorGroup._boundaryCells);
 
 		return result;
 	}
 
-	static void DrawBoundary(RenderOverlays::IOverlayContext& overlayContext, const HexCellField& cellField, const HexCellField::BoundaryGroup& group, RenderOverlays::ColorB color)
+	HexCellField CreateFromSingleCellIsland(IteratorRange<const Int2*> enabledCells)
 	{
-		std::vector<Float3> boundaryLines;
-		boundaryLines.reserve(group._boundaryCells.size() * 2 * 6);
+		HexCellField result;
+		result._enabledCells.insert(result._enabledCells.end(), enabledCells.begin(), enabledCells.end());
 
-		// Super primitive; but.. for each boundary cell, check which neighbours are enabled and draw
-		// a line between them
-		for (auto cell:group._boundaryCells) {
+		std::vector<Int2> workingBoundaryCells;
+		workingBoundaryCells.reserve(enabledCells.size());
+		for (auto c:enabledCells) {
 			Int2 adjacent[6];
-			GetAdjacentCells(adjacent, cell);
-			for (unsigned a=0; a<dimof(adjacent); ++a) {
-				if (std::find(cellField._enabledCells.begin(), cellField._enabledCells.end(), adjacent[a]) == cellField._enabledCells.end()) continue;
-				Float2 cellCenter { s_2cos30 * (float)cell[0], 1.5f * (float)cell[1] };
-				if (cell[1] & 1) {
-					// odd
-					boundaryLines.push_back(Float3(s_hexCornersOdds[s_hexEdges[a].first] + cellCenter, 0.f));
-					boundaryLines.push_back(Float3(s_hexCornersOdds[s_hexEdges[a].second] + cellCenter, 0.f));
-				} else {
-					// even
-					boundaryLines.push_back(Float3(s_hexCornersEvens[s_hexEdges[a].first] + cellCenter, 0.f));
-					boundaryLines.push_back(Float3(s_hexCornersEvens[s_hexEdges[a].second] + cellCenter, 0.f));
-				}
+			GetAdjacentCells(adjacent, c);
+			unsigned enabledAdjacentCount = 0;
+			for (auto a:adjacent) {
+				if (std::find(enabledCells.begin(), enabledCells.end(), a) == enabledCells.end())
+					break;
+				++enabledAdjacentCount;
 			}
+			if (enabledAdjacentCount != dimof(adjacent))
+				workingBoundaryCells.push_back(c);
 		}
 
+		SeparateAndAssignBoundaryGroups(result, workingBoundaryCells);
+
+		return result;
+	}
+
+	std::vector<HexCellField> CreateFromMultipleCellIslands(IteratorRange<const Int2*> enabledCells)
+	{
+		// Given some arbitrary input cells, find the contiguous parts
+		// This is made a little more difficult by the need to find interior boundaries
+		std::vector<HexCellField> result;
+
+		std::vector<Int2> workingEnabledCells(enabledCells.begin(), enabledCells.end());
+		std::vector<Int2> searchQueue;
+		searchQueue.reserve(workingEnabledCells.size());
+		while (!workingEnabledCells.empty()) {
+			// find the network of connected cells
+			std::vector<Int2> island;
+			island.reserve(workingEnabledCells.size());
+			Int2 original = workingEnabledCells.back();
+			workingEnabledCells.pop_back();
+			island.push_back(original);
+
+			searchQueue.clear();
+			searchQueue.push_back(original);
+			while (!searchQueue.empty()) {
+				auto search = searchQueue.back();
+				searchQueue.pop_back();
+				Int2 adjacent[6];
+				GetAdjacentCells(adjacent, search);
+				for (auto a:adjacent) {
+					auto i = std::find(workingEnabledCells.begin(), workingEnabledCells.end(), a);
+					if (i != workingEnabledCells.end()) {
+						searchQueue.push_back(*i);
+						island.push_back(*i);
+						workingEnabledCells.erase(i);
+					}
+				}
+			}
+
+			// We have all of the connected cells. Find the boundaries, and then figure out which boundaries are internal
+			// and which are external
+			result.emplace_back(CreateFromSingleCellIsland(island));
+		}
+
+		return result;
+	}
+
+	static Float2 TransformPoint(const Float3x3& localToWorld, Float2 pt)
+	{
+		return Truncate(localToWorld * Float3{pt, 1.f});
+	}
+
+	void DrawBoundary(RenderOverlays::IOverlayContext& overlayContext, const HexCellField& cellField, const HexCellField::BoundaryGroup& group, const Float3x3& localToWorld, RenderOverlays::ColorB color)
+	{
+		assert(!group._boundaryLineList.empty());
+		std::vector<Float3> boundaryLines;
+		boundaryLines.reserve(group._boundaryLineList.size());
+		for (auto l:group._boundaryLineList)
+			boundaryLines.push_back(Float3(TransformPoint(localToWorld, l), 0.f));
 		overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, boundaryLines.data(), boundaryLines.size(), color);
+	}
+
+	void FillHexGrid(RenderOverlays::IOverlayContext& overlayContext, IteratorRange<const Int2*> enabledCells, const Float3x3& localToWorld, RenderOverlays::ColorB color)
+	{
+		const unsigned indices[] {
+			0, 5, 1,
+			1, 5, 2,
+			2, 5, 4,
+			2, 4, 3
+		};
+
+		std::vector<Float3> triangles;
+		triangles.reserve(enabledCells.size()*dimof(indices));
+
+		for (auto cell:enabledCells) {
+			Float2 cellCenter { s_2cos30 * (float)cell[0], 1.5f * (float)cell[1] };
+			auto* corners = (cell[1] & 1) ? s_hexCornersOdds : s_hexCornersEvens;
+			for (auto t:indices)
+				triangles.push_back(Expand(TransformPoint(localToWorld, cellCenter + corners[t]), 0.f));
+		}
+
+		overlayContext.DrawTriangles(RenderOverlays::ProjectionMode::P2D, triangles.data(), triangles.size(), color);
 	}
 
 	template<typename T> StraightSkeleton<T> CalculateStraightSkeleton(IteratorRange<const Vector2T<T>*> vertices, T maxInset = std::numeric_limits<T>::max())
@@ -593,9 +650,10 @@ namespace UnitTests
 				{
 					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
 						parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
-					DrawBoundary(*overlayContext, _cellField, _cellField._exteriorGroup, RenderOverlays::ColorB{32, 190, 32});
+					const auto localToWorld = Identity<Float3x3>();
+					DrawBoundary(*overlayContext, _cellField, _cellField._exteriorGroup, localToWorld, RenderOverlays::ColorB{32, 190, 32});
 					for (const auto&g:_cellField._interiorGroups)
-						DrawBoundary(*overlayContext, _cellField, g, RenderOverlays::ColorB{64, 140, 210});
+						DrawBoundary(*overlayContext, _cellField, g, localToWorld, RenderOverlays::ColorB{64, 140, 210});
 					_preview.Draw(*overlayContext);
 				}
 
