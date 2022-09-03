@@ -60,58 +60,52 @@ namespace UnitTests
 		}
 	}
 
-	static bool IsInteriorBoundaryGroup(
-		const HexCellField::BoundaryGroup& group,
-		const std::vector<Int2>& enabledCells)
+	static uint64_t Encode(Int2 q) { return (uint64_t(uint32_t(q[0])) << 32ull) | uint64_t(uint32_t(q[1])); }
+	static Int2 Decode(uint64_t q) { return {q>>32ull, int32_t(q)}; }
+	static unsigned RevAdj(unsigned i)
 	{
-		assert(!group._boundaryCells.empty());
-		assert(!enabledCells.empty());
-
-		// We're going to use a the polygon line testing trick here (even intersections means a point is inside, odd intersections means it's inside)
-		// however, we'll only use lines parallel to the X axis, because the intersection tests become much simplier
-		// There must always be at least one boundary cell that is immediately to the left or right of a enabled cell
-
-		auto i = group._boundaryCells.begin();
-		bool goingNegativeX = false;
-		for (;i != group._boundaryCells.end(); ++i) {
-			Int2 check((*i)[0] - 1, (*i)[1]);
-			if (std::find(enabledCells.begin(), enabledCells.end(), check) != enabledCells.end()) {
-				goingNegativeX = true;
-				break;
-			}
-
-			check = Int2((*i)[0] + 1, (*i)[1]);
-			if (std::find(enabledCells.begin(), enabledCells.end(), check) != enabledCells.end()) {
-				goingNegativeX = false;
-				break;
-			}
-		}
-		if (i == group._boundaryCells.end()) return false;		// nothing to either left or right, must be exterior group
-
-		auto i2 = i+1;
-		unsigned intersectionCount = 1;		// first intersection from the boundary cell through it's edge always counts 
-		for(; i2 != group._boundaryCells.end(); ++i2) {
-			assert(*i2 != *i);
-			if ((*i2)[1] != (*i)[1]) continue;
-			if (goingNegativeX) {
-				if ((*i2)[0] > (*i)[0]) continue;
-			} else {
-				if ((*i2)[0] < (*i)[0]) continue;
-			}
-
-			// We're on the same Y coord, and we're on the right side of *i
-			// check both the left and right edges of this cell
-			Int2 check((*i2)[0] - 1, (*i2)[1]);
-			if (std::find(enabledCells.begin(), enabledCells.end(), check) != enabledCells.end())
-				++intersectionCount;
-
-			check = Int2((*i2)[0] + 1, (*i2)[1]);
-			if (std::find(enabledCells.begin(), enabledCells.end(), check) != enabledCells.end())
-				++intersectionCount;
+		return 5-i;
+		/*switch (i) {
+		case 0: return 5;		// top left -> bottom right
+		case 1: return 4;		// top right -> bottom left
+		case 2: return 3;		// left -> right
+		case 3: return 2;		// right -> left
+		case 4: return 1;		// bottom left -> top right
+		case 5: return 0;		// bottom right -> top left
 		}
 
-		return intersectionCount & 1;		// odd == interior
+		assert(0);
+		return ~0u;*/
 	}
+
+	struct AdjacencyDatabase
+	{
+		std::vector<unsigned> _adjacencies;
+		AdjacencyDatabase(IteratorRange<const Int2*> enabledCells)
+		{
+			// For given arbitrary list of enabled cells, figure out 
+			std::vector<std::pair<uint64_t, unsigned>> sortedList;
+			sortedList.reserve(enabledCells.size());
+			for (unsigned c=0; c<enabledCells.size(); ++c) sortedList.emplace_back(Encode(enabledCells[c]), c);
+			std::sort(sortedList.begin(), sortedList.end(), CompareFirst2{});
+
+			Int2 adj[6];
+			_adjacencies.resize(enabledCells.size()*6, ~0u);
+			for (auto i=sortedList.begin(); i!=sortedList.end(); ++i) {
+				GetAdjacentCells(adj, Decode(i->first));
+				for (unsigned c=0; c<6; ++c) {
+					auto e = Encode(adj[c]);
+					if (e < i->first) continue;
+					auto i2 = LowerBound2(MakeIteratorRange(i+1, sortedList.end()), e);
+					if (i2 == sortedList.end() || i2->first != e) continue;
+
+					// make the adjacency, both ways
+					_adjacencies[i->second*6+c] = i2->second;
+					_adjacencies[i2->second*6+RevAdj(c)] = i->second;
+				}
+			}
+		}
+	};
 
 	static std::vector<Float2> CreateBoundaryLines(const HexCellField& cellField, IteratorRange<const Int2*> boundaryCellsList)
 	{
@@ -142,90 +136,205 @@ namespace UnitTests
 		return boundaryLines;
 	}
 
-	static void SeparateAndAssignBoundaryGroups(HexCellField& result, std::vector<Int2>& workingBoundaryCells)
+	template<typename Primitive>
+		static Primitive SignedPolyArea(IteratorRange<const Vector2T<Primitive>*> loop)
 	{
-		// Separate the boundary cells by the groups they belong to by just walking through
-		// their connections
-		Int2 adjacent[6];
-		while (!workingBoundaryCells.empty()) {
-			std::vector<Int2> localNetwork;
-			localNetwork.push_back(workingBoundaryCells.back());
-			workingBoundaryCells.pop_back();
+		Primitive result = 0;
+		for (unsigned c=0; c<loop.size(); ++c) {
+			auto next = loop[(c+1)%loop.size()];
+			result += (next[0] - loop[c][0]) * (next[1] + loop[c][1]);
+		}
+		return result / 2.f;
+	}
 
-			HexCellField::BoundaryGroup group;
-			while (!localNetwork.empty()) {
-				GetAdjacentCells(adjacent, localNetwork.back());
-				group._boundaryCells.push_back(localNetwork.back());
-				localNetwork.pop_back();
+	template<typename Primitive>
+		static bool PtInPolygon(IteratorRange<const Vector2T<Primitive>*> loop, Vector2T<Primitive> testPt)
+	{
+		// Note that the basic algorithm here doesn't support colinear lines in "loop" too well
+		// since we're likely to get that case, we ideally want to prefer to use a "testPt" where Y
+		// component is not a multiple of 0.5
+		auto lastPt = *(loop.end()-1);
+		unsigned intersectionCount = 0;
+		for (auto pt:loop) {
+			assert(pt[1] != testPt[1]);		// see note above, preferable to avoid this
 
-				for (auto a:adjacent) {
-					auto i = std::find(workingBoundaryCells.begin(), workingBoundaryCells.end(), a);
-					if (i == workingBoundaryCells.end()) continue;
-					localNetwork.push_back(*i);
-					workingBoundaryCells.erase(i);
+			// imagine drawing a line in +X from testPt. Does it intersect this part of the loop?
+			if (	std::min(pt[1], lastPt[1]) <= testPt[1]
+				&& 	std::max(pt[1], lastPt[1]) >  testPt[1]) {
+
+				float A = (testPt[1] - pt[1]) / (lastPt[1] - pt[1]);
+				float xA = LinearInterpolate(pt[0], lastPt[0], A);
+				intersectionCount += xA >= testPt[0];
+			}
+			lastPt = pt;
+		}
+
+		return intersectionCount & 1;		// odd = inside
+	}
+	
+	HexCellField CreateHexField(std::vector<Int2>&& enabledCellList)
+	{
+		// Taking the result._enabledCells, find all of the boundary groups
+		// result._enabledCells should be one contiguous "island"
+		AdjacencyDatabase adjacencies{enabledCellList};
+		std::vector<Float2> boundaryLineList;
+		boundaryLineList.reserve(enabledCellList.size()*6*2/2);
+
+		for (unsigned c=0; c<enabledCellList.size(); ++c) {
+			auto cell = enabledCellList[c];
+			for (unsigned a=0; a<6; ++a) {
+				if (adjacencies._adjacencies[c*6+a] != ~0u) continue;
+				Float2 cellCenter { s_2cos30 * (float)cell[0], 1.5f * (float)cell[1] };
+				if (cell[1] & 1) {
+					// odd
+					boundaryLineList.push_back(s_hexCornersOdds[s_hexEdges[a].first] + cellCenter);
+					boundaryLineList.push_back(s_hexCornersOdds[s_hexEdges[a].second] + cellCenter);
+				} else {
+					// even
+					boundaryLineList.push_back(s_hexCornersEvens[s_hexEdges[a].first] + cellCenter);
+					boundaryLineList.push_back(s_hexCornersEvens[s_hexEdges[a].second] + cellCenter);
+				}
+			}
+		}
+
+		// divide the boundary lines up into loops
+
+		using Primitive = float;
+		struct PendingLoop
+		{
+			std::vector<Vector2T<Primitive>> _boundary; 
+			unsigned _containingLoop = ~0u;
+		};
+		std::vector<PendingLoop> pendingLoops;
+
+		while (!boundaryLineList.empty()) {
+			PendingLoop loop;
+			loop._boundary.reserve(1+boundaryLineList.size()/2);
+			loop._boundary.push_back(*(boundaryLineList.end()-2));
+			loop._boundary.push_back(*(boundaryLineList.end()-1));
+			boundaryLineList.erase(boundaryLineList.end()-2, boundaryLineList.end());
+
+			while (!boundaryLineList.empty()) {
+				auto i = boundaryLineList.begin();
+				for (;i!=boundaryLineList.end(); i+=2)
+					if (Equivalent(*i, loop._boundary.back(), 1e-3f))
+						break;
+				assert(i != boundaryLineList.end());
+				if (Equivalent(*(i+1), loop._boundary[0], 1e-3f)) {
+					// reached the end of the loop
+					boundaryLineList.erase(i, i+2);
+					break;
+				} else {
+					loop._boundary.push_back(*(i+1));
+					boundaryLineList.erase(i, i+2);
 				}
 			}
 
-			group._boundaryLineList = CreateBoundaryLines(result, group._boundaryCells);
+			// This is a completed loop -- like figure out it's winding
+			// we can use a simple area calculation for this -- see (eg)
+			//		https://www.element84.com/blog/determining-the-winding-of-a-polygon-given-as-a-set-of-ordered-points#:~:text=Winding%20can%20be%20either%20clockwise,down%20at%20the%20coordinate%20plane.&text=In%20figure%201%2C%20the%20vertices,CCW%20winding%20on%20the%20right.
+			auto area = SignedPolyArea<Primitive>(loop._boundary);
+			assert(area != 0);
+			if (area > 1.f)
+				std::reverse(loop._boundary.begin(), loop._boundary.end());		// clockwise, so reverse direction
+			pendingLoops.emplace_back(std::move(loop));
+		}
 
-			// We need to know if each boundary group is interior or exterior
-			bool interior = IsInteriorBoundaryGroup(group, result._enabledCells);
-			if (interior) {
-				result._interiorGroups.push_back(std::move(group));
+		// find loops that are contained within other loops. We're assuming no intersections and no
+		// sharing of vertices. So we can do pt-in-polygon tests on one arbitrary point in each polygon
+		// vs the other polygons
+		unsigned externalPolygonIdx = ~0u;
+		for (auto i=pendingLoops.begin(); i!=pendingLoops.end(); ++i) {
+			// little track to find a pt slightly off the hex cell edges -- we should still get
+			// the right result if we're a little inside or a little outside of the boundary
+			auto testPt = i->_boundary[0];
+			for (auto c=i->_boundary.begin()+1; c!=i->_boundary.end(); ++c)
+				if ((*c)[1] != testPt[1]) {
+					testPt += (*c - testPt) / 4;
+					break;
+				}
+
+			auto i2=pendingLoops.begin();
+			for (; i2!=pendingLoops.end(); ++i2)
+				if (i2 != i && PtInPolygon<Primitive>(i2->_boundary, testPt))
+					break;
+
+			if (i2!=pendingLoops.end()) {
+				i->_containingLoop = std::distance(pendingLoops.begin(), i2);
+				#if defined(_DEBUG)
+					// we don't support polys begin inside of multiple other polygons, because
+					// this would mean islands within lakes within outer polygons
+					for (++i2; i2!=pendingLoops.end(); ++i2)
+						if (i2 != i)
+							assert(!PtInPolygon<Primitive>(i2->_boundary, testPt));
+				#endif
 			} else {
-				// We can only have one exterior group because we're creating a contiguous shape
-				assert(result._exteriorGroup._boundaryCells.empty());
-				result._exteriorGroup = std::move(group);
+				// if you hit this, it means there are multiple external polygons -- ie, multiple completely separate "islands" in the original cell list
+				assert(externalPolygonIdx == ~0u);
+				externalPolygonIdx = std::distance(pendingLoops.begin(), i);
 			}
 		}
+
+		// we should end up with exactly one external polygon
+		assert(externalPolygonIdx != ~0u);
+
+		HexCellField result;
+		result._enabledCells = std::move(enabledCellList);
+		result._exteriorGroup = HexCellField::BoundaryGroup{std::move(pendingLoops[externalPolygonIdx]._boundary)};
+		for (unsigned c=0; c<pendingLoops.size(); ++c) {
+			if (c == externalPolygonIdx) continue;
+			assert(pendingLoops[c]._containingLoop == externalPolygonIdx);
+			// reverse winding because the polygon bounds a void, not a solid area
+			std::reverse(pendingLoops[c]._boundary.begin(), pendingLoops[c]._boundary.end());
+			result._interiorGroups.push_back(HexCellField::BoundaryGroup{std::move(pendingLoops[c]._boundary)});
+		}
+		return result;
 	}
 
 	HexCellField CreateRandomHexCellField(unsigned cellCount, std::mt19937_64& rng)
 	{
 		assert(cellCount > 0);
-		HexCellField result;
+		std::vector<Int2> enabledCellList;
 
 		// Each time, select a cell from the boundary, and make it an enabled cell
 		// update the boundary as we go along
 		// could be done much faster with just a little sorting
 
-		result._enabledCells.push_back(Int2(0, 0));
+		enabledCellList.push_back(Int2(0, 0));
 		Int2 adjacent[6];
 		GetAdjacentCells(adjacent, Int2(0, 0));
 		std::vector<Int2> workingBoundaryCells;
 		for (auto c:adjacent) workingBoundaryCells.push_back(c);
 
-		while (result._enabledCells.size() < cellCount) {
+		while (enabledCellList.size() < cellCount) {
 			assert(workingBoundaryCells.size());
 			auto idx = std::uniform_int_distribution<size_t>(0, workingBoundaryCells.size()-1)(rng);
 			auto i = workingBoundaryCells.begin() + idx;
-			assert(std::find(result._enabledCells.begin(), result._enabledCells.end(), *i) == result._enabledCells.end());
+			assert(std::find(enabledCellList.begin(), enabledCellList.end(), *i) == enabledCellList.end());
 			GetAdjacentCells(adjacent, *i);
-			result._enabledCells.push_back(*i);
+			enabledCellList.push_back(*i);
 			workingBoundaryCells.erase(i);
 
 			for (auto c:adjacent) {
-				if (std::find(result._enabledCells.begin(), result._enabledCells.end(), c) != result._enabledCells.end()) continue;
+				if (std::find(enabledCellList.begin(), enabledCellList.end(), c) != enabledCellList.end()) continue;
 				if (std::find(workingBoundaryCells.begin(), workingBoundaryCells.end(), c) != workingBoundaryCells.end()) continue;
 				workingBoundaryCells.push_back(c);
 			}
 		}
 
-		SeparateAndAssignBoundaryGroups(result, workingBoundaryCells);
-
-		return result;
+		return CreateHexField(std::move(enabledCellList));
 	}
 
 	HexCellField CreateRegularHexField(unsigned radius)
 	{
 		assert(radius > 0);
-		HexCellField result;
 
 		// Each time, select a cell from the boundary, and make it an enabled cell
 		// update the boundary as we go along
 		// could be done much faster with just a little sorting
 
-		result._enabledCells.push_back(Int2(0, 0));
+		std::vector<Int2> enabledCells;
+		enabledCells.push_back(Int2(0, 0));
 		Int2 adjacent[6];
 		GetAdjacentCells(adjacent, Int2(0, 0));
 
@@ -236,50 +345,23 @@ namespace UnitTests
 			auto nextBoundaryCells = std::move(workingBoundaryCells);
 
 			for (auto cell:nextBoundaryCells) {
-				assert(std::find(result._enabledCells.begin(), result._enabledCells.end(), cell) == result._enabledCells.end());
-				result._enabledCells.push_back(cell);
+				assert(std::find(enabledCells.begin(), enabledCells.end(), cell) == enabledCells.end());
+				enabledCells.push_back(cell);
 
 				GetAdjacentCells(adjacent, cell);
 				for (auto a:adjacent) {
 					auto i = std::find(workingBoundaryCells.begin(), workingBoundaryCells.end(), a);
 					if (i != workingBoundaryCells.end()) continue;
-					i = std::find(result._enabledCells.begin(), result._enabledCells.end(), a);
-					if (i != result._enabledCells.end()) continue;
+					i = std::find(enabledCells.begin(), enabledCells.end(), a);
+					if (i != enabledCells.end()) continue;
 					i = std::find(nextBoundaryCells.begin(), nextBoundaryCells.end(), a);
 					if (i != nextBoundaryCells.end()) continue;
 					workingBoundaryCells.push_back(a);
 				}
 			}
 		}
-		result._exteriorGroup._boundaryCells = std::move(workingBoundaryCells);
-		result._exteriorGroup._boundaryLineList = CreateBoundaryLines(result, result._exteriorGroup._boundaryCells);
 
-		return result;
-	}
-
-	HexCellField CreateFromSingleCellIsland(IteratorRange<const Int2*> enabledCells)
-	{
-		HexCellField result;
-		result._enabledCells.insert(result._enabledCells.end(), enabledCells.begin(), enabledCells.end());
-
-		std::vector<Int2> workingBoundaryCells;
-		workingBoundaryCells.reserve(enabledCells.size());
-		for (auto c:enabledCells) {
-			Int2 adjacent[6];
-			GetAdjacentCells(adjacent, c);
-			unsigned enabledAdjacentCount = 0;
-			for (auto a:adjacent) {
-				if (std::find(enabledCells.begin(), enabledCells.end(), a) == enabledCells.end())
-					break;
-				++enabledAdjacentCount;
-			}
-			if (enabledAdjacentCount != dimof(adjacent))
-				workingBoundaryCells.push_back(c);
-		}
-
-		SeparateAndAssignBoundaryGroups(result, workingBoundaryCells);
-
-		return result;
+		return CreateHexField(std::move(enabledCells));
 	}
 
 	std::vector<HexCellField> CreateFromMultipleCellIslands(IteratorRange<const Int2*> enabledCells)
@@ -318,7 +400,7 @@ namespace UnitTests
 
 			// We have all of the connected cells. Find the boundaries, and then figure out which boundaries are internal
 			// and which are external
-			result.emplace_back(CreateFromSingleCellIsland(island));
+			result.emplace_back(CreateHexField(std::move(island)));
 		}
 
 		return result;
@@ -331,11 +413,15 @@ namespace UnitTests
 
 	void DrawBoundary(RenderOverlays::IOverlayContext& overlayContext, const HexCellField& cellField, const HexCellField::BoundaryGroup& group, const Float3x3& localToWorld, RenderOverlays::ColorB color)
 	{
-		assert(!group._boundaryLineList.empty());
+		assert(!group._boundaryLineLoop.empty());
 		std::vector<Float3> boundaryLines;
-		boundaryLines.reserve(group._boundaryLineList.size());
-		for (auto l:group._boundaryLineList)
-			boundaryLines.push_back(Float3(TransformPoint(localToWorld, l), 0.f));
+		boundaryLines.reserve(group._boundaryLineLoop.size()*2);
+		auto lastPt = group._boundaryLineLoop.back();
+		for (auto pt:group._boundaryLineLoop) {
+			boundaryLines.push_back(Float3(TransformPoint(localToWorld, lastPt), 0.f));
+			boundaryLines.push_back(Float3(TransformPoint(localToWorld, pt), 0.f));
+			lastPt = pt;
+		}
 		overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, boundaryLines.data(), boundaryLines.size(), color);
 	}
 
@@ -366,57 +452,6 @@ namespace UnitTests
 		StraightSkeletonCalculator<T> calculator;
 		calculator.AddLoop(vertices);
 		return calculator.Calculate(maxInset);
-	}
-
-	template<typename Primitive> static std::vector<Vector2T<Primitive>> MakeBoundaryLoop(StraightSkeletonCalculator<Primitive>& calculator, const HexCellField& cellField, const HexCellField::BoundaryGroup& group)
-	{
-		std::vector<Vector2T<Primitive>> boundaryLines;
-		boundaryLines.reserve(group._boundaryCells.size() * 2 * 6);
-
-		for (auto cell:group._boundaryCells) {
-			Int2 adjacent[6];
-			GetAdjacentCells(adjacent, cell);
-			for (unsigned a=0; a<dimof(adjacent); ++a) {
-				if (std::find(cellField._enabledCells.begin(), cellField._enabledCells.end(), adjacent[a]) == cellField._enabledCells.end()) continue;
-				// cellCenter[0] = std::sqrt(Primitive(3)) * (Primitive)cell[0]
-				// However, to retain more digits of precision, we will do the sqrt last
-				Vector2T<Primitive> cellCenter { std::sqrt(Primitive(3) * (Primitive)cell[0] * (Primitive)cell[0]), Primitive(1.5) * (Primitive)cell[1] };
-				if (cell[0] < 0) cellCenter[0] = -cellCenter[0];
-				if (cell[1] & 1) {
-					// odd
-					boundaryLines.push_back(s_hexCornersOdds[s_hexEdges[a].first] + cellCenter);
-					boundaryLines.push_back(s_hexCornersOdds[s_hexEdges[a].second] + cellCenter);
-				} else {
-					// even
-					boundaryLines.push_back(s_hexCornersEvens[s_hexEdges[a].first] + cellCenter);
-					boundaryLines.push_back(s_hexCornersEvens[s_hexEdges[a].second] + cellCenter);
-				}
-			}
-		}
-
-		assert(!boundaryLines.empty());
-		
-		std::vector<Vector2T<Primitive>> boundary; 
-		boundary.reserve(1+boundaryLines.size()/2);
-		boundary.push_back(*(boundaryLines.end()-2));
-		boundary.push_back(*(boundaryLines.end()-1));
-		boundaryLines.erase(boundaryLines.end()-2, boundaryLines.end());
-		while (boundaryLines.size() > 2) {
-			auto i = boundaryLines.begin();
-			for (;i!=boundaryLines.end(); i+=2)
-				if (Equivalent(*i, *(boundary.end()-1), 1e-3f))
-					break;
-			assert(i != boundaryLines.end());
-			boundary.push_back(*(i+1));
-			boundaryLines.erase(i, i+2);
-		}
-
-		// last line should wrap around back to the first
-		assert(Equivalent(*(boundaryLines.end()-1), boundary[0], 1e-3f));
-
-		// reverse to get the ordering that the straight skeleton algorithm is expecting
-		std::reverse(boundary.begin(), boundary.end());
-		return boundary;
 	}
 
 	template<typename Primitive> static void AsFaceOrderedVertexList(
@@ -484,7 +519,7 @@ namespace UnitTests
 		}
 	}
 
-	template<typename Primitive> static void SaveStraightSkeletonToFile(const StraightSkeleton<Primitive>& ss, IteratorRange<const Float2*> boundaryLoop, const std::string& name)
+	template<typename Primitive> void SaveStraightSkeletonToFile(const StraightSkeleton<Primitive>& ss, IteratorRange<const Float2*> boundaryLoop, const std::string& name)
 	{
 		auto outputName = std::filesystem::temp_directory_path() / "xle-unit-tests" / (name + ".ply");
 		std::ofstream plyOut(outputName);
@@ -570,14 +605,12 @@ namespace UnitTests
 			StraightSkeletonCalculator<Primitive> calculator;
 			
 			{
-				auto boundary = MakeBoundaryLoop<Primitive>(calculator, cellField, cellField._exteriorGroup);
-				calculator.AddLoop(MakeIteratorRange(boundary));
-				_orderedBoundaryPts.push_back(std::move(boundary));
+				calculator.AddLoop(MakeIteratorRange(cellField._exteriorGroup._boundaryLineLoop));
+				_orderedBoundaryPts.push_back(cellField._exteriorGroup._boundaryLineLoop);
 			}
 			for (auto& group:cellField._interiorGroups) {
-				auto boundary = MakeBoundaryLoop<Primitive>(calculator, cellField, group);
-				calculator.AddLoop(MakeIteratorRange(boundary));
-				_orderedBoundaryPts.push_back(std::move(boundary));
+				calculator.AddLoop(MakeIteratorRange(group._boundaryLineLoop));
+				_orderedBoundaryPts.push_back(group._boundaryLineLoop);
 			}
 
 			_straightSkeleton = calculator.Calculate(maxInset);
@@ -647,10 +680,19 @@ namespace UnitTests
 				RenderCore::Techniques::ParsingContext& parserContext,
 				IInteractiveTestHelper& testHelper) override
 			{
+				float zoomFactor = 1.f;
+				Float2 viewOffset{ 0.f, 0.f };
+				Float2 viewport { parserContext.GetViewport()._width, parserContext.GetViewport()._height };
+				float scale = 8.f; // std::log(zoomFactor * gE - zoomFactor + 1.0f);
+				const Float3x3 localToWorld {
+					scale, 0.f, 0.5f * viewport[0] + scale * viewOffset[0],
+					0.f, scale, 0.5f * viewport[1] + scale * viewOffset[1],
+					0.f, 0.f, 1.f
+				};
+
 				{
 					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
 						parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
-					const auto localToWorld = Identity<Float3x3>();
 					DrawBoundary(*overlayContext, _cellField, _cellField._exteriorGroup, localToWorld, RenderOverlays::ColorB{32, 190, 32});
 					for (const auto&g:_cellField._interiorGroups)
 						DrawBoundary(*overlayContext, _cellField, g, localToWorld, RenderOverlays::ColorB{64, 140, 210});
@@ -690,7 +732,6 @@ namespace UnitTests
 			: _rng(std::move(rng))
 			{
 				_cellField = CreateRandomHexCellField(randomCellCount, _rng);
-				// _cellField = CreateRegularHexField(5);
 				_preview = StraightSkeletonPreview<float>(_cellField, maxInset);
 			}
 		};

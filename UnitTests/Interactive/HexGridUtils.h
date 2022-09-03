@@ -16,8 +16,7 @@ namespace UnitTests
 
 		struct BoundaryGroup
 		{
-			std::vector<Int2> _boundaryCells;
-			std::vector<Float2> _boundaryLineList;
+			std::vector<Float2> _boundaryLineLoop;
 		};
 		std::vector<BoundaryGroup> _interiorGroups;
 		BoundaryGroup _exteriorGroup;
@@ -66,7 +65,7 @@ namespace UnitTests
 
 	HexCellField CreateRegularHexField(unsigned radius);
 	HexCellField CreateRandomHexCellField(unsigned cellCount, std::mt19937_64& rng);
-	HexCellField CreateFromSingleCellIsland(IteratorRange<const Int2*> enabledCells);
+	HexCellField CreateHexField(std::vector<Int2>&& enabledCellList);
 	std::vector<HexCellField> CreateFromMultipleCellIslands(IteratorRange<const Int2*> enabledCells);
 
 	void DrawBoundary(
