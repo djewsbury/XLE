@@ -66,7 +66,8 @@ namespace UnitTests
 	HexCellField CreateRegularHexField(unsigned radius);
 	HexCellField CreateRandomHexCellField(unsigned cellCount, std::mt19937_64& rng);
 	HexCellField CreateHexField(std::vector<Int2>&& enabledCellList);
-	std::vector<HexCellField> CreateFromMultipleCellIslands(IteratorRange<const Int2*> enabledCells);
+	std::vector<std::pair<HexCellField, Int2>> CreateFromMultipleCellIslands(IteratorRange<const Int2*> enabledCells);
+	Float2 CellCenter(Int2);
 
 	void DrawBoundary(
 		RenderOverlays::IOverlayContext& overlayContext,

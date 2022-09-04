@@ -364,11 +364,11 @@ namespace UnitTests
 		return CreateHexField(std::move(enabledCells));
 	}
 
-	std::vector<HexCellField> CreateFromMultipleCellIslands(IteratorRange<const Int2*> enabledCells)
+	std::vector<std::pair<HexCellField, Int2>> CreateFromMultipleCellIslands(IteratorRange<const Int2*> enabledCells)
 	{
 		// Given some arbitrary input cells, find the contiguous parts
 		// This is made a little more difficult by the need to find interior boundaries
-		std::vector<HexCellField> result;
+		std::vector<std::pair<HexCellField, Int2>> result;
 
 		std::vector<Int2> workingEnabledCells(enabledCells.begin(), enabledCells.end());
 		std::vector<Int2> searchQueue;
@@ -398,12 +398,47 @@ namespace UnitTests
 				}
 			}
 
-			// We have all of the connected cells. Find the boundaries, and then figure out which boundaries are internal
-			// and which are external
-			result.emplace_back(CreateHexField(std::move(island)));
+			// We have all of the connected cells
+			// Find the median pt and arrange the island around that point -- just to keep the numbers as small as possible
+			// Then find the boundaries, and then figure out which boundaries are internal and which are external
+			Int2 min{INT_MAX, INT_MAX}, max{INT_MIN, INT_MIN};
+			for (auto cell:island) {
+				min[0] = std::min(cell[0], min[0]);
+				min[1] = std::min(cell[1], min[1]);
+				max[0] = std::max(cell[0], max[0]);
+				max[1] = std::max(cell[1], max[1]);
+			}
+			Int2 offset = (max+min)/4;
+			offset *= 2;	// ensure we're offsetting an even numbers
+			for (auto& cell:island) cell -= offset;
+			result.emplace_back(CreateHexField(std::move(island)), offset);
 		}
 
 		return result;
+	}
+
+	Float2 CellCenter(Int2 cell)
+	{
+		Float2 cellCenter { s_2cos30 * (float)cell[0], 1.5f * (float)cell[1] };
+		if (cell[1] & 1) {
+			// odd
+			return cellCenter + Float2{ s_cos30, 0.f };
+		} else {
+			return cellCenter;
+		}
+	}
+
+	HexCellField CreateFixedHexField()
+	{
+		std::vector<Int2> enabledCells {
+			Int2{20, 23}, Int2{19, 23}, Int2{19, 22}, Int2{20, 22}, Int2{20, 21}, Int2{21, 21}, Int2{20, 20}, Int2{19, 20}, Int2{20, 19}, Int2{21, 19}, Int2{22, 19}, Int2{20, 18}, Int2{21, 18}, Int2{21, 17}, Int2{22, 17}, Int2{21, 16}, Int2{20, 16}, Int2{21, 15}, Int2{22, 15}, Int2{21, 14}, Int2{20, 14}, Int2{21, 13}, Int2{22, 13}, Int2{21, 12}, Int2{20, 12}, Int2{21, 11}, Int2{22, 11}, Int2{21, 10}, Int2{20, 10}, Int2{21, 9}, Int2{22, 9}, Int2{21, 8}, Int2{20, 8}, Int2{21, 7}, Int2{22, 7}, Int2{21, 6}, Int2{20, 6}, Int2{21, 5}, Int2{20, 5}, Int2{20, 4}, Int2{19, 4}, Int2{20, 3}, Int2{21, 3}, Int2{20, 2}, Int2{19, 2}, Int2{20, 1}, Int2{19, 1}, Int2{19, 0}, Int2{18, 0}, Int2{19, -1}, Int2{20, -1}, Int2{19, -2}, Int2{18, -2}, Int2{19, -3}, Int2{20, -3}, Int2{18, -3}, Int2{18, -4}, Int2{17, -4}, Int2{18, -5}, Int2{19, -5}, Int2{18, -6}, Int2{17, -6}, Int2{18, -7}, Int2{17, -7}, Int2{17, -8}, Int2{16, -8}, Int2{17, -9}, Int2{18, -9}, Int2{16, -9}, Int2{16, -10}, Int2{15, -10}, Int2{16, -11}, Int2{17, -11}, Int2{15, -11}, Int2{15, -12}, Int2{14, -12}, Int2{15, -13}, Int2{16, -13}, Int2{14, -13}, Int2{14, -14}, Int2{13, -14}, Int2{14, -15}, Int2{15, -15}, Int2{13, -15}, Int2{13, -16}, Int2{12, -16}, Int2{13, -17}, Int2{12, -17}, Int2{11, -16}, Int2{11, -17}, Int2{11, -18}, Int2{10, -18}, Int2{11, -19}, Int2{10, -19}, Int2{10, -20}, Int2{9, -20}, Int2{10, -21}, Int2{9, -21}, Int2{8, -20}, Int2{8, -21}, Int2{7, -20}, Int2{7, -21}, Int2{7, -22}, Int2{6, -22}, Int2{6, -21}, Int2{5, -22}, Int2{5, -21}, Int2{4, -22}, Int2{4, -21}, Int2{3, -22}, Int2{4, -23}, Int2{3, -23}, Int2{2, -22}, Int2{2, -23}, Int2{1, -22}, Int2{1, -23}, Int2{0, -22}, Int2{0, -23}, Int2{-1, -22}, Int2{-1, -23}, Int2{-2, -22}, Int2{-2, -21}, Int2{-1, -21}, Int2{-3, -22}, Int2{-3, -21}, Int2{-4, -22}, Int2{-4, -21}, Int2{-5, -22}, Int2{-5, -21}, Int2{-6, -22}, Int2{-6, -21}, Int2{-7, -20}, Int2{-6, -20}, Int2{-7, -21}, Int2{-8, -20}, Int2{-8, -21}, Int2{-9, -20}, Int2{-9, -21}, Int2{-10, -20}, Int2{-10, -19}, Int2{-9, -19}, Int2{-11, -20},
+			Int2{-11, -19}, Int2{-12, -20}, Int2{-12, -19}, Int2{-13, -18}, Int2{-12, -18}, Int2{-12, -17}, Int2{-11, -17}, Int2{-11, -18}, Int2{-10, -17}, Int2{-10, -18}, Int2{-9, -17}, Int2{-9, -18}, Int2{-8, -17}, Int2{-8, -18}, Int2{-8, -19}, Int2{-7, -19}, Int2{-7, -18}, Int2{-6, -19}, Int2{-6, -18}, Int2{-5, -19}, Int2{-5, -18}, Int2{-4, -19}, Int2{-5, -20}, Int2{-4, -20}, Int2{-3, -19}, Int2{-3, -20}, Int2{-2, -19}, Int2{-2, -20}, Int2{-1, -19}, Int2{-1, -20}, Int2{0, -19}, Int2{0, -20}, Int2{0, -21}, Int2{1, -21}, Int2{1, -20}, Int2{2, -21}, Int2{2, -20}, Int2{3, -21}, Int2{3, -20}, Int2{3, -19}, Int2{4, -19}, Int2{4, -20}, Int2{5, -19}, Int2{5, -20}, Int2{6, -19}, Int2{6, -20}, Int2{7, -19}, Int2{6, -18}, Int2{7, -18}, Int2{8, -19}, Int2{8, -18}, Int2{9, -19}, Int2{9, -18}, Int2{9, -17}, Int2{10, -17}, Int2{9, -16}, Int2{10, -16}, Int2{10, -15}, Int2{11, -15}, Int2{10, -14}, Int2{11, -14}, Int2{12, -15}, Int2{12, -14}, Int2{12, -13}, Int2{13, -13}, Int2{12, -12}, Int2{13, -12}, Int2{13, -11}, Int2{14, -11}, Int2{13, -10}, Int2{14, -10}, Int2{14, -9}, Int2{15, -9}, Int2{14, -8}, Int2{15, -8}, Int2{15, -7}, Int2{16, -7}, Int2{15, -6}, Int2{16, -6}, Int2{16, -5}, Int2{17, -5}, Int2{16, -4}, Int2{16, -3}, Int2{17, -3}, Int2{15, -4}, Int2{15, -3}, Int2{14, -4}, Int2{15, -5}, Int2{14, -5}, Int2{14, -6}, Int2{13, -6}, Int2{14, -7}, Int2{13, -7}, Int2{13, -8}, Int2{12, -8}, Int2{13, -9}, Int2{12, -9}, Int2{12, -10}, Int2{11, -10}, Int2{12, -11}, Int2{11, -11}, Int2{11, -12}, Int2{10, -12}, Int2{11, -13}, Int2{10, -13}, Int2{9, -12}, Int2{9, -13}, Int2{9, -14}, Int2{8, -14}, Int2{9, -15}, Int2{8, -15}, Int2{8, -16}, Int2{7, -16}, Int2{8, -17}, Int2{7, -17}, Int2{6, -16}, Int2{6, -17}, Int2{5, -16}, Int2{5, -17}, Int2{5, -18}, Int2{4, -18}, Int2{4, -17}, Int2{3, -18}, Int2{3, -17}, Int2{2, -18}, Int2{2, -17}, Int2{1, -18}, Int2{2, -19}, Int2{1, -19}, Int2{0, -18}, Int2{0, -17}, Int2{1, -17}, Int2{-1, -18}, Int2{-1, -17}, Int2{-2, -18}, Int2{-2, -17}, Int2{-3, -18}, Int2{-3, -17}, Int2{-4, -18},
+			Int2{-4, -17}, Int2{-5, -16}, Int2{-4, -16}, Int2{-5, -17}, Int2{-6, -16}, Int2{-6, -17}, Int2{-7, -16}, Int2{-7, -17}, Int2{-8, -16}, Int2{-8, -15}, Int2{-7, -15}, Int2{-9, -16}, Int2{-9, -15}, Int2{-10, -16}, Int2{-10, -15}, Int2{-11, -16}, Int2{-11, -15}, Int2{-12, -16}, Int2{-12, -15}, Int2{-13, -16}, Int2{-13, -15}, Int2{-14, -16}, Int2{-13, -17}, Int2{-14, -17}, Int2{-14, -18}, Int2{-15, -18}, Int2{-15, -17}, Int2{-16, -16}, Int2{-15, -16}, Int2{-16, -17}, Int2{-17, -16}, Int2{-17, -17}, Int2{-18, -16}, Int2{-18, -15}, Int2{-17, -15}, Int2{-18, -14}, Int2{-17, -14}, Int2{-16, -15}, Int2{-16, -14}, Int2{-15, -15}, Int2{-15, -14}, Int2{-14, -15}, Int2{-14, -14}, Int2{-14, -13}, Int2{-13, -13}, Int2{-13, -14}, Int2{-12, -13}, Int2{-12, -14}, Int2{-11, -13}, Int2{-11, -14}, Int2{-10, -13}, Int2{-10, -14}, Int2{-9, -13}, Int2{-9, -14}, Int2{-8, -13}, Int2{-8, -14}, Int2{-7, -13}, Int2{-7, -14}, Int2{-6, -13}, Int2{-6, -14}, Int2{-6, -15}, Int2{-5, -15}, Int2{-5, -14}, Int2{-4, -15}, Int2{-4, -14}, Int2{-3, -15}, Int2{-3, -14}, Int2{-2, -15}, Int2{-3, -16}, Int2{-2, -16}, Int2{-1, -15}, Int2{-1, -16}, Int2{0, -15}, Int2{0, -16}, Int2{1, -15}, Int2{1, -16}, Int2{2, -15}, Int2{2, -16}, Int2{3, -15}, Int2{3, -16}, Int2{4, -15}, Int2{4, -16}, Int2{5, -15}, Int2{4, -14}, Int2{5, -14}, Int2{6, -15}, Int2{6, -14}, Int2{7, -15}, Int2{7, -14}, Int2{7, -13}, Int2{8, -13}, Int2{7, -12}, Int2{8, -12}, Int2{8, -11}, Int2{9, -11}, Int2{8, -10}, Int2{9, -10}, Int2{10, -11}, Int2{10, -10}, Int2{10, -9}, Int2{11, -9}, Int2{10, -8}, Int2{11, -8}, Int2{11, -7}, Int2{12, -7}, Int2{11, -6}, Int2{12, -6}, Int2{12, -5}, Int2{13, -5}, Int2{12, -4}, Int2{13, -4}, Int2{13, -3}, Int2{14, -3}, Int2{13, -2}, Int2{14, -2}, Int2{14, -1}, Int2{15, -1}, Int2{15, -2}, Int2{16, -1}, Int2{16, -2}, Int2{17, -1}, Int2{17, -2}, Int2{18, -1}, Int2{17, 0}, Int2{17, 1}, Int2{18, 1}, Int2{16, 0}, Int2{16, 1}, Int2{15, 0}, Int2{15, 1}, Int2{14, 0}, Int2{14, 1}, Int2{13, 0}, Int2{13, 1}, Int2{12, 0}, Int2{13, -1}, Int2{12, -1},
+			Int2{12, -2}, Int2{11, -2}, Int2{12, -3}, Int2{11, -3}, Int2{11, -4}, Int2{10, -4}, Int2{11, -5}, Int2{10, -5}, Int2{10, -6}, Int2{9, -6}, Int2{10, -7}, Int2{9, -7}, Int2{9, -8}, Int2{8, -8}, Int2{9, -9}, Int2{8, -9}, Int2{7, -8}, Int2{7, -9}, Int2{7, -10}, Int2{6, -10}, Int2{7, -11}, Int2{6, -11}, Int2{6, -12}, Int2{5, -12}, Int2{6, -13}, Int2{5, -13}, Int2{4, -12}, Int2{4, -13}, Int2{3, -12}, Int2{3, -13}, Int2{3, -14}, Int2{2, -14}, Int2{2, -13}, Int2{1, -14}, Int2{1, -13}, Int2{0, -14}, Int2{0, -13}, Int2{-1, -14}, Int2{-1, -13}, Int2{-2, -14}, Int2{-2, -13}, Int2{-3, -12}, Int2{-2, -12}, Int2{-3, -13}, Int2{-4, -12}, Int2{-4, -13}, Int2{-5, -12}, Int2{-5, -13}, Int2{-6, -12}, Int2{-6, -11}, Int2{-5, -11}, Int2{-7, -12}, Int2{-7, -11}, Int2{-8, -12}, Int2{-8, -11}, Int2{-9, -12}, Int2{-9, -11}, Int2{-10, -12}, Int2{-10, -11}, Int2{-11, -12}, Int2{-11, -11}, Int2{-12, -12}, Int2{-12, -11}, Int2{-13, -12}, Int2{-13, -11}, Int2{-14, -12}, Int2{-14, -11}, Int2{-15, -12}, Int2{-15, -11}, Int2{-16, -12}, Int2{-15, -13}, Int2{-16, -13}, Int2{-17, -12}, Int2{-17, -13}, Int2{-18, -12}, Int2{-18, -13}, Int2{-19, -12}, Int2{-19, -14}, Int2{-19, -11}, Int2{-18, -11}, Int2{-20, -12}, Int2{-20, -11}, Int2{-21, -10}, Int2{-20, -10}, Int2{-20, -9}, Int2{-19, -9}, Int2{-19, -10}, Int2{-18, -9}, Int2{-18, -10}, Int2{-17, -9}, Int2{-17, -10}, Int2{-17, -11}, Int2{-16, -11}, Int2{-16, -10}, Int2{-16, -9}, Int2{-15, -9}, Int2{-15, -10}, Int2{-18, -8}, Int2{-19, -8}, Int2{-19, -7}, Int2{-20, -8}, Int2{-20, -7}, Int2{-21, -8}, Int2{-21, -7}, Int2{-22, -8}, Int2{-21, -6}, Int2{-10, -10}, Int2{-9, -10}, Int2{-8, -10}, Int2{-7, -10}, Int2{-6, -9}, Int2{-6, -10}, Int2{-5, -9}, Int2{-5, -10}, Int2{-4, -9}, Int2{-4, -10}, Int2{-4, -11}, Int2{-3, -11}, Int2{-3, -10}, Int2{-2, -11}, Int2{-2, -10}, Int2{-1, -11}, Int2{-1, -10}, Int2{0, -11}, Int2{-1, -12}, Int2{0, -12}, Int2{1, -11}, Int2{1, -12}, Int2{2, -11}, Int2{2, -12}, Int2{3, -11}, Int2{2, -10}, Int2{3, -10}, Int2{4, -11}, Int2{4, -10}, Int2{5, -11},
+			Int2{5, -10}, Int2{5, -9}, Int2{6, -9}, Int2{5, -8}, Int2{6, -8}, Int2{6, -7}, Int2{7, -7}, Int2{6, -6}, Int2{7, -6}, Int2{8, -7}, Int2{8, -6}, Int2{8, -5}, Int2{9, -5}, Int2{8, -4}, Int2{9, -4}, Int2{9, -3}, Int2{10, -3}, Int2{9, -2}, Int2{10, -2}, Int2{10, -1}, Int2{11, -1}, Int2{10, 0}, Int2{11, 0}, Int2{11, 1}, Int2{12, 1}, Int2{11, 2}, Int2{12, 2}, Int2{12, 3}, Int2{13, 3}, Int2{13, 2}, Int2{14, 3}, Int2{14, 2}, Int2{15, 3}, Int2{15, 2}, Int2{16, 3}, Int2{16, 2}, Int2{17, 3}, Int2{17, 2}, Int2{18, 3}, Int2{18, 2}, Int2{19, 3}, Int2{18, 4}, Int2{18, 5}, Int2{19, 5}, Int2{17, 4}, Int2{17, 5}, Int2{16, 4}, Int2{16, 5}, Int2{15, 4}, Int2{15, 5}, Int2{14, 4}, Int2{14, 5}, Int2{13, 4}, Int2{13, 5}, Int2{12, 4}, Int2{11, 4}, Int2{13, 6}, Int2{14, 7}, Int2{14, 6}, Int2{15, 7}, Int2{15, 6}, Int2{16, 7}, Int2{16, 6}, Int2{17, 7}, Int2{17, 6}, Int2{18, 7}, Int2{18, 6}, Int2{19, 7}, Int2{19, 6}, Int2{20, 7}, Int2{19, 8}, Int2{19, 9}, Int2{20, 9}, Int2{18, 8}, Int2{18, 9}, Int2{17, 8}, Int2{17, 9}, Int2{16, 8}, Int2{16, 9}, Int2{15, 8}, Int2{15, 9}, Int2{14, 8}, Int2{14, 10}, Int2{15, 10}, Int2{15, 11}, Int2{16, 11}, Int2{16, 10}, Int2{17, 11}, Int2{17, 10}, Int2{18, 11}, Int2{18, 10}, Int2{19, 11}, Int2{19, 10}, Int2{20, 11}, Int2{19, 12}, Int2{19, 13}, Int2{20, 13}, Int2{18, 12}, Int2{18, 13}, Int2{17, 12}, Int2{17, 13}, Int2{16, 12}, Int2{16, 13}, Int2{15, 12}, Int2{15, 14}, Int2{16, 14}, Int2{16, 15}, Int2{17, 15}, Int2{17, 14}, Int2{18, 15}, Int2{18, 14}, Int2{19, 15}, Int2{19, 14}, Int2{20, 15}, Int2{19, 16}, Int2{19, 17}, Int2{20, 17}, Int2{18, 16}, Int2{18, 17}, Int2{17, 16}, Int2{17, 17}, Int2{16, 16}, Int2{16, 17}, Int2{15, 16}, Int2{15, 17}, Int2{14, 16}, Int2{15, 15}, Int2{14, 18}, Int2{15, 18}, Int2{15, 19}, Int2{16, 19}, Int2{16, 18}, Int2{17, 19}, Int2{17, 18}, Int2{18, 19}, Int2{18, 18}, Int2{19, 19}, Int2{19, 18}, Int2{18, 20}, Int2{18, 21}, Int2{19, 21}, Int2{17, 20}, Int2{17, 21}, Int2{16, 20}, Int2{16, 21}, Int2{15, 20}, Int2{15, 21}, Int2{14, 20}, Int2{14, 22},
+			Int2{15, 22}, Int2{16, 23}, Int2{16, 22}, Int2{17, 23}, Int2{17, 22}, Int2{18, 23}, Int2{18, 22}, Int2{10, 2}, Int2{9, 2}, Int2{10, 1}, Int2{9, 1}, Int2{9, 0}, Int2{8, 0}, Int2{9, -1}, Int2{8, -1}, Int2{8, -2}, Int2{7, -2}, Int2{8, -3}, Int2{7, -3}, Int2{7, -4}, Int2{6, -4}, Int2{7, -5}, Int2{6, -5}, Int2{5, -4}, Int2{5, -5}, Int2{5, -6}, Int2{4, -6}, Int2{5, -7}, Int2{4, -7}, Int2{4, -8}, Int2{3, -8}, Int2{4, -9}, Int2{3, -9}, Int2{2, -8}, Int2{2, -9}, Int2{1, -8}, Int2{1, -9}, Int2{1, -10}, Int2{0, -10}, Int2{0, -9}, Int2{-1, -8}, Int2{0, -8}, Int2{-1, -9}, Int2{-2, -8}, Int2{-2, -9}, Int2{-3, -8}, Int2{-3, -9}, Int2{-4, -8}, Int2{-4, -7}, Int2{-3, -7}, Int2{-5, -8}, Int2{-6, -8}, Int2{-4, -6}, Int2{-3, -6}, Int2{-2, -7}, Int2{-2, -6}, Int2{-1, -7}, Int2{-1, -6}, Int2{0, -7}, Int2{0, -6}, Int2{1, -7}, Int2{1, -6}, Int2{2, -7}, Int2{2, -6}, Int2{3, -7}, Int2{3, -6}, Int2{3, -5}, Int2{4, -5}, Int2{3, -4}, Int2{4, -4}, Int2{4, -3}, Int2{5, -3}, Int2{4, -2}, Int2{5, -2}, Int2{6, -3}, Int2{6, -2}, Int2{6, -1}, Int2{7, -1}, Int2{7, 0}, Int2{3, -2}, Int2{2, -2}, Int2{3, -3}, Int2{2, -3}, Int2{2, -4}, Int2{1, -4}, Int2{2, -5}, Int2{1, -5}, Int2{0, -4}, Int2{0, -5}, Int2{-1, -4}, Int2{-1, -5}, Int2{-2, -4}, Int2{-2, -5}, Int2{0, -3}, Int2{0, -2}, Int2{1, -3}, Int2{1, -2}, 
+		};
+		return CreateHexField(std::move(enabledCells));
 	}
 
 	static Float2 TransformPoint(const Float3x3& localToWorld, Float2 pt)
@@ -454,7 +489,7 @@ namespace UnitTests
 		return calculator.Calculate(maxInset);
 	}
 
-	template<typename Primitive> static void AsFaceOrderedVertexList(
+	template<typename Primitive> void AsFaceOrderedVertexList(
 		std::vector<std::vector<unsigned>>& result,
 		IteratorRange<const typename StraightSkeleton<Primitive>::Edge*> edgesInit)
 	{
@@ -490,6 +525,9 @@ namespace UnitTests
 			result.push_back(std::move(workingLoop));
 		}
 	}
+
+	template void AsFaceOrderedVertexList<float>(std::vector<std::vector<unsigned>>&, IteratorRange<const StraightSkeleton<float>::Edge*>);
+	template void AsFaceOrderedVertexList<double>(std::vector<std::vector<unsigned>>&, IteratorRange<const StraightSkeleton<double>::Edge*>);
 
 	template<typename Primitive> static void WriteStraightSkeletonAsPLY(std::ostream& str, const StraightSkeleton<Primitive>& skeleton, IteratorRange<const Vector2T<Primitive>*> boundaryLoop)
 	{
@@ -557,7 +595,7 @@ namespace UnitTests
 			}
 		}
 
-		void Draw(RenderOverlays::IOverlayContext& overlayContext) const
+		void Draw(RenderOverlays::IOverlayContext& overlayContext, const Float4x4& localToWorld) const
 		{
 			const RenderOverlays::ColorB waveFrontColor { 96, 200, 159 };
 			const RenderOverlays::ColorB pathColor { 65, 151, 204 };
@@ -569,12 +607,12 @@ namespace UnitTests
 				if (e._type == StraightSkeleton<Primitive>::EdgeType::Wavefront) {
 					REQUIRE(e._head >= _straightSkeleton._boundaryPointCount);
 					REQUIRE(e._tail >= _straightSkeleton._boundaryPointCount);
-					wavefrontLines.push_back(GetPt(e._head));
-					wavefrontLines.push_back(GetPt(e._tail));
+					wavefrontLines.push_back(XLEMath::TransformPoint(localToWorld, GetPt(e._head)));
+					wavefrontLines.push_back(XLEMath::TransformPoint(localToWorld, GetPt(e._tail)));
 				} else {
 					assert(e._type == StraightSkeleton<Primitive>::EdgeType::VertexPath);
-					pathLines.push_back(GetPt(e._head));
-					pathLines.push_back(GetPt(e._tail));
+					pathLines.push_back(XLEMath::TransformPoint(localToWorld, GetPt(e._head)));
+					pathLines.push_back(XLEMath::TransformPoint(localToWorld, GetPt(e._tail)));
 				}
 			}
 
@@ -586,8 +624,8 @@ namespace UnitTests
 				originalShapeLines.reserve(b.size()*2);
 
 				for (size_t c=0; c<b.size(); ++c) {
-					originalShapeLines.push_back(Float3(b[c], 0));
-					originalShapeLines.push_back(Float3(b[(c+1)%b.size()], 0));
+					originalShapeLines.push_back(XLEMath::TransformPoint(localToWorld, Float3(b[c], 0)));
+					originalShapeLines.push_back(XLEMath::TransformPoint(localToWorld, Float3(b[(c+1)%b.size()], 0)));
 				}
 				overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, originalShapeLines.data(), originalShapeLines.size(), originalShapeColor);
 			}
@@ -684,19 +722,25 @@ namespace UnitTests
 				Float2 viewOffset{ 0.f, 0.f };
 				Float2 viewport { parserContext.GetViewport()._width, parserContext.GetViewport()._height };
 				float scale = 8.f; // std::log(zoomFactor * gE - zoomFactor + 1.0f);
-				const Float3x3 localToWorld {
+				const Float3x3 localToWorld3x3 {
 					scale, 0.f, 0.5f * viewport[0] + scale * viewOffset[0],
 					0.f, scale, 0.5f * viewport[1] + scale * viewOffset[1],
 					0.f, 0.f, 1.f
+				};
+				const Float4x4 localToWorld4x4 {
+					scale, 0.f, 0.f, 0.5f * viewport[0] + scale * viewOffset[0],
+					0.f, scale, 0.f, 0.5f * viewport[1] + scale * viewOffset[1],
+					0.f, 0.f, 1.f, 0.f,
+					0.f, 0.f, 0.f, 1.f
 				};
 
 				{
 					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
 						parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
-					DrawBoundary(*overlayContext, _cellField, _cellField._exteriorGroup, localToWorld, RenderOverlays::ColorB{32, 190, 32});
+					DrawBoundary(*overlayContext, _cellField, _cellField._exteriorGroup, localToWorld3x3, RenderOverlays::ColorB{32, 190, 32});
 					for (const auto&g:_cellField._interiorGroups)
-						DrawBoundary(*overlayContext, _cellField, g, localToWorld, RenderOverlays::ColorB{64, 140, 210});
-					_preview.Draw(*overlayContext);
+						DrawBoundary(*overlayContext, _cellField, g, localToWorld3x3, RenderOverlays::ColorB{64, 140, 210});
+					_preview.Draw(*overlayContext, localToWorld4x4);
 				}
 
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
@@ -756,7 +800,7 @@ namespace UnitTests
 				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
 					parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
 				for (const auto& preview:_previews)
-					preview.Draw(*overlayContext);
+					preview.Draw(*overlayContext, Identity<Float4x4>());
 			}
 
 			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, RenderCore::LoadStore::Clear);
@@ -1021,7 +1065,7 @@ namespace UnitTests
 				{
 					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
 						parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
-					_preview.Draw(*overlayContext);
+					_preview.Draw(*overlayContext, Identity<Float4x4>());
 				}
 
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
@@ -1083,7 +1127,7 @@ namespace UnitTests
 			{
 				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
 					*threadContext, *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
-				preview.Draw(*overlayContext);
+				preview.Draw(*overlayContext, Identity<Float4x4>());
 			}
 
 			RenderCore::ClearValue clearValues[] = { RenderCore::MakeClearValue(1.0f, 1.0f, 1.f) };
