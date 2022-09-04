@@ -211,7 +211,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	std::future<BufferUploads::ResourceLocator> LoadStaticResourceFullyAsync(
-		ResourceConstructionContext& constructionContext,
+		ResourceConstructionContext* constructionContext,
 		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
 		unsigned resourceSize,
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
@@ -224,7 +224,28 @@ namespace RenderCore { namespace Techniques
 			LinearBufferDesc::Create(resourceSize),
 			resourceName);
 		dataSource->_loadRequests = Internal::AsLoadRequests(modelScaffold, loadRequests);
-		return constructionContext.ConstructStaticGeometry(std::move(dataSource), bindFlags, resourceName);
+		if (constructionContext) {
+			return constructionContext->ConstructStaticGeometry(std::move(dataSource), bindFlags, resourceName);
+		} else {
+			auto& bufferUploads = Services::GetBufferUploads();
+			return std::move(bufferUploads.Begin(std::move(dataSource), bindFlags)._future);
+		}
+	}
+
+	std::future<BufferUploads::ResourceLocator> LoadStaticResourceFullyAsync(
+		ResourceConstructionContext* constructionContext,
+		std::vector<uint8_t>&& data,
+		BindFlag::BitField bindFlags,
+		StringSection<> resourceName)
+	{
+		auto dataSource = BufferUploads::CreateBasicPacket(std::move(data));
+		if (constructionContext) {
+			return constructionContext->ConstructStaticGeometry(std::move(dataSource), bindFlags, resourceName);
+		} else {
+			auto desc = CreateDesc(bindFlags, LinearBufferDesc::Create(dataSource->GetData().size()), resourceName);
+			auto& bufferUploads = Services::GetBufferUploads();
+			return std::move(bufferUploads.Begin(desc, std::move(dataSource), bindFlags)._future);
+		}
 	}
 
 	std::pair<std::shared_ptr<IResource>, BufferUploads::TransactionMarker> LoadStaticResourcePartialAsync(

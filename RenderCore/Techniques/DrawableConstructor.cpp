@@ -291,40 +291,20 @@ namespace RenderCore { namespace Techniques
 						}
 					}
 					std::future<BufferUploads::ResourceLocator> transMarker;
-					if (constructionContext) {
-						if (start->_loadBuffer == LoadBuffer::VB) {
-							transMarker = LoadStaticResourceFullyAsync(
-								*constructionContext,
-								MakeIteratorRange(localLoadRequests),
-								offset, _registeredScaffolds[start->_scaffoldIdx],
-								BindFlag::VertexBuffer,
-								(StringMeld<128>() << "[vb]" << _registeredScaffoldNames[start->_scaffoldIdx]).AsStringSection());
-						} else {
-							transMarker = LoadStaticResourceFullyAsync(
-								*constructionContext,
-								MakeIteratorRange(localLoadRequests),
-								offset, _registeredScaffolds[start->_scaffoldIdx],
-								BindFlag::IndexBuffer,
-								(StringMeld<128>() << "[ib]" << _registeredScaffoldNames[start->_scaffoldIdx]).AsStringSection());
-						}
+					if (start->_loadBuffer == LoadBuffer::VB) {
+						transMarker = LoadStaticResourceFullyAsync(
+							constructionContext,
+							MakeIteratorRange(localLoadRequests),
+							offset, _registeredScaffolds[start->_scaffoldIdx],
+							BindFlag::VertexBuffer,
+							(StringMeld<128>() << "[vb]" << _registeredScaffoldNames[start->_scaffoldIdx]).AsStringSection());
 					} else {
-						if (start->_loadBuffer == LoadBuffer::VB) {
-							transMarker = std::move(LoadStaticResourceFullyAsync(
-								*bufferUploads,
-								MakeIteratorRange(localLoadRequests),
-								offset, _registeredScaffolds[start->_scaffoldIdx],
-								BindFlag::VertexBuffer,
-								nullptr,
-								(StringMeld<128>() << "[vb]" << _registeredScaffoldNames[start->_scaffoldIdx]).AsStringSection())._future);
-						} else {
-							transMarker = std::move(LoadStaticResourceFullyAsync(
-								*bufferUploads,
-								MakeIteratorRange(localLoadRequests),
-								offset, _registeredScaffolds[start->_scaffoldIdx],
-								BindFlag::IndexBuffer,
-								nullptr,
-								(StringMeld<128>() << "[ib]" << _registeredScaffoldNames[start->_scaffoldIdx]).AsStringSection())._future);
-						}
+						transMarker = LoadStaticResourceFullyAsync(
+							constructionContext,
+							MakeIteratorRange(localLoadRequests),
+							offset, _registeredScaffolds[start->_scaffoldIdx],
+							BindFlag::IndexBuffer,
+							(StringMeld<128>() << "[ib]" << _registeredScaffoldNames[start->_scaffoldIdx]).AsStringSection());
 					}
 					pendingTransactions->_markers.emplace_back(std::move(transMarker));
 				}

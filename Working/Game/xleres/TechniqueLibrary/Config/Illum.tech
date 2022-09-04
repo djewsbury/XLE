@@ -165,6 +165,20 @@ FlatColor_PerPixelAndEarlyRejection=~
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+CopyDiffuseAlbedo_NoPatches=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:copyDiffuseAlbedo
+
+CopyDiffuseAlbedo_PerPixel=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:copyDiffuseAlbedo
+
+CopyDiffuseAlbedo_PerPixelAndEarlyRejection=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:copyDiffuseAlbedoWithEarlyRejection
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 ProbePrepare_NoPatches=~
 	Inherit=~; Forward_NoPatches
 	Selectors=~

@@ -10,7 +10,7 @@
 #include <memory>
 #include <future>
 
-namespace RenderCore { namespace BufferUploads { using TransactionID = uint64_t; class ResourceLocator; class IAsyncDataSource; class IManager; }}
+namespace RenderCore { namespace BufferUploads { using TransactionID = uint64_t; class ResourceLocator; class IAsyncDataSource; class IDataPacket; class IManager; }}
 namespace RenderCore { namespace Assets { class TextureCompilationRequest; class ModelScaffold; }}
 
 namespace RenderCore { namespace Techniques
@@ -33,6 +33,11 @@ namespace RenderCore { namespace Techniques
 
 		std::future<BufferUploads::ResourceLocator> ConstructStaticGeometry(
 			std::shared_ptr<BufferUploads::IAsyncDataSource> dataSource,
+			BindFlag::BitField bindFlags,
+			StringSection<> resourceName);
+
+		std::future<BufferUploads::ResourceLocator> ConstructStaticGeometry(
+			std::shared_ptr<BufferUploads::IDataPacket> dataSource,
 			BindFlag::BitField bindFlags,
 			StringSection<> resourceName);
 

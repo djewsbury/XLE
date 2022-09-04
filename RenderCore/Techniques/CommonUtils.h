@@ -44,10 +44,16 @@ namespace RenderCore { namespace Techniques {
 
 	class ResourceConstructionContext;
 	std::future<BufferUploads::ResourceLocator> LoadStaticResourceFullyAsync(
-		ResourceConstructionContext& constructionContext,
+		ResourceConstructionContext* constructionContext,	// can be null
 		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
 		unsigned resourceSize,
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+		BindFlag::BitField bindFlags,
+		StringSection<> resourceName);
+
+	std::future<BufferUploads::ResourceLocator> LoadStaticResourceFullyAsync(
+		ResourceConstructionContext* constructionContext,	// can be null
+		std::vector<uint8_t>&& data,
 		BindFlag::BitField bindFlags,
 		StringSection<> resourceName);
 

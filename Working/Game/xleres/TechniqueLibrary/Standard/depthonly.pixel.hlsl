@@ -36,6 +36,7 @@ float4 flatColorWithEarlyRejection(VSOUT geo) : SV_Target0
 	return VSOUT_GetColor0(geo);
 }
 
+[earlydepthstencil]
 float4 copyDiffuseAlbedo(VSOUT geo) : SV_Target0
 {
 	GBufferValues sample = PerPixel(geo);

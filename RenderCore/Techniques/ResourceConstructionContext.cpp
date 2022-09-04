@@ -96,6 +96,40 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
+	std::future<BufferUploads::ResourceLocator> ResourceConstructionContext::ConstructStaticGeometry(
+		std::shared_ptr<BufferUploads::IDataPacket> dataSource,
+		BindFlag::BitField bindFlags,
+		StringSection<> resourceName)
+	{
+		std::shared_ptr<BufferUploads::IResourcePool> resourceSource;
+		if (_pimpl->_repositionableGeometry) {
+			if (bindFlags & BindFlag::VertexBuffer) {
+				assert(!(bindFlags & BindFlag::IndexBuffer));
+				resourceSource = _pimpl->_repositionableGeometry->GetVBResourcePool();
+			} else if (bindFlags & BindFlag::IndexBuffer) {
+				resourceSource = _pimpl->_repositionableGeometry->GetIBResourcePool();
+			}
+		}
+
+		auto desc = CreateDesc(bindFlags, LinearBufferDesc::Create(dataSource->GetData().size()), resourceName);
+
+		if (resourceSource) {
+			auto res = _pimpl->_bufferUploads->Begin(desc, std::move(dataSource), std::move(resourceSource));
+			{
+				ScopedLock(_pimpl->_lock);
+				_pimpl->_uploadMarkers.push_back(res._transactionID);
+			}
+			return std::move(res._future);
+		} else {
+			auto res = _pimpl->_bufferUploads->Begin(desc, std::move(dataSource), bindFlags);
+			{
+				ScopedLock(_pimpl->_lock);
+				_pimpl->_uploadMarkers.push_back(res._transactionID);
+			}
+			return std::move(res._future);
+		}
+	}
+
 	std::shared_ptr<RepositionableGeometryConduit> ResourceConstructionContext::GetRepositionableGeometryConduit()
 	{
 		return _pimpl->_repositionableGeometry;

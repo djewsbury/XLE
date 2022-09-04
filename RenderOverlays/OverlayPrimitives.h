@@ -39,6 +39,17 @@ namespace RenderOverlays
                             uint8_t(Clamp(b_, 0.f, 1.f) * 255.f + 0.5f), uint8_t(Clamp(a_, 0.f, 1.f) * 255.f + 0.5f));
         }
 
+        static ColorB   FromNormalized(const Float4& v)
+        {
+            return ColorB(  uint8_t(Clamp(v[0], 0.f, 1.f) * 255.f + 0.5f), uint8_t(Clamp(v[1], 0.f, 1.f) * 255.f + 0.5f), 
+                            uint8_t(Clamp(v[2], 0.f, 1.f) * 255.f + 0.5f), uint8_t(Clamp(v[3], 0.f, 1.f) * 255.f + 0.5f));
+        }
+
+        Float4 AsNormalized() const
+        {
+            return { r/255.f, g/255.f, b/255.f, a/255.f };
+        }
+
         static const ColorB White;
         static const ColorB Black;
         static const ColorB Red;
