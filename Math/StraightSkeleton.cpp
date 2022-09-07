@@ -849,7 +849,66 @@ namespace XLEMath
 					if (e->_motorLoop == originalLoopId) {
 						useHeadSidePart = ContainsVertex<Primitive>(headSide._edges, e->_motor);
 					} else {
-						// assert(0);		// no way to determine whether headSideReplacement or tailSideReplacement is better... either might be fine; or we might be best off with both
+						// Unfortunately we have to solve this, because it can happen... I've seen a good example with a 3 loop collision, two expanding
+						// and one contracting
+						// We don't get any hints from the loop itself, but we can try to look at the directions tailSideReplacement and headSideReplacement
+						// are moving. They should be moving in opposite directions, so we'll pick the one moving opposite to the direction of the motor
+
+						Vector2T<Primitive> headSideDirection = Zero<Vector2T<Primitive>>();
+						Vector2T<Primitive> tailSideDirection = Zero<Vector2T<Primitive>>();
+
+						// Anchor calculation similar UpdateLoopStage1
+						// note that this doesn't find good movement for vertices on colinear or near-colinear lines
+						if (!ConsiderStationary(headSide)) {
+							auto prevPrevEdge = headSide._edges.end()-2;
+							auto prevEdge = headSide._edges.end()-1;
+							for (auto edge=headSide._edges.begin(); edge!=headSide._edges.end(); ++edge) {
+								assert(edge->_head != edge->_tail);
+								assert(prevEdge->_head == edge->_tail);
+								if (edge->_tail == headSideReplacement) {
+									auto& v0 = vSet[edge->_tail];
+									auto next = edge+1;
+									if (next == headSide._edges.end()) next = headSide._edges.begin();
+									auto calcTime = v0.InitialTime();
+									auto anchor1 = CalculateAnchor1<Primitive>(
+										prevPrevEdge->_tail, prevEdge->_tail, edge->_tail, edge->_head, next->_head, 
+										vSet, calcTime);
+									headSideDirection = Truncate(anchor1) - Truncate(v0._anchor0);
+								}
+
+								prevPrevEdge = prevEdge;
+								prevEdge = edge;
+							}
+						}
+
+						if (!ConsiderStationary(tailSide)) {
+							auto prevPrevEdge = tailSide._edges.end()-2;
+							auto prevEdge = tailSide._edges.end()-1;
+							for (auto edge=tailSide._edges.begin(); edge!=tailSide._edges.end(); ++edge) {
+								assert(edge->_head != edge->_tail);
+								assert(prevEdge->_head == edge->_tail);
+								if (edge->_tail == tailSideReplacement) {
+									auto& v0 = vSet[edge->_tail];
+									auto next = edge+1;
+									if (next == tailSide._edges.end()) next = tailSide._edges.begin();
+									auto calcTime = v0.InitialTime();
+									auto anchor1 = CalculateAnchor1<Primitive>(
+										prevPrevEdge->_tail, prevEdge->_tail, edge->_tail, edge->_head, next->_head, 
+										vSet, calcTime);
+									tailSideDirection = Truncate(anchor1) - Truncate(v0._anchor0);
+								}
+
+								prevPrevEdge = prevEdge;
+								prevEdge = edge;
+							}
+						}
+
+						// if we couldn't calculate the head side direction, try to get it from the tail side
+						if (MagnitudeSquared(headSideDirection) == 0.f)		// bitwise intended
+							headSideDirection = -tailSideDirection;
+						assert(Dot(headSideDirection, tailSideDirection) < 0.f);
+						auto motorDirection = e->_eventPt - Truncate(vSet[e->_motor]._anchor0);
+						useHeadSidePart = Dot(motorDirection, headSideDirection) < 0.f;		// look for the one moving in the opposite direction
 					}
 				}
 				
@@ -1137,33 +1196,8 @@ namespace XLEMath
 			AddVertexPathEdge(crashEvent._edgeHead, GetVertex<Primitive>(_vertices, crashEvent._edgeHead)._anchor0, crashInfo._crashPtAndTime);
 		}
 
-		//////////////////////////////////////////////////////////////////////
-		PostProcessEventsForMotorcycleCrash(crashInfo, initialLoop, evnts);
-
-		// Overwrite "loop" with tailSide, and append inSide to the list of wavefront loops
-		// crashSegment, motorIn & motorOut should not make it into either tailSide or headSide
-		#if defined(_DEBUG)
-			auto motorIn = std::find_if(initialLoop._edges.begin(), initialLoop._edges.end(), [motorHead=crashEvent._motor](const WavefrontEdge<Primitive>& e) { return e._head == motorHead; });
-			auto motorOut = std::find_if(initialLoop._edges.begin(), initialLoop._edges.end(), [motorHead=crashEvent._motor](const WavefrontEdge<Primitive>& e) { return e._tail == motorHead; });
-			for (auto e=crashInfo._tailSide._edges.begin(); e!=crashInfo._tailSide._edges.end(); ++e) {
-				assert(e->_head != crashEvent._edgeHead || e->_tail != crashEvent._edgeTail);
-				assert(e->_head != motorIn->_head || e->_tail != motorIn->_tail);
-				assert(e->_head != motorOut->_head || e->_tail != motorOut->_tail);
-				assert(e->_head != e->_tail);
-				auto next = e+1; if (next == crashInfo._tailSide._edges.end()) next = crashInfo._tailSide._edges.begin();
-				assert(e->_head == next->_tail);
-			}
-			for (auto e=crashInfo._headSide._edges.begin(); e!=crashInfo._headSide._edges.end(); ++e) {
-				assert(e->_head != crashEvent._edgeHead || e->_tail != crashEvent._edgeTail);
-				assert(e->_head != motorIn->_head || e->_tail != motorIn->_tail);
-				assert(e->_head != motorOut->_head || e->_tail != motorOut->_tail);
-				assert(e->_head != e->_tail);
-				auto next = e+1; if (next == crashInfo._headSide._edges.end()) next = crashInfo._headSide._edges.begin();
-				assert(e->_head == next->_tail);
-			}
-		#endif
-
 		// Check for loop inversion, and update _signedAreaAtLatestEvent
+		// Do before PostProcessEventsForMotorcycleCrash to update ConsiderStationary state
 		// Note that an expanding loop can have a contracting part, which can result in a contracting loop
 		// being cut off from an otherwise expanding one
 		//		\----------\
@@ -1196,6 +1230,32 @@ namespace XLEMath
 				crashInfo._headSide._signOfInitialLoop = 0;
 		}
 		assert((crashInfo._tailSide._signOfInitialLoop <= 0) || (crashInfo._headSide._signOfInitialLoop <= 0));	// one should be contracting
+
+		//////////////////////////////////////////////////////////////////////
+		PostProcessEventsForMotorcycleCrash(crashInfo, initialLoop, evnts);
+
+		// Overwrite "loop" with tailSide, and append inSide to the list of wavefront loops
+		// crashSegment, motorIn & motorOut should not make it into either tailSide or headSide
+		#if defined(_DEBUG)
+			auto motorIn = std::find_if(initialLoop._edges.begin(), initialLoop._edges.end(), [motorHead=crashEvent._motor](const WavefrontEdge<Primitive>& e) { return e._head == motorHead; });
+			auto motorOut = std::find_if(initialLoop._edges.begin(), initialLoop._edges.end(), [motorHead=crashEvent._motor](const WavefrontEdge<Primitive>& e) { return e._tail == motorHead; });
+			for (auto e=crashInfo._tailSide._edges.begin(); e!=crashInfo._tailSide._edges.end(); ++e) {
+				assert(e->_head != crashEvent._edgeHead || e->_tail != crashEvent._edgeTail);
+				assert(e->_head != motorIn->_head || e->_tail != motorIn->_tail);
+				assert(e->_head != motorOut->_head || e->_tail != motorOut->_tail);
+				assert(e->_head != e->_tail);
+				auto next = e+1; if (next == crashInfo._tailSide._edges.end()) next = crashInfo._tailSide._edges.begin();
+				assert(e->_head == next->_tail);
+			}
+			for (auto e=crashInfo._headSide._edges.begin(); e!=crashInfo._headSide._edges.end(); ++e) {
+				assert(e->_head != crashEvent._edgeHead || e->_tail != crashEvent._edgeTail);
+				assert(e->_head != motorIn->_head || e->_tail != motorIn->_tail);
+				assert(e->_head != motorOut->_head || e->_tail != motorOut->_tail);
+				assert(e->_head != e->_tail);
+				auto next = e+1; if (next == crashInfo._headSide._edges.end()) next = crashInfo._headSide._edges.begin();
+				assert(e->_head == next->_tail);
+			}
+		#endif
 
 		// We have to patch up loop ids throughout the system
 		// The original containing loop must now contain all of the loops generated
@@ -1601,6 +1661,26 @@ namespace XLEMath
 				if (m->_motor == crashEvent._edgeHead) { motorLoop->_motorcycleSegments.erase(m); break; }
 		}
 
+		// Update signed area & "ConsiderStationary" state
+		// Do before HandleRemovedVertex to update ConsiderStationary state
+		if (motorLoop->_edges.size() > 2) {
+
+			// if either was contracting originally, the result is contracting also
+			if ((motorLoop->_signOfInitialLoop < 0) || (edgeLoop->_signOfInitialLoop < 0))
+				motorLoop->_signOfInitialLoop = -1;
+
+			auto newSignedArea = CalculateSignedAreaAtTime<Primitive>(motorLoop->_edges, _vertices, crashEvent._eventTime);
+			if ((newSignedArea > 0) != (motorLoop->_signOfInitialLoop > 0)) {
+				// reverse all edges, to ensure they're left in the correct order for the new movement
+				for (auto& e:motorLoop->_edges) std::swap(e._head, e._tail);
+				std::reverse(motorLoop->_edges.begin(), motorLoop->_edges.end());
+				newSignedArea = -newSignedArea;
+			}
+
+			motorLoop->_signedAreaAtLatestEvent = newSignedArea;
+			assert(std::abs(motorLoop->_signedAreaAtLatestEvent) < GetEpsilon<Primitive>() || (motorLoop->_signedAreaAtLatestEvent > 0) == (motorLoop->_signOfInitialLoop > 0));
+		}
+
 		// Update loop ids in all evnts and motorcycles
 		for (auto e=evnts.begin(); e!=evnts.end();) {
 			if (e->_edgeLoop == edgeLoop->_loopId) e->_edgeLoop = motorLoop->_loopId;
@@ -1622,7 +1702,7 @@ namespace XLEMath
 			HandleEdgeSplit<Primitive>(
 				evnts, _vertices,
 				crashEvent._edgeTail, crashEvent._edgeHead,
-				tailSideReplacement, headSideReplacement,  
+				tailSideReplacement, headSideReplacement,
 				*motorLoop, *motorLoop, motorLoop->_loopId,
 				Truncate(crashPtAndTime), _vertices);
 		} else {
@@ -1649,24 +1729,6 @@ namespace XLEMath
 				assert(e->_head == next->_tail);
 			}
 		#endif
-
-		if (motorLoop->_edges.size() > 2) {
-
-			// if either was contracting originally, the result is contracting also
-			if ((motorLoop->_signOfInitialLoop < 0) || (edgeLoop->_signOfInitialLoop < 0))
-				motorLoop->_signOfInitialLoop = -1;
-
-			auto newSignedArea = CalculateSignedAreaAtTime<Primitive>(motorLoop->_edges, _vertices, crashEvent._eventTime);
-			if ((newSignedArea > 0) != (motorLoop->_signOfInitialLoop > 0)) {
-				// reverse all edges, to ensure they're left in the correct order for the new movement
-				for (auto& e:motorLoop->_edges) std::swap(e._head, e._tail);
-				std::reverse(motorLoop->_edges.begin(), motorLoop->_edges.end());
-				newSignedArea = -newSignedArea;
-			}
-
-			motorLoop->_signedAreaAtLatestEvent = newSignedArea;
-			assert(std::abs(motorLoop->_signedAreaAtLatestEvent) < GetEpsilon<Primitive>() || (motorLoop->_signedAreaAtLatestEvent > 0) == (motorLoop->_signOfInitialLoop > 0));
-		}
 
 		_loops.erase(edgeLoop);
 	}
