@@ -393,20 +393,20 @@ namespace XLEMath
 		if (winding.first == WindingType::FlatV)
 			return vSet[v0i]._anchor0;
 
-		auto collapse0 = CalculateEdgeCollapse_Offset_ColinearTest_LargeTimeProtection(vm2, vm1, v0, v1, v0);
-		auto collapse1 = CalculateEdgeCollapse_Offset_ColinearTest_LargeTimeProtection(vm1, v0, v1, v2, v0);
+		auto collapse0 = CalculateEdgeCollapse_Offset_ColinearTest<Primitive>(vm2-v0, vm1-v0, Zero<Vector2T<Primitive>>(), v1-v0);
+		auto collapse1 = CalculateEdgeCollapse_Offset_ColinearTest<Primitive>(vm1-v0, Zero<Vector2T<Primitive>>(), v1-v0, v2-v0);
 
 		if (collapse0.has_value() && collapse1.has_value()) {
 			// the collapses should both be in the same direction, but let's choose the sooner one
 			if (collapse0.value()[2] > 0 && collapse0.value()[2] < collapse1.value()[2]) {
-				return OffsetTime(collapse0.value(), calcTime);
+				return collapse0.value() + Vector3T<Primitive>{v0, calcTime};
 			} else {
-				return OffsetTime(collapse1.value(), calcTime);
+				return collapse1.value() + Vector3T<Primitive>{v0, calcTime};
 			}
 		} else if (collapse0.has_value()) {
-			return OffsetTime(collapse0.value(), calcTime);
+			return collapse0.value() + Vector3T<Primitive>{v0, calcTime};
 		} else if (collapse1.has_value()) {
-			return OffsetTime(collapse1.value(), calcTime);
+			return collapse1.value() + Vector3T<Primitive>{v0, calcTime};
 		} else {
 			// Some edges won't collapse (due to parallel edges, etc)
 			auto velocity = CalculateVertexVelocity_LineIntersection(vm1, v0, v1, Primitive(1));
