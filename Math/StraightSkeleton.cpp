@@ -28,8 +28,8 @@ namespace XLEMath
 		Vector2T<Primitive> PositionAtTime(Primitive time) const
 		{
 			if (_anchor1[2] == _anchor0[2]) return Truncate(_anchor0);		// bitwise comparison intended
-			float w1 = (time - _anchor0[2]) / (_anchor1[2] - _anchor0[2]);
-			float w0 = 1.0f - w1;
+			Primitive w1 = (time - _anchor0[2]) / (_anchor1[2] - _anchor0[2]);
+			Primitive w0 = Primitive(1) - w1;
 			return w0 * Truncate(_anchor0) + w1 * Truncate(_anchor1);
 		}
 
@@ -188,7 +188,7 @@ namespace XLEMath
 		auto d1 = Dot(p0-p1, p2-p1);			// distance from p1 (projected onto edge) = d1 / Magnitude(p1-p0)
 		auto d0Sq = std::copysign(d0*d0, d0);
 		auto d1Sq = std::copysign(d1*d1, d1);
-		float eSq = epsilon * epsilon * edgeMagSq;
+		Primitive eSq = epsilon * epsilon * edgeMagSq;
 		if (d0Sq < -eSq || d1Sq < -eSq)
 		// if (d0Sq < 0 || d1Sq < 0)
 			return {};
@@ -246,7 +246,7 @@ namespace XLEMath
 		auto d1 = Dot(p0-p1, p2-p1);			// distance from p1 (projected onto edge) = d1 / Magnitude(p1-p0)
 		auto d0Sq = std::copysign(d0*d0, d0);
 		auto d1Sq = std::copysign(d1*d1, d1);
-		float eSq = epsilon * epsilon * edgeMagSq;
+		Primitive eSq = epsilon * epsilon * edgeMagSq;
 		if (d0Sq < -eSq || d1Sq < -eSq)			// we need a little bit of tolerance here; because we can miss collisions if we test against zero (even though missing requires us to actually miss twice -- once on either edge to connecting to the vertex we're hitting)
 			return {};
 
@@ -307,7 +307,7 @@ namespace XLEMath
 		return bestCollisionEvent;
 	}
 
-	T1(Primitive) static PointAndTime<Primitive> OffsetTime(PointAndTime<Primitive> input, float offsetTime)
+	T1(Primitive) static PointAndTime<Primitive> OffsetTime(PointAndTime<Primitive> input, Primitive offsetTime)
 	{
 		return { input[0], input[1], input[2] + offsetTime };
 	}
@@ -331,7 +331,7 @@ namespace XLEMath
 		return OffsetTime(res.value(), calcTime);
 	}
 
-	T1(Primitive) static PointAndTime<Primitive> CalculateAnchor1(VertexId vm2i, VertexId vm1i, VertexId v0i, VertexId v1i, VertexId v2i, VertexSet<Primitive> vSet, float calcTime)
+	T1(Primitive) static PointAndTime<Primitive> CalculateAnchor1(VertexId vm2i, VertexId vm1i, VertexId v0i, VertexId v1i, VertexId v2i, VertexSet<Primitive> vSet, Primitive calcTime)
 	{
 		auto vm2 = vSet[vm2i].PositionAtTime(calcTime);
 		auto vm1 = vSet[vm1i].PositionAtTime(calcTime);

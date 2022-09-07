@@ -119,7 +119,7 @@ namespace XLEMath
 		return (one[0] - zero[0]) * (two[1] - zero[1]) - (one[1] - zero[1]) * (two[0] - zero[0]);
 	}
 
-	T1(Primitive) std::pair<WindingType, float> CalculateWindingType(Vector2T<Primitive> zero, Vector2T<Primitive> one, Vector2T<Primitive> two, Primitive threshold)
+	T1(Primitive) std::pair<WindingType, Primitive> CalculateWindingType(Vector2T<Primitive> zero, Vector2T<Primitive> one, Vector2T<Primitive> two, Primitive threshold)
 	{
 		auto sign = WindingDeterminant(zero, one, two);
 		#if SPACE_HANDINESS == SPACE_HANDINESS_CLOCKWISE
@@ -129,7 +129,7 @@ namespace XLEMath
 			if (sign > threshold) return {Left, sign};
 			if (sign < -threshold) return {Right, sign};
 		#endif
-		float d = (zero[0] - one[0]) * (two[0] - one[0]) + (zero[1] - one[1]) * (two[1] - one[1]);
+		Primitive d = (zero[0] - one[0]) * (two[0] - one[0]) + (zero[1] - one[1]) * (two[1] - one[1]);
 		return {(d > 0) ? FlatV : Straight, sign};
 	}
 
