@@ -247,22 +247,24 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void CommandList::RequireResourceVisbilityAlreadySorted(IteratorRange<const uint64_t*> resourceGuids)
 	{
-			// Don't record the guid for any resources that are already marked as becoming visible 
-			// during this command list (this is the only way we can check relative ordering of 
-			// initialization and use within the same command list)
-		size_t mustBeVisibleInitialSize = _resourcesThatMustBeVisible.size();
-		auto becomingI = _resourcesBecomingVisible.begin();
-		_resourcesThatMustBeVisible.reserve(_resourcesBecomingVisible.size() + resourceGuids.size());
-		auto mustBeVisibleI = resourceGuids.begin();
-		while (mustBeVisibleI != resourceGuids.end()) {
-			while (becomingI != _resourcesBecomingVisible.end() && *becomingI < *mustBeVisibleI) ++becomingI;
-			if (becomingI == _resourcesBecomingVisible.end() || *becomingI != *mustBeVisibleI)
-				_resourcesThatMustBeVisible.push_back(*mustBeVisibleI);		// we sort using std::inplace_merge just below
-			++mustBeVisibleI;
-		}
-		std::inplace_merge(_resourcesThatMustBeVisible.begin(), _resourcesThatMustBeVisible.begin() + mustBeVisibleInitialSize, _resourcesThatMustBeVisible.end());
-		auto i = std::unique(_resourcesThatMustBeVisible.begin(), _resourcesThatMustBeVisible.end());
-		_resourcesThatMustBeVisible.erase(i, _resourcesThatMustBeVisible.end());
+		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+				// Don't record the guid for any resources that are already marked as becoming visible 
+				// during this command list (this is the only way we can check relative ordering of 
+				// initialization and use within the same command list)
+			size_t mustBeVisibleInitialSize = _resourcesThatMustBeVisible.size();
+			auto becomingI = _resourcesBecomingVisible.begin();
+			_resourcesThatMustBeVisible.reserve(_resourcesBecomingVisible.size() + resourceGuids.size());
+			auto mustBeVisibleI = resourceGuids.begin();
+			while (mustBeVisibleI != resourceGuids.end()) {
+				while (becomingI != _resourcesBecomingVisible.end() && *becomingI < *mustBeVisibleI) ++becomingI;
+				if (becomingI == _resourcesBecomingVisible.end() || *becomingI != *mustBeVisibleI)
+					_resourcesThatMustBeVisible.push_back(*mustBeVisibleI);		// we sort using std::inplace_merge just below
+				++mustBeVisibleI;
+			}
+			std::inplace_merge(_resourcesThatMustBeVisible.begin(), _resourcesThatMustBeVisible.begin() + mustBeVisibleInitialSize, _resourcesThatMustBeVisible.end());
+			auto i = std::unique(_resourcesThatMustBeVisible.begin(), _resourcesThatMustBeVisible.end());
+			_resourcesThatMustBeVisible.erase(i, _resourcesThatMustBeVisible.end());
+		#endif
 	}
 
 	void CommandList::RequireResourceVisbility(IteratorRange<const uint64_t*> resourceGuidsInit)
