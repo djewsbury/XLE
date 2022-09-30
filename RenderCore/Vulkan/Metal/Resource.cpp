@@ -208,7 +208,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	static VkMemoryPropertyFlags AsMemoryPropertyFlags(AllocationRules::BitField rules)
 	{
 		VkMemoryPropertyFlags result = 0;
-		if (rules & (AllocationRules::HostVisibleSequentialWrite|AllocationRules::HostVisibleSequentialWrite)) {
+		if (rules & (AllocationRules::HostVisibleSequentialWrite|AllocationRules::HostVisibleRandomAccess)) {
 			result |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 			if (!(rules & AllocationRules::DisableAutoCacheCoherency))
 				result |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;

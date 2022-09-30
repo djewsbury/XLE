@@ -15,7 +15,7 @@ namespace RenderCore
 {
 	class CompiledShaderByteCode; class IDevice; 
 	class ICompiledPipelineLayout; class LegacyRegisterBindingDesc; 
-	class VulkanCompilerConfiguration;
+	struct VulkanCompilerConfiguration;
 	class PipelineLayoutInitializer;
 }
 

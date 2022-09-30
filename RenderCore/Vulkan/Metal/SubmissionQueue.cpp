@@ -37,6 +37,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			Throw(VulkanAPIFailure(res, "Failure while queuing semaphore signal"));
 
         assert(!submitResult._asyncTrackerMarkers.empty());
+		for (auto i=submitResult._asyncTrackerMarkers.begin(); i<submitResult._asyncTrackerMarkers.end()-1; ++i)
+			assert(*i <= *(submitResult._asyncTrackerMarkers.end()-1));
 		return *(submitResult._asyncTrackerMarkers.end()-1);
 	}
 

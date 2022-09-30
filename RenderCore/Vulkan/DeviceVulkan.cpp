@@ -1050,12 +1050,11 @@ namespace RenderCore { namespace ImplVulkan
         }
     }
 
-	void PresentationChain::PresentToQueue(Metal_Vulkan::SubmissionQueue& queue)
+	void PresentationChain::PresentToQueue(Metal_Vulkan::SubmissionQueue& queue, IteratorRange<const VkSemaphore*> commandBufferSyncs)
 	{
 		if (_activeImageIndex > unsigned(_images.size())) return;
 		auto& sync = _presentSyncs[_activePresentSync];
-		const VkSemaphore waitSema_2[] = { sync._onCommandBufferComplete.get() };
-		queue.Present(_swapChain.get(), _activeImageIndex, MakeIteratorRange(waitSema_2));
+		queue.Present(_swapChain.get(), _activeImageIndex, commandBufferSyncs);
 		_activeImageIndex = ~0x0u;
 	}
 
@@ -1249,9 +1248,11 @@ namespace RenderCore { namespace ImplVulkan
 
 		//////////////////////////////////////////////////////////////////
 
-		VkSemaphore signalSema[] = { syncs._onCommandBufferComplete.get() };
+		VkSemaphore commandBufferSignals[] = { syncs._onCommandBufferComplete.get() };
+		bool commandBufferSubmitted = false;
 		TRY {
-			syncs._presentFence = QueuePrimaryContext(MakeIteratorRange(signalSema));
+			syncs._presentFence = QueuePrimaryContext(MakeIteratorRange(commandBufferSignals));
+			commandBufferSubmitted = true;
 		} CATCH(const std::exception& e) {
 			Log(Warning) << "Failure during queue submission for present: " << e.what() << std::endl;
 		} CATCH_END
@@ -1261,7 +1262,11 @@ namespace RenderCore { namespace ImplVulkan
 		//////////////////////////////////////////////////////////////////
 		// Finally, we can queue the present
 		//		-- do it here to allow it to run in parallel as much as possible
-		swapChain->PresentToQueue(*_submissionQueue);
+		if (commandBufferSubmitted) {
+			swapChain->PresentToQueue(*_submissionQueue, MakeIteratorRange(commandBufferSignals));
+		} else {
+			swapChain->PresentToQueue(*_submissionQueue, {});
+		}
 	}
 
 	void	ThreadContext::CommitCommands(CommitCommandsFlags::BitField flags)

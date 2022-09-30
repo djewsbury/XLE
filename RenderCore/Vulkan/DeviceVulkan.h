@@ -58,7 +58,7 @@ namespace RenderCore { namespace ImplVulkan
         const std::shared_ptr<PresentationChainDesc>& GetDesc() const;
         const TextureDesc& GetBufferDesc() { return _bufferDesc; }
 
-		void PresentToQueue(Metal_Vulkan::SubmissionQueue& queue);
+		void PresentToQueue(Metal_Vulkan::SubmissionQueue& queue, IteratorRange<const VkSemaphore*>);
         struct AquireResult
         {
             std::shared_ptr<IResource> _resource;
