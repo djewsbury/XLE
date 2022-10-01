@@ -39,7 +39,7 @@ namespace RenderCore { namespace Assets
 			} else
 				name = namePrefix + name;
 			auto srcAnim = animation.second;
-			GeoProc::NascentAnimationSet::BlockSpan blockSpans[srcAnim._endBlock-srcAnim._startBlock];
+			VLA(GeoProc::NascentAnimationSet::BlockSpan, blockSpans, srcAnim._endBlock-srcAnim._startBlock);
 			for (unsigned b=0; b<(srcAnim._endBlock-srcAnim._startBlock); ++b)
 				blockSpans[b] = { src._animationSet.GetAnimationBlocks()[srcAnim._startBlock+b]._beginFrame, src._animationSet.GetAnimationBlocks()[srcAnim._startBlock+b]._endFrame };
 			auto newBlocks = dst.AddAnimation(name, MakeIteratorRange(blockSpans, &blockSpans[srcAnim._endBlock-srcAnim._startBlock]), srcAnim._framesPerSecond);

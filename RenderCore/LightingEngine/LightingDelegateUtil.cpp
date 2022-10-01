@@ -469,7 +469,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		
 		// compare to the list lights currently in the database and figure out
 		// evictions and new renderings
-		std::pair<LightIndex, float> potentialNewRenders[lightsAndDistance.size()];
+		using LightIndexAndDistance = std::pair<LightIndex, float>;
+		VLA_UNSAFE_FORCE(LightIndexAndDistance, potentialNewRenders, lightsAndDistance.size());
 		unsigned potentialRenderCount = 0;
 
 		auto currentStateIterator = _allocatedDatabaseEntries.begin();

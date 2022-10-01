@@ -402,7 +402,7 @@ namespace RenderOverlays
 			unsigned _lineIdx = 0;
 			unsigned _glyphIdx = ~0u;
 		};
-		Instance instances[text.size()];
+		VLA_UNSAFE_FORCE(Instance, instances, text.size());
 		unsigned instanceCount = 0;
 
 		float xScale = scale;
@@ -459,21 +459,21 @@ namespace RenderOverlays
 
 		if (!instanceCount) return {x, y};
 
-		Instance* sortedInstances[instanceCount];
+		VLA(Instance*, sortedInstances, instanceCount);
 		for (unsigned c=0; c<instanceCount; ++c) sortedInstances[c] = &instances[c];
 		std::sort(sortedInstances, &sortedInstances[instanceCount], [](auto* lhs, auto* rhs) { return lhs->_chr < rhs->_chr; });
 
-		ucs4 chrsToLookup[instanceCount];
+		VLA(ucs4, chrsToLookup, instanceCount);
 		unsigned chrsToLookupCount = 0;
 		ucs4 lastChar = ~ucs4(0);
-		for (auto* i:sortedInstances) {
-			if (i->_chr != lastChar)
-				chrsToLookup[chrsToLookupCount++] = lastChar = i->_chr;		// get unique chars
-			i->_glyphIdx = chrsToLookupCount-1;
+		for (auto* i=sortedInstances; i!=&sortedInstances[instanceCount]; ++i) {
+			if ((*i)->_chr != lastChar)
+				chrsToLookup[chrsToLookupCount++] = lastChar = (*i)->_chr;		// get unique chars
+			(*i)->_glyphIdx = chrsToLookupCount-1;
 		}
 
 		assert(chrsToLookupCount);
-		const FontRenderingManager::Bitmap* bitmaps[chrsToLookupCount];
+		VLA(const FontRenderingManager::Bitmap*, bitmaps, chrsToLookupCount);
 		bool queryResult = textureMan.GetBitmaps(bitmaps, threadContext, font, MakeIteratorRange(chrsToLookup, &chrsToLookup[chrsToLookupCount]));
 		if (!queryResult)
 			return {0.f, 0.f};
@@ -1122,7 +1122,7 @@ namespace RenderOverlays
 		// Initialize multiple new glyphs at once. We'll allocate all of the space for the new glyphs in one go
 		// only works with linear buffer resources
 
-		RenderOverlays::Font::Bitmap bitmaps[chrs.size()];
+		VLA_UNSAFE_FORCE(RenderOverlays::Font::Bitmap, bitmaps, chrs.size());
 		std::vector<uint8_t> storageBuffer;
 		storageBuffer.reserve(32*1024);
 		unsigned cnt=0;
@@ -1193,7 +1193,8 @@ namespace RenderOverlays
 		auto glyphsToErase = _glyphs.size() / _pimpl->_activePages.size();
 		if (glyphsToErase == 0) return;
 		
-		std::pair<unsigned, unsigned> glyphsByAge[_glyphs.size()];
+		using GlyphPair = std::pair<unsigned, unsigned>;
+		VLA_UNSAFE_FORCE(GlyphPair, glyphsByAge, _glyphs.size());
 		for (unsigned c=0; c<_glyphs.size(); ++c)
 			glyphsByAge[c] = {c, _glyphs[c].second._lastAccessFrame};
 		std::sort(glyphsByAge, &glyphsByAge[_glyphs.size()], [](const auto&lhs, const auto& rhs) { return lhs.second < rhs.second; });
@@ -1517,7 +1518,7 @@ namespace RenderOverlays
 		auto chrIterator = chrs.begin();
 		auto begini = LowerBound(_glyphs, fontHash|uint64_t(*chrIterator));
 		auto endi = LowerBound(_glyphs, fontHash|0xffffffffull);
-		ucs4 missingGlyphs[chrs.size()];
+		VLA(ucs4, missingGlyphs, chrs.size());
 		unsigned missingGlyphCount = 0;
 		const Bitmap** bitmapIterator = bitmaps;
 		auto i = begini;

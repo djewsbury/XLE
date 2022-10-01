@@ -240,7 +240,8 @@ namespace RenderCore { namespace Assets
 		} else {
 			for (auto& sig:autoInitializers) descSetCount = std::max(unsigned(sig->GetDescriptorSets().size()), descSetCount);
 		}
-		PipelineLayoutInitializer::DescriptorSetBinding descriptorSetBindings[descSetCount];
+		std::vector<PipelineLayoutInitializer::DescriptorSetBinding> descriptorSetBindings;
+		descriptorSetBindings.resize(descSetCount);
 		std::vector<const DescriptorSetSignature*> descSetSigs;
 		descSetSigs.reserve(autoInitializers.size());
 		size_t c=0;
@@ -331,7 +332,7 @@ namespace RenderCore { namespace Assets
 		}
 
 		return PipelineLayoutInitializer {
-			MakeIteratorRange(descriptorSetBindings, &descriptorSetBindings[descSetCount]),
+			MakeIteratorRange(descriptorSetBindings),
 			MakeIteratorRange(pushConstantBindings, &pushConstantBindings[pushConstantBindingsCount])};
 	}
 

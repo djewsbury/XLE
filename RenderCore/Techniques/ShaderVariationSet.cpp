@@ -49,7 +49,7 @@ namespace RenderCore { namespace Techniques
 		const ShaderSourceParser::SelectorPreconfiguration* preconfiguration)
 	{
 		if (!preconfiguration) {
-			const ParameterBox* p[selectors.size()+1];
+			VLA(const ParameterBox*, p, selectors.size()+1);
 			p[0] = &techniqueFiltering._setValues;
 			for (unsigned c=0; c<selectors.size(); ++c) p[c+1] = selectors[c];
 			return BuildFlatStringTable(ShaderSourceParser::FilterSelectors({p, p+selectors.size()+1}, techniqueFiltering._relevanceMap, automaticFiltering));

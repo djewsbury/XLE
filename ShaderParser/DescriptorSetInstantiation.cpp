@@ -152,8 +152,8 @@ namespace ShaderSourceParser
 			Throw(std::runtime_error(str.str()));
 		}
 
-		bool assignedSlots_final[maxSlotIdxPipelineLayout+1];
-		bool usedSlots_input[input._slots.size()];
+		VLA(bool, assignedSlots_final, maxSlotIdxPipelineLayout+1);
+		VLA(bool, usedSlots_input, input._slots.size());
 		for (unsigned c=0; c<maxSlotIdxPipelineLayout+1; ++c) assignedSlots_final[c] = false;
 		for (unsigned c=0; c<input._slots.size(); ++c) usedSlots_input[c] = false;
 		result->_slots.reserve(maxSlotIdxPipelineLayout+1);

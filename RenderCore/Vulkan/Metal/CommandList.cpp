@@ -270,7 +270,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	void CommandList::RequireResourceVisbility(IteratorRange<const uint64_t*> resourceGuidsInit)
 	{
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-			uint64_t resourceGuids[resourceGuidsInit.size()];
+			VLA(uint64_t, resourceGuids, resourceGuidsInit.size());
 			std::copy(resourceGuidsInit.begin(), resourceGuidsInit.end(), resourceGuids);
 			std::sort(resourceGuids, &resourceGuids[resourceGuidsInit.size()]);
 			RequireResourceVisbilityAlreadySorted(MakeIteratorRange(resourceGuids, &resourceGuids[resourceGuidsInit.size()]));	// inline please
@@ -280,7 +280,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	void CommandList::MakeResourcesVisible(IteratorRange<const uint64_t*> resourceGuidsInit)
 	{
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-			uint64_t resourceGuids[resourceGuidsInit.size()];
+			VLA(uint64_t, resourceGuids, resourceGuidsInit.size());
 			std::copy(resourceGuidsInit.begin(), resourceGuidsInit.end(), resourceGuids);
 			std::sort(resourceGuids, &resourceGuids[resourceGuidsInit.size()]);
 

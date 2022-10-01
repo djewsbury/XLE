@@ -469,7 +469,7 @@ namespace RenderCore { namespace Metal_Vulkan
             desc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 			desc.viewMask = spDesc.GetViewInstanceMask();
 
-			Internal::AttachmentResourceUsageType::BitField subpassAttachmentUsages[attachmentCount];
+			VLA(Internal::AttachmentResourceUsageType::BitField, subpassAttachmentUsages, attachmentCount);
 			for (unsigned c=0; c<attachmentCount; ++c) subpassAttachmentUsages[c] = 0;
 
 			for (const auto& r:spDesc.GetOutputs()) 
@@ -670,7 +670,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		for (unsigned spIdx=0; spIdx<subpasses.size(); ++spIdx) {
 			const auto& spDesc = subpasses[spIdx];
 			isViewInstancingFrameBuffer |= spDesc.GetViewInstanceMask() != 0;
-			Internal::AttachmentResourceUsageType::BitField subpassAttachmentUsages[attachmentCount];
+			VLA(Internal::AttachmentResourceUsageType::BitField, subpassAttachmentUsages, attachmentCount);
 			for (unsigned c=0; c<attachmentCount; ++c) subpassAttachmentUsages[c] = 0;
 
 			for (const auto& r:spDesc.GetOutputs()) 
@@ -690,7 +690,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx, true);
         }
 
-        VkImageView rawViews[helper._workingViewedAttachments.size()];
+        VLA(VkImageView, rawViews, helper._workingViewedAttachments.size());
 		unsigned rawViewCount = 0;
 		_clearValuesOrdering.reserve(helper._workingViewedAttachments.size());
         MaxDims maxDims;

@@ -654,7 +654,7 @@ namespace SceneEngine
         auto* renderInfo = TryGetCellRenderInfo(cell);
         if (!renderInfo) return nullptr;
 
-        Float4x4 cellToCullingFrustums[worldToCullingFrustums.size()];
+        VLA_UNSAFE_FORCE(Float4x4, cellToCullingFrustums, worldToCullingFrustums.size());
         for (unsigned c=0; c<worldToCullingFrustums.size(); ++c)
             cellToCullingFrustums[c] = Combine(cell._cellToWorld, worldToCullingFrustums[c]);
         if (arbitraryVolume) {
@@ -959,7 +959,7 @@ namespace SceneEngine
         assert(!_imposters);    // not supported after implementing light weight build drawables path
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        Float3x4 localToWorldBuffer[objects.size()];
+        VLA_UNSAFE_FORCE(Float3x4, localToWorldBuffer, objects.size());
         BuildDrawablesMetrics workingMetrics;
 
         auto& rigidModelScene = _placementsCache->GetRigidModelScene();
@@ -1017,8 +1017,8 @@ namespace SceneEngine
         auto renderIndices = MakeIteratorRange(renderInfo._objectToRenderer);
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        Float3x4 localToWorldBuffer[objects.size()];
-        uint32_t viewMaskBuffer[objects.size()];
+        VLA_UNSAFE_FORCE(Float3x4, localToWorldBuffer, objects.size());
+        VLA(uint32_t, viewMaskBuffer, objects.size());
         BuildDrawablesMetrics workingMetrics;
 
         auto& rigidModelScene = _placementsCache->GetRigidModelScene();
@@ -1177,7 +1177,7 @@ namespace SceneEngine
         auto* arbitraryVolume = executeContext._complexCullingVolume;
         BuildDrawablesMetricsHelper metricsHelper { "Arbitrary AABB test", &executeContext };
 
-        Float4x4 worldToCullingFrustums[executeContext._views.size()];
+        VLA_UNSAFE_FORCE(Float4x4, worldToCullingFrustums, executeContext._views.size());
         for (unsigned v=0; v<executeContext._views.size(); ++v)
             worldToCullingFrustums[v] = executeContext._views[v]._worldToProjection;
         auto worldToCullingFrustumsRange = MakeIteratorRange(worldToCullingFrustums, &worldToCullingFrustums[executeContext._views.size()]);

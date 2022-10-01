@@ -533,7 +533,7 @@ namespace SceneEngine
 
 		// Get the animation parameter set for this anim state, and run the skeleton machine with those parameters
 		auto parameterBlockSize = _activeAnimator->_animSetBinding.GetParameterDefaultsBlock().size();
-		uint8_t parameterBlock[parameterBlockSize];
+		VLA(uint8_t, parameterBlock, parameterBlockSize);
 		std::memcpy(parameterBlock, _activeAnimator->_animSetBinding.GetParameterDefaultsBlock().begin(), parameterBlockSize);
 
 		// calculate animated parameters

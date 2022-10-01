@@ -754,7 +754,7 @@ namespace RenderCore { namespace Techniques
 			// bit of information required to use a model scaffold for basic rendering
 			auto* embeddedSkeleton = scaffold.EmbeddedSkeleton();
 			if (embeddedSkeleton) {
-				Float4x4 skeleOutputTransforms[embeddedSkeleton->GetOutputMatrixCount()];
+				VLA_UNSAFE_FORCE(Float4x4, skeleOutputTransforms, embeddedSkeleton->GetOutputMatrixCount());
 				embeddedSkeleton->GenerateOutputTransforms(MakeIteratorRange(skeleOutputTransforms, &skeleOutputTransforms[embeddedSkeleton->GetOutputMatrixCount()]));
 
 				transformMarkerCount = std::min(transformMarkerCount, (unsigned)scaffold.FindCommandStreamInputInterface().size());

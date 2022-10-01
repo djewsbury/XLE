@@ -249,7 +249,7 @@ namespace ToolsRig
 				}
 
 				auto parameterBlockSize = _actualized->_animSetBinding.GetParameterDefaultsBlock().size();
-				uint8_t parameterBlock[parameterBlockSize];
+				VLA(uint8_t, parameterBlock, parameterBlockSize);
 				std::memcpy(parameterBlock, _actualized->_animSetBinding.GetParameterDefaultsBlock().begin(), parameterBlockSize);
 
 				animData._animationSet.CalculateOutput(
@@ -259,7 +259,7 @@ namespace ToolsRig
 
 				// We have to use the "specialized" skeleton in _animSetBinding
 				auto outputMatrixCount = _actualized->_animSetBinding.GetOutputMatrixCount();
-				Float4x4 skeletonOutput[outputMatrixCount];
+				VLA_UNSAFE_FORCE(Float4x4, skeletonOutput, outputMatrixCount);
 				_actualized->_animSetBinding.GenerateOutputTransforms(
 					MakeIteratorRange(skeletonOutput, &skeletonOutput[outputMatrixCount]),
 					MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]));
@@ -321,7 +321,7 @@ namespace ToolsRig
 			assert(skeletonMachine);
 
 			auto outputMatrixCount = skeletonMachine->GetOutputMatrixCount();
-			Float4x4 skeletonMachineOutput[outputMatrixCount];
+			VLA_UNSAFE_FORCE(Float4x4, skeletonMachineOutput, outputMatrixCount);
 			if (_actualized->_animationScaffold && _animationState && _animationState->_state != VisAnimationState::State::BindPose) {
 				auto& animData = _actualized->_animationScaffold->ImmutableData();
 
@@ -333,7 +333,7 @@ namespace ToolsRig
 				time = fmodf(time, foundAnimation._durationInFrames / foundAnimation._framesPerSecond);
 
 				auto parameterBlockSize = _actualized->_animSetBinding.GetParameterDefaultsBlock().size();
-				uint8_t parameterBlock[parameterBlockSize];
+				VLA(uint8_t, parameterBlock, parameterBlockSize);
 				std::memcpy(parameterBlock, _actualized->_animSetBinding.GetParameterDefaultsBlock().begin(), parameterBlockSize);
 
 				animData._animationSet.CalculateOutput(

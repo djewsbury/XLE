@@ -782,8 +782,8 @@ namespace RenderCore { namespace Techniques
 				if (primarySkeleton && secondarySkeleton) {
 
 					///////
-					Float4x4 primaryOutputs[primarySkeleton->GetOutputMatrixCount()];
-					Float4x4 secondaryOutputs[secondarySkeleton->GetOutputMatrixCount()];
+					VLA_UNSAFE_FORCE(Float4x4, primaryOutputs, primarySkeleton->GetOutputMatrixCount());
+					VLA_UNSAFE_FORCE(Float4x4, secondaryOutputs, secondarySkeleton->GetOutputMatrixCount());
 					primarySkeleton->GenerateOutputTransforms(MakeIteratorRange(primaryOutputs, &primaryOutputs[primarySkeleton->GetOutputMatrixCount()]));
 					secondarySkeleton->GenerateOutputTransforms(MakeIteratorRange(secondaryOutputs, &secondaryOutputs[secondarySkeleton->GetOutputMatrixCount()]));
 
@@ -814,7 +814,7 @@ namespace RenderCore { namespace Techniques
 					}
 					
 				} else if (primarySkeleton) {
-					Float4x4 primaryOutputs[primarySkeleton->GetOutputMatrixCount()];
+					VLA_UNSAFE_FORCE(Float4x4, primaryOutputs, primarySkeleton->GetOutputMatrixCount());
 					primarySkeleton->GenerateOutputTransforms(MakeIteratorRange(primaryOutputs, &primaryOutputs[primarySkeleton->GetOutputMatrixCount()]));
 					
 					///////

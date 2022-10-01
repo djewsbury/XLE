@@ -309,7 +309,7 @@ namespace RenderCore { namespace Metal_DX11
 				arguments.push_back(Conversion::Convert<std::basic_string<wchar_t>>(MakeStringSection(shaderPath._filename)));
 
 			auto argumentCount = dimof(fixedArguments) + arguments.size();
-			LPCWSTR finalArguments[argumentCount];
+			VLA(LPCWSTR, finalArguments, argumentCount);
 			LPCWSTR* i = finalArguments;
 			for (auto a:fixedArguments) *i++ = a;
 			for (const auto&a:arguments) *i++ = a.c_str();

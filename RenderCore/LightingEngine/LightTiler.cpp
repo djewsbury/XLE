@@ -74,7 +74,7 @@ namespace RenderCore { namespace LightingEngine
 		AccurateFrustumTester frustumTester(projDesc._worldToProjection, clipSpaceType);
 
 		{
-			IntermediateLight intermediateLights[_config._maxLightsPerView];
+			VLA_UNSAFE_FORCE(IntermediateLight, intermediateLights, _config._maxLightsPerView);
 			IntermediateLight* intLight = intermediateLights, *intLightEnd = &intermediateLights[_config._maxLightsPerView];
 			auto worldToCamera = InvertOrthonormalTransform(projDesc._cameraToWorld);
 			auto zRow = Float4{worldToCamera(2,0), worldToCamera(2,1), worldToCamera(2,2), worldToCamera(2,3)};

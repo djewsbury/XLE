@@ -407,8 +407,8 @@ namespace UnitTests
 		init._slotBindings = _pimpl->_slotBindings;
 		init._signature = &signature;
 
-		RenderCore::IResourceView* resViews[_pimpl->_resources.size()];
-		RenderCore::ISampler* samplers[_pimpl->_samplers.size()];
+		VLA(RenderCore::IResourceView*, resViews, _pimpl->_resources.size());
+		VLA(RenderCore::ISampler*, samplers, _pimpl->_samplers.size());
 		for (unsigned c=0; c<_pimpl->_resources.size(); ++c) resViews[c] = _pimpl->_resources[c].get();
 		for (unsigned c=0; c<_pimpl->_samplers.size(); ++c) samplers[c] = _pimpl->_samplers[c].get();
 

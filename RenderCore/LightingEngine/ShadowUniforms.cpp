@@ -133,7 +133,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		_cbSource = BuildShadowConstantBuffers(desc, operatorMaxFrustumCount, maxBlurRadiusNorm);
 
 		assert(desc.Count() <= dimof(_multiViewWorldToClip));
-		Techniques::ProjectionDesc projDescs[desc.Count()];
+		Techniques::ProjectionDesc projDescs[MaxShadowTexturesPerLight];
 		CalculateProjections({projDescs, &projDescs[desc.Count()]}, desc);
 		for (unsigned c=0; c<desc.Count(); ++c)
 			_multiViewWorldToClip[c] = projDescs[c]._worldToProjection;

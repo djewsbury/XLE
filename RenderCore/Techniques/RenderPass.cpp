@@ -936,8 +936,8 @@ namespace RenderCore { namespace Techniques
         IteratorRange<const PreregisteredAttachment*> attachmentRequests,
         ReservationFlag::BitField flags) -> Reservation
     {
-        bool consumed[_pimpl->_attachments.size()];
-        bool consumedSemantic[_pimpl->_semanticAttachments.size()];
+        VLA(bool, consumed, _pimpl->_attachments.size());
+        VLA(bool, consumedSemantic, _pimpl->_semanticAttachments.size());
         for (unsigned c=0; c<_pimpl->_attachments.size(); ++c) consumed[c] = false;
         for (unsigned c=0; c<_pimpl->_semanticAttachments.size(); ++c) consumedSemantic[c] = false;
         auto originalAttachmentsSize = _pimpl->_attachments.size();
@@ -1288,7 +1288,7 @@ namespace RenderCore { namespace Techniques
 
     void AttachmentPool::Reservation::CompleteInitialization(IThreadContext& threadContext)
     {
-        IResource* resources[_reservedAttachments.size()];
+        VLA(IResource*, resources, _reservedAttachments.size());
         size_t count = 0;
         for (auto a:_reservedAttachments) {
             AttachmentPool::Pimpl::Attachment* attach; 

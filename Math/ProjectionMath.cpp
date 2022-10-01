@@ -607,7 +607,7 @@ namespace XLEMath
     {
         uint64_t straddlingFlags = 0;
         auto planeCount = (uint64_t)_planes.size();
-        Float3 intersectionCenters[planeCount];
+        VLA_UNSAFE_FORCE(Float3, intersectionCenters, planeCount);
         for (uint64_t f=0; f<planeCount; ++f) {
             auto distance = SignedDistance(centerPoint, _planes[f]);
             if (__builtin_expect(distance >= radius, false)) {
@@ -701,7 +701,6 @@ namespace XLEMath
 
         uint64_t straddlingFlags = 0;
         auto planeCount = (unsigned)_planes.size();
-        Float3 intersectionCenters[planeCount];
         for (uint64_t f=0; f<planeCount; ++f) {
 
             unsigned outsideCount = 0;

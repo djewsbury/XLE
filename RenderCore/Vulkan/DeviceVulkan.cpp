@@ -892,7 +892,8 @@ namespace RenderCore { namespace ImplVulkan
 		using DescriptorSetBinding = Metal_Vulkan::CompiledPipelineLayout::DescriptorSetBinding;
 		using PushConstantsBinding = Metal_Vulkan::CompiledPipelineLayout::PushConstantsBinding;
 
-		DescriptorSetBinding descSetBindings[desc.GetDescriptorSets().size()];
+		std::vector<DescriptorSetBinding> descSetBindings;
+		descSetBindings.resize(desc.GetDescriptorSets().size());
 		for (unsigned c=0; c<desc.GetDescriptorSets().size(); ++c) {
 			auto& srcBinding = desc.GetDescriptorSets()[c];
 			descSetBindings[c]._name = srcBinding._name;
@@ -907,7 +908,8 @@ namespace RenderCore { namespace ImplVulkan
 			#endif
 		}
 
-		PushConstantsBinding pushConstantBinding[desc.GetPushConstants().size()];
+		std::vector<PushConstantsBinding> pushConstantBinding;
+		pushConstantBinding.resize(desc.GetPushConstants().size());
 		for (unsigned c=0; c<desc.GetPushConstants().size(); ++c) {
 			auto& srcBinding = desc.GetPushConstants()[c];
 			pushConstantBinding[c]._name = srcBinding._name;
@@ -918,8 +920,8 @@ namespace RenderCore { namespace ImplVulkan
 
 		return std::make_shared<Metal_Vulkan::CompiledPipelineLayout>(
 			_globalsContainer->_objectFactory,
-			MakeIteratorRange(descSetBindings, &descSetBindings[desc.GetDescriptorSets().size()]),
-			MakeIteratorRange(pushConstantBinding, &pushConstantBinding[desc.GetPushConstants().size()]),
+			MakeIteratorRange(descSetBindings),
+			MakeIteratorRange(pushConstantBinding),
 			desc);
 	}
 

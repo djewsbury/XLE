@@ -400,8 +400,9 @@ namespace EntityInterface
 					return ::Assets::PollStatus::Finish;
 				},
 				[futureFormatters, externalPosition=std::move(externalPosition), actualizationLog]() {
-					std::shared_ptr<Formatters::IDynamicFormatter> actualized[futureFormatters.size()];
-					auto a=actualized;
+					std::vector<std::shared_ptr<Formatters::IDynamicFormatter>> actualized;
+					actualized.resize(futureFormatters.size());
+					auto a=actualized.begin();
 					for (const auto& p:futureFormatters) {
 						*a = p->ActualizeBkgrnd();
 						assert(*a);
@@ -409,7 +410,7 @@ namespace EntityInterface
 					}
 
 					return std::make_shared<FormatOverlappingDocuments>(
-						MakeIteratorRange(actualized, actualized+futureFormatters.size()), MakeIteratorRange(externalPosition), actualizationLog);
+						MakeIteratorRange(actualized), MakeIteratorRange(externalPosition), actualizationLog);
 				});
 			return future;
 		}

@@ -105,11 +105,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(viewports.size() <= GetObjectFactory().GetPhysicalDeviceProperties().limits.maxViewports);
 
 		assert(_sharedState->_commandList.GetUnderlying());
-		VkViewport vkViewports[viewports.size()];
+		VLA(VkViewport, vkViewports, viewports.size());
 		for (unsigned c=0; c<viewports.size(); ++c)
 			vkViewports[c] = AsVkViewport(viewports[c], _sharedState->_renderTargetHeight);
 
-		VkRect2D vkScissors[scissorRects.size()];
+		VLA(VkRect2D, vkScissors, scissorRects.size());
 		for (unsigned c=0; c<scissorRects.size(); ++c)
 			vkScissors[c] = AsVkRect2D(scissorRects[c], _sharedState->_renderTargetHeight);
 
@@ -820,8 +820,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(_sharedState->_objectFactory->GetExtensionFunctions()._beginTransformFeedback);
 		assert(_sharedState->_objectFactory->GetExtensionFunctions()._bindTransformFeedbackBuffers);
 
-		VkDeviceSize offsets[outputBuffers.size()];
-		VkBuffer buffers[outputBuffers.size()];
+		VLA(VkDeviceSize, offsets, outputBuffers.size());
+		VLA(VkBuffer, buffers, outputBuffers.size());
 		for (unsigned c=0; c<outputBuffers.size(); ++c) {
 			offsets[c] = outputBuffers[c]._offset;
 			assert(const_cast<IResource*>(outputBuffers[c]._resource)->QueryInterface(typeid(Resource).hash_code()));
@@ -951,7 +951,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		rp_begin.renderArea.extent.width = extent[0];
 		rp_begin.renderArea.extent.height = extent[1];
 		
-		VkClearValue vkClearValues[fb._clearValuesOrdering.size()];
+		VLA(VkClearValue, vkClearValues, fb._clearValuesOrdering.size());
 		for (unsigned c=0; c<fb._clearValuesOrdering.size(); ++c) {
 			if (fb._clearValuesOrdering[c]._originalAttachmentIndex < clearValues.size()) {
 				vkClearValues[c] = *(const VkClearValue*)&clearValues[fb._clearValuesOrdering[c]._originalAttachmentIndex];

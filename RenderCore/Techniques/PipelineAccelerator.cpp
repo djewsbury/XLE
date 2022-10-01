@@ -1114,9 +1114,9 @@ namespace RenderCore { namespace Techniques
 		// trigger a rebuild of any that appear to be out of date.
 		// This allows us to support hotreloading when files change, etc
 		_lastFrameSequencerConfigExpired.resize(_sequencerConfigById.size(), true);
-		unsigned invalidSequencerIndices[_sequencerConfigById.size()];
+		VLA(unsigned, invalidSequencerIndices, _sequencerConfigById.size());
 		unsigned invalidSequencerCount = 0;
-		unsigned newlyExpiredSequencerIndices[_sequencerConfigById.size()];
+		VLA(unsigned, newlyExpiredSequencerIndices, _sequencerConfigById.size());
 		unsigned newlyExpiredSequencerCount = 0;
 
 		for (unsigned c=0; c<_sequencerConfigById.size(); ++c) {
@@ -1167,7 +1167,8 @@ namespace RenderCore { namespace Techniques
 
 		// Requeue pipelines for invalidated sequencers
 		if (invalidSequencerCount) {
-			std::shared_ptr<SequencerConfig> lockedSequencers[invalidSequencerCount];
+			std::vector<std::shared_ptr<SequencerConfig>> lockedSequencers;
+			lockedSequencers.resize(invalidSequencerCount);
 			for (unsigned c=0; c<invalidSequencerCount; ++c)
 				lockedSequencers[c] = _sequencerConfigById[invalidSequencerIndices[c]].second.lock();
 

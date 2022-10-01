@@ -44,7 +44,7 @@ namespace RenderCore { namespace Techniques
 				std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> automaticFiltering) mutable {
 
 				TRY {
-					const ParameterBox* selectorsList[selectorsCopy._selectors.size()];
+					VLA(const ParameterBox*, selectorsList, selectorsCopy._selectors.size());
 					for (unsigned c=0; c<selectorsCopy._selectors.size(); ++c)
 						selectorsList[c] = &selectorsCopy._selectors[c];
 					ScopedLock(sharedPools->_lock);
@@ -137,7 +137,7 @@ namespace RenderCore { namespace Techniques
 
 						ScopedLock(sharedPools->_lock);
 						UniqueShaderVariationSet::FilteredSelectorSet filteredSelectors[dimof(GraphicsPipelineDesc::_shaders)];
-						const ParameterBox* selectorsList[selectorsCopy._selectors.size()];
+						VLA(const ParameterBox*, selectorsList, selectorsCopy._selectors.size());
 						for (unsigned c=0; c<selectorsCopy._selectors.size(); ++c)
 							selectorsList[c] = &selectorsCopy._selectors[c];
 

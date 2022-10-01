@@ -52,6 +52,24 @@
     #define dimof(x) (sizeof(x)/sizeof(*x))
 #endif
 
+#if !defined(VLA)
+    // declare a "variable length array" in a more portable manner
+    // However:
+    //  - the memory is not initialized in any way
+    //  - "Type" must be a simple value type!
+    //      the constructor and destructor will not be called
+    #define VLA(Type, Name, Count)                                                          \
+        static_assert(std::is_trivial_v<Type>, "VLAs can only contain trivial types");      \
+        Type* Name = (Type*)_alloca(sizeof(Type)*(Count));                                  \
+        /**/
+
+    #define VLA_UNSAFE_FORCE(Type, Name, Count)                                             \
+        Type* Name = (Type*)_alloca(sizeof(Type)*(Count));                                  \
+        /**/
+#endif
+
+#define SEALED sealed
+
     //
     //      See similar values in stdlib.h & in the windows headers
     //      Let's just use the same maximums for all platforms!

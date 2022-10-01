@@ -926,8 +926,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		{
 			UniqueShaderVariationSet::FilteredSelectorSet filteredSelectors;
 
-			const ShaderSourceParser::SelectorFilteringRules* autoFiltering[1+patchExpansions.size()];
-			unsigned filteringRulesPulledIn[1+patchExpansions.size()];
+			VLA(const ShaderSourceParser::SelectorFilteringRules*, autoFiltering, 1+patchExpansions.size());
+			VLA(unsigned, filteringRulesPulledIn, 1+patchExpansions.size());
 			unsigned autoFilteringCount = 0;
 			autoFiltering[autoFilteringCount++] = &automaticFiltering;
 			filteringRulesPulledIn[0] = ~0u;
@@ -972,7 +972,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			IteratorRange<const std::pair<uint64_t, ShaderStage>*> patchExpansions,
 			StreamOutputInitializers so = {})
 		{
-			uint64_t patchExpansionsBuffer[patchExpansions.size()];
+			VLA(uint64_t, patchExpansionsBuffer, patchExpansions.size());
 			unsigned patchExpansionCount = 0;
 			for (auto p:patchExpansions)
 				if (p.second == shaderStage) 

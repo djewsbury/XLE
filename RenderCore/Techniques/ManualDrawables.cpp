@@ -462,7 +462,8 @@ namespace RenderCore { namespace Techniques
 		if (material._patchCollection.GetHash())
 		 	patchCollectionPtr = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(material._patchCollection);
 		
-		std::pair<uint64_t, SamplerDesc> samplers[material._samplers.size()];
+		using Pair = std::pair<uint64_t, SamplerDesc>;
+		VLA_UNSAFE_FORCE(Pair, samplers, material._samplers.size());
 		for (unsigned c=0; c<material._samplers.size(); ++c)
 			samplers[c] = {Hash64(material._samplers[c].first), material._samplers[c].second};
 

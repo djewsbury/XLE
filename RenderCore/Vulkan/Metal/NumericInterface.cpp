@@ -151,7 +151,6 @@ namespace RenderCore { namespace Metal_Vulkan
     {
 		assert(_pimpl);
 
-		VkDescriptorBufferInfo buffers[constantBuffers.size()];
 		for (unsigned c=0; c<constantBuffers.size(); ++c) {
 			if (!constantBuffers[c]._prebuiltBuffer) continue;
 

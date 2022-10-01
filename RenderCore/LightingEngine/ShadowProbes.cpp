@@ -149,8 +149,8 @@ namespace RenderCore { namespace LightingEngine
 
 	static void WriteStaticShadowProbeTable(IThreadContext& threadContext, IResource& dst, IteratorRange<const ShadowProbes::Probe*> probes)
 	{
-		CB_StaticShadowProbeDesc probeUniforms[probes.size()*6];
-		Techniques::ProjectionDesc projDescs[probes.size()*6];
+		VLA(CB_StaticShadowProbeDesc, probeUniforms, probes.size()*6);
+		VLA_UNSAFE_FORCE(Techniques::ProjectionDesc, projDescs, probes.size()*6);
 		WriteProjectionDescs(projDescs, probes);
 		for (unsigned c=0; c<probes.size()*6; ++c) {
 			auto miniProj = ExtractMinimalProjection(projDescs[c]._cameraToProjection);
@@ -207,7 +207,7 @@ namespace RenderCore { namespace LightingEngine
 				}
 				LightingTechniqueInstance::Step result;
 				result._type = LightingEngine::StepType::MultiViewParseScene;
-				Probe probesThisStep[nextBatchCount];
+				VLA_UNSAFE_FORCE(Probe, probesThisStep, nextBatchCount);
 				for (unsigned p=0; p<nextBatchCount; ++p) probesThisStep[p] = _probesToRender[_probeIterator+p].second;
 				result._multiViewDesc.resize(nextBatchCount*6);
 				WriteProjectionDescs(result._multiViewDesc.data(), MakeIteratorRange(probesThisStep, probesThisStep+nextBatchCount));
@@ -305,7 +305,7 @@ namespace RenderCore { namespace LightingEngine
 
 		if (_pimpl->_pendingClearOfProbeUniforms) {
 			auto probeUniformsSize = sizeof(CB_StaticShadowProbeDesc)*6*_pimpl->_config._maxStaticProbes;
-			uint8_t blank[probeUniformsSize];
+			VLA(uint8_t, blank, probeUniformsSize);
 			std::memset(blank, 0, probeUniformsSize);
 			Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(*_pimpl->_probeUniforms, MakeIteratorRange(blank, blank+probeUniformsSize));
 			_pimpl->_pendingClearOfProbeUniforms = false;

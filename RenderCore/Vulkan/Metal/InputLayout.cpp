@@ -124,8 +124,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		SPIRVReflection reflection(shader.GetByteCode());
 		_attributes.reserve(layout.size());
 
-		unsigned inputDataRatePerVB[vertexStrides.size()];
-		for (auto&i:inputDataRatePerVB) i = ~0u;
+		VLA(unsigned, inputDataRatePerVB, vertexStrides.size());
+		for (size_t c=0; c<vertexStrides.size(); ++c)
+			inputDataRatePerVB[c] = ~0u;
 
 		// Build the VkVertexInputAttributeDescription in the order of the
 		// input slots to make it easy to generate the trackingOffset separately
@@ -632,7 +633,7 @@ namespace RenderCore { namespace Metal_Vulkan
 							}
 						} else {
 							auto eleCount = reflectionVariable._arrayElementCount.value();
-							unsigned inputSlots[eleCount];
+							VLA(unsigned, inputSlots, eleCount);
 							for (unsigned c=0; c<eleCount; ++c) inputSlots[c] = ~0u;
 							for (unsigned c=0; c<eleCount; ++c) {
 								unsigned eleGroupIdx = ~0u;
@@ -1175,7 +1176,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					bind += 2;
 				} else {
 					auto count = bind[1]&~s_arrayBindingFlag;
-					const ResourceView* resViews[count];
+					VLA(const ResourceView*, resViews, count);
 					for (unsigned c=0; c<count; ++c) {
 						assert(bind[2+c] != ~0u);
 						resViews[c] = checked_cast<const ResourceView*>(srvs[bind[2+c]]);
@@ -1343,7 +1344,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 
 				unsigned dynamicOffsetCount = adaptiveSet._layoutDynamicOffsetCount;		// we should prefer this to be zero in the majority of cases
-				unsigned dynamicOffsets[dynamicOffsetCount];
+				VLA(unsigned, dynamicOffsets, dynamicOffsetCount);
 				for (unsigned c=0; c<dynamicOffsetCount; ++c) dynamicOffsets[c] = 0;
 			
 				encoder.BindDescriptorSet(

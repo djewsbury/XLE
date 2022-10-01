@@ -209,18 +209,19 @@ namespace Assets
 		if (!_updateSignal.AtLeastOneBind()) return;
 		ScopedLock(_lock);
 		assert(_assets.size() == _lastKnownAssetStates.size());
-		std::pair<uint64_t, AssetHeapRecord> updates[_assets.size()];
-		unsigned updateCount = 0;
+		using RecordPair = std::pair<uint64_t, AssetHeapRecord>;
+		std::vector<RecordPair> updates;
+		updates.reserve(64);
 		for (unsigned c=0; c<_assets.size(); ++c) {
 			auto& a = _assets[c];
 			auto newState = a.second->GetAssetState();
 			if (newState != _lastKnownAssetStates[c]) {
-				updates[updateCount++] = {a.first, AssetHeapRecord{ a.second->Initializer(), a.second->GetAssetState(), a.second->GetDependencyValidation(), a.second->GetActualizationLog(), GetTypeCode() }};
+				updates.emplace_back(a.first, AssetHeapRecord{ a.second->Initializer(), a.second->GetAssetState(), a.second->GetDependencyValidation(), a.second->GetActualizationLog(), GetTypeCode() });
 				_lastKnownAssetStates[c] = newState;
 			}
 		}
-		if (updateCount)
-			_updateSignal.Invoke(MakeIteratorRange(updates, &updates[updateCount]));
+		if (!updates.empty())
+			_updateSignal.Invoke(MakeIteratorRange(updates));
 	}
 
 	template<typename AssetType>

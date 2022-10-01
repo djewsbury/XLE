@@ -236,7 +236,7 @@ namespace RenderCore { namespace Techniques
 		assert(toLoadDelegate);
 		auto minToCheck = xl_ctz8(toLoadDelegate);
 		auto maxPlusOneToCheck = 64 - xl_clz8(toLoadDelegate);
-		IResourceView* rvDst[maxPlusOneToCheck];
+		VLA(IResourceView*, rvDst, maxPlusOneToCheck);
 
 		del._delegate->WriteResourceViews(parsingContext, nullptr, toLoadDelegate, MakeIteratorRange(rvDst, &rvDst[maxPlusOneToCheck]));
 		parsingContext.RequireCommandList(del._delegate->_completionCmdList);
@@ -263,7 +263,7 @@ namespace RenderCore { namespace Techniques
 		assert(toLoadDelegate);
 		auto minToCheck = xl_ctz8(toLoadDelegate);
 		auto maxPlusOneToCheck = 64 - xl_clz8(toLoadDelegate);
-		ISampler* samplerDst[maxPlusOneToCheck];
+		VLA(ISampler*, samplerDst, maxPlusOneToCheck);
 
 		del._delegate->WriteSamplers(parsingContext, nullptr, toLoadDelegate, MakeIteratorRange(&samplerDst[minToCheck], &samplerDst[maxPlusOneToCheck]));
 		
@@ -503,8 +503,9 @@ namespace RenderCore { namespace Techniques
 		// alternative is attaching storage to the descriptor set itself; but this isn't ideal because it requires
 		// allocating new resources
 		const bool useCmdListAttachedStorage = true;
-		const IResourceView* newResourceViews[delegateHelper._queriedResources.size() + delegateHelper._queriedImmediateDatas.size()];
-		std::shared_ptr<IResourceView> tempResViews[delegateHelper._queriedResources.size() + delegateHelper._queriedImmediateDatas.size()];
+		VLA(const IResourceView*, newResourceViews, delegateHelper._queriedResources.size() + delegateHelper._queriedImmediateDatas.size());
+		std::vector<std::shared_ptr<IResourceView>> tempResViews;		// subframe heap candidate
+		tempResViews.resize(delegateHelper._queriedResources.size() + delegateHelper._queriedImmediateDatas.size());
 		if (useCmdListAttachedStorage) {
 			size_t immDataIterator = 0;
 			const unsigned alignment = 0x100;

@@ -135,7 +135,7 @@ namespace RenderCore { namespace Assets
 
 			auto mipCount = desc._textureDesc._mipCount;
 			auto arrayLayerCount = ActualArrayLayerCount(desc._textureDesc);
-			BufferUploads::IAsyncDataSource::SubResource subres[mipCount*arrayLayerCount];
+			VLA_UNSAFE_FORCE(BufferUploads::IAsyncDataSource::SubResource, subres, mipCount*arrayLayerCount);
 			for (unsigned a=0; a<arrayLayerCount; ++a)
 				for (unsigned m=0; m<mipCount; ++m) {
 					auto& sr = subres[m+a*mipCount];
@@ -434,7 +434,7 @@ namespace RenderCore { namespace Assets
 				auto mipCount = (unsigned)desc._textureDesc._mipCount, elementCount = ActualArrayLayerCount(desc._textureDesc);
 				std::vector<uint8_t> data;
 				data.resize(ByteCount(desc._textureDesc));
-				BufferUploads::IAsyncDataSource::SubResource srs[mipCount*elementCount];
+				VLA_UNSAFE_FORCE(BufferUploads::IAsyncDataSource::SubResource, srs, mipCount*elementCount);
 				for (unsigned e=0; e<elementCount; ++e)
 					for (unsigned m=0; m<mipCount; ++m) {
 						auto srOffset = GetSubResourceOffset(desc._textureDesc, m, e);

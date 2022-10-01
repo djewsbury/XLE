@@ -714,7 +714,7 @@ namespace RenderCore { namespace Assets
                 for (const auto& m:pendingTree->_loadedSubMaterials)
                     MergeIn(finalMaterial, *m.second);
 
-                ::Assets::DependencyValidationMarker depVals[pendingTree->_depVals.size()];
+                VLA(::Assets::DependencyValidationMarker, depVals, pendingTree->_depVals.size());
                 for (unsigned c=0; c<pendingTree->_depVals.size(); c++) depVals[c] = pendingTree->_depVals[c];
                 finalMaterial._depVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals, &depVals[pendingTree->_depVals.size()]));
                 return finalMaterial;

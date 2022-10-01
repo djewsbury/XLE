@@ -235,7 +235,7 @@ namespace RenderCore { namespace LightingEngine
 
 		for (unsigned lightOperatorId=0; lightOperatorId!=resolveOperators.size(); ++lightOperatorId) {
 			
-			Internal::ShadowResolveParam shadowParams[shadowOperators.size()+1];
+			VLA_UNSAFE_FORCE(Internal::ShadowResolveParam, shadowParams, shadowOperators.size()+1);
 			unsigned shadowParamCount = 0;
 			shadowParams[shadowParamCount++] = Internal::ShadowResolveParam { Internal::ShadowResolveParam::Shadowing::NoShadows };
 			auto basePipelineIdx = (unsigned)pipelineFutures.size();

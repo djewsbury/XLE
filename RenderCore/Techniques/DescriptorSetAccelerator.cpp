@@ -390,7 +390,7 @@ namespace RenderCore { namespace Techniques
 		const UniformsStream& us)
 	{
 		assert(usi.GetImmediateDataBindings().empty());		// imm data bindings not supported here
-		DescriptorSetInitializer::BindTypeAndIdx bindTypesAndIdx[layout._slots.size()];
+		VLA_UNSAFE_FORCE(DescriptorSetInitializer::BindTypeAndIdx, bindTypesAndIdx, layout._slots.size());
 
 		auto* bind = bindTypesAndIdx;
 		for (const auto& slot:layout._slots) {

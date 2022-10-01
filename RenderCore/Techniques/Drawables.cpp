@@ -883,8 +883,8 @@ namespace RenderCore { namespace Techniques
 		assert(!geo._repositionalGeometry);
 		geo._repositionalGeometry = shared_from_this();
 		
-		AttachedRange ibRanges[attachedLocators.size()];
-		AttachedRange vbRanges[attachedLocators.size()];
+		VLA(AttachedRange, ibRanges, attachedLocators.size());
+		VLA(AttachedRange, vbRanges, attachedLocators.size());
 		unsigned ibRangeCount = 0, vbRangeCount = 0;
 		for (const auto& l:attachedLocators) {
 			assert(!l.IsWholeResource());

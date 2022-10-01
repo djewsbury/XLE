@@ -338,7 +338,7 @@ namespace RenderCore { namespace LightingEngine
 
 		// Map the shadow operator ids onto the underlying type of shadow (dynamically generated, shadow probes, etc)
 		{
-			ShadowOperatorDesc dynShadowGens[shadowGenerators.size()];
+			VLA_UNSAFE_FORCE(ShadowOperatorDesc, dynShadowGens, shadowGenerators.size());
 			unsigned dynShadowCount = 0;
 			for (unsigned c=0; c<shadowGenerators.size(); ++c) {
 				if (shadowGenerators[c]._resolveType == ShadowResolveType::Probe) {

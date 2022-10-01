@@ -218,7 +218,8 @@ namespace XLEMath
         // based on implementation from https://github.com/pradeep-pyro/tinynurbs/blob/master/include/tinynurbs/core/basis.h, but this
         // algorithm can be found on wikipedia as well as other places
         assert(degree >= 1);
-        float left[degree+1], right[degree+1];
+        VLA(float, left, degree+1);
+        VLA(float, right, degree+1);
         output[0] = 1.f;
         left[0] = right[1] = 0.f;
 

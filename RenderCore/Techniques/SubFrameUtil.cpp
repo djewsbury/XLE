@@ -57,8 +57,9 @@ namespace RenderCore { namespace Techniques
 		}
 
 		DescriptorSetInitializer newInitializer = initializer;
-		const IResourceView* newResourceViews[initializer._bindItems._immediateData.size() + initializer._bindItems._resourceViews.size()];
-		std::shared_ptr<IResourceView> temporaryResourceViews[initializer._bindItems._immediateData.size() + initializer._bindItems._resourceViews.size()];
+		VLA(const IResourceView*, newResourceViews, initializer._bindItems._immediateData.size() + initializer._bindItems._resourceViews.size());
+		std::vector<std::shared_ptr<IResourceView>> temporaryResourceViews;		// subframe heap candidate
+		temporaryResourceViews.resize(initializer._bindItems._immediateData.size() + initializer._bindItems._resourceViews.size());
 		unsigned rv = 0;
 		for (auto v:newInitializer._bindItems._resourceViews) newResourceViews[rv++] = v;
 
@@ -81,7 +82,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		// update _slotBindings to change from immediate data reference to resource view reference
-		DescriptorSetInitializer::BindTypeAndIdx newBindings[initializer._slotBindings.size()];
+		VLA_UNSAFE_FORCE(DescriptorSetInitializer::BindTypeAndIdx, newBindings, initializer._slotBindings.size());
 		for (unsigned c=0; c<initializer._slotBindings.size(); ++c) {
 			newBindings[c] = initializer._slotBindings[c];
 			if (newBindings[c]._type == DescriptorSetInitializer::BindType::ImmediateData) {

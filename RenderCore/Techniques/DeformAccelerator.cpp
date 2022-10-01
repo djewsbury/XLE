@@ -190,7 +190,8 @@ namespace RenderCore { namespace Techniques
 		assert(_boundThread == std::this_thread::get_id());
 		auto attachedStorage = _temporaryStorageManager->BeginCmdListReservation();
 
-		std::shared_ptr<DeformAccelerator> accelerators[_accelerators.size()];
+		std::vector<std::shared_ptr<DeformAccelerator>> accelerators;
+		accelerators.resize(_accelerators.size());		// subframe heap candidate
 		unsigned activeAcceleratorCount=0;
 		unsigned reservationBytes[AllocationType_Max] = {0,0,0};
 		unsigned maxInstanceCount = 0;
@@ -261,7 +262,7 @@ namespace RenderCore { namespace Techniques
 			}
 
 			unsigned movingOffsets[AllocationType_Max] = {0, 0, 0};
-			unsigned instanceList[maxInstanceCount];
+			VLA(unsigned, instanceList, maxInstanceCount);
 
 			for (unsigned c=0; c<activeAcceleratorCount; ++c) {
 				auto accelerator = accelerators[c];

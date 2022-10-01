@@ -543,7 +543,7 @@ namespace RenderCore { namespace Techniques
         auto device = threadContext.GetDevice();
         std::vector<uint8_t> data(ByteCount(desc._textureDesc));
         auto arrayCount = ActualArrayLayerCount(desc._textureDesc), mipCount = (unsigned)desc._textureDesc._mipCount;
-        BufferUploads::IAsyncDataSource::SubResource srs[arrayCount*mipCount];
+        VLA_UNSAFE_FORCE(BufferUploads::IAsyncDataSource::SubResource, srs, arrayCount*mipCount);
         for (unsigned a=0; a<arrayCount; ++a)
             for (unsigned m=0; m<mipCount; ++m) {
                 auto srOffset = GetSubResourceOffset(desc._textureDesc, m, a);

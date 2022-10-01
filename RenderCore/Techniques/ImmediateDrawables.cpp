@@ -140,11 +140,11 @@ namespace RenderCore { namespace Techniques
 	private:
 		void ApplyUniforms(const ExecuteDrawableContext& drawContext)
 		{
-			const IResourceView* res[_uniforms._resourceViews.size()];
+			VLA(const IResourceView*, res, _uniforms._resourceViews.size());
 			for (size_t c=0; c<_uniforms._resourceViews.size(); ++c) res[c] = _uniforms._resourceViews[c].get();
-			UniformsStream::ImmediateData immData[_uniforms._immediateData.size()];
+			VLA_UNSAFE_FORCE(UniformsStream::ImmediateData, immData, _uniforms._immediateData.size());
 			for (size_t c=0; c<_uniforms._immediateData.size(); ++c) immData[c] = _uniforms._immediateData[c];
-			const ISampler* samplers[_uniforms._samplers.size()];
+			VLA(const ISampler*, samplers, _uniforms._samplers.size());
 			for (size_t c=0; c<_uniforms._samplers.size(); ++c) samplers[c] = _uniforms._samplers[c].get();
 			drawContext.ApplyLooseUniforms(
 				UniformsStream { 

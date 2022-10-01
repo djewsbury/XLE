@@ -234,7 +234,7 @@ namespace RenderCore { namespace Assets
 							if ((pixelSize + offset) > that->_file.GetData().size())
 								Throw(std::runtime_error("DDS file appears truncating when reading (" + that->_filename + ")"));
 
-							DirectX::Image dximages[nimages];
+							VLA(DirectX::Image, dximages, nimages);
 							if (!_SetupImageArray(
 								(uint8_t*)pixels,
 								pixelSize,

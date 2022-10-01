@@ -915,7 +915,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		std::vector<VkDescriptorSetLayoutBinding> bindings;
 		bindings.reserve(srcLayout.size());
-		VkSampler tempSamplerArray[_fixedSamplers.size()];
+		VLA(VkSampler, tempSamplerArray, _fixedSamplers.size());
 		uint64_t dummyMask = 0;
 		for (unsigned bIndex=0; bIndex<(unsigned)srcLayout.size(); ++bIndex) {
 			if (srcLayout[bIndex]._type == DescriptorType::Empty) continue;

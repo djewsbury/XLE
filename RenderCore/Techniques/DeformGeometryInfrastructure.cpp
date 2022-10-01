@@ -580,14 +580,15 @@ namespace RenderCore { namespace Techniques
 
 			auto vertexCount = vbData->_size / vbData->_ia._vertexStride;
 			auto animatedElementsStride = vbData->_ia._vertexStride;
-			InputElementDesc animatedElements[vbData->_ia._elements.size()];
+			std::vector<InputElementDesc> animatedElements;
+			animatedElements.resize(vbData->_ia._elements.size());
 			BuildLowLevelInputAssembly(
-				MakeIteratorRange(animatedElements, &animatedElements[vbData->_ia._elements.size()]),
+				MakeIteratorRange(animatedElements),
 				vbData->_ia._elements);
 		
 			bool requiresGPUStaticDataLoad = false;
 			LinkDeformers(
-				MakeIteratorRange(animatedElements, &animatedElements[vbData->_ia._elements.size()]),
+				MakeIteratorRange(animatedElements),
 				vertexCount, animatedElementsStride, isCPUDeformer, geoIdx, *modelScaffold,
 				instantiations,
 				resultDeformerBindings,

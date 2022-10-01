@@ -740,9 +740,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
             minValue = minValueHistory = std::min(LinearInterpolate(minValueHistory, minValue, 0.15f), minValue);
             maxValue = maxValueHistory = std::max(LinearInterpolate(maxValueHistory, maxValue, 0.15f), maxValue);
 
-            Float3 graphLinePoints[valuesCount*2];
-            Float3 graphTrianglePoints[(valuesCount-1)*3*2];
-            ColorB graphTriangleColors[(valuesCount-1)*3*2];
+            VLA_UNSAFE_FORCE(Float3, graphLinePoints, valuesCount*2);
+            VLA_UNSAFE_FORCE(Float3, graphTrianglePoints, (valuesCount-1)*3*2);
+            VLA_UNSAFE_FORCE(ColorB, graphTriangleColors, (valuesCount-1)*3*2);
 
             //  figure out y axis coordination conversion...
             float yB = -(graphArea._bottomRight[1]-graphArea._topLeft[1]-20)/float(maxValue-minValue);

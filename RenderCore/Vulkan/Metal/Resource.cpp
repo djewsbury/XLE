@@ -784,7 +784,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 			assert(!dst._leftTopFrontIsLinearBufferOffset);		// expecting an actual xyz coord since it's an image
 
-            VkImageCopy copies[mipLevelCount];
+            VLA(VkImageCopy, copies, mipLevelCount);
 			for (unsigned q=0; q<mipLevelCount; ++q) {
 				auto&c = copies[q];
 				c.dstOffset = VkOffset3D { (int)dst._leftTopFront._values[0], (int)dst._leftTopFront._values[1], (int)dst._leftTopFront._values[2] };
@@ -884,7 +884,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			// where a full mipchain is contigous, and there's a gap between subsequent array layers of
 			// the same mip level. So let's just expand out to a separate copy op per mip chain, just to
 			// avoid a special requirement there.
-            VkBufferImageCopy copyOps[arrayLayerCount*mipLevelCount];
+            VLA(VkBufferImageCopy, copyOps, arrayLayerCount*mipLevelCount);
 
 			for (unsigned m=0; m<mipLevelCount; ++m)
 				for (unsigned a=0; a<arrayLayerCount; ++a) {
@@ -978,7 +978,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					Throw(std::runtime_error("When copying a partial subresource area, only a single mip level is supported"));	// copying multiple mip levels wouldn't work, because the partial ranges needs to be different for each mip level
 			}
 
-            VkBufferImageCopy copyOps[arrayLayerCount*mipLevelCount];
+            VLA(VkBufferImageCopy, copyOps, arrayLayerCount*mipLevelCount);
 			for (unsigned m=0; m<mipLevelCount; ++m)
 				for (unsigned a=0; a<arrayLayerCount; ++a) {
 					auto& copyOp = copyOps[m*arrayLayerCount+a];
@@ -1101,7 +1101,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		DeviceContext& context,
 		IteratorRange<IResource* const*> resources)
 	{
-		uint64_t makeResourcesVisibleExtra[resources.size()];
+		VLA(uint64_t, makeResourcesVisibleExtra, resources.size());
 		unsigned makeResourcesVisibleExtraCount = 0;
 
 		BarrierHelper barrierHelper{context};
