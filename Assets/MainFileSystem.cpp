@@ -210,7 +210,7 @@ namespace Assets
 					// attempt opening with the default file system...
 				if (ptrs.s_defaultFileSystem)
 					return ::Assets::TryGetDesc(*ptrs.s_defaultFileSystem, filename);
-				return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };
+				return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), {FileSnapshot::State::DoesNotExist} };
 			}
 
 			for (;;) {
@@ -232,7 +232,7 @@ namespace Assets
 				}
 			}
 
-			return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };
+			return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), {FileSnapshot::State::DoesNotExist} };
 		}
 	}
 
@@ -432,7 +432,7 @@ namespace Assets
 		auto transResult = fs.TryTranslate(marker, fn);
 		if (transResult == IFileSystem::TranslateResult::Success)
 			return fs.TryGetDesc(marker);
-		return FileDesc{std::basic_string<utf8>(), std::basic_string<utf8>(), AsSnapshotState(transResult)};
+		return FileDesc{std::basic_string<utf8>(), std::basic_string<utf8>(), {AsSnapshotState(transResult)}};
 	}
 
 	template IFileSystem::IOReason TryOpen<utf8, std::unique_ptr<IFileInterface>>(std::unique_ptr<IFileInterface>& result, IFileSystem& fs, StringSection<utf8> fn, const char openMode[], OSServices::FileShareMode::BitField shareMode);

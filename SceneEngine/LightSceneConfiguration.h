@@ -72,7 +72,6 @@ namespace SceneEngine
 	{
 		StringSection<> keyname;
 		std::vector<PendingProperty> properties; 
-		Type object;
 		StringSection<> objectName;
 		while (fmttr.TryKeyedItem(keyname)) {
 			if (XlEqString(keyname, "Name")) {

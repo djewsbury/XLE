@@ -451,7 +451,6 @@ namespace RenderCore { namespace Techniques
 		auto nodeSpaceToWorld = Identity<Float3x4>();
 		const Float4x4* geoSpaceToNodeSpace = nullptr;
 		IteratorRange<const uint64_t*> materialGuids;
-		unsigned materialGuidsIterator = 0;
 		unsigned transformMarker = ~0u;
 		unsigned elementIdx = ~0u;
 		for (auto cmd:cmdStream->GetCmdStream()) {
@@ -466,7 +465,6 @@ namespace RenderCore { namespace Techniques
 				break;
 			case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
 				materialGuids = cmd.RawData().Cast<const uint64_t*>();
-				materialGuidsIterator = 0;
 				break;
 			case (uint32_t)DrawableConstructor::Command::BeginElement:
 				elementIdx = cmd.As<unsigned>();

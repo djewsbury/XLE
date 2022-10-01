@@ -660,13 +660,13 @@ namespace Assets
 
 	FileDesc FileSystem_Memory::TryGetDesc(const Marker& marker)
 	{
-		if (marker.size() < sizeof(MarkerStruct)) return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };;
+		if (marker.size() < sizeof(MarkerStruct)) return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), {FileSnapshot::State::DoesNotExist} };
 
 		const auto& m = *(const MarkerStruct*)AsPointer(marker.begin());
 		if (m._fileIdx & 1) {
 			auto idx = m._fileIdx >> size_t(1);
 			if (idx >= _staticFilesAndContents.size())
-				return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };;
+				return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), {FileSnapshot::State::DoesNotExist} };
 
 			auto i = _staticFilesAndContents.begin();
 			std::advance(i, idx);
@@ -675,13 +675,13 @@ namespace Assets
 			return FileDesc
 				{
 					name, name,
-					FileSnapshot::State::Normal,
-					_modificationTime, (uint64_t)i->second.size()
+					{FileSnapshot::State::Normal, _modificationTime},
+					(uint64_t)i->second.size()
 				};
 		} else {
 			auto idx = m._fileIdx >> size_t(1);
 			if (idx >= _filesAndContents.size())
-				return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };;
+				return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), {FileSnapshot::State::DoesNotExist} };
 
 			auto i = _filesAndContents.begin();
 			std::advance(i, idx);
@@ -690,8 +690,8 @@ namespace Assets
 			return FileDesc
 				{
 					name, name,
-					FileSnapshot::State::Normal,
-					_modificationTime, (uint64_t)i->second->size()
+					{FileSnapshot::State::Normal, _modificationTime},
+					(uint64_t)i->second->size()
 				};
 		}
 	}

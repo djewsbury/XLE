@@ -33,7 +33,6 @@
 namespace Assets
 {
 	static const uint64_t ChunkType_ArchiveDirectory = ConstHash64<'Arch', 'ive', 'Dir'>::Value;
-	static const uint64_t ChunkType_CollectionDirectory = ConstHash64<'Coll', 'ecti', 'onDi', 'r'>::Value;
 	static const auto ChunkType_Metrics = ConstHash64<'Metr', 'ics'>::Value;
 	static const auto ChunkType_Log = ConstHash64<'Log'>::Value;
 	static const unsigned ArchiveHeaderChunkVersion = 1;

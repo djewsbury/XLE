@@ -644,7 +644,7 @@ namespace Utility
                 endRun += 2;
                 successiveUnallocatedSpace = *(endRun+1) - *endRun;
             }
-            auto allocatedSpace = *endRun - *i;
+            unsigned allocatedSpace = *endRun - *i;
 
             // If moving this block will expand the contiguous unallocated space sufficiently,
             // then let's do it

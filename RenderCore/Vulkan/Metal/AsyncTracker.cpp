@@ -22,6 +22,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		VkFence rawFence = nullptr;
         auto res = vkCreateFence(device, &createInfo, g_allocationCallbacks, &rawFence);
+		assert(res == VK_SUCCESS);
         return VulkanUniquePtr<VkFence>(
             rawFence,
             [device](VkFence fence) { vkDestroyFence(device, fence, g_allocationCallbacks ); });
@@ -50,14 +51,13 @@ namespace RenderCore { namespace Metal_Vulkan
 			lock.unlock();
 			auto pressure = GetThreadingPressure();
 			Log(Warning) << "Stalling due to too many fences in FenceBasedTracker (pressure: " << pressure << "). This happens when a command list submitted in the background takes longer than multiple frames. Slowing down to try to reduce pressure" << std::endl;
-			Threading::Sleep(4 * pressure);
+			Threading::Sleep(uint32_t(4 * pressure));
 			if (std::this_thread::get_id() == _queueThreadId)
 				UpdateConsumer();
 			lock.lock();
 		}
 
 		assert(!markers.empty());
-		auto highestMarker = *(markers.end()-1);
 		auto firstAvailable = _fenceAllocationFlags.Allocate();
 		if (firstAvailable == ~0u)
 			Throw(std::runtime_error("Failed to allocate fence in FenceBaseTracker"));
@@ -336,7 +336,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	bool FenceBasedTracker::WaitForFence(Marker marker, std::optional<std::chrono::nanoseconds> timeout)
 	{
-		auto start = std::chrono::steady_clock::now();
 		if (marker <= _lastCompletedConsumerFrameMarker.load())
 			return true;
 

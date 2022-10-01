@@ -98,7 +98,7 @@ namespace RenderCore { namespace Metal_Vulkan
         _pool = std::move(moveFrom._pool);
         _device = std::move(moveFrom._device);
         _pendingDestroys = std::move(moveFrom._pendingDestroys);
-		_markedDestroys = std::move(_markedDestroys);
+		_markedDestroys = std::move(moveFrom._markedDestroys);
 		_gpuTracker = std::move(moveFrom._gpuTracker);
     }
     
@@ -120,7 +120,7 @@ namespace RenderCore { namespace Metal_Vulkan
         _pool = std::move(moveFrom._pool);
         _device = std::move(moveFrom._device);
         _pendingDestroys = std::move(moveFrom._pendingDestroys);
-		_markedDestroys = std::move(_markedDestroys); 
+		_markedDestroys = std::move(moveFrom._markedDestroys); 
 		_gpuTracker = std::move(moveFrom._gpuTracker);
         return *this;
     }

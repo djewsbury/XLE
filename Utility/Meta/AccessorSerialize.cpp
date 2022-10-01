@@ -23,16 +23,11 @@
 
 namespace Utility
 {
-    static const unsigned ParsingBufferSize = 256;
-
     template<typename Formatter>
         void AccessorDeserialize(
             Formatter& formatter,
             void* obj, const ClassAccessors& props)
     {
-        using CharType = typename Formatter::value_type;
-        auto charTypeCat = ImpliedTyping::TypeOf<CharType>()._type;
-
         for (;;) {
             switch (formatter.PeekNext()) {
             case FormatterBlob::KeyedItem:

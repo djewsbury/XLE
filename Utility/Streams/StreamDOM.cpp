@@ -458,8 +458,8 @@ namespace Utility
     template class StreamDOM<InputStreamFormatter<utf8>>;
     template class StreamDOM<XmlInputStreamFormatter<utf8>>;
 
-    template class StreamDOMElement<InputStreamFormatter<utf8>>;
-    template class StreamDOMElement<XmlInputStreamFormatter<utf8>>;
+    template struct StreamDOMElement<InputStreamFormatter<utf8>>;
+    template struct StreamDOMElement<XmlInputStreamFormatter<utf8>>;
 
     template class StreamDOMAttribute<InputStreamFormatter<utf8>>;
     template class StreamDOMAttribute<XmlInputStreamFormatter<utf8>>;

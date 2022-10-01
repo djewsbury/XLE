@@ -64,7 +64,7 @@ namespace RenderCore { namespace Techniques
 	void EnableInstanceDeform(DeformAccelerator& accelerator, unsigned instanceIdx);
 
 	class IGeoDeformer;
-	class DeformerToRendererBinding;
+	struct DeformerToRendererBinding;
 	class IDeformGeoAttachment
 	{
 	public:

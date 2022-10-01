@@ -670,7 +670,7 @@ namespace EntityInterface
 			if (_docInterface->TryLock()) {
                 TRY {
                     CommonWidgets::Input widgets{interfaceState, input, _hoverings};
-                    auto pir = _layedOutWidgets.ProcessInput(widgets);
+                    pir = _layedOutWidgets.ProcessInput(widgets);
                     
                     if (widgets._madeChange)
                         _docInterface->IncreaseValidationIndex();

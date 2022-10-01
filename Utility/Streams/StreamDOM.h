@@ -20,7 +20,7 @@ namespace Utility
 {
     class OutputStreamFormatter;
 
-    template<typename Formatter> class StreamDOMElement;
+    template<typename Formatter> struct StreamDOMElement;
     template<typename Formatter> class StreamDOMAttribute;
         
     namespace Internal
@@ -66,7 +66,7 @@ namespace Utility
 
         unsigned ParseElement(Formatter& formatter, bool rootElement, StringSection<> name);
 
-        friend class StreamDOMElement<Formatter>;
+        friend struct StreamDOMElement<Formatter>;
         friend class StreamDOMAttribute<Formatter>;
         friend class Internal::DocElementIterator<Formatter>;
         friend class Internal::DocAttributeIterator<Formatter>;
@@ -199,7 +199,7 @@ namespace Utility
 
         StreamDOMAttribute(unsigned attributeIndex, const StreamDOM<Formatter>& doc);
 
-        friend class StreamDOMElement<Formatter>;
+        friend struct StreamDOMElement<Formatter>;
         friend class Internal::DocAttributeIterator<Formatter>;
     };
 
@@ -230,7 +230,7 @@ namespace Utility
         private:
             DocElementIterator(const Value& v) : _value(v) {}
             Value _value;
-            friend class StreamDOMElement<Formatter>;
+            friend struct StreamDOMElement<Formatter>;
         };
 
         template<typename Formatter>
@@ -258,7 +258,7 @@ namespace Utility
         private:
             DocAttributeIterator(const Value& v) : _value(v) {}
             Value _value;
-            friend class StreamDOMElement<Formatter>;
+            friend struct StreamDOMElement<Formatter>;
         };
     }
 

@@ -45,7 +45,6 @@ namespace RenderCore { namespace Techniques
 			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
 			auto& sysUsi = parsingContext.GetUniformDelegateManager()->GetInterface();
-			auto sysUsiHash = sysUsi.GetHash();
 			auto& boundUniforms = _boundUniforms.Get(*_pipeline, sysUsi, _usi);
 
 			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());

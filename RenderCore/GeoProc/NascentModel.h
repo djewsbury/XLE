@@ -25,7 +25,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	class UnboundSkinController;
 	class NascentSkeleton;
 	struct NativeVBSettings;
-	class NascentGeometryObjects;
+	struct NascentGeometryObjects;
 	struct CmdStreamSerializationHelper;
 
 	class NascentModel

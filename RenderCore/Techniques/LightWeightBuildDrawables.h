@@ -11,7 +11,7 @@ namespace RenderCore { namespace Techniques
 {
 	class DrawableConstructor;
 	class DrawablesPacket;
-	class ModelConstructionSkeletonBinding;
+	struct ModelConstructionSkeletonBinding;
 
 	struct LightWeightBuildDrawables
 	{

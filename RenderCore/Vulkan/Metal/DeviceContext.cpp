@@ -435,7 +435,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(encoderType != EncoderType::None);
 		assert(index < s_maxBoundDescriptorSetCount);
 		assert(index < GetDescriptorSetCount());
-		auto& collection = (encoderType == EncoderType::Compute) ? _sharedState->_computeDescriptorsTracking : _sharedState->_graphicsDescriptorsTracking;
 		if (_capturedStates) {
 			if (_capturedStates->_currentDescSet[index] != set)
 				_sharedState->_commandList.BindDescriptorSets(
@@ -453,6 +452,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 
 		#if defined(VULKAN_VERBOSE_DEBUG)
+			auto& collection = (encoderType == EncoderType::Compute) ? _sharedState->_computeDescriptorsTracking : _sharedState->_graphicsDescriptorsTracking;
 			collection._currentlyBoundDesc[index] = description;
 		#endif
 	}
@@ -970,7 +970,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		// Set the default viewport & scissor
 		VkViewport defaultViewport = AsVkViewport(fb.GetDefaultViewport(), _sharedState->_renderTargetHeight);
-		VkRect2D defaultScissor { offset[0], offset[1], extent[0], extent[1] };
+		VkRect2D defaultScissor { {offset[0], offset[1]}, {extent[0], extent[1]} };
 		vkCmdSetViewport(_sharedState->_commandList.GetUnderlying().get(), 0, 1, &defaultViewport);
 		vkCmdSetScissor(_sharedState->_commandList.GetUnderlying().get(), 0, 1, &defaultScissor);
 		vkCmdSetStencilReference(_sharedState->_commandList.GetUnderlying().get(), VK_STENCIL_FACE_FRONT_AND_BACK, 0);		// we must set this to something, because all the pipelines we use have this marked as a dynamic state

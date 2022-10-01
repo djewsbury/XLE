@@ -61,7 +61,7 @@ namespace EntityInterface
 		: _cfgFile(cfgFile)
 		{
 			if (!internalSection.IsEmpty()) {
-				typename Formatter::value_type internalSectionCopy[internalSection.size()];
+				VLA(typename Formatter::value_type, internalSectionCopy, internalSection.size());
 				auto* c2 = &internalSectionCopy[0];
 				for (auto c:internalSection) *c2++ = (c=='/')?':':c;
 				_fmttr = _cfgFile->GetFormatter(MakeStringSection(internalSectionCopy, internalSectionCopy+internalSection.size()));

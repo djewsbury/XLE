@@ -877,7 +877,7 @@ namespace RenderCore { namespace Metal_DX11
             ++i;
         }
 
-        return std::move(result);
+        return result;
     }
 
     static intrusive_ptr<ID3DBlob> GetLastError(ID3D11FunctionLinkingGraph& graph)
@@ -1067,7 +1067,7 @@ namespace RenderCore { namespace Metal_DX11
             }
         }
 
-        return std::move(linkingNode);
+        return linkingNode;
     }
 
     FunctionLinkingModule FunctionLinkingGraph::ParseModuleExpression(Section params, const ::Assets::DirectorySearchRules& searchRules, StreamLocation loc)
@@ -1192,7 +1192,7 @@ namespace RenderCore { namespace Metal_DX11
         for (auto i=macros.cbegin(); i!=macros.cend(); ++i)
             if (i->Name && i->Definition)
                 result[i->Name] = i->Definition;
-        return std::move(result);
+        return result;
     }
 
     bool D3DShaderCompiler::DoLowLevelCompile(

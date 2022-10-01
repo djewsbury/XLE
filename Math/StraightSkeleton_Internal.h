@@ -146,7 +146,6 @@ namespace XLEMath
 		-> typename std::enable_if<!std::is_integral<Primitive>::value, Vector2T<Primitive>>::type
 	{
 		auto scale = std::hypot(input[0], input[1]);		// (note "scale" becomes promoted to double)
-		using Promoted = decltype(scale);
 		Vector2T<Primitive> result;
 		for (unsigned c=0; c<2; ++c)
 			result[c] = input[c] * mag / scale;

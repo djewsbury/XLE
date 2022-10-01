@@ -301,7 +301,7 @@ namespace ColladaConversion
                 i->_semantic.c_str(), i->_semanticIndex);
         }
 
-        return std::move(result);
+        return result;
     }
 
     enum class PrimitiveTopology { Unknown, Triangles, TriangleStrips, PolyList, Polygons };
@@ -375,7 +375,7 @@ namespace ColladaConversion
         drawCall._indexBuffer = std::move(finalIndices);
         drawCall._materialBinding = geoPrim.GetMaterialBinding();
         drawCall._topology = Topology::TriangleList;
-        return std::move(drawCall);
+        return drawCall;
     }
 
     static WorkingDrawOperation LoadPolyList(
@@ -447,7 +447,7 @@ namespace ColladaConversion
         drawCall._indexBuffer = std::move(finalIndices);
         drawCall._materialBinding = geoPrim.GetMaterialBinding();
         drawCall._topology = Topology::TriangleList;
-        return std::move(drawCall);
+        return drawCall;
     }
 
     static WorkingDrawOperation LoadPolygons(
@@ -516,7 +516,7 @@ namespace ColladaConversion
         drawCall._indexBuffer = std::move(finalIndices);
         drawCall._materialBinding = geoPrim.GetMaterialBinding();
         drawCall._topology = Topology::TriangleList;
-        return std::move(drawCall);
+        return drawCall;
     }
 
     static std::shared_ptr<MeshDatabase> BuildMeshDatabase(

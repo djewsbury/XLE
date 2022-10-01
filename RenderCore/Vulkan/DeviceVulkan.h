@@ -90,7 +90,6 @@ namespace RenderCore { namespace ImplVulkan
         VulkanSharedPtr<VkSwapchainKHR> _swapChain;
         VulkanSharedPtr<VkDevice>       _device;
         Metal_Vulkan::ObjectFactory*    _factory;
-        const void*		_platformValue;
         unsigned		_activeImageIndex;
 
         std::vector<std::shared_ptr<IResource>> _images;

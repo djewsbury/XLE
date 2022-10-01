@@ -607,6 +607,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+    IAsyncTracker::~IAsyncTracker() {}
     IDestructionQueue::~IDestructionQueue() {}
 
     class DeferredDestruction : public IDestructionQueue

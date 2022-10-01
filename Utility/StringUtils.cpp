@@ -1403,19 +1403,6 @@ char XlToHex(int n)
     }
 }*/
 
-static inline bool XlIsHangulSyllable(int c)
-{
-    // see http://www.unicode.org/charts/PDF/UAC00.pdf
-
-    return c >= 0xAC00 && c <= 0xD7AF;
-}
-
-static inline bool XlIsHangulSpace(int c)
-{
-    return (c >= 0xAC00 && c <= 0xD7AF) || (c == 0x0020);
-}
-
-
 bool XlAtoBool(const char* str, const char** end_ptr)
 { 
 

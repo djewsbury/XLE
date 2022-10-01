@@ -122,8 +122,8 @@ namespace ShaderSourceParser
 		// However not the other way around. If the "input/material layout" version is dynamic offset, it can't match with a non-dynamic-offset
 		// pipeline layout slot
 		return inputSlotType == pipelineLayoutSlotType
-			|| (inputSlotType == RenderCore::DescriptorType::UniformBuffer) && pipelineLayoutSlotType == RenderCore::DescriptorType::UniformBufferDynamicOffset
-			|| (inputSlotType == RenderCore::DescriptorType::UnorderedAccessBuffer) && pipelineLayoutSlotType == RenderCore::DescriptorType::UnorderedAccessBufferDynamicOffset
+			|| (inputSlotType == RenderCore::DescriptorType::UniformBuffer && pipelineLayoutSlotType == RenderCore::DescriptorType::UniformBufferDynamicOffset)
+			|| (inputSlotType == RenderCore::DescriptorType::UnorderedAccessBuffer && pipelineLayoutSlotType == RenderCore::DescriptorType::UnorderedAccessBufferDynamicOffset)
 			;
 	}
 

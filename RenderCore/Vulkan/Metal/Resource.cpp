@@ -265,6 +265,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;   // sharing between queues
 			buf_info.flags = 0;     // flags for sparse buffers
 
+			/*
+			if (buf_info.usage & (VK_BUFFER_USAGE_VERTEX_BUFFER_BIT|VK_BUFFER_USAGE_INDEX_BUFFER_BIT))
+				buf_info.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+			*/
+
 			assert(buf_info.usage != 0);
 			if (!allocateDirectFromVulkan) {
 				_underlyingBuffer = factory.CreateBufferWithAutoMemory(_vmaMem, allocationInfo, buf_info, desc._allocationRules);

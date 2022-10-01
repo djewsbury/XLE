@@ -602,7 +602,6 @@ namespace RenderCore { namespace Techniques
         const ParameterBox& inputMatParameters, const ParameterBox& resBindings,
         const ::Assets::DirectorySearchRules& searchRules)
     {
-        static const auto DefaultNormalsTextureBindingHash = ParameterBox::MakeParameterNameHash("NormalsTexture");
             // The "material parameters" ParameterBox should contain some "RES_HAS_..."
             // settings. These tell the shader what resource bindings are available
             // (and what are missing). We need to set these parameters according to our
@@ -611,6 +610,7 @@ namespace RenderCore { namespace Techniques
         for (const auto& param:resBindings) {
             result.SetParameter(StringMeld<64, utf8>() << "RES_HAS_" << param.Name(), 1);
 #if 0
+            static const auto DefaultNormalsTextureBindingHash = ParameterBox::MakeParameterNameHash("NormalsTexture");
             if (param.HashName() == DefaultNormalsTextureBindingHash) {
                 auto resourceName = resBindings.GetParameterAsString(DefaultNormalsTextureBindingHash);
                 if (resourceName.has_value()) {
@@ -623,6 +623,6 @@ namespace RenderCore { namespace Techniques
             }
 #endif
         }
-        return std::move(result);
+        return result;
     }
 }}

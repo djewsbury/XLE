@@ -262,7 +262,7 @@ namespace RenderCore { namespace ImplVulkan
 			Throw(VulkanAPIFailure(res, "Failure in Vulkan instance construction. You must have an up-to-date Vulkan driver installed."));
 
         debug_init(instance.get());
-        return std::move(instance);
+        return instance;
     }
 
 	static std::vector<VkPhysicalDevice> EnumeratePhysicalDevices(VkInstance vulkan)
@@ -1055,7 +1055,6 @@ namespace RenderCore { namespace ImplVulkan
 	void PresentationChain::PresentToQueue(Metal_Vulkan::SubmissionQueue& queue, IteratorRange<const VkSemaphore*> commandBufferSyncs)
 	{
 		if (_activeImageIndex > unsigned(_images.size())) return;
-		auto& sync = _presentSyncs[_activePresentSync];
 		queue.Present(_swapChain.get(), _activeImageIndex, commandBufferSyncs);
 		_activeImageIndex = ~0x0u;
 	}
@@ -1083,7 +1082,6 @@ namespace RenderCore { namespace ImplVulkan
     , _device(factory.GetDevice())
     , _factory(&factory)
 	, _submissionQueue(submissionQueue)
-    , _platformValue(platformValue)
 	, _primaryBufferPool(factory, queueFamilyIndex, true, nullptr)
     {
         _activeImageIndex = ~0x0u;

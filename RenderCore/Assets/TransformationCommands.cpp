@@ -871,7 +871,7 @@ namespace RenderCore { namespace Assets
         OptimizePatterns(result);
         RemoveRedundantPushes(result);
 
-        return std::move(result);
+        return result;
     }
 
     ITransformationMachineOptimizer::~ITransformationMachineOptimizer() {}

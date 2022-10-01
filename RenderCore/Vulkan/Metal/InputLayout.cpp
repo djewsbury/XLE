@@ -846,10 +846,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				return lhs._descriptorSetIdx < rhs._descriptorSetIdx;
 			});
 		auto hash = DefaultSeed64;
-		for (const auto& a:_pushConstantsRules)
-			hash = Hash64(AsPointer(_pushConstantsRules.begin()), AsPointer(_pushConstantsRules.end()), hash);
-		for (const auto& a:_fixedDescriptorSetRules)
-			hash = Hash64(AsPointer(_fixedDescriptorSetRules.begin()), AsPointer(_fixedDescriptorSetRules.end()), hash);
+		hash = Hash64(AsPointer(_pushConstantsRules.begin()), AsPointer(_pushConstantsRules.end()), hash);
+		hash = Hash64(AsPointer(_fixedDescriptorSetRules.begin()), AsPointer(_fixedDescriptorSetRules.end()), hash);
 		for (const auto& a:_adaptiveSetRules)
 			hash = a.CalculateHash(hash);
 		_groupRulesHash = hash;
@@ -1326,9 +1324,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			// In the most common case, there should be no dummy descriptors to fill in here... So we'll 
 			// optimise for that case.
 			uint64_t dummyDescWriteMask = (~descSetSlots) & adaptiveSet._dummyMask;
-			uint64_t dummyDescWritten = 0;
 			if (dummyDescWriteMask != 0)
-				dummyDescWritten = builder->BindDummyDescriptors(context.GetGlobalPools(), dummyDescWriteMask);
+				builder->BindDummyDescriptors(context.GetGlobalPools(), dummyDescWriteMask);
 
 			if (doFlushNow) {
 				if (descSetSlots | dummyDescWriteMask) {

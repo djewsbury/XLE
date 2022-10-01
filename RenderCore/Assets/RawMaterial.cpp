@@ -657,7 +657,6 @@ namespace RenderCore { namespace Assets
             std::move(promisedMaterial),
             [pendingTree]() {
                 for (;;) {
-                    ::Assets::AssetState currentState = ::Assets::AssetState::Ready;
                     std::vector<std::pair<unsigned, std::shared_ptr<RawMaterial>>> subMaterials;
                     std::vector<::Assets::DependencyValidation> subDepVals;
                     for (const auto& f:pendingTree->_subFutures) {

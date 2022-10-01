@@ -51,16 +51,6 @@ namespace Assets
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static DependencyValidation MakeDepVal(
-		IteratorRange<const DependentFileState*> deps,
-		const DependencyValidation& compilerDepVal)
-	{
-		auto result = GetDepValSys().Make(deps);
-		if (compilerDepVal)
-			result.RegisterDependency(compilerDepVal);
-		return result;
-	}
-
 	class IntermediateCompilers : public IIntermediateCompilers
     {
     public:
@@ -195,7 +185,7 @@ namespace Assets
 
 	static DependencyValidation AsSingleDepVal(IteratorRange<const DependencyValidation*> depVals)
 	{
-		DependencyValidationMarker markers[depVals.size()];
+		VLA(DependencyValidationMarker, markers, depVals.size());
 		for (unsigned c=0; c<depVals.size(); ++c) markers[c] = depVals[c];
 		return GetDepValSys().MakeOrReuse(MakeIteratorRange(markers, &markers[depVals.size()]));
 	}

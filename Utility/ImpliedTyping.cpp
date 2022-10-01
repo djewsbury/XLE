@@ -484,9 +484,7 @@ namespace Utility { namespace ImpliedTyping
                         ++parseEnd;
 
                     auto* endOfNumber = parseEnd;
-                    bool precisionSpecifierFound = false;
                     if (parseEnd != expression.end() && (*parseEnd == 'f' || *parseEnd == 'F')) {
-                        precisionSpecifierFound = true;
                         ++parseEnd;
                         if (parseEnd != expression.end()) {
                             parseEnd = FastParseValue(MakeStringSection(parseEnd, expression.end()), precision);
@@ -949,8 +947,6 @@ namespace Utility { namespace ImpliedTyping
                 return {i, true};
 
             const CharType* parseEnd = nullptr;
-            int32_t i32; uint32_t ui32;
-            int64_t i64; uint64_t ui64;
             switch (destinationType._type) {
             case TypeCat::Bool:
                 {

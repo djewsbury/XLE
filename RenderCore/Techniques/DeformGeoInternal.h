@@ -25,7 +25,7 @@
 namespace RenderCore { class IDevice; class ICompiledPipelineLayout; class UniformsStreamInterface; }
 namespace RenderCore { namespace Techniques 
 {
-	class ComputePipelineAndLayout;
+	struct ComputePipelineAndLayout;
 	class CompiledShaderPatchCollection;
 	class PipelineCollection;
 	class SubFrameEvents;

@@ -88,7 +88,6 @@ namespace ConsoleRig
     static auto Fn_GuidGen = ConstHash64<'guid', 'gen'>::Value;
     static auto Fn_RedirectCout = ConstHash64<'redi', 'rect', 'cout'>::Value;
 	static auto Fn_GetAssetRoot = ConstHash64<'asse', 'troo', 't'>::Value;
-	static auto Fn_DefaultFileSystem = ConstHash64<'defa', 'ultf', 's'>::Value;
 
 	void DebugUtil_Startup();
 	void DebugUtil_Shutdown();

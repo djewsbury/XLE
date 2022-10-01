@@ -16,7 +16,6 @@ namespace ColladaConversion
 {
 
 	static uint64_t s_knownAssetTypes[] = { Type_Model, Type_RawMat, Type_Skeleton, Type_AnimationSet };
-	static uint64_t s_animSetAssetTypes[] = { Type_AnimationSet };
 
 	class CompilerDesc : public ::Assets::ICompilerDesc
 	{

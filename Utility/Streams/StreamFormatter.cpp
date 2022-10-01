@@ -263,7 +263,6 @@ namespace Utility
         if (marker.Remaining() < Count)
             return false;
 
-        const auto* test = marker.Pointer();
         for (unsigned c=0; c<Count; ++c)
             if (marker[c] != pattern[c])
                 return false;
@@ -278,7 +277,6 @@ namespace Utility
         if (marker.Remaining() < Count)
             Throw(FormatException("Blob prefix clipped", location));
 
-        const auto* test = marker.Pointer();
         for (unsigned c=0; c<Count; ++c)
             if (marker[c] != pattern[c])
                 Throw(FormatException("Malformed blob prefix", location));

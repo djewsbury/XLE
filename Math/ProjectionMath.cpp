@@ -721,10 +721,10 @@ namespace XLEMath
             if (__builtin_expect((straddlingFlags & faceBitMask) != faceBitMask, true)) continue;
 
             Float3 aabbSpaceCorner = IdentityAabbToLocalSpace ? _corners[cIdx] : TransformPointByOrthonormalInverse(aabbToLocalSpace, _corners[cIdx]);
-            bool inside = 
-                  (aabbSpaceCorner[0] >= mins[0]) & (aabbSpaceCorner[0] <= maxs[0])
-                & (aabbSpaceCorner[1] >= mins[1]) & (aabbSpaceCorner[1] <= maxs[1])
-                & (aabbSpaceCorner[2] >= mins[2]) & (aabbSpaceCorner[2] <= maxs[2])
+            auto inside = 
+                  int(aabbSpaceCorner[0] >= mins[0]) & int(aabbSpaceCorner[0] <= maxs[0])
+                & int(aabbSpaceCorner[1] >= mins[1]) & int(aabbSpaceCorner[1] <= maxs[1])
+                & int(aabbSpaceCorner[2] >= mins[2]) & int(aabbSpaceCorner[2] <= maxs[2])
                 ;
             if (__builtin_expect(inside, true)) {
                 return CullTestResult::Boundary;

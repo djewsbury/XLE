@@ -21,7 +21,7 @@ namespace RenderCore { namespace Techniques
 {
 	class IShaderOperator;
 	class PipelineCollection;
-	class FrameBufferTarget;
+	struct FrameBufferTarget;
 	class ParsingContext;
 }}
 

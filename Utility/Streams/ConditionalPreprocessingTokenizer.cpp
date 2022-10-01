@@ -193,7 +193,6 @@ namespace Utility
     void ConditionalProcessingTokenizer::SkipWhitespace()
     {
         assert(!_fileStates.empty());
-        auto& state = *(_fileStates.end()-1);
 
         // Note -- not supporting block comments or line extensions
         while ((_fileStates.end()-1)->_helper._input.begin() != (_fileStates.end()-1)->_helper._input.end()) {
@@ -775,11 +774,9 @@ namespace Utility
 
                         auto definedCheck = tokenDictionary.TryGetToken(Internal::TokenDictionary::TokenType::IsDefinedTest, symbol._value);
 
-                        bool unconditionalSet = true;
                         bool gotNotDefinedCheck = false;
                         for (auto condition=conditionsStack.rbegin(); condition!=conditionsStack.rend(); ++condition) {
                             if (!condition->_negativeCond.empty() && !IsFalse(condition->_negativeCond)) {
-                                unconditionalSet = false;
                                 break;
                             }
                             // We're looking for "just true" or "just !defined(X)"
@@ -789,7 +786,6 @@ namespace Utility
                                     // of the stack
                                     gotNotDefinedCheck = true;
                                 } else {
-                                    unconditionalSet = false;
                                     break;
                                 }
                             }
@@ -821,7 +817,7 @@ namespace Utility
                                     } else {
                                         expressionSubstitution = false;
                                     }
-                                } catch (const std::exception& e) {
+                                } catch (const std::exception&) {
                                     expressionSubstitution = false;
                                 }
                             }

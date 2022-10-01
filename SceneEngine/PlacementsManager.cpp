@@ -1318,7 +1318,7 @@ namespace SceneEngine
                 result.push_back(std::make_pair(i->_cellToWorld, tree));
             }
         }
-        return std::move(result);
+        return result;
     }
 
     auto PlacementsRenderer::GetQuadTree(const PlacementCellSet& cellSet, StringSection<> cellName) const
@@ -1341,7 +1341,7 @@ namespace SceneEngine
                 result.push_back(std::make_pair(i->_cellToWorld, obb));
             }
         }
-        return std::move(result);
+        return result;
     }
 
     auto PlacementsRenderer::GetObjectBoundingBoxes(const PlacementCellSet& cellSet, StringSection<> cellName) const -> ObjectBoundingBoxes
@@ -1975,7 +1975,7 @@ namespace SceneEngine
             CATCH_END
         }
 
-        return std::move(result);
+        return result;
     }
 
     std::vector<PlacementGUID> PlacementsIntersections::Find_FrustumIntersection(
@@ -1999,7 +1999,7 @@ namespace SceneEngine
             CATCH_END
         }
 
-        return std::move(result);
+        return result;
     }
 
     std::vector<PlacementGUID> PlacementsIntersections::Find_BoxIntersection(
@@ -2043,7 +2043,7 @@ namespace SceneEngine
             CATCH_END
         }
 
-        return std::move(result);
+        return result;
     }
 
     PlacementsIntersections::PlacementsIntersections(
@@ -2247,7 +2247,7 @@ namespace SceneEngine
             result.push_back(hash);
             i = comma;
         }
-        return std::move(result);
+        return result;
     }
 
     static std::string SupplementsGuidsToString(SupplementRange guids)
@@ -2859,6 +2859,8 @@ namespace SceneEngine
 
     PlacementsEditor::~PlacementsEditor()
     {}
+
+    PlacementsEditor::ITransaction::~ITransaction() {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

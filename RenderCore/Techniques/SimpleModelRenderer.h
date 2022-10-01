@@ -14,7 +14,7 @@
 
 namespace RenderCore { namespace Assets { class ModelScaffold; class MaterialScaffold; class SkeletonScaffold; }} // todo -- remove
 
-namespace RenderCore { namespace Assets { class DrawCallDesc; class ModelRendererConstruction; }}
+namespace RenderCore { namespace Assets { struct DrawCallDesc; class ModelRendererConstruction; }}
 namespace RenderCore { class UniformsStreamInterface; }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 namespace std { template<typename T> class future; }

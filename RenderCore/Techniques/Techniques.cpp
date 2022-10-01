@@ -121,8 +121,6 @@ namespace RenderCore { namespace Techniques
 		const ::Assets::DirectorySearchRules& searchRules, 
 		std::vector<::Assets::DependencyValidation>& inherited)
 	{
-		using ParsingString = std::basic_string<Formatter::value_type>;
-
 		TechniqueEntry result;
 		Formatter::InteriorSection name;
 		while (formatter.TryKeyedItem(name)) {

@@ -12,8 +12,6 @@
 
 namespace Assets
 {
-	#define SEALED sealed
-
 	class DependencyValidationSystem : public IDependencyValidationSystem
 	{
 	public:

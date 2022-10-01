@@ -504,7 +504,7 @@ namespace OSServices
 			FindClose(findHandle);
 		}
 
-		return std::move(result);
+		return result;
 	}
 
 	static size_t GetFileSize(HANDLE fileHandle)

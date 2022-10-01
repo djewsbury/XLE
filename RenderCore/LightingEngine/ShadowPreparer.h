@@ -100,7 +100,7 @@ namespace RenderCore { namespace LightingEngine
 		virtual void SetDescriptorSetLayout(
 			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout,
 			PipelineType pipelineType) = 0;
-		~ICompiledShadowPreparer();
+		virtual ~ICompiledShadowPreparer();
 	};
 
 	class ShadowOperatorDesc;

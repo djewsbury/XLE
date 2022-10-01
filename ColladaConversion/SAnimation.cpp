@@ -474,7 +474,7 @@ namespace ColladaConversion
             i = i2;
         }
 
-        return std::move(result);
+        return result;
     }
 
 }

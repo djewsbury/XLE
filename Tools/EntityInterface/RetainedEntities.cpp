@@ -102,7 +102,7 @@ namespace EntityInterface
             if (i->_type == typeId) {
                 result.push_back(AsPointer(i));
             }
-        return std::move(result);
+        return result;
     }
 
     EntityTypeId RetainedEntities::GetTypeId(StringSection<> name) const

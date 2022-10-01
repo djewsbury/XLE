@@ -211,7 +211,7 @@ namespace SceneEngine
 			std::sort(result.begin(), result.end(), &ResultEntry::CompareDepth);
 		}
 
-        return std::move(result);
+        return result;
     }
 
     void ModelIntersectionStateContext::SetRay(const std::pair<Float3, Float3> worldSpaceRay)

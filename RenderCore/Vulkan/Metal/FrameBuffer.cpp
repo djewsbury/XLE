@@ -451,7 +451,6 @@ namespace RenderCore { namespace Metal_Vulkan
         const FrameBufferDesc& layout)
 	{
 		const auto subpasses = layout.GetSubpasses();
-		auto samples = layout.GetProperties()._samples;
 		auto attachmentCount = layout.GetAttachments().size();
 		RenderPassHelper helper{layout};
 

@@ -33,6 +33,7 @@ namespace OSServices
 	public:
 		virtual void OnEvent(std::any&& payload) = 0;
 		virtual void OnException(const std::exception_ptr& exception) = 0;
+		virtual ~IConduitConsumer() = default;
 	};
 
 	/** <summary>Abstraction of OS specific event polling behaviour</summary>

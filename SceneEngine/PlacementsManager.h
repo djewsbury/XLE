@@ -190,6 +190,7 @@ namespace SceneEngine
             virtual void    Commit() = 0;
             virtual void    Cancel() = 0;
             virtual void    UndoAndRestart() = 0;
+            virtual ~ITransaction();
         };
 
         struct TransactionFlags { 

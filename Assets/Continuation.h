@@ -188,7 +188,7 @@ namespace Assets
 	template<typename... FutureTypes>
 		MultiAssetFuture<std::decay_t<decltype(Internal::GetContinuableFuture(std::declval<FutureTypes>()))>...> WhenAll(FutureTypes... subFutures)
 	{
-		Internal::CheckValidForContinuation<0, FutureTypes...>();
+		// Internal::CheckValidForContinuation<0, FutureTypes...>();
 		return MultiAssetFuture<std::decay_t<decltype(Internal::GetContinuableFuture(std::declval<FutureTypes>()))>...>{
 			Internal::GetContinuableFuture(std::forward<FutureTypes>(subFutures))...
 		};

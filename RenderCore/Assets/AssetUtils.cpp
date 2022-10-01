@@ -48,7 +48,7 @@ namespace RenderCore { namespace Assets
 			ele._alignedByteOffset = i->_alignedByteOffset;
 			result._elements.push_back(ele);
 		}
-		return std::move(result);
+		return result;
 	}
 
 	unsigned BuildLowLevelInputAssembly(

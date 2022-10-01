@@ -83,7 +83,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IResourceView> _configCB;
 		std::vector<uint8_t> _configCBData;
 
-		class ResolutionDependentResources;
+		struct ResolutionDependentResources;
 		std::unique_ptr<ResolutionDependentResources> _res;
 		std::unique_ptr<BlueNoiseGeneratorTables> _blueNoiseRes;
 		

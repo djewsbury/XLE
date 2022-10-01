@@ -35,7 +35,7 @@ namespace RenderCore { namespace Techniques
 	class DescriptorSetLayoutAndBinding;
 	class ActualizedDescriptorSet;
 	class CompiledPipelineLayoutAsset;
-	class DeformerToDescriptorSetBinding;
+	struct DeformerToDescriptorSetBinding;
 	class ICompiledLayoutPool;
 	class IDrawablesPool;
 	class ResourceConstructionContext;

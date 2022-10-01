@@ -366,12 +366,12 @@ template<typename T>
                     size_t len = XlGlyphCount(val.f_wstring) + 1;
                     nchars += std::max<size_t>(len, width);
 
-                    auto tmp = val.f_wstring;
-
                     len = width - len;
 
                     assert(0);  // following no longer supported
-                    /*if (len <= 0) {
+                    /*
+                    auto tmp = val.f_wstring;
+                    if (len <= 0) {
                         stream->Write(tmp);
                     } else if (left) {
                         stream->Write(tmp);

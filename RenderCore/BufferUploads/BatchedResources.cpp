@@ -44,7 +44,7 @@ namespace RenderCore { namespace BufferUploads
 			unsigned pageSizeInBytes);
 		~BatchedResources();
 	private:
-		class EventListManager;
+		struct EventListManager;
 		class HeapedResource;
 		class ActiveReposition;
 

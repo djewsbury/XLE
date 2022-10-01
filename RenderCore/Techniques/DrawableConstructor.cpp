@@ -242,10 +242,6 @@ namespace RenderCore { namespace Techniques
 						return lhs._srcOffset < rhs._srcOffset;
 					});
 
-				BufferUploads::IManager* bufferUploads = nullptr;
-				if (!constructionContext)
-					bufferUploads = &Services::GetBufferUploads();
-
 				struct PendingTransactions
 				{
 					std::vector<std::future<BufferUploads::ResourceLocator>> _markers;
@@ -688,7 +684,6 @@ namespace RenderCore { namespace Techniques
 									currentGeoSpaceToNodeSpace = {};
 								}
 
-								auto& pendingGeo = _pendingGeos._geos[pendingGeoIdx];
 								unsigned materialIterator = 0;
 								auto drawCallCount = rawGeometry->_drawCalls.size();
 								assert(drawCallCount == currentMaterialAssignments.size());

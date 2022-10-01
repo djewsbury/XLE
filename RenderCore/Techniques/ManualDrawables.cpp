@@ -99,7 +99,6 @@ namespace RenderCore { namespace Techniques
 		auto asyncChildren = std::make_shared<std::vector<std::future<void>>>();
 		asyncChildren->reserve(_parts.size());
 		
-		size_t offsetIterator = 0;
 		for (const auto&p:_parts) {
 			assert((p._offset+p._size) <= subResources[0]._destination.size());
 			SubResource childSubRes = subResources[0];

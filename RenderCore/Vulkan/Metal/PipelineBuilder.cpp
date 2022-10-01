@@ -247,7 +247,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void 		GraphicsPipelineBuilder::SetRenderPassConfiguration(const FrameBufferDesc& fbDesc, unsigned subPass)
 	{
-		const auto& samples = fbDesc.GetProperties()._samples;
 		_renderPassConfigurationHash = CalculateFrameBufferRelevance(fbDesc, subPass);
 		_currentRenderPass = GetGlobalPools()._renderPassPool.CreateVulkanRenderPass(fbDesc);
 		_currentTextureSamples = fbDesc.GetProperties()._samples;

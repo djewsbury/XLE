@@ -9,7 +9,7 @@
 #include <functional>
 
 namespace RenderCore { namespace LightingEngine { class CompiledLightingTechnique; class LightingTechniqueSequence; class LightingTechniqueIterator; class ILightScene; }}
-namespace RenderCore { namespace Techniques { class PreregisteredAttachment; class DrawingApparatus; class FragmentStitchingContext; class ImmediateDrawingApparatus; struct DoubleBufferAttachment; }}
+namespace RenderCore { namespace Techniques { struct PreregisteredAttachment; class DrawingApparatus; class FragmentStitchingContext; class ImmediateDrawingApparatus; struct DoubleBufferAttachment; }}
 namespace RenderCore { class FrameBufferProperties; }
 namespace RenderCore { namespace BufferUploads { class IManager; }}
 namespace Formatters { class IDynamicFormatter; }

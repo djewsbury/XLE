@@ -709,7 +709,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		// Now we have an buffer with indices of unique positions, we can build a topological buffer
 		std::vector<uint8_t> adjacencyIndexBuffer;
-		auto adjacencyIndexFormat = Format::R32_UINT;
 		adjacencyIndexBuffer.resize(remappedIndexBuffer.size()*2*sizeof(unsigned));
 		TriListToTriListWithAdjacency(
 			MakeIteratorRange((unsigned*)AsPointer(adjacencyIndexBuffer.begin()), (unsigned*)AsPointer(adjacencyIndexBuffer.end())),

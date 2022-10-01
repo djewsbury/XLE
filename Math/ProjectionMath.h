@@ -86,7 +86,6 @@ namespace XLEMath
         std::vector<Float3> _corners;
         std::vector<Edge> _edges;
         std::vector<unsigned> _cornerFaceBitMasks;
-        Float3 _testSpaceTranslation;
 
         template<bool IdentityAabbToLocalSpace>
             CullTestResult TestAABBInternal(const Float3x4& aabbToLocalSpace, Float3 mins, Float3 maxs) const;

@@ -18,7 +18,7 @@ namespace Utility { class ParameterBox; }
 namespace RenderCore { class IThreadContext; class MiniInputElementDesc; class InputElementDesc; class UniformsStreamInterface; class UniformsStream; class DescriptorSetSignature; }
 namespace RenderCore { namespace Assets { class ShaderPatchCollection; class PredefinedDescriptorSetLayout; } }
 namespace Assets { class IAsyncMarker; }
-namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; class IResourcePool; class IBatchedResources; class ResourceLocator; class Event_ResourceReposition; }}
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; class IResourcePool; class IBatchedResources; class ResourceLocator; struct Event_ResourceReposition; }}
 namespace std { template<typename Type> class promise; }
 
 namespace RenderCore { namespace Techniques
@@ -189,7 +189,7 @@ namespace RenderCore { namespace Techniques
 		template<typename Type, typename... Args>
 			std::shared_ptr<Type> MakeProtectedPtr(Args...);
 
-		~IDrawablesPool();
+		virtual ~IDrawablesPool();
 		unsigned GetGUID() const { return _guid; }
 	protected:
 		virtual void ReturnToPool(DrawablesPacket&&, unsigned) = 0;

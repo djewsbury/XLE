@@ -79,7 +79,7 @@ namespace Assets { namespace Internal
 		return stallResult.value_or(AssetState::Pending) != AssetState::Pending;
 	}
 	
-	static bool TimedWait(const IAsyncMarker& future, std::chrono::microseconds timeout)
+	inline bool TimedWait(const IAsyncMarker& future, std::chrono::microseconds timeout)
 	{
 		auto stallResult = future.StallWhilePending(timeout);
 		return stallResult.value_or(AssetState::Pending) != AssetState::Pending;
@@ -104,7 +104,7 @@ namespace Assets { namespace Internal
 		return stallResult.value_or(AssetState::Pending) != AssetState::Pending;
 	}
 	
-	static bool TimedWaitUntil(const IAsyncMarker& future, std::chrono::steady_clock::time_point timeoutTime)
+	inline bool TimedWaitUntil(const IAsyncMarker& future, std::chrono::steady_clock::time_point timeoutTime)
 	{
 		auto stallResult = future.StallWhilePending(std::chrono::microseconds(500));	// no StallUntil(), so just have to pick a timeout time
 		return stallResult.value_or(AssetState::Pending) != AssetState::Pending;

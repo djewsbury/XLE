@@ -105,7 +105,6 @@ namespace RenderCore { namespace Techniques
 
 		const unsigned deformInstanceIdx = ~0u;
 
-		auto nodeSpaceToWorld = Identity<Float3x4>();
 		const Float4x4* geoSpaceToNodeSpace = nullptr;
 		unsigned transformMarker = ~0u;
 		std::pair<unsigned, unsigned> baseTransformsRange { 0, 0 };
@@ -223,7 +222,6 @@ namespace RenderCore { namespace Techniques
 
 		const unsigned deformInstanceIdx = ~0u;
 
-		auto nodeSpaceToWorld = Identity<Float3x4>();
 		const Float4x4* geoSpaceToNodeSpace = nullptr;
 		unsigned transformMarker = ~0u;
 		std::pair<unsigned, unsigned> baseTransformsRange { 0, 0 };
@@ -322,7 +320,6 @@ namespace RenderCore { namespace Techniques
 		for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c)
 			drawables[c] = (cmdStream._drawCallCounts[c] && pkts[c]) ? pkts[c]->_drawables.Allocate<Internal::SingleInstanceViewMask_Drawable>(cmdStream._drawCallCounts[c]) : nullptr;
 
-		auto nodeSpaceToWorld = Identity<Float3x4>();
 		const Float4x4* geoSpaceToNodeSpace = nullptr;
 		unsigned transformMarker = ~0u;
 		std::pair<unsigned, unsigned> baseTransformsRange { 0, 0 };

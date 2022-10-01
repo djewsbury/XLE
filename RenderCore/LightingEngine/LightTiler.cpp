@@ -196,7 +196,7 @@ namespace RenderCore { namespace LightingEngine
 		spDesc.SetName("rasterization-light-tiler-init");
 		result.AddSubpass(
 			std::move(spDesc),
-			[op=shared_from_this(), lightTileBufferSize=_lightTileBufferSize](LightingEngine::LightingTechniqueIterator& iterator) {
+			[](LightingEngine::LightingTechniqueIterator& iterator) {
 				auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
 				/*
 					Can't copy from our R32_FLOAT downsampled depth buffer onto a D32_FLOAT texture to be used for depth/stencil tests

@@ -353,7 +353,6 @@ namespace ShaderSourceParser
 				assert(targetCode == SelectorFilteringRules::CompileProcessType);
 				::Assets::IIntermediateCompilers::SplitArchiveName result;
 				auto fn = initializers.GetInitializer<std::string>(0);
-				auto splitFN = MakeFileNameSplitter(fn);
 				result._entryId = Hash64(fn);
 				result._archive = "filtering";
 				result._descriptiveName = fn;

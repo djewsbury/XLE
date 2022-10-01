@@ -32,6 +32,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
         enum class MarkerStatus { Unknown, NotSubmitted, ConsumerPending, ConsumerCompleted };
         virtual MarkerStatus GetSpecificMarkerStatus(Marker) const = 0;
+
+        virtual ~IAsyncTracker();
 	};
 
     class IDestructionQueue

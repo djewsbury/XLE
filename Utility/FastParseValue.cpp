@@ -103,11 +103,11 @@ namespace Utility
         for (;;) {
             if (iterator >= input.end()) break;
             if (*iterator >= '0' && *iterator <= '9') {
-                if (((*iterator) - '0') >= radix) break;
+                if (((*iterator) - '0') >= CharType(radix)) break;
                 result = (result * radix) + uint32_t((*iterator) - '0');
-            } else if (*iterator >= 'a' && *iterator <= 'a'+radix-11) {
+            } else if (*iterator >= 'a' && *iterator <= CharType('a'+radix-11)) {
                 result = (result * radix) + uint32_t((*iterator) - 'a' + 10);
-            } else if (*iterator >= 'A' && *iterator <= 'A'+radix-11) {
+            } else if (*iterator >= 'A' && *iterator <= CharType('A'+radix-11)) {
                 result = (result * radix) + uint32_t((*iterator) - 'A' + 10);
             } else
                 break;
@@ -132,11 +132,11 @@ namespace Utility
         for (;;) {
             if (iterator >= input.end()) break;
             if (*iterator >= '0' && *iterator <= '9') {
-                if (((*iterator) - '0') >= radix) break;
+                if (((*iterator) - '0') >= CharType(radix)) break;
                 result = (result * radix) + uint64_t((*iterator) - '0');
-            } else if (*iterator >= 'a' && *iterator <= 'a'+radix-11) {
+            } else if (*iterator >= 'a' && *iterator <= CharType('a'+radix-11)) {
                 result = (result * radix) + uint64_t((*iterator) - 'a' + 10);
-            } else if (*iterator >= 'A' && *iterator <= 'A'+radix-11) {
+            } else if (*iterator >= 'A' && *iterator <= CharType('A'+radix-11)) {
                 result = (result * radix) + uint64_t((*iterator) - 'A' + 10);
             } else
                 break;
@@ -155,11 +155,11 @@ namespace Utility
         for (;;) {
             if (iterator >= input.end()) break;
             if (*iterator >= '0' && *iterator <= '9') {
-                if (((*iterator) - '0') >= radix) break;
+                if (((*iterator) - '0') >= CharType(radix)) break;
                 result = (result * radix) + uint64_t((*iterator) - '0');
-            } else if (*iterator >= 'a' && *iterator <= 'a'+radix-11) {
+            } else if (*iterator >= 'a' && *iterator <= CharType('a'+radix-11)) {
                 result = (result * radix) + uint64_t((*iterator) - 'a' + 10);
-            } else if (*iterator >= 'A' && *iterator <= 'A'+radix-11) {
+            } else if (*iterator >= 'A' && *iterator <= CharType('A'+radix-11)) {
                 result = (result * radix) + uint64_t((*iterator) - 'A' + 10);
             } else
                 break;
@@ -178,11 +178,11 @@ namespace Utility
         for (;;) {
             if (iterator >= input.end()) break;
             if (*iterator >= '0' && *iterator <= '9') {
-                if (((*iterator) - '0') >= radix) break;
+                if (((*iterator) - '0') >= CharType(radix)) break;
                 result = (result * radix) + uint32_t((*iterator) - '0');
-            } else if (*iterator >= 'a' && *iterator <= 'a'+radix-11) {
+            } else if (*iterator >= 'a' && *iterator <= CharType('a'+radix-11)) {
                 result = (result * radix) + uint32_t((*iterator) - 'a' + 10);
-            } else if (*iterator >= 'A' && *iterator <= 'A'+radix-11) {
+            } else if (*iterator >= 'A' && *iterator <= CharType('A'+radix-11)) {
                 result = (result * radix) + uint32_t((*iterator) - 'A' + 10);
             } else
                 break;

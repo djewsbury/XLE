@@ -69,9 +69,7 @@ namespace Assets
 		if (!_file.IsGood()) 
 			return { FileSnapshot::State::DoesNotExist, 0 };
 
-		auto size = _file.GetSize();
 		auto ft = _file.GetFileTime();
-
 		return { FileSnapshot::State::Normal, ft };
 	}
 
@@ -340,21 +338,21 @@ namespace Assets
 			std::basic_string<utf8> str((const utf8*)PtrAdd(AsPointer(marker.begin()), 2));
 			auto attrib = OSServices::TryGetFileAttributes(str.c_str());
 			if (!attrib)
-				return FileDesc { std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };
+				return FileDesc { std::basic_string<utf8>(), std::basic_string<utf8>(), {FileSnapshot::State::DoesNotExist} };
 
 			std::basic_string<utf8> mountedName((const utf8*)PtrAdd(AsPointer(marker.begin()), 2 + _rootUTF8.size()));
 
             auto attribv = *attrib;
 			return FileDesc
 				{
-					str, mountedName, FileSnapshot::State::Normal,
-					attribv._lastWriteTime, attribv._size
+					str, mountedName, {FileSnapshot::State::Normal, attribv._lastWriteTime},
+					attribv._size
 				};
 		} else if (type == 2) {
 			std::basic_string<utf16> str((const utf16*)PtrAdd(AsPointer(marker.begin()), 2));
 			auto attrib = OSServices::TryGetFileAttributes(str.c_str());
 			if (!attrib)
-				return FileDesc { std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };
+				return FileDesc { std::basic_string<utf8>(), std::basic_string<utf8>(), {FileSnapshot::State::DoesNotExist} };
 
 			std::basic_string<utf16> mountedName((const utf16*)PtrAdd(AsPointer(marker.begin()), 2 + 2*_rootUTF16.size()));
 
@@ -363,12 +361,12 @@ namespace Assets
 				{
 					Conversion::Convert<std::basic_string<utf8>>(str), 
 					Conversion::Convert<std::basic_string<utf8>>(mountedName),
-					FileSnapshot::State::Normal,
-					attribv._lastWriteTime, attribv._size
+					{FileSnapshot::State::Normal, attribv._lastWriteTime},
+					attribv._size
 				};
 		} 
 
-		return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), FileSnapshot::State::DoesNotExist };
+		return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), {FileSnapshot::State::DoesNotExist} };
 	}
 
     std::vector<IFileSystem::Marker> FileSystem_OS::FindFiles(

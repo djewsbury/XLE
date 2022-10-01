@@ -189,7 +189,6 @@ namespace Assets
 		// to resolve these just yet; but as "../" can happen anywhere in the input
 		// string we effectively have to iterate over the entire thing...
 		_segmentCount = 0;
-		bool firstSegmentContainsColon = false;
 		if (_encoding == Encoding::UTF8) {
 			StringSection<char> totalSection { (char*)AsPointer(_request.begin()), (char*)AsPointer(_request.end()) };
 			const char* iterator = totalSection.begin();

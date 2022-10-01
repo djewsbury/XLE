@@ -220,7 +220,6 @@ namespace RenderCore { namespace Assets
 		// We should find a dequantization block at the start and after every X keys
 		// This will contain the reconstructed min & max, and other parameters that
 		// help with dequantization.
-		const unsigned framesPerDequantBlock = 256;
 		auto* dequantBlock = (const CurveDequantizationBlock*)_data.begin();
 		assert(PtrAdd(dequantBlock, sizeof(CurveDequantizationBlock)) <= _data.end());
 		assert(dequantBlock->_mins[3] == 0.f && dequantBlock->_maxs[3] == 0.f);

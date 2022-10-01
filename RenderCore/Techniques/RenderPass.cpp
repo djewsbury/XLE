@@ -1060,7 +1060,7 @@ namespace RenderCore { namespace Techniques
             binding = std::find_if(
                 _pimpl->_semanticAttachments.begin(),
                 _pimpl->_semanticAttachments.end(),
-                [semantic](const Pimpl::SemanticAttachment& a) {
+                [](const Pimpl::SemanticAttachment& a) {
                     return a._semantic == 0 && a._lockCount == 0;
                 });
             if (binding != _pimpl->_semanticAttachments.end()) {
@@ -1850,7 +1850,6 @@ namespace RenderCore { namespace Techniques
         assert(transforms.size() == fragment._attachments.size());
         auto ti = transforms.begin();
         for (const auto& inputFrag:fragment._attachments) {
-            uint64_t semantic = inputFrag._semantic;
             AttachmentDesc desc;
             desc._loadFromPreviousPhase = inputFrag._loadFromPreviousPhase;
             desc._storeToNextPhase = inputFrag._storeToNextPhase;
@@ -2396,7 +2395,6 @@ namespace RenderCore { namespace Techniques
 
         auto existing = LowerBound(remapping, input);
         if (existing == remapping.end() || existing->first != input) {
-            auto semantic = srcFragment._attachments[input].GetInputSemanticBinding();
             auto newName = dstFragment.DefineAttachment(srcFragment._attachments[input]);
             existing = remapping.insert(existing, {input, newName});
         }

@@ -15,7 +15,7 @@ namespace Assets { class DependencyValidation; class DirectorySearchRules; }
 
 namespace Utility
 {
-	template<typename Type> class StreamDOMElement;
+	template<typename Type> struct StreamDOMElement;
 	template<typename Type> class InputStreamFormatter;
 }
 

@@ -418,7 +418,7 @@ namespace XLEMath
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	T1(Primitive) class CrashEventInfo;
+	T1(Primitive) struct CrashEventInfo;
 
 	T1(Primitive) class StraightSkeletonGraph
 	{
@@ -1788,6 +1788,7 @@ namespace XLEMath
 	{
 		assert(IsFiniteNumber(vertex[0]) && IsFiniteNumber(vertex[1]) && IsFiniteNumber(vertex[2]));
 		assert(vertex[0] != std::numeric_limits<Primitive>::max() && vertex[1] != std::numeric_limits<Primitive>::max() && vertex[2] != std::numeric_limits<Primitive>::max());
+		assert(vertex[2] < 1e6f);
 
 		auto existing = std::find_if(
 			skeleton._steinerVertices.begin(), skeleton._steinerVertices.end(),
@@ -1831,6 +1832,7 @@ namespace XLEMath
 
 	T1(Primitive) void StraightSkeletonGraph<Primitive>::AddVertexPathEdge(VertexId vertex, PointAndTime<Primitive> begin, PointAndTime<Primitive> end)
 	{
+		assert(end[2] < 1e6f);
 		_vertexPathEdges.push_back({vertex, begin, end});
 	}
 
@@ -1874,6 +1876,41 @@ namespace XLEMath
 			events.erase(end, events.end());
 
 			ProcessEvents(events);
+		}
+
+
+		// santize remaining loops
+		std::vector<Event<Primitive>> santizeEvents;
+		std::vector<Event<Primitive>> originalSantizeEvents;
+		if (0) {
+			for (auto& l:_loops) {
+				if (l._edges.size() <= 2) continue;
+
+				bool atLeastOneFrozenVert = false;
+				for (auto& e:l._edges)
+					atLeastOneFrozenVert |= _vertices[e._head]._anchor0[2] == _vertices[e._head]._anchor1[2];
+
+				if (!atLeastOneFrozenVert) continue;
+				
+				l._motorcycleSegments.clear();
+				for (auto&e:l._edges) {
+					e._pendingCalculate = true;
+					if (_vertices[e._head]._anchor0[2] != _vertices[e._head]._anchor1[2])
+						l._motorcycleSegments.emplace_back(MotorcycleSegment<Primitive>{e._head});
+				}
+				if (l._motorcycleSegments.empty()) continue;
+				UpdateLoopStage1(l);
+				UpdateLoopStage2(l);
+				UpdateLoopStage3(l);
+				auto earliestTime = std::numeric_limits<Primitive>::max();
+				FindMotorcycleCrashes(santizeEvents, earliestTime, l);
+			}
+			std::sort(santizeEvents.begin(), santizeEvents.end(), [](const auto& lhs, const auto& rhs) { return lhs._eventTime < rhs._eventTime; });
+			auto end = santizeEvents.begin();
+			while (end != santizeEvents.end() && end->_eventTime < maxTime) ++end;
+			santizeEvents.erase(end, santizeEvents.end());
+			originalSantizeEvents = santizeEvents;
+			ProcessEvents(santizeEvents);
 		}
 
 		StraightSkeleton<Primitive> result;
@@ -1941,7 +1978,7 @@ namespace XLEMath
 			_graph->_originalBoundaryEdges.push_back({vertexOffset + unsigned((v+1)%vertices.size()), vertexOffset + unsigned(v)});
 			_graph->_vertices.push_back(Vertex<Primitive>{PointAndTime<Primitive>{vertices[v], Primitive(0)}, PointAndTime<Primitive>{vertices[v], Primitive(0)}, FaceId(vertexOffset+((v+vertices.size()-1)%vertices.size())), FaceId(vertexOffset+v)});
 		}
-		auto resultId = loop._loopId = _graph->_nextLoopId++;
+		loop._loopId = _graph->_nextLoopId++;
 		loop._signedAreaAtLatestEvent = CalculateSignedAreaAtTime<Primitive>(loop._edges, _graph->_vertices, 0);
 		loop._signOfInitialLoop = std::copysign(Primitive(1), loop._signedAreaAtLatestEvent);
 		_graph->_loops.emplace_back(std::move(loop));

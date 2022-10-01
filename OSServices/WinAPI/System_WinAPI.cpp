@@ -207,8 +207,6 @@ void GetProcessPath(utf8 dst[], size_t bufferCount)    { GetModuleFileNameA(NULL
 void ChDir(const utf8 path[])                          { SetCurrentDirectoryA((const char*)path); }
 void DeleteFile(const utf8 path[]) { auto result = ::DeleteFileA((char*)path); (void)result; }
 
-static uint64 AsUInt64(FILETIME ft) { return (uint64(ft.dwHighDateTime) << 32ull) | uint64(ft.dwLowDateTime); }
-
 FileTime GetModuleFileTime()
 {
     char path[MaxPath];

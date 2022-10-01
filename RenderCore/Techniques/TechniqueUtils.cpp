@@ -89,7 +89,6 @@ namespace RenderCore { namespace Techniques
         auto worldToProjection = Combine(InvertOrthonormalTransform(sceneCamera._cameraToWorld), projectionMatrix);
         CalculateAbsFrustumCorners(frustumCorners, worldToProjection, RenderCore::Techniques::GetDefaultClipSpaceType());
 
-        Float3 cameraPosition = ExtractTranslation(sceneCamera._cameraToWorld);
         return XLEMath::BuildRayUnderCursor(mousePosition, frustumCorners, viewport);
     }
 
@@ -205,7 +204,7 @@ namespace RenderCore { namespace Techniques
             Float2{1.f/float(viewport._width), 1.f/float(viewport._height)}, 
             Float2{viewport._x, viewport._y},
             Float2{viewport._width, viewport._height},
-            0, 0 };
+            {0, 0} };
     }
 
     SharedPkt MakeLocalTransformPacket(const Float4x4& localToWorld, const CameraDesc& camera)

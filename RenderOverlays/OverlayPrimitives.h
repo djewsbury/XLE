@@ -28,7 +28,7 @@ namespace RenderOverlays
         uint8_t           a, r, g, b;
 
         ColorB() {}
-        ColorB(uint8_t r_, uint8_t g_, uint8_t b_, uint8_t a_ = 0xff) : r(r_), g(g_), b(b_), a(a_) {}
+        ColorB(uint8_t r_, uint8_t g_, uint8_t b_, uint8_t a_ = 0xff) : a(a_), r(r_), g(g_), b(b_) {}
         ColorB(uint32_t rawColor)    { a = rawColor >> 24; r = (rawColor >> 16) & 0xff; g = (rawColor >> 8) & 0xff; b = (rawColor >> 0) & 0xff; }
         
         unsigned        AsUInt32() const           { return (uint32_t(a) << 24) | (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b); }

@@ -11,7 +11,7 @@
 
 namespace RenderCore { namespace Techniques { class ParsingContext; class ImmediateDrawingApparatus; class IImmediateDrawables; }}
 namespace RenderCore { class IThreadContext; }
-namespace RenderOverlays { class Rect; }
+namespace RenderOverlays { struct Rect; }
 
 namespace RenderOverlays
 {

@@ -132,7 +132,6 @@ namespace RenderCore { namespace Metal_Vulkan
     {
         // We don't know anything about the "image" in this case. We need to rely on "image" containing all
         // of the relevant information.
-        bool isArray = (window._arrayLayerRange._count != TextureViewDesc::Unlimited) && (window._arrayLayerRange._count > 1u);       // akwardly, TextureViewDesc::Unlimited is ambiguous
         auto createInfo = MakeImageViewCreateInfo(window, image, true);
         _imageView = factory.CreateImageView(createInfo);
         static_assert(sizeof(_imageSubresourceRange) >= sizeof(VkImageSubresourceRange));

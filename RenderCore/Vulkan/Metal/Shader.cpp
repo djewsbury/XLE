@@ -172,14 +172,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-	static void TryRegisterDependency(
-		::Assets::DependencyValidation& dst,
-		const ::Assets::DependencyValidation& dependency)
-	{
-		if (dependency)
-			dst.RegisterDependency(dependency);
-	}
-
 	void ShaderProgram::ConstructToPromise(
 		std::promise<std::shared_ptr<ShaderProgram>>&& promise,
 		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
