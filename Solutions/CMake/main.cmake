@@ -2,7 +2,10 @@
 get_filename_component(XLE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../" ABSOLUTE)
 get_filename_component(FOREIGN_DIR "${XLE_DIR}/Foreign/" ABSOLUTE)
 get_filename_component(XLE_MAIN_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}" ABSOLUTE)
-get_filename_component(XLE_BINARY_OUTPUT_DIR "${XLE_DIR}/Finals_Debug64/" ABSOLUTE)
+get_filename_component(XLE_BINARY_OUTPUT_DIR_Debug "${XLE_DIR}/Finals_Debug64/" ABSOLUTE)
+get_filename_component(XLE_BINARY_OUTPUT_DIR_Release "${XLE_DIR}/Finals_Debug64/" ABSOLUTE)
+get_filename_component(XLE_BINARY_OUTPUT_DIR_MinSizeRel "${XLE_DIR}/Finals_Debug64/" ABSOLUTE)
+get_filename_component(XLE_BINARY_OUTPUT_DIR_RelWithDebInfo "${XLE_DIR}/Finals_Debug64/" ABSOLUTE)
 
 # See https://stackoverflow.com/questions/375913/how-can-i-profile-c-code-running-on-linux for some examples of methods to profile
 # on linux, including tools that can interpret the -pg instrumentation output
@@ -134,6 +137,13 @@ macro(xle_configure_dll DllName)
             target_link_options(${DllName} PRIVATE -Wl,--unresolved-symbols=report-all)
         endif ()
     endif ()
+endmacro()
+
+macro(xle_configure_binary_output target)
+    set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${XLE_BINARY_OUTPUT_DIR_Debug})
+    set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${XLE_BINARY_OUTPUT_DIR_Release})
+    set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${XLE_BINARY_OUTPUT_DIR_MinSizeRel})
+    set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${XLE_BINARY_OUTPUT_DIR_RelWithDebInfo})
 endmacro()
 
 macro(xle_executable_post_build executable_target)

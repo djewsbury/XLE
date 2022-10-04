@@ -18,7 +18,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 		TerrainManipulatorsInterface.cpp
 		#TerrainOp.cpp
 		#TerrainShadowOp.cpp
-		VisualisationGeo.cpp
+		#VisualisationGeo.cpp		(in techniques for now)
 		VisualisationUtils.cpp
 		DrawablesWriter.cpp
 		ToolsRigServices.cpp
@@ -36,5 +36,6 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 		)
 	xle_configure_library(ToolsRig-${metal_name})
 	target_link_libraries(ToolsRig-${metal_name} PRIVATE RenderCoreTechniques-${metal_name})
+	target_link_libraries(ToolsRig-${metal_name} PRIVATE yogacore)
 
 endforeach()

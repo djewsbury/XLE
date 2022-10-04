@@ -29,10 +29,18 @@ set(Src
 	../DX11/Metal/NewShaderCompiler.cpp
 	)
 
+if (NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	list(APPEND Src RegisterVulkan.cpp)
+endif ()
+
 add_library(RenderCore_Vulkan STATIC ${Src} ${Headers})
 xle_configure_library(RenderCore_Vulkan)
 target_link_libraries(RenderCore_Vulkan PRIVATE ForeignMisc)
-target_sources(RenderCore_Vulkan INTERFACE ${CMAKE_CURRENT_LIST_DIR}/RegisterVulkan.cpp)
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	# use target_sources INTERFACES to ensure that RegisterVulkan is included in the top most linked project when using the clang based compilation process
+	target_sources(RenderCore_Vulkan INTERFACE ${CMAKE_CURRENT_LIST_DIR}/RegisterVulkan.cpp)
+endif ()
 
 ############################################################################################################################################
 set(XLE_VULKAN_SDK_DIR "" CACHE PATH "Vulkan SDK directory")
@@ -97,13 +105,13 @@ add_custom_command(
 	TARGET RenderCore_Vulkan POST_BUILD 
 	COMMAND "${CMAKE_COMMAND}" -E copy_if_different
 	"$<TARGET_FILE:dxcompiler>"
-	"${XLE_BINARY_OUTPUT_DIR}/$<TARGET_FILE_NAME:dxcompiler>")
+	"${XLE_BINARY_OUTPUT_DIR_${CMAKE_BUILD_TYPE}}/$<TARGET_FILE_NAME:dxcompiler>")
 
 add_custom_command(
 	TARGET RenderCore_Vulkan POST_BUILD 
 	COMMAND "${CMAKE_COMMAND}" -E copy_if_different
 	"$<TARGET_FILE:dxil>"
-	"${XLE_BINARY_OUTPUT_DIR}/$<TARGET_FILE_NAME:dxil>")
+	"${XLE_BINARY_OUTPUT_DIR_${CMAKE_BUILD_TYPE}}/$<TARGET_FILE_NAME:dxil>")
 
 ############################################################################################################################################
 
