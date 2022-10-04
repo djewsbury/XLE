@@ -87,7 +87,7 @@ namespace Assets
 		// iterating through. If the mounted filesystems change (ie, mounts added or removed), it
 		// potentially invalidates the iteration, and we should start again from the top
 		ScopedLock(_pimpl->_mountsLock);
-		_changeId = _changeId ?: _pimpl->_changeId;
+		_changeId = _changeId ? _changeId : _pimpl->_changeId;
 		if (!_pimpl || _pimpl->_changeId != _changeId)
 			return Result::Invalidated;
 

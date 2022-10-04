@@ -174,11 +174,14 @@ namespace Utility
             storedFunction._offset = allocation;
         }
 
+        #pragma push_macro("new")
+        #undef new
         if constexpr(sizeof...(Args)==0) {
             new((void*)PtrAdd(AsPointer(_pages[storedFunction._pageIdx]._storage.begin()), storedFunction._offset)) Fn(std::move(fn));
         } else {
             new((void*)PtrAdd(AsPointer(_pages[storedFunction._pageIdx]._storage.begin()), storedFunction._offset)) BoundFn(std::bind(std::move(fn), std::forward<Args>(args)...));
         }
+        #pragma pop_macro("new")
 
         _pendingTasks.push(storedFunction);
         _pendingTaskVariable.notify_one();

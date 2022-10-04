@@ -576,7 +576,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             return context.DrawText(AsPixelCoords(rect), *_font, _flags, _color, _alignment, text);
         } else {
             auto* res = ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>();
-            if (__builtin_expect(res != nullptr, true))
+            if (expect_evaluation(res != nullptr, true))
                 return context.DrawText(AsPixelCoords(rect), *res->_defaultFont, _flags, _color, _alignment, text);
             return {0,0};
         }

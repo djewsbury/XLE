@@ -163,7 +163,7 @@ namespace UnitTests
 			std::mt19937_64 localRng(rng());
 			threads[c]._threadContext = testHelper->_device->CreateDeferredContext();
 			threads[c]._thread = std::thread(
-				[localContext=threads[c]._threadContext, threadableFunction, localRng, &drawCount, &pendingCommandListLock, &pendingCommandList]() mutable {
+				[localContext=threads[c]._threadContext, threadableFunction, localRng, &drawCount, &pendingCommandListLock, &pendingCommandList, drawCountLimit]() mutable {
 
 					unsigned batchCount = 0;
 					for (;;) {

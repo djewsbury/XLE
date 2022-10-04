@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "../Core/Prefix.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/UTFUtils.h"
 #include "../Utility/StringFormat.h"
@@ -298,8 +299,11 @@ namespace Assets
 		InitializerPack& operator=(InitializerPack&& moveFrom) = default;
 		InitializerPack(const InitializerPack& copyFrom) = default;
 		InitializerPack& operator=(const InitializerPack& copyFrom) = default;
-		InitializerPack(InitializerPack& copyFrom) = default;
-		InitializerPack& operator=(InitializerPack& copyFrom) = default;
+
+		#if COMPILER_ACTIVE != COMPILER_TYPE_MSVC
+			InitializerPack(InitializerPack& copyFrom) = default;
+			InitializerPack& operator=(InitializerPack& copyFrom) = default;
+		#endif
 
 	private:
 		std::vector<std::any> _variantPack;

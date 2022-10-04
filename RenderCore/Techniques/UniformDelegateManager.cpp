@@ -230,7 +230,7 @@ namespace RenderCore { namespace Techniques
 
 		uint64_t toLoadDelegate = 0;
 		for (unsigned c=0; c<del._resourceInterfaceToUSI.size(); ++c)
-			if (del._resourceInterfaceToUSI[c] != ~0u && (resourcesToQuery & (1 << uint64_t(del._resourceInterfaceToUSI[c]))))
+			if (del._resourceInterfaceToUSI[c] != ~0u && (resourcesToQuery & (1ull << uint64_t(del._resourceInterfaceToUSI[c]))))
 				toLoadDelegate |= 1ull << uint64_t(c);
 
 		assert(toLoadDelegate);
@@ -242,7 +242,7 @@ namespace RenderCore { namespace Techniques
 		parsingContext.RequireCommandList(del._delegate->_completionCmdList);
 		
 		for (unsigned c=minToCheck; c<maxPlusOneToCheck; ++c)
-			if (del._resourceInterfaceToUSI[c] != ~0u && (resourcesToQuery & (1 << uint64_t(del._resourceInterfaceToUSI[c])))) {
+			if (del._resourceInterfaceToUSI[c] != ~0u && (resourcesToQuery & (1ull << uint64_t(del._resourceInterfaceToUSI[c])))) {
 				assert(rvDst[c]);
 				_queriedResources[del._resourceInterfaceToUSI[c]] = rvDst[c];
 			}
@@ -257,7 +257,7 @@ namespace RenderCore { namespace Techniques
 
 		uint64_t toLoadDelegate = 0;
 		for (unsigned c=0; c<del._samplerInterfaceToUSI.size(); ++c)
-			if (del._samplerInterfaceToUSI[c] != ~0u && (samplersToQuery & (1 << uint64_t(del._samplerInterfaceToUSI[c]))))
+			if (del._samplerInterfaceToUSI[c] != ~0u && (samplersToQuery & (1ull << uint64_t(del._samplerInterfaceToUSI[c]))))
 				toLoadDelegate |= 1ull << uint64_t(c);
 
 		assert(toLoadDelegate);
@@ -268,7 +268,7 @@ namespace RenderCore { namespace Techniques
 		del._delegate->WriteSamplers(parsingContext, nullptr, toLoadDelegate, MakeIteratorRange(&samplerDst[minToCheck], &samplerDst[maxPlusOneToCheck]));
 		
 		for (unsigned c=minToCheck; c<maxPlusOneToCheck; ++c)
-			if (del._samplerInterfaceToUSI[c] != ~0u && (samplersToQuery & (1 << uint64_t(del._samplerInterfaceToUSI[c])))) {
+			if (del._samplerInterfaceToUSI[c] != ~0u && (samplersToQuery & (1ull << uint64_t(del._samplerInterfaceToUSI[c])))) {
 				assert(samplerDst[c]);
 				_queriedSamplers[del._samplerInterfaceToUSI[c]] = samplerDst[c];
 			}
@@ -283,7 +283,7 @@ namespace RenderCore { namespace Techniques
 
 		uint64_t toLoadDelegate = 0;
 		for (unsigned c=0; c<del._immediateDataInterfaceToUSI.size(); ++c)
-			if (del._immediateDataInterfaceToUSI[c] != ~0u && (toLoad & (1 << uint64_t(del._immediateDataInterfaceToUSI[c]))))
+			if (del._immediateDataInterfaceToUSI[c] != ~0u && (toLoad & (1ull << uint64_t(del._immediateDataInterfaceToUSI[c]))))
 				toLoadDelegate |= 1ull << uint64_t(c);
 
 		assert(toLoadDelegate);
@@ -744,10 +744,10 @@ namespace RenderCore { namespace Techniques
 		auto& man = *checked_cast<UniformDelegateManager*>(&delManager);
 		assert(man._lastPreparedChangeIndex == man._delegateGroup->_currentChangeIndex);
 		assert(!man._graphics._pendingRebuildDescSets);
-		if (__builtin_expect(!man._graphics._descSetsForBinding.empty(), true))
+		if (expect_evaluation(!man._graphics._descSetsForBinding.empty(), true))
 			boundUniforms.ApplyDescriptorSets(metalContext, encoder, man._graphics._descSetsForBinding, groupIdx);
 
-		if (__builtin_expect(boundUniforms.GetBoundLooseImmediateDatas(0) | boundUniforms.GetBoundLooseResources(0) | boundUniforms.GetBoundLooseResources(0), 0ull)) {
+		if (expect_evaluation(boundUniforms.GetBoundLooseImmediateDatas(0) | boundUniforms.GetBoundLooseResources(0) | boundUniforms.GetBoundLooseResources(0), 0ull)) {
 			man._delegateHelper.QueryResources(parsingContext, boundUniforms.GetBoundLooseResources(groupIdx));
 			man._delegateHelper.QuerySamplers(parsingContext, boundUniforms.GetBoundLooseSamplers(groupIdx));
 			man._delegateHelper.QueryImmediateDatas(parsingContext, boundUniforms.GetBoundLooseImmediateDatas(groupIdx));
@@ -770,10 +770,10 @@ namespace RenderCore { namespace Techniques
 		auto& man = *checked_cast<UniformDelegateManager*>(&delManager);
 		assert(man._lastPreparedChangeIndex == man._delegateGroup->_currentChangeIndex);
 		assert(!man._compute._pendingRebuildDescSets);
-		if (__builtin_expect(!man._compute._descSetsForBinding.empty(), true))
+		if (expect_evaluation(!man._compute._descSetsForBinding.empty(), true))
 			boundUniforms.ApplyDescriptorSets(metalContext, encoder, man._compute._descSetsForBinding, groupIdx);
 
-		if (__builtin_expect(boundUniforms.GetBoundLooseImmediateDatas(0) | boundUniforms.GetBoundLooseResources(0) | boundUniforms.GetBoundLooseResources(0), 0ull)) {
+		if (expect_evaluation(boundUniforms.GetBoundLooseImmediateDatas(0) | boundUniforms.GetBoundLooseResources(0) | boundUniforms.GetBoundLooseResources(0), 0ull)) {
 			man._delegateHelper.QueryResources(parsingContext, boundUniforms.GetBoundLooseResources(groupIdx));
 			man._delegateHelper.QuerySamplers(parsingContext, boundUniforms.GetBoundLooseSamplers(groupIdx));
 			man._delegateHelper.QueryImmediateDatas(parsingContext, boundUniforms.GetBoundLooseImmediateDatas(groupIdx));

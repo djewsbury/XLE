@@ -114,7 +114,7 @@ namespace RenderCore { namespace Techniques
 			const RenderCore::Assets::VertexElement& ele,
 			unsigned vertexStride)
 		{
-			unsigned vCount = vbData.size() / vertexStride;
+			auto vCount = vbData.size() / vertexStride;
 			auto beginPtr = PtrAdd(vbData.begin(), ele._alignedByteOffset);		
 			auto endPtr = PtrAdd(vbData.begin(), ele._alignedByteOffset + vertexStride*vCount);
 			VertexElementIterator begin {
@@ -132,7 +132,7 @@ namespace RenderCore { namespace Techniques
 			unsigned byteOffset,
 			unsigned vertexStride)
 		{
-			unsigned vCount = vbData.size() / vertexStride;
+			auto vCount = vbData.size() / vertexStride;
 			auto beginPtr = PtrAdd(vbData.begin(), byteOffset);
 			auto endPtr = PtrAdd(vbData.begin(), byteOffset + vertexStride*vCount);
 			VertexElementIterator begin { MakeIteratorRange(beginPtr, endPtr), vertexStride, format };

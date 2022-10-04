@@ -35,7 +35,6 @@ namespace ToolsRig
     using namespace RenderCore;
 
     void Placements_RenderFiltered(
-        RenderCore::IThreadContext& threadContext,
         Techniques::ParsingContext& parserContext,
         Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
         const RenderCore::Techniques::SequencerConfig& sequencerConfig,

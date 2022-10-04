@@ -268,7 +268,7 @@ namespace UnitTests
 		};
 		FrameBufferProperties fbProps { s_testResolution[0], s_testResolution[1] };
 
-		auto parsingContext = BeginMassProbesParsingContext(testApparatus, threadContext);
+		auto parsingContext = BeginParsingContext(testApparatus, threadContext);
 
 		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 		stitchingContext._workingProps = fbProps;
@@ -873,7 +873,7 @@ namespace UnitTests
 				10.f,
 				std::uniform_real_distribution<>(worldMins[0], worldMaxs[1])(rng)
 			};
-			float angle = std::uniform_real_distribution<>(0, 2.0f*gPI)(rng);
+			float angle = std::uniform_real_distribution<>(0.f, 2.0f*gPI)(rng);
 			Float3 forward = Normalize(Float3{std::cos(angle), -2.f, std::sin(angle)});
 			auto& camera = cameras[c];
 			camera._cameraToWorld = MakeCameraToWorld(forward, Float3{0.0f, 1.0f, 0.0f}, position);

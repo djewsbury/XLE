@@ -14,10 +14,13 @@
 #include "../../Utility/Conversion.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/ImpliedTyping.h"
+#include "../../Core/Prefix.h"
 #include <string>
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
-#include <x86intrin.h>
+#if COMPILER_ACTIVE == COMPILER_TYPE_CLANG
+    #include <x86intrin.h>
+#endif
 
 /*#include "../../ConsoleRig/GlobalServices.h"
 #include "../../ConsoleRig/AttachablePtr.h"
@@ -712,14 +715,17 @@ EnvSettings=~
         #else
             const unsigned iterationCount = 64 * 1024;
         #endif
-        unsigned auxBegin = 0, auxMiddle = 0, auxEnd = 0;
-        auto start = __builtin_ia32_rdtscp(&auxBegin);
-        RunPerformanceTest1(testString, iterationCount);
-        auto middle = __builtin_ia32_rdtscp(&auxMiddle);
-        RunPerformanceTest2(testString, iterationCount);
-        auto end = __builtin_ia32_rdtscp(&auxEnd);
+        
+        #if COMPILER_ACTIVE == COMPILER_TYPE_CLANG      // instruction count query not implemented for other compilers
+            unsigned auxBegin = 0, auxMiddle = 0, auxEnd = 0;
+            auto start = __builtin_ia32_rdtscp(&auxBegin);
+            RunPerformanceTest1(testString, iterationCount);
+            auto middle = __builtin_ia32_rdtscp(&auxMiddle);
+            RunPerformanceTest2(testString, iterationCount);
+            auto end = __builtin_ia32_rdtscp(&auxEnd);
 
-        std::cout << "InputStreamFormatter based deserialization: " << (middle-start) / iterationCount << " cycles per iteration (" << (middle-start) / iterationCount / testString.size() << " cycles per character)." << std::endl;
-        std::cout << "StreamDOM based deserialization: " << (end-middle) / iterationCount << " cycles per iteration (" << (end-middle) / iterationCount / testString.size() << " cycles per character)." << std::endl;
+            std::cout << "InputStreamFormatter based deserialization: " << (middle-start) / iterationCount << " cycles per iteration (" << (middle-start) / iterationCount / testString.size() << " cycles per character)." << std::endl;
+            std::cout << "StreamDOM based deserialization: " << (end-middle) / iterationCount << " cycles per iteration (" << (end-middle) / iterationCount / testString.size() << " cycles per character)." << std::endl;
+        #endif
     }
 }

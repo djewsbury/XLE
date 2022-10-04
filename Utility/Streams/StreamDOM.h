@@ -89,7 +89,7 @@ namespace Utility
         
         Section Name() const;
 
-        template<typename Type, decltype(DeserializationOperator(std::declval<const StreamDOMElement&>(), std::declval<Type&>()))* =nullptr>
+        template<typename Type, decltype(DeserializationOperator(std::declval<const StreamDOMElement<Formatter>&>(), std::declval<Type&>()))* =nullptr>
             Type As() const;
 
         // Find children elements

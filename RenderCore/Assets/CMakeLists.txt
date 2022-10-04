@@ -10,12 +10,11 @@ add_library(
     PredefinedPipelineLayout.cpp
     RawAnimationCurve.cpp
     RawMaterial.cpp
-    # Services.cpp  (*1 some files not really required for processing dlls -- eg model conversion dlls -- so it's convenient to remove them here)
     ShaderPatchCollection.cpp
     SkinningScaffold.cpp
     TransformationCommands.cpp
     PipelineConfigurationUtils.cpp
-    TextureCompiler.cpp
+    #TextureCompiler.cpp        moved into the Techniques project for now, due to dependencies on that project (& bufferuploads)
     TextureLoaders.cpp
     MergedAnimationSetCompiler.cpp
     AnimationBindings.cpp
@@ -35,11 +34,7 @@ add_library(
 	../GeoProc/DequantAnalysisTools.cpp)
 
 xle_configure_library(RenderCoreAssets)
-target_link_libraries(RenderCoreAssets PUBLIC ShaderParser RenderCore ConsoleRig Assets Math OSServices Utility ForeignMisc)
-
-include(${FOREIGN_DIR}/Compressonator/FindCompressonator.cmake)
-find_compressonator()
-target_link_libraries(RenderCoreAssets PRIVATE compressonator)
+target_link_libraries(RenderCoreAssets PUBLIC BufferUploads-Shared ShaderParser RenderCore ConsoleRig Assets Math OSServices Utility ForeignMisc)
 
 if (WIN32)
     target_link_libraries(RenderCoreAssets PRIVATE DirectXTex)

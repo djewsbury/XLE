@@ -244,7 +244,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			return result;
 		}
 
-		static void ValidatePipelineLayout(
+		void ValidatePipelineLayout(
 			VkPhysicalDevice physDev,
 			const PipelineLayoutInitializer& pipelineLayout)
 		{

@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <algorithm>		// (for std::max)
 #include <type_traits>
+#include <assert.h>
 
 template<typename Stream, typename Object, std::remove_reference_t<decltype(SerializationOperator(std::declval<Stream&>(), std::declval<const Object&>()))>* =nullptr>
 	Stream& operator<<(Stream& stream, const Object& obj)

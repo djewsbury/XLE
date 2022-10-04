@@ -21,7 +21,7 @@ namespace SceneEngine
 		IScene& scene)
     {
 		RenderCore::Techniques::DrawablesPacket pkt;
-		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max];
+		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max] {};
 		pkts[(unsigned)batch] = &pkt;
 		ExecuteSceneContext executeContext{MakeIteratorRange(pkts), MakeIteratorRange(&view, &view+1)};
         scene.ExecuteScene(parserContext.GetThreadContext(), executeContext);

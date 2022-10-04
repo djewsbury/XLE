@@ -120,8 +120,6 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         RenderCore/LightingEngine/BackgroundPrepareTests.cpp
         RenderCore/Metal/MetalTestHelper.cpp
         EmbeddedRes.cpp
-        ../Tools/ToolsRig/VisualisationGeo.cpp
-        ../Tools/ToolsRig/DrawablesWriter.cpp
         )
 
     xle_configure_executable(UnitTests-RenderCoreAssetsTechniques-${metal_name})
@@ -176,8 +174,6 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         Interactive/FontRenderingTests.cpp
         EmbeddedRes.cpp
         RenderCore/Metal/MetalTestHelper.cpp
-        ../Tools/ToolsRig/VisualisationGeo.cpp
-        ../Tools/ToolsRig/DrawablesWriter.cpp
         )
 
     xle_configure_executable(UnitTests-Interactive-${metal_name})

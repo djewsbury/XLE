@@ -45,10 +45,14 @@ namespace Utility
             typename Result = decltype(((Buffer*)nullptr)->str())>
         auto AsString() const -> Result { return _buffer.str(); }
 
-        template<
-            typename Buffer = BufferType,
-            typename std::enable_if<(sizeof(decltype(IsFullTest<Buffer>(0))) > 1)>::type* = nullptr>
-        bool IsFull() const { return _buffer.IsFull(); }
+        bool IsFull() const
+        {
+            if constexpr (sizeof(decltype(IsFullTest<BufferType>(0))) > 1) {
+                return _buffer.IsFull();
+            } else {
+                return false;
+            }
+        }
 
         const BufferType& GetBuffer() const { return _buffer; }
 

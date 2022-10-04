@@ -233,6 +233,8 @@ namespace ConsoleRig
 			// we go to lookup that symbol with dlsym, we don't include the extra underscore. It seems like there's
 			// no way to lookup symbols that don't begin with an underscore
 			static dll_export CrossModule* RealCrossModuleGetInstance() asm("_RealCrossModuleGetInstance") __attribute__((visibility("default")));
+		#elif COMPILER_ACTIVE == COMPILER_TYPE_MSVC
+			static dll_export CrossModule* RealCrossModuleGetInstance();
 		#else
 			static dll_export CrossModule* RealCrossModuleGetInstance() asm("RealCrossModuleGetInstance") __attribute__((visibility("default")));
 		#endif
@@ -319,6 +321,9 @@ namespace ConsoleRig
 #if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
 	CrossModule* CrossModule::Pimpl::RealCrossModuleGetInstance()
 	{
+		#if COMPILER_ACTIVE == COMPILER_TYPE_MSVC
+			#pragma comment(linker, "/EXPORT:RealCrossModuleGetInstance=" __FUNCDNAME__)
+		#endif
 		static CrossModule wholeProcessInstance;
 		return &wholeProcessInstance;
 	}

@@ -239,7 +239,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		while (pageIdx >= _pages.size()) _pages.push_back(std::make_unique<Page>());
 		auto& page = *_pages[pageIdx];
 		auto* data = &page._data[idxWithinPage*sizeof(T)];
+		#pragma push_macro("new")
+		#undef new
 		new (data) T(std::forward<Params>(p)...);
+		#pragma pop_macro("new")
 		return Get(index);
 	}
 

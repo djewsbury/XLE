@@ -2335,7 +2335,7 @@ namespace RenderCore { namespace Techniques
             // list -- so we must ensure that we insert in order, and without gaps
             assert(a._name == result._attachments.size());
             assert(a._firstAccessSemantic == 0 || a._containsDataForSemantic == 0 || a._firstAccessSemantic == a._containsDataForSemantic);       // split semantic case
-            FrameBufferDescFragment::Attachment r { a._containsDataForSemantic ?: a._firstAccessSemantic };
+            FrameBufferDescFragment::Attachment r { a._containsDataForSemantic ? a._containsDataForSemantic : a._firstAccessSemantic };
             // r._desc._format = a._format;
             // r._desc._flags = (a._samples._sampleCount > 1) ? AttachmentDesc::Flags::Multisampled : 0u;
             if (a._fullyDefinedAttachment.has_value()) {

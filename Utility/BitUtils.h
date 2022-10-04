@@ -64,7 +64,7 @@ namespace Utility
             // returns "input", or the next largest multiple of the number "multiple"
             // Here, we assume "multiple" is a power of 2
         assert(IsPowerOfTwo(multiple));
-        return (input + multiple - 1) & ~(multiple - 1);
+        return (input + multiple - 1) & ~(Type(multiple) - 1);
     }
 
     template <typename Type>

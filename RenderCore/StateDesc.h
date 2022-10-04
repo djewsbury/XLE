@@ -213,7 +213,7 @@ namespace RenderCore
         SamplerDescFlags::BitField _flags = 0;
 
 		uint64_t Hash() const;
-		friend std::ostream& operator<<(std::ostream&, const SamplerDesc&);
+		friend std::ostream& SerializationOperator(std::ostream&, const SamplerDesc&);
     };
 
     namespace ColorWriteMask

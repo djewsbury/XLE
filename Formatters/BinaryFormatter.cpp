@@ -111,9 +111,9 @@ namespace Formatters
 			}
 
 		auto paramCount = paramTypeCodes.size();
-		if (__builtin_expect(paramCount, 0)) {
+		if (expect_evaluation(paramCount, 0)) {
 			// params end up in reverse order, so we have to reverse them as we're looking them up
-			int64_t params[paramCount];
+			VLA(int64_t, params, paramCount);
 			unsigned typeBitField = 0;
 			for (unsigned p=0; p<paramCount; ++p) {
 				auto type = paramTypeCodes[p];

@@ -46,7 +46,7 @@ namespace RenderCore { namespace Techniques
 
 		virtual std::shared_ptr<IResource> GetDynamicPageResource() const = 0;
 
-		unsigned GetGUID() const { return _guid; }
+		uint64_t GetGUID() const { return _guid; }
 		virtual const std::shared_ptr<IDevice>& GetDevice() const = 0;
 		virtual const std::shared_ptr<ICompiledLayoutPool>& GetCompiledLayoutPool() const = 0;
 

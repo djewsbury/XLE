@@ -96,7 +96,7 @@ namespace RenderOverlays
 
 	void WorkingVertexSetFontResource::PushQuad(const Quad& positions, ColorB color, const FontRenderingManager::Bitmap& bitmap, float depth, bool snap)
 	{
-		if (__builtin_expect((_currentIterator + 6) > _currentAllocation.end(), false)) {
+		if (expect_evaluation((_currentIterator + 6) > _currentAllocation.end(), false)) {
 			auto reserveVertexCount = _currentAllocation.size() + 6 + (_currentAllocation.size() + 6)/2;
 			auto iteratorPosition = _currentIterator - _currentAllocation.begin();
 			_currentAllocation = _immediateDrawables->UpdateLastDrawCallVertexCount(reserveVertexCount).Cast<Vertex*>();
@@ -227,7 +227,7 @@ namespace RenderOverlays
 
 	void WorkingVertexSetPCT::PushQuad(const Quad& positions, ColorB color, const FontRenderingManager::Bitmap& bitmap, float depth, bool snap)
 	{
-		if (__builtin_expect((_currentIterator + 6) > _currentAllocation.end(), false)) {
+		if (expect_evaluation((_currentIterator + 6) > _currentAllocation.end(), false)) {
 			auto reserveVertexCount = _currentAllocation.size() + 6 + (_currentAllocation.size() + 6)/2;
 			auto iteratorPosition = _currentIterator - _currentAllocation.begin();
 			_currentAllocation = _immediateDrawables->UpdateLastDrawCallVertexCount(reserveVertexCount).Cast<Vertex*>();
@@ -433,7 +433,7 @@ namespace RenderOverlays
 					continue;
 				}
 
-				if (__builtin_expect(ch == '{', false)) {
+				if (expect_evaluation(ch == '{', false)) {
 					if (text.size() > 6 && XlEqStringI({text.begin(), text.begin()+6}, DrawingTags<CharType>::s_changeColor)) {
 						unsigned newColorOverride = 0;
 						unsigned parseLength = ParseColorValue(text._start+6, &newColorOverride);
@@ -530,7 +530,7 @@ namespace RenderOverlays
 				baseX, baseY, 
 				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
 
-			if (__builtin_expect(!CheckMaxXY || (pos.max[0] <= maxX && pos.max[1] <= maxY), true))
+			if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX && pos.max[1] <= maxY), true))
 				break;		// this one will render
 		}
 
@@ -556,7 +556,7 @@ namespace RenderOverlays
 					baseX, baseY, 
 					baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
 
-				if (__builtin_expect(!CheckMaxXY || (pos.max[0] <= maxX && pos.max[1] <= maxY), true)) {
+				if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX && pos.max[1] <= maxY), true)) {
 					Quad shadowPos;
 					shadowPos = pos;
 					shadowPos.min[0] -= xScale;
@@ -625,7 +625,7 @@ namespace RenderOverlays
 					baseX, baseY, 
 					baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
 
-				if (__builtin_expect(!CheckMaxXY || (pos.max[0] <= maxX && pos.max[1] <= maxY), true)) {
+				if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX && pos.max[1] <= maxY), true)) {
 					Quad shadowPos = pos;
 					shadowPos.min[0] += xScale;
 					shadowPos.max[0] += xScale;
@@ -651,7 +651,7 @@ namespace RenderOverlays
 				baseX, baseY, 
 				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
 
-			if (__builtin_expect(!CheckMaxXY || (pos.max[0] <= maxX && pos.max[1] <= maxY), true))
+			if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX && pos.max[1] <= maxY), true))
 				workingVertices.PushQuad(pos, inst->_color, bitmap, depth);
 		}
 
@@ -671,13 +671,13 @@ namespace RenderOverlays
 		assert(!(flags & DrawTextFlags::Snap));		// we could support this by using the SnapCoords template parameter to DrawTemplate<>
 		if (maxX || maxY) {
 			// checking maximum extents
-			if (__builtin_expect(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
+			if (expect_evaluation(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
 				return DrawTemplate<utf8, WorkingVertexSetFontResource, true, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
 			} else {
 				return DrawTemplate<utf8, WorkingVertexSetPCT, true, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
 			}
 		} else {
-			if (__builtin_expect(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
+			if (expect_evaluation(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
 				return DrawTemplate<utf8, WorkingVertexSetFontResource, false, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
 			} else {
 				return DrawTemplate<utf8, WorkingVertexSetPCT, false, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
@@ -697,13 +697,13 @@ namespace RenderOverlays
 		assert(!(flags & DrawTextFlags::Snap));
 		if (maxX || maxY) {
 			// checking maximum extents
-			if (__builtin_expect(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
+			if (expect_evaluation(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
 				return DrawTemplate<ucs4, WorkingVertexSetFontResource, true, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
 			} else {
 				return DrawTemplate<ucs4, WorkingVertexSetPCT, true, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
 			}
 		} else {
-			if (__builtin_expect(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
+			if (expect_evaluation(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
 				return DrawTemplate<ucs4, WorkingVertexSetFontResource, false, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
 			} else {
 				return DrawTemplate<ucs4, WorkingVertexSetPCT, false, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);

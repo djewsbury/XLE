@@ -199,7 +199,7 @@ namespace RenderCore { namespace Assets
 
 	uint64_t NascentCompoundObject::GetHash() const
 	{
-		if (__builtin_expect(_hash, true)) return _hash;
+		if (expect_evaluation(_hash, true)) return _hash;
 
 		_hash = Hash64(_skeleton);
 		for (auto&cmd:_commands) {

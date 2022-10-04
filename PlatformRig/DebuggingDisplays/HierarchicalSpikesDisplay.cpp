@@ -16,7 +16,6 @@
 
 namespace PlatformRig { namespace Overlays
 {
-    extern float g_fpsDisplay;
     using namespace RenderOverlays;
     using namespace RenderOverlays::DebuggingDisplay;
 
@@ -231,17 +230,6 @@ namespace PlatformRig { namespace Overlays
                     section._graphMin, section._graphMax);
             }
         }
-
-	    {
-            auto* res = ConsoleRig::TryActualizeCachedBox<SpikesProfilerResources>();
-            if (!res) return;
-		    DrawText()
-                .Font(*res->_largeFont)
-                .Alignment(TextAlignment::Left)
-                .Draw(
-                    context, {Coord2(layout.GetMaximumSize()._bottomRight[0] - 100, layout.GetMaximumSize()._topLeft[1]), layout.GetMaximumSize()._bottomRight},
-                    StringMeld<64>() << std::setprecision(3) << g_fpsDisplay);
-	    }
     }
 
     HierarchicalSpikesDisplay::HierarchicalSpikesDisplay(IHierarchicalProfiler* profiler)

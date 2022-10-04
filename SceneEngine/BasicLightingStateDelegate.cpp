@@ -345,7 +345,7 @@ namespace SceneEngine
                     _lightSourcesInCfgFile.begin(), _lightSourcesInCfgFile.end(),
                     [name](const auto& c) { return XlEqString(name, c._name); });
                 if (!name.IsEmpty() && i != _lightSourcesInCfgFile.end()) {
-                    i->_operatorHash = operatorHash ?: i->_operatorHash;
+                    i->_operatorHash = operatorHash ? operatorHash : i->_operatorHash;
                     i->_parameters.MergeIn(lightProperties);
                 } else {
                     _lightSourcesInCfgFile.push_back(PendingLightSource{operatorHash, name.AsString(), std::move(lightProperties)});

@@ -112,7 +112,7 @@ namespace RenderCore
             ;
     }
 
-    std::ostream& operator<<(std::ostream& str, const SamplerDesc& desc)
+    std::ostream& SerializationOperator(std::ostream& str, const SamplerDesc& desc)
     {
         str << "{Filter: " << AsString(desc._filter) << ", U: " << AsString(desc._addressU) << ", V: " << AsString(desc._addressV);
         if (desc._comparison != CompareOp::Never)

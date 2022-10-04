@@ -37,6 +37,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         ManualDrawables.cpp
         ResourceConstructionContext.cpp
         SubFrameUtil.cpp
+        ../Assets/TextureCompiler.cpp           # moved here while figuring out the architecture -- due to dependencies with TextureCompilerUtil.cpp
         ../../Tools/ToolsRig/VisualisationGeo.cpp
         )
 
@@ -44,5 +45,9 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
     xle_configure_library(RenderCoreTechniques-${metal_name})
     target_compile_definitions(RenderCoreTechniques-${metal_name} PUBLIC ${metal_macro})
     target_link_libraries(RenderCoreTechniques-${metal_name} PUBLIC RenderCoreAssets RenderCore_${metal_name} RenderCore Utility ForeignMisc)
+
+    include(${FOREIGN_DIR}/Compressonator/FindCompressonator.cmake)
+    find_compressonator()
+    target_link_libraries(RenderCoreTechniques-${metal_name} PRIVATE compressonator)
 
 endforeach()

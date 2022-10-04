@@ -492,7 +492,7 @@ namespace UnitTests
                 }
 
                 threadPool.Enqueue(
-                    [&items, c, pairList]() {
+                    [&items, c, pairList, maxDependencyCount]() {
                         for (auto pair:pairList) {
                             {
                                 std::unique_lock<std::mutex> lock(items[c]._lock);

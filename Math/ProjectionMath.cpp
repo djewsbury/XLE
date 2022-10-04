@@ -466,7 +466,7 @@ namespace XLEMath
         Float3 intersectionCenters[6];
         for (unsigned f=0; f<6; ++f) {
             auto distance = SignedDistance(centerPoint, _frustumPlanes[f]);
-            if (__builtin_expect(distance >= radius, false)) {
+            if (expect_evaluation(distance >= radius, false)) {
                 return CullTestResult::Culled;        // this should be rare given the quick test above
             }
             straddlingFlags |= (distance > -radius) << f;
@@ -494,10 +494,10 @@ namespace XLEMath
 
         for (unsigned cIdx=0; cIdx<dimof(faceBitFieldForCorner); cIdx++) {
             auto faceBitMask = faceBitFieldForCorner[cIdx];
-            if (__builtin_expect((straddlingFlags & faceBitMask) != faceBitMask, true)) continue;
+            if (expect_evaluation((straddlingFlags & faceBitMask) != faceBitMask, true)) continue;
             // the sphere is straddling all 3 edges of this corner. Check if it's
             // inside of the sphere
-            if (__builtin_expect(MagnitudeSquared(_frustumCorners[cIdx] - centerPoint) < radiusSq, true)) {
+            if (expect_evaluation(MagnitudeSquared(_frustumCorners[cIdx] - centerPoint) < radiusSq, true)) {
                 return CullTestResult::Boundary;
             }
         }
@@ -518,7 +518,7 @@ namespace XLEMath
             { 0, 3, 1, 2 }        
         };
         for (unsigned f=0; f<6; ++f) {
-            if (__builtin_expect(!(straddlingFlags & (1<<f)), true)) continue;
+            if (expect_evaluation(!(straddlingFlags & (1<<f)), true)) continue;
             auto intersectionCenter = intersectionCenters[f];
             auto naFaces = nonAlignedFaces[f];
             unsigned withinCount = 0;
@@ -557,7 +557,7 @@ namespace XLEMath
         };
 
         for (auto e:faceBitFieldForEdge) {
-            if (__builtin_expect((straddlingFlags & e._faceBitField) != e._faceBitField, true)) continue;
+            if (expect_evaluation((straddlingFlags & e._faceBitField) != e._faceBitField, true)) continue;
             // the sphere is straddling both planes of this edge. Check the edge to see
             // if it intersects the sphere
             if (RayVsSphere(_frustumCorners[e._cornerZero] - centerPoint, _frustumCorners[e._cornerOne] - centerPoint, radiusSq)) {
@@ -610,7 +610,7 @@ namespace XLEMath
         VLA_UNSAFE_FORCE(Float3, intersectionCenters, planeCount);
         for (uint64_t f=0; f<planeCount; ++f) {
             auto distance = SignedDistance(centerPoint, _planes[f]);
-            if (__builtin_expect(distance >= radius, false)) {
+            if (expect_evaluation(distance >= radius, false)) {
                 return CullTestResult::Culled;
             }
             straddlingFlags |= uint64_t(distance > -radius) << f;
@@ -625,10 +625,10 @@ namespace XLEMath
         const float radiusSq = radius*radius;
         for (unsigned cIdx=0; cIdx<_cornerFaceBitMasks.size(); cIdx++) {
             auto faceBitMask = _cornerFaceBitMasks[cIdx];
-            if (__builtin_expect((straddlingFlags & faceBitMask) != faceBitMask, true)) continue;
+            if (expect_evaluation((straddlingFlags & faceBitMask) != faceBitMask, true)) continue;
             // the sphere is straddling all 3 edges of this corner. Check if it's
             // inside of the sphere
-            if (__builtin_expect(MagnitudeSquared(_corners[cIdx] - centerPoint) < radiusSq, true)) {
+            if (expect_evaluation(MagnitudeSquared(_corners[cIdx] - centerPoint) < radiusSq, true)) {
                 return CullTestResult::Boundary;
             }
         }
@@ -636,7 +636,7 @@ namespace XLEMath
         // Check the faces for any intersection centers we got. If it's inside
         // all, then the sphere does intersect the frustum
         for (unsigned f=0; f<planeCount; ++f) {
-            if (__builtin_expect(!(straddlingFlags & (1ull<<f)), true)) continue;
+            if (expect_evaluation(!(straddlingFlags & (1ull<<f)), true)) continue;
             auto intersectionCenter = intersectionCenters[f];
             unsigned qf=0;
             for (; qf<planeCount; ++qf)
@@ -646,7 +646,7 @@ namespace XLEMath
         }
 
         for (auto e:_edges) {
-            if (__builtin_expect((straddlingFlags & e._faceBitMask) != e._faceBitMask, true)) continue;
+            if (expect_evaluation((straddlingFlags & e._faceBitMask) != e._faceBitMask, true)) continue;
             // the sphere is straddling both planes of this edge. Check the edge to see
             // if it intersects the sphere
             if (RayVsSphere(_corners[e._cornerZero] - centerPoint, _corners[e._cornerOne] - centerPoint, radiusSq)) {
@@ -718,7 +718,7 @@ namespace XLEMath
 
         for (unsigned cIdx=0; cIdx<_cornerFaceBitMasks.size(); cIdx++) {
             auto faceBitMask = _cornerFaceBitMasks[cIdx];
-            if (__builtin_expect((straddlingFlags & faceBitMask) != faceBitMask, true)) continue;
+            if (expect_evaluation((straddlingFlags & faceBitMask) != faceBitMask, true)) continue;
 
             Float3 aabbSpaceCorner = IdentityAabbToLocalSpace ? _corners[cIdx] : TransformPointByOrthonormalInverse(aabbToLocalSpace, _corners[cIdx]);
             auto inside = 
@@ -726,7 +726,7 @@ namespace XLEMath
                 & int(aabbSpaceCorner[1] >= mins[1]) & int(aabbSpaceCorner[1] <= maxs[1])
                 & int(aabbSpaceCorner[2] >= mins[2]) & int(aabbSpaceCorner[2] <= maxs[2])
                 ;
-            if (__builtin_expect(inside, true)) {
+            if (expect_evaluation(inside, true)) {
                 return CullTestResult::Boundary;
             }
         }
@@ -742,7 +742,7 @@ namespace XLEMath
         };
 
         for (uint64_t f=0; f<planeCount; ++f) {
-            if (__builtin_expect(!(straddlingFlags & (1ull<<f)), true)) continue;
+            if (expect_evaluation(!(straddlingFlags & (1ull<<f)), true)) continue;
 
             // The bounding volume is on both sides of this plane -- but is the intersection point point actually within the finite face area?
             uint64_t surroundingFaceMask = 0;
@@ -761,13 +761,13 @@ namespace XLEMath
                     if (!qf) return CullTestResult::Boundary;
                     auto bit = xl_ctz8(qf);
                     if (SignedDistance(intr, _planes[bit]) > 0.f) break;
-                    qf ^= 1<<bit;
+                    qf ^= 1ull<<bit;
                 }
             }
         }
 
         for (auto e:_edges) {
-            if (__builtin_expect((straddlingFlags & e._faceBitMask) != e._faceBitMask, true)) continue;
+            if (expect_evaluation((straddlingFlags & e._faceBitMask) != e._faceBitMask, true)) continue;
             // the sphere is straddling both planes of this edge. Check the edge to see
             // if it intersects the sphere
             Float3 aabbSpaceStart = IdentityAabbToLocalSpace ? _corners[e._cornerZero] : TransformPointByOrthonormalInverse(aabbToLocalSpace, _corners[e._cornerZero]);

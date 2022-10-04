@@ -195,7 +195,10 @@ namespace Utility
             };
         }
 
+        #pragma push_macro("new")
+        #undef new
         new((void*)PtrAdd(AsPointer(_pages[storedFunction._pageIdx]._storage.begin()), storedFunction._offset)) std::function<void()>(std::move(fn));
+        #pragma pop_macro("new")
 
         _pendingTasks.push(storedFunction);
         _pendingTaskVariable.notify_one();

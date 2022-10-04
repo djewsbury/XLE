@@ -109,7 +109,7 @@ namespace SceneEngine
 
 		auto& accessors = Legacy_GetAccessors<Type>();
 		for (const auto& p:properties) {
-			if (__builtin_expect(XlEqString(p._name, "ObjectTableCmd") && p._typeDesc._typeHint == ImpliedTyping::TypeHint::String && (p._typeDesc._type == ImpliedTyping::TypeCat::UInt8 || p._typeDesc._type == ImpliedTyping::TypeCat::Int8), false)) {
+			if (expect_evaluation(XlEqString(p._name, "ObjectTableCmd") && p._typeDesc._typeHint == ImpliedTyping::TypeHint::String && (p._typeDesc._type == ImpliedTyping::TypeCat::UInt8 || p._typeDesc._type == ImpliedTyping::TypeCat::Int8), false)) {
 				auto value = MakeStringSection((const char*)p._data.begin(), (const char*)p._data.end());
 				if (XlEqString(value, "Delete")) {
 					_objects.erase(existing);

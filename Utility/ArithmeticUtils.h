@@ -312,15 +312,16 @@ namespace Utility
     #else
         inline int popcount(uint32_t v)
         {
-            v = v - ((v >> 1) & 0x55555555);                    // reuse input as temporary
+            /*v = v - ((v >> 1) & 0x55555555);                    // reuse input as temporary
             v = (v & 0x33333333) + ((v >> 2) & 0x33333333);     // temp
             uint32 c = ((v + ((v >> 4) & 0xF0F0F0F)) * 0x1010101) >> 24; // count
 
-            return c;
+            return c;*/
+            return (int)_mm_popcnt_u32(v);       // requires SSE4
         }
         inline int popcount(uint64_t v)
         {
-            assert(0);
+            return (int)_mm_popcnt_u64(v);       // requires SSE4
         }
     #endif
 
@@ -516,6 +517,11 @@ namespace Utility
     }
 
     #if COMPILER_ACTIVE == COMPILER_TYPE_MSVC
+
+        inline uint32 rotl32(uint32 x, int8_t r) { return _rotl(x, r); }
+        inline uint64 rotl64(uint64 x, int8_t r) { return _rotl64(x, r); }
+        inline uint32 rotr32(uint32 x, int8_t r) { return _rotr(x, r); }
+        inline uint64 rotr64(uint64 x, int8_t r) { return _rotr64(x, r); }
 
         #define ROTL32(x, y) _rotl(x, y)
         #define ROTL64(x, y) _rotl64(x, y)

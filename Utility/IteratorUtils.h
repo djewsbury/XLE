@@ -180,14 +180,14 @@ namespace Utility
 			static auto HasImplicitIteratorCast_Helper(...) -> std::false_type;
 
         template<typename DstType, typename SrcType>
-            decltype(ImplicitIteratorCast<DstType>(std::declval<SrcType>())) StaticIteratorCast(SrcType input) { return ImplicitIteratorCast<DstType>(input); }
-
-        template<
-            typename DstType, typename SrcType,
-            typename std::enable_if<
-                !decltype(HasImplicitIteratorCast_Helper<DstType, SrcType>(0))::value
-            >::type* =nullptr
-            > DstType StaticIteratorCast(SrcType input) { return static_cast<DstType>(AsPointer(input)); }
+            auto StaticIteratorCast(SrcType input) -> DstType
+        {
+            if constexpr (decltype(HasImplicitIteratorCast_Helper<DstType, SrcType>(0))::value) {
+                return ImplicitIteratorCast<DstType>(input);
+            } else {
+                return static_cast<DstType>(AsPointer(input));
+            }
+        }
 	}
 
     template<typename Iterator>
@@ -310,22 +310,22 @@ namespace Utility
                 }
         };
 
+    template<typename ArrayElement, int Count>
+        IteratorRange<ArrayElement*> MakeIteratorRange(ArrayElement (&c)[Count])
+        {
+            return IteratorRange<ArrayElement*>(&c[0], &c[Count]);
+        }
+
     template<typename Container>
         IteratorRange<decltype(std::begin(std::declval<Container&>()))> MakeIteratorRange(Container& c)
         {
             return IteratorRange<decltype(std::begin(std::declval<Container&>()))>(std::begin(c), std::end(c));
         }
-   
+
     template<typename Iterator>
         IteratorRange<Iterator> MakeIteratorRange(Iterator begin, Iterator end)
         {
             return IteratorRange<Iterator>(begin, end);
-        }
-
-    template<typename ArrayElement, int Count>
-        IteratorRange<ArrayElement*> MakeIteratorRange(ArrayElement (&c)[Count])
-        {
-            return IteratorRange<ArrayElement*>(&c[0], &c[Count]);
         }
 
 	template<typename Type>
@@ -399,10 +399,7 @@ namespace Utility
             return std::lower_bound(v.begin(), v.end(), compareToFirst, 
 				CompareFirst<decltype(std::declval<Iterator>()->first), decltype(std::declval<Iterator>()->second)>());
         }
-}
 
-namespace std
-{
     template<typename Iterator> Iterator begin(const IteratorRange<Iterator>& range) { return range.begin(); }
     template<typename Iterator> Iterator end(const IteratorRange<Iterator>& range) { return range.end(); }
 }

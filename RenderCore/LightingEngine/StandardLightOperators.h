@@ -46,7 +46,7 @@ namespace RenderCore { namespace LightingEngine
 		bool _lateTemporalFiltering = true;
 		bool _enableFiltering = true;
 		bool _enableHierarchicalStepping = true;
-		float _thicknessHeuristicFactor = 0.15;		// set to 1 to disable
+		float _thicknessHeuristicFactor = 0.15f;		// set to 1 to disable
 
 		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
 	};

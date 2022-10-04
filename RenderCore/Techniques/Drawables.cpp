@@ -513,7 +513,10 @@ namespace RenderCore { namespace Techniques
 				_pages.emplace_back(Page{std::move(newStorage)});
 			}
 			auto* result = (DrawableGeo*)PtrAdd(_pages[pageForNewItem]._storage.get(), sizeof(DrawableGeo)*indexInPage);
+			#pragma push_macro("new")
+			#undef new
 			new(result) DrawableGeo();
+			#pragma pop_macro("new")
 			return result;
 		}
 

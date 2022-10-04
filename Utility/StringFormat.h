@@ -17,6 +17,8 @@
 #include <ostream>
 #include <stdarg.h>
 
+template<typename Type> std::ostream& Internal_MeldHelper_BreakoutOperator(std::ostream& strm, const Type& type) { return strm << type; }
+
 namespace Utility
 {
 
@@ -125,7 +127,7 @@ namespace Utility
     template<typename Type, int Count, typename CharType>
         const StringMeld<Count, CharType>& operator<<(const StringMeld<Count, CharType>& meld, const Type& type)
         {
-            meld._stream << type;
+            ::Internal_MeldHelper_BreakoutOperator(meld._stream, type);
             return meld;
         }
 
@@ -255,7 +257,7 @@ namespace Utility
             const StringMeldInPlace<CharType>& 
                 operator<<(const StringMeldInPlace<CharType>& meld, const Type& type)
             {
-                meld._stream << type;
+                ::Internal_MeldHelper_BreakoutOperator(meld._stream, type);
                 return meld;
             }
 

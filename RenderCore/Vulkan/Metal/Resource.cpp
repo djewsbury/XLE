@@ -16,6 +16,7 @@
 #include "../../../OSServices/Log.h"
 #include "../../../Utility/BitUtils.h"
 #include "../../../Utility/MemoryUtils.h"
+#include "../../../Utility/Streams/SerializationUtils.h"
 #include "../../../Utility/StringFormat.h"
 #include "../../../Utility/Threading/Mutex.h"
 

@@ -335,7 +335,7 @@ namespace RenderCore
         return strm;
     }
 
-    std::ostream& operator<<(std::ostream& str, SubResourceId subr)
+    std::ostream& SerializationOperator(std::ostream& str, SubResourceId subr)
     {
         return str << "{ mip: " << subr._mip << ", arrayLayer: " << subr._arrayLayer << " }";
     }

@@ -1146,7 +1146,7 @@ namespace RenderCore { namespace Techniques
 						cfg->_pipelineLayout._pipelineLayout = {};
 						cfg->_pipelineLayout._visibilityMarker = ~VisibilityMarkerId(0);
 						cfg->_pipelineLayout._pending = {};
-					} CATCH(const std::exception& e) {
+					} CATCH(const std::exception&) {
 						// we've gone invalid (no dep val)
 						cfg->_pipelineLayout._depVal = {};
 						cfg->_pipelineLayout._pipelineLayout = {};
@@ -1286,7 +1286,7 @@ namespace RenderCore { namespace Techniques
 				accelerator->_completedPipelines[seqIdx]._depVal = e.GetDependencyValidation();
 				accelerator->_completedPipelines[seqIdx]._pipeline = {};
 				accelerator->_completedPipelines[seqIdx]._visibilityMarker = ~VisibilityMarkerId(0);
-			} CATCH(const std::exception& e) {
+			} CATCH(const std::exception&) {
 				// we've gone invalid (no dep val)
 				accelerator->_completedPipelines[seqIdx]._depVal = {};
 				accelerator->_completedPipelines[seqIdx]._pipeline = {};
@@ -1326,7 +1326,7 @@ namespace RenderCore { namespace Techniques
 				descSet->_completed = {};
 				descSet->_visibilityMarker = ~VisibilityMarkerId(0);
 				descSet->_pending = {};
-			} CATCH(const std::exception& e) {
+			} CATCH(const std::exception&) {
 				// we've gone invalid (no dep val)
 				descSet->_depVal = {};
 				descSet->_completed = {};
@@ -1447,7 +1447,7 @@ namespace RenderCore { namespace Techniques
 		const auto& matchingDesc = pipelineLayoutDesc.GetDescriptorSets()[matDescSetLayout.GetSlotIndex()]._signature;
 		const auto& layout = *matDescSetLayout.GetLayout();
 		for (unsigned s=0; s<layout._slots.size(); ++s) {
-			auto expectedCount = layout._slots[s]._arrayElementCount ?: 1;
+			auto expectedCount = layout._slots[s]._arrayElementCount ? layout._slots[s]._arrayElementCount : 1;
 			auto idx = layout._slots[s]._slotIdx;
 
 			// It's ok if the pipeline layout has more slots than the _matDescSetLayout version; just not the other way around

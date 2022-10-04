@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "ResourceUploadHelper.h"
+#include "IBufferUploads.h"
 #include "../Format.h"
 #include "../ResourceUtils.h"
 #include "../../Assets/IFileSystem.h"
@@ -294,5 +294,5 @@ namespace RenderCore { namespace BufferUploads
 
     IDataPacket::~IDataPacket() {}
     IAsyncDataSource::~IAsyncDataSource() {}
-    
+
 }}

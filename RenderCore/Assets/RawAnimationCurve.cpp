@@ -303,7 +303,7 @@ namespace RenderCore { namespace Assets
 			auto* keyUpper = std::upper_bound(timeMarkers.begin(), timeMarkers.end(), (uint16_t)evalFrame);
 
 				// note -- clamping at start and end positions of the curve
-			if (__builtin_expect(keyUpper == timeMarkers.end() || keyUpper == timeMarkers.begin(), false)) {
+			if (expect_evaluation(keyUpper == timeMarkers.end() || keyUpper == timeMarkers.begin(), false)) {
 				assert(!timeMarkers.empty());
 				if (evalFrame == 0) return decomp(0, *timeMarkers.begin());
 				else return decomp(timeMarkers.size()-1, *(timeMarkers.end()-1));

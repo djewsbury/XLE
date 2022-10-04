@@ -127,7 +127,7 @@ namespace RenderOverlays
 		uint64_t fontHash = (font.GetHash() & 0xffffffffull) << 32ull;
 		auto code = fontHash|uint64_t(ch);
 		auto i = LowerBound(_glyphs, code);
-		if (__builtin_expect(i != _glyphs.end() && i->first == code, true)) {
+		if (expect_evaluation(i != _glyphs.end() && i->first == code, true)) {
 			i->second._lastAccessFrame = _currentFrameIdx;
 			return i->second;
 		}
