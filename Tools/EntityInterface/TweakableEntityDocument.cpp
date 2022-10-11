@@ -6,8 +6,10 @@
 #include "TweakableEntityDocumentInternal.h"
 #include "FormatterAdapters.h"
 #include "../../Assets/AssetUtils.h"
+#include "../../Assets/Marker.h"
 #include "../../Utility/Streams/OutputStreamFormatter.h"
 #include "../../Utility/Streams/StreamTypes.h"
+#include "../../Utility/Threading/Mutex.h"
 #include "../../Utility/ParameterBox.h"
 #include "../../Utility/MemoryUtils.h"
 
@@ -167,7 +169,7 @@ namespace EntityInterface
 		void IncreaseValidationIndex() override { _depVal.IncreaseValidationIndex(); }
 		std::shared_ptr<ArbiterState> GetArbiterState() override { return _arbiterState; }
 
-		virtual ::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) override
+		virtual std::future<std::shared_ptr<Formatters::IDynamicFormatter>> BeginFormatter(StringSection<> internalPoint) override
 		{
 			MemoryOutputStream<> outputStream;
 			{
@@ -175,8 +177,9 @@ namespace EntityInterface
 				ExecuteOnFormatter(fmttr);
 			}
 
-			auto result = std::make_shared<::Assets::MarkerPtr<Formatters::IDynamicFormatter>>();
-			result->SetAsset(CreateDynamicFormatter(std::move(outputStream), ::Assets::DependencyValidation{_depVal}));
+			std::promise<std::shared_ptr<Formatters::IDynamicFormatter>> promise;
+			auto result = promise.get_future();
+			promise.set_value(CreateDynamicFormatter(std::move(outputStream), ::Assets::DependencyValidation{_depVal}));
 			return result;
 		}
 

@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include "../../Assets/Marker.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/ImpliedTyping.h"
 #include "../../Utility/StringUtils.h"
@@ -18,25 +17,17 @@
 
 namespace Assets { class DependencyValidation; class DirectorySearchRules; }
 namespace Formatters { class IDynamicFormatter; }
+namespace std { template<typename T> class future; }
 
 namespace EntityInterface
 {
-    using EntityTypeId = uint32_t;
-    using PropertyId = uint32_t;
-    using ChildListId = uint32_t;
-
     using DocumentId = uint64_t;
-    using EntityId = uint64_t;
-
-    struct PropertyInitializer : public ImpliedTyping::VariantNonRetained
-    {
-        PropertyId _prop = 0;
-    };
+    class IEntityDocument;
 
     class IEntityDocument
     {
     public:
-        virtual ::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) = 0;
+        virtual std::future<std::shared_ptr<Formatters::IDynamicFormatter>> BeginFormatter(StringSection<> internalPoint) = 0;
         virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
         virtual const ::Assets::DirectorySearchRules& GetDirectorySearchRules() const = 0;
 
@@ -58,7 +49,7 @@ namespace EntityInterface
         // returns a dependency validation that advances if any properties at that mount point,
         // (or underneath) change 
         virtual ::Assets::DependencyValidation GetDependencyValidation(StringSection<> mountPount) const = 0;
-        virtual ::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> mountPoint) const = 0;
+        virtual std::future<std::shared_ptr<Formatters::IDynamicFormatter>> BeginFormatter(StringSection<> mountPoint) const = 0;
 
         virtual ~IEntityMountingTree() = default;
     };
@@ -69,6 +60,16 @@ namespace EntityInterface
     }
 
     std::shared_ptr<IEntityMountingTree> CreateMountingTree(MountingTreeFlags::BitField = 0);
+
+    using EntityId = uint64_t;
+    using StringAndHash = std::pair<StringSection<>, uint64_t>;
+
+    StringAndHash MakeStringAndHash(StringSection<>);
+
+    struct PropertyInitializer : public ImpliedTyping::VariantNonRetained
+    {
+        StringAndHash _prop = {{}, 0ull};
+    };
 
     /// <summary>Defines rules for creation, deletion and update of entities</summary>
     ///
@@ -107,17 +108,41 @@ namespace EntityInterface
     class IMutableEntityDocument
     {
     public:
-        virtual std::optional<EntityId> CreateEntity(EntityTypeId objType, IteratorRange<const PropertyInitializer*>) = 0;
+        virtual std::optional<EntityId> CreateEntity(StringAndHash objType, IteratorRange<const PropertyInitializer*>) = 0;
         virtual bool DeleteEntity(EntityId id) = 0;
         virtual bool SetProperty(EntityId id, IteratorRange<const PropertyInitializer*>) = 0;
-        virtual std::optional<ImpliedTyping::TypeDesc> GetProperty(EntityId id, PropertyId prop, IteratorRange<void*> destinationBuffer) const = 0;
-        virtual bool SetParent(EntityId child, EntityId parent, ChildListId childList, int insertionPosition) = 0;
-
-        virtual EntityTypeId GetTypeId(StringSection<> name) const = 0;
-        virtual PropertyId GetPropertyId(EntityTypeId type, StringSection<> name) const = 0;
-        virtual ChildListId GetChildListId(EntityTypeId type, StringSection<> name) const = 0;
-
+        virtual std::optional<ImpliedTyping::TypeDesc> GetProperty(EntityId id, StringAndHash prop, IteratorRange<void*> destinationBuffer) const = 0;
+        virtual bool SetParent(EntityId child, EntityId parent, StringAndHash childList, int insertionPosition) = 0;
         virtual ~IMutableEntityDocument() = default;
+    };
+
+    class Switch
+    {
+    public:
+        using DocumentId = uint32_t;
+        DocumentId CreateDocument(StringSection<> docType, StringSection<> initializer);
+        DocumentId CreateDocument(std::shared_ptr<IMutableEntityDocument> doc);
+        bool DeleteDocument(DocumentId doc);
+        IMutableEntityDocument* GetInterface(DocumentId);
+
+        class IDocumentType
+        {
+        public:
+            virtual std::shared_ptr<IMutableEntityDocument> CreateDocument(StringSection<> initializer) = 0;
+            virtual ~IDocumentType() = default;
+        };
+
+        void RegisterDocumentType(StringSection<> name, std::shared_ptr<IDocumentType>);
+        void DeregisterDocumentType(StringSection<> name);
+
+        Switch();
+        ~Switch();
+        Switch(Switch&&) = delete;
+        Switch& operator=(Switch&&) = delete;
+    private:
+        std::vector<std::pair<DocumentId, std::shared_ptr<IMutableEntityDocument>>> _documents;
+        std::vector<std::pair<std::string, std::shared_ptr<IDocumentType>>> _documentTypes;
+        DocumentId _nextDocumentId = 1;
     };
 
 #if 0

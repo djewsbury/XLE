@@ -22,10 +22,10 @@ namespace EntityInterface
     {
     public:
         EntityId _id = 0;
-        EntityTypeId _type = 0;
+        uint64_t _typeNameHash = 0;
 
         ParameterBox _properties;
-        std::vector<std::pair<ChildListId, EntityId>> _children;
+        std::vector<std::pair<uint64_t, EntityId>> _children;
         EntityId _parent = 0;
     };
 
@@ -44,7 +44,10 @@ namespace EntityInterface
     {
     public:
         const RetainedEntity* GetEntity(EntityId) const;
-        std::vector<const RetainedEntity*> FindEntitiesOfType(EntityTypeId typeId) const;
+
+        using TypeNameHash = uint64_t;
+        using ChildListNameHash = uint64_t;
+        std::vector<const RetainedEntity*> FindEntitiesOfType(TypeNameHash typeId) const;
 
         enum class ChangeType 
         {
@@ -72,16 +75,8 @@ namespace EntityInterface
             std::function<
                 void(const RetainedEntities& flexSys, EntityId, ChangeType)
             >;
-        unsigned RegisterCallback(EntityTypeId typeId, OnChangeDelegate&& onChange);
+        unsigned RegisterCallback(TypeNameHash typeId, OnChangeDelegate&& onChange);
         void DeregisterCallback(unsigned callbackId);
-
-        EntityTypeId    GetTypeId(StringSection<> name) const;
-		PropertyId      GetPropertyId(EntityTypeId typeId, StringSection<> name) const;
-		ChildListId     GetChildListId(EntityTypeId typeId, StringSection<> name) const;
-
-        std::string		GetTypeName(EntityTypeId id) const;
-		std::string		GetPropertyName(EntityTypeId typeId, PropertyId id) const;
-		std::string		GetChildListName(EntityTypeId typeId, ChildListId id) const;
 
 		void			PrintDocument(std::ostream& stream, unsigned indent) const;
 
@@ -105,22 +100,22 @@ namespace EntityInterface
 			reference operator->() const;
 			reference operator[](size_t idx) const;
 
-			using UnderlyingIterator = std::vector<std::pair<ChildListId, EntityId>>::const_iterator;
+			using UnderlyingIterator = std::vector<std::pair<ChildListNameHash, EntityId>>::const_iterator;
 
 			ChildConstIterator(
 				const RetainedEntities& entitySystem,
-				const RetainedEntity& parent, UnderlyingIterator i, ChildListId childList);
+				const RetainedEntity& parent, UnderlyingIterator i, ChildListNameHash childList);
 			ChildConstIterator();
 			ChildConstIterator(nullptr_t);
 		protected:
 			const RetainedEntities* _entitySystem; 
 			const RetainedEntity* _parentObject;
-			ChildListId _childListId;
+			ChildListNameHash _childListId;
 			ptrdiff_t _childIdx;
 		};
 
-		IteratorRange<ChildConstIterator> GetChildren(EntityId parentObj, ChildListId childList) const;
-		IteratorRange<ChildConstIterator> GetChildren(const RetainedEntity& parent, ChildListId childList) const;
+		IteratorRange<ChildConstIterator> GetChildren(EntityId parentObj, ChildListNameHash childList) const;
+		IteratorRange<ChildConstIterator> GetChildren(const RetainedEntity& parent, ChildListNameHash childList) const;
 
         RetainedEntities();
         ~RetainedEntities();
@@ -132,21 +127,17 @@ namespace EntityInterface
         {
         public:
             std::string _name;
-            std::vector<std::string> _properties;
-            std::vector<std::string> _childLists;
-
             std::vector<std::pair<unsigned, OnChangeDelegate>> _onChange;
-
             RegisteredObjectType(const std::string& name) : _name(name) {}
         };
-        mutable std::vector<std::pair<EntityTypeId, RegisteredObjectType>> _registeredObjectTypes;
+        mutable std::vector<std::pair<TypeNameHash, RegisteredObjectType>> _registeredObjectTypes;
 
-        mutable EntityTypeId _nextObjectTypeId;
         unsigned _nextCallbackId;
 
-        RegisteredObjectType* GetObjectType(EntityTypeId id) const;
+        RegisteredObjectType* GetObjectType(TypeNameHash id) const;
+        RegisteredObjectType* GetObjectType(StringAndHash id) const;
         void InvokeOnChange(RegisteredObjectType& type, RetainedEntity& obj, ChangeType changeType) const;
-        bool SetSingleProperties(RetainedEntity& dest, const RegisteredObjectType& type, const PropertyInitializer& initializer) const;
+        bool SetSingleProperties(RetainedEntity& dest, const PropertyInitializer& initializer) const;
 		void PrintEntity(std::ostream& stream, const RetainedEntity& entity, StringSection<> childListName, unsigned indent) const;
         RetainedEntity* GetEntityWriteable(EntityId);
 
@@ -159,15 +150,11 @@ namespace EntityInterface
     class RetainedEntitiesAdapter : public IMutableEntityDocument
     {
     public:
-		std::optional<EntityId> CreateEntity(EntityTypeId, IteratorRange<const PropertyInitializer*>) override;
+		std::optional<EntityId> CreateEntity(StringAndHash, IteratorRange<const PropertyInitializer*>) override;
 		bool DeleteEntity(EntityId) override;
 		bool SetProperty(EntityId, IteratorRange<const PropertyInitializer*>) override;
-		std::optional<ImpliedTyping::TypeDesc> GetProperty(EntityId, PropertyId prop, IteratorRange<void*> destinationBuffer) const override;
-        bool SetParent(EntityId child, EntityId parent, ChildListId childList, int insertionPosition) override;
-
-		EntityTypeId    GetTypeId(StringSection<> name) const override;
-		PropertyId      GetPropertyId(EntityTypeId typeId, StringSection<> name) const override;
-		ChildListId     GetChildListId(EntityTypeId typeId, StringSection<> name) const override;
+		std::optional<ImpliedTyping::TypeDesc> GetProperty(EntityId, StringAndHash prop, IteratorRange<void*> destinationBuffer) const override;
+        bool SetParent(EntityId child, EntityId parent, StringAndHash childList, int insertionPosition) override;
 
 		RetainedEntitiesAdapter(std::shared_ptr<RetainedEntities> scene);
 		~RetainedEntitiesAdapter();

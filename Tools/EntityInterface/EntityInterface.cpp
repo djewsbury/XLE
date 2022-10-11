@@ -315,7 +315,7 @@ namespace EntityInterface
 			return {};
 		}
 
-		::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> inputMountPoint) const
+		std::future<std::shared_ptr<Formatters::IDynamicFormatter>> BeginFormatter(StringSection<> inputMountPoint) const
 		{
 			ScopedLock(_mountsLock);
 
@@ -367,7 +367,7 @@ namespace EntityInterface
 			}
 
 			if (overlappingMounts.empty())
-				return nullptr;
+				return {};
 
 			// if just a single document; we can return a formatter directly from there
 			if (overlappingMounts.size() == 1 && overlappingMounts[0]._externalPosition.empty())
@@ -381,36 +381,42 @@ namespace EntityInterface
 				actualizationLog = ::Assets::AsBlob(str.str());
 			}
 
-			std::vector<Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter>> futureFormatters;
-			std::vector<std::string> externalPosition;
-			futureFormatters.reserve(overlappingMounts.size());
-			externalPosition.reserve(overlappingMounts.size());
+			struct Helper
+			{
+				std::vector<std::future<std::shared_ptr<Formatters::IDynamicFormatter>>> _futureFormatters;
+				std::vector<std::string> _externalPosition;
+			};
+			auto helper = std::make_shared<Helper>();
+			helper->_futureFormatters.reserve(overlappingMounts.size());
+			helper->_externalPosition.reserve(overlappingMounts.size());
 			for (auto& o:overlappingMounts) {
-				futureFormatters.push_back(o._srcIterator->_document->BeginFormatter(o._internalPosition));
-				externalPosition.push_back(o._externalPosition);
+				helper->_futureFormatters.push_back(o._srcIterator->_document->BeginFormatter(o._internalPosition));
+				helper->_externalPosition.push_back(o._externalPosition);
 			}
 
-			auto future = std::make_shared<::Assets::MarkerPtr<Formatters::IDynamicFormatter>>();
+			std::promise<std::shared_ptr<Formatters::IDynamicFormatter>> promise;
+			auto future = promise.get_future();
 			::Assets::PollToPromise(
-				future->AdoptPromise(),
-				[futureFormatters]() {
-					for (const auto& p:futureFormatters)
-						if (p->IsBkgrndPending()) 
+				std::move(promise),
+				[helper](auto timeout) {
+					auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+					for (auto& p:helper->_futureFormatters)
+						if (p.wait_until(timeoutTime) != std::future_status::ready)
 							return ::Assets::PollStatus::Continue;
 					return ::Assets::PollStatus::Finish;
 				},
-				[futureFormatters, externalPosition=std::move(externalPosition), actualizationLog]() {
+				[helper, actualizationLog]() mutable {
 					std::vector<std::shared_ptr<Formatters::IDynamicFormatter>> actualized;
-					actualized.resize(futureFormatters.size());
+					actualized.resize(helper->_futureFormatters.size());
 					auto a=actualized.begin();
-					for (const auto& p:futureFormatters) {
-						*a = p->ActualizeBkgrnd();
+					for (auto& p:helper->_futureFormatters) {
+						*a = p.get();
 						assert(*a);
 						++a;
 					}
 
 					return std::make_shared<FormatOverlappingDocuments>(
-						MakeIteratorRange(actualized), MakeIteratorRange(externalPosition), actualizationLog);
+						MakeIteratorRange(actualized), MakeIteratorRange(helper->_externalPosition), actualizationLog);
 				});
 			return future;
 		}
@@ -464,4 +470,66 @@ namespace EntityInterface
 	{
 		return std::make_shared<MountingTree>(flags);
 	}
+
+	StringAndHash MakeStringAndHash(StringSection<> str)
+	{
+		return { str, Hash64(str) };
+	}
+
+	auto Switch::CreateDocument(StringSection<> docType, StringSection<> initializer) -> DocumentId
+	{
+		for (auto i=_documentTypes.begin(); i!=_documentTypes.end(); ++i)
+			if (XlEqString(docType, i->first)) {
+				auto newDoc = i->second->CreateDocument(initializer);
+				auto result = _nextDocumentId++;
+				_documents.emplace_back(result, std::move(newDoc));
+				return result;
+			}
+		return ~DocumentId(0);
+	}
+
+	auto Switch::CreateDocument(std::shared_ptr<IMutableEntityDocument> doc) -> DocumentId
+	{
+		auto result = _nextDocumentId++;
+		_documents.emplace_back(result, std::move(doc));
+		return result;
+	}
+
+	bool Switch::DeleteDocument(DocumentId docId)
+	{
+		auto i = LowerBound(_documents, docId);
+		if (i != _documents.end() && i->first == docId) {
+			_documents.erase(i);
+			return true;
+		}
+		return false;
+	}
+
+	IMutableEntityDocument* Switch::GetInterface(DocumentId docId)
+	{
+		auto i = LowerBound(_documents, docId);
+		if (i != _documents.end() && i->first == docId)
+			return i->second.get();
+		return nullptr;
+	}
+
+	void Switch::RegisterDocumentType(StringSection<> name, std::shared_ptr<IDocumentType> docType)
+	{
+		for (const auto& d:_documentTypes)
+			assert(!XlEqString(name, d.first));
+		_documentTypes.emplace_back(name.AsString(), std::move(docType));
+	}
+
+	void Switch::DeregisterDocumentType(StringSection<> name)
+	{
+		for (auto i=_documentTypes.begin(); i!=_documentTypes.end(); ++i)
+			if (XlEqString(name, i->first)) {
+				_documentTypes.erase(i);
+				return;
+			}
+		assert(0);		// couldn't be found
+	}
+
+	Switch::Switch() {}
+	Switch::~Switch() {}
 }

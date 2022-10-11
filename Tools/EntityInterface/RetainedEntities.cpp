@@ -17,25 +17,32 @@
 namespace EntityInterface
 {
     bool RetainedEntities::SetSingleProperties(
-        RetainedEntity& dest, const RegisteredObjectType& type, const PropertyInitializer& prop) const
+        RetainedEntity& dest, const PropertyInitializer& prop) const
     {
-        if (prop._prop == 0 || prop._prop > type._properties.size()) return false;
         if (prop._data.empty()) return false;
-
-        const auto& propertyName = type._properties[prop._prop-1];
-        dest._properties.SetParameter(MakeStringSection(propertyName), prop._data, prop._type);
+        dest._properties.SetParameter(prop._prop.first, prop._data, prop._type);
         return true;
     }
 
-    auto RetainedEntities::GetObjectType(EntityTypeId id) const -> RegisteredObjectType*
+    auto RetainedEntities::GetObjectType(TypeNameHash id) const -> RegisteredObjectType*
     {
 		auto i = LowerBound(_registeredObjectTypes, id);
         if (i != _registeredObjectTypes.end() && i->first == id)
 			return &i->second;
+        assert(0);
         return nullptr;
     }
 
-    unsigned RetainedEntities::RegisterCallback(EntityTypeId typeId, OnChangeDelegate&& onChange)
+    auto RetainedEntities::GetObjectType(StringAndHash id) const -> RegisteredObjectType*
+    {
+        auto i = LowerBound(_registeredObjectTypes, id.second);
+        if (i != _registeredObjectTypes.end() && i->first == id.second)
+			return &i->second;
+        i = _registeredObjectTypes.insert(i, std::make_pair(id.second, RegisteredObjectType{id.first.AsString()}));
+        return &i->second;
+    }
+
+    unsigned RetainedEntities::RegisterCallback(TypeNameHash typeId, OnChangeDelegate&& onChange)
     {
         auto type = GetObjectType(typeId);
         if (!type) Throw(std::runtime_error("Unknown type in RegisterCallback"));
@@ -72,7 +79,7 @@ namespace EntityInterface
 
             for (auto i=_objects.begin(); i!=_objects.end(); ++i)
                 if (i->_id == obj._parent) {
-                    auto type2 = GetObjectType(i->_type);
+                    auto type2 = GetObjectType(i->_typeNameHash);
                     if (type2) 
                         InvokeOnChange(*type2, *i, newChangeType);
                 }
@@ -95,25 +102,25 @@ namespace EntityInterface
         return nullptr;
     }
 
-    auto RetainedEntities::FindEntitiesOfType(EntityTypeId typeId) const -> std::vector<const RetainedEntity*>
+    auto RetainedEntities::FindEntitiesOfType(TypeNameHash typeId) const -> std::vector<const RetainedEntity*>
     {
         std::vector<const RetainedEntity*> result;
         for (auto i=_objects.begin(); i!=_objects.end(); ++i)
-            if (i->_type == typeId) {
+            if (i->_typeNameHash == typeId) {
                 result.push_back(AsPointer(i));
             }
         return result;
     }
 
-    EntityTypeId RetainedEntities::GetTypeId(StringSection<> name) const
+    /*auto RetainedEntities::GetTypeId(StringSection<> name) const -> TypeNameHash
     {
-        for (auto i=_registeredObjectTypes.cbegin(); i!=_registeredObjectTypes.cend(); ++i)
-            if (XlEqStringI(name, i->second._name))
-                return i->first;
-        
-        _registeredObjectTypes.push_back(
-            std::make_pair(_nextObjectTypeId, RegisteredObjectType(name.AsString())));
-        return _nextObjectTypeId++;
+        auto hash = Hash64(name);
+        auto i = LowerBound(_registeredObjectTypes, hash);
+        if (i == _registeredObjectTypes.end() || i->first != hash) {
+            _registeredObjectTypes.push_back(
+                std::make_pair(name, RegisteredObjectType(name.AsString())));
+        }
+        return hash;
     }
 
 	PropertyId RetainedEntities::GetPropertyId(EntityTypeId typeId, StringSection<> name) const
@@ -168,11 +175,11 @@ namespace EntityInterface
 			if (childListId <= (unsigned)i->second._childLists.size())
 				return i->second._childLists[childListId-1];
 		return {};
-	}
+	}*/
 
 	void RetainedEntities::PrintEntity(std::ostream& stream, const RetainedEntity& entity, StringSection<> childListName, unsigned indent) const
 	{
-		stream << StreamIndent(indent) << "[" << entity._id << "] type: " << GetTypeName(entity._type);
+		stream << StreamIndent(indent) << "[" << entity._id << "] type: " << GetObjectType(entity._typeNameHash)->_name;
 		if (!childListName.IsEmpty())
 			stream << ", childList: " << childListName;
 		stream << std::endl;
@@ -186,7 +193,7 @@ namespace EntityInterface
 				continue;
 			}
 			stream << "";
-			PrintEntity(stream, *child, GetChildListName(entity._type, c.first), indent + 2);
+			PrintEntity(stream, *child, {}/*GetChildListName(entity._type, c.first)*/, indent + 2);
 		}
 	}
 
@@ -198,18 +205,18 @@ namespace EntityInterface
 				PrintEntity(stream, o, {}, indent);
 	}
 
-	IteratorRange<RetainedEntities::ChildConstIterator> RetainedEntities::GetChildren(EntityId parentObj, ChildListId childList) const
+	IteratorRange<RetainedEntities::ChildConstIterator> RetainedEntities::GetChildren(EntityId parentObj, ChildListNameHash childList) const
 	{
 		auto parent = GetEntity(parentObj);
 		if (!parent) return {};
 		return GetChildren(*parent, childList);
 	}
 
-	IteratorRange<RetainedEntities::ChildConstIterator> RetainedEntities::GetChildren(const RetainedEntity& parent, ChildListId childList) const
+	IteratorRange<RetainedEntities::ChildConstIterator> RetainedEntities::GetChildren(const RetainedEntity& parent, ChildListNameHash childList) const
 	{
 		auto i = std::find_if(
 			parent._children.begin(), parent._children.end(),
-			[childList](const std::pair<ChildListId, EntityId>& p) { return p.first == childList; });
+			[childList](const auto& p) { return p.first == childList; });
 		return IteratorRange<RetainedEntities::ChildConstIterator>(
 			ChildConstIterator{ *this, parent, i, childList },
 			ChildConstIterator{ *this, parent, parent._children.end(), childList });
@@ -217,7 +224,6 @@ namespace EntityInterface
 
     RetainedEntities::RetainedEntities()
     {
-        _nextObjectTypeId = 1;
         _nextEntityId = 1;
         _nextCallbackId = 0;
     }
@@ -326,7 +332,7 @@ namespace EntityInterface
 
 	RetainedEntities::ChildConstIterator::ChildConstIterator(
 		const RetainedEntities& entitySystem,
-		const RetainedEntity& parent, UnderlyingIterator i, ChildListId childList)
+		const RetainedEntity& parent, UnderlyingIterator i, ChildListNameHash childList)
 	: _entitySystem(&entitySystem), _parentObject(&parent), _childListId(childList)
 	{
 		_childIdx = std::distance(parent._children.begin(), i);
@@ -351,18 +357,18 @@ namespace EntityInterface
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	std::optional<EntityId> RetainedEntitiesAdapter::CreateEntity( 
-        EntityTypeId typeId, IteratorRange<const PropertyInitializer*> props)
+        StringAndHash typeName, IteratorRange<const PropertyInitializer*> props)
     {
-        auto type = _scene->GetObjectType(typeId);
+        auto type = _scene->GetObjectType(typeName);
         if (!type) return {};
 
         RetainedEntity newObject;
         newObject._id = _scene->_nextEntityId++;
-        newObject._type = typeId;
+        newObject._typeNameHash = typeName.second;
         newObject._parent = 0;
 
         for (const auto& p:props)
-            _scene->SetSingleProperties(newObject, *type, p);
+            _scene->SetSingleProperties(newObject, p);
 
         _scene->_objects.push_back(std::move(newObject));
 
@@ -377,7 +383,7 @@ namespace EntityInterface
                 RetainedEntity copy(std::move(*i));
                 _scene->_objects.erase(i);
 
-                auto type = _scene->GetObjectType(copy._type);
+                auto type = _scene->GetObjectType(copy._typeNameHash);
                 if (type)
                     _scene->InvokeOnChange(*type, copy, RetainedEntities::ChangeType::Delete);
                 return true;
@@ -388,16 +394,14 @@ namespace EntityInterface
 	bool RetainedEntitiesAdapter::SetProperty(
         EntityId entity, IteratorRange<const PropertyInitializer*> props)
     {
-        
-
         for (auto i=_scene->_objects.begin(); i!=_scene->_objects.end(); ++i)
             if (i->_id == entity) {
-                auto type = _scene->GetObjectType(i->_type);
+                auto type = _scene->GetObjectType(i->_typeNameHash);
                 if (!type) return false;
 
                 bool gotChange = false;
                 for (const auto& p:props)
-                    gotChange |= _scene->SetSingleProperties(*i, *type, p);
+                    gotChange |= _scene->SetSingleProperties(*i, p);
                 if (gotChange) _scene->InvokeOnChange(*type, *i, RetainedEntities::ChangeType::SetProperty);
                 return true;
             }
@@ -405,18 +409,13 @@ namespace EntityInterface
         return false;
     }
 
-	std::optional<ImpliedTyping::TypeDesc> RetainedEntitiesAdapter::GetProperty(EntityId entity, PropertyId prop, IteratorRange<void*> destinationBuffer) const
+	std::optional<ImpliedTyping::TypeDesc> RetainedEntitiesAdapter::GetProperty(EntityId entity, StringAndHash prop, IteratorRange<void*> destinationBuffer) const
     {
         for (auto i=_scene->_objects.begin(); i!=_scene->_objects.end(); ++i)
             if (i->_id == entity) {
-                auto type = _scene->GetObjectType(i->_type);
-                if (!type) return {};
-                if (prop == 0 || prop > type->_properties.size()) return {};
-
-                ParameterBox::ParameterName pname = type->_properties[prop-1];
-                auto ptype = i->_properties.GetParameterType(pname);
+                auto ptype = i->_properties.GetParameterType(prop.second);
                 if (ptype._type != ImpliedTyping::TypeCat::Void) {
-                    auto res = i->_properties.GetParameterRawValue(pname);
+                    auto res = i->_properties.GetParameterRawValue(prop.second);
                     assert(res.size() == ptype.GetSize());
                     std::memcpy(destinationBuffer.begin(), res.begin(), std::min(res.size(), destinationBuffer.size()));
                     return ptype;
@@ -429,13 +428,13 @@ namespace EntityInterface
 
     bool RetainedEntitiesAdapter::SetParent(
         EntityId child, EntityId parent,
-		ChildListId childList, int insertionPosition)
+		StringAndHash childList, int insertionPosition)
     {
         auto* childObj = _scene->GetEntityWriteable(child);
         if (!childObj)
             return false;
 
-        auto childType = _scene->GetObjectType(childObj->_type);
+        auto childType = _scene->GetObjectType(childObj->_typeNameHash);
         if (!childType) return false;
 
         if (childObj->_parent != 0) {
@@ -443,11 +442,11 @@ namespace EntityInterface
             if (oldParent) {
                 auto i = std::find_if(
 					oldParent->_children.begin(), oldParent->_children.end(), 
-					[child](const std::pair<ChildListId, EntityId>& p) { return p.second == child; });
+					[child](const std::pair<uint64_t, EntityId>& p) { return p.second == child; });
                 assert(i != oldParent->_children.end());
                 oldParent->_children.erase(i);
 
-                auto oldParentType = _scene->GetObjectType(oldParent->_type);
+                auto oldParentType = _scene->GetObjectType(oldParent->_typeNameHash);
                 if (oldParentType)
                     _scene->InvokeOnChange(
                         *oldParentType, *oldParent, 
@@ -471,24 +470,24 @@ namespace EntityInterface
         }
 
         if (insertionPosition < 0 || insertionPosition >= (int)parentObj->_children.size()) {
-			parentObj->_children.push_back({ childList, child });
+			parentObj->_children.push_back({ childList.second, child });
         } else {
             parentObj->_children.insert(
                 parentObj->_children.begin() + insertionPosition,
-				{ childList, child });
+				{ childList.second, child });
         }
         childObj->_parent = parentObj->_id;
 
         _scene->InvokeOnChange(*childType, *childObj, RetainedEntities::ChangeType::SetParent);
 
-        auto parentType = _scene->GetObjectType(parentObj->_type);
+        auto parentType = _scene->GetObjectType(parentObj->_typeNameHash);
         if (parentType)
             _scene->InvokeOnChange(*parentType, *parentObj, RetainedEntities::ChangeType::AddChild);
 
         return true;
     }
 
-	EntityTypeId    RetainedEntitiesAdapter::GetTypeId(StringSection<> name) const
+	/*EntityTypeId    RetainedEntitiesAdapter::GetTypeId(StringSection<> name) const
     {
         return _scene->GetTypeId(name);
     }
@@ -501,7 +500,7 @@ namespace EntityInterface
 	ChildListId     RetainedEntitiesAdapter::GetChildListId(EntityTypeId typeId, StringSection<> name) const
     {
         return _scene->GetChildListId(typeId, name);
-    }
+    }*/
 
 	RetainedEntitiesAdapter::RetainedEntitiesAdapter(std::shared_ptr<RetainedEntities> flexObjects)
     : _scene(std::move(flexObjects))
@@ -521,7 +520,6 @@ namespace EntityInterface
         using Section = InputStreamFormatter<utf8>::InteriorSection;
                 
         auto beginLoc = formatter.GetLocation();
-        auto typeId = interf.GetTypeId(objType);
 
         std::vector<PropertyInitializer> inits;
         std::vector<char> initsBuffer;
@@ -559,11 +557,9 @@ namespace EntityInterface
                     auto size = std::min(type.GetSize(), (unsigned)sizeof(intermediateBuffer));
                     initsBuffer.insert(initsBuffer.end(), intermediateBuffer, PtrAdd(intermediateBuffer, size));
                 }
-        
-                auto id = interf.GetPropertyId(typeId, name);
 
                 PropertyInitializer i;
-                i._prop = id;
+                i._prop = MakeStringAndHash(name);
                 i._data = { (void*)bufferOffset, (void*)initsBuffer.size() };		// note -- temporarily storing the offset here, because we convert to a pointer in just below before calling CreateObject
                 i._type = type;
 
@@ -571,22 +567,19 @@ namespace EntityInterface
             }
         };
 
-        if (typeId != ~EntityTypeId(0x0)) {
-            for (auto&i : inits)
-                i._data = { PtrAdd(AsPointer(initsBuffer.cbegin()), size_t(i._data.first)), PtrAdd(AsPointer(initsBuffer.cbegin()), size_t(i._data.second)) };
+        for (auto&i : inits)
+            i._data = { PtrAdd(AsPointer(initsBuffer.cbegin()), size_t(i._data.first)), PtrAdd(AsPointer(initsBuffer.cbegin()), size_t(i._data.second)) };
 
-            auto id = interf.CreateEntity(typeId, inits);
-            if (!id)
-                Throw(FormatException("Error while creating object in entity deserialisation", beginLoc));
+        auto id = interf.CreateEntity(MakeStringAndHash(objType), inits);
+        if (!id)
+            Throw(FormatException("Error while creating object in entity deserialisation", beginLoc));
 
-            for (const auto&c:children)
-                interf.SetParent(c, id.value(), 0, -1);
+        for (const auto&c:children)
+            interf.SetParent(c, id.value(), {}, -1);
 
-            typeId = ~EntityTypeId(0x0);
-            initsBuffer.clear();
+        initsBuffer.clear();
 
-            return id.value();
-        }
+        return id.value();
 
         return 0;
     }

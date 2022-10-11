@@ -84,15 +84,16 @@ namespace EntityInterface
     class TextEntityDocument : public IEntityDocument
 	{
 	public:
-		virtual ::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) override
+		virtual std::future<std::shared_ptr<Formatters::IDynamicFormatter>> BeginFormatter(StringSection<> internalPoint) override
 		{
 			if (!_srcFile || ::Assets::IsInvalidated(*_srcFile))
 				_srcFile = ::Assets::MakeAssetMarkerPtr<::Assets::ConfigFileContainer<>>(_src);
 
 			using UnderlyingFormatter = InputStreamFormatter<>;
-			auto result = std::make_shared<::Assets::MarkerPtr<Formatters::IDynamicFormatter>>();
+			std::promise<std::shared_ptr<Formatters::IDynamicFormatter>> promise;
+			auto result = promise.get_future();
 			::Assets::WhenAll(_srcFile).ThenConstructToPromise(
-				result->AdoptPromise(),
+				std::move(promise),
 				[ip=internalPoint.AsString()](auto cfgFileContainer) {
 					return EntityInterface::CreateDynamicFormatter(std::move(cfgFileContainer), ip);
 				});

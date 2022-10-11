@@ -14,58 +14,28 @@
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/Meta/AccessorSerialize.h"
 #include "../../Math/Transformations.h"
+#include "../../Math/Matrix.h"
+#include "../../Math/Vector.h"
+#include "../../Math/MathSerialization.h"
 
 namespace EntityInterface
 {
-    static const DocumentTypeId DocumentType_Placements = 1;
-    static const EntityTypeId ObjectType_Placement = 1;
-    static const PropertyId Property_LocalToWorld = 100;
-    static const PropertyId Property_Visible = 101;
-    static const PropertyId Property_Model = 102;
-    static const PropertyId Property_Material = 103;
-    static const PropertyId Property_Supplements = 104;
-    static const PropertyId Property_Bounds = 105;
-    static const PropertyId Property_LocalBounds = 106;
-
-
-    DocumentId PlacementEntities::CreateDocument(DocumentTypeId docType, const char initializer[])
-    {
-        if (docType != DocumentType_Placements) { assert(0); return 0; }
-
-        StringMeld<MaxPath, ::Assets::ResChar> meld;
-        meld << "[dyn] " << initializer << (_cellCounter++);
-
-            // todo -- boundary of this cell should be set to something reasonable
-            //          (or at least adapt as objects are added and removed)
-        auto result = (DocumentId)_editor->CreateCell(meld, Float2(-100000.f, -100000.f), Float2(100000.f, 100000.f));
-		auto hiddenResult = _hiddenObjects->CreateCell(meld, Float2(-100000.f, -100000.f), Float2(100000.f, 100000.f));
-		(void)hiddenResult;
-		assert(result == hiddenResult);	// ids must match up
-		return result;
-	}
-
-	bool PlacementEntities::DeleteDocument(DocumentId doc, DocumentTypeId docType)
-	{
-		if (docType != DocumentType_Placements) { assert(0); return false; }
-		bool result = _editor->RemoveCell(doc);
-		result |= _hiddenObjects->RemoveCell(doc);
-		return result;
-	}
-
-	EntityId PlacementEntities::AssignObjectId(DocumentId doc, EntityTypeId type) const
-	{
-		if (type != ObjectType_Placement) { assert(0); return 0; }
-		return _editor->GenerateObjectGUID();
-	}
+    static const uint64_t Property_LocalToWorld = Hash64("LocalToWorld");
+    static const uint64_t Property_Visible = Hash64("VisibleHierarchy");
+    static const uint64_t Property_Model = Hash64("model");
+    static const uint64_t Property_Material = Hash64("material");
+    static const uint64_t Property_Supplements = Hash64("supplements");
+    static const uint64_t Property_Bounds = Hash64("Bounds");
+    static const uint64_t Property_LocalBounds = Hash64("LocalBounds");
 
 	enum VisibilityChange { None, MakeVisible, MakeHidden };
-	static VisibilityChange GetVisibilityChange(const PropertyInitializer initializers[], size_t initializerCount)
+	static VisibilityChange GetVisibilityChange(IteratorRange<const PropertyInitializer*> initializers)
 	{
 		VisibilityChange visChange = None;
-		for (unsigned c = 0; c < initializerCount; ++c) {
-			if (initializers[c]._prop == Property_Visible && !initializers[c]._src.empty()) {
-				assert(!initializers[c]._src.empty());
-				bool flagValue = (*(const uint8*)initializers[c]._src.begin()) != 0;
+		for (unsigned c = 0; c < initializers.size(); ++c) {
+			if (initializers[c]._prop.second == Property_Visible && !initializers[c]._data.empty()) {
+				assert(!initializers[c]._data.empty());
+				bool flagValue = (*(const uint8*)initializers[c]._data.begin()) != 0;
 				visChange = flagValue ? MakeVisible : MakeHidden;
 			}
 		}
@@ -76,21 +46,21 @@ namespace EntityInterface
 		SceneEngine::PlacementsEditor::ObjTransDef& obj,
 		const PropertyInitializer& prop)
 	{
-		if (prop._prop == Property_LocalToWorld) {
+		if (prop._prop.second == Property_LocalToWorld) {
 			// note -- putting in a transpose here, because the level editor matrix
 			//          math uses a transposed form
-			if (prop._elementType == (unsigned)ImpliedTyping::TypeCat::Float && prop._arrayCount >= 16) {
-				assert(prop._src.size() >= sizeof(Float4x4));
-				obj._localToWorld = AsFloat3x4(Transpose(*(const Float4x4*)prop._src.begin()));
+			if (prop._type._type == ImpliedTyping::TypeCat::Float && prop._type._arrayCount >= 16) {
+				assert(prop._data.size() >= sizeof(Float4x4));
+				obj._localToWorld = AsFloat3x4(Transpose(*(const Float4x4*)prop._data.begin()));
 				return true;
 			}
 		}
-		else if (prop._prop == Property_Model || prop._prop == Property_Material || prop._prop == Property_Supplements) {
-			std::string value = {(const char*)prop._src.begin(), (const char*)prop._src.end()};
-			if (prop._prop == Property_Model) {
+		else if (prop._prop.second == Property_Model || prop._prop.second == Property_Material || prop._prop.second == Property_Supplements) {
+			std::string value = {(const char*)prop._data.begin(), (const char*)prop._data.end()};
+			if (prop._prop.second == Property_Model) {
 				obj._model = value;
 			}
-			else if (prop._prop == Property_Supplements) {
+			else if (prop._prop.second == Property_Supplements) {
 				obj._supplements = value;
 			}
 			else {
@@ -101,20 +71,19 @@ namespace EntityInterface
 		return false;
 	}
 
-	bool PlacementEntities::CreateObject(
-		const Identifier& id,
-		const PropertyInitializer initializers[], size_t initializerCount)
+	std::optional<EntityId> PlacementEntities::CreateEntity(
+		StringAndHash typeId,
+		IteratorRange<const PropertyInitializer*> initializers)
 	{
-		if (id.ObjectType() != ObjectType_Placement) { assert(0); return false; }
-
 		SceneEngine::PlacementsEditor::ObjTransDef newObj;
 		newObj._localToWorld = Identity<decltype(newObj._localToWorld)>();
-		for (size_t c = 0; c < initializerCount; ++c)
+		for (size_t c = 0; c < initializers.size(); ++c)
 			SetObjProperty(newObj, initializers[c]);
 
-		auto visChange = GetVisibilityChange(initializers, initializerCount);
+		auto visChange = GetVisibilityChange(initializers);
 
-		auto guid = SceneEngine::PlacementGUID(id.Document(), id.Object());
+		auto entityId = _editor->GenerateObjectGUID();
+		auto guid = SceneEngine::PlacementGUID(_cellId, entityId);
 		std::shared_ptr<SceneEngine::PlacementsEditor::ITransaction> transaction;
 		if (visChange == MakeHidden) {
 			transaction = _hiddenObjects->Transaction_Begin(nullptr, nullptr);
@@ -122,10 +91,10 @@ namespace EntityInterface
 			transaction = _editor->Transaction_Begin(nullptr, nullptr);
 		if (transaction->Create(guid, newObj)) {
 			transaction->Commit();
-			return true;
+			return entityId;
 		}
 
-		return false;
+		return {};
 	}
 
 	static std::shared_ptr<SceneEngine::PlacementsEditor::ITransaction> Begin(SceneEngine::PlacementsEditor& editor, SceneEngine::PlacementGUID guid)
@@ -145,12 +114,10 @@ namespace EntityInterface
 		return false;
 	}
 
-    bool PlacementEntities::DeleteObject(const Identifier& id)
+    bool PlacementEntities::DeleteEntity(EntityId id)
     {
-        if (id.ObjectType() != ObjectType_Placement) { assert(0); return false; }
-
 		bool result = false;
-        auto guid = SceneEngine::PlacementGUID(id.Document(), id.Object());
+        auto guid = SceneEngine::PlacementGUID(_cellId, id);
 
 			// delete from both the hidden and visible lists ---
 
@@ -172,15 +139,13 @@ namespace EntityInterface
     }
 
     bool PlacementEntities::SetProperty(
-        const Identifier& id,
-        const PropertyInitializer initializers[], size_t initializerCount)
+        EntityId id,
+        IteratorRange<const PropertyInitializer*> initializers)
     {
             // find the object, and set the given property (as per the new value specified in the string)
             //  We need to create a transaction, make the change and then commit it back.
             //  If the transaction returns no results, then we must have got a bad object or document id.
-        if (id.ObjectType() != ObjectType_Placement) { assert(0); return false; }
-
-		auto guid = SceneEngine::PlacementGUID(id.Document(), id.Object());
+		auto guid = SceneEngine::PlacementGUID(_cellId, id);
 		using TransType = SceneEngine::PlacementsEditor::ObjTransDef::TransactionType;
 
 		bool pendingTransactionCommit = false;
@@ -198,7 +163,7 @@ namespace EntityInterface
 			// All of this transaction stuff is mostly thread safe and well
 			// ordered. But playing around with separate hidden and visible object
 			// lists is not!
-		auto visChange = GetVisibilityChange(initializers, initializerCount); 
+		auto visChange = GetVisibilityChange(initializers); 
 		if (visChange == MakeVisible) {
 			// if the object is not already in the visible list, then we have to move
 			// it's properties across from the hidden list (and destroy the version
@@ -249,7 +214,7 @@ namespace EntityInterface
         
         if (mainTransaction && mainTransaction->GetObjectCount() > 0) {
             auto originalObject = mainTransaction->GetObject(0);
-            for (size_t c=0; c<initializerCount; ++c)
+            for (size_t c=0; c<initializers.size(); ++c)
                 pendingTransactionCommit |= SetObjProperty(originalObject, initializers[c]);
             if (pendingTransactionCommit) {
 				mainTransaction->SetObject(0, originalObject);
@@ -261,17 +226,16 @@ namespace EntityInterface
         return false;
     }
 
-    bool PlacementEntities::GetProperty(
-        const Identifier& id, PropertyId prop, 
-        void* dest, unsigned* destSize) const
+    std::optional<ImpliedTyping::TypeDesc> PlacementEntities::GetProperty(
+        EntityId entityId, StringAndHash prop,
+        IteratorRange<void*> destinationBuffer) const
     {
-        if (id.ObjectType() != ObjectType_Placement) { assert(0); return false; }
-        if (prop != Property_LocalToWorld && prop != Property_Bounds && prop != Property_LocalBounds) { assert(0); return false; }
-        assert(destSize);
+        if (prop.second != Property_LocalToWorld && prop.second != Property_Bounds && prop.second != Property_LocalBounds) { assert(0); return {}; }
+        assert(!destinationBuffer.empty());
 
-        typedef std::pair<Float3, Float3> BoundingBox;
+        using BoundingBox = std::pair<Float3, Float3>;
 
-        auto guid = SceneEngine::PlacementGUID(id.Document(), id.Object());
+        auto guid = SceneEngine::PlacementGUID(_cellId, entityId);
         auto transaction = Begin(*_editor, guid);
         if (transaction && transaction->GetObjectCount()==1) {
 
@@ -282,65 +246,39 @@ namespace EntityInterface
 					transaction = hiddenTrans;
 			}
 
-            if (prop == Property_LocalToWorld) {
-                if (*destSize >= sizeof(Float4x4)) {
+            if (prop.second == Property_LocalToWorld) {
+                if (destinationBuffer.size() >= sizeof(Float4x4)) {
                     auto originalObject = transaction->GetObject(0);
                         // note -- putting in a transpose here, because the level editor matrix
                         //          math uses a transposed form
-                    *(Float4x4*)dest = Transpose(AsFloat4x4(originalObject._localToWorld));
-                    return true;
-                }
-                *destSize = sizeof(Float4x4);
-            } else if (prop == Property_Bounds) {
-                if (*destSize >= sizeof(BoundingBox)) {
-                    *(BoundingBox*)dest = transaction->GetWorldBoundingBox(0);
-                    return true;
-                }
-                *destSize = sizeof(BoundingBox);
-            } else if (prop == Property_LocalBounds) {
-                if (*destSize >= sizeof(BoundingBox)) {
-                    *(BoundingBox*)dest = transaction->GetLocalBoundingBox(0);
-                    return true;
-                }
-                *destSize = sizeof(BoundingBox);
+                    *(Float4x4*)destinationBuffer.begin() = Transpose(AsFloat4x4(originalObject._localToWorld));
+                } else {
+					std::memset(destinationBuffer.begin(), 0, destinationBuffer.size());
+				}
+                return ImpliedTyping::TypeOf<Float4x4>();
+            } else if (prop.second == Property_Bounds) {
+                if (destinationBuffer.size() >= sizeof(BoundingBox)) {
+                    *(BoundingBox*)destinationBuffer.begin() = transaction->GetWorldBoundingBox(0);
+                } else {
+					std::memset(destinationBuffer.begin(), 0, destinationBuffer.size());
+				}
+                return ImpliedTyping::TypeDesc{ImpliedTyping::TypeCat::Float, 6};
+            } else if (prop.second == Property_LocalBounds) {
+                if (destinationBuffer.size() >= sizeof(BoundingBox)) {
+                    *(BoundingBox*)destinationBuffer.begin() = transaction->GetLocalBoundingBox(0);
+                } else {
+					std::memset(destinationBuffer.begin(), 0, destinationBuffer.size());
+				}
+                return ImpliedTyping::TypeDesc{ImpliedTyping::TypeCat::Float, 6};
 			}
         }
 
-        return false;
+        return {};
     }
 
-    bool PlacementEntities::SetParent(const Identifier& child, const Identifier& parent, ChildListId childList, int insertionPosition)
+    bool PlacementEntities::SetParent(EntityId child, EntityId parent, StringAndHash childList, int insertionPosition)
     {
         return false;
-    }
-
-    EntityTypeId PlacementEntities::GetTypeId(const char name[]) const
-    {
-        if (!XlCompareString(name, "PlacementObject")) return ObjectType_Placement;
-        return 0;
-    }
-
-    DocumentTypeId PlacementEntities::GetDocumentTypeId(const char name[]) const
-    {
-        if (!XlCompareString(name, "PlacementsDocument")) return DocumentType_Placements;
-        return 0;
-    }
-
-    PropertyId PlacementEntities::GetPropertyId(EntityTypeId type, const char name[]) const
-    {
-        if (!XlCompareString(name, "LocalToWorld"))     return Property_LocalToWorld;
-        if (!XlCompareString(name, "VisibleHierarchy")) return Property_Visible;
-        if (!XlCompareString(name, "model"))            return Property_Model;
-        if (!XlCompareString(name, "material"))         return Property_Material;
-        if (!XlCompareString(name, "supplements"))      return Property_Supplements;
-        if (!XlCompareString(name, "Bounds"))           return Property_Bounds;
-        if (!XlCompareString(name, "LocalBounds"))      return Property_LocalBounds;
-        return 0;
-    }
-
-    ChildListId PlacementEntities::GetChildListId(EntityTypeId type, const char name[]) const
-    {
-        return 0;
     }
 
 	void PlacementEntities::PrintDocument(std::ostream& stream, DocumentId doc, unsigned indent) const
@@ -352,14 +290,61 @@ namespace EntityInterface
     PlacementEntities::PlacementEntities(
         std::shared_ptr<SceneEngine::PlacementsManager> manager,
         std::shared_ptr<SceneEngine::PlacementsEditor> editor,
-		std::shared_ptr<SceneEngine::PlacementsEditor> hiddenObjects)
+		std::shared_ptr<SceneEngine::PlacementsEditor> hiddenObjects,
+		StringSection<> initializer)
     : _manager(std::move(manager))
     , _editor(std::move(editor))
 	, _hiddenObjects(std::move(hiddenObjects))
-    , _cellCounter(0) 
-    {}
+    {
+            // todo -- boundary of this cell should be set to something reasonable
+            //          (or at least adapt as objects are added and removed)
+		auto nullTerm = initializer.AsString();
+        _cellId = _editor->CreateCell(nullTerm.c_str(), Float2(-100000.f, -100000.f), Float2(100000.f, 100000.f));
+		auto hiddenResult = _hiddenObjects->CreateCell(nullTerm.c_str(), Float2(-100000.f, -100000.f), Float2(100000.f, 100000.f));
+		assert(_cellId == hiddenResult);	// ids must match up
+	}
 
-    PlacementEntities::~PlacementEntities() {}
+    PlacementEntities::~PlacementEntities()
+	{
+		bool result = _editor->RemoveCell(_cellId);
+		result |= _hiddenObjects->RemoveCell(_cellId);
+		assert(result);
+	}
+
+	class PlacementEntitiesType : public Switch::IDocumentType
+	{
+	public:
+		std::shared_ptr<IMutableEntityDocument> CreateDocument(StringSection<> initializer)
+		{
+			StringMeld<MaxPath, ::Assets::ResChar> meld;
+        	meld << "[dyn] " << initializer << (_cellCounter++);
+			return std::make_shared<PlacementEntities>(_manager, _editor, _hiddenObjects, meld);
+		}
+
+		PlacementEntitiesType(
+            std::shared_ptr<SceneEngine::PlacementsManager> manager,
+            std::shared_ptr<SceneEngine::PlacementsEditor> editor,
+			std::shared_ptr<SceneEngine::PlacementsEditor> hiddenObjects)
+		: _manager(std::move(manager))
+		, _editor(std::move(editor))
+		, _hiddenObjects(std::move(hiddenObjects))
+		, _cellCounter(_cellCounter) {}
+		~PlacementEntitiesType() {}
+
+	protected:
+        std::shared_ptr<SceneEngine::PlacementsManager> _manager;
+        std::shared_ptr<SceneEngine::PlacementsEditor> _editor;
+		std::shared_ptr<SceneEngine::PlacementsEditor> _hiddenObjects;
+		unsigned _cellCounter;
+	};
+
+	std::shared_ptr<Switch::IDocumentType> CreatePlacementEntitiesSwitch(
+        std::shared_ptr<SceneEngine::PlacementsManager> manager,
+        std::shared_ptr<SceneEngine::PlacementsEditor> editor,
+        std::shared_ptr<SceneEngine::PlacementsEditor> hiddenObjects)
+	{
+		return std::make_shared<PlacementEntitiesType>(std::move(manager), std::move(editor), std::move(hiddenObjects));
+	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -369,9 +354,9 @@ namespace EntityInterface
     {
         std::weak_ptr<SceneEngine::DynamicImposters> weakPtrToManager = imposters;
         flexSys.RegisterCallback(
-            flexSys.GetTypeId("DynamicImpostersConfig"),
+            Hash64("DynamicImpostersConfig"),
             [weakPtrToManager](
-                const RetainedEntities& flexSys, const Identifier& obj,
+                const RetainedEntities& flexSys, EntityId obj,
                 RetainedEntities::ChangeType changeType)
             {
                 auto mgr = weakPtrToManager.lock();

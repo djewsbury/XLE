@@ -17,30 +17,22 @@ namespace SceneEngine
 
 namespace EntityInterface
 {
-    class PlacementEntities : public IEntityInterface
+    class PlacementEntities : public IMutableEntityDocument
     {
     public:
-        DocumentId CreateDocument(DocumentTypeId docType, const char initializer[]);
-        bool DeleteDocument(DocumentId doc, DocumentTypeId docType);
-
-        EntityId AssignObjectId(DocumentId doc, EntityTypeId type) const;
-        bool CreateObject(const Identifier& id, const PropertyInitializer initializers[], size_t initializerCount);
-        bool DeleteObject(const Identifier& id);
-        bool SetProperty(const Identifier& id, const PropertyInitializer initializers[], size_t initializerCount);
-        bool GetProperty(const Identifier& id, PropertyId prop, void* dest, unsigned* destSize) const;
-        bool SetParent(const Identifier& child, const Identifier& parent, ChildListId childList, int insertionPosition);
-
-        EntityTypeId GetTypeId(const char name[]) const;
-        DocumentTypeId GetDocumentTypeId(const char name[]) const;
-        PropertyId GetPropertyId(EntityTypeId type, const char name[]) const;
-        ChildListId GetChildListId(EntityTypeId type, const char name[]) const;
+        std::optional<EntityId> CreateEntity(StringAndHash id, IteratorRange<const PropertyInitializer*>) override;
+        bool DeleteEntity(EntityId id) override;
+        bool SetProperty(EntityId id, IteratorRange<const PropertyInitializer*>) override;
+        std::optional<ImpliedTyping::TypeDesc> GetProperty(EntityId id, StringAndHash prop, IteratorRange<void*> destinationBuffer) const override;
+        bool SetParent(EntityId child, EntityId parent, StringAndHash childList, int insertionPosition) override;
 
 		void PrintDocument(std::ostream& stream, DocumentId doc, unsigned indent) const;
 
         PlacementEntities(
             std::shared_ptr<SceneEngine::PlacementsManager> manager,
             std::shared_ptr<SceneEngine::PlacementsEditor> editor,
-			std::shared_ptr<SceneEngine::PlacementsEditor> hiddenObjects);
+			std::shared_ptr<SceneEngine::PlacementsEditor> hiddenObjects,
+            StringSection<> initializer);
         ~PlacementEntities();
 
     protected:
@@ -48,8 +40,13 @@ namespace EntityInterface
         std::shared_ptr<SceneEngine::PlacementsEditor> _editor;
 		std::shared_ptr<SceneEngine::PlacementsEditor> _hiddenObjects;
 
-        unsigned _cellCounter;
+        uint64_t _cellId = ~0ull;
     };
+
+    std::shared_ptr<Switch::IDocumentType> CreatePlacementEntitiesSwitch(
+        std::shared_ptr<SceneEngine::PlacementsManager> manager,
+        std::shared_ptr<SceneEngine::PlacementsEditor> editor,
+        std::shared_ptr<SceneEngine::PlacementsEditor> hiddenObjects);
 
     class RetainedEntities;
     void RegisterDynamicImpostersFlexObjects(
