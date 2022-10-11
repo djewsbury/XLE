@@ -129,7 +129,7 @@ namespace ToolsRig
 		void Set(std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) override;
 		void Set(std::shared_ptr<SceneEngine::IScene> scene) override;
 
-		std::shared_ptr<VisCameraSettings> GetCamera() override;
+		void Set(std::shared_ptr<VisCameraSettings>) override;
 		void ResetCamera() override;
 		virtual OverlayState GetOverlayState() const override;
 
@@ -223,7 +223,7 @@ namespace ToolsRig
 				_pendingCameraReset = false;
 			}
 
-			auto cam = AsCameraDesc(*_camera);
+			auto cam = _camera ? AsCameraDesc(*_camera) : RenderCore::Techniques::CameraDesc{};
 			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(cam, {parserContext.GetViewport()._width, parserContext.GetViewport()._height});
 			{
 				auto& lightScene = RenderCore::LightingEngine::GetLightScene(*actualizedScene->_compiledLightingTechnique);
@@ -408,15 +408,15 @@ namespace ToolsRig
 		RebuildPreparedScene();
 	}
 
-	std::shared_ptr<VisCameraSettings> SimpleSceneOverlay::GetCamera()
+	void SimpleSceneOverlay::Set(std::shared_ptr<VisCameraSettings> camera)
 	{
-		return _camera;
+		_camera = std::move(camera);
 	}
 
 	void SimpleSceneOverlay::ResetCamera()
 	{
 		auto* t = _preparedSceneFuture ? _preparedSceneFuture->TryActualize() : nullptr;
-		if (!t) return;
+		if (!t || !_camera) return;
 
 		auto* visContentScene = dynamic_cast<ToolsRig::IVisContent*>((*t)->_scene.get());
 		if (visContentScene) {
@@ -450,7 +450,6 @@ namespace ToolsRig
 		const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus,
 		const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators)
     {
-		_camera = std::make_shared<VisCameraSettings>();
 		_pipelineAccelerators = immediateDrawingApparatus->_mainDrawingApparatus->_pipelineAccelerators;
 		_deformAccelerators = deformAccelerators;
 		_immediateDrawables = immediateDrawingApparatus->_immediateDrawables;
@@ -533,6 +532,206 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+	static RenderCore::Techniques::TechniqueContext MakeTechniqueContext(RenderCore::Techniques::DrawingApparatus& drawingApparatus)
+    {
+        RenderCore::Techniques::TechniqueContext techniqueContext;
+		techniqueContext._commonResources = drawingApparatus._commonResources;
+		techniqueContext._uniformDelegateManager = drawingApparatus._mainUniformDelegateManager;
+		techniqueContext._drawablesPool = drawingApparatus._drawablesPool;
+		techniqueContext._pipelineAccelerators = drawingApparatus._pipelineAccelerators;
+		techniqueContext._graphicsPipelinePool = drawingApparatus._graphicsPipelinePool;
+        return techniqueContext;
+    }
+
+	static SceneEngine::IntersectionTestResult FirstRayIntersection(
+		RenderCore::IThreadContext& threadContext,
+		RenderCore::Techniques::DrawingApparatus& drawingApparatus,
+        std::pair<Float3, Float3> worldSpaceRay,
+		SceneEngine::IScene& scene)
+	{
+		using namespace RenderCore;
+
+		TRY {
+			auto techniqueContext = MakeTechniqueContext(drawingApparatus);
+			Techniques::ParsingContext parserContext { techniqueContext, threadContext };
+			parserContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
+
+			RenderCore::Techniques::DrawablesPacket pkt;
+			RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max] {};
+			pkts[(unsigned)RenderCore::Techniques::Batch::Opaque] = &pkt;
+			SceneEngine::ExecuteSceneContext sceneExecuteContext{MakeIteratorRange(pkts), {}};
+			scene.ExecuteScene(threadContext, sceneExecuteContext);
+			parserContext.RequireCommandList(sceneExecuteContext._completionCmdList);
+			
+			SceneEngine::ModelIntersectionStateContext stateContext {
+				SceneEngine::ModelIntersectionStateContext::RayTest,
+				threadContext, *drawingApparatus._pipelineAccelerators,
+				parserContext.GetPipelineAcceleratorsVisibility() };
+			stateContext.SetRay(worldSpaceRay);
+			stateContext.ExecuteDrawables(parserContext, pkt);
+
+			// Stall if we haven't yet submitted required buffer uploads command lists
+			// (if we bail here, the draw commands are have still be submitted and we will run into ordering problems later)
+			auto requiredBufferUploads = parserContext._requiredBufferUploadsCommandList;
+			if (requiredBufferUploads) {
+				auto& bu=RenderCore::Techniques::Services::GetBufferUploads();
+				bu.StallUntilCompletion(threadContext, parserContext._requiredBufferUploadsCommandList);
+			}
+			
+			auto results = stateContext.GetResults();
+			if (!results.empty()) {
+				const auto& r = results[0];
+
+				SceneEngine::IntersectionTestResult result;
+				result._type = SceneEngine::IntersectionTestResult::Type::Extra;
+				result._worldSpaceCollision = 
+					worldSpaceRay.first + r._intersectionDepth * Normalize(worldSpaceRay.second - worldSpaceRay.first);
+				result._distance = r._intersectionDepth;
+				result._drawCallIndex = r._drawCallIndex;
+				result._materialGuid = r._materialGuid;
+
+				result._modelName = "Model";
+				result._materialName = "Material";
+				auto* visContent = dynamic_cast<IVisContent*>(&scene);
+				if (visContent) {
+					auto details = visContent->GetDrawCallDetails(result._drawCallIndex, result._materialGuid);
+					result._modelName = details._modelName;
+					result._materialName = details._materialName;
+				}
+
+				return result;
+			}
+		} CATCH(...) {
+			// suppress exceptions during intersection detection
+			// we can get pending assets, etc
+		} CATCH_END
+
+		return {};
+    }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+    class MouseOverTrackingListener : public PlatformRig::IInputListener, public std::enable_shared_from_this<MouseOverTrackingListener>
+    {
+    public:
+        bool OnInputEvent(
+			const PlatformRig::InputContext& context,
+			const PlatformRig::InputSnapshot& evnt)
+        {
+			if (evnt._mouseDelta == PlatformRig::Coord2 { 0, 0 })
+				return false;
+
+			// Limit the update frequency by ensuring that enough time has
+			// passed since the last time we did an update. If there hasn't
+			// been enough time, we should schedule a timeout event to trigger.
+			//
+			// If there has already been a timeout event scheduled, we have 2 options.
+			// Either we reschedule it, or we just allow the previous timeout to 
+			// finish as normal.
+			//			
+			// If we rescheduled the event, it would mean that fast movement of the 
+			// mouse would disable all update events, and we would only get new information
+			// after the mouse has come to rest for the timeout period.
+			//
+			// The preferred option may depend on the particular use case.
+			auto time = std::chrono::steady_clock::now();
+			const auto timePeriod = std::chrono::milliseconds(200u);
+			_timeoutContext = context;
+			_timeoutMousePosition = evnt._mousePosition;
+			if ((time - _timeOfLastCalculate) < timePeriod) {
+				auto* osRunLoop = PlatformRig::GetOSRunLoop();
+				if (_timeoutEvent == ~0u && osRunLoop) {
+					std::weak_ptr<MouseOverTrackingListener> weakThis = weak_from_this();
+					_timeoutEvent = osRunLoop->ScheduleTimeoutEvent(
+						time + timePeriod,
+						[weakThis]() {
+							auto l = weakThis.lock();
+							if (l) {
+								l->_timeOfLastCalculate = std::chrono::steady_clock::now();
+								l->CalculateForMousePosition(
+									l->_timeoutContext,
+									l->_timeoutMousePosition);
+								l->_timeoutEvent = ~0u;								
+							}
+						});
+				}
+			} else {
+				auto* osRunLoop = PlatformRig::GetOSRunLoop();
+				if (_timeoutEvent != ~0u && osRunLoop) {
+					osRunLoop->RemoveEvent(_timeoutEvent);
+					_timeoutEvent = ~0u;
+				}
+
+				CalculateForMousePosition(context, evnt._mousePosition);
+				_timeOfLastCalculate = time;
+			}
+
+			return false;
+		}
+
+		void CalculateForMousePosition(
+			const PlatformRig::InputContext& context,
+			PlatformRig::Coord2 mousePosition)
+		{
+            auto worldSpaceRay = SceneEngine::IntersectionTestContext::CalculateWorldSpaceRay(
+				AsCameraDesc(*_camera), mousePosition, context._viewMins, context._viewMaxs);
+
+            if (!_scene) return;
+
+			auto intr = FirstRayIntersection(*RenderCore::Techniques::GetThreadContext(), *_drawingApparatus, worldSpaceRay, *_scene);
+			if (intr._type != 0) {
+				if (        intr._drawCallIndex != _mouseOver->_drawCallIndex
+						||  intr._materialGuid != _mouseOver->_materialGuid
+						||  !_mouseOver->_hasMouseOver) {
+
+					_mouseOver->_hasMouseOver = true;
+					_mouseOver->_drawCallIndex = intr._drawCallIndex;
+					_mouseOver->_materialGuid = intr._materialGuid;
+					_mouseOver->_changeEvent.Invoke();
+				}
+			} else {
+				if (_mouseOver->_hasMouseOver) {
+					_mouseOver->_hasMouseOver = false;
+					_mouseOver->_changeEvent.Invoke();
+				}
+			}
+        }
+
+		void Set(std::shared_ptr<SceneEngine::IScene> scene) { _scene = std::move(scene); }
+
+        MouseOverTrackingListener(
+            std::shared_ptr<VisMouseOver> mouseOver,
+            std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
+            std::shared_ptr<VisCameraSettings> camera)
+        : _mouseOver(std::move(mouseOver))
+        , _drawingApparatus(std::move(drawingApparatus))
+        , _camera(std::move(camera))
+        {}
+        ~MouseOverTrackingListener() {}
+
+    protected:
+        std::shared_ptr<VisMouseOver> _mouseOver;
+        std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
+        std::shared_ptr<VisCameraSettings> _camera;
+        
+		std::shared_ptr<SceneEngine::IScene> _scene;
+		std::chrono::time_point<std::chrono::steady_clock> _timeOfLastCalculate;
+
+		PlatformRig::InputContext _timeoutContext;
+		PlatformRig::Coord2 _timeoutMousePosition;
+		unsigned _timeoutEvent = ~0u;
+    };
+
+	std::shared_ptr<PlatformRig::IInputListener> CreateMouseTrackingInputListener(
+        std::shared_ptr<VisMouseOver> mouseOver,
+        std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
+        std::shared_ptr<VisCameraSettings> camera)
+	{
+		return std::make_shared<MouseOverTrackingListener>(std::move(mouseOver), std::move(drawingApparatus), std::move(camera));
+	}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
 	class StencilRefDelegate : public RenderCore::Techniques::ICustomDrawDelegate
 	{
 	public:
@@ -553,9 +752,11 @@ namespace ToolsRig
         std::shared_ptr<VisMouseOver> _mouseOver;
 		std::shared_ptr<VisCameraSettings> _cameraSettings;
 		std::shared_ptr<VisAnimationState> _animState;
+		std::shared_ptr<MouseOverTrackingListener> _inputListener;
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
+		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
 
 		std::shared_ptr<SceneEngine::IScene> _scene;
 		bool _pendingAnimStateBind = false;
@@ -765,17 +966,29 @@ namespace ToolsRig
 
 			CATCH_ASSETS_END(parserContext)
 		}
+
+		const bool dummyCalculation = false;
+		if constexpr (dummyCalculation) {
+			PlatformRig::InputContext inputContext { {0, 0}, {256, 256} };
+			PlatformRig::Coord2 mousePosition {128, 128};
+			_pimpl->_inputListener->CalculateForMousePosition(inputContext, mousePosition);
+		}
     }
 
 	void VisualisationOverlay::Set(std::shared_ptr<SceneEngine::IScene> scene)
 	{
-		_pimpl->_scene = scene;
+		_pimpl->_scene = std::move(scene);
 		_pimpl->_pendingAnimStateBind = true;
+		if (_pimpl->_inputListener)
+			_pimpl->_inputListener->Set(_pimpl->_scene);
 	}
 
 	void VisualisationOverlay::Set(const std::shared_ptr<VisCameraSettings>& camera)
 	{
 		_pimpl->_cameraSettings = camera;
+		_pimpl->_inputListener = nullptr;
+		_pimpl->_inputListener = std::make_shared<MouseOverTrackingListener>(_pimpl->_mouseOver, _pimpl->_drawingApparatus, _pimpl->_cameraSettings);
+		_pimpl->_inputListener->Set(_pimpl->_scene);
 	}
 
 	void VisualisationOverlay::Set(const VisOverlaySettings& overlaySettings)
@@ -809,6 +1022,11 @@ namespace ToolsRig
 		}
 		
 		return { refreshMode };
+	}
+
+	std::shared_ptr<PlatformRig::IInputListener> VisualisationOverlay::GetInputListener()
+	{
+		return _pimpl->_inputListener;
 	}
 
 	void VisualisationOverlay::OnRenderTargetUpdate(
@@ -851,16 +1069,17 @@ namespace ToolsRig
 
     VisualisationOverlay::VisualisationOverlay(
 		const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
-		const VisOverlaySettings& overlaySettings,
-        std::shared_ptr<VisMouseOver> mouseOver)
+		const VisOverlaySettings& overlaySettings)
     {
 		using namespace RenderCore;
         _pimpl = std::make_unique<Pimpl>();
 		_pimpl->_pipelineAccelerators = immediateDrawingApparatus->_mainDrawingApparatus->_pipelineAccelerators;
 		_pimpl->_immediateDrawables = immediateDrawingApparatus->_immediateDrawables;
 		_pimpl->_fontRenderingManager = immediateDrawingApparatus->_fontRenderingManager;
+		_pimpl->_drawingApparatus = immediateDrawingApparatus->_mainDrawingApparatus;
         _pimpl->_settings = overlaySettings;
-        _pimpl->_mouseOver = std::move(mouseOver);
+
+        _pimpl->_mouseOver = std::make_shared<VisMouseOver>();
 
 		_pimpl->_visWireframeDelegate =
 			RenderCore::Techniques::CreateTechniqueDelegateLegacy(
@@ -880,228 +1099,6 @@ namespace ToolsRig
     }
 
     VisualisationOverlay::~VisualisationOverlay() {}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-	static RenderCore::Techniques::TechniqueContext MakeTechniqueContext(RenderCore::Techniques::DrawingApparatus& drawingApparatus)
-    {
-        RenderCore::Techniques::TechniqueContext techniqueContext;
-		techniqueContext._commonResources = drawingApparatus._commonResources;
-		techniqueContext._uniformDelegateManager = drawingApparatus._mainUniformDelegateManager;
-		techniqueContext._drawablesPool = drawingApparatus._drawablesPool;
-		techniqueContext._pipelineAccelerators = drawingApparatus._pipelineAccelerators;
-		techniqueContext._graphicsPipelinePool = drawingApparatus._graphicsPipelinePool;
-        return techniqueContext;
-    }
-
-	static SceneEngine::IntersectionTestResult FirstRayIntersection(
-		RenderCore::IThreadContext& threadContext,
-		RenderCore::Techniques::DrawingApparatus& drawingApparatus,
-        std::pair<Float3, Float3> worldSpaceRay,
-		SceneEngine::IScene& scene)
-	{
-		using namespace RenderCore;
-
-		auto techniqueContext = MakeTechniqueContext(drawingApparatus);
-		Techniques::ParsingContext parserContext { techniqueContext, threadContext };
-		parserContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
-
-		RenderCore::Techniques::DrawablesPacket pkt;
-		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max];
-		pkts[(unsigned)RenderCore::Techniques::Batch::Opaque] = &pkt;
-		SceneEngine::ExecuteSceneContext sceneExecuteContext{MakeIteratorRange(pkts), {}};
-        scene.ExecuteScene(threadContext, sceneExecuteContext);
-		
-		SceneEngine::ModelIntersectionStateContext stateContext {
-            SceneEngine::ModelIntersectionStateContext::RayTest,
-            threadContext, *drawingApparatus._pipelineAccelerators };
-        stateContext.SetRay(worldSpaceRay);
-		stateContext.ExecuteDrawables(parserContext, pkt);
-
-		// Stall if we haven't yet submitted required buffer uploads command lists
-		// (if we bail here, the draw commands are have still be submitted and we will run into ordering problems later)
-		auto requiredBufferUploads = parserContext._requiredBufferUploadsCommandList;
-		if (requiredBufferUploads) {
-			auto& bu=RenderCore::Techniques::Services::GetBufferUploads();
-			bu.StallUntilCompletion(threadContext, parserContext._requiredBufferUploadsCommandList);
-		}
-		
-        auto results = stateContext.GetResults();
-        if (!results.empty()) {
-            const auto& r = results[0];
-
-            SceneEngine::IntersectionTestResult result;
-            result._type = SceneEngine::IntersectionTestResult::Type::Extra;
-            result._worldSpaceCollision = 
-                worldSpaceRay.first + r._intersectionDepth * Normalize(worldSpaceRay.second - worldSpaceRay.first);
-            result._distance = r._intersectionDepth;
-            result._drawCallIndex = r._drawCallIndex;
-            result._materialGuid = r._materialGuid;
-
-			result._modelName = "Model";
-			result._materialName = "Material";
-			auto* visContent = dynamic_cast<IVisContent*>(&scene);
-			if (visContent) {
-				auto details = visContent->GetDrawCallDetails(result._drawCallIndex, result._materialGuid);
-				result._modelName = details._modelName;
-				result._materialName = details._materialName;
-			}
-
-            return result;
-        }
-
-		return {};
-    }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-    class MouseOverTrackingListener : public PlatformRig::IInputListener, public std::enable_shared_from_this<MouseOverTrackingListener>
-    {
-    public:
-        bool OnInputEvent(
-			const PlatformRig::InputContext& context,
-			const PlatformRig::InputSnapshot& evnt)
-        {
-			return false;
-			
-			if (evnt._mouseDelta == PlatformRig::Coord2 { 0, 0 })
-				return false;
-
-			// Limit the update frequency by ensuring that enough time has
-			// passed since the last time we did an update. If there hasn't
-			// been enough time, we should schedule a timeout event to trigger.
-			//
-			// If there has already been a timeout event scheduled, we have 2 options.
-			// Either we reschedule it, or we just allow the previous timeout to 
-			// finish as normal.
-			//			
-			// If we rescheduled the event, it would mean that fast movement of the 
-			// mouse would disable all update events, and we would only get new information
-			// after the mouse has come to rest for the timeout period.
-			//
-			// The preferred option may depend on the particular use case.
-			auto time = std::chrono::steady_clock::now();
-			const auto timePeriod = std::chrono::milliseconds(200u);
-			_timeoutContext = context;
-			_timeoutMousePosition = evnt._mousePosition;
-			if ((time - _timeOfLastCalculate) < timePeriod) {
-				auto* osRunLoop = PlatformRig::GetOSRunLoop();
-				if (_timeoutEvent == ~0u && osRunLoop) {
-					std::weak_ptr<MouseOverTrackingListener> weakThis = weak_from_this();
-					_timeoutEvent = osRunLoop->ScheduleTimeoutEvent(
-						time + timePeriod,
-						[weakThis]() {
-							auto l = weakThis.lock();
-							if (l) {
-								l->_timeOfLastCalculate = std::chrono::steady_clock::now();
-								l->CalculateForMousePosition(
-									l->_timeoutContext,
-									l->_timeoutMousePosition);
-								l->_timeoutEvent = ~0u;								
-							}
-						});
-				}
-			} else {
-				auto* osRunLoop = PlatformRig::GetOSRunLoop();
-				if (_timeoutEvent != ~0u && osRunLoop) {
-					osRunLoop->RemoveEvent(_timeoutEvent);
-					_timeoutEvent = ~0u;
-				}
-
-				CalculateForMousePosition(context, evnt._mousePosition);
-				_timeOfLastCalculate = time;
-			}
-
-			return false;
-		}
-
-		void CalculateForMousePosition(
-			const PlatformRig::InputContext& context,
-			PlatformRig::Coord2 mousePosition)
-		{
-            auto worldSpaceRay = SceneEngine::IntersectionTestContext::CalculateWorldSpaceRay(
-				AsCameraDesc(*_camera), mousePosition, context._viewMins, context._viewMaxs);
-
-            if (!_scene) return;
-
-			auto intr = FirstRayIntersection(*RenderCore::Techniques::GetThreadContext(), *_drawingApparatus, worldSpaceRay, *_scene);
-			if (intr._type != 0) {
-				if (        intr._drawCallIndex != _mouseOver->_drawCallIndex
-						||  intr._materialGuid != _mouseOver->_materialGuid
-						||  !_mouseOver->_hasMouseOver) {
-
-					_mouseOver->_hasMouseOver = true;
-					_mouseOver->_drawCallIndex = intr._drawCallIndex;
-					_mouseOver->_materialGuid = intr._materialGuid;
-					_mouseOver->_changeEvent.Invoke();
-				}
-			} else {
-				if (_mouseOver->_hasMouseOver) {
-					_mouseOver->_hasMouseOver = false;
-					_mouseOver->_changeEvent.Invoke();
-				}
-			}
-        }
-
-		void Set(std::shared_ptr<SceneEngine::IScene> scene) { _scene = std::move(scene); }
-
-        MouseOverTrackingListener(
-            const std::shared_ptr<VisMouseOver>& mouseOver,
-            const std::shared_ptr<RenderCore::Techniques::DrawingApparatus>& drawingApparatus,
-            const std::shared_ptr<VisCameraSettings>& camera)
-        : _mouseOver(mouseOver)
-        , _drawingApparatus(drawingApparatus)
-        , _camera(camera)
-        {}
-        ~MouseOverTrackingListener() {}
-
-    protected:
-        std::shared_ptr<VisMouseOver> _mouseOver;
-        std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
-        std::shared_ptr<VisCameraSettings> _camera;
-        
-		std::shared_ptr<SceneEngine::IScene> _scene;
-		std::chrono::time_point<std::chrono::steady_clock> _timeOfLastCalculate;
-
-		PlatformRig::InputContext _timeoutContext;
-		PlatformRig::Coord2 _timeoutMousePosition;
-		unsigned _timeoutEvent = ~0u;
-    };
-
-    auto MouseOverTrackingOverlay::GetInputListener() -> std::shared_ptr<PlatformRig::IInputListener>
-    {
-        return std::static_pointer_cast<PlatformRig::IInputListener>(_inputListener);
-    }
-
-    void MouseOverTrackingOverlay::Render(
-        RenderCore::Techniques::ParsingContext& parsingContext) 
-    {
-		const bool dummyCalculation = false;
-		if (dummyCalculation) {
-			PlatformRig::InputContext inputContext { {0, 0}, {256, 256} };
-			PlatformRig::Coord2 mousePosition {128, 128};
-			_inputListener->CalculateForMousePosition(inputContext, mousePosition);
-		}
-    }
-
-	void MouseOverTrackingOverlay::Set(std::shared_ptr<SceneEngine::IScene> scene)
-	{
-		_inputListener->Set(std::move(scene));
-	}
-
-    MouseOverTrackingOverlay::MouseOverTrackingOverlay(
-        const std::shared_ptr<VisMouseOver>& mouseOver,
-        const std::shared_ptr<RenderCore::Techniques::DrawingApparatus>& drawingApparatus,
-        const std::shared_ptr<VisCameraSettings>& camera)
-    {
-        _mouseOver = mouseOver;
-        _inputListener = std::make_shared<MouseOverTrackingListener>(
-            mouseOver,
-            drawingApparatus, 
-            camera);
-    }
-
-    MouseOverTrackingOverlay::~MouseOverTrackingOverlay() {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1127,12 +1124,12 @@ namespace ToolsRig
     void InputLayer::Render(
 		RenderCore::Techniques::ParsingContext&) {}
 
-    InputLayer::InputLayer(std::shared_ptr<PlatformRig::IInputListener> listener) : _listener(listener) {}
+    InputLayer::InputLayer(std::shared_ptr<PlatformRig::IInputListener> listener) : _listener(std::move(listener)) {}
     InputLayer::~InputLayer() {}
 
-	std::shared_ptr<PlatformRig::IOverlaySystem> MakeLayerForInput(const std::shared_ptr<PlatformRig::IInputListener>& listener)
+	std::shared_ptr<PlatformRig::IOverlaySystem> MakeLayerForInput(std::shared_ptr<PlatformRig::IInputListener> listener)
 	{
-		return std::make_shared<InputLayer>(listener);
+		return std::make_shared<InputLayer>(std::move(listener));
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1145,7 +1142,6 @@ namespace ToolsRig
 
         std::shared_ptr<ISimpleSceneOverlay> _sceneOverlay;
         std::shared_ptr<VisualisationOverlay> _visualisationOverlay;
-        std::shared_ptr<MouseOverTrackingOverlay> _mouseTrackingOverlay;
 
         enum class SceneBindType { ModelVisSettings, MaterialVisSettings, Ptr, Marker };
         SceneBindType _sceneBindType = SceneBindType::Ptr;
@@ -1175,7 +1171,6 @@ namespace ToolsRig
 			if (auto* actualized = _sceneMarker->TryActualize()) {
 				if (_sceneOverlay) _sceneOverlay->Set(*actualized);
 				if (_visualisationOverlay) _visualisationOverlay->Set(*actualized);
-				if (_mouseTrackingOverlay) _mouseTrackingOverlay->Set(*actualized);
 				_pendingSceneActualize = false;
 			}
 		}
@@ -1193,7 +1188,6 @@ namespace ToolsRig
 				// scene hot reload
 				if (_sceneOverlay) _sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
 				if (_visualisationOverlay) _visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
-				if (_mouseTrackingOverlay) _mouseTrackingOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
 
 				_sceneMarker = MakeScene(
 					_drawablesPool, _pipelineAcceleratorPool, _deformAcceleratorPool,
@@ -1215,7 +1209,6 @@ namespace ToolsRig
 	{
 		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
 		if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
-		if (_pimpl->_mouseTrackingOverlay) _pimpl->_mouseTrackingOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
 
 		_pimpl->_scene = nullptr;
 		_pimpl->_sceneMarker = nullptr;
@@ -1240,7 +1233,6 @@ namespace ToolsRig
 
 		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(_pimpl->_scene);
 		if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(_pimpl->_scene);
-		if (_pimpl->_mouseTrackingOverlay) _pimpl->_mouseTrackingOverlay->Set(_pimpl->_scene);
 	}
 
 	void VisOverlayController::SetScene(std::shared_ptr<SceneEngine::IScene> scene)
@@ -1252,7 +1244,6 @@ namespace ToolsRig
 
 		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(_pimpl->_scene);
 		if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(_pimpl->_scene);
-		if (_pimpl->_mouseTrackingOverlay) _pimpl->_mouseTrackingOverlay->Set(_pimpl->_scene);
 	}
 
 	void VisOverlayController::SetScene(Assets::PtrToMarkerPtr<SceneEngine::IScene> marker)
@@ -1266,12 +1257,10 @@ namespace ToolsRig
 		if (actual) {
 			if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(*actual);
 			if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(*actual);
-			if (_pimpl->_mouseTrackingOverlay) _pimpl->_mouseTrackingOverlay->Set(*actual);
 			_pimpl->_pendingSceneActualize = false;
 		} else {
 			if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
 			if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
-			if (_pimpl->_mouseTrackingOverlay) _pimpl->_mouseTrackingOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
 			_pimpl->_pendingSceneActualize = true;
 		}
 	}
@@ -1365,26 +1354,6 @@ namespace ToolsRig
 				_pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
 		} else
 			_pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
-	}
-
-	void VisOverlayController::AttachMouseTrackingOverlay(std::shared_ptr<MouseOverTrackingOverlay> mouseTrackingOverlay)
-	{
-		if (_pimpl->_mouseTrackingOverlay && _pimpl->_mouseTrackingOverlay != mouseTrackingOverlay) {
-			_pimpl->_mouseTrackingOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
-		}
-
-		_pimpl->_mouseTrackingOverlay = std::move(mouseTrackingOverlay);
-
-		// set current scene state
-		if (_pimpl->_scene) {
-			_pimpl->_mouseTrackingOverlay->Set(_pimpl->_scene);
-		} else if (_pimpl->_sceneMarker) {
-			if (auto* actual = _pimpl->_sceneMarker->TryActualize()) {
-				_pimpl->_mouseTrackingOverlay->Set(*actual);
-			} else
-				_pimpl->_mouseTrackingOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
-		} else
-			_pimpl->_mouseTrackingOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
 	}
 
 	SceneEngine::IScene* VisOverlayController::TryGetScene()

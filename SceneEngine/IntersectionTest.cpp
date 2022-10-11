@@ -148,6 +148,7 @@ namespace SceneEngine
 				cellSet, &object, &object+1);
             for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c)
                 intersectionContext.ExecuteDrawables(parsingContext, pkt[c], cameraForLOD);
+            parsingContext.RequireCommandList(sceneExeContext._completionCmdList);
 		}
 
         return stateContext.GetResults();
@@ -220,9 +221,10 @@ namespace SceneEngine
                     for (unsigned c=0; c<count; ++c) {
                         auto guid = trans->GetGuid(c);
 
-                        ModelIntersectionStateContext intersectionContext(
+                        ModelIntersectionStateContext intersectionContext{
                             ModelIntersectionStateContext::RayTest,
-                            threadContext, *context._drawingApparatus->_pipelineAccelerators);
+                            threadContext, *context._drawingApparatus->_pipelineAccelerators,
+                            parsingContext.GetPipelineAcceleratorsVisibility()};
                         intersectionContext.SetRay(worldSpaceRay);
                         auto results = PlacementsIntersection(
                             intersectionContext, parsingContext, intersectionContext, 
@@ -331,9 +333,10 @@ namespace SceneEngine
                         
                         bool isInside = boundaryTest == CullTestResult::Within;
                         if (!isInside) {
-                            ModelIntersectionStateContext intersectionContext(
+                            ModelIntersectionStateContext intersectionContext{
                                 ModelIntersectionStateContext::FrustumTest,
-                                threadContext, *context._drawingApparatus->_pipelineAccelerators);
+                                threadContext, *context._drawingApparatus->_pipelineAccelerators,
+                                parsingContext.GetPipelineAcceleratorsVisibility()};
                             intersectionContext.SetFrustum(worldToProjection);
 
                             auto results = PlacementsIntersection(

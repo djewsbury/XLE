@@ -18,6 +18,7 @@ namespace RenderCore { namespace Techniques
 	class ParsingContext;
     class IPipelineAcceleratorPool;
     class DrawablesPacket;
+    using VisibilityMarkerId = uint32_t;
 }}
 
 namespace SceneEngine
@@ -52,7 +53,8 @@ namespace SceneEngine
         ModelIntersectionStateContext(
             TestType testType,
             RenderCore::IThreadContext& threadContext,
-            RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
+            RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
+            RenderCore::Techniques::VisibilityMarkerId visibilityMarkerId);
         ~ModelIntersectionStateContext();
 
     protected:

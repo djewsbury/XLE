@@ -140,7 +140,7 @@ namespace ToolsRig
         virtual void Set(std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) = 0;
 		virtual void Set(std::shared_ptr<SceneEngine::IScene> scene) = 0;
 
-        virtual std::shared_ptr<VisCameraSettings> GetCamera() = 0;
+        virtual void Set(std::shared_ptr<VisCameraSettings> camera) = 0;
 		virtual void ResetCamera() = 0;
 
         virtual ~ISimpleSceneOverlay() = default;
@@ -164,6 +164,7 @@ namespace ToolsRig
         virtual void Render(
             RenderCore::Techniques::ParsingContext& parserContext) override;
 		virtual OverlayState GetOverlayState() const override;
+        virtual std::shared_ptr<PlatformRig::IInputListener> GetInputListener() override;
 
         virtual void OnRenderTargetUpdate(
             IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
@@ -172,39 +173,20 @@ namespace ToolsRig
 
         VisualisationOverlay(
             const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
-			const VisOverlaySettings& overlaySettings,
-            std::shared_ptr<VisMouseOver> mouseOver);
+			const VisOverlaySettings& overlaySettings);
         ~VisualisationOverlay();
     protected:
         class Pimpl;
         std::unique_ptr<Pimpl> _pimpl;
     };
 
-	class MouseOverTrackingListener;
-
-    class MouseOverTrackingOverlay : public PlatformRig::IOverlaySystem
-    {
-    public:
-        virtual std::shared_ptr<PlatformRig::IInputListener> GetInputListener() override;
-
-        virtual void Render(
-            RenderCore::Techniques::ParsingContext& parserContext) override;
-
-		void Set(std::shared_ptr<SceneEngine::IScene> scene);
-
-		MouseOverTrackingOverlay(
-            const std::shared_ptr<VisMouseOver>& mouseOver,
-            const std::shared_ptr<RenderCore::Techniques::DrawingApparatus>& drawingApparatus,
-            const std::shared_ptr<VisCameraSettings>& camera);
-        ~MouseOverTrackingOverlay();
-    protected:
-        std::shared_ptr<MouseOverTrackingListener> _inputListener;
-        std::shared_ptr<VisCameraSettings> _camera;
-        std::shared_ptr<VisMouseOver> _mouseOver;
-    };
-
 	std::shared_ptr<PlatformRig::IOverlaySystem> MakeLayerForInput(
-		const std::shared_ptr<PlatformRig::IInputListener>& listener);
+		std::shared_ptr<PlatformRig::IInputListener> listener);
+
+    std::shared_ptr<PlatformRig::IInputListener> CreateMouseTrackingInputListener(
+        std::shared_ptr<VisMouseOver> mouseOver,
+        std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
+        std::shared_ptr<VisCameraSettings> camera);
 
     class ModelVisSettings;
     class MaterialVisSettings;
@@ -226,7 +208,6 @@ namespace ToolsRig
 
         void AttachSceneOverlay(std::shared_ptr<ISimpleSceneOverlay>);
         void AttachVisualisationOverlay(std::shared_ptr<VisualisationOverlay>);
-        void AttachMouseTrackingOverlay(std::shared_ptr<MouseOverTrackingOverlay>);
 
         SceneEngine::IScene* TryGetScene();
 

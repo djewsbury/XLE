@@ -23,13 +23,14 @@ namespace Sample
 	{
 		ToolsRig::MountTextEntityDocument("cfg/lighting", "rawos/defaultenv.dat");
 
+		auto camera = std::make_shared<ToolsRig::VisCameraSettings>();
 		auto modelLayer = ToolsRig::CreateSimpleSceneOverlay(
 			globals._immediateDrawingApparatus,
 			std::make_shared<RenderCore::LightingEngine::LightingEngineApparatus>(globals._drawingApparatus),
 			globals._drawingApparatus->_deformAccelerators);
+		modelLayer->Set(camera);
 		AddSystem(modelLayer);
 
-		auto mouseOver = std::make_shared<ToolsRig::VisMouseOver>();
 		ToolsRig::VisOverlaySettings overlaySettings;
 		overlaySettings._colourByMaterial = 2;
 		overlaySettings._drawNormals = true;
@@ -37,25 +38,21 @@ namespace Sample
 
 		auto visOverlay = std::make_shared<ToolsRig::VisualisationOverlay>(
 			globals._immediateDrawingApparatus,
-			overlaySettings, mouseOver);
-		visOverlay->Set(modelLayer->GetCamera());
+			overlaySettings);
+		visOverlay->Set(camera);
 		AddSystem(visOverlay);
 
-		auto trackingOverlay = std::make_shared<ToolsRig::MouseOverTrackingOverlay>(mouseOver, globals._drawingApparatus, modelLayer->GetCamera());
-		AddSystem(trackingOverlay);
-
 		{
-			auto manipulators = std::make_shared<ToolsRig::ManipulatorStack>(modelLayer->GetCamera(), globals._drawingApparatus);
+			auto manipulators = std::make_shared<ToolsRig::ManipulatorStack>(camera, globals._drawingApparatus);
 			manipulators->Register(
 				ToolsRig::ManipulatorStack::CameraManipulator,
-				ToolsRig::CreateCameraManipulator(modelLayer->GetCamera(), ToolsRig::CameraManipulatorMode::Blender_RightButton));
+				ToolsRig::CreateCameraManipulator(camera, ToolsRig::CameraManipulatorMode::Blender_RightButton));
 			AddSystem(ToolsRig::MakeLayerForInput(manipulators));
 		}
 
 		_overlayBinder = std::make_shared<ToolsRig::VisOverlayController>(globals._drawingApparatus->_drawablesPool, globals._drawingApparatus->_pipelineAccelerators, globals._drawingApparatus->_deformAccelerators);
 		_overlayBinder->AttachSceneOverlay(modelLayer);
 		_overlayBinder->AttachVisualisationOverlay(visOverlay);
-		_overlayBinder->AttachMouseTrackingOverlay(trackingOverlay);
 
 		ToolsRig::ModelVisSettings visSettings {};
 		_overlayBinder->SetScene(visSettings);

@@ -66,7 +66,7 @@ namespace SceneEngine
 		}
 		static const uint64_t s_binding;
 	};
-	const uint64_t RayDefinitionUniformDelegate::s_binding = Hash64("RayDefinition");
+	const uint64_t RayDefinitionUniformDelegate::s_binding = Hash64("ShadowProjection");		// we reuse this binding for RayDefinition -- but we have to use this string in order to find it
 
     class ModelIntersectionStateContext::Pimpl
     {
@@ -265,8 +265,15 @@ namespace SceneEngine
     ModelIntersectionStateContext::ModelIntersectionStateContext(
         TestType testType,
         RenderCore::IThreadContext& threadContext,
-		Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+		Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
+		Techniques::VisibilityMarkerId visibilityMarkerId)
     {
+		auto& box = ConsoleRig::FindCachedBox<ModelIntersectionTechniqueBox>(std::ref(pipelineAcceleratorPool));
+		auto sequencerConfig = (testType == TestType::FrustumTest) ? box._frustumTestSequencerCfg : box._rayTestSequencerCfg;
+		auto pipelineLayout = Techniques::TryGetCompiledPipelineLayout(*sequencerConfig, visibilityMarkerId);
+		if (!pipelineLayout)
+			Throw(std::runtime_error("Pipeline layout pending"));	// prefer to throw before we start the query
+
         _pimpl = std::make_unique<Pimpl>();
         _pimpl->_threadContext = &threadContext;
 
@@ -275,18 +282,6 @@ namespace SceneEngine
         _pimpl->_res = &ConsoleRig::FindCachedBox<ModelIntersectionResources>(
             sizeof(ResultEntry), s_maxResultCount);
 
-		    // We're doing the intersection test in the geometry shader. This means
-            // we have to setup a projection transform to avoid removing any potential
-            // intersection results during screen-edge clipping.
-            // Also, if we want to know the triangle pts and barycentric coordinates,
-            // we need to make sure that no clipping occurs.
-            // The easiest way to prevent clipping would be use a projection matrix that
-            // would transform all points into a single point in the center of the view
-            // frustum.
-        // Viewport newViewport(0.f, 0.f, float(255.f), float(255.f), 0.f, 1.f);
-        // metalContext.Bind(MakeIteratorRange(&newViewport, &newViewport+1), {});
-
-		auto& box = ConsoleRig::FindCachedBox<ModelIntersectionTechniqueBox>(std::ref(pipelineAcceleratorPool));
 		_pimpl->_queryId = _pimpl->_res->_streamOutputQueryPool->Begin(metalContext);
 		_pimpl->_rpi = Techniques::RenderPassInstance {
 			threadContext,
@@ -295,14 +290,8 @@ namespace SceneEngine
 			{} };
 
 		VertexBufferView sov { _pimpl->_res->_streamOutputBuffer.get() };
-		_pimpl->_sequencerConfig = (testType == TestType::FrustumTest) ? box._frustumTestSequencerCfg : box._rayTestSequencerCfg;
-
-		const Techniques::VisibilityMarkerId visibilityId = 0;
-		auto pipelineLayout = Techniques::TryGetCompiledPipelineLayout(*_pimpl->_sequencerConfig, visibilityId);
-		if (!pipelineLayout)
-			Throw(std::runtime_error("Pipeline layout pending"));
-
-		_pimpl->_encoder = metalContext.BeginStreamOutputEncoder(pipelineLayout, MakeIteratorRange(&sov, &sov+1));
+		_pimpl->_sequencerConfig = std::move(sequencerConfig);
+		_pimpl->_encoder = metalContext.BeginStreamOutputEncoder(std::move(pipelineLayout), MakeIteratorRange(&sov, &sov+1));
 		_pimpl->_testType = testType;
 		_pimpl->_pipelineAccelerators = &pipelineAcceleratorPool;
     }
@@ -338,6 +327,14 @@ namespace SceneEngine
         Techniques::CameraDesc camera;
         if (cameraForLOD) { camera = *cameraForLOD; }
 
+		    // We're doing the intersection test in the geometry shader. This means
+            // we have to setup a projection transform to avoid removing any potential
+            // intersection results during screen-edge clipping.
+            // Also, if we want to know the triangle pts and barycentric coordinates,
+            // we need to make sure that no clipping occurs.
+            // The easiest way to prevent clipping would be use a projection matrix that
+            // would transform all points into a single point in the center of the view
+            // frustum.
 		auto projDesc = BuildProjectionDesc(camera, UInt2(256, 256));
 		projDesc._cameraToProjection = MakeFloat4x4(
             0.f, 0.f, 0.f, 0.5f,
@@ -361,6 +358,7 @@ namespace SceneEngine
 		} CATCH_END
 		_pimpl->_pipelineAccelerators->UnlockForReading();
 		parsingContext.GetUniformDelegateManager()->RemoveShaderResourceDelegate(*_pimpl->_res->_rayDefinition);
+		parsingContext.GetUniformDelegateManager()->InvalidateUniforms();
 	}
 
 	static const InputElementDesc s_soEles[] = {
