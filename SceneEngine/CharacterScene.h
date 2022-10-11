@@ -37,7 +37,7 @@ namespace SceneEngine
 
 		BuildDrawablesHelper BeginBuildDrawables(ExecuteSceneContext&);
 
-		struct AnimationConfigureHelper;
+		class AnimationConfigureHelper;
 		AnimationConfigureHelper BeginAnimationConfigure();
 
 		virtual void OnFrameBarrier() = 0;

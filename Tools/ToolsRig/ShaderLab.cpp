@@ -22,6 +22,7 @@
 #include "../../SceneEngine/Noise.h"
 #include "../../Formatters/IDynamicFormatter.h"
 #include "../../Assets/AssetsCore.h"
+#include "../../Assets/Marker.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../OSServices/Log.h"
 #include "../../Utility/Streams/FormatterUtils.h"
@@ -98,7 +99,7 @@ namespace ToolsRig
 	}
 	
 	::Assets::PtrToMarkerPtr<ShaderLab::ICompiledOperation> ShaderLab::BuildCompiledTechnique(
-		::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> futureFormatter,
+		std::future<std::shared_ptr<Formatters::IDynamicFormatter>> futureFormatter,
 		::Assets::PtrToMarkerPtr<IVisualizeStep> visualizeStep,
 		::Assets::PtrToMarkerPtr<RenderCore::LightingEngine::ILightScene> futureLightScene,
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachmentsInit,
@@ -118,8 +119,8 @@ namespace ToolsRig
 					auto l = weakThis.lock();
 					if (!l) Throw(std::runtime_error("ShaderLab shutdown before construction finished"));
 
-					futureFormatter->StallWhilePending();
-					formatter = futureFormatter->Actualize();
+					YieldToPool(futureFormatter);
+					formatter = futureFormatter.get();
 
 					std::shared_ptr<RenderCore::LightingEngine::ILightScene> lightScene;
 					if (futureLightScene) {
@@ -218,18 +219,18 @@ namespace ToolsRig
 	}
 
 	::Assets::PtrToMarkerPtr<ShaderLab::IVisualizeStep> ShaderLab::BuildVisualizeStep(
-		::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> futureFormatter)
+		std::future<std::shared_ptr<Formatters::IDynamicFormatter>> futureFormatter)
 	{
 		auto result = std::make_shared<::Assets::MarkerPtr<ShaderLab::IVisualizeStep>>();
 		auto weakThis = weak_from_this();
 		AsyncConstructToPromise(
 			result->AdoptPromise(),
-			[futureFormatter=std::move(futureFormatter), weakThis]() {
+			[futureFormatter=std::move(futureFormatter), weakThis]() mutable {
 				auto l = weakThis.lock();
 				if (!l) Throw(std::runtime_error("ShaderLab shutdown before construction finished"));
 
-				futureFormatter->StallWhilePending();
-				auto formatter = futureFormatter->Actualize();
+				YieldToPool(futureFormatter);
+				auto formatter = futureFormatter.get();
 
 				OperationConstructorContext constructorContext;
 				constructorContext._depVal = ::Assets::GetDepValSys().Make();

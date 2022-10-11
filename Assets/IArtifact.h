@@ -4,6 +4,10 @@
 
 #pragma once
 
+#if defined(__CLR_VER)
+	#error This file cannot be included in CLR builds
+#endif
+
 #include "IAsyncMarker.h"
 #include "ICompileOperation.h"
 #include "AssetsCore.h"

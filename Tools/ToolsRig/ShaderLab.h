@@ -13,6 +13,7 @@ namespace RenderCore { namespace Techniques { struct PreregisteredAttachment; cl
 namespace RenderCore { class FrameBufferProperties; }
 namespace RenderCore { namespace BufferUploads { class IManager; }}
 namespace Formatters { class IDynamicFormatter; }
+namespace std { template<typename T> class future; }
 
 namespace ToolsRig
 {
@@ -43,7 +44,7 @@ namespace ToolsRig
 		};
 
 		::Assets::PtrToMarkerPtr<ICompiledOperation> BuildCompiledTechnique(
-			::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> futureFormatter,
+			std::future<std::shared_ptr<Formatters::IDynamicFormatter>> futureFormatter,
 			::Assets::PtrToMarkerPtr<IVisualizeStep> visualizeStep,
 			::Assets::PtrToMarkerPtr<RenderCore::LightingEngine::ILightScene> lightScene,
 			IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachmentsInit,
@@ -51,7 +52,7 @@ namespace ToolsRig
 			IteratorRange<const RenderCore::Format*> systemAttachmentFormats);
 
 		::Assets::PtrToMarkerPtr<IVisualizeStep> BuildVisualizeStep(
-			::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> futureFormatter);
+			std::future<std::shared_ptr<Formatters::IDynamicFormatter>> futureFormatter);
 
 		struct OperationConstructorContext
 		{

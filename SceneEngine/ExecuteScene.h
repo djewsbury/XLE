@@ -5,7 +5,6 @@
 #pragma once 
 
 #include "IScene.h"
-#include "../Assets/AssetsCore.h"
 #include <memory>
 
 namespace RenderCore { namespace Techniques 
@@ -16,15 +15,19 @@ namespace RenderCore { namespace Techniques
 	class ProjectionDesc;
 	enum class Batch;
 	struct PreparedResourcesVisibility;
+	struct PreregisteredAttachment;
 }}
 
 namespace RenderCore { namespace LightingEngine 
 {
     class CompiledLightingTechnique;
     class LightingTechniqueInstance;
+	class LightingEngineApparatus;
+	class LightSourceOperatorDesc;
+	class ShadowOperatorDesc;
+	class AmbientLightOperatorDesc;
 }}
-namespace RenderCore { class IThreadContext; }
-namespace Assets { class IAsyncMarker; }
+namespace RenderCore { class IThreadContext; class FrameBufferProperties; }
 namespace std { template<typename Type> class future; }
 
 namespace SceneEngine
@@ -46,5 +49,11 @@ namespace SceneEngine
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique,
 		IScene& scene);
 
-	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> StallAndActualize(::Assets::MarkerPtr<RenderCore::LightingEngine::CompiledLightingTechnique>&);
+	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> CreateAndActualizeForwardLightingTechnique(
+		const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& apparatus,
+		IteratorRange<const RenderCore::LightingEngine::LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const RenderCore::LightingEngine::ShadowOperatorDesc*> shadowGenerators,
+		const RenderCore::LightingEngine::AmbientLightOperatorDesc& ambientLightOperator,
+		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregisteredAttachments,
+		const RenderCore::FrameBufferProperties& fbProps);
 }

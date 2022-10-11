@@ -17,7 +17,7 @@
 #include <stdint.h>
 #include <stdexcept>
 
-#if !defined(_M_CEE)	// cannot be included into CLR builds, for reasons known only to Microsoft
+#if !defined(__CLR_VER)	// cannot be included into CLR builds, for reasons known only to Microsoft
 #include "Threading/Mutex.h"
 #endif
 
@@ -450,7 +450,7 @@ namespace Utility
     using SignalDelegateId = unsigned;
     enum class SignalDelegateResult { Continue, Unbind };
 
-#if !defined(_M_CEE)		// (due to mutex dependencies, must be excluded from CLR builds)
+#if !defined(__CLR_VER)		// (due to mutex dependencies, must be excluded from CLR builds)
 
     /// <summary>Bind multiple callbacks to an event</summary>
     ///

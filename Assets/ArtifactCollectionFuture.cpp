@@ -12,6 +12,7 @@
 #include "../Utility/StringUtils.h"
 #include "../Utility/StringFormat.h"
 #include "../Core/Exceptions.h"
+#include <future>
 
 namespace Assets 
 {

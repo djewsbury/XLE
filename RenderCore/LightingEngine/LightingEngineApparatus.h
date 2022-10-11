@@ -9,7 +9,9 @@
 #include "../../Assets/InitializerPack.h"
 #include <memory>
 #include <map>
-#include <future>
+#if !defined(__CLR_VER)
+	#include <future>
+#endif
 
 namespace RenderCore { namespace Techniques 
 {
@@ -25,25 +27,7 @@ namespace Assets { class InitializerPack; }
 
 namespace RenderCore { namespace LightingEngine
 {
-	class SharedTechniqueDelegateBox
-	{
-	public:
-		std::shared_future<std::shared_ptr<Techniques::TechniqueSetFile>> _techniqueSetFile;
-		std::shared_ptr<Techniques::ITechniqueDelegate> _forwardIllumDelegate_DisableDepthWrite;
-		std::shared_ptr<Techniques::ITechniqueDelegate> _depthOnlyDelegate;
-		std::shared_ptr<Techniques::ITechniqueDelegate> _depthMotionDelegate;
-		std::shared_ptr<Techniques::ITechniqueDelegate> _depthMotionNormalDelegate;
-		std::shared_ptr<Techniques::ITechniqueDelegate> _depthMotionNormalRoughnessDelegate;
-		std::shared_ptr<Techniques::ITechniqueDelegate> _deferredIllumDelegate;
-
-		template<typename... Args>
-			std::shared_ptr<Techniques::ITechniqueDelegate> GetShadowGenTechniqueDelegate(Args... args);
-
-		SharedTechniqueDelegateBox(Techniques::DrawingApparatus& drawingApparatus);
-		SharedTechniqueDelegateBox();
-	private:
-		std::map<uint64_t, std::shared_ptr<Techniques::ITechniqueDelegate>> _shadowGenTechniqueDelegates;
-	};
+	class SharedTechniqueDelegateBox;
 
 	class LightingEngineApparatus
 	{
@@ -66,6 +50,27 @@ namespace RenderCore { namespace LightingEngine
 		LightingEngineApparatus& operator=(LightingEngineApparatus&) = delete;
 	};
 
+#if !defined(__CLR_VER)
+	class SharedTechniqueDelegateBox
+	{
+	public:
+		std::shared_future<std::shared_ptr<Techniques::TechniqueSetFile>> _techniqueSetFile;
+		std::shared_ptr<Techniques::ITechniqueDelegate> _forwardIllumDelegate_DisableDepthWrite;
+		std::shared_ptr<Techniques::ITechniqueDelegate> _depthOnlyDelegate;
+		std::shared_ptr<Techniques::ITechniqueDelegate> _depthMotionDelegate;
+		std::shared_ptr<Techniques::ITechniqueDelegate> _depthMotionNormalDelegate;
+		std::shared_ptr<Techniques::ITechniqueDelegate> _depthMotionNormalRoughnessDelegate;
+		std::shared_ptr<Techniques::ITechniqueDelegate> _deferredIllumDelegate;
+
+		template<typename... Args>
+			std::shared_ptr<Techniques::ITechniqueDelegate> GetShadowGenTechniqueDelegate(Args... args);
+
+		SharedTechniqueDelegateBox(Techniques::DrawingApparatus& drawingApparatus);
+		SharedTechniqueDelegateBox();
+	private:
+		std::map<uint64_t, std::shared_ptr<Techniques::ITechniqueDelegate>> _shadowGenTechniqueDelegates;
+	};
+
 	template<typename... Args>
 		std::shared_ptr<Techniques::ITechniqueDelegate> SharedTechniqueDelegateBox::GetShadowGenTechniqueDelegate(Args... args)
 	{
@@ -79,6 +84,7 @@ namespace RenderCore { namespace LightingEngine
 		_shadowGenTechniqueDelegates.insert(std::make_pair(hash, delegate));
 		return delegate;
 	}
+#endif
 
 }}
 

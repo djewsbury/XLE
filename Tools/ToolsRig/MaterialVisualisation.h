@@ -35,30 +35,6 @@ namespace ToolsRig
 		const MaterialVisSettings& visObject, 
 		const std::shared_ptr<RenderCore::Assets::RawMaterial>& material = nullptr);
 
-	class OnChangeCallback
-    {
-    public:
-        virtual void    OnChange() = 0;
-        virtual ~OnChangeCallback() = default;
-    };
-
-	class MessageRelay
-	{
-	public:
-		std::string GetMessages() const;
-
-		unsigned AddCallback(const std::shared_ptr<OnChangeCallback>& callback);
-		void RemoveCallback(unsigned);
-
-		void AddMessage(const std::string& msg);
-
-		MessageRelay();
-		~MessageRelay();
-	private:
-		class Pimpl;
-		std::unique_ptr<Pimpl> _pimpl;
-	};
-
 	using PatchCollectionFuture = ::Assets::PtrToMarkerPtr<RenderCore::Techniques::CompiledShaderPatchCollection>;
 
 #if 0

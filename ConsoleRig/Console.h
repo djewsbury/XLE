@@ -7,7 +7,9 @@
 #pragma once
 
 #include "../Utility/UTFUtils.h"
-#include "../Utility/Threading/Mutex.h"
+#if !defined(__CLR_VER)
+    #include "../Utility/Threading/Mutex.h"
+#endif
 #include <string>
 #include <vector>
 #include <memory>
@@ -19,12 +21,14 @@ namespace ConsoleRig
     class LuaState;
     class ConsoleVariableStorage;
 
-    struct LockedLuaState
-    {
-        std::unique_lock<Threading::Mutex> _lock;
-        lua_State* _luaState;
-        lua_State* GetLuaState() const { return _luaState; }
-    };
+    #if !defined(__CLR_VER)
+        struct LockedLuaState
+        {
+            std::unique_lock<Threading::Mutex> _lock;
+            lua_State* _luaState;
+            lua_State* GetLuaState() const { return _luaState; }
+        };
+    #endif
     
     class Console
     {
@@ -44,7 +48,9 @@ namespace ConsoleRig
         static bool         HasInstance() { return s_instance != nullptr; }
         static void         SetInstance(Console* newInstance);
 
-        LockedLuaState      LockLuaState();
+        #if !defined(__CLR_VER)
+            LockedLuaState      LockLuaState();
+        #endif
         ConsoleVariableStorage& GetCVars();
 
         Console();

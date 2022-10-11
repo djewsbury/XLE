@@ -225,9 +225,6 @@ namespace UnitTests
 		std::vector<RenderCore::LightingEngine::ILightScene::LightSourceId> _lightSourcesId;
 
 		unsigned _lightOperatorId = ~0u, _shadowOperatorId = ~0u;
-
-		const ::Assets::DependencyValidation& GetDependencyValidation() const override { return _depVal; }
-		::Assets::DependencyValidation _depVal;
 	};
 
 	TEST_CASE( "LightingEngine-BackgroundShadowProbeRender", "[rendercore_lighting_engine]" )

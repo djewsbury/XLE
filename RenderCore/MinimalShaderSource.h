@@ -29,6 +29,7 @@ namespace RenderCore
             StringSection<> inputSource, 
             StringSection<> definesTable,
             const ::Assets::DirectorySearchRules& searchRules) = 0;
+		virtual ~ISourceCodePreprocessor();
     };
 
 	class MinimalShaderSource : public IShaderSource

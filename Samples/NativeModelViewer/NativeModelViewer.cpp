@@ -52,7 +52,7 @@ namespace Sample
 			AddSystem(ToolsRig::MakeLayerForInput(manipulators));
 		}
 
-		_overlayBinder = std::make_shared<ToolsRig::VisOverlayController>(globals._drawingApparatus->_drawablesPool, pipelineAccelerators, globals._drawingApparatus->_deformAccelerators);
+		_overlayBinder = std::make_shared<ToolsRig::VisOverlayController>(globals._drawingApparatus->_drawablesPool, globals._drawingApparatus->_pipelineAccelerators, globals._drawingApparatus->_deformAccelerators);
 		_overlayBinder->AttachSceneOverlay(modelLayer);
 		_overlayBinder->AttachVisualisationOverlay(visOverlay);
 		_overlayBinder->AttachMouseTrackingOverlay(trackingOverlay);

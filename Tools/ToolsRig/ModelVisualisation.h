@@ -14,9 +14,6 @@ namespace RenderCore { namespace Techniques { class IDrawablesPool; class IPipel
 
 namespace ToolsRig
 {
-    class VisCameraSettings;
-    class VisEnvSettings;
-
     /// <summary>Settings related to the visualisation of a model</summary>
     /// This is a "model" part of a MVC pattern related to the way a model
     /// is presented in a viewport. Typically some other controls might 

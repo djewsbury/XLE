@@ -24,8 +24,10 @@ namespace RenderCore { namespace Techniques
     class ImmediateDrawingApparatus;
     class ICustomDrawDelegate;
     class DrawingApparatus;
+    class IDrawablesPool;
 }}
 namespace RenderCore { namespace LightingEngine { class LightingEngineApparatus; }}
+namespace RenderCore { namespace Assets { class RawMaterial; } }
 namespace RenderOverlays { class IOverlayContext; struct Rect; }
 namespace OSServices { class OnChangeCallback; }
 namespace SceneEngine { class IScene; class ILightingStateDelegate; class IRenderStep; }
@@ -69,8 +71,6 @@ namespace ToolsRig
 
 	RenderCore::Techniques::CameraDesc AsCameraDesc(const VisCameraSettings& camSettings);
     void ConfigureParsingContext(RenderCore::Techniques::ParsingContext&, const VisCameraSettings&);
-
-    Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate> MakeLightingStateDelegate(StringSection<> cfgSource);
 
 	class VisOverlaySettings
 	{

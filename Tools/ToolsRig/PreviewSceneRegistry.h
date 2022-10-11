@@ -5,7 +5,7 @@
 #pragma once
 
 #include "../EntityInterface/EntityInterface.h"
-#include "../../Assets/Marker.h"
+#include "../../Assets/AssetsCore.h"
 #include "../../Utility/StringUtils.h"
 #include <cstdint>
 #include <memory>

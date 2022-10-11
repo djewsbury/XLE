@@ -293,6 +293,8 @@ namespace ToolsRig
 			return _actualized->_animationScaffold && _animationState && _animationState->_state == VisAnimationState::State::Playing;
 		}
 
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _actualized->GetDependencyValidation(); }
+
 		ModelScene(
 			std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
 			std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
@@ -364,13 +366,15 @@ namespace ToolsRig
 		const ModelVisSettings& settings)
 	{
 		auto rendererFuture = ::Assets::ConstructToMarkerPtr<ModelSceneRendererState>(drawablesPool, pipelineAcceleratorPool, deformAcceleratorPool, settings);
-		auto result = std::make_shared<Assets::MarkerPtr<SceneEngine::IScene>>();
+		// Must use a marker to ModelScene, and then reinterpret it over to the generic type, in order
+		// to propagate dependency validations correctly (since GetDependencyValidation is part of ModelScene, not IScene)
+		auto result = std::make_shared<Assets::MarkerPtr<ModelScene>>();
 		::Assets::WhenAll(rendererFuture).ThenConstructToPromise(
 			result->AdoptPromise(),
 			[pipelineAcceleratorPool, deformAcceleratorPool, settings](auto renderer) {
 				return std::make_shared<ModelScene>(pipelineAcceleratorPool, deformAcceleratorPool, renderer, settings);
 			});
-		return result;
+		return std::reinterpret_pointer_cast<Assets::MarkerPtr<SceneEngine::IScene>>(result);
 	}
 
 	uint64_t ModelVisSettings::GetHash() const

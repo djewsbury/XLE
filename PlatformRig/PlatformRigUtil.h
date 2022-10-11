@@ -35,7 +35,7 @@ namespace PlatformRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if !defined(_M_CEE)
+#if !defined(__CLR_VER)
     /// <summary>Resizes a presentation chain to match a window</summary>
     /// A handler to resize the presentation chain whenever the window
     /// changes size (keeping 1:1 ratio)

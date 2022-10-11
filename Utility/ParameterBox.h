@@ -229,8 +229,7 @@ namespace Utility
     template<typename Type>
         void ParameterBox::SetParameter(StringSection<utf8> name, Type value)
     {
-        const auto insertType = ImpliedTyping::TypeOf<Type>();
-        SetParameter(name, MakeOpaqueIteratorRange(value), insertType);
+        SetParameter(name, MakeOpaqueIteratorRange(value), ImpliedTyping::TypeOf<Type>());
     }
 
     inline void ParameterBox::SetParameter(StringSection<utf8> name, const std::string& stringData) { SetParameter(name, MakeStringSection(stringData)); }

@@ -13,7 +13,6 @@
 #include "../Math/Matrix.h"
 #include <string>
 #include <functional>
-#include <future>
 
 namespace RenderCore { namespace Techniques { class ParsingContext; class DrawablesPacket; class ICustomDrawDelegate; } }
 namespace Utility { class OutputStream; template<typename CharType> class InputStreamFormatter; }
@@ -21,6 +20,7 @@ namespace Assets { class DirectorySearchRules; class IAsyncMarker; }
 namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
 namespace Assets { class OperationContext; }
+namespace std { template<typename T> class future; }
 
 namespace SceneEngine
 {

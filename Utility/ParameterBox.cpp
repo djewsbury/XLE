@@ -87,28 +87,6 @@ namespace Utility
         return PtrAdd(AsPointer(values.begin()), offset);
     }
 
-    void ParameterBox::SetParameter(
-        StringSection<utf8> name, IteratorRange<const void*> value, 
-        const ImpliedTyping::TypeDesc& insertType)
-    {
-        SetParameter(MakeParameterNameHash(name), name, value, insertType);
-    }
-
-    void ParameterBox::SetParameter(ParameterNameHash nameHash, IteratorRange<const void*> data, const TypeDesc& type)
-    {
-        SetParameter(nameHash, {}, data, type);
-    }
-
-    void ParameterBox::SetParameter(
-        ParameterNameHash hash, StringSection<utf8> name, IteratorRange<const void*> value,
-        const ImpliedTyping::TypeDesc& insertType)
-    {
-        SetParameterHint(
-            std::lower_bound(_hashNames.cbegin(), _hashNames.cend(), hash),
-            hash, name,
-            value, insertType, true);
-    }
-
     auto ParameterBox::SetParameterHint(
         SerializableVector<ParameterNameHash>::const_iterator i,
         ParameterNameHash hash, StringSection<utf8> name, IteratorRange<const void*> value,
@@ -220,6 +198,30 @@ namespace Utility
 
         _cachedHash = 0;
         return i;
+    }
+
+    void ParameterBox::SetParameter(
+        ParameterNameHash hash, StringSection<utf8> name, IteratorRange<const void*> value,
+        const ImpliedTyping::TypeDesc& insertType)
+    {
+        assert(value.size() == insertType.GetSize());
+        SetParameterHint(
+            std::lower_bound(_hashNames.cbegin(), _hashNames.cend(), hash),
+            hash, name,
+            value, insertType, true);
+    }
+
+    void ParameterBox::SetParameter(
+        StringSection<utf8> name, IteratorRange<const void*> value, 
+        const ImpliedTyping::TypeDesc& insertType)
+    {
+        assert(value.size() == insertType.GetSize());
+        SetParameter(MakeParameterNameHash(name), name, value, insertType);
+    }
+
+    void ParameterBox::SetParameter(ParameterNameHash nameHash, IteratorRange<const void*> data, const TypeDesc& type)
+    {
+        SetParameter(nameHash, {}, data, type);
     }
 
 	void ParameterBox::RemoveParameter(ParameterName name)

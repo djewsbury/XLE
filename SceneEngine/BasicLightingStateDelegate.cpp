@@ -105,8 +105,6 @@ namespace SceneEngine
         unsigned _operatorId = ~0u;
     };
 
-    static SwirlingPointLights s_swirlingLights;
-
     class BasicLightingStateDelegate : public ILightingStateDelegate
     {
     public:
@@ -125,7 +123,7 @@ namespace SceneEngine
 			std::promise<std::shared_ptr<BasicLightingStateDelegate>>&& promise,
 			StringSection<> envSettingFileName);
 
-		const ::Assets::DependencyValidation& GetDependencyValidation() const override;
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
     protected:
         LightOperatorResolveContext _operatorResolveContext;
@@ -149,6 +147,8 @@ namespace SceneEngine
 
         ::Assets::DependencyValidation _depVal;
 
+        SwirlingPointLights _swirlingLights;
+
         void DeserializeLightSources(Formatters::IDynamicFormatter& formatter);
     };
 
@@ -156,7 +156,7 @@ namespace SceneEngine
         const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc,
         RenderCore::LightingEngine::ILightScene& lightScene)
     {
-        s_swirlingLights.UpdateLights(lightScene);
+        _swirlingLights.UpdateLights(lightScene);
     }
 
     void        BasicLightingStateDelegate::PostRender(RenderCore::LightingEngine::ILightScene& lightScene)
@@ -266,12 +266,12 @@ namespace SceneEngine
                 lightScene, lightId->second, sunSource.second);
         }
 
-        s_swirlingLights.BindScene(lightScene);
+        _swirlingLights.BindScene(lightScene);
     }
 
     void        BasicLightingStateDelegate::UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene)
     {
-        s_swirlingLights.UnbindScene(lightScene);
+        _swirlingLights.UnbindScene(lightScene);
         for (auto lightSource:_lightSourcesInBoundScene)
             lightScene.DestroyLightSource(lightSource);
         _lightSourcesInBoundScene.clear();
@@ -300,7 +300,7 @@ namespace SceneEngine
             _sunSourceHashToShadowOperatorId.emplace_back(c.first, cfg.Register(shadowOperator));
         }
 
-        s_swirlingLights.BindCfg(cfg);
+        _swirlingLights.BindCfg(cfg);
 
         if (!_operatorResolveContext._ambientOperators._objects.empty()) {
             cfg.SetAmbientOperator(_operatorResolveContext._ambientOperators._objects[0].second);
@@ -310,11 +310,6 @@ namespace SceneEngine
         std::sort(_lightOperatorHashToId.begin(), _lightOperatorHashToId.end(), CompareFirst<uint64_t, unsigned>());
         std::sort(_shadowOperatorHashToId.begin(), _shadowOperatorHashToId.end(), CompareFirst<uint64_t, unsigned>());
         std::sort(_sunSourceHashToShadowOperatorId.begin(), _sunSourceHashToShadowOperatorId.end(), CompareFirst<uint64_t, unsigned>());
-    }
-
-    const ::Assets::DependencyValidation& BasicLightingStateDelegate::GetDependencyValidation() const
-    {
-        return _depVal;
     }
 
     void BasicLightingStateDelegate::DeserializeLightSources(Formatters::IDynamicFormatter& formatter)
@@ -383,7 +378,7 @@ namespace SceneEngine
 		StringSection<> envSettingFileName)
 	{
         auto fmttrFuture = ToolsRig::Services::GetEntityMountingTree().BeginFormatter(envSettingFileName);
-        ::Assets::WhenAll(fmttrFuture).ThenConstructToPromise(
+        ::Assets::WhenAll(std::move(fmttrFuture)).ThenConstructToPromise(
             std::move(promise),
             [](auto fmttr) { return std::make_shared<BasicLightingStateDelegate>(*fmttr); });
 	}

@@ -50,7 +50,7 @@ namespace ToolsRig
 		StringSection<> cfgLocation)
 	{
 		auto formatterFuture = ToolsRig::Services::GetEntityMountingTree().BeginFormatter("cfg/sample/Plugins");
-		::Assets::WhenAll(formatterFuture).ThenConstructToPromise(
+		::Assets::WhenAll(std::move(formatterFuture)).ThenConstructToPromise(
 			std::move(promise),
 			[opContext=std::move(opContext)](auto&& promise, const auto& formatter) mutable {
 				PluginConfiguration::ConstructToPromise(std::move(promise), std::move(opContext), *formatter);
@@ -76,18 +76,14 @@ namespace ToolsRig
 					continue;
 				}
 				auto pluginName = keyname.AsString();
-				auto entityType = cfg->GetTypeId("game");
-				auto entity = cfg->CreateEntity(entityType, {});
+				auto entity = cfg->CreateEntity(EntityInterface::MakeStringAndHash("game"), {});
 				if (entity) {
 					RequireBeginElement(formatter);
 					while (formatter.TryKeyedItem(keyname)) {
 						EntityInterface::PropertyInitializer propInit;
-						propInit._prop = cfg->GetPropertyId(entityType, keyname);
-						if (propInit._prop != ~0u) {
-							propInit._data = RequireRawValue(formatter, propInit._type);
-							cfg->SetProperty(entity.value(), MakeIteratorRange(&propInit, &propInit+1));
-						} else
-							SkipValueOrElement(formatter);
+						propInit._prop = EntityInterface::MakeStringAndHash(keyname);
+						propInit._data = RequireRawValue(formatter, propInit._type);
+						cfg->SetProperty(entity.value(), MakeIteratorRange(&propInit, &propInit+1));
 					}
 					RequireEndElement(formatter);
 				} else

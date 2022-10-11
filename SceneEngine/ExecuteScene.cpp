@@ -4,6 +4,7 @@
 
 #include "ExecuteScene.h"
 #include "../RenderCore/LightingEngine/LightingEngine.h"
+#include "../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/RenderPass.h"
@@ -64,9 +65,16 @@ namespace SceneEngine
 		return result;
 	}
 
-	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> StallAndActualize(::Assets::MarkerPtr<RenderCore::LightingEngine::CompiledLightingTechnique>& future)
+	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> CreateAndActualizeForwardLightingTechnique(
+		const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& apparatus,
+		IteratorRange<const RenderCore::LightingEngine::LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const RenderCore::LightingEngine::ShadowOperatorDesc*> shadowGenerators,
+		const RenderCore::LightingEngine::AmbientLightOperatorDesc& ambientLightOperator,
+		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregisteredAttachments,
+		const RenderCore::FrameBufferProperties& fbProps)
 	{
-		future.StallWhilePending();
-		return future.Actualize();
+		auto future = RenderCore::LightingEngine::CreateForwardLightingTechnique(
+			apparatus, resolveOperators, shadowGenerators, ambientLightOperator, preregisteredAttachments, fbProps);
+		return future.get();
 	}
 }

@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "../Assets/AssetsCore.h"		// require for assets exceptions
+#include "../../Assets/AssetsCore.h"		// require for assets exceptions
 #include "../StringUtils.h"
 #include "../PtrUtils.h"
 #include "../IteratorUtils.h"

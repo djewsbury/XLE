@@ -444,7 +444,7 @@ namespace ColladaConversion
             SerializableVector<uint16_t> inputTimeBlock;
             inputTimeBlock.reserve(inputTimeBlockAsFloats.size());
             for (auto t:inputTimeBlockAsFloats)
-                inputTimeBlock.push_back(t*framesPerSecond);
+                inputTimeBlock.push_back(uint16_t(t*framesPerSecond));
 
                 // todo -- we need to find the correct animation curve type
             auto interpolationType = RenderCore::Assets::CurveInterpolationType::Linear;

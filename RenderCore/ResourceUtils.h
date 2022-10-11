@@ -10,7 +10,9 @@
 #include "Format.h"
 #include "StateDesc.h"
 #include "../Utility/MemoryUtils.h"
-#include "../Utility/Threading/Mutex.h"
+#if !defined(__CLR_VER)
+    #include "../Utility/Threading/Mutex.h"
+#endif
 #include <memory>
 #include <iostream>
 
@@ -166,6 +168,7 @@ namespace RenderCore
     class ISampler;
     class IDevice;
 
+#if !defined(__CLR_VER)
     class SamplerPool
     {
     public:
@@ -176,6 +179,7 @@ namespace RenderCore
         std::vector<std::pair<uint64_t, std::shared_ptr<ISampler>>> _samplers;
         IDevice* _device = nullptr;
     };
+#endif
 
     std::ostream& SerializationOperator(std::ostream& strm, const ResourceDesc&);
 }

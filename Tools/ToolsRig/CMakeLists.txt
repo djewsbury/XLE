@@ -25,13 +25,14 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 		ShaderLab.cpp
 		ShaderLab_LightingEngine.cpp
 		SampleUtils.cpp
+		MiscUtils.cpp
 		../EntityInterface/EntityInterface.cpp
 		../EntityInterface/FormatterAdapters.cpp
 		../EntityInterface/RetainedEntities.cpp
 		../EntityInterface/TweakableEntityDocument.cpp
 		../EntityInterface/TweakableWidgets.cpp
 		#../EntityInterface/GameObjects.cpp
-		#../EntityInterface/PlacementEntities.cpp
+		../EntityInterface/PlacementEntities.cpp
 		#../EntityInterface/EnvironmentSettings.cpp
 		)
 	xle_configure_library(ToolsRig-${metal_name})

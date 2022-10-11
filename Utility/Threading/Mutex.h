@@ -6,6 +6,10 @@
 
 #pragma once
 
+#if defined(__CLR_VER)
+    #error This file cannot be included in C++/CLR projects
+#endif
+
 #include "../../Core/Prefix.h"
 #include "../../Core/SelectConfiguration.h"
 #include "ThreadLibrary.h"

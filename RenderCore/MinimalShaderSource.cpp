@@ -314,5 +314,7 @@ namespace RenderCore
 		return result;
 	}
 
+	ISourceCodePreprocessor::~ISourceCodePreprocessor() {}
+
 }
 

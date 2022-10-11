@@ -10,7 +10,6 @@
 #include "../Utility/IteratorUtils.h"
 #include "../Core/Types.h"
 #include <utility>
-#include <future>
 
 namespace RenderCore { namespace Assets
 {
@@ -33,6 +32,7 @@ namespace RenderCore { namespace Techniques
 	class DrawablesPacket;
 }}
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
+namespace std { template<class T> class future; }
 
 namespace SceneEngine
 {

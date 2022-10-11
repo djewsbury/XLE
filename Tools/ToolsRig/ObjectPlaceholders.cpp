@@ -469,7 +469,7 @@ namespace ToolsRig
 		if (Tweakable("DrawMarkers", true)) {
 			auto* visBox = ::Assets::MakeAssetMarker<VisGeoBox>(_drawablesPool, _pipelineAcceleratorPool)->TryActualize();
 			for (const auto& a:_cubeAnnotations) {
-				auto objects = _objects->FindEntitiesOfType(a._typeId);
+				auto objects = _objects->FindEntitiesOfType(a._typeNameHash);
 				for (const auto&o:objects) {
 					if (!o->_properties.GetParameter(Parameters::Visible, true) || !GetShowMarker(*o)) continue;
 					DrawSphereStandIn(_drawablesPool, _pipelineAcceleratorPool, pkts, GetTransform(*o));
@@ -477,7 +477,7 @@ namespace ToolsRig
 			}
 
 			for (const auto& a:_directionalAnnotations) {
-				auto objects = _objects->FindEntitiesOfType(a._typeId);
+				auto objects = _objects->FindEntitiesOfType(a._typeNameHash);
 				for (const auto&o : objects) {
 					if (!o->_properties.GetParameter(Parameters::Visible, true) || !GetShowMarker(*o)) continue;
 
@@ -493,7 +493,7 @@ namespace ToolsRig
 			if (!_areaLightAnnotation.empty()) {
 				if (visBox) {
 					for (auto a = _areaLightAnnotation.cbegin(); a != _areaLightAnnotation.cend(); ++a) {
-						auto objects = _objects->FindEntitiesOfType(a->_typeId);
+						auto objects = _objects->FindEntitiesOfType(a->_typeNameHash);
 						for (const auto&o : objects) {
 							if (!o->_properties.GetParameter(Parameters::Visible, true) || !GetShowMarker(*o)) continue;
 
@@ -519,7 +519,7 @@ namespace ToolsRig
 
 			for (const auto&a:_triMeshAnnotations) {
 				if (visBox) {
-					auto objects = _objects->FindEntitiesOfType(a._typeId);
+					auto objects = _objects->FindEntitiesOfType(a._typeNameHash);
 					for (auto o=objects.cbegin(); o!=objects.cend(); ++o) {
 						DrawTriMeshMarker(*_drawablesPool, MakeIteratorRange(pkts), *visBox, **o, *_objects);
 					}
@@ -528,10 +528,10 @@ namespace ToolsRig
 		}
 	}
 
-    void ObjectPlaceholders::AddAnnotation(EntityInterface::EntityTypeId typeId, const std::string& geoType)
+    void ObjectPlaceholders::AddAnnotation(uint64_t typeNameHash, const std::string& geoType)
     {
         Annotation newAnnotation;
-        newAnnotation._typeId = typeId;
+        newAnnotation._typeNameHash = typeNameHash;
 
         if (XlEqStringI(geoType, "TriMeshMarker")) {
             _triMeshAnnotations.push_back(newAnnotation);
@@ -587,19 +587,19 @@ namespace ToolsRig
 		//		closest to the start of the ray!
 
         for (const auto& a:_placeHolders->_cubeAnnotations) {
-            for (const auto& o: _placeHolders->_objects->FindEntitiesOfType(a._typeId))
+            for (const auto& o: _placeHolders->_objects->FindEntitiesOfType(a._typeNameHash))
                 if (RayVsAABB(worldSpaceRay, AsFloat3x4(GetTransform(*o)), Float3(-1.f, -1.f, -1.f), Float3(1.f, 1.f, 1.f)))
 					return AsResult(worldSpaceRay.first, *o);
         }
 
 		for (const auto& a : _placeHolders->_directionalAnnotations) {
-			for (const auto& o : _placeHolders->_objects->FindEntitiesOfType(a._typeId))
+			for (const auto& o : _placeHolders->_objects->FindEntitiesOfType(a._typeNameHash))
 				if (RayVsAABB(worldSpaceRay, AsFloat3x4(GetTransform(*o)), Float3(-1.f, -1.f, -1.f), Float3(1.f, 1.f, 1.f)))
 					return AsResult(worldSpaceRay.first, *o);
 		}
 
 		for (const auto& a : _placeHolders->_areaLightAnnotation) {
-			for (const auto& o : _placeHolders->_objects->FindEntitiesOfType(a._typeId)) {
+			for (const auto& o : _placeHolders->_objects->FindEntitiesOfType(a._typeNameHash)) {
 				const auto shape = o->_properties.GetParameter(Parameters::Shape, 0);
 				auto trans = GetTransform(*o); 
 				if (shape == 2) {

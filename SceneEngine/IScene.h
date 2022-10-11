@@ -37,6 +37,8 @@ namespace SceneEngine
         ExecuteSceneContext() { _quickMetrics[0] = '\0'; }
     };
 
+#pragma warning(push)
+#pragma warning(disable:4324)          // structure was padded due to alignment specifier
     class PrepareForViewContext
     {
     public:
@@ -44,6 +46,7 @@ namespace SceneEngine
         IteratorRange<const RenderCore::Techniques::ProjectionDesc*> _shadowViews;
         IteratorRange<const RenderCore::Techniques::ProjectionDesc*> _extraViews;
     };
+#pragma warning(pop)
 
     class IScene
     {
@@ -99,7 +102,7 @@ namespace SceneEngine
         virtual std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> BeginPrepareStep(
             RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext) = 0;
 
-        virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
+        // virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
 
 		virtual ~ILightingStateDelegate() = default;
     };

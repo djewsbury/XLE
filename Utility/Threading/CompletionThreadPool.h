@@ -157,7 +157,7 @@ namespace Utility
     
         bool foundAllocation = false;
         for (unsigned p=0; p<_pages.size(); ++p) {
-            auto attemptedAllocation = _pages[p]._heap.Allocate(storedFunction._size);
+            auto attemptedAllocation = _pages[p]._heap.Allocate((unsigned)storedFunction._size);
             if (attemptedAllocation != ~0u) {
                 storedFunction._pageIdx = p;
                 storedFunction._offset = attemptedAllocation;
@@ -168,7 +168,7 @@ namespace Utility
         if (!foundAllocation) {
             _pages.push_back({});
             auto p = _pages.end()-1;
-            auto allocation = p->_heap.Allocate(storedFunction._size);
+            auto allocation = p->_heap.Allocate((unsigned)storedFunction._size);
             assert(allocation != ~0u);
             storedFunction._pageIdx = (unsigned)_pages.size()-1;
             storedFunction._offset = allocation;

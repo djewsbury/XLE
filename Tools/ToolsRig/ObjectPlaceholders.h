@@ -7,7 +7,6 @@
 #pragma once
 
 #include "../EntityInterface/EntityInterface.h"
-#include "../../RenderCore/Metal/Forward.h"
 #include <memory>
 #include <string>
 
@@ -23,7 +22,7 @@ namespace ToolsRig
     public:
 		void BuildDrawables(const SceneEngine::ExecuteSceneContext& executeContext);
 
-        void AddAnnotation(EntityInterface::EntityTypeId typeId, const std::string& geoType);
+        void AddAnnotation(uint64_t typeNameHash, const std::string& geoType);
 
         std::shared_ptr<SceneEngine::IIntersectionScene> CreateIntersectionTester();
 
@@ -35,11 +34,7 @@ namespace ToolsRig
     protected:
         std::shared_ptr<EntityInterface::RetainedEntities> _objects;
 
-        class Annotation
-        {
-        public:
-            EntityInterface::EntityTypeId _typeId;
-        };
+        struct Annotation { uint64_t _typeNameHash; };
         std::vector<Annotation> _cubeAnnotations;
 		std::vector<Annotation> _directionalAnnotations;
         std::vector<Annotation> _triMeshAnnotations;

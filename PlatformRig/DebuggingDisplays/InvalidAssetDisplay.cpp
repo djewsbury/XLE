@@ -68,7 +68,7 @@ namespace PlatformRig { namespace Overlays
 				});
 		}
 
-		~InvalidAssetDisplay() 
+		~InvalidAssetDisplay()
 		{
 			_tracking->UnbindUpdateSignal(_signalId);
 		}

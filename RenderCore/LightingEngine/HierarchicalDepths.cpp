@@ -32,7 +32,10 @@ namespace RenderCore { namespace LightingEngine
 		srvs[0] = _atomicCounterBufferView.get();
 		srvs[1] = iterator._rpi.GetNonFrameBufferAttachmentView(0).get();
 		unsigned mipCount = iterator._rpi.GetNonFrameBufferAttachmentView(1)->GetResource()->GetDesc()._textureDesc._mipCount;
-		for (unsigned c=0; c<13; ++c) {
+		auto& fbProps = iterator._rpi.GetFrameBufferDesc().GetProperties();
+		unsigned expectedMipCount = IntegerLog2(std::max(fbProps._outputWidth, fbProps._outputHeight))+1;
+		assert(mipCount == expectedMipCount);
+		for (unsigned c=0; c<13; ++c) {		// 13 slots in the shader input interface
 			// duplicate the lowest resource view over any extra bindings
 			srvs[2+c] = iterator._rpi.GetNonFrameBufferAttachmentView(1+std::min(c, mipCount-1)).get();
 		}

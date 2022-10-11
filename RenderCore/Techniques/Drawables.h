@@ -9,7 +9,9 @@
 #include "../../Math/Matrix.h"
 #include "../../Utility/VariantUtils.h"
 #include "../../Utility/IteratorUtils.h"
-#include "../../Utility/Threading/Mutex.h"
+#if !defined(__CLR_VER)
+	#include "../../Utility/Threading/Mutex.h"
+#endif
 #include <vector>
 #include <memory>
 #include <string>
@@ -242,6 +244,7 @@ namespace RenderCore { namespace Techniques
 		using BitField = unsigned;
 	}
 
+#if !defined(__CLR_VER)
 	/// <summary>Associate drawable geos with resource source so they can be updated after reposition operations</summary>
 	class RepositionableGeometryConduit : public std::enable_shared_from_this<RepositionableGeometryConduit>
 	{
@@ -267,6 +270,7 @@ namespace RenderCore { namespace Techniques
 		friend class DrawableGeo;
 		void Remove(DrawableGeo& geo);
 	};
+#endif
 
 	namespace Internal
 	{

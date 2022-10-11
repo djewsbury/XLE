@@ -13,12 +13,12 @@
 #include "../Utility/UTFUtils.h"
 #include "../Utility/StringUtils.h"
 #include <assert.h>
-#include <future>
 
 namespace Utility
 {
 	template<typename CharType> class InputStreamFormatter;
 }
+namespace std { template<typename T> class shared_future; }
 
 namespace Assets
 {
