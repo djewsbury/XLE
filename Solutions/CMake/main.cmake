@@ -106,6 +106,7 @@ macro(xle_configure_executable ExeName)
     endif (MSVC)
 
     target_include_directories(${ExeName} PRIVATE ${XLE_DIR})
+    target_compile_definitions(${ExeName} PRIVATE XLE_REGISTER_METAL_VARIANTS)
 
     xle_internal_configure_compiler(${ExeName})
 
