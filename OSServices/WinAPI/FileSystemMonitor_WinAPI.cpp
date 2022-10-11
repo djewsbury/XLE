@@ -31,6 +31,11 @@
 
 namespace OSServices
 {
+	// Since Win32 filesystems aren't case sensitive, when the OS passes us a filename (ie, to reference a changed file)
+	// it may not be using the same case we're expecting
+	// so we have to take that into account when hasing filenames in this system
+	static FilenameRules s_rawos_filenamerules('/', false);
+
 	class MonitorDirectoryConduit : public IConduitProducer_CompletionRoutine
 	{
 	public:
@@ -178,7 +183,7 @@ namespace OSServices
 	{
 		const auto& conduitResult = std::any_cast<const MonitorDirectoryConduit::ConduitResult&>(inputData);
 		for (const auto&f:conduitResult._changedFiles)
-			OnChange(HashFilename(MakeStringSection(f)));
+			OnChange(HashFilename(MakeStringSection(f), s_rawos_filenamerules));
 	}
 
 	void MonitoredDirectory::OnException(const std::exception_ptr& exception)
@@ -249,18 +254,18 @@ namespace OSServices
 			OSServices::GetCurrentDirectory(dimof(cwdBuffer), cwdBuffer);
 			directoryName = cwdBuffer;
 		}
-		auto dirHash = HashFilenameAndPath(directoryName);
+		auto dirHash = HashFilenameAndPath(directoryName, s_rawos_filenamerules);
 
 		ScopedLock(_pimpl->_monitoredDirectoriesLock);
 		auto i = LowerBound(_pimpl->_monitoredDirectories, dirHash);
 		if (i != _pimpl->_monitoredDirectories.cend() && i->first == dirHash) {
-			i->second._monitoredDirectory->AttachCallback(HashFilename(splitter.FileAndExtension()), std::move(callback));
+			i->second._monitoredDirectory->AttachCallback(HashFilename(splitter.FileAndExtension(), s_rawos_filenamerules), std::move(callback));
 			return;
 		}
 
 		Pimpl::DirAndConduit newDir;
 		newDir._monitoredDirectory = std::make_unique<MonitoredDirectory>();
-		newDir._monitoredDirectory->AttachCallback(HashFilename(splitter.FileAndExtension()), std::move(callback));
+		newDir._monitoredDirectory->AttachCallback(HashFilename(splitter.FileAndExtension(), s_rawos_filenamerules), std::move(callback));
 		newDir._conduit = std::make_shared<MonitorDirectoryConduit>(Conversion::Convert<std::u16string>(directoryName));
 		_pimpl->_pollingThread->Connect(newDir._conduit, newDir._monitoredDirectory);
 		_pimpl->_monitoredDirectories.insert(i, std::make_pair(dirHash, std::move(newDir)));
@@ -270,18 +275,18 @@ namespace OSServices
 	{
 		auto splitter = MakeFileNameSplitter(filenameWithPath);
 		auto directoryName = splitter.DriveAndPath();
-		auto dirHash = HashFilenameAndPath(directoryName);
+		auto dirHash = HashFilenameAndPath(directoryName, s_rawos_filenamerules);
 
 		ScopedLock(_pimpl->_monitoredDirectoriesLock);
 		auto i = LowerBound(_pimpl->_monitoredDirectories, dirHash);
 		if (i != _pimpl->_monitoredDirectories.cend() && i->first == dirHash) {
-			i->second._monitoredDirectory->AttachCallback(HashFilename(splitter.FileAndExtension()), std::move(callback));
+			i->second._monitoredDirectory->AttachCallback(HashFilename(splitter.FileAndExtension(), s_rawos_filenamerules), std::move(callback));
 			return;
 		}
 
 		Pimpl::DirAndConduit newDir;
 		newDir._monitoredDirectory = std::make_unique<MonitoredDirectory>();
-		newDir._monitoredDirectory->AttachCallback(HashFilename(splitter.FileAndExtension()), std::move(callback));
+		newDir._monitoredDirectory->AttachCallback(HashFilename(splitter.FileAndExtension(), s_rawos_filenamerules), std::move(callback));
 		newDir._conduit = std::make_shared<MonitorDirectoryConduit>(directoryName.AsString());
 		_pimpl->_pollingThread->Connect(newDir._conduit, newDir._monitoredDirectory);
 		_pimpl->_monitoredDirectories.insert(i, std::make_pair(dirHash, std::move(newDir)));
@@ -291,24 +296,24 @@ namespace OSServices
 	{
 		auto splitter = MakeFileNameSplitter(filenameWithPath);
 		auto directoryName = splitter.DriveAndPath();
-		auto dirHash = HashFilenameAndPath(directoryName);
+		auto dirHash = HashFilenameAndPath(directoryName, s_rawos_filenamerules);
 
 		ScopedLock(_pimpl->_monitoredDirectoriesLock);
 		auto i = LowerBound(_pimpl->_monitoredDirectories, dirHash);
 		if (i != _pimpl->_monitoredDirectories.cend() && i->first == dirHash)
-			i->second._monitoredDirectory->OnChange(HashFilename(splitter.FileAndExtension()));
+			i->second._monitoredDirectory->OnChange(HashFilename(splitter.FileAndExtension(), s_rawos_filenamerules));
 	}
 
 	void    RawFSMonitor::FakeFileChange(StringSection<utf16> filenameWithPath) 
 	{
 		auto splitter = MakeFileNameSplitter(filenameWithPath);
 		auto directoryName = splitter.DriveAndPath();
-		auto dirHash = HashFilenameAndPath(directoryName);
+		auto dirHash = HashFilenameAndPath(directoryName, s_rawos_filenamerules);
 
 		ScopedLock(_pimpl->_monitoredDirectoriesLock);
 		auto i = LowerBound(_pimpl->_monitoredDirectories, dirHash);
 		if (i != _pimpl->_monitoredDirectories.cend() && i->first == dirHash)
-			i->second._monitoredDirectory->OnChange(HashFilename(splitter.FileAndExtension()));
+			i->second._monitoredDirectory->OnChange(HashFilename(splitter.FileAndExtension(), s_rawos_filenamerules));
 	}
 
 	RawFSMonitor::RawFSMonitor(const std::shared_ptr<PollingThread>& pollingThread)
