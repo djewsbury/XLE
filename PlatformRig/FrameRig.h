@@ -10,7 +10,7 @@
 #include <memory>
 
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ParsingContext; class IImmediateDrawables; class SubFrameEvents; class FrameRenderingApparatus; class DrawingApparatus; }}
+namespace RenderCore { namespace Techniques { class ParsingContext; class IImmediateDrawables; class SubFrameEvents; class FrameRenderingApparatus; class DrawingApparatus; class TechniqueContext; }}
 namespace RenderOverlays { class FontRenderingManager; }
 namespace RenderOverlays { namespace DebuggingDisplay { class DebugScreensSystem; class IWidget; }}
 namespace Utility { class HierarchicalCPUProfiler; }
@@ -50,6 +50,7 @@ namespace PlatformRig
         const std::shared_ptr<IOverlaySystem>& GetMainOverlaySystem() { return _mainOverlaySys; }
 		const std::shared_ptr<IOverlaySystem>& GetDebugScreensOverlaySystem() { return _debugScreenOverlaySystem; }
         const std::shared_ptr<RenderCore::Techniques::SubFrameEvents>& GetSubFrameEvents() { return _subFrameEvents; }
+        RenderCore::Techniques::TechniqueContext& GetTechniqueContext();
 
         auto CreateDisplay(std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> debugSystem) -> std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget>;
 

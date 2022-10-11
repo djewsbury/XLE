@@ -101,11 +101,9 @@ namespace Sample
                 [fra = std::weak_ptr<RenderCore::Techniques::FrameRenderingApparatus>{sampleGlobals._frameRenderingApparatus},
                 ps = std::weak_ptr<RenderCore::IPresentationChain>(sampleGlobals._windowApparatus->_presentationChain), 
                 d = std::weak_ptr<RenderCore::IDevice>(sampleGlobals._renderDevice), &frameRig](unsigned, unsigned) {
-                    auto apparatus = fra.lock();
-                    if (apparatus) {
-                        RenderCore::Techniques::ResetFrameBufferPool(*apparatus->_frameBufferPool);
-                        apparatus->_attachmentPool->ResetActualized();
-                    }
+                    RenderCore::Techniques::ResetFrameBufferPool(*frameRig.GetTechniqueContext()._frameBufferPool);
+                    frameRig.GetTechniqueContext()._attachmentPool->ResetActualized();
+
                     auto presChain = ps.lock();
                     auto device = d.lock();
                     if (presChain && device)

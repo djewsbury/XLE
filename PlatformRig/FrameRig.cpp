@@ -386,6 +386,11 @@ namespace PlatformRig
         _debugScreenOverlaySystem = std::move(overlaySystem);
     }
 
+    RenderCore::Techniques::TechniqueContext& FrameRig::GetTechniqueContext()
+    {
+        return _pimpl->_techniqueContext;
+    }
+
     FrameRig::FrameRig(
         RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
         RenderCore::Techniques::DrawingApparatus* drawingApparatus)
@@ -412,7 +417,7 @@ namespace PlatformRig
             techniqueContext._uniformDelegateManager = drawingApparatus->_mainUniformDelegateManager;
             techniqueContext._pipelineAccelerators = drawingApparatus->_pipelineAccelerators;
         }
-        techniqueContext._attachmentPool = frameRenderingApparatus._attachmentPool;
+        techniqueContext._attachmentPool = std::make_shared<RenderCore::Techniques::AttachmentPool>(frameRenderingApparatus._device);
         techniqueContext._frameBufferPool = frameRenderingApparatus._frameBufferPool;
 
         _pimpl->_frameCPUProfiler = frameRenderingApparatus._frameCPUProfiler;

@@ -85,12 +85,7 @@ namespace UnitTests
 
 		virtual RenderCore::Techniques::TechniqueContext CreateTechniqueContext() override
 		{
-			RenderCore::Techniques::TechniqueContext techniqueContext;
-			techniqueContext._commonResources = _drawingApparatus->_commonResources;
-			techniqueContext._uniformDelegateManager = _drawingApparatus->_mainUniformDelegateManager;
-			techniqueContext._attachmentPool = _frameRenderingApparatus->_attachmentPool;
-			techniqueContext._frameBufferPool = _frameRenderingApparatus->_frameBufferPool;
-			return techniqueContext;
+			return _frameRig->GetTechniqueContext();
 		}
 
 		InteractiveTestHelper(EnabledComponents::BitField enabledComponents)

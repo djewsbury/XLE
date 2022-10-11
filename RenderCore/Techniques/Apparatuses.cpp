@@ -231,15 +231,12 @@ namespace RenderCore { namespace Techniques
 
 	FrameRenderingApparatus::FrameRenderingApparatus(std::shared_ptr<IDevice> device)
 	{
-		_attachmentPool = std::make_shared<RenderCore::Techniques::AttachmentPool>(device);
 		_frameBufferPool = RenderCore::Techniques::CreateFrameBufferPool();
 		_frameCPUProfiler = std::make_shared<Utility::HierarchicalCPUProfiler>();
+		_device = std::move(device);
 	}
 
-	FrameRenderingApparatus::~FrameRenderingApparatus()
-	{
-
-	}
+	FrameRenderingApparatus::~FrameRenderingApparatus() {}
 
 	std::shared_ptr<SubFrameEvents> FrameRenderingApparatus::GetSubFrameEvents()
 	{
