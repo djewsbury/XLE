@@ -5,6 +5,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "VisualisationUtils.h"
+#include "MaterialVisualisation.h"
+#include "ModelVisualisation.h"
 #include "../../SceneEngine/RayVsModel.h"
 #include "../../SceneEngine/IntersectionTest.h"
 #include "../../SceneEngine/BasicLightingStateDelegate.h"
@@ -33,6 +35,7 @@
 #include "../../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../../RenderCore/Techniques/Services.h"
 #include "../../RenderCore/Techniques/Drawables.h"
+#include "../../RenderCore/Techniques/SubFrameEvents.h"
 #include "../../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/ResourceDesc.h"
@@ -115,23 +118,16 @@ namespace ToolsRig
         return result;
     }
 
-	Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate> MakeLightingStateDelegate(StringSection<> cfgSource)
-	{
-		return SceneEngine::CreateBasicLightingStateDelegate(cfgSource);
-	}
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class SimpleSceneLayer : public ISimpleSceneLayer
+	class SimpleSceneOverlay : public ISimpleSceneOverlay
     {
     public:
         virtual void Render(
             RenderCore::Techniques::ParsingContext& parserContext) override;
 
-        void Set(Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate> envSettings) override;
-		void Set(Assets::PtrToMarkerPtr<SceneEngine::IScene> scene) override;
-		void Set(RefreshableFuture<SceneEngine::ILightingStateDelegate> envSettings) override;
-		void Set(RefreshableFuture<SceneEngine::IScene> scene) override;
+		void Set(std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) override;
+		void Set(std::shared_ptr<SceneEngine::IScene> scene) override;
 
 		std::shared_ptr<VisCameraSettings> GetCamera() override;
 		void ResetCamera() override;
@@ -142,11 +138,11 @@ namespace ToolsRig
             const RenderCore::FrameBufferProperties& fbProps,
 			IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override;
 
-        SimpleSceneLayer(
+        SimpleSceneOverlay(
             const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
             const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus,
 			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators);
-        ~SimpleSceneLayer();
+        ~SimpleSceneOverlay();
     protected:
 		std::shared_ptr<VisCameraSettings> _camera;
 
@@ -173,10 +169,8 @@ namespace ToolsRig
 		};
 		::Assets::PtrToMarkerPtr<PreparedScene> _preparedSceneFuture;
 
-		::Assets::PtrToMarkerPtr<SceneEngine::IScene> _sceneFuture;
-		::Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate> _envSettingsFuture;
-		RefreshableFuture<SceneEngine::IScene> _refreshableSceneFuture;
-		RefreshableFuture<SceneEngine::ILightingStateDelegate> _refreshableEnvSettingsFuture;
+		std::shared_ptr<SceneEngine::IScene> _scene;
+		std::shared_ptr<SceneEngine::ILightingStateDelegate> _envSettings;
 		void RebuildPreparedScene();
 		
 		unsigned _loadingIndicatorCounter = 0;
@@ -201,7 +195,7 @@ namespace ToolsRig
 		return ::Assets::AssetState::Ready;
 	}
 
-    void SimpleSceneLayer::Render(
+    void SimpleSceneOverlay::Render(
         RenderCore::Techniques::ParsingContext& parserContext)
     {
         using namespace SceneEngine;
@@ -306,7 +300,7 @@ namespace ToolsRig
 		}*/
     }
 
-	void SimpleSceneLayer::OnRenderTargetUpdate(
+	void SimpleSceneOverlay::OnRenderTargetUpdate(
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
 		const RenderCore::FrameBufferProperties& fbProps,
 		IteratorRange<const RenderCore::Format*> systemAttachmentFormats)
@@ -318,15 +312,9 @@ namespace ToolsRig
 		RebuildPreparedScene();
 	}
 
-	void SimpleSceneLayer::RebuildPreparedScene()
+	void SimpleSceneOverlay::RebuildPreparedScene()
 	{
-		if ((!_envSettingsFuture || ::Assets::IsInvalidated(*_envSettingsFuture)) && _refreshableEnvSettingsFuture)
-			_envSettingsFuture = _refreshableEnvSettingsFuture();
-
-		if ((!_sceneFuture || ::Assets::IsInvalidated(*_sceneFuture)) && _refreshableSceneFuture)
-			_sceneFuture = _refreshableSceneFuture();
-
-		if (!_envSettingsFuture || _lightingTechniqueTargets.empty() || !_sceneFuture) {
+		if (!_envSettings || _lightingTechniqueTargets.empty() || !_scene) {
 			_preparedSceneFuture = nullptr;
 			return;
 		}
@@ -343,13 +331,10 @@ namespace ToolsRig
 		//
 		_preparedSceneFuture = std::make_shared<::Assets::MarkerPtr<PreparedScene>>("simple-scene-layer");
 
-		::Assets::WhenAll(_envSettingsFuture).ThenConstructToPromise(
-			_preparedSceneFuture->AdoptPromise(),
-			[	targets = _lightingTechniqueTargets, fbProps = _lightingTechniqueFBProps, lightingApparatus = _lightingApparatus, 
-				sceneFuture = _sceneFuture, pipelineAccelerators = _pipelineAccelerators,
-				sceneIsRefreshable = !!_refreshableSceneFuture, envSettingsIsRefreshable = !!_refreshableEnvSettingsFuture](
-				std::promise<std::shared_ptr<PreparedScene>>&& thatPromise, 
-				std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) {
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[	promise = std::move(_preparedSceneFuture->AdoptPromise()),
+				targets = _lightingTechniqueTargets, fbProps = _lightingTechniqueFBProps, lightingApparatus = _lightingApparatus, 
+				scene = _scene, envSettings = _envSettings, pipelineAccelerators = _pipelineAccelerators]() mutable {
 
 				TRY {
 					SceneEngine::MergedLightingEngineCfg lightingEngineCfg;
@@ -374,26 +359,16 @@ namespace ToolsRig
 							targets, fbProps);
 					}
 
-					::Assets::WhenAll(sceneFuture, std::move(compiledLightingTechniqueFuture)).ThenConstructToPromise(
-						std::move(thatPromise),
-						[pipelineAccelerators, envSettings, sceneIsRefreshable, envSettingsIsRefreshable, sceneDepVal=sceneFuture->GetDependencyValidation()](std::promise<std::shared_ptr<PreparedScene>>&& thatPromise, auto scene, auto compiledLightingTechnique) {
+					::Assets::WhenAll(std::move(compiledLightingTechniqueFuture)).ThenConstructToPromise(
+						std::move(promise),
+						[pipelineAccelerators, envSettings, scene=std::move(scene)](std::promise<std::shared_ptr<PreparedScene>>&& thatPromise, auto compiledLightingTechnique) mutable {
 							
 							TRY {
 								auto preparedScene = std::make_shared<PreparedScene>();
 								preparedScene->_envSettings = envSettings;
 								preparedScene->_compiledLightingTechnique = std::move(compiledLightingTechnique);
 								preparedScene->_scene = std::move(scene);
-
-								if (sceneIsRefreshable || envSettingsIsRefreshable) {
-									preparedScene->_depVal = ::Assets::GetDepValSys().Make();
-									if (envSettingsIsRefreshable)
-										preparedScene->_depVal.RegisterDependency(preparedScene->_envSettings->GetDependencyValidation());
-									if (sceneIsRefreshable)
-										preparedScene->_depVal.RegisterDependency(sceneDepVal);
-									preparedScene->_depVal.RegisterDependency(RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique));
-								} else {
-									preparedScene->_depVal = RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique);
-								}
+								preparedScene->_depVal = RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique);
 
 								auto& lightScene = RenderCore::LightingEngine::GetLightScene(*preparedScene->_compiledLightingTechnique);
 								preparedScene->_envSettings->BindScene(lightScene);
@@ -415,48 +390,30 @@ namespace ToolsRig
 							} CATCH_END
 						});
 				} CATCH(...) {
-					thatPromise.set_exception(std::current_exception());
+					promise.set_exception(std::current_exception());
 				} CATCH_END
 			});
 
 	}
 
-    void SimpleSceneLayer::Set(Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate> envSettings)
+    void SimpleSceneOverlay::Set(std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings)
     {
-		_envSettingsFuture = std::move(envSettings);
-		_refreshableEnvSettingsFuture = nullptr;
+		_envSettings = std::move(envSettings);
 		RebuildPreparedScene();
     }
 
-	void SimpleSceneLayer::Set(Assets::PtrToMarkerPtr<SceneEngine::IScene> scene)
+	void SimpleSceneOverlay::Set(std::shared_ptr<SceneEngine::IScene> scene)
 	{
-		_sceneFuture = std::move(scene);
-		_refreshableSceneFuture = nullptr;
-		_pendingCameraReset = true;
+		_scene = std::move(scene);
 		RebuildPreparedScene();
 	}
 
-	void SimpleSceneLayer::Set(RefreshableFuture<SceneEngine::ILightingStateDelegate> envSettings)
-	{
-		_refreshableEnvSettingsFuture = std::move(envSettings);
-		_envSettingsFuture = nullptr;
-		RebuildPreparedScene();
-	}
-
-	void SimpleSceneLayer::Set(RefreshableFuture<SceneEngine::IScene> scene)
-	{
-		_refreshableSceneFuture = std::move(scene);
-		_sceneFuture = nullptr;
-		_pendingCameraReset = true;
-		RebuildPreparedScene();
-	}
-
-	std::shared_ptr<VisCameraSettings> SimpleSceneLayer::GetCamera()
+	std::shared_ptr<VisCameraSettings> SimpleSceneOverlay::GetCamera()
 	{
 		return _camera;
 	}
 
-	void SimpleSceneLayer::ResetCamera()
+	void SimpleSceneOverlay::ResetCamera()
 	{
 		auto* t = _preparedSceneFuture ? _preparedSceneFuture->TryActualize() : nullptr;
 		if (!t) return;
@@ -468,7 +425,7 @@ namespace ToolsRig
 		}
 	}
 
-	auto SimpleSceneLayer::GetOverlayState() const -> OverlayState
+	auto SimpleSceneOverlay::GetOverlayState() const -> OverlayState
 	{
 		RefreshMode refreshMode = RefreshMode::EventBased;
 
@@ -488,7 +445,7 @@ namespace ToolsRig
 		return { refreshMode };
 	}
 	
-    SimpleSceneLayer::SimpleSceneLayer(
+    SimpleSceneOverlay::SimpleSceneOverlay(
 		const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
 		const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus,
 		const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators)
@@ -501,14 +458,14 @@ namespace ToolsRig
 		_lightingApparatus = lightingEngineApparatus;
     }
 
-    SimpleSceneLayer::~SimpleSceneLayer() {}
+    SimpleSceneOverlay::~SimpleSceneOverlay() {}
 
-	std::shared_ptr<ISimpleSceneLayer> CreateSimpleSceneLayer(
+	std::shared_ptr<ISimpleSceneOverlay> CreateSimpleSceneOverlay(
         const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
         const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus,
 		const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators)
 	{
-		return std::make_shared<SimpleSceneLayer>(immediateDrawingApparatus, lightingEngineApparatus, deformAccelerators);
+		return std::make_shared<SimpleSceneOverlay>(immediateDrawingApparatus, lightingEngineApparatus, deformAccelerators);
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -600,7 +557,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
 
-		::Assets::PtrToMarkerPtr<SceneEngine::IScene> _scene;
+		std::shared_ptr<SceneEngine::IScene> _scene;
 		bool _pendingAnimStateBind = false;
 
 		std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate> _stencilPrimeDelegate;
@@ -687,11 +644,9 @@ namespace ToolsRig
 		}
 
 		if (!_pimpl->_scene || !_pimpl->_cameraSettings) return;
-		auto scene = _pimpl->_scene->TryActualize();
-		if (!scene) return;
 
 		if (_pimpl->_pendingAnimStateBind) {
-			auto* visContext = dynamic_cast<IVisContent*>(scene->get());
+			auto* visContext = dynamic_cast<IVisContent*>(_pimpl->_scene.get());
 			if (visContext && _pimpl->_animState)
 				visContext->BindAnimationState(_pimpl->_animState);
 			_pimpl->_pendingAnimStateBind = false;
@@ -711,7 +666,7 @@ namespace ToolsRig
 			bool drawImmediateDrawables = false;
 			if (_pimpl->_settings._skeletonMode) {
 				CATCH_ASSETS_BEGIN
-					auto* visContent = dynamic_cast<IVisContent*>(scene->get());
+					auto* visContent = dynamic_cast<IVisContent*>(_pimpl->_scene.get());
 					if (visContent) {
 						// awkwardly, we don't call RenderSkeleton during an rpi because it can render glyphs to a font texture
 						RenderOverlays::ImmediateOverlayContext overlays(parserContext.GetThreadContext(), *_pimpl->_immediateDrawables, _pimpl->_fontRenderingManager.get());
@@ -732,7 +687,7 @@ namespace ToolsRig
 						parserContext, *_pimpl->_pipelineAccelerators,
 						*_pimpl->_visWireframeCfg,
 						sceneView, RenderCore::Techniques::Batch::Opaque,
-						**scene);
+						*_pimpl->_scene);
 				}
 
 				if (_pimpl->_settings._drawNormals) {
@@ -740,7 +695,7 @@ namespace ToolsRig
 						parserContext, *_pimpl->_pipelineAccelerators,
 						*_pimpl->_visNormalsCfg,
 						sceneView, RenderCore::Techniques::Batch::Opaque,
-						**scene);
+						*_pimpl->_scene);
 				}
 
 				if (drawImmediateDrawables)
@@ -751,7 +706,7 @@ namespace ToolsRig
 				auto fbFrag = CreateVisJustStencilFrag();
 				Techniques::RenderPassInstance rpi { parserContext, fbFrag };
 
-				auto *visContent = dynamic_cast<IVisContent*>(scene->get());
+				auto *visContent = dynamic_cast<IVisContent*>(_pimpl->_scene.get());
 				std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate> oldDelegate;
 				if (visContent)
 					oldDelegate = visContent->SetCustomDrawDelegate(_pimpl->_stencilPrimeDelegate);
@@ -760,7 +715,7 @@ namespace ToolsRig
 					parserContext, *_pimpl->_pipelineAccelerators,
 					*_pimpl->_primeStencilCfg,
 					sceneView, RenderCore::Techniques::Batch::Opaque,
-					**scene);
+					*_pimpl->_scene);
 				if (visContent)
 					visContent->SetCustomDrawDelegate(oldDelegate);
 			}
@@ -798,7 +753,7 @@ namespace ToolsRig
 				ImmediateOverlayContext overlays(parserContext.GetThreadContext(), *_pimpl->_immediateDrawables, _pimpl->_fontRenderingManager.get());
 				overlays.CaptureState();
 				Rect rect { Coord2{0, 0}, Coord2(viewportDims[0], viewportDims[1]) };
-				RenderTrackingOverlay(overlays, rect, *_pimpl->_mouseOver, **scene);
+				RenderTrackingOverlay(overlays, rect, *_pimpl->_mouseOver, *_pimpl->_scene);
 				if (_pimpl->_settings._drawBasisAxis)
 					RenderOverlays::DrawBasisAxes(overlays.GetImmediateDrawables(), parserContext);
 				if (_pimpl->_settings._drawGrid)
@@ -812,7 +767,7 @@ namespace ToolsRig
 		}
     }
 
-	void VisualisationOverlay::Set(Assets::PtrToMarkerPtr<SceneEngine::IScene> scene)
+	void VisualisationOverlay::Set(std::shared_ptr<SceneEngine::IScene> scene)
 	{
 		_pimpl->_scene = scene;
 		_pimpl->_pendingAnimStateBind = true;
@@ -841,19 +796,16 @@ namespace ToolsRig
 
     auto VisualisationOverlay::GetOverlayState() const -> OverlayState
 	{
-		RefreshMode refreshMode = RefreshMode::EventBased;
-
 		// Need regular updates if the scene future hasn't been fully loaded yet
 		// Or if there's active animation playing in the scene
+		RefreshMode refreshMode = RefreshMode::EventBased;
+		
 		if (_pimpl->_scene) {
-			if (_pimpl->_scene->GetAssetState() == ::Assets::AssetState::Pending) { 	
+			auto* visContext = dynamic_cast<IVisContent*>(_pimpl->_scene.get());
+			if (visContext && visContext->HasActiveAnimation())
 				refreshMode = RefreshMode::RegularAnimation;
-			} else {
-				auto* actual = _pimpl->_scene->TryActualize();
-				auto* visContext = dynamic_cast<IVisContent*>(actual->get());
-				if (visContext && visContext->HasActiveAnimation())
-					refreshMode = RefreshMode::RegularAnimation;
-			}
+		} else {
+			refreshMode = RefreshMode::RegularAnimation;
 		}
 		
 		return { refreshMode };
@@ -1072,10 +1024,7 @@ namespace ToolsRig
 
             if (!_scene) return;
 
-			auto sceneActual = _scene->TryActualize();
-			if (!sceneActual) return;
-
-			auto intr = FirstRayIntersection(*RenderCore::Techniques::GetThreadContext(), *_drawingApparatus, worldSpaceRay, **sceneActual);
+			auto intr = FirstRayIntersection(*RenderCore::Techniques::GetThreadContext(), *_drawingApparatus, worldSpaceRay, *_scene);
 			if (intr._type != 0) {
 				if (        intr._drawCallIndex != _mouseOver->_drawCallIndex
 						||  intr._materialGuid != _mouseOver->_materialGuid
@@ -1094,7 +1043,7 @@ namespace ToolsRig
 			}
         }
 
-		void Set(Assets::PtrToMarkerPtr<SceneEngine::IScene> scene) { _scene = std::move(scene); }
+		void Set(std::shared_ptr<SceneEngine::IScene> scene) { _scene = std::move(scene); }
 
         MouseOverTrackingListener(
             const std::shared_ptr<VisMouseOver>& mouseOver,
@@ -1111,7 +1060,7 @@ namespace ToolsRig
         std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
         std::shared_ptr<VisCameraSettings> _camera;
         
-		Assets::PtrToMarkerPtr<SceneEngine::IScene> _scene;
+		std::shared_ptr<SceneEngine::IScene> _scene;
 		std::chrono::time_point<std::chrono::steady_clock> _timeOfLastCalculate;
 
 		PlatformRig::InputContext _timeoutContext;
@@ -1135,7 +1084,7 @@ namespace ToolsRig
 		}
     }
 
-	void MouseOverTrackingOverlay::Set(Assets::PtrToMarkerPtr<SceneEngine::IScene> scene)
+	void MouseOverTrackingOverlay::Set(std::shared_ptr<SceneEngine::IScene> scene)
 	{
 		_inputListener->Set(std::move(scene));
 	}
@@ -1184,6 +1133,290 @@ namespace ToolsRig
 	std::shared_ptr<PlatformRig::IOverlaySystem> MakeLayerForInput(const std::shared_ptr<PlatformRig::IInputListener>& listener)
 	{
 		return std::make_shared<InputLayer>(listener);
+	}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+	struct VisOverlayController::Pimpl
+	{
+		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> _drawablesPool;
+        std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
+        std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> _deformAcceleratorPool;
+
+        std::shared_ptr<ISimpleSceneOverlay> _sceneOverlay;
+        std::shared_ptr<VisualisationOverlay> _visualisationOverlay;
+        std::shared_ptr<MouseOverTrackingOverlay> _mouseTrackingOverlay;
+
+        enum class SceneBindType { ModelVisSettings, MaterialVisSettings, Ptr, Marker };
+        SceneBindType _sceneBindType = SceneBindType::Ptr;
+        ModelVisSettings _modelVisSettings;
+        MaterialVisSettings _materialVisSettings;
+        std::shared_ptr<SceneEngine::IScene> _scene;
+        Assets::PtrToMarkerPtr<SceneEngine::IScene> _sceneMarker;
+
+		enum LightingStateBindType { Filename, Ptr, Marker };
+		LightingStateBindType _lightingStateBindType = LightingStateBindType::Ptr;
+		std::string _lightingStateFilename;
+		std::shared_ptr<SceneEngine::ILightingStateDelegate> _lightingState;
+        Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate> _lightingStateMarker;
+
+		bool _pendingSceneActualize = false;
+		bool _pendingLightingStateActualize = false;
+		unsigned _lastGlobalDepValChangeIndex = 0;
+
+		unsigned _mainThreadTickFn = ~0u;
+
+		void MainThreadTick();
+	};
+
+	void VisOverlayController::Pimpl::MainThreadTick()
+	{
+		if (_pendingSceneActualize && _sceneMarker) {
+			if (auto* actualized = _sceneMarker->TryActualize()) {
+				if (_sceneOverlay) _sceneOverlay->Set(*actualized);
+				if (_visualisationOverlay) _visualisationOverlay->Set(*actualized);
+				if (_mouseTrackingOverlay) _mouseTrackingOverlay->Set(*actualized);
+				_pendingSceneActualize = false;
+			}
+		}
+		if (_pendingLightingStateActualize && _lightingStateMarker) {
+			if (auto* actualized = _lightingStateMarker->TryActualize()) {
+				if (_sceneOverlay) _sceneOverlay->Set(*actualized);
+				_pendingLightingStateActualize = false;
+			}
+		}
+
+		auto depValChangeIndex = ::Assets::GetDepValSys().GlobalChangeIndex();
+		if (depValChangeIndex != _lastGlobalDepValChangeIndex) {
+			_lastGlobalDepValChangeIndex = depValChangeIndex;
+			if (_sceneBindType == SceneBindType::ModelVisSettings && _sceneMarker && ::Assets::IsInvalidated(*_sceneMarker)) {
+				// scene hot reload
+				if (_sceneOverlay) _sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+				if (_visualisationOverlay) _visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+				if (_mouseTrackingOverlay) _mouseTrackingOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+
+				_sceneMarker = MakeScene(
+					_drawablesPool, _pipelineAcceleratorPool, _deformAcceleratorPool,
+					_modelVisSettings);
+				_pendingSceneActualize = true;
+			}
+
+			if (_lightingStateBindType == LightingStateBindType::Filename && _lightingStateMarker && ::Assets::IsInvalidated(*_lightingStateMarker)) {
+				// lighting state hot reload
+				if (_sceneOverlay) _sceneOverlay->Set(std::shared_ptr<SceneEngine::ILightingStateDelegate>{});
+
+				_lightingStateMarker = SceneEngine::CreateBasicLightingStateDelegate(_lightingStateFilename);
+				_pendingLightingStateActualize = true;
+			}
+		}
+	}
+
+	void VisOverlayController::SetScene(const ModelVisSettings& visSettings)
+	{
+		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+		if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+		if (_pimpl->_mouseTrackingOverlay) _pimpl->_mouseTrackingOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+
+		_pimpl->_scene = nullptr;
+		_pimpl->_sceneMarker = nullptr;
+		_pimpl->_sceneBindType = Pimpl::SceneBindType::ModelVisSettings;
+		_pimpl->_modelVisSettings = visSettings;
+		_pimpl->_sceneMarker = MakeScene(
+			_pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_deformAcceleratorPool,
+			visSettings);
+		_pimpl->_pendingSceneActualize = true;
+	}
+
+	void VisOverlayController::SetScene(const MaterialVisSettings& visSettings, std::shared_ptr<RenderCore::Assets::RawMaterial> material)
+	{
+		_pimpl->_scene = nullptr;
+		_pimpl->_sceneMarker = nullptr;
+		_pimpl->_sceneBindType = Pimpl::SceneBindType::MaterialVisSettings;
+		_pimpl->_materialVisSettings = visSettings;
+		_pimpl->_scene = MakeScene(
+			_pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool,
+			visSettings, material);
+		_pimpl->_pendingSceneActualize = false;
+
+		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(_pimpl->_scene);
+		if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(_pimpl->_scene);
+		if (_pimpl->_mouseTrackingOverlay) _pimpl->_mouseTrackingOverlay->Set(_pimpl->_scene);
+	}
+
+	void VisOverlayController::SetScene(std::shared_ptr<SceneEngine::IScene> scene)
+	{
+		_pimpl->_scene = std::move(scene);
+		_pimpl->_sceneMarker = nullptr;
+		_pimpl->_sceneBindType = Pimpl::SceneBindType::Ptr;
+		_pimpl->_pendingSceneActualize = false;
+
+		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(_pimpl->_scene);
+		if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(_pimpl->_scene);
+		if (_pimpl->_mouseTrackingOverlay) _pimpl->_mouseTrackingOverlay->Set(_pimpl->_scene);
+	}
+
+	void VisOverlayController::SetScene(Assets::PtrToMarkerPtr<SceneEngine::IScene> marker)
+	{
+		assert(marker);
+
+		_pimpl->_scene = nullptr;
+		_pimpl->_sceneMarker = std::move(marker);
+		_pimpl->_sceneBindType = Pimpl::SceneBindType::Marker;
+		auto* actual = _pimpl->_sceneMarker->TryActualize();
+		if (actual) {
+			if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(*actual);
+			if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(*actual);
+			if (_pimpl->_mouseTrackingOverlay) _pimpl->_mouseTrackingOverlay->Set(*actual);
+			_pimpl->_pendingSceneActualize = false;
+		} else {
+			if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+			if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+			if (_pimpl->_mouseTrackingOverlay) _pimpl->_mouseTrackingOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+			_pimpl->_pendingSceneActualize = true;
+		}
+	}
+
+	void VisOverlayController::SetEnvSettings(StringSection<> envSettings)
+	{
+		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::ILightingStateDelegate>{});
+
+		_pimpl->_lightingState = nullptr;
+		_pimpl->_lightingStateMarker = nullptr;
+		_pimpl->_lightingStateBindType = Pimpl::LightingStateBindType::Filename;
+		_pimpl->_lightingStateFilename = envSettings.AsString();
+		_pimpl->_lightingStateMarker = SceneEngine::CreateBasicLightingStateDelegate(envSettings);
+		_pimpl->_pendingLightingStateActualize = true;
+	}
+
+	void VisOverlayController::SetEnvSettings(::Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate> marker)
+	{
+		assert(marker);
+
+		_pimpl->_lightingState = nullptr;
+		_pimpl->_lightingStateMarker = std::move(marker);
+		_pimpl->_lightingStateBindType = Pimpl::LightingStateBindType::Marker;
+
+		if (auto* actualized = _pimpl->_lightingStateMarker->TryActualize()) {
+			if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(*actualized);
+			_pimpl->_pendingLightingStateActualize = false;
+		} else {
+			if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::ILightingStateDelegate>{});
+			_pimpl->_pendingLightingStateActualize = true;
+		}
+	}
+
+	void VisOverlayController::SetEnvSettings(std::shared_ptr<SceneEngine::ILightingStateDelegate> lightingState)
+	{
+		_pimpl->_lightingState = std::move(lightingState);
+		_pimpl->_lightingStateMarker = nullptr;
+		_pimpl->_lightingStateBindType = Pimpl::LightingStateBindType::Ptr;
+		_pimpl->_pendingLightingStateActualize = false;
+
+		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(_pimpl->_lightingState);
+	}
+
+	void VisOverlayController::AttachSceneOverlay(std::shared_ptr<ISimpleSceneOverlay> sceneOverlay)
+	{
+		if (_pimpl->_sceneOverlay && _pimpl->_sceneOverlay != sceneOverlay) {
+			_pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+			_pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::ILightingStateDelegate>{});
+		}
+
+		_pimpl->_sceneOverlay = std::move(sceneOverlay);
+
+		// set current scene state
+		if (_pimpl->_scene) {
+			_pimpl->_sceneOverlay->Set(_pimpl->_scene);
+		} else if (_pimpl->_sceneMarker) {
+			if (auto* actual = _pimpl->_sceneMarker->TryActualize()) {
+				_pimpl->_sceneOverlay->Set(*actual);
+			} else
+				_pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+		} else
+			_pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+
+		// set current lighting state
+		if (_pimpl->_lightingState) {
+			_pimpl->_sceneOverlay->Set(_pimpl->_lightingState);
+		} else if (_pimpl->_lightingStateMarker) {
+			if (auto* actual = _pimpl->_lightingStateMarker->TryActualize()) {
+				_pimpl->_sceneOverlay->Set(*actual);
+			} else
+				_pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::ILightingStateDelegate>{});
+		} else
+			_pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::ILightingStateDelegate>{});
+	}
+
+	void VisOverlayController::AttachVisualisationOverlay(std::shared_ptr<VisualisationOverlay> visualisationOverlay)
+	{
+		if (_pimpl->_visualisationOverlay && _pimpl->_visualisationOverlay != visualisationOverlay) {
+			_pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+		}
+
+		_pimpl->_visualisationOverlay = std::move(visualisationOverlay);
+
+		// set current scene state
+		if (_pimpl->_scene) {
+			_pimpl->_visualisationOverlay->Set(_pimpl->_scene);
+		} else if (_pimpl->_sceneMarker) {
+			if (auto* actual = _pimpl->_sceneMarker->TryActualize()) {
+				_pimpl->_visualisationOverlay->Set(*actual);
+			} else
+				_pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+		} else
+			_pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+	}
+
+	void VisOverlayController::AttachMouseTrackingOverlay(std::shared_ptr<MouseOverTrackingOverlay> mouseTrackingOverlay)
+	{
+		if (_pimpl->_mouseTrackingOverlay && _pimpl->_mouseTrackingOverlay != mouseTrackingOverlay) {
+			_pimpl->_mouseTrackingOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+		}
+
+		_pimpl->_mouseTrackingOverlay = std::move(mouseTrackingOverlay);
+
+		// set current scene state
+		if (_pimpl->_scene) {
+			_pimpl->_mouseTrackingOverlay->Set(_pimpl->_scene);
+		} else if (_pimpl->_sceneMarker) {
+			if (auto* actual = _pimpl->_sceneMarker->TryActualize()) {
+				_pimpl->_mouseTrackingOverlay->Set(*actual);
+			} else
+				_pimpl->_mouseTrackingOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+		} else
+			_pimpl->_mouseTrackingOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+	}
+
+	SceneEngine::IScene* VisOverlayController::TryGetScene()
+	{
+		if (_pimpl->_scene)
+			return _pimpl->_scene.get();
+		if (_pimpl->_sceneMarker) {
+			auto* actual = _pimpl->_sceneMarker->TryActualize();
+			if (actual)
+				return actual->get();
+		}
+		return nullptr;
+	}
+
+	VisOverlayController::VisOverlayController(
+		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
+		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool)
+	{
+		_pimpl = std::make_unique<Pimpl>();
+		_pimpl->_drawablesPool = std::move(drawablesPool);
+		_pimpl->_pipelineAcceleratorPool = std::move(pipelineAcceleratorPool);
+		_pimpl->_deformAcceleratorPool = std::move(deformAcceleratorPool);
+
+		_pimpl->_mainThreadTickFn = RenderCore::Techniques::Services::GetSubFrameEvents()._onFrameBarrier.Bind(
+			[this]() { this->_pimpl->MainThreadTick(); });
+	}
+
+	VisOverlayController::~VisOverlayController()
+	{
+		if (_pimpl->_mainThreadTickFn != ~0u)
+			RenderCore::Techniques::Services::GetSubFrameEvents()._onFrameBarrier.Unbind(_pimpl->_mainThreadTickFn);
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

@@ -134,24 +134,19 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    template<typename AssetType>
-        using RefreshableFuture = std::function<::Assets::PtrToMarkerPtr<AssetType>()>;
-
-    class ISimpleSceneLayer : public PlatformRig::IOverlaySystem
+    class ISimpleSceneOverlay : public PlatformRig::IOverlaySystem
     {
     public:
-        virtual void Set(Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate> envSettings) = 0;
-		virtual void Set(Assets::PtrToMarkerPtr<SceneEngine::IScene> scene) = 0;
-
-        virtual void Set(RefreshableFuture<SceneEngine::ILightingStateDelegate> envSettings) = 0;
-		virtual void Set(RefreshableFuture<SceneEngine::IScene> scene) = 0;
+        virtual void Set(std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) = 0;
+		virtual void Set(std::shared_ptr<SceneEngine::IScene> scene) = 0;
 
         virtual std::shared_ptr<VisCameraSettings> GetCamera() = 0;
 		virtual void ResetCamera() = 0;
-        virtual ~ISimpleSceneLayer() = default;
+
+        virtual ~ISimpleSceneOverlay() = default;
     };
 
-    std::shared_ptr<ISimpleSceneLayer> CreateSimpleSceneLayer(
+    std::shared_ptr<ISimpleSceneOverlay> CreateSimpleSceneOverlay(
         const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
         const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus,
         const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators);
@@ -159,7 +154,7 @@ namespace ToolsRig
 	class VisualisationOverlay : public PlatformRig::IOverlaySystem
     {
     public:
-		void Set(Assets::PtrToMarkerPtr<SceneEngine::IScene> scene);
+		void Set(std::shared_ptr<SceneEngine::IScene> scene);
 		void Set(const std::shared_ptr<VisCameraSettings>&);
 		void Set(const VisOverlaySettings& overlaySettings);
 		void Set(const std::shared_ptr<VisAnimationState>&);
@@ -195,7 +190,7 @@ namespace ToolsRig
         virtual void Render(
             RenderCore::Techniques::ParsingContext& parserContext) override;
 
-		void Set(Assets::PtrToMarkerPtr<SceneEngine::IScene> scene);
+		void Set(std::shared_ptr<SceneEngine::IScene> scene);
 
 		MouseOverTrackingOverlay(
             const std::shared_ptr<VisMouseOver>& mouseOver,
@@ -210,6 +205,40 @@ namespace ToolsRig
 
 	std::shared_ptr<PlatformRig::IOverlaySystem> MakeLayerForInput(
 		const std::shared_ptr<PlatformRig::IInputListener>& listener);
+
+    class ModelVisSettings;
+    class MaterialVisSettings;
+
+    /// <summary>Assigns scene and environmental settings to visualisation overlays</summary>
+    /// This separates the code for managing hot reloading events out of the overlays themselves,
+    /// and allows a set of overlays to be managed all at once
+    class VisOverlayController
+    {
+    public:
+        void SetScene(const ModelVisSettings&);
+        void SetScene(const MaterialVisSettings&, std::shared_ptr<RenderCore::Assets::RawMaterial> = nullptr);
+        void SetScene(std::shared_ptr<SceneEngine::IScene>);
+        void SetScene(Assets::PtrToMarkerPtr<SceneEngine::IScene>);
+
+        void SetEnvSettings(StringSection<>);
+        void SetEnvSettings(::Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate>);
+        void SetEnvSettings(std::shared_ptr<SceneEngine::ILightingStateDelegate>);
+
+        void AttachSceneOverlay(std::shared_ptr<ISimpleSceneOverlay>);
+        void AttachVisualisationOverlay(std::shared_ptr<VisualisationOverlay>);
+        void AttachMouseTrackingOverlay(std::shared_ptr<MouseOverTrackingOverlay>);
+
+        SceneEngine::IScene* TryGetScene();
+
+        VisOverlayController(
+            std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
+		    std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+            std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool);
+        ~VisOverlayController();
+    private:
+        struct Pimpl;
+        std::unique_ptr<Pimpl> _pimpl;
+    };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

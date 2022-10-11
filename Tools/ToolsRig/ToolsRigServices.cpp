@@ -5,6 +5,7 @@
 #include "ToolsRigServices.h"
 #include "PreviewSceneRegistry.h"
 #include "../EntityInterface/EntityInterface.h"
+#include "../EntityInterface/FormatterAdapters.h"
 #include "../../ConsoleRig/AttachablePtr.h"
 
 namespace ToolsRig
@@ -19,6 +20,16 @@ namespace ToolsRig
 	EntityInterface::IEntityMountingTree& Services::GetEntityMountingTree()
 	{
 		return *s_entityMountingTree.lock();
+	}
+
+	EntityInterface::DocumentId MountTextEntityDocument(Utility::StringSection<> mntPoint, Utility::StringSection<> srcFile)
+	{
+		return Services::GetEntityMountingTree().MountDocument(mntPoint, EntityInterface::CreateTextEntityDocument(srcFile));
+	}
+
+    void UnmountEntityDocument(EntityInterface::DocumentId docId)
+	{
+		Services::GetEntityMountingTree().UnmountDocument(docId);
 	}
 }
 

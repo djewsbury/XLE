@@ -8,16 +8,10 @@
 #include "../../Tools/ToolsRig/VisualisationUtils.h"
 #include "../../Tools/ToolsRig/BasicManipulators.h"
 #include "../../Tools/ToolsRig/ToolsRigServices.h"
-#include "../../Tools/EntityInterface/EntityInterface.h"
-#include "../../Tools/EntityInterface/FormatterAdapters.h"
-#include "../../RenderCore/Techniques/PipelineAccelerator.h"
-#include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/LightingEngine/LightingEngineApparatus.h"
-#include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Utility/StringFormat.h"
-#include <iomanip>
 
 namespace Sample
 {
@@ -27,20 +21,12 @@ namespace Sample
 
 	void NativeModelViewerOverlay::OnStartup(const SampleGlobals& globals)
 	{
-		auto pipelineAccelerators = globals._drawingApparatus->_pipelineAccelerators;
-		auto lightingEngineApparatus = std::make_shared<RenderCore::LightingEngine::LightingEngineApparatus>(globals._drawingApparatus);
+		ToolsRig::MountTextEntityDocument("cfg/lighting", "rawos/defaultenv.dat");
 
-		auto modelLayer = ToolsRig::CreateSimpleSceneLayer(
+		auto modelLayer = ToolsRig::CreateSimpleSceneOverlay(
 			globals._immediateDrawingApparatus,
-			lightingEngineApparatus,
+			std::make_shared<RenderCore::LightingEngine::LightingEngineApparatus>(globals._drawingApparatus),
 			globals._drawingApparatus->_deformAccelerators);
-
-		ToolsRig::ModelVisSettings visSettings {};
-		ToolsRig::Services::GetEntityMountingTree().MountDocument("cfg/lighting", EntityInterface::CreateTextEntityDocument("rawos/defaultenv.dat"));
-
-		auto scene = ToolsRig::MakeScene(globals._drawingApparatus->_drawablesPool, pipelineAccelerators, globals._drawingApparatus->_deformAccelerators, visSettings);
-		modelLayer->Set(scene);
-		modelLayer->Set([]() { return ToolsRig::MakeLightingStateDelegate("cfg/lighting"); });
 		AddSystem(modelLayer);
 
 		auto mouseOver = std::make_shared<ToolsRig::VisMouseOver>();
@@ -52,14 +38,10 @@ namespace Sample
 		auto visOverlay = std::make_shared<ToolsRig::VisualisationOverlay>(
 			globals._immediateDrawingApparatus,
 			overlaySettings, mouseOver);
-		visOverlay->Set(scene);
 		visOverlay->Set(modelLayer->GetCamera());
 		AddSystem(visOverlay);
 
-		auto trackingOverlay = std::make_shared<ToolsRig::MouseOverTrackingOverlay>(
-			mouseOver, globals._drawingApparatus,
-			modelLayer->GetCamera());
-		trackingOverlay->Set(scene);
+		auto trackingOverlay = std::make_shared<ToolsRig::MouseOverTrackingOverlay>(mouseOver, globals._drawingApparatus, modelLayer->GetCamera());
 		AddSystem(trackingOverlay);
 
 		{
@@ -69,6 +51,29 @@ namespace Sample
 				ToolsRig::CreateCameraManipulator(modelLayer->GetCamera(), ToolsRig::CameraManipulatorMode::Blender_RightButton));
 			AddSystem(ToolsRig::MakeLayerForInput(manipulators));
 		}
+
+		_overlayBinder = std::make_shared<ToolsRig::VisOverlayController>(globals._drawingApparatus->_drawablesPool, pipelineAccelerators, globals._drawingApparatus->_deformAccelerators);
+		_overlayBinder->AttachSceneOverlay(modelLayer);
+		_overlayBinder->AttachVisualisationOverlay(visOverlay);
+		_overlayBinder->AttachMouseTrackingOverlay(trackingOverlay);
+
+		ToolsRig::ModelVisSettings visSettings {};
+		_overlayBinder->SetScene(visSettings);
+		_overlayBinder->SetEnvSettings("cfg/lighting");
+
+		/*scene->StallWhilePending();
+		TRY {
+			auto actualizedScene = scene->Actualize();
+			auto* visContent = dynamic_cast<ToolsRig::IVisContent*>(actualizedScene.get());
+			if (visContent) {
+				auto animationState = std::make_shared<ToolsRig::VisAnimationState>();
+				animationState->_activeAnimation = "idle";
+				animationState->_state = ToolsRig::VisAnimationState::State::Playing;
+				animationState->_anchorTime = std::chrono::steady_clock::now();
+				visContent->BindAnimationState(animationState);
+			}
+		} CATCH(...) {
+		} CATCH_END*/
 	}
 
 	auto NativeModelViewerOverlay::GetInputListener() -> std::shared_ptr<PlatformRig::IInputListener>

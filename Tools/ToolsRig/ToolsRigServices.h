@@ -4,7 +4,10 @@
 
 #pragma once
 
-namespace EntityInterface { class IEntityMountingTree; }
+#include "../../Utility/StringUtils.h"
+#include <cinttypes>
+
+namespace EntityInterface { class IEntityMountingTree; using DocumentId = uint64_t; }
 
 namespace ToolsRig
 {
@@ -15,5 +18,8 @@ namespace ToolsRig
         static EntityInterface::IEntityMountingTree& GetEntityMountingTree();
         static IPreviewSceneRegistry& GetPreviewSceneRegistry();
     };
+
+    EntityInterface::DocumentId MountTextEntityDocument(StringSection<> mntPoint, StringSection<> srcFile);
+    void UnmountEntityDocument(EntityInterface::DocumentId);
 }
 
