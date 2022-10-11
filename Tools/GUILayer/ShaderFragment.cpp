@@ -91,11 +91,12 @@ namespace GUILayer
 
 		size_t size = 0;
         std::unique_ptr<uint8[]> file;
+		::Assets::FileSnapshot fileSnapshot;
         try
         {
 			Name = System::IO::Path::GetFileNameWithoutExtension(sourceFile);
 			nativeFilename = clix::marshalString<clix::E_UTF8>(sourceFile);
-            file = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(nativeFilename, &size);
+            file = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(nativeFilename, &size, &fileSnapshot);
         } catch (System::IO::IOException^) {
 
                 //      Hit an exception! Most likely, the file just doesn't
@@ -142,7 +143,7 @@ namespace GUILayer
 
         std::shared_ptr<Internal::ShaderFragmentChangeCallback> changeCallback(
             new Internal::ShaderFragmentChangeCallback(this, System::Threading::SynchronizationContext::Current));
-		::Assets::MainFileSystem::TryMonitor(MakeStringSection(clix::marshalString<clix::E_UTF8>(sourceFile)), changeCallback);
+		::Assets::MainFileSystem::TryMonitor(fileSnapshot, MakeStringSection(clix::marshalString<clix::E_UTF8>(sourceFile)), changeCallback);
         _fileChangeCallback = changeCallback;
     }
 

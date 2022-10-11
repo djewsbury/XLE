@@ -22,27 +22,32 @@
     <ProjectGuid>{7626C65E-8DF3-42E0-B9CB-414561C50BC5}</ProjectGuid>
     <RootNamespace>XLEBridgeUtils</RootNamespace>
     <ProjectName>XLEBridgeUtils</ProjectName>
+    <TargetFrameworkVersion>4.0</TargetFrameworkVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
     <CLRSupport>true</CLRSupport>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
     <CLRSupport>true</CLRSupport>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
     <CLRSupport>true</CLRSupport>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
     <CLRSupport>true</CLRSupport>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <Import Project="..\..\..\..\Solutions\Main.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
@@ -57,8 +62,18 @@
   <PropertyGroup />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Link>
-      <AdditionalDependencies>imagehlp.lib;$(SolutionDir)\..\build\Debug\ConsoleRig\ConsoleRig.lib;$(SolutionDir)\..\build\Debug\Assets\Assets.lib;$(SolutionDir)\..\build\Debug\Math\Math.lib;$(SolutionDir)\..\build\Debug\OSServices\OSServices.lib;$(SolutionDir)\..\build\Debug\Utility\Utility.lib;$(SolutionDir)\..\build\Debug\ForeignMisc\ForeignMisc.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>imagehlp.lib;
+        $(SolutionDir)\..\build\msvc-debug\ConsoleRig\ConsoleRig.lib;
+        $(SolutionDir)\..\build\msvc-debug\Assets\Assets.lib;
+        $(SolutionDir)\..\build\msvc-debug\Math\Math.lib;
+        $(SolutionDir)\..\build\msvc-debug\OSServices\OSServices.lib;
+        $(SolutionDir)\..\build\msvc-debug\Utility\Utility.lib;
+        $(SolutionDir)\..\build\msvc-debug\ForeignMisc\ForeignMisc.lib;
+        %(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <ClCompile>
+      <AdditionalOptions>/Zc:twoPhase- %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>

@@ -2,9 +2,9 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "../../Tools/GUILayer/MarshalString.h"
-#include "../../Tools/GUILayer/CLIXAutoPtr.h"
-#include "../../../RenderCore/Assets/ModelScaffold.h"
+#include "../../../Tools/GUILayer/MarshalString.h"
+#include "../../../Tools/GUILayer/CLIXAutoPtr.h"
+#include "../../../Tools/ToolsRig/MiscUtils.h"
 #include "../../../RenderCore/Assets/RawMaterial.h"
 #include "../../../Assets/IFileSystem.h"
 #include "../../../Assets/AssetServices.h"
@@ -183,7 +183,7 @@ namespace XLEBridgeUtils
 			}
 
 			auto desc = fs->TryGetDesc(marker);
-			if (desc._state != ::Assets::FileDesc::State::Normal)
+			if (desc._snapshot._state != ::Assets::FileSnapshot::State::Normal)
 				return LevelEditorCore::ResourceQueryService::GetDesc(input);
 
 			LevelEditorCore::ResourceDesc result;
@@ -191,25 +191,22 @@ namespace XLEBridgeUtils
 			result.NaturalName = Marshal(desc._naturalName);
 			auto naturalNameSplitter = MakeFileNameSplitter(desc._naturalName);
 			result.ShortName = Marshal(naturalNameSplitter.FileAndExtension());
-			result.ModificationTime = DateTime::FromFileTime(desc._modificationTime);
+			result.ModificationTime = DateTime::FromFileTime(desc._snapshot._modificationTime);
 			result.SizeInBytes = desc._size;
 			result.Filesystem = "IFileSystem";
 
 			// figure out what types we can compile this into
 			auto temp = naturalNameSplitter.Extension();
-			auto types = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers().GetTargetCodesForExtension(temp);
+			auto targets = GUILayer::Utils::FindCompilationTargets(clix::marshalString<clix::E_UTF8>(temp));
 			result.Types = 0u;
-			for (auto t:types) {
-				if (t == RenderCore::Assets::ModelScaffold::CompileProcessType) {
-					result.Types |= (uint)LevelEditorCore::ResourceTypeFlags::Model;
-				} else if (t == RenderCore::Assets::AnimationSetScaffold::CompileProcessType) {
-					result.Types |= (uint)LevelEditorCore::ResourceTypeFlags::Animation;
-				} else if (t == RenderCore::Assets::SkeletonScaffold::CompileProcessType) {
-					result.Types |= (uint)LevelEditorCore::ResourceTypeFlags::Skeleton;
-				} else if (t == RenderCore::Assets::RawMatConfigurations::CompileProcessType) {
-					result.Types |= (uint)LevelEditorCore::ResourceTypeFlags::Material;
-				}
-			}
+			if (targets & (uint32_t)GUILayer::CompilationTargetFlag::Model)
+				result.Types |= (uint)LevelEditorCore::ResourceTypeFlags::Model;
+			if (targets & (uint32_t)GUILayer::CompilationTargetFlag::Animation)
+				result.Types |= (uint)LevelEditorCore::ResourceTypeFlags::Animation;
+			if (targets & (uint32_t)GUILayer::CompilationTargetFlag::Skeleton)
+				result.Types |= (uint)LevelEditorCore::ResourceTypeFlags::Skeleton;
+			if (targets & (uint32_t)GUILayer::CompilationTargetFlag::Material)
+				result.Types |= (uint)LevelEditorCore::ResourceTypeFlags::Material;
 			return result;
 		}
 	};

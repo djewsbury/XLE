@@ -161,8 +161,7 @@ namespace GUILayer
         *(Float4*)colorStorage._data.begin() = color;
 
         RenderCore::Techniques::ImmediateDrawableMaterial currentState;
-        currentState._uniformStreamInterface = std::make_shared<RenderCore::UniformsStreamInterface>();
-        currentState._uniformStreamInterface->BindImmediateData(0, Hash64("LocalTransform"));
+        currentState._uniformStreamInterface = _mainUniformsInterface.get();
         currentState._uniforms._immediateData.push_back(
             RenderCore::Techniques::MakeLocalTransformPacket(Transpose(Float4x4(xform)), ExtractTranslation(_parsingContext->GetProjectionDesc()._cameraToWorld)));
         // We're repurposing this flag for depth write disable
@@ -204,8 +203,7 @@ namespace GUILayer
         *(Float4*)colorStorage._data.begin() = color;
 
         RenderCore::Techniques::ImmediateDrawableMaterial currentState;
-        currentState._uniformStreamInterface = std::make_shared<RenderCore::UniformsStreamInterface>();
-        currentState._uniformStreamInterface->BindImmediateData(0, Hash64("LocalTransform"));
+        currentState._uniformStreamInterface = _mainUniformsInterface.get();
         currentState._uniforms._immediateData.push_back(
             RenderCore::Techniques::MakeLocalTransformPacket(Transpose(Float4x4(xform)), ExtractTranslation(_parsingContext->GetProjectionDesc()._cameraToWorld)));
         // We're repurposing this flag for depth write disable
@@ -305,16 +303,17 @@ namespace GUILayer
     SimpleRenderingContext::SimpleRenderingContext(
         RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
         RetainedRenderResources^ savedRes,
-        RenderCore::IThreadContext* threadContext,
         RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
         void* parsingContext)
     : _retainedRes(savedRes)
     , _immediateDrawables(&immediateDrawables), _parsingContext((RenderCore::Techniques::ParsingContext*)parsingContext)
-    , _threadContext(threadContext)
     , _pipelineAccelerators(&pipelineAccelerators)
     {
         _depthWriteEnable = true;
         _depthTestEnable = true;
+
+        _mainUniformsInterface = std::make_shared<RenderCore::UniformsStreamInterface>();
+        _mainUniformsInterface->BindImmediateData(0, Hash64("LocalTransform"));
     }
     SimpleRenderingContext::~SimpleRenderingContext() {}
     SimpleRenderingContext::!SimpleRenderingContext() {}
@@ -329,7 +328,7 @@ namespace GUILayer
             Vector3 centre, float radius)
         {
             ToolsRig::RenderCylinderHighlight(
-                renderingContext->GetThreadContext(), renderingContext->GetParsingContext(), renderingContext->GetPipelineAccelerators(),
+                renderingContext->GetParsingContext(), renderingContext->GetPipelineAccelerators(),
                 AsFloat3(centre), radius);
         }
 
@@ -339,11 +338,10 @@ namespace GUILayer
             PlacementsRendererWrapper^ renderer,
             ObjectSet^ highlight, uint64 materialGuid)
         {
-            auto& threadContext = context->GetThreadContext();
             if (highlight == nullptr) {
 
 				ToolsRig::Placements_RenderHighlight(
-                    threadContext, context->GetParsingContext(), context->GetPipelineAccelerators(),
+                    context->GetParsingContext(), context->GetPipelineAccelerators(),
                     renderer->GetNative(), placements->GetNative().GetCellSet(),
 					nullptr, nullptr,
                     materialGuid);
@@ -352,7 +350,7 @@ namespace GUILayer
                 if (highlight->IsEmpty()) return;
 
                 ToolsRig::Placements_RenderHighlight(
-                    threadContext, context->GetParsingContext(), context->GetPipelineAccelerators(),
+                    context->GetParsingContext(), context->GetPipelineAccelerators(),
                     renderer->GetNative(), placements->GetNative().GetCellSet(),
                     (const SceneEngine::PlacementGUID*)AsPointer(highlight->_nativePlacements->cbegin()),
                     (const SceneEngine::PlacementGUID*)AsPointer(highlight->_nativePlacements->cend()),
@@ -377,21 +375,20 @@ namespace GUILayer
     {
     public:
         virtual void Render(
-            RenderCore::IThreadContext& threadContext,
             RenderCore::Techniques::ParsingContext& parserContext) override
         {
             ToolsRig::ConfigureParsingContext(parserContext, *_visCameraSettings.get());
             
             auto& immediateDrawables = *EngineDevice::GetInstance()->GetNative().GetImmediateDrawingApparatus()->_immediateDrawables;
             auto& pipelineAccelerators = *EngineDevice::GetInstance()->GetNative().GetDrawingApparatus()->_pipelineAccelerators;
-			auto context = gcnew GUILayer::SimpleRenderingContext(immediateDrawables, RetainedResources, &threadContext, pipelineAccelerators, &parserContext);
+			auto context = gcnew GUILayer::SimpleRenderingContext(immediateDrawables, RetainedResources, pipelineAccelerators, &parserContext);
 			try
 			{
                 OnRender(context);
 
 				{
-					auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithDepthStencil(threadContext, parserContext);
-					immediateDrawables.ExecuteDraws(threadContext, parserContext, rpi);
+					auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithDepthStencil(parserContext);
+					immediateDrawables.ExecuteDraws(parserContext, rpi);
 				}
 				OnRenderPostProcess(context);
 			}

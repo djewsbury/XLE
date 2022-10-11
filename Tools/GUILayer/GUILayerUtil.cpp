@@ -7,20 +7,13 @@
 #include "GUILayerUtil.h"
 #include "MarshalString.h"
 #include "ExportedNativeTypes.h"
-#include "../ToolsRig/MaterialVisualisation.h"
 #include "../ToolsRig/PreviewSceneRegistry.h"
 #include "../ToolsRig/ToolsRigServices.h"
-#include "../../SceneEngine/IntersectionTest.h"
-#include "../../RenderCore/Assets/ModelScaffold.h"
-#include "../../RenderCore/Techniques/DrawableDelegates.h"
-#include "../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
+#include "../ToolsRig/MiscUtils.h"
+#include "../ToolsRig/MaterialVisualisation.h"
 #include "../../RenderCore/Techniques/TechniqueDelegates.h"
-#include "../../Assets/AssetServices.h"
-#include "../../Assets/AssetUtils.h"
-#include "../../Assets/CompileAndAsyncManager.h"
 #include "../../ConsoleRig/IProgress.h"
 #include "../../Utility/MemoryUtils.h"
-#include "../../OSServices/FileSystemMonitor.h"
 #include <msclr/auto_gcroot.h>
 
 namespace GUILayer
@@ -50,15 +43,13 @@ namespace GUILayer
 
 	System::Collections::Generic::IEnumerable<Utils::AssetExtension^>^ Utils::GetModelExtensions()
 	{
-		auto exts = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers().GetExtensionsForTargetCode(
-			RenderCore::Assets::ModelScaffold::CompileProcessType);
+		auto exts = ToolsRig::GetModelExtensions();
 		return ToManaged(MakeIteratorRange(exts));
 	}
 
 	System::Collections::Generic::IEnumerable<Utils::AssetExtension^>^ Utils::GetAnimationSetExtensions()
 	{
-		auto exts = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers().GetExtensionsForTargetCode(
-			RenderCore::Assets::AnimationSetScaffold::CompileProcessType);
+		auto exts = ToolsRig::GetAnimationSetExtensions();
 		return ToManaged(MakeIteratorRange(exts));
 	}
 
@@ -68,6 +59,22 @@ namespace GUILayer
 		auto result = gcnew System::Collections::Generic::List<System::String^>();
 		for (const auto&s:previewSceneRegistry.EnumerateScenes())
 			result->Add(clix::marshalString<clix::E_UTF8>(s));
+		return result;
+	}
+
+	uint32_t Utils::FindCompilationTargets(System::String^ extension)
+	{
+		auto nativeString = clix::marshalString<clix::E_UTF8>(extension);
+		auto targets = ToolsRig::FindCompilationTargets(nativeString);
+		uint32_t result = 0u;
+		if (targets & ToolsRig::CompilationTarget::Model)
+			result |= (uint32_t)CompilationTargetFlag::Model;
+		if (targets & ToolsRig::CompilationTarget::Animation)
+			result |= (uint32_t)CompilationTargetFlag::Animation;
+		if (targets & ToolsRig::CompilationTarget::Skeleton)
+			result |= (uint32_t)CompilationTargetFlag::Skeleton;
+		if (targets & ToolsRig::CompilationTarget::Material)
+			result |= (uint32_t)CompilationTargetFlag::Material;
 		return result;
 	}
 

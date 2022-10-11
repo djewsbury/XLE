@@ -15,7 +15,7 @@
 #include "../../PlatformRig/FrameRig.h"
 #include "../../PlatformRig/OverlappedWindow.h"
 #include "../../PlatformRig/OverlaySystem.h"
-#include "../../PlatformRig/InputTranslator.h"
+#include "../../PlatformRig/WinAPI/InputTranslator.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/IDevice.h"
@@ -276,7 +276,8 @@ namespace GUILayer
 	static std::unique_ptr<WindowRig> CreateWindowRig(EngineDevice^ engineDevice, const void* nativeWindowHandle)
     {
         return std::make_unique<WindowRig>(
-            *engineDevice->GetNative().GetRenderDevice(),
+            engineDevice->GetNative().GetDrawingApparatus(),
+            engineDevice->GetNative().GetFrameRenderingApparatus(),
             nativeWindowHandle);
     }
 

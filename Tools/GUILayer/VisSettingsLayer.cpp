@@ -16,7 +16,7 @@
 
 namespace GUILayer
 {
-	static ToolsRig::VisEnvSettings::LightingType AsNative(
+	/*static ToolsRig::VisEnvSettings::LightingType AsNative(
          MaterialVisSettings::LightingType input)
     {
         switch (input) {
@@ -38,7 +38,7 @@ namespace GUILayer
 		for each(auto c in rawMaterials)
 			RenderCore::Assets::MergeIn_Stall(result, patchCollection, *c->GetUnderlying(), searchRules);
 		return result;
-	}
+	}*/
     
     static MaterialVisSettings::GeometryType AsManaged(
         ToolsRig::MaterialVisSettings::GeometryType input)

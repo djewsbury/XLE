@@ -16,11 +16,12 @@
 #include "../ToolsRig/BasicManipulators.h"
 #include "../ToolsRig/PreviewSceneRegistry.h"
 #include "../ToolsRig/ToolsRigServices.h"
-#include "../../PlatformRig/InputTranslator.h"
+#include "../../PlatformRig/WinAPI/InputTranslator.h"
 #include "../../PlatformRig/FrameRig.h"
 #include "../../PlatformRig/OverlaySystem.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderCore/Techniques/Techniques.h"
+#include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Assets/MaterialScaffold.h"
 #include "../../SceneEngine/IScene.h"
 #include "../../Utility/StringFormat.h"
@@ -34,18 +35,21 @@ namespace GUILayer
     {
     public:
         std::shared_ptr<ToolsRig::VisualisationOverlay> _visOverlay;
-		std::shared_ptr<ToolsRig::ISimpleSceneLayer> _modelLayer;
+		std::shared_ptr<ToolsRig::ISimpleSceneOverlay> _modelLayer;
 		std::shared_ptr<PlatformRig::IOverlaySystem> _manipulatorLayer;
 		std::shared_ptr<ToolsRig::MouseOverTrackingOverlay> _trackingLayer;
 		std::shared_ptr<ToolsRig::VisMouseOver> _mouseOver;
 		std::shared_ptr<ToolsRig::VisAnimationState> _animState;
+		std::shared_ptr<ToolsRig::VisOverlayController> _overlayBinder;
 
 		std::shared_ptr<ToolsRig::DeferredCompiledShaderPatchCollection> _patchCollection;
-		std::shared_ptr<SceneEngine::IScene> _scene;
 
 		void ApplyPatchCollection()
 		{
-			auto* patchCollectionScene = dynamic_cast<ToolsRig::IPatchCollectionVisualizationScene*>(_scene.get());
+			auto* scene = _overlayBinder->TryGetScene();
+			if (!scene) return;		// note that this will fail if the scene hasn't completed loading yet
+
+			auto* patchCollectionScene = dynamic_cast<ToolsRig::IPatchCollectionVisualizationScene*>(scene);
 			if (patchCollectionScene)
 				patchCollectionScene->SetPatchCollection(_patchCollection->GetFuture());
 		}
@@ -53,7 +57,7 @@ namespace GUILayer
 
 	VisMouseOver^ VisLayerController::MouseOver::get()
 	{
-		return gcnew VisMouseOver(_pimpl->_mouseOver, _pimpl->_scene);
+		return gcnew VisMouseOver(_pimpl->_mouseOver, nullptr);	// todo -- scene
 	}
 
 	VisAnimationState^ VisLayerController::AnimationState::get()
@@ -63,35 +67,25 @@ namespace GUILayer
 
 	void VisLayerController::SetScene(ModelVisSettings^ settings)
 	{
-		auto pipelineAcceleratorPool = EngineDevice::GetInstance()->GetNative().GetMainPipelineAcceleratorPool();
-		auto nativeSettings = settings->ConvertToNative();
-		_pimpl->_scene = ToolsRig::MakeScene(pipelineAcceleratorPool, *nativeSettings);
-		_pimpl->ApplyPatchCollection();
-		_pimpl->_modelLayer->Set(_pimpl->_scene);
-		_pimpl->_visOverlay->Set(_pimpl->_scene);
-		_pimpl->_trackingLayer->Set(_pimpl->_scene);
+		_pimpl->_overlayBinder->SetScene(*settings->ConvertToNative());
+		// _pimpl->ApplyPatchCollection();
 	}
 
 	void VisLayerController::SetScene(MaterialVisSettings^ settings)
 	{
-		auto pipelineAcceleratorPool = EngineDevice::GetInstance()->GetNative().GetMainPipelineAcceleratorPool();
-		auto nativeSettings = settings->ConvertToNative();
-		_pimpl->_scene = ToolsRig::MakeScene(pipelineAcceleratorPool, *nativeSettings);
-		_pimpl->ApplyPatchCollection();
-		_pimpl->_modelLayer->Set(_pimpl->_scene);
-		_pimpl->_visOverlay->Set(_pimpl->_scene);
-		_pimpl->_trackingLayer->Set(_pimpl->_scene);
+		_pimpl->_overlayBinder->SetScene(*settings->ConvertToNative());
+		// _pimpl->ApplyPatchCollection();
 	}
 
 	void VisLayerController::SetPreviewRegistryScene(System::String^ name)
 	{
 		auto pipelineAcceleratorPool = EngineDevice::GetInstance()->GetNative().GetMainPipelineAcceleratorPool();
+		auto drawablesPool = EngineDevice::GetInstance()->GetNative().GetDrawingApparatus()->_drawablesPool;
+		auto deformAcceleratorPool = EngineDevice::GetInstance()->GetNative().GetDrawingApparatus()->_deformAccelerators;
 		auto nativeName = clix::marshalString<clix::E_UTF8>(name);
-		_pimpl->_scene = ToolsRig::Services::GetPreviewSceneRegistry().CreateScene(MakeStringSection(nativeName), pipelineAcceleratorPool);
-		_pimpl->ApplyPatchCollection();
-		_pimpl->_modelLayer->Set(_pimpl->_scene);
-		_pimpl->_visOverlay->Set(_pimpl->_scene);
-		_pimpl->_trackingLayer->Set(_pimpl->_scene);
+		auto scene = ToolsRig::Services::GetPreviewSceneRegistry().CreateScene(MakeStringSection(nativeName), drawablesPool, pipelineAcceleratorPool, deformAcceleratorPool);
+		_pimpl->_overlayBinder->SetScene(std::move(scene));
+		// _pimpl->ApplyPatchCollection();
 	}
 
 	void VisLayerController::SetOverlaySettings(VisOverlaySettings^ settings)
@@ -155,8 +149,8 @@ namespace GUILayer
 		_pimpl->_mouseOver = std::make_shared<ToolsRig::VisMouseOver>();
 		_pimpl->_animState = std::make_shared<ToolsRig::VisAnimationState>();
 
-		_pimpl->_modelLayer = ToolsRig::CreateSimpleSceneLayer(immediateDrawableApparatus, lightingEngineApparatus, drawingApparatus->_deformAccelerators);
-		_pimpl->_modelLayer->Set(ToolsRig::VisEnvSettings{});
+		_pimpl->_modelLayer = ToolsRig::CreateSimpleSceneOverlay(immediateDrawableApparatus, lightingEngineApparatus, drawingApparatus->_deformAccelerators);
+		// _pimpl->_modelLayer->Set(ToolsRig::VisEnvSettings{});
 
 		_pimpl->_visOverlay = std::make_shared<ToolsRig::VisualisationOverlay>(
 			immediateDrawableApparatus,
@@ -179,6 +173,13 @@ namespace GUILayer
 			_pimpl->_mouseOver,
 			drawingApparatus,
 			_pimpl->_modelLayer->GetCamera());
+
+		_pimpl->_overlayBinder = std::make_shared<ToolsRig::VisOverlayController>(drawingApparatus->_drawablesPool, drawingApparatus->_pipelineAccelerators, drawingApparatus->_deformAccelerators);
+		_pimpl->_overlayBinder->AttachMouseTrackingOverlay(_pimpl->_trackingLayer);
+		_pimpl->_overlayBinder->AttachSceneOverlay(_pimpl->_modelLayer);
+		_pimpl->_overlayBinder->AttachVisualisationOverlay(_pimpl->_visOverlay);
+
+		_pimpl->_overlayBinder->SetEnvSettings("cfg/lighting");		// default env settings
 
 		auto engineDevice = EngineDevice::GetInstance();
 		engineDevice->AddOnShutdown(this);

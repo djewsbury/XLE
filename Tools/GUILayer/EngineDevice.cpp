@@ -11,6 +11,7 @@
 #include "ExportedNativeTypes.h"
 #include "../ToolsRig/DivergentAsset.h"
 #include "../ToolsRig/PreviewSceneRegistry.h"
+#include "../ToolsRig/ToolsRigServices.h"
 #include "../../PlatformRig/WinAPI/RunLoop_WinAPI.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/Techniques.h"
@@ -18,11 +19,11 @@
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/LightingEngine/LightingEngineApparatus.h"
 #include "../../RenderCore/IDevice.h"
-#include "../../RenderCore/Init.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/MountingTree.h"
 #include "../../Assets/OSFileSystem.h"
 #include "../../Assets/AssetServices.h"
+#include "../../Assets/AssetSetManager.h"
 #include "../../ConsoleRig/AttachablePtr.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../Utility/Streams/PathUtils.h"
@@ -108,6 +109,7 @@ namespace GUILayer
 		_assetServices = std::make_shared<::Assets::Services>();
         _mountId0 = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS("Game/xleres", _services->GetPollingThread()));
         _mountId1 = ::Assets::MainFileSystem::GetMountingTree()->Mount("", ::Assets::MainFileSystem::GetDefaultFileSystem());
+        _mountId2 = ::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::MainFileSystem::GetDefaultFileSystem());
 
         _renderDevice = RenderCore::CreateDevice(RenderCore::Techniques::GetTargetAPI());
         _immediateContext = _renderDevice->GetImmediateContext();
@@ -120,12 +122,16 @@ namespace GUILayer
         _frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(_renderDevice);
         _lightingEngineApparatus = std::make_shared<RenderCore::LightingEngine::LightingEngineApparatus>(_drawingApparatus);
         _previewSceneRegistry = ToolsRig::CreatePreviewSceneRegistry();
+        _entityMountingTree = EntityInterface::CreateMountingTree();
 
         _services->LoadDefaultPlugins();
 
         _divAssets = std::make_unique<ToolsRig::DivergentAssetManager>();
         _creationThreadId = System::Threading::Thread::CurrentThread->ManagedThreadId;
         RenderCore::Techniques::SetThreadContext(_immediateContext);
+
+        // setup mounting for default environment settings
+        _defaultEnvMount = ToolsRig::MountTextEntityDocument("cfg/lighting", "rawos/defaultenv.dat");
 
 		auto osRunLoop = std::make_shared<PlatformRig::OSRunLoop_BasicTimer>((HWND)0);
 		PlatformRig::SetOSRunLoop(osRunLoop);
@@ -142,8 +148,10 @@ namespace GUILayer
 		if (_messageFilter.get())
 			System::Windows::Forms::Application::RemoveMessageFilter(_messageFilter.get());
 		PlatformRig::SetOSRunLoop(nullptr);
-        // ::Assets::Services::GetAssetSets().Clear();
+        ::Assets::Services::GetAssetSets().Clear();
 		_services->UnloadDefaultPlugins();
+        ToolsRig::UnmountEntityDocument(_defaultEnvMount);
+        ::Assets::MainFileSystem::GetMountingTree()->Unmount(_mountId2);
         ::Assets::MainFileSystem::GetMountingTree()->Unmount(_mountId1);
         ::Assets::MainFileSystem::GetMountingTree()->Unmount(_mountId0);
     }

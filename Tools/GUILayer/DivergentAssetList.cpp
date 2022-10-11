@@ -21,6 +21,7 @@
 #include "../../Utility/Streams/StreamFormatter.h"
 #include "../../Utility/Streams/OutputStreamFormatter.h"
 #include "../../Utility/Streams/PathUtils.h"
+#include "../../Utility/Streams/FormatterUtils.h"
 #include "../../Utility/Threading/ThreadingUtils.h"
 #include "../../Utility/Conversion.h"
 #include "MarshalString.h"

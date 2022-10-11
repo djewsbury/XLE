@@ -37,7 +37,8 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{E1E9A4C1-97A8-44B7-8279-D287313C5B6B}</ProjectGuid>
     <RootNamespace>GUILayer</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.19041.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <TargetFrameworkVersion>4.0</TargetFrameworkVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration">
@@ -46,28 +47,28 @@
     <CLRSupport>true</CLRSupport>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug-DX11|x64'">
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release-Vulkan|Win32'">
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug-DX11|Win32'">
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release-Vulkan|x64'">
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug-Vulkan|x64'">
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug-Vulkan|Win32'">
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release-DX11|x64'">
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release-DX11|Win32'">
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <Import Project="..\..\..\Solutions\Main.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
@@ -82,7 +83,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release-DX11|x64'">
     <ClCompile>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
-      <PreprocessorDefinitions>COMPILING_GUILAYER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>COMPILING_GUILAYER;XLE_REGISTER_METAL_VARIANTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <AdditionalDependencies>dxguid.lib;cfgmgr32.lib;shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -91,7 +92,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release-Vulkan|x64'">
     <ClCompile>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
-      <PreprocessorDefinitions>COMPILING_GUILAYER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>COMPILING_GUILAYER;XLE_REGISTER_METAL_VARIANTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <AdditionalDependencies>dxguid.lib;cfgmgr32.lib;shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -104,32 +105,34 @@
       <AdditionalDependencies>dxguid.lib;cfgmgr32.lib;shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <ClCompile>
-      <PreprocessorDefinitions>COMPILING_GUILAYER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>COMPILING_GUILAYER;XLE_REGISTER_METAL_VARIANTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug-Vulkan|x64'">
     <Link>
       <AssemblyDebug>true</AssemblyDebug>
       <AdditionalDependencies>dxguid.lib;cfgmgr32.lib;shlwapi.lib;imagehlp.lib;
-		  $(SolutionDir)\..\build\Debug\ToolsRig\ToolsRig-$(GfxConfiguration).lib;
-		  $(SolutionDir)\..\build\Debug\PlatformRig\PlatformRig-$(GfxConfiguration).lib;
-		  $(SolutionDir)\..\build\Debug\RenderOverlays\RenderOverlays-$(GfxConfiguration).lib;
-		  $(SolutionDir)\..\build\Debug\RenderCoreLightingEngine\RenderCoreLightingEngine-$(GfxConfiguration).lib;
-		  $(SolutionDir)\..\build\Debug\RenderCoreTechniques\RenderCoreTechniques-$(GfxConfiguration).lib;
-		  $(SolutionDir)\..\build\Debug\RenderCoreMetal\RenderCoreMetalVulkan\RenderCore_$(GfxConfiguration).lib;
-		  $(SolutionDir)\..\build\Debug\BufferUploads\BufferUploads-$(GfxConfiguration).lib;
-		  $(SolutionDir)\..\build\Debug\RenderCoreAssets\RenderCoreAssets.lib;
-		  $(SolutionDir)\..\build\Debug\RenderCore\RenderCore.lib;
-		  $(SolutionDir)\..\build\Debug\ShaderParser\ShaderParser.lib;
-		  $(SolutionDir)\..\build\Debug\ConsoleRig\ConsoleRig.lib;
-		  $(SolutionDir)\..\build\Debug\Assets\Assets.lib;
-		  $(SolutionDir)\..\build\Debug\Math\Math.lib;
-		  $(SolutionDir)\..\build\Debug\OSServices\OSServices.lib;
-		  $(SolutionDir)\..\build\Debug\Utility\Utility.lib;
-		  $(SolutionDir)\..\build\Debug\ForeignMisc\ForeignMisc.lib;
-		  $(SolutionDir)\..\build\Debug\bin\CMake\DirectXTex.lib;
-		  $(SolutionDir)\..\build\Debug\freetype\freetyped.lib;
-		  $(SolutionDir)\..\build\Debug\lib64\libHLSLcc.lib;
+		  $(SolutionDir)\..\build\msvc-debug\ToolsRig\ToolsRig-$(GfxConfiguration).lib;
+		  $(SolutionDir)\..\build\msvc-debug\PlatformRig\PlatformRig-$(GfxConfiguration).lib;
+		  $(SolutionDir)\..\build\msvc-debug\RenderOverlays\RenderOverlays-$(GfxConfiguration).lib;
+		  $(SolutionDir)\..\build\msvc-debug\RenderCoreLightingEngine\RenderCoreLightingEngine-$(GfxConfiguration).lib;
+		  $(SolutionDir)\..\build\msvc-debug\RenderCoreTechniques\RenderCoreTechniques-$(GfxConfiguration).lib;
+		  $(SolutionDir)\..\build\msvc-debug\RenderCoreMetal\RenderCoreMetalVulkan\RenderCore_$(GfxConfiguration).lib;
+		  $(SolutionDir)\..\build\msvc-debug\BufferUploads\BufferUploads-$(GfxConfiguration).lib;
+      $(SolutionDir)\..\build\msvc-debug\BufferUploads\BufferUploads-Shared.lib;
+		  $(SolutionDir)\..\build\msvc-debug\RenderCoreAssets\RenderCoreAssets.lib;
+		  $(SolutionDir)\..\build\msvc-debug\RenderCore\RenderCore.lib;
+		  $(SolutionDir)\..\build\msvc-debug\ShaderParser\ShaderParser.lib;
+		  $(SolutionDir)\..\build\msvc-debug\ConsoleRig\ConsoleRig.lib;
+		  $(SolutionDir)\..\build\msvc-debug\Assets\Assets.lib;
+		  $(SolutionDir)\..\build\msvc-debug\Math\Math.lib;
+		  $(SolutionDir)\..\build\msvc-debug\OSServices\OSServices.lib;
+		  $(SolutionDir)\..\build\msvc-debug\Utility\Utility.lib;
+		  $(SolutionDir)\..\build\msvc-debug\ForeignMisc\ForeignMisc.lib;
+      $(SolutionDir)\..\build\msvc-debug\ForeignMisc\yogacore.lib;
+		  $(SolutionDir)\..\build\msvc-debug\bin\CMake\DirectXTex.lib;
+		  $(SolutionDir)\..\build\msvc-debug\freetype\freetyped.lib;
+		  $(SolutionDir)\..\build\msvc-debug\lib64\libHLSLcc.lib;
       C:\codelibrary\Compressonator_4.1.5083\lib\VS2017\x64\Compressonator_MDd.lib;
 		  $(VULKAN_SDK)\Lib\vulkan-1.lib;
 		  $(VULKAN_SDK)\Lib\glslangd.lib;
@@ -145,27 +148,28 @@
 		  %(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <ClCompile>
-      <PreprocessorDefinitions>COMPILING_GUILAYER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>COMPILING_GUILAYER;XLE_REGISTER_METAL_VARIANTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/Zc:twoPhase- %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug-DX11|Win32'">
     <ClCompile>
-      <PreprocessorDefinitions>COMPILING_GUILAYER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>COMPILING_GUILAYER;XLE_REGISTER_METAL_VARIANTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug-Vulkan|Win32'">
     <ClCompile>
-      <PreprocessorDefinitions>COMPILING_GUILAYER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>COMPILING_GUILAYER;XLE_REGISTER_METAL_VARIANTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release-DX11|Win32'">
     <ClCompile>
-      <PreprocessorDefinitions>COMPILING_GUILAYER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>COMPILING_GUILAYER;XLE_REGISTER_METAL_VARIANTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release-Vulkan|Win32'">
     <ClCompile>
-      <PreprocessorDefinitions>COMPILING_GUILAYER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>COMPILING_GUILAYER;XLE_REGISTER_METAL_VARIANTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>

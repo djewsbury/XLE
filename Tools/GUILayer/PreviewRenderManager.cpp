@@ -14,28 +14,17 @@
 #include "../ToolsRig/VisualisationUtils.h"
 
 #include "../../SceneEngine/IScene.h"
-// #include "../../SceneEngine/RenderStep.h"
 
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
-#include "../../RenderCore/Techniques/PipelineAccelerator.h"
-#include "../../RenderCore/Techniques/Services.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Assets/RawMaterial.h"
-#include "../../RenderCore/MinimalShaderSource.h"
+#include "../../RenderCore/Assets/ShaderPatchCollection.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/ResourceUtils.h"
-
-// #include "../../BufferUploads/IBufferUploads.h"
-
-#include "../../Assets/AssetServices.h"
-#include "../../Assets/CompileAndAsyncManager.h"
-#include "../../Assets/AssetSetManager.h"
 #include "../../Assets/IAsyncMarker.h"
-#include "../../ConsoleRig/ResourceBox.h"
 #include "../../Utility/PtrUtils.h"
-
 #include <memory>
 
 using System::Collections::Generic::Dictionary;
@@ -46,9 +35,11 @@ namespace GUILayer
 {
 	using System::Drawing::Size;
 
-	static std::shared_ptr<RenderCore::Assets::MaterialScaffoldMaterial> CreatePreviewMaterial(const std::string& materialNames, const ::Assets::DirectorySearchRules& searchRules)
+	static std::shared_ptr<RenderCore::Assets::RawMaterial> CreatePreviewMaterial(const std::string& materialNames, const ::Assets::DirectorySearchRules& searchRules)
 	{
-		auto result = std::make_shared<RenderCore::Assets::MaterialScaffoldMaterial>();
+		auto result = std::make_shared<RenderCore::Assets::RawMaterial>();
+		assert(0);
+#if 0
 		RenderCore::Assets::ShaderPatchCollection patchCollectionResult;
 
         // Our default material settings come from the "Document" object. This
@@ -67,7 +58,7 @@ namespace GUILayer
 			start = end+1;
         }
 
-        result->_matParams.SetParameter("SHADER_NODE_EDITOR", MakeStringSection("1"));
+        result->_selectors.SetParameter("SHADER_NODE_EDITOR", MakeStringSection("1"));
 
         /*
 		for each(auto i in doc->ShaderParameters)
@@ -75,6 +66,7 @@ namespace GUILayer
                 MakeStringSection(clix::marshalString<clix::E_UTF8>(i.Key)).Cast<utf8>(),
                 MakeStringSection(clix::marshalString<clix::E_UTF8>(i.Value)));
 		*/
+#endif
 
 		return result;
 	}
@@ -85,6 +77,7 @@ namespace GUILayer
 		std::shared_ptr<SceneEngine::IScene> _scene;
 		std::shared_ptr<RenderCore::IResource> _resource;
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
+		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> _drawablesPool;
 		std::shared_ptr<RenderCore::Techniques::TechniqueContext> _globalTechniqueContext;
 		std::shared_ptr<SceneEngine::IRenderStep> _customRenderStep;
 		ToolsRig::VisCameraSettings _camSettings;
@@ -130,10 +123,11 @@ namespace GUILayer
 
 				FrameBufferProperties fbProps{(unsigned)_width, (unsigned)_height, TextureSamples::Create()};
 
-				ToolsRig::VisEnvSettings envSettings;
-				envSettings._lightingType = ToolsRig::VisEnvSettings::LightingType::Direct;
+				// ToolsRig::VisEnvSettings envSettings;
+				// envSettings._lightingType = ToolsRig::VisEnvSettings::LightingType::Direct;
+				const char* envSettings = "";
 
-				Techniques::ParsingContext parserContext { *_globalTechniqueContext };
+				Techniques::ParsingContext parserContext { *_globalTechniqueContext, threadContext };
 
 				// Can no longer render to multiple output targets using this path. We only get to input the single "presentation target"
 				// to the lighting parser.
@@ -166,6 +160,7 @@ namespace GUILayer
 				// We use a short-lived pipeline accelerator pool here, because
 				// everything we put into it is temporary
 			_pipelineAcceleratorPool = EngineDevice::GetInstance()->GetNative().GetMainPipelineAcceleratorPool();
+			_drawablesPool = EngineDevice::GetInstance()->GetNative().GetDrawingApparatus()->_drawablesPool;
 			_globalTechniqueContext = std::make_shared<RenderCore::Techniques::TechniqueContext>();
 			_globalTechniqueContext->_attachmentPool = std::make_shared<RenderCore::Techniques::AttachmentPool>(device);
 			_globalTechniqueContext->_frameBufferPool = RenderCore::Techniques::CreateFrameBufferPool();
@@ -204,14 +199,15 @@ namespace GUILayer
 				auto material = CreatePreviewMaterial(materialNames, ::Assets::DirectorySearchRules{});
 
 				if (pretransformed)
-					material->_matParams.SetParameter("GEO_PRETRANSFORMED", MakeStringSection("1"));
+					material->_selectors.SetParameter("GEO_PRETRANSFORMED", MakeStringSection("1"));
 
-				_scene = ToolsRig::MakeScene(_pipelineAcceleratorPool, nativeVisSettings, material);
+				_scene = ToolsRig::MakeScene(_drawablesPool, _pipelineAcceleratorPool, nativeVisSettings, material);
 			} else {
 				ToolsRig::ModelVisSettings modelSettings;
 				// modelSettings._modelName = clix::marshalString<clix::E_UTF8>(doc->PreviewModelFile);
 				// modelSettings._materialName = clix::marshalString<clix::E_UTF8>(doc->PreviewModelFile);
-				_scene = ToolsRig::MakeScene(_pipelineAcceleratorPool, modelSettings);
+				assert(0);
+				// _scene = ToolsRig::MakeScene(_drawablesPool, _pipelineAcceleratorPool, nullptr, modelSettings);
 			}
 
 			auto* patchScene = dynamic_cast<ToolsRig::IPatchCollectionVisualizationScene*>(_scene.get());

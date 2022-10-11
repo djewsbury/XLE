@@ -9,6 +9,7 @@
 #include "CLIXAutoPtr.h"
 #include "MarshalString.h"
 #include "../ToolsRig/ModelVisualisation.h"
+#include "../ToolsRig/VisualisationUtils.h"
 #include "../ToolsRig/DivergentAsset.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../OSServices/RawFS.h"

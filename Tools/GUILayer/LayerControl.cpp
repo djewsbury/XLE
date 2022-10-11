@@ -19,7 +19,7 @@
 #include "../ToolsRig/IManipulator.h"
 #include "../ToolsRig/BasicManipulators.h"
 #include "../ToolsRig/VisualisationUtils.h"
-#include "../../PlatformRig/InputTranslator.h"
+#include "../../PlatformRig/WinAPI/InputTranslator.h"
 #include "../../PlatformRig/FrameRig.h"
 #include "../../PlatformRig/OverlaySystem.h"
 
@@ -49,10 +49,7 @@ namespace GUILayer
         TRY
         {
             auto& frameRig = windowRig.GetFrameRig();
-            auto frResult = frameRig.ExecuteFrame(
-                threadContext, *windowRig.GetPresentationChain(), 
-                *EngineDevice::GetInstance()->GetNative().GetFrameRenderingApparatus(),
-                EngineDevice::GetInstance()->GetNative().GetDrawingApparatus().get());
+            auto frResult = frameRig.ExecuteFrame(threadContext, *windowRig.GetPresentationChain());
 
             // return false if when we have pending resources (encourage another redraw)
             result = !frResult._hasPendingResources;
@@ -81,17 +78,16 @@ namespace GUILayer
         class OverlaySystemAdapter : public PlatformRig::IOverlaySystem
         {
         public:
-            std::shared_ptr<PlatformRig::IInputListener> GetInputListener()
+            std::shared_ptr<PlatformRig::IInputListener> GetInputListener() override
             {
                 // return _managedOverlay->GetInputListener();
                 return nullptr;
             }
 
             void Render(
-                RenderCore::IThreadContext& threadContext,
-                RenderCore::Techniques::ParsingContext& parserContext)
+                RenderCore::Techniques::ParsingContext& parserContext) override
             {
-				_managedOverlay->Render(threadContext, parserContext);
+				_managedOverlay->Render(parserContext);
             }
 
             void SetActivationState(bool newState)

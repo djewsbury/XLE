@@ -7,6 +7,7 @@
 #include "GUILayerUtil.h"
 #include "UITypesBinding.h"
 #include "MarshalString.h"
+#include "../ToolsRig/MiscUtils.h"
 #include "../ToolsRig/MaterialVisualisation.h"
 #include "../../RenderCore/Assets/RawMaterial.h"
 #include "../../ShaderParser/ShaderPatcher.h"
@@ -14,21 +15,11 @@
 #include "../../ShaderParser/NodeGraphProvider.h"
 #include "../../ShaderParser/ShaderInstantiation.h"
 #include "../../ShaderParser/DescriptorSetInstantiation.h"
-#include "../../RenderCore/Techniques/DrawableDelegates.h"
-#include "../../RenderCore/Techniques/Techniques.h"
-#include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
-#include "../../RenderCore/Assets/Services.h"
-#include "../../RenderCore/ShaderService.h"
-#include "../../RenderCore/MinimalShaderSource.h"
-#include "../../OSServices/Log.h"
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/IFileSystem.h"
-#include "../../Assets/IArtifact.h"
-#include "../../OSServices/RawFS.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Conversion.h"
-#include "../../Core/Exceptions.h"
 #include <sstream>
 #include <regex>
 #include <msclr/auto_gcroot.h>
@@ -232,7 +223,7 @@ namespace GUILayer
 			if (kv.Value->IndexOf(':') == -1)
 			{
 				auto nativeName = clix::marshalString<clix::E_UTF8>(kv.Key);
-				previewMat->_constants.SetParameter(
+				previewMat->_uniforms.SetParameter(
 					MakeStringSection(nativeName).Cast<utf8>(),
 					MakeStringSection(clix::marshalString<clix::E_UTF8>(kv.Value)));
 			}
@@ -356,7 +347,7 @@ namespace GUILayer
             for each(auto i in shaderParams) {
                 sw->Write("            ");
                 sw->Write(i.Key);
-                if (i.Value && i.Value->Length > 0) {
+                if (!String::IsNullOrEmpty(i.Value)) {
                     sw->Write("=");
                     sw->Write(i.Value);
                 }

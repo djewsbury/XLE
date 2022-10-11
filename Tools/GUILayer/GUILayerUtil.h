@@ -26,6 +26,8 @@ namespace std { template <typename R> class future; }
 
 namespace GUILayer
 {
+	public enum class CompilationTargetFlag { Model = 1<<0, Animation = 1<<1, Skeleton = 1<<2, Material = 1<<3 };
+
 	public ref class Utils
 	{
 	public:
@@ -41,6 +43,8 @@ namespace GUILayer
 		static System::Collections::Generic::IEnumerable<AssetExtension^>^ GetAnimationSetExtensions();
 
 		static System::Collections::Generic::IEnumerable<System::String^>^ EnumeratePreviewScenes();
+
+		static uint32_t FindCompilationTargets(System::String^ Extension);
 	};
 
     public ref class TechniqueContextWrapper

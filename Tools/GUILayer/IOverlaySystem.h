@@ -18,7 +18,6 @@ namespace GUILayer
     {
     public:
         virtual void Render(
-            RenderCore::IThreadContext& threadContext, 
             RenderCore::Techniques::ParsingContext& parserContext) = 0; 
         virtual ~IOverlaySystem();
     };

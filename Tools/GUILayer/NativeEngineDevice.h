@@ -11,6 +11,7 @@
 
 namespace RenderCore { namespace Assets { class Services; } }
 namespace ToolsRig { class DivergentAssetManager; class IPreviewSceneRegistry; }
+namespace EntityInterface { class IEntityMountingTree; }
 namespace ConsoleRig { class GlobalServices; class CrossModule; }
 namespace RenderCore { namespace Techniques 
 { 
@@ -67,8 +68,11 @@ namespace GUILayer
 
         uint32_t _mountId0 = ~0u;
         uint32_t _mountId1 = ~0u;
+        uint32_t _mountId2 = ~0u;
+        uint64_t _defaultEnvMount = ~0ull;
         
         ConsoleRig::AttachablePtr<ToolsRig::IPreviewSceneRegistry> _previewSceneRegistry;
+        ConsoleRig::AttachablePtr<EntityInterface::IEntityMountingTree> _entityMountingTree;
         std::unique_ptr<ToolsRig::DivergentAssetManager> _divAssets;
 
         int _creationThreadId;

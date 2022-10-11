@@ -12,7 +12,6 @@
 #include "../ToolsRig/ObjectPlaceholders.h"
 #include "../ToolsRig/ManipulatorsRender.h"
 #include "../EntityInterface/RetainedEntities.h"
-#include "../EntityInterface/EnvironmentSettings.h"
 #include "../../SceneEngine/PlacementsManager.h"
 #include "../../SceneEngine/ExecuteScene.h"
 
@@ -61,66 +60,81 @@ namespace GUILayer
         EditorSceneRenderSettings^ _renderSettings;
     };
 
-	class EditorLightingParserDelegate : public SceneEngine::BasicLightingStateDelegate
+	class EditorLightingParserDelegate : public SceneEngine::ILightingStateDelegate
 	{
 	public:
-        void PrepareEnvironmentalSettings(const char envSettings[]);
+        virtual void        PreRender(
+            const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc, 
+            RenderCore::LightingEngine::ILightScene& lightScene) override
+        {}
+        virtual void        PostRender(RenderCore::LightingEngine::ILightScene& lightScene) override
+        {}
 
-		EditorLightingParserDelegate(const std::shared_ptr<EditorScene>& editorScene);
-		~EditorLightingParserDelegate();
+        virtual void        BindScene(RenderCore::LightingEngine::ILightScene& lightScene, std::shared_ptr<::Assets::OperationContext>) override
+        {}
+        virtual void        UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) override
+        {}
+
+        virtual void        BindCfg(MergedLightingEngineCfg& cfg) override
+        {}
+
+        virtual std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> BeginPrepareStep(
+            RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext) override
+        {
+            return nullptr;
+        }
+
+        void PrepareEnvironmentalSettings(const EditorScene& editorScene, const char envSettings[]);
+
 	protected:
-		std::shared_ptr<EditorScene> _editorScene;
+        ::Assets::DependencyValidation _depVal;
 	};
 
 	static void BuildDrawables(
 		EditorScene& scene,
-		ToolsRig::VisCameraSettings& camera,
-		UInt2 viewportDims,
-		RenderCore::Techniques::BatchFilter batchFilter,
-		RenderCore::Techniques::DrawablesPacket& pkt)
+		RenderCore::LightingEngine::LightingTechniqueInstance::Step& step)
 	{
-		SceneEngine::ExecuteSceneContext exeContext;
-		exeContext._batchFilter = batchFilter;
-		exeContext._destinationPkt = &pkt;
-		auto camDesc = ToolsRig::AsCameraDesc(camera);
-		exeContext._view = SceneEngine::SceneView { SceneEngine::SceneView::Type::Normal, RenderCore::Techniques::BuildProjectionDesc(camDesc, viewportDims) };
+        SceneEngine::ExecuteSceneContext exeContext;
+        exeContext._destinationPkts = MakeIteratorRange(step._pkts);
+        exeContext._views = MakeIteratorRange(step._multiViewDesc);
+        exeContext._complexCullingVolume = step._complexCullingVolume;
 		scene._placementsManager->GetRenderer()->BuildDrawables(exeContext, *scene._placementsCells);
 		scene._placeholders->BuildDrawables(exeContext);
 	}
     
     void EditorSceneOverlay::Render(
-        RenderCore::IThreadContext& threadContext,
         RenderCore::Techniques::ParsingContext& parserContext)
     {
         UInt2 viewportDims { parserContext.GetViewport()._width, parserContext.GetViewport()._height };
 
         auto& stitchingContext = parserContext.GetFragmentStitchingContext();
-		EditorLightingParserDelegate lightingDelegate(_scene.GetNativePtr());
+		EditorLightingParserDelegate lightingDelegate;
         lightingDelegate.PrepareEnvironmentalSettings(
+            *_scene.get(),
 			clix::marshalString<clix::E_UTF8>(_renderSettings->_activeEnvironmentSettings).c_str());
 
-        RenderCore::LightingEngine::AmbientLightOperatorDesc ambientLightOperator;
-		auto compiledTechniqueFuture = RenderCore::LightingEngine::CreateForwardLightingTechnique(
+        SceneEngine::MergedLightingEngineCfg lightingEngineCfg;
+		auto compiledTechnique = SceneEngine::CreateAndActualizeForwardLightingTechnique(
 			_lightingApparatus.GetNativePtr(),
-            lightingDelegate.GetLightResolveOperators(),
-			lightingDelegate.GetShadowResolveOperators(), ambientLightOperator,
+            lightingEngineCfg.GetLightOperators(),
+			lightingEngineCfg.GetShadowOperators(),
+			lightingEngineCfg.GetAmbientOperator(),
 			stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
-        auto compiledTechnique = SceneEngine::StallAndActualize(*compiledTechniqueFuture);
 
         {
 			ToolsRig::ConfigureParsingContext(parserContext, *_camera.get());
 
             {
 				auto lightingIterator = SceneEngine::BeginLightingTechnique(
-					threadContext, parserContext,
+					parserContext,
 					lightingDelegate, *compiledTechnique);
 
 				for (;;) {
 					auto next = lightingIterator.GetNextStep();
 					if (next._type == RenderCore::LightingEngine::StepType::None || next._type == RenderCore::LightingEngine::StepType::Abort) break;
 					if (next._type == RenderCore::LightingEngine::StepType::ParseScene) {
-					    assert(next._pkt);
-					    BuildDrawables(*_scene.get(), *_camera.get(), viewportDims, next._batch, *next._pkt);
+					    assert(!next._pkts.empty());
+					    BuildDrawables(*_scene.get(), next);
                     }
 				}
 
@@ -134,7 +148,7 @@ namespace GUILayer
             // at the moment, only placements can be selected... So we need to assume that 
             // they are all placements.
             ToolsRig::Placements_RenderHighlight(
-                threadContext, parserContext, *_pipelineAcceleratorPool.get(),
+                parserContext, *_pipelineAcceleratorPool.get(),
                 *_scene->_placementsManager->GetRenderer().get(), *_scene->_placementsCells.get(),
                 (const SceneEngine::PlacementGUID*)AsPointer(_renderSettings->_selection->_nativePlacements->cbegin()),
                 (const SceneEngine::PlacementGUID*)AsPointer(_renderSettings->_selection->_nativePlacements->cend()));
@@ -143,7 +157,7 @@ namespace GUILayer
         // render shadow for hidden placements
         if (::ConsoleRig::Detail::FindTweakable("ShadowHiddenPlacements", true)) {
             ToolsRig::Placements_RenderShadow(
-                threadContext, parserContext, *_pipelineAcceleratorPool.get(),
+                parserContext, *_pipelineAcceleratorPool.get(),
                 *_scene->_placementsManager->GetRenderer().get(), *_scene->_placementsCellsHidden.get());
         }
     }
@@ -165,15 +179,15 @@ namespace GUILayer
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    void EditorLightingParserDelegate::PrepareEnvironmentalSettings(const char envSettings[])
+    void EditorLightingParserDelegate::PrepareEnvironmentalSettings(const EditorScene& editorScene, const char envSettings[])
     {
-        for (const auto& i:_editorScene->_prepareSteps)
+        for (const auto& i:editorScene._prepareSteps)
             i();
 
         using namespace EntityInterface;
-        const auto& objs = *_editorScene->_flexObjects;
+        const auto& objs = *editorScene._flexObjects;
         const RetainedEntity* settings = nullptr;
-        const auto typeSettings = objs.GetTypeId("EnvSettings");
+        const auto typeSettings = Hash64("EnvSettings");
 
         {
             static const auto nameHash = ParameterBox::MakeParameterNameHash("Name");
@@ -185,6 +199,8 @@ namespace GUILayer
                 }
         }
 
+        // todo -- collate lighting information from the entities
+        /*
         if (settings) {
             *_envSettings = BuildEnvironmentSettings(objs, *settings);
         } else {
@@ -192,15 +208,8 @@ namespace GUILayer
             _envSettings->_sunSourceShadowProj.clear();
             _envSettings->_environmentalLightingDesc = SceneEngine::DefaultEnvironmentalLightingDesc();
         }
+        */
     }
-
-	EditorLightingParserDelegate::EditorLightingParserDelegate(const std::shared_ptr<EditorScene>& editorScene)
-	: BasicLightingStateDelegate(std::make_shared<SceneEngine::EnvironmentSettings>(SceneEngine::DefaultEnvironmentSettings()))
-	, _editorScene(editorScene)
-	{
-	}
-
-	EditorLightingParserDelegate::~EditorLightingParserDelegate() {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

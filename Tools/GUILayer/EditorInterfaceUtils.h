@@ -7,13 +7,12 @@
 #pragma once
 
 #include "CLIXAutoPtr.h"
-#include "../../SceneEngine/BasicLightingStateDelegate.h"
+#include "../../RenderCore/Techniques/TechniqueUtils.h"     // for CameraDesc destructor
 #include "../../Core/Types.h"
 #include <vector>
 #include <utility>
 
 namespace SceneEngine { class PlacementsEditor; }
-namespace PlatformRig { class EnvironmentSettings; }
 namespace ToolsRig { class VisCameraSettings; }
 
 namespace GUILayer
@@ -36,18 +35,14 @@ namespace GUILayer
         ~ObjectSet();
     };
 
-    using EnvSettingsVector = std::vector<std::pair<std::string, SceneEngine::EnvironmentSettings>>;
-
     ref class EditorSceneManager;
 
     public ref class EnvironmentSettingsSet
     {
     public:
-        clix::auto_ptr<EnvSettingsVector> _settings;
         property System::Collections::Generic::IEnumerable<System::String^>^ Names { System::Collections::Generic::IEnumerable<System::String^>^ get(); }
 
         void AddDefault();
-        const SceneEngine::EnvironmentSettings& GetSettings(System::String^ name);
 
         EnvironmentSettingsSet(EditorSceneManager^ scene);
         ~EnvironmentSettingsSet();

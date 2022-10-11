@@ -11,7 +11,7 @@
 #include <memory>
 #include <vector>
 
-namespace RenderCore { namespace Techniques { class SubFrameEvents; }}
+namespace RenderCore { namespace Techniques { class DrawingApparatus; class FrameRenderingApparatus; } }
 
 namespace GUILayer
 {
@@ -25,13 +25,17 @@ namespace GUILayer
         void AddWindowHandler(std::shared_ptr<PlatformRig::IWindowHandler> windowHandler);
         void OnResize(unsigned newWidth, unsigned newHeight);
 
-        WindowRig(RenderCore::IDevice& device, const void* platformWindowHandle);
+        WindowRig(
+            std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
+            std::shared_ptr<RenderCore::Techniques::FrameRenderingApparatus> frameRenderingApparatus,
+            const void* platformWindowHandle);
         ~WindowRig();
     protected:
         std::shared_ptr<PlatformRig::FrameRig> _frameRig;
         std::shared_ptr<RenderCore::IPresentationChain> _presentationChain;
         std::vector<std::shared_ptr<PlatformRig::IWindowHandler>> _windowHandlers;
         std::shared_ptr<PlatformRig::OverlaySystemSet> _mainOverlaySystemSet;
+        std::shared_ptr<RenderCore::IDevice> _device;
     };
 }
 

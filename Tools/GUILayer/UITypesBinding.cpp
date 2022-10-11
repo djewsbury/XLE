@@ -11,7 +11,6 @@
 #include "../ToolsRig/VisualisationUtils.h"
 #include "../ToolsRig/DivergentAsset.h"
 #include "../../SceneEngine/IScene.h"
-#include "../../RenderCore/Techniques/RenderStateResolver.h"
 #include "../../RenderCore/Assets/MaterialScaffold.h"
 #include "../../RenderCore/Assets/RawMaterial.h"
 #include "../../Assets/AssetUtils.h"
@@ -112,7 +111,7 @@ namespace GUILayer
 
 	static String^ DescriptiveMaterialName(String^ fullName)
     {
-        if (fullName->Length == 0 || fullName[0] == '<') return fullName;
+        if (String::IsNullOrEmpty(fullName) == 0 || fullName->StartsWith("<")) return fullName;
         auto split = fullName->Split(';');
         if (split && split->Length > 0) {
             auto s = split[split->Length-1];
@@ -132,7 +131,7 @@ namespace GUILayer
 
     System::String^ VisMouseOver::ModelName::get() 
     {
-		if (_scene) {
+		if (_scene.get()) {
 			auto* visContent = dynamic_cast<ToolsRig::IVisContent*>(_scene.get());
 			if (visContent)
 				return clix::marshalString<clix::E_UTF8>(visContent->GetDrawCallDetails(_object->_drawCallIndex, _object->_materialGuid)._modelName);
@@ -147,7 +146,7 @@ namespace GUILayer
 
     System::String^ VisMouseOver::FullMaterialName::get()
     {
-		if (_scene) {
+		if (_scene.get()) {
 			auto* visContent = dynamic_cast<ToolsRig::IVisContent*>(_scene.get());
 			if (visContent)
 				return clix::marshalString<clix::E_UTF8>(visContent->GetDrawCallDetails(_object->_drawCallIndex, _object->_materialGuid)._materialName);
@@ -383,7 +382,7 @@ namespace GUILayer
     {
         if (!_underlying) { return nullptr; }
         if (!_materialParameterBox) {
-            _materialParameterBox = BindingConv::AsBindingList(_underlying->GetWorkingAsset()->_matParamBox);
+            _materialParameterBox = BindingConv::AsBindingList(_underlying->GetWorkingAsset()->_selectors);
             _materialParameterBox->ListChanged += 
                 gcnew ListChangedEventHandler(
                     this, &RawMaterial::ParameterBox_Changed);
@@ -398,7 +397,7 @@ namespace GUILayer
     {
         if (!_underlying) { return nullptr; }
         if (!_shaderConstants) {
-            _shaderConstants = BindingConv::AsBindingList(_underlying->GetWorkingAsset()->_constants);
+            _shaderConstants = BindingConv::AsBindingList(_underlying->GetWorkingAsset()->_uniforms);
             _shaderConstants->ListChanged += 
                 gcnew ListChangedEventHandler(
                     this, &RawMaterial::ParameterBox_Changed);
@@ -413,7 +412,7 @@ namespace GUILayer
     {
         if (!_underlying) { return nullptr; }
         if (!_resourceBindings) {
-            _resourceBindings = BindingConv::AsBindingList(_underlying->GetWorkingAsset()->_resourceBindings);
+            _resourceBindings = BindingConv::AsBindingList(_underlying->GetWorkingAsset()->_resources);
             _resourceBindings->ListChanged += 
                 gcnew ListChangedEventHandler(
                     this, &RawMaterial::ResourceBinding_Changed);
@@ -455,13 +454,13 @@ namespace GUILayer
             if (isMatParams) {
                 auto transaction = _underlying->Transaction_Begin("Material parameter");
                 if (transaction) {
-                    transaction->GetAsset()._matParamBox = BindingConv::AsParameterBox((BindingList<StringStringPair^>^)obj);
+                    transaction->GetAsset()._selectors = BindingConv::AsParameterBox((BindingList<StringStringPair^>^)obj);
                     _transId = transaction->Commit();
                 }
             } else if (isMatConstants) {
                 auto transaction = _underlying->Transaction_Begin("Material constant");
                 if (transaction) {
-                    transaction->GetAsset()._constants = BindingConv::AsParameterBox((BindingList<StringStringPair^>^)obj);
+                    transaction->GetAsset()._uniforms = BindingConv::AsParameterBox((BindingList<StringStringPair^>^)obj);
 					_transId = transaction->Commit();
                 }
             }
@@ -487,7 +486,7 @@ namespace GUILayer
             if (obj == _resourceBindings) {
 				auto transaction = _underlying->Transaction_Begin("Resource Binding");
 				if (transaction) {
-					transaction->GetAsset()._resourceBindings = BindingConv::AsParameterBox((BindingList<StringStringPair^>^)obj);
+					transaction->GetAsset()._resources = BindingConv::AsParameterBox((BindingList<StringStringPair^>^)obj);
 					_transId = transaction->Commit();
 				}
 			}
@@ -504,7 +503,7 @@ namespace GUILayer
             System::String^ result = "";
             auto inheritted = asset.ResolveInherited(searchRules);
             for (auto i = inheritted.cbegin(); i != inheritted.cend(); ++i) {
-                if (result->Length != 0) result += ";";
+                if (!String::IsNullOrEmpty(result)) result += ";";
                 result += clix::marshalString<clix::E_UTF8>(*i);
             }
             return result;
@@ -530,14 +529,14 @@ namespace GUILayer
 	{
 		auto transaction = _underlying->Transaction_Begin("Merge In");
 		if (transaction) {
-			transaction->GetAsset()->MergeIn(_underlying->GetWorkingAsset());
-			destination->_transId = transaction->Commit();
+			transaction->GetAsset().MergeIn(*_underlying->GetWorkingAsset());
+			_transId = transaction->Commit();
 		}
 	}
 
 	bool RawMaterial::TryGetConstantInt(String^ label, [Out] int% value)
 	{
-		auto param = _underlying->GetWorkingAsset()->_constants.GetParameter<int>(
+		auto param = _underlying->GetWorkingAsset()->_uniforms.GetParameter<int>(
 			MakeStringSection(clix::marshalString<clix::E_UTF8>(label)));
 		if (!param.has_value())
 			return false;
@@ -548,7 +547,7 @@ namespace GUILayer
 
 	bool RawMaterial::TryGetConstantFloat(String^ label, [Out] float% value)
 	{
-		auto param = _underlying->GetWorkingAsset()->_constants.GetParameter<float>(
+		auto param = _underlying->GetWorkingAsset()->_uniforms.GetParameter<float>(
 			MakeStringSection(clix::marshalString<clix::E_UTF8>(label)));
 		if (!param.has_value())
 			return false;
@@ -559,7 +558,7 @@ namespace GUILayer
 
 	bool RawMaterial::TryGetConstantBool(String^ label, [Out] bool% value)
 	{
-		auto param = _underlying->GetWorkingAsset()->_constants.GetParameter<bool>(
+		auto param = _underlying->GetWorkingAsset()->_uniforms.GetParameter<bool>(
 			MakeStringSection(clix::marshalString<clix::E_UTF8>(label)));
 		if (!param.has_value())
 			return false;
@@ -570,7 +569,7 @@ namespace GUILayer
 
 	bool RawMaterial::TryGetConstantFloat2(String^ label, array<float>^ value)
 	{
-		auto param = _underlying->GetWorkingAsset()->_constants.GetParameter<Float2>(
+		auto param = _underlying->GetWorkingAsset()->_uniforms.GetParameter<Float2>(
 			MakeStringSection(clix::marshalString<clix::E_UTF8>(label)));
 		if (!param.has_value())
 			return false;
@@ -583,7 +582,7 @@ namespace GUILayer
 
 	bool RawMaterial::TryGetConstantFloat3(String^ label, array<float>^ value)
 	{
-		auto param = _underlying->GetWorkingAsset()->_constants.GetParameter<Float3>(
+		auto param = _underlying->GetWorkingAsset()->_uniforms.GetParameter<Float3>(
 			MakeStringSection(clix::marshalString<clix::E_UTF8>(label)));
 		if (!param.has_value())
 			return false;
@@ -597,7 +596,7 @@ namespace GUILayer
 
 	bool RawMaterial::TryGetConstantFloat4(String^ label, array<float>^ value)
 	{
-		auto param = _underlying->GetWorkingAsset()->_constants.GetParameter<Float4>(
+		auto param = _underlying->GetWorkingAsset()->_uniforms.GetParameter<Float4>(
 			MakeStringSection(clix::marshalString<clix::E_UTF8>(label)));
 		if (!param.has_value())
 			return false;
@@ -612,7 +611,7 @@ namespace GUILayer
 
 	bool RawMaterial::HasConstant(System::String^ label)
 	{
-		return _underlying->GetWorkingAsset()->_constants.HasParameter(
+		return _underlying->GetWorkingAsset()->_uniforms.HasParameter(
 			MakeStringSection(clix::marshalString<clix::E_UTF8>(label)));
 	}
 
@@ -670,7 +669,7 @@ namespace GUILayer
         // Note -- there's a problem here because different initializers could
         // end up resolving to the same native object. That may not be a problem
         // in all cases... But it could throw off the change tracking.
-        System::Diagnostics::Debug::Assert(initializer && initializer->Length > 0);
+        System::Diagnostics::Debug::Assert(!String::IsNullOrEmpty(initializer));
         
         WeakReference^ ref;
         if (s_table->TryGetValue(initializer, ref)) {
@@ -921,7 +920,8 @@ namespace GUILayer
     { 
         auto result = gcnew List<Tuple<String^, String^>^>();
 
-		auto records = ::Assets::Services::GetAssetSets().LogRecords();
+		/*
+        auto records = ::Assets::Services::GetAssetSets().LogRecords();
         for (const auto& i : records) {
 			if (i._state != ::Assets::AssetState::Invalid) continue;
 
@@ -938,6 +938,7 @@ namespace GUILayer
                 clix::marshalString<clix::E_UTF8>(i._initializer),
                 clix::marshalString<clix::E_UTF8>(logStr)));
         }
+        */
 
         return result;
     }

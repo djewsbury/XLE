@@ -10,7 +10,7 @@
 #include "../../PlatformRig/FrameRig.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/ResourceDesc.h"
-#include "../../RenderCore/Techniques/Services.h"
+#include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../Utility/PtrUtils.h"
 #include "../../OSServices/WinAPI/IncludeWindows.h"
 
@@ -62,7 +62,7 @@ namespace GUILayer
         for (auto i=_windowHandlers.begin(); i!=_windowHandlers.end(); ++i) {
             (*i)->OnResize(newWidth, newHeight);
         }
-        _frameRig->UpdatePresentationChain(*_presentationChain);
+        _frameRig->UpdatePresentationChain(*_device, *_presentationChain);
     }
 
     PlatformRig::OverlaySystemSet& WindowRig::GetMainOverlaySystemSet()
@@ -71,22 +71,24 @@ namespace GUILayer
     }
 
     WindowRig::WindowRig(
-        RenderCore::IDevice& device,
+        std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
+        std::shared_ptr<RenderCore::Techniques::FrameRenderingApparatus> frameRenderingApparatus,
         const void* platformWindowHandle)
+    : _device(drawingApparatus->_device)
     {
         ::RECT clientRect;
         GetClientRect((HWND)platformWindowHandle, &clientRect);
 
-        _presentationChain = device.CreatePresentationChain(
+        _presentationChain = _device->CreatePresentationChain(
             platformWindowHandle,
 			RenderCore::PresentationChainDesc {
 				unsigned(clientRect.right - clientRect.left), unsigned(clientRect.bottom - clientRect.top)});
-        _frameRig = std::make_shared<PlatformRig::FrameRig>(RenderCore::Techniques::Services::GetSubFrameEventsPtr());
+        _frameRig = std::make_shared<PlatformRig::FrameRig>(*frameRenderingApparatus, drawingApparatus.get());
 
         _mainOverlaySystemSet = std::make_shared<PlatformRig::OverlaySystemSet>();
         _frameRig->SetMainOverlaySystem(_mainOverlaySystemSet);
 
-        _frameRig->UpdatePresentationChain(*_presentationChain);
+        _frameRig->UpdatePresentationChain(*_device, *_presentationChain);
 
         /*{
             auto overlaySwitch = std::make_shared<PlatformRig::OverlaySystemSwitch>();

@@ -33,11 +33,8 @@ namespace ToolsRig { class TerrainManipulatorContext; class ObjectPlaceholders; 
 
 namespace EntityInterface 
 { 
-    class Switch; 
-    class RetainedEntities; 
-    class RetainedEntitiesAdapter; 
-    class TerrainEntities; 
-    class EnvEntitiesManager; 
+    class RetainedEntities;
+    class RetainedEntitiesAdapter;
 }
 
 namespace GUILayer
@@ -197,11 +194,12 @@ namespace GUILayer
     protected:
         clix::shared_ptr<EditorScene> _scene;
         clix::shared_ptr<::EntityInterface::RetainedEntitiesAdapter> _flexGobInterface;
-        clix::shared_ptr<::EntityInterface::EnvEntitiesManager> _envEntitiesManager;
 #if defined(GUILAYER_SCENEENGINE)
+        clix::shared_ptr<::EntityInterface::EnvEntitiesManager> _envEntitiesManager;
         clix::shared_ptr<::EntityInterface::TerrainEntities> _terrainInterface;
 #endif
         EntityLayer^ _entities;
+        uint32_t _flexGlobDocumentId;
     };
 }
 

@@ -12,7 +12,6 @@
 #include "NativeEngineDevice.h"
 
 #include "../EntityInterface/RetainedEntities.h"
-#include "../EntityInterface/EnvironmentSettings.h"
 
 #include "../ToolsRig/VisualisationUtils.h"     // for AsCameraDesc
 #include "../ToolsRig/ManipulatorsRender.h"

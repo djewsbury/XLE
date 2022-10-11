@@ -13,17 +13,18 @@
 #include "LevelEditorScene.h"
 #include "ExportedNativeTypes.h"
 #include "../EntityInterface/EntityInterface.h"
-#include "../EntityInterface/EnvironmentSettings.h"
 #include "../ToolsRig/VisualisationUtils.h"
 #include "../ToolsRig/PlacementsManipulators.h"
-#include "../../SceneEngine/BasicLightingStateDelegate.h"
-#include "../../SceneEngine/IntersectionTest.h"
-#include "../../SceneEngine/Terrain.h"
 #include "../../SceneEngine/PlacementsManager.h"
+#include "../../SceneEngine/IntersectionTest.h"
+#if 0
+#include "../../SceneEngine/BasicLightingStateDelegate.h"
+#include "../../SceneEngine/Terrain.h"
 #include "../../SceneEngine/TerrainConfig.h"
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
+#endif
 #include "../../Utility/StringUtils.h"
 #include "../../Math/Transformations.h"
 
@@ -475,34 +476,14 @@ namespace GUILayer
     IEnumerable<String^>^ EnvironmentSettingsSet::Names::get()
     {
         auto result = gcnew List<String^>();
-        for (auto i=_settings->cbegin(); i!=_settings->cend(); ++i)
-            result->Add(clix::marshalString<clix::E_UTF8>(i->first));
         return result;
     }
 
     void EnvironmentSettingsSet::AddDefault()
     {
-        _settings->push_back(
-            std::make_pair(std::string("Default"), SceneEngine::DefaultEnvironmentSettings()));
     }
 
-    const SceneEngine::EnvironmentSettings& EnvironmentSettingsSet::GetSettings(String^ name)
-    {
-        auto nativeName = clix::marshalString<clix::E_UTF8>(name);
-        for (auto i=_settings->cbegin(); i!=_settings->cend(); ++i)
-            if (!XlCompareStringI(nativeName.c_str(), i->first.c_str()))
-                return i->second;
-        if (!_settings->empty()) return (*_settings)[0].second;
-
-        return *(const SceneEngine::EnvironmentSettings*)nullptr;
-    }
-
-    EnvironmentSettingsSet::EnvironmentSettingsSet(EditorSceneManager^ scene)
-    {
-        _settings.reset(new EnvSettingsVector());
-        *_settings = BuildEnvironmentSettings(scene->GetFlexObjects());
-    }
-
+    EnvironmentSettingsSet::EnvironmentSettingsSet(EditorSceneManager^ scene) {}
     EnvironmentSettingsSet::~EnvironmentSettingsSet() {}
 }
 

@@ -51,7 +51,6 @@ namespace GUILayer
         SimpleRenderingContext(
             RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
             RetainedRenderResources^ savedRes,
-            RenderCore::IThreadContext* threadContext,
             RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
             void* parsingContext);
         ~SimpleRenderingContext();
@@ -64,6 +63,7 @@ namespace GUILayer
         RenderCore::IThreadContext* _threadContext;     // note -- keeping an unprotected pointer here (SimpleRenderingContext is typically short lived). Create must be careful to manage lifetimes
         bool _depthWriteEnable = true;
         bool _depthTestEnable = true;
+        clix::shared_ptr<RenderCore::UniformsStreamInterface> _mainUniformsInterface;
     };
 }
 
