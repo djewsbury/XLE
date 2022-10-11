@@ -354,7 +354,7 @@ namespace RenderCore { namespace Techniques
 
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
 		assert(cmdStream);
-		SimpleModelDrawable* drawables[dimof(cmdStream->_drawCallCounts)];
+		SimpleModelDrawable_Delegate* drawables[dimof(cmdStream->_drawCallCounts)];
 		for (unsigned c=0; c<dimof(cmdStream->_drawCallCounts); ++c) {
 			if (!cmdStream->_drawCallCounts[c]) {
 				drawables[c] = nullptr;
@@ -418,6 +418,7 @@ namespace RenderCore { namespace Techniques
 						drawable._localTransform._localSpaceView = Float3{0,0,0};
 						drawable._localTransform._viewMask = viewMask;
 						drawable._deformInstanceIdx = deformInstanceIdx;
+						drawable._delegate = delegate;
 						++drawCallCounter;
 					}
 				}
