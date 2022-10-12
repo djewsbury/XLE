@@ -593,9 +593,9 @@ namespace RenderCore { namespace LightingEngine
 					pkts.resize((unsigned)Techniques::Batch::Max);
 					_iterator->GetOrAllocatePkts(MakeIteratorRange(pkts), next->_parseId, next->_batches);
 					if (next->_multiViewProjections.empty()) {
-						return { StepType::ParseScene, std::move(pkts), next->_complexCullingVolume.get() };
+						return { StepType::ParseScene, _iterator->_parsingContext, std::move(pkts), next->_complexCullingVolume.get() };
 					} else {
-						return { StepType::MultiViewParseScene, std::move(pkts), next->_complexCullingVolume.get(), next->_multiViewProjections };
+						return { StepType::MultiViewParseScene, _iterator->_parsingContext, std::move(pkts), next->_complexCullingVolume.get(), next->_multiViewProjections };
 					}
 				}
 			}
@@ -749,9 +749,9 @@ namespace RenderCore { namespace LightingEngine
 				pkts.resize((unsigned)Techniques::Batch::Max);
 				_prepareResourcesIterator->GetOrAllocatePkts(MakeIteratorRange(pkts), next->_parseId, next->_batches);
 				if (next->_multiViewProjections.empty()) {
-					return { StepType::ParseScene, std::move(pkts), next->_complexCullingVolume.get() };
+					return { StepType::ParseScene, nullptr, std::move(pkts), next->_complexCullingVolume.get() };
 				} else {
-					return { StepType::MultiViewParseScene, std::move(pkts), next->_complexCullingVolume.get(), next->_multiViewProjections };
+					return { StepType::MultiViewParseScene, nullptr, std::move(pkts), next->_complexCullingVolume.get(), next->_multiViewProjections };
 				}
 			}
 
