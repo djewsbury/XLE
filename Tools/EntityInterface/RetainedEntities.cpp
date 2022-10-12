@@ -356,14 +356,24 @@ namespace EntityInterface
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	std::optional<EntityId> RetainedEntitiesAdapter::CreateEntity( 
-        StringAndHash typeName, IteratorRange<const PropertyInitializer*> props)
+    EntityId RetainedEntitiesAdapter::AssignEntityId()
+    {
+        return _scene->_nextEntityId++;
+    }
+
+	bool RetainedEntitiesAdapter::CreateEntity( 
+        StringAndHash typeName, EntityId entityId, IteratorRange<const PropertyInitializer*> props)
     {
         auto type = _scene->GetObjectType(typeName);
-        if (!type) return {};
+        if (!type) return false;
+
+        // check for duplicate ids
+        for (const auto& o:_scene->_objects)
+            if (o._id == entityId)
+                return false;
 
         RetainedEntity newObject;
-        newObject._id = _scene->_nextEntityId++;
+        newObject._id = entityId;
         newObject._typeNameHash = typeName.second;
         newObject._parent = 0;
 
@@ -373,7 +383,7 @@ namespace EntityInterface
         _scene->_objects.push_back(std::move(newObject));
 
         _scene->InvokeOnChange(*type, _scene->_objects[_scene->_objects.size()-1], RetainedEntities::ChangeType::Create);
-        return newObject._id;
+        return true;
     }
 
 	bool RetainedEntitiesAdapter::DeleteEntity(EntityId entity)
@@ -487,21 +497,6 @@ namespace EntityInterface
         return true;
     }
 
-	/*EntityTypeId    RetainedEntitiesAdapter::GetTypeId(StringSection<> name) const
-    {
-        return _scene->GetTypeId(name);
-    }
-
-	PropertyId      RetainedEntitiesAdapter::GetPropertyId(EntityTypeId typeId, StringSection<> name) const
-    {
-        return _scene->GetPropertyId(typeId, name);
-    }
-
-	ChildListId     RetainedEntitiesAdapter::GetChildListId(EntityTypeId typeId, StringSection<> name) const
-    {
-        return _scene->GetChildListId(typeId, name);
-    }*/
-
 	RetainedEntitiesAdapter::RetainedEntitiesAdapter(std::shared_ptr<RetainedEntities> flexObjects)
     : _scene(std::move(flexObjects))
     {}
@@ -570,18 +565,17 @@ namespace EntityInterface
         for (auto&i : inits)
             i._data = { PtrAdd(AsPointer(initsBuffer.cbegin()), size_t(i._data.first)), PtrAdd(AsPointer(initsBuffer.cbegin()), size_t(i._data.second)) };
 
-        auto id = interf.CreateEntity(MakeStringAndHash(objType), inits);
-        if (!id)
+        auto id = interf.AssignEntityId();
+        auto creationSuccess = interf.CreateEntity(MakeStringAndHash(objType), id, inits);
+        if (!creationSuccess)
             Throw(FormatException("Error while creating object in entity deserialisation", beginLoc));
 
         for (const auto&c:children)
-            interf.SetParent(c, id.value(), {}, -1);
+            interf.SetParent(c, id, {}, -1);
 
         initsBuffer.clear();
 
-        return id.value();
-
-        return 0;
+        return id;
     }
 
     void Deserialize(

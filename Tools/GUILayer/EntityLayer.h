@@ -20,7 +20,7 @@ namespace GUILayer
     {
     public:
                 //// //// ////   G O B   I N T E R F A C E   //// //// ////
-        using DocumentId = EntityInterface::DocumentId;
+        using DocumentId = EntityInterface::Switch::DocumentId;
         using EntityId = EntityInterface::EntityId;
         using DocumentTypeId = uint32_t;
         using EntityTypeId = uint32_t;
@@ -42,8 +42,9 @@ namespace GUILayer
                 : _prop(prop), _srcBegin(srcBegin), _srcEnd(srcEnd), _elementType(elementType), _arrayCount(arrayCount), _isString(isString) {}
         };
 
-        EntityId CreateObject(DocumentId doc, EntityId obj, EntityTypeId objType, IEnumerable<PropertyInitializer>^ initializers);
-        bool DeleteObject(DocumentId doc, EntityId obj);
+        EntityId AssignEntityId(DocumentId doc);
+        bool CreateEntity(DocumentId doc, EntityTypeId objType, EntityId obj, IEnumerable<PropertyInitializer>^ initializers);
+        bool DeleteEntity(DocumentId doc, EntityId obj);
         bool SetProperty(DocumentId doc, EntityId obj, IEnumerable<PropertyInitializer>^ initializers);
         bool GetProperty(DocumentId doc, EntityId obj, PropertyId prop, void* dest, unsigned* destSize);
 

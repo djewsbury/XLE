@@ -71,8 +71,14 @@ namespace EntityInterface
 		return false;
 	}
 
-	std::optional<EntityId> PlacementEntities::CreateEntity(
+	EntityId PlacementEntities::AssignEntityId()
+	{
+		return _editor->GenerateObjectGUID();
+	}
+
+	bool PlacementEntities::CreateEntity(
 		StringAndHash typeId,
+		EntityId entityId,
 		IteratorRange<const PropertyInitializer*> initializers)
 	{
 		SceneEngine::PlacementsEditor::ObjTransDef newObj;
@@ -82,7 +88,6 @@ namespace EntityInterface
 
 		auto visChange = GetVisibilityChange(initializers);
 
-		auto entityId = _editor->GenerateObjectGUID();
 		auto guid = SceneEngine::PlacementGUID(_cellId, entityId);
 		std::shared_ptr<SceneEngine::PlacementsEditor::ITransaction> transaction;
 		if (visChange == MakeHidden) {
@@ -91,10 +96,10 @@ namespace EntityInterface
 			transaction = _editor->Transaction_Begin(nullptr, nullptr);
 		if (transaction->Create(guid, newObj)) {
 			transaction->Commit();
-			return entityId;
+			return true;
 		}
 
-		return {};
+		return false;
 	}
 
 	static std::shared_ptr<SceneEngine::PlacementsEditor::ITransaction> Begin(SceneEngine::PlacementsEditor& editor, SceneEngine::PlacementGUID guid)

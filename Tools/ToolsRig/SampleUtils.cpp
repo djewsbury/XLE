@@ -76,19 +76,21 @@ namespace ToolsRig
 					continue;
 				}
 				auto pluginName = keyname.AsString();
-				auto entity = cfg->CreateEntity(EntityInterface::MakeStringAndHash("game"), {});
-				if (entity) {
+				auto entity = cfg->AssignEntityId();
+				if (cfg->CreateEntity(EntityInterface::MakeStringAndHash("game"), entity, {})) {
 					RequireBeginElement(formatter);
 					while (formatter.TryKeyedItem(keyname)) {
 						EntityInterface::PropertyInitializer propInit;
 						propInit._prop = EntityInterface::MakeStringAndHash(keyname);
 						propInit._data = RequireRawValue(formatter, propInit._type);
-						cfg->SetProperty(entity.value(), MakeIteratorRange(&propInit, &propInit+1));
+						cfg->SetProperty(entity, MakeIteratorRange(&propInit, &propInit+1));
 					}
 					RequireEndElement(formatter);
-				} else
+				} else {
 					SkipValueOrElement(formatter);
-				configuredPlugins.emplace_back(std::move(pluginName), entity.value());
+					entity = ~0ull;
+				}
+				configuredPlugins.emplace_back(std::move(pluginName), entity);
 				pluginsPendingApply.insert(cfg);
 			}
 

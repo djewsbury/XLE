@@ -99,6 +99,8 @@ namespace SceneEngine
 		void CullAndBuildDrawables(
 			unsigned instanceIdx, const Float3x4& localToWorld);
 
+		bool IntersectViewFrustumTest(const Float3x4& localToWorld);
+
 		BuildDrawablesHelper(
 			IRigidModelScene& scene,
 			IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,

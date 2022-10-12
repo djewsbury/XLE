@@ -26,7 +26,7 @@ namespace GUILayer
         uint32_t _nextChildListId = 1;
     };
 
-    DocumentId EntityLayer::CreateDocument(DocumentTypeId docType) 
+    auto EntityLayer::CreateDocument(DocumentTypeId docType) -> DocumentId
     {
         auto i = LowerBound(_pimpl->_documentTypes, docType);
         if (i != _pimpl->_documentTypes.end() && i->first == docType) {
@@ -77,19 +77,28 @@ namespace GUILayer
         return std::move(native);
     }
 
-    auto EntityLayer::CreateObject(DocumentId doc, EntityId obj, EntityTypeId objType, IEnumerable<PropertyInitializer>^ initializers) -> EntityId
+    EntityId EntityLayer::AssignEntityId(DocumentId doc)
+    {
+        auto intrf = _switch->GetInterface(doc);
+        if (intrf) {
+            return intrf->AssignEntityId();
+        }
+        return ~0ull;
+    }
+
+    bool EntityLayer::CreateEntity(DocumentId doc, EntityTypeId objType, EntityId obj, IEnumerable<PropertyInitializer>^ initializers)
     {
         auto native = AsNative(*_pimpl.get(), initializers);
         auto intrf = _switch->GetInterface(doc);
         if (intrf) {
             auto i = LowerBound(_pimpl->_entityTypes, objType);
             if (i != _pimpl->_entityTypes.end() && i->first == objType)
-                return intrf->CreateEntity({i->second.first, i->second.second}, native).value_or(~0ull); 
+                return intrf->CreateEntity({i->second.first, i->second.second}, obj, native); 
         }
-        return ~0ull;
+        return false;
     }
 
-    bool EntityLayer::DeleteObject(DocumentId doc, EntityId obj)
+    bool EntityLayer::DeleteEntity(DocumentId doc, EntityId obj)
     { 
         auto intrf = _switch->GetInterface(doc);
         if (intrf)

@@ -85,12 +85,6 @@ namespace SceneEngine
             const PlacementGUID* begin, const PlacementGUID* end,
 			const std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate>& preDrawDelegate = nullptr);
 
-            // -------------- Utilities --------------
-        auto GetVisibleQuadTrees(const PlacementCellSet& cellSet, const Float4x4& worldToClip) const
-            -> std::vector<std::pair<Float3x4, std::shared_ptr<GenericQuadTree>>>;
-        auto GetQuadTree(const PlacementCellSet& cellSet, StringSection<> cellName) const
-            -> std::shared_ptr<GenericQuadTree>;
-
         struct ObjectBoundingBoxes { const std::pair<Float3, Float3> * _boundingBox = nullptr; unsigned _stride = 0; unsigned _count = 0; };
         auto GetObjectBoundingBoxes(const PlacementCellSet& cellSet, const Float4x4& worldToClip) const
             -> std::vector<std::pair<Float3x4, ObjectBoundingBoxes>>;

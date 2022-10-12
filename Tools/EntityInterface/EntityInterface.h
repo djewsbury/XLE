@@ -108,7 +108,8 @@ namespace EntityInterface
     class IMutableEntityDocument
     {
     public:
-        virtual std::optional<EntityId> CreateEntity(StringAndHash objType, IteratorRange<const PropertyInitializer*>) = 0;
+        virtual EntityId AssignEntityId() = 0;
+        virtual bool CreateEntity(StringAndHash objType, EntityId id, IteratorRange<const PropertyInitializer*>) = 0;
         virtual bool DeleteEntity(EntityId id) = 0;
         virtual bool SetProperty(EntityId id, IteratorRange<const PropertyInitializer*>) = 0;
         virtual std::optional<ImpliedTyping::TypeDesc> GetProperty(EntityId id, StringAndHash prop, IteratorRange<void*> destinationBuffer) const = 0;
@@ -119,7 +120,7 @@ namespace EntityInterface
     class Switch
     {
     public:
-        using DocumentId = uint32_t;
+        using DocumentId = uint64_t;
         DocumentId CreateDocument(StringSection<> docType, StringSection<> initializer);
         DocumentId CreateDocument(std::shared_ptr<IMutableEntityDocument> doc);
         bool DeleteDocument(DocumentId doc);

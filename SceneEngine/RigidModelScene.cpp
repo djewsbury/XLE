@@ -580,6 +580,19 @@ namespace SceneEngine
 		EnableInstanceDeform(*_activeRenderer->_deformAccelerator, instanceIdx);
 	}
 
+	bool IRigidModelScene::BuildDrawablesHelper::IntersectViewFrustumTest(const Float3x4& localToWorld)
+	{
+		if (_complexCullingVolume && _complexCullingVolume->TestAABB(localToWorld, _activeRenderer->_aabb.first, _activeRenderer->_aabb.second) == CullTestResult::Culled)
+			return false;
+		uint32_t viewMask = 0;
+		for (unsigned v=0; v<_views.size(); ++v) {
+			auto localToClip = Combine(localToWorld, _views[v]._worldToProjection);
+			viewMask |= (!CullAABB(localToClip, _activeRenderer->_aabb.first, _activeRenderer->_aabb.second, RenderCore::Techniques::GetDefaultClipSpaceType())) << v;
+		}
+		if (!viewMask) return false;
+		return true;
+	}
+
 	bool IRigidModelScene::BuildDrawablesHelper::SetRenderer(void* renderer)
 	{
 		_activeRenderer = (RigidModelSceneInternal::Renderer*)renderer;

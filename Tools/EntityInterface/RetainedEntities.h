@@ -150,7 +150,8 @@ namespace EntityInterface
     class RetainedEntitiesAdapter : public IMutableEntityDocument
     {
     public:
-		std::optional<EntityId> CreateEntity(StringAndHash, IteratorRange<const PropertyInitializer*>) override;
+        EntityId AssignEntityId();
+		bool CreateEntity(StringAndHash, EntityId, IteratorRange<const PropertyInitializer*>) override;
 		bool DeleteEntity(EntityId) override;
 		bool SetProperty(EntityId, IteratorRange<const PropertyInitializer*>) override;
 		std::optional<ImpliedTyping::TypeDesc> GetProperty(EntityId, StringAndHash prop, IteratorRange<void*> destinationBuffer) const override;

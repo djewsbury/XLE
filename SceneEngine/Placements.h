@@ -20,11 +20,9 @@ namespace SceneEngine
 	public:
 		using BoundingBox = std::pair<Float3, Float3>;
 
-		class ObjectReference
+		struct ObjectReference
 		{
-		public:
 			Float3x4    _localToCell;
-			BoundingBox _cellSpaceBoundary;
 			unsigned    _modelFilenameOffset;       // note -- hash values should be stored with the filenames
 			unsigned    _materialFilenameOffset;
 			unsigned    _supplementsOffset;
@@ -33,10 +31,10 @@ namespace SceneEngine
 			Float3      _decomposedScale;
 		};
 		
-		const ObjectReference*  GetObjectReferences() const;
-		unsigned                GetObjectReferenceCount() const;
-		const void*             GetFilenamesBuffer() const;
-		const uint64_t*           GetSupplementsBuffer() const;
+		IteratorRange<const ObjectReference*>	GetObjectReferences() const;
+		IteratorRange<const BoundingBox*>		GetCellSpaceBoundaries() const;
+		const void*								GetFilenamesBuffer() const;
+		const uint64_t*							GetSupplementsBuffer() const;
 
 		void Write(const Assets::ResChar destinationFile[]) const;
 		::Assets::Blob Serialize() const;
@@ -51,17 +49,19 @@ namespace SceneEngine
 		~Placements();
 	protected:
 		std::vector<ObjectReference>    _objects;
+		std::vector<BoundingBox>		_cellSpaceBoundaries;
 		std::vector<uint8_t>            _filenamesBuffer;
 		std::vector<uint64_t>           _supplementsBuffer;
 
 		::Assets::DependencyValidation				_dependencyValidation;
 		void ReplaceString(const char oldString[], const char newString[]);
+		friend class DynamicPlacements;
 	};
 
-	inline auto            Placements::GetObjectReferences() const -> const ObjectReference*	{ return AsPointer(_objects.begin()); }
-	inline unsigned        Placements::GetObjectReferenceCount() const							{ return unsigned(_objects.size()); }
-	inline const void*     Placements::GetFilenamesBuffer() const								{ return AsPointer(_filenamesBuffer.begin()); }
-	inline const uint64_t*   Placements::GetSupplementsBuffer() const							{ return AsPointer(_supplementsBuffer.begin()); }
+	inline auto            	Placements::GetObjectReferences() const -> IteratorRange<const ObjectReference*>	{ return _objects; }
+	inline auto            	Placements::GetCellSpaceBoundaries() const -> IteratorRange<const BoundingBox*>	{ return _cellSpaceBoundaries; }
+	inline const void*     	Placements::GetFilenamesBuffer() const								{ return AsPointer(_filenamesBuffer.begin()); }
+	inline const uint64_t*	Placements::GetSupplementsBuffer() const							{ return AsPointer(_supplementsBuffer.begin()); }
 
 	class NascentPlacement
 	{
@@ -69,7 +69,7 @@ namespace SceneEngine
 		struct Resource
 		{
 			std::string _name, _material;
-			std::pair<Float3, Float3> _aabb;
+			std::pair<Float3, Float3> _cellSpaceBoundary;
 		};
 		Float3x4 _localToCell;
 		Resource _resource;

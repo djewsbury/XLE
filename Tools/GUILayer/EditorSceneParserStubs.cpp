@@ -92,14 +92,20 @@ namespace GUILayer
 
 	static void BuildDrawables(
 		EditorScene& scene,
+        RenderCore::Techniques::ParsingContext& parserContext,
 		RenderCore::LightingEngine::LightingTechniqueInstance::Step& step)
 	{
         SceneEngine::ExecuteSceneContext exeContext;
         exeContext._destinationPkts = MakeIteratorRange(step._pkts);
-        exeContext._views = MakeIteratorRange(step._multiViewDesc);
+        if (step._type == RenderCore::LightingEngine::StepType::ParseScene) {
+            exeContext._views = MakeIteratorRange(&parserContext.GetProjectionDesc(), &parserContext.GetProjectionDesc()+1);
+        } else if (step._type == RenderCore::LightingEngine::StepType::MultiViewParseScene) {
+            exeContext._views = MakeIteratorRange(step._multiViewDesc);
+        }
         exeContext._complexCullingVolume = step._complexCullingVolume;
 		scene._placementsManager->GetRenderer()->BuildDrawables(exeContext, *scene._placementsCells);
 		scene._placeholders->BuildDrawables(exeContext);
+        parserContext.RequireCommandList(exeContext._completionCmdList);
 	}
     
     void EditorSceneOverlay::Render(
@@ -132,9 +138,9 @@ namespace GUILayer
 				for (;;) {
 					auto next = lightingIterator.GetNextStep();
 					if (next._type == RenderCore::LightingEngine::StepType::None || next._type == RenderCore::LightingEngine::StepType::Abort) break;
-					if (next._type == RenderCore::LightingEngine::StepType::ParseScene) {
+					if (next._type == RenderCore::LightingEngine::StepType::ParseScene || next._type == RenderCore::LightingEngine::StepType::MultiViewParseScene) {
 					    assert(!next._pkts.empty());
-					    BuildDrawables(*_scene.get(), next);
+					    BuildDrawables(*_scene.get(), parserContext, next);
                     }
 				}
 

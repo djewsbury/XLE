@@ -20,7 +20,8 @@ namespace EntityInterface
     class PlacementEntities : public IMutableEntityDocument
     {
     public:
-        std::optional<EntityId> CreateEntity(StringAndHash id, IteratorRange<const PropertyInitializer*>) override;
+        EntityId AssignEntityId() override;
+        bool CreateEntity(StringAndHash id, EntityId, IteratorRange<const PropertyInitializer*>) override;
         bool DeleteEntity(EntityId id) override;
         bool SetProperty(EntityId id, IteratorRange<const PropertyInitializer*>) override;
         std::optional<ImpliedTyping::TypeDesc> GetProperty(EntityId id, StringAndHash prop, IteratorRange<void*> destinationBuffer) const override;
