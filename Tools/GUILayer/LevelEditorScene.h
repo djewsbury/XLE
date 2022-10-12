@@ -199,7 +199,7 @@ namespace GUILayer
         clix::shared_ptr<::EntityInterface::TerrainEntities> _terrainInterface;
 #endif
         EntityLayer^ _entities;
-        uint32_t _flexGlobDocumentId;
+        uint64_t _flexGlobDocumentId;
     };
 }
 

@@ -2413,13 +2413,6 @@ namespace SceneEngine
 
     bool    Transaction::Create(PlacementGUID guid, const ObjTransDef& newState)
     {
-        std::pair<Float3, Float3> boundingBox;
-        if (!GetLocalBoundingBox_Stall(boundingBox, newState._model.c_str())) {
-                // if we can't get a bounding box, then we can't really 
-                // create this object. We need to cancel the creation operation
-            return false;
-        }
-
         auto worldSpaceCenter = ExtractTranslation(newState._localToWorld);
 
         std::string materialFilename = newState._material;

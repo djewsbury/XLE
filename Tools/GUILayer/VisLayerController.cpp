@@ -37,8 +37,7 @@ namespace GUILayer
         std::shared_ptr<ToolsRig::VisualisationOverlay> _visOverlay;
 		std::shared_ptr<ToolsRig::ISimpleSceneOverlay> _modelLayer;
 		std::shared_ptr<PlatformRig::IOverlaySystem> _manipulatorLayer;
-		std::shared_ptr<ToolsRig::MouseOverTrackingOverlay> _trackingLayer;
-		std::shared_ptr<ToolsRig::VisMouseOver> _mouseOver;
+		std::shared_ptr<ToolsRig::VisCameraSettings> _camera;
 		std::shared_ptr<ToolsRig::VisAnimationState> _animState;
 		std::shared_ptr<ToolsRig::VisOverlayController> _overlayBinder;
 
@@ -57,7 +56,7 @@ namespace GUILayer
 
 	VisMouseOver^ VisLayerController::MouseOver::get()
 	{
-		return gcnew VisMouseOver(_pimpl->_mouseOver, nullptr);	// todo -- scene
+		return gcnew VisMouseOver(_pimpl->_visOverlay->GetMouseOver(), nullptr);	// todo -- scene
 	}
 
 	VisAnimationState^ VisLayerController::AnimationState::get()
@@ -120,13 +119,11 @@ namespace GUILayer
         overlaySet.AddSystem(_pimpl->_modelLayer);
 		overlaySet.AddSystem(_pimpl->_visOverlay);
 		overlaySet.AddSystem(_pimpl->_manipulatorLayer);
-		overlaySet.AddSystem(_pimpl->_trackingLayer);
 	}
 
 	void VisLayerController::DetachFromView(LayerControl^ view)
 	{
 		auto& overlaySet = view->GetWindowRig().GetMainOverlaySystemSet();
-		overlaySet.RemoveSystem(*_pimpl->_trackingLayer);
 		overlaySet.RemoveSystem(*_pimpl->_manipulatorLayer);
 		overlaySet.RemoveSystem(*_pimpl->_visOverlay);
 		overlaySet.RemoveSystem(*_pimpl->_modelLayer);
@@ -146,36 +143,30 @@ namespace GUILayer
 		auto primaryResourcesApparatus = EngineDevice::GetInstance()->GetNative().GetPrimaryResourcesApparatus();
 
 		_pimpl.reset(new VisLayerControllerPimpl());
-		_pimpl->_mouseOver = std::make_shared<ToolsRig::VisMouseOver>();
 		_pimpl->_animState = std::make_shared<ToolsRig::VisAnimationState>();
+		_pimpl->_camera = std::make_shared<ToolsRig::VisCameraSettings>();
 
 		_pimpl->_modelLayer = ToolsRig::CreateSimpleSceneOverlay(immediateDrawableApparatus, lightingEngineApparatus, drawingApparatus->_deformAccelerators);
 		// _pimpl->_modelLayer->Set(ToolsRig::VisEnvSettings{});
+		_pimpl->_modelLayer->Set(_pimpl->_camera);
 
 		_pimpl->_visOverlay = std::make_shared<ToolsRig::VisualisationOverlay>(
 			immediateDrawableApparatus,
-			ToolsRig::VisOverlaySettings{},
-            _pimpl->_mouseOver);
-		_pimpl->_visOverlay->Set(_pimpl->_modelLayer->GetCamera());
+			ToolsRig::VisOverlaySettings{});
+		_pimpl->_visOverlay->Set(_pimpl->_camera);
 		_pimpl->_visOverlay->Set(_pimpl->_animState);
 
 		{
-			auto manipulators = std::make_shared<ToolsRig::ManipulatorStack>(_pimpl->_modelLayer->GetCamera(), drawingApparatus);
+			auto manipulators = std::make_shared<ToolsRig::ManipulatorStack>(_pimpl->_camera, drawingApparatus);
 			manipulators->Register(
 				ToolsRig::ManipulatorStack::CameraManipulator,
 				ToolsRig::CreateCameraManipulator(
-					_pimpl->_modelLayer->GetCamera(), 
+					_pimpl->_camera,
 					ToolsRig::CameraManipulatorMode::Blender_RightButton));
 			_pimpl->_manipulatorLayer = ToolsRig::MakeLayerForInput(manipulators);
 		}
 
-		_pimpl->_trackingLayer = std::make_shared<ToolsRig::MouseOverTrackingOverlay>(
-			_pimpl->_mouseOver,
-			drawingApparatus,
-			_pimpl->_modelLayer->GetCamera());
-
 		_pimpl->_overlayBinder = std::make_shared<ToolsRig::VisOverlayController>(drawingApparatus->_drawablesPool, drawingApparatus->_pipelineAccelerators, drawingApparatus->_deformAccelerators);
-		_pimpl->_overlayBinder->AttachMouseTrackingOverlay(_pimpl->_trackingLayer);
 		_pimpl->_overlayBinder->AttachSceneOverlay(_pimpl->_modelLayer);
 		_pimpl->_overlayBinder->AttachVisualisationOverlay(_pimpl->_visOverlay);
 
