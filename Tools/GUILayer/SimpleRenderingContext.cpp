@@ -157,6 +157,7 @@ namespace GUILayer
         // Color is stored into a per-instance secondary vertex stream
         auto colorStorage = _immediateDrawables->GetDrawablesPacket()->AllocateStorage(RenderCore::Techniques::DrawablesPacket::Storage::Vertex, sizeof(Float4));
         geo->_vertexStreams[1]._vbOffset = colorStorage._startOffset;
+        geo->_vertexStreams[1]._type = RenderCore::Techniques::DrawableGeo::StreamType::PacketStorage;
         ++geo->_vertexStreamCount;
         *(Float4*)colorStorage._data.begin() = color;
 

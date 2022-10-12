@@ -1001,6 +1001,11 @@ namespace ToolsRig
 		return _pimpl->_settings;
 	}
 
+	std::shared_ptr<VisMouseOver> VisualisationOverlay::GetMouseOver() const
+	{
+		return _pimpl->_mouseOver;
+	}
+
 	void VisualisationOverlay::Set(const std::shared_ptr<VisAnimationState>& animState)
 	{
 		_pimpl->_animState = animState;

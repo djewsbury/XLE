@@ -160,6 +160,7 @@ namespace ToolsRig
 		void Set(const std::shared_ptr<VisAnimationState>&);
 
 		const VisOverlaySettings& GetOverlaySettings() const;
+        std::shared_ptr<VisMouseOver> GetMouseOver() const;
 
         virtual void Render(
             RenderCore::Techniques::ParsingContext& parserContext) override;

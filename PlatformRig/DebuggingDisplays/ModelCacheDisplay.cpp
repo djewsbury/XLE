@@ -135,7 +135,7 @@ namespace PlatformRig { namespace Overlays
 
 			// calculate how many entries can appear within tableArea, even if not all rows are drawn this time...
 			auto averageEntryHeight = totalHeightUsedByEntries ? (totalHeightUsedByEntries / (entryCount-(unsigned)scrollOffset)) : lineHeight;
-			ScrollBar::Coordinates scrollCoordinates(scrollBarLocation, 0.f, sourceEntryCount, tableAreaHeight / averageEntryHeight);
+			ScrollBar::Coordinates scrollCoordinates(scrollBarLocation, 0.f, sourceEntryCount, tableAreaHeight / (float)averageEntryHeight);
 			scrollOffset = _scrollBar.CalculateCurrentOffset(scrollCoordinates, scrollOffset);
 			DrawScrollBar(context, scrollCoordinates, scrollOffset, interfaceState.HasMouseOver(_scrollBar.GetID()) ? RenderOverlays::ColorB(120, 120, 120) : RenderOverlays::ColorB(51, 51, 51));
 			interactables.Register({scrollCoordinates.InteractableRect(), _scrollBar.GetID()});

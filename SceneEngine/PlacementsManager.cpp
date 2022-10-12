@@ -1121,13 +1121,11 @@ namespace SceneEngine
             BuildDrawablesMetrics bdMetrics;
 
 			if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == i->_filenameHash) {
-                assert(0);
-                #if 0   // broken because BuildDrawables requires a CellRenderInfo
-                    __declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, worldToProjection);
-                    _pimpl->CullCell(visibleObjects, cellToCullSpace, *ovr->second.get(), nullptr, &cullMetrics);
-                    auto cmdList = _pimpl->BuildDrawables<false>(executeContext._destinationPkts, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
-                    completionCmdList = std::max(cmdList, completionCmdList);
-                #endif
+                __declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, worldToProjection);
+                visibleObjects.resize(ovr->second->_placements.GetObjectReferences().size());
+                for (unsigned c=0; c<ovr->second->_placements.GetObjectReferences().size(); ++c) visibleObjects[c] = c; // "fake" post-culling list; just includes everything
+                auto cmdList = _pimpl->BuildDrawables<false, true>(executeContext._destinationPkts, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
+                completionCmdList = std::max(cmdList, completionCmdList);
 			} else {
 				auto* plc = _pimpl->CullCell(visibleObjects, worldToProjection, *i, &cullMetrics);
 				if (plc) {
@@ -1178,18 +1176,10 @@ namespace SceneEngine
             BuildDrawablesMetrics bdMetrics;
 
             if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == i->_filenameHash) {
-                assert(0);
-                #if 0   // broken because BuildDrawables requires a CellRenderInfo
-                    Float4x4 cellToCullingFrustums[worldToCullingFrustumsRange.size()];
-                    for (unsigned c=0; c<worldToCullingFrustumsRange.size(); ++c)
-                        cellToCullingFrustums[c] = Combine(i->_cellToWorld, worldToCullingFrustumsRange[c]);
-                    if (arbitraryVolume)
-                        _pimpl->CullCell(visibleObjects, *arbitraryVolume, i->_cellToWorld, MakeIteratorRange(cellToCullingFrustums, &cellToCullingFrustums[worldToCullingFrustumsRange.size()]), partialMask, *ovr->second.get(), nullptr, &cullMetrics);
-                    else
-                        _pimpl->CullCell(visibleObjects, MakeIteratorRange(cellToCullingFrustums, &cellToCullingFrustums[worldToCullingFrustumsRange.size()]), partialMask, *ovr->second.get(), nullptr, &cullMetrics);
-                    auto cmdList = _pimpl->BuildDrawablesViewMasks(executeContext._destinationPkts, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, &bdMetrics);
-                    completionCmdList = std::max(cmdList, completionCmdList);
-                #endif
+                visibleObjects.resize(ovr->second->_placements.GetObjectReferences().size());
+                for (unsigned c=0; c<ovr->second->_placements.GetObjectReferences().size(); ++c) visibleObjects[c] = {c, partialMask}; // "fake" post-culling list; just includes everything
+                auto cmdList = _pimpl->BuildDrawablesViewMasks(executeContext._destinationPkts, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, &bdMetrics);
+                completionCmdList = std::max(cmdList, completionCmdList);
 			} else {
                 auto* plc = _pimpl->CullCell(visibleObjects, arbitraryVolume, worldToCullingFrustumsRange, partialMask, *i, &cullMetrics);
                 if (plc) {
@@ -1236,13 +1226,11 @@ namespace SceneEngine
 
                     auto ovr = LowerBound(cellSet._pimpl->_cellOverrides, ci->_filenameHash);
 					if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == ci->_filenameHash) {
-                        assert(0);
-                        #if 0   // broken because BuildDrawables requires a CellRenderInfo
-                            __declspec(align(16)) auto cellToCullSpace = Combine(ci->_cellToWorld, worldToProjection);
-                            _pimpl->CullCell(visibleObjects, cellToCullSpace, *ovr->second.get(), nullptr);
-                            auto cmdList = _pimpl->BuildDrawables<true>(executeContext._destinationPkts, *ovr->second, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
-                            completionCmdList = std::max(cmdList, completionCmdList);
-                        #endif
+                        __declspec(align(16)) auto cellToCullSpace = Combine(ci->_cellToWorld, worldToProjection);
+                        visibleObjects.resize(ovr->second->_placements.GetObjectReferences().size());
+                        for (unsigned c=0; c<ovr->second->_placements.GetObjectReferences().size(); ++c) visibleObjects[c] = c; // "fake" post-culling list; just includes everything
+                        auto cmdList = _pimpl->BuildDrawables<true, true>(executeContext._destinationPkts, *ovr->second, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
+                        completionCmdList = std::max(cmdList, completionCmdList);
 					} else {
 						auto* plcmnts = _pimpl->CullCell(visibleObjects, worldToProjection, *ci);
 						if (plcmnts) {
@@ -1262,13 +1250,11 @@ namespace SceneEngine
 
                 auto ovr = LowerBound(cellSet._pimpl->_cellOverrides, i->_filenameHash);
 				if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == i->_filenameHash) {
-                    assert(0);
-                    #if 0   // broken because BuildDrawables requires a CellRenderInfo
-                        __declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, worldToProjection);
-                        _pimpl->CullCell(visibleObjects, cellToCullSpace, *ovr->second.get(), nullptr);
-                        auto cmdList = _pimpl->BuildDrawables<false>(executeContext._destinationPkts, *ovr->second, MakeIteratorRange(visibleObjects), i->_cellToWorld);
-                        completionCmdList = std::max(cmdList, completionCmdList);
-                    #endif
+                    __declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, worldToProjection);
+                    visibleObjects.resize(ovr->second->_placements.GetObjectReferences().size());
+                    for (unsigned c=0; c<ovr->second->_placements.GetObjectReferences().size(); ++c) visibleObjects[c] = c; // "fake" post-culling list; just includes everything
+                    auto cmdList = _pimpl->BuildDrawables<false, true>(executeContext._destinationPkts, *ovr->second, MakeIteratorRange(visibleObjects), i->_cellToWorld);
+                    completionCmdList = std::max(cmdList, completionCmdList);
 				} else {
 					auto* plcmnts = _pimpl->CullCell(visibleObjects, worldToProjection, *i);
 					if (plcmnts) {
@@ -1868,12 +1854,14 @@ namespace SceneEngine
 
         for (unsigned c=0; c<p->GetObjectReferences().size(); ++c) {
             auto& obj = p->GetObjectReferences()[c];
-            auto& cellSpaceBoundary = p->GetCellSpaceBoundaries()[c];
-                //  We're only doing a very rough world space bounding box vs ray test here...
-                //  Ideally, we should follow up with a more accurate test using the object local
-                //  space bounding box
-            if (!RayVsAABB(cellSpaceRay, cellSpaceBoundary.first, cellSpaceBoundary.second))
-                continue;
+            if (!p->GetCellSpaceBoundaries().empty()) {
+                auto& cellSpaceBoundary = p->GetCellSpaceBoundaries()[c];
+                    //  We're only doing a very rough world space bounding box vs ray test here...
+                    //  Ideally, we should follow up with a more accurate test using the object local
+                    //  space bounding box
+                if (!RayVsAABB(cellSpaceRay, cellSpaceBoundary.first, cellSpaceBoundary.second))
+                    continue;
+            }
 
             Placements::BoundingBox localBoundingBox;
             auto assetState = TryGetBoundingBox(
