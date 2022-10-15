@@ -164,15 +164,11 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     class UploadsThreadContext
     {
     public:
-        void                    ResolveCommandList();
-        void                    CommitToImmediate(
-            IThreadContext& commitTo,
-            unsigned frameId,
-            LockFreeFixedSizeQueue<unsigned, 4>* framePriorityQueue = nullptr);
+        void                    ResolveCommandList(CommandListID id);
+        void                    CommitToImmediate(IThreadContext& commitTo, unsigned frameId);
 
         CommandListMetrics      PopMetrics();
 
-        CommandListID           CommandList_GetUnderConstruction() const;
         CommandListID           CommandList_GetCommittedToImmediate() const;
 
         CommandListMetrics&     GetMetricsUnderConstruction();
@@ -181,7 +177,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         DeferredOperations&     GetDeferredOperationsUnderConstruction();
 
         unsigned                CommitCount_Current();
-        unsigned&               CommitCount_LastResolve();
 
         PlatformInterface::StagingPage&     GetStagingPage();
         PlatformInterface::QueueMarker      GetProducerCmdListSpecificMarker();

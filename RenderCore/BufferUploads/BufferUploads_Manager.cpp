@@ -106,7 +106,7 @@ namespace RenderCore { namespace BufferUploads
                                     IThreadContext& threadContext,
                                     const ResourceDesc& desc, IDataPacket& data);
 
-        void                Process(unsigned stepMask, PlatformInterface::UploadsThreadContext& context, LockFreeFixedSizeQueue<unsigned, 4>& pendingFramePriorityCommandLists);
+        void                Process(unsigned stepMask, PlatformInterface::UploadsThreadContext& context);
 
         void                Resource_Release(ResourceLocator& locator);
         void                Resource_AddRef(const ResourceLocator& locator);
@@ -116,7 +116,7 @@ namespace RenderCore { namespace BufferUploads
         void                Wait(unsigned stepMask, PlatformInterface::UploadsThreadContext& context);
         void                TriggerWakeupEvent();
 
-        unsigned            FlipWritingQueueSet();
+        bool                CompleteCurrentCmdListID();
         unsigned            BindOnBackgroundFrame(std::function<void()>&& fn);
         void                UnbindOnBackgroundFrame(unsigned marker);
         void                BindBackgroundThread();
@@ -215,9 +215,8 @@ namespace RenderCore { namespace BufferUploads
             std::shared_ptr<IDataPacket> _initialisationData;
         };
 
-        class QueueSet
+        struct QueueSet
         {
-        public:
             LockFreeFixedSizeQueue<PrepareStagingStep, 256> _prepareStagingSteps;
             LockFreeFixedSizeQueue<TransferStagingToFinalStep, 256> _transferStagingToFinalSteps;
             LockFreeFixedSizeQueue<CreateFromDataPacketStep, 256> _createFromDataPacketSteps;
@@ -227,7 +226,11 @@ namespace RenderCore { namespace BufferUploads
         QueueSet _queueSet_FramePriority[4];
         unsigned _framePriority_WritingQueueSet;
 
-        LockFreeFixedSizeQueue<std::function<void(AssemblyLine&, PlatformInterface::UploadsThreadContext&)>, 256> _queuedFunctions;
+        struct CmdListToResolve { CommandListID _cmdListId; unsigned _framePriorityQueueSet; };
+        LockFreeFixedSizeQueue<CmdListToResolve, 4> _cmdListsToResolve;        // cmd list id & queue set idx for frame priority lists that must be committed
+        CommandListID _cmdListNextResolve = 1;
+
+        LockFreeFixedSizeQueue<std::function<void(AssemblyLine&, PlatformInterface::UploadsThreadContext&, CommandListID)>, 256> _queuedFunctions;
         SimpleWakeupEvent _wakeupEvent;
 
         Signal<> _onBackgroundFrame;
@@ -260,12 +263,13 @@ namespace RenderCore { namespace BufferUploads
 
         void    SystemReleaseTransaction(Transaction* transaction, bool abort = false);
 
-        bool    Process(CreateFromDataPacketStep& resourceCreateStep, PlatformInterface::UploadsThreadContext& context, const CommandListBudget& budgetUnderConstruction);
-        bool    Process(PrepareStagingStep& prepareStagingStep, PlatformInterface::UploadsThreadContext& context, const CommandListBudget& budgetUnderConstruction);
-        bool    Process(TransferStagingToFinalStep& transferStagingToFinalStep, PlatformInterface::UploadsThreadContext& context, const CommandListBudget& budgetUnderConstruction);
+        bool    Process(CreateFromDataPacketStep& resourceCreateStep, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction, const CommandListBudget& budgetUnderConstruction);
+        bool    Process(PrepareStagingStep& prepareStagingStep, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction, const CommandListBudget& budgetUnderConstruction);
+        bool    Process(TransferStagingToFinalStep& transferStagingToFinalStep, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction, const CommandListBudget& budgetUnderConstruction);
 
-        bool    ProcessQueueSet(QueueSet& queueSet, unsigned stepMask, PlatformInterface::UploadsThreadContext& context, const CommandListBudget& budgetUnderConstruction);
-        bool    DrainPriorityQueueSet(QueueSet& queueSet, unsigned stepMask, PlatformInterface::UploadsThreadContext& context);
+        bool    ProcessQueueSet(QueueSet& queueSet, unsigned stepMask, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction, const CommandListBudget& budgetUnderConstruction);
+        struct DrainPriorityQueueSetResult { bool _didSomething; bool _someOperationsFailed; };
+        DrainPriorityQueueSetResult    DrainPriorityQueueSet(QueueSet& queueSet, unsigned stepMask, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction);
 
         auto    GetQueueSet(TransactionOptions::BitField transactionOptions) -> QueueSet &;
         void    PushStep(QueueSet&, PrepareStagingStep&& step);
@@ -430,13 +434,13 @@ namespace RenderCore { namespace BufferUploads
         assert(dst.IsWholeResource() && src.IsWholeResource());
         
         _queuedFunctions.push_overflow(
-            [helper=std::move(helper)](AssemblyLine& assemblyLine, PlatformInterface::UploadsThreadContext& context) mutable {
+            [helper=std::move(helper)](AssemblyLine& assemblyLine, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction) mutable {
                 TRY {
                     // Update any transactions that are pointing at one of the moved blocks
                     assemblyLine.ApplyRepositions(helper->_dst.GetContainingResource(), *helper->_src.GetContainingResource(), helper->_steps);
                     // Copy between the resources using the GPU
                     context.GetResourceUploadHelper().DeviceBasedCopy(*helper->_dst.GetContainingResource(), *helper->_src.GetContainingResource(), helper->_steps);
-                    helper->_promise.set_value(context.CommandList_GetUnderConstruction());
+                    helper->_promise.set_value(cmdListUnderConstruction);
                     ++context.GetMetricsUnderConstruction()._contextOperations;
                 } CATCH (...) {
                     helper->_promise.set_exception(std::current_exception());
@@ -816,7 +820,7 @@ namespace RenderCore { namespace BufferUploads
     {
         std::vector<TransactionID> transactions{transactionsInit.begin(), transactionsInit.end()};
         _queuedFunctions.push_overflow(
-            [transactions=std::move(transactions), fn=std::move(fn)](auto& assemblyLine, auto&) {
+            [transactions=std::move(transactions), fn=std::move(fn)](auto& assemblyLine, auto&, CommandListID) {
                 ScopedLock(assemblyLine._transactionsLock);
                 auto attachment = std::make_shared<OnCompletionAttachment>();
                 attachment->_transactions.reserve(transactions.size());
@@ -914,7 +918,7 @@ namespace RenderCore { namespace BufferUploads
         assert(newValue >= 0);
     }
 
-    bool AssemblyLine::Process(CreateFromDataPacketStep& resourceCreateStep, PlatformInterface::UploadsThreadContext& context, const CommandListBudget& budgetUnderConstruction)
+    bool AssemblyLine::Process(CreateFromDataPacketStep& resourceCreateStep, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction, const CommandListBudget& budgetUnderConstruction)
     {
         auto& metricsUnderConstruction = context.GetMetricsUnderConstruction();
         if ((metricsUnderConstruction._contextOperations+1) >= budgetUnderConstruction._limit_Operations)
@@ -1056,7 +1060,7 @@ namespace RenderCore { namespace BufferUploads
             }
 
             // Embue the final resource with the completion command list information
-            transaction->_finalResource = ResourceLocator { std::move(finalConstruction), context.CommandList_GetUnderConstruction() };
+            transaction->_finalResource = ResourceLocator { std::move(finalConstruction), cmdListUnderConstruction };
             transaction->_promise.set_value(transaction->_finalResource);
             transaction->_promisePending = false;
             resourceCreateStep._transactionRef.SuccessfulRetirement();
@@ -1069,7 +1073,7 @@ namespace RenderCore { namespace BufferUploads
         return true;
     }
 
-    bool AssemblyLine::Process(PrepareStagingStep& prepareStagingStep, PlatformInterface::UploadsThreadContext& context, const CommandListBudget& budgetUnderConstruction)
+    bool AssemblyLine::Process(PrepareStagingStep& prepareStagingStep, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction, const CommandListBudget& budgetUnderConstruction)
     {
         auto& metricsUnderConstruction = context.GetMetricsUnderConstruction();
         if ((metricsUnderConstruction._contextOperations+1) >= budgetUnderConstruction._limit_Operations)
@@ -1114,7 +1118,7 @@ namespace RenderCore { namespace BufferUploads
                         if (auto l = _weakThis.lock()) {
                             auto helper = std::make_shared<PlatformInterface::StagingPage::Allocation>(std::move(_stagingConstruction));
                             l->_queuedFunctions.push_overflow(
-                                [helper=std::move(helper)](auto&, auto&) {
+                                [helper=std::move(helper)](auto&, auto&, auto) {
                                     // just holding onto _stagingConstruction to release it in the assembly line thread
                                 });
                             l->_wakeupEvent.Increment();
@@ -1246,7 +1250,7 @@ namespace RenderCore { namespace BufferUploads
         }
     }
 
-    bool AssemblyLine::Process(TransferStagingToFinalStep& transferStagingToFinalStep, PlatformInterface::UploadsThreadContext& context, const CommandListBudget& budgetUnderConstruction)
+    bool AssemblyLine::Process(TransferStagingToFinalStep& transferStagingToFinalStep, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction, const CommandListBudget& budgetUnderConstruction)
     {
         CommandListMetrics& metricsUnderConstruction = context.GetMetricsUnderConstruction();
         if ((metricsUnderConstruction._contextOperations+1) >= budgetUnderConstruction._limit_Operations)
@@ -1311,7 +1315,7 @@ namespace RenderCore { namespace BufferUploads
             }
 
             // Embue the final resource with the completion command list information
-            transaction->_finalResource = ResourceLocator { std::move(transaction->_finalResource), context.CommandList_GetUnderConstruction() };
+            transaction->_finalResource = ResourceLocator { std::move(transaction->_finalResource), cmdListUnderConstruction };
 
             metricsUnderConstruction._bytesUploadTotal += descByteCount;
             metricsUnderConstruction._bytesUploaded[dataType] += descByteCount;
@@ -1329,37 +1333,41 @@ namespace RenderCore { namespace BufferUploads
         return true;
     }
 
-    bool        AssemblyLine::DrainPriorityQueueSet(QueueSet& queueSet, unsigned stepMask, PlatformInterface::UploadsThreadContext& context)
+    auto AssemblyLine::DrainPriorityQueueSet(QueueSet& queueSet, unsigned stepMask, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction) -> DrainPriorityQueueSetResult
     {
-        bool didSomething = false;
+        DrainPriorityQueueSetResult result { false, false };
+        bool prepareStagingBlocked = false;
+        bool transferStagingBlocked = false;
         CommandListBudget budgetUnderConstruction(true);
 
             /////////////// ~~~~ /////////////// ~~~~ ///////////////
         for (;;) {
+
+            // try to drain everything until we're empty, or something fails
+            // however we'll try to interleave _prepareStagingSteps & _transferStagingToFinalSteps
+
             bool continueLooping = false;
-            if (stepMask & Step_PrepareStaging) {
+            if ((stepMask & Step_PrepareStaging) && !prepareStagingBlocked) {
                 PrepareStagingStep* step = nullptr;
                 if (queueSet._prepareStagingSteps.try_front(step)) {
-                    if (Process(*step, context, budgetUnderConstruction)) {
-                        didSomething = true;
+                    if (Process(*step, context, cmdListUnderConstruction, budgetUnderConstruction)) {
+                        result._didSomething = continueLooping = true;
+                        queueSet._prepareStagingSteps.pop();
                     } else {
-                        _queueSet_Main._prepareStagingSteps.push_overflow(std::move(*step));
+                        prepareStagingBlocked = result._someOperationsFailed = true;
                     }
-                    continueLooping = true;
-                    queueSet._prepareStagingSteps.pop();
                 }
             }
 
-            if (stepMask & Step_TransferStagingToFinal) {
+            if ((stepMask & Step_TransferStagingToFinal) && !transferStagingBlocked) {
                 TransferStagingToFinalStep* step = 0;
                 if (queueSet._transferStagingToFinalSteps.try_front(step)) {
-                    if (Process(*step, context, budgetUnderConstruction)) {
-                        didSomething = true;
+                    if (Process(*step, context, cmdListUnderConstruction, budgetUnderConstruction)) {
+                        result._didSomething = continueLooping = true;
+                        queueSet._transferStagingToFinalSteps.pop();
                     } else {
-                        _queueSet_Main._transferStagingToFinalSteps.push_overflow(std::move(*step));
+                        transferStagingBlocked = result._someOperationsFailed = true;
                     }
-                    continueLooping = true;
-                    queueSet._transferStagingToFinalSteps.pop();
                 }
             }
             if (!continueLooping) break;
@@ -1369,19 +1377,20 @@ namespace RenderCore { namespace BufferUploads
         if (stepMask & Step_CreateFromDataPacket) {
             CreateFromDataPacketStep* step = 0;
             while (queueSet._createFromDataPacketSteps.try_front(step)) {
-                if (Process(*step, context, budgetUnderConstruction)) {
-                    didSomething = true;
+                if (Process(*step, context, cmdListUnderConstruction, budgetUnderConstruction)) {
+                    result._didSomething = true;
+                    queueSet._createFromDataPacketSteps.pop();
                 } else {
-                    _queueSet_Main._createFromDataPacketSteps.push_overflow(std::move(*step));
+                    result._someOperationsFailed = true;
+                    break;
                 }
-                queueSet._createFromDataPacketSteps.pop();
             }
         }
 
-        return didSomething;
+        return result;
     }
 
-    bool AssemblyLine::ProcessQueueSet(QueueSet& queueSet, unsigned stepMask, PlatformInterface::UploadsThreadContext& context, const CommandListBudget& budgetUnderConstruction)
+    bool AssemblyLine::ProcessQueueSet(QueueSet& queueSet, unsigned stepMask, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction, const CommandListBudget& budgetUnderConstruction)
     {
         bool didSomething = false;
         bool prepareStagingBlocked = false;
@@ -1395,7 +1404,7 @@ namespace RenderCore { namespace BufferUploads
             bool continueLooping = false;
             PrepareStagingStep* prepareStaging = nullptr;
             if ((stepMask & Step_PrepareStaging) && !prepareStagingBlocked && queueSet._prepareStagingSteps.try_front(prepareStaging)) {
-                if (Process(*prepareStaging, context, budgetUnderConstruction)) {
+                if (Process(*prepareStaging, context, cmdListUnderConstruction, budgetUnderConstruction)) {
                     didSomething = continueLooping = true;
                     queueSet._prepareStagingSteps.pop();
                 } else
@@ -1404,7 +1413,7 @@ namespace RenderCore { namespace BufferUploads
 
             TransferStagingToFinalStep* transferStaging = nullptr;
             if ((stepMask & Step_TransferStagingToFinal) && !transferStagingBlocked && queueSet._transferStagingToFinalSteps.try_front(transferStaging)) {
-                if (Process(*transferStaging, context, budgetUnderConstruction)) {
+                if (Process(*transferStaging, context, cmdListUnderConstruction, budgetUnderConstruction)) {
                     didSomething = continueLooping = true;
                     queueSet._transferStagingToFinalSteps.pop();
                 } else
@@ -1417,7 +1426,7 @@ namespace RenderCore { namespace BufferUploads
         if (stepMask & Step_CreateFromDataPacket) {
             CreateFromDataPacketStep* step = 0;
             while (queueSet._createFromDataPacketSteps.try_front(step)) {
-                if (Process(*step, context, budgetUnderConstruction)) {
+                if (Process(*step, context, cmdListUnderConstruction, budgetUnderConstruction)) {
                     didSomething = true;
                     queueSet._createFromDataPacketSteps.pop();
                 } else
@@ -1428,19 +1437,23 @@ namespace RenderCore { namespace BufferUploads
         return didSomething;
     }
 
-    void AssemblyLine::Process(unsigned stepMask, PlatformInterface::UploadsThreadContext& context, LockFreeFixedSizeQueue<unsigned, 4>& pendingFramePriorityCommandLists)
+    void AssemblyLine::Process(unsigned stepMask, PlatformInterface::UploadsThreadContext& context)
     {
         const bool          isLoading = false;
         CommandListMetrics& metricsUnderConstruction = context.GetMetricsUnderConstruction();
         CommandListBudget   budgetUnderConstruction(isLoading);
 
-        bool atLeastOneRealAction = false;
+        bool doResolve = false;
+        CommandListID cmdListId = _cmdListNextResolve;
+        bool preventNonFramePriority = false;
+        bool popFromFramePriority = false;
+        bool completingResolveForCmdList = false;
 
             /////////////// ~~~~ /////////////// ~~~~ ///////////////
         if (stepMask & Step_BackgroundMisc) {
-            std::function<void(AssemblyLine&, PlatformInterface::UploadsThreadContext&)>* fn;
+            std::function<void(AssemblyLine&, PlatformInterface::UploadsThreadContext&, CommandListID)>* fn;
             while (_queuedFunctions.try_front(fn)) {
-                fn->operator()(*this, context);
+                fn->operator()(*this, context, cmdListId);
                 _queuedFunctions.pop();
             }
 
@@ -1454,20 +1467,25 @@ namespace RenderCore { namespace BufferUploads
             context.GetStagingPage().UpdateConsumerMarker();        // update at least once per frame, not strictly necessary, but improves metrics
         }
 
-        bool framePriorityResolve = false;
-        bool popFromFramePriority = false;
-        unsigned *qs = NULL;
-
-        if (pendingFramePriorityCommandLists.try_front(qs)) {
+        CmdListToResolve *qs = NULL;
+        if (_cmdListsToResolve.try_front(qs)) {
 
                 //      --~<   Drain all frame priority steps   >~--      //
-            framePriorityResolve = DrainPriorityQueueSet(_queueSet_FramePriority[*qs], stepMask, context);
-            atLeastOneRealAction |= framePriorityResolve;
-            popFromFramePriority = true;
+            auto drainResult = DrainPriorityQueueSet(_queueSet_FramePriority[qs->_framePriorityQueueSet], stepMask, context, qs->_framePriorityQueueSet);
+            if (!drainResult._someOperationsFailed) {
+                popFromFramePriority = true;
+                completingResolveForCmdList = true;
+                cmdListId = qs->_cmdListId;     // cmd list finished
 
+                // we can go ahead and advance the working cmd list id
+                if (cmdListId == _cmdListNextResolve)
+                    ++_cmdListNextResolve;
+            }
+            preventNonFramePriority = drainResult._someOperationsFailed;       // prevent non-frame-priority if we got some failures during this drain attempt
+            doResolve = true;       // always resolve, as long this 
         }
 
-        if (!framePriorityResolve) {
+        if (!preventNonFramePriority) {
 
                 //
                 //      Process the queue set, but do everything in the "frame priority" queue set that we're writing 
@@ -1475,13 +1493,13 @@ namespace RenderCore { namespace BufferUploads
                 //      things will complete first
                 //
 
-            atLeastOneRealAction |= ProcessQueueSet(_queueSet_FramePriority[_framePriority_WritingQueueSet], stepMask, context, budgetUnderConstruction);
-            atLeastOneRealAction |= ProcessQueueSet(_queueSet_Main, stepMask, context, budgetUnderConstruction);
+            ProcessQueueSet(_queueSet_FramePriority[_framePriority_WritingQueueSet], stepMask, context, cmdListId, budgetUnderConstruction);
+            ProcessQueueSet(_queueSet_Main, stepMask, context, cmdListId, budgetUnderConstruction);
 
         }
 
         if (stepMask & Step_BackgroundMisc) {
-            // move from _pendingRetirements into the 
+            // move from _pendingRetirements into the metrics under construction
             ScopedLock(_pendingRetirementsLock);
             auto& metrics = context.GetMetricsUnderConstruction();
             auto nonOverflow = std::min(_pendingRetirements.size(), dimof(metrics._retirements) - metrics._retirementCount);
@@ -1492,32 +1510,20 @@ namespace RenderCore { namespace BufferUploads
             _pendingRetirements.clear();
         }
 
-        CommandListID commandListIdCommitted = ~unsigned(0x0);
-
             /////////////// ~~~~ /////////////// ~~~~ ///////////////
-        const bool somethingToResolve = 
-                (metricsUnderConstruction._contextOperations!=0)
-            || !context.GetDeferredOperationsUnderConstruction().IsEmpty();
-        
-        // The commit count is a scheduling scheme
-        //    -- we will generally "resolve" a command list and queue it for submission
-        //      once per call to Manager::Update(). The exception is when there are frame
-        //      priority requests
-        const unsigned commitCountCurrent = context.CommitCount_Current();
-        const bool normalPriorityResolve = commitCountCurrent > context.CommitCount_LastResolve();
-        if ((framePriorityResolve||normalPriorityResolve) && somethingToResolve) {
-            commandListIdCommitted = context.CommandList_GetUnderConstruction();
-            context.CommitCount_LastResolve() = commitCountCurrent;
+        if (doResolve) {
+            if ((metricsUnderConstruction._contextOperations!=0)
+                || !context.GetDeferredOperationsUnderConstruction().IsEmpty())
+                context.ResolveCommandList(completingResolveForCmdList ? cmdListId : ~0u);
 
             metricsUnderConstruction._assemblyLineMetrics = CalculateMetrics(context);
 
-            context.ResolveCommandList();
-
-            atLeastOneRealAction = true;
+            if (completingResolveForCmdList)
+                assert(_cmdListNextResolve > cmdListId);        // should have already advanced this index
         }
 
         if (popFromFramePriority)
-            pendingFramePriorityCommandLists.pop();
+            _cmdListsToResolve.pop();
     }
 
     AssemblyLineMetrics AssemblyLine::CalculateMetrics(PlatformInterface::UploadsThreadContext& context)
@@ -1569,14 +1575,14 @@ namespace RenderCore { namespace BufferUploads
         _wakeupEvent.Increment();
     }
 
-    unsigned AssemblyLine::FlipWritingQueueSet()
+    bool AssemblyLine::CompleteCurrentCmdListID()
     {
-            //      This works best if we're only accessing _currentFramePriorityQueueSet from a single
-            //      thread. Eg; we should schedule operations for frame priority transactions from the 
-            //      main thread, and set the barrier at the end of the main thread;
+        // todo -- threading protection
         unsigned oldWritingQueueSet = _framePriority_WritingQueueSet;
+        if (!_cmdListsToResolve.push(AssemblyLine::CmdListToResolve{_cmdListNextResolve, oldWritingQueueSet}))
+            return false;
         _framePriority_WritingQueueSet = (_framePriority_WritingQueueSet+1)%dimof(_queueSet_FramePriority);
-        return oldWritingQueueSet;
+        return true;
     }
 
     unsigned AssemblyLine::BindOnBackgroundFrame(std::function<void()>&& fn)
@@ -1681,7 +1687,6 @@ namespace RenderCore { namespace BufferUploads
 
         volatile bool _shutdownBackgroundThread;
 
-        LockFreeFixedSizeQueue<unsigned, 4> _pendingFramePriority_CommandLists;
         unsigned _frameId = 0;
         unsigned _guid = 0;
 
@@ -1698,6 +1703,7 @@ namespace RenderCore { namespace BufferUploads
     void                    Manager::StallUntilCompletion(IThreadContext& immediateContext, CommandListID id)
     {
         if (!id || id == CommandListID_Invalid) return;
+        FramePriority_Barrier();        // ensure we're queued for resolve
         while (!IsComplete(id)) {
             Update(immediateContext);
             std::this_thread::sleep_for(std::chrono::nanoseconds(500*1000));
@@ -1716,12 +1722,12 @@ namespace RenderCore { namespace BufferUploads
     void                    Manager::Update(IThreadContext& immediateContext)
     {
         if (_foregroundStepMask)
-            _assemblyLine->Process(_foregroundStepMask, *_foregroundContext.get(), _pendingFramePriority_CommandLists);
+            _assemblyLine->Process(_foregroundStepMask, *_foregroundContext.get());
 
             //  Commit both the foreground and background contexts here
         ++_frameId;
         _foregroundContext->CommitToImmediate(immediateContext, _frameId);
-        _backgroundContext->CommitToImmediate(immediateContext, _frameId, &_pendingFramePriority_CommandLists);
+        _backgroundContext->CommitToImmediate(immediateContext, _frameId);
         
             // Assembly line uses the number of times we've run CommitToImmediate() for some
             // internal scheduling -- so we need to wake it up now, because it may do something
@@ -1732,20 +1738,17 @@ namespace RenderCore { namespace BufferUploads
 
     void Manager::FramePriority_Barrier()
     {
-        unsigned oldQueueSetId = _assemblyLine->FlipWritingQueueSet();
-        if (_backgroundStepMask) {
-            while (!_pendingFramePriority_CommandLists.push(oldQueueSetId)) {
-                _assemblyLine->TriggerWakeupEvent();
-                Threading::Sleep(0); 
-            }
+        while (!_assemblyLine->CompleteCurrentCmdListID()) {
             _assemblyLine->TriggerWakeupEvent();
+            Threading::Sleep(0); 
         }
+        _assemblyLine->TriggerWakeupEvent();
     }
 
     uint32_t Manager::DoBackgroundThread()
     {
         while (!_shutdownBackgroundThread && _backgroundStepMask) {
-            _assemblyLine->Process(_backgroundStepMask, *_backgroundContext, _pendingFramePriority_CommandLists);
+            _assemblyLine->Process(_backgroundStepMask, *_backgroundContext);
             if (!_shutdownBackgroundThread)
                 _assemblyLine->Wait(_backgroundStepMask, *_backgroundContext);
         }

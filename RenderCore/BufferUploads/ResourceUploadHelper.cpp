@@ -636,9 +636,9 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         bool _isImmediateContext;
 
         TimeMarker  _lastResolve;
-        unsigned    _commitCountCurrent, _commitCountLastResolve;
+        unsigned    _commitCountCurrent;
 
-        CommandListID _commandListIDUnderConstruction, _commandListIDCommittedToImmediate;
+        CommandListID _commandListIDCommittedToImmediate;
 
         std::shared_ptr<Metal_Vulkan::IAsyncTracker> _asyncTracker;
         std::unique_ptr<PlatformInterface::StagingPage> _stagingPage;
@@ -646,14 +646,14 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         unsigned _immediateContextLastFrameId = 0;
     };
 
-    void UploadsThreadContext::ResolveCommandList()
+    void UploadsThreadContext::ResolveCommandList(CommandListID cmdListId)
     {
         int64_t currentTime = OSServices::GetPerformanceCounter();
         Pimpl::QueuedCommandList newCommandList;
         newCommandList._metrics = _pimpl->_commandListUnderConstruction;
         newCommandList._metrics._resolveTime = currentTime;
         newCommandList._metrics._processingEnd = currentTime;
-        newCommandList._id = _pimpl->_commandListIDUnderConstruction;
+        newCommandList._id = cmdListId;
 
         if (!_pimpl->_isImmediateContext) {
             newCommandList._deviceCommandList = Metal::DeviceContext::Get(*_underlyingContext)->ResolveCommandList();
@@ -663,7 +663,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                     // immediate resolve -- skip the render thread resolve step...
             _pimpl->_deferredOperationsUnderConstruction.CommitToImmediate_PreCommandList(*_underlyingContext);
             _pimpl->_deferredOperationsUnderConstruction.CommitToImmediate_PostCommandList(*_underlyingContext);
-            _pimpl->_commandListIDCommittedToImmediate = std::max(_pimpl->_commandListIDCommittedToImmediate, _pimpl->_commandListIDUnderConstruction);
+            if (cmdListId !=  ~0u)
+                _pimpl->_commandListIDCommittedToImmediate = std::max(_pimpl->_commandListIDCommittedToImmediate, cmdListId);
 
             newCommandList._metrics._frameId = _pimpl->_immediateContextLastFrameId+1;  // ie, assume it's just the next one after the last call to CommitToImmediate()
             newCommandList._metrics._commitTime = currentTime;
@@ -677,13 +678,9 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         _pimpl->_commandListUnderConstruction = CommandListMetrics();
         _pimpl->_commandListUnderConstruction._processingStart = currentTime;
         DeferredOperations().swap(_pimpl->_deferredOperationsUnderConstruction);
-        ++_pimpl->_commandListIDUnderConstruction;
     }
 
-    void UploadsThreadContext::CommitToImmediate(
-        IThreadContext& commitTo,
-        unsigned frameId,
-        LockFreeFixedSizeQueue<unsigned, 4>* framePriorityQueue)
+    void UploadsThreadContext::CommitToImmediate(IThreadContext& commitTo, unsigned frameId)
     {
         if (_pimpl->_isImmediateContext) {
             assert(&commitTo == _underlyingContext.get());
@@ -696,53 +693,39 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         
         TimeMarker stallStart = OSServices::GetPerformanceCounter();
         bool gotStart = false;
-        for (;;) {
 
-                //
-                //      While there are uncommitted frame-priority command lists, we need to 
-                //      stall to wait until they are committed. Keep trying to drain the queue
-                //      until there are no lists, and nothing pending.
-                //
-
-            const bool currentlyUncommitedFramePriorityCommandLists = framePriorityQueue && framePriorityQueue->size()!=0;
-
-            Pimpl::QueuedCommandList* commandList = 0;
-            while (_pimpl->_queuedCommandLists.try_front(commandList)) {
-                TimeMarker stallEnd = OSServices::GetPerformanceCounter();
-                if (!gotStart) {
-                    commitTo.GetAnnotator().Event("BufferUploads", IAnnotator::EventTypes::MarkerBegin);
-                    gotStart = true;
-                }
-
-                commandList->_deferredOperations.CommitToImmediate_PreCommandList(commitTo);
-                if (commandList->_deviceCommandList) {
-                    auto* deviceVulkan = (IThreadContextVulkan*)commitTo.QueryInterface(typeid(IThreadContextVulkan).hash_code());
-                    if (deviceVulkan) {
-                        deviceVulkan->CommitPrimaryCommandBufferToQueue(*commandList->_deviceCommandList);
-                        commandList->_deviceCommandList = {};
-                    } else {
-                        immContext->ExecuteCommandList(std::move(*commandList->_deviceCommandList));
-                    }
-                }
-                commandList->_deferredOperations.CommitToImmediate_PostCommandList(commitTo);
-                _pimpl->_commandListIDCommittedToImmediate = std::max(_pimpl->_commandListIDCommittedToImmediate, commandList->_id);
-            
-                commandList->_metrics._frameId                  = frameId;
-                commandList->_metrics._commitTime               = OSServices::GetPerformanceCounter();
-                commandList->_metrics._framePriorityStallTime   = stallEnd - stallStart;    // this should give us very small numbers, when we're not actually stalling for frame priority commits
-                #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
-                    while (!_pimpl->_recentRetirements.push(commandList->_metrics))
-                        _pimpl->_recentRetirements.pop();   // note -- this might violate the single-popping-thread rule!
-                #endif
-                _pimpl->_queuedCommandLists.pop();
-
-                stallStart = OSServices::GetPerformanceCounter();
+        Pimpl::QueuedCommandList* commandList = 0;
+        while (_pimpl->_queuedCommandLists.try_front(commandList)) {
+            TimeMarker stallEnd = OSServices::GetPerformanceCounter();
+            if (!gotStart) {
+                commitTo.GetAnnotator().Event("BufferUploads", IAnnotator::EventTypes::MarkerBegin);
+                gotStart = true;
             }
-                
-            if (!currentlyUncommitedFramePriorityCommandLists)
-                break;
 
-            Threading::YieldTimeSlice();
+            commandList->_deferredOperations.CommitToImmediate_PreCommandList(commitTo);
+            if (commandList->_deviceCommandList) {
+                auto* deviceVulkan = (IThreadContextVulkan*)commitTo.QueryInterface(typeid(IThreadContextVulkan).hash_code());
+                if (deviceVulkan) {
+                    deviceVulkan->CommitPrimaryCommandBufferToQueue(*commandList->_deviceCommandList);
+                    commandList->_deviceCommandList = {};
+                } else {
+                    immContext->ExecuteCommandList(std::move(*commandList->_deviceCommandList));
+                }
+            }
+            commandList->_deferredOperations.CommitToImmediate_PostCommandList(commitTo);
+            if (commandList->_id != ~0u)
+                _pimpl->_commandListIDCommittedToImmediate = std::max(_pimpl->_commandListIDCommittedToImmediate, commandList->_id);
+        
+            commandList->_metrics._frameId                  = frameId;
+            commandList->_metrics._commitTime               = OSServices::GetPerformanceCounter();
+            commandList->_metrics._framePriorityStallTime   = stallEnd - stallStart;    // this should give us very small numbers, when we're not actually stalling for frame priority commits
+            #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
+                while (!_pimpl->_recentRetirements.push(commandList->_metrics))
+                    _pimpl->_recentRetirements.pop();   // note -- this might violate the single-popping-thread rule!
+            #endif
+            _pimpl->_queuedCommandLists.pop();
+
+            stallStart = OSServices::GetPerformanceCounter();
         }
 
         if (gotStart) {
@@ -766,7 +749,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     }
 
 
-    CommandListID           UploadsThreadContext::CommandList_GetUnderConstruction() const        { return _pimpl->_commandListIDUnderConstruction; }
     CommandListID           UploadsThreadContext::CommandList_GetCommittedToImmediate() const     { return _pimpl->_commandListIDCommittedToImmediate; }
 
     CommandListMetrics&     UploadsThreadContext::GetMetricsUnderConstruction()                   { return _pimpl->_commandListUnderConstruction; }
@@ -774,7 +756,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     auto                    UploadsThreadContext::GetDeferredOperationsUnderConstruction() -> DeferredOperations&        { return _pimpl->_deferredOperationsUnderConstruction; }
 
     unsigned                UploadsThreadContext::CommitCount_Current()                           { return _pimpl->_commitCountCurrent; }
-    unsigned&               UploadsThreadContext::CommitCount_LastResolve()                       { return _pimpl->_commitCountLastResolve; }
 
     PlatformInterface::StagingPage&     UploadsThreadContext::GetStagingPage()
     {
@@ -798,9 +779,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         _underlyingContext = std::move(underlyingContext);
         _pimpl = std::make_unique<Pimpl>();
         _pimpl->_lastResolve = 0;
-        _pimpl->_commitCountCurrent = _pimpl->_commitCountLastResolve = 0;
+        _pimpl->_commitCountCurrent = 0;
         _pimpl->_isImmediateContext = _underlyingContext->IsImmediate();
-        _pimpl->_commandListIDUnderConstruction = 1;
         _pimpl->_commandListIDCommittedToImmediate = 0;
 
         if (!_pimpl->_isImmediateContext) {
