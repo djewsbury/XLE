@@ -11,6 +11,7 @@
 #include <string>
 
 namespace RenderCore { namespace Techniques { class ParsingContext; class DrawablesPacket; class IDrawablesPool; class IPipelineAcceleratorPool; } }
+namespace RenderCore { namespace BufferUploads { class IManager; }}
 namespace SceneEngine { class IIntersectionScene; class ExecuteSceneContext; }
 
 namespace EntityInterface { class RetainedEntities; }
@@ -29,6 +30,7 @@ namespace ToolsRig
         ObjectPlaceholders(
 			std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
             std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+            std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
 			std::shared_ptr<EntityInterface::RetainedEntities> objects);
         ~ObjectPlaceholders();
     protected:
@@ -42,6 +44,7 @@ namespace ToolsRig
 
 		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> _drawablesPool;
         std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
+        std::shared_ptr<RenderCore::BufferUploads::IManager> _bufferUploads;
 
         class IntersectionTester;
     };

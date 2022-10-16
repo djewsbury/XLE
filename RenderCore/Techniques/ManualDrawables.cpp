@@ -48,6 +48,8 @@ namespace RenderCore { namespace Techniques
 			virtual std::future<ResourceDesc> GetDesc () override;
 			virtual std::future<void> PrepareData(IteratorRange<const SubResource*> subResources) override;
 			virtual ::Assets::DependencyValidation GetDependencyValidation() const override;
+
+			std::shared_ptr<BufferUploads::IDataPacket> AsDataPacket();
 		};
 
 		std::shared_ptr<ResourceUploader> _vb, _ib;
@@ -146,6 +148,44 @@ namespace RenderCore { namespace Techniques
 			promise.set_value();
 		}
 		return result;
+	}
+
+	std::shared_ptr<BufferUploads::IDataPacket> ManualDrawableGeoConstructor::Pimpl::ResourceUploader::AsDataPacket()
+	{
+		std::shared_ptr<BufferUploads::IDataPacket> result;
+		if (_parts.size() == 1) {
+			auto& part = _parts[0];
+			assert(part._offset == 0 && part._size == _uploadTotal);
+			if (part._pkt) {
+				return part._pkt;
+			} else if (!part._vectorSource.empty()) {
+				return BufferUploads::CreateBasicPacket(std::move(part._vectorSource));
+			} else if (part._asyncSrc) {
+				Throw(std::runtime_error("ManualDrawableGeoConstructor::ImmediateFulFill cannot be used with uploads that include a IAsyncDataSource"));
+			} else {
+				std::vector<uint8_t> vbData;
+				vbData.resize(_uploadTotal);
+				std::memcpy(vbData.data(), PtrAdd(_storage.data(), part._storageSrc->first), part._storageSrc->second);
+				return BufferUploads::CreateBasicPacket(std::move(vbData));
+			}	
+		} else {
+			std::vector<uint8_t> vbData;
+			vbData.resize(_uploadTotal);
+			// unfortunately we have to copy the upload data to a separate buffer if we have separate parts
+			for (const auto& part:_parts) {
+				if (part._pkt) {
+					auto data = part._pkt->GetData();
+					std::memcpy(PtrAdd(vbData.data(), part._offset), data.begin(), data.size());
+				} else if (!part._vectorSource.empty()) {
+					std::memcpy(PtrAdd(vbData.data(), part._offset), part._vectorSource.data(), part._vectorSource.size());
+				} else if (part._asyncSrc) {
+					Throw(std::runtime_error("ManualDrawableGeoConstructor::ImmediateFulFill cannot be used with uploads that include a IAsyncDataSource"));
+				} else {
+					std::memcpy(PtrAdd(vbData.data(), part._offset), PtrAdd(_storage.data(), part._storageSrc->first), part._storageSrc->second);
+				}
+			}
+			return BufferUploads::CreateBasicPacket(std::move(vbData));
+		}
 	}
 
 	::Assets::DependencyValidation ManualDrawableGeoConstructor::Pimpl::ResourceUploader::GetDependencyValidation() const { return {}; }
@@ -349,7 +389,7 @@ namespace RenderCore { namespace Techniques
 	{
 		auto prevCalled = _pimpl->_fulfillWhenNotPendingCalled.exchange(true);
 		if (prevCalled)
-			Throw(std::runtime_error("Attempting to call DrawableGeoInitHelper::FulfillWhenNotPending multiple times. This can only be called once"));
+			Throw(std::runtime_error("Attempting to call DrawableGeoInitHelper fulfill method multiple times. This can only be called once"));
 
 		struct WaitingParts
 		{
@@ -405,6 +445,7 @@ namespace RenderCore { namespace Techniques
 						stream._resource = resLocator.GetContainingResource();
 						auto offset = resLocator.GetRangeInContainingResource().first;
 						if (offset != ~size_t(0)) stream._vbOffset += offset;
+						geo._completionCmdList = std::max(geo._completionCmdList, resLocator.GetCompletionCommandList());
 					}
 				}
 
@@ -418,11 +459,66 @@ namespace RenderCore { namespace Techniques
 						geo._ib = resLocator.GetContainingResource();
 						auto offset = resLocator.GetRangeInContainingResource().first;
 						if (offset != ~size_t(0)) geo._ibOffset += offset;
+						geo._completionCmdList = std::max(geo._completionCmdList, resLocator.GetCompletionCommandList());
 					}
 				}
 				
 				return Promise{std::move(pimpl)};
 			});
+	}
+
+	auto ManualDrawableGeoConstructor::ImmediateFulfill() -> Promise
+	{
+		auto prevCalled = _pimpl->_fulfillWhenNotPendingCalled.exchange(true);
+		if (prevCalled)
+			Throw(std::runtime_error("Attempting to call DrawableGeoInitHelper fulfill method multiple times. This can only be called once"));
+
+		for (auto& q:_pimpl->_vb->_parts)
+			if (q._asyncSrc)
+				Throw(std::runtime_error("ManualDrawableGeoConstructor::ImmediateFulFill cannot be used with uploads that include a IAsyncDataSource"));
+
+		for (auto& q:_pimpl->_ib->_parts)
+			if (q._asyncSrc)
+				Throw(std::runtime_error("ManualDrawableGeoConstructor::ImmediateFulFill cannot be used with uploads that include a IAsyncDataSource"));
+
+		if (_pimpl->_vb->_uploadTotal != 0) {
+			_pimpl->_vb->_desc = CreateDesc(BindFlag::VertexBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(_pimpl->_vb->_uploadTotal), "[vb]");
+			auto vbUploadPkt = _pimpl->_vb->AsDataPacket();
+			auto vb = _pimpl->_bufferUploads->ImmediateTransaction(_pimpl->_vb->_desc, std::move(vbUploadPkt));
+			assert(!vb.IsEmpty());
+
+			_pimpl->_completionCmdList = std::max(_pimpl->_completionCmdList, vb.GetCompletionCommandList());
+
+			for (const auto& assignment:_pimpl->_pendingResAssignment) {
+				if (assignment._stream == DrawableStream::IB) continue;
+				auto& geo = *_pimpl->_pendingGeos[assignment._geoIdx];
+				auto& stream = geo._vertexStreams[assignment._stream - DrawableStream::Vertex0];
+				stream._resource = vb.GetContainingResource();
+				auto offset = vb.GetRangeInContainingResource().first;
+				if (offset != ~size_t(0)) stream._vbOffset += offset;
+				geo._completionCmdList = std::max(geo._completionCmdList, vb.GetCompletionCommandList());
+			}
+		}
+
+		if (_pimpl->_ib->_uploadTotal != 0) {
+			_pimpl->_ib->_desc = CreateDesc(BindFlag::IndexBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(_pimpl->_ib->_uploadTotal), "[ib]");
+			auto ibUploadPkt = _pimpl->_ib->AsDataPacket();
+			auto ib = _pimpl->_bufferUploads->ImmediateTransaction(_pimpl->_ib->_desc, std::move(ibUploadPkt));
+			assert(!ib.IsEmpty());
+
+			_pimpl->_completionCmdList = std::max(_pimpl->_completionCmdList, ib.GetCompletionCommandList());
+
+			for (const auto& assignment:_pimpl->_pendingResAssignment) {
+				if (assignment._stream != DrawableStream::IB) continue;
+				auto& geo = *_pimpl->_pendingGeos[assignment._geoIdx];
+				geo._ib = ib.GetContainingResource();
+				auto offset = ib.GetRangeInContainingResource().first;
+				if (offset != ~size_t(0)) geo._ibOffset += offset;
+				geo._completionCmdList = std::max(geo._completionCmdList, ib.GetCompletionCommandList());
+			}
+		}
+
+		return Promise{_pimpl};
 	}
 
 	BufferUploads::CommandListID ManualDrawableGeoConstructor::Promise::GetCompletionCommandList() const

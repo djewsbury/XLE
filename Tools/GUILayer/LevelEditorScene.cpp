@@ -108,7 +108,7 @@ namespace GUILayer
         auto& drawingApparatus = EngineDevice::GetInstance()->GetNative().GetDrawingApparatus();
         auto& primaryResources = EngineDevice::GetInstance()->GetNative().GetPrimaryResourcesApparatus();
         _flexObjects = std::make_shared<EntityInterface::RetainedEntities>();
-        _placeholders = std::make_shared<ToolsRig::ObjectPlaceholders>(drawingApparatus->_drawablesPool, drawingApparatus->_pipelineAccelerators, _flexObjects);
+        _placeholders = std::make_shared<ToolsRig::ObjectPlaceholders>(drawingApparatus->_drawablesPool, drawingApparatus->_pipelineAccelerators, primaryResources->_bufferUploads, _flexObjects);
         _currentTime = 0.f;
 
         // Placements scene aspects

@@ -20,6 +20,7 @@
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderCore/Techniques/DescriptorSetAccelerator.h"
 #include "../../RenderCore/Techniques/Drawables.h"
+#include "../../RenderCore/Techniques/ManualDrawables.h"
 #include "../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
 #include "../../RenderCore/ResourceList.h"
 #include "../../RenderCore/Format.h"
@@ -99,14 +100,17 @@ namespace ToolsRig
 			const Float4x4& localToWorld = Identity<Float4x4>()) const;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+		RenderCore::BufferUploads::CommandListID GetCompletionCmdList() const { return _completionCmdList; }
 
 		SimpleModel(
 			std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
 			std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+			std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
 			const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile);
 		SimpleModel(
 			std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
 			std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+			std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
 			StringSection<::Assets::ResChar> filename);
 		SimpleModel() = default;
 		~SimpleModel();
@@ -114,8 +118,10 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _drawableGeo;
 		std::vector<RenderCore::Assets::DrawCallDesc> _drawCalls;
 		::Assets::DependencyValidation _depVal;
+		RenderCore::BufferUploads::CommandListID _completionCmdList = 0;
 		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> _drawablesPool;
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
+		std::shared_ptr<RenderCore::BufferUploads::IManager> _bufferUploads;
 		
 		std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _pipelineAccelerator;
 		std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> _descriptorSetAccelerator;
@@ -128,34 +134,6 @@ namespace ToolsRig
 		const ParameterBox& materialParams,
 		const Float4x4& localToWorld) const
 	{
-#if 0
-		auto shader = _material.FindVariation(parserContext, techniqueIndex, techniqueConfig);
-		if (shader._shader._shaderProgram) {
-			auto matParams0 = shader._cbLayout->BuildCBDataAsPkt(materialParams, RenderCore::Techniques::GetDefaultShaderLanguage());
-			Float3 col0 = Float3(.66f, 0.2f, 0.f);
-			Float3 col1 = Float3(0.44f, 0.6f, 0.1f);
-			static float time = 0.f;
-			time += 3.14159f / 3.f / 60.f;
-			ParameterBox p; p.SetParameter("MaterialDiffuse", LinearInterpolate(col0, col1, 0.5f + 0.5f * XlCos(time)));
-			auto matParams1 = shader._cbLayout->BuildCBDataAsPkt(p, RenderCore::Techniques::GetDefaultShaderLanguage());
-
-			if (_drawCalls.size() >= 2) {
-				devContext.Bind(*(Metal::Resource*)_ib->QueryInterface(typeid(Metal::Resource).hash_code()), _ibFormat);
-
-				VertexBufferView vbv { _vb, 0 };
-				shader._shader.Apply(devContext, parserContext, {vbv});
-
-				ConstantBufferView cbvs0[] = { {localTransform}, {matParams0} };
-				shader._shader._boundUniforms->Apply(devContext, 1, UniformsStream{ MakeIteratorRange(cbvs0) });
-				devContext.DrawIndexed(_drawCalls[0]._indexCount, _drawCalls[0]._firstIndex, _drawCalls[0]._firstVertex);
-
-				ConstantBufferView cbvs1[] = { {localTransform}, {matParams0} };
-				shader._shader._boundUniforms->Apply(devContext, 1, UniformsStream{ MakeIteratorRange(cbvs1) });
-				devContext.DrawIndexed(_drawCalls[1]._indexCount, _drawCalls[1]._firstIndex, _drawCalls[1]._firstVertex);
-			}
-		}
-#endif
-
 		auto* drawables = pkts[(unsigned)RenderCore::Techniques::Batch::Opaque]->_drawables.Allocate<SimpleModelDrawable>(_drawCalls.size());
 		for (const auto& drawCall:_drawCalls) {
 			auto& drawable = *drawables++;
@@ -180,20 +158,24 @@ namespace ToolsRig
 	SimpleModel::SimpleModel(
 		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+		std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
 		const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile)
 	{
 		_drawablesPool = std::move(drawablesPool);
 		_pipelineAcceleratorPool = std::move(pipelineAcceleratorPool);
+		_bufferUploads = std::move(bufferUploads);
 		Build(geo, largeBlocksFile);
 	}
 
 	SimpleModel::SimpleModel(
 		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+		std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
 		StringSection<::Assets::ResChar> filename)
 	{
 		_drawablesPool = std::move(drawablesPool);
 		_pipelineAcceleratorPool = std::move(pipelineAcceleratorPool);
+		_bufferUploads = std::move(bufferUploads);
 		auto& scaffold = ::Assets::Legacy::GetAssetComp<RenderCore::Assets::ModelScaffold>(filename);
 		// we only use the first geo in the scaffold; and ignore the command stream
 		if (scaffold.GetGeoCount() > 0) {
@@ -214,13 +196,15 @@ namespace ToolsRig
 		auto largeBlocksOffset = largeBlocksFile.TellP();
 		auto vbData = ReadFromFile(largeBlocksFile, geo._vb._size, geo._vb._offset + largeBlocksOffset);
 		auto ibData = ReadFromFile(largeBlocksFile, geo._ib._size, geo._ib._offset + largeBlocksOffset);
-		auto vb = RenderCore::Techniques::CreateStaticVertexBuffer(*_pipelineAcceleratorPool->GetDevice(), MakeIteratorRange(vbData));
-		auto ib = RenderCore::Techniques::CreateStaticIndexBuffer(*_pipelineAcceleratorPool->GetDevice(), MakeIteratorRange(ibData));
-		_drawableGeo = _drawablesPool->CreateGeo();
-		_drawableGeo->_vertexStreams[0]._resource = vb;
-		_drawableGeo->_vertexStreamCount = 1;
-		_drawableGeo->_ib = ib;
-		_drawableGeo->_ibFormat = geo._ib._format;
+		RenderCore::Techniques::ManualDrawableGeoConstructor geoConstructor(_drawablesPool, _bufferUploads);
+		geoConstructor.BeginGeo();
+		geoConstructor.SetStreamData(RenderCore::Techniques::ManualDrawableGeoConstructor::Vertex0, std::move(vbData));
+		geoConstructor.SetStreamData(RenderCore::Techniques::ManualDrawableGeoConstructor::IB, std::move(ibData));
+		auto geoFulfillment = geoConstructor.ImmediateFulfill();
+		assert(geoFulfillment.GetInstantiatedGeos().size() == 1);
+		_drawableGeo = geoFulfillment.GetInstantiatedGeos()[0];
+		_completionCmdList = geoFulfillment.GetCompletionCommandList();
+
 		_drawCalls.insert(_drawCalls.begin(), geo._drawCalls.cbegin(), geo._drawCalls.cend());
 
 		// also construct a technique material for the geometry format
@@ -271,7 +255,8 @@ namespace ToolsRig
 		static void ConstructToPromise(
 			std::promise<VisGeoBox>&&,
 			const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>& drawablesPool,
-			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool);
+			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+			const std::shared_ptr<RenderCore::BufferUploads::IManager>& bufferUploads);
     };
 
 	static std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> BuildPipelineAccelerator(
@@ -286,22 +271,25 @@ namespace ToolsRig
 			mat._stateSet);
 	}
 
-	static std::shared_ptr<RenderCore::Techniques::DrawableGeo> CreateCubeDrawableGeo(IDevice& device, Techniques::IDrawablesPool& drawablesPool)
+	static std::shared_ptr<RenderCore::Techniques::DrawableGeo> CreateCubeDrawableGeo(
+		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> pool, 
+		std::shared_ptr<BufferUploads::IManager> bufferUploads)
 	{
 		auto cubeVertices = ToolsRig::BuildCube();
-        auto cubeVBCount = (unsigned)cubeVertices.size();
-        auto cubeVBStride = (unsigned)sizeof(decltype(cubeVertices)::value_type);
-        auto cubeVB = RenderCore::Techniques::CreateStaticVertexBuffer(device, MakeIteratorRange(cubeVertices));
-		auto geo = drawablesPool.CreateGeo();
-		geo->_vertexStreams[0]._resource = cubeVB;
-		geo->_vertexStreamCount = 1;
-		return geo;
+		std::vector<uint8_t> data((const uint8_t*)AsPointer(cubeVertices.begin()), (const uint8_t*)AsPointer(cubeVertices.end()));
+
+		using Constructor = RenderCore::Techniques::ManualDrawableGeoConstructor;
+		Constructor constructor{std::move(pool), std::move(bufferUploads)};
+		constructor.BeginGeo();
+		constructor.SetStreamData(Constructor::DrawableStream::Vertex0, std::move(data));
+		return constructor.ImmediateFulfill().GetInstantiatedGeos()[0];
 	}
     
     void VisGeoBox::ConstructToPromise(
 		std::promise<VisGeoBox>&& promise,
 		const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>& drawablesPool,
-		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool)
+		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+		const std::shared_ptr<RenderCore::BufferUploads::IManager>& bufferUploads)
     {
 		auto sphereMatFuture = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":sphere");
 		auto tubeMatFuture = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":tube");
@@ -309,7 +297,7 @@ namespace ToolsRig
 
 		::Assets::WhenAll(sphereMatFuture, tubeMatFuture, rectangleMatFuture).ThenConstructToPromise(
 			std::move(promise),
-			[drawablesPool, pipelineAcceleratorPool](
+			[drawablesPool, pipelineAcceleratorPool, bufferUploads](
 				const RenderCore::Assets::ResolvedMaterial& sphereMat,
 				const RenderCore::Assets::ResolvedMaterial& tubeMat,
 				const RenderCore::Assets::ResolvedMaterial& rectangleMat) {
@@ -318,7 +306,7 @@ namespace ToolsRig
 				res._genSphere = BuildPipelineAccelerator(pipelineAcceleratorPool, sphereMat);
 				res._genTube = BuildPipelineAccelerator(pipelineAcceleratorPool, tubeMat);
 				res._genRectangle = BuildPipelineAccelerator(pipelineAcceleratorPool, rectangleMat);
-				res._cubeGeo = CreateCubeDrawableGeo(*pipelineAcceleratorPool->GetDevice(), *drawablesPool);
+				res._cubeGeo = CreateCubeDrawableGeo(drawablesPool, bufferUploads);
 				res._justPointsPipelineAccelerator = pipelineAcceleratorPool->CreatePipelineAccelerator(
 					nullptr, {}, GlobalInputLayouts::P, Topology::TriangleList, RenderCore::Assets::RenderStateSet{});
 
@@ -373,11 +361,12 @@ namespace ToolsRig
     void DrawSphereStandIn(
 		const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>& drawablesPool,
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+		const std::shared_ptr<RenderCore::BufferUploads::IManager>& bufferUploads,
         IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
 		const Float4x4& localToWorld, 
 		const ParameterBox& matParams = {})
     {
-		auto* asset = ::Assets::MakeAssetMarker<SimpleModel>(drawablesPool, pipelineAcceleratorPool, "game/model/simple/spherestandin.dae")->TryActualize();
+		auto* asset = ::Assets::MakeAssetMarker<SimpleModel>(drawablesPool, pipelineAcceleratorPool, bufferUploads, "game/model/simple/spherestandin.dae")->TryActualize();
 		if (asset)
 			asset->BuildDrawables(pkts, matParams, localToWorld);
     }
@@ -385,11 +374,12 @@ namespace ToolsRig
 	static void DrawPointerStandIn(
 		const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>& drawablesPool,
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+		const std::shared_ptr<RenderCore::BufferUploads::IManager>& bufferUploads,
         IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
 		const Float4x4& localToWorld, 
 		const ParameterBox& matParams = {})
 	{
-		auto* asset = ::Assets::MakeAssetMarker<SimpleModel>(drawablesPool, pipelineAcceleratorPool, "game/model/simple/pointerstandin.dae")->TryActualize();
+		auto* asset = ::Assets::MakeAssetMarker<SimpleModel>(drawablesPool, pipelineAcceleratorPool, bufferUploads, "game/model/simple/pointerstandin.dae")->TryActualize();
 		if (asset)
 			asset->BuildDrawables(pkts, matParams, localToWorld);
 	}
@@ -467,12 +457,12 @@ namespace ToolsRig
 	{
 		auto pkts = executeContext._destinationPkts;
 		if (Tweakable("DrawMarkers", true)) {
-			auto* visBox = ::Assets::MakeAssetMarker<VisGeoBox>(_drawablesPool, _pipelineAcceleratorPool)->TryActualize();
+			auto* visBox = ::Assets::MakeAssetMarker<VisGeoBox>(_drawablesPool, _pipelineAcceleratorPool, _bufferUploads)->TryActualize();
 			for (const auto& a:_cubeAnnotations) {
 				auto objects = _objects->FindEntitiesOfType(a._typeNameHash);
 				for (const auto&o:objects) {
 					if (!o->_properties.GetParameter(Parameters::Visible, true) || !GetShowMarker(*o)) continue;
-					DrawSphereStandIn(_drawablesPool, _pipelineAcceleratorPool, pkts, GetTransform(*o));
+					DrawSphereStandIn(_drawablesPool, _pipelineAcceleratorPool, _bufferUploads, pkts, GetTransform(*o));
 				}
 			}
 
@@ -486,7 +476,7 @@ namespace ToolsRig
 					auto translation = ExtractTranslation(trans);
 					trans = MakeObjectToWorld(-Normalize(translation), Float3(0.f, 0.f, 1.f), translation);
 
-					DrawPointerStandIn(_drawablesPool, _pipelineAcceleratorPool, pkts, trans);
+					DrawPointerStandIn(_drawablesPool, _pipelineAcceleratorPool, _bufferUploads, pkts, trans);
 				}
 			}
 
@@ -663,11 +653,13 @@ namespace ToolsRig
 
     ObjectPlaceholders::ObjectPlaceholders(
 		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
-            std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
-			std::shared_ptr<EntityInterface::RetainedEntities> objects)
+		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+		std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
+		std::shared_ptr<EntityInterface::RetainedEntities> objects)
     : _objects(std::move(objects))
 	, _drawablesPool(std::move(drawablesPool))
 	, _pipelineAcceleratorPool(std::move(pipelineAcceleratorPool))
+	, _bufferUploads(std::move(bufferUploads))
     {}
 
     ObjectPlaceholders::~ObjectPlaceholders() {}

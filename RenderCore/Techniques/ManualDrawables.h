@@ -66,6 +66,7 @@ namespace RenderCore { namespace Techniques
 			friend class ManualDrawableGeoConstructor;
 		};
 		void FulfillWhenNotPending(std::promise<Promise>&& promise);
+		Promise ImmediateFulfill();
 
 		ManualDrawableGeoConstructor(std::shared_ptr<IDrawablesPool> pool, std::shared_ptr<BufferUploads::IManager> bufferUploads);
 		~ManualDrawableGeoConstructor();
