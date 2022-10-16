@@ -76,6 +76,15 @@ namespace RenderCore { namespace BufferUploads
                 _semaphoreCount.store(0);
             }
         }
+        void WaitUntil(std::chrono::steady_clock::time_point timeoutTime)
+        {
+            auto exchange = _semaphoreCount.exchange(0);
+            if (!exchange) {
+                std::unique_lock<std::mutex> ul(_l);
+                _cv.wait_until(ul, timeoutTime);
+                _semaphoreCount.store(0);
+            }
+        }
         bool Peek()
         {
             return _semaphoreCount.load() != 0;
@@ -102,9 +111,7 @@ namespace RenderCore { namespace BufferUploads
         void            Cancel(IteratorRange<const TransactionID*>);
         void            OnCompletion(IteratorRange<const TransactionID*>, std::function<void()>&& fn);
 
-        ResourceLocator         ImmediateTransaction(
-                                    IThreadContext& threadContext,
-                                    const ResourceDesc& desc, IDataPacket& data);
+        ResourceLocator         ImmediateTransaction(const ResourceDesc& desc, std::shared_ptr<IDataPacket> data);
 
         void                Process(unsigned stepMask, PlatformInterface::UploadsThreadContext& context);
 
@@ -228,7 +235,10 @@ namespace RenderCore { namespace BufferUploads
 
         struct CmdListToResolve { CommandListID _cmdListId; unsigned _framePriorityQueueSet; };
         LockFreeFixedSizeQueue<CmdListToResolve, 4> _cmdListsToResolve;        // cmd list id & queue set idx for frame priority lists that must be committed
-        CommandListID _cmdListNextResolve = 1;
+        std::atomic<CommandListID> _commandListNextFramePriority = 1;
+        Threading::Mutex _completeCmdListLock;
+
+        std::chrono::steady_clock::time_point _lastResolveTime;
 
         LockFreeFixedSizeQueue<std::function<void(AssemblyLine&, PlatformInterface::UploadsThreadContext&, CommandListID)>, 256> _queuedFunctions;
         SimpleWakeupEvent _wakeupEvent;
@@ -246,7 +256,7 @@ namespace RenderCore { namespace BufferUploads
         #else
             std::shared_ptr<thousandeyes::futures::Executor> _continuationExecutor;
         #endif
-        void StallWhileCheckingFutures();
+        void StallWhileCheckingFutures(std::chrono::steady_clock::time_point timeoutTime);
 
         class CommandListBudget
         {
@@ -565,28 +575,33 @@ namespace RenderCore { namespace BufferUploads
         }
     }
 
-    ResourceLocator AssemblyLine::ImmediateTransaction(
-        IThreadContext& threadContext,
-        const ResourceDesc& descInit, IDataPacket& initialisationData)
+    ResourceLocator AssemblyLine::ImmediateTransaction(const ResourceDesc& descInit, std::shared_ptr<IDataPacket> data)
     {
+        // Create resource immediately, in the current thread -- but schedule
+        // upload for happen in the buffer uploads thread.
+        // We use the "frame priority" concept to get a completion cmd list before the upload is processed
+
         ResourceDesc desc = descInit;
-
-        auto supportInit = 
-            (desc._type == ResourceDesc::Type::Texture)
-            ? PlatformInterface::SupportsResourceInitialisation_Texture
-            : PlatformInterface::SupportsResourceInitialisation_Buffer;
-
-        if (supportInit)
-            return CreateResource(*threadContext.GetDevice(), desc, &initialisationData);
-
         desc._bindFlags |= BindFlag::TransferDst;
-        auto finalResourceConstruction = CreateResource(*threadContext.GetDevice(), desc);
-        if (!finalResourceConstruction)
+        auto constructedResource = CreateResource(*_device, desc);
+        if (!constructedResource)
             return {};
 
-        PlatformInterface::ResourceUploadHelper helper{threadContext};
-        helper.UpdateFinalResourceViaCmdListAttachedStaging(threadContext, finalResourceConstruction, initialisationData);
-        return finalResourceConstruction;
+        auto ref = AllocateTransaction(TransactionOptions::FramePriority);
+        assert(ref._transaction);
+        ref._transaction->_desc = desc;
+        ref._transaction->_finalResource = constructedResource;
+        if (data) ValidatePacketSize(desc, *data);
+        _currentQueuedBytes[(unsigned)AsUploadDataType(desc, desc._bindFlags)] += RenderCore::ByteCount(desc);
+
+        // if we use the frame priority queue, we know what cmd list id it will be completed with
+        // by looking at _commandListNextFramePriority
+        ScopedLock(_completeCmdListLock);
+        ResourceLocator result{std::move(constructedResource), _commandListNextFramePriority};
+        PushStep(
+            _queueSet_FramePriority[_framePriority_WritingQueueSet],
+            CreateFromDataPacketStep { std::move(ref), nullptr, desc, std::move(data) });
+        return result;
     }
 
     void AssemblyLine::watch(std::unique_ptr<thousandeyes::futures::Waitable> w)
@@ -616,7 +631,7 @@ namespace RenderCore { namespace BufferUploads
         #endif
     }
 
-    void AssemblyLine::StallWhileCheckingFutures()
+    void AssemblyLine::StallWhileCheckingFutures(std::chrono::steady_clock::time_point timeoutTime)
     {
         #if !defined(BU_SEPARATELY_THREADED_CONTINUATIONS)
             assert(std::this_thread::get_id() == _futureWaitablesThread);
@@ -630,7 +645,7 @@ namespace RenderCore { namespace BufferUploads
 
             auto timeout = std::chrono::microseconds{500};
             while (!_activeFutureWaitables.empty()) {
-                if (_wakeupEvent.Peek())
+                if (_wakeupEvent.Peek() || std::chrono::steady_clock::now() > timeoutTime)
                     break;      // still have to do _wakeupEvent.Wait() to clear out the signal
 
                 bool readyForDispatch = _activeFutureWaitables[_futureWaitablesIterator]->wait(timeout);
@@ -644,7 +659,7 @@ namespace RenderCore { namespace BufferUploads
                 if (_futureWaitablesIterator >= _activeFutureWaitables.size()) _futureWaitablesIterator = 0;
             }
 
-            _wakeupEvent.Wait();
+            _wakeupEvent.WaitUntil(timeoutTime);
         #else
             _wakeupEvent.Wait();
         #endif
@@ -743,6 +758,7 @@ namespace RenderCore { namespace BufferUploads
         XlZeroMemory(_currentQueuedBytes);
         _framePriority_WritingQueueSet = 0;
         _pendingRetirements.reserve(64);
+        _lastResolveTime = std::chrono::steady_clock::now();
 
         #if !defined(BU_SEPARATELY_THREADED_CONTINUATIONS)
             _activeFutureWaitables.reserve(2048);
@@ -845,7 +861,9 @@ namespace RenderCore { namespace BufferUploads
     void AssemblyLine::Wait(unsigned stepMask, PlatformInterface::UploadsThreadContext& context)
     {
         int64_t startTime = OSServices::GetPerformanceCounter();
-        StallWhileCheckingFutures();
+        const auto autoResolveTimeout = std::chrono::milliseconds(20);
+        auto timeoutTime = std::chrono::steady_clock::now() + autoResolveTimeout;
+        StallWhileCheckingFutures(timeoutTime);
 
         CommandListMetrics& metricsUnderConstruction = context.GetMetricsUnderConstruction();
         metricsUnderConstruction._waitTime += OSServices::GetPerformanceCounter() - startTime;
@@ -1444,9 +1462,8 @@ namespace RenderCore { namespace BufferUploads
         CommandListBudget   budgetUnderConstruction(isLoading);
 
         bool doResolve = false;
-        CommandListID cmdListId = _cmdListNextResolve;
+        CommandListID cmdListId = _commandListNextFramePriority;
         bool preventNonFramePriority = false;
-        bool popFromFramePriority = false;
         bool completingResolveForCmdList = false;
 
             /////////////// ~~~~ /////////////// ~~~~ ///////////////
@@ -1467,22 +1484,19 @@ namespace RenderCore { namespace BufferUploads
             context.GetStagingPage().UpdateConsumerMarker();        // update at least once per frame, not strictly necessary, but improves metrics
         }
 
+        auto now = std::chrono::steady_clock::now();
         CmdListToResolve *qs = NULL;
         if (_cmdListsToResolve.try_front(qs)) {
 
                 //      --~<   Drain all frame priority steps   >~--      //
             auto drainResult = DrainPriorityQueueSet(_queueSet_FramePriority[qs->_framePriorityQueueSet], stepMask, context, qs->_framePriorityQueueSet);
             if (!drainResult._someOperationsFailed) {
-                popFromFramePriority = true;
+                _cmdListsToResolve.pop();
                 completingResolveForCmdList = true;
                 cmdListId = qs->_cmdListId;     // cmd list finished
-
-                // we can go ahead and advance the working cmd list id
-                if (cmdListId == _cmdListNextResolve)
-                    ++_cmdListNextResolve;
             }
             preventNonFramePriority = drainResult._someOperationsFailed;       // prevent non-frame-priority if we got some failures during this drain attempt
-            doResolve = true;       // always resolve, as long this 
+            doResolve = true;       // always resolve, even if we get some failures
         }
 
         if (!preventNonFramePriority) {
@@ -1510,6 +1524,29 @@ namespace RenderCore { namespace BufferUploads
             _pendingRetirements.clear();
         }
 
+        if (!doResolve && (metricsUnderConstruction._contextOperations!=0)) {
+            // If we wouldn't otherwise resolve, but it's been X amount of time since the last resolve, then go ahead and 
+            // resolve anyway.
+            // This timeout should probably be slightly longer than a frame -- so that this is only a backup for when the
+            // main thread isn't continually pushing updates
+            const auto autoResolveTimeout = std::chrono::milliseconds(20);
+            if ((now - _lastResolveTime) > autoResolveTimeout) {
+                doResolve = true;
+                CompleteCurrentCmdListID();
+
+                // Note duplication from above -- we need the same logic for handling the newly created entry in _cmdListsToResolve
+                //  - we can't actually consider this cmd list finished until all of the frame priority operations have actually completed successfully
+                if (_cmdListsToResolve.try_front(qs)) {
+                    auto drainResult = DrainPriorityQueueSet(_queueSet_FramePriority[qs->_framePriorityQueueSet], stepMask, context, qs->_framePriorityQueueSet);
+                    if (!drainResult._someOperationsFailed) {
+                        _cmdListsToResolve.pop();
+                        completingResolveForCmdList = true;
+                        cmdListId = qs->_cmdListId;     // cmd list finished
+                    }
+                }
+            }
+        }
+
             /////////////// ~~~~ /////////////// ~~~~ ///////////////
         if (doResolve) {
             if ((metricsUnderConstruction._contextOperations!=0)
@@ -1517,13 +1554,8 @@ namespace RenderCore { namespace BufferUploads
                 context.ResolveCommandList(completingResolveForCmdList ? cmdListId : ~0u);
 
             metricsUnderConstruction._assemblyLineMetrics = CalculateMetrics(context);
-
-            if (completingResolveForCmdList)
-                assert(_cmdListNextResolve > cmdListId);        // should have already advanced this index
+            _lastResolveTime = now;
         }
-
-        if (popFromFramePriority)
-            _cmdListsToResolve.pop();
     }
 
     AssemblyLineMetrics AssemblyLine::CalculateMetrics(PlatformInterface::UploadsThreadContext& context)
@@ -1577,11 +1609,15 @@ namespace RenderCore { namespace BufferUploads
 
     bool AssemblyLine::CompleteCurrentCmdListID()
     {
-        // todo -- threading protection
+        // _completeCmdListLock is only used by this function, because incrementing _commandListNextFramePriority, and
+        // adding it to _cmdListsToResolve can cause race conditions if CompleteCurrentCmdListID() is called in multiple
+        // different threads at the same time
+        ScopedLock(_completeCmdListLock);
         unsigned oldWritingQueueSet = _framePriority_WritingQueueSet;
-        if (!_cmdListsToResolve.push(AssemblyLine::CmdListToResolve{_cmdListNextResolve, oldWritingQueueSet}))
+        if (!_cmdListsToResolve.push(AssemblyLine::CmdListToResolve{_commandListNextFramePriority, oldWritingQueueSet}))
             return false;
         _framePriority_WritingQueueSet = (_framePriority_WritingQueueSet+1)%dimof(_queueSet_FramePriority);
+        ++_commandListNextFramePriority;
         return true;
     }
 
@@ -1657,11 +1693,9 @@ namespace RenderCore { namespace BufferUploads
             _assemblyLine->UnbindOnBackgroundFrame(marker);
         }
 
-        ResourceLocator         ImmediateTransaction(
-                                    IThreadContext& threadContext,
-                                    const ResourceDesc& desc, IDataPacket& data) override
+        ResourceLocator ImmediateTransaction(const ResourceDesc& desc, std::shared_ptr<IDataPacket> data) override
         {
-            return _assemblyLine->ImmediateTransaction(threadContext, desc, data);
+            return _assemblyLine->ImmediateTransaction(desc, std::move(data));
         }
         
         bool                    IsComplete(CommandListID id) override;

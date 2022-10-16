@@ -451,8 +451,9 @@ namespace UnitTests
 
 		auto testDesc = CreateDesc(BindFlag::ShaderResource|BindFlag::TransferSrc, TextureDesc::Plain2D(256, 256, RenderCore::Format::R8G8B8A8_UNORM, 9, 3), "immediate-upload-test");
 		auto pkt = std::make_shared<RandomTestPkt>(testDesc);
-		auto resource = bu->ImmediateTransaction(*threadContext, testDesc, *pkt).AsIndependentResource();
-		DestageAndCompare(*threadContext, *resource, *pkt);
+		auto locator = bu->ImmediateTransaction(testDesc, pkt);
+		bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
+		DestageAndCompare(*threadContext, *locator.AsIndependentResource(), *pkt);
 	}
 
 	TEST_CASE( "BufferUploads-LargeObjects", "[rendercore_techniques]" )
@@ -468,14 +469,16 @@ namespace UnitTests
 
 		{
 			auto pkt = std::make_shared<RandomTestPkt>(massiveTexture);
-			auto resource = bu->ImmediateTransaction(*threadContext, massiveTexture, *pkt).AsIndependentResource();
-			DestageAndCompare(*threadContext, *resource, *pkt);
+			auto locator = bu->ImmediateTransaction(massiveTexture, pkt);
+			bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
+			DestageAndCompare(*threadContext, *locator.AsIndependentResource(), *pkt);
 		}
 
 		{
 			auto pkt = std::make_shared<RandomTestPkt>(massiveLinearBuffer);
-			auto resource = bu->ImmediateTransaction(*threadContext, massiveLinearBuffer, *pkt).AsIndependentResource();
-			DestageAndCompare(*threadContext, *resource, *pkt);
+			auto locator = bu->ImmediateTransaction(massiveLinearBuffer, pkt);
+			bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
+			DestageAndCompare(*threadContext, *locator.AsIndependentResource(), *pkt);
 		}
 
 		{

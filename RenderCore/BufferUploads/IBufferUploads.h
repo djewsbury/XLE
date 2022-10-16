@@ -69,22 +69,12 @@ namespace RenderCore { namespace BufferUploads
 
         virtual std::future<CommandListID>   Begin    (ResourceLocator destinationResource, ResourceLocator sourceResource, IteratorRange<const Utility::RepositionStep*> repositionOperations) = 0;
 
+        virtual ResourceLocator ImmediateTransaction(const ResourceDesc& desc, std::shared_ptr<IDataPacket> data) = 0;
+
         virtual void            Cancel      (IteratorRange<const TransactionID*>) = 0;
 
         virtual void            OnCompletion(IteratorRange<const TransactionID*>, std::function<void()>&& fn) = 0;
 
-            /// @}
-
-            /// \name Immediate creation
-            /// @{
-
-            /// <summary>Create a new buffer synchronously</summary>
-            /// Creates a new resource synchronously. All creating objects will
-            /// execute in the current thread, and a new resource will be returned from
-            /// the call. Use these methods when uploads can't be delayed.
-        virtual ResourceLocator
-            ImmediateTransaction(  IThreadContext& threadContext,
-                                    const ResourceDesc& desc, IDataPacket& data) = 0;
             /// @}
 
             /// \name Frame management
