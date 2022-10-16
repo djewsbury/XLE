@@ -332,7 +332,7 @@ namespace ToolsRig
 		_preparedSceneFuture = std::make_shared<::Assets::MarkerPtr<PreparedScene>>("simple-scene-layer");
 
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[	promise = std::move(_preparedSceneFuture->AdoptPromise()),
+			[	promise = _preparedSceneFuture->AdoptPromise(),
 				targets = _lightingTechniqueTargets, fbProps = _lightingTechniqueFBProps, lightingApparatus = _lightingApparatus, 
 				scene = _scene, envSettings = _envSettings, pipelineAccelerators = _pipelineAccelerators]() mutable {
 

@@ -91,11 +91,12 @@ namespace UnitTests
 			translation[0] += viewport[0] / 2;
 			translation[1] += viewport[1] / 2;
 			{
-				VLA_UNSAFE_FORCE(Float3, gridLines, (_gridHeight-1)*2+(_gridWidth-1)*2);
+				auto gridLineCount = (_gridHeight-1)*2+(_gridWidth-1)*2;
+				VLA_UNSAFE_FORCE(Float3, gridLines, gridLineCount);
 				Float3* gl = gridLines;
 				for (unsigned y=1; y<_gridHeight; ++y) { *gl++ = Float3{translation[0], y*scale+translation[1], 0}; *gl++ = Float3{_gridWidth*scale+translation[0], y*scale+translation[1], 0}; }
 				for (unsigned x=1; x<_gridWidth; ++x) { *gl++ = Float3{x*scale+translation[0], translation[1], 0}; *gl++ = Float3{x*scale+translation[0], _gridHeight*scale+translation[1], 0}; }
-				overlayContext->DrawLines(ProjectionMode::P2D, gridLines, dimof(gridLines), {64, 64, 64, 128}, 1.f);
+				overlayContext->DrawLines(ProjectionMode::P2D, gridLines, gridLineCount, {64, 64, 64, 128}, 1.f);
 
 				char buffer[64];
 				for (unsigned y=0; y<_gridHeight; ++y)

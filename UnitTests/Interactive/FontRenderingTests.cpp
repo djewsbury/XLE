@@ -98,7 +98,7 @@ namespace UnitTests
 					ucs4 chrs[chrCount];
 					for (auto& c:chrs) c = std::uniform_int_distribution<>(33, 126)(_rng);
 					DrawTextFlags::BitField flags = 0;
-					RenderOverlays:Draw(
+					RenderOverlays::Draw(
 						parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables,
 						*_renderingManager, *font, flags,
 						rect._topLeft[0], rect._topLeft[1] + fontProps._ascender, rect._bottomRight[0], rect._bottomRight[1],

@@ -151,7 +151,6 @@ namespace EntityInterface
             //  We need to create a transaction, make the change and then commit it back.
             //  If the transaction returns no results, then we must have got a bad object or document id.
 		auto guid = SceneEngine::PlacementGUID(_cellId, id);
-		using TransType = SceneEngine::PlacementsEditor::ObjTransDef::TransactionType;
 
 		bool pendingTransactionCommit = false;
 		std::shared_ptr<SceneEngine::PlacementsEditor::ITransaction> mainTransaction;

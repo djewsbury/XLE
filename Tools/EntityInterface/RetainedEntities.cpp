@@ -512,7 +512,6 @@ namespace EntityInterface
         StringSection<> objType)
     {
         using Blob = InputStreamFormatter<utf8>::Blob;
-        using Section = InputStreamFormatter<utf8>::InteriorSection;
                 
         auto beginLoc = formatter.GetLocation();
 

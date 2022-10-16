@@ -114,7 +114,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		static Type RequireActualize(std::future<Type>& future)
+		static Type RequireActualize(std::future<Type> future)
 	{
 		return future.get();
 	}

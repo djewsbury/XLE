@@ -26,7 +26,7 @@ namespace ToolsRig
 	CompilationTarget::BitField FindCompilationTargets(StringSection<> ext)
 	{
 		auto types = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers().GetTargetCodesForExtension(ext);
-		CompilationTarget::BitField result;
+		CompilationTarget::BitField result = 0;
 		for (auto t:types) {
 			if (t == RenderCore::Assets::ModelScaffold::CompileProcessType) {
 				result |= CompilationTarget::Flags::Model;

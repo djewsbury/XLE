@@ -1036,7 +1036,6 @@ namespace Utility
             if ((i+1)<_entries.end()) {
                 assert(i->_end <= (i+1)->_start);
             }
-            assert(i->_start <= 0x800 && i->_end <= 0x800);
             result += i->_refCount*size_t(i->_end-i->_start);
         }
         return result;

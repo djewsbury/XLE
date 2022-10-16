@@ -50,7 +50,7 @@ namespace UnitTests
 			subResourceDst_.insert(subResourceDst_.end(), subResources.begin(), subResources.end());
 			return std::async(
 				std::launch::async,
-				[capturedDesc{_desc}, capturedData{_rawData}, subResourceDst{std::move(subResourceDst_)}]() {
+				[capturedData{_rawData}, subResourceDst{std::move(subResourceDst_)}]() {
 					std::this_thread::sleep_for(1500ms);
 
 					assert(subResourceDst[0]._destination.size() == capturedData.size() * sizeof(unsigned));

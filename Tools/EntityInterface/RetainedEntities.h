@@ -150,7 +150,7 @@ namespace EntityInterface
     class RetainedEntitiesAdapter : public IMutableEntityDocument
     {
     public:
-        EntityId AssignEntityId();
+        EntityId AssignEntityId() override;
 		bool CreateEntity(StringAndHash, EntityId, IteratorRange<const PropertyInitializer*>) override;
 		bool DeleteEntity(EntityId) override;
 		bool SetProperty(EntityId, IteratorRange<const PropertyInitializer*>) override;

@@ -973,7 +973,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
         result._localBoundingBox = boundingBox;
 
-        return std::move(result);
+        return result;
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

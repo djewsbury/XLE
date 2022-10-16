@@ -21,9 +21,15 @@
 // This is also pretty critical (within falling back to extern "C" stuff) because
 // the name mangling won't be guaranteed to be the same, anyway...
 //
-dll_export std::string ExampleFunctionReturnsString(std::string acrossInterface) asm("ExampleFunctionReturnsString");
+#if COMPILER_ACTIVE == COMPILER_TYPE_CLANG
+	dll_export std::string ExampleFunctionReturnsString(std::string acrossInterface) asm("ExampleFunctionReturnsString");
+#endif
 dll_export std::string ExampleFunctionReturnsString(std::string acrossInterface)
 {
+	#if COMPILER_ACTIVE == COMPILER_TYPE_MSVC
+		#pragma comment(linker, "/EXPORT:ExampleFunctionReturnsString=" __FUNCDNAME__)
+	#endif
+
 	return "This is a string from ExampleFunctionReturnsString <<" + acrossInterface + ">>";
 }
 
@@ -31,18 +37,30 @@ static ConsoleRig::AttachablePtr<UnitTests::SingletonSharedFromAttachedModule> s
 static ConsoleRig::AttachablePtr<UnitTests::SingletonSharedFromMainModule2> s_embuedByMainModule2;
 static ConsoleRig::WeakAttachablePtr<UnitTests::SingletonSharedFromMainModule3> s_embuedByMainModule3;
 
-dll_export std::string FunctionCheckingAttachablePtrs() asm("FunctionCheckingAttachablePtrs");
+#if COMPILER_ACTIVE == COMPILER_TYPE_CLANG
+	dll_export std::string FunctionCheckingAttachablePtrs() asm("FunctionCheckingAttachablePtrs");
+#endif
 dll_export std::string FunctionCheckingAttachablePtrs()
 {
+	#if COMPILER_ACTIVE == COMPILER_TYPE_MSVC
+		#pragma comment(linker, "/EXPORT:FunctionCheckingAttachablePtrs=" __FUNCDNAME__)
+	#endif
+
 	s_singletonToPublish = std::make_shared<UnitTests::SingletonSharedFromAttachedModule>();
 
 	ConsoleRig::AttachablePtr<UnitTests::SingletonSharedFromMainModule1> embuedByMainModule1;
 	return embuedByMainModule1->_identifyingString + " and " + s_embuedByMainModule2->_identifyingString + " and " + s_embuedByMainModule3.lock()->_identifyingString;
 }
 
-dll_export std::string CheckWeakAttachable() asm("CheckWeakAttachable");
+#if COMPILER_ACTIVE == COMPILER_TYPE_CLANG
+	dll_export std::string CheckWeakAttachable() asm("CheckWeakAttachable");
+#endif
 dll_export std::string CheckWeakAttachable()
 {
+	#if COMPILER_ACTIVE == COMPILER_TYPE_MSVC
+		#pragma comment(linker, "/EXPORT:CheckWeakAttachable=" __FUNCDNAME__)
+	#endif
+
 	if (s_embuedByMainModule3.lock() != nullptr)
 		return "Still have value";
 	return "No longer have value";
