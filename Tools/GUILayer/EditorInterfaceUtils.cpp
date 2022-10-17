@@ -249,7 +249,7 @@ namespace GUILayer
             EditorSceneManager^ sceneMan,
             EntityInterface::DocumentId doc)
         {
-            auto boundary = sceneMan->GetScene()._placementsEditor->CalculateCellBoundary(doc);
+            auto boundary = sceneMan->GetScene()._placementsEditor->StallAndCalculateCellBoundary(doc);
             return Tuple::Create(AsVector3(boundary.first), AsVector3(boundary.second));
         }
 

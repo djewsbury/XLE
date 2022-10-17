@@ -50,7 +50,7 @@ namespace SceneEngine
 
 		::Assets::DependencyValidation				_dependencyValidation;
 		void ReplaceString(const char oldString[], const char newString[]);
-		friend class DynamicPlacements;
+		friend class EditorOverlayCellRenderer;
 	};
 
 	inline auto            	PlacementsScaffold::GetObjectReferences() const -> IteratorRange<const ObjectReference*>	{ return _objects; }
@@ -64,10 +64,12 @@ namespace SceneEngine
 		struct Resource
 		{
 			std::string _name, _material;
+			std::vector<uint64_t> _supplements;
 			std::pair<Float3, Float3> _cellSpaceBoundary;
 		};
 		Float3x4 _localToCell;
 		Resource _resource;
+		std::optional<uint64_t> _preassignedGuid;
 	};
 	::Assets::Blob SerializePlacements(IteratorRange<const NascentPlacement*>);
 

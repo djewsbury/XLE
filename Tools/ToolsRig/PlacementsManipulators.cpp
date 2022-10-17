@@ -13,6 +13,7 @@
 #include "../../SceneEngine/PlacementsManager.h"
 //#include "../../SceneEngine/Terrain.h"
 #include "../../SceneEngine/IntersectionTest.h"
+#include "../../RenderCore/Assets/ModelScaffold.h"
 
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/IOverlayContext.h"
@@ -1193,7 +1194,10 @@ namespace ToolsRig
             //  the bottom range.
             //  We will use the first model in the list to calibrate the scatter densitys
 
-        auto modelBoundingBox = editor.GetModelBoundingBox(modelName[0]);
+        auto* attemptedActualize = ::Assets::MakeAssetMarkerPtr<RenderCore::Assets::ModelScaffold>(modelName[0])->TryActualize();
+        if (!attemptedActualize) return;
+
+        auto modelBoundingBox = (*attemptedActualize)->GetStaticBoundingBox();
         if (    modelBoundingBox.second[0] <= modelBoundingBox.first[0]
             ||  modelBoundingBox.second[1] <= modelBoundingBox.first[1]
             ||  modelBoundingBox.second[2] <= modelBoundingBox.first[2])

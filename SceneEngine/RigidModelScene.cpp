@@ -468,9 +468,15 @@ namespace SceneEngine
 		std::future<ModelInfo> GetModelInfo(OpaquePtr modelPtr) override
 		{
 			ScopedLock(_poolLock);
+			bool foundModelEntry = false;
 			for (const auto& e:_modelEntries)
-				if (!e.second.owner_before(modelPtr) && !modelPtr.owner_before(e.second))
-					Throw(std::runtime_error("Invalid model ptr passed to GetModelInfo"));
+				if (!e.second.owner_before(modelPtr) && !modelPtr.owner_before(e.second)) {
+					foundModelEntry = true;
+					break;
+				}
+
+			if (!foundModelEntry)
+				Throw(std::runtime_error("Invalid model ptr passed to GetModelInfo"));
 			
 			auto& model = *(RigidModelSceneInternal::ModelEntry*)modelPtr.get();
 			std::promise<ModelInfo> promise;

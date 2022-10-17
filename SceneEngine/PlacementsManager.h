@@ -85,13 +85,6 @@ namespace SceneEngine
             const PlacementGUID* begin, const PlacementGUID* end,
 			const std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate>& preDrawDelegate = nullptr);
 
-#if 0
-        struct ObjectBoundingBoxes { const std::pair<Float3, Float3> * _boundingBox = nullptr; unsigned _stride = 0; unsigned _count = 0; };
-        auto GetObjectBoundingBoxes(const PlacementCellSet& cellSet, const Float4x4& worldToClip) const
-            -> std::vector<std::pair<Float3x4, ObjectBoundingBoxes>>;
-        auto GetObjectBoundingBoxes(const PlacementCellSet& cellSet, StringSection<> cellName) const -> ObjectBoundingBoxes;
-#endif
-
         void SetImposters(std::shared_ptr<DynamicImposters> imposters);
 
         std::future<void> PrepareDrawables(IteratorRange<const Float4x4*> worldToCullingFrustums, const PlacementCellSet& cellSet);
@@ -202,13 +195,11 @@ namespace SceneEngine
         static uint64_t GenerateObjectGUID();
         void    PerformGUIDFixup(PlacementGUID* begin, PlacementGUID* end) const;
 
-        std::pair<Float3, Float3> CalculateCellBoundary(uint64_t cellId) const;
+        std::pair<Float3, Float3> StallAndCalculateCellBoundary(uint64_t cellId) const;
 
         std::string GetMetricsString(uint64_t cellId) const;
         void WriteAllCells();
         void WriteCell(uint64_t cellId, const Assets::ResChar destinationFile[]) const;
-
-        std::pair<Float3, Float3> GetModelBoundingBox(const Assets::ResChar modelName[]) const;
 
         std::shared_ptr<PlacementsManager> GetManager();
         const PlacementCellSet& GetCellSet() const;
