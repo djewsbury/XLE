@@ -59,6 +59,11 @@ namespace SceneEngine
 		virtual std::shared_ptr<RenderCore::BufferUploads::IBatchedResources> GetIBResources() = 0;
 		virtual std::shared_ptr<Assets::OperationContext> GetLoadingContext() = 0;
 
+		struct ModelInfo
+		{
+			std::pair<Float3, Float3> _boundingBox;
+		};
+		virtual std::future<ModelInfo> GetModelInfo(OpaquePtr model) = 0;
 		virtual std::future<void> FutureForRenderer(OpaquePtr renderer) = 0;
 		virtual RenderCore::BufferUploads::CommandListID GetCompletionCommandList(void* renderer) = 0;
 

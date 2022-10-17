@@ -145,6 +145,12 @@ namespace SceneEngine
 		return result.str();
 	}
 
+	static std::pair<Float3, Float3> GetBoundingBox(const RenderCore::Assets::ModelRendererConstruction& modelRendererConstruction)
+	{
+		assert(modelRendererConstruction.GetElementCount() == 1);
+		return modelRendererConstruction.GetElement(0)->GetModelScaffold()->GetStaticBoundingBox();
+	}
+
 	class RigidModelScene : public IRigidModelScene, public std::enable_shared_from_this<RigidModelScene>
 	{
 	public:
@@ -456,6 +462,26 @@ namespace SceneEngine
 			}
 
 			std::sort(result.begin(), result.end(), CompareFirst2());
+			return result;
+		}
+
+		std::future<ModelInfo> GetModelInfo(OpaquePtr modelPtr) override
+		{
+			ScopedLock(_poolLock);
+			for (const auto& e:_modelEntries)
+				if (!e.second.owner_before(modelPtr) && !modelPtr.owner_before(e.second))
+					Throw(std::runtime_error("Invalid model ptr passed to GetModelInfo"));
+			
+			auto& model = *(RigidModelSceneInternal::ModelEntry*)modelPtr.get();
+			std::promise<ModelInfo> promise;
+			auto result = promise.get_future();
+			::Assets::WhenAll(model._completedConstruction).ThenConstructToPromise(
+				std::move(promise),
+				[](const auto& modelRendererConstruction) {
+					ModelInfo modelInfo;
+					modelInfo._boundingBox = GetBoundingBox(*modelRendererConstruction);
+					return modelInfo;
+				});
 			return result;
 		}
 

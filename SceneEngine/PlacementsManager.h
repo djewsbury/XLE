@@ -85,10 +85,12 @@ namespace SceneEngine
             const PlacementGUID* begin, const PlacementGUID* end,
 			const std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate>& preDrawDelegate = nullptr);
 
+#if 0
         struct ObjectBoundingBoxes { const std::pair<Float3, Float3> * _boundingBox = nullptr; unsigned _stride = 0; unsigned _count = 0; };
         auto GetObjectBoundingBoxes(const PlacementCellSet& cellSet, const Float4x4& worldToClip) const
             -> std::vector<std::pair<Float3x4, ObjectBoundingBoxes>>;
         auto GetObjectBoundingBoxes(const PlacementCellSet& cellSet, StringSection<> cellName) const -> ObjectBoundingBoxes;
+#endif
 
         void SetImposters(std::shared_ptr<DynamicImposters> imposters);
 

@@ -57,9 +57,8 @@ namespace SceneEngine
 
     static const unsigned s_PlacementsChunkVersionNumber = 1;
 
-    class PlacementsHeader
+    struct PlacementsScaffoldHeader
     {
-    public:
         unsigned _version;
         unsigned _objectRefCount;
         unsigned _filenamesBufferSize;
@@ -67,41 +66,7 @@ namespace SceneEngine
         unsigned _dummy;
     };
 
-    ::Assets::Blob Placements::Serialize() const
-    {
-        PlacementsHeader hdr;
-        hdr._version = 0;
-        hdr._objectRefCount = (unsigned)_objects.size();
-        hdr._filenamesBufferSize = unsigned(_filenamesBuffer.size());
-        hdr._supplementsBufferSize = unsigned(_supplementsBuffer.size() * sizeof(uint64_t));
-        hdr._dummy = 0;
-
-        auto result = std::make_shared<std::vector<uint8_t>>();
-        result->reserve(sizeof(hdr) + sizeof(ObjectReference)*hdr._objectRefCount + hdr._filenamesBufferSize + hdr._supplementsBufferSize);
-        result->insert(result->end(), (const uint8_t*)&hdr, (const uint8_t*)PtrAdd(&hdr, sizeof(hdr)));
-        result->insert(result->end(), (const uint8_t*)AsPointer(_objects.begin()), (const uint8_t*)AsPointer(_objects.begin() + hdr._objectRefCount));
-        result->insert(result->end(), (const uint8_t*)AsPointer(_cellSpaceBoundaries.begin()), (const uint8_t*)AsPointer(_cellSpaceBoundaries.begin() + hdr._objectRefCount));
-        result->insert(result->end(), (const uint8_t*)AsPointer(_filenamesBuffer.begin()), (const uint8_t*)AsPointer(_filenamesBuffer.begin() + hdr._filenamesBufferSize));
-        result->insert(result->end(), (const uint8_t*)AsPointer(_supplementsBuffer.begin()), (const uint8_t*)PtrAdd(AsPointer(_supplementsBuffer.begin()), hdr._supplementsBufferSize));
-        return result;
-    }
-
-    void Placements::Write(const Assets::ResChar destinationFile[]) const
-    {
-        using namespace Assets::ChunkFile;
-		auto libVersion = ConsoleRig::GetLibVersionDesc();
-        SimpleChunkFileWriter fileWriter(
-			::Assets::MainFileSystem::OpenBasicFile(destinationFile, "wb", 0),
-            1, libVersion._versionString, libVersion._buildDateString);
-        fileWriter.BeginChunk(ChunkType_Placements, s_PlacementsChunkVersionNumber, "Placements");
-
-        auto blob = Serialize();
-        auto writeResult0 = fileWriter.Write(AsPointer(blob->begin()), 1, blob->size());
-        if (writeResult0 != blob->size())
-            Throw(::Exceptions::BasicLabel("Failure in file write while saving placements"));
-    }
-
-    void Placements::LogDetails(const char title[]) const
+    void PlacementsScaffold::LogDetails(const char title[]) const
     {
         // write some details about this placements file to the log
         Log(Verbose) << "---<< Placements file: " << title << " >>---" << std::endl;
@@ -134,7 +99,7 @@ namespace SceneEngine
         }
     }
 
-    void Placements::ReplaceString(const char oldString[], const char newString[])
+    void PlacementsScaffold::ReplaceString(const char oldString[], const char newString[])
     {
         unsigned replacementStart = 0, preReplacementEnd = 0;
         unsigned postReplacementEnd = 0;
@@ -193,7 +158,7 @@ namespace SceneEngine
         }
     }
 
-    const ::Assets::ArtifactRequest Placements::ChunkRequests[]
+    const ::Assets::ArtifactRequest PlacementsScaffold::ChunkRequests[]
     {
         ::Assets::ArtifactRequest
         {
@@ -202,7 +167,7 @@ namespace SceneEngine
         }
     };
 
-    Placements::Placements(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
+    PlacementsScaffold::PlacementsScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
 	: _dependencyValidation(depVal)
     {
         assert(chunks.size() == 1);
@@ -218,11 +183,11 @@ namespace SceneEngine
             //
 
         void const* i = chunks[0]._buffer.get();
-        const auto& hdr = *(const PlacementsHeader*)i;
+        const auto& hdr = *(const PlacementsScaffoldHeader*)i;
         if (hdr._version != s_PlacementsChunkVersionNumber)
             Throw(::Exceptions::BasicLabel(
                 StringMeld<128>() << "Unexpected version number (" << hdr._version << ")"));
-        i = PtrAdd(i, sizeof(PlacementsHeader));
+        i = PtrAdd(i, sizeof(PlacementsScaffoldHeader));
 
         _objects.clear();
         _filenamesBuffer.clear();
@@ -250,10 +215,10 @@ namespace SceneEngine
         #endif
     }
 
-	Placements::Placements() 
+	PlacementsScaffold::PlacementsScaffold() 
 	{}
 
-    Placements::~Placements()
+    PlacementsScaffold::~PlacementsScaffold()
     {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -268,34 +233,52 @@ namespace SceneEngine
         char        _filename[256];
     };
 
-    struct CellRenderInfo
+    class CellRenderInfo
     {
-        Placements _placements;
+    public:
         std::shared_ptr<GenericQuadTree> _quadTree;
         std::vector<unsigned> _objectToRenderer;
         std::vector<std::shared_ptr<void>> _renderers;
+
+        virtual IteratorRange<const PlacementsScaffold::ObjectReference*> GetObjectReferences() const = 0;
+        virtual const void* GetFilenamesBuffer() const = 0;
+        virtual const uint64_t* GetSupplementsBuffer() const = 0;
+        virtual IteratorRange<const std::pair<Float3, Float3>*> GetCellSpaceBoundaries() const = 0;
+        virtual ~CellRenderInfo();
+    };
+
+    CellRenderInfo::~CellRenderInfo() {}
+
+    class ImmutableCellRenderInfo : public CellRenderInfo
+    {
+    public:
+        PlacementsScaffold _scaffold;
+        virtual const void* GetFilenamesBuffer() const { return _scaffold.GetFilenamesBuffer(); }
+        virtual IteratorRange<const PlacementsScaffold::ObjectReference*> GetObjectReferences() const { return _scaffold.GetObjectReferences(); }
+        virtual IteratorRange<const std::pair<Float3, Float3>*> GetCellSpaceBoundaries() const { return _scaffold.GetCellSpaceBoundaries(); }
+        virtual const uint64_t* GetSupplementsBuffer() const { return _scaffold.GetSupplementsBuffer(); }
     };
 
     static const unsigned s_quadTreeLeafThreshold = 12;
 
-    static CellRenderInfo ConstructCellRenderInfo(Placements&& placements, IRigidModelScene& cache)
+    static std::shared_ptr<CellRenderInfo> ConstructCellRenderInfo(PlacementsScaffold&& placements, IRigidModelScene& cache)
     {
-        CellRenderInfo result;
-        result._placements = std::move(placements);
+        auto result = std::make_shared<ImmutableCellRenderInfo>();
+        result->_scaffold = std::move(placements);
         
         {
             auto dataBlock = GenericQuadTree::BuildQuadTree(
                 placements.GetCellSpaceBoundaries().begin(),
-                sizeof(Placements::BoundingBox), 
+                sizeof(PlacementsScaffold::BoundingBox), 
                 placements.GetCellSpaceBoundaries().size(),
                 s_quadTreeLeafThreshold);
             ::Assets::Block_Initialize(dataBlock.first.get());
             // ::Assets::Block_GetFirstObject(...) is handled inside of GenericQuadTree
-            result._quadTree = std::make_unique<GenericQuadTree>(std::move(dataBlock.first));
+            result->_quadTree = std::make_unique<GenericQuadTree>(std::move(dataBlock.first));
         }
 
         // sort by model reference, because we're going to allocate a renderer for each unique one
-        std::vector<const Placements::ObjectReference*> sortedObjectReferences;
+        std::vector<const PlacementsScaffold::ObjectReference*> sortedObjectReferences;
         sortedObjectReferences.reserve(placements.GetObjectReferences().size());
         for (unsigned c=0; c<placements.GetObjectReferences().size(); ++c)
             sortedObjectReferences.push_back(&placements.GetObjectReferences()[c]);
@@ -306,7 +289,7 @@ namespace SceneEngine
         });
         
         auto* filenamesBuffer = placements.GetFilenamesBuffer();
-        result._objectToRenderer.resize(placements.GetObjectReferences().size(), ~0u);
+        result->_objectToRenderer.resize(placements.GetObjectReferences().size(), ~0u);
         for (auto i=sortedObjectReferences.begin(); i!=sortedObjectReferences.end();) {
             auto endi = i+1;
             while (endi!=sortedObjectReferences.end() && (*endi)->_modelFilenameOffset == (*i)->_modelFilenameOffset  && (*endi)->_materialFilenameOffset == (*i)->_materialFilenameOffset) ++endi;
@@ -317,11 +300,11 @@ namespace SceneEngine
                 (const char*)PtrAdd(filenamesBuffer, (*i)->_materialFilenameOffset + sizeof(uint64_t)));
             auto modelPtr = cache.CreateModel(model);
             auto rendererPtr = cache.CreateRenderer(modelPtr, nullptr);
-            result._renderers.emplace_back(std::move(rendererPtr));
+            result->_renderers.emplace_back(std::move(rendererPtr));
 
             // assign this renderer to all objects that reference it
             for (auto i2=i; i2!=endi; ++i2)
-                result._objectToRenderer[std::distance(placements.GetObjectReferences().begin(), *i2)] = (unsigned)result._renderers.size()-1;
+                result->_objectToRenderer[std::distance(placements.GetObjectReferences().begin(), *i2)] = (unsigned)result->_renderers.size()-1;
 
             i = endi;
         }
@@ -335,30 +318,31 @@ namespace SceneEngine
     {
     public:
         const CellRenderInfo* TryGetCellRenderInfo(uint64_t filenameHash, StringSection<> filename);
-        std::shared_future<CellRenderInfo> GetCellRenderInfoFuture(uint64_t filenameHash, StringSection<> filename);
+        std::shared_future<std::shared_ptr<CellRenderInfo>> GetCellRenderInfoFuture(uint64_t filenameHash, StringSection<> filename);
         IRigidModelScene& GetRigidModelScene() { return *_rigidModelScene; }
         PlacementsCache(std::shared_ptr<::Assets::OperationContext>, std::shared_ptr<IRigidModelScene> rigidModelScene);
         ~PlacementsCache();
     private:
         std::shared_ptr<::Assets::OperationContext> _loadingContext;
         std::shared_ptr<IRigidModelScene> _rigidModelScene;
-        FrameByFrameLRUHeap<::Assets::Marker<CellRenderInfo>> _renderInfos;
+        FrameByFrameLRUHeap<::Assets::MarkerPtr<CellRenderInfo>> _renderInfos;
     };
 
     const CellRenderInfo* PlacementsCache::TryGetCellRenderInfo(uint64_t filenameHash, StringSection<> filename)
     {
         auto query = _renderInfos.Query(filenameHash);
         if (query.GetType() == LRUCacheInsertType::Update) {
-            return query.GetExisting().TryActualize();
+            auto* actual = query.GetExisting().TryActualize();
+            return actual ? actual->get() : nullptr;
         } else if (query.GetType() == LRUCacheInsertType::Fail) {
             return nullptr;
         }
 
         // create new CellRenderInfo
-        std::promise<Placements> placementsPromise;
+        std::promise<PlacementsScaffold> placementsPromise;
         auto placementsFuture = placementsPromise.get_future();
         ::Assets::AutoConstructToPromise(std::move(placementsPromise), _loadingContext, filename);
-        ::Assets::Marker<CellRenderInfo> newCellRenderInfo;
+        ::Assets::MarkerPtr<CellRenderInfo> newCellRenderInfo;
         ::Assets::WhenAll(std::move(placementsFuture)).ThenConstructToPromise(
             newCellRenderInfo.AdoptPromise(),
             [weakScene=std::weak_ptr<IRigidModelScene>{_rigidModelScene}](auto&& placements) {
@@ -369,10 +353,10 @@ namespace SceneEngine
 
         auto* res = newCellRenderInfo.TryActualize();   // probably can't complete immediately
         query.Set(std::move(newCellRenderInfo));
-        return res;
+        return res ? res->get() : nullptr;
     }
 
-    std::shared_future<CellRenderInfo> PlacementsCache::GetCellRenderInfoFuture(uint64_t filenameHash, StringSection<> filename)
+    std::shared_future<std::shared_ptr<CellRenderInfo>> PlacementsCache::GetCellRenderInfoFuture(uint64_t filenameHash, StringSection<> filename)
     {
         auto query = _renderInfos.Query(filenameHash);
         if (query.GetType() == LRUCacheInsertType::Update) {
@@ -382,10 +366,10 @@ namespace SceneEngine
         }
 
         // create new CellRenderInfo
-        std::promise<Placements> placementsPromise;
+        std::promise<PlacementsScaffold> placementsPromise;
         auto placementsFuture = placementsPromise.get_future();
         ::Assets::AutoConstructToPromise(std::move(placementsPromise), _loadingContext, filename);
-        ::Assets::Marker<CellRenderInfo> newCellRenderInfo;
+        ::Assets::MarkerPtr<CellRenderInfo> newCellRenderInfo;
         ::Assets::WhenAll(std::move(placementsFuture)).ThenConstructToPromise(
             newCellRenderInfo.AdoptPromise(),
             [weakScene=std::weak_ptr<IRigidModelScene>{_rigidModelScene}](auto&& placements) {
@@ -426,7 +410,7 @@ namespace SceneEngine
     }
 #else
     static ::Assets::AssetState TryGetBoundingBox(
-        Placements::BoundingBox& result, 
+        PlacementsScaffold::BoundingBox& result, 
         IRigidModelScene& modelCache, const char modelFilename[], 
         unsigned LOD = 0, bool stallWhilePending = false)
     {
@@ -468,32 +452,18 @@ namespace SceneEngine
     class PlacementsRenderer::Pimpl
     {
     public:
-        const CellRenderInfo* CullCell(
-            std::vector<unsigned>& visiblePlacements,
-            const Float4x4& worldToProjection,
-            const PlacementCell& cell,
-            CullMetrics* metrics = nullptr);
-
         void CullCell(
             std::vector<unsigned>& visiblePlacements,
             const Float4x4& cellToCullSpace,
-            const Placements& placements,
+            IteratorRange<const std::pair<Float3, Float3>*> cellSpaceBoundingBoxes,
             const GenericQuadTree* quadTree,
-            CullMetrics* metrics = nullptr);
-
-        const CellRenderInfo* CullCell(
-            std::vector<std::pair<unsigned, uint32_t>>& visibleObjects,
-            const ArbitraryConvexVolumeTester* volumeTester,
-            IteratorRange<const Float4x4*> worldToCullingFrustums,
-            uint32_t viewMask,
-            const PlacementCell& cell,
             CullMetrics* metrics = nullptr);
 
         void CullCell(
             std::vector<std::pair<unsigned, uint32_t>>& visiblePlacements,
             IteratorRange<const Float4x4*> cellToCullingFrustums,
             uint32_t viewMask,
-            const Placements& placements,
+            IteratorRange<const std::pair<Float3, Float3>*> cellSpaceBoundingBoxes,
             const GenericQuadTree* quadTree,
             CullMetrics* metrics = nullptr);
 
@@ -503,21 +473,15 @@ namespace SceneEngine
             const Float3x4& cellToArbitraryVolume,
             IteratorRange<const Float4x4*> cellToCullingFrustums,
             uint32_t viewMask,
-            const Placements& placements,
+            IteratorRange<const std::pair<Float3, Float3>*> cellSpaceBoundingBoxes,
             const GenericQuadTree* quadTree,
-            CullMetrics* metrics = nullptr);
-
-        const CellRenderInfo* CullCell(
-            std::vector<unsigned>& visiblePlacements,
-            const ArbitraryConvexVolumeTester& tester,
-            const PlacementCell& cell,
             CullMetrics* metrics = nullptr);
 
         void CullCell(
             std::vector<unsigned>& visiblePlacements,
             const ArbitraryConvexVolumeTester& tester,
             const Float3x4& cellToCullSpace,
-            const Placements& placements,
+            IteratorRange<const std::pair<Float3, Float3>*> cellSpaceBoundingBoxes,
             const GenericQuadTree* quadTree,
             CullMetrics* metrics = nullptr);
 
@@ -581,100 +545,6 @@ namespace SceneEngine
         return _placementsCache->TryGetCellRenderInfo(cell._filenameHash, cell._filename);
     }
 
-    const CellRenderInfo* PlacementsRenderer::Pimpl::CullCell(
-        std::vector<unsigned>& visibleObjects,
-        const Float4x4& worldToProjection,
-        const PlacementCell& cell,
-        CullMetrics* metrics)
-    {
-        // Look for a "RenderInfo" for this cell.. and create it if it doesn't exist
-        // Note that there's a bit of extra overhead here:
-        //  * in this design, we need to search for the cell by guid id
-        //  * however, the cells are probably arranged in a 2d grid, and we probably
-        //      know the 2d address -- which means we could go right to the correct
-        //      cell.
-        //
-        // But this design allows for a little extra flexibility. We're no restricted
-        // on how the placement cells are arranged, so we can have overlapping cells, or
-        // separate cells for inside/outside/underwater/etc. Or we can have cells that
-        // represent different states (like stages of building a castle, or if a zone
-        // changes over time). 
-        //
-        // It seems useful to me. But if the overhead becomes too great, we can just change
-        // to a basic 2d addressing model.
-        if (cell._filename[0] == '[') return nullptr;   // hack -- if the cell filename begins with '[', it is a cell from the editor (and should be using _cellOverrides)
-
-        auto* renderInfo = TryGetCellRenderInfo(cell);
-        if (!renderInfo) return nullptr;
-
-        __declspec(align(16)) auto cellToCullSpace = Combine(cell._cellToWorld, worldToProjection);
-        CullCell(
-            visibleObjects, cellToCullSpace, 
-            renderInfo->_placements, 
-            renderInfo->_quadTree.get(),
-            metrics);
-
-        return renderInfo;
-    }
-
-    const CellRenderInfo* PlacementsRenderer::Pimpl::CullCell(
-        std::vector<std::pair<unsigned, uint32_t>>& visibleObjects,
-        const ArbitraryConvexVolumeTester* arbitraryVolume,
-        IteratorRange<const Float4x4*> worldToCullingFrustums,
-        uint32_t viewMask,
-        const PlacementCell& cell,
-        CullMetrics* metrics)
-    {
-        if (cell._filename[0] == '[') return nullptr;
-
-        auto* renderInfo = TryGetCellRenderInfo(cell);
-        if (!renderInfo) return nullptr;
-
-        VLA_UNSAFE_FORCE(Float4x4, cellToCullingFrustums, worldToCullingFrustums.size());
-        for (unsigned c=0; c<worldToCullingFrustums.size(); ++c)
-            cellToCullingFrustums[c] = Combine(cell._cellToWorld, worldToCullingFrustums[c]);
-        if (arbitraryVolume) {
-            CullCell(
-                visibleObjects, 
-                *arbitraryVolume, cell._cellToWorld,
-                MakeIteratorRange(cellToCullingFrustums, &cellToCullingFrustums[worldToCullingFrustums.size()]),
-                viewMask,
-                renderInfo->_placements, 
-                renderInfo->_quadTree.get(),
-                metrics);
-
-        } else {
-            CullCell(
-                visibleObjects, MakeIteratorRange(cellToCullingFrustums, &cellToCullingFrustums[worldToCullingFrustums.size()]),
-                viewMask,
-                renderInfo->_placements, 
-                renderInfo->_quadTree.get(),
-                metrics);
-        }
-
-        return renderInfo;
-    }
-
-    const CellRenderInfo* PlacementsRenderer::Pimpl::CullCell(
-        std::vector<unsigned>& visibleObjects,
-        const ArbitraryConvexVolumeTester& tester,
-        const PlacementCell& cell,
-        CullMetrics* metrics)
-    {
-        if (cell._filename[0] == '[') return nullptr;   // hack -- if the cell filename begins with '[', it is a cell from the editor (and should be using _cellOverrides)
-
-        auto* renderInfo = TryGetCellRenderInfo(cell);
-        if (!renderInfo) return nullptr;
-
-        CullCell(
-            visibleObjects, tester, cell._cellToWorld,
-            renderInfo->_placements,
-            renderInfo->_quadTree.get(),
-            metrics);
-
-        return renderInfo;
-    }
-
     static SupplementRange AsSupplements(const uint64_t* supplementsBuffer, unsigned supplementsOffset)
     {
         if (!supplementsOffset) return SupplementRange();
@@ -691,11 +561,11 @@ namespace SceneEngine
     void PlacementsRenderer::Pimpl::CullCell(
         std::vector<unsigned>& visiblePlacements,
         const Float4x4& cellToCullSpace,
-        const Placements& placements,
+        IteratorRange<const std::pair<Float3, Float3>*> cellSpaceBoundingBoxes,
         const GenericQuadTree* quadTree,
         CullMetrics* metrics)
     {
-        auto placementCount = placements.GetCellSpaceBoundaries().size();
+        auto placementCount = cellSpaceBoundingBoxes.size();
         if (!placementCount)
             return;
 
@@ -706,8 +576,8 @@ namespace SceneEngine
 			assert(placementCount < (1<<28));
             quadTree->CalculateVisibleObjects(
                 cellToCullSpace, RenderCore::Techniques::GetDefaultClipSpaceType(),
-                placements.GetCellSpaceBoundaries().begin(),
-                sizeof(Placements::BoundingBox),
+                cellSpaceBoundingBoxes.begin(),
+                sizeof(PlacementsScaffold::BoundingBox),
                 AsPointer(visiblePlacements.begin()), cullResults, cullResults,
                 metrics ? &metrics->_qtMetrics : nullptr);
             visiblePlacements.resize(cullResults);
@@ -722,13 +592,13 @@ namespace SceneEngine
         } else {
             visiblePlacements.reserve(placementCount);
             for (unsigned c=0; c<placementCount; ++c) {
-                auto& cellSpaceBoundary = placements.GetCellSpaceBoundaries()[c];
+                auto& cellSpaceBoundary = cellSpaceBoundingBoxes[c];
                 if (CullAABB_Aligned(cellToCullSpace, cellSpaceBoundary.first, cellSpaceBoundary.second, RenderCore::Techniques::GetDefaultClipSpaceType()))
                     continue;
                 visiblePlacements.push_back(c);
             }
             if (metrics)
-                metrics->_qtMetrics._payloadAabbTestCount += placementCount;
+                metrics->_qtMetrics._payloadAabbTestCount += (unsigned)placementCount;
         }
     }
 
@@ -736,11 +606,11 @@ namespace SceneEngine
         std::vector<std::pair<unsigned, uint32_t>>& visiblePlacements,
         IteratorRange<const Float4x4*> cellToCullingFrustums,
         uint32_t viewMask,
-        const Placements& placements,
+        IteratorRange<const std::pair<Float3, Float3>*> cellSpaceBoundingBoxes,
         const GenericQuadTree* quadTree,
         CullMetrics* metrics)
     {
-        auto placementCount = placements.GetCellSpaceBoundaries().size();
+        auto placementCount = cellSpaceBoundingBoxes.size();
         if (!placementCount)
             return;
 
@@ -751,8 +621,8 @@ namespace SceneEngine
 			assert(placementCount < (1<<28));
             quadTree->CalculateVisibleObjects(
                 cellToCullingFrustums, viewMask, RenderCore::Techniques::GetDefaultClipSpaceType(),
-                placements.GetCellSpaceBoundaries().begin(),
-                sizeof(Placements::BoundingBox),
+                cellSpaceBoundingBoxes.begin(),
+                sizeof(PlacementsScaffold::BoundingBox),
                 AsPointer(visiblePlacements.begin()), cullResults, cullResults,
                 metrics ? &metrics->_qtMetrics : nullptr);
             visiblePlacements.resize(cullResults);
@@ -779,11 +649,11 @@ namespace SceneEngine
         const Float3x4& cellToArbitraryVolume,
         IteratorRange<const Float4x4*> cellToCullingFrustums,
         uint32_t viewMask,
-        const Placements& placements,
+        IteratorRange<const std::pair<Float3, Float3>*> cellSpaceBoundingBoxes,
         const GenericQuadTree* quadTree,
         CullMetrics* metrics)
     {
-        auto placementCount = placements.GetCellSpaceBoundaries().size();
+        auto placementCount = cellSpaceBoundingBoxes.size();
         if (!placementCount)
             return;
         
@@ -795,8 +665,8 @@ namespace SceneEngine
             quadTree->CalculateVisibleObjects(
                 arbitraryVolume, cellToArbitraryVolume,
                 cellToCullingFrustums, viewMask, RenderCore::Techniques::GetDefaultClipSpaceType(),
-                placements.GetCellSpaceBoundaries().begin(),
-                sizeof(Placements::BoundingBox),
+                cellSpaceBoundingBoxes.begin(),
+                sizeof(PlacementsScaffold::BoundingBox),
                 AsPointer(visiblePlacements.begin()), cullResults, cullResults,
                 metrics ? &metrics->_qtMetrics : nullptr);
             visiblePlacements.resize(cullResults);
@@ -821,11 +691,11 @@ namespace SceneEngine
         std::vector<unsigned>& visiblePlacements,
         const ArbitraryConvexVolumeTester& tester,
         const Float3x4& cellToCullSpace,
-        const Placements& placements,
+        IteratorRange<const std::pair<Float3, Float3>*> cellSpaceBoundingBoxes,
         const GenericQuadTree* quadTree,
         CullMetrics* metrics)
     {
-        auto placementCount = placements.GetCellSpaceBoundaries().size();
+        auto placementCount = cellSpaceBoundingBoxes.size();
         if (!placementCount)
             return;
 
@@ -836,8 +706,8 @@ namespace SceneEngine
 			assert(placementCount < (1<<28));
             quadTree->CalculateVisibleObjects(
                 tester, cellToCullSpace,
-                placements.GetCellSpaceBoundaries().begin(),
-                sizeof(Placements::BoundingBox),
+                cellSpaceBoundingBoxes.begin(),
+                sizeof(PlacementsScaffold::BoundingBox),
                 AsPointer(visiblePlacements.begin()), cullResults, cullResults,
                 metrics ? &metrics->_qtMetrics : nullptr);
             visiblePlacements.resize(cullResults);
@@ -852,13 +722,13 @@ namespace SceneEngine
         } else {
             visiblePlacements.reserve(placementCount);
             for (unsigned c=0; c<placementCount; ++c) {
-                auto& cellSpaceBoundary = placements.GetCellSpaceBoundaries()[c];
+                auto& cellSpaceBoundary = cellSpaceBoundingBoxes[c];
                 if (tester.TestAABB(cellToCullSpace, cellSpaceBoundary.first, cellSpaceBoundary.second) == CullTestResult::Culled)
                     continue;
                 visiblePlacements.push_back(c);
             }
             if (metrics)
-                metrics->_qtMetrics._payloadAabbTestCount += placementCount;
+                metrics->_qtMetrics._payloadAabbTestCount += (unsigned)placementCount;
         }
     }
 
@@ -912,8 +782,8 @@ namespace SceneEngine
             assert(filterStart != filterEnd);
 
         RenderCore::BufferUploads::CommandListID completionCmdList = 0;
-        const auto* filenamesBuffer = renderInfo._placements.GetFilenamesBuffer();
-        const auto* objRef = renderInfo._placements.GetObjectReferences().begin();
+        const auto* filenamesBuffer = renderInfo.GetFilenamesBuffer();
+        const auto* objRef = renderInfo.GetObjectReferences().begin();
         auto renderIndices = MakeIteratorRange(renderInfo._objectToRenderer);
 
             // Filtering is required in some cases (for example, if we want to render only
@@ -967,7 +837,7 @@ namespace SceneEngine
 
             buildDrawablesHelper.BuildDrawablesInstancedFixedSkeleton(
                 MakeIteratorRange(localToWorldBuffer, &localToWorldBuffer[objCount]));
-            workingMetrics._instancesPrepared += objCount;
+            workingMetrics._instancesPrepared += (unsigned)objCount;
             ++workingMetrics._uniqueModelsPrepared;
             completionCmdList = std::max(completionCmdList, rigidModelScene.GetCompletionCommandList(renderInfo._renderers[rendererIdx].get()));
         }
@@ -985,8 +855,8 @@ namespace SceneEngine
         BuildDrawablesMetrics* metrics)
     {
         RenderCore::BufferUploads::CommandListID completionCmdList = 0;
-        const auto* filenamesBuffer = renderInfo._placements.GetFilenamesBuffer();
-        const auto* objRef = renderInfo._placements.GetObjectReferences().begin();
+        const auto* filenamesBuffer = renderInfo.GetFilenamesBuffer();
+        const auto* objRef = renderInfo.GetObjectReferences().begin();
         auto renderIndices = MakeIteratorRange(renderInfo._objectToRenderer);
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1017,7 +887,7 @@ namespace SceneEngine
             buildDrawablesHelper.BuildDrawablesInstancedFixedSkeleton(
                 MakeIteratorRange(localToWorldBuffer, &localToWorldBuffer[objCount]),
                 MakeIteratorRange(viewMaskBuffer, &viewMaskBuffer[objCount]));
-            workingMetrics._instancesPrepared += objCount;
+            workingMetrics._instancesPrepared += (unsigned)objCount;
             ++workingMetrics._uniqueModelsPrepared;
             completionCmdList = std::max(completionCmdList, rigidModelScene.GetCompletionCommandList(renderInfo._renderers[rendererIdx].get()));
         }
@@ -1055,7 +925,7 @@ namespace SceneEngine
         public:
             unsigned                _cellIndex;
             std::vector<unsigned>   _objects;
-            Placements*             _placements;
+            PlacementsScaffold*             _placements;
             Float3x4                _cellToWorld;
         };
 
@@ -1119,19 +989,25 @@ namespace SceneEngine
 			auto ovr = LowerBound(cellSet._pimpl->_cellOverrides, i->_filenameHash);
             CullMetrics cullMetrics;
             BuildDrawablesMetrics bdMetrics;
+            __declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, worldToProjection);
 
 			if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == i->_filenameHash) {
-                __declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, worldToProjection);
-                visibleObjects.resize(ovr->second->_placements.GetObjectReferences().size());
-                for (unsigned c=0; c<ovr->second->_placements.GetObjectReferences().size(); ++c) visibleObjects[c] = c; // "fake" post-culling list; just includes everything
+
+                visibleObjects.resize(ovr->second->GetObjectReferences().size());
+                for (unsigned c=0; c<ovr->second->GetObjectReferences().size(); ++c) visibleObjects[c] = c; // "fake" post-culling list; just includes everything
                 auto cmdList = _pimpl->BuildDrawables<false, true>(executeContext._destinationPkts, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
                 completionCmdList = std::max(cmdList, completionCmdList);
-			} else {
-				auto* plc = _pimpl->CullCell(visibleObjects, worldToProjection, *i, &cullMetrics);
-				if (plc) {
-					auto cmdList = _pimpl->BuildDrawables<false, false>(executeContext._destinationPkts, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
-                    completionCmdList = std::max(cmdList, completionCmdList);
-                }
+
+			} else if (auto* renderInfo = _pimpl->TryGetCellRenderInfo(*i)) {
+
+                _pimpl->CullCell(
+                    visibleObjects, cellToCullSpace, 
+                    renderInfo->GetCellSpaceBoundaries(), 
+                    renderInfo->_quadTree.get(),
+                    &cullMetrics);
+
+                auto cmdList = _pimpl->BuildDrawables<false, false>(executeContext._destinationPkts, *renderInfo, MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
+                completionCmdList = std::max(cmdList, completionCmdList);
 			}
 
             metricsHelper.AddMetrics(i->_filename, cullMetrics, bdMetrics);
@@ -1148,10 +1024,10 @@ namespace SceneEngine
         auto* arbitraryVolume = executeContext._complexCullingVolume;
         BuildDrawablesMetricsHelper metricsHelper { "Arbitrary AABB test", &executeContext };
 
-        VLA_UNSAFE_FORCE(Float4x4, worldToCullingFrustums, executeContext._views.size());
-        for (unsigned v=0; v<executeContext._views.size(); ++v)
+        auto cullingFrustumCount = executeContext._views.size();
+        VLA_UNSAFE_FORCE(Float4x4, worldToCullingFrustums, cullingFrustumCount);
+        for (unsigned v=0; v<cullingFrustumCount; ++v)
             worldToCullingFrustums[v] = executeContext._views[v]._worldToProjection;
-        auto worldToCullingFrustumsRange = MakeIteratorRange(worldToCullingFrustums, &worldToCullingFrustums[executeContext._views.size()]);
 
             // Render every registered cell
             // We catch exceptions on a cell based level (so pending cells won't cause other cells to flicker)
@@ -1176,16 +1052,36 @@ namespace SceneEngine
             BuildDrawablesMetrics bdMetrics;
 
             if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == i->_filenameHash) {
-                visibleObjects.resize(ovr->second->_placements.GetObjectReferences().size());
-                for (unsigned c=0; c<ovr->second->_placements.GetObjectReferences().size(); ++c) visibleObjects[c] = {c, partialMask}; // "fake" post-culling list; just includes everything
+
+                visibleObjects.resize(ovr->second->GetObjectReferences().size());
+                for (unsigned c=0; c<ovr->second->GetObjectReferences().size(); ++c) visibleObjects[c] = {c, partialMask}; // "fake" post-culling list; just includes everything
                 auto cmdList = _pimpl->BuildDrawablesViewMasks(executeContext._destinationPkts, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, &bdMetrics);
                 completionCmdList = std::max(cmdList, completionCmdList);
-			} else {
-                auto* plc = _pimpl->CullCell(visibleObjects, arbitraryVolume, worldToCullingFrustumsRange, partialMask, *i, &cullMetrics);
-                if (plc) {
-                    auto cmdList = _pimpl->BuildDrawablesViewMasks(executeContext._destinationPkts, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld, &bdMetrics);
-                    completionCmdList = std::max(cmdList, completionCmdList);
+
+			} else if (auto* renderInfo = _pimpl->TryGetCellRenderInfo(*i)) {
+
+                VLA_UNSAFE_FORCE(Float4x4, cellToCullingFrustums, cullingFrustumCount);
+                for (unsigned c=0; c<cullingFrustumCount; ++c)
+                    cellToCullingFrustums[c] = Combine(i->_cellToWorld, worldToCullingFrustums[c]);
+                auto cellToCullingFrustumsRange = MakeIteratorRange(cellToCullingFrustums, &cellToCullingFrustums[cullingFrustumCount]);
+
+                if (arbitraryVolume) {
+                    _pimpl->CullCell(
+                        visibleObjects,
+                        *arbitraryVolume, i->_cellToWorld, cellToCullingFrustumsRange, partialMask,
+                        renderInfo->GetCellSpaceBoundaries(), renderInfo->_quadTree.get(),
+                        &cullMetrics);
+                } else {
+                    _pimpl->CullCell(
+                        visibleObjects,
+                        cellToCullingFrustumsRange, partialMask,
+                        renderInfo->GetCellSpaceBoundaries(), renderInfo->_quadTree.get(),
+                        &cullMetrics);
                 }
+
+                auto cmdList = _pimpl->BuildDrawablesViewMasks(executeContext._destinationPkts, *renderInfo, MakeIteratorRange(visibleObjects), i->_cellToWorld, &bdMetrics);
+                completionCmdList = std::max(cmdList, completionCmdList);
+
             }
 
             metricsHelper.AddMetrics(i->_filename, cullMetrics, bdMetrics);
@@ -1223,20 +1119,22 @@ namespace SceneEngine
                     while (i < i2) { *t++ = i->second; i++; }
 
                     visibleObjects.clear();
+                    __declspec(align(16)) auto cellToCullSpace = Combine(ci->_cellToWorld, worldToProjection);
 
                     auto ovr = LowerBound(cellSet._pimpl->_cellOverrides, ci->_filenameHash);
 					if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == ci->_filenameHash) {
-                        __declspec(align(16)) auto cellToCullSpace = Combine(ci->_cellToWorld, worldToProjection);
-                        visibleObjects.resize(ovr->second->_placements.GetObjectReferences().size());
-                        for (unsigned c=0; c<ovr->second->_placements.GetObjectReferences().size(); ++c) visibleObjects[c] = c; // "fake" post-culling list; just includes everything
+
+                        visibleObjects.resize(ovr->second->GetObjectReferences().size());
+                        for (unsigned c=0; c<ovr->second->GetObjectReferences().size(); ++c) visibleObjects[c] = c; // "fake" post-culling list; just includes everything
                         auto cmdList = _pimpl->BuildDrawables<true, true>(executeContext._destinationPkts, *ovr->second, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
                         completionCmdList = std::max(cmdList, completionCmdList);
-					} else {
-						auto* plcmnts = _pimpl->CullCell(visibleObjects, worldToProjection, *ci);
-						if (plcmnts) {
-							auto cmdList = _pimpl->BuildDrawables<true, false>(executeContext._destinationPkts, *plcmnts, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
-                            completionCmdList = std::max(cmdList, completionCmdList);
-                        }
+
+					} else if (auto* renderInfo = _pimpl->TryGetCellRenderInfo(*ci)) {
+
+						_pimpl->CullCell(visibleObjects, cellToCullSpace, renderInfo->GetCellSpaceBoundaries(), renderInfo->_quadTree.get());
+                        auto cmdList = _pimpl->BuildDrawables<true, false>(executeContext._destinationPkts, *renderInfo, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
+                        completionCmdList = std::max(cmdList, completionCmdList);
+
 					}
 
                 } else {
@@ -1247,36 +1145,39 @@ namespace SceneEngine
                 // in this case we're not filtering by object GUID (though we may apply a predicate on the prepared draw calls)
             for (auto i=cellSet._pimpl->_cells.begin(); i!=cellSet._pimpl->_cells.end(); ++i) {
                 visibleObjects.clear();
+                __declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, worldToProjection);
 
                 auto ovr = LowerBound(cellSet._pimpl->_cellOverrides, i->_filenameHash);
 				if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == i->_filenameHash) {
-                    __declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, worldToProjection);
-                    visibleObjects.resize(ovr->second->_placements.GetObjectReferences().size());
-                    for (unsigned c=0; c<ovr->second->_placements.GetObjectReferences().size(); ++c) visibleObjects[c] = c; // "fake" post-culling list; just includes everything
+
+                    visibleObjects.resize(ovr->second->GetObjectReferences().size());
+                    for (unsigned c=0; c<ovr->second->GetObjectReferences().size(); ++c) visibleObjects[c] = c; // "fake" post-culling list; just includes everything
                     auto cmdList = _pimpl->BuildDrawables<false, true>(executeContext._destinationPkts, *ovr->second, MakeIteratorRange(visibleObjects), i->_cellToWorld);
                     completionCmdList = std::max(cmdList, completionCmdList);
-				} else {
-					auto* plcmnts = _pimpl->CullCell(visibleObjects, worldToProjection, *i);
-					if (plcmnts) {
-						auto cmdList = _pimpl->BuildDrawables<false, false>(executeContext._destinationPkts, *plcmnts, MakeIteratorRange(visibleObjects), i->_cellToWorld);
-                        completionCmdList = std::max(cmdList, completionCmdList);
-                    }
+
+				} else if (auto* renderInfo = _pimpl->TryGetCellRenderInfo(*i)) {
+
+					_pimpl->CullCell(visibleObjects, worldToProjection, renderInfo->GetCellSpaceBoundaries(), renderInfo->_quadTree.get());
+                    auto cmdList = _pimpl->BuildDrawables<false, false>(executeContext._destinationPkts, *renderInfo, MakeIteratorRange(visibleObjects), i->_cellToWorld);
+                    completionCmdList = std::max(cmdList, completionCmdList);
+
 				}
             }
         }
         executeContext._completionCmdList = std::max(executeContext._completionCmdList, completionCmdList);
     }
 
+#if 0
     auto PlacementsRenderer::GetObjectBoundingBoxes(const PlacementCellSet& cellSet, const Float4x4& worldToClip) const
             -> std::vector<std::pair<Float3x4, ObjectBoundingBoxes>>
     {
         std::vector<std::pair<Float3x4, ObjectBoundingBoxes>> result;
         for (auto i=cellSet._pimpl->_cells.begin(); i!=cellSet._pimpl->_cells.end(); ++i) {
             if (!CullAABB(worldToClip, i->_aabbMin, i->_aabbMax, RenderCore::Techniques::GetDefaultClipSpaceType())) {
-                auto& placements = Assets::Legacy::GetAsset<Placements>(i->_filename);
+                auto& placements = Assets::Legacy::GetAsset<PlacementsScaffold>(i->_filename);
                 ObjectBoundingBoxes obb;
                 obb._boundingBox = placements.GetCellSpaceBoundaries().begin();
-                obb._stride = sizeof(Placements::BoundingBox);
+                obb._stride = sizeof(PlacementsScaffold::BoundingBox);
                 obb._count = placements.GetCellSpaceBoundaries().size();
                 result.push_back(std::make_pair(i->_cellToWorld, obb));
             }
@@ -1294,22 +1195,23 @@ namespace SceneEngine
             if (!renderInfo) return {};
 
             ObjectBoundingBoxes obb;
-            obb._boundingBox = renderInfo->_placements.GetCellSpaceBoundaries().begin();
-            obb._stride = sizeof(Placements::BoundingBox);
-            obb._count = renderInfo->_placements.GetCellSpaceBoundaries().size();
+            obb._boundingBox = renderInfo->GetCellSpaceBoundaries().begin();
+            obb._stride = sizeof(PlacementsScaffold::BoundingBox);
+            obb._count = renderInfo->GetCellSpaceBoundaries().size();
             return obb;
         }
 
         return {};
     }
+#endif
 
     std::future<void> PlacementsRenderer::PrepareDrawables(IteratorRange<const Float4x4*> worldToCullingFrustums, const PlacementCellSet& cellSet)
     {
         auto& cells = cellSet._pimpl->_cells;
         struct Helper
         {
-            std::vector<std::shared_future<CellRenderInfo>> _pendingFutures;
-            std::vector<std::shared_future<CellRenderInfo>> _readyFutures;
+            std::vector<std::shared_future<std::shared_ptr<CellRenderInfo>>> _pendingFutures;
+            std::vector<std::shared_future<std::shared_ptr<CellRenderInfo>>> _readyFutures;
         };
         auto helper = std::make_shared<Helper>();
         helper->_pendingFutures.reserve(cells.size());
@@ -1353,7 +1255,7 @@ namespace SceneEngine
                     auto helper2 = std::make_shared<Helper2>();
                     for (const auto&renderInfoFuture:helper->_readyFutures) {
                         auto& renderInfo = renderInfoFuture.get();
-                        for (const auto& renderer:renderInfo._renderers) {
+                        for (const auto& renderer:renderInfo->_renderers) {
                             auto future = placementsCache->GetRigidModelScene().FutureForRenderer(renderer);
                             if (future.valid())
                                 helper2->_pendingFutures.emplace_back(std::move(future));
@@ -1503,14 +1405,21 @@ namespace SceneEngine
             StringSection<> modelFilename, StringSection<> materialFilename,
             SupplementRange supplements);
 
-        IteratorRange<const Placements::ObjectReference*> GetObjectReferences() const { return _placements.GetObjectReferences(); }
-        const Placements& GetPlacements() const { return _placements; }
+        IteratorRange<const PlacementsScaffold::ObjectReference*> GetObjectReferences() const override { return _objects; }
+        const void* GetFilenamesBuffer() const override { return _filenamesBuffer.data(); }
+        const uint64_t* GetSupplementsBuffer() const { return _supplementsBuffer.data(); }
+        IteratorRange<const std::pair<Float3, Float3>*> GetCellSpaceBoundaries() const override { return {}; }
+        
         bool HasObject(uint64_t guid);
 
         unsigned AddString(StringSection<> str);
         unsigned AddSupplements(SupplementRange supplements);
 
-        DynamicPlacements(const Placements& copyFrom);
+        void Write(IRigidModelScene& cache, const Assets::ResChar destinationFile[]) const;
+		::Assets::Blob Serialize(IRigidModelScene& cache) const;
+        std::vector<std::pair<Float3, Float3>> StallAndCalculateCellSpaceBoundaries(IRigidModelScene& cache) const;
+
+        DynamicPlacements(const PlacementsScaffold& copyFrom);
         DynamicPlacements();
 
     private:
@@ -1520,6 +1429,10 @@ namespace SceneEngine
             unsigned _referenceCount = 0;
         };
         std::vector<RenderRegistration> _rendererRegistrations;
+        std::vector<PlacementsScaffold::ObjectReference> _objects;
+		std::vector<uint8_t> _filenamesBuffer;
+        std::vector<uint64_t> _supplementsBuffer;
+        std::vector<std::shared_ptr<void>> _models;     // parrallel to _renderers
 
         void AssignRenderer(IRigidModelScene& cache, unsigned objectIdx);
     };
@@ -1535,8 +1448,8 @@ namespace SceneEngine
         unsigned result = ~unsigned(0x0);
         auto stringHash = Hash64(str.begin(), str.end());
 
-        auto* start = AsPointer(_placements._filenamesBuffer.begin());
-        auto* end = AsPointer(_placements._filenamesBuffer.end());
+        auto* start = AsPointer(_filenamesBuffer.begin());
+        auto* end = AsPointer(_filenamesBuffer.end());
         
         for (auto i=start; i<end && result == ~unsigned(0x0);) {
             auto h = *(uint64_t*)AsPointer(i);
@@ -1548,10 +1461,10 @@ namespace SceneEngine
         }
 
         if (result == ~unsigned(0x0)) {
-            result = unsigned(_placements._filenamesBuffer.size());
+            result = unsigned(_filenamesBuffer.size());
             auto lengthInBaseChars = str.end() - str.begin();
-            _placements._filenamesBuffer.resize(_placements._filenamesBuffer.size() + sizeof(uint64_t) + (lengthInBaseChars + 1) * sizeof(char));
-            auto* dest = &_placements._filenamesBuffer[result];
+            _filenamesBuffer.resize(_filenamesBuffer.size() + sizeof(uint64_t) + (lengthInBaseChars + 1) * sizeof(char));
+            auto* dest = &_filenamesBuffer[result];
             *(uint64_t*)dest = stringHash;
             XlCopyString((char*)PtrAdd(dest, sizeof(uint64_t)), lengthInBaseChars+1, str);
         }
@@ -1563,8 +1476,8 @@ namespace SceneEngine
     {
         if (supplements.empty()) return 0;
 
-        auto* start = AsPointer(_placements._supplementsBuffer.begin());
-        auto* end = AsPointer(_placements._supplementsBuffer.end());
+        auto* start = AsPointer(_supplementsBuffer.begin());
+        auto* end = AsPointer(_supplementsBuffer.end());
         
         for (auto i=start; i<end;) {
             const auto count = size_t(*i);
@@ -1573,12 +1486,12 @@ namespace SceneEngine
             i += 1+count;
         }
 
-        if (_placements._supplementsBuffer.empty())
-            _placements._supplementsBuffer.push_back(0);    // sentinal in place 0 (since an offset of '0' is used to mean no supplements)
+        if (_supplementsBuffer.empty())
+            _supplementsBuffer.push_back(0);    // sentinal in place 0 (since an offset of '0' is used to mean no supplements)
 
-        auto r = _placements._supplementsBuffer.size();
-        _placements._supplementsBuffer.push_back(supplements.size());
-        _placements._supplementsBuffer.insert(_placements._supplementsBuffer.end(), supplements.begin(), supplements.end());
+        auto r = _supplementsBuffer.size();
+        _supplementsBuffer.push_back(supplements.size());
+        _supplementsBuffer.insert(_supplementsBuffer.end(), supplements.begin(), supplements.end());
         return unsigned(r);
     }
 
@@ -1590,7 +1503,7 @@ namespace SceneEngine
         uint64_t objectGuid)
     {
 		assert(modelFilename.Length() > 0);
-        Placements::ObjectReference newReference;
+        PlacementsScaffold::ObjectReference newReference;
         newReference._localToCell = objectToCell;
         newReference._modelFilenameOffset = AddString(modelFilename);
         newReference._materialFilenameOffset = AddString(materialFilename);
@@ -1604,11 +1517,11 @@ namespace SceneEngine
             //  We're sorting by GUID, which is an arbitrary random number. So the final
             //  order should end up very arbitrary. We could alternatively also sort by model name
             //  (or just encode the model name into to guid somehow)
-        auto i = std::lower_bound(_placements._objects.begin(), _placements._objects.end(), newReference, 
+        auto i = std::lower_bound(_objects.begin(), _objects.end(), newReference, 
             [](const auto& lhs, const auto& rhs) { return lhs._guid < rhs._guid; });
-        assert(i == _placements._objects.end() || i->_guid != newReference._guid);  // hitting this means a GUID collision. Should be extremely unlikely
-        auto insertionIdx = std::distance(_placements._objects.begin(), i);
-        _placements._objects.insert(i, newReference);
+        assert(i == _objects.end() || i->_guid != newReference._guid);  // hitting this means a GUID collision. Should be extremely unlikely
+        auto insertionIdx = std::distance(_objects.begin(), i);
+        _objects.insert(i, newReference);
         _objectToRenderer.insert(_objectToRenderer.begin()+insertionIdx, ~0u);
 
         AssignRenderer(cache, (unsigned)insertionIdx);
@@ -1618,7 +1531,7 @@ namespace SceneEngine
 
     void DynamicPlacements::AssignRenderer(IRigidModelScene& cache, unsigned objectIdx)
     {
-        auto& obj = _placements._objects[objectIdx];
+        auto& obj = _objects[objectIdx];
         auto r = _rendererRegistrations.begin();
         while (r!=_rendererRegistrations.end()) {
             if (r->_model == obj._modelFilenameOffset && r->_material == obj._materialFilenameOffset)
@@ -1628,14 +1541,15 @@ namespace SceneEngine
         if (r == _rendererRegistrations.end() || !r->_referenceCount) {
             auto model = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
             model->AddElement().SetModelAndMaterialScaffolds(cache.GetLoadingContext(), 
-                (const char*)PtrAdd(_placements._filenamesBuffer.data(), obj._modelFilenameOffset + sizeof(uint64_t)),
-                (const char*)PtrAdd(_placements._filenamesBuffer.data(), obj._materialFilenameOffset + sizeof(uint64_t)));
+                (const char*)PtrAdd(_filenamesBuffer.data(), obj._modelFilenameOffset + sizeof(uint64_t)),
+                (const char*)PtrAdd(_filenamesBuffer.data(), obj._materialFilenameOffset + sizeof(uint64_t)));
             auto modelPtr = cache.CreateModel(model);
             auto renderer = cache.CreateRenderer(modelPtr, nullptr);
             if (r == _rendererRegistrations.end()) {
                 auto rendererIdx = _rendererRegistrations.size();
                 _rendererRegistrations.push_back(RenderRegistration{obj._modelFilenameOffset, obj._materialFilenameOffset, 1});
                 _renderers.push_back(renderer);
+                _models.push_back(modelPtr);
                 _objectToRenderer[objectIdx] = (unsigned)rendererIdx;
             } else {
                 // recreating one that went stale
@@ -1643,6 +1557,7 @@ namespace SceneEngine
                 r->_referenceCount ++;
                 assert(!_renderers[rendererIdx]);
                 _renderers[rendererIdx] = renderer;
+                _models[rendererIdx] = modelPtr;
                 _objectToRenderer[objectIdx] = (unsigned)rendererIdx;
             }
         } else {
@@ -1654,20 +1569,22 @@ namespace SceneEngine
     void DynamicPlacements::DeletePlacement(uint64_t guid)
     {
         auto i = std::lower_bound(
-            _placements._objects.begin(), _placements._objects.end(), guid, 
+            _objects.begin(), _objects.end(), guid, 
             [](const auto& lhs, auto rhs) { return lhs._guid < rhs; });
-        if (i == _placements._objects.end() || i->_guid != guid)
+        if (i == _objects.end() || i->_guid != guid)
             return;
 
-        auto idx = std::distance(_placements._objects.begin(), i);
-        _placements._objects.erase(i);
+        auto idx = std::distance(_objects.begin(), i);
+        _objects.erase(i);
         auto rendererIdx = _objectToRenderer[idx];
         _objectToRenderer.erase(_objectToRenderer.begin()+idx);
 
         assert(_rendererRegistrations[rendererIdx]._referenceCount != 0);
         --_rendererRegistrations[rendererIdx]._referenceCount;
-        if (_rendererRegistrations[rendererIdx]._referenceCount == 0)
+        if (_rendererRegistrations[rendererIdx]._referenceCount == 0) {
             _renderers[rendererIdx] = nullptr;  // releasing last use of this renderer
+            _models[rendererIdx] = nullptr;
+        }
     }
 
     void DynamicPlacements::UpdatePlacement(
@@ -1678,9 +1595,9 @@ namespace SceneEngine
         SupplementRange supplements)
     {
         auto i = std::lower_bound(
-            _placements._objects.begin(), _placements._objects.end(), guid, 
+            _objects.begin(), _objects.end(), guid, 
             [](const auto& lhs, auto rhs) { return lhs._guid < rhs; });
-        if (i == _placements._objects.end() || i->_guid != guid)
+        if (i == _objects.end() || i->_guid != guid)
             return;
 
         i->_localToCell = objectToCell;
@@ -1692,33 +1609,133 @@ namespace SceneEngine
         auto newModel = AddString(modelFilename);
         auto newMaterial = AddString(materialFilename);
         if (newModel != i->_modelFilenameOffset || newMaterial != i->_materialFilenameOffset) {
-            auto objIdx = std::distance(_placements._objects.begin(), i);
+            auto objIdx = std::distance(_objects.begin(), i);
 
             auto rendererIdx = _objectToRenderer[objIdx];
             assert(_rendererRegistrations[rendererIdx]._referenceCount != 0);
             --_rendererRegistrations[rendererIdx]._referenceCount;
-            if (_rendererRegistrations[rendererIdx]._referenceCount == 0)
+            if (_rendererRegistrations[rendererIdx]._referenceCount == 0) {
                 _renderers[rendererIdx] = nullptr;  // releasing last use of this renderer
+                _models[rendererIdx] = nullptr;
+            }
 
             i->_modelFilenameOffset = newModel;
             i->_materialFilenameOffset = newMaterial;
-            AssignRenderer(cache, (unsigned)std::distance(_placements._objects.begin(), i));
+            AssignRenderer(cache, (unsigned)std::distance(_objects.begin(), i));
         }
     }
 
     bool DynamicPlacements::HasObject(uint64_t guid)
     {
-        Placements::ObjectReference dummy;
+        PlacementsScaffold::ObjectReference dummy;
         XlZeroMemory(dummy);
         dummy._guid = guid;
-        auto i = std::lower_bound(_placements._objects.begin(), _placements._objects.end(), dummy, 
+        auto i = std::lower_bound(_objects.begin(), _objects.end(), dummy, 
             [](const auto& lhs, const auto& rhs) { return lhs._guid < rhs._guid; });
-        return (i != _placements._objects.end() && i->_guid == guid);
+        return (i != _objects.end() && i->_guid == guid);
     }
 
-    DynamicPlacements::DynamicPlacements(const Placements& copyFrom)
+    ::Assets::Blob DynamicPlacements::Serialize(IRigidModelScene& cache) const
     {
-        _placements = copyFrom;
+        auto cellSpaceBoundaries = StallAndCalculateCellSpaceBoundaries(cache);
+
+        PlacementsScaffoldHeader hdr;
+        hdr._version = 0;
+        hdr._objectRefCount = (unsigned)_objects.size();
+        hdr._filenamesBufferSize = unsigned(_filenamesBuffer.size());
+        hdr._supplementsBufferSize = unsigned(_supplementsBuffer.size() * sizeof(uint64_t));
+        hdr._dummy = 0;
+
+        auto result = std::make_shared<std::vector<uint8_t>>();
+        result->reserve(sizeof(hdr) + sizeof(PlacementsScaffold::ObjectReference)*hdr._objectRefCount + hdr._filenamesBufferSize + hdr._supplementsBufferSize);
+        result->insert(result->end(), (const uint8_t*)&hdr, (const uint8_t*)PtrAdd(&hdr, sizeof(hdr)));
+        result->insert(result->end(), (const uint8_t*)AsPointer(_objects.begin()), (const uint8_t*)AsPointer(_objects.begin() + hdr._objectRefCount));
+        result->insert(result->end(), (const uint8_t*)AsPointer(cellSpaceBoundaries.begin()), (const uint8_t*)AsPointer(cellSpaceBoundaries.begin() + hdr._objectRefCount));
+        result->insert(result->end(), (const uint8_t*)AsPointer(_filenamesBuffer.begin()), (const uint8_t*)AsPointer(_filenamesBuffer.begin() + hdr._filenamesBufferSize));
+        result->insert(result->end(), (const uint8_t*)AsPointer(_supplementsBuffer.begin()), (const uint8_t*)PtrAdd(AsPointer(_supplementsBuffer.begin()), hdr._supplementsBufferSize));
+        return result;
+    }
+
+    void DynamicPlacements::Write(IRigidModelScene& cache, const Assets::ResChar destinationFile[]) const
+    {
+        using namespace Assets::ChunkFile;
+		auto libVersion = ConsoleRig::GetLibVersionDesc();
+        SimpleChunkFileWriter fileWriter(
+			::Assets::MainFileSystem::OpenBasicFile(destinationFile, "wb", 0),
+            1, libVersion._versionString, libVersion._buildDateString);
+        fileWriter.BeginChunk(ChunkType_Placements, s_PlacementsChunkVersionNumber, "Placements");
+
+        auto blob = Serialize(cache);
+        auto writeResult0 = fileWriter.Write(AsPointer(blob->begin()), 1, blob->size());
+        if (writeResult0 != blob->size())
+            Throw(::Exceptions::BasicLabel("Failure in file write while saving placements"));
+    }
+
+    std::pair<Float3, Float3> s_invalidBoundingBox = std::make_pair(Float3(std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()), Float3(-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max(), -std::numeric_limits<float>::max()));
+
+    std::vector<std::pair<Float3, Float3>> DynamicPlacements::StallAndCalculateCellSpaceBoundaries(IRigidModelScene& cache) const
+    {
+        // Find the cell space boundaries for all of the given placements. We need to know this in order
+        // to serialize out the placements file
+        // Unfortunately it requires us to complete loading all of all of the placement models themselves
+        // -- which may require stalling in this function.
+        // Since IRigidModelScene is mostly designed for rendering, and not asset manipulation, so the API
+        // isn't ideal for this
+        struct Helper
+        {
+            std::vector<std::future<IRigidModelScene::ModelInfo>> _futureInfos;
+            unsigned _futureInfosIterator = 0;
+        };
+        auto helper = std::make_shared<Helper>();
+        helper->_futureInfos.reserve(_models.size());
+        for (const auto& m:_models) {
+            if (m) {
+                helper->_futureInfos.push_back(cache.GetModelInfo(m));
+            } else {
+                helper->_futureInfos.push_back({});
+            }
+        }
+
+        std::promise<void> stallingPromise;
+        auto stallingFuture = stallingPromise.get_future();
+        ::Assets::PollToPromise(
+            std::move(stallingPromise),
+            [helper](auto timeout) {
+                auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+                for (unsigned c=helper->_futureInfosIterator; c!=helper->_futureInfos.size(); ++c)
+                    if (helper->_futureInfos[c].wait_until(timeoutTime) == std::future_status::timeout) {
+                        helper->_futureInfosIterator = c;
+                        return ::Assets::PollStatus::Continue;
+                    }
+                return ::Assets::PollStatus::Finish;
+            },
+            [helper]() {});
+
+        YieldToPool(stallingFuture);
+
+        std::vector<std::pair<Float3, Float3>> modelBoundingBoxes;
+        modelBoundingBoxes.reserve(helper->_futureInfos.size());
+        for (auto& f:helper->_futureInfos) {
+            TRY {
+                modelBoundingBoxes.push_back(f.get()._boundingBox);
+            } CATCH(...) {
+                // got an exception loading this model -- nothing much we can do
+                modelBoundingBoxes.push_back(s_invalidBoundingBox);
+            } CATCH_END
+        }
+
+        std::vector<std::pair<Float3, Float3>> result;
+        result.reserve(_objectToRenderer.size());
+        for (auto o:_objectToRenderer)
+            result.push_back(modelBoundingBoxes[o]);
+        return result;
+    }
+
+    DynamicPlacements::DynamicPlacements(const PlacementsScaffold& copyFrom)
+    {
+        _objects = copyFrom._objects;
+        _filenamesBuffer = copyFrom._filenamesBuffer;
+        _supplementsBuffer = copyFrom._supplementsBuffer;
     }
 
     DynamicPlacements::DynamicPlacements() {}
@@ -1763,10 +1780,10 @@ namespace SceneEngine
         return Identity<Float3x4>();
     }
 
-    static const Placements* GetPlacements(const PlacementCell& cell, const PlacementCellSet& set, PlacementsCache& cache)
+    static const CellRenderInfo* GetPlacements(const PlacementCell& cell, const PlacementCellSet& set, PlacementsCache& cache)
     {
         auto* ovr = set._pimpl->GetOverride(cell._filenameHash);
-        if (ovr) return &ovr->_placements;
+        if (ovr) return ovr;
 
             //  We can get an invalid resource here. It probably means the file
             //  doesn't exist -- which can happen with an uninitialized data
@@ -1775,8 +1792,7 @@ namespace SceneEngine
 
 		if (cell._filename[0] != '[') {		// used in the editor for dynamic placements
 			TRY {
-                auto* renderInfo = cache.TryGetCellRenderInfo(cell._filenameHash, cell._filename);
-                return renderInfo ? &renderInfo->_placements : nullptr;
+                return cache.TryGetCellRenderInfo(cell._filenameHash, cell._filename);
 			} CATCH (const std::exception& e) {
                 Log(Warning) << "Got invalid resource while loading placements file (" << cell._filename << "). Error: (" << e.what() << ")." << std::endl;
 			} CATCH_END
@@ -1798,7 +1814,7 @@ namespace SceneEngine
 
 			if (cell->_filename[0] != '[') {		// used in the editor for dynamic placements
 				TRY {
-					auto& sourcePlacements = Assets::Legacy::GetAsset<Placements>(cell->_filename);
+					auto& sourcePlacements = Assets::Legacy::GetAsset<PlacementsScaffold>(cell->_filename);
 					placements = std::make_shared<DynamicPlacements>(sourcePlacements);
 				} CATCH (const std::exception& e) {
 					Log(Warning) << "Got invalid resource while loading placements file (" << cell->_filename << "). If this file exists, but is corrupted, the next save will overwrite it. Error: (" << e.what() << ")." << std::endl;
@@ -1863,7 +1879,7 @@ namespace SceneEngine
                     continue;
             }
 
-            Placements::BoundingBox localBoundingBox;
+            PlacementsScaffold::BoundingBox localBoundingBox;
             auto assetState = TryGetBoundingBox(
                 localBoundingBox, _placementsCache->GetRigidModelScene(),
                 (const char*)PtrAdd(p->GetFilenamesBuffer(), obj._modelFilenameOffset + sizeof(uint64_t)));
@@ -1921,7 +1937,7 @@ namespace SceneEngine
                 continue;
             }
 
-            Placements::BoundingBox localBoundingBox;
+            PlacementsScaffold::BoundingBox localBoundingBox;
             auto assetState = TryGetBoundingBox(
                 localBoundingBox, _placementsCache->GetRigidModelScene(),
                 (const char*)PtrAdd(p->GetFilenamesBuffer(), obj._modelFilenameOffset + sizeof(uint64_t)));
@@ -1978,7 +1994,7 @@ namespace SceneEngine
                 IntersectionDef def;
                 def._localToWorld = Combine(obj._localToCell, cell._cellToWorld);
 
-                Placements::BoundingBox localBoundingBox;
+                PlacementsScaffold::BoundingBox localBoundingBox;
                 auto assetState = TryGetBoundingBox(
                     localBoundingBox, _placementsCache->GetRigidModelScene(),
                     (const char*)PtrAdd(p->GetFilenamesBuffer(), obj._modelFilenameOffset + sizeof(uint64_t)));
@@ -2117,9 +2133,9 @@ namespace SceneEngine
     class CompareObjectId
     {
     public:
-        bool operator()(const Placements::ObjectReference& lhs, uint64_t rhs) { return lhs._guid < rhs; }
-        bool operator()(uint64_t lhs, const Placements::ObjectReference& rhs) { return lhs < rhs._guid; }
-        bool operator()(const Placements::ObjectReference& lhs, const Placements::ObjectReference& rhs) { return lhs._guid < rhs._guid; }
+        bool operator()(const PlacementsScaffold::ObjectReference& lhs, uint64_t rhs) { return lhs._guid < rhs; }
+        bool operator()(uint64_t lhs, const PlacementsScaffold::ObjectReference& rhs) { return lhs < rhs._guid; }
+        bool operator()(const PlacementsScaffold::ObjectReference& lhs, const PlacementsScaffold::ObjectReference& rhs) { return lhs._guid < rhs._guid; }
     };
 
     class Transaction : public PlacementsEditor::ITransaction
@@ -2194,7 +2210,7 @@ namespace SceneEngine
         auto model = _editorPimpl->_modelCache->GetModelScaffold(filename);
         auto state = model->StallWhilePending();
         if (state != ::Assets::AssetState::Ready) {
-            result = std::make_pair(Float3(std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()), Float3(-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max(), -std::numeric_limits<float>::max()));
+            result = s_invalidBoundingBox;
             return false;
         }
 
@@ -2216,11 +2232,11 @@ namespace SceneEngine
     {
         auto guid = _pushedGuids[index];
         auto cellToWorld = _editorPimpl->GetCellToWorld(guid.first);
-        const Placements* placements = nullptr;
+        const CellRenderInfo* placements = nullptr;
         auto* cell = _editorPimpl->GetCell(guid.first);
         if (cell)
             placements = GetPlacements(*cell, *_editorPimpl->_cellSet, *_editorPimpl->_placementsCache);
-        if (!placements) return std::make_pair(Float3(std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()), Float3(-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max(), -std::numeric_limits<float>::max()));
+        if (!placements) return s_invalidBoundingBox;
 
         auto count = placements->GetObjectReferences().size();
         auto* objects = placements->GetObjectReferences().begin();
@@ -2603,7 +2619,7 @@ namespace SceneEngine
                     uint32_t comparison = uint32_t(i->second);
                     auto pIterator = std::find_if(
                         placements->GetObjectReferences().begin(), placements->GetObjectReferences().end(),
-                        [=](const Placements::ObjectReference& obj) { return uint32_t(obj._guid) == comparison; });
+                        [=](const PlacementsScaffold::ObjectReference& obj) { return uint32_t(obj._guid) == comparison; });
                     if (pIterator!=placements->GetObjectReferences().end()) {
                         i->second = pIterator->_guid;       // set the recorded guid to the full guid
 
@@ -2721,7 +2737,7 @@ namespace SceneEngine
 
 				for (auto i3 = i; i3 < i2; ++i3) {
 					auto p = std::find_if(placements, &placements[count],
-						[=](const Placements::ObjectReference& obj) { return uint32_t(obj._guid) == uint32_t(i3->second); });
+						[=](const PlacementsScaffold::ObjectReference& obj) { return uint32_t(obj._guid) == uint32_t(i3->second); });
                     if (p != &placements[count])
                         i3->second = p->_guid;
 				}
@@ -2740,16 +2756,9 @@ namespace SceneEngine
             // Find the given cell within our list, and calculate the true boundary
             // of all the placements within it
         std::pair<Float3, Float3> result(Float3(std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()), Float3(-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max(), -std::numeric_limits<float>::max()));
-        const Placements* p = nullptr;
-        for (auto i = _pimpl->_dynPlacements.begin(); i!=_pimpl->_dynPlacements.end(); ++i)
-            if (i->first == cellId) { p = &i->second->GetPlacements(); break; }
-        
-        if (!p) 
-        {
-            auto* c = _pimpl->GetCell(cellId);
-            if (c)
-                p = GetPlacements(*c, *_pimpl->_cellSet, *_pimpl->_placementsCache);
-        }
+        const CellRenderInfo* p = nullptr;
+        if (auto* c = _pimpl->GetCell(cellId))
+            p = GetPlacements(*c, *_pimpl->_cellSet, *_pimpl->_placementsCache);
         if (!p) return result;
 
         assert(0);  // cell space boundaries may not be available for dynamic placements
@@ -2767,11 +2776,6 @@ namespace SceneEngine
         return result;
     }
     
-    static void SavePlacements(const char outputFilename[], Placements& placements)
-    {
-        placements.Write(outputFilename);
-    }
-
     void PlacementsEditor::WriteAllCells()
     {
             //  Save all of the placement files that have changed. 
@@ -2786,11 +2790,10 @@ namespace SceneEngine
 
         for (auto i = _pimpl->_dynPlacements.begin(); i!=_pimpl->_dynPlacements.end(); ++i) {
             auto cellGuid = i->first;
-            auto& placements = *i->second;
 
             const auto* cell = _pimpl->GetCell(cellGuid);
             if (cell) {
-                SavePlacements(cell->_filename, placements._placements);
+                i->second->Write(_pimpl->_placementsCache->GetRigidModelScene(), cell->_filename);
 
                     // clear the renderer links
                 _pimpl->_cellSet->_pimpl->SetOverride(cellGuid, nullptr);
@@ -2809,8 +2812,7 @@ namespace SceneEngine
             if (i->first != cellId)
                 continue;
 
-            auto& placements = *i->second;
-            placements._placements.Write(destinationFile);
+            i->second->Write(_pimpl->_placementsCache->GetRigidModelScene(), destinationFile);
             return;
         }
 
@@ -2858,10 +2860,10 @@ namespace SceneEngine
 
     std::pair<Float3, Float3> PlacementsEditor::GetModelBoundingBox(const char modelName[]) const
     {
-        Placements::BoundingBox boundingBox;
+        PlacementsScaffold::BoundingBox boundingBox;
         auto assetState = TryGetBoundingBox(boundingBox, _pimpl->_placementsCache->GetRigidModelScene(), modelName, 0, true);
         if (assetState != ::Assets::AssetState::Ready)
-            return std::make_pair(Float3(std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()), Float3(-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max(), -std::numeric_limits<float>::max()));
+            return s_invalidBoundingBox;
 
         return boundingBox;
     }
@@ -2950,7 +2952,10 @@ namespace SceneEngine
 
     ::Assets::Blob SerializePlacements(IteratorRange<const NascentPlacement*> placements)
     {
-        DynamicPlacements plcmnts;
+        assert(0);
+        return nullptr;
+
+        /*DynamicPlacements plcmnts;
         for (const auto&p:placements) {
 
             uint64_t id, idTopPart = ObjectIdTopPart(p._resource._name, p._resource._material);
@@ -2960,12 +2965,13 @@ namespace SceneEngine
                 if (!plcmnts.HasObject(id)) { break; }
             }
 
-            assert(0);      // need to figure this out post changes to DynamicPlacements
-            /*plcmnts.AddPlacement(
+            plcmnts.AddPlacement(
                 p._localToCell,
                 p._resource._name, p._resource._material, {}, 
-                id);*/
+                id);
         }
-        return plcmnts._placements.Serialize();
+        return plcmnts.Serialize();
+        */
     }
+
 }
