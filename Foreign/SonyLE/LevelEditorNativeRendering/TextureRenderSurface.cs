@@ -23,7 +23,7 @@ namespace RenderingInterop
             m_typeId = GameEngine.GetObjectTypeId(typeName);
             BkgColorPropId = GameEngine.GetObjectPropertyId(m_typeId, "BkgColor");
 
-            m_intanceId = GameEngine.CreateObject(0, 0, m_typeId, null);
+            m_intanceId = GameEngine.CreateObject(0, m_typeId, null);
         }
 
         public ulong InstanceId
@@ -43,7 +43,7 @@ namespace RenderingInterop
         {
             if (m_intanceId != 0)
             {
-                GameEngine.DestroyObject(0, m_intanceId, m_typeId);
+                GameEngine.DestroyObject(0, m_intanceId);
                 m_intanceId = 0;
             }
             base.Dispose(disposing);

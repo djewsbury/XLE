@@ -697,8 +697,21 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			}
 
 			auto i = LowerBound(_pendingGraphicsPipelines, hash);
-			if (i!=_pendingGraphicsPipelines.end() && i->first == hash)
-				return i->second.second;
+			if (i!=_pendingGraphicsPipelines.end() && i->first == hash) {
+				// somewhat awkwardly, we need to check if the pending pipeline has an exception, but is invalidated. In these cases, we'll
+				// go ahead and rebuild
+				bool isInvalidated = false;
+				TRY {
+					if (i->second.second.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+						i->second.second.get();
+				} CATCH(const ::Assets::Exceptions::ExceptionWithDepVal& e) {
+					isInvalidated = e.GetDependencyValidation().GetValidationIndex() != 0;
+				} CATCH_END
+
+				// only return if we know it's not invalidated
+				if (!isInvalidated)
+					return i->second.second;
+			}
 
 			#if 0
 				Log(Verbose) << "Building pipeline for pipeline accelerator: " << std::endl;

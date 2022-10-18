@@ -14,6 +14,20 @@ namespace PlatformRig { namespace Overlays
 {
 	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateInvalidAssetDisplay(std::shared_ptr<Assets::IAssetTracking> tracking);
 
+	class ITrackedAssetList
+	{
+	public:
+		virtual void Lock() = 0;
+		virtual void Unlock() = 0;
+
+		using TypeCodeAndId = std::pair<uint64_t, uint64_t>;
+		virtual IteratorRange<const std::pair<TypeCodeAndId,::Assets::AssetHeapRecord>*> GetCurrentRecords() const = 0;
+		virtual unsigned BindOnChange(std::function<void()>&&) = 0;
+		virtual void UnbindOnChange(unsigned) = 0;
+		virtual ~ITrackedAssetList();
+	};
+	std::shared_ptr<ITrackedAssetList> CreateTrackedAssetList(std::shared_ptr<Assets::IAssetTracking> tracking, ::Assets::AssetState state);
+
 	class OperationContextDisplay : public RenderOverlays::DebuggingDisplay::IWidget ///////////////////////////////////////////////////////////
 	{
 	public:

@@ -2115,10 +2115,6 @@ namespace SceneEngine
 
         void PushObj(unsigned index, const ObjTransDef& newState);
 
-        bool GetLocalBoundingBox_Stall(
-            std::pair<Float3, Float3>& result,
-            const char filename[]) const;
-
         enum State { Active, Committed };
         State _state;
     };
@@ -2136,30 +2132,11 @@ namespace SceneEngine
         return (unsigned)_originalGuids.size();
     }
 
-    bool Transaction::GetLocalBoundingBox_Stall(std::pair<Float3, Float3>& result, const char filename[]) const
-    {
-        #if 0
-            // get the local bounding box for a model
-            // ... but stall waiting for any pending resources
-        auto model = _editorPimpl->_modelCache->GetModelScaffold(filename);
-        auto state = model->StallWhilePending();
-        if (state != ::Assets::AssetState::Ready) {
-            result = s_invalidBoundingBox;
-            return false;
-        }
-
-        result = model->Actualize()->GetStaticBoundingBox();
-        return true;
-        #endif
-        assert(0);
-        return false;
-    }
-
     std::pair<Float3, Float3>   Transaction::GetLocalBoundingBox(unsigned index) const
     {
-        std::pair<Float3, Float3> result;
-        GetLocalBoundingBox_Stall(result, _objects[index]._model.c_str());
-        return result;
+        auto* attemptedActualize = ::Assets::MakeAssetMarkerPtr<RenderCore::Assets::ModelScaffold>(_objects[index]._model)->TryActualize();
+        if (!attemptedActualize) return s_invalidBoundingBox;
+        return (*attemptedActualize)->GetStaticBoundingBox();
     }
 
     std::pair<Float3, Float3>   Transaction::GetWorldBoundingBox(unsigned index) const
@@ -2183,22 +2160,15 @@ namespace SceneEngine
 
     std::string Transaction::GetMaterialName(unsigned objectIndex, uint64_t materialGuid) const
     {
-        #if 0
-        if (objectIndex >= _objects.size()) return std::string();
+        const std::shared_ptr<RenderCore::Assets::MaterialScaffold>* attemptedActualize = nullptr;
+        if (!_objects[objectIndex]._material.empty()) {
+            attemptedActualize = ::Assets::MakeAssetMarkerPtr<RenderCore::Assets::MaterialScaffold>(_objects[objectIndex]._material, _objects[objectIndex]._model)->TryActualize();
+        } else {
+            attemptedActualize = ::Assets::MakeAssetMarkerPtr<RenderCore::Assets::MaterialScaffold>(_objects[objectIndex]._model, _objects[objectIndex]._model)->TryActualize();
+        }
 
-            // attempt to get the 
-        auto scaff = _editorPimpl->_modelCache->GetMaterialScaffold(
-            MakeStringSection(_objects[objectIndex]._material),
-			MakeStringSection(_objects[objectIndex]._model));
-        if (!scaff) return std::string();
-
-		auto actual = scaff->TryActualize();
-		if (!actual) return std::string();
-
-        return (*actual)->DehashMaterialName(materialGuid).AsString();
-        #endif
-        assert(0);
-        return {};
+        if (!attemptedActualize) return {};
+        (*attemptedActualize)->DehashMaterialName(materialGuid).AsString();
     }
 
     void    Transaction::SetObject(unsigned index, const ObjTransDef& newState)

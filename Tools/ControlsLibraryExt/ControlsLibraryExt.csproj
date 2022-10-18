@@ -77,6 +77,7 @@
     <Reference Include="System.XML" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AssetTrackingService.cs" />
     <Compile Include="Commands\ModifiedDocumentList.cs" />
     <Compile Include="GameLoopService.cs" />
     <Compile Include="ModelView\AnimationCtrlStrip.cs">

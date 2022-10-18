@@ -506,7 +506,7 @@ namespace Assets
 
 		ScopedLock(_delegatesLock);
 		for (const auto&d:_extensionsAndDelegatesMap) {
-			if (!XlEqString(extension, d.second)) continue;
+			if (!XlEqStringI(extension, d.second)) continue;		// case insensitive comparison, for convention's sake
 
 			auto a = _requestAssociations.equal_range(d.first);
 			for (auto association=a.first; association != a.second; ++association)

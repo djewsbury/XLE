@@ -31,7 +31,7 @@ namespace ControlsLibraryExt.Commands
                         || (_docRegistry != null && ModifiedDocumentPendingSaveList.HasModifiedDocuments(_docRegistry));
 
                 case Command.ViewInvalidAssets:
-                    return GUILayer.InvalidAssetList.HasInvalidAssets();
+                    return _assetTrackingService.InvalidAssetList.HasInvalidAssets();
             }
 
             return false;
@@ -134,7 +134,7 @@ namespace ControlsLibraryExt.Commands
 
         private void PerformViewInvalidAssets()
         {
-            using (var dialog = new ControlsLibrary.InvalidAssetDialog())
+            using (var dialog = new ControlsLibrary.InvalidAssetDialog(_assetTrackingService.InvalidAssetList))
             {
                 dialog.ShowDialog();
             }
@@ -148,5 +148,8 @@ namespace ControlsLibraryExt.Commands
 
         [Import(AllowDefault = true)]
         private Sce.Atf.Applications.IDocumentService _docService;
+
+        [Import(AllowDefault = true)]
+        private ControlsLibraryExt.AssetTrackingService _assetTrackingService;
     }
 }

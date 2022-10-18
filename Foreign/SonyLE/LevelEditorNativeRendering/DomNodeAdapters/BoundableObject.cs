@@ -64,7 +64,7 @@ namespace RenderingInterop
                     int datasize = 0;
                     IntPtr data;
                     var nao = this.Cast<NativeObjectAdapter>();
-                    GameEngine.GetObjectProperty(attrInfo.TypeId, attrInfo.PropertyId, 
+                    GameEngine.GetObjectProperty(attrInfo.PropertyId, 
                         nao.DocumentId, nao.InstanceId,
                         out data, out datasize);
                     Vec3F* vecptr = (Vec3F*)data.ToPointer();                    

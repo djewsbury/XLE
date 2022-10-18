@@ -64,7 +64,7 @@ namespace RenderingInterop
                 // destroy the document on the native side, as well
             var tag = node.Type.GetTag(NativeAnnotations.NativeDocumentType);
             var typeId = (tag != null) ? (uint)tag : 0;
-            GameEngine.DeleteDocument(m_nativeDocId, typeId);
+            GameEngine.DeleteDocument(m_nativeDocId);
         }
 
         void node_ChildInserted(object sender, ChildEventArgs e)

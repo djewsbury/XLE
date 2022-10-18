@@ -157,12 +157,13 @@ GeneratedVertex GenVertex(uint vIndex, uint shape)
 
 WorkingVertex VertexPatch(VSIN vInput)
 {
-    WorkingVertex dv = WorkingVertex_DefaultInitialize(input);
+    WorkingVertex dv = WorkingVertex_DefaultInitialize(vInput);
 
 	GeneratedVertex genVertex = GenVertex(vInput.vertexId, SHAPE);
 	dv.position = genVertex.worldPosition;
-	dv.tangentFrame.basisVector0 = 0.0.xxx;
-	dv.tangentFrame.basisVector1 = 0.0.xxx;
+	dv.tangentFrame.tangent = 0.0.xxx;
+	dv.tangentFrame.bitangent = 0.0.xxx;
+    dv.tangentFrame.normal = 0.0.xxx;
 	dv.tangentFrame.handiness = 0;
     dv.tangentFrameType = WORKINGVERTEX_TANGENTFRAME_NONE;
 	dv.coordinateSpace = WORKINGVERTEX_COORDINATESPACE_WORLD;

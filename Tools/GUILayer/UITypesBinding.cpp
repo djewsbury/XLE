@@ -10,6 +10,7 @@
 #include "../ToolsRig/ModelVisualisation.h"
 #include "../ToolsRig/VisualisationUtils.h"
 #include "../ToolsRig/DivergentAsset.h"
+#include "../../PlatformRig/DebuggingDisplays/InvalidAssetDisplay.h"        // for ITrackedAssetList
 #include "../../SceneEngine/IScene.h"
 #include "../../RenderCore/Assets/MaterialScaffold.h"
 #include "../../RenderCore/Assets/RawMaterial.h"
@@ -908,50 +909,87 @@ namespace GUILayer
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+    static unsigned BindHelper(
+        PlatformRig::Overlays::ITrackedAssetList& trackedAssetList,
+        InvalidAssetList^ thisHandle)
+    {
+        // we have to jump through a ton of hoops to make this work
+        struct Helper { msclr::auto_gcroot<InvalidAssetList^> _thisHandle; };
+        auto helper = std::make_shared<Helper>();
+        helper->_thisHandle = thisHandle;
+        return trackedAssetList.BindOnChange(
+            [helper=std::move(helper)]() {
+                helper->_thisHandle->InvokeOnChange(nullptr);
+            });
+    }
+
 	InvalidAssetList::InvalidAssetList()
     {
+        auto tracking = ::Assets::Services::GetAssetSetsPtr();
+        _trackedAssetList = PlatformRig::Overlays::CreateTrackedAssetList(tracking, ::Assets::AssetState::Invalid);
+        _onChangeContext = System::Threading::SynchronizationContext::Current;
+        _onChangeSignalId = BindHelper(*_trackedAssetList.get(), this);
     }
 
     InvalidAssetList::~InvalidAssetList()
     {
+        _trackedAssetList->UnbindOnChange(_onChangeSignalId);
+    }
+
+    void InvalidAssetList::InvokeOnChange(System::Object^)
+    {
+        if (System::Threading::SynchronizationContext::Current != _onChangeContext) {
+            // shift callback into the original thread, to avoid calling out to C# from native threads too much
+            _onChangeContext->Send(
+                gcnew System::Threading::SendOrPostCallback(this, &InvalidAssetList::InvokeOnChange), nullptr);
+        } else {
+            _onChange();
+        }
     }
 
     IEnumerable<Tuple<String^, String^>^>^ InvalidAssetList::AssetList::get() 
-    { 
+    {
         auto result = gcnew List<Tuple<String^, String^>^>();
+        
+        _trackedAssetList->Lock();
+        TRY {
+            auto records = _trackedAssetList->GetCurrentRecords();
+            for (const auto& i : records) {
+			    std::string logStr;
+			    if (i.second._actualizationLog && !i.second._actualizationLog->empty()) {
+				    logStr = std::string(
+					    (const char*)AsPointer(i.second._actualizationLog->begin()),
+					    (const char*)AsPointer(i.second._actualizationLog->end()));
+			    } else {
+				    logStr = "<<no actualization log>>";
+			    }
 
-		/*
-        auto records = ::Assets::Services::GetAssetSets().LogRecords();
-        for (const auto& i : records) {
-			if (i._state != ::Assets::AssetState::Invalid) continue;
+                result->Add(gcnew Tuple<String^, String^>(
+                    clix::marshalString<clix::E_UTF8>(i.second._initializer),
+                    clix::marshalString<clix::E_UTF8>(logStr)));
+            }
 
-			std::string logStr;
-			if (i._actualizationLog && !i._actualizationLog->empty()) {
-				logStr = std::string(
-					(const char*)AsPointer(i._actualizationLog->begin()),
-					(const char*)AsPointer(i._actualizationLog->end()));
-			} else {
-				logStr = "<<no actualization log>>";
-			}
-
-            result->Add(gcnew Tuple<String^, String^>(
-                clix::marshalString<clix::E_UTF8>(i._initializer),
-                clix::marshalString<clix::E_UTF8>(logStr)));
-        }
-        */
+        } CATCH(...) {
+            _trackedAssetList->Unlock();
+            throw;
+        } CATCH_END
+        _trackedAssetList->Unlock();
 
         return result;
     }
 
-    void InvalidAssetList::RaiseChangeEvent()
-    {
-        _onChange();
-    }
-
     bool InvalidAssetList::HasInvalidAssets()
     {
-		// no way to check if there are actually invalid assets now
-		return true;
+        bool result = false;
+        _trackedAssetList->Lock();
+        TRY {
+            result = !_trackedAssetList->GetCurrentRecords().empty();
+        } CATCH(...) {
+            _trackedAssetList->Unlock();
+            throw;
+        } CATCH_END
+        _trackedAssetList->Unlock();
+		return result;
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

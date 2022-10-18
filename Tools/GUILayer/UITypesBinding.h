@@ -25,6 +25,7 @@ namespace RenderCore { namespace Assets { class RawMaterial; class MaterialScaff
 namespace ToolsRig { class VisOverlaySettings; class VisMouseOver; class VisAnimationState; class MaterialVisSettings; }
 namespace Assets { class DirectorySearchRules; }
 namespace SceneEngine { class IScene; }
+namespace PlatformRig { namespace Overlays { class ITrackedAssetList; }}
 
 namespace GUILayer
 {
@@ -405,12 +406,18 @@ namespace GUILayer
             IEnumerable<System::Tuple<System::String^, System::String^>^>^ get();
         }
 
-        static bool			HasInvalidAssets();
+        bool HasInvalidAssets();
+
         delegate void		OnChange();
         event OnChange^		_onChange;
-        void				RaiseChangeEvent();
 
         InvalidAssetList();
         ~InvalidAssetList();
+        void InvokeOnChange(System::Object^);
+
+    private:
+        clix::shared_ptr<PlatformRig::Overlays::ITrackedAssetList> _trackedAssetList;
+        unsigned _onChangeSignalId = ~0u;
+        System::Threading::SynchronizationContext^ _onChangeContext;
     };
 }

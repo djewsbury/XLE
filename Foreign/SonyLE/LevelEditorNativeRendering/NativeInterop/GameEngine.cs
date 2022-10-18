@@ -166,12 +166,7 @@ namespace RenderingInterop
                 initializable.Shutdown();
 
             foreach (var keyValue in s_idToDomNode)
-            {
-                DestroyObject(
-                    keyValue.Key.Item1,
-                    keyValue.Key.Item2, 
-                    keyValue.Value.TypeId);
-            }
+                DestroyObject(keyValue.Key.Item1, keyValue.Key.Item2);
             s_idToDomNode.Clear();
 
             s_loggingRedirect.Dispose();
@@ -276,20 +271,23 @@ namespace RenderingInterop
         }
 
         public static ulong CreateObject(
-            ulong documentId, ulong existingId, uint typeId,
+            ulong documentId, uint typeId,
             IEnumerable<PropertyInitializer> initializers)
         {
-            if (existingId == 0)
-                existingId = s_entityInterface.AssignObjectId(documentId, typeId);
-
-            if (s_entityInterface.CreateObject(documentId, existingId, typeId, initializers))
-                return existingId;
-            return 0;
+            ulong result = s_entityInterface.AssignEntityId(documentId);
+            bool success = s_entityInterface.CreateEntity(documentId, typeId, result, initializers);
+            return success ? result : 0;
+        }
+        public static bool CreateObjectWithId(
+            ulong documentId, uint typeId, ulong entityId,
+            IEnumerable<PropertyInitializer> initializers)
+        {
+            return s_entityInterface.CreateEntity(documentId, typeId, entityId, initializers);
         }
 
-        public static void DestroyObject(ulong documentId, ulong instanceId, uint typeId)
+        public static void DestroyObject(ulong documentId, ulong instanceId)
         {
-            s_entityInterface.DeleteObject(documentId, instanceId, typeId);
+            s_entityInterface.DeleteEntity(documentId, instanceId);
         }
 
         public static void SetTypeAnnotation(
@@ -313,9 +311,9 @@ namespace RenderingInterop
             return s_entityInterface.CreateDocument(docTypeId);
         }
 
-        public static void DeleteDocument(ulong docId, uint docTypeId)
+        public static void DeleteDocument(ulong docId)
         {
-            s_entityInterface.DeleteDocument(docId, docTypeId);
+            s_entityInterface.DeleteDocument(docId);
         }
 
         public static void InvokeMemberFn(ulong instanceId, string fn, IntPtr arg, out IntPtr retVal)
@@ -324,24 +322,23 @@ namespace RenderingInterop
         }
 
         public static void SetObjectProperty(
-            uint typeId, ulong documentId, ulong instanceId,
+            ulong documentId, ulong instanceId,
             IEnumerable<PropertyInitializer> initializers)
         {
             unsafe
             {
-                s_entityInterface.SetProperty(
-                    documentId, instanceId, typeId, initializers);
+                s_entityInterface.SetProperty(documentId, instanceId, initializers);
             }
         }
 
         public static void SetObjectParent(
-            ulong documentId, ulong childInstanceId, uint childTypeId,
-            ulong parentInstanceId, uint parentTypeId,
+            ulong documentId, ulong childInstanceId,
+            ulong parentInstanceId,
             uint childListId, int insertionPosition)
         {
             s_entityInterface.SetObjectParent(documentId, 
-                childInstanceId, childTypeId,
-                parentInstanceId, parentTypeId,
+                childInstanceId,
+                parentInstanceId,
                 childListId, insertionPosition);
         }
 
@@ -350,7 +347,7 @@ namespace RenderingInterop
         private static uint s_temporaryNativeBufferSize = 0;
         private static bool s_builtSavedBoundingBox = false;
 
-        public static void GetObjectProperty(uint typeId, uint propId, ulong documentId, ulong instanceId, out IntPtr data, out int size)
+        public static void GetObjectProperty(uint propId, ulong documentId, ulong instanceId, out IntPtr data, out int size)
         {
             if (!s_builtSavedBoundingBox)
             {
@@ -369,7 +366,7 @@ namespace RenderingInterop
                 uint bufferSize = s_temporaryNativeBufferSize;
                 IntPtr pinnedPtr = s_temporaryNativeBuffer.AddrOfPinnedObject();
                 if (s_entityInterface.GetProperty(
-                    documentId, instanceId, typeId, propId,
+                    documentId, instanceId, propId,
                     pinnedPtr.ToPointer(), &bufferSize))
                 {
                     data = s_temporaryNativeBuffer.AddrOfPinnedObject();

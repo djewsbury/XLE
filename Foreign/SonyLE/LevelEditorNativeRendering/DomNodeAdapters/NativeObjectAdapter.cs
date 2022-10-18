@@ -51,7 +51,7 @@ namespace RenderingInterop
             ulong documentId = (doc != null) ? doc.NativeDocumentId : 0;
             System.Diagnostics.Debug.Assert(documentId == m_documentId);
 
-            GameEngine.DestroyObject(m_documentId, m_instanceId, TypeId);
+            GameEngine.DestroyObject(m_documentId, m_instanceId);
             GameEngine.DeregisterGob(m_documentId, m_instanceId, this);
             ReleaseNativeHandle();
         }
@@ -71,15 +71,15 @@ namespace RenderingInterop
             {
                 GameEngine.SetObjectParent(
                     m_documentId,
-                    InstanceId, TypeId,
-                    p.InstanceId, p.TypeId, childListId, insertionPosition);
+                    InstanceId,
+                    p.InstanceId, childListId, insertionPosition);
             }
             else
             {
                 GameEngine.SetObjectParent(
                     m_documentId,
-                    InstanceId, TypeId,
-                    0, 0, childListId, insertionPosition);
+                    InstanceId,
+                    0, childListId, insertionPosition);
             }
 
             UpdateLocalToWorld();
@@ -96,7 +96,7 @@ namespace RenderingInterop
                     if (transfer.Properties.Count > 0)
                     {
                         GameEngine.SetObjectProperty(
-                            TypeId, DocumentId, InstanceId,
+                            DocumentId, InstanceId,
                             transfer.Properties);
                     }
                 }
@@ -168,7 +168,7 @@ namespace RenderingInterop
                     if (transfer.Properties.Count > 0)
                     {
                         GameEngine.SetObjectProperty(
-                            TypeId, DocumentId, InstanceId,
+                            DocumentId, InstanceId,
                             transfer.Properties);
                     }
                 }
@@ -193,7 +193,7 @@ namespace RenderingInterop
                     if (transfer.Properties.Count > 0)
                     {
                         GameEngine.SetObjectProperty(
-                            TypeId, DocumentId, InstanceId,
+                            DocumentId, InstanceId,
                             transfer.Properties);
                     }
                 }
@@ -245,7 +245,15 @@ namespace RenderingInterop
                         foreach (AttributeInfo attribInfo in this.DomNode.Type.Attributes)
                             UpdateNativeProperty(DomNode, attribInfo, transfer.Properties, stream);
                         UpdateSecondaryNativeProperties(transfer.Properties, stream);
-                        m_instanceId = GameEngine.CreateObject(doc.NativeDocumentId, existingId, TypeId, transfer.Properties);
+                        if (existingId != 0)
+                        {
+                            bool success = GameEngine.CreateObjectWithId(doc.NativeDocumentId, TypeId, existingId, transfer.Properties);
+                            m_instanceId = success ? existingId : 0; 
+                        }
+                        else
+                        {
+                            m_instanceId = GameEngine.CreateObject(doc.NativeDocumentId, TypeId, transfer.Properties);
+                        }
                     }
                 }
 

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -11,15 +12,19 @@ namespace ControlsLibrary
 {
     public partial class InvalidAssetDialog : Form
     {
-        public InvalidAssetDialog()
+        public InvalidAssetDialog(GUILayer.InvalidAssetList invalidAssetList)
         {
+            _list = invalidAssetList;
             InitializeComponent();
 
-            _list = new GUILayer.InvalidAssetList();
             RebuildList();
-            _list._onChange += RebuildList;
+            invalidAssetList._onChange += RebuildList;
 
             _assetList.SelectedIndexChanged += SelectedIndexChanged;
+        }
+        ~InvalidAssetDialog()
+        {
+            invalidAssetList._onChange -= RebuildList;
         }
 
         void SelectedIndexChanged(object sender, EventArgs e)

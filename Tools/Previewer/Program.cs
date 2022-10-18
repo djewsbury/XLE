@@ -116,6 +116,7 @@ namespace Previewer
                 typeof(ControlsLibraryExt.ModelView.GlobalPreviewerCommands), 
                 typeof(ControlsLibraryExt.ModelView.Previewer),
                 typeof(ControlsLibraryExt.GameLoopService),
+                typeof(ControlsLibraryExt.AssetTrackingService),
 
                 typeof(ActiveMaterialContext)
             );
