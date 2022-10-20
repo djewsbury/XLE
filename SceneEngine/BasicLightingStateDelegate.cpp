@@ -163,18 +163,18 @@ namespace SceneEngine
     {
     }
 
+    static const ParameterBox::ParameterName Transform = "Transform";
+    static const ParameterBox::ParameterName Position = "Position";
+    static const ParameterBox::ParameterName Radius = "Radius";
+    static const ParameterBox::ParameterName Brightness = "Brightness";
+    static const ParameterBox::ParameterName CutoffBrightness = "CutoffBrightness";
+    static const ParameterBox::ParameterName CutoffRange = "CutoffRange";
+
     void InitializeLight(
         RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
         const ParameterBox& parameters,
         const Float3& offsetLocalToWorld)
     {
-        static const ParameterBox::ParameterName Transform = "Transform";
-        static const ParameterBox::ParameterName Position = "Position";
-        static const ParameterBox::ParameterName Radius = "Radius";
-        static const ParameterBox::ParameterName Brightness = "Brightness";
-        static const ParameterBox::ParameterName CutoffBrightness = "CutoffBrightness";
-        static const ParameterBox::ParameterName CutoffRange = "CutoffRange";
-
         auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
         if (positional) {
             auto transformValue = parameters.GetParameter<Float4x4>(Transform);
@@ -194,7 +194,7 @@ namespace SceneEngine
                     st._translation += offsetLocalToWorld;
                     positional->SetLocalToWorld(AsFloat4x4(st));
                 }
-            }                    
+            }
         }
 
         auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId);
@@ -213,6 +213,72 @@ namespace SceneEngine
             if (cutoffRange)
                 finite->SetCutoffRange(cutoffRange.value());
         }
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        if (propertyNameHash == Transform._hash) {
+            auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
+            if (positional) {
+                Float4x4 localToWorld;
+                if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(localToWorld), ImpliedTyping::TypeOf<Float4x4>(), data, type)) {
+                    positional->SetLocalToWorld(localToWorld);
+                    return true;
+                }
+            }
+        } else if (propertyNameHash == Position._hash) {
+            auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
+            if (positional) {
+                Float3 position;
+                if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(position), ImpliedTyping::TypeOf<Float3>(), data, type)) {
+                    Float4x4 localToWorld = positional->GetLocalToWorld();
+                    SetTranslation(localToWorld, position);
+                    positional->SetLocalToWorld(localToWorld);
+                    return true;
+                }
+            }
+        } else if (propertyNameHash == Radius._hash) {
+            auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
+            if (positional) {
+                Float3 radius;
+                if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(radius), ImpliedTyping::TypeOf<Float3>(), data, type)) {
+                    ScaleRotationTranslationM srt{positional->GetLocalToWorld()};
+                    srt._scale = radius;
+                    positional->SetLocalToWorld(AsFloat4x4(srt));
+                    return true;
+                }
+            }
+        } else if (propertyNameHash == Brightness._hash) {
+            auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId);
+            if (uniformEmittance) {
+                Float3 brightness;
+                if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(brightness), ImpliedTyping::TypeOf<Float3>(), data, type)) {
+                    uniformEmittance->SetBrightness(brightness);
+                    return true;
+                }
+            }
+        } else if (propertyNameHash == CutoffBrightness._hash) {
+            auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId);
+            if (finite) {
+                float cutoffBrightness;
+                if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(cutoffBrightness), ImpliedTyping::TypeOf<float>(), data, type)) {
+                    finite->SetCutoffBrightness(cutoffBrightness);
+                    return true;
+                }
+            }
+        } else if (propertyNameHash == CutoffRange._hash) {
+            auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId);
+            if (finite) {
+                float cutoffRange;
+                if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(cutoffRange), ImpliedTyping::TypeOf<float>(), data, type)) {
+                    finite->SetCutoffRange(cutoffRange);
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     void        BasicLightingStateDelegate::BindScene(RenderCore::LightingEngine::ILightScene& lightScene, std::shared_ptr<::Assets::OperationContext> operationContext)
@@ -553,7 +619,7 @@ namespace SceneEngine
             return (unsigned)std::distance(_lightHashes.begin(), i);
         _lightResolveOperators.push_back(operatorDesc);
         _lightHashes.push_back(hash);
-        return _lightHashes.size()-1;
+        return unsigned(_lightHashes.size()-1);
     }
 
     unsigned MergedLightingEngineCfg::Register(const RenderCore::LightingEngine::ShadowOperatorDesc& operatorDesc)
@@ -565,7 +631,7 @@ namespace SceneEngine
             return (unsigned)std::distance(_shadowHashes.begin(), i);
         _shadowResolveOperators.push_back(operatorDesc);
         _shadowHashes.push_back(hash);
-        return _shadowHashes.size()-1;
+        return unsigned(_shadowHashes.size()-1);
     }
 
     void MergedLightingEngineCfg::SetAmbientOperator(const RenderCore::LightingEngine::AmbientLightOperatorDesc& operatorDesc)
@@ -646,7 +712,7 @@ template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine:
         props.Add(
             "DepthBias", 
             [](const Obj& obj) { return obj._singleSidedBias._depthBias; },
-            [](Obj& obj, float depthBias) { obj._doubleSidedBias._depthBias = obj._singleSidedBias._depthBias = depthBias; });
+            [](Obj& obj, int depthBias) { obj._doubleSidedBias._depthBias = obj._singleSidedBias._depthBias = depthBias; });
         props.Add(
             "DepthBiasClamp", 
             [](const Obj& obj) { return obj._singleSidedBias._depthBiasClamp; },

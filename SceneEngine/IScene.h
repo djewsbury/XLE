@@ -102,8 +102,6 @@ namespace SceneEngine
         virtual std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> BeginPrepareStep(
             RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext) = 0;
 
-        // virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
-
 		virtual ~ILightingStateDelegate() = default;
     };
 }

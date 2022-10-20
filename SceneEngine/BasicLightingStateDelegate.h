@@ -7,7 +7,6 @@
 #pragma once
 
 #include "IScene.h"
-#include "../SceneEngine/Tonemap.h"
 #include "../Assets/DepVal.h"
 #include "../Assets/AssetsCore.h"
 #if 0
@@ -18,6 +17,7 @@
 
 namespace RenderCore { namespace LightingEngine { class SunSourceFrustumSettings; }}
 namespace Utility { class ParameterBox; }
+namespace Utility { namespace ImpliedTyping { class TypeDesc; }}
 
 namespace SceneEngine
 {
@@ -33,7 +33,23 @@ namespace SceneEngine
 
     void InitializeLight(
         RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
-        const ParameterBox& parameters,
+        const Utility::ParameterBox& parameters,
         const Float3& offsetLocalToWorld);
+
+    bool SetProperty(
+        RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
+
+    bool SetProperty(
+        RenderCore::LightingEngine::LightSourceOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
+
+    bool SetProperty(
+        RenderCore::LightingEngine::AmbientLightOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
+
+    bool SetProperty(
+        RenderCore::LightingEngine::ShadowOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
 }
 

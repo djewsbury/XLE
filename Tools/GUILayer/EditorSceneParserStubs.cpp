@@ -43,9 +43,7 @@ namespace GUILayer
     public ref class EditorSceneOverlay : public IOverlaySystem
     {
     public:
-        void Render(
-            RenderCore::Techniques::ParsingContext& parserContext) override;
-
+        void Render(RenderCore::Techniques::ParsingContext& parserContext) override;
         EditorSceneOverlay(
             const std::shared_ptr<EditorScene>& sceneParser,
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
@@ -120,6 +118,7 @@ namespace GUILayer
 			clix::marshalString<clix::E_UTF8>(_renderSettings->_activeEnvironmentSettings).c_str());
 
         SceneEngine::MergedLightingEngineCfg lightingEngineCfg;
+        lightingDelegate.BindCfg(lightingEngineCfg);
 		auto compiledTechnique = SceneEngine::CreateAndActualizeForwardLightingTechnique(
 			_lightingApparatus.GetNativePtr(),
             lightingEngineCfg.GetLightOperators(),
