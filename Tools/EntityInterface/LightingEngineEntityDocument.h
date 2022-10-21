@@ -38,23 +38,15 @@ namespace EntityInterface
 		std::optional<ImpliedTyping::TypeDesc> GetProperty(EntityId id, StringAndHash prop, IteratorRange<void*> destinationBuffer) const override;
 		bool SetParent(EntityId child, EntityId parent, StringAndHash childList, int insertionPosition) override;
 	protected:
-		unsigned _currentChangeId = ~0u;
-
-		std::mt19937_64 _rng;
-		struct LightSourceOperatorAndName
-		{
-			std::string _name;
-			RenderCore::LightingEngine::LightSourceOperatorDesc _opDesc;
-		};
-		struct ShadowOperatorAndName
-		{
-			std::string _name;
-			RenderCore::LightingEngine::ShadowOperatorDesc _opDesc;
-		};
+		struct LightSourceOperatorAndName;
+		struct ShadowOperatorAndName;
 		std::vector<std::pair<EntityId, LightSourceOperatorAndName>> _lightOperators;
 		std::vector<std::pair<EntityId, ShadowOperatorAndName>> _shadowOperators;
 		std::optional<EntityId> _ambientOperatorEntity;
 		RenderCore::LightingEngine::AmbientLightOperatorDesc _ambientOperator;
+
+		unsigned _currentChangeId = ~0u;
+		std::mt19937_64 _rng;
 	};
 
 	class LightSceneEntityDocument : public IMutableEntityDocument

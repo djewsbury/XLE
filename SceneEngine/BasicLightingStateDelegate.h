@@ -21,15 +21,13 @@ namespace Utility { namespace ImpliedTyping { class TypeDesc; }}
 
 namespace SceneEngine
 {
-    using SunSourceFrustumSettings = RenderCore::LightingEngine::SunSourceFrustumSettings;
-
     /// <summary>Simple & partial implementation of the ILightingStateDelegate interface<summary>
     /// This provides implementations of the basic lighting related interfaces of
     /// ISceneParser that will hook into an EnvironmentSettings object.
     /// Derived classes should implement the accessor GetEnvSettings().
     ::Assets::PtrToMarkerPtr<ILightingStateDelegate> CreateBasicLightingStateDelegate(StringSection<> envSettings);
 
-    SunSourceFrustumSettings    DefaultSunSourceFrustumSettings();
+    RenderCore::LightingEngine::SunSourceFrustumSettings    DefaultSunSourceFrustumSettings();
 
     void InitializeLight(
         RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
@@ -45,11 +43,15 @@ namespace SceneEngine
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
 
     bool SetProperty(
+        RenderCore::LightingEngine::ShadowOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
+
+    bool SetProperty(
         RenderCore::LightingEngine::AmbientLightOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
 
     bool SetProperty(
-        RenderCore::LightingEngine::ShadowOperatorDesc& desc,
+        RenderCore::LightingEngine::SunSourceFrustumSettings& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
 }
 

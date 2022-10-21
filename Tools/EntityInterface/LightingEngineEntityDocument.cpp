@@ -169,6 +169,17 @@ namespace EntityInterface
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	struct LightingOperatorsEntityDocument::LightSourceOperatorAndName
+	{
+		std::string _name;
+		RenderCore::LightingEngine::LightSourceOperatorDesc _opDesc;
+	};
+	struct LightingOperatorsEntityDocument::ShadowOperatorAndName
+	{
+		std::string _name;
+		RenderCore::LightingEngine::ShadowOperatorDesc _opDesc;
+	};
+
 	void LightingOperatorsEntityDocument::BindCfg(MergedLightingCfgHelper& cfg)
 	{
 		for (const auto& l:_lightOperators) {

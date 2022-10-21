@@ -107,7 +107,6 @@ namespace SceneEngine
 		if (existing == _objects.end() || existing->first != objectNameHash)
 			existing = _objects.insert(existing, std::make_pair(objectNameHash, Type{}));
 
-		auto& accessors = Legacy_GetAccessors<Type>();
 		for (const auto& p:properties) {
 			if (expect_evaluation(XlEqString(p._name, "ObjectTableCmd") && p._typeDesc._typeHint == ImpliedTyping::TypeHint::String && (p._typeDesc._type == ImpliedTyping::TypeCat::UInt8 || p._typeDesc._type == ImpliedTyping::TypeCat::Int8), false)) {
 				auto value = MakeStringSection((const char*)p._data.begin(), (const char*)p._data.end());
@@ -117,7 +116,7 @@ namespace SceneEngine
 				}
 				continue;
 			}
-			accessors.Set(&existing->second, p._name, p._data, p._typeDesc);
+			SetProperty(existing->second, Hash64(p._name), p._data, p._typeDesc);
 		}
 		return objectNameHash;
 	}

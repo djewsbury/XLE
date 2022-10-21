@@ -1179,6 +1179,8 @@ namespace RenderCore { namespace LightingEngine
 
 }}
 
+#if 0
+
 #include "../Utility/Meta/ClassAccessors.h"
 #include "../Utility/Meta/ClassAccessorsImpl.h"
 
@@ -1223,4 +1225,5 @@ template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine:
     return props;
 }
 
+#endif
 

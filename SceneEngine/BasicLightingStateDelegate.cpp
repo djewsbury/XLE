@@ -21,8 +21,8 @@
 #include "../Utility/Streams/FormatterUtils.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/Conversion.h"
-#include "../Utility/Meta/AccessorSerialize.h"
-#include "../Utility/Meta/ClassAccessors.h"
+// #include "../Utility/Meta/AccessorSerialize.h"
+// #include "../Utility/Meta/ClassAccessors.h"
  
 namespace SceneEngine
 {
@@ -161,124 +161,6 @@ namespace SceneEngine
 
     void        BasicLightingStateDelegate::PostRender(RenderCore::LightingEngine::ILightScene& lightScene)
     {
-    }
-
-    static const ParameterBox::ParameterName Transform = "Transform";
-    static const ParameterBox::ParameterName Position = "Position";
-    static const ParameterBox::ParameterName Radius = "Radius";
-    static const ParameterBox::ParameterName Brightness = "Brightness";
-    static const ParameterBox::ParameterName CutoffBrightness = "CutoffBrightness";
-    static const ParameterBox::ParameterName CutoffRange = "CutoffRange";
-
-    void InitializeLight(
-        RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
-        const ParameterBox& parameters,
-        const Float3& offsetLocalToWorld)
-    {
-        auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
-        if (positional) {
-            auto transformValue = parameters.GetParameter<Float4x4>(Transform);
-            if (transformValue) {
-                Combine_IntoLHS(transformValue.value(), offsetLocalToWorld);
-                positional->SetLocalToWorld(transformValue.value());
-            } else {
-                auto positionValue = parameters.GetParameter<Float3>(Position);
-                auto radiusValue = parameters.GetParameter<Float3>(Radius);
-                
-                if (positionValue || radiusValue) {
-                    ScaleTranslation st;
-                    if (positionValue)
-                        st._translation = positionValue.value();
-                    if (radiusValue)
-                        st._scale = radiusValue.value();
-                    st._translation += offsetLocalToWorld;
-                    positional->SetLocalToWorld(AsFloat4x4(st));
-                }
-            }
-        }
-
-        auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId);
-        if (uniformEmittance) {
-            auto brightness = parameters.GetParameter<Float3>(Brightness);
-            if (brightness)
-                uniformEmittance->SetBrightness(brightness.value());
-        }
-
-        auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId);
-        if (finite) {
-            auto cutoffBrightness = parameters.GetParameter<float>(CutoffBrightness);
-            if (cutoffBrightness)
-                finite->SetCutoffBrightness(cutoffBrightness.value());
-            auto cutoffRange = parameters.GetParameter<float>(CutoffRange);
-            if (cutoffRange)
-                finite->SetCutoffRange(cutoffRange.value());
-        }
-    }
-
-    bool SetProperty(
-        RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
-        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
-    {
-        if (propertyNameHash == Transform._hash) {
-            auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
-            if (positional) {
-                Float4x4 localToWorld;
-                if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(localToWorld), ImpliedTyping::TypeOf<Float4x4>(), data, type)) {
-                    positional->SetLocalToWorld(localToWorld);
-                    return true;
-                }
-            }
-        } else if (propertyNameHash == Position._hash) {
-            auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
-            if (positional) {
-                Float3 position;
-                if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(position), ImpliedTyping::TypeOf<Float3>(), data, type)) {
-                    Float4x4 localToWorld = positional->GetLocalToWorld();
-                    SetTranslation(localToWorld, position);
-                    positional->SetLocalToWorld(localToWorld);
-                    return true;
-                }
-            }
-        } else if (propertyNameHash == Radius._hash) {
-            auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
-            if (positional) {
-                Float3 radius;
-                if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(radius), ImpliedTyping::TypeOf<Float3>(), data, type)) {
-                    ScaleRotationTranslationM srt{positional->GetLocalToWorld()};
-                    srt._scale = radius;
-                    positional->SetLocalToWorld(AsFloat4x4(srt));
-                    return true;
-                }
-            }
-        } else if (propertyNameHash == Brightness._hash) {
-            auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId);
-            if (uniformEmittance) {
-                Float3 brightness;
-                if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(brightness), ImpliedTyping::TypeOf<Float3>(), data, type)) {
-                    uniformEmittance->SetBrightness(brightness);
-                    return true;
-                }
-            }
-        } else if (propertyNameHash == CutoffBrightness._hash) {
-            auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId);
-            if (finite) {
-                float cutoffBrightness;
-                if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(cutoffBrightness), ImpliedTyping::TypeOf<float>(), data, type)) {
-                    finite->SetCutoffBrightness(cutoffBrightness);
-                    return true;
-                }
-            }
-        } else if (propertyNameHash == CutoffRange._hash) {
-            auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId);
-            if (finite) {
-                float cutoffRange;
-                if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(cutoffRange), ImpliedTyping::TypeOf<float>(), data, type)) {
-                    finite->SetCutoffRange(cutoffRange);
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     void        BasicLightingStateDelegate::BindScene(RenderCore::LightingEngine::ILightScene& lightScene, std::shared_ptr<::Assets::OperationContext> operationContext)
@@ -511,9 +393,9 @@ namespace SceneEngine
     }
 #endif
 
-    SunSourceFrustumSettings DefaultSunSourceFrustumSettings()
+    RenderCore::LightingEngine::SunSourceFrustumSettings DefaultSunSourceFrustumSettings()
     {
-        SunSourceFrustumSettings result;
+        RenderCore::LightingEngine::SunSourceFrustumSettings result;
         result._maxFrustumCount = 3;
         result._maxDistanceFromCamera = 2000.f;
         result._focusDistance = 5.0f;
@@ -642,22 +524,367 @@ namespace SceneEngine
     std::future<void> IScene::PrepareForView(PrepareForViewContext& prepareContext) const { return {}; }
     IScene::~IScene() {}
     ISceneOverlay::~ISceneOverlay() {}
+
+
+    static const ParameterBox::ParameterName Transform = "Transform";
+    static const ParameterBox::ParameterName Position = "Position";
+    static const ParameterBox::ParameterName Radius = "Radius";
+    static const ParameterBox::ParameterName Brightness = "Brightness";
+    static const ParameterBox::ParameterName CutoffBrightness = "CutoffBrightness";
+    static const ParameterBox::ParameterName CutoffRange = "CutoffRange";
+
+    void InitializeLight(
+        RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
+        const ParameterBox& parameters,
+        const Float3& offsetLocalToWorld)
+    {
+        auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
+        if (positional) {
+            auto transformValue = parameters.GetParameter<Float4x4>(Transform);
+            if (transformValue) {
+                Combine_IntoLHS(transformValue.value(), offsetLocalToWorld);
+                positional->SetLocalToWorld(transformValue.value());
+            } else {
+                auto positionValue = parameters.GetParameter<Float3>(Position);
+                auto radiusValue = parameters.GetParameter<Float3>(Radius);
+                
+                if (positionValue || radiusValue) {
+                    ScaleTranslation st;
+                    if (positionValue)
+                        st._translation = positionValue.value();
+                    if (radiusValue)
+                        st._scale = radiusValue.value();
+                    st._translation += offsetLocalToWorld;
+                    positional->SetLocalToWorld(AsFloat4x4(st));
+                }
+            }
+        }
+
+        auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId);
+        if (uniformEmittance) {
+            auto brightness = parameters.GetParameter<Float3>(Brightness);
+            if (brightness)
+                uniformEmittance->SetBrightness(brightness.value());
+        }
+
+        auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId);
+        if (finite) {
+            auto cutoffBrightness = parameters.GetParameter<float>(CutoffBrightness);
+            if (cutoffBrightness)
+                finite->SetCutoffBrightness(cutoffBrightness.value());
+            auto cutoffRange = parameters.GetParameter<float>(CutoffRange);
+            if (cutoffRange)
+                finite->SetCutoffRange(cutoffRange.value());
+        }
+    }
+
+    template <typename Type>
+        std::optional<Type> ConvertOrCast(IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
+    {
+        if ((type._type == ImpliedTyping::TypeCat::UInt8 || type._type == ImpliedTyping::TypeCat::Int8) && type._typeHint == ImpliedTyping::TypeHint::String)
+            return ImpliedTyping::ConvertFullMatch<Type>(MakeStringSection((const char*)data.begin(), (const char*)data.end()));
+
+        Type result;
+        if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(result), ImpliedTyping::TypeOf<Type>(), data, type))
+            return result;
+        return {};
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
+    {
+        if (propertyNameHash == Transform._hash) {
+            auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
+            if (positional) {
+                if (auto localToWorld = ConvertOrCast<Float4x4>(data, type)) {
+                    positional->SetLocalToWorld(localToWorld.value());
+                    return true;
+                }
+            }
+        } else if (propertyNameHash == Position._hash) {
+            auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
+            if (positional) {
+                if (auto position = ConvertOrCast<Float3>(data, type)) {
+                    Float4x4 localToWorld = positional->GetLocalToWorld();
+                    SetTranslation(localToWorld, position.value());
+                    positional->SetLocalToWorld(localToWorld);
+                    return true;
+                }
+            }
+        } else if (propertyNameHash == Radius._hash) {
+            auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
+            if (positional) {
+                if (auto radius = ConvertOrCast<Float3>(data, type)) {
+                    ScaleRotationTranslationM srt{positional->GetLocalToWorld()};
+                    srt._scale = radius.value();
+                    positional->SetLocalToWorld(AsFloat4x4(srt));
+                    return true;
+                }
+            }
+        } else if (propertyNameHash == Brightness._hash) {
+            auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId);
+            if (uniformEmittance) {
+                if (auto brightness = ConvertOrCast<Float3>(data, type)) {
+                    uniformEmittance->SetBrightness(brightness.value());
+                    return true;
+                }
+            }
+        } else if (propertyNameHash == CutoffBrightness._hash) {
+            auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId);
+            if (finite) {
+                if (auto cutoffBrightness = ConvertOrCast<float>(data, type)) {
+                    finite->SetCutoffBrightness(cutoffBrightness.value());
+                    return true;
+                }
+            }
+        } else if (propertyNameHash == CutoffRange._hash) {
+            auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId);
+            if (finite) {
+                if (auto cutoffRange = ConvertOrCast<float>(data, type)) {
+                    finite->SetCutoffRange(cutoffRange.value());
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    static const ParameterBox::ParameterName Shape = "Shape";
+    static const ParameterBox::ParameterName DiffuseModel = "DiffuseModel";
+    static const ParameterBox::ParameterName DominantLight = "DominantLight";
+
+    template<typename MemberType, std::optional<MemberType> StringToEnum(StringSection<>), typename ObjectType>
+        static void SetViaEnumFn(ObjectType& dst, MemberType ObjectType::*ptrToMember, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
+    {
+        auto str = ImpliedTyping::AsString(data, type);
+        auto o = StringToEnum(str);
+        if (!o.has_value()) Throw(std::runtime_error("Unknown value for enum (" + str + ")"));
+        dst.*ptrToMember = o.value();
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::LightSourceOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
+    {
+        using namespace RenderCore::LightingEngine;
+        if (propertyNameHash == Shape._hash) {
+            SetViaEnumFn<LightSourceShape, AsLightSourceShape>(desc, &LightSourceOperatorDesc::_shape, data, type);
+            return true;
+        } else if (propertyNameHash == DiffuseModel._hash) {
+            SetViaEnumFn<RenderCore::LightingEngine::DiffuseModel, AsDiffuseModel>(desc, &LightSourceOperatorDesc::_diffuseModel, data, type);
+            return true;
+        } else if (propertyNameHash == DominantLight._hash) {
+            if (auto value = ConvertOrCast<unsigned>(data, type)) {
+                if (value.value()) {
+                    desc._flags |= RenderCore::LightingEngine::LightSourceOperatorDesc::Flags::DominantLight;
+                } else {
+                    desc._flags &= ~RenderCore::LightingEngine::LightSourceOperatorDesc::Flags::DominantLight;
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static const ParameterBox::ParameterName Format = "Format";
+    static const ParameterBox::ParameterName ResolveType = "ResolveType";
+    static const ParameterBox::ParameterName ProjectionMode = "ProjectionMode";
+    static const ParameterBox::ParameterName FilterModel = "FilterModel";
+    static const ParameterBox::ParameterName CullMode = "CullMode";
+    static const ParameterBox::ParameterName Dims = "Dims";
+    static const ParameterBox::ParameterName SlopeScaledBias = "SlopeScaledBias";
+    static const ParameterBox::ParameterName DepthBias = "DepthBias";
+    static const ParameterBox::ParameterName DepthBiasClamp = "DepthBiasClamp";
+
+    bool SetProperty(
+        RenderCore::LightingEngine::ShadowOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
+    {
+        using namespace RenderCore::LightingEngine;
+        if (propertyNameHash == Format._hash) {
+            SetViaEnumFn<RenderCore::Format, RenderCore::AsFormat>(desc, &ShadowOperatorDesc::_format, data, type);
+            return true;
+        } else if (propertyNameHash == ResolveType._hash) {
+            SetViaEnumFn<ShadowResolveType, AsShadowResolveType>(desc, &ShadowOperatorDesc::_resolveType, data, type);
+            return true;
+        } else if (propertyNameHash == ProjectionMode._hash) {
+            SetViaEnumFn<ShadowProjectionMode, AsShadowProjectionMode>(desc, &ShadowOperatorDesc::_projectionMode, data, type);
+            return true;
+        } else if (propertyNameHash == FilterModel._hash) {
+            SetViaEnumFn<ShadowFilterModel, AsShadowFilterModel>(desc, &ShadowOperatorDesc::_filterModel, data, type);
+            return true;
+        } else if (propertyNameHash == CullMode._hash) {
+            SetViaEnumFn<RenderCore::CullMode, RenderCore::AsCullMode>(desc, &ShadowOperatorDesc::_cullMode, data, type);
+            return true;
+        } else if (propertyNameHash == Dims._hash) {
+            if (auto dims = ConvertOrCast<uint32_t>(data, type)) {
+                desc._width = desc._height = dims.value();
+                return true;
+            }
+        } else if (propertyNameHash == SlopeScaledBias._hash) {
+            if (auto slopeScaledBias = ConvertOrCast<float>(data, type)) {
+                 desc._doubleSidedBias._slopeScaledBias = desc._singleSidedBias._slopeScaledBias = slopeScaledBias.value();
+                 return true;
+            }
+        } else if (propertyNameHash == DepthBias._hash) {
+            if (auto depthBias = ConvertOrCast<int>(data, type)) {
+                desc._doubleSidedBias._depthBias = desc._singleSidedBias._depthBias = depthBias.value();
+                return true;
+            }
+        } else if (propertyNameHash == DepthBiasClamp._hash) {
+            if (auto depthBiasClamp = ConvertOrCast<float>(data, type)) {
+                desc._doubleSidedBias._depthBiasClamp = desc._singleSidedBias._depthBiasClamp = depthBiasClamp.value();
+                return true;
+            }
+        }
+
+        return true;
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::AmbientLightOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
+    {
+        return false;
+    }
+
+    static const ParameterBox::ParameterName MaxCascadeCount = "MaxCascadeCount";
+    static const ParameterBox::ParameterName MaxDistanceFromCamera = "MaxDistanceFromCamera";
+    static const ParameterBox::ParameterName FrustumSizeFactor = "FrustumSizeFactor";
+    static const ParameterBox::ParameterName FocusDistance = "FocusDistance";
+    static const ParameterBox::ParameterName ResolutionScale = "ResolutionScale";
+    static const ParameterBox::ParameterName Flags = "Flags";
+    static const ParameterBox::ParameterName TextureSize = "TextureSize";
+    static const ParameterBox::ParameterName BlurAngleDegrees = "BlurAngleDegrees";
+    static const ParameterBox::ParameterName MinBlurSearch = "MinBlurSearch";
+    static const ParameterBox::ParameterName MaxBlurSearch = "MaxBlurSearch";
+    static const ParameterBox::ParameterName HighPrecisionDepths = "HighPrecisionDepths";
+    static const ParameterBox::ParameterName CasterDistanceExtraBias = "CasterDistanceExtraBias";
+    static const ParameterBox::ParameterName WorldSpaceResolveBias = "WorldSpaceResolveBias";
+    static const ParameterBox::ParameterName BaseBias = "BaseBias";
+    static const ParameterBox::ParameterName EnableContactHardening = "EnableContactHardening";
+
+    bool SetProperty(
+        RenderCore::LightingEngine::SunSourceFrustumSettings& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        static const unsigned s_staticMaxSubProjections = 6;
+
+        if (propertyNameHash == MaxCascadeCount._hash) {
+            if (auto value = ConvertOrCast<uint32_t>(data, type)) {
+                desc._maxFrustumCount = Clamp(value.value(), 1u, s_staticMaxSubProjections);
+                return true;
+            }
+        } else if (propertyNameHash == MaxDistanceFromCamera._hash) {
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._maxDistanceFromCamera = value.value();
+                return true;
+            }
+        } else if (propertyNameHash == FrustumSizeFactor._hash) {
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._frustumSizeFactor = value.value();
+                return true;
+            }
+        } else if (propertyNameHash == FocusDistance._hash) {
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._focusDistance = value.value();
+                return true;
+            }
+        } else if (propertyNameHash == ResolutionScale._hash) {
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._resolutionScale = value.value();
+                return true;
+            }
+        } else if (propertyNameHash == Flags._hash) {
+            if (auto value = ConvertOrCast<uint32_t>(data, type)) {
+                desc._flags = value.value();
+                return true;
+            }
+        } else if (propertyNameHash == TextureSize._hash) {
+            if (auto value = ConvertOrCast<uint32_t>(data, type)) {
+                desc._textureSize = 1<<(IntegerLog2(value.value()-1)+1);  // ceil to a power of two
+                return true;
+            }
+        } else if (propertyNameHash == BlurAngleDegrees._hash) {
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._tanBlurAngle = XlTan(Deg2Rad(value.value()));
+                return true;
+            }
+        } else if (propertyNameHash == MinBlurSearch._hash) {
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._minBlurSearch = value.value();
+                return true;
+            }
+        } else if (propertyNameHash == MaxBlurSearch._hash) {
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._maxBlurSearch = value.value();
+                return true;
+            }
+        } else if (propertyNameHash == HighPrecisionDepths._hash) {
+            if (auto value = ConvertOrCast<uint32_t>(data, type)) {
+                using Obj = RenderCore::LightingEngine::SunSourceFrustumSettings;
+                if (value.value()) desc._flags |= Obj::Flags::HighPrecisionDepths; 
+                else desc._flags &= ~Obj::Flags::HighPrecisionDepths; 
+                return true;
+            }
+        } else if (propertyNameHash == CasterDistanceExtraBias._hash) {
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._casterDistanceExtraBias = value.value();
+                return true;
+            }
+        } else if (propertyNameHash == WorldSpaceResolveBias._hash) {
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._worldSpaceResolveBias = value.value();
+                return true;
+            }
+        } else if (propertyNameHash == SlopeScaledBias._hash) {
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._slopeScaledBias = value.value();
+                return true;
+            }
+        } else if (propertyNameHash == BaseBias._hash) {
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._baseBias = value.value();
+                return true;
+            }
+        } else if (propertyNameHash == EnableContactHardening._hash) {
+            if (auto value = ConvertOrCast<bool>(data, type)) {
+                desc._enableContactHardening = value.value();
+                return true;
+            }
+        } else if (propertyNameHash == FilterModel._hash) {
+            using namespace RenderCore::LightingEngine;
+            using Obj = RenderCore::LightingEngine::SunSourceFrustumSettings;
+            SetViaEnumFn<ShadowFilterModel, AsShadowFilterModel>(desc, &Obj::_filterModel, data, type);
+            return true;
+        } else if (propertyNameHash == CullMode._hash) {
+            using Obj = RenderCore::LightingEngine::SunSourceFrustumSettings;
+            SetViaEnumFn<RenderCore::CullMode, RenderCore::AsCullMode>(desc, &Obj::_cullMode, data, type);
+            return true;
+        }
+
+        return false;
+    }
+
 }
 
-#if 1
+#if 0
 
 namespace SceneEngine
 {
     ToneMapSettings::ToneMapSettings() {}
 }
 
-#endif
-
 template<> const ClassAccessors& Legacy_GetAccessors<SceneEngine::ToneMapSettings>()
 {
     static ClassAccessors dummy(0);
     return dummy;
 }
+
+#endif
+
+#if 0
 
 template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine::LightSourceOperatorDesc>()
 {
@@ -721,3 +948,5 @@ template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine:
 	}
 	return props;
 }
+
+#endif
