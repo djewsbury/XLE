@@ -35,6 +35,7 @@ namespace EntityInterface
 { 
     class RetainedEntities;
     class RetainedEntitiesAdapter;
+    class MultiEnvironmentSettingsDocument;
 }
 
 namespace GUILayer
@@ -178,6 +179,7 @@ namespace GUILayer
             //// //// ////   U T I L I T Y   //// //// ////
 
         const EntityInterface::RetainedEntities& GetFlexObjects();
+        ::EntityInterface::MultiEnvironmentSettingsDocument& GetEnvSettingsDocument();
         void IncrementTime(float increment);
 
 #if defined(GUILAYER_SCENEENGINE)
@@ -194,12 +196,14 @@ namespace GUILayer
     protected:
         clix::shared_ptr<EditorScene> _scene;
         clix::shared_ptr<::EntityInterface::RetainedEntitiesAdapter> _flexGobInterface;
+        clix::shared_ptr<::EntityInterface::MultiEnvironmentSettingsDocument> _multiEnvSettingsDocument;
 #if defined(GUILAYER_SCENEENGINE)
         clix::shared_ptr<::EntityInterface::EnvEntitiesManager> _envEntitiesManager;
         clix::shared_ptr<::EntityInterface::TerrainEntities> _terrainInterface;
 #endif
         EntityLayer^ _entities;
         uint64_t _flexGlobDocumentId;
+        uint64_t _envSettingsDocumentId;
     };
 }
 

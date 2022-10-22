@@ -9,6 +9,7 @@
 #include "../../Formatters/IDynamicFormatter.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Threading/Mutex.h"
+#include <random>
 
 namespace EntityInterface
 {
@@ -476,6 +477,136 @@ namespace EntityInterface
 		return { str, Hash64(str) };
 	}
 
+	class MultiInterfaceDocument : public IMutableEntityDocument
+	{
+	public:
+		EntityId AssignEntityId() override
+		{
+			for (;;) {
+				auto id = _rng();
+				auto i = LowerBound(_assignedIds, id);
+				if (i == _assignedIds.end() || i->first != id) {
+					_assignedIds.insert(i, {id, ~0u});
+					return id;
+				}
+			}
+		}
+
+		bool CreateEntity(StringAndHash objType, EntityId id, IteratorRange<const PropertyInitializer*> props) override
+		{
+			unsigned documentIdx = ~0u;
+
+			auto t = LowerBound(_pairedTypes, objType.second);
+			if (t != _pairedTypes.end() && t->first == objType.second) {
+				documentIdx = t->second;
+			} else
+				documentIdx = _catchAllDocument;
+
+			if (documentIdx == ~0u) return false;		// don't recognize type, and no catch-all document
+
+			auto i = LowerBound(_assignedIds, id);
+			assert(i != _assignedIds.end() && i->first == id);
+			if (i != _assignedIds.end() && i->first == id)
+				i->second = documentIdx;
+
+			return _subDocs[documentIdx]->CreateEntity(objType, id, props);
+		}
+
+		bool DeleteEntity(EntityId id) override
+		{
+			bool result = false;
+			auto i = LowerBound(_assignedIds, id);
+			if (i != _assignedIds.end() && i->first == id) {
+				if (i->second != ~0u && _subDocs[i->second])
+					result = _subDocs[i->second]->DeleteEntity(id);
+				_assignedIds.erase(i);
+			}
+			return result;
+		}
+
+		bool SetProperty(EntityId id, IteratorRange<const PropertyInitializer*> props) override
+		{
+			auto i = LowerBound(_assignedIds, id);
+			if (i != _assignedIds.end() && i->first == id)
+				if (i->second != ~0u && _subDocs[i->second])
+					return _subDocs[i->second]->SetProperty(id, props);
+			return false;
+		}
+
+		std::optional<ImpliedTyping::TypeDesc> GetProperty(EntityId id, StringAndHash prop, IteratorRange<void*> destinationBuffer) const override
+		{
+			auto i = LowerBound(_assignedIds, id);
+			if (i != _assignedIds.end() && i->first == id)
+				if (i->second != ~0u && _subDocs[i->second])
+					return _subDocs[i->second]->GetProperty(id, prop, destinationBuffer);
+			return {};
+		}
+
+		bool SetParent(EntityId child, EntityId parent, StringAndHash childList, int insertionPosition) override
+		{
+			auto childI = LowerBound(_assignedIds, child);
+			auto parentI = LowerBound(_assignedIds, parent);
+			if (childI != _assignedIds.end() && childI->first == child
+				&& parentI != _assignedIds.end() && parentI->first == parent) {
+
+				assert(childI->second == parentI->second);
+				if (childI->second != parentI->second)		// expecting both to exist within the same subdocument
+					return false;
+
+				if (childI->second != ~0u && _subDocs[childI->second])
+					return _subDocs[childI->second]->SetParent(child, parent, childList, insertionPosition);
+			}
+			return {};
+		}
+
+		void RegisterSubDocument(uint64_t entityType, std::shared_ptr<IMutableEntityDocument> subDoc)
+		{
+			auto i = _subDocs.begin();
+			for (;i!=_subDocs.end(); ++i)
+				if (i->get() == subDoc.get())
+					break;
+			if (i == _subDocs.end())
+				i = _subDocs.insert(_subDocs.end(), std::move(subDoc));
+
+			auto docIdx = (unsigned)std::distance(_subDocs.begin(), i);
+			
+			auto q = LowerBound(_pairedTypes, entityType);
+			if (q != _pairedTypes.end() && q->first == entityType) {
+				q->second = docIdx;
+			} else
+				q = _pairedTypes.insert(q, {entityType, docIdx});
+		}
+
+		void RegisterCatchAllDocument(std::shared_ptr<IMutableEntityDocument> subDoc)
+		{
+			auto i = _subDocs.begin();
+			for (;i!=_subDocs.end(); ++i)
+				if (i->get() == subDoc.get())
+					break;
+			if (i == _subDocs.end())
+				i = _subDocs.insert(_subDocs.end(), std::move(subDoc));
+			_catchAllDocument = (unsigned)std::distance(_subDocs.begin(), i);
+		}
+
+		void TryRemoveSubDocument(IMutableEntityDocument& subDoc)
+		{
+			for (auto& d:_subDocs)
+				if (d.get() == &subDoc)
+					d.reset();
+		}
+
+		MultiInterfaceDocument()
+		: _rng{std::random_device().operator()()}
+		{}
+		~MultiInterfaceDocument() {}
+	private:
+		std::mt19937_64 _rng;
+		std::vector<std::pair<EntityId, unsigned>> _assignedIds;
+		std::vector<std::shared_ptr<IMutableEntityDocument>> _subDocs;
+		std::vector<std::pair<uint64_t, unsigned>> _pairedTypes;
+		unsigned _catchAllDocument = ~0u;
+	};
+
 	auto Switch::CreateDocument(StringSection<> docType, StringSection<> initializer) -> DocumentId
 	{
 		for (auto i=_documentTypes.begin(); i!=_documentTypes.end(); ++i)
@@ -499,6 +630,9 @@ namespace EntityInterface
 	{
 		auto i = LowerBound(_documents, docId);
 		if (i != _documents.end() && i->first == docId) {
+			// check to see if it's registered as one of our defaults, and erase if so
+			if (_defaultDocument)
+				_defaultDocument->TryRemoveSubDocument(*i->second);
 			_documents.erase(i);
 			return true;
 		}
@@ -510,7 +644,7 @@ namespace EntityInterface
 		auto i = LowerBound(_documents, docId);
 		if (i != _documents.end() && i->first == docId)
 			return i->second.get();
-		return nullptr;
+		return _defaultDocument.get();
 	}
 
 	void Switch::RegisterDocumentType(StringSection<> name, std::shared_ptr<IDocumentType> docType)
@@ -528,6 +662,30 @@ namespace EntityInterface
 				return;
 			}
 		assert(0);		// couldn't be found
+	}
+
+	void Switch::RegisterDefaultDocument(StringAndHash objType, DocumentId docId)
+	{
+		auto i = LowerBound(_documents, docId);
+		if (i != _documents.end() && i->first == docId) {
+			if (!_defaultDocument)
+				_defaultDocument = std::make_shared<MultiInterfaceDocument>();
+			_defaultDocument->RegisterSubDocument(objType.second, i->second);
+			return;
+		}
+		assert(0);		// didn't find document with the given id
+	}
+
+	void Switch::RegisterDefaultDocument(DocumentId docId)
+	{
+		auto i = LowerBound(_documents, docId);
+		if (i != _documents.end() && i->first == docId) {
+			if (!_defaultDocument)
+				_defaultDocument = std::make_shared<MultiInterfaceDocument>();
+			_defaultDocument->RegisterCatchAllDocument(i->second);
+			return;
+		}
+		assert(0);		// didn't find document with the given id
 	}
 
 	Switch::Switch() {}

@@ -117,6 +117,7 @@ namespace EntityInterface
         virtual ~IMutableEntityDocument() = default;
     };
 
+    class MultiInterfaceDocument;
     class Switch
     {
     public:
@@ -136,6 +137,9 @@ namespace EntityInterface
         void RegisterDocumentType(StringSection<> name, std::shared_ptr<IDocumentType>);
         void DeregisterDocumentType(StringSection<> name);
 
+        void RegisterDefaultDocument(StringAndHash objType, DocumentId doc);
+        void RegisterDefaultDocument(DocumentId doc);
+
         Switch();
         ~Switch();
         Switch(Switch&&) = delete;
@@ -143,6 +147,7 @@ namespace EntityInterface
     private:
         std::vector<std::pair<DocumentId, std::shared_ptr<IMutableEntityDocument>>> _documents;
         std::vector<std::pair<std::string, std::shared_ptr<IDocumentType>>> _documentTypes;
+        std::shared_ptr<MultiInterfaceDocument> _defaultDocument;
         DocumentId _nextDocumentId = 1;
     };
 

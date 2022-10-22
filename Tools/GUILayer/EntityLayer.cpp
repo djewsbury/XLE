@@ -158,9 +158,14 @@ namespace GUILayer
     {
         auto intrf = _switch->GetInterface(doc);
         if (intrf) {
-            auto i = LowerBound(_pimpl->_childLists, childList);
-            if (i != _pimpl->_childLists.end() && i->first == childList)
-                return intrf->SetParent(childId, parentId, {i->second.first, i->second.second}, insertionPosition);
+            if (childList != 0) {
+                auto i = LowerBound(_pimpl->_childLists, childList);
+                if (i != _pimpl->_childLists.end() && i->first == childList)
+                    return intrf->SetParent(childId, parentId, {i->second.first, i->second.second}, insertionPosition);
+            } else {
+                // we often use a default/nulled out child list
+                return intrf->SetParent(childId, parentId, StringAndHash{{}, 0}, insertionPosition);
+            }
         }
         return false;
     }

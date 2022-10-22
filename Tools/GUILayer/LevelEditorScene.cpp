@@ -25,6 +25,7 @@
 #endif
 #include "../EntityInterface/RetainedEntities.h"
 #include "../EntityInterface/GameObjects.h"
+#include "../EntityInterface/LightingEngineEntityDocument.h"
 #include "../ToolsRig/PlacementsManipulators.h"     // just needed for destructors referenced in PlacementGobInterface.h
 #if defined(GUILAYER_SCENEENGINE)
 #include "../ToolsRig/TerrainManipulators.h"        // for TerrainManipulatorContext
@@ -268,6 +269,12 @@ namespace GUILayer
     EntityLayer^ EditorSceneManager::GetEntityInterface()
     {
         return _entities;
+    }
+
+    ::EntityInterface::MultiEnvironmentSettingsDocument& EditorSceneManager::GetEnvSettingsDocument()
+    {
+        assert(_multiEnvSettingsDocument.get());
+        return *_multiEnvSettingsDocument.get();
     }
 
     void EditorSceneManager::IncrementTime(float increment)
@@ -594,12 +601,27 @@ namespace GUILayer
         _scene = std::make_shared<EditorScene>();
 
         using namespace EntityInterface;
-        auto placementsEditor = CreatePlacementEntitiesSwitch(_scene->_placementsManager, _scene->_placementsEditor, _scene->_placementsHidden);
-        auto flexGobInterface = std::make_shared<RetainedEntitiesAdapter>(_scene->_flexObjects);
 
         auto swtch = std::make_shared<Switch>();
+
+        auto placementsEditor = CreatePlacementEntitiesSwitch(_scene->_placementsManager, _scene->_placementsEditor, _scene->_placementsHidden);
         swtch->RegisterDocumentType("PlacementsDocument", placementsEditor);
+
+        // catch entities related to environment settings in a specific document
+        auto envSettingsDocument = std::make_shared<MultiEnvironmentSettingsDocument>();
+        _envSettingsDocumentId = swtch->CreateDocument(envSettingsDocument);
+        swtch->RegisterDefaultDocument(EntityInterface::MakeStringAndHash("LightOperator"), _envSettingsDocumentId);
+        swtch->RegisterDefaultDocument(EntityInterface::MakeStringAndHash("ShadowOperator"), _envSettingsDocumentId);
+        swtch->RegisterDefaultDocument(EntityInterface::MakeStringAndHash("AmbientOperator"), _envSettingsDocumentId);
+        swtch->RegisterDefaultDocument(EntityInterface::MakeStringAndHash("EnvSettings"), _envSettingsDocumentId);
+        swtch->RegisterDefaultDocument(EntityInterface::MakeStringAndHash("DirectionalLight"), _envSettingsDocumentId);
+        swtch->RegisterDefaultDocument(EntityInterface::MakeStringAndHash("AreaLight"), _envSettingsDocumentId);
+
+        // catch-all document for everything not caught above
+        auto flexGobInterface = std::make_shared<RetainedEntitiesAdapter>(_scene->_flexObjects);
         _flexGlobDocumentId = swtch->CreateDocument(flexGobInterface);
+        swtch->RegisterDefaultDocument(_flexGlobDocumentId);
+
         _entities = gcnew EntityLayer(std::move(swtch));
 
         _flexGobInterface = flexGobInterface;
