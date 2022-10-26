@@ -154,6 +154,7 @@ namespace RenderCore { namespace Techniques
 						if (stream._type == DrawableGeo::StreamType::Resource) {
 							vbv[c]._resource = stream._resource.get();
 							vbv[c]._offset = stream._vbOffset;
+							assert(vbv[c]._resource);
 						} else if (stream._type == DrawableGeo::StreamType::Deform) {
 							assert(drawable._geo->_deformAccelerator);
 							// todo -- we can make GetOutputVBV() accessible without the pool and avoid the need for a pool passed to this function
@@ -169,6 +170,7 @@ namespace RenderCore { namespace Techniques
 
 					if (drawable._geo->_ibFormat != Format(0)) {
 						if (drawable._geo->_ibStreamType == DrawableGeo::StreamType::Resource) {
+							assert(drawable._geo->_ib);
 							encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{drawable._geo->_ib.get(), drawable._geo->_ibFormat, drawable._geo->_ibOffset});
 						} else {
 							assert(drawable._geo->_ibStreamType == DrawableGeo::StreamType::PacketStorage);
@@ -189,7 +191,8 @@ namespace RenderCore { namespace Techniques
 					++fullDescSetCount;
 				} 
 				if (matDescSet) {
-					unsigned dynamicOffset = Internal::GetMaterialDescSetDynamicOffset(*drawable._geo->_deformAccelerator, *matDescSet, drawable._deformInstanceIdx);
+					unsigned dynamicOffset = 0;
+					if (drawable._geo) dynamicOffset = Internal::GetMaterialDescSetDynamicOffset(*drawable._geo->_deformAccelerator, *matDescSet, drawable._deformInstanceIdx);
 					currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *matDescSet->GetDescriptorSet(), s_uniformGroupMaterial, 0, MakeIteratorRange(&dynamicOffset, &dynamicOffset+1));
 					++justMatDescSetCount;
 				}

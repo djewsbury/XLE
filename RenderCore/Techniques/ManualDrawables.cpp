@@ -282,12 +282,13 @@ namespace RenderCore { namespace Techniques
 			uploader = _pimpl->_vb.get();
 		}
 
+		auto size = sourceData.size();
 		Pimpl::ResourceUploader::UploadPart uploadPart;
 		uploadPart._offset = uploader->_uploadTotal;
-		uploadPart._size = sourceData.size();
+		uploadPart._size = size;
 		uploadPart._vectorSource = std::move(sourceData);
 		uploader->_parts.emplace_back(std::move(uploadPart));
-		uploader->_uploadTotal += sourceData.size();
+		uploader->_uploadTotal += size;
 
 		auto geoIdx = unsigned(_pimpl->_pendingGeos.size()-1);
 		_pimpl->_pendingResAssignment.push_back({geoIdx, str});

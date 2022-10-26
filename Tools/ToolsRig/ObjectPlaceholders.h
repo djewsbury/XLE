@@ -21,7 +21,7 @@ namespace ToolsRig
     class ObjectPlaceholders : public std::enable_shared_from_this<ObjectPlaceholders>
     {
     public:
-		void BuildDrawables(const SceneEngine::ExecuteSceneContext& executeContext);
+		void BuildDrawables(SceneEngine::ExecuteSceneContext& executeContext);
 
         void AddAnnotation(uint64_t typeNameHash, const std::string& geoType);
 

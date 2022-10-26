@@ -495,21 +495,24 @@ namespace EntityInterface
 		bool CreateEntity(StringAndHash objType, EntityId id, IteratorRange<const PropertyInitializer*> props) override
 		{
 			unsigned documentIdx = ~0u;
+			bool result = false;
 
 			auto t = LowerBound(_pairedTypes, objType.second);
-			if (t != _pairedTypes.end() && t->first == objType.second) {
+			if (t != _pairedTypes.end() && t->first == objType.second)
 				documentIdx = t->second;
-			} else
-				documentIdx = _catchAllDocument;
 
-			if (documentIdx == ~0u) return false;		// don't recognize type, and no catch-all document
+			if (documentIdx != ~0u) {
+				auto i = LowerBound(_assignedIds, id);
+				assert(i != _assignedIds.end() && i->first == id);
+				if (i != _assignedIds.end() && i->first == id)
+					i->second = documentIdx;
 
-			auto i = LowerBound(_assignedIds, id);
-			assert(i != _assignedIds.end() && i->first == id);
-			if (i != _assignedIds.end() && i->first == id)
-				i->second = documentIdx;
+				result |= _subDocs[documentIdx]->CreateEntity(objType, id, props);
+			}
 
-			return _subDocs[documentIdx]->CreateEntity(objType, id, props);
+			if (_catchAllDocument != ~0u)
+				result |= _subDocs[_catchAllDocument]->CreateEntity(objType, id, props);
+			return result;
 		}
 
 		bool DeleteEntity(EntityId id) override
@@ -518,7 +521,9 @@ namespace EntityInterface
 			auto i = LowerBound(_assignedIds, id);
 			if (i != _assignedIds.end() && i->first == id) {
 				if (i->second != ~0u && _subDocs[i->second])
-					result = _subDocs[i->second]->DeleteEntity(id);
+					result |= _subDocs[i->second]->DeleteEntity(id);
+				if (_catchAllDocument != ~0u)
+					result |= _subDocs[_catchAllDocument]->DeleteEntity(id);
 				_assignedIds.erase(i);
 			}
 			return result;
@@ -526,35 +531,45 @@ namespace EntityInterface
 
 		bool SetProperty(EntityId id, IteratorRange<const PropertyInitializer*> props) override
 		{
+			bool result = false;
 			auto i = LowerBound(_assignedIds, id);
-			if (i != _assignedIds.end() && i->first == id)
+			if (i != _assignedIds.end() && i->first == id) {
 				if (i->second != ~0u && _subDocs[i->second])
-					return _subDocs[i->second]->SetProperty(id, props);
-			return false;
+					result |= _subDocs[i->second]->SetProperty(id, props);
+				if (_catchAllDocument != ~0u)
+					result |= _subDocs[_catchAllDocument]->SetProperty(id, props);
+			}
+			return result;
 		}
 
 		std::optional<ImpliedTyping::TypeDesc> GetProperty(EntityId id, StringAndHash prop, IteratorRange<void*> destinationBuffer) const override
 		{
 			auto i = LowerBound(_assignedIds, id);
-			if (i != _assignedIds.end() && i->first == id)
+			if (i != _assignedIds.end() && i->first == id) {
 				if (i->second != ~0u && _subDocs[i->second])
-					return _subDocs[i->second]->GetProperty(id, prop, destinationBuffer);
+					if (auto res = _subDocs[i->second]->GetProperty(id, prop, destinationBuffer))
+						return res;
+				if (_catchAllDocument != ~0u)
+					return _subDocs[_catchAllDocument]->GetProperty(id, prop, destinationBuffer);
+			}
 			return {};
 		}
 
 		bool SetParent(EntityId child, EntityId parent, StringAndHash childList, int insertionPosition) override
 		{
+			bool result = false;
 			auto childI = LowerBound(_assignedIds, child);
 			auto parentI = LowerBound(_assignedIds, parent);
 			if (childI != _assignedIds.end() && childI->first == child
 				&& parentI != _assignedIds.end() && parentI->first == parent) {
 
-				assert(childI->second == parentI->second);
-				if (childI->second != parentI->second)		// expecting both to exist within the same subdocument
-					return false;
+				if (childI->second == parentI->second) {		// expecting both to exist within the same subdocument
+					if (childI->second != ~0u && _subDocs[childI->second])
+						result |= _subDocs[childI->second]->SetParent(child, parent, childList, insertionPosition);
+				}
 
-				if (childI->second != ~0u && _subDocs[childI->second])
-					return _subDocs[childI->second]->SetParent(child, parent, childList, insertionPosition);
+				if (_catchAllDocument != ~0u)
+					result |= _subDocs[_catchAllDocument]->SetParent(child, parent, childList, insertionPosition);
 			}
 			return {};
 		}

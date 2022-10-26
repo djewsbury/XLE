@@ -200,6 +200,7 @@ namespace ToolsRig
 		geoConstructor.BeginGeo();
 		geoConstructor.SetStreamData(RenderCore::Techniques::ManualDrawableGeoConstructor::Vertex0, std::move(vbData));
 		geoConstructor.SetStreamData(RenderCore::Techniques::ManualDrawableGeoConstructor::IB, std::move(ibData));
+		geoConstructor.SetIndexFormat(geo._ib._format);
 		auto geoFulfillment = geoConstructor.ImmediateFulfill();
 		assert(geoFulfillment.GetInstantiatedGeos().size() == 1);
 		_drawableGeo = geoFulfillment.GetInstantiatedGeos()[0];
@@ -321,7 +322,7 @@ namespace ToolsRig
     static Float4x4 GetTransform(const RetainedEntity& obj)
     {
         auto xform = obj._properties.GetParameter<Float4x4>(Parameters::Transform);
-        if (xform.has_value()) return Transpose(xform.value());
+        if (xform.has_value()) return xform.value();
 
         auto transl = obj._properties.GetParameter<Float3>(Parameters::Translation);
         if (transl.has_value()) {
@@ -362,26 +363,30 @@ namespace ToolsRig
 		const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>& drawablesPool,
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const std::shared_ptr<RenderCore::BufferUploads::IManager>& bufferUploads,
-        IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
+        SceneEngine::ExecuteSceneContext& exeContext,
 		const Float4x4& localToWorld, 
 		const ParameterBox& matParams = {})
     {
 		auto* asset = ::Assets::MakeAssetMarker<SimpleModel>(drawablesPool, pipelineAcceleratorPool, bufferUploads, "game/model/simple/spherestandin.dae")->TryActualize();
-		if (asset)
-			asset->BuildDrawables(pkts, matParams, localToWorld);
+		if (asset) {
+			asset->BuildDrawables(exeContext._destinationPkts, matParams, localToWorld);
+			exeContext._completionCmdList = std::max(exeContext._completionCmdList, asset->GetCompletionCmdList());
+		}
     }
 
 	static void DrawPointerStandIn(
 		const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>& drawablesPool,
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const std::shared_ptr<RenderCore::BufferUploads::IManager>& bufferUploads,
-        IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
+        SceneEngine::ExecuteSceneContext& exeContext,
 		const Float4x4& localToWorld, 
 		const ParameterBox& matParams = {})
 	{
 		auto* asset = ::Assets::MakeAssetMarker<SimpleModel>(drawablesPool, pipelineAcceleratorPool, bufferUploads, "game/model/simple/pointerstandin.dae")->TryActualize();
-		if (asset)
-			asset->BuildDrawables(pkts, matParams, localToWorld);
+		if (asset) {
+			asset->BuildDrawables(exeContext._destinationPkts, matParams, localToWorld);
+			exeContext._completionCmdList = std::max(exeContext._completionCmdList, asset->GetCompletionCmdList());
+		}
 	}
 
 	static void DrawTriMeshMarker(
@@ -426,8 +431,10 @@ namespace ToolsRig
 
 		auto geo = pkt.CreateTemporaryGeo();
 		geo->_vertexStreams[0]._vbOffset = vbData._startOffset;
+		geo->_vertexStreams[0]._type = Techniques::DrawableGeo::StreamType::PacketStorage;
 		geo->_vertexStreamCount = 1;
 		geo->_ibOffset = ibData._startOffset;
+		geo->_ibStreamType = Techniques::DrawableGeo::StreamType::PacketStorage;
 		geo->_ibFormat = RenderCore::Format::R32_UINT;
 
 		struct CustomDrawable : public RenderCore::Techniques::Drawable 
@@ -453,7 +460,7 @@ namespace ToolsRig
 			};
     }
 
-	void ObjectPlaceholders::BuildDrawables(const SceneEngine::ExecuteSceneContext& executeContext)
+	void ObjectPlaceholders::BuildDrawables(SceneEngine::ExecuteSceneContext& executeContext)
 	{
 		auto pkts = executeContext._destinationPkts;
 		if (Tweakable("DrawMarkers", true)) {
@@ -462,7 +469,7 @@ namespace ToolsRig
 				auto objects = _objects->FindEntitiesOfType(a._typeNameHash);
 				for (const auto&o:objects) {
 					if (!o->_properties.GetParameter(Parameters::Visible, true) || !GetShowMarker(*o)) continue;
-					DrawSphereStandIn(_drawablesPool, _pipelineAcceleratorPool, _bufferUploads, pkts, GetTransform(*o));
+					DrawSphereStandIn(_drawablesPool, _pipelineAcceleratorPool, _bufferUploads, executeContext, GetTransform(*o));
 				}
 			}
 
@@ -476,7 +483,7 @@ namespace ToolsRig
 					auto translation = ExtractTranslation(trans);
 					trans = MakeObjectToWorld(-Normalize(translation), Float3(0.f, 0.f, 1.f), translation);
 
-					DrawPointerStandIn(_drawablesPool, _pipelineAcceleratorPool, _bufferUploads, pkts, trans);
+					DrawPointerStandIn(_drawablesPool, _pipelineAcceleratorPool, _bufferUploads, executeContext, trans);
 				}
 			}
 
