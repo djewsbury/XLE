@@ -14,9 +14,9 @@ namespace std { template<typename T> class future; }
 
 namespace RenderCore { namespace LightingEngine
 {
-	class ShadowOperatorDesc;
-	class LightSourceOperatorDesc;
-	class AmbientLightOperatorDesc;
+	struct ShadowOperatorDesc;
+	struct LightSourceOperatorDesc;
+	struct AmbientLightOperatorDesc;
 
 	void CreateForwardLightingTechnique(
 		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,

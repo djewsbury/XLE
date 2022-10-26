@@ -12,11 +12,10 @@ namespace RenderCore { namespace Techniques { class ProjectionDesc; }}
 
 namespace RenderCore { namespace LightingEngine
 {
-    class ShadowOperatorDesc;
+    struct ShadowOperatorDesc;
 
-    class SunSourceFrustumSettings
+    struct SunSourceFrustumSettings
     {
-    public:
         struct Flags 
         {
             enum Enum 

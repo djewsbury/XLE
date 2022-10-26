@@ -10,7 +10,7 @@
 
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; class ParsingContext; class IImmediateDrawables; } }
-namespace RenderCore { namespace LightingEngine { class ILightScene; class LightSourceOperatorDesc; class ShadowOperatorDesc; class IProbeRenderingInstance; }}
+namespace RenderCore { namespace LightingEngine { class ILightScene; struct LightSourceOperatorDesc; struct ShadowOperatorDesc; class IProbeRenderingInstance; }}
 namespace Assets { class DependencyValidation; }
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}

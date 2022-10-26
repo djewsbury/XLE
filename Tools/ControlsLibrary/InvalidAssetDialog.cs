@@ -24,7 +24,7 @@ namespace ControlsLibrary
         }
         ~InvalidAssetDialog()
         {
-            invalidAssetList._onChange -= RebuildList;
+            _list._onChange -= RebuildList;
         }
 
         void SelectedIndexChanged(object sender, EventArgs e)

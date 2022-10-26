@@ -404,6 +404,7 @@ namespace SceneEngine
         return result;
     }
 
+#if 0
     static ParameterBox::ParameterNameHash ParamHash(const char name[])
     {
         return ParameterBox::MakeParameterNameHash(name);
@@ -489,6 +490,7 @@ namespace SceneEngine
 
         return result;
     }
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -526,12 +528,15 @@ namespace SceneEngine
     ISceneOverlay::~ISceneOverlay() {}
 
 
-    static const ParameterBox::ParameterName Transform = "Transform";
+    static const ParameterBox::ParameterName LocalToWorld = "LocalToWorld";
     static const ParameterBox::ParameterName Position = "Position";
     static const ParameterBox::ParameterName Radius = "Radius";
     static const ParameterBox::ParameterName Brightness = "Brightness";
     static const ParameterBox::ParameterName CutoffBrightness = "CutoffBrightness";
     static const ParameterBox::ParameterName CutoffRange = "CutoffRange";
+    static const ParameterBox::ParameterName DiffuseWideningMin = "DiffuseWideningMin";
+    static const ParameterBox::ParameterName DiffuseWideningMax = "DiffuseWideningMax";
+    static const ParameterBox::ParameterName EquirectangularSource = "EquirectangularSource";
 
     void InitializeLight(
         RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
@@ -540,7 +545,7 @@ namespace SceneEngine
     {
         auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
         if (positional) {
-            auto transformValue = parameters.GetParameter<Float4x4>(Transform);
+            auto transformValue = parameters.GetParameter<Float4x4>(LocalToWorld);
             if (transformValue) {
                 Combine_IntoLHS(transformValue.value(), offsetLocalToWorld);
                 positional->SetLocalToWorld(transformValue.value());
@@ -565,6 +570,11 @@ namespace SceneEngine
             auto brightness = parameters.GetParameter<Float3>(Brightness);
             if (brightness)
                 uniformEmittance->SetBrightness(brightness.value());
+
+            auto wideningMin = parameters.GetParameter<float>(DiffuseWideningMin);
+            auto wideningMax = parameters.GetParameter<float>(DiffuseWideningMax);
+            if (wideningMin && wideningMax)
+                uniformEmittance->SetDiffuseWideningFactors({wideningMin.value(), wideningMax.value()});
         }
 
         auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId);
@@ -575,6 +585,13 @@ namespace SceneEngine
             auto cutoffRange = parameters.GetParameter<float>(CutoffRange);
             if (cutoffRange)
                 finite->SetCutoffRange(cutoffRange.value());
+        }
+
+        auto* distantIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IDistantIBLSource>(sourceId);
+        if (distantIBL) {
+            auto src = parameters.GetParameterAsString(EquirectangularSource);
+            if (src)
+                distantIBL->SetEquirectangularSource(nullptr, src.value());     // todo -- Assets::OperationContext
         }
     }
 
@@ -594,17 +611,15 @@ namespace SceneEngine
         RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
     {
-        if (propertyNameHash == Transform._hash) {
-            auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
-            if (positional) {
+        if (propertyNameHash == LocalToWorld._hash) {
+            if (auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId)) {
                 if (auto localToWorld = ConvertOrCast<Float4x4>(data, type)) {
                     positional->SetLocalToWorld(localToWorld.value());
                     return true;
                 }
             }
         } else if (propertyNameHash == Position._hash) {
-            auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
-            if (positional) {
+            if (auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId)) {
                 if (auto position = ConvertOrCast<Float3>(data, type)) {
                     Float4x4 localToWorld = positional->GetLocalToWorld();
                     SetTranslation(localToWorld, position.value());
@@ -613,8 +628,7 @@ namespace SceneEngine
                 }
             }
         } else if (propertyNameHash == Radius._hash) {
-            auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
-            if (positional) {
+            if (auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId)) {
                 if (auto radius = ConvertOrCast<Float3>(data, type)) {
                     ScaleRotationTranslationM srt{positional->GetLocalToWorld()};
                     srt._scale = radius.value();
@@ -623,30 +637,47 @@ namespace SceneEngine
                 }
             }
         } else if (propertyNameHash == Brightness._hash) {
-            auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId);
-            if (uniformEmittance) {
+            if (auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId)) {
                 if (auto brightness = ConvertOrCast<Float3>(data, type)) {
                     uniformEmittance->SetBrightness(brightness.value());
                     return true;
                 }
             }
+        } else if (propertyNameHash == DiffuseWideningMin._hash) {
+            if (auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId)) {
+                if (auto wideningMin = ConvertOrCast<float>(data, type)) {
+                    uniformEmittance->SetDiffuseWideningFactors({wideningMin.value(), uniformEmittance->GetDiffuseWideningFactors()[1]});
+                    return true;
+                }
+            }
+        } else if (propertyNameHash == DiffuseWideningMax._hash) {
+            if (auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId)) {
+                if (auto wideningMax = ConvertOrCast<float>(data, type)) {
+                    uniformEmittance->SetDiffuseWideningFactors({uniformEmittance->GetDiffuseWideningFactors()[0], wideningMax.value()});
+                    return true;
+                }
+            }
         } else if (propertyNameHash == CutoffBrightness._hash) {
-            auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId);
-            if (finite) {
+            if (auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId)) {
                 if (auto cutoffBrightness = ConvertOrCast<float>(data, type)) {
                     finite->SetCutoffBrightness(cutoffBrightness.value());
                     return true;
                 }
             }
         } else if (propertyNameHash == CutoffRange._hash) {
-            auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId);
-            if (finite) {
+            if (auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId)) {
                 if (auto cutoffRange = ConvertOrCast<float>(data, type)) {
                     finite->SetCutoffRange(cutoffRange.value());
                     return true;
                 }
             }
+        } else if (propertyNameHash == EquirectangularSource._hash) {
+            if (auto* distantIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IDistantIBLSource>(sourceId)) {
+                auto src = ImpliedTyping::AsString(data, type);
+                distantIBL->SetEquirectangularSource(nullptr, src);     // todo -- Assets::OperationContext
+            }
         }
+
         return false;
     }
 
@@ -657,10 +688,16 @@ namespace SceneEngine
     template<typename MemberType, std::optional<MemberType> StringToEnum(StringSection<>), typename ObjectType>
         static void SetViaEnumFn(ObjectType& dst, MemberType ObjectType::*ptrToMember, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
     {
-        auto str = ImpliedTyping::AsString(data, type);
-        auto o = StringToEnum(str);
-        if (!o.has_value()) Throw(std::runtime_error("Unknown value for enum (" + str + ")"));
-        dst.*ptrToMember = o.value();
+        uint32_t intValue;
+        if (type._typeHint != ImpliedTyping::TypeHint::String && ImpliedTyping::Cast(MakeOpaqueIteratorRange(intValue), ImpliedTyping::TypeOf<uint32_t>(), data, type)) {
+            // just an int value, set directly from this int
+            dst.*ptrToMember = (MemberType)intValue;
+        } else {
+            auto str = ImpliedTyping::AsString(data, type);
+            auto o = StringToEnum(str);
+            if (!o.has_value()) Throw(std::runtime_error("Unknown value for enum (" + str + ")"));
+            dst.*ptrToMember = o.value();
+        }
     }
 
     bool SetProperty(

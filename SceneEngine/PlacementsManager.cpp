@@ -2168,7 +2168,7 @@ namespace SceneEngine
         }
 
         if (!attemptedActualize) return {};
-        (*attemptedActualize)->DehashMaterialName(materialGuid).AsString();
+        return (*attemptedActualize)->DehashMaterialName(materialGuid).AsString();
     }
 
     void    Transaction::SetObject(unsigned index, const ObjTransDef& newState)

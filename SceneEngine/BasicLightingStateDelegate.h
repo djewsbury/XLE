@@ -15,7 +15,7 @@
 #include "../SceneEngine/DeepOceanSim.h"
 #endif
 
-namespace RenderCore { namespace LightingEngine { class SunSourceFrustumSettings; }}
+namespace RenderCore { namespace LightingEngine { struct SunSourceFrustumSettings; }}
 namespace Utility { class ParameterBox; }
 namespace Utility { namespace ImpliedTyping { class TypeDesc; }}
 

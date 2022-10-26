@@ -14,8 +14,8 @@ namespace std { template<typename T> class future; }
 
 namespace RenderCore { namespace LightingEngine
 {
-	class LightSourceOperatorDesc;
-	class ShadowOperatorDesc;
+	struct LightSourceOperatorDesc;
+	struct ShadowOperatorDesc;
 
 	namespace DeferredLightingTechniqueFlags
 	{

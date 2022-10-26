@@ -1113,19 +1113,10 @@ namespace RenderCore { namespace LightingEngine
         ApplyNonFrustumSettings(lightScene, associatedLightId, settings);
 
         auto* attachDriver = lightScene.TryGetLightSourceInterface<Internal::IAttachDriver>(associatedLightId);
-        if (attachDriver) {
-            attachDriver->AttachDriver(
-                std::make_shared<SunSourceFrustumDriver>(settings));
-        } else {
-            assert(0);
-        }
+        if (!attachDriver)
+            Throw(std::runtime_error("Attempting to setup sun source shadows on a light that was not configured for this type of shadows (check the operator settings)"));
 
-		/*result._shadowGeneratorDesc = CalculateShadowGeneratorDesc(settings);
-		assert(result._shadowGeneratorDesc._enableNearCascade == result._projections._useNearProj);
-		assert(result._shadowGeneratorDesc._arrayCount == result._projections.Count());
-		assert(result._shadowGeneratorDesc._projectionMode == result._projections._mode);
-
-        return result;*/
+        attachDriver->AttachDriver(std::make_shared<SunSourceFrustumDriver>(settings));
     }
 
     void ConfigureShadowProjectionImmediately(

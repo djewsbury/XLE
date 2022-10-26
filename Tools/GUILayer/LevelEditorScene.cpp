@@ -116,12 +116,12 @@ namespace GUILayer
 		std::shared_ptr<::Assets::OperationContext> loadingContext;
 
 		SceneEngine::IRigidModelScene::Config rigModelSceneCfg;
-        auto rigidModelScene = SceneEngine::CreateRigidModelScene(
+        _rigidModelScene = SceneEngine::CreateRigidModelScene(
             drawingApparatus->_drawablesPool, drawingApparatus->_pipelineAccelerators,
             drawingApparatus->_deformAccelerators, primaryResources->_bufferUploads,
             loadingContext,
             rigModelSceneCfg);
-        _placementsManager = std::make_shared<SceneEngine::PlacementsManager>(rigidModelScene, loadingContext);
+        _placementsManager = std::make_shared<SceneEngine::PlacementsManager>(_rigidModelScene, loadingContext);
         _placementsCells = std::make_shared<SceneEngine::PlacementCellSet>();
         _placementsCellsHidden = std::make_shared<SceneEngine::PlacementCellSet>();
         _placementsEditor = _placementsManager->CreateEditor(_placementsCells);
@@ -608,8 +608,8 @@ namespace GUILayer
         swtch->RegisterDocumentType("PlacementsDocument", placementsEditor);
 
         // catch entities related to environment settings in a specific document
-        auto envSettingsDocument = std::make_shared<MultiEnvironmentSettingsDocument>();
-        _envSettingsDocumentId = swtch->CreateDocument(envSettingsDocument);
+        _scene->_envSettingsDocument = std::make_shared<MultiEnvironmentSettingsDocument>();
+        _envSettingsDocumentId = swtch->CreateDocument(_scene->_envSettingsDocument);
         swtch->RegisterDefaultDocument(EntityInterface::MakeStringAndHash("LightOperator"), _envSettingsDocumentId);
         swtch->RegisterDefaultDocument(EntityInterface::MakeStringAndHash("ShadowOperator"), _envSettingsDocumentId);
         swtch->RegisterDefaultDocument(EntityInterface::MakeStringAndHash("AmbientOperator"), _envSettingsDocumentId);
@@ -640,7 +640,6 @@ namespace GUILayer
     {
         IOverlaySystem^ CreateOverlaySystem(
             const std::shared_ptr<EditorScene>& scene, 
-			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
             const std::shared_ptr<ToolsRig::VisCameraSettings>& camera, 
             EditorSceneRenderSettings^ renderSettings);
     }
@@ -648,9 +647,6 @@ namespace GUILayer
     IOverlaySystem^ EditorSceneManager::CreateOverlaySystem(VisCameraSettings^ camera, EditorSceneRenderSettings^ renderSettings)
     {
 		// we have to get the PipelineAcceleratorPool from somewhere
-        return Internal::CreateOverlaySystem(
-            _scene.GetNativePtr(), 
-			EngineDevice::GetInstance()->GetNative().GetMainPipelineAcceleratorPool(),
-			camera->GetUnderlying(), renderSettings);
+        return Internal::CreateOverlaySystem(_scene.GetNativePtr(), camera->GetUnderlying(), renderSettings);
     }
 }

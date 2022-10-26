@@ -6,12 +6,13 @@
 
 #include "../../Math/Vector.h"
 
-namespace RenderCore { namespace LightingEngine { class EnvironmentalLightingDesc; class LightSourceOperatorDesc; }}
+namespace RenderCore { namespace LightingEngine { struct LightSourceOperatorDesc; }}
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
 	class StandardPositionalLight;
 
+#if 0
 	struct CB_Ambient
 	{ 
 		Float3      _ambientColour; 
@@ -19,6 +20,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		float       _skyReflectionBlurriness; 
 		unsigned    _dummy[3];
 	};
+#endif
 
 	struct CB_RangeFog
 	{
@@ -59,8 +61,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		Float4 _diffuseSHCoefficients[25];
 	};
 
+#if 0
 	CB_Ambient MakeAmbientUniforms(const EnvironmentalLightingDesc& desc);
 	CB_RangeFog MakeRangeFogUniforms(const EnvironmentalLightingDesc& desc);
+#endif
 	CB_Light MakeLightUniforms(const StandardPositionalLight& light, const LightSourceOperatorDesc& operatorDesc);
 	CB_Light MakeBlankLightDesc();
 	CB_VolumeFog MakeBlankVolumeFogDesc();

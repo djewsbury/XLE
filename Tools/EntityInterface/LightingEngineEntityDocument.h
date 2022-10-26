@@ -33,7 +33,7 @@ namespace EntityInterface
 			const MergedLightingCfgHelper& mergedCfgHelper);
 		void UnbindScene(RenderCore::LightingEngine::ILightScene&);
 
-		void BindCfg(EnvSettingsId envSettings, MergedLightingCfgHelper& cfg);
+		void PrepareCfg(EnvSettingsId envSettings, MergedLightingCfgHelper& cfg);
 		unsigned GetChangeId(EnvSettingsId envSettings) const;
 
 		MultiEnvironmentSettingsDocument();
@@ -49,17 +49,23 @@ namespace EntityInterface
 		using LightSourceId = RenderCore::LightingEngine::ILightScene::LightSourceId;
 		struct RegisteredLight
 		{
+			enum class Type { Positional, DistantIBL };
+			Type _type = Type::Positional;
 			ParameterBox _parameters;
-			LightSourceId _registeredLight = ~0u;
+			LightSourceId _instantiatedLight = ~0u;
 			EnvSettingsId _container = ~0ull;
+			std::string _explicitLightOperator, _explicitShadowOperator;
+			RenderCore::LightingEngine::LightSourceOperatorDesc _impliedLightingOperator;
 		};
 		std::vector<std::pair<EntityId, RegisteredLight>> _lights;
+		std::vector<std::pair<EntityId, RegisteredLight>> _distantIBL;
 
 		struct BoundScene
 		{
 			std::shared_ptr<RenderCore::LightingEngine::ILightScene> _boundScene;
 			std::vector<std::pair<uint64_t, unsigned>> _lightOperatorNameToIdx;
 			std::vector<std::pair<uint64_t, unsigned>> _shadowOperatorNameToIdx;
+			std::vector<uint64_t> _lightOperatorHashes;
 		};
 		std::vector<std::pair<EnvSettingsId, BoundScene>> _boundScenes;
 
@@ -75,7 +81,7 @@ namespace EntityInterface
 		std::mt19937_64 _rng;
 
 		void IncreaseChangeId(EnvSettingsId);
-		void InstantiateLight(RegisteredLight&);
+		bool InstantiateLight(RegisteredLight&);
 		void DeinstantiateLight(RegisteredLight&);
 	};
 

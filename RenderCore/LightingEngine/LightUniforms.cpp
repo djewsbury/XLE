@@ -9,6 +9,7 @@
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
+#if 0
     CB_Ambient MakeAmbientUniforms(const EnvironmentalLightingDesc& desc)
     {
         return CB_Ambient 
@@ -23,6 +24,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
             return CB_RangeFog { desc._rangeFogInscatter, desc._rangeFogThickness };
         return CB_RangeFog { Float3(0.f, 0.f, 0.f), 0 };
     }
+#endif
 
     static unsigned AsLightShapeId(LightSourceShape shape)
     {

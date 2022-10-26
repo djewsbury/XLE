@@ -410,6 +410,7 @@ namespace RenderCore { namespace LightingEngine
 	////////////  temp ----->
 	enum class SkyTextureType { HemiCube, Cube, Equirectangular, HemiEquirectangular };
 	
+#if 0
 	class EnvironmentalLightingDesc
 	{
 	public:
@@ -434,7 +435,7 @@ namespace RenderCore { namespace LightingEngine
 		float   _atmosBlurStart = 1000.f;
 		float   _atmosBlurEnd = 1500.f;
 	};
-
+#endif
 
 }}
 

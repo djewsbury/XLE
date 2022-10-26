@@ -1,4 +1,4 @@
-//Copyright © 2014 Sony Computer Entertainment America LLC. See License.txt.
+﻿//Copyright © 2014 Sony Computer Entertainment America LLC. See License.txt.
 
 using System;
 using System.Runtime.InteropServices;
@@ -11,6 +11,7 @@ using Sce.Atf.Adaptation;
 using LevelEditorCore;
 
 using System.Collections.Generic;
+using Sce.Atf.Controls.Adaptable.Graphs;
 
 namespace RenderingInterop
 {
@@ -575,6 +576,7 @@ namespace RenderingInterop
             {
                 result = Uri.UnescapeDataString(uri.OriginalString);
             }
+            result = "rawos/" + result;
 
             // awkwardly, we want to make the filename lowercase here; but leave the case there for the parameters
             var paramSeparator = result.LastIndexOf('?');

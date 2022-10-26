@@ -31,9 +31,8 @@ namespace RenderCore { namespace LightingEngine
 	enum class ShadowResolveType { DepthTexture, RayTraced, Probe };
 	enum class ShadowFilterModel { None, PoissonDisc, Smooth };
 
-	class ShadowOperatorDesc
+	struct ShadowOperatorDesc
 	{
-	public:
 			/// @{
 			/// Shadow texture definition
 		RenderCore::Format	_format = RenderCore::Format::D16_UNORM;
@@ -103,7 +102,7 @@ namespace RenderCore { namespace LightingEngine
 		virtual ~ICompiledShadowPreparer();
 	};
 
-	class ShadowOperatorDesc;
+	struct ShadowOperatorDesc;
 	class SharedTechniqueDelegateBox;
 	std::future<std::shared_ptr<ICompiledShadowPreparer>> CreateCompiledShadowPreparer(
 		const ShadowOperatorDesc& desc,

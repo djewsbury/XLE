@@ -68,7 +68,7 @@ namespace RenderCore { namespace LightingEngine
 	};
 
 	class IPreparedShadowResult;
-	class ShadowOperatorDesc;
+	struct ShadowOperatorDesc;
 	namespace Internal { class StandardLightScene; }
 	class ShadowProbes;
 	namespace Internal { class DynamicShadowProjectionScheduler; }

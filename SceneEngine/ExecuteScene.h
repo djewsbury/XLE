@@ -23,9 +23,9 @@ namespace RenderCore { namespace LightingEngine
     class CompiledLightingTechnique;
     class LightingTechniqueInstance;
 	class LightingEngineApparatus;
-	class LightSourceOperatorDesc;
-	class ShadowOperatorDesc;
-	class AmbientLightOperatorDesc;
+	struct LightSourceOperatorDesc;
+	struct ShadowOperatorDesc;
+	struct AmbientLightOperatorDesc;
 }}
 namespace RenderCore { class IThreadContext; class FrameBufferProperties; }
 namespace std { template<typename Type> class future; }
@@ -50,10 +50,14 @@ namespace SceneEngine
 		IScene& scene);
 
 	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> CreateAndActualizeForwardLightingTechnique(
-		const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& apparatus,
-		IteratorRange<const RenderCore::LightingEngine::LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const RenderCore::LightingEngine::ShadowOperatorDesc*> shadowGenerators,
-		const RenderCore::LightingEngine::AmbientLightOperatorDesc& ambientLightOperator,
+		RenderCore::LightingEngine::LightingEngineApparatus& apparatus,
+		std::shared_ptr<RenderCore::LightingEngine::ILightScene> lightScene,
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const RenderCore::FrameBufferProperties& fbProps);
+
+	std::shared_ptr<RenderCore::LightingEngine::ILightScene> CreateAndActualizeForwardLightingScene(
+		RenderCore::LightingEngine::LightingEngineApparatus& apparatus,
+		IteratorRange<const RenderCore::LightingEngine::LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const RenderCore::LightingEngine::ShadowOperatorDesc*> shadowGenerators,
+		const RenderCore::LightingEngine::AmbientLightOperatorDesc& ambientLightOperator);
 }

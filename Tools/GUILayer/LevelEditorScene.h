@@ -27,6 +27,7 @@ namespace SceneEngine
     class VolumetricFogManager;
     class ShallowSurfaceManager;
     class DynamicImposters;
+    class IRigidModelScene;
 }
 namespace Tools { class IManipulator; }
 namespace ToolsRig { class TerrainManipulatorContext; class ObjectPlaceholders; }
@@ -69,6 +70,7 @@ namespace GUILayer
     public:
         // Base scene aspects
         std::shared_ptr<EntityInterface::RetainedEntities>      _flexObjects;
+        std::shared_ptr<EntityInterface::MultiEnvironmentSettingsDocument> _envSettingsDocument;
         std::shared_ptr<ToolsRig::ObjectPlaceholders>			_placeholders;
         std::vector<std::function<void()>>                      _prepareSteps;
 
@@ -81,6 +83,7 @@ namespace GUILayer
 		std::shared_ptr<SceneEngine::PlacementsEditor>          _placementsHidden;
         std::shared_ptr<SceneEngine::PlacementCellSet>          _placementsCells;
 		std::shared_ptr<SceneEngine::PlacementCellSet>          _placementsCellsHidden;
+        std::shared_ptr<SceneEngine::IRigidModelScene>          _rigidModelScene;
 
 
         EditorScene();
