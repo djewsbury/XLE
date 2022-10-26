@@ -1,4 +1,4 @@
-﻿//Copyright © 2014 Sony Computer Entertainment America LLC. See License.txt.
+//Copyright © 2014 Sony Computer Entertainment America LLC. See License.txt.
 
 using System;
 using System.Runtime.InteropServices;
@@ -307,8 +307,23 @@ namespace RenderingInterop
             if (idObj == null) return;
             uint id = (uint)idObj;
 
+            // Check if this is a matrix we need to transpose before sending to the native side
+            if (attribInfo.GetTag(NativeAnnotations.NativeTranspose) != null)
+            {
+                Type clrType = attribInfo.Type.ClrType;
+                Type elmentType = clrType.GetElementType();
+                if (clrType.IsArray && elmentType.IsPrimitive && elmentType == typeof(float))
+                {
+                    PushTransposedMatrixAttribute(
+                        id,
+                        node.GetAttribute(attribInfo),
+                        properties, stream);
+                    return;
+                }
+            }
+
             PushAttribute(
-                id, 
+                id,
                 attribInfo.Type.ClrType, attribInfo.Type.Length,
                 node.GetAttribute(attribInfo),
                 properties, stream);
@@ -339,8 +354,17 @@ namespace RenderingInterop
                         GameEngine.CreateInitializer(
                             _localToWorldAttribute.PropertyId, stream.PositionPointer, stream.PositionPointer + sizeof(float) * 16,
                             typeof(float), 16, false));
-                    for (int c=0; c<16; ++c)
-                        ((float*)stream.PositionPointer)[c] = localToWorld[c];
+                    if (_localToWorldAttribute.Transpose)
+                    {
+                        for (int j = 0; j < 4; ++j)
+                            for (int i = 0; i < 4; ++i)
+                                ((float*)stream.PositionPointer)[j*4+i] = localToWorld[i*4+j];
+                    }
+                    else
+                    {
+                        for (int c = 0; c < 16; ++c)
+                            ((float*)stream.PositionPointer)[c] = localToWorld[c];
+                    }
                     stream.Position += sizeof(float) * 16;
                 }
             }
@@ -504,6 +528,24 @@ namespace RenderingInterop
                     }
                 }
             }
+        }
+
+        unsafe internal static void PushTransposedMatrixAttribute(
+            uint propertyId,
+            object data,
+            IList<PropertyInitializer> properties,
+            System.IO.UnmanagedMemoryStream stream)
+        {
+            var count = 16;
+            properties.Add(GameEngine.CreateInitializer(
+                propertyId, stream.PositionPointer, stream.PositionPointer + sizeof(float) * count,
+                typeof(float), (uint)count, false));
+
+            fixed (float* d = (float[])data)
+                for (uint j = 0; j < 4; ++j)
+                    for (uint i = 0; i < 4; ++i)
+                        ((float*)stream.PositionPointer)[i*4+j] = d[j*4+i];     // transpose here
+            stream.Position += sizeof(float) * count;
         }
 
         private static string AsAssetName(Uri uri)

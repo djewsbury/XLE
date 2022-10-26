@@ -52,11 +52,11 @@
     <xs:annotation>
       <xs:appinfo>
         <LeGe.NativeType nativeName="PlacementObject"/>
-        <LeGe.NativeProperty name="transform" nativeName="transform"/>
+        <LeGe.NativeProperty name="transform" nativeName="transform" transpose="true"/>
         <LeGe.NativeProperty name="visible" nativeName="visible"/>
         <LeGe.NativeProperty nativeName="Bounds"/>
         <LeGe.NativeProperty nativeName="LocalBounds"/>
-        <LeGe.NativeProperty nativeName="LocalToWorld"/>
+        <LeGe.NativeProperty nativeName="LocalToWorld" transpose="true"/>
         <LeGe.NativeProperty nativeName="VisibleHierarchy"/>
       </xs:appinfo>
     </xs:annotation>

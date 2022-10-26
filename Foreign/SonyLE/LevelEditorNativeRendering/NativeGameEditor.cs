@@ -102,15 +102,19 @@ namespace RenderingInterop
                             // find a prop name and added to the attribute.
                             string nativePropName = elm.GetAttribute(NativeAnnotations.NativeName);
                             string attribName = elm.GetAttribute(NativeAnnotations.Name);
+                            string transposeAttrib = elm.GetAttribute("transpose");
+                            bool transpose = !string.IsNullOrEmpty(transposeAttrib) && transposeAttrib.Equals("true", StringComparison.CurrentCultureIgnoreCase);
                             uint propId = GameEngine.GetObjectPropertyId(typeId, nativePropName);
                             if (!string.IsNullOrEmpty(attribName))
                             {
                                 AttributeInfo attribInfo = domType.GetAttributeInfo(elm.GetAttribute(NativeAnnotations.Name));
                                 attribInfo.SetTag(NativeAnnotations.NativeProperty, propId);
+                                if (transpose)
+                                    attribInfo.SetTag(NativeAnnotations.NativeTranspose, true);
                             }
                             else
                             {
-                                NativeAttributeInfo attribInfo = new NativeAttributeInfo(domType, nativePropName, typeId, propId);
+                                NativeAttributeInfo attribInfo = new NativeAttributeInfo(domType, nativePropName, typeId, propId, transpose);
                                 nativeAttribs.Add(attribInfo);
                             }
 

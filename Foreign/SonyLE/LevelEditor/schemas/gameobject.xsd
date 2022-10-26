@@ -46,7 +46,7 @@
       <xs:appinfo>
         <LeGe.NativeType nativeName="GameObject"/>
         
-        <LeGe.NativeProperty name="transform" nativeName="Transform" access="set"/>
+        <LeGe.NativeProperty name="transform" nativeName="Transform" access="set" transpose="true"/>
         <LeGe.NativeProperty name="name" nativeName="Name" access="set"/>
         <LeGe.NativeProperty name="visible" nativeName="Visible" access="set,get"/>
         <LeGe.NativeProperty nativeName="Bounds" nativeType="AABB" access="get"/>

@@ -47,11 +47,9 @@ namespace EntityInterface
 		const PropertyInitializer& prop)
 	{
 		if (prop._prop.second == Property_LocalToWorld) {
-			// note -- putting in a transpose here, because the level editor matrix
-			//          math uses a transposed form
 			if (prop._type._type == ImpliedTyping::TypeCat::Float && prop._type._arrayCount >= 16) {
 				assert(prop._data.size() >= sizeof(Float4x4));
-				obj._localToWorld = AsFloat3x4(Transpose(*(const Float4x4*)prop._data.begin()));
+				obj._localToWorld = AsFloat3x4(*(const Float4x4*)prop._data.begin());
 				return true;
 			}
 		}
@@ -253,9 +251,7 @@ namespace EntityInterface
             if (prop.second == Property_LocalToWorld) {
                 if (destinationBuffer.size() >= sizeof(Float4x4)) {
                     auto originalObject = transaction->GetObject(0);
-                        // note -- putting in a transpose here, because the level editor matrix
-                        //          math uses a transposed form
-                    *(Float4x4*)destinationBuffer.begin() = Transpose(AsFloat4x4(originalObject._localToWorld));
+                    *(Float4x4*)destinationBuffer.begin() = AsFloat4x4(originalObject._localToWorld);
                 } else {
 					std::memset(destinationBuffer.begin(), 0, destinationBuffer.size());
 				}

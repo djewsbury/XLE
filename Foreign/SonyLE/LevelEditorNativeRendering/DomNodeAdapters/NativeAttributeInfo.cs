@@ -13,12 +13,13 @@ namespace RenderingInterop
     class NativeAttributeInfo
     {
 
-        public NativeAttributeInfo(DomNodeType type, string name, uint typeId, uint propId)
+        public NativeAttributeInfo(DomNodeType type, string name, uint typeId, uint propId, bool transpose)
         {
             DefiningType = type;
             Name = name;
             TypeId = typeId;
             PropertyId = propId;
+            Transpose = transpose;
         }
 
 
@@ -26,5 +27,6 @@ namespace RenderingInterop
         public readonly string Name;
         public readonly uint TypeId;
         public readonly uint PropertyId;
+        public readonly bool Transpose;
     }
 }

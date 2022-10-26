@@ -166,12 +166,12 @@
   <xs:complexType name="envObjectType">
     <xs:annotation>
       <xs:appinfo>
-        <LeGe.NativeProperty name="transform" nativeName="Transform"/>
+        <LeGe.NativeProperty name="transform" nativeName="Transform" transpose="true"/>
         <LeGe.NativeProperty name="visible" nativeName="Visible"/>
         <LeGe.NativeProperty name="name" nativeName="Name"/>
         <LeGe.NativeProperty nativeName="Bounds"/>
         <LeGe.NativeProperty nativeName="LocalBounds"/>
-        <LeGe.NativeProperty nativeName="LocalToWorld"/>
+        <LeGe.NativeProperty nativeName="LocalToWorld" transpose="true"/>
         <LeGe.NativeProperty nativeName="VisibleHierarchy"/>
 
         <scea.dom.editors.attribute name="name" displayName="Name" description="Unique name of Game Object" category="General"/>
@@ -236,8 +236,8 @@
   <xs:complexType name="staticLightType">
     <xs:annotation>
       <xs:appinfo>
-        <LeGe.NativeProperty name="Color" nativeName="Color"/>
-        <LeGe.NativeProperty name="Brightness" nativeName="Brightness"/>
+        <LeGe.NativeProperty name="Color" nativeName="PackedColor"/>
+        <LeGe.NativeProperty name="Brightness" nativeName="BrightnessScalar"/>
         <LeGe.NativeProperty name="DiffuseModel" nativeName="DiffuseModel"/>
         <LeGe.NativeProperty name="DiffuseWideningMin" nativeName="DiffuseWideningMin"/>
         <LeGe.NativeProperty name="DiffuseWideningMax" nativeName="DiffuseWideningMax"/>

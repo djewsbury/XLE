@@ -44,7 +44,7 @@ namespace EntityInterface
     static void ReadTransform(SceneEngine::LightDesc& light, const ParameterBox& props)
     {
         static const auto transformHash = ParameterBox::MakeParameterNameHash("Transform");
-        auto transform = Transpose(props.GetParameter(transformHash, Identity<Float4x4>()));
+        auto transform = props.GetParameter(transformHash, Identity<Float4x4>());
 
         ScaleRotationTranslationM decomposed(transform);
         light._position = decomposed._translation;
@@ -325,7 +325,7 @@ namespace EntityInterface
         ParamName(Translation);
 
         auto xform = obj._properties.GetParameter<Float4x4>(Transform);
-        if (xform.has_value()) return Transpose(xform.value());
+        if (xform.has_value()) return xform.value();
 
         auto transl = obj._properties.GetParameter<Float3>(Translation);
         if (transl.has_value()) {
