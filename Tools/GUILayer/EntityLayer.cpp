@@ -230,6 +230,19 @@ namespace GUILayer
         return ~0ull;
     }
 
+    System::Tuple<uint64_t, uint64_t>^ EntityLayer::QueryNativeHighlightableId(DocumentId doc, EntityId obj)
+    {
+        auto intrf = _switch->GetInterface(doc);
+        if (intrf) {
+            if (auto* translator = dynamic_cast<EntityInterface::ITranslateHighlightableId*>(intrf)) {
+                auto native = translator->QueryHighlightableId(obj);
+                return gcnew System::Tuple<uint64_t, uint64_t>(native.first, native.second);
+            }
+        }
+
+        return gcnew System::Tuple<uint64_t, uint64_t>(doc, obj);
+    }
+
     EntityInterface::Switch& EntityLayer::GetSwitch()
     {
         return *_switch.get();

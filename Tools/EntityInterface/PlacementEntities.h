@@ -17,7 +17,7 @@ namespace SceneEngine
 
 namespace EntityInterface
 {
-    class PlacementEntities : public IMutableEntityDocument
+    class PlacementEntities : public IMutableEntityDocument, public ITranslateHighlightableId
     {
     public:
         EntityId AssignEntityId() override;
@@ -26,6 +26,8 @@ namespace EntityInterface
         bool SetProperty(EntityId id, IteratorRange<const PropertyInitializer*>) override;
         std::optional<ImpliedTyping::TypeDesc> GetProperty(EntityId id, StringAndHash prop, IteratorRange<void*> destinationBuffer) const override;
         bool SetParent(EntityId child, EntityId parent, StringAndHash childList, int insertionPosition) override;
+
+        std::pair<uint64_t, uint64_t> QueryHighlightableId(EntityId) override;
 
 		void PrintDocument(std::ostream& stream, DocumentId doc, unsigned indent) const;
 

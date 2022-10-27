@@ -80,18 +80,15 @@ namespace RenderingInterop
                 if (node.Is<ITransformableGroup>())
                 {
                     foreach (var adapter in node.Subtree.AsIEnumerable<NativeObjectAdapter>())
-                        sel.Add(adapter.DocumentId, adapter.InstanceId);
+                        sel.Add(adapter.NativeHighlightableId);
                 }
                 else
                 {
                     var adapter = node.As<NativeObjectAdapter>();
                     if (adapter != null)
-                        sel.Add(adapter.DocumentId, adapter.InstanceId);
+                        sel.Add(adapter.NativeHighlightableId);
                 }
             }
-
-            using (var placements = GameEngine.GetEditorSceneManager().GetPlacementsEditor())
-                sel.DoFixup(placements);
 
             InvalidateViews();
         }

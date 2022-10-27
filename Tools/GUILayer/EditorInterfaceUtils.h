@@ -22,11 +22,9 @@ namespace GUILayer
     public ref class ObjectSet
     {
     public:
-        void Add(uint64 document, uint64 id);
+        void Add(System::Tuple<uint64, uint64>^ nativeHighlightableId);
         void Clear();
         bool IsEmpty();
-        void DoFixup(SceneEngine::PlacementsEditor& placements);
-        void DoFixup(PlacementsEditorWrapper^ placements);
 
         typedef std::vector<std::pair<uint64, uint64>> NativePlacementSet;
 		clix::auto_ptr<NativePlacementSet> _nativePlacements;

@@ -151,6 +151,13 @@ namespace EntityInterface
         DocumentId _nextDocumentId = 1;
     };
 
+    class ITranslateHighlightableId
+    {
+    public:
+        virtual std::pair<uint64_t, uint64_t> QueryHighlightableId(EntityId) = 0;
+        ~ITranslateHighlightableId() = default;
+    };
+
 #if 0
     class IEnumerableEntityInterface
     {

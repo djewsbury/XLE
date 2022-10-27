@@ -342,6 +342,11 @@ namespace RenderingInterop
                 childListId, insertionPosition);
         }
 
+        public static Tuple<ulong, ulong> QueryNativeHighlightableId(ulong documentId, ulong instanceId)
+        {
+            return s_entityInterface.QueryNativeHighlightableId(documentId, instanceId);
+        }
+
         private static GCHandle s_savedBoundingBoxHandle;
         private static GCHandle s_temporaryNativeBuffer;
         private static uint s_temporaryNativeBufferSize = 0;

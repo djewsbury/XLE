@@ -623,6 +623,11 @@ namespace RenderingInterop
         {
             get { return m_documentId; }
         }
+
+        public Tuple<ulong, ulong> NativeHighlightableId
+        {
+            get { return GameEngine.QueryNativeHighlightableId(m_documentId, m_instanceId); }
+        }
         #endregion
     }
 }

@@ -287,6 +287,16 @@ namespace EntityInterface
 		stream << "PlacementEntities document (printing not supported)" << std::endl;
 	}
 
+	std::pair<uint64_t, uint64_t> PlacementEntities::QueryHighlightableId(EntityId entityId)
+	{
+		// Somewhat awkwardly, we have to call out to the placements system to "fixup" the entity reference here
+		// we don't store the entire id in the entityId value, but we need the remaining part in order to
+		// construct a "highlightable" id that works with the placements filtering stuff
+		std::pair<uint64_t, uint64_t> result { _cellId, entityId };
+		_editor->PerformGUIDFixup(&result, &result+1);
+		return result;
+	}
+
     PlacementEntities::PlacementEntities(
         std::shared_ptr<SceneEngine::PlacementsManager> manager,
         std::shared_ptr<SceneEngine::PlacementsEditor> editor,

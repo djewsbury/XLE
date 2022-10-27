@@ -47,25 +47,13 @@ namespace GUILayer
         unsigned _drawCallIndex;
     };
 
-    void ObjectSet::Add(uint64 document, uint64 id)
+    void ObjectSet::Add(System::Tuple<uint64, uint64>^ nativeHighlightableId)
     {
-        _nativePlacements->push_back(std::make_pair(document, id));
+        _nativePlacements->push_back(std::make_pair(nativeHighlightableId->Item1, nativeHighlightableId->Item2));
     }
 
     void ObjectSet::Clear() { _nativePlacements->clear(); }
     bool ObjectSet::IsEmpty() { return _nativePlacements->empty(); }
-
-    void ObjectSet::DoFixup(SceneEngine::PlacementsEditor& placements)
-    {
-        placements.PerformGUIDFixup(
-            AsPointer(_nativePlacements->begin()),
-            AsPointer(_nativePlacements->end()));
-    }
-        
-    void ObjectSet::DoFixup(PlacementsEditorWrapper^ placements)
-    {
-        DoFixup(placements->GetNative());
-    }
 
     ObjectSet::ObjectSet()
     { 

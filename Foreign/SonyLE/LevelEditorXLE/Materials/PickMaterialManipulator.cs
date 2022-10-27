@@ -50,12 +50,7 @@ namespace LevelEditorXLE.Materials
             if (pick != null && pick.Length > 0)
             {
                 m_highlightMaterialGUID = pick[0].materialGuid;
-                m_highlight.Add(pick[0].documentId, pick[0].instanceId);
-
-                using (var placements = nativeVC.SceneManager.GetPlacementsEditor())
-                {
-                    m_highlight.DoFixup(placements);
-                }
+                m_highlight.Add(new Tuple<ulong, ulong>(pick[0].documentId, pick[0].instanceId));
             }
 
             return ManipulatorPickResult.ImmediateBeginDrag;

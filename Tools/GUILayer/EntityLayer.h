@@ -59,6 +59,7 @@ namespace GUILayer
         ChildListId GetChildListId(EntityTypeId type, System::String^ name);
 
         uint64_t HashNameForTypeId(EntityTypeId);
+        System::Tuple<uint64_t, uint64_t>^ QueryNativeHighlightableId(DocumentId doc, EntityId obj);
 
         EntityInterface::Switch& GetSwitch();
 
