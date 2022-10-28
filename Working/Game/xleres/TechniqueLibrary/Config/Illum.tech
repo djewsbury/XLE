@@ -85,7 +85,6 @@ DepthOnly=~
 RayTest=~
 	Selectors=~
 		VSOUT_HAS_WORLD_POSITION=1
-		INTERSECTION_TEST
 	GeometryShader=xleres/TechniqueLibrary/Standard/raytest.geo.hlsl:triangles
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

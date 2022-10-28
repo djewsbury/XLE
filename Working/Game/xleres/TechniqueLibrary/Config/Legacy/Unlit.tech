@@ -33,7 +33,6 @@ RayTest=~
 	Inherit=~; Silhouette
 	Selectors=~
 		VSOUT_HAS_WORLD_POSITION=1
-		INTERSECTION_TEST
 	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
 	GeometryShader=xleres/TechniqueLibrary/Standard/raytest.geo.hlsl:triangles
 

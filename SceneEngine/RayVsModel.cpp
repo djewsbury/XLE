@@ -160,7 +160,7 @@ namespace SceneEngine
 			};
 		context.GetActiveCommandList().PipelineBarrier(
 			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+			VK_PIPELINE_STAGE_TRANSFORM_FEEDBACK_BIT_EXT,
 			0,
 			0, nullptr,
 			1, &globalBarrier,
@@ -184,9 +184,12 @@ namespace SceneEngine
 		if (_pimpl->_queryId != ~0u)
 			_pimpl->_res->_streamOutputQueryPool->End(metalContext, _pimpl->_queryId);
 		_pimpl->_pendingUnbind = false;
+
 		#if GFXAPI_TARGET == GFXAPI_VULKAN
 			BufferBarrier0(metalContext, *checked_cast<Metal::Resource*>(_pimpl->_res->_streamOutputBuffer.get()));
 		#endif
+		metalContext.BeginBlitEncoder().Copy(*_pimpl->_res->_cpuAccessBuffer, *_pimpl->_res->_streamOutputBuffer);		// copy early to avoid multiple cpu/gpu syncs
+
 		_pimpl->_threadContext->CommitCommands(CommitCommandsFlags::WaitForCompletion);		// unfortunately we need a synchronize here
 
 		unsigned hitEventsWritten = 0;
@@ -199,8 +202,7 @@ namespace SceneEngine
 
 		if (hitEventsWritten!=0) {
 			// note -- we may not have to readback the entire buffer here, if we use the hitEventsWritten value
-			// todo -- copy to _cpuAccessBuffer, rather than just calling ReadBackSynchronized() directly
-			auto readback = _pimpl->_res->_streamOutputBuffer->ReadBackSynchronized(*_pimpl->_threadContext);
+			auto readback = _pimpl->_res->_cpuAccessBuffer->ReadBackSynchronized(*_pimpl->_threadContext);
 			if (!readback.empty()) {
 				const auto* mappedData = (const ResultEntry*)readback.data();
 				result.reserve(std::min(std::min(hitEventsWritten, unsigned(readback.size() / sizeof(ResultEntry))), s_maxResultCount));
@@ -283,6 +285,7 @@ namespace SceneEngine
             sizeof(ResultEntry), s_maxResultCount);
 
 		_pimpl->_queryId = _pimpl->_res->_streamOutputQueryPool->Begin(metalContext);
+		assert(_pimpl->_queryId != ~0u);
 		_pimpl->_rpi = Techniques::RenderPassInstance {
 			threadContext,
 			box._fbDesc, {},

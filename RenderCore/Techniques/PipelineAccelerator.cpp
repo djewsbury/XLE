@@ -152,19 +152,18 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_future<std::shared_ptr<GraphicsPipelineDesc>> pipelineDescFuture = cfg->_delegate->GetPipelineDesc(compiledPatchCollection->GetInterface(), _stateSet);
 		VertexInputStates vis { _inputAssembly, _miniInputAssembly, _topology };
-		auto metalPipelineFuture = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
+		std::promise<Techniques::GraphicsPipelineAndLayout> metalPipelinePromise;
+		auto metalPipelineFuture = metalPipelinePromise.get_future();
 		pipelineCollection.CreateGraphicsPipeline(
-			metalPipelineFuture->AdoptPromise(),
+			std::move(metalPipelinePromise),
 			actualPipelineLayoutAsset->GetPipelineLayout(), pipelineDescFuture,
 			MakeIteratorRange(paramBoxes), 
 			vis, FrameBufferTarget{&cfg->_fbDesc, cfg->_subpassIdx}, compiledPatchCollection);
 
 		std::weak_ptr<PipelineAccelerator> weakThis = shared_from_this();
-		::Assets::WhenAll(metalPipelineFuture, std::move(pipelineDescFuture)).ThenConstructToPromise(
+		::Assets::WhenAll(std::move(metalPipelineFuture), std::move(pipelineDescFuture)).ThenConstructToPromise(
 			std::move(resultPromise),
-			[cfg=std::move(cfg), weakThis](
-				GraphicsPipelineAndLayout metalPipeline, auto pipelineDesc) {
-
+			[cfg=std::move(cfg), weakThis](GraphicsPipelineAndLayout metalPipeline, auto pipelineDesc) {
 				auto containingPipelineAccelerator = weakThis.lock();
 				if (!containingPipelineAccelerator)
 					Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));
