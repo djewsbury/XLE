@@ -43,14 +43,15 @@ For RenderCore you'll need a little more
 * Download AMD compressonator from the github releases page (https://github.com/GPUOpen-Tools/compressonator/releases/tag/V4.1.5083) (last used V4.1.5083). Set the XLE_COMPRESSONATOR_DIR cmake cache dir to the base dir where this is extracted
 
 Some optional changes that make things a little bit nicer:
-* set cmake build directory to ${workspaceFolder}/build/${buildType}  ("cmake.buildDirectory": "${workspaceFolder}/build/${buildType}")
 * in launch configuration set working directory (ie, launch.json -- "cwd": "${workspaceFolder}/Working")
 * also use Microsoft debugger; launch.json -- "type": "cppvsdbg"
-* "choco install ccls" and install ccls vscode extension. also consider setting the following in settings.json:
-    - "C_Cpp.autocomplete": "Disabled",
-    - "C_Cpp.formatting": "Disabled",
-    - "C_Cpp.errorSquiggles": "Disabled",
-    - "C_Cpp.intelliSenseEngine": "Disabled"
+* when using the microsoft compiler, you can use the microsoft intellisense plugins for vscode. However for clang-only, you might want to use a solution built around clang static analysis
+    * CCLS is an option here -- "choco install ccls" and install ccls vscode extension
+    * also consider setting the following in settings.json:
+        - "C_Cpp.autocomplete": "Disabled",
+        - "C_Cpp.formatting": "Disabled",
+        - "C_Cpp.errorSquiggles": "Disabled",
+        - "C_Cpp.intelliSenseEngine": "Disabled"
 
 Temporary fixup in some submodules:
 * in some submodules, there are some small changes I either haven't figured out entirely or just haven't got around to uploading to a fork:
@@ -59,6 +60,11 @@ Temporary fixup in some submodules:
     call "D:\Program Files (x86)\Microsoft Visual Studio\2019\Community\Common7\Tools\VsDevCmd.bat"
     (this wouldn't be required if compiling via VSStudio, but is via cmdline, or vscode)
 
-There's some options for configurability in the cmake cache variables (such as what GFXAPIs to compile in, etc). You can search for "XLE_" in the cmake cache variables UI in vscode to get a list of them. Recommended settings are just:
+To use the CMakePresets.json infrastructure
+* these just make screwing around with the cmake cache variables a little easier (should be supported in both vscode & Visual Studio)
+* rename CMakeUserPresets.json.example to CMakeUserPresets.json
+* adjust the user settings in CMakeUserPresets.json as required (there are some user-specific paths in there, for example)
+* you might need to restart vscode, but the configurations from CMakeUserPresets.json should now be selectable in the cmake plugin
+* There's some options for configurability in the cmake cache variables (such as what GFXAPIs to compile in, etc). You can search for "XLE_" in the cmake cache variables UI in vscode to get a list of them. Recommended settings are just:
 * XLE_VULKAN_ENABLE ON
 * XLE_DXCOMPILER_DIR & XLE_COMPRESSONATOR_DIR set appropriately (see above)

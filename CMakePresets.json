@@ -1,0 +1,101 @@
+﻿{
+	"version": 3,
+	"configurePresets": [
+		{
+			"name": "clang-windows-base",
+			"hidden": true,
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/${presetName}",
+			"cacheVariables": {
+				"CMAKE_C_COMPILER": "clang",
+				"CMAKE_CXX_COMPILER": "clang++",
+				"CMAKE_EXPORT_COMPILE_COMMANDS": true
+			},
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Windows"
+			},
+			"architecture": {
+				"value": "x64",
+				"strategy": "external"
+			}
+		},
+		{
+			"name": "msvc-base",
+			"hidden": true,
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build/${presetName}",
+			"cacheVariables": {
+				"CMAKE_C_COMPILER": "cl.exe",
+				"CMAKE_CXX_COMPILER": "cl.exe",
+				"CMAKE_EXPORT_COMPILE_COMMANDS": true
+			},
+			"condition": {
+				"type": "equals",
+				"lhs": "${hostSystemName}",
+				"rhs": "Windows"
+			},
+			"architecture": {
+				"value": "x64",
+				"strategy": "external"
+			},
+			"toolset": {
+				"value": "host=x64",
+				"strategy": "external"
+			}
+		},
+
+
+		{
+			"name": "debug-base",
+			"hidden": true,
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Debug"
+			},
+			"inherits": ["clang-windows-base"]
+		},
+		{
+			"name": "release-base",
+			"hidden": true,
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release"
+			},
+			"inherits": ["clang-windows-base"]
+		},
+		{
+			"name": "relwithdebinfo-base",
+			"hidden": true,
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "RelWithDebInfo"
+			},
+			"inherits": ["clang-windows-base"]
+		},
+
+
+		{
+			"name": "msvc-debug-base",
+			"hidden": true,
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Debug"
+			},
+			"inherits": ["msvc-base"]
+		},
+		{
+			"name": "msvc-release-base",
+			"hidden": true,
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release"
+			},
+			"inherits": ["msvc-base"]
+		},
+		{
+			"name": "msvc-relwithdebinfo-base",
+			"hidden": true,
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "RelWithDebInfo"
+			},
+			"inherits": ["msvc-base"]
+		}
+	]
+}

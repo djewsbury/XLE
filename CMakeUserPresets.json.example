@@ -1,0 +1,51 @@
+{
+	"version": 3,
+	"configurePresets": [
+		{
+			"name": "user-presets",
+			"hidden": true,
+			"cacheVariables": {
+				"XLE_OPENGLES_ENABLE": false,
+				"XLE_VULKAN_ENABLE": true,
+				"XLE_APPLEMETAL_ENABLE": false,
+				"XLE_DX11_ENABLE": false,
+				"XLE_COMPRESSONATOR_DIR": "C:\\codelibrary\\Compressonator_4.1.5083",
+				"XLE_DXCOMPILER_DIR": "C:\\codelibrary\\dxcompiler"
+			}
+		},
+
+
+		{
+			"name": "debug",
+			"displayName": "Debug",
+			"inherits": ["debug-base", "user-presets"]
+		},
+		{
+			"name": "release",
+			"displayName": "Release",
+			"inherits": ["release-base", "user-presets"]
+		},
+		{
+			"name": "relwithdebinfo",
+			"displayName": "RelWithDebInfo",
+			"inherits": ["relwithdebinfo-base", "user-presets"]
+		},
+
+
+		{
+			"name": "msvc-debug",
+			"displayName": "MSVC-Debug",
+			"inherits": ["msvc-debug-base", "user-presets"]
+		},
+		{
+			"name": "msvc-release",
+			"displayName": "MSVC-Release",
+			"inherits": ["msvc-release-base", "user-presets"]
+		},
+		{
+			"name": "msvc-relwithdebinfo",
+			"displayName": "MSVC-RelWithDebInfo",
+			"inherits": ["msvc-relwithdebinfo-base", "user-presets"]
+		}
+	]
+}
