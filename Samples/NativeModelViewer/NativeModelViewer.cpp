@@ -10,6 +10,13 @@
 #include "../../Tools/ToolsRig/ToolsRigServices.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/LightingEngine/LightingEngineApparatus.h"
+#include "../../PlatformRig/DebuggingDisplays/PipelineAcceleratorDisplay.h"
+#include "../../PlatformRig/DebuggingDisplays/DeformAcceleratorDisplay.h"
+#include "../../PlatformRig/DebuggingDisplays/VulkanMemoryDisplay.h"
+#include "../../PlatformRig/DebuggingDisplays/BufferUploadDisplay.h"
+#include "../../PlatformRig/DebuggingDisplays/InvalidAssetDisplay.h"
+#include "../../PlatformRig/DebugScreenRegistry.h"
+#include "../../Assets/OperationContext.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Utility/StringFormat.h"
 
@@ -50,7 +57,10 @@ namespace Sample
 			AddSystem(ToolsRig::MakeLayerForInput(manipulators));
 		}
 
-		_overlayBinder = std::make_shared<ToolsRig::VisOverlayController>(globals._drawingApparatus->_drawablesPool, globals._drawingApparatus->_pipelineAccelerators, globals._drawingApparatus->_deformAccelerators);
+		auto loadingContext = std::make_shared<::Assets::OperationContext>();
+		_overlayBinder = std::make_shared<ToolsRig::VisOverlayController>(
+			globals._drawingApparatus->_drawablesPool, globals._drawingApparatus->_pipelineAccelerators, globals._drawingApparatus->_deformAccelerators,
+			loadingContext);
 		_overlayBinder->AttachSceneOverlay(modelLayer);
 		_overlayBinder->AttachVisualisationOverlay(visOverlay);
 
@@ -71,6 +81,26 @@ namespace Sample
 			}
 		} CATCH(...) {
 		} CATCH_END*/
+
+		_displayRegistrations.emplace_back(
+			"PipelineAccelerators", 
+			PlatformRig::Overlays::CreatePipelineAcceleratorPoolDisplay(globals._drawingApparatus->_pipelineAccelerators));
+
+		_displayRegistrations.emplace_back(
+			"DeformAccelerators",
+			PlatformRig::Overlays::CreateDeformAcceleratorPoolDisplay(globals._drawingApparatus->_deformAccelerators));
+
+		_displayRegistrations.emplace_back(
+			"Vulkan Memory Allocator",
+			PlatformRig::Overlays::CreateVulkanMemoryAllocatorDisplay(globals._drawingApparatus->_device));
+
+		_displayRegistrations.emplace_back(
+			"Buffer Uploads Display",
+			std::make_shared<PlatformRig::Overlays::BufferUploadDisplay>(globals._primaryResourcesApparatus->_bufferUploads.get()));
+
+		_displayRegistrations.emplace_back(
+			"LoadingContext",
+			std::make_shared<PlatformRig::Overlays::OperationContextDisplay>(loadingContext));
 	}
 
 	auto NativeModelViewerOverlay::GetInputListener() -> std::shared_ptr<PlatformRig::IInputListener>

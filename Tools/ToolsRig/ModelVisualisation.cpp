@@ -114,10 +114,11 @@ namespace ToolsRig
 			const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>& drawablesPool,
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators,
+			const std::shared_ptr<::Assets::OperationContext>& loadingContext,
 			const ModelVisSettings& settings)
 		{
 			auto construction = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
-			construction->AddElement().SetModelAndMaterialScaffolds(settings._modelName, settings._materialName);
+			construction->AddElement().SetModelAndMaterialScaffolds(loadingContext, settings._modelName, settings._materialName);
 			auto rendererFuture = ::Assets::MakeAssetPtr<SimpleModelRenderer>(drawablesPool, pipelineAcceleratorPool, nullptr, construction, deformAccelerators);
 
 			if (!settings._animationFileName.empty() && !settings._skeletonFileName.empty()) {
@@ -363,15 +364,16 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
 		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
+		std::shared_ptr<::Assets::OperationContext> loadingContext,
 		const ModelVisSettings& settings)
 	{
-		auto rendererFuture = ::Assets::ConstructToMarkerPtr<ModelSceneRendererState>(drawablesPool, pipelineAcceleratorPool, deformAcceleratorPool, settings);
+		auto rendererFuture = ::Assets::ConstructToMarkerPtr<ModelSceneRendererState>(drawablesPool, pipelineAcceleratorPool, deformAcceleratorPool, loadingContext, settings);
 		// Must use a marker to ModelScene, and then reinterpret it over to the generic type, in order
 		// to propagate dependency validations correctly (since GetDependencyValidation is part of ModelScene, not IScene)
 		auto result = std::make_shared<Assets::MarkerPtr<ModelScene>>();
 		::Assets::WhenAll(rendererFuture).ThenConstructToPromise(
 			result->AdoptPromise(),
-			[pipelineAcceleratorPool, deformAcceleratorPool, settings](auto renderer) {
+			[pipelineAcceleratorPool=std::move(pipelineAcceleratorPool), deformAcceleratorPool=std::move(deformAcceleratorPool), loadingContext=std::move(loadingContext), settings](auto renderer) {
 				return std::make_shared<ModelScene>(pipelineAcceleratorPool, deformAcceleratorPool, renderer, settings);
 			});
 		return std::reinterpret_pointer_cast<Assets::MarkerPtr<SceneEngine::IScene>>(result);

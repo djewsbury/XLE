@@ -1161,6 +1161,8 @@ namespace ToolsRig
 		std::shared_ptr<SceneEngine::ILightingStateDelegate> _lightingState;
         Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate> _lightingStateMarker;
 
+		std::shared_ptr<::Assets::OperationContext> _loadingContext;
+
 		bool _pendingSceneActualize = false;
 		bool _pendingLightingStateActualize = false;
 		unsigned _lastGlobalDepValChangeIndex = 0;
@@ -1195,7 +1197,7 @@ namespace ToolsRig
 				if (_visualisationOverlay) _visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
 
 				_sceneMarker = MakeScene(
-					_drawablesPool, _pipelineAcceleratorPool, _deformAcceleratorPool,
+					_drawablesPool, _pipelineAcceleratorPool, _deformAcceleratorPool, _loadingContext,
 					_modelVisSettings);
 				_pendingSceneActualize = true;
 			}
@@ -1220,7 +1222,7 @@ namespace ToolsRig
 		_pimpl->_sceneBindType = Pimpl::SceneBindType::ModelVisSettings;
 		_pimpl->_modelVisSettings = visSettings;
 		_pimpl->_sceneMarker = MakeScene(
-			_pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_deformAcceleratorPool,
+			_pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_deformAcceleratorPool, _pimpl->_loadingContext,
 			visSettings);
 		_pimpl->_pendingSceneActualize = true;
 	}
@@ -1373,15 +1375,22 @@ namespace ToolsRig
 		return nullptr;
 	}
 
+	const std::shared_ptr<::Assets::OperationContext>& VisOverlayController::GetLoadingContext()
+	{
+		return _pimpl->_loadingContext;
+	}
+
 	VisOverlayController::VisOverlayController(
 		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
-		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool)
+		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
+		std::shared_ptr<::Assets::OperationContext> loadingContext)
 	{
 		_pimpl = std::make_unique<Pimpl>();
 		_pimpl->_drawablesPool = std::move(drawablesPool);
 		_pimpl->_pipelineAcceleratorPool = std::move(pipelineAcceleratorPool);
 		_pimpl->_deformAcceleratorPool = std::move(deformAcceleratorPool);
+		_pimpl->_loadingContext = std::move(loadingContext);
 
 		_pimpl->_mainThreadTickFn = RenderCore::Techniques::Services::GetSubFrameEvents()._onFrameBarrier.Bind(
 			[this]() { this->_pimpl->MainThreadTick(); });

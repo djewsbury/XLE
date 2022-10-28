@@ -6,10 +6,12 @@
 
 #include "../Shared/SampleRig.h"
 #include <memory>
+#include <vector>
 
 namespace SceneEngine { class IScene; class ILightingStateDelegate; class BasicLightingStateDelegate; }
 namespace RenderCore { namespace Techniques { class CameraDesc; class IPipelineAcceleratorPool; }}
 namespace ToolsRig { class VisOverlayController; }
+namespace PlatformRig { class DebugScreenRegistration; }
 
 namespace Sample
 {
@@ -35,5 +37,6 @@ namespace Sample
 		~NativeModelViewerOverlay();
 	private:
 		std::shared_ptr<ToolsRig::VisOverlayController> _overlayBinder;
+		std::vector<PlatformRig::DebugScreenRegistration> _displayRegistrations;
 	};
 }

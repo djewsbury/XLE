@@ -11,6 +11,7 @@
 
 namespace SceneEngine { class IScene; }
 namespace RenderCore { namespace Techniques { class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; } }
+namespace Assets { class OperationContext; }
 
 namespace ToolsRig
 {
@@ -43,6 +44,7 @@ namespace ToolsRig
         std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
         std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
+        std::shared_ptr<::Assets::OperationContext> loadingContext,
 		const ModelVisSettings& settings);
 }
 

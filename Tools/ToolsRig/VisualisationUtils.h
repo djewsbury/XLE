@@ -31,6 +31,7 @@ namespace RenderCore { namespace Assets { class RawMaterial; } }
 namespace RenderOverlays { class IOverlayContext; struct Rect; }
 namespace OSServices { class OnChangeCallback; }
 namespace SceneEngine { class IScene; class ILightingStateDelegate; class IRenderStep; }
+namespace Assets { class OperationContext; }
 
 namespace ToolsRig
 {
@@ -211,11 +212,13 @@ namespace ToolsRig
         void AttachVisualisationOverlay(std::shared_ptr<VisualisationOverlay>);
 
         SceneEngine::IScene* TryGetScene();
+        const std::shared_ptr<::Assets::OperationContext>& GetLoadingContext();
 
         VisOverlayController(
             std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
 		    std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
-            std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool);
+            std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
+            std::shared_ptr<::Assets::OperationContext> loadingContext);
         ~VisOverlayController();
     private:
         struct Pimpl;
