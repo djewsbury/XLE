@@ -10,6 +10,7 @@
 #include "../OSServices/Log.h"
 #include "../Utility/Streams/StreamFormatter.h"
 #include "../Utility/Streams/PreprocessorInterpreter.h"
+#include "../Utility/Streams/FormatterUtils.h"
 #include "../Utility/StringFormat.h"
 #include <sstream>
 
@@ -294,12 +295,72 @@ namespace ShaderSourceParser
 		return result;
 	}
 
-	void ManualSelectorFiltering::GenerateHash()
+	uint64_t ManualSelectorFiltering::GetHash() const
+	{
+		if (!_hash) GenerateHash();
+		return _hash;
+	}
+
+	void ManualSelectorFiltering::GenerateHash() const
 	{
 		_hash = HashCombine(_setValues.GetHash(), _setValues.GetParameterNamesHash());
 		for (const auto&r:_relevanceMap)
-			_hash = HashCombine(HashCombine(Hash64(r.first), Hash64(r.second)), _hash);
+			_hash = Hash64(r.first, Hash64(r.second, _hash));
 	}
+
+	ManualSelectorFiltering::ManualSelectorFiltering(InputStreamFormatter<>& formatter)
+	{
+		while (formatter.PeekNext() == FormatterBlob::KeyedItem || formatter.PeekNext() == FormatterBlob::Value) {
+
+			if (formatter.PeekNext() == FormatterBlob::Value) {
+
+				// a selector name alone becomes a whitelist setting
+				auto selectorName = RequireStringValue(formatter);
+				_relevanceMap[selectorName.AsString()] = "1";
+
+			} else {
+				auto selectorName = RequireKeyedItem(formatter);
+				if (formatter.PeekNext() == FormatterBlob::BeginElement) {
+					RequireBeginElement(formatter);
+
+					for (;;) {
+						if (formatter.PeekNext() == FormatterBlob::EndElement) break;
+
+						auto filterType = RequireKeyedItem(formatter);
+						auto value = RequireStringValue(formatter);
+						if (XlEqStringI(filterType, "relevance")) {
+							_relevanceMap[selectorName.AsString()] = value.AsString();
+						} else if (XlEqStringI(filterType, "set")) {
+							_setValues.SetParameter(selectorName, value);
+						} else {
+							Throw(FormatException("Expecting \"whitelist\", \"blacklist\" or \"set\"", formatter.GetLocation()));
+						}
+					}
+
+					RequireEndElement(formatter);
+				} else {
+					auto value = RequireStringValue(formatter);
+					_setValues.SetParameter(selectorName, value);
+				}
+			}
+		}
+
+		if (formatter.PeekNext() != FormatterBlob::EndElement && formatter.PeekNext() != FormatterBlob::None)
+			Throw(FormatException("Unexpected blob when deserializing selector filtering", formatter.GetLocation()));
+
+		GenerateHash();
+	}
+
+	void ManualSelectorFiltering::MergeIn(const ManualSelectorFiltering& src)
+	{
+		_setValues.MergeIn(src._setValues);
+		for (const auto&i:src._relevanceMap)
+			_relevanceMap[i.first] = i.second;
+		GenerateHash();
+	}
+
+	ManualSelectorFiltering::ManualSelectorFiltering() = default;
+	ManualSelectorFiltering::~ManualSelectorFiltering() = default;
 
 	ParameterBox FilterSelectors(
 		IteratorRange<const ParameterBox* const*> selectors,
@@ -353,8 +414,8 @@ namespace ShaderSourceParser
 		const ManualSelectorFiltering& manualFiltering,
 		const SelectorFilteringRules& automaticFiltering)
 	{
-		const ParameterBox* boxes[] = { &manualFiltering._setValues, &selectors };
+		const ParameterBox* boxes[] = { &manualFiltering.GetSetSelectors(), &selectors };
 		const SelectorFilteringRules* filtering[] = { &automaticFiltering };
-		return FilterSelectors(MakeIteratorRange(boxes), manualFiltering._relevanceMap, MakeIteratorRange(filtering));
+		return FilterSelectors(MakeIteratorRange(boxes), manualFiltering.GetRelevanceMap(), MakeIteratorRange(filtering));
 	}
 }

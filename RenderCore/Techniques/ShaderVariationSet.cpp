@@ -50,9 +50,9 @@ namespace RenderCore { namespace Techniques
 	{
 		if (!preconfiguration) {
 			VLA(const ParameterBox*, p, selectors.size()+1);
-			p[0] = &techniqueFiltering._setValues;
+			p[0] = &techniqueFiltering.GetSetSelectors();
 			for (unsigned c=0; c<selectors.size(); ++c) p[c+1] = selectors[c];
-			return BuildFlatStringTable(ShaderSourceParser::FilterSelectors({p, p+selectors.size()+1}, techniqueFiltering._relevanceMap, automaticFiltering));
+			return BuildFlatStringTable(ShaderSourceParser::FilterSelectors({p, p+selectors.size()+1}, techniqueFiltering.GetRelevanceMap(), automaticFiltering));
 		} else {
 			// If we have a preconfiguration file, we need to run that over the selectors first. It will define or undefine
 			// selectors based on it's script. Because it can also undefine, we need to be working with non-const parameter boxes
@@ -65,13 +65,13 @@ namespace RenderCore { namespace Techniques
 			}
 
 			// Merge in the "_setValues" from technique filtering, so it can be available to the preconfiguration operation
-			ParameterBox mergedSelectors = techniqueFiltering._setValues;
+			ParameterBox mergedSelectors = techniqueFiltering.GetSetSelectors();
 			for (auto i=selectors.begin(); i!=selectors.end(); ++i)
 				mergedSelectors.MergeIn(**i);
 
 			mergedSelectors = preconfiguration->Preconfigure(std::move(mergedSelectors));
 			ParameterBox* p = &mergedSelectors;
-			return BuildFlatStringTable(ShaderSourceParser::FilterSelectors({&p, &p+1}, techniqueFiltering._relevanceMap, automaticFiltering));
+			return BuildFlatStringTable(ShaderSourceParser::FilterSelectors({&p, &p+1}, techniqueFiltering.GetRelevanceMap(), automaticFiltering));
 		}
 	}
 
@@ -82,6 +82,7 @@ namespace RenderCore { namespace Techniques
 		const ShaderSourceParser::SelectorPreconfiguration* preconfiguration) -> const FilteredSelectorSet&
 	{
 		auto inputHash = Hash(selectors);
+		assert(techniqueFiltering.GetHash() != 0);		// hash set to 0 when it hasn't been built
 		inputHash = HashCombine(techniqueFiltering.GetHash(), inputHash);
 		for (const auto*f:automaticFiltering)
 			inputHash = HashCombine(f->GetHash(), inputHash);

@@ -316,8 +316,8 @@ namespace RenderCore { namespace LightingEngine
 					pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL ":PrepareMany";
 					pipelineDesc->_shaders[(unsigned)ShaderStage::Geometry] = BASIC_GEO_HLSL ":ClipToNear";
 					pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = TILED_LIGHTING_PREPARE_HLSL ":main";
-					// pipelineDesc->_manualSelectorFiltering._setValues.SetParameter("LIGHT_SHAPE", 1);
-					pipelineDesc->_manualSelectorFiltering._setValues.SetParameter("GS_OBJECT_INDEX", 1);
+					// pipelineDesc->_manualSelectorFiltering.SetSelector("LIGHT_SHAPE", 1);
+					pipelineDesc->_manualSelectorFiltering.SetSelector("GS_OBJECT_INDEX", 1);
 					// pipelineDesc->_depthStencil._depthBoundsTestEnable = true;
 					pipelineDesc->_rasterization = Techniques::CommonResourceBox::s_rsDefault;
 					pipelineDesc->_rasterization._flags |= RasterizationDescFlags::ConservativeRaster;

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../Utility/ParameterBox.h"
+#include "../Utility/Streams/StreamFormatter.h"
 #include <unordered_map>
 #include <string>
 #include <set>
@@ -22,13 +23,24 @@ namespace ShaderSourceParser
 	class ManualSelectorFiltering
     {
     public:
-		ParameterBox    _setValues;
+		uint64_t GetHash() const;
+		void MergeIn(const ManualSelectorFiltering&);
+
+		template<typename Type>
+			void SetSelector(StringSection<> name, Type value);
+
+		const ParameterBox& GetSetSelectors() const { return _setValues; }
+		const std::unordered_map<std::string, std::string>& GetRelevanceMap() const { return _relevanceMap; }
+
+		ManualSelectorFiltering();
+		~ManualSelectorFiltering();
+		ManualSelectorFiltering(InputStreamFormatter<>&);
+	private:
+		ParameterBox _setValues;
 		std::unordered_map<std::string, std::string> _relevanceMap;
 
-		uint64_t GetHash() const { return _hash; }
-
-		void GenerateHash();
-		uint64_t _hash = 0ull;
+		void GenerateHash() const;
+		mutable uint64_t _hash = 0ull;
     };
 
 	class SelectorFilteringRules;
@@ -42,5 +54,12 @@ namespace ShaderSourceParser
 		const ParameterBox& selectors,
 		const ManualSelectorFiltering& manualFiltering,
 		const SelectorFilteringRules& automaticFiltering);
+
+	template<typename Type>
+		void ManualSelectorFiltering::SetSelector(StringSection<> name, Type value)
+	{
+		_setValues.SetParameter(name, std::move(value));
+		_hash = 0ull;
+	}
 
 }

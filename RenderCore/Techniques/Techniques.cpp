@@ -71,49 +71,6 @@ namespace RenderCore { namespace Techniques
 		if (formatter.PeekNext() != FormatterBlob::EndElement && formatter.PeekNext() != FormatterBlob::None)
 			Throw(FormatException("Unexpected blob when deserializing inheritted list", formatter.GetLocation()));
 	}
-
-	static void LoadSelectorFiltering(Formatter& formatter, ShaderSourceParser::ManualSelectorFiltering& dst)
-	{
-		while (formatter.PeekNext() == FormatterBlob::KeyedItem || formatter.PeekNext() == FormatterBlob::Value) {
-
-			if (formatter.PeekNext() == FormatterBlob::Value) {
-
-				// a selector name alone becomes a whitelist setting
-				auto selectorName = RequireStringValue(formatter);
-				dst._relevanceMap[selectorName.AsString()] = "1";
-
-			} else {
-				auto selectorName = RequireKeyedItem(formatter);
-				if (formatter.PeekNext() == FormatterBlob::BeginElement) {
-					RequireBeginElement(formatter);
-
-					for (;;) {
-						if (formatter.PeekNext() == FormatterBlob::EndElement) break;
-
-						auto filterType = RequireKeyedItem(formatter);
-						auto value = RequireStringValue(formatter);
-						if (XlEqStringI(filterType, "relevance")) {
-							dst._relevanceMap[selectorName.AsString()] = value.AsString();
-						} else if (XlEqStringI(filterType, "set")) {
-							dst._setValues.SetParameter(selectorName, value);
-						} else {
-							Throw(FormatException("Expecting \"whitelist\", \"blacklist\" or \"set\"", formatter.GetLocation()));
-						}
-					}
-
-					RequireEndElement(formatter);
-				} else {
-					auto value = RequireStringValue(formatter);
-					dst._setValues.SetParameter(selectorName, value);
-				}
-			}
-		}
-
-		if (formatter.PeekNext() != FormatterBlob::EndElement && formatter.PeekNext() != FormatterBlob::None)
-			Throw(FormatException("Unexpected blob when deserializing selector filtering", formatter.GetLocation()));
-
-		dst.GenerateHash();
-	}
 	
 	static TechniqueEntry ParseTechniqueEntry(
 		Formatter& formatter, 
@@ -130,7 +87,7 @@ namespace RenderCore { namespace Techniques
 				RequireEndElement(formatter);
 			} else if (XlEqString(name, "Selectors")) {
 				RequireBeginElement(formatter);
-				LoadSelectorFiltering(formatter, result._selectorFiltering);
+				result._selectorFiltering = ShaderSourceParser::ManualSelectorFiltering{formatter};
 				RequireEndElement(formatter);
 			}  else if (XlEqString(name, "VertexShader")) {
 				result._vertexShaderName = RequireStringValue(formatter).AsString();
@@ -199,12 +156,7 @@ namespace RenderCore { namespace Techniques
 		if (!source._pixelShaderName.empty()) _pixelShaderName = source._pixelShaderName;
 		if (!source._geometryShaderName.empty()) _geometryShaderName = source._geometryShaderName;
 		if (!source._preconfigurationFileName.empty()) _preconfigurationFileName = source._preconfigurationFileName;
-
-		_selectorFiltering._setValues.MergeIn(source._selectorFiltering._setValues);
-		for (const auto&i:source._selectorFiltering._relevanceMap)
-			_selectorFiltering._relevanceMap[i.first] = i.second;
-		_selectorFiltering.GenerateHash();
-
+		_selectorFiltering.MergeIn(source._selectorFiltering);
 		GenerateHash();
 	}
 

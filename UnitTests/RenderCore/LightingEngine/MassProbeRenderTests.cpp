@@ -425,7 +425,7 @@ namespace UnitTests
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/amplifying_geo_shader.hlsl:ps_main";
 				nascentDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
-				nascentDesc->_manualSelectorFiltering._setValues.SetParameter("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
+				nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
 				std::promise<std::shared_ptr<Techniques::GraphicsPipelineDesc>> promise;
 				promise.set_value(std::move(nascentDesc));
 				return promise.get_future();
@@ -540,7 +540,7 @@ namespace UnitTests
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/instancing_multiprobe_shader.hlsl:ps_main";
 				nascentDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
-				nascentDesc->_manualSelectorFiltering._setValues.SetParameter("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
+				nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
 				std::promise<std::shared_ptr<Techniques::GraphicsPipelineDesc>> promise;
 				promise.set_value(std::move(nascentDesc));
 				return promise.get_future();

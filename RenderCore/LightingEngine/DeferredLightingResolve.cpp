@@ -129,7 +129,7 @@ namespace RenderCore { namespace LightingEngine
 			pipelineDesc->_shaders[(unsigned)ShaderStage::Geometry] = BASIC_GEO_HLSL ":ClipToNear";
 			inputStates._topology = Topology::TriangleList;
 			pipelineDesc->_depthStencil._depthBoundsTestEnable = true;
-			pipelineDesc->_manualSelectorFiltering._setValues.SetParameter("GS_FVF", 1);
+			pipelineDesc->_manualSelectorFiltering.SetSelector("GS_FVF", 1);
 		}
 
 		pipelineDesc->_rasterization = Techniques::CommonResourceBox::s_rsDefault;

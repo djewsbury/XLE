@@ -679,15 +679,15 @@ namespace RenderCore { namespace Techniques
 					mergedTechEntry.MergeIn(*psTechEntry);
 
 					if (preDepthType == PreDepthType::DepthMotion || preDepthType == PreDepthType::DepthMotionNormal || preDepthType == PreDepthType::DepthMotionNormalRoughness || preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation) {
-						mergedTechEntry._selectorFiltering._setValues.SetParameter("VSOUT_HAS_PREV_POSITION", 1);
-						mergedTechEntry._selectorFiltering._setValues.SetParameter("DEPTH_PLUS_MOTION", 1);
+						mergedTechEntry._selectorFiltering.SetSelector("VSOUT_HAS_PREV_POSITION", 1);
+						mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_MOTION", 1);
 					}
 					if (preDepthType == PreDepthType::DepthMotionNormal || preDepthType == PreDepthType::DepthMotionNormalRoughness || preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
-						mergedTechEntry._selectorFiltering._setValues.SetParameter("DEPTH_PLUS_NORMAL", 1);
+						mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_NORMAL", 1);
 					if (preDepthType == PreDepthType::DepthMotionNormalRoughness || preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
-						mergedTechEntry._selectorFiltering._setValues.SetParameter("DEPTH_PLUS_ROUGHNESS", 1);
+						mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_ROUGHNESS", 1);
 					if (preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
-						mergedTechEntry._selectorFiltering._setValues.SetParameter("DEPTH_PLUS_HISTORY_ACCUMULATION", 1);
+						mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_HISTORY_ACCUMULATION", 1);
 
 					PrepareShadersFromTechniqueEntry(nascentDesc, mergedTechEntry);
 					return nascentDesc;
@@ -1079,7 +1079,7 @@ namespace RenderCore { namespace Techniques
 					mergedTechEntry.MergeIn(*psTechEntry);
 
 					PrepareShadersFromTechniqueEntry(nascentDesc, mergedTechEntry);
-					nascentDesc->_manualSelectorFiltering._setValues.SetParameter("INTERSECTION_TEST", testType);
+					nascentDesc->_manualSelectorFiltering.SetSelector("INTERSECTION_TEST", testType);
 					return nascentDesc;
 				});			
 			return result;

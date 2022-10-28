@@ -90,8 +90,8 @@ namespace UnitTests
 			auto pipelineDesc = std::make_shared<RenderCore::Techniques::GraphicsPipelineDesc>();
 			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = NO_PATCHES_VERTEX_HLSL ":main";
 			pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/write_world_coords.pixel.hlsl:frameworkEntry";
-			pipelineDesc->_manualSelectorFiltering._setValues.SetParameter("VSOUT_HAS_WORLD_POSITION", 1);
-			pipelineDesc->_manualSelectorFiltering._setValues.SetParameter("VSOUT_HAS_NORMAL", 1);
+			pipelineDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_WORLD_POSITION", 1);
+			pipelineDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_NORMAL", 1);
 			pipelineDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
 			pipelineDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
 			pipelineDesc->_rasterization = Techniques::CommonResourceBox::s_rsDefault;
