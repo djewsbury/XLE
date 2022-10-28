@@ -20,7 +20,19 @@ namespace RenderCore { namespace LightingEngine
 	void SkyOperator::Execute(Techniques::ParsingContext& parsingContext)
 	{
 		if (!_descSet) {
-			StringMeldAppend(parsingContext._stringHelpers->_pendingAssets, ArrayEnd(parsingContext._stringHelpers->_pendingAssets)) << "Sky resources\n";
+			// Just clear to black. We have to do it with a pixel shader, however
+			Techniques::PixelOutputStates outputStates;
+			outputStates.Bind(*parsingContext._rpi);
+			outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
+			AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
+			outputStates.Bind(MakeIteratorRange(blendStates));
+			auto pipelineFuture = Techniques::CreateFullViewportOperator(
+				_pool, Techniques::FullViewportOperatorSubType::DisableDepth,
+				BASIC_PIXEL_HLSL ":blackOpaque",
+				{}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
+				outputStates, UniformsStreamInterface{});
+			if (auto pipeline = pipelineFuture->TryActualize())
+				(*pipeline)->Draw(parsingContext.GetThreadContext(), UniformsStream{});
 			return;
 		}
 
@@ -64,10 +76,11 @@ namespace RenderCore { namespace LightingEngine
 	SkyOperator::SkyOperator(
 		const SkyOperatorDesc& desc,
 		std::shared_ptr<Techniques::IShaderOperator> shader,
-		std::shared_ptr<IDevice> device)
+		std::shared_ptr<Techniques::PipelineCollection> pipelinePool)
 	: _shader(std::move(shader))
-	, _device(std::move(device))
 	{
+		_device = pipelinePool->GetDevice();
+		_pool = std::move(pipelinePool);
 	}
 
 	SkyOperator::~SkyOperator()
@@ -98,8 +111,8 @@ namespace RenderCore { namespace LightingEngine
 			po, usi);
 		::Assets::WhenAll(futureShader).ThenConstructToPromise(
 			std::move(promise),
-			[desc, device=pipelinePool->GetDevice()](auto shader) {
-				return std::make_shared<SkyOperator>(desc, std::move(shader), std::move(device));
+			[desc, pipelinePool=std::move(pipelinePool)](auto shader) {
+				return std::make_shared<SkyOperator>(desc, std::move(shader), pipelinePool);
 			});
 	}
 

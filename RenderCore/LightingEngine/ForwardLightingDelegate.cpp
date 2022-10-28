@@ -122,12 +122,12 @@ namespace RenderCore { namespace LightingEngine
 		return fragment;
 	}
 
-	static ::Assets::PtrToMarkerPtr<SkyOperator> CreateSkyOperator(
+	static std::future<std::shared_ptr<SkyOperator>> CreateSkyOperator(
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const Techniques::FrameBufferTarget& fbTarget,
 		const SkyOperatorDesc& desc)
 	{
-		return ::Assets::ConstructToMarkerPtr<SkyOperator>(desc, pipelinePool, fbTarget);
+		return ::Assets::ConstructToFuturePtr<SkyOperator>(desc, pipelinePool, fbTarget);
 	}
 
 	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, bool precisionTargets = false)
@@ -461,7 +461,7 @@ namespace RenderCore { namespace LightingEngine
 					// Any final operators that depend on the resolved frame buffer:
 					auto resolvedFB = mainSequence.GetResolvedFrameBufferDesc(mainSceneFragmentRegistration);
 					auto skyOpFuture = CreateSkyOperator(pipelinePool, Techniques::FrameBufferTarget{resolvedFB.first, resolvedFB.second}, SkyOperatorDesc { SkyTextureType::Equirectangular });
-					::Assets::WhenAll(skyOpFuture).ThenConstructToPromise(
+					::Assets::WhenAll(std::move(skyOpFuture)).ThenConstructToPromise(
 						std::move(thatPromise),
 						[captures, lightingTechnique](auto skyOp) {
 							captures->_skyOperator = skyOp;

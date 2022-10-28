@@ -47,7 +47,7 @@ namespace RenderCore { namespace LightingEngine
 		SkyOperator(
 			const SkyOperatorDesc& desc,
 			std::shared_ptr<Techniques::IShaderOperator> shader,
-			std::shared_ptr<IDevice> device);
+			std::shared_ptr<Techniques::PipelineCollection> pipelinePool);
 		~SkyOperator();
 
 		static void ConstructToPromise(
@@ -58,6 +58,7 @@ namespace RenderCore { namespace LightingEngine
 	private:
 		std::shared_ptr<Techniques::IShaderOperator> _shader;
 		std::shared_ptr<IDescriptorSet> _descSet;
+		std::shared_ptr<Techniques::PipelineCollection> _pool;
 		std::shared_ptr<IDevice> _device;
 	};
 
