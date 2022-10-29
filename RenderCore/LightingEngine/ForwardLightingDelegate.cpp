@@ -253,7 +253,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		RenderStepFragmentInterface result { PipelineType::Graphics };
 		auto lightResolve = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).NoInitialState();
-		auto depth = result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).FinalState(BindFlag::DepthStencil);
+		auto depth = result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(BindFlag::ShaderResource).FinalState(BindFlag::DepthStencil);
 		
 		Techniques::FrameBufferDescFragment::SubpassDesc skySubpass;
 		skySubpass.AppendOutput(lightResolve);
