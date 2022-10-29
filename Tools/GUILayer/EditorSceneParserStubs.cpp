@@ -133,10 +133,22 @@ namespace GUILayer
         }
     };
 
+    struct PreregAttachmentsHelper
+    {
+        uint64_t _targetsHash = 0ull;
+        uint64_t _lastBuiltTargetsHash = 0ull;
+		std::vector<RenderCore::Techniques::PreregisteredAttachment> _targets;
+		RenderCore::FrameBufferProperties _fbProps;
+    };
+
     public ref class EditorSceneOverlay : public IOverlaySystem
     {
     public:
         void Render(RenderCore::Techniques::ParsingContext& parserContext) override;
+        void OnRenderTargetUpdate(
+            IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
+            const RenderCore::FrameBufferProperties& fbProps,
+            IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override;
         EditorSceneOverlay(
             const std::shared_ptr<EditorScene>& sceneParser,
 			const std::shared_ptr<ToolsRig::VisCameraSettings>& camera, 
@@ -149,6 +161,7 @@ namespace GUILayer
         EditorSceneRenderSettings^ _renderSettings;
         clix::shared_ptr<BoundEnvironmentSettings> _boundEnvSettings;
         clix::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> _lightingTechnique;
+        clix::shared_ptr<PreregAttachmentsHelper> _preregAttachmentsHelper;
         unsigned _lastLightingTechniqueChangeId = 0;
     };
 
@@ -185,11 +198,12 @@ namespace GUILayer
 
         // todo -- stitching context compatibility
         unsigned temp = _lastLightingTechniqueChangeId;
-        if (!_lightingTechnique || !_boundEnvSettings->LightingTechniqueIsCompatible(*_lightingTechnique.get(), temp)) {
+        if (!_lightingTechnique || !_boundEnvSettings->LightingTechniqueIsCompatible(*_lightingTechnique.get(), temp) || _preregAttachmentsHelper->_targetsHash != _preregAttachmentsHelper->_lastBuiltTargetsHash) {
             _lightingTechnique = SceneEngine::CreateAndActualizeForwardLightingTechnique(
                 *_lightingApparatus.GetNativePtr(),
                 _boundEnvSettings->GetLightScene(),
                 stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
+            _preregAttachmentsHelper->_lastBuiltTargetsHash = _preregAttachmentsHelper->_targetsHash;
         }
         _lastLightingTechniqueChangeId = temp;
 
@@ -225,6 +239,16 @@ namespace GUILayer
         }
     }
 
+    void EditorSceneOverlay::OnRenderTargetUpdate(
+        IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
+        const RenderCore::FrameBufferProperties& fbProps,
+        IteratorRange<const RenderCore::Format*> systemAttachmentFormats)
+    {
+        _preregAttachmentsHelper->_targetsHash = RenderCore::Techniques::HashPreregisteredAttachments(preregAttachments, fbProps);
+        _preregAttachmentsHelper->_targets = {preregAttachments.begin(), preregAttachments.end()};
+		_preregAttachmentsHelper->_fbProps = fbProps;
+    }
+
     EditorSceneOverlay::EditorSceneOverlay(
         const std::shared_ptr<EditorScene>& sceneParser,
 		const std::shared_ptr<ToolsRig::VisCameraSettings>& camera, 
@@ -234,6 +258,7 @@ namespace GUILayer
 		_camera = camera;
         _renderSettings = renderSettings;
 		_lightingApparatus = EngineDevice::GetInstance()->GetNative().GetLightingEngineApparatus();
+        _preregAttachmentsHelper = std::make_shared<PreregAttachmentsHelper>();
     }
 
     EditorSceneOverlay::~EditorSceneOverlay() {}

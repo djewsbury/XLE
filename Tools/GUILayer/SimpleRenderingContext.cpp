@@ -376,7 +376,7 @@ namespace GUILayer
     public ref class SimpleRenderingContextOverlaySystem : public GUILayer::IOverlaySystem
     {
     public:
-        virtual void Render(
+        void Render(
             RenderCore::Techniques::ParsingContext& parserContext) override
         {
             ToolsRig::ConfigureParsingContext(parserContext, *_visCameraSettings.get());
@@ -399,6 +399,12 @@ namespace GUILayer
 				delete context;
 			}
         }
+
+        void OnRenderTargetUpdate(
+            IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
+            const RenderCore::FrameBufferProperties& fbProps,
+            IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override
+        {}
 
         property VisCameraSettings^ CameraSettings {
             void set(VisCameraSettings^ cameraSettings)

@@ -6,10 +6,11 @@
 
 #pragma once
 
+#include "../../Utility/IteratorUtils.h"
 #include <memory>
 
-namespace RenderCore { class IThreadContext; class IResource; }
-namespace RenderCore { namespace Techniques { class ParsingContext; }}
+namespace RenderCore { class IThreadContext; class IResource; class FrameBufferProperties; enum class Format; }
+namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; }}
 
 namespace GUILayer 
 {
@@ -19,6 +20,10 @@ namespace GUILayer
     public:
         virtual void Render(
             RenderCore::Techniques::ParsingContext& parserContext) = 0; 
+        virtual void OnRenderTargetUpdate(
+            IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
+            const RenderCore::FrameBufferProperties& fbProps,
+            IteratorRange<const RenderCore::Format*> systemAttachmentFormats) = 0;
         virtual ~IOverlaySystem();
     };
 }

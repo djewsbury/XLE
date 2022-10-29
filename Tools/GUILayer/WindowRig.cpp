@@ -8,14 +8,16 @@
 #include "ExportedNativeTypes.h"
 #include "../../PlatformRig/OverlappedWindow.h"
 #include "../../PlatformRig/FrameRig.h"
+#include "../../PlatformRig/OverlaySystem.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/ResourceDesc.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
+#include "../../RenderCore/Techniques/RenderPass.h"
+#include "../../RenderCore/Techniques/Techniques.h"
 #include "../../Utility/PtrUtils.h"
 #include "../../OSServices/WinAPI/IncludeWindows.h"
 
-#include "../../PlatformRig/OverlaySystem.h"
-#include "../../RenderOverlays/DebuggingDisplay.h"
+// #include "../../RenderOverlays/DebuggingDisplay.h"
 
 namespace GUILayer
 {
@@ -62,6 +64,8 @@ namespace GUILayer
         for (auto i=_windowHandlers.begin(); i!=_windowHandlers.end(); ++i) {
             (*i)->OnResize(newWidth, newHeight);
         }
+        RenderCore::Techniques::ResetFrameBufferPool(*_frameRig->GetTechniqueContext()._frameBufferPool);
+        _frameRig->GetTechniqueContext()._attachmentPool->ResetActualized();
         _frameRig->UpdatePresentationChain(*_device, *_presentationChain);
     }
 

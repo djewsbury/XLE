@@ -94,6 +94,14 @@ namespace GUILayer
             {
             }
 
+            void OnRenderTargetUpdate(
+                IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
+                const RenderCore::FrameBufferProperties& fbProps,
+                IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override
+            {
+                _managedOverlay->OnRenderTargetUpdate(preregAttachments, fbProps, systemAttachmentFormats);
+            }
+
             OverlaySystemAdapter(::GUILayer::IOverlaySystem^ managedOverlay) : _managedOverlay(managedOverlay) {}
             ~OverlaySystemAdapter() {}
         protected:
