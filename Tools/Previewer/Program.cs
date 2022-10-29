@@ -163,9 +163,11 @@ namespace Previewer
             }
 
             Application.Run(mainForm);
+
+            foreach (var initializable in container.GetExportedValues<XLEBridgeUtils.IShutdownWithEngine>())
+                initializable.Shutdown();
             container.Dispose();
             mainForm.Dispose();
-
             logRedirect.Dispose();
             engineDevice.PrepareForShutdown();
             XLEBridgeUtils.Utils.DetachLibrary(engineDevice);

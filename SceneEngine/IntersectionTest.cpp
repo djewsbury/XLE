@@ -280,6 +280,7 @@ namespace SceneEngine
                 }
             } 
             CATCH(const ::Assets::Exceptions::RetrievalError&) {}
+            CATCH(const std::exception&) {}        // can sometimes through runtime_errors on pending assets
             CATCH_END
         }
 
@@ -359,6 +360,7 @@ namespace SceneEngine
                     }
                 } 
                 CATCH(const ::Assets::Exceptions::RetrievalError&) {}
+                CATCH(const std::exception&) {}        // can sometimes through runtime_errors on pending assets
                 CATCH_END
 
                 trans->Cancel();
