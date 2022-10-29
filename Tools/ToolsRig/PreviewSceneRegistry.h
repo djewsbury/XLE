@@ -26,7 +26,8 @@ namespace ToolsRig
 			StringSection<>, 
 			const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>&,
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>&,
-			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>&) = 0;
+			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>&,
+			const std::shared_ptr<::Assets::OperationContext>&) = 0;
 		virtual ~IPreviewSceneRegistrySet() = default;
 	};
 
@@ -45,7 +46,8 @@ namespace ToolsRig
 			StringSection<>, 
 			const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>&,
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>&,
-			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>&) = 0;
+			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>&,
+			const std::shared_ptr<::Assets::OperationContext>&) = 0;
 
 		virtual std::shared_ptr<IConfigurablePlugin> GetConfigurablePlugin(
 			StringSection<>) = 0;

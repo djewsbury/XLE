@@ -84,7 +84,7 @@ namespace GUILayer
 		auto drawablesPool = EngineDevice::GetInstance()->GetNative().GetDrawingApparatus()->_drawablesPool;
 		auto deformAcceleratorPool = EngineDevice::GetInstance()->GetNative().GetDrawingApparatus()->_deformAccelerators;
 		auto nativeName = clix::marshalString<clix::E_UTF8>(name);
-		auto scene = ToolsRig::Services::GetPreviewSceneRegistry().CreateScene(MakeStringSection(nativeName), drawablesPool, pipelineAcceleratorPool, deformAcceleratorPool);
+		auto scene = ToolsRig::Services::GetPreviewSceneRegistry().CreateScene(MakeStringSection(nativeName), drawablesPool, pipelineAcceleratorPool, deformAcceleratorPool, _pimpl->_loadingContext);
 		_pimpl->_overlayBinder->SetScene(std::move(scene));
 		// _pimpl->ApplyPatchCollection();
 	}
