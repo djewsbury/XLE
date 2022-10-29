@@ -909,17 +909,32 @@ namespace GUILayer
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+    ref struct InvalidAssetListHelper
+    {
+        InvalidAssetList^ _ial;
+    };
+
     static unsigned BindHelper(
         PlatformRig::Overlays::ITrackedAssetList& trackedAssetList,
         InvalidAssetList^ thisHandle)
     {
-        // we have to jump through a ton of hoops to make this work
-        struct Helper { msclr::auto_gcroot<InvalidAssetList^> _thisHandle; };
-        auto helper = std::make_shared<Helper>();
-        helper->_thisHandle = thisHandle;
+        // We have to jump through a ton of hoops to make this work
+        // auto_gcroot to a managed class that contains a reference counted pointer
+        // to the original InvalidAssetList
+        // However, the auto_gcroot has to be contained in a std::shared_ptr<> because
+        // we can't copy it during the conversion from lambda -> std::function<...> in BindOnChange
+
+        struct Helper2
+        {
+            msclr::auto_gcroot<InvalidAssetListHelper^> _helper;
+        };
+
+        auto helper = std::make_shared<Helper2>();
+        helper ->_helper = gcnew InvalidAssetListHelper;
+        helper->_helper->_ial = thisHandle;
         return trackedAssetList.BindOnChange(
             [helper=std::move(helper)]() {
-                helper->_thisHandle->InvokeOnChange(nullptr);
+                helper->_helper->_ial->InvokeOnChange(nullptr);
             });
     }
 
@@ -934,6 +949,7 @@ namespace GUILayer
     InvalidAssetList::~InvalidAssetList()
     {
         _trackedAssetList->UnbindOnChange(_onChangeSignalId);
+        _trackedAssetList.reset();
     }
 
     void InvalidAssetList::InvokeOnChange(System::Object^)

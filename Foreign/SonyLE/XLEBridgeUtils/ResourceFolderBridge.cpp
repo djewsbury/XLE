@@ -152,7 +152,7 @@ namespace XLEBridgeUtils
 
 	ResourceFolderBridge::~ResourceFolderBridge() 
 	{
-		delete _walker;
+		_walker.reset();
 	}
 
 	[Export(LevelEditorCore::IResourceQueryService::typeid)]

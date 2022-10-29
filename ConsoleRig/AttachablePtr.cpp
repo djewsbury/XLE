@@ -4,8 +4,10 @@
 
 #include "AttachablePtr.h"
 #include "../Utility/IteratorUtils.h"
+#include "../Utility/StringUtils.h"
 #include "../Utility/Threading/Mutex.h"
 #include "../Core/SelectConfiguration.h"
+#include "../Core/Exceptions.h"
 #include <vector>
 #include <stdexcept>
 
@@ -40,8 +42,8 @@ namespace ConsoleRig
 				unsigned _localStrongReferenceCounts = 0;
 				unsigned _localWeakReferenceCounts = 0;
 				std::shared_ptr<void> _currentValue;
-				std::function<void(const std::shared_ptr<void>&)> _attachModuleFn;
-				std::function<void(const std::shared_ptr<void>&)> _detachModuleFn;
+				AttachDetachSig* _attachModuleFn = nullptr;
+				AttachDetachSig* _detachModuleFn = nullptr;
 			};
 			std::vector<std::pair<TypeKey, RegisteredType>> _registeredTypes;
 
@@ -129,8 +131,8 @@ namespace ConsoleRig
 
 		void InfraModuleManager::ConfigureType(
 			TypeKey id,
-			std::function<void(const std::shared_ptr<void>&)>&& attachModuleFn,
-			std::function<void(const std::shared_ptr<void>&)>&& detachModuleFn)
+			AttachDetachSig* attachModuleFn,
+			AttachDetachSig* detachModuleFn)
 		{
 			ScopedLock(_pimpl->_pointersAndTypesLock);
 			auto i2 = LowerBound(_pimpl->_registeredTypes, id);
@@ -138,8 +140,8 @@ namespace ConsoleRig
 				i2 = _pimpl->_registeredTypes.insert(i2, {id, Pimpl::RegisteredType{0}});
 			
 			assert(!i2->second._attachModuleFn && !i2->second._detachModuleFn);
-			i2->second._attachModuleFn = std::move(attachModuleFn);
-			i2->second._detachModuleFn = std::move(detachModuleFn);
+			i2->second._attachModuleFn = attachModuleFn;
+			i2->second._detachModuleFn = detachModuleFn;
 
 			// if there's already local reference counts, we should in theory call the attach function here
 			if ((i2->second._localStrongReferenceCounts + i2->second._localWeakReferenceCounts) != 0 && i2->second._currentValue)

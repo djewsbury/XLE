@@ -4,7 +4,9 @@
 
 #pragma once
 
-#include "../Utility/FunctionUtils.h"
+#include "../Utility/FunctionUtils.h"		// (for VariantFunctions)
+#include "../Core/Prefix.h"
+#include "../Core/SelectConfiguration.h"
 #include <memory>
 #include <typeinfo>
 #include <typeindex>
@@ -43,10 +45,11 @@ namespace ConsoleRig
 			RegisteredPointerId Register(TypeKey id, IRegistrablePointer* ptr, bool strong);
 			void Deregister(RegisteredPointerId);
 
+			using AttachDetachSig = void(const std::shared_ptr<void>&);
 			void ConfigureType(
 				TypeKey id,
-				std::function<void(const std::shared_ptr<void>&)>&& attachModuleFn,
-				std::function<void(const std::shared_ptr<void>&)>&& detachModuleFn);
+				AttachDetachSig* attachModuleFn,
+				AttachDetachSig* detachModuleFn);
 
 			void EnsureRegistered();
 
@@ -193,37 +196,6 @@ namespace ConsoleRig
 	};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-	namespace Internal
-	{
-		template<typename T> struct HasAttachCurrentModule
-		{
-			template<typename U, void (U::*)()> struct FunctionSignature {};
-			template<typename U> static std::true_type Test1(FunctionSignature<U, &U::AttachCurrentModule>*);
-			template<typename U> static std::false_type Test1(...);
-			static const bool Result = decltype(Test1<T>(0))::value;
-		};
-
-		template<typename Obj, typename std::enable_if<HasAttachCurrentModule<Obj>::Result>::type* = nullptr>
-			static void TryAttachCurrentModule(Obj& obj)
-		{
-			obj.AttachCurrentModule();
-		}
-
-		template<typename Obj, typename std::enable_if<HasAttachCurrentModule<Obj>::Result>::type* = nullptr>
-			static void TryDetachCurrentModule(Obj& obj)
-		{
-			obj.DetachCurrentModule();
-		}
-
-		template<typename Obj, typename std::enable_if<!HasAttachCurrentModule<Obj>::Result>::type* = nullptr>
-			static void TryAttachCurrentModule(Obj& obj) {}
-
-		template<typename Obj, typename std::enable_if<!HasAttachCurrentModule<Obj>::Result>::type* = nullptr>
-			static void TryDetachCurrentModule(Obj& obj) {}
-	}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
 	
 	template<typename Obj>
 		AttachablePtr<Obj>::AttachablePtr(const std::shared_ptr<Obj>& copyFrom)
@@ -296,6 +268,14 @@ namespace ConsoleRig
 
 	namespace Internal
 	{
+		template<typename T> struct HasAttachCurrentModule
+		{
+			template<typename U, void (U::*)()> struct FunctionSignature {};
+			template<typename U> static std::true_type Test1(FunctionSignature<U, &U::AttachCurrentModule>*);
+			template<typename U> static std::false_type Test1(...);
+			static const bool Result = decltype(Test1<T>(0))::value;
+		};
+
 		template<typename Obj>
 			void TryConfigureType()
 		{
@@ -305,14 +285,18 @@ namespace ConsoleRig
 				static bool s_typeConfigured = false;
 			#endif
 			if (!s_typeConfigured) {
-				Internal::InfraModuleManager::GetInstance().ConfigureType(
-					Internal::KeyForType<Obj>(),
-					[](const std::shared_ptr<void>& singleton) {
-						Internal::TryAttachCurrentModule(*static_cast<Obj*>(singleton.get()));
-					},
-					[](const std::shared_ptr<void>& singleton) {
-						Internal::TryDetachCurrentModule(*static_cast<Obj*>(singleton.get()));
-					});
+				if constexpr (HasAttachCurrentModule<Obj>::Result) {
+					Internal::InfraModuleManager::GetInstance().ConfigureType(
+						Internal::KeyForType<Obj>(),
+						[](const std::shared_ptr<void>& singleton) {
+							static_cast<Obj*>(singleton.get())->AttachCurrentModule();
+						},
+						[](const std::shared_ptr<void>& singleton) {
+							static_cast<Obj*>(singleton.get())->DetachCurrentModule();
+						});
+				} else {
+					Internal::InfraModuleManager::GetInstance().ConfigureType(Internal::KeyForType<Obj>(), nullptr, nullptr);
+				}
 				s_typeConfigured = true;
 			}
 		}

@@ -148,8 +148,7 @@ namespace GUILayer
 		if (_messageFilter.get())
 			System::Windows::Forms::Application::RemoveMessageFilter(_messageFilter.get());
 		PlatformRig::SetOSRunLoop(nullptr);
-        ::Assets::Services::GetAssetSets().Clear();
-		_services->UnloadDefaultPlugins();
+        _services->PrepareForDestruction();
         ToolsRig::UnmountEntityDocument(_defaultEnvMount);
         ::Assets::MainFileSystem::GetMountingTree()->Unmount(_mountId2);
         ::Assets::MainFileSystem::GetMountingTree()->Unmount(_mountId1);
