@@ -301,17 +301,17 @@ namespace EntityInterface
         std::shared_ptr<SceneEngine::PlacementsManager> manager,
         std::shared_ptr<SceneEngine::PlacementsEditor> editor,
 		std::shared_ptr<SceneEngine::PlacementsEditor> hiddenObjects,
-		StringSection<> initializer)
+		StringSection<> initializer,
+		uint64_t documentId)
     : _manager(std::move(manager))
     , _editor(std::move(editor))
 	, _hiddenObjects(std::move(hiddenObjects))
+	, _cellId(documentId)
     {
             // todo -- boundary of this cell should be set to something reasonable
             //          (or at least adapt as objects are added and removed)
-		auto nullTerm = initializer.AsString();
-        _cellId = _editor->CreateCell(nullTerm.c_str(), Float2(-100000.f, -100000.f), Float2(100000.f, 100000.f));
-		auto hiddenResult = _hiddenObjects->CreateCell(nullTerm.c_str(), Float2(-100000.f, -100000.f), Float2(100000.f, 100000.f));
-		assert(_cellId == hiddenResult);	// ids must match up
+        _editor->CreateCell(_cellId, Float2(-100000.f, -100000.f), Float2(100000.f, 100000.f));
+		_hiddenObjects->CreateCell(_cellId, Float2(-100000.f, -100000.f), Float2(100000.f, 100000.f));
 	}
 
     PlacementEntities::~PlacementEntities()
@@ -324,11 +324,9 @@ namespace EntityInterface
 	class PlacementEntitiesType : public Switch::IDocumentType
 	{
 	public:
-		std::shared_ptr<IMutableEntityDocument> CreateDocument(StringSection<> initializer)
+		std::shared_ptr<IMutableEntityDocument> CreateDocument(StringSection<> initializer, DocumentId docId)
 		{
-			StringMeld<MaxPath, ::Assets::ResChar> meld;
-        	meld << "[dyn] " << initializer << (_cellCounter++);
-			return std::make_shared<PlacementEntities>(_manager, _editor, _hiddenObjects, meld);
+			return std::make_shared<PlacementEntities>(_manager, _editor, _hiddenObjects, initializer, docId);
 		}
 
 		PlacementEntitiesType(

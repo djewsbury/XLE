@@ -130,7 +130,7 @@ namespace EntityInterface
         class IDocumentType
         {
         public:
-            virtual std::shared_ptr<IMutableEntityDocument> CreateDocument(StringSection<> initializer) = 0;
+            virtual std::shared_ptr<IMutableEntityDocument> CreateDocument(StringSection<> initializer, DocumentId) = 0;
             virtual ~IDocumentType() = default;
         };
 

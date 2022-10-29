@@ -2605,6 +2605,24 @@ namespace SceneEngine
         return newCell._filenameHash;
     }
 
+    void PlacementsEditor::CreateCell(uint64_t documentId, const Float2& mins, const Float2& maxs)
+    {
+        auto existing = std::find_if(
+            _pimpl->_cellSet->_pimpl->_cells.begin(), _pimpl->_cellSet->_pimpl->_cells.end(),
+            [documentId](const auto& c) { return c._filenameHash == documentId; });
+        assert(existing == _pimpl->_cellSet->_pimpl->_cells.end());     // if you hit this, there is another cell with the same id
+
+        PlacementCell newCell;
+        XlCopyString(newCell._filename, "[dyn]");
+        newCell._filenameHash = documentId;
+        newCell._cellToWorld = Identity<decltype(newCell._cellToWorld)>();
+        newCell._aabbMin = Expand(mins, -10000.f);
+        newCell._aabbMax = Expand(maxs,  10000.f);
+        newCell._captureMins = mins;
+        newCell._captureMaxs = maxs;
+        _pimpl->_cellSet->_pimpl->_cells.push_back(newCell);
+    }
+
     bool PlacementsEditor::RemoveCell(uint64_t id)
     {
         auto i = std::lower_bound(_pimpl->_cellSet->_pimpl->_cells.begin(), _pimpl->_cellSet->_pimpl->_cells.end(), id, CompareFilenameHash());

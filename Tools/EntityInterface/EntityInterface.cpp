@@ -626,8 +626,8 @@ namespace EntityInterface
 	{
 		for (auto i=_documentTypes.begin(); i!=_documentTypes.end(); ++i)
 			if (XlEqString(docType, i->first)) {
-				auto newDoc = i->second->CreateDocument(initializer);
 				auto result = _nextDocumentId++;
+				auto newDoc = i->second->CreateDocument(initializer, result);
 				_documents.emplace_back(result, std::move(newDoc));
 				return result;
 			}

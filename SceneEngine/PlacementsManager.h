@@ -191,6 +191,7 @@ namespace SceneEngine
             TransactionFlags::BitField transactionFlags = 0);
 
         uint64_t  CreateCell(const ::Assets::ResChar name[], const Float2& mins, const Float2& maxs);
+        void    CreateCell(uint64_t documentId, const Float2& mins, const Float2& maxs);
         bool    RemoveCell(uint64_t id);
         static uint64_t GenerateObjectGUID();
         void    PerformGUIDFixup(PlacementGUID* begin, PlacementGUID* end) const;

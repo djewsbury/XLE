@@ -35,7 +35,8 @@ namespace EntityInterface
             std::shared_ptr<SceneEngine::PlacementsManager> manager,
             std::shared_ptr<SceneEngine::PlacementsEditor> editor,
 			std::shared_ptr<SceneEngine::PlacementsEditor> hiddenObjects,
-            StringSection<> initializer);
+            StringSection<> initializer,
+            uint64_t documentId);
         ~PlacementEntities();
 
     protected:
