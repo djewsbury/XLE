@@ -23,6 +23,7 @@ float4 main(float4 pos : SV_Position) : SV_Target0
 		//	purposes, and convenient to do this it this way.
 
 	int2 basePos = int2(pos.xy);
+	if (frac((basePos.x + basePos.y) / 8.f) < 0.5f) discard;
 	if (InputTexture.Load(int3(basePos, 0)).a > 0.01f) discard;
 
 	float2 dhdp = 0.0.xx;
@@ -32,13 +33,12 @@ float4 main(float4 pos : SV_Position) : SV_Target0
 				//	kind of scalar. We could use luminance. But if we
 				//	just want to find the outline of a rendered area,
 				//	then we can use the alpha channel
-			float value = InputTexture.Load(int3(basePos + 2*int2(x-2, y-2), 0)).a > 0.01f;
+			int3 lookup = int3(basePos + 2*int2(x-2, y-2), 0);
+			float value = InputTexture.Load(lookup).a > 0.01f;
 			dhdp.x += ScharrHoriz5x5[x][y] * value;
 			dhdp.y += ScharrVert5x5[x][y] * value;
 		}
 	}
-
-	if (frac((basePos.x + basePos.y) / 8.f) < 0.5f) discard;
 
 	float alpha = max(abs(dhdp.x), abs(dhdp.y));
 	alpha = 1.0f - pow(1.0f-alpha, 8.f);

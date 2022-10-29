@@ -7,6 +7,7 @@
 #include "../../RenderCore/Assets/RawMaterial.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/CompileAndAsyncManager.h"
+#include "../../Assets/OperationContext.h"
 #include "../../Utility/Threading/Mutex.h"
 
 namespace ToolsRig
@@ -97,6 +98,13 @@ namespace ToolsRig
 
 	MessageRelay::~MessageRelay()
 	{}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	std::shared_ptr<::Assets::OperationContext> CreateLoadingContext()
+	{
+		return std::make_shared<::Assets::OperationContext>();
+	}
 	
 }
 

@@ -87,14 +87,20 @@ namespace ToolsRig
 	public:
 		::Assets::PtrToMarkerPtr<RenderCore::Techniques::TechniqueSetFile> _techniqueSetFile;
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _forwardIllumDelegate;
+        std::shared_ptr<RenderCore::Techniques::SequencerConfig> _renderHighlightCfg;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSetFile->GetDependencyValidation(); }
 
-		TechniqueBox()
+		TechniqueBox(RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool, const RenderCore::FrameBufferDesc& fbDesc)
 		{
 			_techniqueSetFile = ::Assets::MakeAssetMarkerPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
 			_forwardIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Utility(
                 _techniqueSetFile->ShareFuture(), RenderCore::Techniques::UtilityDelegateType::FlatColor);
+
+            _renderHighlightCfg = pipelineAcceleratorPool.CreateSequencerConfig(
+                "render-highlight",
+				_forwardIllumDelegate, ParameterBox{}, 
+				fbDesc);
 		}
 	};
 
@@ -109,10 +115,7 @@ namespace ToolsRig
     {
         CATCH_ASSETS_BEGIN
             RenderOverlays::BinaryHighlight highlight{parserContext};
-			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
-                "render-highlight",
-				ConsoleRig::FindCachedBox<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
-				highlight.GetFrameBufferDesc());
+            const auto* sequencerCfg = ConsoleRig::FindCachedBox<TechniqueBox>(pipelineAccelerators, highlight.GetFrameBufferDesc())._renderHighlightCfg.get();
             Placements_RenderFiltered(
                 parserContext, pipelineAccelerators,
 				*sequencerCfg,
@@ -132,10 +135,7 @@ namespace ToolsRig
     {
 		CATCH_ASSETS_BEGIN
             RenderOverlays::BinaryHighlight highlight{parserContext};
-			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
-                "render-highlight",
-				ConsoleRig::FindCachedBox<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
-				highlight.GetFrameBufferDesc());
+            const auto* sequencerCfg = ConsoleRig::FindCachedBox<TechniqueBox>(pipelineAccelerators, highlight.GetFrameBufferDesc())._renderHighlightCfg.get();
             Placements_RenderFiltered(
                 parserContext, pipelineAccelerators,
 				*sequencerCfg,
@@ -159,10 +159,7 @@ namespace ToolsRig
     {
         CATCH_ASSETS_BEGIN
             RenderOverlays::BinaryHighlight highlight{parserContext};
-			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
-                "render-shadow",
-				ConsoleRig::FindCachedBox<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
-				highlight.GetFrameBufferDesc());
+			const auto* sequencerCfg = ConsoleRig::FindCachedBox<TechniqueBox>(pipelineAccelerators, highlight.GetFrameBufferDesc())._renderHighlightCfg.get();
 			Placements_RenderFiltered(
                 parserContext, pipelineAccelerators,
 				*sequencerCfg,

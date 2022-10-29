@@ -8,6 +8,8 @@
 #include <vector>
 #include <string>
 
+namespace Assets { class OperationContext; }
+
 namespace ToolsRig
 {
 	class OnChangeCallback
@@ -43,4 +45,6 @@ namespace ToolsRig
 		using BitField = unsigned;
 	}
 	CompilationTarget::BitField FindCompilationTargets(StringSection<> ext);
+
+	std::shared_ptr<::Assets::OperationContext> CreateLoadingContext();
 }

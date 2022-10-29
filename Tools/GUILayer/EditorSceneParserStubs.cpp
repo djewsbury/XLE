@@ -181,8 +181,6 @@ namespace GUILayer
 
         _scene->_rigidModelScene->OnFrameBarrier();     // todo -- move somewhere better
 
-        UInt2 viewportDims { parserContext.GetViewport()._width, parserContext.GetViewport()._height };
-
         auto& stitchingContext = parserContext.GetFragmentStitchingContext();
 
         // todo -- stitching context compatibility

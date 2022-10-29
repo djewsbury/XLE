@@ -16,6 +16,7 @@
 #include "../ToolsRig/BasicManipulators.h"
 #include "../ToolsRig/PreviewSceneRegistry.h"
 #include "../ToolsRig/ToolsRigServices.h"
+#include "../ToolsRig/MiscUtils.h"
 #include "../../PlatformRig/WinAPI/InputTranslator.h"
 #include "../../PlatformRig/FrameRig.h"
 #include "../../PlatformRig/OverlaySystem.h"
@@ -40,6 +41,7 @@ namespace GUILayer
 		std::shared_ptr<ToolsRig::VisCameraSettings> _camera;
 		std::shared_ptr<ToolsRig::VisAnimationState> _animState;
 		std::shared_ptr<ToolsRig::VisOverlayController> _overlayBinder;
+		std::shared_ptr<::Assets::OperationContext> _loadingContext;
 
 		std::shared_ptr<ToolsRig::DeferredCompiledShaderPatchCollection> _patchCollection;
 
@@ -145,6 +147,7 @@ namespace GUILayer
 		_pimpl.reset(new VisLayerControllerPimpl());
 		_pimpl->_animState = std::make_shared<ToolsRig::VisAnimationState>();
 		_pimpl->_camera = std::make_shared<ToolsRig::VisCameraSettings>();
+		_pimpl->_loadingContext = ToolsRig::CreateLoadingContext();
 
 		_pimpl->_modelLayer = ToolsRig::CreateSimpleSceneOverlay(immediateDrawableApparatus, lightingEngineApparatus, drawingApparatus->_deformAccelerators);
 		// _pimpl->_modelLayer->Set(ToolsRig::VisEnvSettings{});
@@ -166,7 +169,7 @@ namespace GUILayer
 			_pimpl->_manipulatorLayer = ToolsRig::MakeLayerForInput(manipulators);
 		}
 
-		_pimpl->_overlayBinder = std::make_shared<ToolsRig::VisOverlayController>(drawingApparatus->_drawablesPool, drawingApparatus->_pipelineAccelerators, drawingApparatus->_deformAccelerators);
+		_pimpl->_overlayBinder = std::make_shared<ToolsRig::VisOverlayController>(drawingApparatus->_drawablesPool, drawingApparatus->_pipelineAccelerators, drawingApparatus->_deformAccelerators, _pimpl->_loadingContext);
 		_pimpl->_overlayBinder->AttachSceneOverlay(_pimpl->_modelLayer);
 		_pimpl->_overlayBinder->AttachVisualisationOverlay(_pimpl->_visOverlay);
 

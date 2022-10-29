@@ -822,7 +822,7 @@ namespace ToolsRig
 		SubpassDesc mainPass;
 		mainPass.SetName("VisualisationOverlay");
 		mainPass.SetDepthStencil(
-			fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear, 0),
+			fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear, 0).FinalState(BindFlag::ShaderResource),
 			TextureViewDesc{TextureViewDesc::Aspect::Stencil});
 		fbDesc.AddSubpass(std::move(mainPass));
 		return fbDesc;
@@ -1056,7 +1056,7 @@ namespace ToolsRig
 
 			// register a default depth texture
 			auto depthDesc = colorPreg._desc;
-			depthDesc._bindFlags = BindFlag::DepthStencil|BindFlag::TransferSrc;
+			depthDesc._bindFlags = BindFlag::DepthStencil|BindFlag::TransferSrc|BindFlag::ShaderResource;
 			assert(systemAttachmentFormats.size() > (unsigned)Techniques::SystemAttachmentFormat::MainDepthStencil);
 			depthDesc._textureDesc._format = systemAttachmentFormats[(unsigned)Techniques::SystemAttachmentFormat::MainDepthStencil];
 			stitching.DefineAttachment({Techniques::AttachmentSemantics::MultisampleDepth, depthDesc, Techniques::PreregisteredAttachment::State::Initialized});
