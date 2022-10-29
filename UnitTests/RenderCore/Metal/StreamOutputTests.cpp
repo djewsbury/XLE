@@ -9,6 +9,7 @@
 #include "../../../RenderCore/Metal/Resource.h"
 #include "../../../RenderCore/Metal/InputLayout.h"
 #include "../../../RenderCore/Metal/State.h"
+#include "../../../RenderCore/Metal/QueryPool.h"
 #include "../../../RenderCore/Format.h"
 #include "../../../RenderCore/BufferView.h"
 #include "../../../Math/Vector.h"
@@ -102,7 +103,7 @@ namespace UnitTests
 
 		auto vertexBuffer = testHelper->_device->CreateResource(
 			CreateDesc(
-				BindFlag::VertexBuffer,
+				BindFlag::VertexBuffer, AllocationRules::HostVisibleSequentialWrite,
 				LinearBufferDesc::Create(1024, 1024),
 				"vertexBuffer"),
 			SubResourceInitData{MakeIteratorRange(inputVertices)});
@@ -110,16 +111,15 @@ namespace UnitTests
 		Metal::BoundInputLayout inputLayout(MakeIteratorRange(inputEle), shaderProgram);
 
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
+		UnitTestFBHelper dummyFBHelper(*testHelper->_device, *threadContext);
+
+		Metal::GraphicsPipelineBuilder pipelineBuilder;
+		pipelineBuilder.SetRenderPassConfiguration(dummyFBHelper.GetDesc(), 0);
+		pipelineBuilder.Bind(inputLayout, Topology::TriangleList);
+		pipelineBuilder.Bind(shaderProgram);
+		auto pipeline = pipelineBuilder.CreatePipeline(Metal::GetObjectFactory(*testHelper->_device));
 
 		{
-			UnitTestFBHelper dummyFBHelper(*testHelper->_device, *threadContext);
-
-			Metal::GraphicsPipelineBuilder pipelineBuilder;
-			pipelineBuilder.SetRenderPassConfiguration(dummyFBHelper.GetDesc(), 0);
-			pipelineBuilder.Bind(inputLayout, Topology::TriangleList);
-			pipelineBuilder.Bind(shaderProgram);
-			auto pipeline = pipelineBuilder.CreatePipeline(Metal::GetObjectFactory());
-
 			auto rpi = dummyFBHelper.BeginRenderPass(*threadContext);
 
 			VertexBufferView sov { soBuffer.get() };
@@ -138,5 +138,43 @@ namespace UnitTests
 		REQUIRE(Equivalent(readbackData[1], Float4{25.f, 26.f, 27.f, 28.f}, 1e-6f));
 		REQUIRE(Equivalent(readbackData[2], Float4{41.f, 42.f, 43.f, 44.f}, 1e-6f));
 		REQUIRE(1024 == readbackBuffer.size());
+
+		// try same thing again, this time with a query wrapped around the operation
+		SECTION("with query")
+		{
+			auto streamOutputQueryPool = std::make_unique<RenderCore::Metal::QueryPool>(
+				Metal::GetObjectFactory(*testHelper->_device), 
+				Metal::QueryPool::QueryType::StreamOutput_Stream0, 4);
+
+			auto queryId = streamOutputQueryPool->Begin(metalContext);
+
+			auto rpi = dummyFBHelper.BeginRenderPass(*threadContext);
+
+			VertexBufferView sov { soBuffer.get() };
+			auto encoder = metalContext.BeginStreamOutputEncoder(
+				testHelper->_pipelineLayout, MakeIteratorRange(&sov, &sov+1));
+
+			VertexBufferView vbv { vertexBuffer.get() };
+			encoder.Bind(MakeIteratorRange(&vbv, &vbv+1), {});
+			encoder.Draw(*pipeline, dimof(inputVertices));
+
+			encoder = {};
+			rpi = {};
+			streamOutputQueryPool->End(metalContext, queryId);
+			threadContext->CommitCommands(CommitCommandsFlags::WaitForCompletion);
+
+			Metal::QueryPool::QueryResult_StreamOutput out;
+			streamOutputQueryPool->GetResults_Stall(metalContext, queryId, MakeOpaqueIteratorRange(out));
+			REQUIRE(out._primitivesWritten == 3);
+			REQUIRE(out._primitivesNeeded == 3);
+
+			auto readbackBuffer = soBuffer->ReadBackSynchronized(*threadContext);
+			auto* readbackData = (Float4*)readbackBuffer.data();
+
+			REQUIRE(Equivalent(readbackData[0], Float4{11.f, 12.f, 13.f, 14.f}, 1e-6f));
+			REQUIRE(Equivalent(readbackData[1], Float4{25.f, 26.f, 27.f, 28.f}, 1e-6f));
+			REQUIRE(Equivalent(readbackData[2], Float4{41.f, 42.f, 43.f, 44.f}, 1e-6f));
+			REQUIRE(1024 == readbackBuffer.size());
+		}
 	}
 }
