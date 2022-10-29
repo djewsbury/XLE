@@ -255,6 +255,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		{
 			AttachmentDesc _desc;
 			Internal::AttachmentResourceUsageType::BitField _attachmentUsage = 0;
+			std::optional<VkImageLayout> _firstSubpassLayout;
+			std::optional<VkImageLayout> _lastSubpassLayout;
 		};
 		std::vector<std::pair<AttachmentName, WorkingAttachmentResource>> _workingAttachments;
 
@@ -322,18 +324,33 @@ namespace RenderCore { namespace Metal_Vulkan
             desc.stencilStoreOp = viewedAttachment._lastViewOfResource ? AsStoreOpStencil(finalStore) : VK_ATTACHMENT_STORE_OP_STORE;
 			assert(desc.format != VK_FORMAT_UNDEFINED);
 
-			desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			desc.finalLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-			// If we're loading or storing the data, we should set the initial and final layouts
-			// If the attachment desc has initial and/or final layout flags, those take precidence
-			// Otherwise 
-			if (HasRetain(attachmentDesc._loadFromPreviousPhase))
+			// Note that the initial/final layout flags are important even in the clear/discard cases. This can prevent a 
+			// render pass from clearing a target while it's still being used as a shader resource (for example)
+			if (attachmentDesc._initialLayout) {
 				desc.initialLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._initialLayout, res.second._attachmentUsage);
+			} else if (res.second._firstSubpassLayout.has_value()) {
+				// no explicit layout given, just assume it's in the correct state for the first subpass
+				desc.initialLayout = res.second._firstSubpassLayout.value();
+			} else {
+				desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			}
 
-			// Even if we don't have a "retain" on the store operation, we're still supposed to give the attachment
-			// a final layout. Using "undefined" here results in a validation warning
-			desc.finalLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._finalLayout, res.second._attachmentUsage);
+			// Getting incorrect behaviour in GUI tools when the initial layout is PRESENT_SRC
+			// Undefined should be fine here because we have other synchronization methods preventing overwriting
+			// an image that is currently presenting
+			if (desc.initialLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
+				assert(desc.loadOp != VK_ATTACHMENT_LOAD_OP_LOAD);		// if you hit this, avoid switching into PRESENT_SRC layout too soon
+				desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			}
+			
+			if (attachmentDesc._finalLayout) {
+				desc.finalLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._finalLayout, res.second._attachmentUsage);
+			} else if (res.second._lastSubpassLayout.has_value()) {
+				// no explicit layout given, just continue to be in whatever state it was last used
+				desc.finalLayout = res.second._lastSubpassLayout.value();
+			} else {
+				desc.finalLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			}
 
             if (attachmentDesc._flags & AttachmentDesc::Flags::Multisampled)
                 desc.samples = (VkSampleCountFlagBits)AsSampleCountFlagBits(_layout->GetProperties()._samples);
@@ -387,6 +404,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					view._lastViewOfResource = false;		// even if it were previously the last view, it is no longer
 				}
 			}
+			assert(firstViewOfResource == !i->second._firstSubpassLayout.has_value());
 
 			std::vector<WorkingViewedAttachment>::iterator i2 = _workingViewedAttachments.end();
 			if (!inputAttachmentReference) {
@@ -394,11 +412,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				i2 = std::find_if(
 					_workingViewedAttachments.begin(), _workingViewedAttachments.end(),
 					[viewHash, mappedAttachmentIdx](auto& i) { return i._mappedAttachmentIdx == mappedAttachmentIdx && i._viewHash == viewHash; });
-				if (i2 == _workingViewedAttachments.end()) {
+				if (i2 == _workingViewedAttachments.end())
 					i2 = _workingViewedAttachments.insert(_workingViewedAttachments.end(), WorkingViewedAttachment{mappedAttachmentIdx, view, viewHash, firstViewOfResource, true});
-				} else {
-					i2->_lastViewOfResource = true;
-				}
 			} else {
 				// For an input attachment, the properties of the view matter less -- because we bind a TextureView to the descriptor
 				// set that contains a lot of the important information. Instead we just want to find the most recent use of this physical
@@ -412,6 +427,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				if (i2 == _workingViewedAttachments.end())
 					Throw(std::runtime_error("Could not find earlier output operation for input attachment request when building Vulkan framebuffer"));
 			}
+
+			i2->_lastViewOfResource = true;
 
 			// check dependencies now. If there's a previous subpass that uses this resource and the view overlap, and the usages contain output somewhere, then we need a dependency
 			// We need to do this sometimes even when it seems like it shouldn't be required -- such as 2 subpasses that use the same depth/stencil buffer (otherwise we get validation errors)
@@ -432,7 +449,11 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 			}
 
-			return MakeAttachmentReference((uint32_t)std::distance(_workingViewedAttachments.begin(), i2), AsBindFlags(subpassUsage), i->second._attachmentUsage, view);
+			auto ref = MakeAttachmentReference((uint32_t)std::distance(_workingViewedAttachments.begin(), i2), AsBindFlags(subpassUsage), i->second._attachmentUsage, view);
+			if (!i->second._firstSubpassLayout)
+				i->second._firstSubpassLayout = ref.layout;
+			i->second._lastSubpassLayout = ref.layout;
+			return ref;
 		}
 		
 		RenderPassHelper(const FrameBufferDesc& layout)
