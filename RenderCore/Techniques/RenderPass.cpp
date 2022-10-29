@@ -34,8 +34,8 @@ namespace RenderCore
             if (!attachment._name.empty()) str << "\"" << attachment._name << "\"";
         #endif
         str << " " << AsString(attachment._format)
-            << ", L:" << AsString(attachment._loadFromPreviousPhase) << " " << BindFlagsAsString(attachment._initialLayout)
-            << ", S:" << AsString(attachment._storeToNextPhase) << " " << BindFlagsAsString(attachment._finalLayout)
+            << ", L:" << AsString(attachment._loadFromPreviousPhase) << "/" << BindFlagsAsString(attachment._initialLayout)
+            << ", S:" << AsString(attachment._storeToNextPhase) << "/" << BindFlagsAsString(attachment._finalLayout)
             << ", 0x" << std::hex << attachment._flags << std::dec
             << " }";
         return str;
@@ -1725,7 +1725,7 @@ namespace RenderCore { namespace Techniques
         str << "PreregisteredAttachment { "
             << AttachmentSemantic{attachment._semantic} << ", "
             << attachment._desc << ", "
-            << AsString(attachment._state) << ", "
+            << AsString(attachment._state) << "/"
             << BindFlagsAsString(attachment._layoutFlags) << "}";
         return str;
     }
@@ -1792,7 +1792,10 @@ namespace RenderCore { namespace Techniques
                 str << AttachmentSemantic{fragment._attachments[c].GetInputSemanticBinding()};
             } else
                 str << AttachmentSemantic{fragment._attachments[c].GetInputSemanticBinding()} << ", " << AttachmentSemantic{fragment._attachments[c].GetOutputSemanticBinding()};
-            str << ": " << fragment._attachments[c]._matchingRules << std::endl;
+            str << ": " << fragment._attachments[c]._matchingRules;
+            str << ", L: " << AsString(fragment._attachments[c]._loadFromPreviousPhase) << "/" << BindFlagsAsString(fragment._attachments[c]._initialLayout)
+                << ", S: " << AsString(fragment._attachments[c]._storeToNextPhase) << "/" << BindFlagsAsString(fragment._attachments[c]._finalLayout)
+                << std::endl;
         }
         str << "Subpasses: " << std::endl;
         for (unsigned c=0; c<fragment._subpasses.size(); ++c) {
@@ -1803,7 +1806,10 @@ namespace RenderCore { namespace Techniques
 
     static std::ostream& operator<<(std::ostream& str, const FrameBufferDescFragment::Attachment& attachment)
     {
-        str << AttachmentSemantic{attachment._semantic} << " : " << attachment._matchingRules;
+        str << AttachmentSemantic{attachment._semantic} 
+            << " : " << attachment._matchingRules
+            << ", L: " << AsString(attachment._loadFromPreviousPhase) << "/" << BindFlagsAsString(attachment._initialLayout)
+            << ", S: " << AsString(attachment._storeToNextPhase) << "/" << BindFlagsAsString(attachment._finalLayout);        
         return str;
     }
 

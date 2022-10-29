@@ -157,7 +157,7 @@ namespace RenderOverlays
         StringMeld<64, ::Assets::ResChar> params;
         params << "ONLY_HIGHLIGHTED=" << unsigned(onlyHighlighted);
         if (inputAttachmentMode) params << ";INPUT_MODE=" << 2;
-        else params << ";INPUT_MODE=" << (stencilInput?0:2);
+        else params << ";INPUT_MODE=" << (stencilInput?0:1);
 
         auto highlightShader = LoadShaderProgram(
             encoder.GetPipelineLayout(),
@@ -247,12 +247,13 @@ namespace RenderOverlays
         auto n_offscreen = fbDescFrag.DefineAttachment(0).FixedFormat(Format::R8G8B8A8_UNORM).MultisamplingMode(false)
             .Clear()
             .FinalState(s_inputAttachmentMode ? LoadStore::DontCare : LoadStore::Retain, BindFlag::ShaderResource);
-		const bool doDepthTest = true;
-        auto n_depth = doDepthTest ? fbDescFrag.DefineAttachment(RenderCore::Techniques::AttachmentSemantics::MultisampleDepth) : ~0u;
+        fbDescFrag._attachments[0]._initialLayout = BindFlag::ShaderResource;
 
 		Techniques::FrameBufferDescFragment::SubpassDesc subpass0;
 		subpass0.AppendOutput(n_offscreen);
-		subpass0.SetDepthStencil(n_depth, TextureViewDesc{ TextureViewDesc::Aspect::DepthStencil });
+        const bool doDepthTest = true;
+        if (doDepthTest)
+		    subpass0.SetDepthStencil(fbDescFrag.DefineAttachment(RenderCore::Techniques::AttachmentSemantics::MultisampleDepth), TextureViewDesc{ TextureViewDesc::Aspect::DepthStencil });
         subpass0.SetName("prepare-highlight");
 		fbDescFrag.AddSubpass(std::move(subpass0));
 
@@ -328,8 +329,6 @@ namespace RenderOverlays
 			encoder.Bind({}, Topology::TriangleStrip);
 			encoder.Draw(4);
 		}
-
-        _pimpl->_rpi.End();
     }
 
     void BinaryHighlight::FinishWithShadow(Float4 shadowColor)
@@ -362,8 +361,6 @@ namespace RenderOverlays
 			encoder.Bind({}, Topology::TriangleStrip);
 			encoder.Draw(4);
 		}
-
-        _pimpl->_rpi.End();
     }
 
     BinaryHighlight::~BinaryHighlight() {}

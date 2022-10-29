@@ -481,7 +481,7 @@ namespace SceneEngine
 			auto& model = *(RigidModelSceneInternal::ModelEntry*)modelPtr.get();
 			std::promise<ModelInfo> promise;
 			auto result = promise.get_future();
-			::Assets::WhenAll(model._completedConstruction).ThenConstructToPromise(
+			::Assets::WhenAll(model._completedConstruction).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
 				[](const auto& modelRendererConstruction) {
 					ModelInfo modelInfo;

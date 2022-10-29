@@ -146,6 +146,7 @@ namespace SceneEngine
 			placementsRenderer.BuildDrawablesSingleView(
 				sceneExeContext,
 				cellSet, &object, &object+1);
+            parsingContext.RequireCommandList(sceneExeContext._completionCmdList);
             for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c)
                 intersectionContext.ExecuteDrawables(parsingContext, pkt[c], cameraForLOD);
             parsingContext.RequireCommandList(sceneExeContext._completionCmdList);
@@ -260,6 +261,7 @@ namespace SceneEngine
                     }
                 }
                 CATCH(const ::Assets::Exceptions::RetrievalError&) {}
+                CATCH(const std::exception&) {}        // can sometimes through runtime_errors on pending assets
                 CATCH_END
 
                 trans->Cancel();
