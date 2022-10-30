@@ -49,10 +49,13 @@ namespace Assets
 		// AssociateRequest associates a pattern with a compiler (previously registered with RegisterCompiler)
 		// When requests are made (via Prepare) that match the pattern, that compiler can be selected to
 		// handle the request
+		// matchPattern uses wildcards::match, which is a little like glob and simpler than regex
+		// see https://github.com/zemasoft/wildcards
+		// matches are case sensitive
 		virtual void AssociateRequest(
 			RegisteredCompilerId compiler,
 			IteratorRange<const CompileRequestCode*> compileRequestCode,	///< id used to request this compilation operation. Matches "CompileProcessType" in compilable asset types
-			const std::string& initializerRegexFilter = {}					///< compiler will be invoked for assets that match this regex filter
+			const std::string& matchPattern = {}							///< compiler will be invoked for assets that match this pattern
 			) = 0;
 
 		//

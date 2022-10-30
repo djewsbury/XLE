@@ -50,7 +50,6 @@
 #include "thousandeyes/futures/then.h"
 #include "thousandeyes/futures/DefaultExecutor.h"
 #include <map>
-#include <regex>
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 

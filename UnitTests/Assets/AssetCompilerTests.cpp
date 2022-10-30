@@ -192,7 +192,7 @@ namespace UnitTests
 			compilers->AssociateRequest(
 				registration,
 				MakeIteratorRange(outputTypes),
-				"unit-test-asset-.*");
+				"unit-test-asset-*");
 
 			auto marker = compilers->Prepare(Type_UnitTestArtifact, ::Assets::InitializerPack { "unit-test-asset-one" });
 			REQUIRE(marker != nullptr);
@@ -292,7 +292,7 @@ namespace UnitTests
 			compilers->AssociateRequest(
 				registration,
 				MakeIteratorRange(outputTypes),
-				"unit-test-asset-.*");
+				"unit-test-asset-*");
 
 			auto initializer0 = "unit-test-asset-one";
 			auto initializer1 = "unit-test-asset-two";
@@ -323,7 +323,7 @@ namespace UnitTests
 		compilers.AssociateRequest(
 			registration.RegistrationId(),
 			MakeIteratorRange(outputTypes),
-			"unit-test-asset-.*");
+			"unit-test-asset-*");
 		return registration;
 	}
 
@@ -534,7 +534,7 @@ namespace UnitTests
 		compilers.AssociateRequest(
 			registration,
 			MakeIteratorRange(outputTypes),
-			"unit-test-asset-.*");
+			"unit-test-asset-*");
 
 		// start a compile via ConstructToMarkerPtr, and ensure that it gets propagated to the registered compiler and generates
 		// the asset as expected
@@ -568,7 +568,7 @@ namespace UnitTests
 		compilers.AssociateRequest(
 			registration,
 			MakeIteratorRange(outputTypes),
-			"unit-test-asset-.*");
+			"unit-test-asset-*");
 
 		auto opContext = std::make_shared<::Assets::OperationContext>();
 

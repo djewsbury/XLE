@@ -549,7 +549,7 @@ namespace Assets
 				auto& fs = _fileSystems[fsIdx];
 				if (!fs._pendingDirectories.empty()) continue;
 
-				auto foundMarkers = fs._fs->FindFiles(MakeStringSection(fs._internalPoint), ".*");
+				auto foundMarkers = fs._fs->FindFiles(MakeStringSection(fs._internalPoint), "*");
 
 				auto* baseFS = dynamic_cast<IFileSystem*>(fs._fs.get());
 				assert(baseFS);

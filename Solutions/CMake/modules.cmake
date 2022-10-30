@@ -26,10 +26,3 @@ add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../Tools/ToolsRig ToolsRig)
 add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../ColladaConversion ColladaConversion)
 
 add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../Foreign ForeignMisc)
-add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../Foreign/freetype freetype)
-add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../Foreign/Catch2 catch2)
-
-if (WIN32)
-    add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../Foreign/DirectXTex DirectXTex)
-    add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../Foreign/HLSLCC/mk HLSLCC)
-endif ()

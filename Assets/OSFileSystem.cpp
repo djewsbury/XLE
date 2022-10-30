@@ -11,9 +11,9 @@
 #include "../OSServices/FileSystemMonitor.h"
 #include "../Utility/Conversion.h"
 #include "../Core/Exceptions.h"
+#include "wildcards.hpp"
 #include <sstream>
 #include <vector>
-#include <regex>
 
 namespace Assets
 {
@@ -111,7 +111,7 @@ namespace Assets
 
         virtual std::vector<IFileSystem::Marker> FindFiles(
             StringSection<utf8> baseDirectory,
-            StringSection<utf8> regexMatchPattern);
+            StringSection<utf8> matchPattern);
         virtual std::vector<std::basic_string<utf8>> FindSubDirectories(
             StringSection<utf8> baseDirectory);
 
@@ -371,7 +371,7 @@ namespace Assets
 
     std::vector<IFileSystem::Marker> FileSystem_OS::FindFiles(
         StringSection<utf8> baseDirectory,
-        StringSection<utf8> regexMatchPattern)
+        StringSection<utf8> matchPattern)
     {
         std::string dir;
 		if (!baseDirectory.IsEmpty()) {
@@ -387,22 +387,35 @@ namespace Assets
         auto temp = OSServices::FindFiles(dir, OSServices::FindFilesFilter::File);
         std::vector<IFileSystem::Marker> res;
         res.reserve(temp.size());
-        std::regex r(regexMatchPattern.AsString());
-        for (const auto&t:temp) {
-            std::smatch match;
-            if (std::regex_match(t, match, r)) {
+		if (!matchPattern.IsEmpty() && !XlEqString(matchPattern, "*")) {
+			auto matcher = wildcards::make_matcher(matchPattern);
+			for (const auto&t:temp) {
+				if (matcher.matches(t)) {
+					Marker marker;
+					marker.resize(2 + (t.size()+ 1) * sizeof(utf8));
+					auto* out = AsPointer(marker.begin());
+					*(uint16*)out = 1;
+					uint8* dst = (uint8*)PtrAdd(out, 2);
+					std::copy(t.begin(), t.end(), dst);
+					dst[t.size()] = 0;
 
-                Marker marker;
-                marker.resize(2 + (t.size()+ 1) * sizeof(utf8));
-                auto* out = AsPointer(marker.begin());
-                *(uint16*)out = 1;
-                uint8* dst = (uint8*)PtrAdd(out, 2);
-                std::copy(t.begin(), t.end(), dst);
-                dst[t.size()] = 0;
+					res.push_back(marker);
+				}
+			}
+		} else {
+			// just selecting everything, skip over the pattern matcher
+			for (const auto&t:temp) {
+				Marker marker;
+				marker.resize(2 + (t.size()+ 1) * sizeof(utf8));
+				auto* out = AsPointer(marker.begin());
+				*(uint16*)out = 1;
+				uint8* dst = (uint8*)PtrAdd(out, 2);
+				std::copy(t.begin(), t.end(), dst);
+				dst[t.size()] = 0;
 
-                res.push_back(marker);
-            }
-        }
+				res.push_back(marker);
+			}
+		}
         return res;
     }
 

@@ -5,17 +5,17 @@
 #include "GraphSyntax.h"
 #include "NodeGraphSignature.h"
 #include "../Utility/StringFormat.h"
-#include <regex>
 #include <sstream>
 
 namespace GraphLanguage
 {
-	static std::regex s_templateRestrictionFilter(R"--((\w*)<.*>)--");
 	static std::string RemoveTemplateRestrictions(const std::string& input)
 	{
-		std::smatch matchResult;
-        if (std::regex_match(input, matchResult, s_templateRestrictionFilter) && matchResult.size() > 1)
-			return matchResult[1];
+		// for strings like "something<parameters>", remove the part in angle brackets (ie, just return "something")
+		if (input.empty() || *(input.end()-1) != '>') return input;
+		auto i = input.find_first_of('<');
+		if (i != std::string::npos)
+			return input.substr(i+1, input.size()-i-2);
 		return input;
 	}
 

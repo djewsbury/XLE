@@ -22,7 +22,7 @@
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/Threading/CompletionThreadPool.h"
-#include <regex>
+#include "wildcards.hpp"
 #include <set>
 #include <unordered_map>
 #include <atomic>
@@ -46,7 +46,7 @@ namespace Assets
 	struct DelegateAssociation
 	{
 		std::vector<CompileRequestCode> _compileRequestCodes;
-		std::optional<std::regex> _regexFilter;
+		std::string _matchPattern;
 	};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,7 +73,7 @@ namespace Assets
 		virtual void AssociateRequest(
 			RegisteredCompilerId compiler,
 			IteratorRange<const uint64_t*> outputAssetTypes,
-			const std::string& initializerRegexFilter
+			const std::string& matchPattern
 			) override;
 
 		virtual void AssociateExtensions(RegisteredCompilerId associatedCompiler, const std::string& commaSeparatedExtensions) override;
@@ -382,13 +382,14 @@ namespace Assets
 			auto i = std::find(a.second._compileRequestCodes.begin(), a.second._compileRequestCodes.end(), targetCode);
 			if (i == a.second._compileRequestCodes.end())
 				continue;
-			bool passRegex = true;
-			if (a.second._regexFilter.has_value()) {
+			bool passMatchPattern = true;
+			if (!a.second._matchPattern.empty()) {
 				if (firstInitializer.empty())
 					firstInitializer = initializers.GetInitializer<std::string>(0);		// first initializer is assumed to be a string
-				passRegex = std::regex_match(firstInitializer.begin(), firstInitializer.end(), a.second._regexFilter.value());
+				auto asStringView = cx::make_string_view(a.second._matchPattern.data(), a.second._matchPattern.size());
+				passMatchPattern = wildcards::match(firstInitializer, asStringView);
 			}
-			if (passRegex) {
+			if (passMatchPattern) {
 				// find the associated delegate and use that
 				for (const auto&d:_delegates) {
 					if (d.first != a.first) continue;
@@ -411,7 +412,8 @@ namespace Assets
 			auto i = std::find(a.second._compileRequestCodes.begin(), a.second._compileRequestCodes.end(), targetCode);
 			if (i == a.second._compileRequestCodes.end())
 				continue;
-			if (a.second._regexFilter.has_value() && std::regex_match(firstInitializer.begin(), firstInitializer.end(), a.second._regexFilter.value()))
+			auto asStringView = cx::make_string_view(a.second._matchPattern.data(), a.second._matchPattern.size());
+			if (!a.second._matchPattern.empty() && wildcards::match(firstInitializer, asStringView))
 				return true;
 		}
 		return false;
@@ -471,13 +473,12 @@ namespace Assets
 	void IntermediateCompilers::AssociateRequest(
 		RegisteredCompilerId compiler,
 		IteratorRange<const uint64_t*> outputAssetTypes,
-		const std::string& initializerRegexFilter)
+		const std::string& matchPattern)
 	{
 		ScopedLock(_delegatesLock);
 		DelegateAssociation association;
 		association._compileRequestCodes = std::vector<uint64_t>{ outputAssetTypes.begin(), outputAssetTypes.end() };
-		if (!initializerRegexFilter.empty())
-			association._regexFilter = std::regex{initializerRegexFilter, std::regex_constants::icase};
+		association._matchPattern = matchPattern;
 		_requestAssociations.insert(std::make_pair(compiler, association));
 	}
 

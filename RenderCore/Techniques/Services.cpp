@@ -8,8 +8,8 @@
 #include "../BufferUploads/IBufferUploads.h"
 #include "../../ConsoleRig/AttachablePtr.h"
 #include "../../Utility/Threading/Mutex.h"
+#include "wildcards.hpp"
 #include <vector>
-#include <regex>
 
 namespace RenderCore { namespace Techniques
 {
@@ -18,7 +18,7 @@ namespace RenderCore { namespace Techniques
 	public:
 		struct TexturePlugin
 		{
-			std::regex _initializerMatcher;
+			std::string _initializerMatcher;
 			std::function<Assets::TextureLoaderSignature> _loader;
 			unsigned _id;
 		};
@@ -39,16 +39,16 @@ namespace RenderCore { namespace Techniques
 	};
 
 	unsigned Services::RegisterTextureLoader(
-		const std::basic_regex<char, std::regex_traits<char>>& initializerMatcher, 
+		StringSection<> initializerMatcher, 
 		std::function<Assets::TextureLoaderSignature>&& loader)
 	{
 		ScopedLock(_pimpl->_lock);
 		auto res = _pimpl->_nextTexturePluginId++;
 
 		Pimpl::TexturePlugin plugin;
-		plugin._initializerMatcher = initializerMatcher;
 		plugin._loader = std::move(loader);
 		plugin._id = res;
+		plugin._initializerMatcher = initializerMatcher.AsString();
 		_pimpl->_texturePlugins.push_back(std::move(plugin));
 		return res;
 	}
@@ -70,9 +70,11 @@ namespace RenderCore { namespace Techniques
 	std::shared_ptr<BufferUploads::IAsyncDataSource> Services::CreateTextureDataSource(StringSection<> identifier, Assets::TextureLoaderFlags::BitField flags)
 	{
 		ScopedLock(_pimpl->_lock);
-		for (const auto& plugin:_pimpl->_texturePlugins)
-			if (std::regex_match(identifier.begin(), identifier.end(), plugin._initializerMatcher))
+		for (const auto& plugin:_pimpl->_texturePlugins) {
+			auto asStringView = cx::make_string_view(plugin._initializerMatcher.data(), plugin._initializerMatcher.size());
+			if (wildcards::match(identifier, asStringView))
 				return plugin._loader(identifier, flags);
+		}
 		if (_pimpl->_fallbackTextureLoader)
 			return _pimpl->_fallbackTextureLoader(identifier, flags);
 		return nullptr;

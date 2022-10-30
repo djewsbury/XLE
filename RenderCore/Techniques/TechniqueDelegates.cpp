@@ -17,7 +17,6 @@
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../xleres/FileList.h"
 #include <sstream>
-#include <regex>
 #include <cctype>
 #include <charconv>
 

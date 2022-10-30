@@ -1,3 +1,14 @@
+add_subdirectory(freetype freetype)
+add_subdirectory(Catch2 catch2)
+add_subdirectory(wildcards wildcards)
+
+if (WIN32)
+    add_subdirectory(DirectXTex DirectXTex)
+    add_subdirectory(HLSLCC/mk HLSLCC)
+endif ()
+
+#############################################################################################
+
 if(NOT CLIENT_HAS_LUA)
     file(GLOB LuaSrc "Lua/src/*.c" "Lua/src/*.h")
 endif()
@@ -32,6 +43,7 @@ target_include_directories(ForeignMisc INTERFACE LuaBridge/Source/LuaBridge Lua/
 target_include_directories(ForeignMisc INTERFACE json/include)
 target_include_directories(ForeignMisc INTERFACE future/include)
 target_include_directories(ForeignMisc INTERFACE thousandeyes-futures/include)
+target_include_directories(ForeignMisc INTERFACE wildcards/include)
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(ForeignMisc PRIVATE -Wno-parentheses-equality -Wno-incompatible-pointer-types-discards-qualifiers)

@@ -37,7 +37,6 @@
 #include "../../Assets/CompileAndAsyncManager.h"
 #include "../../Utility/Profiling/CPUProfiler.h"
 #include "../../xleres/FileList.h"
-#include <regex>
 
 namespace RenderCore { namespace Techniques
 {
@@ -187,8 +186,8 @@ namespace RenderCore { namespace Techniques
 		_bufferUploads = BufferUploads::CreateManager(*device);
 		_techniqueServices->SetBufferUploads(_bufferUploads);
 
-		_techniqueServices->RegisterTextureLoader(std::regex{R"(.*\.[dD][dD][sS])"}, RenderCore::Assets::CreateDDSTextureLoader());
-		_techniqueServices->RegisterTextureLoader(std::regex{R"(.*\.[hH][dD][rR])"}, RenderCore::Assets::CreateHDRTextureLoader());
+		_techniqueServices->RegisterTextureLoader("*.[dD][dD][sS]", RenderCore::Assets::CreateDDSTextureLoader());
+		_techniqueServices->RegisterTextureLoader("*.[hH][dD][rR]", RenderCore::Assets::CreateHDRTextureLoader());
 		_techniqueServices->SetFallbackTextureLoader(RenderCore::Assets::CreateWICTextureLoader());
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();

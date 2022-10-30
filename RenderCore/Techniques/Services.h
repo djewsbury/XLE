@@ -10,10 +10,6 @@
 #include <cassert>
 
 namespace RenderCore { class IDevice; }
-namespace std { 
-	template<typename CharT> class regex_traits;
-	template<typename CharT, typename Traits> class basic_regex; 
-}
 namespace RenderCore { namespace BufferUploads { class IManager; }}
 
 namespace RenderCore { namespace Techniques
@@ -36,7 +32,7 @@ namespace RenderCore { namespace Techniques
 		/////////////////////////////
 		//   T E X T U R E   L O A D E R S
 		////////////////////////////////////////////
-		unsigned 	RegisterTextureLoader(const std::basic_regex<char, std::regex_traits<char>>& initializerMatcher, std::function<Assets::TextureLoaderSignature>&& loader);
+		unsigned 	RegisterTextureLoader(StringSection<> wildcardPattern, std::function<Assets::TextureLoaderSignature>&& loader);
 		void 		DeregisterTextureLoader(unsigned pluginId);
 		void 		SetFallbackTextureLoader(std::function<Assets::TextureLoaderSignature>&& loader);
 		std::shared_ptr<BufferUploads::IAsyncDataSource> CreateTextureDataSource(StringSection<> identifier, Assets::TextureLoaderFlags::BitField flags);

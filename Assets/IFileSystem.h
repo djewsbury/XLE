@@ -85,9 +85,12 @@ namespace Assets
 	class ISearchableFileSystem
 	{
 	public:
+		// matchPattern uses wildcards::match, which is a little like glob and simpler than regex
+		// see https://github.com/zemasoft/wildcards
+		// matches are case sensitive
 		virtual std::vector<IFileSystem::Marker> FindFiles(
 			StringSection<utf8> baseDirectory,
-			StringSection<utf8> regexMatchPattern) = 0;
+			StringSection<utf8> matchPattern) = 0;
 		virtual std::vector<std::basic_string<utf8>> FindSubDirectories(
 			StringSection<utf8> baseDirectory) = 0;
 		virtual ~ISearchableFileSystem();

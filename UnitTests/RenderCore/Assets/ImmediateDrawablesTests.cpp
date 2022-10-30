@@ -41,7 +41,6 @@
 #include "thousandeyes/futures/DefaultExecutor.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
-#include <regex>
 #include <chrono>
 
 using namespace Catch::literals;
@@ -91,8 +90,8 @@ namespace UnitTests
 		std::shared_ptr<BufferUploads::IManager> bufferUploads = BufferUploads::CreateManager(*testHelper->_device);
 		techniqueServices->SetBufferUploads(bufferUploads);
 		techniqueServices->SetCommonResources(std::make_shared<RenderCore::Techniques::CommonResourceBox>(*testHelper->_device));
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), RenderCore::Assets::CreateDDSTextureLoader());
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), RenderCore::Assets::CreateWICTextureLoader());
+		techniqueServices->RegisterTextureLoader("*.[dD][dD][sS]", RenderCore::Assets::CreateDDSTextureLoader());
+		techniqueServices->RegisterTextureLoader("*", RenderCore::Assets::CreateWICTextureLoader());
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		auto filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);

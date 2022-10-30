@@ -33,7 +33,6 @@
 #include "../../../Math/Transformations.h"
 #include "../../../Utility/Threading/CompletionThreadPool.h"
 #include "../../../xleres/FileList.h"
-#include <regex>
 #include <chrono>
 
 namespace UnitTests
@@ -49,8 +48,8 @@ namespace UnitTests
 		_metalTestHelper = MakeTestHelper();
 
 		_techniqueServices = std::make_shared<Techniques::Services>(_metalTestHelper->_device);
-		_techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), RenderCore::Assets::CreateDDSTextureLoader());
-		_techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), RenderCore::Assets::CreateWICTextureLoader());
+		_techniqueServices->RegisterTextureLoader("*.[dD][dD][sS])", RenderCore::Assets::CreateDDSTextureLoader());
+		_techniqueServices->RegisterTextureLoader("*", RenderCore::Assets::CreateWICTextureLoader());
 		_bufferUploads = BufferUploads::CreateManager(*_metalTestHelper->_device);
 		_techniqueServices->SetBufferUploads(_bufferUploads);
 

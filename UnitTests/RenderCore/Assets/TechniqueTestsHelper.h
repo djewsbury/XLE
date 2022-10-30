@@ -12,7 +12,6 @@
 #include "../../../Assets/CompileAndAsyncManager.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
-#include <regex>
 
 namespace RenderCore { namespace Techniques { class TechniqueContext; class ICompiledLayoutPool; class IDrawablesPool; class DrawablesPacket; struct PreparedResourcesVisibility; }}
 

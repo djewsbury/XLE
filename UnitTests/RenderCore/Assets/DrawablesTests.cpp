@@ -39,7 +39,6 @@
 #include "../../../Utility/StringFormat.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
-#include <regex>
 #include <thread>
 #include <chrono>
 

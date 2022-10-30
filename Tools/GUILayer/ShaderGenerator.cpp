@@ -21,7 +21,6 @@
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Conversion.h"
 #include <sstream>
-#include <regex>
 #include <msclr/auto_gcroot.h>
 
 #pragma warning (disable:4505) // 'ShaderPatcherLayer::StateTypeToString': unreferenced local function has been removed

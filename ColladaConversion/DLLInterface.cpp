@@ -25,7 +25,7 @@ namespace ColladaConversion
 		unsigned	FileKindCount() const override { return 1; }
 		FileKind	GetFileKind(unsigned index) const override
 		{
-			return FileKind { MakeIteratorRange(s_knownAssetTypes), R"(.*\.dae)", "Collada XML asset", "dae", "dae" };
+			return FileKind { MakeIteratorRange(s_knownAssetTypes), "*.[dD][aA][eE]", "Collada XML asset", "dae", "dae" };
 		}
 
 		CompilerDesc() {}

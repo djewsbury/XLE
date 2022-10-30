@@ -12,8 +12,8 @@
 #include "../../Assets/Assets.h"
 #include "../../OSServices/AttachableLibrary.h"
 #include "../../Utility/Streams/PathUtils.h"
+#include "wildcards.hpp"
 #include "../../Core/Prefix.h"
-#include <regex>
 
 namespace RenderCore { namespace Assets
 {
@@ -80,10 +80,10 @@ namespace RenderCore { namespace Assets
 
 		auto walk = ::Assets::MainFileSystem::BeginWalk(baseFolder);
 		std::vector<std::string> files;
-		std::regex fileMatcher{R"(.*\.(([hH][kK][xX])|([dD][aA][eE])))"};
+		auto matcher = wildcards::make_matcher("*.([hH][kK][xX]|[dD][aA][eE])");
 		for (auto w=walk.begin_files(); w!=walk.end_files(); ++w) {
 			auto f = w.Desc()._mountedName;
-			if (std::regex_match(f.begin(), f.end(), fileMatcher))
+			if (matcher.matches(f))
 				files.push_back(f);
 		}
 
@@ -127,7 +127,7 @@ namespace RenderCore { namespace Assets
 		intermediateCompilers.AssociateRequest(
 			result.RegistrationId(),
 			MakeIteratorRange(outputAssetTypes),
-			R"(.*[\\/]\*)");
+			R"(*[\\/]\*)");
 		return result;
 	}
 

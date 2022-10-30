@@ -24,7 +24,6 @@
 #include "../../../OSServices/Log.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
 #include "../../../OSServices/RawFS.h"
-#include <regex>
 #include <sstream>
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"

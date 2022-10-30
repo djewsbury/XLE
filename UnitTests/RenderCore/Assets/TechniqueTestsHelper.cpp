@@ -25,8 +25,8 @@ namespace UnitTests
 		_techniqueServices->SetBufferUploads(_bufferUploads);
 		_commonResources = std::make_shared<Techniques::CommonResourceBox>(*testHelper._device);
 		_techniqueServices->SetCommonResources(_commonResources);
-		_techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), RenderCore::Assets::CreateDDSTextureLoader());
-		_techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), RenderCore::Assets::CreateWICTextureLoader());
+		_techniqueServices->RegisterTextureLoader("*.[dD][dD][sS]", RenderCore::Assets::CreateDDSTextureLoader());
+		_techniqueServices->RegisterTextureLoader("*", RenderCore::Assets::CreateWICTextureLoader());
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		_filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
