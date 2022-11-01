@@ -23,7 +23,7 @@ namespace LevelEditorCore
     [Export(typeof(ResourceLister))]
     [Export(typeof(IInitializable))]
     [PartCreationPolicy(CreationPolicy.Shared)]
-    public class ResourceLister : ICommandClient, IControlHostClient, IInitializable
+    public class ResourceLister : ICommandClient, IControlHostClient, IInitializable, IDisposable
     {
         /// <summary>
         /// Event that is raised after the selection changes</summary>
@@ -45,13 +45,6 @@ namespace LevelEditorCore
                 m_watcher.Created += Watcher_FileChanged;
                 m_watcher.Deleted += Watcher_FileChanged;
                 m_watcher.Renamed += Watcher_Renamed;
-
-                    // We need to shut down the watcher before the dispose phase begins
-                    // this is because file events can occur while disposing other MEF objects
-                    // (eg, flushing out a cached file). When this happens, we can get a
-                    // callback that can end up accessing MEF objects that have already
-                    // been disposed.
-                Application.ApplicationExit += ShutdownWatcher;
             }
 
             IFileSystemResourceFolder rootDirectory = rootFolder as IFileSystemResourceFolder;
@@ -192,11 +185,22 @@ namespace LevelEditorCore
                     // for completeness, let's undo the startup operations.
                 m_watcher.Renamed -= Watcher_Renamed;
                 m_watcher.Deleted -= Watcher_FileChanged;
-                m_watcher.Deleted -= Watcher_FileChanged;
+                m_watcher.Renamed -= Watcher_FileChanged;
                 m_watcher.Dispose();
                 m_watcher = null;
             }
-            Application.ApplicationExit -= ShutdownWatcher;
+
+            if (m_treeContext != null)
+            {
+                m_treeContext.Dispose();
+                m_treeContext = null;
+            }
+
+            if (m_listContext != null)
+            {
+                m_listContext.Dispose();
+                m_listContext = null;
+            }
         }
 
         /// <summary>
@@ -313,6 +317,14 @@ namespace LevelEditorCore
             RegisterCommands();
             RegisterSettings();
 
+                // We need to shut down the watcher before the dispose phase begins
+                // this is because file events can occur while disposing other MEF objects
+                // (eg, flushing out a cached file). When this happens, we can get a
+                // callback that can end up accessing MEF objects that have already
+                // been disposed.
+                // Likewise we should dispose any IOpaqueResourceFolder because they can contain
+                // native objects inside of them
+            Application.ApplicationExit += ShutdownWatcher;
         }
 
         void ThumbnailControl_MouseLeave(object sender, EventArgs e)
@@ -727,6 +739,52 @@ namespace LevelEditorCore
             }
         }
 
+        public void Dispose() => Dispose(true);
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposing) return;
+            if (m_splitContainer != null)
+            {
+                m_splitContainer.Dispose();
+                m_splitContainer = null;
+            }
+            if (m_treeContext != null)
+            {
+                m_treeContext.Dispose();
+                m_treeContext = null;
+            }
+            if (m_treeControl != null)
+            {
+                m_treeControl.Dispose();
+                m_treeControl = null;
+            }
+            if (m_listContext != null)
+            {
+                m_listContext.Dispose();
+                m_listContext = null;
+            }
+            if (m_listView != null)
+            {
+                m_listView.Dispose();
+                m_listView = null;
+            }
+            if (m_thumbnailControl != null)
+            {
+                m_thumbnailControl.Dispose();
+                m_thumbnailControl = null;
+            }
+            if (m_watcher != null)
+            {
+                m_watcher.Renamed -= Watcher_Renamed;
+                m_watcher.Deleted -= Watcher_FileChanged;
+                m_watcher.Renamed -= Watcher_FileChanged;
+                m_watcher.Dispose();
+                m_watcher = null;
+            }
+            Application.ApplicationExit -= ShutdownWatcher;
+        }
+
         private void RegisterSettings()
         {
             m_settingsService.RegisterSettings(
@@ -783,7 +841,7 @@ namespace LevelEditorCore
         private FileSystemWatcher m_watcher;
 
         #region private classes
-        private class TreeViewContext : ITreeView, IItemView, IObservableContext, ISelectionContext
+        private class TreeViewContext : ITreeView, IItemView, IObservableContext, ISelectionContext, IDisposable
         {
             public TreeViewContext(IOpaqueResourceFolder rootFolder)
             {
@@ -932,7 +990,7 @@ namespace LevelEditorCore
                 if (Reloaded != null)
                 {
                     Reloaded(this, e);
-                    this.Clear();                  
+                    this.Clear();
                 }
             }
 
@@ -943,6 +1001,19 @@ namespace LevelEditorCore
                 get { return m_rootFolder; }
             }
 
+            public void Dispose() => Dispose(true);
+
+            protected virtual void Dispose(bool disposing)
+            {
+                if (!disposing) return;
+                IDisposable disposableRootFolder = m_rootFolder as IDisposable; 
+                if (disposableRootFolder != null)
+                {
+                    disposableRootFolder.Dispose();
+                }
+                m_rootFolder = null;
+                m_selection = null;
+            }
 
             private void TheSelectionChanging(object sender, EventArgs e)
             {
@@ -954,10 +1025,10 @@ namespace LevelEditorCore
                 SelectionChanged.Raise(this, EventArgs.Empty);
             }
 
-            private readonly AdaptableSelection<object> m_selection = new AdaptableSelection<object>();
-            private readonly IOpaqueResourceFolder m_rootFolder;
+            private AdaptableSelection<object> m_selection = new AdaptableSelection<object>();
+            private IOpaqueResourceFolder m_rootFolder;
         }
-        private class ListViewContext : IListView, IItemView, IObservableContext, ISelectionContext
+        private class ListViewContext : IListView, IItemView, IObservableContext, ISelectionContext, IDisposable
         {
             public ListViewContext()
             {
@@ -1132,6 +1203,20 @@ namespace LevelEditorCore
                 }
             }
 
+            public void Dispose() => Dispose(true);
+
+            protected virtual void Dispose(bool disposing)
+            {
+                if (!disposing) return;
+                IDisposable disposableSelectedFolder = m_selectedFolder as IDisposable;
+                if (disposableSelectedFolder != null)
+                {
+                    disposableSelectedFolder.Dispose();
+                }
+                m_selectedFolder = null;
+                m_selection = null;
+            }
+
             private void TheSelectionChanging(object sender, EventArgs e)
             {
                 SelectionChanging.Raise(this, EventArgs.Empty);
@@ -1143,7 +1228,7 @@ namespace LevelEditorCore
             }
 
             private IOpaqueResourceFolder m_selectedFolder;
-            private readonly AdaptableSelection<object> m_selection = new AdaptableSelection<object>();
+            private AdaptableSelection<object> m_selection = new AdaptableSelection<object>();
         }
         private class CustomListView : ListView
         {

@@ -135,7 +135,6 @@
     <Compile Include="Search\SearchResultsListView.cs">
       <SubType>Component</SubType>
     </Compile>
-    <Compile Include="Services\CustomFileSystemResourceFolder.cs" />
     <Compile Include="Services\GameLoopService.cs" />
     <Compile Include="Services\PrefabService.cs" />
     <Compile Include="Services\PrototypingService.cs" />

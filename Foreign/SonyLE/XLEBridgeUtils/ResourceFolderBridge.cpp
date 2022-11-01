@@ -43,8 +43,6 @@ namespace XLEBridgeUtils
 			virtual String^ get() { return _name; }
 		}
 
-        // virtual Sce::Atf::IOpaqueResourceFolder^ CreateFolder();
-
 		static ResourceFolderBridge^ BeginFromRoot();
 
 		ResourceFolderBridge();
@@ -55,56 +53,16 @@ namespace XLEBridgeUtils
 		String^ _name;
 	};
 
-	static String^ Marshal(const std::basic_string<utf8>& str)
-	{
-		return clix::detail::StringMarshaler<clix::detail::NetFromCxx>::marshalCxxString<clix::E_UTF8>(AsPointer(str.begin()), AsPointer(str.end()));
-	}
-
 	static String^ Marshal(StringSection<utf8> str)
 	{
 		return clix::detail::StringMarshaler<clix::detail::NetFromCxx>::marshalCxxString<clix::E_UTF8>(str.begin(), str.end());
 	}
 
-	/*ref class FolderEnumerable : IEnumerable<LevelEditorCore::IOpaqueResourceFolder^> 
-	{
-	public:
-		ref struct MyRangeIterator : IEnumerator<LevelEditorCore::IOpaqueResourceFolder^> 
-		{
-		private:
-			::Assets::FileSystemWalker::DirectoryIterator _begin;
-			::Assets::FileSystemWalker::DirectoryIterator _end;
-
-			property LevelEditorCore::IOpaqueResourceFolder^ Current { 
-				virtual LevelEditorCore::IOpaqueResourceFolder^ get(); // { return i; } 
-			}
-
-			bool MoveNext() { return i++ != 10; }
-
-			property Object^ System::Collections::IEnumerator::Current2
-			{
-				virtual Object^ get() new sealed = System::Collections::IEnumerator::Current::get
-				{ 
-					return Current; 
-				}
-			}
-
-			~MyRangeIterator();
-			void Reset() { throw gcnew NotImplementedException(); }
-		};
-
-		virtual IEnumerator<LevelEditorCore::IOpaqueResourceFolder^>^ GetEnumerator() { return gcnew MyRangeIterator(); }
-
-		virtual System::Collections::IEnumerator^ GetEnumerator2() new sealed = System::Collections::IEnumerable::GetEnumerator
-		{
-			return GetEnumerator(); 
-		}
-	}*/
-
 	IEnumerable<LevelEditorCore::IOpaqueResourceFolder^>^ ResourceFolderBridge::Subfolders::get()
 	{
 		auto result = gcnew List<LevelEditorCore::IOpaqueResourceFolder^>();
 		for (auto i=_walker->begin_directories(); i!=_walker->end_directories(); ++i)
-			result->Add(gcnew ResourceFolderBridge(*i, Marshal(i.Name())));
+			result->Add(gcnew ResourceFolderBridge(*i, clix::marshalString<clix::E_UTF8>(i.Name())));
 		return result;
 	}
 
@@ -130,11 +88,6 @@ namespace XLEBridgeUtils
 		return result;
 	}
 
-	/*Sce::Atf::IOpaqueResourceFolder^ ResourceFolderBridge::CreateFolder()
-	{
-		throw gcnew System::Exception("Cannot create a new folder via mounted filesystem bridge");
-	}*/
-
 	ResourceFolderBridge^ ResourceFolderBridge::BeginFromRoot()
 	{
 		return gcnew ResourceFolderBridge(::Assets::MainFileSystem::BeginWalk(), "<root>");
@@ -153,6 +106,7 @@ namespace XLEBridgeUtils
 	ResourceFolderBridge::~ResourceFolderBridge() 
 	{
 		_walker.reset();
+		delete _walker;
 	}
 
 	[Export(LevelEditorCore::IResourceQueryService::typeid)]
@@ -187,8 +141,8 @@ namespace XLEBridgeUtils
 				return LevelEditorCore::ResourceQueryService::GetDesc(input);
 
 			LevelEditorCore::ResourceDesc result;
-			result.MountedName = Marshal(mountBase) + Marshal(desc._mountedName);
-			result.NaturalName = Marshal(desc._naturalName);
+			result.MountedName = clix::marshalString<clix::E_UTF8>(mountBase) + clix::marshalString<clix::E_UTF8>(desc._mountedName);
+			result.NaturalName = clix::marshalString<clix::E_UTF8>(desc._naturalName);
 			auto naturalNameSplitter = MakeFileNameSplitter(desc._naturalName);
 			result.ShortName = Marshal(naturalNameSplitter.FileAndExtension());
 			result.ModificationTime = DateTime::FromFileTime(desc._snapshot._modificationTime);
