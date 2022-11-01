@@ -68,20 +68,22 @@ namespace GUILayer
 
         const SceneEngine::MergedLightingEngineCfg& GetMergedLightingEngineCfg() const { return _operatorsCfg._mergedCfg; }
         const std::shared_ptr<RenderCore::LightingEngine::ILightScene> GetLightScene() const { return _lightScene; }
+        EntityInterface::MultiEnvironmentSettingsDocument::EnvSettingsId GetEnvSettingsId() const { return _envSettings; }
 
         BoundEnvironmentSettings(
             std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> apparatus,
             std::shared_ptr<EntityInterface::MultiEnvironmentSettingsDocument> envSettingsDocument,
-            StringSection<> envSettingsName)
+            EntityInterface::MultiEnvironmentSettingsDocument::EnvSettingsId envSettingsId)
         : _envSettingsDocument(std::move(envSettingsDocument))
         , _apparatus(std::move(apparatus))
         {
-            _envSettings = _envSettingsDocument->FindEnvSettingsId(envSettingsName);
+            _envSettings = envSettingsId;
             _lightSceneChangeId = _envSettingsDocument->GetChangeId(_envSettings);
 
             _envSettingsDocument->PrepareCfg(_envSettings, _operatorsCfg);
 
-            // todo -- stall here
+            // todo -- there's a stall here; we need to move into native code in order to manage the 
+            // synchronization for background compilation properly
             _lightScene = SceneEngine::CreateAndActualizeForwardLightingScene(
                 *_apparatus,
                 _operatorsCfg._mergedCfg.GetLightOperators(),
@@ -186,10 +188,10 @@ namespace GUILayer
     void EditorSceneOverlay::Render(
         RenderCore::Techniques::ParsingContext& parserContext)
     {
-        if (!_boundEnvSettings) {
-            // todo -- manage switching between different environmental settings
-            auto envSettingsName = clix::marshalString<clix::E_UTF8>(_renderSettings->_activeEnvironmentSettings);
-            _boundEnvSettings = std::make_shared<BoundEnvironmentSettings>(_lightingApparatus.GetNativePtr(), _scene->_envSettingsDocument, envSettingsName);
+        auto envSettingsId = _scene->_envSettingsDocument->FindEnvSettingsId(clix::marshalString<clix::E_UTF8>(_renderSettings->_activeEnvironmentSettings));
+        if (!_boundEnvSettings || _boundEnvSettings->GetEnvSettingsId() != envSettingsId) {
+            _boundEnvSettings = std::make_shared<BoundEnvironmentSettings>(_lightingApparatus.GetNativePtr(), _scene->_envSettingsDocument, envSettingsId);
+            _lightingTechnique = nullptr;
         }
 
         _scene->_rigidModelScene->OnFrameBarrier();     // todo -- move somewhere better

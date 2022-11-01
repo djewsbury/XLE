@@ -75,6 +75,7 @@ namespace ToolsRig
 			auto del = std::make_shared<PreDrawDelegate>(materialGuid);
 			renderer.BuildDrawablesSingleView(sceneExeContext, cellSet, filterBegin, filterEnd, del);
 		}
+        parserContext.RequireCommandList(sceneExeContext._completionCmdList);
 
         for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c) {
             if (pkts[c]._drawables.empty()) continue;

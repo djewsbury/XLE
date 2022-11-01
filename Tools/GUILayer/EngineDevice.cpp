@@ -12,6 +12,7 @@
 #include "../ToolsRig/DivergentAsset.h"
 #include "../ToolsRig/PreviewSceneRegistry.h"
 #include "../ToolsRig/ToolsRigServices.h"
+#include "../ToolsRig/MiscUtils.h"
 #include "../../PlatformRig/WinAPI/RunLoop_WinAPI.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/Techniques.h"
@@ -130,6 +131,8 @@ namespace GUILayer
         _creationThreadId = System::Threading::Thread::CurrentThread->ManagedThreadId;
         RenderCore::Techniques::SetThreadContext(_immediateContext);
 
+        ToolsRig::InvokeCheckCompleteInitialization(_techniquesServices->GetSubFrameEvents(), *_immediateContext);
+
         // setup mounting for default environment settings
         _defaultEnvMount = ToolsRig::MountTextEntityDocument("cfg/lighting", "rawos/defaultenv.dat");
 
@@ -176,9 +179,6 @@ namespace GUILayer
         System::GC::Collect();
         System::GC::WaitForPendingFinalizers();
         DelayedDeleteQueue::FlushQueue();
-        
-        //if (_pimpl->GetAssetServices())
-        //    _pimpl->GetAssetServices()->GetAssetSets().Clear();
     }
 
     void EngineDevice::AddOnShutdown(IOnEngineShutdown^ callback)

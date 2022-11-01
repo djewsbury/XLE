@@ -9,6 +9,8 @@
 #include <string>
 
 namespace Assets { class OperationContext; }
+namespace RenderCore { class IThreadContext; }
+namespace RenderCore { namespace Techniques { class SubFrameEvents; }}
 
 namespace ToolsRig
 {
@@ -47,4 +49,8 @@ namespace ToolsRig
 	CompilationTarget::BitField FindCompilationTargets(StringSection<> ext);
 
 	std::shared_ptr<::Assets::OperationContext> CreateLoadingContext();
+
+	void InvokeCheckCompleteInitialization(
+		RenderCore::Techniques::SubFrameEvents&,
+		RenderCore::IThreadContext&);
 }

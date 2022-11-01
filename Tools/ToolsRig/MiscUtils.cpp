@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "MiscUtils.h"
+#include "../../RenderCore/Techniques/SubFrameEvents.h"
 #include "../../RenderCore/Assets/ModelScaffold.h"
 #include "../../RenderCore/Assets/RawMaterial.h"
 #include "../../Assets/AssetServices.h"
@@ -104,6 +105,14 @@ namespace ToolsRig
 	std::shared_ptr<::Assets::OperationContext> CreateLoadingContext()
 	{
 		return std::make_shared<::Assets::OperationContext>();
+	}
+
+	void InvokeCheckCompleteInitialization(
+		RenderCore::Techniques::SubFrameEvents& subFrameEvents,
+		RenderCore::IThreadContext& threadContext)
+	{
+		// hidden here because we can't invoke this from CLR code
+		subFrameEvents._onCheckCompleteInitialization.Invoke(threadContext);
 	}
 	
 }
