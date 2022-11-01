@@ -178,29 +178,18 @@ namespace RenderCore { namespace LightingEngine
 				auto l = weakThis.lock();
 				if (!l) return;
 
-				std::shared_ptr<Techniques::DeferredShaderResource> specularIBL;
-				std::optional<SHCoefficientsAsset> diffuseIBL;
+				ScopedLock(l->_pendingUpdatesLock);
+				l->_pendingSkyTextureUpdate = true;
 				TRY {
-					specularIBL = specularIBLFuture.get();
-					diffuseIBL = diffuseIBLFuture.get();
+					l->_pendingDiffuseIBL = diffuseIBLFuture.get();
+					l->_pendingSpecularIBL = specularIBLFuture.get();
+					l->_pendingAmbientRawCubemap = ambientRawCubemapFuture.get();
 				} CATCH(...) {
-					// suppress bad textures
+					// suppress bad texture errors
+					l->_pendingDiffuseIBL = {};
+					l->_pendingSpecularIBL = nullptr;
+					l->_pendingAmbientRawCubemap = nullptr;
 				} CATCH_END
-
-				if (!specularIBL || !diffuseIBL.has_value()) {
-					l->_onChangeSpecularIBL(nullptr);
-					l->_onChangeSkyTexture(nullptr);
-					l->_onChangeDiffuseIBL({});
-					std::memset(l->_diffuseSHCoefficients, 0, sizeof(l->_diffuseSHCoefficients));
-				} else {
-					auto ambientRawCubemap = ambientRawCubemapFuture.get();
-					std::memset(l->_diffuseSHCoefficients, 0, sizeof(l->_diffuseSHCoefficients));
-					std::memcpy(l->_diffuseSHCoefficients, diffuseIBL.value().GetCoefficients().begin(), sizeof(Float4*)*std::min(diffuseIBL.value().GetCoefficients().size(), dimof(l->_diffuseSHCoefficients)));
-					l->_completionCommandListID = std::max(l->_completionCommandListID, ambientRawCubemap->GetCompletionCommandList());
-					l->_onChangeSpecularIBL(specularIBL);
-					l->_onChangeSkyTexture(ambientRawCubemap);
-					l->_onChangeDiffuseIBL(diffuseIBL);
-				}
 			});
 	}
 
@@ -274,8 +263,25 @@ namespace RenderCore { namespace LightingEngine
 			parsingContext.RequireCommandList(_completionCommandListID);
 	}
 
-	void ForwardPlusLightScene::CompleteInitialization(IThreadContext& threadContext)
+	void ForwardPlusLightScene::Prerender(IThreadContext& threadContext)
 	{
+		{
+			// certain updates processed one per render, in the main rendering thread
+			ScopedLock(_pendingUpdatesLock);
+			if (_pendingSkyTextureUpdate) {
+				if (!_pendingSpecularIBL) {
+					_onChangeSkyTexture(nullptr);
+					std::memset(_diffuseSHCoefficients, 0, sizeof(_diffuseSHCoefficients));
+				} else {
+					std::memset(_diffuseSHCoefficients, 0, sizeof(_diffuseSHCoefficients));
+					std::memcpy(_diffuseSHCoefficients, _pendingDiffuseIBL.GetCoefficients().begin(), sizeof(Float4*)*std::min(_pendingDiffuseIBL.GetCoefficients().size(), dimof(_diffuseSHCoefficients)));
+					_completionCommandListID = std::max(_completionCommandListID, _pendingAmbientRawCubemap->GetCompletionCommandList());
+					_onChangeSkyTexture(_pendingAmbientRawCubemap);
+				}
+				_pendingSkyTextureUpdate = false;
+			}
+		}
+
 		_lightTiler->CompleteInitialization(threadContext);
 		if (_shadowProbes)
 			_shadowProbes->CompleteInitialization(threadContext);
@@ -397,6 +403,23 @@ namespace RenderCore { namespace LightingEngine
 				return false;
 		}
 		return true;
+	}
+
+	unsigned ForwardPlusLightScene::BindOnChangeSkyTexture(std::function<void(std::shared_ptr<Techniques::DeferredShaderResource>)>&& fn)
+	{
+		// if we don't have a pending update (ie, if we're not expecting to call the function at the start of next render, anyway, we must
+		// call it now with most recently configured texture)
+		{
+			ScopedLock(_pendingUpdatesLock);
+			if (!_pendingSkyTextureUpdate)
+				fn(_pendingAmbientRawCubemap);
+		}
+		return _onChangeSkyTexture.Bind(std::move(fn));
+	}
+
+	void ForwardPlusLightScene::UnbindOnChangeSkyTexture(unsigned bindId)
+	{
+		_onChangeSkyTexture.Unbind(bindId);
 	}
 
 	ForwardPlusLightScene::ForwardPlusLightScene(const AmbientLightOperatorDesc& ambientLightOperator)

@@ -47,6 +47,15 @@ namespace RenderCore { namespace LightingEngine
 		void DoToneMap(LightingTechniqueIterator& iterator);
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext);
 		void ReleaseParsingContext(Techniques::ParsingContext& parsingContext);
+
+		void ConfigureSkyOperatorBindings();
+
+		std::vector<unsigned> _boundOnSkyTextureChange;
+		~ForwardLightingCaptures()
+		{
+			if (_lightScene)
+				for (auto b:_boundOnSkyTextureChange) _lightScene->UnbindOnChangeSkyTexture(b);
+		}
 	};
 
 	void ForwardLightingCaptures::DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence)
@@ -102,6 +111,31 @@ namespace RenderCore { namespace LightingEngine
 			us._resourceViews = MakeIteratorRange(srvs);
 			(*pipeline)->Draw(*iterator._threadContext, us);
 		}
+	}
+
+	void ForwardLightingCaptures::ConfigureSkyOperatorBindings()
+	{
+		unsigned binding0 = _lightScene->BindOnChangeSkyTexture(
+			[weakSkyOperator=std::weak_ptr<SkyOperator>(_skyOperator)](auto texture) {
+				auto l=weakSkyOperator.lock();
+				if (l) l->SetResource(texture ? texture->GetShaderResource() : nullptr);
+			});
+		unsigned binding1 = _lightScene->BindOnChangeSkyTexture(
+			[weakSSROperator=std::weak_ptr<ScreenSpaceReflectionsOperator>(_ssrOperator)](auto texture) {
+				auto l=weakSSROperator.lock();
+				if (l) {
+					// Note -- this is getting the full sky texture (not the specular IBL prefiltered texture!)
+					if (texture) {
+						TextureViewDesc adjustedViewDesc;
+						adjustedViewDesc._mipRange._min = 2;
+						auto adjustedView = texture->GetShaderResource()->GetResource()->CreateTextureView(BindFlag::ShaderResource, adjustedViewDesc);
+						l->SetSpecularIBL(adjustedView);
+					} else
+						l->SetSpecularIBL(nullptr);
+				}
+			});
+		_boundOnSkyTextureChange.push_back(binding0);
+		_boundOnSkyTextureChange.push_back(binding1);
 	}
 
 	static RenderStepFragmentInterface CreateToneMapFragment(
@@ -401,7 +435,7 @@ namespace RenderCore { namespace LightingEngine
 					lightingTechnique->CreateDynamicSequence(
 						[captures](LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence) {
 							captures->DoShadowPrepare(iterator, sequence);
-							captures->_lightScene->CompleteInitialization(*iterator._threadContext);
+							captures->_lightScene->Prerender(*iterator._threadContext);
 						});
 
 					auto& mainSequence = lightingTechnique->CreateSequence();
@@ -465,25 +499,7 @@ namespace RenderCore { namespace LightingEngine
 						std::move(thatPromise),
 						[captures, lightingTechnique](auto skyOp) {
 							captures->_skyOperator = skyOp;
-							captures->_lightScene->_onChangeSkyTexture.Bind(
-								[weakSkyOperator=std::weak_ptr<SkyOperator>(skyOp)](auto texture) {
-									auto l=weakSkyOperator.lock();
-									if (l) l->SetResource(texture ? texture->GetShaderResource() : nullptr);
-								});
-							captures->_lightScene->_onChangeSkyTexture.Bind(
-								[weakSSROperator=std::weak_ptr<ScreenSpaceReflectionsOperator>(captures->_ssrOperator)](auto texture) {
-									auto l=weakSSROperator.lock();
-									if (l) {
-										// Note -- this is getting the full sky texture (not the specular IBL prefiltered texture!)
-										if (texture) {
-											TextureViewDesc adjustedViewDesc;
-											adjustedViewDesc._mipRange._min = 2;
-											auto adjustedView = texture->GetShaderResource()->GetResource()->CreateTextureView(BindFlag::ShaderResource, adjustedViewDesc);
-											l->SetSpecularIBL(adjustedView);
-										} else
-											l->SetSpecularIBL(nullptr);
-									}
-								});
+							captures->ConfigureSkyOperatorBindings();
 							lightingTechnique->_depVal.RegisterDependency(skyOp->GetDependencyValidation());
 							return lightingTechnique;
 						});

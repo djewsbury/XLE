@@ -7,6 +7,7 @@
 #include "StandardLightScene.h"
 #include "LightTiler.h"
 #include "ShadowProbes.h"
+#include "SHCoefficients.h"
 #include "../Techniques/TechniqueUtils.h"
 #include "../../Utility/FunctionUtils.h"
 #include <optional>
@@ -32,7 +33,7 @@ namespace RenderCore { namespace LightingEngine
 
 		void FinalizeConfiguration();
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext);
-		void CompleteInitialization(IThreadContext&);
+		void Prerender(IThreadContext&);
 
 		std::optional<LightSourceOperatorDesc> GetDominantLightOperator() const;
 		std::optional<ShadowOperatorDesc> GetDominantShadowOperator() const;
@@ -40,10 +41,9 @@ namespace RenderCore { namespace LightingEngine
 		const AmbientLightOperatorDesc& GetAmbientLightOperatorDesc() const;
 
 		// The following are for propagating configuration settings to operators managed by the delegate
-		// signaled on arbitrary thread
-		Signal<std::shared_ptr<Techniques::DeferredShaderResource>> _onChangeSkyTexture;
-		Signal<std::shared_ptr<Techniques::DeferredShaderResource>> _onChangeSpecularIBL;
-		Signal<std::optional<SHCoefficientsAsset>> _onChangeDiffuseIBL;
+		// signaled on the rendering thread just before rendering begins (ie, avoid long operations)s
+		unsigned BindOnChangeSkyTexture(std::function<void(std::shared_ptr<Techniques::DeferredShaderResource>)>&& fn);
+		void UnbindOnChangeSkyTexture(unsigned);
 
 		// ILightScene
 		virtual LightSourceId CreateAmbientLightSource() override;
@@ -113,6 +113,14 @@ namespace RenderCore { namespace LightingEngine
 		};
 		SceneLightUniforms _uniforms[2];
 		unsigned _pingPongCounter = 0;
+
+		Threading::Mutex _pendingUpdatesLock;
+		bool _pendingSkyTextureUpdate = true;
+		SHCoefficientsAsset _pendingDiffuseIBL;
+		std::shared_ptr<Techniques::DeferredShaderResource> _pendingSpecularIBL;
+		std::shared_ptr<Techniques::DeferredShaderResource> _pendingAmbientRawCubemap;
+
+		Signal<std::shared_ptr<Techniques::DeferredShaderResource>> _onChangeSkyTexture;
 
 		static std::shared_ptr<ForwardPlusLightScene> CreateInternal(
 			std::shared_ptr<DynamicShadowPreparers> shadowPreparers,

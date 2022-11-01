@@ -19,23 +19,6 @@ namespace RenderCore { namespace LightingEngine
 {
 	void SkyOperator::Execute(Techniques::ParsingContext& parsingContext)
 	{
-		if (!_descSet) {
-			// Just clear to black. We have to do it with a pixel shader, however
-			Techniques::PixelOutputStates outputStates;
-			outputStates.Bind(*parsingContext._rpi);
-			outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
-			AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
-			outputStates.Bind(MakeIteratorRange(blendStates));
-			auto pipelineFuture = Techniques::CreateFullViewportOperator(
-				_pool, Techniques::FullViewportOperatorSubType::DisableDepth,
-				BASIC_PIXEL_HLSL ":blackOpaque",
-				{}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
-				outputStates, UniformsStreamInterface{});
-			if (auto pipeline = pipelineFuture->TryActualize())
-				(*pipeline)->Draw(parsingContext.GetThreadContext(), UniformsStream{});
-			return;
-		}
-
 		const IDescriptorSet* descSets[] = { _descSet.get() };
 		_shader->Draw(
 			parsingContext,
@@ -81,6 +64,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		_device = pipelinePool->GetDevice();
 		_pool = std::move(pipelinePool);
+		SetResource(nullptr);		// initial blocked out state
 	}
 
 	SkyOperator::~SkyOperator()
