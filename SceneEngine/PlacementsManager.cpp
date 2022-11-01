@@ -2415,11 +2415,12 @@ namespace SceneEngine
             // if the object model or material was changed
         auto newIdTopPart = ObjectIdTopPart(newState._model, materialFilename);
         bool objectIdChanged = newIdTopPart != (guid.second & 0xffffffff00000000ull);
+        uint64_t newReplacementGuid = guid.second;
         if (objectIdChanged) {
             auto id32 = uint32_t(guid.second);
             for (;;) {
-                guid.second = newIdTopPart | uint64_t(id32);
-                if (!dynPlacements->HasObject(guid.second)) { break; }
+                newReplacementGuid = newIdTopPart | uint64_t(id32);
+                if (!dynPlacements->HasObject(newReplacementGuid)) { break; }
                 id32 = BuildGuid32();
             }
 
@@ -2445,7 +2446,8 @@ namespace SceneEngine
                     _editorPimpl->_placementsCache->GetRigidModelScene(),
                     localToCell,
                     MakeStringSection(newState._model), MakeStringSection(materialFilename), 
-                    MakeIteratorRange(suppGuids), guid.second);
+                    MakeIteratorRange(suppGuids), newReplacementGuid);
+                guid.second = newReplacementGuid;
             }
         }
     }
