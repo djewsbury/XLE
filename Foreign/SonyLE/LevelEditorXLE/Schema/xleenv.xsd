@@ -99,6 +99,23 @@
     <xs:attribute name="Flags" type="xs:int" default="0"/>
   </xs:complexType>
 
+      <!-- D I S T A N T   I B L -->
+  <xs:complexType name="distantIBLType">
+    <xs:annotation>
+      <xs:appinfo>
+        <scea.dom.editors.attribute category="Ambient" name="EquirectangularSource" displayName="Distant IBL Texture (Equirectangular)"
+          editor="Sce.Atf.Controls.PropertyEditing.FileUriEditor,Atf.Gui.WinForms"/>
+
+        <LeGe.NativeType nativeName="DistantIBL"/>
+        <LeGe.NativeProperty name="EquirectangularSource" nativeName="EquirectangularSource"/>
+
+        <scea.dom.editors category="Environment" name="DistantIBL" menuText="Environment/DistantIBL" description="Distant IBL Settings" image="LevelEditorCore.Resources.Lighting16.png"/>
+        <LeGe.OpaqueListable label="DistantIBL"/>
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:attribute name="EquirectangularSource" type="xs:anyURI" default="xleres/DefaultResources/sky/samplesky2.dds" />
+  </xs:complexType>
+
       <!-- T O N E   M A P   S E T T I N G S -->
   <xs:complexType name="toneMapSettingsType">
     <xs:annotation>
@@ -211,6 +228,7 @@
       <xs:element name="settings" type="envMiscType" minOccurs="0" maxOccurs="unbounded"/>
       <xs:element name="ambient" type="ambientSettingsType" minOccurs="1" maxOccurs="1"/>
       <xs:element name="tonemap" type="toneMapSettingsType" minOccurs="1" maxOccurs="1"/>
+      <xs:element name="distantIBL" type="distantIBLType" minOccurs="1" maxOccurs="1"/>
     </xs:sequence>
     <xs:attribute name="Name" type="xs:string" default="environment"/>
   </xs:complexType>

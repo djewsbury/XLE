@@ -32,6 +32,7 @@ namespace LevelEditorXLE.Environment
                     if (type == Schema.envMiscType.Type) return true;
                     if (type == Schema.ambientSettingsType.Type) return true;
                     if (type == Schema.toneMapSettingsType.Type) return true;
+                    if (type == Schema.distantIBLType.Type) return true;
                 }
             }
             return false;
@@ -62,6 +63,11 @@ namespace LevelEditorXLE.Environment
                     if (type == Schema.toneMapSettingsType.Type)
                     {
                         SetChild(Schema.envSettingsType.tonemapChild, domNode);
+                        return true;
+                    }
+                    if (type == Schema.distantIBLType.Type)
+                    {
+                        SetChild(Schema.envSettingsType.distantIBLChild, domNode);
                         return true;
                     }
                 }
@@ -112,6 +118,9 @@ namespace LevelEditorXLE.Environment
                 case Command.AddToneMapSettings:
                     return GetChild<DomNode>(Schema.envSettingsType.tonemapChild) == null;
 
+                case Command.AddDistantIBLSettings:
+                    return GetChild<DomNode>(Schema.envSettingsType.distantIBLChild) == null;
+
                 case Command.AddSun:
                     return FindObjectByName("Sun") == null;
 
@@ -142,6 +151,13 @@ namespace LevelEditorXLE.Environment
                         DomNode.GetRoot(), this,
                         new DomNode(Schema.toneMapSettingsType.Type),
                         "Add Tone Map Settings", null);
+                    break;
+
+                case Command.AddDistantIBLSettings:
+                    ApplicationUtil.Insert(
+                        DomNode.GetRoot(), this,
+                        new DomNode(Schema.distantIBLType.Type),
+                        "Add Distant IBL Settings", null);
                     break;
 
                 case Command.AddSun:
@@ -188,6 +204,7 @@ namespace LevelEditorXLE.Environment
         {
             [Description("Add Ambient Settings")] AddAmbientSettings,
             [Description("Add Tone Map Settings")] AddToneMapSettings,
+            [Description("Add Distant IBL Settings")] AddDistantIBLSettings,
             [Description("Add Sun")] AddSun,
             [Description("Add Directional Light")] AddDirectionalLight,
             [Description("Add Area Light")] AddAreaLight,

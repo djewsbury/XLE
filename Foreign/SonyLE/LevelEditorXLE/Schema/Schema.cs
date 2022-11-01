@@ -145,12 +145,14 @@ namespace LevelEditorXLE
             ambientSettingsType.SkyBrightnessAttribute = ambientSettingsType.Type.GetAttributeInfo("SkyBrightness");
             ambientSettingsType.RangeFogInscatterAttribute = ambientSettingsType.Type.GetAttributeInfo("RangeFogInscatter");
             ambientSettingsType.RangeFogInscatterScaleAttribute = ambientSettingsType.Type.GetAttributeInfo("RangeFogInscatterScale");
-            ambientSettingsType.RangeFogThicknessAttribute = ambientSettingsType.Type.GetAttributeInfo("RangeFogThickness");
-            ambientSettingsType.RangeFogThicknessScaleAttribute = ambientSettingsType.Type.GetAttributeInfo("RangeFogThicknessScale");
+            ambientSettingsType.RangeFogThicknessReciprocalScaleAttribute = ambientSettingsType.Type.GetAttributeInfo("RangeFogThicknessReciprocalScale");
             ambientSettingsType.AtmosBlurStdDevAttribute = ambientSettingsType.Type.GetAttributeInfo("AtmosBlurStdDev");
             ambientSettingsType.AtmosBlurStartAttribute = ambientSettingsType.Type.GetAttributeInfo("AtmosBlurStart");
             ambientSettingsType.AtmosBlurEndAttribute = ambientSettingsType.Type.GetAttributeInfo("AtmosBlurEnd");
             ambientSettingsType.FlagsAttribute = ambientSettingsType.Type.GetAttributeInfo("Flags");
+
+            distantIBLType.Type = getNodeType("gap", "distantIBLType");
+            distantIBLType.EquirectangularSourceAttribute = distantIBLType.Type.GetAttributeInfo("EquirectangularSource");
 
             toneMapSettingsType.Type = getNodeType("gap", "toneMapSettingsType");
             toneMapSettingsType.BloomScaleAttribute = toneMapSettingsType.Type.GetAttributeInfo("BloomScale");
@@ -184,6 +186,7 @@ namespace LevelEditorXLE
             envSettingsType.settingsChild = envSettingsType.Type.GetChildInfo("settings");
             envSettingsType.ambientChild = envSettingsType.Type.GetChildInfo("ambient");
             envSettingsType.tonemapChild = envSettingsType.Type.GetChildInfo("tonemap");
+            envSettingsType.distantIBLChild = envSettingsType.Type.GetChildInfo("distantIBL");
 
             envSettingsFolderType.Type = getNodeType("gap", "envSettingsFolderType");
             envSettingsFolderType.ExportTargetAttribute = envSettingsFolderType.Type.GetAttributeInfo("ExportTarget");
@@ -200,13 +203,11 @@ namespace LevelEditorXLE
             staticLightType.visibleAttribute = staticLightType.Type.GetAttributeInfo("visible");
             staticLightType.lockedAttribute = staticLightType.Type.GetAttributeInfo("locked");
             staticLightType.nameAttribute = staticLightType.Type.GetAttributeInfo("name");
-            staticLightType.DiffuseAttribute = staticLightType.Type.GetAttributeInfo("Diffuse");
-            staticLightType.DiffuseBrightnessAttribute = staticLightType.Type.GetAttributeInfo("DiffuseBrightness");
+            staticLightType.ColorAttribute = staticLightType.Type.GetAttributeInfo("Color");
+            staticLightType.BrightnessAttribute = staticLightType.Type.GetAttributeInfo("Brightness");
             staticLightType.DiffuseModelAttribute = staticLightType.Type.GetAttributeInfo("DiffuseModel");
             staticLightType.DiffuseWideningMinAttribute = staticLightType.Type.GetAttributeInfo("DiffuseWideningMin");
             staticLightType.DiffuseWideningMaxAttribute = staticLightType.Type.GetAttributeInfo("DiffuseWideningMax");
-            staticLightType.SpecularAttribute = staticLightType.Type.GetAttributeInfo("Specular");
-            staticLightType.SpecularBrightnessAttribute = staticLightType.Type.GetAttributeInfo("SpecularBrightness");
 
             directionalLightType.Type = getNodeType("gap", "directionalLightType");
             directionalLightType.transformAttribute = directionalLightType.Type.GetAttributeInfo("transform");
@@ -218,13 +219,11 @@ namespace LevelEditorXLE
             directionalLightType.visibleAttribute = directionalLightType.Type.GetAttributeInfo("visible");
             directionalLightType.lockedAttribute = directionalLightType.Type.GetAttributeInfo("locked");
             directionalLightType.nameAttribute = directionalLightType.Type.GetAttributeInfo("name");
-            directionalLightType.DiffuseAttribute = directionalLightType.Type.GetAttributeInfo("Diffuse");
-            directionalLightType.DiffuseBrightnessAttribute = directionalLightType.Type.GetAttributeInfo("DiffuseBrightness");
+            directionalLightType.ColorAttribute = directionalLightType.Type.GetAttributeInfo("Color");
+            directionalLightType.BrightnessAttribute = directionalLightType.Type.GetAttributeInfo("Brightness");
             directionalLightType.DiffuseModelAttribute = directionalLightType.Type.GetAttributeInfo("DiffuseModel");
             directionalLightType.DiffuseWideningMinAttribute = directionalLightType.Type.GetAttributeInfo("DiffuseWideningMin");
             directionalLightType.DiffuseWideningMaxAttribute = directionalLightType.Type.GetAttributeInfo("DiffuseWideningMax");
-            directionalLightType.SpecularAttribute = directionalLightType.Type.GetAttributeInfo("Specular");
-            directionalLightType.SpecularBrightnessAttribute = directionalLightType.Type.GetAttributeInfo("SpecularBrightness");
             directionalLightType.FlagsAttribute = directionalLightType.Type.GetAttributeInfo("Flags");
             directionalLightType.ShadowResolveModelAttribute = directionalLightType.Type.GetAttributeInfo("ShadowResolveModel");
 
@@ -238,19 +237,18 @@ namespace LevelEditorXLE
             areaLightType.visibleAttribute = areaLightType.Type.GetAttributeInfo("visible");
             areaLightType.lockedAttribute = areaLightType.Type.GetAttributeInfo("locked");
             areaLightType.nameAttribute = areaLightType.Type.GetAttributeInfo("name");
-            areaLightType.DiffuseAttribute = areaLightType.Type.GetAttributeInfo("Diffuse");
-            areaLightType.DiffuseBrightnessAttribute = areaLightType.Type.GetAttributeInfo("DiffuseBrightness");
+            areaLightType.ColorAttribute = areaLightType.Type.GetAttributeInfo("Color");
+            areaLightType.BrightnessAttribute = areaLightType.Type.GetAttributeInfo("Brightness");
             areaLightType.DiffuseModelAttribute = areaLightType.Type.GetAttributeInfo("DiffuseModel");
             areaLightType.DiffuseWideningMinAttribute = areaLightType.Type.GetAttributeInfo("DiffuseWideningMin");
             areaLightType.DiffuseWideningMaxAttribute = areaLightType.Type.GetAttributeInfo("DiffuseWideningMax");
-            areaLightType.SpecularAttribute = areaLightType.Type.GetAttributeInfo("Specular");
-            areaLightType.SpecularBrightnessAttribute = areaLightType.Type.GetAttributeInfo("SpecularBrightness");
             areaLightType.ShapeAttribute = areaLightType.Type.GetAttributeInfo("Shape");
+            areaLightType.CutoffBrightnessAttribute = areaLightType.Type.GetAttributeInfo("CutoffBrightness");
 
             shadowFrustumSettings.Type = getNodeType("gap", "shadowFrustumSettings");
             shadowFrustumSettings.NameAttribute = shadowFrustumSettings.Type.GetAttributeInfo("Name");
             shadowFrustumSettings.FlagsAttribute = shadowFrustumSettings.Type.GetAttributeInfo("Flags");
-            shadowFrustumSettings.FrustumCountAttribute = shadowFrustumSettings.Type.GetAttributeInfo("MaxFrustumCount");
+            shadowFrustumSettings.MaxFrustumCountAttribute = shadowFrustumSettings.Type.GetAttributeInfo("MaxFrustumCount");
             shadowFrustumSettings.MaxDistanceFromCameraAttribute = shadowFrustumSettings.Type.GetAttributeInfo("MaxDistanceFromCamera");
             shadowFrustumSettings.FrustumSizeFactorAttribute = shadowFrustumSettings.Type.GetAttributeInfo("FrustumSizeFactor");
             shadowFrustumSettings.FocusDistanceAttribute = shadowFrustumSettings.Type.GetAttributeInfo("FocusDistance");
@@ -281,6 +279,8 @@ namespace LevelEditorXLE
             oceanSettings.SuppressionFactorAttribute = oceanSettings.Type.GetAttributeInfo("SuppressionFactor");
             oceanSettings.GridShiftSpeedAttribute = oceanSettings.Type.GetAttributeInfo("GridShiftSpeed");
             oceanSettings.BaseHeightAttribute = oceanSettings.Type.GetAttributeInfo("BaseHeight");
+            oceanSettings.SpectrumMinAttribute = oceanSettings.Type.GetAttributeInfo("SpectrumMin");
+            oceanSettings.SpectrumMaxAttribute = oceanSettings.Type.GetAttributeInfo("SpectrumMax");
             oceanSettings.FoamThresholdAttribute = oceanSettings.Type.GetAttributeInfo("FoamThreshold");
             oceanSettings.FoamIncreaseSpeedAttribute = oceanSettings.Type.GetAttributeInfo("FoamIncreaseSpeed");
             oceanSettings.FoamIncreaseClampAttribute = oceanSettings.Type.GetAttributeInfo("FoamIncreaseClamp");
@@ -288,8 +288,8 @@ namespace LevelEditorXLE
 
             oceanLightingSettings.Type = getNodeType("gap", "oceanLightingSettings");
             oceanLightingSettings.FoamBrightnessAttribute = oceanLightingSettings.Type.GetAttributeInfo("FoamBrightness");
-            oceanLightingSettings.OpticalThicknessScalarAttribute = oceanLightingSettings.Type.GetAttributeInfo("OpticalThicknessScalar");
-            oceanLightingSettings.OpticalThicknessColorAttribute = oceanLightingSettings.Type.GetAttributeInfo("OpticalThicknessColor");
+            oceanLightingSettings.OpticalThicknessReciprocalScalarAttribute = oceanLightingSettings.Type.GetAttributeInfo("OpticalThicknessReciprocalScalar");
+            oceanLightingSettings.OpticalThicknessReciprocalColorAttribute = oceanLightingSettings.Type.GetAttributeInfo("OpticalThicknessReciprocalColor");
             oceanLightingSettings.SkyReflectionBrightnessAttribute = oceanLightingSettings.Type.GetAttributeInfo("SkyReflectionBrightness");
             oceanLightingSettings.UpwellingScaleAttribute = oceanLightingSettings.Type.GetAttributeInfo("UpwellingScale");
             oceanLightingSettings.RefractiveIndexAttribute = oceanLightingSettings.Type.GetAttributeInfo("RefractiveIndex");
@@ -314,18 +314,19 @@ namespace LevelEditorXLE
             fogVolumeType.nameAttribute = fogVolumeType.Type.GetAttributeInfo("name");
             fogVolumeType.visibleAttribute = fogVolumeType.Type.GetAttributeInfo("visible");
             fogVolumeType.lockedAttribute = fogVolumeType.Type.GetAttributeInfo("locked");
-            fogVolumeType.DensityAttribute = fogVolumeType.Type.GetAttributeInfo("Density");
-            fogVolumeType.NoiseDensityScaleAttribute = fogVolumeType.Type.GetAttributeInfo("NoiseDensityScale");
+            fogVolumeType.ReciprocalThicknessAttribute = fogVolumeType.Type.GetAttributeInfo("ReciprocalThickness");
+            fogVolumeType.NoiseThicknessScaleAttribute = fogVolumeType.Type.GetAttributeInfo("NoiseThicknessScale");
             fogVolumeType.NoiseSpeedAttribute = fogVolumeType.Type.GetAttributeInfo("NoiseSpeed");
-            fogVolumeType.ForwardColorAttribute = fogVolumeType.Type.GetAttributeInfo("ForwardColor");
-            fogVolumeType.ForwardColorScaleAttribute = fogVolumeType.Type.GetAttributeInfo("ForwardColorScale");
-            fogVolumeType.BackColorAttribute = fogVolumeType.Type.GetAttributeInfo("BackColor");
-            fogVolumeType.BackColorScaleAttribute = fogVolumeType.Type.GetAttributeInfo("BackColorScale");
+            fogVolumeType.SunInscatterAttribute = fogVolumeType.Type.GetAttributeInfo("SunInscatter");
+            fogVolumeType.SunInscatterScaleAttribute = fogVolumeType.Type.GetAttributeInfo("SunInscatterScale");
+            fogVolumeType.AmbientInscatterAttribute = fogVolumeType.Type.GetAttributeInfo("AmbientInscatter");
+            fogVolumeType.AmbientInscatterScaleAttribute = fogVolumeType.Type.GetAttributeInfo("AmbientInscatterScale");
             fogVolumeType.ESM_CAttribute = fogVolumeType.Type.GetAttributeInfo("ESM_C");
             fogVolumeType.ShadowBiasAttribute = fogVolumeType.Type.GetAttributeInfo("ShadowBias");
             fogVolumeType.JitteringAmountAttribute = fogVolumeType.Type.GetAttributeInfo("JitteringAmount");
             fogVolumeType.HeightStartAttribute = fogVolumeType.Type.GetAttributeInfo("HeightStart");
             fogVolumeType.HeightEndAttribute = fogVolumeType.Type.GetAttributeInfo("HeightEnd");
+            fogVolumeType.EnableShadowsAttribute = fogVolumeType.Type.GetAttributeInfo("EnableShadows");
 
             fogVolumeRendererType.Type = getNodeType("gap", "fogVolumeRendererType");
             fogVolumeRendererType.BlurredShadowSizeAttribute = fogVolumeRendererType.Type.GetAttributeInfo("BlurredShadowSize");
@@ -354,8 +355,8 @@ namespace LevelEditorXLE
             shallowSurfaceType.RainQuantityAttribute = shallowSurfaceType.Type.GetAttributeInfo("RainQuantity");
             shallowSurfaceType.EvaporationConstantAttribute = shallowSurfaceType.Type.GetAttributeInfo("EvaporationConstant");
             shallowSurfaceType.PressureConstantAttribute = shallowSurfaceType.Type.GetAttributeInfo("PressureConstant");
-            shallowSurfaceType.OpticalThicknessColorAttribute = shallowSurfaceType.Type.GetAttributeInfo("OpticalThicknessColor");
-            shallowSurfaceType.OpticalThicknessScalarAttribute = shallowSurfaceType.Type.GetAttributeInfo("OpticalThicknessScalar");
+            shallowSurfaceType.OpticalThicknessReciprocalColorAttribute = shallowSurfaceType.Type.GetAttributeInfo("OpticalThicknessReciprocalColor");
+            shallowSurfaceType.OpticalThicknessReciprocalScalarAttribute = shallowSurfaceType.Type.GetAttributeInfo("OpticalThicknessReciprocalScalar");
             shallowSurfaceType.FoamColorAttribute = shallowSurfaceType.Type.GetAttributeInfo("FoamColor");
             shallowSurfaceType.SpecularAttribute = shallowSurfaceType.Type.GetAttributeInfo("Specular");
             shallowSurfaceType.RoughnessAttribute = shallowSurfaceType.Type.GetAttributeInfo("Roughness");
@@ -783,12 +784,17 @@ namespace LevelEditorXLE
             public static AttributeInfo SkyBrightnessAttribute;
             public static AttributeInfo RangeFogInscatterAttribute;
             public static AttributeInfo RangeFogInscatterScaleAttribute;
-            public static AttributeInfo RangeFogThicknessAttribute;
-            public static AttributeInfo RangeFogThicknessScaleAttribute;
+            public static AttributeInfo RangeFogThicknessReciprocalScaleAttribute;
             public static AttributeInfo AtmosBlurStdDevAttribute;
             public static AttributeInfo AtmosBlurStartAttribute;
             public static AttributeInfo AtmosBlurEndAttribute;
             public static AttributeInfo FlagsAttribute;
+        }
+
+        public static class distantIBLType
+        {
+            public static DomNodeType Type;
+            public static AttributeInfo EquirectangularSourceAttribute;
         }
 
         public static class toneMapSettingsType
@@ -834,6 +840,7 @@ namespace LevelEditorXLE
             public static ChildInfo settingsChild;
             public static ChildInfo ambientChild;
             public static ChildInfo tonemapChild;
+            public static ChildInfo distantIBLChild;
         }
 
         public static class envSettingsFolderType
@@ -856,13 +863,11 @@ namespace LevelEditorXLE
             public static AttributeInfo visibleAttribute;
             public static AttributeInfo lockedAttribute;
             public static AttributeInfo nameAttribute;
-            public static AttributeInfo DiffuseAttribute;
-            public static AttributeInfo DiffuseBrightnessAttribute;
+            public static AttributeInfo ColorAttribute;
+            public static AttributeInfo BrightnessAttribute;
             public static AttributeInfo DiffuseModelAttribute;
             public static AttributeInfo DiffuseWideningMinAttribute;
             public static AttributeInfo DiffuseWideningMaxAttribute;
-            public static AttributeInfo SpecularAttribute;
-            public static AttributeInfo SpecularBrightnessAttribute;
         }
 
         public static class directionalLightType
@@ -877,13 +882,11 @@ namespace LevelEditorXLE
             public static AttributeInfo visibleAttribute;
             public static AttributeInfo lockedAttribute;
             public static AttributeInfo nameAttribute;
-            public static AttributeInfo DiffuseAttribute;
-            public static AttributeInfo DiffuseBrightnessAttribute;
+            public static AttributeInfo ColorAttribute;
+            public static AttributeInfo BrightnessAttribute;
             public static AttributeInfo DiffuseModelAttribute;
             public static AttributeInfo DiffuseWideningMinAttribute;
             public static AttributeInfo DiffuseWideningMaxAttribute;
-            public static AttributeInfo SpecularAttribute;
-            public static AttributeInfo SpecularBrightnessAttribute;
             public static AttributeInfo FlagsAttribute;
             public static AttributeInfo ShadowResolveModelAttribute;
         }
@@ -900,14 +903,13 @@ namespace LevelEditorXLE
             public static AttributeInfo visibleAttribute;
             public static AttributeInfo lockedAttribute;
             public static AttributeInfo nameAttribute;
-            public static AttributeInfo DiffuseAttribute;
-            public static AttributeInfo DiffuseBrightnessAttribute;
+            public static AttributeInfo ColorAttribute;
+            public static AttributeInfo BrightnessAttribute;
             public static AttributeInfo DiffuseModelAttribute;
             public static AttributeInfo DiffuseWideningMinAttribute;
             public static AttributeInfo DiffuseWideningMaxAttribute;
-            public static AttributeInfo SpecularAttribute;
-            public static AttributeInfo SpecularBrightnessAttribute;
             public static AttributeInfo ShapeAttribute;
+            public static AttributeInfo CutoffBrightnessAttribute;
         }
 
         public static class shadowFrustumSettings
@@ -915,7 +917,7 @@ namespace LevelEditorXLE
             public static DomNodeType Type;
             public static AttributeInfo NameAttribute;
             public static AttributeInfo FlagsAttribute;
-            public static AttributeInfo FrustumCountAttribute;
+            public static AttributeInfo MaxFrustumCountAttribute;
             public static AttributeInfo MaxDistanceFromCameraAttribute;
             public static AttributeInfo FrustumSizeFactorAttribute;
             public static AttributeInfo FocusDistanceAttribute;
@@ -949,6 +951,8 @@ namespace LevelEditorXLE
             public static AttributeInfo SuppressionFactorAttribute;
             public static AttributeInfo GridShiftSpeedAttribute;
             public static AttributeInfo BaseHeightAttribute;
+            public static AttributeInfo SpectrumMinAttribute;
+            public static AttributeInfo SpectrumMaxAttribute;
             public static AttributeInfo FoamThresholdAttribute;
             public static AttributeInfo FoamIncreaseSpeedAttribute;
             public static AttributeInfo FoamIncreaseClampAttribute;
@@ -959,8 +963,8 @@ namespace LevelEditorXLE
         {
             public static DomNodeType Type;
             public static AttributeInfo FoamBrightnessAttribute;
-            public static AttributeInfo OpticalThicknessScalarAttribute;
-            public static AttributeInfo OpticalThicknessColorAttribute;
+            public static AttributeInfo OpticalThicknessReciprocalScalarAttribute;
+            public static AttributeInfo OpticalThicknessReciprocalColorAttribute;
             public static AttributeInfo SkyReflectionBrightnessAttribute;
             public static AttributeInfo UpwellingScaleAttribute;
             public static AttributeInfo RefractiveIndexAttribute;
@@ -991,18 +995,19 @@ namespace LevelEditorXLE
             public static AttributeInfo nameAttribute;
             public static AttributeInfo visibleAttribute;
             public static AttributeInfo lockedAttribute;
-            public static AttributeInfo DensityAttribute;
-            public static AttributeInfo NoiseDensityScaleAttribute;
+            public static AttributeInfo ReciprocalThicknessAttribute;
+            public static AttributeInfo NoiseThicknessScaleAttribute;
             public static AttributeInfo NoiseSpeedAttribute;
-            public static AttributeInfo ForwardColorAttribute;
-            public static AttributeInfo ForwardColorScaleAttribute;
-            public static AttributeInfo BackColorAttribute;
-            public static AttributeInfo BackColorScaleAttribute;
+            public static AttributeInfo SunInscatterAttribute;
+            public static AttributeInfo SunInscatterScaleAttribute;
+            public static AttributeInfo AmbientInscatterAttribute;
+            public static AttributeInfo AmbientInscatterScaleAttribute;
             public static AttributeInfo ESM_CAttribute;
             public static AttributeInfo ShadowBiasAttribute;
             public static AttributeInfo JitteringAmountAttribute;
             public static AttributeInfo HeightStartAttribute;
             public static AttributeInfo HeightEndAttribute;
+            public static AttributeInfo EnableShadowsAttribute;
         }
 
         public static class fogVolumeRendererType
@@ -1037,8 +1042,8 @@ namespace LevelEditorXLE
             public static AttributeInfo RainQuantityAttribute;
             public static AttributeInfo EvaporationConstantAttribute;
             public static AttributeInfo PressureConstantAttribute;
-            public static AttributeInfo OpticalThicknessColorAttribute;
-            public static AttributeInfo OpticalThicknessScalarAttribute;
+            public static AttributeInfo OpticalThicknessReciprocalColorAttribute;
+            public static AttributeInfo OpticalThicknessReciprocalScalarAttribute;
             public static AttributeInfo FoamColorAttribute;
             public static AttributeInfo SpecularAttribute;
             public static AttributeInfo RoughnessAttribute;
