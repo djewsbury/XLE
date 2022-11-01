@@ -414,7 +414,7 @@ namespace Assets
 		std::vector<FileSystemWalker::StartingFS> result;
 		ScopedLock(_pimpl->_mountsLock);
 		for (const auto&mount:_pimpl->_mounts) {
-			auto searchingFs = std::dynamic_pointer_cast<ISearchableFileSystem>(mount._fileSystem);
+			auto* searchingFs = dynamic_cast<ISearchableFileSystem*>(mount._fileSystem.get());
 			if (!searchingFs) continue;
 
 			bool match = true;
@@ -432,13 +432,23 @@ namespace Assets
 					std::vector<SplitPath<utf8>::Section>{
 						&splitInitial.GetSections()[minCount],
 						splitInitial.GetSections().end()}}.Rebuild(remainingPath);
-				result.emplace_back(FileSystemWalker::StartingFS{{}, remainingPath, std::move(searchingFs), mount._id});	// (note that we use the mount id as the filesystem ie, due to behaviour in MainFileSystem::GetFileSystem)
+				#if defined(XLE_VERIFY_FILESYSTEMWALKER_POINTERS)
+					auto searchingFsVerification = std::dynamic_pointer_cast<ISearchableFileSystem>(mount._fileSystem);
+					result.emplace_back(FileSystemWalker::StartingFS{{}, remainingPath, std::move(searchingFsVerification), mount._id});	// (note that we use the mount id as the filesystem ie, due to behaviour in MainFileSystem::GetFileSystem)
+				#else
+					result.emplace_back(FileSystemWalker::StartingFS{{}, remainingPath, searchingFs, mount._id});	// (note that we use the mount id as the filesystem ie, due to behaviour in MainFileSystem::GetFileSystem)
+				#endif
 			} else {
 				SplitPath<utf8>{
 					std::vector<SplitPath<utf8>::Section>{
 						&mount._mountPoint.GetSections()[minCount],
 						mount._mountPoint.GetSections().end()}}.Rebuild(remainingPath);
-				result.emplace_back(FileSystemWalker::StartingFS{remainingPath, {}, std::move(searchingFs), mount._id});
+				#if defined(XLE_VERIFY_FILESYSTEMWALKER_POINTERS)
+					auto searchingFsVerification = std::dynamic_pointer_cast<ISearchableFileSystem>(mount._fileSystem);
+					result.emplace_back(FileSystemWalker::StartingFS{remainingPath, {}, std::move(searchingFsVerification), mount._id});
+				#else
+					result.emplace_back(FileSystemWalker::StartingFS{remainingPath, {}, searchingFs, mount._id});
+				#endif
 			}
 		}
 

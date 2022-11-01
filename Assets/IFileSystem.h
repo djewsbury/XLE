@@ -12,6 +12,8 @@
 #include <string>
 #include <memory>
 
+// #define XLE_VERIFY_FILESYSTEMWALKER_POINTERS
+
 namespace OSServices { class OnChangeCallback; }
 
 namespace Assets
@@ -172,8 +174,22 @@ namespace Assets
 		{
 			std::basic_string<utf8> _pendingDirectories;
 			std::basic_string<utf8> _internalPoint;
-			std::shared_ptr<ISearchableFileSystem> _fs;
+			ISearchableFileSystem* _fs;
 			FileSystemId _fsId = FileSystemId_Invalid;
+			#if defined(XLE_VERIFY_FILESYSTEMWALKER_POINTERS)
+				std::weak_ptr<ISearchableFileSystem> _fsVerification;
+				StartingFS(
+					const std::basic_string<utf8>& pendingDirectories,
+					const std::basic_string<utf8>& internalPoint,
+					std::weak_ptr<ISearchableFileSystem> fs,
+					FileSystemId fsId);
+			#else
+				StartingFS(
+					const std::basic_string<utf8>& pendingDirectories,
+					const std::basic_string<utf8>& internalPoint,
+					ISearchableFileSystem* fs,
+					FileSystemId fsId);
+			#endif
 		};
 
 		FileSystemWalker(std::vector<StartingFS>&& fileSystems);

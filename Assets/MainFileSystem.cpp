@@ -506,11 +506,43 @@ namespace Assets
 	FileSystemWalker BeginWalk(const std::shared_ptr<ISearchableFileSystem>& fs, StringSection<> initialSubDirectory)
 	{
 		std::vector<FileSystemWalker::StartingFS> startingFS;
-		startingFS.push_back({{}, initialSubDirectory.AsString(), fs, 0});		// here, relying on 0 being a sentinel in the mounting tree than doesn't correspond to any mountId
+		#if defined(XLE_VERIFY_FILESYSTEMWALKER_POINTERS)
+			startingFS.push_back({{}, initialSubDirectory.AsString(), fs, 0});		// here, relying on 0 being a sentinel in the mounting tree than doesn't correspond to any mountId
+		#else
+			startingFS.push_back({{}, initialSubDirectory.AsString(), fs.get(), 0});		// here, relying on 0 being a sentinel in the mounting tree than doesn't correspond to any mountId
+		#endif
 		return FileSystemWalker(std::move(startingFS));
 	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	#if defined(XLE_VERIFY_FILESYSTEMWALKER_POINTERS)
+		FileSystemWalker::StartingFS::StartingFS(
+			const std::basic_string<utf8>& pendingDirectories,
+			const std::basic_string<utf8>& internalPoint,
+			std::weak_ptr<ISearchableFileSystem> fs,
+			FileSystemId fsId)
+		: _pendingDirectories(pendingDirectories)
+		, _internalPoint(internalPoint)
+		, _fsVerification(std::move(fs))
+		, _fsId(fsId)
+		{
+			_fs = _fsVerification.lock().get();
+			assert(_fs);
+		}
+	#else
+		FileSystemWalker::StartingFS::StartingFS(
+			const std::basic_string<utf8>& pendingDirectories,
+			const std::basic_string<utf8>& internalPoint,
+			ISearchableFileSystem* fs,
+			FileSystemId fsId)
+		: _pendingDirectories(pendingDirectories)
+		, _internalPoint(internalPoint)
+		, _fs(fs)
+		, _fsId(fsId)
+		{
+		}
+	#endif
 
 	class FileSystemWalker::Pimpl
 	{
@@ -549,9 +581,10 @@ namespace Assets
 				auto& fs = _fileSystems[fsIdx];
 				if (!fs._pendingDirectories.empty()) continue;
 
+				CheckPointers(fs);
 				auto foundMarkers = fs._fs->FindFiles(MakeStringSection(fs._internalPoint), "*");
 
-				auto* baseFS = dynamic_cast<IFileSystem*>(fs._fs.get());
+				auto* baseFS = dynamic_cast<IFileSystem*>(fs._fs);
 				assert(baseFS);
 				for (auto&m:foundMarkers) {
 					// The filesystem will give us it's internal "marker" representation of the filename
@@ -608,6 +641,7 @@ namespace Assets
                     }
 				}
 
+				CheckPointers(fs);
 				auto foundSubDirs = fs._fs->FindSubDirectories(MakeStringSection(fs._internalPoint));
 				for (auto&m:foundSubDirs) {
 					auto hash = HashFilenameAndPath(MakeStringSection(m));
@@ -622,6 +656,13 @@ namespace Assets
 			}
 
 			_foundDirectories = true;
+		}
+
+		void CheckPointers(const StartingFS&fs)
+		{
+			#if defined(XLE_VERIFY_FILESYSTEMWALKER_POINTERS)
+				assert(fs._fsVerification.lock());
+			#endif
 		}
 	};
 
@@ -672,12 +713,20 @@ namespace Assets
 				auto sections = splitPath.GetSections();
 				utf8 newPending[MaxPath];
 				SplitPath<utf8>(std::vector<SplitPath<utf8>::Section>{&sections[1], sections.end()}).Rebuild(newPending);
-				nextStep.emplace_back(StartingFS{newPending, fs._internalPoint, fs._fs, fs._fsId});
+				#if defined(XLE_VERIFY_FILESYSTEMWALKER_POINTERS)
+					nextStep.emplace_back(StartingFS{newPending, fs._internalPoint, fs._fsVerification, fs._fsId});
+				#else
+					nextStep.emplace_back(StartingFS{newPending, fs._internalPoint, fs._fs, fs._fsId});
+				#endif
 			} else {
 				auto newInternalPoint = fs._internalPoint;
 				if (!newInternalPoint.empty()) newInternalPoint += "/";
 				newInternalPoint += subDirectory;
-				nextStep.emplace_back(StartingFS{{}, newInternalPoint, fs._fs, fs._fsId});
+				#if defined(XLE_VERIFY_FILESYSTEMWALKER_POINTERS)
+					nextStep.emplace_back(StartingFS{{}, newInternalPoint, fs._fsVerification, fs._fsId});
+				#else
+					nextStep.emplace_back(StartingFS{{}, newInternalPoint, fs._fs, fs._fsId});
+				#endif
 			}
 		}
 
