@@ -25,7 +25,6 @@ set(Src
 	Metal/State.cpp
 	Metal/TextureView.cpp
 	Metal/VMAImplementation.cpp
-	../DX11/Metal/CompiledShaderByteCode.cpp
 	../DX11/Metal/NewShaderCompiler.cpp
 	)
 
