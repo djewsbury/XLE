@@ -72,6 +72,7 @@ namespace SceneEngine
 			unsigned _modelScaffoldCount = 2000;
 			unsigned _materialScaffoldCount = 2000;
 			unsigned _rendererCount = 200;
+			bool _disableRepositionableGeometry = false;
 		};
 		virtual ~IRigidModelScene();
 	};

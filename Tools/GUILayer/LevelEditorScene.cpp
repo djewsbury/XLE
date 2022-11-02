@@ -116,6 +116,7 @@ namespace GUILayer
 		std::shared_ptr<::Assets::OperationContext> loadingContext;
 
 		SceneEngine::IRigidModelScene::Config rigModelSceneCfg;
+        rigModelSceneCfg._disableRepositionableGeometry = true;     // disable this, because this requires a constructionContext, and those have issues in the level editor -- because the preview window doesn't use them, and it's invalid to create the same descriptor set both with and without a construction context
         _rigidModelScene = SceneEngine::CreateRigidModelScene(
             drawingApparatus->_drawablesPool, drawingApparatus->_pipelineAccelerators,
             drawingApparatus->_deformAccelerators, primaryResources->_bufferUploads,
