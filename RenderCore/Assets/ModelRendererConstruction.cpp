@@ -278,22 +278,35 @@ namespace RenderCore { namespace Assets
 		return hasPending ? ::Assets::AssetState::Pending : ::Assets::AssetState::Ready;
 	}
 
+	template<typename Future>
+		static bool FutureInvalidated(Future& f)
+	{
+		TRY {
+			return f.valid() && f.get()->GetDependencyValidation().GetValidationIndex() != 0;
+		} CATCH(const ::Assets::Exceptions::ExceptionWithDepVal& e) {
+			return e.GetDependencyValidation().GetValidationIndex() != 0;
+		} CATCH(...) {
+		} CATCH_END
+		return false;
+	}
+
 	bool ModelRendererConstruction::IsInvalidated() const
 	{
 		// expecting to have already waited on this construction -- because we're querying all of the futures here
+		// also, this is an expensive function; avoid calling it frequently (probably just during construction operations)
 		for (const auto& m:_internal->_modelScaffoldMarkers)
-			if (m.second.valid() && m.second.get()->GetDependencyValidation().GetValidationIndex() != 0)
+			if (FutureInvalidated(m.second))
 				return true;
 		for (const auto& m:_internal->_modelScaffoldPtrs)
 			if (m.second && m.second->GetDependencyValidation().GetValidationIndex() != 0)
 				return true;
 		for (const auto& m:_internal->_materialScaffoldMarkers)
-			if (m.second.valid() && m.second.get()->GetDependencyValidation().GetValidationIndex() != 0)
+			if (FutureInvalidated(m.second))
 				return true;
 		for (const auto& m:_internal->_materialScaffoldPtrs)
 			if (m.second && m.second->GetDependencyValidation().GetValidationIndex() != 0)
 				return true;
-		if (_internal->_skeletonScaffoldMarker.valid() && _internal->_skeletonScaffoldMarker.get()->GetDependencyValidation().GetValidationIndex() != 0)
+		if (FutureInvalidated(_internal->_skeletonScaffoldMarker))
 			return true;
 		if (_internal->_skeletonScaffoldPtr && _internal->_skeletonScaffoldPtr->GetDependencyValidation().GetValidationIndex() != 0)
 			return true;
