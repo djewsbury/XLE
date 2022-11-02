@@ -2178,6 +2178,9 @@ namespace SceneEngine
         if (currTrans != ObjTransDef::Deleted) {
 			currentState = newState;
             currentState._transaction = (currTrans == ObjTransDef::Created || currTrans == ObjTransDef::Error) ? ObjTransDef::Created : ObjTransDef::Modified;
+            // never create a placement with an empty model field
+            if (newState._model.empty())
+                currentState._transaction = ObjTransDef::Error;
             PushObj(index, currentState);
         }
     }
@@ -2265,45 +2268,48 @@ namespace SceneEngine
         PlacementGUID guid(0, 0);
         PlacementsTransform localToCell = Identity<PlacementsTransform>();
 
-        auto& cells = _editorPimpl->_cellSet->_pimpl->_cells;
-        for (auto i=cells.cbegin(); i!=cells.cend(); ++i) {
-            if (    worldSpaceCenter[0] >= i->_captureMins[0] && worldSpaceCenter[0] < i->_captureMaxs[0]
-                &&  worldSpaceCenter[1] >= i->_captureMins[1] && worldSpaceCenter[1] < i->_captureMaxs[1]) {
-                
-                    // This is the correct cell. Look for a dynamic placement associated
-                auto dynPlacements = _editorPimpl->GetDynPlacements(i->_filenameHash);
+        if (!newState._model.empty()) {     // (don't attempt to create a placement with an empty model field)
+            auto& cells = _editorPimpl->_cellSet->_pimpl->_cells;
+            for (auto i=cells.cbegin(); i!=cells.cend(); ++i) {
+                if (    worldSpaceCenter[0] >= i->_captureMins[0] && worldSpaceCenter[0] < i->_captureMaxs[0]
+                    &&  worldSpaceCenter[1] >= i->_captureMins[1] && worldSpaceCenter[1] < i->_captureMaxs[1]) {
+                    
+                        // This is the correct cell. Look for a dynamic placement associated
+                    auto dynPlacements = _editorPimpl->GetDynPlacements(i->_filenameHash);
 
-                    //  Build a GUID for this object. We're going to sort by GUID, and we want
-                    //  objects with the name model and material to appear together. So let's
-                    //  build the top 32 bits from the model and material hash. The bottom 
-                    //  32 bits can be a random number.
-                    //  Note that it's possible that the bottom 32 bits could collide with an
-                    //  existing object. It's unlikely, but possible. So let's make sure we
-                    //  have a unique GUID before we add it.
-                uint64_t id, idTopPart = ObjectIdTopPart(newState._model, materialFilename);
-                for (;;) {
-                    auto id32 = BuildGuid32();
-                    id = idTopPart | uint64_t(id32);
-                    if (!dynPlacements->HasObject(id)) { break; }
+                        //  Build a GUID for this object. We're going to sort by GUID, and we want
+                        //  objects with the name model and material to appear together. So let's
+                        //  build the top 32 bits from the model and material hash. The bottom 
+                        //  32 bits can be a random number.
+                        //  Note that it's possible that the bottom 32 bits could collide with an
+                        //  existing object. It's unlikely, but possible. So let's make sure we
+                        //  have a unique GUID before we add it.
+                    uint64_t id, idTopPart = ObjectIdTopPart(newState._model, materialFilename);
+                    for (;;) {
+                        auto id32 = BuildGuid32();
+                        id = idTopPart | uint64_t(id32);
+                        if (!dynPlacements->HasObject(id)) { break; }
+                    }
+
+                    auto suppGuid = StringToSupplementGuids(newState._supplements.c_str());
+                    dynPlacements->AddPlacement(
+                        _editorPimpl->_placementsCache->GetRigidModelScene(),
+                        localToCell,
+                        MakeStringSection(newState._model), MakeStringSection(materialFilename), 
+                        MakeIteratorRange(suppGuid), id);
+
+                    guid = PlacementGUID(i->_filenameHash, id);
+                    break;
+
                 }
-
-                auto suppGuid = StringToSupplementGuids(newState._supplements.c_str());
-                dynPlacements->AddPlacement(
-                    _editorPimpl->_placementsCache->GetRigidModelScene(),
-                    localToCell,
-                    MakeStringSection(newState._model), MakeStringSection(materialFilename), 
-                    MakeIteratorRange(suppGuid), id);
-
-                guid = PlacementGUID(i->_filenameHash, id);
-                break;
-
             }
         }
 
-        if (guid.first == 0 && guid.second == 0) return false;    // couldn't find a way to create this object
-        
         ObjTransDef newObj = newState;
         newObj._transaction = ObjTransDef::Created;
+
+        if (guid.first == 0 && guid.second == 0)
+            newObj._transaction = ObjTransDef::Error;
 
         ObjTransDef originalState;
         originalState._localToWorld = Identity<decltype(originalState._localToWorld)>();
@@ -2329,35 +2335,38 @@ namespace SceneEngine
         PlacementsTransform localToCell = Identity<PlacementsTransform>();
         bool foundCell = false;
 
-        auto& cells = _editorPimpl->_cellSet->_pimpl->_cells;
-        for (auto i=cells.cbegin(); i!=cells.cend(); ++i) {
-            if (i->_filenameHash == guid.first) {
-                auto dynPlacements = _editorPimpl->GetDynPlacements(i->_filenameHash);
-                localToCell = Combine(newState._localToWorld, InvertOrthonormalTransform(i->_cellToWorld));
+        if (!newState._model.empty()) {
+            auto& cells = _editorPimpl->_cellSet->_pimpl->_cells;
+            for (auto i=cells.cbegin(); i!=cells.cend(); ++i) {
+                if (i->_filenameHash == guid.first) {
+                    auto dynPlacements = _editorPimpl->GetDynPlacements(i->_filenameHash);
+                    localToCell = Combine(newState._localToWorld, InvertOrthonormalTransform(i->_cellToWorld));
 
-                auto idTopPart = ObjectIdTopPart(newState._model, materialFilename);
-                uint64_t id = idTopPart | uint64_t(guid.second & 0xffffffffull);
-                if (dynPlacements->HasObject(id)) {
-                    assert(0);      // got a hash collision or duplicated id
-                    return false;
+                    auto idTopPart = ObjectIdTopPart(newState._model, materialFilename);
+                    uint64_t id = idTopPart | uint64_t(guid.second & 0xffffffffull);
+                    if (dynPlacements->HasObject(id)) {
+                        assert(0);      // got a hash collision or duplicated id
+                        return false;
+                    }
+
+                    auto supp = StringToSupplementGuids(newState._supplements.c_str());
+                    dynPlacements->AddPlacement(
+                        _editorPimpl->_placementsCache->GetRigidModelScene(),
+                        localToCell,
+                        MakeStringSection(newState._model), MakeStringSection(materialFilename), 
+                        MakeIteratorRange(supp), id);
+
+                    guid.second = id;
+                    foundCell = true;
+                    break;
                 }
-
-                auto supp = StringToSupplementGuids(newState._supplements.c_str());
-                dynPlacements->AddPlacement(
-                    _editorPimpl->_placementsCache->GetRigidModelScene(),
-                    localToCell,
-                    MakeStringSection(newState._model), MakeStringSection(materialFilename), 
-                    MakeIteratorRange(supp), id);
-
-                guid.second = id;
-                foundCell = true;
-                break;
             }
         }
-        if (!foundCell) return false;    // couldn't find a way to create this object
         
         ObjTransDef newObj = newState;
         newObj._transaction = ObjTransDef::Created;
+        if (!foundCell)
+            newObj._transaction = ObjTransDef::Error;
 
         ObjTransDef originalState;
         originalState._localToWorld = Identity<decltype(originalState._localToWorld)>();
