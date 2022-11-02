@@ -46,7 +46,7 @@ namespace SceneEngine
 			std::shared_ptr<RenderCore::Assets::SkeletonScaffold> _skeletonScaffold;
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> _firstModelScaffold;
 			RenderCore::BufferUploads::CommandListID _completionCmdList;
-			std::pair<Float3, Float3> _aabb;
+			std::pair<Float3, Float3> _aabb = { Float3{FLT_MAX, FLT_MAX, FLT_MAX}, Float3{-FLT_MAX, -FLT_MAX, -FLT_MAX} };
 
 			const RenderCore::Assets::SkeletonMachine& GetSkeletonMachine() const
 			{
@@ -283,8 +283,6 @@ namespace SceneEngine
 										if (completedConstruction->GetElementCount() != 0) {
 											renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
 											renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
-										} else {
-											renderer._aabb = {Zero<Float3>(), Zero<Float3>()};
 										}
 										return renderer;
 									});
@@ -296,8 +294,10 @@ namespace SceneEngine
 										renderer._drawableConstructor = drawableConstructorFuture.get();
 										renderer._completionCmdList = renderer._drawableConstructor->_completionCommandList;
 										renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
-										if (completedConstruction->GetElementCount() != 0)
+										if (completedConstruction->GetElementCount() != 0) {
 											renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
+											renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
+										}
 										return renderer;
 									});
 							}
@@ -326,8 +326,10 @@ namespace SceneEngine
 									renderer._drawableConstructor = drawableConstructorFuture.get();
 									renderer._completionCmdList = renderer._drawableConstructor->_completionCommandList;
 									renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
-									if (completedConstruction->GetElementCount() != 0)
+									if (completedConstruction->GetElementCount() != 0) {
 										renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
+										renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
+									}
 									return renderer;
 								});
 						} CATCH (...) {

@@ -486,7 +486,7 @@ namespace SceneEngine
 
         template<bool DoFilter, bool DoLateCulling>
             RenderCore::BufferUploads::CommandListID BuildDrawables(
-                IteratorRange<RenderCore::Techniques::DrawablesPacket**const> pkts,
+                SceneEngine::ExecuteSceneContext& exeContext,
                 const ICellRenderer& placements,
                 IteratorRange<const unsigned*> objects,
                 const Float3x4& cellToWorld,
@@ -739,7 +739,7 @@ namespace SceneEngine
 
     template<bool DoFilter, bool DoLateCulling>
         RenderCore::BufferUploads::CommandListID PlacementsRenderer::Pimpl::BuildDrawables(
-            IteratorRange<RenderCore::Techniques::DrawablesPacket**const> pkts,
+            SceneEngine::ExecuteSceneContext& exeContext,
             const ICellRenderer& renderInfo,
             IteratorRange<const unsigned*> objects,
             const Float3x4& cellToWorld,
@@ -797,7 +797,7 @@ namespace SceneEngine
         BuildDrawablesMetrics workingMetrics;
 
         auto& rigidModelScene = _placementsCache->GetRigidModelScene();
-        auto buildDrawablesHelper = rigidModelScene.BeginBuildDrawables(pkts);
+        auto buildDrawablesHelper = rigidModelScene.BeginBuildDrawables(exeContext);
 
         auto i = objects.begin();
         for (; i!=objects.end();) {
@@ -819,7 +819,6 @@ namespace SceneEngine
 
             if (!buildDrawablesHelper.SetRenderer(renderInfo._renderers[rendererIdx].get())) continue;
 
-            auto objCount = i-start;
             Float3x4* localToWorldI = localToWorldBuffer;
             for (auto idx:MakeIteratorRange(start, i)) {
 
@@ -833,6 +832,9 @@ namespace SceneEngine
 
                 ++localToWorldI;
             }
+
+            auto objCount = localToWorldI-localToWorldBuffer;
+            if (DoLateCulling && !objCount) continue;
 
             buildDrawablesHelper.BuildDrawablesInstancedFixedSkeleton(
                 MakeIteratorRange(localToWorldBuffer, &localToWorldBuffer[objCount]));
@@ -995,7 +997,7 @@ namespace SceneEngine
                 auto objectReferences = ovr->second->GetObjectReferences();
                 visibleObjects.resize(objectReferences.size());
                 for (unsigned c=0; c<objectReferences.size(); ++c) visibleObjects[c] = c; // "fake" post-culling list; just includes everything
-                auto cmdList = _pimpl->BuildDrawables<false, true>(executeContext._destinationPkts, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
+                auto cmdList = _pimpl->BuildDrawables<false, true>(executeContext, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
                 completionCmdList = std::max(cmdList, completionCmdList);
 
 			} else if (auto* renderInfo = _pimpl->TryGetCellRenderer(*i)) {
@@ -1006,7 +1008,7 @@ namespace SceneEngine
                     renderInfo->_quadTree.get(),
                     &cullMetrics);
 
-                auto cmdList = _pimpl->BuildDrawables<false, false>(executeContext._destinationPkts, *renderInfo, MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
+                auto cmdList = _pimpl->BuildDrawables<false, false>(executeContext, *renderInfo, MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
                 completionCmdList = std::max(cmdList, completionCmdList);
 			}
 
@@ -1128,13 +1130,13 @@ namespace SceneEngine
                         auto objectReferences = ovr->second->GetObjectReferences();
                         visibleObjects.resize(objectReferences.size());
                         for (unsigned c=0; c<objectReferences.size(); ++c) visibleObjects[c] = c; // "fake" post-culling list; just includes everything
-                        auto cmdList = _pimpl->BuildDrawables<true, true>(executeContext._destinationPkts, *ovr->second, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
+                        auto cmdList = _pimpl->BuildDrawables<true, true>(executeContext, *ovr->second, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
                         completionCmdList = std::max(cmdList, completionCmdList);
 
 					} else if (auto* renderInfo = _pimpl->TryGetCellRenderer(*ci)) {
 
 						_pimpl->CullCell(visibleObjects, cellToCullSpace, renderInfo->GetCellSpaceBoundaries(), renderInfo->_quadTree.get());
-                        auto cmdList = _pimpl->BuildDrawables<true, false>(executeContext._destinationPkts, *renderInfo, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
+                        auto cmdList = _pimpl->BuildDrawables<true, false>(executeContext, *renderInfo, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
                         completionCmdList = std::max(cmdList, completionCmdList);
 
 					}
@@ -1155,13 +1157,13 @@ namespace SceneEngine
                     auto objectReferences = ovr->second->GetObjectReferences();
                     visibleObjects.resize(objectReferences.size());
                     for (unsigned c=0; c<objectReferences.size(); ++c) visibleObjects[c] = c; // "fake" post-culling list; just includes everything
-                    auto cmdList = _pimpl->BuildDrawables<false, true>(executeContext._destinationPkts, *ovr->second, MakeIteratorRange(visibleObjects), i->_cellToWorld);
+                    auto cmdList = _pimpl->BuildDrawables<false, true>(executeContext, *ovr->second, MakeIteratorRange(visibleObjects), i->_cellToWorld);
                     completionCmdList = std::max(cmdList, completionCmdList);
 
 				} else if (auto* renderInfo = _pimpl->TryGetCellRenderer(*i)) {
 
 					_pimpl->CullCell(visibleObjects, worldToProjection, renderInfo->GetCellSpaceBoundaries(), renderInfo->_quadTree.get());
-                    auto cmdList = _pimpl->BuildDrawables<false, false>(executeContext._destinationPkts, *renderInfo, MakeIteratorRange(visibleObjects), i->_cellToWorld);
+                    auto cmdList = _pimpl->BuildDrawables<false, false>(executeContext, *renderInfo, MakeIteratorRange(visibleObjects), i->_cellToWorld);
                     completionCmdList = std::max(cmdList, completionCmdList);
 
 				}
