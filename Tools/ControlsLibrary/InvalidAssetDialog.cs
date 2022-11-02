@@ -22,10 +22,6 @@ namespace ControlsLibrary
 
             _assetList.SelectedIndexChanged += SelectedIndexChanged;
         }
-        ~InvalidAssetDialog()
-        {
-            _list._onChange -= RebuildList;
-        }
 
         void SelectedIndexChanged(object sender, EventArgs e)
         {

@@ -13,11 +13,18 @@
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing)
             {
-                components.Dispose();
-                _list.Dispose();
-                _list = null;
+                if (components != null)
+                {
+                    components.Dispose();
+                    components = null;
+                }
+                if (_list != null)
+                {
+                    _list._onChange -= RebuildList;
+                    _list = null;
+                }
             }
             base.Dispose(disposing);
         }
