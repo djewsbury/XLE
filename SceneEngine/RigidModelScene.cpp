@@ -239,7 +239,7 @@ namespace SceneEngine
 			}
 
 			std::shared_ptr<RigidModelSceneInternal::Renderer> newRenderer;
-			if (i != _renderers.end()) newRenderer = i->_renderer.lock();		// attempt to use the existing one if we're rebuilding and invalidated renderer
+			if (i != _renderers.end()) newRenderer = i->_renderer.lock();		// attempt to use the existing one if we're rebuilding an invalidated renderer
 			if (!newRenderer) newRenderer = std::make_shared<RigidModelSceneInternal::Renderer>();
 			newEntry._renderer = newRenderer;
 
@@ -255,39 +255,70 @@ namespace SceneEngine
 						auto&& promise, 
 						auto completedConstruction, auto completedDeformerConstruction) mutable {
 
-						std::shared_ptr<RenderCore::Techniques::DeformAccelerator> deformAccelerator;
-						std::shared_ptr<RenderCore::Techniques::IDeformGeoAttachment> geoDeformer;
-						if (completedDeformerConstruction && !completedDeformerConstruction->IsEmpty()) {
-							geoDeformer = RenderCore::Techniques::CreateDeformGeoAttachment(
-								*pipelineAcceleratorPool->GetDevice(), *completedConstruction, *completedDeformerConstruction);
-							deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator();
-							deformAcceleratorPool->Attach(*deformAccelerator, geoDeformer);
-						}
+						TRY {
+							std::shared_ptr<RenderCore::Techniques::DeformAccelerator> deformAccelerator;
+							std::shared_ptr<RenderCore::Techniques::IDeformGeoAttachment> geoDeformer;
+							if (completedDeformerConstruction && !completedDeformerConstruction->IsEmpty()) {
+								geoDeformer = RenderCore::Techniques::CreateDeformGeoAttachment(
+									*pipelineAcceleratorPool->GetDevice(), *completedConstruction, *completedDeformerConstruction);
+								deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator();
+								deformAcceleratorPool->Attach(*deformAccelerator, geoDeformer);
+							}
 
-						auto drawableConstructor = std::make_shared<RenderCore::Techniques::DrawableConstructor>(
-							drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext),
-							*completedConstruction, deformAcceleratorPool, deformAccelerator);
+							auto drawableConstructor = std::make_shared<RenderCore::Techniques::DrawableConstructor>(
+								drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext),
+								*completedConstruction, deformAcceleratorPool, deformAccelerator);
 
-						if (geoDeformer) {
-							::Assets::WhenAll(ToFuture(*drawableConstructor), geoDeformer->GetInitializationFuture()).ThenConstructToPromiseWithFutures(
-								std::move(promise),
-								[geoDeformer, deformAccelerator, completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture, std::shared_future<void>&& deformerInitFuture) mutable {
-									deformerInitFuture.get();	// propagate exceptions
+							if (geoDeformer) {
+								::Assets::WhenAll(ToFuture(*drawableConstructor), geoDeformer->GetInitializationFuture()).ThenConstructToPromiseWithFutures(
+									std::move(promise),
+									[geoDeformer, deformAccelerator, completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture, std::shared_future<void>&& deformerInitFuture) mutable {
+										deformerInitFuture.get();	// propagate exceptions
 
-									RigidModelSceneInternal::Renderer renderer;
-									renderer._drawableConstructor = drawableConstructorFuture.get();
-									renderer._completionCmdList = std::max(renderer._drawableConstructor->_completionCommandList, geoDeformer->GetCompletionCommandList());
-									renderer._deformAccelerator = deformAccelerator;
-									renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
-									if (completedConstruction->GetElementCount() != 0) {
-										renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
-										renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
-									} else {
-										renderer._aabb = {Zero<Float3>(), Zero<Float3>()};
-									}
-									return renderer;
-								});
-						} else {
+										RigidModelSceneInternal::Renderer renderer;
+										renderer._drawableConstructor = drawableConstructorFuture.get();
+										renderer._completionCmdList = std::max(renderer._drawableConstructor->_completionCommandList, geoDeformer->GetCompletionCommandList());
+										renderer._deformAccelerator = deformAccelerator;
+										renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
+										if (completedConstruction->GetElementCount() != 0) {
+											renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
+											renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
+										} else {
+											renderer._aabb = {Zero<Float3>(), Zero<Float3>()};
+										}
+										return renderer;
+									});
+							} else {
+								::Assets::WhenAll(ToFuture(*drawableConstructor)).ThenConstructToPromiseWithFutures(
+									std::move(promise),
+									[completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture) mutable {
+										RigidModelSceneInternal::Renderer renderer;
+										renderer._drawableConstructor = drawableConstructorFuture.get();
+										renderer._completionCmdList = renderer._drawableConstructor->_completionCommandList;
+										renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
+										if (completedConstruction->GetElementCount() != 0)
+											renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
+										return renderer;
+									});
+							}
+						} CATCH(...) {
+							promise.set_exception(std::current_exception());
+						} CATCH_END
+					});
+			} else {
+				// When no deformers explicitly specified, we don't apply the defaults -- just use the no-deformers case
+				assert(newEntry._model->_completedConstruction.valid());
+				::Assets::WhenAll(newEntry._model->_completedConstruction).ThenConstructToPromise(
+					std::move(rendererPromise),
+					[drawablesPool=_drawablesPool, pipelineAcceleratorPool=_pipelineAcceleratorPool, constructionContext=_constructionContext](
+						auto&& promise, 
+						auto completedConstruction) mutable {
+
+						TRY {
+							auto drawableConstructor = std::make_shared<RenderCore::Techniques::DrawableConstructor>(
+								drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext),
+								*completedConstruction);
+
 							::Assets::WhenAll(ToFuture(*drawableConstructor)).ThenConstructToPromiseWithFutures(
 								std::move(promise),
 								[completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture) mutable {
@@ -299,32 +330,9 @@ namespace SceneEngine
 										renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
 									return renderer;
 								});
-						}
-					});
-			} else {
-				// When no deformers explicitly specified, we don't apply the defaults -- just use the no-deformers case
-				assert(newEntry._model->_completedConstruction.valid());
-				::Assets::WhenAll(newEntry._model->_completedConstruction).ThenConstructToPromise(
-					std::move(rendererPromise),
-					[drawablesPool=_drawablesPool, pipelineAcceleratorPool=_pipelineAcceleratorPool, constructionContext=_constructionContext](
-						auto&& promise, 
-						auto completedConstruction) mutable {
-
-						auto drawableConstructor = std::make_shared<RenderCore::Techniques::DrawableConstructor>(
-							drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext),
-							*completedConstruction);
-
-						::Assets::WhenAll(ToFuture(*drawableConstructor)).ThenConstructToPromiseWithFutures(
-							std::move(promise),
-							[completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture) mutable {
-								RigidModelSceneInternal::Renderer renderer;
-								renderer._drawableConstructor = drawableConstructorFuture.get();
-								renderer._completionCmdList = renderer._drawableConstructor->_completionCommandList;
-								renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
-								if (completedConstruction->GetElementCount() != 0)
-									renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
-								return renderer;
-							});
+						} CATCH (...) {
+							promise.set_exception(std::current_exception());
+						} CATCH_END
 					});
 			}
 
