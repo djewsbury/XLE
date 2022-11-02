@@ -40,10 +40,6 @@ float4 forward(VSOUT geo, SystemInputs sys) : SV_Target0
 
 	result.a = sample.blendingAlpha;
 
-	#if VSOUT_HAS_COLOR_LINEAR && (MAT_VCOLOR_IS_ANIM_PARAM==0)
-		result.rgb *= geo.color.rgb;
-	#endif
-
 	#if MAT_SKIP_LIGHTING_SCALE==0
 		result.rgb *= LightingScale;		// (note -- should we scale by this here? when using this shader with a basic lighting pipeline [eg, for material preview], the scale is unwanted)
 	#endif
