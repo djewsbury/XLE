@@ -562,6 +562,9 @@ namespace ToolsRig
 			SceneEngine::ExecuteSceneContext sceneExecuteContext{MakeIteratorRange(pkts), {}};
 			scene.ExecuteScene(threadContext, sceneExecuteContext);
 			parserContext.RequireCommandList(sceneExecuteContext._completionCmdList);
+
+			if (drawingApparatus._deformAccelerators)
+				drawingApparatus._deformAccelerators->ReadyInstances(threadContext);
 			
 			SceneEngine::ModelIntersectionStateContext stateContext {
 				SceneEngine::ModelIntersectionStateContext::RayTest,
@@ -579,6 +582,10 @@ namespace ToolsRig
 			}
 			
 			auto results = stateContext.GetResults();
+
+			if (drawingApparatus._deformAccelerators)
+				drawingApparatus._deformAccelerators->OnFrameBarrier(); // must create a fake "frame barrier" -- to reset before whatever comes after this
+
 			if (!results.empty()) {
 				const auto& r = results[0];
 

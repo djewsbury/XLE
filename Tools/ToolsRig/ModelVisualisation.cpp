@@ -242,44 +242,48 @@ namespace ToolsRig
 				auto& animData = _actualized->_animationScaffold->ImmutableData();
 
 				auto animHash = Hash64(_animationState->_activeAnimation);
-				auto foundAnimation = animData._animationSet.FindAnimation(animHash).value();
-				float time = _animationState->_animationTime;
-				if (_animationState->_state == VisAnimationState::State::Playing) {
-					time += std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - _animationState->_anchorTime).count() / 1000.f;
-					time = fmodf(time, foundAnimation._durationInFrames / foundAnimation._framesPerSecond);
+				auto foundAnimation = animData._animationSet.FindAnimation(animHash);
+				if (foundAnimation) {
+					float time = _animationState->_animationTime;
+					if (_animationState->_state == VisAnimationState::State::Playing) {
+						time += std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - _animationState->_anchorTime).count() / 1000.f;
+						time = fmodf(time, foundAnimation->_durationInFrames / foundAnimation->_framesPerSecond);
+					}
+
+					auto parameterBlockSize = _actualized->_animSetBinding.GetParameterDefaultsBlock().size();
+					VLA(uint8_t, parameterBlock, parameterBlockSize);
+					std::memcpy(parameterBlock, _actualized->_animSetBinding.GetParameterDefaultsBlock().begin(), parameterBlockSize);
+
+					animData._animationSet.CalculateOutput(
+						MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]),
+						{time, animHash},
+						_actualized->_animSetBinding.GetParameterBindingRules());
+
+					// We have to use the "specialized" skeleton in _animSetBinding
+					auto outputMatrixCount = _actualized->_animSetBinding.GetOutputMatrixCount();
+					VLA_UNSAFE_FORCE(Float4x4, skeletonOutput, outputMatrixCount);
+					_actualized->_animSetBinding.GenerateOutputTransforms(
+						MakeIteratorRange(skeletonOutput, &skeletonOutput[outputMatrixCount]),
+						MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]));
+
+					RenderOverlays::RenderSkeleton(
+						overlayContext,
+						parserContext,
+						*_actualized->GetSkeletonMachine(),
+						MakeIteratorRange(skeletonOutput, &skeletonOutput[outputMatrixCount]),
+						Identity<Float4x4>(),
+						drawBoneNames);
+					return;
 				}
-
-				auto parameterBlockSize = _actualized->_animSetBinding.GetParameterDefaultsBlock().size();
-				VLA(uint8_t, parameterBlock, parameterBlockSize);
-				std::memcpy(parameterBlock, _actualized->_animSetBinding.GetParameterDefaultsBlock().begin(), parameterBlockSize);
-
-				animData._animationSet.CalculateOutput(
-					MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]),
-					{time, animHash},
-					_actualized->_animSetBinding.GetParameterBindingRules());
-
-				// We have to use the "specialized" skeleton in _animSetBinding
-				auto outputMatrixCount = _actualized->_animSetBinding.GetOutputMatrixCount();
-				VLA_UNSAFE_FORCE(Float4x4, skeletonOutput, outputMatrixCount);
-				_actualized->_animSetBinding.GenerateOutputTransforms(
-					MakeIteratorRange(skeletonOutput, &skeletonOutput[outputMatrixCount]),
-					MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]));
-
-				RenderOverlays::RenderSkeleton(
-					overlayContext,
-					parserContext,
-					*_actualized->GetSkeletonMachine(),
-					MakeIteratorRange(skeletonOutput, &skeletonOutput[outputMatrixCount]),
-					Identity<Float4x4>(),
-					drawBoneNames);
-			} else {
-				RenderOverlays::RenderSkeleton(
-					overlayContext,
-					parserContext,
-					*_actualized->GetSkeletonMachine(),
-					Identity<Float4x4>(),
-					drawBoneNames);
 			}
+
+			// fallback to unanimated skeleton
+			RenderOverlays::RenderSkeleton(
+				overlayContext,
+				parserContext,
+				*_actualized->GetSkeletonMachine(),
+				Identity<Float4x4>(),
+				drawBoneNames);
 		}
 
 		void BindAnimationState(const std::shared_ptr<VisAnimationState>& animState) override
@@ -324,34 +328,39 @@ namespace ToolsRig
 			assert(skeletonMachine);
 
 			auto outputMatrixCount = skeletonMachine->GetOutputMatrixCount();
+			bool foundGoodAnimation = false;
 			VLA_UNSAFE_FORCE(Float4x4, skeletonMachineOutput, outputMatrixCount);
 			if (_actualized->_animationScaffold && _animationState && _animationState->_state != VisAnimationState::State::BindPose) {
 				auto& animData = _actualized->_animationScaffold->ImmutableData();
 
 				auto animHash = Hash64(_animationState->_activeAnimation);
-				auto foundAnimation = animData._animationSet.FindAnimation(animHash).value();
-				float time = _animationState->_animationTime;
-				if (_animationState->_state == VisAnimationState::State::Playing)
-					time += std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - _animationState->_anchorTime).count() / 1000.f;
-				time = fmodf(time, foundAnimation._durationInFrames / foundAnimation._framesPerSecond);
+				auto foundAnimation = animData._animationSet.FindAnimation(animHash);
+				if (foundAnimation) {
+					float time = _animationState->_animationTime;
+					if (_animationState->_state == VisAnimationState::State::Playing)
+						time += std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - _animationState->_anchorTime).count() / 1000.f;
+					time = fmodf(time, foundAnimation->_durationInFrames / foundAnimation->_framesPerSecond);
 
-				auto parameterBlockSize = _actualized->_animSetBinding.GetParameterDefaultsBlock().size();
-				VLA(uint8_t, parameterBlock, parameterBlockSize);
-				std::memcpy(parameterBlock, _actualized->_animSetBinding.GetParameterDefaultsBlock().begin(), parameterBlockSize);
+					auto parameterBlockSize = _actualized->_animSetBinding.GetParameterDefaultsBlock().size();
+					VLA(uint8_t, parameterBlock, parameterBlockSize);
+					std::memcpy(parameterBlock, _actualized->_animSetBinding.GetParameterDefaultsBlock().begin(), parameterBlockSize);
 
-				animData._animationSet.CalculateOutput(
-					MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]),
-					{time, animHash},
-					_actualized->_animSetBinding.GetParameterBindingRules());
+					animData._animationSet.CalculateOutput(
+						MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]),
+						{time, animHash},
+						_actualized->_animSetBinding.GetParameterBindingRules());
 
-				// We have to use the "specialized" skeleton in _animSetBinding
-				assert(_actualized->_animSetBinding.GetOutputMatrixCount() == outputMatrixCount);
-				_actualized->_animSetBinding.GenerateOutputTransforms(
-					MakeIteratorRange(skeletonMachineOutput, &skeletonMachineOutput[outputMatrixCount]),
-					MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]));
-			} else {
-				skeletonMachine->GenerateOutputTransforms(MakeIteratorRange(skeletonMachineOutput, &skeletonMachineOutput[outputMatrixCount]));
+					// We have to use the "specialized" skeleton in _animSetBinding
+					assert(_actualized->_animSetBinding.GetOutputMatrixCount() == outputMatrixCount);
+					_actualized->_animSetBinding.GenerateOutputTransforms(
+						MakeIteratorRange(skeletonMachineOutput, &skeletonMachineOutput[outputMatrixCount]),
+						MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]));
+					foundGoodAnimation = true;
+				}
 			}
+
+			if (!foundGoodAnimation)
+				skeletonMachine->GenerateOutputTransforms(MakeIteratorRange(skeletonMachineOutput, &skeletonMachineOutput[outputMatrixCount]));
 
 			if (_actualized->_skeletonInterface)
 				_actualized->_skeletonInterface->FeedInSkeletonMachineResults(instanceIdx, MakeIteratorRange(skeletonMachineOutput, &skeletonMachineOutput[outputMatrixCount]));
