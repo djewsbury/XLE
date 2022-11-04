@@ -64,8 +64,8 @@ namespace UnitTests
 		_pipelineAccelerators = Techniques::CreatePipelineAcceleratorPool(
 			_metalTestHelper->_device, _drawablesPool, compiledLayoutPool, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
 
-		_sharedDelegates = std::make_shared<LightingEngine::SharedTechniqueDelegateBox>();
 		_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*_metalTestHelper->_device);
+		_sharedDelegates = std::make_shared<LightingEngine::SharedTechniqueDelegateBox>(*_metalTestHelper->_device, _metalTestHelper->_shaderCompiler->GetShaderLanguage(), &_commonResources->_samplerPool);
 		_techniqueServices->SetCommonResources(_commonResources);
 
 		_pipelinePool = std::make_shared<Techniques::PipelineCollection>(_metalTestHelper->_device);
@@ -90,23 +90,6 @@ namespace UnitTests
 		// like the drawables pool
 		if (::Assets::Services::HasAssetSets())
 			::Assets::Services::GetAssetSets().Clear();
-	}
-
-
-	LightingOperatorsPipelineLayout::LightingOperatorsPipelineLayout(const MetalTestHelper& testHelper)
-	{	
-		_samplerPool = std::make_shared<RenderCore::SamplerPool>(*testHelper._device);
-		_pipelineLayoutFile = ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
-
-		const std::string pipelineLayoutName = "LightingOperator";
-		auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout{*_pipelineLayoutFile, pipelineLayoutName}.MakePipelineLayoutInitializer(
-			testHelper._shaderCompiler->GetShaderLanguage(), _samplerPool.get());
-		_pipelineLayout = testHelper._device->CreatePipelineLayout(pipelineInit);
-
-		auto i = _pipelineLayoutFile->_descriptorSets.find("DMShadow");
-		if (i == _pipelineLayoutFile->_descriptorSets.end())
-			Throw(std::runtime_error("Missing ShadowTemplate entry in pipeline layout file"));
-		_dmShadowDescSetTemplate = i->second;
 	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

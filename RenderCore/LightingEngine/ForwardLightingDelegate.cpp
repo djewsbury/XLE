@@ -362,12 +362,8 @@ namespace RenderCore { namespace LightingEngine
 			std::move(promisedTechnique),
 			[
 				A=apparatus->_pipelineAccelerators, B=apparatus->_lightingOperatorCollection, C=apparatus->_sharedDelegates,
-				shadowDescSet=apparatus->_dmShadowDescSetTemplate,
 				preregisteredAttachments=std::move(preregisteredAttachments), fbProps
 			](auto&& promise, auto lightSceneActual) {
-				if (auto* shadowScheduler=(IDynamicShadowProjectionScheduler*)lightSceneActual->QueryInterface(typeid(IDynamicShadowProjectionScheduler).hash_code()))
-					shadowScheduler->SetDescriptorSetLayout(shadowDescSet, PipelineType::Graphics);
-
 				CreateForwardLightingTechnique(
 					std::move(promise),
 					A, B, C,

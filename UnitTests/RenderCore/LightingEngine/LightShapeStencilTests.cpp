@@ -127,8 +127,6 @@ namespace UnitTests
 		testHelper->BeginFrameCapture();
 
 		{
-			LightingOperatorsPipelineLayout pipelineLayout(*testHelper);
-
 			LightingEngine::LightSourceOperatorDesc resolveOperators[] {
 				LightingEngine::LightSourceOperatorDesc{ LightingEngine::LightSourceShape::Sphere },
 				LightingEngine::LightSourceOperatorDesc{ LightingEngine::LightSourceShape::Tube },
@@ -145,7 +143,7 @@ namespace UnitTests
 			auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-				testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
+				testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates,
 				MakeIteratorRange(resolveOperators), {}, 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = lightingTechniqueFuture.get();

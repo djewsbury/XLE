@@ -296,7 +296,7 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	Techniques::RenderPassInstance DMShadowPreparer::Begin(
-		IThreadContext& threadContext, 
+		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
 		Internal::ILightBase& projectionBase,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
@@ -317,7 +317,7 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	void DMShadowPreparer::End(
-		IThreadContext& threadContext, 
+		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
 		Techniques::RenderPassInstance& rpi,
 		PipelineType descSetPipelineType,

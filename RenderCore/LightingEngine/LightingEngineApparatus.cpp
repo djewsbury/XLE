@@ -17,8 +17,9 @@
 
 namespace RenderCore { namespace LightingEngine
 {
-	SharedTechniqueDelegateBox::SharedTechniqueDelegateBox()
+	SharedTechniqueDelegateBox::SharedTechniqueDelegateBox(IDevice& device, ShaderLanguage shaderLanguage, SamplerPool* samplerPool)
 	{
+		_depVal = ::Assets::GetDepValSys().Make();
 		_techniqueSetFile = ::Assets::MakeAssetPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
 		_forwardIllumDelegate_DisableDepthWrite = RenderCore::Techniques::CreateTechniqueDelegate_Forward(_techniqueSetFile, RenderCore::Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
 		_depthOnlyDelegate = RenderCore::Techniques::CreateTechniqueDelegate_PreDepth(_techniqueSetFile, Techniques::PreDepthType::DepthOnly);
@@ -26,32 +27,27 @@ namespace RenderCore { namespace LightingEngine
 		_depthMotionNormalDelegate = RenderCore::Techniques::CreateTechniqueDelegate_PreDepth(_techniqueSetFile, Techniques::PreDepthType::DepthMotionNormal);
 		_depthMotionNormalRoughnessDelegate = RenderCore::Techniques::CreateTechniqueDelegate_PreDepth(_techniqueSetFile, Techniques::PreDepthType::DepthMotionNormalRoughness);
 		_deferredIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Deferred(_techniqueSetFile);
-	}
-
-	SharedTechniqueDelegateBox::SharedTechniqueDelegateBox(Techniques::DrawingApparatus& drawingApparatus)
-	: SharedTechniqueDelegateBox()
-	{}
-
-	LightingEngineApparatus::LightingEngineApparatus(std::shared_ptr<Techniques::DrawingApparatus> drawingApparatus)
-	{
-		_depVal = ::Assets::GetDepValSys().Make();
-
-		_device = drawingApparatus->_device;
-		_pipelineAccelerators = drawingApparatus->_pipelineAccelerators;
-		_sharedDelegates = std::make_shared<SharedTechniqueDelegateBox>(*drawingApparatus);
 
 		_lightingOperatorsPipelineLayoutFile = ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
 		_depVal.RegisterDependency(_lightingOperatorsPipelineLayoutFile->GetDependencyValidation());
 
 		const std::string pipelineLayoutName = "LightingOperator";
-		auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout(*_lightingOperatorsPipelineLayoutFile, pipelineLayoutName).MakePipelineLayoutInitializer(drawingApparatus->_shaderCompiler->GetShaderLanguage(), &drawingApparatus->_commonResources->_samplerPool);
-		_lightingOperatorLayout = _device->CreatePipelineLayout(pipelineInit);
+		auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout(*_lightingOperatorsPipelineLayoutFile, pipelineLayoutName).MakePipelineLayoutInitializer(shaderLanguage, samplerPool);
+		_lightingOperatorLayout = device.CreatePipelineLayout(pipelineInit);
 
 		auto i = _lightingOperatorsPipelineLayoutFile->_descriptorSets.find("DMShadow");
 		if (i == _lightingOperatorsPipelineLayoutFile->_descriptorSets.end())
 			Throw(std::runtime_error("Missing ShadowTemplate entry in pipeline layout file"));
 		_dmShadowDescSetTemplate = i->second;
+	}
 
+	LightingEngineApparatus::LightingEngineApparatus(std::shared_ptr<Techniques::DrawingApparatus> drawingApparatus)
+	{
+		_device = drawingApparatus->_device;
+		_pipelineAccelerators = drawingApparatus->_pipelineAccelerators;
+		_sharedDelegates = std::make_shared<SharedTechniqueDelegateBox>(
+			*_device,
+			drawingApparatus->_shaderCompiler->GetShaderLanguage(), &drawingApparatus->_commonResources->_samplerPool);
 		_lightingOperatorCollection = std::make_shared<Techniques::PipelineCollection>(_device);
 		_systemUniformsDelegate = drawingApparatus->_systemUniformsDelegate;
 	}

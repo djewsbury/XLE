@@ -187,8 +187,6 @@ namespace UnitTests
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		SECTION("Deferred lighting")
 		{
-			LightingOperatorsPipelineLayout pipelineLayout(*testHelper);
-
 			LightingEngine::LightSourceOperatorDesc resolveOperators[] {
 				LightingEngine::LightSourceOperatorDesc{}
 			};
@@ -208,7 +206,7 @@ namespace UnitTests
 
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-				testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
+				testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates,
 				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = lightingTechniqueFuture.get();
@@ -267,8 +265,6 @@ namespace UnitTests
 		testHelper->BeginFrameCapture();
 
 		{
-			LightingOperatorsPipelineLayout pipelineLayout(*testHelper);
-
 			LightingEngine::LightSourceOperatorDesc resolveOperators[] {
 				LightingEngine::LightSourceOperatorDesc {
 					LightingEngine::LightSourceShape::Sphere
@@ -285,7 +281,7 @@ namespace UnitTests
 
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-				testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
+				testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates,
 				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = lightingTechniqueFuture.get();

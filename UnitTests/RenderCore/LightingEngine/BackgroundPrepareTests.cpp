@@ -97,7 +97,7 @@ namespace UnitTests
 			while (auto nextStep = renderingInstance.GetNextStep()) {
 				assert(nextStep._type == RenderCore::LightingEngine::StepType::MultiViewParseScene);
 				if (nextStep._pkts.empty() || !nextStep._pkts[0]) continue;
-				uint64_t viewMask = (1ull << uint64_t(nextStep._multiViewDesc.size())) - 1ull;
+				uint32_t viewMask = (1u << uint32_t(nextStep._multiViewDesc.size())) - 1u;
 				drawablesWriter.WriteDrawables(*nextStep._pkts[0], viewMask);
 			}
 		}
@@ -113,11 +113,8 @@ namespace UnitTests
 			SceneEngine::MergedLightingEngineCfg lightingEngineCfg;
 			lightingDelegate->BindCfg(lightingEngineCfg);
 
-			LightingOperatorsPipelineLayout pipelineLayout(*lightingApparatus._metalTestHelper);
-
 			auto techniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
 				lightingApparatus._pipelineAccelerators, lightingApparatus._pipelinePool, lightingApparatus._sharedDelegates,
-				pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 				lightingEngineCfg.GetLightOperators(), lightingEngineCfg.GetShadowOperators(),
 				preregAttachments, fbProps);
 

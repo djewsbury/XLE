@@ -35,14 +35,8 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<SharedTechniqueDelegateBox> _sharedDelegates;
 		std::shared_ptr<IDevice> _device;
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
-		std::shared_ptr<ICompiledPipelineLayout> _lightingOperatorLayout;
 		std::shared_ptr<Techniques::PipelineCollection> _lightingOperatorCollection;
-		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _lightingOperatorsPipelineLayoutFile;
-		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _dmShadowDescSetTemplate;
 		std::shared_ptr<Techniques::SystemUniformsDelegate> _systemUniformsDelegate;
-
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
-		::Assets::DependencyValidation _depVal;
 
 		LightingEngineApparatus(std::shared_ptr<Techniques::DrawingApparatus>);
 		~LightingEngineApparatus();
@@ -61,14 +55,20 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::ITechniqueDelegate> _depthMotionNormalDelegate;
 		std::shared_ptr<Techniques::ITechniqueDelegate> _depthMotionNormalRoughnessDelegate;
 		std::shared_ptr<Techniques::ITechniqueDelegate> _deferredIllumDelegate;
+		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _lightingOperatorsPipelineLayoutFile;
+		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _dmShadowDescSetTemplate;
+		std::shared_ptr<ICompiledPipelineLayout> _lightingOperatorLayout;
 
 		template<typename... Args>
 			std::shared_ptr<Techniques::ITechniqueDelegate> GetShadowGenTechniqueDelegate(Args... args);
 
-		SharedTechniqueDelegateBox(Techniques::DrawingApparatus& drawingApparatus);
-		SharedTechniqueDelegateBox();
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+
+		SharedTechniqueDelegateBox(
+			IDevice& device, ShaderLanguage shaderLanguage, SamplerPool* samplerPool);
 	private:
 		std::map<uint64_t, std::shared_ptr<Techniques::ITechniqueDelegate>> _shadowGenTechniqueDelegates;
+		::Assets::DependencyValidation _depVal;
 	};
 
 	template<typename... Args>

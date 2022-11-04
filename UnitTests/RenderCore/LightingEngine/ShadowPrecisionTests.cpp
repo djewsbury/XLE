@@ -138,8 +138,6 @@ namespace UnitTests
 		testHelper->BeginFrameCapture();
 
 		{
-			LightingOperatorsPipelineLayout pipelineLayout(*testHelper);
-
 			float wsDepthResolution = depthRange / 16384.f;
 			const float filterRadiusInPixels = 10.0f;
 			const float frustumWidthWS = 2.0f;
@@ -184,7 +182,7 @@ namespace UnitTests
 
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-					testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
+					testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 				auto lightingTechnique = lightingTechniqueFuture.get();
@@ -228,7 +226,7 @@ namespace UnitTests
 				auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-					testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
+					testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 				auto lightingTechnique = lightingTechniqueFuture.get();
@@ -453,8 +451,6 @@ namespace UnitTests
 			sunSourceFrustumSettings._maxFrustumCount = 5;
 			sunSourceFrustumSettings._frustumSizeFactor = 2.0f;
 
-			LightingOperatorsPipelineLayout pipelineLayout(*testHelper);
-
 			LightingEngine::LightSourceOperatorDesc resolveOperators[] {
 				LightingEngine::LightSourceOperatorDesc{ LightingEngine::LightSourceShape::Directional }
 			};
@@ -471,7 +467,7 @@ namespace UnitTests
 				auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, sceneCamera);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-					testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
+					testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps,
 					LightingEngine::DeferredLightingTechniqueFlags::GenerateDebuggingTextures);

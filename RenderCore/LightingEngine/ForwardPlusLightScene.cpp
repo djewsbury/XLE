@@ -13,6 +13,7 @@
 #include "LightUniforms.h"
 #include "LightingDelegateUtil.h"
 #include "RenderStepFragments.h"
+#include "LightingEngineApparatus.h"
 #include "../Techniques/DeferredShaderResource.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/DrawableDelegates.h"
@@ -119,6 +120,7 @@ namespace RenderCore { namespace LightingEngine
 			_shadowScheduler = std::make_shared<Internal::DynamicShadowProjectionScheduler>(
 				_pipelineAccelerators->GetDevice(), _shadowPreparers,
 				_shadowPreparerIdMapping._operatorToShadowPreparerId);
+			_shadowScheduler->SetDescriptorSetLayout(_techDelBox->_dmShadowDescSetTemplate, PipelineType::Graphics);
 			RegisterComponent(_shadowScheduler);
 		}
 	}

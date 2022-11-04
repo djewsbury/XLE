@@ -66,6 +66,7 @@ namespace RenderCore { namespace LightingEngine
 				_shadowScheduler = std::make_shared<Internal::DynamicShadowProjectionScheduler>(
 					_pipelineAccelerators->GetDevice(), _shadowPreparers,
 					_shadowOperatorIdMapping._operatorToShadowPreparerId);
+				_shadowScheduler->SetDescriptorSetLayout(_techDelBox->_dmShadowDescSetTemplate, PipelineType::Graphics);
 				RegisterComponent(_shadowScheduler);
 			}
 		}
@@ -376,8 +377,6 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelineCollection,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
-		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperatorsInit,
 		IteratorRange<const ShadowOperatorDesc*> shadowOperatorsInit,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit,
@@ -398,8 +397,8 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::WhenAll(std::move(buildGBufferFragment), std::move(lightSceneFuture)).ThenConstructToPromise(
 			std::move(promisedTechnique),
 			[pipelineAccelerators, techDelBox, fbProps, 
-			preregisteredAttachments=std::move(preregisteredAttachments), shadowDescSet=shadowDescSet,
-			resolveOperators=std::move(resolveOperators), shadowOperators=std::move(shadowOperators), pipelineCollection, lightingOperatorLayout, flags](
+			preregisteredAttachments=std::move(preregisteredAttachments), shadowDescSet=techDelBox->_dmShadowDescSetTemplate,
+			resolveOperators=std::move(resolveOperators), shadowOperators=std::move(shadowOperators), pipelineCollection, lightingOperatorLayout=techDelBox->_lightingOperatorLayout, flags](
 				auto&& thatPromise, auto buildGbuffer, auto lightScene) {
 
 				TRY {
@@ -411,9 +410,6 @@ namespace RenderCore { namespace LightingEngine
 					captures->_lightScene = lightScene;
 					captures->_lightingOperatorLayout = lightingOperatorLayout;
 					captures->_pipelineCollection = pipelineCollection;
-
-					if (auto* shadowScheduler=(IDynamicShadowProjectionScheduler*)captures->_lightScene->QueryInterface(typeid(IDynamicShadowProjectionScheduler).hash_code()))
-						shadowScheduler->SetDescriptorSetLayout(shadowDescSet, PipelineType::Graphics);
 
 					// Reset captures
 					lightingTechnique->PreSequenceSetup(
@@ -510,8 +506,6 @@ namespace RenderCore { namespace LightingEngine
 			apparatus->_pipelineAccelerators,
 			apparatus->_lightingOperatorCollection,
 			apparatus->_sharedDelegates,
-			apparatus->_lightingOperatorLayout,
-			apparatus->_dmShadowDescSetTemplate,
 			resolveOperators, shadowGenerators, preregisteredAttachments,
 			fbProps, flags);		
 	}
