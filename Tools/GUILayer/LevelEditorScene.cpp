@@ -618,6 +618,7 @@ namespace GUILayer
         swtch->RegisterDefaultDocument(EntityInterface::MakeStringAndHash("DirectionalLight"), _envSettingsDocumentId);
         swtch->RegisterDefaultDocument(EntityInterface::MakeStringAndHash("AreaLight"), _envSettingsDocumentId);
         swtch->RegisterDefaultDocument(EntityInterface::MakeStringAndHash("DistantIBL"), _envSettingsDocumentId);
+        swtch->RegisterDefaultDocument(EntityInterface::MakeStringAndHash("SunSourceShadowSettings"), _envSettingsDocumentId);
 
         // catch-all document for everything not caught above
         auto flexGobInterface = std::make_shared<RetainedEntitiesAdapter>(_scene->_flexObjects);

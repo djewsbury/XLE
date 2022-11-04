@@ -47,26 +47,15 @@ namespace EntityInterface
 		bool SetParent(EntityId child, EntityId parent, StringAndHash childList, int insertionPosition) override;
 	private:
 		using LightSourceId = RenderCore::LightingEngine::ILightScene::LightSourceId;
-		struct RegisteredLight
-		{
-			enum class Type { Positional, DistantIBL };
-			Type _type = Type::Positional;
-			ParameterBox _parameters;
-			LightSourceId _instantiatedLight = ~0u;
-			EnvSettingsId _container = ~0ull;
-			std::string _explicitLightOperator, _explicitShadowOperator;
-			RenderCore::LightingEngine::LightSourceOperatorDesc _impliedLightingOperator;
-		};
+		
+		struct RegisteredLight;
 		std::vector<std::pair<EntityId, RegisteredLight>> _lights;
 		std::vector<std::pair<EntityId, RegisteredLight>> _distantIBL;
 
-		struct BoundScene
-		{
-			std::shared_ptr<RenderCore::LightingEngine::ILightScene> _boundScene;
-			std::vector<std::pair<uint64_t, unsigned>> _lightOperatorNameToIdx;
-			std::vector<std::pair<uint64_t, unsigned>> _shadowOperatorNameToIdx;
-			std::vector<uint64_t> _lightOperatorHashes;
-		};
+		struct RegisteredShadow;
+		std::vector<std::pair<EntityId, RegisteredShadow>> _sunSourceShadowSettings;
+
+		struct BoundScene;
 		std::vector<std::pair<EnvSettingsId, BoundScene>> _boundScenes;
 
 		struct LightSourceOperatorAndName;

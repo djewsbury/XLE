@@ -1057,11 +1057,6 @@ namespace RenderCore { namespace LightingEngine
             return _settings;
         }
 
-        void SetSettings(const SunSourceFrustumSettings&) override
-        {
-            assert(0);      // not yet implemennted
-        }
-
         void FixMainSceneCamera(const Techniques::ProjectionDesc& projDesc) override
         {
             _fixedCamera = projDesc;
@@ -1157,7 +1152,7 @@ namespace RenderCore { namespace LightingEngine
 
         _worldSpaceResolveBias = 0.025f;        // this is world space, so always positive, ReverseZ doesn't matter
         _casterDistanceExtraBias = -0.001f;     // note that this should be negative for ReverseZ modes, but positive for non-ReverseZ modes
-        _slopeScaledBias = -0.5f;               // also should be native for ReverseZ modes
+        _slopeScaledBias = -0.5f;               // also should be negative for ReverseZ modes
         _baseBias = 1.f;                        // this multiples the calculated base bias values, so should be positive
     
         _tanBlurAngle = 0.00436f;

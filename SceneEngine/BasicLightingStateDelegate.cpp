@@ -788,7 +788,7 @@ namespace SceneEngine
 
     static const ParameterBox::ParameterName MaxCascadeCount = "MaxCascadeCount";
     static const ParameterBox::ParameterName MaxDistanceFromCamera = "MaxDistanceFromCamera";
-    static const ParameterBox::ParameterName FrustumSizeFactor = "FrustumSizeFactor";
+    static const ParameterBox::ParameterName CascadeSizeFactor = "CascadeSizeFactor";
     static const ParameterBox::ParameterName FocusDistance = "FocusDistance";
     static const ParameterBox::ParameterName ResolutionScale = "ResolutionScale";
     static const ParameterBox::ParameterName Flags = "Flags";
@@ -818,7 +818,7 @@ namespace SceneEngine
                 desc._maxDistanceFromCamera = value.value();
                 return true;
             }
-        } else if (propertyNameHash == FrustumSizeFactor._hash) {
+        } else if (propertyNameHash == CascadeSizeFactor._hash) {
             if (auto value = ConvertOrCast<float>(data, type)) {
                 desc._frustumSizeFactor = value.value();
                 return true;

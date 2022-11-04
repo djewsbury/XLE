@@ -73,7 +73,6 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		virtual SunSourceFrustumSettings GetSettings() const = 0;
-        virtual void SetSettings(const SunSourceFrustumSettings&) = 0;
         virtual void FixMainSceneCamera(const Techniques::ProjectionDesc&) = 0;
         virtual void UnfixMainSceneCamera() = 0;
 		virtual ~ISunSourceShadows() = default;

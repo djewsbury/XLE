@@ -6,6 +6,7 @@
 #include "../../SceneEngine/BasicLightingStateDelegate.h"
 #include "../../SceneEngine/IScene.h"
 #include "../../RenderCore/LightingEngine/ShadowPreparer.h"
+#include "../../RenderCore/LightingEngine/SunSourceConfiguration.h"
 
 namespace EntityInterface
 {
@@ -20,8 +21,39 @@ namespace EntityInterface
 	static const ParameterBox::ParameterName s_name = "Name";
 	static const ParameterBox::ParameterName s_packedColor = "PackedColor";
 	static const ParameterBox::ParameterName s_brightnessScalar = "BrightnessScalar";
+	static const ParameterBox::ParameterName s_sunSourceShadowSettings = "SunSourceShadowSettings";
+	static const ParameterBox::ParameterName s_light = "Light";
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	struct MultiEnvironmentSettingsDocument::RegisteredLight
+	{
+		enum class Type { Positional, DistantIBL };
+		Type _type = Type::Positional;
+		ParameterBox _parameters;
+		LightSourceId _instantiatedLight = ~0u;
+		EnvSettingsId _container = ~0ull;
+		std::string _explicitLightOperator, _explicitShadowOperator;
+		RenderCore::LightingEngine::LightSourceOperatorDesc _impliedLightingOperator;
+		std::string _name;
+	};
+
+	struct MultiEnvironmentSettingsDocument::RegisteredShadow
+	{
+		ParameterBox _parameters;
+		std::string _attachedLightName;
+		EnvSettingsId _container = ~0ull;
+		RenderCore::LightingEngine::SunSourceFrustumSettings _settings;
+	};
+
+	struct MultiEnvironmentSettingsDocument::BoundScene
+	{
+		std::shared_ptr<RenderCore::LightingEngine::ILightScene> _boundScene;
+		std::vector<std::pair<uint64_t, unsigned>> _lightOperatorNameToIdx;
+		std::vector<std::pair<uint64_t, unsigned>> _shadowOperatorNameToIdx;
+		std::vector<uint64_t> _lightOperatorHashes;
+		std::vector<uint64_t> _shadowOperatorHashes;
+	};
 
 	struct MultiEnvironmentSettingsDocument::LightSourceOperatorAndName
 	{
@@ -80,8 +112,12 @@ namespace EntityInterface
 
 		// register "implicit" light operators
 		for (const auto& l:_lights)
-			if (l.second._explicitLightOperator.empty())
+			if (l.second._container == envSettings && l.second._explicitLightOperator.empty())
 				cfg._mergedCfg.Register(l.second._impliedLightingOperator);
+
+		for (const auto& s:_sunSourceShadowSettings)
+			if (s.second._container == envSettings)
+				cfg._mergedCfg.Register(RenderCore::LightingEngine::CalculateShadowOperatorDesc(s.second._settings));
 	}
 
 	unsigned MultiEnvironmentSettingsDocument::GetChangeId(EnvSettingsId envSettings) const
@@ -155,17 +191,16 @@ namespace EntityInterface
 			assert(i == _lights.end() || i->first != id);
 			RegisteredLight newLight;
 			newLight._instantiatedLight = ~0u;
-			for (const auto& p:props) {
-				if (p._prop.second == s_lightOperator._hash) {
-					newLight._explicitLightOperator = ImpliedTyping::AsString(p._data, p._type);
-				} else if (p._prop.second == s_shadowOperator._hash) {
-					newLight._explicitShadowOperator = ImpliedTyping::AsString(p._data, p._type);
-				} else
-					newLight._parameters.SetParameter(p._prop.first, p._data, p._type);
-			}
-			if (objType.second == s_distantIBL._hash)
-				newLight._type = RegisteredLight::Type::DistantIBL;
+			newLight._type = (objType.second == s_distantIBL._hash) ? RegisteredLight::Type::DistantIBL : RegisteredLight::Type::Positional;
 			_lights.insert(i, std::make_pair(id, std::move(newLight)));
+			SetProperty(id, props);
+			return true;
+		} else if (objType.second == s_sunSourceShadowSettings._hash) {
+			auto i = LowerBound(_sunSourceShadowSettings, id);
+			assert(i == _sunSourceShadowSettings.end() || i->first != id);
+			RegisteredShadow newShadow;
+			_sunSourceShadowSettings.insert(i, std::make_pair(id, std::move(newShadow)));
+			SetProperty(id, props);
 			return true;
 		} else
 			return false;
@@ -209,6 +244,21 @@ namespace EntityInterface
 		if (i5 != _lights.end() && i5->first == id) {
 			DeinstantiateLight(i5->second);
 			_lights.erase(i5);
+			return true;
+		}
+
+		auto i6 = LowerBound(_sunSourceShadowSettings, id);
+		if (i6 != _sunSourceShadowSettings.end() && i6->first == id) {
+			auto attachedLightName = i6->second._attachedLightName;
+			auto container = i6->second._container;
+			_sunSourceShadowSettings.erase(i6);
+
+			if (container != ~0u)
+				for (auto& r:_lights)
+					if (r.second._name == attachedLightName && r.second._container == container && r.second._instantiatedLight != ~0u) {
+						DeinstantiateLight(r.second);
+						InstantiateLight(r.second);
+					}
 			return true;
 		}
 
@@ -298,20 +348,23 @@ namespace EntityInterface
 
 		auto i5 = LowerBound(_lights, id);
 		if (i5 != _lights.end() && i5->first == id) {
-			bool changedOperator = false;
+			bool changedOperatorOrName = false;
 			for (const auto& p:props) {
 				if (p._prop.second == s_lightOperator._hash) {
 					auto newOperator = ImpliedTyping::AsString(p._data, p._type);
 					if (newOperator != i5->second._explicitLightOperator) {
 						i5->second._explicitLightOperator = newOperator;
-						changedOperator = true;
+						changedOperatorOrName = true;
 					}
 				} else if (p._prop.second == s_shadowOperator._hash) {
 					auto newOperator = ImpliedTyping::AsString(p._data, p._type);
 					if (newOperator != i5->second._explicitLightOperator) {
 						i5->second._explicitShadowOperator = newOperator;
-						changedOperator = true;
+						changedOperatorOrName = true;
 					}
+				} else if (p._prop.second == s_name._hash) {
+					i5->second._name = ImpliedTyping::AsString(p._data, p._type);
+					changedOperatorOrName = true;
 				} else if (SceneEngine::SetProperty(i5->second._impliedLightingOperator, p._prop.second, p._data, p._type)) {
 					// DiffuseModel
 					// ShadowResolveModel
@@ -319,35 +372,87 @@ namespace EntityInterface
 					// DominantLight
 					// etc
 					i5->second._parameters.SetParameter(p._prop.first, p._data, p._type);
-					changedOperator = true;
+					changedOperatorOrName = true;
 				} else
 					i5->second._parameters.SetParameter(p._prop.first, p._data, p._type);
 			}
 
-			if (i5->second._instantiatedLight != ~0u) {
-				auto boundScene = LowerBound(_boundScenes, i5->second._container);
-				if (boundScene != _boundScenes.end() && boundScene->first == i5->second._container) {
-					if (changedOperator) {
-						// destroy and recreate the light, because the operator changed
-						DeinstantiateLight(i5->second);
-						bool successful = InstantiateLight(i5->second);
-						// If reinstantiation is not successful, it's because the new light operator is implicit and
-						// hasn't already been registered in the scene. We increase change id to signal clients that
-						// the technique must be rebuilt
-						if (!successful) IncreaseChangeId(i5->second._container);
-					} else {
-						for (const auto& p:props) {
-							if (!SetSpecialProperty(
+			// instantiation
+			auto boundScene = LowerBound(_boundScenes, i5->second._container);
+			if (boundScene != _boundScenes.end() && boundScene->first == i5->second._container) {
+				if (changedOperatorOrName || (i5->second._instantiatedLight == ~0u)) {
+					// destroy and recreate the light, because the operator changed (or name changed, which could change shadow configuration)
+					DeinstantiateLight(i5->second);
+					bool successful = InstantiateLight(i5->second);
+					// If reinstantiation is not successful, it's because the new light operator is implicit and
+					// hasn't already been registered in the scene. We increase change id to signal clients that
+					// the technique must be rebuilt
+					if (!successful) IncreaseChangeId(i5->second._container);
+				} else {
+					for (const auto& p:props) {
+						if (!SetSpecialProperty(
+							*boundScene->second._boundScene, i5->second._instantiatedLight,
+							p._prop.second, p._data, p._type, i5->second._parameters)) {
+							SceneEngine::SetProperty(
 								*boundScene->second._boundScene, i5->second._instantiatedLight,
-								p._prop.second, p._data, p._type, i5->second._parameters)) {
-								SceneEngine::SetProperty(
-									*boundScene->second._boundScene, i5->second._instantiatedLight,
-									p._prop.second, p._data, p._type);
-							}
+								p._prop.second, p._data, p._type);
 						}
 					}
 				}
 			}
+
+			return true;
+		}
+
+		auto i6 = LowerBound(_sunSourceShadowSettings, id);
+		if (i6 != _sunSourceShadowSettings.end() && i6->first == id) {
+			auto originalAttachedLightName = i6->second._attachedLightName;
+			auto originalOperatorHash = RenderCore::LightingEngine::CalculateShadowOperatorDesc(i6->second._settings).GetHash();
+			bool successfulPropertyChange = false;
+			for (const auto& p:props) {
+				if (p._prop.second == s_light._hash) {
+					i6->second._attachedLightName = ImpliedTyping::AsString(p._data, p._type);
+				} else {
+					successfulPropertyChange |= SceneEngine::SetProperty(i6->second._settings, p._prop.second, p._data, p._type);
+					i6->second._parameters.SetParameter(p._prop.first, p._data, p._type);
+				}
+			}
+			
+			bool changedOperator = false;
+			if (successfulPropertyChange)
+				changedOperator = RenderCore::LightingEngine::CalculateShadowOperatorDesc(i6->second._settings).GetHash() != originalOperatorHash;
+
+			// update instantiations
+			auto boundScene = LowerBound(_boundScenes, i6->second._container);
+			if (boundScene != _boundScenes.end() && boundScene->first == i6->second._container) {
+				
+				// if the attached name changed, remove the shadow operator from it's previously assignment
+				bool attachedNameChange = originalAttachedLightName != i6->second._attachedLightName;
+				if (attachedNameChange) {
+					for (const auto& r:_lights)
+						if (r.second._container == i6->second._container && r.second._name == originalAttachedLightName && r.second._instantiatedLight != ~0u)
+							boundScene->second._boundScene->SetShadowOperator(r.second._instantiatedLight, ~0u);
+				}
+
+				// push updates to shadow 
+				for (auto& r:_lights)
+					if (r.second._container == i6->second._container && r.second._name == i6->second._attachedLightName && r.second._instantiatedLight != ~0u) {
+
+						if (attachedNameChange || changedOperator) {
+							// after an operator change, just go ahead and reinstantiate the light entirely (to reuse code)
+							DeinstantiateLight(r.second);
+							bool successful = InstantiateLight(r.second);
+							if (!successful) IncreaseChangeId(i6->second._container);
+						} else {
+							RenderCore::LightingEngine::SetupSunSourceShadows(
+								*boundScene->second._boundScene,
+								r.second._instantiatedLight,
+								i6->second._settings);
+						}
+
+					}
+			}
+
 			return true;
 		}
 
@@ -374,6 +479,19 @@ namespace EntityInterface
 				std::memcpy(destinationBuffer.begin(), res.begin(), std::min(res.size(), destinationBuffer.size()));
 				return ptype;
 			}
+			return {};
+		}
+
+		auto i6 = LowerBound(_sunSourceShadowSettings, id);
+		if (i6 != _sunSourceShadowSettings.end() && i6->first == id) {
+			auto ptype = i6->second._parameters.GetParameterType(prop.second);
+			if (ptype._type != ImpliedTyping::TypeCat::Void) {
+				auto res = i6->second._parameters.GetParameterRawValue(prop.second);
+				assert(res.size() == ptype.GetSize());
+				std::memcpy(destinationBuffer.begin(), res.begin(), std::min(res.size(), destinationBuffer.size()));
+				return ptype;
+			}
+			return {};
 		}
 
 		return {};
@@ -434,6 +552,22 @@ namespace EntityInterface
 			return true;
 		}
 
+		auto i6 = LowerBound(_sunSourceShadowSettings, child);
+		if (i6 != _sunSourceShadowSettings.end() && i6->first == child) {
+			if (i6->second._container != parent) {
+				i6->second._container = parent;
+
+				// reinstantiate any lights in the old container that may have lost their shadow, or lights in the new
+				// container that may have gained a shadow
+				for (auto& r:_lights)
+					if (r.second._name == i6->second._attachedLightName && r.second._instantiatedLight != ~0u) {
+						DeinstantiateLight(r.second);
+						InstantiateLight(r.second);
+					}
+			}
+			return true;
+		}
+
 		return false;
 	}
 
@@ -457,6 +591,10 @@ namespace EntityInterface
 		i->second._lightOperatorHashes.reserve(mergedCfgHelper._mergedCfg.GetLightOperators().size());
 		for (const auto& o:mergedCfgHelper._mergedCfg.GetLightOperators())
 			i->second._lightOperatorHashes.push_back(o.GetHash());
+		i->second._shadowOperatorHashes.clear();
+		i->second._shadowOperatorHashes.reserve(mergedCfgHelper._mergedCfg.GetShadowOperators().size());
+		for (const auto& o:mergedCfgHelper._mergedCfg.GetShadowOperators())
+			i->second._shadowOperatorHashes.push_back(o.GetHash());
 
 		for (auto& light:_lights)
 			if (light.second._container == envSettings)
@@ -513,14 +651,6 @@ namespace EntityInterface
 				lightOperatorId = (unsigned)std::distance(boundScene->second._lightOperatorHashes.begin(), q);
 		}
 
-		unsigned shadowOperatorId = ~0u;
-		if (!registration._explicitShadowOperator.empty()) {
-			auto opNameHash = Hash64(registration._explicitShadowOperator);
-			auto q = LowerBound(boundScene->second._shadowOperatorNameToIdx, opNameHash);
-			if (q != boundScene->second._shadowOperatorNameToIdx.end() && q->first == opNameHash)
-			shadowOperatorId = q->second;
-		}
-
 		if (lightOperatorId == ~0u) {
 			registration._instantiatedLight = ~0u;
 			return false;
@@ -528,8 +658,6 @@ namespace EntityInterface
 
 		if (registration._type == RegisteredLight::Type::Positional) {
 			registration._instantiatedLight = boundScene->second._boundScene->CreateLightSource(lightOperatorId);
-			if (shadowOperatorId != ~0u)
-				boundScene->second._boundScene->SetShadowOperator(registration._instantiatedLight, shadowOperatorId);
 		} else if (registration._type == RegisteredLight::Type::DistantIBL) {
 			registration._instantiatedLight = boundScene->second._boundScene->CreateAmbientLightSource();
 		} else {
@@ -547,6 +675,33 @@ namespace EntityInterface
 						*boundScene->second._boundScene, registration._instantiatedLight,
 						p.HashName(), p.RawValue(), p.Type());
 				}
+		
+		// Attach shadows to this light, if any have been configured
+		if (!registration._explicitShadowOperator.empty()) {
+			auto opNameHash = Hash64(registration._explicitShadowOperator);
+			auto q = LowerBound(boundScene->second._shadowOperatorNameToIdx, opNameHash);
+			if (q != boundScene->second._shadowOperatorNameToIdx.end() && q->first == opNameHash) {
+				boundScene->second._boundScene->SetShadowOperator(registration._instantiatedLight, q->second);
+			} else
+				return false;	// missing shadow operator
+		} else if (!registration._name.empty()) {
+			auto i = std::find_if(_sunSourceShadowSettings.begin(), _sunSourceShadowSettings.end(),
+				[name=registration._name, container=registration._container](const auto& q) { return q.second._container == container && q.second._attachedLightName == name; });
+			if (i != _sunSourceShadowSettings.end()) {
+				auto shadowOpHash = RenderCore::LightingEngine::CalculateShadowOperatorDesc(i->second._settings).GetHash();
+				auto q = std::find(boundScene->second._shadowOperatorHashes.begin(), boundScene->second._shadowOperatorHashes.end(), shadowOpHash);
+				if (q != boundScene->second._shadowOperatorHashes.end() && *q == shadowOpHash) {
+					boundScene->second._boundScene->SetShadowOperator(
+						registration._instantiatedLight,
+						(unsigned)std::distance(boundScene->second._shadowOperatorHashes.begin(), q));
+					RenderCore::LightingEngine::SetupSunSourceShadows(
+						*boundScene->second._boundScene, 
+						registration._instantiatedLight,
+						i->second._settings);
+				} else
+					return false; // missing shadow operator
+			}
+		}
 
 		return true;
 	}
