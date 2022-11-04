@@ -126,7 +126,7 @@ namespace LevelEditorXLE.Environment
 
                 case Command.AddAreaLight:
                 case Command.AddDirectionalLight:
-                case Command.AddShadowSettings:
+                case Command.AddSunSourceShadowSettings:
                     return true;
             }
 
@@ -187,11 +187,11 @@ namespace LevelEditorXLE.Environment
                         "Add Directional Light", null);
                     break;
 
-                case Command.AddShadowSettings:
+                case Command.AddSunSourceShadowSettings:
                     ApplicationUtil.Insert(
                         DomNode.GetRoot(), this,
-                        new DomNode(Schema.shadowFrustumSettings.Type),
-                        "Add Shadow Settings", null);
+                        new DomNode(Schema.sunSourceShadowSettings.Type),
+                        "Add Sun Source Shadow Settings", null);
                     break;
             }
         }
@@ -208,7 +208,7 @@ namespace LevelEditorXLE.Environment
             [Description("Add Sun")] AddSun,
             [Description("Add Directional Light")] AddDirectionalLight,
             [Description("Add Area Light")] AddAreaLight,
-            [Description("Add Shadow Settings")] AddShadowSettings
+            [Description("Add Sun Source Shadow Settings")] AddSunSourceShadowSettings
         }
 
         IEnumerable<object> IContextMenuCommandProvider.GetCommands(object context, object target)

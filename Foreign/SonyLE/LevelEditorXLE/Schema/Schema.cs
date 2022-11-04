@@ -245,25 +245,26 @@ namespace LevelEditorXLE
             areaLightType.ShapeAttribute = areaLightType.Type.GetAttributeInfo("Shape");
             areaLightType.CutoffBrightnessAttribute = areaLightType.Type.GetAttributeInfo("CutoffBrightness");
 
-            shadowFrustumSettings.Type = getNodeType("gap", "shadowFrustumSettings");
-            shadowFrustumSettings.NameAttribute = shadowFrustumSettings.Type.GetAttributeInfo("Name");
-            shadowFrustumSettings.FlagsAttribute = shadowFrustumSettings.Type.GetAttributeInfo("Flags");
-            shadowFrustumSettings.MaxFrustumCountAttribute = shadowFrustumSettings.Type.GetAttributeInfo("MaxFrustumCount");
-            shadowFrustumSettings.MaxDistanceFromCameraAttribute = shadowFrustumSettings.Type.GetAttributeInfo("MaxDistanceFromCamera");
-            shadowFrustumSettings.FrustumSizeFactorAttribute = shadowFrustumSettings.Type.GetAttributeInfo("FrustumSizeFactor");
-            shadowFrustumSettings.FocusDistanceAttribute = shadowFrustumSettings.Type.GetAttributeInfo("FocusDistance");
-            shadowFrustumSettings.TextureSizeAttribute = shadowFrustumSettings.Type.GetAttributeInfo("TextureSize");
-            shadowFrustumSettings.SingleSidedSlopeScaledBiasAttribute = shadowFrustumSettings.Type.GetAttributeInfo("SingleSidedSlopeScaledBias");
-            shadowFrustumSettings.SingleSidedDepthBiasClampAttribute = shadowFrustumSettings.Type.GetAttributeInfo("SingleSidedDepthBiasClamp");
-            shadowFrustumSettings.SingleSidedRasterDepthBiasAttribute = shadowFrustumSettings.Type.GetAttributeInfo("SingleSidedRasterDepthBias");
-            shadowFrustumSettings.DoubleSidedSlopeScaledBiasAttribute = shadowFrustumSettings.Type.GetAttributeInfo("DoubleSidedSlopeScaledBias");
-            shadowFrustumSettings.DoubleSidedDepthBiasClampAttribute = shadowFrustumSettings.Type.GetAttributeInfo("DoubleSidedDepthBiasClamp");
-            shadowFrustumSettings.DoubleSidedRasterDepthBiasAttribute = shadowFrustumSettings.Type.GetAttributeInfo("DoubleSidedRasterDepthBias");
-            shadowFrustumSettings.WorldSpaceResolveBiasAttribute = shadowFrustumSettings.Type.GetAttributeInfo("WorldSpaceResolveBias");
-            shadowFrustumSettings.BlurAngleDegreesAttribute = shadowFrustumSettings.Type.GetAttributeInfo("BlurAngleDegrees");
-            shadowFrustumSettings.MinBlurSearchAttribute = shadowFrustumSettings.Type.GetAttributeInfo("MinBlurSearch");
-            shadowFrustumSettings.MaxBlurSearchAttribute = shadowFrustumSettings.Type.GetAttributeInfo("MaxBlurSearch");
-            shadowFrustumSettings.LightAttribute = shadowFrustumSettings.Type.GetAttributeInfo("Light");
+            sunSourceShadowSettings.Type = getNodeType("gap", "sunSourceShadowSettings");
+            sunSourceShadowSettings.NameAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("Name");
+            sunSourceShadowSettings.FlagsAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("Flags");
+            sunSourceShadowSettings.MaxFrustumCountAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("MaxFrustumCount");
+            sunSourceShadowSettings.MaxDistanceFromCameraAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("MaxDistanceFromCamera");
+            sunSourceShadowSettings.FrustumSizeFactorAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("FrustumSizeFactor");
+            sunSourceShadowSettings.FocusDistanceAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("FocusDistance");
+            sunSourceShadowSettings.ResolutionScaleAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("ResolutionScale");
+            sunSourceShadowSettings.TextureSizeAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("TextureSize");
+            sunSourceShadowSettings.SingleSidedSlopeScaledBiasAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("SingleSidedSlopeScaledBias");
+            sunSourceShadowSettings.SingleSidedDepthBiasClampAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("SingleSidedDepthBiasClamp");
+            sunSourceShadowSettings.SingleSidedRasterDepthBiasAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("SingleSidedRasterDepthBias");
+            sunSourceShadowSettings.DoubleSidedSlopeScaledBiasAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("DoubleSidedSlopeScaledBias");
+            sunSourceShadowSettings.DoubleSidedDepthBiasClampAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("DoubleSidedDepthBiasClamp");
+            sunSourceShadowSettings.DoubleSidedRasterDepthBiasAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("DoubleSidedRasterDepthBias");
+            sunSourceShadowSettings.WorldSpaceResolveBiasAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("WorldSpaceResolveBias");
+            sunSourceShadowSettings.BlurAngleDegreesAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("BlurAngleDegrees");
+            sunSourceShadowSettings.MinBlurSearchAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("MinBlurSearch");
+            sunSourceShadowSettings.MaxBlurSearchAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("MaxBlurSearch");
+            sunSourceShadowSettings.LightAttribute = sunSourceShadowSettings.Type.GetAttributeInfo("Light");
 
             oceanSettings.Type = getNodeType("gap", "oceanSettings");
             oceanSettings.EnableAttribute = oceanSettings.Type.GetAttributeInfo("Enable");
@@ -912,7 +913,7 @@ namespace LevelEditorXLE
             public static AttributeInfo CutoffBrightnessAttribute;
         }
 
-        public static class shadowFrustumSettings
+        public static class sunSourceShadowSettings
         {
             public static DomNodeType Type;
             public static AttributeInfo NameAttribute;
@@ -921,6 +922,7 @@ namespace LevelEditorXLE
             public static AttributeInfo MaxDistanceFromCameraAttribute;
             public static AttributeInfo FrustumSizeFactorAttribute;
             public static AttributeInfo FocusDistanceAttribute;
+            public static AttributeInfo ResolutionScaleAttribute;
             public static AttributeInfo TextureSizeAttribute;
             public static AttributeInfo SingleSidedSlopeScaledBiasAttribute;
             public static AttributeInfo SingleSidedDepthBiasClampAttribute;

@@ -288,14 +288,10 @@
     <xs:annotation>
       <xs:appinfo>
         <LeGe.NativeType nativeName="DirectionalLight"/>
-        <LeGe.NativeProperty name="Flags" nativeName="Flags"/>
-        <LeGe.NativeProperty name="ShadowResolveModel" nativeName="ShadowResolveModel"/>
+        <LeGe.NativeProperty name="DominantLight" nativeName="DominantLight"/>
 
-        <scea.dom.editors.attribute category="Other" name="Flags" displayName="Flags"
-          editor="Sce.Atf.Controls.PropertyEditing.FlagsUITypeEditor,Atf.Gui.WinForms:CastShadows"
-          converter="Sce.Atf.Controls.PropertyEditing.FlagsTypeConverter:CastShadows"/>
-        <scea.dom.editors.attribute category="Other" name="ShadowResolveModel" displayName="Shadow Resolve Model"
-          enum="Noisy=0,Smooth=1"/>
+        <scea.dom.editors.attribute category="Light" name="DominantLight" displayName="Is Dominant Light"
+          editor="Sce.Atf.Controls.PropertyEditing.BoolEditor,Atf.Gui.WinForms"/>
 
         <scea.dom.editors category="Environment" name="DirLight" menuText="Environment/DirLight" description="A directional light" image="LevelEditorCore.Resources.Lighting16.png"/>
         <LeGe.NativeVis geo="PointToOrigin"/>
@@ -304,8 +300,7 @@
 
     <xs:complexContent>
       <xs:extension base="staticLightType">
-        <xs:attribute name="Flags" type="xs:int" default="0"/>
-        <xs:attribute name="ShadowResolveModel" type="xs:int" default="0"/>
+        <xs:attribute name="DominantLight" type="xs:boolean" default="false"/>
       </xs:extension>
     </xs:complexContent>
   </xs:complexType>
@@ -334,69 +329,67 @@
   </xs:complexType>
 
       <!-- S H A D O W   F R U S T U M   S E T T I N G S -->
-  <xs:complexType name="shadowFrustumSettings">
+  <xs:complexType name="sunSourceShadowSettings">
     <xs:annotation>
       <xs:appinfo>
-        <LeGe.NativeType nativeName="ShadowFrustumSettings"/>
+        <LeGe.NativeType nativeName="SunSourceShadowSettings"/>
         <LeGe.NativeProperty name="Name" nativeName="Name"/>
         <LeGe.NativeProperty name="Flags" nativeName="Flags"/>
-        <LeGe.NativeProperty name="MaxFrustumCount" nativeName="MaxFrustumCount"/>
+        <LeGe.NativeProperty name="MaxCascadeCount" nativeName="MaxCascadeCount"/>
         <LeGe.NativeProperty name="MaxDistanceFromCamera" nativeName="MaxDistanceFromCamera"/>
-        <LeGe.NativeProperty name="FrustumSizeFactor" nativeName="FrustumSizeFactor"/>
+        <LeGe.NativeProperty name="CascadeSizeFactor" nativeName="CascadeSizeFactor"/>
         <LeGe.NativeProperty name="FocusDistance" nativeName="FocusDistance"/>
+        <LeGe.NativeProperty name="ResolutionScale" nativeName="ResolutionScale"/>
         <LeGe.NativeProperty name="TextureSize" nativeName="TextureSize"/>
-        <LeGe.NativeProperty name="SingleSidedSlopeScaledBias" nativeName="SingleSidedSlopeScaledBias"/>
-        <LeGe.NativeProperty name="SingleSidedDepthBiasClamp" nativeName="SingleSidedDepthBiasClamp"/>
-        <LeGe.NativeProperty name="SingleSidedRasterDepthBias" nativeName="SingleSidedRasterDepthBias"/>
-        <LeGe.NativeProperty name="DoubleSidedSlopeScaledBias" nativeName="DoubleSidedSlopeScaledBias"/>
-        <LeGe.NativeProperty name="DoubleSidedDepthBiasClamp" nativeName="DoubleSidedDepthBiasClamp"/>
-        <LeGe.NativeProperty name="DoubleSidedRasterDepthBias" nativeName="DoubleSidedRasterDepthBias"/>
+        <LeGe.NativeProperty name="BaseBias" nativeName="BaseBias"/>
+        <LeGe.NativeProperty name="SlopeScaledBias" nativeName="SlopeScaledBias"/>
         <LeGe.NativeProperty name="WorldSpaceResolveBias" nativeName="WorldSpaceResolveBias"/>
+        <LeGe.NativeProperty name="CasterDistanceExtraBias" nativeName="CasterDistanceExtraBias"/>
         <LeGe.NativeProperty name="BlurAngleDegrees" nativeName="BlurAngleDegrees"/>
         <LeGe.NativeProperty name="MinBlurSearch" nativeName="MinBlurSearch"/>
         <LeGe.NativeProperty name="MaxBlurSearch" nativeName="MaxBlurSearch"/>
+        <LeGe.NativeProperty name="FilterModel" nativeName="FilterModel"/>
+        <LeGe.NativeProperty name="EnableContactHardening" nativeName="EnableContactHardening"/>
         <LeGe.NativeProperty name="Light" nativeName="Light"/>
 
-        <scea.dom.editors.attribute category="Projection" name="MaxFrustumCount" displayName="Max Frustum Count" description="Number of separate shadow frustums (1 to 6)"/>
+        <scea.dom.editors.attribute category="Projection" name="MaxCascadeCount" displayName="Max Cascade Count" description="Number of separate cascades frustums (1 to 6)"/>
         <scea.dom.editors.attribute category="Projection" name="MaxDistanceFromCamera" displayName="Max Distance From Camera" description="Furtherest distance from camera for objects to cast shadows"/>
         <scea.dom.editors.attribute category="Projection" name="FrustumSizeFactor" displayName="Frustum Size Factor" description="Factor controlling the size of the shadow frustums"
           editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:0,8"/>
-        <scea.dom.editors.attribute category="Projection" name="FocusDistance" displayName="Focus Distance" description="The highest precision shadows are at this number of units in front of the camera"
+        <scea.dom.editors.attribute category="Projection" name="FocusDistance" displayName="Focus Distance" description="Distance from the camera to the main focus point. The shadow resolution is optimized for this focus point"
+          editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:0,2000"/>
+        <scea.dom.editors.attribute category="Projection" name="ResolutionScale" displayName="Resolution Scale" description="Approximately the number of on-screen pixels per shadow map pixel, at the focus distance in the middle of the screen"
           editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:0,20"/>
 
         <scea.dom.editors.attribute category="Precision" name="TextureSize" displayName="Texture Size" description="Size of the shadow projection texture (use a power of 2, normally 1024, 2048 or 4096)"/>
-        
-        <scea.dom.editors.attribute category="Precision" name="SingleSidedSlopeScaledBias" displayName="Slope Scaled Bias Factor" description="Raise to reduce 'acne' artefacts at glancing angles to the shadow projection"
-          editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:-20,20"/>
-        <scea.dom.editors.attribute category="Precision" name="SingleSidedDepthBiasClamp" displayName="Depth Bias Clamp" description="Low-level depth bias clamp value"
-          editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:-100,100"/>
-        <scea.dom.editors.attribute category="Precision" name="SingleSidedRasterDepthBias" displayName="Depth Bias" description="Low-level depth bias value (in integer zbuffer units)"/>
-
-        <scea.dom.editors.attribute category="Precision" name="DoubleSidedSlopeScaledBias" displayName="Double-sided Slope Scaled Bias factor" description="Same as Slope Scaled Bias Factor, but for double sided geometry"
-          editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:-20,20"/>
-        <scea.dom.editors.attribute category="Precision" name="DoubleSidedDepthBiasClamp" displayName="Double-sided Depth Bias Clamp" description="Same as Depth Bias Clamp, but for double sided geometry"
-          editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:-100,100"/>
-        <scea.dom.editors.attribute category="Precision" name="DoubleSidedRasterDepthBias" displayName="Double-sided Depth Bias" description="Same as Depth Bias, but for double sided geometry"/>
-        
-        <scea.dom.editors.attribute category="Precision" name="WorldSpaceResolveBias" displayName="World Space Resolve Bias" description="Resolve bias (world space)"
+        <scea.dom.editors.attribute category="Precision" name="BaseBias" displayName="BaseBias" description="Main bias factor. '1' is evenly balanced between catching small features and avoiding acne. The hardware bias is calculated based on this factor, the frustum size, texture resolution and format (should be a positive value)"
+          editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:0,5"/>
+        <scea.dom.editors.attribute category="Precision" name="SlopeScaledBias" displayName="Slope Scaled Bias Factor" description="Can reduce acne at glancing angles (should be a negative value)"
+          editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:-20,0"/>
+        <scea.dom.editors.attribute category="Precision" name="WorldSpaceResolveBias" displayName="World Space Resolve Bias" description="Resolve bias (world space). Features near this size won't cast shadows, but a small amount of bias here can help overall (should be a positive value)"
           editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:-0.2,0.2"/>
+        <scea.dom.editors.attribute category="Precision" name="CasterDistanceExtraBias" displayName="Caster Distance Extra Bias" description="Additional bias used in contact hardening modes, when calculating the size of the blurring kernel (should be a negative value)"
+          editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:-1.0,0"/>
         
-        <scea.dom.editors.attribute category="Flags" name="Flags" displayName="Flags"
-          editor="Sce.Atf.Controls.PropertyEditing.FlagsUITypeEditor,Atf.Gui.WinForms:HighPrecisionDepths,ArbitraryCascades,RayTraced,CullFrontFaces"
-          converter="Sce.Atf.Controls.PropertyEditing.FlagsTypeConverter:HighPrecisionDepths,ArbitraryCascades,RayTraced,CullFrontFaces"/>
-
         <scea.dom.editors.attribute category="Resolve" name="BlurAngleDegrees" displayName="Blur Angle" description="Angle of the penumbra of the light (higher numbers mean softer shadows)"
           editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:0,1"/>
         <scea.dom.editors.attribute category="Resolve" name="MinBlurSearch" displayName="Min Blur Search" description="Minimum pixel radius blur for shadows. Increase if there is a lot of scintillation in the shadows."
           editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:0,128"/>
         <scea.dom.editors.attribute category="Resolve" name="MaxBlurSearch" displayName="Max Blur Search" description="Maximum pixel radius blur for shadows. Decrease if shadows appear grainy and excessively blurred. Try Blur Angle as well."
           editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:0,128"/>
+        <scea.dom.editors.attribute category="Resolve" name="FilterModel" displayName="Filter Method" descripion="Method for calculating the partially shadows 'penumbra' area"
+          enum="PoissonDisc=1,Smooth=2"/>
+        <scea.dom.editors.attribute category="Resolve" name="EnableContactHardening" displayName="Contact Hardening" description="When enabled, the size of the shadow penumbra depends on distance to the shadow caster"
+          editor="Sce.Atf.Controls.PropertyEditing.BoolEditor,Atf.Gui.WinForms"/>
 
+        <scea.dom.editors.attribute category="General" name="Flags" displayName="Flags"
+          editor="Sce.Atf.Controls.PropertyEditing.FlagsUITypeEditor,Atf.Gui.WinForms:HighPrecisionDepths,ArbitraryCascades,RayTraced,CullFrontFaces"
+          converter="Sce.Atf.Controls.PropertyEditing.FlagsTypeConverter:HighPrecisionDepths,ArbitraryCascades,RayTraced,CullFrontFaces"/>
         <scea.dom.editors.attribute category="General" name="Name" displayName="Name"/>
         <scea.dom.editors.attribute category="General" name="Light" displayName="Attached Light"/>
 
-        <scea.dom.editors category="Environment" name="ShadowFrustumSettings" menuText="Environment/ShadowFrustumSettings" description="Shadow frustum settings" image="LevelEditorCore.Resources.Shadow16.png"/>
-        <LeGe.OpaqueListable label="ShadowFrustumSettings"/>
+        <scea.dom.editors category="Environment" name="SunSourceShadowSettings" menuText="Environment/SunSourceShadowSettings" description="Sun source shadow settings" image="LevelEditorCore.Resources.Shadow16.png"/>
+        <LeGe.OpaqueListable label="SunSourceShadowSettings"/>
       </xs:appinfo>
     </xs:annotation>
 
@@ -404,22 +397,24 @@
       <xs:extension base="envMiscType">
         <xs:attribute name="Name" type="xs:string" default="shadows"/>
         <xs:attribute name="Flags" type="xs:int" default="1"/>
-        <xs:attribute name="MaxFrustumCount" type="xs:int" default="5"/>
+        <xs:attribute name="MaxCascadeCount" type="xs:int" default="5"/>
         <xs:attribute name="MaxDistanceFromCamera" type="xs:float" default="1000"/>
-        <xs:attribute name="FrustumSizeFactor" type="xs:float" default="3.8"/>
+        <xs:attribute name="CascadeSizeFactor" type="xs:float" default="3.8"/>
         <xs:attribute name="FocusDistance" type="xs:float" default="3"/>
+        <xs:attribute name="ResolutionScale" type="xs:float" default="2"/>
         <xs:attribute name="TextureSize" type="xs:int" default="1024"/>
-        <xs:attribute name="SingleSidedSlopeScaledBias" type="xs:float" default="1"/>
-        <xs:attribute name="SingleSidedDepthBiasClamp" type="xs:float" default="0"/>
-        <xs:attribute name="SingleSidedRasterDepthBias" type="xs:int" default="300"/>
-        <xs:attribute name="DoubleSidedSlopeScaledBias" type="xs:float" default="1"/>
-        <xs:attribute name="DoubleSidedDepthBiasClamp" type="xs:float" default="0"/>
-        <xs:attribute name="DoubleSidedRasterDepthBias" type="xs:int" default="300"/>
-        <xs:attribute name="WorldSpaceResolveBias" type="xs:float" default="0"/>
+
+        <xs:attribute name="BaseBias" type="xs:float" default="1"/>
+        <xs:attribute name="SlopeScaledBias" type="xs:float" default="-0.5"/>
+        <xs:attribute name="WorldSpaceResolveBias" type="xs:float" default="0.025"/>
+        <xs:attribute name="CasterDistanceExtraBias" type="xs:float" default="-0.001"/>
+
         <xs:attribute name="BlurAngleDegrees" type="xs:float" default=".25"/>
         <xs:attribute name="MinBlurSearch" type="xs:float" default=".5"/>
-        <xs:attribute name="MaxBlurSearch" type="xs:float" default="25"/>
+        <xs:attribute name="MaxBlurSearch" type="xs:float" default="4"/>
         <xs:attribute name="Light" type="xs:string" default="Sun"/>
+        <xs:attribute name="FilterModel" type="xs:int" default="1"/>
+        <xs:attribute name="EnableContactHardening" type="xs:boolean" default="false"/>
       </xs:extension>
     </xs:complexContent>
   </xs:complexType>
