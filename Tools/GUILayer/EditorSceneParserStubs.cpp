@@ -121,6 +121,7 @@ namespace GUILayer
                 _envSettingsDocument->UnbindScene(*_lightScene);
             _lightScene.reset();
 
+            _operatorsCfg = {};
             _envSettingsDocument->PrepareCfg(_envSettings, _operatorsCfg);
 
             // todo -- stall here

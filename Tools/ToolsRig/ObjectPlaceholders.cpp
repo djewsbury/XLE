@@ -367,7 +367,7 @@ namespace ToolsRig
 		const Float4x4& localToWorld, 
 		const ParameterBox& matParams = {})
     {
-		auto* asset = ::Assets::MakeAssetMarker<SimpleModel>(drawablesPool, pipelineAcceleratorPool, bufferUploads, "game/model/simple/spherestandin.dae")->TryActualize();
+		auto* asset = ::Assets::MakeAssetMarker<SimpleModel>(drawablesPool, pipelineAcceleratorPool, bufferUploads, "rawos/game/model/simple/spherestandin.dae")->TryActualize();
 		if (asset) {
 			asset->BuildDrawables(exeContext._destinationPkts, matParams, localToWorld);
 			exeContext._completionCmdList = std::max(exeContext._completionCmdList, asset->GetCompletionCmdList());
@@ -382,7 +382,7 @@ namespace ToolsRig
 		const Float4x4& localToWorld, 
 		const ParameterBox& matParams = {})
 	{
-		auto* asset = ::Assets::MakeAssetMarker<SimpleModel>(drawablesPool, pipelineAcceleratorPool, bufferUploads, "game/model/simple/pointerstandin.dae")->TryActualize();
+		auto* asset = ::Assets::MakeAssetMarker<SimpleModel>(drawablesPool, pipelineAcceleratorPool, bufferUploads, "rawos/game/model/simple/pointerstandin.dae")->TryActualize();
 		if (asset) {
 			asset->BuildDrawables(exeContext._destinationPkts, matParams, localToWorld);
 			exeContext._completionCmdList = std::max(exeContext._completionCmdList, asset->GetCompletionCmdList());

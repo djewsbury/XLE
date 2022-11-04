@@ -260,8 +260,7 @@ namespace LevelEditorXLE.Placements
 
                     // add a simple placement with a default object
 
-                var defResource = Globals.ResourceService.Load(
-                    new Uri(Utils.CurrentDirectoryAsUri(), "Game/xleres/DefaultResources/materialsphere.dae"));
+                var defResource = Globals.ResourceService.Load(new Uri("xleres/DefaultResources/materialsphere.dae", UriKind.Relative));
                 if (defResource != null)
                 {
                     var plcmnt = XLEPlacementObject.Create(defResource);

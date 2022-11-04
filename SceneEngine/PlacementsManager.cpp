@@ -1049,7 +1049,6 @@ namespace SceneEngine
 
             visibleObjects.clear();
 			auto ovr = LowerBound(cellSet._pimpl->_cellOverrides, i->_filenameHash);
-            assert(ovr == cellSet._pimpl->_cellOverrides.end() || ovr->first != i->_filenameHash);
             CullMetrics cullMetrics;
             BuildDrawablesMetrics bdMetrics;
 
