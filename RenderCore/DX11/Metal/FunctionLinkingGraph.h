@@ -4,12 +4,14 @@
 
 #include "../../../Assets/AssetsCore.h"
 #include "../../../Assets/AssetUtils.h"
-#include "../../../OSServices/WinAPI/WinAPIWrapper.h"
 #include "../../../Utility/Streams/StreamFormatter.h"
 #include "../../../Utility/IntrusivePtr.h"
+#include "../../../Utility/Threading/CompletionThreadPool.h"
+#include <memory>
+
+#include "../../../OSServices/WinAPI/WinAPIWrapper.h"
 #include "IncludeDX11.h"
 #include <D3D11Shader.h>
-#include <memory>
 
 namespace RenderCore { namespace Metal_DX11
 {

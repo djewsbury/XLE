@@ -79,7 +79,7 @@ namespace RenderCore { namespace Metal_DX11
         HRESULT D3DCreateLinker_Wrapper(ID3D11Linker **ppLinker) const;
 
         HRESULT D3DLoadModule_Wrapper(
-            LPCVOID pSrcData, SIZE_T cbSrcDataSize, 
+            LPCVOID pSrcData, SIZE_T cbSrcDataSize,
             ID3D11Module **ppModule) const;
 
         HRESULT D3DReflectLibrary_Wrapper(
@@ -327,30 +327,33 @@ namespace RenderCore { namespace Metal_DX11
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    static void CreatePayloadFromBlobs(
-        /*out*/ ::Assets::Blob& payload,
-        /*out*/ ::Assets::Blob& errors,
-        ID3DBlob* payloadBlob,
-        ID3DBlob* errorsBlob,
-        const ShaderService::ShaderHeader& hdr)
+    namespace Internal
     {
-        payload.reset();
-        if (payloadBlob && payloadBlob->GetBufferPointer() && payloadBlob->GetBufferSize()) {
-            payload = std::make_shared<std::vector<uint8>>(payloadBlob->GetBufferSize() + sizeof(ShaderService::ShaderHeader));
-            auto* dsthdr = (ShaderService::ShaderHeader*)AsPointer(payload->begin());
-            *dsthdr = hdr;
-            XlCopyMemory(
-                PtrAdd(AsPointer(payload->begin()), sizeof(ShaderService::ShaderHeader)),
-                (uint8*)payloadBlob->GetBufferPointer(), payloadBlob->GetBufferSize());
-        }
+        void CreatePayloadFromBlobs(
+            /*out*/ ::Assets::Blob& payload,
+            /*out*/ ::Assets::Blob& errors,
+            ID3DBlob* payloadBlob,
+            ID3DBlob* errorsBlob,
+            const ShaderService::ShaderHeader& hdr)
+        {
+            payload.reset();
+            if (payloadBlob && payloadBlob->GetBufferPointer() && payloadBlob->GetBufferSize()) {
+                payload = std::make_shared<std::vector<uint8>>(payloadBlob->GetBufferSize() + sizeof(ShaderService::ShaderHeader));
+                auto* dsthdr = (ShaderService::ShaderHeader*)AsPointer(payload->begin());
+                *dsthdr = hdr;
+                XlCopyMemory(
+                    PtrAdd(AsPointer(payload->begin()), sizeof(ShaderService::ShaderHeader)),
+                    (uint8*)payloadBlob->GetBufferPointer(), payloadBlob->GetBufferSize());
+            }
 
-        errors.reset();
-        if (errorsBlob && errorsBlob->GetBufferPointer() && errorsBlob->GetBufferSize()) {
-			auto str = MakeStringSection(
-                (char*)errorsBlob->GetBufferPointer(), 
-                PtrAdd((char*)errorsBlob->GetBufferPointer(), errorsBlob->GetBufferSize()));
-			while (!str.IsEmpty() && *(str.end()-1) == '\0') str._end--;	// strip off trailing zeroes, because we don't need them in the blob
-            errors = Assets::AsBlob(str);
+            errors.reset();
+            if (errorsBlob && errorsBlob->GetBufferPointer() && errorsBlob->GetBufferSize()) {
+                auto str = MakeStringSection(
+                    (char*)errorsBlob->GetBufferPointer(), 
+                    PtrAdd((char*)errorsBlob->GetBufferPointer(), errorsBlob->GetBufferSize()));
+                while (!str.IsEmpty() && *(str.end()-1) == '\0') str._end--;	// strip off trailing zeroes, because we don't need them in the blob
+                errors = Assets::AsBlob(str);
+            }
         }
     }
 
@@ -464,7 +467,7 @@ namespace RenderCore { namespace Metal_DX11
                 // we get a "blob" from D3D. But we need to copy it into
                 // a shared_ptr<vector> so we can pass to it our clients
             
-            CreatePayloadFromBlobs(
+            Internal::CreatePayloadFromBlobs(
                 payload, errors, codeResult, errorResult, 
                 ShaderService::ShaderHeader {
 					identifier.AsStringSection(),
@@ -600,7 +603,7 @@ namespace RenderCore { namespace Metal_DX11
     }
 
     HRESULT D3DShaderCompiler::D3DLoadModule_Wrapper(
-        LPCVOID pSrcData, SIZE_T cbSrcDataSize, 
+        LPCVOID pSrcData, SIZE_T cbSrcDataSize,
         ID3D11Module **ppModule) const
     {
         auto compiler = GetShaderCompileModule();
@@ -728,6 +731,41 @@ namespace RenderCore { namespace Metal_DX11
         if (_module != INVALID_HANDLE_VALUE) {
             (*OSServices::Windows::FreeLibrary)(_module);
             _module = (HMODULE)INVALID_HANDLE_VALUE;
+        }
+    }
+
+    namespace Internal
+    {
+        HRESULT D3DCreateFunctionLinkingGraph_Wrapper(
+            UINT uFlags,
+            ID3D11FunctionLinkingGraph **ppFunctionLinkingGraph)
+        {
+            auto compiler = D3DShaderCompiler::GetInstance();
+            return compiler->D3DCreateFunctionLinkingGraph_Wrapper(uFlags, ppFunctionLinkingGraph);
+        }
+
+        HRESULT D3DCreateLinker_Wrapper(ID3D11Linker **ppLinker)
+        {
+            auto compiler = D3DShaderCompiler::GetInstance();
+            return compiler->D3DCreateLinker_Wrapper(ppLinker);
+        }
+
+        HRESULT D3DLoadModule_Wrapper(
+            LPCVOID pSrcData, SIZE_T cbSrcDataSize,
+            ID3D11Module **ppModule)
+        {
+            auto compiler = D3DShaderCompiler::GetInstance();
+            return compiler->D3DLoadModule_Wrapper(pSrcData, cbSrcDataSize, ppModule);
+        }
+
+        HRESULT D3DReflectLibrary_Wrapper(
+            LPCVOID pSrcData,
+            SIZE_T  SrcDataSize,
+            REFIID  riid,
+            LPVOID  *ppReflector)
+        {
+            auto compiler = D3DShaderCompiler::GetInstance();
+            return compiler->D3DReflectLibrary_Wrapper(pSrcData, SrcDataSize, riid, ppReflector);
         }
     }
 

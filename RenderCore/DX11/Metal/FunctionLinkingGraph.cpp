@@ -3,10 +3,11 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "FunctionLinkingGraph.h"
+#include "../../ShaderService.h"
 #include "../../ShaderLangUtil.h"
 #include "../../../Assets/Assets.h"
 #include "../../../Utility/Conversion.h"
-
+#include <set>
 #include <regex> // used for parsing parameter definition
 
 namespace RenderCore { namespace Metal_DX11
@@ -142,6 +143,28 @@ namespace RenderCore { namespace Metal_DX11
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+    namespace Internal
+    {
+        HRESULT D3DCreateFunctionLinkingGraph_Wrapper(
+            UINT uFlags,
+            ID3D11FunctionLinkingGraph **ppFunctionLinkingGraph);
+        HRESULT D3DCreateLinker_Wrapper(ID3D11Linker **ppLinker);
+        HRESULT D3DLoadModule_Wrapper(
+            LPCVOID pSrcData, SIZE_T cbSrcDataSize,
+            ID3D11Module **ppModule);
+        HRESULT D3DReflectLibrary_Wrapper(
+            LPCVOID pSrcData,
+            SIZE_T  SrcDataSize,
+            REFIID  riid,
+            LPVOID  *ppReflector);
+        void CreatePayloadFromBlobs(
+            /*out*/ ::Assets::Blob& payload,
+            /*out*/ ::Assets::Blob& errors,
+            ID3DBlob* payloadBlob,
+            ID3DBlob* errorsBlob,
+            const ShaderService::ShaderHeader& hdr);
+    }
+
     class FunctionLinkingModule
     {
     public:
@@ -170,14 +193,13 @@ namespace RenderCore { namespace Metal_DX11
         auto code = byteCode.GetByteCode();
 
         ID3D11Module* rawModule = nullptr;
-        auto compiler = D3DShaderCompiler::GetInstance(); 
-        auto hresult = compiler->D3DLoadModule_Wrapper(code.begin(), code.size(), &rawModule);
+        auto hresult = Internal::D3DLoadModule_Wrapper(code.begin(), code.size(), &rawModule);
         _module = moveptr(rawModule);
         if (!SUCCEEDED(hresult))
             Throw(::Exceptions::BasicLabel("Failure while creating shader module from compiled shader byte code (%s)", initializer));
 
         ID3D11LibraryReflection* reflectionRaw = nullptr;
-        compiler->D3DReflectLibrary_Wrapper(code.begin(), code.size(), IID_ID3D11LibraryReflection, (void**)&reflectionRaw);
+        Internal::D3DReflectLibrary_Wrapper(code.begin(), code.size(), IID_ID3D11LibraryReflection, (void**)&reflectionRaw);
         _reflection = moveptr(reflectionRaw);
 		_dependencyValidation = byteCode.GetDependencyValidation();
     }
@@ -217,8 +239,7 @@ namespace RenderCore { namespace Metal_DX11
     , _defines(defines.AsString())
     {
         ID3D11FunctionLinkingGraph* graphRaw = nullptr;
-        auto compiler = D3DShaderCompiler::GetInstance();
-        auto hresult = compiler->D3DCreateFunctionLinkingGraph_Wrapper(0, &graphRaw);
+        auto hresult = Internal::D3DCreateFunctionLinkingGraph_Wrapper(0, &graphRaw);
         if (!SUCCEEDED(hresult))
             Throw(::Exceptions::BasicLabel("Failure while creating D3D function linking graph"));
         _graph = moveptr(graphRaw);
@@ -297,8 +318,7 @@ namespace RenderCore { namespace Metal_DX11
         const char shaderModel[])
     {
         ID3D11Linker* linkerRaw = nullptr;
-        auto compiler = D3DShaderCompiler::GetInstance();
-        auto hresult = compiler->D3DCreateLinker_Wrapper(&linkerRaw);
+        auto hresult = Internal::D3DCreateLinker_Wrapper(&linkerRaw);
         intrusive_ptr<ID3D11Linker> linker = moveptr(linkerRaw);
         if (!SUCCEEDED(hresult)) {
             errors = ::Assets::AsBlob("Could not create D3D shader linker object");
@@ -386,7 +406,7 @@ namespace RenderCore { namespace Metal_DX11
             return false;
         }
 
-        CreatePayloadFromBlobs(
+        Internal::CreatePayloadFromBlobs(
             payload, errors, resultBlob.get(), errorsBlob1.get(), 
             ShaderService::ShaderHeader { identifier, shaderModel, "main", false });
 

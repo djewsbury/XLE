@@ -1,4 +1,6 @@
 
+option(XLE_VULKAN_ENABLE_GLSLLANG NO)
+
 set(Src
 	Annotator.cpp
 	DeviceVulkan.cpp
@@ -27,6 +29,10 @@ set(Src
 	Metal/VMAImplementation.cpp
 	../DX11/Metal/NewShaderCompiler.cpp
 	)
+
+if (XLE_VULKAN_ENABLE_GLSLLANG)
+	list(APPEND Src ../DX11/Metal/CompiledShaderByteCode.cpp ../DX11/Metal/FunctionLinkingGraph.cpp)		# included for CreateVulkanPrecompiler, related to the deprecate HLSL path
+endif ()
 
 add_library(RenderCore_Vulkan STATIC ${Src} ${Headers})
 xle_configure_library(RenderCore_Vulkan)
@@ -108,7 +114,6 @@ add_custom_command(
 
 ############################################################################################################################################
 
-option(XLE_VULKAN_ENABLE_GLSLLANG NO)
 if (XLE_VULKAN_ENABLE_GLSLLANG)
 	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 		target_link_libraries(
