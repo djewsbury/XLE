@@ -500,8 +500,6 @@ namespace SceneEngine
             const Float3x4& cellToWorld,
             BuildDrawablesMetrics* metrics = nullptr);
 
-        auto GetCachedQuadTree(uint64_t cellFilenameHash) const -> std::shared_ptr<GenericQuadTree>;
-
         Pimpl(std::shared_ptr<PlacementsCache> placementsCache);
         ~Pimpl();
 
@@ -1256,6 +1254,30 @@ namespace SceneEngine
             });
 
         return result;
+    }
+
+    auto PlacementsRenderer::StallAndGetQuadTree(const PlacementCellSet& cellSet, StringSection<> cellName) const
+        -> std::shared_ptr<GenericQuadTree>
+    {
+        auto cellRenderer = _pimpl->_placementsCache->GetCellRendererFuture(Hash64(cellName), cellName);
+        if (!cellRenderer.valid()) return nullptr;
+
+        auto renderer = cellRenderer.get();
+        return renderer->_quadTree;
+    }
+
+    auto PlacementsRenderer::StallAndGetCellSpaceBoundingBoxes(const PlacementCellSet& cellSet, StringSection<> cellName) const -> CellSpaceBoundingBoxes
+    {
+        auto cellRenderer = _pimpl->_placementsCache->GetCellRendererFuture(Hash64(cellName), cellName);
+        if (!cellRenderer.valid()) return {};
+
+        auto renderer = cellRenderer.get();
+        auto cellSpaceBoundaries = renderer->GetCellSpaceBoundaries();
+        CellSpaceBoundingBoxes obb;
+        obb._cellSpaceBoundingBoxes = cellSpaceBoundaries.begin();
+        obb._count = cellSpaceBoundaries.size();
+        obb._stride = sizeof(std::pair<Float3, Float3>);
+        return obb;
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2990,7 +3012,7 @@ namespace SceneEngine
         }
 
         PlacementsScaffoldHeader hdr;
-        hdr._version = 0;
+        hdr._version = s_PlacementsChunkVersionNumber;
         hdr._objectRefCount = (unsigned)objects.size();
         hdr._filenamesBufferSize = unsigned(filenamesBuffer.size());
         hdr._supplementsBufferSize = unsigned(supplementsBuffer.size() * sizeof(uint64_t));

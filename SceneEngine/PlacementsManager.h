@@ -89,6 +89,11 @@ namespace SceneEngine
 
         std::future<void> PrepareDrawables(IteratorRange<const Float4x4*> worldToCullingFrustums, const PlacementCellSet& cellSet);
 
+            // -------------- For debugging displays --------------
+        auto StallAndGetQuadTree(const PlacementCellSet& cellSet, StringSection<> cellName) const -> std::shared_ptr<GenericQuadTree>;
+        struct CellSpaceBoundingBoxes { const std::pair<Float3, Float3> * _cellSpaceBoundingBoxes = nullptr; unsigned _stride = 0; unsigned _count = 0; };
+        auto StallAndGetCellSpaceBoundingBoxes(const PlacementCellSet& cellSet, StringSection<> cellName) const -> CellSpaceBoundingBoxes;
+
         PlacementsRenderer(
             std::shared_ptr<PlacementsCache> placementsCache);
         ~PlacementsRenderer();
