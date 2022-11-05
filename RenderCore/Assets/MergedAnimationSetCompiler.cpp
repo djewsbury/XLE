@@ -9,10 +9,10 @@
 #include "../GeoProc/NascentObjectsSerialize.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/BlockSerializer.h"
-#include "../../Assets/Assets.h"
+#include "../../Assets/AssetServices.h"
+#include "../../Assets/CompileAndAsyncManager.h"
 #include "../../OSServices/AttachableLibrary.h"
 #include "../../Utility/Streams/PathUtils.h"
-#include "wildcards.hpp"
 #include "../../Core/Prefix.h"
 
 namespace RenderCore { namespace Assets
@@ -78,12 +78,13 @@ namespace RenderCore { namespace Assets
 			Throw(std::runtime_error("Expecting merged anim set request to end with '/*'"));
 		auto baseFolder = MakeStringSection((const char*)AsPointer(baseFolderSrc.begin()), splitPath.GetSection(splitPath.GetSectionCount()-2).end()).AsString();
 
+		auto& intermediateCompilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+
 		auto walk = ::Assets::MainFileSystem::BeginWalk(baseFolder);
 		std::vector<std::string> files;
-		auto matcher = wildcards::make_matcher("*.([hH][kK][xX]|[dD][aA][eE])");
 		for (auto w=walk.begin_files(); w!=walk.end_files(); ++w) {
 			auto f = w.Desc()._mountedName;
-			if (matcher.matches(f))
+			if (intermediateCompilers.HasAssociatedCompiler(AnimationSetScaffold::CompileProcessType, f))
 				files.push_back(f);
 		}
 
