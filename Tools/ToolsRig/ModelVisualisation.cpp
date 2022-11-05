@@ -121,15 +121,20 @@ namespace ToolsRig
 			construction->AddElement().SetModelAndMaterialScaffolds(loadingContext, settings._modelName, settings._materialName);
 			auto rendererFuture = ::Assets::MakeAssetPtr<SimpleModelRenderer>(drawablesPool, pipelineAcceleratorPool, nullptr, construction, deformAccelerators);
 
+			std::promise<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> promisedConstruction;
+			auto futureConstruction = promisedConstruction.get_future();	// we do have to wait on the construction, because there's a chance that MakeAssetPtr<SimpleModelRenderer> will return something that was previously constructed and already setup
+			construction->FulfillWhenNotPending(std::move(promisedConstruction));
+
 			if (!settings._animationFileName.empty() && !settings._skeletonFileName.empty()) {
 				auto animationSetFuture = ::Assets::MakeAssetPtr<AnimationSetScaffold>(settings._animationFileName);
 				auto skeletonFuture = ::Assets::MakeAssetPtr<SkeletonScaffold>(settings._skeletonFileName);
-				::Assets::WhenAll(rendererFuture, animationSetFuture, skeletonFuture).ThenConstructToPromise(
+				::Assets::WhenAll(rendererFuture, animationSetFuture, skeletonFuture, std::move(futureConstruction)).ThenConstructToPromise(
 					std::move(promise), 
-					[construction, deformAccelerators](
+					[deformAccelerators](
 						std::shared_ptr<SimpleModelRenderer> renderer,
 						std::shared_ptr<AnimationSetScaffold> animationSet,
-						std::shared_ptr<SkeletonScaffold> skeleton) {
+						std::shared_ptr<SkeletonScaffold> skeleton,
+						std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> construction) {
 						
 						RenderCore::Assets::AnimationSetBinding animBinding(
 							animationSet->ImmutableData()._animationSet.GetOutputInterface(), 
@@ -144,18 +149,19 @@ namespace ToolsRig
 
 						return std::make_shared<ModelSceneRendererState>(
 							ModelSceneRendererState {
-								renderer, construction,
+								renderer, std::move(construction),
 								nullptr, skeleton, animationSet, skeletonInterface,
 								std::move(animBinding), depVal,
 							});
 					});
 			} else if (!settings._animationFileName.empty()) {
 				auto animationSetFuture = ::Assets::MakeAssetPtr<AnimationSetScaffold>(settings._animationFileName);
-				::Assets::WhenAll(rendererFuture, animationSetFuture).ThenConstructToPromise(
+				::Assets::WhenAll(rendererFuture, animationSetFuture, std::move(futureConstruction)).ThenConstructToPromise(
 					std::move(promise), 
-					[construction, deformAccelerators](
+					[deformAccelerators](
 						std::shared_ptr<SimpleModelRenderer> renderer,
-						std::shared_ptr<AnimationSetScaffold> animationSet) {
+						std::shared_ptr<AnimationSetScaffold> animationSet,
+						std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> construction) {
 						
 						auto modelScaffold = construction->GetElement(0)->GetModelScaffold();
 						assert(modelScaffold->EmbeddedSkeleton());
@@ -171,19 +177,20 @@ namespace ToolsRig
 
 						return std::make_shared<ModelSceneRendererState>(
 							ModelSceneRendererState {
-								renderer, construction,
+								renderer, std::move(construction),
 								modelScaffold, nullptr, animationSet, skeletonInterface,
 								std::move(animBinding), depVal,
 							});
 					});
 			} else {
-				::Assets::WhenAll(rendererFuture).ThenConstructToPromise(
+				::Assets::WhenAll(rendererFuture, std::move(futureConstruction)).ThenConstructToPromise(
 					std::move(promise), 
-					[construction](std::shared_ptr<SimpleModelRenderer> renderer) {
+					[](std::shared_ptr<SimpleModelRenderer> renderer, std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> construction) {
+						auto firstModelScaffold = construction->GetElement(0)->GetModelScaffold();
 						return std::make_shared<ModelSceneRendererState>(
 							ModelSceneRendererState {
-								renderer, construction,
-								construction->GetElement(0)->GetModelScaffold(), nullptr, nullptr, nullptr,
+								renderer, std::move(construction),
+								firstModelScaffold, nullptr, nullptr, nullptr,
 								{}, renderer->GetDependencyValidation(),
 							});
 					});
