@@ -1499,6 +1499,130 @@ namespace UnitTests
 
 	}
 
+	TEST_CASE( "InputLayout-DummyResourceTypes", "[rendercore_metal]" )
+	{
+		// We'll bind a shader with many different input resource variables
+		// We'll use Metal::BoundUniforms, but provide no actual bindings
+		// BoundUniforms should automatically apply default fallbacks of the correct type for each variable
+		using namespace RenderCore;
+		auto testHelper = MakeTestHelper();
+
+		const char shaderText[] = R"--(
+			/////// buffers ////////////
+			struct InputStruct { float4 A; };
+			StructuredBuffer<InputStruct> UnorderedAccessReadBuffer;
+			RWStructuredBuffer<InputStruct> UnorderedAccessRWBuffer;
+
+			RWBuffer<float4> TexelBuffer;
+			Buffer<float4> InputTexelBuffer;
+
+			ByteAddressBuffer ByteBuffer;
+			RWByteAddressBuffer RWByteBuffer;
+
+			// AppendStructuredBuffer, ConsumeStructuredBuffer not tested
+			// PushConstants excluded, because they will throw an exception if no data provided
+
+			cbuffer UniformBuffer
+			{
+				float4 A, B, C, D;
+			}
+
+			/////// textures ////////////
+			// note -- only float types tested
+
+			Texture1D Tex1D;
+			Texture2D Tex2D;
+			Texture2DMS<float> Tex2DMS;
+			Texture3D Tex3D;
+			TextureCube TexCube;
+			Texture1DArray Tex1DArray;
+			Texture2DArray Tex2DArray;
+			Texture2DMSArray<float> Tex2DMSArray;
+			TextureCubeArray TexCubeArray;
+			RWTexture2D<float4> RWTex;
+			RWTexture2DArray<float4> RWTexArray;
+
+			/////// others ////////////
+			SamplerState Samplr;
+
+			float4 QueryResource(uint3 dispatchThreadId)
+			{
+				float uCoord = ((float)dispatchThreadId.x)/1024.0;
+				uint idx = dispatchThreadId.y;
+				const uint inputTypesCount = 18;
+				// buffers //
+				     if ((idx%inputTypesCount) == 0) return UnorderedAccessReadBuffer[0].A;
+				else if ((idx%inputTypesCount) == 1) return UnorderedAccessRWBuffer[0].A;
+				else if ((idx%inputTypesCount) == 2) return TexelBuffer[0];
+				else if ((idx%inputTypesCount) == 3) return InputTexelBuffer[0];
+				else if ((idx%inputTypesCount) == 4) return ByteBuffer.Load(0);
+				else if ((idx%inputTypesCount) == 5) return RWByteBuffer.Load(0);
+				else if ((idx%inputTypesCount) == 6) return A;
+
+				// textures // 
+				else if ((idx%inputTypesCount) == 7) return Tex1D.SampleLevel(Samplr, uCoord, 0);
+				else if ((idx%inputTypesCount) == 8) return Tex2D.SampleLevel(Samplr, float2(uCoord, 0), 0);
+				else if ((idx%inputTypesCount) == 9) return Tex2DMS.Load(int2(0,0), 0);
+				else if ((idx%inputTypesCount) == 10) return Tex3D.SampleLevel(Samplr, float3(uCoord, 0, 0), 0);
+				else if ((idx%inputTypesCount) == 11) return TexCube.SampleLevel(Samplr, float3(0,0,1), 0);
+				else if ((idx%inputTypesCount) == 12) return Tex1DArray.SampleLevel(Samplr, float2(uCoord, 0), 0);
+				else if ((idx%inputTypesCount) == 13) return Tex2DArray.SampleLevel(Samplr, float3(uCoord, 0, 0), 0);
+				else if ((idx%inputTypesCount) == 14) return Tex2DMSArray.Load(int3(0, 0, 0), 0);
+				else if ((idx%inputTypesCount) == 15) return TexCubeArray.SampleLevel(Samplr, float4(0, 0, 1, 0), 0);
+				else if ((idx%inputTypesCount) == 16) return RWTex.Load(uint2(0, 0));
+				else if ((idx%inputTypesCount) == 17) return RWTexArray.Load(uint3(0, 0, 0));
+				return 0;
+			}
+
+			RWTexture2D<float4> OutputTexture;
+
+			[numthreads(8, 8, 1)]
+				void main(uint3 dispatchThreadId : SV_DispatchThreadID)
+			{
+				float4 value = QueryResource(dispatchThreadId);
+				OutputTexture[dispatchThreadId.xy] = value;
+			}
+		)--";
+
+		auto threadContext = testHelper->_device->GetImmediateContext();
+		auto targetDesc = CreateDesc(
+			BindFlag::UnorderedAccess | BindFlag::TransferSrc,
+			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
+			"temporary-out");
+
+		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
+		auto targetTexture = testHelper->_device->CreateResource(targetDesc); 
+		Metal::CompleteInitialization(metalContext, {targetTexture.get()});
+
+		////////////////////////////////////////////////////////////////////////////////////////
+		{
+			using namespace RenderCore;
+			auto shaderCode = testHelper->MakeShader(shaderText, "cs_*");
+			auto pipelineLayoutInitializer = Metal::BuildPipelineLayoutInitializer(shaderCode);
+			auto pipelineLayout = testHelper->_device->CreatePipelineLayout(pipelineLayoutInitializer);
+
+			Metal::ComputeShader computeShader(Metal::GetObjectFactory(), pipelineLayout, shaderCode);
+			Metal::ComputePipelineBuilder pipelineBuilder;
+			pipelineBuilder.Bind(computeShader);
+			auto pipeline = pipelineBuilder.CreatePipeline(Metal::GetObjectFactory());
+
+			auto encoder = metalContext.BeginComputeEncoder(pipelineLayout);
+
+			UniformsStreamInterface usi;
+			usi.BindResourceView(0, Hash64("OutputTexture"));
+			Metal::BoundUniforms uniforms { *pipeline, usi };
+
+			auto targetView = targetTexture->CreateTextureView(BindFlag::UnorderedAccess);
+			const IResourceView* resourceViews[] { targetView.get() };
+			UniformsStream uniformsStream;
+			uniformsStream._resourceViews = resourceViews;
+			uniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
+
+			encoder.Dispatch(*pipeline, targetDesc._textureDesc._width/8, targetDesc._textureDesc._height/8);
+		}
+		////////////////////////////////////////////////////////////////////////////////////////
+	}
+
 	// error cases we could try:
 	//      * not binding all attributes
 	//      * refering to a vertex buffer in the InputElementDesc, and then not providing it
