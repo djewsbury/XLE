@@ -168,24 +168,69 @@ namespace RenderCore { namespace Metal_Vulkan
             }
         }
 
-    static SPIRVReflection::StorageType AsStorageType(unsigned type)
+    static SPIRVReflection::StorageClass AsStorageType(unsigned type)
     {
         switch (type)
         {
-        case 0:  return SPIRVReflection::StorageType::UniformConstant;
-        case 1:  return SPIRVReflection::StorageType::Input;
-        case 2:  return SPIRVReflection::StorageType::Uniform;
-        case 3:  return SPIRVReflection::StorageType::Output;
-        case 4:  return SPIRVReflection::StorageType::Workgroup;
-        case 5:  return SPIRVReflection::StorageType::CrossWorkgroup;
-        case 6:  return SPIRVReflection::StorageType::Private;
-        case 7:  return SPIRVReflection::StorageType::Function;
-        case 8:  return SPIRVReflection::StorageType::Generic;
-        case 9:  return SPIRVReflection::StorageType::PushConstant;
-        case 10: return SPIRVReflection::StorageType::AtomicCounter;
-        case 11: return SPIRVReflection::StorageType::Image;
-        default: return SPIRVReflection::StorageType::Unknown;
+        case spv::StorageClassUniformConstant:  return SPIRVReflection::StorageClass::UniformConstant;
+        case spv::StorageClassInput:            return SPIRVReflection::StorageClass::Input;
+        case spv::StorageClassUniform:          return SPIRVReflection::StorageClass::Uniform;
+        case spv::StorageClassOutput:           return SPIRVReflection::StorageClass::Output;
+        case spv::StorageClassWorkgroup:        return SPIRVReflection::StorageClass::Workgroup;
+        case spv::StorageClassCrossWorkgroup:   return SPIRVReflection::StorageClass::CrossWorkgroup;
+        case spv::StorageClassPrivate:          return SPIRVReflection::StorageClass::Private;
+        case spv::StorageClassFunction:         return SPIRVReflection::StorageClass::Function;
+        case spv::StorageClassGeneric:          return SPIRVReflection::StorageClass::Generic;
+        case spv::StorageClassPushConstant:     return SPIRVReflection::StorageClass::PushConstant;
+        case spv::StorageClassAtomicCounter:    return SPIRVReflection::StorageClass::AtomicCounter;
+        case spv::StorageClassImage:            return SPIRVReflection::StorageClass::Image;
+        case spv::StorageClassStorageBuffer:    return SPIRVReflection::StorageClass::StorageBuffer;
+        default:                                return SPIRVReflection::StorageClass::Unknown;
         }
+    }
+
+    static SPIRVReflection::ResourceType ResourceTypeFromParams(const uint32_t* paramStart)
+    {
+        // params:
+        //  [0] name
+        //  [1] appears to be channel type (index of another type in the spirv code)
+        //  [2] dimensions (Dim from spirv.hpp)
+        //  [3] unknown (generally 2)
+        //  [4] 1 for array types, 0 otherwise
+        //  [5] 1 for multisample types, 0 otherwise
+        //  [6] 2 for read/write types (eg, RWTexture2D and RWBuffer<> texel buffers), 1 otherwise
+        //  [7] probably a pixel format code for texel buffers (ImageFormat in spirv.hpp)
+        SPIRVReflection::ResourceType result;
+        switch (paramStart[2]) {
+        case spv::Dim::Dim1D: result._category = SPIRVReflection::ResourceCategory::Image1D; break;
+        case spv::Dim::Dim2D: result._category = SPIRVReflection::ResourceCategory::Image2D; break;
+        case spv::Dim::Dim3D: result._category = SPIRVReflection::ResourceCategory::Image3D; break;
+        case spv::Dim::DimCube: result._category = SPIRVReflection::ResourceCategory::ImageCube; break;
+        case spv::Dim::DimBuffer: result._category = SPIRVReflection::ResourceCategory::Buffer; break;
+        case spv::Dim::DimSubpassData: result._category = SPIRVReflection::ResourceCategory::InputAttachment; break;
+        default: result._category = SPIRVReflection::ResourceCategory::Unknown; break;
+        }
+        assert((paramStart[4] == 0) || (paramStart[4] == 1));
+        result._arrayVariation = paramStart[4] == 1;
+        assert((paramStart[5] == 0) || (paramStart[5] == 1));
+        result._multisampleVariation = paramStart[5] == 1;
+        assert((paramStart[6] == 1) || (paramStart[6] == 2));
+        result._readWriteVariation = paramStart[6] == 2;
+        return result;
+
+        /*if (paramStart[6] == 2) {
+            if (paramStart[2] == 5) {
+                _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::StorageTexelBuffer));
+            } else if (paramStart[2] == 6) {
+                _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::InputAttachment));
+            } else
+                _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::StorageImage));
+        } else {
+            if (paramStart[2] == 5) {
+                _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::TexelBuffer));
+            } else
+                _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::Image));
+        }*/
     }
 
     SPIRVReflection::SPIRVReflection(IteratorRange<const void*> byteCode)
@@ -197,7 +242,6 @@ namespace RenderCore { namespace Metal_Vulkan
         _entryPoint._id = ~0x0u;
 
         using namespace spv;
-        // spv::Parameterize();
 
         std::vector<ObjectId> runtimeArrayTypes;
 
@@ -285,48 +329,48 @@ namespace RenderCore { namespace Metal_Vulkan
                 {
                     auto i = std::find_if(_basicTypes.begin(), _basicTypes.end(), [q=paramStart[0]](auto c) { return c.first == q; });
                     if (i!=_basicTypes.end() && i->second == BasicType::Int)
-                        _integerConstants.push_back(std::make_pair(paramStart[1], paramStart[2]));
+                        _integerConstants.emplace_back(paramStart[1], paramStart[2]);
                 }
                 break;
 
             case OpTypeBool:
-                _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::Bool));
+                _basicTypes.emplace_back(paramStart[0], BasicType::Bool);
                 break;
 
             case OpTypeFloat:  
-                _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::Float));
+                _basicTypes.emplace_back(paramStart[0], BasicType::Float);
                 break;
 
             case OpTypeInt:  
-                _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::Int));
+                _basicTypes.emplace_back(paramStart[0], BasicType::Int);
                 break;
 
             case OpTypeVector:  
-                _vectorTypes.push_back(std::make_pair(paramStart[0], VectorType{paramStart[1], paramStart[2]}));
+                _vectorTypes.emplace_back(paramStart[0], VectorType{paramStart[1], paramStart[2]});
                 break;
 
             case OpTypeSampler:
-                _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::Sampler));
+                _basicTypes.emplace_back(paramStart[0], BasicType::Sampler);
                 break;
 
             case OpTypeSampledImage:
-                _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::SampledImage));
+                _basicTypes.emplace_back(paramStart[0], BasicType::SampledImage);
                 break;
 
             case OpTypeImage:
-                if (paramStart[6] == 2) {
-                    if (paramStart[2] == 5) {
-                        _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::StorageTexelBuffer));
-                    } else if (paramStart[2] == 6) {
-                        _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::InputAttachment));
+                /*{
+                    Log(Warning) << "OpTypeImage";
+                    auto i = LowerBound(_names, paramStart[0]);
+                    if (i != _names.end() && i->first == paramStart[0]) {
+                        Log(Warning) << " \"" << i->second << "\"";
                     } else
-                        _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::StorageImage));
-                } else {
-                    if (paramStart[2] == 5) {
-                        _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::TexelBuffer));
-                    } else
-                        _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::Image));
-                }
+                        Log(Warning) << " " << paramStart[0];
+                    for (unsigned c=1; c<wordCount-1; ++c)
+                        Log(Warning) << " " << paramStart[c];
+                    Log(Warning) << std::endl;
+                }*/
+
+                _resourceTypes.emplace_back(paramStart[0], ResourceTypeFromParams(paramStart));
                 break;
 
             case OpTypeRuntimeArray:
@@ -372,6 +416,7 @@ namespace RenderCore { namespace Metal_Vulkan
         std::sort(_pointerTypes.begin(), _pointerTypes.end(), CompareFirst<ObjectId, PointerType>());
         std::sort(_arrayTypes.begin(), _arrayTypes.end(), CompareFirst<ObjectId, ArrayType>());
         std::sort(_variables.begin(), _variables.end(), CompareFirst<ObjectId, Variable>());
+        std::sort(_resourceTypes.begin(), _resourceTypes.end(), CompareFirst<ObjectId, ResourceType>());
 
         // build the quick lookup table, which matches hash names to binding values
         for (auto& b:_bindings) {
@@ -396,7 +441,7 @@ namespace RenderCore { namespace Metal_Vulkan
             // now insert the type name into the quick lookup table ---
             auto v = LowerBound(_variables, bindingName);
             if (v != _variables.end() && v->first == bindingName) {
-                auto type = DecayType(v->second._type);                
+                auto type = DecayType(v->second._type);
                 n = LowerBound(_names, type);
                 if (n != _names.end() && n->first == type) {
                     auto nameStart = n->second.begin();
@@ -415,7 +460,7 @@ namespace RenderCore { namespace Metal_Vulkan
         for (auto i:_entryPoint._interface) {
             auto v = LowerBound(_variables, i);
             if (v == _variables.end() || v->first != i) continue;
-            if (v->second._storage != StorageType::Input) continue;
+            if (v->second._storage != StorageClass::Input) continue;
 
             auto b = LowerBound(_bindings, v->first);
             if (b == _bindings.end() || b->first != v->first) continue;
@@ -457,7 +502,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		// build the quick lookup table for push constants
 		for (unsigned vi=0; vi<_variables.size(); ++vi) {
-			if (_variables[vi].second._storage != StorageType::PushConstant)
+			if (_variables[vi].second._storage != StorageClass::PushConstant)
 				continue;
 
 			// We don't have a way to get the offset from the top of push constant
@@ -619,7 +664,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 
 		for (auto v:refl._variables) {
-			if (v.second._storage != SPIRVReflection::StorageType::PushConstant)
+			if (v.second._storage != SPIRVReflection::StorageClass::PushConstant)
 				continue;
 			
 			str << "\tPush Constants: ";

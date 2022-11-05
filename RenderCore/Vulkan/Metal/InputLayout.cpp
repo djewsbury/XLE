@@ -29,8 +29,9 @@ namespace RenderCore { namespace Metal_Vulkan
 	struct ReflectionVariableInformation
 	{
 		SPIRVReflection::Binding _binding = {};
-		SPIRVReflection::StorageType _storageType = SPIRVReflection::StorageType::Unknown;
-		const SPIRVReflection::BasicType* _type = nullptr;
+		SPIRVReflection::StorageClass _storageClass = SPIRVReflection::StorageClass::Unknown;
+		const SPIRVReflection::BasicType* _basicType = nullptr;
+		const SPIRVReflection::ResourceType* _resourceType = nullptr;
 		std::optional<unsigned> _arrayElementCount;
 		bool _isStructType = false;
 		bool _isRuntimeArrayStructType = false;
@@ -60,7 +61,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		auto v = LowerBound(reflection._variables, objectId);
 		if (v != reflection._variables.end() && v->first == objectId) {
-			result._storageType = v->second._storage;
+			result._storageClass = v->second._storage;
 			auto typeToLookup = v->second._type;
 
 			auto p = LowerBound(reflection._pointerTypes, typeToLookup);
@@ -75,26 +76,29 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			auto t = LowerBound(reflection._basicTypes, typeToLookup);
 			if (t != reflection._basicTypes.end() && t->first == typeToLookup) {
-				result._type = &t->second;
-			} else {
-				if (std::find(reflection._structTypes.begin(), reflection._structTypes.end(), typeToLookup) != reflection._structTypes.end()) {
-					// a structure will require some kind of buffer as input
-					result._isStructType = true;
+				result._basicType = &t->second;
+			} else if (std::find(reflection._structTypes.begin(), reflection._structTypes.end(), typeToLookup) != reflection._structTypes.end()) {
+				// a structure will require some kind of buffer as input
+				result._isStructType = true;
 
-					// When using the HLSLCC cross-compiler; we end up with the variable having name
-					// like "<cbuffername>_inst" and the type will be "<cbuffername>"
-					// In this case, the name we're interested in isn't actually the variable
-					// name itself, but instead the name of the struct type. As per HLSL, this
-					// is the name we use for binding
-					// By contrast, when using the DX HLSL compiler, the variable will have the name
-					// "<cbuffername>" and the type will be "<cbuffername>.type"
-					if (XlEndsWith(result._name, MakeStringSection("_inst"))) {
-						auto n = LowerBound(reflection._names, typeToLookup);
-						if (n != reflection._names.end() && n->first == typeToLookup)
-							result._name = n->second;
-					}
-				} else if (std::find(reflection._runtimeArrayStructTypes.begin(), reflection._runtimeArrayStructTypes.end(), typeToLookup) != reflection._runtimeArrayStructTypes.end()) {
-					result._isRuntimeArrayStructType = true;
+				// When using the HLSLCC cross-compiler; we end up with the variable having name
+				// like "<cbuffername>_inst" and the type will be "<cbuffername>"
+				// In this case, the name we're interested in isn't actually the variable
+				// name itself, but instead the name of the struct type. As per HLSL, this
+				// is the name we use for binding
+				// By contrast, when using the DX HLSL compiler, the variable will have the name
+				// "<cbuffername>" and the type will be "<cbuffername>.type"
+				if (XlEndsWith(result._name, MakeStringSection("_inst"))) {
+					auto n = LowerBound(reflection._names, typeToLookup);
+					if (n != reflection._names.end() && n->first == typeToLookup)
+						result._name = n->second;
+				}
+			} else if (std::find(reflection._runtimeArrayStructTypes.begin(), reflection._runtimeArrayStructTypes.end(), typeToLookup) != reflection._runtimeArrayStructTypes.end()) {
+				result._isRuntimeArrayStructType = true;
+			} else {
+				auto r = LowerBound(reflection._resourceTypes, typeToLookup);
+				if (r != reflection._resourceTypes.end() && r->first == typeToLookup) {
+					result._resourceType = &r->second;
 				} else {
 					#if defined(_DEBUG)
 						std::cout << "Could not understand type information for input " << result._name << std::endl;
@@ -253,7 +257,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		_allAttributesBound = true;
 		for (const auto&v:reflection._entryPoint._interface) {
 			auto reflectionVariable = GetReflectionVariableInformation(reflection, v);
-			if (reflectionVariable._storageType != SPIRVReflection::StorageType::Input) continue;
+			if (reflectionVariable._storageClass != SPIRVReflection::StorageClass::Input) continue;
 			if (reflectionVariable._binding._location == ~0u) continue;
 			auto loc = reflectionVariable._binding._location;
 
@@ -342,21 +346,25 @@ namespace RenderCore { namespace Metal_Vulkan
 		switch (slotType) { 
 		case DescriptorType::SampledTexture:
 		case DescriptorType::UnorderedAccessTexture:
-			return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._type && (*reflectionVariable._type == SPIRVReflection::BasicType::SampledImage || *reflectionVariable._type == SPIRVReflection::BasicType::Image || *reflectionVariable._type == SPIRVReflection::BasicType::StorageImage || *reflectionVariable._type == SPIRVReflection::BasicType::InputAttachment); 
+			if (reflectionVariable._basicType)
+				return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && (*reflectionVariable._basicType == SPIRVReflection::BasicType::SampledImage || *reflectionVariable._basicType == SPIRVReflection::BasicType::Image);
+			if (reflectionVariable._resourceType)
+				return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && ((reflectionVariable._resourceType->_category == SPIRVReflection::ResourceCategory::Image1D) || (reflectionVariable._resourceType->_category == SPIRVReflection::ResourceCategory::Image2D) || (reflectionVariable._resourceType->_category == SPIRVReflection::ResourceCategory::Image3D) || (reflectionVariable._resourceType->_category == SPIRVReflection::ResourceCategory::ImageCube));
+			return false;
 		case DescriptorType::UniformBuffer:
 		case DescriptorType::UniformBufferDynamicOffset:
-			return reflectionVariable._isStructType || (reflectionVariable._type && (*reflectionVariable._type != SPIRVReflection::BasicType::Image && *reflectionVariable._type != SPIRVReflection::BasicType::SampledImage && *reflectionVariable._type != SPIRVReflection::BasicType::Sampler));
+			return reflectionVariable._isStructType || (reflectionVariable._basicType && (*reflectionVariable._basicType != SPIRVReflection::BasicType::Image && *reflectionVariable._basicType != SPIRVReflection::BasicType::SampledImage && *reflectionVariable._basicType != SPIRVReflection::BasicType::Sampler));
 		case DescriptorType::UnorderedAccessBuffer:
 		case DescriptorType::UnorderedAccessBufferDynamicOffset:
-			return reflectionVariable._isStructType || reflectionVariable._isRuntimeArrayStructType || (reflectionVariable._type && (*reflectionVariable._type != SPIRVReflection::BasicType::Image && *reflectionVariable._type != SPIRVReflection::BasicType::SampledImage && *reflectionVariable._type != SPIRVReflection::BasicType::Sampler));
+			return reflectionVariable._isStructType || reflectionVariable._isRuntimeArrayStructType || (reflectionVariable._basicType && (*reflectionVariable._basicType != SPIRVReflection::BasicType::Image && *reflectionVariable._basicType != SPIRVReflection::BasicType::SampledImage && *reflectionVariable._basicType != SPIRVReflection::BasicType::Sampler));
 		case DescriptorType::UniformTexelBuffer:
-			return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._type && *reflectionVariable._type == SPIRVReflection::BasicType::TexelBuffer; 
+			return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._resourceType && reflectionVariable._resourceType->_category == SPIRVReflection::ResourceCategory::Buffer && !reflectionVariable._resourceType->_readWriteVariation;
 		case DescriptorType::UnorderedAccessTexelBuffer:
-			return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._type && *reflectionVariable._type == SPIRVReflection::BasicType::StorageTexelBuffer; 
+			return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._resourceType && reflectionVariable._resourceType->_category == SPIRVReflection::ResourceCategory::Buffer && reflectionVariable._resourceType->_readWriteVariation;
 		case DescriptorType::Sampler:
-			return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._type && *reflectionVariable._type == SPIRVReflection::BasicType::Sampler; 
+			return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._basicType && *reflectionVariable._basicType == SPIRVReflection::BasicType::Sampler; 
 		case DescriptorType::InputAttachment:
-			return reflectionVariable._binding._inputAttachmentIndex != ~0u;
+			return (reflectionVariable._binding._inputAttachmentIndex != ~0u) && reflectionVariable._resourceType && reflectionVariable._resourceType->_category == SPIRVReflection::ResourceCategory::InputAttachment;
 		case DescriptorType::Empty:
 		default:
 			assert(0);
@@ -594,9 +602,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			// We'll need an input value for every binding in the shader reflection
 			for (const auto&v:reflection._variables) {
 				auto reflectionVariable = GetReflectionVariableInformation(reflection, v.first);
-				if (   reflectionVariable._storageType == SPIRVReflection::StorageType::Input 	// storage "Input/Output" should be attributes and can be ignored
-					|| reflectionVariable._storageType == SPIRVReflection::StorageType::Output
-					|| reflectionVariable._storageType == SPIRVReflection::StorageType::Function) continue;
+				if (   reflectionVariable._storageClass == SPIRVReflection::StorageClass::Input 	// storage "Input/Output" should be attributes and can be ignored
+					|| reflectionVariable._storageClass == SPIRVReflection::StorageClass::Output
+					|| reflectionVariable._storageClass == SPIRVReflection::StorageClass::Function) continue;
 				uint64_t hashName = reflectionVariable._name.IsEmpty() ? 0 : Hash64(reflectionVariable._name.begin(), reflectionVariable._name.end());
 
 				// The _descriptorSet value can be ~0u for push constants, vertex attribute inputs, etc
@@ -721,7 +729,7 @@ namespace RenderCore { namespace Metal_Vulkan
 						#endif
 
 					}
-				} else if (reflectionVariable._storageType == SPIRVReflection::StorageType::PushConstant) {
+				} else if (reflectionVariable._storageClass == SPIRVReflection::StorageClass::PushConstant) {
 
 					assert(!reflectionVariable._name.IsEmpty());
 					unsigned pipelineLayoutIdx = 0;
@@ -1450,31 +1458,40 @@ namespace RenderCore { namespace Metal_Vulkan
 			return DescriptorSlot { DescriptorType::UniformBuffer, 1 };
 		if (varinfo._isRuntimeArrayStructType)
 			return DescriptorSlot { DescriptorType::UnorderedAccessBuffer, 1 };
-		if (!varinfo._type) return {};
 
 		DescriptorSlot result;
-		if (*varinfo._type == SPIRVReflection::BasicType::Image || *varinfo._type == SPIRVReflection::BasicType::SampledImage) {
-			result._type = DescriptorType::SampledTexture;
-		} else if (*varinfo._type == SPIRVReflection::BasicType::TexelBuffer) {
-			result._type = DescriptorType::UniformTexelBuffer;
-		} else if (*varinfo._type == SPIRVReflection::BasicType::StorageTexelBuffer) {
-			result._type = DescriptorType::UnorderedAccessTexelBuffer;
-		} else if (*varinfo._type == SPIRVReflection::BasicType::StorageImage) {
-			result._type = DescriptorType::UnorderedAccessTexture;
-		} else if (*varinfo._type == SPIRVReflection::BasicType::InputAttachment) {
-			result._type = DescriptorType::InputAttachment;
-		} else if (*varinfo._type == SPIRVReflection::BasicType::Sampler) {
-			result._type = DescriptorType::Sampler;
+		if (varinfo._basicType) {
+			if (*varinfo._basicType == SPIRVReflection::BasicType::Image || *varinfo._basicType == SPIRVReflection::BasicType::SampledImage) {
+				result._type = DescriptorType::SampledTexture;
+			} else if (*varinfo._basicType == SPIRVReflection::BasicType::Sampler) {
+				result._type = DescriptorType::Sampler;
+			} else
+				result._type = DescriptorType::UniformBuffer;
+		} else if (varinfo._resourceType) {
+			if (varinfo._resourceType->_category == SPIRVReflection::ResourceCategory::Buffer) {
+				result._type = varinfo._resourceType->_readWriteVariation ? DescriptorType::UnorderedAccessTexelBuffer : DescriptorType::UniformTexelBuffer;
+			} else if (varinfo._resourceType->_category == SPIRVReflection::ResourceCategory::InputAttachment) {
+				result._type = DescriptorType::InputAttachment;
+			} else if (varinfo._resourceType->_category == SPIRVReflection::ResourceCategory::Unknown) {
+				return {};
+			} else {
+				assert(varinfo._resourceType->_category == SPIRVReflection::ResourceCategory::Image1D
+					|| varinfo._resourceType->_category == SPIRVReflection::ResourceCategory::Image2D
+					|| varinfo._resourceType->_category == SPIRVReflection::ResourceCategory::Image3D
+					|| varinfo._resourceType->_category == SPIRVReflection::ResourceCategory::ImageCube);
+				result._type = varinfo._resourceType->_readWriteVariation ? DescriptorType::UnorderedAccessTexture : DescriptorType::SampledTexture;
+				// note that varinfo._resourceType->_arrayVariation & varinfo._resourceType->_multisampleVariation don't have an impact
+			}
 		} else
-			result._type = DescriptorType::UniformBuffer;
-		// DescriptorType::InputAttachment can never be generated
+			return {};
+
 		result._count = varinfo._arrayElementCount.value_or(1);
 		return result;
 	}
 
 	ConstantBufferElementDesc AsConstantBufferElementDesc(const ReflectionVariableInformation& varinfo)
 	{
-		if (!varinfo._type) return {};
+		if (!varinfo._basicType) return {};
 
 		ConstantBufferElementDesc result;
 		result._semanticHash = Hash64(varinfo._name);
@@ -1527,11 +1544,11 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		for (const auto&v:reflection._variables) {
 			auto reflectionVariable = GetReflectionVariableInformation(reflection, v.first);
-			if (   reflectionVariable._storageType == SPIRVReflection::StorageType::Input 	// storage "Input/Output" should be attributes and can be ignored
-				|| reflectionVariable._storageType == SPIRVReflection::StorageType::Output
-				|| reflectionVariable._storageType == SPIRVReflection::StorageType::Function) continue;
+			if (   reflectionVariable._storageClass == SPIRVReflection::StorageClass::Input 	// storage "Input/Output" should be attributes and can be ignored
+				|| reflectionVariable._storageClass == SPIRVReflection::StorageClass::Output
+				|| reflectionVariable._storageClass == SPIRVReflection::StorageClass::Function) continue;
 
-			if (reflectionVariable._storageType == SPIRVReflection::StorageType::PushConstant) {
+			if (reflectionVariable._storageClass == SPIRVReflection::StorageClass::PushConstant) {
 				if (!pushConstants._cbElements.empty())
 					Throw(std::runtime_error("Multiple separate push constant structures detected"));
 				assert(reflectionVariable._isStructType);
@@ -1578,9 +1595,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		SPIRVReflection reflection{byteCode.GetByteCode()};
 		for (const auto&v:reflection._variables) {
 			auto reflectionVariable = GetReflectionVariableInformation(reflection, v.first);
-			if (   reflectionVariable._storageType == SPIRVReflection::StorageType::Input
-				|| reflectionVariable._storageType == SPIRVReflection::StorageType::Output
-				|| reflectionVariable._storageType == SPIRVReflection::StorageType::Function) continue;
+			if (   reflectionVariable._storageClass == SPIRVReflection::StorageClass::Input
+				|| reflectionVariable._storageClass == SPIRVReflection::StorageClass::Output
+				|| reflectionVariable._storageClass == SPIRVReflection::StorageClass::Function) continue;
 
 			if (reflectionVariable._binding._descriptorSet != ~0u) {
 				if (reflectionVariable._binding._descriptorSet >= pipelineLayout->GetDescriptorSetCount())
@@ -1589,7 +1606,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				auto descSetSigBindings = pipelineLayout->GetDescriptorSetLayout(reflectionVariable._binding._descriptorSet)->GetDescriptorSlots();
 				if (reflectionVariable._binding._bindingPoint >= descSetSigBindings.size() || !ShaderVariableCompatibleWithDescriptorSet(reflectionVariable, descSetSigBindings[reflectionVariable._binding._bindingPoint]._type))
 					ThrowFromMeld(StringMeldInPlace(buffer) << "Shader input assignment is off the pipeline layout, or the shader type does not agree with descriptor set (variable: " << reflectionVariable._name << ")");
-			} else if (reflectionVariable._storageType == SPIRVReflection::StorageType::PushConstant) {
+			} else if (reflectionVariable._storageClass == SPIRVReflection::StorageClass::PushConstant) {
 				PipelineLayoutInitializer::PushConstantsBinding pushConstants;
 				pushConstants._shaderStage = byteCode.GetStage();
 				AddToPushConstants(pushConstants, reflection, v.second._type);
