@@ -215,6 +215,10 @@ namespace RenderCore { namespace Techniques
 
 					// hack -- we might need this for material deform, as well
 					drawableGeo->_deformAccelerator = deformAccelerator;
+
+					#if defined(_DEBUG)
+						drawableGeo->_name = modelScaffoldName;
+					#endif
 					
 					AddStaticLoadRequest(LoadBuffer::IB, DrawableStream::IB, scaffoldIdx, drawableGeoIdx, rg._ib._offset, rg._ib._size);
 					drawableGeo->_ibFormat = rg._ib._format;

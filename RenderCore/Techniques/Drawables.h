@@ -60,6 +60,10 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<DeformAccelerator> _deformAccelerator;
 		BufferUploads::CommandListID _completionCmdList = 0;
 
+		#if defined(_DEBUG)
+			std::string _name;
+		#endif
+
 		// avoid constructing directly -- prefer IDrawablesPool::CreateGeo() or DrawablesPacket::CreateTemporaryGeo()
 		DrawableGeo();
 		~DrawableGeo();
