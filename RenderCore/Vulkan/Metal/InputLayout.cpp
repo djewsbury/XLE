@@ -397,8 +397,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			case SPIRVReflection::ResourceCategory::Buffer:
 				return ResourceDims::DimBuffer;
 			case SPIRVReflection::ResourceCategory::InputAttachment:
-				assert(0);		// this case is invalid -- we can't dummy out an input attachment uniform
-				return ResourceDims::Unknown;
+				return ResourceDims::DimInputAttachment;
 			default:
 				break;
 			}
@@ -541,6 +540,20 @@ namespace RenderCore { namespace Metal_Vulkan
 			_descSetInfos[outputDescriptorSet]._shaderUsageMask |= 1ull<<uint64_t(outputDescriptorSetSlot);
 			_descSetInfos[outputDescriptorSet]._shaderStageMask |= shaderStageMask;
 			if (uniformStreamType == UniformStreamType::Dummy) {
+				auto* descSetLayout = _pipelineLayout->GetDescriptorSetLayout(outputDescriptorSet).get();
+				auto descriptorType = descSetLayout->GetDescriptorSlots()[outputDescriptorSetSlot]._type;
+				
+				if (resourceDims == ProgressiveDescriptorSetBuilder::ResourceDims::DimInputAttachment || descriptorType == DescriptorType::InputAttachment)
+					Throw(std::runtime_error(StringMeld<256>() << "No binding provided for shader input attachment (" << variableName << "). Dummy resources can't be bound for input attachments."));
+
+				if (descriptorType == DescriptorType::UniformTexelBuffer || descriptorType == DescriptorType::UnorderedAccessTexelBuffer)
+					// this is actually a "texel buffer" case -- not a UAV. We can't dummy it out without specializing the dummy
+					// for the specific texel buffer required
+					Throw(std::runtime_error(StringMeld<256>() << "No binding provided for shader texel buffer input (" << variableName << "). Dummy resources can't be bound for texel buffers."));
+
+				if (resourceDims == ProgressiveDescriptorSetBuilder::ResourceDims::Dim2DMS || resourceDims == ProgressiveDescriptorSetBuilder::ResourceDims::Dim2DMSArray)
+					Throw(std::runtime_error(StringMeld<256>() << "No binding provided for multisampled image input (" << variableName << "). Dummy resources can't be bound for multisampled inputs."));
+
 				_descSetInfos[outputDescriptorSet]._dummyMask |= 1ull<<uint64_t(outputDescriptorSetSlot);
 				if (_descSetInfos[outputDescriptorSet]._shaderDummyTypes.size() <= outputDescriptorSetSlot)
 					_descSetInfos[outputDescriptorSet]._shaderDummyTypes.resize(outputDescriptorSetSlot+1, (unsigned)ProgressiveDescriptorSetBuilder::ResourceDims::Unknown);

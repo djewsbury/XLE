@@ -54,6 +54,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			Dim2DMS, Dim2DMSArray,
 			DimCube, DimCubeArray,
 			DimBuffer,
+			DimInputAttachment,
 			Unknown
 		};
 		uint64_t	BindDummyDescriptors(

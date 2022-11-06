@@ -507,6 +507,10 @@ namespace RenderCore { namespace Metal_Vulkan
 					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
 			break;
 
+		case ResourceDims::DimBuffer:
+		case ResourceDims::DimInputAttachment:
+			assert(0);	// invalid cases
+
 		default:
 			// fallback to 2d image (multisample types will fallback here currently, because they are used only for specific shaders)
 			for (unsigned c=0; c<count; ++c)
@@ -579,6 +583,10 @@ namespace RenderCore { namespace Metal_Vulkan
 					globalPools._dummyResources._blankImageCubeArrayUav.GetImageView(),
 					VK_IMAGE_LAYOUT_GENERAL };
 			break;
+
+		case ResourceDims::DimBuffer:
+		case ResourceDims::DimInputAttachment:
+			assert(0);	// invalid cases
 
 		default:
 			// fallback to 2d image (multisample types will fallback here currently, because they are used only for specific shaders)
