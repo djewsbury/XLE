@@ -1275,7 +1275,7 @@ namespace SceneEngine
         auto cellSpaceBoundaries = renderer->GetCellSpaceBoundaries();
         CellSpaceBoundingBoxes obb;
         obb._cellSpaceBoundingBoxes = cellSpaceBoundaries.begin();
-        obb._count = cellSpaceBoundaries.size();
+        obb._count = (unsigned)cellSpaceBoundaries.size();
         obb._stride = sizeof(std::pair<Float3, Float3>);
         return obb;
     }
@@ -2132,6 +2132,7 @@ namespace SceneEngine
 
         std::vector<ObjTransDef>    _originalState;
         std::vector<ObjTransDef>    _objects;
+        bool _pushedChanges = false;
 
         std::vector<PlacementGUID>  _originalGuids;
         std::vector<PlacementGUID>  _pushedGuids;
@@ -2299,6 +2300,7 @@ namespace SceneEngine
                     
                         // This is the correct cell. Look for a dynamic placement associated
                     auto dynPlacements = _editorPimpl->GetDynPlacements(i->_filenameHash);
+                    _pushedChanges = true;
 
                         //  Build a GUID for this object. We're going to sort by GUID, and we want
                         //  objects with the name model and material to appear together. So let's
@@ -2363,6 +2365,8 @@ namespace SceneEngine
             for (auto i=cells.cbegin(); i!=cells.cend(); ++i) {
                 if (i->_filenameHash == guid.first) {
                     auto dynPlacements = _editorPimpl->GetDynPlacements(i->_filenameHash);
+                    _pushedChanges = true;
+
                     localToCell = Combine(newState._localToWorld, InvertOrthonormalTransform(i->_cellToWorld));
 
                     auto idTopPart = ObjectIdTopPart(newState._model, materialFilename);
@@ -2423,6 +2427,8 @@ namespace SceneEngine
 
         auto cellToWorld = _editorPimpl->GetCellToWorld(guid.first);
         auto* dynPlacements = _editorPimpl->GetDynPlacements(guid.first).get();
+        _pushedChanges = true;
+
         auto objects = dynPlacements->GetObjectReferences();
 
         auto dst = std::lower_bound(objects.begin(), objects.end(), guid.second, CompareObjectId());
@@ -2504,9 +2510,12 @@ namespace SceneEngine
         if (_state != Active) return;
 
             // we just have to reset all objects to their previous state
-        for (unsigned c=0; c<_objects.size(); ++c) {
-            _objects[c] = _originalState[c];
-            PushObj(c, _originalState[c]);
+        if (_pushedChanges) {
+            for (unsigned c=0; c<_objects.size(); ++c) {
+                _objects[c] = _originalState[c];
+                PushObj(c, _originalState[c]);
+            }
+            _pushedChanges = false;
         }
     }
     

@@ -5,53 +5,85 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "PlacementsDisplay.h"
-#include "../../Math/Geometry.h"
-#include "../../Utility/PtrUtils.h"
+#include "../../SceneEngine/PlacementsManager.h"
+#include "../../SceneEngine/RayVsModel.h"
+#include "../../SceneEngine/IntersectionTest.h"
+#include "../../RenderCore/Techniques/Apparatuses.h"
+#include "../../RenderCore/Techniques/ParsingContext.h"
+#include "../../RenderCore/Techniques/TechniqueUtils.h"
+#include "../../RenderCore/Techniques/Techniques.h"
+#include "../../RenderCore/Techniques/PipelineAccelerator.h"
+#include "../../RenderOverlays/DebuggingDisplay.h"
+#include "../../Tools/ToolsRig/VisualisationUtils.h"
 
 namespace PlatformRig { namespace Overlays
 {
+	using namespace RenderOverlays;
+	using namespace RenderOverlays::DebuggingDisplay;
 
-    void    PlacementsDisplay::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
-    {
-#if 0
-        Float3x4 placementsToWorld = Truncate(Float4x4(
-            0.f, 1.f, 0.f, 0.f,
-            1.f, 0.f, 0.f, 0.f,
-            0.f, 0.f, 1.f, 0.f,
-            0.f, 0.f, 0.f, 1.f));
+	class PlacementsDisplay : public IWidget ///////////////////////////////////////////////////////////
+	{
+	public:
+		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
+		{}
 
-        {
-            unsigned objectCount = _placements->GetObjectReferenceCount();
-            auto* objRef = _placements->GetObjectReferences();
-            for (unsigned c=0; c<objectCount; ++c) {
-                auto& obj = objRef[c];
-                DrawBoundingBox(context, obj._worldSpaceBoundary, placementsToWorld, ColorB(0xff7fffff), 0x1);
-            }
-            for (unsigned c=0; c<objectCount; ++c) {
-                auto& obj = objRef[c];
-                DrawBoundingBox(context, obj._worldSpaceBoundary, placementsToWorld, ColorB(0xff7fffff), 0x2);
-            }
-        }
-        {
-            unsigned objectCount = _placements->GetVegetationReferenceCount();
-            auto* objRef = _placements->GetVegetationReferences();
-            for (unsigned c=0; c<objectCount; ++c) {
-                auto& obj = objRef[c];
-                DrawBoundingBox(context, obj._worldSpaceBoundary, placementsToWorld, ColorB(0xffffff7f), 0x1);
-            }
-            for (unsigned c=0; c<objectCount; ++c) {
-                auto& obj = objRef[c];
-                DrawBoundingBox(context, obj._worldSpaceBoundary, placementsToWorld, ColorB(0xffffff7f), 0x2);
-            }
-        }
-#endif
-    }
+		virtual ProcessInputResult ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input)
+		{
+			// Given the camera & viewport find a ray & perform intersection detection withte placements scene
+			if (input.IsRelease_LButton()) {
+				UInt2 viewportDims { 1920, 1080 };	// todo -- get real values
+				auto cameraDesc = ToolsRig::AsCameraDesc(*_camera);
+				auto worldSpaceRay = SceneEngine::CalculateWorldSpaceRay(
+					cameraDesc, input._mousePosition, {0,0}, viewportDims);
 
-    PlacementsDisplay::PlacementsDisplay()
-    {}
+				auto& threadContext = *RenderCore::Techniques::GetThreadContext();
+				auto techniqueContext = SceneEngine::MakeIntersectionsTechniqueContext(*_drawingApparatus);
+				RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
+				parsingContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
+				parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(cameraDesc, viewportDims);
 
-    PlacementsDisplay::~PlacementsDisplay()
-    {}
+				auto firstHit = SceneEngine::FirstRayIntersection(parsingContext, *_placementsEditor, worldSpaceRay, nullptr);
+				if (firstHit) {
+					_selectedMaterialName = firstHit->_materialName;
+					_selectedModelName = firstHit->_modelName;
+				} else {
+					_selectedMaterialName = _selectedModelName = {};
+				}
+
+				return ProcessInputResult::Consumed;
+			}
+
+			if (input.IsPress_LButton())
+				return ProcessInputResult::Consumed;
+
+			return ProcessInputResult::Passthrough;
+		}
+
+		PlacementsDisplay(
+			std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
+			std::shared_ptr<SceneEngine::PlacementsEditor> placements, 
+			std::shared_ptr<ToolsRig::VisCameraSettings> camera)
+		: _drawingApparatus(std::move(drawingApparatus))
+		, _placementsEditor(std::move(placements))
+		, _camera(std::move(camera))
+		{
+		}
+
+	private:
+		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
+		std::shared_ptr<SceneEngine::PlacementsEditor> _placementsEditor;
+		std::shared_ptr<ToolsRig::VisCameraSettings> _camera;
+
+		std::string _selectedModelName, _selectedMaterialName;
+	};
+
+	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreatePlacementsDisplay(
+		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
+		std::shared_ptr<SceneEngine::PlacementsEditor> placements,
+		std::shared_ptr<ToolsRig::VisCameraSettings> camera)
+	{
+		return std::make_shared<PlacementsDisplay>(std::move(drawingApparatus), std::move(placements), std::move(camera));
+	}
 
 }}
 

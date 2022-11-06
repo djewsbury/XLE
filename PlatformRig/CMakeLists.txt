@@ -25,7 +25,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         DebuggingDisplays/GPUProfileDisplay.cpp
         DebuggingDisplays/HierarchicalSpikesDisplay.cpp
         DebuggingDisplays/HistoricalProfilerDisplay.cpp
-        #DebuggingDisplays/PlacementsDisplay.cpp
+        DebuggingDisplays/PlacementsDisplay.cpp
         #DebuggingDisplays/TestDisplays.cpp
         DebuggingDisplays/InvalidAssetDisplay.cpp
         DebuggingDisplays/QuickMetricsDisplay.cpp

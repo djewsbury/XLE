@@ -6,19 +6,18 @@
 
 #pragma once
 
-#include "../../RenderOverlays/DebuggingDisplay.h"
+#include <memory>
+
+namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}
+namespace RenderCore { namespace Techniques { class DrawingApparatus; }}
+namespace SceneEngine { class PlacementsEditor; }
+namespace ToolsRig { class VisCameraSettings; }
 
 namespace PlatformRig { namespace Overlays
 {
-    using namespace RenderOverlays;
-    using namespace RenderOverlays::DebuggingDisplay;
-
-    class PlacementsDisplay : public IWidget ///////////////////////////////////////////////////////////
-    {
-    public:
-        void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-
-        PlacementsDisplay();
-        ~PlacementsDisplay();
-    };
+	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreatePlacementsDisplay(
+		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
+		std::shared_ptr<SceneEngine::PlacementsEditor> placements,
+		std::shared_ptr<ToolsRig::VisCameraSettings> camera);
 }}
+
