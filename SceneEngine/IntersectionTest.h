@@ -9,8 +9,9 @@
 #include "../Core/Types.h"
 #include "../Math/Vector.h"
 #include <memory>
+#include <optional>
 
-namespace RenderCore { namespace Techniques { class CameraDesc; class DrawingApparatus; }}
+namespace RenderCore { namespace Techniques { class CameraDesc; class DrawingApparatus; class TechniqueContext; class ParsingContext; }}
 namespace RenderCore { class PresentationChainDesc; }
 
 namespace SceneEngine
@@ -73,10 +74,6 @@ namespace SceneEngine
 	class IntersectionTestContext
     {
     public:
-		static std::pair<Float3, Float3> CalculateWorldSpaceRay(
-            const RenderCore::Techniques::CameraDesc& sceneCamera,
-            Int2 screenCoord, UInt2 viewMins, UInt2 viewMaxs);
-
         std::pair<Float3, Float3> CalculateWorldSpaceRay(Int2 screenCoord) const;
         Float2 ProjectToScreenSpace(const Float3& worldSpaceCoord) const;
 
@@ -90,7 +87,6 @@ namespace SceneEngine
     class PlacementsEditor;
     std::shared_ptr<IIntersectionScene> CreateIntersectionTestScene(
         std::shared_ptr<TerrainManager> terrainManager,
-        std::shared_ptr<PlacementCellSet> placements,
         std::shared_ptr<PlacementsEditor> placementsEditor,
         IteratorRange<const std::shared_ptr<SceneEngine::IIntersectionScene>*> extraTesters = {});
 
@@ -98,4 +94,17 @@ namespace SceneEngine
     {
         std::optional<float> GetTerrainHeight(const IIntersectionScene& scene, Float2 pt);
     }
+
+    std::pair<Float3, Float3> CalculateWorldSpaceRay(
+        const RenderCore::Techniques::CameraDesc& sceneCamera,
+        Int2 screenCoord, UInt2 viewMins, UInt2 viewMaxs);
+
+    RenderCore::Techniques::TechniqueContext MakeIntersectionsTechniqueContext(
+        RenderCore::Techniques::DrawingApparatus& drawingApparatus);
+
+    std::optional<IntersectionTestResult> FirstRayIntersection(
+        RenderCore::Techniques::ParsingContext& parsingContext,
+        PlacementsEditor& placementsEditor,
+        std::pair<Float3, Float3> worldSpaceRay,
+        const RenderCore::Techniques::CameraDesc* cameraForLOD);
 }

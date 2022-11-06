@@ -77,7 +77,7 @@ namespace ToolsRig
 		bool gotSomething = false;
         static auto ctrl = PlatformRig::KeyId_Make("control");
         if (evnt.IsHeld(ctrl) && evnt.IsPress_LButton() && hitTestScene) {
-            auto worldSpaceRay = SceneEngine::IntersectionTestContext::CalculateWorldSpaceRay(
+            auto worldSpaceRay = SceneEngine::CalculateWorldSpaceRay(
 				AsCameraDesc(*_visCameraSettings), evnt._mousePosition, hitTestContext._viewportMins, hitTestContext._viewportMaxs);
 
             auto intr = hitTestScene->FirstRayIntersection(hitTestContext, worldSpaceRay);

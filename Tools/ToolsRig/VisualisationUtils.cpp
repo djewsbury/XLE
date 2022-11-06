@@ -680,7 +680,7 @@ namespace ToolsRig
 			const PlatformRig::InputContext& context,
 			PlatformRig::Coord2 mousePosition)
 		{
-            auto worldSpaceRay = SceneEngine::IntersectionTestContext::CalculateWorldSpaceRay(
+            auto worldSpaceRay = SceneEngine::CalculateWorldSpaceRay(
 				AsCameraDesc(*_camera), mousePosition, context._viewMins, context._viewMaxs);
 
             if (!_scene) return;

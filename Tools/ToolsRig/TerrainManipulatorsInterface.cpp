@@ -87,7 +87,7 @@ namespace ToolsRig
         _manipulators = CreateTerrainManipulators(terrainManager, terrainManipulatorContext);
 #endif
 
-        auto intersectionTestScene = SceneEngine::CreateIntersectionTestScene(terrainManager, nullptr, nullptr);
+        auto intersectionTestScene = SceneEngine::CreateIntersectionTestScene(terrainManager, nullptr);
 
         _terrainManager = terrainManager;
         _intersectionTestScene = intersectionTestScene;

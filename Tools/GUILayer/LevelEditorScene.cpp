@@ -260,7 +260,6 @@ namespace GUILayer
 	{
         auto scene = SceneEngine::CreateIntersectionTestScene(
             nullptr,
-            _scene->_placementsCells,
             _scene->_placementsEditor,
             {_scene->_placeholders->CreateIntersectionTester()});
         return gcnew IntersectionTestSceneWrapper(std::move(scene));

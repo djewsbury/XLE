@@ -53,13 +53,11 @@ namespace SceneEngine
 
         IntersectionTestScene(
             std::shared_ptr<TerrainManager> terrainManager = nullptr,
-            std::shared_ptr<PlacementCellSet> placements = nullptr,
             std::shared_ptr<PlacementsEditor> placementsEditor = nullptr,
             IteratorRange<const std::shared_ptr<SceneEngine::IIntersectionScene>*> extraTesters = {});
         ~IntersectionTestScene();
     protected:
         std::shared_ptr<TerrainManager> _terrainManager;
-        std::shared_ptr<PlacementCellSet> _placements;
         std::shared_ptr<PlacementsEditor> _placementsEditor;
         std::vector<std::shared_ptr<IIntersectionScene>> _extraTesters;
     };
@@ -116,7 +114,7 @@ namespace SceneEngine
         SceneEngine::ModelIntersectionStateContext& intersectionContext, 
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		ModelIntersectionStateContext& stateContext,
-        SceneEngine::PlacementsRenderer& placementsRenderer, SceneEngine::PlacementCellSet& cellSet,
+        SceneEngine::PlacementsRenderer& placementsRenderer, const SceneEngine::PlacementCellSet& cellSet,
         SceneEngine::PlacementGUID object,
         const RenderCore::Techniques::CameraDesc* cameraForLOD)
     {
@@ -157,7 +155,7 @@ namespace SceneEngine
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    static RenderCore::Techniques::TechniqueContext MakeTechniqueContext(RenderCore::Techniques::DrawingApparatus& drawingApparatus)
+    RenderCore::Techniques::TechniqueContext MakeIntersectionsTechniqueContext(RenderCore::Techniques::DrawingApparatus& drawingApparatus)
     {
         RenderCore::Techniques::TechniqueContext techniqueContext;
         techniqueContext._commonResources = drawingApparatus._commonResources;
@@ -166,6 +164,86 @@ namespace SceneEngine
         techniqueContext._pipelineAccelerators = drawingApparatus._pipelineAccelerators;
         techniqueContext._graphicsPipelinePool = drawingApparatus._graphicsPipelinePool;
         return techniqueContext;
+    }
+
+    std::optional<IntersectionTestResult> FirstRayIntersection(
+        RenderCore::Techniques::ParsingContext& parsingContext,
+        PlacementsEditor& placementsEditor,
+        std::pair<Float3, Float3> worldSpaceRay,
+        const RenderCore::Techniques::CameraDesc* cameraForLOD)
+    {
+        std::optional<IntersectionTestResult> result;
+
+        auto intersections = placementsEditor.GetManager()->GetIntersections();
+        auto roughIntersection = 
+            intersections->Find_RayIntersection(placementsEditor.GetCellSet(), worldSpaceRay.first, worldSpaceRay.second, nullptr);
+
+        if (!roughIntersection.empty()) {
+
+                // we can improve the intersection by doing ray-vs-triangle tests
+                // on the roughIntersection geometry
+
+                //  we need to create a temporary transaction to get
+                //  at the information for these objects.
+            auto trans = placementsEditor.Transaction_Begin(
+                AsPointer(roughIntersection.cbegin()), AsPointer(roughIntersection.cend()));
+
+            TRY
+            {
+                float rayLength = Magnitude(worldSpaceRay.second - worldSpaceRay.first);
+
+                // note --  we could do this all in a single render call, except that there
+                //          is no way to associate a low level intersection result with a specific
+                //          draw call.
+                auto count = trans->GetObjectCount();
+                for (unsigned c=0; c<count; ++c) {
+                    auto guid = trans->GetGuid(c);
+
+                    ModelIntersectionStateContext intersectionContext{
+                        ModelIntersectionStateContext::RayTest,
+                        parsingContext.GetThreadContext(), *parsingContext.GetTechniqueContext()._pipelineAccelerators,
+                        parsingContext.GetPipelineAcceleratorsVisibility()};
+                    intersectionContext.SetRay(worldSpaceRay);
+                    auto results = PlacementsIntersection(
+                        intersectionContext, parsingContext, intersectionContext, 
+                        *placementsEditor.GetManager()->GetRenderer(), placementsEditor.GetCellSet(),
+                        guid, cameraForLOD);
+
+                    bool gotGoodResult = false;
+                    unsigned drawCallIndex = 0;
+                    uint64 materialGuid = 0;
+                    float intersectionDistance = std::numeric_limits<float>::max();
+                    for (auto i=results.cbegin(); i!=results.cend(); ++i) {
+                        if (i->_intersectionDepth < intersectionDistance) {
+                            intersectionDistance = i->_intersectionDepth;
+                            drawCallIndex = i->_drawCallIndex;
+                            materialGuid = i->_materialGuid;
+                            gotGoodResult = true;
+                        }
+                    }
+
+                    if (gotGoodResult && (!result.has_value() || intersectionDistance < result->_distance)) {
+                        result = IntersectionTestResult{};
+                        result->_type = IntersectionTestResult::Type::Placement;
+                        result->_worldSpaceCollision = LinearInterpolate(
+                            worldSpaceRay.first, worldSpaceRay.second, 
+                            intersectionDistance / rayLength);
+                        result->_distance = intersectionDistance;
+                        result->_objectGuid = guid;
+                        result->_drawCallIndex = drawCallIndex;
+                        result->_materialGuid = materialGuid;
+                        result->_materialName = trans->GetMaterialName(c, materialGuid);
+                        result->_modelName = trans->GetObject(c)._model;
+                    }
+                }
+            }
+            CATCH(const ::Assets::Exceptions::RetrievalError&) {}
+            CATCH(const std::exception&) {}        // can sometimes through runtime_errors on pending assets
+            CATCH_END
+
+            trans->Cancel();
+        }
+        return result;
     }
 
     auto IntersectionTestScene::FirstRayIntersection(
@@ -177,7 +255,7 @@ namespace SceneEngine
         using Type = IntersectionTestResult::Type;
 
 		auto& threadContext = *RenderCore::Techniques::GetThreadContext();
-        auto techniqueContext = MakeTechniqueContext(*context._drawingApparatus);
+        auto techniqueContext = MakeIntersectionsTechniqueContext(*context._drawingApparatus);
 		RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
         parsingContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
         parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(context._cameraDesc, context._viewportMaxs - context._viewportMins);
@@ -196,76 +274,11 @@ namespace SceneEngine
             }
         }
 
-        if ((filter & Type::Placement) && _placements && _placementsEditor) {
-            auto intersections = _placementsEditor->GetManager()->GetIntersections();
-            auto roughIntersection = 
-                intersections->Find_RayIntersection(*_placements, worldSpaceRay.first, worldSpaceRay.second, nullptr);
-
-            if (!roughIntersection.empty()) {
-
-                    // we can improve the intersection by doing ray-vs-triangle tests
-                    // on the roughIntersection geometry
-
-                    //  we need to create a temporary transaction to get
-                    //  at the information for these objects.
-                auto trans = _placementsEditor->Transaction_Begin(
-                    AsPointer(roughIntersection.cbegin()), AsPointer(roughIntersection.cend()));
-
-                TRY
-                {
-                    float rayLength = Magnitude(worldSpaceRay.second - worldSpaceRay.first);
-
-                    // note --  we could do this all in a single render call, except that there
-                    //          is no way to associate a low level intersection result with a specific
-                    //          draw call.
-                    auto count = trans->GetObjectCount();
-                    for (unsigned c=0; c<count; ++c) {
-                        auto guid = trans->GetGuid(c);
-
-                        ModelIntersectionStateContext intersectionContext{
-                            ModelIntersectionStateContext::RayTest,
-                            threadContext, *context._drawingApparatus->_pipelineAccelerators,
-                            parsingContext.GetPipelineAcceleratorsVisibility()};
-                        intersectionContext.SetRay(worldSpaceRay);
-                        auto results = PlacementsIntersection(
-                            intersectionContext, parsingContext, intersectionContext, 
-                            *_placementsEditor->GetManager()->GetRenderer(), *_placements,
-                            guid, &context._cameraDesc);
-
-                        bool gotGoodResult = false;
-                        unsigned drawCallIndex = 0;
-                        uint64 materialGuid = 0;
-                        float intersectionDistance = std::numeric_limits<float>::max();
-                        for (auto i=results.cbegin(); i!=results.cend(); ++i) {
-                            if (i->_intersectionDepth < intersectionDistance) {
-                                intersectionDistance = i->_intersectionDepth;
-                                drawCallIndex = i->_drawCallIndex;
-                                materialGuid = i->_materialGuid;
-                                gotGoodResult = true;
-                            }
-                        }
-
-                        if (gotGoodResult && intersectionDistance < result._distance) {
-                            result = IntersectionTestResult{};
-                            result._type = Type::Placement;
-                            result._worldSpaceCollision = LinearInterpolate(
-                                worldSpaceRay.first, worldSpaceRay.second, 
-                                intersectionDistance / rayLength);
-                            result._distance = intersectionDistance;
-                            result._objectGuid = guid;
-                            result._drawCallIndex = drawCallIndex;
-                            result._materialGuid = materialGuid;
-                            result._materialName = trans->GetMaterialName(c, materialGuid);
-                            result._modelName = trans->GetObject(c)._model;
-                        }
-                    }
-                }
-                CATCH(const ::Assets::Exceptions::RetrievalError&) {}
-                CATCH(const std::exception&) {}        // can sometimes through runtime_errors on pending assets
-                CATCH_END
-
-                trans->Cancel();
-            }
+        if ((filter & Type::Placement) && _placementsEditor) {
+            auto placementsIntersection = SceneEngine::FirstRayIntersection(
+                parsingContext, *_placementsEditor, worldSpaceRay, &context._cameraDesc);
+            if (placementsIntersection.has_value() && placementsIntersection->_distance < result._distance)
+                result = *placementsIntersection;
         }
 
         unsigned firstExtraBit = IntegerLog2(uint32(Type::Extra));
@@ -297,10 +310,10 @@ namespace SceneEngine
 
         auto& threadContext = *RenderCore::Techniques::GetThreadContext();
 
-        if ((filter & Type::Placement) && _placements && _placementsEditor) {
+        if ((filter & Type::Placement) && _placementsEditor) {
             auto intersections = _placementsEditor->GetManager()->GetIntersections();
             auto roughIntersection = 
-                intersections->Find_FrustumIntersection(*_placements, worldToProjection, nullptr);
+                intersections->Find_FrustumIntersection(_placementsEditor->GetCellSet(), worldToProjection, nullptr);
 
                 // we can improve the intersection by doing ray-vs-triangle tests
                 // on the roughIntersection geometry
@@ -313,7 +326,7 @@ namespace SceneEngine
 
                 TRY
                 {
-                    auto techniqueContext = MakeTechniqueContext(*context._drawingApparatus);
+                    auto techniqueContext = MakeIntersectionsTechniqueContext(*context._drawingApparatus);
 					RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
                     parsingContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
 
@@ -344,7 +357,7 @@ namespace SceneEngine
 
                             auto results = PlacementsIntersection(
                                 intersectionContext, parsingContext, intersectionContext, 
-                                *_placementsEditor->GetManager()->GetRenderer(), *_placements, guid,
+                                *_placementsEditor->GetManager()->GetRenderer(), _placementsEditor->GetCellSet(), guid,
                                 &context._cameraDesc);
                             isInside = !results.empty();
                         }
@@ -376,11 +389,9 @@ namespace SceneEngine
 
     IntersectionTestScene::IntersectionTestScene(
         std::shared_ptr<TerrainManager> terrainManager,
-        std::shared_ptr<PlacementCellSet> placements,
         std::shared_ptr<PlacementsEditor> placementsEditor,
         IteratorRange<const std::shared_ptr<SceneEngine::IIntersectionScene>*> extraTesters)
     : _terrainManager(std::move(terrainManager))
-    , _placements(std::move(placements))
     , _placementsEditor(std::move(placementsEditor))
     {
         for (size_t c=0; c<extraTesters.size(); ++c) 
@@ -392,12 +403,11 @@ namespace SceneEngine
 
     std::shared_ptr<IIntersectionScene> CreateIntersectionTestScene(
         std::shared_ptr<TerrainManager> terrainManager,
-        std::shared_ptr<PlacementCellSet> placements,
         std::shared_ptr<PlacementsEditor> placementsEditor,
         IteratorRange<const std::shared_ptr<SceneEngine::IIntersectionScene>*> extraTesters)
     {
         return std::make_shared<IntersectionTestScene>(
-            std::move(terrainManager), std::move(placements), std::move(placementsEditor), extraTesters);
+            std::move(terrainManager), std::move(placementsEditor), extraTesters);
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -408,7 +418,7 @@ namespace SceneEngine
         return Combine(InvertOrthonormalTransform(sceneCamera._cameraToWorld), projectionMatrix);
     }
 
-    std::pair<Float3, Float3> IntersectionTestContext::CalculateWorldSpaceRay(
+    std::pair<Float3, Float3> CalculateWorldSpaceRay(
         const RenderCore::Techniques::CameraDesc& sceneCamera,
         Int2 screenCoord, UInt2 viewMins, UInt2 viewMaxs)
     {
@@ -427,7 +437,7 @@ namespace SceneEngine
     
     std::pair<Float3, Float3> IntersectionTestContext::CalculateWorldSpaceRay(Int2 screenCoord) const
     {
-		return CalculateWorldSpaceRay(_cameraDesc, screenCoord, _viewportMins, _viewportMaxs);
+		return SceneEngine::CalculateWorldSpaceRay(_cameraDesc, screenCoord, _viewportMins, _viewportMaxs);
     }
 
     Float2 IntersectionTestContext::ProjectToScreenSpace(const Float3& worldSpaceCoord) const

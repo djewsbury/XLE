@@ -1658,7 +1658,7 @@ namespace ToolsRig
         pimpl->_placementsManager = placementsManager;
         pimpl->_editor = pimpl->_placementsManager->CreateEditor(placementCellSet);
         pimpl->_intersectionTestScene = SceneEngine::CreateIntersectionTestScene(
-            terrainManager, placementCellSet, pimpl->_editor);
+            terrainManager, pimpl->_editor);
         pimpl->_placementsDispl = std::make_shared<PlacementsWidgets>(
             pimpl->_editor, placementsManager->GetRenderer(),
             pimpl->_intersectionTestScene, camera, immediateDrawablesApparatus->_mainDrawingApparatus);
