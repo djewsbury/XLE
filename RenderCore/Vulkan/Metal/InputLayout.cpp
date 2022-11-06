@@ -926,8 +926,8 @@ namespace RenderCore { namespace Metal_Vulkan
 	uint64_t BoundUniforms::AdaptiveSetBindingRules::CalculateHash(uint64_t seed) const
 	{
 		auto hash = Hash64(AsPointer(_resourceViewBinds.begin()), AsPointer(_resourceViewBinds.end()), seed);
-		hash = Hash64(AsPointer(_immediateDataBinds.begin()), AsPointer(_immediateDataBinds.end()), seed);
-		hash = Hash64(AsPointer(_samplerBinds.begin()), AsPointer(_samplerBinds.end()), seed);
+		hash = Hash64(AsPointer(_immediateDataBinds.begin()), AsPointer(_immediateDataBinds.end()), hash);
+		hash = Hash64(AsPointer(_samplerBinds.begin()), AsPointer(_samplerBinds.end()), hash);
 		hash = rotr64(hash, _descriptorSetIdx);
 		return hash;
 	}
