@@ -545,10 +545,10 @@ namespace SceneEngine
     {
         auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
         if (positional) {
-            auto transformValue = parameters.GetParameter<Float4x4>(LocalToWorld);
+            auto transformValue = parameters.GetParameter<Float3x4>(LocalToWorld);
             if (transformValue) {
                 Combine_IntoLHS(transformValue.value(), offsetLocalToWorld);
-                positional->SetLocalToWorld(transformValue.value());
+                positional->SetLocalToWorld(AsFloat4x4(transformValue.value()));
             } else {
                 auto positionValue = parameters.GetParameter<Float3>(Position);
                 auto radiusValue = parameters.GetParameter<Float3>(Radius);
@@ -613,8 +613,8 @@ namespace SceneEngine
     {
         if (propertyNameHash == LocalToWorld._hash) {
             if (auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId)) {
-                if (auto localToWorld = ConvertOrCast<Float4x4>(data, type)) {
-                    positional->SetLocalToWorld(localToWorld.value());
+                if (auto localToWorld = ConvertOrCast<Float3x4>(data, type)) {
+                    positional->SetLocalToWorld(AsFloat4x4(localToWorld.value()));
                     return true;
                 }
             }
