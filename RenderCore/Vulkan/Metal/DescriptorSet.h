@@ -48,7 +48,17 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		void    BindArray(unsigned descriptorSetBindPoint, IteratorRange<const ResourceView*const*> resources, StringSection<> shaderOrDescSetVariable={});
 
-		uint64_t	BindDummyDescriptors(GlobalPools& globalPools, uint64_t dummyDescWriteMask);
+		enum class ResourceDims : uint32_t
+		{
+			Dim1D, Dim1DArray, Dim2D, Dim2DArray, Dim3D,
+			Dim2DMS, Dim2DMSArray,
+			DimCube, DimCubeArray,
+			DimBuffer,
+			Unknown
+		};
+		uint64_t	BindDummyDescriptors(
+			GlobalPools& globalPools, uint64_t dummyDescWriteMask,
+			IteratorRange<const ResourceDims*> shaderTypesExpected);		// the descriptor set layout itself doesn't care about specific texture );
 
 		bool		HasChanges() const;
 		void		Reset();
@@ -111,6 +121,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			BindingInfo& AllocateInfo(const BindingInfo& init);
 		template<typename BindingInfo>
 			BindingInfo* AllocateInfos(unsigned count);
+		VkDescriptorImageInfo* AllocateBlankImageInfos(GlobalPools&, ResourceDims, unsigned count);
+		VkDescriptorImageInfo* AllocateBlankUavImageInfos(GlobalPools&, ResourceDims, unsigned count);
 	};
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////

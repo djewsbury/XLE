@@ -451,32 +451,166 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-	uint64_t	ProgressiveDescriptorSetBuilder::BindDummyDescriptors(GlobalPools& globalPools, uint64_t dummyDescWriteMask)
+	VkDescriptorImageInfo* ProgressiveDescriptorSetBuilder::AllocateBlankImageInfos(GlobalPools& globalPools, ResourceDims shaderTypeExpected, unsigned count)
+	{
+		auto* result = AllocateInfos<VkDescriptorImageInfo>(count);
+		switch (shaderTypeExpected)
+		{
+		case ResourceDims::Dim1D:
+			for (unsigned c=0; c<count; ++c)
+				result[c] = VkDescriptorImageInfo {
+					globalPools._dummyResources._blankSampler->GetUnderlying(),
+					globalPools._dummyResources._blankImage1DSrv.GetImageView(),
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+			break;
+		case ResourceDims::Dim2D:
+			for (unsigned c=0; c<count; ++c)
+				result[c] = VkDescriptorImageInfo {
+					globalPools._dummyResources._blankSampler->GetUnderlying(),
+					globalPools._dummyResources._blankImage2DSrv.GetImageView(),
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+			break;
+		case ResourceDims::Dim3D:
+			for (unsigned c=0; c<count; ++c)
+				result[c] = VkDescriptorImageInfo {
+					globalPools._dummyResources._blankSampler->GetUnderlying(),
+					globalPools._dummyResources._blankImage3DSrv.GetImageView(),
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+			break;
+		case ResourceDims::DimCube:
+			for (unsigned c=0; c<count; ++c)
+				result[c] = VkDescriptorImageInfo {
+					globalPools._dummyResources._blankSampler->GetUnderlying(),
+					globalPools._dummyResources._blankImageCubeSrv.GetImageView(),
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+			break;
+
+		case ResourceDims::Dim1DArray:
+			for (unsigned c=0; c<count; ++c)
+				result[c] = VkDescriptorImageInfo {
+					globalPools._dummyResources._blankSampler->GetUnderlying(),
+					globalPools._dummyResources._blankImage1DArraySrv.GetImageView(),
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+			break;
+		case ResourceDims::Dim2DArray:
+			for (unsigned c=0; c<count; ++c)
+				result[c] = VkDescriptorImageInfo {
+					globalPools._dummyResources._blankSampler->GetUnderlying(),
+					globalPools._dummyResources._blankImage2DArraySrv.GetImageView(),
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+			break;
+		case ResourceDims::DimCubeArray:
+			for (unsigned c=0; c<count; ++c)
+				result[c] = VkDescriptorImageInfo {
+					globalPools._dummyResources._blankSampler->GetUnderlying(),
+					globalPools._dummyResources._blankImageCubeArraySrv.GetImageView(),
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+			break;
+
+		default:
+			// fallback to 2d image (multisample types will fallback here currently, because they are used only for specific shaders)
+			for (unsigned c=0; c<count; ++c)
+				result[c] = VkDescriptorImageInfo {
+					globalPools._dummyResources._blankSampler->GetUnderlying(),
+					globalPools._dummyResources._blankImage2DSrv.GetImageView(),
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+			break;
+		}
+
+		return result;
+	}
+
+	VkDescriptorImageInfo* ProgressiveDescriptorSetBuilder::AllocateBlankUavImageInfos(GlobalPools& globalPools, ResourceDims shaderTypeExpected, unsigned count)
+	{
+		// binding dummy "UAV" resources is a little questionable; because any data written out will be passed onto the next user
+		// since they are shared, there's also lots of race condition hazards
+		// This should only be used as a safety barrier; to avoid a GPU crash and allow debugging
+		Log(Warning) << "Binding dummy storage image to descriptor set. Do not rely on this behaviour because the contents of the dummies is undefined" << std::endl;
+		auto* result = AllocateInfos<VkDescriptorImageInfo>(count);
+		switch (shaderTypeExpected)
+		{
+		case ResourceDims::Dim1D:
+			for (unsigned c=0; c<count; ++c)
+				result[c] = VkDescriptorImageInfo {
+					globalPools._dummyResources._blankSampler->GetUnderlying(),
+					globalPools._dummyResources._blankImage1DUav.GetImageView(),
+					VK_IMAGE_LAYOUT_GENERAL };
+			break;
+		case ResourceDims::Dim2D:
+			for (unsigned c=0; c<count; ++c)
+				result[c] = VkDescriptorImageInfo {
+					globalPools._dummyResources._blankSampler->GetUnderlying(),
+					globalPools._dummyResources._blankImage2DUav.GetImageView(),
+					VK_IMAGE_LAYOUT_GENERAL };
+			break;
+		case ResourceDims::Dim3D:
+			for (unsigned c=0; c<count; ++c)
+				result[c] = VkDescriptorImageInfo {
+					globalPools._dummyResources._blankSampler->GetUnderlying(),
+					globalPools._dummyResources._blankImage3DUav.GetImageView(),
+					VK_IMAGE_LAYOUT_GENERAL };
+			break;
+		case ResourceDims::DimCube:
+			for (unsigned c=0; c<count; ++c)
+				result[c] = VkDescriptorImageInfo {
+					globalPools._dummyResources._blankSampler->GetUnderlying(),
+					globalPools._dummyResources._blankImageCubeUav.GetImageView(),
+					VK_IMAGE_LAYOUT_GENERAL };
+			break;
+
+		case ResourceDims::Dim1DArray:
+			for (unsigned c=0; c<count; ++c)
+				result[c] = VkDescriptorImageInfo {
+					globalPools._dummyResources._blankSampler->GetUnderlying(),
+					globalPools._dummyResources._blankImage1DArrayUav.GetImageView(),
+					VK_IMAGE_LAYOUT_GENERAL };
+			break;
+		case ResourceDims::Dim2DArray:
+			for (unsigned c=0; c<count; ++c)
+				result[c] = VkDescriptorImageInfo {
+					globalPools._dummyResources._blankSampler->GetUnderlying(),
+					globalPools._dummyResources._blankImage2DArrayUav.GetImageView(),
+					VK_IMAGE_LAYOUT_GENERAL };
+			break;
+		case ResourceDims::DimCubeArray:
+			for (unsigned c=0; c<count; ++c)
+				result[c] = VkDescriptorImageInfo {
+					globalPools._dummyResources._blankSampler->GetUnderlying(),
+					globalPools._dummyResources._blankImageCubeArrayUav.GetImageView(),
+					VK_IMAGE_LAYOUT_GENERAL };
+			break;
+
+		default:
+			// fallback to 2d image (multisample types will fallback here currently, because they are used only for specific shaders)
+			for (unsigned c=0; c<count; ++c)
+				result[c] = VkDescriptorImageInfo {
+					globalPools._dummyResources._blankSampler->GetUnderlying(),
+					globalPools._dummyResources._blankImage2DUav.GetImageView(),
+					VK_IMAGE_LAYOUT_GENERAL };
+			break;
+		}
+
+		return result;
+	}
+
+	uint64_t	ProgressiveDescriptorSetBuilder::BindDummyDescriptors(
+		GlobalPools& globalPools, uint64_t dummyDescWriteMask,
+		IteratorRange<const ResourceDims*> shaderTypesExpected)
 	{
 		uint64_t bindingsWrittenTo = 0u;
 
 		auto& blankBuffer = AllocateInfo(
 			VkDescriptorBufferInfo { 
 				globalPools._dummyResources._blankBuffer->GetBuffer(),
-				0, VK_WHOLE_SIZE });
-		auto& blankImage = AllocateInfo(
-			VkDescriptorImageInfo {
-				globalPools._dummyResources._blankSampler->GetUnderlying(),
-				globalPools._dummyResources._blankSrv.GetImageView(),
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
+				0, VK_WHOLE_SIZE });	
 		auto& blankSampler = AllocateInfo(
 			VkDescriptorImageInfo {
 				globalPools._dummyResources._blankSampler->GetUnderlying(),
 				nullptr,
 				VK_IMAGE_LAYOUT_UNDEFINED });
-		auto& blankStorageImage = AllocateInfo(
-			VkDescriptorImageInfo {
-				globalPools._dummyResources._blankSampler->GetUnderlying(),
-				globalPools._dummyResources._blankUavImage.GetImageView(),
-				VK_IMAGE_LAYOUT_GENERAL });
 		auto& blankStorageBuffer = AllocateInfo(
 			VkDescriptorBufferInfo {
-				globalPools._dummyResources._blankUavBuffer.GetVulkanResource()->GetBuffer(),
+				globalPools._dummyResources._blankBufferUav.GetVulkanResource()->GetBuffer(),
 				0, VK_WHOLE_SIZE });
 
 		unsigned minBit = xl_ctz8(dummyDescWriteMask);
@@ -494,6 +628,7 @@ namespace RenderCore { namespace Metal_Vulkan
 						blankBuffer, false
 						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
 				} else if (b == DescriptorType::SampledTexture) {
+					auto& blankImage = *AllocateBlankImageInfos(globalPools, shaderTypesExpected[bIndex], 1);
 					WriteBinding(
 						bIndex,
 						AsVkDescriptorType(b),
@@ -506,12 +641,14 @@ namespace RenderCore { namespace Metal_Vulkan
 						blankSampler, false
 						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
 				} else if (b == DescriptorType::UnorderedAccessTexture) {
+					auto& blankImage = *AllocateBlankUavImageInfos(globalPools, shaderTypesExpected[bIndex], 1);
 					WriteBinding(
 						bIndex,
 						AsVkDescriptorType(b),
-						blankStorageImage, false
+						blankImage, false
 						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
 				} else if (b == DescriptorType::UnorderedAccessBuffer) {
+					Log(Warning) << "Binding dummy storage buffer to descriptor set. Do not rely on this behaviour because the contents of the dummies is undefined" << std::endl;
 					WriteBinding(
 						bIndex,
 						AsVkDescriptorType(b),
@@ -529,6 +666,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 			} else {
 				if (b == DescriptorType::UnorderedAccessBuffer) {
+					Log(Warning) << "Binding dummy storage buffer to descriptor set. Do not rely on this behaviour because the contents of the dummies is undefined" << std::endl;
 					auto* bindingInfos = AllocateInfos<std::decay_t<decltype(blankStorageBuffer)>>(_signature[bIndex]._count);
 					for (unsigned c=0; c<_signature[bIndex]._count; ++c)
 						bindingInfos[c] = blankStorageBuffer;
@@ -538,19 +676,15 @@ namespace RenderCore { namespace Metal_Vulkan
 						MakeIteratorRange(bindingInfos, bindingInfos+_signature[bIndex]._count)
 						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
 				} else if (b == DescriptorType::SampledTexture) {
-					auto* bindingInfos = AllocateInfos<std::decay_t<decltype(blankImage)>>(_signature[bIndex]._count);
-					for (unsigned c=0; c<_signature[bIndex]._count; ++c)
-						bindingInfos[c] = blankImage;
-					WriteArrayBinding<std::decay_t<decltype(blankImage)>>(
+					auto* bindingInfos = AllocateBlankImageInfos(globalPools, shaderTypesExpected[bIndex], _signature[bIndex]._count);
+					WriteArrayBinding<std::decay_t<decltype(*bindingInfos)>>(
 						bIndex,
 						AsVkDescriptorType(b),
 						MakeIteratorRange(bindingInfos, bindingInfos+_signature[bIndex]._count)
 						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
 				} else if (b == DescriptorType::UnorderedAccessTexture) {
-					auto* bindingInfos = AllocateInfos<std::decay_t<decltype(blankStorageImage)>>(_signature[bIndex]._count);
-					for (unsigned c=0; c<_signature[bIndex]._count; ++c)
-						bindingInfos[c] = blankStorageImage;
-					WriteArrayBinding<std::decay_t<decltype(blankStorageImage)>>(
+					auto* bindingInfos = AllocateBlankUavImageInfos(globalPools, shaderTypesExpected[bIndex], _signature[bIndex]._count);
+					WriteArrayBinding<std::decay_t<decltype(*bindingInfos)>>(
 						bIndex,
 						AsVkDescriptorType(b),
 						MakeIteratorRange(bindingInfos, bindingInfos+_signature[bIndex]._count)
@@ -1018,7 +1152,9 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 		}
 
-		builder.BindDummyDescriptors(*_globalPools, _layout->GetDummyMask() & ~writtenMask);
+		VLA(ProgressiveDescriptorSetBuilder::ResourceDims, resourceDims, _layout->GetDescriptorSlots().size());
+		for (unsigned c=0; c<_layout->GetDescriptorSlots().size(); ++c) resourceDims[c] = ProgressiveDescriptorSetBuilder::ResourceDims::Unknown;
+		builder.BindDummyDescriptors(*_globalPools, _layout->GetDummyMask() & ~writtenMask, MakeIteratorRange(resourceDims, &resourceDims[_layout->GetDescriptorSlots().size()]));
 
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
 			// update resource visibility before we call FlushChanges()

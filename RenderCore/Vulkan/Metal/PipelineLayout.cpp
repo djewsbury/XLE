@@ -160,7 +160,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			
 			{
 				ProgressiveDescriptorSetBuilder builder { MakeIteratorRange(signature._slots), 0 };
-				builder.BindDummyDescriptors(*_globalPools, ds->_layout->GetDummyMask());
+				VLA(ProgressiveDescriptorSetBuilder::ResourceDims, resourceDims, signature._slots.size());
+				for (unsigned c=0; c<signature._slots.size(); ++c) resourceDims[c] = ProgressiveDescriptorSetBuilder::ResourceDims::Unknown;
+				builder.BindDummyDescriptors(*_globalPools, ds->_layout->GetDummyMask(), MakeIteratorRange(resourceDims, &resourceDims[signature._slots.size()]));
 				ds->_blankBindings = _globalPools->_longTermDescriptorPool.Allocate(ds->_layout->GetUnderlying());
 				VULKAN_VERBOSE_DEBUG_ONLY(ds->_blankBindingsDescription._descriptorSetInfo = s_dummyDescriptorString);
 				builder.FlushChanges(

@@ -154,6 +154,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			// these exist so we default out slots that are used by the shader, but not provided as input
 			uint64_t _dummyMask = 0ull;
 			unsigned _sharedBuilder = ~0u;
+			std::vector<unsigned> _shaderDummyTypes;		// ProgressiveDescriptorSetBuilder::ResourceDims
 
 			#if defined(_DEBUG)
 				std::vector<std::string> _resourceViewNames;

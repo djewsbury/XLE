@@ -101,13 +101,26 @@ namespace RenderCore { namespace Metal_Vulkan
     class DummyResources
     {
     public:
-        std::shared_ptr<Resource>		_blankTexture;
-        std::shared_ptr<Resource>		_blankUAVImageRes;
-        std::shared_ptr<Resource>		_blankUAVBufferRes;
-        ResourceView        _blankSrv;
-        ResourceView        _blankUavImage;
-        ResourceView        _blankUavBuffer;
-        std::shared_ptr<Resource>            _blankBuffer;
+        ResourceView        _blankImage1DSrv;
+        ResourceView        _blankImage2DSrv;
+        ResourceView        _blankImage3DSrv;
+        ResourceView        _blankImageCubeSrv;
+
+        ResourceView        _blankImage1DArraySrv;
+        ResourceView        _blankImage2DArraySrv;
+        ResourceView        _blankImageCubeArraySrv;
+
+        ResourceView        _blankImage1DUav;
+        ResourceView        _blankImage2DUav;
+        ResourceView        _blankImage3DUav;
+        ResourceView        _blankImageCubeUav;
+
+        ResourceView        _blankImage1DArrayUav;
+        ResourceView        _blankImage2DArrayUav;
+        ResourceView        _blankImageCubeArrayUav;
+
+        ResourceView        _blankBufferUav;
+        std::shared_ptr<Resource> _blankBuffer;
         std::unique_ptr<SamplerState> _blankSampler;
 
         void CompleteInitialization(DeviceContext&);

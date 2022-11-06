@@ -323,63 +323,99 @@ namespace RenderCore { namespace Metal_Vulkan
         return *this;
     }
 
+    static void CopyHelper(
+        BlitEncoder& encoder,
+        IResource& dst, CopyPartial_Src src)
+    {
+        auto size = ByteCount(dst.GetDesc());
+        assert((src._linearBufferRange.second - src._linearBufferRange.first) >= size);
+        src._linearBufferRange.second = src._linearBufferRange.first + size;
+        encoder.Copy(CopyPartial_Dest{dst}, src);
+    }
+
 	void DummyResources::CompleteInitialization(DeviceContext& devContext)
 	{
-		IResource* res[] = { _blankTexture.get(), _blankUAVImageRes.get(), _blankUAVBufferRes.get() }; 
+		IResource* res[] = {
+            _blankImage1DSrv.GetResource().get(), _blankImage2DSrv.GetResource().get(), _blankImage3DSrv.GetResource().get(), _blankImageCubeSrv.GetResource().get(),
+            _blankImage1DArraySrv.GetResource().get(), _blankImage2DArraySrv.GetResource().get(), _blankImageCubeArraySrv.GetResource().get(),
+
+            _blankImage1DUav.GetResource().get(), _blankImage2DUav.GetResource().get(), _blankImage3DUav.GetResource().get(), _blankImageCubeUav.GetResource().get(),
+            _blankImage1DArrayUav.GetResource().get(), _blankImage2DArrayUav.GetResource().get(), _blankImageCubeArrayUav.GetResource().get(),
+
+            _blankBufferUav.GetResource().get() }; 
 		Metal_Vulkan::CompleteInitialization(devContext, MakeIteratorRange(res));
 
-        // _blankTexture -> 32*32*4 bytes of 0
-        // _blankUAVImageRes -> 32*32*4 bytes of 0
-        // _blankUAVBufferRes -> 4096 bytes of 0
-        // _blankBuffer -> 4096 bytes of 0
-
-        auto stagingSource = devContext.MapTemporaryStorage(4096, BindFlag::TransferSrc);
+        const unsigned maxDummySizeBytes = 6144;        // (odd size because of cubemaps)
+        auto stagingSource = devContext.MapTemporaryStorage(maxDummySizeBytes, BindFlag::TransferSrc);
         std::memset(stagingSource.GetData().begin(), 0, stagingSource.GetData().size());
         auto encoder = devContext.BeginBlitEncoder();
-        encoder.Copy(CopyPartial_Dest{*_blankTexture}, stagingSource.AsCopySource());
-        encoder.Copy(CopyPartial_Dest{*_blankUAVImageRes}, stagingSource.AsCopySource());
-        encoder.Copy(CopyPartial_Dest{*_blankUAVBufferRes}, stagingSource.AsCopySource());
-        encoder.Copy(CopyPartial_Dest{*_blankBuffer}, stagingSource.AsCopySource());
+
+        CopyHelper(encoder, *_blankImage1DSrv.GetResource(), stagingSource.AsCopySource());
+        CopyHelper(encoder, *_blankImage2DSrv.GetResource(), stagingSource.AsCopySource());
+        CopyHelper(encoder, *_blankImage3DSrv.GetResource(), stagingSource.AsCopySource());
+        CopyHelper(encoder, *_blankImageCubeSrv.GetResource(), stagingSource.AsCopySource());
+        CopyHelper(encoder, *_blankImage1DArraySrv.GetResource(), stagingSource.AsCopySource());
+        CopyHelper(encoder, *_blankImage2DArraySrv.GetResource(), stagingSource.AsCopySource());
+        CopyHelper(encoder, *_blankImageCubeArraySrv.GetResource(), stagingSource.AsCopySource());
+
+        CopyHelper(encoder, *_blankImage1DUav.GetResource(), stagingSource.AsCopySource());
+        CopyHelper(encoder, *_blankImage2DUav.GetResource(), stagingSource.AsCopySource());
+        CopyHelper(encoder, *_blankImage3DUav.GetResource(), stagingSource.AsCopySource());
+        CopyHelper(encoder, *_blankImageCubeUav.GetResource(), stagingSource.AsCopySource());
+        CopyHelper(encoder, *_blankImage1DArrayUav.GetResource(), stagingSource.AsCopySource());
+        CopyHelper(encoder, *_blankImage2DArrayUav.GetResource(), stagingSource.AsCopySource());
+        CopyHelper(encoder, *_blankImageCubeArrayUav.GetResource(), stagingSource.AsCopySource());
+
+        CopyHelper(encoder, *_blankBufferUav.GetResource(), stagingSource.AsCopySource());
 	}
 
     DummyResources::DummyResources(ObjectFactory& factory)
     : _blankSampler(std::make_unique<SamplerState>(factory, SamplerDesc{FilterMode::Point, AddressMode::Clamp, AddressMode::Clamp}))
     {
-        _blankTexture = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8G8B8A8_UNORM), "DummyTexture"));
-        _blankUAVImageRes = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8G8B8A8_UNORM), "DummyUAVTexture"));
-        _blankUAVBufferRes = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc::Create(4096), "DummyUAVBuffer"));
+        auto blankImage1D = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain1D(64, Format::R8G8B8A8_UNORM), "DummyTexture1D"));
+        auto blankImage2D = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM), "DummyTexture2D"));
+        auto blankImage3D = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain3D(4, 4, 4, Format::R8G8B8A8_UNORM), "DummyTexture3D"));
+        auto blankCube = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM), "DummyTextureCube"));
+        auto blankImage1DArray = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain1D(64, Format::R8G8B8A8_UNORM, 1, 1), "DummyTexture1DArray"));
+        auto blankImage2DArray = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM, 1, 1), "DummyTexture2DArray"));
+        auto blankCubeArray = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM, 1, 6), "DummyTextureCubeArray"));
+
+        auto blankImage1DUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain1D(64, Format::R8G8B8A8_UNORM), "DummyTexture1DUAV"));
+        auto blankImage2DUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM), "DummyTexture2DUAV"));
+        auto blankImage3DUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain3D(4, 4, 4, Format::R8G8B8A8_UNORM), "DummyTexture3DUAV"));
+        auto blankCubeUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM), "DummyTextureCubeUAV"));
+        auto blankImage1DArrayUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain1D(64, Format::R8G8B8A8_UNORM, 1, 1), "DummyTexture1DArrayUAV"));
+        auto blankImage2DArrayUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM, 1, 1), "DummyTexture2DArrayUAV"));
+        auto blankCubeArrayUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM, 1, 6), "DummyTextureCubeArrayUAV"));
+
+        auto blankUAVBufferRes = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc::Create(4096), "DummyBufferUAV"));
         _blankBuffer = Internal::CreateResource(factory, CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(4096), "DummyUniformBuffer"));
-        _blankSrv = ResourceView{factory, _blankTexture};
-        _blankUavImage = ResourceView{factory, _blankUAVImageRes};
-        _blankUavBuffer = ResourceView{factory, _blankUAVBufferRes};
+
+        _blankImage1DSrv = ResourceView{factory, blankImage1D};
+        _blankImage2DSrv = ResourceView{factory, blankImage2D};
+        _blankImage3DSrv = ResourceView{factory, blankImage3D};
+        _blankImageCubeSrv = ResourceView{factory, blankCube};
+
+        _blankImage1DArraySrv = ResourceView{factory, blankImage1DArray};
+        _blankImage2DArraySrv = ResourceView{factory, blankImage2DArray};
+        _blankImageCubeArraySrv = ResourceView{factory, blankCubeArray};
+
+        _blankImage1DUav = ResourceView{factory, blankImage1DUav};
+        _blankImage2DUav = ResourceView{factory, blankImage2DUav};
+        _blankImage3DUav = ResourceView{factory, blankImage3DUav};
+        _blankImageCubeUav = ResourceView{factory, blankCubeUav};
+
+        _blankImage1DArrayUav = ResourceView{factory, blankImage1DArrayUav};
+        _blankImage2DArrayUav = ResourceView{factory, blankImage2DArrayUav};
+        _blankImageCubeArrayUav = ResourceView{factory, blankCubeArrayUav};
+
+        _blankBufferUav = ResourceView{factory, blankUAVBufferRes};
     }
 
-    DummyResources::DummyResources() {}
-    DummyResources::~DummyResources() {}
-
-    DummyResources::DummyResources(DummyResources&& moveFrom) never_throws
-    : _blankTexture(std::move(moveFrom._blankTexture))
-    , _blankUAVImageRes(std::move(moveFrom._blankUAVImageRes))
-    , _blankUAVBufferRes(std::move(moveFrom._blankUAVBufferRes))
-    , _blankSrv(std::move(moveFrom._blankSrv))
-    , _blankUavImage(std::move(moveFrom._blankUavImage))
-    , _blankUavBuffer(std::move(moveFrom._blankUavBuffer))
-    , _blankBuffer(std::move(moveFrom._blankBuffer))
-    , _blankSampler(std::move(moveFrom._blankSampler))
-    {}
-
-    DummyResources& DummyResources::operator=(DummyResources&& moveFrom) never_throws
-    {
-        _blankTexture = std::move(moveFrom._blankTexture);
-        _blankUAVImageRes = std::move(moveFrom._blankUAVImageRes);
-        _blankUAVBufferRes = std::move(moveFrom._blankUAVBufferRes);
-        _blankSrv = std::move(moveFrom._blankSrv);
-        _blankUavImage = std::move(moveFrom._blankUavImage);
-        _blankUavBuffer = std::move(moveFrom._blankUavBuffer);
-        _blankBuffer = std::move(moveFrom._blankBuffer);
-        _blankSampler = std::move(moveFrom._blankSampler);
-        return *this;
-    }
+    DummyResources::DummyResources() = default;
+    DummyResources::~DummyResources() = default;
+    DummyResources::DummyResources(DummyResources&& moveFrom) never_throws = default;
+    DummyResources& DummyResources::operator=(DummyResources&& moveFrom) never_throws = default;
 
     GlobalPools::GlobalPools() {}
     GlobalPools::~GlobalPools() {}

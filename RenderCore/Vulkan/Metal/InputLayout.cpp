@@ -372,6 +372,43 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
+	static ProgressiveDescriptorSetBuilder::ResourceDims ResourceDimsFromVariable(const ReflectionVariableInformation& reflectionVariable)
+	{
+		// For resource types, the shader has some resource requirements that are more specific than can be represented by the DescriptorType
+		// These relate to the type of shader variable -- we can extract them as so:
+		using ResourceDims = ProgressiveDescriptorSetBuilder::ResourceDims;
+		if (reflectionVariable._resourceType) {
+			auto* res = reflectionVariable._resourceType;
+			// (note that we ignore the _readWriteVariation flag in these cases)
+			switch (res->_category) {
+			case SPIRVReflection::ResourceCategory::Image1D:
+				assert(!res->_multisampleVariation);
+				return res->_arrayVariation ? ResourceDims::Dim1DArray : ResourceDims::Dim1D;
+			case SPIRVReflection::ResourceCategory::Image2D:
+				if (res->_multisampleVariation)
+					return res->_arrayVariation ? ResourceDims::Dim2DMSArray : ResourceDims::Dim2DMS;
+				return res->_arrayVariation ? ResourceDims::Dim2DArray : ResourceDims::Dim2D;
+			case SPIRVReflection::ResourceCategory::Image3D:
+				assert(!res->_arrayVariation && !res->_multisampleVariation);
+				return ResourceDims::Dim3D;
+			case SPIRVReflection::ResourceCategory::ImageCube:
+				assert(!res->_multisampleVariation);
+				return res->_arrayVariation ? ResourceDims::DimCubeArray : ResourceDims::DimCube;
+			case SPIRVReflection::ResourceCategory::Buffer:
+				return ResourceDims::DimBuffer;
+			case SPIRVReflection::ResourceCategory::InputAttachment:
+				assert(0);		// this case is invalid -- we can't dummy out an input attachment uniform
+				return ResourceDims::Unknown;
+			default:
+				break;
+			}
+		} else if (reflectionVariable._isStructType || reflectionVariable._isRuntimeArrayStructType) {
+			return ResourceDims::DimBuffer;
+		}
+
+		return ProgressiveDescriptorSetBuilder::ResourceDims::Unknown;
+	}
+
 	class BoundUniforms::ConstructionHelper
 	{
 	public:
@@ -398,9 +435,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		{
 			std::vector<unsigned> _groupsThatWriteHere;
 			uint64_t _shaderUsageMask = 0ull;
-			uint64_t _dummyMask = 0ull;
 			unsigned _shaderStageMask = 0;
 			unsigned _assignedSharedDescSetWriter = ~0u;
+			uint64_t _dummyMask = 0ull;
+			std::vector<unsigned> _shaderDummyTypes;		// ProgressiveDescriptorSetBuilder::ResourceDims
 		};
 		std::vector<DescriptorSetInfo> _descSetInfos;
 		unsigned _sharedDescSetWriterCount = 0;
@@ -456,6 +494,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					if (set._descriptorSetIdx == descSetIdx) {
 						assert(set._dummyMask == 0); 
 						set._dummyMask = ds._dummyMask;
+						set._shaderDummyTypes = ds._shaderDummyTypes;
 						break;
 					}
 				}
@@ -493,6 +532,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			UniformStreamType uniformStreamType,
 			unsigned outputDescriptorSet, unsigned outputDescriptorSetSlot,
 			unsigned groupIdx, unsigned inputUniformStreamIdx, uint32_t shaderStageMask,
+			ProgressiveDescriptorSetBuilder::ResourceDims resourceDims,
 			StringSection<> variableName)
 		{
 			if (_descSetInfos.size() <= outputDescriptorSet)
@@ -502,6 +542,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			_descSetInfos[outputDescriptorSet]._shaderStageMask |= shaderStageMask;
 			if (uniformStreamType == UniformStreamType::Dummy) {
 				_descSetInfos[outputDescriptorSet]._dummyMask |= 1ull<<uint64_t(outputDescriptorSetSlot);
+				if (_descSetInfos[outputDescriptorSet]._shaderDummyTypes.size() <= outputDescriptorSetSlot)
+					_descSetInfos[outputDescriptorSet]._shaderDummyTypes.resize(outputDescriptorSetSlot+1, (unsigned)ProgressiveDescriptorSetBuilder::ResourceDims::Unknown);
+				_descSetInfos[outputDescriptorSet]._shaderDummyTypes[outputDescriptorSetSlot] = (unsigned)resourceDims;
 				return;
 			}
 
@@ -605,7 +648,9 @@ namespace RenderCore { namespace Metal_Vulkan
 				if (   reflectionVariable._storageClass == SPIRVReflection::StorageClass::Input 	// storage "Input/Output" should be attributes and can be ignored
 					|| reflectionVariable._storageClass == SPIRVReflection::StorageClass::Output
 					|| reflectionVariable._storageClass == SPIRVReflection::StorageClass::Function) continue;
+
 				uint64_t hashName = reflectionVariable._name.IsEmpty() ? 0 : Hash64(reflectionVariable._name.begin(), reflectionVariable._name.end());
+				auto resourceDims = ResourceDimsFromVariable(reflectionVariable);
 
 				// The _descriptorSet value can be ~0u for push constants, vertex attribute inputs, etc
 				if (reflectionVariable._binding._descriptorSet != ~0u) {
@@ -638,7 +683,7 @@ namespace RenderCore { namespace Metal_Vulkan
 								AddLooseUniformBinding(
 									bindingType,
 									reflectionVariable._binding._descriptorSet, reflectionVariable._binding._bindingPoint,
-									groupIdx, inputSlot, shaderStageMask,
+									groupIdx, inputSlot, shaderStageMask, resourceDims,
 									reflectionVariable._name);
 								foundBinding = true;
 							}
@@ -682,7 +727,7 @@ namespace RenderCore { namespace Metal_Vulkan
 								AddLooseUniformBinding(
 									UniformStreamType::Dummy,
 									reflectionVariable._binding._descriptorSet, reflectionVariable._binding._bindingPoint,
-									groupIdxForDummies, ~0u, shaderStageMask,
+									groupIdxForDummies, ~0u, shaderStageMask, resourceDims,
 									reflectionVariable._name);
 							}
 						}
@@ -798,6 +843,7 @@ namespace RenderCore { namespace Metal_Vulkan
 								bindingType,
 								descSetIdx, slotIdx,
 								groupIdx, inputSlot, ShaderStageMaskForPipelineType(descSet._pipelineType),
+								ProgressiveDescriptorSetBuilder::ResourceDims::Unknown,
 								"pipeline-layout-binding");
 						}
 					}
@@ -1099,7 +1145,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			if (bindingIndicies.empty()) return {};
 
 			uint64_t bindingsWrittenTo = 0u;
-			size_t totalSize = 0;
+			VkDeviceSize totalSize = 0;
 
 			auto alignment = (bindType == BindFlag::ConstantBuffer) 
 				? factory.GetPhysicalDeviceProperties().limits.minUniformBufferOffsetAlignment
@@ -1108,7 +1154,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind[0]))));
 				if (!(bind[1]&s_arrayBindingFlag)) {
 					assert(bind[1] < pkts.size());
-					auto alignedSize = CeilToMultiple((unsigned)pkts[bind[1]].size(), alignment);
+					auto alignedSize = CeilToMultiple((VkDeviceSize)pkts[bind[1]].size(), (unsigned)alignment);
 					totalSize += alignedSize;
 					bind+=2;
 				} else {
@@ -1121,7 +1167,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			auto temporaryMapping = context.MapTemporaryStorage(totalSize, bindType);
 			if (!temporaryMapping.GetData().empty()) {
 				assert(temporaryMapping.GetData().size() == totalSize);
-				size_t iterator = 0;
+				VkDeviceSize iterator = 0;
 				auto beginInResource = temporaryMapping.GetBeginAndEndInResource().first;
 
 				for (auto bind=bindingIndicies.begin(); bind!=bindingIndicies.end();) {
@@ -1138,7 +1184,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					tempSpace.range = pkt.size();
 					builder.Bind(bind[0], tempSpace DEBUG_ONLY(, *nameIterator++, "temporary buffer"));
 
-					auto alignedSize = CeilToMultiple((unsigned)pkt.size(), alignment);
+					auto alignedSize = CeilToMultiple((VkDeviceSize)pkt.size(), (unsigned)alignment);
 					iterator += alignedSize;
 
 					bindingsWrittenTo |= (1ull << uint64_t(bind[0]));
@@ -1336,7 +1382,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			// optimise for that case.
 			uint64_t dummyDescWriteMask = (~descSetSlots) & adaptiveSet._dummyMask;
 			if (dummyDescWriteMask != 0)
-				builder->BindDummyDescriptors(context.GetGlobalPools(), dummyDescWriteMask);
+				builder->BindDummyDescriptors(
+					context.GetGlobalPools(), dummyDescWriteMask,
+					MakeIteratorRange((const ProgressiveDescriptorSetBuilder::ResourceDims*)AsPointer(adaptiveSet._shaderDummyTypes.begin()), (const ProgressiveDescriptorSetBuilder::ResourceDims*)AsPointer(adaptiveSet._shaderDummyTypes.end())));
 
 			if (doFlushNow) {
 				if (descSetSlots | dummyDescWriteMask) {

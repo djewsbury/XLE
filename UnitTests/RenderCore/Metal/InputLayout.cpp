@@ -1542,6 +1542,8 @@ namespace UnitTests
 			RWTexture2D<float4> RWTex;
 			RWTexture2DArray<float4> RWTexArray;
 
+			Texture2D Tex2DAtlas[3];
+
 			/////// others ////////////
 			SamplerState Samplr;
 
@@ -1549,7 +1551,7 @@ namespace UnitTests
 			{
 				float uCoord = ((float)dispatchThreadId.x)/1024.0;
 				uint idx = dispatchThreadId.y;
-				const uint inputTypesCount = 18;
+				const uint inputTypesCount = 21;
 				// buffers //
 				     if ((idx%inputTypesCount) == 0) return UnorderedAccessReadBuffer[0].A;
 				else if ((idx%inputTypesCount) == 1) return UnorderedAccessRWBuffer[0].A;
@@ -1571,6 +1573,9 @@ namespace UnitTests
 				else if ((idx%inputTypesCount) == 15) return TexCubeArray.SampleLevel(Samplr, float4(0, 0, 1, 0), 0);
 				else if ((idx%inputTypesCount) == 16) return RWTex.Load(uint2(0, 0));
 				else if ((idx%inputTypesCount) == 17) return RWTexArray.Load(uint3(0, 0, 0));
+				else if ((idx%inputTypesCount) == 18) return Tex2DAtlas[0].SampleLevel(Samplr, float2(uCoord, 0), 0);
+				else if ((idx%inputTypesCount) == 19) return Tex2DAtlas[1].SampleLevel(Samplr, float2(uCoord, 0), 0);
+				else if ((idx%inputTypesCount) == 20) return Tex2DAtlas[2].SampleLevel(Samplr, float2(uCoord, 0), 0);
 				return 0;
 			}
 
