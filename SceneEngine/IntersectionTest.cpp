@@ -121,17 +121,6 @@ namespace SceneEngine
             // Using the GPU, look for intersections between the ray
             // and the given model. Since we're using the GPU, we need to
             // get a device context. 
-            //
-            // We'll have to use the immediate context
-            // because we want to get the result get right. But that means the
-            // immediate context can't be doing anything else in another thread.
-            //
-            // This will require more complex threading support in the future!
-        // assert(metalContext.IsImmediate());
-
-            //  We need to invoke the render for the given object
-            //  now. Afterwards we can query the buffers for the result
-		
 		{
 			using namespace RenderCore;
 			using namespace SceneEngine;

@@ -71,6 +71,7 @@ namespace ToolsRig
         const std::pair<Float3, Float3>& boxIn);
 
 	RenderCore::Techniques::CameraDesc AsCameraDesc(const VisCameraSettings& camSettings);
+    VisCameraSettings AsVisCameraSettings(const RenderCore::Techniques::CameraDesc&, float distanceToFocus=5.f);
     void ConfigureParsingContext(RenderCore::Techniques::ParsingContext&, const VisCameraSettings&);
 
 	class VisOverlaySettings

@@ -76,6 +76,25 @@ namespace ToolsRig
         return result;
     }
 
+	VisCameraSettings AsVisCameraSettings(const RenderCore::Techniques::CameraDesc& cameraDesc, float distanceToFocus)
+	{
+		using CameraDesc = RenderCore::Techniques::CameraDesc;
+		VisCameraSettings result;
+		result._position = ExtractTranslation(cameraDesc._cameraToWorld);
+		result._nearClip = cameraDesc._nearClip;
+		result._farClip = cameraDesc._farClip;
+		result._projection = (cameraDesc._projection == CameraDesc::Projection::Orthogonal)
+			? VisCameraSettings::Projection::Orthogonal
+			: VisCameraSettings::Projection::Perspective;
+		result._verticalFieldOfView = Rad2Deg(cameraDesc._verticalFieldOfView);
+		result._left = cameraDesc._left;
+		result._top = cameraDesc._top;
+		result._right = cameraDesc._right;
+		result._bottom = cameraDesc._bottom;
+		result._focus = result._position + distanceToFocus * Normalize(ExtractForward_Cam(cameraDesc._cameraToWorld));
+		return result;
+	}
+
 	void ConfigureParsingContext(RenderCore::Techniques::ParsingContext& parsingContext, const VisCameraSettings& cam)
 	{
 		UInt2 viewportDims { parsingContext.GetViewport()._width, parsingContext.GetViewport()._height };

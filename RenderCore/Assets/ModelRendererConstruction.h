@@ -57,7 +57,7 @@ namespace RenderCore { namespace Assets
 		void SetSkeletonScaffold(StringSection<>);
 		void SetSkeletonScaffold(std::shared_ptr<::Assets::OperationContext>, StringSection<>);
 		void SetSkeletonScaffold(std::shared_future<std::shared_ptr<Assets::SkeletonScaffold>>, std::string initializer={});
-		void SetSkeletonScaffold(const std::shared_ptr<Assets::SkeletonScaffold>&);		
+		void SetSkeletonScaffold(const std::shared_ptr<Assets::SkeletonScaffold>&);
 		std::shared_ptr<Assets::SkeletonScaffold> GetSkeletonScaffold() const;
 
 		uint64_t GetHash() const;
