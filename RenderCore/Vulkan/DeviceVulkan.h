@@ -187,7 +187,7 @@ namespace RenderCore { namespace ImplVulkan
 		FormatCapability    QueryFormatCapability(Format format, BindFlag::BitField bindingType) override;
 
         std::shared_ptr<ICompiledPipelineLayout> CreatePipelineLayout(const PipelineLayoutInitializer& desc) override;
-        std::shared_ptr<IDescriptorSet> CreateDescriptorSet(const DescriptorSetInitializer& desc) override;
+        std::shared_ptr<IDescriptorSet> CreateDescriptorSet(PipelineType pipelineType, const DescriptorSetSignature& signature) override;
         std::shared_ptr<ISampler> CreateSampler(const SamplerDesc& desc) override;
 
 		void			Stall() override;

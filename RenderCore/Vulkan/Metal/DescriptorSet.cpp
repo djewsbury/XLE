@@ -1099,39 +1099,40 @@ namespace RenderCore { namespace Metal_Vulkan
 		const UniformsStream& uniforms)
 	{
 		// _retainedViews & _retainedSamplers must be per-slot, so we release the previous binding to the
-		// slot. Note that due to the synchronization methods, the actual release of the previous view
+		// slot. Since we will fill in unwritten slots with dummies, we can release all previous retained views & samplers
+		// Note that due to the synchronization methods, the actual release of the previous view
 		// might happen one frame too late
-		_retainedViews.resize(binds.size(), {});
-		_retainedSamplers.resize(binds.size(), {});
+		_retainedViews.clear();
+		_retainedSamplers.clear();
 
 		uint64_t writtenMask = 0ull;
 		size_t linearBufferIterator = 0;
 		unsigned offsetMultiple = std::max(1u, (unsigned)factory.GetPhysicalDeviceProperties().limits.minUniformBufferOffsetAlignment);
 		ProgressiveDescriptorSetBuilder builder { _layout->GetDescriptorSlots(), 0 };
-		for (unsigned c=0; c<binds.size(); ++c) {
-			if (binds[c]._type == DescriptorSetInitializer::BindType::ResourceView) {
-				assert(uniforms._resourceViews[binds[c]._uniformsStreamIdx]);
-				auto* view = checked_cast<const ResourceView*>(uniforms._resourceViews[binds[c]._uniformsStreamIdx]);
-				builder.Bind(c, *view, {});
-				writtenMask |= 1ull<<uint64_t(c);
-				_retainedViews[c] = *view;
-			} else if (binds[c]._type == DescriptorSetInitializer::BindType::Sampler) {
-				assert(uniforms._samplers[binds[c]._uniformsStreamIdx]);
-				auto* sampler = checked_cast<const SamplerState*>(uniforms._samplers[binds[c]._uniformsStreamIdx]);
-				builder.Bind(c, sampler->GetUnderlying(), {}, {});
-				writtenMask |= 1ull<<uint64_t(c);
-				_retainedSamplers[c] = *sampler;
-			} else if (binds[c]._type == DescriptorSetInitializer::BindType::ImmediateData) {
+		for (const auto& b:binds) {
+			if (b._type == DescriptorSetInitializer::BindType::ResourceView) {
+				assert(uniforms._resourceViews[b._uniformsStreamIdx]);
+				auto* view = checked_cast<const ResourceView*>(uniforms._resourceViews[b._uniformsStreamIdx]);
+				builder.Bind(b._descriptorSetSlot, *view, {});
+				writtenMask |= 1ull<<uint64_t(b._descriptorSetSlot);
+				_retainedViews.push_back(*view);
+			} else if (b._type == DescriptorSetInitializer::BindType::Sampler) {
+				assert(uniforms._samplers[b._uniformsStreamIdx]);
+				auto* sampler = checked_cast<const SamplerState*>(uniforms._samplers[b._uniformsStreamIdx]);
+				builder.Bind(b._descriptorSetSlot, sampler->GetUnderlying(), {}, {});
+				writtenMask |= 1ull<<uint64_t(b._descriptorSetSlot);
+				_retainedSamplers.push_back(*sampler);
+			} else if (binds[b._descriptorSetSlot]._type == DescriptorSetInitializer::BindType::ImmediateData) {
 				// Only constant buffers are supported for immediate data; partially for consistency
 				// across APIs.
 				// to support different descriptor types, we'd need to change the offset alignment
 				// values and change the bind flag used to create the buffer
-				assert(_layout->GetDescriptorSlots()[c]._type == DescriptorType::UniformBuffer || _layout->GetDescriptorSlots()[c]._type == DescriptorType::UniformBufferDynamicOffset);
-				auto size = uniforms._immediateData[binds[c]._uniformsStreamIdx].size();
+				assert(_layout->GetDescriptorSlots()[b._descriptorSetSlot]._type == DescriptorType::UniformBuffer || _layout->GetDescriptorSlots()[b._descriptorSetSlot]._type == DescriptorType::UniformBufferDynamicOffset);
+				auto size = uniforms._immediateData[b._uniformsStreamIdx].size();
 				linearBufferIterator += CeilToMultiple(size, offsetMultiple);
-				writtenMask |= 1ull<<uint64_t(c);
+				writtenMask |= 1ull<<uint64_t(b._descriptorSetSlot);
 			} else {
-				assert(binds[c]._type == DescriptorSetInitializer::BindType::Empty);
+				assert(b._type == DescriptorSetInitializer::BindType::Empty);
 			}
 		}
 
@@ -1209,14 +1210,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		ObjectFactory& factory,
 		GlobalPools& globalPools,
 		const std::shared_ptr<CompiledDescriptorSetLayout>& layout,
-		VkShaderStageFlags shaderStageFlags,
-		IteratorRange<const DescriptorSetInitializer::BindTypeAndIdx*> binds,
-		const UniformsStream& uniforms)
+		VkShaderStageFlags shaderStageFlags)
 	: _layout(layout)
 	, _globalPools(&globalPools)
 	{
 		_underlying = globalPools._longTermDescriptorPool.Allocate(GetUnderlyingLayout());
-		WriteInternal(factory, binds, uniforms);
 	}
 
 	CompiledDescriptorSet::~CompiledDescriptorSet()

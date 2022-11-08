@@ -164,16 +164,15 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::WhenAll(balancedNoiseFuture).ThenConstructToPromise(
 			std::move(promise),
 			[device, descSetLayout=descSetLayout](auto balancedNoise) {
-				DescriptorSetInitializer::BindTypeAndIdx bindTypes[4];
-				bindTypes[0] = { DescriptorSetInitializer::BindType::Empty };
-				bindTypes[1] = { DescriptorSetInitializer::BindType::ResourceView, 0 };
+				DescriptorSetInitializer::BindTypeAndIdx bindTypes[1];
+				bindTypes[0] = { DescriptorSetInitializer::BindType::ResourceView, 0, 1 };
 				IResourceView* srv[1] { balancedNoise->GetShaderResource().get() };
 				DescriptorSetInitializer inits;
 				inits._slotBindings = MakeIteratorRange(bindTypes);
 				inits._bindItems._resourceViews = MakeIteratorRange(srv);
-				inits._signature = &descSetLayout;
 				DescSetAndCmdListId result;
-				result._descSet = device->CreateDescriptorSet(inits);
+				result._descSet = device->CreateDescriptorSet(PipelineType::Graphics, descSetLayout);
+				result._descSet->Write(inits);
 				result._completionCommandList = balancedNoise->GetCompletionCommandList();
 				result._signature = descSetLayout;
 				return result;

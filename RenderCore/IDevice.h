@@ -23,6 +23,7 @@ namespace RenderCore
 ////////////////////////////////////////////////////////////////////////////////
 
     enum class Format;
+    enum class PipelineType;
     namespace BindFlag { typedef unsigned BitField; }
     enum class FormatCapability
     {
@@ -89,6 +90,7 @@ namespace RenderCore
 
 	class ILowLevelCompiler;
     class SamplerDesc;
+    class DescriptorSetSignature;
     class DescriptorSetInitializer;
 
     ///
@@ -170,7 +172,7 @@ namespace RenderCore
         IResourcePtr                CreateResource(const ResourceDesc& desc, const SubResourceInitData& initData);
         virtual FormatCapability    QueryFormatCapability(Format format, BindFlag::BitField bindingType) = 0;
 
-        virtual std::shared_ptr<IDescriptorSet> CreateDescriptorSet(const DescriptorSetInitializer& desc) = 0;
+        virtual std::shared_ptr<IDescriptorSet> CreateDescriptorSet(PipelineType pipelineType, const DescriptorSetSignature& signature) = 0;
         virtual std::shared_ptr<ISampler>       CreateSampler(const SamplerDesc& desc) = 0;
 
         virtual std::shared_ptr<ICompiledPipelineLayout> CreatePipelineLayout(const PipelineLayoutInitializer& desc) = 0;

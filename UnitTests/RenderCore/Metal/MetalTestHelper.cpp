@@ -381,31 +381,38 @@ namespace UnitTests
 
 	void DescriptorSetHelper::Bind(unsigned descriptorSetSlot, const std::shared_ptr<RenderCore::IResourceView>& res)
 	{
-		if (_pimpl->_slotBindings.size() <= descriptorSetSlot)
-			_pimpl->_slotBindings.resize(descriptorSetSlot+1, {});
+		auto i = std::find_if(_pimpl->_slotBindings.begin(), _pimpl->_slotBindings.end(), [descriptorSetSlot](const auto& l) { return l._descriptorSetSlot == descriptorSetSlot; });
+		if (i == _pimpl->_slotBindings.end()) {
+			_pimpl->_slotBindings.push_back({});
+			i = _pimpl->_slotBindings.end()-1;
+			i->_descriptorSetSlot = descriptorSetSlot;
+		}
 
-		_pimpl->_slotBindings[descriptorSetSlot]._type = RenderCore::DescriptorSetInitializer::BindType::ResourceView;
-		_pimpl->_slotBindings[descriptorSetSlot]._uniformsStreamIdx = (unsigned)_pimpl->_resources.size();
+		i->_type = RenderCore::DescriptorSetInitializer::BindType::ResourceView;
+		i->_uniformsStreamIdx = (unsigned)_pimpl->_resources.size();
 		_pimpl->_resources.push_back(res);
 	}
 	
 	void DescriptorSetHelper::Bind(unsigned descriptorSetSlot, const std::shared_ptr<RenderCore::ISampler>& sampler)
 	{
-		if (_pimpl->_slotBindings.size() <= descriptorSetSlot)
-			_pimpl->_slotBindings.resize(descriptorSetSlot+1, {});
+		auto i = std::find_if(_pimpl->_slotBindings.begin(), _pimpl->_slotBindings.end(), [descriptorSetSlot](const auto& l) { return l._descriptorSetSlot == descriptorSetSlot; });
+		if (i == _pimpl->_slotBindings.end()) {
+			_pimpl->_slotBindings.push_back({});
+			i = _pimpl->_slotBindings.end()-1;
+			i->_descriptorSetSlot = descriptorSetSlot;
+		}
 
-		_pimpl->_slotBindings[descriptorSetSlot]._type = RenderCore::DescriptorSetInitializer::BindType::Sampler;
-		_pimpl->_slotBindings[descriptorSetSlot]._uniformsStreamIdx = (unsigned)_pimpl->_samplers.size();
+		i->_type = RenderCore::DescriptorSetInitializer::BindType::Sampler;
+		i->_uniformsStreamIdx = (unsigned)_pimpl->_samplers.size();
 		_pimpl->_samplers.push_back(sampler);
 	}
 
 	std::shared_ptr<RenderCore::IDescriptorSet> DescriptorSetHelper::CreateDescriptorSet(
 		RenderCore::IDevice& device,
-		const RenderCore::DescriptorSetSignature& signature)
+		const RenderCore::DescriptorSetSignature& signature,
+		RenderCore::PipelineType pipelineType)
 	{
 		RenderCore::DescriptorSetInitializer init;
-		init._slotBindings = _pimpl->_slotBindings;
-		init._signature = &signature;
 
 		VLA(RenderCore::IResourceView*, resViews, _pimpl->_resources.size());
 		VLA(RenderCore::ISampler*, samplers, _pimpl->_samplers.size());
@@ -415,7 +422,9 @@ namespace UnitTests
 		init._bindItems._resourceViews = MakeIteratorRange(resViews, resViews+_pimpl->_resources.size());
 		init._bindItems._samplers = MakeIteratorRange(samplers, samplers+_pimpl->_samplers.size());
 
-		return device.CreateDescriptorSet(init);
+		auto result = device.CreateDescriptorSet(pipelineType, signature);
+		result->Write(init);
+		return result;
 	}
 
 	DescriptorSetHelper::DescriptorSetHelper()

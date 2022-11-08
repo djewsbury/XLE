@@ -313,8 +313,8 @@ namespace UnitTests
 		set1helper.Bind(4, testHelper->CreateCB(MakeOpaqueIteratorRange(set1binding4))->CreateBufferView());
 		set1helper.Bind(5, testStorageBuffer->CreateBufferView(BindFlag::UnorderedAccess));
 		set1helper.Bind(6, testStorageTexture->CreateTextureView(BindFlag::UnorderedAccess));
-		auto set0 = set0helper.CreateDescriptorSet(*testHelper->_device, *FindDescriptorSetSignature(pipelineLayoutInitializer, "Set0"));
-		auto set1 = set1helper.CreateDescriptorSet(*testHelper->_device, *FindDescriptorSetSignature(pipelineLayoutInitializer, "Set1"));
+		auto set0 = set0helper.CreateDescriptorSet(*testHelper->_device, *FindDescriptorSetSignature(pipelineLayoutInitializer, "Set0"), PipelineType::Graphics);
+		auto set1 = set1helper.CreateDescriptorSet(*testHelper->_device, *FindDescriptorSetSignature(pipelineLayoutInitializer, "Set1"), PipelineType::Graphics);
 
 		Metal::BoundInputLayout inputLayout(IteratorRange<const InputElementDesc*>{}, shaderProgram);
 		REQUIRE(inputLayout.AllAttributesBound());

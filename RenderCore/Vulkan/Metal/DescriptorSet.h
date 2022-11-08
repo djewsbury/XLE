@@ -186,9 +186,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			ObjectFactory& factory,
 			GlobalPools& globalPools,
 			const std::shared_ptr<CompiledDescriptorSetLayout>& layout,
-			VkShaderStageFlags stageFlags,
-			IteratorRange<const DescriptorSetInitializer::BindTypeAndIdx*> binds,
-			const UniformsStream& uniforms);
+			VkShaderStageFlags stageFlags);
 		~CompiledDescriptorSet();
 	private:
 		VulkanUniquePtr<VkDescriptorSet> _underlying;

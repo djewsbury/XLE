@@ -326,7 +326,6 @@ namespace RenderCore { namespace LightingEngine
 		assert(_descSetGood);
 
 		DescriptorSetInitializer descSetInit;
-		descSetInit._signature = &_descSetHeap.GetSignature();
 		descSetInit._slotBindings = _descSetSlotBindings;
 		const IResourceView* srvs[] = { rpi.GetDepthStencilAttachmentSRV({}).get() };
 		IteratorRange<const void*> immediateData[3];
@@ -341,7 +340,6 @@ namespace RenderCore { namespace LightingEngine
 		immediateData[2] = {screenToShadow.begin(), screenToShadow.end()};
 		descSetInit._bindItems._resourceViews = MakeIteratorRange(srvs);
 		descSetInit._bindItems._immediateData = MakeIteratorRange(immediateData);
-		descSetInit._pipelineType = descSetPipelineType;
 
 		// We can only use this descriptor set during this frame -- but there's no protections for this, we're on our own
 		auto* descSet = _descSetHeap.Allocate();
@@ -377,17 +375,17 @@ namespace RenderCore { namespace LightingEngine
 			descSetLayout->MakeDescriptorSetSignature(&commonResources._samplerPool),
 			pipelineType };
 		_descSetSlotBindings.reserve(descSetLayout->_slots.size());
-		for (const auto& s:descSetLayout->_slots) {
+		for (unsigned c=0; c<descSetLayout->_slots.size(); ++c) {
+			const auto& s = descSetLayout->_slots[c];
 			if (s._name == "DMShadow") {
-				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ResourceView, 0});
+				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ResourceView, 0, c});
 			} else if (s._name == "ShadowProjection") {
-				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 0});
+				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 0, c});
 			} else if (s._name == "ShadowResolveParameters") {
-				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 1});
+				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 1, c});
 			} else if (s._name == "ScreenToShadowProjection") {
-				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 2});
-			} else 
-				_descSetSlotBindings.push_back({});
+				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 2, c});
+			}
 		}
 		_descSetGood = true;
 	}

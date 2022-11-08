@@ -925,20 +925,18 @@ namespace RenderCore { namespace ImplVulkan
 			desc);
 	}
 
-	std::shared_ptr<IDescriptorSet> Device::CreateDescriptorSet(const DescriptorSetInitializer& desc)
+	std::shared_ptr<IDescriptorSet> Device::CreateDescriptorSet(PipelineType pipelineType, const DescriptorSetSignature& signature)
 	{
 		DoSecondStageInit();
 		if (!_globalsContainer->_pools._descriptorSetLayoutCache)
 			_globalsContainer->_pools._descriptorSetLayoutCache = Metal_Vulkan::Internal::CreateCompiledDescriptorSetLayoutCache();
 
-		VkShaderStageFlags shaderStages = desc._pipelineType == PipelineType::Graphics ? VK_SHADER_STAGE_ALL_GRAPHICS : VK_SHADER_STAGE_COMPUTE_BIT;
-		auto descSetLayout = _globalsContainer->_pools._descriptorSetLayoutCache->CompileDescriptorSetLayout(*desc._signature, {}, shaderStages); // don't have the name available here
+		VkShaderStageFlags shaderStages = pipelineType == PipelineType::Graphics ? VK_SHADER_STAGE_ALL_GRAPHICS : VK_SHADER_STAGE_COMPUTE_BIT;
+		auto descSetLayout = _globalsContainer->_pools._descriptorSetLayoutCache->CompileDescriptorSetLayout(signature, {}, shaderStages); // don't have the name available here
 		return std::make_shared<Metal_Vulkan::CompiledDescriptorSet>(
 			_globalsContainer->_objectFactory, _globalsContainer->_pools,
 			descSetLayout->_layout,
-			shaderStages,
-			desc._slotBindings,
-			desc._bindItems);
+			shaderStages);
 	}
 
 	std::shared_ptr<ISampler> Device::CreateSampler(const SamplerDesc& desc)

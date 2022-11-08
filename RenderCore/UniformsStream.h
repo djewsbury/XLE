@@ -155,11 +155,15 @@ namespace RenderCore
 	{
 	public:
 		enum class BindType { ResourceView, Sampler, ImmediateData, Empty };
-		struct BindTypeAndIdx { BindType _type = BindType::Empty; unsigned _uniformsStreamIdx = ~0u; };
+		struct BindTypeAndIdx
+		{
+			BindType _type = BindType::Empty;
+			unsigned _uniformsStreamIdx = ~0u;
+			unsigned _descriptorSetSlot = ~0u;
+			unsigned _descriptorSetArrayIdx = 0u;
+		};
 		IteratorRange<const BindTypeAndIdx*> _slotBindings;
 		UniformsStream _bindItems;
-		const DescriptorSetSignature* _signature;
-		PipelineType _pipelineType = PipelineType::Graphics;
 	};
 
 	class PipelineLayoutInitializer

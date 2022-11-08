@@ -339,8 +339,9 @@ namespace RenderCore { namespace Techniques
 					std::vector<::Assets::DependencyValidationMarker> subDepValMarkers;
 					subDepValMarkers.reserve(ds._slots.size());
 					bindTypesAndIdx.reserve(ds._slots.size());
-					for (const auto&s:ds._slots) {
-						bindTypesAndIdx.push_back(DescriptorSetInitializer::BindTypeAndIdx{s._bindType, s._resourceIdx});
+					for (unsigned slotIdx=0; slotIdx<ds._slots.size(); ++slotIdx) {
+						const auto&s = ds._slots[slotIdx];
+						bindTypesAndIdx.push_back(DescriptorSetInitializer::BindTypeAndIdx{s._bindType, s._resourceIdx, slotIdx});
 						if (s._bindType == DescriptorSetInitializer::BindType::ResourceView && subDepVals[s._resourceIdx])
 							subDepValMarkers.push_back(subDepVals[s._resourceIdx]);
 					}
@@ -364,11 +365,10 @@ namespace RenderCore { namespace Techniques
 					initializer._slotBindings = MakeIteratorRange(bindTypesAndIdx);
 					initializer._bindItems._resourceViews = MakeIteratorRange(resourceViews);
 					initializer._bindItems._samplers = MakeIteratorRange(samplers);
-					initializer._signature = &ds._signature;
-					initializer._pipelineType = pipelineType;
 
 					ActualizedDescriptorSet actualized;
-					actualized._descriptorSet = device->CreateDescriptorSet(initializer);
+					actualized._descriptorSet = device->CreateDescriptorSet(pipelineType, ds._signature);
+					actualized._descriptorSet->Write(initializer);
 					actualized._depVal = std::move(depVal);
 					actualized._bindingInfo = std::move(ds._bindingInfo);
 					actualized._completionCommandList = completionCommandList;
@@ -393,14 +393,16 @@ namespace RenderCore { namespace Techniques
 		VLA_UNSAFE_FORCE(DescriptorSetInitializer::BindTypeAndIdx, bindTypesAndIdx, layout._slots.size());
 
 		auto* bind = bindTypesAndIdx;
-		for (const auto& slot:layout._slots) {
+		for (unsigned slotIdx=0; slotIdx<layout._slots.size(); ++slotIdx) {
+			const auto& slot = layout._slots[slotIdx];
 			auto hash = Hash64(slot._name);
 
 			auto i = std::find(usi.GetResourceViewBindings().begin(), usi.GetResourceViewBindings().end(), hash);
 			if (i != usi.GetResourceViewBindings().end()) {
 				*bind++ = DescriptorSetInitializer::BindTypeAndIdx{
 					DescriptorSetInitializer::BindType::ResourceView,
-					(unsigned)std::distance(usi.GetResourceViewBindings().begin(), i)};
+					(unsigned)std::distance(usi.GetResourceViewBindings().begin(), i),
+					slotIdx};
 				continue;
 			}
 
@@ -408,24 +410,23 @@ namespace RenderCore { namespace Techniques
 			if (i != usi.GetSamplerBindings().end()) {
 				*bind++ = DescriptorSetInitializer::BindTypeAndIdx{
 					DescriptorSetInitializer::BindType::Sampler,
-					(unsigned)std::distance(usi.GetSamplerBindings().begin(), i)};
+					(unsigned)std::distance(usi.GetSamplerBindings().begin(), i),
+					slotIdx};
 				continue;
 			}
-
-			*bind++ = DescriptorSetInitializer::BindTypeAndIdx{DescriptorSetInitializer::BindType::Empty, 0};
 		}
 
 		// awkwardly we need to construct a descriptor set signature here
 		auto sig = layout.MakeDescriptorSetSignature(_samplerPool);
 
 		DescriptorSetInitializer initializer;
-		initializer._slotBindings = MakeIteratorRange(bindTypesAndIdx, &bindTypesAndIdx[layout._slots.size()]);
+		initializer._slotBindings = MakeIteratorRange(bindTypesAndIdx, bind);
 		initializer._bindItems._resourceViews = us._resourceViews;
 		initializer._bindItems._samplers = us._samplers;
-		initializer._signature = &sig;
-		initializer._pipelineType = _pipelineType;
 
-		return _device->CreateDescriptorSet(initializer);
+		auto result = _device->CreateDescriptorSet(_pipelineType, sig);
+		result->Write(initializer);
+		return result;
 	}
 
 	const uint64_t DeformerToDescriptorSetBinding::GetHash() const

@@ -449,7 +449,7 @@ namespace RenderCore { namespace Techniques
 				auto samplerBinding = std::find(delegateHelper._finalUSI.GetSamplerBindings().begin(), delegateHelper._finalUSI.GetSamplerBindings().end(), hashName);
 				if (samplerBinding != delegateHelper._finalUSI.GetSamplerBindings().end()) {
 					auto samplerIdx = (unsigned)std::distance(delegateHelper._finalUSI.GetSamplerBindings().begin(), samplerBinding);
-					bindTypesAndIdx.push_back({DescriptorSetInitializer::BindType::Sampler, samplerIdx});
+					bindTypesAndIdx.push_back({DescriptorSetInitializer::BindType::Sampler, samplerIdx, slotIdx});
 					samplersWeNeed |= 1ull << uint64_t(samplerIdx);
 					continue;
 				}
@@ -465,7 +465,7 @@ namespace RenderCore { namespace Techniques
 				auto resourceBinding = std::find(delegateHelper._finalUSI.GetResourceViewBindings().begin(), delegateHelper._finalUSI.GetResourceViewBindings().end(), hashName);
 				if (resourceBinding != delegateHelper._finalUSI.GetResourceViewBindings().end()) {
 					auto resourceIdx = (unsigned)std::distance(delegateHelper._finalUSI.GetResourceViewBindings().begin(), resourceBinding);
-					bindTypesAndIdx.push_back({DescriptorSetInitializer::BindType::ResourceView, resourceIdx});
+					bindTypesAndIdx.push_back({DescriptorSetInitializer::BindType::ResourceView, resourceIdx, slotIdx});
 					resourcesWeNeed |= 1ull << uint64_t(resourceIdx);
 					continue;
 				}
@@ -473,7 +473,7 @@ namespace RenderCore { namespace Techniques
 				auto immediateDataBinding = std::find(delegateHelper._finalUSI.GetImmediateDataBindings().begin(), delegateHelper._finalUSI.GetImmediateDataBindings().end(), hashName);
 				if (immediateDataBinding != delegateHelper._finalUSI.GetImmediateDataBindings().end()) {
 					auto resourceIdx = (unsigned)std::distance(delegateHelper._finalUSI.GetImmediateDataBindings().begin(), immediateDataBinding);
-					bindTypesAndIdx.push_back({DescriptorSetInitializer::BindType::ImmediateData, resourceIdx});
+					bindTypesAndIdx.push_back({DescriptorSetInitializer::BindType::ImmediateData, resourceIdx, slotIdx});
 					immediateDatasWeNeed |= 1ull << uint64_t(resourceIdx);
 					continue;
 				}
@@ -484,8 +484,6 @@ namespace RenderCore { namespace Techniques
 						Log(Warning) << "Sampler provided for descriptor set slot (" << _descSetLayout._slots[slotIdx]._name << "), however, this lot is not a sampler type in the descriptor set layout." << std::endl;
 				#endif
 			}
-
-			bindTypesAndIdx.push_back({});		// didn't find any binding
 		}
 
 		// Now that we know what we need, we should query the delegates to get the associated data
@@ -537,7 +535,8 @@ namespace RenderCore { namespace Techniques
 					// Creating a IResourceView here is a bit unfortunate -- on most APIs we should be fine with a resource pointer and size/offset
 					tempResViews[newResourceViewCount] = resource->CreateBufferView(BindFlag::ConstantBuffer, immDataIterator + beginAndEndInRes.first, size);
 					newResourceViews[newResourceViewCount] = tempResViews[newResourceViewCount].get();
-					slot = { DescriptorSetInitializer::BindType::ResourceView, newResourceViewCount };
+					slot._type = DescriptorSetInitializer::BindType::ResourceView;
+					slot._uniformsStreamIdx = newResourceViewCount;
 					++newResourceViewCount;
 					immDataIterator += size;
 				}

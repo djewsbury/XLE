@@ -107,7 +107,8 @@ namespace UnitTests
 		void Bind(unsigned descriptorSetSlot, const std::shared_ptr<RenderCore::ISampler>&);
 		std::shared_ptr<RenderCore::IDescriptorSet> CreateDescriptorSet(
             RenderCore::IDevice& device, 
-            const RenderCore::DescriptorSetSignature& signature);
+            const RenderCore::DescriptorSetSignature& signature,
+            RenderCore::PipelineType pipelineType);
 
         DescriptorSetHelper();
         ~DescriptorSetHelper();
