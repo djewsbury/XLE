@@ -15,6 +15,8 @@
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../Tools/ToolsRig/VisualisationUtils.h"
+#include "../../Assets/Marker.h"
+#include "../../Utility/StringFormat.h"
 
 namespace PlatformRig { namespace Overlays
 {
@@ -24,8 +26,35 @@ namespace PlatformRig { namespace Overlays
 	class PlacementsDisplay : public IWidget ///////////////////////////////////////////////////////////
 	{
 	public:
-		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
-		{}
+		void Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
+		{
+			const unsigned lineHeight = 20;
+			const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
+
+			auto allocation = layout.AllocateFullWidth(30);
+			FillRectangle(context, allocation, titleBkground);
+			allocation._topLeft[0] += 8;
+			if (auto* font = _headingFont->TryActualize())
+				DrawText()
+					.Font(**font)
+					.Color({ 191, 123, 0 })
+					.Alignment(RenderOverlays::TextAlignment::Left)
+					.Flags(RenderOverlays::DrawTextFlags::Shadow)
+					.Draw(context, allocation, "Placements Selector");
+			
+			if (_hasSelectedPlacements) {
+				char meldBuffer[256];
+				DrawText()
+					.Color(0xffcfcfcf)
+					.Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(meldBuffer) << "Model: " << _selectedModelName);
+				DrawText()
+					.Color(0xffcfcfcf)
+					.Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(meldBuffer) << "Material: " << _selectedMaterialName);
+			}
+
+			if (_hasLastRayTest)
+				context.DrawLines(ProjectionMode::P3D, &_lastRayTest.first, 2, ColorB{255, 128, 128});
+		}
 
 		virtual ProcessInputResult ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input)
 		{
@@ -36,18 +65,23 @@ namespace PlatformRig { namespace Overlays
 				auto worldSpaceRay = SceneEngine::CalculateWorldSpaceRay(
 					cameraDesc, input._mousePosition, {0,0}, viewportDims);
 
+				_lastRayTest = worldSpaceRay;
+				_hasLastRayTest = true;
+
 				auto& threadContext = *RenderCore::Techniques::GetThreadContext();
 				auto techniqueContext = SceneEngine::MakeIntersectionsTechniqueContext(*_drawingApparatus);
 				RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
 				parsingContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
 				parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(cameraDesc, viewportDims);
 
-				auto firstHit = SceneEngine::FirstRayIntersection(parsingContext, *_placementsEditor, worldSpaceRay, nullptr);
+				auto firstHit = SceneEngine::FirstRayIntersection(parsingContext, *_placementsEditor, worldSpaceRay, &cameraDesc);
 				if (firstHit) {
 					_selectedMaterialName = firstHit->_materialName;
 					_selectedModelName = firstHit->_modelName;
+					_hasSelectedPlacements = true;
 				} else {
 					_selectedMaterialName = _selectedModelName = {};
+					_hasSelectedPlacements = false;
 				}
 
 				return ProcessInputResult::Consumed;
@@ -67,6 +101,7 @@ namespace PlatformRig { namespace Overlays
 		, _placementsEditor(std::move(placements))
 		, _camera(std::move(camera))
 		{
+			_headingFont = RenderOverlays::MakeFont("DosisExtraBold", 20);
 		}
 
 	private:
@@ -75,6 +110,12 @@ namespace PlatformRig { namespace Overlays
 		std::shared_ptr<ToolsRig::VisCameraSettings> _camera;
 
 		std::string _selectedModelName, _selectedMaterialName;
+		bool _hasSelectedPlacements = false;
+
+		std::pair<Float3, Float3> _lastRayTest;
+		bool _hasLastRayTest = false;
+
+		::Assets::PtrToMarkerPtr<RenderOverlays::Font> _headingFont;
 	};
 
 	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreatePlacementsDisplay(
