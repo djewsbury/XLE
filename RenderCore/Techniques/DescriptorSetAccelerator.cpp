@@ -44,8 +44,10 @@ namespace RenderCore { namespace Techniques
 
 			struct Slot
 			{
-				DescriptorSetInitializer::BindType _bindType = DescriptorSetInitializer::BindType::Empty;
+				DescriptorSetInitializer::BindType _bindType = DescriptorSetInitializer::BindType::ResourceView;
 				unsigned _resourceIdx = ~0u;
+				unsigned _descriptorSetSlot = ~0u;
+				unsigned _descriptorSetArrayIdx = 0u;
 				std::string _slotName;
 				DescriptorType _slotType;
 			};
@@ -150,9 +152,8 @@ namespace RenderCore { namespace Techniques
 			_working = std::make_shared<Internal::DescriptorSetInProgress>();
 
 		Internal::DescriptorSetInProgress::DescriptorSet ds;
-		ds._slots.resize(maxSlotIdx+1);
 		if (_generateBindingInfo)
-			ds._bindingInfo._slots.resize(ds._slots.size());
+			ds._bindingInfo._slots.resize(maxSlotIdx+1);
 
 		Internal::InterpretMaterialMachineHelper machineHelper{materialMachine};
 		bool applyDeformAcceleratorOffset = false;
@@ -171,101 +172,109 @@ namespace RenderCore { namespace Techniques
 			slotBindingInfo._layoutName = s._name;
 			slotBindingInfo._layoutSlotType = s._type;
 
-			bool gotBinding = false;
-			auto hashName = Hash64(s._name);
-			std::optional<std::string> boundResource = machineHelper._resourceBindings ? machineHelper._resourceBindings->GetParameterAsString(hashName) : std::optional<std::string>{};
-			if (boundResource.has_value() && !boundResource.value().empty()) {
-				if (s._type != DescriptorType::SampledTexture)
-					Throw(std::runtime_error("Attempting to bind resource to non-texture descriptor slot for slot " + s._name));
+			for (unsigned a=0; a<std::max(s._arrayElementCount, 1u); ++a) {
 
-				slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
-				slotInProgress._resourceIdx = (unsigned)_working->_resources.size();
-				Internal::DescriptorSetInProgress::Resource res;
-				if (context) {
-					res._deferredShaderResource = context->ConstructShaderResource(MakeStringSection(boundResource.value()));
-				} else
-					res._deferredShaderResource = ::Assets::MakeAssetPtr<DeferredShaderResource>(MakeStringSection(boundResource.value()));
-				_working->_resources.push_back(res);
-				gotBinding = true;
+				bool gotBinding = false;
+				auto hashName = Hash64(s._name) + a;
+				std::optional<std::string> boundResource = machineHelper._resourceBindings ? machineHelper._resourceBindings->GetParameterAsString(hashName) : std::optional<std::string>{};
+				if (boundResource.has_value() && !boundResource.value().empty()) {
+					if (s._type != DescriptorType::SampledTexture)
+						Throw(std::runtime_error("Attempting to bind resource to non-texture descriptor slot for slot " + s._name));
 
-				if (_generateBindingInfo)
-					slotBindingInfo._binding = (StringMeldInPlace(stringMeldBuffer) << "DeferredShaderResource: " << boundResource.value()).AsString();
+					slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
+					slotInProgress._resourceIdx = (unsigned)_working->_resources.size();
+					Internal::DescriptorSetInProgress::Resource res;
+					if (context) {
+						res._deferredShaderResource = context->ConstructShaderResource(MakeStringSection(boundResource.value()));
+					} else
+						res._deferredShaderResource = ::Assets::MakeAssetPtr<DeferredShaderResource>(MakeStringSection(boundResource.value()));
+					_working->_resources.push_back(res);
+					gotBinding = true;
 
-			} else if ((s._type == DescriptorType::UniformBuffer || s._type == DescriptorType::UniformBufferDynamicOffset) && s._cbIdx < (unsigned)layout._constantBuffers.size()) {
+					if (_generateBindingInfo)
+						slotBindingInfo._binding = (StringMeldInPlace(stringMeldBuffer) << "DeferredShaderResource: " << boundResource.value()).AsString();
 
-				bool animated = false;
-				if (deformBinding) {
-					animated = std::find_if(deformBinding->_animatedSlots.begin(), deformBinding->_animatedSlots.end(), [slotIdx=s._slotIdx](const auto& q) { return q.first == slotIdx; }) != deformBinding->_animatedSlots.end();
-				}
+				} else if ((s._type == DescriptorType::UniformBuffer || s._type == DescriptorType::UniformBufferDynamicOffset) && s._cbIdx < (unsigned)layout._constantBuffers.size()) {
 
-				if (!animated) {
-					auto& cbLayout = layout._constantBuffers[s._cbIdx];
-					auto cbSize = cbLayout->GetSize(shrLanguage);
-					if (cbSize) {
-						auto uploadBufferStart = CeilToMultiple(unsigned(cbUploadBuffer.size()), cbAlignmentRules);
-						auto uploadBufferEnd = CeilToMultiple(uploadBufferStart+cbSize, cbAlignmentRules);
-						cbUploadBuffer.resize(uploadBufferEnd);
-						auto uploadBufferRange = MakeIteratorRange(PtrAdd(cbUploadBuffer.data(), uploadBufferStart), PtrAdd(cbUploadBuffer.data(), uploadBufferEnd));
-						
-						if (machineHelper._constantBindings) {
-							cbLayout->BuildCB(uploadBufferRange, *machineHelper._constantBindings, shrLanguage);
-						} else {
-							cbLayout->BuildCB(uploadBufferRange, {}, shrLanguage);
+					bool animated = false;
+					if (deformBinding) {
+						animated = std::find_if(deformBinding->_animatedSlots.begin(), deformBinding->_animatedSlots.end(), [slotIdx=s._slotIdx](const auto& q) { return q.first == slotIdx; }) != deformBinding->_animatedSlots.end();
+					}
+
+					if (!animated) {
+						auto& cbLayout = layout._constantBuffers[s._cbIdx];
+						auto cbSize = cbLayout->GetSize(shrLanguage);
+						if (cbSize) {
+							auto uploadBufferStart = CeilToMultiple(unsigned(cbUploadBuffer.size()), cbAlignmentRules);
+							auto uploadBufferEnd = CeilToMultiple(uploadBufferStart+cbSize, cbAlignmentRules);
+							cbUploadBuffer.resize(uploadBufferEnd);
+							auto uploadBufferRange = MakeIteratorRange(PtrAdd(cbUploadBuffer.data(), uploadBufferStart), PtrAdd(cbUploadBuffer.data(), uploadBufferEnd));
+							
+							if (machineHelper._constantBindings) {
+								cbLayout->BuildCB(uploadBufferRange, *machineHelper._constantBindings, shrLanguage);
+							} else {
+								cbLayout->BuildCB(uploadBufferRange, {}, shrLanguage);
+							}
+
+							slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
+							slotInProgress._resourceIdx = (unsigned)_working->_resources.size();
+
+							Internal::DescriptorSetInProgress::Resource res;
+							res._cbResourceOffsetAndSize = {uploadBufferStart, cbSize};
+							res._cbUploadIdx = (unsigned)_working->_cbUploadMarkers.size();		// upload marker added later
+							_working->_resources.push_back(res);
+
+							if (_generateBindingInfo) {
+								std::stringstream str;
+								cbLayout->DescribeCB(str, uploadBufferRange, shrLanguage);
+								slotBindingInfo._binding = str.str();
+							}
+							cbName = cbName.has_value() ? MakeStringSection(s_multipleDescSetCBs) : MakeStringSection(s._name);
 						}
-
+					} else {
+						applyDeformAcceleratorOffset = true;
 						slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
 						slotInProgress._resourceIdx = (unsigned)_working->_resources.size();
 
 						Internal::DescriptorSetInProgress::Resource res;
-						res._cbResourceOffsetAndSize = {uploadBufferStart, cbSize};
-						res._cbUploadIdx = (unsigned)_working->_cbUploadMarkers.size();		// upload marker added later
+						res._fixedResource = deformBinding->_dynamicPageResource->CreateBufferView(BindFlag::ConstantBuffer);
 						_working->_resources.push_back(res);
-
-						if (_generateBindingInfo) {
-							std::stringstream str;
-							cbLayout->DescribeCB(str, uploadBufferRange, shrLanguage);
-							slotBindingInfo._binding = str.str();
-						}
-						cbName = cbName.has_value() ? MakeStringSection(s_multipleDescSetCBs) : MakeStringSection(s._name);
+						
+						if (_generateBindingInfo)
+							slotBindingInfo._binding = "Animated Uniforms";
 					}
-				} else {
-					applyDeformAcceleratorOffset = true;
-					slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
-					slotInProgress._resourceIdx = (unsigned)_working->_resources.size();
-
-					Internal::DescriptorSetInProgress::Resource res;
-					res._fixedResource = deformBinding->_dynamicPageResource->CreateBufferView(BindFlag::ConstantBuffer);
-					_working->_resources.push_back(res);
-					
-					if (_generateBindingInfo)
-						slotBindingInfo._binding = "Animated Uniforms";
-				}
-					
-				gotBinding = true;
-				
-			} else if (s._type == DescriptorType::Sampler && _samplerPool) {
-				auto i = std::find_if(machineHelper._samplerBindings.begin(), machineHelper._samplerBindings.end(), [hashName](const auto& c) { return c.first == hashName; });
-				if (i != machineHelper._samplerBindings.end()) {
-					slotInProgress._bindType = DescriptorSetInitializer::BindType::Sampler;
-					slotInProgress._resourceIdx = (unsigned)_working->_samplers.size();
-					auto metalSampler = _samplerPool->GetSampler(i->second);
-					_working->_samplers.push_back(metalSampler);
+						
 					gotBinding = true;
+					
+				} else if (s._type == DescriptorType::Sampler && _samplerPool) {
+					auto i = std::find_if(machineHelper._samplerBindings.begin(), machineHelper._samplerBindings.end(), [hashName](const auto& c) { return c.first == hashName; });
+					if (i != machineHelper._samplerBindings.end()) {
+						slotInProgress._bindType = DescriptorSetInitializer::BindType::Sampler;
+						slotInProgress._resourceIdx = (unsigned)_working->_samplers.size();
+						auto metalSampler = _samplerPool->GetSampler(i->second);
+						_working->_samplers.push_back(metalSampler);
+						gotBinding = true;
 
-					if (_generateBindingInfo)
-						slotBindingInfo._binding = (StringMeldInPlace(stringMeldBuffer) << "Sampler: " << metalSampler->GetDesc()).AsString();
+						if (_generateBindingInfo)
+							slotBindingInfo._binding = (StringMeldInPlace(stringMeldBuffer) << "Sampler: " << metalSampler->GetDesc()).AsString();
+					}
 				}
-			} 
 			
-			if (gotBinding) {
-				if (ds._slots[s._slotIdx]._bindType != DescriptorSetInitializer::BindType::Empty)
-					Throw(std::runtime_error("Multiple resources bound to the same slot in ConstructDescriptorSet(). Attempting to bind slot " + s._name));
+				if (gotBinding) {
+					slotInProgress._descriptorSetSlot = s._slotIdx;
+					slotInProgress._descriptorSetArrayIdx = a;
 
-				assert(s._slotIdx < ds._slots.size());
-				ds._slots[s._slotIdx] = slotInProgress;
-				if (_generateBindingInfo) {
-					slotBindingInfo._bindType = slotInProgress._bindType;
-					ds._bindingInfo._slots[s._slotIdx] = slotBindingInfo;
+					auto existing = std::find_if(ds._slots.begin(), ds._slots.end(), [s=slotInProgress._descriptorSetSlot, a=slotInProgress._descriptorSetArrayIdx](const auto& q) {
+							return q._descriptorSetSlot == s && q._descriptorSetArrayIdx == a;
+						});
+					if (existing != ds._slots.end())
+						Throw(std::runtime_error("Multiple resources bound to the same slot in ConstructDescriptorSet(). Attempting to bind slot " + s._name));
+
+					ds._slots.push_back(slotInProgress);
+					if (_generateBindingInfo) {
+						slotBindingInfo._bindType = slotInProgress._bindType;
+						ds._bindingInfo._slots[s._slotIdx] = slotBindingInfo;
+					}
 				}
 			}
 		}
@@ -339,9 +348,8 @@ namespace RenderCore { namespace Techniques
 					std::vector<::Assets::DependencyValidationMarker> subDepValMarkers;
 					subDepValMarkers.reserve(ds._slots.size());
 					bindTypesAndIdx.reserve(ds._slots.size());
-					for (unsigned slotIdx=0; slotIdx<ds._slots.size(); ++slotIdx) {
-						const auto&s = ds._slots[slotIdx];
-						bindTypesAndIdx.push_back(DescriptorSetInitializer::BindTypeAndIdx{s._bindType, s._resourceIdx, slotIdx});
+					for (const auto& s:ds._slots) {
+						bindTypesAndIdx.push_back(DescriptorSetInitializer::BindTypeAndIdx{s._bindType, s._resourceIdx, s._descriptorSetSlot, s._descriptorSetArrayIdx});
 						if (s._bindType == DescriptorSetInitializer::BindType::ResourceView && subDepVals[s._resourceIdx])
 							subDepValMarkers.push_back(subDepVals[s._resourceIdx]);
 					}

@@ -154,10 +154,10 @@ namespace RenderCore
 	class DescriptorSetInitializer
 	{
 	public:
-		enum class BindType { ResourceView, Sampler, ImmediateData, Empty };
+		enum class BindType { ResourceView, Sampler, ImmediateData };
 		struct BindTypeAndIdx
 		{
-			BindType _type = BindType::Empty;
+			BindType _type = BindType::ResourceView;
 			unsigned _uniformsStreamIdx = ~0u;
 			unsigned _descriptorSetSlot = ~0u;
 			unsigned _descriptorSetArrayIdx = 0u;

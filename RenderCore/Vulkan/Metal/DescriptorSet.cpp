@@ -314,16 +314,21 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		assert(descriptorSetBindPoint < _signature.size());
 		auto slotType = _signature[descriptorSetBindPoint]._type;
-		assert(_signature[descriptorSetBindPoint]._count == resources.size());
+		auto signatureArrayCount = _signature[descriptorSetBindPoint]._count;
+		assert(resources.size() <= signatureArrayCount);
 
 		switch (resources[0]->GetType()) {
 		case ResourceView::Type::ImageView:
 			{
 				VkDescriptorImageInfo* imageInfos = AllocateInfos<VkDescriptorImageInfo>(resources.size());
-				for (unsigned c=0; c<resources.size(); ++c) {
-					assert(resources[c]->GetType() == ResourceView::Type::ImageView);
-					assert(resources[c]->GetVulkanResource() && resources[c]->GetImageView());
-					imageInfos[c] = AsVkDescriptorImageInfo(*resources[c]);
+				for (unsigned c=0; c<signatureArrayCount; ++c) {
+					if (c < resources.size() && resources[c]) {
+						assert(resources[c]->GetType() == ResourceView::Type::ImageView);
+						assert(resources[c]->GetVulkanResource() && resources[c]->GetImageView());
+						imageInfos[c] = AsVkDescriptorImageInfo(*resources[c]);
+					} else {
+						imageInfos[c] = {};		// we don't know the correct dummy type to apply here, so we can't set a good binding
+					}
 				}
 				WriteArrayBinding<VkDescriptorImageInfo>(
 					descriptorSetBindPoint,
@@ -336,15 +341,19 @@ namespace RenderCore { namespace Metal_Vulkan
 		case ResourceView::Type::BufferAndRange:
 			{
 				VkDescriptorBufferInfo* bufferInfos = AllocateInfos<VkDescriptorBufferInfo>(resources.size());
-				for (unsigned c=0; c<resources.size(); ++c) {
-					assert(resources[c]->GetType() == ResourceView::Type::BufferAndRange);
-					assert(resources[c]->GetVulkanResource() && resources[c]->GetVulkanResource()->GetBuffer());
-					auto range = resources[c]->GetBufferRangeOffsetAndSize();
-					uint64_t rangeBegin = range.first, rangeSize = range.second;
-					if (rangeBegin == 0 && rangeSize == 0)
-						rangeSize = VK_WHOLE_SIZE;
-					assert(rangeSize != 0);
-					bufferInfos[c] = VkDescriptorBufferInfo { resources[c]->GetVulkanResource()->GetBuffer(), rangeBegin, rangeSize };
+				for (unsigned c=0; c<signatureArrayCount; ++c) {
+					if (c < resources.size() && resources[c]) {
+						assert(resources[c]->GetType() == ResourceView::Type::BufferAndRange);
+						assert(resources[c]->GetVulkanResource() && resources[c]->GetVulkanResource()->GetBuffer());
+						auto range = resources[c]->GetBufferRangeOffsetAndSize();
+						uint64_t rangeBegin = range.first, rangeSize = range.second;
+						if (rangeBegin == 0 && rangeSize == 0)
+							rangeSize = VK_WHOLE_SIZE;
+						assert(rangeSize != 0);
+						bufferInfos[c] = VkDescriptorBufferInfo { resources[c]->GetVulkanResource()->GetBuffer(), rangeBegin, rangeSize };
+					} else {
+						bufferInfos[c] = {};
+					}
 				}
 				WriteArrayBinding<VkDescriptorBufferInfo>(
 					descriptorSetBindPoint,
@@ -358,8 +367,12 @@ namespace RenderCore { namespace Metal_Vulkan
 			{
 				VkBufferView* bufferViews = AllocateInfos<VkBufferView>(resources.size());
 				for (unsigned c=0; c<resources.size(); ++c) {
-					assert(resources[c]->GetType() == ResourceView::Type::BufferView);
-					bufferViews[c] = resources[c]->GetBufferView();
+					if (c < resources.size() && resources[c]) {
+						assert(resources[c]->GetType() == ResourceView::Type::BufferView);
+						bufferViews[c] = resources[c]->GetBufferView();
+					} else {
+						bufferViews[c] = {};
+					}
 				}
 
 				WriteArrayBinding<VkBufferView>(
@@ -378,10 +391,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			if (resources[0]->GetType() == ResourceView::Type::ImageView) {
 				unsigned count = 0;
 				for (const auto& r:resources)
-					if (auto g=GetGuidForVisibility(*r)) {
-						_pendingResourceVisibilityChanges.push_back(g);
-						++count;
-					}
+					if (r)
+						if (auto g=GetGuidForVisibility(*r)) {
+							_pendingResourceVisibilityChanges.push_back(g);
+							++count;
+						}
 				if (count)
 					_pendingResourceVisibilityChangesSlotAndCount.emplace_back(descriptorSetBindPoint, count);
 			}
@@ -1095,7 +1109,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void CompiledDescriptorSet::WriteInternal(
 		ObjectFactory& factory,
-		IteratorRange<const DescriptorSetInitializer::BindTypeAndIdx*> binds,
+		IteratorRange<const DescriptorSetInitializer::BindTypeAndIdx*> bindsInit,
 		const UniformsStream& uniforms)
 	{
 		// _retainedViews & _retainedSamplers must be per-slot, so we release the previous binding to the
@@ -1105,34 +1119,83 @@ namespace RenderCore { namespace Metal_Vulkan
 		_retainedViews.clear();
 		_retainedSamplers.clear();
 
+		std::vector<DescriptorSetInitializer::BindTypeAndIdx> sortedBinds { bindsInit.begin(), bindsInit.end() };
+		std::sort(
+			sortedBinds.begin(), sortedBinds.end(),
+			[](const auto& lhs, const auto& rhs) { 
+				if (lhs._descriptorSetSlot < rhs._descriptorSetSlot) return true;
+				if (lhs._descriptorSetSlot > rhs._descriptorSetSlot) return false;
+				return lhs._descriptorSetArrayIdx < rhs._descriptorSetArrayIdx;
+			});
+
 		uint64_t writtenMask = 0ull;
 		size_t linearBufferIterator = 0;
 		unsigned offsetMultiple = std::max(1u, (unsigned)factory.GetPhysicalDeviceProperties().limits.minUniformBufferOffsetAlignment);
 		ProgressiveDescriptorSetBuilder builder { _layout->GetDescriptorSlots(), 0 };
-		for (const auto& b:binds) {
-			if (b._type == DescriptorSetInitializer::BindType::ResourceView) {
-				assert(uniforms._resourceViews[b._uniformsStreamIdx]);
-				auto* view = checked_cast<const ResourceView*>(uniforms._resourceViews[b._uniformsStreamIdx]);
-				builder.Bind(b._descriptorSetSlot, *view, {});
-				writtenMask |= 1ull<<uint64_t(b._descriptorSetSlot);
-				_retainedViews.push_back(*view);
-			} else if (b._type == DescriptorSetInitializer::BindType::Sampler) {
-				assert(uniforms._samplers[b._uniformsStreamIdx]);
-				auto* sampler = checked_cast<const SamplerState*>(uniforms._samplers[b._uniformsStreamIdx]);
-				builder.Bind(b._descriptorSetSlot, sampler->GetUnderlying(), {}, {});
-				writtenMask |= 1ull<<uint64_t(b._descriptorSetSlot);
-				_retainedSamplers.push_back(*sampler);
-			} else if (binds[b._descriptorSetSlot]._type == DescriptorSetInitializer::BindType::ImmediateData) {
-				// Only constant buffers are supported for immediate data; partially for consistency
-				// across APIs.
-				// to support different descriptor types, we'd need to change the offset alignment
-				// values and change the bind flag used to create the buffer
-				assert(_layout->GetDescriptorSlots()[b._descriptorSetSlot]._type == DescriptorType::UniformBuffer || _layout->GetDescriptorSlots()[b._descriptorSetSlot]._type == DescriptorType::UniformBufferDynamicOffset);
-				auto size = uniforms._immediateData[b._uniformsStreamIdx].size();
-				linearBufferIterator += CeilToMultiple(size, offsetMultiple);
-				writtenMask |= 1ull<<uint64_t(b._descriptorSetSlot);
+		for (auto b=sortedBinds.begin(); b!=sortedBinds.end();) {
+
+			auto bStart = b;
+			while (b != sortedBinds.end() && b->_descriptorSetSlot == bStart->_descriptorSetSlot) ++b;
+
+			auto slotArrayCount = _layout->GetDescriptorSlots()[bStart->_descriptorSetSlot]._count;
+			bool arraySlot = slotArrayCount != 1;
+
+			if (!arraySlot) {
+
+				assert(b == (bStart+1));		// if you hit this, we're attempting to bind multiple things to the same non-array slot
+				assert(bStart->_descriptorSetArrayIdx == 0);
+
+				if (bStart->_type == DescriptorSetInitializer::BindType::ResourceView) {
+					assert(uniforms._resourceViews[bStart->_uniformsStreamIdx]);
+					auto* view = checked_cast<const ResourceView*>(uniforms._resourceViews[bStart->_uniformsStreamIdx]);
+					builder.Bind(bStart->_descriptorSetSlot, *view, {});
+					writtenMask |= 1ull<<uint64_t(bStart->_descriptorSetSlot);
+					_retainedViews.push_back(*view);
+				} else if (bStart->_type == DescriptorSetInitializer::BindType::Sampler) {
+					assert(uniforms._samplers[bStart->_uniformsStreamIdx]);
+					auto* sampler = checked_cast<const SamplerState*>(uniforms._samplers[bStart->_uniformsStreamIdx]);
+					builder.Bind(bStart->_descriptorSetSlot, sampler->GetUnderlying(), {}, {});
+					writtenMask |= 1ull<<uint64_t(bStart->_descriptorSetSlot);
+					_retainedSamplers.push_back(*sampler);
+				} else if (bStart->_type == DescriptorSetInitializer::BindType::ImmediateData) {
+					// Only constant buffers are supported for immediate data; partially for consistency
+					// across APIs.
+					// to support different descriptor types, we'd need to change the offset alignment
+					// values and change the bind flag used to create the buffer
+					assert(_layout->GetDescriptorSlots()[bStart->_descriptorSetSlot]._type == DescriptorType::UniformBuffer 
+						|| _layout->GetDescriptorSlots()[bStart->_descriptorSetSlot]._type == DescriptorType::UniformBufferDynamicOffset);
+					auto size = uniforms._immediateData[bStart->_uniformsStreamIdx].size();
+					linearBufferIterator += CeilToMultiple(size, offsetMultiple);
+					writtenMask |= 1ull<<uint64_t(bStart->_descriptorSetSlot);
+				} else {
+					assert(0);
+				}
+
 			} else {
-				assert(b._type == DescriptorSetInitializer::BindType::Empty);
+
+				for (auto b2=bStart; b2!=(b-1); ++b2) {
+					assert(b2->_type == (b2+1)->_type);
+					assert(b2->_descriptorSetArrayIdx < (b2+1)->_descriptorSetArrayIdx);
+				}
+
+				if (bStart->_type == DescriptorSetInitializer::BindType::ResourceView) {
+
+					VLA(const ResourceView*, arrayOfResources, slotArrayCount);
+					for (unsigned c=0; c<slotArrayCount; ++c) arrayOfResources[c] = nullptr;
+
+					assert(uniforms._resourceViews[bStart->_uniformsStreamIdx]);
+					for (auto b2=bStart; b2!=b; ++b2) {
+						arrayOfResources[b2->_descriptorSetArrayIdx] = checked_cast<const ResourceView*>(uniforms._resourceViews[b2->_uniformsStreamIdx]);
+						_retainedViews.push_back(*arrayOfResources[b2->_descriptorSetArrayIdx]);
+					}
+
+					builder.BindArray(bStart->_descriptorSetSlot, MakeIteratorRange(arrayOfResources, &arrayOfResources[slotArrayCount]), {});
+					writtenMask |= 1ull<<uint64_t(bStart->_descriptorSetSlot);
+
+				} else {
+					assert(0);		// only arrays of resource views are supported
+				}
+
 			}
 		}
 
@@ -1140,11 +1203,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			auto linearBufferSize = linearBufferIterator;
 			linearBufferIterator = 0;
 			std::vector<uint8_t> initData(linearBufferSize, 0);
-			for (unsigned c=0; c<binds.size(); ++c)
-				if (binds[c]._type == DescriptorSetInitializer::BindType::ImmediateData) {
-					auto size = uniforms._immediateData[binds[c]._uniformsStreamIdx].size();
+			for (unsigned c=0; c<sortedBinds.size(); ++c)
+				if (sortedBinds[c]._type == DescriptorSetInitializer::BindType::ImmediateData) {
+					auto size = uniforms._immediateData[sortedBinds[c]._uniformsStreamIdx].size();
 					auto range = MakeIteratorRange(initData.begin() + linearBufferIterator, initData.begin() + linearBufferIterator + size);
-					std::memcpy(AsPointer(range.begin()), uniforms._immediateData[binds[c]._uniformsStreamIdx].begin(), size);
+					std::memcpy(AsPointer(range.begin()), uniforms._immediateData[sortedBinds[c]._uniformsStreamIdx].begin(), size);
 					linearBufferIterator += CeilToMultiple(size, offsetMultiple);
 				}
 			assert(linearBufferIterator == linearBufferSize);
@@ -1152,11 +1215,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			_associatedLinearBufferData = Resource(factory, desc, MakeIteratorRange(initData).Cast<const void*>());
 
 			linearBufferIterator = 0;
-			for (unsigned c=0; c<binds.size(); ++c)
-				if (binds[c]._type == DescriptorSetInitializer::BindType::ImmediateData) {
-					auto size = uniforms._immediateData[binds[c]._uniformsStreamIdx].size();
+			for (unsigned c=0; c<sortedBinds.size(); ++c)
+				if (sortedBinds[c]._type == DescriptorSetInitializer::BindType::ImmediateData) {
+					auto size = uniforms._immediateData[sortedBinds[c]._uniformsStreamIdx].size();
 					assert(size);
-					builder.Bind(c, VkDescriptorBufferInfo{_associatedLinearBufferData.GetBuffer(), linearBufferIterator, size}, {}, "descriptor-set-bound-data");
+					builder.Bind(sortedBinds[c]._descriptorSetSlot, VkDescriptorBufferInfo{_associatedLinearBufferData.GetBuffer(), linearBufferIterator, size}, {}, "descriptor-set-bound-data");
 					linearBufferIterator += CeilToMultiple(size, offsetMultiple);
 				}
 		}
