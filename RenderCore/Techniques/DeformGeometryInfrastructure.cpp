@@ -186,22 +186,28 @@ namespace RenderCore { namespace Techniques
 		// Call call Bind on all deformers, for everything calculated in CreateDeformBindings
 		std::vector<std::future<void>> deformerInitFutures;
 		deformerInitFutures.reserve(pendingDeformerBinds.size());
-		std::sort(
-			pendingDeformerBinds.begin(), pendingDeformerBinds.end(),
-			[](const auto& lhs, const auto& rhs) { return lhs._deformer < rhs._deformer; });
-		for (auto i=pendingDeformerBinds.begin(); i!=pendingDeformerBinds.end();) {
-			auto start = i;
-			++i;
-			while (i!=pendingDeformerBinds.end() && i->_deformer == start->_deformer) ++i;
-
+		while (!pendingDeformerBinds.empty()) {
+			// get the input binding for everthing associated with this deformer
+			auto deformer = pendingDeformerBinds.begin()->_deformer;
 			DeformerInputBinding inputBinding;
-			inputBinding._geoBindings.reserve(i-start);
-			for (auto& c:MakeIteratorRange(start, i))
-				inputBinding._geoBindings.emplace_back(std::make_pair(c._elementIdx, c._geoIdx), std::move(c._binding));
+			for (auto i=pendingDeformerBinds.begin(); i!=pendingDeformerBinds.end();) {
+				if (i->_deformer == deformer) {
 
-			start->_deformer->Bind(inputBinding);
-			deformerInitFutures.emplace_back(start->_deformer->GetInitializationFuture());
-			result->_deformOps.push_back(std::move(start->_deformer));
+					#if defined(_DEBUG)
+						for (auto i2=pendingDeformerBinds.begin(); i2!=i; ++i2)
+							if (i2->_elementIdx == i->_elementIdx && i2->_geoIdx == i->_geoIdx)
+								Throw(std::runtime_error("Cannot order deformer operations consistantly"));		// if you hit this, it means that two different geos share 2 deformers, but they apply them in different orders
+					#endif
+
+					inputBinding._geoBindings.emplace_back(std::make_pair(i->_elementIdx, i->_geoIdx), std::move(i->_binding));
+					i = pendingDeformerBinds.erase(i);
+				} else
+					++i;
+			}
+
+			deformer->Bind(inputBinding);
+			deformerInitFutures.emplace_back(deformer->GetInitializationFuture());
+			result->_deformOps.push_back(std::move(deformer));
 		}
 
 		////////////////////////////////////////////////////////////////////////////////////
