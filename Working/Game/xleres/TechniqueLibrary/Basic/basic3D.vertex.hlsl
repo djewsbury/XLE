@@ -32,6 +32,10 @@ VSOUT frameworkEntry(VSIN vsin)
 	VSOUT output;
 	output.position = TransformPosition(VSIN_GetLocalPosition(vsin));
 
+	#if VSOUT_HAS_LOCAL_POSITION
+		output.localPosition = VSIN_GetLocalPosition(vsin);
+	#endif
+
 	// Note that we're kind of forced to do srgb -> linear conversion here, because we'll loose precision
 	// assuming 8 bit color inputs	
 	#if VSOUT_HAS_COLOR_LINEAR

@@ -44,6 +44,10 @@ struct VSOUT /////////////////////////////////////////////////////
 		float3 normal : NORMAL;
 	#endif
 
+	#if VSOUT_HAS_LOCAL_POSITION
+		float3 localPosition : LOCALPOSITION;
+	#endif
+	
 	#if VSOUT_HAS_LOCAL_NORMAL
 		float3 localNormal : LOCALNORMAL;
 	#endif

@@ -72,6 +72,10 @@ VSOUT BuildVSOUT(
 			output.position.z = min(1, output.position.z);
 		#endif
 	#endif
+
+	#if VSOUT_HAS_LOCAL_POSITION
+		output.localPosition = workingVertex.position;
+	#endif
 	
 	#if VSOUT_HAS_COLOR_LINEAR
 		if (workingVertex.colorCount >= 1) {

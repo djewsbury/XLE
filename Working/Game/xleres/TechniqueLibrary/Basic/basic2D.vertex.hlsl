@@ -96,6 +96,10 @@ VSOUT frameworkEntry(VSIN vsin)
 		output.position = PixelCoordToSVPosition(vsin.pixelposition.xy);
 	#else
 		output.position = TransformPosition(vsin.position);
+
+		#if VSOUT_HAS_LOCAL_POSITION
+			output.localPosition = vsin.position;
+		#endif
 	#endif
 
 	// Note that we're kind of forced to do srgb -> linear conversion here, because we'll loose precision
