@@ -116,7 +116,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				VULKAN_VERBOSE_DEBUG_ONLY(, const std::string& description));
 		template<typename BindingInfo> 
 			void WriteArrayBinding(
-				unsigned bindingPoint, VkDescriptorType_ type, IteratorRange<const BindingInfo*> bindingInfo
+				unsigned bindingPoint, VkDescriptorType_ type, unsigned dstArrayElement, IteratorRange<const BindingInfo*> bindingInfo
 				VULKAN_VERBOSE_DEBUG_ONLY(, const std::string& description));
 		template<typename BindingInfo>
 			BindingInfo& AllocateInfo(const BindingInfo& init);

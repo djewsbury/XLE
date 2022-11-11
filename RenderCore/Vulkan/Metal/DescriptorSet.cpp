@@ -150,7 +150,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	template<typename BindingInfo>
 		void    ProgressiveDescriptorSetBuilder::WriteArrayBinding(
-			unsigned bindingPoint, VkDescriptorType_ type, IteratorRange<const BindingInfo*> bindingInfo
+			unsigned bindingPoint, VkDescriptorType_ type, unsigned dstArrayElement, IteratorRange<const BindingInfo*> bindingInfo
 			VULKAN_VERBOSE_DEBUG_ONLY(, const std::string& description))
 	{
 			// (we're limited by the number of bits in _sinceLastFlush)
@@ -164,6 +164,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			for (unsigned p=0; p<_pendingWrites; ++p) {
 				auto& w = _writes[p];
 				if (w.descriptorType == type && w.dstBinding == bindingPoint) {
+					w.dstArrayElement = dstArrayElement;
+					w.descriptorCount = (uint32_t)bindingInfo.size();
 					InfoPtr<BindingInfo>(w) = bindingInfo.begin();
 					foundExisting = true;
 					break;
@@ -179,7 +181,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			w.pNext = nullptr;
 			w.dstSet = nullptr;
 			w.dstBinding = bindingPoint;
-			w.dstArrayElement = 0;
+			w.dstArrayElement = dstArrayElement;
 			w.descriptorCount = (uint32_t)bindingInfo.size();
 			w.descriptorType = (VkDescriptorType)type;
 
@@ -321,26 +323,32 @@ namespace RenderCore { namespace Metal_Vulkan
 		case ResourceView::Type::ImageView:
 			{
 				VkDescriptorImageInfo* imageInfos = AllocateInfos<VkDescriptorImageInfo>(resources.size());
+				unsigned minElementIdx = UINT_MAX, maxElementIdx = 0;
 				for (unsigned c=0; c<signatureArrayCount; ++c) {
 					if (c < resources.size() && resources[c]) {
 						assert(resources[c]->GetType() == ResourceView::Type::ImageView);
 						assert(resources[c]->GetVulkanResource() && resources[c]->GetImageView());
 						imageInfos[c] = AsVkDescriptorImageInfo(*resources[c]);
+						minElementIdx = std::min(minElementIdx, c);
+						maxElementIdx = std::max(maxElementIdx, c);
 					} else {
 						imageInfos[c] = {};		// we don't know the correct dummy type to apply here, so we can't set a good binding
 					}
 				}
-				WriteArrayBinding<VkDescriptorImageInfo>(
-					descriptorSetBindPoint,
-					AsVkDescriptorType(slotType),
-					MakeIteratorRange(imageInfos, &imageInfos[resources.size()])
-					VULKAN_VERBOSE_DEBUG_ONLY(, description));
+				if (minElementIdx < maxElementIdx)
+					WriteArrayBinding<VkDescriptorImageInfo>(
+						descriptorSetBindPoint,
+						AsVkDescriptorType(slotType),
+						minElementIdx,
+						MakeIteratorRange(&imageInfos[minElementIdx], &imageInfos[maxElementIdx+1])
+						VULKAN_VERBOSE_DEBUG_ONLY(, description));
 			}
 			break;
 
 		case ResourceView::Type::BufferAndRange:
 			{
 				VkDescriptorBufferInfo* bufferInfos = AllocateInfos<VkDescriptorBufferInfo>(resources.size());
+				unsigned minElementIdx = UINT_MAX, maxElementIdx = 0;
 				for (unsigned c=0; c<signatureArrayCount; ++c) {
 					if (c < resources.size() && resources[c]) {
 						assert(resources[c]->GetType() == ResourceView::Type::BufferAndRange);
@@ -351,35 +359,44 @@ namespace RenderCore { namespace Metal_Vulkan
 							rangeSize = VK_WHOLE_SIZE;
 						assert(rangeSize != 0);
 						bufferInfos[c] = VkDescriptorBufferInfo { resources[c]->GetVulkanResource()->GetBuffer(), rangeBegin, rangeSize };
+						minElementIdx = std::min(minElementIdx, c);
+						maxElementIdx = std::max(maxElementIdx, c);
 					} else {
 						bufferInfos[c] = {};
 					}
 				}
-				WriteArrayBinding<VkDescriptorBufferInfo>(
-					descriptorSetBindPoint,
-					AsVkDescriptorType(slotType),
-					MakeIteratorRange(bufferInfos, &bufferInfos[resources.size()])
-					VULKAN_VERBOSE_DEBUG_ONLY(, description));
+				if (minElementIdx < maxElementIdx)
+					WriteArrayBinding<VkDescriptorBufferInfo>(
+						descriptorSetBindPoint,
+						AsVkDescriptorType(slotType),
+						minElementIdx,
+						MakeIteratorRange(&bufferInfos[minElementIdx], &bufferInfos[maxElementIdx+1])
+						VULKAN_VERBOSE_DEBUG_ONLY(, description));
 			}
 			break;
 
 		case ResourceView::Type::BufferView:
 			{
 				VkBufferView* bufferViews = AllocateInfos<VkBufferView>(resources.size());
+				unsigned minElementIdx = UINT_MAX, maxElementIdx = 0;
 				for (unsigned c=0; c<resources.size(); ++c) {
 					if (c < resources.size() && resources[c]) {
 						assert(resources[c]->GetType() == ResourceView::Type::BufferView);
 						bufferViews[c] = resources[c]->GetBufferView();
+						minElementIdx = std::min(minElementIdx, c);
+						maxElementIdx = std::max(maxElementIdx, c);
 					} else {
 						bufferViews[c] = {};
 					}
 				}
 
-				WriteArrayBinding<VkBufferView>(
-					descriptorSetBindPoint,
-					AsVkDescriptorType(slotType),
-					MakeIteratorRange(bufferViews, &bufferViews[resources.size()])
-					VULKAN_VERBOSE_DEBUG_ONLY(, description));
+				if (minElementIdx < maxElementIdx)
+					WriteArrayBinding<VkBufferView>(
+						descriptorSetBindPoint,
+						AsVkDescriptorType(slotType),
+						minElementIdx,
+						MakeIteratorRange(&bufferViews[minElementIdx], &bufferViews[maxElementIdx+1])
+						VULKAN_VERBOSE_DEBUG_ONLY(, description));
 			}
 			break;
 
@@ -695,21 +712,21 @@ namespace RenderCore { namespace Metal_Vulkan
 					WriteArrayBinding<std::decay_t<decltype(blankStorageBuffer)>>(
 						bIndex,
 						AsVkDescriptorType(b),
-						MakeIteratorRange(bindingInfos, bindingInfos+_signature[bIndex]._count)
+						0, MakeIteratorRange(bindingInfos, bindingInfos+_signature[bIndex]._count)
 						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
 				} else if (b == DescriptorType::SampledTexture) {
 					auto* bindingInfos = AllocateBlankImageInfos(globalPools, shaderTypesExpected[bIndex], _signature[bIndex]._count);
 					WriteArrayBinding<std::decay_t<decltype(*bindingInfos)>>(
 						bIndex,
 						AsVkDescriptorType(b),
-						MakeIteratorRange(bindingInfos, bindingInfos+_signature[bIndex]._count)
+						0, MakeIteratorRange(bindingInfos, bindingInfos+_signature[bIndex]._count)
 						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
 				} else if (b == DescriptorType::UnorderedAccessTexture) {
 					auto* bindingInfos = AllocateBlankUavImageInfos(globalPools, shaderTypesExpected[bIndex], _signature[bIndex]._count);
 					WriteArrayBinding<std::decay_t<decltype(*bindingInfos)>>(
 						bIndex,
 						AsVkDescriptorType(b),
-						MakeIteratorRange(bindingInfos, bindingInfos+_signature[bIndex]._count)
+						0, MakeIteratorRange(bindingInfos, bindingInfos+_signature[bIndex]._count)
 						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
 				} else if (b == DescriptorType::Empty) {
 					/* treated as empty */
