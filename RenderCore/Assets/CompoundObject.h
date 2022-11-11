@@ -71,6 +71,9 @@ namespace RenderCore { namespace Assets
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		uint64_t GetHash() const;
 
+		bool AreScaffoldsInvalidated() const;
+		::Assets::DependencyValidation MakeScaffoldsDependencyValidation() const;
+
 		CompoundObjectScaffold();
 		CompoundObjectScaffold(
 			std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> modelRendererConstruction,

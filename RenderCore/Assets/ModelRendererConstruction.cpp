@@ -290,7 +290,7 @@ namespace RenderCore { namespace Assets
 		return false;
 	}
 
-	bool ModelRendererConstruction::IsInvalidated() const
+	bool ModelRendererConstruction::AreScaffoldsInvalidated() const
 	{
 		// expecting to have already waited on this construction -- because we're querying all of the futures here
 		// also, this is an expensive function; avoid calling it frequently (probably just during construction operations)
@@ -311,6 +311,35 @@ namespace RenderCore { namespace Assets
 		if (_internal->_skeletonScaffoldPtr && _internal->_skeletonScaffoldPtr->GetDependencyValidation().GetValidationIndex() != 0)
 			return true;
 		return false;
+	}
+
+	::Assets::DependencyValidation ModelRendererConstruction::MakeScaffoldsDependencyValidation() const
+	{
+		// don't call before FulfillWhenNotPending (or before waiting on that promise), because otherwise this will stall
+		std::vector<::Assets::DependencyValidationMarker> markers;
+		markers.reserve(2 + _internal->_modelScaffoldMarkers.size() + _internal->_modelScaffoldPtrs.size() + _internal->_materialScaffoldMarkers.size() + _internal->_materialScaffoldPtrs.size());
+		for (const auto& m:_internal->_modelScaffoldMarkers) {
+			assert(m.second.wait_for(std::chrono::seconds(0)) == std::future_status::ready);
+			markers.push_back(m.second.get()->GetDependencyValidation());
+		}
+		for (const auto& m:_internal->_modelScaffoldPtrs)
+			markers.push_back(m.second->GetDependencyValidation());
+		for (const auto& m:_internal->_materialScaffoldMarkers) {
+			assert(m.second.wait_for(std::chrono::seconds(0)) == std::future_status::ready);
+			markers.push_back(m.second.get()->GetDependencyValidation());
+		}
+		for (const auto& m:_internal->_materialScaffoldPtrs)
+			markers.push_back(m.second->GetDependencyValidation());
+
+		if (_internal->_skeletonScaffoldMarker.valid()) {
+			assert(_internal->_skeletonScaffoldMarker.wait_for(std::chrono::seconds(0)) == std::future_status::ready);
+			markers.push_back(_internal->_skeletonScaffoldMarker.get()->GetDependencyValidation());
+		}
+		
+		if (_internal->_skeletonScaffoldPtr)
+			markers.push_back(_internal->_skeletonScaffoldPtr->GetDependencyValidation());
+		
+		return ::Assets::GetDepValSys().MakeOrReuse(markers);
 	}
 
 	std::shared_ptr<ModelRendererConstruction> ModelRendererConstruction::Reconstruct(const ModelRendererConstruction& src, std::shared_ptr<::Assets::OperationContext> opContext)

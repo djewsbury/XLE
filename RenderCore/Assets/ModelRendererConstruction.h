@@ -64,7 +64,8 @@ namespace RenderCore { namespace Assets
 
 		void FulfillWhenNotPending(std::promise<std::shared_ptr<ModelRendererConstruction>>&& promise);
 		::Assets::AssetState GetAssetState() const;
-		bool IsInvalidated() const;
+		bool AreScaffoldsInvalidated() const;
+		::Assets::DependencyValidation MakeScaffoldsDependencyValidation() const;		// create a new dependency validation, however should only be called after the promise from FulfillWhenNotPending has been fulfilled, otherwise will stall
 		static std::shared_ptr<ModelRendererConstruction> Reconstruct(const ModelRendererConstruction& src, std::shared_ptr<::Assets::OperationContext> opContext = nullptr);
 
 		ModelRendererConstruction();

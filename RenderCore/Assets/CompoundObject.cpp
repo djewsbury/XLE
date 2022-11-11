@@ -82,6 +82,18 @@ namespace RenderCore { namespace Assets
 		return container.GetRootFormatter();
 	}
 
+	bool CompoundObjectScaffold::AreScaffoldsInvalidated() const
+	{
+		return _depVal.GetValidationIndex() != 0 || _modelRendererConstruction->AreScaffoldsInvalidated();
+	}
+
+	::Assets::DependencyValidation CompoundObjectScaffold::MakeScaffoldsDependencyValidation() const
+	{
+		auto scaffoldsDepVal = _modelRendererConstruction->MakeScaffoldsDependencyValidation();
+		::Assets::DependencyValidationMarker markers[] { _depVal, scaffoldsDepVal };
+		return ::Assets::GetDepValSys().MakeOrReuse(markers);
+	}
+
 	CompoundObjectScaffold::CompoundObjectScaffold() {}
 	CompoundObjectScaffold::CompoundObjectScaffold(
 		std::shared_ptr<ModelRendererConstruction> modelRendererConstruction,
