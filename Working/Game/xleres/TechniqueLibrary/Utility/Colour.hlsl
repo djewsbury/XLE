@@ -10,10 +10,15 @@
 float3 SRGBToLinear_Fast(float3 input)		{ return input*input; }
 float3 LinearToSRGB_Fast(float3 input)		{ return sqrt(input); }
 
-float3 LinearToSRGB(float3 input)		    { return pow(input, 1.f/2.4f)*1.055f-0.055f; }
-float3 SRGBToLinear(float3 input)		    { return pow((input+0.055f)/1.055f, 2.4f); }
+// LinearToSRGB & SRGBToLinear are slightly optimized to remove the special case in the darkest values
+// Use LinearToSRGB_Formal & SRGBToLinear_Formal for the most accurate calculation
+// The exponent here is picked to match as closely as possible, based on my own calculations
+// small deviations of this exponent have little effect
+// however, the special case in the darks in the formal equation can have a noticible effect
+float3 LinearToSRGB(float3 input)		    { return pow(input, 1.f/2.2246f); }
+float3 SRGBToLinear(float3 input)		    { return pow(input, 2.2246f); }
 
-float SRGBToLinear_Formal(float input)		    
+float SRGBToLinear_Formal(float input)
 {
 	// The following matches exactly the linear to srgb conversion by the hardware (tested on NVIDIA drivers)
 	// if we skip the condition, it only effects color values less than 7 (at least with 8 bit color values)
@@ -28,16 +33,28 @@ float SRGBToLinear_Formal(float input)
 	// 		5 -> 6
 	// 		6 -> 7
 	// 		7 -> 7... etc
-	// in practice, that difference seems so minute to be completely pendantic
 	if (input <= 0.04045f) {
 		return input / 12.92f;
 	} else
 		return pow((input+0.055f)/1.055f, 2.4f);
 }
 
+float LinearToSRGB_Formal(float input)
+{
+	if (input <= 0.04045f/12.92f) {
+		return input * 12.92;
+	} else
+		return pow(input, 1.f/2.4f)*1.055f-0.055f;
+}
+
 float3 SRGBToLinear_Formal(float3 input)
 {
 	return float3(SRGBToLinear_Formal(input.r), SRGBToLinear_Formal(input.g), SRGBToLinear_Formal(input.b));
+}
+
+float3 LinearToSRGB_Formal(float3 input)
+{
+	return float3(LinearToSRGB_Formal(input.r), LinearToSRGB_Formal(input.g), LinearToSRGB_Formal(input.b));
 }
 
 static const float LightingScale = 1.f;     // note -- LightingScale is currently not working with high res screenshots (it is applied twice, so only 1 is safe)
