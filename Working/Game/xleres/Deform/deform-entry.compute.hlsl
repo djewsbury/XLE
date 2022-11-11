@@ -88,7 +88,7 @@ void StoreVertex(DeformVertex vertex, uint vertexIdx, uint instanceIdx, DeformIn
 	if (!loadVertex.success)
 		return;
 
-	#if defined(VERTEX_MAPPING)
+	#if VERTEX_MAPPING
 		IAParamsStruct iaParams = IAParams[invocationParams.ParamsIdx];
 		uint mappedVertex = VertexMapping.Load(iaParams.MappingBufferByteOffset+loadVertex.vertexIdx*4);
 	#else
