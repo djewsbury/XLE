@@ -81,7 +81,7 @@ DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
 
 				outputPosition += weight * mul(JointTransforms[boneIndex], float4(input.position.xyz, 1)).xyz;
 				float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
-				outputNormal += weight * mul(rotationPart, input.normal);
+				outputNormal += weight * mul(rotationPart, input.normal.xyz);
 				outputTangent += weight * mul(rotationPart, input.tangent.xyz);
 
 				++c;
@@ -142,7 +142,7 @@ DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
 		}
 	#else
 		outputPosition = input.position;
-		outputNormal = input.normal;
+		outputNormal = input.normal.xyz;
 		outputTangent = input.tangent.xyz;
 	#endif
 

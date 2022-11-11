@@ -130,14 +130,7 @@ namespace RenderCore { namespace Assets
 			auto name = RequireKeyedItem(formatter);
 			switch (formatter.PeekNext()) {
 			case FormatterBlob::BeginElement:
-				{
-					RequireBeginElement(formatter);
-					if (XlEqString(name, "MorphDeformer")) {
-						// auto morphDeformer = DeserializeMorphDeformer(formatter);
-					} else
-						Throw(Utility::FormatException("Unexpected element while serializing MorphDeformer", formatter.GetLocation()));
-					RequireEndElement(formatter);
-				}
+				Throw(Utility::FormatException("Unexpected element while serializing MorphDeformer", formatter.GetLocation()));
 				break;
 
 			case FormatterBlob::Value:
