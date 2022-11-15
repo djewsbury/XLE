@@ -324,26 +324,96 @@ namespace RenderCore { namespace Metal_Vulkan
 			image_create_info.initialLayout = hasInitData ? VK_IMAGE_LAYOUT_PREINITIALIZED : VK_IMAGE_LAYOUT_UNDEFINED;
 			image_create_info.usage = AsImageUsageFlags(desc._bindFlags);
 
-			// minor validations
-            if (image_create_info.tiling == VK_IMAGE_TILING_OPTIMAL && (image_create_info.usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) {
-                // For depth/stencil textures, if the device doesn't support optimal tiling, they switch back to linear
-                // Maybe this is unnecessary, because the device could just define "optimal" to mean linear in this case.
-                // But the vulkan samples do something similar (though they prefer to use linear mode when it's available...?)
-				auto depthFormat = AsVkFormat(AsDepthStencilFormat(tDesc._format));
-                const auto formatProps = factory.GetFormatProperties(depthFormat);
-                if (!(formatProps.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)) {
-                    image_create_info.tiling = VK_IMAGE_TILING_LINEAR;
-                    if (!(formatProps.linearTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT))
-                        Throw(Exceptions::BasicLabel("Format (%i) can't be used for a depth stencil", unsigned(image_create_info.format)));
-                }
-            }
+			// Check format compatibility with bind flags
+			{
+				struct RequiredViewSupport
+				{
+					VkFormat _format;
+					VkFormatFeatureFlags _features;
+					const char* _name;
+				};
+				std::vector<RequiredViewSupport> requiredViews;
 
-			if (image_create_info.tiling == VK_IMAGE_TILING_LINEAR && (image_create_info.usage & VK_IMAGE_USAGE_SAMPLED_BIT)) {
-				const auto formatProps = factory.GetFormatProperties(image_create_info.format);
-				const bool canSampleLinearTexture =
-					!!(formatProps.linearTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT);
-				if (!canSampleLinearTexture)
-					Throw(::Exceptions::BasicLabel("Hardware does not support sampling from a linear texture. A staging texture is required"));
+				if (desc._bindFlags & BindFlag::TexelBuffer) {
+					if (desc._bindFlags & BindFlag::UnorderedAccess) requiredViews.push_back({image_create_info.format, VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT, "StorageTexelBuffer"});
+					if (desc._bindFlags & (BindFlag::ShaderResource|BindFlag::ConstantBuffer)) requiredViews.push_back({image_create_info.format, VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT, "UniformTexelBuffer"});
+					assert((desc._bindFlags&(BindFlag::UnorderedAccess|BindFlag::ShaderResource|BindFlag::ConstantBuffer)) != 0);		// must combine TexelBuffer with one of the usage flags
+				} else {
+					if (desc._bindFlags & BindFlag::UnorderedAccess) requiredViews.push_back({image_create_info.format, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT, "UnorderedAccess"});
+					if (desc._bindFlags & BindFlag::ShaderResource) requiredViews.push_back({image_create_info.format, VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT, "ShaderResource"});
+				}
+
+				if (desc._bindFlags & BindFlag::RenderTarget) requiredViews.push_back({image_create_info.format, VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT, "RenderTarget"});
+					
+				if (desc._bindFlags & BindFlag::DepthStencil)
+					requiredViews.push_back({(VkFormat)AsVkFormat(AsDepthStencilFormat(tDesc._format)), VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT, "DepthStencil"});
+
+				if (desc._bindFlags & BindFlag::TransferSrc) requiredViews.push_back({image_create_info.format, VK_FORMAT_FEATURE_TRANSFER_SRC_BIT, "TransferSrc"});
+				if (desc._bindFlags & BindFlag::TransferDst) requiredViews.push_back({image_create_info.format, VK_FORMAT_FEATURE_TRANSFER_DST_BIT, "TransferDst"});
+
+				VkFormat uniqueFormats[2];
+				unsigned uniqueFormatCount = 0;
+				for (const auto& v:requiredViews) {
+					unsigned c=0;
+					for (; c<uniqueFormatCount; ++c) if (uniqueFormats[c] == v._format) break;
+					if (c == uniqueFormatCount) {
+						assert((uniqueFormatCount+1) <= dimof(uniqueFormats));
+						uniqueFormats[uniqueFormatCount++] = v._format;
+					}
+				}
+
+				VkFormatProperties formatPropsList[dimof(uniqueFormats)];
+				for (unsigned c=0; c<uniqueFormatCount; c++)
+					formatPropsList[c] = factory.GetFormatProperties(uniqueFormats[c]);		// should we be caching this somehow?
+
+				// check to see if we feed to fallback to non-optimal
+				if (image_create_info.tiling == VK_IMAGE_TILING_OPTIMAL) {
+					bool fallback = false;
+					for (unsigned c=0; c<uniqueFormatCount; c++) {
+						auto format = uniqueFormats[c];
+						auto& formatProps = formatPropsList[c];
+
+						for (const auto& v:requiredViews) {
+							if (v._format != format) continue;
+
+							if ((formatProps.optimalTilingFeatures & v._features) != v._features) {
+								// report early, it try to make the exception msg a little clearer
+								// however, this might still be confusing if one bind flag is only supported in optimal tiling, and one is only supported in linear tiling
+								if ((formatProps.linearTilingFeatures & v._features) != v._features)
+									Throw(Exceptions::BasicLabel("Format (%s) not supported for requested bind flags (%s)", AsString(desc._textureDesc._format), v._name));
+
+								Log(Verbose) << "Falling back to non-optimal tiling for texture (" << desc._name << ") due to format (" << AsString(desc._textureDesc._format) << ") and bind flag (" << v._name << ")" << std::endl;
+								fallback = true;
+							}
+						}
+					}
+
+					if (fallback)
+						image_create_info.tiling = VK_IMAGE_TILING_LINEAR;
+				}
+
+				// After deciding final tiling mode, check to ensure all features are going to be supported (don't check to check the image_create_info.tiling == VK_IMAGE_TILING_OPTIMAL, because if we didn't fallback, it's supported)
+				if (image_create_info.tiling == VK_IMAGE_TILING_LINEAR) {
+					for (unsigned c=0; c<uniqueFormatCount; c++) {
+						auto format = uniqueFormats[c];
+						auto& formatProps = formatPropsList[c];
+
+						for (const auto& v:requiredViews) {
+							if (v._format != format) continue;
+
+							if (((formatProps.linearTilingFeatures|formatProps.optimalTilingFeatures) & v._features) != v._features) {
+								Throw(Exceptions::BasicLabel("Format (%s) not supported for requested bind flags (%s)", AsString(desc._textureDesc._format), v._name));
+							} else if ((formatProps.linearTilingFeatures & v._features) != v._features) {
+								// If you hit this, something has to change in the resource request (the underlying gfx api doesn't support this request)
+								// Either:
+								// a) select a different pixel format
+								// b) remove unneeded bind flags -- some bind flags are only supported in "optimal tiling" mode and some are only in "linear tiling" mode for a particular pixel format (and so can't be combined together)
+								// c) avoid making this resource "host visible" (& don't provide init data)
+								Throw(Exceptions::BasicLabel("Format (%s) not supported in linear tiling mode for bind flags (%s), and linear tiling was selected, either because of a fallback due to another bind flag, or host visibility requirements", AsString(desc._textureDesc._format), v._name));
+							}
+						}
+					}
+				}
 			}
 
             // When constructing a staging (or readback) texture with multiple mip levels or array layers,
