@@ -132,8 +132,8 @@ namespace RenderCore
 
     uint64_t FrameBufferProperties::CalculateHash() const
     {
-        return uint64_t(_outputWidth) 
-            ^ (uint64_t(_outputHeight) << 16ull)
+        return uint64_t(_width) 
+            ^ (uint64_t(_height) << 16ull)
             ^ (uint64_t(_samples._sampleCount) << 48ull)
             ^ (uint64_t(_samples._samplingQuality) << 56ull);
     }

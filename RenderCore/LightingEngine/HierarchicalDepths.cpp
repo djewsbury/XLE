@@ -33,7 +33,7 @@ namespace RenderCore { namespace LightingEngine
 		srvs[1] = iterator._rpi.GetNonFrameBufferAttachmentView(0).get();
 		unsigned mipCount = iterator._rpi.GetNonFrameBufferAttachmentView(1)->GetResource()->GetDesc()._textureDesc._mipCount;
 		auto& fbProps = iterator._rpi.GetFrameBufferDesc().GetProperties();
-		unsigned expectedMipCount = IntegerLog2(std::max(fbProps._outputWidth, fbProps._outputHeight))+1;
+		unsigned expectedMipCount = IntegerLog2(std::max(fbProps._width, fbProps._height))+1;
 		assert(mipCount == expectedMipCount);
 		for (unsigned c=0; c<13; ++c) {		// 13 slots in the shader input interface
 			// duplicate the lowest resource view over any extra bindings
@@ -43,7 +43,7 @@ namespace RenderCore { namespace LightingEngine
 		UniformsStream us;
 		us._resourceViews = MakeIteratorRange(srvs);
 
-		UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._outputWidth, iterator._rpi.GetFrameBufferDesc().GetProperties()._outputHeight };
+		UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._width, iterator._rpi.GetFrameBufferDesc().GetProperties()._height };
 		_resolveOp->Dispatch(
 			*iterator._parsingContext,
 			(outputDims[0]+63) / 64, (outputDims[1]+63) / 64, 1,
@@ -57,7 +57,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc { TextureViewDesc::Aspect::Depth });
 		auto hierarchicalDepthsAttachment = result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths).NoInitialState();
-		unsigned depthsMipCount = IntegerLog2(std::max(fbProps._outputWidth, fbProps._outputHeight))+1;
+		unsigned depthsMipCount = IntegerLog2(std::max(fbProps._width, fbProps._height))+1;
 		for (unsigned c=0; c<depthsMipCount; ++c) {
 			TextureViewDesc view;
 			view._format._explicitFormat = Format::R32_FLOAT;
@@ -78,7 +78,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void HierarchicalDepthsOperator::PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext) 
 	{
-		UInt2 fbSize{stitchingContext._workingProps._outputWidth, stitchingContext._workingProps._outputHeight};
+		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
 		unsigned depthsMipCount = IntegerLog2(std::max(fbSize[0], fbSize[1]))+1;
 		Techniques::PreregisteredAttachment attachments[] {
 			Techniques::PreregisteredAttachment {

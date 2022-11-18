@@ -72,14 +72,14 @@ namespace RenderCore { namespace LightingEngine
 			_rayLengthsTexture = device.CreateResource(
 				CreateDesc(
 					BindFlag::TransferDst | BindFlag::UnorderedAccess | BindFlag::ShaderResource,
-					TextureDesc::Plain2D(fbProps._outputWidth, fbProps._outputHeight, Format::R16_FLOAT),
+					TextureDesc::Plain2D(fbProps._width, fbProps._height, Format::R16_FLOAT),
 					"ssr-ray-lengths"
 				));
 			_rayLengthsUAV = _rayLengthsTexture->CreateTextureView(BindFlag::UnorderedAccess);
 			_rayLengthsSRV = _rayLengthsTexture->CreateTextureView(BindFlag::ShaderResource);
 
-			auto tileCount = ((fbProps._outputWidth+7)/8)*((fbProps._outputHeight+7)/8);
-			auto pixelCount = fbProps._outputWidth*fbProps._outputHeight;
+			auto tileCount = ((fbProps._width+7)/8)*((fbProps._height+7)/8);
+			auto pixelCount = fbProps._width*fbProps._height;
 			uint32_t ray_list_element_count = pixelCount;
 			uint32_t ray_counter_element_count = 1;
 
@@ -212,7 +212,7 @@ namespace RenderCore { namespace LightingEngine
 			rvs[34] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceIntSRV).get();	// g_spatially_denoised_confidence_read
 		}
 
-		UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._outputWidth, iterator._rpi.GetFrameBufferDesc().GetProperties()._outputHeight };
+		UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._width, iterator._rpi.GetFrameBufferDesc().GetProperties()._height };
 		struct ExtendedTransforms
 		{
 			Float4x4 _clipToView, _clipToWorld, _worldToView;
@@ -363,7 +363,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void ScreenSpaceReflectionsOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext) 
 	{
-		UInt2 fbSize{stitchingContext._workingProps._outputWidth, stitchingContext._workingProps._outputHeight};
+		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
 		const auto colorFormat = Format::R11G11B10_FLOAT;
 		if (_desc._enableFinalBlur) {	/////////////////////////////////////////////
 			Techniques::PreregisteredAttachment attachments[] {

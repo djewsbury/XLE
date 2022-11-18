@@ -222,7 +222,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void RasterizationLightTileOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext) 
 	{
-		UInt2 fbSize{stitchingContext._workingProps._outputWidth, stitchingContext._workingProps._outputHeight};
+		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
 		unsigned planesRequired = _config._maxLightsPerView/32;
 		_lightTileBufferSize = UInt2{(fbSize[0]+s_gridDims-1)/s_gridDims, (fbSize[1]+s_gridDims-1)/s_gridDims};
 		Techniques::PreregisteredAttachment attachments[] {
@@ -369,7 +369,7 @@ namespace RenderCore { namespace LightingEngine
 
 		Techniques::FrameBufferDescFragment fragment;
 
-		UInt2 fbSize{parsingContext.GetFragmentStitchingContext()._workingProps._outputWidth, parsingContext.GetFragmentStitchingContext()._workingProps._outputHeight};
+		UInt2 fbSize{parsingContext.GetFragmentStitchingContext()._workingProps._outputWidth, parsingContext.GetFragmentStitchingContext()._workingProps._height};
 		auto lightTileBufferSize = UInt2{(fbSize[0]+s_gridDims-1)/s_gridDims, (fbSize[1]+s_gridDims-1)/s_gridDims};
 
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;

@@ -266,7 +266,7 @@ namespace RenderCore { namespace LightingEngine
 
 	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, GBufferType gbufferType, bool precisionTargets = false)
 	{
-		UInt2 fbSize{stitchingContext._workingProps._outputWidth, stitchingContext._workingProps._outputHeight};
+		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
 		Techniques::PreregisteredAttachment attachments[] {
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::MultisampleDepth,

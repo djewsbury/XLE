@@ -61,8 +61,8 @@ namespace UnitTests
 		SECTION("Basic construction")
 		{
 			FragmentStitchingContext stitchingContext;
-			stitchingContext._workingProps._outputWidth = 1024;
-			stitchingContext._workingProps._outputHeight = 1024;
+			stitchingContext._workingProps._width = 1024;
+			stitchingContext._workingProps._height = 1024;
 			DefineTestAttachments(stitchingContext, 0, UInt2(1024, 1024));
 
 			FrameBufferDescFragment fragment;
@@ -154,8 +154,8 @@ namespace UnitTests
 			}
 
 			FragmentStitchingContext stitchingContext;
-			stitchingContext._workingProps._outputWidth = 1024;
-			stitchingContext._workingProps._outputHeight = 1024;
+			stitchingContext._workingProps._width = 1024;
+			stitchingContext._workingProps._height = 1024;
 			DefineTestAttachments(stitchingContext, 0, UInt2(1024, 1024));
 
 			auto stitched = stitchingContext.TryStitchFrameBufferDesc(MakeIteratorRange(fragments));

@@ -129,7 +129,7 @@ namespace RenderCore
     class FrameBufferProperties
     {
     public:
-        unsigned _outputWidth = 0, _outputHeight = 0;
+        unsigned _width = 0, _height = 0;
         TextureSamples _samples = TextureSamples::Create();
 
         uint64_t CalculateHash() const;
@@ -359,8 +359,8 @@ namespace RenderCore
 
 	inline bool operator==(const FrameBufferProperties& lhs, const FrameBufferProperties& rhs)
 	{
-		return lhs._outputWidth == rhs._outputHeight
-			&& lhs._outputHeight == rhs._outputHeight
+		return lhs._width == rhs._height
+			&& lhs._height == rhs._height
 			&& lhs._samples._sampleCount == rhs._samples._sampleCount
 			&& lhs._samples._samplingQuality == rhs._samples._samplingQuality
 			;

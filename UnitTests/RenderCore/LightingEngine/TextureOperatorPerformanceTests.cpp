@@ -361,8 +361,8 @@ namespace UnitTests
 		camera._right = 2.f * aspectRatio;
 		camera._bottom = -2.f;
 		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
-		parsingContext.GetFragmentStitchingContext()._workingProps._outputWidth = workingRes[0];
-		parsingContext.GetFragmentStitchingContext()._workingProps._outputHeight = workingRes[1];
+		parsingContext.GetFragmentStitchingContext()._workingProps._width = workingRes[0];
+		parsingContext.GetFragmentStitchingContext()._workingProps._height = workingRes[1];
 
 		testHelper->BeginFrameCapture();
 

@@ -1831,7 +1831,7 @@ namespace RenderCore { namespace Techniques
         assert(fmt != Format::Unknown);
 
         TextureDesc tDesc = TextureDesc::Plain2D(
-            (unsigned)props._outputWidth, (unsigned)props._outputHeight,
+            (unsigned)props._width, (unsigned)props._height,
             fmt, 1, 0u,
             GetSamples(attachmentDesc._matchingRules, props));
         auto bindFlags = usageBindFlags | attachmentDesc._initialLayout | attachmentDesc._finalLayout | attachmentDesc._matchingRules._requiredBindFlags;

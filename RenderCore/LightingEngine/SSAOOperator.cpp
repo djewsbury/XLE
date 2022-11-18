@@ -96,7 +96,7 @@ namespace RenderCore { namespace LightingEngine
             MakeOpaqueIteratorRange(aoProps)
         };
         us._immediateData = MakeIteratorRange(immData);
-        UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._outputWidth, iterator._rpi.GetFrameBufferDesc().GetProperties()._outputHeight };
+        UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._width, iterator._rpi.GetFrameBufferDesc().GetProperties()._height };
         
         bool orthogonalMainSceneCamera = IsOrthogonalProjection(iterator._parsingContext->GetProjectionDesc()._cameraToProjection);
         if (orthogonalMainSceneCamera) {
@@ -185,7 +185,7 @@ namespace RenderCore { namespace LightingEngine
 
     void SSAOOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext)
     {
-        UInt2 fbSize{stitchingContext._workingProps._outputWidth, stitchingContext._workingProps._outputHeight};
+        UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
         Techniques::PreregisteredAttachment preGeneratedAttachments[] {
             Techniques::PreregisteredAttachment {
                 Hash_AOAccumulation0,
