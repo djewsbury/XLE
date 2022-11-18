@@ -311,12 +311,15 @@ namespace ToolsRig
 		{
 			using namespace RenderCore;
 
+			// since we're writing to ColorLDR, never attempt to copy this onto itself
+			auto attachmentSemantic = ConstHash64FromString(AsPointer(_attachmentName.begin()), AsPointer(_attachmentName.end()));
+			if (attachmentSemantic == RenderCore::Techniques::AttachmentSemantics::ColorLDR) return;
+
 			// update graphics descriptor set, because we've probably just done bunch of unbind operations
 			parsingContext.GetUniformDelegateManager()->BringUpToDateGraphics(parsingContext);
 
 			Techniques::FrameBufferDescFragment fragment;
 
-			auto attachmentSemantic = ConstHash64FromString(AsPointer(_attachmentName.begin()), AsPointer(_attachmentName.end()));
 			auto preRegAttachments = parsingContext.GetFragmentStitchingContext().GetPreregisteredAttachments();
 			auto i = std::find_if(preRegAttachments.begin(), preRegAttachments.end(),
 				[attachmentSemantic](const auto& c) { return c._semantic == attachmentSemantic; });
@@ -389,7 +392,9 @@ namespace ToolsRig
 
 		virtual auto GetRequiredAttachments() const -> std::vector<std::pair<uint64_t, RenderCore::BindFlag::BitField>> override
 		{
-			return {std::make_pair(ConstHash64FromString(AsPointer(_attachmentName.begin()), AsPointer(_attachmentName.end())), RenderCore::BindFlag::ShaderResource)};
+			auto attachmentHash = ConstHash64FromString(AsPointer(_attachmentName.begin()), AsPointer(_attachmentName.end()));
+			if (attachmentHash == RenderCore::Techniques::AttachmentSemantics::ColorLDR) return {};
+			return {std::make_pair(attachmentHash, RenderCore::BindFlag::ShaderResource)};
 		}
 
 		VisualizeAttachment(

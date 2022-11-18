@@ -50,8 +50,6 @@
 #define METRICS_RENDER_GEO_HLSL "xleres/TechniqueLibrary/Profiling/metricsrender.geo.hlsl"
 #define METRICS_RENDER_PIXEL_HLSL "xleres/TechniqueLibrary/Profiling/metricsrender.pixel.hlsl"
 
-#define AO_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/ao.compute.hlsl"
-
 #define RENDEROVERLAYS_SHAPES_HLSL "xleres/TechniqueLibrary/RenderOverlays/dd/ShapesFrameworkEntry.hlsl"
 #define RENDEROVERLAYS_SHAPES_MATERIAL "xleres/TechniqueLibrary/RenderOverlays/dd/DebuggingShapes.material"
 #define RENDEROVERLAYS_SEL_PRECONFIG "xleres/TechniqueLibrary/RenderOverlays/dd/Preconfiguration.hlsl"
@@ -76,6 +74,9 @@
 
 #define TILED_LIGHTING_PREPARE_HLSL "xleres/TechniqueLibrary/LightingEngine/tiledlighting-prepare.pixel.hlsl"
 #define TILED_LIGHTING_PREPARE_PIPELINE "xleres/TechniqueLibrary/LightingEngine/tiledlighting-prepare.pipeline"
+
+#define AO_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/ao.compute.hlsl"
+#define TONEMAP_ACES_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/tonemap-aces.compute.hlsl"
 
 #define SKY_PIXEL_HLSL "xleres/TechniqueLibrary/SceneEngine/Effects/Sky.pixel.hlsl"
 

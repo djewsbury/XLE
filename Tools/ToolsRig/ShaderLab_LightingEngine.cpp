@@ -9,6 +9,7 @@
 #include "../../RenderCore/LightingEngine/ForwardPlusLightScene.h"
 #include "../../RenderCore/LightingEngine/ShadowPreparer.h"
 #include "../../RenderCore/LightingEngine/SSAOOperator.h"
+#include "../../RenderCore/LightingEngine/ToneMapOperator.h"
 #include "../../RenderCore/LightingEngine/HierarchicalDepths.h"
 #include "../../RenderCore/LightingEngine/ScreenSpaceReflections.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
@@ -147,6 +148,24 @@ namespace ToolsRig
 					hasHierarchialDepths |= a._semantic == Techniques::AttachmentSemantics::HierarchicalDepths;
 
 				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::SSAOOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc, hasHierarchialDepths);
+				opStep->PreregisterAttachments(context._stitchingContext);
+				context._setupFunctions.push_back(
+					[opStep, fbProps=context._stitchingContext._workingProps](auto& sequence) {
+						sequence.CreateStep_RunFragments(opStep->CreateFragment(fbProps));
+					});
+				context._depVal.RegisterDependency(opStep->GetDependencyValidation());
+			});
+
+		shaderLab.RegisterOperation(
+			"ToneMapAcesOperator",
+			[](Formatters::IDynamicFormatter& formatter, ToolsRig::ShaderLab::OperationConstructorContext& context) {
+				RenderCore::LightingEngine::ToneMapAcesOperatorDesc desc;
+				StringSection<> keyname;
+				while (formatter.TryKeyedItem(keyname)) {
+					formatter.SkipValueOrElement();
+				}
+
+				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::ToneMapAcesOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc);
 				opStep->PreregisterAttachments(context._stitchingContext);
 				context._setupFunctions.push_back(
 					[opStep, fbProps=context._stitchingContext._workingProps](auto& sequence) {
