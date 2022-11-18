@@ -374,6 +374,7 @@ namespace RenderCore { namespace LightingEngine
 			*_pipelineAccelerators->GetDevice(),
 			descSetLayout->MakeDescriptorSetSignature(&commonResources._samplerPool),
 			pipelineType };
+		_descSetSlotBindings.clear();
 		_descSetSlotBindings.reserve(descSetLayout->_slots.size());
 		for (unsigned c=0; c<descSetLayout->_slots.size(); ++c) {
 			const auto& s = descSetLayout->_slots[c];

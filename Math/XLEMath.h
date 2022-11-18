@@ -118,6 +118,11 @@ namespace XLEMath
         return (rhs - lhs) * alpha + lhs;
     }
 
+    inline double LinearInterpolate(double lhs, double rhs, double alpha)
+    {
+        return (rhs - lhs) * alpha + lhs;
+    }
+
     inline int LinearInterpolate(int lhs, int rhs, float alpha)
     {
         return int((rhs - lhs) * alpha + .5f) + lhs;

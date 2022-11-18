@@ -227,7 +227,7 @@ namespace SceneEngine
 			RigidModelSceneInternal::RendererEntry newEntry;
 			newEntry._model = std::static_pointer_cast<RigidModelSceneInternal::ModelEntry>(model);
 
-			if (newEntry._model->_completedConstruction.wait_for(std::chrono::seconds(0)) == std::future_status::ready && newEntry._model->_referenceHolder->IsInvalidated()) {
+			if (newEntry._model->_completedConstruction.wait_for(std::chrono::seconds(0)) == std::future_status::ready && newEntry._model->_referenceHolder->AreScaffoldsInvalidated()) {
 				// scaffolds invalidated -- 
 				auto rebuiltConstruction = RenderCore::Assets::ModelRendererConstruction::Reconstruct(*newEntry._model->_referenceHolder, _loadingContext);
 				newEntry._model->_completedConstruction = {};
