@@ -1021,7 +1021,7 @@ namespace RenderCore { namespace Techniques
         return Reservation(std::move(selectedAttachments), this, flags);
     }
 
-    void AttachmentPool::Bind(uint64_t semantic, const IResourcePtr& resource)
+    void AttachmentPool::Bind(uint64_t semantic, const IResourcePtr& resource, bool completeInitialisationBeforeUse)
     {
         assert(resource);
         assert(semantic != 0);      // using zero as a semantic is not supported; this is used as a sentinel for "no semantic"
@@ -1073,7 +1073,10 @@ namespace RenderCore { namespace Techniques
         binding->_desc = resource->GetDesc();
 		assert(binding->_desc._textureDesc._format != Format::Unknown);
         binding->_resource = resource;
-        binding->_pendingCompleteInitialization = false;
+        // By default, we must check attachments registered this way for possible CompleteInitialization() calls
+        // it's possible that the caller has given us an attachment that has just been freshly created
+        // so the first time it's used, it may not have had complete initialization called
+        binding->_pendingCompleteInitialization = completeInitialisationBeforeUse;
     }
 
     void AttachmentPool::Bind(uint64_t semantic, AttachmentName resName)

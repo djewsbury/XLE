@@ -234,7 +234,7 @@ namespace RenderCore { namespace Techniques
     class AttachmentPool
     {
     public:
-        void Bind(uint64_t semantic, const IResourcePtr& resource);
+        void Bind(uint64_t semantic, const IResourcePtr& resource, bool completeInitialisationBeforeUse = true);
         void Bind(uint64_t semantic, AttachmentName resName);
         void Unbind(const IResource& resource);
         void Unbind(uint64_t semantic);

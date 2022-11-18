@@ -176,7 +176,8 @@ namespace PlatformRig
 
 			// Bind the presentation target as the default output for the parser context
 			// (including setting the normalized width and height)
-			parserContext.GetTechniqueContext()._attachmentPool->Bind(RenderCore::Techniques::AttachmentSemantics::ColorLDR, presentationTarget);
+            const bool checkPresentationTargetCompleteInitialisation = true;
+			parserContext.GetTechniqueContext()._attachmentPool->Bind(RenderCore::Techniques::AttachmentSemantics::ColorLDR, presentationTarget, checkPresentationTargetCompleteInitialisation);
             auto targetDesc = presentationTarget->GetDesc();
             auto& stitchingContext = parserContext.GetFragmentStitchingContext();
             stitchingContext.DefineAttachment(
