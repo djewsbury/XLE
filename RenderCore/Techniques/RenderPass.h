@@ -153,6 +153,17 @@ namespace RenderCore { namespace Techniques
         ResourceDesc _desc;
     };
 
+    struct AttachmentTransform
+    {
+        enum Type
+        {
+            Preserved, Generated, Written, Consumed, Temporary
+        };
+        Type _type = Temporary;
+        BindFlag::BitField _initialLayout = 0;
+        BindFlag::BitField _finalLayout = 0;
+    };
+
     class FragmentStitchingContext
     {
     public:
@@ -172,15 +183,6 @@ namespace RenderCore { namespace Techniques
             ClearValue initialContents,
             unsigned initialLayoutFlags=0);
 
-        struct AttachmentTransform
-        {
-            enum Type
-            {
-                Preserved, Generated, Written, Consumed, Temporary
-            };
-            Type _type = Temporary;
-            BindFlag::BitField _newLayout = 0;
-        };
         struct StitchResult
         {
             FrameBufferDesc _fbDesc;
@@ -231,33 +233,37 @@ namespace RenderCore { namespace Techniques
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+    class AttachmentReservation;
+    struct ReservationFlag
+    {
+        enum class Enum {};
+        using BitField=unsigned; 
+    };
+
+    struct AttachmentTransform;
+
     class AttachmentPool
     {
     public:
+        /*
         void Bind(uint64_t semantic, const IResourcePtr& resource, bool completeInitialisationBeforeUse = true);
         void Bind(uint64_t semantic, AttachmentName resName);
         void Unbind(const IResource& resource);
         void Unbind(uint64_t semantic);
         void UnbindAll();
 		auto GetBoundResource(uint64_t semantic) -> IResourcePtr;
+        */
 
         const std::shared_ptr<IResource>& GetResource(AttachmentName resName) const;
         auto GetSRV(AttachmentName resName, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
         auto GetView(AttachmentName resName, BindFlag::Enum usage, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
 
-        struct ReservationFlag
-        {
-            enum class Enum {};
-            using BitField=unsigned; 
-        };
-        class Reservation;
-        Reservation Reserve(
-            IteratorRange<const PreregisteredAttachment*>, 
+        AttachmentReservation Reserve(
+            IteratorRange<const PreregisteredAttachment*>,
+            AttachmentReservation* parentReservation = nullptr,
+            IteratorRange<const AttachmentTransform*> transform = {},
+            IteratorRange<const DoubleBufferAttachment*> doubleBufferAttachmentRules = {},
             ReservationFlag::BitField = 0);
-
-        void FlipDoubleBufferAttachments(
-            IThreadContext& threadContext,
-            IteratorRange<const DoubleBufferAttachment*> attachments);
 
         void ResetActualized();
         std::string GetMetrics() const;
@@ -270,29 +276,74 @@ namespace RenderCore { namespace Techniques
 
         void AddRef(IteratorRange<const AttachmentName*>, ReservationFlag::BitField flags);
         void Release(IteratorRange<const AttachmentName*>, ReservationFlag::BitField flags);
+
+        friend class AttachmentReservation;
     };
 
-    class AttachmentPool::Reservation
+    class AttachmentReservation
     {
     public:
-        IteratorRange<const AttachmentName*> GetResourceIds() const { return MakeIteratorRange(_reservedAttachments); }
+        AttachmentName Bind(uint64_t semantic, const IResourcePtr& resource, BindFlag::Enum currentLayout);
+        void Unbind(const IResource& resource);
+
+        // Bind(uint64_t semantic, IPresentationChain...)   ?
+
+        // AttachmentReservation has it's own indexing for attachments
+        // this will be zero-based and agree with the ordering of requests when returned from AttachmentPool::Reserve
+        // this can be used to make it compatible with the AttachmentName in a FrameBufferDesc
+        const std::shared_ptr<IResource>& GetResource(AttachmentName resName) const;
+        const ResourceDesc& GetResourceDesc(AttachmentName resName) const;
+        auto GetSRV(AttachmentName resName, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
+        auto GetView(AttachmentName resName, BindFlag::Enum usage, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
+
+        const std::shared_ptr<IResource>& GetSemanticResource(uint64_t semantic) const;
+
+        unsigned GetResourceCount() const { return (unsigned)_entries.size(); }
+
         void CompleteInitialization(IThreadContext&);
         bool HasPendingCompleteInitialization() const;
-        Reservation();
-        ~Reservation();
-        Reservation(Reservation&&);
-        Reservation& operator=(Reservation&&);
-        Reservation(const Reservation&);
-        Reservation& operator=(const Reservation&);
+
+        using AttachmentNameMapping = std::vector<std::pair<AttachmentName, AttachmentName>>;
+        AttachmentNameMapping MergeIn(const AttachmentReservation&);
+
+        AttachmentReservation CaptureDoubleBufferAttachments();
+
+        AttachmentReservation();
+        ~AttachmentReservation();
+        AttachmentReservation(AttachmentReservation&&);
+        AttachmentReservation& operator=(AttachmentReservation&&);
+        AttachmentReservation(const AttachmentReservation&);
+        AttachmentReservation& operator=(const AttachmentReservation&);
     private:
-        std::vector<AttachmentName> _reservedAttachments;       // good candidate for subframe heap
+        struct Entry
+        {
+            unsigned _poolResource = ~0u;
+            std::shared_ptr<IResource> _resource;
+            uint64_t _semantic = ~0ull;
+            BindFlag::Enum _currentLayout = (BindFlag::Enum)0;
+            std::optional<ClearValue> _pendingClear;
+            std::optional<BindFlag::Enum> _pendingSwitchToLayout;
+        };
+        std::vector<Entry> _entries;                 // candidate for subframe heap
         AttachmentPool* _pool;
         ReservationFlag::BitField _reservationFlags;
 
-        Reservation(
-            std::vector<AttachmentName>&& reservedAttachments,
+        struct AttachmentToReserve
+        {
+            AttachmentName _poolName = ~0u;
+            std::shared_ptr<IResource> _resource;
+            uint64_t _semantic;
+            std::optional<ClearValue> _pendingClear;
+            std::optional<unsigned> _initialLayout;
+            std::optional<BindFlag::Enum> _pendingSwitchToLayout;
+        };
+        AttachmentReservation(
+            std::vector<AttachmentToReserve>&& reservedAttachments,
             AttachmentPool* pool,
             ReservationFlag::BitField flags);
+        void Remove(AttachmentName);
+        void AddRefAll();
+        void ReleaseAll();
         friend class AttachmentPool;
     };
 
@@ -340,7 +391,7 @@ namespace RenderCore { namespace Techniques
         const Metal::FrameBuffer& GetFrameBuffer() const { return *_frameBuffer; }
         const FrameBufferDesc& GetFrameBufferDesc() const { return *_layout; }
         ViewportDesc GetDefaultViewport() const;
-        const AttachmentPool::Reservation& GetAttachmentReservation() const { return _attachmentPoolReservation; }
+        const AttachmentReservation& GetAttachmentReservation() const { return _attachmentPoolReservation; }
 
         auto GetInputAttachmentResource(unsigned inputAttachmentSlot) const -> const std::shared_ptr<IResource>&;
         auto GetInputAttachmentView(unsigned inputAttachmentSlot) const -> const std::shared_ptr<IResourceView>&;
@@ -385,8 +436,7 @@ namespace RenderCore { namespace Techniques
 		RenderPassInstance(
 			const FrameBufferDesc& layout,
             IteratorRange<const PreregisteredAttachment*> resolvedAttachmentDescs,
-			AttachmentPool& attachmentPool,
-            unsigned frameIdx = 0);
+			AttachmentPool& attachmentPool);
         ~RenderPassInstance();
 
         RenderPassInstance();
@@ -397,7 +447,7 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<Metal::FrameBuffer> _frameBuffer;
         Metal::DeviceContext* _attachedContext;
         AttachmentPool* _attachmentPool;
-        AttachmentPool::Reservation _attachmentPoolReservation;
+        AttachmentReservation _attachmentPoolReservation;
 		const FrameBufferDesc* _layout;     // this is expensive to copy, so avoid it when we can
         unsigned _currentSubpassIndex = 0;
         ParsingContext* _attachedParsingContext = nullptr;

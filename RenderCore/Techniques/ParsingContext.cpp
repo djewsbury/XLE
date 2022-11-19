@@ -13,6 +13,16 @@
 
 namespace RenderCore { namespace Techniques
 {
+    struct ParsingContext::Internal
+    {
+        ProjectionDesc _projectionDesc;
+        ProjectionDesc _prevProjectionDesc;
+        bool _enablePrevProjectionDesc = false;
+
+        FragmentStitchingContext _stitchingContext;
+        AttachmentReservation _attachmentReservation;
+    };
+
     void ParsingContext::Process(const ::Assets::Exceptions::RetrievalError& e)
     {
             //  Handle a "invalid asset" and "pending asset" exception that 
@@ -44,16 +54,6 @@ namespace RenderCore { namespace Techniques
 		}
     }
 
-	FragmentStitchingContext& ParsingContext::GetFragmentStitchingContext()
-	{
-		if (!_stitchingContext)
-			_stitchingContext = std::make_unique<FragmentStitchingContext>(
-                IteratorRange<const PreregisteredAttachment*>{},
-                FrameBufferProperties{},
-                _techniqueContext->_systemAttachmentFormats);
-		return *_stitchingContext;
-	}
-
     ParsingContext::ParsingContext(TechniqueContext& techniqueContext, IThreadContext& threadContext)
 	: _techniqueContext(&techniqueContext)
     , _threadContext(&threadContext)
@@ -66,6 +66,11 @@ namespace RenderCore { namespace Techniques
 
 		_uniformDelegateManager = _techniqueContext->_uniformDelegateManager;
         _pipelineAcceleratorsVisibility = 0;
+
+        _internal->_stitchingContext = FragmentStitchingContext{
+            IteratorRange<const PreregisteredAttachment*>{},
+            FrameBufferProperties{},
+            _techniqueContext->_systemAttachmentFormats};
     }
 
     ParsingContext::~ParsingContext() {}
@@ -74,5 +79,14 @@ namespace RenderCore { namespace Techniques
     {
         _errorString[0] = _pendingAssets[0] = _invalidAssets[0] = _quickMetrics[0] = '\0';
     }
+
+    ProjectionDesc&         ParsingContext::GetProjectionDesc()                 { return _internal->_projectionDesc; }
+    const ProjectionDesc&   ParsingContext::GetProjectionDesc() const           { return _internal->_projectionDesc; }
+    ProjectionDesc&         ParsingContext::GetPrevProjectionDesc()             { return _internal->_prevProjectionDesc; }
+    const ProjectionDesc&   ParsingContext::GetPrevProjectionDesc() const       { return _internal->_prevProjectionDesc; }
+    bool&                   ParsingContext::GetEnablePrevProjectionDesc()       { return _internal->_enablePrevProjectionDesc; }
+    bool                    ParsingContext::GetEnablePrevProjectionDesc() const { return _internal->_enablePrevProjectionDesc; }
+    FragmentStitchingContext& ParsingContext::GetFragmentStitchingContext()     { return _internal->_stitchingContext; }
+    AttachmentReservation& ParsingContext::GetAttachmentReservation()           { return _internal->_attachmentReservation; }
 }}
 

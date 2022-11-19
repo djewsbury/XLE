@@ -42,7 +42,7 @@ namespace RenderCore { namespace Techniques
 		LoadStore loadOperation,
 		unsigned clearColor)
 	{
-		parserContext.GetTechniqueContext()._attachmentPool->Bind(AttachmentSemantics::ColorLDR, presentationTarget);
+		parserContext.GetAttachmentReservation().Bind(AttachmentSemantics::ColorLDR, presentationTarget, BindFlag::Enum(0));
 		return RenderPassToPresentationTarget(parserContext, loadOperation, clearColor);
 	}
 
@@ -51,7 +51,7 @@ namespace RenderCore { namespace Techniques
 		LoadStore loadOperation,
 		unsigned clearColor)
 	{
-		auto boundDepth = parserContext.GetTechniqueContext()._attachmentPool->GetBoundResource(AttachmentSemantics::MultisampleDepth);
+		auto boundDepth = parserContext.GetAttachmentReservation().GetSemanticResource(AttachmentSemantics::MultisampleDepth).get();
 		if (!boundDepth && loadOperation != LoadStore::Clear)
 			return RenderPassToPresentationTarget(parserContext, loadOperation, clearColor);
 
@@ -71,7 +71,7 @@ namespace RenderCore { namespace Techniques
 		LoadStore loadOperation,
 		unsigned clearColor)
 	{
-        parserContext.GetTechniqueContext()._attachmentPool->Bind(AttachmentSemantics::ColorLDR, presentationTarget);
+        parserContext.GetAttachmentReservation().Bind(AttachmentSemantics::ColorLDR, presentationTarget, BindFlag::Enum(0));
 		return RenderPassToPresentationTargetWithDepthStencil(parserContext, loadOperation, clearColor);
 	}
 

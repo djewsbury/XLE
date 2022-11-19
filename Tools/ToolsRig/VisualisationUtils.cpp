@@ -859,7 +859,7 @@ namespace ToolsRig
     {
         using namespace RenderCore;
 		{
-			if (!parserContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::MultisampleDepth))		// we need this attachment to continue
+			if (!parserContext.GetAttachmentReservation().GetSemanticResource(Techniques::AttachmentSemantics::MultisampleDepth))		// we need this attachment to continue
 				return;
 
 			auto preRegs = parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments();

@@ -23,6 +23,7 @@ namespace RenderCore { namespace Techniques
     class IShaderResourceDelegate;
     class SystemUniformsDelegate;
     class FragmentStitchingContext;
+    class AttachmentReservation;
     class RenderPassInstance;
     class IUniformDelegateManager;
     using VisibilityMarkerId = uint32_t;
@@ -42,14 +43,14 @@ namespace RenderCore { namespace Techniques
     {
     public:
             //  ----------------- Active projection context -----------------
-        ProjectionDesc&         GetProjectionDesc()                 { return _internal->_projectionDesc; }
-        const ProjectionDesc&   GetProjectionDesc() const           { return _internal->_projectionDesc; }
-        ProjectionDesc&         GetPrevProjectionDesc()             { return _internal->_prevProjectionDesc; }
-        const ProjectionDesc&   GetPrevProjectionDesc() const       { return _internal->_prevProjectionDesc; }
-        bool&                   GetEnablePrevProjectionDesc()       { return _internal->_enablePrevProjectionDesc; }
-        bool                    GetEnablePrevProjectionDesc() const { return _internal->_enablePrevProjectionDesc; }
-        ViewportDesc&           GetViewport()                       { return _viewportDesc; }
-        const ViewportDesc&     GetViewport() const                 { return _viewportDesc; }
+        ProjectionDesc&         GetProjectionDesc();
+        const ProjectionDesc&   GetProjectionDesc() const;
+        ProjectionDesc&         GetPrevProjectionDesc();
+        const ProjectionDesc&   GetPrevProjectionDesc() const;
+        bool&                   GetEnablePrevProjectionDesc();
+        bool                    GetEnablePrevProjectionDesc() const;
+        ViewportDesc&           GetViewport();
+        const ViewportDesc&     GetViewport() const;
 
             //  ----------------- Working technique context -----------------
         TechniqueContext&		GetTechniqueContext()               { return *_techniqueContext; }
@@ -71,6 +72,7 @@ namespace RenderCore { namespace Techniques
 
 			//  ----------------- Frame buffer / render pass state -----------------
         FragmentStitchingContext& GetFragmentStitchingContext();
+        AttachmentReservation& GetAttachmentReservation();
 
 			//  ----------------- Overlays for late rendering -----------------
         typedef std::function<void(ParsingContext&)> PendingOverlay;
@@ -108,17 +110,11 @@ namespace RenderCore { namespace Techniques
         IThreadContext*         _threadContext;
         std::shared_ptr<IUniformDelegateManager> _uniformDelegateManager;
 
-        struct Internal 
-        {
-            ProjectionDesc _projectionDesc;
-            ProjectionDesc _prevProjectionDesc;
-            bool _enablePrevProjectionDesc = false;
-        };
+        class Internal;
         std::unique_ptr<Internal>           _internal;
         ViewportDesc                        _viewportDesc;
 
 		ParameterBox                        _subframeShaderSelectors;
-        std::unique_ptr<FragmentStitchingContext> _stitchingContext;
         VisibilityMarkerId                  _pipelineAcceleratorsVisibility;
     };
 
