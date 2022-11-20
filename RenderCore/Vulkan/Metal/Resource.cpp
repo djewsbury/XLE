@@ -2047,8 +2047,11 @@ namespace RenderCore { namespace Metal_Vulkan
 				_pipelineStageFlags |= VK_PIPELINE_STAGE_TRANSFER_BIT;
 				break;
 
-			default:
 			case BindFlag::PresentationSrc:
+				_pipelineStageFlags |= VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+				break;
+
+			default:
 			case BindFlag::RawViews:
 				break;
 			}
@@ -2175,6 +2178,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto lifetimeBindFlags = checked_cast<Resource*>(&resource)->AccessDesc()._bindFlags;
 		preBarrierUsage = preBarrierUsage.SpecializeForResource(lifetimeBindFlags);
 		postBarrierUsage = postBarrierUsage.SpecializeForResource(lifetimeBindFlags);
+		assert(preBarrierUsage._pipelineStageFlags);
+		assert(postBarrierUsage._pipelineStageFlags);
 
 		auto* res = checked_cast<Resource*>(&resource);
 		if (res->GetBuffer()) {

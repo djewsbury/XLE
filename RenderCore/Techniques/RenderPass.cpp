@@ -401,7 +401,7 @@ namespace RenderCore { namespace Techniques
             
             if (HasRetain(fbDesc.GetAttachments()[c]._loadFromPreviousPhase)) {
                 if (HasRetain(fbDesc.GetAttachments()[c]._storeToNextPhase)) {
-                    dstTransforms[c]._type = AttachmentTransform::Written;
+                    dstTransforms[c]._type = AttachmentTransform::LoadedAndStored;
                 } else {
                     dstTransforms[c]._type = AttachmentTransform::Consumed;
                 }
@@ -655,13 +655,14 @@ namespace RenderCore { namespace Techniques
         IteratorRange<const PreregisteredAttachment*> fullAttachmentsDescription,
         FrameBufferPool& frameBufferPool,
         AttachmentPool& attachmentPool,
+        AttachmentReservation* parentReservation,
         const RenderPassBeginDesc& beginInfo)
     {
         _attachedContext = Metal::DeviceContext::Get(context).get();
 
         auto fb = frameBufferPool.BuildFrameBuffer(
             Metal::GetObjectFactory(*context.GetDevice()),
-            layout, fullAttachmentsDescription, attachmentPool, nullptr);
+            layout, fullAttachmentsDescription, attachmentPool, parentReservation);
         fb._poolReservation.CompleteInitialization(context);
 
         _frameBuffer = std::move(fb._frameBuffer);
@@ -713,6 +714,7 @@ namespace RenderCore { namespace Techniques
                 parsingContext.GetThreadContext(), stitchedFragment._fbDesc, stitchedFragment._fullAttachmentDescriptions,
                 *parsingContext.GetTechniqueContext()._frameBufferPool,
                 *parsingContext.GetTechniqueContext()._attachmentPool,
+                &parsingContext.GetAttachmentReservation(),
                 beginInfo };
             parsingContext.GetViewport() = _frameBuffer->GetDefaultViewport();
         } else {
@@ -1009,8 +1011,7 @@ namespace RenderCore { namespace Techniques
                     // todo -- check _initialLayout
                     parentReservation->_entries[q]._currentLayout = (BindFlag::Enum)transforms[r]._finalLayout;
                     switch (transforms[r]._type) {
-                    case AttachmentTransform::Preserved:
-                    case AttachmentTransform::Written:
+                    case AttachmentTransform::LoadedAndStored:
                     case AttachmentTransform::Generated:
                         break;
                     case AttachmentTransform::Temporary:
@@ -1397,9 +1398,7 @@ namespace RenderCore { namespace Techniques
         assert(resName < _entries.size());
         const auto& e = _entries[resName];
         if (e._poolResource == ~0u) {
-            assert(0);      // we need to keep a pool of views
-            static std::shared_ptr<IResourceView> dummy;
-            return dummy;
+            return _viewPool.GetTextureView(e._resource, usage, window);
         }
         return _pool->GetView(e._poolResource, usage, window);
     }
@@ -1458,6 +1457,9 @@ namespace RenderCore { namespace Techniques
             } else if (a._poolResource != ~0u) {
                 auto& poolResource = _pool->_pimpl->_attachments[a._poolResource];
                 if (poolResource._pendingCompleteInitialization) {
+                    if (!poolResource._resource)
+                        _pool->_pimpl->BuildAttachment(a._poolResource);
+                    assert(poolResource._resource);
                     completeInitializationResources[completeInitializationCount++] = poolResource._resource.get();
                     poolResource._pendingCompleteInitialization = false;
                 }
@@ -2116,10 +2118,10 @@ namespace RenderCore { namespace Techniques
                 AttachmentTransform transform;
                 if (directionFlags & DirectionFlags::RetainsOnExit) {
                     if (directionFlags & DirectionFlags::WritesData) {
-                        if (directionFlags & DirectionFlags::RequirePreinitializedData) transform._type = AttachmentTransform::Written;
+                        if (directionFlags & DirectionFlags::RequirePreinitializedData) transform._type = AttachmentTransform::LoadedAndStored;
                         else transform._type = AttachmentTransform::Generated;
                     } else  {
-                        transform._type = AttachmentTransform::Preserved;
+                        transform._type = AttachmentTransform::LoadedAndStored;
                     }
                 } else {
                     assert(directionFlags & DirectionFlags::Reference);
@@ -2188,17 +2190,9 @@ namespace RenderCore { namespace Techniques
             auto semantic = stitchResult._fullAttachmentDescriptions[aIdx]._semantic;
             if (!semantic) continue;
             switch (stitchResult._attachmentTransforms[aIdx]._type) {
-            case AttachmentTransform::Preserved:
             case AttachmentTransform::Temporary:
                 break;
-            case AttachmentTransform::Written:
-                {
-                    auto desc = stitchResult._fullAttachmentDescriptions[aIdx];
-                    desc._state = PreregisteredAttachment::State::Initialized;
-                    desc._layoutFlags = stitchResult._attachmentTransforms[aIdx]._finalLayout;
-                    DefineAttachment(desc);
-                    break;
-                }
+            case AttachmentTransform::LoadedAndStored:
             case AttachmentTransform::Generated:
                 {
                     auto desc = stitchResult._fullAttachmentDescriptions[aIdx];

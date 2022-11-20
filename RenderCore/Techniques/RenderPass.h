@@ -9,6 +9,7 @@
 #include "../ResourceDesc.h"        // needed for TextureViewDesc constructor
 #include "../Types.h"
 #include "../FrameBufferDesc.h"
+#include "../ResourceUtils.h"           // for ViewPool
 #include "../Metal/Forward.h"
 #include "../../Math/Vector.h"
 #include "../../Utility/IteratorUtils.h"
@@ -159,7 +160,7 @@ namespace RenderCore { namespace Techniques
     {
         enum Type
         {
-            Preserved, Generated, Written, Consumed, Temporary
+            LoadedAndStored, Generated, Consumed, Temporary
         };
         Type _type = Temporary;
         BindFlag::BitField _initialLayout = 0;
@@ -320,6 +321,7 @@ namespace RenderCore { namespace Techniques
         std::vector<Entry> _entries;                 // candidate for subframe heap
         AttachmentPool* _pool;
         ReservationFlag::BitField _reservationFlags;
+        mutable ViewPool _viewPool;
 
         struct AttachmentToReserve
         {
@@ -409,6 +411,7 @@ namespace RenderCore { namespace Techniques
             IteratorRange<const PreregisteredAttachment*> fullAttachmentsDescription,
             FrameBufferPool& frameBufferPool,
             AttachmentPool& attachmentPool,
+            AttachmentReservation* parentReservation = nullptr,
             const RenderPassBeginDesc& beginInfo = RenderPassBeginDesc());
 
         // Construct from a fully FrameBufferDescFragment fragment. This will use the

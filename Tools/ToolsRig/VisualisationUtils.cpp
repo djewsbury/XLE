@@ -1078,6 +1078,7 @@ namespace ToolsRig
 			// register an initialized color texture
 			auto colorPreg = *color;
 			colorPreg._state = Techniques::PreregisteredAttachment::State::Initialized;
+			colorPreg._layoutFlags = BindFlag::RenderTarget;
 			stitching.DefineAttachment(colorPreg);
 
 			// register a default depth texture
