@@ -30,7 +30,7 @@ namespace RenderCore { namespace Techniques
 	{
 		FrameBufferDescFragment frag;
 		SubpassDesc subpass;
-		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::ColorLDR).InitialState(loadOperation, 0));
+		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::ColorLDR).InitialState(loadOperation));
 		frag.AddSubpass(std::move(subpass));
 		auto clear = AsClearValueColor(clearColor);
         return RenderPassInstance{parserContext, frag, RenderPassBeginDesc{MakeIteratorRange(&clear, &clear+1)}};
@@ -57,8 +57,8 @@ namespace RenderCore { namespace Techniques
 
 		FrameBufferDescFragment frag;
 		SubpassDesc subpass;
-		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::ColorLDR).InitialState(loadOperation, 0));
-		subpass.SetDepthStencil(frag.DefineAttachment(AttachmentSemantics::MultisampleDepth).InitialState(loadOperation, 0));
+		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::ColorLDR).InitialState(loadOperation));
+		subpass.SetDepthStencil(frag.DefineAttachment(AttachmentSemantics::MultisampleDepth).InitialState(loadOperation));
 		frag.AddSubpass(std::move(subpass));
 
         auto clear = AsClearValueColor(clearColor);
@@ -82,7 +82,7 @@ namespace RenderCore { namespace Techniques
 	{
 		FrameBufferDescFragment frag;
 		SubpassDesc subpass;
-		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::MultisampleDepth).InitialState(loadOperation, 0));
+		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::MultisampleDepth).InitialState(loadOperation));
 		frag.AddSubpass(std::move(subpass));
         return RenderPassInstance{parserContext, frag, RenderPassBeginDesc{MakeIteratorRange(&clearValue, &clearValue+1)}};	
 	}

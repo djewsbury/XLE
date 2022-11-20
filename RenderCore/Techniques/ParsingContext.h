@@ -49,8 +49,8 @@ namespace RenderCore { namespace Techniques
         const ProjectionDesc&   GetPrevProjectionDesc() const;
         bool&                   GetEnablePrevProjectionDesc();
         bool                    GetEnablePrevProjectionDesc() const;
-        ViewportDesc&           GetViewport();
-        const ViewportDesc&     GetViewport() const;
+        ViewportDesc&           GetViewport()                       { return _viewportDesc; }
+        const ViewportDesc&     GetViewport() const                 { return _viewportDesc; }
 
             //  ----------------- Working technique context -----------------
         TechniqueContext&		GetTechniqueContext()               { return *_techniqueContext; }

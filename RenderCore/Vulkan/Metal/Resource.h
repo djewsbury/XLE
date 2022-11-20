@@ -242,8 +242,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkAccessFlags _accessFlags = 0;
 		VkPipelineStageFlags _pipelineStageFlags = 0;
 		VkImageLayout _imageLayout = (VkImageLayout)0;
-		BarrierResourceUsage(RenderCore::BindFlag::Enum);
-		BarrierResourceUsage(RenderCore::BindFlag::Enum, RenderCore::ShaderStage);
+		BarrierResourceUsage(BindFlag::BitField immediateUsage);
+		BarrierResourceUsage(BindFlag::BitField immediateUsage, ShaderStage);
 		BarrierResourceUsage() = default;
 		static BarrierResourceUsage HostRead();
 		static BarrierResourceUsage HostWrite();
@@ -252,6 +252,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		static BarrierResourceUsage AllCommandsReadAndWrite();
 		static BarrierResourceUsage NoState();
 		static BarrierResourceUsage Preinitialized();
+
+		BarrierResourceUsage SpecializeForResource(BindFlag::BitField lifetimeResourceUsage);
+	private:
+		BarrierResourceUsage(BindFlag::BitField, VkPipelineStageFlags);
 	};
 
 	struct BarrierHelper

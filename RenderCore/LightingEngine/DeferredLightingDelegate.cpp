@@ -162,7 +162,7 @@ namespace RenderCore { namespace LightingEngine
 		bool precisionTargets = false)
 	{
 		RenderStepFragmentInterface fragment { RenderCore::PipelineType::Graphics };
-		auto depthTarget = fragment.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear, 0).FinalState(BindFlag::DepthStencil);
+		auto depthTarget = fragment.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear).FinalState(BindFlag::DepthStencil);
 		auto lightResolveTarget = fragment.DefineAttachment(
 			Techniques::AttachmentSemantics::ColorHDR).Clear().Discard()
 			.FixedFormat((!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT)
@@ -190,9 +190,9 @@ namespace RenderCore { namespace LightingEngine
 
 		auto gbufferStore = LoadStore::Retain;	// (technically only need retain when we're going to use these for debugging)
 		auto diffuseAspect = (!precisionTargets) ? TextureViewDesc::Aspect::ColorSRGB : TextureViewDesc::Aspect::ColorLinear;
-		subpasses[1].AppendInput(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse).InitialState(gbufferStore, 0), {diffuseAspect});
-		subpasses[1].AppendInput(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal).InitialState(gbufferStore, 0));
-		subpasses[1].AppendInput(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter).InitialState(gbufferStore, 0));
+		subpasses[1].AppendInput(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse).InitialState(gbufferStore), {diffuseAspect});
+		subpasses[1].AppendInput(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal).InitialState(gbufferStore));
+		subpasses[1].AppendInput(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter).InitialState(gbufferStore));
 		subpasses[1].AppendInput(depthTarget, justDepthWindow);
 		subpasses[1].SetName("light-resolve");
 

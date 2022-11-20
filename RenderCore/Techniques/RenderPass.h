@@ -74,6 +74,8 @@ namespace RenderCore { namespace Techniques
             DefineAttachmentHelper& FinalState(BindFlag::BitField);
             DefineAttachmentHelper& InitialState(LoadStore, BindFlag::BitField);
             DefineAttachmentHelper& FinalState(LoadStore, BindFlag::BitField);
+            DefineAttachmentHelper& InitialState(LoadStore);
+            DefineAttachmentHelper& FinalState(LoadStore);
 
             // Matching rules
             DefineAttachmentHelper& FixedFormat(Format);
@@ -112,8 +114,8 @@ namespace RenderCore { namespace Techniques
             AttachmentMatchingRules _matchingRules;
             LoadStore _loadFromPreviousPhase = LoadStore::Retain;
             LoadStore _storeToNextPhase = LoadStore::Retain;
-            BindFlag::BitField _initialLayout = 0u;
-            BindFlag::BitField _finalLayout = 0u;
+            std::optional<BindFlag::BitField> _initialLayout;       // layouts that are not specfied will have defaults generated from the first and last usage
+            std::optional<BindFlag::BitField> _finalLayout;         // 0 can be used for an undefined initial layout
 
             uint64_t GetInputSemanticBinding() const { return _semantic; }
             uint64_t GetOutputSemanticBinding() const { return _semantic; }
@@ -245,15 +247,6 @@ namespace RenderCore { namespace Techniques
     class AttachmentPool
     {
     public:
-        /*
-        void Bind(uint64_t semantic, const IResourcePtr& resource, bool completeInitialisationBeforeUse = true);
-        void Bind(uint64_t semantic, AttachmentName resName);
-        void Unbind(const IResource& resource);
-        void Unbind(uint64_t semantic);
-        void UnbindAll();
-		auto GetBoundResource(uint64_t semantic) -> IResourcePtr;
-        */
-
         const std::shared_ptr<IResource>& GetResource(AttachmentName resName) const;
         auto GetSRV(AttachmentName resName, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
         auto GetView(AttachmentName resName, BindFlag::Enum usage, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
@@ -283,7 +276,7 @@ namespace RenderCore { namespace Techniques
     class AttachmentReservation
     {
     public:
-        AttachmentName Bind(uint64_t semantic, const IResourcePtr& resource, BindFlag::Enum currentLayout);
+        AttachmentName Bind(uint64_t semantic, const IResourcePtr& resource, BindFlag::BitField currentLayout);
         void Unbind(const IResource& resource);
 
         // Bind(uint64_t semantic, IPresentationChain...)   ?
@@ -292,7 +285,7 @@ namespace RenderCore { namespace Techniques
         // this will be zero-based and agree with the ordering of requests when returned from AttachmentPool::Reserve
         // this can be used to make it compatible with the AttachmentName in a FrameBufferDesc
         const std::shared_ptr<IResource>& GetResource(AttachmentName resName) const;
-        const ResourceDesc& GetResourceDesc(AttachmentName resName) const;
+        ResourceDesc GetResourceDesc(AttachmentName resName) const;
         auto GetSRV(AttachmentName resName, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
         auto GetView(AttachmentName resName, BindFlag::Enum usage, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
 
@@ -320,9 +313,9 @@ namespace RenderCore { namespace Techniques
             unsigned _poolResource = ~0u;
             std::shared_ptr<IResource> _resource;
             uint64_t _semantic = ~0ull;
-            BindFlag::Enum _currentLayout = (BindFlag::Enum)0;
+            BindFlag::BitField _currentLayout = (BindFlag::BitField)0;
             std::optional<ClearValue> _pendingClear;
-            std::optional<BindFlag::Enum> _pendingSwitchToLayout;
+            std::optional<BindFlag::BitField> _pendingSwitchToLayout;
         };
         std::vector<Entry> _entries;                 // candidate for subframe heap
         AttachmentPool* _pool;
@@ -335,7 +328,7 @@ namespace RenderCore { namespace Techniques
             uint64_t _semantic;
             std::optional<ClearValue> _pendingClear;
             std::optional<unsigned> _initialLayout;
-            std::optional<BindFlag::Enum> _pendingSwitchToLayout;
+            std::optional<BindFlag::BitField> _pendingSwitchToLayout;
         };
         AttachmentReservation(
             std::vector<AttachmentToReserve>&& reservedAttachments,

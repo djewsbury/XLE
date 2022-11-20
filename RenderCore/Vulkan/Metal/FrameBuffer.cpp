@@ -98,7 +98,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			enum Flags
 			{
 				Input = 1<<0, Output = 1<<1, DepthStencil = 1<<2,
-				HintGeneral = 1<<3		// if "general" is explicitly requested in the input FrameBufferDesc
+				HintGeneral = 1<<3,			// if "general" is explicitly requested in the input FrameBufferDesc
+				HintDepthAspect = 1<<4,		// if the depth aspect is referenced
+				HintStencilAspect = 1<<5,	// if the stencil aspect is referenced
 			};
 			using BitField = unsigned;
 		}
@@ -140,8 +142,27 @@ namespace RenderCore { namespace Metal_Vulkan
 			dst._aspect = src._aspect;
 	}
 
+	static BindFlag::BitField AsBindFlags(Internal::AttachmentResourceUsageType::BitField usage)
+	{
+		BindFlag::BitField result = 0;
+		if (usage & Internal::AttachmentResourceUsageType::Input) result |= BindFlag::InputAttachment;
+		if (usage & Internal::AttachmentResourceUsageType::Output) result |= BindFlag::RenderTarget;
+		if (usage & Internal::AttachmentResourceUsageType::DepthStencil) result |= BindFlag::DepthStencil;
+		return result;
+	}
+
 	static VkImageLayout LayoutFromBindFlagsAndUsage(BindFlag::BitField bindFlagInSubpass, Internal::AttachmentResourceUsageType::BitField usageOverFullLife)
 	{
+		assert(bindFlagInSubpass!=0);
+		// Generate the image layout using the same logic as BarrierHelper and other things related to layouts
+		// We need to know the "lifetime bind flags" to calculate this correctly -- at the moment just to check if it's a depth buffer
+		// this can usually be implied the usage; however in some cases this might be impossible (& the caller will have to explicitly select the layout)
+		auto assumedResourceBindFlags = AsBindFlags(usageOverFullLife);
+		if (usageOverFullLife & (Internal::AttachmentResourceUsageType::HintDepthAspect|Internal::AttachmentResourceUsageType::HintStencilAspect))
+			assumedResourceBindFlags |= BindFlag::DepthStencil;
+		return BarrierResourceUsage{bindFlagInSubpass}.SpecializeForResource(assumedResourceBindFlags)._imageLayout;
+
+#if 0
 		const bool isDepthStencil = !!(usageOverFullLife & unsigned(Internal::AttachmentResourceUsageType::DepthStencil));
 		const bool isColorOutput = !!(usageOverFullLife & unsigned(Internal::AttachmentResourceUsageType::Output));
 		const bool isAttachmentInput = !!(usageOverFullLife & unsigned(Internal::AttachmentResourceUsageType::Input));
@@ -194,18 +215,10 @@ namespace RenderCore { namespace Metal_Vulkan
 				return VK_IMAGE_LAYOUT_UNDEFINED;
 			}
 		}
+#endif
 	}
 
 	VkImageAspectFlags GetAspectForTextureView(const TextureViewDesc& window);
-
-	static BindFlag::BitField AsBindFlags(Internal::AttachmentResourceUsageType::BitField usage)
-	{
-		BindFlag::BitField result = 0;
-		if (usage & Internal::AttachmentResourceUsageType::Input) result |= BindFlag::InputAttachment;
-		if (usage & Internal::AttachmentResourceUsageType::Output) result |= BindFlag::RenderTarget;
-		if (usage & Internal::AttachmentResourceUsageType::DepthStencil) result |= BindFlag::DepthStencil;
-		return result;
-	}
 
 	static VkAttachmentReference2 MakeAttachmentReference(uint32_t attachmentName, BindFlag::BitField bindFlagInSubpass, Internal::AttachmentResourceUsageType::BitField usageOverFullLife, const TextureViewDesc& window)
 	{
@@ -303,8 +316,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 
             BindFlag::Enum formatUsage = BindFlag::ShaderResource;
-            if (res.second._attachmentUsage & Internal::AttachmentResourceUsageType::Output) formatUsage = BindFlag::RenderTarget;
-            if (res.second._attachmentUsage & Internal::AttachmentResourceUsageType::DepthStencil) formatUsage = BindFlag::DepthStencil;
+            if (res.second._attachmentUsage & Internal::AttachmentResourceUsageType::Output)
+				formatUsage = BindFlag::RenderTarget;
+            if (res.second._attachmentUsage & (Internal::AttachmentResourceUsageType::DepthStencil|Internal::AttachmentResourceUsageType::HintDepthAspect|Internal::AttachmentResourceUsageType::HintStencilAspect))
+				formatUsage = BindFlag::DepthStencil;
             auto resolvedFormat = ResolveFormat(attachmentDesc._format, formatFilter, formatUsage);
 
 			LoadStore originalLoad = attachmentDesc._loadFromPreviousPhase;
@@ -354,6 +369,11 @@ namespace RenderCore { namespace Metal_Vulkan
 
             if (attachmentDesc._flags & AttachmentDesc::Flags::Multisampled)
                 desc.samples = (VkSampleCountFlagBits)AsSampleCountFlagBits(_layout->GetProperties()._samples);
+
+			// Note -- we can specify different layouts for aspects of a depth/stencil attachment by adding
+			// a VkAttachmentDescriptionStencilLayout to pNext
+			// (if the separateDepthStencilLayouts feature is enabled)
+
 			return desc;
 		}
 
@@ -393,6 +413,11 @@ namespace RenderCore { namespace Metal_Vulkan
 				if (HasRetain(i->second._desc._storeToNextPhase) && i->second._desc._finalLayout && LayoutFromBindFlagsAndUsage(i->second._desc._finalLayout, 0) == VK_IMAGE_LAYOUT_GENERAL)
 					i->second._attachmentUsage |= Internal::AttachmentResourceUsageType::HintGeneral;
 			}
+
+			if (view._format._aspect == TextureViewDesc::Depth || view._format._aspect == TextureViewDesc::DepthStencil || view._flags & TextureViewDesc::Flags::JustDepth)
+				i->second._attachmentUsage |= Internal::AttachmentResourceUsageType::HintDepthAspect;
+			if (view._format._aspect == TextureViewDesc::Stencil || view._format._aspect == TextureViewDesc::DepthStencil || view._flags & TextureViewDesc::Flags::JustStencil)
+				i->second._attachmentUsage |= Internal::AttachmentResourceUsageType::HintStencilAspect;
 
 			i->second._attachmentUsage |= subpassUsage;
 			auto mappedAttachmentIdx = (unsigned)std::distance(_workingAttachments.begin(), i);

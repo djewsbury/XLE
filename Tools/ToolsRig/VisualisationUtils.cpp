@@ -836,7 +836,7 @@ namespace ToolsRig
 		SubpassDesc mainPass;
 		mainPass.SetName("VisualisationOverlay");
 		mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
-		mainPass.SetDepthStencil(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear, 0));		// ensure stencil is cleared (but ok to keep depth)
+		mainPass.SetDepthStencil(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear));		// ensure stencil is cleared (but ok to keep depth)
 		fbDesc.AddSubpass(std::move(mainPass));
 		return fbDesc;
 	}
@@ -848,7 +848,7 @@ namespace ToolsRig
 		SubpassDesc mainPass;
 		mainPass.SetName("VisualisationOverlay");
 		mainPass.SetDepthStencil(
-			fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear, 0).FinalState(BindFlag::ShaderResource),
+			fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear).FinalState(BindFlag::ShaderResource),
 			TextureViewDesc{TextureViewDesc::Aspect::Stencil});
 		fbDesc.AddSubpass(std::move(mainPass));
 		return fbDesc;
@@ -1085,7 +1085,7 @@ namespace ToolsRig
 			depthDesc._bindFlags = BindFlag::DepthStencil|BindFlag::TransferSrc|BindFlag::ShaderResource;
 			assert(systemAttachmentFormats.size() > (unsigned)Techniques::SystemAttachmentFormat::MainDepthStencil);
 			depthDesc._textureDesc._format = systemAttachmentFormats[(unsigned)Techniques::SystemAttachmentFormat::MainDepthStencil];
-			stitching.DefineAttachment({Techniques::AttachmentSemantics::MultisampleDepth, depthDesc, Techniques::PreregisteredAttachment::State::Initialized});
+			stitching.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, depthDesc, Techniques::PreregisteredAttachment::State::Initialized, BindFlag::DepthStencil);
 		}
 
 		auto fbFrag = CreateVisFBFrag();

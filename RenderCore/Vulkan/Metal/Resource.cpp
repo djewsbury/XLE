@@ -138,7 +138,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	namespace Internal
 	{
-		static VkImageLayout GetLayoutForBindType(BindFlag::Enum bindType);
+		static VkImageLayout LayoutForImmediateUsage(BindFlag::BitField immediateLayout);
 		static VkImageLayout SelectDefaultSteadyStateLayout(BindFlag::BitField allBindFlags);
 		static BarrierResourceUsage DefaultBarrierResourceUsageFromLayout(VkImageLayout prevLayout);
 	}
@@ -498,7 +498,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void Resource::ChangeSteadyState(BindFlag::Enum usage)
 	{
-		_steadyStateImageLayout = Internal::GetLayoutForBindType(usage);
+		_steadyStateImageLayout = Internal::LayoutForImmediateUsage(usage);
 	}
 
 	std::shared_ptr<IResourceView>  Resource::CreateTextureView(BindFlag::Enum usage, const TextureViewDesc& window)
@@ -1788,17 +1788,19 @@ namespace RenderCore { namespace Metal_Vulkan
 			std::vector<std::pair<uint64_t, Record>> _captures;
 		};
 
-		static VkImageLayout GetLayoutForBindType(BindFlag::Enum bindType)
+		static VkImageLayout LayoutForImmediateUsage(BindFlag::BitField immediateUsage)
 		{
-			switch (bindType) {
+			switch (immediateUsage) {
 			case BindFlag::TransferSrc:
 				return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 			case BindFlag::TransferDst:
 				return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-			case (BindFlag::Enum)(BindFlag::TransferSrc|BindFlag::TransferDst):
+			case BindFlag::TransferSrc|BindFlag::TransferDst:
 				return VK_IMAGE_LAYOUT_GENERAL;
 			case BindFlag::ShaderResource:
 			case BindFlag::InputAttachment:
+				// note -- this is only valid for *non-depth-stencil* attachments
+				// caller should specialize the result for depth stencil textures, and use one of the depth stencil specific layouts
 				return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			case BindFlag::UnorderedAccess:
 				return VK_IMAGE_LAYOUT_GENERAL;
@@ -1984,67 +1986,80 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-	BarrierResourceUsage::BarrierResourceUsage(BindFlag::Enum usage)
+	BarrierResourceUsage::BarrierResourceUsage(BindFlag::BitField immediateUsage, VkPipelineStageFlags shaderRelatedPipelineStageFlags)
 	{
-		switch (usage) {
-		case BindFlag::VertexBuffer:
-			_accessFlags = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-			_pipelineStageFlags = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
-			break;
-		case BindFlag::IndexBuffer:
-			_accessFlags = VK_ACCESS_INDEX_READ_BIT;
-			_pipelineStageFlags = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
-			break;
-		case BindFlag::ShaderResource:
-			_accessFlags = VK_ACCESS_SHADER_READ_BIT;
-			_pipelineStageFlags = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-			break;
-		case BindFlag::RenderTarget:
-			_accessFlags = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-			_pipelineStageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-			break;
-		case BindFlag::DepthStencil:
-			_accessFlags = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-			_pipelineStageFlags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-			break;
-		case BindFlag::TexelBuffer:
-		case BindFlag::UnorderedAccess:
-			_accessFlags = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-			_pipelineStageFlags = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-			break;
-		case BindFlag::ConstantBuffer:
-			_accessFlags = VK_ACCESS_UNIFORM_READ_BIT;
-			_pipelineStageFlags = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-			break;
-		case BindFlag::StreamOutput:
-			_accessFlags = VK_ACCESS_TRANSFORM_FEEDBACK_WRITE_BIT_EXT;
-			_pipelineStageFlags = VK_PIPELINE_STAGE_TRANSFORM_FEEDBACK_BIT_EXT;
-			break;
-		case BindFlag::DrawIndirectArgs:
-			_accessFlags = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-			_pipelineStageFlags = VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
-			break;
-		case BindFlag::InputAttachment:
-			_accessFlags = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
-			_pipelineStageFlags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;		// only fragment shader makes sense for input attachment
-			break;
-		case BindFlag::TransferSrc:
-			_accessFlags = VK_ACCESS_TRANSFER_READ_BIT;
-			_pipelineStageFlags = VK_PIPELINE_STAGE_TRANSFER_BIT;		// only fragment shader makes sense for input attachment
-			break;
-		case BindFlag::TransferDst:
-			_accessFlags = VK_ACCESS_TRANSFER_WRITE_BIT;
-			_pipelineStageFlags = VK_PIPELINE_STAGE_TRANSFER_BIT;		// only fragment shader makes sense for input attachment
-			break;
+		_accessFlags = _pipelineStageFlags = 0;
 
-		default:
-		case BindFlag::PresentationSrc:
-		case BindFlag::RawViews:
-			assert(0);
-			_accessFlags = _pipelineStageFlags = 0;
-			break;
+		auto minBit = xl_ctz4(immediateUsage);
+		auto maxBit = 32u - xl_clz4(immediateUsage);
+
+		for (auto usageBit=minBit; usageBit<maxBit; ++usageBit) {
+			if (!(immediateUsage & (1u << usageBit))) continue;
+
+			switch (1u << usageBit) {
+			case BindFlag::VertexBuffer:
+				_accessFlags |= VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+				_pipelineStageFlags |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+				break;
+			case BindFlag::IndexBuffer:
+				_accessFlags |= VK_ACCESS_INDEX_READ_BIT;
+				_pipelineStageFlags |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+				break;
+			case BindFlag::ShaderResource:
+				_accessFlags |= VK_ACCESS_SHADER_READ_BIT;
+				_pipelineStageFlags |= shaderRelatedPipelineStageFlags;
+				break;
+			case BindFlag::RenderTarget:
+				_accessFlags |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+				_pipelineStageFlags |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+				break;
+			case BindFlag::DepthStencil:
+				_accessFlags |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+				_pipelineStageFlags |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+				break;
+			case BindFlag::TexelBuffer:
+			case BindFlag::UnorderedAccess:
+				_accessFlags |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+				_pipelineStageFlags |= shaderRelatedPipelineStageFlags;
+				break;
+			case BindFlag::ConstantBuffer:
+				_accessFlags |= VK_ACCESS_UNIFORM_READ_BIT;
+				_pipelineStageFlags |= shaderRelatedPipelineStageFlags;
+				break;
+			case BindFlag::StreamOutput:
+				_accessFlags |= VK_ACCESS_TRANSFORM_FEEDBACK_WRITE_BIT_EXT;
+				_pipelineStageFlags |= VK_PIPELINE_STAGE_TRANSFORM_FEEDBACK_BIT_EXT;
+				break;
+			case BindFlag::DrawIndirectArgs:
+				_accessFlags |= VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+				_pipelineStageFlags |= VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+				break;
+			case BindFlag::InputAttachment:
+				_accessFlags |= VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+				_pipelineStageFlags |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;		// only fragment shader makes sense for input attachment
+				break;
+			case BindFlag::TransferSrc:
+				_accessFlags |= VK_ACCESS_TRANSFER_READ_BIT;
+				_pipelineStageFlags |= VK_PIPELINE_STAGE_TRANSFER_BIT;
+				break;
+			case BindFlag::TransferDst:
+				_accessFlags |= VK_ACCESS_TRANSFER_WRITE_BIT;
+				_pipelineStageFlags |= VK_PIPELINE_STAGE_TRANSFER_BIT;
+				break;
+
+			default:
+			case BindFlag::PresentationSrc:
+			case BindFlag::RawViews:
+				break;
+			}
 		}
-		_imageLayout = Internal::GetLayoutForBindType(usage);
+
+		_imageLayout = Internal::LayoutForImmediateUsage(immediateUsage);
+	}
+
+	BarrierResourceUsage::BarrierResourceUsage(BindFlag::BitField immediateUsage)
+	: BarrierResourceUsage(immediateUsage, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)
+	{
 	}
 
 	static VkPipelineStageFlags AsPipelineStage(ShaderStage shaderStage)
@@ -2058,33 +2073,37 @@ namespace RenderCore { namespace Metal_Vulkan
 		case ShaderStage::Domain:
 		case ShaderStage::Null:
 		case ShaderStage::Max:
+		default:
 			assert(0);	// bad shader stage
 			return 0;
 		}
 	}
 
-	BarrierResourceUsage::BarrierResourceUsage(BindFlag::Enum usage, ShaderStage shaderStage)
+	BarrierResourceUsage::BarrierResourceUsage(BindFlag::BitField usage, ShaderStage shaderStage)
+	: BarrierResourceUsage(usage, AsPipelineStage(shaderStage))
 	{
-		switch (usage) {
-		case BindFlag::ShaderResource:
-			_accessFlags = VK_ACCESS_SHADER_READ_BIT;
-			_pipelineStageFlags = AsPipelineStage(shaderStage);
-			break;
-		case BindFlag::TexelBuffer:
-		case BindFlag::UnorderedAccess:
-			_accessFlags = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-			_pipelineStageFlags = AsPipelineStage(shaderStage);
-			break;
-		case BindFlag::ConstantBuffer:
-			_accessFlags = VK_ACCESS_UNIFORM_READ_BIT;
-			_pipelineStageFlags = AsPipelineStage(shaderStage);
-			break;
+	}
 
-		default:
-			*this = BarrierResourceUsage{usage};		// shader stage not required
-			break;
-		}
-		_imageLayout = Internal::GetLayoutForBindType(usage);
+	BarrierResourceUsage BarrierResourceUsage::SpecializeForResource(BindFlag::BitField lifetimeResourceUsage)
+	{
+		BarrierResourceUsage result = *this;
+
+		// DepthStencil textures have special case layouts -- VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL is illegal
+		// for them. We can use _GENERAL, or 
+		//		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+		// 		VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+		//		VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL
+		//		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL
+		//		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
+		//		VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL
+		//
+		// or we can specific layouts separately for the depth and stencil aspects (using VkAttachmentDescriptionStencilLayout)
+
+		if (lifetimeResourceUsage & BindFlag::DepthStencil)
+			if (result._imageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+				result._imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+
+		return result;
 	}
 
 	BarrierResourceUsage BarrierResourceUsage::HostRead()
@@ -2152,6 +2171,11 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	BarrierHelper& BarrierHelper::Add(IResource& resource, BarrierResourceUsage preBarrierUsage, BarrierResourceUsage postBarrierUsage)
 	{
+		// "SpecializeForResource" fixes up layout selection for depth stencil images
+		auto lifetimeBindFlags = checked_cast<Resource*>(&resource)->AccessDesc()._bindFlags;
+		preBarrierUsage = preBarrierUsage.SpecializeForResource(lifetimeBindFlags);
+		postBarrierUsage = postBarrierUsage.SpecializeForResource(lifetimeBindFlags);
+
 		auto* res = checked_cast<Resource*>(&resource);
 		if (res->GetBuffer()) {
 			// barriers from BarrierResourceUsage::NoState() -> some state are not required for buffers (but they are for textures)
