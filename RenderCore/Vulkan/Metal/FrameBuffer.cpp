@@ -220,9 +220,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	VkImageAspectFlags GetAspectForTextureView(const TextureViewDesc& window);
 
-	static VkAttachmentReference2 MakeAttachmentReference(uint32_t attachmentName, BindFlag::BitField bindFlagInSubpass, Internal::AttachmentResourceUsageType::BitField usageOverFullLife, const TextureViewDesc& window)
+	static VkAttachmentReference2 MakeAttachmentReference(uint32_t attachmentName, VkImageLayout layout, VkImageAspectFlags aspectMask, Internal::AttachmentResourceUsageType::BitField usageOverFullLife)
 	{
-		auto aspectMask = GetAspectForTextureView(window);
 		if (aspectMask == 0) {
 			// no aspect can be derived from the view (it's probably all defaulted out)
 			// Have to take the aspect from the usage
@@ -245,7 +244,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
 			nullptr,
 			attachmentName,
-			LayoutFromBindFlagsAndUsage(bindFlagInSubpass, usageOverFullLife),
+			layout,
 			aspectMask};
 	}
 
@@ -474,7 +473,10 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 			}
 
-			auto ref = MakeAttachmentReference((uint32_t)std::distance(_workingViewedAttachments.begin(), i2), AsBindFlags(subpassUsage), i->second._attachmentUsage, view);
+			auto aspectMask = GetAspectForTextureView(view);
+			auto layout = LayoutFromBindFlagsAndUsage(AsBindFlags(subpassUsage), i->second._attachmentUsage);
+
+			auto ref = MakeAttachmentReference((uint32_t)std::distance(_workingViewedAttachments.begin(), i2), layout, aspectMask, i->second._attachmentUsage);
 			if (!i->second._firstSubpassLayout)
 				i->second._firstSubpassLayout = ref.layout;
 			i->second._lastSubpassLayout = ref.layout;
@@ -750,6 +752,9 @@ namespace RenderCore { namespace Metal_Vulkan
 				res.first, (BindFlag::Enum)AsBindFlags(res.second._attachmentUsage), a._view,
 				fbDesc.GetAttachments()[res.first], fbDesc.GetProperties());
 			rawViews[rawViewCount++] = checked_cast<ResourceView*>(rtv.get())->GetImageView();
+
+			// Even though the "rtv" has a _imageLayout built in, we will ignore it here. It will be superceeded
+			// the image layout calculated when we built the render pass
 
 			ClearValue defaultClearValue = MakeClearValue(0.f, 0.f, 0.f, 1.f);
 			if (res.second._attachmentUsage & Internal::AttachmentResourceUsageType::DepthStencil)

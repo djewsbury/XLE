@@ -287,6 +287,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			const ResourceDesc& desc, 
 			const ResourceInitializer& init = ResourceInitializer());
 
+		VkImageLayout LayoutForImmediateUsage(BindFlag::BitField immediateUsage);
+
+#if 0
 		enum class ImageLayout
 		{
 			Undefined						= 0, // VK_IMAGE_LAYOUT_UNDEFINED,
@@ -318,6 +321,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			DeviceContext& context, Resource& res, 
 			ImageLayout oldLayout, unsigned oldAccessMask, unsigned srcStages, 
 			ImageLayout newLayout, unsigned newAccessMask, unsigned dstStages);
+#endif
 
 		class CaptureForBindRecords;
 		void ValidateIsEmpty(CaptureForBindRecords&);

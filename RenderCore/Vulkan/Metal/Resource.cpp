@@ -138,7 +138,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	namespace Internal
 	{
-		static VkImageLayout LayoutForImmediateUsage(BindFlag::BitField immediateLayout);
+		VkImageLayout LayoutForImmediateUsage(BindFlag::BitField immediateLayout);
 		static VkImageLayout SelectDefaultSteadyStateLayout(BindFlag::BitField allBindFlags);
 		static BarrierResourceUsage DefaultBarrierResourceUsageFromLayout(VkImageLayout prevLayout);
 	}
@@ -1788,7 +1788,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			std::vector<std::pair<uint64_t, Record>> _captures;
 		};
 
-		static VkImageLayout LayoutForImmediateUsage(BindFlag::BitField immediateUsage)
+		VkImageLayout LayoutForImmediateUsage(BindFlag::BitField immediateUsage)
 		{
 			switch (immediateUsage) {
 			case BindFlag::TransferSrc:
@@ -1808,6 +1808,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 			case BindFlag::DepthStencil:
 				return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			case BindFlag::PresentationSrc:
+				return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 			default:
 				return VK_IMAGE_LAYOUT_GENERAL;
 			}
@@ -2092,15 +2094,15 @@ namespace RenderCore { namespace Metal_Vulkan
 		BarrierResourceUsage result = *this;
 
 		// DepthStencil textures have special case layouts -- VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL is illegal
-		// for them. We can use _GENERAL, or 
-		//		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-		// 		VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
-		//		VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL
-		//		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL
-		//		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
-		//		VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL
+		// for them.
+		// Some layouts affect both aspects the same:
+		//		- VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+		//		- VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
 		//
-		// or we can specific layouts separately for the depth and stencil aspects (using VkAttachmentDescriptionStencilLayout)
+		// But there are also layouts for just depth or just stencil, and others where we can specify
+		// different layouts per aspect
+		//
+		// Note that we can specific layouts separately for the depth and stencil aspects (using VkAttachmentDescriptionStencilLayout)
 
 		if (lifetimeResourceUsage & BindFlag::DepthStencil)
 			if (result._imageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)

@@ -197,13 +197,10 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	static VkDescriptorImageInfo AsVkDescriptorImageInfo(const ResourceView& resourceView)
 	{
-		// todo -- unclear whether it's better for the image layout here to be a property of the descriptor
-		// set, or a property of the resource itself. Consider binding depthbuffers as read; they are always
-		// in General layout, rather that ShaderReadOnlyOptimal
 		return VkDescriptorImageInfo {
 			nullptr,
 			resourceView.GetImageView(),
-			resourceView.GetVulkanResource()->_steadyStateImageLayout
+			resourceView.GetImageLayout()
 		};
 	}
 

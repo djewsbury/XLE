@@ -27,7 +27,7 @@ namespace RenderCore { namespace Metal_Vulkan
     class ResourceView : public IResourceView
     {
     public:
-        ResourceView(ObjectFactory& factory, VkImage image, const TextureViewDesc& window = TextureViewDesc());
+        ResourceView(ObjectFactory& factory, VkImage image, const TextureViewDesc& window = TextureViewDesc(), VkImageLayout layout = (VkImageLayout)0);
         ResourceView(ObjectFactory& factory, const VkBuffer buffer, Format texelBufferFormat, unsigned rangeOffset = 0, unsigned rangeSize = 0);
 
         ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& image, BindFlag::Enum usage, const TextureViewDesc& window);
@@ -42,6 +42,7 @@ namespace RenderCore { namespace Metal_Vulkan
         VkBufferView						GetBufferView() const { return _bufferView.get(); }
         std::pair<unsigned, unsigned>       GetBufferRangeOffsetAndSize() const { return _bufferRange; }
         const VkImageSubresourceRange&      GetImageSubresourceRange() const { return (VkImageSubresourceRange&)_imageSubresourceRange; }
+        VkImageLayout                       GetImageLayout() const { return _imageLayout; }
 
         Resource* GetVulkanResource() const { return _resource.get(); }
 
@@ -55,6 +56,7 @@ namespace RenderCore { namespace Metal_Vulkan
         std::pair<unsigned, unsigned>   _bufferRange;       // used for basic VkBuffer bindings (eg, with VkDescriptorBufferInfo)
         uint8_t                         _imageSubresourceRange[5*4];
 		std::shared_ptr<Resource>		_resource;
+        VkImageLayout                   _imageLayout;
     };
 }}
 

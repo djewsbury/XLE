@@ -127,7 +127,44 @@ namespace RenderCore { namespace Metal_Vulkan
         return view_info;
     }
 
-    ResourceView::ResourceView(ObjectFactory& factory, VkImage image, const TextureViewDesc& window)
+    static VkImageLayout MergeDepthStencilAspectLayouts(VkImageLayout depthAspect, VkImageLayout stencilAspect)
+    {
+        switch (depthAspect) {
+        case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL:
+            if (stencilAspect == VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL) {
+                return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            } else if (stencilAspect == VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL) {
+                return VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
+            } else {
+                assert(stencilAspect == VK_IMAGE_LAYOUT_UNDEFINED);
+                return depthAspect;
+            }
+            break;
+
+        case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL:
+            if (stencilAspect == VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL) {
+                return VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
+            } else if (stencilAspect == VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL) {
+                return VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            } else {
+                assert(stencilAspect == VK_IMAGE_LAYOUT_UNDEFINED);
+                return VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;                 // single aspect layout can't be used with descriptor set updates
+            }
+            break;
+
+        case VK_IMAGE_LAYOUT_UNDEFINED:
+            if (stencilAspect == VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL) {
+                return VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;                 // single aspect layout can't be used with descriptor set updates
+            } else
+                return stencilAspect;
+
+        default:
+            assert(depthAspect == stencilAspect);
+            return depthAspect;
+        }
+    }
+
+    ResourceView::ResourceView(ObjectFactory& factory, VkImage image, const TextureViewDesc& window, VkImageLayout layout)
     : _type(Type::ImageView)
     {
         // We don't know anything about the "image" in this case. We need to rely on "image" containing all
@@ -136,10 +173,11 @@ namespace RenderCore { namespace Metal_Vulkan
         _imageView = factory.CreateImageView(createInfo);
         static_assert(sizeof(_imageSubresourceRange) >= sizeof(VkImageSubresourceRange));
         ((VkImageSubresourceRange&)_imageSubresourceRange) = createInfo.subresourceRange;
+        _imageLayout = layout;
     }
 
 	ResourceView::ResourceView(
-        ObjectFactory& factory, const std::shared_ptr<IResource>& image, 
+        ObjectFactory& factory, const std::shared_ptr<IResource>& image,
         BindFlag::Enum formatUsage, const TextureViewDesc& window)
 	: _type(Type::ImageView)
     {
@@ -148,7 +186,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (!res)
 			Throw(::Exceptions::BasicLabel("Incorrect resource type passed to Vulkan ResourceView"));
 
-        auto resDesc = res->GetDesc();
+        const auto& resDesc = res->AccessDesc();
         if (res->GetImage()) {
             auto adjWindow = window;
             assert(resDesc._type == ResourceDesc::Type::Texture);
@@ -176,6 +214,68 @@ namespace RenderCore { namespace Metal_Vulkan
             _imageView = factory.CreateImageView(createInfo);
             static_assert(sizeof(_imageSubresourceRange) >= sizeof(VkImageSubresourceRange));
             ((VkImageSubresourceRange&)_imageSubresourceRange) = createInfo.subresourceRange;
+
+            // Most of the time there's a direct mapping between the immediate usage of this view and the 
+            // image layout vulkan wants
+            // There's some complications for depth stencil texture, though
+            _imageLayout = Internal::LayoutForImmediateUsage(formatUsage);
+
+            if (resDesc._bindFlags & BindFlag::DepthStencil) {
+                // multiple options for depth stencil, based on what aspects we need and read/write flags
+                //
+                // * note -- The following single-aspect layouts can't be used when updating descriptors in descriptor sets! *
+                // VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
+                //      -- depth aspect only bound as depth buffer
+                // VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL
+                //      -- depth aspect only bound as a depth buffer, "sampled image" or input attachment
+                // VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL
+                //      -- stencil aspect only bound as stencil buffer
+                // VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL
+                //      -- stencil aspect only bound as stencil buffer, "sampled image" or input attachment
+                //
+                // Combinations of the above can form:
+                // VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+                //      -- both aspects, bound as a depth/stencil buffer
+                // VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+                //      -- both aspects, but read only
+                //          can be used as a depth/stencil buffer, or a "sampled image" or input attachment
+                // VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL
+                //      -- effectively VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL for the depth aspect
+                //          and VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL for the stencil aspect
+                // VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL
+                //      -- effectively VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL for the depth aspect
+                //          and VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL for the stencil aspect
+                //
+                // also VK_IMAGE_LAYOUT_GENERAL can work in at least some cases
+                //
+                // See also BarrierResourceUsage::SpecializeForResource for another place where we do a similar
+                // transform
+
+                if (_imageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                    || _imageLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+
+                    VkImageLayout depthAspectLayout, stencilAspectLayout;
+                    if (_imageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+                        depthAspectLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+                        stencilAspectLayout = VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL;
+                    } else {
+                        assert(_imageLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+                        depthAspectLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+                        stencilAspectLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
+                    }
+
+                    // todo -- we need to know what how the other aspect is being used at the time we use it
+
+                    auto aspects = createInfo.subresourceRange.aspectMask;
+                    if (!(aspects& VK_IMAGE_ASPECT_DEPTH_BIT))
+                        depthAspectLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                    if (!(aspects& VK_IMAGE_ASPECT_STENCIL_BIT))
+                        stencilAspectLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+                    _imageLayout = MergeDepthStencilAspectLayouts(depthAspectLayout, stencilAspectLayout);
+                }
+            }
+
         } else {
             if (!(res->GetDesc()._bindFlags & BindFlag::TexelBuffer))
                 Throw(::Exceptions::BasicLabel("Attempting to create a texture view for a resource that is not a texture. Did you intend to use CreateBufferView?"));
@@ -188,6 +288,7 @@ namespace RenderCore { namespace Metal_Vulkan
             auto createInfo = MakeBufferViewCreateInfo(finalFmt, 0, VK_WHOLE_SIZE, res->GetBuffer());
             _bufferView = factory.CreateBufferView(createInfo);
             _type = Type::BufferView;
+            _imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         }
 
         _resource = std::static_pointer_cast<Resource>(image);
@@ -198,6 +299,7 @@ namespace RenderCore { namespace Metal_Vulkan
     {
         auto createInfo = MakeBufferViewCreateInfo(texelBufferFormat, rangeOffset, rangeSize, buffer);
         _bufferView = factory.CreateBufferView(createInfo);
+        _imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     }
 
     ResourceView::ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& buffer, Format texelBufferFormat, unsigned rangeOffset, unsigned rangeSize)
@@ -218,6 +320,7 @@ namespace RenderCore { namespace Metal_Vulkan
         _bufferView = factory.CreateBufferView(createInfo);
 
         _resource = std::static_pointer_cast<Resource>(buffer);
+        _imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     }
 
     ResourceView::ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& buffer, unsigned rangeOffset, unsigned rangeSize)
@@ -229,6 +332,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			Throw(::Exceptions::BasicLabel("Incorrect resource type passed to Vulkan ResourceView"));
 
         _resource = std::static_pointer_cast<Resource>(buffer);
+        _imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     }
 
     ResourceView::ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& resource)
