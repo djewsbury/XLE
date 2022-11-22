@@ -422,10 +422,7 @@ namespace RenderCore { namespace Techniques
         AttachmentPool& attachmentPool,
         AttachmentReservation* parentReservation) -> Result
     {    
-        VLA_UNSAFE_FORCE(AttachmentTransform, attachmentTransforms, resolvedAttachmentDescs.size());
-        CalculateAttachmentTransforms(MakeIteratorRange(attachmentTransforms, &attachmentTransforms[resolvedAttachmentDescs.size()]), desc);
-
-        auto poolAttachments = attachmentPool.Reserve(resolvedAttachmentDescs, parentReservation, MakeIteratorRange(attachmentTransforms, &attachmentTransforms[resolvedAttachmentDescs.size()]));
+        auto poolAttachments = attachmentPool.Reserve(resolvedAttachmentDescs, parentReservation);
 		assert(poolAttachments.GetResourceCount() == desc.GetAttachments().size());
 
         std::vector<AttachmentDesc> adjustedAttachments;
@@ -521,351 +518,6 @@ namespace RenderCore { namespace Techniques
         fbPool.Reset();
     }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	void RenderPassInstance::NextSubpass()
-    {
-		if (_trueRenderPass) {
-			assert(_frameBuffer && _attachedContext);
-			_attachedContext->BeginNextSubpass(*_frameBuffer);
-		}
-        #if defined(_DEBUG)
-            if (_attachedContext) {
-                _attachedContext->EndLabel();
-                _attachedContext->BeginLabel(_layout->GetSubpasses()[_currentSubpassIndex+1]._name.empty() ? "<<unnnamed subpass>>" : _layout->GetSubpasses()[_currentSubpassIndex+1]._name.c_str());
-            }
-        #endif
-        ++_currentSubpassIndex;
-    }
-
-    void RenderPassInstance::End()
-    {
-		if (_trueRenderPass) {
-            assert(_attachedContext);
-            _attachedContext->EndRenderPass();
-            #if defined(_DEBUG)
-                if (_attachedContext)
-                    _attachedContext->EndLabel();
-            #endif
-			_attachedContext = nullptr;
-            _trueRenderPass = false;
-		} else {
-            #if defined(_DEBUG)
-                if (_attachedContext)
-                    _attachedContext->EndLabel();
-            #endif
-        }
-
-        if (_attachedParsingContext) {
-            assert(_attachedParsingContext->_rpi == this);
-            _attachedParsingContext->_rpi = nullptr;
-            _attachedParsingContext = nullptr;
-        }
-    }
-    
-    unsigned RenderPassInstance::GetCurrentSubpassIndex() const
-    {
-		if (_attachedContext && _trueRenderPass)
-			assert(_currentSubpassIndex == _attachedContext->GetCurrentSubpassIndex());
-		return _currentSubpassIndex;
-    }
-
-    ViewportDesc RenderPassInstance::GetDefaultViewport() const
-    {
-        return _frameBuffer->GetDefaultViewport();
-    }
-
-    auto RenderPassInstance::GetResourceForAttachmentName(AttachmentName resName) const -> const std::shared_ptr<IResource>&
-    {
-        assert(_attachmentPool);
-        return _attachmentPool->GetResource(resName);
-    }
-
-    auto RenderPassInstance::GetSRVForAttachmentName(AttachmentName resName, const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
-    {
-        assert(_attachmentPool);
-        return _attachmentPool->GetSRV(resName, window);
-    }
-
-    auto RenderPassInstance::GetInputAttachmentResource(unsigned inputAttachmentSlot) const -> const std::shared_ptr<IResource>&
-	{
-		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
-		auto resName = subPass.GetInputs()[inputAttachmentSlot]._resourceName;
-		assert(_attachmentPool);
-        return _attachmentPool->GetResource(resName);
-	}
-
-    auto RenderPassInstance::GetInputAttachmentView(unsigned inputAttachmentSlot) const -> const std::shared_ptr<IResourceView>&
-	{
-		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
-		auto resName = subPass.GetInputs()[inputAttachmentSlot]._resourceName;
-		assert(_attachmentPool);
-        return _attachmentPool->GetView(resName, BindFlag::InputAttachment, subPass.GetInputs()[inputAttachmentSlot]._window);
-	}
-	
-	auto RenderPassInstance::GetOutputAttachmentResource(unsigned outputAttachmentSlot) const -> const std::shared_ptr<IResource>&
-	{
-		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
-		auto resName = subPass.GetOutputs()[outputAttachmentSlot]._resourceName;
-		assert(_attachmentPool);
-        return _attachmentPool->GetResource(resName);
-	}
-	
-	auto RenderPassInstance::GetOutputAttachmentSRV(unsigned outputAttachmentSlot, const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
-	{
-		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
-		auto resName = subPass.GetOutputs()[outputAttachmentSlot]._resourceName;
-		assert(_attachmentPool);
-        return _attachmentPool->GetSRV(resName, window);
-	}
-
-	auto RenderPassInstance::GetDepthStencilAttachmentSRV(const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
-	{
-		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
-		auto resName = subPass.GetDepthStencil()._resourceName;
-		assert(_attachmentPool);
-        return _attachmentPool->GetSRV(resName, window);
-	}
-
-	auto RenderPassInstance::GetDepthStencilAttachmentResource() const -> const std::shared_ptr<IResource>&
-	{
-		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
-		auto resName = subPass.GetDepthStencil()._resourceName;
-		assert(_attachmentPool);
-        return _attachmentPool->GetResource(resName);
-	}
-
-    auto RenderPassInstance::GetNonFrameBufferAttachmentView(unsigned viewedAttachmentSlot) const -> const std::shared_ptr<IResourceView>&
-    {
-        auto spIdx = GetCurrentSubpassIndex();
-        assert((spIdx+1) < _viewedAttachmentsMap.size());
-        auto base = _viewedAttachmentsMap[spIdx];
-        assert((_viewedAttachmentsMap[spIdx+1] - base) > viewedAttachmentSlot);     // if you hit this, it means "viewedAttachmentSlot" is out of bounds for the current subpass
-        return _viewedAttachments[base+viewedAttachmentSlot];
-    }
-
-    static bool HasClear(LoadStore ls) 
-	{
-		return ls == LoadStore::Clear || ls == LoadStore::DontCare_StencilClear || ls == LoadStore::Retain_StencilClear || ls == LoadStore::Clear_StencilDontCare || ls == LoadStore::Clear_StencilRetain;
-	}
-	
-    RenderPassInstance::RenderPassInstance(
-        IThreadContext& context,
-        const FrameBufferDesc& layout,
-        IteratorRange<const PreregisteredAttachment*> fullAttachmentsDescription,
-        FrameBufferPool& frameBufferPool,
-        AttachmentPool& attachmentPool,
-        AttachmentReservation* parentReservation,
-        const RenderPassBeginDesc& beginInfo)
-    {
-        _attachedContext = Metal::DeviceContext::Get(context).get();
-
-        auto fb = frameBufferPool.BuildFrameBuffer(
-            Metal::GetObjectFactory(*context.GetDevice()),
-            layout, fullAttachmentsDescription, attachmentPool, parentReservation);
-        fb._poolReservation.CompleteInitialization(context);
-
-        _frameBuffer = std::move(fb._frameBuffer);
-        _attachmentPoolReservation = std::move(fb._poolReservation);
-        _attachmentPool = &attachmentPool;
-        _layout = fb._completedDesc;        // expecting this to be retained by the pool until at least the destruction of this
-        // todo -- we might need to pass offset & extent parameters to BeginRenderPass
-        // this could be derived from _attachmentPool->GetFrameBufferProperties()?
-        _trueRenderPass = true;
-
-        #if defined(_DEBUG)
-            _attachedContext->BeginLabel(_layout->GetSubpasses()[0]._name.empty() ? "<<unnnamed subpass>>" : _layout->GetSubpasses()[0]._name.c_str());
-        #endif
-        _attachedContext->BeginRenderPass(*_frameBuffer, beginInfo._clearValues);
-        _attachedParsingContext = nullptr;
-    }
-
-    static bool operator==(const AttachmentTransform& lhs, const AttachmentTransform& rhs)
-    {
-        return (lhs._type == rhs._type) && (lhs._initialLayout == rhs._initialLayout) && (lhs._finalLayout == rhs._finalLayout);
-    }
-
-    RenderPassInstance::RenderPassInstance(
-        ParsingContext& parsingContext,
-        const FragmentStitchingContext::StitchResult& stitchedFragment,
-        const RenderPassBeginDesc& beginInfo)
-    {
-        _attachedContext = nullptr;
-        _attachmentPool = nullptr;
-        _trueRenderPass = false;
-
-        auto& stitchContext = parsingContext.GetFragmentStitchingContext();
-        if (stitchedFragment._pipelineType == PipelineType::Graphics) {
-
-            #if defined(_DEBUG)
-                {
-                    // attachment transforms in the stitched fragment must agree with what we get from the fbDesc
-                    VLA_UNSAFE_FORCE(AttachmentTransform, generatedAttachmentTransforms, stitchedFragment._fbDesc.GetAttachments().size());
-                    CalculateAttachmentTransforms(
-                        MakeIteratorRange(generatedAttachmentTransforms, &generatedAttachmentTransforms[stitchedFragment._fbDesc.GetAttachments().size()]),
-                        stitchedFragment._fbDesc);
-                    assert(stitchedFragment._fbDesc.GetAttachments().size() == stitchedFragment._attachmentTransforms.size());
-                    for (unsigned c=0; c<stitchedFragment._fbDesc.GetAttachments().size(); ++c)
-                        assert(generatedAttachmentTransforms[c] == stitchedFragment._attachmentTransforms[c]);
-                }
-            #endif
-
-            *this = RenderPassInstance {
-                parsingContext.GetThreadContext(), stitchedFragment._fbDesc, stitchedFragment._fullAttachmentDescriptions,
-                *parsingContext.GetTechniqueContext()._frameBufferPool,
-                *parsingContext.GetTechniqueContext()._attachmentPool,
-                &parsingContext.GetAttachmentReservation(),
-                beginInfo };
-            parsingContext.GetViewport() = _frameBuffer->GetDefaultViewport();
-        } else {
-            auto& attachmentPool = *parsingContext.GetTechniqueContext()._attachmentPool;
-            _attachmentPoolReservation = attachmentPool.Reserve(stitchedFragment._fullAttachmentDescriptions, &parsingContext.GetAttachmentReservation(), stitchedFragment._attachmentTransforms);
-            _attachmentPool = &attachmentPool;
-            _attachmentPoolReservation.CompleteInitialization(parsingContext.GetThreadContext());
-            _layout = &stitchedFragment._fbDesc;
-            // clear not supported in this mode
-            for (const auto& a:_layout->GetAttachments())
-                assert(!HasClear(a._loadFromPreviousPhase));
-
-            _attachedContext = Metal::DeviceContext::Get(parsingContext.GetThreadContext()).get();
-            #if defined(_DEBUG)
-                _attachedContext->BeginLabel(_layout->GetSubpasses()[0]._name.empty() ? "<<unnnamed subpass>>" : _layout->GetSubpasses()[0]._name.c_str());
-            #endif
-        }
-
-        assert(!parsingContext._rpi);
-        parsingContext._rpi = this;
-        _attachedParsingContext = &parsingContext;
-
-        // Update the parsing context with the changes to attachments
-        stitchContext.UpdateAttachments(stitchedFragment);
-#if 0
-        for (unsigned aIdx=0; aIdx<stitchedFragment._attachmentTransforms.size(); ++aIdx) {
-            auto semantic = stitchedFragment._fullAttachmentDescriptions[aIdx]._semantic;
-            if (!semantic) continue;
-
-            switch (stitchedFragment._attachmentTransforms[aIdx]._type) {
-            case FragmentStitchingContext::AttachmentTransform::Temporary:
-            case FragmentStitchingContext::AttachmentTransform::Preserved:
-                break;
-            case FragmentStitchingContext::AttachmentTransform::Written:
-            case FragmentStitchingContext::AttachmentTransform::Generated:
-                parsingContext.GetTechniqueContext()._attachmentPool->Bind(semantic, _attachmentPoolReservation.GetResourceIds()[aIdx]);
-                break;
-            case FragmentStitchingContext::AttachmentTransform::Consumed:
-                parsingContext.GetTechniqueContext()._attachmentPool->Unbind(semantic);
-                break;
-            }
-        }
-#endif
-
-        _viewedAttachmentsMap = stitchedFragment._viewedAttachmentsMap;
-        _viewedAttachments.reserve(stitchedFragment._viewedAttachments.size());
-        for (const auto&view:stitchedFragment._viewedAttachments)
-            _viewedAttachments.push_back(_attachmentPoolReservation.GetView(view._resourceName, view._usage, view._window));
-    }
-
-    RenderPassInstance::RenderPassInstance(
-        ParsingContext& parsingContext,
-        const FrameBufferDescFragment& layout,
-        const RenderPassBeginDesc& beginInfo)
-    {
-        _attachedContext = nullptr;
-        _attachmentPool = nullptr;
-        _trueRenderPass = false;
-        _attachedParsingContext = nullptr;
-        auto& stitchContext = parsingContext.GetFragmentStitchingContext();
-        auto stitchResult = stitchContext.TryStitchFrameBufferDesc(MakeIteratorRange(&layout, &layout+1));
-        // todo -- have to protect lifetime of stitchResult._fbDesc in this case
-        // candidate for subframe heap
-        // just copy stitchResult._fbDesc somewhere that will last to the end of the frame
-        *this = RenderPassInstance { parsingContext, stitchResult, beginInfo };
-    }
-
-	RenderPassInstance::RenderPassInstance(
-        const FrameBufferDesc& layout,
-        IteratorRange<const PreregisteredAttachment*> resolvedAttachmentDescs,
-        AttachmentPool& attachmentPool)
-	: _layout(&layout)
-    {
-		// This constructs a kind of "non-metal" RenderPassInstance
-		// It allows us to use the RenderPassInstance infrastructure (for example, for remapping attachment requests)
-		// without actually constructing a underlying metal renderpass.
-		// This is used with compute pipelines sometimes -- since in Vulkan, those have some similarities with
-		// graphics pipelines, but are incompatible with the vulkan render passes
-		_attachedContext = nullptr;
-        _trueRenderPass = false;
-        _attachedParsingContext = nullptr;
-		_attachmentPoolReservation = attachmentPool.Reserve(resolvedAttachmentDescs);
-		_attachmentPool = &attachmentPool;
-        assert(!_attachmentPoolReservation.HasPendingCompleteInitialization());
-	}
-    
-    RenderPassInstance::~RenderPassInstance() 
-    {
-        End();
-    }
-
-    RenderPassInstance::RenderPassInstance(RenderPassInstance&& moveFrom) never_throws
-    : _frameBuffer(std::move(moveFrom._frameBuffer))
-    , _attachedContext(moveFrom._attachedContext)
-    , _attachmentPool(moveFrom._attachmentPool)
-    , _attachmentPoolReservation(std::move(moveFrom._attachmentPoolReservation))
-	, _layout(std::move(moveFrom._layout))
-    , _viewedAttachments(std::move(moveFrom._viewedAttachments))
-    , _viewedAttachmentsMap(std::move(moveFrom._viewedAttachmentsMap))
-    , _currentSubpassIndex(moveFrom._currentSubpassIndex)
-    , _trueRenderPass(moveFrom._trueRenderPass)
-    {
-        moveFrom._attachedContext = nullptr;
-        moveFrom._attachmentPool = nullptr;
-        moveFrom._currentSubpassIndex = 0;
-        moveFrom._trueRenderPass = false;
-        moveFrom._layout = nullptr;
-
-        if (moveFrom._attachedParsingContext) {
-            assert(moveFrom._attachedParsingContext->_rpi == &moveFrom);
-            moveFrom._attachedParsingContext->_rpi = this;
-            _attachedParsingContext = moveFrom._attachedParsingContext;
-            moveFrom._attachedParsingContext = nullptr;
-        }
-    }
-
-    RenderPassInstance& RenderPassInstance::operator=(RenderPassInstance&& moveFrom) never_throws
-    {
-        End();
-        _frameBuffer = std::move(moveFrom._frameBuffer);
-        _attachedContext = moveFrom._attachedContext;
-        _attachmentPool = moveFrom._attachmentPool;
-        _attachmentPoolReservation = std::move(moveFrom._attachmentPoolReservation);
-        moveFrom._attachedContext = nullptr;
-        moveFrom._attachmentPool = nullptr;
-		_layout = std::move(moveFrom._layout);
-        moveFrom._layout = nullptr;
-        _viewedAttachments = std::move(moveFrom._viewedAttachments);
-        _viewedAttachmentsMap = std::move(moveFrom._viewedAttachmentsMap);
-        _currentSubpassIndex = moveFrom._currentSubpassIndex;
-        moveFrom._currentSubpassIndex = 0;
-        _trueRenderPass = moveFrom._trueRenderPass;
-        moveFrom._trueRenderPass = false;
-
-        if (moveFrom._attachedParsingContext) {
-            assert(moveFrom._attachedParsingContext->_rpi == &moveFrom);
-            moveFrom._attachedParsingContext->_rpi = this;
-            _attachedParsingContext = moveFrom._attachedParsingContext;
-            moveFrom._attachedParsingContext = nullptr;
-        }
-        return *this;
-    }
-
-    RenderPassInstance::RenderPassInstance()
-    {
-        _attachedContext = nullptr;
-        _attachmentPool = nullptr;
-        _trueRenderPass = false;
-        _attachedParsingContext = nullptr;
-    }
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     class AttachmentPool::Pimpl
@@ -956,20 +608,17 @@ namespace RenderCore { namespace Techniques
     auto AttachmentPool::Reserve(
         IteratorRange<const PreregisteredAttachment*> attachmentRequests,
         AttachmentReservation* parentReservation,
-        IteratorRange<const AttachmentTransform*> transforms,
         IteratorRange<const DoubleBufferAttachment*> doubleBufferAttachmentRules,
         ReservationFlag::BitField flags) -> AttachmentReservation
     {
         AttachmentReservation emptyReservation;
         if (!parentReservation) parentReservation = &emptyReservation;
 
-        assert(!parentReservation || (transforms.size() == attachmentRequests.size()));
-
         VLA(bool, consumed, _pimpl->_attachments.size());
-        VLA(bool, consumedParentReservation, parentReservation->_entries.size());
         for (unsigned c=0; c<_pimpl->_attachments.size(); ++c) consumed[c] = false;
-        for (unsigned c=0; c<parentReservation->_entries.size(); ++c) consumedParentReservation[c] = false;
         auto originalAttachmentsSize = _pimpl->_attachments.size();
+
+        assert(!parentReservation || !parentReservation->_pool || parentReservation->_pool == this);     // parentReservation must be associated with this pool, or none at all
 
         // Treat any attachments that are bound to semantic values as "consumed" already.
         // In other words, we can't give these attachments to requests without a semantic,
@@ -985,50 +634,32 @@ namespace RenderCore { namespace Techniques
 
             // If a semantic value is set, we should first check to see if the request can match
             // something bound to that semantic in the parent reservation
-            bool foundMatch = false;
             if (!request._semantic) continue;
 
-            auto requestSemantic = request._semantic;
-            for (unsigned q=0; q<parentReservation->_entries.size(); ++q) {
-                if (requestSemantic == parentReservation->_entries[q]._semantic && !consumedParentReservation[q]) {
-                    #if defined(_DEBUG)
-                        if (!MatchRequest(request._desc, parentReservation->GetResourceDesc(q))) {
-                            Log(Warning) << "Attachment previously used for the semantic (" << AttachmentSemantic{request._semantic} << ") does not match the request for this semantic. Attempting to use it anyway. Request: "
-                                << request._desc << ", Bound previously: " << parentReservation->GetResourceDesc(q)
-                                << std::endl;
-                        }
-                    #endif
+            auto matchingParent = std::find_if(
+                parentReservation->_entries.begin(), parentReservation->_entries.end(),
+                [semantic=request._semantic](const auto& q) { return q._semantic == semantic; });
 
-                    consumedParentReservation[q] = true;
-                    foundMatch = true;
-                    selectedAttachments[r]._resource = parentReservation->_entries[q]._resource;
-                    selectedAttachments[r]._poolName = parentReservation->_entries[q]._poolResource;
-                    selectedAttachments[r]._initialLayout = parentReservation->_entries[q]._currentLayout;
-                    selectedAttachments[r]._semantic = requestSemantic;
-
-                    // update the state in the parentReservation immediately
-                    // (note, this will never get reset back if an exception occurs before the return)
-                    // todo -- check _initialLayout
-                    parentReservation->_entries[q]._currentLayout = (BindFlag::Enum)transforms[r]._finalLayout;
-                    switch (transforms[r]._type) {
-                    case AttachmentTransform::LoadedAndStored:
-                    case AttachmentTransform::Generated:
-                        break;
-                    case AttachmentTransform::Temporary:
-                    case AttachmentTransform::Consumed:
-                        parentReservation->Remove(q);
-                        break;
+            if (matchingParent != parentReservation->_entries.end()) {
+                #if defined(_DEBUG)
+                    auto q = unsigned(matchingParent - parentReservation->_entries.begin());
+                    if (!MatchRequest(request._desc, parentReservation->GetResourceDesc(q))) {
+                        Log(Warning) << "Attachment previously used for the semantic (" << AttachmentSemantic{request._semantic} << ") does not match the request for this semantic. Attempting to use it anyway. Request: "
+                            << request._desc << ", Bound previously: " << parentReservation->GetResourceDesc(q)
+                            << std::endl;
                     }
-
                     // If this attachment is in the doubleBufferAttachments list, ensure the layout flags match up
                     auto i = std::find_if(
                         doubleBufferAttachmentRules.begin(), doubleBufferAttachmentRules.end(),
                         [semantic=request._semantic](const auto& a) { return a._yesterdaySemantic == semantic; });
                     if (i != doubleBufferAttachmentRules.end())
-                        assert(i->_initialLayoutFlags == selectedAttachments[r]._initialLayout);
+                        assert(i->_initialLayoutFlags == matchingParent->_currentLayout);
+                #endif
 
-                    break;
-                }
+                selectedAttachments[r]._resource = matchingParent->_resource;
+                selectedAttachments[r]._poolName = matchingParent->_poolResource;
+                selectedAttachments[r]._initialLayout = matchingParent->_currentLayout;
+                selectedAttachments[r]._semantic = request._semantic;
             }
         }
 
@@ -1039,7 +670,7 @@ namespace RenderCore { namespace Techniques
 
             if (selectedAttachments[r]._poolName != ~0u || selectedAttachments[r]._resource) continue;
 
-            // We will never attempt to reuse something from the parent reservation (unless the semantics match), 
+            // We will never attempt to reuse something from the parent reservation (unless the semantics match),
             // even another temporary -- ie, we're expecting any temporaries in the parent reservation are there
             // because they are expected to be used later
 
@@ -1060,16 +691,29 @@ namespace RenderCore { namespace Techniques
             }
 
             selectedAttachments[r]._poolName = poolAttachmentName;
+            selectedAttachments[r]._semantic = request._semantic;
 
             // if this is a mentioned in doubleBufferAttachmentRules, then there may special rules for initializing this
             auto i = doubleBufferAttachmentRules.end();
-            if (request._semantic != ~0ull)
+            if (request._semantic)
                 i = std::find_if(
                     doubleBufferAttachmentRules.begin(), doubleBufferAttachmentRules.end(),
                     [semantic=request._semantic](const auto& a) { return a._yesterdaySemantic == semantic; });
             if (i != doubleBufferAttachmentRules.end()) {
                 selectedAttachments[r]._pendingClear = i->_initialContents;
                 selectedAttachments[r]._pendingSwitchToLayout = (BindFlag::Enum)i->_initialLayoutFlags;
+            }
+
+            // If the request was expecting an initialized input, it must match either with something explicitly bound to the semantic,
+            // or with something with double buffer attachment rules
+            // If we don't have either of these, then we can't fulfill it correctly -- we'd be passing uninitialized data into something
+            // that asked for an initialized attachment
+            if ((request._state != PreregisteredAttachment::State::Uninitialized) && (i == doubleBufferAttachmentRules.end())) {
+                char buffer[256];
+                if (request._semantic) {
+                    Throw(std::runtime_error(StringMeldInPlace(buffer) << "Cannot find initialized attachment for request with semantic " << AttachmentSemantic{request._semantic}));
+                } else
+                    Throw(std::runtime_error(StringMeldInPlace(buffer) << "Cannot find initialized attachment for non-semantic request"));
             }
         }
 
@@ -1374,6 +1018,101 @@ namespace RenderCore { namespace Techniques
         }
     }
 
+    void AttachmentReservation::UpdateAttachments(AttachmentReservation& childReservation, IteratorRange<const AttachmentTransform*> transforms)
+    {
+        assert(transforms.size() == childReservation._entries.size());
+
+        VLA(bool, removeEntry, _entries.size());
+        for (unsigned c=0; c<_entries.size(); ++c)
+            removeEntry[c] = false;
+
+        std::vector<Entry> newEntries;
+        for (unsigned aIdx=0; aIdx<transforms.size(); ++aIdx) {
+            auto transform = transforms[aIdx];
+            auto& childEntry = childReservation._entries[aIdx];
+
+            if (    transform._type == AttachmentTransform::Temporary
+                ||  transform._type == AttachmentTransform::Consumed) {
+                // unbind this attachment if it appears anywhere, and unbind the semantic as well
+                for (unsigned c=0; c<_entries.size(); ++c)
+                    if (_entries[c]._poolResource == childEntry._poolResource && _entries[c]._resource == childEntry._resource)
+                        removeEntry[c] = true;
+                if (childEntry._semantic != ~0ull && childEntry._semantic != 0ull)
+                    for (unsigned c=0; c<_entries.size(); ++c)
+                        if (_entries[c]._semantic == childEntry._semantic)
+                            removeEntry[c] = true;
+            } else if (transform._type == AttachmentTransform::LoadedAndStored
+                    || transform._type == AttachmentTransform::Generated) {
+                // unbind any alternative bindings of this semantic, and update the layout for this resource
+                // note that we allow the resource to keep any previous binding it might have
+                for (unsigned c=0; c<_entries.size(); ++c)
+                    if (_entries[c]._poolResource == childEntry._poolResource && _entries[c]._resource == childEntry._resource) {
+                        _entries[c]._currentLayout = transform._finalLayout;
+                        _entries[c]._pendingClear = {};
+                        _entries[c]._pendingSwitchToLayout = {};
+                    }
+
+                if (childEntry._semantic != ~0ull && childEntry._semantic != 0ull) {
+                    bool foundExistingBinding = false;
+                    for (unsigned c=0; c<_entries.size(); ++c)
+                        if (_entries[c]._semantic == childEntry._semantic)
+                            if (_entries[c]._poolResource == childEntry._poolResource && _entries[c]._resource == childEntry._resource) {
+                                foundExistingBinding = true;
+                                removeEntry[c] = false;
+                            } else
+                                removeEntry[c] = true;
+                    if (!foundExistingBinding) {
+                        Entry newEntry;
+                        newEntry._poolResource = childEntry._poolResource;
+                        newEntry._resource = childEntry._resource;
+                        newEntry._currentLayout = transform._finalLayout;
+                        newEntry._semantic = childEntry._semantic;
+                        newEntries.emplace_back(std::move(newEntry));
+                    }
+                }
+            }
+        }
+
+        // release fixup
+        {
+            auto initialEntriesSize = _entries.size();
+            VLA(AttachmentName, toRelease, initialEntriesSize);
+            unsigned toReleaseCount = 0;
+            for (int c=(int)initialEntriesSize-1; c>=0; c--)
+                if (removeEntry[c]) {
+                    if (_entries[c]._poolResource != ~0u)
+                        toRelease[toReleaseCount++] = _entries[c]._poolResource;
+                    _entries.erase(_entries.begin()+c);
+                }
+
+            if (toReleaseCount)
+                _pool->Release(MakeIteratorRange(toRelease, toRelease+toReleaseCount), _reservationFlags);
+        }
+
+        // addref fixup
+        if (!newEntries.empty()) {
+            VLA(AttachmentName, toAddRef, newEntries.size());
+            unsigned toAddRefCount = 0;
+
+            _entries.reserve(_entries.size()+newEntries.size());
+            for (auto& e:newEntries) {
+                if (e._poolResource != ~0u)
+                    toAddRef[toAddRefCount++] = e._poolResource;
+                _entries.emplace_back(std::move(e));
+            }
+
+            if (!_pool) {
+                _pool = childReservation._pool;
+                _reservationFlags = childReservation._reservationFlags;
+            }
+
+            _pool->AddRef(MakeIteratorRange(toAddRef, toAddRef+toAddRefCount), _reservationFlags);
+        }
+
+        assert(!_pool || _pool == childReservation._pool);
+        assert(!_pool || _reservationFlags == childReservation._reservationFlags);
+    }
+
     // AttachmentReservation has it's own indexing for attachments
     // this will be zero-based and agree with the ordering of requests when returned from AttachmentPool::Reserve
     // this can be used to make it compatible with the AttachmentName in a FrameBufferDesc
@@ -1590,6 +1329,314 @@ namespace RenderCore { namespace Techniques
             if (attachmentsToReleaseCount)
                 _pool->AddRef(MakeIteratorRange(poolAttachmentsToRelease, &poolAttachmentsToRelease[attachmentsToReleaseCount]), _reservationFlags);
         }
+    }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	void RenderPassInstance::NextSubpass()
+    {
+		if (_trueRenderPass) {
+			assert(_frameBuffer && _attachedContext);
+			_attachedContext->BeginNextSubpass(*_frameBuffer);
+		}
+        #if defined(_DEBUG)
+            if (_attachedContext) {
+                _attachedContext->EndLabel();
+                _attachedContext->BeginLabel(_layout->GetSubpasses()[_currentSubpassIndex+1]._name.empty() ? "<<unnnamed subpass>>" : _layout->GetSubpasses()[_currentSubpassIndex+1]._name.c_str());
+            }
+        #endif
+        ++_currentSubpassIndex;
+    }
+
+    void RenderPassInstance::End()
+    {
+		if (_trueRenderPass) {
+            assert(_attachedContext);
+            _attachedContext->EndRenderPass();
+            #if defined(_DEBUG)
+                if (_attachedContext)
+                    _attachedContext->EndLabel();
+            #endif
+			_attachedContext = nullptr;
+            _trueRenderPass = false;
+		} else {
+            #if defined(_DEBUG)
+                if (_attachedContext)
+                    _attachedContext->EndLabel();
+            #endif
+        }
+
+        if (_attachedParsingContext) {
+            assert(_attachedParsingContext->_rpi == this);
+            _attachedParsingContext->_rpi = nullptr;
+            _attachedParsingContext = nullptr;
+        }
+    }
+    
+    unsigned RenderPassInstance::GetCurrentSubpassIndex() const
+    {
+		if (_attachedContext && _trueRenderPass)
+			assert(_currentSubpassIndex == _attachedContext->GetCurrentSubpassIndex());
+		return _currentSubpassIndex;
+    }
+
+    ViewportDesc RenderPassInstance::GetDefaultViewport() const
+    {
+        return _frameBuffer->GetDefaultViewport();
+    }
+
+    auto RenderPassInstance::GetResourceForAttachmentName(AttachmentName resName) const -> const std::shared_ptr<IResource>&
+    {
+        return _attachmentPoolReservation.GetResource(resName);
+    }
+
+    auto RenderPassInstance::GetSRVForAttachmentName(AttachmentName resName, const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
+    {
+        return _attachmentPoolReservation.GetSRV(resName, window);
+    }
+
+    auto RenderPassInstance::GetInputAttachmentResource(unsigned inputAttachmentSlot) const -> const std::shared_ptr<IResource>&
+	{
+		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
+		auto resName = subPass.GetInputs()[inputAttachmentSlot]._resourceName;
+        return _attachmentPoolReservation.GetResource(resName);
+	}
+
+    auto RenderPassInstance::GetInputAttachmentView(unsigned inputAttachmentSlot) const -> const std::shared_ptr<IResourceView>&
+	{
+		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
+		auto resName = subPass.GetInputs()[inputAttachmentSlot]._resourceName;
+        return _attachmentPoolReservation.GetView(resName, BindFlag::InputAttachment, subPass.GetInputs()[inputAttachmentSlot]._window);
+	}
+	
+	auto RenderPassInstance::GetOutputAttachmentResource(unsigned outputAttachmentSlot) const -> const std::shared_ptr<IResource>&
+	{
+		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
+		auto resName = subPass.GetOutputs()[outputAttachmentSlot]._resourceName;
+        return _attachmentPoolReservation.GetResource(resName);
+	}
+	
+	auto RenderPassInstance::GetOutputAttachmentSRV(unsigned outputAttachmentSlot, const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
+	{
+		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
+		auto resName = subPass.GetOutputs()[outputAttachmentSlot]._resourceName;
+        return _attachmentPoolReservation.GetSRV(resName, window);
+	}
+
+	auto RenderPassInstance::GetDepthStencilAttachmentSRV(const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
+	{
+		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
+		auto resName = subPass.GetDepthStencil()._resourceName;
+        return _attachmentPoolReservation.GetSRV(resName, window);
+	}
+
+	auto RenderPassInstance::GetDepthStencilAttachmentResource() const -> const std::shared_ptr<IResource>&
+	{
+		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
+		auto resName = subPass.GetDepthStencil()._resourceName;
+        return _attachmentPoolReservation.GetResource(resName);
+	}
+
+    auto RenderPassInstance::GetNonFrameBufferAttachmentView(unsigned viewedAttachmentSlot) const -> const std::shared_ptr<IResourceView>&
+    {
+        auto spIdx = GetCurrentSubpassIndex();
+        assert((spIdx+1) < _viewedAttachmentsMap.size());
+        auto base = _viewedAttachmentsMap[spIdx];
+        assert((_viewedAttachmentsMap[spIdx+1] - base) > viewedAttachmentSlot);     // if you hit this, it means "viewedAttachmentSlot" is out of bounds for the current subpass
+        return _viewedAttachments[base+viewedAttachmentSlot];
+    }
+
+    static bool HasClear(LoadStore ls) 
+	{
+		return ls == LoadStore::Clear || ls == LoadStore::DontCare_StencilClear || ls == LoadStore::Retain_StencilClear || ls == LoadStore::Clear_StencilDontCare || ls == LoadStore::Clear_StencilRetain;
+	}
+	
+    RenderPassInstance::RenderPassInstance(
+        IThreadContext& context,
+        const FrameBufferDesc& layout,
+        IteratorRange<const PreregisteredAttachment*> fullAttachmentsDescription,
+        FrameBufferPool& frameBufferPool,
+        AttachmentPool& attachmentPool,
+        AttachmentReservation* parentReservation,
+        const RenderPassBeginDesc& beginInfo)
+    {
+        _attachedContext = Metal::DeviceContext::Get(context).get();
+
+        auto fb = frameBufferPool.BuildFrameBuffer(
+            Metal::GetObjectFactory(*context.GetDevice()),
+            layout, fullAttachmentsDescription, attachmentPool, parentReservation);
+        fb._poolReservation.CompleteInitialization(context);
+
+        _frameBuffer = std::move(fb._frameBuffer);
+        _attachmentPoolReservation = std::move(fb._poolReservation);
+        _layout = fb._completedDesc;        // expecting this to be retained by the pool until at least the destruction of this
+        _trueRenderPass = true;
+
+        #if defined(_DEBUG)
+            _attachedContext->BeginLabel(_layout->GetSubpasses()[0]._name.empty() ? "<<unnnamed subpass>>" : _layout->GetSubpasses()[0]._name.c_str());
+        #endif
+        _attachedContext->BeginRenderPass(*_frameBuffer, beginInfo._clearValues);
+        _attachedParsingContext = nullptr;
+    }
+
+    static bool operator==(const AttachmentTransform& lhs, const AttachmentTransform& rhs)
+    {
+        return (lhs._type == rhs._type) && (lhs._initialLayout == rhs._initialLayout) && (lhs._finalLayout == rhs._finalLayout);
+    }
+
+    RenderPassInstance::RenderPassInstance(
+        ParsingContext& parsingContext,
+        const FragmentStitchingContext::StitchResult& stitchedFragment,
+        const RenderPassBeginDesc& beginInfo)
+    {
+        _attachedContext = nullptr;
+        _trueRenderPass = false;
+
+        auto& stitchContext = parsingContext.GetFragmentStitchingContext();
+        if (stitchedFragment._pipelineType == PipelineType::Graphics) {
+
+            #if defined(_DEBUG)
+                {
+                    // attachment transforms in the stitched fragment must agree with what we get from the fbDesc
+                    VLA_UNSAFE_FORCE(AttachmentTransform, generatedAttachmentTransforms, stitchedFragment._fbDesc.GetAttachments().size());
+                    CalculateAttachmentTransforms(
+                        MakeIteratorRange(generatedAttachmentTransforms, &generatedAttachmentTransforms[stitchedFragment._fbDesc.GetAttachments().size()]),
+                        stitchedFragment._fbDesc);
+                    assert(stitchedFragment._fbDesc.GetAttachments().size() == stitchedFragment._attachmentTransforms.size());
+                    for (unsigned c=0; c<stitchedFragment._fbDesc.GetAttachments().size(); ++c)
+                        assert(generatedAttachmentTransforms[c] == stitchedFragment._attachmentTransforms[c]);
+                }
+            #endif
+
+            *this = RenderPassInstance {
+                parsingContext.GetThreadContext(), stitchedFragment._fbDesc, stitchedFragment._fullAttachmentDescriptions,
+                *parsingContext.GetTechniqueContext()._frameBufferPool,
+                *parsingContext.GetTechniqueContext()._attachmentPool,
+                &parsingContext.GetAttachmentReservation(),
+                beginInfo };
+            parsingContext.GetViewport() = _frameBuffer->GetDefaultViewport();
+        } else {
+            auto& attachmentPool = *parsingContext.GetTechniqueContext()._attachmentPool;
+            _attachmentPoolReservation = attachmentPool.Reserve(stitchedFragment._fullAttachmentDescriptions, &parsingContext.GetAttachmentReservation());
+            _attachmentPoolReservation.CompleteInitialization(parsingContext.GetThreadContext());
+            _layout = &stitchedFragment._fbDesc;
+            // clear not supported in this mode
+            for (const auto& a:_layout->GetAttachments())
+                assert(!HasClear(a._loadFromPreviousPhase));
+
+            _attachedContext = Metal::DeviceContext::Get(parsingContext.GetThreadContext()).get();
+            #if defined(_DEBUG)
+                _attachedContext->BeginLabel(_layout->GetSubpasses()[0]._name.empty() ? "<<unnnamed subpass>>" : _layout->GetSubpasses()[0]._name.c_str());
+            #endif
+        }
+
+        assert(!parsingContext._rpi);
+        parsingContext._rpi = this;
+        _attachedParsingContext = &parsingContext;
+
+        // Update the records in the parsing context with what's changed
+        stitchContext.UpdateAttachments(stitchedFragment);
+        parsingContext.GetAttachmentReservation().UpdateAttachments(_attachmentPoolReservation, stitchedFragment._attachmentTransforms);
+
+        _viewedAttachmentsMap = stitchedFragment._viewedAttachmentsMap;
+        _viewedAttachments.reserve(stitchedFragment._viewedAttachments.size());
+        for (const auto&view:stitchedFragment._viewedAttachments)
+            _viewedAttachments.push_back(_attachmentPoolReservation.GetView(view._resourceName, view._usage, view._window));
+    }
+
+    RenderPassInstance::RenderPassInstance(
+        ParsingContext& parsingContext,
+        const FrameBufferDescFragment& layout,
+        const RenderPassBeginDesc& beginInfo)
+    {
+        _attachedContext = nullptr;
+        _trueRenderPass = false;
+        _attachedParsingContext = nullptr;
+        auto& stitchContext = parsingContext.GetFragmentStitchingContext();
+        auto stitchResult = stitchContext.TryStitchFrameBufferDesc(MakeIteratorRange(&layout, &layout+1));
+        // todo -- have to protect lifetime of stitchResult._fbDesc in this case
+        // candidate for subframe heap
+        // just copy stitchResult._fbDesc somewhere that will last to the end of the frame
+        *this = RenderPassInstance { parsingContext, stitchResult, beginInfo };
+    }
+
+	RenderPassInstance::RenderPassInstance(
+        const FrameBufferDesc& layout,
+        IteratorRange<const PreregisteredAttachment*> resolvedAttachmentDescs,
+        AttachmentPool& attachmentPool)
+	: _layout(&layout)
+    {
+		// This constructs a kind of "non-metal" RenderPassInstance
+		// It allows us to use the RenderPassInstance infrastructure (for example, for remapping attachment requests)
+		// without actually constructing a underlying metal renderpass.
+		// This is used with compute pipelines sometimes -- since in Vulkan, those have some similarities with
+		// graphics pipelines, but are incompatible with the vulkan render passes
+		_attachedContext = nullptr;
+        _trueRenderPass = false;
+        _attachedParsingContext = nullptr;
+		_attachmentPoolReservation = attachmentPool.Reserve(resolvedAttachmentDescs);
+        assert(!_attachmentPoolReservation.HasPendingCompleteInitialization());
+	}
+    
+    RenderPassInstance::~RenderPassInstance() 
+    {
+        End();
+    }
+
+    RenderPassInstance::RenderPassInstance(RenderPassInstance&& moveFrom) never_throws
+    : _frameBuffer(std::move(moveFrom._frameBuffer))
+    , _attachedContext(moveFrom._attachedContext)
+    , _attachmentPoolReservation(std::move(moveFrom._attachmentPoolReservation))
+	, _layout(std::move(moveFrom._layout))
+    , _viewedAttachments(std::move(moveFrom._viewedAttachments))
+    , _viewedAttachmentsMap(std::move(moveFrom._viewedAttachmentsMap))
+    , _currentSubpassIndex(moveFrom._currentSubpassIndex)
+    , _trueRenderPass(moveFrom._trueRenderPass)
+    {
+        moveFrom._attachedContext = nullptr;
+        moveFrom._currentSubpassIndex = 0;
+        moveFrom._trueRenderPass = false;
+        moveFrom._layout = nullptr;
+
+        if (moveFrom._attachedParsingContext) {
+            assert(moveFrom._attachedParsingContext->_rpi == &moveFrom);
+            moveFrom._attachedParsingContext->_rpi = this;
+            _attachedParsingContext = moveFrom._attachedParsingContext;
+            moveFrom._attachedParsingContext = nullptr;
+        }
+    }
+
+    RenderPassInstance& RenderPassInstance::operator=(RenderPassInstance&& moveFrom) never_throws
+    {
+        End();
+        _frameBuffer = std::move(moveFrom._frameBuffer);
+        _attachedContext = moveFrom._attachedContext;
+        _attachmentPoolReservation = std::move(moveFrom._attachmentPoolReservation);
+        moveFrom._attachedContext = nullptr;
+		_layout = std::move(moveFrom._layout);
+        moveFrom._layout = nullptr;
+        _viewedAttachments = std::move(moveFrom._viewedAttachments);
+        _viewedAttachmentsMap = std::move(moveFrom._viewedAttachmentsMap);
+        _currentSubpassIndex = moveFrom._currentSubpassIndex;
+        moveFrom._currentSubpassIndex = 0;
+        _trueRenderPass = moveFrom._trueRenderPass;
+        moveFrom._trueRenderPass = false;
+
+        if (moveFrom._attachedParsingContext) {
+            assert(moveFrom._attachedParsingContext->_rpi == &moveFrom);
+            moveFrom._attachedParsingContext->_rpi = this;
+            _attachedParsingContext = moveFrom._attachedParsingContext;
+            moveFrom._attachedParsingContext = nullptr;
+        }
+        return *this;
+    }
+
+    RenderPassInstance::RenderPassInstance()
+    {
+        _attachedContext = nullptr;
+        _trueRenderPass = false;
+        _attachedParsingContext = nullptr;
+        _layout = nullptr;
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2190,8 +2237,6 @@ namespace RenderCore { namespace Techniques
             auto semantic = stitchResult._fullAttachmentDescriptions[aIdx]._semantic;
             if (!semantic) continue;
             switch (stitchResult._attachmentTransforms[aIdx]._type) {
-            case AttachmentTransform::Temporary:
-                break;
             case AttachmentTransform::LoadedAndStored:
             case AttachmentTransform::Generated:
                 {
@@ -2201,6 +2246,7 @@ namespace RenderCore { namespace Techniques
                     DefineAttachment(desc);
                     break;
                 }
+            case AttachmentTransform::Temporary:
             case AttachmentTransform::Consumed:
                 Undefine(semantic);
                 break;

@@ -255,7 +255,6 @@ namespace RenderCore { namespace Techniques
         AttachmentReservation Reserve(
             IteratorRange<const PreregisteredAttachment*>,
             AttachmentReservation* parentReservation = nullptr,
-            IteratorRange<const AttachmentTransform*> transform = {},
             IteratorRange<const DoubleBufferAttachment*> doubleBufferAttachmentRules = {},
             ReservationFlag::BitField = 0);
 
@@ -279,6 +278,7 @@ namespace RenderCore { namespace Techniques
     public:
         AttachmentName Bind(uint64_t semantic, const IResourcePtr& resource, BindFlag::BitField currentLayout);
         void Unbind(const IResource& resource);
+        void UpdateAttachments(AttachmentReservation& childReservation, IteratorRange<const AttachmentTransform*> transforms);
 
         // Bind(uint64_t semantic, IPresentationChain...)   ?
 
@@ -442,7 +442,6 @@ namespace RenderCore { namespace Techniques
     private:
         std::shared_ptr<Metal::FrameBuffer> _frameBuffer;
         Metal::DeviceContext* _attachedContext;
-        AttachmentPool* _attachmentPool;
         AttachmentReservation _attachmentPoolReservation;
 		const FrameBufferDesc* _layout;     // this is expensive to copy, so avoid it when we can
         unsigned _currentSubpassIndex = 0;
