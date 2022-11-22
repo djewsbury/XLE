@@ -137,7 +137,7 @@ namespace RenderCore { namespace Techniques
             Initialized_StencilUninitialized, Uninitialized_StencilInitialized
         };
         State _state = State::Uninitialized;
-        BindFlag::BitField _layoutFlags = 0;
+        BindFlag::BitField _layout = 0;
 
         uint64_t CalculateHash() const;
     };
@@ -151,7 +151,7 @@ namespace RenderCore { namespace Techniques
     { 
         uint64_t _yesterdaySemantic;
         uint64_t _todaySemantic;
-        unsigned _initialLayoutFlags;
+        BindFlag::BitField _initialLayout;      // ie, layout at the start of "today"
         ClearValue _initialContents;
         ResourceDesc _desc;
     };
@@ -173,7 +173,7 @@ namespace RenderCore { namespace Techniques
         void DefineAttachment(
             uint64_t semantic, const ResourceDesc&,
             PreregisteredAttachment::State state = PreregisteredAttachment::State::Uninitialized, 
-            BindFlag::BitField initialLayoutFlags = 0);
+            BindFlag::BitField initialLayout = 0);
         void DefineAttachment(const PreregisteredAttachment& attachment);
         void Undefine(uint64_t semantic);
 
@@ -183,8 +183,8 @@ namespace RenderCore { namespace Techniques
         // you can then use AttachmentSemantics::MultisampleDepthPrev)
         void DefineDoubleBufferAttachment(
             uint64_t semantic,
-            ClearValue initialContents,
-            unsigned initialLayoutFlags=0);
+            ClearValue defaultContents,
+            unsigned initialLayout=0);
 
         struct StitchResult
         {
@@ -395,7 +395,6 @@ namespace RenderCore { namespace Techniques
 	    auto GetOutputAttachmentSRV(unsigned outputAttachmentSlot, const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&;
 
 		auto GetDepthStencilAttachmentResource() const -> const std::shared_ptr<IResource>&;
-		auto GetDepthStencilAttachmentSRV(const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
 
 		// The "AttachmentNames" here map onto the names used by the FrameBufferDesc used to initialize this RPI
         auto GetResourceForAttachmentName(AttachmentName resName) const -> const std::shared_ptr<IResource>&;

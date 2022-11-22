@@ -44,7 +44,8 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::ParsingContext& parsingContext,
 			Internal::ILightBase& projection,
 			Techniques::FrameBufferPool& shadowGenFrameBufferPool,
-			Techniques::AttachmentPool& shadowGenAttachmentPool) override;
+			Techniques::AttachmentPool& shadowGenAttachmentPool,
+			ViewPool& viewPool) override;
 
 		void End(
 			IThreadContext& threadContext, 
@@ -79,6 +80,7 @@ namespace RenderCore { namespace LightingEngine
 		bool _descSetGood = false;
 		float _shadowTextureSize = 0.f;
 		unsigned _maxFrustumCount = 0;
+		ViewPool* _viewPool = nullptr;
 
 		class UniformDelegate : public Techniques::IShaderResourceDelegate
 		{
@@ -300,7 +302,8 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::ParsingContext& parsingContext,
 		Internal::ILightBase& projectionBase,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
-		Techniques::AttachmentPool& shadowGenAttachmentPool)
+		Techniques::AttachmentPool& shadowGenAttachmentPool,
+		ViewPool& viewPool)
 	{
 		assert(projectionBase.QueryInterface(typeid(Internal::StandardShadowProjection).hash_code()) == &projectionBase);
 		auto& projection = *(Internal::StandardShadowProjection*)&projectionBase;
@@ -311,8 +314,9 @@ namespace RenderCore { namespace LightingEngine
 		auto rpi = Techniques::RenderPassInstance{
 			threadContext,
 			_fbDesc._fbDesc, _fbDesc._fullAttachmentDescriptions,
-			shadowGenFrameBufferPool, shadowGenAttachmentPool, {}};
+			shadowGenFrameBufferPool, shadowGenAttachmentPool, nullptr, {}};
 		parsingContext.GetViewport() = rpi.GetDefaultViewport();
+		_viewPool = &viewPool;
 		return rpi;
 	}
 
@@ -327,7 +331,8 @@ namespace RenderCore { namespace LightingEngine
 
 		DescriptorSetInitializer descSetInit;
 		descSetInit._slotBindings = _descSetSlotBindings;
-		const IResourceView* srvs[] = { rpi.GetDepthStencilAttachmentSRV({}).get() };
+		auto srv = _viewPool->GetTextureView(rpi.GetDepthStencilAttachmentResource(), BindFlag::ShaderResource, {});
+		const IResourceView* srvs[] = { srv.get() };
 		IteratorRange<const void*> immediateData[3];
 		immediateData[0] = {_workingDMFrustum._cbSource.begin(), _workingDMFrustum._cbSource.end()};
 		immediateData[1] = MakeOpaqueIteratorRange(_workingDMFrustum._resolveParameters);
@@ -425,7 +430,7 @@ namespace RenderCore { namespace LightingEngine
 		{
 			SubpassDesc subpass;
 			auto attach = fragment.DefineAttachment(Techniques::AttachmentSemantics::ShadowDepthMap)
-				.Clear().FinalState(BindFlag::ShaderResource | BindFlag::DepthStencil);
+				.Clear().FinalState(BindFlag::ShaderResource);
 			subpass.SetDepthStencil(attach);
 			subpass.SetName("prepare-shadow");
 			fragment.AddSubpass(std::move(subpass));
@@ -439,7 +444,7 @@ namespace RenderCore { namespace LightingEngine
 		// vs drawing to texture array
 		Techniques::PreregisteredAttachment pregAttach;
 		pregAttach._semantic = Techniques::AttachmentSemantics::ShadowDepthMap;
-		pregAttach._layoutFlags = BindFlag::ShaderResource | BindFlag::DepthStencil;
+		pregAttach._layout = BindFlag::ShaderResource;
 		pregAttach._state = Techniques::PreregisteredAttachment::State::Uninitialized;
 		if (desc._projectionMode == ShadowProjectionMode::ArbitraryCubeMap) {
 			pregAttach._desc = CreateDesc(

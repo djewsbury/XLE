@@ -273,7 +273,7 @@ namespace UnitTests
 		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 		stitchingContext._workingProps = fbProps;
 		for (const auto&a:preregisteredAttachments)
-			stitchingContext.DefineAttachment(a._semantic, a._desc, a._state, a._layoutFlags);
+			stitchingContext.DefineAttachment(a._semantic, a._desc, a._state, a._layout);
 		return parsingContext;
 	}
 

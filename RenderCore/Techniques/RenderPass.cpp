@@ -176,6 +176,7 @@ namespace RenderCore { namespace Techniques
 
     FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::Clear()
     {
+        _fragment->_attachments[_attachmentName]._initialLayout = 0;
         _fragment->_attachments[_attachmentName]._loadFromPreviousPhase = LoadStore::Clear;
         return *this;
     }
@@ -590,13 +591,11 @@ namespace RenderCore { namespace Techniques
         return _pimpl->_srvPool.GetTextureView(attach->_resource, usage, window);
     }
 
-    static unsigned GetArrayCount(unsigned arrayCount) { return arrayCount; }           // { return (arrayCount == 0) ? 1 : arrayCount; }
-
     static bool MatchRequest(const ResourceDesc& preregisteredDesc, const ResourceDesc& concreteObjectDesc)
     {
         assert(preregisteredDesc._type == ResourceDesc::Type::Texture && concreteObjectDesc._type == ResourceDesc::Type::Texture);
         return
-            GetArrayCount(preregisteredDesc._textureDesc._arrayCount) == GetArrayCount(concreteObjectDesc._textureDesc._arrayCount)
+            preregisteredDesc._textureDesc._arrayCount == concreteObjectDesc._textureDesc._arrayCount
             && (AsTypelessFormat(preregisteredDesc._textureDesc._format) == AsTypelessFormat(concreteObjectDesc._textureDesc._format) || preregisteredDesc._textureDesc._format == Format::Unknown)
             && preregisteredDesc._textureDesc._width == concreteObjectDesc._textureDesc._width
             && preregisteredDesc._textureDesc._height == concreteObjectDesc._textureDesc._height
@@ -653,13 +652,15 @@ namespace RenderCore { namespace Techniques
                         doubleBufferAttachmentRules.begin(), doubleBufferAttachmentRules.end(),
                         [semantic=request._semantic](const auto& a) { return a._yesterdaySemantic == semantic; });
                     if (i != doubleBufferAttachmentRules.end())
-                        assert(i->_initialLayoutFlags == matchingParent->_currentLayout);
+                        assert(i->_initialLayout == matchingParent->_currentLayout);
                 #endif
 
                 selectedAttachments[r]._resource = matchingParent->_resource;
                 selectedAttachments[r]._poolName = matchingParent->_poolResource;
                 selectedAttachments[r]._initialLayout = matchingParent->_currentLayout;
                 selectedAttachments[r]._semantic = request._semantic;
+
+                assert(matchingParent->_currentLayout == request._layout);
             }
         }
 
@@ -701,7 +702,7 @@ namespace RenderCore { namespace Techniques
                     [semantic=request._semantic](const auto& a) { return a._yesterdaySemantic == semantic; });
             if (i != doubleBufferAttachmentRules.end()) {
                 selectedAttachments[r]._pendingClear = i->_initialContents;
-                selectedAttachments[r]._pendingSwitchToLayout = (BindFlag::Enum)i->_initialLayoutFlags;
+                selectedAttachments[r]._pendingSwitchToLayout = (BindFlag::Enum)i->_initialLayout;
             }
 
             // If the request was expecting an initialized input, it must match either with something explicitly bound to the semantic,
@@ -1423,13 +1424,6 @@ namespace RenderCore { namespace Techniques
         return _attachmentPoolReservation.GetSRV(resName, window);
 	}
 
-	auto RenderPassInstance::GetDepthStencilAttachmentSRV(const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
-	{
-		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
-		auto resName = subPass.GetDepthStencil()._resourceName;
-        return _attachmentPoolReservation.GetSRV(resName, window);
-	}
-
 	auto RenderPassInstance::GetDepthStencilAttachmentResource() const -> const std::shared_ptr<IResource>&
 	{
 		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
@@ -1646,6 +1640,7 @@ namespace RenderCore { namespace Techniques
 		uint64_t result = HashCombine(_semantic, _desc.CalculateHash());
 		auto shift = (unsigned)_state;
 		lrot(result, shift);
+        result += _layout;
 		return result;
 	}
 
@@ -1877,7 +1872,7 @@ namespace RenderCore { namespace Techniques
             || attachment._state == PreregisteredAttachment::State::Uninitialized_StencilInitialized)
             _containsDataForSemantic = attachment._semantic;
         _shouldReceiveDataForSemantic = attachment._semantic;
-        _firstAccessInitialLayout = attachment._layoutFlags;
+        _firstAccessInitialLayout = attachment._layout;
         _fullyDefinedAttachment = attachment;
     }
 
@@ -1965,7 +1960,7 @@ namespace RenderCore { namespace Techniques
             << AttachmentSemantic{attachment._semantic} << ", "
             << attachment._desc << ", "
             << AsString(attachment._state) << "/"
-            << BindFlagsAsString(attachment._layoutFlags) << "}";
+            << BindFlagsAsString(attachment._layout) << "}";
         return str;
     }
 
@@ -2082,7 +2077,7 @@ namespace RenderCore { namespace Techniques
         assert(result._desc._textureDesc._format != Format::Unknown);       // at this point we must have a resolved format. If it's still unknown, we can't created a preregistered attachment
         result._semantic = attachmentDesc._semantic;
         result._state = PreregisteredAttachment::State::Uninitialized;
-        result._layoutFlags = attachmentDesc._initialLayout.value_or(0);
+        result._layout = attachmentDesc._initialLayout.value_or(0);
         return result;
     }
 
@@ -2242,7 +2237,7 @@ namespace RenderCore { namespace Techniques
                 {
                     auto desc = stitchResult._fullAttachmentDescriptions[aIdx];
                     desc._state = PreregisteredAttachment::State::Initialized;
-                    desc._layoutFlags = stitchResult._attachmentTransforms[aIdx]._finalLayout;
+                    desc._layout = stitchResult._attachmentTransforms[aIdx]._finalLayout;
                     DefineAttachment(desc);
                     break;
                 }
@@ -2315,7 +2310,7 @@ namespace RenderCore { namespace Techniques
 			[semantic](const auto& c) { return c._todaySemantic == semantic; });
         if (i3 != _doubleBufferAttachments.end()) {
             // can't easily check if the clear values are the same, because it's an enum
-            assert(i3->_initialLayoutFlags == initialLayoutFlags);
+            assert(i3->_initialLayout == initialLayoutFlags);
             return; // already defined
         }
 
@@ -2329,7 +2324,7 @@ namespace RenderCore { namespace Techniques
         a._todaySemantic = semantic;
         a._yesterdaySemantic = semantic+1;
         a._initialContents = initialContents;
-        a._initialLayoutFlags = initialLayoutFlags;
+        a._initialLayout = initialLayoutFlags;
         a._desc = i->_desc;
         _doubleBufferAttachments.push_back(a);
         DefineAttachment(a._yesterdaySemantic, a._desc, PreregisteredAttachment::State::Initialized, initialLayoutFlags);

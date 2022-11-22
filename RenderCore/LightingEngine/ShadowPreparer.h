@@ -21,7 +21,7 @@ namespace RenderCore { namespace Techniques
 	class SequencerConfig;
 	class IShaderResourceDelegate;
 }}
-namespace RenderCore { class IThreadContext; class IDescriptorSet; }
+namespace RenderCore { class IThreadContext; class IDescriptorSet; class ViewPool; }
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
 namespace std { template<typename T> class future; }
 
@@ -87,7 +87,8 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::ParsingContext& parsingContext,
 			Internal::ILightBase& projection,
 			Techniques::FrameBufferPool& shadowGenFrameBufferPool,
-			Techniques::AttachmentPool& shadowGenAttachmentPool) = 0;
+			Techniques::AttachmentPool& shadowGenAttachmentPool,
+			ViewPool& viewPool) = 0;
 		virtual void End(
 			IThreadContext& threadContext, 
 			Techniques::ParsingContext& parsingContext,

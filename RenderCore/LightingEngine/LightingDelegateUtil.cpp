@@ -40,7 +40,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		const SequencerAddendums& addenums,
 		PipelineType descSetPipelineType,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
-		Techniques::AttachmentPool& shadowGenAttachmentPool);
+		Techniques::AttachmentPool& shadowGenAttachmentPool,
+		ViewPool& shadowGenViewPool);
 
 	void DynamicShadowProjectionScheduler::SceneSet::RegisterLight(unsigned index, ILightBase& light)
 	{
@@ -86,7 +87,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					comp._preparedResult[idx] = SetupShadowPrepare(
 						iterator, sequence, *comp._projections[idx], comp._addendums[idx],
 						PipelineType::Graphics,
-						*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool);
+						*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool, _shadowGenViewPool);
 				}
 				offset += 64;
 			}
@@ -206,20 +207,22 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		const SequencerAddendums& addenums,
 		PipelineType descSetPipelineType,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
-		Techniques::AttachmentPool& shadowGenAttachmentPool)
+		Techniques::AttachmentPool& shadowGenAttachmentPool,
+		ViewPool& shadowGenViewPool)
 	{
 		auto parseId = SetupShadowParse(iterator, sequence, proj, addenums);
 
 		auto& preparer = *addenums._preparer;
 		auto res = preparer.CreatePreparedShadowResult();
 		sequence.CreateStep_CallFunction(
-			[&preparer, &proj, &shadowGenFrameBufferPool, &shadowGenAttachmentPool, parseId, res, descSetPipelineType](LightingTechniqueIterator& iterator) {
+			[&preparer, &proj, &shadowGenFrameBufferPool, &shadowGenAttachmentPool, &shadowGenViewPool, parseId, res, descSetPipelineType](LightingTechniqueIterator& iterator) {
 				auto rpi = preparer.Begin(
 					*iterator._threadContext,
 					*iterator._parsingContext,
 					proj,
 					shadowGenFrameBufferPool,
-					shadowGenAttachmentPool);
+					shadowGenAttachmentPool,
+					shadowGenViewPool);
 				iterator.ExecuteDrawables(parseId, *preparer.GetSequencerConfig().first, preparer.GetSequencerConfig().second);
 				rpi.End();
 				preparer.End(*iterator._threadContext, *iterator._parsingContext, rpi, descSetPipelineType, *res);

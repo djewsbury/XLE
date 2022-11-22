@@ -139,13 +139,10 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	static RenderStepFragmentInterface CreateToneMapFragment(
-		std::function<void(LightingTechniqueIterator&)>&& fn,
-		bool keepHDRForNextFrame = false)
+		std::function<void(LightingTechniqueIterator&)>&& fn)
 	{
 		RenderStepFragmentInterface fragment { RenderCore::PipelineType::Graphics };
 		auto hdrInput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard();
-		if (keepHDRForNextFrame)
-			hdrInput.FinalState(BindFlag::ShaderResource);
 		auto ldrOutput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState();
 
 		Techniques::FrameBufferDescFragment::SubpassDesc subpass;

@@ -56,7 +56,7 @@ namespace RenderCore { namespace LightingEngine
 
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc { TextureViewDesc::Aspect::Depth });
-		auto hierarchicalDepthsAttachment = result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths).NoInitialState();
+		auto hierarchicalDepthsAttachment = result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths).NoInitialState().FinalState(BindFlag::ShaderResource);
 		unsigned depthsMipCount = IntegerLog2(std::max(fbProps._width, fbProps._height))+1;
 		for (unsigned c=0; c<depthsMipCount; ++c) {
 			TextureViewDesc view;

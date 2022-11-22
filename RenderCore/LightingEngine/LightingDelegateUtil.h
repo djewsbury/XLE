@@ -9,6 +9,7 @@
 #include "ShadowProbes.h"
 #include "ShadowPreparer.h"
 #include "../Types.h"
+#include "../ResourceUtils.h"		// for ViewPool
 #include "../../Assets/Marker.h"
 #include <memory>
 
@@ -125,6 +126,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
 		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
+		ViewPool _shadowGenViewPool;
 		std::vector<unsigned> _operatorToPreparerIdMapping;
 	};
 
