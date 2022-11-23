@@ -566,6 +566,14 @@ namespace RenderCore { namespace Techniques
         return attach->_resource;
 	}
 
+    AttachmentName AttachmentPool::GetNameForResource(IResource& res) const
+    {
+        for (unsigned c=0; c<_pimpl->_attachments.size(); ++c)
+            if (_pimpl->_attachments[c]._resource.get() == &res)
+                return c;
+        return ~0u;
+    }
+
     static TextureViewDesc CompleteTextureViewDesc(const TextureViewDesc& viewDesc, TextureViewDesc::Aspect defaultAspect)
 	{
 		TextureViewDesc result = viewDesc;
@@ -660,7 +668,7 @@ namespace RenderCore { namespace Techniques
                 selectedAttachments[r]._initialLayout = matchingParent->_currentLayout;
                 selectedAttachments[r]._semantic = request._semantic;
 
-                assert(matchingParent->_currentLayout == request._layout);
+                assert(!request._layout || (matchingParent->_currentLayout == request._layout));
             }
         }
 
@@ -2159,12 +2167,9 @@ namespace RenderCore { namespace Techniques
 
                 AttachmentTransform transform;
                 if (directionFlags & DirectionFlags::RetainsOnExit) {
-                    if (directionFlags & DirectionFlags::WritesData) {
-                        if (directionFlags & DirectionFlags::RequirePreinitializedData) transform._type = AttachmentTransform::LoadedAndStored;
-                        else transform._type = AttachmentTransform::Generated;
-                    } else  {
-                        transform._type = AttachmentTransform::LoadedAndStored;
-                    }
+                    // directionFlags will have DirectionFlags::WritesData if we actually write something
+                    if (directionFlags & DirectionFlags::RequirePreinitializedData) transform._type = AttachmentTransform::LoadedAndStored;
+                    else transform._type = AttachmentTransform::Generated;
                 } else {
                     assert(directionFlags & DirectionFlags::Reference);
                     if (directionFlags & DirectionFlags::RequirePreinitializedData) transform._type = AttachmentTransform::Consumed;
@@ -2250,11 +2255,13 @@ namespace RenderCore { namespace Techniques
     }
 
     static void PatchInDefaultLayouts(FrameBufferDescFragment& fragment);
+    static void CheckNonFrameBufferAttachmentLayouts(FrameBufferDescFragment& fragment);
 
     auto FragmentStitchingContext::TryStitchFrameBufferDesc(IteratorRange<const FrameBufferDescFragment*> fragments) -> StitchResult
     {
         auto merged = MergeFragments(MakeIteratorRange(_workingAttachments), fragments, _workingProps, MakeIteratorRange(_systemFormats));
         PatchInDefaultLayouts(merged._mergedFragment);
+        CheckNonFrameBufferAttachmentLayouts(merged._mergedFragment);
         auto stitched = TryStitchFrameBufferDescInternal(merged._mergedFragment);
         stitched._log = merged._log;
         return stitched;
@@ -2666,6 +2673,45 @@ namespace RenderCore { namespace Techniques
 
             // clear/dont-care load attachments can have an initial layout of 0; but otherwise we must have an initial layout
             assert(!HasRetain(fragment.GetAttachments()[c]._loadFromPreviousPhase) || fragment.GetAttachments()[c]._initialLayout.value_or(0) != 0);
+        }
+    }
+
+    static void CheckNonFrameBufferAttachmentLayouts(FrameBufferDescFragment& fragment)
+    {
+        if (fragment._pipelineType == PipelineType::Graphics) {
+            // With graphics pipelines, we can't change the layout of attachments based on the non frame buffer attachment requests
+            // So, the non frame buffer requests must be compatible with whatever layout the attachment is going to end up in
+            #if defined(_DEBUG)
+                VLA(BindFlag::BitField, attachmentState, fragment.GetAttachments().size());
+                for (unsigned c=0; c<fragment.GetAttachments().size(); ++c)
+                    attachmentState[c] = fragment.GetAttachments()[c]._initialLayout.value_or(0);
+
+                for (unsigned spIdx=0; spIdx<fragment.GetSubpasses().size(); ++spIdx) {
+                    auto& sp = fragment.GetSubpasses()[spIdx];
+                    
+                    for (const auto& o:sp.GetOutputs())
+                        attachmentState[o._resourceName] = BindFlag::RenderTarget;
+                    for (const auto& i:sp.GetInputs())
+                        attachmentState[i._resourceName] = BindFlag::ShaderResource;
+                    if (sp.GetDepthStencil()._resourceName != ~0u)
+                        attachmentState[sp.GetDepthStencil()._resourceName] = BindFlag::DepthStencil;
+
+                    for (const auto& nonfb:sp.GetViews()) {
+                        // usage must agree with expectations (or at least have "simultaneous" flags set)
+                        // note -- we're not validating that we're using the correct "simultaneous" flags; just that we're using at least one
+                        auto nonFrameBufferUsage = nonfb._usage;
+                        auto simultaneousFlags = nonfb._window._flags &
+                            ( TextureViewDesc::Flags::SimultaneouslyColorAttachment | TextureViewDesc::Flags::SimultaneouslyColorReadOnly
+                            | TextureViewDesc::Flags::SimultaneouslyDepthAttachment | TextureViewDesc::Flags::SimultaneouslyDepthReadOnly
+                            | TextureViewDesc::Flags::SimultaneouslyStencilAttachment | TextureViewDesc::Flags::SimultaneouslyStencilReadOnly );
+                        assert(nonFrameBufferUsage == attachmentState[nonfb._resourceName] || simultaneousFlags);
+                    }
+                }
+            #endif
+        } else {
+            // For compute pipelines, we could potential figure out the barriers that need to be added here
+            // it's also possible for the client to just add the barriers as needed, though, and the client must have more context to control the barriers better?
+            assert(fragment._pipelineType == PipelineType::Compute);
         }
     }
 

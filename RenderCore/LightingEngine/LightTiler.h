@@ -57,6 +57,7 @@ namespace RenderCore { namespace LightingEngine
 
 		void PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext);
 		void CompleteInitialization(IThreadContext& threadContext);
+		void BarrierToReadingLayout(IThreadContext& threadContext);
 
 		::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
 

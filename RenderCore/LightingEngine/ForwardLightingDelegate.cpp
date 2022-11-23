@@ -464,6 +464,7 @@ namespace RenderCore { namespace LightingEngine
 					mainSequence.CreateStep_CallFunction(
 						[captures](LightingTechniqueIterator& iterator) {
 							captures->ConfigureParsingContext(*iterator._parsingContext);
+							captures->_lightScene->GetLightTiler().BarrierToReadingLayout(*iterator._threadContext);
 						});
 
 					// Draw main scene

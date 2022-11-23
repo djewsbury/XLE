@@ -159,7 +159,19 @@ namespace RenderCore { namespace LightingEngine
 			encoder.DrawIndexedInstances(*_prepareBitFieldPipeline, _stencilingGeo._lowDetailHemiSphereIndexCount, _outputs._lightCount);
 		}
 
-		_outputs._tiledLightBitFieldSRV = iterator._rpi.GetNonFrameBufferAttachmentView(2);
+		// Build and SRV for the attachment we're writing in. We don't use AppendNonFrameBufferAttachmentView() because this attachment will never
+		// change to a read-only layout during the render step fragment
+		auto& attachmentPool = iterator._rpi.GetAttachmentReservation().GetAttachmentPool();
+		auto attachmentName = attachmentPool.GetNameForResource(*iterator._rpi.GetNonFrameBufferAttachmentView(0)->GetResource());
+		assert(attachmentName != ~0u);
+		_outputs._tiledLightBitFieldSRV = attachmentPool.GetView(attachmentName, BindFlag::ShaderResource);
+	}
+
+	void RasterizationLightTileOperator::BarrierToReadingLayout(IThreadContext& threadContext)
+	{
+		auto* tiledLightsOutput = _outputs._tiledLightBitFieldSRV->GetResource().get();
+		assert(tiledLightsOutput);
+		Metal::BarrierHelper{threadContext}.Add(*tiledLightsOutput, {BindFlag::UnorderedAccess, ShaderStage::Compute}, {BindFlag::ShaderResource, ShaderStage::Pixel});
 	}
 
 	LightingEngine::RenderStepFragmentInterface RasterizationLightTileOperator::CreateFragment(const FrameBufferProperties& fbProps)
@@ -167,13 +179,12 @@ namespace RenderCore { namespace LightingEngine
 		LightingEngine::RenderStepFragmentInterface result{PipelineType::Graphics};
 
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-		auto tiledLightBitField = result.DefineAttachment(Techniques::AttachmentSemantics::TiledLightBitField).InitialState(BindFlag::UnorderedAccess).FinalState(BindFlag::ShaderResource);
+		auto tiledLightBitField = result.DefineAttachment(Techniques::AttachmentSemantics::TiledLightBitField).InitialState(BindFlag::UnorderedAccess).FinalState(BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(tiledLightBitField, BindFlag::UnorderedAccess);
 		TextureViewDesc depthBufferView;
 		depthBufferView._mipRange._min = IntegerLog2(s_gridDims);
 		depthBufferView._mipRange._count = 1;
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::ShaderResource, depthBufferView);
-		spDesc.AppendNonFrameBufferAttachmentView(tiledLightBitField, BindFlag::ShaderResource);
 		spDesc.SetName("rasterization-light-tiler");
 		result.AddSubpass(
 			std::move(spDesc),
@@ -190,7 +201,7 @@ namespace RenderCore { namespace LightingEngine
 
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
 		auto tiledLightBitField = result.DefineAttachment(Techniques::AttachmentSemantics::TiledLightBitField).NoInitialState().FinalState(BindFlag::UnorderedAccess);
-		spDesc.AppendNonFrameBufferAttachmentView(tiledLightBitField, BindFlag::UnorderedAccess);
+		spDesc.AppendNonFrameBufferAttachmentView(tiledLightBitField, BindFlag::TransferDst);
 		/*spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Hash64("LowRezDepthBuffer")), BindFlag::DepthStencil);*/
 		spDesc.SetName("rasterization-light-tiler-init");
@@ -212,9 +223,10 @@ namespace RenderCore { namespace LightingEngine
 				copySrc._rightBottomBack = {lightTileBufferSize[0],lightTileBufferSize[1],1};
 				bltEncoder.Copy(copyDst, copySrc);
 				*/
-				metalContext.ClearUInt(
-					*iterator._rpi.GetNonFrameBufferAttachmentView(0),
-					UInt4{0,0,0,0});
+				auto& view = *iterator._rpi.GetNonFrameBufferAttachmentView(0);
+				Metal::BarrierHelper{*iterator._threadContext}.Add(*view.GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::TransferDst);
+				metalContext.ClearUInt(view, UInt4{0,0,0,0});
+				Metal::BarrierHelper{*iterator._threadContext}.Add(*view.GetResource(), BindFlag::TransferDst, {BindFlag::UnorderedAccess, ShaderStage::Pixel});
 			});
 
 		return result;

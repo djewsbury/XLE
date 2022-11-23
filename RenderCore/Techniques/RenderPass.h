@@ -249,6 +249,8 @@ namespace RenderCore { namespace Techniques
     {
     public:
         const std::shared_ptr<IResource>& GetResource(AttachmentName resName) const;
+        AttachmentName GetNameForResource(IResource&) const;
+
         auto GetSRV(AttachmentName resName, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
         auto GetView(AttachmentName resName, BindFlag::Enum usage, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
 
@@ -296,6 +298,7 @@ namespace RenderCore { namespace Techniques
 
         void CompleteInitialization(IThreadContext&);
         bool HasPendingCompleteInitialization() const;
+        const AttachmentPool& GetAttachmentPool() const { return *_pool; }
 
         using AttachmentNameMapping = std::vector<std::pair<AttachmentName, AttachmentName>>;
         AttachmentNameMapping MergeIn(const AttachmentReservation&);

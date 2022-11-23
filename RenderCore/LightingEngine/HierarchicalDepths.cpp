@@ -22,6 +22,8 @@ namespace RenderCore { namespace LightingEngine
 	{
 		GPUProfilerBlock profileBlock(*iterator._threadContext, "HierarchicalDepthsOperator");
 
+		Metal::BarrierHelper{*iterator._threadContext}.Add(*iterator._rpi.GetNonFrameBufferAttachmentView(1)->GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
+
 		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
 		vkCmdFillBuffer(
 			metalContext.GetActiveCommandList().GetUnderlying().get(),
@@ -48,6 +50,9 @@ namespace RenderCore { namespace LightingEngine
 			*iterator._parsingContext,
 			(outputDims[0]+63) / 64, (outputDims[1]+63) / 64, 1,
 			us);
+
+		// because we're using a compute shader fragment, we must manually add a barrier to update the resource layout
+		Metal::BarrierHelper{*iterator._threadContext}.Add(*iterator._rpi.GetNonFrameBufferAttachmentView(1)->GetResource(), BindFlag::UnorderedAccess, BindFlag::ShaderResource);
 	}
 
 	RenderCore::LightingEngine::RenderStepFragmentInterface HierarchicalDepthsOperator::CreateFragment(const FrameBufferProperties& fbProps)
@@ -56,7 +61,7 @@ namespace RenderCore { namespace LightingEngine
 
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc { TextureViewDesc::Aspect::Depth });
-		auto hierarchicalDepthsAttachment = result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths).NoInitialState().FinalState(BindFlag::ShaderResource);
+		auto hierarchicalDepthsAttachment = result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths).InitialState(LoadStore::DontCare, BindFlag::UnorderedAccess).FinalState(BindFlag::ShaderResource);
 		unsigned depthsMipCount = IntegerLog2(std::max(fbProps._width, fbProps._height))+1;
 		for (unsigned c=0; c<depthsMipCount; ++c) {
 			TextureViewDesc view;
