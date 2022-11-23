@@ -197,8 +197,7 @@ namespace RenderOverlays
 		mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
         TextureViewDesc stencilViewDesc{
             {TextureViewDesc::Aspect::Stencil},
-            TextureViewDesc::All, TextureViewDesc::All, TextureDesc::Dimensionality::Undefined,
-            TextureViewDesc::Flags::JustStencil};
+            TextureViewDesc::All, TextureViewDesc::All, TextureDesc::Dimensionality::Undefined};
         if (s_inputAttachmentMode) {
             mainPass.AppendInput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), stencilViewDesc);
         } else {

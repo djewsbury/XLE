@@ -183,7 +183,7 @@ namespace ToolsRig
 					}
 
 					for (auto doubleBuffer:constructorContext._stitchingContext.GetDoubleBufferAttachments())
-						sequence.ForceRetainAttachment(doubleBuffer._todaySemantic, doubleBuffer._initialLayoutFlags);
+						sequence.ForceRetainAttachment(doubleBuffer._todaySemantic, doubleBuffer._initialLayout);
 					
 					technique->CompleteConstruction(
 						l->_drawingApparatus->_pipelineAccelerators,

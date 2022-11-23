@@ -848,7 +848,7 @@ namespace ToolsRig
 		SubpassDesc mainPass;
 		mainPass.SetName("VisualisationOverlay");
 		mainPass.SetDepthStencil(
-			fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear).FinalState(BindFlag::ShaderResource),
+			fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear, BindFlag::DepthStencil).FinalState(BindFlag::ShaderResource),
 			TextureViewDesc{TextureViewDesc::Aspect::Stencil});
 		fbDesc.AddSubpass(std::move(mainPass));
 		return fbDesc;
