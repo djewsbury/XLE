@@ -7,6 +7,7 @@
 #include "State.h"
 #include "Format.h"
 #include "../../Format.h"
+#include "../../../Utility/ArithmeticUtils.h"
 #include <stdexcept>
 
 namespace RenderCore { namespace Metal_Vulkan
@@ -70,9 +71,6 @@ namespace RenderCore { namespace Metal_Vulkan
             break;
         }
 
-        // disable depth or stencil when requiring just a single subaspect
-        if (window._flags & TextureViewDesc::Flags::JustDepth) aspectMask &= ~VK_IMAGE_ASPECT_STENCIL_BIT;
-        if (window._flags & TextureViewDesc::Flags::JustStencil) aspectMask &= ~VK_IMAGE_ASPECT_DEPTH_BIT;
         return aspectMask;
     }
 
@@ -164,6 +162,106 @@ namespace RenderCore { namespace Metal_Vulkan
         }
     }
 
+    VkImageLayout CalculateImageLayout(BindFlag::BitField immediateUsage, VkImageAspectFlags immediateAspects, TextureViewDesc::Flags::BitField viewFlags)
+    {
+        // Most of the time there's a direct mapping between the immediate usage of this view and the 
+        // image layout vulkan wants
+        // There's some complications for depth stencil texture, though
+        auto imageLayout = Internal::LayoutForImmediateUsage(immediateUsage);
+
+        // the logic below assumes that only one or zero "simultaneously..." flag is set
+        auto simultaneousFlags = viewFlags & (
+                TextureViewDesc::Flags::SimultaneouslyColorAttachment|TextureViewDesc::Flags::SimultaneouslyColorReadOnly
+            |TextureViewDesc::Flags::SimultaneouslyDepthAttachment|TextureViewDesc::Flags::SimultaneouslyDepthReadOnly
+            |TextureViewDesc::Flags::SimultaneouslyStencilAttachment|TextureViewDesc::Flags::SimultaneouslyStencilReadOnly);
+        assert(popcount(simultaneousFlags) <= 1);
+
+        if (immediateAspects & (VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT)) {
+            // multiple options for depth stencil, based on what aspects we need and read/write flags
+            //
+            // * note -- The following single-aspect layouts can't be used when updating descriptors in descriptor sets! *
+            // VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
+            //      -- depth aspect only bound as depth buffer
+            // VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL
+            //      -- depth aspect only bound as a depth buffer, "sampled image" or input attachment
+            // VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL
+            //      -- stencil aspect only bound as stencil buffer
+            // VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL
+            //      -- stencil aspect only bound as stencil buffer, "sampled image" or input attachment
+            //
+            // Combinations of the above can form:
+            // VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+            //      -- both aspects, bound as a depth/stencil buffer
+            // VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+            //      -- both aspects, but read only
+            //          can be used as a depth/stencil buffer, or a "sampled image" or input attachment
+            // VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL
+            //      -- effectively VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL for the depth aspect
+            //          and VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL for the stencil aspect
+            // VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL
+            //      -- effectively VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL for the depth aspect
+            //          and VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL for the stencil aspect
+            //
+            // also VK_IMAGE_LAYOUT_GENERAL can work in at least some cases
+            //
+            // See also BarrierResourceUsage::SpecializeForResource for another place where we do a similar
+            // transform
+
+            assert(!(viewFlags & (TextureViewDesc::Flags::SimultaneouslyColorAttachment|TextureViewDesc::Flags::SimultaneouslyColorReadOnly)));
+
+            if (imageLayout != VK_IMAGE_LAYOUT_GENERAL) {
+
+                VkImageLayout depthAspectLayout, stencilAspectLayout;
+                if (imageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+                    depthAspectLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+                    stencilAspectLayout = VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL;
+                } else {
+                    assert(imageLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+                    depthAspectLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+                    stencilAspectLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
+                }
+
+                if (!(immediateAspects& VK_IMAGE_ASPECT_DEPTH_BIT))
+                    depthAspectLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                if (!(immediateAspects& VK_IMAGE_ASPECT_STENCIL_BIT))
+                    stencilAspectLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+                // based on the "simultaneously..." flags in the view, try to fill in how the other aspects in image will be used
+                if (viewFlags & TextureViewDesc::Flags::SimultaneouslyDepthAttachment) {
+                    assert(immediateAspects == VK_IMAGE_ASPECT_STENCIL_BIT);
+                    depthAspectLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+                } else if (viewFlags & TextureViewDesc::Flags::SimultaneouslyDepthReadOnly) {
+                    assert(immediateAspects == VK_IMAGE_ASPECT_STENCIL_BIT);
+                    depthAspectLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+                } else if (viewFlags & TextureViewDesc::Flags::SimultaneouslyStencilAttachment) {
+                    assert(immediateAspects == VK_IMAGE_ASPECT_DEPTH_BIT);
+                    stencilAspectLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
+                } else if (viewFlags & TextureViewDesc::Flags::SimultaneouslyStencilReadOnly) {
+                    assert(immediateAspects == VK_IMAGE_ASPECT_DEPTH_BIT);
+                    stencilAspectLayout = VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL;
+                }
+
+                imageLayout = MergeDepthStencilAspectLayouts(depthAspectLayout, stencilAspectLayout);
+
+            }
+        } else {
+            // color aspect
+            assert(immediateAspects == VK_IMAGE_ASPECT_COLOR_BIT);
+            assert(!(viewFlags & 
+                (TextureViewDesc::Flags::SimultaneouslyDepthAttachment|TextureViewDesc::Flags::SimultaneouslyDepthReadOnly
+                |TextureViewDesc::Flags::SimultaneouslyStencilAttachment|TextureViewDesc::Flags::SimultaneouslyStencilReadOnly)));
+            
+            // switch to general layout if we're attempting to access the resource as both an attachment and a read only image at the same time
+            if (imageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && (viewFlags & TextureViewDesc::Flags::SimultaneouslyColorAttachment)) {
+                imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            } else if (imageLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && (viewFlags & TextureViewDesc::Flags::SimultaneouslyColorReadOnly)) {
+                imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            }
+        }
+
+        return imageLayout;
+    }
+
     ResourceView::ResourceView(ObjectFactory& factory, VkImage image, const TextureViewDesc& window, VkImageLayout layout)
     : _type(Type::ImageView)
     {
@@ -214,67 +312,7 @@ namespace RenderCore { namespace Metal_Vulkan
             _imageView = factory.CreateImageView(createInfo);
             static_assert(sizeof(_imageSubresourceRange) >= sizeof(VkImageSubresourceRange));
             ((VkImageSubresourceRange&)_imageSubresourceRange) = createInfo.subresourceRange;
-
-            // Most of the time there's a direct mapping between the immediate usage of this view and the 
-            // image layout vulkan wants
-            // There's some complications for depth stencil texture, though
-            _imageLayout = Internal::LayoutForImmediateUsage(formatUsage);
-
-            if (resDesc._bindFlags & BindFlag::DepthStencil) {
-                // multiple options for depth stencil, based on what aspects we need and read/write flags
-                //
-                // * note -- The following single-aspect layouts can't be used when updating descriptors in descriptor sets! *
-                // VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
-                //      -- depth aspect only bound as depth buffer
-                // VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL
-                //      -- depth aspect only bound as a depth buffer, "sampled image" or input attachment
-                // VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL
-                //      -- stencil aspect only bound as stencil buffer
-                // VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL
-                //      -- stencil aspect only bound as stencil buffer, "sampled image" or input attachment
-                //
-                // Combinations of the above can form:
-                // VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-                //      -- both aspects, bound as a depth/stencil buffer
-                // VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
-                //      -- both aspects, but read only
-                //          can be used as a depth/stencil buffer, or a "sampled image" or input attachment
-                // VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL
-                //      -- effectively VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL for the depth aspect
-                //          and VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL for the stencil aspect
-                // VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL
-                //      -- effectively VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL for the depth aspect
-                //          and VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL for the stencil aspect
-                //
-                // also VK_IMAGE_LAYOUT_GENERAL can work in at least some cases
-                //
-                // See also BarrierResourceUsage::SpecializeForResource for another place where we do a similar
-                // transform
-
-                if (_imageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-                    || _imageLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-
-                    VkImageLayout depthAspectLayout, stencilAspectLayout;
-                    if (_imageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-                        depthAspectLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
-                        stencilAspectLayout = VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL;
-                    } else {
-                        assert(_imageLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-                        depthAspectLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-                        stencilAspectLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
-                    }
-
-                    // todo -- we need to know what how the other aspect is being used at the time we use it
-
-                    auto aspects = createInfo.subresourceRange.aspectMask;
-                    if (!(aspects& VK_IMAGE_ASPECT_DEPTH_BIT))
-                        depthAspectLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-                    if (!(aspects& VK_IMAGE_ASPECT_STENCIL_BIT))
-                        stencilAspectLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-                    _imageLayout = MergeDepthStencilAspectLayouts(depthAspectLayout, stencilAspectLayout);
-                }
-            }
+            _imageLayout = CalculateImageLayout(formatUsage, createInfo.subresourceRange.aspectMask, window._flags);
 
         } else {
             if (!(res->GetDesc()._bindFlags & BindFlag::TexelBuffer))

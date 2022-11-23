@@ -190,7 +190,20 @@ namespace RenderCore
             { 
                 AttachedCounter = 1<<0, AppendBuffer = 1<<1, 
                 ForceArray = 1<<2, ForceSingleSample = 1<<3, 
-                JustDepth = 1<<4, JustStencil = 1<<5 
+
+                // the Simultaneously.... flags can be set when the same resource is also used
+                // elsewhere in a *different* way (or a different aspect is used) during the 
+                // same subpass or at the same time
+                // ie, this might be a depth aspect read view; but we'll also be using a stencil
+                // aspect read view during the same shader operation
+                SimultaneouslyColorAttachment = 1<<4,
+                SimultaneouslyColorReadOnly = 1<<5,
+
+                SimultaneouslyDepthAttachment = 1<<6,
+                SimultaneouslyDepthReadOnly = 1<<7,
+
+                SimultaneouslyStencilAttachment = 1<<8,
+                SimultaneouslyStencilReadOnly = 1<<9,
             };
 			using BitField = unsigned;
 		};

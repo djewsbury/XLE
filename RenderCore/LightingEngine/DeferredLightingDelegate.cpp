@@ -172,13 +172,13 @@ namespace RenderCore { namespace LightingEngine
 			TextureViewDesc::Aspect::Stencil,
 			TextureViewDesc::All, TextureViewDesc::All,
 			TextureDesc::Dimensionality::Undefined,
-			TextureViewDesc::Flags::JustStencil};
+			TextureViewDesc::Flags::SimultaneouslyDepthReadOnly};
 
 		TextureViewDesc justDepthWindow {
 			TextureViewDesc::Aspect::Depth,
 			TextureViewDesc::All, TextureViewDesc::All,
 			TextureDesc::Dimensionality::Undefined,
-			TextureViewDesc::Flags::JustDepth};
+			TextureViewDesc::Flags::SimultaneouslyStencilAttachment};
 
 		Techniques::FrameBufferDescFragment::SubpassDesc subpasses[2];
 		subpasses[0].AppendOutput(lightResolveTarget);
@@ -186,7 +186,7 @@ namespace RenderCore { namespace LightingEngine
 		subpasses[0].SetName("sky");
 
 		subpasses[1].AppendOutput(lightResolveTarget);
-		subpasses[1].SetDepthStencil(depthTarget);
+		subpasses[1].SetDepthStencil(depthTarget, justStencilWindow);
 
 		auto gbufferStore = LoadStore::Retain;	// (technically only need retain when we're going to use these for debugging)
 		auto diffuseAspect = (!precisionTargets) ? TextureViewDesc::Aspect::ColorSRGB : TextureViewDesc::Aspect::ColorLinear;

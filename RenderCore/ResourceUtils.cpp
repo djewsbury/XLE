@@ -349,7 +349,7 @@ namespace RenderCore
         assert((uint64_t(_mipRange._min) & MaskBits(5)) == uint64_t(_mipRange._min));
         assert((uint64_t(_arrayLayerRange._min) & MaskBits(12)) == uint64_t(_arrayLayerRange._min));
         assert((uint64_t(_dimensionality) & MaskBits(3)) == uint64_t(_dimensionality));
-        assert((uint64_t(_flags) & MaskBits(6)) == uint64_t(_flags));
+        assert((uint64_t(_flags) & MaskBits(10)) == uint64_t(_flags));
 
 		auto result =
                  uint64_t(_format._aspect)
@@ -362,7 +362,7 @@ namespace RenderCore
 
         if (_mipRange._count != Unlimited) {
             assert((uint64_t(_mipRange._count) & MaskBits(5)) == uint64_t(_mipRange._count));
-            result |= (uint64_t(_mipRange._count) << 51ull);
+            result |= (uint64_t(_mipRange._count) << 55ull);
         }
 
         if (_arrayLayerRange._count != Unlimited) {
