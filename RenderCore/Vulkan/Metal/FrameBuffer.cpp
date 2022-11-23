@@ -295,8 +295,14 @@ namespace RenderCore { namespace Metal_Vulkan
             desc.stencilStoreOp = viewedAttachment._lastViewOfResource ? AsStoreOpStencil(finalStore) : VK_ATTACHMENT_STORE_OP_STORE;
 			assert(desc.format != VK_FORMAT_UNDEFINED);
 
+			// the API doesn't allow specifying differents layouts for the aspects for the initial/final layouts
+			// we have to assume that we always mean all aspects the image has
+			auto aspectsForInitialFinalLayout = CalculateImageAspects({}, res.second._attachmentUsage);
+			if (aspectsForInitialFinalLayout & (VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT))
+				aspectsForInitialFinalLayout |= VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT;
+
 			if (attachmentDesc._initialLayout) {
-				desc.initialLayout = CalculateImageLayout(attachmentDesc._initialLayout, CalculateImageAspects({}, res.second._attachmentUsage), 0);
+				desc.initialLayout = CalculateImageLayout(attachmentDesc._initialLayout, aspectsForInitialFinalLayout, 0);
 			} else {
 				desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			}
@@ -310,7 +316,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 			
 			if (attachmentDesc._finalLayout) {
-				desc.finalLayout = CalculateImageLayout(attachmentDesc._finalLayout, CalculateImageAspects({}, res.second._attachmentUsage), 0);
+				desc.finalLayout = CalculateImageLayout(attachmentDesc._finalLayout, aspectsForInitialFinalLayout, 0);
 			} else if (res.second._lastSubpassLayout.has_value()) {
 				// no explicit layout given, just continue to be in whatever state it was last used
 				desc.finalLayout = res.second._lastSubpassLayout.value();
