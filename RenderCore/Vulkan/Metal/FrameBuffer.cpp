@@ -98,7 +98,6 @@ namespace RenderCore { namespace Metal_Vulkan
 			enum Flags
 			{
 				Input = 1<<0, Output = 1<<1, DepthStencil = 1<<2,
-				HintGeneral = 1<<3,			// if "general" is explicitly requested in the input FrameBufferDesc
 				HintDepthAspect = 1<<4,		// if the depth aspect is referenced
 				HintStencilAspect = 1<<5,	// if the stencil aspect is referenced
 			};
@@ -151,74 +150,32 @@ namespace RenderCore { namespace Metal_Vulkan
 		return result;
 	}
 
-	static VkImageLayout LayoutFromBindFlagsAndUsage(BindFlag::BitField bindFlagInSubpass, Internal::AttachmentResourceUsageType::BitField usageOverFullLife)
-	{
-		assert(bindFlagInSubpass!=0);
-		// Generate the image layout using the same logic as BarrierHelper and other things related to layouts
-		// We need to know the "lifetime bind flags" to calculate this correctly -- at the moment just to check if it's a depth buffer
-		// this can usually be implied the usage; however in some cases this might be impossible (& the caller will have to explicitly select the layout)
-		auto assumedResourceBindFlags = AsBindFlags(usageOverFullLife);
-		if (usageOverFullLife & (Internal::AttachmentResourceUsageType::HintDepthAspect|Internal::AttachmentResourceUsageType::HintStencilAspect))
-			assumedResourceBindFlags |= BindFlag::DepthStencil;
-		return BarrierResourceUsage{bindFlagInSubpass}.SpecializeForResource(assumedResourceBindFlags)._imageLayout;
-
-#if 0
-		const bool isDepthStencil = !!(usageOverFullLife & unsigned(Internal::AttachmentResourceUsageType::DepthStencil));
-		const bool isColorOutput = !!(usageOverFullLife & unsigned(Internal::AttachmentResourceUsageType::Output));
-		const bool isAttachmentInput = !!(usageOverFullLife & unsigned(Internal::AttachmentResourceUsageType::Input));
-		const bool hintGeneral = !!(usageOverFullLife & unsigned(Internal::AttachmentResourceUsageType::HintGeneral));
-
-		if (bindFlagInSubpass == BindFlag::ShaderResource) {
-			if (isDepthStencil) return VK_IMAGE_LAYOUT_GENERAL;
-			return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		} else if (bindFlagInSubpass == BindFlag::InputAttachment) {
-			if (isDepthStencil) return VK_IMAGE_LAYOUT_GENERAL;
-			return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		} else if (bindFlagInSubpass == BindFlag::TransferSrc) {
-			return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-		} else if (bindFlagInSubpass == BindFlag::TransferDst) {
-			return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		} else if (bindFlagInSubpass == BindFlag::PresentationSrc) {
-			return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-		} else if (bindFlagInSubpass == BindFlag::RenderTarget) {
-			return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-		} else if (bindFlagInSubpass == BindFlag::DepthStencil) {
-			//
-			// VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
-			// VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL
-			// VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
-			// VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
-			// VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL
-			// VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL
-			// VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL
-			// are not accessible here -- but would it be useful?
-			//
-			return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-		} else if (bindFlagInSubpass != 0) {
-			return VK_IMAGE_LAYOUT_GENERAL;
-		} else {
-			if (hintGeneral) {
-				return VK_IMAGE_LAYOUT_GENERAL;
-			} else if (isDepthStencil) {
-				assert(!isColorOutput);
-				if (isAttachmentInput)
-					return VK_IMAGE_LAYOUT_GENERAL;
-				return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-			} else if (isColorOutput) {
-				if (isAttachmentInput)
-					return VK_IMAGE_LAYOUT_GENERAL;
-				return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-			} else if (isAttachmentInput) {
-				return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			} else {
-				// (sometimes we use this function just to convert from BindFlag to a VkImageLayout -- in which case we can get here)
-				return VK_IMAGE_LAYOUT_UNDEFINED;
-			}
-		}
-#endif
-	}
+	VkImageLayout CalculateImageLayout(BindFlag::BitField immediateUsage, VkImageAspectFlags immediateAspects, TextureViewDesc::Flags::BitField viewFlags);
 
 	VkImageAspectFlags GetAspectForTextureView(const TextureViewDesc& window);
+
+	VkImageAspectFlags CalculateImageAspects(const TextureViewDesc& window, Internal::AttachmentResourceUsageType::BitField usageOverFullLife)
+	{
+		auto aspects = GetAspectForTextureView(window);
+
+		// we sometimes need to fill in the aspects implicitly, based on how the image is used
+		if (!aspects) {
+			auto depthStencilHints = usageOverFullLife & (Internal::AttachmentResourceUsageType::HintDepthAspect|Internal::AttachmentResourceUsageType::HintStencilAspect);
+			if (depthStencilHints) {
+				if (depthStencilHints == Internal::AttachmentResourceUsageType::HintDepthAspect) aspects = VK_IMAGE_ASPECT_DEPTH_BIT;
+				else if (depthStencilHints == Internal::AttachmentResourceUsageType::HintStencilAspect) aspects = VK_IMAGE_ASPECT_STENCIL_BIT;
+				else aspects = VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT;
+			} else if (usageOverFullLife & Internal::AttachmentResourceUsageType::Input) {
+				aspects = VK_IMAGE_ASPECT_COLOR_BIT;
+			} else if (usageOverFullLife & Internal::AttachmentResourceUsageType::Output) {
+				aspects = VK_IMAGE_ASPECT_COLOR_BIT;
+			} else if (usageOverFullLife & Internal::AttachmentResourceUsageType::DepthStencil) {
+				aspects = VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT;
+			}
+		}
+
+		return aspects;
+	}
 
 	static VkAttachmentReference2 MakeAttachmentReference(uint32_t attachmentName, VkImageLayout layout, VkImageAspectFlags aspectMask, Internal::AttachmentResourceUsageType::BitField usageOverFullLife)
 	{
@@ -338,13 +295,8 @@ namespace RenderCore { namespace Metal_Vulkan
             desc.stencilStoreOp = viewedAttachment._lastViewOfResource ? AsStoreOpStencil(finalStore) : VK_ATTACHMENT_STORE_OP_STORE;
 			assert(desc.format != VK_FORMAT_UNDEFINED);
 
-			// Note that the initial/final layout flags are important even in the clear/discard cases. This can prevent a 
-			// render pass from clearing a target while it's still being used as a shader resource (for example)
 			if (attachmentDesc._initialLayout) {
-				desc.initialLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._initialLayout, res.second._attachmentUsage);
-			} else if (res.second._firstSubpassLayout.has_value()) {
-				// no explicit layout given, just assume it's in the correct state for the first subpass
-				desc.initialLayout = res.second._firstSubpassLayout.value();
+				desc.initialLayout = CalculateImageLayout(attachmentDesc._initialLayout, CalculateImageAspects({}, res.second._attachmentUsage), 0);
 			} else {
 				desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			}
@@ -358,11 +310,12 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 			
 			if (attachmentDesc._finalLayout) {
-				desc.finalLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._finalLayout, res.second._attachmentUsage);
+				desc.finalLayout = CalculateImageLayout(attachmentDesc._finalLayout, CalculateImageAspects({}, res.second._attachmentUsage), 0);
 			} else if (res.second._lastSubpassLayout.has_value()) {
 				// no explicit layout given, just continue to be in whatever state it was last used
 				desc.finalLayout = res.second._lastSubpassLayout.value();
 			} else {
+				assert(0);		// "undefined" for final layout is not valid
 				desc.finalLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			}
 
@@ -397,25 +350,22 @@ namespace RenderCore { namespace Metal_Vulkan
 			return mipLevelOverlap && arrayLayerOverlap;
 		}
 
-		VkAttachmentReference2 CreateAttachmentReference(AttachmentName resourceName, const TextureViewDesc& view, Internal::AttachmentResourceUsageType::BitField subpassUsage, unsigned subpassIdx, bool inputAttachmentReference = false)
+		VkAttachmentReference2 CreateAttachmentReference(
+			AttachmentName resourceName, const TextureViewDesc& view,
+			Internal::AttachmentResourceUsageType::BitField immediateUsage,
+			Internal::AttachmentResourceUsageType::BitField subpassUsage,
+			unsigned subpassIdx, bool inputAttachmentReference = false)
 		{
 			auto i = FindIf(_workingAttachments, [resourceName](auto& i) { return i.first == resourceName; });
 			if (i == _workingAttachments.end()) {
 				i = _workingAttachments.insert(_workingAttachments.end(), {resourceName, WorkingAttachmentResource{}});
 				assert(resourceName < _layout->GetAttachments().size());
 				i->second._desc = _layout->GetAttachments()[resourceName];
-
-				// If we're loading from general or storing to general, then we should encourage use of general
-				// within the render pass, also
-				if (HasRetain(i->second._desc._loadFromPreviousPhase) && i->second._desc._initialLayout && LayoutFromBindFlagsAndUsage(i->second._desc._initialLayout, 0) == VK_IMAGE_LAYOUT_GENERAL)
-					i->second._attachmentUsage |= Internal::AttachmentResourceUsageType::HintGeneral;
-				if (HasRetain(i->second._desc._storeToNextPhase) && i->second._desc._finalLayout && LayoutFromBindFlagsAndUsage(i->second._desc._finalLayout, 0) == VK_IMAGE_LAYOUT_GENERAL)
-					i->second._attachmentUsage |= Internal::AttachmentResourceUsageType::HintGeneral;
 			}
 
-			if (view._format._aspect == TextureViewDesc::Depth || view._format._aspect == TextureViewDesc::DepthStencil || view._flags & TextureViewDesc::Flags::JustDepth)
+			if (view._format._aspect == TextureViewDesc::Depth || view._format._aspect == TextureViewDesc::DepthStencil)
 				i->second._attachmentUsage |= Internal::AttachmentResourceUsageType::HintDepthAspect;
-			if (view._format._aspect == TextureViewDesc::Stencil || view._format._aspect == TextureViewDesc::DepthStencil || view._flags & TextureViewDesc::Flags::JustStencil)
+			if (view._format._aspect == TextureViewDesc::Stencil || view._format._aspect == TextureViewDesc::DepthStencil)
 				i->second._attachmentUsage |= Internal::AttachmentResourceUsageType::HintStencilAspect;
 
 			i->second._attachmentUsage |= subpassUsage;
@@ -473,8 +423,20 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 			}
 
-			auto aspectMask = GetAspectForTextureView(view);
-			auto layout = LayoutFromBindFlagsAndUsage(AsBindFlags(subpassUsage), i->second._attachmentUsage);
+			auto aspectMask = CalculateImageAspects(view, i->second._attachmentUsage);
+			auto layout = CalculateImageLayout(AsBindFlags(immediateUsage), aspectMask, view._flags);
+
+			if (immediateUsage != subpassUsage) {
+				// if the same resource is used in multiple different ways in the same subpass, we just have one of the "simultaneous" flags
+				// set in the texture view
+				// (otherwise we'll get a layout that's not compatible with using the image in multiple ways)
+				const auto simultaneousMask = 
+					  TextureViewDesc::Flags::SimultaneouslyColorAttachment | TextureViewDesc::Flags::SimultaneouslyColorReadOnly
+					| TextureViewDesc::Flags::SimultaneouslyDepthAttachment | TextureViewDesc::Flags::SimultaneouslyDepthReadOnly
+					| TextureViewDesc::Flags::SimultaneouslyStencilAttachment | TextureViewDesc::Flags::SimultaneouslyStencilReadOnly
+					;
+				assert((view._flags & simultaneousMask) != 0);
+			}
 
 			auto ref = MakeAttachmentReference((uint32_t)std::distance(_workingViewedAttachments.begin(), i2), layout, aspectMask, i->second._attachmentUsage);
 			if (!i->second._firstSubpassLayout)
@@ -532,7 +494,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
             auto beforeOutputs = attachReferences.size();
             for (auto& a:spDesc.GetOutputs())
-				attachReferences.push_back(helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx));
+				attachReferences.push_back(helper.CreateAttachmentReference(a._resourceName, a._window, Internal::AttachmentResourceUsageType::Output, subpassAttachmentUsages[a._resourceName], spIdx));
             desc.pColorAttachments = (const VkAttachmentReference2*)(beforeOutputs+1);
             desc.colorAttachmentCount = uint32_t(attachReferences.size() - beforeOutputs);
             desc.pResolveAttachments = nullptr; // not supported
@@ -542,7 +504,7 @@ namespace RenderCore { namespace Metal_Vulkan
             if (spDesc.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName) {
 				const auto& a = spDesc.GetDepthStencil();
 				desc.pDepthStencilAttachment = (const VkAttachmentReference2*)(attachReferences.size()+1);
-				attachReferences.push_back(helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx));
+				attachReferences.push_back(helper.CreateAttachmentReference(a._resourceName, a._window, Internal::AttachmentResourceUsageType::DepthStencil, subpassAttachmentUsages[a._resourceName], spIdx));
             } else {
                 desc.pDepthStencilAttachment = nullptr;
             }
@@ -553,7 +515,7 @@ namespace RenderCore { namespace Metal_Vulkan
             // layout, descriptor set and shader must all agree!
             auto beforeInputs = attachReferences.size();
             for (auto& a:spDesc.GetInputs())
-				attachReferences.push_back(helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx, true));
+				attachReferences.push_back(helper.CreateAttachmentReference(a._resourceName, a._window, Internal::AttachmentResourceUsageType::Input, subpassAttachmentUsages[a._resourceName], spIdx, true));
             desc.pInputAttachments = (const VkAttachmentReference2*)(beforeInputs+1);
             desc.inputAttachmentCount = uint32_t(attachReferences.size() - beforeInputs);
 
@@ -709,7 +671,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto subpasses = fbDesc.GetSubpasses();
 
 		RenderPassHelper helper(fbDesc);
-		unsigned attachmentCount = fbDesc.GetAttachments().size();
+		unsigned attachmentCount = (unsigned)fbDesc.GetAttachments().size();
 		bool isViewInstancingFrameBuffer = false;
 
 		// Duplicate the work from CreateRenderPass in order to prime RenderPassHelper
@@ -728,13 +690,13 @@ namespace RenderCore { namespace Metal_Vulkan
 				subpassAttachmentUsages[spDesc.GetDepthStencil()._resourceName] |= Internal::AttachmentResourceUsageType::DepthStencil;
 
             for (auto& a:spDesc.GetOutputs())
-				helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx);
+				helper.CreateAttachmentReference(a._resourceName, a._window, Internal::AttachmentResourceUsageType::Output, subpassAttachmentUsages[a._resourceName], spIdx);
             if (spDesc.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName) {
 				const auto& a = spDesc.GetDepthStencil();
-				helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx);
+				helper.CreateAttachmentReference(a._resourceName, a._window, Internal::AttachmentResourceUsageType::DepthStencil, subpassAttachmentUsages[a._resourceName], spIdx);
             }
             for (auto& a:spDesc.GetInputs())
-				helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx, true);
+				helper.CreateAttachmentReference(a._resourceName, a._window, Internal::AttachmentResourceUsageType::Input, subpassAttachmentUsages[a._resourceName], spIdx, true);
         }
 
         VLA(VkImageView, rawViews, helper._workingViewedAttachments.size());
