@@ -201,7 +201,7 @@ namespace RenderOverlays
         if (s_inputAttachmentMode) {
             mainPass.AppendInput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), stencilViewDesc);
         } else {
-            mainPass.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, stencilViewDesc);
+            mainPass.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(BindFlag::ShaderResource), BindFlag::ShaderResource, stencilViewDesc);
         }
         fbDesc.AddSubpass(std::move(mainPass));
 		Techniques::RenderPassInstance rpi { parsingContext, fbDesc };
