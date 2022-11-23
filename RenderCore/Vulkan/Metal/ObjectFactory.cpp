@@ -492,6 +492,7 @@ namespace RenderCore { namespace Metal_Vulkan
     #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
         void ObjectFactory::ForgetResource(uint64_t resourceGuid) const
         {
+            ScopedLock(_resourcesVisibleToQueueLock);
             auto i = std::lower_bound(_resourcesVisibleToQueue.begin(), _resourcesVisibleToQueue.end(), resourceGuid);
             if (i != _resourcesVisibleToQueue.end() && *i == resourceGuid)
                 _resourcesVisibleToQueue.erase(i);

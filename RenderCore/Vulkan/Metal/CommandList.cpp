@@ -217,6 +217,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			//   - that the resource was never made visible on a command list
 			//   - the command list in which it was made visible hasn't yet been commited to the queue
 			//   - it's made visible after it was used on this command list
+			ScopedLock(factory._resourcesVisibleToQueueLock);
 			auto factoryi = factory._resourcesVisibleToQueue.begin();
 			auto searchi = _resourcesThatMustBeVisible.begin();
 			while (searchi != _resourcesThatMustBeVisible.end()) {

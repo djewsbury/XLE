@@ -15,6 +15,10 @@
 #include "IncludeVulkan.h"
 #include "Foreign/VulkanMemoryAllocator/include/vk_mem_alloc.h"
 
+#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+    #include "../../../Utility/Threading/Mutex.h"
+#endif
+
 namespace RenderCore { namespace Metal_Vulkan
 {
 	class DeviceContext;
@@ -160,6 +164,7 @@ namespace RenderCore { namespace Metal_Vulkan
         #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
             void ForgetResource(uint64_t resourceGuid) const;
             mutable std::vector<uint64_t> _resourcesVisibleToQueue;
+            mutable Threading::Mutex _resourcesVisibleToQueueLock;
         #endif
 
 		ObjectFactory(
