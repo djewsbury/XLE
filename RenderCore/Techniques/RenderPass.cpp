@@ -668,7 +668,14 @@ namespace RenderCore { namespace Techniques
                 selectedAttachments[r]._initialLayout = matchingParent->_currentLayout;
                 selectedAttachments[r]._semantic = request._semantic;
 
-                assert(!request._layout || (matchingParent->_currentLayout == request._layout));
+                if (request._layout && (matchingParent->_currentLayout != request._layout)) {
+                    // If you hit this, it probably means that initial/final layouts for sequential render passes do not agree
+                    // Continuing will spit out a lot of underlying graphics API warnings and could potentially cause synchronization
+                    // bugs on certain hardware
+                    Log(Warning) << "Request for attachment with semantic (" << AttachmentSemantic{request._semantic} << ") found mismatch between layouts" << std::endl;
+                    Log(Warning) << "Requested layout: (" << BindFlagsAsString(request._layout) << "), resource last left in layout: (" << BindFlagsAsString(matchingParent->_currentLayout) << ")" << std::endl;
+                    assert(0);
+                }
             }
         }
 
@@ -2159,6 +2166,7 @@ namespace RenderCore { namespace Techniques
                             << a << ", Preregistered: " << *i << std::endl;
                     }
                 #endif
+                i->_layout = a._initialLayout.value();
                 result._fullAttachmentDescriptions.push_back(*i);
 
                 auto requiredBindFlags = usageFlags | *a._initialLayout | *a._finalLayout; 
@@ -2186,6 +2194,7 @@ namespace RenderCore { namespace Techniques
                     if (newAttachment._desc._textureDesc._format == Format::Unknown)
                         Log(Warning) << "Missing format information for attachment with semantic: " << AttachmentSemantic{a._semantic} << std::endl;
                 #endif 
+                newAttachment._layout = a._initialLayout.value();
                 result._fullAttachmentDescriptions.push_back(newAttachment);
                 AttachmentTransform transform;
                 assert(!(directionFlags & DirectionFlags::RequirePreinitializedData));      // If you hit this, it means the fragment has an attachment that loads data, but there's no matching attachment in the stitching context
@@ -2699,12 +2708,11 @@ namespace RenderCore { namespace Techniques
                     for (const auto& nonfb:sp.GetViews()) {
                         // usage must agree with expectations (or at least have "simultaneous" flags set)
                         // note -- we're not validating that we're using the correct "simultaneous" flags; just that we're using at least one
-                        auto nonFrameBufferUsage = nonfb._usage;
                         auto simultaneousFlags = nonfb._window._flags &
                             ( TextureViewDesc::Flags::SimultaneouslyColorAttachment | TextureViewDesc::Flags::SimultaneouslyColorReadOnly
                             | TextureViewDesc::Flags::SimultaneouslyDepthAttachment | TextureViewDesc::Flags::SimultaneouslyDepthReadOnly
                             | TextureViewDesc::Flags::SimultaneouslyStencilAttachment | TextureViewDesc::Flags::SimultaneouslyStencilReadOnly );
-                        assert(nonFrameBufferUsage == attachmentState[nonfb._resourceName] || simultaneousFlags);
+                        assert(nonfb._usage == attachmentState[nonfb._resourceName] || simultaneousFlags);
                     }
                 }
             #endif
