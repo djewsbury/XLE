@@ -455,7 +455,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         #if defined(_DEBUG)
             assert(_boundThread == std::this_thread::get_id());
         #endif
-        assert(releaseMarker != 0);
 
         bool found = false;
         for (auto& a:_activeAllocations)
