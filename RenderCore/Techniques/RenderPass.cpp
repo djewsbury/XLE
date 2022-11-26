@@ -2723,17 +2723,28 @@ namespace RenderCore { namespace Techniques
         }
     }
 
-    static AttachmentName RemapAttachmentName(
+    static AttachmentName RemapAttachmentNameForSimplifyTest(
         AttachmentName input,
         const RenderCore::Techniques::FrameBufferDescFragment& srcFragment,
         RenderCore::Techniques::FrameBufferDescFragment& dstFragment,
-        std::vector<std::pair<RenderCore::AttachmentName, RenderCore::AttachmentName>>& remapping)
+        std::vector<std::pair<RenderCore::AttachmentName, RenderCore::AttachmentName>>& remapping,
+        IteratorRange<const RenderCore::AttachmentName*> prevWrittenAttachments)
     {
         if (input == ~0u) return input;
 
         auto existing = LowerBound(remapping, input);
         if (existing == remapping.end() || existing->first != input) {
-            auto newName = dstFragment.DefineAttachment(srcFragment._attachments[input]);
+            auto a = srcFragment._attachments[input];
+            // Always have to store, because an attachment that is passed from one subpass to the next will
+            // be transformed in passing an attachment from one fragment to the next.
+            // Since we don't know if there's an upcoming subpass that will use this attachment, we need to
+            // assume it exists
+            a._storeToNextPhase = LoadStore::Retain;
+            // Also, if we used this attachment in a previous subpass, we havet oa ssume this is now a retain
+            auto q = std::lower_bound(prevWrittenAttachments.begin(), prevWrittenAttachments.end(), input);
+            if (q != prevWrittenAttachments.end() && *q == input)
+                a._loadFromPreviousPhase = LoadStore::Retain;
+            auto newName = dstFragment.DefineAttachment(a);
             existing = remapping.insert(existing, {input, newName});
         }
 
@@ -2749,15 +2760,25 @@ namespace RenderCore { namespace Techniques
         TRY
         {
             std::vector<FrameBufferDescFragment> testFragments;
+            std::vector<AttachmentName> allWrittenAttachments;
+
             // Create a separate fragment for each subpass
             for (const auto&subpass:inputFragment._subpasses) {
                 std::vector<std::pair<AttachmentName, AttachmentName>> remapping;
                 FrameBufferDescFragment separatedFragment;
                 auto remappedSubpass = RemapSubpassDesc(
 					subpass,
-					std::bind(&RemapAttachmentName, std::placeholders::_1, std::ref(inputFragment), std::ref(separatedFragment), std::ref(remapping)));
+					std::bind(&RemapAttachmentNameForSimplifyTest, std::placeholders::_1, std::ref(inputFragment), std::ref(separatedFragment), std::ref(remapping), MakeIteratorRange(allWrittenAttachments)));
                 separatedFragment.AddSubpass(std::move(remappedSubpass));
                 testFragments.emplace_back(std::move(separatedFragment));
+
+                // record each attachment that the subpass touched
+                auto q = allWrittenAttachments.begin();
+                for (auto a:remapping) {
+                    auto i = std::lower_bound(q, allWrittenAttachments.end(), a.first);
+                    if (i == allWrittenAttachments.end() || *i != a.first)
+                        q = allWrittenAttachments.insert(i, a.first);
+                }
             }
             auto collapsed = MergeFragments(
                 systemAttachments, MakeIteratorRange(testFragments), fbProps, systemFormats);
