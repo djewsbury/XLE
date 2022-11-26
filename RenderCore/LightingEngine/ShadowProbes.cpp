@@ -94,7 +94,7 @@ namespace RenderCore { namespace LightingEngine
 			: _pimpl(&pimpl)
 			{
 				auto staticDatabaseDesc = TextureDesc::PlainCube(_pimpl->_config._staticFaceDims, _pimpl->_config._staticFaceDims, Format::D16_UNORM);
-				staticDatabaseDesc._arrayCount = 6*_pimpl->_probes.size();
+				staticDatabaseDesc._arrayCount = uint16_t(6*_pimpl->_probes.size());
 				Techniques::PreregisteredAttachment preregisteredAttachments[] {
 					{ semanticProbePrepare, CreateDesc(BindFlag::ShaderResource | BindFlag::DepthStencil, staticDatabaseDesc, "probe-prepare") }
 				};
@@ -110,7 +110,8 @@ namespace RenderCore { namespace LightingEngine
 				_techContext._pipelineAccelerators = _pimpl->_pipelineAccelerators;
 				_parsingContext = std::make_unique<Techniques::ParsingContext>(_techContext, threadContext);
 				_parsingContext->SetPipelineAcceleratorsVisibility(_techContext._pipelineAccelerators->VisibilityBarrier());
-				for (const auto&a:preregisteredAttachments) _parsingContext->GetFragmentStitchingContext().DefineAttachment(a);
+
+				_parsingContext->BindAttachment(semanticProbePrepare, _pimpl->_staticTable, false, ~0u);
 			}
 
 			Techniques::RenderPassInstance BeginRPI(unsigned firstSlice, unsigned sliceCount)
@@ -122,8 +123,6 @@ namespace RenderCore { namespace LightingEngine
 				sp.SetDepthStencil(fragment.DefineAttachment(semanticProbePrepare).Clear().FinalState(BindFlag::ShaderResource), viewDesc);
 				sp.SetName("static-shadow-prepare");
 				fragment.AddSubpass(std::move(sp));
-
-				_techContext._attachmentPool->Bind(semanticProbePrepare, _pimpl->_staticTable);
 
 				Techniques::RenderPassBeginDesc beginInfo;
 				return Techniques::RenderPassInstance{*_parsingContext, fragment, beginInfo};

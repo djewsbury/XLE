@@ -82,6 +82,8 @@ namespace PlatformRig
         RenderCore::Techniques::TechniqueContext _techniqueContext;
         std::shared_ptr<Utility::HierarchicalCPUProfiler> _frameCPUProfiler;
 
+        RenderCore::Techniques::AttachmentReservation _capturedDoubleBufferAttachments;
+
         Pimpl()
         : _prevFrameStartTime(0) 
         , _timerFrequency(OSServices::GetPerformanceCounterFrequency())
@@ -175,18 +177,11 @@ namespace PlatformRig
             }
 
 			// Bind the presentation target as the default output for the parser context
-			// (including setting the normalized width and height)
-            const bool checkPresentationTargetCompleteInitialisation = true;
-			parserContext.GetTechniqueContext()._attachmentPool->Bind(RenderCore::Techniques::AttachmentSemantics::ColorLDR, presentationTarget, checkPresentationTargetCompleteInitialisation);
+            parserContext.BindAttachment(RenderCore::Techniques::AttachmentSemantics::ColorLDR, presentationTarget, false, RenderCore::BindFlag::PresentationSrc);
+            parserContext.GetAttachmentReservation().Absorb(std::move(_pimpl->_capturedDoubleBufferAttachments));
+
             auto targetDesc = presentationTarget->GetDesc();
             auto& stitchingContext = parserContext.GetFragmentStitchingContext();
-            stitchingContext.DefineAttachment(
-                RenderCore::Techniques::PreregisteredAttachment {
-                    RenderCore::Techniques::AttachmentSemantics::ColorLDR,
-                    targetDesc,
-                    RenderCore::Techniques::PreregisteredAttachment::State::Uninitialized,
-                    RenderCore::BindFlag::PresentationSrc
-                });
             stitchingContext._workingProps = RenderCore::FrameBufferProperties { targetDesc._textureDesc._width, targetDesc._textureDesc._height };
             parserContext.GetViewport() = RenderCore::ViewportDesc { 0.f, 0.f, (float)targetDesc._textureDesc._width, (float)targetDesc._textureDesc._height };
 
@@ -213,7 +208,7 @@ namespace PlatformRig
                 // (also redefine AttachmentSemantics::ColorLDR as initialized here)
                 RenderCore::Metal::DeviceContext::Get(*context)->Clear(*presentationTarget->CreateTextureView(RenderCore::BindFlag::RenderTarget), Float4(0,0,0,1));
                 using namespace RenderCore::Techniques;
-                stitchingContext.DefineAttachment(PreregisteredAttachment {AttachmentSemantics::ColorLDR, targetDesc, PreregisteredAttachment::State::Initialized});
+                stitchingContext.DefineAttachment(AttachmentSemantics::ColorLDR, targetDesc, PreregisteredAttachment::State::Initialized, RenderCore::BindFlag::TransferDst);
             }
 
 			TRY {
@@ -246,18 +241,16 @@ namespace PlatformRig
 				}
 			}
 
-			parserContext.GetTechniqueContext()._attachmentPool->UnbindAll();
-
             if (_subFrameEvents)
                 _subFrameEvents->_onPrePresent.Invoke(*context);
 
             if (parserContext._requiredBufferUploadsCommandList)
                 RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(*context, parserContext._requiredBufferUploadsCommandList);
 
-            RenderCore::Metal::Internal::SetImageLayout(
-                *RenderCore::Metal::DeviceContext::Get(*context), *checked_cast<RenderCore::Metal::Resource*>(presentationTarget.get()),
-                RenderCore::Metal::Internal::ImageLayout::ColorAttachmentOptimal, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-                RenderCore::Metal::Internal::ImageLayout::PresentSrc, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+            {
+                RenderCore::Metal::BarrierHelper barrierHelper(*context);
+                barrierHelper.Add(*presentationTarget, RenderCore::BindFlag::RenderTarget, RenderCore::BindFlag::PresentationSrc);
+            }
 
             endAnnotatorFrame = false;
             context->GetAnnotator().Frame_End();        // calling Frame_End() can prevent creating a new command list immediately after the Present() call (which ends the previous command list)
@@ -269,6 +262,8 @@ namespace PlatformRig
 
             if (_subFrameEvents)
                 _subFrameEvents->_onPostPresent.Invoke(*context);
+
+            _pimpl->_capturedDoubleBufferAttachments = parserContext.GetAttachmentReservation().CaptureDoubleBufferAttachments();
 
 		} CATCH(const std::exception& e) {
 			Log(Error) << "Suppressed error in frame rig render: " << e.what() << std::endl;
@@ -347,7 +342,8 @@ namespace PlatformRig
                 Techniques::PreregisteredAttachment {
                     Techniques::AttachmentSemantics::ColorLDR,
                     targetDesc,
-                    Techniques::PreregisteredAttachment::State::Uninitialized
+                    Techniques::PreregisteredAttachment::State::Uninitialized,
+                    BindFlag::PresentationSrc
                 });
             _mainOverlaySys->OnRenderTargetUpdate(MakeIteratorRange(preregisteredAttachments), fbProps, MakeIteratorRange(_pimpl->_techniqueContext._systemAttachmentFormats));
             _pimpl->_mainOverlayRigTargetConfig = Techniques::HashPreregisteredAttachments(MakeIteratorRange(preregisteredAttachments), fbProps);

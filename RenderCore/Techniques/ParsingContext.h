@@ -15,6 +15,7 @@ namespace Assets { namespace Exceptions { class RetrievalError; }}
 namespace Utility { class ParameterBox; }
 namespace RenderCore { class IResource; class IThreadContext; class ViewportDesc; class IDescriptorSet; }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
+namespace RenderCore { namespace BindFlags { using BitField = unsigned; }}
 
 namespace RenderCore { namespace Techniques 
 {
@@ -73,6 +74,7 @@ namespace RenderCore { namespace Techniques
 			//  ----------------- Frame buffer / render pass state -----------------
         FragmentStitchingContext& GetFragmentStitchingContext();
         AttachmentReservation& GetAttachmentReservation();
+        void BindAttachment(uint64_t semantic, std::shared_ptr<IResource>, bool isInitialized, BindFlags::BitField currentLayout=~0u);      // set initialLayout=~0u for never initialized
 
 			//  ----------------- Overlays for late rendering -----------------
         typedef std::function<void(ParsingContext&)> PendingOverlay;

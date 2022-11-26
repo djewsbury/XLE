@@ -6,6 +6,7 @@
 #include "Techniques.h"
 #include "SystemUniformsDelegate.h"
 #include "RenderPass.h"
+#include "../IDevice.h"
 #include "../../Assets/AssetUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/ArithmeticUtils.h"
@@ -53,6 +54,16 @@ namespace RenderCore { namespace Techniques
 				StringMeldAppend(_stringHelpers->_errorString, ArrayEnd(_stringHelpers->_errorString)) << e.what() << "\n";
 			}
 		}
+    }
+
+    void ParsingContext::BindAttachment(uint64_t semantic, std::shared_ptr<IResource> resource, bool isInitialized, BindFlags::BitField currentLayout)
+    {
+        _internal->_stitchingContext.DefineAttachment(
+            semantic,
+            resource->GetDesc(),
+            isInitialized ? RenderCore::Techniques::PreregisteredAttachment::State::Initialized : RenderCore::Techniques::PreregisteredAttachment::State::Uninitialized,
+            currentLayout);
+        _internal->_attachmentReservation.Bind(semantic, std::move(resource), currentLayout);
     }
 
     ParsingContext::ParsingContext(TechniqueContext& techniqueContext, IThreadContext& threadContext)

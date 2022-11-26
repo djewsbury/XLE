@@ -977,10 +977,10 @@ namespace RenderCore { namespace Techniques
     AttachmentPool::~AttachmentPool()
     {}
 
-    AttachmentName AttachmentReservation::Bind(uint64_t semantic, const IResourcePtr& resource, BindFlag::BitField currentLayout)
+    AttachmentName AttachmentReservation::Bind(uint64_t semantic, std::shared_ptr<IResource> resource, BindFlag::BitField currentLayout)
     {
         Entry newEntry;
-        newEntry._resource = resource;
+        newEntry._resource = std::move(resource);
         newEntry._semantic = semantic;
         newEntry._currentLayout = currentLayout;    // current layout can be ~0u, which means never initialized
 

@@ -277,7 +277,7 @@ namespace RenderCore { namespace Techniques
     class AttachmentReservation
     {
     public:
-        AttachmentName Bind(uint64_t semantic, const IResourcePtr& resource, BindFlag::BitField currentLayout);     // set currentLayout to ~0u for never initialized/no state
+        AttachmentName Bind(uint64_t semantic, std::shared_ptr<IResource> resource, BindFlag::BitField currentLayout);     // set currentLayout to ~0u for never initialized/no state
         void Unbind(const IResource& resource);
         void UpdateAttachments(AttachmentReservation& childReservation, IteratorRange<const AttachmentTransform*> transforms);
 
