@@ -148,7 +148,7 @@ namespace RenderCore { namespace Techniques
         uint64_t seed = DefaultSeed64);
 
     struct DoubleBufferAttachment
-    { 
+    {
         uint64_t _yesterdaySemantic;
         uint64_t _todaySemantic;
         BindFlag::BitField _initialLayout;      // ie, layout at the start of "today"
@@ -184,7 +184,7 @@ namespace RenderCore { namespace Techniques
         void DefineDoubleBufferAttachment(
             uint64_t semantic,
             ClearValue defaultContents,
-            unsigned initialLayout=0);
+            BindFlag::BitField initialLayout);
 
         struct StitchResult
         {
@@ -201,10 +201,10 @@ namespace RenderCore { namespace Techniques
         StitchResult TryStitchFrameBufferDesc(const FrameBufferDescFragment& fragment);
 
         void UpdateAttachments(const StitchResult& res);
-        IteratorRange<const PreregisteredAttachment*> GetPreregisteredAttachments() const { return MakeIteratorRange(_workingAttachments); }
+        IteratorRange<const PreregisteredAttachment*> GetPreregisteredAttachments() const { return _workingAttachments; }
         Format GetSystemAttachmentFormat(SystemAttachmentFormat) const;
 
-        IteratorRange<const DoubleBufferAttachment*> GetDoubleBufferAttachments() const;
+        IteratorRange<const DoubleBufferAttachment*> GetDoubleBufferAttachments() const { return _doubleBufferAttachments; }
 
         FrameBufferProperties _workingProps;
         Format _systemFormats[(unsigned)SystemAttachmentFormat::Max];
@@ -257,7 +257,6 @@ namespace RenderCore { namespace Techniques
         AttachmentReservation Reserve(
             IteratorRange<const PreregisteredAttachment*>,
             AttachmentReservation* parentReservation = nullptr,
-            IteratorRange<const DoubleBufferAttachment*> doubleBufferAttachmentRules = {},
             ReservationFlag::BitField = 0);
 
         void ResetActualized();
@@ -278,7 +277,7 @@ namespace RenderCore { namespace Techniques
     class AttachmentReservation
     {
     public:
-        AttachmentName Bind(uint64_t semantic, const IResourcePtr& resource, BindFlag::BitField currentLayout);
+        AttachmentName Bind(uint64_t semantic, const IResourcePtr& resource, BindFlag::BitField currentLayout);     // set currentLayout to ~0u for never initialized/no state
         void Unbind(const IResource& resource);
         void UpdateAttachments(AttachmentReservation& childReservation, IteratorRange<const AttachmentTransform*> transforms);
 
@@ -300,12 +299,19 @@ namespace RenderCore { namespace Techniques
         bool HasPendingCompleteInitialization() const;
         const AttachmentPool& GetAttachmentPool() const { return *_pool; }
 
-        using AttachmentNameMapping = std::vector<std::pair<AttachmentName, AttachmentName>>;
-        AttachmentNameMapping MergeIn(const AttachmentReservation&);
+        void Absorb(AttachmentReservation&&);
 
+        void DefineDoubleBufferAttachments(IteratorRange<const DoubleBufferAttachment*>);
+        void DefineDoubleBufferAttachment(
+            uint64_t yesterdaySemantic,
+            uint64_t todaySemantic,
+            const ResourceDesc& desc,
+            ClearValue defaultContents,
+            BindFlag::BitField initialLayout);
         AttachmentReservation CaptureDoubleBufferAttachments();
 
         AttachmentReservation();
+        AttachmentReservation(AttachmentPool& pool);
         ~AttachmentReservation();
         AttachmentReservation(AttachmentReservation&&);
         AttachmentReservation& operator=(AttachmentReservation&&);
@@ -322,9 +328,11 @@ namespace RenderCore { namespace Techniques
             std::optional<BindFlag::BitField> _pendingSwitchToLayout;
         };
         std::vector<Entry> _entries;                 // candidate for subframe heap
-        AttachmentPool* _pool;
-        ReservationFlag::BitField _reservationFlags;
+        AttachmentPool* _pool = nullptr;
+        ReservationFlag::BitField _reservationFlags = 0;
         mutable ViewPool _viewPool;
+
+        std::vector<DoubleBufferAttachment> _doubleBufferAttachments;
 
         struct AttachmentToReserve
         {
@@ -332,7 +340,7 @@ namespace RenderCore { namespace Techniques
             std::shared_ptr<IResource> _resource;
             uint64_t _semantic;
             std::optional<ClearValue> _pendingClear;
-            std::optional<unsigned> _initialLayout;
+            std::optional<BindFlag::BitField> _currentLayout;
             std::optional<BindFlag::BitField> _pendingSwitchToLayout;
         };
         AttachmentReservation(

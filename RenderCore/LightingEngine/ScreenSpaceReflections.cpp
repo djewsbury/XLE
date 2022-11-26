@@ -324,7 +324,7 @@ namespace RenderCore { namespace LightingEngine
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormalPrev), BindFlag::ShaderResource);
-		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR), BindFlag::ShaderResource);
+		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDRPrev).Discard(), BindFlag::ShaderResource);		// discard ColorHDRPrev to encourage reuse of that large target
 
 		auto intAttachment = result.DefineAttachment(SSRInt).NoInitialState().FinalState(BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(intAttachment, BindFlag::UnorderedAccess);
@@ -386,7 +386,7 @@ namespace RenderCore { namespace LightingEngine
 			};
 			for (const auto& a:attachments)
 				stitchingContext.DefineAttachment(a);
-			stitchingContext.DefineDoubleBufferAttachment(SSRInt, MakeClearValue(0,0,0,0));
+			stitchingContext.DefineDoubleBufferAttachment(SSRInt, MakeClearValue(0,0,0,0), BindFlag::ShaderResource);
 		} else {	/////////////////////////////////////////////
 			Techniques::PreregisteredAttachment attachments[] {
 				Techniques::PreregisteredAttachment {
@@ -408,7 +408,7 @@ namespace RenderCore { namespace LightingEngine
 			};
 			for (const auto& a:attachments)
 				stitchingContext.DefineAttachment(a);
-			stitchingContext.DefineDoubleBufferAttachment(SSRReflections, MakeClearValue(0,0,0,0));
+			stitchingContext.DefineDoubleBufferAttachment(SSRReflections, MakeClearValue(0,0,0,0), BindFlag::ShaderResource);
 		}	/////////////////////////////////////////////
 
 		if (_desc._splitConfidence) {
@@ -432,7 +432,7 @@ namespace RenderCore { namespace LightingEngine
 			};
 			for (const auto& a:attachments)
 				stitchingContext.DefineAttachment(a);
-			stitchingContext.DefineDoubleBufferAttachment(SSRConfidence, MakeClearValue(0,0,0,0));
+			stitchingContext.DefineDoubleBufferAttachment(SSRConfidence, MakeClearValue(0,0,0,0), BindFlag::ShaderResource);
 		}
 
 		Techniques::PreregisteredAttachment attachments[] {
@@ -447,7 +447,6 @@ namespace RenderCore { namespace LightingEngine
 		};
 		for (const auto& a:attachments)
 			stitchingContext.DefineAttachment(a);
-		stitchingContext.DefineDoubleBufferAttachment(Techniques::AttachmentSemantics::GBufferNormal, MakeClearValue(0,0,0,0));
 	}
 
 	void ScreenSpaceReflectionsOperator::ResetAccumulation() { _pingPongCounter = ~0u; }

@@ -53,9 +53,6 @@ namespace RenderCore { namespace Techniques
         constexpr uint64_t GBufferMotion    = ConstHash64<'GBuf', 'ferM', 'otio', 'n'>::Value;
         constexpr uint64_t HistoryAcc       = ConstHash64<'Hist', 'oryA', 'cc'>::Value;
 
-        constexpr uint64_t MultisampleDepthPrev = ConstHash64<'Mult', 'isam', 'pleD', 'epth'>::Value+1;
-        constexpr uint64_t GBufferNormalPrev    = ConstHash64<'GBuf', 'ferN', 'orma', 'l'>::Value+1;
-
         constexpr uint64_t ColorLDR         = ConstHash64<'Colo', 'rLDR'>::Value;
         constexpr uint64_t ColorHDR         = ConstHash64<'Colo', 'rHDR'>::Value;
         constexpr uint64_t Depth            = ConstHash64<'Dept', 'h'>::Value;
@@ -64,6 +61,10 @@ namespace RenderCore { namespace Techniques
 
         constexpr uint64_t HierarchicalDepths	= ConstHash64<'Hier', 'arch', 'ical', 'Dept'>::Value;
         constexpr uint64_t TiledLightBitField	= ConstHash64<'Tile', 'dLig', 'htBi', 'tFie'>::Value;
+
+        constexpr uint64_t MultisampleDepthPrev = ConstHash64<'Mult', 'isam', 'pleD', 'epth'>::Value+1;
+        constexpr uint64_t GBufferNormalPrev    = ConstHash64<'GBuf', 'ferN', 'orma', 'l'>::Value+1;
+        constexpr uint64_t ColorHDRPrev         = ConstHash64<'Colo', 'rHDR'>::Value+1;
 
         const char* TryDehash(uint64_t);
 	}

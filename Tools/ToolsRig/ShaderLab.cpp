@@ -182,9 +182,6 @@ namespace ToolsRig
 							sequence.ForceRetainAttachment(r.first, r.second);
 					}
 
-					for (auto doubleBuffer:constructorContext._stitchingContext.GetDoubleBufferAttachments())
-						sequence.ForceRetainAttachment(doubleBuffer._todaySemantic, doubleBuffer._initialLayout);
-					
 					technique->CompleteConstruction(
 						l->_drawingApparatus->_pipelineAccelerators,
 						constructorContext._stitchingContext);

@@ -574,14 +574,6 @@ namespace RenderCore { namespace Techniques
         return ~0u;
     }
 
-    static TextureViewDesc CompleteTextureViewDesc(const TextureViewDesc& viewDesc, TextureViewDesc::Aspect defaultAspect)
-	{
-		TextureViewDesc result = viewDesc;
-		if (result._format._aspect == TextureViewDesc::Aspect::UndefinedAspect)
-			result._format._aspect = defaultAspect;
-		return result;
-	}
-
 	const std::shared_ptr<IResourceView>& AttachmentPool::GetSRV(AttachmentName attachName, const TextureViewDesc& window) const
 	{
         return GetView(attachName, BindFlag::ShaderResource, window);
@@ -615,7 +607,6 @@ namespace RenderCore { namespace Techniques
     auto AttachmentPool::Reserve(
         IteratorRange<const PreregisteredAttachment*> attachmentRequests,
         AttachmentReservation* parentReservation,
-        IteratorRange<const DoubleBufferAttachment*> doubleBufferAttachmentRules,
         ReservationFlag::BitField flags) -> AttachmentReservation
     {
         AttachmentReservation emptyReservation;
@@ -655,25 +646,19 @@ namespace RenderCore { namespace Techniques
                             << request._desc << ", Bound previously: " << parentReservation->GetResourceDesc(q)
                             << std::endl;
                     }
-                    // If this attachment is in the doubleBufferAttachments list, ensure the layout flags match up
-                    auto i = std::find_if(
-                        doubleBufferAttachmentRules.begin(), doubleBufferAttachmentRules.end(),
-                        [semantic=request._semantic](const auto& a) { return a._yesterdaySemantic == semantic; });
-                    if (i != doubleBufferAttachmentRules.end())
-                        assert(i->_initialLayout == matchingParent->_currentLayout);
                 #endif
 
                 selectedAttachments[r]._resource = matchingParent->_resource;
                 selectedAttachments[r]._poolName = matchingParent->_poolResource;
-                selectedAttachments[r]._initialLayout = matchingParent->_currentLayout;
+                selectedAttachments[r]._currentLayout = matchingParent->_currentLayout;
                 selectedAttachments[r]._semantic = request._semantic;
 
-                if (request._layout && (matchingParent->_currentLayout != request._layout)) {
+                if (request._layout && (matchingParent->_pendingSwitchToLayout.value_or(matchingParent->_currentLayout) != request._layout)) {
                     // If you hit this, it probably means that initial/final layouts for sequential render passes do not agree
                     // Continuing will spit out a lot of underlying graphics API warnings and could potentially cause synchronization
                     // bugs on certain hardware
                     Log(Warning) << "Request for attachment with semantic (" << AttachmentSemantic{request._semantic} << ") found mismatch between layouts" << std::endl;
-                    Log(Warning) << "Requested layout: (" << BindFlagsAsString(request._layout) << "), resource last left in layout: (" << BindFlagsAsString(matchingParent->_currentLayout) << ")" << std::endl;
+                    Log(Warning) << "Requested layout: (" << BindFlagsAsString(request._layout) << "), resource last left in layout: (" << BindFlagsAsString(matchingParent->_pendingSwitchToLayout.value_or(matchingParent->_currentLayout)) << ")" << std::endl;
                     assert(0);
                 }
             }
@@ -708,23 +693,15 @@ namespace RenderCore { namespace Techniques
 
             selectedAttachments[r]._poolName = poolAttachmentName;
             selectedAttachments[r]._semantic = request._semantic;
-
-            // if this is a mentioned in doubleBufferAttachmentRules, then there may special rules for initializing this
-            auto i = doubleBufferAttachmentRules.end();
-            if (request._semantic)
-                i = std::find_if(
-                    doubleBufferAttachmentRules.begin(), doubleBufferAttachmentRules.end(),
-                    [semantic=request._semantic](const auto& a) { return a._yesterdaySemantic == semantic; });
-            if (i != doubleBufferAttachmentRules.end()) {
-                selectedAttachments[r]._pendingClear = i->_initialContents;
-                selectedAttachments[r]._pendingSwitchToLayout = (BindFlag::Enum)i->_initialLayout;
-            }
+            // selectedAttachments[r]._currentLayout = ...
+            if (request._layout)
+                selectedAttachments[r]._pendingSwitchToLayout = request._layout;
 
             // If the request was expecting an initialized input, it must match either with something explicitly bound to the semantic,
             // or with something with double buffer attachment rules
             // If we don't have either of these, then we can't fulfill it correctly -- we'd be passing uninitialized data into something
             // that asked for an initialized attachment
-            if ((request._state != PreregisteredAttachment::State::Uninitialized) && (i == doubleBufferAttachmentRules.end())) {
+            if (request._state != PreregisteredAttachment::State::Uninitialized) {
                 char buffer[256];
                 if (request._semantic) {
                     Throw(std::runtime_error(StringMeldInPlace(buffer) << "Cannot find initialized attachment for request with semantic " << AttachmentSemantic{request._semantic}));
@@ -1005,7 +982,7 @@ namespace RenderCore { namespace Techniques
         Entry newEntry;
         newEntry._resource = resource;
         newEntry._semantic = semantic;
-        newEntry._currentLayout = currentLayout;
+        newEntry._currentLayout = currentLayout;    // current layout can be ~0u, which means never initialized
 
         // replace an existing binding to this semantic, if one exists
         for (auto e=_entries.begin(); e!=_entries.end(); ++e) {
@@ -1071,12 +1048,13 @@ namespace RenderCore { namespace Techniques
                 if (childEntry._semantic != ~0ull && childEntry._semantic != 0ull) {
                     bool foundExistingBinding = false;
                     for (unsigned c=0; c<_entries.size(); ++c)
-                        if (_entries[c]._semantic == childEntry._semantic)
+                        if (_entries[c]._semantic == childEntry._semantic) {
                             if (_entries[c]._poolResource == childEntry._poolResource && _entries[c]._resource == childEntry._resource) {
                                 foundExistingBinding = true;
                                 removeEntry[c] = false;
                             } else
                                 removeEntry[c] = true;
+                        }
                     if (!foundExistingBinding) {
                         Entry newEntry;
                         newEntry._poolResource = childEntry._poolResource;
@@ -1174,16 +1152,96 @@ namespace RenderCore { namespace Techniques
         return dummy;
     }
 
-    auto AttachmentReservation::MergeIn(const AttachmentReservation&) -> AttachmentNameMapping
+    void AttachmentReservation::DefineDoubleBufferAttachment(
+        uint64_t yesterdaySemantic,
+        uint64_t todaySemantic,
+        const ResourceDesc& desc,
+        ClearValue defaultContents,
+        BindFlag::BitField initialLayout)
     {
-        assert(0);      // todo -- implement
-        return {};
+        auto existingRegistration = std::find_if(_doubleBufferAttachments.begin(), _doubleBufferAttachments.end(), [y=yesterdaySemantic, t=todaySemantic](const auto& q) { return q._yesterdaySemantic == y || q._todaySemantic == t; });
+        if (existingRegistration != _doubleBufferAttachments.end())
+            if (!MatchRequest(desc, existingRegistration->_desc) || initialLayout != existingRegistration->_initialLayout || yesterdaySemantic != existingRegistration->_yesterdaySemantic || todaySemantic != existingRegistration->_todaySemantic)
+                Throw(std::runtime_error("Double buffer attachment registered multiple times, and both registrations don't agree"));
+
+        // figure out if we have the given attachment already. If not, we'll declare a new one with an initial clear operation
+        auto existing = std::find_if(_entries.begin(), _entries.end(), [s=todaySemantic](const auto& q) { return q._semantic == s; });
+        if (existing != _entries.end()) {
+            // check compatibility, using the same behaviour as AttachmentPool::Reserve
+            // We can get a mis-match if (for example) resolution changed and there's still a registered attachment with the previous size
+            auto* res = (existing->_poolResource != ~0u) ? _pool->GetResource(existing->_poolResource).get() : existing->_resource.get();
+            if (!MatchRequest(desc, res->GetDesc()))
+                Throw(std::runtime_error("Double buffer attachment description mismatch between an existing registered attachment and requested attachment"));
+            if (existing->_pendingSwitchToLayout.value_or(existing->_currentLayout) != initialLayout)
+                Throw(std::runtime_error("Double buffer attachment layout mismatch between an existing registered attachment and requested attachment"));
+            return;
+        }
+
+        // no existing entry, create a new one and ensure that there's a pending clear registered
+        assert(_pool);
+        PreregisteredAttachment reservation {
+            0, desc, PreregisteredAttachment::State::Uninitialized, 0
+        };
+        auto newReservation = _pool->Reserve(MakeIteratorRange(&reservation, &reservation+1));
+        assert(newReservation._entries.size() == 1);
+        auto newEntry = std::move(newReservation._entries[0]);
+        newReservation._entries.clear();
+
+        newEntry._semantic = todaySemantic;
+        newEntry._pendingClear = defaultContents;
+        newEntry._pendingSwitchToLayout = initialLayout;
+        _entries.emplace_back(std::move(newEntry));
+
+        if (existingRegistration == _doubleBufferAttachments.end()) {
+            _doubleBufferAttachments.push_back({
+                yesterdaySemantic, todaySemantic, initialLayout, defaultContents, desc
+            });
+        }
+    }
+
+    void AttachmentReservation::DefineDoubleBufferAttachments(IteratorRange<const DoubleBufferAttachment*> attachments)
+    {
+        for (auto& a:attachments)
+            DefineDoubleBufferAttachment(a._yesterdaySemantic, a._todaySemantic, a._desc, a._initialContents, a._initialLayout);
     }
 
     AttachmentReservation AttachmentReservation::CaptureDoubleBufferAttachments()
     {
-        assert(0);      // todo -- implement
-        return {};
+        // Double buffer attachment reservations work both ways -- we register what we want to use from last frame, and those
+        // same reservations are used to determine what we will pass on from this frame to the next
+        AttachmentReservation result;
+        result._pool = _pool;
+        result._reservationFlags = _reservationFlags;
+        for (const auto& res:_doubleBufferAttachments) {
+            auto e = std::find_if(_entries.begin(), _entries.end(), [s=res._yesterdaySemantic](const auto& q) { return q._semantic == s; });
+            if (e == _entries.end()) continue;      // didn't actually write out any information for this semantic
+            if (e->_pendingClear.has_value() || e->_currentLayout == 0) continue;
+            Entry newEntry = *e;
+            newEntry._semantic = res._todaySemantic;        // flip the semantic
+            if (newEntry._pendingSwitchToLayout.has_value() || (newEntry._currentLayout != res._initialLayout))
+                newEntry._pendingSwitchToLayout = res._initialLayout;
+            result._entries.emplace_back(std::move(newEntry));
+        }
+        result.AddRefAll();
+        return result;
+    }
+
+    void AttachmentReservation::Absorb(AttachmentReservation&& src)
+    {
+        if (src._entries.empty()) return;
+        _entries.reserve(_entries.size() + src._entries.size());
+        for (auto& e:src._entries) {
+            assert((e._poolResource == ~0u) || (src._pool == _pool || src._reservationFlags == _reservationFlags));
+
+            auto existing = std::find_if(_entries.begin(), _entries.end(), [s=e._semantic](const auto& q) { return q._semantic == s; });
+            if (existing != _entries.end()) {
+                assert(0);      // if you hit this, it means we already have an attachment for this semantic
+                continue;
+            }
+
+            _entries.emplace_back(std::move(e));
+        }
+        src._entries.clear();
     }
 
     void AttachmentReservation::CompleteInitialization(IThreadContext& threadContext)
@@ -1201,10 +1259,22 @@ namespace RenderCore { namespace Techniques
         for (auto& a:_entries) {
             if (a._pendingSwitchToLayout) {
                 if (a._poolResource == ~0u) {
-                    barrierHelper.Add(*a._resource, a._currentLayout, *a._pendingSwitchToLayout);
+                    if (a._currentLayout == ~0u) {
+                        barrierHelper.Add(*a._resource, Metal::BarrierResourceUsage::NoState(), *a._pendingSwitchToLayout);
+                    } else
+                        barrierHelper.Add(*a._resource, a._currentLayout, *a._pendingSwitchToLayout);
                 } else {
                     auto& poolResource = _pool->_pimpl->_attachments[a._poolResource];
-                    barrierHelper.Add(*poolResource._resource, a._currentLayout, *a._pendingSwitchToLayout);
+                    if (!poolResource._resource) {
+                        _pool->_pimpl->BuildAttachment(a._poolResource);
+                        assert(poolResource._resource);
+                        barrierHelper.Add(*poolResource._resource, Metal::BarrierResourceUsage::NoState(), *a._pendingSwitchToLayout);
+                    } else if (a._currentLayout == ~0u) {
+                        // not a new texture, but we don't know the previous layout / usage
+                        barrierHelper.Add(*poolResource._resource, Metal::BarrierResourceUsage::AllCommandsReadAndWrite(), *a._pendingSwitchToLayout);
+                    } else {
+                        barrierHelper.Add(*poolResource._resource, a._currentLayout, *a._pendingSwitchToLayout);
+                    }
                     poolResource._pendingCompleteInitialization = false;
                 }
                 a._currentLayout = a._pendingSwitchToLayout.value();
@@ -1241,11 +1311,12 @@ namespace RenderCore { namespace Techniques
         return false;
     }
 
-    AttachmentReservation::AttachmentReservation() 
+    AttachmentReservation::AttachmentReservation() = default;
+    
+    AttachmentReservation::AttachmentReservation(AttachmentPool& pool) : _pool(&pool)
     {
-        _pool = nullptr;
-        _reservationFlags = 0;
     }
+
     AttachmentReservation::~AttachmentReservation()
     {
         ReleaseAll();
@@ -1302,7 +1373,7 @@ namespace RenderCore { namespace Techniques
             e._semantic = a._semantic;
             e._pendingClear = a._pendingClear;
             e._pendingSwitchToLayout = a._pendingSwitchToLayout;
-            e._currentLayout = (BindFlag::Enum)a._initialLayout.value_or(0);
+            e._currentLayout = a._currentLayout.value_or(~0u);
             _entries.push_back(e);
         }
 
@@ -1502,6 +1573,7 @@ namespace RenderCore { namespace Techniques
         _trueRenderPass = false;
 
         auto& stitchContext = parsingContext.GetFragmentStitchingContext();
+        auto& parentReservation = parsingContext.GetAttachmentReservation();
         if (stitchedFragment._pipelineType == PipelineType::Graphics) {
 
             #if defined(_DEBUG)
@@ -1521,12 +1593,12 @@ namespace RenderCore { namespace Techniques
                 parsingContext.GetThreadContext(), stitchedFragment._fbDesc, stitchedFragment._fullAttachmentDescriptions,
                 *parsingContext.GetTechniqueContext()._frameBufferPool,
                 *parsingContext.GetTechniqueContext()._attachmentPool,
-                &parsingContext.GetAttachmentReservation(),
+                &parentReservation,
                 beginInfo };
             parsingContext.GetViewport() = _frameBuffer->GetDefaultViewport();
         } else {
             auto& attachmentPool = *parsingContext.GetTechniqueContext()._attachmentPool;
-            _attachmentPoolReservation = attachmentPool.Reserve(stitchedFragment._fullAttachmentDescriptions, &parsingContext.GetAttachmentReservation());
+            _attachmentPoolReservation = attachmentPool.Reserve(stitchedFragment._fullAttachmentDescriptions, &parentReservation);
             _attachmentPoolReservation.CompleteInitialization(parsingContext.GetThreadContext());
             _layout = &stitchedFragment._fbDesc;
             // clear not supported in this mode
@@ -1545,7 +1617,7 @@ namespace RenderCore { namespace Techniques
 
         // Update the records in the parsing context with what's changed
         stitchContext.UpdateAttachments(stitchedFragment);
-        parsingContext.GetAttachmentReservation().UpdateAttachments(_attachmentPoolReservation, stitchedFragment._attachmentTransforms);
+        parentReservation.UpdateAttachments(_attachmentPoolReservation, stitchedFragment._attachmentTransforms);
 
         _viewedAttachmentsMap = stitchedFragment._viewedAttachmentsMap;
         _viewedAttachments.reserve(stitchedFragment._viewedAttachments.size());
@@ -2277,7 +2349,7 @@ namespace RenderCore { namespace Techniques
     }
 
     void FragmentStitchingContext::DefineAttachment(
-        uint64_t semantic, const ResourceDesc& resourceDesc, 
+        uint64_t semantic, const ResourceDesc& resourceDesc,
         PreregisteredAttachment::State state,
         BindFlag::BitField initialLayoutFlags)
 	{
@@ -2285,7 +2357,10 @@ namespace RenderCore { namespace Techniques
 			_workingAttachments.begin(), _workingAttachments.end(),
 			[semantic](const auto& c) { return c._semantic == semantic; });
 		if (i != _workingAttachments.end()) {
-            *i = RenderCore::Techniques::PreregisteredAttachment{semantic, resourceDesc, state, initialLayoutFlags};
+            assert(MatchRequest(resourceDesc, i->_desc));
+            if (initialLayoutFlags)
+                i->_layout = initialLayoutFlags;
+            i->_state = state;
         } else
             _workingAttachments.push_back(
                 RenderCore::Techniques::PreregisteredAttachment{semantic, resourceDesc, state, initialLayoutFlags});
@@ -2299,7 +2374,10 @@ namespace RenderCore { namespace Techniques
 			_workingAttachments.begin(), _workingAttachments.end(),
 			[semantic=attachment._semantic](const auto& c) { return c._semantic == semantic; });
 		if (i != _workingAttachments.end()) {
-            *i = attachment;
+            assert(MatchRequest(attachment._desc, i->_desc));
+            if (attachment._layout)
+                i->_layout = attachment._layout;
+            i->_state = attachment._state;
         } else
             _workingAttachments.push_back(attachment);
 	}
@@ -2319,7 +2397,7 @@ namespace RenderCore { namespace Techniques
 			_workingAttachments.begin(), _workingAttachments.end(),
 			[semantic](const auto& c) { return c._semantic == semantic; });
         if (i == _workingAttachments.end())
-            Throw(std::runtime_error("Attempting to call DefineDoubleBufferAttachment() for a semantic that doesn't have a predefined attachment yet. Define the attachment for the current frame first, before requiring a double buffer of it"));
+            Throw(std::runtime_error("Attempting to call DefineDoubleBufferAttachment() for a semantic that doesn't have a predefined attachment yet. Define the attachment for the current frame first, before requiring a double buffer of it."));
 
         auto i3 = std::find_if(
 			_doubleBufferAttachments.begin(), _doubleBufferAttachments.end(),
@@ -2334,16 +2412,18 @@ namespace RenderCore { namespace Techniques
 			_workingAttachments.begin(), _workingAttachments.end(),
 			[semantic](const auto& c) { return c._semantic == semantic+1; });
         if (i2 != _workingAttachments.end())
-            Throw(std::runtime_error("Attempting to call DefineDoubleBufferAttachment(), but there is an overlapping predefined attachment for the double buffer. Only predefine the attachment one."));
+            Throw(std::runtime_error("Attempting to call DefineDoubleBufferAttachment(), but there is an overlapping predefined attachment for the double buffer. Only predefine the attachment once."));
 
         DoubleBufferAttachment a;
-        a._todaySemantic = semantic;
-        a._yesterdaySemantic = semantic+1;
+        a._todaySemantic = semantic+1;
+        a._yesterdaySemantic = semantic;
         a._initialContents = initialContents;
         a._initialLayout = initialLayoutFlags;
         a._desc = i->_desc;
+        XlCatString(a._desc._name, "-prev");
         _doubleBufferAttachments.push_back(a);
-        DefineAttachment(a._yesterdaySemantic, a._desc, PreregisteredAttachment::State::Initialized, initialLayoutFlags);
+        assert(initialLayoutFlags != 0);
+        DefineAttachment(a._todaySemantic, a._desc, PreregisteredAttachment::State::Initialized, initialLayoutFlags);
     }
 
     Format FragmentStitchingContext::GetSystemAttachmentFormat(SystemAttachmentFormat fmt) const
@@ -2351,11 +2431,6 @@ namespace RenderCore { namespace Techniques
         if ((unsigned)fmt < dimof(_systemFormats))
             return _systemFormats[(unsigned(fmt))];
         return Format::Unknown;
-    }
-
-    IteratorRange<const DoubleBufferAttachment*> FragmentStitchingContext::GetDoubleBufferAttachments() const
-    {
-        return _doubleBufferAttachments;
     }
 
     FragmentStitchingContext::FragmentStitchingContext(

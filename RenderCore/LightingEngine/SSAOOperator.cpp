@@ -27,8 +27,8 @@
 namespace RenderCore { namespace LightingEngine
 {
 	static const auto Hash_AOOutput = ConstHash64<'ao-o', 'utpu', 't'>::Value;
-	static const auto Hash_AOAccumulation0 = ConstHash64<'ao-a', 'ccum', 'ulat', 'ion0'>::Value;
-	static const auto Hash_AOAccumulation1 = ConstHash64<'ao-a', 'ccum', 'ulat', 'ion1'>::Value;
+	static const auto Hash_AOAccumulation = ConstHash64<'ao-a', 'ccum', 'ulat', 'ion'>::Value;
+	static const auto Hash_AOAccumulationPrev = ConstHash64<'ao-a', 'ccum', 'ulat', 'ion'>::Value+1;
 
 	static const auto s_aoFormat = Format::R8_UNORM;
 
@@ -39,9 +39,9 @@ namespace RenderCore { namespace LightingEngine
         IResourceView& inputDepthsSRV,
         IResourceView& inputNormalsSRV,
         IResourceView& inputVelocitiesSRV,
-        IResourceView& inputHistoryAccumulation,
-        IResourceView& accumulation0UAV,
-        IResourceView& accumulation1UAV,
+        IResourceView& inputHistoryAccuracy,
+        IResourceView& accumulationUAV,
+        IResourceView& accumulationPrevUAV,
         IResourceView& aoOutputUAV,
         IResourceView* hierarchicalDepths)
     {
@@ -73,11 +73,8 @@ namespace RenderCore { namespace LightingEngine
 				dimof(barrier), barrier);
 		}
 
-        IResourceView* accumulationUAV = (_pingPongCounter&1) ? &accumulation0UAV : &accumulation1UAV;
-        IResourceView* accumulationLastUAV = (_pingPongCounter&1) ? &accumulation1UAV : &accumulation0UAV;
-        
         UniformsStream us;
-        IResourceView* srvs[] = { &inputDepthsSRV, &aoOutputUAV, accumulationUAV, accumulationLastUAV, &inputNormalsSRV, &inputVelocitiesSRV, &inputHistoryAccumulation, hierarchicalDepths, _ditherTable.get() };
+        IResourceView* srvs[] = { &inputDepthsSRV, &aoOutputUAV, &accumulationUAV, &accumulationPrevUAV, &inputNormalsSRV, &inputVelocitiesSRV, &inputHistoryAccuracy, hierarchicalDepths, _ditherTable.get() };
         us._resourceViews = MakeIteratorRange(srvs);
         struct AOProps
         {
@@ -120,7 +117,7 @@ namespace RenderCore { namespace LightingEngine
             barrier[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             barrier[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
             barrier[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            barrier[0].image = checked_cast<Metal_Vulkan::Resource*>(accumulationUAV->GetResource().get())->GetImage();
+            barrier[0].image = checked_cast<Metal_Vulkan::Resource*>(accumulationUAV.GetResource().get())->GetImage();
             barrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             barrier[0].subresourceRange.baseMipLevel = 0;
             barrier[0].subresourceRange.baseArrayLayer = 0;
@@ -148,8 +145,8 @@ namespace RenderCore { namespace LightingEngine
     {
         RenderStepFragmentInterface result{PipelineType::Compute};
 
-        auto accumulation0 = result.DefineAttachment(Hash_AOAccumulation0).InitialState(BindFlag::UnorderedAccess).FinalState(BindFlag::UnorderedAccess);
-        auto accumulation1 = result.DefineAttachment(Hash_AOAccumulation1).InitialState(BindFlag::UnorderedAccess).FinalState(BindFlag::UnorderedAccess);
+        auto accumulation = result.DefineAttachment(Hash_AOAccumulation).InitialState(LoadStore::DontCare, BindFlag::UnorderedAccess).FinalState(BindFlag::ShaderResource);
+        auto accumulationPrev = result.DefineAttachment(Hash_AOAccumulationPrev).InitialState(BindFlag::ShaderResource).Discard();
         auto aoOutput = result.DefineAttachment(Hash_AOOutput).NoInitialState().FinalState(BindFlag::UnorderedAccess);
 
         Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
@@ -158,8 +155,8 @@ namespace RenderCore { namespace LightingEngine
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion));
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HistoryAcc));
 
-        spDesc.AppendNonFrameBufferAttachmentView(accumulation0, BindFlag::UnorderedAccess);
-        spDesc.AppendNonFrameBufferAttachmentView(accumulation1, BindFlag::UnorderedAccess);
+        spDesc.AppendNonFrameBufferAttachmentView(accumulation, BindFlag::UnorderedAccess);
+        spDesc.AppendNonFrameBufferAttachmentView(accumulationPrev, BindFlag::ShaderResource);
         spDesc.AppendNonFrameBufferAttachmentView(aoOutput, BindFlag::UnorderedAccess);
         if (_hasHierarchicalDepths)
             spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::ShaderResource);
@@ -188,21 +185,11 @@ namespace RenderCore { namespace LightingEngine
         UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
         Techniques::PreregisteredAttachment preGeneratedAttachments[] {
             Techniques::PreregisteredAttachment {
-                Hash_AOAccumulation0,
+                Hash_AOAccumulation,
                 CreateDesc(
                     BindFlag::UnorderedAccess | BindFlag::ShaderResource,
                     TextureDesc::Plain2D(fbSize[0]/2, fbSize[1]/2, s_aoFormat),
-                    "ao-accumulation-0"),
-                Techniques::PreregisteredAttachment::State::Initialized
-            },
-
-            Techniques::PreregisteredAttachment {
-                Hash_AOAccumulation1,
-                CreateDesc(
-                    BindFlag::UnorderedAccess | BindFlag::ShaderResource,
-                    TextureDesc::Plain2D(fbSize[0]/2, fbSize[1]/2, s_aoFormat),
-                    "ao-accumulation-1"),
-                Techniques::PreregisteredAttachment::State::Initialized
+                    "ao-accumulation-0")
             },
 
             Techniques::PreregisteredAttachment {
@@ -216,6 +203,7 @@ namespace RenderCore { namespace LightingEngine
         };
         for (auto a:preGeneratedAttachments)
             stitchingContext.DefineAttachment(a);
+        stitchingContext.DefineDoubleBufferAttachment(Hash_AOAccumulation, MakeClearValue(1.f, 1.f, 1.f, 1.f), BindFlag::ShaderResource);
     }
 
     void SSAOOperator::ResetAccumulation() { _pingPongCounter = ~0u; }

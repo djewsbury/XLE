@@ -171,6 +171,7 @@ namespace RenderCore { namespace Techniques
             case HistoryAcc: return "HistoryAcc";
             case MultisampleDepthPrev: return "MultisampleDepthPrev";
             case GBufferNormalPrev: return "GBufferNormalPrev";
+            case ColorHDRPrev: return "ColorHDRPrev";
             case ConstHash64<'SSRe', 'flec', 'tion'>::Value: return "SSReflection";
             case ConstHash64<'SSRe', 'flec', 'tion'>::Value+1: return "SSReflectionPrev";
             case ConstHash64<'SSRC', 'onfi', 'denc', 'e'>::Value: return "SSRConfidence";

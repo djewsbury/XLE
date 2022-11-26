@@ -13,8 +13,9 @@
 
 namespace RenderCore { namespace Techniques
 {
-    struct ParsingContext::Internal
+    class ParsingContext::Internal
     {
+    public:
         ProjectionDesc _projectionDesc;
         ProjectionDesc _prevProjectionDesc;
         bool _enablePrevProjectionDesc = false;
@@ -63,6 +64,7 @@ namespace RenderCore { namespace Techniques
 
         _internal = std::make_unique<Internal>();
         assert(size_t(_internal.get()) % 16 == 0);
+        _internal->_attachmentReservation = AttachmentReservation{*techniqueContext._attachmentPool};
 
 		_uniformDelegateManager = _techniqueContext->_uniformDelegateManager;
         _pipelineAcceleratorsVisibility = 0;
