@@ -47,7 +47,7 @@ namespace RenderCore
             PresentationSrc     = 1<<14,    ///< Part of a swap chain that can be presented to the screen
             TexelBuffer         = 1<<15,    ///< Combine with UnorderedAccess to get an UnorderedAccessTexelBuffer or ShaderResource to get a UniformTexelBuffer
         };
-        typedef unsigned BitField;
+        using BitField = unsigned;
     }
 
     std::string BindFlagsAsString(BindFlag::BitField bindFlags);

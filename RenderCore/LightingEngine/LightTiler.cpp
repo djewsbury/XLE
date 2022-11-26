@@ -342,15 +342,16 @@ namespace RenderCore { namespace LightingEngine
 					vInput._topology = Topology::TriangleList;
 					FrameBufferDesc fbDesc{{}, std::vector<SubpassDesc>{SubpassDesc{}}};
 					Techniques::FrameBufferTarget fbTarget{&fbDesc, 0};
-					auto futurePipeline = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
+					std::promise<Techniques::GraphicsPipelineAndLayout> promisedPipeline;
+					auto futurePipeline = promisedPipeline.get_future();
 					pipelinePool->CreateGraphicsPipeline(
-						futurePipeline->AdoptPromise(),
+						std::move(promisedPipeline),
 						{pipelineLayout, plan},
 						pipelineDesc,
 						{},
 						inputStates, fbTarget);
 
-					::Assets::WhenAll(futurePipeline).ThenConstructToPromise(
+					::Assets::WhenAll(std::move(futurePipeline)).ThenConstructToPromise(
 						std::move(promise),
 						[pipelinePool, config](auto pipeline) {
 							return std::make_shared<RasterizationLightTileOperator>(std::move(pipelinePool), std::move(pipeline._pipeline), std::move(pipeline._layout), config);

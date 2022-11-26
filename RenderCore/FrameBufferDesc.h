@@ -97,7 +97,7 @@ namespace RenderCore
 		IteratorRange<const AttachmentViewDesc*> GetResolveOutputs() const;
 		const AttachmentViewDesc& GetResolveDepthStencil() const;
         IteratorRange<const AttachmentViewDesc*> GetViews() const;
-        uint64_t GetViewInstanceMask() const;
+        uint32_t GetViewInstanceMask() const;
 
 		#if defined(_DEBUG)
             mutable std::string _name = std::string();
@@ -322,7 +322,7 @@ namespace RenderCore
         return *this;
     }
 
-    inline uint64_t SubpassDesc::GetViewInstanceMask() const
+    inline uint32_t SubpassDesc::GetViewInstanceMask() const
     {
         return _viewInstancingMask;
     }
