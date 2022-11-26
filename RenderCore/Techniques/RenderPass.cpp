@@ -2614,8 +2614,10 @@ namespace RenderCore { namespace Techniques
 
                 newState->_lastAccessStore = interfaceAttachment._storeToNextPhase;
                 newState->_lastAccessFinalLayout = interfaceAttachment._finalLayout;
-                if (!HasRetain(interfaceAttachment._storeToNextPhase))
+                if (!HasRetain(interfaceAttachment._storeToNextPhase)) {
+                    newState->_shouldReceiveDataForSemantic = 0;
                     newState->_containsDataForSemantic = 0;     // if we don't explicitly retain the data, let's forget it exists
+                }
                 newWorkingAttachments.push_back(*newState);
 
                 attachmentRemapping.push_back({interfaceAttachmentName, (unsigned)newWorkingAttachments.size()-1});
