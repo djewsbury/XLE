@@ -113,7 +113,7 @@ namespace RenderCore { namespace Techniques
 		void BeginPrepareForSequencerStateInternal(
 			std::promise<IPipelineAcceleratorPool::Pipeline>&& resultPromise,
 			std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection,
-			PipelineCollection& pipelineCollection, const ParameterBox& globalSelectors, std::shared_ptr<SequencerConfig> cfg, PipelineLayoutMarker& pipelineLayoutMarker);
+			const std::shared_ptr<PipelineCollection>& pipelineCollection, const ParameterBox& globalSelectors, std::shared_ptr<SequencerConfig> cfg, PipelineLayoutMarker& pipelineLayoutMarker);
 
 		bool HasCurrentOrFuturePipeline(const SequencerConfig& cfg) const;
 
@@ -133,32 +133,44 @@ namespace RenderCore { namespace Techniques
 	void PipelineAccelerator::BeginPrepareForSequencerStateInternal(
 		std::promise<IPipelineAcceleratorPool::Pipeline>&& resultPromise,
 		std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection,
-		PipelineCollection& pipelineCollection, const ParameterBox& globalSelectors, std::shared_ptr<SequencerConfig> cfg, PipelineLayoutMarker& pipelineLayoutMarker)
+		const std::shared_ptr<PipelineCollection>& pipelineCollection, const ParameterBox& globalSelectors, std::shared_ptr<SequencerConfig> cfg, PipelineLayoutMarker& pipelineLayoutMarker)
 	{
-		// Use our copy of PipelineLayoutMarker (rather than the one in cfg) to avoid and race conditions
-		std::shared_ptr<CompiledPipelineLayoutAsset> actualPipelineLayoutAsset = pipelineLayoutMarker._pipelineLayout;
-		if (!actualPipelineLayoutAsset) {
-			assert(pipelineLayoutMarker._pending.valid());
-			YieldToPool(pipelineLayoutMarker._pending);		// this case should be uncommon, and YieldToPool is a lot simplier than making pipelineLayoutMarker._pending an optional precondition
-			actualPipelineLayoutAsset = pipelineLayoutMarker._pending.get();
-		}
-
-		const ParameterBox* paramBoxes[] = {
-			&cfg->_sequencerSelectors,
-			&_geoSelectors,
-			&_materialSelectors,
-			&globalSelectors
-		};
-
 		std::shared_future<std::shared_ptr<GraphicsPipelineDesc>> pipelineDescFuture = cfg->_delegate->GetPipelineDesc(compiledPatchCollection->GetInterface(), _stateSet);
-		VertexInputStates vis { _inputAssembly, _miniInputAssembly, _topology };
 		std::promise<Techniques::GraphicsPipelineAndLayout> metalPipelinePromise;
 		auto metalPipelineFuture = metalPipelinePromise.get_future();
-		pipelineCollection.CreateGraphicsPipeline(
-			std::move(metalPipelinePromise),
-			actualPipelineLayoutAsset->GetPipelineLayout(), pipelineDescFuture,
-			MakeIteratorRange(paramBoxes), 
-			vis, FrameBufferTarget{&cfg->_fbDesc, cfg->_subpassIdx}, compiledPatchCollection);
+
+		// Use our copy of PipelineLayoutMarker (rather than the one in cfg) to avoid and race conditions
+		std::shared_ptr<CompiledPipelineLayoutAsset> actualPipelineLayoutAsset = pipelineLayoutMarker._pipelineLayout;
+		if (actualPipelineLayoutAsset) {
+			const ParameterBox* paramBoxes[] = {
+				&cfg->_sequencerSelectors,
+				&_geoSelectors,
+				&_materialSelectors,
+				&globalSelectors
+			};
+			VertexInputStates vis { _inputAssembly, _miniInputAssembly, _topology };
+			pipelineCollection->CreateGraphicsPipeline(
+				std::move(metalPipelinePromise),
+				actualPipelineLayoutAsset->GetPipelineLayout(), pipelineDescFuture,
+				MakeIteratorRange(paramBoxes), 
+				vis, FrameBufferTarget{&cfg->_fbDesc, cfg->_subpassIdx}, compiledPatchCollection);
+		} else {
+			// unfortunately this is a fair bit more complicated, but we can't yield on pipelineLayoutMarker._pending here because we're within
+			// the pipeline accelerator pool's lock
+			::Assets::WhenAll(pipelineLayoutMarker._pending).ThenConstructToPromise(
+				std::move(metalPipelinePromise),
+				[pipelineCollection, pipelineDescFuture, cfg, compiledPatchCollection, ia0=_inputAssembly, ia1=_miniInputAssembly, top=_topology,
+					p0=cfg->_sequencerSelectors, p1=_geoSelectors, p2=_materialSelectors, p3=globalSelectors]
+					(auto&& promise, auto actualPipelineLayoutAsset) {
+					const ParameterBox* paramBoxes[] = { &p0, &p1, &p2, &p3 };
+					VertexInputStates vis { ia0, ia1, top };
+					pipelineCollection->CreateGraphicsPipeline(
+						std::move(promise),
+						actualPipelineLayoutAsset->GetPipelineLayout(), pipelineDescFuture,
+						MakeIteratorRange(paramBoxes), 
+						vis, FrameBufferTarget{&cfg->_fbDesc, cfg->_subpassIdx}, compiledPatchCollection);
+				});
+		}
 
 		std::weak_ptr<PipelineAccelerator> weakThis = shared_from_this();
 		::Assets::WhenAll(std::move(metalPipelineFuture), std::move(pipelineDescFuture)).ThenConstructToPromise(
@@ -208,7 +220,7 @@ namespace RenderCore { namespace Techniques
 			TRY {
 				BeginPrepareForSequencerStateInternal(
 					std::move(pipelinePromise),
-					immediatePatchCollection, *pipelineCollection, copyGlobalSelectors, std::move(cfg), pipelineLayoutMarker);
+					immediatePatchCollection, pipelineCollection, copyGlobalSelectors, std::move(cfg), pipelineLayoutMarker);
 			} CATCH(...) {
 				pipelinePromise.set_exception(std::current_exception());
 			} CATCH_END
@@ -225,7 +237,7 @@ namespace RenderCore { namespace Techniques
 							Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));
 						containingPipelineAccelerator->BeginPrepareForSequencerStateInternal(
 							std::move(resultPromise),
-							compiledPatchCollection, *pipelineCollection, copyGlobalSelectors, std::move(cfg), pipelineLayoutMarker);
+							compiledPatchCollection, pipelineCollection, copyGlobalSelectors, std::move(cfg), pipelineLayoutMarker);
 					} CATCH(...) {
 						resultPromise.set_exception(std::current_exception());
 					} CATCH_END
