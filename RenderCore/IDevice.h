@@ -121,11 +121,6 @@ namespace RenderCore
     /// platforms might expose special case behaviour. To get access, use QueryInterface
     /// to check if the device supports the behaviour you want.
     ///
-    /// Note that there is no reference counting behaviour built into IDevice (or any
-    /// RenderCore object). But you can use std::shared_ptr<> to get that behaviour.
-    /// If necessary, we can add a CreateDeviceShared() that will use std::make_shared<>
-    /// to create an efficient referenced counted object.
-    ///
     class IDevice
     {
     public:

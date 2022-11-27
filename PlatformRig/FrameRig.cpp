@@ -159,9 +159,7 @@ namespace PlatformRig
 
         bool endAnnotatorFrame = false;
 		TRY {
-
             auto presentationTarget = context->BeginFrame(presChain);
-            auto presentationTargetDesc = presentationTarget->GetDesc();
 
             context->GetAnnotator().Frame_Begin(_pimpl->_frameRenderCount);		// (on Vulkan, we must do this after IThreadContext::BeginFrame(), because that primes the command list in the vulkan device)
             endAnnotatorFrame = true;

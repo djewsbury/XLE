@@ -227,6 +227,7 @@ namespace RenderCore { namespace Techniques
 	: _device(std::move(device))
 	, _guid(s_nextGraphicsPipelinePoolGUID++)
 	{
+		assert(_device);
 		_sharedPools = std::make_shared<Internal::SharedPools>(_device);
 	}
 

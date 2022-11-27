@@ -219,7 +219,7 @@ namespace RenderCore { namespace Metal_DX11
 				BOOL knownEncoding = false;
 				UINT32 codepage = 0;
 				auto hres = blobEncoding->GetEncoding(&knownEncoding, &codepage);
-				isText = hres == S_OK && knownEncoding == true && (codepage == CP_UTF8 || codepage == CP_ACP || codepage == CP_OEMCP || codepage == CP_MACCP || codepage == CP_THREAD_ACP);
+				isText = hres == S_OK && knownEncoding && (codepage == CP_UTF8 || codepage == CP_ACP || codepage == CP_OEMCP || codepage == CP_MACCP || codepage == CP_THREAD_ACP);
 			}
 
 			Payload result = std::make_shared<std::vector<uint8_t>>();
