@@ -60,4 +60,12 @@ namespace RenderCore
 		~IThreadContextVulkan();
 	};
 
+	////////////////////////////////////////////////////////////////////////////////
+
+	class IAPIInstanceVulkan
+	{
+	public:
+		virtual void SetWindowPlatformValue(const void*) = 0;
+	};
+
 }

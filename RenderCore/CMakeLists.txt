@@ -1,7 +1,7 @@
 list(APPEND Src
     Format.cpp
     FrameBufferDesc.cpp
-    Init.cpp
+    DeviceInitialization.cpp
     MinimalShaderSource.cpp
     RenderUtils.cpp
     ResourceUtils.cpp

@@ -15,6 +15,7 @@ namespace RenderCore
     class IDevice;
     class IResource;
     class IThreadContext;
+    class IAPIInstance;
     class IAnnotator;
     class ICompiledPipelineLayout;
     class IResourceView;
@@ -28,5 +29,6 @@ namespace RenderCore
     class PresentationChainDesc;
     class SubResourceId;
     class PipelineLayoutInitializer;
+    class DeviceFeatures;
 }
 

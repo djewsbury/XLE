@@ -5,7 +5,7 @@
 #include "DeviceVulkan.h"
 #include "../IAnnotator.h"
 #include "../Format.h"
-#include "../Init.h"
+#include "../DeviceInitialization.h"
 #include "Metal/VulkanCore.h"
 #include "Metal/ObjectFactory.h"
 #include "Metal/Format.h"
@@ -487,33 +487,7 @@ namespace RenderCore { namespace ImplVulkan
 			[](VkDevice dev) { vkDestroyDevice(dev, Metal_Vulkan::g_allocationCallbacks); });
 	}
 
-    Device::Device()
-    {
-            // todo -- we need to do this in a bind to DLL step
-        Metal_Vulkan::InitFormatConversionTables();
-
-			//
-			//	Create the instance. This will attach the Vulkan DLL. If there are no valid Vulkan drivers
-			//	available, it will throw an exception here.
-			//
-		_instance = CreateVulkanInstance();
-        _physDev = { nullptr, ~0u };
-		_initializationThread = std::this_thread::get_id();
-
-			// We can't create the underlying device immediately... Because we need a pointer to
-			// the "platformValue" (window handle) in order to check for physical device capabilities.
-			// So, we must do a lazy initialization of _underlying.
-    }
-
-    Device::~Device()
-    {
-		_foregroundPrimaryContext.reset();
-        _globalsContainer = nullptr;
-		/*
-			While exiting post a vulkan failure (eg, device lost), we will can end up in an infinite loop if we stall here
-		if (_underlying.get())
-			vkDeviceWaitIdle(_underlying.get());*/
-    }
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     static std::vector<VkSurfaceFormatKHR> GetSurfaceFormats(VkPhysicalDevice physDev, VkSurfaceKHR surface)
     {
@@ -588,43 +562,105 @@ namespace RenderCore { namespace ImplVulkan
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    void Device::DoSecondStageInit(VkSurfaceKHR surface)
-    {
-        if (!_underlying) {
-			if (std::this_thread::get_id() != _initializationThread)
-				Throw(std::runtime_error("Attempting second stage device initialization on incorrect thread"));
+	DeviceFeatures              APIInstance::QuerySupportedFeatures()
+	{
+		return {};
+	}
 
-			_physDev = SelectPhysicalDeviceForRendering(_instance.get(), surface);
-			#if defined(OSSERVICES_ENABLE_LOG)
-				LogPhysicalDeviceExtensions(Log(Verbose), _physDev._dev);
-			#endif
-			_underlying = CreateUnderlyingDevice(_physDev);
-			auto extensionFunctions = std::make_shared<Metal_Vulkan::ExtensionFunctions>(_instance.get());
-			_globalsContainer = std::make_shared<Metal_Vulkan::GlobalsContainer>();
-			_globalsContainer->_objectFactory = Metal_Vulkan::ObjectFactory{_instance.get(), _physDev._dev, _underlying, extensionFunctions};
-			auto& objFactory = _globalsContainer->_objectFactory;
-			auto& pools = _globalsContainer->_pools;
+	void                        APIInstance::SetWindowPlatformValue(const void* platformValue)
+	{
+		if (_physicalDeviceSelected)
+			Throw(std::runtime_error("Attempting to call IAPIInstanceVulkan::SetWindowPlatformValue() after a physical device has already been selected. This method is optional, but prefer to call it only once and before other methods in the same class."));
+		_windowPlatformValue = platformValue;
+		SelectPhysicalDevice();
+	}
 
-			// Set up the object factory with a default destroyer that tracks the current
-			// GPU frame progress
-			_graphicsQueue = std::make_shared<Metal_Vulkan::SubmissionQueue>(objFactory, GetQueue(_underlying.get(), _physDev._renderingQueueFamily), _physDev._renderingQueueFamily);
-			auto destroyer = objFactory.CreateMarkerTrackingDestroyer(_graphicsQueue->GetTracker());
-			objFactory.SetDefaultDestroyer(destroyer);
+	std::shared_ptr<IDevice>    APIInstance::CreateDevice(const DeviceFeatures& features)
+	{
+		if (!_physicalDeviceSelected)
+			SelectPhysicalDevice();
+		return std::make_shared<Device>(_instance, _physDev);
+	}
 
-            pools._mainDescriptorPool = Metal_Vulkan::DescriptorPool(objFactory, _graphicsQueue->GetTracker());
-			pools._longTermDescriptorPool = Metal_Vulkan::DescriptorPool(objFactory, _graphicsQueue->GetTracker());
-			pools._renderPassPool = Metal_Vulkan::VulkanRenderPassPool(objFactory);
-            pools._mainPipelineCache = objFactory.CreatePipelineCache();
-            pools._dummyResources = Metal_Vulkan::DummyResources(objFactory);
-			pools._temporaryStorageManager = std::make_unique<Metal_Vulkan::TemporaryStorageManager>(objFactory, _graphicsQueue->GetTracker());
-
-			assert(!_foregroundPrimaryContext);
-            _foregroundPrimaryContext = std::make_shared<ThreadContext>(shared_from_this(), _graphicsQueue);
-			_foregroundPrimaryContext->AttachDestroyer(destroyer);
-
-			// We need to ensure that the "dummy" resources get their layout change to complete initialization
-			pools._dummyResources.CompleteInitialization(*_foregroundPrimaryContext->GetMetalContext());
+	void APIInstance::SelectPhysicalDevice()
+	{
+		assert(!_physicalDeviceSelected);
+		if (_windowPlatformValue) {
+			// We create a surface object temporarily in order to select a matching physical device
+			// we're expecting that all presentation chains created by any device constructed from this
+			// instance will be compatible with the physical device in the same way that this surface is
+			auto surface = CreateSurface(_instance.get(), _windowPlatformValue);
+			_physDev = SelectPhysicalDeviceForRendering(_instance.get(), surface.get());
+		} else {
+			_physDev = SelectPhysicalDeviceForRendering(_instance.get(), nullptr);
 		}
+		#if 0 // defined(OSSERVICES_ENABLE_LOG)
+			LogPhysicalDeviceExtensions(Log(Verbose), _physDev._dev);
+		#endif
+		_physicalDeviceSelected = true;
+	}
+
+	void* APIInstance::QueryInterface(size_t guid)
+	{
+		if (guid == typeid(APIInstance).hash_code())
+			return this;
+		else if (guid == typeid(IAPIInstance).hash_code())
+			return (IAPIInstance*)this;
+		return nullptr;
+	}
+
+	APIInstance::APIInstance()
+	{
+            // todo -- we need to do this in a bind to DLL step
+        Metal_Vulkan::InitFormatConversionTables();
+
+			//
+			//	Create the instance. This will attach the Vulkan DLL. If there are no valid Vulkan drivers
+			//	available, it will throw an exception here.
+			//
+		_instance = CreateVulkanInstance();
+        _physDev = { nullptr, ~0u };
+	}
+
+	APIInstance::~APIInstance()
+	{}
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+    Device::Device(
+		VulkanSharedPtr<VkInstance> instance,
+    	SelectedPhysicalDevice physDev)
+	: _instance(std::move(instance))
+	, _physDev(std::move(physDev))
+    {
+		_initializationThread = std::this_thread::get_id();
+
+		_underlying = CreateUnderlyingDevice(_physDev);
+		auto extensionFunctions = std::make_shared<Metal_Vulkan::ExtensionFunctions>(_instance.get());
+		_globalsContainer = std::make_shared<Metal_Vulkan::GlobalsContainer>();
+		_globalsContainer->_objectFactory = Metal_Vulkan::ObjectFactory{_instance.get(), _physDev._dev, _underlying, extensionFunctions};
+		auto& objFactory = _globalsContainer->_objectFactory;
+		auto& pools = _globalsContainer->_pools;
+
+		// Set up the object factory with a default destroyer that tracks the current
+		// GPU frame progress
+		_graphicsQueue = std::make_shared<Metal_Vulkan::SubmissionQueue>(objFactory, GetQueue(_underlying.get(), _physDev._renderingQueueFamily), _physDev._renderingQueueFamily);
+		_destrQueue = objFactory.CreateMarkerTrackingDestroyer(_graphicsQueue->GetTracker());
+		objFactory.SetDefaultDestroyer(_destrQueue);
+
+		pools._mainDescriptorPool = Metal_Vulkan::DescriptorPool(objFactory, _graphicsQueue->GetTracker());
+		pools._longTermDescriptorPool = Metal_Vulkan::DescriptorPool(objFactory, _graphicsQueue->GetTracker());
+		pools._renderPassPool = Metal_Vulkan::VulkanRenderPassPool(objFactory);
+		pools._mainPipelineCache = objFactory.CreatePipelineCache();
+		pools._dummyResources = Metal_Vulkan::DummyResources(objFactory);
+		pools._temporaryStorageManager = std::make_unique<Metal_Vulkan::TemporaryStorageManager>(objFactory, _graphicsQueue->GetTracker());
+	}
+
+    Device::~Device()
+    {
+		_foregroundPrimaryContext.reset();
+		_destrQueue = nullptr;
+        _globalsContainer = nullptr;
     }
 
     struct SwapChainProperties
@@ -768,9 +804,13 @@ namespace RenderCore { namespace ImplVulkan
 		const void* platformValue, const PresentationChainDesc& desc)
     {
 		auto surface = CreateSurface(_instance.get(), platformValue);
-		DoSecondStageInit(surface.get());
 
-        // double check to make sure our physical device is compatible with this surface
+        // Double check to make sure our physical device is compatible with this surface
+		// if you hit this, there are a few things you can do:
+		//	a) check that IAPIInstanceVulkan::SetWindowPlatformValue() is called with a relevant window handle before any other IAPIInstance methods
+		//	b) if you need to render to multiple windows, they must all be renderable with the same vulkan "physical device". Physical devices can be
+		//		compatible with rendering to a specific window, or incompatable. We only a single physical device per IAPIInstance / IDevice, and
+		//		only check at most a single window for compatibility
         VkBool32 supportsPresent = false;
 		auto res = vkGetPhysicalDeviceSurfaceSupportKHR(
 			_physDev._dev, _physDev._renderingQueueFamily, surface.get(), &supportsPresent);
@@ -786,10 +826,14 @@ namespace RenderCore { namespace ImplVulkan
 
     std::shared_ptr<IThreadContext> Device::GetImmediateContext()
     {
-        // Note that when we do the second stage init through this path,
-        // we will not verify the selected physical device against a
-        // presentation surface.
-        DoSecondStageInit();
+        if (!_foregroundPrimaryContext) {
+			_foregroundPrimaryContext = std::make_shared<ThreadContext>(shared_from_this(), _graphicsQueue);
+			_foregroundPrimaryContext->AttachDestroyer(_destrQueue);
+
+			// We need to ensure that the "dummy" resources get their layout change to complete initialization
+			auto& pools = _globalsContainer->_pools;
+			pools._dummyResources.CompleteInitialization(*_foregroundPrimaryContext->GetMetalContext());
+		}
 		return _foregroundPrimaryContext;
     }
 
@@ -798,7 +842,6 @@ namespace RenderCore { namespace ImplVulkan
         // Note that when we do the second stage init through this path,
         // we will not verify the selected physical device against a
         // presentation surface.
-        DoSecondStageInit();
 		return std::make_unique<ThreadContext>(shared_from_this(), _graphicsQueue);
     }
 
@@ -910,7 +953,6 @@ namespace RenderCore { namespace ImplVulkan
 
 	std::shared_ptr<ICompiledPipelineLayout> Device::CreatePipelineLayout(const PipelineLayoutInitializer& desc)
 	{
-		DoSecondStageInit();
 		if (!_globalsContainer->_pools._descriptorSetLayoutCache)
 			_globalsContainer->_pools._descriptorSetLayoutCache = Metal_Vulkan::Internal::CreateCompiledDescriptorSetLayoutCache();
 
@@ -954,7 +996,6 @@ namespace RenderCore { namespace ImplVulkan
 
 	std::shared_ptr<IDescriptorSet> Device::CreateDescriptorSet(PipelineType pipelineType, const DescriptorSetSignature& signature)
 	{
-		DoSecondStageInit();
 		if (!_globalsContainer->_pools._descriptorSetLayoutCache)
 			_globalsContainer->_pools._descriptorSetLayoutCache = Metal_Vulkan::Internal::CreateCompiledDescriptorSetLayoutCache();
 
@@ -1183,9 +1224,9 @@ namespace RenderCore { namespace ImplVulkan
 
     //////////////////////////////////////////////////////////////////////////////////////////////////
 
-    render_dll_export std::shared_ptr<IDevice>    CreateDevice()
+    render_dll_export std::shared_ptr<IAPIInstance>    CreateAPIInstance()
     {
-        return std::make_shared<Device>();
+        return std::make_shared<APIInstance>();
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1439,6 +1480,7 @@ namespace RenderCore { namespace ImplVulkan
 	, _submissionQueue(std::move(submissionQueue))
 	, _underlyingDevice(device->GetUnderlyingDevice())
     {
+		assert(_device.lock());
 		// look for compatible pool from the _idleCommandBufferPools
 		unsigned queueFamilyIndex = _submissionQueue->GetQueueFamilyIndex();
 		{

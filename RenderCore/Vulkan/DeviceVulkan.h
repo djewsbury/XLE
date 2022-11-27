@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../IDevice.h"
+#include "../DeviceInitialization.h"
 #include "IDeviceVulkan.h"
 #include "Metal/VulkanCore.h"
 #include "Metal/ObjectFactory.h"
@@ -205,11 +206,13 @@ namespace RenderCore { namespace ImplVulkan
         virtual void*   QueryInterface(size_t guid) override;
 		VkInstance	    GetVulkanInstance() override;
 
-        Device();
+        Device(
+            VulkanSharedPtr<VkInstance> instance,
+            SelectedPhysicalDevice physDev);
         ~Device();
     protected:
 		VulkanSharedPtr<VkInstance>         _instance;
-		VulkanSharedPtr<VkDevice>		    _underlying;
+        VulkanSharedPtr<VkDevice>		    _underlying;
         SelectedPhysicalDevice              _physDev;
 		ConsoleRig::AttachablePtr<Metal_Vulkan::GlobalsContainer> _globalsContainer;
         std::shared_ptr<Metal_Vulkan::SubmissionQueue>	_graphicsQueue;
@@ -217,8 +220,30 @@ namespace RenderCore { namespace ImplVulkan
 		std::shared_ptr<ThreadContext>	_foregroundPrimaryContext;
         std::thread::id _initializationThread;
 
-        void DoSecondStageInit(VkSurfaceKHR surface = nullptr);
+        std::shared_ptr<Metal_Vulkan::IDestructionQueue> _destrQueue;
     };
 
 ////////////////////////////////////////////////////////////////////////////////
+
+    class APIInstance : public IAPIInstance, public IAPIInstanceVulkan
+    {
+    public:
+        std::shared_ptr<IDevice>    CreateDevice(const DeviceFeatures& features) override;
+        DeviceFeatures              QuerySupportedFeatures() override;
+        void                        SetWindowPlatformValue(const void*) override;
+
+        void*       QueryInterface(size_t guid) override;
+        APIInstance();
+        ~APIInstance();
+    private:
+		VulkanSharedPtr<VkInstance>         _instance;
+        SelectedPhysicalDevice              _physDev;
+        bool _physicalDeviceSelected = false;
+        const void* _windowPlatformValue = nullptr;
+
+        void SelectPhysicalDevice();
+    };
+
+////////////////////////////////////////////////////////////////////////////////
+
 }}

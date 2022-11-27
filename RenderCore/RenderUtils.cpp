@@ -12,6 +12,7 @@
 
 #include "IDevice.h"
 #include "IAnnotator.h"
+#include "DeviceInitialization.h"
 
 #include "../ConsoleRig/GlobalServices.h"
 #include "../OSServices/Log.h"
@@ -1059,6 +1060,7 @@ namespace RenderCore
     ICompiledPipelineLayout::~ICompiledPipelineLayout() {}
     IResourceView::~IResourceView() {}
     ISampler::~ISampler() {}
+    IAPIInstance::~IAPIInstance() {}
 
 }
 

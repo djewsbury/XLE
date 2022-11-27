@@ -4,7 +4,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "Init.h"
+#include "DeviceInitialization.h"
 #include "../OSServices/Log.h"
 #include "../Core/Exceptions.h"
 #include <vector>
@@ -13,9 +13,9 @@
 
 namespace RenderCore
 {
-	static std::vector<std::pair<UnderlyingAPI, DeviceCreationFunction*>>& GetRegisterCreationFunctions()
+	static std::vector<std::pair<UnderlyingAPI, InstanceCreationFunction*>>& GetRegisterCreationFunctions()
 	{
-		static std::vector<std::pair<UnderlyingAPI, DeviceCreationFunction*>> creationFunctions;
+		static std::vector<std::pair<UnderlyingAPI, InstanceCreationFunction*>> creationFunctions;
 		return creationFunctions;
 	}
 
@@ -30,32 +30,32 @@ namespace RenderCore
 		return "<<unknown>>";
 	}
 
-    std::shared_ptr<IDevice>    CreateDevice(UnderlyingAPI api)
+    std::shared_ptr<IAPIInstance>    CreateAPIInstance(UnderlyingAPI api)
     {
 		auto& creationFunctions = GetRegisterCreationFunctions();
 		auto i = std::find_if(
 			creationFunctions.begin(), creationFunctions.end(),
-			[api](const std::pair<UnderlyingAPI, DeviceCreationFunction*>& p) {
+			[api](const std::pair<UnderlyingAPI, InstanceCreationFunction*>& p) {
 				return p.first == api;
 			});
 		if (i != creationFunctions.end())
 			return (*i->second)();
 
 		std::stringstream str;
-		str << "No device creation function registered for the given device API. Returning nullptr. These devices are supported:" << std::endl;
+		str << "No API creation function registered for the given device API. Returning nullptr. These devices are supported:" << std::endl;
 		for (const auto& c:creationFunctions)
 			str << AsString(c.first) << std::endl;
 		Throw(std::runtime_error(str.str().c_str()));
     }
 
-	void RegisterDeviceCreationFunction(
+	void RegisterInstanceCreationFunction(
 		UnderlyingAPI api,
-		DeviceCreationFunction* fn)
+		InstanceCreationFunction* fn)
 	{
 		auto& creationFunctions = GetRegisterCreationFunctions();
 		auto i = std::find_if(
 			creationFunctions.begin(), creationFunctions.end(),
-			[api](const std::pair<UnderlyingAPI, DeviceCreationFunction*>& p) {
+			[api](const std::pair<UnderlyingAPI, InstanceCreationFunction*>& p) {
 				return p.first == api;
 			});
 		if (i != creationFunctions.end()) {

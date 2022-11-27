@@ -8,14 +8,14 @@
 // try to distinguish the particular project we want to actually instantiate this in
 #if defined(XLE_REGISTER_METAL_VARIANTS)
 
-#include "../Init.h"
+#include "../DeviceInitialization.h"
 #include "../../Utility/FunctionUtils.h"
 #include "../../Core/Prefix.h"
 #include <memory>
 
 namespace RenderCore { namespace ImplVulkan
 {
-	std::shared_ptr<IDevice> CreateDevice();
+	std::shared_ptr<IAPIInstance> CreateAPIInstance();
 	void RegisterCreation()
 	{
 		#if COMPILER_ACTIVE == COMPILER_TYPE_MSVC
@@ -24,7 +24,7 @@ namespace RenderCore { namespace ImplVulkan
 
 		// (we can also use __attribute__((constructor)) with clang/gcc)
 		(void)static_constructor<&RegisterCreation>::c;
-		RegisterDeviceCreationFunction(UnderlyingAPI::Vulkan, &CreateDevice);
+		RegisterInstanceCreationFunction(UnderlyingAPI::Vulkan, &CreateAPIInstance);
 	}
 }}
 
