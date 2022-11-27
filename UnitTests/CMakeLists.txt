@@ -84,109 +84,117 @@ endforeach()
     ## UnitTests-RenderCoreAssetsTechniques ##
 ####################################################################################################
 
-foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")      # embedded resources only supported with clang compiler (due to how incbin works)
 
-    add_executable(
-        UnitTests-RenderCoreAssetsTechniques-${metal_name}
-        RenderCore/Assets/ShaderParserTests.cpp
-        RenderCore/Assets/ShaderPatchCollectionTests.cpp
-        RenderCore/Assets/TransformationMachineOpt.cpp
-        RenderCore/Assets/RenderCoreCompilerTests.cpp
-        RenderCore/Assets/FakeModelCompiler.cpp
-		RenderCore/Assets/ShaderCompilationTests.cpp
-        RenderCore/Assets/TechniqueDelegateTests.cpp
-        RenderCore/Assets/TechniqueFileTests.cpp
-        RenderCore/Assets/NodeGraphInstantiationTests.cpp
-        RenderCore/Assets/RenderMiscTests.cpp
-        RenderCore/Assets/BufferUploadsTests.cpp
-        RenderCore/Assets/PipelineAcceleratorTests.cpp
-        RenderCore/Assets/DrawablesTests.cpp
-        RenderCore/Assets/ColladaModelConversion.cpp
-        RenderCore/Assets/PipelineConfigurationTests.cpp
-        RenderCore/Assets/ImmediateDrawablesTests.cpp
-        RenderCore/Assets/RenderPassManagementTests.cpp
-        RenderCore/Assets/FrustumCullingTests.cpp
-        RenderCore/Assets/TechniqueTestsHelper.cpp
-        RenderCore/Assets/DeformAcceleratorTests.cpp
-        RenderCore/Assets/ComplexRendererConstruction.cpp
-        RenderCore/Assets/PipelineOperatorTests.cpp
-        RenderCore/LightingEngine/LightingEngineTests.cpp
-        RenderCore/LightingEngine/LightingEngineTestHelper.cpp
-        RenderCore/LightingEngine/GBufferConstructionTests.cpp
-        RenderCore/LightingEngine/ShadowPrecisionTests.cpp
-        RenderCore/LightingEngine/LightShapeStencilTests.cpp
-        RenderCore/LightingEngine/TextureOperatorPerformanceTests.cpp
-        RenderCore/LightingEngine/MassProbeRenderTests.cpp
-        RenderCore/LightingEngine/BackgroundPrepareTests.cpp
-        RenderCore/Metal/MetalTestHelper.cpp
-        EmbeddedRes.cpp
-        )
+    foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 
-    xle_configure_executable(UnitTests-RenderCoreAssetsTechniques-${metal_name})
-    target_compile_definitions(UnitTests-RenderCoreAssetsTechniques-${metal_name} PUBLIC ${metal_macro})
-    target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE Catch2WithMain)
-    target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE ShaderParser RenderCoreAssets)
-    target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE RenderCore)
-    target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE RenderCore_${metal_name})
-    target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE RenderCoreTechniques-${metal_name})
-    target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE RenderCoreLightingEngine-${metal_name})
-    target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE BufferUploads-${metal_name})
-    target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE RenderOverlays-${metal_name})
-    target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE PlatformRig-${metal_name})
-    xle_executable_post_build(UnitTests-RenderCoreAssetsTechniques-${metal_name})
+        add_executable(
+            UnitTests-RenderCoreAssetsTechniques-${metal_name}
+            RenderCore/Assets/ShaderParserTests.cpp
+            RenderCore/Assets/ShaderPatchCollectionTests.cpp
+            RenderCore/Assets/TransformationMachineOpt.cpp
+            RenderCore/Assets/RenderCoreCompilerTests.cpp
+            RenderCore/Assets/FakeModelCompiler.cpp
+            RenderCore/Assets/ShaderCompilationTests.cpp
+            RenderCore/Assets/TechniqueDelegateTests.cpp
+            RenderCore/Assets/TechniqueFileTests.cpp
+            RenderCore/Assets/NodeGraphInstantiationTests.cpp
+            RenderCore/Assets/RenderMiscTests.cpp
+            RenderCore/Assets/BufferUploadsTests.cpp
+            RenderCore/Assets/PipelineAcceleratorTests.cpp
+            RenderCore/Assets/DrawablesTests.cpp
+            RenderCore/Assets/ColladaModelConversion.cpp
+            RenderCore/Assets/PipelineConfigurationTests.cpp
+            RenderCore/Assets/ImmediateDrawablesTests.cpp
+            RenderCore/Assets/RenderPassManagementTests.cpp
+            RenderCore/Assets/FrustumCullingTests.cpp
+            RenderCore/Assets/TechniqueTestsHelper.cpp
+            RenderCore/Assets/DeformAcceleratorTests.cpp
+            RenderCore/Assets/ComplexRendererConstruction.cpp
+            RenderCore/Assets/PipelineOperatorTests.cpp
+            RenderCore/LightingEngine/LightingEngineTests.cpp
+            RenderCore/LightingEngine/LightingEngineTestHelper.cpp
+            RenderCore/LightingEngine/GBufferConstructionTests.cpp
+            RenderCore/LightingEngine/ShadowPrecisionTests.cpp
+            RenderCore/LightingEngine/LightShapeStencilTests.cpp
+            RenderCore/LightingEngine/TextureOperatorPerformanceTests.cpp
+            RenderCore/LightingEngine/MassProbeRenderTests.cpp
+            RenderCore/LightingEngine/BackgroundPrepareTests.cpp
+            RenderCore/Metal/MetalTestHelper.cpp
+            EmbeddedRes.cpp
+            )
 
-    # copy the collada dll into the same folder as the output executable
-    add_dependencies(UnitTests-RenderCoreAssetsTechniques-${metal_name} ColladaConversion)
-    add_custom_command(
-        TARGET UnitTests-RenderCoreAssetsTechniques-${metal_name} POST_BUILD 
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "$<TARGET_FILE:ColladaConversion>"
-        "$<TARGET_FILE_DIR:UnitTests-RenderCoreAssetsTechniques-${metal_name}>/$<TARGET_FILE_NAME:ColladaConversion>")
+        xle_configure_executable(UnitTests-RenderCoreAssetsTechniques-${metal_name})
+        target_compile_definitions(UnitTests-RenderCoreAssetsTechniques-${metal_name} PUBLIC ${metal_macro})
+        target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE Catch2WithMain)
+        target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE ShaderParser RenderCoreAssets)
+        target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE RenderCore)
+        target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE RenderCore_${metal_name})
+        target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE RenderCoreTechniques-${metal_name})
+        target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE RenderCoreLightingEngine-${metal_name})
+        target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE BufferUploads-${metal_name})
+        target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE RenderOverlays-${metal_name})
+        target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE PlatformRig-${metal_name})
+        xle_executable_post_build(UnitTests-RenderCoreAssetsTechniques-${metal_name})
 
-    if (${metal_name} STREQUAL "Vulkan")
+        # copy the collada dll into the same folder as the output executable
+        add_dependencies(UnitTests-RenderCoreAssetsTechniques-${metal_name} ColladaConversion)
         add_custom_command(
             TARGET UnitTests-RenderCoreAssetsTechniques-${metal_name} POST_BUILD 
             COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "$<TARGET_FILE:dxil>"
-            "$<TARGET_FILE_DIR:UnitTests-RenderCoreAssetsTechniques-${metal_name}>/$<TARGET_FILE_NAME:dxil>")
+            "$<TARGET_FILE:ColladaConversion>"
+            "$<TARGET_FILE_DIR:UnitTests-RenderCoreAssetsTechniques-${metal_name}>/$<TARGET_FILE_NAME:ColladaConversion>")
 
-        add_custom_command(
-            TARGET UnitTests-RenderCoreAssetsTechniques-${metal_name} POST_BUILD 
-            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "$<TARGET_FILE:dxcompiler>"
-            "$<TARGET_FILE_DIR:UnitTests-RenderCoreAssetsTechniques-${metal_name}>/$<TARGET_FILE_NAME:dxcompiler>")
-    endif ()
+        if (${metal_name} STREQUAL "Vulkan")
+            add_custom_command(
+                TARGET UnitTests-RenderCoreAssetsTechniques-${metal_name} POST_BUILD 
+                COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "$<TARGET_FILE:dxil>"
+                "$<TARGET_FILE_DIR:UnitTests-RenderCoreAssetsTechniques-${metal_name}>/$<TARGET_FILE_NAME:dxil>")
 
-endforeach()
+            add_custom_command(
+                TARGET UnitTests-RenderCoreAssetsTechniques-${metal_name} POST_BUILD 
+                COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "$<TARGET_FILE:dxcompiler>"
+                "$<TARGET_FILE_DIR:UnitTests-RenderCoreAssetsTechniques-${metal_name}>/$<TARGET_FILE_NAME:dxcompiler>")
+        endif ()
+
+    endforeach()
+
+endif()
 
 ####################################################################################################
     ## UnitTests-Interactive ##
 ####################################################################################################
 
-foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")      # embedded resources only supported with clang compiler (due to how incbin works)
 
-    add_executable(
-        UnitTests-Interactive-${metal_name}
-        Interactive/InteractiveTestHelper.cpp
-        Interactive/VolumeClipTests.cpp
-        Interactive/StraightSkeletonTests.cpp
-        Interactive/BatchAndDefragTests.cpp
-        Interactive/FontRenderingTests.cpp
-        EmbeddedRes.cpp
-        RenderCore/Metal/MetalTestHelper.cpp
-        )
+    foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 
-    xle_configure_executable(UnitTests-Interactive-${metal_name})
-    target_compile_definitions(UnitTests-Interactive-${metal_name} PUBLIC ${metal_macro})
-    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE Catch2WithMain)
-    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE ShaderParser RenderCoreAssets)
-    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE RenderCore)
-    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE RenderCore_${metal_name})
-    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE RenderCoreTechniques-${metal_name})
-    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE RenderCoreLightingEngine-${metal_name})
-    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE BufferUploads-${metal_name})
-    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE RenderOverlays-${metal_name})
-    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE PlatformRig-${metal_name})
-    xle_executable_post_build(UnitTests-Interactive-${metal_name})
+        add_executable(
+            UnitTests-Interactive-${metal_name}
+            Interactive/InteractiveTestHelper.cpp
+            Interactive/VolumeClipTests.cpp
+            Interactive/StraightSkeletonTests.cpp
+            Interactive/BatchAndDefragTests.cpp
+            Interactive/FontRenderingTests.cpp
+            EmbeddedRes.cpp
+            RenderCore/Metal/MetalTestHelper.cpp
+            )
 
-endforeach()
+        xle_configure_executable(UnitTests-Interactive-${metal_name})
+        target_compile_definitions(UnitTests-Interactive-${metal_name} PUBLIC ${metal_macro})
+        target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE Catch2WithMain)
+        target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE ShaderParser RenderCoreAssets)
+        target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE RenderCore)
+        target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE RenderCore_${metal_name})
+        target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE RenderCoreTechniques-${metal_name})
+        target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE RenderCoreLightingEngine-${metal_name})
+        target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE BufferUploads-${metal_name})
+        target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE RenderOverlays-${metal_name})
+        target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE PlatformRig-${metal_name})
+        xle_executable_post_build(UnitTests-Interactive-${metal_name})
+
+    endforeach()
+
+endif()
