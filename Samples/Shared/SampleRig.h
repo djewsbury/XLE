@@ -4,8 +4,10 @@
 
 #pragma once
 
+#include "../../RenderCore/ResourceDesc.h"
 #include "../../PlatformRig/OverlaySystem.h"
 #include "../../ConsoleRig/AttachablePtr.h"
+#include "../../Math/Vector.h"
 #include <memory>
 
 namespace RenderCore
@@ -30,7 +32,7 @@ namespace Sample
 	class SampleGlobals
 	{
 	public:
-		std::shared_ptr<RenderCore::IDevice>				_renderDevice;
+		std::shared_ptr<RenderCore::IDevice> _renderDevice;
 
 		std::shared_ptr<PlatformRig::WindowApparatus> _windowApparatus;
         std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
@@ -47,5 +49,13 @@ namespace Sample
 		virtual void OnStartup(const SampleGlobals& globals);
 	};
 
-	void ExecuteSample(std::shared_ptr<ISampleOverlay>&& sampleOverlay);
+	class SampleConfiguration
+	{
+	public:
+		RenderCore::BindFlag::BitField _presentationChainBindFlags = 0;
+		std::string _windowTitle;
+		std::optional<UInt2> _initialWindowSize;
+	};
+
+	void ExecuteSample(std::shared_ptr<ISampleOverlay>&& sampleOverlay, const SampleConfiguration& = {});
 }

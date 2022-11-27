@@ -39,7 +39,7 @@
 
 namespace Sample
 {
-	void ExecuteSample(std::shared_ptr<ISampleOverlay>&& sampleOverlay)
+	void ExecuteSample(std::shared_ptr<ISampleOverlay>&& sampleOverlay, const SampleConfiguration& config)
     {
 		SampleGlobals sampleGlobals;
 
@@ -66,14 +66,21 @@ namespace Sample
             // as they go along
             // We separate this initialization work like this to provide some flexibility. It's only necessary to
             // construct as much as will be required for the specific use case 
-        sampleGlobals._windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(sampleGlobals._renderDevice);
+        sampleGlobals._windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(sampleGlobals._renderDevice, config._presentationChainBindFlags);
         sampleGlobals._drawingApparatus = std::make_shared<RenderCore::Techniques::DrawingApparatus>(sampleGlobals._renderDevice);
         sampleGlobals._immediateDrawingApparatus = std::make_shared<RenderCore::Techniques::ImmediateDrawingApparatus>(sampleGlobals._drawingApparatus);
         sampleGlobals._primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(sampleGlobals._renderDevice);
         sampleGlobals._frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(sampleGlobals._renderDevice);
         auto v = sampleGlobals._renderDevice->GetDesc();
-        sampleGlobals._windowApparatus->_osWindow->SetTitle(StringMeld<128>() << "XLE sample [RenderCore: " << v._buildVersion << ", " << v._buildDate << "]");
-        sampleGlobals._windowApparatus->_osWindow->Resize(1920, 1080);
+        {
+            StringMeld<128> meld;
+            if (!config._windowTitle.empty()) meld << config._windowTitle;
+            else meld << "XLE sample";
+            meld << " [RenderCore: " << v._buildVersion << ", " << v._buildDate << "]";
+            sampleGlobals._windowApparatus->_osWindow->SetTitle(meld);
+        }
+        if (config._initialWindowSize)
+            sampleGlobals._windowApparatus->_osWindow->Resize((*config._initialWindowSize)[0], (*config._initialWindowSize)[1]);
 
         {
                 //  Create the debugging system, and add any "displays"
@@ -85,7 +92,7 @@ namespace Sample
             sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._immediateDrawingApparatus, frameRig);
             PlatformRig::InitProfilerDisplays(*sampleGlobals._debugOverlaysApparatus->_debugSystem, &sampleGlobals._windowApparatus->_immediateContext->GetAnnotator(), *sampleGlobals._frameRenderingApparatus->_frameCPUProfiler);
             frameRig.SetDebugScreensOverlaySystem(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem);
-            frameRig.SetMainOverlaySystem(sampleOverlay); // (disabled temporarily)
+            frameRig.SetMainOverlaySystem(sampleOverlay);
             techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
 
             Log(Verbose) << "Call OnStartup and start the frame loop" << std::endl;

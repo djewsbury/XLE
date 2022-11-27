@@ -9,6 +9,7 @@
 #include <memory>
 
 namespace RenderCore { class IDevice; class IThreadContext; class IPresentationChain; class IAnnotator; }
+namespace RenderCore { namespace BindFlag { using BitField = unsigned; }}
 namespace RenderCore { namespace Techniques { class ImmediateDrawingApparatus; }}
 namespace RenderOverlays { class Font; }
 namespace RenderOverlays { namespace DebuggingDisplay { class DebugScreensSystem; }}
@@ -56,7 +57,9 @@ namespace PlatformRig
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
 		::Assets::DependencyValidation _depValPtr;
 
-		WindowApparatus(std::shared_ptr<RenderCore::IDevice> device);
+		WindowApparatus(
+			std::shared_ptr<RenderCore::IDevice> device,
+			RenderCore::BindFlag::BitField presentationChainBindFlags);
 		~WindowApparatus();
 	};
 
