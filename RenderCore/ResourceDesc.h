@@ -230,6 +230,7 @@ namespace RenderCore
     };
 
     Format ResolveFormat(Format baseFormat, TextureViewDesc::FormatFilter filter, BindFlag::Enum usage);
+    TextureViewDesc::FormatFilter ImpliedFormatFilter(Format);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

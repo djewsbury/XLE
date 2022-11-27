@@ -416,6 +416,8 @@ namespace RenderCore { namespace Techniques
         }
     }
 
+    static bool HasExplicitAspect(const TextureViewDesc& viewDesc) { return viewDesc._format._aspect != TextureViewDesc::Aspect::UndefinedAspect || viewDesc._format._explicitFormat != Format(0); }
+
     auto FrameBufferPool::BuildFrameBuffer(
         Metal::ObjectFactory& factory,
         const FrameBufferDesc& desc,
@@ -444,7 +446,7 @@ namespace RenderCore { namespace Techniques
             // which would help cases where functionality identical information produces different hash value
             auto resDesc = matchedAttachment->GetDesc();
             AttachmentDesc completeAttachmentDesc = desc.GetAttachments()[c];
-            completeAttachmentDesc._format = resDesc._textureDesc._format;
+            completeAttachmentDesc._format = AsTypelessFormat(resDesc._textureDesc._format);
             adjustedAttachments.push_back({completeAttachmentDesc});
         }
 
@@ -452,6 +454,43 @@ namespace RenderCore { namespace Techniques
             std::move(adjustedAttachments),
             {desc.GetSubpasses().begin(), desc.GetSubpasses().end()},
             desc.GetProperties()); 
+        
+        // patch up the view aspects, to compensate from that falling off during the attachment reservation operation
+        // ie, the format of the attachment request can have an implied aspect (eg, using one of the _SRGB formats). Since
+        // we always drop these off by going to a typeless attachment format, we have to compensate by shifting the aspect
+        // back into the view
+        for (auto& sp:adjustedDesc.GetSubpasses()) {
+            for (auto& o:sp.GetOutputs())
+                if (!HasExplicitAspect(o._window)) {
+                    o._window._format = ImpliedFormatFilter(desc.GetAttachments()[o._resourceName]._format);
+                    assert(
+                        ResolveFormat(resolvedAttachmentDescs[o._resourceName]._desc._textureDesc._format, o._window._format, BindFlag::RenderTarget)
+                        == ResolveFormat(adjustedDesc.GetAttachments()[o._resourceName]._format, o._window._format, BindFlag::RenderTarget));
+                }
+            if (sp.GetDepthStencil()._resourceName != ~0u && !HasExplicitAspect(sp.GetDepthStencil()._window)) {
+                sp.GetDepthStencil()._window._format = ImpliedFormatFilter(desc.GetAttachments()[sp.GetDepthStencil()._resourceName]._format);
+                assert(
+                    ResolveFormat(resolvedAttachmentDescs[sp.GetDepthStencil()._resourceName]._desc._textureDesc._format, sp.GetDepthStencil()._window._format, BindFlag::DepthStencil)
+                    == ResolveFormat(adjustedDesc.GetAttachments()[sp.GetDepthStencil()._resourceName]._format, sp.GetDepthStencil()._window._format, BindFlag::DepthStencil));
+            }
+            for (auto& i:sp.GetInputs())
+                if (!HasExplicitAspect(i._window)) {
+                    i._window._format = ImpliedFormatFilter(desc.GetAttachments()[i._resourceName]._format);
+                    assert(
+                        ResolveFormat(resolvedAttachmentDescs[i._resourceName]._desc._textureDesc._format, i._window._format, BindFlag::InputAttachment)
+                        == ResolveFormat(adjustedDesc.GetAttachments()[i._resourceName]._format, i._window._format, BindFlag::InputAttachment));
+                }
+            for (auto& v:sp.GetViews())
+                if (!HasExplicitAspect(v._window)) {
+                    v._window._format = ImpliedFormatFilter(desc.GetAttachments()[v._resourceName]._format);
+                    assert(
+                        ResolveFormat(resolvedAttachmentDescs[v._resourceName]._desc._textureDesc._format, v._window._format, BindFlag::ShaderResource)
+                        == ResolveFormat(adjustedDesc.GetAttachments()[v._resourceName]._format, v._window._format, BindFlag::ShaderResource));
+                }
+            assert(sp.GetResolveOutputs().empty());
+            assert(sp.GetResolveDepthStencil()._resourceName == ~0u);
+        }
+
         hashValue = HashCombine(adjustedDesc.GetHash(), hashValue);
         assert(hashValue != ~0ull);     // using ~0ull has a sentinel, so this will cause some problems
 

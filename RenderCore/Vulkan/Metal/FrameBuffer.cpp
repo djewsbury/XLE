@@ -105,18 +105,14 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-	static bool HasRetain(LoadStore loadStore)
-	{
-        return  loadStore == LoadStore::Retain
-            ||  loadStore == LoadStore::DontCare_StencilRetain
-            ||  loadStore == LoadStore::Clear_StencilRetain
-            ||  loadStore == LoadStore::Retain_StencilDontCare
-            ||  loadStore == LoadStore::Retain_StencilClear
-            ;
-	}
-
 	static void MergeFormatFilter(TextureViewDesc::FormatFilter& dst, TextureViewDesc::FormatFilter src)
 	{
+		if (src._explicitFormat != Format(0)) {
+			dst._explicitFormat = src._explicitFormat;
+			dst._aspect = TextureViewDesc::Aspect::UndefinedAspect;
+			return;
+		}
+
 		if (dst._aspect == TextureViewDesc::Aspect::Depth) {
 			if (src._aspect == TextureViewDesc::Aspect::DepthStencil || src._aspect == TextureViewDesc::Aspect::Stencil) {
 				dst = TextureViewDesc::Aspect::DepthStencil;

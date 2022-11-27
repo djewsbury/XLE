@@ -555,6 +555,10 @@ namespace RenderCore
         case Format::R32_FLOAT:
             return Format::D32_FLOAT;
 
+        case Format::R16_TYPELESS:
+        case Format::R16_UNORM:
+            return Format::D16_UNORM;
+
         case Format::R8_TYPELESS:
         case Format::R8_UINT:
             return Format::S8_UINT;
@@ -573,6 +577,10 @@ namespace RenderCore
         case Format::R32_TYPELESS:
         case Format::D32_FLOAT:
             return Format::R32_FLOAT;
+
+        case Format::R16_TYPELESS:
+        case Format::R16_UNORM:
+            return Format::D16_UNORM;
         }
         return inputFormat;
     }
@@ -853,6 +861,9 @@ namespace RenderCore
         // We need to filter the format by aspect and color space.
         // First, check if there are linear & SRGB versions of the format. If there are, we can ignore the "aspect" filter,
         // because these formats only have color aspects
+
+        if (filter._explicitFormat != (Format)0)
+            return filter._explicitFormat;
         
         switch (filter._aspect) {
         default:
@@ -872,6 +883,179 @@ namespace RenderCore
 
         case TextureViewDesc::ColorSRGB:
             return AsSRGBFormat(baseFormat);
+        }
+    }
+
+    TextureViewDesc::FormatFilter ImpliedFormatFilter(Format fmt)
+    {
+        switch (fmt) {
+        case Format::R32G32B32A32_TYPELESS:
+        case Format::R32G32B32_TYPELESS:
+        case Format::R16G16B16A16_TYPELESS:
+        case Format::R32G32_TYPELESS:
+        case Format::R10G10B10A2_TYPELESS:
+        case Format::R8G8B8A8_TYPELESS:
+        case Format::R16G16_TYPELESS:
+        case Format::R32_TYPELESS:
+        case Format::R8G8_TYPELESS:
+        case Format::R16_TYPELESS:
+        case Format::R8_TYPELESS:
+        case Format::BC1_TYPELESS:
+        case Format::BC2_TYPELESS:
+        case Format::BC3_TYPELESS:
+        case Format::BC4_TYPELESS:
+        case Format::BC5_TYPELESS:
+        case Format::BC6H_TYPELESS:
+        case Format::BC7_TYPELESS:
+        case Format::B8G8R8A8_TYPELESS:
+        case Format::B8G8R8X8_TYPELESS:
+        case Format::R8G8B8_TYPELESS:
+        case Format::RGB_PVRTC1_2BPP_TYPELESS:
+        case Format::RGBA_PVRTC1_2BPP_TYPELESS:
+        case Format::RGB_PVRTC1_4BPP_TYPELESS:
+        case Format::RGBA_PVRTC1_4BPP_TYPELESS:
+        case Format::RGBA_PVRTC2_2BPP_TYPELESS:
+        case Format::RGBA_PVRTC2_4BPP_TYPELESS:
+        case Format::RGB_ETC1_TYPELESS:
+        case Format::RGB_ETC2_TYPELESS:
+        case Format::RGBA_ETC2_TYPELESS:
+        case Format::RGBA1_ETC2_TYPELESS:
+        case Format::R24G8_TYPELESS:
+            return {};
+
+        case Format::R16G16B16A16_UNORM:
+        case Format::R10G10B10A2_UNORM:
+        case Format::R8G8B8A8_UNORM:
+        case Format::R16G16_UNORM:
+        case Format::R8G8_UNORM:
+        case Format::R16_UNORM:
+        case Format::R8_UNORM:
+        case Format::BC1_UNORM:
+        case Format::BC2_UNORM:
+        case Format::BC3_UNORM:
+        case Format::BC4_UNORM:
+        case Format::BC4_SNORM:
+        case Format::BC5_UNORM:
+        case Format::BC5_SNORM:
+        case Format::BC7_UNORM:
+        case Format::B8G8R8A8_UNORM:
+        case Format::B8G8R8X8_UNORM:
+        case Format::R8G8B8_UNORM:
+        case Format::RGB_PVRTC1_2BPP_UNORM:
+        case Format::RGBA_PVRTC1_2BPP_UNORM:
+        case Format::RGB_PVRTC1_4BPP_UNORM:
+        case Format::RGBA_PVRTC1_4BPP_UNORM:
+        case Format::RGBA_PVRTC2_2BPP_UNORM:
+        case Format::RGBA_PVRTC2_4BPP_UNORM:
+        case Format::RGB_ETC1_UNORM:
+        case Format::RGB_ETC2_UNORM:
+        case Format::RGBA_ETC2_UNORM:
+        case Format::RGBA1_ETC2_UNORM:
+            return { TextureViewDesc::Aspect::ColorLinear };
+
+        case Format::R8G8B8A8_UNORM_SRGB:
+        case Format::BC1_UNORM_SRGB:
+        case Format::BC2_UNORM_SRGB:
+        case Format::BC3_UNORM_SRGB:
+        case Format::BC7_UNORM_SRGB:
+        case Format::B8G8R8A8_UNORM_SRGB:
+        case Format::B8G8R8X8_UNORM_SRGB:
+        case Format::R8G8B8_UNORM_SRGB:
+        case Format::RGB_PVRTC1_2BPP_UNORM_SRGB:
+        case Format::RGBA_PVRTC1_2BPP_UNORM_SRGB:
+        case Format::RGB_PVRTC1_4BPP_UNORM_SRGB:
+        case Format::RGBA_PVRTC1_4BPP_UNORM_SRGB:
+        case Format::RGBA_PVRTC2_2BPP_UNORM_SRGB:
+        case Format::RGBA_PVRTC2_4BPP_UNORM_SRGB:
+        case Format::RGB_ETC1_UNORM_SRGB:
+        case Format::RGB_ETC2_UNORM_SRGB:
+        case Format::RGBA_ETC2_UNORM_SRGB:
+        case Format::RGBA1_ETC2_UNORM_SRGB:
+            return { TextureViewDesc::Aspect::ColorSRGB };
+
+        case Format::D16_UNORM:
+        case Format::R24_UNORM_X8_TYPELESS:
+            return { TextureViewDesc::Aspect::Depth };
+
+        case Format::X24_TYPELESS_G8_UINT:
+        case Format::S8_UINT:
+            return { TextureViewDesc::Aspect::Stencil };
+
+        case Format::D24_UNORM_S8_UINT:
+        case Format::D32_SFLOAT_S8_UINT:
+            return { TextureViewDesc::Aspect::DepthStencil };
+
+        case Format::R32G32B32A32_FLOAT:
+        case Format::R32G32B32A32_UINT:
+        case Format::R32G32B32A32_SINT:
+        case Format::R32G32B32_FLOAT:
+        case Format::R32G32B32_UINT:
+        case Format::R32G32B32_SINT:
+
+        case Format::R16G16B16A16_FLOAT:
+        case Format::R16G16B16A16_UINT:
+        case Format::R16G16B16A16_SNORM:
+        case Format::R16G16B16A16_SINT:
+
+        case Format::R32G32_FLOAT:
+        case Format::R32G32_UINT:
+        case Format::R32G32_SINT:
+
+        case Format::R10G10B10A2_UINT:
+        case Format::R11G11B10_FLOAT:
+
+        case Format::R8G8B8A8_UINT:
+        case Format::R8G8B8A8_SNORM:
+        case Format::R8G8B8A8_SINT:
+
+        case Format::R16G16_FLOAT:
+        case Format::R16G16_UINT:
+        case Format::R16G16_SNORM:
+        case Format::R16G16_SINT:
+
+        case Format::D32_FLOAT:
+        case Format::R32_FLOAT:
+        case Format::R32_UINT:
+        case Format::R32_SINT:
+
+        case Format::R8G8_UINT:
+        case Format::R8G8_SNORM:
+        case Format::R8G8_SINT:
+
+        case Format::R16_FLOAT:
+        case Format::R16_UINT:
+        case Format::R16_SNORM:
+        case Format::R16_SINT:
+            
+        case Format::R8_UINT:
+        case Format::R8_SNORM:
+        case Format::R8_SINT:
+        case Format::R1_UNORM:
+        case Format::A8_UNORM:
+
+        case Format::R9G9B9E5_SHAREDEXP:
+        case Format::R8G8_B8G8_UNORM:
+        case Format::G8R8_G8B8_UNORM:
+
+        case Format::BC6H_UF16:
+        case Format::BC6H_SF16:
+
+        case Format::B5G6R5_UNORM:
+        case Format::B5G5R5A1_UNORM:
+
+        case Format::R8G8B8_UINT:
+        case Format::R8G8B8_SNORM:
+        case Format::R8G8B8_SINT:
+
+        case Format::R4G4B4A4_UNORM:
+
+        case Format::RGB_ATITC_UNORM:
+        case Format::RGBA_ATITC_UNORM:
+            return fmt;     // either doesn't have a matching "typeless" format, or aspects are not explicit enough to distinguish this format
+        
+        default:
+            assert(0);
+            return fmt;
         }
     }
 

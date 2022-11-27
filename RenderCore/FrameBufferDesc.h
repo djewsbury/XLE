@@ -99,6 +99,13 @@ namespace RenderCore
         IteratorRange<const AttachmentViewDesc*> GetViews() const;
         uint32_t GetViewInstanceMask() const;
 
+        IteratorRange<AttachmentViewDesc*> GetOutputs();
+		AttachmentViewDesc& GetDepthStencil();
+		IteratorRange<AttachmentViewDesc*> GetInputs();
+		IteratorRange<AttachmentViewDesc*> GetResolveOutputs();
+		AttachmentViewDesc& GetResolveDepthStencil();
+        IteratorRange<AttachmentViewDesc*> GetViews();
+
 		#if defined(_DEBUG)
             mutable std::string _name = std::string();
             inline const SubpassDesc& SetName(const std::string& name) const { _name = name; return *this; }
@@ -140,6 +147,8 @@ namespace RenderCore
 	public:
         auto	GetSubpasses() const -> IteratorRange<const SubpassDesc*> { return MakeIteratorRange(_subpasses); }
         auto    GetAttachments() const -> IteratorRange<const AttachmentDesc*> { return MakeIteratorRange(_attachments); }
+        auto	GetSubpasses() -> IteratorRange<SubpassDesc*> { return MakeIteratorRange(_subpasses); }
+        auto    GetAttachments() -> IteratorRange<AttachmentDesc*> { return MakeIteratorRange(_attachments); }
 
         const FrameBufferProperties& GetProperties() const { return _props; }
 
@@ -353,6 +362,36 @@ namespace RenderCore
 	}
 
 	inline const AttachmentViewDesc& SubpassDesc::GetResolveDepthStencil() const
+	{
+		return _resolveDepthStencil;
+	}
+
+    inline IteratorRange<AttachmentViewDesc*> SubpassDesc::GetOutputs()
+	{
+		return MakeIteratorRange(_attachmentViewBuffer, &_attachmentViewBuffer[_outputAttachmentCount]);
+	}
+
+	inline AttachmentViewDesc& SubpassDesc::GetDepthStencil()
+	{
+		return _depthStencil;
+	}
+
+    inline IteratorRange<AttachmentViewDesc*> SubpassDesc::GetViews()
+    {
+        return MakeIteratorRange(&_attachmentViewBuffer[_outputAttachmentCount], &_attachmentViewBuffer[_outputAttachmentCount]);
+    }
+
+	inline IteratorRange<AttachmentViewDesc*> SubpassDesc::GetInputs()
+	{
+		return MakeIteratorRange(&_attachmentViewBuffer[_outputAttachmentCount], &_attachmentViewBuffer[_outputAttachmentCount+_inputAttachmentCount]);
+	}
+
+	inline IteratorRange<AttachmentViewDesc*> SubpassDesc::GetResolveOutputs()
+	{
+		return MakeIteratorRange(&_attachmentViewBuffer[_outputAttachmentCount+_inputAttachmentCount], &_attachmentViewBuffer[_outputAttachmentCount+_inputAttachmentCount+_resolveOutputAttachmentCount]);
+	}
+
+	inline AttachmentViewDesc& SubpassDesc::GetResolveDepthStencil()
 	{
 		return _resolveDepthStencil;
 	}
