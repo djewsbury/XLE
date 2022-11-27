@@ -44,12 +44,15 @@ namespace PlatformRig
     public:
         void    OnResize(unsigned newWidth, unsigned newHeight);
 
-        Signal<unsigned, unsigned> _onResize;
+        Signal<unsigned, unsigned> _preResize;
+        Signal<RenderCore::IPresentationChain&, unsigned, unsigned> _postResize;
 
         ResizePresentationChain(
-            const std::shared_ptr<RenderCore::IPresentationChain>& presentationChain);
+            std::shared_ptr<RenderCore::IPresentationChain> presentationChain,
+            std::shared_ptr<RenderCore::IThreadContext> immediateThreadContext);
     protected:
         std::weak_ptr<RenderCore::IPresentationChain> _presentationChain;
+        std::weak_ptr<RenderCore::IThreadContext> _immediateThreadContext;
     };
 #endif
 

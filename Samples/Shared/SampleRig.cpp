@@ -96,18 +96,16 @@ namespace Sample
             if (sampleListener)
                 sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleListener);
 
-            frameRig.UpdatePresentationChain(*sampleGlobals._renderDevice, *sampleGlobals._windowApparatus->_presentationChain);
-            sampleGlobals._windowApparatus->_windowHandler->_onResize.Bind(
-                [fra = std::weak_ptr<RenderCore::Techniques::FrameRenderingApparatus>{sampleGlobals._frameRenderingApparatus},
-                ps = std::weak_ptr<RenderCore::IPresentationChain>(sampleGlobals._windowApparatus->_presentationChain), 
-                d = std::weak_ptr<RenderCore::IDevice>(sampleGlobals._renderDevice), &frameRig](unsigned, unsigned) {
+            frameRig.UpdatePresentationChain(*sampleGlobals._windowApparatus->_presentationChain);
+            sampleGlobals._windowApparatus->_windowHandler->_preResize.Bind(
+                [ &frameRig](unsigned, unsigned) {
                     RenderCore::Techniques::ResetFrameBufferPool(*frameRig.GetTechniqueContext()._frameBufferPool);
                     frameRig.GetTechniqueContext()._attachmentPool->ResetActualized();
+                });
 
-                    auto presChain = ps.lock();
-                    auto device = d.lock();
-                    if (presChain && device)
-                        frameRig.UpdatePresentationChain(*device, *presChain);
+            sampleGlobals._windowApparatus->_windowHandler->_postResize.Bind(
+                [&frameRig](auto& presentationChain, unsigned, unsigned) {
+                    frameRig.UpdatePresentationChain(presentationChain);
                 });
 
             RenderCore::Techniques::SetThreadContext(sampleGlobals._windowApparatus->_immediateContext);

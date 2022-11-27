@@ -320,22 +320,23 @@ namespace PlatformRig
         return ExecuteFrame(windowApparatus._immediateContext, *windowApparatus._presentationChain);
     }
 
-    void FrameRig::UpdatePresentationChain(RenderCore::IDevice& device, RenderCore::IPresentationChain& presChain)
+    void FrameRig::UpdatePresentationChain(RenderCore::IPresentationChain& presChain)
     {
         auto desc = presChain.GetDesc();
+        auto& device = *presChain.GetDevice();
 
         using namespace RenderCore;
         auto targetDesc = CreateDesc(
-            desc->_bindFlags, 
+            desc._bindFlags, 
             AllocationRules::ResizeableRenderTarget,
-            TextureDesc::Plain2D(desc->_width, desc->_height, desc->_format, 1, 0, desc->_samples),
+            TextureDesc::Plain2D(desc._width, desc._height, desc._format, 1, 0, desc._samples),
             "presentation-target");
 
         // update system attachment formats
         _pimpl->_techniqueContext._systemAttachmentFormats = Techniques::CalculateDefaultSystemFormats(device);
         _pimpl->_techniqueContext._systemAttachmentFormats[(unsigned)Techniques::SystemAttachmentFormat::TargetColor] = targetDesc._textureDesc._format;
 
-        auto fbProps = FrameBufferProperties { desc->_width, desc->_height, desc->_samples };
+        auto fbProps = FrameBufferProperties { desc._width, desc._height, desc._samples };
         if (_mainOverlaySys) {
             std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments;
             preregisteredAttachments.push_back(

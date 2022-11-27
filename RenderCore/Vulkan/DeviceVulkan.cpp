@@ -47,6 +47,8 @@ namespace RenderCore { namespace Metal_Vulkan
 	ObjectFactory& GetObjectFactory(DeviceContext&) { return s_globalsContainer.lock()->_objectFactory; }
 	ObjectFactory& GetObjectFactory() { return s_globalsContainer.lock()->_objectFactory; }
 	GlobalPools& GetGlobalPools() { return s_globalsContainer.lock()->_pools; }
+
+	VkImageUsageFlags AsImageUsageFlags(BindFlag::BitField bindFlags);
 }}
 
 namespace RenderCore { namespace ImplVulkan
@@ -632,11 +634,12 @@ namespace RenderCore { namespace ImplVulkan
         uint32_t                        _desiredNumberOfImages;
         VkSurfaceTransformFlagBitsKHR   _preTransform;
         VkPresentModeKHR                _presentMode;
+		BindFlag::BitField              _bindFlags;
     };
 
     static SwapChainProperties DecideSwapChainProperties(
         VkPhysicalDevice phyDev, VkSurfaceKHR surface,
-        unsigned requestedWidth, unsigned requestedHeight)
+        unsigned requestedWidth, unsigned requestedHeight, BindFlag::BitField requestedBindFlags)
     {
         SwapChainProperties result;
 
@@ -700,11 +703,22 @@ namespace RenderCore { namespace ImplVulkan
         result._preTransform = 
             (surfCapabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
             ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : surfCapabilities.currentTransform;
+
+		result._bindFlags = BindFlag::PresentationSrc;
+		if ((surfCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) && (requestedBindFlags & BindFlag::RenderTarget))
+			result._bindFlags |= BindFlag::RenderTarget;
+		if ((surfCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_STORAGE_BIT) && (requestedBindFlags & BindFlag::UnorderedAccess))
+			result._bindFlags |= BindFlag::UnorderedAccess;
+		if ((surfCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_SAMPLED_BIT) && (requestedBindFlags & BindFlag::ShaderResource))
+			result._bindFlags |= BindFlag::ShaderResource;
+		if ((surfCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) && (requestedBindFlags & BindFlag::TransferDst))
+			result._bindFlags |= BindFlag::TransferDst;
+
         return result;
     }
 
     static VulkanSharedPtr<VkSwapchainKHR> CreateUnderlyingSwapChain(
-        VkDevice dev, VkSurfaceKHR  surface, 
+        VkDevice dev, VkSurfaceKHR surface, VkSwapchainKHR oldSwapChain,
         const SwapChainProperties& props)
     {
         // finally, fill in our SwapchainCreate structure
@@ -720,10 +734,10 @@ namespace RenderCore { namespace ImplVulkan
         swapChainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
         swapChainInfo.imageArrayLayers = 1;
         swapChainInfo.presentMode = props._presentMode;
-        swapChainInfo.oldSwapchain = nullptr;
+        swapChainInfo.oldSwapchain = oldSwapChain;
         swapChainInfo.clipped = true;
         swapChainInfo.imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-        swapChainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        swapChainInfo.imageUsage = Metal_Vulkan::AsImageUsageFlags(props._bindFlags);
         swapChainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         swapChainInfo.queueFamilyIndexCount = 0;
         swapChainInfo.pQueueFamilyIndices = nullptr;
@@ -752,7 +766,8 @@ namespace RenderCore { namespace ImplVulkan
             Throw(::Exceptions::BasicLabel("Presentation surface is not compatible with selected physical device. This may occur if the wrong physical device is selected, and it cannot render to the output window."));
         
         auto finalChain = std::make_unique<PresentationChain>(
-            _globalsContainer->_objectFactory, std::move(surface), VectorPattern<unsigned, 2>{desc._width, desc._height}, 
+			shared_from_this(),
+            _globalsContainer->_objectFactory, std::move(surface), VectorPattern<unsigned, 2>{desc._width, desc._height}, desc._bindFlags,
 			_graphicsQueue.get(), _physDev._renderingQueueFamily, platformValue);
         return std::move(finalChain);
     }
@@ -961,10 +976,10 @@ namespace RenderCore { namespace ImplVulkan
 
     //////////////////////////////////////////////////////////////////////////////////////////////////
 
-    void            PresentationChain::Resize(unsigned newWidth, unsigned newHeight)
+    void            PresentationChain::Resize(IThreadContext& mainThreadContext, unsigned newWidth, unsigned newHeight)
     {
         // We need to destroy and recreate the presentation chain here.
-        auto props = DecideSwapChainProperties(_factory->GetPhysicalDevice(), _surface.get(), newWidth, newHeight);
+        auto props = DecideSwapChainProperties(_factory->GetPhysicalDevice(), _surface.get(), newWidth, newHeight, _originalRequestBindFlags);
         if (newWidth == _bufferDesc._width && newHeight == _bufferDesc._height)
             return;
 
@@ -972,22 +987,52 @@ namespace RenderCore { namespace ImplVulkan
         // way to get around this is to just synchronize with the GPU here.
         // Since a resize is uncommon, this should not be a issue. It might be better to wait for
         // a queue idle -- but we don't have access to the VkQueue from here.
-        vkDeviceWaitIdle(_device.get());
-        _swapChain.reset();
+		#if defined(_DEBUG)
+			std::vector<std::weak_ptr<IResource>> resources;
+			std::vector<Metal_Vulkan::VulkanWeakPtr<VkImage>> images;
+			for (auto& i:_images) {
+				resources.push_back(i);
+				images.push_back(checked_cast<Metal_Vulkan::Resource*>(i.get())->ShareImage());
+			}
+		#endif
         _images.clear();
+		#if defined(_DEBUG)
+			bool allExpired = true;
+			for (auto& i:resources) allExpired &= i.expired();
+			for (auto& i:images) allExpired &= i.expired();
+			if (!allExpired) {
+				Log(Warning) << "Some presentation chain images still have active reference counts while resizing presentation chain." << std::endl;
+				Log(Warning) << "Ensure that all references to presentation chain images (including views) are dropped before calling PresentationChain::Resize()" << std::endl;
+				Log(Warning) << "This is required to ensure that the textures for the new presentation chain do not exist at the same time as the images for the old presentation chain (since they are quite large)" << std::endl;
+				assert(0);
+			}
+		#endif
 
-        _swapChain = CreateUnderlyingSwapChain(_device.get(), _surface.get(), props);
-        _bufferDesc = TextureDesc::Plain2D(props._extent.width, props._extent.height, Metal_Vulkan::AsFormat(props._fmt));    
+		mainThreadContext.CommitCommands(CommitCommandsFlags::WaitForCompletion);
+		vkDeviceWaitIdle(_vulkanDevice.get());
+		auto oldSwapChain = std::move(_swapChain);
 
-        *_desc = { _bufferDesc._width, _bufferDesc._height, _bufferDesc._format, _bufferDesc._samples, BindFlag::RenderTarget | BindFlag::PresentationSrc };
+		// we don't want the new and old images to exist at the same time, so pump the destruction queues to try to
+		// ensure they are truly gone
+		checked_cast<ThreadContext*>(&mainThreadContext)->PumpDestructionQueues();
+
+        _swapChain = CreateUnderlyingSwapChain(_vulkanDevice.get(), _surface.get(), oldSwapChain.get(), props);
+        _bufferDesc = TextureDesc::Plain2D(props._extent.width, props._extent.height, Metal_Vulkan::AsFormat(props._fmt));
+
+        _desc = { _bufferDesc._width, _bufferDesc._height, _bufferDesc._format, _bufferDesc._samples, props._bindFlags };
 
         BuildImages();
     }
 
-    const std::shared_ptr<PresentationChainDesc>& PresentationChain::GetDesc() const
+    PresentationChainDesc PresentationChain::GetDesc() const
     {
 		return _desc;
     }
+
+	std::shared_ptr<IDevice> PresentationChain::GetDevice() const
+	{
+		return _device.lock();
+	}
 
     auto PresentationChain::AcquireNextImage(Metal_Vulkan::SubmissionQueue& queue) -> AquireResult
     {
@@ -1010,7 +1055,7 @@ namespace RenderCore { namespace ImplVulkan
         uint32_t nextImageIndex = ~0x0u;
         const auto timeout = UINT64_MAX;
         auto res = vkAcquireNextImageKHR(
-            _device.get(), _swapChain.get(), 
+            _vulkanDevice.get(), _swapChain.get(), 
             timeout,
             sync._onAcquireComplete.get(), VK_NULL_HANDLE,
             &nextImageIndex);
@@ -1059,40 +1104,43 @@ namespace RenderCore { namespace ImplVulkan
 
     void PresentationChain::BuildImages()
     {
-        auto images = GetImages(_device.get(), _swapChain.get());
+        auto images = GetImages(_vulkanDevice.get(), _swapChain.get());
         _images.reserve(images.size());
         for (auto& vkImage:images) {
             auto resDesc = CreateDesc(
-                BindFlag::PresentationSrc | BindFlag::RenderTarget, AllocationRules::ResizeableRenderTarget,
+                _desc._bindFlags, AllocationRules::ResizeableRenderTarget,
                 _bufferDesc, "presentationimage");
             _images.emplace_back(std::make_shared<Metal_Vulkan::Resource>(vkImage, resDesc));
         }
     }
 
     PresentationChain::PresentationChain(
+		std::shared_ptr<Device> device,
 		Metal_Vulkan::ObjectFactory& factory,
         VulkanSharedPtr<VkSurfaceKHR> surface, 
 		VectorPattern<unsigned, 2> extent,
+		BindFlag::BitField bindFlags,
 		Metal_Vulkan::SubmissionQueue* submissionQueue,
 		unsigned queueFamilyIndex,
         const void* platformValue)
     : _surface(std::move(surface))
-    , _device(factory.GetDevice())
+    , _vulkanDevice(factory.GetDevice())
     , _factory(&factory)
 	, _submissionQueue(submissionQueue)
 	, _primaryBufferPool(factory, queueFamilyIndex, true, nullptr)
+	, _originalRequestBindFlags(bindFlags)
+	, _device(std::move(device))
     {
         _activeImageIndex = ~0x0u;
-        auto props = DecideSwapChainProperties(factory.GetPhysicalDevice(), _surface.get(), extent[0], extent[1]);
-        _swapChain = CreateUnderlyingSwapChain(_device.get(), _surface.get(), props);
+        auto props = DecideSwapChainProperties(factory.GetPhysicalDevice(), _surface.get(), extent[0], extent[1], bindFlags);
+        _swapChain = CreateUnderlyingSwapChain(_vulkanDevice.get(), _surface.get(), nullptr, props);
 
         _bufferDesc = TextureDesc::Plain2D(props._extent.width, props._extent.height, Metal_Vulkan::AsFormat(props._fmt));
-		_desc = std::make_shared<PresentationChainDesc>();
-		_desc->_width = _bufferDesc._width;
-		_desc->_height = _bufferDesc._height;
-        _desc->_format = _bufferDesc._format;
-		_desc->_samples = _bufferDesc._samples;
-		_desc->_bindFlags = BindFlag::RenderTarget | BindFlag::PresentationSrc;
+		_desc._width = _bufferDesc._width;
+		_desc._height = _bufferDesc._height;
+        _desc._format = _bufferDesc._format;
+		_desc._samples = _bufferDesc._samples;
+		_desc._bindFlags = props._bindFlags;
 
         // We need to get pointers to each image and build the synchronization semaphores
         BuildImages();

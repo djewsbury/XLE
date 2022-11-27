@@ -112,21 +112,26 @@ namespace PlatformRig
 
     void ResizePresentationChain::OnResize(unsigned newWidth, unsigned newHeight)
     {
+        _preResize.Invoke(newWidth, newHeight);
+
 		auto chain = _presentationChain.lock();
-        if (chain) {
+        auto threadContext = _immediateThreadContext.lock();
+        if (chain && threadContext) {
                 //  When we become an icon, we'll end up with zero width and height.
                 //  We can't actually resize the presentation to zero. And we can't
                 //  delete the presentation chain from here. So maybe just do nothing.
             if (newWidth && newHeight) {
-				chain->Resize(newWidth, newHeight);
+				chain->Resize(*threadContext, newWidth, newHeight);
             }
         }
 
-        _onResize.Invoke(newWidth, newHeight);
+        _postResize.Invoke(*chain, newWidth, newHeight);
     }
 
     ResizePresentationChain::ResizePresentationChain(
-		const std::shared_ptr<RenderCore::IPresentationChain>& presentationChain)
-    : _presentationChain(presentationChain)
+		std::shared_ptr<RenderCore::IPresentationChain> presentationChain,
+        std::shared_ptr<RenderCore::IThreadContext> immediateThreadContext)
+    : _presentationChain(std::move(presentationChain))
+    , _immediateThreadContext(std::move(immediateThreadContext))
     {}
 }

@@ -42,7 +42,7 @@ namespace PlatformRig
             RenderCore::Techniques::ParsingContext& parserContext) -> FrameResult;
 
         void SetFrameLimiter(unsigned maxFPS);
-        void UpdatePresentationChain(RenderCore::IDevice& device, RenderCore::IPresentationChain& presChain);
+        void UpdatePresentationChain(RenderCore::IPresentationChain& presChain);
 
         void SetMainOverlaySystem(std::shared_ptr<IOverlaySystem>);
 		void SetDebugScreensOverlaySystem(std::shared_ptr<IOverlaySystem>);

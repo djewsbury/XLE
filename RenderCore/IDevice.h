@@ -81,10 +81,11 @@ namespace RenderCore
         /// the window.
         ///
         /// Should not be called between BeginFrame/Present
-        virtual void                    Resize(unsigned newWidth=0, unsigned newHeight=0) = 0;
+        virtual void                    Resize(IThreadContext& immediateThreadContext, unsigned newWidth=0, unsigned newHeight=0) = 0;
 
         /// <summary>Returns a context object that will track the size of the viewport</summary>
-        virtual const std::shared_ptr<PresentationChainDesc>&   GetDesc() const = 0;
+        virtual PresentationChainDesc GetDesc() const = 0;
+        virtual std::shared_ptr<IDevice> GetDevice() const = 0;
         virtual ~IPresentationChain();
     };
 

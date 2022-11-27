@@ -12,7 +12,6 @@
 #include <optional>
 
 namespace RenderCore { namespace Techniques { class CameraDesc; class DrawingApparatus; class TechniqueContext; class ParsingContext; }}
-namespace RenderCore { class PresentationChainDesc; }
 
 namespace SceneEngine
 {

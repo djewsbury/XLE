@@ -53,9 +53,10 @@ namespace RenderCore { namespace ImplVulkan
     class PresentationChain : public IPresentationChain
     {
     public:
-        void Resize(unsigned newWidth, unsigned newHeight) /*override*/;
+        void Resize(IThreadContext&, unsigned newWidth, unsigned newHeight) override;
 
-        const std::shared_ptr<PresentationChainDesc>& GetDesc() const;
+        PresentationChainDesc GetDesc() const override;
+        std::shared_ptr<IDevice> GetDevice() const override;
         const TextureDesc& GetBufferDesc() { return _bufferDesc; }
 
 		void PresentToQueue(Metal_Vulkan::SubmissionQueue& queue, IteratorRange<const VkSemaphore*>);
@@ -78,9 +79,11 @@ namespace RenderCore { namespace ImplVulkan
 		VkCommandBuffer GetPrimaryBuffer() { return _primaryBuffers[_activePresentSync].get(); }
 
         PresentationChain(
+            std::shared_ptr<Device> device,
 			Metal_Vulkan::ObjectFactory& factory,
             VulkanSharedPtr<VkSurfaceKHR> surface, 
 			VectorPattern<unsigned, 2> extent,
+            BindFlag::BitField bindFlags,
             Metal_Vulkan::SubmissionQueue* submissionQueue,
 			unsigned queueFamilyIndex,
             const void* platformValue);
@@ -88,14 +91,14 @@ namespace RenderCore { namespace ImplVulkan
     private:
 		VulkanSharedPtr<VkSurfaceKHR>   _surface;
         VulkanSharedPtr<VkSwapchainKHR> _swapChain;
-        VulkanSharedPtr<VkDevice>       _device;
+        VulkanSharedPtr<VkDevice>       _vulkanDevice;
         Metal_Vulkan::ObjectFactory*    _factory;
         unsigned		_activeImageIndex;
 
         std::vector<std::shared_ptr<IResource>> _images;
 
 		TextureDesc     _bufferDesc;
-		std::shared_ptr<PresentationChainDesc>	_desc;
+		PresentationChainDesc	_desc;
 
         PresentSync     _presentSyncs[3];
         unsigned        _activePresentSync;
@@ -103,6 +106,9 @@ namespace RenderCore { namespace ImplVulkan
 
 		Metal_Vulkan::CommandBufferPool _primaryBufferPool;
 		VulkanSharedPtr<VkCommandBuffer> _primaryBuffers[3];
+
+        BindFlag::BitField _originalRequestBindFlags = 0;
+        std::weak_ptr<Device> _device;
 
         void BuildImages();
     };
@@ -134,6 +140,7 @@ namespace RenderCore { namespace ImplVulkan
         const std::shared_ptr<Metal_Vulkan::DeviceContext>& GetMetalContext() override;
 
 		void AttachDestroyer(const std::shared_ptr<Metal_Vulkan::IDestructionQueue>&);
+        void PumpDestructionQueues();
 
         ThreadContext(
             std::shared_ptr<Device> device, 
@@ -159,7 +166,6 @@ namespace RenderCore { namespace ImplVulkan
 
         Metal_Vulkan::IAsyncTracker::Marker QueuePrimaryContext(IteratorRange<const VkSemaphore*> completionSignals);
         Metal_Vulkan::IAsyncTracker::Marker CommitPrimaryCommandBufferToQueue_Internal(Metal_Vulkan::CommandList& cmdList, IteratorRange<const VkSemaphore*> completionSignals);
-        void PumpDestructionQueues();
     };
 
 ////////////////////////////////////////////////////////////////////////////////

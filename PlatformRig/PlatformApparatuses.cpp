@@ -86,7 +86,7 @@ namespace PlatformRig
 		_presentationChain = _device->CreatePresentationChain(
 			_osWindow->GetUnderlyingHandle(), 
 			RenderCore::PresentationChainDesc{unsigned(clientRect.second[0] - clientRect.first[0]), unsigned(clientRect.second[1] - clientRect.first[1])});
-		_windowHandler = std::make_shared<PlatformRig::ResizePresentationChain>(_presentationChain);
+		_windowHandler = std::make_shared<PlatformRig::ResizePresentationChain>(_presentationChain, _device->GetImmediateContext());
 		_osWindow->AddWindowHandler(_windowHandler);
 
 		_mainInputHandler = std::make_shared<PlatformRig::MainInputHandler>();
