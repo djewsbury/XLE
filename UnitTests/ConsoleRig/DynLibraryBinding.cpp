@@ -126,5 +126,26 @@ namespace UnitTests
 		REQUIRE(singletonFromAttachedModule == nullptr);			// automatically reset to null when the attached module was detached
 	}
 
+#if 0
+	TEST_CASE("LoadPrecompiledDLL", "[consoleRig]")
+	{
+		#if CLIBRARIES_ACTIVE == CLIBRARIES_MSVC && defined(_DEBUG)
+	        _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_CHECK_CRT_DF | _CRTDBG_CHECK_EVERY_16_DF | _CRTDBG_LEAK_CHECK_DF | _CRTDBG_CHECK_ALWAYS_DF);
+    	#endif
+
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+
+		// OSServices::AttachableLibrary testLibrary("c://code//XLE//Finals_Debug64//GUILayerVulkan.dll");
+		OSServices::AttachableLibrary testLibrary("ToolsRigProtoDLL-Vulkan.dll");
+		std::string attachErrorMsg;
+		auto tryAttachResult = testLibrary.TryAttach(attachErrorMsg);
+		REQUIRE(tryAttachResult == true);
+
+		auto fn = testLibrary.GetFunction<void(*)()>("AntiStrippingReferences");
+		if (fn)
+			fn();
+	}
+#endif
+
 }
 
