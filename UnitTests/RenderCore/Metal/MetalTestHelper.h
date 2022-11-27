@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "../../../RenderCore/Init.h"
+#include "../../../RenderCore/DeviceInitialization.h"
 #include "../../../RenderCore/ShaderService.h"
 #include "../../../RenderCore/FrameBufferDesc.h"
 #include "../../../RenderCore/UniformsStream.h"

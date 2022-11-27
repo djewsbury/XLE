@@ -8,7 +8,7 @@
 
 #include "CommonBindings.h"     // for TechniqueIndex::Max
 #include "../Assets/PredefinedCBLayout.h"
-#include "../Init.h"
+#include "../DeviceInitialization.h"
 #include "../../ShaderParser/ShaderAnalysis.h"
 #include "../../Utility/ParameterBox.h"
 #include <string>

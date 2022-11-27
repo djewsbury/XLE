@@ -15,8 +15,9 @@
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/Techniques/Services.h"
 #include "../../RenderCore/Techniques/SubFrameEvents.h"
-#include "../../RenderCore/Init.h"
+#include "../../RenderCore/DeviceInitialization.h"
 #include "../../RenderCore/IDevice.h"
+#include "../../RenderCore/Vulkan/IDeviceVulkan.h"
 
 #include "../../Tools/ToolsRig/PreviewSceneRegistry.h"
 #include "../../Tools/EntityInterface/EntityInterface.h"
@@ -51,36 +52,42 @@ namespace Sample
             // Note that the render device should be created first, so that the window
             // object is destroyed before the device is destroyed.
         Log(Verbose) << "Building primary managers" << std::endl;
-        sampleGlobals._renderDevice = RenderCore::CreateDevice(RenderCore::Techniques::GetTargetAPI());
+        auto renderAPI = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
 
         auto assetServices = ConsoleRig::MakeAttachablePtr<::Assets::Services>();
         auto rawosmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::CreateFileSystem_OS({}, ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
+
+        auto osWindow = std::make_unique<PlatformRig::OverlappedWindow>();
+        if (config._initialWindowSize)
+            osWindow->Resize((*config._initialWindowSize)[0], (*config._initialWindowSize)[1]);
+        if (auto* vulkanInstance = (RenderCore::IAPIInstanceVulkan*)renderAPI->QueryInterface(typeid(RenderCore::IAPIInstanceVulkan).hash_code()))
+            vulkanInstance->SetWindowPlatformValue(osWindow->GetUnderlyingHandle());
+
+        sampleGlobals._renderDevice = renderAPI->CreateDevice({});
+
         auto techniqueServices = ConsoleRig::MakeAttachablePtr<RenderCore::Techniques::Services>(sampleGlobals._renderDevice);
         ConsoleRig::AttachablePtr<ToolsRig::IPreviewSceneRegistry> previewSceneRegistry = ToolsRig::CreatePreviewSceneRegistry();
         ConsoleRig::AttachablePtr<EntityInterface::IEntityMountingTree> entityMountingTree = EntityInterface::CreateMountingTree();
-
-		::ConsoleRig::GlobalServices::GetInstance().LoadDefaultPlugins();
+        ::ConsoleRig::GlobalServices::GetInstance().LoadDefaultPlugins();
 
             // Many objects are initialized by via helper objects called "apparatues". These construct and destruct
             // the objects required to do meaningful work. Often they also initialize the "services" singletons
             // as they go along
             // We separate this initialization work like this to provide some flexibility. It's only necessary to
             // construct as much as will be required for the specific use case 
-        sampleGlobals._windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(sampleGlobals._renderDevice, config._presentationChainBindFlags);
+        sampleGlobals._windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(osWindow), sampleGlobals._renderDevice, config._presentationChainBindFlags);
         sampleGlobals._drawingApparatus = std::make_shared<RenderCore::Techniques::DrawingApparatus>(sampleGlobals._renderDevice);
         sampleGlobals._immediateDrawingApparatus = std::make_shared<RenderCore::Techniques::ImmediateDrawingApparatus>(sampleGlobals._drawingApparatus);
         sampleGlobals._primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(sampleGlobals._renderDevice);
         sampleGlobals._frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(sampleGlobals._renderDevice);
-        auto v = sampleGlobals._renderDevice->GetDesc();
         {
+            auto v = sampleGlobals._renderDevice->GetDesc();
             StringMeld<128> meld;
             if (!config._windowTitle.empty()) meld << config._windowTitle;
             else meld << "XLE sample";
             meld << " [RenderCore: " << v._buildVersion << ", " << v._buildDate << "]";
             sampleGlobals._windowApparatus->_osWindow->SetTitle(meld);
         }
-        if (config._initialWindowSize)
-            sampleGlobals._windowApparatus->_osWindow->Resize((*config._initialWindowSize)[0], (*config._initialWindowSize)[1]);
 
         {
                 //  Create the debugging system, and add any "displays"
@@ -105,7 +112,7 @@ namespace Sample
 
             frameRig.UpdatePresentationChain(*sampleGlobals._windowApparatus->_presentationChain);
             sampleGlobals._windowApparatus->_windowHandler->_preResize.Bind(
-                [ &frameRig](unsigned, unsigned) {
+                [&frameRig](unsigned, unsigned) {
                     RenderCore::Techniques::ResetFrameBufferPool(*frameRig.GetTechniqueContext()._frameBufferPool);
                     frameRig.GetTechniqueContext()._attachmentPool->ResetActualized();
                 });

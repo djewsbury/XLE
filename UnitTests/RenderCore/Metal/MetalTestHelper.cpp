@@ -50,7 +50,8 @@ namespace UnitTests
 		if (!_depValSys)
 			_depValSys = ::Assets::CreateDepValSys();
 
-		_device = RenderCore::CreateDevice(api);
+		auto instance = RenderCore::CreateAPIInstance(api);
+		_device = instance->CreateDevice();
 
 		// For GLES, we must initialize the root context to something. Since we're not going to be
 		// rendering to window for unit tests, we will never create a PresentationChain (during which the

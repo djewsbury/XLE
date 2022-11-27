@@ -77,11 +77,11 @@ namespace PlatformRig
 	}
 
 
-	WindowApparatus::WindowApparatus(std::shared_ptr<RenderCore::IDevice> device, RenderCore::BindFlag::BitField presentationChainBindFlags)
+	WindowApparatus::WindowApparatus(std::shared_ptr<OverlappedWindow> osWindow, std::shared_ptr<RenderCore::IDevice> device, RenderCore::BindFlag::BitField presentationChainBindFlags)
 	{
 		_device = device;
+		_osWindow = std::move(osWindow);
 
-		_osWindow = std::make_unique<PlatformRig::OverlappedWindow>();
 		auto clientRect = _osWindow->GetRect();
 		auto desc = RenderCore::PresentationChainDesc{unsigned(clientRect.second[0] - clientRect.first[0]), unsigned(clientRect.second[1] - clientRect.first[1])};
 		desc._bindFlags |= presentationChainBindFlags;

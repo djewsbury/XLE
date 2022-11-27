@@ -58,8 +58,9 @@ namespace PlatformRig
 		::Assets::DependencyValidation _depValPtr;
 
 		WindowApparatus(
+			std::shared_ptr<OverlappedWindow> osWindow,
 			std::shared_ptr<RenderCore::IDevice> device,
-			RenderCore::BindFlag::BitField presentationChainBindFlags);
+			RenderCore::BindFlag::BitField presentationChainBindFlags=0);
 		~WindowApparatus();
 	};
 

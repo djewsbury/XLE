@@ -30,26 +30,30 @@ namespace GUILayer
         void    OnResize(unsigned newWidth, unsigned newHeight);
 
         ResizePresentationChain(
-            std::shared_ptr<RenderCore::IPresentationChain> presentationChain);
+            std::shared_ptr<RenderCore::IPresentationChain> presentationChain,
+            std::shared_ptr<RenderCore::IThreadContext> immediateThreadContext);
     protected:
         std::weak_ptr<RenderCore::IPresentationChain> _presentationChain;
+        std::weak_ptr<RenderCore::IThreadContext> _immediateThreadContext;
     };
 
     void ResizePresentationChain::OnResize(unsigned newWidth, unsigned newHeight)
     {
 		auto chain = _presentationChain.lock();
-        if (chain) {
+        auto threadContext = _immediateThreadContext.lock();
+        if (chain && threadContext) {
                 //  When we become an icon, we'll end up with zero width and height.
                 //  We can't actually resize the presentation to zero. And we can't
                 //  delete the presentation chain from here. So maybe just do nothing.
             if (newWidth && newHeight) {
-				chain->Resize(newWidth, newHeight);
+				chain->Resize(*threadContext, newWidth, newHeight);
             }
         }
     }
 
-    ResizePresentationChain::ResizePresentationChain(std::shared_ptr<RenderCore::IPresentationChain> presentationChain)
+    ResizePresentationChain::ResizePresentationChain(std::shared_ptr<RenderCore::IPresentationChain> presentationChain, std::shared_ptr<RenderCore::IThreadContext> immediateThreadContext)
     : _presentationChain(presentationChain)
+    , _immediateThreadContext(std::move(immediateThreadContext))
     {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

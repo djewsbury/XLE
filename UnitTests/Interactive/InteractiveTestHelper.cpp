@@ -17,8 +17,9 @@
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/Services.h"
-#include "../../RenderCore/Init.h"
+#include "../../RenderCore/DeviceInitialization.h"
 #include "../../RenderCore/IDevice.h"
+#include "../../RenderCore/Vulkan/IDeviceVulkan.h"
 
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/MountingTree.h"
@@ -60,7 +61,7 @@ namespace UnitTests
 
 			auto adapter = CreateAdapter(overlaySystem, camera, weak_from_this());
 			_frameRig->SetMainOverlaySystem(adapter);
-			_frameRig->UpdatePresentationChain(*_device, *_windowApparatus->_presentationChain);
+			_frameRig->UpdatePresentationChain(*_windowApparatus->_presentationChain);
 			_windowApparatus->_mainInputHandler->AddListener(adapter->GetInputListener());
 			while (PlatformRig::OverlappedWindow::DoMsgPump() != PlatformRig::OverlappedWindow::PumpResult::Terminate) {
 				_frameRig->ExecuteFrame(*_windowApparatus);
@@ -75,7 +76,7 @@ namespace UnitTests
 			REQUIRE(_activeCamera);
 
 			auto presChainDesc = _windowApparatus->_presentationChain->GetDesc();
-			UInt2 viewportDims { presChainDesc->_width, presChainDesc->_height };
+			UInt2 viewportDims { presChainDesc._width, presChainDesc._height };
 			REQUIRE(viewportDims[0] > 0); REQUIRE(viewportDims[1] > 0);	// expecting a non-empty viewport here, otherwise we'll get a divide by zero below
 
 			return RenderCore::Techniques::BuildRayUnderCursor(
@@ -93,10 +94,15 @@ namespace UnitTests
 			if (!_globalServices) _globalServices = std::make_shared<ConsoleRig::GlobalServices>();
 			_xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 
-			_device = RenderCore::CreateDevice(RenderCore::Techniques::GetTargetAPI());
+			auto osWindow = std::make_unique<PlatformRig::OverlappedWindow>();
+			auto renderAPI = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
+			if (auto* vulkanInstance = (RenderCore::IAPIInstanceVulkan*)renderAPI->QueryInterface(typeid(RenderCore::IAPIInstanceVulkan).hash_code()))
+	            vulkanInstance->SetWindowPlatformValue(osWindow->GetUnderlyingHandle());
+
+			_device = renderAPI->CreateDevice();
 			if (!_assetServices) _assetServices = std::make_shared<::Assets::Services>();
 
-			_windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(_device);
+			_windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(osWindow), _device);
 			_primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(_device);
 			_frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(_device);
 			auto v = _device->GetDesc();
@@ -113,20 +119,19 @@ namespace UnitTests
 			}
 
 			_frameRig = std::make_shared<PlatformRig::FrameRig>(*_frameRenderingApparatus, _drawingApparatus.get());
-			_windowApparatus->_windowHandler->_onResize.Bind(
-				[fra = std::weak_ptr<RenderCore::Techniques::FrameRenderingApparatus>{_frameRenderingApparatus},
-				ps = std::weak_ptr<RenderCore::IPresentationChain>(_windowApparatus->_presentationChain),
-				d = std::weak_ptr<RenderCore::IDevice>(_device),
-				fr = std::weak_ptr<PlatformRig::FrameRig>{_frameRig}](unsigned, unsigned) {
-					auto apparatus = fra.lock();
-					if (apparatus)
-						RenderCore::Techniques::ResetFrameBufferPool(*apparatus->_frameBufferPool);
-					auto presChain = ps.lock();
-					auto frameRig = fr.lock();
-					auto device = d.lock();
-					if (presChain && frameRig && device)
-						frameRig->UpdatePresentationChain(*device, *presChain);
+			_windowApparatus->_windowHandler->_preResize.Bind(
+				[fr = std::weak_ptr<PlatformRig::FrameRig>{_frameRig}](unsigned, unsigned) {
+					if (auto frameRig = fr.lock()) {
+						RenderCore::Techniques::ResetFrameBufferPool(*frameRig->GetTechniqueContext()._frameBufferPool);
+                    	frameRig->GetTechniqueContext()._attachmentPool->ResetActualized();
+					}
 				});
+
+			_windowApparatus->_windowHandler->_postResize.Bind(
+                [fr = std::weak_ptr<PlatformRig::FrameRig>{_frameRig}](auto& presentationChain, unsigned, unsigned) {
+					if (auto frameRig = fr.lock())
+                    	frameRig->UpdatePresentationChain(presentationChain);
+                });
 		}
 
 		~InteractiveTestHelper()
