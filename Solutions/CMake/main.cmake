@@ -81,7 +81,7 @@ macro(xle_internal_configure_compiler TargetName)
             target_link_options(${TargetName} PRIVATE -fsanitize=thread)
         endif()
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-        target_compile_options(${TargetName} PRIVATE /arch:SSE4.1)
+        target_compile_options(${TargetName} PRIVATE /arch:AVX2)
     endif()
 endmacro()
 
