@@ -81,7 +81,9 @@ namespace RenderCore
         /// the window.
         ///
         /// Should not be called between BeginFrame/Present
-        virtual void                    Resize(IThreadContext& immediateThreadContext, unsigned newWidth=0, unsigned newHeight=0) = 0;
+        virtual void Resize(
+            IThreadContext& immediateThreadContext,
+            unsigned newWidth=0, unsigned newHeight=0) = 0;
 
         /// <summary>Returns a context object that will track the size of the viewport</summary>
         virtual PresentationChainDesc GetDesc() const = 0;
@@ -133,11 +135,13 @@ namespace RenderCore
         /// <param name="platformWindowHandle">A platform specific value representing a window. On windows,
         /// this is would be a HWND value</param>
         /// <param name="desc">The description struct that specifies the width, height, color format and msaa
-        /// sample count of the back buffer. RenderCore can't call GetClientRect() on the
-        /// window directly, because that would require adding a linker reference to windows dlls. But normally,
-        /// width and height are the same size as the window client area. If a different size is used, the behaviour
-        /// might be different on different platforms (but on windows, the output is stretched. </param>
-        virtual std::unique_ptr<IPresentationChain>     CreatePresentationChain(const void* platformWindowHandle, const PresentationChainDesc& desc) = 0;
+        /// sample count of the back buffer.
+        /// Normally, width and height are the same size as the window client
+        /// area. If a different size is used, the behaviour will depend on the specific window environment
+        /// and underlying graphics api.</param>
+        virtual std::unique_ptr<IPresentationChain>     CreatePresentationChain(
+            const void* platformWindowHandle,
+            const PresentationChainDesc& desc) = 0;
 
         /// <summary>Looks for compatibility with another interface</summary>
         /// Some implementations of IDevice might provide extension interfaces.

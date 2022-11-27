@@ -639,7 +639,9 @@ namespace RenderCore { namespace ImplVulkan
 
     static SwapChainProperties DecideSwapChainProperties(
         VkPhysicalDevice phyDev, VkSurfaceKHR surface,
-        unsigned requestedWidth, unsigned requestedHeight, BindFlag::BitField requestedBindFlags)
+        unsigned requestedWidth, unsigned requestedHeight,
+		Format preferedFormat,
+		BindFlag::BitField requestedBindFlags)
     {
         SwapChainProperties result;
 
@@ -655,9 +657,19 @@ namespace RenderCore { namespace ImplVulkan
 		// LDR SRGB format, if we can find one.
         result._fmt = VK_FORMAT_UNDEFINED;
 
+		VkFormat vkPreferedFormat = VK_FORMAT_B8G8R8A8_SRGB;
+		if (preferedFormat != Format(0))
+			vkPreferedFormat = (VkFormat)Metal_Vulkan::AsVkFormat(preferedFormat);
+
 		for (auto f:fmts)
-			if (f.format == VK_FORMAT_B8G8R8A8_SRGB)
-				result._fmt = VK_FORMAT_B8G8R8A8_SRGB;
+			if (f.format == vkPreferedFormat)
+				result._fmt = vkPreferedFormat;
+				
+		if (result._fmt == VK_FORMAT_UNDEFINED) {
+			for (auto f:fmts)
+				if (f.format == VK_FORMAT_B8G8R8A8_SRGB)
+					result._fmt = VK_FORMAT_B8G8R8A8_SRGB;
+		}
 
 		if (result._fmt == VK_FORMAT_UNDEFINED) {
 			for (auto f:fmts)
@@ -767,7 +779,7 @@ namespace RenderCore { namespace ImplVulkan
         
         auto finalChain = std::make_unique<PresentationChain>(
 			shared_from_this(),
-            _globalsContainer->_objectFactory, std::move(surface), VectorPattern<unsigned, 2>{desc._width, desc._height}, desc._bindFlags,
+            _globalsContainer->_objectFactory, std::move(surface), desc,
 			_graphicsQueue.get(), _physDev._renderingQueueFamily, platformValue);
         return std::move(finalChain);
     }
@@ -979,7 +991,7 @@ namespace RenderCore { namespace ImplVulkan
     void            PresentationChain::Resize(IThreadContext& mainThreadContext, unsigned newWidth, unsigned newHeight)
     {
         // We need to destroy and recreate the presentation chain here.
-        auto props = DecideSwapChainProperties(_factory->GetPhysicalDevice(), _surface.get(), newWidth, newHeight, _originalRequestBindFlags);
+        auto props = DecideSwapChainProperties(_factory->GetPhysicalDevice(), _surface.get(), newWidth, newHeight, _originalRequestFormat, _originalRequestBindFlags);
         if (newWidth == _bufferDesc._width && newHeight == _bufferDesc._height)
             return;
 
@@ -1118,8 +1130,7 @@ namespace RenderCore { namespace ImplVulkan
 		std::shared_ptr<Device> device,
 		Metal_Vulkan::ObjectFactory& factory,
         VulkanSharedPtr<VkSurfaceKHR> surface, 
-		VectorPattern<unsigned, 2> extent,
-		BindFlag::BitField bindFlags,
+		const PresentationChainDesc& requestDesc,
 		Metal_Vulkan::SubmissionQueue* submissionQueue,
 		unsigned queueFamilyIndex,
         const void* platformValue)
@@ -1128,11 +1139,12 @@ namespace RenderCore { namespace ImplVulkan
     , _factory(&factory)
 	, _submissionQueue(submissionQueue)
 	, _primaryBufferPool(factory, queueFamilyIndex, true, nullptr)
-	, _originalRequestBindFlags(bindFlags)
+	, _originalRequestBindFlags(requestDesc._bindFlags)
+	, _originalRequestFormat(requestDesc._format)
 	, _device(std::move(device))
     {
         _activeImageIndex = ~0x0u;
-        auto props = DecideSwapChainProperties(factory.GetPhysicalDevice(), _surface.get(), extent[0], extent[1], bindFlags);
+        auto props = DecideSwapChainProperties(factory.GetPhysicalDevice(), _surface.get(), requestDesc._width, requestDesc._height, requestDesc._format, requestDesc._bindFlags);
         _swapChain = CreateUnderlyingSwapChain(_vulkanDevice.get(), _surface.get(), nullptr, props);
 
         _bufferDesc = TextureDesc::Plain2D(props._extent.width, props._extent.height, Metal_Vulkan::AsFormat(props._fmt));

@@ -21,11 +21,13 @@ namespace RenderCore { namespace Metal_Vulkan
             struct VulkanTypeTraits
             { 
                 typedef std::shared_ptr<typename std::decay<decltype(*std::declval<Type>())>::type> SharedPtr; 
+                typedef std::weak_ptr<typename std::decay<decltype(*std::declval<Type>())>::type> WeakPtr; 
                 typedef std::unique_ptr<typename std::decay<decltype(*std::declval<Type>())>::type, std::function<void(Type)>> UniquePtr; 
             };
     }
 
     template<typename Type> using VulkanSharedPtr = typename Internal::VulkanTypeTraits<Type>::SharedPtr;
+    template<typename Type> using VulkanWeakPtr = typename Internal::VulkanTypeTraits<Type>::WeakPtr;
     template<typename Type> using VulkanUniquePtr = typename Internal::VulkanTypeTraits<Type>::UniquePtr;
 
     class VulkanAPIFailure : public ::Exceptions::BasicLabel

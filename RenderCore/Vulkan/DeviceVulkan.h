@@ -82,8 +82,7 @@ namespace RenderCore { namespace ImplVulkan
             std::shared_ptr<Device> device,
 			Metal_Vulkan::ObjectFactory& factory,
             VulkanSharedPtr<VkSurfaceKHR> surface, 
-			VectorPattern<unsigned, 2> extent,
-            BindFlag::BitField bindFlags,
+			const PresentationChainDesc& requestDesc,
             Metal_Vulkan::SubmissionQueue* submissionQueue,
 			unsigned queueFamilyIndex,
             const void* platformValue);
@@ -108,6 +107,7 @@ namespace RenderCore { namespace ImplVulkan
 		VulkanSharedPtr<VkCommandBuffer> _primaryBuffers[3];
 
         BindFlag::BitField _originalRequestBindFlags = 0;
+        Format _originalRequestFormat = (Format)0;
         std::weak_ptr<Device> _device;
 
         void BuildImages();
