@@ -76,6 +76,23 @@ namespace Utility
         }
     };
 
+    class CommaSeparatedList
+    {
+    public:
+        CommaSeparatedList(std::ostream& str) : _str(&str) {}
+        std::ostream* _str;
+        bool _pendingComma = false;
+
+        template<typename T>
+            friend inline CommaSeparatedList& operator<<(CommaSeparatedList& str, T&& t)
+        {
+            if (str._pendingComma) *str._str << ", ";
+            str._pendingComma = true;
+            *str._str << std::forward<T>(t);
+            return str;
+        }
+    };
+
     template<typename T>
         std::ostream& operator<<(std::ostream& oss, IteratorRange<const T*> v)
     {
