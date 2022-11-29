@@ -61,12 +61,17 @@ namespace Sample
         if (config._initialWindowSize)
             osWindow->Resize((*config._initialWindowSize)[0], (*config._initialWindowSize)[1]);
         if (auto* vulkanInstance = (RenderCore::IAPIInstanceVulkan*)renderAPI->QueryInterface(typeid(RenderCore::IAPIInstanceVulkan).hash_code())) {
-            vulkanInstance->SetWindowPlatformValue(osWindow->GetUnderlyingHandle());
-            Log(Verbose) << vulkanInstance->LogInstance();
-            Log(Verbose) << vulkanInstance->LogPhysicalDevice();
+            Log(Verbose) << "-------------- vulkan instance --------------" << std::endl;
+            Log(Verbose) << vulkanInstance->LogInstance() << std::endl;
+
+            auto count = renderAPI->GetDeviceConfigurationCount();
+            for (unsigned c=0; c<count; ++c) {
+                Log(Verbose) << "-------------- vulkan properties for device configuration (" << c << ") --------------" << std::endl;
+                Log(Verbose) << vulkanInstance->LogPhysicalDevice(c) << std::endl;
+            }
         }
 
-        sampleGlobals._renderDevice = renderAPI->CreateDevice({});
+        sampleGlobals._renderDevice = renderAPI->CreateDevice(0, {});
 
         auto techniqueServices = ConsoleRig::MakeAttachablePtr<RenderCore::Techniques::Services>(sampleGlobals._renderDevice);
         ConsoleRig::AttachablePtr<ToolsRig::IPreviewSceneRegistry> previewSceneRegistry = ToolsRig::CreatePreviewSceneRegistry();

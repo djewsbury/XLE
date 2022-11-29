@@ -765,9 +765,88 @@ namespace RenderCore { namespace ImplVulkan
 	}
 #endif
 
+static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceLimits& limits)
+{
+	str << "Max image dimension -- 1D: " << limits.maxImageDimension1D << " 2D: " << limits.maxImageDimension2D << " 3D: " << limits.maxImageDimension3D << " Cube: " << limits.maxImageDimensionCube << std::endl;
+	str << "Max image array layers: " << limits.maxImageArrayLayers << std::endl;
+
+	str << "Max texel buffer elements: " << limits.maxTexelBufferElements << std::endl;
+	str << "Max buffer range -- uniform: " << limits.maxUniformBufferRange << " storage: " << limits.maxStorageBufferRange << std::endl;
+	str << "Max push constants size: " << limits.maxPushConstantsSize << std::endl;
+	str << "Max memory allocation count: " << limits.maxMemoryAllocationCount << std::endl;
+	str << "Max sampler allocation count: " << limits.maxSamplerAllocationCount << std::endl;
+	str << "Buffer image granularity: " << limits.bufferImageGranularity << std::endl;
+
+	str << "Sparse address space size: " << limits.sparseAddressSpaceSize << std::endl;
+
+	str << "Max bound descriptor sets: " << limits.maxBoundDescriptorSets << std::endl;
+	str << "Max per stage descriptors -- samplers: " << limits.maxPerStageDescriptorSamplers << ", uniform buffers: " << limits.maxPerStageDescriptorUniformBuffers << ", storage buffers: " << limits.maxPerStageDescriptorStorageBuffers
+		<< ", sampled images: " << limits.maxPerStageDescriptorSampledImages << ", storage images: " << limits.maxPerStageDescriptorStorageImages << ", input attachments: " << limits.maxPerStageDescriptorInputAttachments << ", resources: " << limits.maxPerStageResources << std::endl;
+
+	str << "Max descriptors -- samplers: " << limits.maxDescriptorSetSamplers << ", uniform buffers: " << limits.maxDescriptorSetUniformBuffers << ", uniform buffers dynamic: " << limits.maxDescriptorSetUniformBuffersDynamic
+		<< ", storage buffers: " << limits.maxDescriptorSetStorageBuffers << ", storage buffers dynamic: " << limits.maxDescriptorSetStorageBuffersDynamic << ", sampled images: "  << limits.maxDescriptorSetSampledImages
+		<< ", storage images: " << limits.maxDescriptorSetStorageImages << ", input attachments: " << limits.maxDescriptorSetInputAttachments << std::endl;
+
+	str << "Max input -- attributes: " << limits.maxVertexInputAttributes << ", bindings: " << limits.maxVertexInputBindings << std::endl;
+	str << "Max input attribute offset: " << limits.maxVertexInputAttributeOffset << std::endl;
+	str << "Max input binding stride: " << limits.maxVertexInputBindingStride << std::endl;
+	str << "Max vertex output components: " << limits.maxVertexOutputComponents << std::endl;
+
+	str << "Max tesselation -- generation level: " << limits.maxTessellationGenerationLevel << ", patch size: " << limits.maxTessellationPatchSize << ", control per vertex input components: " << limits.maxTessellationControlPerVertexInputComponents
+		<< ", control per vertex output components: " << limits.maxTessellationControlPerVertexOutputComponents << ", control per patch output components: " << limits.maxTessellationControlPerPatchOutputComponents
+		<< ", control total output components: " << limits.maxTessellationControlTotalOutputComponents
+		<< ", evaluation input components " << limits.maxTessellationEvaluationInputComponents << ", evaluation output components " << limits.maxTessellationEvaluationOutputComponents << std::endl;
+
+	str << "Max geometry -- shader invocations: " << limits.maxGeometryShaderInvocations << ", input components: " << limits.maxGeometryInputComponents << ", output components " << limits.maxGeometryOutputComponents
+		<< ", output vertices " << limits.maxGeometryOutputVertices << ", total output components " << limits.maxGeometryTotalOutputComponents << std::endl;
+
+	str << "Max fragment -- input components: " << limits.maxFragmentInputComponents << ", output components: " << limits.maxFragmentOutputAttachments << ", dual src attachments: " << limits.maxFragmentDualSrcAttachments
+		<< ", combined output resources: " << limits.maxFragmentCombinedOutputResources << std::endl;
+
+	str << "Max Compute -- shared memory size: " << limits.maxComputeSharedMemorySize << ", workgroup count: " << limits.maxComputeWorkGroupCount[0] << "x" << limits.maxComputeWorkGroupCount[1] << "x" << limits.maxComputeWorkGroupCount[2]
+		<< ", workgroup invocations: " << limits.maxComputeWorkGroupInvocations << ", workgroup size: " << limits.maxComputeWorkGroupSize[0] << "x" << limits.maxComputeWorkGroupSize[1] << "x" << limits.maxComputeWorkGroupSize[2] << std::endl;
+
+	str << "Sub pixel precision bits: " << limits.subPixelPrecisionBits << ", sub texel precision bits: " << limits.subTexelPrecisionBits << ", mipmap precision bits: " << limits.mipmapPrecisionBits << std::endl;
+
+	str << "Max DrawIndexed index value: " << limits.maxDrawIndexedIndexValue << ", max DrawIndirect count: " << limits.maxDrawIndirectCount << std::endl;
+
+	str << "Max Sampler -- lod bias: " << limits.maxSamplerLodBias << ", anisotrophy: " << limits.maxSamplerAnisotropy << std::endl;
+
+	str << "Max viewports: " << limits.maxViewports << ", max viewport dimensions: " << limits.maxViewportDimensions[0] << "x" << limits.maxViewportDimensions[1]
+		<< ", viewport bounds range: " << limits.viewportBoundsRange[0] << " to " << limits.viewportBoundsRange[1] << ", viewport sub pixel bits: " << limits.viewportSubPixelBits << std::endl;
+
+	str << "Min offset alignment -- map: " << limits.minMemoryMapAlignment << ", texel buffers: " << limits.minTexelBufferOffsetAlignment << ", uniform buffers: " << limits.minUniformBufferOffsetAlignment << ", storage buffers: " << limits.minStorageBufferOffsetAlignment << std::endl;
+
+	str << "Texel offsets: " << limits.minTexelOffset << " to " << limits.maxTexelOffset << ", texel gather offsets: " << limits.minTexelGatherOffset << " to " << limits.maxTexelGatherOffset 
+		<< ", interpolation offsets: " << limits.minInterpolationOffset << " to " << limits.maxInterpolationOffset << ", sub pixel interpolation offset bits: " << limits.subPixelInterpolationOffsetBits << std::endl;
+
+	str << "Max framebuffer: " << limits.maxFramebufferWidth << "x" << limits.maxFramebufferHeight << "x" << limits.maxFramebufferLayers 
+		<< ", color samples: " << limits.framebufferColorSampleCounts << ", depth samples: " << limits.framebufferDepthSampleCounts << ", stencil samples: " << limits.framebufferStencilSampleCounts << ", no attachment samples: " << limits.framebufferNoAttachmentsSampleCounts << std::endl;
+	str << "Max color attachments: " << limits.maxColorAttachments << std::endl;
+
+	str << "Max sample counts -- sampled image color: " << limits.sampledImageColorSampleCounts << ", sampled image integer: " << limits.sampledImageIntegerSampleCounts << ", sampled image depth: " << limits.sampledImageDepthSampleCounts << ", sampled image stencil: " 
+		<< limits.sampledImageStencilSampleCounts << ", storage image: " << limits.storageImageSampleCounts << std::endl;
+	str << "Max sample mask words: " << limits.maxSampleMaskWords << std::endl;
+
+	str << "Timestamp --  compute and graphics: " << (limits.timestampComputeAndGraphics ? "supported": "unsupported") << ", period: " << limits.timestampPeriod << std::endl;
+
+	str << "Max clip distances: " << limits.maxClipDistances << ", max cull distances: " << limits.maxCullDistances << ", max combined: " << limits.maxCombinedClipAndCullDistances << std::endl;
+
+	str << "Discrete queue priorities: " << limits.discreteQueuePriorities << std::endl;
+
+	str << "Point size: " << limits.pointSizeRange[0] << " to " << limits.pointSizeRange[1] << ", point granularity: " << limits.pointSizeGranularity 
+		<< ", line width: " << limits.lineWidthRange[0] << " to " << limits.lineWidthRange[1] << ", line granularity: " << limits.lineWidthGranularity << ", strict lines: " << limits.strictLines << std::endl;
+
+	str << "Standard sampled locations: " << (limits.standardSampleLocations ? "true" : "false") << std::endl;
+
+	str << "Optimal buffer copy offset alignment: " << limits.optimalBufferCopyOffsetAlignment << ", optional buffer copy row pitch alignment: " << limits.optimalBufferCopyRowPitchAlignment << std::endl;
+	str << "Non coherent atom size: " << limits.nonCoherentAtomSize << std::endl;
+	return str;
+}
+
 namespace RenderCore { namespace ImplVulkan
 {
-	static void LogPhysicalDeviceFeatures(std::ostream& str, VkPhysicalDeviceFeatures2 features2)
+	static void LogPhysicalDeviceFeatures(std::ostream& str, const VkPhysicalDeviceFeatures2& features2)
 	{
 		assert(features2.sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR);
 
@@ -831,6 +910,7 @@ namespace RenderCore { namespace ImplVulkan
 		(features2.features.variableMultisampleRate ? &enabledFeatures : &disabledFeatures)->push_back("variableMultisampleRate");
 		(features2.features.inheritedQueries ? &enabledFeatures : &disabledFeatures)->push_back("inheritedQueries");
 
+		str << "VK1.0" << std::endl;
 		str << "Enabled vk1.0 physical device features [";
 		if (!enabledFeatures.empty()) {
 			str << *enabledFeatures.begin();
@@ -846,97 +926,154 @@ namespace RenderCore { namespace ImplVulkan
 		}
 		str << "]" << std::endl;
 
+		std::pair<unsigned, const char*> versions [] { 
+			{11, "VK1.1"},
+			{12, "VK1.2"}
+		};
+
 		// walk through the "pNext" chain to find extended features information
-		auto* pNextChain = (VkBaseOutStructure*)features2.pNext;
-		while (pNextChain) {
-			switch (pNextChain->sType) {
+		// but group by version just to improve readability a bit
+		for (auto v:versions) {
+			str << std::endl << v.second << std::endl;
+			unsigned versionCode = v.first;
+		
+			auto* pNextChain = (VkBaseOutStructure*)features2.pNext;
+			while (pNextChain) {
+				switch (pNextChain->sType) {
 
 #if VK_VERSION_1_1
-			case VK_STRUCTURE_TYPE_DEVICE_GROUP_DEVICE_CREATE_INFO:
-				str << *(VkDeviceGroupDeviceCreateInfo*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES:
-				str << *(VkPhysicalDeviceMultiviewFeatures*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROTECTED_MEMORY_FEATURES:
-				str << *(VkPhysicalDeviceProtectedMemoryFeatures*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES:
-				str << *(VkPhysicalDeviceSamplerYcbcrConversionFeatures*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES:
-				str << *(VkPhysicalDeviceShaderDrawParametersFeatures*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTERS_FEATURES:
-				str << *(VkPhysicalDeviceVariablePointersFeatures*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES:
-				str << *(VkPhysicalDevice16BitStorageFeatures*)pNextChain << std::endl;
-				break;
+				case VK_STRUCTURE_TYPE_DEVICE_GROUP_DEVICE_CREATE_INFO:
+					if (versionCode == 11)
+						str << *(VkDeviceGroupDeviceCreateInfo*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES:
+					if (versionCode == 11)
+						str << *(VkPhysicalDeviceMultiviewFeatures*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROTECTED_MEMORY_FEATURES:
+					if (versionCode == 11)
+						str << *(VkPhysicalDeviceProtectedMemoryFeatures*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES:
+					if (versionCode == 11)
+						str << *(VkPhysicalDeviceSamplerYcbcrConversionFeatures*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES:
+					if (versionCode == 11)
+						str << *(VkPhysicalDeviceShaderDrawParametersFeatures*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTERS_FEATURES:
+					if (versionCode == 11)
+						str << *(VkPhysicalDeviceVariablePointersFeatures*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES:
+					if (versionCode == 11)
+						str << *(VkPhysicalDevice16BitStorageFeatures*)pNextChain << std::endl;
+					break;
 
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES:
-				// VkPhysicalDeviceVulkan11Features is a container that overlaps settings contained in the smaller
-				// structure. However, we can sometimes get more detail from the smaller structures, so it can be preferable
-				// to use them
-				str << *(VkPhysicalDeviceVulkan11Features*)pNextChain << std::endl;
-				break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES:
+					// VkPhysicalDeviceVulkan11Features is a container that overlaps settings contained in the smaller
+					// structure. However, we can sometimes get more detail from the smaller structures, so it can be preferable
+					// to use them
+					if (versionCode == 11)
+						str << *(VkPhysicalDeviceVulkan11Features*)pNextChain << std::endl;
+					break;
 #endif
 
 #if VK_VERSION_1_2
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES:
-				str << *(VkPhysicalDevice8BitStorageFeatures*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES:
-				str << *(VkPhysicalDeviceBufferDeviceAddressFeatures*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES:
-				str << *(VkPhysicalDeviceDescriptorIndexingFeatures*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES:
-				str << *(VkPhysicalDeviceHostQueryResetFeatures*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES:
-				str << *(VkPhysicalDeviceImagelessFramebufferFeatures*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES:
-				str << *(VkPhysicalDeviceScalarBlockLayoutFeatures*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES:
-				str << *(VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES:
-				str << *(VkPhysicalDeviceShaderAtomicInt64Features*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES:
-				str << *(VkPhysicalDeviceShaderFloat16Int8Features*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES:
-				str << *(VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES:
-				str << *(VkPhysicalDeviceTimelineSemaphoreFeatures*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFORM_BUFFER_STANDARD_LAYOUT_FEATURES:
-				str << *(VkPhysicalDeviceUniformBufferStandardLayoutFeatures*)pNextChain << std::endl;
-				break;
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES:
-				str << *(VkPhysicalDeviceVulkanMemoryModelFeatures*)pNextChain << std::endl;
-				break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES:
+					if (versionCode == 12)
+						str << *(VkPhysicalDevice8BitStorageFeatures*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES:
+					if (versionCode == 12)
+						str << *(VkPhysicalDeviceBufferDeviceAddressFeatures*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES:
+					if (versionCode == 12)
+						str << *(VkPhysicalDeviceDescriptorIndexingFeatures*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES:
+					if (versionCode == 12)
+						str << *(VkPhysicalDeviceHostQueryResetFeatures*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES:
+					if (versionCode == 12)
+						str << *(VkPhysicalDeviceImagelessFramebufferFeatures*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES:
+					if (versionCode == 12)
+						str << *(VkPhysicalDeviceScalarBlockLayoutFeatures*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES:
+					if (versionCode == 12)
+						str << *(VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES:
+					if (versionCode == 12)
+						str << *(VkPhysicalDeviceShaderAtomicInt64Features*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES:
+					if (versionCode == 12)
+						str << *(VkPhysicalDeviceShaderFloat16Int8Features*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES:
+					if (versionCode == 12)
+						str << *(VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES:
+					if (versionCode == 12)
+						str << *(VkPhysicalDeviceTimelineSemaphoreFeatures*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFORM_BUFFER_STANDARD_LAYOUT_FEATURES:
+					if (versionCode == 12)
+						str << *(VkPhysicalDeviceUniformBufferStandardLayoutFeatures*)pNextChain << std::endl;
+					break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES:
+					if (versionCode == 12)
+						str << *(VkPhysicalDeviceVulkanMemoryModelFeatures*)pNextChain << std::endl;
+					break;
 
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES:
-				str << *(VkPhysicalDeviceVulkan12Features*)pNextChain << std::endl;
-				break;
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES:
+					if (versionCode == 12)
+						str << *(VkPhysicalDeviceVulkan12Features*)pNextChain << std::endl;
+					break;
 #endif
 
-			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2:
-				assert(0);
-			default:
-				str << "Unknown feature 0x" << std::hex << pNextChain->sType << std::dec << std::endl;
-				break;
-			}
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2:
+					assert(0);
+				default:
+					if (versionCode == versions[0].first)
+						str << "Unknown feature 0x" << std::hex << pNextChain->sType << std::dec << std::endl;
+					break;
+				}
 
-			pNextChain = pNextChain->pNext;
+				pNextChain = pNextChain->pNext;
+			}
 		}
+	}
+
+	static void LogPhysicalDeviceProperties(std::ostream& str, const VkPhysicalDeviceProperties2& properties2)
+	{
+		assert(properties2.sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2_KHR);
+
+		str << "API version: 0x" << std::hex << properties2.properties.apiVersion << std::endl;
+		str << "Driver version: 0x" << properties2.properties.driverVersion << std::endl;
+		str << "VendorID: 0x" << properties2.properties.vendorID << std::endl;
+		str << "DeviceID: 0x" << properties2.properties.deviceID << std::dec << std::endl;
+		switch (properties2.properties.deviceType) {
+		case VK_PHYSICAL_DEVICE_TYPE_OTHER: str << "Type: \'Other\'" << std::endl; break;
+		case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: str << "Type: Integrated GPU" << std::endl; break;
+		case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: str << "Type: Discrete GPU" << std::endl; break;
+		case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: str << "Type: Virtual GPU" << std::endl; break;
+		case VK_PHYSICAL_DEVICE_TYPE_CPU: str << "Type: CPU" << std::endl; break;
+		default: str << "Type: Unknown" << std::endl; break;
+		}
+		str << "Device name: " << properties2.properties.deviceName << std::endl;
+		// is properties2.properties.pipelineCacheUUID useful?
+		str << std::endl << "VK1.0 limits" << std::endl;
+		str << properties2.properties.limits;
+		// str << properties2.properties.sparseProperties << std::endl;
 	}
 
 	static VulkanSharedPtr<VkDevice> CreateUnderlyingDevice(SelectedPhysicalDevice physDev)
@@ -1092,105 +1229,225 @@ namespace RenderCore { namespace ImplVulkan
         return queue;
     }
 
+	static FormatCapability TestFormatProperties(VkFormatProperties fmtProps, BindFlag::BitField bindingType)
+	{
+		// bind flags not tested:
+		// 	VertexBuffer, IndexBuffer, ConstantBuffer, StreamOutput, DrawIndirectArgs, RawViews
+		// 	PresentationSrc
+		if (bindingType & BindFlag::ShaderResource) {
+			auto req = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;		// VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+		if (bindingType & BindFlag::RenderTarget) {
+			auto req = VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT|VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT;
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+		if (bindingType & BindFlag::DepthStencil) {
+			auto req = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+		if (bindingType & BindFlag::UnorderedAccess) {
+			auto req = VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;	// VK_FORMAT_FEATURE_STORAGE_IMAGE_ATOMIC_BIT
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+		if (bindingType & BindFlag::InputAttachment) {
+			auto req = VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT;
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+		if (bindingType & BindFlag::TransferSrc) {
+			auto req = VK_FORMAT_FEATURE_BLIT_SRC_BIT;
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+		if (bindingType & BindFlag::TransferDst) {
+			auto req = VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+		if ((bindingType & (BindFlag::TexelBuffer|BindFlag::UnorderedAccess)) == (BindFlag::TexelBuffer|BindFlag::UnorderedAccess)) {
+			auto req = VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT;	// VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_ATOMIC_BIT
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+		if ((bindingType & (BindFlag::TexelBuffer|BindFlag::ShaderResource)) == (BindFlag::TexelBuffer|BindFlag::ShaderResource)) {
+			auto req = VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT;
+			if ((fmtProps.optimalTilingFeatures & req) != req)
+				return FormatCapability::NotSupported;
+		}
+
+		return FormatCapability::Supported;
+	}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	DeviceFeatures              APIInstance::QuerySupportedFeatures()
+	std::shared_ptr<IDevice>    APIInstance::CreateDevice(unsigned configurationIdx, const DeviceFeatures& features)
 	{
+		if (configurationIdx >= _physicalDevices.size())
+			Throw(std::runtime_error("Invalid configuration index"));
+		return std::make_shared<Device>(_instance, _physicalDevices[configurationIdx]);
+	}
+
+	std::shared_ptr<IDevice>    APIInstance::CreateDevice(VkPhysicalDevice physDev, unsigned renderingQueueFamily)
+	{
+		return std::make_shared<Device>(_instance, SelectedPhysicalDevice{physDev, renderingQueueFamily});
+	}
+
+	unsigned                    APIInstance::GetDeviceConfigurationCount()
+	{
+		return (unsigned)_physicalDevices.size();
+	}
+
+    DeviceConfigurationProps    APIInstance::GetDeviceConfigurationProps(unsigned configurationIdx)
+	{
+		if (configurationIdx >= _physicalDevices.size())
+			Throw(std::runtime_error("Invalid configuration index"));
+
+		VkPhysicalDeviceProperties2 props = {};
+		props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+		vkGetPhysicalDeviceProperties2(_physicalDevices[configurationIdx]._dev, &props);
+
+		DeviceConfigurationProps result = {};
+		XlCopyString(result._driverName, props.properties.deviceName);
+		result._driverVersion = props.properties.driverVersion;
+		switch (props.properties.deviceType) {
+			case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: result._physicalDeviceType = PhysicalDeviceType::IntegratedGPU; break;
+			case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: result._physicalDeviceType = PhysicalDeviceType::DiscreteGPU; break;
+			case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: result._physicalDeviceType = PhysicalDeviceType::VirtualGPU; break;
+			case VK_PHYSICAL_DEVICE_TYPE_CPU: result._physicalDeviceType = PhysicalDeviceType::CPU; break;
+			default: result._physicalDeviceType = PhysicalDeviceType::Unknown; break;
+		}
+
+		return result;
+	}
+
+	DeviceFeatures              APIInstance::QueryFeatures(unsigned configurationIdx)
+	{
+		if (configurationIdx >= _physicalDevices.size())
+			Throw(std::runtime_error("Invalid configuration index"));
+
+		assert(0);		// todo -- implement
 		return {};
 	}
 
-	void                        APIInstance::SetWindowPlatformValue(const void* platformValue)
+	bool                        APIInstance::QueryPresentationChainCompatibility(unsigned configurationIdx, const void* platformWindowHandle)
 	{
-		// (no need to call this if the caller is explicitly selecting a physical device via SelectPhysicalDevice)
-		if (_physicalDeviceSelected)
-			Throw(std::runtime_error("Attempting to call IAPIInstanceVulkan::SetWindowPlatformValue() after a physical device has already been selected. This method is optional, but prefer to call it only once and before other methods in the same class."));
-		_windowPlatformValue = platformValue;
+		if (configurationIdx >= _physicalDevices.size())
+			Throw(std::runtime_error("Invalid configuration index"));
+		if (!platformWindowHandle)
+			Throw(std::runtime_error("Invalid platform window handle"));
+
+		auto surface = CreateSurface(_instance.get(), platformWindowHandle);
+		
+		VkBool32 supportsPresent = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR(
+			_physicalDevices[configurationIdx]._dev, _physicalDevices[configurationIdx]._renderingQueueFamily,
+			surface.get(), &supportsPresent);
+		return supportsPresent;
 	}
 
-	std::shared_ptr<IDevice>    APIInstance::CreateDevice(const DeviceFeatures& features)
+    FormatCapability            APIInstance::QueryFormatCapability(unsigned configurationIdx, Format format, BindFlag::BitField bindingType)
 	{
-		if (!_physicalDeviceSelected)
-			SelectPhysicalDevice();
-		return std::make_shared<Device>(_instance, _physDev);
+		if (configurationIdx >= _physicalDevices.size())
+			Throw(std::runtime_error("Invalid configuration index"));
+
+		VkFormatProperties formatProps;
+		vkGetPhysicalDeviceFormatProperties(_physicalDevices[configurationIdx]._dev, (VkFormat)Metal_Vulkan::AsVkFormat(format), &formatProps);
+		return TestFormatProperties(formatProps, bindingType);
 	}
 
-	void APIInstance::SelectPhysicalDevice()
+	std::string APIInstance::LogPhysicalDevice(unsigned configurationIdx)
 	{
-		assert(!_physicalDeviceSelected);
-		if (_windowPlatformValue) {
-			// We create a surface object temporarily in order to select a matching physical device
-			// we're expecting that all presentation chains created by any device constructed from this
-			// instance will be compatible with the physical device in the same way that this surface is
-			auto surface = CreateSurface(_instance.get(), _windowPlatformValue);
-			_physDev = SelectPhysicalDeviceForRendering(_instance.get(), surface.get());
-		} else {
-			_physDev = SelectPhysicalDeviceForRendering(_instance.get(), nullptr);
-		}
-		_physicalDeviceSelected = true;
-	}
+		if (configurationIdx >= _physicalDevices.size())
+			Throw(std::runtime_error("Invalid configuration index"));
 
-	void APIInstance::SelectPhysicalDevice(VkPhysicalDevice device, unsigned renderingQueueFamily)
-	{
-		if (_physicalDeviceSelected)
-			Throw(std::runtime_error("Attempting to call IAPIInstanceVulkan::SelectPhysicalDevice() after a physical device has already been selected. This method is optional, but prefer to call it only once and before other methods in the same class."));
-		_physDev._dev = device;
-		_physDev._renderingQueueFamily = renderingQueueFamily;
-		_physicalDeviceSelected = true;
-	}
-
-	std::string APIInstance::LogPhysicalDevice()
-	{
-		if (!_physicalDeviceSelected)
-			SelectPhysicalDevice();
-		std::stringstream str;
-		LogPhysicalDeviceExtensions(str, _physDev._dev);
-
-		VkPhysicalDeviceFeatures2 features;
-		XlZeroMemory(features);
-		features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR;
-		auto* appender = (VkBaseOutStructure*)&features;
 		#define APPEND_STRUCT(X, T)																				\
-			X X##_inst; XlZeroMemory(X##_inst); X##_inst.sType = T;												\
+			X X##_inst = {}; X##_inst.sType = T;																\
 			appender->pNext = (VkBaseOutStructure*)&X##_inst; appender = (VkBaseOutStructure*)&X##_inst;		\
 			/**/;
-		#if VK_VERSION_1_1
-			APPEND_STRUCT(VkDeviceGroupDeviceCreateInfo, VK_STRUCTURE_TYPE_DEVICE_GROUP_DEVICE_CREATE_INFO);
-			APPEND_STRUCT(VkPhysicalDeviceMultiviewFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceProtectedMemoryFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROTECTED_MEMORY_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceSamplerYcbcrConversionFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceShaderDrawParametersFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceVariablePointersFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTERS_FEATURES);
-			APPEND_STRUCT(VkPhysicalDevice16BitStorageFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceVulkan11Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
-		#endif
-		#if VK_VERSION_1_2
-			APPEND_STRUCT(VkPhysicalDevice8BitStorageFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceBufferDeviceAddressFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceDescriptorIndexingFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceHostQueryResetFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceImagelessFramebufferFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceScalarBlockLayoutFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceShaderAtomicInt64Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceShaderFloat16Int8Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceTimelineSemaphoreFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceUniformBufferStandardLayoutFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFORM_BUFFER_STANDARD_LAYOUT_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceVulkanMemoryModelFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES);
-			APPEND_STRUCT(VkPhysicalDeviceVulkan12Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
-		#endif
+
+		std::stringstream str;
+
+		{
+			VkPhysicalDeviceProperties2 properties = {};
+			properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+			auto* appender = (VkBaseOutStructure*)&properties;
+
+			#if VK_VERSION_1_1
+				APPEND_STRUCT(VkPhysicalDeviceIDProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES);
+				APPEND_STRUCT(VkPhysicalDeviceMaintenance3Properties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_3_PROPERTIES);
+				APPEND_STRUCT(VkPhysicalDeviceMultiviewProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PROPERTIES);
+				APPEND_STRUCT(VkPhysicalDevicePointClippingProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_POINT_CLIPPING_PROPERTIES);
+				APPEND_STRUCT(VkPhysicalDeviceProtectedMemoryProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROTECTED_MEMORY_PROPERTIES);
+				APPEND_STRUCT(VkPhysicalDeviceSubgroupProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES);
+			#endif
+			#if VK_VERSION_1_2
+				APPEND_STRUCT(VkPhysicalDeviceDepthStencilResolveProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_STENCIL_RESOLVE_PROPERTIES);
+				APPEND_STRUCT(VkPhysicalDeviceDescriptorIndexingProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES);
+				APPEND_STRUCT(VkPhysicalDeviceDriverProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES);
+				APPEND_STRUCT(VkPhysicalDeviceFloatControlsProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES);
+				APPEND_STRUCT(VkPhysicalDeviceSamplerFilterMinmaxProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_FILTER_MINMAX_PROPERTIES);
+				APPEND_STRUCT(VkPhysicalDeviceTimelineSemaphoreProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_PROPERTIES);
+				APPEND_STRUCT(VkPhysicalDeviceVulkan11Properties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES);		// not added until 1.2
+				APPEND_STRUCT(VkPhysicalDeviceVulkan12Properties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES);
+			#endif
+			vkGetPhysicalDeviceProperties2(_physicalDevices[configurationIdx]._dev, &properties);
+			str << "PHYSICAL DEVICE PROPERTIES AND LIMITS" << std::endl;
+			LogPhysicalDeviceProperties(str, properties);
+		}
+
+		{
+			VkPhysicalDeviceFeatures2 features = {};
+			features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR;
+			auto* appender = (VkBaseOutStructure*)&features;
+			#if VK_VERSION_1_1
+				APPEND_STRUCT(VkDeviceGroupDeviceCreateInfo, VK_STRUCTURE_TYPE_DEVICE_GROUP_DEVICE_CREATE_INFO);
+				APPEND_STRUCT(VkPhysicalDeviceMultiviewFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceProtectedMemoryFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROTECTED_MEMORY_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceSamplerYcbcrConversionFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceShaderDrawParametersFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceVariablePointersFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTERS_FEATURES);
+				APPEND_STRUCT(VkPhysicalDevice16BitStorageFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceVulkan11Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
+			#endif
+			#if VK_VERSION_1_2
+				APPEND_STRUCT(VkPhysicalDevice8BitStorageFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceBufferDeviceAddressFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceDescriptorIndexingFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceHostQueryResetFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceImagelessFramebufferFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceScalarBlockLayoutFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceShaderAtomicInt64Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceShaderFloat16Int8Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceTimelineSemaphoreFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceUniformBufferStandardLayoutFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFORM_BUFFER_STANDARD_LAYOUT_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceVulkanMemoryModelFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES);
+				APPEND_STRUCT(VkPhysicalDeviceVulkan12Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
+			#endif
+			vkGetPhysicalDeviceFeatures2(_physicalDevices[configurationIdx]._dev, &features);
+			str << std::endl << "TOGGLEABLE PHYSICAL DEVICE FEATURES" << std::endl;
+			LogPhysicalDeviceFeatures(str, features);
+		}
+
+		str << std::endl;
+		LogPhysicalDeviceExtensions(str, _physicalDevices[configurationIdx]._dev);
+
 		#undef APPEND_STRUCT
-		vkGetPhysicalDeviceFeatures2(_physDev._dev, &features);
-		LogPhysicalDeviceFeatures(str, features);
 
 		return str.str();
 	}
 
-	std::string APIInstance::LogInstance()
+	std::string APIInstance::LogInstance(const void* presentationChainPlatformValue)
 	{
 		std::stringstream str;
-		if (_windowPlatformValue) {
-			auto surface = CreateSurface(_instance.get(), _windowPlatformValue);
+		if (presentationChainPlatformValue) {
+			auto surface = CreateSurface(_instance.get(), presentationChainPlatformValue);
 			LogPhysicalDevices(str, _instance.get(), surface.get());
 		} else {
 			LogPhysicalDevices(str, _instance.get(), nullptr);
@@ -1204,18 +1461,11 @@ namespace RenderCore { namespace ImplVulkan
 		return _instance.get();
 	}
 
-	VkPhysicalDevice APIInstance::GetSelectedPhysicalDevice()
+	VkPhysicalDevice APIInstance::GetPhysicalDevice(unsigned configurationIdx)
 	{
-		if (!_physicalDeviceSelected)
-			SelectPhysicalDevice();
-		return _physDev._dev;
-	}
-
-	unsigned APIInstance::GetSelectedRenderingQueueFamily()
-	{
-		if (!_physicalDeviceSelected)
-			SelectPhysicalDevice();
-		return _physDev._renderingQueueFamily;
+		if (configurationIdx >= _physicalDevices.size())
+			Throw(std::runtime_error("Invalid configuration index"));
+		return _physicalDevices[configurationIdx]._dev;
 	}
 
 	void* APIInstance::QueryInterface(size_t guid)
@@ -1239,7 +1489,20 @@ namespace RenderCore { namespace ImplVulkan
 			//	available, it will throw an exception here.
 			//
 		_instance = CreateVulkanInstance();
-        _physDev = { nullptr, ~0u };
+
+		auto devices = EnumeratePhysicalDevices(_instance.get());
+		if (devices.empty())
+			Throw(Exceptions::BasicLabel("Could not find any Vulkan physical devices. You must have an up-to-date Vulkan driver installed."));
+
+		for (auto dev:devices) {
+			auto queueProps = EnumerateQueueFamilyProperties(dev);
+
+			// Add a configuration option for all queue families that have the graphics bit set
+			// client can test them each separately for compatibility for rendering to a specific window
+			for (unsigned qi=0; qi<unsigned(queueProps.size()); ++qi)
+				if (queueProps[qi].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+					_physicalDevices.push_back({dev, qi});
+		}
 	}
 
 	APIInstance::~APIInstance()
@@ -1476,57 +1739,7 @@ namespace RenderCore { namespace ImplVulkan
 	{
 		assert(_underlying);
 		auto fmtProps = _globalsContainer->_objectFactory.GetFormatProperties((VkFormat)Metal_Vulkan::AsVkFormat(format));
-
-		// bind flags not tested:
-		// 	VertexBuffer, IndexBuffer, ConstantBuffer, StreamOutput, DrawIndirectArgs, RawViews
-		// 	PresentationSrc
-		if (bindingType & BindFlag::ShaderResource) {
-			auto req = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;		// VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT
-			if ((fmtProps.optimalTilingFeatures & req) != req)
-				return FormatCapability::NotSupported;
-		}
-		if (bindingType & BindFlag::RenderTarget) {
-			auto req = VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT|VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT;
-			if ((fmtProps.optimalTilingFeatures & req) != req)
-				return FormatCapability::NotSupported;
-		}
-		if (bindingType & BindFlag::DepthStencil) {
-			auto req = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
-			if ((fmtProps.optimalTilingFeatures & req) != req)
-				return FormatCapability::NotSupported;
-		}
-		if (bindingType & BindFlag::UnorderedAccess) {
-			auto req = VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;	// VK_FORMAT_FEATURE_STORAGE_IMAGE_ATOMIC_BIT
-			if ((fmtProps.optimalTilingFeatures & req) != req)
-				return FormatCapability::NotSupported;
-		}
-		if (bindingType & BindFlag::InputAttachment) {
-			auto req = VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT;
-			if ((fmtProps.optimalTilingFeatures & req) != req)
-				return FormatCapability::NotSupported;
-		}
-		if (bindingType & BindFlag::TransferSrc) {
-			auto req = VK_FORMAT_FEATURE_BLIT_SRC_BIT;
-			if ((fmtProps.optimalTilingFeatures & req) != req)
-				return FormatCapability::NotSupported;
-		}
-		if (bindingType & BindFlag::TransferDst) {
-			auto req = VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
-			if ((fmtProps.optimalTilingFeatures & req) != req)
-				return FormatCapability::NotSupported;
-		}
-		if ((bindingType & (BindFlag::TexelBuffer|BindFlag::UnorderedAccess)) == (BindFlag::TexelBuffer|BindFlag::UnorderedAccess)) {
-			auto req = VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT;	// VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_ATOMIC_BIT
-			if ((fmtProps.optimalTilingFeatures & req) != req)
-				return FormatCapability::NotSupported;
-		}
-		if ((bindingType & (BindFlag::TexelBuffer|BindFlag::ShaderResource)) == (BindFlag::TexelBuffer|BindFlag::ShaderResource)) {
-			auto req = VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT;
-			if ((fmtProps.optimalTilingFeatures & req) != req)
-				return FormatCapability::NotSupported;
-		}
-
-		return FormatCapability::Supported;
+		return TestFormatProperties(fmtProps, bindingType);
 	}
 
 	std::shared_ptr<ILowLevelCompiler>		Device::CreateShaderCompiler()

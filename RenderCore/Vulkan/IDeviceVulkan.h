@@ -65,13 +65,13 @@ namespace RenderCore
 	class IAPIInstanceVulkan
 	{
 	public:
+		virtual std::shared_ptr<IDevice> CreateDevice(VkPhysicalDevice, unsigned renderingQueueFamily) = 0;
+
 		virtual VkInstance GetVulkanInstance() = 0;
-		virtual VkPhysicalDevice GetSelectedPhysicalDevice() = 0;
-		virtual unsigned GetSelectedRenderingQueueFamily() = 0;
-		virtual void SetWindowPlatformValue(const void*) = 0;
-		virtual void SelectPhysicalDevice(VkPhysicalDevice, unsigned renderingQueueFamily) = 0;
-		virtual std::string LogPhysicalDevice() = 0;
-		virtual std::string LogInstance() = 0;
+		virtual VkPhysicalDevice GetPhysicalDevice(unsigned configurationIdx) = 0;
+		
+		virtual std::string LogPhysicalDevice(unsigned configurationIdx) = 0;
+		virtual std::string LogInstance(const void* presentationChainPlatformValue = nullptr) = 0;
 		virtual ~IAPIInstanceVulkan();
 	};
 

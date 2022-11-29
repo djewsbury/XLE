@@ -228,27 +228,28 @@ namespace RenderCore { namespace ImplVulkan
     class APIInstance : public IAPIInstance, public IAPIInstanceVulkan
     {
     public:
-        std::shared_ptr<IDevice>    CreateDevice(const DeviceFeatures& features) override;
-        DeviceFeatures              QuerySupportedFeatures() override;
-        void                        SetWindowPlatformValue(const void*) override;
-        void                        SelectPhysicalDevice(VkPhysicalDevice, unsigned renderingQueueFamily);
+        std::shared_ptr<IDevice>    CreateDevice(unsigned configurationIdx, const DeviceFeatures& features) override;
+        std::shared_ptr<IDevice>    CreateDevice(VkPhysicalDevice, unsigned renderingQueueFamily) override;
 
-        std::string                 LogPhysicalDevice();
-		std::string                 LogInstance();
+        unsigned                    GetDeviceConfigurationCount() override;
+        DeviceConfigurationProps    GetDeviceConfigurationProps(unsigned configurationIdx) override;
+
+        DeviceFeatures              QueryFeatures(unsigned configurationIdx) override;
+        bool                        QueryPresentationChainCompatibility(unsigned configurationIdx, const void* platformWindowHandle) override;
+        FormatCapability            QueryFormatCapability(unsigned configurationIdx, Format format, BindFlag::BitField bindingType) override;
+
         VkInstance                  GetVulkanInstance() override;
-        VkPhysicalDevice            GetSelectedPhysicalDevice() override;
-        unsigned                    GetSelectedRenderingQueueFamily() override;
+        VkPhysicalDevice            GetPhysicalDevice(unsigned configurationIdx) override;
+
+        std::string                 LogPhysicalDevice(unsigned configurationIdx);
+		std::string                 LogInstance(const void* presentationChainPlatformValue);
 
         void*       QueryInterface(size_t guid) override;
         APIInstance();
         ~APIInstance();
     private:
 		VulkanSharedPtr<VkInstance>         _instance;
-        SelectedPhysicalDevice              _physDev;
-        bool _physicalDeviceSelected = false;
-        const void* _windowPlatformValue = nullptr;
-
-        void SelectPhysicalDevice();
+        std::vector<SelectedPhysicalDevice> _physicalDevices;
     };
 
 ////////////////////////////////////////////////////////////////////////////////
