@@ -43,7 +43,7 @@ namespace RenderCore
 		virtual std::shared_ptr<ILowLevelCompiler> CreateShaderCompiler(
 			const VulkanCompilerConfiguration&) = 0;
 		virtual std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetAsyncTracker() = 0;
-		~IDeviceVulkan();
+		virtual ~IDeviceVulkan();
 	};
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -57,7 +57,7 @@ namespace RenderCore
 		virtual unsigned GetCmdListSpecificMarker() = 0;		// Metal_Vulkan::IAsyncTracker::Marker
 		virtual void AttachNameToCmdList(std::string name) = 0;
 		virtual void ReleaseCommandBufferPool() = 0;
-		~IThreadContextVulkan();
+		virtual ~IThreadContextVulkan();
 	};
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -65,7 +65,14 @@ namespace RenderCore
 	class IAPIInstanceVulkan
 	{
 	public:
+		virtual VkInstance GetVulkanInstance() = 0;
+		virtual VkPhysicalDevice GetSelectedPhysicalDevice() = 0;
+		virtual unsigned GetSelectedRenderingQueueFamily() = 0;
 		virtual void SetWindowPlatformValue(const void*) = 0;
+		virtual void SelectPhysicalDevice(VkPhysicalDevice, unsigned renderingQueueFamily) = 0;
+		virtual std::string LogPhysicalDevice() = 0;
+		virtual std::string LogInstance() = 0;
+		virtual ~IAPIInstanceVulkan();
 	};
 
 }

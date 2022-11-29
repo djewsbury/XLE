@@ -25,6 +25,7 @@
 #include "../../Utility/Threading/ThreadingUtils.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/PtrUtils.h"
+#include "../../Utility/StreamUtils.h"
 #include "../../Core/SelectConfiguration.h"
 #include <memory>
 
@@ -369,8 +370,8 @@ namespace RenderCore { namespace ImplVulkan
 
 				Log(Verbose)
 					<< "Selecting physical device (" << props.deviceName 
-					<< "). API Version: (" << props.apiVersion 
-					<< "). Driver version: (" << props.driverVersion 
+					<< "). API Version: (0x" << std::hex << props.apiVersion 
+					<< "). Driver version: (0x" << props.driverVersion << std::dec
 					<< "). Type: (" << AsString(props.deviceType) << ")"
 					<< std::endl;
 				return SelectedPhysicalDevice { dev, qi };
@@ -378,6 +379,60 @@ namespace RenderCore { namespace ImplVulkan
 		}
 
 		Throw(Exceptions::BasicLabel("There are physical Vulkan devices, but none of them support rendering. You must have an up-to-date Vulkan driver installed."));
+	}
+
+	static void LogInstanceLayers(std::ostream& str)
+	{
+		auto layers = EnumerateLayers();
+		str << "[" << layers.size() << "] Vulkan instance layers" << std::endl;
+		for (const auto& l:layers)
+			str << "  " << l.layerName << std::hex << " (0x" << l.specVersion << ", 0x" << l.implementationVersion << ") " << std::dec << l.description << std::endl;
+	}
+
+	static void LogPhysicalDevices(std::ostream& str, VkInstance instance, VkSurfaceKHR surface)
+	{
+		auto devices = EnumeratePhysicalDevices(instance);
+		if (devices.empty()) {
+			str << "Could not find any Vulkan physical devices. You must have an up-to-date Vulkan driver installed." << std::endl;
+			return;
+		}
+
+ 		str << "[" << devices.size() << "] Vulkan physical devices" << std::endl;
+		for (auto dev:devices) {
+			VkPhysicalDeviceProperties props;
+			vkGetPhysicalDeviceProperties(dev, &props);
+			str << "  " << props.deviceName << " (" << AsString(props.deviceType) <<  ") ";
+			str << "IDs: (0x" << std::hex << props.vendorID << "-0x" << props.deviceID;
+			str << ") Version codes: (0x" << props.apiVersion << ", 0x" << props.driverVersion << ")" << std::dec << std::endl;
+			// props.limits -> VkPhysicalDeviceLimits
+			// props.sparseProperties -> VkPhysicalDeviceSparseProperties
+
+			auto queueProps = EnumerateQueueFamilyProperties(dev);
+			str << "  [" << queueProps.size() << "] queue families" << std::endl;
+			for (unsigned qi=0; qi<unsigned(queueProps.size()); ++qi) {
+				auto qprops = queueProps[qi];
+
+				str << "    (";
+				CommaSeparatedList list{str};
+				if (qprops.queueFlags & VK_QUEUE_GRAPHICS_BIT) list << "Graphics";
+				if (qprops.queueFlags & VK_QUEUE_COMPUTE_BIT) list << "Compute";
+				if (qprops.queueFlags & VK_QUEUE_TRANSFER_BIT) list << "Transfer";
+				if (qprops.queueFlags & VK_QUEUE_SPARSE_BINDING_BIT) list << "Sparse Binding";
+				if (qprops.queueFlags & VK_QUEUE_PROTECTED_BIT) list << "Protected";
+				str << "), queue count: " << qprops.queueCount;
+				str << ", time stamp bits: " << qprops.timestampValidBits;
+				str << ", min image gran: " << qprops.minImageTransferGranularity.width << "x" << qprops.minImageTransferGranularity.height << "x" << qprops.minImageTransferGranularity.depth;
+				str << std::endl;
+
+				if ((qprops.queueFlags & VK_QUEUE_GRAPHICS_BIT) && (surface != nullptr)) {
+					VkBool32 supportsPresent = false;
+					vkGetPhysicalDeviceSurfaceSupportKHR(
+						dev, qi, surface, &supportsPresent);
+					if (supportsPresent)
+						str << "      Can present to output window" << std::endl;
+				}
+			}
+		}
 	}
 
 	static void LogPhysicalDeviceExtensions(std::ostream& str, VkPhysicalDevice physDev)
@@ -405,6 +460,483 @@ namespace RenderCore { namespace ImplVulkan
 		str << "[" << foundExtensions.size() << "] Vulkan physical device extensions" << std::endl;
 		for (auto c:foundExtensions)
 			str << "  " << c.extensionName << " (" << c.specVersion << ")" << std::endl;
+	}
+}}
+
+#if VK_VERSION_1_1
+	static std::ostream& operator<<(std::ostream& str, const VkDeviceGroupDeviceCreateInfo& features)
+	{
+		if (features.physicalDeviceCount)
+			str << "In physical device group with " << features.physicalDeviceCount << " devices";
+		else
+			str << "not in physical device group";
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceMultiviewFeatures& features)
+	{
+		str << "Multiview features: ";
+		CommaSeparatedList list{str};
+		if (features.multiview) list << "core features";
+		if (features.multiviewGeometryShader) list << "geometry shader";
+		if (features.multiviewTessellationShader) list << "tessellation shader";
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceProtectedMemoryFeatures& features)
+	{
+		str << "Protected memory: " << (features.protectedMemory ? "enabled" : "disabled");
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceSamplerYcbcrConversionFeatures& features)
+	{
+		str << "YCbCr conversion: " << (features.samplerYcbcrConversion ? "enabled" : "disabled");
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceShaderDrawParametersFeatures& features)
+	{
+		str << "Shader draw parameters: " << (features.shaderDrawParameters ? "enabled" : "disabled");
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceVariablePointersFeatures& features)
+	{
+		str << "Shader variable pointers: ";
+		CommaSeparatedList list{str};
+		if (features.variablePointers) list << "basic";
+		if (features.variablePointersStorageBuffer) list << "storage buffers";
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDevice16BitStorageFeatures& features)
+	{
+		str << "16 bit shader values: ";
+		CommaSeparatedList list{str};
+		if (features.storageBuffer16BitAccess) list << "Storage buffer";
+		if (features.uniformAndStorageBuffer16BitAccess) list << "Uniform and storage buffer";
+		if (features.storagePushConstant16) list << "Push constants";
+		if (features.storageInputOutput16) list << "Input/output";
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceVulkan11Features& features)
+	{
+		std::vector<const char*> enabledFeatures;
+		std::vector<const char*> disabledFeatures;
+		enabledFeatures.reserve(16);
+		disabledFeatures.reserve(16);
+
+		// \s*VkBool32\s*(\w+)
+		// (features.$1 ? &enabledFeatures : &disabledFeatures)->push_back("$1")
+		(features.storageBuffer16BitAccess ? &enabledFeatures : &disabledFeatures)->push_back("storageBuffer16BitAccess");
+		(features.uniformAndStorageBuffer16BitAccess ? &enabledFeatures : &disabledFeatures)->push_back("uniformAndStorageBuffer16BitAccess");
+		(features.storagePushConstant16 ? &enabledFeatures : &disabledFeatures)->push_back("storagePushConstant16");
+		(features.storageInputOutput16 ? &enabledFeatures : &disabledFeatures)->push_back("storageInputOutput16");
+		(features.multiview ? &enabledFeatures : &disabledFeatures)->push_back("multiview");
+		(features.multiviewGeometryShader ? &enabledFeatures : &disabledFeatures)->push_back("multiviewGeometryShader");
+		(features.multiviewTessellationShader ? &enabledFeatures : &disabledFeatures)->push_back("multiviewTessellationShader");
+		(features.variablePointersStorageBuffer ? &enabledFeatures : &disabledFeatures)->push_back("variablePointersStorageBuffer");
+		(features.variablePointers ? &enabledFeatures : &disabledFeatures)->push_back("variablePointers");
+		(features.protectedMemory ? &enabledFeatures : &disabledFeatures)->push_back("protectedMemory");
+		(features.samplerYcbcrConversion ? &enabledFeatures : &disabledFeatures)->push_back("samplerYcbcrConversion");
+		(features.shaderDrawParameters ? &enabledFeatures : &disabledFeatures)->push_back("shaderDrawParameters");
+
+		str << "Enabled vk1.1 physical device features [";
+		if (!enabledFeatures.empty()) {
+			str << *enabledFeatures.begin();
+			for (auto f=enabledFeatures.begin()+1; f!=enabledFeatures.end(); ++f)
+				str << ", " << *f;
+		}
+		str << "]" << std::endl;
+		str << "Disabled vk1.1 physical device features [";
+		if (!disabledFeatures.empty()) {
+			str << *disabledFeatures.begin();
+			for (auto f=disabledFeatures.begin()+1; f!=disabledFeatures.end(); ++f)
+				str << ", " << *f;
+		}
+		str << "]";
+
+		return str;
+	}
+#endif
+
+#if VK_VERSION_1_2
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDevice8BitStorageFeatures& features)
+	{
+		str << "8 bit shader values: ";
+		CommaSeparatedList list{str};
+		if (features.storageBuffer8BitAccess) list << "Storage buffer";
+		if (features.uniformAndStorageBuffer8BitAccess) list << "Uniform and storage buffer";
+		if (features.storagePushConstant8) list << "Push constants";
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceBufferDeviceAddressFeatures& features)
+	{
+		// related to using vkGetBufferDeviceAddress to get addresses to buffer memory 
+		str << "vkGetBufferDeviceAddress() features: ";
+		CommaSeparatedList list{str};
+		if (features.bufferDeviceAddress) list << "enabled";
+		if (features.bufferDeviceAddressCaptureReplay) list << "capture replay";
+		if (features.bufferDeviceAddressMultiDevice) list << "multi device";
+		return str;
+	}
+	
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceDescriptorIndexingFeatures& features)
+	{
+		// related to using vkGetBufferDeviceAddress to get addresses to buffer memory 
+		str << "Dynamic shader indexing for arrays of: ";
+		CommaSeparatedList list{str};
+		if (features.shaderInputAttachmentArrayDynamicIndexing) list << "input attachments";
+		if (features.shaderUniformTexelBufferArrayDynamicIndexing) list << "uniform texel buffers";
+		if (features.shaderStorageTexelBufferArrayDynamicIndexing) list << "storage texel buffers";
+
+		str << std::endl << "Non uniform shader indexing for arrays of: ";
+		list = str;
+		if (features.shaderUniformBufferArrayNonUniformIndexing) list << "uniform buffers";
+		if (features.shaderSampledImageArrayNonUniformIndexing) list << "sampled images";
+		if (features.shaderStorageBufferArrayNonUniformIndexing) list << "storage buffers";
+		if (features.shaderStorageImageArrayNonUniformIndexing) list << "storage images";
+		if (features.shaderInputAttachmentArrayNonUniformIndexing) list << "input attachments";
+		if (features.shaderUniformTexelBufferArrayNonUniformIndexing) list << "uniform texel buffers";
+		if (features.shaderStorageTexelBufferArrayNonUniformIndexing) list << "storage texel buffers";
+
+		str << std::endl << "Update after bind for: ";
+		list = str;
+		if (features.descriptorBindingUniformBufferUpdateAfterBind) list << "update buffers";
+		if (features.descriptorBindingSampledImageUpdateAfterBind) list << "sampled images";
+		if (features.descriptorBindingStorageImageUpdateAfterBind) list << "storage images";
+		if (features.descriptorBindingStorageBufferUpdateAfterBind) list << "storage buffers";
+		if (features.descriptorBindingUniformTexelBufferUpdateAfterBind) list << "uniform texel buffers";
+		if (features.descriptorBindingStorageTexelBufferUpdateAfterBind) list << "storage texel buffers";
+
+		str << std::endl << "Additional features: ";
+		list = str;
+		if (features.descriptorBindingUpdateUnusedWhilePending) list << "update unused while pending";
+		if (features.descriptorBindingPartiallyBound) list << "partially bound";
+		if (features.descriptorBindingVariableDescriptorCount) list << "variable descriptor count";
+		if (features.runtimeDescriptorArray) list << "runtime descriptor array";
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceHostQueryResetFeatures& features)
+	{
+		str << "Host query reset: " << (features.hostQueryReset ? "enabled" : "disabled");
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceImagelessFramebufferFeatures& features)
+	{
+		str << "Imageless frame buffer: " << (features.imagelessFramebuffer ? "enabled" : "disabled");
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceScalarBlockLayoutFeatures& features)
+	{
+		str << "Scalar block layout: " << (features.scalarBlockLayout ? "enabled" : "disabled");
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures& features)
+	{
+		str << "Separate depth stencil layouts: " << (features.separateDepthStencilLayouts ? "enabled" : "disabled");
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceShaderAtomicInt64Features& features)
+	{
+		str << "Shader atomic Int64 features: ";
+		CommaSeparatedList list{str};
+		if (features.shaderBufferInt64Atomics) list << "buffers";
+		if (features.shaderSharedInt64Atomics) list << "shared memory";
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceShaderFloat16Int8Features& features)
+	{
+		str << "Shader additional value types: ";
+		CommaSeparatedList list{str};
+		if (features.shaderFloat16) list << "float16";
+		if (features.shaderInt8) list << "int8";
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures& features)
+	{
+		str << "Shader subgroup extended types: " << (features.shaderSubgroupExtendedTypes ? "enabled" : "disabled");
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceTimelineSemaphoreFeatures& features)
+	{
+		str << "Semaphore type timeline: " << (features.timelineSemaphore ? "enabled" : "disabled");
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceUniformBufferStandardLayoutFeatures& features)
+	{
+		str << "Uniform buffer standard layout: " << (features.uniformBufferStandardLayout ? "enabled" : "disabled");
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceVulkanMemoryModelFeatures& features)
+	{
+		str << "Vulkan memory model: ";
+		CommaSeparatedList list{str};
+		if (features.vulkanMemoryModel) list << "enabled";
+		if (features.vulkanMemoryModelDeviceScope) list << "device scope";
+		if (features.vulkanMemoryModelAvailabilityVisibilityChains) list << "availability and visibility chains";
+		return str;
+	}
+
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceVulkan12Features& features)
+	{
+		std::vector<const char*> enabledFeatures;
+		std::vector<const char*> disabledFeatures;
+		enabledFeatures.reserve(56);
+		disabledFeatures.reserve(56);
+
+		(features.samplerMirrorClampToEdge ? &enabledFeatures : &disabledFeatures)->push_back("samplerMirrorClampToEdge");
+		(features.drawIndirectCount ? &enabledFeatures : &disabledFeatures)->push_back("drawIndirectCount");
+		(features.storageBuffer8BitAccess ? &enabledFeatures : &disabledFeatures)->push_back("storageBuffer8BitAccess");
+		(features.uniformAndStorageBuffer8BitAccess ? &enabledFeatures : &disabledFeatures)->push_back("uniformAndStorageBuffer8BitAccess");
+		(features.storagePushConstant8 ? &enabledFeatures : &disabledFeatures)->push_back("storagePushConstant8");
+		(features.shaderBufferInt64Atomics ? &enabledFeatures : &disabledFeatures)->push_back("shaderBufferInt64Atomics");
+		(features.shaderSharedInt64Atomics ? &enabledFeatures : &disabledFeatures)->push_back("shaderSharedInt64Atomics");
+		(features.shaderFloat16 ? &enabledFeatures : &disabledFeatures)->push_back("shaderFloat16");
+		(features.shaderInt8 ? &enabledFeatures : &disabledFeatures)->push_back("shaderInt8");
+		(features.descriptorIndexing ? &enabledFeatures : &disabledFeatures)->push_back("descriptorIndexing");
+		(features.shaderInputAttachmentArrayDynamicIndexing ? &enabledFeatures : &disabledFeatures)->push_back("shaderInputAttachmentArrayDynamicIndexing");
+		(features.shaderUniformTexelBufferArrayDynamicIndexing ? &enabledFeatures : &disabledFeatures)->push_back("shaderUniformTexelBufferArrayDynamicIndexing");
+		(features.shaderStorageTexelBufferArrayDynamicIndexing ? &enabledFeatures : &disabledFeatures)->push_back("shaderStorageTexelBufferArrayDynamicIndexing");
+		(features.shaderUniformBufferArrayNonUniformIndexing ? &enabledFeatures : &disabledFeatures)->push_back("shaderUniformBufferArrayNonUniformIndexing");
+		(features.shaderSampledImageArrayNonUniformIndexing ? &enabledFeatures : &disabledFeatures)->push_back("shaderSampledImageArrayNonUniformIndexing");
+		(features.shaderStorageBufferArrayNonUniformIndexing ? &enabledFeatures : &disabledFeatures)->push_back("shaderStorageBufferArrayNonUniformIndexing");
+		(features.shaderStorageImageArrayNonUniformIndexing ? &enabledFeatures : &disabledFeatures)->push_back("shaderStorageImageArrayNonUniformIndexing");
+		(features.shaderInputAttachmentArrayNonUniformIndexing ? &enabledFeatures : &disabledFeatures)->push_back("shaderInputAttachmentArrayNonUniformIndexing");
+		(features.shaderUniformTexelBufferArrayNonUniformIndexing ? &enabledFeatures : &disabledFeatures)->push_back("shaderUniformTexelBufferArrayNonUniformIndexing");
+		(features.shaderStorageTexelBufferArrayNonUniformIndexing ? &enabledFeatures : &disabledFeatures)->push_back("shaderStorageTexelBufferArrayNonUniformIndexing");
+		(features.descriptorBindingUniformBufferUpdateAfterBind ? &enabledFeatures : &disabledFeatures)->push_back("descriptorBindingUniformBufferUpdateAfterBind");
+		(features.descriptorBindingSampledImageUpdateAfterBind ? &enabledFeatures : &disabledFeatures)->push_back("descriptorBindingSampledImageUpdateAfterBind");
+		(features.descriptorBindingStorageImageUpdateAfterBind ? &enabledFeatures : &disabledFeatures)->push_back("descriptorBindingStorageImageUpdateAfterBind");
+		(features.descriptorBindingStorageBufferUpdateAfterBind ? &enabledFeatures : &disabledFeatures)->push_back("descriptorBindingStorageBufferUpdateAfterBind");
+		(features.descriptorBindingUniformTexelBufferUpdateAfterBind ? &enabledFeatures : &disabledFeatures)->push_back("descriptorBindingUniformTexelBufferUpdateAfterBind");
+		(features.descriptorBindingStorageTexelBufferUpdateAfterBind ? &enabledFeatures : &disabledFeatures)->push_back("descriptorBindingStorageTexelBufferUpdateAfterBind");
+		(features.descriptorBindingUpdateUnusedWhilePending ? &enabledFeatures : &disabledFeatures)->push_back("descriptorBindingUpdateUnusedWhilePending");
+		(features.descriptorBindingPartiallyBound ? &enabledFeatures : &disabledFeatures)->push_back("descriptorBindingPartiallyBound");
+		(features.descriptorBindingVariableDescriptorCount ? &enabledFeatures : &disabledFeatures)->push_back("descriptorBindingVariableDescriptorCount");
+		(features.runtimeDescriptorArray ? &enabledFeatures : &disabledFeatures)->push_back("runtimeDescriptorArray");
+		(features.samplerFilterMinmax ? &enabledFeatures : &disabledFeatures)->push_back("samplerFilterMinmax");
+		(features.scalarBlockLayout ? &enabledFeatures : &disabledFeatures)->push_back("scalarBlockLayout");
+		(features.imagelessFramebuffer ? &enabledFeatures : &disabledFeatures)->push_back("imagelessFramebuffer");
+		(features.uniformBufferStandardLayout ? &enabledFeatures : &disabledFeatures)->push_back("uniformBufferStandardLayout");
+		(features.shaderSubgroupExtendedTypes ? &enabledFeatures : &disabledFeatures)->push_back("shaderSubgroupExtendedTypes");
+		(features.separateDepthStencilLayouts ? &enabledFeatures : &disabledFeatures)->push_back("separateDepthStencilLayouts");
+		(features.hostQueryReset ? &enabledFeatures : &disabledFeatures)->push_back("hostQueryReset");
+		(features.timelineSemaphore ? &enabledFeatures : &disabledFeatures)->push_back("timelineSemaphore");
+		(features.bufferDeviceAddress ? &enabledFeatures : &disabledFeatures)->push_back("bufferDeviceAddress");
+		(features.bufferDeviceAddressCaptureReplay ? &enabledFeatures : &disabledFeatures)->push_back("bufferDeviceAddressCaptureReplay");
+		(features.bufferDeviceAddressMultiDevice ? &enabledFeatures : &disabledFeatures)->push_back("bufferDeviceAddressMultiDevice");
+		(features.vulkanMemoryModel ? &enabledFeatures : &disabledFeatures)->push_back("vulkanMemoryModel");
+		(features.vulkanMemoryModelDeviceScope ? &enabledFeatures : &disabledFeatures)->push_back("vulkanMemoryModelDeviceScope");
+		(features.vulkanMemoryModelAvailabilityVisibilityChains ? &enabledFeatures : &disabledFeatures)->push_back("vulkanMemoryModelAvailabilityVisibilityChains");
+		(features.shaderOutputViewportIndex ? &enabledFeatures : &disabledFeatures)->push_back("shaderOutputViewportIndex");
+		(features.shaderOutputLayer ? &enabledFeatures : &disabledFeatures)->push_back("shaderOutputLayer");
+		(features.subgroupBroadcastDynamicId ? &enabledFeatures : &disabledFeatures)->push_back("subgroupBroadcastDynamicId");
+
+		str << "Enabled vk1.2 physical device features [";
+		if (!enabledFeatures.empty()) {
+			str << *enabledFeatures.begin();
+			for (auto f=enabledFeatures.begin()+1; f!=enabledFeatures.end(); ++f)
+				str << ", " << *f;
+		}
+		str << "]" << std::endl;
+		str << "Disabled vk1.2 physical device features [";
+		if (!disabledFeatures.empty()) {
+			str << *disabledFeatures.begin();
+			for (auto f=disabledFeatures.begin()+1; f!=disabledFeatures.end(); ++f)
+				str << ", " << *f;
+		}
+		str << "]";
+
+		return str;
+	}
+#endif
+
+namespace RenderCore { namespace ImplVulkan
+{
+	static void LogPhysicalDeviceFeatures(std::ostream& str, VkPhysicalDeviceFeatures2 features2)
+	{
+		assert(features2.sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR);
+
+		std::vector<const char*> enabledFeatures;
+		std::vector<const char*> disabledFeatures;
+		enabledFeatures.reserve(64);		// 55 max in Vulkan 1.0
+		disabledFeatures.reserve(64);
+		(features2.features.robustBufferAccess ? &enabledFeatures : &disabledFeatures)->push_back("robustBufferAccess");
+		(features2.features.fullDrawIndexUint32 ? &enabledFeatures : &disabledFeatures)->push_back("fullDrawIndexUint32");
+		(features2.features.imageCubeArray ? &enabledFeatures : &disabledFeatures)->push_back("imageCubeArray");
+		(features2.features.independentBlend ? &enabledFeatures : &disabledFeatures)->push_back("independentBlend");
+		(features2.features.geometryShader ? &enabledFeatures : &disabledFeatures)->push_back("geometryShader");
+		(features2.features.tessellationShader ? &enabledFeatures : &disabledFeatures)->push_back("tessellationShader");
+		(features2.features.sampleRateShading ? &enabledFeatures : &disabledFeatures)->push_back("sampleRateShading");
+		(features2.features.dualSrcBlend ? &enabledFeatures : &disabledFeatures)->push_back("dualSrcBlend");
+		(features2.features.logicOp ? &enabledFeatures : &disabledFeatures)->push_back("logicOp");
+		(features2.features.multiDrawIndirect ? &enabledFeatures : &disabledFeatures)->push_back("multiDrawIndirect");
+		(features2.features.drawIndirectFirstInstance ? &enabledFeatures : &disabledFeatures)->push_back("drawIndirectFirstInstance");
+		(features2.features.depthClamp ? &enabledFeatures : &disabledFeatures)->push_back("depthClamp");
+		(features2.features.depthBiasClamp ? &enabledFeatures : &disabledFeatures)->push_back("depthBiasClamp");
+		(features2.features.fillModeNonSolid ? &enabledFeatures : &disabledFeatures)->push_back("fillModeNonSolid");
+		(features2.features.depthBounds ? &enabledFeatures : &disabledFeatures)->push_back("depthBounds");
+		(features2.features.wideLines ? &enabledFeatures : &disabledFeatures)->push_back("wideLines");
+		(features2.features.largePoints ? &enabledFeatures : &disabledFeatures)->push_back("largePoints");
+		(features2.features.alphaToOne ? &enabledFeatures : &disabledFeatures)->push_back("alphaToOne");
+		(features2.features.multiViewport ? &enabledFeatures : &disabledFeatures)->push_back("multiViewport");
+		(features2.features.samplerAnisotropy ? &enabledFeatures : &disabledFeatures)->push_back("samplerAnisotropy");
+		(features2.features.textureCompressionETC2 ? &enabledFeatures : &disabledFeatures)->push_back("textureCompressionETC2");
+		(features2.features.textureCompressionASTC_LDR ? &enabledFeatures : &disabledFeatures)->push_back("textureCompressionASTC_LDR");
+		(features2.features.textureCompressionBC ? &enabledFeatures : &disabledFeatures)->push_back("textureCompressionBC");
+		(features2.features.occlusionQueryPrecise ? &enabledFeatures : &disabledFeatures)->push_back("occlusionQueryPrecise");
+		(features2.features.pipelineStatisticsQuery ? &enabledFeatures : &disabledFeatures)->push_back("pipelineStatisticsQuery");
+		(features2.features.vertexPipelineStoresAndAtomics ? &enabledFeatures : &disabledFeatures)->push_back("vertexPipelineStoresAndAtomics");
+		(features2.features.fragmentStoresAndAtomics ? &enabledFeatures : &disabledFeatures)->push_back("fragmentStoresAndAtomics");
+		(features2.features.shaderTessellationAndGeometryPointSize ? &enabledFeatures : &disabledFeatures)->push_back("shaderTessellationAndGeometryPointSize");
+		(features2.features.shaderImageGatherExtended ? &enabledFeatures : &disabledFeatures)->push_back("shaderImageGatherExtended");
+		(features2.features.shaderStorageImageExtendedFormats ? &enabledFeatures : &disabledFeatures)->push_back("shaderStorageImageExtendedFormats");
+		(features2.features.shaderStorageImageMultisample ? &enabledFeatures : &disabledFeatures)->push_back("shaderStorageImageMultisample");
+		(features2.features.shaderStorageImageReadWithoutFormat ? &enabledFeatures : &disabledFeatures)->push_back("shaderStorageImageReadWithoutFormat");
+		(features2.features.shaderStorageImageWriteWithoutFormat ? &enabledFeatures : &disabledFeatures)->push_back("shaderStorageImageWriteWithoutFormat");
+		(features2.features.shaderUniformBufferArrayDynamicIndexing ? &enabledFeatures : &disabledFeatures)->push_back("shaderUniformBufferArrayDynamicIndexing");
+		(features2.features.shaderSampledImageArrayDynamicIndexing ? &enabledFeatures : &disabledFeatures)->push_back("shaderSampledImageArrayDynamicIndexing");
+		(features2.features.shaderStorageBufferArrayDynamicIndexing ? &enabledFeatures : &disabledFeatures)->push_back("shaderStorageBufferArrayDynamicIndexing");
+		(features2.features.shaderStorageImageArrayDynamicIndexing ? &enabledFeatures : &disabledFeatures)->push_back("shaderStorageImageArrayDynamicIndexing");
+		(features2.features.shaderClipDistance ? &enabledFeatures : &disabledFeatures)->push_back("shaderClipDistance");
+		(features2.features.shaderCullDistance ? &enabledFeatures : &disabledFeatures)->push_back("shaderCullDistance");
+		(features2.features.shaderFloat64 ? &enabledFeatures : &disabledFeatures)->push_back("shaderFloat64");
+		(features2.features.shaderInt64 ? &enabledFeatures : &disabledFeatures)->push_back("shaderInt64");
+		(features2.features.shaderInt16 ? &enabledFeatures : &disabledFeatures)->push_back("shaderInt16");
+		(features2.features.shaderResourceResidency ? &enabledFeatures : &disabledFeatures)->push_back("shaderResourceResidency");
+		(features2.features.shaderResourceMinLod ? &enabledFeatures : &disabledFeatures)->push_back("shaderResourceMinLod");
+		(features2.features.sparseBinding ? &enabledFeatures : &disabledFeatures)->push_back("sparseBinding");
+		(features2.features.sparseResidencyBuffer ? &enabledFeatures : &disabledFeatures)->push_back("sparseResidencyBuffer");
+		(features2.features.sparseResidencyImage2D ? &enabledFeatures : &disabledFeatures)->push_back("sparseResidencyImage2D");
+		(features2.features.sparseResidencyImage3D ? &enabledFeatures : &disabledFeatures)->push_back("sparseResidencyImage3D");
+		(features2.features.sparseResidency2Samples ? &enabledFeatures : &disabledFeatures)->push_back("sparseResidency2Samples");
+		(features2.features.sparseResidency4Samples ? &enabledFeatures : &disabledFeatures)->push_back("sparseResidency4Samples");
+		(features2.features.sparseResidency8Samples ? &enabledFeatures : &disabledFeatures)->push_back("sparseResidency8Samples");
+		(features2.features.sparseResidency16Samples ? &enabledFeatures : &disabledFeatures)->push_back("sparseResidency16Samples");
+		(features2.features.sparseResidencyAliased ? &enabledFeatures : &disabledFeatures)->push_back("sparseResidencyAliased");
+		(features2.features.variableMultisampleRate ? &enabledFeatures : &disabledFeatures)->push_back("variableMultisampleRate");
+		(features2.features.inheritedQueries ? &enabledFeatures : &disabledFeatures)->push_back("inheritedQueries");
+
+		str << "Enabled vk1.0 physical device features [";
+		if (!enabledFeatures.empty()) {
+			str << *enabledFeatures.begin();
+			for (auto f=enabledFeatures.begin()+1; f!=enabledFeatures.end(); ++f)
+				str << ", " << *f;
+		}
+		str << "]" << std::endl;
+		str << "Disabled vk1.0 physical device features [";
+		if (!disabledFeatures.empty()) {
+			str << *disabledFeatures.begin();
+			for (auto f=disabledFeatures.begin()+1; f!=disabledFeatures.end(); ++f)
+				str << ", " << *f;
+		}
+		str << "]" << std::endl;
+
+		// walk through the "pNext" chain to find extended features information
+		auto* pNextChain = (VkBaseOutStructure*)features2.pNext;
+		while (pNextChain) {
+			switch (pNextChain->sType) {
+
+#if VK_VERSION_1_1
+			case VK_STRUCTURE_TYPE_DEVICE_GROUP_DEVICE_CREATE_INFO:
+				str << *(VkDeviceGroupDeviceCreateInfo*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES:
+				str << *(VkPhysicalDeviceMultiviewFeatures*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROTECTED_MEMORY_FEATURES:
+				str << *(VkPhysicalDeviceProtectedMemoryFeatures*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES:
+				str << *(VkPhysicalDeviceSamplerYcbcrConversionFeatures*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES:
+				str << *(VkPhysicalDeviceShaderDrawParametersFeatures*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTERS_FEATURES:
+				str << *(VkPhysicalDeviceVariablePointersFeatures*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES:
+				str << *(VkPhysicalDevice16BitStorageFeatures*)pNextChain << std::endl;
+				break;
+
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES:
+				// VkPhysicalDeviceVulkan11Features is a container that overlaps settings contained in the smaller
+				// structure. However, we can sometimes get more detail from the smaller structures, so it can be preferable
+				// to use them
+				str << *(VkPhysicalDeviceVulkan11Features*)pNextChain << std::endl;
+				break;
+#endif
+
+#if VK_VERSION_1_2
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES:
+				str << *(VkPhysicalDevice8BitStorageFeatures*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES:
+				str << *(VkPhysicalDeviceBufferDeviceAddressFeatures*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES:
+				str << *(VkPhysicalDeviceDescriptorIndexingFeatures*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES:
+				str << *(VkPhysicalDeviceHostQueryResetFeatures*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES:
+				str << *(VkPhysicalDeviceImagelessFramebufferFeatures*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES:
+				str << *(VkPhysicalDeviceScalarBlockLayoutFeatures*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES:
+				str << *(VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES:
+				str << *(VkPhysicalDeviceShaderAtomicInt64Features*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES:
+				str << *(VkPhysicalDeviceShaderFloat16Int8Features*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES:
+				str << *(VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES:
+				str << *(VkPhysicalDeviceTimelineSemaphoreFeatures*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFORM_BUFFER_STANDARD_LAYOUT_FEATURES:
+				str << *(VkPhysicalDeviceUniformBufferStandardLayoutFeatures*)pNextChain << std::endl;
+				break;
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES:
+				str << *(VkPhysicalDeviceVulkanMemoryModelFeatures*)pNextChain << std::endl;
+				break;
+
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES:
+				str << *(VkPhysicalDeviceVulkan12Features*)pNextChain << std::endl;
+				break;
+#endif
+
+			case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2:
+				assert(0);
+			default:
+				str << "Unknown feature 0x" << std::hex << pNextChain->sType << std::dec << std::endl;
+				break;
+			}
+
+			pNextChain = pNextChain->pNext;
+		}
 	}
 
 	static VulkanSharedPtr<VkDevice> CreateUnderlyingDevice(SelectedPhysicalDevice physDev)
@@ -569,10 +1101,10 @@ namespace RenderCore { namespace ImplVulkan
 
 	void                        APIInstance::SetWindowPlatformValue(const void* platformValue)
 	{
+		// (no need to call this if the caller is explicitly selecting a physical device via SelectPhysicalDevice)
 		if (_physicalDeviceSelected)
 			Throw(std::runtime_error("Attempting to call IAPIInstanceVulkan::SetWindowPlatformValue() after a physical device has already been selected. This method is optional, but prefer to call it only once and before other methods in the same class."));
 		_windowPlatformValue = platformValue;
-		SelectPhysicalDevice();
 	}
 
 	std::shared_ptr<IDevice>    APIInstance::CreateDevice(const DeviceFeatures& features)
@@ -594,15 +1126,103 @@ namespace RenderCore { namespace ImplVulkan
 		} else {
 			_physDev = SelectPhysicalDeviceForRendering(_instance.get(), nullptr);
 		}
-		#if 0 // defined(OSSERVICES_ENABLE_LOG)
-			LogPhysicalDeviceExtensions(Log(Verbose), _physDev._dev);
-		#endif
 		_physicalDeviceSelected = true;
+	}
+
+	void APIInstance::SelectPhysicalDevice(VkPhysicalDevice device, unsigned renderingQueueFamily)
+	{
+		if (_physicalDeviceSelected)
+			Throw(std::runtime_error("Attempting to call IAPIInstanceVulkan::SelectPhysicalDevice() after a physical device has already been selected. This method is optional, but prefer to call it only once and before other methods in the same class."));
+		_physDev._dev = device;
+		_physDev._renderingQueueFamily = renderingQueueFamily;
+		_physicalDeviceSelected = true;
+	}
+
+	std::string APIInstance::LogPhysicalDevice()
+	{
+		if (!_physicalDeviceSelected)
+			SelectPhysicalDevice();
+		std::stringstream str;
+		LogPhysicalDeviceExtensions(str, _physDev._dev);
+
+		VkPhysicalDeviceFeatures2 features;
+		XlZeroMemory(features);
+		features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR;
+		auto* appender = (VkBaseOutStructure*)&features;
+		#define APPEND_STRUCT(X, T)																				\
+			X X##_inst; XlZeroMemory(X##_inst); X##_inst.sType = T;												\
+			appender->pNext = (VkBaseOutStructure*)&X##_inst; appender = (VkBaseOutStructure*)&X##_inst;		\
+			/**/;
+		#if VK_VERSION_1_1
+			APPEND_STRUCT(VkDeviceGroupDeviceCreateInfo, VK_STRUCTURE_TYPE_DEVICE_GROUP_DEVICE_CREATE_INFO);
+			APPEND_STRUCT(VkPhysicalDeviceMultiviewFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceProtectedMemoryFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROTECTED_MEMORY_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceSamplerYcbcrConversionFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceShaderDrawParametersFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceVariablePointersFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTERS_FEATURES);
+			APPEND_STRUCT(VkPhysicalDevice16BitStorageFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceVulkan11Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
+		#endif
+		#if VK_VERSION_1_2
+			APPEND_STRUCT(VkPhysicalDevice8BitStorageFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceBufferDeviceAddressFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceDescriptorIndexingFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceHostQueryResetFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceImagelessFramebufferFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceScalarBlockLayoutFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceShaderAtomicInt64Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceShaderFloat16Int8Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceTimelineSemaphoreFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceUniformBufferStandardLayoutFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFORM_BUFFER_STANDARD_LAYOUT_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceVulkanMemoryModelFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES);
+			APPEND_STRUCT(VkPhysicalDeviceVulkan12Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
+		#endif
+		#undef APPEND_STRUCT
+		vkGetPhysicalDeviceFeatures2(_physDev._dev, &features);
+		LogPhysicalDeviceFeatures(str, features);
+
+		return str.str();
+	}
+
+	std::string APIInstance::LogInstance()
+	{
+		std::stringstream str;
+		if (_windowPlatformValue) {
+			auto surface = CreateSurface(_instance.get(), _windowPlatformValue);
+			LogPhysicalDevices(str, _instance.get(), surface.get());
+		} else {
+			LogPhysicalDevices(str, _instance.get(), nullptr);
+		}
+		LogInstanceLayers(str);
+		return str.str();
+	}
+
+	VkInstance APIInstance::GetVulkanInstance()
+	{
+		return _instance.get();
+	}
+
+	VkPhysicalDevice APIInstance::GetSelectedPhysicalDevice()
+	{
+		if (!_physicalDeviceSelected)
+			SelectPhysicalDevice();
+		return _physDev._dev;
+	}
+
+	unsigned APIInstance::GetSelectedRenderingQueueFamily()
+	{
+		if (!_physicalDeviceSelected)
+			SelectPhysicalDevice();
+		return _physDev._renderingQueueFamily;
 	}
 
 	void* APIInstance::QueryInterface(size_t guid)
 	{
-		if (guid == typeid(APIInstance).hash_code())
+		if (guid == typeid(IAPIInstanceVulkan).hash_code())
+			return (IAPIInstanceVulkan*)this;
+		else if (guid == typeid(APIInstance).hash_code())
 			return this;
 		else if (guid == typeid(IAPIInstance).hash_code())
 			return (IAPIInstance*)this;
@@ -1547,4 +2167,5 @@ namespace RenderCore
 {
 	IDeviceVulkan::~IDeviceVulkan() {}
 	IThreadContextVulkan::~IThreadContextVulkan() {}
+	IAPIInstanceVulkan::~IAPIInstanceVulkan() {}
 }

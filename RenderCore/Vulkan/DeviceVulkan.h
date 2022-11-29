@@ -231,6 +231,13 @@ namespace RenderCore { namespace ImplVulkan
         std::shared_ptr<IDevice>    CreateDevice(const DeviceFeatures& features) override;
         DeviceFeatures              QuerySupportedFeatures() override;
         void                        SetWindowPlatformValue(const void*) override;
+        void                        SelectPhysicalDevice(VkPhysicalDevice, unsigned renderingQueueFamily);
+
+        std::string                 LogPhysicalDevice();
+		std::string                 LogInstance();
+        VkInstance                  GetVulkanInstance() override;
+        VkPhysicalDevice            GetSelectedPhysicalDevice() override;
+        unsigned                    GetSelectedRenderingQueueFamily() override;
 
         void*       QueryInterface(size_t guid) override;
         APIInstance();
