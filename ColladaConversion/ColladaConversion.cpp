@@ -569,7 +569,14 @@ namespace ColladaConversion
 		auto split = MakeFileNameSplitter(identifier);
 		auto filePath = split.AllExceptParameters().AsString();
 
-		result->_cfg = ::Assets::AutoConstructAsset<ImportConfiguration>(s_cfgName);
+		{
+			// don't throw an error when the cfg file is missing; just drop back to the defaults
+			::Assets::FileSnapshot snapshot;
+			auto cfgBlob = ::Assets::MainFileSystem::TryLoadFileAsBlob_TolerateSharingErrors(s_cfgName, &snapshot);
+			::Assets::DependentFileState depFileState { s_cfgName, snapshot };
+			auto cfgDepVal = ::Assets::GetDepValSys().Make(MakeIteratorRange(&depFileState, &depFileState+1));
+			result->_cfg = ::Assets::AutoConstructAsset<ImportConfiguration>(cfgBlob, std::move(cfgDepVal));
+		}
 
 		auto mainFileDepVal = ::Assets::GetDepValSys().Make(filePath);
 		result->_fileData = ::Assets::MainFileSystem::OpenMemoryMappedFile(filePath, 0, "r", OSServices::FileShareMode::Read);
