@@ -207,7 +207,8 @@ namespace UnitTests
 				RenderCore::Format::R32G32B32_FLOAT),
 			{},
 			"POSITION", 0);
-		geoBlock._drawCalls.push_back( GeoProc::NascentModel::DrawCallDesc { 0, dimof(indices), RenderCore::Topology::TriangleList } );
+		geoBlock._drawCalls.push_back( GeoProc::NascentModel::DrawCallDesc { 0, dimof(indices)/2, RenderCore::Topology::TriangleList } );
+		geoBlock._drawCalls.push_back( GeoProc::NascentModel::DrawCallDesc { dimof(indices)/2, dimof(indices)/2, RenderCore::Topology::TriangleList } );
 		geoBlock._indices = std::vector<uint8_t>{ (uint8_t*)indices, (uint8_t*)PtrAdd(indices, sizeof(indices)) };
 		geoBlock._indexFormat = RenderCore::Format::R32_UINT;
 		geoBlock._geoSpaceToNodeSpace = Identity<Float4x4>();

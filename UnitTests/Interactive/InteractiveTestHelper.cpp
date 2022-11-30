@@ -96,10 +96,8 @@ namespace UnitTests
 
 			auto osWindow = std::make_unique<PlatformRig::OverlappedWindow>();
 			auto renderAPI = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
-			if (auto* vulkanInstance = (RenderCore::IAPIInstanceVulkan*)renderAPI->QueryInterface(typeid(RenderCore::IAPIInstanceVulkan).hash_code()))
-	            vulkanInstance->SetWindowPlatformValue(osWindow->GetUnderlyingHandle());
 
-			_device = renderAPI->CreateDevice();
+			_device = renderAPI->CreateDevice(0, renderAPI->QueryFeatureCapability(0));
 			if (!_assetServices) _assetServices = std::make_shared<::Assets::Services>();
 
 			_windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(osWindow), _device);

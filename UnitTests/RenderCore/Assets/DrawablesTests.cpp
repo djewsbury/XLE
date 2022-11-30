@@ -299,11 +299,10 @@ namespace UnitTests
 					auto parsingContext = BeginParsingContext(techniqueTestApparatus, *threadContext);
 					parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 					parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(globalDelegate);
-					
+					parsingContext.RequireCommandList(renderer->Actualize()->GetCompletionCommandList());
+
 					for (const auto&pkt:pkts)
 						Techniques::Draw(parsingContext, *pipelineAcceleratorPool, *cfgId, pkt);
-
-					parsingContext.RequireCommandList(renderer->Actualize()->GetCompletionCommandList());
 
 					if (parsingContext._requiredBufferUploadsCommandList)
 						techniqueTestApparatus._bufferUploads->StallUntilCompletion(*threadContext, parsingContext._requiredBufferUploadsCommandList);
@@ -371,9 +370,11 @@ namespace UnitTests
 			BindImmediateData(_realImmediateDataSlot, Hash64("SeqBuffer0"));
 
 			std::vector<uint8_t> dummyData(32*32, 0);
+			// inefficient use of HostVisibleSequentialWrite, not recommended for use outside of unit tests
 			auto textureResource = dev.CreateResource(
 				CreateDesc(
-					BindFlag::ShaderResource, 
+					BindFlag::ShaderResource,
+					AllocationRules::HostVisibleSequentialWrite,
 					TextureDesc::Plain2D(32, 32, RenderCore::Format::R8G8B8A8_UNORM),
 					name + "-tex0"),
 				SubResourceInitData{MakeIteratorRange(dummyData)});

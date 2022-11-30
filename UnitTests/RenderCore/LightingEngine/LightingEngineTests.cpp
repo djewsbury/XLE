@@ -147,7 +147,7 @@ namespace UnitTests
 		}
 
 		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
-		parsingContext.GetTechniqueContext()._attachmentPool->Bind(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget());
+		parsingContext.BindAttachment(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget(), BindFlag::RenderTarget);
 
 		testHelper->BeginFrameCapture();
 
@@ -260,7 +260,7 @@ namespace UnitTests
 		camera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-8.0f, 5.f, 0.f}), Float3{0.0f, 1.0f, 0.0f}, Float3{-8.0f, 5.f, 0.f});
 		
 		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
-		parsingContext.GetTechniqueContext()._attachmentPool->Bind(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget());
+		parsingContext.BindAttachment(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget(), BindFlag::RenderTarget);
 
 		testHelper->BeginFrameCapture();
 

@@ -467,9 +467,11 @@ namespace UnitTests
 	std::shared_ptr<RenderCore::IResource> MetalTestHelper::CreateVB(IteratorRange<const void*> data)
 	{
 		using namespace RenderCore;
+		// note -- inefficient use of HostVisibleSequentialWrite, not recommended for use outside of unit tests
 		return _device->CreateResource(
 			CreateDesc(
 				BindFlag::VertexBuffer,
+				AllocationRules::HostVisibleSequentialWrite,
 				LinearBufferDesc::Create((unsigned)data.size()),
 				"vertex-buffer"),
 			SubResourceInitData { data });
@@ -478,9 +480,11 @@ namespace UnitTests
 	std::shared_ptr<RenderCore::IResource> MetalTestHelper::CreateIB(IteratorRange<const void*> data)
 	{
 		using namespace RenderCore;
+		// note -- inefficient use of HostVisibleSequentialWrite, not recommended for use outside of unit tests
 		return _device->CreateResource(
 			CreateDesc(
 				BindFlag::IndexBuffer,
+				AllocationRules::HostVisibleSequentialWrite,
 				LinearBufferDesc::Create((unsigned)data.size()),
 				"index-buffer"),
 			SubResourceInitData { data });
@@ -489,9 +493,11 @@ namespace UnitTests
 	std::shared_ptr<RenderCore::IResource> MetalTestHelper::CreateCB(IteratorRange<const void*> data)
 	{
 		using namespace RenderCore;
+		// note -- inefficient use of HostVisibleSequentialWrite, not recommended for use outside of unit tests
 		return _device->CreateResource(
 			CreateDesc(
 				BindFlag::ConstantBuffer,
+				AllocationRules::HostVisibleSequentialWrite,
 				LinearBufferDesc::Create((unsigned)data.size()),
 				"constant-buffer"),
 			SubResourceInitData { data });

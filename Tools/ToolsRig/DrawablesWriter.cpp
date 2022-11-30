@@ -22,9 +22,11 @@ namespace ToolsRig
 	static std::shared_ptr<RenderCore::IResource> CreateVB(RenderCore::IDevice& device, IteratorRange<const void*> data)
 	{
 		using namespace RenderCore;
+		// note -- inefficient use of AllocationRules::HostVisibleSequentialWrite, not recommended for large or frequently used vertex buffers
 		return device.CreateResource(
 			CreateDesc(
 				BindFlag::VertexBuffer,
+				AllocationRules::HostVisibleSequentialWrite,
 				LinearBufferDesc::Create((unsigned)data.size()),
 				"vertex-buffer"),
 			SubResourceInitData { data });

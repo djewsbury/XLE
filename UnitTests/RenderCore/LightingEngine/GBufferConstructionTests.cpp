@@ -346,13 +346,8 @@ namespace UnitTests
 
 	static void ReadyForTransfer(RenderCore::IThreadContext& threadContext, RenderCore::IResource& resource)
 	{
-		// todo -- final image layout solution
 		using namespace RenderCore;
-		Metal::Internal::SetImageLayout(
-			*Metal::DeviceContext::Get(threadContext),
-			*dynamic_cast<Metal::Resource*>(&resource),
-			Metal::Internal::ImageLayout::ColorAttachmentOptimal, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-			Metal::Internal::ImageLayout::General, 0, VK_PIPELINE_STAGE_HOST_BIT);
+		Metal::BarrierHelper(threadContext).Add(resource, BindFlag::RenderTarget, BindFlag::TransferSrc);
 	}
 
 	TEST_CASE( "LightingEngine-GBufferAccuracy", "[rendercore_lighting_engine]" )
@@ -402,7 +397,7 @@ namespace UnitTests
 				std::shared_ptr<IResource> diffuseResource, normalResource, parameterResource, depthResource;
 				std::shared_ptr<IResource> reconstructedWorldPosition, reconstructedWorldNormal;
 				std::shared_ptr<IResource> directWorldPosition, directWorldNormal;
-				RenderCore::Techniques::AttachmentPool::Reservation attachmentReservation;
+				RenderCore::Techniques::AttachmentReservation attachmentReservation;
 
 				testApparatus._bufferUploads->Update(*threadContext);
 				Threading::Sleep(16);

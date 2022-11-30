@@ -178,7 +178,7 @@ namespace UnitTests
 				auto stitchedImage = testHelper->_device->CreateResource(stitchedImageDesc);
 				UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, stripeTargetDesc);
 				auto parsingContext = BeginParsingContext(testApparatus, *threadContext, stripeTargetDesc, camera);
-				parsingContext.GetTechniqueContext()._attachmentPool->Bind(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget());
+				parsingContext.BindAttachment(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget(), BindFlag::RenderTarget);
 
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
@@ -212,7 +212,6 @@ namespace UnitTests
 				}
 
 				SaveImage(*threadContext, *stitchedImage, "acne-shadow-precision");
-				parsingContext.GetTechniqueContext()._attachmentPool->UnbindAll();
 			}
 
 			///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -248,7 +247,7 @@ namespace UnitTests
 
 				lightScene.DestroyLightSource(lightId);
 
-				auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
+				auto colorLDR = parsingContext.GetAttachmentReservation().GetSemanticResource(Techniques::AttachmentSemantics::ColorLDR);
 				REQUIRE(colorLDR);
 
 				SaveImage(*threadContext, *colorLDR, "contact-shadow-precision");
@@ -340,7 +339,7 @@ namespace UnitTests
 		using namespace RenderCore;
 		auto rpi = Techniques::RenderPassToPresentationTarget(parsingContext);
 		UniformsStreamInterface usi;
-		auto cascadeIndexTexture = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Hash64("CascadeIndex")+0);
+		auto cascadeIndexTexture = parsingContext.GetAttachmentReservation().GetSemanticResource(Hash64("CascadeIndex")+0);
 		REQUIRE(cascadeIndexTexture);
 		auto cascadeIndexTextureSRV = cascadeIndexTexture->CreateTextureView(BindFlag::ShaderResource);
 		usi.BindResourceView(0, Hash64("PrebuiltCascadeIndexTexture"));
@@ -498,12 +497,12 @@ namespace UnitTests
 
 					DrawCascadeColors(parsingContext.GetThreadContext(), parsingContext, testApparatus._pipelinePool);
 
-					auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
+					auto colorLDR = parsingContext.GetAttachmentReservation().GetSemanticResource(Techniques::AttachmentSemantics::ColorLDR);
 					REQUIRE(colorLDR);
 
 					SaveImage(*threadContext, *colorLDR, "sun-source-cascades-scene-camera");
 
-					auto cascadeIndexTexture = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Hash64("CascadeIndex")+0);
+					auto cascadeIndexTexture = parsingContext.GetAttachmentReservation().GetSemanticResource(Hash64("CascadeIndex")+0);
 					REQUIRE(cascadeIndexTexture);
 					auto cascadeIndexReadback = cascadeIndexTexture->ReadBackSynchronized(*threadContext);
 					unsigned cascadePixelCount[5] = {0,0,0,0,0};
@@ -532,7 +531,7 @@ namespace UnitTests
 					// draw the camera and shadow frustums into the output image
 					DrawCameraAndShadowFrustums(*threadContext, immediateDrawingHelper, parsingContext, lightScene, lightId, sceneCamera);
 
-					auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
+					auto colorLDR = parsingContext.GetAttachmentReservation().GetSemanticResource(Techniques::AttachmentSemantics::ColorLDR);
 					REQUIRE(colorLDR);
 
 					SaveImage(*threadContext, *colorLDR, "sun-source-cascades-vis-camera-" + std::to_string(c));

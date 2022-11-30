@@ -172,10 +172,6 @@ namespace UnitTests
 
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 		
-		/*Metal::Internal::SetupInitialLayout(
-			*Metal::DeviceContext::Get(*threadContext),
-			*fbHelper.GetMainTarget());*/
-
 		{
 			auto stagingDesc = CreateDesc(
 				BindFlag::TransferSrc,

@@ -138,10 +138,11 @@ namespace UnitTests
 				"skinning"
 			});
 
+		std::vector<std::string> materialBindingSymbols { "Material0" };
 		model.Add(
 			GeoProc::NascentModel::Command {
 				mainObjId, {controllerId},
-				"geo-model", {}});
+				"geo-model", std::move(materialBindingSymbols)});
 
 		GeoProc::NascentSkeleton skeleton;
 		skeleton.WriteOutputMarker({}, "geo-model");
@@ -264,6 +265,11 @@ namespace UnitTests
 		for (auto& s:deformInputBinding._geoBindings[0].second._bufferStrides) s = 0;
 		deformInputBinding._geoBindings[0].second._bufferStrides[Techniques::Internal::VB_GPUStaticData] = animVB._ia._vertexStride;
 		deformInputBinding._geoBindings[0].second._bufferStrides[Techniques::Internal::VB_PostDeform] = CalculateVertexStrideForSlot(dstLayout, Techniques::Internal::VB_PostDeform);
+		// note -- this will throw an exception right now because the model compiler is adding extra "geos" to the model scaffold (for the adjacency mesh version)
+		// 		however, we haven't configured bindings for them
+		//		there's a couple of fixes we need to do:
+		//			- adjacency index buffer should become an optional "supplement", rather than extra geos
+		//			- consider supporting cases in the deformer when not everything is configured for deform
 		deformer.Bind(deformInputBinding);
 
 		auto inputResource = LoadStorageBuffer(*testHelper._device, *modelScaffold, animVB);

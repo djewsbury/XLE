@@ -52,7 +52,7 @@ namespace UnitTests
 	//
 	static std::unordered_map<std::string, ::Assets::Blob> s_utData {
 		std::make_pair("downsample.pixel.hlsl", ::Assets::AsBlob(R"--(
-			Texture2D InputTexture : register(t6, space0);
+			Texture2D InputTexture : register(t0, space0);
 			
 			SamplerState BilinearClampSampler : register(s14, space0);
 			SamplerState UnnormalizedBilinearClampSampler : register(s15, space0);
@@ -229,9 +229,12 @@ namespace UnitTests
 		ToolsRig::IDrawablesWriter& drawableWriter)
 	{
 		using namespace RenderCore;
+		auto techDel = RenderCore::Techniques::CreateTechniqueDelegate_Utility(
+			testApparatus._sharedDelegates->_techniqueSetFile,
+			RenderCore::Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
 		auto sequencerConfig = testApparatus._pipelineAccelerators->CreateSequencerConfig(
 			"WriteDownsampleInput",
-			testApparatus._sharedDelegates->_deferredIllumDelegate,
+			techDel,
 			{}, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 
 		if (1) {

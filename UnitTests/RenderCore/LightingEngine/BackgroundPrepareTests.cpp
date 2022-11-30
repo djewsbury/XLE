@@ -301,7 +301,7 @@ namespace UnitTests
 				ParseScene(drawInstance, *scene._drawablesWriter);
 			}
 
-			auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
+			auto colorLDR = parsingContext.GetAttachmentReservation().GetSemanticResource(Techniques::AttachmentSemantics::ColorLDR);
 			REQUIRE(colorLDR);
 			SaveImage(*threadContext, *colorLDR, "background-probe-prepare-" + std::to_string(c));
 		}
