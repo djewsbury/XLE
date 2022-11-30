@@ -445,9 +445,15 @@ namespace RenderCore { namespace LightingEngine
 		srvs[SR::GBuffer_Parameters] = rpi.GetInputAttachmentView(2).get();
 		srvs[SR::DepthTexture] = rpi.GetInputAttachmentView(3).get();
 		if (lightResolveOperators._enableShadowProbes) {
-			assert(shadowProbes);
-			srvs[SR::StaticShadowProbeDatabase] = &shadowProbes->GetStaticProbesTable();
-			srvs[SR::StaticShadowProbeProperties] = &shadowProbes->GetShadowProbeUniforms();
+			if (shadowProbes && shadowProbes->IsReady()) {
+				srvs[SR::StaticShadowProbeDatabase] = &shadowProbes->GetStaticProbesTable();
+				srvs[SR::StaticShadowProbeProperties] = &shadowProbes->GetShadowProbeUniforms();
+			} else {
+				// We need a white dummy texture in reverseZ modes, or black in non-reverseZ modes
+				assert(Techniques::GetDefaultClipSpaceType() == ClipSpaceType::Positive_ReverseZ || Techniques::GetDefaultClipSpaceType() == ClipSpaceType::PositiveRightHanded_ReverseZ);
+				srvs[SR::StaticShadowProbeDatabase] = parsingContext.GetTechniqueContext()._commonResources->_whiteCubeArraySRV.get();
+				srvs[SR::StaticShadowProbeProperties] = parsingContext.GetTechniqueContext()._commonResources->_blackBufferUAV.get();
+			}
 		}
 
 			////////////////////////////////////////////////////////////////////////

@@ -482,6 +482,9 @@ namespace RenderCore { namespace LightingEngine
 						[lightingTechnique, captures, pipelineCollection](const std::shared_ptr<LightResolveOperators>& resolveOperators) {
 							captures->_lightResolveOperators = resolveOperators;
 							captures->_lightScene->_lightResolveOperators = resolveOperators;
+							// all lights get "SupportFiniteRange"
+							for (unsigned op=0; op<resolveOperators->_operatorDescs.size(); ++op)
+								captures->_lightScene->AssociateFlag(op, Internal::StandardPositionLightFlags::SupportFiniteRange);
 							lightingTechnique->_depVal = resolveOperators->GetDependencyValidation();
 							lightingTechnique->_completionCommandList = std::max(lightingTechnique->_completionCommandList, resolveOperators->_completionCommandList);
 							return lightingTechnique;
