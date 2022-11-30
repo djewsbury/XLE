@@ -1414,7 +1414,7 @@ namespace RenderCore { namespace ImplVulkan
 
 		// General rendering features
 		VkPhysicalDeviceMultiviewFeatures multiViewFeatures = {};
-		if (xleFeatures._multiViewRenderPasses) {
+		if (xleFeatures._viewInstancingRenderPasses) {
 			multiViewFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES;
 			multiViewFeatures.multiview = true;
 			appender->pNext = (VkBaseInStructure*)&multiViewFeatures;
@@ -1476,7 +1476,7 @@ namespace RenderCore { namespace ImplVulkan
 
 		std::vector<const char*> extensions;
 		for (auto c:s_deviceExtensions) extensions.push_back(c);
-		if (xleFeatures._conservativeRasterization)
+		if (xleFeatures._conservativeRaster)
 			extensions.push_back(VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME);
 		if (xleFeatures._streamOutput)
 			extensions.push_back(VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME);
@@ -1724,7 +1724,7 @@ namespace RenderCore { namespace ImplVulkan
 		result._geometryShaders = features.features.geometryShader;
 
 		// General rendering features
-		result._multiViewRenderPasses = VkPhysicalDeviceVulkan11Features_inst.multiview;
+		result._viewInstancingRenderPasses = VkPhysicalDeviceVulkan11Features_inst.multiview;
 		if (hasStreamOutputExt)
 			result._streamOutput = 
 					VkPhysicalDeviceTransformFeedbackFeaturesEXT_inst.geometryStreams
@@ -1732,7 +1732,7 @@ namespace RenderCore { namespace ImplVulkan
 		result._depthBounds = features.features.depthBounds;
 		result._samplerAnisotrophy = features.features.samplerAnisotropy;
 		result._wideLines = features.features.wideLines;
-		result._conservativeRasterization = hasConservativeRasterExt;
+		result._conservativeRaster = hasConservativeRasterExt;
 		result._multiViewport = features.features.multiViewport;
 		result._independentBlend = features.features.independentBlend;
 		result._separateDepthStencilLayouts = VkPhysicalDeviceVulkan12Features_inst.separateDepthStencilLayouts;

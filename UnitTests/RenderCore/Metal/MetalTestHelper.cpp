@@ -51,7 +51,7 @@ namespace UnitTests
 			_depValSys = ::Assets::CreateDepValSys();
 
 		auto instance = RenderCore::CreateAPIInstance(api);
-		_device = instance->CreateDevice();
+		_device = instance->CreateDevice(0, instance->QueryFeatureCapability(0));
 
 		// For GLES, we must initialize the root context to something. Since we're not going to be
 		// rendering to window for unit tests, we will never create a PresentationChain (during which the
@@ -60,8 +60,6 @@ namespace UnitTests
 		if (glesDevice)
 			glesDevice->InitializeRootContextHeadless();
 
-		_device->GetImmediateContext();	// on Vulkan this will cause an early "second stage init"
-		
 		_defaultLegacyBindings = CreateDefaultLegacyRegisterBindingDesc();
 		_pipelineLayout = CreateDefaultPipelineLayout(*_device);
 
@@ -73,7 +71,14 @@ namespace UnitTests
 
 	MetalTestHelper::MetalTestHelper(const std::shared_ptr<RenderCore::IDevice>& device)
 	{
+		// Basically every test needs to use dep vals; so let's ensure the dep val sys exists here
+		if (!_depValSys)
+			_depValSys = ::Assets::CreateDepValSys();
+
 		_device = device;
+
+		_defaultLegacyBindings = CreateDefaultLegacyRegisterBindingDesc();
+		_pipelineLayout = CreateDefaultPipelineLayout(*_device);
 
 		_shaderService = std::make_unique<RenderCore::ShaderService>();
 		_shaderCompiler = _device->CreateShaderCompiler();
@@ -262,7 +267,7 @@ namespace UnitTests
 		assert(res != 0);
 	}
 
-	const std::shared_ptr<RenderCore::IResource> UnitTestFBHelper::GetMainTarget() const
+	std::shared_ptr<RenderCore::IResource> UnitTestFBHelper::GetMainTarget() const
 	{
 		return _pimpl->_targets[0];
 	}

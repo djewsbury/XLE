@@ -141,6 +141,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		const auto& vs = _shaderProgram->GetModule(ShaderStage::Vertex);
 		const auto& gs = _shaderProgram->GetModule(ShaderStage::Geometry);
 		const auto& ps = _shaderProgram->GetModule(ShaderStage::Pixel);
+		if (gs && !factory.GetXLEFeatures()._geometryShaders)
+			Throw(std::runtime_error("Attempting to create a pipeline with a geometry shader, but the geometry shaders feature is not enabled in DeviceFeatures"));
 		if (vs) shaderStages[shaderStageCount++] = BuildShaderStage(vs.get(), VK_SHADER_STAGE_VERTEX_BIT, vsEntryPoint);
 		if (gs) shaderStages[shaderStageCount++] = BuildShaderStage(gs.get(), VK_SHADER_STAGE_GEOMETRY_BIT, psEntryPoint);
 		if (ps) shaderStages[shaderStageCount++] = BuildShaderStage(ps.get(), VK_SHADER_STAGE_FRAGMENT_BIT, gsEntryPoint);
@@ -196,6 +198,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		ms.alphaToCoverageEnable = VK_FALSE;
 		ms.alphaToOneEnable = VK_FALSE;
 		ms.minSampleShading = 0.0f;
+
+		if (_rasterizerState.pNext && ((VkBaseInStructure*)_rasterizerState.pNext)->sType == VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_CONSERVATIVE_STATE_CREATE_INFO_EXT
+			&& !factory.GetXLEFeatures()._samplerAnisotrophy)
+			Throw(std::runtime_error("Attempting to create a pipeline with conservative rasterization, but the conservative raster feature is not enabled in DeviceFeatures"));
 
 		VkGraphicsPipelineCreateInfo pipeline = {};
 		pipeline.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;

@@ -337,13 +337,22 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		IResource* res[] = {
             _blankImage1DSrv.GetResource().get(), _blankImage2DSrv.GetResource().get(), _blankImage3DSrv.GetResource().get(), _blankImageCubeSrv.GetResource().get(),
-            _blankImage1DArraySrv.GetResource().get(), _blankImage2DArraySrv.GetResource().get(), _blankImageCubeArraySrv.GetResource().get(),
+            _blankImage1DArraySrv.GetResource().get(), _blankImage2DArraySrv.GetResource().get(),
 
             _blankImage1DUav.GetResource().get(), _blankImage2DUav.GetResource().get(), _blankImage3DUav.GetResource().get(), _blankImageCubeUav.GetResource().get(),
-            _blankImage1DArrayUav.GetResource().get(), _blankImage2DArrayUav.GetResource().get(), _blankImageCubeArrayUav.GetResource().get(),
+            _blankImage1DArrayUav.GetResource().get(), _blankImage2DArrayUav.GetResource().get(),
 
             _blankBufferUav.GetResource().get() }; 
 		Metal_Vulkan::CompleteInitialization(devContext, MakeIteratorRange(res));
+
+        if (_blankImageCubeArraySrv.GetResource()) {
+            // not all drivers support cubemap arrays; can be disabled with feature flags
+            IResource* res[] = {
+                _blankImageCubeArraySrv.GetResource().get(),
+                _blankImageCubeArrayUav.GetResource().get()
+            };
+            Metal_Vulkan::CompleteInitialization(devContext, MakeIteratorRange(res));
+        }
 
         const unsigned maxDummySizeBytes = 6144;        // (odd size because of cubemaps)
         auto stagingSource = devContext.MapTemporaryStorage(maxDummySizeBytes, BindFlag::TransferSrc);
@@ -356,7 +365,6 @@ namespace RenderCore { namespace Metal_Vulkan
         CopyHelper(encoder, *_blankImageCubeSrv.GetResource(), stagingSource.AsCopySource());
         CopyHelper(encoder, *_blankImage1DArraySrv.GetResource(), stagingSource.AsCopySource());
         CopyHelper(encoder, *_blankImage2DArraySrv.GetResource(), stagingSource.AsCopySource());
-        CopyHelper(encoder, *_blankImageCubeArraySrv.GetResource(), stagingSource.AsCopySource());
 
         CopyHelper(encoder, *_blankImage1DUav.GetResource(), stagingSource.AsCopySource());
         CopyHelper(encoder, *_blankImage2DUav.GetResource(), stagingSource.AsCopySource());
@@ -364,9 +372,13 @@ namespace RenderCore { namespace Metal_Vulkan
         CopyHelper(encoder, *_blankImageCubeUav.GetResource(), stagingSource.AsCopySource());
         CopyHelper(encoder, *_blankImage1DArrayUav.GetResource(), stagingSource.AsCopySource());
         CopyHelper(encoder, *_blankImage2DArrayUav.GetResource(), stagingSource.AsCopySource());
-        CopyHelper(encoder, *_blankImageCubeArrayUav.GetResource(), stagingSource.AsCopySource());
 
         CopyHelper(encoder, *_blankBufferUav.GetResource(), stagingSource.AsCopySource());
+
+        if (_blankImageCubeArraySrv.GetResource()) {
+            CopyHelper(encoder, *_blankImageCubeArraySrv.GetResource(), stagingSource.AsCopySource());
+            CopyHelper(encoder, *_blankImageCubeArrayUav.GetResource(), stagingSource.AsCopySource());
+        }
 	}
 
     DummyResources::DummyResources(ObjectFactory& factory)
@@ -378,7 +390,6 @@ namespace RenderCore { namespace Metal_Vulkan
         auto blankCube = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM), "DummyTextureCube"));
         auto blankImage1DArray = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain1D(64, Format::R8G8B8A8_UNORM, 1, 1), "DummyTexture1DArray"));
         auto blankImage2DArray = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM, 1, 1), "DummyTexture2DArray"));
-        auto blankCubeArray = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM, 1, 6), "DummyTextureCubeArray"));
 
         auto blankImage1DUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain1D(64, Format::R8G8B8A8_UNORM), "DummyTexture1DUAV"));
         auto blankImage2DUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM), "DummyTexture2DUAV"));
@@ -386,7 +397,6 @@ namespace RenderCore { namespace Metal_Vulkan
         auto blankCubeUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM), "DummyTextureCubeUAV"));
         auto blankImage1DArrayUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain1D(64, Format::R8G8B8A8_UNORM, 1, 1), "DummyTexture1DArrayUAV"));
         auto blankImage2DArrayUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM, 1, 1), "DummyTexture2DArrayUAV"));
-        auto blankCubeArrayUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM, 1, 6), "DummyTextureCubeArrayUAV"));
 
         auto blankUAVBufferRes = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc::Create(4096), "DummyBufferUAV"));
         _blankBuffer = Internal::CreateResource(factory, CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(4096), "DummyUniformBuffer"));
@@ -398,7 +408,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
         _blankImage1DArraySrv = ResourceView{factory, blankImage1DArray};
         _blankImage2DArraySrv = ResourceView{factory, blankImage2DArray};
-        _blankImageCubeArraySrv = ResourceView{factory, blankCubeArray};
 
         _blankImage1DUav = ResourceView{factory, blankImage1DUav};
         _blankImage2DUav = ResourceView{factory, blankImage2DUav};
@@ -407,9 +416,15 @@ namespace RenderCore { namespace Metal_Vulkan
 
         _blankImage1DArrayUav = ResourceView{factory, blankImage1DArrayUav};
         _blankImage2DArrayUav = ResourceView{factory, blankImage2DArrayUav};
-        _blankImageCubeArrayUav = ResourceView{factory, blankCubeArrayUav};
 
         _blankBufferUav = ResourceView{factory, blankUAVBufferRes};
+
+        if (factory.GetXLEFeatures()._cubemapArrays) {
+            auto blankCubeArray = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM, 1, 6), "DummyTextureCubeArray"));
+            auto blankCubeArrayUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM, 1, 6), "DummyTextureCubeArrayUAV"));
+            _blankImageCubeArraySrv = ResourceView{factory, blankCubeArray};
+            _blankImageCubeArrayUav = ResourceView{factory, blankCubeArrayUav};
+        }
     }
 
     DummyResources::DummyResources() = default;

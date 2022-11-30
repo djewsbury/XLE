@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "MetalTestHelper.h"
+#include "MetalTestShaders.h"
 #include "../../../RenderCore/Metal/Shader.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Metal/ObjectFactory.h"
@@ -26,32 +27,7 @@ namespace UnitTests
 		return (OutputType*)input.QueryInterface(typeid(OutputType).hash_code());
 	}
 
-	static const char vsText[] = R"(
-		float4 main(float4 input : INPUT) : SV_Position { return input; }
-	)";
-	static const char gsText[] = R"(
-		struct GSOutput
-		{
-			float4 gsOut : POINT0;
-		};
-		struct VSOUT
-		{
-			float4 vsOut : SV_Position;
-		};
-
-		[maxvertexcount(1)]
-			void main(triangle VSOUT input[3], inout PointStream<GSOutput> outputStream)
-		{
-			GSOutput result;
-			result.gsOut.x = max(max(input[0].vsOut.x, input[1].vsOut.x), input[2].vsOut.x);
-			result.gsOut.y = max(max(input[0].vsOut.y, input[1].vsOut.y), input[2].vsOut.y);
-			result.gsOut.z = max(max(input[0].vsOut.z, input[1].vsOut.z), input[2].vsOut.z);
-			result.gsOut.w = max(max(input[0].vsOut.w, input[1].vsOut.w), input[2].vsOut.w);
-			outputStream.Append(result);
-		}
-	)";
-
-	static std::string BuildSODefinesString(IteratorRange<const RenderCore::InputElementDesc*> desc)
+	std::string BuildSODefinesString(IteratorRange<const RenderCore::InputElementDesc*> desc)
 	{
 		std::stringstream str;
 		str << "SO_OFFSETS=";
@@ -80,11 +56,11 @@ namespace UnitTests
 		const InputElementDesc soEles[] = { InputElementDesc("POINT", 0, Format::R32G32B32A32_FLOAT) };
 		const unsigned soStrides[] = { (unsigned)sizeof(Float4) };
 		
-		auto vs = testHelper->MakeShader(vsText, "vs_5_0");
-		auto gs = testHelper->MakeShader(gsText, "gs_5_0", BuildSODefinesString(MakeIteratorRange(soEles)));
+		auto vs = testHelper->MakeShader(vsText_JustPosition, "vs_5_0");
+		auto gs = testHelper->MakeShader(gsText_StreamOutput, "gs_5_0", BuildSODefinesString(MakeIteratorRange(soEles)));
 		Metal::ShaderProgram shaderProgram{
 			Metal::GetObjectFactory(), testHelper->_pipelineLayout,
-			vs, gs,  {},
+			vs, gs, {},
 			StreamOutputInitializers { MakeIteratorRange(soEles), MakeIteratorRange(soStrides) }};
 
 		Float4 inputVertices[] = {

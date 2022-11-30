@@ -289,6 +289,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
 			break;
 		case FilterMode::Anisotropic:
+			if (!objectFactory.GetXLEFeatures()._samplerAnisotrophy)
+				Throw(std::runtime_error("Attempting to create a sampler with anisotrophic filtering, but the anisotropic filtering feature is not enabled in DeviceFeatures"));
 			samplerCreateInfo.magFilter = VK_FILTER_LINEAR;
 			samplerCreateInfo.minFilter = VK_FILTER_LINEAR;
 			samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;

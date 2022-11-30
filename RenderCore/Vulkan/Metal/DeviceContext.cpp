@@ -103,6 +103,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(scissorRects.size() >= 1);
 		assert(viewports.size() == scissorRects.size());
 		assert(viewports.size() <= GetObjectFactory().GetPhysicalDeviceProperties().limits.maxViewports);
+		assert(!_sharedState->_objectFactory->GetXLEFeatures()._multiViewport || (viewports.size() == 1 && scissorRects.size() == 1));	// just an assert for performance reasons
 
 		assert(_sharedState->_commandList.GetUnderlying());
 		VLA(VkViewport, vkViewports, viewports.size());
@@ -174,6 +175,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void		GraphicsEncoder::SetDepthBounds(float minDepthValue, float maxDepthValue)
 	{
+		assert(_sharedState->_objectFactory->GetXLEFeatures()._depthBounds);
 		// See 26.5. Depth Bounds Test
 		// The depth bounds test compares the depth value za in the depth/stencil attachment at each sample’s
 		// framebuffer coordinates (xf,yf) and sample index i against a set of depth bounds.

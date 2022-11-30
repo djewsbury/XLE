@@ -277,7 +277,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			break;
 		case QueryPool::QueryType::ShaderInvocations:
 			{
-				if (!factory.GetPhysicalDeviceFeatures().pipelineStatisticsQuery)
+				if (!factory.GetXLEFeatures()._queryShaderInvocation)
 					Throw(std::runtime_error("Device feature \"_queryShaderInvocation\" must be enabled in order to use ShaderInvocation queries"));
 
 				VkQueryPipelineStatisticFlags pipelineStatistics =

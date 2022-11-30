@@ -88,7 +88,7 @@ namespace UnitTests
             RenderCore::IThreadContext& threadContext,
             IteratorRange<const RenderCore::ClearValue*> clearValues = {});
         std::map<unsigned, unsigned> GetFullColorBreakdown(RenderCore::IThreadContext& threadContext);
-        const std::shared_ptr<RenderCore::IResource> GetMainTarget() const;
+        std::shared_ptr<RenderCore::IResource> GetMainTarget() const;
         const RenderCore::FrameBufferDesc& GetDesc() const;
         RenderCore::ViewportDesc GetDefaultViewport() const;
         void SaveImage(RenderCore::IThreadContext& threadContext, StringSection<> filename) const;

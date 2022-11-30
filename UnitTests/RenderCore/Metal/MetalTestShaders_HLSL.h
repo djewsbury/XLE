@@ -101,6 +101,10 @@ namespace UnitTests
             }
         )";
 
+    static const char vsText_JustPosition[] = R"(
+		float4 main(float4 input : INPUT) : SV_Position { return input; }
+	)";
+
     static const char psText[] = 
         HLSLPrefix
 		R"(
@@ -164,4 +168,46 @@ namespace UnitTests
                 }
             }
         )";
+
+    static const char gsText_Passthrough[] = 
+        HLSLPrefix
+        R"(
+            struct PCVertex
+            {
+                float4 position : SV_Position;
+                float4 color : COLOR0;
+            };
+
+            [maxvertexcount(3)]
+                void main(triangle PCVertex input[3], inout TriangleStream<PCVertex> OutStream)
+            {
+                OutStream.Append(input[0]);
+                OutStream.Append(input[1]);
+                OutStream.Append(input[2]);
+                OutStream.RestartStrip();
+            }
+        )";
+
+    static const char gsText_StreamOutput[] = R"(
+		struct GSOutput
+		{
+			float4 gsOut : POINT0;
+		};
+		struct VSOUT
+		{
+			float4 vsOut : SV_Position;
+		};
+
+		[maxvertexcount(1)]
+			void main(triangle VSOUT input[3], inout PointStream<GSOutput> outputStream)
+		{
+			GSOutput result;
+			result.gsOut.x = max(max(input[0].vsOut.x, input[1].vsOut.x), input[2].vsOut.x);
+			result.gsOut.y = max(max(input[0].vsOut.y, input[1].vsOut.y), input[2].vsOut.y);
+			result.gsOut.z = max(max(input[0].vsOut.z, input[1].vsOut.z), input[2].vsOut.z);
+			result.gsOut.w = max(max(input[0].vsOut.w, input[1].vsOut.w), input[2].vsOut.w);
+			outputStream.Append(result);
+		}
+	)";
+
 }

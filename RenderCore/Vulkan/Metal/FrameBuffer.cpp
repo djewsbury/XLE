@@ -701,6 +701,9 @@ namespace RenderCore { namespace Metal_Vulkan
 				helper.CreateAttachmentReference(a._resourceName, a._window, Internal::AttachmentResourceUsageType::Input, subpassAttachmentUsages[a._resourceName], spIdx, true);
         }
 
+		if (isViewInstancingFrameBuffer && !factory.GetXLEFeatures()._viewInstancingRenderPasses)
+			Throw(std::runtime_error("Attempting to create a view instancing frame buffer, but the view instancing feature is disabled"));
+
         VLA(VkImageView, rawViews, helper._workingViewedAttachments.size());
 		unsigned rawViewCount = 0;
 		_clearValuesOrdering.reserve(helper._workingViewedAttachments.size());

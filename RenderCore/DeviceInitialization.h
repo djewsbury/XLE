@@ -52,12 +52,12 @@ namespace RenderCore
         bool _geometryShaders = false;
 
         // General rendering features
-        bool _multiViewRenderPasses = false;
+        bool _viewInstancingRenderPasses = false;
         bool _streamOutput = false;                 // "transform feedback" in GL/Vulkan parlance
         bool _depthBounds = false;
         bool _samplerAnisotrophy = false;
         bool _wideLines = false;
-        bool _conservativeRasterization = false;
+        bool _conservativeRaster = false;
         bool _independentBlend = false;
         bool _multiViewport = false;
         bool _separateDepthStencilLayouts = false;

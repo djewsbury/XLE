@@ -73,7 +73,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		return result;
 	}
 	
-	static VkImageUsageFlags AsImageUsageFlags(BindFlag::BitField bindFlags)
+	VkImageUsageFlags AsImageUsageFlags(BindFlag::BitField bindFlags)
 	{
 		// note -- we're assuming shader resources are sampled here (rather than storage type textures)
 		// Also, assuming that the ShaderResource flag means it can be used as an input attachment
