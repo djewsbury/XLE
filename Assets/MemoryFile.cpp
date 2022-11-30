@@ -577,12 +577,6 @@ namespace Assets
 	auto FileSystem_Memory::TryMonitor(FileSnapshot& snapshot, const Marker& marker, const std::shared_ptr<IFileMonitor>& evnt) -> IOReason
 	{
 		snapshot._state = FileSnapshot::State::DoesNotExist;
-
-		// Monitors are only really needed for unit tests and debugging purposes
-		// when not needed, we should disable them
-		if (!(_flags & FileSystemMemoryFlags::EnableChangeMonitoring))
-			return IOReason::Invalid;
-
 		if (marker.size() < sizeof(MarkerStruct)) return IOReason::FileNotFound;
 
 		const auto& m = *(const MarkerStruct*)AsPointer(marker.begin());
@@ -591,15 +585,22 @@ namespace Assets
 			if (idx >= _staticFilesAndContents.size())
 				return IOReason::FileNotFound;
 
-			ScopedLock(_attachedMonitorsLock);
-			auto range = EqualRange(_staticAttachedMonitors, (unsigned)idx);
-			for (auto r=range.first; r!=range.second; ++r)
-				// weak_ptr to shared_ptr comparison without lock -- https://stackoverflow.com/questions/12301916/equality-compare-stdweak-ptr
-				// compares the control block, rather than the object pointer itself
-				if (!r->second.owner_before(evnt) && !evnt.owner_before(r->second))
-					return IOReason::Invalid;
+			// Monitors are only really needed for unit tests and debugging purposes
+			// when not needed, we should disable them
+			// Still report the current snapshot, though, otherwise the dep val system will end up
+			// thinking the file doesn't exist
+			if (_flags & FileSystemMemoryFlags::EnableChangeMonitoring) {
+				ScopedLock(_attachedMonitorsLock);
+				auto range = EqualRange(_staticAttachedMonitors, (unsigned)idx);
+				for (auto r=range.first; r!=range.second; ++r)
+					// weak_ptr to shared_ptr comparison without lock -- https://stackoverflow.com/questions/12301916/equality-compare-stdweak-ptr
+					// compares the control block, rather than the object pointer itself
+					if (!r->second.owner_before(evnt) && !evnt.owner_before(r->second))
+						return IOReason::Invalid;
 
-			_staticAttachedMonitors.insert(range.second, std::make_pair(idx, evnt));
+				_staticAttachedMonitors.insert(range.second, std::make_pair(idx, evnt));
+			}
+
 			snapshot._state = FileSnapshot::State::Normal;
 			snapshot._modificationTime = _modificationTime;
 			return IOReason::Success;
@@ -607,15 +608,18 @@ namespace Assets
 			if (idx >= _filesAndContents.size())
 				return IOReason::FileNotFound;
 
-			ScopedLock(_attachedMonitorsLock);
-			auto range = EqualRange(_attachedMonitors, (unsigned)idx);
-			for (auto r=range.first; r!=range.second; ++r)
-				// weak_ptr to shared_ptr comparison without lock -- https://stackoverflow.com/questions/12301916/equality-compare-stdweak-ptr
-				// compares the control block, rather than the object pointer itself
-				if (!r->second.owner_before(evnt) && !evnt.owner_before(r->second))
-					return IOReason::Invalid;
+			if (_flags & FileSystemMemoryFlags::EnableChangeMonitoring) {
+				ScopedLock(_attachedMonitorsLock);
+				auto range = EqualRange(_attachedMonitors, (unsigned)idx);
+				for (auto r=range.first; r!=range.second; ++r)
+					// weak_ptr to shared_ptr comparison without lock -- https://stackoverflow.com/questions/12301916/equality-compare-stdweak-ptr
+					// compares the control block, rather than the object pointer itself
+					if (!r->second.owner_before(evnt) && !evnt.owner_before(r->second))
+						return IOReason::Invalid;
 
-			_attachedMonitors.insert(range.second, std::make_pair(idx, evnt));
+				_attachedMonitors.insert(range.second, std::make_pair(idx, evnt));
+			}
+
 			snapshot._state = FileSnapshot::State::Normal;
 			snapshot._modificationTime = _modificationTime;
 			return IOReason::Success;
