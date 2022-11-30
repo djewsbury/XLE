@@ -508,6 +508,7 @@ namespace RenderCore { namespace Metal_Vulkan
     , _physDevProperties(std::move(moveFrom._physDevProperties))
     , _physDevFeatures(std::move(moveFrom._physDevFeatures))
     , _extensionFunctions(std::move(moveFrom._extensionFunctions))
+    , _xleFeatures(std::move(moveFrom._xleFeatures))
     , _vmaAllocator(std::move(moveFrom._vmaAllocator))
     {
         moveFrom._vmaAllocator = nullptr;
@@ -537,6 +538,7 @@ namespace RenderCore { namespace Metal_Vulkan
         _physDevProperties = std::move(moveFrom._physDevProperties);
         _physDevFeatures = std::move(moveFrom._physDevFeatures);
         _extensionFunctions = std::move(moveFrom._extensionFunctions);
+        _xleFeatures = std::move(moveFrom._xleFeatures);
         _vmaAllocator = std::move(moveFrom._vmaAllocator); moveFrom._vmaAllocator = nullptr;
         #if defined(_DEBUG)
             _associatedDestructionQueues = std::move(moveFrom._associatedDestructionQueues);
@@ -544,8 +546,8 @@ namespace RenderCore { namespace Metal_Vulkan
         return *this;
     }
 
-    ObjectFactory::ObjectFactory(VkInstance instance,  VkPhysicalDevice physDev, VulkanSharedPtr<VkDevice> device, std::shared_ptr<ExtensionFunctions> extensionFunctions)
-    : _physDev(physDev), _device(device), _extensionFunctions(extensionFunctions)
+    ObjectFactory::ObjectFactory(VkInstance instance,  VkPhysicalDevice physDev, VulkanSharedPtr<VkDevice> device, const DeviceFeatures& xleFeatures, std::shared_ptr<ExtensionFunctions> extensionFunctions)
+    : _physDev(physDev), _device(device), _extensionFunctions(extensionFunctions), _xleFeatures(xleFeatures)
     {
         _memProps = std::make_unique<VkPhysicalDeviceMemoryProperties>(VkPhysicalDeviceMemoryProperties{});
         vkGetPhysicalDeviceMemoryProperties(physDev, _memProps.get());
@@ -704,6 +706,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		} else {
 			assert(q._markerCounts.front().first < marker);
 			q._markerCounts.emplace_back(std::make_pair(marker, 1u));
+            assert(q._markerCounts.page_count() <= 128);        // sanity check
 		}
 
 		q._objects.push_back(obj);

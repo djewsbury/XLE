@@ -29,7 +29,7 @@ namespace RenderCore
         virtual unsigned                    GetDeviceConfigurationCount() = 0;
         virtual DeviceConfigurationProps    GetDeviceConfigurationProps(unsigned configurationIdx) = 0;
 
-        virtual DeviceFeatures              QueryFeatures(unsigned configurationIdx) = 0;
+        virtual DeviceFeatures              QueryFeatureCapability(unsigned configurationIdx) = 0;
         // "platformWindowHandle" here is the same value passed to IDevice::CreatePresentationChain()
         // will return false if we expect IDevice::CreatePresentationChain() to fail with the given parameter
         virtual bool                        QueryPresentationChainCompatibility(
@@ -57,24 +57,32 @@ namespace RenderCore
         bool _depthBounds = false;
         bool _samplerAnisotrophy = false;
         bool _wideLines = false;
+        bool _conservativeRasterization = false;
+        bool _independentBlend = false;
+        bool _multiViewport = false;
+        bool _separateDepthStencilLayouts = false;
 
         // Resource types
         bool _cubemapArrays = false;
 
         // Query types
         bool _queryShaderInvocation = false;        // for QueryPool::Type::ShaderInvocations
+        bool _queryStreamOutput = false;            // for QueryPool::Type::StreamOutput_Stream0 (etc)
 
         // Additional shader instructions
         bool _shaderImageGatherExtended = false;
+        bool _pixelShaderStoresAndAtomics = false;
+        bool _vertexGeoTessellationShaderStoresAndAtomics = false;
 
         // texture compression types
         bool _textureCompressionETC2 = false;
-        bool _textureCompressionATSC_LDR = false;
+        bool _textureCompressionASTC_LDR = false;
+        bool _textureCompressionASTC_HDR = false;
         bool _textureCompressionBC = false;
 
         // queues
-        bool _separateTransferQueue = false;
-        bool _separateComputeQueue = false;
+        bool _dedicatedTransferQueue = false;
+        bool _dedicatedComputeQueue = false;
     };
 
     enum class PhysicalDeviceType { Unknown, DiscreteGPU, IntegratedGPU, VirtualGPU, CPU };
@@ -84,6 +92,8 @@ namespace RenderCore
     public:
         char _driverName[256];
         uint64_t _driverVersion = 0;
+        uint32_t _vendorId = 0;
+        uint32_t _deviceId = 0;
         PhysicalDeviceType _physicalDeviceType = PhysicalDeviceType::Unknown;
     };
 

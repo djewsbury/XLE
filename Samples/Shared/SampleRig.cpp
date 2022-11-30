@@ -71,7 +71,8 @@ namespace Sample
             }
         }
 
-        sampleGlobals._renderDevice = renderAPI->CreateDevice(0, {});
+        auto capability = renderAPI->QueryFeatureCapability(0);
+        sampleGlobals._renderDevice = renderAPI->CreateDevice(0, capability);
 
         auto techniqueServices = ConsoleRig::MakeAttachablePtr<RenderCore::Techniques::Services>(sampleGlobals._renderDevice);
         ConsoleRig::AttachablePtr<ToolsRig::IPreviewSceneRegistry> previewSceneRegistry = ToolsRig::CreatePreviewSceneRegistry();

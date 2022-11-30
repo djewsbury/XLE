@@ -269,11 +269,17 @@ namespace RenderCore { namespace Metal_Vulkan
 		_queryStates = std::vector<QueryState>(count, QueryState::PendingReset);
 		switch (type) {
 		case QueryPool::QueryType::StreamOutput_Stream0:
+			if (!factory.GetXLEFeatures()._queryStreamOutput)
+				Throw(std::runtime_error("Device feature \"_queryStreamOutput\" must be enabled in order to use StreamOutput_Stream0 queries"));
+
 			_underlying = factory.CreateQueryPool(VK_QUERY_TYPE_TRANSFORM_FEEDBACK_STREAM_EXT, count, 0);
 			_outputCount = 2;
 			break;
 		case QueryPool::QueryType::ShaderInvocations:
 			{
+				if (!factory.GetPhysicalDeviceFeatures().pipelineStatisticsQuery)
+					Throw(std::runtime_error("Device feature \"_queryShaderInvocation\" must be enabled in order to use ShaderInvocation queries"));
+
 				VkQueryPipelineStatisticFlags pipelineStatistics =
 					VK_QUERY_PIPELINE_STATISTIC_VERTEX_SHADER_INVOCATIONS_BIT |
 					VK_QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT |

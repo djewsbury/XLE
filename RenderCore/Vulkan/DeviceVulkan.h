@@ -208,7 +208,8 @@ namespace RenderCore { namespace ImplVulkan
 
         Device(
             VulkanSharedPtr<VkInstance> instance,
-            SelectedPhysicalDevice physDev);
+            SelectedPhysicalDevice physDev,
+            const DeviceFeatures& xleFeatures);
         ~Device();
     protected:
 		VulkanSharedPtr<VkInstance>         _instance;
@@ -229,12 +230,12 @@ namespace RenderCore { namespace ImplVulkan
     {
     public:
         std::shared_ptr<IDevice>    CreateDevice(unsigned configurationIdx, const DeviceFeatures& features) override;
-        std::shared_ptr<IDevice>    CreateDevice(VkPhysicalDevice, unsigned renderingQueueFamily) override;
+        std::shared_ptr<IDevice>    CreateDevice(VkPhysicalDevice, unsigned renderingQueueFamily, const DeviceFeatures&) override;
 
         unsigned                    GetDeviceConfigurationCount() override;
         DeviceConfigurationProps    GetDeviceConfigurationProps(unsigned configurationIdx) override;
 
-        DeviceFeatures              QueryFeatures(unsigned configurationIdx) override;
+        DeviceFeatures              QueryFeatureCapability(unsigned configurationIdx) override;
         bool                        QueryPresentationChainCompatibility(unsigned configurationIdx, const void* platformWindowHandle) override;
         FormatCapability            QueryFormatCapability(unsigned configurationIdx, Format format, BindFlag::BitField bindingType) override;
 

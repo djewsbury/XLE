@@ -435,30 +435,39 @@ namespace RenderCore { namespace ImplVulkan
 		}
 	}
 
+	struct PhysicalDeviceExtensionQuery
+	{
+		IteratorRange<const VkExtensionProperties*> _extensions;
+
+		PhysicalDeviceExtensionQuery(VkPhysicalDevice physDev)
+		{
+			unsigned extPropertyCount = dimof(_extensionsBuffer);
+			auto res = vkEnumerateDeviceExtensionProperties(
+				physDev, nullptr,
+				&extPropertyCount, _extensionsBuffer);
+			if (res == VK_INCOMPLETE) {
+				res = vkEnumerateDeviceExtensionProperties(physDev, nullptr, &extPropertyCount, nullptr);
+				assert(res == VK_SUCCESS);
+				_overflowExtensions.resize(extPropertyCount);
+				res = vkEnumerateDeviceExtensionProperties(
+					physDev, nullptr,
+					&extPropertyCount, _overflowExtensions.data());
+				assert(res == VK_SUCCESS);
+				_extensions = MakeIteratorRange(_overflowExtensions);
+			} else {
+				_extensions = MakeIteratorRange(_extensionsBuffer, &_extensionsBuffer[extPropertyCount]);
+			}
+		}
+	private:
+		VkExtensionProperties _extensionsBuffer[256];
+		std::vector<VkExtensionProperties> _overflowExtensions;
+	};
+
 	static void LogPhysicalDeviceExtensions(std::ostream& str, VkPhysicalDevice physDev)
 	{
-		VkExtensionProperties extensions[64];
-		std::vector<VkExtensionProperties> overflowExtensions;
-		IteratorRange<const VkExtensionProperties*> foundExtensions;
-		unsigned extPropertyCount = dimof(extensions);
-		auto res = vkEnumerateDeviceExtensionProperties(
-			physDev, nullptr,
-			&extPropertyCount, extensions);
-		if (res == VK_INCOMPLETE) {
-			res = vkEnumerateDeviceExtensionProperties(physDev, nullptr, &extPropertyCount, nullptr);
-			assert(res == VK_SUCCESS);
-			overflowExtensions.resize(extPropertyCount);
-			res = vkEnumerateDeviceExtensionProperties(
-				physDev, nullptr,
-				&extPropertyCount, overflowExtensions.data());
-			assert(res == VK_SUCCESS);
-			foundExtensions = MakeIteratorRange(overflowExtensions);
-		} else {
-			foundExtensions = MakeIteratorRange(extensions);
-		}
-
-		str << "[" << foundExtensions.size() << "] Vulkan physical device extensions" << std::endl;
-		for (auto c:foundExtensions)
+		PhysicalDeviceExtensionQuery ext{physDev};
+		str << "[" << ext._extensions.size() << "] Vulkan physical device extensions" << std::endl;
+		for (auto c:ext._extensions)
 			str << "  " << c.extensionName << " (" << c.specVersion << ")" << std::endl;
 	}
 }}
@@ -1059,11 +1068,32 @@ static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceVulkan1
 	return str;
 }
 
+static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceConservativeRasterizationPropertiesEXT& props)
+{
+	str << "Conservative rasterization" << std::endl;
+	str << "  Primitive overestimation size: " << props.primitiveOverestimationSize << ", max extra overestimation size: " << props.maxExtraPrimitiveOverestimationSize << ", extra overestimation granularity: " << props.extraPrimitiveOverestimationSizeGranularity << std::endl;
+	str << "  Primitive underestimation: " << (props.primitiveUnderestimation ? "supported" : "unsupported") << std::endl;
+	str << "  Conservative point and line rasterization: " << (props.conservativePointAndLineRasterization ? "supported" : "unsupported") << std::endl;
+	str << "  Degenerate triangles rasterized: " << (props.degenerateTrianglesRasterized ? "yes" : "no") << ", degenerate lines rasterized: " << (props.degenerateLinesRasterized ? "yes" : "no") << std::endl;
+	str << "  Fully covered fragment shader input variable: " << (props.fullyCoveredFragmentShaderInputVariable ? "supported" : "unsupported") << ", simultaneous post depth converage: " << (props.conservativeRasterizationPostDepthCoverage ? "supported" : "unsupported");
+	return str;
+}
+
+static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceTransformFeedbackPropertiesEXT& props)
+{
+	str << "Transform feedback" << std::endl;
+	str << "  Max -- streams: " << props.maxTransformFeedbackStreams << ", buffers: " << props.maxTransformFeedbackBuffers << ", buffer size: " << props.maxTransformFeedbackBufferSize
+		<< ", stream data size: " << props.maxTransformFeedbackStreamDataSize << ", buffer data size: " << props.maxTransformFeedbackBufferDataSize << ", buffer data stride: " << props.maxTransformFeedbackBufferDataStride << std::endl;
+	str << "  Queries: " << (props.transformFeedbackQueries ? "supported" : "unsupported") << ", multi stream lines/triangles: " << (props.transformFeedbackQueries ? "supported" : "unsupported") 
+		<< ", shader stream select: " << (props.transformFeedbackRasterizationStreamSelect ? "supported" : "unsupported") << ", draw indirect: " << (props.transformFeedbackRasterizationStreamSelect ? "supported" : "unsupported");
+	return str;
+}
+
 namespace RenderCore { namespace ImplVulkan
 {
 	static void LogPhysicalDeviceFeatures(std::ostream& str, const VkPhysicalDeviceFeatures2& features2)
 	{
-		assert(features2.sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR);
+		assert(features2.sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
 
 		std::vector<const char*> enabledFeatures;
 		std::vector<const char*> disabledFeatures;
@@ -1292,7 +1322,8 @@ namespace RenderCore { namespace ImplVulkan
 
 		std::pair<unsigned, const char*> versions [] { 
 			{11, "VK1.1"},
-			{12, "VK1.2"}
+			{12, "VK1.2"},
+			{99, "Extensions"}
 		};
 
 		// walk through the "pNext" chain to find extended properties information
@@ -1337,6 +1368,16 @@ namespace RenderCore { namespace ImplVulkan
 					break;
 #endif
 
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONSERVATIVE_RASTERIZATION_PROPERTIES_EXT:
+					if (versionCode == 99)
+						str << *(VkPhysicalDeviceConservativeRasterizationPropertiesEXT*)pNextChain << std::endl;
+					break;
+
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TRANSFORM_FEEDBACK_PROPERTIES_EXT:
+					if (versionCode == 99)
+						str << *(VkPhysicalDeviceTransformFeedbackPropertiesEXT*)pNextChain << std::endl;
+					break;
+
 				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2_KHR:
 					assert(0);
 				default:
@@ -1350,7 +1391,9 @@ namespace RenderCore { namespace ImplVulkan
 		}
 	}
 
-	static VulkanSharedPtr<VkDevice> CreateUnderlyingDevice(SelectedPhysicalDevice physDev)
+	static VulkanSharedPtr<VkDevice> CreateUnderlyingDevice(
+		SelectedPhysicalDevice physDev,
+		const DeviceFeatures& xleFeatures)
 	{
 		VkDeviceQueueCreateInfo queue_info = {};
 		queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -1362,34 +1405,68 @@ namespace RenderCore { namespace ImplVulkan
 		queue_info.pQueuePriorities = queue_priorities;
 		queue_info.queueFamilyIndex = physDev._renderingQueueFamily;
 
-		VkPhysicalDeviceFeatures physicalDeviceFeatures = {};
-		physicalDeviceFeatures.geometryShader = true;
-		physicalDeviceFeatures.samplerAnisotropy = true;
-		physicalDeviceFeatures.pipelineStatisticsQuery = true;
-		// physicalDeviceFeatures.wideLines = true;
-		// physicalDeviceFeatures.independentBlend = true;
-		// physicalDeviceFeatures.robustBufferAccess = true;
-		// physicalDeviceFeatures.multiViewport = true;
-		physicalDeviceFeatures.shaderImageGatherExtended = true;
-		physicalDeviceFeatures.fragmentStoresAndAtomics = true;
-		physicalDeviceFeatures.imageCubeArray = true;
-		physicalDeviceFeatures.depthBounds = true;
+		VkPhysicalDeviceFeatures2 enabledFeatures2 = {};
+		enabledFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+		auto* appender = (VkBaseInStructure*)&enabledFeatures2;
+
+		// ShaderStages supported
+		enabledFeatures2.features.geometryShader = xleFeatures._geometryShaders;
+
+		// General rendering features
+		VkPhysicalDeviceMultiviewFeatures multiViewFeatures = {};
+		if (xleFeatures._multiViewRenderPasses) {
+			multiViewFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES;
+			multiViewFeatures.multiview = true;
+			appender->pNext = (VkBaseInStructure*)&multiViewFeatures;
+			appender = (VkBaseInStructure*)&multiViewFeatures;
+		}
 
 		VkPhysicalDeviceTransformFeedbackFeaturesEXT transformFeedbackFeatures = {};
-		transformFeedbackFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TRANSFORM_FEEDBACK_FEATURES_EXT;
-		transformFeedbackFeatures.geometryStreams = true;
-		transformFeedbackFeatures.transformFeedback = true;
+		if (xleFeatures._streamOutput) {
+			transformFeedbackFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TRANSFORM_FEEDBACK_FEATURES_EXT;
+			transformFeedbackFeatures.geometryStreams = true;
+			transformFeedbackFeatures.transformFeedback = true;
+			appender->pNext = (VkBaseInStructure*)&transformFeedbackFeatures;
+			appender = (VkBaseInStructure*)&transformFeedbackFeatures;
+		}
 
-		VkPhysicalDeviceMultiviewFeatures multiViewFeatures = {};
-        multiViewFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES;
-		multiViewFeatures.multiview = true;
-		multiViewFeatures.multiviewGeometryShader = true;
-        transformFeedbackFeatures.pNext = &multiViewFeatures;
+		enabledFeatures2.features.depthBounds = xleFeatures._depthBounds;
+		enabledFeatures2.features.samplerAnisotropy = xleFeatures._samplerAnisotrophy;
+		enabledFeatures2.features.wideLines = xleFeatures._wideLines;
+		enabledFeatures2.features.independentBlend = xleFeatures._independentBlend;
+		enabledFeatures2.features.multiViewport = xleFeatures._multiViewport;
 
-		VkPhysicalDeviceFeatures2KHR enabledFeatures2 = {};
-		enabledFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR;
-		enabledFeatures2.pNext = &transformFeedbackFeatures;
-		enabledFeatures2.features = physicalDeviceFeatures;
+		VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures separateDepthStencilLayoutFeatures = {};
+		if (xleFeatures._separateDepthStencilLayouts) {
+			separateDepthStencilLayoutFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES;
+			separateDepthStencilLayoutFeatures.separateDepthStencilLayouts = true;
+			appender->pNext = (VkBaseInStructure*)&separateDepthStencilLayoutFeatures;
+			appender = (VkBaseInStructure*)&separateDepthStencilLayoutFeatures;
+		}
+
+		// Resource types
+		enabledFeatures2.features.imageCubeArray = xleFeatures._cubemapArrays;
+
+		// Query types
+		enabledFeatures2.features.pipelineStatisticsQuery = xleFeatures._queryShaderInvocation;
+
+		// Additional shader instructions
+		enabledFeatures2.features.shaderImageGatherExtended = xleFeatures._shaderImageGatherExtended;
+		enabledFeatures2.features.fragmentStoresAndAtomics = xleFeatures._pixelShaderStoresAndAtomics;
+		enabledFeatures2.features.vertexPipelineStoresAndAtomics = xleFeatures._vertexGeoTessellationShaderStoresAndAtomics;
+
+		// texture compression types
+		enabledFeatures2.features.textureCompressionETC2 = xleFeatures._textureCompressionETC2;
+		enabledFeatures2.features.textureCompressionASTC_LDR = xleFeatures._textureCompressionASTC_LDR;
+		enabledFeatures2.features.textureCompressionBC = xleFeatures._textureCompressionBC;
+
+		VkPhysicalDeviceTextureCompressionASTCHDRFeaturesEXT astHDRFeatures = {};
+		if (xleFeatures._textureCompressionASTC_HDR) {
+			astHDRFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXTURE_COMPRESSION_ASTC_HDR_FEATURES_EXT;
+			astHDRFeatures.textureCompressionASTC_HDR = true;
+			appender->pNext = (VkBaseInStructure*)&astHDRFeatures;
+			appender = (VkBaseInStructure*)&astHDRFeatures;
+		}
 
 		VkDeviceCreateInfo device_info = {};
 		device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1399,7 +1476,12 @@ namespace RenderCore { namespace ImplVulkan
 
 		std::vector<const char*> extensions;
 		for (auto c:s_deviceExtensions) extensions.push_back(c);
-		extensions.push_back("VK_EXT_conservative_rasterization");
+		if (xleFeatures._conservativeRasterization)
+			extensions.push_back(VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME);
+		if (xleFeatures._streamOutput)
+			extensions.push_back(VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME);
+		if (xleFeatures._textureCompressionASTC_HDR)
+			extensions.push_back(VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME);
 		device_info.enabledExtensionCount = (uint32_t)extensions.size();
 		device_info.ppEnabledExtensionNames = extensions.data();
 
@@ -1563,12 +1645,12 @@ namespace RenderCore { namespace ImplVulkan
 	{
 		if (configurationIdx >= _physicalDevices.size())
 			Throw(std::runtime_error("Invalid configuration index"));
-		return std::make_shared<Device>(_instance, _physicalDevices[configurationIdx]);
+		return std::make_shared<Device>(_instance, _physicalDevices[configurationIdx], features);
 	}
 
-	std::shared_ptr<IDevice>    APIInstance::CreateDevice(VkPhysicalDevice physDev, unsigned renderingQueueFamily)
+	std::shared_ptr<IDevice>    APIInstance::CreateDevice(VkPhysicalDevice physDev, unsigned renderingQueueFamily, const DeviceFeatures& features)
 	{
-		return std::make_shared<Device>(_instance, SelectedPhysicalDevice{physDev, renderingQueueFamily});
+		return std::make_shared<Device>(_instance, SelectedPhysicalDevice{physDev, renderingQueueFamily}, features);
 	}
 
 	unsigned                    APIInstance::GetDeviceConfigurationCount()
@@ -1595,17 +1677,102 @@ namespace RenderCore { namespace ImplVulkan
 			case VK_PHYSICAL_DEVICE_TYPE_CPU: result._physicalDeviceType = PhysicalDeviceType::CPU; break;
 			default: result._physicalDeviceType = PhysicalDeviceType::Unknown; break;
 		}
+		result._vendorId = props.properties.vendorID;
+		result._deviceId = props.properties.deviceID;
 
 		return result;
 	}
 
-	DeviceFeatures              APIInstance::QueryFeatures(unsigned configurationIdx)
+	DeviceFeatures              APIInstance::QueryFeatureCapability(unsigned configurationIdx)
 	{
 		if (configurationIdx >= _physicalDevices.size())
 			Throw(std::runtime_error("Invalid configuration index"));
 
-		assert(0);		// todo -- implement
-		return {};
+		#define APPEND_STRUCT(X, T)																				\
+			X X##_inst = {}; X##_inst.sType = T;																\
+			appender->pNext = (VkBaseOutStructure*)&X##_inst; appender = (VkBaseOutStructure*)&X##_inst;		\
+			/**/;
+
+		VkPhysicalDeviceProperties2 props = {};
+		props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+		vkGetPhysicalDeviceProperties2(_physicalDevices[configurationIdx]._dev, &props);
+		auto* appender = (VkBaseOutStructure*)&props;
+		APPEND_STRUCT(VkPhysicalDeviceConservativeRasterizationPropertiesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONSERVATIVE_RASTERIZATION_PROPERTIES_EXT);
+		APPEND_STRUCT(VkPhysicalDeviceTransformFeedbackPropertiesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TRANSFORM_FEEDBACK_PROPERTIES_EXT);
+
+		VkPhysicalDeviceFeatures2 features = {};
+		features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+		appender = (VkBaseOutStructure*)&features;
+		APPEND_STRUCT(VkPhysicalDeviceVulkan11Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
+		APPEND_STRUCT(VkPhysicalDeviceVulkan12Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
+		APPEND_STRUCT(VkPhysicalDeviceTransformFeedbackFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TRANSFORM_FEEDBACK_FEATURES_EXT);
+		APPEND_STRUCT(VkPhysicalDeviceTextureCompressionASTCHDRFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXTURE_COMPRESSION_ASTC_HDR_FEATURES_EXT);	// brought into vk1.3 core
+
+		#undef APPEND_STRUCT
+
+		vkGetPhysicalDeviceProperties2(_physicalDevices[configurationIdx]._dev, &props);
+		vkGetPhysicalDeviceFeatures2(_physicalDevices[configurationIdx]._dev, &features);
+
+		PhysicalDeviceExtensionQuery ext{_physicalDevices[configurationIdx]._dev};
+		bool hasStreamOutputExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME); }) != ext._extensions.end();
+		bool hasASTCHDRExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME); }) != ext._extensions.end();
+		bool hasConservativeRasterExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME); }) != ext._extensions.end();
+
+		DeviceFeatures result;
+
+		// ShaderStages supported
+		result._geometryShaders = features.features.geometryShader;
+
+		// General rendering features
+		result._multiViewRenderPasses = VkPhysicalDeviceVulkan11Features_inst.multiview;
+		if (hasStreamOutputExt)
+			result._streamOutput = 
+					VkPhysicalDeviceTransformFeedbackFeaturesEXT_inst.geometryStreams
+				&&  VkPhysicalDeviceTransformFeedbackFeaturesEXT_inst.transformFeedback;
+		result._depthBounds = features.features.depthBounds;
+		result._samplerAnisotrophy = features.features.samplerAnisotropy;
+		result._wideLines = features.features.wideLines;
+		result._conservativeRasterization = hasConservativeRasterExt;
+		result._multiViewport = features.features.multiViewport;
+		result._independentBlend = features.features.independentBlend;
+		result._separateDepthStencilLayouts = VkPhysicalDeviceVulkan12Features_inst.separateDepthStencilLayouts;
+
+		// Resource types
+		result._cubemapArrays = features.features.imageCubeArray;
+
+		// Query types
+		result._queryShaderInvocation = features.features.pipelineStatisticsQuery;
+		if (hasStreamOutputExt)
+			result._queryStreamOutput = VkPhysicalDeviceTransformFeedbackPropertiesEXT_inst.transformFeedbackQueries;
+
+		// Additional shader instructions
+		result._shaderImageGatherExtended = features.features.shaderImageGatherExtended;
+		result._pixelShaderStoresAndAtomics = features.features.fragmentStoresAndAtomics;
+		result._vertexGeoTessellationShaderStoresAndAtomics = features.features.vertexPipelineStoresAndAtomics;
+
+		// texture compression types
+		result._textureCompressionETC2 = features.features.textureCompressionETC2;
+		result._textureCompressionASTC_LDR = features.features.textureCompressionASTC_LDR;
+		result._textureCompressionBC = features.features.textureCompressionBC;
+
+		result._textureCompressionASTC_HDR = false;
+		if (hasASTCHDRExt)
+			result._textureCompressionASTC_HDR = VkPhysicalDeviceTextureCompressionASTCHDRFeaturesEXT_inst.textureCompressionASTC_HDR;
+
+		// queues
+		result._dedicatedTransferQueue = false;
+		result._dedicatedComputeQueue = false;
+
+		for (auto qprops:EnumerateQueueFamilyProperties(_physicalDevices[configurationIdx]._dev)) {
+			// we say a queue family is "dedicated transfer", if it can support transfer but not graphics or compute
+			// likewise a dedicate compute queue family won't support graphics
+			if ((qprops.queueFlags & VK_QUEUE_TRANSFER_BIT) && !(qprops.queueFlags & (VK_QUEUE_GRAPHICS_BIT|VK_QUEUE_COMPUTE_BIT)))
+				result._dedicatedTransferQueue = true;
+			if ((qprops.queueFlags & VK_QUEUE_COMPUTE_BIT) && !(qprops.queueFlags & VK_QUEUE_GRAPHICS_BIT))
+				result._dedicatedComputeQueue = true;
+		}
+
+		return result;
 	}
 
 	bool                        APIInstance::QueryPresentationChainCompatibility(unsigned configurationIdx, const void* platformWindowHandle)
@@ -1669,6 +1836,9 @@ namespace RenderCore { namespace ImplVulkan
 				APPEND_STRUCT(VkPhysicalDeviceVulkan11Properties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES);		// not added until 1.2
 				APPEND_STRUCT(VkPhysicalDeviceVulkan12Properties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES);
 			#endif
+			// do we need to check if the extension is available for these objects?
+			APPEND_STRUCT(VkPhysicalDeviceConservativeRasterizationPropertiesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONSERVATIVE_RASTERIZATION_PROPERTIES_EXT);
+			APPEND_STRUCT(VkPhysicalDeviceTransformFeedbackPropertiesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TRANSFORM_FEEDBACK_PROPERTIES_EXT);
 			vkGetPhysicalDeviceProperties2(_physicalDevices[configurationIdx]._dev, &properties);
 			str << "PHYSICAL DEVICE PROPERTIES AND LIMITS" << std::endl;
 			LogPhysicalDeviceProperties(str, properties);
@@ -1676,7 +1846,7 @@ namespace RenderCore { namespace ImplVulkan
 
 		{
 			VkPhysicalDeviceFeatures2 features = {};
-			features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR;
+			features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 			auto* appender = (VkBaseOutStructure*)&features;
 			#if VK_VERSION_1_1
 				APPEND_STRUCT(VkDeviceGroupDeviceCreateInfo, VK_STRUCTURE_TYPE_DEVICE_GROUP_DEVICE_CREATE_INFO);
@@ -1773,6 +1943,7 @@ namespace RenderCore { namespace ImplVulkan
 
 			// Add a configuration option for all queue families that have the graphics bit set
 			// client can test them each separately for compatibility for rendering to a specific window
+			// physical devices that don't support graphics (ie, compute-only) aren't supported
 			for (unsigned qi=0; qi<unsigned(queueProps.size()); ++qi)
 				if (queueProps[qi].queueFlags & VK_QUEUE_GRAPHICS_BIT)
 					_physicalDevices.push_back({dev, qi});
@@ -1786,16 +1957,17 @@ namespace RenderCore { namespace ImplVulkan
 
     Device::Device(
 		VulkanSharedPtr<VkInstance> instance,
-    	SelectedPhysicalDevice physDev)
+    	SelectedPhysicalDevice physDev,
+		const DeviceFeatures& xleFeatures)
 	: _instance(std::move(instance))
 	, _physDev(std::move(physDev))
     {
 		_initializationThread = std::this_thread::get_id();
 
-		_underlying = CreateUnderlyingDevice(_physDev);
+		_underlying = CreateUnderlyingDevice(_physDev, xleFeatures);
 		auto extensionFunctions = std::make_shared<Metal_Vulkan::ExtensionFunctions>(_instance.get());
 		_globalsContainer = std::make_shared<Metal_Vulkan::GlobalsContainer>();
-		_globalsContainer->_objectFactory = Metal_Vulkan::ObjectFactory{_instance.get(), _physDev._dev, _underlying, extensionFunctions};
+		_globalsContainer->_objectFactory = Metal_Vulkan::ObjectFactory{_instance.get(), _physDev._dev, _underlying, xleFeatures, extensionFunctions};
 		auto& objFactory = _globalsContainer->_objectFactory;
 		auto& pools = _globalsContainer->_pools;
 
