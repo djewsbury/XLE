@@ -828,7 +828,7 @@ static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceLimits&
 		<< limits.sampledImageStencilSampleCounts << ", storage image: " << limits.storageImageSampleCounts << std::endl;
 	str << "Max sample mask words: " << limits.maxSampleMaskWords << std::endl;
 
-	str << "Timestamp --  compute and graphics: " << (limits.timestampComputeAndGraphics ? "supported": "unsupported") << ", period: " << limits.timestampPeriod << std::endl;
+	str << "Timestamp -- compute and graphics: " << (limits.timestampComputeAndGraphics ? "supported": "unsupported") << ", period: " << limits.timestampPeriod << std::endl;
 
 	str << "Max clip distances: " << limits.maxClipDistances << ", max cull distances: " << limits.maxCullDistances << ", max combined: " << limits.maxCombinedClipAndCullDistances << std::endl;
 
@@ -840,7 +840,222 @@ static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceLimits&
 	str << "Standard sampled locations: " << (limits.standardSampleLocations ? "true" : "false") << std::endl;
 
 	str << "Optimal buffer copy offset alignment: " << limits.optimalBufferCopyOffsetAlignment << ", optional buffer copy row pitch alignment: " << limits.optimalBufferCopyRowPitchAlignment << std::endl;
-	str << "Non coherent atom size: " << limits.nonCoherentAtomSize << std::endl;
+	str << "Non coherent atom size: " << limits.nonCoherentAtomSize;
+	return str;
+}
+
+static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceSparseProperties& props)
+{
+	str << "Sparse residency standard -- 2d block shape: " << props.residencyStandard2DBlockShape << ", multisample block shape: " << props.residencyStandard2DMultisampleBlockShape << ", 3d block shape: " << props.residencyStandard3DBlockShape << std::endl;
+	str << "Sparse residency aligned mip size: " << props.residencyAlignedMipSize << ", non resident strict: " << props.residencyNonResidentStrict;
+	return str;
+}
+
+struct StreamShaderStageFlags
+{
+	VkShaderStageFlags _flags = 0; 
+	friend std::ostream& operator<<(std::ostream& str, StreamShaderStageFlags input)
+	{
+		std::pair<unsigned, const char*> flags[]
+		{
+		    {VK_SHADER_STAGE_VERTEX_BIT, "Vertex"},
+			{VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, "TesselationControl"},
+			{VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, "TesselationEval"},
+			{VK_SHADER_STAGE_GEOMETRY_BIT, "Geometry"},
+			{VK_SHADER_STAGE_FRAGMENT_BIT, "Fragment"},
+			{VK_SHADER_STAGE_COMPUTE_BIT, "Compute"},
+			{VK_SHADER_STAGE_RAYGEN_BIT_KHR, "Raygen"},
+			{VK_SHADER_STAGE_ANY_HIT_BIT_KHR, "Anyhit"},
+			{VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, "ClosestHit"},
+			{VK_SHADER_STAGE_MISS_BIT_KHR, "Miss"},
+			{VK_SHADER_STAGE_INTERSECTION_BIT_KHR, "Intersection"},
+			{VK_SHADER_STAGE_CALLABLE_BIT_KHR, "Callable"},
+			{VK_SHADER_STAGE_TASK_BIT_NV, "Task"},
+			{VK_SHADER_STAGE_MESH_BIT_NV, "Mesh"}
+		};
+
+		bool pendingSeparator = false;
+		for (auto f:flags)
+			if (input._flags & f.first) {
+				if (pendingSeparator) str << " | ";
+				pendingSeparator = true;
+				str << f.second;
+			}
+		return str;
+	};
+};
+
+struct StreamSubgroupFeatureFlags
+{
+	VkSubgroupFeatureFlags _flags = 0; 
+	friend std::ostream& operator<<(std::ostream& str, StreamSubgroupFeatureFlags input)
+	{
+		std::pair<unsigned, const char*> flags[]
+		{
+		    {VK_SUBGROUP_FEATURE_BASIC_BIT, "Basic"},
+			{VK_SUBGROUP_FEATURE_VOTE_BIT, "Vote"},
+			{VK_SUBGROUP_FEATURE_ARITHMETIC_BIT, "Arithmetic"},
+			{VK_SUBGROUP_FEATURE_BALLOT_BIT, "Ballot"},
+			{VK_SUBGROUP_FEATURE_SHUFFLE_BIT, "Shuffle"},
+			{VK_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT, "ShuffleRelative"},
+			{VK_SUBGROUP_FEATURE_CLUSTERED_BIT, "Clustered"},
+			{VK_SUBGROUP_FEATURE_QUAD_BIT, "Quad"},
+			{VK_SUBGROUP_FEATURE_PARTITIONED_BIT_NV, "Partitioned"}
+		};
+
+		bool pendingSeparator = false;
+		for (auto f:flags)
+			if (input._flags & f.first) {
+				if (pendingSeparator) str << " | ";
+				pendingSeparator = true;
+				str << f.second;
+			}
+		return str;
+	};
+};
+
+static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceVulkan11Properties& props)
+{
+	str << "Device UUID: 0x" << std::hex << std::setfill('0');
+	for (auto i:props.deviceUUID) str << std::setw(2) << (unsigned)i;
+	str << ", driver UUID: 0x";
+	for (auto i:props.driverUUID) str << std::setw(2) << (unsigned)i;
+	if (props.deviceLUIDValid) {
+		str << ", device LUID: 0x";
+		for (auto i:props.deviceLUID) str << std::setw(2) << (unsigned)i;
+	} else {
+		str << ", no device LUID";
+	}
+	str << std::setw(0);
+	str << std::endl;
+	str << "Device node mask: 0x" << props.deviceNodeMask << std::dec << std::endl;
+	str << "Subgroup -- size: " << props.subgroupSize << ", supported stages: (" << StreamShaderStageFlags{props.subgroupSupportedStages} 
+		<< "), supported ops: (" << StreamSubgroupFeatureFlags{props.subgroupSupportedOperations} << "), quad ops in all stages: " << (props.subgroupQuadOperationsInAllStages ? "supported" : "unsupported") << std::endl;
+
+	str << "Point clipping behaviour: ";
+	switch (props.pointClippingBehavior) {
+	case VK_POINT_CLIPPING_BEHAVIOR_ALL_CLIP_PLANES: str << "all clip planes" << std::endl; break;
+	case VK_POINT_CLIPPING_BEHAVIOR_USER_CLIP_PLANES_ONLY: str << "user clip planes only" << std::endl; break;
+	default: str << "unknown" << std::endl; break;
+	}
+
+	str << "Max multiview -- view count: " << props.maxMultiviewViewCount << ", instance index: " << props.maxMultiviewInstanceIndex << std::endl;
+	str << "Fault on protected memory rule break: " << (props.protectedNoFault ? "no" : "yes") << std::endl;
+	str << "Max per set descriptors: " << props.maxPerSetDescriptors << ", max memory allocation size: " << props.maxMemoryAllocationSize;
+	return str;
+}
+
+struct StreamShaderFloatControlsIndependence
+{
+	VkShaderFloatControlsIndependence v;
+	friend std::ostream& operator<<(std::ostream& str, StreamShaderFloatControlsIndependence q)
+	{
+		switch (q.v) {
+		case VK_SHADER_FLOAT_CONTROLS_INDEPENDENCE_32_BIT_ONLY: str << "32 bit only"; break;
+		case VK_SHADER_FLOAT_CONTROLS_INDEPENDENCE_ALL: str << "all"; break;
+		case VK_SHADER_FLOAT_CONTROLS_INDEPENDENCE_NONE: str << "none"; break;
+		default: str << "unknown"; break;
+		}
+		return str;
+	}
+};
+
+static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceVulkan12Properties& props)
+{
+	str << "DriverID: ";
+	switch (props.driverID) {
+	case VK_DRIVER_ID_AMD_PROPRIETARY: str << "AMD proprietary"; break;
+	case VK_DRIVER_ID_AMD_OPEN_SOURCE: str << "AMD open source"; break;
+	case VK_DRIVER_ID_MESA_RADV: str << "Mesa"; break;
+	case VK_DRIVER_ID_NVIDIA_PROPRIETARY: str << "Nvidia proprietary"; break;
+	case VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS: str << "Intel proprietary"; break;
+	case VK_DRIVER_ID_INTEL_OPEN_SOURCE_MESA: str << "Intel open source Mesa"; break;
+	case VK_DRIVER_ID_IMAGINATION_PROPRIETARY: str << "Imagination proprietary"; break;
+	case VK_DRIVER_ID_QUALCOMM_PROPRIETARY: str << "Qualcomm proprietary"; break;
+	case VK_DRIVER_ID_ARM_PROPRIETARY: str << "Arm proprietary"; break;
+	case VK_DRIVER_ID_GOOGLE_SWIFTSHADER: str << "Google Swiftshader"; break;
+	case VK_DRIVER_ID_GGP_PROPRIETARY: str << "GGP proprietary"; break;
+	case VK_DRIVER_ID_BROADCOM_PROPRIETARY: str << "Broadcom proprietary"; break;
+	case VK_DRIVER_ID_MESA_LLVMPIPE: str << "Mesa LLVMpipe"; break;
+	case VK_DRIVER_ID_MOLTENVK: str << "MoltenVK"; break;
+	default: str << "Unknown"; break;
+	}
+
+	str << ", name: " << props.driverName << ", info: " << props.driverInfo << std::endl;
+	str << "VK conformance version: " << (unsigned)props.conformanceVersion.major << "." << (unsigned)props.conformanceVersion.minor << "." << (unsigned)props.conformanceVersion.subminor << "." << (unsigned)props.conformanceVersion.patch << std::endl;
+	str << "Denorm behaviour independence: " << StreamShaderFloatControlsIndependence{props.denormBehaviorIndependence} << ", rounding mode independence: " << StreamShaderFloatControlsIndependence{props.roundingModeIndependence} << std::endl;
+
+	auto floatTypesHelper = [](std::ostream& str, bool float16, bool float32, bool float64) {
+		CommaSeparatedList list{str};
+		if (float16) list << "float16"; if (float32) list << "float32"; if (float64) list << "float64";
+	};
+	str << "Shader signed-zero-inf-nan preserve: ";
+	floatTypesHelper(str, props.shaderSignedZeroInfNanPreserveFloat16, props.shaderSignedZeroInfNanPreserveFloat32, props.shaderSignedZeroInfNanPreserveFloat64);
+	str << std::endl << "Shader denorm preserve: ";
+	floatTypesHelper(str, props.shaderDenormPreserveFloat16, props.shaderDenormPreserveFloat32, props.shaderDenormPreserveFloat64);
+	str << std::endl << "Shader denorm flush to zero: ";
+	floatTypesHelper(str, props.shaderDenormFlushToZeroFloat16, props.shaderDenormFlushToZeroFloat32, props.shaderDenormFlushToZeroFloat64);
+	str << std::endl << "Shader rounding mode RTE: ";
+	floatTypesHelper(str, props.shaderRoundingModeRTEFloat16, props.shaderRoundingModeRTEFloat32, props.shaderRoundingModeRTEFloat64);
+	str << std::endl << "Shader rounding mode RTZ: ";
+	floatTypesHelper(str, props.shaderRoundingModeRTZFloat16, props.shaderRoundingModeRTZFloat32, props.shaderRoundingModeRTZFloat64);
+	str << std::endl;
+
+	str << "Max update after bind descriptors: " << props.maxUpdateAfterBindDescriptorsInAllPools << std::endl;
+
+	str << "Shader native non uniform indexing: ";
+	CommaSeparatedList list{str};
+	if (props.shaderUniformBufferArrayNonUniformIndexingNative) list << "uniform buffers";
+	if (props.shaderSampledImageArrayNonUniformIndexingNative) list << "sampled images";
+	if (props.shaderStorageBufferArrayNonUniformIndexingNative) list << "storage buffers";
+	if (props.shaderStorageImageArrayNonUniformIndexingNative) list << "storage images";
+	if (props.shaderInputAttachmentArrayNonUniformIndexingNative) list << "input attachments";
+	str << std::endl;
+
+	str << "Robust buffer access update after bind: " << (props.robustBufferAccessUpdateAfterBind ? "supported" : "unsupported") << std::endl;
+	str << "Quad divergent implicit lod: " << (props.quadDivergentImplicitLod ? "supported" : "unsupported") << std::endl;
+
+	str << "Max per stage descriptor update after bind -- samplers: " << props.maxPerStageDescriptorUpdateAfterBindSamplers << ", uniform buffers: " << props.maxPerStageDescriptorUpdateAfterBindUniformBuffers
+		 << ", storage buffers: " << props.maxPerStageDescriptorUpdateAfterBindStorageBuffers << ", sampled images: " << props.maxPerStageDescriptorUpdateAfterBindSampledImages
+		 << ", storage images: " << props.maxPerStageDescriptorUpdateAfterBindStorageImages << ", input attachments: " << props.maxPerStageDescriptorUpdateAfterBindInputAttachments << std::endl;
+	str << "Max per stage update after bind resources: " << props.maxPerStageUpdateAfterBindResources << std::endl;
+
+	str << "Max descriptor set update after bind -- samplers: " << props.maxDescriptorSetUpdateAfterBindSamplers << ", uniform buffers: " << props.maxDescriptorSetUpdateAfterBindUniformBuffers 
+		<< ", uniform buffers dynamic: " << props.maxDescriptorSetUpdateAfterBindUniformBuffersDynamic << ", storage buffers: " << props.maxDescriptorSetUpdateAfterBindStorageBuffers
+		<< ", storage buffers dynamic: " << props.maxDescriptorSetUpdateAfterBindStorageBuffersDynamic << ", sampled images: " << props.maxDescriptorSetUpdateAfterBindSampledImages
+		<< ", storage images: " << props.maxDescriptorSetUpdateAfterBindStorageImages << ", input attachments: " << props.maxDescriptorSetUpdateAfterBindInputAttachments << std::endl;
+
+	str << "Supported resolve modes -- depth: (";
+	list = CommaSeparatedList{str};
+	if (props.supportedDepthResolveModes & VK_RESOLVE_MODE_SAMPLE_ZERO_BIT) list << "sample zero";
+	if (props.supportedDepthResolveModes & VK_RESOLVE_MODE_AVERAGE_BIT) list << "average";
+	if (props.supportedDepthResolveModes & VK_RESOLVE_MODE_MIN_BIT) list << "min";
+	if (props.supportedDepthResolveModes & VK_RESOLVE_MODE_MAX_BIT) list << "max";
+	str << "), stencil: (";
+	list = CommaSeparatedList{str};
+	if (props.supportedStencilResolveModes & VK_RESOLVE_MODE_SAMPLE_ZERO_BIT) list << "sample zero";
+	if (props.supportedStencilResolveModes & VK_RESOLVE_MODE_AVERAGE_BIT) list << "average";
+	if (props.supportedStencilResolveModes & VK_RESOLVE_MODE_MIN_BIT) list << "min";
+	if (props.supportedStencilResolveModes & VK_RESOLVE_MODE_MAX_BIT) list << "max";
+	str << "), independent depth/stencil resolve modes: ";
+	if (props.independentResolve) str << "supported";
+	else if (props.independentResolveNone) str << "only with \"none\"";
+	else str << "unsupported";
+
+	str << std::endl << "Filter min/max filtering: " << (props.filterMinmaxSingleComponentFormats ? "single component formats" : "not guaranteed") << ", image component mapping: " << (props.filterMinmaxImageComponentMapping ? "supported" : "unsupported") << std::endl;
+
+	str << "Max timeline semaphore value difference: " << props.maxTimelineSemaphoreValueDifference << std::endl;
+
+	str << "Integer framebuffer sample counts: ";
+	list = CommaSeparatedList{str};
+	if (props.framebufferIntegerColorSampleCounts & VK_SAMPLE_COUNT_1_BIT) list << "1";
+	if (props.framebufferIntegerColorSampleCounts & VK_SAMPLE_COUNT_2_BIT) list << "2";
+	if (props.framebufferIntegerColorSampleCounts & VK_SAMPLE_COUNT_4_BIT) list << "4";
+	if (props.framebufferIntegerColorSampleCounts & VK_SAMPLE_COUNT_8_BIT) list << "8";
+	if (props.framebufferIntegerColorSampleCounts & VK_SAMPLE_COUNT_16_BIT) list << "16";
+	if (props.framebufferIntegerColorSampleCounts & VK_SAMPLE_COUNT_32_BIT) list << "32";
+	if (props.framebufferIntegerColorSampleCounts & VK_SAMPLE_COUNT_64_BIT) list << "64";
+
 	return str;
 }
 
@@ -1072,8 +1287,67 @@ namespace RenderCore { namespace ImplVulkan
 		str << "Device name: " << properties2.properties.deviceName << std::endl;
 		// is properties2.properties.pipelineCacheUUID useful?
 		str << std::endl << "VK1.0 limits" << std::endl;
-		str << properties2.properties.limits;
-		// str << properties2.properties.sparseProperties << std::endl;
+		str << properties2.properties.limits << std::endl;
+		str << properties2.properties.sparseProperties << std::endl;
+
+		std::pair<unsigned, const char*> versions [] { 
+			{11, "VK1.1"},
+			{12, "VK1.2"}
+		};
+
+		// walk through the "pNext" chain to find extended properties information
+		// but group by version just to improve readability a bit
+		for (auto v:versions) {
+			str << std::endl << v.second << std::endl;
+			unsigned versionCode = v.first;
+		
+			auto* pNextChain = (VkBaseOutStructure*)properties2.pNext;
+			while (pNextChain) {
+				switch (pNextChain->sType) {
+
+#if VK_VERSION_1_1
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES:
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_3_PROPERTIES:
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PROPERTIES:
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_POINT_CLIPPING_PROPERTIES:
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROTECTED_MEMORY_PROPERTIES:
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES:
+					// These are all subsets of VkPhysicalDeviceVulkan11Properties
+					break;
+
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES:
+					if (versionCode == 11)
+						str << *(VkPhysicalDeviceVulkan11Properties*)pNextChain << std::endl;
+					break;
+#endif
+
+#if VK_VERSION_1_2
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_STENCIL_RESOLVE_PROPERTIES:
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES:
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES:
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES:
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_FILTER_MINMAX_PROPERTIES:
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_PROPERTIES:
+					// These are all subsets of VkPhysicalDeviceVulkan12Properties
+					break;
+
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES:
+					if (versionCode == 12)
+						str << *(VkPhysicalDeviceVulkan12Properties*)pNextChain << std::endl;
+					break;
+#endif
+
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2_KHR:
+					assert(0);
+				default:
+					if (versionCode == versions[0].first)
+						str << "Unknown properties struct 0x" << std::hex << pNextChain->sType << std::dec << std::endl;
+					break;
+				}
+
+				pNextChain = pNextChain->pNext;
+			}
+		}
 	}
 
 	static VulkanSharedPtr<VkDevice> CreateUnderlyingDevice(SelectedPhysicalDevice physDev)
