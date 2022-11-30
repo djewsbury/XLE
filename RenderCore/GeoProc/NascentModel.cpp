@@ -288,6 +288,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				if (!geoBlock)
 					Throw(std::runtime_error("Missing geometry block referenced by command list in NascentModel::SerializeToChunks"));
 
+				// the number of material assigments in the cmd must match the number of draw calls in
+				// the geometry block (ie the material binding symbols is parrallel to the draw calls array)
+				assert(geoBlock->_drawCalls.size() == cmd.second._materialBindingSymbols.size());
+
 				std::vector<MaterialGuid> materials;
 				materials.reserve(cmd.second._materialBindingSymbols.size());
 				for (const auto&mat:cmd.second._materialBindingSymbols) {
