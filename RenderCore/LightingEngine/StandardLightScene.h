@@ -313,7 +313,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 		auto allocationFlagsArray = _allocationFlags.InternalArray();
 		if (!allocationFlagsArray.empty()) {
-			unsigned idxOffset = 0;
 			uint64_t q;
 			while (!allocationFlagsArray.empty()) {
 				q = ~allocationFlagsArray[0];

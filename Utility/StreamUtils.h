@@ -43,14 +43,15 @@ namespace Utility
         friend inline std::ostream& operator<<(std::ostream& stream, const ByteData& byteData)
         {
             stream << "Binary data (" << ByteCount(byteData._data.size()) << ") follows" << std::endl;
+            stream << std::hex << std::setfill('0');
             unsigned count = 0;
             for (auto byte:byteData._data.Cast<const uint8_t*>()) {
                 if ((count % 32) == 0 && count != 0) stream << std::endl;
                 else if (count != 0) stream << ' ';
                 ++count;
-                stream << std::hex << std::setw(2) << std::setfill('0') << (unsigned)byte;
+                stream << std::setw(2) << (unsigned)byte;
             }
-            stream << std::dec;
+            stream << std::setw(0) << std::dec;
             return stream;
         }
     };

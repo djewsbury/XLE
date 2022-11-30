@@ -88,6 +88,9 @@ namespace RenderCore { namespace Techniques
 
     ParsingContext::~ParsingContext() {}
 
+    ParsingContext& ParsingContext::operator=(ParsingContext&&) = default;
+    ParsingContext::ParsingContext(ParsingContext&&) = default;
+
     ParsingContext::StringHelpers::StringHelpers()
     {
         _errorString[0] = _pendingAssets[0] = _invalidAssets[0] = _quickMetrics[0] = '\0';

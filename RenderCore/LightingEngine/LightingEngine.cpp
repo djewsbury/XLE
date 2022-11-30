@@ -555,12 +555,6 @@ namespace RenderCore { namespace LightingEngine
 		_currentPhase = Phase::SequenceSetup;
 	}
 
-	static void Remove(std::vector<Techniques::PreregisteredAttachment>& prereg, uint64_t semantic)
-	{
-		auto i = std::find_if(prereg.begin(), prereg.end(), [semantic](const auto& c) { return c._semantic == semantic; });
-		if (i != prereg.end()) prereg.erase(i);
-	}
-
 	auto LightingTechniqueInstance::GetNextStep() -> Step
 	{
 		if (!_iterator)

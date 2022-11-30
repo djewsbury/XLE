@@ -93,12 +93,6 @@ namespace RenderCore { namespace LightingEngine
 			StaticProbePrepareHelper(IThreadContext& threadContext, ShadowProbes::Pimpl& pimpl)
 			: _pimpl(&pimpl)
 			{
-				auto staticDatabaseDesc = TextureDesc::PlainCube(_pimpl->_config._staticFaceDims, _pimpl->_config._staticFaceDims, Format::D16_UNORM);
-				staticDatabaseDesc._arrayCount = uint16_t(6*_pimpl->_probes.size());
-				Techniques::PreregisteredAttachment preregisteredAttachments[] {
-					{ semanticProbePrepare, CreateDesc(BindFlag::ShaderResource | BindFlag::DepthStencil, staticDatabaseDesc, "probe-prepare") }
-				};
-
 				_techContext._attachmentPool = std::make_shared<Techniques::AttachmentPool>(threadContext.GetDevice());
 				_techContext._frameBufferPool = Techniques::CreateFrameBufferPool();
 				auto uniformDelegateMan = Techniques::CreateUniformDelegateManager();

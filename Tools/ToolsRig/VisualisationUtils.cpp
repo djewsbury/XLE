@@ -206,14 +206,6 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> _lightingApparatus;
     };
 
-	static ::Assets::AssetState GetAsyncSceneState(SceneEngine::IScene& scene)
-	{
-		auto* asyncScene = dynamic_cast<::Assets::IAsyncMarker*>(&scene);
-		if (asyncScene)
-			return asyncScene->GetAssetState();
-		return ::Assets::AssetState::Ready;
-	}
-
     void SimpleSceneOverlay::Render(
         RenderCore::Techniques::ParsingContext& parserContext)
     {

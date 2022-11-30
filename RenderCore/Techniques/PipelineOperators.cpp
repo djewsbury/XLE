@@ -20,12 +20,6 @@
 #include "../../Assets/Continuation.h"
 #include "../../xleres/FileList.h"
 
-namespace Assets 
-{
-	uint64_t Hash64(const DependencyValidation& depVal, uint64_t seed) { return seed; }
-	static std::ostream& StreamWithHashFallback(std::ostream& str, const DependencyValidation& value, bool) { return str; }
-}
-
 namespace RenderCore { namespace Techniques
 {
 	class FullViewportOperator : public IShaderOperator
