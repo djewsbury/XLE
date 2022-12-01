@@ -5,6 +5,7 @@
 #pragma once
 
 #include "IncludeVulkan.h"
+#include "VulkanCore.h"
 
 namespace RenderCore { namespace Metal_Vulkan
 {
@@ -15,9 +16,11 @@ namespace RenderCore { namespace Metal_Vulkan
         PFN_vkCmdBindTransformFeedbackBuffersEXT _bindTransformFeedbackBuffers = nullptr;
         PFN_vkCmdEndTransformFeedbackEXT _endTransformFeedback = nullptr;
 
-        PFN_vkSetDebugUtilsObjectNameEXT _setObjectName = nullptr;
-        PFN_vkCmdBeginDebugUtilsLabelEXT _beginLabel = nullptr;
-        PFN_vkCmdEndDebugUtilsLabelEXT _endLabel = nullptr;
+        #if defined(VULKAN_ENABLE_DEBUG_EXTENSIONS)
+            PFN_vkSetDebugUtilsObjectNameEXT _setObjectName = nullptr;
+            PFN_vkCmdBeginDebugUtilsLabelEXT _beginLabel = nullptr;
+            PFN_vkCmdEndDebugUtilsLabelEXT _endLabel = nullptr;
+        #endif
 
         ExtensionFunctions(VkInstance instance);
     };

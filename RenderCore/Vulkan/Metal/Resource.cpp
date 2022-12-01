@@ -162,7 +162,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	static void AssignObjectName(ObjectFactory& factory, VkImage underlyingImage, VkBuffer underlyingBuffer, const char* name)
 	{
-		#if defined(_DEBUG)
+		#if defined(VULKAN_ENABLE_DEBUG_EXTENSIONS)
 			if (factory.GetExtensionFunctions()._setObjectName && name && name[0]) {
 				const VkDebugUtilsObjectNameInfoEXT imageNameInfo {
 					VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT, // sType

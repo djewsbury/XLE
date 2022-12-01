@@ -16,15 +16,18 @@ namespace RenderCore
         DX11, Vulkan, OpenGLES, AppleMetal
     };
 
-    std::shared_ptr<IAPIInstance> CreateAPIInstance(UnderlyingAPI api);
-
+    class APIFeatures;
     class DeviceFeatures;
     class DeviceConfigurationProps;
+    const APIFeatures& DefaultAPIFeatures();
+    const DeviceFeatures& DefaultDeviceFeatures();
+
+    std::shared_ptr<IAPIInstance> CreateAPIInstance(UnderlyingAPI api, const APIFeatures& features = DefaultAPIFeatures());
 
     class IAPIInstance
     {
     public:
-        virtual std::shared_ptr<IDevice>    CreateDevice(unsigned configurationIdx, const DeviceFeatures& features) = 0;
+        virtual std::shared_ptr<IDevice>    CreateDevice(unsigned configurationIdx = 0, const DeviceFeatures& features = DefaultDeviceFeatures()) = 0;
 
         virtual unsigned                    GetDeviceConfigurationCount() = 0;
         virtual DeviceConfigurationProps    GetDeviceConfigurationProps(unsigned configurationIdx) = 0;
@@ -41,6 +44,12 @@ namespace RenderCore
 
         virtual void*       QueryInterface(size_t guid) = 0;
         virtual ~IAPIInstance();
+    };
+
+    class APIFeatures
+    {
+    public:
+        bool _debugValidation = false;
     };
 
     // "features" can be toggled on or off at device construction time, and
@@ -97,7 +106,7 @@ namespace RenderCore
         PhysicalDeviceType _physicalDeviceType = PhysicalDeviceType::Unknown;
     };
 
-	using InstanceCreationFunction = std::shared_ptr<IAPIInstance>();
+	using InstanceCreationFunction = std::shared_ptr<IAPIInstance>(const APIFeatures&);
 	void RegisterInstanceCreationFunction(
 		UnderlyingAPI api,
 		InstanceCreationFunction* fn);

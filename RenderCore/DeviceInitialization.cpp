@@ -30,7 +30,7 @@ namespace RenderCore
 		return "<<unknown>>";
 	}
 
-    std::shared_ptr<IAPIInstance>    CreateAPIInstance(UnderlyingAPI api)
+    std::shared_ptr<IAPIInstance>    CreateAPIInstance(UnderlyingAPI api, const APIFeatures& apiFeatures)
     {
 		auto& creationFunctions = GetRegisterCreationFunctions();
 		auto i = std::find_if(
@@ -39,7 +39,7 @@ namespace RenderCore
 				return p.first == api;
 			});
 		if (i != creationFunctions.end())
-			return (*i->second)();
+			return (*i->second)(apiFeatures);
 
 		std::stringstream str;
 		str << "No API creation function registered for the given device API. Returning nullptr. These devices are supported:" << std::endl;
@@ -63,6 +63,21 @@ namespace RenderCore
 			return;
 		}
 		creationFunctions.push_back({api, fn});
+	}
+
+	const APIFeatures& DefaultAPIFeatures()
+	{
+		static APIFeatures result;
+		#if defined(_DEBUG)
+			result._debugValidation = true;
+		#endif
+		return result;
+	}
+
+    const DeviceFeatures& DefaultDeviceFeatures()
+	{
+		static DeviceFeatures result;
+		return result;
 	}
 }
 

@@ -17,21 +17,15 @@
 #include "Metal/ExtensionFunctions.h"
 #include "Metal/AsyncTracker.h"
 #include "Metal/SubmissionQueue.h"
-#include "../../Assets/IFileSystem.h"
-#include "../../ConsoleRig/GlobalServices.h"
 #include "../../OSServices/Log.h"
-#include "../../OSServices/AttachableLibrary.h"
-#include "../../ConsoleRig/AttachablePtr.h"
+#include "../../ConsoleRig/GlobalServices.h"		// (for GetLibVersionDesc())
+#include "../../OSServices/AttachableLibrary.h"		// (for GetLibVersionDesc())
 #include "../../Utility/Threading/ThreadingUtils.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/PtrUtils.h"
 #include "../../Utility/StreamUtils.h"
 #include "../../Core/SelectConfiguration.h"
 #include <memory>
-
-#if defined(_DEBUG)
-    #define ENABLE_DEBUG_EXTENSIONS
-#endif
 
 namespace RenderCore { namespace Metal_Vulkan
 {
@@ -64,209 +58,135 @@ namespace RenderCore { namespace ImplVulkan
 			ConstHash64<'appn', 'ame'>::Value, std::string("<<unnamed>>"));
 	}
 
-	static const char* s_instanceExtensions[] = 
+	static std::vector<VkLayerProperties> EnumerateLayers()
 	{
-		VK_KHR_SURFACE_EXTENSION_NAME
-		#if PLATFORMOS_TARGET  == PLATFORMOS_WINDOWS
-			, VK_KHR_WIN32_SURFACE_EXTENSION_NAME
-		#endif
-        #if defined(ENABLE_DEBUG_EXTENSIONS)
-            , VK_EXT_DEBUG_UTILS_EXTENSION_NAME
-        #endif
-		, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME		// (this extension now rolled into Vulkan 1.1, so technically deprecated)
-	};
+		for (;;) {
+			uint32_t layerCount = 0;
+			auto res = vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+			if (res != VK_SUCCESS)
+				Throw(VulkanAPIFailure(res, "Failure in during enumeration of Vulkan layer capabilities. You must have an up-to-date Vulkan driver installed."));
 
-	static const char* s_deviceExtensions[] =
-	{
-		VK_KHR_SWAPCHAIN_EXTENSION_NAME
-		, VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME
-		, VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME					// (rolled into 1.1)
-	};
+			if (layerCount == 0)
+				return std::vector<VkLayerProperties>();
 
-    #if defined(ENABLE_DEBUG_EXTENSIONS)
-	    static const char* s_instanceLayers[] =
-	    {
-			// "VK_LAYER_LUNARG_api_dump",
-			"VK_LAYER_LUNARG_assistant_layer",
-			"VK_LAYER_LUNARG_core_validation",
-			// "VK_LAYER_LUNARG_device_simulation",
-			// "VK_LAYER_LUNARG_monitor",
-			"VK_LAYER_LUNARG_object_tracker",
-			"VK_LAYER_LUNARG_parameter_validation",
-			// "VK_LAYER_LUNARG_screenshot",
-			"VK_LAYER_LUNARG_standard_validation",
+			std::vector<VkLayerProperties> layerProps;
+			layerProps.resize(layerCount);
+			res = vkEnumerateInstanceLayerProperties(&layerCount, AsPointer(layerProps.begin()));
+			if (res == VK_INCOMPLETE) continue;	// doc's arent clear as to whether layerCount is updated in this case
+			if (res != VK_SUCCESS)
+				Throw(VulkanAPIFailure(res, "Failure in during enumeration of Vulkan layer capabilities. You must have an up-to-date Vulkan driver installed."));
 
-		    "VK_LAYER_LUNARG_device_limits",
-		    "VK_LAYER_LUNARG_draw_state",
-		    "VK_LAYER_LUNARG_image",
-		    "VK_LAYER_LUNARG_mem_tracker",
-		    "VK_LAYER_LUNARG_object_tracker",
-		    "VK_LAYER_LUNARG_param_checker",
-		    "VK_LAYER_LUNARG_swapchain",
+			return layerProps;
+		}
+	}
 
-			// "VK_LAYER_LUNARG_vktrace"
+    #if defined(VULKAN_ENABLE_DEBUG_EXTENSIONS)
+		class DebugMessageHandler
+		{
+		public:
+			static OSServices::MessageTarget<> VulkanMsgTarget;
 
-		    "VK_LAYER_GOOGLE_threading",
-			"VK_LAYER_GOOGLE_unique_objects",
-            // "VK_LAYER_RENDERDOC_Capture",
+			static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback( 
+				VkDebugUtilsMessageSeverityFlagBitsEXT           messageSeverity,
+				VkDebugUtilsMessageTypeFlagsEXT                  messageTypes,
+				const VkDebugUtilsMessengerCallbackDataEXT*      pCallbackData,
+				void*                                            pUserData)
+			{
+				if (!VulkanMsgTarget.IsEnabled()) return false;
 
-			// "VK_LAYER_NV_optimus",
+				const auto* pMsg = pCallbackData->pMessage;
+				auto* handler = (DebugMessageHandler*)pUserData;
 
-			"VK_LAYER_KHRONOS_validation"
-	    };
+				bool report = true;
+				if (handler->_suppressSpamRules & messageSeverity) {
+					ScopedLock(handler->_suppressSpamLock);
+					auto now = std::chrono::steady_clock::now();
+					constexpr std::chrono::steady_clock::duration timeBetweenDuplicateMsgs = std::chrono::seconds(5);
+					constexpr std::chrono::steady_clock::duration timeBetweenSuppressionReports = std::chrono::seconds(1);
 
-	    static const char* s_deviceLayers[] =
-	    {
-			// "VK_LAYER_LUNARG_api_dump",
-			"VK_LAYER_LUNARG_assistant_layer",
-			"VK_LAYER_LUNARG_core_validation",
-			// "VK_LAYER_LUNARG_device_simulation",
-			// "VK_LAYER_LUNARG_monitor",
-			"VK_LAYER_LUNARG_object_tracker",
-			"VK_LAYER_LUNARG_parameter_validation",
-			// "VK_LAYER_LUNARG_screenshot",
-			"VK_LAYER_LUNARG_standard_validation",
+					uint64_t hashedCode = pCallbackData->messageIdNumber;
+					for (unsigned c=0; c<pCallbackData->cmdBufLabelCount; ++c)
+						hashedCode = HashCombine((size_t)pCallbackData->pCmdBufLabels[c].pLabelName, hashedCode);
+					for (unsigned c=0; c<pCallbackData->objectCount; ++c)
+						hashedCode = HashCombine(pCallbackData->pObjects[c].objectHandle, hashedCode);
 
-		    "VK_LAYER_LUNARG_device_limits",
-		    "VK_LAYER_LUNARG_draw_state",
-		    "VK_LAYER_LUNARG_image",
-		    "VK_LAYER_LUNARG_mem_tracker",
-		    "VK_LAYER_LUNARG_object_tracker",
-		    "VK_LAYER_LUNARG_param_checker",
-		    "VK_LAYER_LUNARG_swapchain",
+					auto i = LowerBound(handler->_suppressableMsgs, hashedCode);
+					if (i == handler->_suppressableMsgs.end() || i->first != hashedCode) {
+						i = handler->_suppressableMsgs.insert(i, {hashedCode, MsgReport{now, pCallbackData->messageIdNumber, 0}});
+					} else {
+						report = (now - i->second._lastReport) > timeBetweenDuplicateMsgs;
+						if (report) {
+							i->second._lastReport = now;
+							i->second._suppressedSinceLastReport = 0;
+						} else {
+							++i->second._suppressedSinceLastReport;
 
-			// "VK_LAYER_LUNARG_vktrace"
+							// Every now and again, report that there have been some suppressions
+							if ((now - handler->_lastSuppressionReport) >= timeBetweenSuppressionReports) {
+								handler->_lastSuppressionReport = now;
 
-		    "VK_LAYER_GOOGLE_threading",
-			"VK_LAYER_GOOGLE_unique_objects",
-            // "VK_LAYER_RENDERDOC_Capture",
+								Log(VulkanMsgTarget) << "Recent suppressed Vulkan messages: ";
+								for (auto& h:handler->_suppressableMsgs) {
+									if (h.second._suppressedSinceLastReport > 0) {
+										Log(VulkanMsgTarget) << "[type: 0x" << std::hex << h.second._idMsgCode << std::dec << ", count: " << h.second._suppressedSinceLastReport << "]";
+										h.second._suppressedSinceLastReport = 0;
+									}
+								}
+								Log(VulkanMsgTarget) << std::endl;
+							}
+						}
+					}
+				}
 
-			// "VK_LAYER_NV_optimus",
+				if (report)
+					Log(VulkanMsgTarget) << pCallbackData->pMessageIdName << ": " << pMsg << std::endl;
 
-			"VK_LAYER_KHRONOS_validation"
+				return false;
+			}
+
+			DebugMessageHandler(VkInstance instance)
+			: _instance(instance)
+			{
+				_suppressSpamRules = ~0u;
+
+				VkDebugUtilsMessengerCreateInfoEXT callback1 = {
+					VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,  // sType
+					NULL,                                                     // pNext
+					0,                                                        // flags
+					VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |           // messageSeverity
+					VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
+					VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |             // messageType
+					VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
+					debug_callback,                                           // pfnUserCallback
+					this                                                      // pUserData
+				};
+		
+				auto proc = ((PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr( _instance, "vkCreateDebugUtilsMessengerEXT" ));
+				if (!proc)
+					Throw(std::runtime_error("Cannot find Vulkan debug layer function. Ensure that the SDK is fully installed, or disable the debug reporting feature"));
+				proc( _instance, &callback1, Metal_Vulkan::g_allocationCallbacks, &_msgCallback );
+			}
+
+			~DebugMessageHandler()
+			{
+				((PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr( _instance, "vkDestroyDebugUtilsMessengerEXT" ))( _instance, _msgCallback, 0 );
+			}
+
+			DebugMessageHandler(DebugMessageHandler&&) = delete;
+			DebugMessageHandler& operator=(DebugMessageHandler&&) = delete;
+		private:
+			VkInstance _instance;
+			VkDebugUtilsMessengerEXT _msgCallback;
+
+			unsigned _suppressSpamRules = 0;
+			Threading::Mutex _suppressSpamLock;
+			struct MsgReport { std::chrono::steady_clock::time_point _lastReport; int32_t _idMsgCode; unsigned _suppressedSinceLastReport; };
+			std::vector<std::pair<uint64_t, MsgReport>> _suppressableMsgs;
+			std::chrono::steady_clock::time_point _lastSuppressionReport;
 		};
 
-        static std::vector<VkLayerProperties> EnumerateLayers()
-	    {
-		    for (;;) {
-			    uint32_t layerCount = 0;
-			    auto res = vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-			    if (res != VK_SUCCESS)
-				    Throw(VulkanAPIFailure(res, "Failure in during enumeration of Vulkan layer capabilities. You must have an up-to-date Vulkan driver installed."));
-
-			    if (layerCount == 0)
-				    return std::vector<VkLayerProperties>();
-
-			    std::vector<VkLayerProperties> layerProps;
-			    layerProps.resize(layerCount);
-			    res = vkEnumerateInstanceLayerProperties(&layerCount, AsPointer(layerProps.begin()));
-			    if (res == VK_INCOMPLETE) continue;	// doc's arent clear as to whether layerCount is updated in this case
-                if (res != VK_SUCCESS)
-				    Throw(VulkanAPIFailure(res, "Failure in during enumeration of Vulkan layer capabilities. You must have an up-to-date Vulkan driver installed."));
-
-			    return layerProps;
-		    }
-	    }
-
-        static VkDebugUtilsMessengerEXT msg_callback;
-		static bool s_debugInitialized = false;
-        static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback( 
-			VkDebugUtilsMessageSeverityFlagBitsEXT           messageSeverity,
-			VkDebugUtilsMessageTypeFlagsEXT                  messageTypes,
-			const VkDebugUtilsMessengerCallbackDataEXT*      pCallbackData,
-			void*                                            pUserData)
-        {
-			if (!Verbose.IsEnabled()) return false;
-			const auto* pMsg = pCallbackData->pMessage;
-			if (XlFindString(pMsg, "layout")) return false;
-            Log(Verbose) << pCallbackData->pMessageIdName << ": " << pMsg << std::endl;
-	        return false;
-        }
-    
-        static void debug_init(VkInstance instance)
-        {
-			assert(!s_debugInitialized);
-
-			VkDebugUtilsMessengerCreateInfoEXT callback1 = {
-				VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,  // sType
-				NULL,                                                     // pNext
-				0,                                                        // flags
-				VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |           // messageSeverity
-				VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
-				VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |             // messageType
-				VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
-				debug_callback,                                           // pfnUserCallback
-				NULL                                                      // pUserData
-			};
-	
-	        auto proc = ((PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr( instance, "vkCreateDebugUtilsMessengerEXT" ));
-			assert(proc);
-            proc( instance, &callback1, Metal_Vulkan::g_allocationCallbacks, &msg_callback );
-			s_debugInitialized = true;
-        }
-    
-        static void debug_destroy(VkInstance instance)
-        {
-			assert(s_debugInitialized);
-	        ((PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr( instance, "vkDestroyDebugUtilsMessengerEXT" ))( instance, msg_callback, 0 );
-			s_debugInitialized = false;
-        }
-    #else
-        static void debug_init(VkInstance instance) {}
-        static void debug_destroy(VkInstance instance) {}
+		OSServices::MessageTarget<> DebugMessageHandler::VulkanMsgTarget{"Vulkan"};
     #endif
-
-	static VulkanSharedPtr<VkInstance> CreateVulkanInstance()
-	{
-		auto appname = GetApplicationName();
-
-		VkApplicationInfo app_info = {};
-		app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-		app_info.pNext = NULL;
-		app_info.pApplicationName = appname.c_str();
-		app_info.applicationVersion = 1;
-		app_info.pEngineName = "XLE";
-		app_info.engineVersion = 1;
-		app_info.apiVersion = VK_HEADER_VERSION_COMPLETE;
-
-		VkInstanceCreateInfo inst_info = {};
-		inst_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-		inst_info.pNext = NULL;
-		inst_info.flags = 0;
-		inst_info.pApplicationInfo = &app_info;
-		inst_info.enabledExtensionCount = (uint32_t)dimof(s_instanceExtensions);
-		inst_info.ppEnabledExtensionNames = s_instanceExtensions;
-
-        #if defined(ENABLE_DEBUG_EXTENSIONS)
-            auto availableLayers = EnumerateLayers();
-
-            std::vector<const char*> filteredLayers;
-            for (unsigned c=0; c<dimof(s_instanceLayers); ++c) {
-                auto i = std::find_if(
-                    availableLayers.begin(), availableLayers.end(),
-                    [c](VkLayerProperties layer) { return XlEqString(layer.layerName, s_instanceLayers[c]); });
-                if (i != availableLayers.end())
-                    filteredLayers.push_back(s_instanceLayers[c]);
-            }
-
-            inst_info.enabledLayerCount = (uint32_t)filteredLayers.size();
-		    inst_info.ppEnabledLayerNames = AsPointer(filteredLayers.begin());
-        #else
-            inst_info.enabledLayerCount = 0;
-            inst_info.ppEnabledLayerNames = nullptr;
-        #endif
-
-		VkInstance rawResult = nullptr;
-		VkResult res = vkCreateInstance(&inst_info, Metal_Vulkan::g_allocationCallbacks, &rawResult);
-		auto instance = VulkanSharedPtr<VkInstance>(
-			rawResult,
-			[](VkInstance inst) { debug_destroy(inst); vkDestroyInstance(inst, Metal_Vulkan::g_allocationCallbacks); });
-        if (res != VK_SUCCESS)
-			Throw(VulkanAPIFailure(res, "Failure in Vulkan instance construction. You must have an up-to-date Vulkan driver installed."));
-
-        debug_init(instance.get());
-        return instance;
-    }
 
 	static std::vector<VkPhysicalDevice> EnumeratePhysicalDevices(VkInstance vulkan)
 	{
@@ -1393,7 +1313,8 @@ namespace RenderCore { namespace ImplVulkan
 
 	static VulkanSharedPtr<VkDevice> CreateUnderlyingDevice(
 		SelectedPhysicalDevice physDev,
-		const DeviceFeatures& xleFeatures)
+		const DeviceFeatures& xleFeatures,
+		bool enableDebugLayer)
 	{
 		VkDeviceQueueCreateInfo queue_info = {};
 		queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -1474,34 +1395,26 @@ namespace RenderCore { namespace ImplVulkan
 		device_info.queueCreateInfoCount = 1;
 		device_info.pQueueCreateInfos = &queue_info;
 
-		std::vector<const char*> extensions;
-		for (auto c:s_deviceExtensions) extensions.push_back(c);
+		const char* deviceExtensions[8];
+		unsigned deviceExtensionCount = 0;
+		const char* deviceLayers[8];
+		unsigned deviceLayerCount = 0;
+
 		if (xleFeatures._conservativeRaster)
-			extensions.push_back(VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME);
+			deviceExtensions[deviceExtensionCount++] = VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME;
 		if (xleFeatures._streamOutput)
-			extensions.push_back(VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME);
+			deviceExtensions[deviceExtensionCount++] = VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME;
 		if (xleFeatures._textureCompressionASTC_HDR)
-			extensions.push_back(VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME);
-		device_info.enabledExtensionCount = (uint32_t)extensions.size();
-		device_info.ppEnabledExtensionNames = extensions.data();
+			deviceExtensions[deviceExtensionCount++] = VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME;
+		deviceExtensions[deviceExtensionCount++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 
-        #if defined(ENABLE_DEBUG_EXTENSIONS)
-            auto availableLayers = EnumerateLayers();
-            std::vector<const char*> filteredLayers;
-            for (unsigned c=0; c<dimof(s_deviceLayers); ++c) {
-                auto i = std::find_if(
-                    availableLayers.begin(), availableLayers.end(),
-                    [c](VkLayerProperties layer) { return XlEqString(layer.layerName, s_deviceLayers[c]); });
-                if (i != availableLayers.end())
-                    filteredLayers.push_back(s_deviceLayers[c]);
-            }
+		if (enableDebugLayer)
+			deviceLayers[deviceLayerCount++] = "VK_LAYER_KHRONOS_validation";
 
-		    device_info.enabledLayerCount = (uint32)filteredLayers.size();
-		    device_info.ppEnabledLayerNames = AsPointer(filteredLayers.begin());
-        #else
-            device_info.enabledLayerCount = 0;
-		    device_info.ppEnabledLayerNames = nullptr;
-        #endif
+		device_info.enabledExtensionCount = deviceExtensionCount;
+		device_info.ppEnabledExtensionNames = deviceExtensions;
+		device_info.enabledLayerCount = deviceLayerCount;
+		device_info.ppEnabledLayerNames = deviceLayers;
 
 		VkDevice rawResult = nullptr;
 		auto res = vkCreateDevice(physDev._dev, &device_info, Metal_Vulkan::g_allocationCallbacks, &rawResult);
@@ -1645,12 +1558,12 @@ namespace RenderCore { namespace ImplVulkan
 	{
 		if (configurationIdx >= _physicalDevices.size())
 			Throw(std::runtime_error("Invalid configuration index"));
-		return std::make_shared<Device>(_instance, _physicalDevices[configurationIdx], features);
+		return std::make_shared<Device>(_instance, _physicalDevices[configurationIdx], features, _features._debugValidation);
 	}
 
 	std::shared_ptr<IDevice>    APIInstance::CreateDevice(VkPhysicalDevice physDev, unsigned renderingQueueFamily, const DeviceFeatures& features)
 	{
-		return std::make_shared<Device>(_instance, SelectedPhysicalDevice{physDev, renderingQueueFamily}, features);
+		return std::make_shared<Device>(_instance, SelectedPhysicalDevice{physDev, renderingQueueFamily}, features, _features._debugValidation);
 	}
 
 	unsigned                    APIInstance::GetDeviceConfigurationCount()
@@ -1923,7 +1836,8 @@ namespace RenderCore { namespace ImplVulkan
 		return nullptr;
 	}
 
-	APIInstance::APIInstance()
+	APIInstance::APIInstance(const APIFeatures& features)
+	: _features(features)
 	{
             // todo -- we need to do this in a bind to DLL step
         Metal_Vulkan::InitFormatConversionTables();
@@ -1932,8 +1846,70 @@ namespace RenderCore { namespace ImplVulkan
 			//	Create the instance. This will attach the Vulkan DLL. If there are no valid Vulkan drivers
 			//	available, it will throw an exception here.
 			//
-		_instance = CreateVulkanInstance();
+		auto appname = GetApplicationName();
 
+		VkApplicationInfo app_info = {};
+		app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+		app_info.pNext = nullptr;
+		app_info.pApplicationName = appname.c_str();
+		app_info.applicationVersion = 1;
+		app_info.pEngineName = "XLE";
+		app_info.engineVersion = 1;
+		app_info.apiVersion = VK_HEADER_VERSION_COMPLETE;
+
+		const char* instanceExtensions[8];
+		unsigned instanceExtensionCount = 0;
+		const char* instanceLayers[8];
+		unsigned instanceLayerCount = 0;
+
+		auto availableLayers = EnumerateLayers();
+
+		instanceExtensions[instanceExtensionCount++] = VK_KHR_SURFACE_EXTENSION_NAME;
+		#if PLATFORMOS_TARGET  == PLATFORMOS_WINDOWS
+			instanceExtensions[instanceExtensionCount++] = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
+		#endif
+		#if defined(VULKAN_ENABLE_DEBUG_EXTENSIONS)
+			if (_features._debugValidation) {
+				auto i = std::find_if(
+					availableLayers.begin(), availableLayers.end(),
+					[](VkLayerProperties layer) { return XlEqString(layer.layerName, "VK_LAYER_KHRONOS_validation"); });
+				if (i != availableLayers.end()) {
+					instanceExtensions[instanceExtensionCount++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+					instanceLayers[instanceLayerCount++] = "VK_LAYER_KHRONOS_validation";
+				} else {
+					Log(Warning) << "Cannot enable debug validation because required Vulkan layer is not present. Ensure that the Vulkan SDK is installed" << std::endl;
+					_features._debugValidation = false;
+				}
+			}
+		#else
+			if (_features._debugValidation) {
+				Log(Warning) << "Cannot enable debug validation because required code was compiled out of this configuration. Check the VULKAN_ENABLE_DEBUG_EXTENSIONS preprocessor symbol" << std::endl;
+				_features._debugValidation = false;
+			}
+		#endif
+
+		VkInstanceCreateInfo inst_info = {};
+		inst_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+		inst_info.pNext = nullptr;
+		inst_info.flags = 0;
+		inst_info.pApplicationInfo = &app_info;
+		inst_info.enabledExtensionCount = instanceExtensionCount;
+		inst_info.ppEnabledExtensionNames = instanceExtensions;
+		inst_info.enabledLayerCount = instanceLayerCount;
+        inst_info.ppEnabledLayerNames = instanceLayers;
+
+		VkInstance rawResult = nullptr;
+		VkResult res = vkCreateInstance(&inst_info, Metal_Vulkan::g_allocationCallbacks, &rawResult);
+		_instance = VulkanSharedPtr<VkInstance>(
+			rawResult,
+			[](VkInstance inst) { vkDestroyInstance(inst, Metal_Vulkan::g_allocationCallbacks); });
+        if (res != VK_SUCCESS)
+			Throw(VulkanAPIFailure(res, "Failure in Vulkan instance construction. You must have an up-to-date Vulkan driver installed."));
+
+		if (features._debugValidation)
+			_msgHandler = std::make_unique<DebugMessageHandler>(_instance.get());
+
+		// Find the physical device options
 		auto devices = EnumeratePhysicalDevices(_instance.get());
 		if (devices.empty())
 			Throw(Exceptions::BasicLabel("Could not find any Vulkan physical devices. You must have an up-to-date Vulkan driver installed."));
@@ -1951,20 +1927,22 @@ namespace RenderCore { namespace ImplVulkan
 	}
 
 	APIInstance::~APIInstance()
-	{}
+	{
+	}
 
 /////////////////////////////////////////////////////////////////////////////////////
 
     Device::Device(
 		VulkanSharedPtr<VkInstance> instance,
     	SelectedPhysicalDevice physDev,
-		const DeviceFeatures& xleFeatures)
+		const DeviceFeatures& xleFeatures,
+		bool enableDebugLayer)
 	: _instance(std::move(instance))
 	, _physDev(std::move(physDev))
     {
 		_initializationThread = std::this_thread::get_id();
 
-		_underlying = CreateUnderlyingDevice(_physDev, xleFeatures);
+		_underlying = CreateUnderlyingDevice(_physDev, xleFeatures, enableDebugLayer);
 		auto extensionFunctions = std::make_shared<Metal_Vulkan::ExtensionFunctions>(_instance.get());
 		_globalsContainer = std::make_shared<Metal_Vulkan::GlobalsContainer>();
 		_globalsContainer->_objectFactory = Metal_Vulkan::ObjectFactory{_instance.get(), _physDev._dev, _underlying, xleFeatures, extensionFunctions};
@@ -2503,9 +2481,9 @@ namespace RenderCore { namespace ImplVulkan
 
     //////////////////////////////////////////////////////////////////////////////////////////////////
 
-    render_dll_export std::shared_ptr<IAPIInstance>    CreateAPIInstance()
+    render_dll_export std::shared_ptr<IAPIInstance>    CreateAPIInstance(const APIFeatures& features)
     {
-        return std::make_shared<APIInstance>();
+        return std::make_shared<APIInstance>(features);
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////////

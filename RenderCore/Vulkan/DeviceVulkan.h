@@ -209,7 +209,8 @@ namespace RenderCore { namespace ImplVulkan
         Device(
             VulkanSharedPtr<VkInstance> instance,
             SelectedPhysicalDevice physDev,
-            const DeviceFeatures& xleFeatures);
+            const DeviceFeatures& xleFeatures,
+            bool enableDebugLayer);
         ~Device();
     protected:
 		VulkanSharedPtr<VkInstance>         _instance;
@@ -225,6 +226,8 @@ namespace RenderCore { namespace ImplVulkan
     };
 
 ////////////////////////////////////////////////////////////////////////////////
+
+    class DebugMessageHandler;
 
     class APIInstance : public IAPIInstance, public IAPIInstanceVulkan
     {
@@ -242,15 +245,17 @@ namespace RenderCore { namespace ImplVulkan
         VkInstance                  GetVulkanInstance() override;
         VkPhysicalDevice            GetPhysicalDevice(unsigned configurationIdx) override;
 
-        std::string                 LogPhysicalDevice(unsigned configurationIdx);
-		std::string                 LogInstance(const void* presentationChainPlatformValue);
+        std::string                 LogPhysicalDevice(unsigned configurationIdx) override;
+		std::string                 LogInstance(const void* presentationChainPlatformValue) override;
 
         void*       QueryInterface(size_t guid) override;
-        APIInstance();
+        APIInstance(const APIFeatures& features);
         ~APIInstance();
     private:
 		VulkanSharedPtr<VkInstance>         _instance;
         std::vector<SelectedPhysicalDevice> _physicalDevices;
+        std::unique_ptr<DebugMessageHandler> _msgHandler;
+        APIFeatures _features;
     };
 
 ////////////////////////////////////////////////////////////////////////////////

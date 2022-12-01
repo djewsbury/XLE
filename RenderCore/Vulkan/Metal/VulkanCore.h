@@ -40,6 +40,7 @@ namespace RenderCore { namespace Metal_Vulkan
 #if defined(_DEBUG)
 	// #define VULKAN_VERBOSE_DEBUG
     #define VULKAN_VALIDATE_RESOURCE_VISIBILITY
+    #define VULKAN_ENABLE_DEBUG_EXTENSIONS
 #endif
 
 #if defined(VULKAN_VERBOSE_DEBUG)

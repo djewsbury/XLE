@@ -180,11 +180,11 @@ namespace OSServices
     };
 
     static std::shared_ptr<LogCentral> s_instance;
-    static Threading::Mutex s_logCentralInstanceLock;
     
     const std::shared_ptr<LogCentral>& LogCentral::GetInstance()
     {
         if (!s_instance) {
+            static Threading::Mutex s_logCentralInstanceLock;
             ScopedLock(s_logCentralInstanceLock);
             if (!s_instance) {
                 s_instance = std::make_shared<LogCentral>();

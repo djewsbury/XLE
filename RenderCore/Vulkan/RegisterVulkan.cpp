@@ -15,7 +15,7 @@
 
 namespace RenderCore { namespace ImplVulkan
 {
-	std::shared_ptr<IAPIInstance> CreateAPIInstance();
+	std::shared_ptr<IAPIInstance> CreateAPIInstance(const APIFeatures& features);
 	void RegisterCreation()
 	{
 		#if COMPILER_ACTIVE == COMPILER_TYPE_MSVC
