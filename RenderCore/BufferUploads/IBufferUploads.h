@@ -121,13 +121,15 @@ namespace RenderCore { namespace BufferUploads
     public:
         virtual IteratorRange<void*>    GetData         (SubResourceId subRes = {}) = 0;
         virtual TexturePitches          GetPitches      (SubResourceId subRes = {}) const = 0;
+        virtual StringSection<>         GetName         () const = 0;
         virtual ~IDataPacket();
     };
 
     class IAsyncDataSource
     {
     public:
-        virtual std::future<ResourceDesc> GetDesc () = 0;
+        virtual std::future<ResourceDesc> GetDesc() = 0;
+        virtual StringSection<> GetName() const = 0;
 
         struct SubResource
         {
@@ -220,7 +222,7 @@ namespace RenderCore { namespace BufferUploads
 	{
 	public:
 		virtual ResourceLocator Allocate(size_t size, StringSection<> name) = 0;
-		virtual ResourceDesc MakeFallbackDesc(size_t size, StringSection<> name) = 0;
+		virtual ResourceDesc MakeFallbackDesc(size_t size) = 0;
 
 		virtual bool AddRef(IResource& resource, size_t offset, size_t size) = 0;
 		virtual bool Release(IResource& resource, size_t offset, size_t size) = 0;
@@ -230,15 +232,17 @@ namespace RenderCore { namespace BufferUploads
         /////////////////////////////////////////////////
 
     buffer_upload_dll_export std::shared_ptr<IDataPacket> CreateBasicPacket(
-        IteratorRange<const void*> data = {}, 
+        IteratorRange<const void*> data,
+        std::string&& name,
         TexturePitches pitches = TexturePitches());
 
     buffer_upload_dll_export std::shared_ptr<IDataPacket> CreateBasicPacket(
         std::vector<uint8_t>&& data, 
+        std::string&& name,
         TexturePitches pitches = TexturePitches());
 
-    buffer_upload_dll_export std::shared_ptr<IDataPacket> CreateEmptyPacket(const ResourceDesc& desc);
-    buffer_upload_dll_export std::shared_ptr<IDataPacket> CreateEmptyLinearBufferPacket(size_t size);
+    buffer_upload_dll_export std::shared_ptr<IDataPacket> CreateEmptyPacket(const ResourceDesc& desc, std::string&& name);
+    buffer_upload_dll_export std::shared_ptr<IDataPacket> CreateEmptyLinearBufferPacket(size_t size, std::string&& name);
     buffer_upload_dll_export std::unique_ptr<IManager> CreateManager(IDevice& renderDevice);
 
 }}

@@ -168,14 +168,12 @@ namespace UnitTests
 
 				auto stripeTargetDesc = CreateDesc(
 					BindFlag::RenderTarget | BindFlag::TransferSrc,
-					TextureDesc::Plain2D(2048, stripeHeight, RenderCore::Format::R8G8B8A8_UNORM),
-					"temporary-out");
+					TextureDesc::Plain2D(2048, stripeHeight, RenderCore::Format::R8G8B8A8_UNORM));
 
 				auto stitchedImageDesc = CreateDesc(
 					BindFlag::TransferDst, AllocationRules::HostVisibleRandomAccess,
-					TextureDesc::Plain2D(2048, stripes*stripeHeight, RenderCore::Format::R8G8B8A8_UNORM),
-					"saved-image");
-				auto stitchedImage = testHelper->_device->CreateResource(stitchedImageDesc);
+					TextureDesc::Plain2D(2048, stripes*stripeHeight, RenderCore::Format::R8G8B8A8_UNORM));
+				auto stitchedImage = testHelper->_device->CreateResource(stitchedImageDesc, "ShadowPrecisionTests");
 				UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, stripeTargetDesc);
 				auto parsingContext = BeginParsingContext(testApparatus, *threadContext, stripeTargetDesc, camera);
 				parsingContext.BindAttachment(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget(), BindFlag::RenderTarget);
@@ -219,8 +217,7 @@ namespace UnitTests
 			{
 				auto targetDesc = CreateDesc(
 					BindFlag::RenderTarget | BindFlag::TransferSrc,
-					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
-					"temporary-out");
+					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM));
 
 				auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
@@ -460,8 +457,7 @@ namespace UnitTests
 			{
 				auto targetDesc = CreateDesc(
 					BindFlag::RenderTarget | BindFlag::TransferSrc,
-					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
-					"temporary-out");
+					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM));
 
 				auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, sceneCamera);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();

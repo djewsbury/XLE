@@ -47,25 +47,22 @@ namespace RenderCore { namespace LightingEngine
 		auto sobolBuffer = device.CreateResource(
 			CreateDesc(
 				BindFlag::TransferDst | BindFlag::ShaderResource | BindFlag::TexelBuffer,
-				LinearBufferDesc::Create(sizeof(g_blue_noise_sampler_state.sobol_buffer_)),
-				"blue-noise-sobol"
-			));
+				LinearBufferDesc::Create(sizeof(g_blue_noise_sampler_state.sobol_buffer_))),
+			"blue-noise-sobol");
 		_sobolBufferView = sobolBuffer->CreateTextureView(BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
 
 		auto rankingTileBuffer = device.CreateResource(
 			CreateDesc(
 				BindFlag::TransferDst | BindFlag::ShaderResource | BindFlag::TexelBuffer,
-				LinearBufferDesc::Create(sizeof(g_blue_noise_sampler_state.ranking_tile_buffer_)),
-				"blue-noise-ranking"
-			));
+				LinearBufferDesc::Create(sizeof(g_blue_noise_sampler_state.ranking_tile_buffer_))),
+			"blue-noise-ranking");
 		_rankingTileBufferView = rankingTileBuffer->CreateTextureView(BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
 
 		auto scramblingTileBuffer = device.CreateResource(
 			CreateDesc(
 				BindFlag::TransferDst | BindFlag::ShaderResource | BindFlag::TexelBuffer,
-				LinearBufferDesc::Create(sizeof(g_blue_noise_sampler_state.scrambling_tile_buffer_)),
-				"blue-noise-scrambling"
-			));
+				LinearBufferDesc::Create(sizeof(g_blue_noise_sampler_state.scrambling_tile_buffer_))),
+			"blue-noise-scrambling");
 		_scramblingTileBufferView = scramblingTileBuffer->CreateTextureView(BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
 		_pendingInitialization = true;
 	}

@@ -70,16 +70,23 @@ namespace RenderCore { namespace Metal_Vulkan
 		unsigned GetMemoryType() const { return _memoryType; }
 
 		const Desc& AccessDesc() const { return _desc; }
+		#if defined(_DEBUG)
+			StringSection<> GetName() const { return _name; }
+		#else
+			StringSection<> GetName() const { return {}; }
+		#endif
 
 		void ChangeSteadyState(BindFlag::Enum);
 
 		Resource(
 			ObjectFactory& factory, const Desc& desc,
+			StringSection<> name,
 			const SubResourceInitData& initData = SubResourceInitData{});
 		Resource(
 			ObjectFactory& factory, const Desc& desc,
+			StringSection<> name,
 			const std::function<SubResourceInitData(SubResourceId)>&);
-		Resource(VkImage image, const Desc& desc);
+		Resource(VkImage image, const Desc& desc, StringSection<> name);
 		Resource();
 		~Resource();
 		
@@ -96,6 +103,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		Desc _desc;
 		uint64_t _guid;
 		// void ConfigureDefaultSteadyState(BindFlag::BitField);
+
+		#if defined(_DEBUG)
+			std::string _name;
+		#endif
 	};
 
 	void CompleteInitialization(
@@ -284,7 +295,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		using ResourceInitializer = std::function<SubResourceInitData(SubResourceId)>;
 		std::shared_ptr<Resource> CreateResource(
 			ObjectFactory& factory,
-			const ResourceDesc& desc, 
+			const ResourceDesc& desc,
+			StringSection<> name,
 			const ResourceInitializer& init = ResourceInitializer());
 
 		VkImageLayout LayoutForImmediateUsage(BindFlag::BitField immediateUsage);

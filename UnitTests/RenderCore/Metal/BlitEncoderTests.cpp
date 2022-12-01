@@ -27,7 +27,6 @@ namespace UnitTests
 		auto result = desc;
 		result._bindFlags = BindFlag::TransferSrc;
 		result._allocationRules = AllocationRules::HostVisibleSequentialWrite;
-		StringMeldInPlace(result._name) << "staging-" << desc._name;
 		return result;
 	}
 
@@ -41,17 +40,17 @@ namespace UnitTests
 
 		SECTION("SingleSubResourceCopy")
 		{
-			auto desc = CreateDesc(BindFlag::ShaderResource, TextureDesc::Plain2D(512, 512, Format::R8_UNORM), "test");
+			auto desc = CreateDesc(BindFlag::ShaderResource, TextureDesc::Plain2D(512, 512, Format::R8_UNORM));
 			auto stagingDesc = AsStagingDesc(desc);
 			auto initData = CreateInitData(desc);
 			
-			auto deviceResource = device.CreateResource(desc); 
-			auto staging = device.CreateResource(stagingDesc, SubResourceInitData{MakeIteratorRange(initData)});
+			auto deviceResource = device.CreateResource(desc, "deviceResource"); 
+			auto staging = device.CreateResource(stagingDesc, "staging", SubResourceInitData{MakeIteratorRange(initData)});
 			auto blitEncoder = metalContext.BeginBlitEncoder();
 			blitEncoder.Copy(*deviceResource, *staging);
 
 			{
-				auto destaging = device.CreateResource(stagingDesc);
+				auto destaging = device.CreateResource(stagingDesc, "destaging");
 				blitEncoder.Copy(*destaging, *deviceResource);
 				auto readback = destaging->ReadBackSynchronized(*threadContext);
 				REQUIRE(readback.size() == initData.size());
@@ -60,13 +59,13 @@ namespace UnitTests
 			}
 
 			// copy from larger buffer
-			auto largeStagingResource = AsStagingDesc(CreateDesc(0, LinearBufferDesc{8*1024*1024}, "largebuffer"));
+			auto largeStagingResource = AsStagingDesc(CreateDesc(0, LinearBufferDesc{8*1024*1024}));
 			auto largeInitData = CreateInitData(largeStagingResource);
-			auto largeStaging = device.CreateResource(largeStagingResource, SubResourceInitData{MakeIteratorRange(largeInitData)});
+			auto largeStaging = device.CreateResource(largeStagingResource, "largebuffer", SubResourceInitData{MakeIteratorRange(largeInitData)});
 			blitEncoder.Copy(*deviceResource, *staging);
 
 			{
-				auto destaging = device.CreateResource(stagingDesc);
+				auto destaging = device.CreateResource(stagingDesc, "destaging");
 				blitEncoder.Copy(*destaging, *deviceResource);
 				auto readback = destaging->ReadBackSynchronized(*threadContext);
 				REQUIRE(readback.size() <= largeInitData.size());
@@ -81,7 +80,7 @@ namespace UnitTests
 				CopyPartial_Src{*largeStaging, offsetWithinLargeBuffer});
 
 			{
-				auto destaging = device.CreateResource(stagingDesc);
+				auto destaging = device.CreateResource(stagingDesc, "destaging");
 				blitEncoder.Copy(*destaging, *deviceResource);
 				auto readback = destaging->ReadBackSynchronized(*threadContext);
 				REQUIRE(readback.size() <= largeInitData.size());
@@ -101,7 +100,7 @@ namespace UnitTests
 				CopyPartial_Src{*largeStaging, offsetWithinLargeBuffer2}.PartialSubresource({0,0,0}, {desc._textureDesc._width - offsetToCopyTo[0], desc._textureDesc._height - offsetToCopyTo[1], 1}, stagingPitches));
 
 			{
-				auto destaging = device.CreateResource(stagingDesc);
+				auto destaging = device.CreateResource(stagingDesc, "destaging");
 				blitEncoder.Copy(*destaging, *deviceResource);
 				auto readback = destaging->ReadBackSynchronized(*threadContext);
 				REQUIRE(readback.size() <= largeInitData.size());
@@ -129,7 +128,7 @@ namespace UnitTests
 			// copy subrectangle deviceResource to a destaging texture
 			// first with a "partial" copy that is actually a full copy -- and then with a subcube
 			{
-				auto destaging = device.CreateResource(stagingDesc);
+				auto destaging = device.CreateResource(stagingDesc, "destaging");
 				unsigned destOffset[] = {0, 0, 0};
 				unsigned srcLeftTopFront[] = {0, 0, 0};
 				unsigned srcRightBottomBack[] = {desc._textureDesc._width, desc._textureDesc._height, 1};
@@ -152,7 +151,7 @@ namespace UnitTests
 					}
 			}			
 			{
-				auto destaging = device.CreateResource(stagingDesc);
+				auto destaging = device.CreateResource(stagingDesc, "destaging");
 				unsigned destOffset[] = {32, 32, 0};
 				unsigned srcLeftTopFront[] = {67, 133, 0};
 				unsigned srcRightBottomBack[] = {324, 493, 1};
@@ -178,13 +177,14 @@ namespace UnitTests
 
 		SECTION("Multi-subresource copy")
 		{
-			auto desc = CreateDesc(BindFlag::ShaderResource, TextureDesc::Plain2D(227, 227, Format::R8_UNORM, 8), "test");
+			auto desc = CreateDesc(BindFlag::ShaderResource, TextureDesc::Plain2D(227, 227, Format::R8_UNORM, 8));
 			auto stagingDesc = AsStagingDesc(desc);
 			auto initData = CreateInitData(desc);
 			
-			auto deviceResource = device.CreateResource(desc); 
+			auto deviceResource = device.CreateResource(desc, "deviceResource"); 
 			auto staging = device.CreateResource(
-				stagingDesc, 
+				stagingDesc,
+				"staging",
 				[&initData, &desc](const auto subres) -> SubResourceInitData {
 					auto offset = GetSubResourceOffset(desc._textureDesc, subres._mip, subres._arrayLayer);
 					return { MakeIteratorRange(initData.begin()+offset._offset, initData.begin()+offset._offset+offset._size), offset._pitches }; 
@@ -193,7 +193,7 @@ namespace UnitTests
 			blitEncoder.Copy(*deviceResource, *staging);
 
 			{
-				auto destaging = device.CreateResource(stagingDesc);
+				auto destaging = device.CreateResource(stagingDesc, "destaging");
 				blitEncoder.Copy(*destaging, *deviceResource);
 
 				// ReadBackSynchronized only reads a single subresource, so we have to loop over them all
@@ -212,7 +212,7 @@ namespace UnitTests
 				auto singleMipDesc = stagingDesc;
 				singleMipDesc._textureDesc = CalculateMipMapDesc(singleMipDesc._textureDesc, mipToGet);
 				singleMipDesc._textureDesc._mipCount = 1;
-				auto destaging = device.CreateResource(singleMipDesc);
+				auto destaging = device.CreateResource(singleMipDesc, "destaging");
 				blitEncoder.Copy(
 					CopyPartial_Dest{*destaging},
 					CopyPartial_Src{*deviceResource}.SingleSubresource({mipToGet, 0}));
@@ -234,7 +234,7 @@ namespace UnitTests
 				singleMipTextDesc._mipCount = 1;
 				singleMipDesc._type = ResourceDesc::Type::LinearBuffer;
 				singleMipDesc._linearBufferDesc._sizeInBytes = ByteCount(singleMipTextDesc);
-				auto destaging = device.CreateResource(singleMipDesc);
+				auto destaging = device.CreateResource(singleMipDesc, "destaging");
 				blitEncoder.Copy(
 					CopyPartial_Dest{*destaging},
 					CopyPartial_Src{*deviceResource}.SingleSubresource({mipToGet, 0}));
@@ -259,7 +259,8 @@ namespace UnitTests
 					desc._textureDesc._format, {singleMipDesc._width, singleMipDesc._height, 1}, MakeTexturePitches(singleMipDesc));
 				
 				auto destaging = device.CreateResource(
-					AsStagingDesc(CreateDesc(0, CalculateMipMapDesc(desc._textureDesc, 1), "temp")));
+					AsStagingDesc(CreateDesc(0, CalculateMipMapDesc(desc._textureDesc, 1))),
+					"destaging");
 				unsigned mipInDestaging = 1;
 				blitEncoder.Copy(
 					CopyPartial_Dest{*destaging, {mipInDestaging, 0}},
@@ -284,7 +285,8 @@ namespace UnitTests
 					desc._textureDesc._format, {singleMipDesc._width, singleMipDesc._height, 1}, MakeTexturePitches(singleMipDesc));
 				
 				auto destaging = device.CreateResource(
-					AsStagingDesc(CreateDesc(0, LinearBufferDesc{ByteCount(singleMipDesc)}, "temp")));
+					AsStagingDesc(CreateDesc(0, LinearBufferDesc{ByteCount(singleMipDesc)})),
+					"destaging");
 				blitEncoder.Copy(
 					CopyPartial_Dest{*destaging},
 					CopyPartial_Src{*deviceResource}.SingleSubresource({mipInDeviceResource, 0}));

@@ -384,22 +384,22 @@ namespace RenderCore { namespace Metal_Vulkan
     DummyResources::DummyResources(ObjectFactory& factory)
     : _blankSampler(std::make_unique<SamplerState>(factory, SamplerDesc{FilterMode::Point, AddressMode::Clamp, AddressMode::Clamp}))
     {
-        auto blankImage1D = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain1D(64, Format::R8G8B8A8_UNORM), "DummyTexture1D"));
-        auto blankImage2D = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM), "DummyTexture2D"));
-        auto blankImage3D = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain3D(4, 4, 4, Format::R8G8B8A8_UNORM), "DummyTexture3D"));
-        auto blankCube = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM), "DummyTextureCube"));
-        auto blankImage1DArray = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain1D(64, Format::R8G8B8A8_UNORM, 1, 1), "DummyTexture1DArray"));
-        auto blankImage2DArray = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM, 1, 1), "DummyTexture2DArray"));
+        auto blankImage1D = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain1D(64, Format::R8G8B8A8_UNORM)), "DummyTexture1D");
+        auto blankImage2D = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM)), "DummyTexture2D");
+        auto blankImage3D = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain3D(4, 4, 4, Format::R8G8B8A8_UNORM)), "DummyTexture3D");
+        auto blankCube = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM)), "DummyTextureCube");
+        auto blankImage1DArray = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain1D(64, Format::R8G8B8A8_UNORM, 1, 1)), "DummyTexture1DArray");
+        auto blankImage2DArray = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM, 1, 1)), "DummyTexture2DArray");
 
-        auto blankImage1DUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain1D(64, Format::R8G8B8A8_UNORM), "DummyTexture1DUAV"));
-        auto blankImage2DUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM), "DummyTexture2DUAV"));
-        auto blankImage3DUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain3D(4, 4, 4, Format::R8G8B8A8_UNORM), "DummyTexture3DUAV"));
-        auto blankCubeUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM), "DummyTextureCubeUAV"));
-        auto blankImage1DArrayUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain1D(64, Format::R8G8B8A8_UNORM, 1, 1), "DummyTexture1DArrayUAV"));
-        auto blankImage2DArrayUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM, 1, 1), "DummyTexture2DArrayUAV"));
+        auto blankImage1DUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain1D(64, Format::R8G8B8A8_UNORM)), "DummyTexture1DUAV");
+        auto blankImage2DUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM)), "DummyTexture2DUAV");
+        auto blankImage3DUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain3D(4, 4, 4, Format::R8G8B8A8_UNORM)), "DummyTexture3DUAV");
+        auto blankCubeUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM)), "DummyTextureCubeUAV");
+        auto blankImage1DArrayUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain1D(64, Format::R8G8B8A8_UNORM, 1, 1)), "DummyTexture1DArrayUAV");
+        auto blankImage2DArrayUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM, 1, 1)), "DummyTexture2DArrayUAV");
 
-        auto blankUAVBufferRes = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc::Create(4096), "DummyBufferUAV"));
-        _blankBuffer = Internal::CreateResource(factory, CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(4096), "DummyUniformBuffer"));
+        auto blankUAVBufferRes = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc::Create(4096)), "DummyBufferUAV");
+        _blankBuffer = Internal::CreateResource(factory, CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(4096)), "DummyUniformBuffer");
 
         _blankImage1DSrv = ResourceView{factory, blankImage1D};
         _blankImage2DSrv = ResourceView{factory, blankImage2D};
@@ -420,8 +420,8 @@ namespace RenderCore { namespace Metal_Vulkan
         _blankBufferUav = ResourceView{factory, blankUAVBufferRes};
 
         if (factory.GetXLEFeatures()._cubemapArrays) {
-            auto blankCubeArray = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM, 1, 6), "DummyTextureCubeArray"));
-            auto blankCubeArrayUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM, 1, 6), "DummyTextureCubeArrayUAV"));
+            auto blankCubeArray = Internal::CreateResource(factory, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM, 1, 6)), "DummyTextureCubeArray");
+            auto blankCubeArrayUav = Internal::CreateResource(factory, CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::PlainCube(16, 16, Format::R8G8B8A8_UNORM, 1, 6)), "DummyTextureCubeArrayUAV");
             _blankImageCubeArraySrv = ResourceView{factory, blankCubeArray};
             _blankImageCubeArrayUav = ResourceView{factory, blankCubeArrayUav};
         }

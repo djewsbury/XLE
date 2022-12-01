@@ -319,8 +319,7 @@ namespace UnitTests
 			auto threadContext = testHelper->_device->GetImmediateContext();
 			auto targetDesc = CreateDesc(
 				BindFlag::RenderTarget,
-				TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
-				"temporary-out");
+				TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM));
 			UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 			auto cfgIdWithColor = mainPool->CreateSequencerConfig(
 				"cfgIdWithColor",
@@ -466,8 +465,7 @@ namespace UnitTests
 			auto threadContext = testHelper->_device->GetImmediateContext();
 			auto targetDesc = CreateDesc(
 				BindFlag::RenderTarget | BindFlag::TransferSrc,
-				TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
-				"temporary-out");
+				TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM));
 			UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 			
 			auto patches = GetPatchCollectionFromText(s_patchCollectionBasicTexturing);
@@ -562,8 +560,7 @@ namespace UnitTests
 			auto threadContext = testHelper->_device->GetImmediateContext();
 			auto targetDesc = CreateDesc(
 				BindFlag::RenderTarget | BindFlag::TransferSrc,
-				TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
-				"temporary-out");
+				TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM));
 			UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 
 			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");

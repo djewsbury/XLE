@@ -90,8 +90,8 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::AttachmentSemantics::HierarchicalDepths,
 				CreateDesc(
 					BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TransferSrc,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R32_FLOAT, depthsMipCount),
-					"hierarchical-depths")
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R32_FLOAT, depthsMipCount)),
+				"hierarchical-depths"
 			}
 		};
 		for (const auto& a:attachments)
@@ -110,9 +110,8 @@ namespace RenderCore { namespace LightingEngine
 		auto atomicBuffer = device->CreateResource(
 			CreateDesc(
 				BindFlag::TransferDst | BindFlag::UnorderedAccess | BindFlag::TexelBuffer,
-				LinearBufferDesc::Create(4*4),
-				"depth-downsample-atomic-counter"
-			));
+				LinearBufferDesc::Create(4*4)),
+			"depth-downsample-atomic-counter");
 		_atomicCounterBufferView = atomicBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
 	}
 

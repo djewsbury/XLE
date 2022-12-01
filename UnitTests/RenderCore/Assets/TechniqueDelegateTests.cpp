@@ -491,8 +491,7 @@ namespace UnitTests
 			auto threadContext = testHelper->_device->GetImmediateContext();
 			auto targetDesc = CreateDesc(
 				BindFlag::RenderTarget | BindFlag::TransferSrc | BindFlag::TransferDst,
-				TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
-				"temporary-out");
+				TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM));
 
 			auto pipelinePool = testApparatus._pipelineAccelerators;
 

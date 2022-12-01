@@ -188,16 +188,16 @@ namespace RenderCore { namespace LightingEngine
                 Hash_AOAccumulation,
                 CreateDesc(
                     BindFlag::UnorderedAccess | BindFlag::ShaderResource,
-                    TextureDesc::Plain2D(fbSize[0]/2, fbSize[1]/2, s_aoFormat),
-                    "ao-accumulation-0")
+                    TextureDesc::Plain2D(fbSize[0]/2, fbSize[1]/2, s_aoFormat)),
+                "ao-accumulation-0"
             },
 
             Techniques::PreregisteredAttachment {
                 Hash_AOOutput,
                 CreateDesc(
                     BindFlag::UnorderedAccess | BindFlag::ShaderResource,
-                    TextureDesc::Plain2D(fbSize[0], fbSize[1], s_aoFormat),
-                    "ao-output"),
+                    TextureDesc::Plain2D(fbSize[0], fbSize[1], s_aoFormat)),
+                "ao-output",
                 Techniques::PreregisteredAttachment::State::Uninitialized
             }
         };
@@ -215,8 +215,8 @@ namespace RenderCore { namespace LightingEngine
             auto ditherTable = threadContext.GetDevice()->CreateResource(
                 CreateDesc(
                     BindFlag::ShaderResource | BindFlag::TexelBuffer | BindFlag::TransferDst,
-                    LinearBufferDesc::Create(sizeof(s_ditherTable)),
-                    "ao-dither-table"));                
+                    LinearBufferDesc::Create(sizeof(s_ditherTable))),
+                "ao-dither-table");
             _ditherTable = ditherTable->CreateTextureView(BindFlag::ShaderResource, {Format::R32_UINT});
 
             Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(*ditherTable, MakeIteratorRange(s_ditherTable));

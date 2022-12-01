@@ -251,18 +251,16 @@ namespace UnitTests
 				s_attachmentProbeTarget,
 				CreateDesc(
 					BindFlag::TransferSrc | BindFlag::RenderTarget,
-					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::B8G8R8A8_UNORM_SRGB, 1, 64),
-					"probe-target"
-				),
+					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::B8G8R8A8_UNORM_SRGB, 1, 64)),
+				"probe-target",
 				Techniques::PreregisteredAttachment::State::Uninitialized
 			},
 			Techniques::PreregisteredAttachment {
 				s_attachmentProbeDepth,
 				CreateDesc(
 					BindFlag::TransferSrc | BindFlag::DepthStencil,
-					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::D16_UNORM, 1, 64),
-					"probe-depth"
-				),
+					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::D16_UNORM, 1, 64)),
+				"probe-depth",
 				Techniques::PreregisteredAttachment::State::Uninitialized
 			}
 		};
@@ -273,7 +271,7 @@ namespace UnitTests
 		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 		stitchingContext._workingProps = fbProps;
 		for (const auto&a:preregisteredAttachments)
-			stitchingContext.DefineAttachment(a._semantic, a._desc, a._state, a._layout);
+			stitchingContext.DefineAttachment(a._semantic, a._desc, a._name, a._state, a._layout);
 		return parsingContext;
 	}
 

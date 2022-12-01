@@ -1177,8 +1177,7 @@ namespace UnitTests
 		UInt2 outputDims(1024, 1024);
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
-			TextureDesc::Plain2D(outputDims[0], outputDims[1], Format::R8G8B8A8_UNORM),
-			"temporary-out");
+			TextureDesc::Plain2D(outputDims[0], outputDims[1], Format::R8G8B8A8_UNORM));
 		auto threadContext = testHelper->GetDevice()->GetImmediateContext();
 		UnitTestFBHelper fbHelper(*testHelper->GetDevice(), *threadContext, targetDesc);
 

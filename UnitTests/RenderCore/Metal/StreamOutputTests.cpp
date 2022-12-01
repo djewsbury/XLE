@@ -50,8 +50,8 @@ namespace UnitTests
 		auto soBuffer = testHelper->_device->CreateResource(
 			CreateDesc(
 				BindFlag::StreamOutput | BindFlag::TransferSrc,
-				LinearBufferDesc::Create(1024, 1024),
-				"soBuffer"));
+				LinearBufferDesc::Create(1024, 1024)),
+			"soBuffer");
 
 		const InputElementDesc soEles[] = { InputElementDesc("POINT", 0, Format::R32G32B32A32_FLOAT) };
 		const unsigned soStrides[] = { (unsigned)sizeof(Float4) };
@@ -80,8 +80,8 @@ namespace UnitTests
 		auto vertexBuffer = testHelper->_device->CreateResource(
 			CreateDesc(
 				BindFlag::VertexBuffer, AllocationRules::HostVisibleSequentialWrite,
-				LinearBufferDesc::Create(1024, 1024),
-				"vertexBuffer"),
+				LinearBufferDesc::Create(1024, 1024)),
+			"vertexBuffer",
 			SubResourceInitData{MakeIteratorRange(inputVertices)});
 		InputElementDesc inputEle[] = { InputElementDesc{"INPUT", 0, Format::R32G32B32A32_FLOAT} };
 		Metal::BoundInputLayout inputLayout(MakeIteratorRange(inputEle), shaderProgram);

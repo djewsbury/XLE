@@ -33,13 +33,11 @@ namespace RenderCore { namespace Techniques
 
 		std::future<BufferUploads::ResourceLocator> ConstructStaticGeometry(
 			std::shared_ptr<BufferUploads::IAsyncDataSource> dataSource,
-			BindFlag::BitField bindFlags,
-			StringSection<> resourceName);
+			BindFlag::BitField bindFlags);
 
 		std::future<BufferUploads::ResourceLocator> ConstructStaticGeometry(
 			std::shared_ptr<BufferUploads::IDataPacket> dataSource,
-			BindFlag::BitField bindFlags,
-			StringSection<> resourceName);
+			BindFlag::BitField bindFlags);
 
 		std::shared_ptr<RepositionableGeometryConduit> GetRepositionableGeometryConduit();
 

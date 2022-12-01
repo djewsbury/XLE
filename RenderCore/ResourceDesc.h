@@ -152,15 +152,10 @@ namespace RenderCore
         uint64_t CalculateHash() const;
     };
 
-    /// <summary>Description of a buffer</summary>
-    /// Description of a buffer, used during creation operations.
-    /// Usually, BufferDesc is filled with a description of a new buffer to create,
-    /// and passed to IManager::Begin.
     class ResourceDesc
     {
     public:
-            // following the D3D11 style; let's use a "type" member, with a union
-        enum class Type { LinearBuffer, Texture, Unknown, Max };
+        enum class Type { Unknown, LinearBuffer, Texture };
         Type _type;
         BindFlag::BitField _bindFlags;
         AllocationRules::BitField _allocationRules;
@@ -168,7 +163,6 @@ namespace RenderCore
             LinearBufferDesc _linearBufferDesc;
             TextureDesc _textureDesc;
         };
-        char _name[48];
 
         uint64_t CalculateHash() const;
 
@@ -258,58 +252,50 @@ namespace RenderCore
     inline ResourceDesc CreateDesc(
         BindFlag::BitField bindFlags,
         AllocationRules::BitField allocationRules,
-        const TextureDesc& textureDesc,
-        StringSection<char> name)
+        const TextureDesc& textureDesc)
     {
 		ResourceDesc desc;
         desc._type = ResourceDesc::Type::Texture;
         desc._bindFlags = bindFlags;
         desc._allocationRules = allocationRules;
         desc._textureDesc = textureDesc;
-        XlCopyString(desc._name, dimof(desc._name), name);
         return desc;
     }
 
     inline ResourceDesc CreateDesc(
         BindFlag::BitField bindFlags,
         AllocationRules::BitField allocationRules,
-        const LinearBufferDesc& linearBufferDesc,
-        StringSection<char> name)
+        const LinearBufferDesc& linearBufferDesc)
     {
 		ResourceDesc desc;
         desc._type = ResourceDesc::Type::LinearBuffer;
         desc._bindFlags = bindFlags;
         desc._allocationRules = allocationRules;
         desc._linearBufferDesc = linearBufferDesc;
-        XlCopyString(desc._name, dimof(desc._name), name);
         return desc;
     }
 
     inline ResourceDesc CreateDesc(
         BindFlag::BitField bindFlags,
-        const TextureDesc& textureDesc,
-        StringSection<char> name)
+        const TextureDesc& textureDesc)
     {
 		ResourceDesc desc;
         desc._type = ResourceDesc::Type::Texture;
         desc._bindFlags = bindFlags;
         desc._allocationRules = 0;
         desc._textureDesc = textureDesc;
-        XlCopyString(desc._name, dimof(desc._name), name);
         return desc;
     }
 
     inline ResourceDesc CreateDesc(
         BindFlag::BitField bindFlags,
-        const LinearBufferDesc& linearBufferDesc,
-        StringSection<char> name)
+        const LinearBufferDesc& linearBufferDesc)
     {
 		ResourceDesc desc;
         desc._type = ResourceDesc::Type::LinearBuffer;
         desc._bindFlags = bindFlags;
         desc._allocationRules = 0;
         desc._linearBufferDesc = linearBufferDesc;
-        XlCopyString(desc._name, dimof(desc._name), name);
         return desc;
     }
 

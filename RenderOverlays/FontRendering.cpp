@@ -963,11 +963,11 @@ namespace RenderOverlays
 	{
 		using namespace RenderCore;
 		if (height != 1) {
-			_resource = dev.CreateResource(CreateDesc(BindFlag::ShaderResource | BindFlag::TransferDst | BindFlag::TransferSrc, TextureDesc::Plain2D(width, height, pixelFormat, 1), "Font"));
+			_resource = dev.CreateResource(CreateDesc(BindFlag::ShaderResource | BindFlag::TransferDst | BindFlag::TransferSrc, TextureDesc::Plain2D(width, height, pixelFormat, 1)), "Font");
 			_srv = _resource->CreateTextureView();
 		} else {
 			assert(BitsPerPixel(pixelFormat) == 8);
-			_resource = dev.CreateResource(CreateDesc(BindFlag::ShaderResource | BindFlag::TexelBuffer | BindFlag::TransferDst | BindFlag::TransferSrc, LinearBufferDesc::Create(width*height), "Font"));
+			_resource = dev.CreateResource(CreateDesc(BindFlag::ShaderResource | BindFlag::TexelBuffer | BindFlag::TransferDst | BindFlag::TransferSrc, LinearBufferDesc::Create(width*height)), "Font");
 			_srv = _resource->CreateTextureView(BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::FormatFilter{pixelFormat}});
 		}
 	}

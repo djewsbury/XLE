@@ -175,8 +175,9 @@ namespace UnitTests
 		return device.CreateResource(
 			CreateDesc(
 				BindFlag::UnorderedAccess|BindFlag::TransferSrc,
-				LinearBufferDesc::Create(unsigned(vb._size)),
-				"vb"),
+				AllocationRules::HostVisibleSequentialWrite,
+				LinearBufferDesc::Create(unsigned(vb._size))),
+			"vb",
 			SubResourceInitData{MakeIteratorRange(buffer.get(), PtrAdd(buffer.get(), vb._size))});
 	}
 
@@ -273,7 +274,7 @@ namespace UnitTests
 		deformer.Bind(deformInputBinding);
 
 		auto inputResource = LoadStorageBuffer(*testHelper._device, *modelScaffold, animVB);
-		auto outputResource = testHelper._device->CreateResource(inputResource->GetDesc());
+		auto outputResource = testHelper._device->CreateResource(inputResource->GetDesc(), "RunGPUDeformerDirectly");
 
 		REQUIRE(modelScaffold->EmbeddedSkeleton());
 		deformer.FeedInSkeletonMachineResults(

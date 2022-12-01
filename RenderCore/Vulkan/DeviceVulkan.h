@@ -190,6 +190,7 @@ namespace RenderCore { namespace ImplVulkan
 
 		IResourcePtr CreateResource(
 			const ResourceDesc& desc, 
+            StringSection<> name,
 			const std::function<SubResourceInitData(SubResourceId)>&) override;
 		FormatCapability    QueryFormatCapability(Format format, BindFlag::BitField bindingType) override;
 

@@ -28,12 +28,6 @@ namespace RenderCore { namespace Metal_Vulkan
 {
 	static uint64_t s_nextResourceGUID = 1;
 
-    static VkDevice ExtractUnderlyingDevice(IDevice& idev)
-    {
-        auto* vulkanDevice = (IDeviceVulkan*)idev.QueryInterface(typeid(IDeviceVulkan).hash_code());
-		return vulkanDevice ? vulkanDevice->GetUnderlyingDevice() : nullptr;
-    }
-
 	static unsigned CopyViaMemoryMap(
 		VkDevice device, ResourceMap& map,
 		VkImage imageForLayout, const TextureDesc& descForLayout,
@@ -160,16 +154,18 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	#endif
 
-	static void AssignObjectName(ObjectFactory& factory, VkImage underlyingImage, VkBuffer underlyingBuffer, const char* name)
+	static void AssignObjectName(ObjectFactory& factory, VkImage underlyingImage, VkBuffer underlyingBuffer, StringSection<> name)
 	{
 		#if defined(VULKAN_ENABLE_DEBUG_EXTENSIONS)
-			if (factory.GetExtensionFunctions()._setObjectName && name && name[0]) {
+			if (factory.GetExtensionFunctions()._setObjectName && !name.IsEmpty()) {
+				VLA(char, nameCopy, name.size()+1);
+				XlCopyString(nameCopy, name.size()+1, name);		// copy to get a null terminator
 				const VkDebugUtilsObjectNameInfoEXT imageNameInfo {
 					VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT, // sType
 					NULL,                                               // pNext
 					(underlyingImage != nullptr) ? VK_OBJECT_TYPE_IMAGE : VK_OBJECT_TYPE_BUFFER,					// objectType
 					(underlyingImage != nullptr) ? (uint64_t)underlyingImage : (uint64_t)underlyingBuffer,			// object
-					name
+					nameCopy
 				};
 				factory.GetExtensionFunctions()._setObjectName(factory.GetDevice().get(), &imageNameInfo);
 			}
@@ -238,10 +234,13 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	Resource::Resource(
-		ObjectFactory& factory, const Desc& desc,
+		ObjectFactory& factory, const Desc& desc, StringSection<> name,
 		const std::function<SubResourceInitData(SubResourceId)>& initData)
 	: _desc(desc)
 	, _guid(s_nextResourceGUID++)
+	#if defined(_DEBUG)
+		, _name(name.AsString())
+	#endif
 	{
 		// Our resource can either be a linear buffer, or an image
 		// These correspond to the 2 types of Desc
@@ -265,11 +264,6 @@ namespace RenderCore { namespace Metal_Vulkan
 			buf_info.pQueueFamilyIndices = nullptr;
 			buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;   // sharing between queues
 			buf_info.flags = 0;     // flags for sparse buffers
-
-			/*
-			if (buf_info.usage & (VK_BUFFER_USAGE_VERTEX_BUFFER_BIT|VK_BUFFER_USAGE_INDEX_BUFFER_BIT))
-				buf_info.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-			*/
 
 			assert(buf_info.usage != 0);
 			if (!allocateDirectFromVulkan) {
@@ -382,7 +376,7 @@ namespace RenderCore { namespace Metal_Vulkan
 								if ((formatProps.linearTilingFeatures & v._features) != v._features)
 									Throw(Exceptions::BasicLabel("Format (%s) not supported for requested bind flags (%s)", AsString(desc._textureDesc._format), v._name));
 
-								Log(Verbose) << "Falling back to non-optimal tiling for texture (" << desc._name << ") due to format (" << AsString(desc._textureDesc._format) << ") and bind flag (" << v._name << ")" << std::endl;
+								Log(Verbose) << "Falling back to non-optimal tiling for texture (" << name << ") due to format (" << AsString(desc._textureDesc._format) << ") and bind flag (" << v._name << ")" << std::endl;
 								fallback = true;
 							}
 						}
@@ -462,7 +456,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			#endif
 		}
 
-		AssignObjectName(factory, _underlyingImage.get(), _underlyingBuffer.get(), desc._name);
+		AssignObjectName(factory, _underlyingImage.get(), _underlyingBuffer.get(), name);
 
 		if (allocateDirectFromVulkan) {
 			if (_underlyingBuffer) {
@@ -520,8 +514,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			auto stagingCopyDesc = _desc;
 			stagingCopyDesc._allocationRules = AllocationRules::HostVisibleRandomAccess;
 			stagingCopyDesc._bindFlags = BindFlag::TransferDst;
-			XlCopyString(stagingCopyDesc._name, "ReadBackSynchronized");
-			Resource destaging { GetObjectFactory(), stagingCopyDesc };
+			Resource destaging { GetObjectFactory(), stagingCopyDesc, "ReadBackSynchronized" };
 
 			auto& ctx = *DeviceContext::Get(context);
 			{

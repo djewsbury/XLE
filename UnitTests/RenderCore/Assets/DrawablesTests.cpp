@@ -170,8 +170,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
-			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
-			"temporary-out");
+			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM));
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 		
 		/////////////////////////////////////////////////////////////////
@@ -375,8 +374,8 @@ namespace UnitTests
 				CreateDesc(
 					BindFlag::ShaderResource,
 					AllocationRules::HostVisibleSequentialWrite,
-					TextureDesc::Plain2D(32, 32, RenderCore::Format::R8G8B8A8_UNORM),
-					name + "-tex0"),
+					TextureDesc::Plain2D(32, 32, RenderCore::Format::R8G8B8A8_UNORM)),
+				name + "-tex0",
 				SubResourceInitData{MakeIteratorRange(dummyData)});
 			_textureResource = textureResource->CreateTextureView();
 

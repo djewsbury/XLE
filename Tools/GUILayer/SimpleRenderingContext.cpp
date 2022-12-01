@@ -230,9 +230,10 @@ namespace GUILayer
     uint64  RetainedRenderResources::CreateVertexBuffer(void* data, size_t size, unsigned format)
     {
         using namespace RenderCore;
-        auto desc = CreateDesc(BindFlag::VertexBuffer, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc::Create((unsigned)size), "retained-render-resources");
+        auto desc = CreateDesc(BindFlag::VertexBuffer, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc::Create((unsigned)size));
 		auto newBuffer = _pimpl->_device->CreateResource(
             desc,
+            "retained-render-resources",
             SubResourceInitData{MakeIteratorRange(data, PtrAdd(data, size))});
         _pimpl->_vertexBuffers.push_back(std::make_pair(_pimpl->_nextBufferID, std::move(newBuffer)));
         _pimpl->_vbFormat.push_back(std::make_pair(_pimpl->_nextBufferID, format));
@@ -242,9 +243,10 @@ namespace GUILayer
     uint64  RetainedRenderResources::CreateIndexBuffer(void* data, size_t size)
     {
 		using namespace RenderCore;
-        auto desc = CreateDesc(BindFlag::IndexBuffer, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc::Create((unsigned)size), "retained-render-resources");
+        auto desc = CreateDesc(BindFlag::IndexBuffer, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc::Create((unsigned)size));
 		auto newBuffer = _pimpl->_device->CreateResource(
             desc,
+            "retained-render-resources",
             SubResourceInitData{MakeIteratorRange(data, PtrAdd(data, size))});
         _pimpl->_indexBuffers.push_back(std::make_pair(_pimpl->_nextBufferID, std::move(newBuffer)));
         return _pimpl->_nextBufferID++;

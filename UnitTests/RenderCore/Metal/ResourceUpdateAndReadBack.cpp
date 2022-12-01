@@ -155,8 +155,7 @@ namespace UnitTests
 			auto stagingDesc = cbResource.GetDesc();
 			stagingDesc._bindFlags = BindFlag::TransferSrc;
 			stagingDesc._allocationRules = AllocationRules::HostVisibleSequentialWrite;
-			XlCopyString(stagingDesc._name, "TempStaging");
-			auto stagingRes = device.CreateResource(stagingDesc, newData);
+			auto stagingRes = device.CreateResource(stagingDesc, "TempStaging", newData);
 			auto encoder = metalContext.BeginBlitEncoder();
 			encoder.Copy(cbResource, *stagingRes);
 		}
@@ -174,22 +173,21 @@ namespace UnitTests
 		auto shaderProgram = testHelper.MakeShaderProgram(vsText_clipInput, psText_Uniforms);
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
-			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
-			"temporary-out");
+			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM));
 
 		std::shared_ptr<IResource> cbResource;
 		if (unsynchronized) {
 			cbResource = testHelper._device->CreateResource(
 				CreateDesc(	
 					BindFlag::ConstantBuffer, AllocationRules::HostVisibleSequentialWrite,
-					LinearBufferDesc::Create(sizeof(Values)),
-					"test-cbuffer"));
+					LinearBufferDesc::Create(sizeof(Values))),
+				"test-cbuffer");
 		} else {
 			cbResource = testHelper._device->CreateResource(
 				CreateDesc(	
 					BindFlag::ConstantBuffer | BindFlag::TransferDst, 0,
-					LinearBufferDesc::Create(sizeof(Values)),
-					"test-cbuffer"));
+					LinearBufferDesc::Create(sizeof(Values))),
+				"test-cbuffer");
 		}
 
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
@@ -321,8 +319,7 @@ namespace UnitTests
 		auto shaderProgram = testHelper->MakeShaderProgram(vsText_clipInput, psText_Uniforms);
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
-			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
-			"temporary-out");
+			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM));
 
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 
@@ -355,8 +352,8 @@ namespace UnitTests
 				cbs[d] = testHelper->_device->CreateResource(
 					CreateDesc(	
 						BindFlag::ConstantBuffer, AllocationRules::HostVisibleSequentialWrite,
-						LinearBufferDesc::Create(sizeof(initData)),
-						"test-cbuffer"));
+						LinearBufferDesc::Create(sizeof(initData))),
+					"test-cbuffer");
 				UpdateConstantBuffer(metalContext, *testHelper->_device, *cbs[d], MakeOpaqueIteratorRange(initData), true);
 			}
 
@@ -387,6 +384,7 @@ namespace UnitTests
 	public:
 		std::future<std::shared_ptr<RenderCore::IResource>> Queue(
 			const RenderCore::ResourceDesc& desc,
+			std::string&& name,
 			RenderCore::BindFlag::Enum finalResourceState);
 		void Tick();
 
@@ -403,6 +401,7 @@ namespace UnitTests
 		{
 			RenderCore::ResourceDesc _desc;
 			RenderCore::BindFlag::Enum _finalResourceState;
+			std::string _name;
 			std::promise<std::shared_ptr<RenderCore::IResource>> _promise;
 		};
 		std::queue<QueuedUpload> _itemsToUpload;
@@ -415,6 +414,7 @@ namespace UnitTests
 			std::shared_ptr<RenderCore::IResource> CreateAndTransferData(
 				RenderCore::IThreadContext& threadContext,
 				const RenderCore::ResourceDesc& desc,
+				StringSection<> resName,
 				RenderCore::BindFlag::Enum finalResourceState);
 
 			struct AllocationPendingRelease
@@ -429,12 +429,13 @@ namespace UnitTests
 		StagingBufferMan _stagingBufferMan;
 	};
 
-	std::future<std::shared_ptr<RenderCore::IResource>> BackgroundTextureUploader::Queue(const RenderCore::ResourceDesc& desc, RenderCore::BindFlag::Enum finalResourceState)
+	std::future<std::shared_ptr<RenderCore::IResource>> BackgroundTextureUploader::Queue(const RenderCore::ResourceDesc& desc, std::string&& name, RenderCore::BindFlag::Enum finalResourceState)
 	{
 		ScopedLock(_queueLock);
 		QueuedUpload upload;
 		upload._desc = desc;
 		upload._finalResourceState = finalResourceState;
+		upload._name = std::move(name);
 		auto result = upload._promise.get_future();
 		_itemsToUpload.push(std::move(upload));
 		_newlyQueued.notify_one();
@@ -514,6 +515,7 @@ namespace UnitTests
 	auto BackgroundTextureUploader::StagingBufferMan::CreateAndTransferData(
 		RenderCore::IThreadContext& threadContext,
 		const RenderCore::ResourceDesc& desc,
+		StringSection<> resName,
 		RenderCore::BindFlag::Enum finalResourceState) -> std::shared_ptr<RenderCore::IResource>
 	{
 		using namespace RenderCore;
@@ -531,7 +533,7 @@ namespace UnitTests
 			stagingSize = byteCount;
 		}
 		
-		auto resource = threadContext.GetDevice()->CreateResource(modifiedDesc);
+		auto resource = threadContext.GetDevice()->CreateResource(modifiedDesc, resName);
 		if (Metal::ResourceMap::CanMap(*threadContext.GetDevice(), *resource, Metal::ResourceMap::Mode::WriteDiscardPrevious)) {
 			if (stagingAllocation) {
 				// didn't need to make this allocation after all
@@ -602,8 +604,8 @@ namespace UnitTests
 		_stagingBufferMan._stagingBuffer = device->CreateResource(
 			CreateDesc(
 				BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite | AllocationRules::PermanentlyMapped | AllocationRules::DisableAutoCacheCoherency,
-				LinearBufferDesc::Create(stagingHeapSize),
-				"main-staging-buffer"));
+				LinearBufferDesc::Create(stagingHeapSize)),
+			"main-staging-buffer");
 
 		_workerThread = std::thread{[device, this]() {
 			auto bkThreadContext = device->CreateDeferredContext();
@@ -636,7 +638,7 @@ namespace UnitTests
 
 				if (frontItem) {
 					// process this upload request
-					auto res = _stagingBufferMan.CreateAndTransferData(*bkThreadContext, frontItem->_desc, frontItem->_finalResourceState);
+					auto res = _stagingBufferMan.CreateAndTransferData(*bkThreadContext, frontItem->_desc, frontItem->_name, frontItem->_finalResourceState);
 					if (!res) {
 						// commit all to try to release staging allocations
 						bkThreadContext->CommitCommands();
@@ -690,8 +692,7 @@ namespace UnitTests
 		auto shaderProgram = testHelper->MakeShaderProgram(vsText_clipInput, psText_TextureBinding);
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
-			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
-			"temporary-out");
+			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM));
 
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc, LoadStore::Clear);
 
@@ -715,11 +716,12 @@ namespace UnitTests
 			if (std::uniform_int_distribution<>(0, 3)(rng) >= 1) {
 				auto dims = std::uniform_int_distribution<>(3, 11)(rng);
 				future = uploads.Queue(
-					CreateDesc(BindFlag::ShaderResource, TextureDesc::Plain2D(1<<dims, 1<<dims, Format::R8G8B8A8_UNORM_SRGB, dims+1), "upload-test"),
+					CreateDesc(BindFlag::ShaderResource, TextureDesc::Plain2D(1<<dims, 1<<dims, Format::R8G8B8A8_UNORM_SRGB, dims+1)),
+					"upload-test",
 					BindFlag::ShaderResource);
 			} else {
 				auto bufferSize = std::uniform_int_distribution<>(8*1024, 256*1024)(rng);
-				future = uploads.Queue(CreateDesc(BindFlag::VertexBuffer, LinearBufferDesc::Create(bufferSize), "upload-test"), BindFlag::VertexBuffer);
+				future = uploads.Queue(CreateDesc(BindFlag::VertexBuffer, LinearBufferDesc::Create(bufferSize)), "upload-test", BindFlag::VertexBuffer);
 			}
 			futureResources.emplace_back(std::move(future));
 

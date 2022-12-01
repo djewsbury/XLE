@@ -74,15 +74,15 @@ namespace UnitTests
 				Techniques::AttachmentSemantics::ColorHDR,
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::InputAttachment,
-					TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
-					"color-hdr")
+					TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM)),
+				"color-hdr"
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::ColorLDR,
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::TransferSrc,
-					TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
-					"color-ldr")
+					TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM)),
+				"color-ldr"
 			}
 		};
 

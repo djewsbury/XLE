@@ -324,11 +324,11 @@ namespace RenderCore
     std::ostream& SerializationOperator(std::ostream& strm, const ResourceDesc& resDesc)
     {
         if (resDesc._type == ResourceDesc::Type::LinearBuffer) {
-            strm << "LinearBuffer (" << resDesc._name << ") size: " << resDesc._linearBufferDesc._sizeInBytes / 1024.f << "KiB";
+            strm << "LinearBuffer size: " << resDesc._linearBufferDesc._sizeInBytes / 1024.f << "KiB";
             strm << ", BindFlags: " << resDesc._bindFlags;
             strm << ", AllocationRules: " << resDesc._allocationRules;
         } else if (resDesc._type == ResourceDesc::Type::Texture) {
-            strm << "Texture (" << resDesc._name << ") [" << resDesc._textureDesc << "]";
+            strm << "Texture [" << resDesc._textureDesc << "]";
             strm << ", BindFlags: " << resDesc._bindFlags;
             strm << ", AllocationRules: " << resDesc._allocationRules;
         }

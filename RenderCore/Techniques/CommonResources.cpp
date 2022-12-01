@@ -68,19 +68,19 @@ namespace RenderCore { namespace Techniques
         _unnormalizedBilinearClampSampler = device.CreateSampler(SamplerDesc{FilterMode::Bilinear, AddressMode::Clamp, AddressMode::Clamp, AddressMode::Clamp, CompareOp::Never, SamplerDescFlags::UnnormalizedCoordinates});
         _defaultSampler = _linearWrapSampler;
 
-        _black2DSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM), "black2d"))->CreateTextureView();
-        _black2DArraySRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM, 1, 1), "black2darray"))->CreateTextureView();
-        _black3DSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain3D(8, 8, 8, Format::R8_UNORM), "black3d"))->CreateTextureView();
-        _blackCubeSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM), "blackCube"))->CreateTextureView();
-        _blackCubeArraySRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM, 1, 6), "blackCubeArray"))->CreateTextureView();
-        _blackCB = device.CreateResource(CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc{256}, "blackbuffer"));
-        _blackBufferUAV = device.CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc{256, 16}, "blackbufferuav"))->CreateBufferView(BindFlag::UnorderedAccess);
+        _black2DSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM)), "black2d")->CreateTextureView();
+        _black2DArraySRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM, 1, 1)), "black2darray")->CreateTextureView();
+        _black3DSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain3D(8, 8, 8, Format::R8_UNORM)), "black3d")->CreateTextureView();
+        _blackCubeSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM)), "blackCube")->CreateTextureView();
+        _blackCubeArraySRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM, 1, 6)), "blackCubeArray")->CreateTextureView();
+        _blackCB = device.CreateResource(CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc{256}), "blackbuffer");
+        _blackBufferUAV = device.CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc{256, 16}), "blackbufferuav")->CreateBufferView(BindFlag::UnorderedAccess);
 
-        _white2DSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM), "white2d"))->CreateTextureView();
-        _white2DArraySRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM, 1, 1), "white2darray"))->CreateTextureView();
-        _white3DSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain3D(8, 8, 8, Format::R8_UNORM), "white3d"))->CreateTextureView();
-        _whiteCubeSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM), "whiteCube"))->CreateTextureView();
-        _whiteCubeArraySRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM, 1, 6), "whiteCubeArray"))->CreateTextureView();
+        _white2DSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM)), "white2d")->CreateTextureView();
+        _white2DArraySRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM, 1, 1)), "white2darray")->CreateTextureView();
+        _white3DSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain3D(8, 8, 8, Format::R8_UNORM)), "white3d")->CreateTextureView();
+        _whiteCubeSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM)), "whiteCube")->CreateTextureView();
+        _whiteCubeArraySRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM, 1, 6)), "whiteCubeArray")->CreateTextureView();
 
         _pendingCompleteInitialization = true;
     }

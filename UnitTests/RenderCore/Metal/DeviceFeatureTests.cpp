@@ -44,7 +44,7 @@ namespace UnitTests
 		auto& factory = Metal::GetObjectFactory(*testHelper._device);
 		UnitTestFBHelper simpleFBHelper{
 			*testHelper._device, *testHelper._device->GetImmediateContext(),
-			RenderCore::CreateDesc(BindFlag::RenderTarget, TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM_SRGB), "simple-fb")};
+			RenderCore::CreateDesc(BindFlag::RenderTarget, TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM_SRGB))};
 
 		SECTION("Geometry Shader")
 		{

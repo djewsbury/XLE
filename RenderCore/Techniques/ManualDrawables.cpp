@@ -44,10 +44,12 @@ namespace RenderCore { namespace Techniques
 			std::vector<uint8_t> _storage;
 
 			ResourceDesc _desc;
+			std::string _name;
 
 			virtual std::future<ResourceDesc> GetDesc () override;
 			virtual std::future<void> PrepareData(IteratorRange<const SubResource*> subResources) override;
 			virtual ::Assets::DependencyValidation GetDependencyValidation() const override;
+			virtual StringSection<> GetName() const override;
 
 			std::shared_ptr<BufferUploads::IDataPacket> AsDataPacket();
 		};
@@ -159,14 +161,14 @@ namespace RenderCore { namespace Techniques
 			if (part._pkt) {
 				return part._pkt;
 			} else if (!part._vectorSource.empty()) {
-				return BufferUploads::CreateBasicPacket(std::move(part._vectorSource));
+				return BufferUploads::CreateBasicPacket(std::move(part._vectorSource), std::string{_name});
 			} else if (part._asyncSrc) {
 				Throw(std::runtime_error("ManualDrawableGeoConstructor::ImmediateFulFill cannot be used with uploads that include a IAsyncDataSource"));
 			} else {
 				std::vector<uint8_t> vbData;
 				vbData.resize(_uploadTotal);
 				std::memcpy(vbData.data(), PtrAdd(_storage.data(), part._storageSrc->first), part._storageSrc->second);
-				return BufferUploads::CreateBasicPacket(std::move(vbData));
+				return BufferUploads::CreateBasicPacket(std::move(vbData), std::string{_name});
 			}	
 		} else {
 			std::vector<uint8_t> vbData;
@@ -184,11 +186,12 @@ namespace RenderCore { namespace Techniques
 					std::memcpy(PtrAdd(vbData.data(), part._offset), PtrAdd(_storage.data(), part._storageSrc->first), part._storageSrc->second);
 				}
 			}
-			return BufferUploads::CreateBasicPacket(std::move(vbData));
+			return BufferUploads::CreateBasicPacket(std::move(vbData), std::string{_name});
 		}
 	}
 
 	::Assets::DependencyValidation ManualDrawableGeoConstructor::Pimpl::ResourceUploader::GetDependencyValidation() const { return {}; }
+	StringSection<> ManualDrawableGeoConstructor::Pimpl::ResourceUploader::GetName() const { return _name; }
 
 	static DrawablesPacket::AllocateStorageResult AllocateFrom(std::vector<uint8_t>& vector, size_t size, unsigned alignment)
 	{
@@ -262,7 +265,7 @@ namespace RenderCore { namespace Techniques
 		_pimpl->_pendingResAssignment.push_back({geoIdx, str});
 	}
 
-	void ManualDrawableGeoConstructor::SetStreamData(DrawableStream str, std::vector<uint8_t>&& sourceData)
+	void ManualDrawableGeoConstructor::SetStreamData(DrawableStream str, std::vector<uint8_t>&& sourceData, std::string&& name)
 	{
 		assert(!_pimpl->_fulfillWhenNotPendingCalled.load());
 		assert(!_pimpl->_pendingGeos.empty());		// call BeginGeo() first
@@ -289,6 +292,10 @@ namespace RenderCore { namespace Techniques
 		uploadPart._vectorSource = std::move(sourceData);
 		uploader->_parts.emplace_back(std::move(uploadPart));
 		uploader->_uploadTotal += size;
+		if (uploader->_name != name) {
+			if (!uploader->_name.empty()) uploader->_name += "+" + name;
+			else uploader->_name = std::move(name);
+		}
 
 		auto geoIdx = unsigned(_pimpl->_pendingGeos.size()-1);
 		_pimpl->_pendingResAssignment.push_back({geoIdx, str});
@@ -322,6 +329,11 @@ namespace RenderCore { namespace Techniques
 		uploadPart._pkt = std::move(sourceData);
 		uploader->_parts.emplace_back(std::move(uploadPart));
 		uploader->_uploadTotal += size;
+		auto name = uploadPart._pkt->GetName().AsString();
+		if (uploader->_name != name) {
+			if (!uploader->_name.empty()) uploader->_name += "+" + name;
+			else uploader->_name = std::move(name);
+		}
 
 		auto geoIdx = unsigned(_pimpl->_pendingGeos.size()-1);
 		_pimpl->_pendingResAssignment.push_back({geoIdx, str});
@@ -354,6 +366,11 @@ namespace RenderCore { namespace Techniques
 		uploadPart._asyncSrc = std::move(sourceData);
 		uploader->_parts.emplace_back(std::move(uploadPart));
 		uploader->_uploadTotal += size;
+		auto name = uploadPart._asyncSrc->GetName().AsString();
+		if (uploader->_name != name) {
+			if (!uploader->_name.empty()) uploader->_name += "+" + name;
+			else uploader->_name = std::move(name);
+		}
 
 		auto geoIdx = unsigned(_pimpl->_pendingGeos.size()-1);
 		_pimpl->_pendingResAssignment.push_back({geoIdx, str});
@@ -401,13 +418,13 @@ namespace RenderCore { namespace Techniques
 		// create an upload future for both VB & IB
 		if (_pimpl->_vb->_uploadTotal != 0) {
 			auto vbSize = _pimpl->_vb->_uploadTotal;
-			_pimpl->_vb->_desc = CreateDesc(BindFlag::VertexBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(vbSize), "[vb]");
+			_pimpl->_vb->_desc = CreateDesc(BindFlag::VertexBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(vbSize));
 			waitingParts->_vbUploadMarker = _pimpl->_bufferUploads->Begin(_pimpl->_vb, _pimpl->_vb->_desc._bindFlags);
 		}
 
 		if (_pimpl->_ib->_uploadTotal != 0) {
 			auto ibSize = _pimpl->_ib->_uploadTotal;
-			_pimpl->_ib->_desc = CreateDesc(BindFlag::IndexBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(ibSize), "[ib]");
+			_pimpl->_ib->_desc = CreateDesc(BindFlag::IndexBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(ibSize));
 			waitingParts->_ibUploadMarker = _pimpl->_bufferUploads->Begin(_pimpl->_ib, _pimpl->_ib->_desc._bindFlags);
 		}
 
@@ -483,7 +500,7 @@ namespace RenderCore { namespace Techniques
 				Throw(std::runtime_error("ManualDrawableGeoConstructor::ImmediateFulFill cannot be used with uploads that include a IAsyncDataSource"));
 
 		if (_pimpl->_vb->_uploadTotal != 0) {
-			_pimpl->_vb->_desc = CreateDesc(BindFlag::VertexBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(_pimpl->_vb->_uploadTotal), "[vb]");
+			_pimpl->_vb->_desc = CreateDesc(BindFlag::VertexBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(_pimpl->_vb->_uploadTotal));
 			auto vbUploadPkt = _pimpl->_vb->AsDataPacket();
 			auto vb = _pimpl->_bufferUploads->ImmediateTransaction(_pimpl->_vb->_desc, std::move(vbUploadPkt));
 			assert(!vb.IsEmpty());
@@ -502,7 +519,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		if (_pimpl->_ib->_uploadTotal != 0) {
-			_pimpl->_ib->_desc = CreateDesc(BindFlag::IndexBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(_pimpl->_ib->_uploadTotal), "[ib]");
+			_pimpl->_ib->_desc = CreateDesc(BindFlag::IndexBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(_pimpl->_ib->_uploadTotal));
 			auto ibUploadPkt = _pimpl->_ib->AsDataPacket();
 			auto ib = _pimpl->_bufferUploads->ImmediateTransaction(_pimpl->_ib->_desc, std::move(ibUploadPkt));
 			assert(!ib.IsEmpty());

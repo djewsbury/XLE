@@ -242,12 +242,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		return CreateDesc(
 			bindingFlags,
 			AllocationRules::DedicatedPage | AllocationRules::DisableSafeDestruction | (cpuMappable ? AllocationRules::HostVisibleSequentialWrite|AllocationRules::PermanentlyMapped|AllocationRules::DisableAutoCacheCoherency : 0),
-			LinearBufferDesc::Create(unsigned(byteCount)),
-			"RollingTempBuf");
+			LinearBufferDesc::Create(unsigned(byteCount)));
 	}
 
 	TemporaryStoragePage::TemporaryStoragePage(ObjectFactory& factory, size_t byteCount, BindFlag::BitField type, bool cpuMappable, unsigned pageId)
-	: _resource(std::make_shared<Resource>(factory, BuildBufferDesc(type, byteCount, cpuMappable)))
+	: _resource(std::make_shared<Resource>(factory, BuildBufferDesc(type, byteCount, cpuMappable), "RollingTempBuf"))
 	, _heap((unsigned)byteCount), _type(type), _cpuMappable(cpuMappable), _pageId(pageId)
 	{
 		_lastBarrier = 0u;

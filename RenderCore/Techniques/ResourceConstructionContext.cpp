@@ -66,8 +66,7 @@ namespace RenderCore { namespace Techniques
 
 	std::future<BufferUploads::ResourceLocator> ResourceConstructionContext::ConstructStaticGeometry(
 		std::shared_ptr<BufferUploads::IAsyncDataSource> dataSource,
-		BindFlag::BitField bindFlags,
-		StringSection<> resourceName)
+		BindFlag::BitField bindFlags)
 	{
 		std::shared_ptr<BufferUploads::IResourcePool> resourceSource;
 		if (_pimpl->_repositionableGeometry) {
@@ -98,8 +97,7 @@ namespace RenderCore { namespace Techniques
 
 	std::future<BufferUploads::ResourceLocator> ResourceConstructionContext::ConstructStaticGeometry(
 		std::shared_ptr<BufferUploads::IDataPacket> dataSource,
-		BindFlag::BitField bindFlags,
-		StringSection<> resourceName)
+		BindFlag::BitField bindFlags)
 	{
 		std::shared_ptr<BufferUploads::IResourcePool> resourceSource;
 		if (_pimpl->_repositionableGeometry) {
@@ -111,7 +109,7 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 
-		auto desc = CreateDesc(bindFlags, LinearBufferDesc::Create(dataSource->GetData().size()), resourceName);
+		auto desc = CreateDesc(bindFlags, LinearBufferDesc::Create(dataSource->GetData().size()));
 
 		if (resourceSource) {
 			auto res = _pimpl->_bufferUploads->Begin(desc, std::move(dataSource), std::move(resourceSource));

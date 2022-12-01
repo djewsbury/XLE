@@ -242,8 +242,8 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::AttachmentSemantics::TiledLightBitField,
 				CreateDesc(
 					BindFlag::UnorderedAccess|BindFlag::ShaderResource|BindFlag::TransferDst,
-					TextureDesc::Plain3D(_lightTileBufferSize[0], _lightTileBufferSize[1], planesRequired, Format::R32_UINT),
-					"tiled-light-bit-field")
+					TextureDesc::Plain3D(_lightTileBufferSize[0], _lightTileBufferSize[1], planesRequired, Format::R32_UINT)),
+				"tiled-light-bit-field"
 			}/*,
 			Techniques::PreregisteredAttachment {
 				Hash64("LowRezDepthBuffer"),
@@ -290,18 +290,16 @@ namespace RenderCore { namespace LightingEngine
 
 		auto tileableLightBufferDesc = CreateDesc(
 			BindFlag::UnorderedAccess, AllocationRules::HostVisibleRandomAccess|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped,
-			LinearBufferDesc::Create(sizeof(IntermediateLight)*_config._maxLightsPerView),
-			"tileable-lights");
+			LinearBufferDesc::Create(sizeof(IntermediateLight)*_config._maxLightsPerView));
 		for (unsigned c=0; c<2; ++c) {
-			_tileableLightBuffer[c] = _pipelinePool->GetDevice()->CreateResource(tileableLightBufferDesc);
+			_tileableLightBuffer[c] = _pipelinePool->GetDevice()->CreateResource(tileableLightBufferDesc, "tileable-lights");
 			_tileableLightBufferUAV[c] = _tileableLightBuffer[c]->CreateBufferView(BindFlag::UnorderedAccess);
 		}
 
 		auto metricsBufferDesc = CreateDesc(
 			BindFlag::UnorderedAccess|BindFlag::ShaderResource,
-			LinearBufferDesc::Create(sizeof(unsigned)*16),
-			"metrics");
-		auto buffer = _pipelinePool->GetDevice()->CreateResource(metricsBufferDesc);
+			LinearBufferDesc::Create(sizeof(unsigned)*16));
+		auto buffer = _pipelinePool->GetDevice()->CreateResource(metricsBufferDesc, "tileable-lights-metrics");
 		_metricsBufferUAV = buffer->CreateBufferView(BindFlag::UnorderedAccess);
 		_metricsBufferSRV = buffer->CreateBufferView(BindFlag::ShaderResource);
 

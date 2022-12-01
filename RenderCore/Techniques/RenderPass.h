@@ -136,6 +136,7 @@ namespace RenderCore { namespace Techniques
             Uninitialized, Initialized, 
             Initialized_StencilUninitialized, Uninitialized_StencilInitialized
         };
+        StringSection<> _name;
         State _state = State::Uninitialized;
         BindFlag::BitField _layout = 0;
 
@@ -172,6 +173,7 @@ namespace RenderCore { namespace Techniques
     public:
         void DefineAttachment(
             uint64_t semantic, const ResourceDesc&,
+            StringSection<> name,
             PreregisteredAttachment::State state = PreregisteredAttachment::State::Uninitialized, 
             BindFlag::BitField initialLayout = 0);
         void DefineAttachment(const PreregisteredAttachment& attachment);

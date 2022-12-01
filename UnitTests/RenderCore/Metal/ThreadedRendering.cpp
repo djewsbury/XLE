@@ -56,8 +56,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget|BindFlag::TransferSrc,
-			TextureDesc::Plain2D(256, 256, Format::R32G32B32A32_FLOAT),
-			"temporary-out1");
+			TextureDesc::Plain2D(256, 256, Format::R32G32B32A32_FLOAT));
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc, LoadStore::Retain);
 
 		auto* vulkanThreadContext = (IThreadContextVulkan*)threadContext->QueryInterface(typeid(IThreadContextVulkan).hash_code());

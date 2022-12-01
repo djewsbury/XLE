@@ -179,16 +179,15 @@ namespace UnitTests
 		using namespace RenderCore;
 		auto desc = CreateDesc(
 			BindFlag::UnorderedAccess | BindFlag::TransferDst,
-			TextureDesc::Plain2D(8, 8, Format::R8G8B8A8_UINT),
-			"test-storage-texture");
-		auto result = device.CreateResource(desc);
+			TextureDesc::Plain2D(8, 8, Format::R8G8B8A8_UINT));
+		auto result = device.CreateResource(desc, "test-storage-texture");
 
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(threadContext), {result.get()});
 
 		// fill with data via a staging texture
 		// Vulkan really doesn't like initializing UnorderedAccess with preinitialized data, even if we use
 		// linear tiling. We must do an explicit initialization via a staging texture
-		auto staging = device.CreateResource(AsStagingDesc(desc));
+		auto staging = device.CreateResource(AsStagingDesc(desc), "staging");
 		{
 			Metal::ResourceMap map(
 				*Metal::DeviceContext::Get(threadContext),
@@ -217,10 +216,10 @@ namespace UnitTests
 		using namespace RenderCore;
 		auto desc = CreateDesc(
 			BindFlag::UnorderedAccess,
-			LinearBufferDesc::Create(sizeof(contents)),
-			"test-storage-buffer");
+			AllocationRules::HostVisibleSequentialWrite,
+			LinearBufferDesc::Create(sizeof(contents)));
 
-		return device.CreateResource(desc, MakeOpaqueIteratorRange(contents).Cast<const void*>());
+		return device.CreateResource(desc, "test-storage-buffer", MakeOpaqueIteratorRange(contents).Cast<const void*>());
 	}
 
 	TEST_CASE( "Pipeline-ComplexUniformBinding", "[rendercore_metal]" )
@@ -230,8 +229,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
-			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
-			"temporary-out");
+			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM));
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 		auto testStorageTexture = CreateTestStorageTexture(*testHelper->_device, *threadContext);
 		auto testStorageBuffer = CreateTestStorageBuffer(*testHelper->_device);
@@ -407,8 +405,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
-			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
-			"temporary-out");
+			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM));
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 
 		TestBufferType pushConstants0 { Float3(1, 0, 1), 8 };
@@ -419,18 +416,16 @@ namespace UnitTests
 		{
 			auto desc = CreateDesc(
 				BindFlag::ShaderResource | BindFlag::TransferDst,
-				TextureDesc::Plain2D(8, 8, Format::R8G8B8A8_UINT),
-				"test-storage-texture-0");
-			tex0 = testHelper->_device->CreateResource(desc);
-			XlCopyString(desc._name, "test-storage-texture-1");
-			tex1 = testHelper->_device->CreateResource(desc);
+				TextureDesc::Plain2D(8, 8, Format::R8G8B8A8_UINT));
+			tex0 = testHelper->_device->CreateResource(desc, "test-storage-texture-0");
+			tex1 = testHelper->_device->CreateResource(desc, "test-storage-texture-1");
 
 			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 			Metal::CompleteInitialization(metalContext, {tex0.get(), tex1.get(), fbHelper.GetMainTarget().get()});
 
 			auto blt = metalContext.BeginBlitEncoder();
 
-			auto staging0 = testHelper->_device->CreateResource(AsStagingDesc(desc));
+			auto staging0 = testHelper->_device->CreateResource(AsStagingDesc(desc), "staging0");
 			{
 				Metal::ResourceMap map(metalContext, *staging0, Metal::ResourceMap::Mode::WriteDiscardPrevious);
 				std::memset(map.GetData().begin(), 0, map.GetData().size());
@@ -440,7 +435,7 @@ namespace UnitTests
 
 			// (note that it's critical that we use a different staging texture for this -- since the copy into
 			// tex0 is queued on a command list, but the effects of ResourceMap happen immediately)
-			auto staging1 = testHelper->_device->CreateResource(AsStagingDesc(desc));
+			auto staging1 = testHelper->_device->CreateResource(AsStagingDesc(desc), "staging1");
 			{
 				Metal::ResourceMap map(metalContext, *staging1, Metal::ResourceMap::Mode::WriteDiscardPrevious);
 				std::memset(map.GetData().begin(), 0, map.GetData().size());

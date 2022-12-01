@@ -206,7 +206,7 @@ namespace PlatformRig
                 // (also redefine AttachmentSemantics::ColorLDR as initialized here)
                 RenderCore::Metal::DeviceContext::Get(*context)->Clear(*presentationTarget->CreateTextureView(RenderCore::BindFlag::RenderTarget), Float4(0,0,0,1));
                 using namespace RenderCore::Techniques;
-                stitchingContext.DefineAttachment(AttachmentSemantics::ColorLDR, targetDesc, PreregisteredAttachment::State::Initialized, RenderCore::BindFlag::TransferDst);
+                stitchingContext.DefineAttachment(AttachmentSemantics::ColorLDR, targetDesc, "color-hdr", PreregisteredAttachment::State::Initialized, RenderCore::BindFlag::TransferDst);
             }
 
 			TRY {
@@ -327,8 +327,7 @@ namespace PlatformRig
         auto targetDesc = CreateDesc(
             desc._bindFlags, 
             AllocationRules::ResizeableRenderTarget,
-            TextureDesc::Plain2D(desc._width, desc._height, desc._format, 1, 0, desc._samples),
-            "presentation-target");
+            TextureDesc::Plain2D(desc._width, desc._height, desc._format, 1, 0, desc._samples));
 
         // update system attachment formats
         _pimpl->_techniqueContext._systemAttachmentFormats = Techniques::CalculateDefaultSystemFormats(device);
@@ -341,6 +340,7 @@ namespace PlatformRig
                 Techniques::PreregisteredAttachment {
                     Techniques::AttachmentSemantics::ColorLDR,
                     targetDesc,
+                    "color-ldr",
                     Techniques::PreregisteredAttachment::State::Uninitialized,
                     BindFlag::PresentationSrc
                 });
@@ -356,6 +356,7 @@ namespace PlatformRig
                 Techniques::PreregisteredAttachment {
                     Techniques::AttachmentSemantics::ColorLDR,
                     targetDesc,
+                    "color-ldr",
                     Techniques::PreregisteredAttachment::State::Initialized,
                     BindFlag::RenderTarget
                 });

@@ -759,7 +759,7 @@ namespace PlatformRig { namespace Overlays
 
                     const auto& retire = commandList.Retirement(i2);
                     DrawTableEntry(context, rect, MakeIteratorRange(headers), 
-                        {   std::make_pair("Name", retire._desc._name), 
+                        {   std::make_pair("Name", retire._name), 
                             std::make_pair("Latency (ms)", XlDynFormatString("%6.2f", float(double(retire._retirementTime-retire._requestTime)*_reciprocalTimerFrequency*1000.))),
                             std::make_pair("Type", TypeString(retire._desc)),
                             std::make_pair("Description", BuildDescription(retire._desc)) });

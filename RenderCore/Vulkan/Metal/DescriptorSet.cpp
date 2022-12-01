@@ -241,7 +241,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					&&  vkSlotType != VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
 					&&  vkSlotType != VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
 					&&  vkSlotType != VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT)
-					Throw(std::runtime_error(StringMeld<256>() << "Binding mismatch for shader variable (" << shaderOrDescSetVariable << ") when binding resource (" << (resourceView.GetVulkanResource() ? resourceView.GetVulkanResource()->GetDesc()._name : std::string{}) << ")"));
+					Throw(std::runtime_error(StringMeld<256>() << "Binding mismatch for shader variable (" << shaderOrDescSetVariable << ") when binding resource (" << (resourceView.GetVulkanResource() ? resourceView.GetVulkanResource()->GetName() : StringSection<>{}) << ")"));
 			#endif
 
 			WriteBinding(
@@ -258,7 +258,7 @@ namespace RenderCore { namespace Metal_Vulkan
 						&&  vkSlotType != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
 						&&  vkSlotType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
 						&&  vkSlotType != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC)
-						Throw(std::runtime_error(StringMeld<256>() << "Binding mismatch for shader variable (" << shaderOrDescSetVariable << ") when binding buffer (" << (resourceView.GetVulkanResource() ? resourceView.GetVulkanResource()->GetDesc()._name : std::string{}) << ")"));
+						Throw(std::runtime_error(StringMeld<256>() << "Binding mismatch for shader variable (" << shaderOrDescSetVariable << ") when binding buffer (" << (resourceView.GetVulkanResource() ? resourceView.GetVulkanResource()->GetName() : StringSection<>{}) << ")"));
 				#endif
 
 				assert(resourceView.GetVulkanResource() && resourceView.GetVulkanResource()->GetBuffer());
@@ -279,7 +279,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			#if defined(_DEBUG)
 				if (	vkSlotType != VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER
 					&&  vkSlotType != VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER)
-					Throw(std::runtime_error(StringMeld<256>() << "Binding mismatch for shader variable (" << shaderOrDescSetVariable << ") when binding buffer (" << (resourceView.GetVulkanResource() ? resourceView.GetVulkanResource()->GetDesc()._name : std::string{}) << ")"));
+					Throw(std::runtime_error(StringMeld<256>() << "Binding mismatch for shader variable (" << shaderOrDescSetVariable << ") when binding buffer (" << (resourceView.GetVulkanResource() ? resourceView.GetVulkanResource()->GetName() : StringSection<>{}) << ")"));
 			#endif
 
 			assert(resourceView.GetBufferView());
@@ -1225,8 +1225,8 @@ namespace RenderCore { namespace Metal_Vulkan
 					linearBufferIterator += CeilToMultiple(size, offsetMultiple);
 				}
 			assert(linearBufferIterator == linearBufferSize);
-			auto desc = CreateDesc(BindFlag::ConstantBuffer, LinearBufferDesc::Create(linearBufferSize), "descriptor-set-bound-data");
-			_associatedLinearBufferData = Resource(factory, desc, MakeIteratorRange(initData).Cast<const void*>());
+			auto desc = CreateDesc(BindFlag::ConstantBuffer, LinearBufferDesc::Create(linearBufferSize));
+			_associatedLinearBufferData = Resource(factory, desc, "descriptor-set-bound-data", MakeIteratorRange(initData).Cast<const void*>());
 
 			linearBufferIterator = 0;
 			for (unsigned c=0; c<sortedBinds.size(); ++c)

@@ -45,7 +45,7 @@ namespace RenderCore { namespace Techniques
 		unsigned BeginGeo();
 		void SetStreamData(DrawableStream, DrawablesPacket::AllocateStorageResult);
 		void SetStreamData(DrawableStream, std::shared_ptr<IResource> resource, size_t offset=0);
-		void SetStreamData(DrawableStream, std::vector<uint8_t>&& sourceData);
+		void SetStreamData(DrawableStream, std::vector<uint8_t>&& sourceData, std::string&& name);
 		void SetStreamData(DrawableStream, std::shared_ptr<BufferUploads::IDataPacket>&& sourceData);
 		void SetStreamData(DrawableStream, std::shared_ptr<BufferUploads::IAsyncDataSource>&& sourceData, size_t size);
 		void SetIndexFormat(Format);

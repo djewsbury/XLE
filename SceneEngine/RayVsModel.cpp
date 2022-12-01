@@ -110,10 +110,10 @@ namespace SceneEngine
         lbDesc._sizeInBytes = elementSize * elementCount;
 
         _streamOutputBuffer = device.CreateResource(
-			CreateDesc(BindFlag::StreamOutput | BindFlag::TransferSrc, lbDesc, "ModelIntersectionBuffer"));
+			CreateDesc(BindFlag::StreamOutput | BindFlag::TransferSrc, lbDesc), "ModelIntersectionBuffer");
 
         _cpuAccessBuffer = device.CreateResource(
-            CreateDesc(BindFlag::TransferDst, AllocationRules::HostVisibleRandomAccess, lbDesc, "ModelIntersectionCopyBuffer"));
+            CreateDesc(BindFlag::TransferDst, AllocationRules::HostVisibleRandomAccess, lbDesc), "ModelIntersectionCopyBuffer");
 
 		_streamOutputQueryPool = std::make_unique<RenderCore::Metal::QueryPool>(
 			Metal::GetObjectFactory(device), 

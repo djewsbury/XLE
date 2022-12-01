@@ -57,10 +57,10 @@ namespace SceneEngine
 			};
 
 			auto& uploads = Techniques::Services::GetBufferUploads();
-			auto gradDesc = CreateDesc(RenderCore::BindFlag::ShaderResource, RenderCore::TextureDesc::Plain1D(dimof(g), Format::R32G32B32A32_TYPELESS), "NoiseGrad");
-			auto permDesc = CreateDesc(RenderCore::BindFlag::ShaderResource, RenderCore::TextureDesc::Plain1D(dimof(perm), Format::R8_TYPELESS), "NoisePerm");
-			auto gradMarker = uploads.Begin(gradDesc, BufferUploads::CreateBasicPacket(MakeIteratorRange(g)));
-			auto permMarker = uploads.Begin(permDesc, BufferUploads::CreateBasicPacket(MakeIteratorRange(perm)));
+			auto gradDesc = CreateDesc(RenderCore::BindFlag::ShaderResource, RenderCore::TextureDesc::Plain1D(dimof(g), Format::R32G32B32A32_TYPELESS));
+			auto permDesc = CreateDesc(RenderCore::BindFlag::ShaderResource, RenderCore::TextureDesc::Plain1D(dimof(perm), Format::R8_TYPELESS));
+			auto gradMarker = uploads.Begin(gradDesc, BufferUploads::CreateBasicPacket(MakeIteratorRange(g), "NoiseGrad"));
+			auto permMarker = uploads.Begin(permDesc, BufferUploads::CreateBasicPacket(MakeIteratorRange(perm), "NoisePerm"));
 
 			::Assets::WhenAll(std::move(gradMarker._future), std::move(permMarker._future)).ThenConstructToPromise(
 				std::move(promise),

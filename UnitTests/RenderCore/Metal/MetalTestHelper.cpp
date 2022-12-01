@@ -293,7 +293,7 @@ namespace UnitTests
 
 		// Create a resource that matches the given desc, and then also create
 		// a framebuffer with a single subpass rendering into that resource;
-		_pimpl->_targets.emplace_back(device.CreateResource(mainTargetDesc));
+		_pimpl->_targets.emplace_back(device.CreateResource(mainTargetDesc, "unit-test-fb"));
 		_pimpl->_targetDescs.emplace_back(mainTargetDesc);
 
 		AttachmentDesc mainAttachment { mainTargetDesc._textureDesc._format };
@@ -325,9 +325,9 @@ namespace UnitTests
 
 		// Create a resource that matches the given desc, and then also create
 		// a framebuffer with a single subpass rendering into that resource;
-		_pimpl->_targets.emplace_back(device.CreateResource(target0Desc));
-		_pimpl->_targets.emplace_back(device.CreateResource(target1Desc));
-		_pimpl->_targets.emplace_back(device.CreateResource(target2Desc));
+		_pimpl->_targets.emplace_back(device.CreateResource(target0Desc, "unit-test-fb0"));
+		_pimpl->_targets.emplace_back(device.CreateResource(target1Desc, "unit-test-fb1"));
+		_pimpl->_targets.emplace_back(device.CreateResource(target2Desc, "unit-test-fb2"));
 		_pimpl->_targetDescs.emplace_back(target0Desc);
 		_pimpl->_targetDescs.emplace_back(target1Desc);
 		_pimpl->_targetDescs.emplace_back(target2Desc);
@@ -472,8 +472,8 @@ namespace UnitTests
 			CreateDesc(
 				BindFlag::VertexBuffer,
 				AllocationRules::HostVisibleSequentialWrite,
-				LinearBufferDesc::Create((unsigned)data.size()),
-				"vertex-buffer"),
+				LinearBufferDesc::Create((unsigned)data.size())),
+			"vertex-buffer",
 			SubResourceInitData { data });
 	}
 
@@ -485,8 +485,8 @@ namespace UnitTests
 			CreateDesc(
 				BindFlag::IndexBuffer,
 				AllocationRules::HostVisibleSequentialWrite,
-				LinearBufferDesc::Create((unsigned)data.size()),
-				"index-buffer"),
+				LinearBufferDesc::Create((unsigned)data.size())),
+			"index-buffer",
 			SubResourceInitData { data });
 	}
 
@@ -498,8 +498,8 @@ namespace UnitTests
 			CreateDesc(
 				BindFlag::ConstantBuffer,
 				AllocationRules::HostVisibleSequentialWrite,
-				LinearBufferDesc::Create((unsigned)data.size()),
-				"constant-buffer"),
+				LinearBufferDesc::Create((unsigned)data.size())),
+			"constant-buffer",
 			SubResourceInitData { data });
 	}
 

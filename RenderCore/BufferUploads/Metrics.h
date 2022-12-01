@@ -38,6 +38,7 @@ namespace RenderCore { namespace BufferUploads
     struct AssemblyLineRetirement
     {
         ResourceDesc _desc;
+        std::string _name;
         TimeMarker _requestTime, _retirementTime;
     };
 

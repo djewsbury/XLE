@@ -449,13 +449,13 @@ namespace RenderCore { namespace LightingEngine
 		if (desc._projectionMode == ShadowProjectionMode::ArbitraryCubeMap) {
 			pregAttach._desc = CreateDesc(
 				BindFlag::ShaderResource | BindFlag::DepthStencil,
-				TextureDesc::PlainCube(desc._width, desc._height, desc._format),
-				"shadow-map-cube");
+				TextureDesc::PlainCube(desc._width, desc._height, desc._format));
+			pregAttach._name = "shadow-map-cube";
 		} else {
 			pregAttach._desc = CreateDesc(
 				BindFlag::ShaderResource | BindFlag::DepthStencil,
-				TextureDesc::Plain2D(desc._width, desc._height, desc._format, 1, arrayCount),
-				"shadow-map");
+				TextureDesc::Plain2D(desc._width, desc._height, desc._format, 1, arrayCount));
+			pregAttach._name = "shadow-map";
 		}
 		stitchingContext.DefineAttachment(pregAttach);
 

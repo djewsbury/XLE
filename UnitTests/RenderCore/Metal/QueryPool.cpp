@@ -93,8 +93,7 @@ namespace UnitTests
             auto shaderProgram = MakeShaderProgram(*_testHelper, vsText_clipInputTransform, psText);
             auto targetDesc = CreateDesc(
                 BindFlag::RenderTarget,
-                TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
-                "temporary-out");
+                TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM));
 
             UnitTestFBHelper fbHelper(*_testHelper->_device, *threadContext, targetDesc);
 
@@ -193,8 +192,7 @@ namespace UnitTests
             auto shaderProgram = MakeShaderProgram(*_testHelper, vsText_clipInputTransform, psText);
             auto targetDesc = CreateDesc(
                 BindFlag::RenderTarget,
-                TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
-                "temporary-out");
+                TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM));
 
             UnitTestFBHelper fbHelper(*_testHelper->_device, *threadContext, targetDesc);
 

@@ -118,8 +118,8 @@ namespace GUILayer
 				_resource = threadContext.GetDevice()->CreateResource(
 					CreateDesc(
 						BindFlag::RenderTarget,
-						TextureDesc::Plain2D(_width, _height, Format::R8G8B8A8_UNORM_SRGB),
-						"PreviewBuilderTarget"));
+						TextureDesc::Plain2D(_width, _height, Format::R8G8B8A8_UNORM_SRGB)),
+						"PreviewBuilderTarget");
 
 				FrameBufferProperties fbProps{(unsigned)_width, (unsigned)_height, TextureSamples::Create()};
 

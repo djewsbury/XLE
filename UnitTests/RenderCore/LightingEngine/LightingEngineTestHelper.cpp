@@ -277,6 +277,7 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::ColorLDR,
 				targetDesc,
+				"color-ldr",
 				Techniques::PreregisteredAttachment::State::Uninitialized
 			}
 		};
@@ -288,7 +289,7 @@ namespace UnitTests
 		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 		stitchingContext._workingProps = fbProps;
 		for (const auto&a:preregisteredAttachments)
-			stitchingContext.DefineAttachment(a._semantic, a._desc, a._state, a._layout);
+			stitchingContext.DefineAttachment(a._semantic, a._desc, a._name, a._state, a._layout);
 		return parsingContext;
 	}
 

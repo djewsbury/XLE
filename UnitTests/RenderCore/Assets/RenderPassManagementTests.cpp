@@ -25,8 +25,8 @@ namespace UnitTests
 			AttachmentSemantics::ColorLDR + semanticOffset,
 			CreateDesc(
 				BindFlag::RenderTarget | BindFlag::TransferSrc | BindFlag::PresentationSrc,
-				TextureDesc::Plain2D(dims[0], dims[1], Format::R8G8B8A8_UNORM_SRGB),
-				"color-ldr"),
+				TextureDesc::Plain2D(dims[0], dims[1], Format::R8G8B8A8_UNORM_SRGB)),
+			"color-ldr",
 			PreregisteredAttachment::State::Uninitialized,
 			BindFlag::PresentationSrc);
 
@@ -34,8 +34,8 @@ namespace UnitTests
 			AttachmentSemantics::MultisampleDepth + semanticOffset,
 			CreateDesc(
 				BindFlag::DepthStencil | BindFlag::InputAttachment,
-				TextureDesc::Plain2D(dims[0], dims[1], Format::D24_UNORM_S8_UINT),
-				"depth-stencil"),
+				TextureDesc::Plain2D(dims[0], dims[1], Format::D24_UNORM_S8_UINT)),
+			"depth-stencil",
 			PreregisteredAttachment::State::Uninitialized,
 			BindFlag::DepthStencil);
 
@@ -43,8 +43,8 @@ namespace UnitTests
 			AttachmentSemantics::ShadowDepthMap + semanticOffset,
 			CreateDesc(
 				BindFlag::DepthStencil | BindFlag::ShaderResource,
-				TextureDesc::Plain2D(dims[0], dims[1], Format::D16_UNORM),
-				"depth-stencil"),
+				TextureDesc::Plain2D(dims[0], dims[1], Format::D16_UNORM)),
+			"depth-stencil",
 			PreregisteredAttachment::State::Initialized,
 			BindFlag::DepthStencil);
 	}

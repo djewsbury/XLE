@@ -169,29 +169,29 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::AttachmentSemantics::MultisampleDepth,
 				CreateDesc(
 					BindFlag::DepthStencil | BindFlag::ShaderResource | BindFlag::InputAttachment,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], stitchingContext.GetSystemAttachmentFormat(Techniques::SystemAttachmentFormat::MainDepthStencil)),
-					"main-depth")
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], stitchingContext.GetSystemAttachmentFormat(Techniques::SystemAttachmentFormat::MainDepthStencil))),
+				"main-depth"
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::ColorHDR,
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT),
-					"color-hdr")
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT)),
+				"color-hdr"
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferNormal,
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::ShaderResource,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_SNORM),
-					"gbuffer-normal")
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_SNORM)),
+				"gbuffer-normal"
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferMotion,
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::ShaderResource,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8_SINT),
-					"gbuffer-motion")
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8_SINT)),
+				"gbuffer-motion"
 			}
 		};
 		for (const auto& a:attachments)

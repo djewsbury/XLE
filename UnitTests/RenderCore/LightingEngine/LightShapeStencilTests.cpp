@@ -137,8 +137,7 @@ namespace UnitTests
 
 			auto targetDesc = CreateDesc(
 				BindFlag::RenderTarget | BindFlag::TransferSrc,
-				TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
-				"temporary-out");
+				TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM));
 
 			auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();

@@ -113,8 +113,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
-			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
-			"temporary-out");
+			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM));
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 
 		auto sphereGeo = ToolsRig::BuildGeodesicSphere();

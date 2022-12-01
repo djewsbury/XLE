@@ -14,7 +14,7 @@ namespace RenderCore { namespace BufferUploads
 	{
 	public:
 		ResourceLocator Allocate(size_t size, StringSection<> name) override;
-		ResourceDesc MakeFallbackDesc(size_t size, StringSection<> name) override;
+		ResourceDesc MakeFallbackDesc(size_t size) override;
 
 		virtual bool AddRef(
 			IResource& resource, 
@@ -183,7 +183,7 @@ namespace RenderCore { namespace BufferUploads
 			}
 		}
 
-		auto heapResource = _device->CreateResource(_prototype);
+		auto heapResource = _device->CreateResource(_prototype, "batched-resources");
 		if (!heapResource)
 			return {};
 
@@ -575,9 +575,9 @@ namespace RenderCore { namespace BufferUploads
 		return ~EventListID(0x0);
 	}
 
-	ResourceDesc BatchedResources::MakeFallbackDesc(size_t size, StringSection<> name)
+	ResourceDesc BatchedResources::MakeFallbackDesc(size_t size)
 	{
-		return CreateDesc(_fallbackBindFlags, LinearBufferDesc::Create(size), name);
+		return CreateDesc(_fallbackBindFlags, LinearBufferDesc::Create(size));
 	}
 
 	BatchedResources::BatchedResources(
@@ -590,8 +590,7 @@ namespace RenderCore { namespace BufferUploads
 	{
 		_prototype = CreateDesc(
 			bindFlags | BindFlag::TransferDst | BindFlag::TransferSrc, 0,
-			LinearBufferDesc::Create(pageSizeInBytes),
-			"batched-resources");
+			LinearBufferDesc::Create(pageSizeInBytes));
 		_recentDeviceCreateCount = 0;
 		_totalCreateCount = 0;
 	}

@@ -174,7 +174,7 @@ namespace RenderCore { namespace Assets
 							}
 
 							auto textureDesc = BuildTextureDesc(that->_texMetadata);
-							that->_resourceDesc = CreateDesc(0, textureDesc, that->_filename);
+							that->_resourceDesc = CreateDesc(0, textureDesc);
 							that->_hasReadMetadata = true;
 						}
 
@@ -272,6 +272,8 @@ namespace RenderCore { namespace Assets
 				});
 			return result;
 		}
+
+		StringSection<> GetName() const { return _filename; }
 
 		::Assets::DependencyValidation GetDependencyValidation() const override
 		{
@@ -386,7 +388,7 @@ namespace RenderCore { namespace Assets
 						}
 
 						auto textureDesc = BuildTextureDesc(that->_texMetadata);
-						auto resourceDesc = CreateDesc(0, textureDesc, that->_filename);
+						auto resourceDesc = CreateDesc(0, textureDesc);
 						captures->_promise.set_value(resourceDesc);
 					} catch(...) {
 						captures->_promise.set_exception(std::current_exception());
@@ -429,6 +431,8 @@ namespace RenderCore { namespace Assets
 		{
 			return ::Assets::GetDepValSys().Make(_filename);
 		}
+
+		StringSection<> GetName() const override { return _filename; }
 
 		WICDataSource(const std::string& filename, TextureLoaderFlags::BitField flags)
 		: _filename(filename), _flags(flags)
@@ -518,8 +522,7 @@ namespace RenderCore { namespace Assets
 
 							// The real file format is R8G8B8E8 (8 bit shared exponent)
 							that->_desc = CreateDesc(
-								0, TextureDesc::Plain2D(width, height, Format::R32G32B32A32_FLOAT),
-								that->_filename);
+								0, TextureDesc::Plain2D(width, height, Format::R32G32B32A32_FLOAT));
 							that->_dataBegin = (uint8_t*)i;
 							that->_hasBeenInitialized = true;
 						}
@@ -627,6 +630,8 @@ namespace RenderCore { namespace Assets
 		{
 			return ::Assets::GetDepValSys().Make(_filename);
 		}
+
+		StringSection<> GetName() const override { return _filename; }
 
 		HDRDataSource(const std::string& filename, TextureLoaderFlags::BitField flags)
 		: _filename(filename), _flags(flags)

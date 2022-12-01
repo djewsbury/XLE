@@ -130,8 +130,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
-			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
-			"temporary-out");
+			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM));
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
@@ -166,8 +165,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
-			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
-			"temporary-out");
+			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM));
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
@@ -289,8 +287,7 @@ namespace UnitTests
 
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
-			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
-			"temporary-out");
+			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM));
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 		{
 			auto rpi = fbHelper.BeginRenderPass(*threadContext);
@@ -368,8 +365,7 @@ namespace UnitTests
 
 		auto targetDesc0 = CreateDesc(
 			BindFlag::RenderTarget|BindFlag::ShaderResource|BindFlag::TransferSrc,
-			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
-			"temporary-out0");
+			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM));
 		UnitTestFBHelper fbHelper0(*testHelper->_device, *threadContext, targetDesc0);
 		{
 			auto rpi = fbHelper0.BeginRenderPass(*threadContext);
@@ -379,8 +375,7 @@ namespace UnitTests
 
 		auto targetDesc1 = CreateDesc(
 			BindFlag::RenderTarget|BindFlag::TransferSrc,
-			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
-			"temporary-out1");
+			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM));
 		UnitTestFBHelper fbHelper1(*testHelper->_device, *threadContext, targetDesc1);
 		{
 			auto rpi = fbHelper1.BeginRenderPass(*threadContext);
@@ -438,8 +433,7 @@ namespace UnitTests
 
 		auto targetDesc0 = CreateDesc(
 			BindFlag::RenderTarget|BindFlag::TransferSrc,
-			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
-			"temporary-out0");
+			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM));
 		UnitTestFBHelper fbHelper0(*testHelper->_device, *threadContext, targetDesc0);
 		{
 			auto rpi = fbHelper0.BeginRenderPass(*threadContext);
@@ -449,8 +443,7 @@ namespace UnitTests
 
 		auto targetDesc1 = CreateDesc(
 			BindFlag::RenderTarget|BindFlag::TransferDst,
-			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM),
-			"temporary-out1");
+			TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM));
 		UnitTestFBHelper fbHelper1(*testHelper->_device, *threadContext, targetDesc1);
 		{
 			auto blitPass = metalContext.BeginBlitEncoder();

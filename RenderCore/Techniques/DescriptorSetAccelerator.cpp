@@ -287,8 +287,8 @@ namespace RenderCore { namespace Techniques
 			auto size = cbUploadBuffer.size();
 			_working->_cbUploadMarkers.push_back(
 				bu.Begin(
-					CreateDesc(BindFlag::ConstantBuffer, LinearBufferDesc::Create((unsigned)size), cbName.value()),
-					BufferUploads::CreateBasicPacket(std::move(cbUploadBuffer))));
+					CreateDesc(BindFlag::ConstantBuffer, LinearBufferDesc::Create((unsigned)size)),
+					BufferUploads::CreateBasicPacket(std::move(cbUploadBuffer), cbName.value().AsString())));
 		}
 
 		_working->_descriptorSets.emplace_back(std::move(ds));

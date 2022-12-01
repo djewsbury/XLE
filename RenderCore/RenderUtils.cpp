@@ -511,7 +511,6 @@ namespace RenderCore
 	{
 		_type = Type::Unknown;
 		_bindFlags = _allocationRules = 0;
-		_name[0] = '\0';
 		XlZeroMemory(_textureDesc);
 	}
 
@@ -1037,18 +1036,19 @@ namespace RenderCore
         return PipelineType::Graphics;
     }
 
-    IResourcePtr IDevice::CreateResource(const ResourceDesc& desc, const SubResourceInitData& initData)
+    IResourcePtr IDevice::CreateResource(const ResourceDesc& desc, StringSection<> name, const SubResourceInitData& initData)
     {
         // Utility function to make creating single-subresource resources a little easier
         if (initData._data.size()) {
             return CreateResource(
                 desc,
+                name,
                 [&initData](SubResourceId subResId) -> SubResourceInitData {
                     assert(subResId._mip == 0 && subResId._arrayLayer == 0);
                     return initData;
                 });
         } else {
-            return CreateResource(desc, ResourceInitializer{});
+            return CreateResource(desc, name, ResourceInitializer{});
         }
     }
 

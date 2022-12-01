@@ -61,6 +61,7 @@ namespace RenderCore { namespace Techniques
         _internal->_stitchingContext.DefineAttachment(
             semantic,
             resource->GetDesc(),
+            AttachmentSemantics::TryDehash(semantic),
             isInitialized ? RenderCore::Techniques::PreregisteredAttachment::State::Initialized : RenderCore::Techniques::PreregisteredAttachment::State::Uninitialized,
             currentLayout);
         _internal->_attachmentReservation.Bind(semantic, std::move(resource), currentLayout);

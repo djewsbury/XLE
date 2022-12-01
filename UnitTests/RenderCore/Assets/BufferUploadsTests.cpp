@@ -61,6 +61,7 @@ namespace UnitTests
 		}
 
 		::Assets::DependencyValidation GetDependencyValidation() const override { return {}; }
+		StringSection<> GetName() const override { return "BufferUploadsTest"; }
 
 		std::vector<unsigned> _rawData;
 		RenderCore::ResourceDesc _desc;
@@ -75,14 +76,12 @@ namespace UnitTests
 
 		std::vector<unsigned> rawData;
 		rawData.resize(256*256, 0xff7fff7f);
-		auto desc = CreateDesc(
-			BindFlag::ShaderResource, TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
-			"bu-test-texture");
+		auto desc = CreateDesc(BindFlag::ShaderResource, TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM));
 
 		SECTION("Prepared data packet")
 		{
 			
-			auto dataPacket = BufferUploads::CreateBasicPacket(MakeIteratorRange(rawData), MakeTexturePitches(desc._textureDesc));
+			auto dataPacket = BufferUploads::CreateBasicPacket(MakeIteratorRange(rawData), "bu-test-texture", MakeTexturePitches(desc._textureDesc));
 			auto transaction = bu->Begin(desc, dataPacket);
 			REQUIRE(transaction.IsValid());
 
@@ -198,7 +197,7 @@ namespace UnitTests
 			auto destagingDesc = finalResourceDesc;
 			destagingDesc._bindFlags = BindFlag::TransferDst;
 			destagingDesc._allocationRules = AllocationRules::HostVisibleRandomAccess;
-			auto destaging = metalHelper->_device->CreateResource(destagingDesc);
+			auto destaging = metalHelper->_device->CreateResource(destagingDesc, "destaging");
 			{
 				auto blitEncoder = Metal::DeviceContext::Get(*metalHelper->_device->GetImmediateContext())->BeginBlitEncoder();
 				blitEncoder.Copy(*destaging, *finalResource);
@@ -251,6 +250,7 @@ namespace UnitTests
 		}
 
 		::Assets::DependencyValidation GetDependencyValidation() const override { return {}; }
+		StringSection<> GetName() const override { return "rng"; }
 
 		RenderCore::ResourceDesc _desc;
 		uint32_t _rngSeed;
@@ -324,8 +324,7 @@ namespace UnitTests
 						0, RenderCore::TextureDesc::Plain2D(
 							1 << std::uniform_int_distribution<>(5, 10)(rng),
 							1 << std::uniform_int_distribution<>(5, 10)(rng),
-							RenderCore::Format::R8G8B8A8_UNORM),
-						"rng"),
+							RenderCore::Format::R8G8B8A8_UNORM)),
 					rng());
 				transactionHelper.AddTransaction(bu->Begin(asyncSource, BindFlag::ShaderResource));
 			}
@@ -363,6 +362,7 @@ namespace UnitTests
 				return {};
 			}
 		}
+		StringSection<> GetName() const override { return "immediate-upload-test"; }
 		RandomTestPkt(const RenderCore::ResourceDesc& desc) : _desc(desc) 
 		{
 			std::mt19937 rng(62956294);
@@ -395,8 +395,7 @@ namespace UnitTests
 		auto destagingDesc = resource.GetDesc();
 		destagingDesc._allocationRules = AllocationRules::HostVisibleRandomAccess;
 		destagingDesc._bindFlags = BindFlag::TransferDst;
-		XlCopyString(destagingDesc._name, "destaging");
-		auto destaging = threadContext.GetDevice()->CreateResource(destagingDesc);
+		auto destaging = threadContext.GetDevice()->CreateResource(destagingDesc, "destaging");
 		Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Copy(*destaging, resource);
 		threadContext.CommitCommands(CommitCommandsFlags::WaitForCompletion);
 
@@ -415,8 +414,7 @@ namespace UnitTests
 		auto destagingDesc = resource.GetDesc();
 		destagingDesc._allocationRules = AllocationRules::HostVisibleRandomAccess;
 		destagingDesc._bindFlags = BindFlag::TransferDst;
-		XlCopyString(destagingDesc._name, "destaging");
-		auto destaging = threadContext.GetDevice()->CreateResource(destagingDesc);
+		auto destaging = threadContext.GetDevice()->CreateResource(destagingDesc, "destaging");
 		Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Copy(*destaging, resource);
 		threadContext.CommitCommands(CommitCommandsFlags::WaitForCompletion);
 
@@ -449,7 +447,7 @@ namespace UnitTests
 		auto bu = BufferUploads::CreateManager(*metalHelper->_device);
 		auto threadContext = metalHelper->_device->GetImmediateContext();
 
-		auto testDesc = CreateDesc(BindFlag::ShaderResource|BindFlag::TransferSrc, TextureDesc::Plain2D(256, 256, RenderCore::Format::R8G8B8A8_UNORM, 9, 3), "immediate-upload-test");
+		auto testDesc = CreateDesc(BindFlag::ShaderResource|BindFlag::TransferSrc, TextureDesc::Plain2D(256, 256, RenderCore::Format::R8G8B8A8_UNORM, 9, 3));
 		auto pkt = std::make_shared<RandomTestPkt>(testDesc);
 		auto locator = bu->ImmediateTransaction(testDesc, pkt);
 		bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
@@ -464,8 +462,8 @@ namespace UnitTests
 		auto bu = BufferUploads::CreateManager(*metalHelper->_device);
 		auto threadContext = metalHelper->_device->GetImmediateContext();
 
-		auto massiveTexture = CreateDesc(BindFlag::ShaderResource|BindFlag::TransferSrc|BindFlag::TransferDst, TextureDesc::Plain2D(1024, 1024, RenderCore::Format::R32G32B32A32_FLOAT, 11, 4), "giant-texture");
-		auto massiveLinearBuffer = CreateDesc(BindFlag::ShaderResource|BindFlag::TransferSrc|BindFlag::TransferDst, LinearBufferDesc::Create(96*1024*1024), "giant-buffer");
+		auto massiveTexture = CreateDesc(BindFlag::ShaderResource|BindFlag::TransferSrc|BindFlag::TransferDst, TextureDesc::Plain2D(1024, 1024, RenderCore::Format::R32G32B32A32_FLOAT, 11, 4));
+		auto massiveLinearBuffer = CreateDesc(BindFlag::ShaderResource|BindFlag::TransferSrc|BindFlag::TransferDst, LinearBufferDesc::Create(96*1024*1024));
 
 		{
 			auto pkt = std::make_shared<RandomTestPkt>(massiveTexture);
@@ -545,9 +543,9 @@ namespace UnitTests
 			unsigned buffersToSpawn = (unsigned)std::sqrt(steadyPoint - transactionHelper._liveTransactions.size());
 			for (unsigned t=0; t<buffersToSpawn; ++t) {
 				auto size = 1024 * std::uniform_int_distribution<>(8, 64)(rng);
-				auto pkt = BufferUploads::CreateEmptyLinearBufferPacket(size);
+				auto pkt = BufferUploads::CreateEmptyLinearBufferPacket(size, "rng-buffer");
 				FillWithRandomData(rng(), pkt->GetData());
-				auto desc = CreateDesc(BindFlag::IndexBuffer, LinearBufferDesc::Create(size, size), "rng-buffer");
+				auto desc = CreateDesc(BindFlag::IndexBuffer, LinearBufferDesc::Create(size, size));
 				if (std::uniform_int_distribution<>(0, 1)(rng) == 0)
 					desc._bindFlags = BindFlag::VertexBuffer;
 				// desc._allocationRules |= AllocationRules::Batched | AllocationRules::Pooled;
@@ -601,19 +599,17 @@ namespace UnitTests
 				[backgroundContext, dev = metalHelper->_device, seed = rng(), &queue]() {
 					auto& metalContext = *Metal::DeviceContext::Get(*backgroundContext);
 					auto finalResourceDesc = CreateDesc(
-						BindFlag::ShaderResource | BindFlag::TransferDst, TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
-						"bu-test-texture");
+						BindFlag::ShaderResource | BindFlag::TransferDst, TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM));
 
 					auto stagingResourceDesc = CreateDesc(
-						BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite, TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
-						"bu-test-staging");
+						BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite, TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM));
 
 					Queue::Item item;
 					std::mt19937 rng(seed);
 
 					for (unsigned c=0; c<8; ++c) {
-						auto stagingResource = dev->CreateResource(stagingResourceDesc);
-						auto finalResource = dev->CreateResource(finalResourceDesc);
+						auto stagingResource = dev->CreateResource(stagingResourceDesc, "bu-test-staging");
+						auto finalResource = dev->CreateResource(finalResourceDesc, "bu-test-texture");
 
 						Metal::ResourceMap map{metalContext, *stagingResource, Metal::ResourceMap::Mode::WriteDiscardPrevious};
 						FillWithRandomData(rng(), map.GetData());

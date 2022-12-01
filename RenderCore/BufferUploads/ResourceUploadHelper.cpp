@@ -336,31 +336,24 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         char buffer[2048];
         if (desc._type == ResourceDesc::Type::Texture) {
             const TextureDesc& tDesc = desc._textureDesc;
-            xl_snprintf(buffer, dimof(buffer), "[%s] Tex(%4s) (%4ix%4i) mips:(%2i)", 
-                desc._name, AsString(tDesc._dimensionality),
+            xl_snprintf(buffer, dimof(buffer), "Tex(%4s) (%4ix%4i) mips:(%2i)", 
+                AsString(tDesc._dimensionality),
                 tDesc._width, tDesc._height, tDesc._mipCount);
         } else if (desc._type == ResourceDesc::Type::LinearBuffer) {
             if (desc._bindFlags & BindFlag::VertexBuffer) {
-                xl_snprintf(buffer, dimof(buffer), "[%s] VB (%6.1fkb)", 
-                    desc._name, desc._linearBufferDesc._sizeInBytes/1024.f);
+                xl_snprintf(buffer, dimof(buffer), "VB (%6.1fkb)", 
+                    desc._linearBufferDesc._sizeInBytes/1024.f);
             } else if (desc._bindFlags & BindFlag::IndexBuffer) {
-                xl_snprintf(buffer, dimof(buffer), "[%s] IB (%6.1fkb)", 
-                    desc._name, desc._linearBufferDesc._sizeInBytes/1024.f);
+                xl_snprintf(buffer, dimof(buffer), "IB (%6.1fkb)", 
+                    desc._linearBufferDesc._sizeInBytes/1024.f);
+            } else {
+                xl_snprintf(buffer, dimof(buffer), "Buffer (%6.1fkb)", 
+                    desc._linearBufferDesc._sizeInBytes/1024.f);
             }
         } else {
             xl_snprintf(buffer, dimof(buffer), "Unknown");
         }
         return std::string(buffer);
-    }
-
-    static ResourceDesc AsStagingDesc(const ResourceDesc& desc)
-    {
-        ResourceDesc result = desc;
-        result._bindFlags = BindFlag::TransferSrc;
-        result._allocationRules = AllocationRules::HostVisibleSequentialWrite;
-        XlCopyString(result._name, "[stage]");
-        XlCatString(result._name, desc._name);
-        return result;
     }
 
     static ResourceDesc ApplyLODOffset(const ResourceDesc& desc, unsigned lodOffset)
@@ -547,8 +540,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 		_stagingBuffer = device.CreateResource(
 			CreateDesc(
 				BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite | AllocationRules::PermanentlyMapped | AllocationRules::DisableAutoCacheCoherency | AllocationRules::DedicatedPage,
-				LinearBufferDesc::Create(size),
-				"staging-page"));
+				LinearBufferDesc::Create(size)),
+           "staging-page");
 
         auto* deviceVulkan = (IDeviceVulkan*)device.QueryInterface(typeid(IDeviceVulkan).hash_code());
         if (deviceVulkan)

@@ -559,6 +559,7 @@ namespace RenderCore { namespace Techniques
         stagingDesc._bindFlags = BindFlag::TransferSrc;
         auto stagingResource = device->CreateResource(
             stagingDesc,
+            (StringMeld<256>() << pkt.GetName() << "-staging").AsStringSection(),
             [data=std::move(data), textureDesc=desc._textureDesc](auto sr) {
                 auto srOffset = GetSubResourceOffset(textureDesc, sr._mip, sr._arrayLayer);
                 return SubResourceInitData {
@@ -567,7 +568,7 @@ namespace RenderCore { namespace Techniques
                 };
             });
         desc._bindFlags |= bindFlags | BindFlag::TransferDst;
-        auto finalResource = device->CreateResource(desc);
+        auto finalResource = device->CreateResource(desc, pkt.GetName());
         auto& devContext = *Metal::DeviceContext::Get(threadContext);
         Metal::CompleteInitialization(devContext, {stagingResource.get(), finalResource.get()});
         devContext.BeginBlitEncoder().Copy(*finalResource, *stagingResource);
@@ -585,7 +586,7 @@ namespace RenderCore { namespace Techniques
         auto destagingDesc = inputDesc;
         destagingDesc._allocationRules = AllocationRules::HostVisibleRandomAccess;
         destagingDesc._bindFlags = BindFlag::TransferDst;
-        auto destagingResource = threadContext.GetDevice()->CreateResource(destagingDesc);
+        auto destagingResource = threadContext.GetDevice()->CreateResource(destagingDesc, "DestageResource");
         auto& devContext = *Metal::DeviceContext::Get(threadContext);
         Metal::CompleteInitialization(devContext, {destagingResource.get()});
         devContext.BeginBlitEncoder().Copy(*destagingResource, *input);

@@ -168,8 +168,8 @@ namespace RenderCore
         virtual std::unique_ptr<IThreadContext>     CreateDeferredContext() = 0;
 
         using ResourceInitializer = std::function<SubResourceInitData(SubResourceId)>;
-        virtual IResourcePtr        CreateResource(const ResourceDesc& desc, const ResourceInitializer& init = ResourceInitializer()) = 0;
-        IResourcePtr                CreateResource(const ResourceDesc& desc, const SubResourceInitData& initData);
+        virtual IResourcePtr        CreateResource(const ResourceDesc& desc, StringSection<> name, const ResourceInitializer& init = ResourceInitializer()) = 0;
+        IResourcePtr                CreateResource(const ResourceDesc& desc, StringSection<> name, const SubResourceInitData& initData);
         virtual FormatCapability    QueryFormatCapability(Format format, BindFlag::BitField bindingType) = 0;
 
         virtual std::shared_ptr<IDescriptorSet> CreateDescriptorSet(PipelineType pipelineType, const DescriptorSetSignature& signature) = 0;

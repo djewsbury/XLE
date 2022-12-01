@@ -122,8 +122,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
-			TextureDesc::Plain2D(2048, 2048, Format::R8G8B8A8_UNORM),
-			"temporary-out");
+			TextureDesc::Plain2D(2048, 2048, Format::R8G8B8A8_UNORM));
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 
 		Techniques::CameraDesc sceneCamera;

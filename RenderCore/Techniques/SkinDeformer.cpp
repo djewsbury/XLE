@@ -695,10 +695,10 @@ namespace RenderCore { namespace Techniques
 		auto utilitiesBuffer = _pipelineCollection->_pipelineCollection->GetDevice()->CreateResource(
 			CreateDesc(
 				BindFlag::ShaderResource | BindFlag::UnorderedAccess | BindFlag::TransferDst,
-				LinearBufferDesc::Create(uploadBuffer.size()), "skin-ia-data"));
+				LinearBufferDesc::Create(uploadBuffer.size())), "skin-ia-data");
 
 		auto& bufferUploads = Techniques::Services::GetBufferUploads();
-		auto transaction = bufferUploads.Begin(utilitiesBuffer, BufferUploads::CreateBasicPacket(std::move(uploadBuffer)));
+		auto transaction = bufferUploads.Begin(utilitiesBuffer, BufferUploads::CreateBasicPacket(std::move(uploadBuffer), "skin-ia-data"));
 		_linearBufferCompletion = std::move(transaction._future);
 
 		_iaParamsView = utilitiesBuffer->CreateBufferView(BindFlag::ShaderResource, 0, _iaParams.size() * sizeof(Internal::GPUDeformerIAParams));

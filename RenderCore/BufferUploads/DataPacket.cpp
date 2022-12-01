@@ -36,13 +36,15 @@ namespace RenderCore { namespace BufferUploads
     public:
         virtual IteratorRange<void*> GetData(SubResourceId subRes = {}) override;
         virtual TexturePitches GetPitches(SubResourceId subRes = {}) const override;
+        virtual StringSection<> GetName() const override;
 
-        BasicRawDataPacket(size_t size, IteratorRange<const void*> data = {}, TexturePitches pitches = TexturePitches());
+        BasicRawDataPacket(size_t size, IteratorRange<const void*> data = {}, std::string&& name = {}, TexturePitches pitches = TexturePitches());
         virtual ~BasicRawDataPacket();
     protected:
         std::unique_ptr<uint8_t, PODAlignedDeletor> _data; 
         size_t _dataSize;
         TexturePitches _pitches;
+        std::string _name;
 
         BasicRawDataPacket(const BasicRawDataPacket&);
         BasicRawDataPacket& operator=(const BasicRawDataPacket&);
@@ -50,8 +52,8 @@ namespace RenderCore { namespace BufferUploads
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    BasicRawDataPacket::BasicRawDataPacket(size_t size, IteratorRange<const void*> data, TexturePitches pitches)
-    : _dataSize(size), _pitches(pitches)    
+    BasicRawDataPacket::BasicRawDataPacket(size_t size, IteratorRange<const void*> data, std::string&& name, TexturePitches pitches)
+    : _dataSize(size), _pitches(pitches), _name{std::move(name)}
     {
             // note --  prefer sending aligned data as input! Just makes it
             //          more convenient for copying
@@ -81,10 +83,12 @@ namespace RenderCore { namespace BufferUploads
         return _pitches; 
     }
 
+    StringSection<> BasicRawDataPacket::GetName() const { return _name; }
+
     std::shared_ptr<IDataPacket> CreateBasicPacket(
-        IteratorRange<const void*> data, TexturePitches rowAndSlicePitch)
+        IteratorRange<const void*> data, std::string&& name, TexturePitches rowAndSlicePitch)
     {
-        return std::make_shared<BasicRawDataPacket>(data.size(), data, rowAndSlicePitch);
+        return std::make_shared<BasicRawDataPacket>(data.size(), data, std::move(name), rowAndSlicePitch);
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -94,20 +98,22 @@ namespace RenderCore { namespace BufferUploads
     public:
         virtual IteratorRange<void*> GetData(SubResourceId subRes = {}) override;
         virtual TexturePitches GetPitches(SubResourceId subRes = {}) const override;
+        virtual StringSection<> GetName() const override;
 
-        VectorRawDataPacket(std::vector<uint8_t>&& data, TexturePitches pitches = TexturePitches());
+        VectorRawDataPacket(std::vector<uint8_t>&& data, std::string&& name, TexturePitches pitches = TexturePitches());
         virtual ~VectorRawDataPacket();
     protected:
         std::vector<uint8_t> _data; 
         TexturePitches _pitches;
+        std::string _name;
 
         VectorRawDataPacket(const VectorRawDataPacket&) = delete;
         VectorRawDataPacket& operator=(const VectorRawDataPacket&) = delete;
     };
 
 
-    VectorRawDataPacket::VectorRawDataPacket(std::vector<uint8_t>&& data, TexturePitches pitches)
-    : _data(std::move(data)), _pitches(pitches)    
+    VectorRawDataPacket::VectorRawDataPacket(std::vector<uint8_t>&& data, std::string&& name, TexturePitches pitches)
+    : _data(std::move(data)), _pitches(pitches), _name(std::move(name))
     {}
 
     VectorRawDataPacket::~VectorRawDataPacket()
@@ -125,20 +131,22 @@ namespace RenderCore { namespace BufferUploads
         return _pitches; 
     }
 
-    std::shared_ptr<IDataPacket> CreateBasicPacket(std::vector<uint8_t>&& data, TexturePitches rowAndSlicePitch)
+    StringSection<> VectorRawDataPacket::GetName() const { return _name; }
+
+    std::shared_ptr<IDataPacket> CreateBasicPacket(std::vector<uint8_t>&& data, std::string&& name, TexturePitches rowAndSlicePitch)
     {
-        return std::make_shared<VectorRawDataPacket>(std::move(data), rowAndSlicePitch);
+        return std::make_shared<VectorRawDataPacket>(std::move(data), std::move(name), rowAndSlicePitch);
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    std::shared_ptr<IDataPacket> CreateEmptyPacket(const ResourceDesc& desc)
+    std::shared_ptr<IDataPacket> CreateEmptyPacket(const ResourceDesc& desc, std::string&& name)
     {
             // Create an empty packet of the appropriate size for the given desc
             // Linear buffers are simple, but textures need a little more detail...
         if (desc._type == ResourceDesc::Type::LinearBuffer) {
             auto size = RenderCore::ByteCount(desc);
-            return std::make_shared<BasicRawDataPacket>(size, IteratorRange<const void*>{}, TexturePitches{size, size});
+            return std::make_shared<BasicRawDataPacket>(size, IteratorRange<const void*>{}, std::move(name), TexturePitches{size, size});
         } else if (desc._type == ResourceDesc::Type::Texture) {
                 //  currently not supporting textures with multiple mip-maps
                 //  or multiple array slices
@@ -146,15 +154,15 @@ namespace RenderCore { namespace BufferUploads
             assert(desc._textureDesc._arrayCount <= 1);
 
             auto pitches = MakeTexturePitches(desc._textureDesc);
-            return std::make_shared<BasicRawDataPacket>(pitches._slicePitch, IteratorRange<const void*>{}, pitches);
+            return std::make_shared<BasicRawDataPacket>(pitches._slicePitch, IteratorRange<const void*>{}, std::move(name), pitches);
         }
 
         return nullptr;
     }
 
-    std::shared_ptr<IDataPacket> CreateEmptyLinearBufferPacket(size_t size)
+    std::shared_ptr<IDataPacket> CreateEmptyLinearBufferPacket(size_t size, std::string&& name)
     {
-        return std::make_shared<BasicRawDataPacket>(size, IteratorRange<const void*>{}, TexturePitches{(unsigned)size, (unsigned)size});
+        return std::make_shared<BasicRawDataPacket>(size, IteratorRange<const void*>{}, std::move(name), TexturePitches{(unsigned)size, (unsigned)size});
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -167,10 +175,11 @@ namespace RenderCore { namespace BufferUploads
     public:
         virtual IteratorRange<void*>    GetData         (SubResourceId subRes) override;
         virtual TexturePitches          GetPitches      (SubResourceId subRes) const override;
+        virtual StringSection<>         GetName         () const override;
 
         virtual std::shared_ptr<Marker>     BeginBackgroundLoad();
 
-        FileDataSource(const void* fileHandle, size_t offset, size_t dataSize, TexturePitches pitches);
+        FileDataSource(const void* fileHandle, size_t offset, size_t dataSize, std::string&& name, TexturePitches pitches);
         virtual ~FileDataSource();
 
     protected:
@@ -187,6 +196,7 @@ namespace RenderCore { namespace BufferUploads
         std::unique_ptr<byte[], PODAlignedDeletor> _pkt;
         std::shared_ptr<Marker> _marker;
 
+        std::string _name;
         TexturePitches  _pitches;
 
         static void CALLBACK CompletionRoutine(
@@ -201,6 +211,8 @@ namespace RenderCore { namespace BufferUploads
     }
 
     TexturePitches FileDataSource::GetPitches(SubResourceId subRes) const    { /*assert(subRes == 0);*/ return _pitches; }
+
+    StringSection<> FileDataSource::GetName() const { return _name; }
 
     void CALLBACK FileDataSource::CompletionRoutine(
         DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered,
@@ -264,7 +276,8 @@ namespace RenderCore { namespace BufferUploads
         return _marker;
     }
 
-    FileDataSource::FileDataSource(const void* fileHandle, size_t offset, size_t dataSize, TexturePitches pitches)
+    FileDataSource::FileDataSource(const void* fileHandle, size_t offset, size_t dataSize, std::string&& name, TexturePitches pitches)
+    : _name(std::move(name))
     {
         assert(dataSize);
         assert(fileHandle != INVALID_HANDLE_VALUE);
@@ -287,9 +300,9 @@ namespace RenderCore { namespace BufferUploads
         }
     }
 
-    std::shared_ptr<IDataPacket> CreateFileDataSource(const void* fileHandle, size_t offset, size_t dataSize, TexturePitches pitches)
+    std::shared_ptr<IDataPacket> CreateFileDataSource(const void* fileHandle, size_t offset, size_t dataSize, std::string&& name, TexturePitches pitches)
     {
-        return std::make_shared<FileDataSource>(fileHandle, offset, dataSize, pitches);
+        return std::make_shared<FileDataSource>(fileHandle, offset, dataSize, std::move(name), pitches);
     }
 
     IDataPacket::~IDataPacket() {}

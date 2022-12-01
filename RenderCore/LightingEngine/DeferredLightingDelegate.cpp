@@ -272,15 +272,15 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::AttachmentSemantics::MultisampleDepth,
 				CreateDesc(
 					BindFlag::DepthStencil | BindFlag::ShaderResource | BindFlag::InputAttachment,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], stitchingContext.GetSystemAttachmentFormat(Techniques::SystemAttachmentFormat::MainDepthStencil)),
-					"main-depth")
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], stitchingContext.GetSystemAttachmentFormat(Techniques::SystemAttachmentFormat::MainDepthStencil))),
+				"main-depth"
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::ColorHDR,
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT),
-					"color-hdr")
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT)),
+				"color-hdr"
 			},
 				// Generally the deferred pixel shader will just copy information from the albedo
 				// texture into the first deferred buffer. So the first deferred buffer should
@@ -294,22 +294,22 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::AttachmentSemantics::GBufferDiffuse,
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R8G8B8A8_UNORM_SRGB : Format::R32G32B32A32_FLOAT),
-					"gbuffer-diffuse")
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R8G8B8A8_UNORM_SRGB : Format::R32G32B32A32_FLOAT)),
+				"gbuffer-diffuse"
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferNormal,
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_SNORM),
-					"gbuffer-diffuse")
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_SNORM)),
+				"gbuffer-diffuse"
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferParameter,
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_UNORM),
-					"gbuffer-parameter")
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_UNORM)),
+				"gbuffer-parameter"
 			}
 		};
 		for (const auto& a:attachments)

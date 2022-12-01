@@ -32,8 +32,8 @@ namespace RenderCore { namespace Techniques
 		return device.CreateResource(
 			CreateDesc(
 				BindFlag::VertexBuffer,
-				LinearBufferDesc::Create(unsigned(data.size())),
-				"vb"),
+				LinearBufferDesc::Create(unsigned(data.size()))),
+			"vb",
 			[data](SubResourceId subres) {
 				assert(subres._arrayLayer == 0 && subres._mip == 0);
 				return SubResourceInitData{ data };
@@ -46,8 +46,8 @@ namespace RenderCore { namespace Techniques
 		return device.CreateResource(
 			CreateDesc(
 				BindFlag::IndexBuffer,
-				LinearBufferDesc::Create(unsigned(data.size())),
-				"ib"),
+				LinearBufferDesc::Create(unsigned(data.size()))),
+			"ib",
 			[data](SubResourceId subres) {
 				assert(subres._arrayLayer == 0 && subres._mip == 0);
 				return SubResourceInitData{ data };
@@ -67,8 +67,8 @@ namespace RenderCore { namespace Techniques
 		auto result = device.CreateResource(
 			CreateDesc(
 				bindFlags, AllocationRules::HostVisibleSequentialWrite,
-				LinearBufferDesc::Create(resourceSize),
-				resourceName));
+				LinearBufferDesc::Create(resourceSize)),
+			resourceName);
 		Metal::ResourceMap map{device, *result, Metal::ResourceMap::Mode::WriteDiscardPrevious};
 		unsigned iterator = 0;
 		std::sort(loadRequests.begin(), loadRequests.end(), [](auto lhs, auto rhs) { return lhs.first < rhs.first; });
@@ -140,6 +140,10 @@ namespace RenderCore { namespace Techniques
 				_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);		// cache this for reuse later
 				return _depVal;
 			}
+			virtual StringSection<> GetName() const
+			{
+				return _name;
+			}
 
 			ResourceDesc _resourceDesc;
 			struct LoadRequests
@@ -149,6 +153,7 @@ namespace RenderCore { namespace Techniques
 			};
 			std::vector<LoadRequests> _loadRequests;
 			mutable ::Assets::DependencyValidation _depVal;
+			std::string _name;
 		};
 
 		static std::vector<ModelScaffoldDataSource::LoadRequests> AsLoadRequests(IteratorRange<const ModelScaffoldLoadRequest*> loadRequests)
@@ -200,8 +205,8 @@ namespace RenderCore { namespace Techniques
 		auto dataSource = std::make_shared<Internal::ModelScaffoldDataSource>();
 		dataSource->_resourceDesc = CreateDesc(
 			bindFlags | BindFlag::TransferDst,
-			LinearBufferDesc::Create(resourceSize),
-			resourceName);
+			LinearBufferDesc::Create(resourceSize));
+		dataSource->_name = resourceName.AsString();
 		dataSource->_loadRequests = Internal::AsLoadRequests(modelScaffold, loadRequests);
 
 		if (resourceSource)
@@ -221,11 +226,11 @@ namespace RenderCore { namespace Techniques
 		auto dataSource = std::make_shared<Internal::ModelScaffoldDataSource>();
 		dataSource->_resourceDesc = CreateDesc(
 			bindFlags | BindFlag::TransferDst,
-			LinearBufferDesc::Create(resourceSize),
-			resourceName);
+			LinearBufferDesc::Create(resourceSize)),
+		dataSource->_name = resourceName.AsString();
 		dataSource->_loadRequests = Internal::AsLoadRequests(modelScaffold, loadRequests);
 		if (constructionContext) {
-			return constructionContext->ConstructStaticGeometry(std::move(dataSource), bindFlags, resourceName);
+			return constructionContext->ConstructStaticGeometry(std::move(dataSource), bindFlags);
 		} else {
 			auto& bufferUploads = Services::GetBufferUploads();
 			return std::move(bufferUploads.Begin(std::move(dataSource), bindFlags)._future);
@@ -238,11 +243,11 @@ namespace RenderCore { namespace Techniques
 		BindFlag::BitField bindFlags,
 		StringSection<> resourceName)
 	{
-		auto dataSource = BufferUploads::CreateBasicPacket(std::move(data));
+		auto dataSource = BufferUploads::CreateBasicPacket(std::move(data), resourceName.AsString());
 		if (constructionContext) {
-			return constructionContext->ConstructStaticGeometry(std::move(dataSource), bindFlags, resourceName);
+			return constructionContext->ConstructStaticGeometry(std::move(dataSource), bindFlags);
 		} else {
-			auto desc = CreateDesc(bindFlags, LinearBufferDesc::Create(dataSource->GetData().size()), resourceName);
+			auto desc = CreateDesc(bindFlags, LinearBufferDesc::Create(dataSource->GetData().size()));
 			auto& bufferUploads = Services::GetBufferUploads();
 			return std::move(bufferUploads.Begin(desc, std::move(dataSource), bindFlags)._future);
 		}
@@ -258,11 +263,11 @@ namespace RenderCore { namespace Techniques
 		auto dataSource = std::make_shared<Internal::ModelScaffoldDataSource>();
 		dataSource->_resourceDesc = CreateDesc(
 			bindFlags | BindFlag::TransferDst,
-			LinearBufferDesc::Create(resourceSize),
-			resourceName);
+			LinearBufferDesc::Create(resourceSize));
+		dataSource->_name = resourceName.AsString();
 		dataSource->_loadRequests = Internal::AsLoadRequests(loadRequests);
 
-		auto resource = device.CreateResource(dataSource->_resourceDesc);
+		auto resource = device.CreateResource(dataSource->_resourceDesc, resourceName);
 		auto marker = Services::GetBufferUploads().Begin(resource, dataSource, bindFlags);
 		return {std::move(resource), std::move(marker)};
 	}

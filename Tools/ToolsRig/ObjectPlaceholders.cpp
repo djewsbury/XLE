@@ -106,12 +106,13 @@ namespace ToolsRig
 			std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
 			std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
 			std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
-			const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile);
+			const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile,
+			StringSection<> identifier);
 		SimpleModel(
 			std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
 			std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
 			std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
-			StringSection<::Assets::ResChar> filename);
+			StringSection<> filename);
 		SimpleModel() = default;
 		~SimpleModel();
 	private:
@@ -126,7 +127,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _pipelineAccelerator;
 		std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> _descriptorSetAccelerator;
 
-		void Build(const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile);
+		void Build(const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile, StringSection<> fn);
 	};
 
 	void SimpleModel::BuildDrawables(
@@ -159,12 +160,13 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
 		std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
-		const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile)
+		const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile,
+		StringSection<> identifier)
 	{
 		_drawablesPool = std::move(drawablesPool);
 		_pipelineAcceleratorPool = std::move(pipelineAcceleratorPool);
 		_bufferUploads = std::move(bufferUploads);
-		Build(geo, largeBlocksFile);
+		Build(geo, largeBlocksFile, identifier);
 	}
 
 	SimpleModel::SimpleModel(
@@ -185,12 +187,12 @@ namespace ToolsRig
 				if (cmd.Cmd() == (uint32_t)RenderCore::Assets::GeoCommand::AttachRawGeometry)
 					geo = &cmd.As<RenderCore::Assets::RawGeometryDesc>();
 			if (geo)
-				Build(*geo, *largeBlocksFile);
+				Build(*geo, *largeBlocksFile, filename);
 		}
 		_depVal = scaffold.GetDependencyValidation();
 	}
 
-	void SimpleModel::Build(const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile)
+	void SimpleModel::Build(const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile, StringSection<> fn)
 	{
 		// load the vertex buffer & index buffer from the geo input, and copy draw calls data
 		auto largeBlocksOffset = largeBlocksFile.TellP();
@@ -198,8 +200,8 @@ namespace ToolsRig
 		auto ibData = ReadFromFile(largeBlocksFile, geo._ib._size, geo._ib._offset + largeBlocksOffset);
 		RenderCore::Techniques::ManualDrawableGeoConstructor geoConstructor(_drawablesPool, _bufferUploads);
 		geoConstructor.BeginGeo();
-		geoConstructor.SetStreamData(RenderCore::Techniques::ManualDrawableGeoConstructor::Vertex0, std::move(vbData));
-		geoConstructor.SetStreamData(RenderCore::Techniques::ManualDrawableGeoConstructor::IB, std::move(ibData));
+		geoConstructor.SetStreamData(RenderCore::Techniques::ManualDrawableGeoConstructor::Vertex0, std::move(vbData), "[vb]" + fn.AsString());
+		geoConstructor.SetStreamData(RenderCore::Techniques::ManualDrawableGeoConstructor::IB, std::move(ibData), "[ib]" + fn.AsString());
 		geoConstructor.SetIndexFormat(geo._ib._format);
 		auto geoFulfillment = geoConstructor.ImmediateFulfill();
 		assert(geoFulfillment.GetInstantiatedGeos().size() == 1);
@@ -282,7 +284,7 @@ namespace ToolsRig
 		using Constructor = RenderCore::Techniques::ManualDrawableGeoConstructor;
 		Constructor constructor{std::move(pool), std::move(bufferUploads)};
 		constructor.BeginGeo();
-		constructor.SetStreamData(Constructor::DrawableStream::Vertex0, std::move(data));
+		constructor.SetStreamData(Constructor::DrawableStream::Vertex0, std::move(data), "cube-vb");
 		return constructor.ImmediateFulfill().GetInstantiatedGeos()[0];
 	}
     

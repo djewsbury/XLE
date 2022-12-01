@@ -482,7 +482,7 @@ namespace ToolsRig
             using namespace RenderCore;
             Metal::ConstantBuffer drawCallIndexBuffer(
 				Metal::GetObjectFactory(), 
-				CreateDesc(BindFlag::ConstantBuffer, CPUAccess::WriteDynamic, GPUAccess::Read, LinearBufferDesc::Create(sizeof(unsigned)*4), "drawCallIndex"));
+				CreateDesc(BindFlag::ConstantBuffer, CPUAccess::WriteDynamic, GPUAccess::Read, LinearBufferDesc::Create(sizeof(unsigned)*4)), "drawCallIndex");
             metalContext->GetNumericUniforms(ShaderStage::Geometry).Bind(MakeResourceList(drawCallIndexBuffer));
 
             if (Tweakable("RenderSkinned", false)) {

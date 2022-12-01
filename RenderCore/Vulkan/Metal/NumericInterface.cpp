@@ -172,7 +172,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			_pimpl->_descSet[binding._descSetIndex]._builder.Bind(
 				binding._slotIndex, bufferInfo,
-				constantBuffers[c]._prebuiltBuffer->GetDesc()._name);
+				checked_cast<const Resource*>(constantBuffers[c]._prebuiltBuffer)->GetName());
 			_pimpl->_hasChanges |= _pimpl->_descSet[binding._descSetIndex]._builder.HasChanges();
         }
     }

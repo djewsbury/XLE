@@ -1078,7 +1078,7 @@ namespace ToolsRig
 			depthDesc._bindFlags = BindFlag::DepthStencil|BindFlag::TransferSrc|BindFlag::ShaderResource;
 			assert(systemAttachmentFormats.size() > (unsigned)Techniques::SystemAttachmentFormat::MainDepthStencil);
 			depthDesc._textureDesc._format = systemAttachmentFormats[(unsigned)Techniques::SystemAttachmentFormat::MainDepthStencil];
-			stitching.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, depthDesc, Techniques::PreregisteredAttachment::State::Initialized, BindFlag::DepthStencil);
+			stitching.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, depthDesc, "main-depth", Techniques::PreregisteredAttachment::State::Initialized, BindFlag::DepthStencil);
 		}
 
 		auto fbFrag = CreateVisFBFrag();

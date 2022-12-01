@@ -569,6 +569,7 @@ namespace RenderCore { namespace Techniques
             ResourceDesc            _desc;
             unsigned                _lockCount = 0;
             bool                    _pendingCompleteInitialization = true;
+            std::string             _name;      // tends to just be the name of the first request (since attachments will be frequently used for multiple requests)
         };
         std::vector<Attachment>     _attachments;
 
@@ -588,7 +589,7 @@ namespace RenderCore { namespace Techniques
         assert(attach->_desc._textureDesc._width > 0);
         assert(attach->_desc._textureDesc._height > 0);
         assert(attach->_desc._textureDesc._depth > 0);
-        attach->_resource = _device->CreateResource(attach->_desc);
+        attach->_resource = _device->CreateResource(attach->_desc, attach->_name.empty() ? MakeStringSection("attachment-pool") : MakeStringSection(attach->_name));
         attach->_pendingCompleteInitialization = true;
         return attach->_resource != nullptr;
     }
@@ -728,6 +729,7 @@ namespace RenderCore { namespace Techniques
             if (!foundMatch) {
                 _pimpl->_attachments.push_back(Pimpl::Attachment{nullptr, request._desc});
                 poolAttachmentName = unsigned(_pimpl->_attachments.size()-1);
+                _pimpl->_attachments[poolAttachmentName]._name = request._name.AsString();
             }
 
             selectedAttachments[r]._poolName = poolAttachmentName;
@@ -1219,7 +1221,7 @@ namespace RenderCore { namespace Techniques
         // no existing entry, create a new one and ensure that there's a pending clear registered
         assert(_pool);
         PreregisteredAttachment reservation {
-            0, desc, PreregisteredAttachment::State::Uninitialized, 0
+            0, desc, {}, PreregisteredAttachment::State::Uninitialized, 0
         };
         auto newReservation = _pool->Reserve(MakeIteratorRange(&reservation, &reservation+1));
         assert(newReservation._entries.size() == 1);
@@ -2083,8 +2085,10 @@ namespace RenderCore { namespace Techniques
     static std::ostream& operator<<(std::ostream& str, const PreregisteredAttachment& attachment)
     {
         str << "PreregisteredAttachment { "
-            << AttachmentSemantic{attachment._semantic} << ", "
-            << attachment._desc << ", "
+            << AttachmentSemantic{attachment._semantic};
+        if (!attachment._name.IsEmpty()) str << " (" << attachment._name << "), ";
+        else str << ", ";
+        str << attachment._desc << ", "
             << AsString(attachment._state) << "/"
             << BindFlagsAsString(attachment._layout) << "}";
         return str;
@@ -2199,7 +2203,7 @@ namespace RenderCore { namespace Techniques
         auto bindFlags = usageBindFlags | attachmentDesc._initialLayout.value_or(0) | attachmentDesc._finalLayout.value_or(0) | attachmentDesc._matchingRules._requiredBindFlags;
 
         PreregisteredAttachment result;
-        result._desc = CreateDesc(bindFlags, AllocationRules::ResizeableRenderTarget, tDesc, "attachment-pool");
+        result._desc = CreateDesc(bindFlags, AllocationRules::ResizeableRenderTarget, tDesc);
         assert(result._desc._textureDesc._format != Format::Unknown);       // at this point we must have a resolved format. If it's still unknown, we can't created a preregistered attachment
         result._semantic = attachmentDesc._semantic;
         result._state = PreregisteredAttachment::State::Uninitialized;
@@ -2389,6 +2393,7 @@ namespace RenderCore { namespace Techniques
 
     void FragmentStitchingContext::DefineAttachment(
         uint64_t semantic, const ResourceDesc& resourceDesc,
+        StringSection<> name,
         PreregisteredAttachment::State state,
         BindFlag::BitField initialLayoutFlags)
 	{
@@ -2402,7 +2407,7 @@ namespace RenderCore { namespace Techniques
             i->_state = state;
         } else
             _workingAttachments.push_back(
-                RenderCore::Techniques::PreregisteredAttachment{semantic, resourceDesc, state, initialLayoutFlags});
+                RenderCore::Techniques::PreregisteredAttachment{semantic, resourceDesc, name, state, initialLayoutFlags});
 	}
 
     void FragmentStitchingContext::DefineAttachment(
@@ -2459,10 +2464,9 @@ namespace RenderCore { namespace Techniques
         a._initialContents = initialContents;
         a._initialLayout = initialLayoutFlags;
         a._desc = i->_desc;
-        XlCatString(a._desc._name, "-prev");
         _doubleBufferAttachments.push_back(a);
         assert(initialLayoutFlags != 0);
-        DefineAttachment(a._todaySemantic, a._desc, PreregisteredAttachment::State::Initialized, initialLayoutFlags);
+        DefineAttachment(a._todaySemantic, a._desc, "yesterday-data", PreregisteredAttachment::State::Initialized, initialLayoutFlags);
     }
 
     Format FragmentStitchingContext::GetSystemAttachmentFormat(SystemAttachmentFormat fmt) const

@@ -27,8 +27,8 @@ namespace ToolsRig
 			CreateDesc(
 				BindFlag::VertexBuffer,
 				AllocationRules::HostVisibleSequentialWrite,
-				LinearBufferDesc::Create((unsigned)data.size()),
-				"vertex-buffer"),
+				LinearBufferDesc::Create((unsigned)data.size())),
+			"vertex-buffer",
 			SubResourceInitData { data });
 	}
 

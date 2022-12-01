@@ -46,6 +46,8 @@ namespace RenderCore { namespace Techniques
 
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
 
+		virtual StringSection<> GetName() const { return "data-source-from-resource"; }
+
 		DataSourceFromResourceSynchronized(
 			std::shared_ptr<IThreadContext> threadContext, 
 			std::shared_ptr<IResource> resource,
@@ -106,7 +108,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		auto inputRes = CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
-		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc, "texture-compiler"));
+		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc), "texture-compiler");
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
 		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code()))
 			threadContextVulkan->AttachNameToCmdList(s_equRectFilterName);
@@ -216,7 +218,7 @@ namespace RenderCore { namespace Techniques
 			std::make_shared<PipelineCollection>(threadContext->GetDevice()),
 			shader, {}, TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain", usi);
 
-		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc, "texture-compiler"));
+		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc), "texture-compiler");
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
 		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code()))
 			threadContextVulkan->AttachNameToCmdList(s_equRectFilterName);

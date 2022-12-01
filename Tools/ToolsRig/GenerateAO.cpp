@@ -307,16 +307,16 @@ namespace ToolsRig
                 BindFlag::DepthStencil | BindFlag::ShaderResource,
                 TextureDesc::Plain2D(
                     settings._renderResolution, settings._renderResolution, 
-                    typelessFormat, 1, cubeFaces),
-                "AoGen"));
+                    typelessFormat, 1, cubeFaces)),
+            "AoGen");
         _pimpl->_cubeDSV = Metal::DepthStencilView(_pimpl->_cubeLocator->GetUnderlying(), {dsvFormat});
         _pimpl->_cubeSRV = Metal::ShaderResourceView(_pimpl->_cubeLocator->GetUnderlying(), {srvFormat});
 
         _pimpl->_miniLocator = bufferUploads.Transaction_Immediate(
             CreateDesc( 
                 BindFlag::UnorderedAccess,
-                TextureDesc::Plain2D(4, 4, Format::R32_FLOAT, 1, cubeFaces),
-                "AoGenMini"));
+                TextureDesc::Plain2D(4, 4, Format::R32_FLOAT, 1, cubeFaces)),
+            "AoGenMini");
         _pimpl->_miniUAV = Metal::UnorderedAccessView(_pimpl->_miniLocator->GetUnderlying());
 
         // _pimpl->_stepDownShader = &::Assets::Legacy::GetAssetDep<Metal::ComputeShader>(

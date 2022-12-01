@@ -2154,9 +2154,10 @@ namespace RenderCore { namespace ImplVulkan
 
 	IResourcePtr Device::CreateResource(
 		const ResourceDesc& desc,
+		StringSection<> name,
 		const std::function<SubResourceInitData(SubResourceId)>& initData)
 	{
-		return Metal_Vulkan::Internal::CreateResource(_globalsContainer->_objectFactory, desc, initData);
+		return Metal_Vulkan::Internal::CreateResource(_globalsContainer->_objectFactory, desc, name, initData);
 	}
 
 	FormatCapability    Device::QueryFormatCapability(Format format, BindFlag::BitField bindingType)
@@ -2417,10 +2418,8 @@ namespace RenderCore { namespace ImplVulkan
         auto images = GetImages(_vulkanDevice.get(), _swapChain.get());
         _images.reserve(images.size());
         for (auto& vkImage:images) {
-            auto resDesc = CreateDesc(
-                _desc._bindFlags, AllocationRules::ResizeableRenderTarget,
-                _bufferDesc, "presentationimage");
-            _images.emplace_back(std::make_shared<Metal_Vulkan::Resource>(vkImage, resDesc));
+            auto resDesc = CreateDesc(_desc._bindFlags, AllocationRules::ResizeableRenderTarget, _bufferDesc);
+            _images.emplace_back(std::make_shared<Metal_Vulkan::Resource>(vkImage, resDesc, "presentationimage"));
         }
     }
 

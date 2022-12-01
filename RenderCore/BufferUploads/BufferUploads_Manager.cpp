@@ -142,6 +142,7 @@ namespace RenderCore { namespace BufferUploads
             std::atomic<unsigned> _referenceCount;
             ResourceLocator _finalResource;
             ResourceDesc _desc;
+            std::string _name;
             TimeMarker _requestTime;
             std::promise<ResourceLocator> _promise;
             std::future<void> _waitingFuture;
@@ -309,13 +310,20 @@ namespace RenderCore { namespace BufferUploads
         #endif
     }
 
+    static std::string s_nullDataPacket { "<<null data packet>>" };
+
     TransactionMarker AssemblyLine::Begin(
         const ResourceDesc& desc, std::shared_ptr<IDataPacket> data, std::shared_ptr<IResourcePool> pool, TransactionOptions::BitField flags)
     {
         auto ref = AllocateTransaction(flags);
         assert(ref._transaction);
         ref._transaction->_desc = desc;
-        if (data) ValidatePacketSize(desc, *data);
+        if (data) {
+            ref._transaction->_name = data->GetName().AsString();
+            ValidatePacketSize(desc, *data);
+        } else {
+            ref._transaction->_name = s_nullDataPacket;
+        }
 
             //
             //      Have to increase _currentQueuedBytes before we push in the create step... Otherwise the create 
@@ -342,7 +350,12 @@ namespace RenderCore { namespace BufferUploads
         assert(ref._transaction);
         auto desc = destinationResource.GetContainingResource()->GetDesc();
         ref._transaction->_finalResource = std::move(destinationResource);
-        if (data) ValidatePacketSize(desc, *data);
+        if (data) {
+            ref._transaction->_name = data->GetName().AsString();
+            ValidatePacketSize(desc, *data);
+        } else {
+            ref._transaction->_name = s_nullDataPacket;
+        }
         assert(desc._bindFlags & BindFlag::TransferDst);
         _currentQueuedBytes[(unsigned)AsUploadDataType(desc, desc._bindFlags)] += RenderCore::ByteCount(desc);
 
@@ -357,11 +370,13 @@ namespace RenderCore { namespace BufferUploads
     TransactionMarker AssemblyLine::Begin(
         std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, BindFlag::BitField bindFlags, TransactionOptions::BitField flags)
     {
+        assert(data);
         auto ref = AllocateTransaction(flags);
         assert(ref._transaction);
 
         TransactionMarker result { ref._transaction->_promise.get_future(), ref.GetID(), *this };
         ref._transaction->_promisePending = true;
+        ref._transaction->_name = data->GetName().AsString();
 
         // Let's optimize the case where the desc is available immediately, since certain
         // usage patterns will allow for that
@@ -393,12 +408,14 @@ namespace RenderCore { namespace BufferUploads
 
     TransactionMarker AssemblyLine::Begin(ResourceLocator destinationResource, std::shared_ptr<IAsyncDataSource> data, TransactionOptions::BitField flags)
     {
+        assert(data);
         auto ref = AllocateTransaction(flags);
         assert(ref._transaction);
         ref._transaction->_finalResource = std::move(destinationResource);
 
         TransactionMarker result { ref._transaction->_promise.get_future(), ref.GetID(), *this };
         ref._transaction->_promisePending = true;
+        ref._transaction->_name = data->GetName().AsString();
 
         // Let's optimize the case where the desc is available immediately, since certain
         // usage patterns will allow for that
@@ -470,6 +487,7 @@ namespace RenderCore { namespace BufferUploads
             {
                 AssemblyLineRetirement retirement;
                 retirement._desc = transaction->_desc;
+                retirement._name = transaction->_name;
                 retirement._requestTime = transaction->_requestTime;
                 retirement._retirementTime = OSServices::GetPerformanceCounter();
                 ScopedLock(_pendingRetirementsLock);
@@ -566,12 +584,13 @@ namespace RenderCore { namespace BufferUploads
     static std::shared_ptr<IResource> CreateResource(
         IDevice& device,
         const ResourceDesc& desc,
+        StringSection<> name,
         IDataPacket* initPkt = nullptr)
     {
         if (initPkt) {
-            return device.CreateResource(desc, PlatformInterface::AsResourceInitializer(*initPkt));
+            return device.CreateResource(desc, name, PlatformInterface::AsResourceInitializer(*initPkt));
         } else {
-            return device.CreateResource(desc);
+            return device.CreateResource(desc, name);
         }
     }
 
@@ -583,7 +602,7 @@ namespace RenderCore { namespace BufferUploads
 
         ResourceDesc desc = descInit;
         desc._bindFlags |= BindFlag::TransferDst;
-        auto constructedResource = CreateResource(*_device, desc);
+        auto constructedResource = CreateResource(*_device, desc, data ? data->GetName() : s_nullDataPacket);
         if (!constructedResource)
             return {};
 
@@ -591,7 +610,12 @@ namespace RenderCore { namespace BufferUploads
         assert(ref._transaction);
         ref._transaction->_desc = desc;
         ref._transaction->_finalResource = constructedResource;
-        if (data) ValidatePacketSize(desc, *data);
+        if (data) {
+            ref._transaction->_name = data->GetName().AsString();
+            ValidatePacketSize(desc, *data);
+        } else {
+            ref._transaction->_name = s_nullDataPacket;
+        }
         _currentQueuedBytes[(unsigned)AsUploadDataType(desc, desc._bindFlags)] += RenderCore::ByteCount(desc);
 
         // if we use the frame priority queue, we know what cmd list id it will be completed with
@@ -969,9 +993,9 @@ namespace RenderCore { namespace BufferUploads
                 // No resource provided beforehand -- have to create it now
                 
                 if (resourceCreateStep._pool && desc._type == ResourceDesc::Type::LinearBuffer) {
-                    finalConstruction = resourceCreateStep._pool->Allocate(desc._linearBufferDesc._sizeInBytes, desc._name);
+                    finalConstruction = resourceCreateStep._pool->Allocate(desc._linearBufferDesc._sizeInBytes, transaction->_name);
                     if (finalConstruction.IsEmpty())
-                        desc = resourceCreateStep._pool->MakeFallbackDesc(desc._linearBufferDesc._sizeInBytes, desc._name);
+                        desc = resourceCreateStep._pool->MakeFallbackDesc(desc._linearBufferDesc._sizeInBytes);
                 }
 
                 if (finalConstruction.IsEmpty()) {
@@ -983,12 +1007,12 @@ namespace RenderCore { namespace BufferUploads
                     if (resourceCreateStep._initialisationData && supportInit) {
                         finalConstruction = CreateResource(
                             context.GetRenderCoreDevice(),
-                            desc, resourceCreateStep._initialisationData.get());
+                            desc, transaction->_name, resourceCreateStep._initialisationData.get());
                         didInitialisationDuringCreation = true;
                     } else {
                         auto modifiedDesc = desc;
                         modifiedDesc._bindFlags |= BindFlag::TransferDst;
-                        finalConstruction = CreateResource(context.GetRenderCoreDevice(), modifiedDesc);
+                        finalConstruction = CreateResource(context.GetRenderCoreDevice(), modifiedDesc, transaction->_name);
                     }
                     deviceConstructionInvoked = true;
                 }
@@ -1168,8 +1192,8 @@ namespace RenderCore { namespace BufferUploads
                 auto oversizeDesc = CreateDesc(
                     BindFlag::TransferSrc,
                     AllocationRules::PermanentlyMapped | AllocationRules::HostVisibleSequentialWrite | AllocationRules::DedicatedPage,
-                    LinearBufferDesc::Create(byteCount), "oversize-staging");
-                captures._oversizeResource = context.GetRenderCoreDevice().CreateResource(oversizeDesc);
+                    LinearBufferDesc::Create(byteCount));
+                captures._oversizeResource = context.GetRenderCoreDevice().CreateResource(oversizeDesc, "oversize-staging");
                 Metal::ResourceMap map{context.GetRenderCoreDevice(), *captures._oversizeResource, Metal::ResourceMap::Mode::WriteDiscardPrevious};
                 uploadList = context.GetResourceUploadHelper().CalculateUploadList(map, desc);
                 captures._map = std::move(map);
@@ -1293,15 +1317,15 @@ namespace RenderCore { namespace BufferUploads
             if (transaction->_finalResource.IsEmpty()) {
                 ResourceLocator finalConstruction;
                 if (transferStagingToFinalStep._pool && transferStagingToFinalStep._finalResourceDesc._type == ResourceDesc::Type::LinearBuffer) {
-                    finalConstruction = transferStagingToFinalStep._pool->Allocate(transferStagingToFinalStep._finalResourceDesc._linearBufferDesc._sizeInBytes, transferStagingToFinalStep._finalResourceDesc._name);
+                    finalConstruction = transferStagingToFinalStep._pool->Allocate(transferStagingToFinalStep._finalResourceDesc._linearBufferDesc._sizeInBytes, transaction->_name);
                     if (finalConstruction.IsEmpty())
-                        transferStagingToFinalStep._finalResourceDesc = transferStagingToFinalStep._pool->MakeFallbackDesc(transferStagingToFinalStep._finalResourceDesc._linearBufferDesc._sizeInBytes, transferStagingToFinalStep._finalResourceDesc._name);
+                        transferStagingToFinalStep._finalResourceDesc = transferStagingToFinalStep._pool->MakeFallbackDesc(transferStagingToFinalStep._finalResourceDesc._linearBufferDesc._sizeInBytes);
                 }
                 
                 if (finalConstruction.IsEmpty()) {
                     auto desc = transferStagingToFinalStep._finalResourceDesc;
                     desc._bindFlags |= BindFlag::TransferDst;       // we must have TransferDst, because we're just about to do a transfer -- might as well add it on, incase the caller forgot
-                    finalConstruction = CreateResource(context.GetRenderCoreDevice(), desc);
+                    finalConstruction = CreateResource(context.GetRenderCoreDevice(), desc, transaction->_name);
                     metricsUnderConstruction._countDeviceCreations[dataType] += 1;
                 }
 
