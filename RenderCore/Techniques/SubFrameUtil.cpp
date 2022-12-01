@@ -18,7 +18,7 @@ namespace RenderCore { namespace Techniques
 			auto newPageCount = 1+nextItem/s_poolPageSize;
 			_descriptorSetPool.resize(newPageCount*s_poolPageSize);
 			for (auto c=initialSize; c<_descriptorSetPool.size(); ++c)
-				_descriptorSetPool[c] = _device->CreateDescriptorSet(_pipelineType, _signature);
+				_descriptorSetPool[c] = _device->CreateDescriptorSet(_pipelineType, _signature, _name);
 		}
 		return _descriptorSetPool[nextItem].get();
 	}
@@ -26,15 +26,17 @@ namespace RenderCore { namespace Techniques
 	SubFrameDescriptorSetHeap::SubFrameDescriptorSetHeap(
 		IDevice& device,
 		const DescriptorSetSignature& signature,
-		PipelineType pipelineType)
+		PipelineType pipelineType,
+		std::string&& name)
 	: _trackerHeap(device)
 	, _pipelineType(pipelineType)
 	, _signature(signature)
 	, _device(&device)
+	, _name(std::move(name))
 	{
 		_descriptorSetPool.reserve(s_poolPageSize);
 		for (unsigned c=0; c<s_poolPageSize; ++c)
-			_descriptorSetPool.push_back(device.CreateDescriptorSet(_pipelineType, _signature));
+			_descriptorSetPool.push_back(device.CreateDescriptorSet(_pipelineType, _signature, _name));
 	}
 
 	SubFrameDescriptorSetHeap::SubFrameDescriptorSetHeap() = default;

@@ -9,6 +9,7 @@
 #include "DeviceContext.h"
 #include "PipelineLayout.h"
 #include "ShaderReflection.h"
+#include "ExtensionFunctions.h"
 #include "../../ShaderService.h"
 #include "../../Types.h"
 #include "../../../Assets/Assets.h"
@@ -26,6 +27,24 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	std::vector<uint32_t> AppendSODecorations(IteratorRange<const void*> byteCode);
 
+	static void AssignModuleName(ObjectFactory& factory, VkShaderModule module, StringSection<> name)
+	{
+		#if defined(VULKAN_ENABLE_DEBUG_EXTENSIONS)
+			if (factory.GetExtensionFunctions()._setObjectName && !name.IsEmpty()) {
+				VLA(char, nameCopy, name.size()+1);
+				XlCopyString(nameCopy, name.size()+1, name);		// copy to get a null terminator
+				const VkDebugUtilsObjectNameInfoEXT shaderNameInfo {
+					VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					NULL,
+					VK_OBJECT_TYPE_SHADER_MODULE,
+					(uint64_t)module,
+					nameCopy
+				};
+				factory.GetExtensionFunctions()._setObjectName(factory.GetDevice().get(), &shaderNameInfo);
+			}
+		#endif
+	}
+
         ////////////////////////////////////////////////////////////////////////////////////////////////
 
     ShaderProgram::ShaderProgram(   ObjectFactory& factory,
@@ -42,6 +61,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			assert(vs.GetStage() == ShaderStage::Vertex);
 			auto byteCode = vs.GetByteCode();
             _modules[(unsigned)ShaderStage::Vertex] = factory.CreateShaderModule(byteCode);
+			AssignModuleName(factory, _modules[(unsigned)ShaderStage::Vertex].get(), vs.GetIdentifier());
 			_compiledCode[(unsigned)ShaderStage::Vertex] = vs;
 			assert(_modules[(unsigned)ShaderStage::Vertex]);
 			_validationCallback.RegisterDependency(vs.GetDependencyValidation());
@@ -53,6 +73,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			assert(ps.GetStage() == ShaderStage::Pixel);
             auto byteCode = ps.GetByteCode();
 			_modules[(unsigned)ShaderStage::Pixel] = factory.CreateShaderModule(byteCode);
+			AssignModuleName(factory, _modules[(unsigned)ShaderStage::Pixel].get(), ps.GetIdentifier());
 			_compiledCode[(unsigned)ShaderStage::Pixel] = ps;
 			assert(_modules[(unsigned)ShaderStage::Pixel]);
 			_validationCallback.RegisterDependency(ps.GetDependencyValidation());
@@ -78,6 +99,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			} else {
 				_modules[(unsigned)ShaderStage::Geometry] = factory.CreateShaderModule(byteCode);
 			}
+			AssignModuleName(factory, _modules[(unsigned)ShaderStage::Geometry].get(), gs.GetIdentifier());
 			_compiledCode[(unsigned)ShaderStage::Geometry] = gs;
 			assert(_modules[(unsigned)ShaderStage::Geometry]);
 			_validationCallback.RegisterDependency(gs.GetDependencyValidation());
@@ -100,6 +122,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			assert(hs.GetStage() == ShaderStage::Hull);
 			auto byteCode = hs.GetByteCode();
             _modules[(unsigned)ShaderStage::Hull] = factory.CreateShaderModule(byteCode);
+			AssignModuleName(factory, _modules[(unsigned)ShaderStage::Hull].get(), hs.GetIdentifier());
 			_compiledCode[(unsigned)ShaderStage::Hull] = hs;
 			assert(_modules[(unsigned)ShaderStage::Hull]);
 			_validationCallback.RegisterDependency(hs.GetDependencyValidation());
@@ -111,6 +134,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			assert(ds.GetStage() == ShaderStage::Domain);
 			auto byteCode = ds.GetByteCode();
             _modules[(unsigned)ShaderStage::Domain] = factory.CreateShaderModule(byteCode);
+			AssignModuleName(factory, _modules[(unsigned)ShaderStage::Domain].get(), ds.GetIdentifier());
 			_compiledCode[(unsigned)ShaderStage::Domain] = ds;
 			assert(_modules[(unsigned)ShaderStage::Domain]);
 			_validationCallback.RegisterDependency(ds.GetDependencyValidation());
@@ -139,6 +163,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			assert(compiledShader.GetStage() == ShaderStage::Compute);
 			auto byteCode = compiledShader.GetByteCode();
             _module = factory.CreateShaderModule(byteCode);
+			AssignModuleName(factory, _module.get(), compiledShader.GetIdentifier());
 			_interfaceBindingHash = Hash64(byteCode.begin(), byteCode.end());
 		}
 

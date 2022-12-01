@@ -44,13 +44,15 @@ namespace RenderCore { namespace LightingEngine
 			_descSet = Techniques::ConstructDescriptorSetHelper{_device, &commonRes._samplerPool}
 				.ConstructImmediately(
 					*descSetLayout, usi, 
-					ResourceViewStream{*texture});
+					ResourceViewStream{*texture},
+					"SkyOperator");
 		} else {
 			auto dummy = Techniques::Services::GetCommonResources()->_blackCubeSRV;
 			_descSet = Techniques::ConstructDescriptorSetHelper{_device, &commonRes._samplerPool}
 				.ConstructImmediately(
 					*descSetLayout, usi, 
-					ResourceViewStream{*dummy});
+					ResourceViewStream{*dummy},
+					"SkyOperator");
 		}
 	}
 

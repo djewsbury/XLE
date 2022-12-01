@@ -113,9 +113,11 @@ namespace RenderCore { namespace Techniques
 	CompiledPipelineLayoutAsset::CompiledPipelineLayoutAsset(
 		std::shared_ptr<RenderCore::IDevice> device,
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> predefinedLayout,
+		StringSection<> name,
 		std::shared_ptr<DescriptorSetLayoutAndBinding> patchInDescSet,
 		RenderCore::ShaderLanguage shaderLanguage)
 	: _predefinedLayout(std::move(predefinedLayout))
+	, _initializer(name.AsString())
 	{
 		_depVal = _predefinedLayout->GetDependencyValidation();
 
@@ -133,7 +135,7 @@ namespace RenderCore { namespace Techniques
 			::Assets::DependencyValidationMarker depVals[] { _depVal, patchInDescSet->GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
-		_pipelineLayout = device->CreatePipelineLayout(initializer);
+		_pipelineLayout = device->CreatePipelineLayout(initializer, name);
 	}
 
 	void CompiledPipelineLayoutAsset::ConstructToPromise(
@@ -147,8 +149,8 @@ namespace RenderCore { namespace Techniques
 		auto src = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(srcFile);
 		::Assets::WhenAll(src).ThenConstructToPromise(
 			std::move(promise),
-			[device, patchInDescSet, shaderLanguage](auto predefinedLayout) {
-				return std::make_shared<CompiledPipelineLayoutAsset>(device, predefinedLayout, patchInDescSet, shaderLanguage);
+			[device, patchInDescSet, shaderLanguage, name=srcFile.AsString()](auto predefinedLayout) {
+				return std::make_shared<CompiledPipelineLayoutAsset>(device, predefinedLayout, name, patchInDescSet, shaderLanguage);
 			});
 	}
 

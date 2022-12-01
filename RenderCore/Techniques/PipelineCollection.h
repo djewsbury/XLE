@@ -42,10 +42,11 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<ICompiledPipelineLayout> _prebuiltPipelineLayout;
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> _predefinedPipelineLayout;
 		uint64_t _hashCode = 0;
+		std::string _name;
 
 		PipelineLayoutOptions() = default;
 		PipelineLayoutOptions(std::shared_ptr<ICompiledPipelineLayout>);
-		PipelineLayoutOptions(std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>, uint64_t);
+		PipelineLayoutOptions(std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>, uint64_t, std::string);
 	};
 
 	struct GraphicsPipelineAndLayout

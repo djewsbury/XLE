@@ -106,7 +106,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				const ParameterBox* sel[] { &selectors };
 				pipelineCollection->CreateComputePipeline(
 					std::move(promise),
-					preparedResources._pipelineLayout, 
+					preparedResources._pipelineLayout,
 					DEFORM_ENTRY_HLSL ":frameworkEntry", MakeIteratorRange(sel),
 					preparedResources._patchCollection, MakeIteratorRange(patchExpansions));
 			});
@@ -144,7 +144,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 						const ParameterBox* sel[] { &selectors };
 						pipelineCollection->CreateComputePipeline(
 							std::move(promise),
-							preparedResources._pipelineLayout, 
+							preparedResources._pipelineLayout,
 							DEFORM_ENTRY_HLSL ":frameworkEntry", MakeIteratorRange(sel),
 							preparedResources._patchCollection, MakeIteratorRange(patchExpansions));
 					});
@@ -170,9 +170,11 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		auto predefinedPipelineLayout = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(_predefinedPipelineInitializer);
 		::Assets::WhenAll(predefinedPipelineLayout).ThenConstructToPromise(
 			_preparedSharedResources.AdoptPromise(),
-			[device=_pipelineCollection->GetDevice(), usi0=_usi0, usi1=_usi1, instRequest=_instRequest](auto predefinedPipelineLayoutActual) mutable {
+			[device=_pipelineCollection->GetDevice(), usi0=_usi0, usi1=_usi1, instRequest=_instRequest, pipelineLayoutInitializer=_predefinedPipelineInitializer](auto predefinedPipelineLayoutActual) mutable {
 				PreparedSharedResources result;
-				result._pipelineLayout = device->CreatePipelineLayout(predefinedPipelineLayoutActual->MakePipelineLayoutInitializer(Techniques::GetDefaultShaderLanguage()));
+				result._pipelineLayout = device->CreatePipelineLayout(
+					predefinedPipelineLayoutActual->MakePipelineLayoutInitializer(Techniques::GetDefaultShaderLanguage()),
+					pipelineLayoutInitializer);
 				result._boundUniforms = Metal::BoundUniforms{ result._pipelineLayout, usi0, usi1 };
 				
 				ShaderSourceParser::GenerateFunctionOptions generateOptions;

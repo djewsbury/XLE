@@ -76,12 +76,14 @@ namespace RenderCore { namespace Techniques
 			ResourceConstructionContext* context,
 			const Assets::PredefinedDescriptorSetLayout& layout,
 			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
-			const DeformerToDescriptorSetBinding* deformBinding);
+			const DeformerToDescriptorSetBinding* deformBinding,
+			std::string&& name);
 
 		std::shared_ptr<IDescriptorSet> ConstructImmediately(
 			const Assets::PredefinedDescriptorSetLayout& layout,
 			const UniformsStreamInterface& usi,
-			const UniformsStream& us);
+			const UniformsStream& us,
+			StringSection<> name);
 
 		void CompleteToPromise(
 			std::promise<std::vector<ActualizedDescriptorSet>>&& promise);

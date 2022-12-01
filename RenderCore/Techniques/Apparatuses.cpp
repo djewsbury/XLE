@@ -120,7 +120,7 @@ namespace RenderCore { namespace Techniques
 		assert(_assetServices != nullptr);
 
 		_mainUniformDelegateManager = CreateUniformDelegateManager();
-		_mainUniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *_sequencerDescSetLayout, *_device);
+		_mainUniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *_sequencerDescSetLayout, SEQUENCER_DS ":Sequencer", *_device);
 		_mainUniformDelegateManager->AddShaderResourceDelegate(_systemUniformsDelegate);
 	}
 

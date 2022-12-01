@@ -408,6 +408,7 @@ namespace RenderCore { namespace Techniques
 			PipelineAcceleratorPool* _ownerPool = nullptr;
 		#endif
 		uint64_t _constructionContextGuid = 0;
+		std::string _name;
 	};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -436,6 +437,7 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& shaderPatches,
 			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 			std::shared_ptr<void> memoryHolder,
+			std::string&& name,
 			const std::shared_ptr<DeformerToDescriptorSetBinding>& deformBinding) override;
 
 		std::shared_ptr<SequencerConfig> CreateSequencerConfig(
@@ -774,8 +776,6 @@ namespace RenderCore { namespace Techniques
 		return cfg;
 	}
 
-	static void DestroyPipelineAccelerator(void* obj) { delete (PipelineAccelerator*)obj; }
-
 	std::shared_ptr<PipelineAccelerator> PipelineAcceleratorPool::CreatePipelineAccelerator(
 		const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& shaderPatches,
 		const ParameterBox& materialSelectors,
@@ -881,6 +881,7 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& shaderPatches,
 		IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 		std::shared_ptr<void> memoryHolder,
+		std::string&& name,
 		const std::shared_ptr<DeformerToDescriptorSetBinding>& deformBinding)
 	{
 		auto constructionContextGuid = constructionContext ? constructionContext->GetGUID() : 0;
@@ -901,6 +902,8 @@ namespace RenderCore { namespace Techniques
 				if (auto l = cachei->second.lock()) {
 					if (l->_constructionContextGuid != constructionContextGuid)
 						Throw(std::runtime_error("Identical DescriptorSetAccelerator initialized for 2 different ConstructionContexts. This is unsafe, because either context could cancel the load"));
+					// to avoid confusion, let's expect that any two identical descriptor set accelerators have the same name
+					assert(l->_name == name);
 					return l;
 				}
 
@@ -917,6 +920,7 @@ namespace RenderCore { namespace Techniques
 			}
 
 			result->_constructionContextGuid = constructionContextGuid;
+			result->_name = name;
 			#if defined(_DEBUG)
 				result->_ownerPool = this;
 			#endif
@@ -953,15 +957,15 @@ namespace RenderCore { namespace Techniques
 				helper.Construct(
 					constructionContext.get(),
 					patchCollection->GetInterface().GetMaterialDescriptorSet(),
-					materialMachine, deformBinding.get());
+					materialMachine, deformBinding.get(), std::move(name));
 				helper.CompleteToPromise(std::move(promise));
 			} else {
 				std::weak_ptr<IDevice> weakDevice = _device;
 				::Assets::WhenAll(patchCollectionFuture).ThenConstructToPromise(
 					std::move(promise),
-					[materialMachine, memoryHolder, weakDevice, generateBindingInfo, samplerPool=std::weak_ptr<SamplerPool>(_samplerPool), deformBinding, result, constructionContext](
+					[materialMachine, memoryHolder, weakDevice, generateBindingInfo, samplerPool=std::weak_ptr<SamplerPool>(_samplerPool), deformBinding, result, constructionContext, name=std::move(name)](
 						std::promise<std::vector<ActualizedDescriptorSet>>&& promise,
-						std::shared_ptr<CompiledShaderPatchCollection> patchCollection) {
+						std::shared_ptr<CompiledShaderPatchCollection> patchCollection) mutable {
 
 						auto d = weakDevice.lock();
 						if (!d)
@@ -971,7 +975,7 @@ namespace RenderCore { namespace Techniques
 						helper.Construct(
 							constructionContext.get(),
 							patchCollection->GetInterface().GetMaterialDescriptorSet(),
-							materialMachine, deformBinding.get());
+							materialMachine, deformBinding.get(), std::move(name));
 						helper.CompleteToPromise(std::move(promise));
 					});
 			}
@@ -980,7 +984,7 @@ namespace RenderCore { namespace Techniques
 			helper.Construct(
 				constructionContext.get(),
 				_layoutPatcher->GetBaseMaterialDescriptorSetLayout(),
-				materialMachine, deformBinding.get());
+				materialMachine, deformBinding.get(), std::move(name));
 			helper.CompleteToPromise(std::move(promise));
 		}
 

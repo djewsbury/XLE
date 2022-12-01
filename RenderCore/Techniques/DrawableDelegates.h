@@ -57,7 +57,7 @@ namespace RenderCore { namespace Techniques
 		virtual void RemoveUniformDelegate(IUniformBufferDelegate&) = 0;
 
         virtual void AddSemiConstantDescriptorSet(
-            uint64_t binding, const RenderCore::Assets::PredefinedDescriptorSetLayout&,
+            uint64_t binding, const RenderCore::Assets::PredefinedDescriptorSetLayout&, StringSection<> name,
             IDevice& device) = 0;
         virtual void RemoveSemiConstantDescriptorSet(uint64_t binding) = 0;
 

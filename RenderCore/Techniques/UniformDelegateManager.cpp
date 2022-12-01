@@ -418,6 +418,7 @@ namespace RenderCore { namespace Techniques
 			IDevice& device,
 			const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
 			PipelineType pipelineType,
+			StringSection<> name,
 			CommonResourceBox& res);
 		~SemiConstantDescriptorSet();
 	};
@@ -560,9 +561,10 @@ namespace RenderCore { namespace Techniques
 		IDevice& device,
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
 		PipelineType pipelineType,
+		StringSection<> name,
 		CommonResourceBox& res)
 	: _descSetLayout(layout)
-	, _heap(device, layout.MakeDescriptorSetSignature(&res._samplerPool), pipelineType)
+	, _heap(device, layout.MakeDescriptorSetSignature(&res._samplerPool), pipelineType, Concatenate("[semi-constant] ", name))
 	{}
 
 	SemiConstantDescriptorSet::~SemiConstantDescriptorSet() {}
@@ -593,7 +595,7 @@ namespace RenderCore { namespace Techniques
 		void RemoveUniformDelegate(IUniformBufferDelegate&) override;
 
 		void AddSemiConstantDescriptorSet(
-			uint64_t binding, const RenderCore::Assets::PredefinedDescriptorSetLayout&,
+			uint64_t binding, const RenderCore::Assets::PredefinedDescriptorSetLayout&, StringSection<> name,
 			IDevice& device) override;
 		void RemoveSemiConstantDescriptorSet(uint64_t binding) override;
 
@@ -692,7 +694,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	void UniformDelegateManager::AddSemiConstantDescriptorSet(
-		uint64_t binding, const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
+		uint64_t binding, const RenderCore::Assets::PredefinedDescriptorSetLayout& layout, StringSection<> name,
 		IDevice& device)
 	{
 		auto& resBox = *Services::GetCommonResources();
@@ -705,8 +707,8 @@ namespace RenderCore { namespace Techniques
 			assert(i == _compute._semiConstantDescSets.end());
 		#endif
 
-		_graphics._semiConstantDescSets.emplace_back(binding, std::make_shared<SemiConstantDescriptorSet>(device, layout, PipelineType::Graphics, resBox));
-		_compute._semiConstantDescSets.emplace_back(binding, std::make_shared<SemiConstantDescriptorSet>(device, layout, PipelineType::Compute, resBox));
+		_graphics._semiConstantDescSets.emplace_back(binding, std::make_shared<SemiConstantDescriptorSet>(device, layout, PipelineType::Graphics, name, resBox));
+		_compute._semiConstantDescSets.emplace_back(binding, std::make_shared<SemiConstantDescriptorSet>(device, layout, PipelineType::Compute, name, resBox));
 	}
 
 	void UniformDelegateManager::RemoveSemiConstantDescriptorSet(uint64_t binding)

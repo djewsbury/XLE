@@ -78,6 +78,7 @@ namespace RenderCore { namespace LightingEngine
 		Configuration _config;
 		std::shared_ptr<Techniques::SequencerConfig> _probePrepareCfg;
 		std::shared_ptr<Assets::PredefinedDescriptorSetLayout> _sequencerDescSetLayout;
+		std::string _sequencerDescSetLayoutName;
 		std::shared_ptr<MultiViewUniformsDelegate> _multiViewUniformsDelegate;
 		std::shared_ptr<Techniques::IDeformAcceleratorPool> _deformAccelerators;
 		std::atomic<bool> _activeUpdate;
@@ -98,7 +99,7 @@ namespace RenderCore { namespace LightingEngine
 				auto uniformDelegateMan = Techniques::CreateUniformDelegateManager();
 				uniformDelegateMan->AddShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*threadContext.GetDevice()));
 				uniformDelegateMan->AddShaderResourceDelegate(_pimpl->_multiViewUniformsDelegate);
-				uniformDelegateMan->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *_pimpl->_sequencerDescSetLayout, *threadContext.GetDevice());
+				uniformDelegateMan->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *_pimpl->_sequencerDescSetLayout, _pimpl->_sequencerDescSetLayoutName, *threadContext.GetDevice());
 				_techContext._uniformDelegateManager = uniformDelegateMan;
 				_techContext._commonResources = Techniques::Services::GetCommonResources();
 				_techContext._pipelineAccelerators = _pimpl->_pipelineAccelerators;
@@ -319,6 +320,7 @@ namespace RenderCore { namespace LightingEngine
 		if (i == descSetLayoutContainer->_descriptorSets.end())
 			Throw(std::runtime_error("Missing 'Sequencer' descriptor set entry in sequencer pipeline file"));
 		_pimpl->_sequencerDescSetLayout = i->second;
+		_pimpl->_sequencerDescSetLayoutName = SEQUENCER_DS ":Sequencer";
 
 		{
 			// Create the pipeline accelerator configuration

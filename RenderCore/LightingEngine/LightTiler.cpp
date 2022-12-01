@@ -320,7 +320,7 @@ namespace RenderCore { namespace LightingEngine
 		auto pipelineLayoutMarker = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
 		::Assets::WhenAll(pipelineLayoutMarker).ThenConstructToPromise(
 			std::move(promise),
-			[pipelinePool, config, plan=Hash64(pipelineLayoutAssetName)](std::promise<std::shared_ptr<RasterizationLightTileOperator>>&& promise, std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> pipelineLayout) {
+			[pipelinePool, config, plname=std::string(pipelineLayoutAssetName)](auto&& promise, auto pipelineLayout) {
 				TRY {
 					auto pipelineDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 					pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL ":PrepareMany";
@@ -344,7 +344,7 @@ namespace RenderCore { namespace LightingEngine
 					auto futurePipeline = promisedPipeline.get_future();
 					pipelinePool->CreateGraphicsPipeline(
 						std::move(promisedPipeline),
-						{pipelineLayout, plan},
+						Techniques::PipelineLayoutOptions{pipelineLayout, Hash64(plname), plname},
 						pipelineDesc,
 						{},
 						inputStates, fbTarget);

@@ -729,7 +729,7 @@ namespace RenderCore { namespace Techniques
             if (!foundMatch) {
                 _pimpl->_attachments.push_back(Pimpl::Attachment{nullptr, request._desc});
                 poolAttachmentName = unsigned(_pimpl->_attachments.size()-1);
-                _pimpl->_attachments[poolAttachmentName]._name = request._name.AsString();
+                _pimpl->_attachments[poolAttachmentName]._name = Concatenate("[pool] ", request._name);
             }
 
             selectedAttachments[r]._poolName = poolAttachmentName;

@@ -1175,7 +1175,7 @@ namespace UnitTests
 			PipelineLayoutInitializer pipelineLayoutInitializer;
 			pipelineLayoutInitializer.AppendDescriptorSet("main", descSetSignature, PipelineType::Compute);
 
-			auto pipelineLayout = testHelper->_device->CreatePipelineLayout(pipelineLayoutInitializer);
+			auto pipelineLayout = testHelper->_device->CreatePipelineLayout(pipelineLayoutInitializer, "unittest");
 
 			Metal::ComputeShader computeShader(
 				Metal::GetObjectFactory(),
@@ -1319,7 +1319,7 @@ namespace UnitTests
 			PipelineLayoutInitializer pipelineLayoutInitializer;
 			pipelineLayoutInitializer.AppendDescriptorSet("main", descSetSignature, PipelineType::Compute);
 
-			auto pipelineLayout = testHelper->_device->CreatePipelineLayout(pipelineLayoutInitializer);
+			auto pipelineLayout = testHelper->_device->CreatePipelineLayout(pipelineLayoutInitializer, "unittest");
 
 			Metal::ComputeShader computeShader(
 				Metal::GetObjectFactory(),
@@ -1490,7 +1490,7 @@ namespace UnitTests
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 		auto shaderCode = testHelper.MakeShader(shaderText, "cs_*");
 		auto pipelineLayoutInitializer = Metal::BuildPipelineLayoutInitializer(shaderCode);
-		auto pipelineLayout = testHelper._device->CreatePipelineLayout(pipelineLayoutInitializer);
+		auto pipelineLayout = testHelper._device->CreatePipelineLayout(pipelineLayoutInitializer, "unittest");
 
 		Metal::ComputeShader computeShader(Metal::GetObjectFactory(), pipelineLayout, shaderCode);
 		Metal::ComputePipelineBuilder pipelineBuilder;

@@ -6,6 +6,7 @@
 #include "DescriptorSet.h"
 #include "ObjectFactory.h"
 #include "Pools.h"
+#include "ExtensionFunctions.h"
 #include "IncludeVulkan.h"
 #include "../../../OSServices/Log.h"
 #include "../../../Utility/Threading/Mutex.h"
@@ -34,9 +35,13 @@ namespace RenderCore { namespace Metal_Vulkan
 		ObjectFactory& factory,
 		IteratorRange<const DescriptorSetBinding*> descriptorSets,
 		IteratorRange<const PushConstantsBinding*> pushConstants,
-		const PipelineLayoutInitializer& desc)
+		const PipelineLayoutInitializer& desc,
+		StringSection<> name)
 	: _guid(s_nextCompiledPipelineLayoutGUID++)
 	, _initializer(desc)
+	#if defined(_DEBUG)
+		, _name(name.AsString())
+	#endif
 	{
 		for (auto&c:_descriptorSetBindingNames) c = 0;
 		for (auto&c:_pushConstantBufferBindingNames) c = 0;
@@ -114,6 +119,21 @@ namespace RenderCore { namespace Metal_Vulkan
 				_pushConstantsRangeValidation.emplace_back(end, 0);
 			}
 		#endif
+
+		#if defined(VULKAN_ENABLE_DEBUG_EXTENSIONS)
+			if (factory.GetExtensionFunctions()._setObjectName && !name.IsEmpty()) {
+				VLA(char, nameCopy, name.size()+1);
+				XlCopyString(nameCopy, name.size()+1, name);		// copy to get a null terminator
+				const VkDebugUtilsObjectNameInfoEXT pipelineLayoutNameInfo {
+					VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					NULL,
+					VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+					(uint64_t)_pipelineLayout.get(),
+					nameCopy
+				};
+				factory.GetExtensionFunctions()._setObjectName(factory.GetDevice().get(), &pipelineLayoutNameInfo);
+			}
+		#endif
 	}
 
 	#if defined(VULKAN_VERBOSE_DEBUG)
@@ -156,7 +176,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				return i->second.get();
 
 			auto ds = std::make_unique<DescriptorSetCacheResult>();
-			ds->_layout = std::make_unique<CompiledDescriptorSetLayout>(*_objectFactory, MakeIteratorRange(signature._slots), MakeIteratorRange(signature._fixedSamplers), stageFlags);
+			ds->_layout = std::make_unique<CompiledDescriptorSetLayout>(*_objectFactory, MakeIteratorRange(signature._slots), MakeIteratorRange(signature._fixedSamplers), stageFlags, name);
 			
 			{
 				ProgressiveDescriptorSetBuilder builder { MakeIteratorRange(signature._slots), 0 };
@@ -170,8 +190,6 @@ namespace RenderCore { namespace Metal_Vulkan
 					ds->_blankBindings.get(),
 					0, 0 VULKAN_VERBOSE_DEBUG_ONLY(, ds->_blankBindingsDescription));
 			}
-
-			VULKAN_VERBOSE_DEBUG_ONLY(ds->_name = name);
 
 			i = _cache.insert(i, std::make_pair(hash, std::move(ds)));
 			return i->second.get();

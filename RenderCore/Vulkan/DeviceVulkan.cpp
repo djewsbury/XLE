@@ -1957,8 +1957,8 @@ namespace RenderCore { namespace ImplVulkan
 		_destrQueue = objFactory.CreateMarkerTrackingDestroyer(_graphicsQueue->GetTracker());
 		objFactory.SetDefaultDestroyer(_destrQueue);
 
-		pools._mainDescriptorPool = Metal_Vulkan::DescriptorPool(objFactory, _graphicsQueue->GetTracker());
-		pools._longTermDescriptorPool = Metal_Vulkan::DescriptorPool(objFactory, _graphicsQueue->GetTracker());
+		pools._mainDescriptorPool = Metal_Vulkan::DescriptorPool(objFactory, _graphicsQueue->GetTracker(), "main-descriptor-pool");
+		pools._longTermDescriptorPool = Metal_Vulkan::DescriptorPool(objFactory, _graphicsQueue->GetTracker(), "long-term-descriptor-pool");
 		pools._renderPassPool = Metal_Vulkan::VulkanRenderPassPool(objFactory);
 		pools._mainPipelineCache = objFactory.CreatePipelineCache();
 		pools._dummyResources = Metal_Vulkan::DummyResources(objFactory);
@@ -2211,7 +2211,7 @@ namespace RenderCore { namespace ImplVulkan
 		return (uint64_t)_underlying.get();		// we just need to return something unique that will distinguish us from any other devices present in the system
 	}
 
-	std::shared_ptr<ICompiledPipelineLayout> Device::CreatePipelineLayout(const PipelineLayoutInitializer& desc)
+	std::shared_ptr<ICompiledPipelineLayout> Device::CreatePipelineLayout(const PipelineLayoutInitializer& desc, StringSection<> name)
 	{
 		if (!_globalsContainer->_pools._descriptorSetLayoutCache)
 			_globalsContainer->_pools._descriptorSetLayoutCache = Metal_Vulkan::Internal::CreateCompiledDescriptorSetLayoutCache();
@@ -2251,10 +2251,10 @@ namespace RenderCore { namespace ImplVulkan
 			_globalsContainer->_objectFactory,
 			MakeIteratorRange(descSetBindings),
 			MakeIteratorRange(pushConstantBinding),
-			desc);
+			desc, name);
 	}
 
-	std::shared_ptr<IDescriptorSet> Device::CreateDescriptorSet(PipelineType pipelineType, const DescriptorSetSignature& signature)
+	std::shared_ptr<IDescriptorSet> Device::CreateDescriptorSet(PipelineType pipelineType, const DescriptorSetSignature& signature, StringSection<> name)
 	{
 		if (!_globalsContainer->_pools._descriptorSetLayoutCache)
 			_globalsContainer->_pools._descriptorSetLayoutCache = Metal_Vulkan::Internal::CreateCompiledDescriptorSetLayoutCache();
@@ -2264,7 +2264,7 @@ namespace RenderCore { namespace ImplVulkan
 		return std::make_shared<Metal_Vulkan::CompiledDescriptorSet>(
 			_globalsContainer->_objectFactory, _globalsContainer->_pools,
 			descSetLayout->_layout,
-			shaderStages);
+			shaderStages, name);
 	}
 
 	std::shared_ptr<ISampler> Device::CreateSampler(const SamplerDesc& desc)

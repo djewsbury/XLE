@@ -60,7 +60,7 @@ namespace RenderCore { namespace Metal_Vulkan
         void FlushDestroys();
         VkDevice GetDevice() { return _device.get(); }
 
-        DescriptorPool(ObjectFactory& factory, const std::shared_ptr<IAsyncTracker>& tracker);
+        DescriptorPool(ObjectFactory& factory, const std::shared_ptr<IAsyncTracker>& tracker, StringSection<> poolName);
         DescriptorPool();
         ~DescriptorPool();
 
@@ -77,6 +77,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		ResizableCircularBuffer<MarkedDestroys, 32> _markedDestroys;
         std::vector<VkDescriptorSet> _pendingDestroys;
         Threading::Mutex _lock;
+
+        std::string _poolName;
 
 		void QueueDestroy(VkDescriptorSet buffer);
     };

@@ -259,8 +259,8 @@ namespace RenderCore { namespace Techniques
 		_hashCode = _prebuiltPipelineLayout->GetGUID();
 	}
 
-	PipelineLayoutOptions::PipelineLayoutOptions(std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> future, uint64_t guid)
-	: _predefinedPipelineLayout(std::move(future))
+	PipelineLayoutOptions::PipelineLayoutOptions(std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> future, uint64_t guid, std::string name)
+	: _predefinedPipelineLayout(std::move(future)), _name(std::move(name))
 	, _hashCode(guid)
 	{}
 

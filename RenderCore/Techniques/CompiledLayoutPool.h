@@ -39,11 +39,13 @@ namespace RenderCore { namespace Techniques
 	public:
 		const std::shared_ptr<ICompiledPipelineLayout>& GetPipelineLayout() const { return _pipelineLayout; }
 		const std::shared_ptr<Assets::PredefinedPipelineLayout>& GetPredefinedPipelineLayout() const { return _predefinedLayout; }
-		const ::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+		const std::string& GetInitializer() const { return _initializer; }
 
 		CompiledPipelineLayoutAsset(
 			std::shared_ptr<IDevice> device,
 			std::shared_ptr<Assets::PredefinedPipelineLayout> predefinedLayout,
+			StringSection<> name,
 			std::shared_ptr<DescriptorSetLayoutAndBinding> patchInDescSet = nullptr,
 			ShaderLanguage shaderLanguage = Techniques::GetDefaultShaderLanguage());
 		CompiledPipelineLayoutAsset() = default;
@@ -59,6 +61,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
 		std::shared_ptr<Assets::PredefinedPipelineLayout> _predefinedLayout;
 		::Assets::DependencyValidation _depVal;
+		std::string _initializer;
 	};
 
 	class DescriptorSetLayoutAndBinding

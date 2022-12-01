@@ -7,6 +7,7 @@
 #include "Pools.h"
 #include "PipelineLayout.h"
 #include "ShaderReflection.h"
+#include "ExtensionFunctions.h"
 #include "../../ShaderService.h"
 #include "../../UniformsStream.h"
 #include "../../BufferView.h"
@@ -1075,13 +1076,17 @@ namespace RenderCore { namespace Metal_Vulkan
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	CompiledDescriptorSetLayout::CompiledDescriptorSetLayout(
-		const ObjectFactory& factory, 
+		ObjectFactory& factory, 
 		IteratorRange<const DescriptorSlot*> srcLayout,
 		IteratorRange<const  std::shared_ptr<ISampler>*> fixedSamplers,
-		VkShaderStageFlags stageFlags)
+		VkShaderStageFlags stageFlags,
+		const std::string& name)
 	: _vkShaderStageMask(stageFlags)
 	, _descriptorSlots(srcLayout.begin(), srcLayout.end())
 	, _fixedSamplers(fixedSamplers.begin(), fixedSamplers.end())
+	#if defined(_DEBUG)
+		, _name(name)
+	#endif
 	{
 		std::vector<VkDescriptorSetLayoutBinding> bindings;
 		bindings.reserve(srcLayout.size());
@@ -1110,6 +1115,19 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 		_layout = factory.CreateDescriptorSetLayout(MakeIteratorRange(bindings));
 		_dummyMask = dummyMask;
+
+		#if defined(VULKAN_ENABLE_DEBUG_EXTENSIONS)
+			if (factory.GetExtensionFunctions()._setObjectName && !name.empty()) {
+				const VkDebugUtilsObjectNameInfoEXT descriptorSetLayoutNameInfo {
+					VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					NULL,
+					VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
+					(uint64_t)_layout.get(),
+					name.c_str()
+				};
+				factory.GetExtensionFunctions()._setObjectName(factory.GetDevice().get(), &descriptorSetLayoutNameInfo);
+			}
+		#endif
 	}
 
 	CompiledDescriptorSetLayout::~CompiledDescriptorSetLayout()
@@ -1287,11 +1305,30 @@ namespace RenderCore { namespace Metal_Vulkan
 		ObjectFactory& factory,
 		GlobalPools& globalPools,
 		const std::shared_ptr<CompiledDescriptorSetLayout>& layout,
-		VkShaderStageFlags shaderStageFlags)
+		VkShaderStageFlags shaderStageFlags,
+		StringSection<> name)
 	: _layout(layout)
 	, _globalPools(&globalPools)
+	#if defined(_DEBUG)
+		, _name(name.AsString())
+	#endif
 	{
 		_underlying = globalPools._longTermDescriptorPool.Allocate(GetUnderlyingLayout());
+
+		#if defined(VULKAN_ENABLE_DEBUG_EXTENSIONS)
+			if (factory.GetExtensionFunctions()._setObjectName && !name.IsEmpty()) {
+				VLA(char, nameCopy, name.size()+1);
+				XlCopyString(nameCopy, name.size()+1, name);		// copy to get a null terminator
+				const VkDebugUtilsObjectNameInfoEXT descriptorSetNameInfo {
+					VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					NULL,
+					VK_OBJECT_TYPE_DESCRIPTOR_SET,
+					(uint64_t)_underlying.get(),
+					nameCopy
+				};
+				factory.GetExtensionFunctions()._setObjectName(factory.GetDevice().get(), &descriptorSetNameInfo);
+			}
+		#endif
 	}
 
 	CompiledDescriptorSet::~CompiledDescriptorSet()

@@ -200,8 +200,8 @@ namespace ToolsRig
 		auto ibData = ReadFromFile(largeBlocksFile, geo._ib._size, geo._ib._offset + largeBlocksOffset);
 		RenderCore::Techniques::ManualDrawableGeoConstructor geoConstructor(_drawablesPool, _bufferUploads);
 		geoConstructor.BeginGeo();
-		geoConstructor.SetStreamData(RenderCore::Techniques::ManualDrawableGeoConstructor::Vertex0, std::move(vbData), "[vb]" + fn.AsString());
-		geoConstructor.SetStreamData(RenderCore::Techniques::ManualDrawableGeoConstructor::IB, std::move(ibData), "[ib]" + fn.AsString());
+		geoConstructor.SetStreamData(RenderCore::Techniques::ManualDrawableGeoConstructor::Vertex0, std::move(vbData), "[vb] " + fn.AsString());
+		geoConstructor.SetStreamData(RenderCore::Techniques::ManualDrawableGeoConstructor::IB, std::move(ibData), "[ib] " + fn.AsString());
 		geoConstructor.SetIndexFormat(geo._ib._format);
 		auto geoFulfillment = geoConstructor.ImmediateFulfill();
 		assert(geoFulfillment.GetInstantiatedGeos().size() == 1);
@@ -215,7 +215,7 @@ namespace ToolsRig
 		for (const auto&i:geo._vb._ia._elements)
 			inputElements.push_back(InputElementDesc(i._semanticName, i._semanticIndex, i._nativeFormat, 0, i._alignedByteOffset));
 
-		_descriptorSetAccelerator = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, nullptr, {}, {});
+		_descriptorSetAccelerator = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, nullptr, {}, {}, "simple-model");
 
 		// The topology must be the same for all draw calls
 		assert(!_drawCalls.empty());
@@ -313,7 +313,7 @@ namespace ToolsRig
 				res._justPointsPipelineAccelerator = pipelineAcceleratorPool->CreatePipelineAccelerator(
 					nullptr, {}, GlobalInputLayouts::P, Topology::TriangleList, RenderCore::Assets::RenderStateSet{});
 
-				res._descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, nullptr, {}, {});
+				res._descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, nullptr, {}, {}, "simple-model");
 				return res;
 			});
     }

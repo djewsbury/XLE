@@ -593,19 +593,23 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	Resource::Resource(
-		ObjectFactory& factory, const Desc& desc,
+		ObjectFactory& factory, const Desc& desc, StringSection<> name,
 		const SubResourceInitData& initData)
-	: Resource(factory, desc, AsResInitializer(initData))
+	: Resource(factory, desc, name, AsResInitializer(initData))
 	{}
 
-    Resource::Resource(VkImage image, const Desc& desc)
+    Resource::Resource(VkImage image, const Desc& desc, StringSection<> name)
     : _desc(desc)
 	, _guid(s_nextResourceGUID++)
+	#if defined(_DEBUG)
+		, _name(name.AsString())
+	#endif
     {
         // do not destroy the image, even on the last release --
         //      this is used with the presentation chain images, which are only
         //      released by the vulkan presentation chain itself
         _underlyingImage = VulkanSharedPtr<VkImage>(image, [](const VkImage) {});
+		AssignObjectName(GetObjectFactory(), image, nullptr, name);
 
 		_steadyStateImageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 		_pendingInit = true;
@@ -641,16 +645,17 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::shared_ptr<Resource> CreateResource(
 			ObjectFactory& factory,
 			const ResourceDesc& desc,
+			StringSection<> name,
 			const ResourceInitializer& initData)
 		{
 			const bool useAllocateShared = true;
 			if (constant_expression<useAllocateShared>::result()) {
 				auto res = std::allocate_shared<Metal_Vulkan::Resource>(
 					Internal::ResourceAllocator(),
-					std::ref(factory), std::ref(desc), std::ref(initData));
+					std::ref(factory), std::ref(desc), name, std::ref(initData));
 				return res;
 			} else {
-				return std::make_unique<Metal_Vulkan::Resource>(factory, desc, initData);
+				return std::make_unique<Metal_Vulkan::Resource>(factory, desc, name, initData);
 			}
 		}
 	}

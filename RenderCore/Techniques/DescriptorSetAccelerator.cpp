@@ -41,6 +41,7 @@ namespace RenderCore { namespace Techniques
 			std::vector<std::shared_ptr<ISampler>> _samplers;
 			std::vector<BufferUploads::TransactionMarker> _cbUploadMarkers;
 			size_t _allReadyBefore = 0;
+			std::string _name;
 
 			struct Slot
 			{
@@ -136,7 +137,8 @@ namespace RenderCore { namespace Techniques
 		ResourceConstructionContext* context,
 		const Assets::PredefinedDescriptorSetLayout& layout,
 		IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
-		const DeformerToDescriptorSetBinding* deformBinding)
+		const DeformerToDescriptorSetBinding* deformBinding,
+		std::string&& name)
 	{
 		// todo -- this might be better if we could construct multiple descriptor sets all at once. Ie, one compound load for an entire model,
 		//		rather than a bunch of individual operations
@@ -292,6 +294,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		_working->_descriptorSets.emplace_back(std::move(ds));
+		_working->_name = std::move(name);
 	}
 
 	void ConstructDescriptorSetHelper::CompleteToPromise(
@@ -375,7 +378,7 @@ namespace RenderCore { namespace Techniques
 					initializer._bindItems._samplers = MakeIteratorRange(samplers);
 
 					ActualizedDescriptorSet actualized;
-					actualized._descriptorSet = device->CreateDescriptorSet(pipelineType, ds._signature);
+					actualized._descriptorSet = device->CreateDescriptorSet(pipelineType, ds._signature, working->_name);
 					actualized._descriptorSet->Write(initializer);
 					actualized._depVal = std::move(depVal);
 					actualized._bindingInfo = std::move(ds._bindingInfo);
@@ -395,7 +398,8 @@ namespace RenderCore { namespace Techniques
 	std::shared_ptr<IDescriptorSet> ConstructDescriptorSetHelper::ConstructImmediately(
 		const Assets::PredefinedDescriptorSetLayout& layout,
 		const UniformsStreamInterface& usi,
-		const UniformsStream& us)
+		const UniformsStream& us,
+		StringSection<> name)
 	{
 		assert(usi.GetImmediateDataBindings().empty());		// imm data bindings not supported here
 		VLA_UNSAFE_FORCE(DescriptorSetInitializer::BindTypeAndIdx, bindTypesAndIdx, layout._slots.size());
@@ -432,7 +436,7 @@ namespace RenderCore { namespace Techniques
 		initializer._bindItems._resourceViews = us._resourceViews;
 		initializer._bindItems._samplers = us._samplers;
 
-		auto result = _device->CreateDescriptorSet(_pipelineType, sig);
+		auto result = _device->CreateDescriptorSet(_pipelineType, sig, name);
 		result->Write(initializer);
 		return result;
 	}

@@ -247,7 +247,7 @@ namespace UnitTests
 		}
 
 		auto pipelineLayoutInitializer = CustomPipelineLayoutInitializer();
-		auto pipelineLayout = testHelper->_device->CreatePipelineLayout(pipelineLayoutInitializer);
+		auto pipelineLayout = testHelper->_device->CreatePipelineLayout(pipelineLayoutInitializer, "unittest");
 
 		TestBufferType set0binding0 { Float3(1, 1, 1), 5 };
 		TestBufferType set1binding4 { Float3(7, 7, 7), 9 };

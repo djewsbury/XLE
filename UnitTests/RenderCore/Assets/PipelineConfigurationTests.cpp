@@ -134,7 +134,7 @@ namespace UnitTests
 		// Attempt to build an actual ICompiledPipelineLayout from the configuration we loaded
 		auto pipelineLayoutInitializer = RenderCore::Assets::PredefinedPipelineLayout{*layoutFile, "GraphicsMain"}.MakePipelineLayoutInitializer(RenderCore::ShaderLanguage::HLSL);
 		auto testHelper = MakeTestHelper();
-		auto compiledLayout = testHelper->_device->CreatePipelineLayout(pipelineLayoutInitializer);
+		auto compiledLayout = testHelper->_device->CreatePipelineLayout(pipelineLayoutInitializer, "ut-data/graphics-main.pipeline:GraphicsMain");
 		REQUIRE(compiledLayout != nullptr);
 
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt);

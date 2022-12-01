@@ -426,7 +426,7 @@ namespace UnitTests
 		init._bindItems._resourceViews = MakeIteratorRange(resViews, resViews+_pimpl->_resources.size());
 		init._bindItems._samplers = MakeIteratorRange(samplers, samplers+_pimpl->_samplers.size());
 
-		auto result = device.CreateDescriptorSet(pipelineType, signature);
+		auto result = device.CreateDescriptorSet(pipelineType, signature, "unittest");
 		result->Write(init);
 		return result;
 	}
@@ -568,7 +568,7 @@ namespace UnitTests
 		desc.AppendDescriptorSet("Sequencer", sequencerSet, RenderCore::PipelineType::Graphics);
 		desc.AppendDescriptorSet("Material", materialSet, RenderCore::PipelineType::Graphics);
 		desc.AppendPushConstants("LocalTransform", 64, ShaderStage::Vertex);
-		return device.CreatePipelineLayout(desc);
+		return device.CreatePipelineLayout(desc, "unittest");
 	}
 
 	std::shared_ptr<RenderCore::LegacyRegisterBindingDesc> CreateDefaultLegacyRegisterBindingDesc()

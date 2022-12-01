@@ -172,10 +172,10 @@ namespace RenderCore
         IResourcePtr                CreateResource(const ResourceDesc& desc, StringSection<> name, const SubResourceInitData& initData);
         virtual FormatCapability    QueryFormatCapability(Format format, BindFlag::BitField bindingType) = 0;
 
-        virtual std::shared_ptr<IDescriptorSet> CreateDescriptorSet(PipelineType pipelineType, const DescriptorSetSignature& signature) = 0;
+        virtual std::shared_ptr<IDescriptorSet> CreateDescriptorSet(PipelineType pipelineType, const DescriptorSetSignature& signature, StringSection<> name) = 0;
         virtual std::shared_ptr<ISampler>       CreateSampler(const SamplerDesc& desc) = 0;
 
-        virtual std::shared_ptr<ICompiledPipelineLayout> CreatePipelineLayout(const PipelineLayoutInitializer& desc) = 0;
+        virtual std::shared_ptr<ICompiledPipelineLayout> CreatePipelineLayout(const PipelineLayoutInitializer& desc, StringSection<> name) = 0;
 
         // Block until the GPU has caught up to (at least) the end of the previous frame
         virtual void                Stall() = 0;

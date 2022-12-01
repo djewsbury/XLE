@@ -80,7 +80,7 @@ namespace UnitTests
 		_techniqueContext->_systemAttachmentFormats = Techniques::CalculateDefaultSystemFormats(*_metalTestHelper->_device);
 
 		_techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
-		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *MakeSequencerDescriptorSetLayout()->GetLayout(), *_metalTestHelper->_device);
+		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *MakeSequencerDescriptorSetLayout()->GetLayout(), "unittest", *_metalTestHelper->_device);
 		_techniqueContext->_uniformDelegateManager->AddShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*_metalTestHelper->_device));
 	}
 

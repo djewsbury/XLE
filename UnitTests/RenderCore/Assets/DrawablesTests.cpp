@@ -196,7 +196,8 @@ namespace UnitTests
 				constantBindings, resourceBindings, samplerBindings);
 			auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 				nullptr, patches,
-				matMachine->GetMaterialMachine(), matMachine);
+				matMachine->GetMaterialMachine(), matMachine,
+				"unittest");
 
 			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
@@ -445,7 +446,7 @@ namespace UnitTests
 		
 		{
 			auto helper0 = Techniques::CreateUniformDelegateManager();
-			helper0->AddSemiConstantDescriptorSet(Hash64("Sequencer"), fakeSequencerDescSet, *testHelper->_device);
+			helper0->AddSemiConstantDescriptorSet(Hash64("Sequencer"), fakeSequencerDescSet, "unittest", *testHelper->_device);
 			helper0->AddShaderResourceDelegate(del0);
 			helper0->AddShaderResourceDelegate(del1);
 			helper0->AddUniformDelegate(Hash64("slot-doesnt-exist-0"), udel0);
@@ -473,7 +474,7 @@ namespace UnitTests
 
 		{
 			auto helper1 = Techniques::CreateUniformDelegateManager();
-			helper1->AddSemiConstantDescriptorSet(Hash64("Sequencer"), fakeSequencerDescSet, *testHelper->_device);
+			helper1->AddSemiConstantDescriptorSet(Hash64("Sequencer"), fakeSequencerDescSet, "unittest", *testHelper->_device);
 			helper1->AddShaderResourceDelegate(del0);
 			helper1->AddShaderResourceDelegate(del1);
 			helper1->AddUniformDelegate(Hash64("slot-doesnt-exist-0"), udel0);

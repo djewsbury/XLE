@@ -87,7 +87,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			ObjectFactory& factory,
 			IteratorRange<const DescriptorSetBinding*> descriptorSets,
 			IteratorRange<const PushConstantsBinding*> pushConstants,
-			const PipelineLayoutInitializer& desc);
+			const PipelineLayoutInitializer& desc,
+			StringSection<> name);
 
 		CompiledPipelineLayout(const CompiledPipelineLayout&) = delete;
 		CompiledPipelineLayout& operator=(const CompiledPipelineLayout&) = delete;
@@ -110,6 +111,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		#if defined(_DEBUG)
 			std::vector<std::pair<unsigned, VkShaderStageFlags>> _pushConstantsRangeValidation;
+			std::string _name;
 		#endif
 
 		#if defined(VULKAN_VERBOSE_DEBUG)
@@ -206,7 +208,6 @@ namespace RenderCore { namespace Metal_Vulkan
 			
 			#if defined(VULKAN_VERBOSE_DEBUG)
 				DescriptorSetDebugInfo _blankBindingsDescription;
-				std::string _name;
 			#endif
 		};
 		

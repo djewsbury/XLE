@@ -90,7 +90,8 @@ namespace RenderCore { namespace Techniques
 		SubFrameDescriptorSetHeap(
 			IDevice& device,
 			const DescriptorSetSignature& signature,
-			PipelineType pipelineType);
+			PipelineType pipelineType,
+			std::string&& name);
 		SubFrameDescriptorSetHeap();
 		~SubFrameDescriptorSetHeap();
 		SubFrameDescriptorSetHeap(SubFrameDescriptorSetHeap&&);
@@ -104,6 +105,7 @@ namespace RenderCore { namespace Techniques
 		DescriptorSetSignature _signature;
 		PipelineType _pipelineType;
 		IDevice* _device = nullptr;
+		std::string _name;
 	};
 
 	// Writes new values to a descriptor set, but uses cmd list bound storage for all "immediate" initializers

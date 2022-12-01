@@ -636,7 +636,8 @@ namespace UnitTests
 					constantBindings, resourceBindings, samplerBindings);
 				auto descriptorSetAccelerator = pipelinePool->CreateDescriptorSetAccelerator(
 					nullptr, patchCollection,
-					matMachine->GetMaterialMachine(), matMachine);
+					matMachine->GetMaterialMachine(), matMachine,
+					"unittest");
 
 				DrawViaPipelineAccelerator(
 					threadContext, fbHelper, globalTransform, pipelinePool,

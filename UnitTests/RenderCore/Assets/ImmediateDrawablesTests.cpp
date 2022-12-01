@@ -107,7 +107,7 @@ namespace UnitTests
 		techniqueContext->_commonResources = techniqueServices->GetCommonResources();
 
 		techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
-		techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *sequencerDescriptorSetLayout, *testHelper->_device);
+		techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *sequencerDescriptorSetLayout, "unittest", *testHelper->_device);
 		techniqueContext->_uniformDelegateManager->AddShaderResourceDelegate(std::make_shared<RenderCore::Techniques::SystemUniformsDelegate>(*testHelper->_device));
 
 		auto threadContext = testHelper->_device->GetImmediateContext();

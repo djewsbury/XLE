@@ -565,6 +565,8 @@ namespace RenderCore { namespace Techniques
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	static const std::string s_manualDrawables{"manual-drawables"};
+
 	std::pair<std::shared_ptr<Techniques::PipelineAccelerator>, std::shared_ptr<Techniques::DescriptorSetAccelerator>> CreateAccelerators(
 		Techniques::IPipelineAcceleratorPool& pool,
 		const RenderCore::Assets::RawMaterial& material,
@@ -582,7 +584,7 @@ namespace RenderCore { namespace Techniques
 
 		auto materialMachine = std::make_shared<Techniques::ManualMaterialMachine>(material._uniforms, material._resources, MakeIteratorRange(samplers, &samplers[material._samplers.size()]));
 		auto pipelineAccelerator = pool.CreatePipelineAccelerator(patchCollectionPtr, material._selectors, inputAssembly, topology, material._stateSet);
-		auto descriptorSetAccelerator = pool.CreateDescriptorSetAccelerator(nullptr, patchCollectionPtr, materialMachine->GetMaterialMachine(), materialMachine);
+		auto descriptorSetAccelerator = pool.CreateDescriptorSetAccelerator(nullptr, patchCollectionPtr, materialMachine->GetMaterialMachine(), materialMachine, std::string{s_manualDrawables});
 		return {std::move(pipelineAccelerator), std::move(descriptorSetAccelerator)};
 	}
 

@@ -152,7 +152,7 @@ namespace RenderCore { namespace Techniques
 				const std::shared_ptr<Assets::ModelScaffold>& scaffold,
 				const std::shared_ptr<DeformAccelerator>& deformAccelerator,
 				const DeformerToRendererBinding::GeoBinding* deformerBinding,
-				const std::string modelScaffoldName)
+				std::string modelScaffoldName)
 			{
 				const Assets::RawGeometryDesc* rawGeometry = nullptr;
 				const Assets::SkinningDataDesc* skinningData = nullptr;
@@ -297,14 +297,14 @@ namespace RenderCore { namespace Techniques
 							MakeIteratorRange(localLoadRequests),
 							offset, _registeredScaffolds[start->_scaffoldIdx],
 							BindFlag::VertexBuffer,
-							(StringMeld<128>() << "[vb]" << _registeredScaffoldNames[start->_scaffoldIdx]).AsStringSection());
+							(StringMeld<128>() << "[vb] " << _registeredScaffoldNames[start->_scaffoldIdx]).AsStringSection());
 					} else {
 						transMarker = LoadStaticResourceFullyAsync(
 							constructionContext,
 							MakeIteratorRange(localLoadRequests),
 							offset, _registeredScaffolds[start->_scaffoldIdx],
 							BindFlag::IndexBuffer,
-							(StringMeld<128>() << "[ib]" << _registeredScaffoldNames[start->_scaffoldIdx]).AsStringSection());
+							(StringMeld<128>() << "[ib] " << _registeredScaffoldNames[start->_scaffoldIdx]).AsStringSection());
 					}
 					pendingTransactions->_markers.emplace_back(std::move(transMarker));
 				}
@@ -422,7 +422,7 @@ namespace RenderCore { namespace Techniques
 			const WorkingMaterial* AddMaterial(
 				IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 				const std::shared_ptr<Assets::MaterialScaffold>& materialScaffold,
-				unsigned elementIdx, uint64_t materialGuid,
+				unsigned elementIdx, uint64_t materialGuid, std::string&& materialName,
 				Techniques::IDeformAcceleratorPool* deformAcceleratorPool,
 				const IDeformUniformsAttachment* parametersDeformInfrastructure)
 			{
@@ -480,6 +480,7 @@ namespace RenderCore { namespace Techniques
 						i->_patchCollection,
 						materialMachine,
 						materialScaffold,
+						std::move(materialName),
 						deformBinding);
 
 					i->_descriptorSetAcceleratorIdx = AddDescriptorSetAccelerator(std::move(descSet));
@@ -701,7 +702,7 @@ namespace RenderCore { namespace Techniques
 									auto* workingMaterial = _pendingPipelines.AddMaterial(
 										materialScaffold->GetMaterialMachine(matAssignment),
 										materialScaffold,
-										elementIdx, matAssignment,
+										elementIdx, matAssignment, materialScaffold->DehashMaterialName(matAssignment).AsString(),
 										deformAcceleratorPool.get(), deformParametersAttachment);
 									auto compiledPipeline = _pendingPipelines.MakePipeline(
 										*workingMaterial, 

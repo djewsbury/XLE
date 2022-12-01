@@ -405,7 +405,7 @@ namespace UnitTests
 			auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(constantBindings, resourceBindings);
 			auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 				nullptr, patches,
-				matMachine->GetMaterialMachine(), matMachine);
+				matMachine->GetMaterialMachine(), matMachine, "unittest");
 			auto descSet = StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator);
 			auto* bindingInfo = &descSet->_bindingInfo;
 
@@ -479,7 +479,7 @@ namespace UnitTests
 			auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(constantBindings, resourceBindings);
 			auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 				nullptr, patches,
-				matMachine->GetMaterialMachine(),  matMachine);
+				matMachine->GetMaterialMachine(), matMachine, "unittest");
 
 			// Put together the pieces we need to create a pipeline
 			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
@@ -589,7 +589,7 @@ namespace UnitTests
 			{
 				// Nothing is bound -- we can still render, but in this case we'll just get
 				// black output
-				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, patches, {}, {});
+				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, patches, {}, {}, "unittest");
 				auto descSet = StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator);
 				REQUIRE(descSet);
 				auto* bindingInfo = &descSet->_bindingInfo;
@@ -617,7 +617,7 @@ namespace UnitTests
 				auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(ParameterBox{}, resourceBindings);
 				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 					nullptr, patches,
-					matMachine->GetMaterialMachine(), matMachine);
+					matMachine->GetMaterialMachine(), matMachine, "unittest");
 				REQUIRE_THROWS(StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator));
 			}
 
@@ -629,7 +629,7 @@ namespace UnitTests
 				auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(ParameterBox{}, resourceBindings);
 				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 					nullptr, patches,
-					matMachine->GetMaterialMachine(), matMachine);
+					matMachine->GetMaterialMachine(), matMachine, "unittest");
 				REQUIRE_THROWS(StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator));
 			}
 
@@ -643,7 +643,7 @@ namespace UnitTests
 				auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(constantBindings, ParameterBox{});
 				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 					nullptr, patches,
-					matMachine->GetMaterialMachine(), matMachine);
+					matMachine->GetMaterialMachine(), matMachine, "unittest");
 				auto descSet = StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator);
 				REQUIRE(descSet);
 				auto* bindingInfo = &descSet->_bindingInfo;
@@ -654,7 +654,7 @@ namespace UnitTests
 				auto matMachine2 = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(constantBindings, ParameterBox{});
 				auto secondDescriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 					nullptr, patches,
-					matMachine2->GetMaterialMachine(), matMachine2);
+					matMachine2->GetMaterialMachine(), matMachine2, "unittest");
 				REQUIRE(descriptorSetAccelerator == secondDescriptorSetAccelerator);
 			}
 			
@@ -669,7 +669,7 @@ namespace UnitTests
 				auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(constantBindings, resourceBindings);
 				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 					nullptr, patches,
-					matMachine->GetMaterialMachine(), matMachine);
+					matMachine->GetMaterialMachine(), matMachine, "unittest");
 				REQUIRE_THROWS(StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator));
 
 				// do the same, but messing up sampler configurations
@@ -683,7 +683,7 @@ namespace UnitTests
 				auto matMachine2 = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(ParameterBox{}, resourceBindings, samplerBindings);
 				descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 					nullptr, patches,
-					matMachine2->GetMaterialMachine(), matMachine2);
+					matMachine2->GetMaterialMachine(), matMachine2, "unittest");
 				REQUIRE_THROWS(StallForDescriptorSet(*pipelineAcceleratorPool, *techniqueTestHelper._bufferUploads, *descriptorSetAccelerator));
 			}
 		}

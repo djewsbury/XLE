@@ -33,7 +33,7 @@ namespace RenderCore { namespace LightingEngine
 
 		const std::string pipelineLayoutName = "LightingOperator";
 		auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout(*_lightingOperatorsPipelineLayoutFile, pipelineLayoutName).MakePipelineLayoutInitializer(shaderLanguage, samplerPool);
-		_lightingOperatorLayout = device.CreatePipelineLayout(pipelineInit);
+		_lightingOperatorLayout = device.CreatePipelineLayout(pipelineInit, "LightingOperator");
 
 		auto i = _lightingOperatorsPipelineLayoutFile->_descriptorSets.find("DMShadow");
 		if (i == _lightingOperatorsPipelineLayoutFile->_descriptorSets.end())

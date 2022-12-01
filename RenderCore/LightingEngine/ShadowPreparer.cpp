@@ -378,7 +378,8 @@ namespace RenderCore { namespace LightingEngine
 		_descSetHeap = Techniques::SubFrameDescriptorSetHeap {
 			*_pipelineAccelerators->GetDevice(),
 			descSetLayout->MakeDescriptorSetSignature(&commonResources._samplerPool),
-			pipelineType };
+			pipelineType,
+			"DMShadowPreparer" };
 		_descSetSlotBindings.clear();
 		_descSetSlotBindings.reserve(descSetLayout->_slots.size());
 		for (unsigned c=0; c<descSetLayout->_slots.size(); ++c) {

@@ -150,10 +150,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		bool IsFixedSampler(unsigned slotIdx);
 
 		CompiledDescriptorSetLayout(
-			const ObjectFactory& factory, 
+			ObjectFactory& factory, 
 			IteratorRange<const DescriptorSlot*> srcLayout,
 			IteratorRange<const  std::shared_ptr<ISampler>*> fixedSamplers,
-			VkShaderStageFlags stageFlags);
+			VkShaderStageFlags stageFlags,
+			const std::string& name);
 		~CompiledDescriptorSetLayout();
 		CompiledDescriptorSetLayout(CompiledDescriptorSetLayout&&) never_throws = default;
 		CompiledDescriptorSetLayout& operator=(CompiledDescriptorSetLayout&&) never_throws = default;
@@ -163,6 +164,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::vector<std::shared_ptr<ISampler>> _fixedSamplers;
 		VkShaderStageFlags _vkShaderStageMask;
 		uint64_t _dummyMask = 0;
+
+		#if defined(_DEBUG)
+			std::string _name;
+		#endif
 	};
 
 	class CompiledDescriptorSet : public IDescriptorSet
@@ -186,7 +191,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			ObjectFactory& factory,
 			GlobalPools& globalPools,
 			const std::shared_ptr<CompiledDescriptorSetLayout>& layout,
-			VkShaderStageFlags stageFlags);
+			VkShaderStageFlags stageFlags,
+			StringSection<> name);
 		~CompiledDescriptorSet();
 	private:
 		VulkanUniquePtr<VkDescriptorSet> _underlying;
@@ -210,6 +216,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			ObjectFactory& factory,
 			IteratorRange<const DescriptorSetInitializer::BindTypeAndIdx*> binds,
 			const UniformsStream& uniforms);
+
+		#if defined(_DEBUG)
+			std::string _name;
+		#endif
 	};
 
 }}

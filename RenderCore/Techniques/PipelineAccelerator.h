@@ -68,6 +68,7 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& shaderPatches,
 			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 			std::shared_ptr<void> memoryHolder,								// retained while we need access to materialMachine
+			std::string&& name,
 			const std::shared_ptr<DeformerToDescriptorSetBinding>& deformBinding = {}) = 0;
 
 		virtual std::shared_ptr<SequencerConfig> CreateSequencerConfig(

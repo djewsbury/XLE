@@ -45,7 +45,7 @@ namespace UnitTests
 		_techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		_techniqueContext->_commonResources = _commonResources;
 		_techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
-		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *_sequencerDescSetLayout->GetLayout(), *testHelper._device);
+		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *_sequencerDescSetLayout->GetLayout(), "unittest", *testHelper._device);
 		_techniqueContext->_pipelineAccelerators = _pipelineAccelerators;
 		_techniqueContext->_drawablesPool = _drawablesPool;
 		_techniqueContext->_systemAttachmentFormats = Techniques::CalculateDefaultSystemFormats(*testHelper._device);

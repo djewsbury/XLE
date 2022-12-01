@@ -6,6 +6,7 @@
 #include "ObjectFactory.h"
 #include "DeviceContext.h"
 #include "FrameBuffer.h"		// for CreateVulkanRenderPass
+#include "ExtensionFunctions.h"
 #include "../../Format.h"
 #include "../../OSServices/Log.h"
 #include "../../Utility/BitUtils.h"
@@ -163,24 +164,30 @@ namespace RenderCore { namespace Metal_Vulkan
         desc_alloc_info.descriptorSetCount = (uint32_t)std::min(dst.size(), layouts.size());
         desc_alloc_info.pSetLayouts = layouts.begin();
 
-        VkDescriptorSet rawDescriptorSets[4] = { nullptr, nullptr, nullptr, nullptr };
+        VLA(VkDescriptorSet, rawDescriptorSets, desc_alloc_info.descriptorSetCount);
+        for (unsigned c=0; c<desc_alloc_info.descriptorSetCount; ++c)
+            rawDescriptorSets[c] = 0;
 
         VkResult res;
-        if (desc_alloc_info.descriptorSetCount <= dimof(rawDescriptorSets)) {
-            res = vkAllocateDescriptorSets(_device.get(), &desc_alloc_info, rawDescriptorSets);
-            for (unsigned c=0; c<desc_alloc_info.descriptorSetCount; ++c)
-                dst[c] = VulkanUniquePtr<VkDescriptorSet>(
-                    rawDescriptorSets[c],
-                    [this](VkDescriptorSet set) { this->QueueDestroy(set); });
-        } else {
-            std::vector<VkDescriptorSet> rawDescriptorsOverflow;
-            rawDescriptorsOverflow.resize(desc_alloc_info.descriptorSetCount, nullptr);
-            res = vkAllocateDescriptorSets(_device.get(), &desc_alloc_info, AsPointer(rawDescriptorsOverflow.begin()));
-            for (unsigned c=0; c<desc_alloc_info.descriptorSetCount; ++c)
-                dst[c] = VulkanUniquePtr<VkDescriptorSet>(
-                    rawDescriptorsOverflow[c],
-                    [this](VkDescriptorSet set) { this->QueueDestroy(set); });
-        }
+        res = vkAllocateDescriptorSets(_device.get(), &desc_alloc_info, rawDescriptorSets);
+        for (unsigned c=0; c<desc_alloc_info.descriptorSetCount; ++c)
+            dst[c] = VulkanUniquePtr<VkDescriptorSet>(
+                rawDescriptorSets[c],
+                [this](VkDescriptorSet set) { this->QueueDestroy(set); });
+        
+        #if defined(VULKAN_ENABLE_DEBUG_EXTENSIONS)
+            auto& extFn = GetObjectFactory().GetExtensionFunctions();
+			if (extFn._setObjectName && !_poolName.empty()) {
+                for (unsigned c=0; c<desc_alloc_info.descriptorSetCount; ++c) {
+                    VkDebugUtilsObjectNameInfoEXT nameInfo {
+                        VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT, nullptr,
+                        VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)dst[c].get(),
+                        _poolName.c_str()
+                    };
+				    extFn._setObjectName(_device.get(), &nameInfo);
+                }
+			}
+		#endif
 
         if (res != VK_SUCCESS)
 			Throw(VulkanAPIFailure(res, "Failure while allocating descriptor set")); 
@@ -229,9 +236,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		_pendingDestroys.push_back(set);
 	}
 
-    DescriptorPool::DescriptorPool(ObjectFactory& factory, const std::shared_ptr<IAsyncTracker>& tracker)
+    DescriptorPool::DescriptorPool(ObjectFactory& factory, const std::shared_ptr<IAsyncTracker>& tracker, StringSection<> poolName)
     : _device(factory.GetDevice())
 	, _gpuTracker(tracker)
+    , _poolName(poolName.AsString())
     {
         VkDescriptorPoolSize type_count[] = 
         {
@@ -272,6 +280,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	, _gpuTracker(std::move(moveFrom._gpuTracker))
 	, _markedDestroys(std::move(moveFrom._markedDestroys))
     , _pendingDestroys(moveFrom._pendingDestroys)
+    , _poolName(std::move(moveFrom._poolName))
     {
     }
 
@@ -288,6 +297,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		_gpuTracker = std::move(moveFrom._gpuTracker);
 		_markedDestroys = std::move(moveFrom._markedDestroys);
 		_pendingDestroys = std::move(moveFrom._pendingDestroys);
+        _poolName = std::move(moveFrom._poolName);
         return *this;
     }
 

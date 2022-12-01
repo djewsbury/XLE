@@ -142,12 +142,12 @@ namespace RenderCore { namespace Techniques
 			auto futurePipelineLayout = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
 			::Assets::WhenAll(std::move(futurePipelineLayout)).ThenConstructToPromise(
 				std::move(promise),
-				[pool, selectors, usi, plan=Hash64(pipelineLayoutAssetName), pipelineDesc, fbTarget](auto&& promise, const auto& predefinedPipelineLayout) {
+				[pool, selectors, usi, plname=pipelineLayoutAssetName.AsString(), pipelineDesc, fbTarget](auto&& promise, const auto& predefinedPipelineLayout) {
 					
 					auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
 					const ParameterBox* selectorList[] { &selectors };
 					VertexInputStates vInputStates { {}, {}, Topology::TriangleStrip };
-					pool->CreateGraphicsPipeline(pipelineFuture->AdoptPromise(), {predefinedPipelineLayout, plan}, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, fbTarget);
+					pool->CreateGraphicsPipeline(pipelineFuture->AdoptPromise(), {predefinedPipelineLayout, Hash64(plname), std::string{plname}}, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, fbTarget);
 
 					::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 						std::move(promise),
@@ -403,10 +403,10 @@ namespace RenderCore { namespace Techniques
 			auto futurePipelineLayout = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
 			::Assets::WhenAll(std::move(futurePipelineLayout)).ThenConstructToPromise(
 				std::move(promise),
-				[pool, selectors, plan=Hash64(pipelineLayoutAssetName), computeShader=computeShader.AsString(), usi](auto&& promise, auto pipelineLayout) mutable {
+				[pool, selectors, plname=pipelineLayoutAssetName.AsString(), computeShader=computeShader.AsString(), usi](auto&& promise, auto pipelineLayout) mutable {
 					const ParameterBox* selectorList[] { &selectors };
 					auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
-					pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), {pipelineLayout, plan}, computeShader, MakeIteratorRange(selectorList));
+					pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), {pipelineLayout, Hash64(plname), plname}, computeShader, MakeIteratorRange(selectorList));
 
 					::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 						std::move(promise),

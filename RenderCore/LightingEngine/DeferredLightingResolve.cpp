@@ -171,7 +171,7 @@ namespace RenderCore { namespace LightingEngine
 				inits._slotBindings = MakeIteratorRange(bindTypes);
 				inits._bindItems._resourceViews = MakeIteratorRange(srv);
 				DescSetAndCmdListId result;
-				result._descSet = device->CreateDescriptorSet(PipelineType::Graphics, descSetLayout);
+				result._descSet = device->CreateDescriptorSet(PipelineType::Graphics, descSetLayout, "deferred-light-resolve");
 				result._descSet->Write(inits);
 				result._completionCommandList = balancedNoise->GetCompletionCommandList();
 				result._signature = descSetLayout;
