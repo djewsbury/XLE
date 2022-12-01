@@ -1869,12 +1869,14 @@ namespace RenderCore { namespace ImplVulkan
 			instanceExtensions[instanceExtensionCount++] = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
 		#endif
 		#if defined(VULKAN_ENABLE_DEBUG_EXTENSIONS)
+			// install debug utils even if validations is off (since it's required for naming objects for RenderDoc, etc)
+			instanceExtensions[instanceExtensionCount++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+
 			if (_features._debugValidation) {
 				auto i = std::find_if(
 					availableLayers.begin(), availableLayers.end(),
 					[](VkLayerProperties layer) { return XlEqString(layer.layerName, "VK_LAYER_KHRONOS_validation"); });
 				if (i != availableLayers.end()) {
-					instanceExtensions[instanceExtensionCount++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
 					instanceLayers[instanceLayerCount++] = "VK_LAYER_KHRONOS_validation";
 				} else {
 					Log(Warning) << "Cannot enable debug validation because required Vulkan layer is not present. Ensure that the Vulkan SDK is installed" << std::endl;
