@@ -143,12 +143,17 @@ namespace RenderCore { namespace Metal_Vulkan
 	class CompiledDescriptorSetLayout
 	{
 	public:
-		VkDescriptorSetLayout GetUnderlying() { return _layout.get(); }
+		VkDescriptorSetLayout GetUnderlying() const { return _layout.get(); }
 		IteratorRange<const DescriptorSlot*> GetDescriptorSlots() const { return MakeIteratorRange(_descriptorSlots); }
 		VkShaderStageFlags GetVkShaderStageMask() const { return _vkShaderStageMask; }
 		uint64_t GetDummyMask() const { return _dummyMask; }
 		uint64_t GetHashCode() const { return _hashCode; }
 		bool IsFixedSampler(unsigned slotIdx);
+		const unsigned* GetDescriptorTypesCount() const { return _descriptorTypesCount; }
+
+		#if defined(_DEBUG)
+			const std::string& GetName() const { return _name; }
+		#endif
 
 		CompiledDescriptorSetLayout(
 			ObjectFactory& factory, 
@@ -167,6 +172,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkShaderStageFlags _vkShaderStageMask;
 		uint64_t _dummyMask = 0;
 		uint64_t _hashCode = 0;
+		unsigned _descriptorTypesCount[11];
 
 		#if defined(_DEBUG)
 			std::string _name;

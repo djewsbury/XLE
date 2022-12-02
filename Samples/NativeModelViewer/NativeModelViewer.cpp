@@ -15,6 +15,7 @@
 #include "../../PlatformRig/DebuggingDisplays/VulkanMemoryDisplay.h"
 #include "../../PlatformRig/DebuggingDisplays/BufferUploadDisplay.h"
 #include "../../PlatformRig/DebuggingDisplays/InvalidAssetDisplay.h"
+#include "../../PlatformRig/DebuggingDisplays/VulkanInternalPoolsDisplay.h"
 #include "../../PlatformRig/DebugScreenRegistry.h"
 #include "../../Assets/OperationContext.h"
 #include "../../ConsoleRig/ResourceBox.h"
@@ -101,6 +102,9 @@ namespace Sample
 		_displayRegistrations.emplace_back(
 			"LoadingContext",
 			std::make_shared<PlatformRig::Overlays::OperationContextDisplay>(loadingContext));
+
+		if (auto vulkanInternalPoolsDisplay = PlatformRig::Overlays::CreateVulkanInternalPoolsDisplay(globals._renderDevice))
+			_displayRegistrations.emplace_back("Vulkan Internal Pools", vulkanInternalPoolsDisplay);
 	}
 
 	auto NativeModelViewerOverlay::GetInputListener() -> std::shared_ptr<PlatformRig::IInputListener>

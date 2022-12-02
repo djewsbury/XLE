@@ -848,7 +848,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
-    void DrawTableHeaders(IOverlayContext& context, const Rect& rect, const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, ColorB bkColor, Interactables* interactables)
+    void DrawTableHeaders(IOverlayContext& context, const Rect& rect, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, ColorB bkColor, Interactables* interactables)
     {
         static const ColorB HeaderTextColor     ( 255, 255, 255, 255 );
         static const ColorB HeaderBkColor       (  96,  96,  96, 196 );
@@ -893,7 +893,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     Coord DrawTableEntry(       IOverlayContext& context,
                                 const Rect& rect, 
-                                const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, 
+                                IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, 
                                 const std::map<std::string, TableElement>& entry)
     {
         static const ColorB TextColor   ( 255, 255, 255, 255 );

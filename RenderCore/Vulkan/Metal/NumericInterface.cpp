@@ -260,9 +260,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		for(unsigned dIdx=0; dIdx<_pimpl->_descSet.size(); ++dIdx) {
 			auto&d = _pimpl->_descSet[dIdx];
 			if (d._builder.HasChanges()) {
-				VulkanUniquePtr<VkDescriptorSet> newSets[1];
-				VkDescriptorSetLayout layouts[1] = { d._layout->GetUnderlying() };
-				_pimpl->_descriptorPool->Allocate(MakeIteratorRange(newSets), MakeIteratorRange(layouts));
+				auto newSet = _pimpl->_descriptorPool->Allocate(*d._layout);
 
 				#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
 					if (!d._builder._pendingResourceVisibilityChanges.empty())
@@ -271,13 +269,13 @@ namespace RenderCore { namespace Metal_Vulkan
 
 				auto written = d._builder.FlushChanges(
 					_pimpl->_descriptorPool->GetDevice(),
-					newSets[0].get(),
+					newSet.get(),
 					d._activeDescSet.get(),
 					d._slotsFilled
 					VULKAN_VERBOSE_DEBUG_ONLY(, d._description));
 
 				d._slotsFilled |= written;
-				d._activeDescSet = std::move(newSets[0]);
+				d._activeDescSet = std::move(newSet);
 
 				encoder.BindDescriptorSet(
 					d._bindSlot, d._activeDescSet.get(), {}

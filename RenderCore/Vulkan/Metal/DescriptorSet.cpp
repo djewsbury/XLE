@@ -1130,6 +1130,23 @@ namespace RenderCore { namespace Metal_Vulkan
 				factory.GetExtensionFunctions()._setObjectName(factory.GetDevice().get(), &descriptorSetLayoutNameInfo);
 			}
 		#endif
+
+		for (auto& i:_descriptorTypesCount) i=0;
+		for (const auto& t:srcLayout) {
+			switch (t._type) {
+			case DescriptorType::SampledTexture: ++_descriptorTypesCount[VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE]; break;
+			case DescriptorType::UniformBuffer: ++_descriptorTypesCount[VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER]; break;
+			case DescriptorType::UnorderedAccessTexture: ++_descriptorTypesCount[VK_DESCRIPTOR_TYPE_STORAGE_IMAGE]; break;
+			case DescriptorType::UnorderedAccessBuffer: ++_descriptorTypesCount[VK_DESCRIPTOR_TYPE_STORAGE_BUFFER]; break;
+			case DescriptorType::Sampler: ++_descriptorTypesCount[VK_DESCRIPTOR_TYPE_SAMPLER]; break;
+			case DescriptorType::InputAttachment: ++_descriptorTypesCount[VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT]; break;
+			case DescriptorType::UniformTexelBuffer: ++_descriptorTypesCount[VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER]; break;
+			case DescriptorType::UnorderedAccessTexelBuffer: ++_descriptorTypesCount[VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER]; break;
+			case DescriptorType::UniformBufferDynamicOffset: ++_descriptorTypesCount[VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC]; break;
+			case DescriptorType::UnorderedAccessBufferDynamicOffset: ++_descriptorTypesCount[VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC]; break;
+			default: break;
+			}
+		}
 	}
 
 	CompiledDescriptorSetLayout::~CompiledDescriptorSetLayout()
@@ -1167,7 +1184,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				VLA(ProgressiveDescriptorSetBuilder::ResourceDims, resourceDims, signature._slots.size());
 				for (unsigned c=0; c<signature._slots.size(); ++c) resourceDims[c] = ProgressiveDescriptorSetBuilder::ResourceDims::Unknown;
 				builder.BindDummyDescriptors(*_globalPools, ds->_layout->GetDummyMask(), MakeIteratorRange(resourceDims, &resourceDims[signature._slots.size()]));
-				ds->_blankBindings = _globalPools->_longTermDescriptorPool.Allocate(ds->_layout->GetUnderlying());
+				ds->_blankBindings = _globalPools->_longTermDescriptorPool.Allocate(*ds->_layout);
 				VULKAN_VERBOSE_DEBUG_ONLY(ds->_blankBindingsDescription._descriptorSetInfo = s_dummyDescriptorString);
 				builder.FlushChanges(
 					_objectFactory->GetDevice().get(),
@@ -1366,7 +1383,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		, _name(name.AsString())
 	#endif
 	{
-		_underlying = globalPools._longTermDescriptorPool.Allocate(GetUnderlyingLayout());
+		_underlying = globalPools._longTermDescriptorPool.Allocate(*_layout);
 
 		#if defined(VULKAN_ENABLE_DEBUG_EXTENSIONS)
 			if (factory.GetExtensionFunctions()._setObjectName && !name.IsEmpty()) {

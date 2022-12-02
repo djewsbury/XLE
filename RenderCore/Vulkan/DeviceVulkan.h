@@ -188,6 +188,8 @@ namespace RenderCore { namespace ImplVulkan
         VkDevice	                            GetUnderlyingDevice() override { return _underlying.get(); }
         std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetAsyncTracker() override;
 
+        void GetInternalMetrics(InternalMetricsType type, IteratorRange<void*>) const override;
+
 		IResourcePtr CreateResource(
 			const ResourceDesc& desc, 
             StringSection<> name,

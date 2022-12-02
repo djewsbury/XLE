@@ -16,7 +16,7 @@ namespace Assets { struct DependentFileState; }
 
 namespace RenderCore
 {
-	namespace Metal_Vulkan { class DeviceContext; class GlobalPools; class PipelineLayout; class CommandList; class IAsyncTracker; }
+	namespace Metal_Vulkan { class DeviceContext; class GlobalPools; class CommandList; class IAsyncTracker; }
 
 	enum class VulkanShaderMode
 	{
@@ -24,6 +24,7 @@ namespace RenderCore
 		HLSLToSPIRV,
 		HLSLCrossCompiled
 	};
+
 	struct VulkanCompilerConfiguration
 	{
 		VulkanShaderMode _shaderMode = VulkanShaderMode::HLSLToSPIRV;
@@ -43,6 +44,10 @@ namespace RenderCore
 		virtual std::shared_ptr<ILowLevelCompiler> CreateShaderCompiler(
 			const VulkanCompilerConfiguration&) = 0;
 		virtual std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetAsyncTracker() = 0;
+
+		enum InternalMetricsType { MainDescriptorPoolMetrics, LongTermDescriptorPoolMetrics };
+		virtual void GetInternalMetrics(InternalMetricsType type, IteratorRange<void*> dst) const = 0;
+
 		virtual ~IDeviceVulkan();
 	};
 

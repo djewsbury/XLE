@@ -151,17 +151,21 @@ namespace RenderCore { namespace Metal_Vulkan
 
     void DescriptorPool::AllocateAlreadyLocked(
         IteratorRange<VulkanUniquePtr<VkDescriptorSet>*> dst,
-        IteratorRange<const VkDescriptorSetLayout*> layouts)
+        IteratorRange<const CompiledDescriptorSetLayout*const*> layouts)
     {
         assert(dst.size() == layouts.size());
         assert(dst.size() > 0);
+
+        VLA(VkDescriptorSetLayout, nativeLayouts, dst.size());
+        for (unsigned c=0; c<dst.size(); ++c)
+            nativeLayouts[c] = layouts[c]->GetUnderlying();
 
         VkDescriptorSetAllocateInfo desc_alloc_info;
         desc_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         desc_alloc_info.pNext = nullptr;
         desc_alloc_info.descriptorPool = _pool.get();
         desc_alloc_info.descriptorSetCount = (uint32_t)std::min(dst.size(), layouts.size());
-        desc_alloc_info.pSetLayouts = layouts.begin();
+        desc_alloc_info.pSetLayouts = nativeLayouts;
 
         VLA(VkDescriptorSet, rawDescriptorSets, desc_alloc_info.descriptorSetCount);
         for (unsigned c=0; c<desc_alloc_info.descriptorSetCount; ++c)
@@ -169,10 +173,23 @@ namespace RenderCore { namespace Metal_Vulkan
 
         VkResult res;
         res = vkAllocateDescriptorSets(_device.get(), &desc_alloc_info, rawDescriptorSets);
-        for (unsigned c=0; c<desc_alloc_info.descriptorSetCount; ++c)
+        for (unsigned c=0; c<desc_alloc_info.descriptorSetCount; ++c) {
+
+            DescriptorTypeCounts descriptorCounts;
+            auto* types = layouts[c]->GetDescriptorTypesCount();
+            for (unsigned q=0; q<dimof(descriptorCounts._counts); ++q) {
+                descriptorCounts._counts[q] = types[q];
+                _descriptorsAllocated[q] += types[q];
+            }
+
             dst[c] = VulkanUniquePtr<VkDescriptorSet>(
                 rawDescriptorSets[c],
-                [this](VkDescriptorSet set) { this->QueueDestroy(set); });
+                [this, descriptorCounts](VkDescriptorSet set) {
+                    this->QueueDestroy(set, descriptorCounts._counts); 
+                });
+        }
+
+        _setsAllocated += desc_alloc_info.descriptorSetCount;
         
         #if defined(VULKAN_ENABLE_DEBUG_EXTENSIONS)
             auto& extFn = GetObjectFactory().GetExtensionFunctions();
@@ -194,16 +211,17 @@ namespace RenderCore { namespace Metal_Vulkan
 
     void DescriptorPool::Allocate(
         IteratorRange<VulkanUniquePtr<VkDescriptorSet>*> dst,
-        IteratorRange<const VkDescriptorSetLayout*> layouts)
+        IteratorRange<const CompiledDescriptorSetLayout*const*> layouts)
     {
         ScopedLock(_lock);
         AllocateAlreadyLocked(dst, layouts);
     }
 
-	VulkanUniquePtr<VkDescriptorSet> DescriptorPool::Allocate(VkDescriptorSetLayout layout)
+	VulkanUniquePtr<VkDescriptorSet> DescriptorPool::Allocate(const CompiledDescriptorSetLayout& layout)
 	{
 		VulkanUniquePtr<VkDescriptorSet> result[1];
-		Allocate(MakeIteratorRange(result), MakeIteratorRange(&layout, &layout+1));
+        const CompiledDescriptorSetLayout* layouts[] { &layout };
+		Allocate(MakeIteratorRange(result), MakeIteratorRange(layouts));
 		return std::move(result[0]);
 	}
 
@@ -228,8 +246,8 @@ namespace RenderCore { namespace Metal_Vulkan
             Page newPage;
             newPage._allocationStates = CircularHeap{PageSize};
             newPage._descriptorSets.resize(PageSize);
-            VkDescriptorSetLayout layouts[PageSize];
-            for (unsigned c=0; c<PageSize; ++c) layouts[c] = _layout->GetUnderlying();
+            const CompiledDescriptorSetLayout* layouts[PageSize];
+            for (unsigned c=0; c<PageSize; ++c) layouts[c] = _layout.get();
             _parent->AllocateAlreadyLocked(
                 MakeIteratorRange(newPage._descriptorSets),
                 MakeIteratorRange(layouts));
@@ -270,6 +288,13 @@ namespace RenderCore { namespace Metal_Vulkan
 
         _empty = false;
         return page->_descriptorSets[item].get();
+    }
+
+    unsigned DescriptorPoolReusableGroup::CalculateAllocatedCountAlreadyLocked()
+    {
+        unsigned result = 0;
+        for (auto& p:_pages) result += p._allocationStates.GetQuickMetrics()._bytesAllocated;
+        return result;
     }
 
     DescriptorPoolReusableGroup::DescriptorPoolReusableGroup(DescriptorPool& parent, std::shared_ptr<CompiledDescriptorSetLayout> layout)
@@ -314,6 +339,12 @@ namespace RenderCore { namespace Metal_Vulkan
 				_device.get(), _pool.get(),
 				(uint32_t)countToDestroy, AsPointer(_pendingDestroys.begin()));
 			_pendingDestroys.erase(_pendingDestroys.begin(), _pendingDestroys.begin() + countToDestroy);
+
+            for (auto&r:MakeIteratorRange(_pendingDestroyCounts.begin(), _pendingDestroyCounts.begin()+countToDestroy))
+                for (unsigned c=0; c<DescriptorPoolMetrics::UnderlyingDescriptorTypes::Max; ++c)
+                    _descriptorsAllocated[c] -= r._counts[c];
+            _pendingDestroyCounts.erase(_pendingDestroyCounts.begin(), _pendingDestroyCounts.begin()+countToDestroy);
+            _setsAllocated -= countToDestroy;
 		}
 
         // check reusable groups
@@ -332,7 +363,7 @@ namespace RenderCore { namespace Metal_Vulkan
         }
     }
 
-	void DescriptorPool::QueueDestroy(VkDescriptorSet set)
+	void DescriptorPool::QueueDestroy(VkDescriptorSet set, const unsigned descriptorCounts[])
 	{
         ScopedLock(_lock);
 		auto currentMarker = _gpuTracker ? _gpuTracker->GetProducerMarker() : ~0u;
@@ -341,15 +372,41 @@ namespace RenderCore { namespace Metal_Vulkan
 		} else {
 			++_markedDestroys.back()._pendingCount;
 		}
-		_pendingDestroys.push_back(set);
+
+        _pendingDestroys.push_back(set);
+        DescriptorTypeCounts record;
+        for (unsigned c=0; c<dimof(record._counts); ++c) record._counts[c] = descriptorCounts[c];
+        _pendingDestroyCounts.push_back(record);
 	}
+
+    DescriptorPoolMetrics DescriptorPool::GetMetrics() const
+    {
+        ScopedLock(_lock);
+        DescriptorPoolMetrics result;
+        for (unsigned c=0; c<dimof(_descriptorsAllocated); ++c) {
+            result._descriptorsAllocated[c] = _descriptorsAllocated[c];
+            result._descriptorsReserved[c] = _descriptorsReserved[c];
+        }
+        result._setsAllocated = _setsAllocated;
+        result._setsReserved = _setsReserved;
+        result._reusableGroups.reserve(_reusableGroups.size());
+        for (const auto& g:_reusableGroups)
+            result._reusableGroups.push_back({
+                #if defined(_DEBUG)
+                    g.second->_layout->GetName(),
+                #else
+                    {},
+                #endif 
+                g.second->CalculateAllocatedCountAlreadyLocked(), unsigned(g.second->_pages.size() * DescriptorPoolReusableGroup::PageSize)});
+        return result;
+    }
 
     DescriptorPool::DescriptorPool(ObjectFactory& factory, const std::shared_ptr<IAsyncTracker>& tracker, StringSection<> poolName)
     : _device(factory.GetDevice())
 	, _gpuTracker(tracker)
     , _poolName(poolName.AsString())
     {
-        VkDescriptorPoolSize type_count[] = 
+        const VkDescriptorPoolSize type_count[] = 
         {
             {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 16*1024},
             {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 16*128},
@@ -359,16 +416,24 @@ namespace RenderCore { namespace Metal_Vulkan
             {VK_DESCRIPTOR_TYPE_SAMPLER, 16*256},
             {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 16*128}
         };
+        const unsigned maxSets = 4096;
 
         VkDescriptorPoolCreateInfo descriptor_pool = {};
         descriptor_pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         descriptor_pool.pNext = nullptr;
-        descriptor_pool.maxSets = 4096;
+        descriptor_pool.maxSets = maxSets;
         descriptor_pool.poolSizeCount = dimof(type_count);
         descriptor_pool.pPoolSizes = type_count;
         descriptor_pool.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
         _pool = factory.CreateDescriptorPool(descriptor_pool);
+
+        XlZeroMemory(_descriptorsAllocated);
+        XlZeroMemory(_descriptorsReserved);
+        for (auto t:type_count)
+            _descriptorsReserved[t.type] = t.descriptorCount;
+        _setsAllocated = 0;
+        _setsReserved = maxSets;
     }
     DescriptorPool::DescriptorPool() {}
     DescriptorPool::~DescriptorPool() 
@@ -382,11 +447,21 @@ namespace RenderCore { namespace Metal_Vulkan
         _reusableGroups.clear();
         if (!_pendingDestroys.empty()) {
             // potentially dangerous early destruction (can happen in exception cases)
+            _setsAllocated -= (unsigned)_pendingDestroys.size();
 			vkFreeDescriptorSets(
 				_device.get(), _pool.get(),
 				(uint32_t)_pendingDestroys.size(), AsPointer(_pendingDestroys.begin()));
 			_pendingDestroys.clear();
+            for (auto&r:_pendingDestroyCounts)
+                for (unsigned c=0; c<DescriptorPoolMetrics::UnderlyingDescriptorTypes::Max; ++c)
+                    _descriptorsAllocated[c] -= r._counts[c];
+            _pendingDestroyCounts.clear();
 		}
+
+        #if defined(_DEBUG)
+            for (auto q:_descriptorsAllocated) assert(q==0);
+            assert(_setsAllocated==0);
+        #endif
     }
 
     DescriptorPool::DescriptorPool(DescriptorPool&& moveFrom) never_throws
@@ -395,10 +470,15 @@ namespace RenderCore { namespace Metal_Vulkan
 	, _gpuTracker(std::move(moveFrom._gpuTracker))
 	, _markedDestroys(std::move(moveFrom._markedDestroys))
     , _pendingDestroys(std::move(moveFrom._pendingDestroys))
+    , _pendingDestroyCounts(std::move(moveFrom._pendingDestroyCounts))
     , _reusableGroups(std::move(moveFrom._reusableGroups))
     , _reusableGroupsInAllocationOrder(std::move(moveFrom._reusableGroupsInAllocationOrder))
     , _poolName(std::move(moveFrom._poolName))
     {
+        std::memcpy(_descriptorsAllocated, moveFrom._descriptorsAllocated, sizeof(_descriptorsAllocated));
+        std::memcpy(_descriptorsReserved, moveFrom._descriptorsReserved, sizeof(_descriptorsReserved));
+        _setsAllocated = moveFrom._setsAllocated;
+        _setsReserved = moveFrom._setsReserved;
     }
 
     DescriptorPool& DescriptorPool::operator=(DescriptorPool&& moveFrom) never_throws
@@ -409,9 +489,14 @@ namespace RenderCore { namespace Metal_Vulkan
 		_gpuTracker = std::move(moveFrom._gpuTracker);
 		_markedDestroys = std::move(moveFrom._markedDestroys);
 		_pendingDestroys = std::move(moveFrom._pendingDestroys);
+        _pendingDestroyCounts = std::move(moveFrom._pendingDestroyCounts);
         _reusableGroups = std::move(moveFrom._reusableGroups);
         _reusableGroupsInAllocationOrder = std::move(moveFrom._reusableGroupsInAllocationOrder);
         _poolName = std::move(moveFrom._poolName);
+        std::memcpy(_descriptorsAllocated, moveFrom._descriptorsAllocated, sizeof(_descriptorsAllocated));
+        std::memcpy(_descriptorsReserved, moveFrom._descriptorsReserved, sizeof(_descriptorsReserved));
+        _setsAllocated = moveFrom._setsAllocated;
+        _setsReserved = moveFrom._setsReserved;
         return *this;
     }
 

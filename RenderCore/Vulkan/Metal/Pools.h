@@ -51,19 +51,42 @@ namespace RenderCore { namespace Metal_Vulkan
 
     class DescriptorPoolReusableGroup;
 
+    struct DescriptorPoolMetrics
+    {
+        enum UnderlyingDescriptorTypes
+        {
+            Sampler, CombinedImageSampler, SampledImage, StorageImage, UniformTexelBuffer, StorageTexelBuffer,
+            UniformBuffer, StorageBuffer, UniformBufferDynamic, StorageBufferDynamic, InputAttachment, Max
+        };
+        unsigned _descriptorsAllocated[UnderlyingDescriptorTypes::Max] = {};
+        unsigned _descriptorsReserved[UnderlyingDescriptorTypes::Max] = {};
+        unsigned _setsAllocated = 0;
+        unsigned _setsReserved = 0;
+
+        struct ReusableGroup
+        {
+            std::string _layoutName;
+            unsigned _allocatedCount = 0;
+            unsigned _reservedCount = 0;
+        };
+        std::vector<ReusableGroup> _reusableGroups;
+    };
+
     class DescriptorPool
     {
     public:
         void Allocate(
             IteratorRange<VulkanUniquePtr<VkDescriptorSet>*> dst,
-            IteratorRange<const VkDescriptorSetLayout*> layouts);
-		VulkanUniquePtr<VkDescriptorSet> Allocate(VkDescriptorSetLayout layout);
+            IteratorRange<const CompiledDescriptorSetLayout*const*> layouts);
+		VulkanUniquePtr<VkDescriptorSet> Allocate(const CompiledDescriptorSetLayout& layout);
 
         const std::shared_ptr<DescriptorPoolReusableGroup>& GetReusableGroup(
             const std::shared_ptr<CompiledDescriptorSetLayout>&);
 
         void FlushDestroys();
         VkDevice GetDevice() { return _device.get(); }
+
+        DescriptorPoolMetrics GetMetrics() const;
 
         DescriptorPool(ObjectFactory& factory, const std::shared_ptr<IAsyncTracker>& tracker, StringSection<> poolName);
         DescriptorPool();
@@ -78,21 +101,27 @@ namespace RenderCore { namespace Metal_Vulkan
 		VulkanSharedPtr<VkDevice> _device;
 		std::shared_ptr<IAsyncTracker> _gpuTracker;
 
+        struct DescriptorTypeCounts { unsigned _counts[DescriptorPoolMetrics::UnderlyingDescriptorTypes::Max]; };
 		struct MarkedDestroys { IAsyncTracker::Marker _marker; unsigned _pendingCount; };
 		ResizableCircularBuffer<MarkedDestroys, 32> _markedDestroys;
         std::vector<VkDescriptorSet> _pendingDestroys;
+        std::vector<DescriptorTypeCounts> _pendingDestroyCounts;
 
         std::vector<std::pair<uint64_t, std::shared_ptr<DescriptorPoolReusableGroup>>> _reusableGroups;
         DescriptorPoolReusableGroup* _reusableGroupsInAllocationOrder = nullptr;
-        Threading::Mutex _lock;
+        mutable Threading::Mutex _lock;
 
+        unsigned _descriptorsAllocated[DescriptorPoolMetrics::UnderlyingDescriptorTypes::Max];
+        unsigned _descriptorsReserved[DescriptorPoolMetrics::UnderlyingDescriptorTypes::Max];
+        unsigned _setsAllocated;
+        unsigned _setsReserved;
         std::string _poolName;
 
         void AllocateAlreadyLocked(
             IteratorRange<VulkanUniquePtr<VkDescriptorSet>*> dst,
-            IteratorRange<const VkDescriptorSetLayout*> layouts);
+            IteratorRange<const CompiledDescriptorSetLayout*const*> layouts);
 
-		void QueueDestroy(VkDescriptorSet buffer);
+		void QueueDestroy(VkDescriptorSet buffer, const unsigned descriptorCounts[]);
         void DestroyEverythingImmediately();
         friend class DescriptorPoolReusableGroup;
     };
@@ -121,6 +150,8 @@ namespace RenderCore { namespace Metal_Vulkan
         bool _empty = true;
 
         std::shared_ptr<CompiledDescriptorSetLayout> _layout;
+
+        unsigned CalculateAllocatedCountAlreadyLocked();
 
         DescriptorPoolReusableGroup* _nextInAllocationOrder = nullptr;
         DescriptorPoolReusableGroup* _prevInAllocationOrder = nullptr;

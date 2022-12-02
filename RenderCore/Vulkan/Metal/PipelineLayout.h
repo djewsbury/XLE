@@ -63,7 +63,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				IteratorRange<const CompiledShaderByteCode**> shaders,
 				IteratorRange<const DescriptorSetDebugInfo*> descriptorSets);
 		#endif
-                                                                                                        
+
 		struct DescriptorSetBinding
 		{
 			std::string _name;

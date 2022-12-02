@@ -2185,6 +2185,25 @@ namespace RenderCore { namespace ImplVulkan
 		return _graphicsQueue->GetTracker();
 	}
 
+	void Device::GetInternalMetrics(InternalMetricsType type, IteratorRange<void*> dst) const
+	{
+		switch (type) {
+		case InternalMetricsType::LongTermDescriptorPoolMetrics:
+		case InternalMetricsType::MainDescriptorPoolMetrics:
+			if (dst.size() != sizeof(Metal_Vulkan::DescriptorPoolMetrics))
+				Throw(std::runtime_error("Bad metrics structure size in Vulkan Device::GetInternalMetrics"));
+			if (type == InternalMetricsType::LongTermDescriptorPoolMetrics) {
+				*(Metal_Vulkan::DescriptorPoolMetrics*)dst.begin() = _globalsContainer.get()->_pools._longTermDescriptorPool.GetMetrics();
+			} else {
+				*(Metal_Vulkan::DescriptorPoolMetrics*)dst.begin() = _globalsContainer.get()->_pools._mainDescriptorPool.GetMetrics();
+			}
+			break;
+
+		default:
+			Throw(std::runtime_error("Unknown metrics type"));
+		}
+	}
+
 	void Device::Stall()
 	{
 		assert(0);	// unimplemented

@@ -34,7 +34,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         )
 
     if (${metal_macro} STREQUAL "SELECT_VULKAN")
-        list(APPEND DebuggingDisplaysSrc DebuggingDisplays/VulkanMemoryDisplay.cpp)
+        list(APPEND DebuggingDisplaysSrc DebuggingDisplays/VulkanMemoryDisplay.cpp DebuggingDisplays/VulkanInternalPoolsDisplay.cpp)
     endif()
 
     set(MiniSceneEngineSrc
