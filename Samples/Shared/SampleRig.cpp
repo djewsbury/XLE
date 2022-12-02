@@ -9,6 +9,7 @@
 #include "../../PlatformRig/MainInputHandler.h"
 #include "../../PlatformRig/PlatformRigUtil.h"
 #include "../../PlatformRig/DebugHotKeys.h"
+#include "../../PlatformRig/DebugScreenRegistry.h"
 
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/Techniques.h"
@@ -40,6 +41,8 @@
 
 namespace Sample
 {
+    void InstallDefaultDebuggingDisplays(SampleGlobals& globals);   // DefaultDebuggingDisplays.cpp
+
 	void ExecuteSample(std::shared_ptr<ISampleOverlay>&& sampleOverlay, const SampleConfiguration& config)
     {
 		SampleGlobals sampleGlobals;
@@ -106,10 +109,11 @@ namespace Sample
             Log(Verbose) << "Setup tools and debugging" << std::endl;
             PlatformRig::FrameRig frameRig{*sampleGlobals._frameRenderingApparatus, sampleGlobals._drawingApparatus.get()};
             sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._immediateDrawingApparatus, frameRig);
-            PlatformRig::InitProfilerDisplays(*sampleGlobals._debugOverlaysApparatus->_debugSystem, &sampleGlobals._windowApparatus->_immediateContext->GetAnnotator(), *sampleGlobals._frameRenderingApparatus->_frameCPUProfiler);
             frameRig.SetDebugScreensOverlaySystem(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem);
             frameRig.SetMainOverlaySystem(sampleOverlay);
             techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
+
+            InstallDefaultDebuggingDisplays(sampleGlobals);
 
             Log(Verbose) << "Call OnStartup and start the frame loop" << std::endl;
             sampleOverlay->OnStartup(sampleGlobals);
@@ -164,5 +168,8 @@ namespace Sample
 
 	void ISampleOverlay::OnStartup(const SampleGlobals& globals) {}
 	void ISampleOverlay::OnUpdate(float deltaTime) {}
+
+    SampleGlobals::SampleGlobals() = default;
+	SampleGlobals::~SampleGlobals() = default;
 }
 

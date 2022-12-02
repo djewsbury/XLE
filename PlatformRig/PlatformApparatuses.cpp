@@ -10,9 +10,6 @@
 #include "MainInputHandler.h"
 #include "DebugScreensOverlay.h"
 #include "DebugScreenRegistry.h"
-#include "DebuggingDisplays/GPUProfileDisplay.h"
-#include "DebuggingDisplays/CPUProfileDisplay.h"
-#include "DebuggingDisplays/InvalidAssetDisplay.h"
 #include "../RenderCore/Techniques/Apparatuses.h"
 #include "../RenderCore/IAnnotator.h"
 #include "../RenderCore/IDevice.h"
@@ -100,28 +97,6 @@ namespace PlatformRig
 	WindowApparatus::~WindowApparatus()
 	{
 
-	}
-
-	void InitProfilerDisplays(
-		RenderOverlays::DebuggingDisplay::DebugScreensSystem& debugSys, 
-		RenderCore::IAnnotator* annotator,
-		Utility::HierarchicalCPUProfiler& cpuProfiler)
-	{
-		if (annotator) {
-			auto gpuProfilerDisplay = std::make_shared<PlatformRig::Overlays::GPUProfileDisplay>(*annotator);
-			debugSys.Register(gpuProfilerDisplay, "[Profiler] GPU Profiler");
-		}
-		debugSys.Register(
-			std::make_shared<PlatformRig::Overlays::HierarchicalProfilerDisplay>(&cpuProfiler),
-			"[Profiler] CPU Profiler");
-
-		/*debugSys.Register(
-			std::make_shared<PlatformRig::Overlays::BufferUploadDisplay>(&RenderCore::Techniques::Services::GetBufferUploads()),
-			"[Profiler] Buffer uploads");*/
-
-		debugSys.Register(PlatformRig::Overlays::CreateInvalidAssetDisplay(::Assets::Services::GetAssetSetsPtr()), "[Console] Invalid asset display");
-		debugSys.SwitchToScreen("[Console] Invalid asset display");
-		// debugSys.SwitchToScreen("[Profiler] GPU Profiler");
 	}
 
 	void ShowDebugScreen(StringSection<> screenName)

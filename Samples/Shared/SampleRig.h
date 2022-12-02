@@ -25,7 +25,7 @@ namespace RenderCore { namespace Techniques
 	class FrameRenderingApparatus;
 }}
 
-namespace PlatformRig { class MainInputHandler; class WindowApparatus; class DebugOverlaysApparatus; }
+namespace PlatformRig { class MainInputHandler; class WindowApparatus; class DebugOverlaysApparatus; struct DebugScreenRegistration; }
 
 namespace Sample
 {
@@ -40,6 +40,11 @@ namespace Sample
         std::shared_ptr<RenderCore::Techniques::PrimaryResourcesApparatus> _primaryResourcesApparatus;
         std::shared_ptr<RenderCore::Techniques::FrameRenderingApparatus> _frameRenderingApparatus;
 		std::shared_ptr<PlatformRig::DebugOverlaysApparatus> _debugOverlaysApparatus;
+
+		std::vector<PlatformRig::DebugScreenRegistration> _displayRegistrations;
+
+		SampleGlobals();
+		~SampleGlobals();
 	};
 
 	class ISampleOverlay : public PlatformRig::IOverlaySystem

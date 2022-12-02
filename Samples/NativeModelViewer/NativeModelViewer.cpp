@@ -10,12 +10,7 @@
 #include "../../Tools/ToolsRig/ToolsRigServices.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/LightingEngine/LightingEngineApparatus.h"
-#include "../../PlatformRig/DebuggingDisplays/PipelineAcceleratorDisplay.h"
-#include "../../PlatformRig/DebuggingDisplays/DeformAcceleratorDisplay.h"
-#include "../../PlatformRig/DebuggingDisplays/VulkanMemoryDisplay.h"
-#include "../../PlatformRig/DebuggingDisplays/BufferUploadDisplay.h"
 #include "../../PlatformRig/DebuggingDisplays/InvalidAssetDisplay.h"
-#include "../../PlatformRig/DebuggingDisplays/VulkanInternalPoolsDisplay.h"
 #include "../../PlatformRig/DebugScreenRegistry.h"
 #include "../../Assets/OperationContext.h"
 #include "../../ConsoleRig/ResourceBox.h"
@@ -84,27 +79,8 @@ namespace Sample
 		} CATCH_END*/
 
 		_displayRegistrations.emplace_back(
-			"PipelineAccelerators", 
-			PlatformRig::Overlays::CreatePipelineAcceleratorPoolDisplay(globals._drawingApparatus->_pipelineAccelerators));
-
-		_displayRegistrations.emplace_back(
-			"DeformAccelerators",
-			PlatformRig::Overlays::CreateDeformAcceleratorPoolDisplay(globals._drawingApparatus->_deformAccelerators));
-
-		_displayRegistrations.emplace_back(
-			"Vulkan Memory Allocator",
-			PlatformRig::Overlays::CreateVulkanMemoryAllocatorDisplay(globals._drawingApparatus->_device));
-
-		_displayRegistrations.emplace_back(
-			"Buffer Uploads Display",
-			std::make_shared<PlatformRig::Overlays::BufferUploadDisplay>(globals._primaryResourcesApparatus->_bufferUploads.get()));
-
-		_displayRegistrations.emplace_back(
 			"LoadingContext",
 			std::make_shared<PlatformRig::Overlays::OperationContextDisplay>(loadingContext));
-
-		if (auto vulkanInternalPoolsDisplay = PlatformRig::Overlays::CreateVulkanInternalPoolsDisplay(globals._renderDevice))
-			_displayRegistrations.emplace_back("Vulkan Internal Pools", vulkanInternalPoolsDisplay);
 	}
 
 	auto NativeModelViewerOverlay::GetInputListener() -> std::shared_ptr<PlatformRig::IInputListener>

@@ -64,10 +64,5 @@ namespace PlatformRig
 		~WindowApparatus();
 	};
 
-	void InitProfilerDisplays(
-		RenderOverlays::DebuggingDisplay::DebugScreensSystem& debugSys, 
-		RenderCore::IAnnotator* annotator,
-		Utility::HierarchicalCPUProfiler& cpuProfiler);
-
 }
 
