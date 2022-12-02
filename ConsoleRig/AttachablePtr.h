@@ -122,8 +122,12 @@ namespace ConsoleRig
 	public:
 		Obj* get() { return _internalPointer.get(); }
 		Obj* operator->() { return _internalPointer.operator->(); }
-		operator bool() { return _internalPointer.operator bool(); }
 		Obj& operator*() { return _internalPointer.operator*(); }
+
+		const Obj* get() const { return _internalPointer.get(); }
+		const Obj* operator->() const { return _internalPointer.operator->(); }
+		operator bool() const { return _internalPointer.operator bool(); }
+		const Obj& operator*() const { return _internalPointer.operator*(); }
 
 		T1(Obj2) friend bool operator==(const AttachablePtr<Obj2>& lhs, const std::shared_ptr<Obj2>& rhs);
 		T1(Obj2) friend bool operator==(const std::shared_ptr<Obj2>& lhs, const AttachablePtr<Obj2>& rhs);
