@@ -33,7 +33,7 @@ namespace RenderCore { namespace Techniques
 	class ImmediateRendererTechniqueDelegate : public ITechniqueDelegate
 	{
 	public:
-		FutureGraphicsPipelineDesc GetPipelineDesc(
+		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
@@ -64,9 +64,7 @@ namespace RenderCore { namespace Techniques
 				nascentDesc->_patchExpansions.emplace_back(s_patchOutline, ShaderStage::Pixel);
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
-				std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
-				promise.set_value(std::move(nascentDesc));
-				return promise.get_future();
+				return nascentDesc;
 			} else if (shaderPatches.HasPatchType(s_patchTwoLayersShader)) {
 				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 				*nascentDesc = *_pipelineDesc[dsMode];
@@ -75,19 +73,20 @@ namespace RenderCore { namespace Techniques
 				nascentDesc->_patchExpansions.emplace_back(s_patchTwoLayersShader, ShaderStage::Pixel);
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
-				std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
-				promise.set_value(std::move(nascentDesc));
-				return promise.get_future();
+				return nascentDesc;
 			} else {
-				std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
-				promise.set_value(_pipelineDesc[dsMode]);
-				return promise.get_future();
+				return _pipelineDesc[dsMode];
 			}
 		}
 
 		virtual std::string GetPipelineLayout() override
 		{
 			return IMMEDIATE_PIPELINE ":ImmediateDrawables";
+		}
+
+		virtual ::Assets::DependencyValidation GetDependencyValidation() override
+		{
+			return {};
 		}
 
 		ImmediateRendererTechniqueDelegate() 

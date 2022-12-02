@@ -42,11 +42,11 @@ namespace ToolsRig
         void RenderWidgets(
             RenderCore::IThreadContext& device, 
             RenderCore::Techniques::ParsingContext& projectionDesc,
-            RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators);
+            const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators);
         void RenderToScene(
             RenderCore::IThreadContext& context, 
             RenderCore::Techniques::ParsingContext& parserContext,
-            RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators);
+            const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators);
 
         std::shared_ptr<PlatformRig::IInputListener> GetInputLister();
 

@@ -9,6 +9,7 @@
 #include "../../Math/Vector.h"
 #include "../../Core/Types.h"
 #include <utility>
+#include <memory>
 
 namespace RenderCore { class IThreadContext; class IResourceView; }
 namespace RenderCore { namespace Techniques { class ParsingContext; class IPipelineAcceleratorPool; class SequencerConfig; }}
@@ -23,7 +24,7 @@ namespace ToolsRig
 {
     void Placements_RenderHighlight(
         RenderCore::Techniques::ParsingContext& parserContext,
-        RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
+        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
         SceneEngine::PlacementsRenderer& renderer,
         const SceneEngine::PlacementCellSet& cellSet,
         const SceneEngine::PlacementGUID* filterBegin = nullptr,
@@ -32,7 +33,7 @@ namespace ToolsRig
 
 	void Placements_RenderHighlightWithOutlineAndOverlay(
         RenderCore::Techniques::ParsingContext& parserContext,
-        RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
+        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
         SceneEngine::PlacementsRenderer& renderer,
         const SceneEngine::PlacementCellSet& cellSet,
 		const SceneEngine::PlacementGUID* filterBegin = nullptr,
@@ -51,7 +52,7 @@ namespace ToolsRig
 
     void Placements_RenderShadow(
         RenderCore::Techniques::ParsingContext& parserContext,
-        RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
+        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
         SceneEngine::PlacementsRenderer& renderer,
         const SceneEngine::PlacementCellSet& cellSet,
         const SceneEngine::PlacementGUID* filterBegin = nullptr,

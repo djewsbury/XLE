@@ -26,7 +26,7 @@ namespace ToolsRig
     public:
         void    Render( RenderCore::IThreadContext& context, 
                         RenderCore::Techniques::ParsingContext& parserContext,
-                        RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators);
+                        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators);
         void    Update();
 
         void SelectManipulator(signed relativeIndex);

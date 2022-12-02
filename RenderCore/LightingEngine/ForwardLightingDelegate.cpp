@@ -392,10 +392,14 @@ namespace RenderCore { namespace LightingEngine
 
 		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
 
-		::Assets::WhenAll(hierarchicalDepthsOperatorFuture, balancedNoiseTexture).ThenConstructToPromise(
+		::Assets::WhenAll(
+			hierarchicalDepthsOperatorFuture, balancedNoiseTexture, 
+			techDelBox->GetDepthMotionNormalRoughnessDelegate(), techDelBox->GetDepthMotionDelegate(), techDelBox->GetForwardIllumDelegate_DisableDepthWrite()).ThenConstructToPromise(
 			std::move(promise),
+
 			[techDelBox, pipelineAccelerators, pipelinePool, ssrFuture=std::move(ssrFuture), forwardLightScene=std::move(forwardLightScene), preregisteredAttachments=std::move(preregisteredAttachments), fbProps]
-			(auto&& thatPromise, auto hierarchicalDepthsOperator, auto balancedNoiseTexture) {
+			(	auto&& thatPromise, auto hierarchicalDepthsOperator, auto balancedNoiseTexture,
+				auto depthMotionNormalRoughnessDelegate, auto depthMotionDelegate, auto forwardIllumDelegate_DisableDepthWrite) {
 
 				TRY {
 					std::shared_ptr<ScreenSpaceReflectionsOperator> ssrActual;
@@ -422,6 +426,9 @@ namespace RenderCore { namespace LightingEngine
 					lightingTechnique->_depVal.RegisterDependency(forwardLightScene->GetLightTiler().GetDependencyValidation());
 					if (ssrActual)
 						lightingTechnique->_depVal.RegisterDependency(ssrActual->GetDependencyValidation());
+					lightingTechnique->_depVal.RegisterDependency(depthMotionNormalRoughnessDelegate->GetDependencyValidation());
+					lightingTechnique->_depVal.RegisterDependency(depthMotionDelegate->GetDependencyValidation());
+					lightingTechnique->_depVal.RegisterDependency(forwardIllumDelegate_DisableDepthWrite->GetDependencyValidation());
 
 					// Prepare shadows
 					lightingTechnique->CreateDynamicSequence(
@@ -439,9 +446,9 @@ namespace RenderCore { namespace LightingEngine
 
 					// Pre depth
 					if (ssrActual) {
-						mainSequence.CreateStep_RunFragments(CreateDepthMotionNormalFragment(techDelBox->_depthMotionNormalRoughnessDelegate));
+						mainSequence.CreateStep_RunFragments(CreateDepthMotionNormalFragment(depthMotionNormalRoughnessDelegate));
 					} else {
-						mainSequence.CreateStep_RunFragments(CreateDepthMotionFragment(techDelBox->_depthMotionDelegate));
+						mainSequence.CreateStep_RunFragments(CreateDepthMotionFragment(depthMotionDelegate));
 					}
 
 					mainSequence.CreateStep_CallFunction(
@@ -469,7 +476,7 @@ namespace RenderCore { namespace LightingEngine
 
 					// Draw main scene
 					auto mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
-						CreateForwardSceneFragment(captures, techDelBox->_forwardIllumDelegate_DisableDepthWrite, ssrActual!=nullptr, *balancedNoiseTexture));
+						CreateForwardSceneFragment(captures, forwardIllumDelegate_DisableDepthWrite, ssrActual!=nullptr, *balancedNoiseTexture));
 
 					// Post processing
 					auto toneMapFragment = CreateToneMapFragment(

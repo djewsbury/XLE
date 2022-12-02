@@ -26,13 +26,15 @@ namespace RenderCore { namespace Techniques
 	class TechniqueDelegate_Legacy : public ITechniqueDelegate
 	{
 	public:
-		FutureGraphicsPipelineDesc GetPipelineDesc(
+		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& input) override;
 
 		std::string GetPipelineLayout() override;
+		::Assets::DependencyValidation GetDependencyValidation() override;
 
 		TechniqueDelegate_Legacy(
+			std::shared_ptr<Technique> technique,
 			unsigned techniqueIndex,
 			const AttachmentBlendDesc& blend,
 			const RasterizationDesc& rasterization,
@@ -43,86 +45,72 @@ namespace RenderCore { namespace Techniques
 		AttachmentBlendDesc _blend;
 		RasterizationDesc _rasterization;
 		DepthStencilDesc _depthStencil;
-		std::shared_future<std::shared_ptr<Technique>> _techniqueFuture;
+		std::shared_ptr<Technique> _technique;
 	};
 
 	static void PrepareShadersFromTechniqueEntry(
-		const std::shared_ptr<GraphicsPipelineDesc>& nascentDesc,
+		GraphicsPipelineDesc& nascentDesc,
 		const TechniqueEntry& entry)
 	{
-		nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = entry._vertexShaderName;
-		nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = entry._pixelShaderName;
-		nascentDesc->_shaders[(unsigned)ShaderStage::Geometry] = entry._geometryShaderName;
-		nascentDesc->_manualSelectorFiltering = entry._selectorFiltering;
-		nascentDesc->_techniquePreconfigurationFile = entry._preconfigurationFileName;
+		nascentDesc._shaders[(unsigned)ShaderStage::Vertex] = entry._vertexShaderName;
+		nascentDesc._shaders[(unsigned)ShaderStage::Pixel] = entry._pixelShaderName;
+		nascentDesc._shaders[(unsigned)ShaderStage::Geometry] = entry._geometryShaderName;
+		nascentDesc._manualSelectorFiltering = entry._selectorFiltering;
+		nascentDesc._techniquePreconfigurationFile = entry._preconfigurationFileName;
 	}
 
 	auto TechniqueDelegate_Legacy::GetPipelineDesc(
 		const CompiledShaderPatchCollection::Interface& shaderPatches,
-		const RenderCore::Assets::RenderStateSet& input) -> FutureGraphicsPipelineDesc
+		const RenderCore::Assets::RenderStateSet& input) -> std::shared_ptr<GraphicsPipelineDesc>
 	{
-		std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
-		auto result = promise.get_future();
+		auto result = std::make_shared<GraphicsPipelineDesc>();
 
-		auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 		if (_techniqueIndex != Techniques::TechniqueIndex::DepthOnly)
-			nascentDesc->_blend.push_back(_blend);
-		nascentDesc->_rasterization = _rasterization;
-		nascentDesc->_depthStencil = _depthStencil;
-		nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
+			result->_blend.push_back(_blend);
+		result->_rasterization = _rasterization;
+		result->_depthStencil = _depthStencil;
+		result->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
-		if (_techniqueFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-			auto& actualTechnique = *_techniqueFuture.get();
-			nascentDesc->_depVal = actualTechnique.GetDependencyValidation();
-			auto& entry = actualTechnique.GetEntry(_techniqueIndex);
-			PrepareShadersFromTechniqueEntry(nascentDesc, entry);
-			promise.set_value(std::move(nascentDesc));
-		} else {
-			// We need to poll until the technique file is ready, and then continue on to figuring out the shader
-			// information as usual
-			::Assets::WhenAll(_techniqueFuture).ThenConstructToPromise(
-				std::move(promise),
-				[techniqueIndex = _techniqueIndex, nascentDesc](const std::shared_ptr<Technique>& technique) {
-					nascentDesc->_depVal = technique->GetDependencyValidation();
-					auto& entry = technique->GetEntry(techniqueIndex);
-					PrepareShadersFromTechniqueEntry(nascentDesc, entry);
-					return nascentDesc;
-				});
-		}
+		result->_depVal = _technique->GetDependencyValidation();
+		auto& entry = _technique->GetEntry(_techniqueIndex);
+		PrepareShadersFromTechniqueEntry(*result, entry);
 
 		return result;
 	}
 
-	std::string TechniqueDelegate_Legacy::GetPipelineLayout()
-	{
-		return MAIN_PIPELINE ":GraphicsMain";
-	}
+	std::string TechniqueDelegate_Legacy::GetPipelineLayout() { return MAIN_PIPELINE ":GraphicsMain"; }
+	::Assets::DependencyValidation TechniqueDelegate_Legacy::GetDependencyValidation() { return {}; }
 
 	TechniqueDelegate_Legacy::TechniqueDelegate_Legacy(
+		std::shared_ptr<Technique> technique,
 		unsigned techniqueIndex,
 		const AttachmentBlendDesc& blend,
 		const RasterizationDesc& rasterization,
 		const DepthStencilDesc& depthStencil)
-	: _techniqueIndex(techniqueIndex)
+	: _technique(std::move(technique))
+	, _techniqueIndex(techniqueIndex)
 	, _blend(blend)
 	, _rasterization(rasterization)
 	, _depthStencil(depthStencil)
-	{
-		const char* techFile = ILLUM_LEGACY_TECH;
-		_techniqueFuture = ::Assets::MakeAssetPtr<Technique>(techFile);
-	}
+	{}
 
 	TechniqueDelegate_Legacy::~TechniqueDelegate_Legacy()
-	{
-	}
+	{}
 
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegateLegacy(
+	void CreateTechniqueDelegateLegacy(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		unsigned techniqueIndex,
 		const AttachmentBlendDesc& blend,
 		const RasterizationDesc& rasterization,
 		const DepthStencilDesc& depthStencil)
 	{
-		return std::make_shared<TechniqueDelegate_Legacy>(techniqueIndex, blend, rasterization, depthStencil);
+		const char* techFile = ILLUM_LEGACY_TECH;
+		auto techniqueFuture = ::Assets::MakeAssetPtr<Technique>(techFile);
+		::Assets::WhenAll(techniqueFuture).ThenConstructToPromise(
+			std::move(promise),
+			[techniqueIndex, blend, rasterization, depthStencil](auto technique) {
+				return std::make_shared<TechniqueDelegate_Legacy>(std::move(technique), techniqueIndex, blend, rasterization, depthStencil);
+			});
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -168,8 +156,8 @@ namespace RenderCore { namespace Techniques
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
 
-			TechniqueFileHelper(const std::shared_ptr<TechniqueSetFile>& techniqueSet)
-			: _techniqueSet(techniqueSet)
+			TechniqueFileHelper(std::shared_ptr<TechniqueSetFile> techniqueSet)
+			: _techniqueSet(std::move(techniqueSet))
 			{
 				const auto noPatchesHash = Hash64("Deferred_NoPatches");
 				const auto perPixelHash = Hash64("Deferred_PerPixel");
@@ -195,12 +183,10 @@ namespace RenderCore { namespace Techniques
 			TechniqueFileHelper() = default;
 		};
 
-		FutureGraphicsPipelineDesc GetPipelineDesc(
+		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
-			auto result = promise.get_future();
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
 			bool deferredDecal = 
@@ -215,46 +201,39 @@ namespace RenderCore { namespace Techniques
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
-				std::move(promise),
-				[nascentDesc, illumType, hasDeformVertex](const TechniqueFileHelper& techniqueFileHelper) {
+			#if defined(_DEBUG)
+				if (_techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
+					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+			#endif
 
-					#if defined(_DEBUG)
-						if (techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
-							Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-					#endif
+			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
+			switch (illumType) {
+			case IllumType::PerPixel:
+				psTechEntry = &_techniqueFileHelper._perPixel;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
+				break;
+			case IllumType::PerPixelAndEarlyRejection:
+				psTechEntry = &_techniqueFileHelper._perPixelAndEarlyRejection;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
+				break;
+			default:
+				break;
+			}
 
-					const TechniqueEntry* psTechEntry = &techniqueFileHelper._noPatches;
-					switch (illumType) {
-					case IllumType::PerPixel:
-						psTechEntry = &techniqueFileHelper._perPixel;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
-						break;
-					case IllumType::PerPixelAndEarlyRejection:
-						psTechEntry = &techniqueFileHelper._perPixelAndEarlyRejection;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
-						break;
-					default:
-						break;
-					}
+			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
+			if (hasDeformVertex) {
+				vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+			}
 
-					const TechniqueEntry* vsTechEntry = &techniqueFileHelper._vsNoPatchesSrc;
-					if (hasDeformVertex) {
-						vsTechEntry = &techniqueFileHelper._vsDeformVertexSrc;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
-					}
-
-					nascentDesc->_depVal = techniqueFileHelper.GetDependencyValidation();
-					
-					// note -- we could premerge all of the combinations in the constructor, to cut down on cost here
-					TechniqueEntry mergedTechEntry = *vsTechEntry;
-					mergedTechEntry.MergeIn(*psTechEntry);
-
-					PrepareShadersFromTechniqueEntry(nascentDesc, mergedTechEntry);
-					return nascentDesc;
-				});
+			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
 			
-			return result;
+			// note -- we could premerge all of the combinations in the constructor, to cut down on cost here
+			TechniqueEntry mergedTechEntry = *vsTechEntry;
+			mergedTechEntry.MergeIn(*psTechEntry);
+
+			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
+			return nascentDesc;
 		}
 
 		std::string GetPipelineLayout() override
@@ -262,21 +241,26 @@ namespace RenderCore { namespace Techniques
 			return MAIN_PIPELINE ":GraphicsMain";
 		}
 
-		TechniqueDelegate_Deferred(
-			const TechniqueSetFileFuture& techniqueSet)
+		::Assets::DependencyValidation GetDependencyValidation() override
 		{
-			std::promise<TechniqueFileHelper> helperPromise;
-			_techniqueFileHelper = helperPromise.get_future();
-			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(std::move(helperPromise));
+			return _techniqueFileHelper.GetDependencyValidation();
+		}
+
+		TechniqueDelegate_Deferred(std::shared_ptr<TechniqueSetFile> techniqueSet)
+		: _techniqueFileHelper(std::move(techniqueSet))
+		{
 		}
 	private:
-		std::shared_future<TechniqueFileHelper> _techniqueFileHelper;
+		TechniqueFileHelper _techniqueFileHelper;
 	};
 
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Deferred(
+	void CreateTechniqueDelegate_Deferred(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet)
 	{
-		return std::make_shared<TechniqueDelegate_Deferred>(techniqueSet);
+		::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+			std::move(promise),
+			[](auto techniqueSet) { return std::make_shared<TechniqueDelegate_Deferred>(std::move(techniqueSet)); });
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -297,8 +281,8 @@ namespace RenderCore { namespace Techniques
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
 
-			TechniqueFileHelper(const std::shared_ptr<TechniqueSetFile>& techniqueSet)
-			: _techniqueSet(techniqueSet)
+			TechniqueFileHelper(std::shared_ptr<TechniqueSetFile> techniqueSet)
+			: _techniqueSet(std::move(techniqueSet))
 			{
 				const auto noPatchesHash = Hash64("Forward_NoPatches");
 				const auto perPixelHash = Hash64("Forward_PerPixel");
@@ -325,12 +309,10 @@ namespace RenderCore { namespace Techniques
 			TechniqueFileHelper() = default;
 		};
 
-		FutureGraphicsPipelineDesc GetPipelineDesc(
+		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
-			auto result = promise.get_future();
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
 
@@ -347,47 +329,41 @@ namespace RenderCore { namespace Techniques
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
-				std::move(promise),
-				[nascentDesc, illumType, hasDeformVertex](const TechniqueFileHelper& techniqueFileHelper) {
+			#if defined(_DEBUG)
+				if (_techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
+					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+			#endif
 
-					#if defined(_DEBUG)
-						if (techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
-							Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-					#endif
+			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
+			switch (illumType) {
+			case IllumType::PerPixel:
+				psTechEntry = &_techniqueFileHelper._perPixel;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
+				break;
+			case IllumType::PerPixelAndEarlyRejection:
+				psTechEntry = &_techniqueFileHelper._perPixelAndEarlyRejection;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
+				break;
+			case IllumType::PerPixelCustomLighting:
+				psTechEntry = &_techniqueFileHelper._perPixelCustomLighting;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelCustomLighting, &s_patchExp_perPixelCustomLighting[dimof(s_patchExp_perPixelCustomLighting)]);
+			default:
+				break;
+			}
 
-					const TechniqueEntry* psTechEntry = &techniqueFileHelper._noPatches;
-					switch (illumType) {
-					case IllumType::PerPixel:
-						psTechEntry = &techniqueFileHelper._perPixel;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
-						break;
-					case IllumType::PerPixelAndEarlyRejection:
-						psTechEntry = &techniqueFileHelper._perPixelAndEarlyRejection;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
-						break;
-					case IllumType::PerPixelCustomLighting:
-						psTechEntry = &techniqueFileHelper._perPixelCustomLighting;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelCustomLighting, &s_patchExp_perPixelCustomLighting[dimof(s_patchExp_perPixelCustomLighting)]);
-					default:
-						break;
-					}
+			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
+			if (hasDeformVertex) {
+				vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+			}
 
-					const TechniqueEntry* vsTechEntry = &techniqueFileHelper._vsNoPatchesSrc;
-					if (hasDeformVertex) {
-						vsTechEntry = &techniqueFileHelper._vsDeformVertexSrc;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
-					}
+			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
 
-					nascentDesc->_depVal = techniqueFileHelper.GetDependencyValidation();
+			TechniqueEntry mergedTechEntry = *vsTechEntry;
+			mergedTechEntry.MergeIn(*psTechEntry);
 
-					TechniqueEntry mergedTechEntry = *vsTechEntry;
-					mergedTechEntry.MergeIn(*psTechEntry);
-
-					PrepareShadersFromTechniqueEntry(nascentDesc, mergedTechEntry);
-					return nascentDesc;
-				});
-			return result;
+			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
+			return nascentDesc;
 		}
 
 		std::string GetPipelineLayout() override
@@ -395,14 +371,16 @@ namespace RenderCore { namespace Techniques
 			return MAIN_PIPELINE ":GraphicsForwardPlus";
 		}
 
-		TechniqueDelegate_Forward(
-			const TechniqueSetFileFuture& techniqueSet,
-			TechniqueDelegateForwardFlags::BitField flags)
+		::Assets::DependencyValidation GetDependencyValidation() override
 		{
-			std::promise<TechniqueFileHelper> helperPromise;
-			_techniqueFileHelper = helperPromise.get_future();
-			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(std::move(helperPromise));
+			return _techniqueFileHelper.GetDependencyValidation();
+		}
 
+		TechniqueDelegate_Forward(
+			std::shared_ptr<TechniqueSetFile> techniqueSet,
+			TechniqueDelegateForwardFlags::BitField flags)
+		: _techniqueFileHelper(std::move(techniqueSet))
+		{
 			if (flags & TechniqueDelegateForwardFlags::DisableDepthWrite) {
 				_depthStencil = CommonResourceBox::s_dsReadOnly;
 			} else {
@@ -410,15 +388,20 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 	private:
-		std::shared_future<TechniqueFileHelper> _techniqueFileHelper;
+		TechniqueFileHelper _techniqueFileHelper;
 		DepthStencilDesc _depthStencil;
 	};
 
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Forward(
+	void CreateTechniqueDelegate_Forward(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet,
 		TechniqueDelegateForwardFlags::BitField flags)
 	{
-		return std::make_shared<TechniqueDelegate_Forward>(techniqueSet, flags);
+		::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+			std::move(promise),
+			[flags](auto techniqueSet) {
+				return std::make_shared<TechniqueDelegate_Forward>(std::move(techniqueSet), flags);
+			});
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -437,8 +420,8 @@ namespace RenderCore { namespace Techniques
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
 
-			TechniqueFileHelper(const std::shared_ptr<TechniqueSetFile>& techniqueSet, std::optional<ShadowGenType> shadowGen)
-			: _techniqueSet(techniqueSet)
+			TechniqueFileHelper(std::shared_ptr<TechniqueSetFile> techniqueSet, std::optional<ShadowGenType> shadowGen)
+			: _techniqueSet(std::move(techniqueSet))
 			{
 				const auto noPatchesHash = Hash64("DepthOnly_NoPatches");
 				const auto earlyRejectionHash = Hash64("DepthOnly_EarlyRejection");
@@ -469,12 +452,10 @@ namespace RenderCore { namespace Techniques
 			TechniqueFileHelper() = default;
 		};
 
-		FutureGraphicsPipelineDesc GetPipelineDesc(
+		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
-			auto result = promise.get_future();
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 
 			unsigned cullDisable = 0;
@@ -489,36 +470,30 @@ namespace RenderCore { namespace Techniques
 			bool hasEarlyRejectionTest = shaderPatches.HasPatchType(s_earlyRejectionTest);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
-				std::move(promise),
-				[nascentDesc, hasEarlyRejectionTest, hasDeformVertex](const TechniqueFileHelper& techniqueFileHelper) {
+			#if defined(_DEBUG)
+				if (_techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
+					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+			#endif
 
-					#if defined(_DEBUG)
-						if (techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
-							Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-					#endif
+			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
+			if (hasEarlyRejectionTest) {
+				psTechEntry = &_techniqueFileHelper._earlyRejectionSrc;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_earlyRejection[dimof(s_patchExp_earlyRejection)]);
+			}
 
-					const TechniqueEntry* psTechEntry = &techniqueFileHelper._noPatches;
-					if (hasEarlyRejectionTest) {
-						psTechEntry = &techniqueFileHelper._earlyRejectionSrc;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_earlyRejection[dimof(s_patchExp_earlyRejection)]);
-					}
+			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
+			if (hasDeformVertex) {
+				vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+			}
 
-					const TechniqueEntry* vsTechEntry = &techniqueFileHelper._vsNoPatchesSrc;
-					if (hasDeformVertex) {
-						vsTechEntry = &techniqueFileHelper._vsDeformVertexSrc;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
-					}
+			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
 
-					nascentDesc->_depVal = techniqueFileHelper.GetDependencyValidation();
+			TechniqueEntry mergedTechEntry = *vsTechEntry;
+			mergedTechEntry.MergeIn(*psTechEntry);
 
-					TechniqueEntry mergedTechEntry = *vsTechEntry;
-					mergedTechEntry.MergeIn(*psTechEntry);
-
-					PrepareShadersFromTechniqueEntry(nascentDesc, mergedTechEntry);
-					return nascentDesc;
-				});
-			return result;
+			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
+			return nascentDesc;
 		}
 
 		std::string GetPipelineLayout() override
@@ -526,44 +501,54 @@ namespace RenderCore { namespace Techniques
 			return MAIN_PIPELINE ":GraphicsMain";
 		}
 
+		::Assets::DependencyValidation GetDependencyValidation() override
+		{
+			return _techniqueFileHelper.GetDependencyValidation();
+		}
+
 		TechniqueDelegate_DepthOnly(
-			const TechniqueSetFileFuture& techniqueSet,
+			std::shared_ptr<TechniqueSetFile> techniqueSet,
 			const RSDepthBias& singleSidedBias,
 			const RSDepthBias& doubleSidedBias,
 			CullMode cullMode, FaceWinding faceWinding,
 			std::optional<ShadowGenType> shadowGen)
+		: _techniqueFileHelper(std::move(techniqueSet), shadowGen)
 		{
-			std::promise<TechniqueFileHelper> helperPromise;
-			_techniqueFileHelper = helperPromise.get_future();
-			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
-				std::move(helperPromise), 
-				[shadowGen](std::shared_ptr<TechniqueSetFile> techniqueSet) { return TechniqueFileHelper{techniqueSet, shadowGen}; });
-
 			_rs[0x0] = RasterizationDesc{cullMode,        faceWinding, (float)singleSidedBias._depthBias, singleSidedBias._depthBiasClamp, singleSidedBias._slopeScaledBias};
             _rs[0x1] = RasterizationDesc{CullMode::None,  faceWinding, (float)doubleSidedBias._depthBias, doubleSidedBias._depthBiasClamp, doubleSidedBias._slopeScaledBias};			
 		}
 	private:
-		std::shared_future<TechniqueFileHelper> _techniqueFileHelper;
+		TechniqueFileHelper _techniqueFileHelper;
 		RasterizationDesc _rs[2];
 	};
 
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_DepthOnly(
+	void CreateTechniqueDelegate_DepthOnly(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet,
 		const RSDepthBias& singleSidedBias,
         const RSDepthBias& doubleSidedBias,
         CullMode cullMode, FaceWinding faceWinding)
 	{
-		return std::make_shared<TechniqueDelegate_DepthOnly>(techniqueSet, singleSidedBias, doubleSidedBias, cullMode, faceWinding, std::optional<ShadowGenType>{});
+		::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+			std::move(promise),
+			[singleSidedBias, doubleSidedBias, cullMode, faceWinding](auto techniqueSet) {
+				return std::make_shared<TechniqueDelegate_DepthOnly>(std::move(techniqueSet), singleSidedBias, doubleSidedBias, cullMode, faceWinding, std::optional<ShadowGenType>{});
+			});
 	}
 
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ShadowGen(
+	void CreateTechniqueDelegate_ShadowGen(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet,
 		ShadowGenType shadowGenType,
 		const RSDepthBias& singleSidedBias,
         const RSDepthBias& doubleSidedBias,
         CullMode cullMode, FaceWinding faceWinding)
 	{
-		return std::make_shared<TechniqueDelegate_DepthOnly>(techniqueSet, singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGenType);
+		::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+			std::move(promise),
+			[singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGenType](auto techniqueSet) {
+				return std::make_shared<TechniqueDelegate_DepthOnly>(std::move(techniqueSet), singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGenType);
+			});
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -616,12 +601,10 @@ namespace RenderCore { namespace Techniques
 			TechniqueFileHelper() = default;
 		};
 
-		FutureGraphicsPipelineDesc GetPipelineDesc(
+		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
-			auto result = promise.get_future();
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 
 			unsigned cullDisable = 0;
@@ -643,55 +626,49 @@ namespace RenderCore { namespace Techniques
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
-				std::move(promise),
-				[nascentDesc, illumType, hasDeformVertex, preDepthType=_preDepthType](const TechniqueFileHelper& techniqueFileHelper) {
+			#if defined(_DEBUG)
+				if (_techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
+					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+			#endif
 
-					#if defined(_DEBUG)
-						if (techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
-							Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-					#endif
+			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._psNoPatchesSrc;
+			switch (illumType) {
+			case IllumType::PerPixel:
+				psTechEntry = &_techniqueFileHelper._psPerPixelSrc;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
+				break;
+			case IllumType::PerPixelAndEarlyRejection:
+				psTechEntry = &_techniqueFileHelper._psPerPixelAndEarlyRejection;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
+				break;
+			default:
+				break;
+			}
 
-					const TechniqueEntry* psTechEntry = &techniqueFileHelper._psNoPatchesSrc;
-					switch (illumType) {
-					case IllumType::PerPixel:
-						psTechEntry = &techniqueFileHelper._psPerPixelSrc;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
-						break;
-					case IllumType::PerPixelAndEarlyRejection:
-						psTechEntry = &techniqueFileHelper._psPerPixelAndEarlyRejection;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
-						break;
-					default:
-						break;
-					}
+			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
+			if (hasDeformVertex) {
+				vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+			}
 
-					const TechniqueEntry* vsTechEntry = &techniqueFileHelper._vsNoPatchesSrc;
-					if (hasDeformVertex) {
-						vsTechEntry = &techniqueFileHelper._vsDeformVertexSrc;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
-					}
+			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
 
-					nascentDesc->_depVal = techniqueFileHelper.GetDependencyValidation();
+			TechniqueEntry mergedTechEntry = *vsTechEntry;
+			mergedTechEntry.MergeIn(*psTechEntry);
 
-					TechniqueEntry mergedTechEntry = *vsTechEntry;
-					mergedTechEntry.MergeIn(*psTechEntry);
+			if (_preDepthType == PreDepthType::DepthMotion || _preDepthType == PreDepthType::DepthMotionNormal || _preDepthType == PreDepthType::DepthMotionNormalRoughness || _preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation) {
+				mergedTechEntry._selectorFiltering.SetSelector("VSOUT_HAS_PREV_POSITION", 1);
+				mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_MOTION", 1);
+			}
+			if (_preDepthType == PreDepthType::DepthMotionNormal || _preDepthType == PreDepthType::DepthMotionNormalRoughness || _preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
+				mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_NORMAL", 1);
+			if (_preDepthType == PreDepthType::DepthMotionNormalRoughness || _preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
+				mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_ROUGHNESS", 1);
+			if (_preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
+				mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_HISTORY_ACCUMULATION", 1);
 
-					if (preDepthType == PreDepthType::DepthMotion || preDepthType == PreDepthType::DepthMotionNormal || preDepthType == PreDepthType::DepthMotionNormalRoughness || preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation) {
-						mergedTechEntry._selectorFiltering.SetSelector("VSOUT_HAS_PREV_POSITION", 1);
-						mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_MOTION", 1);
-					}
-					if (preDepthType == PreDepthType::DepthMotionNormal || preDepthType == PreDepthType::DepthMotionNormalRoughness || preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
-						mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_NORMAL", 1);
-					if (preDepthType == PreDepthType::DepthMotionNormalRoughness || preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
-						mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_ROUGHNESS", 1);
-					if (preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
-						mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_HISTORY_ACCUMULATION", 1);
-
-					PrepareShadersFromTechniqueEntry(nascentDesc, mergedTechEntry);
-					return nascentDesc;
-				});
-			return result;
+			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
+			return nascentDesc;
 		}
 
 		std::string GetPipelineLayout() override
@@ -699,31 +676,35 @@ namespace RenderCore { namespace Techniques
 			return MAIN_PIPELINE ":GraphicsMain";
 		}
 
-		TechniqueDelegate_PreDepth(
-			const TechniqueSetFileFuture& techniqueSet,
-			PreDepthType preDepthType)
-		: _preDepthType(preDepthType)
+		::Assets::DependencyValidation GetDependencyValidation() override
 		{
-			std::promise<TechniqueFileHelper> helperPromise;
-			_techniqueFileHelper = helperPromise.get_future();
-			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
-				std::move(helperPromise),
-				[preDepthType](auto techSet) { return TechniqueFileHelper{techSet, preDepthType}; });
+			return _techniqueFileHelper.GetDependencyValidation();
+		}
 
+		TechniqueDelegate_PreDepth(
+			std::shared_ptr<TechniqueSetFile> techniqueSet,
+			PreDepthType preDepthType)
+		: _techniqueFileHelper(std::move(techniqueSet), preDepthType), _preDepthType(preDepthType)
+		{
 			_rs[0x0] = CommonResourceBox::s_rsDefault;
 			_rs[0x1] = CommonResourceBox::s_rsCullDisable;
 		}
 	private:
-		std::shared_future<TechniqueFileHelper> _techniqueFileHelper;
+		TechniqueFileHelper _techniqueFileHelper;
 		RasterizationDesc _rs[2];
 		PreDepthType _preDepthType;
 	};
 
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_PreDepth(
+	void CreateTechniqueDelegate_PreDepth(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet,
 		PreDepthType preDepthType)
 	{
-		return std::make_shared<TechniqueDelegate_PreDepth>(techniqueSet, preDepthType);
+		::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+			std::move(promise),
+			[preDepthType](auto techniqueSet) {
+				return std::make_shared<TechniqueDelegate_PreDepth>(std::move(techniqueSet), preDepthType);
+			});
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -743,8 +724,8 @@ namespace RenderCore { namespace Techniques
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
 
-			TechniqueFileHelper(const std::shared_ptr<TechniqueSetFile>& techniqueSet, UtilityDelegateType utilityType)
-			: _techniqueSet(techniqueSet)
+			TechniqueFileHelper(std::shared_ptr<TechniqueSetFile> techniqueSet, UtilityDelegateType utilityType)
+			: _techniqueSet(std::move(techniqueSet))
 			{
 				uint64_t psNoPatchesHash, psPerPixelHash, perPixelAndEarlyRejectionHash;
 				if (utilityType == UtilityDelegateType::FlatColor) {
@@ -778,12 +759,10 @@ namespace RenderCore { namespace Techniques
 			TechniqueFileHelper() = default;
 		};
 
-		FutureGraphicsPipelineDesc GetPipelineDesc(
+		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
-			auto result = promise.get_future();
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 
 			unsigned cullDisable = 0;
@@ -797,44 +776,38 @@ namespace RenderCore { namespace Techniques
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
-				std::move(promise),
-				[nascentDesc, illumType, hasDeformVertex](const TechniqueFileHelper& techniqueFileHelper) {
+			#if defined(_DEBUG)
+				if (_techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
+					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+			#endif
 
-					#if defined(_DEBUG)
-						if (techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
-							Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-					#endif
+			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._psNoPatchesSrc;
+			switch (illumType) {
+			case IllumType::PerPixel:
+				psTechEntry = &_techniqueFileHelper._psPerPixelSrc;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
+				break;
+			case IllumType::PerPixelAndEarlyRejection:
+				psTechEntry = &_techniqueFileHelper._psPerPixelAndEarlyRejection;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
+				break;
+			default:
+				break;
+			}
 
-					const TechniqueEntry* psTechEntry = &techniqueFileHelper._psNoPatchesSrc;
-					switch (illumType) {
-					case IllumType::PerPixel:
-						psTechEntry = &techniqueFileHelper._psPerPixelSrc;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
-						break;
-					case IllumType::PerPixelAndEarlyRejection:
-						psTechEntry = &techniqueFileHelper._psPerPixelAndEarlyRejection;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
-						break;
-					default:
-						break;
-					}
+			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
+			if (hasDeformVertex) {
+				vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+			}
 
-					const TechniqueEntry* vsTechEntry = &techniqueFileHelper._vsNoPatchesSrc;
-					if (hasDeformVertex) {
-						vsTechEntry = &techniqueFileHelper._vsDeformVertexSrc;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
-					}
+			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
 
-					nascentDesc->_depVal = techniqueFileHelper.GetDependencyValidation();
+			TechniqueEntry mergedTechEntry = *vsTechEntry;
+			mergedTechEntry.MergeIn(*psTechEntry);
 
-					TechniqueEntry mergedTechEntry = *vsTechEntry;
-					mergedTechEntry.MergeIn(*psTechEntry);
-
-					PrepareShadersFromTechniqueEntry(nascentDesc, mergedTechEntry);
-					return nascentDesc;
-				});
-			return result;
+			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
+			return nascentDesc;
 		}
 
 		std::string GetPipelineLayout() override
@@ -842,31 +815,36 @@ namespace RenderCore { namespace Techniques
 			return MAIN_PIPELINE ":GraphicsMain";
 		}
 
-		TechniqueDelegate_Utility(
-			const TechniqueSetFileFuture& techniqueSet,
-			UtilityDelegateType utilityType)
-		: _utilityType(utilityType)
+		::Assets::DependencyValidation GetDependencyValidation() override
 		{
-			std::promise<TechniqueFileHelper> helperPromise;
-			_techniqueFileHelper = helperPromise.get_future();
-			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
-				std::move(helperPromise),
-				[utilityType](auto techSet) { return TechniqueFileHelper{techSet, utilityType}; });
+			return _techniqueFileHelper.GetDependencyValidation();
+		}
 
+		TechniqueDelegate_Utility(
+			std::shared_ptr<TechniqueSetFile> techniqueSet,
+			UtilityDelegateType utilityType)
+		: _techniqueFileHelper{std::move(techniqueSet), utilityType}
+		, _utilityType(utilityType)
+		{
 			_rs[0x0] = CommonResourceBox::s_rsDefault;
-            _rs[0x1] = CommonResourceBox::s_rsCullDisable;			
+            _rs[0x1] = CommonResourceBox::s_rsCullDisable;
 		}
 	private:
-		std::shared_future<TechniqueFileHelper> _techniqueFileHelper;
+		TechniqueFileHelper _techniqueFileHelper;
 		RasterizationDesc _rs[2];
 		UtilityDelegateType _utilityType;
 	};
 
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Utility(
+	void CreateTechniqueDelegate_Utility(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet,
 		UtilityDelegateType type)
 	{
-		return std::make_shared<TechniqueDelegate_Utility>(techniqueSet, type);
+		::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+			std::move(promise),
+			[type](auto techniqueSet) {
+				return std::make_shared<TechniqueDelegate_Utility>(std::move(techniqueSet), type);
+			});
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -886,8 +864,8 @@ namespace RenderCore { namespace Techniques
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
 
-			TechniqueFileHelper(const std::shared_ptr<TechniqueSetFile>& techniqueSet)
-			: _techniqueSet(techniqueSet)
+			TechniqueFileHelper(std::shared_ptr<TechniqueSetFile> techniqueSet)
+			: _techniqueSet(std::move(techniqueSet))
 			{
 				const auto noPatchesHash = Hash64("ProbePrepare_NoPatches");
 				const auto perPixelHash = Hash64("ProbePrepare_PerPixel");
@@ -912,12 +890,10 @@ namespace RenderCore { namespace Techniques
 			TechniqueFileHelper() = default;
 		};
 
-		FutureGraphicsPipelineDesc GetPipelineDesc(
+		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
-			auto result = promise.get_future();
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
 
@@ -934,66 +910,65 @@ namespace RenderCore { namespace Techniques
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
-				std::move(promise),
-				[nascentDesc, illumType, hasDeformVertex](const TechniqueFileHelper& techniqueFileHelper) {
+			#if defined(_DEBUG)
+				if (_techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
+					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+			#endif
 
-					#if defined(_DEBUG)
-						if (techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
-							Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-					#endif
+			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
+			switch (illumType) {
+			case IllumType::PerPixel:
+				psTechEntry = &_techniqueFileHelper._perPixel;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
+				break;
+			case IllumType::PerPixelAndEarlyRejection:
+				psTechEntry = &_techniqueFileHelper._perPixelAndEarlyRejection;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
+				break;
+			default:
+				break;
+			}
 
-					const TechniqueEntry* psTechEntry = &techniqueFileHelper._noPatches;
-					switch (illumType) {
-					case IllumType::PerPixel:
-						psTechEntry = &techniqueFileHelper._perPixel;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
-						break;
-					case IllumType::PerPixelAndEarlyRejection:
-						psTechEntry = &techniqueFileHelper._perPixelAndEarlyRejection;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
-						break;
-					default:
-						break;
-					}
+			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
+			if (hasDeformVertex) {
+				vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+			}
 
-					const TechniqueEntry* vsTechEntry = &techniqueFileHelper._vsNoPatchesSrc;
-					if (hasDeformVertex) {
-						vsTechEntry = &techniqueFileHelper._vsDeformVertexSrc;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
-					}
+			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
 
-					nascentDesc->_depVal = techniqueFileHelper.GetDependencyValidation();
+			TechniqueEntry mergedTechEntry = *vsTechEntry;
+			mergedTechEntry.MergeIn(*psTechEntry);
 
-					TechniqueEntry mergedTechEntry = *vsTechEntry;
-					mergedTechEntry.MergeIn(*psTechEntry);
-
-					PrepareShadersFromTechniqueEntry(nascentDesc, mergedTechEntry);
-					return nascentDesc;
-				});
-			return result;
+			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
+			return nascentDesc;
 		}
 
 		std::string GetPipelineLayout() override
 		{
 			return MAIN_PIPELINE ":GraphicsProbePrepare";
 		}
-
-		TechniqueDelegate_ProbePrepare(
-			const TechniqueSetFileFuture& techniqueSet)
+				
+		::Assets::DependencyValidation GetDependencyValidation() override
 		{
-			std::promise<TechniqueFileHelper> helperPromise;
-			_techniqueFileHelper = helperPromise.get_future();
-			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(std::move(helperPromise));
+			return _techniqueFileHelper.GetDependencyValidation();
+		}
+
+		TechniqueDelegate_ProbePrepare(std::shared_ptr<TechniqueSetFile> techniqueSet)
+		: _techniqueFileHelper(std::move(techniqueSet))
+		{
 		}
 	private:
-		std::shared_future<TechniqueFileHelper> _techniqueFileHelper;
+		TechniqueFileHelper _techniqueFileHelper;
 	};
 
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ProbePrepare(
+	void CreateTechniqueDelegate_ProbePrepare(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet)
 	{
-		return std::make_shared<TechniqueDelegate_ProbePrepare>(techniqueSet);
+		::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+			std::move(promise),
+			[](auto techniqueSet) { return std::make_shared<TechniqueDelegate_ProbePrepare>(std::move(techniqueSet)); });
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1012,8 +987,8 @@ namespace RenderCore { namespace Techniques
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
 
-			TechniqueFileHelper(const std::shared_ptr<TechniqueSetFile>& techniqueSet)
-			: _techniqueSet(techniqueSet)
+			TechniqueFileHelper(std::shared_ptr<TechniqueSetFile> techniqueSet)
+			: _techniqueSet(std::move(techniqueSet))
 			{
 				const auto noPatchesHash = Hash64("RayTest_NoPatches");
 				const auto earlyRejectionHash = Hash64("RayTest_EarlyRejection");
@@ -1035,12 +1010,10 @@ namespace RenderCore { namespace Techniques
 			TechniqueFileHelper() = default;
 		};
 
-		FutureGraphicsPipelineDesc GetPipelineDesc(
+		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			std::promise<std::shared_ptr<GraphicsPipelineDesc>> promise;
-			auto result = promise.get_future();
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsDisable;
 			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
@@ -1051,37 +1024,31 @@ namespace RenderCore { namespace Techniques
 			bool hasEarlyRejectionTest = shaderPatches.HasPatchType(s_earlyRejectionTest);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
-				std::move(promise),
-				[nascentDesc, hasEarlyRejectionTest, hasDeformVertex, testType=_testTypeParameter](const TechniqueFileHelper& techniqueFileHelper) {
+			#if defined(_DEBUG)
+				if (_techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
+					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+			#endif
 
-					#if defined(_DEBUG)
-						if (techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
-							Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-					#endif
+			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
+			if (hasEarlyRejectionTest) {
+				psTechEntry = &_techniqueFileHelper._earlyRejectionSrc;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_earlyRejection[dimof(s_patchExp_earlyRejection)]);
+			}
 
-					const TechniqueEntry* psTechEntry = &techniqueFileHelper._noPatches;
-					if (hasEarlyRejectionTest) {
-						psTechEntry = &techniqueFileHelper._earlyRejectionSrc;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_earlyRejection[dimof(s_patchExp_earlyRejection)]);
-					}
+			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
+			if (hasDeformVertex) {
+				vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+			}
 
-					const TechniqueEntry* vsTechEntry = &techniqueFileHelper._vsNoPatchesSrc;
-					if (hasDeformVertex) {
-						vsTechEntry = &techniqueFileHelper._vsDeformVertexSrc;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
-					}
+			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
 
-					nascentDesc->_depVal = techniqueFileHelper.GetDependencyValidation();
+			TechniqueEntry mergedTechEntry = *vsTechEntry;
+			mergedTechEntry.MergeIn(*psTechEntry);
 
-					TechniqueEntry mergedTechEntry = *vsTechEntry;
-					mergedTechEntry.MergeIn(*psTechEntry);
-
-					PrepareShadersFromTechniqueEntry(nascentDesc, mergedTechEntry);
-					nascentDesc->_manualSelectorFiltering.SetSelector("INTERSECTION_TEST", testType);
-					return nascentDesc;
-				});			
-			return result;
+			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
+			nascentDesc->_manualSelectorFiltering.SetSelector("INTERSECTION_TEST", _testTypeParameter);
+			return nascentDesc;
 		}
 
 		std::string GetPipelineLayout() override
@@ -1089,32 +1056,40 @@ namespace RenderCore { namespace Techniques
 			return MAIN_PIPELINE ":GraphicsMain";
 		}
 
-		TechniqueDelegate_RayTest(
-			const TechniqueSetFileFuture& techniqueSet,
-			unsigned testTypeParameter,
-			const StreamOutputInitializers& soInit)
-		: _testTypeParameter(testTypeParameter)
+		::Assets::DependencyValidation GetDependencyValidation() override
 		{
-			std::promise<TechniqueFileHelper> helperPromise;
-			_techniqueFileHelper = helperPromise.get_future();
-			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(std::move(helperPromise));
+			return _techniqueFileHelper.GetDependencyValidation();
+		}
 
-			_soElements = NormalizeInputAssembly(soInit._outputElements);
-			_soStrides = std::vector<unsigned>(soInit._outputBufferStrides.begin(), soInit._outputBufferStrides.end());
+		TechniqueDelegate_RayTest(
+			std::shared_ptr<TechniqueSetFile> techniqueSet,
+			unsigned testTypeParameter,
+			std::vector<InputElementDesc> soElements,
+			std::vector<unsigned> soStrides)
+		: _techniqueFileHelper(std::move(techniqueSet)), _testTypeParameter(testTypeParameter)
+		, _soElements(std::move(soElements)), _soStrides(std::move(soStrides))
+		{
 		}
 	private:
-		std::shared_future<TechniqueFileHelper> _techniqueFileHelper;
+		TechniqueFileHelper _techniqueFileHelper;
 		std::vector<InputElementDesc> _soElements;
 		std::vector<unsigned> _soStrides;
 		unsigned _testTypeParameter;
 	};
 
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_RayTest(
+	void CreateTechniqueDelegate_RayTest(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet,
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit)
 	{
-		return std::make_shared<TechniqueDelegate_RayTest>(techniqueSet, testTypeParameter, soInit);
+		auto soElements = NormalizeInputAssembly(soInit._outputElements);
+		auto soStrides = std::vector<unsigned>(soInit._outputBufferStrides.begin(), soInit._outputBufferStrides.end());
+		::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+			std::move(promise),
+			[testTypeParameter, soElements=std::move(soElements), soStrides=std::move(soStrides)](auto techniqueSet) mutable {
+				return std::make_shared<TechniqueDelegate_RayTest>(std::move(techniqueSet), testTypeParameter, std::move(soElements), std::move(soStrides));
+			});
 	}
 
 	uint64_t GraphicsPipelineDesc::GetHash() const

@@ -53,7 +53,7 @@ namespace ToolsRig
                                 Interactables& interactables, InterfaceState& interfaceState);
         void    RenderToScene(  RenderCore::IThreadContext& context, 
                                 RenderCore::Techniques::ParsingContext& parserContext,
-                                RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators);
+                                const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators);
         ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
 
         PlacementsWidgets(
@@ -100,7 +100,7 @@ namespace ToolsRig
         void Render(
             RenderCore::IThreadContext& context,
             RenderCore::Techniques::ParsingContext& parserContext,
-            RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators);
+            const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators);
 
         const char* GetName() const;
         std::string GetStatusText() const;
@@ -508,7 +508,7 @@ namespace ToolsRig
     void SelectAndEdit::Render(
         RenderCore::IThreadContext& context,
         RenderCore::Techniques::ParsingContext& parserContext,
-        RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators)
+        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators)
     {
         std::vector<std::pair<uint64_t, uint64_t>> activeSelection;
 
@@ -619,7 +619,7 @@ namespace ToolsRig
         void Render(
             RenderCore::IThreadContext& context,
             RenderCore::Techniques::ParsingContext& parserContext,
-            RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators);
+            const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators);
 
         const char* GetName() const;
         IteratorRange<const FloatParameter*>  GetFloatParameters() const;
@@ -738,7 +738,7 @@ namespace ToolsRig
     void PlaceSingle::Render(
         RenderCore::IThreadContext& context,
         RenderCore::Techniques::ParsingContext& parserContext,
-        RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators)
+        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators)
     {
         ++_rendersSinceHitTest;
         if (_transaction && _transaction->GetObjectCount()) {
@@ -805,7 +805,7 @@ namespace ToolsRig
         void Render(
             RenderCore::IThreadContext& context,
             RenderCore::Techniques::ParsingContext& parserContext,
-            RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators);
+            const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators);
 
         const char* GetName() const;
         IteratorRange<const FloatParameter*>  GetFloatParameters() const;
@@ -1278,10 +1278,10 @@ namespace ToolsRig
     void ScatterPlacements::Render(
         RenderCore::IThreadContext& context,
         RenderCore::Techniques::ParsingContext& parserContext,
-        RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators)
+        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators)
     {
         if (_hasHoverPoint)
-            RenderCylinderHighlight(parserContext, pipelineAccelerators, _hoverPoint, _radius);
+            RenderCylinderHighlight(parserContext, *pipelineAccelerators, _hoverPoint, _radius);
     }
 
     const char* ScatterPlacements::GetName() const  { return "ScatterPlace"; }
@@ -1546,7 +1546,7 @@ namespace ToolsRig
     void PlacementsWidgets::RenderToScene(
         RenderCore::IThreadContext& context, 
 		RenderCore::Techniques::ParsingContext& parserContext,
-        RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators)
+        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators)
     {
         _manipulators[_activeManipulatorIndex]->Render(context, parserContext, pipelineAccelerators);
     }
@@ -1626,7 +1626,7 @@ namespace ToolsRig
 
     void PlacementsManipulatorsManager::RenderWidgets(
         RenderCore::IThreadContext& device, RenderCore::Techniques::ParsingContext& parsingContext,
-        RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators)
+        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators)
     {
 		auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(device, *_pimpl->_immediateDrawables, _pimpl->_fontRenderingManager.get());
 		auto viewportDims = device.GetStateDesc()._viewportDimensions;
@@ -1636,7 +1636,7 @@ namespace ToolsRig
     void PlacementsManipulatorsManager::RenderToScene(
         RenderCore::IThreadContext& device, 
 		RenderCore::Techniques::ParsingContext& parserContext,
-        RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators)
+        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators)
     {
         _pimpl->_placementsDispl->RenderToScene(device, parserContext, pipelineAccelerators);
     }

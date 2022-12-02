@@ -76,7 +76,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IResourceView> _staticTableSRV, _probeUniformsUAV;
 		std::vector<Probe> _probes;
 		Configuration _config;
-		std::shared_ptr<Techniques::SequencerConfig> _probePrepareCfg;
+		std::shared_future<std::shared_ptr<Techniques::SequencerConfig>> _probePrepareCfg;
 		std::shared_ptr<Assets::PredefinedDescriptorSetLayout> _sequencerDescSetLayout;
 		std::string _sequencerDescSetLayoutName;
 		std::shared_ptr<MultiViewUniformsDelegate> _multiViewUniformsDelegate;
@@ -170,6 +170,7 @@ namespace RenderCore { namespace LightingEngine
 					if (!_drawablePkt._drawables.empty()) {
 
 						YieldForRequiredResources();
+						assert(_pimpl->_probePrepareCfg.wait_for(std::chrono::seconds(0)) == std::future_status::ready);	// we wait for this in YieldForRequiredResources
 
 						_pimpl->_multiViewUniformsDelegate->SetWorldToProjections(MakeIteratorRange(_pendingViews));
 						_staticPrepareHelper->_parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
@@ -177,7 +178,7 @@ namespace RenderCore { namespace LightingEngine
 						TRY {
 							Techniques::Draw(
 								*_staticPrepareHelper->_parsingContext, *_pimpl->_pipelineAccelerators,
-								*_pimpl->_probePrepareCfg, _drawablePkt);
+								*_pimpl->_probePrepareCfg.get(), _drawablePkt);
 						} CATCH (...) {
 						} CATCH_END
 						_drawablePkt.Reset();
@@ -228,10 +229,13 @@ namespace RenderCore { namespace LightingEngine
 
 		void YieldForRequiredResources()
 		{
+			YieldToPool(_pimpl->_probePrepareCfg);
+			auto cfg = _pimpl->_probePrepareCfg.get();
+
 			// wait for resources (shaders, etc)
 			std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
 			auto prepareFuture = preparePromise.get_future();
-			Techniques::PrepareResources(std::move(preparePromise), *_pimpl->_pipelineAccelerators, *_pimpl->_probePrepareCfg, _drawablePkt);
+			Techniques::PrepareResources(std::move(preparePromise), *_pimpl->_pipelineAccelerators, *cfg, _drawablePkt);
 			YieldToPool(prepareFuture);
 			auto requiredVisibility = prepareFuture.get();
 
@@ -335,14 +339,19 @@ namespace RenderCore { namespace LightingEngine
 			// However, if it's not the same as our typical conventions, we may need to flip the winding
 			// direction
 			bool flipCulling = Techniques::GetGeometricCoordinateSpaceForCubemaps() != GeometricCoordinateSpace::RightHanded;
-			_pimpl->_probePrepareCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig(
-				"shadow-probe",
+			std::promise<std::shared_ptr<Techniques::SequencerConfig>> futureSequencerConfig;
+			_pimpl->_probePrepareCfg = futureSequencerConfig.get_future();
+			::Assets::WhenAll(
 				sharedTechniqueDelegate.GetShadowGenTechniqueDelegate(
 					Techniques::ShadowGenType::VertexIdViewInstancing, 
 					_pimpl->_config._singleSidedBias, 
 					_pimpl->_config._doubleSidedBias, 
-					CullMode::Back, flipCulling ? FaceWinding::CW : FaceWinding::CCW),
-				{}, fbDesc, 0);
+					CullMode::Back, flipCulling ? FaceWinding::CW : FaceWinding::CCW))
+				.ThenConstructToPromise(
+					std::move(futureSequencerConfig),
+					[pipelineAccelerators=_pimpl->_pipelineAccelerators, fbDesc](auto techDel) {
+						return pipelineAccelerators->CreateSequencerConfig("shadow-probe", techDel, {}, fbDesc, 0);
+					});
 		}
 
 		_pimpl->_probes.resize(config._maxStaticProbes, Probe{Zero<Float3>(), 1.f, 1024.f});

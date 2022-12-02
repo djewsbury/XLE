@@ -56,7 +56,7 @@ namespace ToolsRig
         : _parent(std::move(parent))
     {}
 
-    void    ManipulatorsInterface::Render(RenderCore::IThreadContext& context, RenderCore::Techniques::ParsingContext& parserContext, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators)
+    void    ManipulatorsInterface::Render(RenderCore::IThreadContext& context, RenderCore::Techniques::ParsingContext& parserContext, const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators)
     {
 		auto a = GetActiveManipulator();
         if (a)

@@ -8,6 +8,7 @@
 
 #include "../../Utility/IteratorUtils.h"
 #include <string>
+#include <memory>
 
 namespace SceneEngine 
 {
@@ -31,7 +32,7 @@ namespace ToolsRig
         virtual void Render(
             RenderCore::IThreadContext& context, 
             RenderCore::Techniques::ParsingContext& parserContext,
-            RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators) = 0;
+            const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators) = 0;
 
         virtual const char* GetName() const = 0;
         virtual std::string GetStatusText() const = 0;

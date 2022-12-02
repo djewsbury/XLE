@@ -25,7 +25,6 @@
 #include "../../RenderOverlays/HighlightEffects.h"
 #include "../../Assets/Assets.h"
 #include "../../Math/Transformations.h"
-#include "../../ConsoleRig/ResourceBox.h"
 #include "../../xleres/FileList.h"
 
 // #include "../../RenderCore/DX11/Metal/DX11Utils.h"
@@ -86,28 +85,46 @@ namespace ToolsRig
 	class TechniqueBox
 	{
 	public:
-		::Assets::PtrToMarkerPtr<RenderCore::Techniques::TechniqueSetFile> _techniqueSetFile;
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _forwardIllumDelegate;
         std::shared_ptr<RenderCore::Techniques::SequencerConfig> _renderHighlightCfg;
 
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSetFile->GetDependencyValidation(); }
+		::Assets::DependencyValidation GetDependencyValidation() const { return _forwardIllumDelegate->GetDependencyValidation(); }
 
-		TechniqueBox(RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool, const RenderCore::FrameBufferDesc& fbDesc)
+		TechniqueBox(
+            RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool, const RenderCore::FrameBufferDesc& fbDesc,
+            std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> forwardIllumDelegate)
+        : _forwardIllumDelegate(std::move(forwardIllumDelegate))
 		{
-			_techniqueSetFile = ::Assets::MakeAssetMarkerPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
-			_forwardIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Utility(
-                _techniqueSetFile->ShareFuture(), RenderCore::Techniques::UtilityDelegateType::FlatColor);
-
             _renderHighlightCfg = pipelineAcceleratorPool.CreateSequencerConfig(
                 "render-highlight",
 				_forwardIllumDelegate, ParameterBox{}, 
 				fbDesc);
 		}
+        TechniqueBox() = default;
+
+        static void ConstructToPromise(
+            std::promise<TechniqueBox>&& promise,
+            std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+            const RenderCore::FrameBufferDesc& fbDesc)
+        {
+            auto techniqueSetFile = ::Assets::MakeAssetMarkerPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
+			
+            std::promise<std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>> techDelPromise;
+            auto techDelFuture = techDelPromise.get_future();
+            RenderCore::Techniques::CreateTechniqueDelegate_Utility(
+                std::move(techDelPromise),
+                techniqueSetFile->ShareFuture(), RenderCore::Techniques::UtilityDelegateType::FlatColor);
+            ::Assets::WhenAll(std::move(techDelFuture)).ThenConstructToPromise(
+                std::move(promise),
+                [techniqueSetFile, pipelineAcceleratorPool, fbDesc](auto techDel) {
+                    return TechniqueBox{*pipelineAcceleratorPool, fbDesc, techDel};
+                });
+        }
 	};
 
     void Placements_RenderHighlight(
         Techniques::ParsingContext& parserContext,
-        Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
+        const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
         SceneEngine::PlacementsRenderer& renderer,
         const SceneEngine::PlacementCellSet& cellSet,
         const SceneEngine::PlacementGUID* filterBegin,
@@ -116,9 +133,9 @@ namespace ToolsRig
     {
         CATCH_ASSETS_BEGIN
             RenderOverlays::BinaryHighlight highlight{parserContext};
-            const auto* sequencerCfg = ConsoleRig::FindCachedBox<TechniqueBox>(pipelineAccelerators, highlight.GetFrameBufferDesc())._renderHighlightCfg.get();
+            const auto* sequencerCfg = ::Assets::ActualizeAsset<TechniqueBox>(pipelineAccelerators, highlight.GetFrameBufferDesc())._renderHighlightCfg.get();
             Placements_RenderFiltered(
-                parserContext, pipelineAccelerators,
+                parserContext, *pipelineAccelerators,
 				*sequencerCfg,
                 renderer, cellSet, filterBegin, filterEnd, materialGuid);
             highlight.FinishWithOutline(Float3(.65f, .8f, 1.5f));
@@ -127,7 +144,7 @@ namespace ToolsRig
 
 	void Placements_RenderHighlightWithOutlineAndOverlay(
         Techniques::ParsingContext& parserContext,
-        Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
+        const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
         SceneEngine::PlacementsRenderer& renderer,
         const SceneEngine::PlacementCellSet& cellSet,
 		const SceneEngine::PlacementGUID* filterBegin,
@@ -136,9 +153,9 @@ namespace ToolsRig
     {
 		CATCH_ASSETS_BEGIN
             RenderOverlays::BinaryHighlight highlight{parserContext};
-            const auto* sequencerCfg = ConsoleRig::FindCachedBox<TechniqueBox>(pipelineAccelerators, highlight.GetFrameBufferDesc())._renderHighlightCfg.get();
+            const auto* sequencerCfg = ::Assets::ActualizeAsset<TechniqueBox>(pipelineAccelerators, highlight.GetFrameBufferDesc())._renderHighlightCfg.get();
             Placements_RenderFiltered(
-                parserContext, pipelineAccelerators,
+                parserContext, *pipelineAccelerators,
 				*sequencerCfg,
                 renderer, cellSet, filterBegin, filterEnd, materialGuid);
 
@@ -151,7 +168,7 @@ namespace ToolsRig
 
     void Placements_RenderShadow(
         Techniques::ParsingContext& parserContext,
-        Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
+        const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
         SceneEngine::PlacementsRenderer& renderer,
         const SceneEngine::PlacementCellSet& cellSet,
         const SceneEngine::PlacementGUID* filterBegin,
@@ -160,9 +177,9 @@ namespace ToolsRig
     {
         CATCH_ASSETS_BEGIN
             RenderOverlays::BinaryHighlight highlight{parserContext};
-			const auto* sequencerCfg = ConsoleRig::FindCachedBox<TechniqueBox>(pipelineAccelerators, highlight.GetFrameBufferDesc())._renderHighlightCfg.get();
+			const auto* sequencerCfg = ::Assets::ActualizeAsset<TechniqueBox>(pipelineAccelerators, highlight.GetFrameBufferDesc())._renderHighlightCfg.get();
 			Placements_RenderFiltered(
-                parserContext, pipelineAccelerators,
+                parserContext, *pipelineAccelerators,
 				*sequencerCfg,
                 renderer, cellSet, filterBegin, filterEnd, materialGuid);
             highlight.FinishWithShadow(Float4(.025f, .025f, .025f, 0.85f));

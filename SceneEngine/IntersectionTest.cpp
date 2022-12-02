@@ -190,7 +190,7 @@ namespace SceneEngine
 
                     ModelIntersectionStateContext intersectionContext{
                         ModelIntersectionStateContext::RayTest,
-                        parsingContext.GetThreadContext(), *parsingContext.GetTechniqueContext()._pipelineAccelerators,
+                        parsingContext.GetThreadContext(), parsingContext.GetTechniqueContext()._pipelineAccelerators,
                         parsingContext.GetPipelineAcceleratorsVisibility()};
                     intersectionContext.SetRay(worldSpaceRay);
                     auto results = PlacementsIntersection(
@@ -340,7 +340,7 @@ namespace SceneEngine
                         if (!isInside) {
                             ModelIntersectionStateContext intersectionContext{
                                 ModelIntersectionStateContext::FrustumTest,
-                                threadContext, *context._drawingApparatus->_pipelineAccelerators,
+                                threadContext, context._drawingApparatus->_pipelineAccelerators,
                                 parsingContext.GetPipelineAcceleratorsVisibility()};
                             intersectionContext.SetFrustum(worldToProjection);
 

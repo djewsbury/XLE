@@ -135,7 +135,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection,
 		const std::shared_ptr<PipelineCollection>& pipelineCollection, const ParameterBox& globalSelectors, std::shared_ptr<SequencerConfig> cfg, PipelineLayoutMarker& pipelineLayoutMarker)
 	{
-		std::shared_future<std::shared_ptr<GraphicsPipelineDesc>> pipelineDescFuture = cfg->_delegate->GetPipelineDesc(compiledPatchCollection->GetInterface(), _stateSet);
+		auto pipelineDesc = cfg->_delegate->GetPipelineDesc(compiledPatchCollection->GetInterface(), _stateSet);
 		std::promise<Techniques::GraphicsPipelineAndLayout> metalPipelinePromise;
 		auto metalPipelineFuture = metalPipelinePromise.get_future();
 
@@ -151,7 +151,7 @@ namespace RenderCore { namespace Techniques
 			VertexInputStates vis { _inputAssembly, _miniInputAssembly, _topology };
 			pipelineCollection->CreateGraphicsPipeline(
 				std::move(metalPipelinePromise),
-				actualPipelineLayoutAsset->GetPipelineLayout(), pipelineDescFuture,
+				actualPipelineLayoutAsset->GetPipelineLayout(), pipelineDesc,
 				MakeIteratorRange(paramBoxes), 
 				vis, FrameBufferTarget{&cfg->_fbDesc, cfg->_subpassIdx}, compiledPatchCollection);
 		} else {
@@ -159,23 +159,23 @@ namespace RenderCore { namespace Techniques
 			// the pipeline accelerator pool's lock
 			::Assets::WhenAll(pipelineLayoutMarker._pending).ThenConstructToPromise(
 				std::move(metalPipelinePromise),
-				[pipelineCollection, pipelineDescFuture, cfg, compiledPatchCollection, ia0=_inputAssembly, ia1=_miniInputAssembly, top=_topology,
+				[pipelineCollection, pipelineDesc, cfg, compiledPatchCollection, ia0=_inputAssembly, ia1=_miniInputAssembly, top=_topology,
 					p0=cfg->_sequencerSelectors, p1=_geoSelectors, p2=_materialSelectors, p3=globalSelectors]
 					(auto&& promise, auto actualPipelineLayoutAsset) {
 					const ParameterBox* paramBoxes[] = { &p0, &p1, &p2, &p3 };
 					VertexInputStates vis { ia0, ia1, top };
 					pipelineCollection->CreateGraphicsPipeline(
 						std::move(promise),
-						actualPipelineLayoutAsset->GetPipelineLayout(), pipelineDescFuture,
+						actualPipelineLayoutAsset->GetPipelineLayout(), pipelineDesc,
 						MakeIteratorRange(paramBoxes), 
 						vis, FrameBufferTarget{&cfg->_fbDesc, cfg->_subpassIdx}, compiledPatchCollection);
 				});
 		}
 
 		std::weak_ptr<PipelineAccelerator> weakThis = shared_from_this();
-		::Assets::WhenAll(std::move(metalPipelineFuture), std::move(pipelineDescFuture)).ThenConstructToPromise(
+		::Assets::WhenAll(std::move(metalPipelineFuture)).ThenConstructToPromise(
 			std::move(resultPromise),
-			[cfg=std::move(cfg), weakThis](GraphicsPipelineAndLayout metalPipeline, auto pipelineDesc) {
+			[cfg=std::move(cfg), weakThis](GraphicsPipelineAndLayout metalPipeline) {
 				auto containingPipelineAccelerator = weakThis.lock();
 				if (!containingPipelineAccelerator)
 					Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));

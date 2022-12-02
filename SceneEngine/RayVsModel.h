@@ -10,6 +10,7 @@
 #include "../Math/Matrix.h"
 #include "../Core/Types.h"
 #include <vector>
+#include <memory>
 
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques 
@@ -53,7 +54,7 @@ namespace SceneEngine
         ModelIntersectionStateContext(
             TestType testType,
             RenderCore::IThreadContext& threadContext,
-            RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
+            const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
             RenderCore::Techniques::VisibilityMarkerId visibilityMarkerId);
         ~ModelIntersectionStateContext();
 

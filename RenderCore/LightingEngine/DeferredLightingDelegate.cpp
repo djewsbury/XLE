@@ -115,9 +115,9 @@ namespace RenderCore { namespace LightingEngine
 		auto result = promise.get_future();
 		auto normalsFittingTexture = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
 
-		::Assets::WhenAll(normalsFittingTexture).ThenConstructToPromise(
+		::Assets::WhenAll(normalsFittingTexture, techDelBox.GetDeferredIllumDelegate()).ThenConstructToPromise(
 			std::move(promise),
-			[defIllumDel = techDelBox._deferredIllumDelegate, gbufferType, precisionTargets](auto normalsFitting) {
+			[gbufferType, precisionTargets](auto normalsFitting, auto defIllumDel) {
 
 				// This render pass will include just rendering to the gbuffer and doing the initial
 				// lighting resolve.
@@ -151,7 +151,7 @@ namespace RenderCore { namespace LightingEngine
 
 				ParameterBox box;
 				box.SetParameter("GBUFFER_TYPE", (unsigned)gbufferType);
-				createGBuffer.AddSubpass(std::move(subpass), defIllumDel, Techniques::BatchFlags::Opaque, std::move(box), std::move(srDelegate));
+				createGBuffer.AddSubpass(std::move(subpass), std::move(defIllumDel), Techniques::BatchFlags::Opaque, std::move(box), std::move(srDelegate));
 				return std::make_pair(std::move(createGBuffer), normalsFitting->GetCompletionCommandList());
 			});
 		return result;

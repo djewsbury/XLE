@@ -7,6 +7,8 @@
 #include "../Techniques/TechniqueDelegates.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Assets/InitializerPack.h"
+#include "../../Assets/Marker.h"
+#include "../../Assets/AssetHeap.h"		// (for ::Assets::IsInvalidated)
 #include <memory>
 #include <map>
 #if !defined(__CLR_VER)
@@ -48,41 +50,58 @@ namespace RenderCore { namespace LightingEngine
 	class SharedTechniqueDelegateBox
 	{
 	public:
-		std::shared_future<std::shared_ptr<Techniques::TechniqueSetFile>> _techniqueSetFile;
-		std::shared_ptr<Techniques::ITechniqueDelegate> _forwardIllumDelegate_DisableDepthWrite;
-		std::shared_ptr<Techniques::ITechniqueDelegate> _depthOnlyDelegate;
-		std::shared_ptr<Techniques::ITechniqueDelegate> _depthMotionDelegate;
-		std::shared_ptr<Techniques::ITechniqueDelegate> _depthMotionNormalDelegate;
-		std::shared_ptr<Techniques::ITechniqueDelegate> _depthMotionNormalRoughnessDelegate;
-		std::shared_ptr<Techniques::ITechniqueDelegate> _deferredIllumDelegate;
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _lightingOperatorsPipelineLayoutFile;
 		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _dmShadowDescSetTemplate;
 		std::shared_ptr<ICompiledPipelineLayout> _lightingOperatorLayout;
 
+		using TechniqueDelegateFuture = std::shared_future<std::shared_ptr<Techniques::ITechniqueDelegate>>;
+		TechniqueDelegateFuture GetForwardIllumDelegate_DisableDepthWrite();
+		TechniqueDelegateFuture GetDepthOnlyDelegate();
+		TechniqueDelegateFuture GetDepthMotionDelegate();
+		TechniqueDelegateFuture GetDepthMotionNormalDelegate();
+		TechniqueDelegateFuture GetDepthMotionNormalRoughnessDelegate();
+		TechniqueDelegateFuture GetDeferredIllumDelegate();
+
+		std::shared_future<std::shared_ptr<Techniques::TechniqueSetFile>> GetTechniqueSetFile();
+
 		template<typename... Args>
-			std::shared_ptr<Techniques::ITechniqueDelegate> GetShadowGenTechniqueDelegate(Args... args);
+			TechniqueDelegateFuture GetShadowGenTechniqueDelegate(Args&&... args);
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
 		SharedTechniqueDelegateBox(
 			IDevice& device, ShaderLanguage shaderLanguage, SamplerPool* samplerPool);
 	private:
-		std::map<uint64_t, std::shared_ptr<Techniques::ITechniqueDelegate>> _shadowGenTechniqueDelegates;
+		std::map<uint64_t, ::Assets::PtrToMarkerPtr<Techniques::ITechniqueDelegate>> _shadowGenTechniqueDelegates;
 		::Assets::DependencyValidation _depVal;
+
+		::Assets::MarkerPtr<Techniques::TechniqueSetFile> _techniqueSetFile;
+		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _forwardIllumDelegate_DisableDepthWrite;
+		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _depthOnlyDelegate;
+		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _depthMotionDelegate;
+		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _depthMotionNormalDelegate;
+		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _depthMotionNormalRoughnessDelegate;
+		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _deferredIllumDelegate;
 	};
 
 	template<typename... Args>
-		std::shared_ptr<Techniques::ITechniqueDelegate> SharedTechniqueDelegateBox::GetShadowGenTechniqueDelegate(Args... args)
+		auto SharedTechniqueDelegateBox::GetShadowGenTechniqueDelegate(Args&&... args) -> TechniqueDelegateFuture
 	{
 		::Assets::InitializerPack pack{args...};
 		auto hash = pack.ArchivableHash();
 		auto i = _shadowGenTechniqueDelegates.find(hash);
-		if (i != _shadowGenTechniqueDelegates.end())
-			return i->second;
+		if (i != _shadowGenTechniqueDelegates.end()) {
+			if (::Assets::IsInvalidated(*i->second)) {
+				i->second = std::make_shared<::Assets::MarkerPtr<Techniques::ITechniqueDelegate>>();
+				Techniques::CreateTechniqueDelegate_ShadowGen(i->second->AdoptPromise(), GetTechniqueSetFile(), std::forward<Args>(args)...);
+			}
+			return i->second->ShareFuture();
+		}
 
-		auto delegate = Techniques::CreateTechniqueDelegate_ShadowGen(_techniqueSetFile, args...);
+		auto delegate = std::make_shared<::Assets::MarkerPtr<Techniques::ITechniqueDelegate>>();
+		Techniques::CreateTechniqueDelegate_ShadowGen(delegate->AdoptPromise(), GetTechniqueSetFile(), std::forward<Args>(args)...);
 		_shadowGenTechniqueDelegates.insert(std::make_pair(hash, delegate));
-		return delegate;
+		return delegate->ShareFuture();
 	}
 #endif
 

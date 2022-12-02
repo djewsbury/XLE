@@ -579,7 +579,7 @@ namespace ToolsRig
 			
 			SceneEngine::ModelIntersectionStateContext stateContext {
 				SceneEngine::ModelIntersectionStateContext::RayTest,
-				threadContext, *drawingApparatus._pipelineAccelerators,
+				threadContext, drawingApparatus._pipelineAccelerators,
 				parserContext.GetPipelineAcceleratorsVisibility() };
 			stateContext.SetRay(worldSpaceRay);
 			stateContext.ExecuteDrawables(parserContext, pkt);
@@ -780,13 +780,15 @@ namespace ToolsRig
 		bool _pendingAnimStateBind = false;
 
 		std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate> _stencilPrimeDelegate;
-		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _visWireframeDelegate;
-		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _visNormalsDelegate;
-		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _primeStencilBufferDelegate;
 
-		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _visWireframeCfg;
-		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _visNormalsCfg;
-		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _primeStencilCfg;
+		struct SequencerCfgs
+		{
+			std::shared_ptr<RenderCore::Techniques::SequencerConfig> _visWireframeCfg;
+			std::shared_ptr<RenderCore::Techniques::SequencerConfig> _visNormalsCfg;
+			std::shared_ptr<RenderCore::Techniques::SequencerConfig> _primeStencilCfg;
+			::Assets::DependencyValidation _depVals;
+		};
+		std::shared_future<SequencerCfgs> _futureSequencerCfgs;
 
 		Pimpl()
 		{
@@ -871,6 +873,11 @@ namespace ToolsRig
 			_pimpl->_pendingAnimStateBind = false;
 		}
 
+		if (_pimpl->_futureSequencerCfgs.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+			return;
+
+		auto cfgs = _pimpl->_futureSequencerCfgs.get();
+
 		UInt2 viewportDims(parserContext.GetViewport()._width, parserContext.GetViewport()._height);
 		assert(viewportDims[0] && viewportDims[1]);
 		auto cam = AsCameraDesc(*_pimpl->_cameraSettings);
@@ -904,7 +911,7 @@ namespace ToolsRig
 				if (_pimpl->_settings._drawWireframe) {
 					SceneEngine::ExecuteSceneRaw(
 						parserContext, *_pimpl->_pipelineAccelerators,
-						*_pimpl->_visWireframeCfg,
+						*cfgs._visWireframeCfg,
 						sceneView, RenderCore::Techniques::Batch::Opaque,
 						*_pimpl->_scene);
 				}
@@ -912,7 +919,7 @@ namespace ToolsRig
 				if (_pimpl->_settings._drawNormals) {
 					SceneEngine::ExecuteSceneRaw(
 						parserContext, *_pimpl->_pipelineAccelerators,
-						*_pimpl->_visNormalsCfg,
+						*cfgs._visNormalsCfg,
 						sceneView, RenderCore::Techniques::Batch::Opaque,
 						*_pimpl->_scene);
 				}
@@ -932,7 +939,7 @@ namespace ToolsRig
 				// Prime the stencil buffer with draw call indices
 				SceneEngine::ExecuteSceneRaw(
 					parserContext, *_pimpl->_pipelineAccelerators,
-					*_pimpl->_primeStencilCfg,
+					*cfgs._primeStencilCfg,
 					sceneView, RenderCore::Techniques::Batch::Opaque,
 					*_pimpl->_scene);
 				if (visContent)
@@ -1059,36 +1066,71 @@ namespace ToolsRig
 	{
 		using namespace RenderCore;
 
-		RenderCore::Techniques::FragmentStitchingContext stitching{{}, fbProps};
+		std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> visWireframeDelegate;
+		auto visWireframeDelegateFuture = visWireframeDelegate.get_future();
+		RenderCore::Techniques::CreateTechniqueDelegateLegacy(
+			std::move(visWireframeDelegate),
+			Techniques::TechniqueIndex::VisWireframe, {}, {}, Techniques::CommonResourceBox::s_dsReadWrite);
 
-		// We can't register the given preregistered attachments directly -- instead we have to 
-		// register what we're expecting to be given when we actually begin our render
-		auto color = std::find_if(
-			preregAttachments.begin(), preregAttachments.end(), 
-			[](auto c) { return c._semantic == Techniques::AttachmentSemantics::ColorLDR; });
-		if (color != preregAttachments.end()) {
-			// register an initialized color texture
-			auto colorPreg = *color;
-			colorPreg._state = Techniques::PreregisteredAttachment::State::Initialized;
-			colorPreg._layout = BindFlag::RenderTarget;
-			stitching.DefineAttachment(colorPreg);
+		std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> visNormalsDelegate;
+		auto visNormalsDelegateFuture = visNormalsDelegate.get_future();
+		RenderCore::Techniques::CreateTechniqueDelegateLegacy(
+			std::move(visNormalsDelegate),
+			Techniques::TechniqueIndex::VisNormals, {}, {}, Techniques::CommonResourceBox::s_dsReadWrite);
 
-			// register a default depth texture
-			auto depthDesc = colorPreg._desc;
-			depthDesc._bindFlags = BindFlag::DepthStencil|BindFlag::TransferSrc|BindFlag::ShaderResource;
-			assert(systemAttachmentFormats.size() > (unsigned)Techniques::SystemAttachmentFormat::MainDepthStencil);
-			depthDesc._textureDesc._format = systemAttachmentFormats[(unsigned)Techniques::SystemAttachmentFormat::MainDepthStencil];
-			stitching.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, depthDesc, "main-depth", Techniques::PreregisteredAttachment::State::Initialized, BindFlag::DepthStencil);
-		}
+		DepthStencilDesc ds {
+			RenderCore::CompareOp::GreaterEqual, true, true,
+			0xff, 0xff,
+			RenderCore::StencilDesc::AlwaysWrite,
+			RenderCore::StencilDesc::NoEffect };
+		std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> primeStencilBufferDelegate;
+		auto primeStencilBufferDelegateFuture = primeStencilBufferDelegate.get_future();
+		RenderCore::Techniques::CreateTechniqueDelegateLegacy(
+			std::move(primeStencilBufferDelegate),
+			Techniques::TechniqueIndex::DepthOnly, {}, {}, ds);
 
-		auto fbFrag = CreateVisFBFrag();
-		auto stitched = stitching.TryStitchFrameBufferDesc({&fbFrag, &fbFrag+1});
-		_pimpl->_visWireframeCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig("vis-wireframe", _pimpl->_visWireframeDelegate, ParameterBox{}, stitched._fbDesc);
-		_pimpl->_visNormalsCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig("vis-normals", _pimpl->_visNormalsDelegate, ParameterBox{}, stitched._fbDesc);
+		std::promise<Pimpl::SequencerCfgs> promisedSequencerCfgs;
+		_pimpl->_futureSequencerCfgs = promisedSequencerCfgs.get_future();
+		std::vector<RenderCore::Techniques::PreregisteredAttachment> attachments { preregAttachments.begin(), preregAttachments.end() };
+		std::vector<RenderCore::Format> sysFormat { systemAttachmentFormats.begin(), systemAttachmentFormats.end() };
+		::Assets::WhenAll(std::move(visWireframeDelegateFuture), std::move(visNormalsDelegateFuture), std::move(primeStencilBufferDelegateFuture))
+			.ThenConstructToPromise(
+				std::move(promisedSequencerCfgs),
+				[pipelineAccelerators=_pimpl->_pipelineAccelerators, fbProps, preregAttachments=std::move(attachments), systemAttachmentFormats=std::move(sysFormat)](auto visWireframeDelegate, auto visNormalsDelegate, auto primeStencilBufferDelegate) {
 
-		auto justStencilFrag = CreateVisJustStencilFrag();
-		auto justStencilStitched = stitching.TryStitchFrameBufferDesc({&justStencilFrag, &justStencilFrag+1});
-		_pimpl->_primeStencilCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig("vis-prime-stencil", _pimpl->_primeStencilBufferDelegate, ParameterBox{}, justStencilStitched._fbDesc);
+					RenderCore::Techniques::FragmentStitchingContext stitching{{}, fbProps};
+
+					// We can't register the given preregistered attachments directly -- instead we have to 
+					// register what we're expecting to be given when we actually begin our render
+					auto color = std::find_if(
+						preregAttachments.begin(), preregAttachments.end(), 
+						[](auto c) { return c._semantic == Techniques::AttachmentSemantics::ColorLDR; });
+					if (color != preregAttachments.end()) {
+						// register an initialized color texture
+						auto colorPreg = *color;
+						colorPreg._state = Techniques::PreregisteredAttachment::State::Initialized;
+						colorPreg._layout = BindFlag::RenderTarget;
+						stitching.DefineAttachment(colorPreg);
+
+						// register a default depth texture
+						auto depthDesc = colorPreg._desc;
+						depthDesc._bindFlags = BindFlag::DepthStencil|BindFlag::TransferSrc|BindFlag::ShaderResource;
+						assert(systemAttachmentFormats.size() > (unsigned)Techniques::SystemAttachmentFormat::MainDepthStencil);
+						depthDesc._textureDesc._format = systemAttachmentFormats[(unsigned)Techniques::SystemAttachmentFormat::MainDepthStencil];
+						stitching.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, depthDesc, "main-depth", Techniques::PreregisteredAttachment::State::Initialized, BindFlag::DepthStencil);
+					}
+
+					Pimpl::SequencerCfgs cfgs;
+					auto fbFrag = CreateVisFBFrag();
+					auto stitched = stitching.TryStitchFrameBufferDesc({&fbFrag, &fbFrag+1});
+					cfgs._visWireframeCfg = pipelineAccelerators->CreateSequencerConfig("vis-wireframe", visWireframeDelegate, ParameterBox{}, stitched._fbDesc);
+					cfgs._visNormalsCfg = pipelineAccelerators->CreateSequencerConfig("vis-normals", visNormalsDelegate, ParameterBox{}, stitched._fbDesc);
+
+					auto justStencilFrag = CreateVisJustStencilFrag();
+					auto justStencilStitched = stitching.TryStitchFrameBufferDesc({&justStencilFrag, &justStencilFrag+1});
+					cfgs._primeStencilCfg = pipelineAccelerators->CreateSequencerConfig("vis-prime-stencil", primeStencilBufferDelegate, ParameterBox{}, justStencilStitched._fbDesc);
+					return cfgs;
+				});
 	}
 
     VisualisationOverlay::VisualisationOverlay(
@@ -1104,22 +1146,6 @@ namespace ToolsRig
         _pimpl->_settings = overlaySettings;
 
         _pimpl->_mouseOver = std::make_shared<VisMouseOver>();
-
-		_pimpl->_visWireframeDelegate =
-			RenderCore::Techniques::CreateTechniqueDelegateLegacy(
-				Techniques::TechniqueIndex::VisWireframe, {}, {}, Techniques::CommonResourceBox::s_dsReadWrite);
-		_pimpl->_visNormalsDelegate =
-			RenderCore::Techniques::CreateTechniqueDelegateLegacy(
-				Techniques::TechniqueIndex::VisNormals, {}, {}, Techniques::CommonResourceBox::s_dsReadWrite);
-
-		DepthStencilDesc ds {
-			RenderCore::CompareOp::GreaterEqual, true, true,
-			0xff, 0xff,
-			RenderCore::StencilDesc::AlwaysWrite,
-			RenderCore::StencilDesc::NoEffect };
-		_pimpl->_primeStencilBufferDelegate =
-			RenderCore::Techniques::CreateTechniqueDelegateLegacy(
-				Techniques::TechniqueIndex::DepthOnly, {}, {}, ds);
     }
 
     VisualisationOverlay::~VisualisationOverlay() {}

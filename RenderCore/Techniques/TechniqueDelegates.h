@@ -43,11 +43,11 @@ namespace RenderCore { namespace Techniques
 	class ITechniqueDelegate
 	{
 	public:
-		using FutureGraphicsPipelineDesc = std::future<std::shared_ptr<GraphicsPipelineDesc>>;
-		virtual FutureGraphicsPipelineDesc GetPipelineDesc(
+		virtual std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) = 0;
 		virtual std::string GetPipelineLayout() = 0;
+		virtual ::Assets::DependencyValidation GetDependencyValidation() = 0;
 		virtual ~ITechniqueDelegate();
 	};
 
@@ -55,18 +55,21 @@ namespace RenderCore { namespace Techniques
 	class CompiledShaderPatchCollection;
 	using TechniqueSetFileFuture = std::shared_future<std::shared_ptr<TechniqueSetFile>>;
 
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Deferred(
+	void CreateTechniqueDelegate_Deferred(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet);
 
 	namespace TechniqueDelegateForwardFlags { 
 		enum { DisableDepthWrite = 1<<0 };
 		using BitField = unsigned;
 	}
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Forward(
+	void CreateTechniqueDelegate_Forward(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet,
 		TechniqueDelegateForwardFlags::BitField flags = 0);
 
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_DepthOnly(
+	void CreateTechniqueDelegate_DepthOnly(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet,
 		const RSDepthBias& singleSidedBias = RSDepthBias{},
         const RSDepthBias& doubleSidedBias = RSDepthBias{},
@@ -74,7 +77,8 @@ namespace RenderCore { namespace Techniques
 		FaceWinding faceWinding = FaceWinding::CCW);
 
 	enum class ShadowGenType { GSAmplify, VertexIdViewInstancing };
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ShadowGen(
+	void CreateTechniqueDelegate_ShadowGen(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet,
 		ShadowGenType shadowGenType = ShadowGenType::GSAmplify,
 		const RSDepthBias& singleSidedBias = RSDepthBias{},
@@ -82,22 +86,26 @@ namespace RenderCore { namespace Techniques
         CullMode cullMode = CullMode::Back,
 		FaceWinding faceWinding = FaceWinding::CCW);
 
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_RayTest(
+	void CreateTechniqueDelegate_RayTest(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet,
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit);
 
 	enum class PreDepthType { DepthOnly, DepthMotion, DepthMotionNormal, DepthMotionNormalRoughness, DepthMotionNormalRoughnessAccumulation };
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_PreDepth(
+	void CreateTechniqueDelegate_PreDepth(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet,
 		PreDepthType preDepthType);
 
 	enum class UtilityDelegateType { FlatColor, CopyDiffuseAlbedo };
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Utility(
+	void CreateTechniqueDelegate_Utility(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet,
 		UtilityDelegateType utilityType);
 
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ProbePrepare(
+	void CreateTechniqueDelegate_ProbePrepare(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet);
 
 	/** <summary>Backwards compatibility for legacy style techniques</summary>
@@ -105,7 +113,8 @@ namespace RenderCore { namespace Techniques
 	A default technique file is selected and the type of shader is picked via the technique
 	index value. In this case, the material does now impact the technique selected.
 	*/
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegateLegacy(
+	void CreateTechniqueDelegateLegacy(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		unsigned techniqueIndex,
 		const AttachmentBlendDesc& blend,
 		const RasterizationDesc& rasterization,

@@ -61,7 +61,7 @@ namespace RenderCore { namespace LightingEngine
 		DMShadowPreparer(
 			const ShadowOperatorDesc& desc,
 			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-			const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox);
+			const std::shared_ptr<Techniques::ITechniqueDelegate>& shadowGenDelegate);
 		~DMShadowPreparer();
 
 	private:
@@ -400,7 +400,7 @@ namespace RenderCore { namespace LightingEngine
 	DMShadowPreparer::DMShadowPreparer(
 		const ShadowOperatorDesc& desc,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox)
+		const std::shared_ptr<Techniques::ITechniqueDelegate>& shadowGenDelegate)
 	: _pipelineAccelerators(pipelineAccelerators)
 	{
 		assert(desc._resolveType == ShadowResolveType::DepthTexture);
@@ -408,10 +408,6 @@ namespace RenderCore { namespace LightingEngine
 		unsigned arrayCount = 0u;
 		if (desc._projectionMode != ShadowProjectionMode::ArbitraryCubeMap)
 			arrayCount = desc._normalProjCount + (desc._enableNearCascade ? 1 : 0);
-
-		auto shadowGenDelegate = delegatesBox->GetShadowGenTechniqueDelegate(
-			desc._multiViewInstancingPath ? Techniques::ShadowGenType::VertexIdViewInstancing : Techniques::ShadowGenType::GSAmplify,
-			desc._singleSidedBias, desc._doubleSidedBias, desc._cullMode);
 
 		ParameterBox sequencerSelectors;
 		if (desc._projectionMode == ShadowProjectionMode::Ortho) {
@@ -495,15 +491,16 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox)
 	{
+		auto shadowGenDelegateFuture = delegatesBox->GetShadowGenTechniqueDelegate(
+			desc._multiViewInstancingPath ? Techniques::ShadowGenType::VertexIdViewInstancing : Techniques::ShadowGenType::GSAmplify,
+			desc._singleSidedBias, desc._doubleSidedBias, desc._cullMode);
+
 		std::promise<std::shared_ptr<ICompiledShadowPreparer>> promise;
 		auto result = promise.get_future();
-		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[desc, pipelineAccelerators, delegatesBox, promise=std::move(promise)]() mutable {
-				TRY {
-					promise.set_value(std::make_shared<DMShadowPreparer>(desc, pipelineAccelerators, delegatesBox));
-				} CATCH(...) {
-					promise.set_exception(std::current_exception());
-				} CATCH_END
+		::Assets::WhenAll(shadowGenDelegateFuture).ThenConstructToPromise(
+			std::move(promise),
+			[desc, pipelineAccelerators, delegatesBox](auto shadowGenDelegate) mutable {
+				return std::make_shared<DMShadowPreparer>(desc, pipelineAccelerators, std::move(shadowGenDelegate));
 			});
 		return result;
 	}

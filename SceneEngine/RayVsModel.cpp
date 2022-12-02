@@ -35,7 +35,8 @@ namespace SceneEngine
 {
     using namespace RenderCore;
 
-	static std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> CreateTechniqueDelegate(
+	static void CreateTechniqueDelegate(
+		std::promise<std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>>&& promise,
 		const std::shared_future<std::shared_ptr<RenderCore::Techniques::TechniqueSetFile>>& techniqueSet,
 		unsigned testTypeParameter);
 
@@ -238,15 +239,19 @@ namespace SceneEngine
 		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _rayTestSequencerCfg;
 		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _frustumTestSequencerCfg;
 		::Assets::PtrToMarkerPtr<RenderCore::Techniques::TechniqueSetFile> _techniqueSetFile;
+		::Assets::DependencyValidation _depVal;
 
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSetFile->GetDependencyValidation(); }
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
-		ModelIntersectionTechniqueBox(Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+		ModelIntersectionTechniqueBox(
+			Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
+			std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> rayTestTechniqueDelegate,
+			std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> frustumTechniqueDelegate)
+		: _rayTestTechniqueDelegate(std::move(rayTestTechniqueDelegate))
+		, _frustumTechniqueDelegate(std::move(frustumTechniqueDelegate))
 		{
-			auto device = RenderCore::Techniques::Services::GetDevicePtr();
-			_techniqueSetFile = ::Assets::MakeAssetMarkerPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
-			_rayTestTechniqueDelegate = CreateTechniqueDelegate(_techniqueSetFile->ShareFuture(), 0);
-			_frustumTechniqueDelegate = CreateTechniqueDelegate(_techniqueSetFile->ShareFuture(), 1);
+			::Assets::DependencyValidationMarker markers[] { _rayTestTechniqueDelegate->GetDependencyValidation(), _frustumTechniqueDelegate->GetDependencyValidation() };
+			_depVal = ::Assets::GetDepValSys().MakeOrReuse(markers);
 
 			std::vector<SubpassDesc> subpasses;
 			subpasses.emplace_back(SubpassDesc{});
@@ -262,16 +267,40 @@ namespace SceneEngine
 				_rayTestTechniqueDelegate,
 				{}, _fbDesc);
 		}
+		ModelIntersectionTechniqueBox() = default;
+
+		static void ConstructToPromise(
+			std::promise<ModelIntersectionTechniqueBox>&& promise,
+			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool)
+		{
+			auto techniqueSetFile = ::Assets::MakeAssetMarkerPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
+
+			std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promisedRayTestDelegate;
+			auto futureRayTestDelegate = promisedRayTestDelegate.get_future();
+			std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promisedFrustumTestDelegate;
+			auto futureFrustumTestDelegate = promisedFrustumTestDelegate.get_future();
+			CreateTechniqueDelegate(std::move(promisedRayTestDelegate), techniqueSetFile->ShareFuture(), 0);
+			CreateTechniqueDelegate(std::move(promisedFrustumTestDelegate), techniqueSetFile->ShareFuture(), 1);
+
+			::Assets::WhenAll(std::move(futureRayTestDelegate), std::move(futureFrustumTestDelegate)).ThenConstructToPromise(
+				std::move(promise),
+				[pipelineAcceleratorPool](auto rayTestDelegate, auto frustumTestDelegate) {
+					return ModelIntersectionTechniqueBox{*pipelineAcceleratorPool, std::move(rayTestDelegate), std::move(frustumTestDelegate)};
+				});
+		}
 	};
 
     ModelIntersectionStateContext::ModelIntersectionStateContext(
         TestType testType,
         RenderCore::IThreadContext& threadContext,
-		Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
+		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		Techniques::VisibilityMarkerId visibilityMarkerId)
     {
-		auto& box = ConsoleRig::FindCachedBox<ModelIntersectionTechniqueBox>(std::ref(pipelineAcceleratorPool));
-		auto sequencerConfig = (testType == TestType::FrustumTest) ? box._frustumTestSequencerCfg : box._rayTestSequencerCfg;
+		auto* box = ::Assets::MakeAssetMarker<ModelIntersectionTechniqueBox>(pipelineAcceleratorPool)->TryActualize();
+		if (!box)
+			Throw(std::runtime_error("Sequencer configurations pending"));	// prefer to throw before we start the query
+
+		auto sequencerConfig = (testType == TestType::FrustumTest) ? box->_frustumTestSequencerCfg : box->_rayTestSequencerCfg;
 		auto pipelineLayout = Techniques::TryGetCompiledPipelineLayout(*sequencerConfig, visibilityMarkerId);
 		if (!pipelineLayout)
 			Throw(std::runtime_error("Pipeline layout pending"));	// prefer to throw before we start the query
@@ -288,7 +317,7 @@ namespace SceneEngine
 		assert(_pimpl->_queryId != ~0u);
 		_pimpl->_rpi = Techniques::RenderPassInstance {
 			threadContext,
-			box._fbDesc, {},
+			box->_fbDesc, {},
 			*_pimpl->_res->_frameBufferPool, _pimpl->_res->_dummyAttachmentPool,
 			{} };
 
@@ -296,7 +325,7 @@ namespace SceneEngine
 		_pimpl->_sequencerConfig = std::move(sequencerConfig);
 		_pimpl->_encoder = metalContext.BeginStreamOutputEncoder(std::move(pipelineLayout), MakeIteratorRange(&sov, &sov+1));
 		_pimpl->_testType = testType;
-		_pimpl->_pipelineAccelerators = &pipelineAcceleratorPool;
+		_pimpl->_pipelineAccelerators = pipelineAcceleratorPool.get();
     }
 
     ModelIntersectionStateContext::~ModelIntersectionStateContext()
@@ -373,11 +402,13 @@ namespace SceneEngine
 
     static const unsigned s_soStrides[] = { sizeof(ModelIntersectionStateContext::ResultEntry) };
 
-	static std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> CreateTechniqueDelegate(
+	static void CreateTechniqueDelegate(
+		std::promise<std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>>&& promise,
 		const std::shared_future<std::shared_ptr<RenderCore::Techniques::TechniqueSetFile>>& techniqueSet,
 		unsigned testTypeParameter)
 	{
-		return RenderCore::Techniques::CreateTechniqueDelegate_RayTest(
+		RenderCore::Techniques::CreateTechniqueDelegate_RayTest(
+			std::move(promise),
 			techniqueSet, testTypeParameter, 
 			StreamOutputInitializers {
 				MakeIteratorRange(s_soEles),
