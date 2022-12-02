@@ -79,6 +79,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	class ComputePipeline;
 	class CompiledDescriptorSetLayout;
 	class CompiledPipelineLayout;
+	class DescriptorPoolReusableGroup;
 
 	class BoundUniforms
 	{
@@ -145,6 +146,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			uint32_t _descriptorSetIdx = 0u;
 			uint32_t _shaderStageMask = 0u;
 			std::shared_ptr<CompiledDescriptorSetLayout> _layout;
+			std::shared_ptr<DescriptorPoolReusableGroup> _reusableDescriptorSetGroup;
 			unsigned _layoutDynamicOffsetCount = 0;
 
 			std::vector<uint32_t> _resourceViewBinds;

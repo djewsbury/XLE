@@ -199,37 +199,6 @@ namespace RenderCore { namespace Metal_Vulkan
 			VkPhysicalDevice physDev,
 			const PipelineLayoutInitializer& pipelineLayout);
 
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-		struct DescriptorSetCacheResult
-		{
-			std::shared_ptr<CompiledDescriptorSetLayout> _layout;
-			VulkanSharedPtr<VkDescriptorSet>		_blankBindings;
-			
-			#if defined(VULKAN_VERBOSE_DEBUG)
-				DescriptorSetDebugInfo _blankBindingsDescription;
-			#endif
-		};
-		
-		class CompiledDescriptorSetLayoutCache
-		{
-		public:
-			const DescriptorSetCacheResult*	CompileDescriptorSetLayout(
-				const DescriptorSetSignature& signature,
-				const std::string& name,
-				VkShaderStageFlags stageFlags);
-
-			CompiledDescriptorSetLayoutCache(ObjectFactory& objectFactory, GlobalPools& globalPools);
-			~CompiledDescriptorSetLayoutCache();
-		private:
-			ObjectFactory*	_objectFactory;
-			GlobalPools*	_globalPools;
-			Threading::Mutex _lock;
-
-			std::vector<std::pair<uint64_t, std::unique_ptr<DescriptorSetCacheResult>>> _cache;
-		};
-		std::shared_ptr<CompiledDescriptorSetLayoutCache> CreateCompiledDescriptorSetLayoutCache();
-
 		class VulkanGlobalsTemp
 		{
 		public:

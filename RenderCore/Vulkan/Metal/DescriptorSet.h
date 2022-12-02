@@ -147,6 +147,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		IteratorRange<const DescriptorSlot*> GetDescriptorSlots() const { return MakeIteratorRange(_descriptorSlots); }
 		VkShaderStageFlags GetVkShaderStageMask() const { return _vkShaderStageMask; }
 		uint64_t GetDummyMask() const { return _dummyMask; }
+		uint64_t GetHashCode() const { return _hashCode; }
 		bool IsFixedSampler(unsigned slotIdx);
 
 		CompiledDescriptorSetLayout(
@@ -154,6 +155,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			IteratorRange<const DescriptorSlot*> srcLayout,
 			IteratorRange<const  std::shared_ptr<ISampler>*> fixedSamplers,
 			VkShaderStageFlags stageFlags,
+			uint64_t hashCode,
 			const std::string& name);
 		~CompiledDescriptorSetLayout();
 		CompiledDescriptorSetLayout(CompiledDescriptorSetLayout&&) never_throws = default;
@@ -164,6 +166,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::vector<std::shared_ptr<ISampler>> _fixedSamplers;
 		VkShaderStageFlags _vkShaderStageMask;
 		uint64_t _dummyMask = 0;
+		uint64_t _hashCode = 0;
 
 		#if defined(_DEBUG)
 			std::string _name;
@@ -221,5 +224,38 @@ namespace RenderCore { namespace Metal_Vulkan
 			std::string _name;
 		#endif
 	};
+
+	namespace Internal
+	{
+		struct DescriptorSetCacheResult
+		{
+			std::shared_ptr<CompiledDescriptorSetLayout> _layout;
+			VulkanSharedPtr<VkDescriptorSet>		_blankBindings;
+			
+			#if defined(VULKAN_VERBOSE_DEBUG)
+				DescriptorSetDebugInfo _blankBindingsDescription;
+			#endif
+		};
+		
+		class CompiledDescriptorSetLayoutCache
+		{
+		public:
+			const DescriptorSetCacheResult*	CompileDescriptorSetLayout(
+				const DescriptorSetSignature& signature,
+				const std::string& name,
+				VkShaderStageFlags stageFlags);
+
+			CompiledDescriptorSetLayoutCache(ObjectFactory& objectFactory, GlobalPools& globalPools);
+			~CompiledDescriptorSetLayoutCache();
+		private:
+			ObjectFactory*	_objectFactory;
+			GlobalPools*	_globalPools;
+			Threading::Mutex _lock;
+
+			std::vector<std::pair<uint64_t, std::unique_ptr<DescriptorSetCacheResult>>> _cache;
+		};
+
+		std::shared_ptr<CompiledDescriptorSetLayoutCache> CreateCompiledDescriptorSetLayoutCache();
+	}
 
 }}

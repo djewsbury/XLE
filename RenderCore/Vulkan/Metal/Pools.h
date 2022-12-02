@@ -49,6 +49,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		void QueueDestroy(VkCommandBuffer buffer);
 	};
 
+    class DescriptorPoolReusableGroup;
+
     class DescriptorPool
     {
     public:
@@ -56,6 +58,9 @@ namespace RenderCore { namespace Metal_Vulkan
             IteratorRange<VulkanUniquePtr<VkDescriptorSet>*> dst,
             IteratorRange<const VkDescriptorSetLayout*> layouts);
 		VulkanUniquePtr<VkDescriptorSet> Allocate(VkDescriptorSetLayout layout);
+
+        const std::shared_ptr<DescriptorPoolReusableGroup>& GetReusableGroup(
+            const std::shared_ptr<CompiledDescriptorSetLayout>&);
 
         void FlushDestroys();
         VkDevice GetDevice() { return _device.get(); }
@@ -76,11 +81,49 @@ namespace RenderCore { namespace Metal_Vulkan
 		struct MarkedDestroys { IAsyncTracker::Marker _marker; unsigned _pendingCount; };
 		ResizableCircularBuffer<MarkedDestroys, 32> _markedDestroys;
         std::vector<VkDescriptorSet> _pendingDestroys;
+
+        std::vector<std::pair<uint64_t, std::shared_ptr<DescriptorPoolReusableGroup>>> _reusableGroups;
+        DescriptorPoolReusableGroup* _reusableGroupsInAllocationOrder = nullptr;
         Threading::Mutex _lock;
 
         std::string _poolName;
 
+        void AllocateAlreadyLocked(
+            IteratorRange<VulkanUniquePtr<VkDescriptorSet>*> dst,
+            IteratorRange<const VkDescriptorSetLayout*> layouts);
+
 		void QueueDestroy(VkDescriptorSet buffer);
+        void DestroyEverythingImmediately();
+        friend class DescriptorPoolReusableGroup;
+    };
+
+    class DescriptorPoolReusableGroup
+    {
+    public:
+        VkDescriptorSet AllocateSingleImmediateUse();
+
+        ~DescriptorPoolReusableGroup();
+        DescriptorPoolReusableGroup(DescriptorPoolReusableGroup&&) = delete;
+        DescriptorPoolReusableGroup& operator=(DescriptorPoolReusableGroup&&) = delete;
+    private:
+        DescriptorPoolReusableGroup(DescriptorPool&, std::shared_ptr<CompiledDescriptorSetLayout>);
+        DescriptorPool* _parent = nullptr;
+        friend class DescriptorPool;
+
+        static constexpr unsigned PageSize = 8;
+        struct Page
+		{
+            CircularHeap _allocationStates;
+            CircularBuffer<std::pair<Metal_Vulkan::IAsyncTracker::Marker, unsigned>, PageSize> _frontResets;
+			std::vector<VulkanUniquePtr<VkDescriptorSet>> _descriptorSets;
+		};
+		std::vector<Page> _pages;
+        bool _empty = true;
+
+        std::shared_ptr<CompiledDescriptorSetLayout> _layout;
+
+        DescriptorPoolReusableGroup* _nextInAllocationOrder = nullptr;
+        DescriptorPoolReusableGroup* _prevInAllocationOrder = nullptr;
     };
 
     class VulkanRenderPassPool

@@ -149,11 +149,10 @@ namespace RenderCore { namespace Metal_Vulkan
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    void DescriptorPool::Allocate(
+    void DescriptorPool::AllocateAlreadyLocked(
         IteratorRange<VulkanUniquePtr<VkDescriptorSet>*> dst,
         IteratorRange<const VkDescriptorSetLayout*> layouts)
     {
-        ScopedLock(_lock);
         assert(dst.size() == layouts.size());
         assert(dst.size() > 0);
 
@@ -193,12 +192,106 @@ namespace RenderCore { namespace Metal_Vulkan
 			Throw(VulkanAPIFailure(res, "Failure while allocating descriptor set")); 
     }
 
+    void DescriptorPool::Allocate(
+        IteratorRange<VulkanUniquePtr<VkDescriptorSet>*> dst,
+        IteratorRange<const VkDescriptorSetLayout*> layouts)
+    {
+        ScopedLock(_lock);
+        AllocateAlreadyLocked(dst, layouts);
+    }
+
 	VulkanUniquePtr<VkDescriptorSet> DescriptorPool::Allocate(VkDescriptorSetLayout layout)
 	{
 		VulkanUniquePtr<VkDescriptorSet> result[1];
 		Allocate(MakeIteratorRange(result), MakeIteratorRange(&layout, &layout+1));
 		return std::move(result[0]);
 	}
+
+    VkDescriptorSet DescriptorPoolReusableGroup::AllocateSingleImmediateUse()
+    {
+        assert(_parent->_gpuTracker);
+        auto producerMarker = _parent->_gpuTracker->GetProducerMarker();
+
+        ScopedLock(_parent->_lock); // unfortunately global pool lock required
+        Page* page = nullptr;
+        unsigned item;
+        for (auto& p:_pages) {
+            item = p._allocationStates.AllocateBack(1);
+            if (item != ~0u) {
+                page = &p;
+                break;
+            }
+        }
+
+        if (!page) {
+            // create a new page & allocate the first item
+            Page newPage;
+            newPage._allocationStates = CircularHeap{PageSize};
+            newPage._descriptorSets.resize(PageSize);
+            VkDescriptorSetLayout layouts[PageSize];
+            for (unsigned c=0; c<PageSize; ++c) layouts[c] = _layout->GetUnderlying();
+            _parent->AllocateAlreadyLocked(
+                MakeIteratorRange(newPage._descriptorSets),
+                MakeIteratorRange(layouts));
+
+            item = newPage._allocationStates.AllocateBack(1);
+            _pages.emplace_back(std::move(newPage));
+            page = &_pages.back();
+        }
+
+        if (!page->_frontResets.empty() && page->_frontResets.back().first == producerMarker) {
+            page->_frontResets.back().second = item;
+        } else {
+            bool success = page->_frontResets.try_emplace_back(producerMarker, item);
+            assert(success);    // should always succeed, because we're limited by the size of _allocationStates
+            (void)success;
+        }
+
+        // if not already first in the list in allocation order, move there
+        if (_parent->_reusableGroupsInAllocationOrder != this) {
+            if (_prevInAllocationOrder) {
+                assert(_prevInAllocationOrder->_nextInAllocationOrder == this);
+                _prevInAllocationOrder->_nextInAllocationOrder = _nextInAllocationOrder;
+                if (_nextInAllocationOrder) {
+                    assert(_nextInAllocationOrder->_prevInAllocationOrder == this);
+                    _nextInAllocationOrder->_prevInAllocationOrder = _prevInAllocationOrder;
+                }
+                _prevInAllocationOrder = nullptr;
+            } else {
+                assert(!_nextInAllocationOrder);
+            }
+            _nextInAllocationOrder = _parent->_reusableGroupsInAllocationOrder;
+            if (_nextInAllocationOrder) {
+                assert(!_nextInAllocationOrder->_prevInAllocationOrder);
+                _nextInAllocationOrder->_prevInAllocationOrder = this;
+            }
+            _parent->_reusableGroupsInAllocationOrder = this;
+        }
+
+        _empty = false;
+        return page->_descriptorSets[item].get();
+    }
+
+    DescriptorPoolReusableGroup::DescriptorPoolReusableGroup(DescriptorPool& parent, std::shared_ptr<CompiledDescriptorSetLayout> layout)
+    : _parent(&parent), _layout(std::move(layout))
+    {}
+
+    DescriptorPoolReusableGroup::~DescriptorPoolReusableGroup()
+    {}
+
+    auto DescriptorPool::GetReusableGroup(const std::shared_ptr<CompiledDescriptorSetLayout>& layout) -> const std::shared_ptr<DescriptorPoolReusableGroup>&
+    {
+        // find a reusable group that matches the layout hash
+        auto hash = layout->GetHashCode();
+        ScopedLock(_lock);
+        auto i = LowerBound(_reusableGroups, hash);
+        if (i != _reusableGroups.end() && i->first == hash)
+            return i->second;
+
+        std::shared_ptr<DescriptorPoolReusableGroup> newGroup { new DescriptorPoolReusableGroup{*this, layout} };
+        i = _reusableGroups.insert(i, {hash, std::move(newGroup)});
+        return i->second;
+    }
 
     void DescriptorPool::FlushDestroys()
     {
@@ -222,6 +315,21 @@ namespace RenderCore { namespace Metal_Vulkan
 				(uint32_t)countToDestroy, AsPointer(_pendingDestroys.begin()));
 			_pendingDestroys.erase(_pendingDestroys.begin(), _pendingDestroys.begin() + countToDestroy);
 		}
+
+        // check reusable groups
+        auto* reusableGroup = _reusableGroupsInAllocationOrder;
+        while (reusableGroup && !reusableGroup->_empty) {
+            bool anythingLeft = false;
+            for (auto &p:reusableGroup->_pages) {
+                while (!p._frontResets.empty() && p._frontResets.front().first <= trackerMarker) {
+                    p._allocationStates.ResetFront(p._frontResets.front().second);
+                    p._frontResets.pop_front();
+                }
+                anythingLeft |= p._frontResets.empty();
+            }
+            reusableGroup->_empty = !anythingLeft;
+            reusableGroup = reusableGroup->_nextInAllocationOrder;
+        }
     }
 
 	void DescriptorPool::QueueDestroy(VkDescriptorSet set)
@@ -265,7 +373,14 @@ namespace RenderCore { namespace Metal_Vulkan
     DescriptorPool::DescriptorPool() {}
     DescriptorPool::~DescriptorPool() 
     {
-		if (!_pendingDestroys.empty()) {
+		DestroyEverythingImmediately();
+    }
+
+    void DescriptorPool::DestroyEverythingImmediately()
+    {
+        // clear reusable groups first, because they will release into our _pendingDestroys list
+        _reusableGroups.clear();
+        if (!_pendingDestroys.empty()) {
             // potentially dangerous early destruction (can happen in exception cases)
 			vkFreeDescriptorSets(
 				_device.get(), _pool.get(),
@@ -279,24 +394,23 @@ namespace RenderCore { namespace Metal_Vulkan
     , _device(std::move(moveFrom._device))
 	, _gpuTracker(std::move(moveFrom._gpuTracker))
 	, _markedDestroys(std::move(moveFrom._markedDestroys))
-    , _pendingDestroys(moveFrom._pendingDestroys)
+    , _pendingDestroys(std::move(moveFrom._pendingDestroys))
+    , _reusableGroups(std::move(moveFrom._reusableGroups))
+    , _reusableGroupsInAllocationOrder(std::move(moveFrom._reusableGroupsInAllocationOrder))
     , _poolName(std::move(moveFrom._poolName))
     {
     }
 
     DescriptorPool& DescriptorPool::operator=(DescriptorPool&& moveFrom) never_throws
     {
-		if (!_pendingDestroys.empty()) {
-			vkFreeDescriptorSets(
-				_device.get(), _pool.get(),
-				(uint32_t)_pendingDestroys.size(), AsPointer(_pendingDestroys.begin()));
-			_pendingDestroys.clear();
-		}
+		DestroyEverythingImmediately();
         _pool = std::move(moveFrom._pool);
         _device = std::move(moveFrom._device);
 		_gpuTracker = std::move(moveFrom._gpuTracker);
 		_markedDestroys = std::move(moveFrom._markedDestroys);
 		_pendingDestroys = std::move(moveFrom._pendingDestroys);
+        _reusableGroups = std::move(moveFrom._reusableGroups);
+        _reusableGroupsInAllocationOrder = std::move(moveFrom._reusableGroupsInAllocationOrder);
         _poolName = std::move(moveFrom._poolName);
         return *this;
     }

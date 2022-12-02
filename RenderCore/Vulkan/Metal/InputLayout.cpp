@@ -414,6 +414,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::map<unsigned, std::tuple<unsigned, unsigned, const DescriptorSetSignature*>> _fixedDescriptorSets;
 		IteratorRange<const UniformsStreamInterface* const*> _looseUniforms = {};
 		const CompiledPipelineLayout* _pipelineLayout = nullptr;
+		GlobalPools* _globalPools = nullptr;	// only needed when getting the reusable descriptor set group from DescriptorPool
 
 		struct GroupRules
 		{
@@ -518,9 +519,10 @@ namespace RenderCore { namespace Metal_Vulkan
 				[outputDescriptorSet](const auto& c) { return c._descriptorSetIdx == outputDescriptorSet; });
 			if (adaptiveSet == groupRules._adaptiveSetRules.end()) {
 				auto layout = _pipelineLayout->GetDescriptorSetLayout(outputDescriptorSet);
+				auto reusableGroup = _globalPools->_mainDescriptorPool.GetReusableGroup(layout);
 				auto dynamicOffsetCount = CalculateDynamicOffsetCount(layout->GetDescriptorSlots());
 				groupRules._adaptiveSetRules.push_back(
-					AdaptiveSetBindingRules { outputDescriptorSet, 0u, std::move(layout), dynamicOffsetCount });
+					AdaptiveSetBindingRules { outputDescriptorSet, 0u, std::move(layout), std::move(reusableGroup), dynamicOffsetCount });
 				adaptiveSet = groupRules._adaptiveSetRules.end()-1;
 			}
 			adaptiveSet->_shaderStageMask |= shaderStageMask;
@@ -566,7 +568,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			assert(groupIdx < 4);
 			auto& groupRules = _group[groupIdx];
-			auto adaptiveSet = InitializeAdaptiveSetBindingRules(outputDescriptorSet, groupIdx, shaderStageMask);			
+			auto adaptiveSet = InitializeAdaptiveSetBindingRules(outputDescriptorSet, groupIdx, shaderStageMask);
 
 			std::vector<uint32_t>* binds;
 			DEBUG_ONLY(std::vector<std::string>* names);
@@ -1004,6 +1006,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		// by the shader's pipeline layout
 		ConstructionHelper helper;
 		helper._looseUniforms = MakeIteratorRange(groups);
+		helper._globalPools = &GetGlobalPools();
 		helper.InitializeForPipelineLayout(*_pipelineLayout);
 
 		for (unsigned stage=0; stage<ShaderProgram::s_maxShaderStages; ++stage) {
@@ -1055,6 +1058,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto& shader = pipeline._shader;
 		ConstructionHelper helper;
 		helper._looseUniforms = MakeIteratorRange(groups);
+		helper._globalPools = &GetGlobalPools();
 		helper.InitializeForPipelineLayout(*_pipelineLayout);
 		
 		const auto& compiledCode = shader.GetCompiledCode();
@@ -1109,6 +1113,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		// by the shader's pipeline layout
 		ConstructionHelper helper;
 		helper._looseUniforms = MakeIteratorRange(groups);
+		helper._globalPools = &GetGlobalPools();
 		helper.InitializeForPipelineLayout(*_pipelineLayout);
 		helper.BindPipelineLayout(_pipelineLayout->GetInitializer());
 		helper.FinalizeRules();
@@ -1324,8 +1329,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			// inputs and already used earlier this frame...? But that may not be worth it. It seems like it will
 			// make more sense to just create and set a full descriptor set for every call to this function.
 
-			auto& globalPools = context.GetGlobalPools();
-			auto descriptorSet = globalPools._mainDescriptorPool.Allocate(adaptiveSet._layout->GetUnderlying());
+			auto descriptorSet = adaptiveSet._reusableDescriptorSetGroup->AllocateSingleImmediateUse();
 			#if defined(VULKAN_VERBOSE_DEBUG)
 				DescriptorSetDebugInfo verboseDescription;
 				verboseDescription._descriptorSetInfo = s_looseUniforms;
@@ -1409,7 +1413,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					#endif
 
 					builder->FlushChanges(
-						context.GetUnderlyingDevice(), descriptorSet.get(), nullptr, 0
+						context.GetUnderlyingDevice(), descriptorSet, nullptr, 0
 						VULKAN_VERBOSE_DEBUG_ONLY(, verboseDescription));
 				}
 
@@ -1418,7 +1422,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				for (unsigned c=0; c<dynamicOffsetCount; ++c) dynamicOffsets[c] = 0;
 			
 				encoder.BindDescriptorSet(
-					adaptiveSet._descriptorSetIdx, descriptorSet.get(),
+					adaptiveSet._descriptorSetIdx, descriptorSet,
 					MakeIteratorRange(dynamicOffsets, &dynamicOffsets[dynamicOffsetCount])
 					VULKAN_VERBOSE_DEBUG_ONLY(, std::move(verboseDescription)));
 

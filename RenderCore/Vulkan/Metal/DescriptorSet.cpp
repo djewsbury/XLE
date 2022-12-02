@@ -1080,10 +1080,12 @@ namespace RenderCore { namespace Metal_Vulkan
 		IteratorRange<const DescriptorSlot*> srcLayout,
 		IteratorRange<const  std::shared_ptr<ISampler>*> fixedSamplers,
 		VkShaderStageFlags stageFlags,
+		uint64_t hashCode,
 		const std::string& name)
 	: _vkShaderStageMask(stageFlags)
 	, _descriptorSlots(srcLayout.begin(), srcLayout.end())
 	, _fixedSamplers(fixedSamplers.begin(), fixedSamplers.end())
+	, _hashCode(hashCode)
 	#if defined(_DEBUG)
 		, _name(name)
 	#endif
@@ -1137,6 +1139,57 @@ namespace RenderCore { namespace Metal_Vulkan
 	bool CompiledDescriptorSetLayout::IsFixedSampler(unsigned slotIdx)
 	{
 		return (slotIdx < _fixedSamplers.size()) && (_fixedSamplers[slotIdx] != nullptr);
+	}
+
+	namespace Internal
+	{
+		static const std::string s_dummyDescriptorString{"<DummyDescriptor>"};
+
+		const DescriptorSetCacheResult*	CompiledDescriptorSetLayoutCache::CompileDescriptorSetLayout(
+			const DescriptorSetSignature& signature,
+			const std::string& name,
+			VkShaderStageFlags stageFlags)
+		{
+			ScopedLock(_lock);
+			auto hash = HashCombine(signature.GetHashIgnoreNames(), stageFlags);
+			auto i = LowerBound(_cache, hash);
+			if (i != _cache.end() && i->first == hash)
+				return i->second.get();
+
+			auto ds = std::make_unique<DescriptorSetCacheResult>();
+			ds->_layout = std::make_unique<CompiledDescriptorSetLayout>(
+				*_objectFactory, MakeIteratorRange(signature._slots), MakeIteratorRange(signature._fixedSamplers), 
+				stageFlags,
+				hash, name);
+			
+			{
+				ProgressiveDescriptorSetBuilder builder { MakeIteratorRange(signature._slots), 0 };
+				VLA(ProgressiveDescriptorSetBuilder::ResourceDims, resourceDims, signature._slots.size());
+				for (unsigned c=0; c<signature._slots.size(); ++c) resourceDims[c] = ProgressiveDescriptorSetBuilder::ResourceDims::Unknown;
+				builder.BindDummyDescriptors(*_globalPools, ds->_layout->GetDummyMask(), MakeIteratorRange(resourceDims, &resourceDims[signature._slots.size()]));
+				ds->_blankBindings = _globalPools->_longTermDescriptorPool.Allocate(ds->_layout->GetUnderlying());
+				VULKAN_VERBOSE_DEBUG_ONLY(ds->_blankBindingsDescription._descriptorSetInfo = s_dummyDescriptorString);
+				builder.FlushChanges(
+					_objectFactory->GetDevice().get(),
+					ds->_blankBindings.get(),
+					0, 0 VULKAN_VERBOSE_DEBUG_ONLY(, ds->_blankBindingsDescription));
+			}
+
+			i = _cache.insert(i, std::make_pair(hash, std::move(ds)));
+			return i->second.get();
+		}
+
+		CompiledDescriptorSetLayoutCache::CompiledDescriptorSetLayoutCache(ObjectFactory& objectFactory, GlobalPools& globalPools)
+		: _objectFactory(&objectFactory)
+		, _globalPools(&globalPools)
+		{}
+
+		CompiledDescriptorSetLayoutCache::~CompiledDescriptorSetLayoutCache() {}
+
+		std::shared_ptr<CompiledDescriptorSetLayoutCache> CreateCompiledDescriptorSetLayoutCache()
+		{
+			return std::make_shared<CompiledDescriptorSetLayoutCache>(GetObjectFactory(), GetGlobalPools());
+		}
 	}
 
 	void CompiledDescriptorSet::WriteInternal(
