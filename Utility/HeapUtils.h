@@ -9,6 +9,7 @@
 #include "IteratorUtils.h"
 #include "ArithmeticUtils.h"
 #include "StringUtils.h"
+#include "BitUtils.h"
 #include "Threading/Mutex.h"
 #include <vector>
 #include <algorithm>
@@ -860,6 +861,93 @@ namespace Utility
             bool operator()(const Entry&lhs, const Entry&rhs)   { return lhs._start < rhs._start; }
         };
     };
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    inline unsigned	CircularHeap::AllocateBack(unsigned size)
+	{
+		if (_start == _end) return ~0u;
+		if (_start > _end) {
+			if ((_start - _end) >= size) {
+				auto result = _end;
+				_end += size;
+				return result;
+			}
+		} else if ((_end + size) <= _heapSize) {
+			auto result = _end;
+			_end += size;
+			return result;
+		} else if (_start >= size) { // this is the wrap around case
+			_end = size;
+			return 0u;
+		}
+
+		return ~0u;
+	}
+
+    inline unsigned	CircularHeap::AllocateBack(unsigned size, unsigned alignment)
+    {
+        assert(alignment);
+        if (_start == _end) return ~0u;
+		auto alignedEnd = CeilToMultiple(_end, alignment);
+        if (_start > _end) {
+			if ((_start - alignedEnd) >= size) {
+				auto result = alignedEnd;
+				_end = alignedEnd + size;
+				return result;
+			}
+		} else if ((alignedEnd + size) <= _heapSize) {
+			auto result = alignedEnd;
+			_end = alignedEnd + size;
+			return result;
+		} else if (_start >= size) {
+			_end = size;
+			return 0u;
+		}
+
+		return ~0u;
+    }
+
+    inline void		CircularHeap::UndoLastAllocation(unsigned size)
+    {
+        // Roll back the last allocation we performed with AllocateBack
+        // This can also be used to shrink the size of the last allocation
+        // (for example, if it was an estimate) by giving the number of bytes
+        // we want to give back to the heap
+        assert(_end >= size);
+        _end -= size;
+    }
+
+    inline auto CircularHeap::GetQuickMetrics() const -> QuickMetrics
+    {
+        QuickMetrics result;
+        if (_start == _end) {
+            result._bytesAllocated = _heapSize;
+            result._maxNextBlockBytes = 0;
+        } else if (_start > _end) {
+            result._maxNextBlockBytes = _start - _end;
+            result._bytesAllocated = _heapSize - result._maxNextBlockBytes;
+        } else {
+            result._maxNextBlockBytes = std::max(_heapSize - _end, _start);
+            result._bytesAllocated = _end - _start;
+        }
+        result._front = _start;
+        result._back = _end;
+        return result;
+    }
+
+	inline void		CircularHeap::ResetFront(unsigned newFront)
+	{
+		_start = newFront;
+		if (_start == _end) {
+			_start = _heapSize;
+			_end = 0;
+		}
+	}
+
+	inline CircularHeap::CircularHeap(unsigned heapSize) { _start = heapSize; _end = 0; _heapSize = heapSize; }
+	inline CircularHeap::CircularHeap() { _start = _end = _heapSize = 0; }
+	inline CircularHeap::~CircularHeap() {}
 
 }
 
