@@ -19,6 +19,8 @@
 #include "../../Core/Exceptions.h"
 #include <sstream>
 
+// #define WRITE_TOPOLOGICAL_CMDSTREAM 1
+
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
 	static const unsigned ModelScaffoldVersion = 1;
@@ -128,7 +130,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             RemoveRedundantBitangents(*geoBlock._mesh);
 
 		std::vector<uint8_t> adjacencyIndexBuffer;
-		const bool buildTopologicalIndexBuffer = true;
+		#if WRITE_TOPOLOGICAL_CMDSTREAM
+			const bool buildTopologicalIndexBuffer = true;
+		#else
+			const bool buildTopologicalIndexBuffer = false;
+		#endif
 		if constexpr (buildTopologicalIndexBuffer) {
 			// note -- assuming Topology::TriangleList here (also that all indices are going to be read in order)
 			auto indexCount = geoBlock._indices.size() * 8 / BitsPerPixel(geoBlock._indexFormat);
@@ -275,7 +281,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		CmdStreamSerializationHelper mainStreamHelper;
 		std::vector<::Assets::BlockSerializer> generatedCmdStreams;
 		NascentGeometryObjects geoObjects;
-		for (auto mode:{CmdStreamMode::Normal, CmdStreamMode::Topological}) {
+		#if WRITE_TOPOLOGICAL_CMDSTREAM
+			CmdStreamMode cmdStreamModes[] {CmdStreamMode::Normal, CmdStreamMode::Topological};
+		#else
+			CmdStreamMode cmdStreamModes[] {CmdStreamMode::Normal};
+		#endif
+		for (auto mode:cmdStreamModes) {
 			::Assets::BlockSerializer cmdStreamSerializer;
 			CmdStreamSerializationHelper helper;
 

@@ -912,8 +912,8 @@ namespace RenderCore { namespace Techniques
 				if (auto l = cachei->second.lock()) {
 					if (l->_constructionContextGuid != constructionContextGuid)
 						Throw(std::runtime_error("Identical DescriptorSetAccelerator initialized for 2 different ConstructionContexts. This is unsafe, because either context could cancel the load"));
-					// to avoid confusion, let's expect that any two identical descriptor set accelerators have the same name
-					assert(l->_name == name);
+					// It's a little confusing when two identical descriptor set accelerators have the same name -- the actual descriptor set will be named after the
+					// first request. But since this situation can easily happen, there isn't a particularly great way to handle it
 					return l;
 				}
 

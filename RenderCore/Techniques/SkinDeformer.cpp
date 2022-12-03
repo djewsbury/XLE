@@ -440,7 +440,7 @@ namespace RenderCore { namespace Techniques
 		auto sharedRes = _pipelineCollection->_preparedSharedResources.TryActualize();
 		if (!sharedRes) return;
 
-		auto encoder = metalContext.BeginComputeEncoder(sharedRes->_pipelineLayout);
+		auto encoder = metalContext.BeginComputeEncoder(*sharedRes->_pipelineLayout);
 		Metal::CapturedStates capturedStates;
 		encoder.BeginStateCapture(capturedStates);
 

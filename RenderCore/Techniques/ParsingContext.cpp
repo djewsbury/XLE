@@ -58,10 +58,11 @@ namespace RenderCore { namespace Techniques
 
     void ParsingContext::BindAttachment(uint64_t semantic, std::shared_ptr<IResource> resource, bool isInitialized, BindFlags::BitField currentLayout)
     {
+        auto semanticName = AttachmentSemantics::TryDehash(semantic);
         _internal->_stitchingContext.DefineAttachment(
             semantic,
             resource->GetDesc(),
-            AttachmentSemantics::TryDehash(semantic),
+            semanticName ? semanticName : "<<unknown>>",
             isInitialized ? RenderCore::Techniques::PreregisteredAttachment::State::Initialized : RenderCore::Techniques::PreregisteredAttachment::State::Uninitialized,
             currentLayout);
         _internal->_attachmentReservation.Bind(semantic, std::move(resource), currentLayout);

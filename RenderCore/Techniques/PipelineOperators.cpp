@@ -42,7 +42,7 @@ namespace RenderCore { namespace Techniques
 			auto& boundUniforms = _boundUniforms.Get(*_pipeline, sysUsi, _usi);
 
 			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
-			auto encoder = metalContext.BeginGraphicsEncoder(_pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder(*_pipelineLayout);
 
 			ApplyUniformsGraphics(*parsingContext.GetUniformDelegateManager(), metalContext, encoder, parsingContext, boundUniforms, 0);
 			if (!descSets.empty())
@@ -59,7 +59,7 @@ namespace RenderCore { namespace Techniques
 			auto& boundUniforms = _boundUniforms.Get(*_pipeline, _usi);	// maybe silly to do a lookup here because it's the same every time
 
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
-			auto encoder = metalContext.BeginGraphicsEncoder(_pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder(*_pipelineLayout);
 
 			if (!descSets.empty())
 				boundUniforms.ApplyDescriptorSets(metalContext, encoder, descSets, 0);
@@ -239,7 +239,7 @@ namespace RenderCore { namespace Techniques
 
 			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
 			_activeEncoder = {};
-			auto newEncoder = metalContext.BeginComputeEncoder(_pipelineLayout);
+			auto newEncoder = metalContext.BeginComputeEncoder(*_pipelineLayout);
 			_capturedStates = {};
 			newEncoder.BeginStateCapture(_capturedStates);
 
@@ -259,7 +259,7 @@ namespace RenderCore { namespace Techniques
 			auto& boundUniforms = _boundUniforms.Get(*_pipeline, {}, _usi, pushConstantsUSI);
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 			_activeEncoder = {};
-			auto newEncoder = metalContext.BeginComputeEncoder(_pipelineLayout);
+			auto newEncoder = metalContext.BeginComputeEncoder(*_pipelineLayout);
 			_capturedStates = {};
 			newEncoder.BeginStateCapture(_capturedStates);
 			if (!descSets.empty())

@@ -82,9 +82,9 @@ namespace SceneEngine
         return result;
     }
 
-    static ResourceDesc BuildTextureResourceDesc(BindFlag::BitField bindFlags, TextureDesc tDesc, const char name[])
+    static ResourceDesc BuildTextureResourceDesc(BindFlag::BitField bindFlags, TextureDesc tDesc)
     {
-        return CreateDesc(bindFlags, tDesc, name);
+        return CreateDesc(bindFlags, tDesc);
     }
 
     TileLightingResources::TileLightingResources(IDevice& device, unsigned width, unsigned height, unsigned bitDepth)
@@ -92,18 +92,18 @@ namespace SceneEngine
         _resLocator0 = device.CreateResource(
             BuildTextureResourceDesc(
                 BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TransferDst,
-                TextureDesc::Plain2D(width, height, Format::R32_TYPELESS),
-                "TileLighting0"));
+                TextureDesc::Plain2D(width, height, Format::R32_TYPELESS)),
+            "TileLighting0");
         _resLocator1 = device.CreateResource(
             BuildTextureResourceDesc(
                 BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TransferDst,
-                TextureDesc::Plain2D(width, height, Format::R32_TYPELESS),
-                "TileLighting1"));
+                TextureDesc::Plain2D(width, height, Format::R32_TYPELESS)),
+            "TileLighting1");
         _resLocator2 = device.CreateResource(
             BuildTextureResourceDesc(
                 BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TransferDst,
-                TextureDesc::Plain2D(width, height, Format::R16_UINT),
-                "TileLighting2"));
+                TextureDesc::Plain2D(width, height, Format::R16_UINT)),
+            "TileLighting2");
 
         _debuggingTextureSRV[0] = _resLocator0->CreateTextureView(BindFlag::ShaderResource, {Format::R32_FLOAT});
         _debuggingTextureSRV[1] = _resLocator1->CreateTextureView(BindFlag::ShaderResource, {Format::R32_FLOAT});
@@ -118,16 +118,13 @@ namespace SceneEngine
         _lightOutputResource = device.CreateResource(
             BuildTextureResourceDesc(
                 BindFlag::UnorderedAccess | BindFlag::ShaderResource, 
-                TextureDesc::Plain2D(width, height, (bitDepth==16)?Format::R16G16B16A16_FLOAT:Format::R32G32B32A32_FLOAT),
-                "TileLighting3"));
+                TextureDesc::Plain2D(width, height, (bitDepth==16)?Format::R16G16B16A16_FLOAT:Format::R32G32B32A32_FLOAT)),
+            "TileLighting3");
         _lightOutputTextureUAV = _lightOutputResource->CreateTextureView(BindFlag::UnorderedAccess);
         _lightOutputTextureSRV = _lightOutputResource->CreateTextureView(BindFlag::ShaderResource);
 
-        auto bufferDesc = CreateDesc(
-            BindFlag::UnorderedAccess,
-            LinearBufferDesc::Create(1024*24, 24),
-            "temporary-projected-lights");
-        _temporaryProjectedLights = device.CreateResource(bufferDesc);
+        auto bufferDesc = CreateDesc(BindFlag::UnorderedAccess, LinearBufferDesc::Create(1024*24, 24));
+        _temporaryProjectedLights = device.CreateResource(bufferDesc, "temporary-projected-lights");
         _temporaryProjectedLightsUAV = _temporaryProjectedLights->CreateBufferView(BindFlag::UnorderedAccess);
     }
 
@@ -429,7 +426,7 @@ namespace SceneEngine
                 us._resourceViews = MakeIteratorRange(resViews);
 
                 auto& metalContext = *Metal::DeviceContext::Get(threadContext);
-                auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(pipelineLayoutAsset.GetPipelineLayout());
+                auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*pipelineLayoutAsset.GetPipelineLayout());
 
                 encoder.Bind(Techniques::CommonResourceBox::s_dsReadWrite);
                 encoder.Bind({}, Topology::PointList);

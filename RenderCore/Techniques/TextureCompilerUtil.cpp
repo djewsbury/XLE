@@ -46,7 +46,7 @@ namespace RenderCore { namespace Techniques
 
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
 
-		virtual StringSection<> GetName() const { return "data-source-from-resource"; }
+		virtual StringSection<> GetName() const override { return "data-source-from-resource"; }
 
 		DataSourceFromResourceSynchronized(
 			std::shared_ptr<IThreadContext> threadContext, 
