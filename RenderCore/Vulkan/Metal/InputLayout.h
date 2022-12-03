@@ -60,6 +60,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		BoundInputLayout(BoundInputLayout&& moveFrom) never_throws = default;
 		BoundInputLayout& operator=(BoundInputLayout&& moveFrom) never_throws = default;
 
+		std::vector<std::string> FindUnboundShaderAttributes(const CompiledShaderByteCode& shader) const;
+		std::vector<std::string> FindUnboundShaderAttributes(const ShaderProgram& shader) const;
+
 		const IteratorRange<const VkVertexInputAttributeDescription*> GetAttributes() const { return MakeIteratorRange(_attributes); }
 		const IteratorRange<const VkVertexInputBindingDescription*> GetVBBindings() const { return MakeIteratorRange(_vbBindingDescriptions); }
 		uint64_t GetPipelineRelevantHash() const { return _pipelineRelevantHash; }
@@ -70,6 +73,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		bool _allAttributesBound;
 
 		void CalculateAllAttributesBound(const SPIRVReflection& reflection);
+		std::vector<std::string> FindUnboundShaderAttributes(const SPIRVReflection& reflection) const;
 	};
 
 		////////////////////////////////////////////////////////////////////////////////////////////////

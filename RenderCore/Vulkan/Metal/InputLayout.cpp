@@ -265,10 +265,38 @@ namespace RenderCore { namespace Metal_Vulkan
 				_attributes.begin(), _attributes.end(), 
 				[loc](const auto& c) { return c.location == loc; });
 			_allAttributesBound &= (existing != _attributes.end());
-
-			if (existing == _attributes.end())
-				Log(Warning) << "Did not find binding for shader input attribute (" << reflectionVariable._name << ")" << std::endl;
 		}
+	}
+
+	std::vector<std::string> BoundInputLayout::FindUnboundShaderAttributes(const CompiledShaderByteCode& shader) const
+	{
+		return FindUnboundShaderAttributes(SPIRVReflection{shader.GetByteCode()});
+	}
+
+	std::vector<std::string> BoundInputLayout::FindUnboundShaderAttributes(const ShaderProgram& shader) const
+	{
+		return FindUnboundShaderAttributes(SPIRVReflection{shader.GetCompiledCode(ShaderStage::Vertex).GetByteCode()});
+	}
+
+	std::vector<std::string> BoundInputLayout::FindUnboundShaderAttributes(const SPIRVReflection& reflection) const
+	{
+		assert(!_allAttributesBound);		// prefer not call this if AllAttributesBound() return true, given we've already cached that result
+
+		std::vector<std::string> result;
+		result.reserve(reflection._entryPoint._interface.size());
+		for (const auto&v:reflection._entryPoint._interface) {
+			auto reflectionVariable = GetReflectionVariableInformation(reflection, v);
+			if (reflectionVariable._storageClass != SPIRVReflection::StorageClass::Input) continue;
+			if (reflectionVariable._binding._location == ~0u) continue;
+			auto loc = reflectionVariable._binding._location;
+
+			auto existing = std::find_if(
+				_attributes.begin(), _attributes.end(), 
+				[loc](const auto& c) { return c.location == loc; });
+			if (existing == _attributes.end())
+				result.push_back(reflectionVariable._name.AsString());
+		}
+		return result;
 	}
 
 	BoundInputLayout::BoundInputLayout(

@@ -346,7 +346,20 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		#if defined(_DEBUG)
 			GraphicsPipelineAndLayout::DebugInfo _debugInfo;
 		#endif
-	};	
+	};
+
+	[[noreturn]] static void ThrowUnboundAttributesExceptions(const Metal::ShaderProgram& shader, Metal::BoundInputLayout& boundIA)
+	{
+		auto unboundAttributes = boundIA.FindUnboundShaderAttributes(shader);
+		std::stringstream str;
+		str << "Vertex input attributes (";
+		if (!unboundAttributes.empty()) {
+			str << *unboundAttributes.begin();
+			for (auto i=unboundAttributes.begin()+1; i!=unboundAttributes.end(); ++i) str << ", " << *i;
+		}
+		str << ") unbound for shader (" << shader.GetCompiledCode(ShaderStage::Vertex).GetIdentifier() << ")";
+		Throw(std::runtime_error(str.str()));
+	}
 
 	static GraphicsPipelineAndLayout MakeGraphicsPipelineAndLayout(
 		const Metal::ShaderProgram& shader,
@@ -360,12 +373,14 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 		if (!params._ia._inputAssembly.empty()) {
 			Metal::BoundInputLayout boundIA(MakeIteratorRange(params._ia._inputAssembly), shader);
-			assert(boundIA.AllAttributesBound());
+			if (expect_evaluation(!boundIA.AllAttributesBound(), false))
+				ThrowUnboundAttributesExceptions(shader, boundIA);
 			builder.Bind(boundIA, params._topology);
 		} else {
 			Metal::BoundInputLayout::SlotBinding slotBinding { MakeIteratorRange(params._ia._miniInputAssembly), 0 };
 			Metal::BoundInputLayout boundIA(MakeIteratorRange(&slotBinding, &slotBinding+1), shader);
-			assert(boundIA.AllAttributesBound());
+			if (expect_evaluation(!boundIA.AllAttributesBound(), false))
+				ThrowUnboundAttributesExceptions(shader, boundIA);
 			builder.Bind(boundIA, params._topology);
 		}
 
