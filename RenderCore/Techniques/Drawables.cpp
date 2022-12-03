@@ -70,6 +70,7 @@ namespace RenderCore { namespace Techniques
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt,
+		const ICompiledPipelineLayout& initialPipelineLayout,
 		const Internal::TemporaryStorageLocator& temporaryVB, 
 		const Internal::TemporaryStorageLocator& temporaryIB,
 		VisibilityMarkerId acceleratorVisibilityId)
@@ -93,16 +94,18 @@ namespace RenderCore { namespace Techniques
 		const UniformsStreamInterface* currentLooseUniformsInterface = nullptr;
 		Metal::BoundUniforms* currentBoundUniforms = nullptr;
 		unsigned idx = 0;
+		const ICompiledPipelineLayout* currentPipelineLayout = &initialPipelineLayout;
 
 		Metal::CapturedStates capturedStates;
 		encoder.BeginStateCapture(capturedStates);
 
 		unsigned pipelineLookupCount = 0;
+		unsigned pipelineLayoutChangeCount = 0;
 		unsigned boundUniformLookupCount = 0;
 		unsigned fullDescSetCount = 0;
 		unsigned justMatDescSetCount = 0;
 		unsigned executeCount = 0;
-		
+
 		TRY {
 			for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d, ++idx) {
 				const auto& drawable = *(Drawable*)d.get();
@@ -121,6 +124,12 @@ namespace RenderCore { namespace Techniques
 					currentLooseUniformsInterface = drawable._looseUniformsInterface;
 					++boundUniformLookupCount;
 					++pipelineLookupCount;
+
+					if (currentPipelineLayout != pipeline->_pipelineLayout.get()) {
+						encoder.SetPipelineLayout(*pipeline->_pipelineLayout);
+						currentPipelineLayout = pipeline->_pipelineLayout.get();
+						++pipelineLayoutChangeCount;
+					}
 
 					// update the "extra" desc set if we changed bound uniforms
 					if (parserContext._extraSequencerDescriptorSet.second)
@@ -218,6 +227,7 @@ namespace RenderCore { namespace Techniques
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt,
+		const ICompiledPipelineLayout& initialPipelineLayout,
 		const DrawOptions& drawOptions)
 	{
 		Internal::TemporaryStorageLocator temporaryVB, temporaryIB;
@@ -239,7 +249,7 @@ namespace RenderCore { namespace Techniques
 		assert(drawOptions._pipelineAcceleratorsVisibility.has_value() || &pipelineAccelerators == parserContext.GetTechniqueContext()._pipelineAccelerators.get());		// if we're not using the default pipeline accelerators, we should explicitly specify the visibility
 
 		Draw(
-			metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB, 
+			metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, initialPipelineLayout, temporaryVB, temporaryIB, 
 			drawOptions._pipelineAcceleratorsVisibility.value_or(parserContext.GetPipelineAcceleratorsVisibility()));
 	}
 
@@ -255,16 +265,16 @@ namespace RenderCore { namespace Techniques
 		pipelineAccelerators.LockForReading();
 		TRY {
 			auto& metalContext = *Metal::DeviceContext::Get(parserContext.GetThreadContext());
-			auto pipelineLayout = TryGetCompiledPipelineLayout(sequencerConfig, acceleratorVisibilityId);
+			auto* pipelineLayout = TryGetCompiledPipelineLayout(sequencerConfig, acceleratorVisibilityId).get();
 			if (!pipelineLayout) {
 				pipelineAccelerators.UnlockForReading();
 				return;
 			}
-			auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder(*pipelineLayout);
 			auto viewport = parserContext.GetViewport();
 			ScissorRect scissorRect { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
 			encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
-			Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, drawOptions);
+			Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, *pipelineLayout, drawOptions);
 		} CATCH (...) {
 			pipelineAccelerators.UnlockForReading();
 			throw;

@@ -95,6 +95,9 @@ namespace RenderCore { namespace Assets
         PredefinedPipelineLayout(
             const PredefinedPipelineLayoutFile& srcFile,
             std::string name);
+        PredefinedPipelineLayout();
+        PredefinedPipelineLayout(const PredefinedPipelineLayout&);
+        PredefinedPipelineLayout& operator=(const PredefinedPipelineLayout&);
 
         static void ConstructToPromise(
             std::promise<std::shared_ptr<PredefinedPipelineLayout>>&& promise,

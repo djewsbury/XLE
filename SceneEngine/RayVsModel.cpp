@@ -78,6 +78,7 @@ namespace SceneEngine
 
 		Techniques::RenderPassInstance _rpi;
 		Metal::GraphicsEncoder_Optimized _encoder;
+		ICompiledPipelineLayout* _pipelineLayout = nullptr;
 		unsigned _queryId = ~0u;
 
 		TestType _testType;
@@ -301,7 +302,7 @@ namespace SceneEngine
 			Throw(std::runtime_error("Sequencer configurations pending"));	// prefer to throw before we start the query
 
 		auto sequencerConfig = (testType == TestType::FrustumTest) ? box->_frustumTestSequencerCfg : box->_rayTestSequencerCfg;
-		auto pipelineLayout = Techniques::TryGetCompiledPipelineLayout(*sequencerConfig, visibilityMarkerId);
+		auto* pipelineLayout = Techniques::TryGetCompiledPipelineLayout(*sequencerConfig, visibilityMarkerId).get();
 		if (!pipelineLayout)
 			Throw(std::runtime_error("Pipeline layout pending"));	// prefer to throw before we start the query
 
@@ -326,6 +327,7 @@ namespace SceneEngine
 		_pimpl->_encoder = metalContext.BeginStreamOutputEncoder(*pipelineLayout, MakeIteratorRange(&sov, &sov+1));
 		_pimpl->_testType = testType;
 		_pimpl->_pipelineAccelerators = pipelineAcceleratorPool.get();
+		_pimpl->_pipelineLayout = pipelineLayout;
     }
 
     ModelIntersectionStateContext::~ModelIntersectionStateContext()
@@ -383,7 +385,7 @@ namespace SceneEngine
 		TRY {
 			RenderCore::Techniques::Draw(
 				metalContext, _pimpl->_encoder, parsingContext, *_pimpl->_pipelineAccelerators,
-				*_pimpl->_sequencerConfig, drawablePkt);
+				*_pimpl->_sequencerConfig, drawablePkt, *_pimpl->_pipelineLayout);
 		} CATCH(...) {
 			_pimpl->_pipelineAccelerators->UnlockForReading();
 			throw;

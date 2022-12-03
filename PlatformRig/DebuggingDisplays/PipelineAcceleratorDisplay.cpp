@@ -139,6 +139,7 @@ namespace PlatformRig { namespace Overlays
 			DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Sequencer config count: %u", (unsigned)records._sequencerConfigs.size());
 			DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Descriptor set accelerator count: %u", (unsigned)records._descriptorSetAcceleratorCount);
 			DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Metal pipeline count: %u", (unsigned)records._metalPipelineCount);
+			DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Pipeline layout count: %u", (unsigned)records._pipelineLayoutCount);
 		}
 	}
 

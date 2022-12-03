@@ -8,6 +8,7 @@
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
 
+namespace RenderCore { class ICompiledPipelineLayout; }
 namespace RenderCore { namespace Techniques
 {
 	class BoundUniformsPool
@@ -42,6 +43,7 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		std::shared_ptr<Metal::GraphicsPipeline> _metalPipeline;
+		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
 		mutable BoundUniformsPool _boundUniformsPool;
 		
 		::Assets::DependencyValidation _depVal;

@@ -106,6 +106,10 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection = nullptr,
 			IteratorRange<const uint64_t*> patchExpansions = {});
 
+		// CreatePipelineLayout uses the internal pool to combine like layouts
+		std::shared_ptr<ICompiledPipelineLayout> CreatePipelineLayout(
+			const PipelineLayoutInitializer& desc, StringSection<> name);
+
 		const std::shared_ptr<IDevice>& GetDevice() { return _device; }
 		uint64_t GetGUID() const { return _guid; }
 
@@ -113,6 +117,7 @@ namespace RenderCore { namespace Techniques
 		{
 			unsigned _graphicsPipelineCount;
 			unsigned _computePipelineCount;
+			unsigned _pipelineLayoutCount;
 		};
 		Metrics GetMetrics() const;
 

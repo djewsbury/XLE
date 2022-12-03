@@ -22,15 +22,29 @@ namespace RenderCore { namespace Techniques
 	public:
 		virtual ::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> GetPatchCollectionFuture(const Assets::ShaderPatchCollection&) = 0;
 		virtual ::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> GetDefaultPatchCollectionFuture() = 0;
-		virtual ::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> GetPatchedPipelineLayout(StringSection<> techniquePipelineLayoutSrc) = 0;
-		virtual const RenderCore::Assets::PredefinedDescriptorSetLayout& GetBaseMaterialDescriptorSetLayout() const = 0;
+
+		virtual ::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> GetCompiledPipelineLayout(StringSection<> techniquePipelineLayoutSrc) = 0;
+
+		virtual const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& GetDefaultMaterialDescriptorSetLayout() const = 0;
+
+		struct PatchInDescriptorSet
+		{
+			StringSection<> _bindingName;
+			std::shared_ptr<Assets::PredefinedDescriptorSetLayout> _descSet;
+		};
+		virtual std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> BuildPatchedLayout(
+			const Assets::PredefinedPipelineLayout& skeletonPipelineLayout,
+			IteratorRange<const PatchInDescriptorSet*> patchInDescSets) = 0;
+
 		virtual ~ICompiledLayoutPool();
 	};
 
 	class DescriptorSetLayoutAndBinding;
+	class PipelineCollection;
 	std::shared_ptr<ICompiledLayoutPool> CreateCompiledLayoutPool(
-		const std::shared_ptr<IDevice>& device,
-		const std::shared_ptr<DescriptorSetLayoutAndBinding>& matDescSetLayout);
+		std::shared_ptr<IDevice> device,
+		std::shared_ptr<PipelineCollection> pipelineCollection,
+		std::shared_ptr<DescriptorSetLayoutAndBinding> matDescSetLayout);
 
 	class DescriptorSetLayoutAndBinding;
 
@@ -48,6 +62,11 @@ namespace RenderCore { namespace Techniques
 			StringSection<> name,
 			std::shared_ptr<DescriptorSetLayoutAndBinding> patchInDescSet = nullptr,
 			ShaderLanguage shaderLanguage = Techniques::GetDefaultShaderLanguage());
+		CompiledPipelineLayoutAsset(
+			std::shared_ptr<PipelineCollection> device,
+			std::shared_ptr<Assets::PredefinedPipelineLayout> predefinedLayout,
+			StringSection<> name,
+			ShaderLanguage shaderLanguage = Techniques::GetDefaultShaderLanguage());
 		CompiledPipelineLayoutAsset() = default;
 
 		static void ConstructToPromise(
@@ -55,6 +74,12 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<IDevice>& device,
 			StringSection<> srcFile,
 			const std::shared_ptr<DescriptorSetLayoutAndBinding>& patchInDescSet = nullptr,
+			ShaderLanguage shaderLanguage = GetDefaultShaderLanguage());
+
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<CompiledPipelineLayoutAsset>>&& promise,
+			const std::shared_ptr<PipelineCollection>& pipelineCollection,
+			StringSection<> srcFile,
 			ShaderLanguage shaderLanguage = GetDefaultShaderLanguage());
 
 	protected:

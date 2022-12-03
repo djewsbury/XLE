@@ -91,9 +91,10 @@ namespace RenderCore { namespace Techniques
 			Throw(std::runtime_error("Missing 'Material' descriptor set entry in material pipeline file"));
 
 		auto descSetAndBinding = std::make_shared<DescriptorSetLayoutAndBinding>(i2->second, FindMaterialDescSetSlotIdx(*_pipelineLayoutFile), "Material", PipelineType::Graphics, matDescSetLayoutContainer->GetDependencyValidation());		 
-		auto compiledLayoutPool = CreateCompiledLayoutPool(device, descSetAndBinding);
+		auto pipelineCollection = std::make_shared<RenderCore::Techniques::PipelineCollection>(_device);
+		auto compiledLayoutPool = CreateCompiledLayoutPool(device, pipelineCollection, descSetAndBinding);
 		const PipelineAcceleratorPoolFlags::BitField poolFlags = 0;
-		_pipelineAccelerators = CreatePipelineAcceleratorPool(device, _drawablesPool, compiledLayoutPool, poolFlags);
+		_pipelineAccelerators = CreatePipelineAcceleratorPool(device, _drawablesPool, pipelineCollection, compiledLayoutPool, poolFlags);
 		_deformAccelerators = CreateDeformAcceleratorPool(device, _drawablesPool, compiledLayoutPool);
 		
 		_systemUniformsDelegate = std::make_shared<SystemUniformsDelegate>(*_device);

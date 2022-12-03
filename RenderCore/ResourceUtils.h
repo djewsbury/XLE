@@ -179,6 +179,23 @@ namespace RenderCore
         std::vector<std::pair<uint64_t, std::shared_ptr<ISampler>>> _samplers;
         IDevice* _device = nullptr;
     };
+
+    class ICompiledPipelineLayout;
+    class PipelineLayoutInitializer;
+
+    class PipelineLayoutPool
+    {
+    public:
+        std::shared_ptr<ICompiledPipelineLayout> GetPipelineLayout(const PipelineLayoutInitializer& desc, StringSection<> name);
+        unsigned GetPipelineLayoutCount();
+
+        PipelineLayoutPool(IDevice& device);
+        ~PipelineLayoutPool();
+    private:
+        Threading::Mutex _lock;
+        std::vector<std::pair<uint64_t, std::shared_ptr<ICompiledPipelineLayout>>> _compiledPipelineLayout;
+        IDevice* _device = nullptr;
+    };
 #endif
 
     std::ostream& SerializationOperator(std::ostream& strm, const ResourceDesc&);

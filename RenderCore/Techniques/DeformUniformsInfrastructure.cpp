@@ -209,7 +209,7 @@ namespace RenderCore { namespace Techniques
 						shrLanguage);
 				} else {
 					animBuffers = FindAnimatedUniformsBuffers(
-						compiledLayoutPool.GetBaseMaterialDescriptorSetLayout(),
+						*compiledLayoutPool.GetDefaultMaterialDescriptorSetLayout(),
 						animatedUniforms,
 						constants,
 						shrLanguage);

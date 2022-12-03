@@ -26,13 +26,17 @@ namespace RenderCore { namespace Techniques
 
 		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> GetDefaultPatchCollectionFuture() override;
 
-		::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> GetPatchedPipelineLayout(
-			StringSection<> techniquePipelineLayoutSrc) override;
+		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& GetDefaultMaterialDescriptorSetLayout() const override;
 
-		const RenderCore::Assets::PredefinedDescriptorSetLayout& GetBaseMaterialDescriptorSetLayout() const override;
+		::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> GetCompiledPipelineLayout(StringSection<> techniquePipelineLayoutSrc) override;
+
+		std::shared_ptr<Assets::PredefinedPipelineLayout> BuildPatchedLayout(
+			const Assets::PredefinedPipelineLayout& skeletonPipelineLayout,
+			IteratorRange<const PatchInDescriptorSet*> patchInDescSets);
 
 		CompiledLayoutPool(
 			std::shared_ptr<IDevice> device,
+			std::shared_ptr<PipelineCollection> pipelineCollection,
 			std::shared_ptr<DescriptorSetLayoutAndBinding> matDescSetLayout);
 		virtual ~CompiledLayoutPool();
 	
@@ -40,6 +44,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<DescriptorSetLayoutAndBinding> _matDescSetLayout;
 		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> _emptyPatchCollection;
 		std::shared_ptr<IDevice> _device;
+		std::shared_ptr<PipelineCollection> _pipelineCollection;
 
 		std::vector<std::pair<uint64_t, ::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection>>> _compiledPatchCollections;
 		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> _defaultCompiledPatchCollection;
@@ -76,22 +81,45 @@ namespace RenderCore { namespace Techniques
 		return _emptyPatchCollection;
 	}
 
-	::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> CompiledLayoutPool::GetPatchedPipelineLayout(
-		StringSection<> techniquePipelineLayoutSrc)
+	const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& CompiledLayoutPool::GetDefaultMaterialDescriptorSetLayout() const
 	{
-		return ::Assets::MakeAssetMarker<std::shared_ptr<CompiledPipelineLayoutAsset>>(_device, techniquePipelineLayoutSrc, _matDescSetLayout);
+		return _matDescSetLayout->GetLayout();
 	}
 
-	const RenderCore::Assets::PredefinedDescriptorSetLayout& CompiledLayoutPool::GetBaseMaterialDescriptorSetLayout() const
+	::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> CompiledLayoutPool::GetCompiledPipelineLayout(StringSection<> techniquePipelineLayoutSrc)
 	{
-		return *_matDescSetLayout->GetLayout();
+		return ::Assets::MakeAssetMarker<std::shared_ptr<CompiledPipelineLayoutAsset>>(_pipelineCollection, techniquePipelineLayoutSrc);
+	}
+
+	std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> CompiledLayoutPool::BuildPatchedLayout(
+		const Assets::PredefinedPipelineLayout& skeletonPipelineLayout,
+		IteratorRange<const PatchInDescriptorSet*> patchInDescSets)
+	{
+		assert(!patchInDescSets.empty());
+
+		auto result = std::make_shared<RenderCore::Assets::PredefinedPipelineLayout>(skeletonPipelineLayout);
+
+		// Take each descriptor set either from skeletonPipelineLayout, or the patch in list
+		for (auto& ds:result->_descriptorSets) {
+			auto patchIn = std::find_if(
+				patchInDescSets.begin(), patchInDescSets.end(),
+				[n=&ds._name](const auto& q) { return XlEqString(q._bindingName, *n); });
+			if (patchIn != patchInDescSets.end()) {
+				ds._isAuto = false;
+				ds._descSet = patchIn->_descSet;
+			}
+		}
+		
+		return result;
 	}
 
 	CompiledLayoutPool::CompiledLayoutPool(
 		std::shared_ptr<IDevice> device,
+		std::shared_ptr<PipelineCollection> pipelineCollection,
 		std::shared_ptr<DescriptorSetLayoutAndBinding> matDescSetLayout)
 	: _matDescSetLayout(std::move(matDescSetLayout))
 	, _device(std::move(device))
+	, _pipelineCollection(std::move(pipelineCollection))
 	{
 		_emptyPatchCollection = std::make_shared<::Assets::MarkerPtr<CompiledShaderPatchCollection>>("empty-patch-collection");
 		_emptyPatchCollection->SetAsset(std::make_shared<CompiledShaderPatchCollection>());
@@ -100,10 +128,11 @@ namespace RenderCore { namespace Techniques
 	CompiledLayoutPool::~CompiledLayoutPool() {}
 
 	std::shared_ptr<ICompiledLayoutPool> CreateCompiledLayoutPool(
-		const std::shared_ptr<IDevice>& device,
-		const std::shared_ptr<DescriptorSetLayoutAndBinding>& matDescSetLayout)
+		std::shared_ptr<IDevice> device,
+		std::shared_ptr<PipelineCollection> pipelineCollection,
+		std::shared_ptr<DescriptorSetLayoutAndBinding> matDescSetLayout)
 	{
-		return std::make_shared<CompiledLayoutPool>(device, matDescSetLayout);
+		return std::make_shared<CompiledLayoutPool>(std::move(device), std::move(pipelineCollection), std::move(matDescSetLayout));
 	}
 
 	ICompiledLayoutPool::~ICompiledLayoutPool() {}
@@ -138,6 +167,22 @@ namespace RenderCore { namespace Techniques
 		_pipelineLayout = device->CreatePipelineLayout(initializer, name);
 	}
 
+	CompiledPipelineLayoutAsset::CompiledPipelineLayoutAsset(
+		std::shared_ptr<PipelineCollection> pipelineCollection,
+		std::shared_ptr<Assets::PredefinedPipelineLayout> predefinedLayout,
+		StringSection<> name,
+		ShaderLanguage shaderLanguage)
+	: _predefinedLayout(std::move(predefinedLayout))
+	, _initializer(name.AsString())
+	{
+		_depVal = _predefinedLayout->GetDependencyValidation();
+
+		assert(Services::HasInstance() && Services::GetCommonResources());
+		auto& commonResources = *Services::GetCommonResources();
+		auto initializer = _predefinedLayout->MakePipelineLayoutInitializer(shaderLanguage, &commonResources._samplerPool);
+		_pipelineLayout = pipelineCollection->CreatePipelineLayout(initializer, name);
+	}
+
 	void CompiledPipelineLayoutAsset::ConstructToPromise(
 		std::promise<std::shared_ptr<CompiledPipelineLayoutAsset>>&& promise,
 		const std::shared_ptr<RenderCore::IDevice>& device,
@@ -151,6 +196,21 @@ namespace RenderCore { namespace Techniques
 			std::move(promise),
 			[device, patchInDescSet, shaderLanguage, name=srcFile.AsString()](auto predefinedLayout) {
 				return std::make_shared<CompiledPipelineLayoutAsset>(device, predefinedLayout, name, patchInDescSet, shaderLanguage);
+			});
+	}
+
+	void CompiledPipelineLayoutAsset::ConstructToPromise(
+		std::promise<std::shared_ptr<CompiledPipelineLayoutAsset>>&& promise,
+		const std::shared_ptr<PipelineCollection>& pipelineCollection,
+		StringSection<> srcFile,
+		ShaderLanguage shaderLanguage)
+	{
+		using namespace RenderCore;
+		auto src = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(srcFile);
+		::Assets::WhenAll(src).ThenConstructToPromise(
+			std::move(promise),
+			[pipelineCollection, shaderLanguage, name=srcFile.AsString()](auto predefinedLayout) {
+				return std::make_shared<CompiledPipelineLayoutAsset>(pipelineCollection, predefinedLayout, name, shaderLanguage);
 			});
 	}
 

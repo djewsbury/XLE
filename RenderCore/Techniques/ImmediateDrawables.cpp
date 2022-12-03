@@ -363,8 +363,9 @@ namespace RenderCore { namespace Techniques
 			_techniqueDelegate = std::make_shared<ImmediateRendererTechniqueDelegate>();
 			auto pipelineLayout = ::Assets::ActualizeAssetPtr<Assets::PredefinedPipelineLayout>(_techniqueDelegate->GetPipelineLayout());
 			auto matDescSetLayout = FindLayout(*pipelineLayout, "Material", PipelineType::Graphics);
-			auto compiledLayoutPool = CreateCompiledLayoutPool(device, matDescSetLayout);
-			_pipelineAcceleratorPool = CreatePipelineAcceleratorPool(device, nullptr, compiledLayoutPool, 0);
+			auto pipelineCollection = std::make_shared<PipelineCollection>(device);
+			auto compiledLayoutPool = CreateCompiledLayoutPool(device, pipelineCollection, matDescSetLayout);
+			_pipelineAcceleratorPool = CreatePipelineAcceleratorPool(device, nullptr, pipelineCollection, compiledLayoutPool, 0);
 			_lastQueuedDrawable = nullptr;
 			_lastQueuedDrawVertexCountOffset = 0;
 		}

@@ -6,10 +6,12 @@
 
 #include "ResourceUtils.h"
 #include "ResourceDesc.h"
+#include "UniformsStream.h"
 #include "Format.h"
 #include "IDevice.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/PtrUtils.h"
+#include "../Utility/ArithmeticUtils.h"
 #include "../Utility/Streams/SerializationUtils.h"
 #include <algorithm>
 
@@ -417,4 +419,44 @@ namespace RenderCore
 		return newSampler;
     }
     SamplerPool::SamplerPool(IDevice& device) : _device(&device) {}
+
+    std::shared_ptr<ICompiledPipelineLayout> PipelineLayoutPool::GetPipelineLayout(const PipelineLayoutInitializer& desc, StringSection<> name)
+    {
+        // figure out a hash value for this initializer
+        uint64_t hash;
+        if (!desc.GetDescriptorSets().empty()) {
+            hash = desc.GetDescriptorSets().begin()->_signature.GetHashIgnoreNames();
+            for (auto q=desc.GetDescriptorSets().begin()+1; q!=desc.GetDescriptorSets().end(); ++q) {
+                hash = HashCombine(q->_signature.GetHashIgnoreNames(), hash);
+                hash += (unsigned)q->_pipelineType;
+            }
+        } else
+            hash = DefaultSeed64;
+        for (auto&q:desc.GetPushConstants()) {
+            hash = Hash64(MakeIteratorRange(q._cbElements), hash);
+            hash += q._cbSize;
+            hash = rotr64(hash, (unsigned)q._shaderStage);
+        }
+
+        ScopedLock(_lock);
+        auto i = LowerBound(_compiledPipelineLayout, hash);
+        if (i != _compiledPipelineLayout.end() && i->first == hash)
+            return i->second;       // it's a little confusing if the 
+
+        auto pipelineLayout = _device->CreatePipelineLayout(desc, name);
+        i = _compiledPipelineLayout.insert(i, {hash, std::move(pipelineLayout)});
+        return i->second;
+    }
+
+    unsigned PipelineLayoutPool::GetPipelineLayoutCount()
+    {
+        ScopedLock(_lock);
+        return (unsigned)_compiledPipelineLayout.size();
+    }
+
+    PipelineLayoutPool::PipelineLayoutPool(IDevice& device)
+    : _device(&device)
+    {
+    }
+    PipelineLayoutPool::~PipelineLayoutPool() {}
 }

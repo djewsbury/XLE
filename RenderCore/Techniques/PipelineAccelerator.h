@@ -39,6 +39,7 @@ namespace RenderCore { namespace Techniques
 	class ICompiledLayoutPool;
 	class IDrawablesPool;
 	class ResourceConstructionContext;
+	class PipelineCollection;
 	using VisibilityMarkerId = uint32_t;
 
 	// Switching this to a virtual interface style class in order to better support multiple DLLs/modules
@@ -140,6 +141,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<SequencerConfigRecord> _sequencerConfigs;
 		size_t _descriptorSetAcceleratorCount = 0;
 		size_t _metalPipelineCount = 0;
+		size_t _pipelineLayoutCount = 0;
 	};
 
 	namespace PipelineAcceleratorPoolFlags
@@ -151,6 +153,7 @@ namespace RenderCore { namespace Techniques
 	std::shared_ptr<IPipelineAcceleratorPool> CreatePipelineAcceleratorPool(
 		const std::shared_ptr<IDevice>&,
 		const std::shared_ptr<IDrawablesPool>&,
+		const std::shared_ptr<PipelineCollection>&,
 		const std::shared_ptr<ICompiledLayoutPool>&,
 		PipelineAcceleratorPoolFlags::BitField flags = 0);
 }}

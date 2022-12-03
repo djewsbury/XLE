@@ -16,6 +16,7 @@ namespace RenderCore { namespace Techniques
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt,
+		const ICompiledPipelineLayout& initialPipelineLayout,
 		const DrawOptions& drawOptions = {});
 
 	class IUniformDelegateManager;

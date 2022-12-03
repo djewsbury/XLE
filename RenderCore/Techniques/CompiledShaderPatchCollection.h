@@ -55,6 +55,7 @@ namespace RenderCore { namespace Techniques
 			};
 			IteratorRange<const Patch*> GetPatches() const { return MakeIteratorRange(_patches); }
 			const RenderCore::Assets::PredefinedDescriptorSetLayout& GetMaterialDescriptorSet() const { return *_descriptorSet; }
+			std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> GetMaterialDescriptorSetPtr() const { return _descriptorSet; }
 			const ShaderSourceParser::SelectorFilteringRules& GetSelectorFilteringRules(unsigned filteringRulesId) const;
 			const std::string& GetPreconfigurationFileName() const { return _preconfiguration; }
 

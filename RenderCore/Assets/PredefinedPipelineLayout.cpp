@@ -433,6 +433,10 @@ namespace RenderCore { namespace Assets
 		_depVal = srcFile.GetDependencyValidation();
 	}
 
+	PredefinedPipelineLayout::PredefinedPipelineLayout() = default;
+	PredefinedPipelineLayout::PredefinedPipelineLayout(const PredefinedPipelineLayout&) = default;
+    PredefinedPipelineLayout& PredefinedPipelineLayout::operator=(const PredefinedPipelineLayout&) = default;
+
 	void PredefinedPipelineLayout::ConstructToPromise(
 		std::promise<std::shared_ptr<PredefinedPipelineLayout>>&& promise,
 		StringSection<::Assets::ResChar> src)

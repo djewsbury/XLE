@@ -207,6 +207,12 @@ namespace RenderCore { namespace Techniques
 			selectors, inputStates, fbTarget, compiledPatchCollection);
 	}
 
+	std::shared_ptr<ICompiledPipelineLayout> PipelineCollection::CreatePipelineLayout(
+		const PipelineLayoutInitializer& desc, StringSection<> name)
+	{
+		return _sharedPools->_pipelineLayoutPool->GetPipelineLayout(desc, name);
+	}
+
 	PipelineCollection::Metrics PipelineCollection::GetMetrics() const
 	{
 		PipelineCollection::Metrics result;
@@ -219,6 +225,7 @@ namespace RenderCore { namespace Techniques
 		for (auto& p:_sharedPools->_completedComputePipelines)
 			if (!p.second._pipeline.expired())
 				++result._computePipelineCount;
+		result._pipelineLayoutCount = _sharedPools->_pipelineLayoutPool->GetPipelineLayoutCount();
 		return result;
 	}
 
