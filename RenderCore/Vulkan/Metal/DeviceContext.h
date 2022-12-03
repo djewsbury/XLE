@@ -165,7 +165,8 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 	public:
 		NumericUniformsInterface	BeginNumericUniformsInterface();
-		const std::shared_ptr<CompiledPipelineLayout>& GetPipelineLayout() { return _pipelineLayout; }
+
+		void SetPipelineLayout(ICompiledPipelineLayout&);
 
 		void BeginStateCapture(CapturedStates& capturedStates);
 		void EndStateCapture();
@@ -183,9 +184,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		unsigned _pendingBoundUniformsFlushGroupMask = 0u, _pendingBoundUniformsCompletionMask = 0u;
 	protected:
 		SharedEncoder(
-			EncoderType encoderType = EncoderType::None,
-			std::shared_ptr<CompiledPipelineLayout> pipelineLayout = nullptr,
+			EncoderType encoderType,
+			CompiledPipelineLayout& pipelineLayout,
 			std::shared_ptr<VulkanEncoderSharedState> sharedState = nullptr);
+		SharedEncoder();
 		~SharedEncoder();
 		SharedEncoder(SharedEncoder&&);		// (hide these to avoid slicing in derived types)
 		SharedEncoder& operator=(SharedEncoder&&);
@@ -194,9 +196,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		unsigned GetDescriptorSetCount();
 		void ValidateFlushedBoundUniforms();
 
-		std::shared_ptr<CompiledPipelineLayout> _pipelineLayout;
+		CompiledPipelineLayout* _pipelineLayout = nullptr;
 		std::shared_ptr<VulkanEncoderSharedState> _sharedState;
-		CapturedStates* _capturedStates;
+		CapturedStates* _capturedStates = nullptr;
 
 		friend class VulkanEncoderSharedState;
 	};
@@ -213,14 +215,15 @@ namespace RenderCore { namespace Metal_Vulkan
 	protected:
 		enum class Type { Normal, StreamOutput };
 		GraphicsEncoder(
-			std::shared_ptr<CompiledPipelineLayout> pipelineLayout = nullptr,
+			CompiledPipelineLayout& pipelineLayout,
 			std::shared_ptr<VulkanEncoderSharedState> sharedState = nullptr,
 			Type type = Type::Normal);
+		GraphicsEncoder();
 		~GraphicsEncoder();
 		GraphicsEncoder(GraphicsEncoder&&);		// (hide these to avoid slicing in derived types)
 		GraphicsEncoder& operator=(GraphicsEncoder&&);
 
-		Type _type;
+		Type _type = Type::Normal;
 
 		friend class DeviceContext;
 	};
@@ -245,7 +248,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		~GraphicsEncoder_ProgressivePipeline();
 	protected:
 		GraphicsEncoder_ProgressivePipeline(
-			std::shared_ptr<CompiledPipelineLayout> pipelineLayout,
+			CompiledPipelineLayout& pipelineLayout,
 			std::shared_ptr<VulkanEncoderSharedState> sharedState,
 			ObjectFactory& objectFactory,
 			GlobalPools& globalPools,
@@ -278,7 +281,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		~GraphicsEncoder_Optimized();
 	protected:
 		GraphicsEncoder_Optimized(
-			std::shared_ptr<CompiledPipelineLayout> pipelineLayout,
+			CompiledPipelineLayout& pipelineLayout,
 			std::shared_ptr<VulkanEncoderSharedState> sharedState,
 			Type type = Type::Normal);
 
@@ -300,7 +303,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		~ComputeEncoder();
 	protected:
 		ComputeEncoder(
-			std::shared_ptr<CompiledPipelineLayout> pipelineLayout,
+			CompiledPipelineLayout& pipelineLayout,
 			std::shared_ptr<VulkanEncoderSharedState> sharedState);
 
 		void BindPipeline(const ComputePipeline& pipeline);
@@ -324,10 +327,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		void EndRenderPass();
 		unsigned GetCurrentSubpassIndex() const;
 
-		GraphicsEncoder_Optimized BeginGraphicsEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout);
-		GraphicsEncoder_ProgressivePipeline BeginGraphicsEncoder_ProgressivePipeline(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout);
-		ComputeEncoder BeginComputeEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout);
-		GraphicsEncoder_Optimized BeginStreamOutputEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout, IteratorRange<const VertexBufferView*> outputBuffers);
+		GraphicsEncoder_Optimized BeginGraphicsEncoder(ICompiledPipelineLayout& pipelineLayout);
+		GraphicsEncoder_ProgressivePipeline BeginGraphicsEncoder_ProgressivePipeline(ICompiledPipelineLayout& pipelineLayout);
+		ComputeEncoder BeginComputeEncoder(ICompiledPipelineLayout& pipelineLayout);
+		GraphicsEncoder_Optimized BeginStreamOutputEncoder(ICompiledPipelineLayout& pipelineLayout, IteratorRange<const VertexBufferView*> outputBuffers);
 		BlitEncoder BeginBlitEncoder();
 
 		void Clear(const IResourceView& renderTarget, const VectorPattern<float,4>& clearColour);

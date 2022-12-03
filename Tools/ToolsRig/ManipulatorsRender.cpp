@@ -196,8 +196,8 @@ namespace ToolsRig
     {
         auto* actualShader = shader.TryActualize()->get();
 
-        auto& metalContext = *Metal::DeviceContext::Get(threadContext);            
-        auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(actualShader->GetPipelineLayout());
+        auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+        auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*actualShader->GetPipelineLayout());
         encoder.Bind(*actualShader);
         
         Metal::BoundUniforms boundLayout(*actualShader, uniformStreamInterface);

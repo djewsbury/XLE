@@ -408,7 +408,7 @@ namespace UnitTests
 			auto rpi = fbHelper.BeginRenderPass(*threadContext);
 
 			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-			auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder(*pipelineLayout);
 
 			UniformsStream::ImmediateData cbvs[] = { MakeOpaqueIteratorRange(globalTransform) };
 			UniformsStream uniformsStream;

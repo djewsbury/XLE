@@ -737,7 +737,7 @@ namespace UnitTests
 	{
 		auto& metalContext = *RenderCore::Metal::DeviceContext::Get(threadContext);
 
-		auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayout);
+		auto encoder = metalContext.BeginGraphicsEncoder(*pipelineLayout);
 		RenderCore::VertexBufferView vbv { &vb };
 		encoder.Bind(MakeIteratorRange(&vbv, &vbv+1), RenderCore::IndexBufferView{});
 		BindPassThroughTransform(metalContext, encoder, pipeline, descSet);

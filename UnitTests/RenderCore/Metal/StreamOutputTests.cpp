@@ -100,7 +100,7 @@ namespace UnitTests
 
 			VertexBufferView sov { soBuffer.get() };
 			auto encoder = metalContext.BeginStreamOutputEncoder(
-				testHelper->_pipelineLayout, MakeIteratorRange(&sov, &sov+1));
+				*testHelper->_pipelineLayout, MakeIteratorRange(&sov, &sov+1));
 
 			VertexBufferView vbv { vertexBuffer.get() };
 			encoder.Bind(MakeIteratorRange(&vbv, &vbv+1), {});
@@ -128,7 +128,7 @@ namespace UnitTests
 
 			VertexBufferView sov { soBuffer.get() };
 			auto encoder = metalContext.BeginStreamOutputEncoder(
-				testHelper->_pipelineLayout, MakeIteratorRange(&sov, &sov+1));
+				*testHelper->_pipelineLayout, MakeIteratorRange(&sov, &sov+1));
 
 			VertexBufferView vbv { vertexBuffer.get() };
 			encoder.Bind(MakeIteratorRange(&vbv, &vbv+1), {});

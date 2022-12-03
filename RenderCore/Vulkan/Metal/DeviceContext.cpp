@@ -255,7 +255,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void GraphicsEncoder_ProgressivePipeline::Bind(const ShaderProgram& shaderProgram)
 	{
-		assert(shaderProgram.GetPipelineLayout().get() == _pipelineLayout.get());
+		assert(shaderProgram.GetPipelineLayout().get() == _pipelineLayout);
 		GraphicsPipelineBuilder::Bind(shaderProgram);
 	}
 
@@ -459,6 +459,17 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 	}
 
+	void SharedEncoder::SetPipelineLayout(ICompiledPipelineLayout& newPipelineLayout)
+	{
+		assert(_sharedState);
+		// Vulkan's rules are as follows:
+		// 	- descriptor set bindings can survive a pipeline layout change, up until the first descriptor set that is not compatible between the old and new layout
+		//
+		// Ie, you should keep descriptor sets that will be compatible with the most pipeline layouts in the early descriptor set indices
+		// and descriptor sets past that point of compatibility must be rebound
+		_pipelineLayout = checked_cast<CompiledPipelineLayout*>(&newPipelineLayout);
+	}
+
 	NumericUniformsInterface SharedEncoder::BeginNumericUniformsInterface()
 	{
 		auto& cmdList = _sharedState->_commandList;
@@ -515,9 +526,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	SharedEncoder::SharedEncoder(
 		EncoderType encoderType,
-		std::shared_ptr<CompiledPipelineLayout> pipelineLayout,
+		CompiledPipelineLayout& pipelineLayout,
 		std::shared_ptr<VulkanEncoderSharedState> sharedState)
-	: _pipelineLayout(std::move(pipelineLayout))
+	: _pipelineLayout(&pipelineLayout)
 	, _sharedState(std::move(sharedState))
 	, _capturedStates(nullptr)
 	{
@@ -542,6 +553,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 		}
 	}
+
+	SharedEncoder::SharedEncoder() = default;
 
 	SharedEncoder::~SharedEncoder()
 	{
@@ -596,13 +609,15 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	GraphicsEncoder::GraphicsEncoder(
-		std::shared_ptr<CompiledPipelineLayout> pipelineLayout,
+		CompiledPipelineLayout& pipelineLayout,
 		std::shared_ptr<VulkanEncoderSharedState> sharedState,
 		Type type)
 	: SharedEncoder(EncoderType::Graphics, pipelineLayout, sharedState)
 	, _type(type)
 	{
 	}
+
+	GraphicsEncoder::GraphicsEncoder() = default;
 
 	GraphicsEncoder::~GraphicsEncoder()
 	{
@@ -660,12 +675,12 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	GraphicsEncoder_ProgressivePipeline::GraphicsEncoder_ProgressivePipeline(
-		std::shared_ptr<CompiledPipelineLayout> pipelineLayout,
+		CompiledPipelineLayout& pipelineLayout,
 		std::shared_ptr<VulkanEncoderSharedState> sharedState,
 		ObjectFactory& objectFactory,
 		GlobalPools& globalPools,
 		Type type)
-	: GraphicsEncoder(std::move(pipelineLayout), std::move(sharedState), type)
+	: GraphicsEncoder(pipelineLayout, std::move(sharedState), type)
 	, _factory(&objectFactory)
 	, _globalPools(&globalPools)
 	{
@@ -698,10 +713,10 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	GraphicsEncoder_Optimized::GraphicsEncoder_Optimized(
-		std::shared_ptr<CompiledPipelineLayout> pipelineLayout,
+		CompiledPipelineLayout& pipelineLayout,
 		std::shared_ptr<VulkanEncoderSharedState> sharedState,
 		Type type)
-	: GraphicsEncoder(std::move(pipelineLayout), std::move(sharedState), type)
+	: GraphicsEncoder(pipelineLayout, std::move(sharedState), type)
 	{}
 	GraphicsEncoder_Optimized::~GraphicsEncoder_Optimized()
 	{}
@@ -783,9 +798,9 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	ComputeEncoder::ComputeEncoder(
-		std::shared_ptr<CompiledPipelineLayout> pipelineLayout,
+		CompiledPipelineLayout& pipelineLayout,
 		std::shared_ptr<VulkanEncoderSharedState> sharedState)
-	: SharedEncoder(EncoderType::Compute, std::move(pipelineLayout), std::move(sharedState))
+	: SharedEncoder(EncoderType::Compute, pipelineLayout, std::move(sharedState))
 	{
 	}
 
@@ -793,22 +808,22 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 	}
 
-	GraphicsEncoder_Optimized DeviceContext::BeginGraphicsEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout)
+	GraphicsEncoder_Optimized DeviceContext::BeginGraphicsEncoder(ICompiledPipelineLayout& pipelineLayout)
 	{
 		if (_sharedState->_inBltPass)
 			Throw(::Exceptions::BasicLabel("Attempting to begin a graphics encoder while a blt encoder is in progress"));
-		return GraphicsEncoder_Optimized { checked_pointer_cast<CompiledPipelineLayout>(std::move(pipelineLayout)), _sharedState };
+		return GraphicsEncoder_Optimized { *checked_cast<CompiledPipelineLayout*>(&pipelineLayout), _sharedState };
 	}
 
-	GraphicsEncoder_ProgressivePipeline DeviceContext::BeginGraphicsEncoder_ProgressivePipeline(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout)
+	GraphicsEncoder_ProgressivePipeline DeviceContext::BeginGraphicsEncoder_ProgressivePipeline(ICompiledPipelineLayout& pipelineLayout)
 	{
 		if (_sharedState->_inBltPass)
 			Throw(::Exceptions::BasicLabel("Attempting to begin a graphics encoder while a blt encoder is in progress"));
-		return GraphicsEncoder_ProgressivePipeline { checked_pointer_cast<CompiledPipelineLayout>(std::move(pipelineLayout)), _sharedState, *_sharedState->_objectFactory, *_sharedState->_globalPools };
+		return GraphicsEncoder_ProgressivePipeline { *checked_cast<CompiledPipelineLayout*>(&pipelineLayout), _sharedState, *_sharedState->_objectFactory, *_sharedState->_globalPools };
 	}
 
 	GraphicsEncoder_Optimized DeviceContext::BeginStreamOutputEncoder(
-		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
+		ICompiledPipelineLayout& pipelineLayout,
 		IteratorRange<const VertexBufferView*> outputBuffers)
 	{
 		if (_sharedState->_inBltPass)
@@ -839,16 +854,16 @@ namespace RenderCore { namespace Metal_Vulkan
 			GetActiveCommandList().GetUnderlying().get(),
 			0, 0, nullptr, nullptr);
 
-		return GraphicsEncoder_Optimized { checked_pointer_cast<CompiledPipelineLayout>(std::move(pipelineLayout)), _sharedState, GraphicsEncoder::Type::StreamOutput };
+		return GraphicsEncoder_Optimized { *checked_cast<CompiledPipelineLayout*>(&pipelineLayout), _sharedState, GraphicsEncoder::Type::StreamOutput };
 	}
 
-	ComputeEncoder DeviceContext::BeginComputeEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout)
+	ComputeEncoder DeviceContext::BeginComputeEncoder(ICompiledPipelineLayout& pipelineLayout)
 	{
 		if (_sharedState->_renderPass)
 			Throw(::Exceptions::BasicLabel("Attempting to begin a compute encoder while a render pass is in progress"));
 		if (_sharedState->_inBltPass)
 			Throw(::Exceptions::BasicLabel("Attempting to begin a compute encoder while a blt pass is in progress"));
-		return ComputeEncoder { checked_pointer_cast<CompiledPipelineLayout>(std::move(pipelineLayout)), _sharedState };
+		return ComputeEncoder { *checked_cast<CompiledPipelineLayout*>(&pipelineLayout), _sharedState };
 	}
 
 	std::shared_ptr<DeviceContext> DeviceContext::Get(IThreadContext& threadContext)

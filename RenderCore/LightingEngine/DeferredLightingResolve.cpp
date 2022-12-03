@@ -460,7 +460,7 @@ namespace RenderCore { namespace LightingEngine
 
 			//-------- do lights --------
 		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
-		auto encoder = metalContext.BeginGraphicsEncoder(lightResolveOperators._pipelineLayout);
+		auto encoder = metalContext.BeginGraphicsEncoder(*lightResolveOperators._pipelineLayout);
 		auto& boundUniforms = lightResolveOperators._boundUniforms;
 
 		IDescriptorSet* fixedDescSets[] = { lightResolveOperators._fixedDescriptorSet.get() };

@@ -120,13 +120,14 @@ namespace RenderOverlays
     static void ExecuteHighlightByStencil(
         Metal::DeviceContext& metalContext,
         Metal::GraphicsEncoder_ProgressivePipeline& encoder,
+        std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
         IResourceView* stencilSrv,
         const HighlightByStencilSettings& settings,
         bool onlyHighlighted,
         bool inputAttachmentMode)
     {
         assert(stencilSrv);
-        auto shaders = ::Assets::MakeAssetMarker<HighlightShaders>(encoder.GetPipelineLayout())->TryActualize();
+        auto shaders = ::Assets::MakeAssetMarker<HighlightShaders>(pipelineLayout)->TryActualize();
         if (!shaders) return;
 
         UniformsStream::ImmediateData cbData[] = {
@@ -160,7 +161,7 @@ namespace RenderOverlays
         else params << ";INPUT_MODE=" << (stencilInput?0:1);
 
         auto highlightShader = LoadShaderProgram(
-            encoder.GetPipelineLayout(),
+            pipelineLayout,
             BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
             HIGHLIGHT_VIS_PIXEL_HLSL ":HighlightByStencil:ps_*",
             params.AsStringSection())->TryActualize();
@@ -173,7 +174,7 @@ namespace RenderOverlays
         // we need to read from several surrounding pixels
         if (!inputAttachmentMode) {
             auto outlineShader = LoadShaderProgram(
-                encoder.GetPipelineLayout(),
+                pipelineLayout,
                 BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
                 HIGHLIGHT_VIS_PIXEL_HLSL ":OutlineByStencil:ps_*",
                 params.AsStringSection())->TryActualize();
@@ -211,8 +212,8 @@ namespace RenderOverlays
 
         auto& metalContext = *RenderCore::Metal::DeviceContext::Get(parsingContext.GetThreadContext());
         auto pipelineLayout = GetMainPipelineLayout(parsingContext.GetThreadContext().GetDevice());
-        auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(pipelineLayout);
-        ExecuteHighlightByStencil(metalContext, encoder, stencilSrv.get(), settings, onlyHighlighted, s_inputAttachmentMode);
+        auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*pipelineLayout);
+        ExecuteHighlightByStencil(metalContext, encoder, pipelineLayout, stencilSrv.get(), settings, onlyHighlighted, s_inputAttachmentMode);
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -291,9 +292,9 @@ namespace RenderOverlays
 
 			HighlightByStencilSettings settings;
 			settings._outlineColor = outlineColor;
-            auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(_pimpl->_pipelineLayout);
+            auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*_pimpl->_pipelineLayout);
 			ExecuteHighlightByStencil(
-				metalContext, encoder, srv.get(), 
+				metalContext, encoder, _pimpl->_pipelineLayout, srv.get(), 
 				settings, false, s_inputAttachmentMode);
 		}
     }
@@ -312,7 +313,7 @@ namespace RenderOverlays
 		if (srv && shaders) {
             auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(*_pimpl->_parsingContext);
 			auto& metalContext = *Metal::DeviceContext::Get(_pimpl->_parsingContext->GetThreadContext());
-            auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(_pimpl->_pipelineLayout);
+            auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*_pimpl->_pipelineLayout);
 
 			struct Constants { Float3 _color; unsigned _dummy; } constants = { outlineColor, 0 };
 
@@ -345,7 +346,7 @@ namespace RenderOverlays
         if (srv && shaders) {
             auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(*_pimpl->_parsingContext);
 			auto& metalContext = *Metal::DeviceContext::Get(_pimpl->_parsingContext->GetThreadContext());
-            auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(_pimpl->_pipelineLayout);
+            auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*_pimpl->_pipelineLayout);
 			struct Constants { Float4 _shadowColor; } constants = { shadowColor };
 
             IResourceView* rvs[] = { srv.get() };

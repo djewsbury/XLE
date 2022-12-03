@@ -323,7 +323,7 @@ namespace SceneEngine
 
 		VertexBufferView sov { _pimpl->_res->_streamOutputBuffer.get() };
 		_pimpl->_sequencerConfig = std::move(sequencerConfig);
-		_pimpl->_encoder = metalContext.BeginStreamOutputEncoder(std::move(pipelineLayout), MakeIteratorRange(&sov, &sov+1));
+		_pimpl->_encoder = metalContext.BeginStreamOutputEncoder(*pipelineLayout, MakeIteratorRange(&sov, &sov+1));
 		_pimpl->_testType = testType;
 		_pimpl->_pipelineAccelerators = pipelineAcceleratorPool.get();
     }

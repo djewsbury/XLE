@@ -262,7 +262,7 @@ namespace UnitTests
 		////////////////////////////////////////////////////////////////////////////////////////
 		{
 			auto rpi = fbHelper.BeginRenderPass(*threadContext);
-			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*pipelineLayout);
 
 			encoder.Bind(shaderProgram);
 
@@ -319,7 +319,7 @@ namespace UnitTests
 
 		{
 			auto rpi = fbHelper.BeginRenderPass(*threadContext);
-			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*pipelineLayout);
 
 			encoder.Bind(shaderProgram);
 
@@ -363,7 +363,7 @@ namespace UnitTests
 
 		{
 			auto rpi = fbHelper.BeginRenderPass(*threadContext);
-			auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder(*pipelineLayout);
 
 			UniformsStreamInterface uniformInterface;
 			uniformInterface.BindImmediateData(0, Hash64("PushConstants0"));
@@ -448,7 +448,7 @@ namespace UnitTests
 		{
 			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 			auto rpi = fbHelper.BeginRenderPass(*threadContext);
-			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 
 			auto shaderProgram = testHelper->MakeShaderProgram(vsText_FullViewport, psText_LegacyBindings);
 			encoder.Bind(shaderProgram);

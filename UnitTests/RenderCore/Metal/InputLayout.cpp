@@ -194,7 +194,7 @@ namespace UnitTests
 
 			VertexBufferView vbv { vertexBuffer.get() };
 			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 
 			encoder.Bind(shaderProgram);
 			encoder.Bind(inputLayout, Topology::TriangleList);
@@ -238,7 +238,7 @@ namespace UnitTests
 
 			VertexBufferView vbv { vertexBuffer.get() };
 			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 
 			encoder.Bind(shaderProgram);
 			encoder.Bind(inputLayout, Topology::TriangleList);
@@ -293,7 +293,7 @@ namespace UnitTests
 				VertexBufferView { vertexBuffer1.get() }
 			};
 			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 			encoder.Bind(shaderProgram);
 			encoder.Bind(inputLayout, Topology::TriangleList);
 			encoder.Bind(MakeIteratorRange(vbvs), {});
@@ -330,7 +330,7 @@ namespace UnitTests
 				VertexBufferView { vertexBuffer1.get() }
 			};
 			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 			encoder.Bind(shaderProgram);
 			encoder.Bind(inputLayout, Topology::TriangleList);
 			encoder.Bind(MakeIteratorRange(vbvs), {});
@@ -386,7 +386,7 @@ namespace UnitTests
 				VertexBufferView { vertexBuffer2.get() },
 			};
 			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 
 			encoder.Bind(shaderProgram);
 			encoder.Bind(inputLayout, Topology::TriangleList);
@@ -425,7 +425,7 @@ namespace UnitTests
 			};
 			IndexBufferView ibv { idxBuffer, Format::R32_UINT };
 			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 
 			encoder.Bind(shaderProgram);
 			encoder.Bind(inputLayout, Topology::TriangleList);
@@ -468,7 +468,7 @@ namespace UnitTests
 
 		auto vertexBuffer = testHelper->CreateVB(MakeIteratorRange(vertices_randomTriangle));
 		VertexBufferView vbv { vertexBuffer.get() };
-		auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+		auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 		encoder.Bind(MakeIteratorRange(&vbv, &vbv+1), {});
 	}
 
@@ -509,7 +509,7 @@ namespace UnitTests
 			VertexBufferView { vertexBuffer2.get() },
 		};
 
-		auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+		auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 		encoder.Bind(MakeIteratorRange(vbvs), {});
 	}
 
@@ -533,7 +533,7 @@ namespace UnitTests
 
 		////////////////////////////////////////////////////////////////////////////////////////
 		{
-			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 			
 			Metal::BoundInputLayout inputLayout(IteratorRange<const InputElementDesc*>{}, shaderProgram);
 			REQUIRE(inputLayout.AllAttributesBound());
@@ -573,7 +573,7 @@ namespace UnitTests
 		rpi = fbHelper.BeginRenderPass(*threadContext);
 
 		{
-			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 
 			Metal::BoundInputLayout inputLayout(IteratorRange<const InputElementDesc*>{}, shaderProgram);
 			REQUIRE(inputLayout.AllAttributesBound());
@@ -622,7 +622,7 @@ namespace UnitTests
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 		auto rpi = fbHelper.BeginRenderPass(*threadContext);
 
-		auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+		auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 		encoder.Bind(shaderProgram);
 
 		{
@@ -745,7 +745,7 @@ namespace UnitTests
 		Metal::CompleteInitialization(metalContext, {testTexture._res.get()});
 
 		auto rpi = fbHelper.BeginRenderPass(*threadContext);
-		auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+		auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 
 		auto vertexBuffer0 = testHelper->CreateVB(MakeIteratorRange(vertices_vIdx));
 		Metal::BoundInputLayout inputLayout(MakeIteratorRange(inputEleVIdx), shaderProgramCB);
@@ -853,7 +853,7 @@ namespace UnitTests
 		Metal::CompleteInitialization(metalContext, {testTexture._res.get()});
 
 		auto rpi = fbHelper.BeginRenderPass(*threadContext);
-		auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+		auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 
 		auto vertexBuffer0 = testHelper->CreateVB(MakeIteratorRange(vertices_vIdx));
 		Metal::BoundInputLayout inputLayout(MakeIteratorRange(inputEleVIdx), shaderProgramCB);
@@ -968,7 +968,7 @@ namespace UnitTests
 		////////////////////////////////////////////////////////////////////////////////////////
 		{
 			auto rpi = fbHelper.BeginRenderPass(*threadContext);
-			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 
 			auto vertexBuffer0 = testHelper->CreateVB(MakeIteratorRange(vertices_vIdx));
 			Metal::BoundInputLayout inputLayout(MakeIteratorRange(inputEleVIdx), shaderProgram);
@@ -1040,7 +1040,7 @@ namespace UnitTests
 
 		////////////////////////////////////////////////////////////////////////////////////////
 		{
-			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 			auto vertexBuffer0 = testHelper->CreateVB(MakeIteratorRange(vertices_vIdx));
 			Metal::BoundInputLayout inputLayout(MakeIteratorRange(inputEleVIdx), shaderProgram);
 			REQUIRE(inputLayout.AllAttributesBound());
@@ -1080,7 +1080,7 @@ namespace UnitTests
 
 		////////////////////////////////////////////////////////////////////////////////////////
 		{
-			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 			auto vertexBuffer0 = testHelper->CreateVB(MakeIteratorRange(vertices_vIdx));
 			Metal::BoundInputLayout inputLayout(MakeIteratorRange(inputEleVIdx), shaderProgram);
 			REQUIRE(inputLayout.AllAttributesBound());
@@ -1185,7 +1185,7 @@ namespace UnitTests
 			pipelineBuilder.Bind(computeShader);
 			auto pipeline = pipelineBuilder.CreatePipeline(Metal::GetObjectFactory());
 
-			auto encoder = metalContext.BeginComputeEncoder(pipelineLayout);
+			auto encoder = metalContext.BeginComputeEncoder(*pipelineLayout);
 
 			UniformsStreamInterface usi;
 			usi.BindResourceView(0, Hash64("ArrayInput")+interfaceRemapping[0]);
@@ -1329,7 +1329,7 @@ namespace UnitTests
 			pipelineBuilder.Bind(computeShader);
 			auto pipeline = pipelineBuilder.CreatePipeline(Metal::GetObjectFactory());
 
-			auto encoder = metalContext.BeginComputeEncoder(pipelineLayout);
+			auto encoder = metalContext.BeginComputeEncoder(*pipelineLayout);
 
 			UniformsStreamInterface usi;
 			usi.BindResourceView(0, Hash64("Output"));
@@ -1497,7 +1497,7 @@ namespace UnitTests
 		pipelineBuilder.Bind(computeShader);
 		auto pipeline = pipelineBuilder.CreatePipeline(Metal::GetObjectFactory());
 
-		auto encoder = metalContext.BeginComputeEncoder(pipelineLayout);
+		auto encoder = metalContext.BeginComputeEncoder(*pipelineLayout);
 
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, Hash64("OutputTexture"));

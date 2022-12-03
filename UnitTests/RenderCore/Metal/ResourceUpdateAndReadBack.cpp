@@ -205,7 +205,7 @@ namespace UnitTests
 
 		{
 			auto rpi = fbHelper.BeginRenderPass(*threadContext);
-			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper._pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper._pipelineLayout);
 			encoder.Bind(shaderProgram);
 
 			auto cbView = cbResource->CreateBufferView();
@@ -249,7 +249,7 @@ namespace UnitTests
 
 		{
 			auto rpi = fbHelper.BeginRenderPass(*threadContext); // RenderCore::LoadStore::Retain);
-			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper._pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper._pipelineLayout);
 			encoder.Bind(shaderProgram);
 
 			auto cbView = cbResource->CreateBufferView();
@@ -360,7 +360,7 @@ namespace UnitTests
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
 
-				auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+				auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 				encoder.Bind(shaderProgram);
 
 				for (unsigned d=0; d<dimof(cbs); ++d) {
@@ -735,7 +735,7 @@ namespace UnitTests
 				{
 					auto rpi = fbHelper.BeginRenderPass(*threadContext);
 					auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-					auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(testHelper->_pipelineLayout);
+					auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 					encoder.Bind(shaderProgram);
 
 					if (!completedResources.empty()) {

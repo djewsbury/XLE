@@ -101,7 +101,7 @@ namespace UnitTests
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 			auto rpi = fbHelper.BeginRenderPass(threadContext);
 
-			auto encoder = metalContext.BeginGraphicsEncoder(testHelper->_pipelineLayout);
+			auto encoder = metalContext.BeginGraphicsEncoder(*testHelper->_pipelineLayout);
 
 			Float2 mins {
 				(float)std::uniform_int_distribution<int>(0, screenMaxs[0]-1)(rng),
@@ -217,7 +217,7 @@ namespace UnitTests
 		Float4* finalColors = (Float4*) readBackData.data();
 		for (unsigned y=0; y<256; ++y)
 			for (unsigned x=0; x<256; ++x) {
-				Float4 final = finalColors[y*256+x], src = srcData[y*256+x];
+				Float4 final = finalColors[y*256+x];
 				auto writeCount = final[3];
 				Float4 expected = srcData[y*256+x] * writeCount;
 				// We pick up a fair amount of floating point creep here -- so we've got to be careful
