@@ -83,11 +83,12 @@ namespace RenderCore { namespace Techniques
 
 		virtual auto GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const -> std::future<VisibilityMarkerId> = 0;
 		virtual auto GetDescriptorSetMarker(DescriptorSetAccelerator& accelerator) const -> std::future<std::pair<VisibilityMarkerId, BufferUploads::CommandListID>> = 0;
-		virtual auto GetCompiledPipelineLayoutMarker(const SequencerConfig& sequencerConfig) const -> std::future<VisibilityMarkerId> = 0;
 
 		virtual void	SetGlobalSelector(StringSection<> name, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) = 0;
 		T1(Type) void   SetGlobalSelector(StringSection<> name, Type value);
 		virtual void	RemoveGlobalSelector(StringSection<> name) = 0;
+
+		virtual void	SetFallbackMaterialDescriptorSetLayout(const std::shared_ptr<Assets::PredefinedDescriptorSetLayout>) = 0;
 
 		virtual VisibilityMarkerId VisibilityBarrier(VisibilityMarkerId expectedVisibility=~0u) = 0;
 		virtual const std::shared_ptr<IDevice>& GetDevice() const = 0;
@@ -109,7 +110,7 @@ namespace RenderCore { namespace Techniques
 
 	const IPipelineAcceleratorPool::Pipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig, VisibilityMarkerId);
 	const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator, VisibilityMarkerId);
-	std::shared_ptr<ICompiledPipelineLayout> TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig, VisibilityMarkerId);
+	ICompiledPipelineLayout* TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig, VisibilityMarkerId);
 
 	T1(Type) inline void   IPipelineAcceleratorPool::SetGlobalSelector(StringSection<> name, Type value)
 	{

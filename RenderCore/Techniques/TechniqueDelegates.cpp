@@ -7,6 +7,7 @@
 #include "CompiledShaderPatchCollection.h"
 #include "Techniques.h"
 #include "../Assets/RawMaterial.h"
+#include "../Assets/PredefinedPipelineLayout.h"
 #include "../IDevice.h"
 #include "../Format.h"
 #include "../../ShaderParser/AutomaticSelectorFiltering.h"
@@ -30,11 +31,12 @@ namespace RenderCore { namespace Techniques
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& input) override;
 
-		std::string GetPipelineLayout() override;
+		std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() override;
 		::Assets::DependencyValidation GetDependencyValidation() override;
 
 		TechniqueDelegate_Legacy(
 			std::shared_ptr<Technique> technique,
+			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
 			unsigned techniqueIndex,
 			const AttachmentBlendDesc& blend,
 			const RasterizationDesc& rasterization,
@@ -46,6 +48,8 @@ namespace RenderCore { namespace Techniques
 		RasterizationDesc _rasterization;
 		DepthStencilDesc _depthStencil;
 		std::shared_ptr<Technique> _technique;
+		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
+		::Assets::DependencyValidation _depVal;
 	};
 
 	static void PrepareShadersFromTechniqueEntry(
@@ -78,21 +82,26 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	std::string TechniqueDelegate_Legacy::GetPipelineLayout() { return MAIN_PIPELINE ":GraphicsMain"; }
-	::Assets::DependencyValidation TechniqueDelegate_Legacy::GetDependencyValidation() { return {}; }
+	std::shared_ptr<Assets::PredefinedPipelineLayout> TechniqueDelegate_Legacy::GetPipelineLayout() { return _pipelineLayout; }
+	::Assets::DependencyValidation TechniqueDelegate_Legacy::GetDependencyValidation() { return _depVal; }
 
 	TechniqueDelegate_Legacy::TechniqueDelegate_Legacy(
 		std::shared_ptr<Technique> technique,
+		std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
 		unsigned techniqueIndex,
 		const AttachmentBlendDesc& blend,
 		const RasterizationDesc& rasterization,
 		const DepthStencilDesc& depthStencil)
 	: _technique(std::move(technique))
+	, _pipelineLayout(std::move(pipelineLayout))
 	, _techniqueIndex(techniqueIndex)
 	, _blend(blend)
 	, _rasterization(rasterization)
 	, _depthStencil(depthStencil)
-	{}
+	{
+		::Assets::DependencyValidationMarker depVals[] { _technique->GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
+		_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
+	}
 
 	TechniqueDelegate_Legacy::~TechniqueDelegate_Legacy()
 	{}
@@ -106,10 +115,11 @@ namespace RenderCore { namespace Techniques
 	{
 		const char* techFile = ILLUM_LEGACY_TECH;
 		auto techniqueFuture = ::Assets::MakeAssetPtr<Technique>(techFile);
-		::Assets::WhenAll(techniqueFuture).ThenConstructToPromise(
+		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsMain");
+		::Assets::WhenAll(techniqueFuture, pipelineLayoutFuture).ThenConstructToPromise(
 			std::move(promise),
-			[techniqueIndex, blend, rasterization, depthStencil](auto technique) {
-				return std::make_shared<TechniqueDelegate_Legacy>(std::move(technique), techniqueIndex, blend, rasterization, depthStencil);
+			[techniqueIndex, blend, rasterization, depthStencil](auto technique, auto pipelineLayout) {
+				return std::make_shared<TechniqueDelegate_Legacy>(std::move(technique), std::move(pipelineLayout), techniqueIndex, blend, rasterization, depthStencil);
 			});
 	}
 
@@ -236,31 +246,29 @@ namespace RenderCore { namespace Techniques
 			return nascentDesc;
 		}
 
-		std::string GetPipelineLayout() override
-		{
-			return MAIN_PIPELINE ":GraphicsMain";
-		}
+		std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() override { return _pipelineLayout; }
+		::Assets::DependencyValidation GetDependencyValidation() override { return _depVal; }
 
-		::Assets::DependencyValidation GetDependencyValidation() override
+		TechniqueDelegate_Deferred(std::shared_ptr<TechniqueSetFile> techniqueSet, std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout)
+		: _techniqueFileHelper(std::move(techniqueSet)), _pipelineLayout(std::move(pipelineLayout))
 		{
-			return _techniqueFileHelper.GetDependencyValidation();
-		}
-
-		TechniqueDelegate_Deferred(std::shared_ptr<TechniqueSetFile> techniqueSet)
-		: _techniqueFileHelper(std::move(techniqueSet))
-		{
+			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
+			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
+		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
+		::Assets::DependencyValidation _depVal;
 	};
 
 	void CreateTechniqueDelegate_Deferred(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet)
 	{
-		::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsMain");
+		::Assets::WhenAll(techniqueSet, pipelineLayoutFuture).ThenConstructToPromise(
 			std::move(promise),
-			[](auto techniqueSet) { return std::make_shared<TechniqueDelegate_Deferred>(std::move(techniqueSet)); });
+			[](auto techniqueSet, auto pipelineLayout) { return std::make_shared<TechniqueDelegate_Deferred>(std::move(techniqueSet), std::move(pipelineLayout)); });
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -366,29 +374,28 @@ namespace RenderCore { namespace Techniques
 			return nascentDesc;
 		}
 
-		std::string GetPipelineLayout() override
-		{
-			return MAIN_PIPELINE ":GraphicsForwardPlus";
-		}
-
-		::Assets::DependencyValidation GetDependencyValidation() override
-		{
-			return _techniqueFileHelper.GetDependencyValidation();
-		}
+		std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() override { return _pipelineLayout; }
+		::Assets::DependencyValidation GetDependencyValidation() override { return _depVal; }
 
 		TechniqueDelegate_Forward(
 			std::shared_ptr<TechniqueSetFile> techniqueSet,
+			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
 			TechniqueDelegateForwardFlags::BitField flags)
-		: _techniqueFileHelper(std::move(techniqueSet))
+		: _techniqueFileHelper(std::move(techniqueSet)), _pipelineLayout(std::move(pipelineLayout))
 		{
 			if (flags & TechniqueDelegateForwardFlags::DisableDepthWrite) {
 				_depthStencil = CommonResourceBox::s_dsReadOnly;
 			} else {
 				_depthStencil = CommonResourceBox::s_dsReadWrite;
 			}
+
+			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
+			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
+		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
+		::Assets::DependencyValidation _depVal;
 		DepthStencilDesc _depthStencil;
 	};
 
@@ -397,10 +404,11 @@ namespace RenderCore { namespace Techniques
 		const TechniqueSetFileFuture& techniqueSet,
 		TechniqueDelegateForwardFlags::BitField flags)
 	{
-		::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsForwardPlus");
+		::Assets::WhenAll(techniqueSet, pipelineLayoutFuture).ThenConstructToPromise(
 			std::move(promise),
-			[flags](auto techniqueSet) {
-				return std::make_shared<TechniqueDelegate_Forward>(std::move(techniqueSet), flags);
+			[flags](auto techniqueSet, auto pipelineLayout) {
+				return std::make_shared<TechniqueDelegate_Forward>(std::move(techniqueSet), std::move(pipelineLayout), flags);
 			});
 	}
 
@@ -496,30 +504,29 @@ namespace RenderCore { namespace Techniques
 			return nascentDesc;
 		}
 
-		std::string GetPipelineLayout() override
-		{
-			return MAIN_PIPELINE ":GraphicsMain";
-		}
-
-		::Assets::DependencyValidation GetDependencyValidation() override
-		{
-			return _techniqueFileHelper.GetDependencyValidation();
-		}
+		std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() override { return _pipelineLayout; }
+		::Assets::DependencyValidation GetDependencyValidation() override { return _depVal; }
 
 		TechniqueDelegate_DepthOnly(
 			std::shared_ptr<TechniqueSetFile> techniqueSet,
+			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
 			const RSDepthBias& singleSidedBias,
 			const RSDepthBias& doubleSidedBias,
 			CullMode cullMode, FaceWinding faceWinding,
 			std::optional<ShadowGenType> shadowGen)
-		: _techniqueFileHelper(std::move(techniqueSet), shadowGen)
+		: _techniqueFileHelper(std::move(techniqueSet), shadowGen), _pipelineLayout(std::move(pipelineLayout))
 		{
 			_rs[0x0] = RasterizationDesc{cullMode,        faceWinding, (float)singleSidedBias._depthBias, singleSidedBias._depthBiasClamp, singleSidedBias._slopeScaledBias};
             _rs[0x1] = RasterizationDesc{CullMode::None,  faceWinding, (float)doubleSidedBias._depthBias, doubleSidedBias._depthBiasClamp, doubleSidedBias._slopeScaledBias};			
+
+			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
+			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
 		RasterizationDesc _rs[2];
+		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
+		::Assets::DependencyValidation _depVal;
 	};
 
 	void CreateTechniqueDelegate_DepthOnly(
@@ -529,10 +536,11 @@ namespace RenderCore { namespace Techniques
         const RSDepthBias& doubleSidedBias,
         CullMode cullMode, FaceWinding faceWinding)
 	{
-		::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsMain");
+		::Assets::WhenAll(techniqueSet, pipelineLayoutFuture).ThenConstructToPromise(
 			std::move(promise),
-			[singleSidedBias, doubleSidedBias, cullMode, faceWinding](auto techniqueSet) {
-				return std::make_shared<TechniqueDelegate_DepthOnly>(std::move(techniqueSet), singleSidedBias, doubleSidedBias, cullMode, faceWinding, std::optional<ShadowGenType>{});
+			[singleSidedBias, doubleSidedBias, cullMode, faceWinding](auto techniqueSet, auto pipelineLayout) {
+				return std::make_shared<TechniqueDelegate_DepthOnly>(std::move(techniqueSet), std::move(pipelineLayout), singleSidedBias, doubleSidedBias, cullMode, faceWinding, std::optional<ShadowGenType>{});
 			});
 	}
 
@@ -544,10 +552,11 @@ namespace RenderCore { namespace Techniques
         const RSDepthBias& doubleSidedBias,
         CullMode cullMode, FaceWinding faceWinding)
 	{
-		::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsMain");
+		::Assets::WhenAll(techniqueSet, pipelineLayoutFuture).ThenConstructToPromise(
 			std::move(promise),
-			[singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGenType](auto techniqueSet) {
-				return std::make_shared<TechniqueDelegate_DepthOnly>(std::move(techniqueSet), singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGenType);
+			[singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGenType](auto techniqueSet, auto pipelineLayout) {
+				return std::make_shared<TechniqueDelegate_DepthOnly>(std::move(techniqueSet), std::move(pipelineLayout), singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGenType);
 			});
 	}
 
@@ -671,28 +680,27 @@ namespace RenderCore { namespace Techniques
 			return nascentDesc;
 		}
 
-		std::string GetPipelineLayout() override
-		{
-			return MAIN_PIPELINE ":GraphicsMain";
-		}
-
-		::Assets::DependencyValidation GetDependencyValidation() override
-		{
-			return _techniqueFileHelper.GetDependencyValidation();
-		}
+		std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() override { return _pipelineLayout; }
+		::Assets::DependencyValidation GetDependencyValidation() override { return _depVal; }
 
 		TechniqueDelegate_PreDepth(
 			std::shared_ptr<TechniqueSetFile> techniqueSet,
+			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
 			PreDepthType preDepthType)
-		: _techniqueFileHelper(std::move(techniqueSet), preDepthType), _preDepthType(preDepthType)
+		: _techniqueFileHelper(std::move(techniqueSet), preDepthType), _pipelineLayout(std::move(pipelineLayout)), _preDepthType(preDepthType)
 		{
 			_rs[0x0] = CommonResourceBox::s_rsDefault;
 			_rs[0x1] = CommonResourceBox::s_rsCullDisable;
+
+			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
+			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
 		RasterizationDesc _rs[2];
 		PreDepthType _preDepthType;
+		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
+		::Assets::DependencyValidation _depVal;
 	};
 
 	void CreateTechniqueDelegate_PreDepth(
@@ -700,10 +708,11 @@ namespace RenderCore { namespace Techniques
 		const TechniqueSetFileFuture& techniqueSet,
 		PreDepthType preDepthType)
 	{
-		::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsMain");
+		::Assets::WhenAll(techniqueSet, pipelineLayoutFuture).ThenConstructToPromise(
 			std::move(promise),
-			[preDepthType](auto techniqueSet) {
-				return std::make_shared<TechniqueDelegate_PreDepth>(std::move(techniqueSet), preDepthType);
+			[preDepthType](auto techniqueSet, auto pipelineLayout) {
+				return std::make_shared<TechniqueDelegate_PreDepth>(std::move(techniqueSet), std::move(pipelineLayout), preDepthType);
 			});
 	}
 
@@ -810,29 +819,28 @@ namespace RenderCore { namespace Techniques
 			return nascentDesc;
 		}
 
-		std::string GetPipelineLayout() override
-		{
-			return MAIN_PIPELINE ":GraphicsMain";
-		}
-
-		::Assets::DependencyValidation GetDependencyValidation() override
-		{
-			return _techniqueFileHelper.GetDependencyValidation();
-		}
+		std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() override { return _pipelineLayout; }
+		::Assets::DependencyValidation GetDependencyValidation() override { return _depVal; }
 
 		TechniqueDelegate_Utility(
 			std::shared_ptr<TechniqueSetFile> techniqueSet,
+			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
 			UtilityDelegateType utilityType)
 		: _techniqueFileHelper{std::move(techniqueSet), utilityType}
 		, _utilityType(utilityType)
 		{
 			_rs[0x0] = CommonResourceBox::s_rsDefault;
             _rs[0x1] = CommonResourceBox::s_rsCullDisable;
+
+			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
+			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
 		RasterizationDesc _rs[2];
 		UtilityDelegateType _utilityType;
+		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
+		::Assets::DependencyValidation _depVal;
 	};
 
 	void CreateTechniqueDelegate_Utility(
@@ -840,10 +848,11 @@ namespace RenderCore { namespace Techniques
 		const TechniqueSetFileFuture& techniqueSet,
 		UtilityDelegateType type)
 	{
-		::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsMain");
+		::Assets::WhenAll(techniqueSet, pipelineLayoutFuture).ThenConstructToPromise(
 			std::move(promise),
-			[type](auto techniqueSet) {
-				return std::make_shared<TechniqueDelegate_Utility>(std::move(techniqueSet), type);
+			[type](auto techniqueSet, auto pipelineLayout) {
+				return std::make_shared<TechniqueDelegate_Utility>(std::move(techniqueSet), std::move(pipelineLayout), type);
 			});
 	}
 
@@ -944,31 +953,29 @@ namespace RenderCore { namespace Techniques
 			return nascentDesc;
 		}
 
-		std::string GetPipelineLayout() override
-		{
-			return MAIN_PIPELINE ":GraphicsProbePrepare";
-		}
-				
-		::Assets::DependencyValidation GetDependencyValidation() override
-		{
-			return _techniqueFileHelper.GetDependencyValidation();
-		}
+		std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() override { return _pipelineLayout; }
+		::Assets::DependencyValidation GetDependencyValidation() override { return _depVal; }
 
-		TechniqueDelegate_ProbePrepare(std::shared_ptr<TechniqueSetFile> techniqueSet)
-		: _techniqueFileHelper(std::move(techniqueSet))
+		TechniqueDelegate_ProbePrepare(std::shared_ptr<TechniqueSetFile> techniqueSet, std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout)
+		: _techniqueFileHelper(std::move(techniqueSet)), _pipelineLayout(std::move(pipelineLayout))
 		{
+			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
+			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
+		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
+		::Assets::DependencyValidation _depVal;
 	};
 
 	void CreateTechniqueDelegate_ProbePrepare(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet)
 	{
-		::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsProbePrepare");
+		::Assets::WhenAll(techniqueSet, pipelineLayoutFuture).ThenConstructToPromise(
 			std::move(promise),
-			[](auto techniqueSet) { return std::make_shared<TechniqueDelegate_ProbePrepare>(std::move(techniqueSet)); });
+			[](auto techniqueSet, auto pipelineLayout) { return std::make_shared<TechniqueDelegate_ProbePrepare>(std::move(techniqueSet), std::move(pipelineLayout)); });
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1051,30 +1058,29 @@ namespace RenderCore { namespace Techniques
 			return nascentDesc;
 		}
 
-		std::string GetPipelineLayout() override
-		{
-			return MAIN_PIPELINE ":GraphicsMain";
-		}
-
-		::Assets::DependencyValidation GetDependencyValidation() override
-		{
-			return _techniqueFileHelper.GetDependencyValidation();
-		}
+		std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() override { return _pipelineLayout; }
+		::Assets::DependencyValidation GetDependencyValidation() override { return _depVal; }
 
 		TechniqueDelegate_RayTest(
 			std::shared_ptr<TechniqueSetFile> techniqueSet,
+			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
 			unsigned testTypeParameter,
 			std::vector<InputElementDesc> soElements,
 			std::vector<unsigned> soStrides)
-		: _techniqueFileHelper(std::move(techniqueSet)), _testTypeParameter(testTypeParameter)
+		: _techniqueFileHelper(std::move(techniqueSet)), _pipelineLayout(std::move(pipelineLayout))
+		, _testTypeParameter(testTypeParameter)
 		, _soElements(std::move(soElements)), _soStrides(std::move(soStrides))
 		{
+			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
+			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
 		std::vector<InputElementDesc> _soElements;
 		std::vector<unsigned> _soStrides;
 		unsigned _testTypeParameter;
+		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
+		::Assets::DependencyValidation _depVal;
 	};
 
 	void CreateTechniqueDelegate_RayTest(
@@ -1083,12 +1089,13 @@ namespace RenderCore { namespace Techniques
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit)
 	{
+		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsMain");
 		auto soElements = NormalizeInputAssembly(soInit._outputElements);
 		auto soStrides = std::vector<unsigned>(soInit._outputBufferStrides.begin(), soInit._outputBufferStrides.end());
-		::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+		::Assets::WhenAll(techniqueSet, pipelineLayoutFuture).ThenConstructToPromise(
 			std::move(promise),
-			[testTypeParameter, soElements=std::move(soElements), soStrides=std::move(soStrides)](auto techniqueSet) mutable {
-				return std::make_shared<TechniqueDelegate_RayTest>(std::move(techniqueSet), testTypeParameter, std::move(soElements), std::move(soStrides));
+			[testTypeParameter, soElements=std::move(soElements), soStrides=std::move(soStrides)](auto techniqueSet, auto pipelineLayout) mutable {
+				return std::make_shared<TechniqueDelegate_RayTest>(std::move(techniqueSet), std::move(pipelineLayout), testTypeParameter, std::move(soElements), std::move(soStrides));
 			});
 	}
 
