@@ -923,21 +923,19 @@ namespace RenderCore { namespace BufferUploads
         assert(dst.IsWholeResource());
 
         const size_t temporaryCount = _transactions.size();
-        for (auto& s:steps) {
-            for (unsigned c=0; c<temporaryCount; ++c) {
-                Transaction& transaction = _transactions[c];
-                if (transaction._finalResource.GetContainingResource().get() == &src) {
-                    auto size = RenderCore::ByteCount(transaction._desc);
-                    if (!transaction._finalResource.IsWholeResource())
-                        assert((transaction._finalResource.GetRangeInContainingResource().second-transaction._finalResource.GetRangeInContainingResource().first) == size);
+        for (unsigned c=0; c<temporaryCount; ++c) {
+            Transaction& transaction = _transactions[c];
+            if (transaction._finalResource.GetContainingResource().get() == &src) {
+                auto size = RenderCore::ByteCount(transaction._desc);
+                if (!transaction._finalResource.IsWholeResource())
+                    assert((transaction._finalResource.GetRangeInContainingResource().second-transaction._finalResource.GetRangeInContainingResource().first) == size);
 
-                    ResourceLocator oldLocator = std::move(transaction._finalResource);
-                    unsigned oldOffset = oldLocator.GetRangeInContainingResource().first;
+                ResourceLocator oldLocator = std::move(transaction._finalResource);
+                unsigned oldOffset = oldLocator.GetRangeInContainingResource().first;
 
-                    auto newOffsetValue = ResolveOffsetValue(oldOffset, RenderCore::ByteCount(transaction._desc), steps);
-                    if (newOffsetValue.has_value())
-                        transaction._finalResource = dst.MakeSubLocator(newOffsetValue.value(), size);
-                }
+                auto newOffsetValue = ResolveOffsetValue(oldOffset, RenderCore::ByteCount(transaction._desc), steps);
+                if (newOffsetValue.has_value())
+                    transaction._finalResource = dst.MakeSubLocator(newOffsetValue.value(), size);
             }
         }
     }
