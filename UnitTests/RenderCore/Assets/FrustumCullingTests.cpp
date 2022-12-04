@@ -18,6 +18,7 @@
 #include "../../../RenderCore/Techniques/SystemUniformsDelegate.h"
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
 #include "../../../RenderCore/Assets/RawMaterial.h"
+#include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../RenderCore/Format.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../Assets/AssetServices.h"
@@ -64,7 +65,7 @@ namespace UnitTests
 	class SimpleTechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 	{
 	public:
-		FutureGraphicsPipelineDesc GetPipelineDesc(
+		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
 			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
@@ -78,15 +79,12 @@ namespace UnitTests
 			templateDesc->_rasterization = Techniques::CommonResourceBox::s_rsDefault;
 			templateDesc->_blend.push_back(Techniques::CommonResourceBox::s_abStraightAlpha);
 			templateDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWrite;
-
-			std::promise<std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc>> promise;
-			promise.set_value(std::move(templateDesc));
-			return promise.get_future();
+			return templateDesc;
 		}
 
-		std::string GetPipelineLayout() override
+		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> GetPipelineLayout() override
 		{
-			return MAIN_PIPELINE ":GraphicsMain";
+			return ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsMain");
 		}
 
 		SimpleTechniqueDelegate() 
@@ -98,14 +96,6 @@ namespace UnitTests
 	{
 		INFO(::Assets::AsString(future.GetActualizationLog()));
 		REQUIRE(future.GetAssetState() == ::Assets::AssetState::Ready);
-	}
-
-	static std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> GetPatchCollectionFromText(StringSection<> techniqueText)
-	{
-		using namespace RenderCore;
-
-		InputStreamFormatter<utf8> formattr { techniqueText.Cast<utf8>() };
-		return std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 	}
 
 	TEST_CASE( "FrustumCulling", "[rendercore_techniques]" )

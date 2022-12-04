@@ -142,7 +142,7 @@ namespace UnitTests
 			auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-				testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates,
+				testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
 				MakeIteratorRange(resolveOperators), {}, 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = lightingTechniqueFuture.get();

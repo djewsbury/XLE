@@ -7,7 +7,7 @@
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/Techniques/Drawables.h"
-#include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
+#include "../../../RenderCore/Techniques/PipelineLayoutDelegate.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"
 #include "../../../RenderCore/Techniques/RenderPass.h"
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
@@ -33,23 +33,28 @@ namespace UnitTests
 		_shaderCompilerRegistration = RenderCore::RegisterShaderCompiler(testHelper._shaderSource, compilers);
 		_shaderCompiler2Registration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(testHelper._shaderSource, compilers);
 
-        RenderCore::Assets::PredefinedPipelineLayoutFile layoutFile { UnitTestPipelineLayout, {}, {} };
-        _materialDescSetLayout = RenderCore::Techniques::FindLayout(layoutFile, "GraphicsMain", "Material", PipelineType::Graphics);
-        _sequencerDescSetLayout = RenderCore::Techniques::FindLayout(layoutFile, "GraphicsMain", "Sequencer", PipelineType::Graphics);
+		RenderCore::Assets::PredefinedPipelineLayout graphicsMainLayout {
+			RenderCore::Assets::PredefinedPipelineLayoutFile{ UnitTestPipelineLayout, {}, {} }, 
+			"GraphicsMain" };
 
-		_compiledLayoutPool = CreateCompiledLayoutPool(testHelper._device, _materialDescSetLayout);
+		auto matDescSetLayout = RenderCore::Techniques::FindLayout(graphicsMainLayout, "Material", PipelineType::Graphics);
+		_pipelineLayoutDelegate = Techniques::CreatePipelineLayoutDelegate(matDescSetLayout);
 		_drawablesPool = Techniques::CreateDrawablesPool();
+		_pipelineCollection = std::make_shared<RenderCore::Techniques::PipelineCollection>(testHelper._device);
 		_pipelineAccelerators = Techniques::CreatePipelineAcceleratorPool(
-			testHelper._device, _drawablesPool, _compiledLayoutPool, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
+			testHelper._device, _drawablesPool, _pipelineCollection, _pipelineLayoutDelegate, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
 
 		_techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		_techniqueContext->_commonResources = _commonResources;
 		_techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
-		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *_sequencerDescSetLayout->GetLayout(), "unittest", *testHelper._device);
+		auto sequencerDescSetLayout = RenderCore::Techniques::FindLayout(graphicsMainLayout, "Sequencer", PipelineType::Graphics);
+		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *sequencerDescSetLayout->GetLayout(), "unittest", *testHelper._device);
 		_techniqueContext->_pipelineAccelerators = _pipelineAccelerators;
 		_techniqueContext->_drawablesPool = _drawablesPool;
 		_techniqueContext->_systemAttachmentFormats = Techniques::CalculateDefaultSystemFormats(*testHelper._device);
 		// _techniqueContext->_uniformDelegateManager->AddShaderResourceDelegate(std::make_shared<SystemUniformsDelegate>(*testHelper._device));
+
+		_commonResources->CompleteInitialization(*testHelper._device->GetImmediateContext());
 	}
 
 	TechniqueTestApparatus::~TechniqueTestApparatus()

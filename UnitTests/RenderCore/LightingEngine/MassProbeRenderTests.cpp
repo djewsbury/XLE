@@ -14,6 +14,7 @@
 #include "../../../RenderCore/Techniques/Drawables.h"
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/Techniques/SimpleModelRenderer.h"
+#include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Metal/QueryPool.h"
 #include "../../../RenderCore/Metal/ObjectFactory.h"
@@ -304,9 +305,9 @@ namespace UnitTests
 		class TechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 		{
 		public:
-			virtual FutureGraphicsPipelineDesc GetPipelineDesc(
+			std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
 				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
-				const RenderCore::Assets::RenderStateSet& renderStates)
+				const RenderCore::Assets::RenderStateSet& renderStates) override
 			{
 				using namespace RenderCore;
 				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
@@ -316,14 +317,12 @@ namespace UnitTests
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/simple.hlsl:ps_main";
 				nascentDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
-				std::promise<std::shared_ptr<Techniques::GraphicsPipelineDesc>> promise;
-				promise.set_value(std::move(nascentDesc));
-				return promise.get_future();
+				return nascentDesc;
 			}
 
-			virtual std::string GetPipelineLayout()
+			std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> GetPipelineLayout() override
 			{
-				return MAIN_PIPELINE ":GraphicsProbePrepare";
+				return ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsProbePrepare");
 			}
 		};
 
@@ -410,9 +409,9 @@ namespace UnitTests
 		class TechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 		{
 		public:
-			virtual FutureGraphicsPipelineDesc GetPipelineDesc(
+			std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
 				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
-				const RenderCore::Assets::RenderStateSet& renderStates)
+				const RenderCore::Assets::RenderStateSet& renderStates) override
 			{
 				using namespace RenderCore;
 				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
@@ -424,14 +423,12 @@ namespace UnitTests
 				nascentDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 				nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
-				std::promise<std::shared_ptr<Techniques::GraphicsPipelineDesc>> promise;
-				promise.set_value(std::move(nascentDesc));
-				return promise.get_future();
+				return nascentDesc;
 			}
 
-			virtual std::string GetPipelineLayout()
+			std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> GetPipelineLayout() override
 			{
-				return MAIN_PIPELINE ":GraphicsProbePrepare";
+				return ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsProbePrepare");
 			}
 		};
 
@@ -526,9 +523,9 @@ namespace UnitTests
 		class TechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 		{
 		public:
-			virtual FutureGraphicsPipelineDesc GetPipelineDesc(
+			std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
 				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
-				const RenderCore::Assets::RenderStateSet& renderStates)
+				const RenderCore::Assets::RenderStateSet& renderStates) override
 			{
 				using namespace RenderCore;
 				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
@@ -539,14 +536,12 @@ namespace UnitTests
 				nascentDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 				nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
-				std::promise<std::shared_ptr<Techniques::GraphicsPipelineDesc>> promise;
-				promise.set_value(std::move(nascentDesc));
-				return promise.get_future();
+				return nascentDesc;
 			}
 
-			virtual std::string GetPipelineLayout()
+			std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> GetPipelineLayout() override
 			{
-				return MAIN_PIPELINE ":GraphicsProbePrepare";
+				return ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsProbePrepare");
 			}
 		};
 
@@ -727,9 +722,9 @@ namespace UnitTests
 		class TechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 		{
 		public:
-			virtual FutureGraphicsPipelineDesc GetPipelineDesc(
+			std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
 				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
-				const RenderCore::Assets::RenderStateSet& renderStates)
+				const RenderCore::Assets::RenderStateSet& renderStates) override
 			{
 				using namespace RenderCore;
 				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
@@ -739,14 +734,12 @@ namespace UnitTests
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/multiview_shader.hlsl:ps_main:ps_6_1";
 				nascentDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
-				std::promise<std::shared_ptr<Techniques::GraphicsPipelineDesc>> promise;
-				promise.set_value(std::move(nascentDesc));
-				return promise.get_future();
+				return nascentDesc;
 			}
 
-			virtual std::string GetPipelineLayout()
+			std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> GetPipelineLayout() override
 			{
-				return MAIN_PIPELINE ":GraphicsProbePrepare";
+				return ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsProbePrepare");
 			}
 		};
 

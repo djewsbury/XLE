@@ -826,7 +826,7 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<TechniqueSetFile> techniqueSet,
 			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
 			UtilityDelegateType utilityType)
-		: _techniqueFileHelper{std::move(techniqueSet), utilityType}
+		: _techniqueFileHelper{std::move(techniqueSet), utilityType}, _pipelineLayout(std::move(pipelineLayout))
 		, _utilityType(utilityType)
 		{
 			_rs[0x0] = CommonResourceBox::s_rsDefault;
@@ -1150,6 +1150,7 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
+	::Assets::DependencyValidation ITechniqueDelegate::GetDependencyValidation() { return {}; }
 	ITechniqueDelegate::~ITechniqueDelegate() {}
 
 }}

@@ -15,7 +15,8 @@ namespace RenderCore { class IDevice; class ICompiledPipelineLayout; }
 namespace RenderCore { namespace Techniques
 {
 	class CompiledShaderPatchCollection;
-	class CompiledPipelineLayoutAsset;
+	class DescriptorSetLayoutAndBinding;
+	class PipelineCollection;
 
 	class IPipelineLayoutDelegate
 	{
@@ -36,8 +37,6 @@ namespace RenderCore { namespace Techniques
 		virtual ~IPipelineLayoutDelegate();
 	};
 
-	class DescriptorSetLayoutAndBinding;
-	class PipelineCollection;
 	std::shared_ptr<IPipelineLayoutDelegate> CreatePipelineLayoutDelegate(
 		StringSection<> skeletonPipelineLayoutFile,
 		StringSection<> fallbackMaterialDescriptorSetFile);
@@ -46,7 +45,8 @@ namespace RenderCore { namespace Techniques
 	std::shared_ptr<IPipelineLayoutDelegate> CreatePipelineLayoutDelegate(
 		StringSection<> pipelineLayoutFile);
 
-	class DescriptorSetLayoutAndBinding;
+	std::shared_ptr<IPipelineLayoutDelegate> CreatePipelineLayoutDelegate(
+		std::shared_ptr<DescriptorSetLayoutAndBinding> fallbackMaterialDescriptorSet);
 
 	class CompiledPipelineLayoutAsset
 	{

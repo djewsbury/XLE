@@ -82,7 +82,7 @@ namespace UnitTests
 	class WriteWorldCoordsDelegate : public RenderCore::Techniques::ITechniqueDelegate
 	{
 	public:
-		FutureGraphicsPipelineDesc GetPipelineDesc(
+		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
 			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
@@ -96,13 +96,13 @@ namespace UnitTests
 			pipelineDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
 			pipelineDesc->_rasterization = Techniques::CommonResourceBox::s_rsDefault;
 			pipelineDesc->_depthStencil = Techniques::CommonResourceBox::s_dsDisable;
-
-			std::promise<std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc>> promise;
-			promise.set_value(std::move(pipelineDesc));
-			return promise.get_future();
+			return pipelineDesc;
 		}
 
-		virtual std::string GetPipelineLayout() override { return MAIN_PIPELINE ":GraphicsMain"; }
+		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> GetPipelineLayout() override
+		{
+			return ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsMain");
+		}
 	};
 
 	static UInt2 s_testResolution { 2048, 2048 };
@@ -373,8 +373,11 @@ namespace UnitTests
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		SECTION("write gbuffer")
 		{
-			auto techniqueSetFile = ::Assets::MakeAssetPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
-			auto deferredIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile);
+			std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promisedTechDel;
+			auto futureTechDel = promisedTechDel.get_future();
+			RenderCore::Techniques::CreateTechniqueDelegate_Deferred(
+				std::move(promisedTechDel),
+				::Assets::MakeAssetPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH));
 
 			auto pipelinePool = std::make_shared<Techniques::PipelineCollection>(testHelper->_device);
 
@@ -414,7 +417,7 @@ namespace UnitTests
 
 					auto gbufferWriteCfg = testApparatus._pipelineAccelerators->CreateSequencerConfig(
 						"gbufferWriteCfg",
-						Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
+						futureTechDel.get(),
 						ParameterBox {},
 						rpi.GetFrameBufferDesc());
 

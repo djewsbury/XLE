@@ -18,7 +18,7 @@
 #include "../../../RenderCore/Techniques/PipelineCollection.h"
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/Techniques/PipelineOperators.h"
-#include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
+#include "../../../RenderCore/Techniques/PipelineLayoutDelegate.h"
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../ShaderParser/AutomaticSelectorFiltering.h"
@@ -59,29 +59,30 @@ namespace UnitTests
 		_compilerRegistrations.push_back(RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(_metalTestHelper->_shaderSource, compilers));
 
 		auto matDescSetLayout = MakeMaterialDescriptorSetLayout();
-		auto compiledLayoutPool = CreateCompiledLayoutPool(_metalTestHelper->_device, matDescSetLayout);
+		auto pipelineLayoutDelegate = Techniques::CreatePipelineLayoutDelegate(matDescSetLayout);
 		_drawablesPool = Techniques::CreateDrawablesPool();
+		_pipelineCollection = std::make_shared<Techniques::PipelineCollection>(_metalTestHelper->_device);
 		_pipelineAccelerators = Techniques::CreatePipelineAcceleratorPool(
-			_metalTestHelper->_device, _drawablesPool, compiledLayoutPool, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
+			_metalTestHelper->_device, _drawablesPool, _pipelineCollection, pipelineLayoutDelegate, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
 
 		_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*_metalTestHelper->_device);
 		_sharedDelegates = std::make_shared<LightingEngine::SharedTechniqueDelegateBox>(*_metalTestHelper->_device, _metalTestHelper->_shaderCompiler->GetShaderLanguage(), &_commonResources->_samplerPool);
 		_techniqueServices->SetCommonResources(_commonResources);
-
-		_pipelinePool = std::make_shared<Techniques::PipelineCollection>(_metalTestHelper->_device);
 
 		_techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		_techniqueContext->_commonResources = _commonResources;
 		_techniqueContext->_attachmentPool = std::make_shared<Techniques::AttachmentPool>(_metalTestHelper->_device);
 		_techniqueContext->_frameBufferPool = Techniques::CreateFrameBufferPool();
 		_techniqueContext->_drawablesPool = _drawablesPool;
-		_techniqueContext->_graphicsPipelinePool = _pipelinePool;
+		_techniqueContext->_graphicsPipelinePool = _pipelineCollection;
 		_techniqueContext->_pipelineAccelerators = _pipelineAccelerators;
 		_techniqueContext->_systemAttachmentFormats = Techniques::CalculateDefaultSystemFormats(*_metalTestHelper->_device);
 
 		_techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
 		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *MakeSequencerDescriptorSetLayout()->GetLayout(), "unittest", *_metalTestHelper->_device);
 		_techniqueContext->_uniformDelegateManager->AddShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*_metalTestHelper->_device));
+
+		_commonResources->CompleteInitialization(*_metalTestHelper->_device->GetImmediateContext());
 	}
 
 	LightingEngineTestApparatus::~LightingEngineTestApparatus()

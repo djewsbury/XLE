@@ -43,7 +43,7 @@ namespace UnitTests
 		std::vector<::Assets::CompilerRegistration> _compilerRegistrations;
 
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
-		std::shared_ptr<RenderCore::Techniques::PipelineCollection> _pipelinePool;
+		std::shared_ptr<RenderCore::Techniques::PipelineCollection> _pipelineCollection;
 		std::shared_ptr<RenderCore::LightingEngine::SharedTechniqueDelegateBox> _sharedDelegates;
 		std::shared_ptr<RenderCore::Techniques::CommonResourceBox> _commonResources;
 		std::shared_ptr<RenderCore::Techniques::TechniqueContext> _techniqueContext;

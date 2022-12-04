@@ -13,7 +13,7 @@
 #include "../../../Assets/AssetServices.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
 
-namespace RenderCore { namespace Techniques { class TechniqueContext; class ICompiledLayoutPool; class IDrawablesPool; class DrawablesPacket; struct PreparedResourcesVisibility; }}
+namespace RenderCore { namespace Techniques { class TechniqueContext; class IPipelineLayoutDelegate; class IDrawablesPool; class DrawablesPacket; struct PreparedResourcesVisibility; class PipelineCollection; }}
 
 namespace UnitTests
 {
@@ -25,11 +25,9 @@ namespace UnitTests
 		std::shared_ptr<RenderCore::Techniques::CommonResourceBox> _commonResources;
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<RenderCore::Techniques::TechniqueContext> _techniqueContext;
-		std::shared_ptr<RenderCore::Techniques::ICompiledLayoutPool> _compiledLayoutPool;
 		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> _drawablesPool;
-
-		std::shared_ptr<RenderCore::Techniques::DescriptorSetLayoutAndBinding> _materialDescSetLayout;
-		std::shared_ptr<RenderCore::Techniques::DescriptorSetLayoutAndBinding> _sequencerDescSetLayout;
+		std::shared_ptr<RenderCore::Techniques::PipelineCollection> _pipelineCollection;
+		std::shared_ptr<RenderCore::Techniques::IPipelineLayoutDelegate> _pipelineLayoutDelegate;
 
 		::Assets::CompilerRegistration _filteringRegistration;
 		::Assets::CompilerRegistration _shaderCompilerRegistration;

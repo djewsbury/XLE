@@ -114,7 +114,7 @@ namespace UnitTests
 			lightingDelegate->BindCfg(lightingEngineCfg);
 
 			auto techniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
-				lightingApparatus._pipelineAccelerators, lightingApparatus._pipelinePool, lightingApparatus._sharedDelegates,
+				lightingApparatus._pipelineAccelerators, lightingApparatus._pipelineCollection, lightingApparatus._sharedDelegates,
 				lightingEngineCfg.GetLightOperators(), lightingEngineCfg.GetShadowOperators(),
 				preregAttachments, fbProps);
 

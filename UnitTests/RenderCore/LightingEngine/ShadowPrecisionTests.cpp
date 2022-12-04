@@ -20,7 +20,7 @@
 #include "../../../RenderCore/Techniques/RenderPassUtils.h"
 #include "../../../RenderCore/Techniques/PipelineCollection.h"
 #include "../../../RenderCore/Techniques/PipelineOperators.h"
-#include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
+#include "../../../RenderCore/Techniques/PipelineLayoutDelegate.h"
 #include "../../../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Metal/Resource.h"
@@ -180,7 +180,7 @@ namespace UnitTests
 
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-					testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates,
+					testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 				auto lightingTechnique = lightingTechniqueFuture.get();
@@ -222,7 +222,7 @@ namespace UnitTests
 				auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-					testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates,
+					testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 				auto lightingTechnique = lightingTechniqueFuture.get();
@@ -462,7 +462,7 @@ namespace UnitTests
 				auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, sceneCamera);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-					testApparatus._pipelineAccelerators, testApparatus._pipelinePool, testApparatus._sharedDelegates,
+					testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps,
 					LightingEngine::DeferredLightingTechniqueFlags::GenerateDebuggingTextures);
@@ -491,7 +491,7 @@ namespace UnitTests
 						ParseScene(lightingIterator, *drawableWriter);
 					}
 
-					DrawCascadeColors(parsingContext.GetThreadContext(), parsingContext, testApparatus._pipelinePool);
+					DrawCascadeColors(parsingContext.GetThreadContext(), parsingContext, testApparatus._pipelineCollection);
 
 					auto colorLDR = parsingContext.GetAttachmentReservation().GetSemanticResource(Techniques::AttachmentSemantics::ColorLDR);
 					REQUIRE(colorLDR);
@@ -522,7 +522,7 @@ namespace UnitTests
 						ParseScene(lightingIterator, *drawableWriter);
 					}
 
-					DrawCascadeColors(*threadContext, parsingContext, testApparatus._pipelinePool);
+					DrawCascadeColors(*threadContext, parsingContext, testApparatus._pipelineCollection);
 
 					// draw the camera and shadow frustums into the output image
 					DrawCameraAndShadowFrustums(*threadContext, immediateDrawingHelper, parsingContext, lightScene, lightId, sceneCamera);

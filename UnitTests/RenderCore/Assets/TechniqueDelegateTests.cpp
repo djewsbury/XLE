@@ -9,6 +9,7 @@
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/Assets/ShaderPatchCollection.h"
 #include "../../../RenderCore/Assets/PredefinedCBLayout.h"
+#include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../RenderCore/Assets/ShaderPatchCollection.h"
 #include "../../../RenderCore/Assets/MaterialScaffold.h"
 #include "../../../RenderCore/Assets/RawMaterial.h"
@@ -23,7 +24,7 @@
 #include "../../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
-#include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
+#include "../../../RenderCore/Techniques/PipelineLayoutDelegate.h"
 #include "../../../RenderCore/Techniques/ManualDrawables.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Metal/InputLayout.h"
@@ -303,7 +304,7 @@ namespace UnitTests
 	class UnitTestTechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 	{
 	public:
-		FutureGraphicsPipelineDesc GetPipelineDesc(
+		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
 			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& input) override
 		{
@@ -334,14 +335,12 @@ namespace UnitTests
 			if (hasDeformPosition)
 				desc->_patchExpansions.emplace_back(deformPositionPatchName, RenderCore::ShaderStage::Vertex);
 
-			std::promise<std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc>> promise;
-			promise.set_value(std::move(desc));
-			return promise.get_future();
+			return desc;
 		}
 
-		std::string GetPipelineLayout() override
+		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> GetPipelineLayout() override
 		{
-			return "ut-data/unit-test.pipeline:GraphicsMain";
+			return ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>("ut-data/unit-test.pipeline:GraphicsMain");
 		}
 	};
 
@@ -371,15 +370,12 @@ namespace UnitTests
 		using namespace RenderCore;
 		const Techniques::IPipelineAcceleratorPool::Pipeline* pipeline;
 		const Techniques::ActualizedDescriptorSet* descriptorSet = nullptr;
-		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout;
+		ICompiledPipelineLayout* pipelineLayout;
 
 		{
 			auto pipelineMarker = pipelinePool->GetPipelineMarker(*pipelineAccelerator, *cfg);
 			Techniques::PreparedResourcesVisibility visibility;
 			visibility._pipelineAcceleratorsVisibility = std::max(pipelineMarker.get(), visibility._pipelineAcceleratorsVisibility);
-
-			auto layoutMarker = pipelinePool->GetCompiledPipelineLayoutMarker(*cfg);
-			visibility._pipelineAcceleratorsVisibility = std::max(layoutMarker.get(), visibility._pipelineAcceleratorsVisibility);
 
 			if (descriptorSetAccelerator) {
 				auto descSetMarker = pipelinePool->GetDescriptorSetMarker(*descriptorSetAccelerator);
@@ -467,17 +463,20 @@ namespace UnitTests
 			)--";
 			InputStreamFormatter<utf8> formattr { MakeStringSection(simplePatchCollectionFragments) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
-			auto compiledPatchCollection = std::make_shared<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, *testApparatus._materialDescSetLayout);
+			auto compiledPatchCollection = testApparatus._pipelineLayoutDelegate->CompileShaderPatchCollection(&patchCollection)->Actualize();
 
 			{
-				auto delegate = RenderCore::Techniques::CreateTechniqueDelegateLegacy(
+				std::promise<std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>> promisedTechDel;
+				auto futureTechDel = promisedTechDel.get_future();
+				RenderCore::Techniques::CreateTechniqueDelegateLegacy(
+					std::move(promisedTechDel),
 					0,
 					RenderCore::AttachmentBlendDesc{},
 					RenderCore::RasterizationDesc{},
 					RenderCore::Techniques::CommonResourceBox::s_dsReadWrite);
 
 				RenderCore::Assets::RenderStateSet stateSet;
-				auto pipelineDesc = delegate->GetPipelineDesc(
+				auto pipelineDesc = futureTechDel.get()->GetPipelineDesc(
 					compiledPatchCollection->GetInterface(),
 					stateSet).get();
 				REQUIRE(pipelineDesc);

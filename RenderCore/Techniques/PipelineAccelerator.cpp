@@ -1376,6 +1376,10 @@ namespace RenderCore { namespace Techniques
 	, _layoutDelegate(std::move(layoutDelegate))
 	, _drawablesPool(std::move(drawablesPool))
 	{
+		assert(_pipelineCollection);
+		assert(_layoutDelegate);
+		// _drawablesPool can be nullptr
+
 		_guid = s_nextPipelineAcceleratorPoolGUID++;
 		_device = std::move(device);
 		_flags = flags;

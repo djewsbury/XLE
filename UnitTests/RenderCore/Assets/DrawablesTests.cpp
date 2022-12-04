@@ -17,7 +17,7 @@
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"
-#include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
+#include "../../../RenderCore/Techniques/PipelineLayoutDelegate.h"
 #include "../../../RenderCore/Techniques/ManualDrawables.h"
 #include "../../../RenderCore/Assets/TextureLoaders.h"
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
@@ -199,10 +199,15 @@ namespace UnitTests
 				matMachine->GetMaterialMachine(), matMachine,
 				"unittest");
 
-			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
+			std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promisedTechDel;
+			auto futureTechDel = promisedTechDel.get_future();
+			Techniques::CreateTechniqueDelegate_Utility(
+				std::move(promisedTechDel),
+				::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"), 
+				Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
 				"test",
-				Techniques::CreateTechniqueDelegate_Utility(techniqueSetFile, Techniques::UtilityDelegateType::CopyDiffuseAlbedo),
+				futureTechDel.get(),		// note -- stall
 				ParameterBox {},
 				fbHelper.GetDesc());
 
@@ -265,10 +270,15 @@ namespace UnitTests
 			#endif
 			REQUIRE(!discoveredCompilations.empty());
 
-			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
+			std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promisedTechDel;
+			auto futureTechDel = promisedTechDel.get_future();
+			Techniques::CreateTechniqueDelegate_Utility(
+				std::move(promisedTechDel),
+				::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"),
+				Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
 				"test",
-				Techniques::CreateTechniqueDelegate_Utility(techniqueSetFile, Techniques::UtilityDelegateType::CopyDiffuseAlbedo),
+				futureTechDel.get(),		// note -- stall
 				ParameterBox {},
 				fbHelper.GetDesc());
 

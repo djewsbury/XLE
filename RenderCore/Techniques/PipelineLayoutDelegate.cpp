@@ -158,6 +158,12 @@ namespace RenderCore { namespace Techniques
 		return std::make_shared<PipelineLayoutDelegate>(std::move(matDescSetLayout));
 	}
 
+	std::shared_ptr<IPipelineLayoutDelegate> CreatePipelineLayoutDelegate(
+		std::shared_ptr<DescriptorSetLayoutAndBinding> fallbackMaterialDescriptorSet)
+	{
+		return std::make_shared<PipelineLayoutDelegate>(std::move(fallbackMaterialDescriptorSet));
+	}
+
 	IPipelineLayoutDelegate::~IPipelineLayoutDelegate() {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

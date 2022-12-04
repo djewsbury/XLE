@@ -13,7 +13,7 @@
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"
-#include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
+#include "../../../RenderCore/Techniques/PipelineLayoutDelegate.h"
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../RenderCore/Metal/Resource.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
@@ -229,12 +229,15 @@ namespace UnitTests
 		ToolsRig::IDrawablesWriter& drawableWriter)
 	{
 		using namespace RenderCore;
-		auto techDel = RenderCore::Techniques::CreateTechniqueDelegate_Utility(
-			testApparatus._sharedDelegates->_techniqueSetFile,
+		std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promisedTechDel;
+		auto futureTechDel = promisedTechDel.get_future();
+		RenderCore::Techniques::CreateTechniqueDelegate_Utility(
+			std::move(promisedTechDel),
+			testApparatus._sharedDelegates->GetTechniqueSetFile(),
 			RenderCore::Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
 		auto sequencerConfig = testApparatus._pipelineAccelerators->CreateSequencerConfig(
 			"WriteDownsampleInput",
-			techDel,
+			futureTechDel.get(),		// note -- stall
 			{}, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 
 		if (1) {
@@ -259,7 +262,7 @@ namespace UnitTests
 			AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abStraightAlpha };
 			outputStates.Bind(MakeIteratorRange(blendStates));
 			auto op = Techniques::CreateFullViewportOperator(
-				testApparatus._pipelinePool,
+				testApparatus._pipelineCollection,
 				Techniques::FullViewportOperatorSubType::DisableDepth,
 				"ut-data/pattern1.pixel.hlsl:main",
 				{}, testApparatus._metalTestHelper->_pipelineLayout,
@@ -293,7 +296,7 @@ namespace UnitTests
 		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abStraightAlpha };
 		outputStates.Bind(MakeIteratorRange(blendStates));
 		auto op = Techniques::CreateFullViewportOperator(
-			testApparatus._pipelinePool,
+			testApparatus._pipelineCollection,
 			Techniques::FullViewportOperatorSubType::DisableDepth,
 			"ut-data/downsample.pixel.hlsl:main",
 			{}, testApparatus._metalTestHelper->_pipelineLayout,
@@ -326,7 +329,7 @@ namespace UnitTests
 			"ut-data/minimal_compute.pipeline:ComputeMain");
 		
 		auto op = Techniques::CreateComputeOperator(
-			testApparatus._pipelinePool,
+			testApparatus._pipelineCollection,
 			pipelineLayouts->GetPipelineLayout(),
 			"ut-data/downsample.compute.hlsl:main",
 			{}, usi);

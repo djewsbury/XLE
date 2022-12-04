@@ -47,7 +47,7 @@ namespace RenderCore { namespace Techniques
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) = 0;
 		virtual std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() = 0;
-		virtual ::Assets::DependencyValidation GetDependencyValidation() = 0;
+		virtual ::Assets::DependencyValidation GetDependencyValidation();
 		virtual ~ITechniqueDelegate();
 	};
 

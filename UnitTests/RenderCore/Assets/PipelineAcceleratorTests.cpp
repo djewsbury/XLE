@@ -17,7 +17,7 @@
 #include "../../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
-#include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
+#include "../../../RenderCore/Techniques/PipelineLayoutDelegate.h"
 #include "../../../RenderCore/Techniques/ManualDrawables.h"
 #include "../../../RenderCore/Metal/Shader.h"
 #include "../../../RenderCore/Metal/InputLayout.h"
@@ -167,7 +167,7 @@ namespace UnitTests
 		RenderCore::IThreadContext& threadContext,
 		const RenderCore::IResource& vb, unsigned vertexCount,
 		const RenderCore::Metal::GraphicsPipeline& pipeline,
-		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout,
+		RenderCore::ICompiledPipelineLayout* pipelineLayout,
 		const RenderCore::IDescriptorSet* descSet = nullptr);
 
 	static std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> GetPatchCollectionFromText(StringSection<> techniqueText)
@@ -185,16 +185,10 @@ namespace UnitTests
 		REQUIRE(future.GetAssetState() == ::Assets::AssetState::Ready);
 	}
 
-	static std::shared_ptr<RenderCore::ICompiledPipelineLayout> StallForPipelineLayout(RenderCore::Techniques::IPipelineAcceleratorPool& pool, RenderCore::Techniques::SequencerConfig& cfg)
+	static RenderCore::ICompiledPipelineLayout* StallForPipelineLayout(RenderCore::Techniques::IPipelineAcceleratorPool& pool, RenderCore::Techniques::SequencerConfig& cfg)
 	{
-		auto compiledLayout = pool.GetCompiledPipelineLayoutMarker(cfg);
-		REQUIRE(compiledLayout.valid());
-		auto resultBecomesVisibleAt = compiledLayout.get();		// stall
-		auto newVisibility = pool.VisibilityBarrier(resultBecomesVisibleAt);
-		REQUIRE(newVisibility >= resultBecomesVisibleAt);
-		auto result = RenderCore::Techniques::TryGetCompiledPipelineLayout(cfg, newVisibility);
-		REQUIRE(result);
-		return result;
+		auto newVisibility = pool.VisibilityBarrier();
+		return RenderCore::Techniques::TryGetCompiledPipelineLayout(cfg, newVisibility);
 	}
 
 	static const RenderCore::Techniques::IPipelineAcceleratorPool::Pipeline* StallForPipeline(
@@ -238,14 +232,18 @@ namespace UnitTests
 		auto testHelper = MakeTestHelper();
 		TechniqueTestApparatus testApparatus(*testHelper);
 
-		auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
-		auto techniqueDelegate = Techniques::CreateTechniqueDelegate_Utility(techniqueSetFile, Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
+		std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promisedTechDel;
+		auto futureTechDel = promisedTechDel.get_future();
+		Techniques::CreateTechniqueDelegate_Utility(
+			std::move(promisedTechDel),
+			::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"), 
+			Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
 
 		auto mainPool = testApparatus._pipelineAccelerators;
 		mainPool->SetGlobalSelector("GLOBAL_SEL", 55);
 		auto cfgId = mainPool->CreateSequencerConfig(
 			"cfgId",
-			techniqueDelegate,
+			futureTechDel.get(),		// note -- stall
 			ParameterBox { std::make_pair("SEQUENCER_SEL", "37") },
 			MakeSimpleFrameBufferDesc());
 
@@ -323,7 +321,7 @@ namespace UnitTests
 			UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 			auto cfgIdWithColor = mainPool->CreateSequencerConfig(
 				"cfgIdWithColor",
-				techniqueDelegate,
+				futureTechDel.get(),		// note -- stall
 				ParameterBox { std::make_pair("COLOR_RED", "1") },
 				MakeSimpleFrameBufferDesc());
 
@@ -349,7 +347,7 @@ namespace UnitTests
 			// Change the sequencer config to now set the COLOR_GREEN selector
 			cfgIdWithColor = mainPool->CreateSequencerConfig(
 				"cfgIdWithColor",
-				techniqueDelegate,
+				futureTechDel.get(),		// note -- stall
 				ParameterBox { std::make_pair("COLOR_GREEN", "1") },
 				MakeSimpleFrameBufferDesc());
 
@@ -482,10 +480,15 @@ namespace UnitTests
 				matMachine->GetMaterialMachine(), matMachine, "unittest");
 
 			// Put together the pieces we need to create a pipeline
-			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
+			std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promisedTechDel;
+			auto futureTechDel = promisedTechDel.get_future();
+			Techniques::CreateTechniqueDelegate_Utility(
+				std::move(promisedTechDel),
+				::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"),
+				Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
 				"cfgId",
-				Techniques::CreateTechniqueDelegate_Utility(techniqueSetFile, Techniques::UtilityDelegateType::CopyDiffuseAlbedo),
+				futureTechDel.get(),		// note -- stall
 				ParameterBox {},
 				fbHelper.GetDesc());
 
@@ -563,10 +566,15 @@ namespace UnitTests
 				TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM));
 			UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 
-			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
+			std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promisedTechDel;
+			auto futureTechDel = promisedTechDel.get_future();
+			Techniques::CreateTechniqueDelegate_Utility(
+				std::move(promisedTechDel),
+				::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"),
+				Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
 				"cfgId",
-				Techniques::CreateTechniqueDelegate_Utility(techniqueSetFile, Techniques::UtilityDelegateType::CopyDiffuseAlbedo),
+				futureTechDel.get(),		// note -- stall
 				ParameterBox {},
 				fbHelper.GetDesc());
 
@@ -732,11 +740,12 @@ namespace UnitTests
 		RenderCore::IThreadContext& threadContext,
 		const RenderCore::IResource& vb, unsigned vertexCount,
 		const RenderCore::Metal::GraphicsPipeline& pipeline,
-		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout,
+		RenderCore::ICompiledPipelineLayout* pipelineLayout,
 		const RenderCore::IDescriptorSet* descSet)
 	{
 		auto& metalContext = *RenderCore::Metal::DeviceContext::Get(threadContext);
 
+		REQUIRE(pipelineLayout);
 		auto encoder = metalContext.BeginGraphicsEncoder(*pipelineLayout);
 		RenderCore::VertexBufferView vbv { &vb };
 		encoder.Bind(MakeIteratorRange(&vbv, &vbv+1), RenderCore::IndexBufferView{});

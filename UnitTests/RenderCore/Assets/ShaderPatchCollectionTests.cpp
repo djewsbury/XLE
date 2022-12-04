@@ -12,7 +12,7 @@
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
-#include "../../../RenderCore/Techniques/CompiledLayoutPool.h"
+#include "../../../RenderCore/Techniques/PipelineLayoutDelegate.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../RenderCore/IDevice.h"
 #include "../../../ShaderParser/ShaderInstantiation.h"
@@ -282,7 +282,6 @@ namespace UnitTests
 			auto instantiation = ShaderSourceParser::InstantiateShader(MakeIteratorRange(instantiations), generateOptions);
 			REQUIRE(instantiation._sourceFragments.size() != (size_t)0);
 
-			auto expectingPatch = Hash64("PerPixel");
 			auto i = std::find_if(instantiation._entryPoints.begin(), instantiation._entryPoints.end(), [](const auto& c) { return c._implementsName == "PerPixel"; });
 			REQUIRE(i != instantiation._entryPoints.end());
 		}
