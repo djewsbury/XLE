@@ -43,11 +43,11 @@ namespace RenderCore { namespace Techniques
 		void OnFrameBarrier() override;
 		ReadyInstancesMetrics GetMetrics() const override;
 		const std::shared_ptr<IDevice>& GetDevice() const override;
-		const std::shared_ptr<ICompiledLayoutPool>& GetCompiledLayoutPool() const override;
+		const std::shared_ptr<IPipelineLayoutDelegate>& GetCompiledLayoutPool() const override;
 
 		std::shared_ptr<IResource> GetDynamicPageResource() const override;
 
-		DeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<IDrawablesPool>, std::shared_ptr<ICompiledLayoutPool>);
+		DeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<IDrawablesPool>, std::shared_ptr<IPipelineLayoutDelegate>);
 		~DeformAcceleratorPool();
 
 	private:
@@ -57,7 +57,7 @@ namespace RenderCore { namespace Techniques
 		std::unique_ptr<RenderCore::Metal_Vulkan::TemporaryStorageManager> _temporaryStorageManager;
 		std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
 		std::vector<RenderCore::Metal_Vulkan::CmdListAttachedStorage> _currentFrameAttachedStorage;
-		std::shared_ptr<ICompiledLayoutPool> _compiledLayoutPool;
+		std::shared_ptr<IPipelineLayoutDelegate> _compiledLayoutPool;
 		mutable bool _pendingVertexInputBarrier = false;
 
 		RenderCore::Metal_Vulkan::NamedPage _cbNamedPage = ~0u;
@@ -435,9 +435,9 @@ namespace RenderCore { namespace Techniques
 
 	auto DeformAcceleratorPool::GetMetrics() const -> ReadyInstancesMetrics { return _lastFrameReadyInstancesMetrics; }
 	const std::shared_ptr<IDevice>& DeformAcceleratorPool::GetDevice() const { return _device; }
-	const std::shared_ptr<ICompiledLayoutPool>& DeformAcceleratorPool::GetCompiledLayoutPool() const { return _compiledLayoutPool; }
+	const std::shared_ptr<IPipelineLayoutDelegate>& DeformAcceleratorPool::GetCompiledLayoutPool() const { return _compiledLayoutPool; }
 
-	DeformAcceleratorPool::DeformAcceleratorPool(std::shared_ptr<IDevice> device, std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<ICompiledLayoutPool> compiledLayoutPool)
+	DeformAcceleratorPool::DeformAcceleratorPool(std::shared_ptr<IDevice> device, std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<IPipelineLayoutDelegate> compiledLayoutPool)
 	: _device(std::move(device))
 	, _compiledLayoutPool(std::move(compiledLayoutPool))
 	, _drawablesPool(std::move(drawablesPool))
@@ -462,7 +462,7 @@ namespace RenderCore { namespace Techniques
 	IDeformAcceleratorPool::IDeformAcceleratorPool() : _guid(s_nextDeformAcceleratorPool++) {}
 	IDeformAcceleratorPool::~IDeformAcceleratorPool() {}
 
-	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device, std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<ICompiledLayoutPool> compiledLayoutPool)
+	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device, std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<IPipelineLayoutDelegate> compiledLayoutPool)
 	{
 		return std::make_shared<DeformAcceleratorPool>(std::move(device), std::move(drawablesPool), std::move(compiledLayoutPool));
 	}

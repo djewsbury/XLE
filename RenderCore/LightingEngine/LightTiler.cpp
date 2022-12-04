@@ -13,7 +13,6 @@
 #include "../Techniques/CommonResources.h"
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/PipelineCollection.h"
-#include "../Techniques/CompiledLayoutPool.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"

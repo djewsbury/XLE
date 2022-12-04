@@ -36,7 +36,7 @@ namespace RenderCore { namespace Techniques
 	class ActualizedDescriptorSet;
 	class CompiledPipelineLayoutAsset;
 	struct DeformerToDescriptorSetBinding;
-	class ICompiledLayoutPool;
+	class IPipelineLayoutDelegate;
 	class IDrawablesPool;
 	class ResourceConstructionContext;
 	class PipelineCollection;
@@ -88,11 +88,8 @@ namespace RenderCore { namespace Techniques
 		T1(Type) void   SetGlobalSelector(StringSection<> name, Type value);
 		virtual void	RemoveGlobalSelector(StringSection<> name) = 0;
 
-		virtual void	SetFallbackMaterialDescriptorSetLayout(const std::shared_ptr<Assets::PredefinedDescriptorSetLayout>) = 0;
-
 		virtual VisibilityMarkerId VisibilityBarrier(VisibilityMarkerId expectedVisibility=~0u) = 0;
 		virtual const std::shared_ptr<IDevice>& GetDevice() const = 0;
-		virtual const std::shared_ptr<ICompiledLayoutPool>& GetCompiledLayoutPool() const = 0;
 
 		virtual void 	LockForReading() const = 0;
 		virtual void 	UnlockForReading() const = 0;
@@ -155,7 +152,7 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<IDevice>&,
 		const std::shared_ptr<IDrawablesPool>&,
 		const std::shared_ptr<PipelineCollection>&,
-		const std::shared_ptr<ICompiledLayoutPool>&,
+		const std::shared_ptr<IPipelineLayoutDelegate>&,
 		PipelineAcceleratorPoolFlags::BitField flags = 0);
 }}
 

@@ -17,7 +17,7 @@
 #include "../RenderCore/Techniques/Drawables.h"
 #include "../RenderCore/Techniques/RenderPassUtils.h"
 #include "../RenderCore/Techniques/RenderPass.h"
-#include "../RenderCore/Techniques/CompiledLayoutPool.h"
+#include "../RenderCore/Techniques/PipelineLayoutDelegate.h"            // (for CompiledPipelineLayoutAsset)
 #include "../RenderCore/Metal/TextureView.h"
 #include "../RenderCore/Metal/State.h"
 #include "../RenderCore/Metal/Shader.h"

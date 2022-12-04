@@ -18,7 +18,7 @@
 #include "Drawables.h"
 #include "PipelineCollection.h"
 #include "PipelineOperators.h"
-#include "CompiledLayoutPool.h"
+#include "PipelineLayoutDelegate.h"
 #include "../Assets/TextureCompiler.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/PipelineConfigurationUtils.h"
@@ -42,20 +42,6 @@ namespace RenderCore { namespace Techniques
 {
 	static std::shared_ptr<RenderCore::ILowLevelCompiler> CreateDefaultShaderCompiler(RenderCore::IDevice& device, const LegacyRegisterBindingDesc& legacyRegisterBinding);
 
-	static unsigned FindMaterialDescSetSlotIdx(const Assets::PredefinedPipelineLayoutFile& layoutFile)
-	{
-		auto t = layoutFile._pipelineLayouts.find("GraphicsMain");
-		if (t != layoutFile._pipelineLayouts.end()) {
-			for (auto q=t->second->_descriptorSets.begin(); q!=t->second->_descriptorSets.end(); ++q)
-				if (q->_name == "Material") {
-					assert(q->_pipelineType == PipelineType::Graphics);
-					return (unsigned)std::distance(t->second->_descriptorSets.begin(), q);
-				}
-		}
-		assert(0);
-		return s_defaultMaterialDescSetSlot;		// default
-	}
-
 	DrawingApparatus::DrawingApparatus(std::shared_ptr<IDevice> device)
 	{
 		_depValPtr = ::Assets::GetDepValSys().Make();
@@ -75,27 +61,11 @@ namespace RenderCore { namespace Techniques
 		_commonResources = std::make_shared<CommonResourceBox>(*_device);
 		_drawablesPool = CreateDrawablesPool();
 
-		_pipelineLayoutFile = ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(MAIN_PIPELINE);
-		_depValPtr.RegisterDependency(_pipelineLayoutFile->GetDependencyValidation());
-
-		auto descSetLayoutContainer = ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(SEQUENCER_DS);
-		auto i = descSetLayoutContainer->_descriptorSets.find("Sequencer");
-		if (i == descSetLayoutContainer->_descriptorSets.end())
-			Throw(std::runtime_error("Missing 'Sequencer' descriptor set entry in sequencer pipeline file"));
-		_sequencerDescSetLayout = i->second;
-		_depValPtr.RegisterDependency(descSetLayoutContainer->GetDependencyValidation());
-
-		auto matDescSetLayoutContainer = ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(MATERIAL_DS);
-		auto i2 = matDescSetLayoutContainer->_descriptorSets.find("Material");
-		if (i2 == matDescSetLayoutContainer->_descriptorSets.end())
-			Throw(std::runtime_error("Missing 'Material' descriptor set entry in material pipeline file"));
-
-		auto descSetAndBinding = std::make_shared<DescriptorSetLayoutAndBinding>(i2->second, FindMaterialDescSetSlotIdx(*_pipelineLayoutFile), "Material", PipelineType::Graphics, matDescSetLayoutContainer->GetDependencyValidation());		 
 		auto pipelineCollection = std::make_shared<RenderCore::Techniques::PipelineCollection>(_device);
-		auto compiledLayoutPool = CreateCompiledLayoutPool(device, pipelineCollection, descSetAndBinding);
+		auto layoutDelegate = CreatePipelineLayoutDelegate(MAIN_PIPELINE ":GraphicsMain", MATERIAL_DS ":Material");		// note -- there are stalls within this function
 		const PipelineAcceleratorPoolFlags::BitField poolFlags = 0;
-		_pipelineAccelerators = CreatePipelineAcceleratorPool(device, _drawablesPool, pipelineCollection, compiledLayoutPool, poolFlags);
-		_deformAccelerators = CreateDeformAcceleratorPool(device, _drawablesPool, compiledLayoutPool);
+		_pipelineAccelerators = CreatePipelineAcceleratorPool(device, _drawablesPool, pipelineCollection, layoutDelegate, poolFlags);
+		_deformAccelerators = CreateDeformAcceleratorPool(device, _drawablesPool, layoutDelegate);
 		
 		_systemUniformsDelegate = std::make_shared<SystemUniformsDelegate>(*_device);
 
@@ -121,8 +91,17 @@ namespace RenderCore { namespace Techniques
 		assert(_assetServices != nullptr);
 
 		_mainUniformDelegateManager = CreateUniformDelegateManager();
-		_mainUniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *_sequencerDescSetLayout, SEQUENCER_DS ":Sequencer", *_device);
 		_mainUniformDelegateManager->AddShaderResourceDelegate(_systemUniformsDelegate);
+
+		// add default semi-constant desc set layout for the sequencer desc set
+		{
+			auto descSetLayoutContainer = ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(SEQUENCER_DS);
+			auto i = descSetLayoutContainer->_descriptorSets.find("Sequencer");
+			if (i == descSetLayoutContainer->_descriptorSets.end())
+				Throw(std::runtime_error("Missing 'Sequencer' descriptor set entry in sequencer pipeline file"));
+			_depValPtr.RegisterDependency(descSetLayoutContainer->GetDependencyValidation());
+			_mainUniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *i->second, SEQUENCER_DS ":Sequencer", *_device);
+		}
 	}
 
 	DrawingApparatus::~DrawingApparatus()

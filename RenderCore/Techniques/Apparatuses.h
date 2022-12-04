@@ -66,9 +66,6 @@ namespace RenderCore { namespace Techniques
 		::Assets::CompilerRegistration _shaderCompilerRegistration;
 		::Assets::CompilerRegistration _graphShaderCompiler2Registration;
 
-		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _pipelineLayoutFile;
-		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _sequencerDescSetLayout;
-
 		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<PipelineCollection> _graphicsPipelinePool;
 

@@ -22,7 +22,7 @@ namespace RenderCore { namespace Techniques
 	class DeformAccelerator;
 	class IDeformGeoAttachment;
 	class IDeformUniformsAttachment;
-	class ICompiledLayoutPool;
+	class IPipelineLayoutDelegate;
 	class IDrawablesPool;
 
 	class IDeformAcceleratorPool
@@ -48,7 +48,7 @@ namespace RenderCore { namespace Techniques
 
 		uint64_t GetGUID() const { return _guid; }
 		virtual const std::shared_ptr<IDevice>& GetDevice() const = 0;
-		virtual const std::shared_ptr<ICompiledLayoutPool>& GetCompiledLayoutPool() const = 0;
+		virtual const std::shared_ptr<IPipelineLayoutDelegate>& GetCompiledLayoutPool() const = 0;
 
 		struct ReadyInstancesMetrics;
 		virtual ReadyInstancesMetrics GetMetrics() const = 0;
@@ -59,7 +59,7 @@ namespace RenderCore { namespace Techniques
 		uint64_t _guid;
 	};
 
-	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<IDrawablesPool>, std::shared_ptr<ICompiledLayoutPool>);
+	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<IDrawablesPool>, std::shared_ptr<IPipelineLayoutDelegate>);
 
 	void EnableInstanceDeform(DeformAccelerator& accelerator, unsigned instanceIdx);
 

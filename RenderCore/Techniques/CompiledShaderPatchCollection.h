@@ -87,6 +87,8 @@ namespace RenderCore { namespace Techniques
 		CompiledShaderPatchCollection(
 			const ShaderSourceParser::InstantiatedShader& instantiatedShader,
 			const DescriptorSetLayoutAndBinding& materialDescSetLayout);
+		CompiledShaderPatchCollection(
+			const DescriptorSetLayoutAndBinding& materialDescSetLayout);
 		CompiledShaderPatchCollection();
 		~CompiledShaderPatchCollection();
 	private:

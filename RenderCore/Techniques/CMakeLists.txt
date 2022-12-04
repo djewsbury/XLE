@@ -32,7 +32,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         DeformGeometryInfrastructure.cpp
         DeformUniformsInfrastructure.cpp
         DrawableConstructor.cpp
-        CompiledLayoutPool.cpp
+        PipelineLayoutDelegate.cpp
         LightWeightBuildDrawables.cpp
         ManualDrawables.cpp
         ResourceConstructionContext.cpp

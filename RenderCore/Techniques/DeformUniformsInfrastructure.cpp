@@ -4,7 +4,7 @@
 
 #include "DeformUniformsInfrastructure.h"
 #include "CompiledShaderPatchCollection.h"
-#include "CompiledLayoutPool.h"
+#include "PipelineLayoutDelegate.h"
 #include "DeformerConstruction.h"
 #include "../Assets/ModelRendererConstruction.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
@@ -160,7 +160,7 @@ namespace RenderCore { namespace Techniques
 	void ConfigureDeformUniformsAttachment(
 		DeformerConstruction& deformerConstruction,
 		const Assets::ModelRendererConstruction& rendererConstruction,
-		RenderCore::Techniques::ICompiledLayoutPool& compiledLayoutPool,
+		RenderCore::Techniques::IPipelineLayoutDelegate& compiledLayoutPool,
 		IteratorRange<const AnimatedUniform*> animatedUniforms,
 		IteratorRange<const void*> defaultInstanceData)
 	{
@@ -198,22 +198,14 @@ namespace RenderCore { namespace Techniques
 				// PipelineAcceleratorPool will use when instantiating the main descriptor set. This
 				// includes any modifications made by the CompiledShaderPatchCollection...
 				std::vector<std::pair<unsigned, AnimatedUniformBufferHelper>> animBuffers;
-				if (shaderPatchCollection) {
-					auto patchCollectionFuture = compiledLayoutPool.GetPatchCollectionFuture(*shaderPatchCollection);
-					patchCollectionFuture->StallWhilePending();
-					auto compiledPatchCollection = patchCollectionFuture->Actualize();
-					animBuffers = FindAnimatedUniformsBuffers(
-						compiledPatchCollection->GetInterface().GetMaterialDescriptorSet(),
-						animatedUniforms,
-						constants,
-						shrLanguage);
-				} else {
-					animBuffers = FindAnimatedUniformsBuffers(
-						*compiledLayoutPool.GetDefaultMaterialDescriptorSetLayout(),
-						animatedUniforms,
-						constants,
-						shrLanguage);
-				}
+				auto patchCollectionFuture = compiledLayoutPool.CompileShaderPatchCollection(shaderPatchCollection.get());
+				patchCollectionFuture->StallWhilePending();		// unfortunately we have to stall; but it should be ready immediately in many cases
+				auto compiledPatchCollection = patchCollectionFuture->Actualize();
+				animBuffers = FindAnimatedUniformsBuffers(
+					compiledPatchCollection->GetInterface().GetMaterialDescriptorSet(),
+					animatedUniforms,
+					constants,
+					shrLanguage);
 
 				if (animBuffers.empty()) continue;
 

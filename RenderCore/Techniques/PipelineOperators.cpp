@@ -6,7 +6,7 @@
 #include "CommonResources.h"
 #include "RenderPass.h"
 #include "ParsingContext.h"
-#include "CompiledLayoutPool.h"
+#include "PipelineLayoutDelegate.h"
 #include "DrawablesInternal.h"
 #include "DrawableDelegates.h"
 #include "PipelineAcceleratorInternal.h"		// for BoundUniformsPool

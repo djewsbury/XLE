@@ -11,7 +11,7 @@
 #include "ShaderVariationSet.h"
 #include "PipelineOperators.h"		// for CompiledPipelineLayoutAsset & DescriptorSetLayoutAndBinding
 #include "DeformAccelerator.h"		// for UniformDeformerToRendererBinding
-#include "CompiledLayoutPool.h"
+#include "PipelineLayoutDelegate.h"
 #include "Drawables.h"				// for IDrawablesPool & protected destroy
 #include "ResourceConstructionContext.h"
 #include "../FrameBufferDesc.h"
@@ -44,16 +44,6 @@ namespace RenderCore { namespace Techniques
 {
 	using SequencerConfigId = uint64_t;
 	class PipelineAcceleratorPool;
-
-	/*
-	struct PipelineLayoutMarker
-	{
-		std::shared_ptr<CompiledPipelineLayoutAsset> _pipelineLayout;
-		volatile VisibilityMarkerId _visibilityMarker = ~VisibilityMarkerId(0);
-		::Assets::DependencyValidation _depVal;
-		std::shared_future<std::shared_ptr<CompiledPipelineLayoutAsset>> _pending;
-	};
-	*/
 
 	class SequencerConfig
 	{
@@ -112,18 +102,18 @@ namespace RenderCore { namespace Techniques
 		std::shared_future<Pipeline> BeginPrepareForSequencerStateAlreadyLocked(
 			std::shared_ptr<SequencerConfig> cfg,
 			const ParameterBox& globalSelectors,
-			const std::shared_ptr<PipelineCollection>& pipelineCollection, const std::shared_ptr<ICompiledLayoutPool>& compiledLayoutPool, const std::shared_ptr<Assets::PredefinedDescriptorSetLayout>& fallbackMaterialDescSetLayout);
+			const std::shared_ptr<PipelineCollection>& pipelineCollection, const std::shared_ptr<IPipelineLayoutDelegate>& layoutDelegate);
 
 		void BeginPrepareForSequencerStateInternal(
 			std::promise<IPipelineAcceleratorPool::Pipeline>&& resultPromise,
 			std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection,
-			PipelineCollection& pipelineCollection, ICompiledLayoutPool& compiledLayoutPool,
-			const ParameterBox& globalSelectors, std::shared_ptr<SequencerConfig> cfg, std::shared_ptr<Assets::PredefinedDescriptorSetLayout> fallbackMaterialDescSetLayout);
+			PipelineCollection& pipelineCollection, IPipelineLayoutDelegate& layoutDelegate,
+			const ParameterBox& globalSelectors, std::shared_ptr<SequencerConfig> cfg);
 
 		bool HasCurrentOrFuturePipeline(const SequencerConfig& cfg) const;
 
 		static PipelineLayoutOptions PatchPipelineLayout(
-			ICompiledLayoutPool& compiledLayoutPool, const SequencerConfig& cfg,
+			IPipelineLayoutDelegate& layoutDelegate, const SequencerConfig& cfg,
 			std::shared_ptr<Assets::PredefinedDescriptorSetLayout> materialDescSet);
 
 		Pipeline* TryGetPipeline(const SequencerConfig& cfg, VisibilityMarkerId visibilityMarker);
@@ -142,9 +132,8 @@ namespace RenderCore { namespace Techniques
 	void PipelineAccelerator::BeginPrepareForSequencerStateInternal(
 		std::promise<IPipelineAcceleratorPool::Pipeline>&& resultPromise,
 		std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection,
-		PipelineCollection& pipelineCollection, ICompiledLayoutPool& compiledLayoutPool,
-		const ParameterBox& globalSelectors, std::shared_ptr<SequencerConfig> cfg,
-		std::shared_ptr<Assets::PredefinedDescriptorSetLayout> fallbackMaterialDescSetLayout)
+		PipelineCollection& pipelineCollection, IPipelineLayoutDelegate& layoutDelegate,
+		const ParameterBox& globalSelectors, std::shared_ptr<SequencerConfig> cfg)
 	{
 		auto pipelineDesc = cfg->_delegate->GetPipelineDesc(compiledPatchCollection->GetInterface(), _stateSet);
 		std::promise<Techniques::GraphicsPipelineAndLayout> metalPipelinePromise;
@@ -157,9 +146,8 @@ namespace RenderCore { namespace Techniques
 			&globalSelectors
 		};
 		VertexInputStates vis { _inputAssembly, _miniInputAssembly, _topology };
-		assert(fallbackMaterialDescSetLayout);
-		auto matDescSetPatchIn = (compiledPatchCollection && compiledPatchCollection->GetInterface().GetMaterialDescriptorSetPtr()) ? compiledPatchCollection->GetInterface().GetMaterialDescriptorSetPtr() : std::move(fallbackMaterialDescSetLayout);
-		auto patchedLayout = PatchPipelineLayout(compiledLayoutPool, *cfg, std::move(matDescSetPatchIn));
+		assert(compiledPatchCollection);
+		auto patchedLayout = PatchPipelineLayout(layoutDelegate, *cfg, compiledPatchCollection->GetInterface().GetMaterialDescriptorSetPtr());
 
 		pipelineCollection.CreateGraphicsPipeline(
 			std::move(metalPipelinePromise),
@@ -191,13 +179,13 @@ namespace RenderCore { namespace Techniques
 	auto PipelineAccelerator::BeginPrepareForSequencerStateAlreadyLocked(
 		std::shared_ptr<SequencerConfig> cfg,
 		const ParameterBox& globalSelectors,
-		const std::shared_ptr<PipelineCollection>& pipelineCollection, const std::shared_ptr<ICompiledLayoutPool>& compiledLayoutPool, const std::shared_ptr<Assets::PredefinedDescriptorSetLayout>& fallbackMaterialDescSetLayout) -> std::shared_future<Pipeline>
+		const std::shared_ptr<PipelineCollection>& pipelineCollection, const std::shared_ptr<IPipelineLayoutDelegate>& layoutDelegate) -> std::shared_future<Pipeline>
 	{
 		std::promise<Pipeline> pipelinePromise;
 		std::shared_future<Pipeline> futurePipeline = pipelinePromise.get_future();
 		ParameterBox copyGlobalSelectors = globalSelectors;
 		std::weak_ptr<PipelineAccelerator> weakThis = shared_from_this();
-		auto patchCollectionFuture = _shaderPatches ? compiledLayoutPool->GetPatchCollectionFuture(*_shaderPatches) : compiledLayoutPool->GetDefaultPatchCollectionFuture();
+		auto patchCollectionFuture = layoutDelegate->CompileShaderPatchCollection(_shaderPatches.get());
 		unsigned sequencerIdx = unsigned(cfg->_cfgId);
 
 		// Note there may be an issue here in that if the shader compile fails, the dep val for the s
@@ -208,14 +196,14 @@ namespace RenderCore { namespace Techniques
 			TRY {
 				BeginPrepareForSequencerStateInternal(
 					std::move(pipelinePromise),
-					immediatePatchCollection, *pipelineCollection, *compiledLayoutPool, copyGlobalSelectors, std::move(cfg), fallbackMaterialDescSetLayout);
+					immediatePatchCollection, *pipelineCollection, *layoutDelegate, copyGlobalSelectors, std::move(cfg));
 			} CATCH(...) {
 				pipelinePromise.set_exception(std::current_exception());
 			} CATCH_END
 		} else {
 			::Assets::WhenAll(patchCollectionFuture).ThenConstructToPromise(
 				std::move(pipelinePromise),
-				[pipelineCollection, compiledLayoutPool, copyGlobalSelectors, cfg=std::move(cfg), fallbackMaterialDescSetLayout, weakThis](
+				[pipelineCollection, layoutDelegate, copyGlobalSelectors, cfg=std::move(cfg), weakThis](
 					auto&& resultPromise,
 					std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection) mutable {
 
@@ -225,7 +213,7 @@ namespace RenderCore { namespace Techniques
 							Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));
 						containingPipelineAccelerator->BeginPrepareForSequencerStateInternal(
 							std::move(resultPromise),
-							compiledPatchCollection, *pipelineCollection, *compiledLayoutPool, copyGlobalSelectors, std::move(cfg), std::move(fallbackMaterialDescSetLayout));
+							compiledPatchCollection, *pipelineCollection, *layoutDelegate, copyGlobalSelectors, std::move(cfg));
 					} CATCH(...) {
 						resultPromise.set_exception(std::current_exception());
 					} CATCH_END
@@ -292,17 +280,17 @@ namespace RenderCore { namespace Techniques
 	}
 
 	PipelineLayoutOptions PipelineAccelerator::PatchPipelineLayout(
-		ICompiledLayoutPool& compiledLayoutPool, const SequencerConfig& sequencerCfg,
+		IPipelineLayoutDelegate& layoutDelegate, const SequencerConfig& sequencerCfg,
 		std::shared_ptr<Assets::PredefinedDescriptorSetLayout> materialDescSet)
 	{
 		if (!materialDescSet)
 			return sequencerCfg._compiledPipelineLayout;
 
 		PipelineLayoutOptions result;
-		ICompiledLayoutPool::PatchInDescriptorSet patchIn[] {
+		IPipelineLayoutDelegate::PatchInDescriptorSet patchIn[] {
 			{ "Material", std::move(materialDescSet) }
 		};
-		auto patchedLayout = compiledLayoutPool.BuildPatchedLayout(*sequencerCfg._pipelineLayout, MakeIteratorRange(patchIn));
+		auto patchedLayout = layoutDelegate.BuildPatchedLayout(*sequencerCfg._pipelineLayout, MakeIteratorRange(patchIn));
 
 		auto hash = patchedLayout->CalculateHash();
 		return { std::move(patchedLayout), hash, Concatenate(sequencerCfg._name, "-patched") };
@@ -454,13 +442,10 @@ namespace RenderCore { namespace Techniques
 
 		std::future<VisibilityMarkerId> GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
 		std::future<std::pair<VisibilityMarkerId, BufferUploads::CommandListID>> GetDescriptorSetMarker(DescriptorSetAccelerator& accelerator) const override;
-		// std::future<VisibilityMarkerId> GetCompiledPipelineLayoutMarker(const SequencerConfig& sequencerConfig) const override;
 
 		void			SetGlobalSelector(StringSection<> name, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) override;
 		T1(Type) void   SetGlobalSelector(StringSection<> name, Type value);
 		void			RemoveGlobalSelector(StringSection<> name) override;
-
-		void			SetFallbackMaterialDescriptorSetLayout(const std::shared_ptr<Assets::PredefinedDescriptorSetLayout>) override;
 
 		VisibilityMarkerId VisibilityBarrier(VisibilityMarkerId expectedVisibility) override;
 
@@ -470,13 +455,12 @@ namespace RenderCore { namespace Techniques
 		Records LogRecords() const override;
 
 		const std::shared_ptr<IDevice>& GetDevice() const override;
-		const std::shared_ptr<ICompiledLayoutPool>& GetCompiledLayoutPool() const override;
 
 		PipelineAcceleratorPool(
 			std::shared_ptr<IDevice> device,
 			std::shared_ptr<IDrawablesPool> drawablesPool,
 			std::shared_ptr<PipelineCollection> pipelineCollection,
-			std::shared_ptr<ICompiledLayoutPool> patchCollectionPool,
+			std::shared_ptr<IPipelineLayoutDelegate> patchCollectionPool,
 			PipelineAcceleratorPoolFlags::BitField flags);
 		~PipelineAcceleratorPool();
 		PipelineAcceleratorPool(const PipelineAcceleratorPool&) = delete;
@@ -505,7 +489,6 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::pair<uint64_t, std::weak_ptr<SequencerConfig>>> _sequencerConfigById;
 		std::vector<std::pair<uint64_t, std::weak_ptr<PipelineAccelerator>>> _pipelineAccelerators;
 		std::vector<std::pair<uint64_t, std::weak_ptr<DescriptorSetAccelerator>>> _descriptorSetAccelerators;
-		std::shared_ptr<Assets::PredefinedDescriptorSetLayout> _fallbackMaterialDescriptorSetLayout;
 
 		SequencerConfig MakeSequencerConfig(
 			/*out*/ uint64_t& hash,
@@ -520,7 +503,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<SamplerPool> _samplerPool;
 		std::shared_ptr<PipelineCollection> _pipelineCollection;
 		std::shared_ptr<IDrawablesPool> _drawablesPool;
-		std::shared_ptr<ICompiledLayoutPool> _layoutPatcher;
+		std::shared_ptr<IPipelineLayoutDelegate> _layoutDelegate;
 		PipelineAcceleratorPoolFlags::BitField _flags;
 
 		struct FuturesToCheckHelper
@@ -674,39 +657,6 @@ namespace RenderCore { namespace Techniques
 		immediatePromise.set_value(std::make_pair((VisibilityMarkerId)accelerator._visibilityMarker, accelerator._completed._completionCommandList));
 		return immediatePromise.get_future();
 	}
-
-#if 0
-	std::future<VisibilityMarkerId> PipelineAcceleratorPool::GetCompiledPipelineLayoutMarker(const SequencerConfig& sequencerConfig) const
-	{
-		ScopedLock(_constructionLock);
-		#if defined(_DEBUG)
-			unsigned poolId = unsigned(sequencerConfig._cfgId >> 32ull);
-			if (poolId != _guid)
-				Throw(std::runtime_error("Mixing a pipeline accelerator from an incorrect pool"));
-		#endif
-
-		auto& seqConfig = _sequencerConfigById[unsigned(sequencerConfig._cfgId)];
-		auto cfg = seqConfig.second.lock();
-		if (!cfg)
-			return {};
-	
-		if (cfg->_pipelineLayout._pending.valid()) {
-			std::promise<VisibilityMarkerId> newPromise;
-			auto result = newPromise.get_future();
-			::Assets::WhenAll(cfg->_pipelineLayout._pending).ThenConstructToPromise(
-				std::move(newPromise),
-				[helper=_futuresToCheckHelper](const auto&) {
-					// the visibility marker should always be the next one
-					return helper->_lastPublishedVisibilityMarker.load()+1;
-				});
-			return result;
-		}
-
-		std::promise<VisibilityMarkerId> immediatePromise;
-		immediatePromise.set_value((VisibilityMarkerId)cfg->_pipelineLayout._visibilityMarker);
-		return immediatePromise.get_future();
-	}
-#endif
 
 	const IPipelineAcceleratorPool::Pipeline* TryGetPipeline(
 		PipelineAccelerator& pipelineAccelerator,
@@ -957,47 +907,37 @@ namespace RenderCore { namespace Techniques
 		// rest outside of the lock
 
 		bool generateBindingInfo = !!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
-		if (shaderPatches) {
-			auto patchCollectionFuture = _layoutPatcher->GetPatchCollectionFuture(*shaderPatches);
+		auto patchCollectionFuture = _layoutDelegate->CompileShaderPatchCollection(shaderPatches.get());
 
-			// Most of the time, it will be ready immediately, and we can avoid some of the overhead of the
-			// future continuation functions
-			std::shared_ptr<CompiledShaderPatchCollection> patchCollection; ::Assets::DependencyValidation patchCollectionDepVal; ::Assets::Blob patchCollectionLog;
-			if (patchCollectionFuture->CheckStatusBkgrnd(patchCollection, patchCollectionDepVal, patchCollectionLog) == ::Assets::AssetState::Ready) {
-				ConstructDescriptorSetHelper helper{_device, _samplerPool.get(), PipelineType::Graphics, generateBindingInfo};
-				helper.Construct(
-					constructionContext.get(),
-					patchCollection->GetInterface().GetMaterialDescriptorSet(),
-					materialMachine, deformBinding.get(), std::move(name));
-				helper.CompleteToPromise(std::move(promise));
-			} else {
-				std::weak_ptr<IDevice> weakDevice = _device;
-				::Assets::WhenAll(patchCollectionFuture).ThenConstructToPromise(
-					std::move(promise),
-					[materialMachine, memoryHolder, weakDevice, generateBindingInfo, samplerPool=std::weak_ptr<SamplerPool>(_samplerPool), deformBinding, result, constructionContext, name=std::move(name)](
-						std::promise<std::vector<ActualizedDescriptorSet>>&& promise,
-						std::shared_ptr<CompiledShaderPatchCollection> patchCollection) mutable {
-
-						auto d = weakDevice.lock();
-						if (!d)
-							Throw(std::runtime_error("Device has been destroyed"));
-						
-						ConstructDescriptorSetHelper helper{d, samplerPool.lock().get(), PipelineType::Graphics, generateBindingInfo};
-						helper.Construct(
-							constructionContext.get(),
-							patchCollection->GetInterface().GetMaterialDescriptorSet(),
-							materialMachine, deformBinding.get(), std::move(name));
-						helper.CompleteToPromise(std::move(promise));
-					});
-			}
-		} else {
-			assert(_fallbackMaterialDescriptorSetLayout);
+		// Most of the time, it will be ready immediately, and we can avoid some of the overhead of the
+		// future continuation functions
+		std::shared_ptr<CompiledShaderPatchCollection> patchCollection; ::Assets::DependencyValidation patchCollectionDepVal; ::Assets::Blob patchCollectionLog;
+		if (patchCollectionFuture->CheckStatusBkgrnd(patchCollection, patchCollectionDepVal, patchCollectionLog) == ::Assets::AssetState::Ready) {
 			ConstructDescriptorSetHelper helper{_device, _samplerPool.get(), PipelineType::Graphics, generateBindingInfo};
 			helper.Construct(
 				constructionContext.get(),
-				*_fallbackMaterialDescriptorSetLayout,
+				patchCollection->GetInterface().GetMaterialDescriptorSet(),
 				materialMachine, deformBinding.get(), std::move(name));
 			helper.CompleteToPromise(std::move(promise));
+		} else {
+			std::weak_ptr<IDevice> weakDevice = _device;
+			::Assets::WhenAll(patchCollectionFuture).ThenConstructToPromise(
+				std::move(promise),
+				[materialMachine, memoryHolder, weakDevice, generateBindingInfo, samplerPool=std::weak_ptr<SamplerPool>(_samplerPool), deformBinding, result, constructionContext, name=std::move(name)](
+					std::promise<std::vector<ActualizedDescriptorSet>>&& promise,
+					std::shared_ptr<CompiledShaderPatchCollection> patchCollection) mutable {
+
+					auto d = weakDevice.lock();
+					if (!d)
+						Throw(std::runtime_error("Device has been destroyed"));
+					
+					ConstructDescriptorSetHelper helper{d, samplerPool.lock().get(), PipelineType::Graphics, generateBindingInfo};
+					helper.Construct(
+						constructionContext.get(),
+						patchCollection->GetInterface().GetMaterialDescriptorSet(),
+						materialMachine, deformBinding.get(), std::move(name));
+					helper.CompleteToPromise(std::move(promise));
+				});
 		}
 
 		return result;
@@ -1046,7 +986,7 @@ namespace RenderCore { namespace Techniques
 					for (auto& accelerator:_pipelineAccelerators) {
 						auto a = accelerator.second.lock();
 						if (a && !a->HasCurrentOrFuturePipeline(*result)) {
-							auto future = a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, _pipelineCollection, _layoutPatcher, _fallbackMaterialDescriptorSetLayout);
+							auto future = a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, _pipelineCollection, _layoutDelegate);
 							newlyQueued.emplace_back(std::move(future), accelerator.first, cfgId);
 						}
 					}
@@ -1079,7 +1019,7 @@ namespace RenderCore { namespace Techniques
 			if (a) {
 				if (a->_completedPipelines.size() < _sequencerConfigById.size())
 					a->_completedPipelines.resize(_sequencerConfigById.size());
-				auto future = a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, _pipelineCollection, _layoutPatcher, _fallbackMaterialDescriptorSetLayout);
+				auto future = a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, _pipelineCollection, _layoutDelegate);
 				newlyQueued.emplace_back(std::move(future), accelerator.first, cfgId);
 			}
 		}
@@ -1099,7 +1039,7 @@ namespace RenderCore { namespace Techniques
 			auto cfgId = SequencerConfigId(c) | (SequencerConfigId(poolGuid) << 32ull);
 			auto l = _sequencerConfigById[c].second.lock();
 			if (l) {
-				auto future = pipeline.BeginPrepareForSequencerStateAlreadyLocked(l, _globalSelectors, _pipelineCollection, _layoutPatcher, _fallbackMaterialDescriptorSetLayout);
+				auto future = pipeline.BeginPrepareForSequencerStateAlreadyLocked(l, _globalSelectors, _pipelineCollection, _layoutDelegate);
 				newlyQueued.emplace_back(std::move(future), acceleratorHash, cfgId);
 			}
 		}
@@ -1161,64 +1101,8 @@ namespace RenderCore { namespace Techniques
 			}
 
 			_lastFrameSequencerConfigExpired[c] = false;
-#if 0
-			if (cfg->_pipelineLayout._pending.valid()) {
-				auto state = cfg->_pipelineLayout._pending.wait_for(std::chrono::milliseconds(0));
-				if (state != std::future_status::timeout) {
-					TRY
-					{
-						auto pipelineLayout = cfg->_pipelineLayout._pending.get();
-						cfg->_pipelineLayout._depVal = pipelineLayout->GetDependencyValidation();
-						cfg->_pipelineLayout._pipelineLayout = std::move(pipelineLayout);
-						cfg->_pipelineLayout._visibilityMarker = newVisibilityMarker;
-						cfg->_pipelineLayout._pending = {};
-					} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
-						// we've gone invalid
-						cfg->_pipelineLayout._depVal = e.GetDependencyValidation();
-						cfg->_pipelineLayout._pipelineLayout = {};
-						cfg->_pipelineLayout._visibilityMarker = ~VisibilityMarkerId(0);
-						cfg->_pipelineLayout._pending = {};
-					} CATCH(const std::exception&) {
-						// we've gone invalid (no dep val)
-						cfg->_pipelineLayout._depVal = {};
-						cfg->_pipelineLayout._pipelineLayout = {};
-						cfg->_pipelineLayout._visibilityMarker = ~VisibilityMarkerId(0);
-						cfg->_pipelineLayout._pending = {};
-					} CATCH_END
-				}
-			} else if (cfg->_pipelineLayout._depVal.GetValidationIndex() != 0) {
-				assert(c == unsigned(cfg->_cfgId));
-				// rebuild pipeline layout asset
-				cfg->_pipelineLayout._pipelineLayout = nullptr;
-				cfg->_pipelineLayout._depVal = {};
-				cfg->_pipelineLayout._visibilityMarker = ~VisibilityMarkerId(0);
-				cfg->_pipelineLayout._pending = _layoutPatcher->GetCompiledPipelineLayout(cfg->_delegate->GetPipelineLayout())->ShareFuture();
-				invalidSequencerIndices[invalidSequencerCount++] = c;
-			}
-#endif
 		}
 
-#if 0
-		// Requeue pipelines for invalidated sequencers
-		if (invalidSequencerCount) {
-			std::vector<std::shared_ptr<SequencerConfig>> lockedSequencers;
-			lockedSequencers.resize(invalidSequencerCount);
-			for (unsigned c=0; c<invalidSequencerCount; ++c)
-				lockedSequencers[c] = _sequencerConfigById[invalidSequencerIndices[c]].second.lock();
-
-			for (auto& accelerator:_pipelineAccelerators) {
-				auto a = accelerator.second.lock();
-				if (a) {
-					for (unsigned c=0; c<invalidSequencerCount; ++c) {
-						// It's out of date -- let's rebuild and reassign it
-						if (!lockedSequencers[c]) continue;
-						auto future = a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencers[c], _globalSelectors, _pipelineCollection, _layoutPatcher);
-						newlyQueued.emplace_back(std::move(future), accelerator.first, lockedSequencers[c]->_cfgId);
-					}
-				}
-			}
-		} else 
-#endif
 		{
 			// pipeline invalidation behaviour & releasing unneeded pipelines
 			// check only 1 sequencer cfg per frame, and just a few pipeline accelerators, but rotate through
@@ -1245,7 +1129,7 @@ namespace RenderCore { namespace Techniques
 							// Don't attempt hotreload if we already have a pending pipeline here (if the hotreload is already out of date it will still get rebuilt after finishing)
 							auto existing = std::find_if(a->_pendingPipelines.begin(), a->_pendingPipelines.end(), [c=_lastSequencerCfgHotReloadCheck](const auto& p) { return p.first == c; });
 							if (existing != a->_pendingPipelines.end()) continue;
-							auto future = a->BeginPrepareForSequencerStateAlreadyLocked(seqCfg, _globalSelectors, _pipelineCollection, _layoutPatcher, _fallbackMaterialDescriptorSetLayout);
+							auto future = a->BeginPrepareForSequencerStateAlreadyLocked(seqCfg, _globalSelectors, _pipelineCollection, _layoutDelegate);
 							newlyQueued.emplace_back(std::move(future), _pipelineAccelerators[_lastPipelineAcceleratorHotReloadCheck].first, seqCfg->_cfgId);
 						}
 					}
@@ -1412,13 +1296,6 @@ namespace RenderCore { namespace Techniques
 		RebuildAllPipelinesAlreadyLocked(_guid);
 	}
 
-	void PipelineAcceleratorPool::SetFallbackMaterialDescriptorSetLayout(const std::shared_ptr<Assets::PredefinedDescriptorSetLayout> newLayout)
-	{
-		ScopedLock(_constructionLock);
-		_fallbackMaterialDescriptorSetLayout = newLayout;
-		RebuildAllPipelinesAlreadyLocked(_guid);
-	}
-
 	static std::string AsString(const ParameterBox& selectors, unsigned countPerLine)
 	{
 		std::stringstream str;
@@ -1476,7 +1353,6 @@ namespace RenderCore { namespace Techniques
 	}
 
 	const std::shared_ptr<IDevice>& PipelineAcceleratorPool::GetDevice() const { return _device; }
-	const std::shared_ptr<ICompiledLayoutPool>& PipelineAcceleratorPool::GetCompiledLayoutPool() const { return _layoutPatcher; }
 
 	static unsigned s_nextPipelineAcceleratorPoolGUID = 1;
 
@@ -1493,11 +1369,11 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IDevice> device,
 		std::shared_ptr<IDrawablesPool> drawablesPool,
 		std::shared_ptr<PipelineCollection> pipelineCollection,
-		std::shared_ptr<ICompiledLayoutPool> patchCollectionPool,
+		std::shared_ptr<IPipelineLayoutDelegate> layoutDelegate,
 		PipelineAcceleratorPoolFlags::BitField flags)
 	: _samplerPool(std::make_shared<SamplerPool>(*device))
 	, _pipelineCollection(std::move(pipelineCollection))
-	, _layoutPatcher(std::move(patchCollectionPool))
+	, _layoutDelegate(std::move(layoutDelegate))
 	, _drawablesPool(std::move(drawablesPool))
 	{
 		_guid = s_nextPipelineAcceleratorPoolGUID++;
@@ -1524,19 +1400,10 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<IDevice>& device, 
 		const std::shared_ptr<IDrawablesPool>& drawablesPool,
 		const std::shared_ptr<PipelineCollection>& pipelineCollection,
-		const std::shared_ptr<ICompiledLayoutPool>& patchCollectionPool,
+		const std::shared_ptr<IPipelineLayoutDelegate>& layoutDelegate,
 		PipelineAcceleratorPoolFlags::BitField flags)
 	{
-		return std::make_shared<PipelineAcceleratorPool>(device, drawablesPool, pipelineCollection, patchCollectionPool, flags);
-	}
-
-	namespace Internal
-	{
-		const DescriptorSetLayoutAndBinding& GetDefaultDescriptorSetLayoutAndBinding()
-		{
-			static DescriptorSetLayoutAndBinding s_result;
-			return s_result;
-		}
+		return std::make_shared<PipelineAcceleratorPool>(device, drawablesPool, pipelineCollection, layoutDelegate, flags);
 	}
 
 }}

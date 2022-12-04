@@ -12,7 +12,7 @@
 #include "RenderPass.h"
 #include "ParsingContext.h"
 #include "PipelineOperators.h"
-#include "CompiledLayoutPool.h"
+#include "PipelineLayoutDelegate.h"
 #include "../Assets/RawMaterial.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/ShaderPatchCollection.h"
@@ -79,17 +79,11 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 
-		virtual std::string GetPipelineLayout() override
-		{
-			return IMMEDIATE_PIPELINE ":ImmediateDrawables";
-		}
+		virtual std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() override { return _pipelineLayout; }
+		virtual ::Assets::DependencyValidation GetDependencyValidation() override { return _pipelineLayout->GetDependencyValidation(); }
 
-		virtual ::Assets::DependencyValidation GetDependencyValidation() override
-		{
-			return {};
-		}
-
-		ImmediateRendererTechniqueDelegate() 
+		ImmediateRendererTechniqueDelegate(std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout) 
+		: _pipelineLayout(std::move(pipelineLayout))
 		{
 			auto templateDesc = std::make_shared<GraphicsPipelineDesc>();
 			templateDesc->_shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":frameworkEntry:vs_*";
@@ -112,7 +106,17 @@ namespace RenderCore { namespace Techniques
 		~ImmediateRendererTechniqueDelegate() {}
 	private:
 		std::shared_ptr<GraphicsPipelineDesc> _pipelineDesc[3];
+		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
 	};
+
+	void CreateImmediateRendererTechniqueDelegate(
+		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise)
+	{
+		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(IMMEDIATE_PIPELINE ":ImmediateDrawables");
+		::Assets::WhenAll(pipelineLayoutFuture).ThenConstructToPromise(
+			std::move(promise),
+			[](auto pipelineLayout) { return std::make_shared<ImmediateRendererTechniqueDelegate>(std::move(pipelineLayout)); });
+	}
 
 	struct DrawableWithVertexCount : public Drawable 
 	{ 
@@ -311,7 +315,8 @@ namespace RenderCore { namespace Techniques
 			if (i==_sequencerConfigs.end() || i->first != hash) {
 				auto result = _pipelineAcceleratorPool->CreateSequencerConfig(
 					"immediate-drawables",
-					_techniqueDelegate, ParameterBox{},
+					_futureTechniqueDelegate.get(),		// note -- potential stall here
+					ParameterBox{},
 					fbDesc, subpassIndex);
 				i = _sequencerConfigs.insert(i, std::make_pair(hash, std::move(result)));
 			}
@@ -360,11 +365,12 @@ namespace RenderCore { namespace Techniques
 
 		ImmediateDrawables(const std::shared_ptr<IDevice>& device)
 		{
-			_techniqueDelegate = std::make_shared<ImmediateRendererTechniqueDelegate>();
-			auto pipelineLayout = ::Assets::ActualizeAssetPtr<Assets::PredefinedPipelineLayout>(_techniqueDelegate->GetPipelineLayout());
-			auto matDescSetLayout = FindLayout(*pipelineLayout, "Material", PipelineType::Graphics);
+			std::promise<std::shared_ptr<ITechniqueDelegate>> promisedTechniqueDelegate;
+			_futureTechniqueDelegate = promisedTechniqueDelegate.get_future();
+			CreateImmediateRendererTechniqueDelegate(std::move(promisedTechniqueDelegate));
+
 			auto pipelineCollection = std::make_shared<PipelineCollection>(device);
-			auto compiledLayoutPool = CreateCompiledLayoutPool(device, pipelineCollection, matDescSetLayout);
+			auto compiledLayoutPool = CreatePipelineLayoutDelegate(IMMEDIATE_PIPELINE ":ImmediateDrawables");
 			_pipelineAcceleratorPool = CreatePipelineAcceleratorPool(device, nullptr, pipelineCollection, compiledLayoutPool, 0);
 			_lastQueuedDrawable = nullptr;
 			_lastQueuedDrawVertexCountOffset = 0;
@@ -374,7 +380,7 @@ namespace RenderCore { namespace Techniques
 		DrawablesPacket _workingPkt;
 		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
 		std::vector<std::pair<uint64_t, std::shared_ptr<PipelineAccelerator>>> _pipelineAccelerators;
-		std::shared_ptr<ITechniqueDelegate> _techniqueDelegate;
+		std::shared_future<std::shared_ptr<ITechniqueDelegate>> _futureTechniqueDelegate;
 		DrawableWithVertexCount* _lastQueuedDrawable = nullptr;
 		unsigned _lastQueuedDrawVertexCountOffset = 0;
 		std::vector<std::pair<uint64_t, std::shared_ptr<SequencerConfig>>> _sequencerConfigs;

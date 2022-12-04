@@ -265,11 +265,8 @@ namespace RenderCore { namespace Techniques
 		pipelineAccelerators.LockForReading();
 		TRY {
 			auto& metalContext = *Metal::DeviceContext::Get(parserContext.GetThreadContext());
-			auto* pipelineLayout = TryGetCompiledPipelineLayout(sequencerConfig, acceleratorVisibilityId).get();
-			if (!pipelineLayout) {
-				pipelineAccelerators.UnlockForReading();
-				return;
-			}
+			auto* pipelineLayout = TryGetCompiledPipelineLayout(sequencerConfig, acceleratorVisibilityId);
+			assert(pipelineLayout);
 			auto encoder = metalContext.BeginGraphicsEncoder(*pipelineLayout);
 			auto viewport = parserContext.GetViewport();
 			ScissorRect scissorRect { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
@@ -347,16 +344,6 @@ namespace RenderCore { namespace Techniques
 							Log(Warning) << "Descriptor set invalid while preparing resources: " << e.what() << std::endl;
 						} CATCH_END
 					}
-				}
-			}
-
-			auto layoutMarker = pipelineAccelerators.GetCompiledPipelineLayoutMarker(sequencerConfig);
-			if (layoutMarker.valid()) {
-				auto initialState = layoutMarker.wait_for(std::chrono::milliseconds(0));
-				if (initialState == std::future_status::timeout) {
-					futures->_pendingFutures1.emplace_back(std::move(layoutMarker));
-				} else {
-					futures->_starterVisMarker = std::max(futures->_starterVisMarker, layoutMarker.get());
 				}
 			}
 

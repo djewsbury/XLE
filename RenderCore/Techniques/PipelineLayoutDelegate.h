@@ -17,15 +17,10 @@ namespace RenderCore { namespace Techniques
 	class CompiledShaderPatchCollection;
 	class CompiledPipelineLayoutAsset;
 
-	class ICompiledLayoutPool
+	class IPipelineLayoutDelegate
 	{
 	public:
-		virtual ::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> GetPatchCollectionFuture(const Assets::ShaderPatchCollection&) = 0;
-		virtual ::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> GetDefaultPatchCollectionFuture() = 0;
-
-		virtual ::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> GetCompiledPipelineLayout(StringSection<> techniquePipelineLayoutSrc) = 0;
-
-		virtual const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& GetDefaultMaterialDescriptorSetLayout() const = 0;
+		virtual ::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> CompileShaderPatchCollection(const Assets::ShaderPatchCollection*) = 0;
 
 		struct PatchInDescriptorSet
 		{
@@ -36,15 +31,20 @@ namespace RenderCore { namespace Techniques
 			const Assets::PredefinedPipelineLayout& skeletonPipelineLayout,
 			IteratorRange<const PatchInDescriptorSet*> patchInDescSets) = 0;
 
-		virtual ~ICompiledLayoutPool();
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
+
+		virtual ~IPipelineLayoutDelegate();
 	};
 
 	class DescriptorSetLayoutAndBinding;
 	class PipelineCollection;
-	std::shared_ptr<ICompiledLayoutPool> CreateCompiledLayoutPool(
-		std::shared_ptr<IDevice> device,
-		std::shared_ptr<PipelineCollection> pipelineCollection,
-		std::shared_ptr<DescriptorSetLayoutAndBinding> matDescSetLayout);
+	std::shared_ptr<IPipelineLayoutDelegate> CreatePipelineLayoutDelegate(
+		StringSection<> skeletonPipelineLayoutFile,
+		StringSection<> fallbackMaterialDescriptorSetFile);
+
+	// In the following version, we're expecting that the pipeline layout file contains a fully defined material descriptor set
+	std::shared_ptr<IPipelineLayoutDelegate> CreatePipelineLayoutDelegate(
+		StringSection<> pipelineLayoutFile);
 
 	class DescriptorSetLayoutAndBinding;
 

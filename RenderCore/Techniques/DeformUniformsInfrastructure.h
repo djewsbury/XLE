@@ -11,7 +11,7 @@ namespace RenderCore { namespace Assets { class ModelRendererConstruction; }}
 namespace RenderCore { namespace Techniques
 {
 	class DeformerConstruction;
-	class ICompiledLayoutPool;
+	class IPipelineLayoutDelegate;
 	
 	struct AnimatedUniform
 	{
@@ -23,7 +23,7 @@ namespace RenderCore { namespace Techniques
 	void ConfigureDeformUniformsAttachment(
 		DeformerConstruction& deformerConstruction,
 		const Assets::ModelRendererConstruction& rendererConstruction,
-		RenderCore::Techniques::ICompiledLayoutPool& compiledLayoutPool,
+		RenderCore::Techniques::IPipelineLayoutDelegate& compiledLayoutPool,
 		IteratorRange<const AnimatedUniform*> animatedUniforms,
 		IteratorRange<const void*> defaultInstanceData);
 

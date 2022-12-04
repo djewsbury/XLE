@@ -24,7 +24,6 @@
 #include "../RenderCore/Techniques/DrawablesInternal.h"
 #include "../RenderCore/Techniques/Services.h"
 #include "../RenderCore/Techniques/CommonUtils.h"
-#include "../RenderCore/Techniques/CompiledLayoutPool.h"
 #include "../Assets/Assets.h"
 #include "../Assets/DepVal.h"
 #include "../Math/Transformations.h"
@@ -302,7 +301,7 @@ namespace SceneEngine
 			Throw(std::runtime_error("Sequencer configurations pending"));	// prefer to throw before we start the query
 
 		auto sequencerConfig = (testType == TestType::FrustumTest) ? box->_frustumTestSequencerCfg : box->_rayTestSequencerCfg;
-		auto* pipelineLayout = Techniques::TryGetCompiledPipelineLayout(*sequencerConfig, visibilityMarkerId).get();
+		auto* pipelineLayout = Techniques::TryGetCompiledPipelineLayout(*sequencerConfig, visibilityMarkerId);
 		if (!pipelineLayout)
 			Throw(std::runtime_error("Pipeline layout pending"));	// prefer to throw before we start the query
 

@@ -4,7 +4,7 @@
 
 #include "CompiledShaderPatchCollection.h"
 #include "TechniqueUtils.h"
-#include "CompiledLayoutPool.h"
+#include "PipelineLayoutDelegate.h"
 #include "../Assets/ShaderPatchCollection.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedPipelineLayout.h"
@@ -101,6 +101,15 @@ namespace RenderCore { namespace Techniques
 			_depVal.RegisterDependency(materialDescSetLayout.GetDependencyValidation());
 		_guid = 0;
 		BuildFromInstantiatedShader(inst);
+		_interface._descriptorSet = materialDescSetLayout.GetLayout();
+		_interface._materialDescriptorSetSlotIndex = materialDescSetLayout.GetSlotIndex();
+	}
+
+	CompiledShaderPatchCollection::CompiledShaderPatchCollection(
+		const DescriptorSetLayoutAndBinding& materialDescSetLayout)
+	{
+		_depVal = materialDescSetLayout.GetDependencyValidation();
+		_guid = 0;
 		_interface._descriptorSet = materialDescSetLayout.GetLayout();
 		_interface._materialDescriptorSetSlotIndex = materialDescSetLayout.GetSlotIndex();
 	}

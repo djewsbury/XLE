@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "CompiledLayoutPool.h"
+#include "PipelineLayoutDelegate.h"
 #include "CompiledShaderPatchCollection.h"
 #include "PipelineOperators.h"
 #include "Services.h"
@@ -14,35 +14,30 @@
 #include "../../Assets/AssetHeap.h"
 #include "../../Assets/Assets.h"
 #include "../../Utility/Threading/Mutex.h"
+#include "../../Utility/Streams/PathUtils.h"
 
 namespace RenderCore { namespace Techniques
 {
 	
-	class CompiledLayoutPool : public ICompiledLayoutPool
+	class PipelineLayoutDelegate : public IPipelineLayoutDelegate
 	{
 	public:
-		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> GetPatchCollectionFuture(
-			const Assets::ShaderPatchCollection&) override;
-
-		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> GetDefaultPatchCollectionFuture() override;
-
-		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& GetDefaultMaterialDescriptorSetLayout() const override;
-
-		::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> GetCompiledPipelineLayout(StringSection<> techniquePipelineLayoutSrc) override;
+		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> CompileShaderPatchCollection(
+			const Assets::ShaderPatchCollection*) override;
 
 		std::shared_ptr<Assets::PredefinedPipelineLayout> BuildPatchedLayout(
 			const Assets::PredefinedPipelineLayout& skeletonPipelineLayout,
-			IteratorRange<const PatchInDescriptorSet*> patchInDescSets);
+			IteratorRange<const PatchInDescriptorSet*> patchInDescSets) override;
 
-		CompiledLayoutPool(
-			std::shared_ptr<IDevice> device,
-			std::shared_ptr<PipelineCollection> pipelineCollection,
+		::Assets::DependencyValidation GetDependencyValidation() const override;
+
+		PipelineLayoutDelegate(
 			std::shared_ptr<DescriptorSetLayoutAndBinding> matDescSetLayout);
-		virtual ~CompiledLayoutPool();
+		virtual ~PipelineLayoutDelegate();
 	
 	private:
 		std::shared_ptr<DescriptorSetLayoutAndBinding> _matDescSetLayout;
-		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> _emptyPatchCollection;
+		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> _fallbackPatchCollection;
 		std::shared_ptr<IDevice> _device;
 		std::shared_ptr<PipelineCollection> _pipelineCollection;
 
@@ -52,13 +47,15 @@ namespace RenderCore { namespace Techniques
 		Threading::Mutex _lock;
 	};
 
-	::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> CompiledLayoutPool::GetPatchCollectionFuture(
-		const Assets::ShaderPatchCollection& shaderPatchCollection)
+	::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> PipelineLayoutDelegate::CompileShaderPatchCollection(
+		const Assets::ShaderPatchCollection* shaderPatchCollection)
 	{
+		if (!shaderPatchCollection) return _fallbackPatchCollection;
+
 		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> result;
 		{
 			ScopedLock(_lock);
-			auto hash = shaderPatchCollection.GetHash();
+			auto hash = shaderPatchCollection->GetHash();
 			auto i = LowerBound(_compiledPatchCollections, hash);
 			if (i!= _compiledPatchCollections.end() && i->first == hash) {
 				if (!::Assets::IsInvalidated(*i->second))
@@ -72,26 +69,12 @@ namespace RenderCore { namespace Techniques
 
 		// Call AutoConstructToPromise outside of the lock. Note that this opens the door to other threads
 		// using the marker before we even initialize the promise like this
-		::Assets::AutoConstructToPromise(result->AdoptPromise(), shaderPatchCollection, std::ref(*_matDescSetLayout));
+		assert(_matDescSetLayout);
+		::Assets::AutoConstructToPromise(result->AdoptPromise(), std::ref(*shaderPatchCollection), std::ref(*_matDescSetLayout));
 		return result;
 	}
 
-	::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> CompiledLayoutPool::GetDefaultPatchCollectionFuture()
-	{
-		return _emptyPatchCollection;
-	}
-
-	const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& CompiledLayoutPool::GetDefaultMaterialDescriptorSetLayout() const
-	{
-		return _matDescSetLayout->GetLayout();
-	}
-
-	::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> CompiledLayoutPool::GetCompiledPipelineLayout(StringSection<> techniquePipelineLayoutSrc)
-	{
-		return ::Assets::MakeAssetMarker<std::shared_ptr<CompiledPipelineLayoutAsset>>(_pipelineCollection, techniquePipelineLayoutSrc);
-	}
-
-	std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> CompiledLayoutPool::BuildPatchedLayout(
+	std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> PipelineLayoutDelegate::BuildPatchedLayout(
 		const Assets::PredefinedPipelineLayout& skeletonPipelineLayout,
 		IteratorRange<const PatchInDescriptorSet*> patchInDescSets)
 	{
@@ -113,29 +96,69 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	CompiledLayoutPool::CompiledLayoutPool(
-		std::shared_ptr<IDevice> device,
-		std::shared_ptr<PipelineCollection> pipelineCollection,
+	::Assets::DependencyValidation PipelineLayoutDelegate::GetDependencyValidation() const { return _matDescSetLayout->GetDependencyValidation(); }
+
+	PipelineLayoutDelegate::PipelineLayoutDelegate(
 		std::shared_ptr<DescriptorSetLayoutAndBinding> matDescSetLayout)
 	: _matDescSetLayout(std::move(matDescSetLayout))
-	, _device(std::move(device))
-	, _pipelineCollection(std::move(pipelineCollection))
 	{
-		_emptyPatchCollection = std::make_shared<::Assets::MarkerPtr<CompiledShaderPatchCollection>>("empty-patch-collection");
-		_emptyPatchCollection->SetAsset(std::make_shared<CompiledShaderPatchCollection>());
+		_fallbackPatchCollection = std::make_shared<::Assets::MarkerPtr<CompiledShaderPatchCollection>>("empty-patch-collection");
+		_fallbackPatchCollection->SetAsset(std::make_shared<CompiledShaderPatchCollection>(*_matDescSetLayout));
 	}
 
-	CompiledLayoutPool::~CompiledLayoutPool() {}
+	PipelineLayoutDelegate::~PipelineLayoutDelegate() {}
 
-	std::shared_ptr<ICompiledLayoutPool> CreateCompiledLayoutPool(
-		std::shared_ptr<IDevice> device,
-		std::shared_ptr<PipelineCollection> pipelineCollection,
-		std::shared_ptr<DescriptorSetLayoutAndBinding> matDescSetLayout)
+	std::shared_ptr<IPipelineLayoutDelegate> CreatePipelineLayoutDelegate(
+		StringSection<> skeletonPipelineLayoutFile,
+		StringSection<> fallbackMaterialDescriptorSetFile)
 	{
-		return std::make_shared<CompiledLayoutPool>(std::move(device), std::move(pipelineCollection), std::move(matDescSetLayout));
+		// The pipeline layout probably has an empty descriptor set named "Material", into which a fully formed
+		// material descriptor set will be patched
+		auto pipelineLayout = ::Assets::ActualizeAssetPtr<Assets::PredefinedPipelineLayout>(skeletonPipelineLayoutFile);
+		auto matDescSetLayout = FindLayout(*pipelineLayout, "Material", PipelineType::Graphics);
+		if (!matDescSetLayout)
+			Throw(std::runtime_error("Missing \"Material\" descriptor set in skeleton pipeline layout (" + skeletonPipelineLayoutFile.AsString() + "). Expecting empty descriptor set."));
+
+		assert(!fallbackMaterialDescriptorSetFile.IsEmpty());
+		auto splitFn = MakeFileNameSplitter(fallbackMaterialDescriptorSetFile);
+		if (splitFn.Parameters().IsEmpty()) {
+			// expecting .ds file -- ie, raw PredefinedDescriptorSet
+			auto descSet = ::Assets::ActualizeAssetPtr<Assets::PredefinedDescriptorSetLayout>(fallbackMaterialDescriptorSetFile);
+			matDescSetLayout = std::make_shared<DescriptorSetLayoutAndBinding>(
+				descSet,
+				matDescSetLayout->GetSlotIndex(),
+				matDescSetLayout->GetName(),
+				matDescSetLayout->GetPipelineType(),
+				descSet->GetDependencyValidation());
+		} else {
+			auto matDescSetLayoutContainer = ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(splitFn.AllExceptParameters());
+			auto i2 = matDescSetLayoutContainer->_descriptorSets.find(splitFn.Parameters().AsString());
+			if (i2 == matDescSetLayoutContainer->_descriptorSets.end())
+				Throw(std::runtime_error("Missing (" + splitFn.Parameters().AsString() + ") descriptor set entry in fallback material file (" + splitFn.AllExceptParameters().AsString() + ")"));
+
+			matDescSetLayout = std::make_shared<DescriptorSetLayoutAndBinding>(
+				i2->second,
+				matDescSetLayout->GetSlotIndex(),
+				matDescSetLayout->GetName(),
+				matDescSetLayout->GetPipelineType(),
+				matDescSetLayoutContainer->GetDependencyValidation());
+		}
+
+		return std::make_shared<PipelineLayoutDelegate>(std::move(matDescSetLayout));
+	}
+	
+	std::shared_ptr<IPipelineLayoutDelegate> CreatePipelineLayoutDelegate(
+		StringSection<> pipelineLayoutFile)
+	{
+		// the default material layout is embedded within the pipeline layout itself
+		auto pipelineLayout = ::Assets::ActualizeAssetPtr<Assets::PredefinedPipelineLayout>(pipelineLayoutFile);
+		auto matDescSetLayout = FindLayout(*pipelineLayout, "Material", PipelineType::Graphics);
+		if (!matDescSetLayout)
+			Throw(std::runtime_error("Missing \"Material\" descriptor set in pipeline layout (" + pipelineLayoutFile.AsString() + ")"));
+		return std::make_shared<PipelineLayoutDelegate>(std::move(matDescSetLayout));
 	}
 
-	ICompiledLayoutPool::~ICompiledLayoutPool() {}
+	IPipelineLayoutDelegate::~IPipelineLayoutDelegate() {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

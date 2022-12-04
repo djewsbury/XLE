@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "DeformGeoInternal.h"
-#include "CompiledLayoutPool.h"
+#include "PipelineLayoutDelegate.h"
 #include "SubFrameEvents.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../IDevice.h"
