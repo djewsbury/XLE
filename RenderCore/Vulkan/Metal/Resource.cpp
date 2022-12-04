@@ -299,6 +299,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			if (tDesc._dimensionality == TextureDesc::Dimensionality::CubeMap) {
 				image_create_info.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 				assert((image_create_info.arrayLayers%6u) == 0);		// "arrayLayers" should be the number of cubemap faces -- ie, 6 for each cubemap in the array
+
+				if (image_create_info.arrayLayers != 6 && !factory.GetXLEFeatures()._cubemapArrays)
+					Throw(std::runtime_error("Attempting to create cubemap array resource (" + name.AsString() + "), however this feature is disabled in DeviceFeatures."));
 			}
 
             // We don't need to use mutable formats in many cases in Vulkan. 
