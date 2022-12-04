@@ -535,19 +535,12 @@ namespace UnitTests
 
 		RenderCore::DescriptorSetSignature materialSet {
 			{DescriptorType::UniformBuffer},
-			{DescriptorType::UniformBuffer},
-			{DescriptorType::UniformBuffer},
 
 			{DescriptorType::SampledTexture},
 			{DescriptorType::SampledTexture},
 			{DescriptorType::SampledTexture},
 			{DescriptorType::SampledTexture},
 			{DescriptorType::SampledTexture},
-			{DescriptorType::SampledTexture},
-			{DescriptorType::SampledTexture},
-			{DescriptorType::SampledTexture},
-
-			{DescriptorType::UnorderedAccessBuffer},
 
 			{DescriptorType::Sampler}
 		};

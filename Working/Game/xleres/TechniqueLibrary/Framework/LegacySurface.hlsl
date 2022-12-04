@@ -9,9 +9,9 @@
 #include "../Math/SurfaceAlgorithm.hlsl"
 #include "../Framework/Binding.hlsl"
 
-Texture2D			DiffuseTexture          BIND_MAT_T3;
-Texture2D			NormalsTexture          BIND_MAT_T4;
-Texture2D<float>	OpacityTexture          BIND_MAT_T7;
+Texture2D			DiffuseTexture          BIND_MAT_T1;
+Texture2D			NormalsTexture          BIND_MAT_T2;
+Texture2D<float>	OpacityTexture          BIND_MAT_T5;
 
 float3 SampleDefaultNormalMap(VSOUT geo)
 {

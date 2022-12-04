@@ -35,9 +35,9 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define BIND_MAT_B0 : register(b0, space2)
-#define BIND_MAT_B1 : register(b1, space2)
-#define BIND_MAT_B2 : register(b2, space2)
 
+#define BIND_MAT_T1 : register(t1, space2)
+#define BIND_MAT_T2 : register(t2, space2)
 #define BIND_MAT_T3 : register(t3, space2)
 #define BIND_MAT_T4 : register(t4, space2)
 #define BIND_MAT_T5 : register(t5, space2)
@@ -46,10 +46,37 @@
 #define BIND_MAT_T8 : register(t8, space2)
 #define BIND_MAT_T9 : register(t9, space2)
 #define BIND_MAT_T10 : register(t10, space2)
+#define BIND_MAT_T11 : register(t11, space2)
+#define BIND_MAT_T12 : register(t12, space2)
+#define BIND_MAT_T13 : register(t13, space2)
 
-#define BIND_MAT_U11 : register(u11, space2)
-
+#define BIND_MAT_S1 : register(s1, space2)
+#define BIND_MAT_S2 : register(s2, space2)
+#define BIND_MAT_S3 : register(s3, space2)
+#define BIND_MAT_S4 : register(s4, space2)
+#define BIND_MAT_S5 : register(s5, space2)
+#define BIND_MAT_S6 : register(s6, space2)
+#define BIND_MAT_S7 : register(s7, space2)
+#define BIND_MAT_S8 : register(s8, space2)
+#define BIND_MAT_S9 : register(s9, space2)
+#define BIND_MAT_S10 : register(s10, space2)
+#define BIND_MAT_S11 : register(s11, space2)
 #define BIND_MAT_S12 : register(s12, space2)
+#define BIND_MAT_S13 : register(s13, space2)
+
+#define BIND_MAT_U1 : register(u1, space2)
+#define BIND_MAT_U2 : register(u2, space2)
+#define BIND_MAT_U3 : register(u3, space2)
+#define BIND_MAT_U4 : register(u4, space2)
+#define BIND_MAT_U5 : register(u5, space2)
+#define BIND_MAT_U6 : register(u6, space2)
+#define BIND_MAT_U7 : register(u7, space2)
+#define BIND_MAT_U8 : register(u8, space2)
+#define BIND_MAT_U9 : register(u9, space2)
+#define BIND_MAT_U10 : register(u10, space2)
+#define BIND_MAT_U11 : register(u11, space2)
+#define BIND_MAT_U12 : register(u12, space2)
+#define BIND_MAT_U13 : register(u13, space2)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

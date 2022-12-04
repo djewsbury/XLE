@@ -12,7 +12,7 @@ static const char* s_examplePerPixelShaderFile = R"--(
 	#include "xleres/TechniqueLibrary/Framework/CommonResources.hlsl"
 	#include "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
 
-	Texture2D       Texture0		BIND_MAT_T3;		// Diffuse
+	Texture2D       Texture0		BIND_MAT_T1;		// Diffuse
 
 	cbuffer BasicMaterialConstants
 	{

@@ -36,7 +36,7 @@ cbuffer DrawCallProperties BIND_NUMERIC_B4
 	uint CurrentDrawCallIndex;
 }
 
-Texture2D		DiffuseTexture          BIND_MAT_T3;
+Texture2D		DiffuseTexture          BIND_MAT_T1;
 
 float3 RayTriangleIntersection(float3 p, float3 d, float3 v0, float3 v1, float3 v2)
 {

@@ -132,8 +132,8 @@ namespace UnitTests
 				#include "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
 				#include "xleres/TechniqueLibrary/Utility/Colour.hlsl"
 
-				Texture2D       TextureDif		BIND_MAT_T3;
-				Texture2D       TextureNorm		BIND_MAT_T4;
+				Texture2D       TextureDif		BIND_MAT_T1;
+				Texture2D       TextureNorm		BIND_MAT_T2;
 
 				PerPixelMaterialParam DefaultMaterialValues()
 				{

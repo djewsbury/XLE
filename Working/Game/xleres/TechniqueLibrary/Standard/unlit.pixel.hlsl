@@ -7,7 +7,7 @@
 #include "../Math/TextureAlgorithm.hlsl"
 #include "../Framework/CommonResources.hlsl"
 
-Texture2D		DiffuseTexture          BIND_MAT_T4;
+Texture2D		DiffuseTexture          BIND_MAT_T1;
 
     //  This cbuffer contains basic constants are used frequently enough that
     //  we can add support for them in most shaders.

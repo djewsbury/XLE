@@ -93,7 +93,7 @@ namespace UnitTests
 		
 		DescriptorSet Material
 		{
-			UniformBuffer BasicMaterialConstants		// this CB layout used by "no patches" techniques for linking with material info
+			UniformBuffer BasicMaterialConstants : 0		// this CB layout used by "no patches" techniques for linking with material info
 			{
 				float3  MaterialDiffuse = {1,1,1};
 				float   Opacity = 1;
@@ -108,20 +108,13 @@ namespace UnitTests
 				float   MetalMax = 1.f;
 			};
 
-			UniformBuffer b1;
-			UniformBuffer b2;
+			SampledTexture t1 : 1;
+			SampledTexture t2 : 2;
+			SampledTexture t3 : 3;
+			SampledTexture t4 : 4;
+			SampledTexture t5 : 5;
 
-			SampledTexture t3;
-			SampledTexture t4;
-			SampledTexture t5;
-			SampledTexture t6;
-			SampledTexture t7;
-			SampledTexture t8;
-			SampledTexture t9;
-			SampledTexture t10;
-
-			UnorderedAccessBuffer u11;
-			Sampler s12;
+			Sampler sampler0 :  6;
 		};
 
 		DescriptorSet Sequencer

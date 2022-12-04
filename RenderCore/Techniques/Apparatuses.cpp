@@ -62,7 +62,7 @@ namespace RenderCore { namespace Techniques
 		_drawablesPool = CreateDrawablesPool();
 
 		auto pipelineCollection = std::make_shared<RenderCore::Techniques::PipelineCollection>(_device);
-		auto layoutDelegate = CreatePipelineLayoutDelegate(MAIN_PIPELINE ":GraphicsMain", MATERIAL_DS ":Material");		// note -- there are stalls within this function
+		auto layoutDelegate = CreatePipelineLayoutDelegate(MAIN_PIPELINE ":GraphicsMain", NOPATCHES_MATERIAL_DS ":Material");		// note -- there are stalls within this function
 		const PipelineAcceleratorPoolFlags::BitField poolFlags = 0;
 		_pipelineAccelerators = CreatePipelineAcceleratorPool(device, _drawablesPool, pipelineCollection, layoutDelegate, poolFlags);
 		_deformAccelerators = CreateDeformAcceleratorPool(device, _drawablesPool, layoutDelegate);

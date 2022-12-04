@@ -17,8 +17,8 @@
 #include "../../TechniqueLibrary/Utility/Colour.hlsl"
 #include "../../TechniqueLibrary/Framework/Binding.hlsl"
 
-Texture2D       ParametersTexture       BIND_MAT_T5;
-Texture2D       SpecularColorTexture    BIND_MAT_T6;
+Texture2D       ParametersTexture       BIND_MAT_T3;
+Texture2D       SpecularColorTexture    BIND_MAT_T4;
 // Texture2D<float>	CustomTexture;
 // Texture2D<float2>	ScratchMap : register(t19);		// high res procedural scratches
 // Texture2D<float>	ScratchOccl : register(t20);

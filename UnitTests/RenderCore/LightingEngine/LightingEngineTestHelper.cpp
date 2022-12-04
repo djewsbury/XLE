@@ -175,7 +175,7 @@ namespace UnitTests
 	static std::shared_ptr<RenderCore::Techniques::DescriptorSetLayoutAndBinding> MakeMaterialDescriptorSetLayout()
 	{
 		const char* unitTestsMaterialDescSet = R"(
-			UniformBuffer BasicMaterialConstants		// this CB layout used by "no patches" techniques for linking with material info
+			UniformBuffer BasicMaterialConstants : 0		// this CB layout used by "no patches" techniques for linking with material info
 			{
 				float3  MaterialDiffuse = {1,1,1};
 				float   Opacity = 1;
@@ -189,20 +189,14 @@ namespace UnitTests
 				float   MetalMin = 0.f;
 				float   MetalMax = 1.f;
 			};
-			UniformBuffer b1;						// 1
-			UniformBuffer b2;						// 2
 
-			SampledTexture t3;						// 3
-			SampledTexture t4;						// 4
-			SampledTexture t5;						// 5
-			SampledTexture t6;						// 6
-			SampledTexture t7;						// 7
-			SampledTexture t8;						// 8
-			SampledTexture t9;						// 9
-			SampledTexture t10;						// 10
+			SampledTexture t1 : 1;
+			SampledTexture t2 : 2;
+			SampledTexture t3 : 3;
+			SampledTexture t4 : 4;
+			SampledTexture t5 : 5;
 
-			UnorderedAccessBuffer uab0;				// 11
-			Sampler sampler0;						// 12
+			Sampler sampler0 :  6;
 		)";
 
 		auto layout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>(
