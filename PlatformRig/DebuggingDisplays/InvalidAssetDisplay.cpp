@@ -10,6 +10,8 @@
 #include "../../Utility/Threading/Mutex.h"
 #include <sstream>
 
+#pragma clang diagnostic ignored "-Wmicrosoft-sealed"
+
 namespace PlatformRig { namespace Overlays
 {
 	class TrackedAssetList : public ITrackedAssetList
@@ -22,12 +24,12 @@ namespace PlatformRig { namespace Overlays
 
 		IteratorRange<const std::pair<TypeCodeAndId,::Assets::AssetHeapRecord>*> GetCurrentRecords() const override SEALED { return _currentRecords; }
 
-		unsigned BindOnChange(std::function<void()>&& fn)
+		unsigned BindOnChange(std::function<void()>&& fn) override
 		{
 			return _onChangeSignal.Bind(std::move(fn));
 		}
 
-		void UnbindOnChange(unsigned signalId)
+		void UnbindOnChange(unsigned signalId) override
 		{
 			_onChangeSignal.Unbind(signalId);
 		}

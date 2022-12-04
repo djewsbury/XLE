@@ -273,7 +273,7 @@ namespace RenderCore { namespace Assets
 			return result;
 		}
 
-		StringSection<> GetName() const { return _filename; }
+		StringSection<> GetName() const override { return _filename; }
 
 		::Assets::DependencyValidation GetDependencyValidation() const override
 		{

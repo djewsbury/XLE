@@ -5,15 +5,11 @@
 #include "CommonResources.h"
 #include "CommonBindings.h"
 #include "../IDevice.h"
+#include "../DeviceInitialization.h"
 #include "../Metal/Metal.h"
 #include "../Metal/Resource.h"          // for Metal::CompleteInitialization
 #include "../Metal/DeviceContext.h"     // for Metal::CompleteInitialization
 #include "../../Utility/MemoryUtils.h"
-
-#if GFXAPI_TARGET == GFXAPI_DX11
-    #include "TechniqueUtils.h" // just for sizeof(LocalTransformConstants)
-    #include "../Metal/ObjectFactory.h"
-#endif
 
 namespace RenderCore { namespace Techniques
 {
@@ -41,26 +37,6 @@ namespace RenderCore { namespace Techniques
     , _guid(s_nextCommonResourceBoxGuid++)
     {
         using namespace RenderCore::Metal;
-#if GFXAPI_TARGET == GFXAPI_DX11
-        _dssReadWrite = DepthStencilState();
-        _dssReadOnly = DepthStencilState(true, false);
-        _dssDisable = DepthStencilState(false, false);
-        _dssReadWriteWriteStencil = DepthStencilState(true, true, 0xff, 0xff, StencilMode::AlwaysWrite, StencilMode::AlwaysWrite);
-        _dssWriteOnly = DepthStencilState(true, true, CompareOp::Always);
-
-        _blendStraightAlpha = BlendState(BlendOp::Add, Blend::SrcAlpha, Blend::InvSrcAlpha);
-        _blendAlphaPremultiplied = BlendState(BlendOp::Add, Blend::One, Blend::InvSrcAlpha);
-        _blendOneSrcAlpha = BlendState(BlendOp::Add, Blend::One, Blend::SrcAlpha);
-        _blendAdditive = BlendState(BlendOp::Add, Blend::One, Blend::One);
-        _blendOpaque = BlendOp::NoBlending;
-
-        _defaultRasterizer = CullMode::Back;
-        _cullDisable = CullMode::None;
-        _cullReverse = RasterizerState(CullMode::Back, false);
-
-        _localTransformBuffer = MakeConstantBuffer(GetObjectFactory(), sizeof(LocalTransformConstants));
-#endif
-
         _linearClampSampler = device.CreateSampler(SamplerDesc{FilterMode::Trilinear, AddressMode::Clamp, AddressMode::Clamp});
         _linearWrapSampler = device.CreateSampler(SamplerDesc{FilterMode::Trilinear, AddressMode::Wrap, AddressMode::Wrap});
         _pointClampSampler = device.CreateSampler(SamplerDesc{FilterMode::Point, AddressMode::Clamp, AddressMode::Clamp});
@@ -72,7 +48,6 @@ namespace RenderCore { namespace Techniques
         _black2DArraySRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM, 1, 1)), "black2darray")->CreateTextureView();
         _black3DSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain3D(8, 8, 8, Format::R8_UNORM)), "black3d")->CreateTextureView();
         _blackCubeSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM)), "blackCube")->CreateTextureView();
-        _blackCubeArraySRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM, 1, 6)), "blackCubeArray")->CreateTextureView();
         _blackCB = device.CreateResource(CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc{256}), "blackbuffer");
         _blackBufferUAV = device.CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc{256, 16}), "blackbufferuav")->CreateBufferView(BindFlag::UnorderedAccess);
 
@@ -80,7 +55,11 @@ namespace RenderCore { namespace Techniques
         _white2DArraySRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM, 1, 1)), "white2darray")->CreateTextureView();
         _white3DSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain3D(8, 8, 8, Format::R8_UNORM)), "white3d")->CreateTextureView();
         _whiteCubeSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM)), "whiteCube")->CreateTextureView();
-        _whiteCubeArraySRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM, 1, 6)), "whiteCubeArray")->CreateTextureView();
+
+        if (device.GetDeviceFeatures()._cubemapArrays) {
+            _blackCubeArraySRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM, 1, 6)), "blackCubeArray")->CreateTextureView();
+            _whiteCubeArraySRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM, 1, 6)), "whiteCubeArray")->CreateTextureView();
+        }
 
         _pendingCompleteInitialization = true;
     }
@@ -91,22 +70,26 @@ namespace RenderCore { namespace Techniques
     void CommonResourceBox::CompleteInitialization(IThreadContext& threadContext)
     {
         if (!_pendingCompleteInitialization) return;
-        IResource* blackResources[] {
+        std::vector<IResource*> blackResources {
             _black2DSRV->GetResource().get(),
             _black2DArraySRV->GetResource().get(),
             _black3DSRV->GetResource().get(),
             _blackCubeSRV->GetResource().get(),
             _blackCubeArraySRV->GetResource().get(),
             _blackCB.get(),
-            _blackBufferUAV->GetResource().get()
         };
-        IResource* whiteResources[] {
+        std::vector<IResource*> whiteResources {
             _white2DSRV->GetResource().get(),
             _white2DArraySRV->GetResource().get(),
             _white3DSRV->GetResource().get(),
-            _whiteCubeSRV->GetResource().get(),
-            _whiteCubeArraySRV->GetResource().get()
+            _whiteCubeSRV->GetResource().get()
         };
+        
+        if (_blackBufferUAV)
+            blackResources.push_back(_blackBufferUAV->GetResource().get());
+        if (_whiteCubeArraySRV)
+            whiteResources.push_back(_whiteCubeArraySRV->GetResource().get());
+
         auto& metalContext = *Metal::DeviceContext::Get(threadContext);
         Metal::CompleteInitialization(metalContext, MakeIteratorRange(blackResources));
         Metal::CompleteInitialization(metalContext, MakeIteratorRange(whiteResources));

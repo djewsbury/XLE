@@ -571,7 +571,7 @@ namespace EntityInterface
 				if (_catchAllDocument != ~0u)
 					result |= _subDocs[_catchAllDocument]->SetParent(child, parent, childList, insertionPosition);
 			}
-			return {};
+			return result;
 		}
 
 		void RegisterSubDocument(uint64_t entityType, std::shared_ptr<IMutableEntityDocument> subDoc)

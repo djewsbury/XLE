@@ -302,7 +302,7 @@ namespace RenderCore { namespace LightingEngine
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment,
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_SNORM)),
-				"gbuffer-diffuse"
+				"gbuffer-normals"
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferParameter,

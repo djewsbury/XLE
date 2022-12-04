@@ -479,7 +479,6 @@ namespace ToolsRig
             if (_manInterface) {
                 auto worldSpaceRay = hitTestContext.CalculateWorldSpaceRay(evnt._mousePosition);
                 
-                SceneEngine::PlacementGUID firstHit(0,0);
                 auto hitTestResult = hitTestScene->FirstRayIntersection(hitTestContext, worldSpaceRay);
                 if (hitTestResult._type == SceneEngine::IntersectionTestResult::Type::Placement) {
                     auto tempTrans = _editor->Transaction_Begin(&hitTestResult._objectGuid, &hitTestResult._objectGuid + 1);

@@ -169,7 +169,8 @@ namespace RenderCore { namespace Techniques
 			EnableInstanceDeform(*_deformAccelerator, deformInstanceIdx);
 
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
-		assert(cmdStream);
+		if (!cmdStream) return;		// cmdStream could the topological stream, for example
+
 		SimpleModelDrawable* drawables[dimof(cmdStream->_drawCallCounts)];
 		for (unsigned c=0; c<dimof(cmdStream->_drawCallCounts); ++c) {
 			if (!cmdStream->_drawCallCounts[c]) {
@@ -255,7 +256,8 @@ namespace RenderCore { namespace Techniques
 			EnableInstanceDeform(*_deformAccelerator, deformInstanceIdx);
 
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
-		assert(cmdStream);
+		if (!cmdStream) return;		// cmdStream could the topological stream, for example
+
 		SimpleModelDrawable* drawables[dimof(cmdStream->_drawCallCounts)];
 		for (unsigned c=0; c<dimof(cmdStream->_drawCallCounts); ++c) {
 			if (!cmdStream->_drawCallCounts[c]) {
@@ -353,7 +355,8 @@ namespace RenderCore { namespace Techniques
 			EnableInstanceDeform(*_deformAccelerator, deformInstanceIdx);
 
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
-		assert(cmdStream);
+		if (!cmdStream) return;		// cmdStream could the topological stream, for example
+
 		SimpleModelDrawable_Delegate* drawables[dimof(cmdStream->_drawCallCounts)];
 		for (unsigned c=0; c<dimof(cmdStream->_drawCallCounts); ++c) {
 			if (!cmdStream->_drawCallCounts[c]) {
@@ -438,7 +441,8 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(!_drawableConstructor->_cmdStreams.empty());
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
-		assert(cmdStream);
+		if (!cmdStream) return;		// cmdStream could the topological stream, for example
+
 		GeometryProcable* drawables[dimof(cmdStream->_drawCallCounts)];
 		for (unsigned c=0; c<dimof(cmdStream->_drawCallCounts); ++c) {
 			if (!cmdStream->_drawCallCounts[c]) {

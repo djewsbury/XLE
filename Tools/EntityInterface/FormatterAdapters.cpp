@@ -89,7 +89,6 @@ namespace EntityInterface
 			if (!_srcFile || ::Assets::IsInvalidated(*_srcFile))
 				_srcFile = ::Assets::MakeAssetMarkerPtr<::Assets::ConfigFileContainer<>>(_src);
 
-			using UnderlyingFormatter = InputStreamFormatter<>;
 			std::promise<std::shared_ptr<Formatters::IDynamicFormatter>> promise;
 			auto result = promise.get_future();
 			::Assets::WhenAll(_srcFile).ThenConstructToPromise(
