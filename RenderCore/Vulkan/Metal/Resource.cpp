@@ -318,7 +318,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			// and initialLayout can only be UNDEFINED or PREINITIALIZED at this stage
 			bool requireHostVisibility = !!(desc._allocationRules & (AllocationRules::HostVisibleRandomAccess|AllocationRules::HostVisibleSequentialWrite));
 			image_create_info.tiling = requireHostVisibility ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
-			image_create_info.initialLayout = hasInitData ? VK_IMAGE_LAYOUT_PREINITIALIZED : VK_IMAGE_LAYOUT_UNDEFINED;
+			// Transition from VK_IMAGE_LAYOUT_UNDEFINED to any other layout is not guaranteed to preserve any data written by the host
+			// so, we will use the VK_IMAGE_LAYOUT_PREINITIALIZED initial layout for any resource with host visibility
+			// However, this is not idealin case of textures that are written first by the GPU (eg, transfer or otherwise), 
+			// but still have host visibility (eg, for a destaging texture)
+			image_create_info.initialLayout = requireHostVisibility ? VK_IMAGE_LAYOUT_PREINITIALIZED : VK_IMAGE_LAYOUT_UNDEFINED;
 			image_create_info.usage = AsImageUsageFlags(desc._bindFlags);
 
 			// Check format compatibility with bind flags
@@ -1186,7 +1190,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			auto* res = checked_cast<Resource*>(r);
 			if (res->_pendingInit) {
 				if (res->_steadyStateImageLayout != VK_IMAGE_LAYOUT_UNDEFINED) {
-					barrierHelper.Add(*res, BarrierResourceUsage::NoState(), Internal::DefaultBarrierResourceUsageFromLayout(res->_steadyStateImageLayout));
+					bool initialLayoutPreinitialized = !!(res->AccessDesc()._allocationRules & (AllocationRules::HostVisibleRandomAccess|AllocationRules::HostVisibleSequentialWrite));
+					if (initialLayoutPreinitialized) {
+						barrierHelper.Add(*res, BarrierResourceUsage::Preinitialized(), Internal::DefaultBarrierResourceUsageFromLayout(res->_steadyStateImageLayout));
+					} else
+						barrierHelper.Add(*res, BarrierResourceUsage::NoState(), Internal::DefaultBarrierResourceUsageFromLayout(res->_steadyStateImageLayout));
 				} else {
 					// also make these resources visible, even though they don't get an actual barrier
 					makeResourcesVisibleExtra[makeResourcesVisibleExtraCount++] = res->GetGUID();
@@ -1954,7 +1962,11 @@ namespace RenderCore { namespace Metal_Vulkan
 				// We're just going to skip that and jump directly to our captured layout
 				res->_pendingInit = false;
 				if (res->GetImage()) {
-					barrierHelper.Add(*res, BarrierResourceUsage::NoState(), usage);
+					bool initialLayoutPreinitialized = !!(res->AccessDesc()._allocationRules & (AllocationRules::HostVisibleRandomAccess|AllocationRules::HostVisibleSequentialWrite));
+					if (initialLayoutPreinitialized) {
+						barrierHelper.Add(*res, BarrierResourceUsage::Preinitialized(), usage);
+					} else
+						barrierHelper.Add(*res, BarrierResourceUsage::NoState(), usage);
 					_restoreLayout = steadyLayout;
 				}
 			} else if (!usingCompatibleSteadyState) {
