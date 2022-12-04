@@ -21,7 +21,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (::Assets::IsInvalidated(_forwardIllumDelegate_DisableDepthWrite)) {
 			_forwardIllumDelegate_DisableDepthWrite = ::Assets::MarkerPtr<Techniques::ITechniqueDelegate>{};
-			RenderCore::Techniques::CreateTechniqueDelegate_Forward(_forwardIllumDelegate_DisableDepthWrite.AdoptPromise(), GetTechniqueSetFile(), RenderCore::Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
+			Techniques::CreateTechniqueDelegate_Forward(_forwardIllumDelegate_DisableDepthWrite.AdoptPromise(), GetTechniqueSetFile(), Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
 		}
 		return _forwardIllumDelegate_DisableDepthWrite.ShareFuture();
 	}
@@ -30,7 +30,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (::Assets::IsInvalidated(_depthOnlyDelegate)) {
 			_depthOnlyDelegate = ::Assets::MarkerPtr<Techniques::ITechniqueDelegate>{};
-			RenderCore::Techniques::CreateTechniqueDelegate_Forward(_depthOnlyDelegate.AdoptPromise(), GetTechniqueSetFile(), RenderCore::Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
+			Techniques::CreateTechniqueDelegate_PreDepth(_depthOnlyDelegate.AdoptPromise(), GetTechniqueSetFile(), Techniques::PreDepthType::DepthOnly);
 		}
 		return _depthOnlyDelegate.ShareFuture();
 	}
@@ -39,7 +39,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (::Assets::IsInvalidated(_depthMotionDelegate)) {
 			_depthMotionDelegate = ::Assets::MarkerPtr<Techniques::ITechniqueDelegate>{};
-			RenderCore::Techniques::CreateTechniqueDelegate_Forward(_depthMotionDelegate.AdoptPromise(), GetTechniqueSetFile(), RenderCore::Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
+			Techniques::CreateTechniqueDelegate_PreDepth(_depthMotionDelegate.AdoptPromise(), GetTechniqueSetFile(), Techniques::PreDepthType::DepthMotion);
 		}
 		return _depthMotionDelegate.ShareFuture();
 	}
@@ -48,7 +48,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (::Assets::IsInvalidated(_depthMotionNormalDelegate)) {
 			_depthMotionNormalDelegate = ::Assets::MarkerPtr<Techniques::ITechniqueDelegate>{};
-			RenderCore::Techniques::CreateTechniqueDelegate_Forward(_depthMotionNormalDelegate.AdoptPromise(), GetTechniqueSetFile(), RenderCore::Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
+			Techniques::CreateTechniqueDelegate_PreDepth(_depthMotionNormalDelegate.AdoptPromise(), GetTechniqueSetFile(), Techniques::PreDepthType::DepthMotionNormal);
 		}
 		return _depthMotionNormalDelegate.ShareFuture();
 	}
@@ -57,18 +57,18 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (::Assets::IsInvalidated(_depthMotionNormalRoughnessDelegate)) {
 			_depthMotionNormalRoughnessDelegate = ::Assets::MarkerPtr<Techniques::ITechniqueDelegate>{};
-			RenderCore::Techniques::CreateTechniqueDelegate_Forward(_depthMotionNormalRoughnessDelegate.AdoptPromise(), GetTechniqueSetFile(), RenderCore::Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
+			Techniques::CreateTechniqueDelegate_PreDepth(_depthMotionNormalRoughnessDelegate.AdoptPromise(), GetTechniqueSetFile(), Techniques::PreDepthType::DepthMotionNormalRoughness);
 		}
 		return _depthMotionNormalRoughnessDelegate.ShareFuture();
 	}
 
 	auto SharedTechniqueDelegateBox::GetDeferredIllumDelegate() -> TechniqueDelegateFuture
 	{
-		if (::Assets::IsInvalidated(_depthMotionNormalRoughnessDelegate)) {
-			_depthMotionNormalRoughnessDelegate = ::Assets::MarkerPtr<Techniques::ITechniqueDelegate>{};
-			RenderCore::Techniques::CreateTechniqueDelegate_Forward(_depthMotionNormalRoughnessDelegate.AdoptPromise(), GetTechniqueSetFile(), RenderCore::Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
+		if (::Assets::IsInvalidated(_deferredIllumDelegate)) {
+			_deferredIllumDelegate = ::Assets::MarkerPtr<Techniques::ITechniqueDelegate>{};
+			Techniques::CreateTechniqueDelegate_Deferred(_deferredIllumDelegate.AdoptPromise(), GetTechniqueSetFile());
 		}
-		return _depthMotionNormalRoughnessDelegate.ShareFuture();
+		return _deferredIllumDelegate.ShareFuture();
 	}
 
 	auto SharedTechniqueDelegateBox::GetTechniqueSetFile() -> std::shared_future<std::shared_ptr<Techniques::TechniqueSetFile>>
@@ -84,18 +84,18 @@ namespace RenderCore { namespace LightingEngine
 	{
 		_depVal = ::Assets::GetDepValSys().Make();
 		::Assets::AutoConstructToPromise(_techniqueSetFile.AdoptPromise(), MakeStringSection(ILLUM_TECH));
-		RenderCore::Techniques::CreateTechniqueDelegate_Forward(_forwardIllumDelegate_DisableDepthWrite.AdoptPromise(), _techniqueSetFile.ShareFuture(), RenderCore::Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
-		RenderCore::Techniques::CreateTechniqueDelegate_PreDepth(_depthOnlyDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::PreDepthType::DepthOnly);
-		RenderCore::Techniques::CreateTechniqueDelegate_PreDepth(_depthMotionDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::PreDepthType::DepthMotion);
-		RenderCore::Techniques::CreateTechniqueDelegate_PreDepth(_depthMotionNormalDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::PreDepthType::DepthMotionNormal);
-		RenderCore::Techniques::CreateTechniqueDelegate_PreDepth(_depthMotionNormalRoughnessDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::PreDepthType::DepthMotionNormalRoughness);
-		RenderCore::Techniques::CreateTechniqueDelegate_Deferred(_deferredIllumDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture());
+		Techniques::CreateTechniqueDelegate_Forward(_forwardIllumDelegate_DisableDepthWrite.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
+		Techniques::CreateTechniqueDelegate_PreDepth(_depthOnlyDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::PreDepthType::DepthOnly);
+		Techniques::CreateTechniqueDelegate_PreDepth(_depthMotionDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::PreDepthType::DepthMotion);
+		Techniques::CreateTechniqueDelegate_PreDepth(_depthMotionNormalDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::PreDepthType::DepthMotionNormal);
+		Techniques::CreateTechniqueDelegate_PreDepth(_depthMotionNormalRoughnessDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::PreDepthType::DepthMotionNormalRoughness);
+		Techniques::CreateTechniqueDelegate_Deferred(_deferredIllumDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture());
 
-		_lightingOperatorsPipelineLayoutFile = ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
+		_lightingOperatorsPipelineLayoutFile = ::Assets::ActualizeAssetPtr<Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
 		_depVal.RegisterDependency(_lightingOperatorsPipelineLayoutFile->GetDependencyValidation());
 
 		const std::string pipelineLayoutName = "LightingOperator";
-		auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout(*_lightingOperatorsPipelineLayoutFile, pipelineLayoutName).MakePipelineLayoutInitializer(shaderLanguage, samplerPool);
+		auto pipelineInit = Assets::PredefinedPipelineLayout(*_lightingOperatorsPipelineLayoutFile, pipelineLayoutName).MakePipelineLayoutInitializer(shaderLanguage, samplerPool);
 		_lightingOperatorLayout = device.CreatePipelineLayout(pipelineInit, "LightingOperator");
 
 		auto i = _lightingOperatorsPipelineLayoutFile->_descriptorSets.find("DMShadow");
