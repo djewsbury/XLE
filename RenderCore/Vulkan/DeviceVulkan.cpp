@@ -2230,6 +2230,11 @@ namespace RenderCore { namespace ImplVulkan
 		return (uint64_t)_underlying.get();		// we just need to return something unique that will distinguish us from any other devices present in the system
 	}
 
+	const DeviceFeatures& Device::GetDeviceFeatures() const
+	{
+		return _globalsContainer->_objectFactory.GetXLEFeatures();
+	}
+
 	std::shared_ptr<ICompiledPipelineLayout> Device::CreatePipelineLayout(const PipelineLayoutInitializer& desc, StringSection<> name)
 	{
 		if (!_globalsContainer->_pools._descriptorSetLayoutCache)

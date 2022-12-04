@@ -179,6 +179,7 @@ namespace RenderCore { namespace ImplVulkan
 
         DeviceDesc                              GetDesc() override;
         uint64_t                                GetGUID() const override;
+        const DeviceFeatures&                   GetDeviceFeatures() const override;
 
         std::shared_ptr<IThreadContext>         GetImmediateContext() override;
         std::unique_ptr<IThreadContext>         CreateDeferredContext() override;
