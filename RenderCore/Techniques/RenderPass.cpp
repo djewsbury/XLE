@@ -1365,6 +1365,24 @@ namespace RenderCore { namespace Techniques
         return false;
     }
 
+    void AttachmentReservation::Barrier(IThreadContext& threadContext, IteratorRange<const AttachmentBarrier*> barriers)
+    {
+        auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+        Metal::BarrierHelper barrierHelper(metalContext);
+        for (auto b:barriers) {
+            auto i = std::find_if(_entries.begin(), _entries.end(), [s=b._semantic](const auto& q) { return q._semantic == s; });
+            if (i == _entries.end()) {
+                assert(0);      // couldn't find this attachment
+                continue;
+            }
+            if (i->_currentLayout != b._semantic) {
+                auto* resource = (i->_poolResource == ~0u) ? i->_resource.get() : _pool->GetResource(i->_poolResource).get();
+                barrierHelper.Add(*resource, i->_currentLayout, Metal::BarrierResourceUsage{b._layout, b._shaderStage});
+                i->_currentLayout = b._layout;
+            }
+        }
+    }
+
     AttachmentReservation::AttachmentReservation() = default;
     
     AttachmentReservation::AttachmentReservation(AttachmentPool& pool) : _pool(&pool)
@@ -2845,6 +2863,8 @@ namespace RenderCore { namespace Techniques
                             ( TextureViewDesc::Flags::SimultaneouslyColorAttachment | TextureViewDesc::Flags::SimultaneouslyColorReadOnly
                             | TextureViewDesc::Flags::SimultaneouslyDepthAttachment | TextureViewDesc::Flags::SimultaneouslyDepthReadOnly
                             | TextureViewDesc::Flags::SimultaneouslyStencilAttachment | TextureViewDesc::Flags::SimultaneouslyStencilReadOnly );
+                        auto attachmentName = AttachmentSemantics::TryDehash(fragment.GetAttachments()[nonfb._resourceName]._semantic);
+                        (void)attachmentName;
                         assert(nonfb._usage == attachmentState[nonfb._resourceName] || simultaneousFlags);
                     }
                 }

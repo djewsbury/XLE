@@ -246,6 +246,7 @@ namespace RenderCore { namespace Techniques
     };
 
     struct AttachmentTransform;
+    struct AttachmentBarrier;
 
     class AttachmentPool
     {
@@ -299,7 +300,7 @@ namespace RenderCore { namespace Techniques
 
         void CompleteInitialization(IThreadContext&);
         bool HasPendingCompleteInitialization() const;
-        const AttachmentPool& GetAttachmentPool() const { return *_pool; }
+        void Barrier(IThreadContext&, IteratorRange<const AttachmentBarrier*>);
 
         void Absorb(AttachmentReservation&&);
 
@@ -311,6 +312,8 @@ namespace RenderCore { namespace Techniques
             ClearValue defaultContents,
             BindFlag::BitField initialLayout);
         AttachmentReservation CaptureDoubleBufferAttachments();
+
+        const AttachmentPool& GetAttachmentPool() const { return *_pool; }
 
         AttachmentReservation();
         AttachmentReservation(AttachmentPool& pool);
@@ -353,6 +356,13 @@ namespace RenderCore { namespace Techniques
         void AddRefAll();
         void ReleaseAll();
         friend class AttachmentPool;
+    };
+
+    struct AttachmentBarrier
+    {
+        uint64_t _semantic = 0ull;
+        BindFlag::BitField _layout = 0;
+        ShaderStage _shaderStage = ShaderStage::Pixel;
     };
 
     struct RenderPassBeginDesc
