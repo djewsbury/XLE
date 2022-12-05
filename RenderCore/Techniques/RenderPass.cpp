@@ -1295,6 +1295,9 @@ namespace RenderCore { namespace Techniques
 
         VLA(IResource*, completeInitializationResources, _entries.size());
         size_t completeInitializationCount = 0;
+        VLA(uint64_t, makeVisibleResources, _entries.size());
+        size_t makeVisibleCount = 0;
+
         Metal::BarrierHelper barrierHelper{threadContext};
 
         for (auto& a:_entries) {
@@ -1328,13 +1331,23 @@ namespace RenderCore { namespace Techniques
                     assert(poolResource._resource);
                     completeInitializationResources[completeInitializationCount++] = poolResource._resource.get();
                     poolResource._pendingCompleteInitialization = false;
-                }
+                } 
+                // We don't need a "make visible" in the "else" case, because for pool resources we must have had a complete initialization to at some earlier
+                // point. We would only have problems if there was an abandoned cmd list, or one submitted out of order
+            } else {
+                // We don't know the history of bound attachments submitted with no layout -- so we have to call make visible for them
+                if (a._currentLayout == ~0u)
+                    makeVisibleResources[makeVisibleCount++] = a._resource->GetGUID();
             }
         }
 
+        auto& metalContext = *Metal::DeviceContext::Get(threadContext);
         Metal::CompleteInitialization(
-            *Metal::DeviceContext::Get(threadContext),
+            metalContext,
             MakeIteratorRange(completeInitializationResources, &completeInitializationResources[completeInitializationCount]));
+
+        if (makeVisibleCount)
+            metalContext.GetActiveCommandList().MakeResourcesVisible(MakeIteratorRange(makeVisibleResources, &makeVisibleResources[makeVisibleCount]));
     }
 
     bool AttachmentReservation::HasPendingCompleteInitialization() const
