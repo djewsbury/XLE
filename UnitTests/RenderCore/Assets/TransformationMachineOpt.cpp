@@ -151,7 +151,7 @@ namespace UnitTests
     {
         using namespace RenderCore::Assets;
 
-        std::mt19937 rng(std::random_device().operator()());
+        std::mt19937 rng { 619461094u };
         const auto testCount = 1000u;
 
         {

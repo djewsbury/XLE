@@ -478,6 +478,7 @@ namespace UnitTests
 
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
 				auto lightId = lightScene.CreateLightSource(0);
+				lightScene.SetShadowOperator(lightId, 0);
 				lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(lightId)->SetLocalToWorld(AsFloat4x4(negativeLightDirection));
 				LightingEngine::SetupSunSourceShadows(lightScene, lightId, sunSourceFrustumSettings);
 				lightScene.TryGetLightSourceInterface<LightingEngine::ISunSourceShadows>(lightId)->FixMainSceneCamera(

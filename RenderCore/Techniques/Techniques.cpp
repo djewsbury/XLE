@@ -87,7 +87,8 @@ namespace RenderCore { namespace Techniques
 				RequireEndElement(formatter);
 			} else if (XlEqString(name, "Selectors")) {
 				RequireBeginElement(formatter);
-				result._selectorFiltering = ShaderSourceParser::ManualSelectorFiltering{formatter};
+				// MergeIn because we may have got some settings from a previous "Inherit"
+				result._selectorFiltering.MergeIn(ShaderSourceParser::ManualSelectorFiltering{formatter});
 				RequireEndElement(formatter);
 			}  else if (XlEqString(name, "VertexShader")) {
 				result._vertexShaderName = RequireStringValue(formatter).AsString();

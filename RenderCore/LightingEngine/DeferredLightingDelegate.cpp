@@ -535,7 +535,6 @@ namespace RenderCore { namespace LightingEngine
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static void GenerateShadowingDebugTextures(
-		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
 		const std::shared_ptr<Techniques::PipelineCollection>& pool,
 		const ShadowOperatorDesc& shadowOpDesc,
@@ -548,9 +547,15 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::FrameBufferDescFragment::SubpassDesc sp;
 		sp.AppendOutput(fbDesc.DefineAttachment(cascadeIndexSemantic).FixedFormat(Format::R8_UINT).NoInitialState().FinalState(BindFlag::ShaderResource).RequireBindFlags(BindFlag::TransferSrc));
 		sp.AppendOutput(fbDesc.DefineAttachment(sampleDensitySemantic + idx).FixedFormat(Format::R32G32B32A32_FLOAT).NoInitialState().FinalState(BindFlag::ShaderResource).RequireBindFlags(BindFlag::TransferSrc));
-		sp.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
-		sp.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::Aspect::Depth});
+		sp.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal).InitialState(BindFlag::ShaderResource));
+		sp.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(BindFlag::ShaderResource), BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::Aspect::Depth});
 		fbDesc.AddSubpass(std::move(sp));
+
+		Techniques::AttachmentBarrier preBarriers[] { 
+			{Techniques::AttachmentSemantics::GBufferNormal, BindFlag::ShaderResource, ShaderStage::Pixel},
+			{Techniques::AttachmentSemantics::MultisampleDepth, BindFlag::ShaderResource, ShaderStage::Pixel}
+		};
+		parsingContext.GetAttachmentReservation().Barrier(parsingContext.GetThreadContext(), preBarriers);
 
 		Techniques::RenderPassInstance rpi { parsingContext, fbDesc };
 
@@ -587,7 +592,7 @@ namespace RenderCore { namespace LightingEngine
 		unsigned c=0;
 		for (auto preparedShadow:_lightScene->_shadowScheduler->GetAllPreparedShadows()) {
 			GenerateShadowingDebugTextures( 
-				*iterator._threadContext, *iterator._parsingContext, 
+				*iterator._parsingContext, 
 				_pipelineCollection,
 				_lightScene->_shadowScheduler->_shadowPreparers->_preparers[preparedShadow._preparerIdx]._desc,
 				*preparedShadow._preparedResult, c);

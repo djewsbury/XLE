@@ -463,7 +463,9 @@ namespace UnitTests
 			)--";
 			InputStreamFormatter<utf8> formattr { MakeStringSection(simplePatchCollectionFragments) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
-			auto compiledPatchCollection = testApparatus._pipelineLayoutDelegate->CompileShaderPatchCollection(&patchCollection)->Actualize();
+			auto patchCollectionMarker = testApparatus._pipelineLayoutDelegate->CompileShaderPatchCollection(&patchCollection);
+			patchCollectionMarker->StallWhilePending();
+			auto compiledPatchCollection = patchCollectionMarker->Actualize();
 
 			{
 				std::promise<std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>> promisedTechDel;
