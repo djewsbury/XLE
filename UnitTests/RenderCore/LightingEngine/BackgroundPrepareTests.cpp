@@ -176,8 +176,6 @@ namespace UnitTests
 			_lightSourcesId.emplace_back(lightScene.CreateLightSource(_lightOperatorId));
 			_lightSourcesId.emplace_back(lightScene.CreateLightSource(_lightOperatorId));
 			_lightSourcesId.emplace_back(lightScene.CreateLightSource(_lightOperatorId));
-			for (auto l:_lightSourcesId)
-				lightScene.SetShadowOperator(l, _shadowOperatorId);
 
 			// red
 			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(_lightSourcesId[0])->SetLocalToWorld(AsFloat4x4(Float3(50, 5, 50)));
@@ -193,6 +191,9 @@ namespace UnitTests
 			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(_lightSourcesId[2])->SetLocalToWorld(AsFloat4x4(Float3(55, 5, 60)));
 			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(_lightSourcesId[2])->SetCutoffRange(50);
 			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(_lightSourcesId[2])->SetBrightness(Float3{0.f, 0.f, 100.f});
+
+			for (auto l:_lightSourcesId)
+				lightScene.SetShadowOperator(l, _shadowOperatorId);
 		}
 		void UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) override
 		{

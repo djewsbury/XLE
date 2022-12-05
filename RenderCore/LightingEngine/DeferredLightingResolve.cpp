@@ -417,7 +417,8 @@ namespace RenderCore { namespace LightingEngine
 		const LightResolveOperators& lightResolveOperators,
 		Internal::StandardLightScene& lightScene,
 		Internal::DynamicShadowProjectionScheduler* shadowProjectionScheduler,
-		ShadowProbes* shadowProbes)
+		ShadowProbes* shadowProbes,
+		Internal::SemiStaticShadowProbeScheduler* shadowProbeScheduler)
 	{
 		GPUAnnotation anno(threadContext, "Lights");
 
@@ -486,6 +487,9 @@ namespace RenderCore { namespace LightingEngine
 
 		for (unsigned setIdx=0; setIdx<lightScene._tileableLightSets.size(); ++setIdx) {
 			auto& set = lightScene._tileableLightSets[setIdx];
+			if (set._operatorId == lightResolveOperators._operatorDescs.size())
+				continue;	// this is the ambient light
+
 			auto lightShape = lightResolveOperators._pipelines[set._operatorId]._stencilingGeoShape;
 			auto shadowOperatorId = set._shadowOperatorId;
 			auto lightOperatorId = set._operatorId;
@@ -507,11 +511,8 @@ namespace RenderCore { namespace LightingEngine
 				pipeline = &lightResolveOperators._pipelines[lightOperatorId];
 			}
 
-			for (auto lightIterator=set._baseData.begin(); lightIterator!=set._baseData.end(); ++lightIterator) {
-				if (set._operatorId == lightResolveOperators._operatorDescs.size()) {
-					continue;	// this is the ambient light
-				}
-
+			unsigned lightIdx = 0;
+			for (auto lightIterator=set._baseData.begin(); lightIterator!=set._baseData.end(); ++lightIterator, ++lightIdx) {
 				assert(lightIterator->QueryInterface(typeid(Internal::StandardPositionalLight).hash_code()) == &lightIterator.get());
 				auto& standardLightDesc = *lightIterator;
 
@@ -524,6 +525,8 @@ namespace RenderCore { namespace LightingEngine
 				}
 
 				auto lightUniforms = Internal::MakeLightUniforms(standardLightDesc, lightResolveOperators._operatorDescs[set._operatorId]);
+				if (shadowProbeScheduler)		// this can be done more efficiently, since we're effectively just iterating through a parrallel array
+					lightUniforms._staticProbeDatabaseEntry = 1+shadowProbeScheduler->GetAllocatedDatabaseEntry(setIdx, lightIdx)._databaseIndex;
 				cbvs[CB::LightBuffer] = MakeOpaqueIteratorRange(lightUniforms);
 				float debuggingDummy[4] = {};
 				cbvs[CB::Debugging] = MakeIteratorRange(debuggingDummy);

@@ -94,7 +94,7 @@ float ResolveShadows(LightDesc light, float3 worldPosition, float3 worldNormal, 
     #else
         if (light.StaticDatabaseLightId != 0)
             return SampleStaticDatabase(light.StaticDatabaseLightId-1, worldPosition - light.Position, screenDesc);
-        return 0;
+        return 1.0f;
     #endif
 }
 

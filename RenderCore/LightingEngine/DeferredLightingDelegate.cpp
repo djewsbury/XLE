@@ -245,7 +245,7 @@ namespace RenderCore { namespace LightingEngine
 		ResolveLights(
 			*iterator._threadContext, *iterator._parsingContext, iterator._rpi,
 			*_lightResolveOperators, *_lightScene,
-			_lightScene->_shadowScheduler.get(), shadowProbes);
+			_lightScene->_shadowScheduler.get(), shadowProbes, _lightScene->_shadowProbesManager.get());
 	}
 
 	static ::Assets::PtrToMarkerPtr<Techniques::IShaderOperator> CreateToneMapOperator(

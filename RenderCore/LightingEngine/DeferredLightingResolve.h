@@ -71,7 +71,7 @@ namespace RenderCore { namespace LightingEngine
 	struct ShadowOperatorDesc;
 	namespace Internal { class StandardLightScene; }
 	class ShadowProbes;
-	namespace Internal { class DynamicShadowProjectionScheduler; }
+	namespace Internal { class DynamicShadowProjectionScheduler; class SemiStaticShadowProbeScheduler; }
 
     void ResolveLights(
 		IThreadContext& threadContext,
@@ -80,7 +80,8 @@ namespace RenderCore { namespace LightingEngine
 		const LightResolveOperators& lightResolveOperators,
 		Internal::StandardLightScene& lightScene,
 		Internal::DynamicShadowProjectionScheduler* shadowProjectionScheduler,
-		ShadowProbes* shadowProbes);
+		ShadowProbes* shadowProbes,
+		Internal::SemiStaticShadowProbeScheduler* shadowProbeScheduler);
 
 	enum class GBufferType { PositionNormal, PositionNormalParameters };
 
