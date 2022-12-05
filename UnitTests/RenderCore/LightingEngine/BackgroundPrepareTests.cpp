@@ -127,28 +127,35 @@ namespace UnitTests
 						std::move(lightingDelegate),
 						std::move(drawablesWriter)};
 
-					if (result._lightingStateDelegate) {
-						// BeginPrepareStep must happen after we construct PreparedScene, since that binds the light 
-						// scene to the lighting delegate
-						auto threadContext = RenderCore::Techniques::GetThreadContext();
-						auto& lightScene = RenderCore::LightingEngine::GetLightScene(*result._compiledLightingTechnique);
-						auto ri = result._lightingStateDelegate->BeginPrepareStep(lightScene, *threadContext);
-						if (ri) {
-							PrepareProbes(*threadContext, *ri, *result._drawablesWriter, *pipelineAcceleratorPool);
-							
-							// We must ensure that the relevant buffer uploads cmdlist has been submitted before
-							// we call CommitCommands(). This is a little more awkward given that we're in a background
-							// thread, and requires that a thread with the immediate context is pumping BufferUploads::Update()
-							assert(!threadContext->IsImmediate());
-							auto bufferUploadsCmdList = ri->GetRequiredBufferUploadsCommandList();
-							if (bufferUploadsCmdList) {
-								auto& bu = RenderCore::Techniques::Services::GetBufferUploads();
-								while (!bu.IsComplete(bufferUploadsCmdList))
-									std::this_thread::sleep_for(std::chrono::milliseconds(2));
-							}
-							threadContext->CommitCommands();
+					// Complete preparing shadow probes before we consider the "prepared scene" complete
+					auto threadContext = RenderCore::Techniques::GetThreadContext();
+					auto& lightScene = RenderCore::LightingEngine::GetLightScene(*result._compiledLightingTechnique);
+
+					auto* shadowProbes = (RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler*)lightScene.QueryInterface(typeid(RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler).hash_code());
+					REQUIRE(shadowProbes);
+
+					// give the probe manager an initial view position
+					shadowProbes->OnFrameBarrier(Float3(0,0,0), 1000);
+
+					const unsigned maxProbeCount = 16;
+					auto ri = shadowProbes->BeginPrepare(*threadContext, maxProbeCount);
+					if (ri) {
+						PrepareProbes(*threadContext, *ri, *result._drawablesWriter, *pipelineAcceleratorPool);
+						
+						// We must ensure that the relevant buffer uploads cmdlist has been submitted before
+						// we call CommitCommands(). This is a little more awkward given that we're in a background
+						// thread, and requires that a thread with the immediate context is pumping BufferUploads::Update()
+						assert(!threadContext->IsImmediate());
+						auto bufferUploadsCmdList = ri->GetRequiredBufferUploadsCommandList();
+						if (bufferUploadsCmdList) {
+							auto& bu = RenderCore::Techniques::Services::GetBufferUploads();
+							while (!bu.IsComplete(bufferUploadsCmdList))
+								std::this_thread::sleep_for(std::chrono::milliseconds(2));
 						}
+						threadContext->CommitCommands();
 					}
+
+					shadowProbes->EndPrepare(*threadContext);
 
 					return result;
 				});
@@ -236,6 +243,8 @@ namespace UnitTests
 		auto testHelper = testApparatus._metalTestHelper.get();
 		auto threadContext = testApparatus._metalTestHelper->_device->GetImmediateContext();
 
+		REQUIRE(testHelper->_device->GetDeviceFeatures()._cubemapArrays);		// cubemap array feature required for shadow probes
+
 		testHelper->BeginFrameCapture();
 
 		auto targetDesc = CreateDesc(
@@ -256,7 +265,14 @@ namespace UnitTests
 			lightingDelegate, drawablesWriter,
 			testApparatus,
 			parsingContext.GetFragmentStitchingContext().GetPreregisteredAttachments(), parsingContext.GetFragmentStitchingContext()._workingProps);
-		auto scene = futureScene.get();		// consider drawing some frames in the foreground while we wait for this
+
+		// awkwardly, we must pump buffer uploads, because the background thread can stall waiting on a buffer uploads complete
+		while (futureScene.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+			testApparatus._bufferUploads->Update(*threadContext);
+			std::this_thread::sleep_for(std::chrono::milliseconds(16));
+		}
+
+		auto scene = futureScene.get();
 
 		{
 			LightingEngine::LightingTechniqueInstance prepareInstance{*scene._compiledLightingTechnique};
@@ -267,6 +283,15 @@ namespace UnitTests
 			auto newVisibility = marker.get();		// stall
 			if (newVisibility._bufferUploadsVisibility)
 				testApparatus._bufferUploads->StallUntilCompletion(*threadContext, newVisibility._bufferUploadsVisibility);
+		}
+
+		{
+			// We must call OnFrameBarrier on the ISemiStaticShadowProbeScheduler at least once to
+			// update the status of the probe manager (since it's cmdlist has not been committed)
+			auto& lightScene = RenderCore::LightingEngine::GetLightScene(*scene._compiledLightingTechnique);
+			auto* shadowProbes = (RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler*)lightScene.QueryInterface(typeid(RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler).hash_code());
+			REQUIRE(shadowProbes);
+			shadowProbes->OnFrameBarrier(Float3(0,0,0), 1000);
 		}
 
 		Techniques::CameraDesc camerasToRender[3];
