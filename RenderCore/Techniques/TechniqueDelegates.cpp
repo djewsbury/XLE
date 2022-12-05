@@ -211,11 +211,6 @@ namespace RenderCore { namespace Techniques
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
-			#if defined(_DEBUG)
-				if (_techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
-					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-			#endif
-
 			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
 			switch (illumType) {
 			case IllumType::PerPixel:
@@ -336,11 +331,6 @@ namespace RenderCore { namespace Techniques
 
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
-
-			#if defined(_DEBUG)
-				if (_techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
-					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-			#endif
 
 			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
 			switch (illumType) {
@@ -477,11 +467,6 @@ namespace RenderCore { namespace Techniques
 
 			bool hasEarlyRejectionTest = shaderPatches.HasPatchType(s_earlyRejectionTest);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
-
-			#if defined(_DEBUG)
-				if (_techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
-					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-			#endif
 
 			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
 			if (hasEarlyRejectionTest) {
@@ -635,11 +620,6 @@ namespace RenderCore { namespace Techniques
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
-			#if defined(_DEBUG)
-				if (_techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
-					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-			#endif
-
 			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._psNoPatchesSrc;
 			switch (illumType) {
 			case IllumType::PerPixel:
@@ -785,11 +765,6 @@ namespace RenderCore { namespace Techniques
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
-			#if defined(_DEBUG)
-				if (_techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
-					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-			#endif
-
 			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._psNoPatchesSrc;
 			switch (illumType) {
 			case IllumType::PerPixel:
@@ -919,11 +894,6 @@ namespace RenderCore { namespace Techniques
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
-			#if defined(_DEBUG)
-				if (_techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
-					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-			#endif
-
 			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
 			switch (illumType) {
 			case IllumType::PerPixel:
@@ -1030,11 +1000,6 @@ namespace RenderCore { namespace Techniques
 
 			bool hasEarlyRejectionTest = shaderPatches.HasPatchType(s_earlyRejectionTest);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
-
-			#if defined(_DEBUG)
-				if (_techniqueFileHelper.GetDependencyValidation().GetValidationIndex() != 0)
-					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
-			#endif
 
 			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
 			if (hasEarlyRejectionTest) {
