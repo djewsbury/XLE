@@ -352,6 +352,40 @@ namespace RenderCore { namespace Metal_Vulkan
 			return mipLevelOverlap && arrayLayerOverlap;
 		}
 
+		static bool MergeCompatibleViews(
+			TextureViewDesc& inAndOut, Internal::AttachmentResourceUsageType::BitField lhsLifeTimeUsage, 
+			const TextureViewDesc& rhs, Internal::AttachmentResourceUsageType::BitField rhsLifeTimeUsage)
+		{
+			// Assuming the input views are overlapping, are they compatible enough that we don't need to create
+			// a new "attachment" in the render pass interface?
+			// We don't have to consider the "Simultaneously..." flags here, because that will actually be handled either by
+			// the 
+			if (inAndOut._dimensionality != rhs._dimensionality) return false;
+
+			// no support for dealing with explicit formats currently (unless they are both exactly identical)
+			if (inAndOut._format._explicitFormat != Format(0) || rhs._format._explicitFormat != Format(0))
+				return inAndOut._format._explicitFormat == rhs._format._explicitFormat;
+
+			if (inAndOut._format._aspect == rhs._format._aspect) return true;		// same aspect -- consider compatible
+
+			// Due to how Vulkan works with depth/stencil layouts, views that just separate either the depth or stencil aspect are actually
+			// compatible. In these cases, we want to update "inAndOut" so that it references all aspects we're going to touch
+			// We can make views touching other aspects compatible; unless they are exactly identical
+			auto lhsAspects = CalculateImageAspects(inAndOut, lhsLifeTimeUsage);
+			auto rhsAspects = CalculateImageAspects(rhs, rhsLifeTimeUsage);
+			if (	(lhsAspects & ~(VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT))
+				||  (rhsAspects & ~(VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT)))
+				return false;
+
+			if (lhsAspects == (VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT))
+				inAndOut._format._aspect = TextureViewDesc::Aspect::DepthStencil;
+			else if (lhsAspects == VK_IMAGE_ASPECT_DEPTH_BIT)
+				inAndOut._format._aspect = TextureViewDesc::Aspect::Depth;
+			else if (lhsAspects == VK_IMAGE_ASPECT_DEPTH_BIT)
+				inAndOut._format._aspect = TextureViewDesc::Aspect::Stencil;
+			return true;
+		}
+
 		VkAttachmentReference2 CreateAttachmentReference(
 			AttachmentName resourceName, const TextureViewDesc& view,
 			Internal::AttachmentResourceUsageType::BitField immediateUsage,
@@ -365,12 +399,6 @@ namespace RenderCore { namespace Metal_Vulkan
 				i->second._desc = _layout->GetAttachments()[resourceName];
 			}
 
-			if (view._format._aspect == TextureViewDesc::Depth || view._format._aspect == TextureViewDesc::DepthStencil)
-				i->second._attachmentUsage |= Internal::AttachmentResourceUsageType::HintDepthAspect;
-			if (view._format._aspect == TextureViewDesc::Stencil || view._format._aspect == TextureViewDesc::DepthStencil)
-				i->second._attachmentUsage |= Internal::AttachmentResourceUsageType::HintStencilAspect;
-
-			i->second._attachmentUsage |= subpassUsage;
 			auto mappedAttachmentIdx = (unsigned)std::distance(_workingAttachments.begin(), i);
 
 			bool firstViewOfResource = true;
@@ -382,29 +410,41 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 			assert(firstViewOfResource == !i->second._firstSubpassLayout.has_value());
 
-			std::vector<WorkingViewedAttachment>::iterator i2 = _workingViewedAttachments.end();
-			if (!inputAttachmentReference) {
-				uint64_t viewHash = view.GetHash();
-				i2 = std::find_if(
-					_workingViewedAttachments.begin(), _workingViewedAttachments.end(),
-					[viewHash, mappedAttachmentIdx](auto& i) { return i._mappedAttachmentIdx == mappedAttachmentIdx && i._viewHash == viewHash; });
-				if (i2 == _workingViewedAttachments.end())
-					i2 = _workingViewedAttachments.insert(_workingViewedAttachments.end(), WorkingViewedAttachment{mappedAttachmentIdx, view, viewHash, firstViewOfResource, true});
-			} else {
-				// For an input attachment, the properties of the view matter less -- because we bind a TextureView to the descriptor
-				// set that contains a lot of the important information. Instead we just want to find the most recent use of this physical
-				// attachment with an overlapping view. That will be considered the same "viewed attachment"
-				for (auto i=_workingViewedAttachments.rbegin(); i!=_workingViewedAttachments.rend(); ++i)
-					if (ViewsOverlap(i->_view, view) && i->_mappedAttachmentIdx == mappedAttachmentIdx) {
-						i2 = (i+1).base();
-						assert(i2->_mappedAttachmentIdx == mappedAttachmentIdx);
-					}
+			std::vector<WorkingViewedAttachment>::iterator i2 = _workingViewedAttachments.begin();
 
-				if (i2 == _workingViewedAttachments.end())
-					Throw(std::runtime_error("Could not find earlier output operation for input attachment request when building Vulkan framebuffer"));
+			// In some extreme cases we use the same resource as multiple different "attachments" in the render pass interface
+			// This might be necessary in some cases where we need to use one resource with different view settings
+			// Alternatively, we might use some subresources as one attachment, and other subresources as other attachments
+			// However, the spec is not very clear on how the driver should handle this; so it's best to be careful with it
+
+			bool foundOverlappingView = false;
+			for (; i2!=_workingViewedAttachments.end(); ++i2) {
+				if (i2->_mappedAttachmentIdx == mappedAttachmentIdx && ViewsOverlap(i2->_view, view)) {
+					foundOverlappingView = true;
+					if (MergeCompatibleViews(i2->_view, _workingAttachments[mappedAttachmentIdx].second._attachmentUsage, view, subpassUsage))
+						break;
+				}
+			}
+
+			if (i2 == _workingViewedAttachments.end()) {
+				if (foundOverlappingView) {
+					// another overlapping review was present, but it's not compatible with the new view
+					Log(Warning) << "Found incompatible overlapping views when preparing FrameBuffer in Vulkan layer. This scenario is not well defined, but can sometimes be useful. Use carefully." << std::endl;
+					i2 = _workingViewedAttachments.insert(_workingViewedAttachments.end(), WorkingViewedAttachment{mappedAttachmentIdx, view, view.GetHash(), firstViewOfResource, true});
+				} else {
+					// brand new attachment; no previous overlapping views
+					i2 = _workingViewedAttachments.insert(_workingViewedAttachments.end(), WorkingViewedAttachment{mappedAttachmentIdx, view, view.GetHash(), firstViewOfResource, true});
+				}
 			}
 
 			i2->_lastViewOfResource = true;
+
+			// update the attachment view usage in WorkingAttachment (after MergeCompatibleViews)
+			if (view._format._aspect == TextureViewDesc::Depth || view._format._aspect == TextureViewDesc::DepthStencil)
+				i->second._attachmentUsage |= Internal::AttachmentResourceUsageType::HintDepthAspect;
+			if (view._format._aspect == TextureViewDesc::Stencil || view._format._aspect == TextureViewDesc::DepthStencil)
+				i->second._attachmentUsage |= Internal::AttachmentResourceUsageType::HintStencilAspect;
+			i->second._attachmentUsage |= subpassUsage;
 
 			// check dependencies now. If there's a previous subpass that uses this resource and the view overlap, and the usages contain output somewhere, then we need a dependency
 			// We need to do this sometimes even when it seems like it shouldn't be required -- such as 2 subpasses that use the same depth/stencil buffer (otherwise we get validation errors)

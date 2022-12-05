@@ -70,6 +70,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         RenderCore/Metal/ThreadedRendering.cpp
         RenderCore/Metal/BlitEncoderTests.cpp
         RenderCore/Metal/DeviceFeatureTests.cpp
+        RenderCore/Metal/ComplexRenderPassTests.cpp
         )
 
     xle_configure_executable(UnitTests-RenderCore-${metal_name})

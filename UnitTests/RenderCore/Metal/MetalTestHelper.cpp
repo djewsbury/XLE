@@ -193,17 +193,22 @@ namespace UnitTests
 		return std::make_shared<RenderPassToken>(devContext, _pimpl->_fb);
 	}
 
-	std::map<unsigned, unsigned> UnitTestFBHelper::GetFullColorBreakdown(RenderCore::IThreadContext& threadContext)
+	std::map<unsigned, unsigned> GetFullColorBreakdown(RenderCore::IThreadContext& threadContext, RenderCore::IResource& resource)
 	{
 		std::map<unsigned, unsigned> result;
 
-		auto data = _pimpl->_targets[0]->ReadBackSynchronized(threadContext);
+		auto data = resource.ReadBackSynchronized(threadContext);
 
-		assert(data.size() == (size_t)RenderCore::ByteCount(_pimpl->_targets[0]->GetDesc()));
+		assert(data.size() == (size_t)RenderCore::ByteCount(resource.GetDesc()));
 		auto pixels = MakeIteratorRange((unsigned*)AsPointer(data.begin()), (unsigned*)AsPointer(data.end()));
 		for (auto p:pixels) ++result[p];
 
 		return result;
+	}
+
+	std::map<unsigned, unsigned> UnitTestFBHelper::GetFullColorBreakdown(RenderCore::IThreadContext& threadContext)
+	{
+		return UnitTests::GetFullColorBreakdown(threadContext, *_pimpl->_targets[0]);
 	}
 
 	void UnitTestFBHelper::SaveImage(RenderCore::IThreadContext& threadContext, StringSection<> filename) const
@@ -553,7 +558,9 @@ namespace UnitTests
 			{DescriptorType::UniformBuffer},				// 3
 			{DescriptorType::UniformBuffer},				// 4
 
-			{DescriptorType::Sampler}						// 5
+			{DescriptorType::Sampler},						// 5
+
+			{DescriptorType::InputAttachment},				// 6
 		};
 
 		RenderCore::PipelineLayoutInitializer desc;

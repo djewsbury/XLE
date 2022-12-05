@@ -98,6 +98,8 @@ namespace UnitTests
         std::unique_ptr<Pimpl> _pimpl;
     };
 
+    std::map<unsigned, unsigned> GetFullColorBreakdown(RenderCore::IThreadContext& threadContext, RenderCore::IResource& resource);
+
     void SaveImage(RenderCore::IThreadContext& threadContext, RenderCore::IResource& resource, StringSection<> filename);
 
     class DescriptorSetHelper
