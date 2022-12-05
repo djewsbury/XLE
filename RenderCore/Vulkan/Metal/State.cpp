@@ -233,7 +233,10 @@ namespace RenderCore { namespace Metal_Vulkan { namespace Internal
 		sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 		pNext = nullptr;
 		flags = 0;
-		depthTestEnable = desc._depthTest != CompareOp::Always;
+		// Note both depth write and depth test are disabled when the "depthTestEnable" flag is false
+		// this case is a little wierd, though, some APIs don't well support depth write enabled while 
+		// depth testing is disabled, so it's not recommended to rely on it
+		depthTestEnable = desc._depthWrite || (desc._depthTest != CompareOp::Always);
 		depthWriteEnable = desc._depthWrite;
 		depthCompareOp = AsVkCompareOp(desc._depthTest);
 		depthBoundsTestEnable = desc._depthBoundsTestEnable;
