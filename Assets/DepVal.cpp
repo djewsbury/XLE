@@ -10,6 +10,8 @@
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/HeapUtils.h"
 
+#pragma clang diagnostic ignored "-Wmicrosoft-sealed"
+
 namespace Assets
 {
 	class DependencyValidationSystem : public IDependencyValidationSystem

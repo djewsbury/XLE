@@ -459,7 +459,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			_steadyStateImageLayout = Internal::SelectDefaultSteadyStateLayout(desc._bindFlags);
 
 			#if defined(TRACK_RESOURCE_GUIDS)
-				AssociateResourceGUID(_guid, desc._name);
+				AssociateResourceGUID(_guid, _name);
 			#endif
 		}
 

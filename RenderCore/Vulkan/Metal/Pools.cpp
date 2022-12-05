@@ -459,6 +459,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 
         #if defined(_DEBUG)
+            // If you hit this, it probably means there are descriptor set leaks
+            // this can also happen if the shutdown order is incorrect (ie, a descriptor set is being
+            // destroyed after the pool). If a descriptor set is destroyed after the pool, it will probably crash
             for (auto q:_descriptorsAllocated) assert(q==0);
             assert(_setsAllocated==0);
         #endif
