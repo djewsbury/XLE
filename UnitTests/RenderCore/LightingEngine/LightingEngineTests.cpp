@@ -113,6 +113,24 @@ namespace UnitTests
 		projections->SetArbitrarySubProjections(MakeIteratorRange(worldToCamera), MakeIteratorRange(cameraToProjection));
 	}
 
+	static void StallAndPrepareResources(
+		LightingEngineTestApparatus& testApparatus,
+		RenderCore::Techniques::ParsingContext& parsingContext,
+		RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique,
+		ToolsRig::IDrawablesWriter& drawablesWriter)
+	{
+		// stall until all resources are ready
+		using namespace RenderCore;
+		LightingEngine::LightingTechniqueInstance prepareLightingIterator(lightingTechnique);
+		ParseScene(prepareLightingIterator, drawablesWriter);
+		std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
+		auto prepareFuture = preparePromise.get_future();
+		prepareLightingIterator.FulfillWhenNotPending(std::move(preparePromise));
+		auto newVisibility = PrepareAndStall(testApparatus, std::move(prepareFuture));
+		parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
+		parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
+	}
+
 	TEST_CASE( "LightingEngine-ExecuteTechnique", "[rendercore_lighting_engine]" )
 	{
 		using namespace RenderCore;
@@ -150,59 +168,61 @@ namespace UnitTests
 
 		testHelper->BeginFrameCapture();
 
+		LightingEngine::LightSourceOperatorDesc resolveOperators[] {
+			LightingEngine::LightSourceOperatorDesc{}
+		};
+		LightingEngine::ShadowOperatorDesc shadowOp;
+		shadowOp._projectionMode = LightingEngine::ShadowProjectionMode::Ortho;
+
+		float wsDepthResolution = shadowDepthRange / 16384.f;
+		float wsXYRange = shadowFrustumWidth / 2048.f;
+		float ratio0 = wsXYRange / wsDepthResolution;
+		float ratio1 = std::sqrt(wsXYRange*wsXYRange + wsXYRange*wsXYRange) / wsDepthResolution;
+		shadowOp._singleSidedBias._depthBias = (int)std::ceil(ratio1);
+		shadowOp._singleSidedBias._slopeScaledBias = 0.5f;
+
+		LightingEngine::ShadowOperatorDesc shadowGenerator[] {
+			shadowOp
+		};
+
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#if 0
 		SECTION("Forward lighting")
 		{
-			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
-			auto lightingTechniqueFuture = LightingEngine::CreateForwardLightingTechnique(
-				testHelper->_device,
-				testApparatus._pipelineAcceleratorPool, testApparatus._techDelBox,
-				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
-			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
-			ConfigureLightScene(LightingEngine::GetLightScene(*lightingTechnique));
+			std::promise<std::shared_ptr<LightingEngine::ILightScene>> promisedLightScene;
+			auto futureLightScene = promisedLightScene.get_future();
+			LightingEngine::CreateForwardLightingScene(
+				std::move(promisedLightScene),
+				testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
+				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator),
+				LightingEngine::AmbientLightOperatorDesc{});
+			auto lightScene = futureLightScene.get();		// stall
 
-			// stall until all resources are ready
-			{
-				RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*testApparatus._pipelineAcceleratorPool, *lightingTechnique);
-				ParseScene(prepareLightingIterator, *drawableWriter);
-				auto prepareMarker = prepareLightingIterator.GetResourcePreparationMarker();
-				if (prepareMarker) {
-					prepareMarker->StallWhilePending();
-					REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
-				}
-			}
+			std::promise<std::shared_ptr<LightingEngine::CompiledLightingTechnique>> promisedLightingTechnique;
+			auto futureLightingTechnique = promisedLightingTechnique.get_future();
+			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
+			LightingEngine::CreateForwardLightingTechnique(
+				std::move(promisedLightingTechnique),
+				testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
+				lightScene,
+				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
+			auto lightingTechnique = futureLightingTechnique.get();		// stall
+
+			ConfigureLightScene(*lightScene);
+
+			StallAndPrepareResources(testApparatus, parsingContext, *lightingTechnique, *drawableWriter);
 
 			{
 				RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-					*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
+					parsingContext, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}
 
 			fbHelper.SaveImage(*threadContext, "forward-lighting-output");
 		}
-#endif
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		SECTION("Deferred lighting")
 		{
-			LightingEngine::LightSourceOperatorDesc resolveOperators[] {
-				LightingEngine::LightSourceOperatorDesc{}
-			};
-			LightingEngine::ShadowOperatorDesc shadowOp;
-			shadowOp._projectionMode = LightingEngine::ShadowProjectionMode::Ortho;
-
-			float wsDepthResolution = shadowDepthRange / 16384.f;
-			float wsXYRange = shadowFrustumWidth / 2048.f;
-			float ratio0 = wsXYRange / wsDepthResolution;
-			float ratio1 = std::sqrt(wsXYRange*wsXYRange + wsXYRange*wsXYRange) / wsDepthResolution;
-			shadowOp._singleSidedBias._depthBias = (int)std::ceil(ratio1);
-			shadowOp._singleSidedBias._slopeScaledBias = 0.5f;
-
-			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
-				shadowOp
-			};
-
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 				testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
@@ -211,21 +231,7 @@ namespace UnitTests
 			auto lightingTechnique = lightingTechniqueFuture.get();
 			ConfigureLightScene(LightingEngine::GetLightScene(*lightingTechnique));
 
-			testApparatus._bufferUploads->Update(*threadContext);
-			Threading::Sleep(16);
-			testApparatus._bufferUploads->Update(*threadContext);
-
-			// stall until all resources are ready
-			{
-				LightingEngine::LightingTechniqueInstance prepareLightingIterator(*lightingTechnique);
-				ParseScene(prepareLightingIterator, *drawableWriter);
-				std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
-				auto prepareFuture = preparePromise.get_future();
-				prepareLightingIterator.FulfillWhenNotPending(std::move(preparePromise));
-				auto newVisibility = PrepareAndStall(testApparatus, std::move(prepareFuture));
-				parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
-				parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
-			}
+			StallAndPrepareResources(testApparatus, parsingContext, *lightingTechnique, *drawableWriter);
 
 			{
 				LightingEngine::LightingTechniqueInstance lightingIterator(
