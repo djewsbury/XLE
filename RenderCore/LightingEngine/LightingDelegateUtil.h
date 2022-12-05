@@ -56,6 +56,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		};
 		AllocatedDatabaseEntry GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx);
 
+		bool DoneInitialBackgroundPrepare() const { return _doneInitialBackgroundPrepare; }		// when this is false, the shadow probes image is probably still in an undefined layout
+
 		SemiStaticShadowProbeScheduler(
 			std::shared_ptr<ShadowProbes> shadowProbes,
 			ILightScene::ShadowOperatorId operatorId);
@@ -72,6 +74,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		uint64_t _probeSlotsReservedInBackground = 0ull;
 		std::vector<std::pair<LightIndex, unsigned>> _probeSlotsPreparedInBackground;
 		bool _readyToCommitBackgroundChanges = false;
+		bool _doneInitialBackgroundPrepare = false;
 		void CommitBackgroundChangesAlreadyLocked();
 
 		std::vector<std::pair<LightIndex, AllocatedDatabaseEntry>> _allocatedDatabaseEntries;

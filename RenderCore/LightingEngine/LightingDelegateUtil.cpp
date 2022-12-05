@@ -397,6 +397,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		}
 
 		_probeSlotsReservedInBackground = 0;
+		_doneInitialBackgroundPrepare |= !_probeSlotsPreparedInBackground.empty();
 		_probeSlotsPreparedInBackground.clear();
 		_readyToCommitBackgroundChanges = false;
 	}

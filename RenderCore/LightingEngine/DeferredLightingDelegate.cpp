@@ -55,13 +55,18 @@ namespace RenderCore { namespace LightingEngine
 		ShadowPreparerIdMapping _shadowOperatorIdMapping;
 		std::shared_ptr<ShadowProbes> _shadowProbes;
 		std::shared_ptr<Internal::SemiStaticShadowProbeScheduler> _shadowProbesManager;
-		std::vector<LightSourceId> _lightsAssignedToShadowProbes;
 
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<SharedTechniqueDelegateBox> _techDelBox;
 
 		void FinalizeConfiguration()
 		{
+			if (_shadowOperatorIdMapping._operatorForStaticProbes != ~0u) {
+				_shadowProbes = std::make_shared<ShadowProbes>(_pipelineAccelerators, *_techDelBox, _shadowOperatorIdMapping._shadowProbesCfg);
+				_shadowProbesManager = std::make_shared<Internal::SemiStaticShadowProbeScheduler>(_shadowProbes, _shadowOperatorIdMapping._operatorForStaticProbes);
+				RegisterComponent(_shadowProbesManager);
+			}
+			
 			if (!_shadowOperatorIdMapping._operatorToShadowPreparerId.empty()) {
 				_shadowScheduler = std::make_shared<Internal::DynamicShadowProjectionScheduler>(
 					_pipelineAccelerators->GetDevice(), _shadowPreparers,
@@ -69,6 +74,16 @@ namespace RenderCore { namespace LightingEngine
 				_shadowScheduler->SetDescriptorSetLayout(_techDelBox->_dmShadowDescSetTemplate, PipelineType::Graphics);
 				RegisterComponent(_shadowScheduler);
 			}
+		}
+
+		void* QueryInterface(uint64_t typeCode) override
+		{
+			if (typeCode == typeid(ISemiStaticShadowProbeScheduler).hash_code())
+				return (ISemiStaticShadowProbeScheduler*)_shadowProbesManager.get();
+			else if (typeCode == typeid(IDynamicShadowProjectionScheduler).hash_code())
+				return (IDynamicShadowProjectionScheduler*)_shadowScheduler.get();
+			else
+				return StandardLightScene::QueryInterface(typeCode);
 		}
 	};
 
@@ -226,10 +241,11 @@ namespace RenderCore { namespace LightingEngine
 	void DeferredLightingCaptures::DoLightResolve(LightingTechniqueIterator& iterator)
 	{
 		// Light subpass
+		auto* shadowProbes = (_lightScene->_shadowProbesManager && _lightScene->_shadowProbesManager->DoneInitialBackgroundPrepare()) ? _lightScene->_shadowProbes.get() : nullptr;
 		ResolveLights(
 			*iterator._threadContext, *iterator._parsingContext, iterator._rpi,
 			*_lightResolveOperators, *_lightScene,
-			_lightScene->_shadowScheduler.get(), _lightScene->_shadowProbes.get());
+			_lightScene->_shadowScheduler.get(), shadowProbes);
 	}
 
 	static ::Assets::PtrToMarkerPtr<Techniques::IShaderOperator> CreateToneMapOperator(

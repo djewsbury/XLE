@@ -167,7 +167,8 @@ namespace RenderCore { namespace LightingEngine
 			return (ISemiStaticShadowProbeScheduler*)_shadowProbesManager.get();
 		else if (typeCode == typeid(IDynamicShadowProjectionScheduler).hash_code())
 			return (IDynamicShadowProjectionScheduler*)_shadowScheduler.get();
-		return nullptr;
+		else
+			return StandardLightScene::QueryInterface(typeCode);
 	}
 
 	void ForwardPlusLightScene::SetEquirectangularSource(std::shared_ptr<::Assets::OperationContext> loadingContext, StringSection<> input)
@@ -313,7 +314,7 @@ namespace RenderCore { namespace LightingEngine
 
 			if (bindingFlags & (1ull<<4ull)) {
 				assert(bindingFlags & (1ull<<5ull));
-				if (_lightScene->_shadowProbes && _lightScene->_shadowProbes->IsReady()) {
+				if (_lightScene->_shadowProbes && _lightScene->_shadowProbes->IsReady() && _lightScene->_shadowProbesManager->DoneInitialBackgroundPrepare()) {
 					dst[4] = &_lightScene->_shadowProbes->GetStaticProbesTable();
 					dst[5] = &_lightScene->_shadowProbes->GetShadowProbeUniforms();
 				} else {
