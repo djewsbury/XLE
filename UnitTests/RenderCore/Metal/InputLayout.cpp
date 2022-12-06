@@ -1695,6 +1695,176 @@ namespace UnitTests
 		// InputAttachments should also throw, but we can't test them with a compute shader
 	}
 
+	TEST_CASE( "InputLayout-PipelineLayoutCompatibility", "[rendercore_metal]" )
+	{
+		// After a pipeline layout change, we sometimes need to update descriptor sets, and other times
+		// its redundant
+		//
+		// Following the Vulkan rules, descriptor sets binds are only valid if they are made with 
+		// a pipeline layout that has an identical layout for that descriptor set, and all previously descriptor
+		// sets.
+		//
+		// We use two hashes to track this:
+		//	- (in Vulkan) CompiledPipelineLayout::GetSequentialDescSetHashes()
+		//	- BoundUniforms::GetGroupRulesHash()
+
+		using namespace RenderCore;
+		auto testHelper = MakeTestHelper();
+
+		DescriptorSetSignature commonEarlyDescSet
+			{
+				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, Hash64("s0d0")),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s0d1")),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s0d2")),
+				std::make_pair(DescriptorSlot{DescriptorType::UnorderedAccessBuffer}, Hash64("s0d3")),
+				std::make_pair(DescriptorSlot{DescriptorType::UniformBufferDynamicOffset}, Hash64("s0d4")),
+			};
+
+		DescriptorSetSignature materialDescSet0
+			{
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s1d0")),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s1d1")),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s1d2")),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s1d3")),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s1d4")),
+			};
+
+		DescriptorSetSignature materialDescSet1
+			{
+				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, Hash64("s2d0")),
+				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, Hash64("s2d1")),
+				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, Hash64("s2d2")),
+				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, Hash64("s2d3")),
+				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, Hash64("s2d4"))
+			};
+
+		DescriptorSetSignature materialDescSet2
+			{
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s3d0")),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s3d1")),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture, 5}, Hash64("s3d2")),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s3d3")),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture, 2}, Hash64("s3d4"))
+			};
+
+		PipelineLayoutInitializer pl0;
+		pl0.AppendDescriptorSet("d0", commonEarlyDescSet, PipelineType::Graphics);
+		pl0.AppendDescriptorSet("d1", materialDescSet0, PipelineType::Graphics);
+		auto cl0 = testHelper->_device->CreatePipelineLayout(pl0, "pl0");
+
+		PipelineLayoutInitializer pl1;
+		pl1.AppendDescriptorSet("d0", commonEarlyDescSet, PipelineType::Graphics);
+		pl1.AppendDescriptorSet("d1", materialDescSet0, PipelineType::Graphics);
+		auto cl1 = testHelper->_device->CreatePipelineLayout(pl1, "pl1");
+
+		PipelineLayoutInitializer pl2;
+		pl2.AppendDescriptorSet("d0", commonEarlyDescSet, PipelineType::Graphics);
+		pl2.AppendDescriptorSet("d1", materialDescSet1, PipelineType::Graphics);
+		auto cl2 = testHelper->_device->CreatePipelineLayout(pl2, "pl2");
+
+		PipelineLayoutInitializer pl3;
+		pl3.AppendDescriptorSet("d0", commonEarlyDescSet, PipelineType::Graphics);
+		pl3.AppendDescriptorSet("d1", materialDescSet2, PipelineType::Graphics);
+		auto cl3 = testHelper->_device->CreatePipelineLayout(pl3, "pl3");
+
+		PipelineLayoutInitializer pl4;
+		pl4.AppendDescriptorSet("d0", materialDescSet0, PipelineType::Graphics);
+		pl4.AppendDescriptorSet("d1", materialDescSet1, PipelineType::Graphics);
+		auto cl4 = testHelper->_device->CreatePipelineLayout(pl4, "pl4");
+
+		PipelineLayoutInitializer pl5;
+		pl5.AppendDescriptorSet("d0", materialDescSet0, PipelineType::Graphics);
+		pl5.AppendDescriptorSet("d1", materialDescSet1, PipelineType::Graphics);
+		pl5.AppendDescriptorSet("d2", materialDescSet2, PipelineType::Graphics);
+		pl5.AppendDescriptorSet("d3", materialDescSet1, PipelineType::Graphics);
+		pl5.AppendDescriptorSet("d4", materialDescSet0, PipelineType::Graphics);
+		pl5.AppendDescriptorSet("d5", commonEarlyDescSet, PipelineType::Graphics);
+		auto cl5 = testHelper->_device->CreatePipelineLayout(pl5, "pl5");
+
+		PipelineLayoutInitializer pl6;
+		pl6.AppendDescriptorSet("d0", materialDescSet0, PipelineType::Graphics);
+		pl6.AppendDescriptorSet("d1", materialDescSet1, PipelineType::Graphics);
+		pl6.AppendDescriptorSet("d2", materialDescSet2, PipelineType::Graphics);
+		pl6.AppendDescriptorSet("d3", materialDescSet1, PipelineType::Graphics);
+		pl6.AppendDescriptorSet("d4", materialDescSet0, PipelineType::Graphics);
+		pl6.AppendDescriptorSet("d5", materialDescSet2, PipelineType::Graphics);
+		auto cl6 = testHelper->_device->CreatePipelineLayout(pl6, "pl6");
+
+		PipelineLayoutInitializer pl7;
+		pl7.AppendDescriptorSet("d0", commonEarlyDescSet, PipelineType::Graphics);
+		pl7.AppendDescriptorSet("d1", materialDescSet1, PipelineType::Graphics);
+		pl7.AppendDescriptorSet("d2", materialDescSet2, PipelineType::Graphics);
+		pl7.AppendDescriptorSet("d3", materialDescSet1, PipelineType::Graphics);
+		pl7.AppendDescriptorSet("d4", materialDescSet0, PipelineType::Graphics);
+		pl7.AppendDescriptorSet("d5", materialDescSet2, PipelineType::Graphics);
+		auto cl7 = testHelper->_device->CreatePipelineLayout(pl7, "pl7");
+
+		#if GFXAPI_TARGET == GFXAPI_VULKAN
+			auto* vcl0 = checked_cast<Metal_Vulkan::CompiledPipelineLayout*>(cl0.get());
+			auto* vcl1 = checked_cast<Metal_Vulkan::CompiledPipelineLayout*>(cl1.get());
+			auto* vcl2 = checked_cast<Metal_Vulkan::CompiledPipelineLayout*>(cl2.get());
+			auto* vcl3 = checked_cast<Metal_Vulkan::CompiledPipelineLayout*>(cl3.get());
+			auto* vcl4 = checked_cast<Metal_Vulkan::CompiledPipelineLayout*>(cl4.get());
+			auto* vcl5 = checked_cast<Metal_Vulkan::CompiledPipelineLayout*>(cl5.get());
+			auto* vcl6 = checked_cast<Metal_Vulkan::CompiledPipelineLayout*>(cl6.get());
+			auto* vcl7 = checked_cast<Metal_Vulkan::CompiledPipelineLayout*>(cl7.get());
+
+			// first set is identical in vcl0, vcl1, vcl2, vcl3
+			REQUIRE(vcl0->GetSequentialDescSetHashes()[0] == vcl1->GetSequentialDescSetHashes()[0]);
+			REQUIRE(vcl0->GetSequentialDescSetHashes()[0] == vcl2->GetSequentialDescSetHashes()[0]);
+			REQUIRE(vcl0->GetSequentialDescSetHashes()[0] == vcl3->GetSequentialDescSetHashes()[0]);
+
+			// vcl0 & vcl1 are exactly identical
+			REQUIRE(vcl0->GetSequentialDescSetHashes()[1] == vcl1->GetSequentialDescSetHashes()[1]);
+
+			// hash 1 should be unique throughout vcl1, vcl2, vcl3
+			REQUIRE(vcl1->GetSequentialDescSetHashes()[1] != vcl2->GetSequentialDescSetHashes()[1]);
+			REQUIRE(vcl1->GetSequentialDescSetHashes()[1] != vcl3->GetSequentialDescSetHashes()[1]);
+			REQUIRE(vcl2->GetSequentialDescSetHashes()[1] != vcl3->GetSequentialDescSetHashes()[1]);
+
+			// vcl4, vcl2 hashes should be different, despite second desc set being identical
+			REQUIRE(vcl4->GetSequentialDescSetHashes()[1] != vcl2->GetSequentialDescSetHashes()[1]);
+
+			// vcl5 & vcl6 are identical up until the last desc set
+			REQUIRE(vcl5->GetSequentialDescSetHashes()[0] == vcl6->GetSequentialDescSetHashes()[0]);
+			REQUIRE(vcl5->GetSequentialDescSetHashes()[1] == vcl6->GetSequentialDescSetHashes()[1]);
+			REQUIRE(vcl5->GetSequentialDescSetHashes()[2] == vcl6->GetSequentialDescSetHashes()[2]);
+			REQUIRE(vcl5->GetSequentialDescSetHashes()[3] == vcl6->GetSequentialDescSetHashes()[3]);
+			REQUIRE(vcl5->GetSequentialDescSetHashes()[4] == vcl6->GetSequentialDescSetHashes()[4]);
+			REQUIRE(vcl5->GetSequentialDescSetHashes()[5] != vcl6->GetSequentialDescSetHashes()[5]);
+
+			// vcl6 & vcl7 vary only in the first desc set
+			REQUIRE(vcl6->GetSequentialDescSetHashes()[0] != vcl7->GetSequentialDescSetHashes()[0]);
+			REQUIRE(vcl6->GetSequentialDescSetHashes()[1] != vcl7->GetSequentialDescSetHashes()[1]);
+			REQUIRE(vcl6->GetSequentialDescSetHashes()[2] != vcl7->GetSequentialDescSetHashes()[2]);
+			REQUIRE(vcl6->GetSequentialDescSetHashes()[3] != vcl7->GetSequentialDescSetHashes()[3]);
+			REQUIRE(vcl6->GetSequentialDescSetHashes()[4] != vcl7->GetSequentialDescSetHashes()[4]);
+			REQUIRE(vcl6->GetSequentialDescSetHashes()[5] != vcl7->GetSequentialDescSetHashes()[5]);
+		#endif
+
+		// Differences in the sequential desc set hashes should bubble up to affect the bound uniform GroupRulesHash
+		{
+			UniformsStreamInterface usi0, usi1;
+			usi0.BindResourceView(0, Hash64("s0d1"));
+			usi1.BindResourceView(0, Hash64("s1d3"));		// in materialDescSet0
+
+			Metal::BoundUniforms boundUniforms0 { cl0, usi0, usi1 };
+			Metal::BoundUniforms boundUniforms1 { cl1, usi0, usi1 };
+			Metal::BoundUniforms boundUniforms2 { cl2, usi0, usi1 };
+			Metal::BoundUniforms boundUniforms4 { cl4, usi0, usi1 };
+
+			REQUIRE(boundUniforms0.GetGroupRulesHash(0) == boundUniforms1.GetGroupRulesHash(0));
+			REQUIRE(boundUniforms0.GetGroupRulesHash(1) == boundUniforms1.GetGroupRulesHash(1));
+			REQUIRE(boundUniforms0.GetGroupRulesHash(0) == boundUniforms2.GetGroupRulesHash(0));
+
+			REQUIRE(boundUniforms0.GetGroupRulesHash(0) == boundUniforms2.GetGroupRulesHash(0));
+			REQUIRE(boundUniforms0.GetGroupRulesHash(1) != boundUniforms2.GetGroupRulesHash(1));
+
+			REQUIRE(boundUniforms4.GetGroupRulesHash(0) != boundUniforms2.GetGroupRulesHash(0));
+			REQUIRE(boundUniforms4.GetGroupRulesHash(1) != boundUniforms2.GetGroupRulesHash(1));
+		}
+	}
+
 	// error cases we could try:
 	//      * not binding all attributes
 	//      * refering to a vertex buffer in the InputElementDesc, and then not providing it

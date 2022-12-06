@@ -438,13 +438,15 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(index < s_maxBoundDescriptorSetCount);
 		assert(index < GetDescriptorSetCount());
 		if (_capturedStates) {
-			if (_capturedStates->_currentDescSet[index] != set)
+			if (_capturedStates->_currentDescSet[index] != set) {
 				_sharedState->_commandList.BindDescriptorSets(
 					(encoderType == EncoderType::Compute) ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
 					GetUnderlyingPipelineLayout(),
 					index, 1, &set, 
 					dynamicOffsets.size(), dynamicOffsets.begin());
-			_capturedStates->_currentDescSet[index] = set;
+				_capturedStates->_currentDescSet[index] = set;
+				_capturedStates->_sequentialDescSetBindingHash[index] = _pipelineLayout->GetSequentialDescSetHashes()[index];
+			}
 		} else {
 			_sharedState->_commandList.BindDescriptorSets(
 				(encoderType == EncoderType::Compute) ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -459,7 +461,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 	}
 
-	void SharedEncoder::SetPipelineLayout(ICompiledPipelineLayout& newPipelineLayout)
+	void SharedEncoder::BindPipelineLayout(ICompiledPipelineLayout& newPipelineLayout)
 	{
 		assert(_sharedState);
 		// Vulkan's rules are as follows:
@@ -467,7 +469,24 @@ namespace RenderCore { namespace Metal_Vulkan
 		//
 		// Ie, you should keep descriptor sets that will be compatible with the most pipeline layouts in the early descriptor set indices
 		// and descriptor sets past that point of compatibility must be rebound
+		//
+		// Note that we don't bind dummies after a pipeline layout switch (even though we do when first beginning the encoder)
 		_pipelineLayout = checked_cast<CompiledPipelineLayout*>(&newPipelineLayout);
+
+		if (_capturedStates) {
+			auto newSequentialHashes = _pipelineLayout->GetSequentialDescSetHashes();
+			unsigned c=0;
+			for (; c<_pipelineLayout->GetDescriptorSetCount(); ++c) {
+				if (newSequentialHashes[c] != _capturedStates->_sequentialDescSetBindingHash[c]) {
+					_capturedStates->_currentDescSet[c] = nullptr;
+					_capturedStates->_sequentialDescSetBindingHash[c] = 0;
+				}
+			}
+			for (; c<s_maxBoundDescriptorSetCount; ++c) {
+				_capturedStates->_currentDescSet[c] = nullptr;
+				_capturedStates->_sequentialDescSetBindingHash[c] = 0;
+			}
+		}
 	}
 
 	NumericUniformsInterface SharedEncoder::BeginNumericUniformsInterface()

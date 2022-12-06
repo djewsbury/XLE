@@ -52,7 +52,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		IteratorRange<const uint64_t*> 	GetDescriptorSetBindingNames() const;
 		IteratorRange<const uint64_t*> 	GetPushConstantsBindingNames() const;
-		const VkPushConstantRange&		GetPushConstantsRange(unsigned idx) const;		
+		const VkPushConstantRange&		GetPushConstantsRange(unsigned idx) const;
+
+		IteratorRange<const uint64_t*> 	GetSequentialDescSetHashes() const;
 
 		void ValidatePushConstantsRange(unsigned offset, unsigned size, VkShaderStageFlags stageFlags) const;
 
@@ -101,6 +103,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkPushConstantRange		_pushConstantRanges[s_maxPushConstantBuffers];
 		unsigned				_descriptorSetCount;
 		unsigned 				_pushConstantBufferCount;
+		uint64_t				_sequentialDescSetHashes[s_maxBoundDescriptorSetCount];
 
 		uint64_t				_descriptorSetBindingNames[s_maxBoundDescriptorSetCount];
 		uint64_t				_pushConstantBufferBindingNames[s_maxPushConstantBuffers];
@@ -158,6 +161,11 @@ namespace RenderCore { namespace Metal_Vulkan
 	inline unsigned CompiledPipelineLayout::GetDescriptorSetCount() const
 	{
 		return _descriptorSetCount;
+	}
+
+	inline IteratorRange<const uint64_t*> CompiledPipelineLayout::GetSequentialDescSetHashes() const
+	{
+		return MakeIteratorRange(_sequentialDescSetHashes, &_sequentialDescSetHashes[_descriptorSetCount]);
 	}
 
 	inline void CompiledPipelineLayout::ValidatePushConstantsRange(unsigned offset, unsigned size, VkShaderStageFlags stageFlags) const

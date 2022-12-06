@@ -455,7 +455,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			uint64_t _boundLooseResources = 0;
 			uint64_t _boundLooseSamplerStates = 0;
 
-			void Finalize();
+			void Finalize(const CompiledPipelineLayout& pipelineLayout);
 		};
 		GroupRules _group[4];
 
@@ -925,7 +925,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	};
 
-	void BoundUniforms::ConstructionHelper::GroupRules::Finalize()
+	void BoundUniforms::ConstructionHelper::GroupRules::Finalize(const CompiledPipelineLayout& pipelineLayout)
 	{
 		// Hash the contents of all of the rules, so we can determine when 2 binding operations
 		// do the same thing
@@ -945,7 +945,24 @@ namespace RenderCore { namespace Metal_Vulkan
 			[](const auto& lhs, const auto& rhs) {
 				return lhs._descriptorSetIdx < rhs._descriptorSetIdx;
 			});
-		auto hash = DefaultSeed64;
+
+
+		uint64_t hash;
+
+		// In Vulkan; descriptor sets earlier in the pipeline layout determine positioning for descriptors
+		// in later descriptor sets
+		// We can account for this by hashing in the layout information for all descriptor sets up to the last
+		// one we write to. In this way, a group will be incompatible with another BoundUniform's group based
+		// not just on the contents of the particular desc sets it's written to, but also if there's a difference
+		// in previous desc sets
+		int lastDescSetWrittenTo = -1;
+		for (const auto& r:_fixedDescriptorSetRules) lastDescSetWrittenTo = std::max(lastDescSetWrittenTo, int(r._outputSlot));
+		for (const auto& r:_adaptiveSetRules) lastDescSetWrittenTo = std::max(lastDescSetWrittenTo, int(r._descriptorSetIdx));
+		if (lastDescSetWrittenTo > 0) {
+			hash = pipelineLayout.GetSequentialDescSetHashes()[lastDescSetWrittenTo-1];
+		} else
+		 	hash = DefaultSeed64;
+
 		hash = Hash64(AsPointer(_pushConstantsRules.begin()), AsPointer(_pushConstantsRules.end()), hash);
 		hash = Hash64(AsPointer(_fixedDescriptorSetRules.begin()), AsPointer(_fixedDescriptorSetRules.end()), hash);
 		for (const auto& a:_adaptiveSetRules)
@@ -1058,7 +1075,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 
 		for (unsigned c=0; c<4; ++c) {
-			helper._group[c].Finalize();
+			helper._group[c].Finalize(*_pipelineLayout);
 			_group[c]._adaptiveSetRules = std::move(helper._group[c]._adaptiveSetRules);
 			_group[c]._fixedDescriptorSetRules = std::move(helper._group[c]._fixedDescriptorSetRules);
 			_group[c]._pushConstantsRules = std::move(helper._group[c]._pushConstantsRules);
@@ -1106,7 +1123,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 
 		for (unsigned c=0; c<4; ++c) {
-			helper._group[c].Finalize();
+			helper._group[c].Finalize(*_pipelineLayout);
 			_group[c]._adaptiveSetRules = std::move(helper._group[c]._adaptiveSetRules);
 			_group[c]._fixedDescriptorSetRules = std::move(helper._group[c]._fixedDescriptorSetRules);
 			_group[c]._pushConstantsRules = std::move(helper._group[c]._pushConstantsRules);
@@ -1158,7 +1175,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 
 		for (unsigned c=0; c<4; ++c) {
-			helper._group[c].Finalize();
+			helper._group[c].Finalize(*_pipelineLayout);
 			_group[c]._adaptiveSetRules = std::move(helper._group[c]._adaptiveSetRules);
 			_group[c]._fixedDescriptorSetRules = std::move(helper._group[c]._fixedDescriptorSetRules);
 			_group[c]._pushConstantsRules = std::move(helper._group[c]._pushConstantsRules);

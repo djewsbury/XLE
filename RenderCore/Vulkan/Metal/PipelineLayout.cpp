@@ -96,6 +96,17 @@ namespace RenderCore { namespace Metal_Vulkan
 			MakeIteratorRange(rawDescriptorSetLayouts, &rawDescriptorSetLayouts[_descriptorSetCount]),
 			MakeIteratorRange(_pushConstantRanges, &_pushConstantRanges[_pushConstantBufferCount]));
 
+		// When we switch from one pipeline layout to another, we retain descriptor set bindings upto the point
+		// where the descriptor sets layouts are not perfectly identical. Ie, internally the driver is rolling
+		// the separate descriptor sets into a single long array, but perhaps the amount of space in that array
+		// varies between descriptor types. Therefore the position of a descriptor in a particular set depends
+		// on the descriptor sets that came before.
+		_sequentialDescSetHashes[0] = _descriptorSetLayouts[0] ? _descriptorSetLayouts[0]->GetHashCode() : DefaultSeed64;
+		for (unsigned c=1; c<s_maxBoundDescriptorSetCount; ++c) {
+			if (_descriptorSetLayouts[c]) _sequentialDescSetHashes[c] = HashCombine(_descriptorSetLayouts[c]->GetHashCode(), _sequentialDescSetHashes[c-1]);
+			else _sequentialDescSetHashes[c] = _sequentialDescSetHashes[c-1];
+		}
+
 		#if defined(_DEBUG)
 			// generate a validation buffer for push constant ranges
 			// we're a little more permissive with range overlaps here than Vulkan may actually be...

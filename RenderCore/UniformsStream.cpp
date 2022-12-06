@@ -169,6 +169,14 @@ namespace RenderCore
 		return res;
 	}
 
+	DescriptorSetSignature::DescriptorSetSignature(std::initializer_list<std::pair<DescriptorSlot, uint64_t>> init)
+	{
+		_slots.reserve(init.size());
+		_slotNames.reserve(init.size());
+		for (const auto& i:init) _slots.push_back(i.first);
+		for (const auto& i:init) _slotNames.push_back(i.second);
+	}
+
 	void PipelineLayoutInitializer::AppendDescriptorSet(
 		const std::string& name,
 		const DescriptorSetSignature& signature,

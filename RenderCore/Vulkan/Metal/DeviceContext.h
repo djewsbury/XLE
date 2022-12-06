@@ -158,7 +158,8 @@ namespace RenderCore { namespace Metal_Vulkan
     {
     public:
 		const void* _currentPipeline = nullptr;
-		const void* _currentDescSet[s_maxBoundDescriptorSetCount] = {nullptr};
+		const void* _currentDescSet[s_maxBoundDescriptorSetCount] = { nullptr };
+		uint64_t _sequentialDescSetBindingHash[s_maxBoundDescriptorSetCount] {};
 	};
 
 	class SharedEncoder
@@ -166,7 +167,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	public:
 		NumericUniformsInterface	BeginNumericUniformsInterface();
 
-		void SetPipelineLayout(ICompiledPipelineLayout&);
+		void BindPipelineLayout(ICompiledPipelineLayout&);
 
 		void BeginStateCapture(CapturedStates& capturedStates);
 		void EndStateCapture();

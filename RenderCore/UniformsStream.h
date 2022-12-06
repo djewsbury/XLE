@@ -147,8 +147,9 @@ namespace RenderCore
 		std::vector<std::shared_ptr<ISampler>> _fixedSamplers;		// this is parallel to "_slots" -- ie, it applies to the slot with the corresponding index
 		uint64_t GetHashIgnoreNames() const;
 
-		DescriptorSetSignature() {}
+		DescriptorSetSignature() = default;
 		DescriptorSetSignature(std::initializer_list<DescriptorSlot> init) : _slots(std::move(init)) {}
+		DescriptorSetSignature(std::initializer_list<std::pair<DescriptorSlot, uint64_t>> init);
 	};
 
 	class DescriptorSetInitializer
@@ -187,7 +188,7 @@ namespace RenderCore
 		void AppendDescriptorSet(
 			const std::string& name,
 			const DescriptorSetSignature& signature,
-			PipelineType _pipelineType);
+			PipelineType pipelineType);
 
 		void AppendPushConstants(
 			const std::string& name,

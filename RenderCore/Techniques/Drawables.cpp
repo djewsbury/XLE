@@ -126,7 +126,7 @@ namespace RenderCore { namespace Techniques
 					++pipelineLookupCount;
 
 					if (currentPipelineLayout != pipeline->_pipelineLayout.get()) {
-						encoder.SetPipelineLayout(*pipeline->_pipelineLayout);
+						encoder.BindPipelineLayout(*pipeline->_pipelineLayout);
 						currentPipelineLayout = pipeline->_pipelineLayout.get();
 						++pipelineLayoutChangeCount;
 					}
