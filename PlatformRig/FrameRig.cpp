@@ -344,8 +344,11 @@ namespace PlatformRig
                     Techniques::PreregisteredAttachment::State::Uninitialized,
                     BindFlag::PresentationSrc
                 });
-            _mainOverlaySys->OnRenderTargetUpdate(MakeIteratorRange(preregisteredAttachments), fbProps, MakeIteratorRange(_pimpl->_techniqueContext._systemAttachmentFormats));
-            _pimpl->_mainOverlayRigTargetConfig = Techniques::HashPreregisteredAttachments(MakeIteratorRange(preregisteredAttachments), fbProps);
+            auto cfgHash = Techniques::HashPreregisteredAttachments(MakeIteratorRange(preregisteredAttachments), fbProps);
+            if (cfgHash != _pimpl->_mainOverlayRigTargetConfig) {
+                _mainOverlaySys->OnRenderTargetUpdate(MakeIteratorRange(preregisteredAttachments), fbProps, MakeIteratorRange(_pimpl->_techniqueContext._systemAttachmentFormats));
+                _pimpl->_mainOverlayRigTargetConfig = cfgHash;
+            }
         } else {
             _pimpl->_mainOverlayRigTargetConfig = 0;
         }
@@ -360,8 +363,11 @@ namespace PlatformRig
                     Techniques::PreregisteredAttachment::State::Initialized,
                     BindFlag::RenderTarget
                 });
-            _debugScreenOverlaySystem->OnRenderTargetUpdate(MakeIteratorRange(preregisteredAttachments), fbProps, MakeIteratorRange(_pimpl->_techniqueContext._systemAttachmentFormats));
-            _pimpl->_debugScreensTargetConfig = Techniques::HashPreregisteredAttachments(MakeIteratorRange(preregisteredAttachments), fbProps);
+            auto cfgHash = Techniques::HashPreregisteredAttachments(MakeIteratorRange(preregisteredAttachments), fbProps);
+            if (cfgHash != _pimpl->_debugScreensTargetConfig) {
+                _debugScreenOverlaySystem->OnRenderTargetUpdate(MakeIteratorRange(preregisteredAttachments), fbProps, MakeIteratorRange(_pimpl->_techniqueContext._systemAttachmentFormats));
+                _pimpl->_debugScreensTargetConfig = _pimpl->_debugScreensTargetConfig;
+            }
         } else {
             _pimpl->_debugScreensTargetConfig = 0;
         }

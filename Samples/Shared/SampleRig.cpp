@@ -82,7 +82,7 @@ namespace Sample
         ConsoleRig::AttachablePtr<EntityInterface::IEntityMountingTree> entityMountingTree = EntityInterface::CreateMountingTree();
         ::ConsoleRig::GlobalServices::GetInstance().LoadDefaultPlugins();
 
-            // Many objects are initialized by via helper objects called "apparatues". These construct and destruct
+            // Many objects are initialized by via helper objects called "apparatuses". These construct and destruct
             // the objects required to do meaningful work. Often they also initialize the "services" singletons
             // as they go along
             // We separate this initialization work like this to provide some flexibility. It's only necessary to
@@ -139,6 +139,10 @@ namespace Sample
             techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
 
             TRY {
+                    // Pump a single frame to ensure we have some content when the window appears (and then show it)
+                frameRig.ExecuteFrame(*sampleGlobals._windowApparatus);
+                sampleGlobals._windowApparatus->_osWindow->ShowWindow();
+
                     //  Finally, we execute the frame loop
                 while (PlatformRig::OverlappedWindow::DoMsgPump() != PlatformRig::OverlappedWindow::PumpResult::Terminate) {
                         // ------- Render ----------------------------------------

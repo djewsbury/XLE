@@ -179,6 +179,11 @@ namespace PlatformRig
         _pimpl->_windowHandlers.push_back(handler);
     }
 
+    void OverlappedWindow::ShowWindow(bool newState)
+    {
+        ::ShowWindow(_pimpl->_hwnd, newState ? SW_SHOWNORMAL : SW_HIDE);
+    }
+
     OverlappedWindow::OverlappedWindow() 
     {
         _pimpl = std::make_unique<Pimpl>();
@@ -225,7 +230,6 @@ namespace PlatformRig
         }
 
         SetWindowLongPtr(_pimpl->_hwnd, GWLP_USERDATA, (LONG_PTR)_pimpl.get());
-        ShowWindow(_pimpl->_hwnd, SW_SHOWNORMAL);
 
             //  Create input translator -- used to translate between windows messages
             //  and the cross platform input-handling interface
