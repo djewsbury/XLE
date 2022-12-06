@@ -360,11 +360,12 @@ namespace RenderCore { namespace Assets
     {
         uint64_t result = seed;
         for (const auto&e:_elements) {
-            // note -- we have to carefully hash only the elements that meaningfully effect the
-            //
             result = HashCombine(e._hash, result);
-            result = Hash64(&e._type, &e._arrayElementStride+1, result);
-            result = HashCombine(Hash64(e._conditions), result);
+            auto h = (uint64_t(e._type._arrayCount) << 32ull) | (uint64_t(e._type._typeHint) << 16ull) | uint64_t(e._type._type);
+            result = HashCombine(h, result);
+            result = HashCombine(uint64_t(e._arrayElementStride) << 32ull | e._arrayElementCount, result);
+            if (!e._conditions.empty())
+                result = Hash64(e._conditions, result);
         }
         return result;
     }
