@@ -83,6 +83,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::IDeformAcceleratorPool> _deformAccelerators;
 		std::atomic<bool> _activeUpdate;
 		bool _pendingClearOfProbeUniforms = true;
+		bool _pendingStaticTableInit = true;
 
 		struct StaticProbePrepareHelper
 		{
@@ -300,8 +301,12 @@ namespace RenderCore { namespace LightingEngine
 
 	void ShadowProbes::CompleteInitialization(IThreadContext& threadContext)
 	{
-		auto tableRes = _pimpl->_staticTable.get();
-		Metal::CompleteInitialization(*Metal::DeviceContext::Get(threadContext), MakeIteratorRange(&tableRes, &tableRes+1));
+		if (_pimpl->_pendingStaticTableInit) {
+			// Ensure that we initialize all subresources into depth buffer's ShaderResource state
+			// individual subresources will be switched to this state when rendered to; but Vulkan validation layer still complains about the unwritten layers
+			auto tableRes = _pimpl->_staticTable.get();
+			Metal::BarrierHelper{*Metal::DeviceContext::Get(threadContext)}.Add(*tableRes, Metal::BarrierResourceUsage::NoState(), BindFlag::ShaderResource);
+		}
 
 		if (_pimpl->_pendingClearOfProbeUniforms) {
 			auto probeUniformsSize = sizeof(CB_StaticShadowProbeDesc)*6*_pimpl->_config._maxStaticProbes;
@@ -364,6 +369,7 @@ namespace RenderCore { namespace LightingEngine
 		auto device = _pimpl->_pipelineAccelerators->GetDevice().get();
 		_pimpl->_staticTable = device->CreateResource(CreateDesc(BindFlag::ShaderResource | BindFlag::DepthStencil | BindFlag::TransferDst, staticDatabaseDesc), "probe-prepare");
 		_pimpl->_staticTableSRV = _pimpl->_staticTable->CreateTextureView(BindFlag::ShaderResource);
+		_pimpl->_pendingStaticTableInit = true;
 
 		_pimpl->_probeUniforms = device->CreateResource(
 			CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(CB_StaticShadowProbeDesc)*staticDatabaseDesc._arrayCount, sizeof(CB_StaticShadowProbeDesc))), "shadow-probe-list");
