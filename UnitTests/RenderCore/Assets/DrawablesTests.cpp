@@ -170,8 +170,10 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
-			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM));
+			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM_SRGB));
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
+
+		testHelper->BeginFrameCapture();
 		
 		/////////////////////////////////////////////////////////////////
 
@@ -301,8 +303,6 @@ namespace UnitTests
 			for (const auto&pkt:pkts)
 				PrepareAndStall(techniqueTestApparatus, *cfgId, pkt);
 
-			testHelper->BeginFrameCapture();
-
 			for (unsigned c=0; c<1; ++c) {
 				{
 					auto rpi = fbHelper.BeginRenderPass(*threadContext);
@@ -320,9 +320,9 @@ namespace UnitTests
 
 				fbHelper.SaveImage(*threadContext, "drawables-render-model");
 			}
-
-			testHelper->EndFrameCapture();
 		}
+
+		testHelper->EndFrameCapture();
 
 		/////////////////////////////////////////////////////////////////
 

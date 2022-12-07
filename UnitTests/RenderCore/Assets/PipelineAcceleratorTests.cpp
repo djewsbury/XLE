@@ -135,7 +135,7 @@ namespace UnitTests
 		mainSubpass.AppendOutput(0);
 
 		std::vector<AttachmentDesc> attachments;
-		attachments.push_back(AttachmentDesc{Format::R8G8B8A8_UNORM});
+		attachments.push_back(AttachmentDesc{Format::R8G8B8A8_UNORM_SRGB});
 		std::vector<SubpassDesc> subpasses;
 		subpasses.push_back(mainSubpass);
 
@@ -317,7 +317,7 @@ namespace UnitTests
 			auto threadContext = testHelper->_device->GetImmediateContext();
 			auto targetDesc = CreateDesc(
 				BindFlag::RenderTarget,
-				TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM));
+				TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM_SRGB));
 			UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 			auto cfgIdWithColor = mainPool->CreateSequencerConfig(
 				"cfgIdWithColor",
@@ -463,7 +463,7 @@ namespace UnitTests
 			auto threadContext = testHelper->_device->GetImmediateContext();
 			auto targetDesc = CreateDesc(
 				BindFlag::RenderTarget | BindFlag::TransferSrc,
-				TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM));
+				TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM_SRGB));
 			UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 			
 			auto patches = GetPatchCollectionFromText(s_patchCollectionBasicTexturing);
@@ -563,7 +563,7 @@ namespace UnitTests
 			auto threadContext = testHelper->_device->GetImmediateContext();
 			auto targetDesc = CreateDesc(
 				BindFlag::RenderTarget | BindFlag::TransferSrc,
-				TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM));
+				TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM_SRGB));
 			UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 
 			std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promisedTechDel;

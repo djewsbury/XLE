@@ -353,7 +353,7 @@ namespace UnitTests
 		UInt2 workingRes { 2560, 1440 };
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::ShaderResource,
-			TextureDesc::Plain2D(workingRes[0], workingRes[1], Format::R8G8B8A8_UNORM /*Format::R11G11B10_FLOAT*/ /*Format::R32G32B32A32_FLOAT*/ ));
+			TextureDesc::Plain2D(workingRes[0], workingRes[1], Format::R8G8B8A8_UNORM_SRGB /*Format::R11G11B10_FLOAT*/ /*Format::R32G32B32A32_FLOAT*/ ));
 
 		RenderCore::Techniques::CameraDesc camera;
 		camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{-1.f, 0.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, 1.0f}), Float3{10.0f, 0.f, 0.0f});

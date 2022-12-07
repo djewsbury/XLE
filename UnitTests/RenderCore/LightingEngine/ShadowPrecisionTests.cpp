@@ -168,11 +168,11 @@ namespace UnitTests
 
 				auto stripeTargetDesc = CreateDesc(
 					BindFlag::RenderTarget | BindFlag::TransferSrc,
-					TextureDesc::Plain2D(2048, stripeHeight, RenderCore::Format::R8G8B8A8_UNORM));
+					TextureDesc::Plain2D(2048, stripeHeight, RenderCore::Format::R8G8B8A8_UNORM_SRGB));
 
 				auto stitchedImageDesc = CreateDesc(
 					BindFlag::TransferDst, AllocationRules::HostVisibleRandomAccess,
-					TextureDesc::Plain2D(2048, stripes*stripeHeight, RenderCore::Format::R8G8B8A8_UNORM));
+					TextureDesc::Plain2D(2048, stripes*stripeHeight, RenderCore::Format::R8G8B8A8_UNORM_SRGB));
 				auto stitchedImage = testHelper->_device->CreateResource(stitchedImageDesc, "ShadowPrecisionTests");
 				UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, stripeTargetDesc);
 				auto parsingContext = BeginParsingContext(testApparatus, *threadContext, stripeTargetDesc, camera);
@@ -217,7 +217,7 @@ namespace UnitTests
 			{
 				auto targetDesc = CreateDesc(
 					BindFlag::RenderTarget | BindFlag::TransferSrc,
-					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM));
+					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM_SRGB));
 
 				auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
@@ -457,7 +457,7 @@ namespace UnitTests
 			{
 				auto targetDesc = CreateDesc(
 					BindFlag::RenderTarget | BindFlag::TransferSrc,
-					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM));
+					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM_SRGB));
 
 				auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, sceneCamera);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();

@@ -250,7 +250,7 @@ namespace UnitTests
 
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
-			TextureDesc::Plain2D(1024, 1024, RenderCore::Format::R8G8B8A8_UNORM));
+			TextureDesc::Plain2D(1024, 1024, RenderCore::Format::R8G8B8A8_UNORM_SRGB));
 		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, Techniques::CameraDesc{});
 
 		const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
