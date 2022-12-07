@@ -1004,7 +1004,11 @@ namespace RenderCore { namespace Techniques
 		auto result = std::make_shared<SequencerConfig>(std::move(cfg));
 		result->_name = name;
 		result->_pipelineLayout = result->_delegate->GetPipelineLayout();
-		auto layoutInitializer = result->_pipelineLayout->MakePipelineLayoutInitializer(GetDefaultShaderLanguage(), _samplerPool.get());
+		// Pass in empty auto initializers to allow pipeline layouts with AutoDescriptorSet, but act as if the shader
+		// doesn't use anything in those descriptor sets
+		auto layoutInitializer = result->_pipelineLayout->MakePipelineLayoutInitializerWithAutoMatching(
+			IteratorRange<const PipelineLayoutInitializer**>{},
+			GetDefaultShaderLanguage(), _samplerPool.get());
 		result->_compiledPipelineLayout = _pipelineCollection->CreatePipelineLayout(layoutInitializer, result->_name);
 		result->_cfgId = cfgId;
 		#if defined(_DEBUG)

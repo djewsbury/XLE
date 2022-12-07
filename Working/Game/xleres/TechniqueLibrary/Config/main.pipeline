@@ -1,14 +1,14 @@
-#include "numeric.pipeline"
 #include "sequencer.pipeline"
 #include "forward.pipeline"
 #include "shadow-template.pipeline"
 
 DescriptorSet Material {};		// replaced by PipelineAcceleratorPool
 DescriptorSet Spacer {};
+DescriptorSet Numeric {};		// filled in automatically on a per-shader level
 
 PipelineLayout GraphicsMain
 {
-	DescriptorSet Numeric;					// 0
+	AutoDescriptorSet Numeric;				// 0
 	DescriptorSet Sequencer;				// 1
 	DescriptorSet Spacer;					// 2
 	DescriptorSet Spacer;					// 3
@@ -24,7 +24,7 @@ PipelineLayout GraphicsMain
 
 PipelineLayout GraphicsForwardPlus
 {
-	DescriptorSet Numeric;					// 0
+	AutoDescriptorSet Numeric;				// 0
 	DescriptorSet Sequencer;				// 1
 	DescriptorSet ForwardLighting;			// 2
 	DescriptorSet ShadowTemplate;			// 3
@@ -40,7 +40,7 @@ PipelineLayout GraphicsForwardPlus
 
 PipelineLayout GraphicsProbePrepare
 {
-	DescriptorSet Numeric;					// 0
+	AutoDescriptorSet Numeric;				// 0
 	DescriptorSet Sequencer;				// 1
 	DescriptorSet ProbePrepareLighting;		// 2
 	DescriptorSet Spacer;					// 3

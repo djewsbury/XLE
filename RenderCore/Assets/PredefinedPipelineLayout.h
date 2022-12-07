@@ -105,7 +105,7 @@ namespace RenderCore { namespace Assets
     protected:
         ::Assets::DependencyValidation _depVal;
 
-        PipelineLayoutInitializer MakePipelineLayoutInitializerInternal(IteratorRange<const PipelineLayoutInitializer**>, ShaderLanguage, SamplerPool*) const;
+        PipelineLayoutInitializer MakePipelineLayoutInitializerInternal(IteratorRange<const PipelineLayoutInitializer**>, ShaderLanguage, bool, SamplerPool*) const;
     };
 
 }}

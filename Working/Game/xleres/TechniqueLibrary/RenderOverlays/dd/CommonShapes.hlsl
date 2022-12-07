@@ -10,7 +10,7 @@
 #include "Interfaces.hlsl"
 #include "../../Framework/Binding.hlsl"
 
-cbuffer RoundedRectSettings BIND_NUMERIC_B3
+cbuffer RoundedRectSettings
 {
     float RoundedProportion;
     uint CornerFlags;

@@ -35,19 +35,17 @@ float4x4 	SysUniform_GetPrevWorldToClip() { return PrevWorldToClip; }
 	[[vk::push_constant]] struct LocalTransformStruct
 	{
 		row_major float3x4 LocalToWorld;
-		float3 LocalSpaceView;
-		#if VERTEX_ID_VIEW_INSTANCING
-			uint ViewMask;
-		#else
-			uint Dummy;		// CPU code always writes this, so we need space for it
-		#endif
+		float4 LocalSpaceView;
 	} LocalTransform;
 
 	// note -- these are only available in the vertex shader due to the pipeline layout configuration
 	float3x4 	SysUniform_GetLocalToWorld() { return LocalTransform.LocalToWorld; }
-	float3 		SysUniform_GetLocalSpaceView() { return LocalTransform.LocalSpaceView; }
+	float3 		SysUniform_GetLocalSpaceView() { return LocalTransform.LocalSpaceView.xyz; }
+	#if VERTEX_ID_VIEW_INSTANCING
+		uint	SystemUniforms_GetViewMask() { return asuint(LocalTransform.LocalSpaceView.w); }
+	#endif
 #else
-	cbuffer LocalTransform BIND_NUMERIC_B3
+	cbuffer LocalTransform
 	{
 		row_major float3x4 LocalToWorld;
 		float3 LocalSpaceView;

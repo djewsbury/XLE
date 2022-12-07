@@ -232,7 +232,7 @@ namespace RenderCore { namespace Assets
 
 	PipelineLayoutInitializer PredefinedPipelineLayout::MakePipelineLayoutInitializerInternal(
 		IteratorRange<const PipelineLayoutInitializer**> autoInitializers,
-		ShaderLanguage language, SamplerPool* samplerPool) const
+		ShaderLanguage language, bool callerPassedAutoInitializers, SamplerPool* samplerPool) const
 	{
 		unsigned descSetCount = 0;
 		if (autoInitializers.empty()) { 
@@ -249,7 +249,7 @@ namespace RenderCore { namespace Assets
 			descriptorSetBindings[c]._name = _descriptorSets[c]._name;
 			descriptorSetBindings[c]._pipelineType = _descriptorSets[c]._pipelineType;
 			if (_descriptorSets[c]._isAuto) {
-				if (autoInitializers.empty())
+				if (!callerPassedAutoInitializers)
 					Throw(std::runtime_error("Pipeline layout has auto descriptor sets and cannot be used without reflection information from the shader"));
 
 				descSetSigs.clear();
@@ -338,7 +338,7 @@ namespace RenderCore { namespace Assets
 
 	PipelineLayoutInitializer PredefinedPipelineLayout::MakePipelineLayoutInitializer(ShaderLanguage language, SamplerPool* samplerPool) const
 	{
-		return MakePipelineLayoutInitializerInternal({}, language, samplerPool);
+		return MakePipelineLayoutInitializerInternal({}, language, false, samplerPool);
 	}
 
 	PipelineLayoutInitializer PredefinedPipelineLayout::MakePipelineLayoutInitializerWithAutoMatching(
@@ -346,14 +346,14 @@ namespace RenderCore { namespace Assets
 		ShaderLanguage language, SamplerPool* samplerPool) const
 	{
 		const PipelineLayoutInitializer* inits[] = {&autoInitializer};
-		return MakePipelineLayoutInitializerInternal(MakeIteratorRange(inits), language, samplerPool);
+		return MakePipelineLayoutInitializerInternal(MakeIteratorRange(inits), language, true, samplerPool);
 	}
 
 	PipelineLayoutInitializer PredefinedPipelineLayout::MakePipelineLayoutInitializerWithAutoMatching(
 		IteratorRange<const PipelineLayoutInitializer**> autoInitializers,
 		ShaderLanguage language, SamplerPool* samplerPool) const
 	{
-		return MakePipelineLayoutInitializerInternal(autoInitializers, language, samplerPool);
+		return MakePipelineLayoutInitializerInternal(autoInitializers, language, true, samplerPool);
 	}
 
 	const PredefinedDescriptorSetLayout* PredefinedPipelineLayout::FindDescriptorSet(StringSection<> name) const

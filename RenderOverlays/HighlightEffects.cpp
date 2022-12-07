@@ -39,9 +39,9 @@ namespace RenderOverlays
             vs, ps, definesTable);
 	}
 
-    static std::shared_ptr<ICompiledPipelineLayout> GetMainPipelineLayout(std::shared_ptr<IDevice> device)
+    static std::shared_ptr<ICompiledPipelineLayout> GetVisPipelineLayout(std::shared_ptr<IDevice> device)
     {
-        return ::Assets::ActualizeAssetPtr<Techniques::CompiledPipelineLayoutAsset>(device, MAIN_PIPELINE ":GraphicsMain")->GetPipelineLayout();
+        return ::Assets::ActualizeAssetPtr<Techniques::CompiledPipelineLayoutAsset>(device, VIS_PIPELINE ":VisMain")->GetPipelineLayout();
     }
 
     HighlightByStencilSettings::HighlightByStencilSettings()
@@ -211,7 +211,7 @@ namespace RenderOverlays
         if (!stencilSrv) return;
 
         auto& metalContext = *RenderCore::Metal::DeviceContext::Get(parsingContext.GetThreadContext());
-        auto pipelineLayout = GetMainPipelineLayout(parsingContext.GetThreadContext().GetDevice());
+        auto pipelineLayout = GetVisPipelineLayout(parsingContext.GetThreadContext().GetDevice());
         auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*pipelineLayout);
         ExecuteHighlightByStencil(metalContext, encoder, pipelineLayout, stencilSrv.get(), settings, onlyHighlighted, s_inputAttachmentMode);
     }
@@ -239,7 +239,7 @@ namespace RenderOverlays
 		Techniques::ParsingContext& parsingContext)
     {
         using namespace RenderCore;
-        auto pipelineLayout = GetMainPipelineLayout(parsingContext.GetThreadContext().GetDevice());
+        auto pipelineLayout = GetVisPipelineLayout(parsingContext.GetThreadContext().GetDevice());
         _pimpl = std::make_unique<Pimpl>(std::move(pipelineLayout));
         _pimpl->_parsingContext = &parsingContext;
 

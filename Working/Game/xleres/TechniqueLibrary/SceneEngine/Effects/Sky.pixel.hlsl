@@ -5,16 +5,14 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../../LightingEngine/LightingAlgorithm.hlsl"
-#include "../../Framework/SystemUniforms.hlsl"
 #include "../../Framework/CommonResources.hlsl"
 #include "../../Framework/VSOUT.hlsl"
 #include "../../Utility/Colour.hlsl"
-#include "../../Framework/Binding.hlsl"
 
 #if SKY_PROJECTION==1
-	Texture2D ReflectionBox[3];
+	Texture2D ReflectionBox[3] : register(t0, space0);
 #elif SKY_PROJECTION==5
-	TextureCube ReflectionCube;
+	TextureCube ReflectionCube : register(t0, space0);
 #endif
 
 float3 CalculateBaseSkyColor(float2 texCoord, float3 viewFrustumVector)

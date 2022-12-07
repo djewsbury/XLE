@@ -7,11 +7,11 @@
 #include "../../Math/EdgeDetection.hlsl"
 #include "../../Framework/Binding.hlsl"
 
-cbuffer Settings BIND_NUMERIC_B3
+cbuffer Settings : register(b3, space0)
 {
 	float3 OutlineColour;
 }
-Texture2D InputTexture BIND_NUMERIC_T0;
+Texture2D InputTexture : register(t0, space0);
 
 float4 main(float4 pos : SV_Position) : SV_Target0
 {
@@ -45,7 +45,7 @@ float4 main(float4 pos : SV_Position) : SV_Target0
 	return float4(alpha * OutlineColour, alpha);
 }
 
-cbuffer ShadowHighlightSettings BIND_NUMERIC_B3
+cbuffer ShadowHighlightSettings : register(b3, space0)
 {
 	float4 ShadowColor;
 }

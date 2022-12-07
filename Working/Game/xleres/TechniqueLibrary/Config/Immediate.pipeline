@@ -1,12 +1,12 @@
-#include "numeric.pipeline"
 #include "sequencer.pipeline"
 
 DescriptorSet Material {};
 DescriptorSet Spacer {};
+DescriptorSet Numeric {};
 
 PipelineLayout ImmediateDrawables
 {
-	DescriptorSet Numeric;
+	AutoDescriptorSet Numeric;
 	DescriptorSet Sequencer;
 	DescriptorSet Spacer;
 	DescriptorSet Spacer;

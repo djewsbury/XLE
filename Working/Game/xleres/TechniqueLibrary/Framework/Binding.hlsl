@@ -80,15 +80,6 @@
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define BIND_NUMERIC_T0 : register(t0, space0)
-#define BIND_NUMERIC_T1 : register(t1, space0)
-#define BIND_NUMERIC_T2 : register(t2, space0)
-
-#define BIND_NUMERIC_B3 : register(b3, space0)
-#define BIND_NUMERIC_B4 : register(b4, space0)
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
 #if defined(LIGHT_RESOLVE_SHADER)
     // Light operator for deferred
     #define BIND_SHADOW_B0 : register(b0, space3)

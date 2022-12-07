@@ -7,7 +7,7 @@
 #include "../../Math/EdgeDetection.hlsl"
 #include "../../Utility/DistinctColors.hlsl"
 
-cbuffer Settings BIND_NUMERIC_B3
+cbuffer Settings : register(b3, space0)
 {
 	float3 OutlineColour;
 	uint HighlightedMarker;
@@ -29,11 +29,11 @@ cbuffer Settings BIND_NUMERIC_B3
 		// the stencil parts (assuming the view was created with X24_TYPELESS_G8_UINT
 		// or some similar stencil-only format).
 		// But, on other hardware we must explicitly access the "G" channel.
-	Texture2D<uint2>	StencilInput BIND_NUMERIC_T0;
+	Texture2D<uint2>	StencilInput : register(t0, space0);
 #elif INPUT_MODE == 1
- 	Texture2D			StencilInput BIND_NUMERIC_T0;
+ 	Texture2D			StencilInput : register(t0, space0);
 #elif INPUT_MODE == 2
-	[[vk::input_attachment_index(0)]] SubpassInput<uint>	StencilInput	 	BIND_NUMERIC_T2;
+	[[vk::input_attachment_index(0)]] SubpassInput<uint>	StencilInput	 	: register(t2, space0);
 #endif
 
 static const uint DummyMarker = 0xffffffff;

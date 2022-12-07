@@ -38,7 +38,7 @@
     }
 #else
 
-    Texture1D DistinctColors BIND_NUMERIC_T1;
+    Texture1D DistinctColors : register(t1, space0);
     float3 GetDistinctFloatColour(uint index)
     {
         uint dims;

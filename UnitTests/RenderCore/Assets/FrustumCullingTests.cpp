@@ -49,7 +49,7 @@ namespace UnitTests
 	static const char* s_localPixelShader = R"--(
 		#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
 
-		cbuffer Settings BIND_NUMERIC_B3
+		cbuffer Settings
 		{
 			float4 Color;
 		} 

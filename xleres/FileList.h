@@ -43,6 +43,7 @@
 #define CASCADE_VIS_HLSL "xleres/Deferred/debugging/cascadevis.pixel.hlsl"
 #define HIGHLIGHT_VIS_PIXEL_HLSL "xleres/TechniqueLibrary/ToolsRig/Vis/HighlightVis.pixel.hlsl"
 #define OUTLINE_VIS_PIXEL_HLSL "xleres/TechniqueLibrary/ToolsRig/Vis/outlinehighlight.pixel.hlsl"
+#define VIS_PIPELINE "xleres/TechniqueLibrary/ToolsRig/Vis/vis.pipeline"
 #define SOLID_WIREFRAME_GEO_HLSL "xleres/TechniqueLibrary/ToolsRig/Vis/solidwireframe.geo.hlsl"
 #define SOLID_WIREFRAME_PIXEL_HLSL "xleres/TechniqueLibrary/ToolsRig/Vis/solidwireframe.pixel.hlsl"
 
