@@ -387,6 +387,8 @@ namespace SceneEngine
 				*_pimpl->_sequencerConfig, drawablePkt, *_pimpl->_pipelineLayout);
 		} CATCH(...) {
 			_pimpl->_pipelineAccelerators->UnlockForReading();
+			parsingContext.GetUniformDelegateManager()->UnbindShaderResourceDelegate(*_pimpl->_res->_rayDefinition);
+			parsingContext.GetUniformDelegateManager()->InvalidateUniforms();
 			throw;
 		} CATCH_END
 		_pimpl->_pipelineAccelerators->UnlockForReading();

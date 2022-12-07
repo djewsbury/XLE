@@ -136,16 +136,16 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkPipelineShaderStageCreateInfo shaderStages[3];
 		uint32_t shaderStageCount = 0;
 		std::string vsEntryPoint = _shaderProgram->GetCompiledCode(ShaderStage::Vertex).GetEntryPoint().AsString();
-		std::string psEntryPoint = _shaderProgram->GetCompiledCode(ShaderStage::Geometry).GetEntryPoint().AsString();
-		std::string gsEntryPoint = _shaderProgram->GetCompiledCode(ShaderStage::Pixel).GetEntryPoint().AsString();
+		std::string gsEntryPoint = _shaderProgram->GetCompiledCode(ShaderStage::Geometry).GetEntryPoint().AsString();
+		std::string psEntryPoint = _shaderProgram->GetCompiledCode(ShaderStage::Pixel).GetEntryPoint().AsString();
 		const auto& vs = _shaderProgram->GetModule(ShaderStage::Vertex);
 		const auto& gs = _shaderProgram->GetModule(ShaderStage::Geometry);
 		const auto& ps = _shaderProgram->GetModule(ShaderStage::Pixel);
 		if (gs && !factory.GetXLEFeatures()._geometryShaders)
 			Throw(std::runtime_error("Attempting to create a pipeline with a geometry shader, but the geometry shaders feature is not enabled in DeviceFeatures"));
 		if (vs) shaderStages[shaderStageCount++] = BuildShaderStage(vs.get(), VK_SHADER_STAGE_VERTEX_BIT, vsEntryPoint);
-		if (gs) shaderStages[shaderStageCount++] = BuildShaderStage(gs.get(), VK_SHADER_STAGE_GEOMETRY_BIT, psEntryPoint);
-		if (ps) shaderStages[shaderStageCount++] = BuildShaderStage(ps.get(), VK_SHADER_STAGE_FRAGMENT_BIT, gsEntryPoint);
+		if (gs) shaderStages[shaderStageCount++] = BuildShaderStage(gs.get(), VK_SHADER_STAGE_GEOMETRY_BIT, gsEntryPoint);
+		if (ps) shaderStages[shaderStageCount++] = BuildShaderStage(ps.get(), VK_SHADER_STAGE_FRAGMENT_BIT, psEntryPoint);
 		assert(shaderStageCount != 0);
 
 		VkDynamicState dynamicStateEnables[4];
