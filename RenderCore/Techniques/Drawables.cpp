@@ -76,7 +76,6 @@ namespace RenderCore { namespace Techniques
 		VisibilityMarkerId acceleratorVisibilityId)
 	{
 		auto& uniformDelegateMan = *parserContext.GetUniformDelegateManager();
-		uniformDelegateMan.InvalidateUniforms();
 		uniformDelegateMan.BringUpToDateGraphics(parserContext);
 
 		const UniformsStreamInterface& globalUSI = uniformDelegateMan.GetInterface();
