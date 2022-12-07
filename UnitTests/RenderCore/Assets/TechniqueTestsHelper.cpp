@@ -48,11 +48,14 @@ namespace UnitTests
 		_techniqueContext->_commonResources = _commonResources;
 		_techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
 		auto sequencerDescSetLayout = RenderCore::Techniques::FindLayout(graphicsMainLayout, "Sequencer", PipelineType::Graphics);
-		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *sequencerDescSetLayout->GetLayout(), "unittest", *testHelper._device);
+		auto seqSemiConstantGraphics = Techniques::CreateSemiConstantDescriptorSet(*sequencerDescSetLayout->GetLayout(), "unittest", PipelineType::Graphics, *testHelper._device);
+		auto seqSemiConstantCompute = Techniques::CreateSemiConstantDescriptorSet(*sequencerDescSetLayout->GetLayout(), "unittest", PipelineType::Compute, *testHelper._device);
+		_techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet(Hash64("Sequencer"), std::move(seqSemiConstantGraphics));
+		_techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet(Hash64("Sequencer"), std::move(seqSemiConstantCompute));
 		_techniqueContext->_pipelineAccelerators = _pipelineAccelerators;
 		_techniqueContext->_drawablesPool = _drawablesPool;
 		_techniqueContext->_systemAttachmentFormats = Techniques::CalculateDefaultSystemFormats(*testHelper._device);
-		// _techniqueContext->_uniformDelegateManager->AddShaderResourceDelegate(std::make_shared<SystemUniformsDelegate>(*testHelper._device));
+		// _techniqueContext->_uniformDelegateManager->BindShaderResourceDelegate(std::make_shared<SystemUniformsDelegate>(*testHelper._device));
 
 		_commonResources->CompleteInitialization(*testHelper._device->GetImmediateContext());
 	}

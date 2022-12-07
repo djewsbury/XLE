@@ -91,7 +91,7 @@ namespace RenderCore { namespace Techniques
 		assert(_assetServices != nullptr);
 
 		_mainUniformDelegateManager = CreateUniformDelegateManager();
-		_mainUniformDelegateManager->AddShaderResourceDelegate(_systemUniformsDelegate);
+		_mainUniformDelegateManager->BindShaderResourceDelegate(_systemUniformsDelegate);
 
 		// add default semi-constant desc set layout for the sequencer desc set
 		{
@@ -100,7 +100,10 @@ namespace RenderCore { namespace Techniques
 			if (i == descSetLayoutContainer->_descriptorSets.end())
 				Throw(std::runtime_error("Missing 'Sequencer' descriptor set entry in sequencer pipeline file"));
 			_depValPtr.RegisterDependency(descSetLayoutContainer->GetDependencyValidation());
-			_mainUniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *i->second, SEQUENCER_DS ":Sequencer", *_device);
+			auto graphicsSequencerDS = CreateSemiConstantDescriptorSet(*i->second, SEQUENCER_DS ":Sequencer", PipelineType::Graphics, *_device);
+			auto computeSequencerDS = CreateSemiConstantDescriptorSet(*i->second, SEQUENCER_DS ":Sequencer", PipelineType::Compute, *_device);
+			_mainUniformDelegateManager->BindSemiConstantDescriptorSet(Hash64("Sequencer"), std::move(graphicsSequencerDS));
+			_mainUniformDelegateManager->BindSemiConstantDescriptorSet(Hash64("Sequencer"), std::move(computeSequencerDS));
 		}
 	}
 

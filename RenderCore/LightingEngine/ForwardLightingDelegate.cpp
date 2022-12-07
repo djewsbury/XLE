@@ -32,6 +32,7 @@ namespace RenderCore { namespace LightingEngine
 {
 
 	static const uint64_t s_shadowTemplate = Utility::Hash64("ShadowTemplate");
+	static const uint64_t s_forwardLighting = Utility::Hash64("ForwardLighting");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,6 +43,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<SkyOperator> _skyOperator;
 		std::shared_ptr<HierarchicalDepthsOperator> _hierarchicalDepthsOperator;
 		std::shared_ptr<ScreenSpaceReflectionsOperator> _ssrOperator;
+		std::shared_ptr<Techniques::SemiConstantDescriptorSet> _forwardLightingSemiConstant;
 
 		void DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence);
 		void DoToneMap(LightingTechniqueIterator& iterator);
@@ -67,16 +69,18 @@ namespace RenderCore { namespace LightingEngine
 	void ForwardLightingCaptures::ConfigureParsingContext(Techniques::ParsingContext& parsingContext)
 	{
 		_lightScene->ConfigureParsingContext(parsingContext);
-		if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow()) {
+		if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow())
 			// find the prepared shadow associated with the dominant light (if it exists) and make sure it's descriptor set is accessible
-			assert(!parsingContext._extraSequencerDescriptorSet.second);
-			parsingContext._extraSequencerDescriptorSet = { s_shadowTemplate, dominantShadow->GetDescriptorSet() };
-		}
+			parsingContext.GetUniformDelegateManager()->BindFixedDescriptorSet(s_shadowTemplate, *dominantShadow->GetDescriptorSet());
+		assert(_forwardLightingSemiConstant);
+		parsingContext.GetUniformDelegateManager()->BindSemiConstantDescriptorSet(s_forwardLighting, _forwardLightingSemiConstant);
 	}
 
 	void ForwardLightingCaptures::ReleaseParsingContext(Techniques::ParsingContext& parsingContext)
 	{
-		parsingContext._extraSequencerDescriptorSet = {0ull, nullptr};
+		if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow())
+			parsingContext.GetUniformDelegateManager()->UnbindFixedDescriptorSet(*dominantShadow->GetDescriptorSet());
+		parsingContext.GetUniformDelegateManager()->UnbindSemiConstantDescriptorSet(*_forwardLightingSemiConstant);
 		if (_lightScene->_shadowScheduler)
 			_lightScene->_shadowScheduler->ClearPreparedShadows();
 	}
@@ -412,6 +416,8 @@ namespace RenderCore { namespace LightingEngine
 					captures->_lightScene = forwardLightScene;
 					captures->_hierarchicalDepthsOperator = hierarchicalDepthsOperator;
 					captures->_ssrOperator = ssrActual;
+					captures->_forwardLightingSemiConstant = Techniques::CreateSemiConstantDescriptorSet(
+						*techDelBox->_forwardLightingDescSetTemplate, "ForwardLighting", PipelineType::Graphics, *pipelinePool->GetDevice());
 
 					Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps, Techniques::CalculateDefaultSystemFormats(*pipelinePool->GetDevice()) };
 					PreregisterAttachments(stitchingContext);

@@ -58,11 +58,10 @@ namespace RenderCore { namespace Techniques
 		ParameterBox&			GetSubframeShaderSelectors()		{ return _subframeShaderSelectors; }
 
         const std::shared_ptr<IUniformDelegateManager>& GetUniformDelegateManager() { return _uniformDelegateManager; }
-        void SetUniformDelegateManager(std::shared_ptr<IUniformDelegateManager> newMan) { _uniformDelegateManager = newMan; }
+        void SetUniformDelegateManager(std::shared_ptr<IUniformDelegateManager> newMan) { _uniformDelegateManager = std::move(newMan); }
 
         IThreadContext& GetThreadContext() { return *_threadContext; }
 
-        std::pair<uint64_t, const IDescriptorSet*> _extraSequencerDescriptorSet = {0ull, nullptr};
         RenderPassInstance* _rpi = nullptr;
 
         BufferUploads::CommandListID _requiredBufferUploadsCommandList = 0;

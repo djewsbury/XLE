@@ -102,6 +102,14 @@ namespace RenderCore { namespace LightingEngine
 		if (i == _lightingOperatorsPipelineLayoutFile->_descriptorSets.end())
 			Throw(std::runtime_error("Missing ShadowTemplate entry in pipeline layout file"));
 		_dmShadowDescSetTemplate = i->second;
+
+		auto forwardPipelineLayout = ::Assets::ActualizeAssetPtr<Assets::PredefinedPipelineLayoutFile>(FORWARD_PIPELINE);
+		_depVal.RegisterDependency(forwardPipelineLayout->GetDependencyValidation());
+
+		i = forwardPipelineLayout->_descriptorSets.find("ForwardLighting");
+		if (i == forwardPipelineLayout->_descriptorSets.end())
+			Throw(std::runtime_error("Missing ForwardLighting entry in pipeline layout file"));
+		_forwardLightingDescSetTemplate = i->second;
 	}
 
 	LightingEngineApparatus::LightingEngineApparatus(std::shared_ptr<Techniques::DrawingApparatus> drawingApparatus)

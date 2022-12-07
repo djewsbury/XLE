@@ -245,7 +245,7 @@ namespace UnitTests
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
 				auto parsingContext = BeginParsingContext(techniqueTestApparatus, *threadContext);
-				parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(globalDelegate);
+				parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(globalDelegate);
 				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 				auto newVisibility = PrepareAndStall(techniqueTestApparatus, *cfgId, pkt);
 				parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
@@ -308,7 +308,7 @@ namespace UnitTests
 					auto rpi = fbHelper.BeginRenderPass(*threadContext);
 					auto parsingContext = BeginParsingContext(techniqueTestApparatus, *threadContext);
 					parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
-					parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(globalDelegate);
+					parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(globalDelegate);
 					parsingContext.RequireCommandList(renderer->Actualize()->GetCompletionCommandList());
 
 					for (const auto&pkt:pkts)
@@ -456,17 +456,17 @@ namespace UnitTests
 		
 		{
 			auto helper0 = Techniques::CreateUniformDelegateManager();
-			helper0->AddSemiConstantDescriptorSet(Hash64("Sequencer"), fakeSequencerDescSet, "unittest", *testHelper->_device);
-			helper0->AddShaderResourceDelegate(del0);
-			helper0->AddShaderResourceDelegate(del1);
-			helper0->AddUniformDelegate(Hash64("slot-doesnt-exist-0"), udel0);
-			helper0->AddUniformDelegate(Hash64("slot-doesnt-exist-1"), udel0);
-			helper0->AddUniformDelegate(Hash64("GlobalTransform"), udel0);
-			helper0->AddUniformDelegate(Hash64("LocalTransform"), udel0);
-			helper0->AddUniformDelegate(Hash64("slot-doesnt-exist-2"), udel0);
+			helper0->BindSemiConstantDescriptorSet(Hash64("Sequencer"), Techniques::CreateSemiConstantDescriptorSet(fakeSequencerDescSet, "unittest", PipelineType::Graphics, *testHelper->_device));
+			helper0->BindShaderResourceDelegate(del0);
+			helper0->BindShaderResourceDelegate(del1);
+			helper0->BindUniformDelegate(Hash64("slot-doesnt-exist-0"), udel0);
+			helper0->BindUniformDelegate(Hash64("slot-doesnt-exist-1"), udel0);
+			helper0->BindUniformDelegate(Hash64("GlobalTransform"), udel0);
+			helper0->BindUniformDelegate(Hash64("LocalTransform"), udel0);
+			helper0->BindUniformDelegate(Hash64("slot-doesnt-exist-2"), udel0);
 
-			helper0->AddShaderResourceDelegate(del2);
-			helper0->AddUniformDelegate(Hash64("LocalTransform"), udel1);
+			helper0->BindShaderResourceDelegate(del2);
+			helper0->BindUniformDelegate(Hash64("LocalTransform"), udel1);
 
 			helper0->BringUpToDateGraphics(parsingContext);
 			REQUIRE(del2->_resViewQueryCount == 1);
@@ -484,14 +484,14 @@ namespace UnitTests
 
 		{
 			auto helper1 = Techniques::CreateUniformDelegateManager();
-			helper1->AddSemiConstantDescriptorSet(Hash64("Sequencer"), fakeSequencerDescSet, "unittest", *testHelper->_device);
-			helper1->AddShaderResourceDelegate(del0);
-			helper1->AddShaderResourceDelegate(del1);
-			helper1->AddUniformDelegate(Hash64("slot-doesnt-exist-0"), udel0);
-			helper1->AddUniformDelegate(Hash64("slot-doesnt-exist-1"), udel0);
-			helper1->AddUniformDelegate(Hash64("GlobalTransform"), udel0);
-			helper1->AddUniformDelegate(Hash64("LocalTransform"), udel0);
-			helper1->AddUniformDelegate(Hash64("slot-doesnt-exist-2"), udel0);
+			helper1->BindSemiConstantDescriptorSet(Hash64("Sequencer"), Techniques::CreateSemiConstantDescriptorSet(fakeSequencerDescSet, "unittest", PipelineType::Graphics, *testHelper->_device));
+			helper1->BindShaderResourceDelegate(del0);
+			helper1->BindShaderResourceDelegate(del1);
+			helper1->BindUniformDelegate(Hash64("slot-doesnt-exist-0"), udel0);
+			helper1->BindUniformDelegate(Hash64("slot-doesnt-exist-1"), udel0);
+			helper1->BindUniformDelegate(Hash64("GlobalTransform"), udel0);
+			helper1->BindUniformDelegate(Hash64("LocalTransform"), udel0);
+			helper1->BindUniformDelegate(Hash64("slot-doesnt-exist-2"), udel0);
 
 			helper1->BringUpToDateGraphics(parsingContext);
 			REQUIRE(del2->_resViewQueryCount == 1);

@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "TonemapOperator.h"
+#include "ToneMapOperator.h"
 #include "LightingEngineIterator.h"
 #include "RenderStepFragments.h"
 #include "../Techniques/PipelineOperators.h"
@@ -14,10 +14,15 @@
 #include "../../Assets/Continuation.h"
 #include "../../xleres/FileList.h"
 
+#include "../Metal/Resource.h"
+
 namespace RenderCore { namespace LightingEngine 
 {
 	void ToneMapAcesOperator::Execute(Techniques::ParsingContext& parsingContext, IResourceView& ldrOutput, IResourceView& hdrInput)
 	{
+		Metal::BarrierHelper{parsingContext.GetThreadContext()}.Add(*hdrInput.GetResource(), BindFlag::UnorderedAccess, BindFlag::ShaderResource);
+		Metal::BarrierHelper{parsingContext.GetThreadContext()}.Add(*ldrOutput.GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
+
 		auto fbProps = parsingContext._rpi->GetFrameBufferDesc().GetProperties();
 		assert(fbProps._width != 0 && fbProps._height != 0);
 		const unsigned dispatchGroupWidth = 8;
@@ -32,6 +37,8 @@ namespace RenderCore { namespace LightingEngine
 			(fbProps._height + dispatchGroupHeight - 1) / dispatchGroupHeight,
 			1,
 			uniforms);
+
+		Metal::BarrierHelper{parsingContext.GetThreadContext()}.Add(*ldrOutput.GetResource(), {BindFlag::UnorderedAccess, ShaderStage::Compute}, BindFlag::RenderTarget);
 	}
 
 	::Assets::DependencyValidation ToneMapAcesOperator::GetDependencyValidation() const { return _shader->GetDependencyValidation(); }
@@ -43,7 +50,7 @@ namespace RenderCore { namespace LightingEngine
 		// todo -- what should we set the final state for ColorLDR to be here? just go directly to PresentationSrc?
         Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState().FinalState(BindFlag::RenderTarget), BindFlag::UnorderedAccess);
-        spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).InitialState(BindFlag::RenderTarget).Discard());
+        spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).InitialState(BindFlag::UnorderedAccess).Discard());
         spDesc.SetName("tone-map-aces-operator");
 
         result.AddSubpass(

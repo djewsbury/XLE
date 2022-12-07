@@ -142,7 +142,7 @@ namespace UnitTests
 		{
 			auto parsingContext = BeginParsingContext(testApparatus, *threadContext);
 			Techniques::RenderPassInstance rpi{parsingContext, stitch};
-			parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*testHelper->_device));
+			parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*testHelper->_device));
 			parsingContext.GetUniformDelegateManager()->BringUpToDateGraphics(parsingContext);
 			operator0->Draw(parsingContext, {});
 			rpi.NextSubpass();

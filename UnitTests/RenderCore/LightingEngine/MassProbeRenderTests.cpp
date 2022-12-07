@@ -486,7 +486,7 @@ namespace UnitTests
 				batchCameras.second = std::min(batchCameras.second, batchCameras.first+maxPerBatch);
 
 				auto uniformDel = std::make_shared<ShaderResourceDelegate>(batchCameras, s_testResolution);
-				parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(uniformDel);
+				parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(uniformDel);
 
 				auto& projDesc = parsingContext.GetProjectionDesc();
 				projDesc = Techniques::ProjectionDesc{};		// identity world-to-projection
@@ -496,7 +496,7 @@ namespace UnitTests
 					Techniques::Draw(parsingContext, *testApparatus._pipelineAccelerators, *_cfg, pkt);
 				}
 
-				parsingContext.GetUniformDelegateManager()->RemoveShaderResourceDelegate(*uniformDel);
+				parsingContext.GetUniformDelegateManager()->UnbindShaderResourceDelegate(*uniformDel);
 				cameras.first = batchCameras.second;
 				++frag;
 			}
@@ -692,12 +692,12 @@ namespace UnitTests
 				extWriter->WriteDrawables(pkt, cullingDelegate, testViewMask, drawDelegate);
 
 				auto uniformDel = std::make_shared<ShaderResourceDelegate>(batchCameras, s_testResolution);
-				parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(uniformDel);
+				parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(uniformDel);
 
 				Techniques::RenderPassInstance rpi{parsingContext, *frag};
 				Techniques::Draw(parsingContext, *testApparatus._pipelineAccelerators, *_cfg, pkt);
 
-				parsingContext.GetUniformDelegateManager()->RemoveShaderResourceDelegate(*uniformDel);
+				parsingContext.GetUniformDelegateManager()->UnbindShaderResourceDelegate(*uniformDel);
 				cameras.first = batchCameras.second;
 				++frag;
 			}
@@ -797,7 +797,7 @@ namespace UnitTests
 				batchCameras.second = std::min(batchCameras.second, batchCameras.first+maxMultiview);
 
 				auto uniformDel = std::make_shared<ShaderResourceDelegate>(batchCameras, s_testResolution);
-				parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(uniformDel);
+				parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(uniformDel);
 
 				auto& projDesc = parsingContext.GetProjectionDesc();
 				projDesc = Techniques::ProjectionDesc{};		// identity world-to-projection
@@ -807,7 +807,7 @@ namespace UnitTests
 					Techniques::Draw(parsingContext, *testApparatus._pipelineAccelerators, *_cfg, pkt);
 				}
 
-				parsingContext.GetUniformDelegateManager()->RemoveShaderResourceDelegate(*uniformDel);
+				parsingContext.GetUniformDelegateManager()->UnbindShaderResourceDelegate(*uniformDel);
 				cameras.first = batchCameras.second;
 				++frag;
 			}

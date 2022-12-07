@@ -83,8 +83,6 @@ namespace RenderCore { namespace Techniques
 
 		UniformsStreamInterface materialUSI;
 		materialUSI.BindFixedDescriptorSet(0, s_materialDescSetName);
-		if (parserContext._extraSequencerDescriptorSet.second)
-			materialUSI.BindFixedDescriptorSet(1, parserContext._extraSequencerDescriptorSet.first);
 
 		UniformsStreamInterface emptyUSI;
 		const DrawableGeo* currentGeo = nullptr;
@@ -130,10 +128,6 @@ namespace RenderCore { namespace Techniques
 						currentPipelineLayout = pipeline->_pipelineLayout.get();
 						++pipelineLayoutChangeCount;
 					}
-
-					// update the "extra" desc set if we changed bound uniforms
-					if (parserContext._extraSequencerDescriptorSet.second)
-						currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *parserContext._extraSequencerDescriptorSet.second, s_uniformGroupMaterial, 1);
 				} else if (currentLooseUniformsInterface != drawable._looseUniformsInterface) {
 					currentBoundUniforms = &currentPipeline->_boundUniformsPool.Get(
 						*currentPipeline->_metalPipeline,
@@ -141,16 +135,13 @@ namespace RenderCore { namespace Techniques
 						*(drawable._looseUniformsInterface ? drawable._looseUniformsInterface : &emptyUSI));
 					currentLooseUniformsInterface = drawable._looseUniformsInterface;
 					++boundUniformLookupCount;
-
-					// update the "extra" desc set if we changed bound uniforms
-					if (parserContext._extraSequencerDescriptorSet.second)
-						currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *parserContext._extraSequencerDescriptorSet.second, s_uniformGroupMaterial, 1);
 				}
 
 				const ActualizedDescriptorSet* matDescSet = nullptr;
 				if (drawable._descriptorSet) {
 					matDescSet = TryGetDescriptorSet(*drawable._descriptorSet, acceleratorVisibilityId);
 					if (!matDescSet) continue;
+					// assert(parserContext._requiredBufferUploadsCommandList >= matDescSet->GetCompletionCommandList());	// parser context must be configured for this completion cmd list before getting here
 					parserContext.RequireCommandList(matDescSet->GetCompletionCommandList());
 				}
 
@@ -166,7 +157,6 @@ namespace RenderCore { namespace Techniques
 							assert(vbv[c]._resource);
 						} else if (stream._type == DrawableGeo::StreamType::Deform) {
 							assert(drawable._geo->_deformAccelerator);
-							// todo -- we can make GetOutputVBV() accessible without the pool and avoid the need for a pool passed to this function
 							auto deformVbv = Techniques::Internal::GetOutputVBV(*drawable._geo->_deformAccelerator, drawable._deformInstanceIdx);
 							vbv[c]._resource = deformVbv._resource;
 							vbv[c]._offset = stream._vbOffset + deformVbv._offset;

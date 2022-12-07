@@ -33,7 +33,7 @@ namespace RenderCore { namespace Techniques
 
 		ChangeIndex _currentChangeIndex = 0;
 
-		void AddShaderResourceDelegate(const std::shared_ptr<IShaderResourceDelegate>& dele)
+		void BindShaderResourceDelegate(std::shared_ptr<IShaderResourceDelegate> dele)
 		{
 			#if defined(_DEBUG)
 				auto i = std::find_if(
@@ -41,11 +41,11 @@ namespace RenderCore { namespace Techniques
 					[&dele](const std::shared_ptr<IShaderResourceDelegate>& p) { return p.get() == dele.get(); });
 				assert(i == _shaderResourceDelegates.end());
 			#endif
-			_shaderResourceDelegates.push_back(dele);
+			_shaderResourceDelegates.push_back(std::move(dele));
 			++_currentChangeIndex;
 		}
 
-		void RemoveShaderResourceDelegate(IShaderResourceDelegate& dele)
+		void UnbindShaderResourceDelegate(IShaderResourceDelegate& dele)
 		{
 			_shaderResourceDelegates.erase(
 				std::remove_if(
@@ -55,18 +55,18 @@ namespace RenderCore { namespace Techniques
 			++_currentChangeIndex;
 		}
 		
-		void AddUniformDelegate(uint64_t binding, const std::shared_ptr<IUniformBufferDelegate>& dele)
+		void BindUniformDelegate(uint64_t binding, std::shared_ptr<IUniformBufferDelegate> dele)
 		{
 			for (auto&d:_uniformDelegates)
 				if (d.first == binding) {
 					d.second = dele;
 					return;
 				}
-			_uniformDelegates.push_back(std::make_pair(binding, dele));
+			_uniformDelegates.push_back(std::make_pair(binding, std::move(dele)));
 			++_currentChangeIndex;
 		}
 
-		void RemoveUniformDelegate(IUniformBufferDelegate& dele)
+		void UnbindUniformDelegate(IUniformBufferDelegate& dele)
 		{
 			_uniformDelegates.erase(
 				std::remove_if(
@@ -407,6 +407,7 @@ namespace RenderCore { namespace Techniques
 		IDescriptorSet* _currentDescriptorSet = nullptr;
 		RenderCore::Assets::PredefinedDescriptorSetLayout _descSetLayout;
 		SubFrameDescriptorSetHeap _heap;
+		PipelineType _pipelineType;
 
 		void RebuildDescriptorSet(
 			ParsingContext& parsingContext,
@@ -565,6 +566,7 @@ namespace RenderCore { namespace Techniques
 		CommonResourceBox& res)
 	: _descSetLayout(layout)
 	, _heap(device, layout.MakeDescriptorSetSignature(&res._samplerPool), pipelineType, Concatenate("[semi-constant] ", name))
+	, _pipelineType(pipelineType)
 	{}
 
 	SemiConstantDescriptorSet::~SemiConstantDescriptorSet() {}
@@ -579,7 +581,9 @@ namespace RenderCore { namespace Techniques
 		struct PipelineBindings
 		{
 			std::vector<std::pair<uint64_t, std::shared_ptr<SemiConstantDescriptorSet>>> _semiConstantDescSets;
+			std::vector<std::pair<uint64_t, IDescriptorSet*>> _fixedDescriptorSets;
 			std::vector<const IDescriptorSet*> _descSetsForBinding;
+			bool _pendingReprepare = true;
 			bool _pendingRebuildDescSets = true;
 		};
 		PipelineBindings _graphics;
@@ -588,18 +592,19 @@ namespace RenderCore { namespace Techniques
 		UniformsStreamInterface _interface;
 
 		////////////////////////////////////////////////////////////////////////////////////
-		void AddShaderResourceDelegate(const std::shared_ptr<IShaderResourceDelegate>&) override;
-		void RemoveShaderResourceDelegate(IShaderResourceDelegate&) override;
+		void BindShaderResourceDelegate(std::shared_ptr<IShaderResourceDelegate>) override;
+		void UnbindShaderResourceDelegate(IShaderResourceDelegate&) override;
 		
-		void AddUniformDelegate(uint64_t binding, const std::shared_ptr<IUniformBufferDelegate>&) override;
-		void RemoveUniformDelegate(IUniformBufferDelegate&) override;
+		void BindUniformDelegate(uint64_t binding, std::shared_ptr<IUniformBufferDelegate>) override;
+		void UnbindUniformDelegate(IUniformBufferDelegate&) override;
 
-		void AddSemiConstantDescriptorSet(
-			uint64_t binding, const RenderCore::Assets::PredefinedDescriptorSetLayout&, StringSection<> name,
-			IDevice& device) override;
-		void RemoveSemiConstantDescriptorSet(uint64_t binding) override;
+		void BindSemiConstantDescriptorSet(uint64_t binding, std::shared_ptr<SemiConstantDescriptorSet>) override;
+		void UnbindSemiConstantDescriptorSet(SemiConstantDescriptorSet&) override;
 
-		void AddBase(const std::shared_ptr<IUniformDelegateManager>&) override;
+		void BindFixedDescriptorSet(uint64_t binding, IDescriptorSet& descSet) override;
+        void UnbindFixedDescriptorSet(IDescriptorSet& descSet) override;
+
+		void AddBase(std::shared_ptr<IUniformDelegateManager>) override;
 		void RemoveBase(IUniformDelegateManager&) override;
 
 		void BringUpToDateGraphics(ParsingContext& parsingContext) override;
@@ -616,7 +621,7 @@ namespace RenderCore { namespace Techniques
 		for (auto&base:_delegateGroup->_baseGroups)
 			pendingReprepare |= base.first != base.second->_currentChangeIndex;
 
-		if (pendingReprepare) {
+		if (pendingReprepare || _graphics._pendingReprepare) {
 			_delegateHelper.Prepare(parsingContext, *_delegateGroup);
 
 			_lastPreparedChangeIndex = _delegateGroup->_currentChangeIndex;
@@ -624,11 +629,16 @@ namespace RenderCore { namespace Techniques
 				base.first = base.second->_currentChangeIndex;
 
 			_interface = _delegateHelper._finalUSI;
-			for (unsigned c=0; c<_graphics._semiConstantDescSets.size(); ++c)
-				_interface.BindFixedDescriptorSet(c, _graphics._semiConstantDescSets[c].first);
+			unsigned descSetBindIdx = 0;
+			for (const auto& d:_graphics._fixedDescriptorSets)
+				_interface.BindFixedDescriptorSet(descSetBindIdx++, d.first);
+			for (const auto& d:_graphics._semiConstantDescSets)
+				_interface.BindFixedDescriptorSet(descSetBindIdx++, d.first);
 
 			_graphics._pendingRebuildDescSets = true;
 			_compute._pendingRebuildDescSets = true;
+			_graphics._pendingReprepare = false;
+			_compute._pendingReprepare = false;
 		}
 
 		PipelineBindings* bindings[] { &_graphics, &_compute };
@@ -639,14 +649,18 @@ namespace RenderCore { namespace Techniques
 				b->_pendingRebuildDescSets = false;
 			}
 
-			b->_descSetsForBinding.resize(b->_semiConstantDescSets.size());
-			for (unsigned c=0; c<b->_semiConstantDescSets.size(); ++c)
-				b->_descSetsForBinding[c] = b->_semiConstantDescSets[c].second->GetDescSet();
+			b->_descSetsForBinding.resize(b->_fixedDescriptorSets.size() + b->_semiConstantDescSets.size());
+			unsigned descSetBindIdx = 0;
+			for (const auto& d:b->_fixedDescriptorSets)
+				b->_descSetsForBinding[descSetBindIdx++] = d.second;
+			for (const auto& d:b->_semiConstantDescSets)
+				b->_descSetsForBinding[descSetBindIdx++] = d.second->GetDescSet();
 		}
 	}
 
 	void UniformDelegateManager::BringUpToDateCompute(ParsingContext& parsingContext)
 	{
+		assert(0);
 	}
 
 	const UniformsStreamInterface& UniformDelegateManager::GetInterface()
@@ -661,29 +675,34 @@ namespace RenderCore { namespace Techniques
 		_compute._pendingRebuildDescSets = true;
 	}
 
-	void UniformDelegateManager::AddShaderResourceDelegate(const std::shared_ptr<IShaderResourceDelegate>& delegate)
+	void UniformDelegateManager::BindShaderResourceDelegate(std::shared_ptr<IShaderResourceDelegate> delegate)
 	{
-		_delegateGroup->AddShaderResourceDelegate(delegate);
+		_delegateGroup->BindShaderResourceDelegate(std::move(delegate));
 	}
 
-	void UniformDelegateManager::RemoveShaderResourceDelegate(IShaderResourceDelegate& delegate)
+	void UniformDelegateManager::UnbindShaderResourceDelegate(IShaderResourceDelegate& delegate)
 	{
-		_delegateGroup->RemoveShaderResourceDelegate(delegate);
+		_delegateGroup->UnbindShaderResourceDelegate(delegate);
 	}
 	
-	void UniformDelegateManager::AddUniformDelegate(uint64_t binding, const std::shared_ptr<IUniformBufferDelegate>& delegate)
+	void UniformDelegateManager::BindUniformDelegate(uint64_t binding, std::shared_ptr<IUniformBufferDelegate> delegate)
 	{
-		_delegateGroup->AddUniformDelegate(binding, delegate);
+		_delegateGroup->BindUniformDelegate(binding, std::move(delegate));
 	}
 
-	void UniformDelegateManager::RemoveUniformDelegate(IUniformBufferDelegate& delegate)
+	void UniformDelegateManager::UnbindUniformDelegate(IUniformBufferDelegate& delegate)
 	{
-		_delegateGroup->RemoveUniformDelegate(delegate);
+		_delegateGroup->UnbindUniformDelegate(delegate);
 	}
 
-	void UniformDelegateManager::AddBase(const std::shared_ptr<IUniformDelegateManager>& iman)
+	void UniformDelegateManager::AddBase(std::shared_ptr<IUniformDelegateManager> iman)
 	{
 		auto& man = *checked_cast<UniformDelegateManager*>(iman.get());
+		// fixed & semi-constant desc sets don't get inheritted via this
+		assert(man._graphics._fixedDescriptorSets.empty());
+		assert(man._graphics._semiConstantDescSets.empty());
+		assert(man._compute._fixedDescriptorSets.empty());
+		assert(man._compute._semiConstantDescSets.empty());
 		_delegateGroup->AddBase(man._delegateGroup);
 	}
 
@@ -693,35 +712,94 @@ namespace RenderCore { namespace Techniques
 		_delegateGroup->RemoveBase(*man._delegateGroup);
 	}
 
-	void UniformDelegateManager::AddSemiConstantDescriptorSet(
-		uint64_t binding, const RenderCore::Assets::PredefinedDescriptorSetLayout& layout, StringSection<> name,
-		IDevice& device)
+	void UniformDelegateManager::BindSemiConstantDescriptorSet(uint64_t binding, std::shared_ptr<SemiConstantDescriptorSet> descSet)
 	{
-		auto& resBox = *Services::GetCommonResources();
+		assert(descSet);
+		if (descSet->_pipelineType == PipelineType::Graphics) {
+			#if defined(_DEBUG)
+				// We should not have another descriptor set bound to the same name (either as a semi-constant or fixed descriptor set)
+				auto i = std::find_if(_graphics._semiConstantDescSets.begin(), _graphics._semiConstantDescSets.end(),
+					[binding](const auto& c) { return c.first == binding; });
+				assert(i == _graphics._semiConstantDescSets.end());
+				auto i2 = std::find_if(_graphics._fixedDescriptorSets.begin(), _graphics._fixedDescriptorSets.end(),
+					[binding](const auto& c) { return c.first == binding; });
+				assert(i2 == _graphics._fixedDescriptorSets.end());
+			#endif
+
+			_graphics._semiConstantDescSets.emplace_back(binding, std::move(descSet));
+			_graphics._pendingReprepare = true;
+		} else {
+			#if defined(_DEBUG)
+				// We should not have another descriptor set bound to the same name (either as a semi-constant or fixed descriptor set)
+				auto i = std::find_if(_compute._semiConstantDescSets.begin(), _compute._semiConstantDescSets.end(),
+					[binding](const auto& c) { return c.first == binding; });
+				assert(i == _compute._semiConstantDescSets.end());
+				auto i2 = std::find_if(_compute._fixedDescriptorSets.begin(), _compute._fixedDescriptorSets.end(),
+					[binding](const auto& c) { return c.first == binding; });
+				assert(i2 == _compute._fixedDescriptorSets.end());
+			#endif
+
+			_compute._semiConstantDescSets.emplace_back(binding, std::move(descSet));
+			_compute._pendingReprepare = true;
+		}
+	}
+
+	void UniformDelegateManager::UnbindSemiConstantDescriptorSet(SemiConstantDescriptorSet& descSet)
+	{
+		auto i = std::find_if(_graphics._semiConstantDescSets.begin(), _graphics._semiConstantDescSets.end(),
+			[&descSet](const auto& c) { return c.second.get() == &descSet; });
+		if (i != _graphics._semiConstantDescSets.end()) {
+			_graphics._semiConstantDescSets.erase(i);
+			_graphics._pendingReprepare = true;
+		}
+
+		i = std::find_if(_compute._semiConstantDescSets.begin(), _compute._semiConstantDescSets.end(),
+			[&descSet](const auto& c) { return c.second.get() == &descSet; });
+		if (i != _compute._semiConstantDescSets.end()) {
+			_compute._semiConstantDescSets.erase(i);
+			_compute._pendingReprepare = true;
+		}
+	}
+
+	void UniformDelegateManager::BindFixedDescriptorSet(uint64_t binding, IDescriptorSet& descSet)
+	{
 		#if defined(_DEBUG)
+			// We should not have another descriptor set bound to the same name (either as a semi-constant or fixed descriptor set)
 			auto i = std::find_if(_graphics._semiConstantDescSets.begin(), _graphics._semiConstantDescSets.end(),
 				[binding](const auto& c) { return c.first == binding; });
 			assert(i == _graphics._semiConstantDescSets.end());
 			i = std::find_if(_compute._semiConstantDescSets.begin(), _compute._semiConstantDescSets.end(),
 				[binding](const auto& c) { return c.first == binding; });
 			assert(i == _compute._semiConstantDescSets.end());
+			auto i2 = std::find_if(_graphics._fixedDescriptorSets.begin(), _graphics._fixedDescriptorSets.end(),
+				[binding](const auto& c) { return c.first == binding; });
+			assert(i2 == _graphics._fixedDescriptorSets.end());
+			i2 = std::find_if(_compute._fixedDescriptorSets.begin(), _compute._fixedDescriptorSets.end(),
+				[binding](const auto& c) { return c.first == binding; });
+			assert(i2 == _compute._fixedDescriptorSets.end());
 		#endif
 
-		_graphics._semiConstantDescSets.emplace_back(binding, std::make_shared<SemiConstantDescriptorSet>(device, layout, PipelineType::Graphics, name, resBox));
-		_compute._semiConstantDescSets.emplace_back(binding, std::make_shared<SemiConstantDescriptorSet>(device, layout, PipelineType::Compute, name, resBox));
+		_graphics._fixedDescriptorSets.emplace_back(binding, &descSet);
+		_compute._fixedDescriptorSets.emplace_back(binding, &descSet);
+		_graphics._pendingReprepare = true;
+		_compute._pendingReprepare = true;
 	}
 
-	void UniformDelegateManager::RemoveSemiConstantDescriptorSet(uint64_t binding)
+    void UniformDelegateManager::UnbindFixedDescriptorSet(IDescriptorSet& descSet)
 	{
-		auto i = std::find_if(_graphics._semiConstantDescSets.begin(), _graphics._semiConstantDescSets.end(),
-			[binding](const auto& c) { return c.first == binding; });
-		if (i != _graphics._semiConstantDescSets.end())
-			_graphics._semiConstantDescSets.erase(i);
+		auto i2 = std::find_if(_graphics._fixedDescriptorSets.begin(), _graphics._fixedDescriptorSets.end(),
+			[&descSet](const auto& c) { return c.second == &descSet; });
+		if (i2 != _graphics._fixedDescriptorSets.end()) {
+			_graphics._fixedDescriptorSets.erase(i2);
+			_graphics._pendingReprepare = true;
+		}
 
-		i = std::find_if(_compute._semiConstantDescSets.begin(), _compute._semiConstantDescSets.end(),
-			[binding](const auto& c) { return c.first == binding; });
-		if (i != _compute._semiConstantDescSets.end())
-			_compute._semiConstantDescSets.erase(i);
+		i2 = std::find_if(_compute._fixedDescriptorSets.begin(), _compute._fixedDescriptorSets.end(),
+			[&descSet](const auto& c) { return c.second == &descSet; });
+		if (i2 != _compute._fixedDescriptorSets.end()) {
+			_compute._fixedDescriptorSets.erase(i2);
+			_compute._pendingReprepare = true;
+		}
 	}
 
 	UniformDelegateManager::UniformDelegateManager()
@@ -732,6 +810,15 @@ namespace RenderCore { namespace Techniques
 	std::shared_ptr<IUniformDelegateManager> CreateUniformDelegateManager()
 	{
 		return std::make_shared<UniformDelegateManager>();
+	}
+
+	std::shared_ptr<SemiConstantDescriptorSet> CreateSemiConstantDescriptorSet(
+        const RenderCore::Assets::PredefinedDescriptorSetLayout& layout, StringSection<> name,
+		PipelineType pipelineType,
+        IDevice& device)
+	{
+		auto& resBox = *Services::GetCommonResources();
+		return std::make_shared<SemiConstantDescriptorSet>(device, layout, pipelineType, name, resBox);
 	}
 
 	void ApplyUniformsGraphics(

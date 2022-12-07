@@ -52,6 +52,7 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _lightingOperatorsPipelineLayoutFile;
 		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _dmShadowDescSetTemplate;
+		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _forwardLightingDescSetTemplate;
 		std::shared_ptr<ICompiledPipelineLayout> _lightingOperatorLayout;
 
 		using TechniqueDelegateFuture = std::shared_future<std::shared_ptr<Techniques::ITechniqueDelegate>>;

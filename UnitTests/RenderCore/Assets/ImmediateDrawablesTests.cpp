@@ -89,26 +89,26 @@ namespace UnitTests
 		auto techniqueServices = ConsoleRig::MakeAttachablePtr<Techniques::Services>(testHelper->_device);
 		std::shared_ptr<BufferUploads::IManager> bufferUploads = BufferUploads::CreateManager(*testHelper->_device);
 		techniqueServices->SetBufferUploads(bufferUploads);
-		techniqueServices->SetCommonResources(std::make_shared<RenderCore::Techniques::CommonResourceBox>(*testHelper->_device));
+		techniqueServices->SetCommonResources(std::make_shared<Techniques::CommonResourceBox>(*testHelper->_device));
 		techniqueServices->RegisterTextureLoader("*.[dD][dD][sS]", RenderCore::Assets::CreateDDSTextureLoader());
 		techniqueServices->RegisterTextureLoader("*", RenderCore::Assets::CreateWICTextureLoader());
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		auto filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
-		auto shaderCompilerRegistration = RenderCore::RegisterShaderCompiler(testHelper->_shaderSource, compilers);
-		auto shaderCompiler2Registration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(testHelper->_shaderSource, compilers);
+		auto shaderCompilerRegistration = RegisterShaderCompiler(testHelper->_shaderSource, compilers);
+		auto shaderCompiler2Registration = Techniques::RegisterInstantiateShaderGraphCompiler(testHelper->_shaderSource, compilers);
 
 		auto sequencerDescriptorSetLayout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>(
 			s_sequencerDescSetLayout, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
-		auto immediateDrawables = RenderCore::Techniques::CreateImmediateDrawables(testHelper->_device);
+		auto immediateDrawables = Techniques::CreateImmediateDrawables(testHelper->_device);
 
-		auto techniqueContext = std::make_shared<RenderCore::Techniques::TechniqueContext>();
+		auto techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		techniqueContext->_commonResources = techniqueServices->GetCommonResources();
 
-		techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
-		techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *sequencerDescriptorSetLayout, "unittest", *testHelper->_device);
-		techniqueContext->_uniformDelegateManager->AddShaderResourceDelegate(std::make_shared<RenderCore::Techniques::SystemUniformsDelegate>(*testHelper->_device));
+		techniqueContext->_uniformDelegateManager = Techniques::CreateUniformDelegateManager();
+		techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet(Hash64("Sequencer"), Techniques::CreateSemiConstantDescriptorSet(*sequencerDescriptorSetLayout, "unittest", PipelineType::Graphics, *testHelper->_device));
+		techniqueContext->_uniformDelegateManager->BindShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*testHelper->_device));
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
@@ -123,7 +123,7 @@ namespace UnitTests
 			// Use remove the "TEXCOORD" input attribute from the IA (otherwise the system assume there's a texture to read)
 			auto vertexLayout = ToolsRig::Vertex3D_MiniInputLayout;
 			for (auto& attribute:vertexLayout)
-				if (attribute._semanticHash == RenderCore::Techniques::CommonSemantics::TEXCOORD)
+				if (attribute._semanticHash == Techniques::CommonSemantics::TEXCOORD)
 					attribute._semanticHash = 0;
 			auto data = immediateDrawables->QueueDraw(
 				sphereGeo.size(),
@@ -135,7 +135,7 @@ namespace UnitTests
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
-				auto parsingContext = RenderCore::Techniques::ParsingContext { *techniqueContext, *threadContext };
+				auto parsingContext = Techniques::ParsingContext { *techniqueContext, *threadContext };
 				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 				Techniques::CameraDesc camera {};
 				SetTranslation(camera._cameraToWorld, ExtractForward_Cam(camera._cameraToWorld) * -5.0f);
@@ -155,7 +155,7 @@ namespace UnitTests
 			bufferUploads->StallUntilCompletion(*threadContext, tex.get()->GetCompletionCommandList());
 
 			Techniques::ImmediateDrawableMaterial material;
-			RenderCore::UniformsStreamInterface inputTextureUSI;
+			UniformsStreamInterface inputTextureUSI;
 			inputTextureUSI.BindResourceView(0, Hash64("InputTexture"));
 			material._uniformStreamInterface = &inputTextureUSI;
 			material._uniforms._resourceViews.push_back(tex.get()->GetShaderResource());
@@ -170,7 +170,7 @@ namespace UnitTests
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
-				RenderCore::Techniques::ParsingContext parsingContext { *techniqueContext, *threadContext };
+				Techniques::ParsingContext parsingContext { *techniqueContext, *threadContext };
 				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 				Techniques::CameraDesc camera {};
 				SetTranslation(camera._cameraToWorld, ExtractForward_Cam(camera._cameraToWorld) * -5.0f);

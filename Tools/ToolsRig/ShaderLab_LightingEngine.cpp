@@ -16,6 +16,7 @@
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/DeferredShaderResource.h"
 #include "../../RenderCore/Techniques/CommonBindings.h"
+#include "../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../RenderCore/Assets/TextureCompiler.h"
 #include "../../Tools/ToolsRig/ShaderLab.h"
 #include "../../Assets/Continuation.h"
@@ -43,15 +44,14 @@ namespace ToolsRig
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext)
 		{
 			_lightScene->ConfigureParsingContext(parsingContext);
-			if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow()) {
-				assert(!parsingContext._extraSequencerDescriptorSet.second);
-				parsingContext._extraSequencerDescriptorSet = { s_shadowTemplate, dominantShadow->GetDescriptorSet() };
-			}
+			if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow())
+				parsingContext.GetUniformDelegateManager()->BindFixedDescriptorSet(s_shadowTemplate, *dominantShadow->GetDescriptorSet());
 		}
 
 		void ReleaseParsingContext(Techniques::ParsingContext& parsingContext)
 		{
-			parsingContext._extraSequencerDescriptorSet = {0ull, nullptr};
+			if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow())
+				parsingContext.GetUniformDelegateManager()->UnbindFixedDescriptorSet(*dominantShadow->GetDescriptorSet());
 			if (_lightScene->_shadowScheduler)
 				_lightScene->_shadowScheduler->ClearPreparedShadows();
 		}

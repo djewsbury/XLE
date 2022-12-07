@@ -47,21 +47,24 @@ namespace RenderCore { namespace Techniques
 		void BindSampler(unsigned slot, uint64_t hashName);
     };
 
+    class SemiConstantDescriptorSet;
+
     class IUniformDelegateManager
     {
     public:
-        virtual void AddShaderResourceDelegate(const std::shared_ptr<IShaderResourceDelegate>&) = 0;
-		virtual void RemoveShaderResourceDelegate(IShaderResourceDelegate&) = 0;
+        virtual void BindShaderResourceDelegate(std::shared_ptr<IShaderResourceDelegate>) = 0;
+		virtual void UnbindShaderResourceDelegate(IShaderResourceDelegate&) = 0;
         
-        virtual void AddUniformDelegate(uint64_t binding, const std::shared_ptr<IUniformBufferDelegate>&) = 0;
-		virtual void RemoveUniformDelegate(IUniformBufferDelegate&) = 0;
+        virtual void BindUniformDelegate(uint64_t binding, std::shared_ptr<IUniformBufferDelegate>) = 0;
+		virtual void UnbindUniformDelegate(IUniformBufferDelegate&) = 0;
 
-        virtual void AddSemiConstantDescriptorSet(
-            uint64_t binding, const RenderCore::Assets::PredefinedDescriptorSetLayout&, StringSection<> name,
-            IDevice& device) = 0;
-        virtual void RemoveSemiConstantDescriptorSet(uint64_t binding) = 0;
+        virtual void BindSemiConstantDescriptorSet(uint64_t binding, std::shared_ptr<SemiConstantDescriptorSet>) = 0;
+        virtual void UnbindSemiConstantDescriptorSet(SemiConstantDescriptorSet& descSet) = 0;
 
-        virtual void AddBase(const std::shared_ptr<IUniformDelegateManager>&) = 0;
+        virtual void BindFixedDescriptorSet(uint64_t binding, IDescriptorSet& descSet) = 0;
+        virtual void UnbindFixedDescriptorSet(IDescriptorSet& descSet) = 0;
+
+        virtual void AddBase(std::shared_ptr<IUniformDelegateManager>) = 0;
 		virtual void RemoveBase(IUniformDelegateManager&) = 0;
 
         virtual void InvalidateUniforms() = 0;
@@ -73,5 +76,9 @@ namespace RenderCore { namespace Techniques
     };
 
     std::shared_ptr<IUniformDelegateManager> CreateUniformDelegateManager();
+
+    std::shared_ptr<SemiConstantDescriptorSet> CreateSemiConstantDescriptorSet(
+        const RenderCore::Assets::PredefinedDescriptorSetLayout&, StringSection<> name,
+        PipelineType pipelineType, IDevice& device);
 
 }}

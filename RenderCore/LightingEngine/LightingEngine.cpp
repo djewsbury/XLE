@@ -478,19 +478,19 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::DrawablesPacket* pkts[(unsigned)Techniques::Batch::Max];
 		GetPkts(MakeIteratorRange(pkts), parseId);
 		if (uniformDelegate)
-			_parsingContext->GetUniformDelegateManager()->AddShaderResourceDelegate(uniformDelegate);
+			_parsingContext->GetUniformDelegateManager()->BindShaderResourceDelegate(uniformDelegate);
 		for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c) {
 			if (!pkts[c] || pkts[c]->_drawables.empty()) continue;
 			TRY {
 				Techniques::Draw(*_parsingContext, *_pipelineAcceleratorPool, sequencerCfg, *pkts[c]);
 			} CATCH(...) {
 				if (uniformDelegate)
-					_parsingContext->GetUniformDelegateManager()->RemoveShaderResourceDelegate(*uniformDelegate);
+					_parsingContext->GetUniformDelegateManager()->UnbindShaderResourceDelegate(*uniformDelegate);
 				throw;
 			} CATCH_END
 		}
 		if (uniformDelegate)
-			_parsingContext->GetUniformDelegateManager()->RemoveShaderResourceDelegate(*uniformDelegate);
+			_parsingContext->GetUniformDelegateManager()->UnbindShaderResourceDelegate(*uniformDelegate);
 	}
 
 	void LightingTechniqueIterator::ResetIteration(Phase newPhase)
@@ -646,7 +646,7 @@ namespace RenderCore { namespace LightingEngine
 				break;
 
 			case LightingTechniqueSequence::ExecuteStep::Type::BindDelegate:
-				_iterator->_parsingContext->GetUniformDelegateManager()->AddShaderResourceDelegate(next->_shaderResourceDelegate);
+				_iterator->_parsingContext->GetUniformDelegateManager()->BindShaderResourceDelegate(next->_shaderResourceDelegate);
 				_iterator->_delegatesPendingUnbind.push_back(next->_shaderResourceDelegate.get());
 				break;
 
@@ -672,7 +672,7 @@ namespace RenderCore { namespace LightingEngine
 
 		auto& delegateMan = *_iterator->_parsingContext->GetUniformDelegateManager();
 		for (auto delegate:_iterator->_delegatesPendingUnbind)
-			delegateMan.RemoveShaderResourceDelegate(*delegate);
+			delegateMan.UnbindShaderResourceDelegate(*delegate);
 		_iterator->_delegatesPendingUnbind.clear();
 	}
 

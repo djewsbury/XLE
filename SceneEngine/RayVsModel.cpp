@@ -378,7 +378,7 @@ namespace SceneEngine
 		parsingContext.GetProjectionDesc() = projDesc;
 
 		auto& metalContext = *Metal::DeviceContext::Get(context);
-		parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(_pimpl->_res->_rayDefinition);
+		parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(_pimpl->_res->_rayDefinition);
 
 		_pimpl->_pipelineAccelerators->LockForReading();
 		TRY {
@@ -390,7 +390,7 @@ namespace SceneEngine
 			throw;
 		} CATCH_END
 		_pimpl->_pipelineAccelerators->UnlockForReading();
-		parsingContext.GetUniformDelegateManager()->RemoveShaderResourceDelegate(*_pimpl->_res->_rayDefinition);
+		parsingContext.GetUniformDelegateManager()->UnbindShaderResourceDelegate(*_pimpl->_res->_rayDefinition);
 		parsingContext.GetUniformDelegateManager()->InvalidateUniforms();
 	}
 

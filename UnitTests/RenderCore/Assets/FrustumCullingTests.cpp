@@ -228,7 +228,7 @@ namespace UnitTests
 				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(visCamera, UInt2{ targetDesc._textureDesc._width, targetDesc._textureDesc._height });
 				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 				Techniques::CommonResourceBox commonResBox{*testHelper->_device};
-				parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*testHelper->_device));
+				parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*testHelper->_device));
 				
 				Techniques::Draw(
 					parsingContext, 

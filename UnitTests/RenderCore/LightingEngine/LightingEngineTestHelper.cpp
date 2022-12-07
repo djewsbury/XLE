@@ -79,8 +79,11 @@ namespace UnitTests
 		_techniqueContext->_systemAttachmentFormats = Techniques::CalculateDefaultSystemFormats(*_metalTestHelper->_device);
 
 		_techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
-		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *MakeSequencerDescriptorSetLayout()->GetLayout(), "unittest", *_metalTestHelper->_device);
-		_techniqueContext->_uniformDelegateManager->AddShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*_metalTestHelper->_device));
+		auto seqSemiConstantGraphics = Techniques::CreateSemiConstantDescriptorSet(*MakeSequencerDescriptorSetLayout()->GetLayout(), "unittest", PipelineType::Graphics, *_metalTestHelper->_device);
+		auto seqSemiConstantCompute = Techniques::CreateSemiConstantDescriptorSet(*MakeSequencerDescriptorSetLayout()->GetLayout(), "unittest", PipelineType::Compute, *_metalTestHelper->_device);
+		_techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet(Hash64("Sequencer"), std::move(seqSemiConstantGraphics));
+		_techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet(Hash64("Sequencer"), std::move(seqSemiConstantCompute));
+		_techniqueContext->_uniformDelegateManager->BindShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*_metalTestHelper->_device));
 
 		_commonResources->CompleteInitialization(*_metalTestHelper->_device->GetImmediateContext());
 	}

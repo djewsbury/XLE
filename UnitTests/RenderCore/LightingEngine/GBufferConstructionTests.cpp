@@ -388,7 +388,7 @@ namespace UnitTests
 				auto parsingContext = InitializeParsingContext(testApparatus, camera, *threadContext);
 
 				auto globalDelegate = std::make_shared<GBufferConstructionUnitTestGlobalUniforms>();
-				parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(globalDelegate);
+				parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(globalDelegate);
 
 				std::shared_ptr<IResource> diffuseResource, normalResource, parameterResource, depthResource;
 				std::shared_ptr<IResource> reconstructedWorldPosition, reconstructedWorldNormal;

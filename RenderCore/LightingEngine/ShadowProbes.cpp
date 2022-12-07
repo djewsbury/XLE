@@ -97,9 +97,12 @@ namespace RenderCore { namespace LightingEngine
 				_techContext._attachmentPool = std::make_shared<Techniques::AttachmentPool>(threadContext.GetDevice());
 				_techContext._frameBufferPool = Techniques::CreateFrameBufferPool();
 				auto uniformDelegateMan = Techniques::CreateUniformDelegateManager();
-				uniformDelegateMan->AddShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*threadContext.GetDevice()));
-				uniformDelegateMan->AddShaderResourceDelegate(_pimpl->_multiViewUniformsDelegate);
-				uniformDelegateMan->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *_pimpl->_sequencerDescSetLayout, _pimpl->_sequencerDescSetLayoutName, *threadContext.GetDevice());
+				uniformDelegateMan->BindShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*threadContext.GetDevice()));
+				uniformDelegateMan->BindShaderResourceDelegate(_pimpl->_multiViewUniformsDelegate);
+				auto graphicsSequencerDS = Techniques::CreateSemiConstantDescriptorSet(*_pimpl->_sequencerDescSetLayout, _pimpl->_sequencerDescSetLayoutName, PipelineType::Graphics, *threadContext.GetDevice());
+				auto computeSequencerDS = Techniques::CreateSemiConstantDescriptorSet(*_pimpl->_sequencerDescSetLayout, _pimpl->_sequencerDescSetLayoutName, PipelineType::Compute, *threadContext.GetDevice());
+				uniformDelegateMan->BindSemiConstantDescriptorSet(Hash64("Sequencer"), std::move(graphicsSequencerDS));
+				uniformDelegateMan->BindSemiConstantDescriptorSet(Hash64("Sequencer"), std::move(computeSequencerDS));
 				_techContext._uniformDelegateManager = uniformDelegateMan;
 				_techContext._commonResources = Techniques::Services::GetCommonResources();
 				_techContext._pipelineAccelerators = _pimpl->_pipelineAccelerators;
