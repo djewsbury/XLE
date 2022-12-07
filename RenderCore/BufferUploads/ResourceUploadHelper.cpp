@@ -545,7 +545,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
         auto* deviceVulkan = (IDeviceVulkan*)device.QueryInterface(typeid(IDeviceVulkan).hash_code());
         if (deviceVulkan)
-            _asyncTracker = deviceVulkan->GetAsyncTracker();
+            _asyncTracker = deviceVulkan->GetGraphicsQueueAsyncTracker();
 
         #if defined(_DEBUG)
             _boundThread = std::this_thread::get_id();
@@ -782,7 +782,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
         auto* deviceVulkan = (IDeviceVulkan*)_underlyingContext->GetDevice()->QueryInterface(typeid(IDeviceVulkan).hash_code());
         if (deviceVulkan)
-            _pimpl->_asyncTracker = deviceVulkan->GetAsyncTracker();
+            _pimpl->_asyncTracker = deviceVulkan->GetGraphicsQueueAsyncTracker();
     }
 
     UploadsThreadContext::~UploadsThreadContext()

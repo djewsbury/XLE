@@ -2102,6 +2102,28 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 	}
 
+	BarrierResourceUsage::BarrierResourceUsage(BindFlag::BitField immediateUsage, Queue queue)
+	: BarrierResourceUsage(immediateUsage, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)
+	{
+		auto& objectFactory = GetObjectFactory();
+		switch (queue) {
+		default:
+			assert(0);		// intentional fall-through
+		case Queue::Graphics:
+			assert(objectFactory._graphicsQueueFamily != ~0u);
+			_queueFamily = objectFactory._graphicsQueueFamily;
+			break;
+		case Queue::DedicatedTransfer:
+			assert(objectFactory._dedicatedTransferQueueFamily != ~0u);
+			_queueFamily = objectFactory._dedicatedTransferQueueFamily;
+			break;
+		case Queue::DedicatedCompute:
+			assert(objectFactory._dedicatedComputeQueueFamily != ~0u);
+			_queueFamily = objectFactory._dedicatedComputeQueueFamily;
+			break;
+		}
+	}
+
 	BarrierResourceUsage BarrierResourceUsage::SpecializeForResource(BindFlag::BitField lifetimeResourceUsage)
 	{
 		BarrierResourceUsage result = *this;
@@ -2195,6 +2217,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		postBarrierUsage = postBarrierUsage.SpecializeForResource(lifetimeBindFlags);
 		assert(preBarrierUsage._pipelineStageFlags);
 		assert(postBarrierUsage._pipelineStageFlags);
+		// both or neither must be VK_QUEUE_FAMILY_IGNORED. We only use srcQueueFamilyIndex & dstQueueFamilyIndex during Queue Family Ownership Transfer (see the Vulkan spec)
+		assert(!((preBarrierUsage._queueFamily == VK_QUEUE_FAMILY_IGNORED) ^ (postBarrierUsage._queueFamily == VK_QUEUE_FAMILY_IGNORED)));
 
 		auto* res = checked_cast<Resource*>(&resource);
 		if (res->GetBuffer()) {
@@ -2211,7 +2235,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				nullptr,
 				preBarrierUsage._accessFlags,
 				postBarrierUsage._accessFlags,
-				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+				preBarrierUsage._queueFamily,
+				postBarrierUsage._queueFamily,
 				checked_cast<Resource*>(&resource)->GetBuffer(),
 				0, VK_WHOLE_SIZE
 			};
@@ -2227,7 +2252,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			barrier.srcAccessMask = preBarrierUsage._accessFlags;
 			barrier.dstAccessMask = postBarrierUsage._accessFlags;
 			barrier.image = checked_cast<Resource*>(&resource)->GetImage();
-			barrier.dstQueueFamilyIndex = barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.srcQueueFamilyIndex = preBarrierUsage._queueFamily;
+			barrier.dstQueueFamilyIndex = postBarrierUsage._queueFamily;
 			barrier.subresourceRange.aspectMask = AsImageAspectMask(res->AccessDesc()._textureDesc._format);
 			barrier.subresourceRange.baseMipLevel = 0;
 			barrier.subresourceRange.baseArrayLayer = 0;

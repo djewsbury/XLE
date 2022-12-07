@@ -36,7 +36,9 @@ namespace RenderCore { namespace ImplVulkan
 	{
 	public:
 		VkPhysicalDevice _dev;
-		unsigned _renderingQueueFamily;
+		unsigned _graphicsQueueFamily = ~0u;
+        unsigned _dedicatedTransferQueueFamily = ~0u;
+        unsigned _dedicatedComputeQueueFamily = ~0u;
 	};
 
     template<typename Type>
@@ -183,11 +185,13 @@ namespace RenderCore { namespace ImplVulkan
 
         std::shared_ptr<IThreadContext>         GetImmediateContext() override;
         std::unique_ptr<IThreadContext>         CreateDeferredContext() override;
+        std::unique_ptr<IThreadContext>         CreateDedicatedTransferContext() override;
 
-        Metal_Vulkan::GlobalPools&              GetGlobalPools() override;
+        Metal_Vulkan::GlobalPools&              GetGlobalPools();
 		Metal_Vulkan::ObjectFactory&			GetObjectFactory();
         VkDevice	                            GetUnderlyingDevice() override { return _underlying.get(); }
-        std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetAsyncTracker() override;
+        std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetGraphicsQueueAsyncTracker() override;
+        std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetDedicatedTransferAsyncTracker() override;
 
         void GetInternalMetrics(InternalMetricsType type, IteratorRange<void*>) const override;
 
@@ -221,7 +225,8 @@ namespace RenderCore { namespace ImplVulkan
         VulkanSharedPtr<VkDevice>		    _underlying;
         SelectedPhysicalDevice              _physDev;
 		ConsoleRig::AttachablePtr<Metal_Vulkan::GlobalsContainer> _globalsContainer;
-        std::shared_ptr<Metal_Vulkan::SubmissionQueue>	_graphicsQueue;
+        std::shared_ptr<Metal_Vulkan::SubmissionQueue> _graphicsQueue;
+        std::shared_ptr<Metal_Vulkan::SubmissionQueue> _dedicatedTransferQueue;
 
 		std::shared_ptr<ThreadContext>	_foregroundPrimaryContext;
         std::thread::id _initializationThread;

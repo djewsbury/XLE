@@ -1316,15 +1316,31 @@ namespace RenderCore { namespace ImplVulkan
 		const DeviceFeatures& xleFeatures,
 		bool enableDebugLayer)
 	{
-		VkDeviceQueueCreateInfo queue_info = {};
-		queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		queue_info.pNext = nullptr;
-		queue_info.queueCount = 1;
 		// The queue priority value are specific to a single VkDevice -- so it shouldn't affect priorities
 		// relative to another application.
+		// We ideally don't want any queue to starve any other queue; so we might be safest using the same
+		// priority for all queues in all families
 		float queue_priorities[1] = { 0.5f };
-		queue_info.pQueuePriorities = queue_priorities;
-		queue_info.queueFamilyIndex = physDev._renderingQueueFamily;
+
+		VkDeviceQueueCreateInfo queue_info[3] = {};
+		unsigned queueCount = 0;
+		queue_info[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queue_info[0].pNext = nullptr;
+		queue_info[0].queueCount = 1;
+		queue_info[0].pQueuePriorities = queue_priorities;
+		queue_info[0].queueFamilyIndex = physDev._graphicsQueueFamily;
+		++queueCount;
+
+		if (xleFeatures._dedicatedTransferQueue) {
+			if (physDev._dedicatedTransferQueueFamily == ~0u)
+				Throw(std::runtime_error("Enabled the _dedicatedTransferQueue device feature, but this feature is not supported the device capabilities"));
+			queue_info[queueCount].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+			queue_info[queueCount].pNext = nullptr;
+			queue_info[queueCount].queueCount = 1;
+			queue_info[queueCount].pQueuePriorities = queue_priorities;
+			queue_info[queueCount].queueFamilyIndex = physDev._dedicatedTransferQueueFamily;
+			++queueCount;
+		}
 
 		VkPhysicalDeviceFeatures2 enabledFeatures2 = {};
 		enabledFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
@@ -1392,8 +1408,8 @@ namespace RenderCore { namespace ImplVulkan
 		VkDeviceCreateInfo device_info = {};
 		device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 		device_info.pNext = &enabledFeatures2;
-		device_info.queueCreateInfoCount = 1;
-		device_info.pQueueCreateInfos = &queue_info;
+		device_info.queueCreateInfoCount = queueCount;
+		device_info.pQueueCreateInfos = queue_info;
 
 		const char* deviceExtensions[8];
 		unsigned deviceExtensionCount = 0;
@@ -1673,17 +1689,8 @@ namespace RenderCore { namespace ImplVulkan
 			result._textureCompressionASTC_HDR = VkPhysicalDeviceTextureCompressionASTCHDRFeaturesEXT_inst.textureCompressionASTC_HDR;
 
 		// queues
-		result._dedicatedTransferQueue = false;
-		result._dedicatedComputeQueue = false;
-
-		for (auto qprops:EnumerateQueueFamilyProperties(_physicalDevices[configurationIdx]._dev)) {
-			// we say a queue family is "dedicated transfer", if it can support transfer but not graphics or compute
-			// likewise a dedicate compute queue family won't support graphics
-			if ((qprops.queueFlags & VK_QUEUE_TRANSFER_BIT) && !(qprops.queueFlags & (VK_QUEUE_GRAPHICS_BIT|VK_QUEUE_COMPUTE_BIT)))
-				result._dedicatedTransferQueue = true;
-			if ((qprops.queueFlags & VK_QUEUE_COMPUTE_BIT) && !(qprops.queueFlags & VK_QUEUE_GRAPHICS_BIT))
-				result._dedicatedComputeQueue = true;
-		}
+		result._dedicatedTransferQueue = _physicalDevices[configurationIdx]._dedicatedTransferQueueFamily != ~0u;
+		result._dedicatedComputeQueue = _physicalDevices[configurationIdx]._dedicatedComputeQueueFamily != ~0u;
 
 		return result;
 	}
@@ -1699,7 +1706,7 @@ namespace RenderCore { namespace ImplVulkan
 		
 		VkBool32 supportsPresent = false;
 		vkGetPhysicalDeviceSurfaceSupportKHR(
-			_physicalDevices[configurationIdx]._dev, _physicalDevices[configurationIdx]._renderingQueueFamily,
+			_physicalDevices[configurationIdx]._dev, _physicalDevices[configurationIdx]._graphicsQueueFamily,
 			surface.get(), &supportsPresent);
 		return supportsPresent;
 	}
@@ -1919,12 +1926,26 @@ namespace RenderCore { namespace ImplVulkan
 		for (auto dev:devices) {
 			auto queueProps = EnumerateQueueFamilyProperties(dev);
 
+			unsigned dedicatedTransferQueueFamily = ~0u;
+        	unsigned dedicatedComputeQueueFamily = ~0u;
+			for (unsigned qi=0; qi<unsigned(queueProps.size()); ++qi) {
+				const auto& qprops=queueProps[qi];
+				// we say a queue family is "dedicated transfer", if it can support transfer but not graphics or compute
+				// likewise a dedicate compute queue family won't support graphics
+				if ((qprops.queueFlags & VK_QUEUE_TRANSFER_BIT) && !(qprops.queueFlags & (VK_QUEUE_GRAPHICS_BIT|VK_QUEUE_COMPUTE_BIT)))
+					if (dedicatedTransferQueueFamily == ~0u)
+						dedicatedTransferQueueFamily = qi;
+				if ((qprops.queueFlags & VK_QUEUE_COMPUTE_BIT) && !(qprops.queueFlags & VK_QUEUE_GRAPHICS_BIT))
+					if (dedicatedComputeQueueFamily == ~0u)
+						dedicatedComputeQueueFamily = qi;
+			}
+
 			// Add a configuration option for all queue families that have the graphics bit set
 			// client can test them each separately for compatibility for rendering to a specific window
 			// physical devices that don't support graphics (ie, compute-only) aren't supported
 			for (unsigned qi=0; qi<unsigned(queueProps.size()); ++qi)
 				if (queueProps[qi].queueFlags & VK_QUEUE_GRAPHICS_BIT)
-					_physicalDevices.push_back({dev, qi});
+					_physicalDevices.push_back({dev, qi, dedicatedTransferQueueFamily, dedicatedComputeQueueFamily});
 		}
 	}
 
@@ -1951,11 +1972,15 @@ namespace RenderCore { namespace ImplVulkan
 		auto& objFactory = _globalsContainer->_objectFactory;
 		auto& pools = _globalsContainer->_pools;
 
-		// Set up the object factory with a default destroyer that tracks the current
-		// GPU frame progress
-		_graphicsQueue = std::make_shared<Metal_Vulkan::SubmissionQueue>(objFactory, GetQueue(_underlying.get(), _physDev._renderingQueueFamily), _physDev._renderingQueueFamily);
+		_graphicsQueue = std::make_shared<Metal_Vulkan::SubmissionQueue>(objFactory, GetQueue(_underlying.get(), _physDev._graphicsQueueFamily), _physDev._graphicsQueueFamily);
 		_destrQueue = objFactory.CreateMarkerTrackingDestroyer(_graphicsQueue->GetTracker());
 		objFactory.SetDefaultDestroyer(_destrQueue);
+		objFactory._graphicsQueueFamily = _physDev._graphicsQueueFamily;
+
+		if (xleFeatures._dedicatedTransferQueue) {
+			_dedicatedTransferQueue = std::make_shared<Metal_Vulkan::SubmissionQueue>(objFactory, GetQueue(_underlying.get(), _physDev._dedicatedTransferQueueFamily), _physDev._dedicatedTransferQueueFamily);
+			objFactory._dedicatedTransferQueueFamily = _physDev._dedicatedTransferQueueFamily;
+		}
 
 		pools._mainDescriptorPool = Metal_Vulkan::DescriptorPool(objFactory, _graphicsQueue->GetTracker(), "main-descriptor-pool");
 		pools._longTermDescriptorPool = Metal_Vulkan::DescriptorPool(objFactory, _graphicsQueue->GetTracker(), "long-term-descriptor-pool");
@@ -2122,14 +2147,14 @@ namespace RenderCore { namespace ImplVulkan
 		//		only check at most a single window for compatibility
         VkBool32 supportsPresent = false;
 		auto res = vkGetPhysicalDeviceSurfaceSupportKHR(
-			_physDev._dev, _physDev._renderingQueueFamily, surface.get(), &supportsPresent);
+			_physDev._dev, _physDev._graphicsQueueFamily, surface.get(), &supportsPresent);
 		if (res != VK_SUCCESS || !supportsPresent) 
             Throw(::Exceptions::BasicLabel("Presentation surface is not compatible with selected physical device. This may occur if the wrong physical device is selected, and it cannot render to the output window."));
         
         auto finalChain = std::make_unique<PresentationChain>(
 			shared_from_this(),
             _globalsContainer->_objectFactory, std::move(surface), desc,
-			_graphicsQueue.get(), _physDev._renderingQueueFamily, platformValue);
+			_graphicsQueue.get(), _physDev._graphicsQueueFamily, platformValue);
         return std::move(finalChain);
     }
 
@@ -2148,11 +2173,14 @@ namespace RenderCore { namespace ImplVulkan
 
     std::unique_ptr<IThreadContext> Device::CreateDeferredContext()
     {
-        // Note that when we do the second stage init through this path,
-        // we will not verify the selected physical device against a
-        // presentation surface.
 		return std::make_unique<ThreadContext>(shared_from_this(), _graphicsQueue);
     }
+
+	std::unique_ptr<IThreadContext> Device::CreateDedicatedTransferContext()
+	{
+		if (!_dedicatedTransferQueue) return nullptr;
+		return std::make_unique<ThreadContext>(shared_from_this(), _dedicatedTransferQueue);
+	}
 
 	IResourcePtr Device::CreateResource(
 		const ResourceDesc& desc,
@@ -2180,9 +2208,15 @@ namespace RenderCore { namespace ImplVulkan
 		return Metal_Vulkan::CreateLowLevelShaderCompiler(*this, cfg);
 	}
 
-	std::shared_ptr<Metal_Vulkan::IAsyncTracker> Device::GetAsyncTracker()
+	std::shared_ptr<Metal_Vulkan::IAsyncTracker> Device::GetGraphicsQueueAsyncTracker()
 	{
 		return _graphicsQueue->GetTracker();
+	}
+
+	std::shared_ptr<Metal_Vulkan::IAsyncTracker> Device::GetDedicatedTransferAsyncTracker()
+	{
+		if (!_dedicatedTransferQueue) return nullptr;
+		return _dedicatedTransferQueue->GetTracker();
 	}
 
 	void Device::GetInternalMetrics(InternalMetricsType type, IteratorRange<void*> dst) const

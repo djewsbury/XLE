@@ -313,7 +313,7 @@ namespace RenderCore { namespace ImplVulkan
 		assert(tc);
 		auto vulkanDevice = (IDeviceVulkan*)tc->GetDevice()->QueryInterface(typeid(IDeviceVulkan).hash_code());
 		assert(vulkanDevice);
-		_asyncTracker = vulkanDevice->GetAsyncTracker();
+		_asyncTracker = vulkanDevice->GetGraphicsQueueAsyncTracker();
 
 		_currentRenderFrameId = ~unsigned(0);
 		_frameRecursionDepth = 0;

@@ -54,7 +54,7 @@ namespace RenderCore { namespace Techniques
 			auto* vulkanDevice = (IDeviceVulkan*)device.QueryInterface(typeid(IDeviceVulkan).hash_code());
 			if (!vulkanDevice)
 				Throw(std::runtime_error("Requires vulkan device for GPU tracking"));
-			_tracker = vulkanDevice->GetAsyncTracker();
+			_tracker = vulkanDevice->GetGraphicsQueueAsyncTracker();
 		}
 
 		GPUTrackerHeap() = default;

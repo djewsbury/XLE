@@ -385,7 +385,7 @@ namespace UnitTests
 		std::future<std::shared_ptr<RenderCore::IResource>> Queue(
 			const RenderCore::ResourceDesc& desc,
 			std::string&& name,
-			RenderCore::BindFlag::Enum finalResourceState);
+			RenderCore::BindFlag::BitField finalResourceState);
 		void Tick();
 
 		BackgroundTextureUploader(std::shared_ptr<RenderCore::IDevice> device);
@@ -400,7 +400,7 @@ namespace UnitTests
 		struct QueuedUpload
 		{
 			RenderCore::ResourceDesc _desc;
-			RenderCore::BindFlag::Enum _finalResourceState;
+			RenderCore::BindFlag::BitField _finalResourceState;
 			std::string _name;
 			std::promise<std::shared_ptr<RenderCore::IResource>> _promise;
 		};
@@ -415,7 +415,7 @@ namespace UnitTests
 				RenderCore::IThreadContext& threadContext,
 				const RenderCore::ResourceDesc& desc,
 				StringSection<> resName,
-				RenderCore::BindFlag::Enum finalResourceState);
+				RenderCore::BindFlag::BitField finalResourceState);
 
 			struct AllocationPendingRelease
 			{
@@ -429,7 +429,7 @@ namespace UnitTests
 		StagingBufferMan _stagingBufferMan;
 	};
 
-	std::future<std::shared_ptr<RenderCore::IResource>> BackgroundTextureUploader::Queue(const RenderCore::ResourceDesc& desc, std::string&& name, RenderCore::BindFlag::Enum finalResourceState)
+	std::future<std::shared_ptr<RenderCore::IResource>> BackgroundTextureUploader::Queue(const RenderCore::ResourceDesc& desc, std::string&& name, RenderCore::BindFlag::BitField finalResourceState)
 	{
 		ScopedLock(_queueLock);
 		QueuedUpload upload;
@@ -480,7 +480,7 @@ namespace UnitTests
 		auto* vulkanDevice = (IDeviceVulkan*)threadContext.GetDevice()->QueryInterface(typeid(IDeviceVulkan).hash_code());
 		if (!vulkanDevice)
 			Throw(std::runtime_error("Expecting Vulkan device"));
-		return vulkanDevice->GetAsyncTracker()->GetProducerMarker();
+		return vulkanDevice->GetGraphicsQueueAsyncTracker()->GetProducerMarker();
 	}
 
 	static RenderCore::Metal_Vulkan::IAsyncTracker::Marker GetConsumerMarker(RenderCore::IThreadContext& threadContext)
@@ -489,7 +489,7 @@ namespace UnitTests
 		auto* vulkanDevice = (IDeviceVulkan*)threadContext.GetDevice()->QueryInterface(typeid(IDeviceVulkan).hash_code());
 		if (!vulkanDevice)
 			Throw(std::runtime_error("Expecting Vulkan device"));
-		return vulkanDevice->GetAsyncTracker()->GetConsumerMarker();
+		return vulkanDevice->GetGraphicsQueueAsyncTracker()->GetConsumerMarker();
 	}
 
 	static unsigned CalculateBufferOffsetAlignment(const RenderCore::ResourceDesc& desc)
@@ -516,7 +516,7 @@ namespace UnitTests
 		RenderCore::IThreadContext& threadContext,
 		const RenderCore::ResourceDesc& desc,
 		StringSection<> resName,
-		RenderCore::BindFlag::Enum finalResourceState) -> std::shared_ptr<RenderCore::IResource>
+		RenderCore::BindFlag::BitField finalResourceState) -> std::shared_ptr<RenderCore::IResource>
 	{
 		using namespace RenderCore;
 		auto byteCount = ByteCount(desc);
@@ -566,7 +566,11 @@ namespace UnitTests
 				*resource, desc,
 				*_stagingBuffer, stagingAllocation, stagingSize);
 
-			Metal::BarrierHelper(threadContext).Add(*resource, BindFlag::TransferDst, finalResourceState);
+			// this a queue family release operation
+			Metal::BarrierHelper(threadContext).Add(
+				*resource,
+				Metal::BarrierResourceUsage { BindFlag::TransferDst, Metal::BarrierResourceUsage::Queue::DedicatedTransfer },
+				Metal::BarrierResourceUsage { finalResourceState, Metal::BarrierResourceUsage::Queue::Graphics });
 			checked_cast<RenderCore::Metal_Vulkan::Resource*>(resource.get())->ChangeSteadyState(finalResourceState);
 
 			auto producerMarker = GetProducerMarker(threadContext);
@@ -608,9 +612,15 @@ namespace UnitTests
 			"main-staging-buffer");
 
 		_workerThread = std::thread{[device, this]() {
-			auto bkThreadContext = device->CreateDeferredContext();
+			// auto bkThreadContext = device->CreateDeferredContext();
+			auto bkThreadContext = dynamic_cast<RenderCore::IDeviceVulkan*>(device.get())->CreateDedicatedTransferContext();
 			std::optional<unsigned> oldestItem;
 			std::vector<ItemsOnCmdList> itemsOnCmdList;
+
+			// we don't need barriers on _stagingBufferMan._stagingBuffer, it's effectively always in TransferDst layout (even though it's really just a buffer)
+			auto& metalContext = *Metal::DeviceContext::Get(*bkThreadContext);
+			Metal::BarrierHelper(metalContext).Add(*_stagingBufferMan._stagingBuffer, Metal::BarrierResourceUsage::NoState(), BindFlag::TransferSrc);
+			checked_cast<RenderCore::Metal_Vulkan::Resource*>(_stagingBufferMan._stagingBuffer.get())->ChangeSteadyState(BindFlag::TransferSrc);
 
 			std::optional<QueuedUpload> frontItem;
 			bool pendingPopFrontItem = false;
@@ -673,7 +683,7 @@ namespace UnitTests
 			for (auto& i:itemsOnCmdList)
 				i._promise.set_exception(std::make_exception_ptr(std::runtime_error("Shutdown before upload completed")));
 
-			// note -- not releasing alocations in allocationsPendingRelease
+			// note -- not releasing allocations in allocationsPendingRelease
 		}};
 	}
 
@@ -726,20 +736,38 @@ namespace UnitTests
 			futureResources.emplace_back(std::move(future));
 
 			if ((c % 4) == 0) {
+				std::vector<IResource*> resourcesToBarrier;
 				while (!futureResources.empty() && futureResources.front().wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-					completedResources.push_back(futureResources.front().get());
+					auto res = futureResources.front().get();
+					resourcesToBarrier.push_back(res.get());
+					completedResources.push_back(std::move(res));
 					futureResources.erase(futureResources.begin());
 				}
 
 				// emulate drawing a frame
 				{
-					auto rpi = fbHelper.BeginRenderPass(*threadContext);
 					auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
+
+					{
+						Metal::BarrierHelper barrierHelper(metalContext);
+						for (const auto& r:resourcesToBarrier) {
+							// this is the acquire barrier, which transfers from the transfer queue onto our graphics queue
+							BindFlag::BitField finalResourceState = (r->GetDesc()._type == ResourceDesc::Type::Texture) ? BindFlag::ShaderResource : BindFlag::VertexBuffer;
+							barrierHelper.Add(
+								*r,
+								Metal::BarrierResourceUsage { BindFlag::TransferDst, Metal::BarrierResourceUsage::Queue::DedicatedTransfer },
+								Metal::BarrierResourceUsage { finalResourceState, Metal::BarrierResourceUsage::Queue::Graphics });
+						}
+					}
+
+					auto rpi = fbHelper.BeginRenderPass(*threadContext);
+
 					auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*testHelper->_pipelineLayout);
 					encoder.Bind(shaderProgram);
 
-					if (!completedResources.empty()) {
-						auto srv = completedResources.front()->CreateTextureView();
+					for (const auto& c:completedResources) {
+						if (c->GetDesc()._type != ResourceDesc::Type::Texture) continue;
+						auto srv = c->CreateTextureView();
 						IResourceView* views[] = { srv.get() };
 						ISampler* samplers[] = { sampler.get() };
 						UniformsStream uniformsStream;

@@ -169,6 +169,10 @@ namespace RenderCore { namespace Metal_Vulkan
             mutable Threading::Mutex _resourcesVisibleToQueueLock;
         #endif
 
+        unsigned _graphicsQueueFamily = ~0u;
+        unsigned _dedicatedTransferQueueFamily = ~0u;
+        unsigned _dedicatedComputeQueueFamily = ~0u;
+
 		ObjectFactory(
             VkInstance instance,
             VkPhysicalDevice physDev, VulkanSharedPtr<VkDevice> device,

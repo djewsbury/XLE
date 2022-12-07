@@ -16,22 +16,8 @@ namespace Assets { struct DependentFileState; }
 
 namespace RenderCore
 {
-	namespace Metal_Vulkan { class DeviceContext; class GlobalPools; class CommandList; class IAsyncTracker; }
-
-	enum class VulkanShaderMode
-	{
-		GLSLToSPIRV,
-		HLSLToSPIRV,
-		HLSLCrossCompiled
-	};
-
-	struct VulkanCompilerConfiguration
-	{
-		VulkanShaderMode _shaderMode = VulkanShaderMode::HLSLToSPIRV;
-		LegacyRegisterBindingDesc _legacyBindings = {};
-		std::vector<PipelineLayoutInitializer::PushConstantsBinding> _pushConstants = {};
-		std::vector<::Assets::DependentFileState> _additionalDependencies = {};		// (if the legacy bindings, etc, are loaded from a file, you can register extra dependencies with this)
-	};
+	namespace Metal_Vulkan { class DeviceContext; class CommandList; class IAsyncTracker; }
+	struct VulkanCompilerConfiguration;
 
 	////////////////////////////////////////////////////////////////////////////////
 
@@ -40,10 +26,14 @@ namespace RenderCore
 	public:
 		virtual VkInstance	GetVulkanInstance() = 0;
 		virtual VkDevice	GetUnderlyingDevice() = 0;
-		virtual Metal_Vulkan::GlobalPools& GetGlobalPools() = 0;
+
 		virtual std::shared_ptr<ILowLevelCompiler> CreateShaderCompiler(
 			const VulkanCompilerConfiguration&) = 0;
-		virtual std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetAsyncTracker() = 0;
+
+		virtual std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetGraphicsQueueAsyncTracker() = 0;
+		virtual std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetDedicatedTransferAsyncTracker() = 0;
+
+		virtual std::unique_ptr<IThreadContext> CreateDedicatedTransferContext() = 0;
 
 		enum InternalMetricsType { MainDescriptorPoolMetrics, LongTermDescriptorPoolMetrics };
 		virtual void GetInternalMetrics(InternalMetricsType type, IteratorRange<void*> dst) const = 0;
@@ -78,6 +68,23 @@ namespace RenderCore
 		virtual std::string LogPhysicalDevice(unsigned configurationIdx) = 0;
 		virtual std::string LogInstance(const void* presentationChainPlatformValue = nullptr) = 0;
 		virtual ~IAPIInstanceVulkan();
+	};
+
+	////////////////////////////////////////////////////////////////////////////////
+
+	enum class VulkanShaderMode
+	{
+		GLSLToSPIRV,
+		HLSLToSPIRV,
+		HLSLCrossCompiled
+	};
+
+	struct VulkanCompilerConfiguration
+	{
+		VulkanShaderMode _shaderMode = VulkanShaderMode::HLSLToSPIRV;
+		LegacyRegisterBindingDesc _legacyBindings = {};
+		std::vector<PipelineLayoutInitializer::PushConstantsBinding> _pushConstants = {};
+		std::vector<::Assets::DependentFileState> _additionalDependencies = {};		// (if the legacy bindings, etc, are loaded from a file, you can register extra dependencies with this)
 	};
 
 }

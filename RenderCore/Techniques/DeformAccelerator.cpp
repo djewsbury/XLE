@@ -444,7 +444,7 @@ namespace RenderCore { namespace Techniques
 	{
 		auto* deviceVulkan = (RenderCore::IDeviceVulkan*)_device->QueryInterface(typeid(RenderCore::IDeviceVulkan).hash_code());
 		if (deviceVulkan) {
-			_asyncTracker = deviceVulkan->GetAsyncTracker();
+			_asyncTracker = deviceVulkan->GetGraphicsQueueAsyncTracker();
 			_temporaryStorageManager = std::make_unique<Metal_Vulkan::TemporaryStorageManager>(Metal::GetObjectFactory(), _asyncTracker);
 			const unsigned cbAllocationSize = 1024*1024;
 			_cbNamedPage = _temporaryStorageManager->CreateNamedPage(cbAllocationSize, BindFlag::ConstantBuffer);
