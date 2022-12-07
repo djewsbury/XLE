@@ -14,8 +14,8 @@
 		TextureCubeArray<float> StaticShadowProbeDatabase : register(t10, space1);
 		StructuredBuffer<StaticShadowProbeDesc> StaticShadowProbeProperties : register(t11, space1);
 	#else
-		TextureCubeArray<float> StaticShadowProbeDatabase : register(t6, space3);
-		StructuredBuffer<StaticShadowProbeDesc> StaticShadowProbeProperties : register(t7, space3);
+		TextureCubeArray<float> StaticShadowProbeDatabase : register(t6, space2);
+		StructuredBuffer<StaticShadowProbeDesc> StaticShadowProbeProperties : register(t7, space2);
 	#endif
 
 	uint MajorAxisIndex(float3 input)

@@ -4,12 +4,15 @@
 #include "shadow-template.pipeline"
 
 DescriptorSet Material {};		// replaced by PipelineAcceleratorPool
+DescriptorSet Spacer {};
 
 PipelineLayout GraphicsMain
 {
-	DescriptorSet Numeric;
-	DescriptorSet Sequencer;
-	DescriptorSet Material;
+	DescriptorSet Numeric;					// 0
+	DescriptorSet Sequencer;				// 1
+	DescriptorSet Spacer;					// 2
+	DescriptorSet Spacer;					// 3
+	DescriptorSet Material;					// 4
 
 	VSPushConstants LocalTransform
 	{
@@ -23,9 +26,9 @@ PipelineLayout GraphicsForwardPlus
 {
 	DescriptorSet Numeric;					// 0
 	DescriptorSet Sequencer;				// 1
-	DescriptorSet Material;					// 2
-	DescriptorSet ForwardLighting;			// 3
-	DescriptorSet ShadowTemplate;			// 4
+	DescriptorSet ForwardLighting;			// 2
+	DescriptorSet ShadowTemplate;			// 3
+	DescriptorSet Material;					// 4
 
 	VSPushConstants LocalTransform
 	{
@@ -39,8 +42,9 @@ PipelineLayout GraphicsProbePrepare
 {
 	DescriptorSet Numeric;					// 0
 	DescriptorSet Sequencer;				// 1
-	DescriptorSet Material;					// 2
-	DescriptorSet ProbePrepareLighting;		// 3
+	DescriptorSet ProbePrepareLighting;		// 2
+	DescriptorSet Spacer;					// 3
+	DescriptorSet Material;					// 4
 
 	VSPushConstants LocalTransform
 	{

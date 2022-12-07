@@ -14,7 +14,7 @@
 #include "../TechniqueLibrary/LightingEngine/SphericalHarmonics.hlsl"
 #include "../TechniqueLibrary/Math/ProjectionMath.hlsl"
 
-cbuffer EnvironmentProps : register (b0, space3)
+cbuffer EnvironmentProps : register (b0, space2)
 {
 	LightDesc DominantLight;
 	uint LightCount;
@@ -22,12 +22,12 @@ cbuffer EnvironmentProps : register (b0, space3)
 	float4 DiffuseSHCoefficients[25];			// todo -- require premultiplied coefficients instead of reference coefficients
 };
 
-StructuredBuffer<LightDesc> LightList : register (t1, space3);
-StructuredBuffer<uint> LightDepthTable : register(t2, space3);
-Texture3D<uint> TiledLightBitField : register(t3, space3);
+StructuredBuffer<LightDesc> LightList : register (t1, space2);
+StructuredBuffer<uint> LightDepthTable : register(t2, space2);
+Texture3D<uint> TiledLightBitField : register(t3, space2);
 
-Texture2D<float3> SSR : register(t4, space3);
-Texture2D<float> SSRConfidence : register(t5, space3);
+Texture2D<float3> SSR : register(t4, space2);
+Texture2D<float> SSRConfidence : register(t5, space2);
 
 static const uint TiledLights_DepthGradiations = 1024;
 static const uint TiledLights_GridDims = 16;

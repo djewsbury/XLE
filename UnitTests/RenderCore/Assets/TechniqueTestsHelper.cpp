@@ -165,11 +165,14 @@ namespace UnitTests
 		};
 
 		DescriptorSet Numeric {};
+		DescriptorSet Spacer {};
 
 		PipelineLayout GraphicsMain
 		{
 			DescriptorSet Numeric;
 			DescriptorSet Sequencer;
+			DescriptorSet Spacer;
+			DescriptorSet Spacer;
 			DescriptorSet Material;
 		};
 
