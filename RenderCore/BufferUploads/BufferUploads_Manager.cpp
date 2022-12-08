@@ -1726,7 +1726,6 @@ namespace RenderCore { namespace BufferUploads
         CommandListMetrics      PopMetrics() override;
 
         void                    Update(IThreadContext&) override;
-        void                    FramePriority_Barrier() override;
 
         unsigned GetGUID() const override { return _guid; }
 
@@ -1759,7 +1758,6 @@ namespace RenderCore { namespace BufferUploads
     void                    Manager::StallUntilCompletion(IThreadContext& immediateContext, CommandListID id)
     {
         if (!id || id == CommandListID_Invalid) return;
-        FramePriority_Barrier();        // ensure we're queued for resolve
         while (!IsComplete(id)) {
             Update(immediateContext);
             std::this_thread::sleep_for(std::chrono::nanoseconds(500*1000));
@@ -1790,15 +1788,6 @@ namespace RenderCore { namespace BufferUploads
         _assemblyLine->TriggerWakeupEvent();
 
         PlatformInterface::Resource_RecalculateVideoMemoryHeadroom();
-    }
-
-    void Manager::FramePriority_Barrier()
-    {
-        while (!_assemblyLine->CompleteCurrentCmdListID()) {
-            _assemblyLine->TriggerWakeupEvent();
-            Threading::Sleep(0); 
-        }
-        _assemblyLine->TriggerWakeupEvent();
     }
 
     uint32_t Manager::DoBackgroundThread()

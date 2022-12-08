@@ -154,9 +154,12 @@ namespace RenderCore { namespace ImplVulkan
 					NULL,                                                     // pNext
 					0,                                                        // flags
 					VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |           // messageSeverity
-					VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
+					VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+					VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+					VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
 					VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |             // messageType
-					VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
+					VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+					VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
 					debug_callback,                                           // pfnUserCallback
 					this                                                      // pUserData
 				};
@@ -1422,6 +1425,8 @@ namespace RenderCore { namespace ImplVulkan
 			deviceExtensions[deviceExtensionCount++] = VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME;
 		if (xleFeatures._textureCompressionASTC_HDR)
 			deviceExtensions[deviceExtensionCount++] = VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME;
+
+		deviceExtensions[deviceExtensionCount++] = VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME;	// because it's used internally, it's always required (promoted into Vulkan 1.2)
 		deviceExtensions[deviceExtensionCount++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 
 		if (enableDebugLayer)
@@ -2560,7 +2565,7 @@ namespace RenderCore { namespace ImplVulkan
 
 	float ThreadContext::GetThreadingPressure()
 	{
-		return _submissionQueue->GetTracker()->GetThreadingPressure();
+		return checked_cast<Metal_Vulkan::FenceBasedTracker*>(_submissionQueue->GetTracker().get())->GetThreadingPressure();
 	}
 
 	unsigned ThreadContext::GetCmdListSpecificMarker()
@@ -2583,9 +2588,6 @@ namespace RenderCore { namespace ImplVulkan
 		Metal_Vulkan::CommandList& cmdList,
 		IteratorRange<const VkSemaphore*> completionSignals)
 	{
-		if (!_interimCommandBufferComplete)
-			_interimCommandBufferComplete = _factory->CreateSemaphore();
-
 		VkSemaphore waitSema[2];
 		VkPipelineStageFlags waitStages[2];
 		unsigned waitCount = 0;
@@ -2595,6 +2597,7 @@ namespace RenderCore { namespace ImplVulkan
 			++waitCount;
 		}
 		if (_nextQueueShouldWaitOnInterimBuffer) {
+			assert(_interimCommandBufferComplete);
 			waitSema[waitCount] = _interimCommandBufferComplete.get();
 			waitStages[waitCount] = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 			++waitCount;
@@ -2711,7 +2714,8 @@ namespace RenderCore { namespace ImplVulkan
 			if (waitForCompletion)
 				_submissionQueue->WaitForFence(fenceToWaitFor);
 		} else {
-			// note tht if we don't have an active command list, and flags is WaitForCompletion, we still don't actually wait for the GPU to catchup to any previously committed command lists
+			// note that if we don't have an active command list, and flags is WaitForCompletion, we still don't actually wait
+			// for the GPU to catchup to any previously committed command lists
 			// however, we still flush out the destruction queues, etc
 		}
 
@@ -2725,7 +2729,7 @@ namespace RenderCore { namespace ImplVulkan
 	void ThreadContext::PumpDestructionQueues()
 	{
 		if (_destrQueue) {
-			_submissionQueue->GetTracker()->UpdateConsumer();
+			checked_cast<Metal_Vulkan::FenceBasedTracker*>(_submissionQueue->GetTracker().get())->UpdateConsumer();
 			_destrQueue->Flush();
 			_globalPools->_mainDescriptorPool.FlushDestroys();
 			_globalPools->_longTermDescriptorPool.FlushDestroys();
@@ -2809,10 +2813,9 @@ namespace RenderCore { namespace ImplVulkan
 				}
 		}
 
-		if (!_commandBufferPool) {
+		if (!_commandBufferPool)
 			_commandBufferPool = std::make_shared<Metal_Vulkan::CommandBufferPool>(
 				*_factory, queueFamilyIndex, false, _submissionQueue->GetTracker());
-		}
 
 		_metalContext = std::make_shared<Metal_Vulkan::DeviceContext>(
 			*_factory, *_globalPools,

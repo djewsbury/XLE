@@ -72,6 +72,12 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkFence FindAvailableFence(IteratorRange<const Marker*> marker, std::unique_lock<Threading::Mutex>& lock);
 	};
 
+	class SemaphoreBasedTracker : public IAsyncTracker
+	{
+	public:
+	private:
+	};
+
 	class EventBasedTracker : public IAsyncTracker
 	{
 	public:

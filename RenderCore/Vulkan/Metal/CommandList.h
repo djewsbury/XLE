@@ -94,7 +94,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		struct SubmissionResult
 		{
-			VkFence _fence;
+			VkFence _fence = nullptr;
+			VkSemaphore _timelineSemaphoreOnComplete = nullptr;
+			uint64_t _timelineSemphoreValue = 0ull;
 			VulkanSharedPtr<VkCommandBuffer> _cmdBuffer;
 			std::vector<IAsyncTracker::Marker> _asyncTrackerMarkers;
 		};

@@ -20,10 +20,6 @@
 #include "../../Utility/Threading/LockFree.h"
 #include <assert.h>
 
-#if GFXAPI_TARGET == GFXAPI_DX11
-    #include "../RenderCore/DX11/Metal/IncludeDX11.h"
-#endif
-
 #if !defined(NDEBUG)
     #define RECORD_BU_THREAD_CONTEXT_METRICS
 #endif

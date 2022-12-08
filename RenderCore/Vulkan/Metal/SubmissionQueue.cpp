@@ -44,7 +44,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
     void SubmissionQueue::WaitForFence(IAsyncTracker::Marker marker, std::optional<std::chrono::nanoseconds> timeout)
     {
-        _gpuTracker->WaitForFence(marker, timeout);
+        checked_cast<FenceBasedTracker*>(_gpuTracker.get())->WaitForFence(marker, timeout);
     }
 
 	void SubmissionQueue::Present(

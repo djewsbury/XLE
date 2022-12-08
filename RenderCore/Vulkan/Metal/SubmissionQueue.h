@@ -15,7 +15,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	class SubmissionQueue
 	{
 	public:
-		const std::shared_ptr<Metal_Vulkan::FenceBasedTracker>& GetTracker() { return _gpuTracker; }
+		const std::shared_ptr<Metal_Vulkan::IAsyncTracker>& GetTracker() { return _gpuTracker; }
 
 		IAsyncTracker::Marker Submit(
 			CommandList& cmdList,
@@ -39,7 +39,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		SubmissionQueue& operator=(SubmissionQueue&&) = delete;
 	private:
 		VkQueue _underlying;
-		std::shared_ptr<Metal_Vulkan::FenceBasedTracker> _gpuTracker;
+		std::shared_ptr<Metal_Vulkan::IAsyncTracker> _gpuTracker;
 		ObjectFactory* _factory;
 		Threading::Mutex _queueLock;
 		unsigned _queueFamilyIndex;

@@ -104,11 +104,6 @@ namespace RenderCore { namespace BufferUploads
             /// PopMetrics() will remove the next item from the queue. If there
         /// no more items, "_commitTime" will be 0.
         virtual CommandListMetrics      PopMetrics              () = 0;
-            /// <summary>Sets a barrier for frame priority operations</summary>
-            /// Sets a barrier, which determines the "end of frame" point for
-            /// frame priority operations. This will normally be called from the same
-            /// thread that begins most upload operations.
-        virtual void                    FramePriority_Barrier   () = 0;
             /// @}
 
         virtual unsigned GetGUID() const = 0;
