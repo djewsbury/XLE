@@ -703,7 +703,7 @@ namespace RenderCore { namespace Metal_Vulkan
     FrameBuffer::FrameBuffer(
         const ObjectFactory& factory,
         const FrameBufferDesc& fbDesc,
-        const INamedAttachments& namedResources)
+        INamedAttachments& namedResources)
     {
 		_layout = GetGlobalPools()._renderPassPool.CreateVulkanRenderPass(fbDesc);
 
