@@ -43,6 +43,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		ObjectFactory* _factory;
 		Threading::Mutex _queueLock;
 		unsigned _queueFamilyIndex;
+		std::atomic<uint64_t> _maxMarkerActuallySubmitted;
 	};
 }}
 

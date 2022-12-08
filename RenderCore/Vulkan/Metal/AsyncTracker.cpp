@@ -4,6 +4,7 @@
 
 #include "AsyncTracker.h"
 #include "DeviceContext.h"
+#include "ExtensionFunctions.h"
 #include "IncludeVulkan.h"
 #include "../../../OSServices/Log.h"
 #include "../../../Utility/Threading/ThreadingUtils.h"
@@ -28,18 +29,18 @@ namespace RenderCore { namespace Metal_Vulkan
             [device](VkFence fence) { vkDestroyFence(device, fence, g_allocationCallbacks ); });
 	}
 
-	auto FenceBasedTracker::IncrementProducerFrame() -> Marker
+	auto FenceBasedTracker::AllocateMarkerForNewCmdList() -> Marker
 	{
 		ScopedLock(_trackersWritingCommandsLock);
 		if (_initialMarker) {
 			// special case to ensure that the initial marker actually gets submitted (or abandoned) by something
 			assert(_currentProducerFrameMarker == 1);
-			_trackersWritingCommands.push_back({_currentProducerFrameMarker, std::chrono::steady_clock::now()});
+			_trackersWritingCommands.push_back({_currentProducerFrameMarker, std::chrono::steady_clock::now(), std::this_thread::get_id()});
 			_initialMarker = false;
 			return _currentProducerFrameMarker;
 		} else {
 			auto result = ++_currentProducerFrameMarker;
-			_trackersWritingCommands.push_back({result, std::chrono::steady_clock::now()});
+			_trackersWritingCommands.push_back({result, std::chrono::steady_clock::now(), std::this_thread::get_id()});
 			return result;
 		}
 	}
@@ -405,7 +406,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		for (unsigned c=0; c<(2*queueDepth); ++c)
 			_fences[c] = CreateFenceOutsideOfFactory(factory.GetDevice().get());
 
-		// We start with frame 1;
+		// We start with frame 1 -- and we want GetProducerMarker() to return 1 even before the first call to AllocateMarkerForNewCmdList()
 		_currentProducerFrameMarker = 1;
 		_lastCompletedConsumerFrameMarker = 0;
 		_nextSubmittedToQueueMarker = 1;
@@ -415,6 +416,195 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	FenceBasedTracker::~FenceBasedTracker() {}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	auto SemaphoreBasedTracker::GetSpecificMarkerStatus(Marker marker) const -> MarkerStatus
+	{
+		if (marker <= _lastCompletedConsumerFrameMarker.load()) return MarkerStatus::ConsumerCompleted;
+		if (marker > _currentProducerFrameMarker.load()) return MarkerStatus::Unknown;
+
+		ScopedLock(_trackersSubmittedToQueueLock);
+		if (marker <= _lastQueuedInOrder) return MarkerStatus::ConsumerPending;
+		if (marker <= _trailingAbandons) return MarkerStatus::Abandoned;
+
+		auto i = std::lower_bound(
+			_trackersSubmittedPendingOrdering.begin(), _trackersSubmittedPendingOrdering.end(), marker,
+			[](const auto& lhs, auto marker) { return lhs._frameMarker < marker; });
+		if (i != _trackersSubmittedPendingOrdering.end() && i->_frameMarker == marker)
+			return (i->_state == State::SubmittedToQueue) ? MarkerStatus::ConsumerPending : MarkerStatus::Abandoned;
+
+		return MarkerStatus::NotSubmitted;		// expecting it to be in _trackersWritingCommands
+	}
+
+	auto SemaphoreBasedTracker::AllocateMarkerForNewCmdList() -> Marker
+	{
+		ScopedLock(_trackersWritingCommandsLock);
+		// note that the first call to AllocateMarkerForNewCmdList() does not advance the producer frame marker, because we want
+		// anything that happens before the first AllocateMarkerForNewCmdList() to be considered part of the first cmd list
+		// Similarily, we can get an early advance if the submitted queue marker catches up to the producer marker
+		if (_currentProducerFrameMarkerAdvancedBeforeAllocation) {
+			_trackersWritingCommands.push_back({(Marker)_currentProducerFrameMarker, std::chrono::steady_clock::now(), std::this_thread::get_id()});
+			_currentProducerFrameMarkerAdvancedBeforeAllocation = false;
+			return (Marker)_currentProducerFrameMarker;
+		} else {
+			auto result = (Marker)++_currentProducerFrameMarker;
+			_trackersWritingCommands.push_back({result, std::chrono::steady_clock::now(), std::this_thread::get_id()});
+			return result;
+		}
+	}
+
+	std::pair<VkSemaphore, uint64_t> SemaphoreBasedTracker::OnSubmitToQueue(IteratorRange<const Marker*> markers)
+	{
+		auto newLastQueuedInOrder = ProcessMarkers(markers, State::SubmittedToQueue);
+		return { _semaphore.get(), newLastQueuedInOrder };		// not that it's possible we return something equal to a previous submit
+	}
+
+	void SemaphoreBasedTracker::AbandonMarkers(IteratorRange<const Marker*> markers)
+	{
+		ProcessMarkers(markers, State::Abandoned);
+	}
+
+	uint64_t SemaphoreBasedTracker::ProcessMarkers(IteratorRange<const Marker*> markers, State newState)
+	{
+		assert(!markers.empty());
+		for (auto i=markers.begin()+1; i!=markers.end(); ++i) assert(*(i-1) < *i);		// we need the markers to be in sorted order here (&unique)
+		assert(markers[0] != 0);		// 0 is an invalid marker
+		assert(markers[markers.size()-1] != Marker_Invalid);
+
+		uint64_t newLastQueuedInOrder;
+		uint64_t newTrailingAbandons;
+
+		{
+			ScopedLock(_trackersSubmittedToQueueLock);
+			{
+				// queuing those markers may now allow us to advance previously out-of-order markers
+				for (;;) {
+					auto nextInOrder = _trailingAbandons+1;
+
+					if (!markers.empty() && *markers.begin() == nextInOrder) {
+						++_trailingAbandons;
+						if (newState != State::Abandoned)
+							_lastQueuedInOrder = _trailingAbandons;		// ie, now _lastQueuedInOrder == *markers.begin()
+						++markers.first;
+						continue;
+					}
+					
+					if (!_trackersSubmittedPendingOrdering.empty() && _trackersSubmittedPendingOrdering.front()._frameMarker == nextInOrder) {
+						++_trailingAbandons;
+						if (_trackersSubmittedPendingOrdering.front()._state != State::Abandoned)
+							_lastQueuedInOrder = _trailingAbandons;		// ie, now _lastQueuedInOrder == _trackersSubmittedPendingOrdering.front()._frameMarker
+						_trackersSubmittedPendingOrdering.erase(_trackersSubmittedPendingOrdering.begin());		// no pop_front!
+						continue;
+					}
+
+					break;		// nothing changed
+				}
+			}
+
+			// any remaining markers are out of order
+			auto i = _trackersSubmittedPendingOrdering.begin();
+			auto m = markers.begin();
+			while (m != markers.end()) {
+				while (i != _trackersSubmittedPendingOrdering.end() && i->_frameMarker < *m) ++i;
+				i = _trackersSubmittedPendingOrdering.insert(i, {*m, newState});
+				++i;
+				++m;
+			}
+
+			newLastQueuedInOrder = _lastQueuedInOrder;
+			newTrailingAbandons = _trailingAbandons;
+		}
+
+		{
+			ScopedLock(_trackersWritingCommandsLock);
+			auto i = _trackersWritingCommands.begin();
+			auto m = markers.begin();
+			while (m!=markers.end()) {
+				// It you hit the below assert, it might mean the marker was given to OnSubmitToQueue/AbandonMarkers multiple times?
+				// At the very least, it's not in _trackersWritingCommands
+				while (i->_marker < *m) { ++i; assert(i != _trackersWritingCommands.end()); }
+				i = _trackersWritingCommands.erase(i);
+				++m;
+			}
+
+			// Note that the following is only safe because _currentProducerFrameMarker only advances within the _trackersWritingCommandsLock lock
+			// _lastCompletedConsumerFrameMarker can become equal to newLastQueuedInOrder at any point after the return from this function
+			// Therefore, it's critical that no newly created objects use newLastQueuedInOrder as their marker. We must pre-advance _currentProducerFrameMarker
+			// if it looks like that might happen
+			if (_currentProducerFrameMarker == newTrailingAbandons) {
+				++_currentProducerFrameMarker;
+				_currentProducerFrameMarkerAdvancedBeforeAllocation = true;
+			}
+		}
+
+		return newLastQueuedInOrder;
+	}
+
+	void SemaphoreBasedTracker::UpdateConsumer()
+	{
+		uint64_t result = 0;
+		auto hres = _extFn->_getSemaphoreCounterValue(_device, _semaphore.get(), &result);
+		assert(hres == VK_SUCCESS);
+		_lastCompletedConsumerFrameMarker = result;
+	}
+
+	void SemaphoreBasedTracker::AttachName(Marker marker, std::string name)
+	{
+		ScopedLock(_trackersWritingCommandsLock);
+		auto i = std::find_if(
+			_trackersWritingCommands.begin(), _trackersWritingCommands.end(),
+			[marker](const auto& c) { return c._marker == marker; });
+		assert(i != _trackersWritingCommands.end());
+		if (i != _trackersWritingCommands.end())
+			i->_name = std::move(name);
+	}
+
+	bool SemaphoreBasedTracker::WaitForMarker(Marker marker, std::optional<std::chrono::nanoseconds> timeout)
+	{
+		if (marker <= _lastCompletedConsumerFrameMarker) return true;
+
+		VkSemaphoreWaitInfo waitInfo = {};
+		waitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+		waitInfo.pNext = nullptr;
+		waitInfo.flags = 0;
+		VkSemaphore sema[] { _semaphore.get() };
+		uint64_t values[] { (uint64_t)marker };
+		waitInfo.semaphoreCount = 1;
+		waitInfo.pSemaphores = sema;
+		waitInfo.pValues = values;
+
+		VkResult res;
+		if (timeout) {
+			auto timeoutCount = std::chrono::duration_cast<std::chrono::nanoseconds>(timeout.value()).count();
+			res = _extFn->_waitSemaphores(_device, &waitInfo, timeoutCount);
+		} else {
+			res = _extFn->_waitSemaphores(_device, &waitInfo, UINT64_MAX);
+		}
+
+		assert(res == VK_SUCCESS || res == VK_TIMEOUT); (void)res;
+		return res == VK_TIMEOUT;
+	}
+
+	SemaphoreBasedTracker::SemaphoreBasedTracker(ObjectFactory& factory)
+	{
+		_extFn = &factory.GetExtensionFunctions();
+		_semaphore = factory.CreateTimelineSemaphore();		// initial state will be 0
+
+		const unsigned reserveDepth = 32;
+		_trackersSubmittedPendingOrdering.reserve(reserveDepth);
+		_trackersWritingCommands.reserve(reserveDepth);
+
+		// We start with frame 1 -- and we want GetProducerMarker() to return 1 even before the first call to AllocateMarkerForNewCmdList()
+		_currentProducerFrameMarker = 1;
+		_lastCompletedConsumerFrameMarker = 0;
+		_lastQueuedInOrder = 0;
+		_trailingAbandons = 0;
+		_currentProducerFrameMarkerAdvancedBeforeAllocation = true;
+		_device = factory.GetDevice().get();
+	}
+
+	SemaphoreBasedTracker::~SemaphoreBasedTracker() {}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -434,7 +624,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-	void EventBasedTracker::IncrementProducerFrame()
+	void EventBasedTracker::AllocateMarkerForNewCmdList()
 	{
 		++_currentProducerFrame;
 		_producerBufferIndex = (_producerBufferIndex + 1) % _bufferCount; 

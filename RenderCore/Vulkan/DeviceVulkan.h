@@ -21,14 +21,7 @@
 #include <vector>
 #include <type_traits>
 
-
-namespace RenderCore { namespace Metal_Vulkan
-{
-    class EventBasedTracker;
-    class FenceBasedTracker;
-    class SubmissionQueue;
-    class GlobalsContainer;
-}}
+namespace RenderCore { namespace Metal_Vulkan { class SubmissionQueue; class GlobalsContainer; }}
 
 namespace RenderCore { namespace ImplVulkan
 {

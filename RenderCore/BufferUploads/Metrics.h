@@ -66,6 +66,8 @@ namespace RenderCore { namespace BufferUploads
         unsigned _batchedUploadCount;
         unsigned _wakeCount, _frameId;
 
+        std::string _exceptionMsg;
+
         CommandListMetrics();
         CommandListMetrics(const CommandListMetrics& cloneFrom);
         const CommandListMetrics& operator=(const CommandListMetrics& cloneFrom);

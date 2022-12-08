@@ -497,7 +497,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-	void Resource::ChangeSteadyState(BindFlag::Enum usage)
+	void Resource::ChangeSteadyState(BindFlag::BitField usage)
 	{
 		_steadyStateImageLayout = Internal::LayoutForImmediateUsage(usage);
 	}
@@ -2063,6 +2063,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				break;
 
 			case BindFlag::PresentationSrc:
+				_accessFlags |= VK_ACCESS_MEMORY_READ_BIT;		// see https://github.com/KhronosGroup/Vulkan-Tools/blob/master/cube/cube.c
 				_pipelineStageFlags |= VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
 				break;
 

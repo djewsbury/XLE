@@ -296,12 +296,18 @@ namespace RenderCore { namespace Metal_Vulkan
 		_attachedStorage.OnSubmitToQueue(GetPrimaryTrackerMarker());
 		assert(!_asyncTrackerMarkers.empty());
 		std::sort(_asyncTrackerMarkers.begin(), _asyncTrackerMarkers.end());
-		auto fence = checked_cast<FenceBasedTracker*>(_asyncTracker.get())->OnSubmitToQueue(_asyncTrackerMarkers);
 
 		SubmissionResult result;
 		result._cmdBuffer = std::move(_underlying);
 		result._asyncTrackerMarkers = std::move(_asyncTrackerMarkers);
-		result._fence = fence;
+
+		if (auto* ft = dynamic_cast<FenceBasedTracker*>(_asyncTracker.get())) {
+			result._fence = ft->OnSubmitToQueue(result._asyncTrackerMarkers);
+		} else {
+			std::tie(result._timelineSemaphoreToSignal, result._timelineSemphoreValue) 
+				= checked_cast<SemaphoreBasedTracker*>(_asyncTracker.get())->OnSubmitToQueue(result._asyncTrackerMarkers);
+		}
+
 		_asyncTrackerMarkers.clear();
 		_asyncTracker = nullptr;
 		return result;
@@ -321,7 +327,14 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (&moveFrom != this) {
 			_attachedStorage.AbandonAllocations();
 			if (_asyncTracker && !_asyncTrackerMarkers.empty()) {
-				checked_cast<FenceBasedTracker*>(_asyncTracker.get())->AbandonMarkers(_asyncTrackerMarkers);
+
+				std::sort(_asyncTrackerMarkers.begin(), _asyncTrackerMarkers.end());
+				if (auto* ft = dynamic_cast<FenceBasedTracker*>(_asyncTracker.get())) {
+					ft->AbandonMarkers(_asyncTrackerMarkers);
+				} else {
+					checked_cast<SemaphoreBasedTracker*>(_asyncTracker.get())->AbandonMarkers(_asyncTrackerMarkers);
+				}
+
 			} else {
 				assert(!_asyncTracker && _asyncTrackerMarkers.empty());     // should have neither or both
 			}
@@ -344,7 +357,13 @@ namespace RenderCore { namespace Metal_Vulkan
 	: _underlying(std::move(underlying)) 
 	, _asyncTracker(std::move(asyncTracker))
 	{
-		auto marker = checked_cast<FenceBasedTracker*>(_asyncTracker.get())->IncrementProducerFrame();
+		IAsyncTracker::Marker marker;
+		if (auto* ft = dynamic_cast<FenceBasedTracker*>(_asyncTracker.get())) {
+			marker = ft->AllocateMarkerForNewCmdList();
+		} else {
+			marker = checked_cast<SemaphoreBasedTracker*>(_asyncTracker.get())->AllocateMarkerForNewCmdList();
+		}
+
 		assert(marker != IAsyncTracker::Marker_Invalid);
 		_asyncTrackerMarkers.push_back(marker);
 	}
@@ -353,7 +372,14 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		_attachedStorage.AbandonAllocations();
 		if (_asyncTracker && !_asyncTrackerMarkers.empty()) {
-			checked_cast<FenceBasedTracker*>(_asyncTracker.get())->AbandonMarkers(_asyncTrackerMarkers);
+			
+			std::sort(_asyncTrackerMarkers.begin(), _asyncTrackerMarkers.end());
+			if (auto* ft = dynamic_cast<FenceBasedTracker*>(_asyncTracker.get())) {
+				ft->AbandonMarkers(_asyncTrackerMarkers);
+			} else {
+				checked_cast<SemaphoreBasedTracker*>(_asyncTracker.get())->AbandonMarkers(_asyncTrackerMarkers);
+			}
+
 		} else {
 			assert(!_asyncTracker && _asyncTrackerMarkers.empty());     // should have neither or both
 		}

@@ -35,7 +35,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		virtual Marker GetConsumerMarker() const = 0;
 		virtual Marker GetProducerMarker() const = 0;
 
-        enum class MarkerStatus { Unknown, NotSubmitted, ConsumerPending, ConsumerCompleted };
+        enum class MarkerStatus { Unknown, NotSubmitted, ConsumerPending, ConsumerCompleted, Abandoned };
         virtual MarkerStatus GetSpecificMarkerStatus(Marker) const = 0;
 
         virtual ~IAsyncTracker();
@@ -68,7 +68,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		struct FlushFlags
 		{
-			enum { DestroyAll = 1<<1 };
+			enum { DestroyAll = 1<<0, ReleaseTracker = 1<<1 };
 			using BitField = unsigned;
 		};
         virtual void    Flush(FlushFlags::BitField = 0) = 0;
@@ -137,6 +137,7 @@ namespace RenderCore { namespace Metal_Vulkan
         // sync
         VulkanUniquePtr<VkFence> CreateFence(VkFenceCreateFlags flags = 0) const;
         VulkanUniquePtr<VkSemaphore> CreateSemaphore(VkSemaphoreCreateFlags flags = 0) const;
+        VulkanUniquePtr<VkSemaphore> CreateTimelineSemaphore(uint64_t initialValue = 0) const;
 		VulkanUniquePtr<VkEvent> CreateEvent() const;
         VulkanUniquePtr<VkQueryPool> CreateQueryPool(
 			VkQueryType_ type, unsigned count, 

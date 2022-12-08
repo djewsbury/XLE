@@ -76,7 +76,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			StringSection<> GetName() const { return {}; }
 		#endif
 
-		void ChangeSteadyState(BindFlag::Enum);
+		void ChangeSteadyState(BindFlag::BitField);
 
 		Resource(
 			ObjectFactory& factory, const Desc& desc,

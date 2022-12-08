@@ -55,6 +55,7 @@ namespace RenderCore { namespace BufferUploads
 		_framePriorityStallTime = cloneFrom._framePriorityStallTime;
 		_batchedUploadBytes = cloneFrom._batchedUploadBytes; _batchedUploadCount = cloneFrom._batchedUploadCount;
 		_wakeCount = cloneFrom._wakeCount; _frameId = cloneFrom._frameId;
+		_exceptionMsg = cloneFrom._exceptionMsg;
 		return *this;
 	}
 

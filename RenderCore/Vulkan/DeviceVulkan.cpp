@@ -1426,8 +1426,11 @@ namespace RenderCore { namespace ImplVulkan
 		if (xleFeatures._textureCompressionASTC_HDR)
 			deviceExtensions[deviceExtensionCount++] = VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME;
 
-		deviceExtensions[deviceExtensionCount++] = VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME;	// because it's used internally, it's always required (promoted into Vulkan 1.2)
+		if (xleFeatures._timelineSemaphore)
+			deviceExtensions[deviceExtensionCount++] = VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME;	// because it's used internally, it's always required (promoted into Vulkan 1.2)
 		deviceExtensions[deviceExtensionCount++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+		if (xleFeatures._viewInstancingRenderPasses)
+			deviceExtensions[deviceExtensionCount++] = VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME; 	// promoted to Vulkan 1.2, HLSL compiler likes to require it
 
 		if (enableDebugLayer)
 			deviceLayers[deviceLayerCount++] = "VK_LAYER_KHRONOS_validation";
@@ -1651,6 +1654,7 @@ namespace RenderCore { namespace ImplVulkan
 		bool hasStreamOutputExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME); }) != ext._extensions.end();
 		bool hasASTCHDRExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME); }) != ext._extensions.end();
 		bool hasConservativeRasterExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME); }) != ext._extensions.end();
+		bool hasTimelineSemaphoreExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME); }) != ext._extensions.end();
 
 		DeviceFeatures result;
 
@@ -1678,6 +1682,7 @@ namespace RenderCore { namespace ImplVulkan
 		result._queryShaderInvocation = features.features.pipelineStatisticsQuery;
 		if (hasStreamOutputExt)
 			result._queryStreamOutput = VkPhysicalDeviceTransformFeedbackPropertiesEXT_inst.transformFeedbackQueries;
+		result._timelineSemaphore = hasTimelineSemaphoreExt;
 
 		// Additional shader instructions
 		result._shaderImageGatherExtended = features.features.shaderImageGatherExtended;
@@ -2011,6 +2016,8 @@ namespace RenderCore { namespace ImplVulkan
     {
 		_foregroundPrimaryContext.reset();
 		_destrQueue = nullptr;
+		_graphicsQueue = nullptr;
+		_dedicatedTransferQueue = nullptr;
         _globalsContainer = nullptr;
     }
 
@@ -2582,7 +2589,11 @@ namespace RenderCore { namespace ImplVulkan
 
 	float ThreadContext::GetThreadingPressure()
 	{
-		return checked_cast<Metal_Vulkan::FenceBasedTracker*>(_submissionQueue->GetTracker().get())->GetThreadingPressure();
+		if (auto* ft = dynamic_cast<Metal_Vulkan::FenceBasedTracker*>(_submissionQueue->GetTracker().get()))
+			return ft->GetThreadingPressure();
+
+		// note -- timeline semaphore has maxTimelineSemaphoreValueDifference (which is probably pretty large, but we should check it)
+		return 0.f;
 	}
 
 	unsigned ThreadContext::GetCmdListSpecificMarker()
@@ -2597,8 +2608,12 @@ namespace RenderCore { namespace ImplVulkan
 		assert(_metalContext && _metalContext->HasActiveCommandList());
 		if (!_metalContext || !_metalContext->HasActiveCommandList())
 			return;
-		checked_cast<Metal_Vulkan::FenceBasedTracker*>(&_metalContext->GetActiveCommandList().GetAsyncTracker())->
-			AttachName(_metalContext->GetActiveCommandList().GetPrimaryTrackerMarker(), std::move(name));
+		if (auto* ft = dynamic_cast<Metal_Vulkan::FenceBasedTracker*>(&_metalContext->GetActiveCommandList().GetAsyncTracker())) {
+			ft->AttachName(_metalContext->GetActiveCommandList().GetPrimaryTrackerMarker(), std::move(name));
+		} else {
+			checked_cast<Metal_Vulkan::SemaphoreBasedTracker*>(&_metalContext->GetActiveCommandList().GetAsyncTracker())
+				->AttachName(_metalContext->GetActiveCommandList().GetPrimaryTrackerMarker(), std::move(name));
+		}
 	}
 
 	Metal_Vulkan::IAsyncTracker::Marker ThreadContext::CommitPrimaryCommandBufferToQueue_Internal(
@@ -2746,7 +2761,13 @@ namespace RenderCore { namespace ImplVulkan
 	void ThreadContext::PumpDestructionQueues()
 	{
 		if (_destrQueue) {
-			checked_cast<Metal_Vulkan::FenceBasedTracker*>(_submissionQueue->GetTracker().get())->UpdateConsumer();
+			if (auto* ft = dynamic_cast<Metal_Vulkan::FenceBasedTracker*>(_submissionQueue->GetTracker().get())) {
+				ft->UpdateConsumer();
+			} else {
+				checked_cast<Metal_Vulkan::SemaphoreBasedTracker*>(_submissionQueue->GetTracker().get())
+					->UpdateConsumer();
+			}
+
 			_destrQueue->Flush();
 			_globalPools->_mainDescriptorPool.FlushDestroys();
 			_globalPools->_longTermDescriptorPool.FlushDestroys();

@@ -689,17 +689,24 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                 gotStart = true;
             }
 
-            commandList->_deferredOperations.CommitToImmediate_PreCommandList(commitTo);
-            if (commandList->_deviceCommandList) {
-                auto* deviceVulkan = (IThreadContextVulkan*)commitTo.QueryInterface(typeid(IThreadContextVulkan).hash_code());
-                if (deviceVulkan) {
-                    deviceVulkan->CommitPrimaryCommandBufferToQueue(*commandList->_deviceCommandList);
-                    commandList->_deviceCommandList = {};
-                } else {
-                    immContext->ExecuteCommandList(std::move(*commandList->_deviceCommandList));
+            TRY {
+                commandList->_deferredOperations.CommitToImmediate_PreCommandList(commitTo);
+                if (commandList->_deviceCommandList) {
+                    auto* deviceVulkan = (IThreadContextVulkan*)commitTo.QueryInterface(typeid(IThreadContextVulkan).hash_code());
+                    if (deviceVulkan) {
+                        deviceVulkan->CommitPrimaryCommandBufferToQueue(*commandList->_deviceCommandList);
+                        commandList->_deviceCommandList = {};
+                    } else {
+                        immContext->ExecuteCommandList(std::move(*commandList->_deviceCommandList));
+                    }
                 }
-            }
-            commandList->_deferredOperations.CommitToImmediate_PostCommandList(commitTo);
+                commandList->_deferredOperations.CommitToImmediate_PostCommandList(commitTo);
+            } CATCH (const std::exception& e) {
+                // we have to catch any exception to ensure (at the very least) that we don't attempt to resubmit this same cmd list again
+                if (!commandList->_metrics._exceptionMsg.empty()) commandList->_metrics._exceptionMsg += ", ";
+                commandList->_metrics._exceptionMsg += e.what();
+            } CATCH_END
+
             if (commandList->_id != ~0u)
                 _pimpl->_commandListIDCommittedToImmediate = std::max(_pimpl->_commandListIDCommittedToImmediate, commandList->_id);
         

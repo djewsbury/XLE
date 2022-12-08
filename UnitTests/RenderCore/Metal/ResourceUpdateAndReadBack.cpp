@@ -54,8 +54,6 @@ namespace UnitTests
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static unsigned vertices_vIdx[] = { 0, 1, 2, 3 };
-
 	static RenderCore::InputElementDesc inputEleVIdx[] = {
 		RenderCore::InputElementDesc { "vertexID", 0, RenderCore::Format::R32_SINT }
 	};
