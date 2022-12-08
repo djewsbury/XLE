@@ -145,7 +145,7 @@ namespace UnitTests
 				viewIndex &= 0xff;*/
 
 				// Find the position of the instanceId'th bit set
-				uint mask = LocalTransform.ViewMask;
+				uint mask = SystemUniforms_GetViewMask();
 				while (instanceId) {
 					mask ^= 1 << firstbithigh(mask);
 					--instanceId;

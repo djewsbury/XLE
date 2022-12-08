@@ -87,6 +87,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
     private:
         IThreadContext*         _renderCoreContext;
+		unsigned 				_copyBufferOffsetAlignment = 1;
     };
 
     using QueueMarker = unsigned;

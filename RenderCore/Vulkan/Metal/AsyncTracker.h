@@ -23,8 +23,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		virtual MarkerStatus GetSpecificMarkerStatus(Marker) const override;
 
 		Marker IncrementProducerFrame();
-		VkFence OnSubmitToQueue(IteratorRange<const Marker*> marker);
-		void AbandonMarker(Marker);
+		VkFence OnSubmitToQueue(IteratorRange<const Marker*> markers);
+		void AbandonMarkers(IteratorRange<const Marker*> markers);
 
 		void UpdateConsumer();
 		bool WaitForFence(Marker marker, std::optional<std::chrono::nanoseconds> timeout = {});	///< returns true iff the marker has completed, or false if we timed out waiting for it
@@ -75,7 +75,40 @@ namespace RenderCore { namespace Metal_Vulkan
 	class SemaphoreBasedTracker : public IAsyncTracker
 	{
 	public:
+		virtual Marker GetConsumerMarker() const override { return _lastCompletedConsumerFrameMarker; }
+		virtual Marker GetProducerMarker() const override { return _currentProducerFrameMarker; }
+		virtual MarkerStatus GetSpecificMarkerStatus(Marker) const override;
+
+		Marker IncrementProducerFrame();
+		VkFence OnSubmitToQueue(IteratorRange<const Marker*> markers);
+		void AbandonMarker(IteratorRange<const Marker*> markers);
+
 	private:
+		enum class State { SubmittedToQueue, Abandoned, Unused }; 
+		struct Tracker
+		{
+			Marker _frameMarker = Marker_Invalid;
+			State _state = State::Unused;
+		};
+		std::vector<Tracker> _trackersSubmittedToQueue;				// protected by _trackersSubmittedToQueueLock
+		std::vector<Tracker> _trackersSubmittedPendingOrdering;		// protected by _trackersSubmittedToQueueLock
+		Marker _nextSubmittedToQueueMarker = Marker_Invalid;		// protected by _trackersSubmittedToQueueLock
+		Threading::Mutex _trackersSubmittedToQueueLock;
+
+		struct TrackerWritingCommands
+		{
+			Marker _marker;
+			std::chrono::steady_clock::time_point _beginTime;
+			std::string _name;
+		};
+		std::vector<TrackerWritingCommands> _trackersWritingCommands;				// protected by _trackersWritingCommandsLock
+		std::vector<unsigned> _trackersPendingAbandon;				// protected by _trackersWritingCommandsLock
+		bool _initialMarker = false;								// protected by _trackersWritingCommandsLock
+		Threading::Mutex _trackersWritingCommandsLock;
+
+		std::atomic<Marker> _currentProducerFrameMarker = Marker_Invalid;
+		std::atomic<Marker> _lastCompletedConsumerFrameMarker = Marker_Invalid;
+		VkDevice _device;
 	};
 
 	class EventBasedTracker : public IAsyncTracker

@@ -182,6 +182,7 @@ namespace RenderCore { namespace ImplVulkan
         DeviceDesc                              GetDesc() override;
         uint64_t                                GetGUID() const override;
         const DeviceFeatures&                   GetDeviceFeatures() const override;
+		const DeviceLimits&						GetDeviceLimits() const override;
 
         std::shared_ptr<IThreadContext>         GetImmediateContext() override;
         std::unique_ptr<IThreadContext>         CreateDeferredContext() override;
@@ -232,6 +233,7 @@ namespace RenderCore { namespace ImplVulkan
         std::thread::id _initializationThread;
 
         std::shared_ptr<Metal_Vulkan::IDestructionQueue> _destrQueue;
+		DeviceLimits _limits;
     };
 
 ////////////////////////////////////////////////////////////////////////////////

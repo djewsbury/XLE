@@ -321,8 +321,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (&moveFrom != this) {
 			_attachedStorage.AbandonAllocations();
 			if (_asyncTracker && !_asyncTrackerMarkers.empty()) {
-				for (auto m:_asyncTrackerMarkers)
-					checked_cast<FenceBasedTracker*>(_asyncTracker.get())->AbandonMarker(m);
+				checked_cast<FenceBasedTracker*>(_asyncTracker.get())->AbandonMarkers(_asyncTrackerMarkers);
 			} else {
 				assert(!_asyncTracker && _asyncTrackerMarkers.empty());     // should have neither or both
 			}
@@ -354,8 +353,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		_attachedStorage.AbandonAllocations();
 		if (_asyncTracker && !_asyncTrackerMarkers.empty()) {
-			for (auto m:_asyncTrackerMarkers)
-				checked_cast<FenceBasedTracker*>(_asyncTracker.get())->AbandonMarker(m);
+			checked_cast<FenceBasedTracker*>(_asyncTracker.get())->AbandonMarkers(_asyncTrackerMarkers);
 		} else {
 			assert(!_asyncTracker && _asyncTrackerMarkers.empty());     // should have neither or both
 		}

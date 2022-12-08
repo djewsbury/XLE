@@ -315,7 +315,7 @@ namespace RenderCore { namespace Metal_Vulkan
             _imageLayout = CalculateImageLayout(formatUsage, createInfo.subresourceRange.aspectMask, window._flags);
 
         } else {
-            if (!(res->GetDesc()._bindFlags & BindFlag::TexelBuffer))
+            if (!(resDesc._bindFlags & BindFlag::TexelBuffer))
                 Throw(::Exceptions::BasicLabel("Attempting to create a texture view for a resource that is not a texture. Did you intend to use CreateBufferView?"));
 
             assert(res->GetBuffer());
@@ -335,6 +335,9 @@ namespace RenderCore { namespace Metal_Vulkan
     ResourceView::ResourceView(ObjectFactory& factory, const VkBuffer buffer, Format texelBufferFormat, unsigned rangeOffset, unsigned rangeSize)
     : _type(Type::BufferView)
     {
+		const auto& physDevLimits = GetObjectFactory().GetPhysicalDeviceProperties().limits;
+		if ((rangeOffset % physDevLimits.minTexelBufferOffsetAlignment) != 0)
+			Throw(std::runtime_error("Offset does not meet physical device requirements while creating texel buffer view (requires alignment to: " + std::to_string(physDevLimits.minTexelBufferOffsetAlignment) + "bytes)"));
         auto createInfo = MakeBufferViewCreateInfo(texelBufferFormat, rangeOffset, rangeSize, buffer);
         _bufferView = factory.CreateBufferView(createInfo);
         _imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -353,6 +356,10 @@ namespace RenderCore { namespace Metal_Vulkan
         if (!res->GetBuffer())
             Throw(::Exceptions::BasicLabel("Attempting to create a texel buffer view for a resource that is not a buffer"));
 
+		const auto& physDevLimits = GetObjectFactory().GetPhysicalDeviceProperties().limits;
+		if ((rangeOffset % physDevLimits.minTexelBufferOffsetAlignment) != 0)
+			Throw(std::runtime_error("Offset does not meet physical device requirements while creating texel buffer view (requires alignment to: " + std::to_string(physDevLimits.minTexelBufferOffsetAlignment) + "bytes)"));
+
         // note that if this resource has a TextureDesc, we're ignoring the format information inside of it
         auto createInfo = MakeBufferViewCreateInfo(texelBufferFormat, rangeOffset, rangeSize, res->GetBuffer());
         _bufferView = factory.CreateBufferView(createInfo);
@@ -369,13 +376,27 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (!res)
 			Throw(::Exceptions::BasicLabel("Incorrect resource type passed to Vulkan ResourceView"));
 
+		{
+			const auto& physDevLimits = GetObjectFactory().GetPhysicalDeviceProperties().limits;
+			auto bindFlags = res->AccessDesc()._bindFlags;
+			if ((bindFlags & BindFlag::ConstantBuffer) && ((rangeOffset % physDevLimits.minUniformBufferOffsetAlignment) != 0))
+				Throw(std::runtime_error("Offset does not meet physical device requirements while creating uniform buffer view (requires alignment to: " + std::to_string(physDevLimits.minUniformBufferOffsetAlignment) + "bytes)"));
+
+			if ((bindFlags & BindFlag::UnorderedAccess) && ((rangeOffset % physDevLimits.minStorageBufferOffsetAlignment) != 0))
+				Throw(std::runtime_error("Offset does not meet physical device requirements while creating storage buffer view (requires alignment to: " + std::to_string(physDevLimits.minStorageBufferOffsetAlignment) + "bytes)"));
+
+			// this path should not be used for texel buffers -- use one of the constructions that take a Format
+			if (bindFlags & BindFlag::TexelBuffer)
+				Throw(::Exceptions::BasicLabel("Use of incorrect construction path while attempting to create a view for a texel buffer"));
+		}
+
         _resource = std::static_pointer_cast<Resource>(buffer);
         _imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     }
 
     ResourceView::ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& resource)
     {
-        const auto& desc = resource->GetDesc();
+        const auto& desc = checked_cast<Resource*>(resource.get())->AccessDesc();
         if (desc._type == ResourceDesc::Type::Texture) {
             BindFlag::Enum usage = BindFlag::ShaderResource;
             if (desc._bindFlags & BindFlag::ShaderResource) {

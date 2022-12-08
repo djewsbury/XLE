@@ -19,7 +19,7 @@
 		// Find the position of the instanceId'th bit set in the view mask
 		// this has a little processing to the vertex shader, but we gain something
 		// by avoiding having to store an array of view indices in LocalTransform 
-		uint mask = LocalTransform.ViewMask;
+		uint mask = SystemUniforms_GetViewMask();
 		while (instanceId) {
 			mask ^= 1u << firstbithigh(mask);
 			--instanceId;

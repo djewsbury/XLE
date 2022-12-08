@@ -257,11 +257,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     unsigned ResourceUploadHelper::CalculateStagingBufferOffsetAlignment(const ResourceDesc& desc)
     {
         using namespace RenderCore;
-		auto& objectFactory = Metal::GetObjectFactory();
-		unsigned alignment = 1u;
-		#if GFXAPI_TARGET == GFXAPI_VULKAN
-			alignment = std::max(alignment, (unsigned)objectFactory.GetPhysicalDeviceProperties().limits.optimalBufferCopyOffsetAlignment);
-		#endif
+		unsigned alignment = _copyBufferOffsetAlignment;
 		if (desc._type == ResourceDesc::Type::Texture) {
 			auto compressionParam = GetCompressionParameters(desc._textureDesc._format);
 			if (compressionParam._blockWidth != 1) {
@@ -313,7 +309,10 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             };
     }
 
-    ResourceUploadHelper::ResourceUploadHelper(IThreadContext& renderCoreContext) : _renderCoreContext(&renderCoreContext) {}
+    ResourceUploadHelper::ResourceUploadHelper(IThreadContext& renderCoreContext) : _renderCoreContext(&renderCoreContext)
+	{
+		_copyBufferOffsetAlignment = _renderCoreContext->GetDevice()->GetDeviceLimits()._copyBufferOffsetAlignment;
+	}
     ResourceUploadHelper::~ResourceUploadHelper() {}
 
     static const char* AsString(TextureDesc::Dimensionality dimensionality)

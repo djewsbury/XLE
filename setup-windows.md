@@ -38,7 +38,8 @@ For RenderCore you'll need a little more
 * After the first cmake configure, you should get an error message saying GLES could not be found. There's no default location for windows, you must configure it manually
 * set the cmake cache variables XLE_OPENGLES_INCLUDE_DIR & XLE_OPENGLES_LIBRARY_DIR
 * install java jre (choco install javaruntime)
-* install vulkan sdk: https://vulkan.lunarg.com/sdk/home. You'll also need the "Additional SDK components" (unzip into the same SDK directory, this the debug libs). Debug libs are required to against debug XLE components because of the iterator debugging functionality in the MSVC standard library
+* install vulkan sdk: https://vulkan.lunarg.com/sdk/home
+* install vulkan runtime as well: https://vulkan.lunarg.com/sdk/home (at least ensure it matches your sdk version)
 * download dxcompiler from https://github.com/microsoft/DirectXShaderCompiler/releases (last used April 2021 release). You may need to set the XLE_DXCOMPILER_DIR cmake cache dir to the base dir where this is extracted
 * Download AMD compressonator from the github releases page (https://github.com/GPUOpen-Tools/compressonator/releases/tag/V4.1.5083) (last used V4.1.5083). Set the XLE_COMPRESSONATOR_DIR cmake cache dir to the base dir where this is extracted
 

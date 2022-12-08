@@ -176,15 +176,17 @@ namespace RenderCore { namespace Metal_Vulkan
 		return fence;
 	}
 
-	void FenceBasedTracker::AbandonMarker(Marker marker)
+	void FenceBasedTracker::AbandonMarkers(IteratorRange<const Marker*> markers)
 	{
 		ScopedLock(_trackersWritingCommandsLock);
-		auto i = std::find_if(
-			_trackersWritingCommands.begin(), _trackersWritingCommands.end(),
-			[marker](const auto& c) { return c._marker == marker; });
-		assert(i != _trackersWritingCommands.end());
-		_trackersWritingCommands.erase(i);
-		_trackersPendingAbandon.push_back(marker);
+		for (auto marker:markers) {
+			auto i = std::find_if(
+				_trackersWritingCommands.begin(), _trackersWritingCommands.end(),
+				[marker](const auto& c) { return c._marker == marker; });
+			assert(i != _trackersWritingCommands.end());
+			_trackersWritingCommands.erase(i);
+		}
+		_trackersPendingAbandon.insert(_trackersPendingAbandon.end(), markers.begin(), markers.end());
 	}
 
 	void FenceBasedTracker::AttachName(Marker marker, std::string name)
