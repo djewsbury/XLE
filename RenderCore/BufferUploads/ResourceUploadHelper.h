@@ -59,6 +59,14 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             const ResourceLocator& finalResource,
             IDataPacket& initialisationData);
 
+        void ReleaseFinalResourcePostDirectInitialize(
+            const ResourceLocator& finalResource,
+            BindFlag::BitField dstLayout);
+
+        void ReleaseFinalResourcePostTransfer(
+            const ResourceLocator& finalResource,
+            BindFlag::BitField dstLayout);
+
         bool CanDirectlyMap(IResource& resource);
 
         std::vector<IAsyncDataSource::SubResource> CalculateUploadList(
@@ -90,7 +98,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 		unsigned 				_copyBufferOffsetAlignment = 1;
     };
 
-    using QueueMarker = unsigned;
+    using QueueMarker = uint64_t;
 
     class StagingPage
     {
@@ -124,7 +132,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         void UpdateConsumerMarker();
         size_t MaxSize() const { return _stagingBufferHeap.HeapSize(); }
 
-        StagingPage(IDevice& device, unsigned size);
+        StagingPage(IThreadContext& threadContext, unsigned size);
         ~StagingPage();
         StagingPage(StagingPage&&) = default;
         StagingPage& operator=(StagingPage&&) = default;
@@ -165,7 +173,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     class UploadsThreadContext
     {
     public:
-        void                    ResolveCommandList(CommandListID id);
+        void                    QueueToHardware(std::optional<CommandListID> completeCmdList);
         void                    CommitToImmediate(IThreadContext& commitTo, unsigned frameId);
 
         CommandListMetrics      PopMetrics();
@@ -180,7 +188,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         unsigned                CommitCount_Current();
 
         PlatformInterface::StagingPage&     GetStagingPage();
-        PlatformInterface::QueueMarker      GetProducerCmdListSpecificMarker();
+        QueueMarker     GetProducerCmdListSpecificMarker();
+        std::optional<QueueMarker>     CommandListToHardwareQueueMarker(CommandListID cmdList);
 
         PlatformInterface::ResourceUploadHelper&    GetResourceUploadHelper() { return _resourceUploadHelper; }
         IThreadContext&                 GetRenderCoreThreadContext() { return *_underlyingContext; }

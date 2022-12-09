@@ -8,6 +8,7 @@
 #include "../Metal/Metal.h"
 #include "../Metal/Resource.h"
 #include "../Metal/DeviceContext.h"
+#include "../Metal/ObjectFactory.h"
 #include "../IDevice.h"
 #include "../IAnnotator.h"
 #include "../Vulkan/IDeviceVulkan.h"
@@ -67,8 +68,10 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                 CopyPartial_Src{stagingResource, stagingOffset, stagingOffset+stagingSize});
         }
 
+#if 0
         auto finalContainingGuid = finalResource.GetContainingResource()->GetGUID();
         metalContext.GetActiveCommandList().MakeResourcesVisible({&finalContainingGuid, &finalContainingGuid+1});
+#endif
     }
 
     void ResourceUploadHelper::UpdateFinalResourceFromStaging(
@@ -163,7 +166,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             byteCount = finalResource.GetRangeInContainingResource().second - finalResource.GetRangeInContainingResource().first;
             desc._linearBufferDesc._sizeInBytes = byteCount;
         }
-        auto alignment = CalculateStagingBufferOffsetAlignment(desc);
+        // auto alignment = CalculateStagingBufferOffsetAlignment(desc);
         
         auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 
@@ -188,6 +191,20 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         UpdateFinalResourceFromStaging(
             finalResource, 
             *stagingSpace.GetResource(), beginAndEndInResource.first, beginAndEndInResource.second-beginAndEndInResource.first);
+    }
+
+    void ResourceUploadHelper::ReleaseFinalResourcePostDirectInitialize(
+        const ResourceLocator& finalResource, BindFlag::BitField dstLayout)
+    {
+        // after a memory map / create, but no actual context operations / transfers
+        assert(0);
+    }
+
+    void ResourceUploadHelper::ReleaseFinalResourcePostTransfer(
+        const ResourceLocator& finalResource, BindFlag::BitField dstLayout)
+    {
+        // after UpdateFinalResourceViaCmdList (etc)...
+        assert(0);
     }
 
     std::vector<IAsyncDataSource::SubResource> ResourceUploadHelper::CalculateUploadList(
@@ -421,7 +438,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         if (checkOnlyOurCmdList) {
             while (!_allocationsWaitingOnDevice.empty()) {
                 auto status = _asyncTracker->GetSpecificMarkerStatus(_allocationsWaitingOnDevice.front()._releaseMarker);
-                if (status != Metal_Vulkan::IAsyncTracker::MarkerStatus::ConsumerCompleted)
+                if (status != Metal_Vulkan::IAsyncTracker::MarkerStatus::ConsumerCompleted && status != Metal_Vulkan::IAsyncTracker::MarkerStatus::Abandoned)
                     break;
 
                 assert(_allocationsWaitingOnDevice.front()._pendingNewFront != ~0u);
@@ -529,18 +546,17 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         #endif
     }
 
-    StagingPage::StagingPage(IDevice& device, unsigned size)
+    StagingPage::StagingPage(IThreadContext& threadContext, unsigned size)
     {
 		_stagingBufferHeap = CircularHeap(size);
-		_stagingBuffer = device.CreateResource(
+		_stagingBuffer = threadContext.GetDevice()->CreateResource(
 			CreateDesc(
 				BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite | AllocationRules::PermanentlyMapped | AllocationRules::DisableAutoCacheCoherency | AllocationRules::DedicatedPage,
 				LinearBufferDesc::Create(size)),
            "staging-page");
 
-        auto* deviceVulkan = (IDeviceVulkan*)device.QueryInterface(typeid(IDeviceVulkan).hash_code());
-        if (deviceVulkan)
-            _asyncTracker = deviceVulkan->GetGraphicsQueueAsyncTracker();
+        if (auto* threadContextVulkan = (IThreadContextVulkan*)threadContext.QueryInterface(typeid(IThreadContextVulkan).hash_code()))
+            _asyncTracker = threadContextVulkan->GetQueueTracker();
 
         #if defined(_DEBUG)
             _boundThread = std::this_thread::get_id();
@@ -611,7 +627,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         DeferredOperations _deferredOperationsUnderConstruction;
         struct QueuedCommandList
         {
-            std::shared_ptr<Metal::CommandList> _deviceCommandList;
+            // std::shared_ptr<Metal::CommandList> _deviceCommandList;
             mutable CommandListMetrics _metrics;
             DeferredOperations _deferredOperations;
             CommandListID _id;
@@ -623,44 +639,96 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         bool _isImmediateContext;
 
         TimeMarker  _lastResolve;
-        unsigned    _commitCountCurrent;
 
+        unsigned    _commitCountCurrent;
         CommandListID _commandListIDCommittedToImmediate;
 
-        std::shared_ptr<Metal_Vulkan::IAsyncTracker> _asyncTracker;
+        Metal_Vulkan::VulkanSharedPtr<VkSemaphore> _transferQueueTimeline;
+        Metal_Vulkan::VulkanSharedPtr<VkSemaphore> _graphicsQueueTimeline;
+
         std::unique_ptr<PlatformInterface::StagingPage> _stagingPage;
 
         unsigned _immediateContextLastFrameId = 0;
     };
 
-    void UploadsThreadContext::ResolveCommandList(CommandListID cmdListId)
+    void UploadsThreadContext::QueueToHardware(std::optional<CommandListID> completeCmdList)
     {
+        // Queue what we've got, and start the GPU on processing them
+        //
+        // Unfortunately the underlying graphics API cmd list tracker markers are not the same as the
+        // buffer uploads CommandListID; this makes everything much more complicated
+        // 
+        // But this is necessary because sometimes we queue only part of a buffer uploads cmd list
+        // So when we want to create a dependency between a client cmd list and a buffer uploads cmd list,
+        // we need to ensure that the dependency exists to all underlying hardware cmd lists that might be
+        // relevant.
+        //
+        // The easiest way to do this is to ensure that all cmd lists on our queue have dependencies between
+        // them, so that they will be completed in order. This way we only have to track the hardware cmd list.
+        //
+        // However, this is only optimal if there's no particular benefit in running transfers in parallel for
+        // the given hardware.
+
+        // VLA(CommandListID, completedCmdLists, completedCmdListsInit.size());
+        // unsigned completedCmdListsCount = 0;
+        // for (auto c:completedCmdListsInit) {
+        //     auto i = std::lower_bound(completedCmdLists, &completedCmdLists[completedCmdListsCount], c);
+        //     if (i != &completedCmdLists[completedCmdListsCount] && *i == c) continue;
+        //     std::memmove(i+1, i, (&completedCmdLists[completedCmdListsCount]-i)*sizeof(*completedCmdLists));
+        //     *i = c;
+        // }
+
         int64_t currentTime = OSServices::GetPerformanceCounter();
         Pimpl::QueuedCommandList newCommandList;
-        newCommandList._metrics = _pimpl->_commandListUnderConstruction;
+        newCommandList._metrics = std::move(_pimpl->_commandListUnderConstruction);
         newCommandList._metrics._resolveTime = currentTime;
         newCommandList._metrics._processingEnd = currentTime;
-        newCommandList._id = cmdListId;
+        newCommandList._deferredOperations.swap(_pimpl->_deferredOperationsUnderConstruction);
+        newCommandList._id = completeCmdList.value_or(~0u);
 
-        if (!_pimpl->_isImmediateContext) {
-            newCommandList._deviceCommandList = Metal::DeviceContext::Get(*_underlyingContext)->ResolveCommandList();
-            newCommandList._deferredOperations.swap(_pimpl->_deferredOperationsUnderConstruction);
-            _pimpl->_queuedCommandLists.push_overflow(std::move(newCommandList));
-        } else {
-                    // immediate resolve -- skip the render thread resolve step...
-            _pimpl->_deferredOperationsUnderConstruction.CommitToImmediate_PreCommandList(*_underlyingContext);
-            _pimpl->_deferredOperationsUnderConstruction.CommitToImmediate_PostCommandList(*_underlyingContext);
-            if (cmdListId !=  ~0u)
-                _pimpl->_commandListIDCommittedToImmediate = std::max(_pimpl->_commandListIDCommittedToImmediate, cmdListId);
+        if (auto* threadContextVulkan = (IThreadContextVulkan*)_underlyingContext->QueryInterface(typeid(IThreadContextVulkan).hash_code())) {
 
-            newCommandList._metrics._frameId = _pimpl->_immediateContextLastFrameId+1;  // ie, assume it's just the next one after the last call to CommitToImmediate()
-            newCommandList._metrics._commitTime = currentTime;
-            #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
-                while (!_pimpl->_recentRetirements.push(newCommandList._metrics)) {
-                    _pimpl->_recentRetirements.pop();   // note -- this might violate the single-popping-thread rule!
-                }
-            #endif
+            std::pair<VkSemaphore, IThreadContextVulkan::CmdListMarker> signalOnCompletion[1];
+            std::pair<VkSemaphore, IThreadContextVulkan::CmdListMarker> waitBeforeBegin[1];
+            unsigned signalOnCompletionCount = 0, waitBeforeBeginCount = 0;
+
+            // If we have completed a buffer uploads CommandListID, we should advance _transferQueueTimeline on completion
+            // Also, we must ensure that every cmd list is sequential on this queue (otherwise we can't guarantee that
+            // all work for a CommandListID is completed when the semaphore is advanced)
+            if (completeCmdList)
+                signalOnCompletion[signalOnCompletionCount++] = { _pimpl->_transferQueueTimeline.get(), *completeCmdList };
+
+            // auto forceOrderTimeline = threadContextVulkan->GetCmdListSpecificMarker();
+            // if (forceOrderTimeline.second > 1)
+            //     waitBeforeBegin[waitBeforeBeginCount++] = { forceOrderTimeline.first, forceOrderTimeline.second-1 };
+
+            threadContextVulkan->CommitCommandsScheduled(
+                MakeIteratorRange(waitBeforeBegin, &waitBeforeBegin[waitBeforeBeginCount]),
+                MakeIteratorRange(signalOnCompletion, &signalOnCompletion[signalOnCompletionCount]));
+
         }
+
+        _pimpl->_queuedCommandLists.push_overflow(std::move(newCommandList));
+
+        // if (!_pimpl->_isImmediateContext) {
+        //     newCommandList._deviceCommandList = Metal::DeviceContext::Get(*_underlyingContext)->ResolveCommandList();
+        //     newCommandList._deferredOperations.swap(_pimpl->_deferredOperationsUnderConstruction);
+        //     _pimpl->_queuedCommandLists.push_overflow(std::move(newCommandList));
+        // } else {
+        //             // immediate resolve -- skip the render thread resolve step...
+        //     _pimpl->_deferredOperationsUnderConstruction.CommitToImmediate_PreCommandList(*_underlyingContext);
+        //     _pimpl->_deferredOperationsUnderConstruction.CommitToImmediate_PostCommandList(*_underlyingContext);
+        //     if (cmdListId !=  ~0u)
+        //         _pimpl->_commandListIDCommittedToImmediate = std::max(_pimpl->_commandListIDCommittedToImmediate, cmdListId);
+        // 
+        //     newCommandList._metrics._frameId = _pimpl->_immediateContextLastFrameId+1;  // ie, assume it's just the next one after the last call to CommitToImmediate()
+        //     newCommandList._metrics._commitTime = currentTime;
+        //     #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
+        //         while (!_pimpl->_recentRetirements.push(newCommandList._metrics)) {
+        //             _pimpl->_recentRetirements.pop();   // note -- this might violate the single-popping-thread rule!
+        //         }
+        //     #endif
+        // }
 
         _pimpl->_commandListUnderConstruction = CommandListMetrics();
         _pimpl->_commandListUnderConstruction._processingStart = currentTime;
@@ -691,7 +759,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
             TRY {
                 commandList->_deferredOperations.CommitToImmediate_PreCommandList(commitTo);
-                if (commandList->_deviceCommandList) {
+                /*if (commandList->_deviceCommandList) {
                     auto* deviceVulkan = (IThreadContextVulkan*)commitTo.QueryInterface(typeid(IThreadContextVulkan).hash_code());
                     if (deviceVulkan) {
                         deviceVulkan->CommitPrimaryCommandBufferToQueue(*commandList->_deviceCommandList);
@@ -699,7 +767,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                     } else {
                         immContext->ExecuteCommandList(std::move(*commandList->_deviceCommandList));
                     }
-                }
+                }*/
                 commandList->_deferredOperations.CommitToImmediate_PostCommandList(commitTo);
             } CATCH (const std::exception& e) {
                 // we have to catch any exception to ensure (at the very least) that we don't attempt to resubmit this same cmd list again
@@ -714,7 +782,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             commandList->_metrics._commitTime               = OSServices::GetPerformanceCounter();
             commandList->_metrics._framePriorityStallTime   = stallEnd - stallStart;    // this should give us very small numbers, when we're not actually stalling for frame priority commits
             #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
-                while (!_pimpl->_recentRetirements.push(commandList->_metrics))
+                while (!_pimpl->_recentRetirements.push(std::move(commandList->_metrics)))
                     _pimpl->_recentRetirements.pop();   // note -- this might violate the single-popping-thread rule!
             #endif
             _pimpl->_queuedCommandLists.pop();
@@ -729,12 +797,30 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         ++_pimpl->_commitCountCurrent;
     }
 
+#if 0
+    std::optional<QueueMarker>     UploadsThreadContext::CommandListToHardwareQueueMarker(CommandListID cmdList)
+    {
+        // Scan through our list of recent completions to try to find the hardware command list where we
+        // completed the given buffer uploads CommandListID
+        // If it's older that the oldest record we have, we will just promote to the oldest hardware
+        // cmd list we're tracking
+        if (_pimpl->_recentBufferUploadsToHardwareCmdListIds.empty())
+            return {};
+
+        if (_pimpl->_recentBufferUploadsToHardwareCmdListIds.back().first < cmdList)
+            return {};      // not completed yet
+
+        if (_pimpl->_recentBufferUploadsToHardwareCmdListIds.front().first >= cmdList)
+            return _pimpl->_recentBufferUploadsToHardwareCmdListIds.front().second;     // oldest record we have
+    }
+#endif
+
     CommandListMetrics UploadsThreadContext::PopMetrics()
     {
         #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
             CommandListMetrics* ptr;
             if (_pimpl->_recentRetirements.try_front(ptr)) {
-                CommandListMetrics result = *ptr;
+                CommandListMetrics result = std::move(*ptr);
                 _pimpl->_recentRetirements.pop();
                 return result;
             }
@@ -762,8 +848,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         // Get the marker that is specific to the particular cmd list we're building
         auto* vulkanThreadContext = (IThreadContextVulkan*)_underlyingContext->QueryInterface(typeid(IThreadContextVulkan).hash_code());
         if (vulkanThreadContext)
-            return vulkanThreadContext->GetCmdListSpecificMarker();
-        if (_pimpl->_asyncTracker) return _pimpl->_asyncTracker->GetProducerMarker();
+            return vulkanThreadContext->GetCmdListSpecificMarker().second;
         return 0;
     }
 
@@ -779,17 +864,15 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
         if (!_pimpl->_isImmediateContext) {
             const unsigned stagingPageSize = 64*1024*1024;
-            _pimpl->_stagingPage = std::make_unique<PlatformInterface::StagingPage>(*_underlyingContext->GetDevice(), stagingPageSize);
+            _pimpl->_stagingPage = std::make_unique<PlatformInterface::StagingPage>(*_underlyingContext, stagingPageSize);
         }
 
-        auto* deviceVulkan = (IDeviceVulkan*)_underlyingContext->GetDevice()->QueryInterface(typeid(IDeviceVulkan).hash_code());
-        if (deviceVulkan)
-            _pimpl->_asyncTracker = deviceVulkan->GetGraphicsQueueAsyncTracker();
+        auto& objectFactory = RenderCore::Metal::GetObjectFactory(*_underlyingContext->GetDevice());
+        _pimpl->_transferQueueTimeline = objectFactory.CreateTimelineSemaphore();
+        _pimpl->_graphicsQueueTimeline = objectFactory.CreateTimelineSemaphore();
     }
 
-    UploadsThreadContext::~UploadsThreadContext()
-    {
-    }
+    UploadsThreadContext::~UploadsThreadContext() {}
 
         //////////////////////////////////////////////////////////////////////////////////////////////
 

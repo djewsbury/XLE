@@ -8,7 +8,10 @@
 #include "CmdListAttachedStorage.h"
 #include "ObjectFactory.h"
 #include "IncludeVulkan.h"
+#include "../../../Utility/Threading/Mutex.h"
+#include "../../../Utility/IteratorUtils.h"
 #include <vector>
+#include <memory>
 
 namespace RenderCore { namespace Metal_Vulkan
 {
@@ -92,15 +95,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		const VulkanSharedPtr<VkCommandBuffer>& GetUnderlying() const { return _underlying; }
 		CmdListAttachedStorage& GetCmdListAttachedStorage() { return _attachedStorage; }
 
-		struct SubmissionResult
-		{
-			VkFence _fence = nullptr;
-			VkSemaphore _timelineSemaphoreToSignal = nullptr;
-			uint64_t _timelineSemphoreValue = 0ull;
-			VulkanSharedPtr<VkCommandBuffer> _cmdBuffer;
-			std::vector<IAsyncTracker::Marker> _asyncTrackerMarkers;
-		};
-		SubmissionResult OnSubmitToQueue();
 		IAsyncTracker& GetAsyncTracker() { return *_asyncTracker; }
 		IAsyncTracker::Marker GetPrimaryTrackerMarker() const;
 
@@ -131,8 +125,54 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::shared_ptr<IAsyncTracker> _asyncTracker;
 		std::vector<IAsyncTracker::Marker> _asyncTrackerMarkers;
 
+		// struct SubmissionResult
+		// {
+		// 	VkFence _queueTrackerFence = nullptr;
+		// 	uint64_t _queueTrackerSemphoreValue = 0ull;
+		// 	VulkanSharedPtr<VkCommandBuffer> _cmdBuffer;
+		// 	std::vector<IAsyncTracker::Marker> _asyncTrackerMarkers;
+		// };
+		// SubmissionResult OnSubmitToQueue();
+
 		friend class DeviceContext;
 		friend class SharedEncoder;
+		friend class SubmissionQueue;
+	};
+
+	class CommandBufferPool;
+
+	class SubmissionQueue
+	{
+	public:
+		const std::shared_ptr<IAsyncTracker>& GetTracker() { return _gpuTracker; }
+
+		IAsyncTracker::Marker Submit(
+			IteratorRange<Metal_Vulkan::CommandList* const*> cmdLists,
+			IteratorRange<const std::pair<VkSemaphore, uint64_t>*> waitBeforeBegin,
+			IteratorRange<const VkPipelineStageFlags*> waitBeforeBeginStages,
+			IteratorRange<const std::pair<VkSemaphore, uint64_t>*> signalOnCompletion);
+		void WaitForFence(IAsyncTracker::Marker marker, std::optional<std::chrono::nanoseconds> timeout = {});
+
+		void Present(
+			VkSwapchainKHR swapChain, unsigned imageIndex, 
+			IteratorRange<const VkSemaphore*> waitBeforePresent);
+
+		unsigned GetQueueFamilyIndex() const { return _queueFamilyIndex; }
+
+		SubmissionQueue(
+			ObjectFactory& factory,
+			VkQueue queue,
+			unsigned queueFamilyIndex);
+		~SubmissionQueue();
+		SubmissionQueue(SubmissionQueue&&) = delete;
+		SubmissionQueue& operator=(SubmissionQueue&&) = delete;
+	private:
+		VkQueue _underlying;
+		std::shared_ptr<IAsyncTracker> _gpuTracker;
+		ObjectFactory* _factory;
+		Threading::Mutex _queueLock;
+		unsigned _queueFamilyIndex;
+		uint64_t _maxMarkerActuallySubmitted;
 	};
 }}
 

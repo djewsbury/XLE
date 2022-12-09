@@ -47,11 +47,22 @@ namespace RenderCore
 	{
 	public:
 		virtual const std::shared_ptr<Metal_Vulkan::DeviceContext>& GetMetalContext() = 0;
+
 		virtual void CommitPrimaryCommandBufferToQueue(Metal_Vulkan::CommandList& cmdList) = 0;
-		virtual float GetThreadingPressure() = 0;
-		virtual unsigned GetCmdListSpecificMarker() = 0;		// Metal_Vulkan::IAsyncTracker::Marker
+
+		using CmdListMarker = uint64_t;
+		virtual bool CommitCommandsScheduled(
+			IteratorRange<const std::pair<VkSemaphore, CmdListMarker>*> waitBeforeBegin,
+			IteratorRange<const std::pair<VkSemaphore, CmdListMarker>*> signalOnCompletion) = 0;
+
+		virtual std::pair<VkSemaphore, CmdListMarker> GetCmdListSpecificMarker() = 0;
+		virtual std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetQueueTracker() = 0;
+
 		virtual void AttachNameToCmdList(std::string name) = 0;
 		virtual void ReleaseCommandBufferPool() = 0;
+
+		virtual float GetThreadingPressure() = 0;
+
 		virtual ~IThreadContextVulkan();
 	};
 

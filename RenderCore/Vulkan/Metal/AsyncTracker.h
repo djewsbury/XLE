@@ -89,7 +89,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		void UpdateConsumer();
 
 		bool WaitForMarker(Marker marker, std::optional<std::chrono::nanoseconds> timeout = {});	///< returns true iff the marker has completed, or false if we timed out waiting for it
+		float GetThreadingPressure();
 		void AttachName(Marker marker, std::string name);
+
+		VkSemaphore GetSemaphore() const { return _semaphore.get(); }
 
 		SemaphoreBasedTracker(ObjectFactory& factory);
 		~SemaphoreBasedTracker();

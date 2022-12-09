@@ -54,7 +54,8 @@ namespace RenderCore { namespace BufferUploads
         unsigned _countDeviceCreations[(unsigned)UploadDataType::Max];
         unsigned _countUploaded[(unsigned)UploadDataType::Max];
 
-        unsigned _contextOperations, _deviceCreateOperations;
+        unsigned _contextOperations;
+        unsigned _deviceCreateOperations;
         AssemblyLineMetrics _assemblyLineMetrics;
         AssemblyLineRetirement _retirements[16];
         unsigned _retirementCount;
@@ -69,8 +70,8 @@ namespace RenderCore { namespace BufferUploads
         std::string _exceptionMsg;
 
         CommandListMetrics();
-        CommandListMetrics(const CommandListMetrics& cloneFrom);
-        const CommandListMetrics& operator=(const CommandListMetrics& cloneFrom);
+        CommandListMetrics(CommandListMetrics&& cloneFrom);
+        const CommandListMetrics& operator=(CommandListMetrics&& cloneFrom);
 
         unsigned RetirementCount() const                                { return unsigned(_retirementCount + _retirementsOverflow.size()); }
         const AssemblyLineRetirement& Retirement(unsigned index) const  { if (index<_retirementCount) {return _retirements[index];} return _retirementsOverflow[index-_retirementCount]; }

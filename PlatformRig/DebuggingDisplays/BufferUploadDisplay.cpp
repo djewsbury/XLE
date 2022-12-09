@@ -771,7 +771,7 @@ namespace PlatformRig { namespace Overlays
     void    BufferUploadDisplay::Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState)
     {
         using namespace RenderCore::BufferUploads;
-        CommandListMetrics mostRecentResults;
+        const CommandListMetrics* mostRecentResults;
         unsigned commandListCount = 0;
 
             //      Keep popping metrics from the upload manager until we stop getting valid ones            
@@ -782,8 +782,6 @@ namespace PlatformRig { namespace Overlays
                 if (!metrics._commitTime) {
                     break;
                 }
-                mostRecentResults = metrics;
-                _recentHistory.push_back(metrics);
                 AddCommandListToFrame(metrics._frameId, unsigned(_recentHistory.size()-1));
                 for (unsigned c=0; c<(unsigned)UploadDataType::Max; ++c) {
                     _accumulatedCreateCount[c] += metrics._countCreations[c];
@@ -791,12 +789,14 @@ namespace PlatformRig { namespace Overlays
                     _accumulatedUploadCount[c] += metrics._countUploaded[c];
                     _accumulatedUploadBytes[c] += metrics._bytesUploaded[c];
                 }
+                _recentHistory.push_back(std::move(metrics));
+                mostRecentResults = &_recentHistory.back();
                 ++commandListCount;
             }
         }
 
-        if (!mostRecentResults._commitTime && _recentHistory.size()) {
-            mostRecentResults = _recentHistory[_recentHistory.size()-1];
+        if (!mostRecentResults && !_recentHistory.empty()) {
+            mostRecentResults = &_recentHistory.back();
         }
 
         {
@@ -812,7 +812,8 @@ namespace PlatformRig { namespace Overlays
         Layout displayArea = layout.AllocateFullWidthFraction(1.f);
 
         if (_graphsMode == GraphTabs::Statistics) {
-            DrawStatistics(context, displayArea, interactables, interfaceState, mostRecentResults);
+            if (mostRecentResults)
+                DrawStatistics(context, displayArea, interactables, interfaceState, *mostRecentResults);
         } else if (_graphsMode == GraphTabs::RecentRetirements) {
             DrawRecentRetirements(context, displayArea, interactables, interfaceState);
         } else {

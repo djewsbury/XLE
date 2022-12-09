@@ -477,16 +477,18 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		{
 			ScopedLock(_trackersSubmittedToQueueLock);
+
+			auto m = markers.begin();
 			{
 				// queuing those markers may now allow us to advance previously out-of-order markers
 				for (;;) {
 					auto nextInOrder = _trailingAbandons+1;
 
-					if (!markers.empty() && *markers.begin() == nextInOrder) {
+					if (m != markers.end() && *m == nextInOrder) {
 						++_trailingAbandons;
 						if (newState != State::Abandoned)
-							_lastQueuedInOrder = _trailingAbandons;		// ie, now _lastQueuedInOrder == *markers.begin()
-						++markers.first;
+							_lastQueuedInOrder = _trailingAbandons;		// ie, now _lastQueuedInOrder == *m
+						++m;
 						continue;
 					}
 					
@@ -504,7 +506,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			// any remaining markers are out of order
 			auto i = _trackersSubmittedPendingOrdering.begin();
-			auto m = markers.begin();
 			while (m != markers.end()) {
 				while (i != _trackersSubmittedPendingOrdering.end() && i->_frameMarker < *m) ++i;
 				i = _trackersSubmittedPendingOrdering.insert(i, {*m, newState});
@@ -584,6 +585,24 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		assert(res == VK_SUCCESS || res == VK_TIMEOUT); (void)res;
 		return res == VK_TIMEOUT;
+	}
+
+	float SemaphoreBasedTracker::GetThreadingPressure()
+	{
+		// note -- timeline semaphore has maxTimelineSemaphoreValueDifference (which is probably pretty large, but we should check it)
+		
+		// When there are multiple CPU threads generating cmdlists, and one or more of those cmdlists are kept
+		// alive for multiple frames, we end up in a situation where the tracker can never advance. This is
+		// very bad for the system, and it probably means that objects are never being destroyed.
+		// The "pressure" value returned here represents how bad this has gotten. We'll use the difference between
+		// the consumer and producer markers as a way to track this
+		//  less than queueDepth is pressure 0
+		//	between 1*queueDepth to 2*queueDepth is pressure 0 to 1
+		//	more than 2*queueDepth , the pressure will increase continually
+		const auto baselineQueueDepth = 32;
+		auto allocated = _currentProducerFrameMarker - _lastCompletedConsumerFrameMarker;
+		if (allocated < baselineQueueDepth) return 0.f;
+		return std::pow((allocated-baselineQueueDepth) / float(baselineQueueDepth), 4.f);
 	}
 
 	SemaphoreBasedTracker::SemaphoreBasedTracker(ObjectFactory& factory)

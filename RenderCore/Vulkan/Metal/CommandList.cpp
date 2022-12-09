@@ -4,6 +4,7 @@
 
 #include "CommandList.h"
 #include "AsyncTracker.h"
+#include "Pools.h"
 #include "IncludeVulkan.h"
 #include <assert.h>
 
@@ -290,11 +291,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 	}
 
+#if 0
 	auto CommandList::OnSubmitToQueue() -> SubmissionResult
 	{
 		assert(!_asyncTrackerMarkers.empty());
 		_attachedStorage.OnSubmitToQueue(GetPrimaryTrackerMarker());
-		assert(!_asyncTrackerMarkers.empty());
 		std::sort(_asyncTrackerMarkers.begin(), _asyncTrackerMarkers.end());
 
 		SubmissionResult result;
@@ -302,16 +303,16 @@ namespace RenderCore { namespace Metal_Vulkan
 		result._asyncTrackerMarkers = std::move(_asyncTrackerMarkers);
 
 		if (auto* ft = dynamic_cast<FenceBasedTracker*>(_asyncTracker.get())) {
-			result._fence = ft->OnSubmitToQueue(result._asyncTrackerMarkers);
+			result._queueTrackerFence = ft->OnSubmitToQueue(result._asyncTrackerMarkers);
 		} else {
-			std::tie(result._timelineSemaphoreToSignal, result._timelineSemphoreValue) 
-				= checked_cast<SemaphoreBasedTracker*>(_asyncTracker.get())->OnSubmitToQueue(result._asyncTrackerMarkers);
+			result._queueTrackerSemphoreValue = checked_cast<SemaphoreBasedTracker*>(_asyncTracker.get())->OnSubmitToQueue(result._asyncTrackerMarkers).second;
 		}
 
 		_asyncTrackerMarkers.clear();
 		_asyncTracker = nullptr;
 		return result;
 	}
+#endif
 
 	IAsyncTracker::Marker CommandList::GetPrimaryTrackerMarker() const
 	{
@@ -386,5 +387,170 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	CommandList::CommandList() {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	IAsyncTracker::Marker SubmissionQueue::Submit(
+		IteratorRange<Metal_Vulkan::CommandList* const*> cmdLists,
+		IteratorRange<const std::pair<VkSemaphore, uint64_t>*> waitBeforeBegin,
+		IteratorRange<const VkPipelineStageFlags*> waitBeforeBeginStages,
+		IteratorRange<const std::pair<VkSemaphore, uint64_t>*> signalOnCompletion)
+	{
+		assert(waitBeforeBegin.size() == waitBeforeBeginStages.size());
+		size_t trackerMarkersCount = 0;
+		for (auto* cmdList:cmdLists) {
+			assert(&cmdList->GetAsyncTracker() == _gpuTracker.get());
+			cmdList->ValidateCommitToQueue(*_factory);
+			cmdList->_attachedStorage.OnSubmitToQueue(cmdList->GetPrimaryTrackerMarker());
+			trackerMarkersCount += cmdList->_asyncTrackerMarkers.size();
+		}
+
+		// auto submitResult = cmdList.OnSubmitToQueue();
+		std::vector<IAsyncTracker::Marker> asyncTrackerMarkers;
+		asyncTrackerMarkers.reserve(trackerMarkersCount);
+		uint64_t queueTrackerSemphoreValue = 0;
+		VLA(VkCommandBuffer, rawCmdBuffers, cmdLists.size());
+		std::vector<VulkanSharedPtr<VkCommandBuffer>> capturedCmdBuffers;
+		capturedCmdBuffers.reserve(cmdLists.size());
+		unsigned c=0;
+		for (auto* cmdList:cmdLists) {
+			if (auto* ft = dynamic_cast<FenceBasedTracker*>(cmdList->_asyncTracker.get())) {
+				checked_cast<SemaphoreBasedTracker*>(cmdList->_asyncTracker.get())->OnSubmitToQueue(cmdList->_asyncTrackerMarkers);
+				assert(0);
+			} else {
+				auto trackerValue = checked_cast<SemaphoreBasedTracker*>(cmdList->_asyncTracker.get())->OnSubmitToQueue(cmdList->_asyncTrackerMarkers).second;
+				queueTrackerSemphoreValue = std::max(trackerValue, queueTrackerSemphoreValue);
+			}
+
+			asyncTrackerMarkers.insert(asyncTrackerMarkers.end(), cmdList->_asyncTrackerMarkers.begin(), cmdList->_asyncTrackerMarkers.end());
+			cmdList->_asyncTrackerMarkers.clear();
+			cmdList->_asyncTracker = nullptr;
+			rawCmdBuffers[c++] = cmdList->_underlying.get();
+			capturedCmdBuffers.emplace_back(std::move(cmdList->_underlying));
+		}
+		std::sort(asyncTrackerMarkers.begin(), asyncTrackerMarkers.end());
+
+		////////////////////////////////////////
+		VLA(VkSemaphore, waitBeforeBeginSemaphores, waitBeforeBegin.size());
+		VLA(uint64_t, waitBeforeBeginValues, waitBeforeBegin.size());
+		VLA(VkSemaphore, signalOnCompletionSemaphores, signalOnCompletion.size()+1);
+		VLA(uint64_t, signalOnCompletionValues, signalOnCompletion.size()+1);
+		unsigned waitBeforeBeginCount = 0, signalOnCompletionCount = 0;
+
+		for (auto s:waitBeforeBegin) {
+			waitBeforeBeginSemaphores[waitBeforeBeginCount] = s.first;
+			waitBeforeBeginValues[waitBeforeBeginCount] = s.second;
+			++waitBeforeBeginCount;
+		}
+
+		for (auto s:signalOnCompletion) {
+			signalOnCompletionSemaphores[signalOnCompletionCount] = s.first;
+			signalOnCompletionValues[signalOnCompletionCount] = s.second;
+			++signalOnCompletionCount;
+		}
+
+		ScopedLock(_queueLock);
+
+		// Note that we have to ignore timeline semaphore values that are the same as previously submitted cmd lists (otherwise it triggers errors inside of Vulkan)
+		// This happens when there are out-of-order markers queued up (ie, the current semaphore value is actually out of date)
+		assert(!queueTrackerSemphoreValue || queueTrackerSemphoreValue >= _maxMarkerActuallySubmitted);
+		if (queueTrackerSemphoreValue > _maxMarkerActuallySubmitted) {
+			signalOnCompletionSemaphores[signalOnCompletionCount] = checked_cast<SemaphoreBasedTracker*>(_gpuTracker.get())->GetSemaphore();
+			signalOnCompletionValues[signalOnCompletionCount] = queueTrackerSemphoreValue;
+			++signalOnCompletionCount;
+		}
+
+		VkSubmitInfo submitInfo;
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.pNext = nullptr;
+
+		submitInfo.waitSemaphoreCount = waitBeforeBeginCount;
+		submitInfo.pWaitSemaphores = waitBeforeBeginSemaphores;
+		submitInfo.pWaitDstStageMask = waitBeforeBeginStages.begin();
+		submitInfo.signalSemaphoreCount = signalOnCompletionCount;
+		submitInfo.pSignalSemaphores = signalOnCompletionSemaphores;
+
+		VkTimelineSemaphoreSubmitInfo timelineSemaphoreSubmitInfo;
+		if (_factory->GetXLEFeatures()._timelineSemaphore) {
+			timelineSemaphoreSubmitInfo = {};
+			timelineSemaphoreSubmitInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+			timelineSemaphoreSubmitInfo.pNext = nullptr;
+			timelineSemaphoreSubmitInfo.waitSemaphoreValueCount = waitBeforeBeginCount;
+			timelineSemaphoreSubmitInfo.pWaitSemaphoreValues = waitBeforeBeginValues;
+			timelineSemaphoreSubmitInfo.signalSemaphoreValueCount = signalOnCompletionCount;
+			timelineSemaphoreSubmitInfo.pSignalSemaphoreValues = signalOnCompletionValues;
+			submitInfo.pNext = &timelineSemaphoreSubmitInfo;
+		}
+
+		submitInfo.commandBufferCount = cmdLists.size();
+		submitInfo.pCommandBuffers = rawCmdBuffers;
+
+		auto res = vkQueueSubmit(_underlying, 1, &submitInfo, nullptr);
+		if (res != VK_SUCCESS)
+			Throw(VulkanAPIFailure(res, "Failure while queuing command list"));
+
+		if (queueTrackerSemphoreValue) {
+			_maxMarkerActuallySubmitted = std::max(_maxMarkerActuallySubmitted, queueTrackerSemphoreValue);
+			return (IAsyncTracker::Marker)queueTrackerSemphoreValue;
+		} else {
+			assert(!asyncTrackerMarkers.empty());
+			for (auto i=asyncTrackerMarkers.begin(); i<asyncTrackerMarkers.end()-1; ++i)
+				assert(*i <= *(asyncTrackerMarkers.end()-1));
+			return *(asyncTrackerMarkers.end()-1);
+		}
+	}
+
+	void SubmissionQueue::WaitForFence(IAsyncTracker::Marker marker, std::optional<std::chrono::nanoseconds> timeout)
+	{
+		if (auto* ft = dynamic_cast<FenceBasedTracker*>(_gpuTracker.get())) {
+			ft->WaitForFence(marker, timeout);
+		} else {
+			assert(marker <= _maxMarkerActuallySubmitted);
+			checked_cast<SemaphoreBasedTracker*>(_gpuTracker.get())->WaitForMarker(marker, timeout);
+		}
+	}
+
+	void SubmissionQueue::Present(
+		VkSwapchainKHR swapChain, unsigned imageIndex, 
+		IteratorRange<const VkSemaphore*> waitBeforePresent)
+	{
+		const VkSwapchainKHR swapChains[] = { swapChain };
+		uint32_t imageIndices[] = { imageIndex };
+
+		VkPresentInfoKHR present;
+		present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		present.pNext = NULL;
+		present.swapchainCount = dimof(swapChains);
+		present.pSwapchains = swapChains;
+		present.pImageIndices = imageIndices;
+		present.pWaitSemaphores = waitBeforePresent.begin();
+		present.waitSemaphoreCount = waitBeforePresent.size();
+		present.pResults = NULL;
+
+		ScopedLock(_queueLock);
+		auto res = vkQueuePresentKHR(_underlying, &present);
+		if (res != VK_SUCCESS)
+			Throw(VulkanAPIFailure(res, "Failure while queuing present"));
+	}
+
+	SubmissionQueue::SubmissionQueue(
+		ObjectFactory& factory,
+		VkQueue queue,
+		unsigned queueFamilyIndex)
+	: _underlying(queue) 
+	, _factory(&factory)
+	, _queueFamilyIndex(queueFamilyIndex)
+	, _maxMarkerActuallySubmitted(0)
+	{
+		if (factory.GetXLEFeatures()._timelineSemaphore) {
+			_gpuTracker = std::make_shared<Metal_Vulkan::SemaphoreBasedTracker>(*_factory);
+		} else
+			_gpuTracker = std::make_shared<Metal_Vulkan::FenceBasedTracker>(*_factory, 32);
+	}
+
+	SubmissionQueue::~SubmissionQueue()
+	{
+	}
+
 }}
 

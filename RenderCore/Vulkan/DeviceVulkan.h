@@ -72,7 +72,6 @@ namespace RenderCore { namespace ImplVulkan
             std::optional<Metal_Vulkan::IAsyncTracker::Marker> _presentFence;      // (owned by the FenceBasedTracker)
 		};
 		PresentSync& GetSyncs() { return _presentSyncs[_activePresentSync]; }
-		VkCommandBuffer GetPrimaryBuffer() { return _primaryBuffers[_activePresentSync].get(); }
 
         PresentationChain(
             std::shared_ptr<Device> device,
@@ -80,7 +79,6 @@ namespace RenderCore { namespace ImplVulkan
             VulkanSharedPtr<VkSurfaceKHR> surface, 
 			const PresentationChainDesc& requestDesc,
             Metal_Vulkan::SubmissionQueue* submissionQueue,
-			unsigned queueFamilyIndex,
             const void* platformValue);
         ~PresentationChain();
     private:
@@ -120,7 +118,13 @@ namespace RenderCore { namespace ImplVulkan
 
         void CommitPrimaryCommandBufferToQueue(Metal_Vulkan::CommandList& cmdList) override;
         float GetThreadingPressure() override;
-        unsigned GetCmdListSpecificMarker() override;
+
+        bool CommitCommandsScheduled(
+			IteratorRange<const std::pair<VkSemaphore, CmdListMarker>*> waitBeforeBegin,
+			IteratorRange<const std::pair<VkSemaphore, CmdListMarker>*> signalOnCompletion) override;
+        std::pair<VkSemaphore, CmdListMarker> GetCmdListSpecificMarker() override;
+        std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetQueueTracker() override;
+
         void AttachNameToCmdList(std::string name) override;
         void ReleaseCommandBufferPool() override;
 
@@ -155,13 +159,17 @@ namespace RenderCore { namespace ImplVulkan
 		Metal_Vulkan::ObjectFactory*	    _factory;
 		Metal_Vulkan::GlobalPools*			_globalPools;
 
-        VulkanUniquePtr<VkSemaphore>		_interimCommandBufferComplete;
-        VulkanUniquePtr<VkSemaphore>		_interimCommandBufferComplete2;
-        bool                                _nextQueueShouldWaitOnInterimBuffer = false;
         VkSemaphore                         _nextQueueShouldWaitOnAcquire = VK_NULL_HANDLE;
 
-        Metal_Vulkan::IAsyncTracker::Marker QueuePrimaryContext(IteratorRange<const VkSemaphore*> completionSignals);
-        Metal_Vulkan::IAsyncTracker::Marker CommitPrimaryCommandBufferToQueue_Internal(Metal_Vulkan::CommandList& cmdList, IteratorRange<const VkSemaphore*> completionSignals);
+        std::vector<std::shared_ptr<Metal_Vulkan::CommandList>> _interimCmdLists;
+
+        Metal_Vulkan::IAsyncTracker::Marker QueuePrimaryContext(
+            IteratorRange<const std::pair<VkSemaphore, CmdListMarker>*> waitBeforeBegin,
+            IteratorRange<const std::pair<VkSemaphore, CmdListMarker>*> signalOnCompletion);
+        Metal_Vulkan::IAsyncTracker::Marker CommitPrimaryCommandBufferToQueue_Internal(
+            Metal_Vulkan::CommandList& cmdList,
+            IteratorRange<const std::pair<VkSemaphore, CmdListMarker>*> waitBeforeBegin,
+            IteratorRange<const std::pair<VkSemaphore, CmdListMarker>*> signalOnCompletion);
     };
 
 ////////////////////////////////////////////////////////////////////////////////

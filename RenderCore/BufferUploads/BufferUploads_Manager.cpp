@@ -463,6 +463,8 @@ namespace RenderCore { namespace BufferUploads
         _queuedFunctions.push_overflow(
             [helper=std::move(helper)](AssemblyLine& assemblyLine, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction) mutable {
                 TRY {
+                    assert(0);      // we need to handle queue transfer
+
                     // Update any transactions that are pointing at one of the moved blocks
                     assemblyLine.ApplyRepositions(helper->_dst.GetContainingResource(), *helper->_src.GetContainingResource(), helper->_steps);
                     // Copy between the resources using the GPU
@@ -986,6 +988,7 @@ namespace RenderCore { namespace BufferUploads
             ResourceLocator finalConstruction;
             bool deviceConstructionInvoked = false;
             bool didInitialisationDuringCreation = false;
+            bool didContextOperation = false;
             auto desc = resourceCreateStep._creationDesc;
             if (transaction->_finalResource.IsEmpty()) {
                 // No resource provided beforehand -- have to create it now
@@ -1065,6 +1068,9 @@ namespace RenderCore { namespace BufferUploads
                             context.GetRenderCoreThreadContext(), finalConstruction, *resourceCreateStep._initialisationData);
                     }
 
+                    helper.ReleaseFinalResourcePostTransfer(finalConstruction, BindFlag::ShaderResource);
+                    didContextOperation = true;
+
                 } else {
 
                     // destination is in host-visible memory, we can just write directly to it
@@ -1084,11 +1090,16 @@ namespace RenderCore { namespace BufferUploads
                             finalConstruction,
                             resourceCreateStep._initialisationData->GetData());
                     }
+
+                    helper.ReleaseFinalResourcePostDirectInitialize(finalConstruction, BindFlag::ShaderResource);
                 }
 
-                ++metricsUnderConstruction._contextOperations;
+            } else {
+                context.GetResourceUploadHelper().ReleaseFinalResourcePostDirectInitialize(finalConstruction, BindFlag::ShaderResource);
             }
 
+            if (didContextOperation)
+                ++metricsUnderConstruction._contextOperations;
             metricsUnderConstruction._bytesUploaded[uploadDataType] += uploadRequestSize;
             metricsUnderConstruction._countUploaded[uploadDataType] += 1;
             metricsUnderConstruction._bytesUploadTotal += uploadRequestSize;
@@ -1100,7 +1111,7 @@ namespace RenderCore { namespace BufferUploads
             }
 
             // Embue the final resource with the completion command list information
-            transaction->_finalResource = ResourceLocator { std::move(finalConstruction), cmdListUnderConstruction };
+            transaction->_finalResource = ResourceLocator { std::move(finalConstruction), didContextOperation ? cmdListUnderConstruction : 0u };
             transaction->_promise.set_value(transaction->_finalResource);
             transaction->_promisePending = false;
             resourceCreateStep._transactionRef.SuccessfulRetirement();
@@ -1354,6 +1365,8 @@ namespace RenderCore { namespace BufferUploads
                 // but that can't be done without adding a whole bunch of extra infrastructure
             }
 
+            context.GetResourceUploadHelper().ReleaseFinalResourcePostTransfer(transaction->_finalResource, BindFlag::ShaderResource);
+
             // Embue the final resource with the completion command list information
             transaction->_finalResource = ResourceLocator { std::move(transaction->_finalResource), cmdListUnderConstruction };
 
@@ -1484,15 +1497,15 @@ namespace RenderCore { namespace BufferUploads
         CommandListBudget   budgetUnderConstruction(isLoading);
 
         bool doResolve = false;
-        CommandListID cmdListId = _commandListNextFramePriority;
+        CommandListID cmdListForNewCmds = _commandListNextFramePriority;
+        std::optional<CommandListID> cmdListToComplete;
         bool preventNonFramePriority = false;
-        bool completingResolveForCmdList = false;
 
             /////////////// ~~~~ /////////////// ~~~~ ///////////////
         if (stepMask & Step_BackgroundMisc) {
             std::function<void(AssemblyLine&, PlatformInterface::UploadsThreadContext&, CommandListID)>* fn;
             while (_queuedFunctions.try_front(fn)) {
-                fn->operator()(*this, context, cmdListId);
+                fn->operator()(*this, context, cmdListForNewCmds);
                 _queuedFunctions.pop();
             }
 
@@ -1514,8 +1527,7 @@ namespace RenderCore { namespace BufferUploads
             auto drainResult = DrainPriorityQueueSet(_queueSet_FramePriority[qs->_framePriorityQueueSet], stepMask, context, qs->_framePriorityQueueSet);
             if (!drainResult._someOperationsFailed) {
                 _cmdListsToResolve.pop();
-                completingResolveForCmdList = true;
-                cmdListId = qs->_cmdListId;     // cmd list finished
+                cmdListToComplete = std::max(cmdListToComplete.value_or(0), qs->_cmdListId);     // cmd list finished
             }
             preventNonFramePriority = drainResult._someOperationsFailed;       // prevent non-frame-priority if we got some failures during this drain attempt
             doResolve = true;       // always resolve, even if we get some failures
@@ -1529,8 +1541,8 @@ namespace RenderCore { namespace BufferUploads
                 //      things will complete first
                 //
 
-            ProcessQueueSet(_queueSet_FramePriority[_framePriority_WritingQueueSet], stepMask, context, cmdListId, budgetUnderConstruction);
-            ProcessQueueSet(_queueSet_Main, stepMask, context, cmdListId, budgetUnderConstruction);
+            ProcessQueueSet(_queueSet_FramePriority[_framePriority_WritingQueueSet], stepMask, context, cmdListForNewCmds, budgetUnderConstruction);
+            ProcessQueueSet(_queueSet_Main, stepMask, context, cmdListForNewCmds, budgetUnderConstruction);
 
         }
 
@@ -1562,8 +1574,7 @@ namespace RenderCore { namespace BufferUploads
                     auto drainResult = DrainPriorityQueueSet(_queueSet_FramePriority[qs->_framePriorityQueueSet], stepMask, context, qs->_framePriorityQueueSet);
                     if (!drainResult._someOperationsFailed) {
                         _cmdListsToResolve.pop();
-                        completingResolveForCmdList = true;
-                        cmdListId = qs->_cmdListId;     // cmd list finished
+                        cmdListToComplete = std::max(cmdListToComplete.value_or(0), qs->_cmdListId);     // cmd list finished
                     }
                 }
             }
@@ -1571,9 +1582,8 @@ namespace RenderCore { namespace BufferUploads
 
             /////////////// ~~~~ /////////////// ~~~~ ///////////////
         if (doResolve) {
-            if ((metricsUnderConstruction._contextOperations!=0)
-                || !context.GetDeferredOperationsUnderConstruction().IsEmpty())
-                context.ResolveCommandList(completingResolveForCmdList ? cmdListId : ~0u);
+            if ((metricsUnderConstruction._contextOperations!=0) || !context.GetDeferredOperationsUnderConstruction().IsEmpty())
+                context.QueueToHardware(cmdListToComplete);     // command lists are sequential; so we only care about the latest one completed, even if multiple ended up begin completed
 
             metricsUnderConstruction._assemblyLineMetrics = CalculateMetrics(context);
             _lastResolveTime = now;
