@@ -2607,6 +2607,16 @@ namespace RenderCore { namespace ImplVulkan
 		return _submissionQueue->GetTracker();
 	}
 
+	void ThreadContext::UpdateGPUTracking()
+	{
+		if (auto* ft = dynamic_cast<Metal_Vulkan::FenceBasedTracker*>(_submissionQueue->GetTracker().get())) {
+			ft->UpdateConsumer();
+		} else {
+			auto& st = *checked_cast<Metal_Vulkan::SemaphoreBasedTracker*>(_submissionQueue->GetTracker().get());
+			st.UpdateConsumer();
+		}
+	}
+
 	void ThreadContext::AttachNameToCommandList(std::string name)
 	{
 		assert(_metalContext && _metalContext->HasActiveCommandList());

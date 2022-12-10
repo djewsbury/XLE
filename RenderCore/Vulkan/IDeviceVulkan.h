@@ -55,6 +55,7 @@ namespace RenderCore
 		using CommandListMarker = uint64_t;
 		virtual std::pair<VkSemaphore, CommandListMarker> GetCommandListSpecificMarker() = 0;
 		virtual std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetQueueTracker() = 0;
+		virtual void UpdateGPUTracking() = 0;
 
 		virtual void AttachNameToCommandList(std::string name) = 0;
 		virtual void ReleaseCommandBufferPool() = 0;

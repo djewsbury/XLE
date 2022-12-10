@@ -670,7 +670,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             DeferredOperations _deferredOperations;
             CommandListID _id;
         };
-        LockFreeFixedSizeQueue<QueuedCommandList, 32> _queuedCommandLists;
+        std::queue<QueuedCommandList> _queuedCommandLists;
+        Threading::Mutex _queuedCommandListsLock;
         #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
             LockFreeFixedSizeQueue<CommandListMetrics, 256> _recentRetirements;
         #endif
@@ -760,7 +761,10 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         if (_pimpl->_backgroundContext)
             _underlyingContext->CommitCommands();
 
-        _pimpl->_queuedCommandLists.push_overflow(std::move(newCommandList));
+        {
+            ScopedLock(_pimpl->_queuedCommandListsLock);
+            _pimpl->_queuedCommandLists.push(std::move(newCommandList));
+        }
 
         // if (!_pimpl->_isImmediateContext) {
         //     newCommandList._deviceCommandList = Metal::DeviceContext::Get(*_underlyingContext)->ResolveCommandList();
@@ -799,8 +803,13 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         TimeMarker stallStart = OSServices::GetPerformanceCounter();
         bool gotStart = false;
 
+        ScopedLock(_pimpl->_queuedCommandListsLock);
+
+        bool wroteSomeStub = false;
         Pimpl::QueuedCommandList* commandList = 0;
-        while (_pimpl->_commandListIDReadyForGraphicsQueue < cmdListRequired && _pimpl->_queuedCommandLists.try_front(commandList)) {
+        while (_pimpl->_commandListIDReadyForGraphicsQueue < cmdListRequired && !_pimpl->_queuedCommandLists.empty()) {
+            commandList = &_pimpl->_queuedCommandLists.front();
+
             TimeMarker stallEnd = OSServices::GetPerformanceCounter();
             if (!gotStart) {
                 commitTo.GetAnnotator().Event("BufferUploads", IAnnotator::EventTypes::MarkerBegin);
@@ -832,7 +841,9 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                     }
                 } else if (commandList->_id != ~0u) {
                     auto& metalContext = *Metal::DeviceContext::Get(commitTo);
+                    assert(metalContext.HasActiveCommandList());
                     metalContext.GetActiveCommandList().AddWaitBeforeBegin(_pimpl->_transferQueueTimeline, commandList->_id);
+                    metalContext.GetActiveCommandList().AddSignalOnCompletion(_pimpl->_graphicsQueueTimeline, commandList->_id);
                 }
             } CATCH (const std::exception& e) {
                 // we have to catch any exception to ensure (at the very least) that we don't attempt to resubmit this same cmd list again
@@ -853,10 +864,17 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             _pimpl->_queuedCommandLists.pop();
 
             stallStart = OSServices::GetPerformanceCounter();
+            wroteSomeStub = true;
         }
 
         if (gotStart) {
             commitTo.GetAnnotator().Event("BufferUploads", IAnnotator::EventTypes::MarkerEnd);
+        }
+
+        if (!wroteSomeStub && (_pimpl->_commandListIDReadyForGraphicsQueue >= cmdListRequired)) {
+            auto& metalContext = *Metal::DeviceContext::Get(commitTo);
+            assert(metalContext.HasActiveCommandList());
+            metalContext.GetActiveCommandList().AddWaitBeforeBegin(_pimpl->_graphicsQueueTimeline, cmdListRequired);
         }
         
         return _pimpl->_commandListIDReadyForGraphicsQueue >= cmdListRequired;
@@ -913,6 +931,13 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     {
         assert(_pimpl->_stagingPage);
         return *_pimpl->_stagingPage;
+    }
+
+    void UploadsThreadContext::UpdateGPUTracking()
+    {
+        auto* vulkanThreadContext = (IThreadContextVulkan*)_underlyingContext->QueryInterface(typeid(IThreadContextVulkan).hash_code());
+        if (vulkanThreadContext)
+            return vulkanThreadContext->UpdateGPUTracking();
     }
 
     QueueMarker      UploadsThreadContext::GetProducerCmdListSpecificMarker()

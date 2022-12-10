@@ -179,7 +179,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     {
     public:
         void                    QueueToHardware(std::optional<CommandListID> completeCmdList);
-
         bool                    AdvanceGraphicsQueue(IThreadContext& commitTo, CommandListID cmdListRequired);
 
         CommandListMetrics      PopMetrics();
@@ -194,6 +193,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         void                    AdvanceFrameId();
 
         StagingPage&                        GetStagingPage();
+        void                                UpdateGPUTracking();
         QueueMarker                         GetProducerCmdListSpecificMarker();
         std::optional<QueueMarker>          CommandListToHardwareQueueMarker(CommandListID cmdList);
 

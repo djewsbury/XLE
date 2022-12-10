@@ -1543,6 +1543,8 @@ namespace RenderCore { namespace BufferUploads
         std::optional<CommandListID> cmdListToComplete;
         bool preventNonFramePriority = false;
 
+        context.UpdateGPUTracking();
+
             /////////////// ~~~~ /////////////// ~~~~ ///////////////
         if (stepMask & Step_BackgroundMisc) {
             std::function<void(AssemblyLine&, PlatformInterface::UploadsThreadContext&, CommandListID)>* fn;
@@ -1566,7 +1568,7 @@ namespace RenderCore { namespace BufferUploads
         if (_cmdListsToResolve.try_front(qs)) {
 
                 //      --~<   Drain all frame priority steps   >~--      //
-            auto drainResult = DrainPriorityQueueSet(_queueSet_FramePriority[qs->_framePriorityQueueSet], stepMask, context, qs->_framePriorityQueueSet);
+            auto drainResult = DrainPriorityQueueSet(_queueSet_FramePriority[qs->_framePriorityQueueSet], stepMask, context, qs->_cmdListId);
             if (!drainResult._someOperationsFailed) {
                 _cmdListsToResolve.pop();
                 cmdListToComplete = std::max(cmdListToComplete.value_or(0), qs->_cmdListId);     // cmd list finished
@@ -1613,7 +1615,7 @@ namespace RenderCore { namespace BufferUploads
                 // Note duplication from above -- we need the same logic for handling the newly created entry in _cmdListsToResolve
                 //  - we can't actually consider this cmd list finished until all of the frame priority operations have actually completed successfully
                 if (_cmdListsToResolve.try_front(qs)) {
-                    auto drainResult = DrainPriorityQueueSet(_queueSet_FramePriority[qs->_framePriorityQueueSet], stepMask, context, qs->_framePriorityQueueSet);
+                    auto drainResult = DrainPriorityQueueSet(_queueSet_FramePriority[qs->_framePriorityQueueSet], stepMask, context, qs->_cmdListId);
                     if (!drainResult._someOperationsFailed) {
                         _cmdListsToResolve.pop();
                         cmdListToComplete = std::max(cmdListToComplete.value_or(0), qs->_cmdListId);     // cmd list finished
@@ -1861,6 +1863,9 @@ namespace RenderCore { namespace BufferUploads
 
     Manager::Manager(IDevice& renderDevice) : _assemblyLine(std::make_shared<AssemblyLine>(renderDevice))
     {
+        if (!renderDevice.GetDeviceFeatures()._timelineSemaphore)
+            Throw(std::runtime_error("Timeline semphores device feature is disabled, but is required by BufferUploads"));
+
         _shutdownBackgroundThread = false;
         _guid = s_nextManagerGuid++;
 

@@ -122,6 +122,7 @@ namespace RenderCore { namespace ImplVulkan
 
         std::pair<VkSemaphore, CommandListMarker> GetCommandListSpecificMarker() override;
         std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetQueueTracker() override;
+        void UpdateGPUTracking() override;
 
         void AttachNameToCommandList(std::string name) override;
         void ReleaseCommandBufferPool() override;
