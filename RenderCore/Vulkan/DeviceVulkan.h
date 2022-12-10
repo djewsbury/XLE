@@ -118,6 +118,7 @@ namespace RenderCore { namespace ImplVulkan
 
         void AddPreFrameCommandList(Metal_Vulkan::CommandList&& cmdList) override;
         float GetThreadingPressure() override;
+        bool IsDedicatedTransferContext() override;
 
         std::pair<VkSemaphore, CommandListMarker> GetCommandListSpecificMarker() override;
         std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetQueueTracker() override;

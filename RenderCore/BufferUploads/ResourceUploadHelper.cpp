@@ -34,6 +34,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize)
     {
         auto destinationDesc = finalResource.GetContainingResource()->GetDesc();
+        Metal::BarrierHelper{*_metalContext}.Add(*finalResource.GetContainingResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::TransferDst);
 
         if (destinationDesc._type == ResourceDesc::Type::Texture) {
             assert(finalResource.IsWholeResource());
@@ -44,7 +45,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             // During the transfer, the images must be in either TransferSrcOptimal, TransferDstOptimal or General.
             // assuming we don't have to CaptureForBind stagingResource, because it should be from a StagingPool, which
             // will always be ready for a transfer
-            Metal::Internal::CaptureForBind cap{*_metalContext, *finalResource.GetContainingResource(), BindFlag::TransferDst};
             auto blitEncoder = _metalContext->BeginBlitEncoder();
             blitEncoder.Copy(
                 CopyPartial_Dest{*finalResource.GetContainingResource().get()},
@@ -60,17 +60,11 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                 assert(stagingSize <= range.second-range.first);
             }
 
-            Metal::Internal::CaptureForBind cap{*_metalContext, *finalResource.GetContainingResource(), BindFlag::TransferDst};
             auto blitEncoder = _metalContext->BeginBlitEncoder();
             blitEncoder.Copy(
                 CopyPartial_Dest{*finalResource.GetContainingResource().get(), dstOffset},
                 CopyPartial_Src{stagingResource, stagingOffset, stagingOffset+stagingSize});
         }
-
-#if 0
-        auto finalContainingGuid = finalResource.GetContainingResource()->GetGUID();
-        metalContext.GetActiveCommandList().MakeResourcesVisible({&finalContainingGuid, &finalContainingGuid+1});
-#endif
     }
 
     void ResourceUploadHelper::UpdateFinalResourceFromStaging(
@@ -238,6 +232,11 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         }
     }
 
+    void ResourceUploadHelper::MakeResourcesVisibleForGraphics(IteratorRange<const uint64_t*> resources)
+    {
+        _metalContext->GetActiveCommandList().MakeResourcesVisible(resources);
+    }
+
     std::vector<IAsyncDataSource::SubResource> ResourceUploadHelper::CalculateUploadList(
         Metal::ResourceMap& map,
         const ResourceDesc& desc)
@@ -387,7 +386,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         char buffer[2048];
         if (desc._type == ResourceDesc::Type::Texture) {
             const TextureDesc& tDesc = desc._textureDesc;
-            xl_snprintf(buffer, dimof(buffer), "Tex(%4s) (%4ix%4i) mips:(%2i)", 
+            xl_snprintf(
+                buffer, dimof(buffer), "Tex(%4s) (%4ix%4i) mips:(%2i)", 
                 AsString(tDesc._dimensionality),
                 tDesc._width, tDesc._height, tDesc._mipCount);
         } else if (desc._type == ResourceDesc::Type::LinearBuffer) {
@@ -686,6 +686,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
         unsigned _frameId = 0;
         bool _backgroundContext = false;
+        bool _isDedicatedTransferContext = false;
     };
 
     void UploadsThreadContext::QueueToHardware(std::optional<CommandListID> completeCmdList)
@@ -901,6 +902,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
     unsigned                UploadsThreadContext::FrameId() const { return _pimpl->_frameId; }
     void                    UploadsThreadContext::AdvanceFrameId() { ++_pimpl->_frameId; }
+    bool                    UploadsThreadContext::IsDedicatedTransferContext() const { return _pimpl->_isDedicatedTransferContext; }
 
     ResourceUploadHelper    UploadsThreadContext::GetResourceUploadHelper()
     {
@@ -927,10 +929,10 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         _underlyingContext = std::move(underlyingContext);
         _pimpl = std::make_unique<Pimpl>();
         _pimpl->_lastResolve = 0;
-        // _pimpl->_commitCountCurrent = 0;
         _pimpl->_frameId = 0;
         _pimpl->_commandListIDReadyForGraphicsQueue = 0;
         _pimpl->_backgroundContext = backgroundContext;
+        _pimpl->_isDedicatedTransferContext = false;
 
         if (reserveStagingSpace) {
             const unsigned stagingPageSize = 64*1024*1024;
@@ -940,6 +942,9 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             _pimpl->_transferQueueTimeline = objectFactory.CreateTimelineSemaphore();
             _pimpl->_graphicsQueueTimeline = objectFactory.CreateTimelineSemaphore();
         }
+
+        if (auto* vulkanThreadContext = query_interface_cast<IThreadContextVulkan*>(_underlyingContext.get()))
+            _pimpl->_isDedicatedTransferContext = vulkanThreadContext->IsDedicatedTransferContext();
     }
 
     UploadsThreadContext::~UploadsThreadContext() {}
@@ -969,6 +974,11 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         _delayedDeletes.push_back(std::move(locator));
     }
 
+    void UploadsThreadContext::DeferredOperations::Add(ResourceTransfer&& transfer)
+    {
+        _transfers.emplace_back(std::move(transfer));
+    }
+
     void UploadsThreadContext::DeferredOperations::CommitToImmediate_PreCommandList(ResourceUploadHelper& helper)
     {
         // D3D11 has some issues with mapping and writing to linear buffers from a background thread
@@ -993,12 +1003,19 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
     void UploadsThreadContext::DeferredOperations::CommitToImmediate_ResourceTransfers(ResourceUploadHelper& helper)
     {
+        if (_transfers.empty()) return;
+
         // queue ownership transfer
         std::vector<ResourceUploadHelper::QueueTransfer> transfers;
+        VLA(uint64_t, makeVisibleResources, _transfers.size());
+        unsigned makeVisibleCount = 0;
         transfers.reserve(_transfers.size());
-        for (auto& i:_transfers)
+        for (auto& i:_transfers) {
             transfers.push_back(ResourceUploadHelper::QueueTransfer{&i._resource, i._transferQueueLayout, i._graphicsQueueLayout});
+            makeVisibleResources[makeVisibleCount++] = i._resource.GetContainingResource()->GetGUID();
+        }
         helper.GraphicsQueueAcquire(transfers);
+        helper.MakeResourcesVisibleForGraphics(MakeIteratorRange(makeVisibleResources, &makeVisibleResources[makeVisibleCount]));
         _transfers.clear();
     }
 

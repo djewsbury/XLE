@@ -68,6 +68,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         void TransferQueueRelease(IteratorRange<const QueueTransfer*> transfers);
         void GraphicsQueueAcquire(IteratorRange<const QueueTransfer*> transfers);
         void PipelineBarrier(IteratorRange<const QueueTransfer*> pipelineBarriers);
+        void MakeResourcesVisibleForGraphics(IteratorRange<const uint64_t*>);
 
         bool CanDirectlyMap(IResource& resource);
 
@@ -199,6 +200,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         ResourceUploadHelper    GetResourceUploadHelper();
         IThreadContext&         GetRenderCoreThreadContext() { return *_underlyingContext; }
         IDevice&                GetRenderCoreDevice() { return *_underlyingContext->GetDevice(); }
+        bool                    IsDedicatedTransferContext() const;
 
         UploadsThreadContext(
             std::shared_ptr<IThreadContext> underlyingContext,

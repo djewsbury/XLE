@@ -424,7 +424,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		size_t trackerMarkersCount = 0;
 		for (auto* cmdList:cmdLists) {
 			assert(&cmdList->GetAsyncTracker() == _gpuTracker.get());
-			cmdList->ValidateCommitToQueue(*_factory);
+			// We don't call ValidateCommitToQueue for transfer queues so that resources aren't marked visible to object factory until they are transfered to graphics queues
+			if (_queueFamilyIndex != _factory->_dedicatedTransferQueueFamily)
+				cmdList->ValidateCommitToQueue(*_factory);
 			cmdList->_attachedStorage.OnSubmitToQueue(cmdList->GetPrimaryTrackerMarker());
 			trackerMarkersCount += cmdList->_asyncTrackerMarkers.size();
 		}

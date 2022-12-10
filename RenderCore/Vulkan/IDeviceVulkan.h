@@ -60,6 +60,7 @@ namespace RenderCore
 		virtual void ReleaseCommandBufferPool() = 0;
 
 		virtual float GetThreadingPressure() = 0;
+		virtual bool IsDedicatedTransferContext() = 0;
 
 		virtual ~IThreadContextVulkan();
 	};

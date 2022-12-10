@@ -63,6 +63,7 @@ namespace RenderOverlays
         std::shared_ptr<RenderCore::IResourceView> _distinctColorsSRV;
 
         const ::Assets::DependencyValidation& GetDependencyValidation() const { return _validationCallback; }
+        BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCmdList; }
 
         HighlightShaders(std::shared_ptr<Metal::ShaderProgram> drawHighlight, std::shared_ptr<Metal::ShaderProgram> drawShadow, std::shared_ptr<Techniques::DeferredShaderResource> distinctColors);
         HighlightShaders() = default;
@@ -71,7 +72,7 @@ namespace RenderOverlays
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout);
     protected:
         ::Assets::DependencyValidation  _validationCallback;
-        
+        BufferUploads::CommandListID _completionCmdList;
     };
 
     void HighlightShaders::ConstructToPromise(
@@ -97,6 +98,7 @@ namespace RenderOverlays
     : _drawHighlight(std::move(drawHighlight))
     , _drawShadow(std::move(drawShadow))
     , _distinctColorsSRV(distinctColors->GetShaderResource())
+    , _completionCmdList(distinctColors->GetCompletionCommandList())
     {
 		UniformsStreamInterface drawHighlightInterface;
 		drawHighlightInterface.BindImmediateData(0, Hash64("Settings"));
@@ -120,6 +122,7 @@ namespace RenderOverlays
     static void ExecuteHighlightByStencil(
         Metal::DeviceContext& metalContext,
         Metal::GraphicsEncoder_ProgressivePipeline& encoder,
+        Techniques::ParsingContext& parsingContext,
         std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
         IResourceView* stencilSrv,
         const HighlightByStencilSettings& settings,
@@ -183,6 +186,8 @@ namespace RenderOverlays
                 encoder.Draw(4);
             }
         }
+
+        parsingContext.RequireCommandList(shaders->GetCompletionCommandList());
     }
 
     static const bool s_inputAttachmentMode = false;
@@ -213,7 +218,7 @@ namespace RenderOverlays
         auto& metalContext = *RenderCore::Metal::DeviceContext::Get(parsingContext.GetThreadContext());
         auto pipelineLayout = GetVisPipelineLayout(parsingContext.GetThreadContext().GetDevice());
         auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*pipelineLayout);
-        ExecuteHighlightByStencil(metalContext, encoder, pipelineLayout, stencilSrv.get(), settings, onlyHighlighted, s_inputAttachmentMode);
+        ExecuteHighlightByStencil(metalContext, encoder, parsingContext, pipelineLayout, stencilSrv.get(), settings, onlyHighlighted, s_inputAttachmentMode);
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -294,7 +299,7 @@ namespace RenderOverlays
 			settings._outlineColor = outlineColor;
             auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*_pimpl->_pipelineLayout);
 			ExecuteHighlightByStencil(
-				metalContext, encoder, _pimpl->_pipelineLayout, srv.get(), 
+				metalContext, encoder, *_pimpl->_parsingContext, _pimpl->_pipelineLayout, srv.get(), 
 				settings, false, s_inputAttachmentMode);
 		}
     }

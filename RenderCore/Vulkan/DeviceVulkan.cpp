@@ -2587,6 +2587,11 @@ namespace RenderCore { namespace ImplVulkan
 			return checked_cast<Metal_Vulkan::SemaphoreBasedTracker*>(_submissionQueue->GetTracker().get())->GetThreadingPressure();
 	}
 
+	bool ThreadContext::IsDedicatedTransferContext()
+	{
+		return _submissionQueue->GetQueueFamilyIndex() == _factory->_dedicatedTransferQueueFamily;
+	}
+
 	auto ThreadContext::GetCommandListSpecificMarker() -> std::pair<VkSemaphore, CommandListMarker>
 	{
 		if (auto* ft = dynamic_cast<Metal_Vulkan::FenceBasedTracker*>(_submissionQueue->GetTracker().get())) {

@@ -8,6 +8,8 @@
 #include "../IDevice.h"
 #include "../ResourceUtils.h"
 #include "../ResourceDesc.h"
+#include "../DeviceInitialization.h"
+#include "../Vulkan/IDeviceVulkan.h"
 #include "../Metal/Resource.h"
 #include "../../OSServices/Log.h"
 #include "../../OSServices/TimeUtils.h"
@@ -1401,7 +1403,7 @@ namespace RenderCore { namespace BufferUploads
     {
         // Release the resource from our background (transfer) queue
         // (this also holds a reference until our queue is finished with the resource)
-        const bool mustDoQueueTransfer = false;
+        const bool mustDoQueueTransfer = context.IsDedicatedTransferContext();
         if (mustDoQueueTransfer) {
             if (layoutInBackgroundContext) {
                 PlatformInterface::ResourceUploadHelper::QueueTransfer transfer{&locator, layoutInBackgroundContext.value(), destinationLayout};
@@ -1872,7 +1874,12 @@ namespace RenderCore { namespace BufferUploads
         decltype(immediateDeviceContext) backgroundDeviceContext;
 
         if (multithreadingOk) {
-            backgroundDeviceContext = renderDevice.CreateDeferredContext();
+            if (renderDevice.GetDeviceFeatures()._dedicatedTransferQueue)
+                if (auto* vulkanDevice = query_interface_cast<IDeviceVulkan*>(&renderDevice))
+                    backgroundDeviceContext = vulkanDevice->CreateDedicatedTransferContext();
+
+            if (!backgroundDeviceContext)
+                backgroundDeviceContext = renderDevice.CreateDeferredContext();
 
                 //
                 //      When using an older feature level, we can fail while
@@ -1913,7 +1920,7 @@ namespace RenderCore { namespace BufferUploads
         }
 
         const auto stagingOnForegroundContext = !_backgroundStepMask;
-        _foregroundContext   = std::make_unique<PlatformInterface::UploadsThreadContext>(std::move(immediateDeviceContext), stagingOnForegroundContext, false);
+        _foregroundContext = std::make_unique<PlatformInterface::UploadsThreadContext>(std::move(immediateDeviceContext), stagingOnForegroundContext, false);
 
         if (_backgroundStepMask) {
             _backgroundContext   = std::make_unique<PlatformInterface::UploadsThreadContext>(backgroundDeviceContext, true, true);
