@@ -59,13 +59,15 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             const ResourceLocator& finalResource,
             IDataPacket& initialisationData);
 
-        void ReleaseFinalResourcePostDirectInitialize(
-            const ResourceLocator& finalResource,
-            BindFlag::BitField dstLayout);
-
-        void ReleaseFinalResourcePostTransfer(
-            const ResourceLocator& finalResource,
-            BindFlag::BitField dstLayout);
+        struct QueueTransfer
+        {
+            const ResourceLocator* _resource;
+            std::optional<BindFlag::BitField> _srcLayout;
+            BindFlag::BitField _dstLayout;
+        };
+        void TransferQueueRelease(IteratorRange<const QueueTransfer*> transfers);
+        void GraphicsQueueAcquire(IteratorRange<const QueueTransfer*> transfers);
+        void PipelineBarrier(IteratorRange<const QueueTransfer*> pipelineBarriers);
 
         bool CanDirectlyMap(IResource& resource);
 
@@ -84,9 +86,10 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
             ////////   C O N S T R U C T I O N   ////////
         ResourceUploadHelper(IThreadContext& renderCoreContext);
+        ResourceUploadHelper(IDevice& device, Metal::DeviceContext& metalContext);
         ~ResourceUploadHelper();
 
-        IThreadContext& GetUnderlying() { return *_renderCoreContext; }
+        // IThreadContext& GetUnderlying() { return *_renderCoreContext; }
 
         #if GFXAPI_TARGET == GFXAPI_DX11
             private: 
@@ -94,7 +97,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         #endif
 
     private:
-        IThreadContext*         _renderCoreContext;
+        Metal::DeviceContext*   _metalContext;
+        IDevice*                _device;
 		unsigned 				_copyBufferOffsetAlignment = 1;
     };
 
@@ -174,32 +178,35 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     {
     public:
         void                    QueueToHardware(std::optional<CommandListID> completeCmdList);
-        void                    CommitToImmediate(IThreadContext& commitTo, unsigned frameId);
+
+        bool                    AdvanceGraphicsQueue(IThreadContext& commitTo, CommandListID cmdListRequired);
 
         CommandListMetrics      PopMetrics();
-
-        CommandListID           CommandList_GetCommittedToImmediate() const;
-
         CommandListMetrics&     GetMetricsUnderConstruction();
+
+        CommandListID           CommandList_GetReadyForGraphicsQueue() const;
 
         class DeferredOperations;
         DeferredOperations&     GetDeferredOperationsUnderConstruction();
 
-        unsigned                CommitCount_Current();
+        unsigned                FrameId() const;
+        void                    AdvanceFrameId();
 
-        PlatformInterface::StagingPage&     GetStagingPage();
-        QueueMarker     GetProducerCmdListSpecificMarker();
-        std::optional<QueueMarker>     CommandListToHardwareQueueMarker(CommandListID cmdList);
+        StagingPage&                        GetStagingPage();
+        QueueMarker                         GetProducerCmdListSpecificMarker();
+        std::optional<QueueMarker>          CommandListToHardwareQueueMarker(CommandListID cmdList);
 
-        PlatformInterface::ResourceUploadHelper&    GetResourceUploadHelper() { return _resourceUploadHelper; }
-        IThreadContext&                 GetRenderCoreThreadContext() { return *_underlyingContext; }
-        IDevice&                        GetRenderCoreDevice() { return *_underlyingContext->GetDevice(); }
+        ResourceUploadHelper    GetResourceUploadHelper();
+        IThreadContext&         GetRenderCoreThreadContext() { return *_underlyingContext; }
+        IDevice&                GetRenderCoreDevice() { return *_underlyingContext->GetDevice(); }
 
-        UploadsThreadContext(std::shared_ptr<IThreadContext> underlyingContext);
+        UploadsThreadContext(
+            std::shared_ptr<IThreadContext> underlyingContext,
+            bool reserveStagingSpace,
+            bool backgroundContext);
         ~UploadsThreadContext();
     private:
         std::shared_ptr<IThreadContext> _underlyingContext;
-        PlatformInterface::ResourceUploadHelper _resourceUploadHelper;
 
         struct Pimpl;
         std::unique_ptr<Pimpl> _pimpl;
@@ -224,11 +231,22 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             ~DeferredDefragCopy();
         };
 
+        struct ResourceTransfer
+        {
+            ResourceLocator _resource;
+            BindFlag::BitField _transferQueueLayout = 0;
+            BindFlag::BitField _graphicsQueueLayout = 0;
+            CommandListID _cmdList = 0;
+        };
+
         void Add(DeferredCopy&& copy);
         void Add(DeferredDefragCopy&& copy);
         void AddDelayedDelete(ResourceLocator&& locator);
-        void CommitToImmediate_PreCommandList(IThreadContext& immediateContext);
-        void CommitToImmediate_PostCommandList(IThreadContext& immediateContext);
+        void Add(ResourceTransfer&& transfer);
+
+        void CommitToImmediate_PreCommandList(ResourceUploadHelper& helper);
+        void CommitToImmediate_PostCommandList(ResourceUploadHelper& helper);
+        void CommitToImmediate_ResourceTransfers(ResourceUploadHelper& helper);
         bool IsEmpty() const;
 
         void swap(DeferredOperations& other);
@@ -241,6 +259,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         std::vector<DeferredCopy>       _deferredCopies;
         std::vector<DeferredDefragCopy> _deferredDefragCopies;
         std::vector<ResourceLocator>    _delayedDeletes;
+        std::vector<ResourceTransfer>   _transfers;
     };
 
         /////////////////////////////////////////////////////////////////////
@@ -274,42 +293,23 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     #if GFXAPI_TARGET == GFXAPI_DX11
 		static const bool SupportsResourceInitialisation_Texture = true;
 		static const bool SupportsResourceInitialisation_Buffer = true;
-        static const bool RequiresStagingTextureUpload = false;
-        static const bool RequiresStagingResourceReadBack = true;
-        static const bool CanDoNooverwriteMapInBackground = false;
-        static const bool UseMapBasedDefrag = false;
-        static const bool ContextBasedMultithreading = true;
         static const bool CanDoPartialMaps = false;
     #elif GFXAPI_TARGET == GFXAPI_DX9
 		static const bool SupportsResourceInitialisation_Texture = false;
 		static const bool SupportsResourceInitialisation_Buffer = false;
-        static const bool RequiresStagingTextureUpload = true;
-        static const bool RequiresStagingResourceReadBack = false;
-        static const bool CanDoNooverwriteMapInBackground = true;
-        static const bool UseMapBasedDefrag = true;
-        static const bool ContextBasedMultithreading = false;
         static const bool CanDoPartialMaps = true;
     #elif GFXAPI_TARGET == GFXAPI_OPENGLES
         static const bool SupportsResourceInitialisation_Texture = true;
 		static const bool SupportsResourceInitialisation_Buffer = true;
-        static const bool RequiresStagingTextureUpload = false;
-        static const bool RequiresStagingResourceReadBack = true;
-        static const bool CanDoNooverwriteMapInBackground = false;
-        static const bool UseMapBasedDefrag = false;
-        static const bool ContextBasedMultithreading = true;
         static const bool CanDoPartialMaps = false;
 	#elif GFXAPI_TARGET == GFXAPI_VULKAN
 		// Vulkan capabilities haven't been tested!
 		static const bool SupportsResourceInitialisation_Texture = false;
 		static const bool SupportsResourceInitialisation_Buffer = false;
-		static const bool RequiresStagingTextureUpload = true;
-		static const bool RequiresStagingResourceReadBack = true;
-		static const bool CanDoNooverwriteMapInBackground = true;
 		static const bool UseMapBasedDefrag = false;
-		static const bool ContextBasedMultithreading = true;
 		static const bool CanDoPartialMaps = true;
 	#else
-        #error Unsupported platform!
+        #error Graphics API not configured in ResourceUploadHelper.h
     #endif
 #endif
 

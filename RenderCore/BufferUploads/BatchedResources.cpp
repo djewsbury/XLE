@@ -696,7 +696,7 @@ namespace RenderCore { namespace BufferUploads
 			_repositionCmdList = _futureRepositionCmdList.get();
 		
 		if (_repositionCmdList && !_eventId.has_value() && bufferUploads.IsComplete(_repositionCmdList.value())) {
-			// publish the changes to encourage the client to move across to the 
+			// publish the changes to encourage the client to move across to the newly updated position
 			Event_ResourceReposition result;
 			result._originalResource = _srcHeap->_heapResource.get();
 			result._newResource = _dstUberBlock.GetContainingResource();

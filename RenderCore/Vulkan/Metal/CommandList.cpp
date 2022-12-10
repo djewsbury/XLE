@@ -321,6 +321,28 @@ namespace RenderCore { namespace Metal_Vulkan
 		return *_asyncTrackerMarkers.begin();
 	}
 
+	void CommandList::AddWaitBeforeBegin(VulkanSharedPtr<VkSemaphore> semaphore, uint64_t value)
+	{
+		for (auto& s:_waitBeforeBegin) {
+			if (s.first == semaphore) {
+				s.second = std::max(s.second, value);
+				return;
+			}
+		}
+		_waitBeforeBegin.emplace_back(std::move(semaphore), value);
+	}
+
+	void CommandList::AddSignalOnCompletion(VulkanSharedPtr<VkSemaphore> semaphore, uint64_t value)
+	{
+		for (auto& s:_signalOnCompletion) {
+			if (s.first == semaphore) {
+				s.second = std::max(s.second, value);
+				return;
+			}
+		}
+		_signalOnCompletion.emplace_back(std::move(semaphore), value);
+	}
+
 	CommandList::CommandList(CommandList&&) = default;
 	
 	CommandList& CommandList::operator=(CommandList&& moveFrom)
@@ -349,6 +371,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		_attachedStorage = std::move(moveFrom._attachedStorage);
 		_asyncTracker = std::move(moveFrom._asyncTracker);
 		_asyncTrackerMarkers = std::move(moveFrom._asyncTrackerMarkers);
+		_waitBeforeBegin = std::move(moveFrom._waitBeforeBegin);
+		_signalOnCompletion = std::move(moveFrom._signalOnCompletion);
 		return *this;
 	}
 
@@ -393,10 +417,10 @@ namespace RenderCore { namespace Metal_Vulkan
 	IAsyncTracker::Marker SubmissionQueue::Submit(
 		IteratorRange<Metal_Vulkan::CommandList* const*> cmdLists,
 		IteratorRange<const std::pair<VkSemaphore, uint64_t>*> waitBeforeBegin,
-		IteratorRange<const VkPipelineStageFlags*> waitBeforeBeginStages,
+		IteratorRange<const VkPipelineStageFlags*> waitBeforeBeginStagesInit,
 		IteratorRange<const std::pair<VkSemaphore, uint64_t>*> signalOnCompletion)
 	{
-		assert(waitBeforeBegin.size() == waitBeforeBeginStages.size());
+		assert(waitBeforeBegin.size() == waitBeforeBeginStagesInit.size());
 		size_t trackerMarkersCount = 0;
 		for (auto* cmdList:cmdLists) {
 			assert(&cmdList->GetAsyncTracker() == _gpuTracker.get());
@@ -413,6 +437,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::vector<VulkanSharedPtr<VkCommandBuffer>> capturedCmdBuffers;
 		capturedCmdBuffers.reserve(cmdLists.size());
 		unsigned c=0;
+		unsigned waitBeforeBeginInCmdListCount = 0, signalOnCompletionInCmdListCount = 0;
 		for (auto* cmdList:cmdLists) {
 			if (auto* ft = dynamic_cast<FenceBasedTracker*>(cmdList->_asyncTracker.get())) {
 				checked_cast<SemaphoreBasedTracker*>(cmdList->_asyncTracker.get())->OnSubmitToQueue(cmdList->_asyncTrackerMarkers);
@@ -427,19 +452,23 @@ namespace RenderCore { namespace Metal_Vulkan
 			cmdList->_asyncTracker = nullptr;
 			rawCmdBuffers[c++] = cmdList->_underlying.get();
 			capturedCmdBuffers.emplace_back(std::move(cmdList->_underlying));
+			waitBeforeBeginInCmdListCount += cmdList->_waitBeforeBegin.size();
+			signalOnCompletionInCmdListCount += cmdList->_signalOnCompletion.size();
 		}
 		std::sort(asyncTrackerMarkers.begin(), asyncTrackerMarkers.end());
 
 		////////////////////////////////////////
-		VLA(VkSemaphore, waitBeforeBeginSemaphores, waitBeforeBegin.size());
-		VLA(uint64_t, waitBeforeBeginValues, waitBeforeBegin.size());
-		VLA(VkSemaphore, signalOnCompletionSemaphores, signalOnCompletion.size()+1);
-		VLA(uint64_t, signalOnCompletionValues, signalOnCompletion.size()+1);
+		VLA(VkSemaphore, waitBeforeBeginSemaphores, waitBeforeBegin.size()+waitBeforeBeginInCmdListCount);
+		VLA(VkPipelineStageFlags, waitBeforeBeginStages, waitBeforeBegin.size()+waitBeforeBeginInCmdListCount);
+		VLA(uint64_t, waitBeforeBeginValues, waitBeforeBegin.size()+waitBeforeBeginInCmdListCount);
+		VLA(VkSemaphore, signalOnCompletionSemaphores, signalOnCompletion.size()+signalOnCompletionInCmdListCount+1);
+		VLA(uint64_t, signalOnCompletionValues, signalOnCompletion.size()+signalOnCompletionInCmdListCount+1);
 		unsigned waitBeforeBeginCount = 0, signalOnCompletionCount = 0;
 
 		for (auto s:waitBeforeBegin) {
 			waitBeforeBeginSemaphores[waitBeforeBeginCount] = s.first;
 			waitBeforeBeginValues[waitBeforeBeginCount] = s.second;
+			waitBeforeBeginStages[waitBeforeBeginCount] = waitBeforeBeginStagesInit[waitBeforeBeginCount];
 			++waitBeforeBeginCount;
 		}
 
@@ -447,6 +476,24 @@ namespace RenderCore { namespace Metal_Vulkan
 			signalOnCompletionSemaphores[signalOnCompletionCount] = s.first;
 			signalOnCompletionValues[signalOnCompletionCount] = s.second;
 			++signalOnCompletionCount;
+		}
+
+		for (auto* cmdList:cmdLists) {
+			for (const auto& s:cmdList->_waitBeforeBegin) {
+				waitBeforeBeginSemaphores[waitBeforeBeginCount] = s.first.get();
+				waitBeforeBeginValues[waitBeforeBeginCount] = s.second;
+				waitBeforeBeginStages[waitBeforeBeginCount] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+				++waitBeforeBeginCount;
+			}
+
+			for (const auto& s:cmdList->_signalOnCompletion) {
+				signalOnCompletionSemaphores[signalOnCompletionCount] = s.first.get();
+				signalOnCompletionValues[signalOnCompletionCount] = s.second;
+				++signalOnCompletionCount;
+			}
+
+			cmdList->_waitBeforeBegin.clear();
+			cmdList->_signalOnCompletion.clear();
 		}
 
 		ScopedLock(_queueLock);
@@ -466,7 +513,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		submitInfo.waitSemaphoreCount = waitBeforeBeginCount;
 		submitInfo.pWaitSemaphores = waitBeforeBeginSemaphores;
-		submitInfo.pWaitDstStageMask = waitBeforeBeginStages.begin();
+		submitInfo.pWaitDstStageMask = waitBeforeBeginStages;
 		submitInfo.signalSemaphoreCount = signalOnCompletionCount;
 		submitInfo.pSignalSemaphores = signalOnCompletionSemaphores;
 

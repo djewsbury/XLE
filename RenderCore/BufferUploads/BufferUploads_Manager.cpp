@@ -246,7 +246,7 @@ namespace RenderCore { namespace BufferUploads
 
         Signal<> _onBackgroundFrame;
         Threading::Mutex _onBackgroundFrameLock;
-        unsigned _commitCountLastOnBackgroundFrame = 0;
+        unsigned _lastContextFrameId = 0;
 
         #if !defined(BU_SEPARATELY_THREADED_CONTINUATIONS)
             std::vector<std::unique_ptr<thousandeyes::futures::Waitable>> _activeFutureWaitables;
@@ -290,6 +290,14 @@ namespace RenderCore { namespace BufferUploads
         void    CompleteWaitForDescFuture(TransactionRefHolder&& ref, std::future<ResourceDesc> descFuture, std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, BindFlag::BitField);
         void    CompleteWaitForDataFuture(TransactionRefHolder&& ref, std::future<void> prepareFuture, PlatformInterface::StagingPage::Allocation&& stagingAllocation, std::shared_ptr<IResource> oversizeResource, std::shared_ptr<IResourcePool> pool, const ResourceDesc& finalResourceDesc);
         void    UnqueueBytes(UploadDataType type, unsigned bytes);
+
+        void    TransferBackFinalResource(
+            TransactionRefHolder& ref,
+            PlatformInterface::UploadsThreadContext&,
+            ResourceLocator&& locator,
+            CommandListID cmdListUnderConstruction,
+            std::optional<BindFlag::BitField> layoutInBackgroundContext,
+            BindFlag::BitField destinationLayout);
     };
 
     static void ValidatePacketSize(const ResourceDesc& desc, IDataPacket& data)
@@ -1027,7 +1035,7 @@ namespace RenderCore { namespace BufferUploads
             if (!didInitialisationDuringCreation) {
                 assert(finalConstruction.GetContainingResource()->GetDesc()._bindFlags & BindFlag::TransferDst);    // need TransferDst to recieve staging data
 
-                auto& helper = context.GetResourceUploadHelper();
+                auto helper = context.GetResourceUploadHelper();
                 if (!helper.CanDirectlyMap(*finalConstruction.GetContainingResource())) {
 
                     auto stagingByteCount = objectSize;
@@ -1068,7 +1076,6 @@ namespace RenderCore { namespace BufferUploads
                             context.GetRenderCoreThreadContext(), finalConstruction, *resourceCreateStep._initialisationData);
                     }
 
-                    helper.ReleaseFinalResourcePostTransfer(finalConstruction, BindFlag::ShaderResource);
                     didContextOperation = true;
 
                 } else {
@@ -1090,12 +1097,8 @@ namespace RenderCore { namespace BufferUploads
                             finalConstruction,
                             resourceCreateStep._initialisationData->GetData());
                     }
-
-                    helper.ReleaseFinalResourcePostDirectInitialize(finalConstruction, BindFlag::ShaderResource);
                 }
 
-            } else {
-                context.GetResourceUploadHelper().ReleaseFinalResourcePostDirectInitialize(finalConstruction, BindFlag::ShaderResource);
             }
 
             if (didContextOperation)
@@ -1111,10 +1114,13 @@ namespace RenderCore { namespace BufferUploads
             }
 
             // Embue the final resource with the completion command list information
-            transaction->_finalResource = ResourceLocator { std::move(finalConstruction), didContextOperation ? cmdListUnderConstruction : 0u };
-            transaction->_promise.set_value(transaction->_finalResource);
-            transaction->_promisePending = false;
-            resourceCreateStep._transactionRef.SuccessfulRetirement();
+            std::optional<BindFlag::BitField> queueLayout;
+            if (didContextOperation) queueLayout = BindFlag::TransferDst;
+            TransferBackFinalResource(
+                resourceCreateStep._transactionRef,
+                context, std::move(finalConstruction),
+                cmdListUnderConstruction,
+                queueLayout, BindFlag::ShaderResource);
         } CATCH (...) {
             transaction->_promise.set_exception(std::current_exception());
             transaction->_promisePending = false;
@@ -1146,7 +1152,8 @@ namespace RenderCore { namespace BufferUploads
         try {
             const auto& desc = prepareStagingStep._desc;
             auto byteCount = RenderCore::ByteCount(desc);
-            auto alignment = context.GetResourceUploadHelper().CalculateStagingBufferOffsetAlignment(desc);
+            auto helper = context.GetResourceUploadHelper();
+            auto alignment = helper.CalculateStagingBufferOffsetAlignment(desc);
 
             using namespace RenderCore;
             struct Captures
@@ -1193,7 +1200,7 @@ namespace RenderCore { namespace BufferUploads
                     context.GetStagingPage().GetStagingResource(),
                     Metal::ResourceMap::Mode::WriteDiscardPrevious,
                     stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize()};
-                uploadList = context.GetResourceUploadHelper().CalculateUploadList(map, desc);
+                uploadList = helper.CalculateUploadList(map, desc);
 
                 captures._map = std::move(map);
                 captures._stagingConstruction = std::move(stagingConstruction);
@@ -1204,7 +1211,7 @@ namespace RenderCore { namespace BufferUploads
                     LinearBufferDesc::Create(byteCount));
                 captures._oversizeResource = context.GetRenderCoreDevice().CreateResource(oversizeDesc, "oversize-staging");
                 Metal::ResourceMap map{context.GetRenderCoreDevice(), *captures._oversizeResource, Metal::ResourceMap::Mode::WriteDiscardPrevious};
-                uploadList = context.GetResourceUploadHelper().CalculateUploadList(map, desc);
+                uploadList = helper.CalculateUploadList(map, desc);
                 captures._map = std::move(map);
             }
 
@@ -1365,18 +1372,16 @@ namespace RenderCore { namespace BufferUploads
                 // but that can't be done without adding a whole bunch of extra infrastructure
             }
 
-            context.GetResourceUploadHelper().ReleaseFinalResourcePostTransfer(transaction->_finalResource, BindFlag::ShaderResource);
-
-            // Embue the final resource with the completion command list information
-            transaction->_finalResource = ResourceLocator { std::move(transaction->_finalResource), cmdListUnderConstruction };
-
             metricsUnderConstruction._bytesUploadTotal += descByteCount;
             metricsUnderConstruction._bytesUploaded[dataType] += descByteCount;
             metricsUnderConstruction._countUploaded[dataType] += 1;
             ++metricsUnderConstruction._contextOperations;
-            transaction->_promise.set_value(transaction->_finalResource);
-            transaction->_promisePending = false;
-            transferStagingToFinalStep._transactionRef.SuccessfulRetirement();
+
+            TransferBackFinalResource(
+                transferStagingToFinalStep._transactionRef,
+                context, std::move(transaction->_finalResource),
+                cmdListUnderConstruction,
+                BindFlag::TransferDst, BindFlag::ShaderResource);
         } CATCH (...) {
             transaction->_promise.set_exception(std::current_exception());
             transaction->_promisePending = false;
@@ -1384,6 +1389,41 @@ namespace RenderCore { namespace BufferUploads
 
         UnqueueBytes((UploadDataType)dataType, descByteCount);
         return true;
+    }
+
+    void AssemblyLine::TransferBackFinalResource(
+        TransactionRefHolder& ref,
+        PlatformInterface::UploadsThreadContext& context,
+        ResourceLocator&& locator,
+        CommandListID cmdListUnderConstruction,
+        std::optional<BindFlag::BitField> layoutInBackgroundContext,
+        BindFlag::BitField destinationLayout)
+    {
+        // Release the resource from our background (transfer) queue
+        // (this also holds a reference until our queue is finished with the resource)
+        const bool mustDoQueueTransfer = false;
+        if (mustDoQueueTransfer) {
+            if (layoutInBackgroundContext) {
+                PlatformInterface::ResourceUploadHelper::QueueTransfer transfer{&locator, layoutInBackgroundContext.value(), destinationLayout};
+                context.GetResourceUploadHelper().TransferQueueRelease(MakeIteratorRange(&transfer, &transfer+1));
+            }
+
+            // Add a record to to handle the "acquire" part of the transfer on the client's (graphics) queue
+            using ResourceTransfer = PlatformInterface::UploadsThreadContext::DeferredOperations::ResourceTransfer;
+            if (layoutInBackgroundContext)
+                context.GetDeferredOperationsUnderConstruction().Add(
+                    ResourceTransfer{locator, layoutInBackgroundContext.value(), destinationLayout, cmdListUnderConstruction});
+        } else {
+            // just plain barrier -- don't have to do the release / acquire thing
+            PlatformInterface::ResourceUploadHelper::QueueTransfer barrier{&locator, layoutInBackgroundContext, destinationLayout};
+            context.GetResourceUploadHelper().PipelineBarrier(MakeIteratorRange(&barrier, &barrier+1));
+        }
+
+        // Set up the promises to pass the resource back to the client
+        ref._transaction->_finalResource = ResourceLocator { std::move(locator), layoutInBackgroundContext ? cmdListUnderConstruction : 0u };
+        ref._transaction->_promise.set_value(ref._transaction->_finalResource);
+        ref._transaction->_promisePending = false;
+        ref.SuccessfulRetirement();
     }
 
     auto AssemblyLine::DrainPriorityQueueSet(QueueSet& queueSet, unsigned stepMask, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction) -> DrainPriorityQueueSetResult
@@ -1509,11 +1549,11 @@ namespace RenderCore { namespace BufferUploads
                 _queuedFunctions.pop();
             }
 
-            auto cc = context.CommitCount_Current();
-            if (cc > _commitCountLastOnBackgroundFrame) {
+            auto cc = context.FrameId();
+            if (cc > _lastContextFrameId) {
                 ScopedLock(_onBackgroundFrameLock);
                 _onBackgroundFrame.Invoke();
-                _commitCountLastOnBackgroundFrame = cc;
+                _lastContextFrameId = cc;
             }
 
             context.GetStagingPage().UpdateConsumerMarker();        // update at least once per frame, not strictly necessary, but improves metrics
@@ -1731,7 +1771,7 @@ namespace RenderCore { namespace BufferUploads
         }
         
         bool                    IsComplete(CommandListID id) override;
-        void                    StallUntilCompletion(IThreadContext& immediateContext, CommandListID id) override;
+        void                    RequireCmdList(IThreadContext& immediateContext, CommandListID id) override;
 
         CommandListMetrics      PopMetrics() override;
 
@@ -1752,7 +1792,6 @@ namespace RenderCore { namespace BufferUploads
 
         volatile bool _shutdownBackgroundThread;
 
-        unsigned _frameId = 0;
         unsigned _guid = 0;
 
         uint32_t DoBackgroundThread();
@@ -1762,14 +1801,19 @@ namespace RenderCore { namespace BufferUploads
 
     bool                    Manager::IsComplete(CommandListID id)
     {
-        return id <= (_backgroundStepMask ? _backgroundContext.get() : _foregroundContext.get())->CommandList_GetCommittedToImmediate();
+        return id <= (_backgroundStepMask ? _backgroundContext.get() : _foregroundContext.get())->CommandList_GetReadyForGraphicsQueue();
     }
 
-    void                    Manager::StallUntilCompletion(IThreadContext& immediateContext, CommandListID id)
+    void                    Manager::RequireCmdList(IThreadContext& immediateContext, CommandListID id)
     {
         if (!id || id == CommandListID_Invalid) return;
-        while (!IsComplete(id)) {
-            Update(immediateContext);
+        // while (!IsComplete(id)) {
+        //     Update(immediateContext);
+        //     std::this_thread::sleep_for(std::chrono::nanoseconds(500*1000));
+        // }
+
+        while (!_backgroundContext->AdvanceGraphicsQueue(immediateContext, id)) {
+            _assemblyLine->TriggerWakeupEvent();
             std::this_thread::sleep_for(std::chrono::nanoseconds(500*1000));
         }
     }
@@ -1789,11 +1833,12 @@ namespace RenderCore { namespace BufferUploads
             _assemblyLine->Process(_foregroundStepMask, *_foregroundContext.get());
 
             //  Commit both the foreground and background contexts here
-        ++_frameId;
-        _foregroundContext->CommitToImmediate(immediateContext, _frameId);
-        _backgroundContext->CommitToImmediate(immediateContext, _frameId);
+        _foregroundContext->AdvanceFrameId();
+        _backgroundContext->AdvanceFrameId();
+        // _foregroundContext->UpdateGraphicsQueue(immediateContext, _frameId);
+        // _backgroundContext->UpdateGraphicsQueue(immediateContext, _frameId);
         
-            // Assembly line uses the number of times we've run CommitToImmediate() for some
+            // Assembly line uses the number of times we've run UpdateGraphicsQueue() for some
             // internal scheduling -- so we need to wake it up now, because it may do something
         _assemblyLine->TriggerWakeupEvent();
 
@@ -1819,8 +1864,6 @@ namespace RenderCore { namespace BufferUploads
 
         bool multithreadingOk = true;
 
-        // multithreadingOk = false;
-
         const auto nsightMode = ConsoleRig::CrossModule::GetInstance()._services.CallDefault(Hash64("nsight"), false);
         if (nsightMode)
             multithreadingOk = false;
@@ -1844,8 +1887,6 @@ namespace RenderCore { namespace BufferUploads
         }
 
         multithreadingOk = !backgroundDeviceContext->IsImmediate() && (backgroundDeviceContext != immediateDeviceContext);
-        _backgroundContext   = std::make_unique<PlatformInterface::UploadsThreadContext>(backgroundDeviceContext);
-        _foregroundContext   = std::make_unique<PlatformInterface::UploadsThreadContext>(std::move(immediateDeviceContext));
 
             //  todo --     if we don't have driver support for concurrent creates, we should try to do this
             //              in the main render thread. Also, if we've created the device with the single threaded
@@ -1870,7 +1911,12 @@ namespace RenderCore { namespace BufferUploads
                 ;
             _backgroundStepMask = 0;
         }
+
+        const auto stagingOnForegroundContext = !_backgroundStepMask;
+        _foregroundContext   = std::make_unique<PlatformInterface::UploadsThreadContext>(std::move(immediateDeviceContext), stagingOnForegroundContext, false);
+
         if (_backgroundStepMask) {
+            _backgroundContext   = std::make_unique<PlatformInterface::UploadsThreadContext>(backgroundDeviceContext, true, true);
             _backgroundThread = std::make_unique<std::thread>(
                 [this](){ 
                     _backgroundContext->GetStagingPage().BindThread();

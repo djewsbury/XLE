@@ -34,7 +34,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize)
     {
         auto destinationDesc = finalResource.GetContainingResource()->GetDesc();
-        auto& metalContext = *Metal::DeviceContext::Get(*_renderCoreContext);
 
         if (destinationDesc._type == ResourceDesc::Type::Texture) {
             assert(finalResource.IsWholeResource());
@@ -45,8 +44,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             // During the transfer, the images must be in either TransferSrcOptimal, TransferDstOptimal or General.
             // assuming we don't have to CaptureForBind stagingResource, because it should be from a StagingPool, which
             // will always be ready for a transfer
-            Metal::Internal::CaptureForBind cap{metalContext, *finalResource.GetContainingResource(), BindFlag::TransferDst};
-            auto blitEncoder = metalContext.BeginBlitEncoder();
+            Metal::Internal::CaptureForBind cap{*_metalContext, *finalResource.GetContainingResource(), BindFlag::TransferDst};
+            auto blitEncoder = _metalContext->BeginBlitEncoder();
             blitEncoder.Copy(
                 CopyPartial_Dest{*finalResource.GetContainingResource().get()},
                 CopyPartial_Src{stagingResource, stagingOffset, stagingOffset+size});
@@ -61,8 +60,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                 assert(stagingSize <= range.second-range.first);
             }
 
-            Metal::Internal::CaptureForBind cap{metalContext, *finalResource.GetContainingResource(), BindFlag::TransferDst};
-            auto blitEncoder = metalContext.BeginBlitEncoder();
+            Metal::Internal::CaptureForBind cap{*_metalContext, *finalResource.GetContainingResource(), BindFlag::TransferDst};
+            auto blitEncoder = _metalContext->BeginBlitEncoder();
             blitEncoder.Copy(
                 CopyPartial_Dest{*finalResource.GetContainingResource().get(), dstOffset},
                 CopyPartial_Src{stagingResource, stagingOffset, stagingOffset+stagingSize});
@@ -102,7 +101,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         IteratorRange<const void*> data)
     {
         assert(resource.GetDesc()._type == ResourceDesc::Type::LinearBuffer);
-        Metal::ResourceMap map{*_renderCoreContext->GetDevice(), resource, Metal::ResourceMap::Mode::WriteDiscardPrevious, resourceOffset, resourceSize};
+        Metal::ResourceMap map{*_device, resource, Metal::ResourceMap::Mode::WriteDiscardPrevious, resourceOffset, resourceSize};
         auto copyAmount = std::min(map.GetData().size(), data.size());
         if (copyAmount > 0) {
             // attempt to use faster aligned copy, if available
@@ -120,8 +119,9 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         const TextureDesc& descForLayout,
         const IDevice::ResourceInitializer& multiSubresourceInitializer)
     {
+        assert(_device);
         return Metal::Internal::CopyViaMemoryMap(
-            *_renderCoreContext->GetDevice(), 
+            *_device, 
             resource, resourceOffset, resourceSize,
             descForLayout, multiSubresourceInitializer);
     }
@@ -130,8 +130,9 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         IResource& resource,
         const IDevice::ResourceInitializer& multiSubresourceInitializer)
     {
+        assert(_device);
         unsigned copyAmount = 0;
-        Metal::ResourceMap map{*_renderCoreContext->GetDevice(), resource, Metal::ResourceMap::Mode::WriteDiscardPrevious};
+        Metal::ResourceMap map{*_device, resource, Metal::ResourceMap::Mode::WriteDiscardPrevious};
         auto desc = resource.GetDesc();
         if (desc._type == ResourceDesc::Type::Texture) {
             auto arrayLayerCount = ActualArrayLayerCount(desc._textureDesc);
@@ -193,18 +194,48 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             *stagingSpace.GetResource(), beginAndEndInResource.first, beginAndEndInResource.second-beginAndEndInResource.first);
     }
 
-    void ResourceUploadHelper::ReleaseFinalResourcePostDirectInitialize(
-        const ResourceLocator& finalResource, BindFlag::BitField dstLayout)
+    void ResourceUploadHelper::TransferQueueRelease(IteratorRange<const QueueTransfer*> transfers)
     {
-        // after a memory map / create, but no actual context operations / transfers
-        assert(0);
+        Metal::BarrierHelper barrierHelper{*_metalContext};
+        for (const auto& c:transfers) {
+            assert(c._srcLayout.has_value());
+            barrierHelper.Add(
+                *c._resource->GetContainingResource(),
+                Metal::BarrierResourceUsage{*c._srcLayout, Metal::BarrierResourceUsage::Queue::DedicatedTransfer},
+                Metal::BarrierResourceUsage{c._dstLayout, Metal::BarrierResourceUsage::Queue::Graphics});
+        }
     }
 
-    void ResourceUploadHelper::ReleaseFinalResourcePostTransfer(
-        const ResourceLocator& finalResource, BindFlag::BitField dstLayout)
+    void ResourceUploadHelper::GraphicsQueueAcquire(IteratorRange<const QueueTransfer*> transfers)
     {
-        // after UpdateFinalResourceViaCmdList (etc)...
-        assert(0);
+        Metal::BarrierHelper barrierHelper{*_metalContext};
+        for (const auto& c:transfers) {
+            if (c._srcLayout.has_value()) {
+                barrierHelper.Add(
+                    *c._resource->GetContainingResource(),
+                    Metal::BarrierResourceUsage{*c._srcLayout, Metal::BarrierResourceUsage::Queue::DedicatedTransfer},
+                    Metal::BarrierResourceUsage{c._dstLayout, Metal::BarrierResourceUsage::Queue::Graphics});
+            } else {
+                // this case should be used when there are no actual context operations on the transfer queue - we just switch into the
+                // requested layout
+                barrierHelper.Add(
+                    *c._resource->GetContainingResource(),
+                    Metal::BarrierResourceUsage::Preinitialized(),
+                    c._dstLayout);
+            }
+        }
+    }
+
+    void ResourceUploadHelper::PipelineBarrier(IteratorRange<const QueueTransfer*> pipelineBarriers)
+    {
+        Metal::BarrierHelper barrierHelper{*_metalContext};
+        for (const auto& c:pipelineBarriers) {
+            if (c._srcLayout.has_value()) {
+                barrierHelper.Add(*c._resource->GetContainingResource(), *c._srcLayout, c._dstLayout);
+            } else {
+                barrierHelper.Add(*c._resource->GetContainingResource(), Metal::BarrierResourceUsage::Preinitialized(), c._dstLayout);
+            }
+        }
     }
 
     std::vector<IAsyncDataSource::SubResource> ResourceUploadHelper::CalculateUploadList(
@@ -268,7 +299,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
     bool ResourceUploadHelper::CanDirectlyMap(IResource& resource)
     {
-        return Metal::ResourceMap::CanMap(*_renderCoreContext->GetDevice(), resource, Metal::ResourceMap::Mode::WriteDiscardPrevious);
+        assert(_device);
+        return Metal::ResourceMap::CanMap(*_device, resource, Metal::ResourceMap::Mode::WriteDiscardPrevious);
     }
 
     unsigned ResourceUploadHelper::CalculateStagingBufferOffsetAlignment(const ResourceDesc& desc)
@@ -296,10 +328,9 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         assert(destination.GetDesc()._type == ResourceDesc::Type::LinearBuffer);
         assert(source.GetDesc()._type == ResourceDesc::Type::LinearBuffer);
 
-        auto& metalContext = *Metal::DeviceContext::Get(*_renderCoreContext);
-        Metal::Internal::CaptureForBind cap0{metalContext, destination, BindFlag::TransferDst};
-        Metal::Internal::CaptureForBind cap1{metalContext, source, BindFlag::TransferSrc};
-        auto blitEncoder = metalContext.BeginBlitEncoder();
+        Metal::Internal::CaptureForBind cap0{*_metalContext, destination, BindFlag::TransferDst};
+        Metal::Internal::CaptureForBind cap1{*_metalContext, source, BindFlag::TransferSrc};
+        auto blitEncoder = _metalContext->BeginBlitEncoder();
         // Vulkan allows for all of these copies to happen in a single cmd -- unfortunately our API doesn't support that, however
         for (auto& s:steps) {
             assert(s._sourceEnd > s._sourceStart);
@@ -326,9 +357,17 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             };
     }
 
-    ResourceUploadHelper::ResourceUploadHelper(IThreadContext& renderCoreContext) : _renderCoreContext(&renderCoreContext)
+    ResourceUploadHelper::ResourceUploadHelper(IThreadContext& renderCoreContext)
 	{
-		_copyBufferOffsetAlignment = _renderCoreContext->GetDevice()->GetDeviceLimits()._copyBufferOffsetAlignment;
+        _device = renderCoreContext.GetDevice().get();
+		_copyBufferOffsetAlignment = _device->GetDeviceLimits()._copyBufferOffsetAlignment;
+        _metalContext = Metal::DeviceContext::Get(renderCoreContext).get();
+	}
+    ResourceUploadHelper::ResourceUploadHelper(IDevice& device, Metal::DeviceContext& metalContext)
+	{
+        _device = &device;
+		_copyBufferOffsetAlignment = _device->GetDeviceLimits()._copyBufferOffsetAlignment;
+        _metalContext = &metalContext;
 	}
     ResourceUploadHelper::~ResourceUploadHelper() {}
 
@@ -627,7 +666,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         DeferredOperations _deferredOperationsUnderConstruction;
         struct QueuedCommandList
         {
-            // std::shared_ptr<Metal::CommandList> _deviceCommandList;
             mutable CommandListMetrics _metrics;
             DeferredOperations _deferredOperations;
             CommandListID _id;
@@ -636,19 +674,18 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
             LockFreeFixedSizeQueue<CommandListMetrics, 256> _recentRetirements;
         #endif
-        bool _isImmediateContext;
 
         TimeMarker  _lastResolve;
 
-        unsigned    _commitCountCurrent;
-        CommandListID _commandListIDCommittedToImmediate;
+        CommandListID _commandListIDReadyForGraphicsQueue;
 
         Metal_Vulkan::VulkanSharedPtr<VkSemaphore> _transferQueueTimeline;
         Metal_Vulkan::VulkanSharedPtr<VkSemaphore> _graphicsQueueTimeline;
 
-        std::unique_ptr<PlatformInterface::StagingPage> _stagingPage;
+        std::unique_ptr<StagingPage> _stagingPage;
 
-        unsigned _immediateContextLastFrameId = 0;
+        unsigned _frameId = 0;
+        bool _backgroundContext = false;
     };
 
     void UploadsThreadContext::QueueToHardware(std::optional<CommandListID> completeCmdList)
@@ -686,10 +723,11 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         newCommandList._deferredOperations.swap(_pimpl->_deferredOperationsUnderConstruction);
         newCommandList._id = completeCmdList.value_or(~0u);
 
-        if (auto* threadContextVulkan = (IThreadContextVulkan*)_underlyingContext->QueryInterface(typeid(IThreadContextVulkan).hash_code())) {
+#if 0
+        if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(_underlyingContext.get())) {
 
-            std::pair<VkSemaphore, IThreadContextVulkan::CmdListMarker> signalOnCompletion[1];
-            std::pair<VkSemaphore, IThreadContextVulkan::CmdListMarker> waitBeforeBegin[1];
+            std::pair<VkSemaphore, IThreadContextVulkan::CommandListMarker> signalOnCompletion[1];
+            std::pair<VkSemaphore, IThreadContextVulkan::CommandListMarker> waitBeforeBegin[1];
             unsigned signalOnCompletionCount = 0, waitBeforeBeginCount = 0;
 
             // If we have completed a buffer uploads CommandListID, we should advance _transferQueueTimeline on completion
@@ -698,15 +736,28 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             if (completeCmdList)
                 signalOnCompletion[signalOnCompletionCount++] = { _pimpl->_transferQueueTimeline.get(), *completeCmdList };
 
-            // auto forceOrderTimeline = threadContextVulkan->GetCmdListSpecificMarker();
+            // auto forceOrderTimeline = threadContextVulkan->GetCommandListSpecificMarker();
             // if (forceOrderTimeline.second > 1)
             //     waitBeforeBegin[waitBeforeBeginCount++] = { forceOrderTimeline.first, forceOrderTimeline.second-1 };
 
             threadContextVulkan->CommitCommandsScheduled(
                 MakeIteratorRange(waitBeforeBegin, &waitBeforeBegin[waitBeforeBeginCount]),
                 MakeIteratorRange(signalOnCompletion, &signalOnCompletion[signalOnCompletionCount]));
-
+        } else {
+            assert(0);      // requires gfx-api specific implementation
         }
+#endif
+
+        #if GFXAPI_TARGET == GFXAPI_VULKAN
+            auto& metalContext = *Metal::DeviceContext::Get(*_underlyingContext);
+            assert(metalContext.HasActiveCommandList());
+            if (completeCmdList)
+                metalContext.GetActiveCommandList().AddSignalOnCompletion(_pimpl->_transferQueueTimeline, *completeCmdList);
+        #else
+            #error GFXAPI specific implementation required in UploadsThreadContext::QueueToHardware()
+        #endif
+        if (_pimpl->_backgroundContext)
+            _underlyingContext->CommitCommands();
 
         _pimpl->_queuedCommandLists.push_overflow(std::move(newCommandList));
 
@@ -719,9 +770,9 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         //     _pimpl->_deferredOperationsUnderConstruction.CommitToImmediate_PreCommandList(*_underlyingContext);
         //     _pimpl->_deferredOperationsUnderConstruction.CommitToImmediate_PostCommandList(*_underlyingContext);
         //     if (cmdListId !=  ~0u)
-        //         _pimpl->_commandListIDCommittedToImmediate = std::max(_pimpl->_commandListIDCommittedToImmediate, cmdListId);
+        //         _pimpl->_commandListIDReadyForGraphicsQueue = std::max(_pimpl->_commandListIDReadyForGraphicsQueue, cmdListId);
         // 
-        //     newCommandList._metrics._frameId = _pimpl->_immediateContextLastFrameId+1;  // ie, assume it's just the next one after the last call to CommitToImmediate()
+        //     newCommandList._metrics._frameId = _pimpl->_immediateContextLastFrameId+1;  // ie, assume it's just the next one after the last call to UpdateGraphicsQueue()
         //     newCommandList._metrics._commitTime = currentTime;
         //     #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
         //         while (!_pimpl->_recentRetirements.push(newCommandList._metrics)) {
@@ -735,22 +786,20 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         DeferredOperations().swap(_pimpl->_deferredOperationsUnderConstruction);
     }
 
-    void UploadsThreadContext::CommitToImmediate(IThreadContext& commitTo, unsigned frameId)
+    bool UploadsThreadContext::AdvanceGraphicsQueue(IThreadContext& commitTo, CommandListID cmdListRequired)
     {
-        if (_pimpl->_isImmediateContext) {
-            assert(&commitTo == _underlyingContext.get());
-            ++_pimpl->_commitCountCurrent;
-            _pimpl->_immediateContextLastFrameId = frameId;
-            return;
-        }
+        // if (_pimpl->_isImmediateContext) {
+        //     assert(&commitTo == _underlyingContext.get());
+        //     ++_pimpl->_commitCountCurrent;
+        //     _pimpl->_immediateContextLastFrameId = frameId;
+        //     return;
+        // }
 
-        auto immContext = Metal::DeviceContext::Get(commitTo);
-        
         TimeMarker stallStart = OSServices::GetPerformanceCounter();
         bool gotStart = false;
 
         Pimpl::QueuedCommandList* commandList = 0;
-        while (_pimpl->_queuedCommandLists.try_front(commandList)) {
+        while (_pimpl->_commandListIDReadyForGraphicsQueue < cmdListRequired && _pimpl->_queuedCommandLists.try_front(commandList)) {
             TimeMarker stallEnd = OSServices::GetPerformanceCounter();
             if (!gotStart) {
                 commitTo.GetAnnotator().Event("BufferUploads", IAnnotator::EventTypes::MarkerBegin);
@@ -758,17 +807,32 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             }
 
             TRY {
-                commandList->_deferredOperations.CommitToImmediate_PreCommandList(commitTo);
-                /*if (commandList->_deviceCommandList) {
-                    auto* deviceVulkan = (IThreadContextVulkan*)commitTo.QueryInterface(typeid(IThreadContextVulkan).hash_code());
-                    if (deviceVulkan) {
-                        deviceVulkan->CommitPrimaryCommandBufferToQueue(*commandList->_deviceCommandList);
-                        commandList->_deviceCommandList = {};
-                    } else {
-                        immContext->ExecuteCommandList(std::move(*commandList->_deviceCommandList));
+                if (!commandList->_deferredOperations.IsEmpty()) {
+                    auto metalContext = Metal::DeviceContext::BeginPrimaryCommandList(commitTo);
+                    ResourceUploadHelper helper{*commitTo.GetDevice(), *metalContext};
+                    commandList->_deferredOperations.CommitToImmediate_PreCommandList(helper);
+                    commandList->_deferredOperations.CommitToImmediate_ResourceTransfers(helper);
+                    commandList->_deferredOperations.CommitToImmediate_PostCommandList(helper);
+
+                    auto cmdList = metalContext->ResolveCommandList();
+                    metalContext.reset();
+
+                    if (commandList->_id != ~0u) {
+                        cmdList->AddWaitBeforeBegin(_pimpl->_transferQueueTimeline, commandList->_id);
+                        cmdList->AddSignalOnCompletion(_pimpl->_graphicsQueueTimeline, commandList->_id);
                     }
-                }*/
-                commandList->_deferredOperations.CommitToImmediate_PostCommandList(commitTo);
+
+                    if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(&commitTo)) {
+                        // the command list generated will become a "pre-frame" command list; meaning it will go into
+                        // the queue earlier than the main frame rendering command list
+                        threadContextVulkan->AddPreFrameCommandList(std::move(*cmdList));
+                    } else {
+                        assert(0);      // missing gfx api specific implementation
+                    }
+                } else if (commandList->_id != ~0u) {
+                    auto& metalContext = *Metal::DeviceContext::Get(commitTo);
+                    metalContext.GetActiveCommandList().AddWaitBeforeBegin(_pimpl->_transferQueueTimeline, commandList->_id);
+                }
             } CATCH (const std::exception& e) {
                 // we have to catch any exception to ensure (at the very least) that we don't attempt to resubmit this same cmd list again
                 if (!commandList->_metrics._exceptionMsg.empty()) commandList->_metrics._exceptionMsg += ", ";
@@ -776,9 +840,9 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             } CATCH_END
 
             if (commandList->_id != ~0u)
-                _pimpl->_commandListIDCommittedToImmediate = std::max(_pimpl->_commandListIDCommittedToImmediate, commandList->_id);
+                _pimpl->_commandListIDReadyForGraphicsQueue = std::max(_pimpl->_commandListIDReadyForGraphicsQueue, commandList->_id);
         
-            commandList->_metrics._frameId                  = frameId;
+            commandList->_metrics._frameId                  = _pimpl->_frameId;
             commandList->_metrics._commitTime               = OSServices::GetPerformanceCounter();
             commandList->_metrics._framePriorityStallTime   = stallEnd - stallStart;    // this should give us very small numbers, when we're not actually stalling for frame priority commits
             #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
@@ -794,7 +858,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             commitTo.GetAnnotator().Event("BufferUploads", IAnnotator::EventTypes::MarkerEnd);
         }
         
-        ++_pimpl->_commitCountCurrent;
+        return _pimpl->_commandListIDReadyForGraphicsQueue >= cmdListRequired;
     }
 
 #if 0
@@ -829,47 +893,53 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     }
 
 
-    CommandListID           UploadsThreadContext::CommandList_GetCommittedToImmediate() const     { return _pimpl->_commandListIDCommittedToImmediate; }
+    CommandListID           UploadsThreadContext::CommandList_GetReadyForGraphicsQueue() const     { return _pimpl->_commandListIDReadyForGraphicsQueue; }
 
     CommandListMetrics&     UploadsThreadContext::GetMetricsUnderConstruction()                   { return _pimpl->_commandListUnderConstruction; }
 
     auto                    UploadsThreadContext::GetDeferredOperationsUnderConstruction() -> DeferredOperations&        { return _pimpl->_deferredOperationsUnderConstruction; }
 
-    unsigned                UploadsThreadContext::CommitCount_Current()                           { return _pimpl->_commitCountCurrent; }
+    unsigned                UploadsThreadContext::FrameId() const { return _pimpl->_frameId; }
+    void                    UploadsThreadContext::AdvanceFrameId() { ++_pimpl->_frameId; }
 
-    PlatformInterface::StagingPage&     UploadsThreadContext::GetStagingPage()
+    ResourceUploadHelper    UploadsThreadContext::GetResourceUploadHelper()
+    {
+        return ResourceUploadHelper{*_underlyingContext};
+    }
+
+    StagingPage&     UploadsThreadContext::GetStagingPage()
     {
         assert(_pimpl->_stagingPage);
         return *_pimpl->_stagingPage;
     }
 
-    PlatformInterface::QueueMarker      UploadsThreadContext::GetProducerCmdListSpecificMarker()
+    QueueMarker      UploadsThreadContext::GetProducerCmdListSpecificMarker()
     {
         // Get the marker that is specific to the particular cmd list we're building
         auto* vulkanThreadContext = (IThreadContextVulkan*)_underlyingContext->QueryInterface(typeid(IThreadContextVulkan).hash_code());
         if (vulkanThreadContext)
-            return vulkanThreadContext->GetCmdListSpecificMarker().second;
+            return vulkanThreadContext->GetCommandListSpecificMarker().second;
         return 0;
     }
 
-    UploadsThreadContext::UploadsThreadContext(std::shared_ptr<IThreadContext> underlyingContext) 
-    : _resourceUploadHelper(*underlyingContext)
+    UploadsThreadContext::UploadsThreadContext(std::shared_ptr<IThreadContext> underlyingContext, bool reserveStagingSpace, bool backgroundContext)
     {
         _underlyingContext = std::move(underlyingContext);
         _pimpl = std::make_unique<Pimpl>();
         _pimpl->_lastResolve = 0;
-        _pimpl->_commitCountCurrent = 0;
-        _pimpl->_isImmediateContext = _underlyingContext->IsImmediate();
-        _pimpl->_commandListIDCommittedToImmediate = 0;
+        // _pimpl->_commitCountCurrent = 0;
+        _pimpl->_frameId = 0;
+        _pimpl->_commandListIDReadyForGraphicsQueue = 0;
+        _pimpl->_backgroundContext = backgroundContext;
 
-        if (!_pimpl->_isImmediateContext) {
+        if (reserveStagingSpace) {
             const unsigned stagingPageSize = 64*1024*1024;
-            _pimpl->_stagingPage = std::make_unique<PlatformInterface::StagingPage>(*_underlyingContext, stagingPageSize);
-        }
+            _pimpl->_stagingPage = std::make_unique<StagingPage>(*_underlyingContext, stagingPageSize);
 
-        auto& objectFactory = RenderCore::Metal::GetObjectFactory(*_underlyingContext->GetDevice());
-        _pimpl->_transferQueueTimeline = objectFactory.CreateTimelineSemaphore();
-        _pimpl->_graphicsQueueTimeline = objectFactory.CreateTimelineSemaphore();
+            auto& objectFactory = RenderCore::Metal::GetObjectFactory(*_underlyingContext->GetDevice());
+            _pimpl->_transferQueueTimeline = objectFactory.CreateTimelineSemaphore();
+            _pimpl->_graphicsQueueTimeline = objectFactory.CreateTimelineSemaphore();
+        }
     }
 
     UploadsThreadContext::~UploadsThreadContext() {}
@@ -899,32 +969,42 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         _delayedDeletes.push_back(std::move(locator));
     }
 
-    void UploadsThreadContext::DeferredOperations::CommitToImmediate_PreCommandList(IThreadContext& immContext)
+    void UploadsThreadContext::DeferredOperations::CommitToImmediate_PreCommandList(ResourceUploadHelper& helper)
     {
         // D3D11 has some issues with mapping and writing to linear buffers from a background thread
         // we get around this by defering some write operations to the main thread, at the point
         // where we commit the command list to the device
         if (!_deferredCopies.empty()) {
-            PlatformInterface::ResourceUploadHelper immediateContext(immContext);
             for (const auto&copy:_deferredCopies)
-                immediateContext.WriteViaMap(copy._destination, MakeIteratorRange(copy._temporaryBuffer));
+                helper.WriteViaMap(copy._destination, MakeIteratorRange(copy._temporaryBuffer));
             _deferredCopies.clear();
         }
     }
 
-    void UploadsThreadContext::DeferredOperations::CommitToImmediate_PostCommandList(IThreadContext& immContext)
+    void UploadsThreadContext::DeferredOperations::CommitToImmediate_PostCommandList(ResourceUploadHelper& helper)
     {
-        if (!_deferredDefragCopies.empty()) {
-            PlatformInterface::ResourceUploadHelper immediateContext(immContext);
-            for (auto i=_deferredDefragCopies.begin(); i!=_deferredDefragCopies.end(); ++i)
-                immediateContext.DeviceBasedCopy(*i->_destination, *i->_source, i->_steps);
-            _deferredDefragCopies.clear();
-        }
+        if (_deferredDefragCopies.empty() && _transfers.empty())
+            return;
+
+        for (auto i=_deferredDefragCopies.begin(); i!=_deferredDefragCopies.end(); ++i)
+            helper.DeviceBasedCopy(*i->_destination, *i->_source, i->_steps);
+        _deferredDefragCopies.clear();
+    }
+
+    void UploadsThreadContext::DeferredOperations::CommitToImmediate_ResourceTransfers(ResourceUploadHelper& helper)
+    {
+        // queue ownership transfer
+        std::vector<ResourceUploadHelper::QueueTransfer> transfers;
+        transfers.reserve(_transfers.size());
+        for (auto& i:_transfers)
+            transfers.push_back(ResourceUploadHelper::QueueTransfer{&i._resource, i._transferQueueLayout, i._graphicsQueueLayout});
+        helper.GraphicsQueueAcquire(transfers);
+        _transfers.clear();
     }
 
     bool UploadsThreadContext::DeferredOperations::IsEmpty() const 
     {
-        return _deferredCopies.empty() && _deferredDefragCopies.empty() && _delayedDeletes.empty();
+        return _deferredCopies.empty() && _deferredDefragCopies.empty() && _delayedDeletes.empty() && _transfers.empty();
     }
 
     void UploadsThreadContext::DeferredOperations::swap(DeferredOperations& other)
@@ -932,6 +1012,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         _deferredCopies.swap(other._deferredCopies);
         _deferredDefragCopies.swap(other._deferredDefragCopies);
         _delayedDeletes.swap(other._delayedDeletes);
+        _transfers.swap(other._transfers);
     }
 
     UploadsThreadContext::DeferredOperations::DeferredOperations()

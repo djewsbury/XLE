@@ -2574,17 +2574,9 @@ namespace RenderCore { namespace ImplVulkan
 
     //////////////////////////////////////////////////////////////////////////////////////////////////
 
-	Metal_Vulkan::IAsyncTracker::Marker ThreadContext::QueuePrimaryContext(
-		IteratorRange<const std::pair<VkSemaphore, CmdListMarker>*> waitBeforeBegin,
-        IteratorRange<const std::pair<VkSemaphore, CmdListMarker>*> signalOnCompletion)
+	void ThreadContext::AddPreFrameCommandList(Metal_Vulkan::CommandList&& cmdList)
 	{
-		auto immediateCommands = _metalContext->ResolveCommandList();
-		return CommitPrimaryCommandBufferToQueue_Internal(*immediateCommands, waitBeforeBegin, signalOnCompletion);
-	}
-
-	void ThreadContext::CommitPrimaryCommandBufferToQueue(Metal_Vulkan::CommandList& cmdList)
-	{
-		CommitPrimaryCommandBufferToQueue_Internal(cmdList, {}, {});
+		_interimCmdLists.emplace_back(std::move(cmdList));
 	}
 
 	float ThreadContext::GetThreadingPressure()
@@ -2595,7 +2587,7 @@ namespace RenderCore { namespace ImplVulkan
 			return checked_cast<Metal_Vulkan::SemaphoreBasedTracker*>(_submissionQueue->GetTracker().get())->GetThreadingPressure();
 	}
 
-	auto ThreadContext::GetCmdListSpecificMarker() -> std::pair<VkSemaphore, CmdListMarker>
+	auto ThreadContext::GetCommandListSpecificMarker() -> std::pair<VkSemaphore, CommandListMarker>
 	{
 		if (auto* ft = dynamic_cast<Metal_Vulkan::FenceBasedTracker*>(_submissionQueue->GetTracker().get())) {
 			return { nullptr, 0 };
@@ -2610,7 +2602,7 @@ namespace RenderCore { namespace ImplVulkan
 		return _submissionQueue->GetTracker();
 	}
 
-	void ThreadContext::AttachNameToCmdList(std::string name)
+	void ThreadContext::AttachNameToCommandList(std::string name)
 	{
 		assert(_metalContext && _metalContext->HasActiveCommandList());
 		if (!_metalContext || !_metalContext->HasActiveCommandList())
@@ -2623,8 +2615,7 @@ namespace RenderCore { namespace ImplVulkan
 		}
 	}
 
-	Metal_Vulkan::IAsyncTracker::Marker ThreadContext::CommitPrimaryCommandBufferToQueue_Internal(
-		Metal_Vulkan::CommandList& cmdList,
+	Metal_Vulkan::IAsyncTracker::Marker ThreadContext::CommitToQueue_Internal(
 		IteratorRange<const std::pair<VkSemaphore, uint64_t>*> waitBeforeBegin,
 		IteratorRange<const std::pair<VkSemaphore, uint64_t>*> completionSignals)
 	{
@@ -2646,12 +2637,12 @@ namespace RenderCore { namespace ImplVulkan
 		}
 		_nextQueueShouldWaitOnAcquire = VK_NULL_HANDLE;
 
+		// _interimCmdLists always come before "cmdList"
 		// _interimCmdLists will be cleared regardless of whether or not _submissionQueue->Submit throws
 		auto interimLists = std::move(_interimCmdLists);
-		VLA(Metal_Vulkan::CommandList*, cmdLists, 1+interimLists.size());
+		VLA(Metal_Vulkan::CommandList*, cmdLists, interimLists.size());
 		unsigned cmdListsCount = 0;
-		for (auto& c:interimLists) cmdLists[cmdListsCount++] = c.get();
-		cmdLists[cmdListsCount++] = &cmdList;
+		for (auto& c:interimLists) cmdLists[cmdListsCount++] = &c;
 
 		auto result = _submissionQueue->Submit(
 			MakeIteratorRange(cmdLists, &cmdLists[cmdListsCount]),
@@ -2670,8 +2661,10 @@ namespace RenderCore { namespace ImplVulkan
 		//
 		// To avoid another call to VkSubmit (which is discouraged by the spec),
 		// we can store the cmd list and submit it along with the primary command list
-		if (_metalContext->HasActiveCommandList())
-			_interimCmdLists.push_back(_metalContext->ResolveCommandList());
+		if (_metalContext->HasActiveCommandList()) {
+			auto cmdList = _metalContext->ResolveCommandList();
+			_interimCmdLists.emplace_back(std::move(*cmdList));
+		}
 
 		PresentationChain* swapChain = checked_cast<PresentationChain*>(&presentationChain);
 		auto nextImage = swapChain->AcquireNextImage(*_submissionQueue);
@@ -2692,13 +2685,16 @@ namespace RenderCore { namespace ImplVulkan
 		auto* swapChain = checked_cast<PresentationChain*>(&chain);
 		auto& syncs = swapChain->GetSyncs();
 		assert(!syncs._presentFence);
+		assert(_metalContext->HasActiveCommandList());
 
 		//////////////////////////////////////////////////////////////////
 
 		std::pair<VkSemaphore, uint64_t> commandBufferSignal = std::make_pair(syncs._onCommandBufferComplete.get(), 0);
 		bool commandBufferSubmitted = false;
 		TRY {
-			syncs._presentFence = QueuePrimaryContext({}, MakeIteratorRange(&commandBufferSignal, &commandBufferSignal+1));
+			auto immediateCommands = _metalContext->ResolveCommandList();
+			_interimCmdLists.emplace_back(std::move(*immediateCommands));
+			syncs._presentFence = CommitToQueue_Internal({}, MakeIteratorRange(&commandBufferSignal, &commandBufferSignal+1));
 			commandBufferSubmitted = true;
 		} CATCH(const std::exception& e) {
 			Log(Warning) << "Failure during queue submission for present: " << e.what() << std::endl;
@@ -2725,10 +2721,14 @@ namespace RenderCore { namespace ImplVulkan
 		// now; but also any other command buffers that have already been submitted
 		// and are still being processed
 		bool waitForCompletion = !!(flags & CommitCommandsFlags::WaitForCompletion);
-		if (_metalContext->HasActiveCommandList()) {
+		if (_metalContext->HasActiveCommandList() || !_interimCmdLists.empty()) {
 			Metal_Vulkan::IAsyncTracker::Marker fenceToWaitFor;
 			TRY {
-				fenceToWaitFor = QueuePrimaryContext({}, {});
+				if (_metalContext->HasActiveCommandList()) {
+					auto immediateCommands = _metalContext->ResolveCommandList();
+					_interimCmdLists.emplace_back(std::move(*immediateCommands));
+				}
+				fenceToWaitFor = CommitToQueue_Internal({}, {});
 			} CATCH (const std::exception& e) {
 				Log(Warning) << "Failure during queue submission in CommitCommands:" << e.what() << std::endl;
 				waitForCompletion = false;
@@ -2749,9 +2749,10 @@ namespace RenderCore { namespace ImplVulkan
 		PumpDestructionQueues();
 	}
 
+#if 0
 	bool ThreadContext::CommitCommandsScheduled(
-		IteratorRange<const std::pair<VkSemaphore, CmdListMarker>*> waitBeforeBegin,
-		IteratorRange<const std::pair<VkSemaphore, CmdListMarker>*> signalOnCompletion)
+		IteratorRange<const std::pair<VkSemaphore, CommandListMarker>*> waitBeforeBegin,
+		IteratorRange<const std::pair<VkSemaphore, CommandListMarker>*> signalOnCompletion)
 	{
 		bool result = false;
 		if (_metalContext->HasActiveCommandList()) {
@@ -2766,6 +2767,7 @@ namespace RenderCore { namespace ImplVulkan
 		PumpDestructionQueues();
 		return result;
 	}
+#endif
 
 	void ThreadContext::PumpDestructionQueues()
 	{
@@ -2864,10 +2866,7 @@ namespace RenderCore { namespace ImplVulkan
 			_commandBufferPool = std::make_shared<Metal_Vulkan::CommandBufferPool>(
 				*_factory, queueFamilyIndex, false, _submissionQueue->GetTracker());
 
-		_metalContext = std::make_shared<Metal_Vulkan::DeviceContext>(
-			*_factory, *_globalPools,
-			_commandBufferPool,
-            Metal_Vulkan::CommandBufferType::Primary);
+		_metalContext = std::make_shared<Metal_Vulkan::DeviceContext>(*_factory, *_globalPools);
 	}
 
     ThreadContext::~ThreadContext() 
@@ -2903,9 +2902,27 @@ namespace RenderCore { namespace ImplVulkan
 
     const std::shared_ptr<Metal_Vulkan::DeviceContext>& ThreadContext::GetMetalContext()
     {
-		if (!_metalContext->HasActiveCommandList())
-			_metalContext->BeginCommandList(_submissionQueue->GetTracker());
+		if (!_metalContext->HasActiveCommandList()) {
+			auto cmdBuffer = _commandBufferPool->Allocate(Metal_Vulkan::CommandBufferType::Primary);
+			_metalContext->BeginCommandList(std::move(cmdBuffer), _submissionQueue->GetTracker());
+		}
         return _metalContext;
+    }
+
+	std::shared_ptr<Metal_Vulkan::DeviceContext> ThreadContext::BeginPrimaryCommandList()
+    {
+		auto cmdBuffer = _commandBufferPool->Allocate(Metal_Vulkan::CommandBufferType::Primary);
+		auto deviceContext = std::make_shared<Metal_Vulkan::DeviceContext>(*_factory, *_globalPools);
+		deviceContext->BeginCommandList(std::move(cmdBuffer), _submissionQueue->GetTracker());
+        return deviceContext;
+    }
+
+	std::shared_ptr<Metal_Vulkan::DeviceContext> ThreadContext::BeginSecondaryCommandList()
+    {
+		auto cmdBuffer = _commandBufferPool->Allocate(Metal_Vulkan::CommandBufferType::Secondary);
+		auto deviceContext = std::make_shared<Metal_Vulkan::DeviceContext>(*_factory, *_globalPools);
+		deviceContext->BeginCommandList(std::move(cmdBuffer), _submissionQueue->GetTracker());
+        return deviceContext;
     }
 }}
 

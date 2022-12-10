@@ -103,6 +103,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		void MakeResourcesVisible(IteratorRange<const uint64_t*> resourceGuids);
 		void ValidateCommitToQueue(ObjectFactory& factory);
 
+		void AddWaitBeforeBegin(VulkanSharedPtr<VkSemaphore> semaphore, uint64_t value=0);
+		void AddSignalOnCompletion(VulkanSharedPtr<VkSemaphore> semaphore, uint64_t value=0);
+
 		void ExecuteSecondaryCommandList(CommandList&& cmdList);
 
 		CommandList();
@@ -125,14 +128,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::shared_ptr<IAsyncTracker> _asyncTracker;
 		std::vector<IAsyncTracker::Marker> _asyncTrackerMarkers;
 
-		// struct SubmissionResult
-		// {
-		// 	VkFence _queueTrackerFence = nullptr;
-		// 	uint64_t _queueTrackerSemphoreValue = 0ull;
-		// 	VulkanSharedPtr<VkCommandBuffer> _cmdBuffer;
-		// 	std::vector<IAsyncTracker::Marker> _asyncTrackerMarkers;
-		// };
-		// SubmissionResult OnSubmitToQueue();
+		std::vector<std::pair<VulkanSharedPtr<VkSemaphore>, uint64_t>> _waitBeforeBegin;
+		std::vector<std::pair<VulkanSharedPtr<VkSemaphore>, uint64_t>> _signalOnCompletion;
 
 		friend class DeviceContext;
 		friend class SharedEncoder;

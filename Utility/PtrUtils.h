@@ -297,6 +297,13 @@ namespace Utility
             #endif
         }
 
+	template<typename RequestedInterface, typename SrcType>
+        RequestedInterface query_interface_cast(SrcType* input)
+    {
+		assert(input);
+        return (RequestedInterface)input->QueryInterface(typeid(std::decay_t<std::remove_pointer_t<RequestedInterface>>).hash_code());
+    }
+
     template<typename T>
         static bool Equivalent(const std::weak_ptr<T>& lhs, const std::weak_ptr<T>& rhs)
         {

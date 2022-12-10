@@ -188,8 +188,10 @@ namespace UnitTests
 			if (currentDrawCount > drawCountLimit) break;
 			{
 				ScopedLock(pendingCommandListLock);
-				for (auto& cmdList:pendingCommandList)
-					vulkanThreadContext->CommitPrimaryCommandBufferToQueue(*cmdList);
+				for (auto& cmdList:pendingCommandList) {
+					vulkanThreadContext->AddPreFrameCommandList(std::move(*cmdList));
+					threadContext->CommitCommands();
+				}
 				pendingCommandList.clear();
 			}
 			
@@ -205,8 +207,10 @@ namespace UnitTests
 			t._thread.join();
 
 		// final cmd lists...
-		for (auto& cmdList:pendingCommandList)
-			vulkanThreadContext->CommitPrimaryCommandBufferToQueue(*cmdList);
+		for (auto& cmdList:pendingCommandList) {
+			vulkanThreadContext->AddPreFrameCommandList(std::move(*cmdList));
+			threadContext->CommitCommands();
+		}
 		pendingCommandList.clear();
 
 		auto readBackData = fbHelper.GetMainTarget()->ReadBackSynchronized(*threadContext);
