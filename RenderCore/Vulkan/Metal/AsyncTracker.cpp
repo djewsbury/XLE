@@ -431,8 +431,14 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto i = std::lower_bound(
 			_trackersSubmittedPendingOrdering.begin(), _trackersSubmittedPendingOrdering.end(), marker,
 			[](const auto& lhs, auto marker) { return lhs._frameMarker < marker; });
-		if (i != _trackersSubmittedPendingOrdering.end() && i->_frameMarker == marker)
-			return (i->_state == State::SubmittedToQueue) ? MarkerStatus::ConsumerPending : MarkerStatus::Abandoned;
+		if (i != _trackersSubmittedPendingOrdering.end() && i->_frameMarker == marker) {
+			if (i->_state != State::SubmittedToQueue) return MarkerStatus::Abandoned;
+
+			// see if we can lookup the state of this specific marker
+			auto c = LowerBound2(MakeIteratorRange(_submitSemaphoreValuesAndMarkers.begin(), _submitSemaphoreValuesAndMarkers.end()), marker);
+			if (c != _submitSemaphoreValuesAndMarkers.end() && c->first == marker)
+				return (c->second <= _lastCompletedSubmitSemaphoreValue.load()) ? MarkerStatus::ConsumerCompleted : MarkerStatus::ConsumerPending;
+		}
 
 		return MarkerStatus::NotSubmitted;		// expecting it to be in _trackersWritingCommands
 	}
@@ -454,18 +460,21 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-	std::pair<VkSemaphore, uint64_t> SemaphoreBasedTracker::OnSubmitToQueue(IteratorRange<const Marker*> markers)
+	auto SemaphoreBasedTracker::OnSubmitToQueue(IteratorRange<const Marker*> markers) -> SubmissionInfo
 	{
-		auto newLastQueuedInOrder = ProcessMarkers(markers, State::SubmittedToQueue);
-		return { _semaphore.get(), newLastQueuedInOrder };		// not that it's possible we return something equal to a previous submit
+		auto submitSemaphoreValue =_nextSubmitSemaphoreValue++;
+		SubmissionInfo result;
+		result._maxInorderMarker = ProcessMarkers(markers, State::SubmittedToQueue, submitSemaphoreValue);
+		result._submitSemaphoreValue = submitSemaphoreValue;
+		return result;
 	}
 
 	void SemaphoreBasedTracker::AbandonMarkers(IteratorRange<const Marker*> markers)
 	{
-		ProcessMarkers(markers, State::Abandoned);
+		ProcessMarkers(markers, State::Abandoned, 0);
 	}
 
-	uint64_t SemaphoreBasedTracker::ProcessMarkers(IteratorRange<const Marker*> markers, State newState)
+	uint64_t SemaphoreBasedTracker::ProcessMarkers(IteratorRange<const Marker*> markers, State newState, uint64_t newSubmitSemaphoreValue)
 	{
 		assert(!markers.empty());
 		for (auto i=markers.begin()+1; i!=markers.end(); ++i) assert(*(i-1) < *i);		// we need the markers to be in sorted order here (&unique)
@@ -515,6 +524,21 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			newLastQueuedInOrder = _lastQueuedInOrder;
 			newTrailingAbandons = _trailingAbandons;
+
+			// remove any markers from _submitSemaphoreValuesAndMarkers <= _trailingAbandons
+			auto ss = _submitSemaphoreValuesAndMarkers.begin();
+			while (ss != _submitSemaphoreValuesAndMarkers.end() && ss->first <= _trailingAbandons) ++ss;
+			_submitSemaphoreValuesAndMarkers.erase(_submitSemaphoreValuesAndMarkers.begin(), ss);
+
+			if (newState == State::SubmittedToQueue) {
+				auto i = _submitSemaphoreValuesAndMarkers.begin();
+				for (auto m:markers) {
+					while (i != _submitSemaphoreValuesAndMarkers.end() && i->first < m) ++i;
+					assert(i == _submitSemaphoreValuesAndMarkers.end() || m != i->first);
+					i = _submitSemaphoreValuesAndMarkers.insert(i, {m, newSubmitSemaphoreValue});
+					++i;
+				}
+			}
 		}
 
 		{
@@ -548,6 +572,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto hres = _extFn->_getSemaphoreCounterValue(_device, _semaphore.get(), &result);
 		assert(hres == VK_SUCCESS);
 		_lastCompletedConsumerFrameMarker = result;
+
+		result = 0;
+		hres = _extFn->_getSemaphoreCounterValue(_device, _submitSemaphore.get(), &result);
+		assert(hres == VK_SUCCESS);
+		_lastCompletedSubmitSemaphoreValue = result;
 	}
 
 	void SemaphoreBasedTracker::AttachName(Marker marker, std::string name)
@@ -561,9 +590,20 @@ namespace RenderCore { namespace Metal_Vulkan
 			i->_name = std::move(name);
 	}
 
-	bool SemaphoreBasedTracker::WaitForMarker(Marker marker, std::optional<std::chrono::nanoseconds> timeout)
+	bool SemaphoreBasedTracker::WaitForSpecificMarker(Marker marker, std::optional<std::chrono::nanoseconds> timeout)
 	{
 		if (marker <= _lastCompletedConsumerFrameMarker) return true;
+
+		// we may have to use _submitSemaphoreValuesAndMarkers and wait on the particular sub
+		std::optional<uint64_t> useSubmitSemaphore;
+		{
+			ScopedLock(_trackersSubmittedToQueueLock);
+			if (marker > _lastQueuedInOrder) {
+				auto c = LowerBound2(MakeIteratorRange(_submitSemaphoreValuesAndMarkers.begin(), _submitSemaphoreValuesAndMarkers.end()), marker);
+				if (c != _submitSemaphoreValuesAndMarkers.end() && c->first == marker)
+					useSubmitSemaphore = c->second;
+			}
+		}
 
 		VkSemaphoreWaitInfo waitInfo = {};
 		waitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
@@ -571,6 +611,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		waitInfo.flags = 0;
 		VkSemaphore sema[] { _semaphore.get() };
 		uint64_t values[] { (uint64_t)marker };
+		if (useSubmitSemaphore.has_value()) {
+			sema[0] = _submitSemaphore.get();
+			values[0] = *useSubmitSemaphore;
+		}
 		waitInfo.semaphoreCount = 1;
 		waitInfo.pSemaphores = sema;
 		waitInfo.pValues = values;
@@ -609,6 +653,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		_extFn = &factory.GetExtensionFunctions();
 		_semaphore = factory.CreateTimelineSemaphore();		// initial state will be 0
+		_submitSemaphore = factory.CreateTimelineSemaphore();
 
 		const unsigned reserveDepth = 32;
 		_trackersSubmittedPendingOrdering.reserve(reserveDepth);
@@ -617,6 +662,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		// We start with frame 1 -- and we want GetProducerMarker() to return 1 even before the first call to AllocateMarkerForNewCmdList()
 		_currentProducerFrameMarker = 1;
 		_lastCompletedConsumerFrameMarker = 0;
+		_lastCompletedSubmitSemaphoreValue = 0;
+		_nextSubmitSemaphoreValue = 1;
 		_lastQueuedInOrder = 0;
 		_trailingAbandons = 0;
 		_currentProducerFrameMarkerAdvancedBeforeAllocation = true;

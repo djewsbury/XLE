@@ -294,9 +294,11 @@ namespace UnitTests
 			auto lightId = CreateTestLight(lightScene);
 			CreateSphereShadowProjection(lightScene, lightId);
 
-			testApparatus._bufferUploads->Update(*threadContext);
+#if 0
+			testApparatus._bufferUploads->v(*threadContext);
 			Threading::Sleep(16);
 			testApparatus._bufferUploads->Update(*threadContext);
+#endif
 
 			// stall until all resources are ready
 			{

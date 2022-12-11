@@ -93,7 +93,7 @@ namespace UnitTests
 		std::future<std::pair<RenderCore::Techniques::VisibilityMarkerId, RenderCore::BufferUploads::CommandListID>>& descriptorSetFuture)
 	{
 		auto state = descriptorSetFuture.get();
-		RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(threadContext, state.second);
+		RenderCore::Techniques::Services::GetBufferUploads().StallAndMarkCommandListDependency(threadContext, state.second);
 		return state.first;
 	}
 
@@ -315,7 +315,7 @@ namespace UnitTests
 						Techniques::Draw(parsingContext, *pipelineAcceleratorPool, *cfgId, pkt);
 
 					if (parsingContext._requiredBufferUploadsCommandList)
-						techniqueTestApparatus._bufferUploads->StallUntilCompletion(*threadContext, parsingContext._requiredBufferUploadsCommandList);
+						techniqueTestApparatus._bufferUploads->StallAndMarkCommandListDependency(*threadContext, parsingContext._requiredBufferUploadsCommandList);
 				}
 
 				fbHelper.SaveImage(*threadContext, "drawables-render-model");

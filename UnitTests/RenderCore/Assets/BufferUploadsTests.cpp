@@ -19,6 +19,7 @@
 #include "../../../Assets/IFileSystem.h"
 #include "../../../Assets/MountingTree.h"
 #include "../../../Utility/HeapUtils.h"
+#include "../../../Utility/StreamUtils.h"
 #include "thousandeyes/futures/then.h"
 #include "thousandeyes/futures/DefaultExecutor.h"
 #include "catch2/catch_test_macros.hpp"
@@ -67,6 +68,12 @@ namespace UnitTests
 		RenderCore::ResourceDesc _desc;
 	};
 
+	static void Flush(RenderCore::IThreadContext& mainContext, RenderCore::BufferUploads::IManager& manager)
+	{
+		if (auto maxList = manager.LatestCommandListPendingProcessing())
+			manager.StallAndMarkCommandListDependency(mainContext, *maxList);
+	}
+
 	TEST_CASE( "BufferUploads-TextureInitialization", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
@@ -80,14 +87,13 @@ namespace UnitTests
 
 		SECTION("Prepared data packet")
 		{
-			
 			auto dataPacket = BufferUploads::CreateBasicPacket(MakeIteratorRange(rawData), "bu-test-texture", MakeTexturePitches(desc._textureDesc));
 			auto transaction = bu->Begin(desc, dataPacket);
 			REQUIRE(transaction.IsValid());
 
 			auto start = std::chrono::steady_clock::now();
 			for (;;) {
-				bu->Update(*metalHelper->_device->GetImmediateContext());
+				bu->OnFrameBarrier(*metalHelper->_device->GetImmediateContext());
 				auto status = transaction._future.wait_for(100ms);
 				if (status == std::future_status::ready)
 					break;
@@ -96,9 +102,14 @@ namespace UnitTests
 					FAIL("Too much time has passed waiting for buffer uploads transaction to complete");
 			}
 
-			bu->Update(*metalHelper->_device->GetImmediateContext());
+			bu->OnFrameBarrier(*metalHelper->_device->GetImmediateContext());
 
-			auto finalResource = transaction._future.get().AsIndependentResource();
+			auto finalLocator = transaction._future.get();
+			auto pendingProcessing = bu->LatestCommandListPendingProcessing();
+			if (pendingProcessing)
+				REQUIRE(*pendingProcessing >= finalLocator.GetCompletionCommandList());
+
+			auto finalResource = finalLocator.AsIndependentResource();
 			REQUIRE(finalResource != nullptr);
 			auto finalResourceDesc = finalResource->GetDesc();
 			REQUIRE(finalResourceDesc._type == ResourceDesc::Type::Texture);
@@ -117,7 +128,7 @@ namespace UnitTests
 
 			auto start = std::chrono::steady_clock::now();
 			for (;;) {
-				bu->Update(*metalHelper->_device->GetImmediateContext());
+				bu->OnFrameBarrier(*metalHelper->_device->GetImmediateContext());
 				auto status = transaction._future.wait_for(100ms);
 				if (status == std::future_status::ready)
 					break;
@@ -126,9 +137,14 @@ namespace UnitTests
 					FAIL("Too much time has passed waiting for buffer uploads transaction to complete");
 			}
 
-			bu->Update(*metalHelper->_device->GetImmediateContext());
+			bu->OnFrameBarrier(*metalHelper->_device->GetImmediateContext());
 
-			auto finalResource = transaction._future.get().AsIndependentResource();
+			auto finalLocator = transaction._future.get();
+			auto pendingProcessing = bu->LatestCommandListPendingProcessing();
+			if (pendingProcessing)
+				REQUIRE(*pendingProcessing >= finalLocator.GetCompletionCommandList());
+
+			auto finalResource = finalLocator.AsIndependentResource();
 			REQUIRE(finalResource != nullptr);
 			auto finalResourceDesc = finalResource->GetDesc();
 			REQUIRE(finalResourceDesc._type == ResourceDesc::Type::Texture);
@@ -145,6 +161,7 @@ namespace UnitTests
 
 		auto metalHelper = MakeTestHelper();
 		auto bu = BufferUploads::CreateManager(*metalHelper->_device);
+		auto& immediateContext = *metalHelper->_device->GetImmediateContext();
 
 		auto ddsLoader = RenderCore::Assets::CreateDDSTextureLoader();
 		auto wicLoader = RenderCore::Assets::CreateWICTextureLoader();
@@ -167,7 +184,7 @@ namespace UnitTests
 
 			auto start = std::chrono::steady_clock::now();
 			for (;;) {
-				bu->Update(*metalHelper->_device->GetImmediateContext());
+				bu->OnFrameBarrier(immediateContext);
 				auto status = transaction._future.wait_for(100ms);
 				if (status == std::future_status::ready)
 					break;
@@ -181,7 +198,7 @@ namespace UnitTests
 			REQUIRE(finalLocator.GetCompletionCommandList() != ~0u);
 			start = std::chrono::steady_clock::now();
 			while (!bu->IsComplete(finalLocator.GetCompletionCommandList())) {
-				bu->Update(*metalHelper->_device->GetImmediateContext());
+				Flush(immediateContext, *bu);
 				std::this_thread::sleep_for(16ms);
 				if ((std::chrono::steady_clock::now() - start) > 5s)
 					FAIL("Too much time has passed waiting for buffer uploads transaction to complete");
@@ -199,12 +216,12 @@ namespace UnitTests
 			destagingDesc._allocationRules = AllocationRules::HostVisibleRandomAccess;
 			auto destaging = metalHelper->_device->CreateResource(destagingDesc, "destaging");
 			{
-				auto blitEncoder = Metal::DeviceContext::Get(*metalHelper->_device->GetImmediateContext())->BeginBlitEncoder();
+				auto blitEncoder = Metal::DeviceContext::Get(immediateContext)->BeginBlitEncoder();
 				blitEncoder.Copy(*destaging, *finalResource);
 			}
 			metalHelper->_device->GetImmediateContext()->CommitCommands(CommitCommandsFlags::WaitForCompletion);
 			Metal::ResourceMap map(
-				*Metal::DeviceContext::Get(*metalHelper->_device->GetImmediateContext()),
+				*Metal::DeviceContext::Get(immediateContext),
 				*destaging, Metal::ResourceMap::Mode::Read);
 			auto data = map.GetData(SubResourceId{});
 			std::stringstream str;
@@ -308,40 +325,57 @@ namespace UnitTests
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
 		auto bu = BufferUploads::CreateManager(*metalHelper->_device);
+		auto& immediateContext = *metalHelper->_device->GetImmediateContext();
 
 		const unsigned steadyPoint = 384;
+		unsigned totalTexturesSpawned = 0;
+		uint64_t totalBytesSpawned = 0;
 		TransactionTestHelper transactionHelper;
 		transactionHelper._liveTransactions.reserve(steadyPoint);
 
 		std::mt19937 rng(0);
 		unsigned loopCounter = 0;
 		auto startTime = std::chrono::steady_clock::now();
+		std::chrono::steady_clock::time_point endTime;
 		for (;;) {
 			unsigned texturesToSpawn = (unsigned)std::sqrt(steadyPoint - transactionHelper._liveTransactions.size());
 			for (unsigned t=0; t<texturesToSpawn; ++t) {
-				auto asyncSource = std::make_shared<RandomNoiseGenerator>(
-					RenderCore::CreateDesc(
-						0, RenderCore::TextureDesc::Plain2D(
-							1 << std::uniform_int_distribution<>(5, 10)(rng),
-							1 << std::uniform_int_distribution<>(5, 10)(rng),
-							RenderCore::Format::R8G8B8A8_UNORM)),
-					rng());
+				auto desc = RenderCore::CreateDesc(
+					0, RenderCore::TextureDesc::Plain2D(
+						1 << std::uniform_int_distribution<>(5, 10)(rng),
+						1 << std::uniform_int_distribution<>(5, 10)(rng),
+						RenderCore::Format::R8G8B8A8_UNORM));
+
+				auto asyncSource = std::make_shared<RandomNoiseGenerator>(desc, rng());
 				transactionHelper.AddTransaction(bu->Begin(asyncSource, BindFlag::ShaderResource));
+				++totalTexturesSpawned;
+				totalBytesSpawned += RenderCore::ByteCount(desc);
 			}
 
-			bu->Update(*metalHelper->_device->GetImmediateContext());
-			metalHelper->_device->GetImmediateContext()->CommitCommands();
+			bu->OnFrameBarrier(immediateContext);
+			Flush(immediateContext, *bu);
+			immediateContext.CommitCommands();
 			transactionHelper.RemoveCompletedTransactions(*bu);
 			std::this_thread::sleep_for(16ms);
 			
 			loopCounter++;
 			if ((loopCounter%60) == 0) {
 				transactionHelper.Report(*bu);
-				// Only every finish immediately after a report
-				if ((std::chrono::steady_clock::now() - startTime) > 20s)
+				// Only ever finish immediately after a report
+				endTime = std::chrono::steady_clock::now();
+				if ((endTime - startTime) > 20s)
 					break;
 			}
 		}
+
+		auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime-startTime).count();
+		Log(Verbose) 
+			<< "Completed " << totalTexturesSpawned << " textures ("
+			<< Utility::ByteCount{totalBytesSpawned} << " in total) in "
+			<< durationMs / 1000.f  << "s (approximately "
+			<< float(totalBytesSpawned) / 1000.f / float(durationMs) << "MB/s)" << std::endl;
+		// we will hit the steady point and stop if textures aren't actually being processed by the system
+		REQUIRE(totalTexturesSpawned > steadyPoint);
 	}
 
 	class RandomTestPkt : public RenderCore::BufferUploads::IDataPacket
@@ -373,7 +407,7 @@ namespace UnitTests
 						auto srDesc = CalculateMipMapDesc(desc._textureDesc, m);
 						srDesc._arrayCount = 0;
 						srDesc._mipCount = 1;
-						d.resize(ByteCount(srDesc));
+						d.resize(RenderCore::ByteCount(srDesc));
 						FillWithRandomData(rng(), MakeIteratorRange(d));
 						_data.emplace_back(RenderCore::SubResourceId{m, a}, std::move(d));
 					}
@@ -425,7 +459,7 @@ namespace UnitTests
 				auto mipDesc = CalculateMipMapDesc(destagingDesc._textureDesc, m);
 				mipDesc._arrayCount = 0; mipDesc._mipCount = 1;
 				std::vector<uint8_t> buffer;
-				buffer.resize(ByteCount(mipDesc));
+				buffer.resize(RenderCore::ByteCount(mipDesc));
 				BufferUploads::IAsyncDataSource::SubResource sr;
 				sr._id = {m, a};
 				sr._destination = MakeIteratorRange(buffer);
@@ -450,7 +484,7 @@ namespace UnitTests
 		auto testDesc = CreateDesc(BindFlag::ShaderResource|BindFlag::TransferSrc, TextureDesc::Plain2D(256, 256, RenderCore::Format::R8G8B8A8_UNORM, 9, 3));
 		auto pkt = std::make_shared<RandomTestPkt>(testDesc);
 		auto locator = bu->ImmediateTransaction(testDesc, pkt);
-		bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
+		bu->StallAndMarkCommandListDependency(*threadContext, locator.GetCompletionCommandList());
 		DestageAndCompare(*threadContext, *locator.AsIndependentResource(), *pkt);
 	}
 
@@ -468,14 +502,14 @@ namespace UnitTests
 		{
 			auto pkt = std::make_shared<RandomTestPkt>(massiveTexture);
 			auto locator = bu->ImmediateTransaction(massiveTexture, pkt);
-			bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
+			bu->StallAndMarkCommandListDependency(*threadContext, locator.GetCompletionCommandList());
 			DestageAndCompare(*threadContext, *locator.AsIndependentResource(), *pkt);
 		}
 
 		{
 			auto pkt = std::make_shared<RandomTestPkt>(massiveLinearBuffer);
 			auto locator = bu->ImmediateTransaction(massiveLinearBuffer, pkt);
-			bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
+			bu->StallAndMarkCommandListDependency(*threadContext, locator.GetCompletionCommandList());
 			DestageAndCompare(*threadContext, *locator.AsIndependentResource(), *pkt);
 		}
 
@@ -485,7 +519,7 @@ namespace UnitTests
 			auto futureLocator = bu->Begin(massiveTexture, pkt);
 			futureLocator._future.wait();
 			auto locator = futureLocator._future.get();
-			bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
+			bu->StallAndMarkCommandListDependency(*threadContext, locator.GetCompletionCommandList());
 			auto resource = locator.AsIndependentResource();
 			DestageAndCompare(*threadContext, *resource, *pkt);
 		}
@@ -496,7 +530,7 @@ namespace UnitTests
 			auto futureLocator = bu->Begin(massiveLinearBuffer, pkt);
 			futureLocator._future.wait();
 			auto locator = futureLocator._future.get();
-			bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
+			bu->StallAndMarkCommandListDependency(*threadContext, locator.GetCompletionCommandList());
 			auto resource = locator.AsIndependentResource();
 			DestageAndCompare(*threadContext, *resource, *pkt);
 		}
@@ -507,7 +541,7 @@ namespace UnitTests
 			auto futureLocator = bu->Begin(pkt, BindFlag::ShaderResource|BindFlag::TransferSrc);
 			futureLocator._future.wait();
 			auto locator = futureLocator._future.get();
-			bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
+			bu->StallAndMarkCommandListDependency(*threadContext, locator.GetCompletionCommandList());
 			auto resource = locator.AsIndependentResource();
 			DestageAndCompare(*threadContext, *resource, *pkt);
 		}
@@ -518,7 +552,7 @@ namespace UnitTests
 			auto futureLocator = bu->Begin(pkt, BindFlag::ShaderResource|BindFlag::TransferSrc);
 			futureLocator._future.wait();
 			auto locator = futureLocator._future.get();
-			bu->StallUntilCompletion(*threadContext, locator.GetCompletionCommandList());
+			bu->StallAndMarkCommandListDependency(*threadContext, locator.GetCompletionCommandList());
 			auto resource = locator.AsIndependentResource();
 			DestageAndCompare(*threadContext, *resource, *pkt);
 		}
@@ -530,8 +564,10 @@ namespace UnitTests
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
 		auto bu = BufferUploads::CreateManager(*metalHelper->_device);
+		auto& immediateContext = *metalHelper->_device->GetImmediateContext();
 
 		const unsigned steadyPoint = 384;
+		unsigned totalBuffersSpawned = 0;
 		TransactionTestHelper transactionHelper;
 		transactionHelper._liveTransactions.reserve(steadyPoint);
 		
@@ -551,21 +587,26 @@ namespace UnitTests
 				// desc._allocationRules |= AllocationRules::Batched | AllocationRules::Pooled;
 				
 				transactionHelper.AddTransaction(bu->Begin(desc, pkt));
+				++totalBuffersSpawned;
 			}
 
-			bu->Update(*metalHelper->_device->GetImmediateContext());
+			bu->OnFrameBarrier(immediateContext);
+			Flush(immediateContext, *bu);
 			transactionHelper.RemoveCompletedTransactions(*bu);
 			std::this_thread::sleep_for(16ms);
-			metalHelper->_device->GetImmediateContext()->CommitCommands();
+			immediateContext.CommitCommands();
 
 			loopCounter++;
 			if ((loopCounter%60) == 0) {
 				transactionHelper.Report(*bu);
-				// Only every finish immediately after a report
+				// Only evey finish immediately after a report
 				if ((std::chrono::steady_clock::now() - startTime) > 20s)
 					break;
 			}
 		}
+
+		// we will hit the steady point and stop if buffers aren't actually being processed by the system
+		REQUIRE(totalBuffersSpawned > steadyPoint);
 	}
 
 	TEST_CASE( "BufferUploads-SimpleBackgroundCmdList", "[rendercore_techniques]" )
@@ -597,7 +638,7 @@ namespace UnitTests
 		for (;;) {
 			std::thread thread(
 				[backgroundContext, dev = metalHelper->_device, seed = rng(), &queue]() {
-					auto& metalContext = *Metal::DeviceContext::Get(*backgroundContext);
+					auto metalContext = Metal::DeviceContext::BeginSecondaryCommandList(*backgroundContext);
 					auto finalResourceDesc = CreateDesc(
 						BindFlag::ShaderResource | BindFlag::TransferDst, TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM));
 
@@ -611,19 +652,19 @@ namespace UnitTests
 						auto stagingResource = dev->CreateResource(stagingResourceDesc, "bu-test-staging");
 						auto finalResource = dev->CreateResource(finalResourceDesc, "bu-test-texture");
 
-						Metal::ResourceMap map{metalContext, *stagingResource, Metal::ResourceMap::Mode::WriteDiscardPrevious};
+						Metal::ResourceMap map{*metalContext, *stagingResource, Metal::ResourceMap::Mode::WriteDiscardPrevious};
 						FillWithRandomData(rng(), map.GetData());
 
-						Metal::Internal::CaptureForBind cap0{metalContext, *stagingResource, BindFlag::TransferSrc};
-						Metal::Internal::CaptureForBind cap1{metalContext, *finalResource, BindFlag::TransferDst};
-						auto blitEncoder = metalContext.BeginBlitEncoder();
+						Metal::Internal::CaptureForBind cap0{*metalContext, *stagingResource, BindFlag::TransferSrc};
+						Metal::Internal::CaptureForBind cap1{*metalContext, *finalResource, BindFlag::TransferDst};
+						auto blitEncoder = metalContext->BeginBlitEncoder();
 						blitEncoder.Copy(*finalResource, *stagingResource);
 
 						item._finalResources.push_back(std::move(finalResource));
 						item._stagingResources.push_back(std::move(stagingResource));
 					}
 					
-					item._cmdList = metalContext.ResolveCommandList();
+					item._cmdList = metalContext->ResolveCommandList();
 
 					ScopedLock(queue._lock);
 					queue._items.push_back(std::move(item));
@@ -631,11 +672,13 @@ namespace UnitTests
 
 			thread.join();
 
-			ScopedLock(queue._lock);
-			while (queue._items.size() >= 2) {
-				auto& immediateContext = *Metal::DeviceContext::Get(*metalHelper->_device->GetImmediateContext());
-				immediateContext.ExecuteCommandList(std::move(*queue._items.begin()->_cmdList));
-				queue._items.erase(queue._items.begin());
+			{
+				ScopedLock(queue._lock);
+				while (queue._items.size() >= 2) {
+					auto& immediateContext = *Metal::DeviceContext::Get(*metalHelper->_device->GetImmediateContext());
+					immediateContext.ExecuteCommandList(std::move(*queue._items.begin()->_cmdList));
+					queue._items.erase(queue._items.begin());
+				}
 			}
 
 			metalHelper->_device->GetImmediateContext()->CommitCommands();

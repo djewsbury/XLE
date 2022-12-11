@@ -143,7 +143,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	public:
 		const std::shared_ptr<IAsyncTracker>& GetTracker() { return _gpuTracker; }
 
-		IAsyncTracker::Marker Submit(
+		void Submit(
 			IteratorRange<Metal_Vulkan::CommandList* const*> cmdLists,
 			IteratorRange<const std::pair<VkSemaphore, uint64_t>*> waitBeforeBegin,
 			IteratorRange<const VkPipelineStageFlags*> waitBeforeBeginStages,
@@ -169,7 +169,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		ObjectFactory* _factory;
 		Threading::Mutex _queueLock;
 		unsigned _queueFamilyIndex;
-		uint64_t _maxMarkerActuallySubmitted;
+		uint64_t _maxInorderActuallySubmitted;
+		uint64_t _maxOutOfOrderActuallySubmitted;
 	};
 }}
 

@@ -113,13 +113,15 @@ namespace UnitTests
 		return PrepareAndStall(testApparatus, std::move(prepareFuture));
 	}
 
+#if 0
 	static void PumpBufferUploads(LightingEngineTestApparatus& testApparatus)
 	{
 		auto& immContext= *testApparatus._metalTestHelper->_device->GetImmediateContext();
-		testApparatus._bufferUploads->Update(immContext);
+		testApparatus._bufferUploads->OnFrameBarrier(immContext);
 		Threading::Sleep(16);
-		testApparatus._bufferUploads->Update(immContext);
+		testApparatus._bufferUploads->OnFrameBarrier(immContext);
 	}
+#endif
 
 	TEST_CASE( "LightingEngine-ShadowPrecisionTests", "[rendercore_lighting_engine]" )
 	{
@@ -184,7 +186,9 @@ namespace UnitTests
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 				auto lightingTechnique = lightingTechniqueFuture.get();
-				PumpBufferUploads(testApparatus);
+				#if 0
+					PumpBufferUploads(testApparatus);
+				#endif
 
 				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateFlatPlaneDrawableWriter();
 				auto newVisibility = PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
@@ -226,7 +230,9 @@ namespace UnitTests
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 				auto lightingTechnique = lightingTechniqueFuture.get();
-				PumpBufferUploads(testApparatus);
+				#if 0
+					PumpBufferUploads(testApparatus);
+				#endif
 
 				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateSharpContactDrawableWriter();
 				auto newVisibility = PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
@@ -323,7 +329,7 @@ namespace UnitTests
 		immediateDrawingHelper._immediateDrawables->PrepareResources(std::move(visibilityPromise), rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 		auto requiredVisibility = visibilityFuture.get(); // stall();
 		immediateDrawingHelper._immediateDrawables->OnFrameBarrier();
-		RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(*RenderCore::Techniques::GetThreadContext(), requiredVisibility._bufferUploadsVisibility);
+		RenderCore::Techniques::Services::GetBufferUploads().StallAndMarkCommandListDependency(*RenderCore::Techniques::GetThreadContext(), requiredVisibility._bufferUploadsVisibility);
 		
 		immediateDrawingHelper._immediateDrawables->ExecuteDraws(parsingContext, rpi);
 	}
@@ -467,7 +473,9 @@ namespace UnitTests
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps,
 					LightingEngine::DeferredLightingTechniqueFlags::GenerateDebuggingTextures);
 				auto lightingTechnique = lightingTechniqueFuture.get();
-				PumpBufferUploads(testApparatus);
+				#if 0
+					PumpBufferUploads(testApparatus);
+				#endif
 
 				const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
 				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators)

@@ -109,7 +109,7 @@ namespace RenderCore { namespace ImplVulkan
 
 ////////////////////////////////////////////////////////////////////////////////
 
-    class ThreadContext : public IThreadContext, public IThreadContextVulkan, public std::enable_shared_from_this<ThreadContext>
+    class ThreadContext : public IThreadContext, public IThreadContextVulkan
     {
     public:
 		void	        Present(IPresentationChain&) override;

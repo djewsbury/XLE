@@ -284,12 +284,14 @@ namespace UnitTests
 		auto inputView = inputResource->CreateBufferView(BindFlag::UnorderedAccess);
 		auto outputView = outputResource->CreateBufferView(BindFlag::UnorderedAccess);
 
-		// hack -- stall to ensure vertex buffers are initialized
 		auto threadContext = testHelper._device->GetImmediateContext();
+#if 0
+		// hack -- stall to ensure vertex buffers are initialized
 		for (unsigned c=0; c<32; ++c) {
 			bufferUploads.Update(*threadContext);
 			std::this_thread::sleep_for(std::chrono::milliseconds(16));
 		}
+#endif
 
 		pipelineCollection->StallForPipeline();
 		

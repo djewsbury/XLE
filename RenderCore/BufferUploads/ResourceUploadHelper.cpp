@@ -669,6 +669,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             mutable CommandListMetrics _metrics;
             DeferredOperations _deferredOperations;
             CommandListID _id;
+            std::shared_ptr<Metal::CommandList> _graphicsQueueAdditionalCmdList;
 
             QueuedCommandList() = default;
             QueuedCommandList(QueuedCommandList&&) = default;
@@ -690,6 +691,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         unsigned _frameId = 0;
         bool _backgroundContext = false;
         bool _isDedicatedTransferContext = false;
+
+        std::shared_ptr<Metal::DeviceContext> _fallbackGraphicsQueueCmdList;
 
         void RetireToGraphicsQueue(IThreadContext& commitTo, QueuedCommandList&& commandList);
     };
@@ -721,8 +724,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         newCommandList._id = completeCmdList.value_or(~0u);
 
         #if GFXAPI_TARGET == GFXAPI_VULKAN
-            auto& metalContext = *Metal::DeviceContext::Get(*_underlyingContext);
-            assert(metalContext.HasActiveCommandList());
+            auto& metalContext = *Metal::DeviceContext::Get(*_mainContext);
+            assert(metalContext.HasActiveCommandList());        // we need a command list, even if it does nothing but advance the semphore value
             if (completeCmdList)
                 metalContext.GetActiveCommandList().AddSignalOnCompletion(_pimpl->_transferQueueTimeline, *completeCmdList);
         #else
@@ -731,7 +734,11 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
         if (_pimpl->_backgroundContext) {
             TRY {
-                _underlyingContext->CommitCommands();
+                _mainContext->CommitCommands();
+                if (_pimpl->_fallbackGraphicsQueueCmdList) {
+                    newCommandList._graphicsQueueAdditionalCmdList = _pimpl->_fallbackGraphicsQueueCmdList->ResolveCommandList();
+                    _pimpl->_fallbackGraphicsQueueCmdList.reset();
+                }
             } CATCH(const std::exception& e) {
                 if (!newCommandList._metrics._exceptionMsg.empty()) newCommandList._metrics._exceptionMsg += ", ";
                 newCommandList._metrics._exceptionMsg += e.what();
@@ -742,7 +749,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             ScopedLock(_pimpl->_queuedForAdvanceGraphicsQueueLock);
             _pimpl->_queuedForAdvanceGraphicsQueue.push(std::move(newCommandList));
         } else {
-            _pimpl->RetireToGraphicsQueue(*_underlyingContext, std::move(newCommandList));
+            _pimpl->RetireToGraphicsQueue(*_mainContext, std::move(newCommandList));
         }
 
         _pimpl->_commandListUnderConstruction = CommandListMetrics();
@@ -753,7 +760,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     bool UploadsThreadContext::AdvanceGraphicsQueue(IThreadContext& commitTo, CommandListID cmdListRequired)
     {
         if (!_pimpl->_backgroundContext) {
-            assert(&commitTo == _underlyingContext.get());
+            assert(&commitTo == _mainContext.get());
             return _pimpl->_commandListIDReadyForGraphicsQueue >= cmdListRequired;
         }
 
@@ -827,6 +834,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                     // the command list generated will become a "pre-frame" command list; meaning it will go into
                     // the queue earlier than the main frame rendering command list
                     threadContextVulkan->AddPreFrameCommandList(std::move(*metalCmdList));
+                    if (commandList._graphicsQueueAdditionalCmdList)
+                        threadContextVulkan->AddPreFrameCommandList(std::move(*commandList._graphicsQueueAdditionalCmdList));
                 } else {
                     assert(0);      // missing gfx api specific implementation
                 }
@@ -887,7 +896,17 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
     ResourceUploadHelper    UploadsThreadContext::GetResourceUploadHelper()
     {
-        return ResourceUploadHelper{*_underlyingContext};
+        return ResourceUploadHelper{*_mainContext};
+    }
+
+    ResourceUploadHelper    UploadsThreadContext::GetFallbackGraphicsQueueResourceUploadHelper()
+    {
+        if (!IsDedicatedTransferContext() || _fallbackGraphicsQueueContext == _mainContext) return GetResourceUploadHelper();
+
+        if (!_pimpl->_fallbackGraphicsQueueCmdList)
+            _pimpl->_fallbackGraphicsQueueCmdList = Metal::DeviceContext::BeginPrimaryCommandList(*_fallbackGraphicsQueueContext);
+
+        return ResourceUploadHelper{*_fallbackGraphicsQueueContext->GetDevice(), *_pimpl->_fallbackGraphicsQueueCmdList};
     }
 
     StagingPage&     UploadsThreadContext::GetStagingPage()
@@ -898,7 +917,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
     void UploadsThreadContext::UpdateGPUTracking()
     {
-        auto* vulkanThreadContext = (IThreadContextVulkan*)_underlyingContext->QueryInterface(typeid(IThreadContextVulkan).hash_code());
+        auto* vulkanThreadContext = (IThreadContextVulkan*)_mainContext->QueryInterface(typeid(IThreadContextVulkan).hash_code());
         if (vulkanThreadContext)
             return vulkanThreadContext->UpdateGPUTracking();
     }
@@ -906,32 +925,43 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     QueueMarker      UploadsThreadContext::GetProducerCmdListSpecificMarker()
     {
         // Get the marker that is specific to the particular cmd list we're building
-        auto* vulkanThreadContext = (IThreadContextVulkan*)_underlyingContext->QueryInterface(typeid(IThreadContextVulkan).hash_code());
+        auto* vulkanThreadContext = (IThreadContextVulkan*)_mainContext->QueryInterface(typeid(IThreadContextVulkan).hash_code());
         if (vulkanThreadContext)
             return vulkanThreadContext->GetCommandListSpecificMarker().second;
         return 0;
     }
 
-    UploadsThreadContext::UploadsThreadContext(std::shared_ptr<IThreadContext> underlyingContext, bool reserveStagingSpace, bool backgroundContext)
+    UploadsThreadContext::UploadsThreadContext(
+        std::shared_ptr<IThreadContext> graphicsQueueContext,
+        std::shared_ptr<IThreadContext> transferQueueContext,
+        bool reserveStagingSpace, bool backgroundContext)
     {
-        _underlyingContext = std::move(underlyingContext);
+
         _pimpl = std::make_unique<Pimpl>();
         _pimpl->_frameId = 0;
         _pimpl->_commandListIDReadyForGraphicsQueue = 0;
         _pimpl->_backgroundContext = backgroundContext;
         _pimpl->_isDedicatedTransferContext = false;
 
+        if (transferQueueContext) {
+            if (auto* vulkanThreadContext = query_interface_cast<IThreadContextVulkan*>(transferQueueContext.get()))
+                assert(vulkanThreadContext->IsDedicatedTransferContext());
+
+            _mainContext = std::move(transferQueueContext);
+            _fallbackGraphicsQueueContext = std::move(graphicsQueueContext);
+            _pimpl->_isDedicatedTransferContext = true;
+        } else {
+            _mainContext = _fallbackGraphicsQueueContext = std::move(graphicsQueueContext);
+        }
+
         if (reserveStagingSpace) {
             const unsigned stagingPageSize = 64*1024*1024;
-            _pimpl->_stagingPage = std::make_unique<StagingPage>(*_underlyingContext, stagingPageSize);
+            _pimpl->_stagingPage = std::make_unique<StagingPage>(*_mainContext, stagingPageSize);
 
-            auto& objectFactory = RenderCore::Metal::GetObjectFactory(*_underlyingContext->GetDevice());
+            auto& objectFactory = RenderCore::Metal::GetObjectFactory(*_mainContext->GetDevice());
             _pimpl->_transferQueueTimeline = objectFactory.CreateTimelineSemaphore();
             _pimpl->_graphicsQueueTimeline = objectFactory.CreateTimelineSemaphore();
         }
-
-        if (auto* vulkanThreadContext = query_interface_cast<IThreadContextVulkan*>(_underlyingContext.get()))
-            _pimpl->_isDedicatedTransferContext = vulkanThreadContext->IsDedicatedTransferContext();
     }
 
     UploadsThreadContext::~UploadsThreadContext() {}

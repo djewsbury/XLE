@@ -157,7 +157,7 @@ namespace UnitTests
 		Techniques::PrepareResources(std::move(preparePromise), *testApparatus._pipelineAccelerators, sequencerConfig, drawablePkt);
 		auto requiredVisibility = prepareFuture.get();		// stall
 		testApparatus._pipelineAccelerators->VisibilityBarrier(requiredVisibility._pipelineAcceleratorsVisibility);		// must call this to flip completed pipelines, etc, to visible
-		testApparatus._bufferUploads->StallUntilCompletion(
+		testApparatus._bufferUploads->StallAndMarkCommandListDependency(
 			*testApparatus._pipelineAccelerators->GetDevice()->GetImmediateContext(),
 			requiredVisibility._bufferUploadsVisibility);
 		return requiredVisibility;
@@ -169,7 +169,7 @@ namespace UnitTests
 	{
 		auto requiredVisibility = visibility.get();		// stall
 		testApparatus._pipelineAccelerators->VisibilityBarrier(requiredVisibility._pipelineAcceleratorsVisibility);		// must call this to flip completed pipelines, etc, to visible
-		testApparatus._bufferUploads->StallUntilCompletion(
+		testApparatus._bufferUploads->StallAndMarkCommandListDependency(
 			*testApparatus._pipelineAccelerators->GetDevice()->GetImmediateContext(),
 			requiredVisibility._bufferUploadsVisibility);
 		return requiredVisibility;

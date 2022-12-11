@@ -90,7 +90,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         ResourceUploadHelper(IDevice& device, Metal::DeviceContext& metalContext);
         ~ResourceUploadHelper();
 
-        // IThreadContext& GetUnderlying() { return *_renderCoreContext; }
+        static ResourceUploadHelper BeginSecondaryCommandList(IThreadContext& renderCoreContext);
 
         #if GFXAPI_TARGET == GFXAPI_DX11
             private: 
@@ -199,17 +199,21 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         std::optional<QueueMarker>          CommandListToHardwareQueueMarker(CommandListID cmdList);
 
         ResourceUploadHelper    GetResourceUploadHelper();
-        IThreadContext&         GetRenderCoreThreadContext() { return *_underlyingContext; }
-        IDevice&                GetRenderCoreDevice() { return *_underlyingContext->GetDevice(); }
+        ResourceUploadHelper    GetFallbackGraphicsQueueResourceUploadHelper();
+        IThreadContext&         GetRenderCoreThreadContext() { return *_mainContext; }
+        IThreadContext&         GetFallbackGraphicsQueueThreadContext() { return *_fallbackGraphicsQueueContext; }
+        IDevice&                GetRenderCoreDevice() { return *_mainContext->GetDevice(); }
         bool                    IsDedicatedTransferContext() const;
 
         UploadsThreadContext(
-            std::shared_ptr<IThreadContext> underlyingContext,
+            std::shared_ptr<IThreadContext> graphicsQueueContext,
+            std::shared_ptr<IThreadContext> transferQueueContext,
             bool reserveStagingSpace,
             bool backgroundContext);
         ~UploadsThreadContext();
     private:
-        std::shared_ptr<IThreadContext> _underlyingContext;
+        std::shared_ptr<IThreadContext> _mainContext;
+        std::shared_ptr<IThreadContext> _fallbackGraphicsQueueContext;
 
         struct Pimpl;
         std::unique_ptr<Pimpl> _pimpl;

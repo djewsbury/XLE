@@ -149,8 +149,7 @@ namespace UnitTests
 						auto bufferUploadsCmdList = ri->GetRequiredBufferUploadsCommandList();
 						if (bufferUploadsCmdList) {
 							auto& bu = RenderCore::Techniques::Services::GetBufferUploads();
-							while (!bu.IsComplete(bufferUploadsCmdList))
-								std::this_thread::sleep_for(std::chrono::milliseconds(2));
+							bu.StallAndMarkCommandListDependency(*threadContext, bufferUploadsCmdList);
 						}
 						threadContext->CommitCommands();
 					}
@@ -269,7 +268,7 @@ namespace UnitTests
 
 		// awkwardly, we must pump buffer uploads, because the background thread can stall waiting on a buffer uploads complete
 		while (futureScene.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-			testApparatus._bufferUploads->Update(*threadContext);
+			testApparatus._bufferUploads->OnFrameBarrier(*threadContext);
 			std::this_thread::sleep_for(std::chrono::milliseconds(16));
 		}
 
@@ -283,7 +282,7 @@ namespace UnitTests
 			prepareInstance.FulfillWhenNotPending(std::move(preparePromise));
 			auto newVisibility = marker.get();		// stall
 			if (newVisibility._bufferUploadsVisibility)
-				testApparatus._bufferUploads->StallUntilCompletion(*threadContext, newVisibility._bufferUploadsVisibility);
+				testApparatus._bufferUploads->StallAndMarkCommandListDependency(*threadContext, newVisibility._bufferUploadsVisibility);
 		}
 
 		{

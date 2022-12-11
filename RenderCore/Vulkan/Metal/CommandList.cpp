@@ -6,7 +6,10 @@
 #include "AsyncTracker.h"
 #include "Pools.h"
 #include "IncludeVulkan.h"
+#include "../../../OSServices/Log.h"
 #include <assert.h>
+
+// #define SUBMISSION_LOG_SPAM 1
 
 namespace RenderCore { namespace Metal_Vulkan
 {
@@ -300,6 +303,10 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void CommandList::AddWaitBeforeBegin(VulkanSharedPtr<VkSemaphore> semaphore, uint64_t value)
 	{
+		#if defined(_DEBUG)
+			for (auto& s:_signalOnCompletion) 
+				assert(s.first != semaphore || s.second > value);		// cmd list both waits and signals the same semaphore
+		#endif
 		for (auto& s:_waitBeforeBegin) {
 			if (s.first == semaphore) {
 				s.second = std::max(s.second, value);
@@ -311,6 +318,10 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void CommandList::AddSignalOnCompletion(VulkanSharedPtr<VkSemaphore> semaphore, uint64_t value)
 	{
+		#if defined(_DEBUG)
+			for (auto& s:_waitBeforeBegin) 
+				assert(s.first != semaphore || s.second < value);		// cmd list both waits and signals the same semaphore
+		#endif
 		for (auto& s:_signalOnCompletion) {
 			if (s.first == semaphore) {
 				s.second = std::max(s.second, value);
@@ -391,7 +402,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	IAsyncTracker::Marker SubmissionQueue::Submit(
+	void SubmissionQueue::Submit(
 		IteratorRange<Metal_Vulkan::CommandList* const*> cmdLists,
 		IteratorRange<const std::pair<VkSemaphore, uint64_t>*> waitBeforeBegin,
 		IteratorRange<const VkPipelineStageFlags*> waitBeforeBeginStagesInit,
@@ -410,22 +421,14 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		std::vector<IAsyncTracker::Marker> asyncTrackerMarkers;
 		asyncTrackerMarkers.reserve(trackerMarkersCount);
-		uint64_t queueTrackerSemphoreValue = 0;
 		VLA(VkCommandBuffer, rawCmdBuffers, cmdLists.size());
 		std::vector<VulkanSharedPtr<VkCommandBuffer>> capturedCmdBuffers;
 		capturedCmdBuffers.reserve(cmdLists.size());
 		unsigned c=0;
 		unsigned waitBeforeBeginInCmdListCount = 0, signalOnCompletionInCmdListCount = 0;
 		for (auto* cmdList:cmdLists) {
+			assert(cmdList->_asyncTracker.get() == _gpuTracker.get());
 			std::sort(cmdList->_asyncTrackerMarkers.begin(), cmdList->_asyncTrackerMarkers.end());
-			if (auto* ft = dynamic_cast<FenceBasedTracker*>(cmdList->_asyncTracker.get())) {
-				checked_cast<SemaphoreBasedTracker*>(cmdList->_asyncTracker.get())->OnSubmitToQueue(cmdList->_asyncTrackerMarkers);
-				assert(0);
-			} else {
-				auto trackerValue = checked_cast<SemaphoreBasedTracker*>(cmdList->_asyncTracker.get())->OnSubmitToQueue(cmdList->_asyncTrackerMarkers).second;
-				queueTrackerSemphoreValue = std::max(trackerValue, queueTrackerSemphoreValue);
-			}
-
 			auto midpoint = asyncTrackerMarkers.insert(asyncTrackerMarkers.end(), cmdList->_asyncTrackerMarkers.begin(), cmdList->_asyncTrackerMarkers.end());
 			std::inplace_merge(asyncTrackerMarkers.begin(), midpoint, asyncTrackerMarkers.end());
 
@@ -437,12 +440,15 @@ namespace RenderCore { namespace Metal_Vulkan
 			signalOnCompletionInCmdListCount += cmdList->_signalOnCompletion.size();
 		}
 
+		// Tell the tracker we're submitting the markers
+		auto trackerSubmitInfo = checked_cast<SemaphoreBasedTracker*>(_gpuTracker.get())->OnSubmitToQueue(asyncTrackerMarkers);
+
 		////////////////////////////////////////
 		VLA(VkSemaphore, waitBeforeBeginSemaphores, waitBeforeBegin.size()+waitBeforeBeginInCmdListCount);
 		VLA(VkPipelineStageFlags, waitBeforeBeginStages, waitBeforeBegin.size()+waitBeforeBeginInCmdListCount);
 		VLA(uint64_t, waitBeforeBeginValues, waitBeforeBegin.size()+waitBeforeBeginInCmdListCount);
-		VLA(VkSemaphore, signalOnCompletionSemaphores, signalOnCompletion.size()+signalOnCompletionInCmdListCount+1);
-		VLA(uint64_t, signalOnCompletionValues, signalOnCompletion.size()+signalOnCompletionInCmdListCount+1);
+		VLA(VkSemaphore, signalOnCompletionSemaphores, signalOnCompletion.size()+signalOnCompletionInCmdListCount+2);
+		VLA(uint64_t, signalOnCompletionValues, signalOnCompletion.size()+signalOnCompletionInCmdListCount+2);
 		unsigned waitBeforeBeginCount = 0, signalOnCompletionCount = 0;
 
 		for (auto s:waitBeforeBegin) {
@@ -460,6 +466,13 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		for (auto* cmdList:cmdLists) {
 			for (const auto& s:cmdList->_waitBeforeBegin) {
+				// if the same semaphore is actually signalled by an earlier cmd list in part of the same commit, we can omit it
+				unsigned c=0;
+				for (; c<signalOnCompletionCount; ++c)
+					if (signalOnCompletionSemaphores[c] == s.first.get() && signalOnCompletionValues[c] <= s.second)
+						break;
+				if (c != signalOnCompletionCount) continue;	// omitted
+
 				waitBeforeBeginSemaphores[waitBeforeBeginCount] = s.first.get();
 				waitBeforeBeginValues[waitBeforeBeginCount] = s.second;
 				waitBeforeBeginStages[waitBeforeBeginCount] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
@@ -480,12 +493,16 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		// Note that we have to ignore timeline semaphore values that are the same as previously submitted cmd lists (otherwise it triggers errors inside of Vulkan)
 		// This happens when there are out-of-order markers queued up (ie, the current semaphore value is actually out of date)
-		assert(!queueTrackerSemphoreValue || queueTrackerSemphoreValue >= _maxMarkerActuallySubmitted);
-		if (queueTrackerSemphoreValue > _maxMarkerActuallySubmitted) {
+		assert(!trackerSubmitInfo._maxInorderMarker || trackerSubmitInfo._maxInorderMarker >= _maxInorderActuallySubmitted);
+		if (trackerSubmitInfo._maxInorderMarker > _maxInorderActuallySubmitted) {
 			signalOnCompletionSemaphores[signalOnCompletionCount] = checked_cast<SemaphoreBasedTracker*>(_gpuTracker.get())->GetSemaphore();
-			signalOnCompletionValues[signalOnCompletionCount] = queueTrackerSemphoreValue;
+			signalOnCompletionValues[signalOnCompletionCount] = trackerSubmitInfo._maxInorderMarker;
 			++signalOnCompletionCount;
 		}
+
+		signalOnCompletionSemaphores[signalOnCompletionCount] = checked_cast<SemaphoreBasedTracker*>(_gpuTracker.get())->GetSubmitSemaphore();
+		signalOnCompletionValues[signalOnCompletionCount] = trackerSubmitInfo._submitSemaphoreValue;
+		++signalOnCompletionCount;
 
 		VkSubmitInfo submitInfo;
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -512,19 +529,21 @@ namespace RenderCore { namespace Metal_Vulkan
 		submitInfo.commandBufferCount = cmdLists.size();
 		submitInfo.pCommandBuffers = rawCmdBuffers;
 
+		#if defined(SUBMISSION_LOG_SPAM)
+			Log(Verbose) << "[q] Submitting " << submitInfo.commandBufferCount << " cmd buffers" << std::endl;
+			for (unsigned c=0; c<waitBeforeBeginCount; ++c)
+				Log(Verbose) << "[q]  wait on 0x" << std::hex << waitBeforeBeginSemaphores[c] << std::dec << " for value " << waitBeforeBeginValues[c] << std::endl;
+			for (unsigned c=0; c<waitBeforeBeginCount; ++c)
+				Log(Verbose) << "[q]  signal 0x" << std::hex << signalOnCompletionSemaphores[c] << std::dec << " for value " << signalOnCompletionValues[c] << std::endl;
+		#endif
+
 		auto res = vkQueueSubmit(_underlying, 1, &submitInfo, nullptr);
 		if (res != VK_SUCCESS)
 			Throw(VulkanAPIFailure(res, "Failure while queuing command list"));
 
-		if (queueTrackerSemphoreValue) {
-			_maxMarkerActuallySubmitted = std::max(_maxMarkerActuallySubmitted, queueTrackerSemphoreValue);
-			return (IAsyncTracker::Marker)queueTrackerSemphoreValue;
-		} else {
-			assert(!asyncTrackerMarkers.empty());
-			for (auto i=asyncTrackerMarkers.begin(); i<asyncTrackerMarkers.end()-1; ++i)
-				assert(*i <= *(asyncTrackerMarkers.end()-1));
-			return *(asyncTrackerMarkers.end()-1);
-		}
+		_maxInorderActuallySubmitted = std::max(_maxInorderActuallySubmitted, (uint64_t)trackerSubmitInfo._maxInorderMarker);
+		if (!asyncTrackerMarkers.empty())
+			_maxOutOfOrderActuallySubmitted = std::max(_maxOutOfOrderActuallySubmitted, (uint64_t)asyncTrackerMarkers.back());
 	}
 
 	void SubmissionQueue::WaitForFence(IAsyncTracker::Marker marker, std::optional<std::chrono::nanoseconds> timeout)
@@ -532,8 +551,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (auto* ft = dynamic_cast<FenceBasedTracker*>(_gpuTracker.get())) {
 			ft->WaitForFence(marker, timeout);
 		} else {
-			assert(marker <= _maxMarkerActuallySubmitted);
-			checked_cast<SemaphoreBasedTracker*>(_gpuTracker.get())->WaitForMarker(marker, timeout);
+			assert(marker <= _maxOutOfOrderActuallySubmitted);
+			checked_cast<SemaphoreBasedTracker*>(_gpuTracker.get())->WaitForSpecificMarker(marker, timeout);
 		}
 	}
 
@@ -567,7 +586,8 @@ namespace RenderCore { namespace Metal_Vulkan
 	: _underlying(queue) 
 	, _factory(&factory)
 	, _queueFamilyIndex(queueFamilyIndex)
-	, _maxMarkerActuallySubmitted(0)
+	, _maxInorderActuallySubmitted(0)
+	, _maxOutOfOrderActuallySubmitted(0)
 	{
 		if (factory.GetXLEFeatures()._timelineSemaphore) {
 			_gpuTracker = std::make_shared<Metal_Vulkan::SemaphoreBasedTracker>(*_factory);

@@ -218,7 +218,7 @@ namespace UnitTests
 		REQUIRE(newVisibility >= resultBecomesVisibleAt.first);
 		auto result = RenderCore::Techniques::TryGetDescriptorSet(accelerator, newVisibility);
 		REQUIRE(result);
-		bu.StallUntilCompletion(*pool.GetDevice()->GetImmediateContext(), resultBecomesVisibleAt.second);
+		bu.StallAndMarkCommandListDependency(*pool.GetDevice()->GetImmediateContext(), resultBecomesVisibleAt.second);
 		return result;
 	}
 

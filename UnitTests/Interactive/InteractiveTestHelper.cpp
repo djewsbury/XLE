@@ -63,6 +63,7 @@ namespace UnitTests
 			_frameRig->SetMainOverlaySystem(adapter);
 			_frameRig->UpdatePresentationChain(*_windowApparatus->_presentationChain);
 			_windowApparatus->_mainInputHandler->AddListener(adapter->GetInputListener());
+			_windowApparatus->_osWindow->ShowWindow();
 			while (PlatformRig::OverlappedWindow::DoMsgPump() != PlatformRig::OverlappedWindow::PumpResult::Terminate) {
 				_frameRig->ExecuteFrame(*_windowApparatus);
 				_frameRenderingApparatus->_frameCPUProfiler->EndFrame();

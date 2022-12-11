@@ -50,7 +50,8 @@ namespace RenderCore { namespace ImplVulkan
 {
     using VulkanAPIFailure = Metal_Vulkan::VulkanAPIFailure;
 
-	std::unique_ptr<IAnnotator> CreateAnnotator(IDevice& device, std::weak_ptr<IThreadContext> threadContext);
+	std::unique_ptr<IAnnotator> CreateAnnotator(IDevice& device, IThreadContext& threadContext);
+	void ReleaseThreadContext(IAnnotator&);
 
 	static std::string GetApplicationName()
 	{
@@ -2655,15 +2656,18 @@ namespace RenderCore { namespace ImplVulkan
 		// _interimCmdLists always come before "cmdList"
 		// _interimCmdLists will be cleared regardless of whether or not _submissionQueue->Submit throws
 		auto interimLists = std::move(_interimCmdLists);
+		auto result = interimLists.back().GetPrimaryTrackerMarker();
 		VLA(Metal_Vulkan::CommandList*, cmdLists, interimLists.size());
 		unsigned cmdListsCount = 0;
 		for (auto& c:interimLists) cmdLists[cmdListsCount++] = &c;
 
-		auto result = _submissionQueue->Submit(
+		_submissionQueue->Submit(
 			MakeIteratorRange(cmdLists, &cmdLists[cmdListsCount]),
 			MakeIteratorRange(waitSema, &waitSema[waitCount]),
 			MakeIteratorRange(waitStages, &waitStages[waitCount]),
 			completionSignals);
+
+		assert(result && result != ~0u);
 		return result;
 	}
 
@@ -2817,7 +2821,7 @@ namespace RenderCore { namespace ImplVulkan
 		if (!_annotator) {
 			auto d = _device.lock();
 			assert(d);
-			_annotator = CreateAnnotator(*d, shared_from_this());
+			_annotator = CreateAnnotator(*d, *this);
 		}
 		return *_annotator;
 	}
@@ -2871,6 +2875,7 @@ namespace RenderCore { namespace ImplVulkan
 			_globalPools->_idleCommandBufferPools.emplace_back(_submissionQueue->GetQueueFamilyIndex(), std::move(_commandBufferPool));
 		}
 		_metalContext.reset();
+		if (_annotator) ReleaseThreadContext(*_annotator);
 		_annotator.reset();
 		_commandBufferPool.reset();
 		_submissionQueue.reset();

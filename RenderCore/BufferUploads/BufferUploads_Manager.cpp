@@ -473,12 +473,11 @@ namespace RenderCore { namespace BufferUploads
         _queuedFunctions.push_overflow(
             [helper=std::move(helper)](AssemblyLine& assemblyLine, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction) mutable {
                 TRY {
-                    assert(0);      // we need to handle queue transfer
-
                     // Update any transactions that are pointing at one of the moved blocks
                     assemblyLine.ApplyRepositions(helper->_dst.GetContainingResource(), *helper->_src.GetContainingResource(), helper->_steps);
                     // Copy between the resources using the GPU
-                    context.GetResourceUploadHelper().DeviceBasedCopy(*helper->_dst.GetContainingResource(), *helper->_src.GetContainingResource(), helper->_steps);
+                    // It doesn't make sense to do this on a transfer queue -- we should just build a graphics queue command list
+                    context.GetFallbackGraphicsQueueResourceUploadHelper().DeviceBasedCopy(*helper->_dst.GetContainingResource(), *helper->_src.GetContainingResource(), helper->_steps);
                     helper->_promise.set_value(cmdListUnderConstruction);
                     ++context.GetMetricsUnderConstruction()._contextOperations;
                 } CATCH (...) {
@@ -1876,12 +1875,7 @@ namespace RenderCore { namespace BufferUploads
         decltype(immediateDeviceContext) backgroundDeviceContext;
 
         if (multithreadingOk) {
-            if (renderDevice.GetDeviceFeatures()._dedicatedTransferQueue)
-                if (auto* vulkanDevice = query_interface_cast<IDeviceVulkan*>(&renderDevice))
-                    backgroundDeviceContext = vulkanDevice->CreateDedicatedTransferContext();
-
-            if (!backgroundDeviceContext)
-                backgroundDeviceContext = renderDevice.CreateDeferredContext();
+            backgroundDeviceContext = renderDevice.CreateDeferredContext();
 
                 //
                 //      When using an older feature level, we can fail while
@@ -1922,10 +1916,16 @@ namespace RenderCore { namespace BufferUploads
         }
 
         const auto stagingOnForegroundContext = !_backgroundStepMask;
-        _foregroundContext = std::make_unique<PlatformInterface::UploadsThreadContext>(std::move(immediateDeviceContext), stagingOnForegroundContext, false);
+        _foregroundContext = std::make_unique<PlatformInterface::UploadsThreadContext>(std::move(immediateDeviceContext), nullptr, stagingOnForegroundContext, false);
 
         if (_backgroundStepMask) {
-            _backgroundContext   = std::make_unique<PlatformInterface::UploadsThreadContext>(backgroundDeviceContext, true, true);
+
+            decltype(immediateDeviceContext) transferQueueContext;
+            if (renderDevice.GetDeviceFeatures()._dedicatedTransferQueue)
+                if (auto* vulkanDevice = query_interface_cast<IDeviceVulkan*>(&renderDevice))
+                    transferQueueContext = vulkanDevice->CreateDedicatedTransferContext();
+
+            _backgroundContext = std::make_unique<PlatformInterface::UploadsThreadContext>(std::move(backgroundDeviceContext), std::move(transferQueueContext), true, true);
             _backgroundThread = std::make_unique<std::thread>(
                 [this](){ 
                     _backgroundContext->GetStagingPage().BindThread();

@@ -68,13 +68,15 @@ namespace UnitTests
 		return PrepareAndStall(testApparatus, std::move(prepareFuture));
 	}
 
+#if 0
 	static void PumpBufferUploads(LightingEngineTestApparatus& testApparatus)
 	{
 		auto& immContext= *testApparatus._metalTestHelper->_device->GetImmediateContext();
-		testApparatus._bufferUploads->Update(immContext);
+		testApparatus._bufferUploads->OnFrameBarrier(immContext);
 		Threading::Sleep(16);
-		testApparatus._bufferUploads->Update(immContext);
+		testApparatus._bufferUploads->OnFrameBarrier(immContext);
 	}
+#endif
 
 	static unsigned CountPixelShaderInvocations(
 		RenderCore::IThreadContext& threadContext, 
@@ -146,7 +148,9 @@ namespace UnitTests
 				MakeIteratorRange(resolveOperators), {}, 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = lightingTechniqueFuture.get();
-			PumpBufferUploads(testApparatus);
+			#if 0
+				PumpBufferUploads(testApparatus);
+			#endif
 
 			auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateFlatPlaneDrawableWriter();
 			auto drawableWriterWithBlocker = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateFlatPlaneAndBlockerDrawableWriter();

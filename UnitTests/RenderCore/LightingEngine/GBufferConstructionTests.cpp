@@ -395,9 +395,11 @@ namespace UnitTests
 				std::shared_ptr<IResource> directWorldPosition, directWorldNormal;
 				RenderCore::Techniques::AttachmentReservation attachmentReservation;
 
+#if 0
 				testApparatus._bufferUploads->Update(*threadContext);
 				Threading::Sleep(16);
 				testApparatus._bufferUploads->Update(*threadContext);
+#endif
 
 				// Prepare gbuffer using standard technique delegate
 				{
