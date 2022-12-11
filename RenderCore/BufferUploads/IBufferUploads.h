@@ -82,8 +82,8 @@ namespace RenderCore { namespace BufferUploads
 
             /// <summary>Called every frame to update uploads</summary>
             /// Performs once-per-frame tasks. Normally called by the render device once per frame.
-        virtual void                    Update(IThreadContext& immediateContext) = 0;
-        virtual void                    RequireCmdList(IThreadContext& immediateContext, CommandListID id) = 0;
+        virtual void                    OnFrameBarrier(IThreadContext& immediateContext) = 0;
+        virtual void                    StallAndMarkCommandListDependency(IThreadContext& immediateContext, CommandListID id) = 0;
         virtual bool                    IsComplete (CommandListID id) = 0;
             /// @}
 

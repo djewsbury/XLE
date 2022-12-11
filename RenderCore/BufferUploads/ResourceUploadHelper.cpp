@@ -669,14 +669,16 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             mutable CommandListMetrics _metrics;
             DeferredOperations _deferredOperations;
             CommandListID _id;
+
+            QueuedCommandList() = default;
+            QueuedCommandList(QueuedCommandList&&) = default;
+            QueuedCommandList& operator=(QueuedCommandList&&) = default;
         };
         std::queue<QueuedCommandList> _queuedForAdvanceGraphicsQueue;
         Threading::Mutex _queuedForAdvanceGraphicsQueueLock;
         #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
             LockFreeFixedSizeQueue<CommandListMetrics, 256> _recentRetirements;
         #endif
-
-        TimeMarker  _lastResolve;
 
         CommandListID _commandListIDReadyForGraphicsQueue;
 
@@ -689,7 +691,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         bool _backgroundContext = false;
         bool _isDedicatedTransferContext = false;
 
-        void RetireToGraphicsQueue(IThreadContext& commitTo, QueuedCommandList& commandList);
+        void RetireToGraphicsQueue(IThreadContext& commitTo, QueuedCommandList&& commandList);
     };
 
     void UploadsThreadContext::QueueToHardware(std::optional<CommandListID> completeCmdList)
@@ -728,12 +730,19 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         #endif
 
         if (_pimpl->_backgroundContext) {
-            _underlyingContext->CommitCommands();
+            TRY {
+                _underlyingContext->CommitCommands();
+            } CATCH(const std::exception& e) {
+                if (!newCommandList._metrics._exceptionMsg.empty()) newCommandList._metrics._exceptionMsg += ", ";
+                newCommandList._metrics._exceptionMsg += e.what();
+                // If we get a failure during CommitCommands(), cancel all deferred operations
+                newCommandList._deferredOperations = {};
+            } CATCH_END
 
             ScopedLock(_pimpl->_queuedForAdvanceGraphicsQueueLock);
             _pimpl->_queuedForAdvanceGraphicsQueue.push(std::move(newCommandList));
         } else {
-            _pimpl->RetireToGraphicsQueue(*_underlyingContext, newCommandList);
+            _pimpl->RetireToGraphicsQueue(*_underlyingContext, std::move(newCommandList));
         }
 
         _pimpl->_commandListUnderConstruction = CommandListMetrics();
@@ -745,35 +754,51 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     {
         if (!_pimpl->_backgroundContext) {
             assert(&commitTo == _underlyingContext.get());
-            return;
+            return _pimpl->_commandListIDReadyForGraphicsQueue >= cmdListRequired;
         }
 
         TimeMarker stallStart = OSServices::GetPerformanceCounter();
-        bool gotStart = false;
-
-        ScopedLock(_pimpl->_queuedForAdvanceGraphicsQueueLock);
+        bool annotatorStart = false;
 
         bool wroteSomeStub = false;
-        Pimpl::QueuedCommandList* commandList = 0;
-        while (_pimpl->_commandListIDReadyForGraphicsQueue < cmdListRequired && !_pimpl->_queuedForAdvanceGraphicsQueue.empty()) {
-            commandList = &_pimpl->_queuedForAdvanceGraphicsQueue.front();
+        for (;;) {
+            Pimpl::QueuedCommandList cmdListsToProcess[16];
+            unsigned cmdListToProcessCount = 0;
+            bool needAnotherBatch = false;
 
-            TimeMarker stallEnd = OSServices::GetPerformanceCounter();
-            if (!gotStart) {
-                commitTo.GetAnnotator().Event("BufferUploads", IAnnotator::EventTypes::MarkerBegin);
-                gotStart = true;
+            {
+                // move out the command lists we're going to tackle -- reduce the time we're in the "_queuedForAdvanceGraphicsQueueLock" lock
+                ScopedLock(_pimpl->_queuedForAdvanceGraphicsQueueLock);
+                unsigned cmdlistIterator = _pimpl->_commandListIDReadyForGraphicsQueue;
+                while (cmdlistIterator < cmdListRequired && cmdListToProcessCount < dimof(cmdListsToProcess) && !_pimpl->_queuedForAdvanceGraphicsQueue.empty()) {
+                    if (_pimpl->_queuedForAdvanceGraphicsQueue.front()._id != ~0u) {
+                        assert(_pimpl->_queuedForAdvanceGraphicsQueue.front()._id > cmdlistIterator);
+                        cmdlistIterator = _pimpl->_queuedForAdvanceGraphicsQueue.front()._id;
+                    }
+                    cmdListsToProcess[cmdListToProcessCount++] = std::move(_pimpl->_queuedForAdvanceGraphicsQueue.front());
+                    _pimpl->_queuedForAdvanceGraphicsQueue.pop();
+                }
+                needAnotherBatch = cmdlistIterator < cmdListRequired && !_pimpl->_queuedForAdvanceGraphicsQueue.empty();
             }
 
-            _pimpl->RetireToGraphicsQueue(commitTo, *commandList);
-            _pimpl->_queuedForAdvanceGraphicsQueue.pop();
+            for (auto& commandList:MakeIteratorRange(cmdListsToProcess, &cmdListsToProcess[cmdListToProcessCount])) {
+                TimeMarker stallEnd = OSServices::GetPerformanceCounter();
+                if (!annotatorStart) {
+                    commitTo.GetAnnotator().Event("BufferUploads", IAnnotator::EventTypes::MarkerBegin);
+                    annotatorStart = true;
+                }
 
-            stallStart = OSServices::GetPerformanceCounter();
-            wroteSomeStub = true;
+                _pimpl->RetireToGraphicsQueue(commitTo, std::move(commandList));
+
+                stallStart = OSServices::GetPerformanceCounter();
+                wroteSomeStub = true;
+            }
+
+            if (!needAnotherBatch) break;
         }
 
-        if (gotStart) {
+        if (annotatorStart)
             commitTo.GetAnnotator().Event("BufferUploads", IAnnotator::EventTypes::MarkerEnd);
-        }
 
         if (!wroteSomeStub && (_pimpl->_commandListIDReadyForGraphicsQueue >= cmdListRequired)) {
             auto& metalContext = *Metal::DeviceContext::Get(commitTo);
@@ -784,7 +809,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         return _pimpl->_commandListIDReadyForGraphicsQueue >= cmdListRequired;
     }
 
-    void UploadsThreadContext::Pimpl::RetireToGraphicsQueue(IThreadContext& commitTo, QueuedCommandList& commandList)
+    void UploadsThreadContext::Pimpl::RetireToGraphicsQueue(IThreadContext& commitTo, QueuedCommandList&& commandList)
     {
         TRY {
             if (!commandList._deferredOperations.IsEmpty()) {
@@ -886,7 +911,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     {
         _underlyingContext = std::move(underlyingContext);
         _pimpl = std::make_unique<Pimpl>();
-        _pimpl->_lastResolve = 0;
         _pimpl->_frameId = 0;
         _pimpl->_commandListIDReadyForGraphicsQueue = 0;
         _pimpl->_backgroundContext = backgroundContext;

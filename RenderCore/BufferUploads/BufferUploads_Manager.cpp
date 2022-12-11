@@ -1775,11 +1775,11 @@ namespace RenderCore { namespace BufferUploads
         }
         
         bool                    IsComplete(CommandListID id) override;
-        void                    RequireCmdList(IThreadContext& immediateContext, CommandListID id) override;
+        void                    StallAndMarkCommandListDependency(IThreadContext& immediateContext, CommandListID id) override;
 
         CommandListMetrics      PopMetrics() override;
 
-        void                    Update(IThreadContext&) override;
+        void                    OnFrameBarrier(IThreadContext&) override;
 
         unsigned GetGUID() const override { return _guid; }
 
@@ -1808,7 +1808,7 @@ namespace RenderCore { namespace BufferUploads
         return id <= (_backgroundStepMask ? _backgroundContext.get() : _foregroundContext.get())->CommandList_GetReadyForGraphicsQueue();
     }
 
-    void                    Manager::RequireCmdList(IThreadContext& immediateContext, CommandListID id)
+    void                    Manager::StallAndMarkCommandListDependency(IThreadContext& immediateContext, CommandListID id)
     {
         if (!id || id == CommandListID_Invalid) return;
         while (!_backgroundContext->AdvanceGraphicsQueue(immediateContext, id)) {
@@ -1826,7 +1826,7 @@ namespace RenderCore { namespace BufferUploads
         return _foregroundContext->PopMetrics();
     }
 
-    void                    Manager::Update(IThreadContext& immediateContext)
+    void                    Manager::OnFrameBarrier(IThreadContext& immediateContext)
     {
         if (_foregroundStepMask)
             _assemblyLine->Process(_foregroundStepMask, *_foregroundContext.get());

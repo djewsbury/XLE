@@ -243,7 +243,7 @@ namespace PlatformRig
                 _subFrameEvents->_onPrePresent.Invoke(*context);
 
             if (parserContext._requiredBufferUploadsCommandList)
-                RenderCore::Techniques::Services::GetBufferUploads().RequireCmdList(*context, parserContext._requiredBufferUploadsCommandList);
+                RenderCore::Techniques::Services::GetBufferUploads().StallAndMarkCommandListDependency(*context, parserContext._requiredBufferUploadsCommandList);
 
             {
                 RenderCore::Metal::BarrierHelper barrierHelper(*context);

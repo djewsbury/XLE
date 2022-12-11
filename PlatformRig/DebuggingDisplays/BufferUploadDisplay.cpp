@@ -147,7 +147,7 @@ namespace PlatformRig { namespace Overlays
             std::pair<const char*, std::vector<Enum>>("Uploads",    { Uploads, StagingBufferAllocated, StagingMaxNextBlock, StagingAwaitingDevice }),
             std::pair<const char*, std::vector<Enum>>("Creations",  { CreatesMB, CreatesCount, DeviceCreatesCount }),
             std::pair<const char*, std::vector<Enum>>("GPU",        { GPUCost, GPUBytesPerSecond, AveGPUCost }),
-            std::pair<const char*, std::vector<Enum>>("Threading",  { Latency, PendingBuffers, CommandListCount, ThreadActivity, BatchedCopy, FramePriorityStall }),
+            std::pair<const char*, std::vector<Enum>>("Threading",  { Latency, PendingBuffers, CommandListCount, ThreadActivity, BatchedCopy }),
             std::pair<const char*, std::vector<Enum>>("Extra",      { Statistics, RecentRetirements }),
         };
     }
@@ -454,7 +454,7 @@ namespace PlatformRig { namespace Overlays
                 if (i->_commandListStart!=i->_commandListEnd) {
                     value = _recentHistory[i->_commandListEnd-1]._assemblyLineMetrics._queuedBytes[uploadType] / (1024.f*1024.f);
                 }
-            } else if ((graphType >= Uploads && graphType <= FramePriorityStall) || graphType == StagingMaxNextBlock || graphType == StagingAwaitingDevice) {
+            } else if ((graphType >= Uploads && graphType <= StagingBufferAllocated) || graphType == StagingMaxNextBlock || graphType == StagingAwaitingDevice) {
                 for (unsigned cl=i->_commandListStart; cl<i->_commandListEnd; ++cl) {
                     auto& commandList = _recentHistory[cl];
                     if (_graphsMode == Uploads) { // bytes uploaded
