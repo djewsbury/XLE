@@ -83,7 +83,20 @@ namespace RenderCore { namespace BufferUploads
             /// <summary>Called every frame to update uploads</summary>
             /// Performs once-per-frame tasks. Normally called by the render device once per frame.
         virtual void                    OnFrameBarrier(IThreadContext& immediateContext) = 0;
-        virtual void                    StallAndMarkCommandListDependency(IThreadContext& immediateContext, CommandListID id) = 0;
+
+            /// <summary>Ensure a specific cmd list will be ready for commands on the given context</summary>
+            /// Note that this will stall waiting for background CPU processing of the given command list (though CPU
+            /// processing may still be ongoing)
+            /// The command list building built in "context" will be marked with a GPU dependency on GPU processing
+            /// part of the given command list
+        virtual void                    StallAndMarkCommandListDependency(IThreadContext& context, CommandListID id) = 0;
+
+            /// <summary>Returns the highest command list that will not stall in StallAndMarkCommandListDependency</summary>
+            /// If StallAndMarkCommandListDependency() will have no effect (other than marking a GPU dependency), this
+            /// will return empty
+        virtual std::optional<CommandListID>           LatestCommandListPendingProcessing() = 0;
+
+            /// <summary>Returns true iff CPU processing is complete on the given command list</summary>
         virtual bool                    IsComplete (CommandListID id) = 0;
             /// @}
 

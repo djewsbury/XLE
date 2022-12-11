@@ -757,7 +757,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             return _pimpl->_commandListIDReadyForGraphicsQueue >= cmdListRequired;
         }
 
-        TimeMarker stallStart = OSServices::GetPerformanceCounter();
         bool annotatorStart = false;
 
         bool wroteSomeStub = false;
@@ -782,15 +781,12 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             }
 
             for (auto& commandList:MakeIteratorRange(cmdListsToProcess, &cmdListsToProcess[cmdListToProcessCount])) {
-                TimeMarker stallEnd = OSServices::GetPerformanceCounter();
                 if (!annotatorStart) {
                     commitTo.GetAnnotator().Event("BufferUploads", IAnnotator::EventTypes::MarkerBegin);
                     annotatorStart = true;
                 }
 
                 _pimpl->RetireToGraphicsQueue(commitTo, std::move(commandList));
-
-                stallStart = OSServices::GetPerformanceCounter();
                 wroteSomeStub = true;
             }
 
@@ -875,6 +871,15 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     CommandListID           UploadsThreadContext::CommandList_GetReadyForGraphicsQueue() const { return _pimpl->_commandListIDReadyForGraphicsQueue; }
     CommandListMetrics&     UploadsThreadContext::GetMetricsUnderConstruction() { return _pimpl->_commandListUnderConstruction; }
     auto                    UploadsThreadContext::GetDeferredOperationsUnderConstruction() -> DeferredOperations& { return _pimpl->_deferredOperationsUnderConstruction; }
+
+    std::optional<CommandListID>    UploadsThreadContext::CommandList_LatestPendingProcessing() const
+    {
+        // What's the furthest AdvanceGraphicsQueue can go without causing a stall on background CPU processing?
+        ScopedLock(_pimpl->_queuedForAdvanceGraphicsQueueLock);
+        if (!_pimpl->_queuedForAdvanceGraphicsQueue.empty())
+            return _pimpl->_queuedForAdvanceGraphicsQueue.back()._id;
+        return {};
+    }
 
     unsigned                UploadsThreadContext::FrameId() const { return _pimpl->_frameId; }
     void                    UploadsThreadContext::AdvanceFrameId() { ++_pimpl->_frameId; }

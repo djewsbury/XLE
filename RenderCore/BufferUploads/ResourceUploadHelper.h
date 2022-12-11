@@ -185,6 +185,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         CommandListMetrics&     GetMetricsUnderConstruction();
 
         CommandListID           CommandList_GetReadyForGraphicsQueue() const;
+        std::optional<CommandListID>    CommandList_LatestPendingProcessing() const;
 
         class DeferredOperations;
         DeferredOperations&     GetDeferredOperationsUnderConstruction();

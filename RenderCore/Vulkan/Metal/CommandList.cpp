@@ -408,7 +408,6 @@ namespace RenderCore { namespace Metal_Vulkan
 			trackerMarkersCount += cmdList->_asyncTrackerMarkers.size();
 		}
 
-		// auto submitResult = cmdList.OnSubmitToQueue();
 		std::vector<IAsyncTracker::Marker> asyncTrackerMarkers;
 		asyncTrackerMarkers.reserve(trackerMarkersCount);
 		uint64_t queueTrackerSemphoreValue = 0;
@@ -418,6 +417,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		unsigned c=0;
 		unsigned waitBeforeBeginInCmdListCount = 0, signalOnCompletionInCmdListCount = 0;
 		for (auto* cmdList:cmdLists) {
+			std::sort(cmdList->_asyncTrackerMarkers.begin(), cmdList->_asyncTrackerMarkers.end());
 			if (auto* ft = dynamic_cast<FenceBasedTracker*>(cmdList->_asyncTracker.get())) {
 				checked_cast<SemaphoreBasedTracker*>(cmdList->_asyncTracker.get())->OnSubmitToQueue(cmdList->_asyncTrackerMarkers);
 				assert(0);
@@ -426,7 +426,9 @@ namespace RenderCore { namespace Metal_Vulkan
 				queueTrackerSemphoreValue = std::max(trackerValue, queueTrackerSemphoreValue);
 			}
 
-			asyncTrackerMarkers.insert(asyncTrackerMarkers.end(), cmdList->_asyncTrackerMarkers.begin(), cmdList->_asyncTrackerMarkers.end());
+			auto midpoint = asyncTrackerMarkers.insert(asyncTrackerMarkers.end(), cmdList->_asyncTrackerMarkers.begin(), cmdList->_asyncTrackerMarkers.end());
+			std::inplace_merge(asyncTrackerMarkers.begin(), midpoint, asyncTrackerMarkers.end());
+
 			cmdList->_asyncTrackerMarkers.clear();
 			cmdList->_asyncTracker = nullptr;
 			rawCmdBuffers[c++] = cmdList->_underlying.get();
@@ -434,7 +436,6 @@ namespace RenderCore { namespace Metal_Vulkan
 			waitBeforeBeginInCmdListCount += cmdList->_waitBeforeBegin.size();
 			signalOnCompletionInCmdListCount += cmdList->_signalOnCompletion.size();
 		}
-		std::sort(asyncTrackerMarkers.begin(), asyncTrackerMarkers.end());
 
 		////////////////////////////////////////
 		VLA(VkSemaphore, waitBeforeBeginSemaphores, waitBeforeBegin.size()+waitBeforeBeginInCmdListCount);

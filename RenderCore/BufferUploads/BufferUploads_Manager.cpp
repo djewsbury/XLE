@@ -1776,6 +1776,7 @@ namespace RenderCore { namespace BufferUploads
         
         bool                    IsComplete(CommandListID id) override;
         void                    StallAndMarkCommandListDependency(IThreadContext& immediateContext, CommandListID id) override;
+        std::optional<CommandListID>           LatestCommandListPendingProcessing() override;
 
         CommandListMetrics      PopMetrics() override;
 
@@ -1815,6 +1816,11 @@ namespace RenderCore { namespace BufferUploads
             _assemblyLine->TriggerWakeupEvent();
             std::this_thread::sleep_for(std::chrono::nanoseconds(500*1000));
         }
+    }
+
+    std::optional<CommandListID>           Manager::LatestCommandListPendingProcessing()
+    {
+        return (_backgroundStepMask ? _backgroundContext.get() : _foregroundContext.get())->CommandList_LatestPendingProcessing();
     }
 
     CommandListMetrics      Manager::PopMetrics()
