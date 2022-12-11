@@ -131,8 +131,7 @@ namespace PlatformRig { namespace Overlays
         enum Enum
         {
             Uploads,
-            CreatesMB, CreatesCount, DeviceCreatesCount, StagingBufferAllocated,
-            FramePriorityStall,     // FillValuesBuffer requires this and the above be in this order
+            CreatesMB, CreatesCount, DeviceCreatesCount, StagingBufferAllocated, // FillValuesBuffer requires this and the above be in this order
             Latency, PendingBuffers, CommandListCount,
             GPUCost, GPUBytesPerSecond, AveGPUCost,
             ThreadActivity, BatchedCopy,
@@ -140,7 +139,7 @@ namespace PlatformRig { namespace Overlays
             StagingMaxNextBlock, StagingAwaitingDevice
         };
         static const char* Names[] = {
-            "Uploads (MB)", "Creates (MB)", "Creates (count)", "Device creates (count)", "Stage Buffer Allocated (MB)", "Frame Priority Stalls", "Latency (s)", "Pending Buffers (MB)", "Command List Count", "GPU Cost", "GPU bytes/second", "Ave GPU cost", "Thread Activity %", "Batched copy", "Statistics", "Recent Retirements", "Stage Max Next Block (MB)", "Stage Awaiting Device (MB)"
+            "Uploads (MB)", "Creates (MB)", "Creates (count)", "Device creates (count)", "Stage Buffer Allocated (MB)", "Latency (s)", "Pending Buffers (MB)", "Command List Count", "GPU Cost", "GPU bytes/second", "Ave GPU cost", "Thread Activity %", "Batched copy", "Statistics", "Recent Retirements", "Stage Max Next Block (MB)", "Stage Awaiting Device (MB)"
         };
 
         std::pair<const char*, std::vector<Enum>> Groups[] = 
@@ -468,8 +467,6 @@ namespace PlatformRig { namespace Overlays
                         value += commandList._countDeviceCreations[uploadType];
                     } else if (_graphsMode == StagingBufferAllocated) {
                         value += commandList._stagingBytesAllocated[uploadType] / (1024.f*1024.f);
-                    } else if (_graphsMode == FramePriorityStall) {
-                        value += float(commandList._framePriorityStallTime * _reciprocalTimerFrequency * 1000.f);
                     } else if (_graphsMode == StagingMaxNextBlock) {
                         value += commandList._assemblyLineMetrics._stagingPageMetrics._maxNextBlockBytes / (1024.f*1024.f);
                     } else if (_graphsMode == StagingAwaitingDevice) {

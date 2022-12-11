@@ -670,8 +670,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             DeferredOperations _deferredOperations;
             CommandListID _id;
         };
-        std::queue<QueuedCommandList> _queuedCommandLists;
-        Threading::Mutex _queuedCommandListsLock;
+        std::queue<QueuedCommandList> _queuedForAdvanceGraphicsQueue;
+        Threading::Mutex _queuedForAdvanceGraphicsQueueLock;
         #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
             LockFreeFixedSizeQueue<CommandListMetrics, 256> _recentRetirements;
         #endif
@@ -688,6 +688,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         unsigned _frameId = 0;
         bool _backgroundContext = false;
         bool _isDedicatedTransferContext = false;
+
+        void RetireToGraphicsQueue(IThreadContext& commitTo, QueuedCommandList& commandList);
     };
 
     void UploadsThreadContext::QueueToHardware(std::optional<CommandListID> completeCmdList)
@@ -708,15 +710,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         // However, this is only optimal if there's no particular benefit in running transfers in parallel for
         // the given hardware.
 
-        // VLA(CommandListID, completedCmdLists, completedCmdListsInit.size());
-        // unsigned completedCmdListsCount = 0;
-        // for (auto c:completedCmdListsInit) {
-        //     auto i = std::lower_bound(completedCmdLists, &completedCmdLists[completedCmdListsCount], c);
-        //     if (i != &completedCmdLists[completedCmdListsCount] && *i == c) continue;
-        //     std::memmove(i+1, i, (&completedCmdLists[completedCmdListsCount]-i)*sizeof(*completedCmdLists));
-        //     *i = c;
-        // }
-
         int64_t currentTime = OSServices::GetPerformanceCounter();
         Pimpl::QueuedCommandList newCommandList;
         newCommandList._metrics = std::move(_pimpl->_commandListUnderConstruction);
@@ -724,31 +717,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         newCommandList._metrics._processingEnd = currentTime;
         newCommandList._deferredOperations.swap(_pimpl->_deferredOperationsUnderConstruction);
         newCommandList._id = completeCmdList.value_or(~0u);
-
-#if 0
-        if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(_underlyingContext.get())) {
-
-            std::pair<VkSemaphore, IThreadContextVulkan::CommandListMarker> signalOnCompletion[1];
-            std::pair<VkSemaphore, IThreadContextVulkan::CommandListMarker> waitBeforeBegin[1];
-            unsigned signalOnCompletionCount = 0, waitBeforeBeginCount = 0;
-
-            // If we have completed a buffer uploads CommandListID, we should advance _transferQueueTimeline on completion
-            // Also, we must ensure that every cmd list is sequential on this queue (otherwise we can't guarantee that
-            // all work for a CommandListID is completed when the semaphore is advanced)
-            if (completeCmdList)
-                signalOnCompletion[signalOnCompletionCount++] = { _pimpl->_transferQueueTimeline.get(), *completeCmdList };
-
-            // auto forceOrderTimeline = threadContextVulkan->GetCommandListSpecificMarker();
-            // if (forceOrderTimeline.second > 1)
-            //     waitBeforeBegin[waitBeforeBeginCount++] = { forceOrderTimeline.first, forceOrderTimeline.second-1 };
-
-            threadContextVulkan->CommitCommandsScheduled(
-                MakeIteratorRange(waitBeforeBegin, &waitBeforeBegin[waitBeforeBeginCount]),
-                MakeIteratorRange(signalOnCompletion, &signalOnCompletion[signalOnCompletionCount]));
-        } else {
-            assert(0);      // requires gfx-api specific implementation
-        }
-#endif
 
         #if GFXAPI_TARGET == GFXAPI_VULKAN
             auto& metalContext = *Metal::DeviceContext::Get(*_underlyingContext);
@@ -758,33 +726,15 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         #else
             #error GFXAPI specific implementation required in UploadsThreadContext::QueueToHardware()
         #endif
-        if (_pimpl->_backgroundContext)
+
+        if (_pimpl->_backgroundContext) {
             _underlyingContext->CommitCommands();
 
-        {
-            ScopedLock(_pimpl->_queuedCommandListsLock);
-            _pimpl->_queuedCommandLists.push(std::move(newCommandList));
+            ScopedLock(_pimpl->_queuedForAdvanceGraphicsQueueLock);
+            _pimpl->_queuedForAdvanceGraphicsQueue.push(std::move(newCommandList));
+        } else {
+            _pimpl->RetireToGraphicsQueue(*_underlyingContext, newCommandList);
         }
-
-        // if (!_pimpl->_isImmediateContext) {
-        //     newCommandList._deviceCommandList = Metal::DeviceContext::Get(*_underlyingContext)->ResolveCommandList();
-        //     newCommandList._deferredOperations.swap(_pimpl->_deferredOperationsUnderConstruction);
-        //     _pimpl->_queuedCommandLists.push_overflow(std::move(newCommandList));
-        // } else {
-        //             // immediate resolve -- skip the render thread resolve step...
-        //     _pimpl->_deferredOperationsUnderConstruction.CommitToImmediate_PreCommandList(*_underlyingContext);
-        //     _pimpl->_deferredOperationsUnderConstruction.CommitToImmediate_PostCommandList(*_underlyingContext);
-        //     if (cmdListId !=  ~0u)
-        //         _pimpl->_commandListIDReadyForGraphicsQueue = std::max(_pimpl->_commandListIDReadyForGraphicsQueue, cmdListId);
-        // 
-        //     newCommandList._metrics._frameId = _pimpl->_immediateContextLastFrameId+1;  // ie, assume it's just the next one after the last call to UpdateGraphicsQueue()
-        //     newCommandList._metrics._commitTime = currentTime;
-        //     #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
-        //         while (!_pimpl->_recentRetirements.push(newCommandList._metrics)) {
-        //             _pimpl->_recentRetirements.pop();   // note -- this might violate the single-popping-thread rule!
-        //         }
-        //     #endif
-        // }
 
         _pimpl->_commandListUnderConstruction = CommandListMetrics();
         _pimpl->_commandListUnderConstruction._processingStart = currentTime;
@@ -793,22 +743,20 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
     bool UploadsThreadContext::AdvanceGraphicsQueue(IThreadContext& commitTo, CommandListID cmdListRequired)
     {
-        // if (_pimpl->_isImmediateContext) {
-        //     assert(&commitTo == _underlyingContext.get());
-        //     ++_pimpl->_commitCountCurrent;
-        //     _pimpl->_immediateContextLastFrameId = frameId;
-        //     return;
-        // }
+        if (!_pimpl->_backgroundContext) {
+            assert(&commitTo == _underlyingContext.get());
+            return;
+        }
 
         TimeMarker stallStart = OSServices::GetPerformanceCounter();
         bool gotStart = false;
 
-        ScopedLock(_pimpl->_queuedCommandListsLock);
+        ScopedLock(_pimpl->_queuedForAdvanceGraphicsQueueLock);
 
         bool wroteSomeStub = false;
         Pimpl::QueuedCommandList* commandList = 0;
-        while (_pimpl->_commandListIDReadyForGraphicsQueue < cmdListRequired && !_pimpl->_queuedCommandLists.empty()) {
-            commandList = &_pimpl->_queuedCommandLists.front();
+        while (_pimpl->_commandListIDReadyForGraphicsQueue < cmdListRequired && !_pimpl->_queuedForAdvanceGraphicsQueue.empty()) {
+            commandList = &_pimpl->_queuedForAdvanceGraphicsQueue.front();
 
             TimeMarker stallEnd = OSServices::GetPerformanceCounter();
             if (!gotStart) {
@@ -816,52 +764,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                 gotStart = true;
             }
 
-            TRY {
-                if (!commandList->_deferredOperations.IsEmpty()) {
-                    auto metalContext = Metal::DeviceContext::BeginPrimaryCommandList(commitTo);
-                    ResourceUploadHelper helper{*commitTo.GetDevice(), *metalContext};
-                    commandList->_deferredOperations.CommitToImmediate_PreCommandList(helper);
-                    commandList->_deferredOperations.CommitToImmediate_ResourceTransfers(helper);
-                    commandList->_deferredOperations.CommitToImmediate_PostCommandList(helper);
-
-                    auto cmdList = metalContext->ResolveCommandList();
-                    metalContext.reset();
-
-                    if (commandList->_id != ~0u) {
-                        cmdList->AddWaitBeforeBegin(_pimpl->_transferQueueTimeline, commandList->_id);
-                        cmdList->AddSignalOnCompletion(_pimpl->_graphicsQueueTimeline, commandList->_id);
-                    }
-
-                    if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(&commitTo)) {
-                        // the command list generated will become a "pre-frame" command list; meaning it will go into
-                        // the queue earlier than the main frame rendering command list
-                        threadContextVulkan->AddPreFrameCommandList(std::move(*cmdList));
-                    } else {
-                        assert(0);      // missing gfx api specific implementation
-                    }
-                } else if (commandList->_id != ~0u) {
-                    auto& metalContext = *Metal::DeviceContext::Get(commitTo);
-                    assert(metalContext.HasActiveCommandList());
-                    metalContext.GetActiveCommandList().AddWaitBeforeBegin(_pimpl->_transferQueueTimeline, commandList->_id);
-                    metalContext.GetActiveCommandList().AddSignalOnCompletion(_pimpl->_graphicsQueueTimeline, commandList->_id);
-                }
-            } CATCH (const std::exception& e) {
-                // we have to catch any exception to ensure (at the very least) that we don't attempt to resubmit this same cmd list again
-                if (!commandList->_metrics._exceptionMsg.empty()) commandList->_metrics._exceptionMsg += ", ";
-                commandList->_metrics._exceptionMsg += e.what();
-            } CATCH_END
-
-            if (commandList->_id != ~0u)
-                _pimpl->_commandListIDReadyForGraphicsQueue = std::max(_pimpl->_commandListIDReadyForGraphicsQueue, commandList->_id);
-        
-            commandList->_metrics._frameId                  = _pimpl->_frameId;
-            commandList->_metrics._commitTime               = OSServices::GetPerformanceCounter();
-            commandList->_metrics._framePriorityStallTime   = stallEnd - stallStart;    // this should give us very small numbers, when we're not actually stalling for frame priority commits
-            #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
-                while (!_pimpl->_recentRetirements.push(std::move(commandList->_metrics)))
-                    _pimpl->_recentRetirements.pop();   // note -- this might violate the single-popping-thread rule!
-            #endif
-            _pimpl->_queuedCommandLists.pop();
+            _pimpl->RetireToGraphicsQueue(commitTo, *commandList);
+            _pimpl->_queuedForAdvanceGraphicsQueue.pop();
 
             stallStart = OSServices::GetPerformanceCounter();
             wroteSomeStub = true;
@@ -880,23 +784,55 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         return _pimpl->_commandListIDReadyForGraphicsQueue >= cmdListRequired;
     }
 
-#if 0
-    std::optional<QueueMarker>     UploadsThreadContext::CommandListToHardwareQueueMarker(CommandListID cmdList)
+    void UploadsThreadContext::Pimpl::RetireToGraphicsQueue(IThreadContext& commitTo, QueuedCommandList& commandList)
     {
-        // Scan through our list of recent completions to try to find the hardware command list where we
-        // completed the given buffer uploads CommandListID
-        // If it's older that the oldest record we have, we will just promote to the oldest hardware
-        // cmd list we're tracking
-        if (_pimpl->_recentBufferUploadsToHardwareCmdListIds.empty())
-            return {};
+        TRY {
+            if (!commandList._deferredOperations.IsEmpty()) {
+                auto metalContext = Metal::DeviceContext::BeginPrimaryCommandList(commitTo);
+                ResourceUploadHelper helper{*commitTo.GetDevice(), *metalContext};
+                commandList._deferredOperations.CommitToImmediate_PreCommandList(helper);
+                commandList._deferredOperations.CommitToImmediate_ResourceTransfers(helper);
+                commandList._deferredOperations.CommitToImmediate_PostCommandList(helper);
 
-        if (_pimpl->_recentBufferUploadsToHardwareCmdListIds.back().first < cmdList)
-            return {};      // not completed yet
+                auto metalCmdList = metalContext->ResolveCommandList();
+                metalContext.reset();
 
-        if (_pimpl->_recentBufferUploadsToHardwareCmdListIds.front().first >= cmdList)
-            return _pimpl->_recentBufferUploadsToHardwareCmdListIds.front().second;     // oldest record we have
+                if (commandList._id != ~0u) {
+                    metalCmdList->AddWaitBeforeBegin(_transferQueueTimeline, commandList._id);
+                    metalCmdList->AddSignalOnCompletion(_graphicsQueueTimeline, commandList._id);
+                }
+
+                if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(&commitTo)) {
+                    // the command list generated will become a "pre-frame" command list; meaning it will go into
+                    // the queue earlier than the main frame rendering command list
+                    threadContextVulkan->AddPreFrameCommandList(std::move(*metalCmdList));
+                } else {
+                    assert(0);      // missing gfx api specific implementation
+                }
+            } else if (commandList._id != ~0u) {
+                auto& metalContext = *Metal::DeviceContext::Get(commitTo);
+                assert(metalContext.HasActiveCommandList());
+                metalContext.GetActiveCommandList().AddWaitBeforeBegin(_transferQueueTimeline, commandList._id);
+                metalContext.GetActiveCommandList().AddSignalOnCompletion(_graphicsQueueTimeline, commandList._id);
+            }
+        } CATCH (const std::exception& e) {
+            // we have to catch any exception to ensure (at the very least) that we don't attempt to resubmit this same cmd list again
+            if (!commandList._metrics._exceptionMsg.empty()) commandList._metrics._exceptionMsg += ", ";
+            commandList._metrics._exceptionMsg += e.what();
+        } CATCH_END
+
+        if (commandList._id != ~0u)
+            _commandListIDReadyForGraphicsQueue = std::max(_commandListIDReadyForGraphicsQueue, commandList._id);
+    
+        commandList._metrics._frameId                  = _frameId;
+        commandList._metrics._commitTime               = OSServices::GetPerformanceCounter();
+        
+        #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
+            while (!_recentRetirements.push(std::move(commandList._metrics)))
+                _recentRetirements.pop();   // note -- this might violate the single-popping-thread rule!
+        #endif
     }
-#endif
+
 
     CommandListMetrics UploadsThreadContext::PopMetrics()
     {
@@ -911,12 +847,9 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         return CommandListMetrics();
     }
 
-
-    CommandListID           UploadsThreadContext::CommandList_GetReadyForGraphicsQueue() const     { return _pimpl->_commandListIDReadyForGraphicsQueue; }
-
-    CommandListMetrics&     UploadsThreadContext::GetMetricsUnderConstruction()                   { return _pimpl->_commandListUnderConstruction; }
-
-    auto                    UploadsThreadContext::GetDeferredOperationsUnderConstruction() -> DeferredOperations&        { return _pimpl->_deferredOperationsUnderConstruction; }
+    CommandListID           UploadsThreadContext::CommandList_GetReadyForGraphicsQueue() const { return _pimpl->_commandListIDReadyForGraphicsQueue; }
+    CommandListMetrics&     UploadsThreadContext::GetMetricsUnderConstruction() { return _pimpl->_commandListUnderConstruction; }
+    auto                    UploadsThreadContext::GetDeferredOperationsUnderConstruction() -> DeferredOperations& { return _pimpl->_deferredOperationsUnderConstruction; }
 
     unsigned                UploadsThreadContext::FrameId() const { return _pimpl->_frameId; }
     void                    UploadsThreadContext::AdvanceFrameId() { ++_pimpl->_frameId; }

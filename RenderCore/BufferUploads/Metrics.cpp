@@ -22,7 +22,6 @@ namespace RenderCore { namespace BufferUploads
 		_bytesUploadTotal = _contextOperations = _deviceCreateOperations = 0;
 		_resolveTime = _commitTime = 0;
 		_waitTime = _processingStart = _processingEnd = 0;
-		_framePriorityStallTime = 0;
 		_batchedUploadBytes = _batchedUploadCount = 0;
 		_wakeCount = 0;
 		_frameId = 0;
@@ -52,7 +51,6 @@ namespace RenderCore { namespace BufferUploads
 		_resolveTime = moveFrom._resolveTime;
 		_commitTime = moveFrom._commitTime;
 		_waitTime = moveFrom._waitTime; _processingStart = moveFrom._processingStart; _processingEnd = moveFrom._processingEnd;
-		_framePriorityStallTime = moveFrom._framePriorityStallTime;
 		_batchedUploadBytes = moveFrom._batchedUploadBytes; _batchedUploadCount = moveFrom._batchedUploadCount;
 		_wakeCount = moveFrom._wakeCount; _frameId = moveFrom._frameId;
 		_exceptionMsg = std::move(moveFrom._exceptionMsg);

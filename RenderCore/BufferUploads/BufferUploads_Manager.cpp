@@ -1811,11 +1811,6 @@ namespace RenderCore { namespace BufferUploads
     void                    Manager::RequireCmdList(IThreadContext& immediateContext, CommandListID id)
     {
         if (!id || id == CommandListID_Invalid) return;
-        // while (!IsComplete(id)) {
-        //     Update(immediateContext);
-        //     std::this_thread::sleep_for(std::chrono::nanoseconds(500*1000));
-        // }
-
         while (!_backgroundContext->AdvanceGraphicsQueue(immediateContext, id)) {
             _assemblyLine->TriggerWakeupEvent();
             std::this_thread::sleep_for(std::chrono::nanoseconds(500*1000));
@@ -1836,14 +1831,10 @@ namespace RenderCore { namespace BufferUploads
         if (_foregroundStepMask)
             _assemblyLine->Process(_foregroundStepMask, *_foregroundContext.get());
 
-            //  Commit both the foreground and background contexts here
+            // Assembly line uses the number of times we've run AdvanceFrameId() for some
+            // internal scheduling -- so we need to wake it up now, because it may do something
         _foregroundContext->AdvanceFrameId();
         _backgroundContext->AdvanceFrameId();
-        // _foregroundContext->UpdateGraphicsQueue(immediateContext, _frameId);
-        // _backgroundContext->UpdateGraphicsQueue(immediateContext, _frameId);
-        
-            // Assembly line uses the number of times we've run UpdateGraphicsQueue() for some
-            // internal scheduling -- so we need to wake it up now, because it may do something
         _assemblyLine->TriggerWakeupEvent();
 
         PlatformInterface::Resource_RecalculateVideoMemoryHeadroom();

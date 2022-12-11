@@ -2764,26 +2764,6 @@ namespace RenderCore { namespace ImplVulkan
 		PumpDestructionQueues();
 	}
 
-#if 0
-	bool ThreadContext::CommitCommandsScheduled(
-		IteratorRange<const std::pair<VkSemaphore, CommandListMarker>*> waitBeforeBegin,
-		IteratorRange<const std::pair<VkSemaphore, CommandListMarker>*> signalOnCompletion)
-	{
-		bool result = false;
-		if (_metalContext->HasActiveCommandList()) {
-			TRY {
-				QueuePrimaryContext(waitBeforeBegin, signalOnCompletion);
-			} CATCH (const std::exception& e) {
-				Log(Warning) << "Failure during queue submission in CommitCommands:" << e.what() << std::endl;
-			} CATCH_END
-			result = true;
-		}
-
-		PumpDestructionQueues();
-		return result;
-	}
-#endif
-
 	void ThreadContext::PumpDestructionQueues()
 	{
 		if (_destrQueue) {

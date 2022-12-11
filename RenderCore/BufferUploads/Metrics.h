@@ -62,7 +62,6 @@ namespace RenderCore { namespace BufferUploads
         std::vector<AssemblyLineRetirement> _retirementsOverflow;
         TimeMarker _resolveTime, _commitTime;
         TimeMarker _waitTime, _processingStart, _processingEnd;
-        TimeMarker _framePriorityStallTime;
         size_t _batchedUploadBytes;
         unsigned _batchedUploadCount;
         unsigned _wakeCount, _frameId;

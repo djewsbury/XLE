@@ -291,29 +291,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 	}
 
-#if 0
-	auto CommandList::OnSubmitToQueue() -> SubmissionResult
-	{
-		assert(!_asyncTrackerMarkers.empty());
-		_attachedStorage.OnSubmitToQueue(GetPrimaryTrackerMarker());
-		std::sort(_asyncTrackerMarkers.begin(), _asyncTrackerMarkers.end());
-
-		SubmissionResult result;
-		result._cmdBuffer = std::move(_underlying);
-		result._asyncTrackerMarkers = std::move(_asyncTrackerMarkers);
-
-		if (auto* ft = dynamic_cast<FenceBasedTracker*>(_asyncTracker.get())) {
-			result._queueTrackerFence = ft->OnSubmitToQueue(result._asyncTrackerMarkers);
-		} else {
-			result._queueTrackerSemphoreValue = checked_cast<SemaphoreBasedTracker*>(_asyncTracker.get())->OnSubmitToQueue(result._asyncTrackerMarkers).second;
-		}
-
-		_asyncTrackerMarkers.clear();
-		_asyncTracker = nullptr;
-		return result;
-	}
-#endif
-
 	IAsyncTracker::Marker CommandList::GetPrimaryTrackerMarker() const
 	{
 		assert(!_asyncTrackerMarkers.empty());
