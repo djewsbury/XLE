@@ -844,6 +844,10 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                 assert(metalContext.HasActiveCommandList());
                 metalContext.GetActiveCommandList().AddWaitBeforeBegin(_transferQueueTimeline, commandList._id);
                 metalContext.GetActiveCommandList().AddSignalOnCompletion(_graphicsQueueTimeline, commandList._id);
+
+                if (commandList._graphicsQueueAdditionalCmdList)
+                    if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(&commitTo))
+                        threadContextVulkan->AddPreFrameCommandList(std::move(*commandList._graphicsQueueAdditionalCmdList));
             }
         } CATCH (const std::exception& e) {
             // we have to catch any exception to ensure (at the very least) that we don't attempt to resubmit this same cmd list again

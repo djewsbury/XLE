@@ -120,7 +120,7 @@ namespace RenderCore { namespace BufferUploads
 	class BatchedResources::ActiveReposition
 	{
 	public:
-		void	Tick(EventListManager& evntListMan, IManager& bufferUploads);
+		void	Tick(EventListManager& evntListMan);
 		bool	IsComplete(EventListID processedEventList);
 		void	Clear();
 
@@ -350,7 +350,7 @@ namespace RenderCore { namespace BufferUploads
 				//      active resource as necessary
 				//
 			ActiveReposition* existingActiveDefrag = _activeDefrag.get();
-			existingActiveDefrag->Tick(_eventListManager, *_bufferUploads.lock());
+			existingActiveDefrag->Tick(_eventListManager);
 			if (existingActiveDefrag->IsComplete(_eventListManager._currentEventListProcessedId.load())) {
 				auto* sourceHeap = _activeDefrag->GetSourceHeap();
 				_activeDefrag->Clear();
@@ -539,10 +539,10 @@ namespace RenderCore { namespace BufferUploads
 				auto newValue = --_eventListManager._eventBuffers[c]._clientReferences;
 				assert(signed(newValue) >= 0);
 					
+				auto originalProcessedId = _eventListManager._currentEventListProcessedId.load();
 				for (;;) {      // lock-free max...
-					auto originalProcessedId = _eventListManager._currentEventListProcessedId.load();
 					auto newProcessedId = std::max(originalProcessedId, (EventListID)_eventListManager._eventBuffers[c]._id);
-					if (_eventListManager._currentEventListProcessedId.compare_exchange_strong(originalProcessedId, newProcessedId))
+					if (_eventListManager._currentEventListProcessedId.compare_exchange_weak(originalProcessedId, newProcessedId))
 						break;
 				}
 
@@ -690,17 +690,18 @@ namespace RenderCore { namespace BufferUploads
 		#endif
 	}
 
-	void BatchedResources::ActiveReposition::Tick(EventListManager& evntListMan, IManager& bufferUploads)
+	void BatchedResources::ActiveReposition::Tick(EventListManager& evntListMan)
 	{
 		if (!_repositionCmdList.has_value() && _futureRepositionCmdList.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
 			_repositionCmdList = _futureRepositionCmdList.get();
 		
-		if (_repositionCmdList && !_eventId.has_value() && bufferUploads.IsComplete(_repositionCmdList.value())) {
+		if (_repositionCmdList && !_eventId.has_value()) {
 			// publish the changes to encourage the client to move across to the newly updated position
 			Event_ResourceReposition result;
 			result._originalResource = _srcHeap->_heapResource.get();
 			result._newResource = _dstUberBlock.GetContainingResource();
 			result._defragSteps = _steps;
+			result._cmdList = *_repositionCmdList;
 			_eventId = evntListMan.EventList_Publish(result);
 		}
 	}

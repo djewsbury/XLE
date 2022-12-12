@@ -269,7 +269,7 @@ namespace RenderCore { namespace Techniques
 		unsigned _frameBarrierMarker = ~0u;
 		unsigned _backgroundFrameMarker = ~0u;
 		unsigned _lastProcessedVB = 0, _lastProcessedIB = 0;
-		void HandleRepositions(IteratorRange<const BufferUploads::Event_ResourceReposition*>, bool);
+		BufferUploads::CommandListID HandleRepositions(IteratorRange<const BufferUploads::Event_ResourceReposition*>, bool);
 
 		friend class DrawableGeo;
 		void Remove(DrawableGeo& geo);

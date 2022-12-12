@@ -168,6 +168,9 @@ namespace PlatformRig
                 //  It appears that the driver might forget bound constant buffers
                 //  during the begin frame or present
             context->InvalidateCachedState();
+
+            if (_subFrameEvents)
+                _subFrameEvents->_onBeginFrame.Invoke(parserContext);
             
             if (_pimpl->_techniqueContext._pipelineAccelerators) {
                 auto newVisibility = _pimpl->_techniqueContext._pipelineAccelerators->VisibilityBarrier();
