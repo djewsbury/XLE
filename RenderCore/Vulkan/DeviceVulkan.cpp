@@ -2839,15 +2839,11 @@ namespace RenderCore { namespace ImplVulkan
 				}
 		}
 
-		if (!_commandBufferPool) {
+		if (!_commandBufferPool)
 			_commandBufferPool = std::make_shared<Metal_Vulkan::CommandBufferPool>(
 				*_factory, queueFamilyIndex, false, _submissionQueue->GetTracker());
-		}
 
-		_metalContext = std::make_shared<Metal_Vulkan::DeviceContext>(
-			*_factory, *_globalPools,
-			_commandBufferPool,
-            Metal_Vulkan::CommandBufferType::Primary);
+		_metalContext = std::make_shared<Metal_Vulkan::DeviceContext>(*_factory, *_globalPools);
 	}
 
     ThreadContext::~ThreadContext() 
@@ -2883,9 +2879,27 @@ namespace RenderCore { namespace ImplVulkan
 
     const std::shared_ptr<Metal_Vulkan::DeviceContext>& ThreadContext::GetMetalContext()
     {
-		if (!_metalContext->HasActiveCommandList())
-			_metalContext->BeginCommandList(_submissionQueue->GetTracker());
+		if (!_metalContext->HasActiveCommandList()) {
+			auto cmdBuffer = _commandBufferPool->Allocate(Metal_Vulkan::CommandBufferType::Primary);
+			_metalContext->BeginCommandList(std::move(cmdBuffer), _submissionQueue->GetTracker());
+		}
         return _metalContext;
+    }
+
+	std::shared_ptr<Metal_Vulkan::DeviceContext> ThreadContext::BeginPrimaryCommandList()
+    {
+		auto cmdBuffer = _commandBufferPool->Allocate(Metal_Vulkan::CommandBufferType::Primary);
+		auto deviceContext = std::make_shared<Metal_Vulkan::DeviceContext>(*_factory, *_globalPools);
+		deviceContext->BeginCommandList(std::move(cmdBuffer), _submissionQueue->GetTracker());
+        return deviceContext;
+    }
+
+	std::shared_ptr<Metal_Vulkan::DeviceContext> ThreadContext::BeginSecondaryCommandList()
+    {
+		auto cmdBuffer = _commandBufferPool->Allocate(Metal_Vulkan::CommandBufferType::Secondary);
+		auto deviceContext = std::make_shared<Metal_Vulkan::DeviceContext>(*_factory, *_globalPools);
+		deviceContext->BeginCommandList(std::move(cmdBuffer), _submissionQueue->GetTracker());
+        return deviceContext;
     }
 }}
 

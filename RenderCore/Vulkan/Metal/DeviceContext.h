@@ -344,12 +344,13 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		TemporaryStorageResourceMap MapTemporaryStorage(size_t byteCount, BindFlag::Enum type);
 
-		static std::shared_ptr<DeviceContext> Get(IThreadContext& threadContext);
+		static const std::shared_ptr<DeviceContext>& Get(IThreadContext& threadContext);
 
 		// --------------- Vulkan specific interface --------------- 
 
-		void		BeginCommandList(std::shared_ptr<IAsyncTracker> asyncTracker);
-		void		BeginCommandList(const VulkanSharedPtr<VkCommandBuffer>& cmdList, std::shared_ptr<IAsyncTracker> asyncTracker);
+		static std::shared_ptr<DeviceContext> BeginPrimaryCommandList(IThreadContext& threadContext);
+		static std::shared_ptr<DeviceContext> BeginSecondaryCommandList(IThreadContext& threadContext);
+
 		void		ExecuteCommandList(CommandList&&);
 		auto        ResolveCommandList() -> std::shared_ptr<CommandList>;
 
@@ -370,14 +371,15 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		DeviceContext(
 			ObjectFactory& factory, 
-			GlobalPools& globalPools,
-			std::shared_ptr<CommandBufferPool> cmdBufferPool,
-			CommandBufferType cmdBufferType);
+			GlobalPools& globalPools);
 		~DeviceContext();
 		DeviceContext(const DeviceContext&) = delete;
 		DeviceContext& operator=(const DeviceContext&) = delete;
 
 		std::shared_ptr<Internal::CaptureForBindRecords> _captureForBindRecords;
+
+		// --------------- used by IThreadContext --------------- 
+		void			BeginCommandList(VulkanSharedPtr<VkCommandBuffer> cmdList, std::shared_ptr<IAsyncTrackerVulkan> asyncTracker);
 
 		// --------------- Legacy interface --------------- 
 		void			InvalidateCachedState() {}
@@ -385,8 +387,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	private:
 		std::shared_ptr<VulkanEncoderSharedState> _sharedState;
-		std::shared_ptr<CommandBufferPool> _cmdBufferPool;
-		CommandBufferType _cmdBufferType;
 
 		friend class BlitEncoder;
 		void EndBlitEncoder();

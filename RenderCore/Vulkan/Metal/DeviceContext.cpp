@@ -885,14 +885,34 @@ namespace RenderCore { namespace Metal_Vulkan
 		return ComputeEncoder { *checked_cast<CompiledPipelineLayout*>(&pipelineLayout), _sharedState };
 	}
 
-	std::shared_ptr<DeviceContext> DeviceContext::Get(IThreadContext& threadContext)
+	const std::shared_ptr<DeviceContext>& DeviceContext::Get(IThreadContext& threadContext)
 	{
 		IThreadContextVulkan* vulkanContext = 
 			(IThreadContextVulkan*)threadContext.QueryInterface(
 				typeid(IThreadContextVulkan).hash_code());
 		if (vulkanContext)
 			return vulkanContext->GetMetalContext();
-		return nullptr;
+		Throw(std::runtime_error("Incorrect thread context type passed to DeviceContext accessor"));
+	}
+
+	std::shared_ptr<DeviceContext> DeviceContext::BeginPrimaryCommandList(IThreadContext& threadContext)
+	{
+		IThreadContextVulkan* vulkanContext = 
+			(IThreadContextVulkan*)threadContext.QueryInterface(
+				typeid(IThreadContextVulkan).hash_code());
+		if (vulkanContext)
+			return vulkanContext->BeginPrimaryCommandList();
+		Throw(std::runtime_error("Incorrect thread context type passed to DeviceContext accessor"));
+	}
+
+	std::shared_ptr<DeviceContext> DeviceContext::BeginSecondaryCommandList(IThreadContext& threadContext)
+	{
+		IThreadContextVulkan* vulkanContext = 
+			(IThreadContextVulkan*)threadContext.QueryInterface(
+				typeid(IThreadContextVulkan).hash_code());
+		if (vulkanContext)
+			return vulkanContext->BeginSecondaryCommandList();
+		Throw(std::runtime_error("Incorrect thread context type passed to DeviceContext accessor"));
 	}
 
 	GlobalPools&    DeviceContext::GetGlobalPools()
@@ -910,16 +930,14 @@ namespace RenderCore { namespace Metal_Vulkan
 		return _sharedState->_objectFactory->GetDevice().get();
 	}
 
-	void		DeviceContext::BeginCommandList(std::shared_ptr<IAsyncTracker> asyncTracker)
+	void		DeviceContext::BeginCommandList(VulkanSharedPtr<VkCommandBuffer> cmdList, std::shared_ptr<IAsyncTrackerVulkan> asyncTracker)
 	{
-		assert(_sharedState && _sharedState->_globalPools && _cmdBufferPool);
-		BeginCommandList(_cmdBufferPool->Allocate(_cmdBufferType), std::move(asyncTracker));
-	}
-
-	void		DeviceContext::BeginCommandList(const VulkanSharedPtr<VkCommandBuffer>& cmdList, std::shared_ptr<IAsyncTracker> asyncTracker)
-	{
+		assert(_sharedState && _sharedState->_globalPools);
 		assert(!_sharedState->_commandList.GetUnderlying());
-		_sharedState->_commandList = CommandList(cmdList, std::move(asyncTracker));
+		assert(!_sharedState->_inBltPass);
+		assert(!_sharedState->_renderPass);
+		assert(!_sharedState->_currentEncoder);
+		_sharedState->_commandList = CommandList(std::move(cmdList), std::move(asyncTracker));
 		_sharedState->_ibBound = false;
 
 		VkCommandBufferInheritanceInfo inheritInfo = {};
@@ -1202,12 +1220,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		return cmdList._attachedStorage.MapStorage(byteCount, type);
 	}
 
-	DeviceContext::DeviceContext(
-		ObjectFactory&			factory, 
-		GlobalPools&            globalPools,
-		std::shared_ptr<CommandBufferPool> cmdBufferPool,
-		CommandBufferType		cmdBufferType)
-	: _cmdBufferPool(std::move(cmdBufferPool)), _cmdBufferType(cmdBufferType)
+	DeviceContext::DeviceContext(ObjectFactory& factory, GlobalPools& globalPools)
 	{
 		_sharedState = std::make_shared<VulkanEncoderSharedState>(factory, globalPools);
 	}

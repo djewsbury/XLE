@@ -137,6 +137,8 @@ namespace RenderCore { namespace ImplVulkan
 
         virtual void*   QueryInterface(size_t guid) override;
         const std::shared_ptr<Metal_Vulkan::DeviceContext>& GetMetalContext() override;
+        std::shared_ptr<Metal_Vulkan::DeviceContext> BeginPrimaryCommandList() override;
+        std::shared_ptr<Metal_Vulkan::DeviceContext> BeginSecondaryCommandList() override;
 
 		void AttachDestroyer(const std::shared_ptr<Metal_Vulkan::IDestructionQueue>&);
         void PumpDestructionQueues();
