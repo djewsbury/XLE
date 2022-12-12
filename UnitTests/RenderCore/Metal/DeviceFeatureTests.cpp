@@ -90,7 +90,7 @@ namespace UnitTests
 				std::shared_ptr<IResourceView> GetResourceView(
 					AttachmentName,
 					BindFlag::Enum bindFlags, TextureViewDesc textureView,
-					const AttachmentDesc&, const FrameBufferProperties&) const
+					const AttachmentDesc&, const FrameBufferProperties&) override
 				{
 					return _mainTarget->CreateTextureView(bindFlags, textureView);
 				}

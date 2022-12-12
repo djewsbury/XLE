@@ -296,7 +296,7 @@ namespace RenderCore { namespace Techniques
 		virtual std::shared_ptr<IResourceView> GetResourceView(
             AttachmentName resName,
             BindFlag::Enum bindFlag, TextureViewDesc viewDesc,
-            const AttachmentDesc& requestDesc, const FrameBufferProperties& props) const override;
+            const AttachmentDesc& requestDesc, const FrameBufferProperties& props) override;
 
         NamedAttachmentsAdapter(
             const AttachmentReservation&);
@@ -308,7 +308,7 @@ namespace RenderCore { namespace Techniques
     std::shared_ptr<IResourceView> NamedAttachmentsAdapter::GetResourceView(
         AttachmentName resName,
         BindFlag::Enum bindFlag, TextureViewDesc viewDesc,
-        const AttachmentDesc& requestDesc, const FrameBufferProperties& props) const
+        const AttachmentDesc& requestDesc, const FrameBufferProperties& props)
     {
         assert(resName < _reservation->GetResourceCount());
         auto view = _reservation->GetView(resName, bindFlag, viewDesc);

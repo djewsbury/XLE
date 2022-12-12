@@ -153,13 +153,13 @@ namespace UnitTests
 		std::vector<RenderCore::ResourceDesc> _targetDescs;
 		std::shared_ptr<RenderCore::Metal::FrameBuffer> _fb;
 		RenderCore::FrameBufferDesc _fbDesc;
-		mutable RenderCore::ViewPool _srvPool;
+		RenderCore::ViewPool _srvPool;
 
 		std::shared_ptr<RenderCore::IResourceView> GetResourceView(
 			RenderCore::AttachmentName resName, 
 			RenderCore::BindFlag::Enum bindFlag, RenderCore::TextureViewDesc viewDesc,
 			const RenderCore::AttachmentDesc& requestDesc,
-			const RenderCore::FrameBufferProperties& props) const override
+			const RenderCore::FrameBufferProperties& props) override
 		{
 			assert(resName <= _targets.size());
 			// the "requestDesc" is passed in here so that we can validate it. We're expecting

@@ -155,9 +155,12 @@ namespace RenderCore { namespace ImplVulkan
 					NULL,                                                     // pNext
 					0,                                                        // flags
 					VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |           // messageSeverity
-					VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
+					VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+					VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+					VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
 					VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |             // messageType
-					VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
+					VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+					VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
 					debug_callback,                                           // pfnUserCallback
 					this                                                      // pUserData
 				};
@@ -1427,6 +1430,8 @@ namespace RenderCore { namespace ImplVulkan
 		if (xleFeatures._timelineSemaphore)
 			deviceExtensions[deviceExtensionCount++] = VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME;	// because it's used internally, it's always required (promoted into Vulkan 1.2)
 		deviceExtensions[deviceExtensionCount++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+		if (xleFeatures._viewInstancingRenderPasses)
+			deviceExtensions[deviceExtensionCount++] = VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME; 	// promoted to Vulkan 1.2, HLSL compiler likes to require it
 
 		if (enableDebugLayer)
 			deviceLayers[deviceLayerCount++] = "VK_LAYER_KHRONOS_validation";

@@ -35,7 +35,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		FrameBuffer(
 			const ObjectFactory& factory,
             const FrameBufferDesc& desc,
-            const INamedAttachments& namedResources);
+        	INamedAttachments& namedResources);
 		FrameBuffer();
 		~FrameBuffer();
 

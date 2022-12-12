@@ -190,7 +190,7 @@ namespace RenderCore
 		virtual std::shared_ptr<IResourceView> GetResourceView(
             AttachmentName resName,
             BindFlag::Enum bindFlag, TextureViewDesc viewDesc,
-            const AttachmentDesc& requestDesc, const FrameBufferProperties& props) const = 0;
+            const AttachmentDesc& requestDesc, const FrameBufferProperties& props) = 0;
 		virtual ~INamedAttachments();
 
         // note -- considering removing this. The Metal layer only needs it for MSAA configuration data
