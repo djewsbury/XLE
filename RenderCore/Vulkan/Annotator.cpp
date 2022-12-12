@@ -42,7 +42,9 @@ namespace RenderCore { namespace ImplVulkan
 		void		BeginFrameCapture() override;
 		void		EndFrameCapture() override;
 
-		AnnotatorImpl(Metal::ObjectFactory&, std::weak_ptr<IThreadContext>);
+		void 		ReleaseThreadContext();
+
+		AnnotatorImpl(Metal::ObjectFactory&, IThreadContext&);
 		~AnnotatorImpl();
 
 	protected:
@@ -74,7 +76,7 @@ namespace RenderCore { namespace ImplVulkan
 		std::vector<std::pair<unsigned, EventListener>> _listeners;
 		unsigned _nextListenerId;
 
-		std::weak_ptr<IThreadContext> _threadContext;
+		IThreadContext* _threadContext;
 		std::shared_ptr<Metal_Vulkan::IAsyncTracker> _asyncTracker;
 	};
 
@@ -82,8 +84,8 @@ namespace RenderCore { namespace ImplVulkan
 
 	void    AnnotatorImpl::Event(const char name[], EventTypes::BitField types)
 	{
-		auto context = _threadContext.lock();
-		if (!context) return;
+		auto context = _threadContext;
+		assert(context);
 
 		auto& metalContext = *Metal::DeviceContext::Get(*context);
 		if (types & EventTypes::MarkerBegin) {
@@ -108,8 +110,8 @@ namespace RenderCore { namespace ImplVulkan
 
 	void    AnnotatorImpl::Frame_Begin(unsigned frameId)
 	{
-		auto context = _threadContext.lock();
-		if (!context) return;
+		auto context = _threadContext;
+		assert(context);
 
 		auto& metalContext = *Metal::DeviceContext::Get(*context);
 		FlushFinishedQueries(metalContext);
@@ -126,8 +128,8 @@ namespace RenderCore { namespace ImplVulkan
 
 	void    AnnotatorImpl::Frame_End()
 	{
-		auto context = _threadContext.lock();
-		if (!context) return;
+		auto context = _threadContext;
+		assert(context);
 		auto& metalContext = *Metal::DeviceContext::Get(*context);
 
 		--_frameRecursionDepth;
@@ -282,9 +284,8 @@ namespace RenderCore { namespace ImplVulkan
 	{
 		RenderDoc_Attach();
 		if(s_rdoc_api) {
-			auto tc = _threadContext.lock();
-			if (tc)
-				tc->CommitCommands(0);
+			assert(_threadContext);
+			_threadContext->CommitCommands(0);
 			s_rdoc_api->StartFrameCapture(nullptr, nullptr);
 		}
 	}
@@ -292,9 +293,8 @@ namespace RenderCore { namespace ImplVulkan
 	{
 		RenderDoc_Attach();
 		if(s_rdoc_api) {
-			auto tc = _threadContext.lock();
-			if (tc)
-				tc->CommitCommands(0);
+			assert(_threadContext);
+			_threadContext->CommitCommands(0);
 			s_rdoc_api->EndFrameCapture(nullptr, nullptr);
 		}
 	}
@@ -305,13 +305,16 @@ namespace RenderCore { namespace ImplVulkan
 	void AnnotatorImpl::EndFrameCapture() {}
 #endif
 
-	AnnotatorImpl::AnnotatorImpl(Metal::ObjectFactory& factory, std::weak_ptr<IThreadContext> threadContext)
-	: _queryPool(factory)
-	, _threadContext(std::move(threadContext))
+	void AnnotatorImpl::ReleaseThreadContext()
 	{
-		auto tc = _threadContext.lock();
-		assert(tc);
-		auto vulkanDevice = (IDeviceVulkan*)tc->GetDevice()->QueryInterface(typeid(IDeviceVulkan).hash_code());
+		_threadContext = nullptr;
+	}
+
+	AnnotatorImpl::AnnotatorImpl(Metal::ObjectFactory& factory, IThreadContext& threadContext)
+	: _queryPool(factory)
+	, _threadContext(&threadContext)
+	{
+		auto vulkanDevice = (IDeviceVulkan*)threadContext.GetDevice()->QueryInterface(typeid(IDeviceVulkan).hash_code());
 		assert(vulkanDevice);
 		_asyncTracker = vulkanDevice->GetGraphicsQueueAsyncTracker();
 
@@ -325,9 +328,14 @@ namespace RenderCore { namespace ImplVulkan
 	{
 	}
 
-	std::unique_ptr<IAnnotator> CreateAnnotator(IDevice& device, std::weak_ptr<IThreadContext> threadContext)
+	std::unique_ptr<IAnnotator> CreateAnnotator(IDevice& device, IThreadContext& threadContext)
 	{
 		return std::make_unique<AnnotatorImpl>(Metal::GetObjectFactory(device), threadContext);
+	}
+
+	void ReleaseThreadContext(IAnnotator& annotator)
+	{
+		checked_cast<AnnotatorImpl*>(&annotator)->ReleaseThreadContext();
 	}
 
 }}

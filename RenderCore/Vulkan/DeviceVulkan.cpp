@@ -50,7 +50,8 @@ namespace RenderCore { namespace ImplVulkan
 {
     using VulkanAPIFailure = Metal_Vulkan::VulkanAPIFailure;
 
-	std::unique_ptr<IAnnotator> CreateAnnotator(IDevice& device, std::weak_ptr<IThreadContext> threadContext);
+	std::unique_ptr<IAnnotator> CreateAnnotator(IDevice& device, IThreadContext& threadContext);
+	void ReleaseThreadContext(IAnnotator&);
 
 	static std::string GetApplicationName()
 	{
@@ -2799,7 +2800,7 @@ namespace RenderCore { namespace ImplVulkan
 		if (!_annotator) {
 			auto d = _device.lock();
 			assert(d);
-			_annotator = CreateAnnotator(*d, shared_from_this());
+			_annotator = CreateAnnotator(*d, *this);
 		}
 		return *_annotator;
 	}
@@ -2853,6 +2854,7 @@ namespace RenderCore { namespace ImplVulkan
 			_globalPools->_idleCommandBufferPools.emplace_back(_submissionQueue->GetQueueFamilyIndex(), std::move(_commandBufferPool));
 		}
 		_metalContext.reset();
+		if (_annotator) ReleaseThreadContext(*_annotator);
 		_annotator.reset();
 		_commandBufferPool.reset();
 		_submissionQueue.reset();
