@@ -1129,38 +1129,44 @@ namespace RenderOverlays
 		for (auto chr:chrs) {
 			bitmaps[cnt] = font.GetBitmap(chr);
 			auto start = storageBuffer.size();
+			assert(!bitmaps[cnt]._data.empty() || (bitmaps[cnt]._width == 0 && bitmaps[cnt]._height == 0));
 			storageBuffer.insert(storageBuffer.end(), (const uint8_t*)bitmaps[cnt]._data.begin(), (const uint8_t*)bitmaps[cnt]._data.end());
 			bitmaps[cnt]._data = MakeIteratorRange((const void*)start, (const void*)(start+bitmaps[cnt]._data.size()));
 			++cnt;
 		}
 
-		unsigned bestPage = ~0u;
-		unsigned allocationSize = storageBuffer.size(), bestFreeBlock = ~0u;
-		for (unsigned c=0; c<_pimpl->_activePages.size(); ++c) {
-			auto largestBlock = _pimpl->_activePages[c]._spanningHeap.CalculateLargestFreeBlock();
-			if (largestBlock >= allocationSize && largestBlock < bestFreeBlock) {
-				bestPage = c;
-				bestFreeBlock = largestBlock;
+		uint32_t encodingOffsetBase = 0;
+		if (!storageBuffer.empty()) {		// (if all chars are whitespace, nothing to upload)
+			unsigned bestPage = ~0u;
+			unsigned allocationSize = storageBuffer.size(), bestFreeBlock = ~0u;
+			for (unsigned c=0; c<_pimpl->_activePages.size(); ++c) {
+				auto largestBlock = _pimpl->_activePages[c]._spanningHeap.CalculateLargestFreeBlock();
+				if (largestBlock >= allocationSize && largestBlock < bestFreeBlock) {
+					bestPage = c;
+					bestFreeBlock = largestBlock;
+				}
 			}
+
+			if (bestPage == ~0u) {
+				// could not fit it in -- we need to release some space and try to do a defrag
+				if (alreadyAttemptedFree)
+					return false;		// maybe too big to fit on a page?
+				FreeUpHeapSpace_Linear(storageBuffer.size());
+				SynchronousDefrag_Linear(threadContext);
+				return InitializeNewGlyphs(threadContext, font, chrs, true);
+			}
+
+			auto allocation = _pimpl->_activePages[bestPage]._spanningHeap.Allocate(allocationSize);
+			assert(allocation != ~0u);
+			_pimpl->_activePages[bestPage]._texelsAllocated += allocationSize;
+
+			// no strong guarantee on exception from here, because allocation already completed
+
+			if (_pimpl->_texture)
+				_pimpl->_texture->UpdateToTexture(threadContext, storageBuffer, _pimpl->_activePages[bestPage]._spaceInTexture._topLeft[0] + allocation);
+
+			encodingOffsetBase = _pimpl->_activePages[bestPage]._spaceInTexture._topLeft[0] + allocation;
 		}
-
-		if (bestPage == ~0u) {
-			// could not fit it in -- we need to release some space and try to do a defrag
-			if (alreadyAttemptedFree)
-				return false;		// maybe too big to fit on a page?
-			FreeUpHeapSpace_Linear(storageBuffer.size());
-			SynchronousDefrag_Linear(threadContext);
-			return InitializeNewGlyphs(threadContext, font, chrs, true);
-		}
-
-		auto allocation = _pimpl->_activePages[bestPage]._spanningHeap.Allocate(allocationSize);
-		assert(allocation != ~0u);
-		_pimpl->_activePages[bestPage]._texelsAllocated += allocationSize;
-
-		// no strong guarantee on exception from here, because allocation already completed
-
-		if (_pimpl->_texture)
-			_pimpl->_texture->UpdateToTexture(threadContext, storageBuffer, _pimpl->_activePages[bestPage]._spaceInTexture._topLeft[0] + allocation);
 
 		uint64_t fontHash = (font.GetHash() & 0xffffffffull) << 32ull;
 		auto i = _glyphs.begin();
@@ -1172,7 +1178,7 @@ namespace RenderOverlays
 			result._lsbDelta = bitmaps[c]._lsbDelta;
 			result._rsbDelta = bitmaps[c]._rsbDelta;
 			result._lastAccessFrame = _currentFrameIdx;
-			result._encodingOffset = _pimpl->_activePages[bestPage]._spaceInTexture._topLeft[0] + allocation + (size_t)bitmaps[c]._data.begin();
+			result._encodingOffset = encodingOffsetBase + (size_t)bitmaps[c]._data.begin();
 			result._width = bitmaps[c]._width;
 			result._height = bitmaps[c]._height;
 
