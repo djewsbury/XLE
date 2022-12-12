@@ -47,6 +47,7 @@ namespace RenderCore { namespace Metal_Vulkan
         Threading::Mutex _lock;
 
 		void QueueDestroy(VkCommandBuffer buffer);
+        void FlushDestroysAlreadyLocked();
 	};
 
     class DescriptorPoolReusableGroup;

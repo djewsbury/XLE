@@ -27,6 +27,9 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
         ScopedLock(_lock);
 
+        // Some client patterns don't given any other real space for processing destroys (ie, we don't get a IThreadContext::CommitCommands don't get sent back to idle list, etc)
+        FlushDestroysAlreadyLocked();
+
 		VkCommandBufferAllocateInfo cmd = {};
 		cmd.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 		cmd.pNext = nullptr;
@@ -71,7 +74,11 @@ namespace RenderCore { namespace Metal_Vulkan
 	void CommandBufferPool::FlushDestroys()
 	{
         ScopedLock(_lock);
+        FlushDestroysAlreadyLocked();
+    }
 
+    void CommandBufferPool::FlushDestroysAlreadyLocked()
+    {
 		auto trackerMarker = _gpuTracker ? _gpuTracker->GetConsumerMarker() : ~0u;
 		size_t countToDestroy = 0;
         while (!_markedDestroys.empty() && _markedDestroys.front()._marker <= trackerMarker) {
