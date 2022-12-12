@@ -49,7 +49,7 @@ namespace RenderCore { namespace ImplVulkan
     class PresentationChain : public IPresentationChain
     {
     public:
-        void Resize(IThreadContext&, unsigned newWidth, unsigned newHeight) override;
+        void ChangeConfiguration(IThreadContext&, const PresentationChainDesc&) override;
 
         PresentationChainDesc GetDesc() const override;
         std::shared_ptr<IDevice> GetDevice() const override;
@@ -100,8 +100,6 @@ namespace RenderCore { namespace ImplVulkan
 		Metal_Vulkan::CommandBufferPool _primaryBufferPool;
 		VulkanSharedPtr<VkCommandBuffer> _primaryBuffers[3];
 
-        BindFlag::BitField _originalRequestBindFlags = 0;
-        Format _originalRequestFormat = (Format)0;
         std::weak_ptr<Device> _device;
 
         void BuildImages();

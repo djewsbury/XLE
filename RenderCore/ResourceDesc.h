@@ -245,6 +245,8 @@ namespace RenderCore
         Format _format = Format(0);
         TextureSamples _samples = TextureSamples::Create();
         BindFlag::BitField _bindFlags = BindFlag::RenderTarget;
+        bool _vsync = true;
+        unsigned _imageCount = 2;
     };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

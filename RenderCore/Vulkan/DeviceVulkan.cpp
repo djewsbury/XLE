@@ -1494,26 +1494,49 @@ namespace RenderCore { namespace ImplVulkan
         }
     }
 
-    static VkPresentModeKHR SelectPresentMode(IteratorRange<const VkPresentModeKHR*> availableModes)
+    static VkPresentModeKHR SelectPresentMode(IteratorRange<const VkPresentModeKHR*> availableModes, bool vsync)
     {
-        // If mailbox mode is available, use it, as is the lowest-latency non-
-        // tearing mode.  If not, try IMMEDIATE which will usually be available,
-        // and is fastest (though it tears).  If not, fall back to FIFO which is
-        // always available.
-        VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
-		const bool onlyVSyncModes = true;
-        for (auto pm:availableModes) {
-            if (pm == VK_PRESENT_MODE_MAILBOX_KHR) {
-                swapchainPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-                break;
-            }
-            if (!onlyVSyncModes &&
-                (swapchainPresentMode != VK_PRESENT_MODE_MAILBOX_KHR) &&
-                (pm == VK_PRESENT_MODE_IMMEDIATE_KHR)) {
-                swapchainPresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
-            }
-        }
-        return swapchainPresentMode;
+        // We have 3 vsync modes:
+        //		VK_PRESENT_MODE_MAILBOX_KHR
+		//		VK_PRESENT_MODE_FIFO_RELAXED_KHR
+		//		VK_PRESENT_MODE_FIFO_KHR
+		// & one non-vsync mode:
+		//		VK_PRESENT_MODE_IMMEDIATE_KHR
+		//
+		// VK_PRESENT_MODE_FIFO_KHR should always be available, and VK_PRESENT_MODE_MAILBOX_KHR is apparently
+		// the lowest latency mode
+		// VK_PRESENT_MODE_MAILBOX_KHR can also guarantee that vkAcquireNextImageKHR() is non blocking if we
+		// triple buffer (with some particular platform exceptions)
+		// (see Q&A in https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_swapchain.html)
+
+		if (vsync) {
+			if (std::find(availableModes.begin(), availableModes.end(), VK_PRESENT_MODE_MAILBOX_KHR) != availableModes.end())
+				return VK_PRESENT_MODE_MAILBOX_KHR;
+
+			if (std::find(availableModes.begin(), availableModes.end(), VK_PRESENT_MODE_FIFO_RELAXED_KHR) != availableModes.end())
+				return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+		} else {
+			if (std::find(availableModes.begin(), availableModes.end(), VK_PRESENT_MODE_IMMEDIATE_KHR) != availableModes.end())
+				return VK_PRESENT_MODE_IMMEDIATE_KHR;
+		}
+
+		assert(std::find(availableModes.begin(), availableModes.end(), VK_PRESENT_MODE_FIFO_KHR) != availableModes.end());
+		return VK_PRESENT_MODE_FIFO_KHR;
+
+        // VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+		// const bool onlyVSyncModes = false;
+        // for (auto pm:availableModes) {
+        //     if (pm == VK_PRESENT_MODE_MAILBOX_KHR) {
+        //         swapchainPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+        //         break;
+        //     }
+        //     if (!onlyVSyncModes &&
+        //         (swapchainPresentMode != VK_PRESENT_MODE_MAILBOX_KHR) &&
+        //         (pm == VK_PRESENT_MODE_IMMEDIATE_KHR)) {
+        //         swapchainPresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+        //     }
+        // }
+        // return swapchainPresentMode;
     }
 
     static VkQueue GetQueue(VkDevice dev, unsigned queueFamilyIndex, unsigned queueIndex=0)
@@ -2034,9 +2057,7 @@ namespace RenderCore { namespace ImplVulkan
 
     static SwapChainProperties DecideSwapChainProperties(
         VkPhysicalDevice phyDev, VkSurfaceKHR surface,
-        unsigned requestedWidth, unsigned requestedHeight,
-		Format preferedFormat,
-		BindFlag::BitField requestedBindFlags)
+		const PresentationChainDesc& requestedDesc)
     {
         SwapChainProperties result;
 
@@ -2053,8 +2074,8 @@ namespace RenderCore { namespace ImplVulkan
         result._fmt = VK_FORMAT_UNDEFINED;
 
 		VkFormat vkPreferedFormat = VK_FORMAT_B8G8R8A8_SRGB;
-		if (preferedFormat != Format(0))
-			vkPreferedFormat = (VkFormat)Metal_Vulkan::AsVkFormat(preferedFormat);
+		if (requestedDesc._format != Format(0))
+			vkPreferedFormat = (VkFormat)Metal_Vulkan::AsVkFormat(requestedDesc._format);
 
 		for (auto f:fmts)
 			if (f.format == vkPreferedFormat)
@@ -2086,23 +2107,22 @@ namespace RenderCore { namespace ImplVulkan
         assert(res == VK_SUCCESS); (void)res;
 
         auto presentModes = GetPresentModes(phyDev, surface);
-        result._presentMode = SelectPresentMode(MakeIteratorRange(presentModes));
+        result._presentMode = SelectPresentMode(MakeIteratorRange(presentModes), requestedDesc._vsync);
 
         // width and height are either both -1, or both not -1.
         if (surfCapabilities.currentExtent.width == (uint32_t)-1) {
             // If the surface size is undefined, the size is set to
             // the size of the images requested.
-            result._extent.width = requestedWidth;
-            result._extent.height = requestedHeight;
+            result._extent.width = requestedDesc._width;
+            result._extent.height = requestedDesc._height;
         } else {
             // If the surface size is defined, the swap chain size must match
             result._extent = surfCapabilities.currentExtent;
         }
         
-        // Determine the number of VkImage's to use in the swap chain (we desire to
-        // own only 1 image at a time, besides the images being displayed and
-        // queued for display):
-        result._desiredNumberOfImages = surfCapabilities.minImageCount + 1;
+        // Determine the number of VkImage's to use in the swap chain
+		// Note that the ideal number of images is surfCapabilities.minImageCount+1
+        result._desiredNumberOfImages = std::max(surfCapabilities.minImageCount, requestedDesc._imageCount);
         if (surfCapabilities.maxImageCount > 0)
             result._desiredNumberOfImages = std::min(result._desiredNumberOfImages, surfCapabilities.maxImageCount);
 
@@ -2112,13 +2132,13 @@ namespace RenderCore { namespace ImplVulkan
             ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : surfCapabilities.currentTransform;
 
 		result._bindFlags = BindFlag::PresentationSrc;
-		if ((surfCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) && (requestedBindFlags & BindFlag::RenderTarget))
+		if ((surfCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) && (requestedDesc._bindFlags & BindFlag::RenderTarget))
 			result._bindFlags |= BindFlag::RenderTarget;
-		if ((surfCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_STORAGE_BIT) && (requestedBindFlags & BindFlag::UnorderedAccess))
+		if ((surfCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_STORAGE_BIT) && (requestedDesc._bindFlags & BindFlag::UnorderedAccess))
 			result._bindFlags |= BindFlag::UnorderedAccess;
-		if ((surfCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_SAMPLED_BIT) && (requestedBindFlags & BindFlag::ShaderResource))
+		if ((surfCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_SAMPLED_BIT) && (requestedDesc._bindFlags & BindFlag::ShaderResource))
 			result._bindFlags |= BindFlag::ShaderResource;
-		if ((surfCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) && (requestedBindFlags & BindFlag::TransferDst))
+		if ((surfCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) && (requestedDesc._bindFlags & BindFlag::TransferDst))
 			result._bindFlags |= BindFlag::TransferDst;
 
         return result;
@@ -2142,7 +2162,7 @@ namespace RenderCore { namespace ImplVulkan
         swapChainInfo.imageArrayLayers = 1;
         swapChainInfo.presentMode = props._presentMode;
         swapChainInfo.oldSwapchain = oldSwapChain;
-        swapChainInfo.clipped = true;
+        swapChainInfo.clipped = true;		// note -- when this is true, reading back from the presentation image itself may not contain all of the pixels
         swapChainInfo.imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
         swapChainInfo.imageUsage = Metal_Vulkan::AsImageUsageFlags(props._bindFlags);
         swapChainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -2376,12 +2396,30 @@ namespace RenderCore { namespace ImplVulkan
 
     //////////////////////////////////////////////////////////////////////////////////////////////////
 
-    void            PresentationChain::Resize(IThreadContext& mainThreadContext, unsigned newWidth, unsigned newHeight)
+	static PresentationChainDesc AsPresentationChainDesc(const SwapChainProperties& props)
+	{
+		return {
+			props._extent.width, props._extent.height, Metal_Vulkan::AsFormat(props._fmt),
+			TextureSamples::Create(),
+			props._bindFlags,
+			!(props._presentMode == VK_PRESENT_MODE_IMMEDIATE_KHR),
+			props._desiredNumberOfImages
+		};
+	}
+
+	static bool operator==(const PresentationChainDesc& lhs, const PresentationChainDesc& rhs)
+	{
+		return lhs._width == rhs._width && lhs._height == rhs._height && lhs._format == rhs._format
+			&& lhs._samples == rhs._samples && lhs._bindFlags == rhs._bindFlags
+			&& lhs._vsync == rhs._vsync && lhs._imageCount == rhs._imageCount;
+	}
+
+    void            PresentationChain::ChangeConfiguration(IThreadContext& mainThreadContext, const PresentationChainDesc& desc)
     {
-        // We need to destroy and recreate the presentation chain here.
-        auto props = DecideSwapChainProperties(_factory->GetPhysicalDevice(), _surface.get(), newWidth, newHeight, _originalRequestFormat, _originalRequestBindFlags);
-        if (newWidth == _bufferDesc._width && newHeight == _bufferDesc._height)
+		if (desc == _desc)
             return;
+
+        auto props = DecideSwapChainProperties(_factory->GetPhysicalDevice(), _surface.get(), desc);
 
         // We can't delete the old swap chain while the device is using it. The easiest
         // way to get around this is to just synchronize with the GPU here.
@@ -2418,8 +2456,7 @@ namespace RenderCore { namespace ImplVulkan
 
         _swapChain = CreateUnderlyingSwapChain(_vulkanDevice.get(), _surface.get(), oldSwapChain.get(), props);
         _bufferDesc = TextureDesc::Plain2D(props._extent.width, props._extent.height, Metal_Vulkan::AsFormat(props._fmt));
-
-        _desc = { _bufferDesc._width, _bufferDesc._height, _bufferDesc._format, _bufferDesc._samples, props._bindFlags };
+        _desc = AsPresentationChainDesc(props);
 
         BuildImages();
     }
@@ -2442,13 +2479,9 @@ namespace RenderCore { namespace ImplVulkan
 			queue.WaitForFence(sync._presentFence.value());
 		sync._presentFence = {};
 
-        // note --  Due to the timeout here, we get a synchronise here.
-        //          This will prevent issues when either the GPU or CPU is
-        //          running ahead of the other... But we could do better by
-        //          using the semaphores
+		// Note that vkAcquireNextImageKHR can be guaranteed to be non-blocking if 
+		// we have VK_PRESENT_MODE_MAILBOX_KHR, and surfCapabilities.minImageCount+1 images.
         //
-        // Note that we must handle the VK_NOT_READY result... Some implementations
-        // may not block, even when timeout is some large value.
         // As stated in the documentation, we shouldn't rely on this function for
         // synchronisation -- instead, we should write an algorithm that will insert 
         // stalls as necessary
@@ -2524,20 +2557,14 @@ namespace RenderCore { namespace ImplVulkan
     , _factory(&factory)
 	, _submissionQueue(submissionQueue)
 	, _primaryBufferPool(factory, submissionQueue->GetQueueFamilyIndex(), true, nullptr)
-	, _originalRequestBindFlags(requestDesc._bindFlags)
-	, _originalRequestFormat(requestDesc._format)
 	, _device(std::move(device))
     {
         _activeImageIndex = ~0x0u;
-        auto props = DecideSwapChainProperties(factory.GetPhysicalDevice(), _surface.get(), requestDesc._width, requestDesc._height, requestDesc._format, requestDesc._bindFlags);
+        auto props = DecideSwapChainProperties(factory.GetPhysicalDevice(), _surface.get(), requestDesc);
         _swapChain = CreateUnderlyingSwapChain(_vulkanDevice.get(), _surface.get(), nullptr, props);
 
         _bufferDesc = TextureDesc::Plain2D(props._extent.width, props._extent.height, Metal_Vulkan::AsFormat(props._fmt));
-		_desc._width = _bufferDesc._width;
-		_desc._height = _bufferDesc._height;
-        _desc._format = _bufferDesc._format;
-		_desc._samples = _bufferDesc._samples;
-		_desc._bindFlags = props._bindFlags;
+		_desc = AsPresentationChainDesc(props);
 
         // We need to get pointers to each image and build the synchronization semaphores
         BuildImages();

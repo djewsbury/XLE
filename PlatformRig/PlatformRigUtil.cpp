@@ -121,7 +121,10 @@ namespace PlatformRig
                 //  We can't actually resize the presentation to zero. And we can't
                 //  delete the presentation chain from here. So maybe just do nothing.
             if (newWidth && newHeight) {
-				chain->Resize(*threadContext, newWidth, newHeight);
+                auto desc = chain->GetDesc();
+                desc._width = newWidth;
+                desc._height = newHeight;
+				chain->ChangeConfiguration(*threadContext, desc);
             }
         }
 

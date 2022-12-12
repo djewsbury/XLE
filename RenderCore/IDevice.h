@@ -71,8 +71,8 @@ namespace RenderCore
     class IPresentationChain
     {
     public:
-        /// <summary>Resizes the presentation chain</summary>
-        /// Resizes the presentation chain. Normally this is called after the
+        /// <summary>Resizes or changes the presentation chain</summary>
+        /// Normally this is called after the
         /// output window changes size. If the presentation chain size doesn't
         /// match the output window's size, the behaviour is undefined (though
         /// on windows, the output is stretched to the window size).
@@ -81,9 +81,9 @@ namespace RenderCore
         /// the window.
         ///
         /// Should not be called between BeginFrame/Present
-        virtual void Resize(
+        virtual void ChangeConfiguration(
             IThreadContext& immediateThreadContext,
-            unsigned newWidth=0, unsigned newHeight=0) = 0;
+            const PresentationChainDesc& desc) = 0;
 
         /// <summary>Returns a context object that will track the size of the viewport</summary>
         virtual PresentationChainDesc GetDesc() const = 0;
