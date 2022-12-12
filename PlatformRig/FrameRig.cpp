@@ -168,6 +168,9 @@ namespace PlatformRig
                 //  It appears that the driver might forget bound constant buffers
                 //  during the begin frame or present
             context->InvalidateCachedState();
+
+            if (_subFrameEvents)
+                _subFrameEvents->_onBeginFrame.Invoke(parserContext);
             
             if (_pimpl->_techniqueContext._pipelineAccelerators) {
                 auto newVisibility = _pimpl->_techniqueContext._pipelineAccelerators->VisibilityBarrier();
@@ -243,7 +246,7 @@ namespace PlatformRig
                 _subFrameEvents->_onPrePresent.Invoke(*context);
 
             if (parserContext._requiredBufferUploadsCommandList)
-                RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(*context, parserContext._requiredBufferUploadsCommandList);
+                RenderCore::Techniques::Services::GetBufferUploads().StallAndMarkCommandListDependency(*context, parserContext._requiredBufferUploadsCommandList);
 
             {
                 RenderCore::Metal::BarrierHelper barrierHelper(*context);

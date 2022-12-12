@@ -385,7 +385,7 @@ namespace UnitTests
 			}
 
 			auto newVisibility = pipelinePool->VisibilityBarrier(visibility._pipelineAcceleratorsVisibility);
-			RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(*threadContext, visibility._bufferUploadsVisibility);
+			RenderCore::Techniques::Services::GetBufferUploads().StallAndMarkCommandListDependency(*threadContext, visibility._bufferUploadsVisibility);
 
 			pipeline = Techniques::TryGetPipeline(*pipelineAccelerator, *cfg, newVisibility);
 			pipelineLayout = Techniques::TryGetCompiledPipelineLayout(*cfg, newVisibility);

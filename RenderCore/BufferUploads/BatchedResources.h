@@ -16,6 +16,7 @@ namespace RenderCore { namespace BufferUploads
 		IResource* _originalResource;
 		std::shared_ptr<IResource> _newResource;
 		std::vector<Utility::RepositionStep> _defragSteps;
+		CommandListID _cmdList = 0;
 	};
 	using EventListID = uint32_t;
 

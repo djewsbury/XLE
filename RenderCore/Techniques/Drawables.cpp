@@ -931,8 +931,9 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	void RepositionableGeometryConduit::HandleRepositions(IteratorRange<const BufferUploads::Event_ResourceReposition*> evnts, bool vb)
+	BufferUploads::CommandListID RepositionableGeometryConduit::HandleRepositions(IteratorRange<const BufferUploads::Event_ResourceReposition*> evnts, bool vb)
 	{
+		BufferUploads::CommandListID result = 0;
 		ScopedLock(_lock);
 		auto& originalAttachedRanges = vb ? _vbAttachedRanges : _ibAttachedRanges;
 		std::vector<std::pair<AttachedRange*, unsigned>> attachedRanges;
@@ -1015,7 +1016,10 @@ namespace RenderCore { namespace Techniques
 						while (r!=attachedRanges.end() && r->first->_geo == (r-1)->first->_geo) ++r;
 					}
 			#endif
+
+			result = std::max(result, evnt._cmdList);
 		}
+		return result;
 	}
 
 	RepositionableGeometryConduit::RepositionableGeometryConduit(std::shared_ptr<BufferUploads::IBatchedResources> vb, std::shared_ptr<BufferUploads::IBatchedResources> ib)
@@ -1028,30 +1032,37 @@ namespace RenderCore { namespace Techniques
 				_ib->TickDefrag();
 			});
 
-		_frameBarrierMarker = Services::GetSubFrameEvents()._onFrameBarrier.Bind(
-			[this]() {
+		_beginFrameMarker = Services::GetSubFrameEvents()._onBeginFrame.Bind(
+			[this](auto& parsingContext) {
+				BufferUploads::CommandListID cmdList = 0;
 				auto nextVb = _vb->EventList_GetPublishedID();
 				if (nextVb > _lastProcessedVB) {
 					auto evntList = _vb->EventList_Get(nextVb);
-					HandleRepositions(evntList, true);
+					auto cl = HandleRepositions(evntList, true);
 					_vb->EventList_Release(nextVb);
 					_lastProcessedVB = nextVb;
+					for (auto e:evntList)
+					cmdList = std::max(cmdList, cl);
 				}
 
 				auto nextIb = _ib->EventList_GetPublishedID();
 				if (nextIb > _lastProcessedIB) {
 					auto evntList = _ib->EventList_Get(nextIb);
-					HandleRepositions(evntList, false);
+					auto cl = HandleRepositions(evntList, false);
 					_ib->EventList_Release(nextIb);
 					_lastProcessedIB = nextIb;
+					cmdList = std::max(cmdList, cl);
 				}
+
+				if (cmdList)
+					parsingContext.RequireCommandList(cmdList);
 			});
 	}
 
 	RepositionableGeometryConduit::~RepositionableGeometryConduit()
 	{
-		if (_frameBarrierMarker != ~0u)
-			Services::GetSubFrameEvents()._onFrameBarrier.Unbind(_frameBarrierMarker);
+		if (_beginFrameMarker != ~0u)
+			Services::GetSubFrameEvents()._onBeginFrame.Unbind(_beginFrameMarker);
 		if (_backgroundFrameMarker != ~0u)
 			Services::GetBufferUploads().UnbindOnBackgroundFrame(_backgroundFrameMarker);
 	}

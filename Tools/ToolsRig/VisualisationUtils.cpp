@@ -589,7 +589,7 @@ namespace ToolsRig
 			auto requiredBufferUploads = parserContext._requiredBufferUploadsCommandList;
 			if (requiredBufferUploads) {
 				auto& bu=RenderCore::Techniques::Services::GetBufferUploads();
-				bu.StallUntilCompletion(threadContext, parserContext._requiredBufferUploadsCommandList);
+				bu.StallAndMarkCommandListDependency(threadContext, parserContext._requiredBufferUploadsCommandList);
 			}
 			
 			auto results = stateContext.GetResults();

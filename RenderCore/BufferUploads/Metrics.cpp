@@ -22,39 +22,38 @@ namespace RenderCore { namespace BufferUploads
 		_bytesUploadTotal = _contextOperations = _deviceCreateOperations = 0;
 		_resolveTime = _commitTime = 0;
 		_waitTime = _processingStart = _processingEnd = 0;
-		_framePriorityStallTime = 0;
 		_batchedUploadBytes = _batchedUploadCount = 0;
 		_wakeCount = 0;
 		_frameId = 0;
 		_retirementCount = 0;
 	}
 
-	CommandListMetrics::CommandListMetrics(const CommandListMetrics& cloneFrom)
+	CommandListMetrics::CommandListMetrics(CommandListMetrics&& moveFrom)
 	{
-		this->operator=(cloneFrom);
+		this->operator=(std::move(moveFrom));
 	}
 
-	const CommandListMetrics& CommandListMetrics::operator=(const CommandListMetrics& cloneFrom)
+	const CommandListMetrics& CommandListMetrics::operator=(CommandListMetrics&& moveFrom)
 	{
-		std::copy(cloneFrom._bytesUploaded, &cloneFrom._bytesUploaded[dimof(cloneFrom._bytesUploaded)], _bytesUploaded);
-		std::copy(cloneFrom._bytesCreated, &cloneFrom._bytesCreated[dimof(cloneFrom._bytesCreated)], _bytesCreated);
-		std::copy(cloneFrom._stagingBytesAllocated, &cloneFrom._stagingBytesAllocated[dimof(cloneFrom._stagingBytesAllocated)], _stagingBytesAllocated);
-		_bytesUploadTotal = cloneFrom._bytesUploadTotal;
-		std::copy(cloneFrom._countCreations, &cloneFrom._countCreations[dimof(cloneFrom._countCreations)], _countCreations);
-		std::copy(cloneFrom._countDeviceCreations, &cloneFrom._countDeviceCreations[dimof(cloneFrom._countDeviceCreations)], _countDeviceCreations);
-		std::copy(cloneFrom._countUploaded, &cloneFrom._countUploaded[dimof(cloneFrom._bytesUploaded)], _countUploaded);
-		_contextOperations = cloneFrom._contextOperations;
-		_deviceCreateOperations = cloneFrom._deviceCreateOperations;
-		_assemblyLineMetrics = cloneFrom._assemblyLineMetrics;
-		_retirementCount = cloneFrom._retirementCount;
-		std::copy(cloneFrom._retirements, &cloneFrom._retirements[std::min(unsigned(dimof(cloneFrom._retirements)), cloneFrom._retirementCount)], _retirements);
-		_retirementsOverflow = cloneFrom._retirementsOverflow;
-		_resolveTime = cloneFrom._resolveTime;
-		_commitTime = cloneFrom._commitTime;
-		_waitTime = cloneFrom._waitTime; _processingStart = cloneFrom._processingStart; _processingEnd = cloneFrom._processingEnd;
-		_framePriorityStallTime = cloneFrom._framePriorityStallTime;
-		_batchedUploadBytes = cloneFrom._batchedUploadBytes; _batchedUploadCount = cloneFrom._batchedUploadCount;
-		_wakeCount = cloneFrom._wakeCount; _frameId = cloneFrom._frameId;
+		std::copy(moveFrom._bytesUploaded, &moveFrom._bytesUploaded[dimof(moveFrom._bytesUploaded)], _bytesUploaded);
+		std::copy(moveFrom._bytesCreated, &moveFrom._bytesCreated[dimof(moveFrom._bytesCreated)], _bytesCreated);
+		std::copy(moveFrom._stagingBytesAllocated, &moveFrom._stagingBytesAllocated[dimof(moveFrom._stagingBytesAllocated)], _stagingBytesAllocated);
+		_bytesUploadTotal = moveFrom._bytesUploadTotal;
+		std::copy(moveFrom._countCreations, &moveFrom._countCreations[dimof(moveFrom._countCreations)], _countCreations);
+		std::copy(moveFrom._countDeviceCreations, &moveFrom._countDeviceCreations[dimof(moveFrom._countDeviceCreations)], _countDeviceCreations);
+		std::copy(moveFrom._countUploaded, &moveFrom._countUploaded[dimof(moveFrom._bytesUploaded)], _countUploaded);
+		_contextOperations = moveFrom._contextOperations;
+		_deviceCreateOperations = moveFrom._deviceCreateOperations;
+		_assemblyLineMetrics = moveFrom._assemblyLineMetrics;
+		_retirementCount = moveFrom._retirementCount;
+		std::copy(moveFrom._retirements, &moveFrom._retirements[std::min(unsigned(dimof(moveFrom._retirements)), moveFrom._retirementCount)], _retirements);
+		_retirementsOverflow = moveFrom._retirementsOverflow;
+		_resolveTime = moveFrom._resolveTime;
+		_commitTime = moveFrom._commitTime;
+		_waitTime = moveFrom._waitTime; _processingStart = moveFrom._processingStart; _processingEnd = moveFrom._processingEnd;
+		_batchedUploadBytes = moveFrom._batchedUploadBytes; _batchedUploadCount = moveFrom._batchedUploadCount;
+		_wakeCount = moveFrom._wakeCount; _frameId = moveFrom._frameId;
+		_exceptionMsg = std::move(moveFrom._exceptionMsg);
 		return *this;
 	}
 

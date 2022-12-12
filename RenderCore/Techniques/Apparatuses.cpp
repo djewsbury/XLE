@@ -185,7 +185,7 @@ namespace RenderCore { namespace Techniques
 		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
 		_prePresentBinding = subFrameEvents._onPrePresent.Bind(
 			[bu=_bufferUploads](RenderCore::IThreadContext& context) {
-				bu->Update(context);
+				bu->OnFrameBarrier(context);
 			});
 
 		_frameBarrierBinding = subFrameEvents._onFrameBarrier.Bind(

@@ -40,7 +40,7 @@ namespace UnitTests
 			locator = RenderCore::BufferUploads::ResourceLocator{
 				newResource,
 				newStart, range.second-range.first,
-				locator.GetPool(), true, RenderCore::BufferUploads::CommandListID_Invalid};
+				locator.GetPool()};
 			return;
 		}
 		
@@ -65,6 +65,7 @@ namespace UnitTests
 				static RenderCore::BufferUploads::EventListID lastProcessed = ~0u;
 				auto evnt = _batchedResources0->EventList_GetPublishedID();
 				if (evnt != lastProcessed) {
+					RenderCore::BufferUploads::CommandListID cmdList = 0;
 					for (auto e:_batchedResources0->EventList_Get(evnt)) {
 						for (auto& o:_allocatedResources.GetRawObjects())
 							if (o.first.GetContainingResource().get() == e._originalResource)
@@ -72,9 +73,12 @@ namespace UnitTests
 						for (auto& o:_longTermAllocations)
 							if (o.first.GetContainingResource().get() == e._originalResource)
 								RepositionLocator(o.first, e._newResource, e._defragSteps);
+						cmdList = std::max(cmdList, e._cmdList);
 					}
 					_batchedResources0->EventList_Release(evnt);
 					lastProcessed = evnt;
+					if (cmdList)
+						parserContext.RequireCommandList(cmdList);
 				}
 			}
 

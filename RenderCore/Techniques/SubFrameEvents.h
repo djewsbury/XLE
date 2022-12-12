@@ -6,7 +6,7 @@
 
 #include "../../Utility/FunctionUtils.h"
 
-namespace RenderCore { class IThreadContext; }
+namespace RenderCore { class IThreadContext; class ParsingContext; }
 namespace RenderCore { namespace Techniques
 {
 	class SubFrameEvents
@@ -15,6 +15,7 @@ namespace RenderCore { namespace Techniques
 		Signal<IThreadContext&> _onPrePresent;
 		Signal<IThreadContext&> _onPostPresent;
 		Signal<> _onFrameBarrier;
+		Signal<ParsingContext&> _onBeginFrame;
 
 		// _onCheckCompleteInitialization is invoked very infrequently,
 		// but once after early startup before rendering the first frame

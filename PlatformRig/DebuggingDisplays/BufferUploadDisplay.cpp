@@ -131,8 +131,7 @@ namespace PlatformRig { namespace Overlays
         enum Enum
         {
             Uploads,
-            CreatesMB, CreatesCount, DeviceCreatesCount, StagingBufferAllocated,
-            FramePriorityStall,     // FillValuesBuffer requires this and the above be in this order
+            CreatesMB, CreatesCount, DeviceCreatesCount, StagingBufferAllocated, // FillValuesBuffer requires this and the above be in this order
             Latency, PendingBuffers, CommandListCount,
             GPUCost, GPUBytesPerSecond, AveGPUCost,
             ThreadActivity, BatchedCopy,
@@ -140,7 +139,7 @@ namespace PlatformRig { namespace Overlays
             StagingMaxNextBlock, StagingAwaitingDevice
         };
         static const char* Names[] = {
-            "Uploads (MB)", "Creates (MB)", "Creates (count)", "Device creates (count)", "Stage Buffer Allocated (MB)", "Frame Priority Stalls", "Latency (s)", "Pending Buffers (MB)", "Command List Count", "GPU Cost", "GPU bytes/second", "Ave GPU cost", "Thread Activity %", "Batched copy", "Statistics", "Recent Retirements", "Stage Max Next Block (MB)", "Stage Awaiting Device (MB)"
+            "Uploads (MB)", "Creates (MB)", "Creates (count)", "Device creates (count)", "Stage Buffer Allocated (MB)", "Latency (s)", "Pending Buffers (MB)", "Command List Count", "GPU Cost", "GPU bytes/second", "Ave GPU cost", "Thread Activity %", "Batched copy", "Statistics", "Recent Retirements", "Stage Max Next Block (MB)", "Stage Awaiting Device (MB)"
         };
 
         std::pair<const char*, std::vector<Enum>> Groups[] = 
@@ -148,7 +147,7 @@ namespace PlatformRig { namespace Overlays
             std::pair<const char*, std::vector<Enum>>("Uploads",    { Uploads, StagingBufferAllocated, StagingMaxNextBlock, StagingAwaitingDevice }),
             std::pair<const char*, std::vector<Enum>>("Creations",  { CreatesMB, CreatesCount, DeviceCreatesCount }),
             std::pair<const char*, std::vector<Enum>>("GPU",        { GPUCost, GPUBytesPerSecond, AveGPUCost }),
-            std::pair<const char*, std::vector<Enum>>("Threading",  { Latency, PendingBuffers, CommandListCount, ThreadActivity, BatchedCopy, FramePriorityStall }),
+            std::pair<const char*, std::vector<Enum>>("Threading",  { Latency, PendingBuffers, CommandListCount, ThreadActivity, BatchedCopy }),
             std::pair<const char*, std::vector<Enum>>("Extra",      { Statistics, RecentRetirements }),
         };
     }
@@ -455,7 +454,7 @@ namespace PlatformRig { namespace Overlays
                 if (i->_commandListStart!=i->_commandListEnd) {
                     value = _recentHistory[i->_commandListEnd-1]._assemblyLineMetrics._queuedBytes[uploadType] / (1024.f*1024.f);
                 }
-            } else if ((graphType >= Uploads && graphType <= FramePriorityStall) || graphType == StagingMaxNextBlock || graphType == StagingAwaitingDevice) {
+            } else if ((graphType >= Uploads && graphType <= StagingBufferAllocated) || graphType == StagingMaxNextBlock || graphType == StagingAwaitingDevice) {
                 for (unsigned cl=i->_commandListStart; cl<i->_commandListEnd; ++cl) {
                     auto& commandList = _recentHistory[cl];
                     if (_graphsMode == Uploads) { // bytes uploaded
@@ -468,8 +467,6 @@ namespace PlatformRig { namespace Overlays
                         value += commandList._countDeviceCreations[uploadType];
                     } else if (_graphsMode == StagingBufferAllocated) {
                         value += commandList._stagingBytesAllocated[uploadType] / (1024.f*1024.f);
-                    } else if (_graphsMode == FramePriorityStall) {
-                        value += float(commandList._framePriorityStallTime * _reciprocalTimerFrequency * 1000.f);
                     } else if (_graphsMode == StagingMaxNextBlock) {
                         value += commandList._assemblyLineMetrics._stagingPageMetrics._maxNextBlockBytes / (1024.f*1024.f);
                     } else if (_graphsMode == StagingAwaitingDevice) {
@@ -771,7 +768,7 @@ namespace PlatformRig { namespace Overlays
     void    BufferUploadDisplay::Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState)
     {
         using namespace RenderCore::BufferUploads;
-        CommandListMetrics mostRecentResults;
+        const CommandListMetrics* mostRecentResults;
         unsigned commandListCount = 0;
 
             //      Keep popping metrics from the upload manager until we stop getting valid ones            
@@ -782,8 +779,6 @@ namespace PlatformRig { namespace Overlays
                 if (!metrics._commitTime) {
                     break;
                 }
-                mostRecentResults = metrics;
-                _recentHistory.push_back(metrics);
                 AddCommandListToFrame(metrics._frameId, unsigned(_recentHistory.size()-1));
                 for (unsigned c=0; c<(unsigned)UploadDataType::Max; ++c) {
                     _accumulatedCreateCount[c] += metrics._countCreations[c];
@@ -791,12 +786,14 @@ namespace PlatformRig { namespace Overlays
                     _accumulatedUploadCount[c] += metrics._countUploaded[c];
                     _accumulatedUploadBytes[c] += metrics._bytesUploaded[c];
                 }
+                _recentHistory.push_back(std::move(metrics));
+                mostRecentResults = &_recentHistory.back();
                 ++commandListCount;
             }
         }
 
-        if (!mostRecentResults._commitTime && _recentHistory.size()) {
-            mostRecentResults = _recentHistory[_recentHistory.size()-1];
+        if (!mostRecentResults && !_recentHistory.empty()) {
+            mostRecentResults = &_recentHistory.back();
         }
 
         {
@@ -812,7 +809,8 @@ namespace PlatformRig { namespace Overlays
         Layout displayArea = layout.AllocateFullWidthFraction(1.f);
 
         if (_graphsMode == GraphTabs::Statistics) {
-            DrawStatistics(context, displayArea, interactables, interfaceState, mostRecentResults);
+            if (mostRecentResults)
+                DrawStatistics(context, displayArea, interactables, interfaceState, *mostRecentResults);
         } else if (_graphsMode == GraphTabs::RecentRetirements) {
             DrawRecentRetirements(context, displayArea, interactables, interfaceState);
         } else {

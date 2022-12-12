@@ -214,14 +214,6 @@ namespace UnitTests
 		return future.Actualize();
 	}
 
-	static void PumpBufferUploads(LightingEngineTestApparatus& testApparatus)
-	{
-		auto& immContext= *testApparatus._metalTestHelper->_device->GetImmediateContext();
-		testApparatus._bufferUploads->Update(immContext);
-		Threading::Sleep(16);
-		testApparatus._bufferUploads->Update(immContext);
-	}
-
 	static void WriteDownsampleInput(
 		LightingEngineTestApparatus& testApparatus, 
 		RenderCore::Techniques::ParsingContext& parsingContext,

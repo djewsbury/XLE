@@ -59,6 +59,17 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             const ResourceLocator& finalResource,
             IDataPacket& initialisationData);
 
+        struct QueueTransfer
+        {
+            const ResourceLocator* _resource;
+            std::optional<BindFlag::BitField> _srcLayout;
+            BindFlag::BitField _dstLayout;
+        };
+        void TransferQueueRelease(IteratorRange<const QueueTransfer*> transfers);
+        void GraphicsQueueAcquire(IteratorRange<const QueueTransfer*> transfers);
+        void PipelineBarrier(IteratorRange<const QueueTransfer*> pipelineBarriers);
+        void MakeResourcesVisibleForGraphics(IteratorRange<const uint64_t*>);
+
         bool CanDirectlyMap(IResource& resource);
 
         std::vector<IAsyncDataSource::SubResource> CalculateUploadList(
@@ -76,9 +87,10 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
             ////////   C O N S T R U C T I O N   ////////
         ResourceUploadHelper(IThreadContext& renderCoreContext);
+        ResourceUploadHelper(IDevice& device, Metal::DeviceContext& metalContext);
         ~ResourceUploadHelper();
 
-        IThreadContext& GetUnderlying() { return *_renderCoreContext; }
+        static ResourceUploadHelper BeginSecondaryCommandList(IThreadContext& renderCoreContext);
 
         #if GFXAPI_TARGET == GFXAPI_DX11
             private: 
@@ -86,10 +98,12 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         #endif
 
     private:
-        IThreadContext*         _renderCoreContext;
+        Metal::DeviceContext*   _metalContext;
+        IDevice*                _device;
+		unsigned 				_copyBufferOffsetAlignment = 1;
     };
 
-    using QueueMarker = unsigned;
+    using QueueMarker = uint64_t;
 
     class StagingPage
     {
@@ -123,7 +137,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         void UpdateConsumerMarker();
         size_t MaxSize() const { return _stagingBufferHeap.HeapSize(); }
 
-        StagingPage(IDevice& device, unsigned size);
+        StagingPage(IThreadContext& threadContext, unsigned size);
         ~StagingPage();
         StagingPage(StagingPage&&) = default;
         StagingPage& operator=(StagingPage&&) = default;
@@ -164,32 +178,42 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     class UploadsThreadContext
     {
     public:
-        void                    ResolveCommandList(CommandListID id);
-        void                    CommitToImmediate(IThreadContext& commitTo, unsigned frameId);
+        void                    QueueToHardware(std::optional<CommandListID> completeCmdList);
+        bool                    AdvanceGraphicsQueue(IThreadContext& commitTo, CommandListID cmdListRequired);
 
         CommandListMetrics      PopMetrics();
-
-        CommandListID           CommandList_GetCommittedToImmediate() const;
-
         CommandListMetrics&     GetMetricsUnderConstruction();
+
+        CommandListID           CommandList_GetReadyForGraphicsQueue() const;
+        std::optional<CommandListID>    CommandList_LatestPendingProcessing() const;
 
         class DeferredOperations;
         DeferredOperations&     GetDeferredOperationsUnderConstruction();
 
-        unsigned                CommitCount_Current();
+        unsigned                FrameId() const;
+        void                    AdvanceFrameId();
 
-        PlatformInterface::StagingPage&     GetStagingPage();
-        PlatformInterface::QueueMarker      GetProducerCmdListSpecificMarker();
+        StagingPage&                        GetStagingPage();
+        void                                UpdateGPUTracking();
+        QueueMarker                         GetProducerCmdListSpecificMarker();
+        std::optional<QueueMarker>          CommandListToHardwareQueueMarker(CommandListID cmdList);
 
-        PlatformInterface::ResourceUploadHelper&    GetResourceUploadHelper() { return _resourceUploadHelper; }
-        IThreadContext&                 GetRenderCoreThreadContext() { return *_underlyingContext; }
-        IDevice&                        GetRenderCoreDevice() { return *_underlyingContext->GetDevice(); }
+        ResourceUploadHelper    GetResourceUploadHelper();
+        ResourceUploadHelper    GetFallbackGraphicsQueueResourceUploadHelper();
+        IThreadContext&         GetRenderCoreThreadContext() { return *_mainContext; }
+        IThreadContext&         GetFallbackGraphicsQueueThreadContext() { return *_fallbackGraphicsQueueContext; }
+        IDevice&                GetRenderCoreDevice() { return *_mainContext->GetDevice(); }
+        bool                    IsDedicatedTransferContext() const;
 
-        UploadsThreadContext(std::shared_ptr<IThreadContext> underlyingContext);
+        UploadsThreadContext(
+            std::shared_ptr<IThreadContext> graphicsQueueContext,
+            std::shared_ptr<IThreadContext> transferQueueContext,
+            bool reserveStagingSpace,
+            bool backgroundContext);
         ~UploadsThreadContext();
     private:
-        std::shared_ptr<IThreadContext> _underlyingContext;
-        PlatformInterface::ResourceUploadHelper _resourceUploadHelper;
+        std::shared_ptr<IThreadContext> _mainContext;
+        std::shared_ptr<IThreadContext> _fallbackGraphicsQueueContext;
 
         struct Pimpl;
         std::unique_ptr<Pimpl> _pimpl;
@@ -214,11 +238,22 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             ~DeferredDefragCopy();
         };
 
+        struct ResourceTransfer
+        {
+            ResourceLocator _resource;
+            BindFlag::BitField _transferQueueLayout = 0;
+            BindFlag::BitField _graphicsQueueLayout = 0;
+            CommandListID _cmdList = 0;
+        };
+
         void Add(DeferredCopy&& copy);
         void Add(DeferredDefragCopy&& copy);
         void AddDelayedDelete(ResourceLocator&& locator);
-        void CommitToImmediate_PreCommandList(IThreadContext& immediateContext);
-        void CommitToImmediate_PostCommandList(IThreadContext& immediateContext);
+        void Add(ResourceTransfer&& transfer);
+
+        void CommitToImmediate_PreCommandList(ResourceUploadHelper& helper);
+        void CommitToImmediate_PostCommandList(ResourceUploadHelper& helper);
+        void CommitToImmediate_ResourceTransfers(ResourceUploadHelper& helper);
         bool IsEmpty() const;
 
         void swap(DeferredOperations& other);
@@ -231,6 +266,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         std::vector<DeferredCopy>       _deferredCopies;
         std::vector<DeferredDefragCopy> _deferredDefragCopies;
         std::vector<ResourceLocator>    _delayedDeletes;
+        std::vector<ResourceTransfer>   _transfers;
     };
 
         /////////////////////////////////////////////////////////////////////
@@ -264,42 +300,23 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     #if GFXAPI_TARGET == GFXAPI_DX11
 		static const bool SupportsResourceInitialisation_Texture = true;
 		static const bool SupportsResourceInitialisation_Buffer = true;
-        static const bool RequiresStagingTextureUpload = false;
-        static const bool RequiresStagingResourceReadBack = true;
-        static const bool CanDoNooverwriteMapInBackground = false;
-        static const bool UseMapBasedDefrag = false;
-        static const bool ContextBasedMultithreading = true;
         static const bool CanDoPartialMaps = false;
     #elif GFXAPI_TARGET == GFXAPI_DX9
 		static const bool SupportsResourceInitialisation_Texture = false;
 		static const bool SupportsResourceInitialisation_Buffer = false;
-        static const bool RequiresStagingTextureUpload = true;
-        static const bool RequiresStagingResourceReadBack = false;
-        static const bool CanDoNooverwriteMapInBackground = true;
-        static const bool UseMapBasedDefrag = true;
-        static const bool ContextBasedMultithreading = false;
         static const bool CanDoPartialMaps = true;
     #elif GFXAPI_TARGET == GFXAPI_OPENGLES
         static const bool SupportsResourceInitialisation_Texture = true;
 		static const bool SupportsResourceInitialisation_Buffer = true;
-        static const bool RequiresStagingTextureUpload = false;
-        static const bool RequiresStagingResourceReadBack = true;
-        static const bool CanDoNooverwriteMapInBackground = false;
-        static const bool UseMapBasedDefrag = false;
-        static const bool ContextBasedMultithreading = true;
         static const bool CanDoPartialMaps = false;
 	#elif GFXAPI_TARGET == GFXAPI_VULKAN
 		// Vulkan capabilities haven't been tested!
 		static const bool SupportsResourceInitialisation_Texture = false;
 		static const bool SupportsResourceInitialisation_Buffer = false;
-		static const bool RequiresStagingTextureUpload = true;
-		static const bool RequiresStagingResourceReadBack = true;
-		static const bool CanDoNooverwriteMapInBackground = true;
 		static const bool UseMapBasedDefrag = false;
-		static const bool ContextBasedMultithreading = true;
 		static const bool CanDoPartialMaps = true;
 	#else
-        #error Unsupported platform!
+        #error Graphics API not configured in ResourceUploadHelper.h
     #endif
 #endif
 

@@ -82,8 +82,21 @@ namespace RenderCore { namespace BufferUploads
 
             /// <summary>Called every frame to update uploads</summary>
             /// Performs once-per-frame tasks. Normally called by the render device once per frame.
-        virtual void                    Update  (IThreadContext& immediateContext) = 0;
-        virtual void                    StallUntilCompletion(IThreadContext& immediateContext, CommandListID id) = 0;
+        virtual void                    OnFrameBarrier(IThreadContext& immediateContext) = 0;
+
+            /// <summary>Ensure a specific cmd list will be ready for commands on the given context</summary>
+            /// Note that this will stall waiting for background CPU processing of the given command list (though CPU
+            /// processing may still be ongoing)
+            /// The command list building built in "context" will be marked with a GPU dependency on GPU processing
+            /// part of the given command list
+        virtual void                    StallAndMarkCommandListDependency(IThreadContext& context, CommandListID id) = 0;
+
+            /// <summary>Returns the highest command list that will not stall in StallAndMarkCommandListDependency</summary>
+            /// If StallAndMarkCommandListDependency() will have no effect (other than marking a GPU dependency), this
+            /// will return empty
+        virtual std::optional<CommandListID>           LatestCommandListPendingProcessing() = 0;
+
+            /// <summary>Returns true iff CPU processing is complete on the given command list</summary>
         virtual bool                    IsComplete (CommandListID id) = 0;
             /// @}
 
@@ -104,11 +117,6 @@ namespace RenderCore { namespace BufferUploads
             /// PopMetrics() will remove the next item from the queue. If there
         /// no more items, "_commitTime" will be 0.
         virtual CommandListMetrics      PopMetrics              () = 0;
-            /// <summary>Sets a barrier for frame priority operations</summary>
-            /// Sets a barrier, which determines the "end of frame" point for
-            /// frame priority operations. This will normally be called from the same
-            /// thread that begins most upload operations.
-        virtual void                    FramePriority_Barrier   () = 0;
             /// @}
 
         virtual unsigned GetGUID() const = 0;
