@@ -30,5 +30,6 @@ namespace RenderCore
     class SubResourceId;
     class PipelineLayoutInitializer;
     class DeviceFeatures;
+	class DeviceLimits;
 }
 

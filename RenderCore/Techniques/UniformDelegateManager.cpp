@@ -13,6 +13,7 @@
 #include "SubFrameUtil.h"
 #include "../BufferView.h"
 #include "../IDevice.h"
+#include "../DeviceInitialization.h"
 #include "../Metal/InputLayout.h"
 #include "../Metal/DeviceContext.h"
 #include "../../OSServices/Log.h"
@@ -408,6 +409,7 @@ namespace RenderCore { namespace Techniques
 		RenderCore::Assets::PredefinedDescriptorSetLayout _descSetLayout;
 		SubFrameDescriptorSetHeap _heap;
 		PipelineType _pipelineType;
+		unsigned _constantBufferAlignment = 1;
 
 		void RebuildDescriptorSet(
 			ParsingContext& parsingContext,
@@ -508,7 +510,7 @@ namespace RenderCore { namespace Techniques
 		tempResViews.resize(delegateHelper._queriedResources.size() + delegateHelper._queriedImmediateDatas.size());
 		if (useCmdListAttachedStorage) {
 			size_t immDataIterator = 0;
-			const unsigned alignment = 0x100;
+			const auto alignment = _constantBufferAlignment;
 			for (auto& slot:bindTypesAndIdx) {
 				if (slot._type != DescriptorSetInitializer::BindType::ImmediateData) continue;
 				auto immData = initializer._bindItems._immediateData[slot._uniformsStreamIdx];
@@ -567,7 +569,9 @@ namespace RenderCore { namespace Techniques
 	: _descSetLayout(layout)
 	, _heap(device, layout.MakeDescriptorSetSignature(&res._samplerPool), pipelineType, Concatenate("[semi-constant] ", name))
 	, _pipelineType(pipelineType)
-	{}
+	{
+		_constantBufferAlignment = device.GetDeviceLimits()._constantBufferOffsetAlignment;
+	}
 
 	SemiConstantDescriptorSet::~SemiConstantDescriptorSet() {}
 

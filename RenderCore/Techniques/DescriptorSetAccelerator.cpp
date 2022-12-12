@@ -16,6 +16,7 @@
 #include "../IDevice.h"
 #include "../UniformsStream.h"
 #include "../StateDesc.h"
+#include "../DeviceInitialization.h"
 #include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Assets/Assets.h"
@@ -161,7 +162,7 @@ namespace RenderCore { namespace Techniques
 		bool applyDeformAcceleratorOffset = false;
 
 		std::vector<uint8_t> cbUploadBuffer;
-		const unsigned cbAlignmentRules = 64;		// todo -- get from device
+		const auto cbAlignmentRules = _device->GetDeviceLimits()._constantBufferOffsetAlignment;
 		std::optional<StringSection<>> cbName;
 
 		char stringMeldBuffer[512];

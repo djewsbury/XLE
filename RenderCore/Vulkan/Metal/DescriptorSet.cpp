@@ -230,6 +230,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto slotType = _signature[descriptorSetBindPoint]._type;
 		assert(_signature[descriptorSetBindPoint]._count == 1);
 		auto vkSlotType = AsVkDescriptorType(slotType);
+		#if defined(_DEBUG)
+			const auto& physDevLimits = GetObjectFactory().GetPhysicalDeviceProperties().limits;
+		#endif
 
 		assert(resourceView.GetVulkanResource());
 		switch (resourceView.GetType()) {
@@ -268,6 +271,12 @@ namespace RenderCore { namespace Metal_Vulkan
 				if (rangeBegin == 0 && rangeSize == 0)
 					rangeSize = VK_WHOLE_SIZE;
 				assert(rangeSize != 0);
+				#if defined(_DEBUG)
+					if (vkSlotType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER || vkSlotType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC)
+						assert((rangeBegin % physDevLimits.minUniformBufferOffsetAlignment) == 0);
+					else
+						assert((rangeBegin % physDevLimits.minStorageBufferOffsetAlignment) == 0);
+				#endif
 				WriteBinding(
 					descriptorSetBindPoint,
 					vkSlotType,
@@ -315,11 +324,24 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(descriptorSetBindPoint < _signature.size());
 		auto slotType = _signature[descriptorSetBindPoint]._type;
 		auto signatureArrayCount = _signature[descriptorSetBindPoint]._count;
+		auto vkSlotType = AsVkDescriptorType(slotType);
 		assert(resources.size() <= signatureArrayCount);
+		#if defined(_DEBUG)
+			const auto& physDevLimits = GetObjectFactory().GetPhysicalDeviceProperties().limits;
+		#endif
 
 		switch (resources[0]->GetType()) {
 		case ResourceView::Type::ImageView:
 			{
+				#if defined(_DEBUG)
+					if (	vkSlotType != VK_DESCRIPTOR_TYPE_SAMPLER
+						&&  vkSlotType != VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+						&&  vkSlotType != VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+						&&  vkSlotType != VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+						&&  vkSlotType != VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT)
+						Throw(std::runtime_error(StringMeld<256>() << "Binding mismatch for shader variable (" << shaderOrDescSetVariable << ") when binding resource (" << (resources[0]->GetVulkanResource() ? resources[0]->GetVulkanResource()->GetName() : StringSection<>{}) << ")"));
+				#endif
+
 				VkDescriptorImageInfo* imageInfos = AllocateInfos<VkDescriptorImageInfo>(resources.size());
 				unsigned minElementIdx = UINT_MAX, maxElementIdx = 0;
 				for (unsigned c=0; c<signatureArrayCount; ++c) {
@@ -345,6 +367,14 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		case ResourceView::Type::BufferAndRange:
 			{
+				#if defined(_DEBUG)
+					if (	vkSlotType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+						&&  vkSlotType != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+						&&  vkSlotType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+						&&  vkSlotType != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC)
+						Throw(std::runtime_error(StringMeld<256>() << "Binding mismatch for shader variable (" << shaderOrDescSetVariable << ") when binding buffer (" << (resources[0]->GetVulkanResource() ? resources[0]->GetVulkanResource()->GetName() : StringSection<>{}) << ")"));
+				#endif
+
 				VkDescriptorBufferInfo* bufferInfos = AllocateInfos<VkDescriptorBufferInfo>(resources.size());
 				unsigned minElementIdx = UINT_MAX, maxElementIdx = 0;
 				for (unsigned c=0; c<signatureArrayCount; ++c) {
@@ -356,6 +386,12 @@ namespace RenderCore { namespace Metal_Vulkan
 						if (rangeBegin == 0 && rangeSize == 0)
 							rangeSize = VK_WHOLE_SIZE;
 						assert(rangeSize != 0);
+						#if defined(_DEBUG)
+							if (vkSlotType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER || vkSlotType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC)
+								assert((rangeBegin % physDevLimits.minUniformBufferOffsetAlignment) == 0);
+							else
+								assert((rangeBegin % physDevLimits.minStorageBufferOffsetAlignment) == 0);
+						#endif
 						bufferInfos[c] = VkDescriptorBufferInfo { resources[c]->GetVulkanResource()->GetBuffer(), rangeBegin, rangeSize };
 						minElementIdx = std::min(minElementIdx, c);
 						maxElementIdx = std::max(maxElementIdx, c);
@@ -375,6 +411,12 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		case ResourceView::Type::BufferView:
 			{
+				#if defined(_DEBUG)
+					if (	vkSlotType != VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER
+						&&  vkSlotType != VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER)
+						Throw(std::runtime_error(StringMeld<256>() << "Binding mismatch for shader variable (" << shaderOrDescSetVariable << ") when binding buffer (" << (resources[0]->GetVulkanResource() ? resources[0]->GetVulkanResource()->GetName() : StringSection<>{}) << ")"));
+				#endif
+
 				VkBufferView* bufferViews = AllocateInfos<VkBufferView>(resources.size());
 				unsigned minElementIdx = UINT_MAX, maxElementIdx = 0;
 				for (unsigned c=0; c<resources.size(); ++c) {

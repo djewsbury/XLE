@@ -1993,6 +1993,18 @@ namespace RenderCore { namespace ImplVulkan
 		pools._mainPipelineCache = objFactory.CreatePipelineCache();
 		pools._dummyResources = Metal_Vulkan::DummyResources(objFactory);
 		pools._temporaryStorageManager = std::make_unique<Metal_Vulkan::TemporaryStorageManager>(objFactory, _graphicsQueue->GetTracker());
+
+		auto& limits = objFactory.GetPhysicalDeviceProperties().limits;
+		_limits._constantBufferOffsetAlignment = limits.minUniformBufferOffsetAlignment;
+		_limits._unorderedAccessBufferOffsetAlignment = limits.minStorageBufferOffsetAlignment;
+		_limits._texelBufferOffsetAlignment = limits.minTexelBufferOffsetAlignment;
+		_limits._copyBufferOffsetAlignment = limits.optimalBufferCopyOffsetAlignment;
+		_limits._maxPushConstantsSize = limits.maxPushConstantsSize;
+		assert(_limits._constantBufferOffsetAlignment != 0);
+		assert(_limits._unorderedAccessBufferOffsetAlignment != 0);
+		assert(_limits._texelBufferOffsetAlignment != 0);
+		assert(_limits._copyBufferOffsetAlignment != 0);
+		assert(_limits._maxPushConstantsSize != 0);
 	}
 
     Device::~Device()
@@ -2273,6 +2285,11 @@ namespace RenderCore { namespace ImplVulkan
 	const DeviceFeatures& Device::GetDeviceFeatures() const
 	{
 		return _globalsContainer->_objectFactory.GetXLEFeatures();
+	}
+
+	const DeviceLimits& Device::GetDeviceLimits() const
+	{
+		return _limits;
 	}
 
 	std::shared_ptr<ICompiledPipelineLayout> Device::CreatePipelineLayout(const PipelineLayoutInitializer& desc, StringSection<> name)

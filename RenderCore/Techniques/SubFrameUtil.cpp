@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "SubFrameUtil.h"
+#include "../DeviceInitialization.h"
 #include "../Metal/DeviceContext.h"
 #include "../../Utility/BitUtils.h"
 
@@ -60,7 +61,7 @@ namespace RenderCore { namespace Techniques
 		for (auto v:newInitializer._bindItems._resourceViews) newResourceViews[rv++] = v;
 
 		size_t immDataTotal = 0;
-		const unsigned cbAlignmentRules = 64;		// todo -- get from device
+		const auto cbAlignmentRules = threadContext.GetDevice()->GetDeviceLimits()._constantBufferOffsetAlignment;
 		for (auto imm:newInitializer._bindItems._immediateData) immDataTotal += CeilToMultiple(imm.size(), cbAlignmentRules);
 		assert(immDataTotal);
 

@@ -188,6 +188,7 @@ namespace RenderCore
         virtual DeviceDesc              GetDesc() = 0;
         virtual uint64_t                GetGUID() const = 0;
         virtual const DeviceFeatures&   GetDeviceFeatures() const = 0;
+		virtual const DeviceLimits&		GetDeviceLimits() const = 0;
         virtual ~IDevice();
     };
 

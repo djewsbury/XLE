@@ -107,6 +107,16 @@ namespace RenderCore
         PhysicalDeviceType _physicalDeviceType = PhysicalDeviceType::Unknown;
     };
 
+	class DeviceLimits
+	{
+	public:
+		uint32_t _constantBufferOffsetAlignment = 1;
+		uint32_t _unorderedAccessBufferOffsetAlignment = 1;
+		uint32_t _texelBufferOffsetAlignment = 1;
+		uint32_t _copyBufferOffsetAlignment = 1;
+		uint32_t _maxPushConstantsSize = 1;
+	};
+
 	using InstanceCreationFunction = std::shared_ptr<IAPIInstance>(const APIFeatures&);
 	void RegisterInstanceCreationFunction(
 		UnderlyingAPI api,
