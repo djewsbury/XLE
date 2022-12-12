@@ -104,3 +104,4 @@ project.xcworkspace/
 build/
 .ccls-cache/
 compile_commands.json
+CMakeUserPresets.json
