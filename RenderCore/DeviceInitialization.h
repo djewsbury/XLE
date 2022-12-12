@@ -74,9 +74,10 @@ namespace RenderCore
         // Resource types
         bool _cubemapArrays = false;
 
-        // Query types
+        // Query & scheduling types
         bool _queryShaderInvocation = false;        // for QueryPool::Type::ShaderInvocations
         bool _queryStreamOutput = false;            // for QueryPool::Type::StreamOutput_Stream0 (etc)
+        bool _timelineSemaphore = false;
 
         // Additional shader instructions
         bool _shaderImageGatherExtended = false;

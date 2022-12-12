@@ -182,7 +182,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		for (auto i = _oversizedAllocations.begin(); i!=_oversizedAllocations.end();) {
 			auto& page = **i;
 			assert(!page._markedDestroys.empty());
-			if (_gpuTracker->GetSpecificMarkerStatus(page._markedDestroys.front()._marker) == IAsyncTracker::MarkerStatus::ConsumerCompleted) {
+			auto status = _gpuTracker->GetSpecificMarkerStatus(page._markedDestroys.front()._marker);
+			if (status == IAsyncTracker::MarkerStatus::ConsumerCompleted || status == IAsyncTracker::MarkerStatus::Abandoned) {
 				page._markedDestroys.pop_front();
 				assert(page._markedDestroys.empty());
 				// we use AllocationRules::DisableSafeDestruction, so the GPU memory should be immediately freed when we do this

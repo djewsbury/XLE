@@ -17,5 +17,9 @@ namespace RenderCore { namespace Metal_Vulkan
             _beginLabel = (PFN_vkCmdBeginDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkCmdBeginDebugUtilsLabelEXT");
             _endLabel = (PFN_vkCmdEndDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT");
         #endif
+
+        _getSemaphoreCounterValue = (PFN_vkGetSemaphoreCounterValueKHR)vkGetInstanceProcAddr(instance, "vkGetSemaphoreCounterValueKHR");
+        _signalSemaphore = (PFN_vkSignalSemaphoreKHR)vkGetInstanceProcAddr(instance, "vkSignalSemaphoreKHR");
+        _waitSemaphores = (PFN_vkWaitSemaphoresKHR)vkGetInstanceProcAddr(instance, "vkWaitSemaphoresKHR");
     }
 }}

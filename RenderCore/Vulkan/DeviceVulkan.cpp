@@ -16,7 +16,7 @@
 #include "Metal/State.h"
 #include "Metal/ExtensionFunctions.h"
 #include "Metal/AsyncTracker.h"
-#include "Metal/SubmissionQueue.h"
+#include "Metal/CommandList.h"
 #include "../../OSServices/Log.h"
 #include "../../ConsoleRig/GlobalServices.h"		// (for GetLibVersionDesc())
 #include "../../OSServices/AttachableLibrary.h"		// (for GetLibVersionDesc())
@@ -1422,6 +1422,9 @@ namespace RenderCore { namespace ImplVulkan
 			deviceExtensions[deviceExtensionCount++] = VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME;
 		if (xleFeatures._textureCompressionASTC_HDR)
 			deviceExtensions[deviceExtensionCount++] = VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME;
+
+		if (xleFeatures._timelineSemaphore)
+			deviceExtensions[deviceExtensionCount++] = VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME;	// because it's used internally, it's always required (promoted into Vulkan 1.2)
 		deviceExtensions[deviceExtensionCount++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 
 		if (enableDebugLayer)
@@ -1646,6 +1649,7 @@ namespace RenderCore { namespace ImplVulkan
 		bool hasStreamOutputExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME); }) != ext._extensions.end();
 		bool hasASTCHDRExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME); }) != ext._extensions.end();
 		bool hasConservativeRasterExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME); }) != ext._extensions.end();
+		bool hasTimelineSemaphoreExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME); }) != ext._extensions.end();
 
 		DeviceFeatures result;
 
@@ -1673,6 +1677,7 @@ namespace RenderCore { namespace ImplVulkan
 		result._queryShaderInvocation = features.features.pipelineStatisticsQuery;
 		if (hasStreamOutputExt)
 			result._queryStreamOutput = VkPhysicalDeviceTransformFeedbackPropertiesEXT_inst.transformFeedbackQueries;
+		result._timelineSemaphore = hasTimelineSemaphoreExt;
 
 		// Additional shader instructions
 		result._shaderImageGatherExtended = features.features.shaderImageGatherExtended;
@@ -1994,6 +1999,8 @@ namespace RenderCore { namespace ImplVulkan
     {
 		_foregroundPrimaryContext.reset();
 		_destrQueue = nullptr;
+		_graphicsQueue = nullptr;
+		_dedicatedTransferQueue = nullptr;
         _globalsContainer = nullptr;
     }
 
@@ -2147,15 +2154,14 @@ namespace RenderCore { namespace ImplVulkan
 		//		only check at most a single window for compatibility
         VkBool32 supportsPresent = false;
 		auto res = vkGetPhysicalDeviceSurfaceSupportKHR(
-			_physDev._dev, _physDev._graphicsQueueFamily, surface.get(), &supportsPresent);
+			_physDev._dev, _graphicsQueue->GetQueueFamilyIndex(), surface.get(), &supportsPresent);
 		if (res != VK_SUCCESS || !supportsPresent) 
             Throw(::Exceptions::BasicLabel("Presentation surface is not compatible with selected physical device. This may occur if the wrong physical device is selected, and it cannot render to the output window."));
         
-        auto finalChain = std::make_unique<PresentationChain>(
+        return std::make_unique<PresentationChain>(
 			shared_from_this(),
             _globalsContainer->_objectFactory, std::move(surface), desc,
-			_graphicsQueue.get(), _physDev._graphicsQueueFamily, platformValue);
-        return std::move(finalChain);
+			_graphicsQueue.get(), platformValue);
     }
 
     std::shared_ptr<IThreadContext> Device::GetImmediateContext()
@@ -2489,13 +2495,12 @@ namespace RenderCore { namespace ImplVulkan
         VulkanSharedPtr<VkSurfaceKHR> surface, 
 		const PresentationChainDesc& requestDesc,
 		Metal_Vulkan::SubmissionQueue* submissionQueue,
-		unsigned queueFamilyIndex,
         const void* platformValue)
     : _surface(std::move(surface))
     , _vulkanDevice(factory.GetDevice())
     , _factory(&factory)
 	, _submissionQueue(submissionQueue)
-	, _primaryBufferPool(factory, queueFamilyIndex, true, nullptr)
+	, _primaryBufferPool(factory, submissionQueue->GetQueueFamilyIndex(), true, nullptr)
 	, _originalRequestBindFlags(requestDesc._bindFlags)
 	, _originalRequestFormat(requestDesc._format)
 	, _device(std::move(device))
@@ -2547,15 +2552,9 @@ namespace RenderCore { namespace ImplVulkan
 
     //////////////////////////////////////////////////////////////////////////////////////////////////
 
-	Metal_Vulkan::IAsyncTracker::Marker ThreadContext::QueuePrimaryContext(IteratorRange<const VkSemaphore*> completionSignals)
+	void ThreadContext::AddPreFrameCommandList(Metal_Vulkan::CommandList&& cmdList)
 	{
-		auto immediateCommands = _metalContext->ResolveCommandList();
-		return CommitPrimaryCommandBufferToQueue_Internal(*immediateCommands, completionSignals);
-	}
-
-	void ThreadContext::CommitPrimaryCommandBufferToQueue(Metal_Vulkan::CommandList& cmdList)
-	{
-		CommitPrimaryCommandBufferToQueue_Internal(cmdList, {});
+		_interimCmdLists.emplace_back(std::move(cmdList));
 	}
 
 	float ThreadContext::GetThreadingPressure()
@@ -2563,50 +2562,78 @@ namespace RenderCore { namespace ImplVulkan
 		return _submissionQueue->GetTracker()->GetThreadingPressure();
 	}
 
-	unsigned ThreadContext::GetCmdListSpecificMarker()
+	bool ThreadContext::IsDedicatedTransferContext()
 	{
-		if (!_metalContext || !_metalContext->HasActiveCommandList())
-			return 0;
-		return _metalContext->GetActiveCommandList().GetPrimaryTrackerMarker();
+		return _submissionQueue->GetQueueFamilyIndex() == _factory->_dedicatedTransferQueueFamily;
 	}
 
-	void ThreadContext::AttachNameToCmdList(std::string name)
+	auto ThreadContext::GetCommandListSpecificMarker() -> std::pair<VkSemaphore, CommandListMarker>
+	{
+		if (auto* ft = dynamic_cast<Metal_Vulkan::FenceBasedTracker*>(_submissionQueue->GetTracker().get())) {
+			assert(0);	// not supported, since the interface only returns a semaphore
+			return { nullptr, 0 };
+		} else {
+			auto& st = *checked_cast<Metal_Vulkan::SemaphoreBasedTracker*>(_submissionQueue->GetTracker().get());
+			return { st.GetSemaphore(), st.GetProducerMarker() };
+		}
+	}
+
+	std::shared_ptr<Metal_Vulkan::IAsyncTracker> ThreadContext::GetQueueTracker()
+	{
+		return _submissionQueue->GetTracker();
+	}
+
+	void ThreadContext::UpdateGPUTracking()
+	{
+		_submissionQueue->GetTracker()->UpdateConsumer();
+	}
+
+	void ThreadContext::AttachNameToCommandList(std::string name)
 	{
 		assert(_metalContext && _metalContext->HasActiveCommandList());
 		if (!_metalContext || !_metalContext->HasActiveCommandList())
 			return;
-		checked_cast<Metal_Vulkan::FenceBasedTracker*>(&_metalContext->GetActiveCommandList().GetAsyncTracker())->
-			AttachName(_metalContext->GetActiveCommandList().GetPrimaryTrackerMarker(), std::move(name));
+		_submissionQueue->GetTracker()->AttachName(
+			_metalContext->GetActiveCommandList().GetPrimaryTrackerMarker(), std::move(name));
 	}
 
-	Metal_Vulkan::IAsyncTracker::Marker ThreadContext::CommitPrimaryCommandBufferToQueue_Internal(
-		Metal_Vulkan::CommandList& cmdList,
-		IteratorRange<const VkSemaphore*> completionSignals)
+	Metal_Vulkan::IAsyncTracker::Marker ThreadContext::CommitToQueue_Internal(
+		IteratorRange<const std::pair<VkSemaphore, uint64_t>*> waitBeforeBegin,
+		IteratorRange<const std::pair<VkSemaphore, uint64_t>*> completionSignals)
 	{
-		if (!_interimCommandBufferComplete)
-			_interimCommandBufferComplete = _factory->CreateSemaphore();
-
-		VkSemaphore waitSema[2];
-		VkPipelineStageFlags waitStages[2];
+		using TimelineSemaPair = std::pair<VkSemaphore, uint64_t>;
+		VLA_UNSAFE_FORCE(TimelineSemaPair, waitSema, waitBeforeBegin.size()+2);
+		VLA(VkPipelineStageFlags, waitStages, waitBeforeBegin.size()+2);
 		unsigned waitCount = 0;
-		if (_nextQueueShouldWaitOnAcquire != VK_NULL_HANDLE) {
-			waitSema[waitCount] = _nextQueueShouldWaitOnAcquire;
+
+		for (auto c:waitBeforeBegin) {
+			waitSema[waitCount] = c;
 			waitStages[waitCount] = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 			++waitCount;
 		}
-		if (_nextQueueShouldWaitOnInterimBuffer) {
-			waitSema[waitCount] = _interimCommandBufferComplete.get();
+
+		if (_nextQueueShouldWaitOnAcquire != VK_NULL_HANDLE) {
+			waitSema[waitCount] = {_nextQueueShouldWaitOnAcquire, 0};
 			waitStages[waitCount] = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 			++waitCount;
 		}
 		_nextQueueShouldWaitOnAcquire = VK_NULL_HANDLE;
-		_nextQueueShouldWaitOnInterimBuffer = false;
 
-		auto result = _submissionQueue->Submit(
-			cmdList,
-			completionSignals,
+		// _interimCmdLists always come before "cmdList"
+		// _interimCmdLists will be cleared regardless of whether or not _submissionQueue->Submit throws
+		auto interimLists = std::move(_interimCmdLists);
+		auto result = interimLists.back().GetPrimaryTrackerMarker();
+		VLA(Metal_Vulkan::CommandList*, cmdLists, interimLists.size());
+		unsigned cmdListsCount = 0;
+		for (auto& c:interimLists) cmdLists[cmdListsCount++] = &c;
+
+		_submissionQueue->Submit(
+			MakeIteratorRange(cmdLists, &cmdLists[cmdListsCount]),
 			MakeIteratorRange(waitSema, &waitSema[waitCount]),
-			MakeIteratorRange(waitStages, &waitStages[waitCount]));
+			MakeIteratorRange(waitStages, &waitStages[waitCount]),
+			completionSignals);
+
+		assert(result && result != ~0u);
 		return result;
 	}
 
@@ -2617,28 +2644,11 @@ namespace RenderCore { namespace ImplVulkan
 		// the immediate metal context over to using the "primary buffer" associated
 		// with the swap chain.
 		//
-		// So if we have any existing command list content, that's got to be submitted
-		// to the queue, and it must be processed before we get onto the main primary
-		// buffer content. That requires some more submit and 
-		//
-		// Most clients would be better off using a different DeviceContext for the commands
-		// in this buffer. These commands might be (for example) for initialization, or
-		// even drawing to a shadow texture or something like that. If so, we don't necessarily
-		// want to delay all commands in the primary buffer until this one is complete. It
-		// would be better to synchronize only those parts that rely on the resources
-		// writen to by this buffer. That's something we can do, by separating it out
-		// into a different context
+		// To avoid another call to VkSubmit (which is discouraged by the spec),
+		// we can store the cmd list and submit it along with the primary command list
 		if (_metalContext->HasActiveCommandList()) {
-			if (!_interimCommandBufferComplete)
-				_interimCommandBufferComplete = _factory->CreateSemaphore();
-			TRY {
-				VkSemaphore signalSema[] = { _interimCommandBufferComplete.get() };
-				QueuePrimaryContext(MakeIteratorRange(signalSema));
-				_nextQueueShouldWaitOnInterimBuffer = true;
-			} CATCH (const std::exception& e) {
-				Log(Warning) << "Failure while submitting queue in BeginFrame(): " << e.what() << std::endl;
-				_nextQueueShouldWaitOnInterimBuffer = false;
-			} CATCH_END
+			auto cmdList = _metalContext->ResolveCommandList();
+			_interimCmdLists.emplace_back(std::move(*cmdList));
 		}
 
 		PresentationChain* swapChain = checked_cast<PresentationChain*>(&presentationChain);
@@ -2660,13 +2670,16 @@ namespace RenderCore { namespace ImplVulkan
 		auto* swapChain = checked_cast<PresentationChain*>(&chain);
 		auto& syncs = swapChain->GetSyncs();
 		assert(!syncs._presentFence);
+		assert(_metalContext->HasActiveCommandList());
 
 		//////////////////////////////////////////////////////////////////
 
-		VkSemaphore commandBufferSignals[] = { syncs._onCommandBufferComplete.get() };
+		std::pair<VkSemaphore, uint64_t> commandBufferSignal = std::make_pair(syncs._onCommandBufferComplete.get(), 0);
 		bool commandBufferSubmitted = false;
 		TRY {
-			syncs._presentFence = QueuePrimaryContext(MakeIteratorRange(commandBufferSignals));
+			auto immediateCommands = _metalContext->ResolveCommandList();
+			_interimCmdLists.emplace_back(std::move(*immediateCommands));
+			syncs._presentFence = CommitToQueue_Internal({}, MakeIteratorRange(&commandBufferSignal, &commandBufferSignal+1));
 			commandBufferSubmitted = true;
 		} CATCH(const std::exception& e) {
 			Log(Warning) << "Failure during queue submission for present: " << e.what() << std::endl;
@@ -2678,7 +2691,7 @@ namespace RenderCore { namespace ImplVulkan
 		// Finally, we can queue the present
 		//		-- do it here to allow it to run in parallel as much as possible
 		if (commandBufferSubmitted) {
-			swapChain->PresentToQueue(*_submissionQueue, MakeIteratorRange(commandBufferSignals));
+			swapChain->PresentToQueue(*_submissionQueue, MakeIteratorRange(&commandBufferSignal.first, &commandBufferSignal.first+1));
 		} else {
 			swapChain->PresentToQueue(*_submissionQueue, {});
 		}
@@ -2693,25 +2706,24 @@ namespace RenderCore { namespace ImplVulkan
 		// now; but also any other command buffers that have already been submitted
 		// and are still being processed
 		bool waitForCompletion = !!(flags & CommitCommandsFlags::WaitForCompletion);
-		if (_metalContext->HasActiveCommandList()) {
-			if (!_interimCommandBufferComplete)
-				_interimCommandBufferComplete = _factory->CreateSemaphore();
-
-			VkSemaphore signalSema[] = { _interimCommandBufferComplete.get() };
+		if (_metalContext->HasActiveCommandList() || !_interimCmdLists.empty()) {
 			Metal_Vulkan::IAsyncTracker::Marker fenceToWaitFor;
 			TRY {
-				fenceToWaitFor = QueuePrimaryContext(MakeIteratorRange(signalSema));
-				_nextQueueShouldWaitOnInterimBuffer = true;
+				if (_metalContext->HasActiveCommandList()) {
+					auto immediateCommands = _metalContext->ResolveCommandList();
+					_interimCmdLists.emplace_back(std::move(*immediateCommands));
+				}
+				fenceToWaitFor = CommitToQueue_Internal({}, {});
 			} CATCH (const std::exception& e) {
 				Log(Warning) << "Failure during queue submission in CommitCommands:" << e.what() << std::endl;
-				_nextQueueShouldWaitOnInterimBuffer = false;
 				waitForCompletion = false;
 			} CATCH_END
 
 			if (waitForCompletion)
 				_submissionQueue->WaitForFence(fenceToWaitFor);
 		} else {
-			// note tht if we don't have an active command list, and flags is WaitForCompletion, we still don't actually wait for the GPU to catchup to any previously committed command lists
+			// note that if we don't have an active command list, and flags is WaitForCompletion, we still don't actually wait
+			// for the GPU to catchup to any previously committed command lists
 			// however, we still flush out the destruction queues, etc
 		}
 
@@ -2726,6 +2738,7 @@ namespace RenderCore { namespace ImplVulkan
 	{
 		if (_destrQueue) {
 			_submissionQueue->GetTracker()->UpdateConsumer();
+
 			_destrQueue->Flush();
 			_globalPools->_mainDescriptorPool.FlushDestroys();
 			_globalPools->_longTermDescriptorPool.FlushDestroys();

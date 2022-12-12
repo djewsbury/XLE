@@ -62,6 +62,36 @@ namespace RenderCore { namespace Metal_Vulkan
         return std::move(result);
     }
 
+    VulkanUniquePtr<VkSemaphore> ObjectFactory::CreateTimelineSemaphore(uint64_t initialValue) const
+    {
+        if (!_xleFeatures._timelineSemaphore)
+            Throw(std::runtime_error("Attempting to create a timeline semaphore when the corresponding device feature is disabled"));
+
+        VkSemaphoreCreateInfo createInfo = {};
+        createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        createInfo.pNext = nullptr;
+        createInfo.flags = 0;
+
+        VkSemaphoreTypeCreateInfo typeInfo = {};
+        typeInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+        typeInfo.pNext = nullptr;
+        typeInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+        typeInfo.initialValue = initialValue;
+        createInfo.pNext = &typeInfo;
+
+        auto d = _destruction.get();
+        VkSemaphore rawPtr = nullptr;
+        auto res = vkCreateSemaphore(
+            _device.get(), &createInfo,
+            g_allocationCallbacks, &rawPtr);
+        VulkanUniquePtr<VkSemaphore> result(
+            rawPtr,
+            [d](VkSemaphore sem) { d->Destroy(sem); });
+        if (res != VK_SUCCESS)
+            Throw(VulkanAPIFailure(res, "Failure while creating Vulkan timeline semaphore"));
+        return std::move(result);
+    }
+
 	VulkanUniquePtr<VkEvent> ObjectFactory::CreateEvent() const
 	{
 		VkEventCreateInfo createInfo = {};
@@ -596,6 +626,10 @@ namespace RenderCore { namespace Metal_Vulkan
 	ObjectFactory::ObjectFactory() {}
 	ObjectFactory::~ObjectFactory() 
     {
+        if (_immediateDestruction)
+            _immediateDestruction->Flush(IDestructionQueue::FlushFlags::DestroyAll|IDestructionQueue::FlushFlags::ReleaseTracker);
+        if (_destruction)
+            _destruction->Flush(IDestructionQueue::FlushFlags::DestroyAll|IDestructionQueue::FlushFlags::ReleaseTracker);
         _immediateDestruction.reset();
         _destruction.reset();
         #if defined(_DEBUG)
@@ -779,6 +813,10 @@ namespace RenderCore { namespace Metal_Vulkan
 
     void    DeferredDestruction::Flush(FlushFlags::BitField flags)
     {
+        if (flags & FlushFlags::ReleaseTracker) {
+            assert(flags & FlushFlags::DestroyAll);
+            _gpuTracker.reset();    // release because this can contain destruction queue objects as well
+        }
 		auto marker = (flags & FlushFlags::DestroyAll) ? ~0u : _gpuTracker->GetConsumerMarker();
         FlushQueue<0>(marker);
         FlushQueue<1>(marker);

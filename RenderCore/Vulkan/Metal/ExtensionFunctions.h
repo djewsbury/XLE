@@ -22,6 +22,10 @@ namespace RenderCore { namespace Metal_Vulkan
             PFN_vkCmdEndDebugUtilsLabelEXT _endLabel = nullptr;
         #endif
 
+        PFN_vkGetSemaphoreCounterValueKHR _getSemaphoreCounterValue = nullptr;
+        PFN_vkSignalSemaphoreKHR _signalSemaphore = nullptr;
+        PFN_vkWaitSemaphoresKHR _waitSemaphores = nullptr;
+
         ExtensionFunctions(VkInstance instance);
     };
 }}

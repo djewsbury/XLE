@@ -11,26 +11,44 @@
 #include <optional>
 #include <chrono>
 #include <vector>
+#include <deque>
 #include <thread>
 
 namespace RenderCore { namespace Metal_Vulkan
 {
-	class FenceBasedTracker : public IAsyncTracker
+	class ExtensionFunctions;
+
+	class IAsyncTrackerVulkan : public IAsyncTracker
+	{
+	public:
+		virtual Marker AllocateMarkerForNewCmdList() = 0;
+		virtual void AbandonMarkers(IteratorRange<const Marker*> markers) = 0;
+
+		///< returns true iff the marker has completed, or false if we timed out waiting for it
+		virtual bool WaitForSpecificMarker(Marker marker, std::optional<std::chrono::nanoseconds> timeout = {}) = 0; 
+
+		virtual float GetThreadingPressure() = 0;
+		virtual void AttachName(Marker marker, std::string name) = 0;
+
+		virtual void UpdateConsumer() = 0;
+	};
+
+	class FenceBasedTracker : public IAsyncTrackerVulkan
 	{
 	public:
 		virtual Marker GetConsumerMarker() const override { return _lastCompletedConsumerFrameMarker; }
 		virtual Marker GetProducerMarker() const override { return _currentProducerFrameMarker; }
 		virtual MarkerStatus GetSpecificMarkerStatus(Marker) const override;
 
-		Marker IncrementProducerFrame();
-		VkFence OnSubmitToQueue(IteratorRange<const Marker*> marker);
-		void AbandonMarker(Marker);
+		Marker AllocateMarkerForNewCmdList() override;
+		VkFence OnSubmitToQueue(IteratorRange<const Marker*> markers);
+		void AbandonMarkers(IteratorRange<const Marker*> markers) override;
 
-		void UpdateConsumer();
-		bool WaitForFence(Marker marker, std::optional<std::chrono::nanoseconds> timeout = {});	///< returns true iff the marker has completed, or false if we timed out waiting for it
+		void UpdateConsumer() override;
+		bool WaitForSpecificMarker(Marker marker, std::optional<std::chrono::nanoseconds> timeout) override;
 
-		float GetThreadingPressure();
-		void AttachName(Marker marker, std::string name);
+		float GetThreadingPressure() override;
+		void AttachName(Marker marker, std::string name) override;
 
 		FenceBasedTracker(ObjectFactory& factory, unsigned queueDepth);
 		~FenceBasedTracker();
@@ -54,10 +72,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		{
 			Marker _marker;
 			std::chrono::steady_clock::time_point _beginTime;
+			std::thread::id _threadInitiated;
 			std::string _name;
 		};
 		std::vector<TrackerWritingCommands> _trackersWritingCommands;				// protected by _trackersWritingCommandsLock
-		std::vector<unsigned> _trackersPendingAbandon;				// protected by _trackersWritingCommandsLock
+		std::vector<Marker> _trackersPendingAbandon;				// protected by _trackersWritingCommandsLock
 		bool _initialMarker = false;								// protected by _trackersWritingCommandsLock
 		Threading::Mutex _trackersWritingCommandsLock;
 
@@ -72,13 +91,88 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkFence FindAvailableFence(IteratorRange<const Marker*> marker, std::unique_lock<Threading::Mutex>& lock);
 	};
 
+	class SemaphoreBasedTracker : public IAsyncTrackerVulkan
+	{
+	public:
+		virtual Marker GetConsumerMarker() const override { return _lastCompletedConsumerFrameMarker; }
+		virtual Marker GetProducerMarker() const override { return _currentProducerFrameMarker; }
+		virtual MarkerStatus GetSpecificMarkerStatus(Marker) const override;
+
+		Marker AllocateMarkerForNewCmdList() override;
+		void AbandonMarkers(IteratorRange<const Marker*> markers) override;
+
+		void UpdateConsumer() override;
+
+		bool WaitForSpecificMarker(Marker marker, std::optional<std::chrono::nanoseconds> timeout) override;
+		float GetThreadingPressure() override;
+		void AttachName(Marker marker, std::string name) override;
+
+		VkSemaphore GetSemaphore() const { return _semaphore.get(); }
+		VkSemaphore GetSubmitSemaphore() const { return _submitSemaphore.get(); }
+
+		SemaphoreBasedTracker(ObjectFactory& factory);
+		~SemaphoreBasedTracker();
+	private:
+		VulkanUniquePtr<VkSemaphore> _semaphore;
+		VulkanUniquePtr<VkSemaphore> _submitSemaphore;
+		ExtensionFunctions* _extFn;
+
+		enum class State { SubmittedToQueue, Abandoned, Unused }; 
+		struct Tracker
+		{
+			Marker _frameMarker = Marker_Invalid;
+			State _state = State::Unused;
+		};
+		std::vector<Tracker> _trackersSubmittedPendingOrdering;		// protected by _trackersSubmittedToQueueLock
+		mutable Threading::Mutex _trackersSubmittedToQueueLock;
+
+		struct TrackerWritingCommands
+		{
+			Marker _marker;
+			std::chrono::steady_clock::time_point _beginTime;
+			std::thread::id _threadInitiated;
+			std::string _name;
+		};
+		std::vector<TrackerWritingCommands> _trackersWritingCommands;		// protected by _trackersWritingCommandsLock
+		bool _currentProducerFrameMarkerAdvancedBeforeAllocation = false;	// protected by _trackersWritingCommandsLock
+		Threading::Mutex _trackersWritingCommandsLock;
+
+		// [1, _lastCompletedConsumerFrameMarker] -> GPU finished all processing already
+		// (_lastCompletedConsumerFrameMarker, _lastQueuedInOrder] -> all queued or abandoned (though _lastSubmittedInOrder must be queued)
+		// (_lastQueuedInOrder, _trailingAbandons] ->  all abandoned, not expecting any GPU updates on these
+		// (_lastTrailingAbandons, _currentProducerFrameMarker] -> CPU writing commands, or queued out of order
+
+		std::atomic<uint64_t> _currentProducerFrameMarker;
+		std::atomic<uint64_t> _lastCompletedConsumerFrameMarker;
+		std::atomic<uint64_t> _lastCompletedSubmitSemaphoreValue;
+		std::atomic<uint64_t> _nextSubmitSemaphoreValue;
+
+		uint64_t _lastQueuedInOrder;		// protected by _trackersSubmittedToQueueLock
+		uint64_t _trailingAbandons;			// protected by _trackersSubmittedToQueueLock
+		VkDevice _device;
+
+		uint64_t ProcessMarkers(IteratorRange<const Marker*> markers, State newState, uint64_t newSubmitSemaphoreValue);
+
+		using MarkerToSubmitSemaphore = std::pair<Marker, uint64_t>;
+		std::deque<MarkerToSubmitSemaphore> _submitSemaphoreValuesAndMarkers;		// protected by _trackersSubmittedToQueueLock
+
+		// SubmissionQueue related interface
+		friend class SubmissionQueue;
+		struct SubmissionInfo
+		{
+			Marker _maxInorderMarker = 0;
+			uint64_t _submitSemaphoreValue = 0;
+		};
+		SubmissionInfo OnSubmitToQueue(IteratorRange<const Marker*> markers);
+	};
+
 	class EventBasedTracker : public IAsyncTracker
 	{
 	public:
 		virtual Marker GetConsumerMarker() const { return _lastConsumerFrame; }
 		virtual Marker GetProducerMarker() const { return _currentProducerFrame; }
 
-		void IncrementProducerFrame();
+		void AllocateMarkerForNewCmdList();
 		void SetConsumerEndOfFrame(DeviceContext&);
 		void UpdateConsumer();
 

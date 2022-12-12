@@ -8,10 +8,15 @@
 #include "CmdListAttachedStorage.h"
 #include "ObjectFactory.h"
 #include "IncludeVulkan.h"
+#include "../../../Utility/Threading/Mutex.h"
+#include "../../../Utility/IteratorUtils.h"
 #include <vector>
+#include <memory>
 
 namespace RenderCore { namespace Metal_Vulkan
 {
+	class IAsyncTrackerVulkan;
+
 	class CommandList
 	{
 	public:
@@ -92,14 +97,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		const VulkanSharedPtr<VkCommandBuffer>& GetUnderlying() const { return _underlying; }
 		CmdListAttachedStorage& GetCmdListAttachedStorage() { return _attachedStorage; }
 
-		struct SubmissionResult
-		{
-			VkFence _fence;
-			VulkanSharedPtr<VkCommandBuffer> _cmdBuffer;
-			std::vector<IAsyncTracker::Marker> _asyncTrackerMarkers;
-		};
-		SubmissionResult OnSubmitToQueue();
-		IAsyncTracker& GetAsyncTracker() { return *_asyncTracker; }
+		IAsyncTrackerVulkan& GetAsyncTracker() { return *_asyncTracker; }
 		IAsyncTracker::Marker GetPrimaryTrackerMarker() const;
 
 		void RequireResourceVisbility(IteratorRange<const uint64_t*> resourceGuids);
@@ -107,12 +105,15 @@ namespace RenderCore { namespace Metal_Vulkan
 		void MakeResourcesVisible(IteratorRange<const uint64_t*> resourceGuids);
 		void ValidateCommitToQueue(ObjectFactory& factory);
 
+		void AddWaitBeforeBegin(VulkanSharedPtr<VkSemaphore> semaphore, uint64_t value=0);
+		void AddSignalOnCompletion(VulkanSharedPtr<VkSemaphore> semaphore, uint64_t value=0);
+
 		void ExecuteSecondaryCommandList(CommandList&& cmdList);
 
 		CommandList();
 		CommandList(
 			VulkanSharedPtr<VkCommandBuffer> underlying,
-			std::shared_ptr<IAsyncTracker> asyncTracker);
+			std::shared_ptr<IAsyncTrackerVulkan> asyncTracker);
 		~CommandList();
 		CommandList(CommandList&&);
 		CommandList& operator=(CommandList&&);
@@ -126,11 +127,52 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 
 		CmdListAttachedStorage _attachedStorage;
-		std::shared_ptr<IAsyncTracker> _asyncTracker;
+		std::shared_ptr<IAsyncTrackerVulkan> _asyncTracker;
 		std::vector<IAsyncTracker::Marker> _asyncTrackerMarkers;
+
+		std::vector<std::pair<VulkanSharedPtr<VkSemaphore>, uint64_t>> _waitBeforeBegin;
+		std::vector<std::pair<VulkanSharedPtr<VkSemaphore>, uint64_t>> _signalOnCompletion;
 
 		friend class DeviceContext;
 		friend class SharedEncoder;
+		friend class SubmissionQueue;
+	};
+
+	class CommandBufferPool;
+
+	class SubmissionQueue
+	{
+	public:
+		const std::shared_ptr<IAsyncTrackerVulkan>& GetTracker() { return _gpuTracker; }
+
+		void Submit(
+			IteratorRange<Metal_Vulkan::CommandList* const*> cmdLists,
+			IteratorRange<const std::pair<VkSemaphore, uint64_t>*> waitBeforeBegin,
+			IteratorRange<const VkPipelineStageFlags*> waitBeforeBeginStages,
+			IteratorRange<const std::pair<VkSemaphore, uint64_t>*> signalOnCompletion);
+		void WaitForFence(IAsyncTracker::Marker marker, std::optional<std::chrono::nanoseconds> timeout = {});
+
+		void Present(
+			VkSwapchainKHR swapChain, unsigned imageIndex, 
+			IteratorRange<const VkSemaphore*> waitBeforePresent);
+
+		unsigned GetQueueFamilyIndex() const { return _queueFamilyIndex; }
+
+		SubmissionQueue(
+			ObjectFactory& factory,
+			VkQueue queue,
+			unsigned queueFamilyIndex);
+		~SubmissionQueue();
+		SubmissionQueue(SubmissionQueue&&) = delete;
+		SubmissionQueue& operator=(SubmissionQueue&&) = delete;
+	private:
+		VkQueue _underlying;
+		std::shared_ptr<IAsyncTrackerVulkan> _gpuTracker;
+		ObjectFactory* _factory;
+		Threading::Mutex _queueLock;
+		unsigned _queueFamilyIndex;
+		uint64_t _maxInorderActuallySubmitted;
+		uint64_t _maxOutOfOrderActuallySubmitted;
 	};
 }}
 
