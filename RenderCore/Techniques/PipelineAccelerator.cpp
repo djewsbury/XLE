@@ -972,7 +972,9 @@ namespace RenderCore { namespace Techniques
 					result = std::make_shared<SequencerConfig>(std::move(cfg));
 					result->_name = name;
 					result->_pipelineLayout = result->_delegate->GetPipelineLayout();
-					auto layoutInitializer = result->_pipelineLayout->MakePipelineLayoutInitializer(GetDefaultShaderLanguage(), _samplerPool.get());
+					auto layoutInitializer = result->_pipelineLayout->MakePipelineLayoutInitializerWithAutoMatching(
+						IteratorRange<const PipelineLayoutInitializer**>{},
+						GetDefaultShaderLanguage(), _samplerPool.get());
 					result->_compiledPipelineLayout = _pipelineCollection->CreatePipelineLayout(layoutInitializer, result->_name);
 					result->_cfgId = cfgId;
 					#if defined(_DEBUG)
