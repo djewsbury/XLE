@@ -420,7 +420,7 @@ namespace PlatformRig
             techniqueContext._uniformDelegateManager = drawingApparatus->_mainUniformDelegateManager;
             techniqueContext._pipelineAccelerators = drawingApparatus->_pipelineAccelerators;
         }
-        techniqueContext._attachmentPool = std::make_shared<RenderCore::Techniques::AttachmentPool>(frameRenderingApparatus._device);
+        techniqueContext._attachmentPool = frameRenderingApparatus._attachmentPool;
         techniqueContext._frameBufferPool = frameRenderingApparatus._frameBufferPool;
 
         _pimpl->_frameCPUProfiler = frameRenderingApparatus._frameCPUProfiler;

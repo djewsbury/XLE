@@ -145,6 +145,7 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		std::shared_ptr<FrameBufferPool> _frameBufferPool;
+		std::shared_ptr<AttachmentPool> _attachmentPool;
 		std::shared_ptr<Utility::HierarchicalCPUProfiler> _frameCPUProfiler;
 		std::shared_ptr<IDevice> _device;
 
