@@ -80,7 +80,6 @@ namespace RenderCore { namespace LightingEngine
 			auto tileCount = ((fbProps._width+7)/8)*((fbProps._height+7)/8);
 			auto pixelCount = fbProps._width*fbProps._height;
 			uint32_t ray_list_element_count = pixelCount;
-			uint32_t ray_counter_element_count = 1;
 
 			_rayListBuffer = device.CreateResource(
 				CreateDesc(
@@ -231,7 +230,7 @@ namespace RenderCore { namespace LightingEngine
 		struct FrameId
 		{
 			unsigned _frameId; unsigned _dummy[3];
-		} frameId { _pingPongCounter, 0, 0, 0 };
+		} frameId { _pingPongCounter, {0, 0, 0} };
 		UniformsStream::ImmediateData immData[] { MakeOpaqueIteratorRange(extendedTransforms), MakeOpaqueIteratorRange(frameId) };
 
 		UniformsStream us;

@@ -142,10 +142,11 @@ namespace UnitTests
 				BindFlag::Enum bindFlag, TextureViewDesc viewDesc,
 				const AttachmentDesc& requestDesc, const FrameBufferProperties& props) override
 			{
-				return _attachments[resName]->CreateTextureView(bindFlag, viewDesc);
+				return _viewPool.GetTextureView(_attachments[resName], bindFlag, viewDesc);
 			}
 
 			std::shared_ptr<IResource> _attachments[3];
+			ViewPool _viewPool;
 			NamedAttachmentsHelper(IDevice& device)
 			{
 				_attachments[0] = device.CreateResource(CreateDesc(BindFlag::RenderTarget|BindFlag::InputAttachment|BindFlag::TransferDst, TextureDesc::Plain2D(512, 512, Format::R16G16B16A16_FLOAT)), "attachment-0");
@@ -231,8 +232,8 @@ namespace UnitTests
 			encoder.SetStencilRef(0x80, 0x80);
 			encoder.SetDepthBounds(0.45f, 0.55f);
 
-			auto srv0 = namedAttachmentsHelper._attachments[0]->CreateTextureView(BindFlag::InputAttachment);
-			auto srv1 = namedAttachmentsHelper._attachments[1]->CreateTextureView(BindFlag::InputAttachment, justDepthWindow);
+			auto srv0 = namedAttachmentsHelper.GetResourceView(0, BindFlag::InputAttachment, {}, {}, {});
+			auto srv1 = namedAttachmentsHelper.GetResourceView(1, BindFlag::InputAttachment, justDepthWindow, {}, {});
 			ResourceViewStream srvs { *srv0, *srv1 };
 			UniformsStreamInterface usi;
 			usi.BindResourceView(0, Hash64("SubpassInputAttachment0"));

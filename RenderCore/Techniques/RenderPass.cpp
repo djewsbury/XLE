@@ -626,7 +626,7 @@ namespace RenderCore { namespace Techniques
         auto* attach = &_pimpl->_attachments[attachName];
         assert(attach);
         if (!attach->_resource)
-        _pimpl->BuildAttachment(attachName);
+        	_pimpl->BuildAttachment(attachName);
 		assert(attach->_resource);
         return _pimpl->_srvPool.GetTextureView(attach->_resource, usage, window);
     }

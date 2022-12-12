@@ -290,7 +290,6 @@ namespace RenderCore { namespace Metal_DX11
 				L"-fspv-debug=source",
 #else
 				L"-Qstrip_debug",
-				L"-Qstrip_reflect",
 				L"-O3"
 #endif
 			};

@@ -14,7 +14,7 @@
 
 namespace UnitTests
 {
-    static ConsoleRig::StartupConfig GetStartupConfig()
+    inline ConsoleRig::StartupConfig GetStartupConfig()
     {
         ConsoleRig::StartupConfig cfg = "unittest";
             // we can't set the working in this way when run from the 
@@ -23,7 +23,7 @@ namespace UnitTests
         return cfg;
     }
 
-    static void UnitTest_SetWorkingDirectory()
+    inline void UnitTest_SetWorkingDirectory()
     {
     	    //
     	    //  We need a special way to set the working dir

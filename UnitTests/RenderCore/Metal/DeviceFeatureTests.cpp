@@ -92,9 +92,10 @@ namespace UnitTests
 					BindFlag::Enum bindFlags, TextureViewDesc textureView,
 					const AttachmentDesc&, const FrameBufferProperties&) override
 				{
-					return _mainTarget->CreateTextureView(bindFlags, textureView);
+					return _viewPool.GetTextureView(_mainTarget, bindFlags, textureView);
 				}
 				std::shared_ptr<RenderCore::IResource> _mainTarget;
+				RenderCore::ViewPool _viewPool;
 				DummyNamedAttachments(std::shared_ptr<RenderCore::IResource> t) : _mainTarget(std::move(t)) {}
 			} dummyNamedAttachments { simpleFBHelper.GetMainTarget() };
 

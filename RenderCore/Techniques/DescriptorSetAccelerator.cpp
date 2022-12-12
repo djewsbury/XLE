@@ -72,6 +72,7 @@ namespace RenderCore { namespace Techniques
 					auto& res = _resources[c];
 					if (res._fixedResource) continue;
 					if (res._cbResourceOffsetAndSize.second) continue;
+					assert(res._deferredShaderResource.valid());
 					if (res._deferredShaderResource.wait_until(timeoutTime) == std::future_status::timeout) {
 						_allReadyBefore = c;
 						return ::Assets::PollStatus::Continue;
@@ -79,6 +80,7 @@ namespace RenderCore { namespace Techniques
 				}
 
 				for (size_t c=_allReadyBefore-_resources.size(); c<_cbUploadMarkers.size(); ++c) {
+					assert(_cbUploadMarkers[c]._future.valid());
 					if (_cbUploadMarkers[c]._future.wait_until(timeoutTime) == std::future_status::timeout) {
 						_allReadyBefore = _resources.size()+c;
 						return ::Assets::PollStatus::Continue;
@@ -318,6 +320,7 @@ namespace RenderCore { namespace Techniques
 				uploadedCBs.reserve(working->_cbUploadMarkers.size());
 				for (auto& cb:working->_cbUploadMarkers) {
 					assert (cb.IsValid());
+					assert(cb._future.valid());
 					uploadedCBs.push_back(cb._future.get());
 					completionCommandList = std::max(completionCommandList, (uploadedCBs.end()-1)->GetCompletionCommandList());
 				}

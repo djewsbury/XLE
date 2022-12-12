@@ -386,8 +386,6 @@ namespace RenderOverlays
 		using namespace RenderCore;
 		if (text.IsEmpty()) return {0.f, 0.f};
 
-		auto* res = textureMan.GetFontTexture().GetUnderlying().get();
-			
 		ColorB colorOverride = 0x0;
 
 		auto estimatedQuadCount = text.size();
@@ -728,13 +726,10 @@ namespace RenderOverlays
 		if (text.IsEmpty()) return {0.f, 0.f};
 
 		int prevGlyph = 0;
-		unsigned prev_rsb_delta = 0;
 		float xScale = scale;
 		float yScale = scale;
 		
 		float xAtLineStart = x, yAtLineStart = y;
-
-		auto* res = textureMan.GetFontTexture().GetUnderlying().get();
 
 		auto estimatedQuadCount = text.size();		// note -- shadow & outline will throw this off
 		WorkingVertexSetFontResource workingVertices;

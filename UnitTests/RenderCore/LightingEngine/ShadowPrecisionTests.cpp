@@ -323,7 +323,7 @@ namespace UnitTests
 		immediateDrawingHelper._immediateDrawables->PrepareResources(std::move(visibilityPromise), rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 		auto requiredVisibility = visibilityFuture.get(); // stall();
 		immediateDrawingHelper._immediateDrawables->OnFrameBarrier();
-		RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(*RenderCore::Techniques::GetThreadContext(), requiredVisibility._bufferUploadsVisibility);
+		RenderCore::Techniques::Services::GetBufferUploads().StallAndMarkCommandListDependency(*RenderCore::Techniques::GetThreadContext(), requiredVisibility._bufferUploadsVisibility);
 		
 		immediateDrawingHelper._immediateDrawables->ExecuteDraws(parsingContext, rpi);
 	}
