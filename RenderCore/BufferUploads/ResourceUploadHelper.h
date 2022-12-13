@@ -110,7 +110,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     public:
         struct Allocation
         {
-            void Release(QueueMarker queueMarker);
+            void Release();
             unsigned GetResourceOffset() const { return _resourceOffset; }
             unsigned GetAllocationSize() const { return _allocationSize; }
             operator bool() const { return Valid(); }
@@ -163,7 +163,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         };
         std::vector<AllocationWaitingOnDevice> _allocationsWaitingOnDevice;
 
-        void Release(unsigned allocationId, QueueMarker releaseMarker);
+        void Release(unsigned allocationId, bool abandon=false);
         void Abandon(unsigned allocationId);
 
         #if defined(_DEBUG)
@@ -195,7 +195,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
         StagingPage&                        GetStagingPage();
         void                                UpdateGPUTracking();
-        QueueMarker                         GetProducerCmdListSpecificMarker();
         std::optional<QueueMarker>          CommandListToHardwareQueueMarker(CommandListID cmdList);
 
         ResourceUploadHelper    GetResourceUploadHelper();

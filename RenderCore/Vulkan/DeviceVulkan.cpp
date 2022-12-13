@@ -1409,6 +1409,16 @@ namespace RenderCore { namespace ImplVulkan
 			appender = (VkBaseInStructure*)&astHDRFeatures;
 		}
 
+		#if VK_VERSION_1_2
+			VkPhysicalDeviceTimelineSemaphoreFeatures timelineSemaphoreFeatures = {};
+			if (xleFeatures._timelineSemaphore) {
+				timelineSemaphoreFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
+				timelineSemaphoreFeatures.timelineSemaphore = true;
+				appender->pNext = (VkBaseInStructure*)&timelineSemaphoreFeatures;
+				appender = (VkBaseInStructure*)&timelineSemaphoreFeatures;
+			}
+		#endif
+
 		VkDeviceCreateInfo device_info = {};
 		device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 		device_info.pNext = &enabledFeatures2;
@@ -1679,6 +1689,7 @@ namespace RenderCore { namespace ImplVulkan
 		bool hasASTCHDRExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME); }) != ext._extensions.end();
 		bool hasConservativeRasterExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME); }) != ext._extensions.end();
 		bool hasTimelineSemaphoreExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME); }) != ext._extensions.end();
+		bool hasShaderViewportIndex = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME); }) != ext._extensions.end();
 
 		DeviceFeatures result;
 
@@ -1686,7 +1697,7 @@ namespace RenderCore { namespace ImplVulkan
 		result._geometryShaders = features.features.geometryShader;
 
 		// General rendering features
-		result._viewInstancingRenderPasses = VkPhysicalDeviceVulkan11Features_inst.multiview;
+		result._viewInstancingRenderPasses = hasShaderViewportIndex && VkPhysicalDeviceVulkan11Features_inst.multiview;
 		if (hasStreamOutputExt)
 			result._streamOutput = 
 					VkPhysicalDeviceTransformFeedbackFeaturesEXT_inst.geometryStreams
@@ -2615,17 +2626,6 @@ namespace RenderCore { namespace ImplVulkan
 	bool ThreadContext::IsDedicatedTransferContext()
 	{
 		return _submissionQueue->GetQueueFamilyIndex() == _factory->_dedicatedTransferQueueFamily;
-	}
-
-	auto ThreadContext::GetCommandListSpecificMarker() -> std::pair<VkSemaphore, CommandListMarker>
-	{
-		if (auto* ft = dynamic_cast<Metal_Vulkan::FenceBasedTracker*>(_submissionQueue->GetTracker().get())) {
-			assert(0);	// not supported, since the interface only returns a semaphore
-			return { nullptr, 0 };
-		} else {
-			auto& st = *checked_cast<Metal_Vulkan::SemaphoreBasedTracker*>(_submissionQueue->GetTracker().get());
-			return { st.GetSemaphore(), st.GetProducerMarker() };
-		}
 	}
 
 	std::shared_ptr<Metal_Vulkan::IAsyncTracker> ThreadContext::GetQueueTracker()

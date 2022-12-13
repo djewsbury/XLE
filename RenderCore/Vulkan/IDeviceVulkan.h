@@ -52,8 +52,6 @@ namespace RenderCore
 
 		virtual void AddPreFrameCommandList(Metal_Vulkan::CommandList&& cmdList) = 0;
 
-		using CommandListMarker = uint64_t;
-		virtual std::pair<VkSemaphore, CommandListMarker> GetCommandListSpecificMarker() = 0;
 		virtual std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetQueueTracker() = 0;
 		virtual void UpdateGPUTracking() = 0;
 

@@ -496,6 +496,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		submitInfo.signalSemaphoreCount = signalOnCompletionCount;
 		submitInfo.pSignalSemaphores = signalOnCompletionSemaphores;
 
+		assert(waitBeforeBeginCount <= waitBeforeBegin.size()+waitBeforeBeginInCmdListCount);
+		assert(signalOnCompletionCount <= signalOnCompletion.size()+signalOnCompletionInCmdListCount+2);
+
 		VkTimelineSemaphoreSubmitInfo timelineSemaphoreSubmitInfo;
 		if (_factory->GetXLEFeatures()._timelineSemaphore) {
 			timelineSemaphoreSubmitInfo = {};
@@ -515,7 +518,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			Log(Verbose) << "[q] Submitting " << submitInfo.commandBufferCount << " cmd buffers" << std::endl;
 			for (unsigned c=0; c<waitBeforeBeginCount; ++c)
 				Log(Verbose) << "[q]  wait on 0x" << std::hex << waitBeforeBeginSemaphores[c] << std::dec << " for value " << waitBeforeBeginValues[c] << std::endl;
-			for (unsigned c=0; c<waitBeforeBeginCount; ++c)
+			for (unsigned c=0; c<signalOnCompletionCount; ++c)
 				Log(Verbose) << "[q]  signal 0x" << std::hex << signalOnCompletionSemaphores[c] << std::dec << " for value " << signalOnCompletionValues[c] << std::endl;
 		#endif
 

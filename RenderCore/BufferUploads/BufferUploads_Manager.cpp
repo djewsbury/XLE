@@ -1069,7 +1069,7 @@ namespace RenderCore { namespace BufferUploads
                             context.GetStagingPage().GetStagingResource(),
                             stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize());
 
-                        stagingConstruction.Release(context.GetProducerCmdListSpecificMarker());
+                        stagingConstruction.Release();
                     } else {
                         // oversized allocations will go via a cmd list staging allocation, which has provisions
                         // to create short-lived large staging buffers
@@ -1363,7 +1363,7 @@ namespace RenderCore { namespace BufferUploads
 
                 // Don't delete the staging buffer immediately. It must stick around until the command list is resolved
                 // and done with it
-                transferStagingToFinalStep._stagingResource.Release(context.GetProducerCmdListSpecificMarker());
+                transferStagingToFinalStep._stagingResource.Release();
             } else {
                 assert(transferStagingToFinalStep._oversizeResource);
                 auto stagingSize = ByteCount(transferStagingToFinalStep._oversizeResource->GetDesc());

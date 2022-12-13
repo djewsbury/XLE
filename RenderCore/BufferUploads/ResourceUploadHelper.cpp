@@ -494,11 +494,13 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         }
     }
 
-    void StagingPage::Release(unsigned allocationId, QueueMarker releaseMarker)
+    void StagingPage::Release(unsigned allocationId, bool abandon)
     {
         #if defined(_DEBUG)
             assert(_boundThread == std::this_thread::get_id());
         #endif
+
+		QueueMarker releaseMarker = abandon ? 0 : _asyncTracker->GetProducerMarker();
 
         bool found = false;
         for (auto& a:_activeAllocations)
@@ -537,7 +539,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         }
     }
 
-    void StagingPage::Abandon(unsigned allocationId) { Release(allocationId, 0); }
+    void StagingPage::Abandon(unsigned allocationId) { Release(allocationId, true); }
 
     auto StagingPage::GetQuickMetrics() const -> StagingPageMetrics
     {
@@ -610,11 +612,10 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         assert(_activeAllocations.empty());
     }
 
-    void StagingPage::Allocation::Release(QueueMarker queueMarker)
+    void StagingPage::Allocation::Release()
     {
-        assert(queueMarker != 0);
         if (_page)
-            _page->Release(_allocationId, queueMarker);
+            _page->Release(_allocationId);
         _page = nullptr;
         _allocationId = ~0u;
         _resourceOffset = _allocationSize = 0;
@@ -924,15 +925,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         auto* vulkanThreadContext = (IThreadContextVulkan*)_mainContext->QueryInterface(typeid(IThreadContextVulkan).hash_code());
         if (vulkanThreadContext)
             return vulkanThreadContext->UpdateGPUTracking();
-    }
-
-    QueueMarker      UploadsThreadContext::GetProducerCmdListSpecificMarker()
-    {
-        // Get the marker that is specific to the particular cmd list we're building
-        auto* vulkanThreadContext = (IThreadContextVulkan*)_mainContext->QueryInterface(typeid(IThreadContextVulkan).hash_code());
-        if (vulkanThreadContext)
-            return vulkanThreadContext->GetCommandListSpecificMarker().second;
-        return 0;
     }
 
     UploadsThreadContext::UploadsThreadContext(

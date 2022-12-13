@@ -118,7 +118,6 @@ namespace RenderCore { namespace ImplVulkan
         float GetThreadingPressure() override;
         bool IsDedicatedTransferContext() override;
 
-        std::pair<VkSemaphore, CommandListMarker> GetCommandListSpecificMarker() override;
         std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetQueueTracker() override;
         void UpdateGPUTracking() override;
 
@@ -163,8 +162,8 @@ namespace RenderCore { namespace ImplVulkan
         std::vector<Metal_Vulkan::CommandList> _interimCmdLists;
 
         Metal_Vulkan::IAsyncTracker::Marker CommitToQueue_Internal(
-            IteratorRange<const std::pair<VkSemaphore, CommandListMarker>*> waitBeforeBegin,
-            IteratorRange<const std::pair<VkSemaphore, CommandListMarker>*> signalOnCompletion);
+            IteratorRange<const std::pair<VkSemaphore, uint64_t>*> waitBeforeBegin,
+            IteratorRange<const std::pair<VkSemaphore, uint64_t>*> signalOnCompletion);
     };
 
 ////////////////////////////////////////////////////////////////////////////////
