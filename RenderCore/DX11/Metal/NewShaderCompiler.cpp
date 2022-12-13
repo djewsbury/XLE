@@ -78,7 +78,28 @@ namespace RenderCore { namespace Metal_DX11
 			utf8 path[MaxPath];
 			std::string buffer;
 			buffer.reserve(MaxPath);
-			auto inputFilenameAsUtf8 = Conversion::Convert<std::string>(std::basic_string<wchar_t>(pFileName));
+
+			auto inputFilenameAsUtf8 = Conversion::Convert<std::string>(MakeStringSection(pFileName));
+
+			// We need to do some processing on the filenames here in order for dxcompiler to write reasonable filenames in the debugging info
+			// (ie, so that frame capture tools can do something with them)
+			// We always want to do our filename lookups using the XLE filesystem. But we've fed in the os filesystem (natural) name for
+			// the initial shader file into dxcompiler. It will then use that name as prefix on all requests to this function
+			// So -- the filename manipulation here replaces the os filename prefix with the xle filesystem prefix to try to make sure
+			// we're always using xle filenames with MainFileSystem::TryOpen(). Tools will then be able to find the file in the os
+			// filesystem, so long as the filename can be made to be relative to the original file.
+			auto postPrefixFilename = inputFilenameAsUtf8.begin();
+			if (!_expectedSearchPrefix.empty() && XlBeginsWith(MakeStringSection(inputFilenameAsUtf8), MakeStringSection(_expectedSearchPrefix))) {
+				if (_replacementSearchPrefix.size() <= _expectedSearchPrefix.size()) {
+					inputFilenameAsUtf8.erase(inputFilenameAsUtf8.begin()+_replacementSearchPrefix.size(), inputFilenameAsUtf8.begin()+_expectedSearchPrefix.size());
+					std::copy(_replacementSearchPrefix.begin(), _replacementSearchPrefix.end(), inputFilenameAsUtf8.begin());
+				} else {
+					std::copy(_replacementSearchPrefix.begin(), _replacementSearchPrefix.begin()+_expectedSearchPrefix.size(), inputFilenameAsUtf8.begin());
+					inputFilenameAsUtf8.insert(inputFilenameAsUtf8.begin()+_expectedSearchPrefix.size(), _replacementSearchPrefix.begin()+_expectedSearchPrefix.size(), _replacementSearchPrefix.end());
+				}
+				postPrefixFilename = inputFilenameAsUtf8.begin()+_replacementSearchPrefix.size();
+			}
+
 			for (auto i2=_searchDirectories.cbegin(); i2!=_searchDirectories.cend(); ++i2) {
 				buffer.clear();
 				buffer.insert(buffer.end(), MakeStringSection(*i2).begin(), MakeStringSection(*i2).end());
@@ -139,16 +160,11 @@ namespace RenderCore { namespace Metal_DX11
 				}
 			}
 
-			// dxcompiler will prepend the base directory name on every lookup 
-			// as if all lookups are relative. We don't really know where the base
-			// starts (since it's just the directory of the file that included this one, and we have no idea what that is...)
-			// so we have to try removing each path in turn
-			auto splitPath = MakeSplitPath((const utf16*)pFileName).Simplify();
-			if (splitPath.GetSectionCount() > 1) {
-				// we inherit the null terminator from the original pFileName string here
-				auto test = splitPath.GetSection(1).begin();
-				return LoadSource((LPCWSTR)test, ppIncludeSource);
-			}
+			// dxcompiler will prepend the base directory name on every lookup, as if all lookups are relative. 
+			// We ideally want absolute includes to work (as in xleres/...). We can try to handle this by just
+			// removing the expected search prefix, if it exists
+			if (postPrefixFilename != inputFilenameAsUtf8.begin())
+				return LoadSource(Conversion::Convert<std::wstring>(MakeStringSection(postPrefixFilename, inputFilenameAsUtf8.end())).c_str(), ppIncludeSource);
 
 			*ppIncludeSource = nullptr;
 			return ERROR_FILE_NOT_FOUND;
@@ -162,6 +178,8 @@ namespace RenderCore { namespace Metal_DX11
 		std::vector<::Assets::DependentFileState> _includeFiles;
 		std::vector<std::string> _searchDirectories;
 		std::vector<std::unique_ptr<uint8[]>> _readFiles;
+		std::string _expectedSearchPrefix;
+		std::string _replacementSearchPrefix;
 	};
 
 	template<typename OutputType, typename InputType>
@@ -272,33 +290,39 @@ namespace RenderCore { namespace Metal_DX11
 			if (hresult == S_OK)
 				return true;*/
 
-			// -O3 should the default (some more information on optimization: https://github.com/Microsoft/DirectXShaderCompiler/blob/master/docs/SPIR-V.rst#optimization)
-			// -fspv-reflect adds some extra reflection info?
-			// -fvk-invert-y, 	-fvk-use-dx-layout, -fvk-use-dx-position-w provide some compatibility with DX
-			// -WX warnings as errors
-			// -Zi debug information
-			// -P preprocess only
-			// more here: https://simoncoenen.com/blog/programming/graphics/DxcCompiling
-			LPCWSTR fixedArguments[] {
-				L"-spirv",
-				L"-fspv-target-env=vulkan1.1",
-#if 0
-				L"-Qembed_debug",
-				L"-Zi",
-				L"-Od",
-				L"-fspv-debug=line",
-				L"-fspv-debug=source",
-#else
-				L"-Qstrip_debug",
-				L"-O3"
-#endif
-			};
-
 			ResChar shaderModel[64];
 			AdaptShaderModel(shaderModel, dimof(shaderModel), shaderPath._shaderModel);
 
 			StringMeld<dimof(ShaderService::ShaderHeader::_identifier)> identifier;
 			identifier << shaderPath._filename << "-" << shaderPath._entryPoint << "[" << definesTable << "]";
+
+			// -O3 should the default (some more information on optimization: https://github.com/Microsoft/DirectXShaderCompiler/blob/master/docs/SPIR-V.rst#optimization)
+			// -fspv-reflect adds some extra reflection info?
+			// -fvk-invert-y, 	-fvk-use-dx-layout, -fvk-use-dx-position-w provide some compatibility with DX
+			// -WX warnings as errors DXC_ARG_WARNINGS_ARE_ERRORS
+			// -Zi debug information
+			// -P preprocess only
+			// -enable-16bit-types			see https://github.com/Microsoft/DirectXShaderCompiler/wiki/16-Bit-Scalar-Types
+			// 								may require shader model 6_2 & SPV_AMD_gpu_shader_half_float to actually get half floats emitted
+			// (DXC_ARG_AVOID_FLOW_CONTROL, DXC_ARG_PREFER_FLOW_CONTROL)
+			// more here: https://simoncoenen.com/blog/programming/graphics/DxcCompiling
+			// also just call "dxc.exe --help"
+
+#if 0
+			LPCWSTR fixedArguments[] {
+				L"-spirv",
+				L"-fspv-target-env=vulkan1.1",
+#if 1
+				L"-Qembed_debug",
+				DXC_ARG_DEBUG,
+				L"-Oconfig=--eliminate-dead-branches,--eliminate-dead-code-aggressive,--eliminate-dead-functions",
+				L"-fspv-debug=line",
+				L"-fspv-debug=source",
+#else
+				L"-Qstrip_debug",
+				DXC_ARG_OPTIMIZATION_LEVEL3
+#endif
+			};
 
 			auto arguments = MakeDefinesTable(definesTable, shaderPath._shaderModel, _fixedDefines);
 
@@ -312,16 +336,58 @@ namespace RenderCore { namespace Metal_DX11
 			LPCWSTR* i = finalArguments;
 			for (auto a:fixedArguments) *i++ = a;
 			for (const auto&a:arguments) *i++ = a.c_str();
+#else
+			LPCWSTR fixedArguments[] {
+				L"-spirv",
+				L"-fspv-target-env=vulkan1.1",
+				L"-fvk-use-dx-layout",			// XLE associates the DirectX alignment rules with HLSL source
+				#if 1
+					L"-Qembed_debug",
+					DXC_ARG_DEBUG,
+					L"-Oconfig=--eliminate-dead-branches,--eliminate-dead-code-aggressive,--eliminate-dead-functions",
+					L"-fspv-debug=line",
+					L"-fspv-debug=source",		// emits the preprocessed source code into the shader bundle
+					// L"-fspv-debug=rich",		// "rich" and "rich-with-source" are undocumented options here, but appear unfinished, since they can crash
+				#else
+					L"-Qstrip_debug",
+					DXC_ARG_OPTIMIZATION_LEVEL3
+				#endif
+			};
+
+			auto defines = MakeDefinesTable(definesTable, shaderPath._shaderModel, _fixedDefines);
+
+			auto fileDesc = ::Assets::MainFileSystem::TryGetDesc(shaderPath._filename);
+			std::string filenameForCompiler;
+			if (!fileDesc._naturalName.empty()) {
+				filenameForCompiler = fileDesc._naturalName;
+			} else {
+				filenameForCompiler = shaderPath._filename;
+			}
+
+			auto naturalNameSplit = MakeFileNameSplitter(filenameForCompiler);
+			includeHandler._expectedSearchPrefix = naturalNameSplit.DriveAndPath().AsString();
+			if (naturalNameSplit.Drive().IsEmpty()) {
+				// the compiler appears to prepend "./" in all cases, except if there's a drive specified (even if string begins with a / or \)
+				includeHandler._expectedSearchPrefix = "./" + includeHandler._expectedSearchPrefix;
+			}
+			includeHandler._replacementSearchPrefix = MakeFileNameSplitter(shaderPath._filename).DriveAndPath().AsString();
+
+			IDxcCompilerArgs* rawArgs = nullptr;
+			auto res2 = _utils->BuildArguments(
+				Conversion::Convert<std::wstring>(MakeStringSection(filenameForCompiler)).c_str(),
+				Conversion::Convert<std::wstring>(MakeStringSection(shaderPath._entryPoint)).c_str(),
+				Conversion::Convert<std::wstring>(MakeStringSection(shaderModel)).c_str(),
+				fixedArguments, dimof(fixedArguments),
+				defines._defines.data(), defines._defines.size(),
+				&rawArgs);
+			if (res2 != S_OK) {
+				assert(!rawArgs);
+				return false;
+			}
+			intrusive_ptr<IDxcCompilerArgs> args = moveptr(rawArgs);
+#endif
 
 			IDxcOperationResult* compileResultRaw = nullptr;
-			/*auto res = _compiler->Compile(
-				sourceBlob.get(),
-				shaderFN.c_str(), 
-				Conversion::Convert<std::basic_string<wchar_t>>(MakeStringSection(shaderPath._entryPoint)).c_str(), 
-				Conversion::Convert<std::basic_string<wchar_t>>(MakeStringSection(shaderModel)).c_str(), 
-				finalArguments, argumentCount, 
-				_fixedDefines.data(), _fixedDefines.size(),
-				&includeHandler, &compileResultRaw);*/
 
 			DxcBuffer inputBuffer;
 			inputBuffer.Ptr = sourceCode;
@@ -329,7 +395,7 @@ namespace RenderCore { namespace Metal_DX11
 			inputBuffer.Encoding = CP_UTF8;
 			auto res = _compiler->Compile(
 				&inputBuffer, 
-				finalArguments, argumentCount, 
+				args->GetArguments(), args->GetCount(), 
 				&includeHandler, 
 				IID_PPV_ARGS(&compileResultRaw));
 
@@ -396,7 +462,15 @@ namespace RenderCore { namespace Metal_DX11
 
 		using FixedDefined = std::pair<std::basic_string<wchar_t>, std::basic_string<wchar_t>>;
 
-		static std::vector<std::basic_string<wchar_t>> MakeDefinesTable(
+		struct DefinesTable
+		{
+			std::vector<wchar_t> _buffer;
+			std::vector<DxcDefine> _defines;
+
+			void Add(StringSection<wchar_t> name, StringSection<wchar_t> value);
+			void Add(StringSection<> name, StringSection<> value);
+		};
+		static DefinesTable MakeDefinesTable(
 			StringSection<char> definesTable, const char shaderModel[],
 			IteratorRange<const FixedDefined*> fixedDefines);
 
@@ -422,28 +496,52 @@ namespace RenderCore { namespace Metal_DX11
 		mutable Threading::Mutex _lock;
 	};
 
-	static const wchar_t s_shaderModelDef_V[] = L"-DVSH=1";
-    static const wchar_t s_shaderModelDef_P[] = L"-DPSH=1";
-    static const wchar_t s_shaderModelDef_G[] = L"-DGSH=1";
-    static const wchar_t s_shaderModelDef_H[] = L"-DHSH=1";
-    static const wchar_t s_shaderModelDef_D[] = L"-DDSH=1";
-    static const wchar_t s_shaderModelDef_C[] = L"-DCSH=1";
+	static const wchar_t s_shaderModelDef_V[] = L"VSH";
+    static const wchar_t s_shaderModelDef_P[] = L"PSH";
+    static const wchar_t s_shaderModelDef_G[] = L"GSH";
+    static const wchar_t s_shaderModelDef_H[] = L"HSH";
+    static const wchar_t s_shaderModelDef_D[] = L"DSH";
+    static const wchar_t s_shaderModelDef_C[] = L"CSH";
 
-	std::vector<std::basic_string<wchar_t>> DXShaderCompiler::MakeDefinesTable(
-		StringSection<char> definesTable, const char shaderModel[],
-		IteratorRange<const FixedDefined*> fixedDefines)
+	void DXShaderCompiler::DefinesTable::Add(StringSection<wchar_t> name, StringSection<wchar_t> value)
 	{
-		unsigned definesCount = 1;
-		auto iterator = definesTable.end();
-		while ((iterator = std::find(iterator, definesTable.end(), ';')) != definesTable.end()) {
-			++definesCount; ++iterator;
-		}
-			
-		std::vector<std::basic_string<wchar_t>> arguments;
-		arguments.reserve(2+fixedDefines.size()+definesCount);
+		DxcDefine define;
+		define.Name = LPCWSTR(1+_buffer.size());
+		_buffer.insert(_buffer.end(), name.begin(), name.end());
+		_buffer.push_back(0);
+		if (!value.IsEmpty()) {
+			define.Value = LPCWSTR(1+_buffer.size());
+			_buffer.insert(_buffer.end(), value.begin(), value.end());
+			_buffer.push_back(0);
+		} else
+			define.Value = 0;
+		_defines.push_back(define);
+	}
 
+	void DXShaderCompiler::DefinesTable::Add(StringSection<> name, StringSection<> value)
+	{
+		DxcDefine define;
+		define.Name = LPCWSTR(1+_buffer.size());
+		auto converted = Conversion::Convert<std::wstring>(name);
+		_buffer.insert(_buffer.end(), converted.begin(), converted.end());
+		_buffer.push_back(0);
+		if (!value.IsEmpty()) {
+			define.Value = LPCWSTR(1+_buffer.size());
+			converted = Conversion::Convert<std::wstring>(value);
+			_buffer.insert(_buffer.end(), converted.begin(), converted.end());
+			_buffer.push_back(0);
+		} else
+			define.Value = 0;
+		_defines.push_back(define);
+	}
+
+	auto DXShaderCompiler::MakeDefinesTable(
+		StringSection<char> definesTable, const char shaderModel[],
+		IteratorRange<const FixedDefined*> fixedDefines) -> DefinesTable
+	{
+		DefinesTable result;
 		for (const auto& fixed:fixedDefines)
-			arguments.push_back(L"-D" + fixed.first + L"=" + fixed.second);
+			result.Add(fixed.first, fixed.second);
 
 		const wchar_t* shaderModelStr = nullptr;
 		switch (tolower(shaderModel[0])) {
@@ -455,23 +553,58 @@ namespace RenderCore { namespace Metal_DX11
 		case 'c': shaderModelStr = s_shaderModelDef_C; break;
 		}
 		if (shaderModelStr)
-			arguments.push_back(shaderModelStr);
+			result.Add(shaderModelStr, L"1");
 
-		iterator = definesTable.begin();
+		auto iterator = definesTable.begin();
 		while (iterator != definesTable.end()) {
 			auto defineEnd = std::find(iterator, definesTable.end(), ';');
+			auto equals = std::find(iterator, defineEnd, '=');
 
-			StringMeld<256> meld;
-			meld << "-D" << MakeStringSection(iterator, defineEnd);
-			arguments.push_back(Conversion::Convert<std::basic_string<wchar_t>>(meld.AsStringSection()));
+			if (equals != defineEnd) {
+				auto namePart = MakeStringSection(iterator, equals);
+				auto valuePart = MakeStringSection(equals+1, defineEnd);
+				result.Add(namePart, valuePart);
+			} else {
+				auto namePart = MakeStringSection(iterator, defineEnd);
+				result.Add(namePart, {});
+			}
 
 			iterator = defineEnd;
 			if (iterator != definesTable.end())
 				++iterator;
 		}
 
-		return arguments;
+		// offset by the buffer starting point
+		for (auto&d:result._defines) {
+			assert(d.Name);
+			d.Name = size_t(d.Name)-1+result._buffer.data();
+			if (d.Value)
+				d.Value = size_t(d.Value)-1+result._buffer.data();
+		}
+
+		return result;
 	}
+
+#if 0
+	static std::vector<DxcDefine> AsDxcDefines(IteratorRange<std::basic_string<wchar_t>*> stringDefines)
+	{
+		std::vector<DxcDefine> result;
+		result.reserve(stringDefines.size());
+		for (auto& s:stringDefines) {
+			auto i = s.find_last_of('=');
+			auto* b = s.c_str();
+			if (b[0] == '-' && b[1] == 'D') b += 2;
+			if (i != std::basic_string<wchar_t>::npos) {
+				s[i] = 0;
+				if (*(s.begin()+i+1)) result.emplace_back(DxcDefine{b, s.c_str()+i+1});
+				else result.emplace_back(DxcDefine{b, nullptr});		// "define="
+			} else {
+				result.emplace_back(DxcDefine{b, nullptr});
+			}
+		}
+		return result;
+	}
+#endif
 
 	std::shared_ptr<ILowLevelCompiler> CreateHLSLToSPIRVCompiler()
 	{
