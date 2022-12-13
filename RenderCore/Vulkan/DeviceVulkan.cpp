@@ -140,7 +140,7 @@ namespace RenderCore { namespace ImplVulkan
 				}
 
 				if (report)
-					Log(VulkanMsgTarget) << pCallbackData->pMessageIdName << ": " << pMsg << std::endl;
+					Log(VulkanMsgTarget) << (pCallbackData->pMessageIdName?pCallbackData->pMessageIdName:"<<>>") << ": " << pMsg << std::endl;
 
 				return false;
 			}
