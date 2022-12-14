@@ -64,9 +64,7 @@ namespace UnitTests
 		_pipelineLayout = CreateDefaultPipelineLayout(*_device);
 
 		_shaderCompiler = CreateDefaultShaderCompiler(*_device, *_defaultLegacyBindings);
-		_shaderService = std::make_unique<RenderCore::ShaderService>();
 		_shaderSource = std::make_shared<RenderCore::MinimalShaderSource>(_shaderCompiler);
-		_shaderService->SetShaderSource(_shaderSource);
 	}
 
 	MetalTestHelper::MetalTestHelper(const std::shared_ptr<RenderCore::IDevice>& device)
@@ -80,10 +78,8 @@ namespace UnitTests
 		_defaultLegacyBindings = CreateDefaultLegacyRegisterBindingDesc();
 		_pipelineLayout = CreateDefaultPipelineLayout(*_device);
 
-		_shaderService = std::make_unique<RenderCore::ShaderService>();
 		_shaderCompiler = _device->CreateShaderCompiler();
 		_shaderSource = std::make_shared<RenderCore::MinimalShaderSource>(_shaderCompiler);
-		_shaderService->SetShaderSource(_shaderSource);
 	}
 
 	MetalTestHelper::~MetalTestHelper()
@@ -92,7 +88,6 @@ namespace UnitTests
 			::Assets::Services::GetAssetSets().Clear();
 		_pipelineLayout.reset();
 		_shaderSource.reset();
-		_shaderService.reset();
 		_device.reset();
 	}
 

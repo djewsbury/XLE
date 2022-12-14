@@ -27,7 +27,6 @@ namespace UnitTests
         std::shared_ptr<RenderCore::IResource> CreateCB(IteratorRange<const void*> data);
 
 		std::shared_ptr<RenderCore::IDevice> _device;
-		std::unique_ptr<RenderCore::ShaderService> _shaderService;
 		std::shared_ptr<RenderCore::IShaderSource> _shaderSource;
         std::shared_ptr<RenderCore::ILowLevelCompiler> _shaderCompiler;
 

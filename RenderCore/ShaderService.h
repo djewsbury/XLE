@@ -113,11 +113,27 @@ namespace RenderCore
         virtual ~IShaderSource();
     };
 
-    class ShaderService
+    /// <summary>Represents a chunk of compiled shader code</summary>
+    /// Typically we construct CompiledShaderByteCode with either a reference
+    /// to a file or a string containing high-level shader code.
+    ///
+    /// When loading a shader from a file, there is a special syntax for the "initializer":
+    ///  * {filename}:{entry point}:{shader model}
+    ///
+    /// Most clients will want to use the default shader model for a given stage. To use the default
+    /// shader model, use ":ps_*". This will always use a shader model that is valid for the current
+    /// hardware. Normally use of an explicit shader model is only required when pre-compiling many
+    /// shaders for the final game image.
+    class CompiledShaderByteCode
     {
     public:
-       using ResChar = ::Assets::ResChar;
+        IteratorRange<const void*>  GetByteCode() const;
+        StringSection<>             GetIdentifier() const;
         
+		ShaderStage		GetStage() const;
+        bool            DynamicLinkingEnabled() const;
+        StringSection<> GetEntryPoint() const;
+
         class ShaderHeader
         {
         public:
@@ -131,56 +147,6 @@ namespace RenderCore
 			ShaderHeader() { _identifier[0] = '\0'; _shaderModel[0] = '\0'; _entryPoint[0] = '\0'; }
 			ShaderHeader(StringSection<char> identifier, StringSection<char> shaderModel, StringSection<char> entryPoint, bool dynamicLinkageEnabled = false);
         };
-
-        void SetShaderSource(std::shared_ptr<IShaderSource> shaderSource);
-        const std::shared_ptr<IShaderSource>& GetShaderSource();
-
-        ShaderService();
-        ~ShaderService();
-
-    protected:
-        std::shared_ptr<IShaderSource> _shaderSource;
-    };
-
-    /// <summary>Represents a chunk of compiled shader code</summary>
-    /// Typically we construct CompiledShaderByteCode with either a reference
-    /// to a file or a string containing high-level shader code.
-    ///
-    /// When loading a shader from a file, there is a special syntax for the "initializer":
-    ///  * {filename}:{entry point}:{shader model}
-    ///
-    /// <example>
-    /// For example:
-    ///     <code>\code
-    ///         CompiledShaderByteCode byteCode("shaders/basic.pixel.hlsl:MainFunction:ps_5_0");
-    ///     \endcode</code>
-    ///     This will load the file <b>shaders/basic.pixel.hlsl</b>, and look for the entry point
-    ///     <b>MainFunction</b>. The shader will be compiled with pixel shader 5.0 shader model.
-    /// </example>
-    ///
-    /// Most clients will want to use the default shader model for a given stage. To use the default
-    /// shader model, use ":ps_*". This will always use a shader model that is valid for the current
-    /// hardware. Normally use of an explicit shader model is only required when pre-compiling many
-    /// shaders for the final game image.
-    ///
-    /// The constructor will invoke background compile operations.
-    /// The resulting compiled byte code can be accessed using GetByteCode()
-    /// However, GetByteCode can throw exceptions (such as ::Assets::Exceptions::PendingAsset
-    /// and ::Assets::Exceptions::InvalidAsset). If the background compile operation has
-    /// not completed yet, a PendingAsset exception will be thrown.
-    ///
-    /// Alternatively, use TryGetByteCode() to return an error code instead of throwing an
-    /// exception. But note that TryGetByteCode() can still throw exceptions -- but only in
-    /// unusual situations (such as programming errors or hardware faults)
-    class CompiledShaderByteCode
-    {
-    public:
-        IteratorRange<const void*>  GetByteCode() const;
-        StringSection<>             GetIdentifier() const;
-        
-		ShaderStage		GetStage() const;
-        bool            DynamicLinkingEnabled() const;
-        StringSection<> GetEntryPoint() const;
 
 		CompiledShaderByteCode(const ::Assets::Blob&, const ::Assets::DependencyValidation&, StringSection<::Assets::ResChar>);
 		CompiledShaderByteCode();

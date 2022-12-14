@@ -36,11 +36,11 @@ namespace RenderCore
 	, _depVal(depVal)
 	{
 		if (_shader && !_shader->empty()) {
-			if (_shader->size() < sizeof(ShaderService::ShaderHeader))
+			if (_shader->size() < sizeof(ShaderHeader))
 				Throw(::Exceptions::BasicLabel("Shader byte code is too small for shader header"));
-			const auto& hdr = *(const ShaderService::ShaderHeader*)_shader->data();
-			if (hdr._version != ShaderService::ShaderHeader::Version)
-				Throw(::Exceptions::BasicLabel("Unexpected version in shader header. Found (%i), expected (%i)", hdr._version, ShaderService::ShaderHeader::Version));
+			const auto& hdr = *(const ShaderHeader*)_shader->data();
+			if (hdr._version != ShaderHeader::Version)
+				Throw(::Exceptions::BasicLabel("Unexpected version in shader header. Found (%i), expected (%i)", hdr._version, ShaderHeader::Version));
 		}
 	}
 
@@ -54,7 +54,7 @@ namespace RenderCore
 	{
 		if (!_shader || _shader->empty()) return {};
 		return MakeIteratorRange(
-			PtrAdd(AsPointer(_shader->begin()), sizeof(ShaderService::ShaderHeader)), 
+			PtrAdd(AsPointer(_shader->begin()), sizeof(ShaderHeader)), 
 			AsPointer(_shader->end()));
 	}
 
@@ -62,9 +62,9 @@ namespace RenderCore
     {
         if (!_shader || _shader->empty()) return false;
 
-		assert(_shader->size() >= sizeof(ShaderService::ShaderHeader));
-        auto& hdr = *(const ShaderService::ShaderHeader*)AsPointer(_shader->begin());
-        assert(hdr._version == ShaderService::ShaderHeader::Version);
+		assert(_shader->size() >= sizeof(ShaderHeader));
+        auto& hdr = *(const ShaderHeader*)AsPointer(_shader->begin());
+        assert(hdr._version == ShaderHeader::Version);
         return hdr._dynamicLinkageEnabled != 0;
     }
 
@@ -72,9 +72,9 @@ namespace RenderCore
 	{
 		if (!_shader || _shader->empty()) return ShaderStage::Null;
 
-		assert(_shader->size() >= sizeof(ShaderService::ShaderHeader));
-		auto& hdr = *(const ShaderService::ShaderHeader*)AsPointer(_shader->begin());
-		assert(hdr._version == ShaderService::ShaderHeader::Version);
+		assert(_shader->size() >= sizeof(ShaderHeader));
+		auto& hdr = *(const ShaderHeader*)AsPointer(_shader->begin());
+		assert(hdr._version == ShaderHeader::Version);
 		return AsShaderStage(hdr._shaderModel);
 	}
 
@@ -82,9 +82,9 @@ namespace RenderCore
     {
         if (!_shader || _shader->empty()) return {};
 
-		assert(_shader->size() >= sizeof(ShaderService::ShaderHeader));
-		auto& hdr = *(const ShaderService::ShaderHeader*)AsPointer(_shader->begin());
-		assert(hdr._version == ShaderService::ShaderHeader::Version);
+		assert(_shader->size() >= sizeof(ShaderHeader));
+		auto& hdr = *(const ShaderHeader*)AsPointer(_shader->begin());
+		assert(hdr._version == ShaderHeader::Version);
 		return MakeStringSection(hdr._identifier);
     }
 
@@ -92,9 +92,9 @@ namespace RenderCore
     {
         if (!_shader || _shader->empty()) return {};
 
-		assert(_shader->size() >= sizeof(ShaderService::ShaderHeader));
-		auto& hdr = *(const ShaderService::ShaderHeader*)AsPointer(_shader->begin());
-		assert(hdr._version == ShaderService::ShaderHeader::Version);
+		assert(_shader->size() >= sizeof(ShaderHeader));
+		auto& hdr = *(const ShaderHeader*)AsPointer(_shader->begin());
+		assert(hdr._version == ShaderHeader::Version);
 		return MakeStringSection(hdr._entryPoint);
     }
 
@@ -121,24 +121,11 @@ namespace RenderCore
         _dynamicLinkageEnabled = false;
     }
 
-    void ShaderService::SetShaderSource(std::shared_ptr<IShaderSource> shaderSource)
-    {
-        _shaderSource = shaderSource;
-    }
-
-    auto ShaderService::GetShaderSource() -> const std::shared_ptr<IShaderSource>&
-    {
-        return _shaderSource;
-    }
-
-    ShaderService::ShaderService() {}
-    ShaderService::~ShaderService() {}
-
     IShaderSource::~IShaderSource() {}
     ILowLevelCompiler::~ILowLevelCompiler() {}
 
 
-	ShaderService::ShaderHeader::ShaderHeader(StringSection<char> identifier, StringSection<char> shaderModel, StringSection<char> entryPoint, bool dynamicLinkageEnabled)
+	CompiledShaderByteCode::ShaderHeader::ShaderHeader(StringSection<char> identifier, StringSection<char> shaderModel, StringSection<char> entryPoint, bool dynamicLinkageEnabled)
 	: _version(Version)
 	, _dynamicLinkageEnabled(unsigned(dynamicLinkageEnabled))
 	{
@@ -147,6 +134,6 @@ namespace RenderCore
         XlCopyString(_entryPoint, entryPoint);
 	}
 
-    const unsigned ShaderService::ShaderHeader::Version = 3u;
+    const unsigned CompiledShaderByteCode::ShaderHeader::Version = 3u;
 }
 

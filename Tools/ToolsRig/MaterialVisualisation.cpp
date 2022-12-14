@@ -30,7 +30,6 @@
 
 #include "../../RenderCore/UniformsStream.h"
 #include "../../RenderCore/BufferView.h"
-#include "../../RenderCore/ShaderService.h"
 
 #include "../../Math/Transformations.h"
 #include "../../Assets/Assets.h"

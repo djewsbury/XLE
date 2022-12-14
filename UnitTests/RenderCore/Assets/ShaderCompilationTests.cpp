@@ -110,9 +110,9 @@ namespace UnitTests
 			REQUIRE(reqRes.size() == 1);
 			auto blob = reqRes[0]._sharedBlob;
 			REQUIRE(blob != nullptr);
-			REQUIRE(blob->size() >= sizeof(ShaderService::ShaderHeader));
-			const auto& hdr = *(const ShaderService::ShaderHeader*)blob->data();
-			REQUIRE(hdr._version == ShaderService::ShaderHeader::Version);
+			REQUIRE(blob->size() >= sizeof(CompiledShaderByteCode::ShaderHeader));
+			const auto& hdr = *(const CompiledShaderByteCode::ShaderHeader*)blob->data();
+			REQUIRE(hdr._version == CompiledShaderByteCode::ShaderHeader::Version);
 			REQUIRE(hdr._identifier == std::string{"ut-data/IncludeDirective.hlsl-main[SOME_DEFINE=1;VS=1]"});
 		}
 

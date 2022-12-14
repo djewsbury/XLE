@@ -252,14 +252,14 @@ namespace RenderCore { namespace Metal_DX11
 			return result;
 		}
 
-		static Payload AsCodePayload(IDxcBlob* input, const ShaderService::ShaderHeader& hdr)
+		static Payload AsCodePayload(IDxcBlob* input, const CompiledShaderByteCode::ShaderHeader& hdr)
 		{
 			auto byteCount = input->GetBufferSize();
 			if (!byteCount) return {};
 
 			Payload result = std::make_shared<std::vector<uint8_t>>();
 			result->resize(sizeof(hdr) + byteCount);
-			*(ShaderService::ShaderHeader*)result->data() = hdr;
+			*(CompiledShaderByteCode::ShaderHeader*)result->data() = hdr;
 			std::memcpy(PtrAdd(result->data(), sizeof(hdr)), input->GetBufferPointer(), byteCount);
 			return result;
 		}
@@ -293,7 +293,7 @@ namespace RenderCore { namespace Metal_DX11
 			ResChar shaderModel[64];
 			AdaptShaderModel(shaderModel, dimof(shaderModel), shaderPath._shaderModel);
 
-			StringMeld<dimof(ShaderService::ShaderHeader::_identifier)> identifier;
+			StringMeld<dimof(CompiledShaderByteCode::ShaderHeader::_identifier)> identifier;
 			identifier << shaderPath._filename << "-" << shaderPath._entryPoint << "[" << definesTable << "]";
 
 			// -O3 should the default (some more information on optimization: https://github.com/Microsoft/DirectXShaderCompiler/blob/master/docs/SPIR-V.rst#optimization)
@@ -416,7 +416,7 @@ namespace RenderCore { namespace Metal_DX11
 					auto hresult = compileResult2->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&payloadBlobRaw), nullptr);
 					intrusive_ptr<IDxcBlob> payloadBlob = moveptr(payloadBlobRaw);
 					if (hresult == S_OK && payloadBlob)
-						payload = AsCodePayload(payloadBlob, ShaderService::ShaderHeader { identifier, shaderModel, shaderPath._entryPoint, false });
+						payload = AsCodePayload(payloadBlob, CompiledShaderByteCode::ShaderHeader { identifier, shaderModel, shaderPath._entryPoint, false });
 				}
 
 				if (compileResult2->HasOutput(DXC_OUT_ERRORS)) {
@@ -437,7 +437,7 @@ namespace RenderCore { namespace Metal_DX11
 					res = compileResult->GetResult(&payloadBlobRaw);
 					intrusive_ptr<IDxcBlob> payloadResult = moveptr(payloadBlobRaw);
 					if (res == S_OK && payloadResult)
-						payload = AsCodePayload(payloadResult, ShaderService::ShaderHeader { identifier, shaderModel, shaderPath._entryPoint, false });
+						payload = AsCodePayload(payloadResult, CompiledShaderByteCode::ShaderHeader { identifier, shaderModel, shaderPath._entryPoint, false });
 
 					IDxcBlobEncoding* errorBlobRaw = nullptr;
 					res = compileResult->GetErrorBuffer(&errorBlobRaw);

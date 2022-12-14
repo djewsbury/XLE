@@ -309,17 +309,17 @@ namespace RenderCore { namespace Metal_Vulkan
 		glslang::GlslangToSpv(*program.getIntermediate(shaderType), spirv, &options);
 
 		auto spirvBlockSize = spirv.size() * sizeof(unsigned);
-		payload = std::make_shared<std::vector<uint8>>(spirvBlockSize + sizeof(ShaderService::ShaderHeader));
+		payload = std::make_shared<std::vector<uint8>>(spirvBlockSize + sizeof(CompiledShaderByteCode::ShaderHeader));
 
-		*(ShaderService::ShaderHeader*)AsPointer(payload->begin())
-			= ShaderService::ShaderHeader { identifier, shaderModel, "main", false };
+		*(CompiledShaderByteCode::ShaderHeader*)AsPointer(payload->begin())
+			= CompiledShaderByteCode::ShaderHeader { identifier, shaderModel, "main", false };
 
 		// std::stringstream disassem;
 		// spv::Disassemble(disassem, spirv);
 		// auto d = disassem.str();
 
 		std::memcpy(
-			PtrAdd(AsPointer(payload->begin()), sizeof(ShaderService::ShaderHeader)),
+			PtrAdd(AsPointer(payload->begin()), sizeof(CompiledShaderByteCode::ShaderHeader)),
 			AsPointer(spirv.begin()), spirvBlockSize);
 
 		return true;
@@ -557,7 +557,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		StringSection<::Assets::ResChar> definesTable,
 		IteratorRange<const ILowLevelCompiler::SourceLineMarker*> sourceLineMarkers) const
 	{
-		StringMeld<dimof(ShaderService::ShaderHeader::_identifier)> identifier;
+		StringMeld<dimof(CompiledShaderByteCode::ShaderHeader::_identifier)> identifier;
 		identifier << shaderPath._filename << "-" << shaderPath._entryPoint << "[" << definesTable << "]";
 		return DoLowLevelCompileInternal(payload, errors, dependencies, sourceCode, sourceCodeLength, shaderPath, identifier.AsStringSection(), definesTable, sourceLineMarkers);
 	}
@@ -586,9 +586,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	std::string GLSLToSPIRVCompiler::MakeShaderMetricsString(const void* data, size_t dataSize) const
 	{
-		if (dataSize > sizeof(ShaderService::ShaderHeader)) {
+		if (dataSize > sizeof(CompiledShaderByteCode::ShaderHeader)) {
 			std::stringstream str;
-			str << SPIRVReflection({PtrAdd(data, sizeof(ShaderService::ShaderHeader)), PtrAdd(data, dataSize - sizeof(ShaderService::ShaderHeader))});
+			str << SPIRVReflection({PtrAdd(data, sizeof(CompiledShaderByteCode::ShaderHeader)), PtrAdd(data, dataSize - sizeof(CompiledShaderByteCode::ShaderHeader))});
 			return str.str();
 		} else {
 			return "<<error: buffer is too small>>";
@@ -717,7 +717,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (tolower(shaderPath._shaderModel[0]) == 'g')
 			hlslccFlags &= ~HLSLCC_FLAG_INOUT_SEMANTIC_NAMES;
 
-		auto* bytecodeStart = (const char*)PtrAdd(AsPointer(hlslBytecode->begin()), sizeof(ShaderService::ShaderHeader));
+		auto* bytecodeStart = (const char*)PtrAdd(AsPointer(hlslBytecode->begin()), sizeof(CompiledShaderByteCode::ShaderHeader));
 		EvaluateBindingData bd { _cfg, definesTable };
 		auto translateResult = TranslateHLSLFromMem(
 			bytecodeStart,
@@ -729,7 +729,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	
 		// Third, GLSL source -> glslang::TShader -> SPIR-V bytecode
 		assert(GLSLShaderTypeToEShLanguage(glslShader.shaderType) == EShLanguageFromShaderModel(shaderPath._shaderModel));
-		StringMeld<dimof(ShaderService::ShaderHeader::_identifier)> identifier;
+		StringMeld<dimof(CompiledShaderByteCode::ShaderHeader::_identifier)> identifier;
 		identifier << shaderPath._filename << "-" << shaderPath._entryPoint << "[" << definesTable << "]";
 		return GLSLToSPIRVCompiler::DoLowLevelCompileInternal(
 			payload, errors, 
@@ -784,6 +784,4 @@ namespace RenderCore { namespace Metal_Vulkan
 			return nullptr;
 		}
 	}
-
 }}
-

@@ -14,10 +14,8 @@ namespace RenderCore
 {
 	class IDevice;
 	class ILowLevelCompiler;
-	class ShaderService;
 	class MinimalShaderSource;
 	class ICompiledPipelineLayout;
-	class LegacyRegisterBindingDesc;
 	class IShaderSource;
 
 	namespace Assets { class PredefinedPipelineLayoutFile; class PredefinedDescriptorSetLayout; }
@@ -59,7 +57,6 @@ namespace RenderCore { namespace Techniques
 	public:
 		std::shared_ptr<IDevice> _device;
 		std::shared_ptr<ILowLevelCompiler> _shaderCompiler;
-		std::shared_ptr<ShaderService> _shaderService;
 		std::shared_ptr<IShaderSource> _shaderSource;
 
 		::Assets::CompilerRegistration _shaderFilteringRegistration;
