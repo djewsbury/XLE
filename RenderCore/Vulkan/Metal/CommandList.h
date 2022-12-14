@@ -151,6 +151,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			IteratorRange<const VkPipelineStageFlags*> waitBeforeBeginStages,
 			IteratorRange<const std::pair<VkSemaphore, uint64_t>*> signalOnCompletion);
 		void WaitForFence(IAsyncTracker::Marker marker, std::optional<std::chrono::nanoseconds> timeout = {});
+		void WaitIdle();
 
 		void Present(
 			VkSwapchainKHR swapChain, unsigned imageIndex, 

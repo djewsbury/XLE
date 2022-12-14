@@ -2295,7 +2295,7 @@ namespace RenderCore { namespace ImplVulkan
 
 	void Device::Stall()
 	{
-		assert(0);	// unimplemented
+		_graphicsQueue->WaitIdle();
 	}
 
 	void Device::PrepareForDestruction()

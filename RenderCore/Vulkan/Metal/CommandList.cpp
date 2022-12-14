@@ -559,6 +559,13 @@ namespace RenderCore { namespace Metal_Vulkan
 			Throw(VulkanAPIFailure(res, "Failure while queuing present"));
 	}
 
+	void SubmissionQueue::WaitIdle()
+	{
+		auto res = vkQueueWaitIdle(_underlying);
+		if (res != VK_SUCCESS)
+			Throw(VulkanAPIFailure(res, "Failure while waiting for idle"));
+	}
+
 	SubmissionQueue::SubmissionQueue(
 		ObjectFactory& factory,
 		VkQueue queue,
