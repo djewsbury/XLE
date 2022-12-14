@@ -107,18 +107,26 @@ namespace RenderCore
         XlCopyString(_filename, filename);
         XlCopyString(_entryPoint, entryPoint);
 
-        _dynamicLinkageEnabled = shaderModel[0] == '!';
-        if (_dynamicLinkageEnabled) {
-			XlCopyString(_shaderModel, MakeStringSection(shaderModel.begin()+1, shaderModel.end()));
-		} else {
-			XlCopyString(_shaderModel, shaderModel);
+		// Read prefixes from the shader model string
+		_compilationFlags = 0;
+		while (!shaderModel.IsEmpty()) {
+			if (shaderModel[0] == '!') {
+				_compilationFlags |= CompilationFlags::DynamicLinkageEnabled;
+				++shaderModel._start;
+			} else if (shaderModel[0] == '$') {
+				_compilationFlags |= CompilationFlags::DebugSymbols | CompilationFlags::DisableOptimizations;
+				++shaderModel._start;
+			} else
+				break;
 		}
+
+		XlCopyString(_shaderModel, shaderModel);
     }
 
     ILowLevelCompiler::ResId::ResId()
     {
         _filename[0] = '\0'; _entryPoint[0] = '\0'; _shaderModel[0] = '\0';
-        _dynamicLinkageEnabled = false;
+        _compilationFlags = 0;
     }
 
     IShaderSource::~IShaderSource() {}

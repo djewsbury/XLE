@@ -66,7 +66,8 @@ namespace RenderCore
 
 	::Assets::CompilerRegistration RegisterShaderCompiler(
 		const std::shared_ptr<IShaderSource>& shaderSource,
-		::Assets::IIntermediateCompilers& intermediateCompilers);
+		::Assets::IIntermediateCompilers& intermediateCompilers,
+		ILowLevelCompiler::CompilationFlags::BitField universalComplationFlags);
 }
 
 

@@ -14,6 +14,7 @@
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/Streams/PathUtils.h"
+#include "../Utility/ArithmeticUtils.h"
 
 namespace RenderCore
 {
@@ -155,36 +156,32 @@ namespace RenderCore
 	ILowLevelCompiler::ResId MinimalShaderSource::MakeResId(
         StringSection<> initializer) const
 	{
-		ILowLevelCompiler::ResId shaderId;
-
-        const ::Assets::ResChar* startShaderModel = nullptr;
+		StringSection<> filename, entryPoint, shaderModel;
         auto splitter = MakeFileNameSplitter(initializer);
-        XlCopyString(shaderId._filename, splitter.AllExceptParameters());
+
+        filename = splitter.AllExceptParameters();
 
         if (splitter.Parameters().IsEmpty()) {
-            XlCopyString(shaderId._entryPoint, "main");
+            entryPoint = "main";
         } else {
-            startShaderModel = XlFindChar(splitter.Parameters().begin(), ':');
-
+            auto startShaderModel = XlFindChar(splitter.Parameters().begin(), ':');
             if (!startShaderModel) {
-                XlCopyString(shaderId._entryPoint, splitter.Parameters().begin());
+				entryPoint = splitter.Parameters();
             } else {
-                XlCopyNString(shaderId._entryPoint, splitter.Parameters().begin(), startShaderModel - splitter.Parameters().begin());
-                if (*(startShaderModel+1) == '!') {
-                    shaderId._dynamicLinkageEnabled = true;
-                    ++startShaderModel;
-                }
-                XlCopyString(shaderId._shaderModel, startShaderModel+1);
+				entryPoint = {splitter.Parameters().begin(), startShaderModel};
+				shaderModel = {startShaderModel+1, splitter.Parameters().end()};
             }
         }
 
-        if (!startShaderModel)
+		ILowLevelCompiler::ResId shaderId { filename, entryPoint, shaderModel };
+
+		if (!shaderId._shaderModel[0])
             XlCopyString(shaderId._shaderModel, PS_DefShaderModel);
 
             //  we have to do the "AdaptShaderModel" shader model here to convert
             //  the default shader model string (etc, "vs_*) to a resolved shader model
             //  this is because we want the archive name to be correct
-        _pimpl->_compiler->AdaptShaderModel(shaderId._shaderModel, dimof(shaderId._shaderModel), shaderId._shaderModel);
+        _pimpl->_compiler->AdaptResId(shaderId);
 
         return shaderId;
 	}
@@ -263,7 +260,8 @@ namespace RenderCore
 
 	::Assets::CompilerRegistration RegisterShaderCompiler(
 		const std::shared_ptr<IShaderSource>& shaderSource,
-		::Assets::IIntermediateCompilers& intermediateCompilers)
+		::Assets::IIntermediateCompilers& intermediateCompilers,
+		ILowLevelCompiler::CompilationFlags::BitField universalComplationFlags)
 	{
 		::Assets::CompilerRegistration result{
 			intermediateCompilers,
@@ -271,18 +269,21 @@ namespace RenderCore
 			"shader-compiler",
 			ConsoleRig::GetLibVersionDesc(),
 			{},
-			[shaderSource](const ::Assets::InitializerPack& initializers) {
+			[shaderSource, universalComplationFlags](const ::Assets::InitializerPack& initializers) {
 				std::string definesTable;
 				if (initializers.GetCount() > 1)
 					definesTable = initializers.GetInitializer<std::string>(1);
+				auto res = shaderSource->MakeResId(initializers.GetInitializer<std::string>(0));
+				res._compilationFlags |= universalComplationFlags;
 				return std::make_shared<ShaderCompileOperation>(
 					*shaderSource,
-					shaderSource->MakeResId(initializers.GetInitializer<std::string>(0)),
+					res,
 					definesTable
 				);
 			},
-			[shaderSource](::Assets::ArtifactTargetCode targetCode, const ::Assets::InitializerPack& initializers) {
+			[shaderSource, universalComplationFlags](::Assets::ArtifactTargetCode targetCode, const ::Assets::InitializerPack& initializers) {
 				auto res = shaderSource->MakeResId(initializers.GetInitializer<std::string>(0));
+				res._compilationFlags |= universalComplationFlags;
 				std::string definesTable;
 				if (initializers.GetCount() > 1)
 					definesTable = initializers.GetInitializer<std::string>(1);
@@ -290,7 +291,9 @@ namespace RenderCore
 				// we don't encode the targetCode, because we assume it's always the same
 				assert(targetCode == CompiledShaderByteCode::CompileProcessType);
 				auto splitFN = MakeFileNameSplitter(res._filename);
-				auto entryId = HashCombine(HashCombine(HashCombine(Hash64(res._entryPoint), Hash64(definesTable)), Hash64(res._shaderModel)), Hash64(splitFN.Extension()));
+				auto entryId = Hash64(res._entryPoint, Hash64(definesTable, Hash64(res._shaderModel, Hash64(splitFN.Extension()))));
+				assert(res._compilationFlags < 64);
+				entryId = rotr64(entryId, res._compilationFlags);
 
 				StringMeld<MaxPath> archiveName;
 				StringMeld<MaxPath> descriptiveName;
@@ -298,10 +301,10 @@ namespace RenderCore
 				if (compressedFN) {
 					// shader model & extension already considered in entry id; we just need to look at the directory and filename here
 					archiveName << splitFN.File() << "-" << std::hex << HashFilenameAndPath(splitFN.DriveAndPath());
-					descriptiveName << res._filename << ":" << res._entryPoint << "[" << definesTable << "]" << res._shaderModel;
+					descriptiveName << res._filename << ":" << res._entryPoint << "[" << definesTable << "]" << res._shaderModel << "-" << res._compilationFlags;
 				} else {
 					archiveName << res._filename;
-					descriptiveName << res._entryPoint << "[" << definesTable << "]" << res._shaderModel;
+					descriptiveName << res._entryPoint << "[" << definesTable << "]" << res._shaderModel << "-" << res._compilationFlags;
 				}
 				return ::Assets::IIntermediateCompilers::SplitArchiveName { archiveName.AsString(), entryId, descriptiveName.AsString() };
 			}

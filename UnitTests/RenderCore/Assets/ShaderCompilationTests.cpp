@@ -87,7 +87,8 @@ namespace UnitTests
 
 		auto compilerRegistration = RenderCore::RegisterShaderCompiler(
 			customShaderSource, 
-			::Assets::Services::GetAsyncMan().GetIntermediateCompilers());
+			::Assets::Services::GetAsyncMan().GetIntermediateCompilers(),
+			GetDefaultShaderCompilationFlags(*testHelper->_device));
 
 		SECTION("MinimalShaderSource") {
 			auto compiledFromString = testHelper->MakeShaderProgram(vsText_clipInput, psText);
@@ -222,7 +223,7 @@ namespace UnitTests
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		auto countingShaderSource = std::make_shared<CountingShaderSource>(testHelper->_shaderSource);
-		auto shaderCompilerRegistration = RenderCore::RegisterShaderCompiler(countingShaderSource, compilers);
+		auto shaderCompilerRegistration = RenderCore::RegisterShaderCompiler(countingShaderSource, compilers, GetDefaultShaderCompilationFlags(*testHelper->_device));
 
 		SECTION("Successful Compilation")
 		{

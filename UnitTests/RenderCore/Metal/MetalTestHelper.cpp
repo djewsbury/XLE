@@ -138,6 +138,15 @@ namespace UnitTests
 		}
 	}
 
+	RenderCore::ILowLevelCompiler::CompilationFlags::BitField GetDefaultShaderCompilationFlags(RenderCore::IDevice& device)
+	{
+		#if defined(_DEBUG)
+			if (device.GetImmediateContext()->GetAnnotator().IsCaptureToolAttached())
+				return RenderCore::ILowLevelCompiler::CompilationFlags::DebugSymbols | RenderCore::ILowLevelCompiler::CompilationFlags::DisableOptimizations;
+		#endif
+		return 0;
+	}
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

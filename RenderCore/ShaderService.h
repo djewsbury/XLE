@@ -30,13 +30,19 @@ namespace RenderCore
         using Payload = ::Assets::Blob;
 		using ResChar = ::Assets::ResChar;
 
+        struct CompilationFlags
+        {
+            enum Flags { DebugSymbols = 1<<0, DisableOptimizations = 1<<1, DynamicLinkageEnabled = 1<<2 };
+            using BitField = unsigned;
+        };
+
 		class ResId
         {
         public:
             ResChar     _filename[MaxPath];
             ResChar     _entryPoint[64];
             ResChar     _shaderModel[32];
-            bool        _dynamicLinkageEnabled;
+            CompilationFlags::BitField _compilationFlags;
 
             ResId(StringSection<ResChar> filename, StringSection<ResChar> entryPoint, StringSection<ResChar> shaderModel);
             ResId();
@@ -55,11 +61,6 @@ namespace RenderCore
             unsigned    _processedSourceLine;
         };
 
-        virtual void AdaptShaderModel(
-            ResChar destination[], 
-            const size_t destinationCount,
-			StringSection<ResChar> source) const = 0;
-
         virtual bool DoLowLevelCompile(
             /*out*/ Payload& payload,
             /*out*/ Payload& errors,
@@ -76,6 +77,8 @@ namespace RenderCore
             const ResId& shaderPath,
             StringSection<::Assets::ResChar> definesTable,
             IteratorRange<const SourceLineMarker*> sourceLineMarkers = {}) const { return false; }
+
+        virtual void AdaptResId(ResId&) const = 0;
 
         virtual bool SupportsCompletionFunctionCompile() { return false; }
 
@@ -124,6 +127,10 @@ namespace RenderCore
     /// shader model, use ":ps_*". This will always use a shader model that is valid for the current
     /// hardware. Normally use of an explicit shader model is only required when pre-compiling many
     /// shaders for the final game image.
+    ///
+    /// Also, you can disable optimization and enable debug symbols for a specific shader by appending
+    /// "$" to the shader model (eg, "$ps_*"). While other methods allow controlling compilation flags
+    /// universally, this allows for applying this flags to particular shaders.
     class CompiledShaderByteCode
     {
     public:

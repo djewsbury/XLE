@@ -95,7 +95,7 @@ namespace UnitTests
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		auto filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
-		auto shaderCompilerRegistration = RegisterShaderCompiler(testHelper->_shaderSource, compilers);
+		auto shaderCompilerRegistration = RegisterShaderCompiler(testHelper->_shaderSource, compilers, GetDefaultShaderCompilationFlags(*testHelper->_device));
 		auto shaderCompiler2Registration = Techniques::RegisterInstantiateShaderGraphCompiler(testHelper->_shaderSource, compilers);
 
 		auto sequencerDescriptorSetLayout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>(

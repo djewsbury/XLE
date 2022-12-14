@@ -209,6 +209,15 @@ size_t XlGlyphCount(const ucs4* str)
     return e - str - 1;
 }
 
+size_t XlStringSize(const wchar_t* str)
+{
+    // string size returns the number of fixed sized "wchar_t" elements in the string
+	// (even if this is not the same as the number of characters)
+    auto* i = str;
+	while (*i) ++i;
+	return i - str;
+}
+
 // count is buffer size in char
 static void XlCopyString_primitive(char* dst, size_t count, const char* src)
 {

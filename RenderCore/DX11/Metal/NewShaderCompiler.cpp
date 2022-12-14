@@ -195,34 +195,22 @@ namespace RenderCore { namespace Metal_DX11
 	class DXShaderCompiler : public ILowLevelCompiler
 	{
 	public:
-		virtual void AdaptShaderModel(
-			ResChar destination[], 
-			const size_t destinationCount,
-			StringSection<ResChar> inputShaderModel) const override
+		virtual void AdaptResId(ResId& resId) const override
 		{
-			assert(inputShaderModel.size() >= 1);
-			if (inputShaderModel[0] != '\0') {
-				size_t length = inputShaderModel.size();
+			assert(resId._shaderModel[0] != '\0');
+			if (resId._shaderModel[0] != '\0') {
+				size_t length = XlStringSize(resId._shaderModel);
 
 					//
 					//      Some shaders end with vs_*, gs_*, etc..
 					//      Change this to the highest shader model we can support
 					//      with the current device
 					//
-				if (inputShaderModel[length-1] == '*') {
-					const char* bestShaderModel = "6_1";
-				
-					if (destination != inputShaderModel.begin()) 
-						XlCopyString(destination, destinationCount, inputShaderModel);
-
-					destination[std::min(length-1, destinationCount-1)] = '\0';
-					XlCatString(destination, destinationCount, bestShaderModel);
-					return;
+				if (resId._shaderModel[length-1] == '*') {
+					resId._shaderModel[length-1] = '\0';
+					XlCatString(resId._shaderModel, dimof(resId._shaderModel)-length, _defaultShaderModel.c_str());
 				}
 			}
-
-			if (destination != inputShaderModel.begin())
-				XlCopyString(destination, destinationCount, inputShaderModel);
 		}
 
 		static Payload AsPayload(IDxcBlob* input)
@@ -269,7 +257,7 @@ namespace RenderCore { namespace Metal_DX11
 			/*out*/ Payload& errors,
 			/*out*/ std::vector<::Assets::DependentFileState>& dependencies,
 			const void* sourceCode, size_t sourceCodeLength,
-			const ResId& shaderPath,
+			const ResId& shaderPathInit,
 			StringSection<::Assets::ResChar> definesTable,
 			IteratorRange<const SourceLineMarker*> sourceLineMarkers) const override
 		{
@@ -290,8 +278,8 @@ namespace RenderCore { namespace Metal_DX11
 			if (hresult == S_OK)
 				return true;*/
 
-			ResChar shaderModel[64];
-			AdaptShaderModel(shaderModel, dimof(shaderModel), shaderPath._shaderModel);
+			ResId shaderPath = shaderPathInit;
+			AdaptResId(shaderPath);
 
 			StringMeld<dimof(CompiledShaderByteCode::ShaderHeader::_identifier)> identifier;
 			identifier << shaderPath._filename << "-" << shaderPath._entryPoint << "[" << definesTable << "]";
@@ -308,51 +296,27 @@ namespace RenderCore { namespace Metal_DX11
 			// more here: https://simoncoenen.com/blog/programming/graphics/DxcCompiling
 			// also just call "dxc.exe --help"
 
-#if 0
-			LPCWSTR fixedArguments[] {
-				L"-spirv",
-				L"-fspv-target-env=vulkan1.1",
-#if 1
-				L"-Qembed_debug",
-				DXC_ARG_DEBUG,
-				L"-Oconfig=--eliminate-dead-branches,--eliminate-dead-code-aggressive,--eliminate-dead-functions",
-				L"-fspv-debug=line",
-				L"-fspv-debug=source",
-#else
-				L"-Qstrip_debug",
-				DXC_ARG_OPTIMIZATION_LEVEL3
-#endif
-			};
+			std::vector<LPCWSTR> fixedArguments;
+			fixedArguments.push_back(L"-spirv");
+			fixedArguments.push_back(L"-fspv-target-env=vulkan1.1");
+			fixedArguments.push_back(L"-fvk-use-dx-layout");			// XLE associates the DirectX alignment rules with HLSL source;
 
-			auto arguments = MakeDefinesTable(definesTable, shaderPath._shaderModel, _fixedDefines);
+			if (shaderPath._compilationFlags & CompilationFlags::DebugSymbols) {
+				fixedArguments.push_back(L"-Qembed_debug");
+				fixedArguments.push_back(DXC_ARG_DEBUG);
+				fixedArguments.push_back(L"-fspv-debug=line");
+				fixedArguments.push_back(L"-fspv-debug=source");		// emits the preprocessed source code into the shader bundle
+				// fixedArguments.push_back(L"-fspv-debug=rich");		// "rich" and "rich-with-source" are undocumented options here, but appear unfinished, since they can crash
+			} else {
+				fixedArguments.push_back(L"-Qstrip_debug");
+			}
 
-			arguments.push_back(L"-E " + Conversion::Convert<std::basic_string<wchar_t>>(MakeStringSection(shaderPath._entryPoint)));
-			arguments.push_back(L"-T " + Conversion::Convert<std::basic_string<wchar_t>>(MakeStringSection(shaderModel)));
-			if (shaderPath._filename[0])
-				arguments.push_back(Conversion::Convert<std::basic_string<wchar_t>>(MakeStringSection(shaderPath._filename)));
-
-			auto argumentCount = dimof(fixedArguments) + arguments.size();
-			VLA(LPCWSTR, finalArguments, argumentCount);
-			LPCWSTR* i = finalArguments;
-			for (auto a:fixedArguments) *i++ = a;
-			for (const auto&a:arguments) *i++ = a.c_str();
-#else
-			LPCWSTR fixedArguments[] {
-				L"-spirv",
-				L"-fspv-target-env=vulkan1.1",
-				L"-fvk-use-dx-layout",			// XLE associates the DirectX alignment rules with HLSL source
-				#if 1
-					L"-Qembed_debug",
-					DXC_ARG_DEBUG,
-					L"-Oconfig=--eliminate-dead-branches,--eliminate-dead-code-aggressive,--eliminate-dead-functions",
-					L"-fspv-debug=line",
-					L"-fspv-debug=source",		// emits the preprocessed source code into the shader bundle
-					// L"-fspv-debug=rich",		// "rich" and "rich-with-source" are undocumented options here, but appear unfinished, since they can crash
-				#else
-					L"-Qstrip_debug",
-					DXC_ARG_OPTIMIZATION_LEVEL3
-				#endif
-			};
+			if (shaderPath._compilationFlags & CompilationFlags::DisableOptimizations) {
+				// we always need to eliminate dead code, otherwise we'll end up with a massive uniforms interface for every shader
+				fixedArguments.push_back(L"-Oconfig=--eliminate-dead-branches,--eliminate-dead-code-aggressive,--eliminate-dead-functions");
+			} else {
+				fixedArguments.push_back(DXC_ARG_OPTIMIZATION_LEVEL3);
+			}
 
 			auto defines = MakeDefinesTable(definesTable, shaderPath._shaderModel, _fixedDefines);
 
@@ -376,8 +340,8 @@ namespace RenderCore { namespace Metal_DX11
 			auto res2 = _utils->BuildArguments(
 				Conversion::Convert<std::wstring>(MakeStringSection(filenameForCompiler)).c_str(),
 				Conversion::Convert<std::wstring>(MakeStringSection(shaderPath._entryPoint)).c_str(),
-				Conversion::Convert<std::wstring>(MakeStringSection(shaderModel)).c_str(),
-				fixedArguments, dimof(fixedArguments),
+				Conversion::Convert<std::wstring>(MakeStringSection(shaderPath._shaderModel)).c_str(),
+				fixedArguments.data(), fixedArguments.size(),
 				defines._defines.data(), defines._defines.size(),
 				&rawArgs);
 			if (res2 != S_OK) {
@@ -385,7 +349,6 @@ namespace RenderCore { namespace Metal_DX11
 				return false;
 			}
 			intrusive_ptr<IDxcCompilerArgs> args = moveptr(rawArgs);
-#endif
 
 			IDxcOperationResult* compileResultRaw = nullptr;
 
@@ -416,7 +379,7 @@ namespace RenderCore { namespace Metal_DX11
 					auto hresult = compileResult2->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&payloadBlobRaw), nullptr);
 					intrusive_ptr<IDxcBlob> payloadBlob = moveptr(payloadBlobRaw);
 					if (hresult == S_OK && payloadBlob)
-						payload = AsCodePayload(payloadBlob, CompiledShaderByteCode::ShaderHeader { identifier, shaderModel, shaderPath._entryPoint, false });
+						payload = AsCodePayload(payloadBlob, CompiledShaderByteCode::ShaderHeader { identifier, shaderPath._shaderModel, shaderPath._entryPoint, false });
 				}
 
 				if (compileResult2->HasOutput(DXC_OUT_ERRORS)) {
@@ -437,7 +400,7 @@ namespace RenderCore { namespace Metal_DX11
 					res = compileResult->GetResult(&payloadBlobRaw);
 					intrusive_ptr<IDxcBlob> payloadResult = moveptr(payloadBlobRaw);
 					if (res == S_OK && payloadResult)
-						payload = AsCodePayload(payloadResult, CompiledShaderByteCode::ShaderHeader { identifier, shaderModel, shaderPath._entryPoint, false });
+						payload = AsCodePayload(payloadResult, CompiledShaderByteCode::ShaderHeader { identifier, shaderPath._shaderModel, shaderPath._entryPoint, false });
 
 					IDxcBlobEncoding* errorBlobRaw = nullptr;
 					res = compileResult->GetErrorBuffer(&errorBlobRaw);
@@ -474,9 +437,10 @@ namespace RenderCore { namespace Metal_DX11
 			StringSection<char> definesTable, const char shaderModel[],
 			IteratorRange<const FixedDefined*> fixedDefines);
 
-		DXShaderCompiler(std::vector<FixedDefined>&& fixedDefines, ShaderFeatureLevel featureLevel)
+		DXShaderCompiler(std::vector<FixedDefined>&& fixedDefines, ShaderFeatureLevel featureLevel, std::string defaultShaderModel)
 		: _fixedDefines(std::move(fixedDefines))
 		, _featureLevel(featureLevel)
+		, _defaultShaderModel(std::move(defaultShaderModel))
 		{
 			auto& library = GetDXCompilerLibrary();
 			_utils = library.CreateDXCompilerInterface<IDxcUtils>(CLSID_DxcUtils);
@@ -492,6 +456,8 @@ namespace RenderCore { namespace Metal_DX11
 
 		intrusive_ptr<IDxcUtils> _utils;
 		intrusive_ptr<IDxcCompiler3> _compiler;
+
+		std::string _defaultShaderModel;
 
 		mutable Threading::Mutex _lock;
 	};
@@ -585,27 +551,6 @@ namespace RenderCore { namespace Metal_DX11
 		return result;
 	}
 
-#if 0
-	static std::vector<DxcDefine> AsDxcDefines(IteratorRange<std::basic_string<wchar_t>*> stringDefines)
-	{
-		std::vector<DxcDefine> result;
-		result.reserve(stringDefines.size());
-		for (auto& s:stringDefines) {
-			auto i = s.find_last_of('=');
-			auto* b = s.c_str();
-			if (b[0] == '-' && b[1] == 'D') b += 2;
-			if (i != std::basic_string<wchar_t>::npos) {
-				s[i] = 0;
-				if (*(s.begin()+i+1)) result.emplace_back(DxcDefine{b, s.c_str()+i+1});
-				else result.emplace_back(DxcDefine{b, nullptr});		// "define="
-			} else {
-				result.emplace_back(DxcDefine{b, nullptr});
-			}
-		}
-		return result;
-	}
-#endif
-
 	std::shared_ptr<ILowLevelCompiler> CreateHLSLToSPIRVCompiler()
 	{
 		std::vector<DXShaderCompiler::FixedDefined> fixedDefines {
@@ -615,6 +560,7 @@ namespace RenderCore { namespace Metal_DX11
 			#endif
 		};
 
-		return std::make_shared<DXShaderCompiler>(std::move(fixedDefines), ShaderFeatureLevel::Level_11_0);
+		std::string defaultShaderModel = "6_1";
+		return std::make_shared<DXShaderCompiler>(std::move(fixedDefines), ShaderFeatureLevel::Level_11_0, std::move(defaultShaderModel));
 	}
 }}

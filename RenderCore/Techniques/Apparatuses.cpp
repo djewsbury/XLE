@@ -26,6 +26,7 @@
 #include "../Assets/MergedAnimationSetCompiler.h"
 #include "../BufferUploads/IBufferUploads.h"
 #include "../IDevice.h"
+#include "../IAnnotator.h"
 #include "../MinimalShaderSource.h"
 #include "../ShaderService.h"
 #include "../Vulkan/IDeviceVulkan.h"
@@ -52,7 +53,20 @@ namespace RenderCore { namespace Techniques
 		
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		_shaderFilteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
-		_shaderCompilerRegistration = RegisterShaderCompiler(_shaderSource, compilers);
+
+		RenderCore::ILowLevelCompiler::CompilationFlags::BitField shaderCompilerFlags = 0;
+		// In debug builds, if we're attached to a frame capture tool, then we'll enable debug symbols & disabled optimizations
+		// for shaders. This will make debugging shaders within the frame capture tool a little easier
+		// However -- optimizations are disabled! So obviously you won't get good performance profiles in the tool.
+		// If you're intending to profile (even for GPU only profiling), prefer to use non-debug builds
+		// This is intended as a convenience feature; but I'm in two minds about it because I worry that it could end up
+		// feeling misleading, because it's sort of a hidden toggle
+		#if defined(_DEBUG)
+			if (_device->GetImmediateContext()->GetAnnotator().IsCaptureToolAttached())
+				shaderCompilerFlags |= RenderCore::ILowLevelCompiler::CompilationFlags::DebugSymbols | RenderCore::ILowLevelCompiler::CompilationFlags::DisableOptimizations;
+		#endif
+
+		_shaderCompilerRegistration = RegisterShaderCompiler(_shaderSource, compilers, shaderCompilerFlags);
 		_graphShaderCompiler2Registration = RegisterInstantiateShaderGraphCompiler(_shaderSource, compilers);
 
 		_commonResources = std::make_shared<CommonResourceBox>(*_device);
