@@ -268,6 +268,11 @@ namespace RenderCore
 		}
 	}
 
+	void LegacyRegisterBindingDesc::AppendPassThroughDescriptorSet(uint64_t dsName)
+	{
+		_passThroughDescriptorSets.push_back(dsName);
+	}
+
 	LegacyRegisterBindingDesc::LegacyRegisterBindingDesc() {}
 	LegacyRegisterBindingDesc::~LegacyRegisterBindingDesc() {}
 

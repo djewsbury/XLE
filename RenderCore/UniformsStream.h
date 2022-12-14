@@ -231,7 +231,10 @@ namespace RenderCore
 			RegisterType type, RegisterQualifier qualifier,
 			const Entry& entry);
 
+		void AppendPassThroughDescriptorSet(uint64_t dsName);
+
 		IteratorRange<const Entry*>	GetEntries(RegisterType type, RegisterQualifier qualifier = RegisterQualifier::None) const;
+		IteratorRange<const uint64_t*> GetPassThroughDescriptorSets() const { return _passThroughDescriptorSets; }
 
 		LegacyRegisterBindingDesc();
 		~LegacyRegisterBindingDesc();
@@ -242,6 +245,7 @@ namespace RenderCore
 		std::vector<Entry> _uavRegisters;
 		std::vector<Entry> _srvRegisters_boundToBuffer;
 		std::vector<Entry> _uavRegisters_boundToBuffer;
+		std::vector<uint64_t> _passThroughDescriptorSets;
 	};
 
 	template<typename T0> ImmediateDataStream::ImmediateDataStream(const T0& b0) : ImmediateDataStream(MakeOpaqueIteratorRange(b0)) {}

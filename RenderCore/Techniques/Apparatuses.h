@@ -66,7 +66,6 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<PipelineCollection> _graphicsPipelinePool;
 
-		std::shared_ptr<LegacyRegisterBindingDesc> _legacyRegisterBindingDesc;
 		std::shared_ptr<SystemUniformsDelegate> _systemUniformsDelegate;
 		std::shared_ptr<CommonResourceBox> _commonResources;
 		std::shared_ptr<IDrawablesPool> _drawablesPool;

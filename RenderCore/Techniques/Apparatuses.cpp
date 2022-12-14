@@ -40,15 +40,14 @@
 
 namespace RenderCore { namespace Techniques
 {
-	static std::shared_ptr<RenderCore::ILowLevelCompiler> CreateDefaultShaderCompiler(RenderCore::IDevice& device, const LegacyRegisterBindingDesc& legacyRegisterBinding);
+	static std::shared_ptr<RenderCore::ILowLevelCompiler> CreateDefaultShaderCompiler(RenderCore::IDevice& device);
 
 	DrawingApparatus::DrawingApparatus(std::shared_ptr<IDevice> device)
 	{
 		_depValPtr = ::Assets::GetDepValSys().Make();
-		_legacyRegisterBindingDesc = std::make_shared<LegacyRegisterBindingDesc>(RenderCore::Assets::CreateDefaultLegacyRegisterBindingDesc());
 
 		_device = device;
-		_shaderCompiler = CreateDefaultShaderCompiler(*device, *_legacyRegisterBindingDesc);
+		_shaderCompiler = CreateDefaultShaderCompiler(*device);
 		_shaderSource = std::make_shared<MinimalShaderSource>(_shaderCompiler);
 		
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
@@ -112,7 +111,7 @@ namespace RenderCore { namespace Techniques
 		subFrameEvents._onFrameBarrier.Unbind(_frameBarrierBinding);
 	}
 
-	std::shared_ptr<RenderCore::ILowLevelCompiler> CreateDefaultShaderCompiler(RenderCore::IDevice& device, const LegacyRegisterBindingDesc& legacyRegisterBinding)
+	std::shared_ptr<RenderCore::ILowLevelCompiler> CreateDefaultShaderCompiler(RenderCore::IDevice& device)
 	{
 		auto* vulkanDevice  = (RenderCore::IDeviceVulkan*)device.QueryInterface(typeid(RenderCore::IDeviceVulkan).hash_code());
 		if (vulkanDevice) {
@@ -120,7 +119,7 @@ namespace RenderCore { namespace Techniques
 			// cross compilation approach
 			RenderCore::VulkanCompilerConfiguration cfg;
 			cfg._shaderMode = RenderCore::VulkanShaderMode::HLSLToSPIRV;
-			cfg._legacyBindings = legacyRegisterBinding;
+			cfg._legacyBindings = RenderCore::Assets::CreateDefaultLegacyRegisterBindingDesc();
 		 	return vulkanDevice->CreateShaderCompiler(cfg);
 		} else {
 			return device.CreateShaderCompiler();

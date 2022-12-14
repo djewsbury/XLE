@@ -86,8 +86,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		};
 		std::vector<DescSet> _descSet;
 		bool _hasChanges = false;
-
-		LegacyRegisterBindingDesc _legacyRegisterBindings;
+		VkPipelineLayout _configuredPipelineLayout = nullptr;		// used for validating that the pipeline layout hasn't changed
 
 		Pimpl(const CompiledPipelineLayout& layout)
 		{
@@ -196,6 +195,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			totalSize += alignedSize;
 		}
 
+		if (!totalSize) return;
+
 		auto temporaryMapping = _pimpl->_cmdListAttachedStorage->MapStorage(totalSize, BindFlag::ConstantBuffer);
 		if (temporaryMapping.GetData().empty()) {
 			Log(Warning) << "Failed to allocate temporary buffer space in numeric uniforms interface" << std::endl;
@@ -251,6 +252,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		SharedEncoder& encoder) const
 	{
 		assert(_pimpl);
+		if (encoder.GetUnderlyingPipelineLayout() != _pimpl->_configuredPipelineLayout)
+			Throw(std::runtime_error("Pipeline layout has changed while using NumericUniformsInterface. After the pipeline layout changes, remember to call BeginNumericUniformsInterface() on the encoder again to begin a new uniforms interface"));
+
         // If we've had any changes this last time, we must create new
         // descriptor sets. We will use vkUpdateDescriptorSets to fill in these
         // sets with the latest changes. Note that this will require copy across the
@@ -308,10 +312,61 @@ namespace RenderCore { namespace Metal_Vulkan
         _pimpl = std::make_unique<Pimpl>(pipelineLayout);
         _pimpl->_globalPools = &GetGlobalPools();
 		_pimpl->_descriptorPool = &_pimpl->_globalPools->_mainDescriptorPool;
-		_pimpl->_legacyRegisterBindings = bindings;		// we store this only so we can return it from the GetLegacyRegisterBindings() query
 		_pimpl->_cmdListAttachedStorage = &cmdListAttachedStorage;
+		_pimpl->_configuredPipelineLayout = pipelineLayout.GetUnderlying();
 		_pimpl->_hasChanges = false;
-        
+
+		for (auto passThrough:bindings.GetPassThroughDescriptorSets()) {
+			// "pass-through" are simplier configuration settings, whereby we jsut expose the registers of the bound pipeline
+			// layout in a 1:1 way. LegacyRegisterBindingDesc gives us a name of a descriptor set, and we'll search for that in 
+			// the pipeline layout binding
+			auto descriptorSet = _pimpl->LookupDescriptorSet(pipelineLayout, passThrough);
+			if (descriptorSet != ~0u) {
+				// register all slots 1:1 in this desc set
+				auto& descSetLayout = *pipelineLayout.GetDescriptorSetLayout(_pimpl->_descSet[descriptorSet]._bindSlot);
+
+				for (unsigned dIdx=0; dIdx<descSetLayout.GetDescriptorSlots().size(); ++dIdx) {
+					const auto& d = descSetLayout.GetDescriptorSlots()[dIdx];
+					if (d._count != 1) continue;		// can't handle arrays
+					switch (d._type) {
+					case DescriptorType::InputAttachment:
+					case DescriptorType::SampledTexture:
+						_pimpl->_srvRegisters[dIdx]._descSetIndex = descriptorSet;
+						_pimpl->_srvRegisters[dIdx]._slotIndex = dIdx;
+						break;
+					case DescriptorType::UniformBuffer:
+						_pimpl->_constantBufferRegisters[dIdx]._descSetIndex = descriptorSet;
+						_pimpl->_constantBufferRegisters[dIdx]._slotIndex = dIdx;
+						break;
+					case DescriptorType::Sampler:
+						_pimpl->_samplerRegisters[dIdx]._descSetIndex = descriptorSet;
+						_pimpl->_samplerRegisters[dIdx]._slotIndex = dIdx;
+						break;
+					case DescriptorType::UnorderedAccessTexture:
+						_pimpl->_uavRegisters[dIdx]._descSetIndex = descriptorSet;
+						_pimpl->_uavRegisters[dIdx]._slotIndex = dIdx;
+						break;
+					case DescriptorType::UnorderedAccessBuffer:
+						_pimpl->_uavRegisters[dIdx]._descSetIndex = descriptorSet;
+						_pimpl->_uavRegisters[dIdx]._slotIndex = dIdx;
+						break;
+					case DescriptorType::UniformTexelBuffer:
+						_pimpl->_srvRegisters_boundToBuffer[dIdx]._descSetIndex = descriptorSet;
+						_pimpl->_srvRegisters_boundToBuffer[dIdx]._slotIndex = dIdx;
+						break;
+					case DescriptorType::UnorderedAccessTexelBuffer:
+						_pimpl->_uavRegisters_boundToBuffer[dIdx]._descSetIndex = descriptorSet;
+						_pimpl->_uavRegisters_boundToBuffer[dIdx]._slotIndex = dIdx;
+						break;
+					case DescriptorType::UniformBufferDynamicOffset:
+					case DescriptorType::UnorderedAccessBufferDynamicOffset:
+					default:
+						break;	// unhandled type
+					}
+				}
+			}
+		}
+
 		for (const auto&e:bindings.GetEntries(LegacyRegisterBindingDesc::RegisterType::Sampler)) {
 			assert(e._end <= Pimpl::s_maxBindings);
 			for (unsigned b=e._begin; b!=e._end; ++b) {

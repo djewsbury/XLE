@@ -94,21 +94,27 @@ namespace RenderCore { namespace Assets
 
 	RenderCore::LegacyRegisterBindingDesc CreateDefaultLegacyRegisterBindingDesc()
 	{
-		const char* defaultCfg = R"--(
-			t0..3=~
-				set = Numeric
-				setIndex = 2
-				mapping = 0..3
-			b3..4=~
-				set = Numeric
-				setIndex = 2
-				mapping = 3..4
-		)--";
+		#if 0
+			const char* defaultCfg = R"--(
+				t0..3=~
+					set = Numeric
+					setIndex = 2
+					mapping = 0..3
+				b3..4=~
+					set = Numeric
+					setIndex = 2
+					mapping = 3..4
+			)--";
 
-		LegacyRegisterBindingDesc result;
-		InputStreamFormatter<> formatter(MakeStringSection(defaultCfg));
-		DeserializationOperator(formatter, result);     // have to call it explicitly, because DeserializationOperator is not in the same namespace as LegacyRegisterBindingDesc
-		return result;
+			LegacyRegisterBindingDesc result;
+			InputStreamFormatter<> formatter(MakeStringSection(defaultCfg));
+			DeserializationOperator(formatter, result);     // have to call it explicitly, because DeserializationOperator is not in the same namespace as LegacyRegisterBindingDesc
+			return result;
+		#else
+			LegacyRegisterBindingDesc result;
+			result.AppendPassThroughDescriptorSet(Hash64("Numeric"));
+			return result;
+		#endif
 	}
 
 }}

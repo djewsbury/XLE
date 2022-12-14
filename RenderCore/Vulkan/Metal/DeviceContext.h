@@ -180,6 +180,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		enum class EncoderType { None, Graphics, ProgressiveGraphics, Compute };
 		EncoderType GetEncoderType();
 
+		VkPipelineLayout GetUnderlyingPipelineLayout();
+
 		// utilities for validating full flushing of BoundUniforms
 		const BoundUniforms* _pendingBoundUniforms = nullptr;
 		unsigned _pendingBoundUniformsFlushGroupMask = 0u, _pendingBoundUniformsCompletionMask = 0u;
@@ -193,7 +195,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		SharedEncoder(SharedEncoder&&);		// (hide these to avoid slicing in derived types)
 		SharedEncoder& operator=(SharedEncoder&&);
 
-		VkPipelineLayout GetUnderlyingPipelineLayout();
 		unsigned GetDescriptorSetCount();
 		void ValidateFlushedBoundUniforms();
 
