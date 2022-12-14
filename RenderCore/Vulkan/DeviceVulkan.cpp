@@ -24,6 +24,7 @@
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/PtrUtils.h"
 #include "../../Utility/StreamUtils.h"
+#include "../../Utility/Profiling/CPUProfiler.h"
 #include "../../Core/SelectConfiguration.h"
 #include <memory>
 
@@ -2482,12 +2483,14 @@ namespace RenderCore { namespace ImplVulkan
 		return _device.lock();
 	}
 
-    auto PresentationChain::AcquireNextImage(Metal_Vulkan::SubmissionQueue& queue) -> AquireResult
+    auto PresentationChain::AcquireNextImage(Metal_Vulkan::SubmissionQueue& queue, HierarchicalCPUProfiler* profiler) -> AquireResult
     {
         _activePresentSync = (_activePresentSync+1) % dimof(_presentSyncs);
         auto& sync = _presentSyncs[_activePresentSync];
-		if (sync._presentFence.has_value())
+		if (sync._presentFence.has_value()) {
+			CPUProfileEvent_Conditional profEvnt("Stall/commandlist", profiler);
 			queue.WaitForFence(sync._presentFence.value());
+		}
 		sync._presentFence = {};
 
 		// Note that vkAcquireNextImageKHR can be guaranteed to be non-blocking if 
@@ -2498,17 +2501,20 @@ namespace RenderCore { namespace ImplVulkan
         // stalls as necessary
         uint32_t nextImageIndex = ~0x0u;
         const auto timeout = UINT64_MAX;
-        auto res = vkAcquireNextImageKHR(
-            _vulkanDevice.get(), _swapChain.get(), 
-            timeout,
-            sync._onAcquireComplete.get(), VK_NULL_HANDLE,
-            &nextImageIndex);
-        _activeImageIndex = nextImageIndex;
+		{
+			CPUProfileEvent_Conditional profEvnt("Stall/image", profiler);
+			auto res = vkAcquireNextImageKHR(
+				_vulkanDevice.get(), _swapChain.get(), 
+				timeout,
+				sync._onAcquireComplete.get(), VK_NULL_HANDLE,
+				&nextImageIndex);
+			_activeImageIndex = nextImageIndex;
 
-        // TODO: Deal with the VK_SUBOPTIMAL_KHR and VK_ERROR_OUT_OF_DATE_KHR
-        // return codes
-        if (res != VK_SUCCESS)
-            Throw(VulkanAPIFailure(res, "Failure during acquire next image"));
+			// TODO: Deal with the VK_SUBOPTIMAL_KHR and VK_ERROR_OUT_OF_DATE_KHR
+			// return codes
+			if (res != VK_SUCCESS)
+				Throw(VulkanAPIFailure(res, "Failure during acquire next image"));
+		}
 
 		AquireResult result;
 		result._resource = _images[_activeImageIndex];
@@ -2702,7 +2708,7 @@ namespace RenderCore { namespace ImplVulkan
 		}
 
 		PresentationChain* swapChain = checked_cast<PresentationChain*>(&presentationChain);
-		auto nextImage = swapChain->AcquireNextImage(*_submissionQueue);
+		auto nextImage = swapChain->AcquireNextImage(*_submissionQueue, _cpuProfiler);
 		_nextQueueShouldWaitOnAcquire = swapChain->GetSyncs()._onAcquireComplete.get();
 
 		{
@@ -2835,6 +2841,11 @@ namespace RenderCore { namespace ImplVulkan
 			_annotator = CreateAnnotator(*d, *this);
 		}
 		return *_annotator;
+	}
+
+	void ThreadContext::AttachCPUProfiler(HierarchicalCPUProfiler* profiler)
+	{
+		_cpuProfiler = profiler;
 	}
 
 	void ThreadContext::AttachDestroyer(const std::shared_ptr<Metal_Vulkan::IDestructionQueue>& queue) { _destrQueue = queue; }

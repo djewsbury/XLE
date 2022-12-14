@@ -13,6 +13,7 @@
 #include <memory>
 
 namespace Assets { struct DependentFileState; }
+namespace Utility { class HierarchicalCPUProfiler; }
 
 namespace RenderCore
 {
@@ -60,6 +61,8 @@ namespace RenderCore
 
 		virtual float GetThreadingPressure() = 0;
 		virtual bool IsDedicatedTransferContext() = 0;
+
+		virtual void AttachCPUProfiler(HierarchicalCPUProfiler*) = 0;
 
 		virtual ~IThreadContextVulkan();
 	};

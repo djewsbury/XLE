@@ -61,7 +61,7 @@ namespace RenderCore { namespace ImplVulkan
             std::shared_ptr<IResource> _resource;
             VulkanSharedPtr<VkCommandBuffer> _primaryCommandBuffer;
         };
-        AquireResult AcquireNextImage(Metal_Vulkan::SubmissionQueue& queue);
+        AquireResult AcquireNextImage(Metal_Vulkan::SubmissionQueue&, HierarchicalCPUProfiler*);
 
 		class PresentSync
 		{
@@ -130,6 +130,8 @@ namespace RenderCore { namespace ImplVulkan
         void                        IncrFrameId();
 		void						InvalidateCachedState() const override;
 
+        void AttachCPUProfiler(HierarchicalCPUProfiler*) override;
+
 		IAnnotator&					GetAnnotator() override;
 
         virtual void*   QueryInterface(size_t guid) override;
@@ -160,6 +162,8 @@ namespace RenderCore { namespace ImplVulkan
         VkSemaphore                         _nextQueueShouldWaitOnAcquire = VK_NULL_HANDLE;
 
         std::vector<Metal_Vulkan::CommandList> _interimCmdLists;
+
+        HierarchicalCPUProfiler* _cpuProfiler = nullptr;
 
         Metal_Vulkan::IAsyncTracker::Marker CommitToQueue_Internal(
             IteratorRange<const std::pair<VkSemaphore, uint64_t>*> waitBeforeBegin,

@@ -157,6 +157,10 @@ namespace PlatformRig
 
         RenderCore::Techniques::SetThreadContext(context);
 
+        if (cpuProfiler)
+            if (auto* threadContextVulkan = query_interface_cast<RenderCore::IThreadContextVulkan*>(context.get()))
+                threadContextVulkan->AttachCPUProfiler(cpuProfiler);
+
         bool endAnnotatorFrame = false;
 		TRY {
             auto presentationTarget = context->BeginFrame(presChain);
@@ -283,6 +287,10 @@ namespace PlatformRig
         if (accAlloc) {
             _pimpl->_prevFrameAllocationCount = accAlloc->GetAndClear();
         }
+
+        if (cpuProfiler)
+            if (auto* threadContextVulkan = query_interface_cast<RenderCore::IThreadContextVulkan*>(context.get()))
+                threadContextVulkan->AttachCPUProfiler(nullptr);
 
         if (parserContext.HasPendingAssets()) {
             ::Threading::Sleep(16);  // slow down while we're building pending resources

@@ -6,6 +6,7 @@
 #include "../RenderCore/Metal/MetalTestHelper.h"
 #include "../RenderCore/Metal/MetalTestShaders.h"
 #include "../../RenderCore/IDevice.h"
+#include "../../RenderCore/Vulkan/IDeviceVulkan.h"
 #include "../../RenderCore/DeviceInitialization.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/Techniques/CommonBindings.h"
@@ -15,8 +16,10 @@
 #include "../../RenderCore/Metal/Shader.h"
 #include "../../RenderCore/Metal/InputLayout.h"
 #include "../../PlatformRig/OverlappedWindow.h"
+#include "../../OSServices/TimeUtils.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/AssetServices.h"
+#include "../../Utility/Profiling/CPUProfiler.h"
 #include "../../xleres/FileList.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
@@ -173,7 +176,7 @@ namespace UnitTests
 	static FrameRateConsistencyResults CalculateFrameRateConsistency(
 		MetalTestHelper& testHelper, ShaderKit& shaderKit,
 		RenderCore::IPresentationChain& presentationChain,
-		unsigned layerCount)
+		unsigned layerCount, HierarchicalCPUProfiler* profiler)
 	{
 		using namespace RenderCore;
 		
@@ -205,6 +208,8 @@ namespace UnitTests
 			}
 			threadContext.Present(presentationChain);
 
+			if (profiler) profiler->EndFrame();
+
 			// we don't time the first few frame, because we'll use them to align with the vsync
 			if (c > 2)
 				intervalPoints.emplace_back(std::chrono::steady_clock::now());
@@ -235,6 +240,47 @@ namespace UnitTests
 		return results;
 	}
 
+	struct HierarchicalProfilerRecords : IHierarchicalProfiler
+	{
+		void AbsorbFrameData(IteratorRange<const void*> rawData)
+		{
+			FrameData fd;
+			// fd._data.insert(fd._data.end(), (const uint8_t*)rawData.begin(), (const uint8_t*)rawData.end());
+			fd._data = IHierarchicalProfiler::CalculateResolvedEvents(rawData);
+			_frames.emplace_back(std::move(fd));
+		}
+
+		void LogEvents(std::ostream& str, const char evnt[])
+		{
+			auto freq = OSServices::GetPerformanceCounterFrequency();
+			double divisor = freq/1000;
+			bool pendingComma = false;
+			for (const auto& fd:_frames) {
+				if (pendingComma) str << ", ";
+				pendingComma = true;
+				
+				uint64_t inclusiveTime = 0;
+				for (auto& e:fd._data) 
+					if (e._label == evnt) {
+						inclusiveTime = e._inclusiveTime;
+						break;
+					}
+
+				if (!inclusiveTime) {
+					str << "{}";
+				} else {
+					str << double(inclusiveTime) / divisor << "ms";
+				}
+			}
+		}
+
+		struct FrameData
+		{
+			std::vector<ResolvedEvent> _data;
+		};
+		std::vector<FrameData> _frames;
+	};
+
 	TEST_CASE( "FrameScheduling-BasicTiming", "[rendercore_metal]" )
 	{
 		using namespace RenderCore;
@@ -260,6 +306,12 @@ namespace UnitTests
 		ShaderKit shaderKit{*testHelper, presentationChain->GetDesc()};
 		auto estimateLayers = EstimateLayersPerFrame(*testHelper, shaderKit);
 
+		HierarchicalCPUProfiler profiler;
+		HierarchicalProfilerRecords profilerRecords;
+		profiler.AddEventListener([&profilerRecords](auto data){profilerRecords.AbsorbFrameData(data);});
+		if (auto* vulkanThreadContext = query_interface_cast<IThreadContextVulkan*>(threadContext.get()))
+			vulkanThreadContext->AttachCPUProfiler(&profiler);
+
 		float gpuLoad = 1.2f;
 		auto testResults = CalculateFrameRateConsistency(*testHelper, shaderKit, *presentationChain, estimateLayers * gpuLoad);
 
@@ -268,6 +320,14 @@ namespace UnitTests
 			<< testResults._minIntervalMS << "ms-" << testResults._maxIntervalMS << "ms, stddev: " << testResults._standardDeviationIntervalMS << "ms)" << std::endl;
 		std::cout << "Intervals: " << testResults._intervals.front();
 		for (auto i=testResults._intervals.begin()+1; i!=testResults._intervals.end(); ++i) std::cout << ", " << *i;
+		std::cout << std::endl;
+
+		std::cout << "Stall/command list: ";
+		profilerRecords.LogEvents(std::cout, "Stall/commandlist");
+		std::cout << std::endl;
+
+		std::cout << "Stall/image: ";
+		profilerRecords.LogEvents(std::cout, "Stall/image");
 		std::cout << std::endl;
 	}
 
