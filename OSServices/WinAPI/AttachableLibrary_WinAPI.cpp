@@ -97,7 +97,7 @@ namespace OSServices
 				(*detachFn)();
 			}
 
-			(*OSServices::Windows::FreeLibrary)(_pimpl->_library);
+			(*OSServices::Windows::Fn_FreeLibrary)(_pimpl->_library);
             _pimpl->_library = LibraryHandle_Invalid;
         }
     }
