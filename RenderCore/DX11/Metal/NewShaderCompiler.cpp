@@ -55,8 +55,8 @@ namespace RenderCore { namespace Metal_DX11
 
 		~DXCompilerLibrary()
 		{
-			(*OSServices::Windows::FreeLibrary)(_dxcModule);
-			(*OSServices::Windows::FreeLibrary)(_dxilModule);
+			(*OSServices::Windows::Fn_FreeLibrary)(_dxcModule);
+			(*OSServices::Windows::Fn_FreeLibrary)(_dxilModule);
 		}
 
 		HMODULE _dxilModule, _dxcModule;

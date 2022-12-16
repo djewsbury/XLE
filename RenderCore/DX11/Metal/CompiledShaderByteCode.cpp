@@ -512,7 +512,7 @@ namespace RenderCore { namespace Metal_DX11
 
         auto fn = (D3DReflect_Fn*)(*OSServices::Windows::Fn_GetProcAddress)(compiler, "D3DReflect");
         if (!fn) {
-            (*OSServices::Windows::FreeLibrary)(compiler);
+            (*OSServices::Windows::Fn_FreeLibrary)(compiler);
             compiler = (HMODULE)INVALID_HANDLE_VALUE;
             return E_NOINTERFACE;
         }
@@ -552,7 +552,7 @@ namespace RenderCore { namespace Metal_DX11
 
         auto fn = (D3DCompile_Fn*)(*OSServices::Windows::Fn_GetProcAddress)(compiler, "D3DCompile");
         if (!fn) {
-            (*OSServices::Windows::FreeLibrary)(compiler);
+            (*OSServices::Windows::Fn_FreeLibrary)(compiler);
             compiler = (HMODULE)INVALID_HANDLE_VALUE;
             return E_NOINTERFACE;
         }
@@ -574,7 +574,7 @@ namespace RenderCore { namespace Metal_DX11
 
         auto fn = (D3DCreateFunctionLinkingGraph_Fn*)(*OSServices::Windows::Fn_GetProcAddress)(compiler, "D3DCreateFunctionLinkingGraph");
         if (!fn) {
-            (*OSServices::Windows::FreeLibrary)(compiler);
+            (*OSServices::Windows::Fn_FreeLibrary)(compiler);
             compiler = (HMODULE)INVALID_HANDLE_VALUE;
             return E_NOINTERFACE;
         }
@@ -594,7 +594,7 @@ namespace RenderCore { namespace Metal_DX11
 
         auto fn = (D3DCreateLinker_Fn*)(*OSServices::Windows::Fn_GetProcAddress)(compiler, "D3DCreateLinker");
         if (!fn) {
-            (*OSServices::Windows::FreeLibrary)(compiler);
+            (*OSServices::Windows::Fn_FreeLibrary)(compiler);
             compiler = (HMODULE)INVALID_HANDLE_VALUE;
             return E_NOINTERFACE;
         }
@@ -616,7 +616,7 @@ namespace RenderCore { namespace Metal_DX11
 
         auto fn = (D3DLoadModule_Fn*)(*OSServices::Windows::Fn_GetProcAddress)(compiler, "D3DLoadModule");
         if (!fn) {
-            (*OSServices::Windows::FreeLibrary)(compiler);
+            (*OSServices::Windows::Fn_FreeLibrary)(compiler);
             compiler = (HMODULE)INVALID_HANDLE_VALUE;
             return E_NOINTERFACE;
         }
@@ -640,7 +640,7 @@ namespace RenderCore { namespace Metal_DX11
 
         auto fn = (D3DReflectLibrary_Fn*)(*OSServices::Windows::Fn_GetProcAddress)(compiler, "D3DReflectLibrary");
         if (!fn) {
-            (*OSServices::Windows::FreeLibrary)(compiler);
+            (*OSServices::Windows::Fn_FreeLibrary)(compiler);
             compiler = (HMODULE)INVALID_HANDLE_VALUE;
             return E_NOINTERFACE;
         }
@@ -729,7 +729,7 @@ namespace RenderCore { namespace Metal_DX11
             //          safe is to make sure all reflection objects are destroyed
             //          before unloading the dll
         if (_module != INVALID_HANDLE_VALUE) {
-            (*OSServices::Windows::FreeLibrary)(_module);
+            (*OSServices::Windows::Fn_FreeLibrary)(_module);
             _module = (HMODULE)INVALID_HANDLE_VALUE;
         }
     }
