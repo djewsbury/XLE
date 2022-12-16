@@ -19,9 +19,8 @@ namespace Utility { class HierarchicalCPUProfiler; }
 namespace PlatformRig
 {
 	class OverlaySystemSet;
-	class OverlappedWindow;
+	class Window;
 	class MainInputHandler;
-	class ResizePresentationChain;
 	class FrameRig;
 	class IDebugScreenRegistry;
 
@@ -47,18 +46,17 @@ namespace PlatformRig
 	class WindowApparatus
 	{
 	public:
-		std::shared_ptr<OverlappedWindow> _osWindow;
+		std::shared_ptr<Window> _osWindow;
 		std::shared_ptr<RenderCore::IThreadContext> _immediateContext;
 		std::shared_ptr<RenderCore::IPresentationChain> _presentationChain;
 		std::shared_ptr<MainInputHandler> _mainInputHandler;
-		std::shared_ptr<ResizePresentationChain> _windowHandler;
 		std::shared_ptr<FrameRig> _frameRig;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
 		::Assets::DependencyValidation _depValPtr;
 
 		WindowApparatus(
-			std::shared_ptr<OverlappedWindow> osWindow,
+			std::shared_ptr<Window> osWindow,
 			RenderCore::Techniques::DrawingApparatus* drawingApparatus,
 			RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
 			RenderCore::BindFlag::BitField presentationChainBindFlags=0);

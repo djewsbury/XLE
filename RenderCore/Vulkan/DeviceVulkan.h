@@ -73,6 +73,8 @@ namespace RenderCore { namespace ImplVulkan
 		};
 		PresentSync& GetSyncs() { return _presentSyncs[_activePresentSync]; }
 
+        bool ReadyForRendering() const { return _swapChain != nullptr; }
+
         PresentationChain(
             std::shared_ptr<Device> device,
 			Metal_Vulkan::ObjectFactory& factory,

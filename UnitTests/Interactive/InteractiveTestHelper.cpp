@@ -63,7 +63,18 @@ namespace UnitTests
 			_frameRig->UpdatePresentationChain(*_windowApparatus->_presentationChain);
 			_windowApparatus->_mainInputHandler->AddListener(adapter->GetInputListener());
 			_windowApparatus->_osWindow->Show();
-			while (PlatformRig::OverlappedWindow::DoMsgPump() != PlatformRig::OverlappedWindow::PumpResult::Terminate) {
+			for (;;) {
+				auto msgPump = PlatformRig::Window::DoMsgPump();
+				if (msgPump == PlatformRig::Window::PumpResult::Terminate) break;
+				if (msgPump == PlatformRig::Window::PumpResult::Background) {
+					// Bail if we're minimized (don't have to check this in the foreground case)
+					auto presChainDesc = _windowApparatus->_presentationChain->GetDesc();
+					if (!(presChainDesc._width * presChainDesc._height)) {
+						Threading::Sleep(64);       // minimized and inactive
+						continue;
+					}
+				}
+				
 				_frameRig->ExecuteFrame(*_windowApparatus);
 				_frameRenderingApparatus->_frameCPUProfiler->EndFrame();
 			}
@@ -94,7 +105,7 @@ namespace UnitTests
 			if (!_globalServices) _globalServices = std::make_shared<ConsoleRig::GlobalServices>();
 			_xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 
-			auto osWindow = std::make_unique<PlatformRig::OverlappedWindow>();
+			auto osWindow = std::make_unique<PlatformRig::Window>();
 			auto renderAPI = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
 
 			_device = renderAPI->CreateDevice(0, renderAPI->QueryFeatureCapability(0));

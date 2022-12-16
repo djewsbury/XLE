@@ -100,12 +100,12 @@ namespace OSServices
 		const unsigned queryFlags = QDC_ONLY_ACTIVE_PATHS | QDC_VIRTUAL_MODE_AWARE;		// QDC_VIRTUAL_REFRESH_RATE_AWARE
 		for (;;) {
 			uint32_t pathArrayCount = 0, modeArrayCount = 0;
-			auto hres = GetDisplayConfigBufferSizes(queryFlags, &pathArrayCount, &modeArrayCount);
+			auto hres = ::GetDisplayConfigBufferSizes(queryFlags, &pathArrayCount, &modeArrayCount);
 			if (SUCCEEDED(hres)) {
 				paths.resize(pathArrayCount);
 				modes.resize(modeArrayCount);
 
-				hres = QueryDisplayConfig(
+				hres = ::QueryDisplayConfig(
 					queryFlags,
 					&pathArrayCount, paths.data(),
 					&modeArrayCount, modes.data(),
@@ -129,6 +129,16 @@ namespace OSServices
 			sourceDisplay._adapterLUID = path.targetInfo.adapterId;
 			sourceDisplay._sourceInfoId = path.targetInfo.id;
 			sourceDisplay._targetInfoId = path.sourceInfo.id;
+			
+			/*
+			if (path.sourceInfo.sourceModeInfoIdx < modes.size()) {
+				DisplaySettingsManager::DesktopGeometry desktopGeometry;
+				desktopGeometry._x = modes[path.sourceInfo.sourceModeInfoIdx].sourceMode.position.x;
+				desktopGeometry._y = modes[path.sourceInfo.sourceModeInfoIdx].sourceMode.position.y;
+				desktopGeometry._width = modes[path.sourceInfo.sourceModeInfoIdx].sourceMode.width;
+				desktopGeometry._height = modes[path.sourceInfo.sourceModeInfoIdx].sourceMode.height;
+			}
+			*/
 
 			DISPLAYCONFIG_TARGET_DEVICE_NAME targetName = {};
 			targetName.header.adapterId = path.targetInfo.adapterId;
@@ -189,7 +199,6 @@ namespace OSServices
 		std::vector<WindowsDisplay> result;
 
 		unsigned c=0;
-		unsigned primaryDeviceIdx = 0;
 		for (;;) {
 			DISPLAY_DEVICEW adapterInfo;
 			XlZeroMemory(adapterInfo);
@@ -200,8 +209,7 @@ namespace OSServices
 
 			if (!(adapterInfo.StateFlags & DISPLAY_DEVICE_ACTIVE)) continue;
 
-			if (adapterInfo.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE)
-				primaryDeviceIdx = (unsigned)result.size();
+			// adapterInfo.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE signifies the primary device
 
 			DISPLAY_DEVICEW monitorInfo;
 			XlZeroMemory(monitorInfo);
@@ -216,10 +224,30 @@ namespace OSServices
 			display._friendlyAdapterName = Conversion::Convert<std::string>(MakeStringSection(adapterInfo.DeviceString));
 			// can't get _adapterDeviceName & _targetDeviceName that is compatible with the CCD path
 			// manifacturer & luid codes also missing
-			
+
 			result.push_back(display);
 		}
 
+		return result;
+	}
+
+	static DisplaySettingsManager::DesktopGeometry GetDesktopGeometryForMonitorDevice(const wchar_t* deviceName)
+	{
+		DisplaySettingsManager::DesktopGeometry result;
+		DEVMODEW devMode;
+		XlZeroMemory(devMode);
+		devMode.dmSize = sizeof(DEVMODEW);
+		auto hres = Windows::Fn_EnumDisplaySettingsEx(deviceName, ENUM_CURRENT_SETTINGS, &devMode, 0);
+		if (SUCCEEDED(hres)) {
+			if (devMode.dmFields & DM_POSITION) {
+				result._x = devMode.dmPosition.x;
+				result._y = devMode.dmPosition.y;
+			}
+			if ((devMode.dmFields & (DM_PELSWIDTH|DM_PELSHEIGHT)) == (DM_PELSWIDTH|DM_PELSHEIGHT)) {
+				result._width = devMode.dmPelsWidth;
+				result._height = devMode.dmPelsHeight;
+			}
+		}
 		return result;
 	}
 
@@ -294,8 +322,6 @@ namespace OSServices
 		assert(std::this_thread::get_id() == _attachedThreadId);
 		assert(monitorIdx < _monitorsInternal.size());
 
-		DisplaySettingsManager::ModeDesc result = {};
-
 		DEVMODEW devMode;
 		XlZeroMemory(devMode);
 		devMode.dmSize = sizeof(DEVMODEW);
@@ -337,7 +363,7 @@ namespace OSServices
 		displayMode.dmPelsHeight = requestedMode._height;
 		displayMode.dmDisplayFrequency = requestedMode._refreshRate;
 		displayMode.dmBitsPerPel = 32;		// windows 8 & above requires this to be 32
-		auto hres = ChangeDisplaySettingsExW(
+		auto hres = Windows::Fn_ChangeDisplaySettingsEx(
 			_pimpl->_monitorsInternal[monitor]._deviceName.c_str(),
 			&displayMode,
 			nullptr,
@@ -345,7 +371,7 @@ namespace OSServices
 			nullptr);
 
 		if (!SUCCEEDED(hres)) {
-			Log(Warning) << "ChangeDisplaySettingsExW failed with error code: " << SystemErrorCodeAsString(hres) << std::endl;
+			Log(Warning) << "ChangeDisplaySettingsEx failed with error code: " << SystemErrorCodeAsString(hres) << std::endl;
 			_pimpl->_performingDisplayChangeCurrently = false;
 			return false;
 		}
@@ -367,7 +393,7 @@ namespace OSServices
 					getAdvancedColor.header.size = sizeof(getAdvancedColor);
 					getAdvancedColor.header.adapterId = adapter._luid;
 					getAdvancedColor.header.id = _pimpl->_monitorsInternal[monitor]._targetInfoId;
-					hres = DisplayConfigGetDeviceInfo(&getAdvancedColor.header);
+					hres = ::DisplayConfigGetDeviceInfo(&getAdvancedColor.header);
 					if (SUCCEEDED(hres))
 						savedMode._advancedColorEnabled = getAdvancedColor.advancedColorEnabled;
 				}
@@ -384,7 +410,7 @@ namespace OSServices
 			setAdvancedColor.header.adapterId = adapter._luid;
 			setAdvancedColor.header.id = _pimpl->_monitorsInternal[monitor]._targetInfoId;
 			setAdvancedColor.enableAdvancedColor = (hdrState == ToggleableState::Enable) ? 1 : 0;
-			hres = DisplayConfigSetDeviceInfo(&setAdvancedColor.header);
+			hres = ::DisplayConfigSetDeviceInfo(&setAdvancedColor.header);
 
 			if (!SUCCEEDED(hres)) {
 				Log(Warning) << "DisplayConfigSetDeviceInfo failed with error code: " << SystemErrorCodeAsString(hres) << std::endl;
@@ -421,7 +447,7 @@ namespace OSServices
 				setAdvancedColor.header.adapterId = adapter._luid;
 				setAdvancedColor.header.id = _pimpl->_monitorsInternal[monitor]._targetInfoId;
 				setAdvancedColor.enableAdvancedColor = savedMode._advancedColorEnabled;
-				auto hres = DisplayConfigSetDeviceInfo(&setAdvancedColor.header);
+				auto hres = ::DisplayConfigSetDeviceInfo(&setAdvancedColor.header);
 
 				if (!SUCCEEDED(hres))
 					Log(Warning) << "DisplayConfigSetDeviceInfo failed with error code: " << SystemErrorCodeAsString(hres) << std::endl;
@@ -435,7 +461,7 @@ namespace OSServices
 			displayMode.dmPelsHeight = savedMode._mode._height;
 			displayMode.dmDisplayFrequency = savedMode._mode._refreshRate;
 			displayMode.dmBitsPerPel = 32;		// windows 8 & above requires this to be 32
-			auto hres = ChangeDisplaySettingsExW(
+			auto hres = Windows::Fn_ChangeDisplaySettingsEx(
 				_pimpl->_monitorsInternal[monitor]._deviceName.c_str(),
 				&displayMode,
 				nullptr,
@@ -443,10 +469,52 @@ namespace OSServices
 				nullptr);
 
 			if (!SUCCEEDED(hres))
-				Log(Warning) << "ChangeDisplaySettingsExW failed with error code: " << SystemErrorCodeAsString(hres) << std::endl;
+				Log(Warning) << "ChangeDisplaySettingsEx failed with error code: " << SystemErrorCodeAsString(hres) << std::endl;
 
 			_pimpl->_savedOriginalModes.erase(i);
 		}
+	}
+
+	auto DisplaySettingsManager::GetDesktopGeometryForMonitor(MonitorId monitorId) -> DesktopGeometry
+	{
+		if (!_pimpl->_initialized)
+			_pimpl->QueryFromOS();
+
+		assert(monitorId < _pimpl->_monitors.size());
+		if (monitorId >= _pimpl->_monitors.size())
+			return {};
+
+		// We can cache this result, because it's probably not going to change more frequently than anything else we cache... But here
+		// we're just querying it on demand
+		return GetDesktopGeometryForMonitorDevice(_pimpl->_monitorsInternal[monitorId]._deviceName.c_str());
+	}
+
+	auto DisplaySettingsManager::GetModes(MonitorId monitorId) -> IteratorRange<const ModeDesc*> 
+	{
+		if (!_pimpl->_initialized)
+			_pimpl->QueryFromOS();
+
+		assert(monitorId < _pimpl->_monitorsInternal.size());
+		if (monitorId >= _pimpl->_monitorsInternal.size())
+			return {};
+
+		return MakeIteratorRange(
+			_pimpl->_modes.begin() + _pimpl->_monitorsInternal[monitorId]._modesStart,
+			_pimpl->_modes.begin() + _pimpl->_monitorsInternal[monitorId]._modesEnd);
+	}
+
+	auto DisplaySettingsManager::GetMonitors() -> IteratorRange<const MonitorDesc*>
+	{
+		if (!_pimpl->_initialized)
+			_pimpl->QueryFromOS();
+		return _pimpl->_monitors;
+	}
+
+	auto DisplaySettingsManager::GetAdapters() -> IteratorRange<const AdapterDesc*>
+	{
+		if (!_pimpl->_initialized)
+			_pimpl->QueryFromOS();
+		return _pimpl->_adapters;
 	}
 
 	static DisplaySettingsManager* s_dispSettingsManager = nullptr;

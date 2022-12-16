@@ -45,20 +45,13 @@ namespace Sample
     {
 		SampleGlobals sampleGlobals;
 
-            // We need to startup some basic objects:
-            //      * OverlappedWindow (corresponds to a single basic window on Windows)
-            //      * RenderDevice & presentation chain
-            //      * BufferUploads
-            //
-            // Note that the render device should be created first, so that the window
-            // object is destroyed before the device is destroyed.
         Log(Verbose) << "Building primary managers" << std::endl;
         auto renderAPI = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
 
         auto assetServices = ConsoleRig::MakeAttachablePtr<::Assets::Services>();
         auto rawosmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::CreateFileSystem_OS({}, ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
 
-        auto osWindow = std::make_unique<PlatformRig::OverlappedWindow>();
+        auto osWindow = std::make_unique<PlatformRig::Window>();
         if (config._initialWindowSize)
             osWindow->Resize((*config._initialWindowSize)[0], (*config._initialWindowSize)[1]);
         if (auto* vulkanInstance = (RenderCore::IAPIInstanceVulkan*)renderAPI->QueryInterface(typeid(RenderCore::IAPIInstanceVulkan).hash_code())) {
@@ -132,12 +125,26 @@ namespace Sample
                 sampleGlobals._windowApparatus->_osWindow->Show();
 
                     //  Finally, we execute the frame loop
-                while (PlatformRig::OverlappedWindow::DoMsgPump() != PlatformRig::OverlappedWindow::PumpResult::Terminate) {
+                for (;;) {
+                    auto msgPump = PlatformRig::Window::DoMsgPump();
+                    if (msgPump == PlatformRig::Window::PumpResult::Terminate) break;
+                    if (msgPump == PlatformRig::Window::PumpResult::Background) {
+                        // Bail if we're minimized (don't have to check this in the foreground case)
+                        auto presChainDesc = sampleGlobals._windowApparatus->_presentationChain->GetDesc();
+                        if (!(presChainDesc._width * presChainDesc._height)) {
+                            Threading::Sleep(64);       // minimized and inactive
+                            continue;
+                        }
+                    }
+
                         // ------- Render ----------------------------------------
                     auto frameResult = frameRig.ExecuteFrame(*sampleGlobals._windowApparatus);
                         // ------- Update ----------------------------------------
                     sampleOverlay->OnUpdate(frameResult._elapsedTime * Tweakable("TimeScale", 1.0f));
                     sampleGlobals._frameRenderingApparatus->_frameCPUProfiler->EndFrame();
+
+                    if (msgPump == PlatformRig::Window::PumpResult::Background)
+                        Threading::Sleep(16);       // yield some process time
                 }
             } CATCH(const std::exception& e) {
                 Log(Error) << "Shutting down due to exception in frame rig. Exception details follow:" << std::endl;

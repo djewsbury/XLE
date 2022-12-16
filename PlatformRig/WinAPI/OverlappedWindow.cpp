@@ -8,6 +8,7 @@
 #include "InputTranslator.h"
 #include "../OverlappedWindow.h"
 #include "../InputListener.h"
+#include "../../OSServices/DisplaySettings.h"
 #include "../../Utility/PtrUtils.h"
 #include "../../Utility/UTFUtils.h"
 #include "../../Utility/MemoryUtils.h"
@@ -15,6 +16,7 @@
 #include "../../Utility/Conversion.h"
 #include "../../Utility/FunctionUtils.h"
 #include "../../OSServices/WinAPI/WinAPIWrapper.h"
+#include "../../OSServices/Log.h"
 #include "../../Core/Exceptions.h"
 #include <windowsx.h>
 
@@ -69,7 +71,7 @@ namespace PlatformRig
         return result;
     }
 
-    class OverlappedWindow::Pimpl
+    class Window::Pimpl
     {
     public:
         HWND        _hwnd;
@@ -79,6 +81,9 @@ namespace PlatformRig
 
 		std::shared_ptr<OSRunLoop_BasicTimer> _runLoop;
         Signal<SystemMessageVariant&&> _onMessage;
+
+        std::shared_ptr<OSServices::DisplaySettingsManager> _displaySettingsManager;
+        OSServices::DisplaySettingsManager::MonitorId _capturedMonitorId = ~0u;
 
         Pimpl() : _hwnd(HWND(INVALID_HANDLE_VALUE)), _activated(false) {}
     };
@@ -96,9 +101,20 @@ namespace PlatformRig
         case WM_DISPLAYCHANGE:
             {
                 OSServices::OnDisplaySettingsChange(unsigned(lparam & 0xffff), unsigned(lparam >> 16u));
-                auto pimpl = (OverlappedWindow::Pimpl*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+                auto pimpl = (Window::Pimpl*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
                 if (pimpl && pimpl->_hwnd == hwnd)
                     pimpl->_onMessage.Invoke(SystemDisplayChange{});
+
+                // If we are capturing a monitor, we should realign the window with the new desktop geometry
+                if (pimpl->_displaySettingsManager && pimpl->_capturedMonitorId != ~0u) {
+                    auto geometry = pimpl->_displaySettingsManager->GetDesktopGeometryForMonitor(pimpl->_capturedMonitorId);
+                    BOOL hres2 = SetWindowPos(
+                        pimpl->_hwnd,
+                        HWND_TOPMOST,
+                        geometry._x, geometry._y, geometry._width, geometry._height,
+                        SWP_FRAMECHANGED | SWP_NOREDRAW | SWP_NOCOPYBITS);
+                    assert(hres2);
+                }
             }
             break;
 
@@ -121,7 +137,7 @@ namespace PlatformRig
         case WM_SYSKEYDOWN:
         case WM_SYSKEYUP:
             {
-                auto pimpl = (OverlappedWindow::Pimpl*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+                auto pimpl = (Window::Pimpl*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
                 if (!pimpl || pimpl->_hwnd != hwnd) break;
 
                 auto* inputTrans = pimpl->_inputTranslator.get();
@@ -134,6 +150,19 @@ namespace PlatformRig
                 case WM_ACTIVATE:
                     pimpl->_activated = wparam != WA_INACTIVE;
 					if (inputTrans) inputTrans->OnFocusChange();
+
+                    // In our "capture monitor" logic, if we're not activated, we shouldn't show the window
+                    // at all
+                    // We could also do this logic in WM_ACTIVATEAPP; however this way will ensure we get a minimize
+                    // if a popup from this app interrupts us
+                    if (pimpl->_capturedMonitorId != ~0u && pimpl->_displaySettingsManager) {
+                        if (wparam == WA_INACTIVE) {
+                            // become inactive -- minimize
+                            ShowWindow(pimpl->_hwnd, SW_SHOWMINNOACTIVE);
+                        } else {
+                            ShowWindow(pimpl->_hwnd, SW_RESTORE);
+                        }
+                    }
                     break;
 
                 case WM_MOUSEMOVE:
@@ -185,7 +214,7 @@ namespace PlatformRig
 
 		case WM_TIMER:
 			{
-				auto pimpl = (OverlappedWindow::Pimpl*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+				auto pimpl = (Window::Pimpl*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
 				pimpl->_runLoop->OnOSTrigger(wparam);
 			}
 			break;
@@ -194,19 +223,62 @@ namespace PlatformRig
         return DefWindowProc(hwnd, msg, wparam, lparam);
     }
 
-    void OverlappedWindow::Show(bool newState)
+    void Window::Show(bool newState)
     {
         ::ShowWindow(_pimpl->_hwnd, newState ? SW_SHOWNORMAL : SW_HIDE);
     }
 
-    InputContext OverlappedWindow::MakeInputContext()
+    InputContext Window::MakeInputContext()
     {
         RECT clientRect;
 		GetClientRect(_pimpl->_hwnd, &clientRect);
 		return { Coord2{clientRect.left, clientRect.top}, Coord2{clientRect.right, clientRect.bottom} };
     }
 
-    OverlappedWindow::OverlappedWindow() 
+    static constexpr LONG s_styleOverlapped = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME;
+    static constexpr LONG s_styleExOverlapped = 0;
+
+    static constexpr LONG s_styleFullscreen = WS_POPUP;
+    static constexpr LONG s_styleExFullscreen = WS_EX_TOPMOST;
+
+    void Window::CaptureMonitor(
+        std::shared_ptr<OSServices::DisplaySettingsManager> displaySettings,
+        unsigned monitorId)
+    {
+        assert(displaySettings);
+        assert(monitorId < displaySettings->GetMonitors().size());
+        assert(!_pimpl->_displaySettingsManager && _pimpl->_capturedMonitorId == ~0u);      // attempting to capture multiple times
+        _pimpl->_displaySettingsManager = std::move(displaySettings);
+        _pimpl->_capturedMonitorId = monitorId;
+
+        ::SetLastError(0);
+        auto hres = ::SetWindowLongPtrA(_pimpl->_hwnd, GWL_STYLE, s_styleExFullscreen);
+        assert(hres != 0 || GetLastError() == 0);
+        hres = ::SetWindowLongPtrA(_pimpl->_hwnd, GWL_EXSTYLE, s_styleFullscreen);
+        assert(hres != 0 || GetLastError() == 0);
+
+        auto geometry = _pimpl->_displaySettingsManager->GetDesktopGeometryForMonitor(_pimpl->_capturedMonitorId);
+        BOOL hres2 = SetWindowPos(
+            _pimpl->_hwnd,
+            HWND_TOPMOST,
+            geometry._x, geometry._y, geometry._width, geometry._height,
+            SWP_FRAMECHANGED | SWP_NOREDRAW | SWP_NOCOPYBITS);
+        assert(hres2);
+    }
+
+    void Window::ReleaseMonitor()
+    {
+        _pimpl->_displaySettingsManager = nullptr;
+        _pimpl->_capturedMonitorId = ~0u;
+
+        ::SetLastError(0);
+        auto hres = ::SetWindowLongPtrA(_pimpl->_hwnd, GWL_EXSTYLE, s_styleOverlapped);
+        assert(hres != 0 || GetLastError() == 0);
+        hres = ::SetWindowLongPtrA(_pimpl->_hwnd, GWL_STYLE, s_styleExOverlapped);
+        assert(hres != 0 || GetLastError() == 0);
+    }
+
+    Window::Window() 
     {
         _pimpl = std::make_unique<Pimpl>();
 
@@ -239,17 +311,14 @@ namespace PlatformRig
             //
             //      ---<>--- Create the window itself ---<>---
             //
-        DWORD windowStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME;
-        DWORD windowStyleEx = 0;
         _pimpl->_hwnd = (*OSServices::Windows::Fn_CreateWindowEx)(
-            windowStyleEx, windowClassName.c_str(), 
-            NULL, windowStyle, 
+            s_styleExOverlapped, windowClassName.c_str(), 
+            NULL, s_styleOverlapped, 
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
             NULL, NULL, CurrentModule::GetInstance().HInstance(), NULL);
 
-        if (!_pimpl->_hwnd || _pimpl->_hwnd == INVALID_HANDLE_VALUE) {
+        if (!_pimpl->_hwnd || _pimpl->_hwnd == INVALID_HANDLE_VALUE)
             Throw(::Exceptions::BasicLabel( "Failure during windows construction" ));        // (note that a window class can be leaked by this.. But, who cares?)
-        }
 
         SetWindowLongPtr(_pimpl->_hwnd, GWLP_USERDATA, (LONG_PTR)_pimpl.get());
 
@@ -261,7 +330,7 @@ namespace PlatformRig
 		SetOSRunLoop(_pimpl->_runLoop);
     }
 
-    OverlappedWindow::~OverlappedWindow()
+    Window::~Window()
     {
 		SetOSRunLoop(nullptr);
 		_pimpl->_inputTranslator.reset();
@@ -270,19 +339,19 @@ namespace PlatformRig
         (*OSServices::Windows::Fn_UnregisterClass)(windowClassName.c_str(), CurrentModule::GetInstance().Handle());
     }
 
-    const void* OverlappedWindow::GetUnderlyingHandle() const
+    const void* Window::GetUnderlyingHandle() const
     {
         return _pimpl->_hwnd;
     }
 
-    std::pair<Int2, Int2> OverlappedWindow::GetRect() const
+    std::pair<Int2, Int2> Window::GetRect() const
     {
         RECT clientRect;
         GetClientRect(_pimpl->_hwnd, &clientRect);
         return std::make_pair(Int2(clientRect.left, clientRect.top), Int2(clientRect.right, clientRect.bottom));
     }
 
-    void OverlappedWindow::Resize(unsigned width, unsigned height)
+    void Window::Resize(unsigned width, unsigned height)
     {
         RECT adjusted { 0, 0, (LONG)width, (LONG)height };
         AdjustWindowRectEx(&adjusted, GetWindowStyle(_pimpl->_hwnd), FALSE, GetWindowExStyle(_pimpl->_hwnd));
@@ -292,17 +361,17 @@ namespace PlatformRig
             SWP_NOACTIVATE | SWP_NOCOPYBITS | SWP_NOMOVE | SWP_NOOWNERZORDER | SWP_NOZORDER);
     }
 
-    void OverlappedWindow::SetTitle(const char titleText[])
+    void Window::SetTitle(const char titleText[])
     {
         SetWindowTextA(_pimpl->_hwnd, titleText);
     }
 
-    Utility::Signal<SystemMessageVariant&&>& OverlappedWindow::OnMessage()
+    Utility::Signal<SystemMessageVariant&&>& Window::OnMessage()
     {
         return _pimpl->_onMessage;
     }
 
-    auto OverlappedWindow::DoMsgPump() -> PumpResult
+    auto Window::DoMsgPump() -> PumpResult
     {
         MSG msg;
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {

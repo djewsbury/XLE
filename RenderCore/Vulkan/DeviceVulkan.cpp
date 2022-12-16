@@ -2431,7 +2431,9 @@ namespace RenderCore { namespace ImplVulkan
 		if (desc == _desc)
             return;
 
-        auto props = DecideSwapChainProperties(_factory->GetPhysicalDevice(), _surface.get(), desc);
+        SwapChainProperties props;
+		if (desc._width*desc._height)
+			props = DecideSwapChainProperties(_factory->GetPhysicalDevice(), _surface.get(), desc);
 
         // We can't delete the old swap chain while the device is using it. The easiest
         // way to get around this is to just synchronize with the GPU here.
@@ -2461,16 +2463,26 @@ namespace RenderCore { namespace ImplVulkan
 		mainThreadContext.CommitCommands(CommitCommandsFlags::WaitForCompletion);
 		vkDeviceWaitIdle(_vulkanDevice.get());
 		auto oldSwapChain = std::move(_swapChain);
+		_activeImageIndex = ~0x0u;
+		_activePresentSync = 0;
 
 		// we don't want the new and old images to exist at the same time, so pump the destruction queues to try to
 		// ensure they are truly gone
 		checked_cast<ThreadContext*>(&mainThreadContext)->PumpDestructionQueues();
 
-        _swapChain = CreateUnderlyingSwapChain(_vulkanDevice.get(), _surface.get(), oldSwapChain.get(), props);
-        _bufferDesc = TextureDesc::Plain2D(props._extent.width, props._extent.height, Metal_Vulkan::AsFormat(props._fmt));
-        _desc = AsPresentationChainDesc(props);
+        if (desc._width*desc._height) {
+			_swapChain = CreateUnderlyingSwapChain(_vulkanDevice.get(), _surface.get(), oldSwapChain.get(), props);
+			_bufferDesc = TextureDesc::Plain2D(props._extent.width, props._extent.height, Metal_Vulkan::AsFormat(props._fmt));
+			_desc = AsPresentationChainDesc(props);
 
-        BuildImages();
+			BuildImages();
+		} else {
+			// A zero-sized IPresentationChain is valid, but a zero sized vulkan swap chain is not.
+			// Don't create in this case -- obviously it's invalid to attempt to render with it
+			_swapChain.reset();
+			_bufferDesc = {};
+			_desc = desc;
+		}
     }
 
     PresentationChainDesc PresentationChain::GetDesc() const
@@ -2485,6 +2497,11 @@ namespace RenderCore { namespace ImplVulkan
 
     auto PresentationChain::AcquireNextImage(Metal_Vulkan::SubmissionQueue& queue, HierarchicalCPUProfiler* profiler) -> AquireResult
     {
+		#if defined(_DEBUG)
+			if (!_swapChain)
+				Throw(std::runtime_error("Attempting to acquire image from zero-sized (or otherwise invalid) swapchain"));
+		#endif
+
         _activePresentSync = (_activePresentSync+1) % dimof(_presentSyncs);
         auto& sync = _presentSyncs[_activePresentSync];
 		if (sync._presentFence.has_value()) {
@@ -2695,6 +2712,10 @@ namespace RenderCore { namespace ImplVulkan
 
 	IResourcePtr    ThreadContext::BeginFrame(IPresentationChain& presentationChain)
 	{
+		PresentationChain* swapChain = checked_cast<PresentationChain*>(&presentationChain);
+		if (!swapChain->ReadyForRendering())
+			Throw(std::runtime_error("IPresentationChain is zero sized or otherwise not ready for rendering"));
+
 		// Our immediate context may have command list already, if it's been used
 		// either before the first frame, or between 2 frames. Normally we switch
 		// the immediate metal context over to using the "primary buffer" associated
@@ -2707,7 +2728,6 @@ namespace RenderCore { namespace ImplVulkan
 			_interimCmdLists.emplace_back(std::move(*cmdList));
 		}
 
-		PresentationChain* swapChain = checked_cast<PresentationChain*>(&presentationChain);
 		auto nextImage = swapChain->AcquireNextImage(*_submissionQueue, _cpuProfiler);
 		_nextQueueShouldWaitOnAcquire = swapChain->GetSyncs()._onAcquireComplete.get();
 

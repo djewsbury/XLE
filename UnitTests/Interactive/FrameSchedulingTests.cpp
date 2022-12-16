@@ -292,7 +292,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 
 		const UInt2 outputSize { 1920, 1080 };
-		auto osWindow = std::make_unique<PlatformRig::OverlappedWindow>();
+		auto osWindow = std::make_unique<PlatformRig::Window>();
 		osWindow->Resize(outputSize[0], outputSize[1]);
 
 		RenderCore::PresentationChainDesc pChainDesc;

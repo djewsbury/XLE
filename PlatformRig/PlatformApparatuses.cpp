@@ -78,7 +78,7 @@ namespace PlatformRig
 
 
 	WindowApparatus::WindowApparatus(
-		std::shared_ptr<OverlappedWindow> osWindow,
+		std::shared_ptr<Window> osWindow,
 		RenderCore::Techniques::DrawingApparatus* drawingApparatus,
 		RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
 		RenderCore::BindFlag::BitField presentationChainBindFlags)
@@ -114,12 +114,10 @@ namespace PlatformRig
 					auto resize = std::get<WindowResize>(msg);
 					RenderCore::Techniques::ResetFrameBufferPool(*frameRig->GetTechniqueContext()._frameBufferPool);
 					frameRig->GetTechniqueContext()._attachmentPool->ResetActualized();
-					if (resize._newWidth && resize._newHeight) {
-						auto desc = presentationChain->GetDesc();
-						desc._width = resize._newWidth;
-						desc._height = resize._newHeight;
-						presentationChain->ChangeConfiguration(*immediateContext, desc);
-					}
+					auto desc = presentationChain->GetDesc();
+					desc._width = resize._newWidth;
+					desc._height = resize._newHeight;
+					presentationChain->ChangeConfiguration(*immediateContext, desc);
 					frameRig->UpdatePresentationChain(*presentationChain);
 				} else if (std::holds_alternative<InputSnapshot>(msg)) {
 					auto inputHandler = wih.lock();

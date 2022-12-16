@@ -72,9 +72,8 @@ namespace RenderCore
     {
     public:
         /// <summary>Resizes or changes the presentation chain</summary>
-        /// Normally this is called after the
-        /// output window changes size. If the presentation chain size doesn't
-        /// match the output window's size, the behaviour is undefined (though
+        /// Normally this is called after the output window changes size. If the presentation
+        // chain size doesn't match the output window's size, the behaviour is undefined (though
         /// on windows, the output is stretched to the window size).
         ///
         /// Use the default arguments to automatically adjust to the same size as
@@ -105,17 +104,14 @@ namespace RenderCore
     /// and memory location of the object). So a device must be created and
     /// selected before anything else is created.
     ///
+    /// To create a device, use the IAPIInstance interface (see DeviceInitialization.h)
+    ///
     /// Normally there is only a single device. Multiple devices are only
     /// required in very special case situations (for example, if a PC has 2 graphics
     /// cards, and you want to render using both cards).
     ///
-    /// Call CreateDevice() to create a new default with the default parameters.
-    ///
     /// Normally clients should create a device first, and then create a presentation
     /// chain once an output window has been created.
-    ///
-    /// To render a frame, call BeginFrame() on the device first, and then call
-    /// PresentationChain::Present when the frame is finished.
     ///
     /// You can use "QueryInterface" to get extended interfaces for the device. Some
     /// platforms might expose special case behaviour. To get access, use QueryInterface
@@ -136,7 +132,7 @@ namespace RenderCore
         /// and underlying graphics api.</param>
         virtual std::unique_ptr<IPresentationChain>     CreatePresentationChain(
             const void* platformWindowHandle,
-            const PresentationChainDesc& desc) = 0;
+            const PresentationChainDesc& desc = {}) = 0;
 
         /// <summary>Looks for compatibility with another interface</summary>
         /// Some implementations of IDevice might provide extension interfaces.
@@ -162,6 +158,7 @@ namespace RenderCore
         /// <returns>Returns nullptr if the interface isn't supported</returns>
         /// <seealso cref="RenderCore::IDeviceDX11"/>
         /// <seealso cref="RenderCore::IDeviceOpenGLES"/>
+        /// <seealso cref="RenderCore::IDeviceVulkan"/>
         virtual void*       QueryInterface(size_t guid) = 0;
 
         virtual std::shared_ptr<IThreadContext>     GetImmediateContext() = 0;
@@ -210,28 +207,18 @@ namespace RenderCore
     ///
     /// <summary>Represents the context state of a particular thread while rendering</summary>
     ///
-    /// There are 2 types of threadContext objects:
-    ///     1. immediate
-    ///     2. deferred
-    ///
     /// Each thread context is associated with a single CPU thread. As a result, the methods
     /// themselves are not-thread-safe -- because they are only called from a single thread.
     /// We need to store the context state on a thread level, because each thread can be working
     /// with a different state, and each thread wants to assume that other threads won't interfere
     /// with its own state.
     ///
-    /// Each device can have only one immediate context. But this can interact directly
-    /// with the GPU, and send commands. The thread that owns the immediate context is the primary
-    /// rendering thread.
-    ///
-    /// Other threads can have a "deferred" context. In this context, GPU commands can be queued up.
-    /// But, before the GPU can act upon them, their commands must be submitted to the immediate 
-    /// context.
-    ///
-    /// This object is critical for hiding the metal layer from platform-independent libraries. 
-    /// Most objects require access to Metal::DeviceContext to perform rendering operations. But 
-    /// DeviceContext is a low-level "Metal" layer object. We need a higher level "RenderCore"
-    /// object to wrap it.
+    /// This object is critical for hiding the metal layer from platform-independent libraries.
+    /// Only clients that actually want to do low level rendering operations require access to 
+    /// Metal::DeviceContext to perform rendering operations.
+    /// Many clients don't need that low-level visibility, and don't want to be exposed to graphics
+    /// api specific code. For those cases, IThreadContext fully encapsulates any platform or
+    /// graphics api specific behaviour.
     ///
     class IThreadContext
     {
@@ -284,14 +271,15 @@ namespace RenderCore
         /// takes care of committing work and starting the next frame.
         virtual void            CommitCommands(CommitCommandsFlags::BitField=0) = 0;
 
+        virtual IAnnotator&		GetAnnotator() = 0;
+
         virtual void*           QueryInterface(size_t guid) = 0;
-        virtual bool            IsImmediate() const = 0;
         virtual auto			GetDevice() const -> std::shared_ptr<IDevice> = 0;
+
+        virtual bool            IsImmediate() const = 0;
 		virtual void			InvalidateCachedState() const = 0;
-
-		virtual IAnnotator&		GetAnnotator() = 0;
-
         virtual ThreadContextStateDesc  GetStateDesc() const = 0;
+
         virtual ~IThreadContext();
     };
 

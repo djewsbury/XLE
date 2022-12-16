@@ -39,6 +39,16 @@ namespace OSServices
 		IteratorRange<const MonitorDesc*> GetMonitors();
 		IteratorRange<const AdapterDesc*> GetAdapters();
 
+		/// DesktopGeometry is used when associating windows in a windowing system with a specific monitor
+		/// The behaviour will be specific to the windowing system. For example, Windows has one large 2D
+		/// field, and a part of that field is assigned to each monitor.
+		struct DesktopGeometry
+		{
+			int _x, _y;
+			int _width, _height;
+		};
+		DesktopGeometry GetDesktopGeometryForMonitor(MonitorId);
+
 		enum class ToggleableState { Disable, Enable, LeaveUnchanged };
 		
 		bool TryChangeMode(MonitorId, const ModeDesc&, ToggleableState hdrState = ToggleableState::LeaveUnchanged);

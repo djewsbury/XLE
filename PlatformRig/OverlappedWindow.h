@@ -13,6 +13,7 @@
 #include <variant>
 
 namespace Utility { template<typename... Args> class Signal; }
+namespace OSServices { class DisplaySettingsManager; }
 
 namespace PlatformRig
 {
@@ -34,7 +35,7 @@ namespace PlatformRig
     ///     To associate a presentation chain with the window, follow this example:
     ///      <code>\code
     ///         RenderCore::IDevice* device = ...;
-    ///         OverlappedWindow* window = ...;
+    ///         Window* window = ...;
     ///
     ///             // create a new presentation attached to the underlying
     ///             // window handle
@@ -53,7 +54,7 @@ namespace PlatformRig
     ///     \endcode</code>
     /// </example>
     ///  
-    class OverlappedWindow
+    class Window
     {
     public:
         const void* GetUnderlyingHandle() const;
@@ -68,11 +69,16 @@ namespace PlatformRig
         enum class PumpResult { Continue, Background, Terminate };
         static PumpResult DoMsgPump();
 
-        OverlappedWindow();
-        ~OverlappedWindow();
+        void CaptureMonitor(
+            std::shared_ptr<OSServices::DisplaySettingsManager>,
+            unsigned monitorId);     // OSServices::DisplaySettingsManager::MonitorId
+        void ReleaseMonitor();
 
-        OverlappedWindow(OverlappedWindow&&) = default;
-        OverlappedWindow& operator=(OverlappedWindow&&) = default;
+        Window();
+        ~Window();
+
+        Window(Window&&) = default;
+        Window& operator=(Window&&) = default;
 
         class Pimpl;
     protected:
