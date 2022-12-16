@@ -301,7 +301,7 @@ namespace UnitTests
 		pChainDesc._imageCount = 3;
 		auto presentationChain = testHelper->_device->CreatePresentationChain(osWindow->GetUnderlyingHandle(), pChainDesc);
 		REQUIRE(presentationChain);
-		osWindow->ShowWindow();
+		osWindow->Show();
 
 		ShaderKit shaderKit{*testHelper, presentationChain->GetDesc()};
 		auto estimateLayers = EstimateLayersPerFrame(*testHelper, shaderKit);
@@ -313,7 +313,7 @@ namespace UnitTests
 			vulkanThreadContext->AttachCPUProfiler(&profiler);
 
 		float gpuLoad = 1.2f;
-		auto testResults = CalculateFrameRateConsistency(*testHelper, shaderKit, *presentationChain, estimateLayers * gpuLoad);
+		auto testResults = CalculateFrameRateConsistency(*testHelper, shaderKit, *presentationChain, estimateLayers * gpuLoad, &profiler);
 
 		std::cout
 			<< "At " << gpuLoad << " load, average interval " << testResults._meanIntervalMS << "ms, expected: " << 16.667f * gpuLoad << "ms (" << 1000.f/testResults._meanIntervalMS << "fps, " 

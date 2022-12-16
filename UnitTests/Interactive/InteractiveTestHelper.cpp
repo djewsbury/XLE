@@ -8,7 +8,6 @@
 #include "../../PlatformRig/PlatformApparatuses.h"
 #include "../../PlatformRig/OverlappedWindow.h"
 #include "../../PlatformRig/MainInputHandler.h"
-#include "../../PlatformRig/PlatformRigUtil.h"
 #include "../../PlatformRig/OverlaySystem.h"
 
 #include "../../RenderCore/LightingEngine/LightingEngineApparatus.h"
@@ -63,7 +62,7 @@ namespace UnitTests
 			_frameRig->SetMainOverlaySystem(adapter);
 			_frameRig->UpdatePresentationChain(*_windowApparatus->_presentationChain);
 			_windowApparatus->_mainInputHandler->AddListener(adapter->GetInputListener());
-			_windowApparatus->_osWindow->ShowWindow();
+			_windowApparatus->_osWindow->Show();
 			while (PlatformRig::OverlappedWindow::DoMsgPump() != PlatformRig::OverlappedWindow::PumpResult::Terminate) {
 				_frameRig->ExecuteFrame(*_windowApparatus);
 				_frameRenderingApparatus->_frameCPUProfiler->EndFrame();
@@ -101,11 +100,8 @@ namespace UnitTests
 			_device = renderAPI->CreateDevice(0, renderAPI->QueryFeatureCapability(0));
 			if (!_assetServices) _assetServices = std::make_shared<::Assets::Services>();
 
-			_windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(osWindow), _device);
 			_primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(_device);
 			_frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(_device);
-			auto v = _device->GetDesc();
-			_windowApparatus->_osWindow->SetTitle(StringMeld<128>() << "XLE interactive unit test [RenderCore: " << v._buildVersion << ", " << v._buildDate << "]");
 
 			if (enabledComponents & EnabledComponents::RenderCoreTechniques) {
 				_drawingApparatus = std::make_shared<RenderCore::Techniques::DrawingApparatus>(_device);
@@ -117,20 +113,11 @@ namespace UnitTests
 				_lightingEngineApparatus = std::make_shared<RenderCore::LightingEngine::LightingEngineApparatus>(_drawingApparatus);
 			}
 
-			_frameRig = std::make_shared<PlatformRig::FrameRig>(*_frameRenderingApparatus, _drawingApparatus.get());
-			_windowApparatus->_windowHandler->_preResize.Bind(
-				[fr = std::weak_ptr<PlatformRig::FrameRig>{_frameRig}](unsigned, unsigned) {
-					if (auto frameRig = fr.lock()) {
-						RenderCore::Techniques::ResetFrameBufferPool(*frameRig->GetTechniqueContext()._frameBufferPool);
-                    	frameRig->GetTechniqueContext()._attachmentPool->ResetActualized();
-					}
-				});
+			_windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(osWindow), _drawingApparatus.get(), *_frameRenderingApparatus);
+			auto v = _device->GetDesc();
+			_windowApparatus->_osWindow->SetTitle(StringMeld<128>() << "XLE interactive unit test [RenderCore: " << v._buildVersion << ", " << v._buildDate << "]");
 
-			_windowApparatus->_windowHandler->_postResize.Bind(
-                [fr = std::weak_ptr<PlatformRig::FrameRig>{_frameRig}](auto& presentationChain, unsigned, unsigned) {
-					if (auto frameRig = fr.lock())
-                    	frameRig->UpdatePresentationChain(presentationChain);
-                });
+			_frameRig = _windowApparatus->_frameRig;
 		}
 
 		~InteractiveTestHelper()

@@ -17,15 +17,13 @@ namespace PlatformRig
     class InputTranslator
     {
     public:
-        void    OnMouseMove         (signed newX,       signed newY);
-        void    OnMouseButtonChange (signed newX, signed newY, unsigned index,    bool newState);
-        void    OnMouseButtonDblClk (signed newX, signed newY, unsigned index);
-        void    OnKeyChange         (unsigned keyCode,  bool newState);
-        void    OnChar              (ucs2 chr);
-        void    OnMouseWheel        (signed wheelDelta);
-        void    OnFocusChange       ();
-
-        void    AddListener         (std::weak_ptr<IInputListener> listener);
+        InputSnapshot    OnMouseMove         (signed newX,       signed newY);
+        InputSnapshot    OnMouseButtonChange (signed newX, signed newY, unsigned index,    bool newState);
+        InputSnapshot    OnMouseButtonDblClk (signed newX, signed newY, unsigned index);
+        InputSnapshot    OnKeyChange         (unsigned keyCode,  bool newState);
+        InputSnapshot    OnChar              (ucs2 chr);
+        InputSnapshot    OnMouseWheel        (signed wheelDelta);
+        InputSnapshot    OnFocusChange       ();
 
         Int2    GetMousePosition();
 
@@ -37,8 +35,6 @@ namespace PlatformRig
         std::unique_ptr<Pimpl> _pimpl;
 
         unsigned        GetMouseButtonState() const;
-
-        void            Publish(const InputSnapshot& snapShot);
         const char*     AsKeyName(unsigned keyCode);
     };
 }

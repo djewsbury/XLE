@@ -10,7 +10,7 @@
 
 namespace RenderCore { class IDevice; class IThreadContext; class IPresentationChain; class IAnnotator; }
 namespace RenderCore { namespace BindFlag { using BitField = unsigned; }}
-namespace RenderCore { namespace Techniques { class ImmediateDrawingApparatus; }}
+namespace RenderCore { namespace Techniques { class ImmediateDrawingApparatus; class DrawingApparatus; class FrameRenderingApparatus; }}
 namespace RenderOverlays { class Font; }
 namespace RenderOverlays { namespace DebuggingDisplay { class DebugScreensSystem; }}
 namespace Assets { class DependencyValidation; }
@@ -48,18 +48,19 @@ namespace PlatformRig
 	{
 	public:
 		std::shared_ptr<OverlappedWindow> _osWindow;
-		std::shared_ptr<RenderCore::IDevice> _device;
 		std::shared_ptr<RenderCore::IThreadContext> _immediateContext;
 		std::shared_ptr<RenderCore::IPresentationChain> _presentationChain;
 		std::shared_ptr<MainInputHandler> _mainInputHandler;
 		std::shared_ptr<ResizePresentationChain> _windowHandler;
+		std::shared_ptr<FrameRig> _frameRig;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
 		::Assets::DependencyValidation _depValPtr;
 
 		WindowApparatus(
 			std::shared_ptr<OverlappedWindow> osWindow,
-			std::shared_ptr<RenderCore::IDevice> device,
+			RenderCore::Techniques::DrawingApparatus* drawingApparatus,
+			RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
 			RenderCore::BindFlag::BitField presentationChainBindFlags=0);
 		~WindowApparatus();
 	};

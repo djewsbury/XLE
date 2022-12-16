@@ -7,13 +7,11 @@
 #include "../../PlatformRig/PlatformApparatuses.h"
 #include "../../PlatformRig/OverlappedWindow.h"
 #include "../../PlatformRig/MainInputHandler.h"
-#include "../../PlatformRig/PlatformRigUtil.h"
 #include "../../PlatformRig/DebugHotKeys.h"
 #include "../../PlatformRig/DebugScreenRegistry.h"
 
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/Techniques.h"
-#include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/Techniques/Services.h"
 #include "../../RenderCore/Techniques/SubFrameEvents.h"
 #include "../../RenderCore/DeviceInitialization.h"
@@ -87,11 +85,11 @@ namespace Sample
             // as they go along
             // We separate this initialization work like this to provide some flexibility. It's only necessary to
             // construct as much as will be required for the specific use case 
-        sampleGlobals._windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(osWindow), sampleGlobals._renderDevice, config._presentationChainBindFlags);
         sampleGlobals._drawingApparatus = std::make_shared<RenderCore::Techniques::DrawingApparatus>(sampleGlobals._renderDevice);
         sampleGlobals._immediateDrawingApparatus = std::make_shared<RenderCore::Techniques::ImmediateDrawingApparatus>(sampleGlobals._drawingApparatus);
         sampleGlobals._primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(sampleGlobals._renderDevice);
         sampleGlobals._frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(sampleGlobals._renderDevice);
+        sampleGlobals._windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(osWindow), sampleGlobals._drawingApparatus.get(), *sampleGlobals._frameRenderingApparatus);
         {
             auto v = sampleGlobals._renderDevice->GetDesc();
             StringMeld<128> meld;
@@ -107,7 +105,7 @@ namespace Sample
                 //  useful to create a debugging display to go along with any new feature. 
                 //  It just provides a convenient architecture for visualizing important information.
             Log(Verbose) << "Setup tools and debugging" << std::endl;
-            PlatformRig::FrameRig frameRig{*sampleGlobals._frameRenderingApparatus, sampleGlobals._drawingApparatus.get()};
+            auto& frameRig = *sampleGlobals._windowApparatus->_frameRig;
             sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._immediateDrawingApparatus, frameRig);
             frameRig.SetDebugScreensOverlaySystem(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem);
             frameRig.SetMainOverlaySystem(sampleOverlay);
@@ -124,16 +122,6 @@ namespace Sample
                 sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleListener);
 
             frameRig.UpdatePresentationChain(*sampleGlobals._windowApparatus->_presentationChain);
-            sampleGlobals._windowApparatus->_windowHandler->_preResize.Bind(
-                [&frameRig](unsigned, unsigned) {
-                    RenderCore::Techniques::ResetFrameBufferPool(*frameRig.GetTechniqueContext()._frameBufferPool);
-                    frameRig.GetTechniqueContext()._attachmentPool->ResetActualized();
-                });
-
-            sampleGlobals._windowApparatus->_windowHandler->_postResize.Bind(
-                [&frameRig](auto& presentationChain, unsigned, unsigned) {
-                    frameRig.UpdatePresentationChain(presentationChain);
-                });
 
             RenderCore::Techniques::SetThreadContext(sampleGlobals._windowApparatus->_immediateContext);
             techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
@@ -141,7 +129,7 @@ namespace Sample
             TRY {
                     // Pump a single frame to ensure we have some content when the window appears (and then show it)
                 frameRig.ExecuteFrame(*sampleGlobals._windowApparatus);
-                sampleGlobals._windowApparatus->_osWindow->ShowWindow();
+                sampleGlobals._windowApparatus->_osWindow->Show();
 
                     //  Finally, we execute the frame loop
                 while (PlatformRig::OverlappedWindow::DoMsgPump() != PlatformRig::OverlappedWindow::PumpResult::Terminate) {

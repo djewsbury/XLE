@@ -10,16 +10,73 @@
 #include <memory>       // for unique_ptr
 #include <functional>
 #include <chrono>
+#include <variant>
+
+namespace Utility { template<typename... Args> class Signal; }
 
 namespace PlatformRig
 {
-    class IInputListener;
+    struct SystemDisplayChange {};
+    struct WindowResize { signed _newWidth = 0, _newHeight = 0; };
+    class InputSnapshot;
+    class InputContext;
 
-    class IWindowHandler
+    using SystemMessageVariant = std::variant<InputSnapshot, SystemDisplayChange, WindowResize>;
+
+    /// <summary>An independent window in OS presentation scheme</summary>
+    /// Creates and manages an independent OS window.
+    /// The result depends on the particular OS. But on an OS like Microsoft
+    /// Windows, we should expect a new top-level window to appear. A normal
+    /// game will have just one window like this, and will attach a rendering
+    /// surface to the window.
+    ///
+    /// <example>
+    ///     To associate a presentation chain with the window, follow this example:
+    ///      <code>\code
+    ///         RenderCore::IDevice* device = ...;
+    ///         OverlappedWindow* window = ...;
+    ///
+    ///             // create a new presentation attached to the underlying
+    ///             // window handle
+    ///         auto presentationChain = device->CreatePresentationChain(
+    ///             window->GetUnderlyingHandle());
+    ///
+    ///             // render a frame so we have some content when we first
+    ///             // show the window
+    ///         auto& threadContext = *device->GetImmediateContext();
+    ///         auto renderTarget = threadContext.BeginFrame(*presentationChain);
+    ///         (render a frame, clear presentation target, etc)
+    ///         threadContext.Present(*presentationChain);
+    ///         window->Show();
+    ///
+    ///         for (;;) { // start rendering / presentation loop
+    ///     \endcode</code>
+    /// </example>
+    ///  
+    class OverlappedWindow
     {
     public:
-        virtual void    OnResize(unsigned newWidth, unsigned newHeight) = 0;
-        virtual ~IWindowHandler() {}
+        const void* GetUnderlyingHandle() const;
+        std::pair<Int2, Int2> GetRect() const;
+        void SetTitle(const char titleText[]);
+        void Resize(unsigned width, unsigned height);
+        void Show(bool newState = true);
+
+        Utility::Signal<SystemMessageVariant&&>& OnMessage();
+        InputContext MakeInputContext();
+
+        enum class PumpResult { Continue, Background, Terminate };
+        static PumpResult DoMsgPump();
+
+        OverlappedWindow();
+        ~OverlappedWindow();
+
+        OverlappedWindow(OverlappedWindow&&) = default;
+        OverlappedWindow& operator=(OverlappedWindow&&) = default;
+
+        class Pimpl;
+    protected:
+        std::unique_ptr<Pimpl> _pimpl;
     };
 
 	class IOSRunLoop
@@ -38,54 +95,5 @@ namespace PlatformRig
 
 	IOSRunLoop* GetOSRunLoop();
 	void SetOSRunLoop(const std::shared_ptr<IOSRunLoop>& runLoop);
-
-    /// <summary>An independent window in OS presentation scheme</summary>
-    /// Creates and manages an independent OS window.
-    /// The result depends on the particular OS. But on an OS like Microsoft
-    /// Windows, we should expect a new top-level window to appear. A normal
-    /// game will have just one window like this, and will attach a rendering
-    /// surface to the window.
-    ///
-    /// <example>
-    ///     To associate a presentation chain with the window, follow this example:
-    ///      <code>\code
-    ///         RenderCore::IDevice* device = ...;
-    ///         OverlappedWindow* window = ...;
-    ///         auto rect = window->GetRect();
-    ///             // create a new presentation attached to the underlying
-    ///             // window handle
-    ///         auto presentationChain = device->CreatePresentationChain(
-    ///             window->GetUnderlyingHandle(), 
-    ///             rect.second[0] - rect.first[0], rect.second[1] - rect.first[1]);
-    ///         for (;;;) { // start rendering / presentation loop
-    ///     \endcode</code>
-    /// </example>
-    ///  
-    class OverlappedWindow
-    {
-    public:
-        const void* GetUnderlyingHandle() const;
-        std::pair<Int2, Int2> GetRect() const;
-        void SetTitle(const char titleText[]);
-        void Resize(unsigned width, unsigned height);
-        void ShowWindow(bool newState = true);
-
-        void AddListener(std::weak_ptr<IInputListener> listener);
-        void AddWindowHandler(std::shared_ptr<IWindowHandler> handler);
-
-        enum class PumpResult { Continue, Background, Terminate };
-        static PumpResult DoMsgPump();
-
-        OverlappedWindow();
-        ~OverlappedWindow();
-
-        OverlappedWindow(OverlappedWindow&&) = default;
-        OverlappedWindow& operator=(OverlappedWindow&&) = default;
-
-        class Pimpl;
-    protected:
-        std::unique_ptr<Pimpl> _pimpl;
-    };
-
 }
 

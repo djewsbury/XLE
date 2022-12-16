@@ -19,7 +19,6 @@ namespace PlatformRig
         
         Int2 _currentMousePosition;
         std::vector<ActiveButton> _passiveButtonState;
-        std::vector<std::weak_ptr<IInputListener>> _listeners;
         HWND _hwnd;
     };
 
@@ -34,14 +33,7 @@ namespace PlatformRig
     {
     }
 
-    static InputContext MakeInputContext(HWND hwnd)
-	{
-		RECT clientRect;
-		GetClientRect(hwnd, &clientRect);
-		return { Coord2{clientRect.left, clientRect.top}, Coord2{clientRect.right, clientRect.bottom} };
-	}
-
-    void    InputTranslator::OnMouseMove(signed newX, signed newY)
+    InputSnapshot    InputTranslator::OnMouseMove(signed newX, signed newY)
     {
         using namespace RenderOverlays::DebuggingDisplay;
         auto oldPos = _pimpl->_currentMousePosition;
@@ -51,10 +43,10 @@ namespace PlatformRig
             GetMouseButtonState(), 0, 0, 
             _pimpl->_currentMousePosition, _pimpl->_currentMousePosition - oldPos);
         snapShot._activeButtons = _pimpl->_passiveButtonState;
-        Publish(snapShot);
+        return snapShot;
     }
 
-    void    InputTranslator::OnMouseButtonChange (signed newX, signed newY, unsigned index,    bool newState)
+    InputSnapshot    InputTranslator::OnMouseButtonChange (signed newX, signed newY, unsigned index,    bool newState)
     {
         assert(index < 32);
         using namespace RenderOverlays::DebuggingDisplay;
@@ -63,10 +55,10 @@ namespace PlatformRig
 
         InputSnapshot snapShot(GetMouseButtonState(), 1<<index, 0, _pimpl->_currentMousePosition, _pimpl->_currentMousePosition - oldPos);
         snapShot._activeButtons = _pimpl->_passiveButtonState;
-        Publish(snapShot);
+        return snapShot;
     }
 
-    void    InputTranslator::OnMouseButtonDblClk (signed newX, signed newY, unsigned index)
+    InputSnapshot    InputTranslator::OnMouseButtonDblClk (signed newX, signed newY, unsigned index)
     {
         assert(index < 32);
         using namespace RenderOverlays::DebuggingDisplay;
@@ -75,10 +67,10 @@ namespace PlatformRig
 
         InputSnapshot snapShot(GetMouseButtonState(), 0, 0, _pimpl->_currentMousePosition, _pimpl->_currentMousePosition - oldPos);
         snapShot._mouseButtonsDblClk |= (1<<index);
-        Publish(snapShot);
+        return snapShot;
     }
 
-    void    InputTranslator::OnKeyChange         (unsigned keyCode,  bool newState)
+    InputSnapshot    InputTranslator::OnKeyChange         (unsigned keyCode,  bool newState)
     {
         using namespace RenderOverlays::DebuggingDisplay;
         InputSnapshot snapShot(GetMouseButtonState(), 0, 0, _pimpl->_currentMousePosition, Int2(0,0));
@@ -117,26 +109,26 @@ namespace PlatformRig
             }
         }
 
-        Publish(snapShot);
+        return snapShot;
     }
 
-    void            InputTranslator::OnChar(ucs2 chr)
+    InputSnapshot            InputTranslator::OnChar(ucs2 chr)
     {
         using namespace RenderOverlays::DebuggingDisplay;
         InputSnapshot snapShot(GetMouseButtonState(), 0, 0, _pimpl->_currentMousePosition, Int2(0,0), chr);
         snapShot._activeButtons = _pimpl->_passiveButtonState;
-        Publish(snapShot);
+        return snapShot;
     }
 
-    void            InputTranslator::OnMouseWheel(signed wheelDelta)
+    InputSnapshot            InputTranslator::OnMouseWheel(signed wheelDelta)
     {
         using namespace RenderOverlays::DebuggingDisplay;
         InputSnapshot snapShot(GetMouseButtonState(), 0, wheelDelta, _pimpl->_currentMousePosition, Int2(0,0));
         snapShot._activeButtons = _pimpl->_passiveButtonState;
-        Publish(snapShot);
+        return snapShot;
     }
 
-    void    InputTranslator::OnFocusChange()
+    InputSnapshot    InputTranslator::OnFocusChange()
     {
             // we have to reset the "_passiveButtonState" set when we gain or loose focus.
             // this is because we will miss key up messages when not focussed...
@@ -148,7 +140,7 @@ namespace PlatformRig
 		// send a snapshot that emulates releasing all held mouse buttons
 		auto emulateClickUp = GetMouseButtonState();
 		InputSnapshot snapShot(0, emulateClickUp, 0, _pimpl->_currentMousePosition, Int2(0,0));
-		Publish(snapShot);
+		return snapShot;
     }
 
     const char*     InputTranslator::AsKeyName(unsigned keyCode)
@@ -265,30 +257,6 @@ namespace PlatformRig
             |   ((GetKeyState(VK_RBUTTON) < 0) << 1)
             |   ((GetKeyState(VK_LBUTTON) < 0) << 0)
             ;
-    }
-
-    void        InputTranslator::Publish(const InputSnapshot& snapShot)
-    {
-        auto context = MakeInputContext(_pimpl->_hwnd);
-        for (auto i=_pimpl->_listeners.begin(); i!=_pimpl->_listeners.end();) {
-            auto l = i->lock();
-            if (l) {
-                if (l->OnInputEvent(context, snapShot)) {
-                    break;
-                }
-                ++i;
-            } else {
-                i = _pimpl->_listeners.erase(i);
-            }
-        }
-    }
-
-    void            InputTranslator::AddListener(std::weak_ptr<IInputListener> listener)
-    {
-        if (std::find_if(_pimpl->_listeners.begin(), _pimpl->_listeners.end(), 
-            [=](const std::weak_ptr<IInputListener>& test) { return Equivalent(listener, test); }) == _pimpl->_listeners.end()) {
-            _pimpl->_listeners.push_back(listener);
-        }
     }
 
     Int2    InputTranslator::GetMousePosition()

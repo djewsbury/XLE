@@ -13,9 +13,12 @@
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/Conversion.h"
+#include "../../Utility/FunctionUtils.h"
 #include "../../OSServices/WinAPI/WinAPIWrapper.h"
 #include "../../Core/Exceptions.h"
 #include <windowsx.h>
+
+namespace OSServices { void OnDisplaySettingsChange(unsigned, unsigned); }
 
 namespace PlatformRig
 {
@@ -74,9 +77,8 @@ namespace PlatformRig
         bool        _activated;
         std::shared_ptr<InputTranslator> _inputTranslator;
 
-        std::vector<std::shared_ptr<IWindowHandler>> _windowHandlers;
-
 		std::shared_ptr<OSRunLoop_BasicTimer> _runLoop;
+        Signal<SystemMessageVariant&&> _onMessage;
 
         Pimpl() : _hwnd(HWND(INVALID_HANDLE_VALUE)), _activated(false) {}
     };
@@ -90,6 +92,15 @@ namespace PlatformRig
 
         case WM_ERASEBKGND:
             return 0;       // (suppress these)
+
+        case WM_DISPLAYCHANGE:
+            {
+                OSServices::OnDisplaySettingsChange(unsigned(lparam & 0xffff), unsigned(lparam >> 16u));
+                auto pimpl = (OverlappedWindow::Pimpl*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+                if (pimpl && pimpl->_hwnd == hwnd)
+                    pimpl->_onMessage.Invoke(SystemDisplayChange{});
+            }
+            break;
 
         case WM_ACTIVATE:
         case WM_MOUSEMOVE:
@@ -116,6 +127,9 @@ namespace PlatformRig
                 auto* inputTrans = pimpl->_inputTranslator.get();
                 if (!pimpl->_activated) { inputTrans = nullptr; }
 
+                std::optional<InputSnapshot> generatedSnapshot;
+                bool suppressDefaultHandler = false;
+
                 switch (msg) {
                 case WM_ACTIVATE:
                     pimpl->_activated = wparam != WA_INACTIVE;
@@ -124,42 +138,48 @@ namespace PlatformRig
 
                 case WM_MOUSEMOVE:
                     if (pimpl->_activated && inputTrans)
-                        inputTrans->OnMouseMove(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam));
+                        generatedSnapshot = inputTrans->OnMouseMove(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam));
                     break;
 
-                case WM_LBUTTONDOWN:    if (inputTrans) { inputTrans->OnMouseButtonChange(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 0, true); }    break;
-                case WM_RBUTTONDOWN:    if (inputTrans) { inputTrans->OnMouseButtonChange(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 1, true); }    break;
-                case WM_MBUTTONDOWN:    if (inputTrans) { inputTrans->OnMouseButtonChange(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 2, true); }    break;
+                case WM_LBUTTONDOWN:    if (inputTrans) { generatedSnapshot = inputTrans->OnMouseButtonChange(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 0, true); }    break;
+                case WM_RBUTTONDOWN:    if (inputTrans) { generatedSnapshot = inputTrans->OnMouseButtonChange(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 1, true); }    break;
+                case WM_MBUTTONDOWN:    if (inputTrans) { generatedSnapshot = inputTrans->OnMouseButtonChange(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 2, true); }    break;
 
-                case WM_LBUTTONUP:      if (inputTrans) { inputTrans->OnMouseButtonChange(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 0, false); }   break;
-                case WM_RBUTTONUP:      if (inputTrans) { inputTrans->OnMouseButtonChange(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 1, false); }   break;
-                case WM_MBUTTONUP:      if (inputTrans) { inputTrans->OnMouseButtonChange(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 2, false); }   break;
+                case WM_LBUTTONUP:      if (inputTrans) { generatedSnapshot = inputTrans->OnMouseButtonChange(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 0, false); }   break;
+                case WM_RBUTTONUP:      if (inputTrans) { generatedSnapshot = inputTrans->OnMouseButtonChange(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 1, false); }   break;
+                case WM_MBUTTONUP:      if (inputTrans) { generatedSnapshot = inputTrans->OnMouseButtonChange(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 2, false); }   break;
 
-                case WM_LBUTTONDBLCLK:  if (inputTrans) { inputTrans->OnMouseButtonDblClk(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 0); }   break;
-                case WM_RBUTTONDBLCLK:  if (inputTrans) { inputTrans->OnMouseButtonDblClk(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 1); }   break;
-                case WM_MBUTTONDBLCLK:  if (inputTrans) { inputTrans->OnMouseButtonDblClk(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 2); }   break;
+                case WM_LBUTTONDBLCLK:  if (inputTrans) { generatedSnapshot = inputTrans->OnMouseButtonDblClk(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 0); }   break;
+                case WM_RBUTTONDBLCLK:  if (inputTrans) { generatedSnapshot = inputTrans->OnMouseButtonDblClk(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 1); }   break;
+                case WM_MBUTTONDBLCLK:  if (inputTrans) { generatedSnapshot = inputTrans->OnMouseButtonDblClk(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam), 2); }   break;
 
-                case WM_MOUSEWHEEL:     if (inputTrans) { inputTrans->OnMouseWheel(GET_WHEEL_DELTA_WPARAM(wparam)); }    break;
+                case WM_MOUSEWHEEL:     if (inputTrans) { generatedSnapshot = inputTrans->OnMouseWheel(GET_WHEEL_DELTA_WPARAM(wparam)); }    break;
 
                 case WM_SYSKEYDOWN:
                 case WM_SYSKEYUP:
                 case WM_KEYDOWN:
                 case WM_KEYUP:
-                    if (inputTrans) { inputTrans->OnKeyChange((unsigned)wparam, (msg==WM_KEYDOWN) || (msg==WM_SYSKEYDOWN)); }
-                    if (msg==WM_SYSKEYUP || msg==WM_SYSKEYDOWN) return true;        // (suppress default windows behaviour for these system keys)
+                    if (inputTrans) { generatedSnapshot = inputTrans->OnKeyChange((unsigned)wparam, (msg==WM_KEYDOWN) || (msg==WM_SYSKEYDOWN)); }
+                    suppressDefaultHandler =  (msg==WM_SYSKEYUP || msg==WM_SYSKEYDOWN);        // (suppress default windows behaviour for these system keys)
                     break;
 
                 case WM_CHAR:
-                    if (inputTrans) { inputTrans->OnChar((wchar_t)wparam); }
+                    if (inputTrans) { generatedSnapshot = inputTrans->OnChar((wchar_t)wparam); }
                     break;
 
                 case WM_SIZE:
-                    for (auto i=pimpl->_windowHandlers.begin(); i!=pimpl->_windowHandlers.end(); ++i) {
-                        signed x = ((int)(short)LOWORD(lparam)), y = ((int)(short)HIWORD(lparam));
-                        (*i)->OnResize(x, y);
+                    {
+                        signed newWidth = ((int)(short)LOWORD(lparam)), newHeight = ((int)(short)HIWORD(lparam));
+                        pimpl->_onMessage.Invoke(WindowResize{newWidth, newHeight});
                     }
                     return msg == WM_SIZING;
                 }
+
+                if (generatedSnapshot)
+                    pimpl->_onMessage.Invoke(*generatedSnapshot);
+
+                if (suppressDefaultHandler)
+                    return true;
             }
             break;
 
@@ -174,14 +194,16 @@ namespace PlatformRig
         return DefWindowProc(hwnd, msg, wparam, lparam);
     }
 
-    void OverlappedWindow::AddWindowHandler(std::shared_ptr<IWindowHandler> handler)
-    {
-        _pimpl->_windowHandlers.push_back(handler);
-    }
-
-    void OverlappedWindow::ShowWindow(bool newState)
+    void OverlappedWindow::Show(bool newState)
     {
         ::ShowWindow(_pimpl->_hwnd, newState ? SW_SHOWNORMAL : SW_HIDE);
+    }
+
+    InputContext OverlappedWindow::MakeInputContext()
+    {
+        RECT clientRect;
+		GetClientRect(_pimpl->_hwnd, &clientRect);
+		return { Coord2{clientRect.left, clientRect.top}, Coord2{clientRect.right, clientRect.bottom} };
     }
 
     OverlappedWindow::OverlappedWindow() 
@@ -222,7 +244,7 @@ namespace PlatformRig
         _pimpl->_hwnd = (*OSServices::Windows::Fn_CreateWindowEx)(
             windowStyleEx, windowClassName.c_str(), 
             NULL, windowStyle, 
-            32, 32, 1280, 720, 
+            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
             NULL, NULL, CurrentModule::GetInstance().HInstance(), NULL);
 
         if (!_pimpl->_hwnd || _pimpl->_hwnd == INVALID_HANDLE_VALUE) {
@@ -274,10 +296,10 @@ namespace PlatformRig
     {
         SetWindowTextA(_pimpl->_hwnd, titleText);
     }
-    
-    void OverlappedWindow::AddListener(std::weak_ptr<IInputListener> listener)
+
+    Utility::Signal<SystemMessageVariant&&>& OverlappedWindow::OnMessage()
     {
-        _pimpl->_inputTranslator->AddListener(listener);
+        return _pimpl->_onMessage;
     }
 
     auto OverlappedWindow::DoMsgPump() -> PumpResult

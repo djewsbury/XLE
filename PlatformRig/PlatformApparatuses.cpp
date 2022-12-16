@@ -11,6 +11,8 @@
 #include "DebugScreensOverlay.h"
 #include "DebugScreenRegistry.h"
 #include "../RenderCore/Techniques/Apparatuses.h"
+#include "../RenderCore/Techniques/Techniques.h"
+#include "../RenderCore/Techniques/RenderPass.h"		// for ResetFrameBufferPool
 #include "../RenderCore/IAnnotator.h"
 #include "../RenderCore/IDevice.h"
 #include "../RenderOverlays/DebuggingDisplay.h"
@@ -20,6 +22,7 @@
 #include "../Assets/AssetSetManager.h"
 #include "../Utility/Profiling/CPUProfiler.h"
 #include "../Utility/MemoryUtils.h"
+#include "../Utility/FunctionUtils.h"
 
 namespace PlatformRig
 {
@@ -74,24 +77,57 @@ namespace PlatformRig
 	}
 
 
-	WindowApparatus::WindowApparatus(std::shared_ptr<OverlappedWindow> osWindow, std::shared_ptr<RenderCore::IDevice> device, RenderCore::BindFlag::BitField presentationChainBindFlags)
+	WindowApparatus::WindowApparatus(
+		std::shared_ptr<OverlappedWindow> osWindow,
+		RenderCore::Techniques::DrawingApparatus* drawingApparatus,
+		RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
+		RenderCore::BindFlag::BitField presentationChainBindFlags)
 	{
-		_device = device;
 		_osWindow = std::move(osWindow);
+		auto* device = frameRenderingApparatus._device.get();
+		_immediateContext = device->GetImmediateContext();
 
 		auto clientRect = _osWindow->GetRect();
 		auto desc = RenderCore::PresentationChainDesc{unsigned(clientRect.second[0] - clientRect.first[0]), unsigned(clientRect.second[1] - clientRect.first[1])};
 		desc._bindFlags |= presentationChainBindFlags;
-		_presentationChain = _device->CreatePresentationChain(
+		_presentationChain = device->CreatePresentationChain(
 			_osWindow->GetUnderlyingHandle(),
 			desc);
-		_windowHandler = std::make_shared<PlatformRig::ResizePresentationChain>(_presentationChain, _device->GetImmediateContext());
-		_osWindow->AddWindowHandler(_windowHandler);
+
+		_frameRig = std::make_shared<FrameRig>(frameRenderingApparatus, drawingApparatus);
 
 		_mainInputHandler = std::make_shared<PlatformRig::MainInputHandler>();
-		_osWindow->AddListener(_mainInputHandler);
-		
-		_immediateContext = _device->GetImmediateContext();
+		auto threadId = std::this_thread::get_id();
+
+		_osWindow->OnMessage().Bind(
+			[	wfr = std::weak_ptr<FrameRig>{_frameRig}, wpc = std::weak_ptr<RenderCore::IPresentationChain>(_presentationChain),
+				immediateContext=_immediateContext.get(),
+				wih = std::weak_ptr<MainInputHandler>(_mainInputHandler), window=_osWindow.get(), threadId](auto&& msg) {
+
+				assert(std::this_thread::get_id() == threadId);
+
+				if (std::holds_alternative<WindowResize>(msg)) {
+					auto frameRig = wfr.lock();
+					auto presentationChain = wpc.lock();
+					if (!frameRig || !presentationChain) return;
+
+					auto resize = std::get<WindowResize>(msg);
+					RenderCore::Techniques::ResetFrameBufferPool(*frameRig->GetTechniqueContext()._frameBufferPool);
+					frameRig->GetTechniqueContext()._attachmentPool->ResetActualized();
+					if (resize._newWidth && resize._newHeight) {
+						auto desc = presentationChain->GetDesc();
+						desc._width = resize._newWidth;
+						desc._height = resize._newHeight;
+						presentationChain->ChangeConfiguration(*immediateContext, desc);
+					}
+					frameRig->UpdatePresentationChain(*presentationChain);
+				} else if (std::holds_alternative<InputSnapshot>(msg)) {
+					auto inputHandler = wih.lock();
+					if (!inputHandler) return;
+					auto context = window->MakeInputContext();
+					inputHandler->OnInputEvent(context, std::get<InputSnapshot>(msg));
+				}
+			});
 	}
 	
 	WindowApparatus::~WindowApparatus()

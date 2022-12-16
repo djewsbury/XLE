@@ -35,29 +35,6 @@ namespace PlatformRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if !defined(__CLR_VER)
-    /// <summary>Resizes a presentation chain to match a window</summary>
-    /// A handler to resize the presentation chain whenever the window
-    /// changes size (keeping 1:1 ratio)
-    class ResizePresentationChain : public IWindowHandler
-    {
-    public:
-        void    OnResize(unsigned newWidth, unsigned newHeight);
-
-        Signal<unsigned, unsigned> _preResize;
-        Signal<RenderCore::IPresentationChain&, unsigned, unsigned> _postResize;
-
-        ResizePresentationChain(
-            std::shared_ptr<RenderCore::IPresentationChain> presentationChain,
-            std::shared_ptr<RenderCore::IThreadContext> immediateThreadContext);
-    protected:
-        std::weak_ptr<RenderCore::IPresentationChain> _presentationChain;
-        std::weak_ptr<RenderCore::IThreadContext> _immediateThreadContext;
-    };
-#endif
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
     void InitDebugDisplays(RenderOverlays::DebuggingDisplay::DebugScreensSystem& system);
     void ShowDebugScreen(StringSection<>);
 
