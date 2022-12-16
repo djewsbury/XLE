@@ -43,13 +43,17 @@ namespace PlatformRig { namespace Overlays
 
 			char buffer[256];
 			auto monitors = _dispSettings->GetMonitors();
+			std::pair<OSServices::DisplaySettingsManager::ModeDesc, bool> currentMode;
 			if (_activeMonitorId < monitors.size()) {
 				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "Name: " + monitors[_activeMonitorId]._friendlyName);
 				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << "AdapterId: " << monitors[_activeMonitorId]._adapter << " (" << _dispSettings->GetAdapters()[monitors[_activeMonitorId]._adapter]._friendlyName << ")");
 				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << "LocallyUniqueId: 0x" << std::hex << monitors[_activeMonitorId]._locallyUniqueId);
+				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << "HDR: " << (monitors[_activeMonitorId]._hdrSupported ? "supported" : "unsupported"));
 				auto geo = _dispSettings->GetDesktopGeometryForMonitor(_activeMonitorId);
-				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << "Geometry X: " << geo._x << ", Y: " << geo._y);
-				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << "Geometry Width: " << geo._width << ", Geometry Height: " << geo._height);
+				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << "Geometry X: " << geo._x << ", Y: " << geo._y << " Width: " << geo._width << ", Geometry Height: " << geo._height);
+				currentMode = _dispSettings->GetCurrentMode(_activeMonitorId);
+				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << "Current Mode: " << currentMode.first._width << "x" << currentMode.first._height << " (" << currentMode.first._refreshRate << "Hz)");
+				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << "Current Mode HDR: " << (currentMode.second ? "Yes" : "No"));
 			}
 
 			layout.AllocateFullWidth(lineHeight);
@@ -63,6 +67,12 @@ namespace PlatformRig { namespace Overlays
 				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "3. Change mode");
 				if (std::find(_monitorsReleasableMode.begin(), _monitorsReleasableMode.end(), _activeMonitorId) != _monitorsReleasableMode.end())
 					DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "4. Release mode");
+				if (_activeMonitorId < monitors.size() && monitors[_activeMonitorId]._hdrSupported) {
+					if (currentMode.second) {
+						DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "5. Disable HDR");
+					} else
+						DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "5. Enable HDR");
+				}
 				break;
 
 			case MenuMode::SelectMonitor:
@@ -118,6 +128,17 @@ namespace PlatformRig { namespace Overlays
 						_monitorsReleasableMode.erase(i);
 						_dispSettings->ReleaseMode(_activeMonitorId);
 					}
+				} else if (input._pressedChar == '5') {
+					auto monitors = _dispSettings->GetMonitors();
+					if (_activeMonitorId < monitors.size() && monitors[_activeMonitorId]._hdrSupported) {
+						auto currentMode = _dispSettings->GetCurrentMode(_activeMonitorId);
+						if (currentMode.second) {
+							_hdrState = OSServices::DisplaySettingsManager::DisplaySettingsManager::ToggleableState::Disable;
+						} else {
+							_hdrState = OSServices::DisplaySettingsManager::DisplaySettingsManager::ToggleableState::Enable;
+						}
+						_dispSettings->TryChangeMode(_activeMonitorId, currentMode.first, _hdrState);
+					}
 				}
 				break;
 
@@ -143,7 +164,7 @@ namespace PlatformRig { namespace Overlays
 						auto idx = (input._pressedChar - '1') + _modeSelectorOffset;
 						auto modes = _dispSettings->GetModes(_activeMonitorId);
 						if (idx < modes.size()) {
-							bool success = _dispSettings->TryChangeMode(_activeMonitorId, modes[idx]);
+							bool success = _dispSettings->TryChangeMode(_activeMonitorId, modes[idx], _hdrState);
 							if (success) {
 								auto i = std::find(_monitorsReleasableMode.begin(), _monitorsReleasableMode.end(), _activeMonitorId);
 								if (i == _monitorsReleasableMode.end())
@@ -177,6 +198,7 @@ namespace PlatformRig { namespace Overlays
 		std::vector<OSServices::DisplaySettingsManager::MonitorId> _monitorsReleasableMode;
 
 		unsigned _modeSelectorOffset = 0;
+		OSServices::DisplaySettingsManager::DisplaySettingsManager::ToggleableState _hdrState = OSServices::DisplaySettingsManager::DisplaySettingsManager::ToggleableState::LeaveUnchanged;
 	};
 
 	std::shared_ptr<IWidget> CreateDisplaySettingsDisplay(std::shared_ptr<OSServices::DisplaySettingsManager> dispSettings, std::shared_ptr<Window> window)

@@ -54,6 +54,8 @@ namespace OSServices
 		bool TryChangeMode(MonitorId, const ModeDesc&, ToggleableState hdrState = ToggleableState::LeaveUnchanged);
 		void ReleaseMode(MonitorId);
 
+		std::pair<ModeDesc, bool> GetCurrentMode(MonitorId);
+
 		DisplaySettingsManager();
 		~DisplaySettingsManager();
 	private:
