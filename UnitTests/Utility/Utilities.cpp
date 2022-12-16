@@ -356,5 +356,148 @@ namespace UnitTests
             REQUIRE(parsed == i64);
         }
     }
+
+    TEST_CASE( "SignalParameterForwarding", "[utility]" )
+    {
+        struct Uncopyable
+        {
+            int _value;
+            Uncopyable() = default;
+            Uncopyable(int v) : _value(v) {}
+            Uncopyable(Uncopyable&& moveFrom)
+            {
+                _value = moveFrom._value;
+                moveFrom._value = 96;
+            }
+            Uncopyable& operator=(Uncopyable&& moveFrom)
+            {
+                _value = moveFrom._value;
+                moveFrom._value = 96;
+                return *this;
+            }
+        };
+
+        struct Copyable
+        {
+            int _value;
+            Copyable() = default;
+            Copyable(int v) : _value(v) {}
+            Copyable(Copyable&& moveFrom)
+            {
+                _value = moveFrom._value;
+                moveFrom._value = 96;
+            }
+            Copyable& operator=(Copyable&& moveFrom)
+            {
+                _value = moveFrom._value;
+                moveFrom._value = 96;
+                return *this;
+            }
+            Copyable(const Copyable&) = default;
+            Copyable& operator=(const Copyable&) = default;
+        };
+
+        SECTION("Signal by value with Uncopyable")
+        {
+            Signal<Uncopyable> sig;
+            sig.Bind([](auto param) { 
+                REQUIRE(param._value == 42);
+            });
+            sig.Invoke(Uncopyable{42});
+            sig(Uncopyable{42});
+
+            // Must fail to compile
+            // {
+            //     Uncopyable A { 42 };
+            //     sig.Invoke(A);
+            // }
+
+            {
+                Uncopyable A { 42 };
+                sig.Invoke(std::move(A));
+                REQUIRE(A._value == 96);
+            }
+
+            // Must fail to compile
+            // {
+            //     Uncopyable A { 42 };
+            //     sig(A);
+            // }
+
+            {
+                Uncopyable A { 42 };
+                sig(std::move(A));
+                REQUIRE(A._value == 96);
+            }
+        }
+
+        SECTION("Signal by value with Copyable")
+        {
+            Signal<Copyable> sig;
+            sig.Bind([](auto param) { 
+                REQUIRE(param._value == 42);
+            });
+            sig.Invoke(Copyable{42});
+            sig(Copyable{42});
+
+            {
+                Copyable A { 42 };
+                sig.Invoke(A);
+                REQUIRE(A._value == 42);
+            }
+
+            {
+                Copyable A { 42 };
+                sig.Invoke(std::move(A));
+                REQUIRE(A._value == 96);
+            }
+
+            {
+                Copyable A { 42 };
+                sig(A);
+                REQUIRE(A._value == 42);
+            }
+
+            {
+                Copyable A { 42 };
+                sig(std::move(A));
+                REQUIRE(A._value == 96);
+            }
+        }
+
+        SECTION("Signal by lvalue reference")
+        {
+            Signal<const Uncopyable&> sig;
+            sig.Bind([](auto& param) { 
+                REQUIRE(param._value == 42);
+            });
+            sig.Invoke(Uncopyable{42});
+            sig(Uncopyable{42});
+
+            {
+                Uncopyable A { 42 };
+                sig.Invoke(A);
+                REQUIRE(A._value == 42);
+            }
+
+            {
+                Uncopyable A { 42 };
+                sig.Invoke(std::move(A));
+                REQUIRE(A._value == 42);        // even though we give a rvalue, it's used as an lvalue because of the signal signature
+            }
+
+            {
+                Uncopyable A { 42 };
+                sig(A);
+                REQUIRE(A._value == 42);
+            }
+
+            {
+                Uncopyable A { 42 };
+                sig(std::move(A));
+                REQUIRE(A._value == 42);        // even though we give a rvalue, it's used as an lvalue because of the signal signature
+            }
+        }
+    }
 }
 

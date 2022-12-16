@@ -489,8 +489,10 @@ namespace Utility
         class Signal
         {
         public:
-            void operator()(Args... args) const;
-            void Invoke(Args... args) const { operator()(std::forward<Args>(args)...); }
+            template<typename... A>
+                void operator()(A&&... args) const;
+            template<typename... A>
+                void Invoke(A&&... args) const { operator()(std::forward<A>(args)...); }
             bool AtLeastOneBind() const { return _atLeastOneBind.load(); }
 
             SignalDelegateId Bind(std::function<void(Args...)>&& fn);
@@ -520,14 +522,15 @@ namespace Utility
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
     template<typename... Args>
-        void Signal<Args...>::operator()(Args... args) const
+        template<typename... A>
+            void Signal<Args...>::operator()(A&&... args) const
         {
             ScopedLock(_delegatesLock);
             _preventChangesToDelegates = true;
             try
             {
                 for (const auto&d:_delegates) {
-                    (d._function)(args...);
+                    (d._function)(std::forward<A>(args)...);
                 }
                 // Call each delegate in _independentDelegates, but erase them when they return
                 // SignalDelegateResult::Unbind. Note that we can't call std::remove_if, because
@@ -537,7 +540,7 @@ namespace Utility
                 auto i = _independentDelegates.begin();
                 auto targetSpot = _independentDelegates.begin();
                 while (i!=_independentDelegates.end()) {
-                    auto result = (*i)(args...);
+                    auto result = (*i)(std::forward<A>(args)...);
                     if (result == SignalDelegateResult::Continue) {
                         if (i != targetSpot)
                             *targetSpot = std::move(*i);    // shift down into it's new location
