@@ -306,6 +306,8 @@ namespace OSServices
 			}
 
 			internalMonitorDesc._modesEnd = _modes.size();
+			// Reverse because windows tends to list the modes from lowest resolution to highest resolution
+			std::reverse(_modes.begin()+internalMonitorDesc._modesStart, _modes.begin()+internalMonitorDesc._modesEnd);
 			_monitorsInternal.emplace_back(std::move(internalMonitorDesc));
 
 			MonitorDesc monitorDesc;

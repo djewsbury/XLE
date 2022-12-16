@@ -17,6 +17,7 @@
 #include "../../PlatformRig/DebuggingDisplays/GPUProfileDisplay.h"
 #include "../../PlatformRig/DebuggingDisplays/CPUProfileDisplay.h"
 #include "../../PlatformRig/DebuggingDisplays/InvalidAssetDisplay.h"
+#include "../../PlatformRig/DebuggingDisplays/DisplaySettingsDisplay.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/AssetSetManager.h"
 #include "../../Utility/Profiling/CPUProfiler.h"
@@ -61,6 +62,10 @@ namespace Sample
 			globals._displayRegistrations.emplace_back(
 				"[Console] Invalid asset display",
 				PlatformRig::Overlays::CreateInvalidAssetDisplay(assetSets));
+
+		globals._displayRegistrations.emplace_back(
+			"Display Settings",
+			PlatformRig::Overlays::CreateDisplaySettingsDisplay(globals._windowApparatus->_displaySettings, globals._windowApparatus->_osWindow));
 	}
 
 }

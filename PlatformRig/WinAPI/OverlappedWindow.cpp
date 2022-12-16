@@ -85,6 +85,8 @@ namespace PlatformRig
         std::shared_ptr<OSServices::DisplaySettingsManager> _displaySettingsManager;
         OSServices::DisplaySettingsManager::MonitorId _capturedMonitorId = ~0u;
 
+        bool _shown = false;
+
         Pimpl() : _hwnd(HWND(INVALID_HANDLE_VALUE)), _activated(false) {}
     };
 
@@ -108,11 +110,11 @@ namespace PlatformRig
                 // If we are capturing a monitor, we should realign the window with the new desktop geometry
                 if (pimpl->_displaySettingsManager && pimpl->_capturedMonitorId != ~0u) {
                     auto geometry = pimpl->_displaySettingsManager->GetDesktopGeometryForMonitor(pimpl->_capturedMonitorId);
-                    BOOL hres2 = SetWindowPos(
+                    BOOL hres2 = ::SetWindowPos(
                         pimpl->_hwnd,
                         HWND_TOPMOST,
                         geometry._x, geometry._y, geometry._width, geometry._height,
-                        SWP_FRAMECHANGED | SWP_NOREDRAW | SWP_NOCOPYBITS);
+                        SWP_FRAMECHANGED | SWP_NOREDRAW | SWP_NOCOPYBITS | (pimpl->_shown ? SWP_SHOWWINDOW : 0));
                     assert(hres2);
                 }
             }
@@ -198,10 +200,13 @@ namespace PlatformRig
 
                 case WM_SIZE:
                     {
+                        // we could also use WM_WINDOWPOSCHANGED, but that adds some extra complcation
+                        // it's harder to tell when the app is minimized
+                        // & we just get more spam with that message
                         signed newWidth = ((int)(short)LOWORD(lparam)), newHeight = ((int)(short)HIWORD(lparam));
                         pimpl->_onMessage.Invoke(WindowResize{newWidth, newHeight});
                     }
-                    return msg == WM_SIZING;
+                    break;
                 }
 
                 if (generatedSnapshot)
@@ -225,6 +230,7 @@ namespace PlatformRig
 
     void Window::Show(bool newState)
     {
+        _pimpl->_shown = newState;
         ::ShowWindow(_pimpl->_hwnd, newState ? SW_SHOWNORMAL : SW_HIDE);
     }
 
@@ -257,12 +263,14 @@ namespace PlatformRig
         hres = ::SetWindowLongPtrA(_pimpl->_hwnd, GWL_EXSTYLE, s_styleFullscreen);
         assert(hres != 0 || GetLastError() == 0);
 
+        // Note that we have to call ShowWindow if we're expecting the window to be visible; otherwise we
+        // end up in some partially visible state
         auto geometry = _pimpl->_displaySettingsManager->GetDesktopGeometryForMonitor(_pimpl->_capturedMonitorId);
-        BOOL hres2 = SetWindowPos(
+        BOOL hres2 = ::SetWindowPos(
             _pimpl->_hwnd,
             HWND_TOPMOST,
             geometry._x, geometry._y, geometry._width, geometry._height,
-            SWP_FRAMECHANGED | SWP_NOREDRAW | SWP_NOCOPYBITS);
+            SWP_FRAMECHANGED | SWP_NOREDRAW | SWP_NOCOPYBITS | (_pimpl->_shown ? SWP_SHOWWINDOW : 0));
         assert(hres2);
     }
 
@@ -272,10 +280,19 @@ namespace PlatformRig
         _pimpl->_capturedMonitorId = ~0u;
 
         ::SetLastError(0);
-        auto hres = ::SetWindowLongPtrA(_pimpl->_hwnd, GWL_EXSTYLE, s_styleOverlapped);
+        auto hres = ::SetWindowLongPtrA(_pimpl->_hwnd, GWL_EXSTYLE, s_styleExOverlapped);
         assert(hres != 0 || GetLastError() == 0);
-        hres = ::SetWindowLongPtrA(_pimpl->_hwnd, GWL_STYLE, s_styleExOverlapped);
+        hres = ::SetWindowLongPtrA(_pimpl->_hwnd, GWL_STYLE, s_styleOverlapped);
         assert(hres != 0 || GetLastError() == 0);
+
+        // Note that we have to include SWP_SHOWWINDOW if we're expecting the window to be visible; otherwise we
+        // end up in some partially visible state
+        BOOL hres2 = ::SetWindowPos(
+            _pimpl->_hwnd,
+            HWND_NOTOPMOST,
+            0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_NOREDRAW | SWP_NOCOPYBITS | (_pimpl->_shown ? SWP_SHOWWINDOW : 0));
+        assert(hres2);
     }
 
     Window::Window() 

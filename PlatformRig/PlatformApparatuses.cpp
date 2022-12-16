@@ -17,6 +17,7 @@
 #include "../RenderCore/IDevice.h"
 #include "../RenderOverlays/DebuggingDisplay.h"
 #include "../ConsoleRig/AttachablePtr.h"
+#include "../OSServices/DisplaySettings.h"
 #include "../Assets/DepVal.h"
 #include "../Assets/AssetServices.h"
 #include "../Assets/AssetSetManager.h"
@@ -95,10 +96,11 @@ namespace PlatformRig
 			desc);
 
 		_frameRig = std::make_shared<FrameRig>(frameRenderingApparatus, drawingApparatus);
+		_displaySettings = std::make_shared<OSServices::DisplaySettingsManager>();
 
 		_mainInputHandler = std::make_shared<PlatformRig::MainInputHandler>();
-		auto threadId = std::this_thread::get_id();
 
+		auto threadId = std::this_thread::get_id();
 		_osWindow->OnMessage().Bind(
 			[	wfr = std::weak_ptr<FrameRig>{_frameRig}, wpc = std::weak_ptr<RenderCore::IPresentationChain>(_presentationChain),
 				immediateContext=_immediateContext.get(),

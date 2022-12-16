@@ -14,6 +14,7 @@ namespace RenderCore { namespace Techniques { class ImmediateDrawingApparatus; c
 namespace RenderOverlays { class Font; }
 namespace RenderOverlays { namespace DebuggingDisplay { class DebugScreensSystem; }}
 namespace Assets { class DependencyValidation; }
+namespace OSServices { class DisplaySettingsManager; }
 namespace Utility { class HierarchicalCPUProfiler; }
 
 namespace PlatformRig
@@ -51,6 +52,7 @@ namespace PlatformRig
 		std::shared_ptr<RenderCore::IPresentationChain> _presentationChain;
 		std::shared_ptr<MainInputHandler> _mainInputHandler;
 		std::shared_ptr<FrameRig> _frameRig;
+		std::shared_ptr<OSServices::DisplaySettingsManager> _displaySettings;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
 		::Assets::DependencyValidation _depValPtr;
