@@ -5,6 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "System_WinAPI.h"
+#include "WinAPIWrapper.h"
 #include "../RawFS.h"
 #include "../TimeUtils.h"
 #include "../../Core/Prefix.h"
@@ -274,6 +275,80 @@ std::string SystemErrorCodeAsString(int errorCode)
     } else
         return std::to_string(errorCode);
 }
+
+namespace Windows
+{
+    ExtensionFunctions& GetExtensionFunctions_Internal(EmulateableVersion emulateableVersion)
+    {
+        // todo -- use AttachablePtrs
+        static ExtensionFunctions extFns;
+        static bool init = false;
+        if (!init) {
+            if (HMODULE userModule = Fn_LoadLibrary("user32.dll")) {
+                extFns._attachedModules.push_back(userModule);
+                if (emulateableVersion >= EmulateableVersion::Windows10_16)
+                    extFns.Fn_EnableNonClientDpiScaling = (decltype(extFns.Fn_EnableNonClientDpiScaling))Fn_GetProcAddress(userModule, "EnableNonClientDpiScaling");
+                if (emulateableVersion >= EmulateableVersion::Windows10_16)
+                    extFns.Fn_GetWindowDpiAwarenessContext = (decltype(extFns.Fn_GetWindowDpiAwarenessContext))Fn_GetProcAddress(userModule, "GetWindowDpiAwarenessContext");
+                if (emulateableVersion >= EmulateableVersion::Windows10_17)
+                    extFns.Fn_SetProcessDpiAwarenessContext = (decltype(extFns.Fn_SetProcessDpiAwarenessContext))Fn_GetProcAddress(userModule, "SetProcessDpiAwarenessContext");
+                if (emulateableVersion >= EmulateableVersion::WindowsVista)
+                    extFns.Fn_SetProcessDPIAware = (decltype(extFns.Fn_SetProcessDPIAware))Fn_GetProcAddress(userModule, "SetProcessDPIAware");
+                if (emulateableVersion >= EmulateableVersion::WindowsVista)
+                    extFns.Fn_GetDpiForWindow = (decltype(extFns.Fn_GetDpiForWindow))Fn_GetProcAddress(userModule, "GetDpiForWindow");
+            }
+
+            if (HMODULE shcore = Fn_LoadLibrary("shcore.dll")) {
+                extFns._attachedModules.push_back(shcore);
+                if (emulateableVersion >= EmulateableVersion::Windows8_1)
+                    extFns.Fn_SetProcessDpiAwareness = (decltype(extFns.Fn_SetProcessDpiAwareness))Fn_GetProcAddress(shcore, "SetProcessDpiAwareness");
+                if (emulateableVersion >= EmulateableVersion::Windows8_1)
+                    extFns.Fn_GetDpiForMonitor = (decltype(extFns.Fn_GetDpiForMonitor))Fn_GetProcAddress(shcore, "GetDpiForMonitor");
+            }
+
+            extFns._emulating = emulateableVersion;
+            init = true;
+        }
+        // If you hit the following assert, you're probably calling EnumlateWindowsVersion too late
+        assert(emulateableVersion == EmulateableVersion::Latest || extFns._emulating == emulateableVersion);
+        return extFns;
+    }
+
+    ExtensionFunctions& GetExtensionFunctions()
+    {
+        return GetExtensionFunctions_Internal(EmulateableVersion::Latest);
+    }
+
+    ExtensionFunctions::~ExtensionFunctions()
+    {
+        for (auto l:_attachedModules)
+            Fn_FreeLibrary(l);
+    }
+
+    void EnumlateWindowsVersion(EmulateableVersion version)
+    {
+        GetExtensionFunctions_Internal(version);
+    }
+}
+
+void ConfigureDPIAwareness()
+{
+    auto& extFns = Windows::GetExtensionFunctions();
+
+    // Almost all applications will want to defeat the Windows built-in DPI behaviour
+    // We do this by telling Windows that we will handle the DPI behaviour ourselves.
+    // This causes windows to give us actual pixel values for common functions (GetClientRect(), etc)
+    // instead of scaled DPI values
+    // Client applications can then selectively handle the DPI behaviour within the gfx api context
+    //
+    // However note that Windows DPI behaviour has made several changes between Vista and Windows 10,
+    // and as a result behaviour might be slightly different on each platform
+    if (extFns.Fn_SetProcessDpiAwarenessContext)
+        extFns.Fn_SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    else if (extFns.Fn_SetProcessDpiAwareness)
+        extFns.Fn_SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+    else if (extFns.Fn_SetProcessDPIAware)
+        extFns.Fn_SetProcessDPIAware();
 }
 
 #if 0
