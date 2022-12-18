@@ -48,7 +48,14 @@ namespace RenderCore { namespace Techniques
 			const RenderCore::Assets::RenderStateSet& renderStates) = 0;
 		virtual std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() = 0;
 		virtual ::Assets::DependencyValidation GetDependencyValidation();
+
+		uint64_t GetGUID() const { return _guid; }
+		ITechniqueDelegate();
 		virtual ~ITechniqueDelegate();
+	private:
+		ITechniqueDelegate&operator=(ITechniqueDelegate&&) = delete;
+		ITechniqueDelegate(ITechniqueDelegate&&) = delete;
+		uint64_t _guid;
 	};
 
 	class TechniqueSetFile;

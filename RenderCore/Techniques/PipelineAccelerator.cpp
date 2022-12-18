@@ -717,8 +717,10 @@ namespace RenderCore { namespace Techniques
 		hash = HashCombine(sequencerSelectors.GetHash(), sequencerSelectors.GetParameterNamesHash());
 		hash = HashCombine(cfg._fbRelevanceValue, hash);
 
-		// todo -- we must take into account the delegate itself; it must impact the hash
-		hash = HashCombine(uint64_t(cfg._delegate.get()), hash);
+		// We must take into account the delegate itself; it must impact the hash
+		// without requiring every technique delegate to implement some kind of way of generating
+		// a unique hash, we just have to relying on a unique counter in the delegate object
+		hash = HashCombine(cfg._delegate->GetGUID(), hash);
 
 		return cfg;
 	}

@@ -1116,6 +1116,9 @@ namespace RenderCore { namespace Techniques
 	}
 
 	::Assets::DependencyValidation ITechniqueDelegate::GetDependencyValidation() { return {}; }
+
+	static std::atomic<uint64_t> s_nextTechniqueDelegateGuid = 1;
+	ITechniqueDelegate::ITechniqueDelegate() : _guid(s_nextTechniqueDelegateGuid++) {}
 	ITechniqueDelegate::~ITechniqueDelegate() {}
 
 }}
