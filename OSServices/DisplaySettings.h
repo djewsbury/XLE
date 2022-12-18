@@ -15,15 +15,17 @@ namespace OSServices
 		using MonitorId = unsigned;
 		using AdapterId = unsigned;
 
+		enum class ToggleableState { Unsupported, Supported, LeaveUnchanged, Disable=Unsupported, Enable=Supported };
+
 		struct ModeDesc
 		{
 			unsigned _width, _height;
 			unsigned _refreshRate;
+			ToggleableState _hdr;
 		};
 
 		struct MonitorDesc
 		{
-			bool _hdrSupported = false;
 			std::string _friendlyName;
 			AdapterId _adapter = 0;
 			uint64_t _locallyUniqueId = 0;
@@ -49,12 +51,10 @@ namespace OSServices
 		};
 		DesktopGeometry GetDesktopGeometryForMonitor(MonitorId);
 
-		enum class ToggleableState { Disable, Enable, LeaveUnchanged };
-		
-		bool TryChangeMode(MonitorId, const ModeDesc&, ToggleableState hdrState = ToggleableState::LeaveUnchanged);
+		bool TryChangeMode(MonitorId, const ModeDesc&);
 		void ReleaseMode(MonitorId);
 
-		std::pair<ModeDesc, bool> GetCurrentMode(MonitorId);
+		ModeDesc GetCurrentMode(MonitorId);
 
 		DisplaySettingsManager();
 		~DisplaySettingsManager();

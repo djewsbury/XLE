@@ -30,6 +30,7 @@ namespace OSServices
 		size_t _modesStart = 0;
 		size_t _modesEnd = 0;
 		unsigned _targetInfoId = 0;
+		bool _hdrSupported = false;
 	};
 
 	struct InternalAdapterDesc
@@ -49,12 +50,7 @@ namespace OSServices
 		bool _initialized = false;
 		std::thread::id _attachedThreadId;
 
-		struct SavedModeDesc
-		{
-			ModeDesc _mode;
-			bool _advancedColorEnabled = false;
-		};
-		std::vector<std::pair<uint64_t, SavedModeDesc>> _savedOriginalModes;
+		std::vector<std::pair<uint64_t, ModeDesc>> _savedOriginalModes;
 		std::optional<std::pair<uint64_t, ModeDesc>> _lastDisplayChange;
 		bool _performingDisplayChangeCurrently = false;
 
@@ -63,7 +59,7 @@ namespace OSServices
 		std::optional<ModeDesc> QueryCurrentSettingsFromOS(unsigned monitorIdx);
 	};
 
-	static std::optional<DisplaySettingsManager::ModeDesc> AsDisplayModeDesc(DEVMODEW devMode)
+	static std::optional<DisplaySettingsManager::ModeDesc> AsDisplayModeDesc(DEVMODEW devMode, DisplaySettingsManager::ToggleableState hdrState)
 	{
 		const unsigned requiredFields = 
 			DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY;
@@ -74,6 +70,7 @@ namespace OSServices
 		result._width = devMode.dmPelsWidth;
 		result._height = devMode.dmPelsHeight;
 		result._refreshRate = devMode.dmDisplayFrequency;
+		result._hdr = hdrState;
 		return result;		// can't query any good information about bit depth / hdr
 	}
 
@@ -297,7 +294,7 @@ namespace OSServices
 				auto hres = Windows::Fn_EnumDisplaySettingsEx(dev._deviceName.c_str(), c++, &devMode, 0);
 				if (!hres) break;
 
-				auto dispMode = AsDisplayModeDesc(devMode);
+				auto dispMode = AsDisplayModeDesc(devMode, internalMonitorDesc._hdrSupported ? ToggleableState::Supported : ToggleableState::Unsupported);
 				if (dispMode) {
 					auto existing = std::find(_modes.begin() + internalMonitorDesc._modesStart, _modes.end(), *dispMode);
 					if (existing == _modes.end())
@@ -306,12 +303,12 @@ namespace OSServices
 			}
 
 			internalMonitorDesc._modesEnd = _modes.size();
+			internalMonitorDesc._hdrSupported = dev._advancedColorSupported;
 			// Reverse because windows tends to list the modes from lowest resolution to highest resolution
 			std::reverse(_modes.begin()+internalMonitorDesc._modesStart, _modes.begin()+internalMonitorDesc._modesEnd);
 			_monitorsInternal.emplace_back(std::move(internalMonitorDesc));
 
 			MonitorDesc monitorDesc;
-			monitorDesc._hdrSupported = dev._advancedColorSupported;
 			monitorDesc._friendlyName = dev._friendlyMonitorName;
 			monitorDesc._adapter = (unsigned)std::distance(_adaptersInternal.begin(), i);
 			monitorDesc._locallyUniqueId = Hash64(dev._deviceName);
@@ -319,20 +316,35 @@ namespace OSServices
 		}
 	}
 
-	auto DisplaySettingsManager::Pimpl::QueryCurrentSettingsFromOS(unsigned monitorIdx) -> std::optional<DisplaySettingsManager::ModeDesc>
+	auto DisplaySettingsManager::Pimpl::QueryCurrentSettingsFromOS(MonitorId monitorId) -> std::optional<DisplaySettingsManager::ModeDesc>
 	{
 		assert(std::this_thread::get_id() == _attachedThreadId);
-		assert(monitorIdx < _monitorsInternal.size());
+		assert(monitorId < _monitorsInternal.size());
 
 		DEVMODEW devMode;
 		XlZeroMemory(devMode);
 		devMode.dmSize = sizeof(DEVMODEW);
-		auto hres = Windows::Fn_EnumDisplaySettingsEx(_monitorsInternal[monitorIdx]._deviceName.c_str(), ENUM_CURRENT_SETTINGS, &devMode, 0);
+		auto hres = Windows::Fn_EnumDisplaySettingsEx(_monitorsInternal[monitorId]._deviceName.c_str(), ENUM_CURRENT_SETTINGS, &devMode, 0);
 		if (!hres) return {};
-		return AsDisplayModeDesc(devMode);
+
+		ToggleableState hdrState = ToggleableState::Unsupported;
+
+		if (_monitorsInternal[monitorId]._hdrSupported) {
+			auto& adapter = _adaptersInternal[_monitors[monitorId]._adapter];
+			DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO getAdvancedColor = {};
+			getAdvancedColor.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+			getAdvancedColor.header.size = sizeof(getAdvancedColor);
+			getAdvancedColor.header.adapterId = adapter._luid;
+			getAdvancedColor.header.id = _monitorsInternal[monitorId]._targetInfoId;
+			hres = ::DisplayConfigGetDeviceInfo(&getAdvancedColor.header);
+			if (SUCCEEDED(hres))
+				hdrState = getAdvancedColor.advancedColorEnabled ? ToggleableState::Supported : ToggleableState::Unsupported;
+		}
+
+		return AsDisplayModeDesc(devMode, hdrState);
 	}
 
-	bool DisplaySettingsManager::TryChangeMode(MonitorId monitor, const ModeDesc& requestedMode, ToggleableState hdrState)
+	bool DisplaySettingsManager::TryChangeMode(MonitorId monitor, const ModeDesc& requestedMode)
 	{
 		assert(std::this_thread::get_id() == _pimpl->_attachedThreadId);
 		assert(!_pimpl->_performingDisplayChangeCurrently);
@@ -347,7 +359,7 @@ namespace OSServices
 		if (monitor >= _pimpl->_monitors.size())
 			return false;
 
-		if (hdrState == ToggleableState::Enable && !_pimpl->_monitors[monitor]._hdrSupported)
+		if (requestedMode._hdr == ToggleableState::Enable && !_pimpl->_monitorsInternal[monitor]._hdrSupported)
 			return false;
 
 		auto initialMode = _pimpl->QueryCurrentSettingsFromOS(monitor);
@@ -384,34 +396,18 @@ namespace OSServices
 			// If this is the first time we've changed this monitor, save the original mode -- so we can release the monitor back to the original state
 			assert(_pimpl->_monitors[monitor]._locallyUniqueId != 0);
 			auto i = LowerBound(_pimpl->_savedOriginalModes, _pimpl->_monitors[monitor]._locallyUniqueId);
-			if (i == _pimpl->_savedOriginalModes.end() || i->first != _pimpl->_monitors[monitor]._locallyUniqueId) {
-				Pimpl::SavedModeDesc savedMode;
-				savedMode._mode = *initialMode;
-				savedMode._advancedColorEnabled = false;
-
-				if (_pimpl->_monitors[monitor]._hdrSupported) {
-					DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO getAdvancedColor = {};
-					getAdvancedColor.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
-					getAdvancedColor.header.size = sizeof(getAdvancedColor);
-					getAdvancedColor.header.adapterId = adapter._luid;
-					getAdvancedColor.header.id = _pimpl->_monitorsInternal[monitor]._targetInfoId;
-					hres = ::DisplayConfigGetDeviceInfo(&getAdvancedColor.header);
-					if (SUCCEEDED(hres))
-						savedMode._advancedColorEnabled = getAdvancedColor.advancedColorEnabled;
-				}
-
-				_pimpl->_savedOriginalModes.emplace_back(_pimpl->_monitors[monitor]._locallyUniqueId, savedMode);
-			}
+			if (i == _pimpl->_savedOriginalModes.end() || i->first != _pimpl->_monitors[monitor]._locallyUniqueId)
+				_pimpl->_savedOriginalModes.emplace_back(_pimpl->_monitors[monitor]._locallyUniqueId, *initialMode);
 		}
 
 		// attempt to enable "advanced color" modes
-		if (hdrState != ToggleableState::LeaveUnchanged) {
+		if (requestedMode._hdr != ToggleableState::LeaveUnchanged) {
 			DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE setAdvancedColor = {};
 			setAdvancedColor.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
 			setAdvancedColor.header.size = sizeof(setAdvancedColor);
 			setAdvancedColor.header.adapterId = adapter._luid;
 			setAdvancedColor.header.id = _pimpl->_monitorsInternal[monitor]._targetInfoId;
-			setAdvancedColor.enableAdvancedColor = (hdrState == ToggleableState::Enable) ? 1 : 0;
+			setAdvancedColor.enableAdvancedColor = (requestedMode._hdr == ToggleableState::Enable) ? 1 : 0;
 			hres = ::DisplayConfigSetDeviceInfo(&setAdvancedColor.header);
 
 			if (!SUCCEEDED(hres)) {
@@ -442,13 +438,13 @@ namespace OSServices
 			auto& adapter = _pimpl->_adaptersInternal[_pimpl->_monitors[monitor]._adapter];
 
 			// restore hdr mode first
-			if (_pimpl->_monitors[monitor]._hdrSupported) {
+			if (_pimpl->_monitorsInternal[monitor]._hdrSupported && savedMode._hdr != ToggleableState::LeaveUnchanged) {
 				DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE setAdvancedColor = {};
 				setAdvancedColor.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
 				setAdvancedColor.header.size = sizeof(setAdvancedColor);
 				setAdvancedColor.header.adapterId = adapter._luid;
 				setAdvancedColor.header.id = _pimpl->_monitorsInternal[monitor]._targetInfoId;
-				setAdvancedColor.enableAdvancedColor = savedMode._advancedColorEnabled;
+				setAdvancedColor.enableAdvancedColor = savedMode._hdr == ToggleableState::Enable;
 				auto hres = ::DisplayConfigSetDeviceInfo(&setAdvancedColor.header);
 
 				if (!SUCCEEDED(hres))
@@ -459,9 +455,9 @@ namespace OSServices
 			DEVMODEW displayMode = {};
 			displayMode.dmSize = sizeof(DEVMODEW);
 			displayMode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
-			displayMode.dmPelsWidth = savedMode._mode._width;
-			displayMode.dmPelsHeight = savedMode._mode._height;
-			displayMode.dmDisplayFrequency = savedMode._mode._refreshRate;
+			displayMode.dmPelsWidth = savedMode._width;
+			displayMode.dmPelsHeight = savedMode._height;
+			displayMode.dmDisplayFrequency = savedMode._refreshRate;
 			displayMode.dmBitsPerPel = 32;		// windows 8 & above requires this to be 32
 			auto hres = Windows::Fn_ChangeDisplaySettingsEx(
 				_pimpl->_monitorsInternal[monitor]._deviceName.c_str(),
@@ -491,24 +487,24 @@ namespace OSServices
 		return GetDesktopGeometryForMonitorDevice(_pimpl->_monitorsInternal[monitorId]._deviceName.c_str());
 	}
 
-	auto DisplaySettingsManager::GetCurrentMode(MonitorId monitorId) -> std::pair<ModeDesc, bool>
+	auto DisplaySettingsManager::GetCurrentMode(MonitorId monitorId) -> ModeDesc
 	{
 		if (!_pimpl->_initialized)
 			_pimpl->QueryFromOS();
 
 		assert(monitorId < _pimpl->_monitors.size());
 		if (monitorId >= _pimpl->_monitors.size())
-			return {ModeDesc{0,0,0}, false};
+			return ModeDesc{0,0,0,ToggleableState::LeaveUnchanged};
 
 		DEVMODEW devMode;
 		XlZeroMemory(devMode);
 		devMode.dmSize = sizeof(DEVMODEW);
 		auto hres = Windows::Fn_EnumDisplaySettingsEx(_pimpl->_monitorsInternal[monitorId]._deviceName.c_str(), ENUM_CURRENT_SETTINGS, &devMode, 0);
 		if (!SUCCEEDED(hres))
-			return {ModeDesc{0,0,0}, false};
+			return ModeDesc{0,0,0,ToggleableState::LeaveUnchanged};
 
 		bool hdrEnabled = false;
-		if (_pimpl->_monitors[monitorId]._hdrSupported) {
+		if (_pimpl->_monitorsInternal[monitorId]._hdrSupported) {
 			DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO getAdvancedColor = {};
 			getAdvancedColor.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
 			getAdvancedColor.header.size = sizeof(getAdvancedColor);
@@ -519,7 +515,7 @@ namespace OSServices
 				hdrEnabled = getAdvancedColor.advancedColorEnabled;
 		}
 
-		return std::make_pair(AsDisplayModeDesc(devMode).value_or(ModeDesc{0,0,0}), hdrEnabled);
+		return AsDisplayModeDesc(devMode, hdrEnabled?ToggleableState::Enable:ToggleableState::Disable).value_or(ModeDesc{0,0,0,ToggleableState::LeaveUnchanged});
 	}
 
 	auto DisplaySettingsManager::GetModes(MonitorId monitorId) -> IteratorRange<const ModeDesc*> 
@@ -584,6 +580,7 @@ namespace OSServices
 
 	DisplaySettingsManager::DisplaySettingsManager()
 	{
+		assert(!s_dispSettingsManager);
 		_pimpl = std::make_unique<Pimpl>();
 		_pimpl->_attachedThreadId = std::this_thread::get_id();
 		s_dispSettingsManager = this;
