@@ -111,7 +111,7 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<IResource> _lightDepthTable;
 			std::shared_ptr<IResourceView> _lightDepthTableUAV;
 		};
-		SceneLightUniforms _uniforms[2];
+		SceneLightUniforms _uniforms[3];
 		unsigned _pingPongCounter = 0;
 
 		Threading::Mutex _pendingUpdatesLock;

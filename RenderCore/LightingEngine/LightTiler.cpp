@@ -66,7 +66,7 @@ namespace RenderCore { namespace LightingEngine
 		GPUProfilerBlock profileBlock(*iterator._threadContext, "RasterizationLightTileOperator");
 
 		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
-		_pingPongCounter = (_pingPongCounter+1)%2;
+		_pingPongCounter = (_pingPongCounter+1)%dimof(_tileableLightBuffer);
 
 		auto& projDesc = iterator._parsingContext->GetProjectionDesc();
 		auto clipSpaceType = Techniques::GetDefaultClipSpaceType();
@@ -82,25 +82,28 @@ namespace RenderCore { namespace LightingEngine
 
 			unsigned lightSetIdx = 0;
 			for (auto& lightSet:_lightScene->_tileableLightSets) {
-				
-				unsigned idxOffset = 0;
-				for (auto i=lightSet._baseData.begin(); i!=lightSet._baseData.end(); ++i) {
-					auto& lightDesc = *i;
-					if (frustumTester.TestSphere(lightDesc._position, lightDesc._cutoffRange) == CullTestResult::Culled) continue;
-					
-					float zMin = Dot(Float4{lightDesc._position, 1}, zRow);
-					// take the negative for convenience --> convert to -Z forward into +Z forward
-					zMin = -zMin;
-					float zMax = zMin + lightDesc._cutoffRange * zRowMag;
-					zMin -= lightDesc._cutoffRange * zRowMag;
 
-					if (intLight < intLightEnd) {
-						*intLight++ = IntermediateLight {
-							lightDesc._position, lightDesc._cutoffRange,
-							zMin/farClip, zMax/farClip,
-							(lightSetIdx << 16) | i.GetIndex() };
+				if (lightSet._flags & Internal::StandardPositionLightFlags::LightTiler) {
+					unsigned idxOffset = 0;
+					for (auto i=lightSet._baseData.begin(); i!=lightSet._baseData.end(); ++i) {
+						auto& lightDesc = *i;
+						if (frustumTester.TestSphere(lightDesc._position, lightDesc._cutoffRange) == CullTestResult::Culled) continue;
+						
+						float zMin = Dot(Float4{lightDesc._position, 1}, zRow);
+						// take the negative for convenience --> convert to -Z forward into +Z forward
+						zMin = -zMin;
+						float zMax = zMin + lightDesc._cutoffRange * zRowMag;
+						zMin -= lightDesc._cutoffRange * zRowMag;
+
+						if (intLight < intLightEnd) {
+							*intLight++ = IntermediateLight {
+								lightDesc._position, lightDesc._cutoffRange,
+								zMin/farClip, zMax/farClip,
+								(lightSetIdx << 16) | i.GetIndex() };
+						}
 					}
 				}
+
 				++lightSetIdx;
 			}
 
@@ -288,9 +291,9 @@ namespace RenderCore { namespace LightingEngine
 		_prepareBitFieldBoundUniforms = Metal::BoundUniforms(*_prepareBitFieldPipeline, usi);
 
 		auto tileableLightBufferDesc = CreateDesc(
-			BindFlag::UnorderedAccess, AllocationRules::HostVisibleRandomAccess|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped,
+			BindFlag::UnorderedAccess, AllocationRules::HostVisibleSequentialWrite|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped,
 			LinearBufferDesc::Create(sizeof(IntermediateLight)*_config._maxLightsPerView));
-		for (unsigned c=0; c<2; ++c) {
+		for (unsigned c=0; c<dimof(_tileableLightBuffer); ++c) {
 			_tileableLightBuffer[c] = _pipelinePool->GetDevice()->CreateResource(tileableLightBufferDesc, "tileable-lights");
 			_tileableLightBufferUAV[c] = _tileableLightBuffer[c]->CreateBufferView(BindFlag::UnorderedAccess);
 		}

@@ -67,7 +67,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void ForwardPlusLightScene::FinalizeConfiguration()
 	{
-		AllocationRules::BitField allocationRulesForDynamicCBs = AllocationRules::HostVisibleRandomAccess|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped;
+		AllocationRules::BitField allocationRulesForDynamicCBs = AllocationRules::HostVisibleSequentialWrite|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped;
 		auto& device = *_pipelineAccelerators->GetDevice();
 		auto tilerConfig = _lightTiler->GetConfiguration();
 		for (unsigned c=0; c<dimof(_uniforms); c++) {
@@ -106,9 +106,11 @@ namespace RenderCore { namespace LightingEngine
 			RegisterComponent(_dominantLightSet);
 		}
 
-		// all lights get "SupportFiniteRange"
-		for (unsigned op=0; op<_positionalLightOperators.size(); ++op)
-			AssociateFlag(op, Internal::StandardPositionLightFlags::SupportFiniteRange);
+		for (unsigned op=0; op<_positionalLightOperators.size(); ++op) {
+			AssociateFlag(op, Internal::StandardPositionLightFlags::SupportFiniteRange);		// all lights get "SupportFiniteRange"
+			if (!(_positionalLightOperators[op]._flags & LightSourceOperatorDesc::Flags::DominantLight))
+				AssociateFlag(op, Internal::StandardPositionLightFlags::LightTiler);
+		}
 
 		if (_shadowPreparerIdMapping._operatorForStaticProbes != ~0u) {
 			_shadowProbes = std::make_shared<ShadowProbes>(_pipelineAccelerators, *_techDelBox, _shadowPreparerIdMapping._shadowProbesCfg);
@@ -224,8 +226,7 @@ namespace RenderCore { namespace LightingEngine
 			for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
 				auto setIdx = *idx >> 16, lightIdx = (*idx)&0xffff;
 				auto op = _tileableLightSets[setIdx]._operatorId;
-				// we have to filter out the dominant light here -- but it would be better if we were just filtering in light sets for tiling explicitly
-				if (_positionalLightOperators[op]._flags & LightSourceOperatorDesc::Flags::DominantLight) continue;
+				assert(!(_positionalLightOperators[op]._flags & LightSourceOperatorDesc::Flags::DominantLight));
 				auto& lightDesc = _tileableLightSets[setIdx]._baseData.GetObject(lightIdx);
 				*i = MakeLightUniforms(lightDesc, _positionalLightOperators[op]);
 			}
@@ -234,7 +235,7 @@ namespace RenderCore { namespace LightingEngine
 				i = (Internal::CB_Light*)map.GetData().begin();
 				for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
 					auto setIdx = *idx >> 16, lightIdx = (*idx)&0xffff;
-					if (_positionalLightOperators[_tileableLightSets[setIdx]._operatorId]._flags & LightSourceOperatorDesc::Flags::DominantLight) continue;
+					assert(!(_positionalLightOperators[_tileableLightSets[setIdx]._operatorId]._flags & LightSourceOperatorDesc::Flags::DominantLight));
 					auto probe = _shadowProbesManager->GetAllocatedDatabaseEntry(setIdx, lightIdx);
 					i->_staticProbeDatabaseEntry = probe._databaseIndex;
 					++i->_staticProbeDatabaseEntry;		// ~0u becomes zero, or add one --> because we want zero to be the sentinal

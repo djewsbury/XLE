@@ -87,8 +87,8 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Metal::GraphicsPipeline> _prepareBitFieldPipeline;
 		std::shared_ptr<ICompiledPipelineLayout> _prepareBitFieldLayout;
 
-		std::shared_ptr<RenderCore::IResource> _tileableLightBuffer[2];
-		std::shared_ptr<RenderCore::IResourceView> _tileableLightBufferUAV[2];
+		std::shared_ptr<RenderCore::IResource> _tileableLightBuffer[3];
+		std::shared_ptr<RenderCore::IResourceView> _tileableLightBufferUAV[dimof(_tileableLightBuffer)];
 		unsigned _pingPongCounter = 0u;
 
 		Metal::BoundUniforms _prepareBitFieldBoundUniforms;
