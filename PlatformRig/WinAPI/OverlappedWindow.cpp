@@ -104,19 +104,47 @@ namespace PlatformRig
             {
                 OSServices::OnDisplaySettingsChange(unsigned(lparam & 0xffff), unsigned(lparam >> 16u));
                 auto pimpl = (Window::Pimpl*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
-                if (pimpl && pimpl->_hwnd == hwnd)
+                if (pimpl && pimpl->_hwnd == hwnd) {
                     pimpl->_onMessage.Invoke(SystemDisplayChange{});
 
-                // If we are capturing a monitor, we should realign the window with the new desktop geometry
-                if (pimpl->_displaySettingsManager && pimpl->_capturedMonitorId != ~0u) {
-                    auto geometry = pimpl->_displaySettingsManager->GetDesktopGeometryForMonitor(pimpl->_capturedMonitorId);
-                    BOOL hres2 = ::SetWindowPos(
-                        pimpl->_hwnd,
-                        HWND_TOPMOST,
-                        geometry._x, geometry._y, geometry._width, geometry._height,
-                        SWP_FRAMECHANGED | SWP_NOREDRAW | SWP_NOCOPYBITS | (pimpl->_shown ? SWP_SHOWWINDOW : 0));
-                    assert(hres2);
+                    // If we are capturing a monitor, we should realign the window with the new desktop geometry
+                    if (pimpl->_displaySettingsManager && pimpl->_capturedMonitorId != ~0u) {
+                        auto geometry = pimpl->_displaySettingsManager->GetDesktopGeometryForMonitor(pimpl->_capturedMonitorId);
+                        BOOL hres2 = ::SetWindowPos(
+                            pimpl->_hwnd,
+                            HWND_TOPMOST,
+                            geometry._x, geometry._y, geometry._width, geometry._height,
+                            SWP_FRAMECHANGED | SWP_NOREDRAW | SWP_NOCOPYBITS | (pimpl->_shown ? SWP_SHOWWINDOW : 0));
+                        assert(hres2);
+                    }
                 }
+            }
+            break;
+
+        case WM_DPICHANGED:
+            {
+                // DPI changed. Windows provides a suggested new rectangle; we should switch so long as we're not capturing a monitor
+                auto* suggestedNewSize = (RECT*)lparam;
+                assert(suggestedNewSize);
+                auto pimpl = (Window::Pimpl*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+                if (pimpl && pimpl->_hwnd == hwnd) {
+                    if (pimpl->_capturedMonitorId == ~0u) {
+                        BOOL hres2 = ::SetWindowPos(
+                            pimpl->_hwnd,
+                            nullptr,
+                            suggestedNewSize->left, suggestedNewSize->top, suggestedNewSize->right-suggestedNewSize->left, suggestedNewSize->bottom-suggestedNewSize->top,
+                            SWP_NOREDRAW | SWP_NOCOPYBITS | SWP_NOZORDER | SWP_NOACTIVATE | (pimpl->_shown ? SWP_SHOWWINDOW : 0));
+                        assert(hres2);
+                    }
+                }
+            }
+            return 0;
+
+        case WM_NCCREATE:
+            {
+                auto& extFn = OSServices::Windows::GetExtensionFunctions();
+                if (extFn.Fn_EnableNonClientDpiScaling)
+                    extFn.Fn_EnableNonClientDpiScaling(hwnd);        // requires windows 10
             }
             break;
 
@@ -295,6 +323,25 @@ namespace PlatformRig
         assert(hres2);
     }
 
+    unsigned Window::GetDPI() const
+    {
+        auto& extFn = OSServices::Windows::GetExtensionFunctions();
+        if (extFn.Fn_GetDpiForWindow)           // Windows 10
+            return extFn.Fn_GetDpiForWindow(_pimpl->_hwnd);
+
+        if (extFn.Fn_GetDpiForMonitor) {        // Windows 8.1
+            UINT dpiX=0, dpiY=0;
+            auto monitor = MonitorFromWindow(_pimpl->_hwnd, MONITOR_DEFAULTTONEAREST);
+            auto hres = extFn.Fn_GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+            if (SUCCEEDED(hres) && dpiX)
+                return dpiX;
+        }
+
+        // may not get good results on Vista
+
+        return 96;      // normal DPI in Windows contexts
+    }
+
     Window::Window() 
     {
         _pimpl = std::make_unique<Pimpl>();
@@ -345,6 +392,16 @@ namespace PlatformRig
 
 		_pimpl->_runLoop = std::make_shared<OSRunLoop_BasicTimer>(_pimpl->_hwnd);
 		SetOSRunLoop(_pimpl->_runLoop);
+
+        auto& extFn = OSServices::Windows::GetExtensionFunctions();
+        if (extFn.Fn_GetWindowDpiAwarenessContext && extFn.Fn_GetWindowDpiAwarenessContext(_pimpl->_hwnd) == DPI_AWARENESS_CONTEXT_UNAWARE) {
+            Log(Warning) << "Window is begin created in non-DPI aware mode. This is non-ideal and will lead to wierdness on some versions of Windows and some configurations" << std::endl;
+            Log(Warning) << "In this mode, Windows will scale windows based on OS DPI settings for the output monitor" << std::endl;
+            Log(Warning) << "Also in this mode, some graphics APIs, such as Vulkan, intentionally do not compensate for this, and as a result the" << std::endl;
+            Log(Warning) << "density of pixels in the presentation target is not the same as actual video mode (ie, in 200% scaling mode, we will have one quarter of the number of pixels we're expecting)." << std::endl;
+            Log(Warning) << "Most clients will want to enable DPI-aware mode (and possibly compensate for DPI within the graphics API context)" << std::endl;
+            Log(Warning) << "To do that, either use the manifest file, or call ConfigureDPIAwareness()" << std::endl;
+        }
     }
 
     Window::~Window()

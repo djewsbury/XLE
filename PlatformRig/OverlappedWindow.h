@@ -74,6 +74,8 @@ namespace PlatformRig
             unsigned monitorId);     // OSServices::DisplaySettingsManager::MonitorId
         void ReleaseMonitor();
 
+        unsigned GetDPI() const;    // return DPI using OS heustrics (ie, on Windows 96 means 100% scaling)
+
         Window();
         ~Window();
 

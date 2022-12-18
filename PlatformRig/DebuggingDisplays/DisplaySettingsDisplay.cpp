@@ -52,6 +52,8 @@ namespace PlatformRig { namespace Overlays
 				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << "Geometry X: " << geo._x << ", Y: " << geo._y << " Width: " << geo._width << ", Geometry Height: " << geo._height);
 				currentMode = _dispSettings->GetCurrentMode(_activeMonitorId);
 				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << "Current Mode: " << currentMode._width << "x" << currentMode._height << " (" << currentMode._refreshRate << "Hz) " << (currentMode._hdr == OSServices::DisplaySettingsManager::ToggleableState::Enable ? "HDR" : "LDR"));
+				if (_window)
+					DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << "Window DPI: " << _window->GetDPI());
 			}
 
 			layout.AllocateFullWidth(lineHeight);

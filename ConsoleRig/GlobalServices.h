@@ -24,6 +24,7 @@ namespace ConsoleRig
         bool _setWorkingDir;
         bool _redirectCout;
         bool _inMemoryOnlyIntermediates;
+        bool _enableDPIAwareness;
         unsigned _longTaskThreadPoolCount;
         unsigned _shortTaskThreadPoolCount;
 

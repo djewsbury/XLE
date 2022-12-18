@@ -112,6 +112,9 @@ namespace ConsoleRig
 			OSServices::ChDir(assetRoot.c_str());
 
 		serv.Add<std::basic_string<utf8>()>(Fn_GetAssetRoot, [assetRoot](){ return assetRoot; });
+
+        if (cfg._enableDPIAwareness)
+            OSServices::ConfigureDPIAwareness();
     }
 
     static void MainRig_Attach()
@@ -346,6 +349,7 @@ namespace ConsoleRig
         _setWorkingDir = false;
         _redirectCout = true;
         _inMemoryOnlyIntermediates = false;
+        _enableDPIAwareness = true;
         _longTaskThreadPoolCount = 4;
         _shortTaskThreadPoolCount = 2;
     }
