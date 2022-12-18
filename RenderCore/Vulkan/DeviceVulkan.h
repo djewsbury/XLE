@@ -248,7 +248,9 @@ namespace RenderCore { namespace ImplVulkan
 
 ////////////////////////////////////////////////////////////////////////////////
 
-    class DebugMessageHandler;
+    #if defined(VULKAN_ENABLE_DEBUG_EXTENSIONS)
+        class DebugMessageHandler;
+    #endif
 
     class APIInstance : public IAPIInstance, public IAPIInstanceVulkan
     {
@@ -275,7 +277,9 @@ namespace RenderCore { namespace ImplVulkan
     private:
 		VulkanSharedPtr<VkInstance>         _instance;
         std::vector<SelectedPhysicalDevice> _physicalDevices;
-        std::unique_ptr<DebugMessageHandler> _msgHandler;
+        #if defined(VULKAN_ENABLE_DEBUG_EXTENSIONS)
+            std::unique_ptr<DebugMessageHandler> _msgHandler;
+        #endif
         APIFeatures _features;
     };
 

@@ -102,7 +102,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		Desc _desc;
 		uint64_t _guid;
-		// void ConfigureDefaultSteadyState(BindFlag::BitField);
 
 		#if defined(_DEBUG)
 			std::string _name;
@@ -304,40 +303,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		VkImageLayout LayoutForImmediateUsage(BindFlag::BitField immediateUsage);
 
-#if 0
-		enum class ImageLayout
-		{
-			Undefined						= 0, // VK_IMAGE_LAYOUT_UNDEFINED,
-			General							= 1, // VK_IMAGE_LAYOUT_GENERAL,
-			ColorAttachmentOptimal			= 2, // VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			DepthStencilAttachmentOptimal	= 3, // VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-			DepthStencilReadOnlyOptimal		= 4, // VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
-			ShaderReadOnlyOptimal			= 5, // VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			TransferSrcOptimal				= 6, // VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			TransferDstOptimal				= 7, // VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			Preinitialized					= 8, // VK_IMAGE_LAYOUT_PREINITIALIZED,
-			PresentSrc						= 1000001002, // VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-		};
-		VkImageLayout_ AsVkImageLayout(ImageLayout input);
-
-		class LayoutTransition
-		{
-		public:
-			Resource* _res = nullptr;
-			ImageLayout _oldLayout = ImageLayout::Undefined;
-			unsigned _oldAccessMask = 0;
-			unsigned _srcStages = 0;
-			ImageLayout _newLayout = ImageLayout::Undefined;
-			unsigned _newAccessMask = 0;
-			unsigned _dstStages = 0;
-		};
-		void SetImageLayouts(DeviceContext& context, IteratorRange<const LayoutTransition*> changes);
-		void SetImageLayout(
-			DeviceContext& context, Resource& res, 
-			ImageLayout oldLayout, unsigned oldAccessMask, unsigned srcStages, 
-			ImageLayout newLayout, unsigned newAccessMask, unsigned dstStages);
-#endif
-
 		class CaptureForBindRecords;
 		void ValidateIsEmpty(CaptureForBindRecords&);
 
@@ -357,8 +322,6 @@ namespace RenderCore { namespace Metal_Vulkan
 			unsigned _capturedStageMask;
 			std::optional<VkImageLayout> _restoreLayout;
 		};
-
-		void SetupInitialLayout(DeviceContext&, IResource&);
 
 		unsigned CopyViaMemoryMap(
 			IDevice& dev, IResource& resource, unsigned resourceOffset, unsigned resourceSize,

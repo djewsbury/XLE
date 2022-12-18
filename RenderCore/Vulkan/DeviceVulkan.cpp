@@ -141,7 +141,7 @@ namespace RenderCore { namespace ImplVulkan
 				}
 
 				if (report)
-					Log(VulkanMsgTarget) << (pCallbackData->pMessageIdName?pCallbackData->pMessageIdName:"<<>>") << ": " << pMsg << std::endl;
+					Log(VulkanMsgTarget) << (pCallbackData->pMessageIdName?pCallbackData->pMessageIdName:"<<>>") << ": " << (pMsg?pMsg:"<<no msg>>") << std::endl;
 
 				return false;
 			}
@@ -263,47 +263,6 @@ namespace RenderCore { namespace ImplVulkan
 		#else
 			#error Windowing platform not supported
 		#endif
-	}
-
-	static SelectedPhysicalDevice SelectPhysicalDeviceForRendering(VkInstance vulkan, VkSurfaceKHR surface)
-	{
-		auto devices = EnumeratePhysicalDevices(vulkan);
-		if (devices.empty())
-			Throw(Exceptions::BasicLabel("Could not find any Vulkan physical devices. You must have an up-to-date Vulkan driver installed."));
-
-		// Iterate through the list of devices -- and if it matches our requirements, select that device.
-		// We're expecting the Vulkan driver to return the devices in priority order.
-		for (auto dev:devices) {
-			VkPhysicalDeviceProperties props;
-			vkGetPhysicalDeviceProperties(dev, &props);
-
-			// We need a device with the QUEUE_GRAPHICS bit set, and that supports presenting.
-			auto queueProps = EnumerateQueueFamilyProperties(dev);
-			for (unsigned qi=0; qi<unsigned(queueProps.size()); ++qi) {
-				if (!(queueProps[qi].queueFlags & VK_QUEUE_GRAPHICS_BIT)) continue;
-
-				// Awkwardly, we need to create the "VkSurfaceKHR" in order to check for
-				// compatibility with the physical device. And creating the surface requires
-				// a windows handle... So we can't select the physical device (or create the
-				// logical device) until we have the windows handle.
-				if (surface != nullptr) {
-					VkBool32 supportsPresent = false;
-					vkGetPhysicalDeviceSurfaceSupportKHR(
-						dev, qi, surface, &supportsPresent);
-					if (!supportsPresent) continue;
-				}
-
-				Log(Verbose)
-					<< "Selecting physical device (" << props.deviceName 
-					<< "). API Version: (0x" << std::hex << props.apiVersion 
-					<< "). Driver version: (0x" << props.driverVersion << std::dec
-					<< "). Type: (" << AsString(props.deviceType) << ")"
-					<< std::endl;
-				return SelectedPhysicalDevice { dev, qi };
-			}
-		}
-
-		Throw(Exceptions::BasicLabel("There are physical Vulkan devices, but none of them support rendering. You must have an up-to-date Vulkan driver installed."));
 	}
 
 	static void LogInstanceLayers(std::ostream& str)
@@ -1533,21 +1492,6 @@ namespace RenderCore { namespace ImplVulkan
 
 		assert(std::find(availableModes.begin(), availableModes.end(), VK_PRESENT_MODE_FIFO_KHR) != availableModes.end());
 		return VK_PRESENT_MODE_FIFO_KHR;
-
-        // VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
-		// const bool onlyVSyncModes = false;
-        // for (auto pm:availableModes) {
-        //     if (pm == VK_PRESENT_MODE_MAILBOX_KHR) {
-        //         swapchainPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-        //         break;
-        //     }
-        //     if (!onlyVSyncModes &&
-        //         (swapchainPresentMode != VK_PRESENT_MODE_MAILBOX_KHR) &&
-        //         (pm == VK_PRESENT_MODE_IMMEDIATE_KHR)) {
-        //         swapchainPresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
-        //     }
-        // }
-        // return swapchainPresentMode;
     }
 
     static VkQueue GetQueue(VkDevice dev, unsigned queueFamilyIndex, unsigned queueIndex=0)
@@ -1961,8 +1905,10 @@ namespace RenderCore { namespace ImplVulkan
         if (res != VK_SUCCESS)
 			Throw(VulkanAPIFailure(res, "Failure in Vulkan instance construction. You must have an up-to-date Vulkan driver installed."));
 
-		if (features._debugValidation)
-			_msgHandler = std::make_unique<DebugMessageHandler>(_instance.get());
+		#if defined(VULKAN_ENABLE_DEBUG_EXTENSIONS)
+			if (features._debugValidation)
+				_msgHandler = std::make_unique<DebugMessageHandler>(_instance.get());
+		#endif
 
 		// Find the physical device options
 		auto devices = EnumeratePhysicalDevices(_instance.get());

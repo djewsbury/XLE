@@ -829,7 +829,7 @@ namespace XLEMath
     }
 
     template<typename Store>
-        void ScalarField3D<Store>::GatherNeighbors(ValueType neighbours[27], float weights[4], FloatCoord coord, unsigned samplingFlags) const
+        void ScalarField3D<Store>::GatherNeighbors(ValueType neighbours[27], float weights[8], FloatCoord coord, unsigned samplingFlags) const
     {
         XLEMath::GatherNeighbors(neighbours, weights, *this, coord, samplingFlags);
     }
@@ -867,7 +867,7 @@ namespace XLEMath
     }
 
     template<typename Store>
-        void VectorField3DSeparate<Store>::GatherNeighbors(ValueType neighbours[27], float weights[4], FloatCoord coord, unsigned samplingFlags) const
+        void VectorField3DSeparate<Store>::GatherNeighbors(ValueType neighbours[27], float weights[8], FloatCoord coord, unsigned samplingFlags) const
     {
         XLEMath::GatherNeighbors(neighbours, weights, *this, coord, samplingFlags);
     }

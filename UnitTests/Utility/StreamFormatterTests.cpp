@@ -483,6 +483,7 @@ EnvSettings=~
 
                 while (formatter.PeekNext() != FormatterBlob::EndElement) {
                     auto ignoredName = RequireKeyedItem(formatter);
+                    (void)ignoredName;
                     RequireBeginElement(formatter);
 
                     ExampleSerializableObject::StrataMaterial::Strata newStrata;

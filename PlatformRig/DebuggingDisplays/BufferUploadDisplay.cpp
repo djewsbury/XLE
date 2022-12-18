@@ -768,7 +768,7 @@ namespace PlatformRig { namespace Overlays
     void    BufferUploadDisplay::Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState)
     {
         using namespace RenderCore::BufferUploads;
-        const CommandListMetrics* mostRecentResults;
+        const CommandListMetrics* mostRecentResults = nullptr;
         unsigned commandListCount = 0;
 
             //      Keep popping metrics from the upload manager until we stop getting valid ones            

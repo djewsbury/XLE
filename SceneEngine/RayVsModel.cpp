@@ -311,7 +311,7 @@ namespace SceneEngine
         auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 		_pimpl->_pendingUnbind = true;
         _pimpl->_res = &ConsoleRig::FindCachedBox<ModelIntersectionResources>(
-            sizeof(ResultEntry), s_maxResultCount);
+            (unsigned)sizeof(ResultEntry), s_maxResultCount);
 
 		_pimpl->_queryId = _pimpl->_res->_streamOutputQueryPool->Begin(metalContext);
 		assert(_pimpl->_queryId != ~0u);

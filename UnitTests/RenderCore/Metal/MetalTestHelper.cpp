@@ -272,7 +272,7 @@ namespace UnitTests
 			desc._textureDesc._width, desc._textureDesc._height,
 			compCount, 
 			AsPointer(data.begin()),
-			data.size() / desc._textureDesc._height);
+			int(data.size() / desc._textureDesc._height));
 		assert(res != 0);
 	}
 

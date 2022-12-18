@@ -167,7 +167,6 @@ namespace UnitTests
                 }
 
                 for (auto e=0; e<eventsToBegin; ++e) {
-                    int* front = nullptr;
                     if (eventPool.empty())
                         break;
 

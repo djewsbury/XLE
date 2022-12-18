@@ -341,8 +341,8 @@ namespace RenderCore { namespace Metal_DX11
 				Conversion::Convert<std::wstring>(MakeStringSection(filenameForCompiler)).c_str(),
 				Conversion::Convert<std::wstring>(MakeStringSection(shaderPath._entryPoint)).c_str(),
 				Conversion::Convert<std::wstring>(MakeStringSection(shaderPath._shaderModel)).c_str(),
-				fixedArguments.data(), fixedArguments.size(),
-				defines._defines.data(), defines._defines.size(),
+				fixedArguments.data(), (UINT32)fixedArguments.size(),
+				defines._defines.data(), (UINT32)defines._defines.size(),
 				&rawArgs);
 			if (res2 != S_OK) {
 				assert(!rawArgs);

@@ -1731,65 +1731,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	namespace Internal
 	{
-		void SetImageLayouts(
-			DeviceContext& context, 
-			IteratorRange<const LayoutTransition*> changes)
-		{
-			VkImageMemoryBarrier barriers[16];
-			assert(changes.size() > 0 && changes.size() < dimof(barriers));
-
-			VkPipelineStageFlags src_stages = 0;
-			VkPipelineStageFlags dest_stages = 0;
-
-			unsigned barrierCount = 0;
-			for (unsigned c=0; c<(unsigned)changes.size(); ++c) {
-				auto& r = *changes[c]._res;
-				assert(r.AccessDesc()._type == ResourceDesc::Type::Texture);
-				if (!r.GetImage()) continue;   // (staging buffer case)
-
-				auto& b = barriers[barrierCount++];
-
-				// unforunately, we can't just blanket aspectMask with all bits enabled.
-				// We must select a correct aspect mask. The nvidia drivers seem to be fine with all
-				// bits enabled, but the documentation says that this is not allowed
-				const auto& desc = r.AccessDesc();
-
-				b = {};
-				b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-				b.pNext = nullptr;
-				b.oldLayout = (VkImageLayout)Internal::AsVkImageLayout(changes[c]._oldLayout);
-				b.newLayout = (VkImageLayout)Internal::AsVkImageLayout(changes[c]._newLayout);
-				b.srcAccessMask = changes[c]._oldAccessMask;
-				b.dstAccessMask = changes[c]._newAccessMask;
-				b.image = r.GetImage();
-				b.subresourceRange.aspectMask = AsImageAspectMask(desc._textureDesc._format);
-				b.subresourceRange.baseMipLevel = 0;
-				b.subresourceRange.baseArrayLayer = 0;
-				b.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-				b.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-
-				src_stages |= changes[c]._srcStages;
-				dest_stages |= changes[c]._dstStages;
-			}
-
-			if (barrierCount) {
-				context.GetActiveCommandList().PipelineBarrier(
-					src_stages, dest_stages,
-					0, 
-					0, nullptr, 0, nullptr,
-					barrierCount, barriers);
-			}
-		}
-
-		void SetImageLayout(
-			DeviceContext& context, Resource& res, 
-			ImageLayout oldLayout, unsigned oldAccessMask, unsigned srcStages, 
-			ImageLayout newLayout, unsigned newAccessMask, unsigned dstStages)
-		{
-			LayoutTransition transition { &res, oldLayout, oldAccessMask, srcStages, newLayout, newAccessMask, dstStages };
-			SetImageLayouts(context, MakeIteratorRange(&transition, &transition+1));
-		}
-
 		class CaptureForBindRecords
 		{
 		public:

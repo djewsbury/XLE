@@ -73,6 +73,7 @@ namespace UnitTests
             for (const auto&fn:getterFuns) {
                 float resultCastedToFloat = 0.f;
                 auto res = fn(&ex, MakeOpaqueIteratorRange(resultCastedToFloat), ImpliedTyping::TypeOf<float>());
+                REQUIRE(res);
                 REQUIRE( resultCastedToFloat == 54_a );
             }
 
@@ -110,6 +111,7 @@ namespace UnitTests
                 TestClass ex{};
                 float newValueAsFloat = 1.f + iterations;
                 auto res = fn(&ex, MakeOpaqueIteratorRange(newValueAsFloat), ImpliedTyping::TypeOf<float>());
+                REQUIRE(res);
                 REQUIRE( ex._intMember == (int)newValueAsFloat );
 
                 ++iterations;
