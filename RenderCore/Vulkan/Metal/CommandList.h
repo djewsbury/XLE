@@ -149,7 +149,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			IteratorRange<Metal_Vulkan::CommandList* const*> cmdLists,
 			IteratorRange<const std::pair<VkSemaphore, uint64_t>*> waitBeforeBegin,
 			IteratorRange<const VkPipelineStageFlags*> waitBeforeBeginStages,
-			IteratorRange<const std::pair<VkSemaphore, uint64_t>*> signalOnCompletion);
+			IteratorRange<const std::pair<VkSemaphore, uint64_t>*> signalOnCompletion,
+			VkFence fenceOnCompletion);
 		void WaitForFence(IAsyncTracker::Marker marker, std::optional<std::chrono::nanoseconds> timeout = {});
 		void WaitIdle();
 

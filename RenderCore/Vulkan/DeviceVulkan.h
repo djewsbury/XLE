@@ -63,15 +63,20 @@ namespace RenderCore { namespace ImplVulkan
         };
         AquireResult AcquireNextImage(Metal_Vulkan::SubmissionQueue&, HierarchicalCPUProfiler*);
 
-		class PresentSync
+		struct PresentImageAttachedSyncs
 		{
-		public:
-			VulkanUniquePtr<VkSemaphore>		_onAcquireComplete;
-			VulkanUniquePtr<VkSemaphore>		_onCommandBufferComplete;
-			
-            std::optional<Metal_Vulkan::IAsyncTracker::Marker> _presentFence;      // (owned by the IAsyncTrackerVulkan)
+			VulkanUniquePtr<VkSemaphore>    _onAcquireComplete;
+			VulkanUniquePtr<VkSemaphore>    _onCommandBufferComplete;
+        };
+
+        struct CommandListAttachedSyncs
+        {
+			VulkanUniquePtr<VkFence>    _presentFence;
+			bool _presentFenceWaitable = false;
 		};
-		PresentSync& GetSyncs() { return _presentSyncs[_activePresentSync]; }
+
+		PresentImageAttachedSyncs& GetPresentImageAttachedSyncs() { return _presentImageAttachedSyncs[0]; }
+        CommandListAttachedSyncs& GetCommandListAttachedSyncs() { return _commandListAttachedSyncs[0]; }
 
         bool ReadyForRendering() const { return _swapChain != nullptr; }
 
@@ -86,25 +91,28 @@ namespace RenderCore { namespace ImplVulkan
     private:
 		VulkanSharedPtr<VkSurfaceKHR>   _surface;
         VulkanSharedPtr<VkSwapchainKHR> _swapChain;
-        VulkanSharedPtr<VkDevice>       _vulkanDevice;
+        VkDevice						_underlyingDevice;
         Metal_Vulkan::ObjectFactory*    _factory;
-        unsigned		_activeImageIndex;
-
-        std::vector<std::shared_ptr<IResource>> _images;
 
 		TextureDesc     _bufferDesc;
 		PresentationChainDesc	_desc;
+        unsigned        _primaryBufferCount;
 
-        PresentSync     _presentSyncs[3];
-        unsigned        _activePresentSync;
+        std::vector<std::shared_ptr<IResource>> _images;
+        unsigned		_lastAcquiredImage;
+
+        PresentImageAttachedSyncs   _presentImageAttachedSyncs[3];      // zero always active
+        CommandListAttachedSyncs    _commandListAttachedSyncs[3];       // zero always active
+
         Metal_Vulkan::SubmissionQueue*	_submissionQueue;
 
-		Metal_Vulkan::CommandBufferPool _primaryBufferPool;
-		VulkanSharedPtr<VkCommandBuffer> _primaryBuffers[3];
+		Metal_Vulkan::CommandBufferPool _primaryCommandBufferPool;
+		VulkanSharedPtr<VkCommandBuffer> _primaryCommandLists[3];
 
         std::weak_ptr<Device> _device;
 
         void BuildImages();
+        unsigned GetImageCount() const { return (unsigned)_images.size(); }
     };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -167,9 +175,10 @@ namespace RenderCore { namespace ImplVulkan
 
         HierarchicalCPUProfiler* _cpuProfiler = nullptr;
 
-        Metal_Vulkan::IAsyncTracker::Marker CommitToQueue_Internal(
+        void CommitToQueue_Internal(
             IteratorRange<const std::pair<VkSemaphore, uint64_t>*> waitBeforeBegin,
-            IteratorRange<const std::pair<VkSemaphore, uint64_t>*> signalOnCompletion);
+            IteratorRange<const std::pair<VkSemaphore, uint64_t>*> signalOnCompletion,
+            VkFence fenceOnCompletion);
     };
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -2432,8 +2432,10 @@ namespace RenderCore { namespace ImplVulkan
             return;
 
         SwapChainProperties props;
-		if (desc._width*desc._height)
+		if (desc._width*desc._height) {
 			props = DecideSwapChainProperties(_factory->GetPhysicalDevice(), _surface.get(), desc);
+			assert(props._desiredNumberOfImages <= dimof(_presentImageAttachedSyncs));
+		}
 
         // We can't delete the old swap chain while the device is using it. The easiest
         // way to get around this is to just synchronize with the GPU here.
@@ -2448,6 +2450,8 @@ namespace RenderCore { namespace ImplVulkan
 			}
 		#endif
         _images.clear();
+		auto oldSwapChain = std::move(_swapChain);
+		_lastAcquiredImage = ~0x0u;
 		#if defined(_DEBUG)
 			bool allExpired = true;
 			for (auto& i:resources) allExpired &= i.expired();
@@ -2461,17 +2465,14 @@ namespace RenderCore { namespace ImplVulkan
 		#endif
 
 		mainThreadContext.CommitCommands(CommitCommandsFlags::WaitForCompletion);
-		vkDeviceWaitIdle(_vulkanDevice.get());
-		auto oldSwapChain = std::move(_swapChain);
-		_activeImageIndex = ~0x0u;
-		_activePresentSync = 0;
 
+		vkDeviceWaitIdle(_underlyingDevice);		// we only really need to wait until any cmd lists that might be referencing the swap chain images have finished
 		// we don't want the new and old images to exist at the same time, so pump the destruction queues to try to
-		// ensure they are truly gone
+		// ensure they are truly gone (CommitCommands() should have already done this, but let's repeat for assurance)
 		checked_cast<ThreadContext*>(&mainThreadContext)->PumpDestructionQueues();
 
         if (desc._width*desc._height) {
-			_swapChain = CreateUnderlyingSwapChain(_vulkanDevice.get(), _surface.get(), oldSwapChain.get(), props);
+			_swapChain = CreateUnderlyingSwapChain(_underlyingDevice, _surface.get(), oldSwapChain.get(), props);
 			_bufferDesc = TextureDesc::Plain2D(props._extent.width, props._extent.height, Metal_Vulkan::AsFormat(props._fmt));
 			_desc = AsPresentationChainDesc(props);
 
@@ -2495,6 +2496,16 @@ namespace RenderCore { namespace ImplVulkan
 		return _device.lock();
 	}
 
+	template<typename T>
+		static void RollList(IteratorRange<T*> list)
+	{
+		assert(list.size() >= 2);
+		auto temp = std::move(list[0]);
+		for (auto i=list.begin(); (i+1)!=list.end(); ++i)
+			*i = std::move(*(i+1));
+		*(list.end()-1) = std::move(temp);
+	}
+
     auto PresentationChain::AcquireNextImage(Metal_Vulkan::SubmissionQueue& queue, HierarchicalCPUProfiler* profiler) -> AquireResult
     {
 		#if defined(_DEBUG)
@@ -2502,13 +2513,21 @@ namespace RenderCore { namespace ImplVulkan
 				Throw(std::runtime_error("Attempting to acquire image from zero-sized (or otherwise invalid) swapchain"));
 		#endif
 
-        _activePresentSync = (_activePresentSync+1) % dimof(_presentSyncs);
-        auto& sync = _presentSyncs[_activePresentSync];
-		if (sync._presentFence.has_value()) {
+		RollList(MakeIteratorRange(_presentImageAttachedSyncs, &_presentImageAttachedSyncs[GetImageCount()]));
+		RollList(MakeIteratorRange(_commandListAttachedSyncs, &_commandListAttachedSyncs[_primaryBufferCount]));
+		RollList(MakeIteratorRange(_primaryCommandLists, &_primaryCommandLists[_primaryBufferCount]));
+
+        auto& imageAttachedSync = _presentImageAttachedSyncs[0];
+		auto& commandListAttachedSync = _commandListAttachedSyncs[0];
+		{
 			CPUProfileEvent_Conditional profEvnt("Stall/commandlist", profiler);
-			queue.WaitForFence(sync._presentFence.value());
+			if (commandListAttachedSync._presentFenceWaitable) {
+				VkFence f = commandListAttachedSync._presentFence.get();
+				auto res = vkWaitForFences(_underlyingDevice, 1, &f, true, UINT64_MAX);
+				if (res != VK_SUCCESS)
+					Throw(VulkanAPIFailure(res, "Failure while waiting for presentation chain commandlist"));
+			}
 		}
-		sync._presentFence = {};
 
 		// Note that vkAcquireNextImageKHR can be guaranteed to be non-blocking if 
 		// we have VK_PRESENT_MODE_MAILBOX_KHR, and surfCapabilities.minImageCount+1 images.
@@ -2521,11 +2540,11 @@ namespace RenderCore { namespace ImplVulkan
 		{
 			CPUProfileEvent_Conditional profEvnt("Stall/image", profiler);
 			auto res = vkAcquireNextImageKHR(
-				_vulkanDevice.get(), _swapChain.get(), 
+				_underlyingDevice, _swapChain.get(), 
 				timeout,
-				sync._onAcquireComplete.get(), VK_NULL_HANDLE,
+				imageAttachedSync._onAcquireComplete.get(), VK_NULL_HANDLE,
 				&nextImageIndex);
-			_activeImageIndex = nextImageIndex;
+			_lastAcquiredImage = nextImageIndex;
 
 			// TODO: Deal with the VK_SUBOPTIMAL_KHR and VK_ERROR_OUT_OF_DATE_KHR
 			// return codes
@@ -2534,8 +2553,8 @@ namespace RenderCore { namespace ImplVulkan
 		}
 
 		AquireResult result;
-		result._resource = _images[_activeImageIndex];
-		result._primaryCommandBuffer = _primaryBuffers[_activePresentSync];
+		result._resource = _images[_lastAcquiredImage];
+		result._primaryCommandBuffer = _primaryCommandLists[0];
 		return result;
     }
 
@@ -2564,14 +2583,14 @@ namespace RenderCore { namespace ImplVulkan
 
 	void PresentationChain::PresentToQueue(Metal_Vulkan::SubmissionQueue& queue, IteratorRange<const VkSemaphore*> commandBufferSyncs)
 	{
-		if (_activeImageIndex > unsigned(_images.size())) return;
-		queue.Present(_swapChain.get(), _activeImageIndex, commandBufferSyncs);
-		_activeImageIndex = ~0x0u;
+		if (_lastAcquiredImage > unsigned(_images.size())) return;
+		queue.Present(_swapChain.get(), _lastAcquiredImage, commandBufferSyncs);
+		_lastAcquiredImage = ~0x0u;
 	}
 
     void PresentationChain::BuildImages()
     {
-        auto images = GetImages(_vulkanDevice.get(), _swapChain.get());
+        auto images = GetImages(_underlyingDevice, _swapChain.get());
         _images.reserve(images.size());
         for (auto& vkImage:images) {
             auto resDesc = CreateDesc(_desc._bindFlags, AllocationRules::ResizeableRenderTarget, _bufferDesc);
@@ -2587,41 +2606,57 @@ namespace RenderCore { namespace ImplVulkan
 		Metal_Vulkan::SubmissionQueue* submissionQueue,
         const void* platformValue)
     : _surface(std::move(surface))
-    , _vulkanDevice(factory.GetDevice())
+    , _underlyingDevice(factory.GetDevice().get())
     , _factory(&factory)
 	, _submissionQueue(submissionQueue)
-	, _primaryBufferPool(factory, submissionQueue->GetQueueFamilyIndex(), true, nullptr)
+	, _primaryCommandBufferPool(factory, submissionQueue->GetQueueFamilyIndex(), true, nullptr)
 	, _device(std::move(device))
     {
-        _activeImageIndex = ~0x0u;
+        _lastAcquiredImage = ~0x0u;
         auto props = DecideSwapChainProperties(factory.GetPhysicalDevice(), _surface.get(), requestDesc);
-        _swapChain = CreateUnderlyingSwapChain(_vulkanDevice.get(), _surface.get(), nullptr, props);
+		assert(props._desiredNumberOfImages <= dimof(_presentImageAttachedSyncs));
+        _swapChain = CreateUnderlyingSwapChain(_underlyingDevice, _surface.get(), nullptr, props);
 
         _bufferDesc = TextureDesc::Plain2D(props._extent.width, props._extent.height, Metal_Vulkan::AsFormat(props._fmt));
 		_desc = AsPresentationChainDesc(props);
 
         // We need to get pointers to each image and build the synchronization semaphores
+		// we should decouple the number of command lists from the number of present images
+		// We may want to triple buffer the number of presentable images while only double buffering
+		// the primary command lists. Triple buffering the command lists will allow for up to 2 complete
+		// frames queued behind a third currently processing -- which would result in excessive input
+		// latency in practical cases
         BuildImages();
+		_primaryBufferCount = 2;
+		assert(_primaryBufferCount <= dimof(_commandListAttachedSyncs));
+		static_assert(dimof(_commandListAttachedSyncs) == dimof(_primaryCommandLists));
+		static_assert(dimof(_presentImageAttachedSyncs) >= dimof(_primaryCommandLists));
 
         // Create the synchronisation primitives
         // This pattern is similar to the "Hologram" sample in the Vulkan SDK
-        for (unsigned c=0; c<dimof(_presentSyncs); ++c) {
-            _presentSyncs[c]._onCommandBufferComplete = factory.CreateSemaphore();
-            _presentSyncs[c]._onAcquireComplete = factory.CreateSemaphore();
-            _presentSyncs[c]._presentFence = {};
+		// We create all of the synchronization primitives for images because the count of images may change later
+        for (unsigned c=0; c<dimof(_presentImageAttachedSyncs); ++c) {
+            _presentImageAttachedSyncs[c]._onCommandBufferComplete = factory.CreateSemaphore();
+            _presentImageAttachedSyncs[c]._onAcquireComplete = factory.CreateSemaphore();
+		}
+
+		for (unsigned c=0; c<_primaryBufferCount; ++c) {
+            _commandListAttachedSyncs[c]._presentFence = factory.CreateFence();
+			_commandListAttachedSyncs[c]._presentFenceWaitable = false;
         }
-		for (unsigned c = 0; c<dimof(_primaryBuffers); ++c)
-			_primaryBuffers[c] = _primaryBufferPool.Allocate(Metal_Vulkan::CommandBufferType::Primary);
-        _activePresentSync = 0;
+		for (unsigned c = 0; c<_primaryBufferCount; ++c)
+			_primaryCommandLists[c] = _primaryCommandBufferPool.Allocate(Metal_Vulkan::CommandBufferType::Primary);
     }
 
     PresentationChain::~PresentationChain()
     {
 		// for safety -- ensure that all submitted Present() events have finished on the GPU
 		if (_submissionQueue)
-			for (auto& sync:_presentSyncs)
-				if (sync._presentFence.has_value())
-					_submissionQueue->WaitForFence(sync._presentFence.value());
+			for (auto& sync:_commandListAttachedSyncs)
+				if (sync._presentFenceWaitable) {
+					VkFence f = sync._presentFence.get();
+					vkWaitForFences(_underlyingDevice, 1, &f, true, UINT64_MAX);
+				}
 		_images.clear();
 		_swapChain.reset();
 		_device.reset();
@@ -2670,9 +2705,10 @@ namespace RenderCore { namespace ImplVulkan
 			_metalContext->GetActiveCommandList().GetPrimaryTrackerMarker(), std::move(name));
 	}
 
-	Metal_Vulkan::IAsyncTracker::Marker ThreadContext::CommitToQueue_Internal(
+	void ThreadContext::CommitToQueue_Internal(
 		IteratorRange<const std::pair<VkSemaphore, uint64_t>*> waitBeforeBegin,
-		IteratorRange<const std::pair<VkSemaphore, uint64_t>*> completionSignals)
+		IteratorRange<const std::pair<VkSemaphore, uint64_t>*> completionSignals,
+		VkFence fenceOnCompletion)
 	{
 		using TimelineSemaPair = std::pair<VkSemaphore, uint64_t>;
 		VLA_UNSAFE_FORCE(TimelineSemaPair, waitSema, waitBeforeBegin.size()+2);
@@ -2695,7 +2731,6 @@ namespace RenderCore { namespace ImplVulkan
 		// _interimCmdLists always come before "cmdList"
 		// _interimCmdLists will be cleared regardless of whether or not _submissionQueue->Submit throws
 		auto interimLists = std::move(_interimCmdLists);
-		auto result = interimLists.back().GetPrimaryTrackerMarker();
 		VLA(Metal_Vulkan::CommandList*, cmdLists, interimLists.size());
 		unsigned cmdListsCount = 0;
 		for (auto& c:interimLists) cmdLists[cmdListsCount++] = &c;
@@ -2704,10 +2739,8 @@ namespace RenderCore { namespace ImplVulkan
 			MakeIteratorRange(cmdLists, &cmdLists[cmdListsCount]),
 			MakeIteratorRange(waitSema, &waitSema[waitCount]),
 			MakeIteratorRange(waitStages, &waitStages[waitCount]),
-			completionSignals);
-
-		assert(result && result != ~0u);
-		return result;
+			completionSignals,
+			fenceOnCompletion);
 	}
 
 	IResourcePtr    ThreadContext::BeginFrame(IPresentationChain& presentationChain)
@@ -2729,7 +2762,7 @@ namespace RenderCore { namespace ImplVulkan
 		}
 
 		auto nextImage = swapChain->AcquireNextImage(*_submissionQueue, _cpuProfiler);
-		_nextQueueShouldWaitOnAcquire = swapChain->GetSyncs()._onAcquireComplete.get();
+		_nextQueueShouldWaitOnAcquire = swapChain->GetPresentImageAttachedSyncs()._onAcquireComplete.get();
 
 		{
 			auto res = vkResetCommandBuffer(nextImage._primaryCommandBuffer.get(), VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
@@ -2744,19 +2777,22 @@ namespace RenderCore { namespace ImplVulkan
 	void            ThreadContext::Present(IPresentationChain& chain)
 	{
 		auto* swapChain = checked_cast<PresentationChain*>(&chain);
-		auto& syncs = swapChain->GetSyncs();
-		assert(!syncs._presentFence);
+		auto& presentImageSyncs = swapChain->GetPresentImageAttachedSyncs();
+		auto& cmdListSyncs = swapChain->GetCommandListAttachedSyncs();
 		assert(_metalContext->HasActiveCommandList());
 
 		//////////////////////////////////////////////////////////////////
 
-		std::pair<VkSemaphore, uint64_t> commandBufferSignal = std::make_pair(syncs._onCommandBufferComplete.get(), 0);
+		std::pair<VkSemaphore, uint64_t> commandBufferSignal = std::make_pair(presentImageSyncs._onCommandBufferComplete.get(), 0);
 		bool commandBufferSubmitted = false;
 		TRY {
 			auto immediateCommands = _metalContext->ResolveCommandList();
 			_interimCmdLists.emplace_back(std::move(*immediateCommands));
-			syncs._presentFence = CommitToQueue_Internal({}, MakeIteratorRange(&commandBufferSignal, &commandBufferSignal+1));
+			auto f = cmdListSyncs._presentFence.get();
+			vkResetFences(_underlyingDevice, 1, &f);
+			CommitToQueue_Internal({}, MakeIteratorRange(&commandBufferSignal, &commandBufferSignal+1), f);
 			commandBufferSubmitted = true;
+			cmdListSyncs._presentFenceWaitable = true;
 		} CATCH(const std::exception& e) {
 			Log(Warning) << "Failure during queue submission for present: " << e.what() << std::endl;
 		} CATCH_END
@@ -2782,28 +2818,42 @@ namespace RenderCore { namespace ImplVulkan
 		// now; but also any other command buffers that have already been submitted
 		// and are still being processed
 		bool waitForCompletion = !!(flags & CommitCommandsFlags::WaitForCompletion);
+
+		// CommitCommands(WaitForCompletion) is somtimes used to ensure that the GPU is finished
+		// using a certain resource (eg, the swap chain images). In order to guarantee that
+		// we do actually get a wait in these scenarios, we have to ensure that there is a command
+		// list submitted (to flush through absolutely all markers in the async tracker)
+		// Since WaitForCompletion is inherently inefficient, we can be a bit less than 100%
+		// optimal here
+		if (waitForCompletion && !_metalContext->HasActiveCommandList()) {
+			auto cmdBuffer = _commandBufferPool->Allocate(Metal_Vulkan::CommandBufferType::Primary);
+			_metalContext->BeginCommandList(std::move(cmdBuffer), _submissionQueue->GetTracker());
+		}
+
 		if (_metalContext->HasActiveCommandList() || !_interimCmdLists.empty()) {
-			Metal_Vulkan::IAsyncTracker::Marker fenceToWaitFor;
+			VulkanUniquePtr<VkFence> fence;
+			if (waitForCompletion)
+				fence = _factory->CreateFence();
+
 			TRY {
 				if (_metalContext->HasActiveCommandList()) {
 					auto immediateCommands = _metalContext->ResolveCommandList();
 					_interimCmdLists.emplace_back(std::move(*immediateCommands));
 				}
-				fenceToWaitFor = CommitToQueue_Internal({}, {});
+				CommitToQueue_Internal({}, {}, fence.get());
+
+				if (waitForCompletion) {
+					VkFence f = fence.get();
+					auto res = vkWaitForFences(_underlyingDevice, 1, &f, true, UINT64_MAX);
+					if (res != VK_SUCCESS)
+						Throw(VulkanAPIFailure(res, "Failure while waiting for CommitCommands() completion"));
+				}
 			} CATCH (const std::exception& e) {
 				Log(Warning) << "Failure during queue submission in CommitCommands:" << e.what() << std::endl;
 				waitForCompletion = false;
 			} CATCH_END
-
-			if (waitForCompletion)
-				_submissionQueue->WaitForFence(fenceToWaitFor);
-		} else {
-			// note that if we don't have an active command list, and flags is WaitForCompletion, we still don't actually wait
-			// for the GPU to catchup to any previously committed command lists
-			// however, we still flush out the destruction queues, etc
 		}
 
-			
 		// We need to flush the destruction queues at some point for clients that never actually call Present
 		// We have less control over the frequency of CommitCommands, though, so it's going to be less clear
 		// when is the right time to call it

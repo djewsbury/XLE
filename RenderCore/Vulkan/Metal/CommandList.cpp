@@ -388,7 +388,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		IteratorRange<Metal_Vulkan::CommandList* const*> cmdLists,
 		IteratorRange<const std::pair<VkSemaphore, uint64_t>*> waitBeforeBegin,
 		IteratorRange<const VkPipelineStageFlags*> waitBeforeBeginStagesInit,
-		IteratorRange<const std::pair<VkSemaphore, uint64_t>*> signalOnCompletion)
+		IteratorRange<const std::pair<VkSemaphore, uint64_t>*> signalOnCompletion,
+		VkFence fenceOnCompletion)
 	{
 		assert(waitBeforeBegin.size() == waitBeforeBeginStagesInit.size());
 		size_t trackerMarkersCount = 0;
@@ -522,7 +523,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				Log(Verbose) << "[q]  signal 0x" << std::hex << signalOnCompletionSemaphores[c] << std::dec << " for value " << signalOnCompletionValues[c] << std::endl;
 		#endif
 
-		auto res = vkQueueSubmit(_underlying, 1, &submitInfo, nullptr);
+		auto res = vkQueueSubmit(_underlying, 1, &submitInfo, fenceOnCompletion);
 		if (res != VK_SUCCESS)
 			Throw(VulkanAPIFailure(res, "Failure while queuing command list"));
 
