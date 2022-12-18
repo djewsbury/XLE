@@ -267,11 +267,13 @@ std::string SystemErrorCodeAsString(int errorCode)
             --end;
             *end = '\0';
         }
-    }
 
-    std::string result = (const char*)lpMsgBuf;
-    LocalFree(lpMsgBuf);
-    return result;
+        std::string result = (const char*)lpMsgBuf;
+        LocalFree(lpMsgBuf);
+        return result;
+    } else
+        return std::to_string(errorCode);
+}
 }
 
 #if 0
