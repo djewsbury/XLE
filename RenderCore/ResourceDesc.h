@@ -150,6 +150,7 @@ namespace RenderCore
         static TextureDesc Empty();
 
         uint64_t CalculateHash() const;
+        uint64_t CalculateHashResolutionIndependent() const;
     };
 
     class ResourceDesc
@@ -165,6 +166,7 @@ namespace RenderCore
         };
 
         uint64_t CalculateHash() const;
+        uint64_t CalculateHashResolutionIndependent() const;
 
 		ResourceDesc();
     };

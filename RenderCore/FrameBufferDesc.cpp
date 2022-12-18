@@ -132,10 +132,24 @@ namespace RenderCore
 
     uint64_t FrameBufferProperties::CalculateHash() const
     {
+        assert((_width & ((1<<16)-1)) == _width);
+        assert((_height & ((1<<16)-1)) == _height);
+        assert((_samples._sampleCount & ((1<<8)-1)) == _samples._sampleCount);
+        assert((_samples._samplingQuality & ((1<<8)-1)) == _samples._samplingQuality);
+
         return uint64_t(_width) 
             ^ (uint64_t(_height) << 16ull)
             ^ (uint64_t(_samples._sampleCount) << 48ull)
             ^ (uint64_t(_samples._samplingQuality) << 56ull);
+    }
+
+    uint64_t FrameBufferProperties::CalculateHashResolutionIndependent() const
+    {
+        assert((_samples._sampleCount & ((1<<8)-1)) == _samples._sampleCount);
+        assert((_samples._samplingQuality & ((1<<8)-1)) == _samples._samplingQuality);
+
+        return uint64_t(_samples._sampleCount)
+            ^ (uint64_t(_samples._samplingQuality) << 8ull);
     }
 
 	FrameBufferDesc SeparateSingleSubpass(const FrameBufferDesc& input, unsigned subpassIdx)

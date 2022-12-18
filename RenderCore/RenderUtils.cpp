@@ -461,8 +461,8 @@ namespace RenderCore
         assert((unsigned(_dimensionality) & ((1<<4)-1)) == unsigned(_dimensionality));
         assert((_mipCount & ((1<<8)-1)) == _mipCount);
         assert((_arrayCount & ((1<<16)-1)) == _arrayCount);
-        assert((_samples._sampleCount & ((1<<8)-1)) == _samples._sampleCount);
-        assert((_samples._samplingQuality & ((1<<8)-1)) == _samples._samplingQuality);
+        assert((_samples._sampleCount & ((1<<5)-1)) == _samples._sampleCount);
+        assert((_samples._samplingQuality & ((1<<5)-1)) == _samples._samplingQuality);
         assert((unsigned(_format) & ((1<<8)-1)) == unsigned(_format));
 
         if (IsPowerOfTwo(_width) && IsPowerOfTwo(_height) && _depth == 1
@@ -477,6 +477,8 @@ namespace RenderCore
             result |= heightPower << 29ull;
             result |= uint64_t(_format) << 37ull;
             result |= uint64_t(_mipCount) << 45ull;
+            result |= uint64_t(_samples._sampleCount) << 53ull;
+            result |= uint64_t(_samples._samplingQuality) << 58ull;
             return result;
         } else {
             uint64_t h0 = (uint64_t(_width) << 32ull) | uint64_t(_height);
@@ -486,10 +488,29 @@ namespace RenderCore
                 | (uint64_t(_mipCount) << 4ull)
                 | (uint64_t(_arrayCount) << 12ull)
                 | (uint64_t(_samples._sampleCount) << 28ull)
-                | (uint64_t(_samples._samplingQuality) << 36ull)
+                | (uint64_t(_samples._samplingQuality) << 33ull)
                 ;
             return HashCombine(h0, HashCombine(h1, h2));
         }
+    }
+
+    uint64_t TextureDesc::CalculateHashResolutionIndependent() const
+    {
+        // This is used when we want to isolate factors that will impact shader
+        // inputs & outputs. So resolution is not important, but dimensionality, format,
+        // sampling, etc, are
+        assert((unsigned(_dimensionality) & ((1<<4)-1)) == unsigned(_dimensionality));
+        assert((_samples._sampleCount & ((1<<5)-1)) == _samples._sampleCount);
+        assert((_samples._samplingQuality & ((1<<5)-1)) == _samples._samplingQuality);
+        assert((unsigned(_format) & ((1<<8)-1)) == unsigned(_format));
+
+        uint64_t result = 0x0;
+        result |= (unsigned(_dimensionality) & ((1<<4)-1));
+        result |= (_arrayCount == 0) << 1;      // number of array layers isn't important, but array or non-array is
+        result |= uint64_t(_format) << 2ull;
+        result |= uint64_t(_samples._sampleCount) << 10ull;
+        result |= uint64_t(_samples._samplingQuality) << 15ull;
+        return result;
     }
 
     uint64_t ResourceDesc::CalculateHash() const
@@ -504,6 +525,20 @@ namespace RenderCore
             ;
         if (_type == Type::Texture) h0 = HashCombine(_textureDesc.CalculateHash(), h0);
         else if (_type == Type::LinearBuffer) h0 = HashCombine(_linearBufferDesc.CalculateHash(), h0);
+        return h0;
+    }
+
+    uint64_t ResourceDesc::CalculateHashResolutionIndependent() const
+    {
+        assert((unsigned(_type) & ((1<<2)-1)) == unsigned(_type));
+        assert((_bindFlags & ((1<<16)-1)) == _bindFlags);
+        assert((_allocationRules & ((1<<10)-1)) == _allocationRules);
+        uint64_t h0 = 
+            uint64_t(_type)
+            | (uint64_t(_bindFlags) << 2ull)
+            | (uint64_t(_allocationRules) << 18ull)
+            ;
+        if (_type == Type::Texture) h0 = HashCombine(_textureDesc.CalculateHashResolutionIndependent(), h0);
         return h0;
     }
 

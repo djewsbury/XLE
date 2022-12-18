@@ -141,9 +141,15 @@ namespace RenderCore { namespace Techniques
         BindFlag::BitField _layout = 0;
 
         uint64_t CalculateHash() const;
+        uint64_t CalculateHashResolutionIndependent() const;
     };
 
     uint64_t HashPreregisteredAttachments(
+        IteratorRange<const PreregisteredAttachment*> attachments,
+        const FrameBufferProperties& fbProps,
+        uint64_t seed = DefaultSeed64);
+
+    uint64_t HashPreregisteredAttachmentsResolutionIndependent(
         IteratorRange<const PreregisteredAttachment*> attachments,
         const FrameBufferProperties& fbProps,
         uint64_t seed = DefaultSeed64);

@@ -1803,6 +1803,15 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
+    uint64_t PreregisteredAttachment::CalculateHashResolutionIndependent() const
+    {
+        uint64_t result = HashCombine(_semantic, _desc.CalculateHashResolutionIndependent());
+		auto shift = (unsigned)_state;
+		lrot(result, shift);
+        result += _layout;
+		return result;
+    }
+
     uint64_t HashPreregisteredAttachments(
         IteratorRange<const PreregisteredAttachment*> attachments,
         const FrameBufferProperties& fbProps,
@@ -1811,6 +1820,17 @@ namespace RenderCore { namespace Techniques
         uint64_t result = HashCombine(fbProps.CalculateHash(), seed);
         for (const auto& a:attachments)
             result = HashCombine(a.CalculateHash(), result);
+        return result;
+    }
+
+    uint64_t HashPreregisteredAttachmentsResolutionIndependent(
+        IteratorRange<const PreregisteredAttachment*> attachments,
+        const FrameBufferProperties& fbProps,
+        uint64_t seed)
+    {
+        uint64_t result = HashCombine(fbProps.CalculateHashResolutionIndependent(), seed);
+        for (const auto& a:attachments)
+            result = HashCombine(a.CalculateHashResolutionIndependent(), result);
         return result;
     }
 

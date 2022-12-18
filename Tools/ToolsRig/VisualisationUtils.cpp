@@ -778,6 +778,7 @@ namespace ToolsRig
 
 		std::shared_ptr<SceneEngine::IScene> _scene;
 		bool _pendingAnimStateBind = false;
+		uint64_t _renderTargetHashes = 0;
 
 		std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate> _stencilPrimeDelegate;
 
@@ -1065,6 +1066,13 @@ namespace ToolsRig
 		IteratorRange<const RenderCore::Format*> systemAttachmentFormats)
 	{
 		using namespace RenderCore;
+
+		auto hash = HashPreregisteredAttachmentsResolutionIndependent(preregAttachments, fbProps);
+		hash = Hash64(systemAttachmentFormats.begin(), systemAttachmentFormats.end(), hash);
+		if (hash == _pimpl->_renderTargetHashes)
+			return;		// if it's just a resolution change, or something, we don't have to rebuild anything -- just move on
+
+		_pimpl->_renderTargetHashes = hash;
 
 		std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> visWireframeDelegate;
 		auto visWireframeDelegateFuture = visWireframeDelegate.get_future();
