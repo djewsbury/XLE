@@ -204,9 +204,9 @@ namespace RenderCore { namespace Techniques
 				drawable->_pipeline = pipeline;
 
 				drawable->_descriptorSet = nullptr;
-				drawable->_vertexCount = vertexCount;
+				drawable->_vertexCount = (unsigned)vertexCount;
 				drawable->_vertexStride = vStride;
-				drawable->_bytesAllocated = vertexDataSize;
+				drawable->_bytesAllocated = (unsigned)vertexDataSize;
 				drawable->_drawFn = &DrawableWithVertexCount::ExecuteFn;
 				if (matUSIHash) {
 					drawable->_looseUniformsInterface = ProtectLifetime(*material._uniformStreamInterface);
@@ -228,9 +228,9 @@ namespace RenderCore { namespace Techniques
 			auto* drawable = _workingPkt._drawables.Allocate<DrawableWithVertexCount>();
 			drawable->_geo = customGeo.get();
 			drawable->_pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors, material._patchCollection);
-			drawable->_vertexCount = indexOrVertexCount;
+			drawable->_vertexCount = (unsigned)indexOrVertexCount;
 			drawable->_descriptorSet = nullptr;
-			drawable->_vertexStartLocation = indexOrVertexStartLocation;
+			drawable->_vertexStartLocation = (unsigned)indexOrVertexStartLocation;
 			drawable->_vertexStride = 0;
 			drawable->_bytesAllocated = 0;
 			DEBUG_ONLY(drawable->_userGeo = true;)
@@ -256,8 +256,8 @@ namespace RenderCore { namespace Techniques
 			drawable->_geo = customGeo.get();
 			drawable->_pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors, material._patchCollection);
 			drawable->_descriptorSet = nullptr;
-			drawable->_vertexCount = indexOrVertexCount;
-			drawable->_vertexStartLocation = indexOrVertexStartLocation;
+			drawable->_vertexCount = (unsigned)indexOrVertexCount;
+			drawable->_vertexStartLocation = (unsigned)indexOrVertexStartLocation;
 			drawable->_vertexStride = 0;
 			drawable->_bytesAllocated = 0;
 			DEBUG_ONLY(drawable->_userGeo = true;)
@@ -283,15 +283,15 @@ namespace RenderCore { namespace Techniques
 			} else if (offsetPlusNewCount > _lastQueuedDrawable->_vertexCount) {
 				size_t allocationRequired = offsetPlusNewCount * _lastQueuedDrawable->_vertexStride;
 				if (allocationRequired <= _lastQueuedDrawable->_bytesAllocated) {
-					_lastQueuedDrawable->_vertexCount = offsetPlusNewCount;
+					_lastQueuedDrawable->_vertexCount = (unsigned)offsetPlusNewCount;
 				} else {
 					auto extraStorage = _workingPkt.AllocateStorage(DrawablesPacket::Storage::Vertex, allocationRequired-_lastQueuedDrawable->_bytesAllocated);
 					assert(_lastQueuedDrawable->_geo->_vertexStreams[0]._vbOffset + _lastQueuedDrawable->_bytesAllocated == extraStorage._startOffset);
-					_lastQueuedDrawable->_bytesAllocated = allocationRequired;
-					_lastQueuedDrawable->_vertexCount = offsetPlusNewCount;
+					_lastQueuedDrawable->_bytesAllocated = (unsigned)allocationRequired;
+					_lastQueuedDrawable->_vertexCount = (unsigned)offsetPlusNewCount;
 				}
 			} else {
-				_lastQueuedDrawable->_vertexCount = offsetPlusNewCount;
+				_lastQueuedDrawable->_vertexCount = (unsigned)offsetPlusNewCount;
 			}
 
 			auto fullStorage = _workingPkt.GetStorage(DrawablesPacket::Storage::Vertex);
@@ -331,6 +331,7 @@ namespace RenderCore { namespace Techniques
 			auto& sequencerConfig = GetSequencerConfig(fbDesc, subpassIndex);
 			assert(parserContext.GetViewport()._width * parserContext.GetViewport()._height);
 			if (!_workingPkt._drawables.empty()) {
+				parserContext.GetUniformDelegateManager()->InvalidateUniforms();
 				Techniques::DrawOptions options;
 				options._pipelineAcceleratorsVisibility = _pipelineAcceleratorsVisibility;
 				Draw(
