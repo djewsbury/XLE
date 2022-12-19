@@ -44,9 +44,11 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::IComputeShaderOperator> _shader;
 		std::shared_ptr<Techniques::PipelineCollection> _pool;
 		std::shared_ptr<IDevice> _device;
-		std::shared_ptr<IResourceView> _params;
+		std::shared_ptr<IResourceView> _params[3];
+		unsigned _paramsBufferCounter = 0;
+		unsigned _paramsBufferCopyCountdown = 0;
+		std::vector<uint8_t> _paramsData;
 	};
 
 }}
-
 

@@ -2,10 +2,12 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#include "../Utility/Colour.hlsl"
+
 cbuffer Params
 {
-	float3x3 PreToneScale;
-	float3x3 PostToneScale;
+	row_major float3x4 PreToneScale;
+	row_major float3x4 PostToneScale;
 }
 
 float3 c5c9CurveEsimate_LogY3(float3 x)
@@ -39,8 +41,8 @@ float3 ToneMapAces(float3 x)
 
 #include "xleres/Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
 
-Texture2D<float> HDRInput;
-RWTexture2D<float> LDROutput;		// output could be >8 bit depth, of course, but we're expecting smaller range than the input
+Texture2D<float3> HDRInput;
+RWTexture2D<float3> LDROutput;		// output could be >8 bit depth, of course, but we're expecting smaller range than the input
 
 [numthreads(8, 8, 1)]
 	void main(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
@@ -52,5 +54,6 @@ RWTexture2D<float> LDROutput;		// output could be >8 bit depth, of course, but w
 	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
 
 	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y)
-		LDROutput[pixelId] = HDRInput[pixelId];
+		LDROutput[pixelId] = saturate(LinearToSRGB_Formal(ToneMapAces(HDRInput[pixelId])));
+		// LDROutput[pixelId] = saturate(LinearToSRGB_Formal(HDRInput[pixelId]));
 }
