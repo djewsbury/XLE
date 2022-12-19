@@ -59,6 +59,7 @@ namespace ToolsRig
 			using SetupFunction = std::function<void(RenderCore::LightingEngine::LightingTechniqueSequence&)>;
 			using DynamicSequenceFunction = std::function<void(RenderCore::LightingEngine::LightingTechniqueIterator&, RenderCore::LightingEngine::LightingTechniqueSequence&)>;
 			std::vector<SetupFunction> _setupFunctions;
+			std::vector<SetupFunction> _shutdownFunctions;
 			std::vector<DynamicSequenceFunction> _dynamicSequenceFunctions;
 			RenderCore::Techniques::FragmentStitchingContext _stitchingContext;
 			std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;

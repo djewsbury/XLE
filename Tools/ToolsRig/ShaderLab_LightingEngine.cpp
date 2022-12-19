@@ -93,6 +93,14 @@ namespace ToolsRig
 								opStep->ConfigureParsingContext(*iterator._parsingContext);
 							});
 					});
+
+				context._shutdownFunctions.emplace_back(
+					[opStep](auto& sequence) {
+						sequence.CreateStep_CallFunction(
+							[opStep](auto& iterator) {
+								opStep->ReleaseParsingContext(*iterator._parsingContext);
+							});
+					});
 			});
 	}
 

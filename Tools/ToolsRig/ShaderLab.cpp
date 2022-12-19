@@ -174,6 +174,7 @@ namespace ToolsRig
 							iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
 						});
 					for (auto& fn:constructorContext._setupFunctions) fn(sequence);
+					for (auto fn=constructorContext._shutdownFunctions.rbegin(); fn!=constructorContext._shutdownFunctions.rend(); ++fn) (*fn)(sequence);
 
 					if (visualizeStep) {
 						visualizeStep->StallWhilePending();
