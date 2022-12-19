@@ -45,6 +45,7 @@ ShadowGen_GSAmplify_Shared=~
 		SHADOW_ENABLE_NEAR_CASCADE
 	GeometryShader=xleres/TechniqueLibrary/Standard/ShadowGen/shadowgen.geo.hlsl:main
 	Preconfiguration=xleres/TechniqueLibrary/Standard/ShadowGen/PreconfigurationShadowGen.hlsl
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 
 VSShadowGen_GSAmplify_NoPatches=~
 	Inherit=~; SilhouetteDepthOnly; ShadowGen_GSAmplify_Shared
@@ -76,16 +77,20 @@ IllumShared=~
 
 Forward=~
 	Inherit=~; IllumShared; Shared.tech:Forward
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsForwardPlus
 
 Deferred=~
 	Inherit=~; IllumShared; Shared.tech:Deferred
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 
 DepthOnly=~
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 
 RayTest=~
 	Selectors=~
 		VSOUT_HAS_WORLD_POSITION=1
 	GeometryShader=xleres/TechniqueLibrary/Standard/raytest.geo.hlsl:triangles
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -182,13 +187,16 @@ ProbePrepare_NoPatches=~
 	Inherit=~; Forward_NoPatches
 	Selectors=~
 		PROBE_PREPARE=1
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsProbePrepare
 
 ProbePrepare_PerPixel=~
 	Inherit=~; Forward_PerPixel
 	Selectors=~
 		PROBE_PREPARE=1
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsProbePrepare
 
 ProbePrepare_PerPixelAndEarlyRejection=~
 	Inherit=~; Forward_PerPixelAndEarlyRejection
 	Selectors=~
 		PROBE_PREPARE=1
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsProbePrepare

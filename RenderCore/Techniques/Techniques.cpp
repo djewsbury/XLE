@@ -98,6 +98,8 @@ namespace RenderCore { namespace Techniques
 				result._geometryShaderName = RequireStringValue(formatter).AsString();
 			} else if (XlEqString(name, "Preconfiguration")) {
 				result._preconfigurationFileName = RequireStringValue(formatter).AsString();
+			} else if (XlEqString(name, "PipelineLayout")) {
+				result._pipelineLayoutName = RequireStringValue(formatter).AsString();
 			} else {
 				Throw(FormatException("Unknown mapped item while reading technique", formatter.GetLocation()));
 			}
@@ -157,6 +159,7 @@ namespace RenderCore { namespace Techniques
 		if (!source._pixelShaderName.empty()) _pixelShaderName = source._pixelShaderName;
 		if (!source._geometryShaderName.empty()) _geometryShaderName = source._geometryShaderName;
 		if (!source._preconfigurationFileName.empty()) _preconfigurationFileName = source._preconfigurationFileName;
+		if (!source._pipelineLayoutName.empty()) _pipelineLayoutName = source._pipelineLayoutName;
 		_selectorFiltering.MergeIn(source._selectorFiltering);
 		GenerateHash();
 	}
@@ -172,6 +175,8 @@ namespace RenderCore { namespace Techniques
 			_shaderNamesHash = Hash64(_geometryShaderName, _shaderNamesHash);
 		if (!_preconfigurationFileName.empty())
 			_shaderNamesHash = Hash64(_preconfigurationFileName, _shaderNamesHash);
+		if (!_pipelineLayoutName.empty())
+			_shaderNamesHash = Hash64(_pipelineLayoutName, _shaderNamesHash);
 	}
 
 	template<typename Char>
@@ -196,6 +201,7 @@ namespace RenderCore { namespace Techniques
 		ReplaceInString(entry._pixelShaderName, selfRef, filename);
 		ReplaceInString(entry._geometryShaderName, selfRef, filename);
 		ReplaceInString(entry._preconfigurationFileName, selfRef, filename);
+		ReplaceInString(entry._pipelineLayoutName, selfRef, filename);
 		entry.GenerateHash();
 	}
 

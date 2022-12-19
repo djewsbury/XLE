@@ -41,6 +41,7 @@ namespace RenderCore { namespace Techniques
         ::Assets::rstring   _pixelShaderName;
         ::Assets::rstring   _geometryShaderName;
         ::Assets::rstring   _preconfigurationFileName;
+        ::Assets::rstring   _pipelineLayoutName;
 		uint64_t			_shaderNamesHash = 0;		// hash of the shader names, but not _baseSelectors
 
 		void GenerateHash();

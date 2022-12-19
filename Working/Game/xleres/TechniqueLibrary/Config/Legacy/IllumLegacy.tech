@@ -42,6 +42,7 @@ DepthOnly=~
 		STOCHASTIC_TRANS_OPACITY
 	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
 	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:depthonly
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 
 ShadowGen=~
 	Inherit=~; ../Illum.tech:Silhouette
@@ -54,6 +55,7 @@ ShadowGen=~
 	VertexShader=xleres/shadowgen/depthonly.vertex.hlsl:main
 	GeometryShader=xleres/shadowgen/depthonly.geo.hlsl:main
 	PixelShader=xleres/shadowgen/depthonly.pixel.hlsl:main
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 
 RayTest=~
 	Inherit=~; ../Illum.tech:Silhouette
@@ -62,6 +64,7 @@ RayTest=~
 	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
 	GeometryShader=xleres/TechniqueLibrary/Standard/raytest.geo.hlsl:triangles
 	PixelShader=null
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 
 WriteTriangleIndex=~
 	Inherit=~; ../Illum.tech:Silhouette
@@ -71,6 +74,7 @@ WriteTriangleIndex=~
 	VertexShader=xleres/shadowgen/rtwritetiles.hlsl:vs_writetris
 	GeometryShader=xleres/shadowgen/rtwritetiles.hlsl:gs_writetris
 	PixelShader=null
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -81,6 +85,7 @@ VisNormals=~
 	GeometryShader=xleres/TechniqueLibrary/ToolsRig/Vis/geowires.geo.hlsl:NormalsAndTangents
 	PixelShader=xleres/TechniqueLibrary/Basic/basic.pixel.hlsl:PC
 	Preconfiguration=xleres/TechniqueLibrary/Config/Preconfiguration.hlsl
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 
 VisWireframe=~
 	Selectors=~
@@ -88,6 +93,7 @@ VisWireframe=~
 	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
 	GeometryShader=xleres/TechniqueLibrary/ToolsRig/Vis/solidwireframe.geo.hlsl:main
 	PixelShader=xleres/TechniqueLibrary/ToolsRig/Vis/solidwireframe.pixel.hlsl:main
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

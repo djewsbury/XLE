@@ -15,6 +15,7 @@
 #include "../../Assets/Continuation.h"
 #include "../../Utility/Conversion.h"
 #include "../../Utility/StringFormat.h"
+#include "../../Utility/StreamUtils.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../xleres/FileList.h"
 #include <sstream>
@@ -115,17 +116,63 @@ namespace RenderCore { namespace Techniques
 	{
 		const char* techFile = ILLUM_LEGACY_TECH;
 		auto techniqueFuture = ::Assets::MakeAssetPtr<Technique>(techFile);
-		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsMain");
-		::Assets::WhenAll(techniqueFuture, pipelineLayoutFuture).ThenConstructToPromise(
+		::Assets::WhenAll(techniqueFuture).CheckImmediately().ThenConstructToPromise(
 			std::move(promise),
-			[techniqueIndex, blend, rasterization, depthStencil](auto technique, auto pipelineLayout) {
-				return std::make_shared<TechniqueDelegate_Legacy>(std::move(technique), std::move(pipelineLayout), techniqueIndex, blend, rasterization, depthStencil);
+			[techniqueIndex, blend, rasterization, depthStencil](auto&& promise, auto technique) {
+				TRY {
+					auto pipelineLayoutName = technique->GetEntry(techniqueIndex)._pipelineLayoutName;
+					if (pipelineLayoutName.empty()) Throw(std::runtime_error("Missing pipeline layout name in legacy technique delegate"));
+					auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(pipelineLayoutName);
+					::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
+						std::move(promise),
+						[technique, techniqueIndex, blend, rasterization, depthStencil](auto pipelineLayout) {
+							return std::make_shared<TechniqueDelegate_Legacy>(std::move(technique), std::move(pipelineLayout), techniqueIndex, blend, rasterization, depthStencil);
+						});
+				} CATCH(...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
 			});
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		//		T E C H N I Q U E   D E L E G A T E
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	static std::string SetupTechniqueFileHelper(TechniqueSetFile& techniqueSet, IteratorRange<const std::pair<const char*, TechniqueEntry*>*> entriesToConfigure)
+	{
+		std::string pipelineLayout;
+		char buffer[256];
+		for (auto e:entriesToConfigure) {
+			auto* entry = techniqueSet.FindEntry(Hash64(e.first));
+			if (!entry)
+				Throw(std::runtime_error(StringMeldInPlace(buffer) << "Could not construct technique delegate because required configurations (" << e.first << ") was not found"));
+			*e.second = *entry;
+			
+			if (!e.second->_pipelineLayoutName.empty()) {
+				if (pipelineLayout.empty()) {
+					pipelineLayout = e.second->_pipelineLayoutName;
+				} else if (pipelineLayout != e.second->_pipelineLayoutName) {
+					auto meld = StringMeldInPlace(buffer);
+					meld << "Pipeline layout does not agree in technique delegate. The entries (";
+					CommaSeparatedList list{meld.AsOStream()};
+					for (auto e2:entriesToConfigure) list << e2.first;
+					meld << ") must all agree in pipeline layout, so they can be used together in the same sequencer config.";
+					Throw(std::runtime_error(meld.AsString()));
+				}
+			}
+		}
+
+		if (pipelineLayout.empty()) {
+			auto meld = StringMeldInPlace(buffer);
+			meld << "None of the technique entries in the following list have a pipeline layout (";
+			CommaSeparatedList list{meld.AsOStream()};
+			for (auto e2:entriesToConfigure) list << e2.first;
+			meld << "). At least one must have a pipeline layout, and every one that does must agree with the others.";
+			Throw(std::runtime_error(meld.AsString()));
+		}
+
+		return pipelineLayout;
+	}
 
 	static const auto s_perPixel = Hash64("PerPixel");
 	static const auto s_perPixelCustomLighting = Hash64("PerPixelCustomLighting");
@@ -163,31 +210,21 @@ namespace RenderCore { namespace Techniques
 			TechniqueEntry _perPixelAndEarlyRejection;
 			TechniqueEntry _vsNoPatchesSrc;
 			TechniqueEntry _vsDeformVertexSrc;
+			std::string _pipelineLayout;
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
 
 			TechniqueFileHelper(std::shared_ptr<TechniqueSetFile> techniqueSet)
 			: _techniqueSet(std::move(techniqueSet))
 			{
-				const auto noPatchesHash = Hash64("Deferred_NoPatches");
-				const auto perPixelHash = Hash64("Deferred_PerPixel");
-				const auto perPixelAndEarlyRejectionHash = Hash64("Deferred_PerPixelAndEarlyRejection");
-				const auto vsNoPatchesHash = Hash64("VS_NoPatches");
-				const auto vsDeformVertexHash = Hash64("VS_DeformVertex");
-				auto* noPatchesSrc = _techniqueSet->FindEntry(noPatchesHash);
-				auto* perPixelSrc = _techniqueSet->FindEntry(perPixelHash);
-				auto* perPixelAndEarlyRejectionSrc = _techniqueSet->FindEntry(perPixelAndEarlyRejectionHash);
-				auto* vsNoPatchesSrc = _techniqueSet->FindEntry(vsNoPatchesHash);
-				auto* vsDeformVertexSrc = _techniqueSet->FindEntry(vsDeformVertexHash);
-				if (!noPatchesSrc || !perPixelSrc || !perPixelAndEarlyRejectionSrc || !vsNoPatchesSrc || !vsDeformVertexSrc) {
-					Throw(std::runtime_error("Could not construct technique delegate because required configurations were not found"));
-				}
-
-				_noPatches = *noPatchesSrc;
-				_perPixel = *perPixelSrc;
-				_perPixelAndEarlyRejection = *perPixelAndEarlyRejectionSrc;
-				_vsNoPatchesSrc = *vsNoPatchesSrc;
-				_vsDeformVertexSrc = *vsDeformVertexSrc;
+				std::pair<const char*, TechniqueEntry*> entriesToCheck[] {
+					{"Deferred_NoPatches", &_noPatches},
+					{"Deferred_PerPixel", &_perPixel},
+					{"Deferred_PerPixelAndEarlyRejection", &_perPixelAndEarlyRejection},
+					{"VS_NoPatches", &_vsNoPatchesSrc},
+					{"VS_DeformVertex", &_vsDeformVertexSrc},
+				};
+				_pipelineLayout = SetupTechniqueFileHelper(*_techniqueSet, entriesToCheck);
 			}
 
 			TechniqueFileHelper() = default;
@@ -244,11 +281,32 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() override { return _pipelineLayout; }
 		::Assets::DependencyValidation GetDependencyValidation() override { return _depVal; }
 
-		TechniqueDelegate_Deferred(std::shared_ptr<TechniqueSetFile> techniqueSet, std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout)
-		: _techniqueFileHelper(std::move(techniqueSet)), _pipelineLayout(std::move(pipelineLayout))
+		TechniqueDelegate_Deferred(TechniqueFileHelper&& helper, std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout)
+		: _techniqueFileHelper(std::move(helper)), _pipelineLayout(std::move(pipelineLayout))
 		{
 			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
+		}
+
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
+			const TechniqueSetFileFuture& techniqueSet)
+		{
+			::Assets::WhenAll(techniqueSet).CheckImmediately().ThenConstructToPromise(
+				std::move(promise),
+				[](auto&& promise, auto techniqueSetFile) {
+					TRY {
+						TechniqueFileHelper helper{techniqueSetFile};
+						auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
+						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
+							std::move(promise),
+							[helper=std::move(helper)](auto pipelineLayout) mutable {
+								return std::make_shared<TechniqueDelegate_Deferred>(std::move(helper), std::move(pipelineLayout));
+							});
+					} CATCH (...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
 		}
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
@@ -260,10 +318,7 @@ namespace RenderCore { namespace Techniques
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet)
 	{
-		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsMain");
-		::Assets::WhenAll(techniqueSet, pipelineLayoutFuture).ThenConstructToPromise(
-			std::move(promise),
-			[](auto techniqueSet, auto pipelineLayout) { return std::make_shared<TechniqueDelegate_Deferred>(std::move(techniqueSet), std::move(pipelineLayout)); });
+		TechniqueDelegate_Deferred::ConstructToPromise(std::move(promise), techniqueSet);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -281,33 +336,22 @@ namespace RenderCore { namespace Techniques
 			TechniqueEntry _perPixelCustomLighting;
 			TechniqueEntry _vsNoPatchesSrc;
 			TechniqueEntry _vsDeformVertexSrc;
+			std::string _pipelineLayout;
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
 
 			TechniqueFileHelper(std::shared_ptr<TechniqueSetFile> techniqueSet)
 			: _techniqueSet(std::move(techniqueSet))
 			{
-				const auto noPatchesHash = Hash64("Forward_NoPatches");
-				const auto perPixelHash = Hash64("Forward_PerPixel");
-				const auto perPixelAndEarlyRejectionHash = Hash64("Forward_PerPixelAndEarlyRejection");
-				const auto perPixelCustomLightingHash = Hash64("Forward_PerPixelCustomLighting");
-				const auto vsNoPatchesHash = Hash64("VS_NoPatches");
-				const auto vsDeformVertexHash = Hash64("VS_DeformVertex");
-				auto* noPatchesSrc = _techniqueSet->FindEntry(noPatchesHash);
-				auto* perPixelSrc = _techniqueSet->FindEntry(perPixelHash);
-				auto* perPixelAndEarlyRejectionSrc = _techniqueSet->FindEntry(perPixelAndEarlyRejectionHash);
-				auto* perPixelCustomLightingSrc = _techniqueSet->FindEntry(perPixelCustomLightingHash);
-				auto* vsNoPatchesSrc = _techniqueSet->FindEntry(vsNoPatchesHash);
-				auto* vsDeformVertexSrc = _techniqueSet->FindEntry(vsDeformVertexHash);
-				if (!noPatchesSrc || !perPixelSrc || !perPixelAndEarlyRejectionSrc || !vsNoPatchesSrc || !vsDeformVertexSrc || !perPixelCustomLightingSrc) {
-					Throw(std::runtime_error("Could not construct technique delegate because required configurations were not found"));
-				}
-				_noPatches = *noPatchesSrc;
-				_perPixel = *perPixelSrc;
-				_perPixelAndEarlyRejection = *perPixelAndEarlyRejectionSrc;
-				_perPixelCustomLighting = *perPixelCustomLightingSrc;
-				_vsNoPatchesSrc = *vsNoPatchesSrc;
-				_vsDeformVertexSrc = *vsDeformVertexSrc;
+				std::pair<const char*, TechniqueEntry*> entriesToCheck[] {
+					{"Forward_NoPatches", &_noPatches},
+					{"Forward_PerPixel", &_perPixel},
+					{"Forward_PerPixelAndEarlyRejection", &_perPixelAndEarlyRejection},
+					{"Forward_PerPixelCustomLighting", &_perPixelCustomLighting},
+					{"VS_NoPatches", &_vsNoPatchesSrc},
+					{"VS_DeformVertex", &_vsDeformVertexSrc},
+				};
+				_pipelineLayout = SetupTechniqueFileHelper(*_techniqueSet, entriesToCheck);
 			}
 			TechniqueFileHelper() = default;
 		};
@@ -368,10 +412,10 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation GetDependencyValidation() override { return _depVal; }
 
 		TechniqueDelegate_Forward(
-			std::shared_ptr<TechniqueSetFile> techniqueSet,
+			TechniqueFileHelper&& helper,
 			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
 			TechniqueDelegateForwardFlags::BitField flags)
-		: _techniqueFileHelper(std::move(techniqueSet)), _pipelineLayout(std::move(pipelineLayout))
+		: _techniqueFileHelper(std::move(helper)), _pipelineLayout(std::move(pipelineLayout))
 		{
 			if (flags & TechniqueDelegateForwardFlags::DisableDepthWrite) {
 				_depthStencil = CommonResourceBox::s_dsReadOnly;
@@ -382,6 +426,29 @@ namespace RenderCore { namespace Techniques
 			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
+
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
+			const TechniqueSetFileFuture& techniqueSet,
+			TechniqueDelegateForwardFlags::BitField flags)
+		{
+			::Assets::WhenAll(techniqueSet).CheckImmediately().ThenConstructToPromise(
+				std::move(promise),
+				[flags](auto&& promise, auto techniqueSetFile) {
+					TRY {
+						TechniqueFileHelper helper{techniqueSetFile};
+						auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
+						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
+							std::move(promise),
+							[helper=std::move(helper), flags](auto pipelineLayout) mutable {
+								return std::make_shared<TechniqueDelegate_Forward>(std::move(helper), std::move(pipelineLayout), flags);
+							});
+					} CATCH (...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+		}
+
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
 		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
@@ -394,12 +461,7 @@ namespace RenderCore { namespace Techniques
 		const TechniqueSetFileFuture& techniqueSet,
 		TechniqueDelegateForwardFlags::BitField flags)
 	{
-		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsForwardPlus");
-		::Assets::WhenAll(techniqueSet, pipelineLayoutFuture).ThenConstructToPromise(
-			std::move(promise),
-			[flags](auto techniqueSet, auto pipelineLayout) {
-				return std::make_shared<TechniqueDelegate_Forward>(std::move(techniqueSet), std::move(pipelineLayout), flags);
-			});
+		TechniqueDelegate_Forward::ConstructToPromise(std::move(promise), techniqueSet, flags);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -415,37 +477,31 @@ namespace RenderCore { namespace Techniques
 			TechniqueEntry _earlyRejectionSrc;
 			TechniqueEntry _vsNoPatchesSrc;
 			TechniqueEntry _vsDeformVertexSrc;
+			std::string _pipelineLayout;
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
 
 			TechniqueFileHelper(std::shared_ptr<TechniqueSetFile> techniqueSet, std::optional<ShadowGenType> shadowGen)
 			: _techniqueSet(std::move(techniqueSet))
 			{
-				const auto noPatchesHash = Hash64("DepthOnly_NoPatches");
-				const auto earlyRejectionHash = Hash64("DepthOnly_EarlyRejection");
-				auto vsNoPatchesHash = Hash64("VSDepthOnly_NoPatches");
-				auto vsDeformVertexHash = Hash64("VSDepthOnly_DeformVertex");
+				std::vector<std::pair<const char*, TechniqueEntry*>> entriesToCheck;
+				entriesToCheck.reserve(4);
+				entriesToCheck.emplace_back("DepthOnly_NoPatches", &_noPatches);
+				entriesToCheck.emplace_back("DepthOnly_EarlyRejection", &_earlyRejectionSrc);
 				if (shadowGen) {
 					if (*shadowGen == ShadowGenType::GSAmplify) {
-						vsNoPatchesHash = Hash64("VSShadowGen_GSAmplify_NoPatches");
-						vsDeformVertexHash = Hash64("VSShadowGen_GSAmplify_DeformVertex");
+						entriesToCheck.emplace_back("VSShadowGen_GSAmplify_NoPatches", &_vsNoPatchesSrc);
+						entriesToCheck.emplace_back("VSShadowGen_GSAmplify_DeformVertex", &_vsDeformVertexSrc);
 					} else {
-						vsNoPatchesHash = Hash64("VSShadowProbe_NoPatches");
-						vsDeformVertexHash = Hash64("VSShadowProbe_DeformVertex");
+						assert(*shadowGen == ShadowGenType::VertexIdViewInstancing);
+						entriesToCheck.emplace_back("VSShadowProbe_NoPatches", &_vsNoPatchesSrc);
+						entriesToCheck.emplace_back("VSShadowProbe_DeformVertex", &_vsDeformVertexSrc);
 					}
+				} else {
+					entriesToCheck.emplace_back("VSDepthOnly_NoPatches", &_vsNoPatchesSrc);
+					entriesToCheck.emplace_back("VSDepthOnly_DeformVertex", &_vsDeformVertexSrc);
 				}
-				auto* noPatchesSrc = _techniqueSet->FindEntry(noPatchesHash);
-				auto* earlyRejectionSrc = _techniqueSet->FindEntry(earlyRejectionHash);
-				auto* vsNoPatchesSrc = _techniqueSet->FindEntry(vsNoPatchesHash);
-				auto* vsDeformVertexSrc = _techniqueSet->FindEntry(vsDeformVertexHash);
-				if (!noPatchesSrc || !earlyRejectionSrc || !vsNoPatchesSrc || !vsDeformVertexSrc) {
-					Throw(std::runtime_error("Could not construct technique delegate because required configurations were not found"));
-				}
-
-				_noPatches = *noPatchesSrc;
-				_earlyRejectionSrc = *earlyRejectionSrc;
-				_vsNoPatchesSrc = *vsNoPatchesSrc;
-				_vsDeformVertexSrc = *vsDeformVertexSrc;
+				_pipelineLayout = SetupTechniqueFileHelper(*_techniqueSet, entriesToCheck);
 			}
 			TechniqueFileHelper() = default;
 		};
@@ -493,13 +549,13 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation GetDependencyValidation() override { return _depVal; }
 
 		TechniqueDelegate_DepthOnly(
-			std::shared_ptr<TechniqueSetFile> techniqueSet,
+			TechniqueFileHelper&& helper,
 			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
 			const RSDepthBias& singleSidedBias,
 			const RSDepthBias& doubleSidedBias,
 			CullMode cullMode, FaceWinding faceWinding,
 			std::optional<ShadowGenType> shadowGen)
-		: _techniqueFileHelper(std::move(techniqueSet), shadowGen), _pipelineLayout(std::move(pipelineLayout))
+		: _techniqueFileHelper(std::move(helper)), _pipelineLayout(std::move(pipelineLayout))
 		{
 			_rs[0x0] = RasterizationDesc{cullMode,        faceWinding, (float)singleSidedBias._depthBias, singleSidedBias._depthBiasClamp, singleSidedBias._slopeScaledBias};
             _rs[0x1] = RasterizationDesc{CullMode::None,  faceWinding, (float)doubleSidedBias._depthBias, doubleSidedBias._depthBiasClamp, doubleSidedBias._slopeScaledBias};			
@@ -507,6 +563,32 @@ namespace RenderCore { namespace Techniques
 			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
+
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
+			const TechniqueSetFileFuture& techniqueSet,
+			const RSDepthBias& singleSidedBias,
+			const RSDepthBias& doubleSidedBias,
+			CullMode cullMode, FaceWinding faceWinding,
+			std::optional<ShadowGenType> shadowGen)
+		{
+			::Assets::WhenAll(techniqueSet).CheckImmediately().ThenConstructToPromise(
+				std::move(promise),
+				[singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGen](auto&& promise, auto techniqueSetFile) {
+					TRY {
+						TechniqueFileHelper helper{techniqueSetFile, shadowGen};
+						auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
+						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
+							std::move(promise),
+							[helper=std::move(helper), singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGen](auto pipelineLayout) mutable {
+								return std::make_shared<TechniqueDelegate_DepthOnly>(std::move(helper), std::move(pipelineLayout), singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGen);
+							});
+					} CATCH (...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+		}
+
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
 		RasterizationDesc _rs[2];
@@ -521,12 +603,7 @@ namespace RenderCore { namespace Techniques
         const RSDepthBias& doubleSidedBias,
         CullMode cullMode, FaceWinding faceWinding)
 	{
-		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsMain");
-		::Assets::WhenAll(techniqueSet, pipelineLayoutFuture).ThenConstructToPromise(
-			std::move(promise),
-			[singleSidedBias, doubleSidedBias, cullMode, faceWinding](auto techniqueSet, auto pipelineLayout) {
-				return std::make_shared<TechniqueDelegate_DepthOnly>(std::move(techniqueSet), std::move(pipelineLayout), singleSidedBias, doubleSidedBias, cullMode, faceWinding, std::optional<ShadowGenType>{});
-			});
+		TechniqueDelegate_DepthOnly::ConstructToPromise(std::move(promise), techniqueSet, singleSidedBias, doubleSidedBias, cullMode, faceWinding, std::optional<ShadowGenType>{});
 	}
 
 	void CreateTechniqueDelegate_ShadowGen(
@@ -537,12 +614,7 @@ namespace RenderCore { namespace Techniques
         const RSDepthBias& doubleSidedBias,
         CullMode cullMode, FaceWinding faceWinding)
 	{
-		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsMain");
-		::Assets::WhenAll(techniqueSet, pipelineLayoutFuture).ThenConstructToPromise(
-			std::move(promise),
-			[singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGenType](auto techniqueSet, auto pipelineLayout) {
-				return std::make_shared<TechniqueDelegate_DepthOnly>(std::move(techniqueSet), std::move(pipelineLayout), singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGenType);
-			});
+		TechniqueDelegate_DepthOnly::ConstructToPromise(std::move(promise), techniqueSet, singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGenType);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -559,38 +631,27 @@ namespace RenderCore { namespace Techniques
 			TechniqueEntry _psPerPixelAndEarlyRejection;
 			TechniqueEntry _vsNoPatchesSrc;
 			TechniqueEntry _vsDeformVertexSrc;
+			std::string _pipelineLayout;
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
 
 			TechniqueFileHelper(const std::shared_ptr<TechniqueSetFile>& techniqueSet, PreDepthType preDepthType)
 			: _techniqueSet(techniqueSet)
 			{
-				uint64_t psNoPatchesHash, psPerPixelHash, perPixelAndEarlyRejectionHash;
+				std::vector<std::pair<const char*, TechniqueEntry*>> entriesToCheck;
+				entriesToCheck.reserve(5);
+				entriesToCheck.emplace_back("VSDepthOnly_NoPatches", &_vsNoPatchesSrc);
+				entriesToCheck.emplace_back("VSDepthOnly_DeformVertex", &_vsDeformVertexSrc);
 				if (preDepthType != PreDepthType::DepthOnly) {
-					psNoPatchesHash = Hash64("DepthPlus_NoPatches");
-					psPerPixelHash = Hash64("DepthPlus_PerPixel");
-					perPixelAndEarlyRejectionHash = Hash64("DepthPlus_PerPixelAndEarlyRejection");
+					entriesToCheck.emplace_back("DepthPlus_NoPatches", &_psNoPatchesSrc);
+					entriesToCheck.emplace_back("DepthPlus_PerPixel", &_psPerPixelSrc);
+					entriesToCheck.emplace_back("DepthPlus_PerPixelAndEarlyRejection", &_psPerPixelAndEarlyRejection);
 				} else {
-					psNoPatchesHash = Hash64("DepthOnly_NoPatches");
-					psPerPixelHash = Hash64("DepthOnly_NoPatches");
-					perPixelAndEarlyRejectionHash = Hash64("DepthOnly_EarlyRejection");
+					entriesToCheck.emplace_back("DepthOnly_NoPatches", &_psNoPatchesSrc);
+					entriesToCheck.emplace_back("DepthOnly_NoPatches", &_psPerPixelSrc);
+					entriesToCheck.emplace_back("DepthOnly_EarlyRejection", &_psPerPixelAndEarlyRejection);
 				}
-				auto vsNoPatchesHash = Hash64("VSDepthOnly_NoPatches");
-				auto vsDeformVertexHash = Hash64("VSDepthOnly_DeformVertex");
-				auto* psNoPatchesSrc = _techniqueSet->FindEntry(psNoPatchesHash);
-				auto* psPerPixelSrc = _techniqueSet->FindEntry(psPerPixelHash);
-				auto* perPixelAndEarlyRejectionSrc = _techniqueSet->FindEntry(perPixelAndEarlyRejectionHash);
-				auto* vsNoPatchesSrc = _techniqueSet->FindEntry(vsNoPatchesHash);
-				auto* vsDeformVertexSrc = _techniqueSet->FindEntry(vsDeformVertexHash);
-				if (!psNoPatchesSrc || !psPerPixelSrc || !vsNoPatchesSrc || !vsDeformVertexSrc) {
-					Throw(std::runtime_error("Could not construct technique delegate because required configurations were not found"));
-				}
-
-				_psNoPatchesSrc = *psNoPatchesSrc;
-				_psPerPixelSrc = *psPerPixelSrc;
-				_psPerPixelAndEarlyRejection = *perPixelAndEarlyRejectionSrc;
-				_vsNoPatchesSrc = *vsNoPatchesSrc;
-				_vsDeformVertexSrc = *vsDeformVertexSrc;
+				_pipelineLayout = SetupTechniqueFileHelper(*_techniqueSet, entriesToCheck);
 			}
 			TechniqueFileHelper() = default;
 		};
@@ -664,10 +725,10 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation GetDependencyValidation() override { return _depVal; }
 
 		TechniqueDelegate_PreDepth(
-			std::shared_ptr<TechniqueSetFile> techniqueSet,
+			TechniqueFileHelper&& helper,
 			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
 			PreDepthType preDepthType)
-		: _techniqueFileHelper(std::move(techniqueSet), preDepthType), _pipelineLayout(std::move(pipelineLayout)), _preDepthType(preDepthType)
+		: _techniqueFileHelper(std::move(helper)), _pipelineLayout(std::move(pipelineLayout)), _preDepthType(preDepthType)
 		{
 			_rs[0x0] = CommonResourceBox::s_rsDefault;
 			_rs[0x1] = CommonResourceBox::s_rsCullDisable;
@@ -675,6 +736,29 @@ namespace RenderCore { namespace Techniques
 			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
+
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
+			const TechniqueSetFileFuture& techniqueSet,
+			PreDepthType preDepthType)
+		{
+			::Assets::WhenAll(techniqueSet).CheckImmediately().ThenConstructToPromise(
+				std::move(promise),
+				[preDepthType](auto&& promise, auto techniqueSetFile) {
+					TRY {
+						TechniqueFileHelper helper{techniqueSetFile, preDepthType};
+						auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
+						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
+							std::move(promise),
+							[helper=std::move(helper), preDepthType](auto pipelineLayout) mutable {
+								return std::make_shared<TechniqueDelegate_PreDepth>(std::move(helper), std::move(pipelineLayout), preDepthType);
+							});
+					} CATCH (...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+		}
+
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
 		RasterizationDesc _rs[2];
@@ -688,12 +772,7 @@ namespace RenderCore { namespace Techniques
 		const TechniqueSetFileFuture& techniqueSet,
 		PreDepthType preDepthType)
 	{
-		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsMain");
-		::Assets::WhenAll(techniqueSet, pipelineLayoutFuture).ThenConstructToPromise(
-			std::move(promise),
-			[preDepthType](auto techniqueSet, auto pipelineLayout) {
-				return std::make_shared<TechniqueDelegate_PreDepth>(std::move(techniqueSet), std::move(pipelineLayout), preDepthType);
-			});
+		TechniqueDelegate_PreDepth::ConstructToPromise(std::move(promise), techniqueSet, preDepthType);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -710,40 +789,29 @@ namespace RenderCore { namespace Techniques
 			TechniqueEntry _psPerPixelAndEarlyRejection;
 			TechniqueEntry _vsNoPatchesSrc;
 			TechniqueEntry _vsDeformVertexSrc;
+			std::string _pipelineLayout;
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
 
 			TechniqueFileHelper(std::shared_ptr<TechniqueSetFile> techniqueSet, UtilityDelegateType utilityType)
 			: _techniqueSet(std::move(techniqueSet))
 			{
-				uint64_t psNoPatchesHash, psPerPixelHash, perPixelAndEarlyRejectionHash;
+				std::vector<std::pair<const char*, TechniqueEntry*>> entriesToCheck;
+				entriesToCheck.reserve(5);
+				entriesToCheck.emplace_back("VS_NoPatches", &_vsNoPatchesSrc);
+				entriesToCheck.emplace_back("VS_DeformVertex", &_vsDeformVertexSrc);
 				if (utilityType == UtilityDelegateType::FlatColor) {
-					psNoPatchesHash = Hash64("FlatColor_NoPatches");
-					psPerPixelHash = Hash64("FlatColor_NoPatches");
-					perPixelAndEarlyRejectionHash = Hash64("FlatColor_PerPixelAndEarlyRejection");
+					entriesToCheck.emplace_back("FlatColor_NoPatches", &_psNoPatchesSrc);
+					entriesToCheck.emplace_back("FlatColor_NoPatches", &_psPerPixelSrc);
+					entriesToCheck.emplace_back("FlatColor_PerPixelAndEarlyRejection", &_psPerPixelAndEarlyRejection);
 				} else if (utilityType == UtilityDelegateType::CopyDiffuseAlbedo) {
-					psNoPatchesHash = Hash64("CopyDiffuseAlbedo_NoPatches");
-					psPerPixelHash = Hash64("CopyDiffuseAlbedo_PerPixel");
-					perPixelAndEarlyRejectionHash = Hash64("CopyDiffuseAlbedo_PerPixelAndEarlyRejection");
+					entriesToCheck.emplace_back("CopyDiffuseAlbedo_NoPatches", &_psNoPatchesSrc);
+					entriesToCheck.emplace_back("CopyDiffuseAlbedo_PerPixel", &_psPerPixelSrc);
+					entriesToCheck.emplace_back("CopyDiffuseAlbedo_PerPixelAndEarlyRejection", &_psPerPixelAndEarlyRejection);
 				} else {
 					assert(0);
 				}
-				auto vsNoPatchesHash = Hash64("VS_NoPatches");
-				auto vsDeformVertexHash = Hash64("VS_DeformVertex");
-				auto* psNoPatchesSrc = _techniqueSet->FindEntry(psNoPatchesHash);
-				auto* psPerPixelSrc = _techniqueSet->FindEntry(psPerPixelHash);
-				auto* perPixelAndEarlyRejectionSrc = _techniqueSet->FindEntry(perPixelAndEarlyRejectionHash);
-				auto* vsNoPatchesSrc = _techniqueSet->FindEntry(vsNoPatchesHash);
-				auto* vsDeformVertexSrc = _techniqueSet->FindEntry(vsDeformVertexHash);
-				if (!psNoPatchesSrc || !psPerPixelSrc || !vsNoPatchesSrc || !vsDeformVertexSrc) {
-					Throw(std::runtime_error("Could not construct technique delegate because required configurations were not found"));
-				}
-
-				_psNoPatchesSrc = *psNoPatchesSrc;
-				_psPerPixelSrc = *psPerPixelSrc;
-				_psPerPixelAndEarlyRejection = *perPixelAndEarlyRejectionSrc;
-				_vsNoPatchesSrc = *vsNoPatchesSrc;
-				_vsDeformVertexSrc = *vsDeformVertexSrc;
+				_pipelineLayout = SetupTechniqueFileHelper(*_techniqueSet, entriesToCheck);
 			}
 			TechniqueFileHelper() = default;
 		};
@@ -798,10 +866,10 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation GetDependencyValidation() override { return _depVal; }
 
 		TechniqueDelegate_Utility(
-			std::shared_ptr<TechniqueSetFile> techniqueSet,
+			TechniqueFileHelper&& helper,
 			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
 			UtilityDelegateType utilityType)
-		: _techniqueFileHelper{std::move(techniqueSet), utilityType}, _pipelineLayout(std::move(pipelineLayout))
+		: _techniqueFileHelper{std::move(helper)}, _pipelineLayout(std::move(pipelineLayout))
 		, _utilityType(utilityType)
 		{
 			_rs[0x0] = CommonResourceBox::s_rsDefault;
@@ -810,6 +878,29 @@ namespace RenderCore { namespace Techniques
 			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
+
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
+			const TechniqueSetFileFuture& techniqueSet,
+			UtilityDelegateType utilityType)
+		{
+			::Assets::WhenAll(techniqueSet).CheckImmediately().ThenConstructToPromise(
+				std::move(promise),
+				[utilityType](auto&& promise, auto techniqueSetFile) {
+					TRY {
+						TechniqueFileHelper helper{techniqueSetFile, utilityType};
+						auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
+						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
+							std::move(promise),
+							[helper=std::move(helper), utilityType](auto pipelineLayout) mutable {
+								return std::make_shared<TechniqueDelegate_Utility>(std::move(helper), std::move(pipelineLayout), utilityType);
+							});
+					} CATCH (...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+		}
+
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
 		RasterizationDesc _rs[2];
@@ -823,12 +914,7 @@ namespace RenderCore { namespace Techniques
 		const TechniqueSetFileFuture& techniqueSet,
 		UtilityDelegateType type)
 	{
-		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsMain");
-		::Assets::WhenAll(techniqueSet, pipelineLayoutFuture).ThenConstructToPromise(
-			std::move(promise),
-			[type](auto techniqueSet, auto pipelineLayout) {
-				return std::make_shared<TechniqueDelegate_Utility>(std::move(techniqueSet), std::move(pipelineLayout), type);
-			});
+		TechniqueDelegate_Utility::ConstructToPromise(std::move(promise), techniqueSet, type);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -845,31 +931,21 @@ namespace RenderCore { namespace Techniques
 			TechniqueEntry _perPixelAndEarlyRejection;
 			TechniqueEntry _vsNoPatchesSrc;
 			TechniqueEntry _vsDeformVertexSrc;
+			std::string _pipelineLayout;
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
 
 			TechniqueFileHelper(std::shared_ptr<TechniqueSetFile> techniqueSet)
 			: _techniqueSet(std::move(techniqueSet))
 			{
-				const auto noPatchesHash = Hash64("ProbePrepare_NoPatches");
-				const auto perPixelHash = Hash64("ProbePrepare_PerPixel");
-				const auto earlyRejectionHash = Hash64("ProbePrepare_PerPixelAndEarlyRejection");
-				auto vsNoPatchesHash = Hash64("VS_NoPatches");
-				auto vsDeformVertexHash = Hash64("VS_DeformVertex");
-				auto* noPatchesSrc = _techniqueSet->FindEntry(noPatchesHash);
-				auto* perPixelSrc = _techniqueSet->FindEntry(perPixelHash);
-				auto* earlyRejectionSrc = _techniqueSet->FindEntry(earlyRejectionHash);
-				auto* vsNoPatchesSrc = _techniqueSet->FindEntry(vsNoPatchesHash);
-				auto* vsDeformVertexSrc = _techniqueSet->FindEntry(vsDeformVertexHash);
-				if (!noPatchesSrc || !perPixelSrc || !earlyRejectionSrc || !vsNoPatchesSrc || !vsDeformVertexSrc) {
-					Throw(std::runtime_error("Could not construct technique delegate because required configurations were not found"));
-				}
-
-				_noPatches = *noPatchesSrc;
-				_perPixel = *perPixelSrc;
-				_perPixelAndEarlyRejection = *earlyRejectionSrc;
-				_vsNoPatchesSrc = *vsNoPatchesSrc;
-				_vsDeformVertexSrc = *vsDeformVertexSrc;
+				std::pair<const char*, TechniqueEntry*> entriesToCheck[] {
+					{"ProbePrepare_NoPatches", &_noPatches},
+					{"ProbePrepare_PerPixel", &_perPixel},
+					{"ProbePrepare_PerPixelAndEarlyRejection", &_perPixelAndEarlyRejection},
+					{"VS_NoPatches", &_vsNoPatchesSrc},
+					{"VS_DeformVertex", &_vsDeformVertexSrc},
+				};
+				_pipelineLayout = SetupTechniqueFileHelper(*_techniqueSet, entriesToCheck);
 			}
 			TechniqueFileHelper() = default;
 		};
@@ -926,12 +1002,34 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() override { return _pipelineLayout; }
 		::Assets::DependencyValidation GetDependencyValidation() override { return _depVal; }
 
-		TechniqueDelegate_ProbePrepare(std::shared_ptr<TechniqueSetFile> techniqueSet, std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout)
-		: _techniqueFileHelper(std::move(techniqueSet)), _pipelineLayout(std::move(pipelineLayout))
+		TechniqueDelegate_ProbePrepare(TechniqueFileHelper&& helper, std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout)
+		: _techniqueFileHelper(std::move(helper)), _pipelineLayout(std::move(pipelineLayout))
 		{
 			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
+
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
+			const TechniqueSetFileFuture& techniqueSet)
+		{
+			::Assets::WhenAll(techniqueSet).CheckImmediately().ThenConstructToPromise(
+				std::move(promise),
+				[](auto&& promise, auto techniqueSetFile) {
+					TRY {
+						TechniqueFileHelper helper{techniqueSetFile};
+						auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
+						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
+							std::move(promise),
+							[helper=std::move(helper)](auto pipelineLayout) mutable {
+								return std::make_shared<TechniqueDelegate_ProbePrepare>(std::move(helper), std::move(pipelineLayout));
+							});
+					} CATCH (...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+		}
+
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
 		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
@@ -942,10 +1040,7 @@ namespace RenderCore { namespace Techniques
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet)
 	{
-		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsProbePrepare");
-		::Assets::WhenAll(techniqueSet, pipelineLayoutFuture).ThenConstructToPromise(
-			std::move(promise),
-			[](auto techniqueSet, auto pipelineLayout) { return std::make_shared<TechniqueDelegate_ProbePrepare>(std::move(techniqueSet), std::move(pipelineLayout)); });
+		TechniqueDelegate_ProbePrepare::ConstructToPromise(std::move(promise), techniqueSet);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -961,28 +1056,20 @@ namespace RenderCore { namespace Techniques
 			TechniqueEntry _earlyRejectionSrc;
 			TechniqueEntry _vsNoPatchesSrc;
 			TechniqueEntry _vsDeformVertexSrc;
+			std::string _pipelineLayout;
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
 
 			TechniqueFileHelper(std::shared_ptr<TechniqueSetFile> techniqueSet)
 			: _techniqueSet(std::move(techniqueSet))
 			{
-				const auto noPatchesHash = Hash64("RayTest_NoPatches");
-				const auto earlyRejectionHash = Hash64("RayTest_EarlyRejection");
-				const auto vsNoPatchesHash = Hash64("VSDepthOnly_NoPatches");
-				const auto vsDeformVertexHash = Hash64("VSDepthOnly_DeformVertex");
-				auto* noPatchesSrc = _techniqueSet->FindEntry(noPatchesHash);
-				auto* earlyRejectionSrc = _techniqueSet->FindEntry(earlyRejectionHash);
-				auto* vsNoPatchesSrc = _techniqueSet->FindEntry(vsNoPatchesHash);
-				auto* vsDeformVertexSrc = _techniqueSet->FindEntry(vsDeformVertexHash);
-				if (!noPatchesSrc || !earlyRejectionSrc || !vsNoPatchesSrc || !vsDeformVertexSrc) {
-					Throw(std::runtime_error("Could not construct technique delegate because required configurations were not found"));
-				}
-
-				_noPatches = *noPatchesSrc;
-				_earlyRejectionSrc = *earlyRejectionSrc;
-				_vsNoPatchesSrc = *vsNoPatchesSrc;
-				_vsDeformVertexSrc = *vsDeformVertexSrc;
+				std::pair<const char*, TechniqueEntry*> entriesToCheck[] {
+					{"RayTest_NoPatches", &_noPatches},
+					{"RayTest_EarlyRejection", &_earlyRejectionSrc},
+					{"VSDepthOnly_NoPatches", &_vsNoPatchesSrc},
+					{"VSDepthOnly_DeformVertex", &_vsDeformVertexSrc},
+				};
+				_pipelineLayout = SetupTechniqueFileHelper(*_techniqueSet, entriesToCheck);
 			}
 			TechniqueFileHelper() = default;
 		};
@@ -1027,17 +1114,42 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation GetDependencyValidation() override { return _depVal; }
 
 		TechniqueDelegate_RayTest(
-			std::shared_ptr<TechniqueSetFile> techniqueSet,
+			TechniqueFileHelper&& helper,
 			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
 			unsigned testTypeParameter,
 			std::vector<InputElementDesc> soElements,
 			std::vector<unsigned> soStrides)
-		: _techniqueFileHelper(std::move(techniqueSet)), _pipelineLayout(std::move(pipelineLayout))
+		: _techniqueFileHelper(std::move(helper)), _pipelineLayout(std::move(pipelineLayout))
 		, _testTypeParameter(testTypeParameter)
 		, _soElements(std::move(soElements)), _soStrides(std::move(soStrides))
 		{
 			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
+		}
+
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
+			const TechniqueSetFileFuture& techniqueSet,
+			unsigned testTypeParameter,
+			const StreamOutputInitializers& soInit)
+		{
+			auto soElements = NormalizeInputAssembly(soInit._outputElements);
+			auto soStrides = std::vector<unsigned>(soInit._outputBufferStrides.begin(), soInit._outputBufferStrides.end());
+			::Assets::WhenAll(techniqueSet).CheckImmediately().ThenConstructToPromise(
+				std::move(promise),
+				[soElements=std::move(soElements), soStrides=std::move(soStrides), testTypeParameter](auto&& promise, auto techniqueSetFile) {
+					TRY {
+						TechniqueFileHelper helper{techniqueSetFile};
+						auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
+						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
+							std::move(promise),
+							[helper=std::move(helper), soElements=std::move(soElements), soStrides=std::move(soStrides), testTypeParameter](auto pipelineLayout) mutable {
+								return std::make_shared<TechniqueDelegate_RayTest>(std::move(helper), std::move(pipelineLayout), testTypeParameter, std::move(soElements), std::move(soStrides));
+							});
+					} CATCH (...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
 		}
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
@@ -1054,14 +1166,7 @@ namespace RenderCore { namespace Techniques
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit)
 	{
-		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsMain");
-		auto soElements = NormalizeInputAssembly(soInit._outputElements);
-		auto soStrides = std::vector<unsigned>(soInit._outputBufferStrides.begin(), soInit._outputBufferStrides.end());
-		::Assets::WhenAll(techniqueSet, pipelineLayoutFuture).ThenConstructToPromise(
-			std::move(promise),
-			[testTypeParameter, soElements=std::move(soElements), soStrides=std::move(soStrides)](auto techniqueSet, auto pipelineLayout) mutable {
-				return std::make_shared<TechniqueDelegate_RayTest>(std::move(techniqueSet), std::move(pipelineLayout), testTypeParameter, std::move(soElements), std::move(soStrides));
-			});
+		TechniqueDelegate_RayTest::ConstructToPromise(std::move(promise), techniqueSet, testTypeParameter, soInit);
 	}
 
 	uint64_t GraphicsPipelineDesc::GetHash() const
