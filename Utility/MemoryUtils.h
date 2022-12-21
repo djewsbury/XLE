@@ -7,6 +7,7 @@
 #pragma once
 
 #include "../Core/SelectConfiguration.h"
+#include "../Core/Prefix.h"
 #include "Detail/API.h"
 #include <string>
 #include <assert.h>
@@ -155,6 +156,336 @@ namespace Utility
     };
 
     uint64_t ConstHash64FromString(const char* begin, const char* end);
+
+        ////////////   C O N S T E X P R   H A S H   ////////////
+
+    constexpr uint64_t ConstHash64New(const char * key, size_t len, const uint64_t seed = DefaultSeed64)
+    {
+        // The code in this function derived from Foreign/Hash/MurmurHash2.cpp
+        // (and made to work with constexpr in C++17)
+        // See licence in that file:
+        // MurmurHash2 was written by Austin Appleby, and is placed in the public
+        // domain. The author hereby disclaims copyright to this source code.
+
+        const uint64_t m = 0xc6a4a7935bd1e995ull;
+        const int r = 47;
+
+        uint64_t h = seed ^ (len * m);
+
+        while (len >= 8) {
+            uint64_t k = 
+                  uint64_t((uint8_t)*(key+0))
+                | uint64_t((uint8_t)*(key+1)) << 8ull
+                | uint64_t((uint8_t)*(key+2)) << 16ull
+                | uint64_t((uint8_t)*(key+3)) << 24ull
+                | uint64_t((uint8_t)*(key+4)) << 32ull
+                | uint64_t((uint8_t)*(key+5)) << 40ull
+                | uint64_t((uint8_t)*(key+6)) << 48ull
+                | uint64_t((uint8_t)*(key+7)) << 56ull
+                ;
+
+            key += 8;
+            len -= 8;
+
+            k *= m; 
+            k ^= k >> r; 
+            k *= m; 
+
+            h ^= k;
+            h *= m; 
+        }
+
+        switch(len & 7)
+        {
+        case 7: h ^= uint64_t((uint8_t)key[6]) << 48;
+        case 6: h ^= uint64_t((uint8_t)key[5]) << 40;
+        case 5: h ^= uint64_t((uint8_t)key[4]) << 32;
+        case 4: h ^= uint64_t((uint8_t)key[3]) << 24;
+        case 3: h ^= uint64_t((uint8_t)key[2]) << 16;
+        case 2: h ^= uint64_t((uint8_t)key[1]) << 8;
+        case 1: h ^= uint64_t((uint8_t)key[0]);
+            h *= m;
+        };
+
+        h ^= h >> r;
+        h *= m;
+        h ^= h >> r;
+
+        return h;
+    }
+
+    namespace Internal {
+        constexpr uint32_t rotl32_constexpr_helper ( uint32_t x, int8_t r ) { return (x << r) | (x >> (32 - r)); }
+        constexpr uint32_t fmix_constexpr_helper ( uint32_t h ) { h ^= h >> 16; h *= 0x85ebca6b; h ^= h >> 13; h *= 0xc2b2ae35; h ^= h >> 16; return h; }
+    }
+
+    constexpr uint32_t ConstHash32New(const char * key, const size_t len, const uint32_t seed = DefaultSeed32)
+    {
+        // The code in this function derived from Foreign/Hash/MurmurHash3.cpp
+        // (and made to work with constexpr in C++17)
+        // See licence in that file:
+        // MurmurHash3 was written by Austin Appleby, and is placed in the public
+        // domain. The author hereby disclaims copyright to this source code.
+
+        const auto nblocks = len / 4;
+
+        uint32_t h1 = seed;
+
+        uint32_t c1 = 0xcc9e2d51;
+        uint32_t c2 = 0x1b873593;
+
+        //----------
+        // body
+
+        for(unsigned i = 0; i<nblocks; i++)
+        {
+            uint32_t k1 = 
+                  uint32_t((uint8_t)key[i*4+0])
+                | uint32_t((uint8_t)key[i*4+1]) << 8u
+                | uint32_t((uint8_t)key[i*4+2]) << 16u
+                | uint32_t((uint8_t)key[i*4+3]) << 24u
+                ;
+
+            k1 *= c1;
+            k1 = Internal::rotl32_constexpr_helper(k1,15);
+            k1 *= c2;
+
+            h1 ^= k1;
+            h1 = Internal::rotl32_constexpr_helper(h1,13); 
+            h1 = h1*5+0xe6546b64;
+        }
+
+        //----------
+        // tail
+
+        const auto * tail = key + nblocks*4;
+
+        uint32_t k1 = 0;
+
+        switch(len & 3)
+        {
+        case 3: k1 ^= uint32_t(uint8_t(tail[2])) << 16u;
+        case 2: k1 ^= uint32_t(uint8_t(tail[1])) << 8u;
+        case 1: k1 ^= uint32_t(uint8_t(tail[0]));
+                k1 *= c1; k1 = Internal::rotl32_constexpr_helper(k1,15); k1 *= c2; h1 ^= k1;
+        };
+
+        //----------
+        // finalization
+
+        h1 ^= len;
+
+        h1 = Internal::fmix_constexpr_helper(h1);
+
+        return h1;
+    }
+
+    namespace Internal
+    {
+        template<uint64_t Seed, char... Chars>
+            constexpr uint64_t ConstHash64New2_Tail()
+        {
+            // The code in this function derived from Foreign/Hash/MurmurHash2.cpp
+            // (and made to work with constexpr in C++17)
+            // See licence in that file:
+            // MurmurHash2 was written by Austin Appleby, and is placed in the public
+            // domain. The author hereby disclaims copyright to this source code.
+
+            constexpr uint64_t m = 0xc6a4a7935bd1e995ull;
+            constexpr int r = 47;
+            constexpr auto len = sizeof...(Chars);
+            std::tuple<decltype(Chars)...> tup{Chars...};
+            auto h = Seed;
+            if constexpr (len >= 7) h ^= uint64_t((uint8_t)std::get<6>(tup)) << 48ull;
+            if constexpr (len >= 6) h ^= uint64_t((uint8_t)std::get<5>(tup)) << 40ull;
+            if constexpr (len >= 5) h ^= uint64_t((uint8_t)std::get<4>(tup)) << 32ull;
+            if constexpr (len >= 4) h ^= uint64_t((uint8_t)std::get<3>(tup)) << 24ull;
+            if constexpr (len >= 3) h ^= uint64_t((uint8_t)std::get<2>(tup)) << 16ull;
+            if constexpr (len >= 2) h ^= uint64_t((uint8_t)std::get<1>(tup)) <<  8ull;
+            if constexpr (len >= 1) { h ^= uint64_t((uint8_t)std::get<0>(tup)); h *= m; }
+
+            h ^= h >> r;
+            h *= m;
+            h ^= h >> r;
+            return h;
+        }
+
+        constexpr uint64_t ConstHash64New2_Block_Helper(uint64_t k, uint64_t h)
+        {
+            // The code in this function derived from Foreign/Hash/MurmurHash2.cpp
+            // (and made to work with constexpr in C++17)
+            // See licence in that file:
+            // MurmurHash2 was written by Austin Appleby, and is placed in the public
+            // domain. The author hereby disclaims copyright to this source code.
+
+            constexpr uint64_t m = 0xc6a4a7935bd1e995ull;
+            constexpr int r = 47;
+            k *= m;
+            k ^= k >> r;
+            k *= m;
+
+            h ^= k;
+            h *= m; 
+            return h;
+        }
+
+        template<uint64_t Seed, char A, char B, char C, char D, char E, char F, char G, char H, char... Remainder>
+            constexpr uint64_t ConstHash64New2_Block()
+        {
+            constexpr uint64_t k = 
+                uint64_t((uint8_t)A)
+                | uint64_t((uint8_t)B) << 8ull
+                | uint64_t((uint8_t)C) << 16ull
+                | uint64_t((uint8_t)D) << 24ull
+                | uint64_t((uint8_t)E) << 32ull
+                | uint64_t((uint8_t)F) << 40ull
+                | uint64_t((uint8_t)G) << 48ull
+                | uint64_t((uint8_t)H) << 56ull
+                ;
+
+            constexpr auto NewSeed = ConstHash64New2_Block_Helper(k, Seed);
+            if constexpr (sizeof...(Remainder) >= 8) {
+                return ConstHash64New2_Block<NewSeed, Remainder...>();
+            } else {
+                return ConstHash64New2_Tail<NewSeed, Remainder...>();
+            }
+        }
+
+        template<uint32_t Seed, uint32_t OriginalLen, char... Chars>
+            constexpr uint32_t ConstHash32New2_Tail()
+        {
+            // The code in this function derived from Foreign/Hash/MurmurHash3.cpp
+            // (and made to work with constexpr in C++17)
+            // See licence in that file:
+            // MurmurHash3 was written by Austin Appleby, and is placed in the public
+            // domain. The author hereby disclaims copyright to this source code.
+
+            constexpr uint32_t c1 = 0xcc9e2d51;
+            constexpr uint32_t c2 = 0x1b873593;
+
+            constexpr auto len = sizeof...(Chars);
+            std::tuple<decltype(Chars)...> tup{Chars...};
+            uint32_t k1 = 0;
+            uint32_t h1 = Seed;
+            if constexpr (len >= 3) k1 ^= uint32_t((uint8_t)std::get<2>(tup)) << 16u;
+            if constexpr (len >= 2) k1 ^= uint32_t((uint8_t)std::get<1>(tup)) <<  8u;
+            if constexpr (len >= 1) { k1 ^= uint32_t((uint8_t)std::get<0>(tup)); k1 *= c1; k1 = rotl32_constexpr_helper(k1,15); k1 *= c2; h1 ^= k1; }
+
+            h1 ^= OriginalLen;
+            h1 = fmix_constexpr_helper(h1);
+            return h1;
+        }
+
+        constexpr uint64_t ConstHash32New2_Block_Helper(uint32_t k1, uint32_t h1)
+        {
+            // The code in this function derived from Foreign/Hash/MurmurHash3.cpp
+            // (and made to work with constexpr in C++17)
+            // See licence in that file:
+            // MurmurHash3 was written by Austin Appleby, and is placed in the public
+            // domain. The author hereby disclaims copyright to this source code.
+
+            constexpr uint32_t c1 = 0xcc9e2d51;
+            constexpr uint32_t c2 = 0x1b873593;
+
+            k1 *= c1;
+            k1 = rotl32_constexpr_helper(k1,15);
+            k1 *= c2;
+
+            h1 ^= k1;
+            h1 = rotl32_constexpr_helper(h1,13);
+            h1 = h1*5+0xe6546b64;
+            return h1;
+        }
+
+        template<uint32_t Seed, uint32_t OriginalLen, char A, char B, char C, char D, char... Remainder>
+            constexpr uint32_t ConstHash32New2_Block()
+        {
+            constexpr uint32_t k1 = 
+                uint32_t((uint8_t)A)
+                | uint32_t((uint8_t)B) << 8u
+                | uint32_t((uint8_t)C) << 16u
+                | uint32_t((uint8_t)D) << 24u
+                ;
+
+            constexpr auto NewSeed = ConstHash32New2_Block_Helper(k1, Seed);
+            if constexpr (sizeof...(Remainder) >= 4) {
+                return ConstHash32New2_Block<NewSeed, OriginalLen, Remainder...>();
+            } else {
+                return ConstHash32New2_Tail<NewSeed, OriginalLen, Remainder...>();
+            }
+        }
+
+    }
+
+    template<uint64_t Seed, char... C>
+        constexpr uint64_t ConstHash64New2()
+    {
+        constexpr auto len = sizeof...(C);
+        constexpr uint64_t m = 0xc6a4a7935bd1e995ull;
+        constexpr uint64_t h = Seed ^ (len * m);
+        if constexpr (sizeof...(C) >= 8) {
+            return Internal::ConstHash64New2_Block<h, C...>();
+        } else {
+            return Internal::ConstHash64New2_Tail<h, C...>();
+        }
+    }
+
+    template<uint32_t Seed, char... C>
+        constexpr uint32_t ConstHash32New2()
+    {
+        constexpr auto len = (uint32_t)sizeof...(C);
+        if constexpr (sizeof...(C) >= 4) {
+            return Internal::ConstHash32New2_Block<Seed, len, C...>();
+        } else {
+            return Internal::ConstHash32New2_Tail<Seed, len, C...>();
+        }
+    }
+
+    #if __cplusplus >= 202002L
+        #define XLE_CONSTEVAL_OR_CONSTEXPR consteval
+    #else
+        #define XLE_CONSTEVAL_OR_CONSTEXPR constexpr
+    #endif
+
+    #if (COMPILER_ACTIVE == COMPILER_TYPE_GCC || COMPILER_ACTIVE == COMPILER_TYPE_CLANG) && (__cplusplus < 202002L)
+
+        // These variants uss an GNU/clang extension "string literal operator templates"
+        // It's not supported in MSVC
+        // but it has an advantage in that it works more like consteval than constexpr -- it can only be evaluated
+        // at compile time, regardless of the context of how it's used
+        // In C++20, it shouldn't be needed because "consteval" is a simplier alternative
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wgnu-string-literal-operator-template"
+            template <typename T, T... chars>
+                XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator""_h() never_throws
+            { 
+                return ConstHash64New2<DefaultSeed64, chars...>();
+            }
+
+            template <typename T, T... chars>
+                XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator""_h64() never_throws
+            {
+                return ConstHash64New2<DefaultSeed64, chars...>();
+            }
+
+            template <typename T, T... chars>
+                XLE_CONSTEVAL_OR_CONSTEXPR uint32_t operator""_h32() never_throws
+            {
+                return ConstHash32New2<DefaultSeed32, chars...>();
+            }
+        #pragma GCC diagnostic pop
+
+    #else
+
+        XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator"" _h(const char* str, const size_t len) never_throws { return ConstHash64New(str, len); }
+        XLE_CONSTEVAL_OR_CONSTEXPR uint32_t operator"" _h32(const char* str, const size_t len) never_throws { return ConstHash32New(str, len); }
+        XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator"" _h64(const char* str, const size_t len) never_throws { return ConstHash64New(str, len); }
+
+    #endif
+
+    XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator"" _h_compatible(const char* str, const size_t len) never_throws { return ConstHash64New(str, len); }
+    XLE_CONSTEVAL_OR_CONSTEXPR uint32_t operator"" _h32_compatible(const char* str, const size_t len) never_throws { return ConstHash32New(str, len); }
+    XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator"" _h64_compatible(const char* str, const size_t len) never_throws { return ConstHash64New(str, len); }
 
         ////////////   I N L I N E   I M P L E M E N T A T I O N S   ////////////
 

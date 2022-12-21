@@ -499,5 +499,95 @@ namespace UnitTests
             }
         }
     }
+
+    static uint64_t operator"" _hnonconstexpr(const char* str, const size_t len) never_throws { return Hash64(MakeStringSection(str, str+len)); }
+
+    #define CONCAT2(X, Y) X##Y
+    #define CONCAT(X, Y) CONCAT2(X, Y)
+    #define KEY "sfd=+rtqw;-e bjxcgya,psad  0qwe 7y123m,as lasd812 3l123a das8dyu12;lkja s"
+
+    enum class HashedToEnum : uint64_t {
+        HashValue = CONCAT(KEY, _h),       // can only compile if operator"" _h truly is constexpr
+        HashValue32 = (uint64_t)CONCAT(KEY, _h32)
+    };
+
+    TEST_CASE( "constexpr-hash", "[utility]" )
+    {
+        SECTION("64 bit")
+        {
+            constexpr auto constExprEvalHash = CONCAT(KEY, _h);
+            static_assert(constExprEvalHash != 0, "Should fail if constexpr is not actually evaluating at compile time");
+            const auto nonConstExprEvalHash = CONCAT(KEY, _hnonconstexpr);
+            constexpr auto constExprMSVCEvalHash = CONCAT(KEY, _h_compatible);
+            static_assert(constExprMSVCEvalHash != 0, "Should fail if constexpr is not actually evaluating at compile time");
+
+            auto expectedHash = Hash64(KEY);
+            REQUIRE(nonConstExprEvalHash == expectedHash);
+            REQUIRE(ConstHash64New(KEY, std::strlen(KEY)) == expectedHash);
+            REQUIRE(constExprEvalHash == expectedHash);
+            REQUIRE(constExprMSVCEvalHash == expectedHash);
+            REQUIRE(uint64_t(HashedToEnum::HashValue) == expectedHash);
+
+            #define KEY_3 "123"
+            #define KEY_8 "12345678"
+            #define KEY_9 "12345678a"
+            #define KEY_10 "12345678ab"
+            #define KEY_11 "12345678abc"
+            #define KEY_12 "12345678abcd"
+            #define KEY_13 "12345678abcde"
+            #define KEY_14 "12345678abcdef"
+            #define KEY_15 "12345678abcdefg"
+
+            REQUIRE(CONCAT(KEY_3, _h) == Hash64(KEY_3));
+            REQUIRE(CONCAT(KEY_8, _h) == Hash64(KEY_8));
+            REQUIRE(CONCAT(KEY_9, _h) == Hash64(KEY_9));
+            REQUIRE(CONCAT(KEY_10, _h) == Hash64(KEY_10));
+            REQUIRE(CONCAT(KEY_11, _h) == Hash64(KEY_11));
+            REQUIRE(CONCAT(KEY_12, _h) == Hash64(KEY_12));
+            REQUIRE(CONCAT(KEY_13, _h) == Hash64(KEY_13));
+            REQUIRE(CONCAT(KEY_14, _h) == Hash64(KEY_14));
+            REQUIRE(CONCAT(KEY_15, _h) == Hash64(KEY_15));
+
+            REQUIRE(CONCAT(KEY_3, _h_compatible) == Hash64(KEY_3));
+            REQUIRE(CONCAT(KEY_8, _h_compatible) == Hash64(KEY_8));
+            REQUIRE(CONCAT(KEY_9, _h_compatible) == Hash64(KEY_9));
+            REQUIRE(CONCAT(KEY_10, _h_compatible) == Hash64(KEY_10));
+            REQUIRE(CONCAT(KEY_11, _h_compatible) == Hash64(KEY_11));
+            REQUIRE(CONCAT(KEY_12, _h_compatible) == Hash64(KEY_12));
+            REQUIRE(CONCAT(KEY_13, _h_compatible) == Hash64(KEY_13));
+            REQUIRE(CONCAT(KEY_14, _h_compatible) == Hash64(KEY_14));
+            REQUIRE(CONCAT(KEY_15, _h_compatible) == Hash64(KEY_15));
+
+            static_assert(CONCAT(KEY_11, _h) != 0, "Should fail if constexpr is not actually evaluating at compile time");
+        }
+
+        SECTION("32 bit")
+        {
+            constexpr auto constExprEvalHash = CONCAT(KEY, _h32);
+            static_assert(constExprEvalHash != 0, "Should fail if constexpr is not actually evaluating at compile time");
+            constexpr auto constExprMSVCEvalHash = CONCAT(KEY, _h32_compatible);
+            static_assert(constExprMSVCEvalHash != 0, "Should fail if constexpr is not actually evaluating at compile time");
+            REQUIRE(constExprEvalHash == constExprMSVCEvalHash);
+
+            auto expectedHash = Hash32(KEY);
+            REQUIRE(ConstHash32New(KEY, std::strlen(KEY)) == expectedHash);
+            REQUIRE(constExprEvalHash == expectedHash);
+            REQUIRE(constExprMSVCEvalHash == expectedHash);
+            REQUIRE(uint64_t(HashedToEnum::HashValue32) == (uint64_t)expectedHash);
+
+            REQUIRE(CONCAT(KEY_3, _h32) == Hash32(KEY_3));
+            REQUIRE(CONCAT(KEY_8, _h32) == Hash32(KEY_8));
+            REQUIRE(CONCAT(KEY_9, _h32) == Hash32(KEY_9));
+            REQUIRE(CONCAT(KEY_10, _h32) == Hash32(KEY_10));
+            REQUIRE(CONCAT(KEY_11, _h32) == Hash32(KEY_11));
+            REQUIRE(CONCAT(KEY_12, _h32) == Hash32(KEY_12));
+            REQUIRE(CONCAT(KEY_13, _h32) == Hash32(KEY_13));
+            REQUIRE(CONCAT(KEY_14, _h32) == Hash32(KEY_14));
+            REQUIRE(CONCAT(KEY_15, _h32) == Hash32(KEY_15));
+
+            static_assert(CONCAT(KEY_11, _h32) != 0, "Should fail if constexpr is not actually evaluating at compile time");
+        }
+    }
+
 }
 
