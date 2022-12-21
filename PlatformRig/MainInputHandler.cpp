@@ -9,6 +9,8 @@
 #include "../Utility/StringUtils.h"
 #include <assert.h>
 
+using namespace PlatformRig::Literals;
+
 namespace PlatformRig
 {
     bool    MainInputHandler::OnInputEvent(const InputContext& context, const InputSnapshot& evnt)
@@ -44,7 +46,7 @@ namespace PlatformRig
 
     bool    DebugScreensInputHandler::OnInputEvent(const InputContext& context, const InputSnapshot& evnt)
     {
-        static const KeyId escape = KeyId_Make("escape");
+        constexpr auto escape = "escape"_key;
         if (evnt.IsPress(escape)) {
             if (_debugScreens->CurrentScreen(0)) {
                 _debugScreens->SwitchToScreen(0, StringSection<>{});

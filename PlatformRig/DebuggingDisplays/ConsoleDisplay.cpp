@@ -13,6 +13,8 @@
 #include "../../ConsoleRig/ResourceBox.h"
 #include <assert.h>
 
+using namespace PlatformRig::Literals;
+
 namespace PlatformRig { namespace Overlays
 {
     class ConsoleDisplayResources
@@ -83,11 +85,11 @@ namespace PlatformRig { namespace Overlays
         RenderOverlays::CommonWidgets::Render(context, entryBoxArea, res->_font, _textEntry);
     }
 
-    static const auto enter      = PlatformRig::KeyId_Make("enter");
-    static const auto escape     = PlatformRig::KeyId_Make("escape");
-    static const auto ctrl       = PlatformRig::KeyId_Make("control");
-    static const auto pgdn       = PlatformRig::KeyId_Make("page down");
-    static const auto pgup       = PlatformRig::KeyId_Make("page up");
+    constexpr auto enter      = "enter"_key;
+    constexpr auto escape     = "escape"_key;
+    constexpr auto ctrl       = "control"_key;
+    constexpr auto pgdn       = "page down"_key;
+    constexpr auto pgup       = "page up"_key;
 
     auto    ConsoleDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
     {

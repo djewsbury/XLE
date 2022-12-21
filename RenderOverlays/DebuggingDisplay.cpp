@@ -28,6 +28,7 @@
 #include <string.h>
 
 using namespace Utility::Literals;
+using namespace PlatformRig::Literals;
 
 #pragma warning(disable:4244)   // conversion from 'int' to 'float', possible loss of data
 
@@ -1292,9 +1293,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
             }
         }
 
-        const KeyId ctrl    = PlatformRig::KeyId_Make("control");
-        const KeyId left    = PlatformRig::KeyId_Make("left");
-        const KeyId right   = PlatformRig::KeyId_Make("right");
+        constexpr auto ctrl    = "control"_key;
+        constexpr auto left    = "left"_key;
+        constexpr auto right   = "right"_key;
         if (evnt.IsHeld(ctrl) && !_widgets.empty()) {
             if (evnt.IsPress(left)) {
                 const unsigned panelIndex = 0;

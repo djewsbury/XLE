@@ -14,6 +14,8 @@
 #include "../../Math/Geometry.h"
 #include <memory>
 
+using namespace PlatformRig::Literals;
+
 namespace ToolsRig
 {
     class CameraMovementManipulator : public IManipulator
@@ -75,7 +77,7 @@ namespace ToolsRig
         if (!_visCameraSettings) { return false; }
 
 		bool gotSomething = false;
-        static auto ctrl = PlatformRig::KeyId_Make("control");
+        constexpr auto ctrl = "control"_key;
         if (evnt.IsHeld(ctrl) && evnt.IsPress_LButton() && hitTestScene) {
             auto worldSpaceRay = SceneEngine::CalculateWorldSpaceRay(
 				AsCameraDesc(*_visCameraSettings), evnt._mousePosition, hitTestContext._viewportMins, hitTestContext._viewportMaxs);
@@ -95,8 +97,8 @@ namespace ToolsRig
 
 		unsigned mainMouseButton = (_mode == CameraManipulatorMode::Max_MiddleButton) ? 2 : 1;
 		if (evnt.IsHeld_MouseButton(mainMouseButton)) {
-			static auto alt = PlatformRig::KeyId_Make("alt");
-			static auto shift = PlatformRig::KeyId_Make("shift");
+			constexpr auto alt = "alt"_key;
+			constexpr auto shift = "shift"_key;
 			enum ModifierMode
 			{
 				Translate, Orbit

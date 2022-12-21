@@ -17,6 +17,8 @@
 #include "../../Math/Transformations.h"
 #include "../../Utility/TimeUtils.h"
 
+using namespace PlatformRig::Literals;
+
 static unsigned FrameRenderCount;
 
 namespace ToolsRig
@@ -118,7 +120,7 @@ namespace ToolsRig
         const SceneEngine::IntersectionTestContext& hitTestContext,
         const SceneEngine::IIntersectionScene* hitTestScene)
     {
-        const bool shiftHeld = evnt.IsHeld(PlatformRig::KeyId_Make("shift"));
+        const bool shiftHeld = evnt.IsHeld("shift"_key);
         if (evnt._wheelDelta) {
                 // on wheel delta, change effect size
             if (shiftHeld) {

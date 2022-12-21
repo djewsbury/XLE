@@ -36,6 +36,8 @@
 #include <random>
 #include <chrono>
 
+using namespace PlatformRig::Literals;
+
 namespace Overlays { class ModelBrowser; }
 
 namespace ToolsRig
@@ -211,15 +213,15 @@ namespace ToolsRig
 
         bool consume = false;
         if (_transaction) {
-            static const auto keyG = PlatformRig::KeyId_Make("g");
-            static const auto keyS = PlatformRig::KeyId_Make("s");
-            static const auto keyR = PlatformRig::KeyId_Make("r");
-            static const auto keyM = PlatformRig::KeyId_Make("m");
-            static const auto keyEscape = PlatformRig::KeyId_Make("escape");
+            constexpr auto keyG = "g"_key;
+            constexpr auto keyS = "s"_key;
+            constexpr auto keyR = "r"_key;
+            constexpr auto keyM = "m"_key;
+            constexpr auto keyEscape = "escape"_key;
 
-            static const auto keyX = PlatformRig::KeyId_Make("x");
-            static const auto keyY = PlatformRig::KeyId_Make("y");
-            static const auto keyZ = PlatformRig::KeyId_Make("z");
+            constexpr auto keyX = "x"_key;
+            constexpr auto keyY = "y"_key;
+            constexpr auto keyZ = "z"_key;
 
             bool updateState = evnt._mouseDelta[0] || evnt._mouseDelta[1];
 
@@ -492,7 +494,7 @@ namespace ToolsRig
             return true;
         }
 
-        if (evnt.IsPress(PlatformRig::KeyId_Make("delete"))) {
+        if (evnt.IsPress("delete"_key)) {
             if (_transaction) {
                 auto count = _transaction->GetObjectCount();
                 for (unsigned c=0; c<count; ++c) { _transaction->Delete(c); }
@@ -724,7 +726,7 @@ namespace ToolsRig
             }
         }
 
-        if (evnt.IsRelease_RButton() || evnt.IsPress(PlatformRig::KeyId_Make("escape"))) {
+        if (evnt.IsRelease_RButton() || evnt.IsPress("escape"_key)) {
             // cancel... tell the manager to change model
             if (_manInterface) {
                 _manInterface->SwitchToMode(IPlacementManipulatorSettings::Mode::Select);
@@ -869,7 +871,7 @@ namespace ToolsRig
             _radius = std::max(1.f, _radius + 3.f * evnt._wheelDelta / 120.f);
         }
 
-        if (evnt.IsRelease_RButton() || evnt.IsPress(PlatformRig::KeyId_Make("escape"))) {
+        if (evnt.IsRelease_RButton() || evnt.IsPress("escape"_key)) {
             // cancel... tell the manager to change model
             if (_manInterface) {
                 _manInterface->SwitchToMode(IPlacementManipulatorSettings::Mode::Select);
@@ -1481,7 +1483,7 @@ namespace ToolsRig
 
         if (_browser && _browserActive) {
                 // disable the browser when pressing escape
-            if (input.IsPress(PlatformRig::KeyId_Make("escape"))) {
+            if (input.IsPress("escape"_key)) {
                 _browserActive = false;
                 return ProcessInputResult::Consumed;
             }

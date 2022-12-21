@@ -11,6 +11,8 @@
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringFormat.h"
 
+using namespace PlatformRig::Literals;
+
 namespace PlatformRig { namespace Overlays
 {
     class ModelCacheDisplay : public RenderOverlays::DebuggingDisplay::IWidget
@@ -148,8 +150,8 @@ namespace PlatformRig { namespace Overlays
 		if (_scrollBar.ProcessInput(interfaceState, input) == ProcessInputResult::Consumed)
 			return ProcessInputResult::Consumed;
 
-		static KeyId pgdn       = KeyId_Make("page down");
-        static KeyId pgup       = KeyId_Make("page up");
+		constexpr auto pgdn       = "page down"_key;
+        constexpr auto pgup       = "page up"_key;
         if (input.IsPress(pgdn)) _scrollOffsets[_tab] += 1.f;
         if (input.IsPress(pgup)) _scrollOffsets[_tab] = std::max(0.f, _scrollOffsets[_tab]-1.f);
 

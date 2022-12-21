@@ -7,15 +7,15 @@
 #include "../Math/Vector.h"
 #include "../Utility/UTFUtils.h"
 #include "../Utility/StringUtils.h"
+#include "../Utility/MemoryUtils.h"
 #include <vector>
 
 namespace PlatformRig
 {
-	typedef int         Coord;
-    typedef Int2        Coord2;
+	using Coord = int;
+    using Coord2 = Int2;
 
-	typedef uint32_t KeyId;
-    KeyId KeyId_Make(StringSection<char> name);
+	using KeyId = uint32_t;
 
 	///////////////////////////////////////////////////////////////////////////////////
     class InputSnapshot
@@ -95,6 +95,27 @@ namespace PlatformRig
 		Coord2 _viewMins = Coord2{0, 0};
 		Coord2 _viewMaxs = Coord2{0, 0};
 	};
+
+    ///////////////////////////////////////////////////////////////////////////////////
+   
+    namespace Literals
+    {
+        #if (COMPILER_ACTIVE == COMPILER_TYPE_GCC || COMPILER_ACTIVE == COMPILER_TYPE_CLANG) && (__cplusplus < 202002L)
+
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wgnu-string-literal-operator-template"
+                template <typename T, T... chars>
+                    XLE_CONSTEVAL_OR_CONSTEXPR uint32_t operator"" _key() never_throws { return Internal::ConstHash32_2<DefaultSeed32, chars...>(); }
+            #pragma GCC diagnostic pop
+
+        #else
+
+            XLE_CONSTEVAL_OR_CONSTEXPR uint32_t operator"" _key(const char* str, const size_t len) never_throws { return Internal::ConstHash32_1(str, len); }
+
+        #endif
+    }
+
+    KeyId KeyId_Make(StringSection<char>);
 
     ///////////////////////////////////////////////////////////////////////////////////
     class IInputListener

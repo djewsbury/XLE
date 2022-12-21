@@ -24,6 +24,7 @@
 
 using namespace System;
 using namespace System::Drawing;
+using namespace PlatformRig::Literals;
 
 extern "C" __declspec(dllimport) short __stdcall GetKeyState(int nVirtKey);
 
@@ -32,9 +33,9 @@ namespace GUILayer
     static void SetupModifierKeys(PlatformRig::InputSnapshot& evnt)
     {
         typedef PlatformRig::InputSnapshot::ActiveButton ActiveButton;
-        static auto shift = PlatformRig::KeyId_Make("shift");
-        static auto control = PlatformRig::KeyId_Make("control");
-        static auto alt = PlatformRig::KeyId_Make("alt");
+        constexr auto shift = "shift"_key;
+        constexr auto control = "control"_key;
+        constexr auto alt = "alt"_key;
 
         if (GetKeyState(0x10) < 0) evnt._activeButtons.push_back(ActiveButton(shift, false, true));
         if (GetKeyState(0x11) < 0) evnt._activeButtons.push_back(ActiveButton(control, false, true));

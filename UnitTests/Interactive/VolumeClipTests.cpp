@@ -24,7 +24,9 @@
 #include <random>
 
 using namespace Catch::literals;
+using namespace PlatformRig::Literals;
 using namespace std::chrono_literals;
+
 namespace UnitTests
 {
 	struct BoxObject
@@ -107,7 +109,7 @@ namespace UnitTests
 			const PlatformRig::InputSnapshot& evnt,
 			IInteractiveTestHelper& testHelper) override
 		{
-			const bool interactWithSphereObject = evnt.IsHeld(PlatformRig::KeyId_Make("shift"));
+			const bool interactWithSphereObject = evnt.IsHeld("shift"_key);
 			if (interactWithSphereObject) {
 				if (_sphereObjects.empty())
 					_sphereObjects.push_back(VolumeClipTestingOverlay::SphereObject { Zero<Float3>(), 1.0f });
@@ -134,7 +136,7 @@ namespace UnitTests
 
 				if (evnt._wheelDelta != 0) {
 					auto& obj = *(_boxObjects.end()-1);
-					if (evnt.IsHeld(PlatformRig::KeyId_Make("control"))) {
+					if (evnt.IsHeld("control"_key)) {
 						obj._rotation += (float)evnt._wheelDelta / 1024.0f;
 					} else
 						obj._radii[0] = std::max(0.5f, obj._radii[0] + (float)evnt._wheelDelta / 128.0f);

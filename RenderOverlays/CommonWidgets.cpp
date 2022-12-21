@@ -7,6 +7,8 @@
 #include "../ConsoleRig/ResourceBox.h"
 #include "../Assets/Continuation.h"
 
+using namespace PlatformRig::Literals;
+
 namespace RenderOverlays { namespace CommonWidgets
 {
 	void DefaultFontsBox::ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>&& promise)
@@ -142,16 +144,16 @@ namespace RenderOverlays { namespace CommonWidgets
 		_fonts = ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>();
 	}
 
-	static const auto left       = PlatformRig::KeyId_Make("left");
-	static const auto right      = PlatformRig::KeyId_Make("right");
-	static const auto home       = PlatformRig::KeyId_Make("home");
-	static const auto end        = PlatformRig::KeyId_Make("end");
-	static const auto backspace  = PlatformRig::KeyId_Make("backspace");
-	static const auto del        = PlatformRig::KeyId_Make("delete");
-	static const auto up         = PlatformRig::KeyId_Make("up");
-	static const auto down       = PlatformRig::KeyId_Make("down");
-	static const auto tab        = PlatformRig::KeyId_Make("tab");
-	static const auto shift      = PlatformRig::KeyId_Make("shift");
+	constexpr auto left       = "left"_key;
+	constexpr auto right      = "right"_key;
+	constexpr auto home       = "home"_key;
+	constexpr auto end        = "end"_key;
+	constexpr auto backspace  = "backspace"_key;
+	constexpr auto del        = "delete"_key;
+	constexpr auto up         = "up"_key;
+	constexpr auto down       = "down"_key;
+	constexpr auto tab        = "tab"_key;
+	constexpr auto shift      = "shift"_key;
 
 	template<typename CharType>
 		static void DeleteSelectedPart(TextEntry<CharType>& textEntry)

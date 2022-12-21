@@ -100,7 +100,7 @@ namespace GUILayer
 
         /*{
             auto overlaySwitch = std::make_shared<PlatformRig::OverlaySystemSwitch>();
-            overlaySwitch->AddSystem(PlatformRig::KeyId_Make("~"), PlatformRig::CreateConsoleOverlaySystem());
+            overlaySwitch->AddSystem("~"_key, PlatformRig::CreateConsoleOverlaySystem());
             _frameRig->GetMainOverlaySystem()->AddSystem(overlaySwitch);
         }*/
 

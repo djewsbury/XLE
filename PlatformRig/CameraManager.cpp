@@ -11,6 +11,8 @@
 #include "../RenderCore/Techniques/TechniqueUtils.h"
 #include "../Math/Transformations.h"
 
+using namespace PlatformRig::Literals;
+
 namespace PlatformRig { namespace Camera
 {
     void UpdateCamera_Slew(RenderCore::Techniques::CameraDesc& camera, float dt, const InputSnapshot& input)
@@ -38,18 +40,18 @@ namespace PlatformRig { namespace Camera
             //      *	-Z into the screen
             //
 
-        static const KeyId shift        = KeyId_Make("shift");
-        static const KeyId ctrl         = KeyId_Make("control");
-        static const KeyId forward      = KeyId_Make("w");
-        static const KeyId back         = KeyId_Make("s");
-        static const KeyId left         = KeyId_Make("a");
-        static const KeyId right        = KeyId_Make("d");
-        static const KeyId up           = KeyId_Make("home");
-        static const KeyId down         = KeyId_Make("end");
-        static const KeyId turnLeft     = KeyId_Make("left");
-        static const KeyId turnRight    = KeyId_Make("right");
-        static const KeyId turnUp       = KeyId_Make("up");
-        static const KeyId turnDown     = KeyId_Make("down");
+        constexpr auto shift        = "shift"_key;
+        constexpr auto ctrl         = "control"_key;
+        constexpr auto forward      = "w"_key;
+        constexpr auto back         = "s"_key;
+        constexpr auto left         = "a"_key;
+        constexpr auto right        = "d"_key;
+        constexpr auto up           = "home"_key;
+        constexpr auto down         = "end"_key;
+        constexpr auto turnLeft     = "left"_key;
+        constexpr auto turnRight    = "right"_key;
+        constexpr auto turnUp       = "up"_key;
+        constexpr auto turnDown     = "down"_key;
 
             // change move/turn speed
         bool fastMove = input.IsHeld(shift);
@@ -114,17 +116,17 @@ namespace PlatformRig { namespace Camera
         const float fr_fspeed_scale  = 1.f;
         const float fr_speed_scale   = 1.f/3.f;
 
-        static const KeyId shift        = KeyId_Make("shift");
-        static const KeyId forward      = KeyId_Make("w");
-        static const KeyId back         = KeyId_Make("s");
-        static const KeyId left         = KeyId_Make("a");
-        static const KeyId right        = KeyId_Make("d");
-        static const KeyId up           = KeyId_Make("home");
-        static const KeyId down         = KeyId_Make("end");
-        static const KeyId turnLeft     = KeyId_Make("left");
-        static const KeyId turnRight    = KeyId_Make("right");
-        static const KeyId turnUp       = KeyId_Make("up");
-        static const KeyId turnDown     = KeyId_Make("down");
+        constexpr auto shift        = "shift"_key;
+        constexpr auto forward      = "w"_key;
+        constexpr auto back         = "s"_key;
+        constexpr auto left         = "a"_key;
+        constexpr auto right        = "d"_key;
+        constexpr auto up           = "home"_key;
+        constexpr auto down         = "end"_key;
+        constexpr auto turnLeft     = "left"_key;
+        constexpr auto turnRight    = "right"_key;
+        constexpr auto turnUp       = "up"_key;
+        constexpr auto turnDown     = "down"_key;
 
         bool fastMove     = input.IsHeld(shift);
         float moveScale   = fastMove ? fr_fspeed_scale : fr_speed_scale;
@@ -174,8 +176,8 @@ namespace PlatformRig { namespace Camera
 
     void CameraInputHandler::Update(float dt, const InputSnapshot& accumulatedInputState, const Float3x4& playerCharacterLocalToWorld)
     {
-        static const KeyId shift = KeyId_Make("shift");
-        static const KeyId tab = KeyId_Make("tab");
+        constexpr auto shift = "shift"_key;
+        constexpr auto tab = "tab"_key;
 
         static unsigned mode = 0;
         if (accumulatedInputState.IsPress(tab)) {

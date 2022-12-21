@@ -8,6 +8,8 @@
 #include "../../Assets/Marker.h"
 #include "../../Utility/MemoryUtils.h"
 
+using namespace PlatformRig::Literals;
+
 namespace PlatformRig { namespace Overlays
 {
 	void    QuickMetricsDisplay::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
@@ -59,8 +61,8 @@ namespace PlatformRig { namespace Overlays
 		if (_scrollBar.ProcessInput(interfaceState, input) == ProcessInputResult::Consumed)
 			return ProcessInputResult::Consumed;
 
-		static KeyId pgdn       = KeyId_Make("page down");
-        static KeyId pgup       = KeyId_Make("page up");
+		constexpr auto pgdn       = "page down"_key;
+        constexpr auto pgup       = "page up"_key;
 		if (input.IsPress(pgdn)) _scrollOffset += 1.f;
 		if (input.IsPress(pgup)) _scrollOffset = std::max(0.f, _scrollOffset-1.f);
 		return ProcessInputResult::Passthrough;

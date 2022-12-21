@@ -11,6 +11,8 @@
 #include <set>
 #include <stack>
 
+using namespace PlatformRig::Literals;
+
 namespace EntityInterface
 {
     using namespace RenderOverlays;
@@ -87,8 +89,8 @@ namespace EntityInterface
 	};
 
 	
-	static const DebuggingDisplay::KeyId enter      = PlatformRig::KeyId_Make("enter");
-	static const DebuggingDisplay::KeyId escape     = PlatformRig::KeyId_Make("escape");
+	constexpr auto enter      = "enter"_key;
+	constexpr auto escape     = "escape"_key;
 
 	class WidgetsLayoutFormatter : public EntityInterface::IWidgetsLayoutFormatter
 	{

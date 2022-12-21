@@ -16,6 +16,8 @@
 #include "../Utility/UTFUtils.h"
 #include "../Utility/Conversion.h"
 
+using namespace PlatformRig::Literals;
+
 namespace PlatformRig
 {
 
@@ -69,7 +71,7 @@ namespace PlatformRig
 
     bool    HotKeyInputHandler::OnInputEvent(const PlatformRig::InputContext& context, const PlatformRig::InputSnapshot& evnt)
     {
-        static KeyId ctrlKey = KeyId_Make("control");
+        constexpr auto ctrlKey = "control"_key;
         if (evnt.IsHeld(ctrlKey)) {
             auto* t = Assets::MakeAssetMarker<TableOfKeys>(MakeStringSection(_filename))->TryActualize();
             if (t) {

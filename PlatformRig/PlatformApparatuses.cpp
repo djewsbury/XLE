@@ -25,6 +25,8 @@
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/FunctionUtils.h"
 
+using namespace PlatformRig::Literals;
+
 namespace PlatformRig
 {
 
@@ -44,7 +46,7 @@ namespace PlatformRig
 		_debugScreensOverlaySystem->AddSystem(CreateDebugScreensOverlay(_debugSystem, immediateDrawingApparatus->_immediateDrawables, immediateDrawingApparatus->_fontRenderingManager));
 
 		auto overlaySwitch = std::make_shared<PlatformRig::OverlaySystemSwitch>();
-		overlaySwitch->AddSystem(PlatformRig::KeyId_Make("~"), PlatformRig::CreateConsoleOverlaySystem(*immediateDrawingApparatus));
+		overlaySwitch->AddSystem("~"_key, PlatformRig::CreateConsoleOverlaySystem(*immediateDrawingApparatus));
 		_debugScreensOverlaySystem->AddSystem(overlaySwitch);
 
 		_debugScreenRegistry = CreateDebugScreenRegistry();

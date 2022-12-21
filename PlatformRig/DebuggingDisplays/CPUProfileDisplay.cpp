@@ -17,6 +17,8 @@
 #include <iomanip>
 #include <functional>
 
+using namespace PlatformRig::Literals;
+
 namespace PlatformRig { namespace Overlays
 {
     static float AsMilliseconds(uint64_t profilerTime)
@@ -315,9 +317,9 @@ namespace PlatformRig { namespace Overlays
             }
         }
         for (const auto& b:input._activeButtons) {
-            if (b._name == KeyId_Make("up") && b._transition && b._state) {
+            if (b._name == "up"_key && b._transition && b._state) {
                 _pimpl->_rowOffset = std::max(0, _pimpl->_rowOffset-1);
-            } else if (b._name == KeyId_Make("down") && b._transition && b._state)
+            } else if (b._name == "down"_key && b._transition && b._state)
                 ++_pimpl->_rowOffset;
         }
         return ProcessInputResult::Passthrough;

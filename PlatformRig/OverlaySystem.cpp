@@ -17,6 +17,8 @@
 #include "../../Assets/Assets.h"
 #include "../../ConsoleRig/Console.h"
 
+using namespace PlatformRig::Literals;
+
 namespace PlatformRig
 {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,7 +29,7 @@ namespace PlatformRig
         virtual bool    OnInputEvent(const InputContext& context, const InputSnapshot& evnt)
         {
             using namespace RenderOverlays::DebuggingDisplay;
-            static const KeyId shiftKey = KeyId_Make("shift");
+            constexpr auto shiftKey = "shift"_key;
             if (evnt.IsHeld(shiftKey)) {
                 for (auto i=_parent->_childSystems.cbegin(); i!=_parent->_childSystems.cend(); ++i) {
                     if (evnt.IsPress(i->first)) {

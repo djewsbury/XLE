@@ -9,6 +9,8 @@
 #include "../../Assets/Marker.h"
 #include "../../Utility/StringFormat.h"
 
+using namespace PlatformRig::Literals;
+
 namespace PlatformRig { namespace Overlays
 {
 	using namespace RenderOverlays;
@@ -147,11 +149,11 @@ namespace PlatformRig { namespace Overlays
 		
 			case MenuMode::ChangeMode:
 				{
-					if (input.IsPress(KeyId_Make("backspace"))) {
+					if (input.IsPress("backspace"_key)) {
 						_menuMode = MenuMode::MainMenu;
-					} else if (input.IsPress(KeyId_Make("up"))) {
+					} else if (input.IsPress("up"_key)) {
 						if (_modeSelectorOffset != 0) --_modeSelectorOffset;
-					} else if (input.IsPress(KeyId_Make("down"))) {
+					} else if (input.IsPress("down"_key)) {
 						++_modeSelectorOffset;
 					} else if (input._pressedChar >= '1' && input._pressedChar <= '9') {
 						auto idx = (input._pressedChar - '1') + _modeSelectorOffset;
