@@ -22,6 +22,8 @@
 #include <cctype>
 #include <charconv>
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace Techniques
 {
 
@@ -174,10 +176,10 @@ namespace RenderCore { namespace Techniques
 		return pipelineLayout;
 	}
 
-	static const auto s_perPixel = Hash64("PerPixel");
-	static const auto s_perPixelCustomLighting = Hash64("PerPixelCustomLighting");
-	static const auto s_earlyRejectionTest = Hash64("EarlyRejectionTest");
-	static const auto s_vertexPatch = Hash64("VertexPatch");
+	constexpr auto s_perPixel = "PerPixel"_h;
+	constexpr auto s_perPixelCustomLighting = "PerPixelCustomLighting"_h;
+	constexpr auto s_earlyRejectionTest = "EarlyRejectionTest"_h;
+	constexpr auto s_vertexPatch = "VertexPatch"_h;
 	static std::pair<uint64_t, ShaderStage> s_patchExp_perPixelAndEarlyRejection[] = { {s_perPixel, ShaderStage::Pixel}, {s_earlyRejectionTest, ShaderStage::Pixel} };
 	static std::pair<uint64_t, ShaderStage> s_patchExp_perPixel[] = { {s_perPixel, ShaderStage::Pixel} };
 	static std::pair<uint64_t, ShaderStage> s_patchExp_perPixelCustomLighting[] = { {s_perPixelCustomLighting, ShaderStage::Pixel} };

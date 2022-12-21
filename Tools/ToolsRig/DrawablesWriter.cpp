@@ -17,6 +17,8 @@
 #include "../../Utility/ArithmeticUtils.h"
 #include <memory>
 
+using namespace Utility::Literals;
+
 namespace ToolsRig
 {
 	static std::shared_ptr<RenderCore::IResource> CreateVB(RenderCore::IDevice& device, IteratorRange<const void*> data)
@@ -65,7 +67,7 @@ namespace ToolsRig
 	static RenderCore::UniformsStreamInterface MakeLocalTransformUSI()
 	{
 		RenderCore::UniformsStreamInterface result;
-		result.BindImmediateData(0, Hash64("LocalTransform"));
+		result.BindImmediateData(0, "LocalTransform"_h);
 		return result;
 	}
 	RenderCore::UniformsStreamInterface s_localTransformUSI = MakeLocalTransformUSI();

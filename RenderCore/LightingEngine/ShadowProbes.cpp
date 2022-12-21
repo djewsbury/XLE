@@ -20,6 +20,8 @@
 #include "../../Assets/Assets.h"
 #include "../../xleres/FileList.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace Techniques { class IDeformAcceleratorPool; }}
 
 namespace RenderCore { namespace LightingEngine
@@ -64,7 +66,7 @@ namespace RenderCore { namespace LightingEngine
 
 		MultiViewUniformsDelegate()
 		{
-			BindImmediateData(0, Utility::Hash64("MultiViewProperties"));
+			BindImmediateData(0, "MultiViewProperties"_h);
 		}
 	};
 
@@ -91,7 +93,7 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::TechniqueContext _techContext;
 			std::unique_ptr<Techniques::ParsingContext> _parsingContext;
 			
-			static const auto semanticProbePrepare = ConstHash64<'prob', 'epre'>::Value;
+			static const auto semanticProbePrepare = ConstHash64Legacy<'prob', 'epre'>::Value;
 			StaticProbePrepareHelper(IThreadContext& threadContext, ShadowProbes::Pimpl& pimpl)
 			: _pimpl(&pimpl)
 			{
@@ -102,8 +104,8 @@ namespace RenderCore { namespace LightingEngine
 				uniformDelegateMan->BindShaderResourceDelegate(_pimpl->_multiViewUniformsDelegate);
 				auto graphicsSequencerDS = Techniques::CreateSemiConstantDescriptorSet(*_pimpl->_sequencerDescSetLayout, _pimpl->_sequencerDescSetLayoutName, PipelineType::Graphics, *threadContext.GetDevice());
 				auto computeSequencerDS = Techniques::CreateSemiConstantDescriptorSet(*_pimpl->_sequencerDescSetLayout, _pimpl->_sequencerDescSetLayoutName, PipelineType::Compute, *threadContext.GetDevice());
-				uniformDelegateMan->BindSemiConstantDescriptorSet(Hash64("Sequencer"), std::move(graphicsSequencerDS));
-				uniformDelegateMan->BindSemiConstantDescriptorSet(Hash64("Sequencer"), std::move(computeSequencerDS));
+				uniformDelegateMan->BindSemiConstantDescriptorSet("Sequencer"_h, std::move(graphicsSequencerDS));
+				uniformDelegateMan->BindSemiConstantDescriptorSet("Sequencer"_h, std::move(computeSequencerDS));
 				_techContext._uniformDelegateManager = uniformDelegateMan;
 				_techContext._commonResources = Techniques::Services::GetCommonResources();
 				_techContext._pipelineAccelerators = _pimpl->_pipelineAccelerators;

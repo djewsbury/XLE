@@ -29,8 +29,9 @@
 #include "catch2/catch_approx.hpp"
 #include <filesystem>
 
-
 using namespace Catch::literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	static std::unordered_map<std::string, ::Assets::Blob> s_utData {
@@ -93,7 +94,7 @@ namespace UnitTests
 
 			auto newScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>(
 				compile.GetArtifactCollection());
-			auto material0 = newScaffold->GetMaterialMachine(Hash64("Material0"));
+			auto material0 = newScaffold->GetMaterialMachine("Material0"_h);
 			REQUIRE(!material0.empty());
 
 			bool foundSelectors = false, foundConstants = false, foundPatches = false;
@@ -140,7 +141,7 @@ namespace UnitTests
 			REQUIRE(foundPatches);
 
 			// material1 actually comes from the fake-model-compiler, which has some default materials
-			auto material1 = newScaffold->GetMaterialMachine(Hash64("Material1"));
+			auto material1 = newScaffold->GetMaterialMachine("Material1"_h);
 			REQUIRE(!material1.empty());
 			foundConstants = false;
 			for (auto cmd:material1) {
@@ -159,8 +160,8 @@ namespace UnitTests
 			}
 			REQUIRE(foundConstants);
 
-			auto dehashedName0 = newScaffold->DehashMaterialName(Hash64("Material0")).AsString();
-			auto dehashedName1 = newScaffold->DehashMaterialName(Hash64("Material1")).AsString();
+			auto dehashedName0 = newScaffold->DehashMaterialName("Material0"_h).AsString();
+			auto dehashedName1 = newScaffold->DehashMaterialName("Material1"_h).AsString();
 			REQUIRE(dehashedName0 == "fake-model:Material0;ut-data/test.material:*;ut-data/test.material:Material0");
 			REQUIRE(dehashedName1 == "fake-model:Material1;ut-data/test.material:*;ut-data/test.material:Material1");
 		}

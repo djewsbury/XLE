@@ -25,6 +25,7 @@
 
 #pragma warning(disable:4127)       // conditional expression is constant
 
+using namespace Utility::Literals;
 namespace PlatformRig { namespace Overlays
 {
     class CollectIntersectionPts
@@ -664,7 +665,7 @@ namespace PlatformRig { namespace Overlays
             DrawButtonBasic(
                 &context, buttonRect,
                 "Randomize", 
-                FormatButton(interfaceState, Hash64("Randomize"), buttonNormalState, buttonMouseOverState, buttonPressedState));
+                FormatButton(interfaceState, "Randomize"_h, buttonNormalState, buttonMouseOverState, buttonPressedState));
             interactables.Register({buttonRect, Hash64("Randomize"}));
         }
         {
@@ -672,7 +673,7 @@ namespace PlatformRig { namespace Overlays
             DrawButtonBasic(
                 &context, buttonRect,
                 "FillEfficiently", 
-                FormatButton(interfaceState, Hash64("FillEfficiently"), buttonNormalState, buttonMouseOverState, buttonPressedState));
+                FormatButton(interfaceState, "FillEfficiently"_h, buttonNormalState, buttonMouseOverState, buttonPressedState));
             interactables.Register({buttonRect, Hash64("FillEfficiently"}));
         }
 
@@ -699,10 +700,10 @@ namespace PlatformRig { namespace Overlays
 
     auto    RectanglePackerTest::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
     {
-        if (input.IsRelease_LButton() && interfaceState.TopMostId() == Hash64("Randomize")) {
+        if (input.IsRelease_LButton() && interfaceState.TopMostId() == "Randomize"_h) {
             _pimpl->FillRandomly();
             return ProcessInputResult::Consumed;
-        } else if (input.IsRelease_LButton() && interfaceState.TopMostId() == Hash64("FillEfficiently")) {
+        } else if (input.IsRelease_LButton() && interfaceState.TopMostId() == "FillEfficiently"_h) {
             _pimpl->FillEfficiently();
             return ProcessInputResult::Consumed;
         }

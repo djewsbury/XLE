@@ -32,9 +32,9 @@
 #pragma GCC diagnostic ignored "-Wmultichar"
 namespace Assets
 {
-	static const uint64_t ChunkType_ArchiveDirectory = ConstHash64<'Arch', 'ive', 'Dir'>::Value;
-	static const auto ChunkType_Metrics = ConstHash64<'Metr', 'ics'>::Value;
-	static const auto ChunkType_Log = ConstHash64<'Log'>::Value;
+	static const uint64_t ChunkType_ArchiveDirectory = ConstHash64Legacy<'Arch', 'ive', 'Dir'>::Value;
+	static const auto ChunkType_Metrics = ConstHash64Legacy<'Metr', 'ics'>::Value;
+	static const auto ChunkType_Log = ConstHash64Legacy<'Log'>::Value;
 	static const unsigned ArchiveHeaderChunkVersion = 1;
 
 	ArtifactRequestResult MakeArtifactRequestResult(ArtifactRequest::DataType dataType, const ::Assets::Blob& blob);

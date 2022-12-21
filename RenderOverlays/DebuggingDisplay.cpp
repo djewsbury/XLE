@@ -27,6 +27,8 @@
 #include <assert.h>
 #include <string.h>
 
+using namespace Utility::Literals;
+
 #pragma warning(disable:4244)   // conversion from 'int' to 'float', possible loss of data
 
 namespace RenderOverlays { namespace DebuggingDisplay
@@ -233,7 +235,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             _fillEllipse = BuildImmediateDrawableMaterial(fillEllipse);
             _outlineEllipse = BuildImmediateDrawableMaterial(outlineEllipse);
 
-            _roundedRectUSI.BindImmediateData(0, Hash64("RoundedRectSettings"));
+            _roundedRectUSI.BindImmediateData(0, "RoundedRectSettings"_h);
             _fillRoundedRect._uniformStreamInterface = &_roundedRectUSI;
             _fillAndOutlineRoundedRect._uniformStreamInterface = &_roundedRectUSI;
             _outlineRoundedRect._uniformStreamInterface = &_roundedRectUSI;

@@ -16,6 +16,8 @@
 #include "../../Utility/BitUtils.h"
 #include "../../xleres/FileList.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace Techniques
 {
 	class DataSourceFromResourceSynchronized : public BufferUploads::IAsyncDataSource
@@ -75,12 +77,12 @@ namespace RenderCore { namespace Techniques
 		auto threadContext = GetThreadContext();
 		
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Hash64("Input"));
-		const auto pushConstantsBinding = Hash64("FilterPassParams");
+		usi.BindResourceView(0, "Input"_h);
+		constexpr auto pushConstantsBinding = "FilterPassParams"_h;
 
 		::Assets::PtrToMarkerPtr<IComputeShaderOperator> computeOpFuture;
 		if (filter == EquRectFilterMode::ToCubeMap) {
-			usi.BindResourceView(1, Hash64("OutputArray"));
+			usi.BindResourceView(1, "OutputArray"_h);
  			computeOpFuture = CreateComputeOperator(
 				std::make_shared<PipelineCollection>(threadContext->GetDevice()),
 				EQUIRECTANGULAR_TO_CUBE_HLSL ":EquRectToCube",
@@ -88,7 +90,7 @@ namespace RenderCore { namespace Techniques
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
 		} else if (filter == EquRectFilterMode::ToGlossySpecular) {
-			usi.BindResourceView(1, Hash64("OutputArray"));
+			usi.BindResourceView(1, "OutputArray"_h);
 			computeOpFuture = CreateComputeOperator(
 				std::make_shared<PipelineCollection>(threadContext->GetDevice()),
 				IBL_PREFILTER_HLSL ":EquiRectFilterGlossySpecular",
@@ -98,7 +100,7 @@ namespace RenderCore { namespace Techniques
 				usi);
 		} else {
 			assert(filter == EquRectFilterMode::ProjectToSphericalHarmonic);
-			usi.BindResourceView(1, Hash64("Output"));
+			usi.BindResourceView(1, "Output"_h);
 			computeOpFuture = CreateComputeOperator(
 				std::make_shared<PipelineCollection>(threadContext->GetDevice()),
 				IBL_PREFILTER_HLSL ":ProjectToSphericalHarmonic",
@@ -211,8 +213,8 @@ namespace RenderCore { namespace Techniques
 		auto threadContext = GetThreadContext();
 		
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Hash64("Output"));
-		usi.BindImmediateData(0, Hash64("FilterPassParams"));
+		usi.BindResourceView(0, "Output"_h);
+		usi.BindImmediateData(0, "FilterPassParams"_h);
 
  		auto computeOpFuture = CreateComputeOperator(
 			std::make_shared<PipelineCollection>(threadContext->GetDevice()),

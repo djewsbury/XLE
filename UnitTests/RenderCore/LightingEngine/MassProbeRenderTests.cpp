@@ -33,6 +33,8 @@
 
 using namespace Catch::literals;
 using namespace std::chrono_literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	static std::unordered_map<std::string, ::Assets::Blob> s_utData {
@@ -463,7 +465,7 @@ namespace UnitTests
 					auto projDesc = RenderCore::Techniques::BuildProjectionDesc(cameras[c], viewportDims);
 					_multProbeProperties._worldToProjection[c] = projDesc._worldToProjection;
 				}
-				BindImmediateData(0, Hash64("MultiViewProperties"));
+				BindImmediateData(0, "MultiViewProperties"_h);
 			}
 		};
 
@@ -576,7 +578,7 @@ namespace UnitTests
 					auto projDesc = RenderCore::Techniques::BuildProjectionDesc(cameras[c], viewportDims);
 					_multProbeProperties._worldToProjection[c] = projDesc._worldToProjection;
 				}
-				BindImmediateData(0, Hash64("MultiViewProperties"));
+				BindImmediateData(0, "MultiViewProperties"_h);
 			}
 		};
 
@@ -774,7 +776,7 @@ namespace UnitTests
 					auto projDesc = RenderCore::Techniques::BuildProjectionDesc(cameras[c], viewportDims);
 					_multProbeProperties._worldToProjection[c] = projDesc._worldToProjection;
 				}
-				BindImmediateData(0, Hash64("MultiViewProperties"));
+				BindImmediateData(0, "MultiViewProperties"_h);
 			}
 		};
 

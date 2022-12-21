@@ -21,6 +21,8 @@
 #include "catch2/catch_approx.hpp"
 
 using namespace Catch::literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	class VertexPCT
@@ -236,8 +238,8 @@ namespace UnitTests
 			auto srv1 = namedAttachmentsHelper.GetResourceView(1, BindFlag::InputAttachment, justDepthWindow, {}, {});
 			ResourceViewStream srvs { *srv0, *srv1 };
 			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Hash64("SubpassInputAttachment0"));
-			usi.BindResourceView(1, Hash64("SubpassInputAttachment1"));
+			usi.BindResourceView(0, "SubpassInputAttachment0"_h);
+			usi.BindResourceView(1, "SubpassInputAttachment1"_h);
 			Metal::BoundUniforms boundUniforms(shaderProgram, usi);
 			boundUniforms.ApplyLooseUniforms(metalContext, encoder, srvs);
 

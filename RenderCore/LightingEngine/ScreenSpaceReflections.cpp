@@ -25,6 +25,8 @@
 #include "../../Utility/ArithmeticUtils.h"
 #include "../../xleres/FileList.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace LightingEngine
 {
 	struct ScreenSpaceReflectionsOperator::ResolutionDependentResources
@@ -108,11 +110,11 @@ namespace RenderCore { namespace LightingEngine
 		ResolutionDependentResources() {};
 	};
 
-	constexpr uint64_t SSRReflections = ConstHash64<'SSRe', 'flec', 'tion'>::Value;
-	constexpr uint64_t SSRConfidence = ConstHash64<'SSRC', 'onfi', 'denc', 'e'>::Value;
-	constexpr uint64_t SSRConfidenceInt = ConstHash64<'SSRC', 'onfi', 'denc', 'eInt'>::Value;
-	constexpr uint64_t SSRInt = ConstHash64<'SSRI', 'nt'>::Value;
-	constexpr uint64_t SSRDebug = ConstHash64<'SSRD', 'ebug'>::Value;
+	constexpr uint64_t SSRReflections = ConstHash64Legacy<'SSRe', 'flec', 'tion'>::Value;
+	constexpr uint64_t SSRConfidence = ConstHash64Legacy<'SSRC', 'onfi', 'denc', 'e'>::Value;
+	constexpr uint64_t SSRConfidenceInt = ConstHash64Legacy<'SSRC', 'onfi', 'denc', 'eInt'>::Value;
+	constexpr uint64_t SSRInt = ConstHash64Legacy<'SSRI', 'nt'>::Value;
+	constexpr uint64_t SSRDebug = ConstHash64Legacy<'SSRD', 'ebug'>::Value;
 
 	constexpr unsigned s_nfb_outputUAV = 0;
 	constexpr unsigned s_nfb_outputSRV = 1;
@@ -547,56 +549,56 @@ namespace RenderCore { namespace LightingEngine
 		const ScreenSpaceReflectionsOperatorDesc& desc)
 	{
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Hash64("g_denoised_reflections"));
+		usi.BindResourceView(0, "g_denoised_reflections"_h);
 
-		usi.BindResourceView(1, Hash64("g_intersection_result"));
-		usi.BindResourceView(2, Hash64("g_intersection_result_read"));
+		usi.BindResourceView(1, "g_intersection_result"_h);
+		usi.BindResourceView(2, "g_intersection_result_read"_h);
 
-		usi.BindResourceView(3, Hash64("g_ray_list"));
-		usi.BindResourceView(4, Hash64("g_ray_list_read"));
-		usi.BindResourceView(5, Hash64("g_ray_counter"));
-		usi.BindResourceView(6, Hash64("g_ray_lengths"));
-		usi.BindResourceView(7, Hash64("g_ray_lengths_read"));
+		usi.BindResourceView(3, "g_ray_list"_h);
+		usi.BindResourceView(4, "g_ray_list_read"_h);
+		usi.BindResourceView(5, "g_ray_counter"_h);
+		usi.BindResourceView(6, "g_ray_lengths"_h);
+		usi.BindResourceView(7, "g_ray_lengths_read"_h);
 
-		usi.BindResourceView(8, Hash64("g_tile_meta_data_mask"));
-		usi.BindResourceView(9, Hash64("g_tile_meta_data_mask_read"));
+		usi.BindResourceView(8, "g_tile_meta_data_mask"_h);
+		usi.BindResourceView(9, "g_tile_meta_data_mask_read"_h);
 
-		usi.BindResourceView(10, Hash64("g_temporal_variance_mask"));
-		usi.BindResourceView(11, Hash64("g_temporal_variance_mask_read"));
-		usi.BindResourceView(12, Hash64("g_temporally_denoised_reflections"));
-		usi.BindResourceView(13, Hash64("g_temporally_denoised_reflections_read"));
-		usi.BindResourceView(14, Hash64("g_temporally_denoised_reflections_history"));
-		usi.BindResourceView(15, Hash64("g_spatially_denoised_reflections"));
-		usi.BindResourceView(16, Hash64("g_spatially_denoised_reflections_read"));
+		usi.BindResourceView(10, "g_temporal_variance_mask"_h);
+		usi.BindResourceView(11, "g_temporal_variance_mask_read"_h);
+		usi.BindResourceView(12, "g_temporally_denoised_reflections"_h);
+		usi.BindResourceView(13, "g_temporally_denoised_reflections_read"_h);
+		usi.BindResourceView(14, "g_temporally_denoised_reflections_history"_h);
+		usi.BindResourceView(15, "g_spatially_denoised_reflections"_h);
+		usi.BindResourceView(16, "g_spatially_denoised_reflections_read"_h);
 
-		usi.BindResourceView(17, Hash64("g_intersect_args"));			
+		usi.BindResourceView(17, "g_intersect_args"_h);			
 
-		usi.BindResourceView(18, Hash64("DownsampleDepths"));
-		usi.BindResourceView(19, Hash64("GBufferMotion"));
-		usi.BindResourceView(20, Hash64("GBufferNormal"));
-		usi.BindResourceView(21, Hash64("GBufferNormalPrev"));
-		usi.BindResourceView(22, Hash64("LastFrameLit"));
+		usi.BindResourceView(18, "DownsampleDepths"_h);
+		usi.BindResourceView(19, "GBufferMotion"_h);
+		usi.BindResourceView(20, "GBufferNormal"_h);
+		usi.BindResourceView(21, "GBufferNormalPrev"_h);
+		usi.BindResourceView(22, "LastFrameLit"_h);
 
-		usi.BindResourceView(23, Hash64("BN_Sobol"));
-		usi.BindResourceView(24, Hash64("BN_Ranking"));
-		usi.BindResourceView(25, Hash64("BN_Scrambling"));
+		usi.BindResourceView(23, "BN_Sobol"_h);
+		usi.BindResourceView(24, "BN_Ranking"_h);
+		usi.BindResourceView(25, "BN_Scrambling"_h);
 
-		usi.BindResourceView(26, Hash64("SkyCube"));
+		usi.BindResourceView(26, "SkyCube"_h);
 
-		usi.BindResourceView(27, Hash64("SSRDebug"));
-		usi.BindResourceView(28, Hash64("SSRConfiguration"));
+		usi.BindResourceView(27, "SSRDebug"_h);
+		usi.BindResourceView(28, "SSRConfiguration"_h);
 
 		if (desc._splitConfidence) {
-			usi.BindResourceView(29, Hash64("g_confidence_result"));
-			usi.BindResourceView(30, Hash64("g_confidence_result_read"));
-			usi.BindResourceView(31, Hash64("g_spatially_denoised_confidence"));
-			usi.BindResourceView(32, Hash64("g_temporally_denoised_confidence_history"));
-			usi.BindResourceView(33, Hash64("g_temporally_denoised_confidence"));
-			usi.BindResourceView(34, Hash64("g_spatially_denoised_confidence_read"));
+			usi.BindResourceView(29, "g_confidence_result"_h);
+			usi.BindResourceView(30, "g_confidence_result_read"_h);
+			usi.BindResourceView(31, "g_spatially_denoised_confidence"_h);
+			usi.BindResourceView(32, "g_temporally_denoised_confidence_history"_h);
+			usi.BindResourceView(33, "g_temporally_denoised_confidence"_h);
+			usi.BindResourceView(34, "g_spatially_denoised_confidence_read"_h);
 		}
 
-		usi.BindImmediateData(0, Hash64("ExtendedTransforms"));
-		usi.BindImmediateData(1, Hash64("FrameIdBuffer"));
+		usi.BindImmediateData(0, "ExtendedTransforms"_h);
+		usi.BindImmediateData(1, "FrameIdBuffer"_h);
 
 		ParameterBox selectors;
 		selectors.SetParameter("DEBUGGING_PRODUCTS", 1);

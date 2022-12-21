@@ -26,9 +26,9 @@
 
 namespace Assets
 {
-	static const auto ChunkType_Metrics = ConstHash64<'Metr', 'ics'>::Value;
-	static const auto ChunkType_Log = ConstHash64<'Log'>::Value;
-	static const auto ChunkType_Multi = ConstHash64<'Mult', 'iChu', 'nk'>::Value;
+	static const auto ChunkType_Metrics = ConstHash64Legacy<'Metr', 'ics'>::Value;
+	static const auto ChunkType_Log = ConstHash64Legacy<'Log'>::Value;
+	static const auto ChunkType_Multi = ConstHash64Legacy<'Mult', 'iChu', 'nk'>::Value;
 
 	class CompileProductsFile
 	{

@@ -31,6 +31,8 @@
 #include "../../Utility/MemoryUtils.h"
 #include "../../xleres/FileList.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace LightingEngine
 {
 	class DeferredLightScene : public Internal::StandardLightScene
@@ -113,7 +115,7 @@ namespace RenderCore { namespace LightingEngine
 
 		BuildGBufferResourceDelegate(Techniques::DeferredShaderResource& normalsFittingResource)
 		{
-			BindResourceView(0, Utility::Hash64("NormalsFittingTexture"));
+			BindResourceView(0, "NormalsFittingTexture"_h);
 			_normalsFitting = normalsFittingResource.GetShaderResource();
 			_completionCmdList = normalsFittingResource.GetCompletionCommandList();
 		}
@@ -258,7 +260,7 @@ namespace RenderCore { namespace LightingEngine
 		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
 		outputStates.Bind(MakeIteratorRange(blendStates));
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Utility::Hash64("SubpassInputAttachment"));
+		usi.BindResourceView(0, "SubpassInputAttachment"_h);
 		return Techniques::CreateFullViewportOperator(
 			pool, Techniques::FullViewportOperatorSubType::DisableDepth,
 			BASIC_PIXEL_HLSL ":copy_inputattachment",
@@ -541,8 +543,8 @@ namespace RenderCore { namespace LightingEngine
 		const IPreparedShadowResult& preparedShadowResult,
 		unsigned idx)
 	{
-		const auto cascadeIndexSemantic = Utility::Hash64("CascadeIndex");
-		const auto sampleDensitySemantic = Utility::Hash64("ShadowSampleDensity");
+		constexpr auto cascadeIndexSemantic = "CascadeIndex"_h;
+		constexpr auto sampleDensitySemantic = "ShadowSampleDensity"_h;
 		Techniques::FrameBufferDescFragment fbDesc;
 		Techniques::FrameBufferDescFragment::SubpassDesc sp;
 		sp.AppendOutput(fbDesc.DefineAttachment(cascadeIndexSemantic).FixedFormat(Format::R8_UINT).NoInitialState().FinalState(BindFlag::ShaderResource).RequireBindFlags(BindFlag::TransferSrc));
@@ -560,9 +562,9 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::RenderPassInstance rpi { parsingContext, fbDesc };
 
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Utility::Hash64("GBuffer_Normals"));
-		usi.BindResourceView(1, Utility::Hash64("DepthTexture"));
-		usi.BindFixedDescriptorSet(0, Utility::Hash64("ShadowTemplate"));
+		usi.BindResourceView(0, "GBuffer_Normals"_h);
+		usi.BindResourceView(1, "DepthTexture"_h);
+		usi.BindFixedDescriptorSet(0, "ShadowTemplate"_h);
 		IResourceView* srvs[] = { rpi.GetNonFrameBufferAttachmentView(0).get(), rpi.GetNonFrameBufferAttachmentView(1).get() };
 		ImmediateDataStream immData { parsingContext.GetProjectionDesc()};
 		UniformsStream us;

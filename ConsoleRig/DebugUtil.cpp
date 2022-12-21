@@ -34,8 +34,8 @@
 //////////////////////////////////
 
 #if defined(REDIRECT_COUT)
-    static auto Fn_CoutRedirectModule = ConstHash64<'cout', 'redi', 'rect'>::Value;
-    static auto Fn_RedirectCout = ConstHash64<'redi', 'rect', 'cout'>::Value;
+    static auto Fn_CoutRedirectModule = ConstHash64Legacy<'cout', 'redi', 'rect'>::Value;
+    static auto Fn_RedirectCout = ConstHash64Legacy<'redi', 'rect', 'cout'>::Value;
 #endif
 
 namespace ConsoleRig

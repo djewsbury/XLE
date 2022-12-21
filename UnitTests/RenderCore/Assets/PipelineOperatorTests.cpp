@@ -28,6 +28,8 @@
 #include <unordered_map>
 
 using namespace Catch::literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	static std::unordered_map<std::string, ::Assets::Blob> s_utData {
@@ -122,7 +124,7 @@ namespace UnitTests
 			outputStates.Bind(stitch._fbDesc, 1);
 			outputStates._attachmentBlendStates = {&Techniques::CommonResourceBox::s_abOpaque, &Techniques::CommonResourceBox::s_abOpaque+1};
 			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Hash64("SubpassInputAttachment"));
+			usi.BindResourceView(0, "SubpassInputAttachment"_h);
 			auto opMarker = Techniques::CreateFullViewportOperator(
 				pipelineCollection,
 				Techniques::FullViewportOperatorSubType::DisableDepth,

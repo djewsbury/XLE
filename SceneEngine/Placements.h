@@ -10,7 +10,7 @@
 
 namespace SceneEngine
 {
-	static const uint64_t ChunkType_Placements = ConstHash64<'Plac','emen','ts'>::Value;
+	static const uint64_t ChunkType_Placements = ConstHash64Legacy<'Plac','emen','ts'>::Value;
 
 	class PlacementsScaffold
 	{

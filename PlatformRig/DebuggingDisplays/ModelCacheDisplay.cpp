@@ -174,8 +174,8 @@ namespace PlatformRig { namespace Overlays
 		scrollBarId += IntegerHash64((uint64_t)this);
 		_scrollBar = RenderOverlays::DebuggingDisplay::ScrollBar(scrollBarId);
 
-		static auto modelTypeId = ConstHash64<'Mode', 'l'>::Value;
-		static auto materialTypeId = ConstHash64<'ResM', 'at'>::Value;
+		static auto modelTypeId = ConstHash64Legacy<'Mode', 'l'>::Value;
+		static auto materialTypeId = ConstHash64Legacy<'ResM', 'at'>::Value;
 		static auto rendererTypeId = 0;
 
 		_signalId = _modelCache->BindUpdateSignal(

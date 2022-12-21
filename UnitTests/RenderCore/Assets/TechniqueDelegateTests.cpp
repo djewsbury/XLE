@@ -64,6 +64,8 @@
 #include "catch2/catch_approx.hpp"
 
 using namespace Catch::literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	static std::unordered_map<std::string, ::Assets::Blob> s_techDelUTData {
@@ -308,8 +310,8 @@ namespace UnitTests
 			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& input) override
 		{
-			const uint64_t perPixelPatchName = Hash64("PerPixel");
-			const uint64_t deformPositionPatchName = Hash64("DeformPosition");
+			const uint64_t perPixelPatchName = "PerPixel"_h;
+			const uint64_t deformPositionPatchName = "DeformPosition"_h;
 
 			auto perPixelPatch = std::find_if(
 				shaderPatches.GetPatches().begin(), shaderPatches.GetPatches().end(),
@@ -395,9 +397,9 @@ namespace UnitTests
 
 		using namespace RenderCore;
 		UniformsStreamInterface usi;
-		usi.BindImmediateData(0, Hash64("GlobalTransform"));
+		usi.BindImmediateData(0, "GlobalTransform"_h);
 		if (descriptorSet)
-			usi.BindFixedDescriptorSet(0, Hash64("Material"));
+			usi.BindFixedDescriptorSet(0, "Material"_h);
 		Metal::BoundUniforms uniforms { *pipeline->_metalPipeline, usi };
 
 		{
@@ -631,7 +633,7 @@ namespace UnitTests
 				ParameterBox resourceBindings;
 				std::vector<std::pair<uint64_t, SamplerDesc>> samplerBindings;
 				resourceBindings.SetParameter("InputTexture", "xleres/DefaultResources/waternoise.png");
-				samplerBindings.push_back(std::make_pair(Hash64("InputSampler"), SamplerDesc{}));
+				samplerBindings.push_back(std::make_pair("InputSampler"_h, SamplerDesc{}));
 				constantBindings.SetParameter("TextureAspectDistortion", Float2{0.5f, 3.0f});
 				auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(
 					constantBindings, resourceBindings, samplerBindings);

@@ -7,6 +7,8 @@
 #include "ParsingContext.h"
 #include "../../Utility/MemoryUtils.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace Techniques
 {
 	void SystemUniformsDelegate::WriteImmediateData(ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst)
@@ -52,9 +54,9 @@ namespace RenderCore { namespace Techniques
 
 	SystemUniformsDelegate::SystemUniformsDelegate(IDevice& device)
 	{
-		BindImmediateData(0, Hash64("GlobalTransform"));
-		BindImmediateData(1, Hash64("LocalTransform"));
-		BindImmediateData(2, Hash64("ReciprocalViewportDimensionsCB"));
+		BindImmediateData(0, "GlobalTransform"_h);
+		BindImmediateData(1, "LocalTransform"_h);
+		BindImmediateData(2, "ReciprocalViewportDimensionsCB"_h);
 
 		XlZeroMemory(_localTransformFallback);
 		_localTransformFallback._localToWorld = Identity<Float3x4>();

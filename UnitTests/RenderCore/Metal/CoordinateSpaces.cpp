@@ -19,6 +19,8 @@
 #include "catch2/catch_approx.hpp"
 
 using namespace Catch::literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	class VertexPCT
@@ -99,8 +101,8 @@ namespace UnitTests
 
 		if (srv) {
 			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Hash64("Texture"));
-			usi.BindSampler(0, Hash64("Texture_sampler"));
+			usi.BindResourceView(0, "Texture"_h);
+			usi.BindSampler(0, "Texture_sampler"_h);
 			Metal::BoundUniforms uniforms { shaderProgram, usi };
 
 			const IResourceView* resourceViews[] = { srv };

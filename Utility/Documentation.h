@@ -67,7 +67,6 @@
             Class | Description
             ----- | -----------
             ParameterBox | <i>Stores a set of variant types, indexed by string hash</i>
-            ConstHash64 | <i>generates a compile time hash of a string, without special compiler support</i>
             utf8, ucs2, ucs4 | <i>unicode character type library</i>
             StringMeld | <i>allows ostream::operator<< syntax on a fixed size character buffer</i>
             Hash32(), Hash64(), HashCombine() | <i>general purpose hashing function</i>

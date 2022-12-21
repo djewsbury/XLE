@@ -16,6 +16,8 @@
 #include "../../Utility/BitUtils.h"
 #include "../../xleres/FileList.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace LightingEngine
 {
 	void HierarchicalDepthsOperator::Execute(RenderCore::LightingEngine::LightingTechniqueIterator& iterator)
@@ -122,9 +124,9 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool)
 	{
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Hash64("AtomicBuffer"));
-		usi.BindResourceView(1, Hash64("InputDepths"));
-		auto downSampleDepthsBinding = Hash64("DownsampleDepths");
+		usi.BindResourceView(0, "AtomicBuffer"_h);
+		usi.BindResourceView(1, "InputDepths"_h);
+		auto downSampleDepthsBinding = "DownsampleDepths"_h;
 		for (unsigned c=0; c<13; ++c)
 			usi.BindResourceView(2+c, downSampleDepthsBinding+c);
 

@@ -40,6 +40,8 @@
 
 using namespace Catch::literals;
 using namespace std::chrono_literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	static std::unordered_map<std::string, ::Assets::Blob> s_utData {
@@ -140,7 +142,7 @@ namespace UnitTests
 				Techniques::PreregisteredAttachment::State::Uninitialized
 			},
 			Techniques::PreregisteredAttachment {
-				Hash64("ReconstructedWorldPosition"),
+				"ReconstructedWorldPosition"_h,
 				CreateDesc(
 					BindFlag::TransferSrc | BindFlag::RenderTarget,
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::R32G32B32A32_FLOAT)),
@@ -148,7 +150,7 @@ namespace UnitTests
 				Techniques::PreregisteredAttachment::State::Uninitialized
 			},
 			Techniques::PreregisteredAttachment {
-				Hash64("ReconstructedWorldNormal"),
+				"ReconstructedWorldNormal"_h,
 				CreateDesc(
 					BindFlag::TransferSrc | BindFlag::RenderTarget,
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::R32G32B32A32_FLOAT)),
@@ -156,7 +158,7 @@ namespace UnitTests
 				Techniques::PreregisteredAttachment::State::Uninitialized
 			},
 			Techniques::PreregisteredAttachment {
-				Hash64("DirectWorldPosition"),
+				"DirectWorldPosition"_h,
 				CreateDesc(
 					BindFlag::TransferSrc | BindFlag::RenderTarget,
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::R32G32B32A32_FLOAT)),
@@ -164,7 +166,7 @@ namespace UnitTests
 				Techniques::PreregisteredAttachment::State::Uninitialized
 			},
 			Techniques::PreregisteredAttachment {
-				Hash64("DirectWorldNormal"),
+				"DirectWorldNormal"_h,
 				CreateDesc(
 					BindFlag::TransferSrc | BindFlag::RenderTarget,
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::R32G32B32A32_FLOAT)),
@@ -228,9 +230,9 @@ namespace UnitTests
 
 		GBufferConstructionUnitTestGlobalUniforms()
 		{
-			BindImmediateData(0, Hash64("GlobalTransform"));
-			BindImmediateData(1, Hash64("LocalTransform"));
-			BindResourceView(0, Hash64("NormalsFittingTexture"));
+			BindImmediateData(0, "GlobalTransform"_h);
+			BindImmediateData(1, "LocalTransform"_h);
+			BindResourceView(0, "NormalsFittingTexture"_h);
 
 			auto normalsFittingTexture = ::Assets::ActualizeAssetPtr<RenderCore::Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
 			_normalsFittingSRV = normalsFittingTexture->GetShaderResource();
@@ -439,8 +441,8 @@ namespace UnitTests
 				{
 					RenderCore::Techniques::FrameBufferDescFragment frag;
 					RenderCore::Techniques::FrameBufferDescFragment::SubpassDesc subpass;
-					subpass.AppendOutput(frag.DefineAttachment(Hash64("ReconstructedWorldPosition")).Clear().FinalState(BindFlag::TransferSrc));
-					subpass.AppendOutput(frag.DefineAttachment(Hash64("ReconstructedWorldNormal")).Clear().FinalState(BindFlag::TransferSrc));
+					subpass.AppendOutput(frag.DefineAttachment("ReconstructedWorldPosition"_h).Clear().FinalState(BindFlag::TransferSrc));
+					subpass.AppendOutput(frag.DefineAttachment("ReconstructedWorldNormal"_h).Clear().FinalState(BindFlag::TransferSrc));
 					subpass.AppendNonFrameBufferAttachmentView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse));
 					subpass.AppendNonFrameBufferAttachmentView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
 					subpass.AppendNonFrameBufferAttachmentView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter));
@@ -451,10 +453,10 @@ namespace UnitTests
 					reconstructedWorldNormal = rpi.GetOutputAttachmentResource(1);
 
 					UniformsStreamInterface usi;
-					usi.BindResourceView(0, Utility::Hash64("GBuffer_Diffuse"));
-					usi.BindResourceView(1, Utility::Hash64("GBuffer_Normals"));
-					usi.BindResourceView(2, Utility::Hash64("GBuffer_Parameters"));
-					usi.BindResourceView(3, Utility::Hash64("DepthTexture"));
+					usi.BindResourceView(0, "GBuffer_Diffuse"_h);
+					usi.BindResourceView(1, "GBuffer_Normals"_h);
+					usi.BindResourceView(2, "GBuffer_Parameters"_h);
+					usi.BindResourceView(3, "DepthTexture"_h);
 					UniformsStream us;
 					IResourceView* srvs[] = { 
 						rpi.GetNonFrameBufferAttachmentView(0).get(),
@@ -472,8 +474,8 @@ namespace UnitTests
 				{
 					RenderCore::Techniques::FrameBufferDescFragment frag;
 					SubpassDesc subpass;
-					subpass.AppendOutput(frag.DefineAttachment(Hash64("DirectWorldPosition")).Clear().FinalState(BindFlag::TransferSrc));
-					subpass.AppendOutput(frag.DefineAttachment(Hash64("DirectWorldNormal")).Clear().FinalState(BindFlag::TransferSrc));
+					subpass.AppendOutput(frag.DefineAttachment("DirectWorldPosition"_h).Clear().FinalState(BindFlag::TransferSrc));
+					subpass.AppendOutput(frag.DefineAttachment("DirectWorldNormal"_h).Clear().FinalState(BindFlag::TransferSrc));
 					subpass.SetDepthStencil(frag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).SystemAttachmentFormat(Techniques::SystemAttachmentFormat::MainDepthStencil).Clear());
 					frag.AddSubpass(std::move(subpass));
 					RenderCore::Techniques::RenderPassInstance rpi(parsingContext, frag);

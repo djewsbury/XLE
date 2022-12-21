@@ -24,6 +24,8 @@
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/Streams/StreamFormatter.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace Techniques
 {
 	static_assert((uint32_t)DrawableConstructor::Command::BeginElement == Assets::s_scaffoldCmdBegin_DrawableConstructor);
@@ -555,7 +557,7 @@ namespace RenderCore { namespace Techniques
 		return nullptr;
 	}
 
-	static const uint64_t s_topologicalCmdStream = Hash64("adjacency");
+	static const uint64_t s_topologicalCmdStream = "adjacency"_h;
 
 	class DrawableConstructor::Pimpl
 	{

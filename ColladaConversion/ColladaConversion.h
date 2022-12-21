@@ -13,8 +13,8 @@ namespace Assets { class ICompileOperation; }
 
 namespace ColladaConversion
 {
-	static const uint64 Type_Model = ConstHash64<'Mode', 'l'>::Value;
-	static const uint64 Type_AnimationSet = ConstHash64<'Anim', 'Set'>::Value;
-	static const uint64 Type_Skeleton = ConstHash64<'Skel', 'eton'>::Value;
-	static const uint64 Type_RawMat = ConstHash64<'RawM', 'at'>::Value;
+	static const uint64 Type_Model = ConstHash64Legacy<'Mode', 'l'>::Value;
+	static const uint64 Type_AnimationSet = ConstHash64Legacy<'Anim', 'Set'>::Value;
+	static const uint64 Type_Skeleton = ConstHash64Legacy<'Skel', 'eton'>::Value;
+	static const uint64 Type_RawMat = ConstHash64Legacy<'RawM', 'at'>::Value;
 }

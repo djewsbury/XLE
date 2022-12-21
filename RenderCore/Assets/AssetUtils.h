@@ -16,12 +16,12 @@ namespace RenderCore { class InputElementDesc; enum class Topology; }
 
 namespace RenderCore { namespace Assets
 {
-	static const uint64_t ChunkType_ModelScaffold = ConstHash64<'Mode', 'lSca', 'fold'>::Value;
-	static const uint64_t ChunkType_ModelScaffoldLargeBlocks = ConstHash64<'Mode', 'lSca', 'fold', 'Larg'>::Value;
-	static const uint64_t ChunkType_AnimationSet = ConstHash64<'Anim', 'Set'>::Value;
-	static const uint64_t ChunkType_Skeleton = ConstHash64<'Skel', 'eton'>::Value;
-	static const uint64_t ChunkType_RawMat = ConstHash64<'RawM', 'at'>::Value;
-	static const uint64_t ChunkType_Metrics = ConstHash64<'Metr', 'ics'>::Value;
+	static const uint64_t ChunkType_ModelScaffold = ConstHash64Legacy<'Mode', 'lSca', 'fold'>::Value;
+	static const uint64_t ChunkType_ModelScaffoldLargeBlocks = ConstHash64Legacy<'Mode', 'lSca', 'fold', 'Larg'>::Value;
+	static const uint64_t ChunkType_AnimationSet = ConstHash64Legacy<'Anim', 'Set'>::Value;
+	static const uint64_t ChunkType_Skeleton = ConstHash64Legacy<'Skel', 'eton'>::Value;
+	static const uint64_t ChunkType_RawMat = ConstHash64Legacy<'RawM', 'at'>::Value;
+	static const uint64_t ChunkType_Metrics = ConstHash64Legacy<'Metr', 'ics'>::Value;
 
 	struct GeoInputAssembly;
 	struct DrawCallDesc;

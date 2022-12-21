@@ -14,11 +14,11 @@ namespace RenderCore { namespace Techniques
 {
     namespace ObjectCB
     {
-        static const auto LocalTransform = Utility::Hash64("LocalTransform");
-        static const auto GlobalTransform = Utility::Hash64("GlobalTransform");
-		static const auto DrawCallProperties = Utility::Hash64("DrawCallProperties");
-        static const auto BasicMaterialConstants = Utility::Hash64("BasicMaterialConstants");
-        static const auto Globals = Utility::Hash64("$Globals");
+        constexpr auto LocalTransform = ConstHash64("LocalTransform");
+        constexpr auto GlobalTransform = ConstHash64("GlobalTransform");
+		constexpr auto DrawCallProperties = ConstHash64("DrawCallProperties");
+        constexpr auto BasicMaterialConstants = ConstHash64("BasicMaterialConstants");
+        constexpr auto Globals = ConstHash64("$Globals");
     }
 
     /// <summary>Technique type binding indicies</summary>
@@ -28,65 +28,65 @@ namespace RenderCore { namespace Techniques
     /// find a good balance between performance and flexibility for this case.
     namespace TechniqueIndex
     {
-        static const auto Forward       = 0u;
-        static const auto DepthOnly     = 1u;
-        static const auto Deferred      = 2u;
-        static const auto ShadowGen     = 3u;
-        static const auto OrderIndependentTransparency = 4u;
-        static const auto PrepareVegetationSpawn = 5u;
-        static const auto RayTest       = 6u;
-        static const auto VisNormals    = 7u;
-        static const auto VisWireframe  = 8u;
-        static const auto WriteTriangleIndex = 9u;
-        static const auto StochasticTransparency = 10u;
-        static const auto DepthWeightedTransparency = 11u;
+        constexpr auto Forward       = 0u;
+        constexpr auto DepthOnly     = 1u;
+        constexpr auto Deferred      = 2u;
+        constexpr auto ShadowGen     = 3u;
+        constexpr auto OrderIndependentTransparency = 4u;
+        constexpr auto PrepareVegetationSpawn = 5u;
+        constexpr auto RayTest       = 6u;
+        constexpr auto VisNormals    = 7u;
+        constexpr auto VisWireframe  = 8u;
+        constexpr auto WriteTriangleIndex = 9u;
+        constexpr auto StochasticTransparency = 10u;
+        constexpr auto DepthWeightedTransparency = 11u;
 
-        static const auto Max = 12u;
+        constexpr auto Max = 12u;
     };
 
 	namespace AttachmentSemantics
     {
-        constexpr uint64_t MultisampleDepth = ConstHash64<'Mult', 'isam', 'pleD', 'epth'>::Value;
-        constexpr uint64_t GBufferDiffuse   = ConstHash64<'GBuf', 'ferD', 'iffu', 'se'>::Value;
-        constexpr uint64_t GBufferNormal    = ConstHash64<'GBuf', 'ferN', 'orma', 'l'>::Value;
-        constexpr uint64_t GBufferParameter = ConstHash64<'GBuf', 'ferP', 'aram', 'eter'>::Value;
-        constexpr uint64_t GBufferMotion    = ConstHash64<'GBuf', 'ferM', 'otio', 'n'>::Value;
-        constexpr uint64_t HistoryAcc       = ConstHash64<'Hist', 'oryA', 'cc'>::Value;
+        constexpr uint64_t MultisampleDepth = ConstHash64Legacy<'Mult', 'isam', 'pleD', 'epth'>::Value;
+        constexpr uint64_t GBufferDiffuse   = ConstHash64Legacy<'GBuf', 'ferD', 'iffu', 'se'>::Value;
+        constexpr uint64_t GBufferNormal    = ConstHash64Legacy<'GBuf', 'ferN', 'orma', 'l'>::Value;
+        constexpr uint64_t GBufferParameter = ConstHash64Legacy<'GBuf', 'ferP', 'aram', 'eter'>::Value;
+        constexpr uint64_t GBufferMotion    = ConstHash64Legacy<'GBuf', 'ferM', 'otio', 'n'>::Value;
+        constexpr uint64_t HistoryAcc       = ConstHash64Legacy<'Hist', 'oryA', 'cc'>::Value;
 
-        constexpr uint64_t ColorLDR         = ConstHash64<'Colo', 'rLDR'>::Value;
-        constexpr uint64_t ColorHDR         = ConstHash64<'Colo', 'rHDR'>::Value;
-        constexpr uint64_t Depth            = ConstHash64<'Dept', 'h'>::Value;
+        constexpr uint64_t ColorLDR         = ConstHash64Legacy<'Colo', 'rLDR'>::Value;
+        constexpr uint64_t ColorHDR         = ConstHash64Legacy<'Colo', 'rHDR'>::Value;
+        constexpr uint64_t Depth            = ConstHash64Legacy<'Dept', 'h'>::Value;
 
-		constexpr uint64_t ShadowDepthMap	= ConstHash64<'Shad', 'owDe', 'pthM', 'ap'>::Value;
+		constexpr uint64_t ShadowDepthMap	= ConstHash64Legacy<'Shad', 'owDe', 'pthM', 'ap'>::Value;
 
-        constexpr uint64_t HierarchicalDepths	= ConstHash64<'Hier', 'arch', 'ical', 'Dept'>::Value;
-        constexpr uint64_t TiledLightBitField	= ConstHash64<'Tile', 'dLig', 'htBi', 'tFie'>::Value;
+        constexpr uint64_t HierarchicalDepths	= ConstHash64Legacy<'Hier', 'arch', 'ical', 'Dept'>::Value;
+        constexpr uint64_t TiledLightBitField	= ConstHash64Legacy<'Tile', 'dLig', 'htBi', 'tFie'>::Value;
 
-        constexpr uint64_t MultisampleDepthPrev = ConstHash64<'Mult', 'isam', 'pleD', 'epth'>::Value+1;
-        constexpr uint64_t GBufferNormalPrev    = ConstHash64<'GBuf', 'ferN', 'orma', 'l'>::Value+1;
-        constexpr uint64_t ColorHDRPrev         = ConstHash64<'Colo', 'rHDR'>::Value+1;
+        constexpr uint64_t MultisampleDepthPrev = ConstHash64Legacy<'Mult', 'isam', 'pleD', 'epth'>::Value+1;
+        constexpr uint64_t GBufferNormalPrev    = ConstHash64Legacy<'GBuf', 'ferN', 'orma', 'l'>::Value+1;
+        constexpr uint64_t ColorHDRPrev         = ConstHash64Legacy<'Colo', 'rHDR'>::Value+1;
 
         const char* TryDehash(uint64_t);
 	}
 
     namespace CommonSemantics
     {        
-        static const auto POSITION = Utility::Hash64("POSITION");
-        static const auto PIXELPOSITION = Utility::Hash64("PIXELPOSITION");
-        static const auto TEXCOORD = Utility::Hash64("TEXCOORD");
-		static const auto COLOR = Utility::Hash64("COLOR");
-		static const auto NORMAL = Utility::Hash64("NORMAL");
-		static const auto TEXTANGENT = Utility::Hash64("TEXTANGENT");
-		static const auto TEXBITANGENT = Utility::Hash64("TEXBITANGENT");
-		static const auto BONEINDICES = Utility::Hash64("BONEINDICES");
-		static const auto BONEWEIGHTS = Utility::Hash64("BONEWEIGHTS");
-		static const auto PER_VERTEX_AO = Utility::Hash64("PER_VERTEX_AO");
-        static const auto RADIUS = Utility::Hash64("RADIUS");
-        static const auto FONTTABLE = Utility::Hash64("FONTTABLE");
+        constexpr auto POSITION = ConstHash64("POSITION");
+        constexpr auto PIXELPOSITION = ConstHash64("PIXELPOSITION");
+        constexpr auto TEXCOORD = ConstHash64("TEXCOORD");
+		constexpr auto COLOR = ConstHash64("COLOR");
+		constexpr auto NORMAL = ConstHash64("NORMAL");
+		constexpr auto TEXTANGENT = ConstHash64("TEXTANGENT");
+		constexpr auto TEXBITANGENT = ConstHash64("TEXBITANGENT");
+		constexpr auto BONEINDICES = ConstHash64("BONEINDICES");
+		constexpr auto BONEWEIGHTS = ConstHash64("BONEWEIGHTS");
+		constexpr auto PER_VERTEX_AO = ConstHash64("PER_VERTEX_AO");
+        constexpr auto RADIUS = ConstHash64("RADIUS");
+        constexpr auto FONTTABLE = ConstHash64("FONTTABLE");
 
         std::pair<const char*, unsigned> TryDehash(uint64_t);
     }
 
-    static constexpr unsigned s_defaultMaterialDescSetSlot = 2;
+    constexpr unsigned s_defaultMaterialDescSetSlot = 2;
 }}
 

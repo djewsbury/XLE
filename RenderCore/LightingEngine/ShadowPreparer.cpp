@@ -24,6 +24,8 @@
 #include "../../Assets/Marker.h"
 #include <vector>
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace LightingEngine
 {
 	class PreparedShadowResult : public IPreparedShadowResult
@@ -128,8 +130,8 @@ namespace RenderCore { namespace LightingEngine
 		
 			UniformDelegate(DMShadowPreparer& preparer) : _preparer(&preparer)
 			{
-				BindImmediateData(0, Utility::Hash64("ShadowProjection"), {});
-				BindImmediateData(1, Utility::Hash64("MultiViewProperties"), {});
+				BindImmediateData(0, "ShadowProjection"_h, {});
+				BindImmediateData(1, "MultiViewProperties"_h, {});
 			}
 			DMShadowPreparer* _preparer;
 		};

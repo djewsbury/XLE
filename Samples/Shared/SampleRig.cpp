@@ -82,7 +82,7 @@ namespace Sample
         sampleGlobals._immediateDrawingApparatus = std::make_shared<RenderCore::Techniques::ImmediateDrawingApparatus>(sampleGlobals._drawingApparatus);
         sampleGlobals._primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(sampleGlobals._renderDevice);
         sampleGlobals._frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(sampleGlobals._renderDevice);
-        sampleGlobals._windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(osWindow), sampleGlobals._drawingApparatus.get(), *sampleGlobals._frameRenderingApparatus);
+        sampleGlobals._windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(osWindow), sampleGlobals._drawingApparatus.get(), *sampleGlobals._frameRenderingApparatus, config._presentationChainBindFlags);
         {
             auto v = sampleGlobals._renderDevice->GetDesc();
             StringMeld<128> meld;

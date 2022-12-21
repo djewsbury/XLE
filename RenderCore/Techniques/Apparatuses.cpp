@@ -39,6 +39,8 @@
 #include "../../Utility/Profiling/CPUProfiler.h"
 #include "../../xleres/FileList.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace Techniques
 {
 	static std::shared_ptr<RenderCore::ILowLevelCompiler> CreateDefaultShaderCompiler(RenderCore::IDevice& device);
@@ -113,8 +115,8 @@ namespace RenderCore { namespace Techniques
 			_depValPtr.RegisterDependency(descSetLayoutContainer->GetDependencyValidation());
 			auto graphicsSequencerDS = CreateSemiConstantDescriptorSet(*i->second, SEQUENCER_DS ":Sequencer", PipelineType::Graphics, *_device);
 			auto computeSequencerDS = CreateSemiConstantDescriptorSet(*i->second, SEQUENCER_DS ":Sequencer", PipelineType::Compute, *_device);
-			_mainUniformDelegateManager->BindSemiConstantDescriptorSet(Hash64("Sequencer"), std::move(graphicsSequencerDS));
-			_mainUniformDelegateManager->BindSemiConstantDescriptorSet(Hash64("Sequencer"), std::move(computeSequencerDS));
+			_mainUniformDelegateManager->BindSemiConstantDescriptorSet("Sequencer"_h, std::move(graphicsSequencerDS));
+			_mainUniformDelegateManager->BindSemiConstantDescriptorSet("Sequencer"_h, std::move(computeSequencerDS));
 		}
 	}
 

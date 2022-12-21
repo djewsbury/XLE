@@ -13,7 +13,7 @@ namespace Utility
         XlMemAlignFree(ptr); 
     }
 
-    uint64_t ConstHash64FromString(const char* begin, const char* end)
+    uint64_t ConstHash64LegacyFromString(const char* begin, const char* end)
     {
         // We want to match the results that we would
         // get from the compiler-time ConstHash64
@@ -22,7 +22,7 @@ namespace Utility
         // but incomplete groups of 4 are aligned to
         // the least significant bits.
 
-        uint64_t result = ConstHash64<0>::Seed;
+        uint64_t result = ConstHash64Legacy<0>::Seed;
         const char* i = begin;
         while (i != end) {
             const auto* s = i;

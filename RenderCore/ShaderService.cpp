@@ -98,7 +98,7 @@ namespace RenderCore
 		return MakeStringSection(hdr._entryPoint);
     }
 
-    const uint64 CompiledShaderByteCode::CompileProcessType = ConstHash64<'Shdr', 'Byte', 'Code'>::Value;
+    const uint64 CompiledShaderByteCode::CompileProcessType = ConstHash64Legacy<'Shdr', 'Byte', 'Code'>::Value;
 
         ////////////////////////////////////////////////////////////
 

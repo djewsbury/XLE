@@ -29,6 +29,8 @@
 	#include "../../../RenderCore/Metal/State.h"
 #endif
 
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	static std::shared_ptr<RenderCore::ICompiledPipelineLayout> CreateDefaultPipelineLayout(RenderCore::IDevice& device);
@@ -584,14 +586,14 @@ namespace UnitTests
 		auto result = std::make_shared<LegacyRegisterBindingDesc>();
 		result->AppendEntry(
 			RegisterType::ShaderResource, RegisterQualifier::None,
-			Entry{0, 3, Hash64("Numeric"), 2, 0, 3});
+			Entry{0, 3, "Numeric"_h, 2, 0, 3});
 		result->AppendEntry(
 			RegisterType::ConstantBuffer, RegisterQualifier::None,
-			Entry{3, 4, Hash64("Numeric"), 2, 3, 4});
+			Entry{3, 4, "Numeric"_h, 2, 3, 4});
 
 		result->AppendEntry(
 			RegisterType::Sampler, RegisterQualifier::None,
-			Entry{16, 17, Hash64("Numeric"), 3, 4, 5});				// HLSL dummy sampler
+			Entry{16, 17, "Numeric"_h, 3, 4, 5});				// HLSL dummy sampler
 		return result;
 	}
 }

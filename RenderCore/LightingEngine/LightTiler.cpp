@@ -25,6 +25,8 @@
 #include "../../Utility/BitUtils.h"
 #include "../../xleres/FileList.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace LightingEngine
 {
 	static constexpr unsigned s_gridDims = 16u;
@@ -205,7 +207,7 @@ namespace RenderCore { namespace LightingEngine
 		auto tiledLightBitField = result.DefineAttachment(Techniques::AttachmentSemantics::TiledLightBitField).NoInitialState().FinalState(BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(tiledLightBitField, BindFlag::TransferDst);
 		/*spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::UnorderedAccess);
-		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Hash64("LowRezDepthBuffer")), BindFlag::DepthStencil);*/
+		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment("LowRezDepthBuffer"_h), BindFlag::DepthStencil);*/
 		spDesc.SetName("rasterization-light-tiler-init");
 		result.AddSubpass(
 			std::move(spDesc),
@@ -248,7 +250,7 @@ namespace RenderCore { namespace LightingEngine
 				"tiled-light-bit-field"
 			}/*,
 			Techniques::PreregisteredAttachment {
-				Hash64("LowRezDepthBuffer"),
+				"LowRezDepthBuffer"_h,
 				CreateDesc(
 					BindFlag::DepthStencil|BindFlag::TransferDst, 0, 0, 
 					TextureDesc::Plain2D(_lightTileBufferSize[0], _lightTileBufferSize[1], Format::D32_FLOAT),
@@ -284,10 +286,10 @@ namespace RenderCore { namespace LightingEngine
 		_depVal.RegisterDependency(_prepareBitFieldPipeline->GetDependencyValidation());
 
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Utility::Hash64("TiledLightBitField"));
-		usi.BindResourceView(1, Utility::Hash64("CombinedLightBuffer"));
-		usi.BindResourceView(2, Utility::Hash64("DownsampleDepths"));
-		usi.BindImmediateData(0, Utility::Hash64("GlobalTransform"));
+		usi.BindResourceView(0, "TiledLightBitField"_h);
+		usi.BindResourceView(1, "CombinedLightBuffer"_h);
+		usi.BindResourceView(2, "DownsampleDepths"_h);
+		usi.BindImmediateData(0, "GlobalTransform"_h);
 		_prepareBitFieldBoundUniforms = Metal::BoundUniforms(*_prepareBitFieldPipeline, usi);
 
 		auto tileableLightBufferDesc = CreateDesc(
@@ -404,10 +406,10 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::RenderPassInstance rpi{threadContext, parsingContext, fragment};
 
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Hash64("TiledLightBitField"));
-		usi.BindResourceView(1, Hash64("CombinedLightBuffer"));
-		usi.BindResourceView(2, Hash64("DepthTexture"));
-		usi.BindResourceView(3, Hash64("LightDepthTable"));
+		usi.BindResourceView(0, "TiledLightBitField"_h);
+		usi.BindResourceView(1, "CombinedLightBuffer"_h);
+		usi.BindResourceView(2, "DepthTexture"_h);
+		usi.BindResourceView(3, "LightDepthTable"_h);
 		UniformsStream us;
 		IResourceView* srvs[] = { rpi.GetNonFrameBufferAttachmentView(0).get(), s_lastLightBufferResView.get(), rpi.GetNonFrameBufferAttachmentView(1).get(), depthLookupTableView.get() };
 		us._resourceViews = MakeIteratorRange(srvs);

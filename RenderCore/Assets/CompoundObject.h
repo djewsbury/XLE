@@ -53,7 +53,7 @@ namespace RenderCore { namespace Assets
 		NascentCompoundObject();
 		~NascentCompoundObject();
 
-		static const auto CompileProcessType = ConstHash64<'Comp', 'ound'>::Value;
+		static const auto CompileProcessType = ConstHash64Legacy<'Comp', 'ound'>::Value;
 	private:
 		::Assets::DependencyValidation _depVal;
 		mutable uint64_t _hash = 0;
@@ -82,7 +82,7 @@ namespace RenderCore { namespace Assets
 		CompoundObjectScaffold(const ::Assets::Blob& blob, const ::Assets::DependencyValidation& depVal, StringSection<> requestParameters);
 		~CompoundObjectScaffold();
 
-		static const auto CompileProcessType = ConstHash64<'Comp', 'ound'>::Value;
+		static const auto CompileProcessType = ConstHash64Legacy<'Comp', 'ound'>::Value;
 	private:
 		std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> _modelRendererConstruction;
 		::Assets::Blob _blob;

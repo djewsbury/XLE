@@ -15,6 +15,8 @@
 #include "../../Assets/Continuation.h"
 #include "../../xleres/FileList.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace LightingEngine 
 {
 	struct CB_Params
@@ -120,9 +122,9 @@ namespace RenderCore { namespace LightingEngine
 		const ToneMapAcesOperatorDesc& desc)
 	{
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Hash64("HDRInput"));
-		usi.BindResourceView(1, Hash64("LDROutput"));
-		usi.BindResourceView(2, Hash64("Params"));
+		usi.BindResourceView(0, "HDRInput"_h);
+		usi.BindResourceView(1, "LDROutput"_h);
+		usi.BindResourceView(2, "Params"_h);
 
 		ParameterBox params;
 

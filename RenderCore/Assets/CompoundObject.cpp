@@ -263,7 +263,7 @@ namespace RenderCore { namespace Assets
 
 
 #if 0
-	static const auto s_compoundObjectCompileProcessType = ConstHash64<'Comp', 'ound'>::Value;
+	static const auto s_compoundObjectCompileProcessType = ConstHash64Legacy<'Comp', 'ound'>::Value;
 
 	static void ConstructCompoundObjectFromCompile(
 		std::promise<CompoundObjectScaffold>&& promise,

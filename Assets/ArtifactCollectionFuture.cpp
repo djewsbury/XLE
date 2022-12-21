@@ -16,7 +16,7 @@
 
 namespace Assets 
 {
-	static const auto ChunkType_Log = ConstHash64<'Log'>::Value;
+	static const auto ChunkType_Log = ConstHash64Legacy<'Log'>::Value;
 
 	Blob GetErrorMessage(const IArtifactCollection& collection)
 	{

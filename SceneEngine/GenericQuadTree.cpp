@@ -18,6 +18,8 @@
 #include <stack>
 #include <cfloat>
 
+using namespace Utility::Literals;
+
 namespace SceneEngine
 {
 #pragma pack(push)
@@ -975,10 +977,10 @@ namespace SceneEngine
         return str;
     }
 
-	static const uint64 ChunkType_QuadTree = ConstHash64<'Quad', 'Tree'>::Value;
-	static const unsigned QuadTreeDataVersion = 0;
+	constexpr uint64 ChunkType_QuadTree = ConstHash64Legacy<'Quad', 'Tree'>::Value;
+	constexpr unsigned QuadTreeDataVersion = 0;
 
-	static const ::Assets::ArtifactRequest QuadTreeChunkRequests[]
+	constexpr ::Assets::ArtifactRequest QuadTreeChunkRequests[]
     {
         ::Assets::ArtifactRequest { "QuadTree", ChunkType_QuadTree, QuadTreeDataVersion, ::Assets::ArtifactRequest::DataType::BlockSerializer },
     };

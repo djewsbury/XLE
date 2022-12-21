@@ -45,6 +45,8 @@
 
 using namespace Catch::literals;
 using namespace std::chrono_literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	static const char* s_sequencerDescSetLayout = R"(
@@ -107,7 +109,7 @@ namespace UnitTests
 		techniqueContext->_commonResources = techniqueServices->GetCommonResources();
 
 		techniqueContext->_uniformDelegateManager = Techniques::CreateUniformDelegateManager();
-		techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet(Hash64("Sequencer"), Techniques::CreateSemiConstantDescriptorSet(*sequencerDescriptorSetLayout, "unittest", PipelineType::Graphics, *testHelper->_device));
+		techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet("Sequencer"_h, Techniques::CreateSemiConstantDescriptorSet(*sequencerDescriptorSetLayout, "unittest", PipelineType::Graphics, *testHelper->_device));
 		techniqueContext->_uniformDelegateManager->BindShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*testHelper->_device));
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
@@ -156,7 +158,7 @@ namespace UnitTests
 
 			Techniques::ImmediateDrawableMaterial material;
 			UniformsStreamInterface inputTextureUSI;
-			inputTextureUSI.BindResourceView(0, Hash64("InputTexture"));
+			inputTextureUSI.BindResourceView(0, "InputTexture"_h);
 			material._uniformStreamInterface = &inputTextureUSI;
 			material._uniforms._resourceViews.push_back(tex.get()->GetShaderResource());
 			auto data = immediateDrawables->QueueDraw(

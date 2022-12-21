@@ -115,6 +115,8 @@ static const char s_patchCollectionBasicTexturing[] = R"--(
 )--";
 
 using namespace Catch::literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	static std::unordered_map<std::string, ::Assets::Blob> s_utData {
@@ -682,9 +684,9 @@ namespace UnitTests
 
 				// do the same, but messing up sampler configurations
 				std::vector<std::pair<uint64_t, SamplerDesc>> samplerBindings {
-					std::make_pair(Hash64("BoundTexture"), SamplerDesc{ FilterMode::Point }),
-					std::make_pair(Hash64("MaterialUniforms"), SamplerDesc{ FilterMode::Bilinear }),
-					std::make_pair(Hash64("Multiplier"), SamplerDesc{ FilterMode::Trilinear })
+					std::make_pair("BoundTexture"_h, SamplerDesc{ FilterMode::Point }),
+					std::make_pair("MaterialUniforms"_h, SamplerDesc{ FilterMode::Bilinear }),
+					std::make_pair("Multiplier"_h, SamplerDesc{ FilterMode::Trilinear })
 				};
 				resourceBindings = {};
 				resourceBindings.SetParameter("BoundSampler", "xleres/DefaultResources/waternoise.png");
@@ -712,10 +714,10 @@ namespace UnitTests
 		// with identity transforms for local to clip
 		using namespace RenderCore;
 		UniformsStreamInterface usi;
-		usi.BindImmediateData(0, Hash64("GlobalTransform"));
-		usi.BindImmediateData(1, Hash64("LocalTransform"));
+		usi.BindImmediateData(0, "GlobalTransform"_h);
+		usi.BindImmediateData(1, "LocalTransform"_h);
 		if (descSet)
-			usi.BindFixedDescriptorSet(0, Hash64("Material"));
+			usi.BindFixedDescriptorSet(0, "Material"_h);
 
 		Techniques::GlobalTransformConstants globalTransform;
 		XlZeroMemory(globalTransform);

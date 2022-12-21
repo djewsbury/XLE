@@ -2255,7 +2255,7 @@ namespace SceneEngine
             const char* parseEnd = nullptr;
             auto hash = XlAtoUI64(i, &parseEnd, 16);
             if (parseEnd != comma)
-                hash = ConstHash64FromString(i, comma);
+                hash = ConstHash64LegacyFromString(i, comma);
 
             result.push_back(hash);
             i = comma;

@@ -35,6 +35,8 @@
 #include "../../../xleres/FileList.h"
 #include <chrono>
 
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	static std::shared_ptr<RenderCore::Techniques::DescriptorSetLayoutAndBinding> MakeMaterialDescriptorSetLayout();
@@ -81,8 +83,8 @@ namespace UnitTests
 		_techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
 		auto seqSemiConstantGraphics = Techniques::CreateSemiConstantDescriptorSet(*MakeSequencerDescriptorSetLayout()->GetLayout(), "unittest", PipelineType::Graphics, *_metalTestHelper->_device);
 		auto seqSemiConstantCompute = Techniques::CreateSemiConstantDescriptorSet(*MakeSequencerDescriptorSetLayout()->GetLayout(), "unittest", PipelineType::Compute, *_metalTestHelper->_device);
-		_techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet(Hash64("Sequencer"), std::move(seqSemiConstantGraphics));
-		_techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet(Hash64("Sequencer"), std::move(seqSemiConstantCompute));
+		_techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet("Sequencer"_h, std::move(seqSemiConstantGraphics));
+		_techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet("Sequencer"_h, std::move(seqSemiConstantCompute));
 		_techniqueContext->_uniformDelegateManager->BindShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*_metalTestHelper->_device));
 
 		_commonResources->CompleteInitialization(*_metalTestHelper->_device->GetImmediateContext());

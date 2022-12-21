@@ -38,6 +38,7 @@
 #pragma warning(disable:4018)       // signed/unsigned mismatch
 
 using namespace std::chrono_literals;
+using namespace Utility::Literals;
 
 namespace RenderCore { namespace BufferUploads
 {
@@ -1867,7 +1868,7 @@ namespace RenderCore { namespace BufferUploads
 
         bool multithreadingOk = true;
 
-        const auto nsightMode = ConsoleRig::CrossModule::GetInstance()._services.CallDefault(Hash64("nsight"), false);
+        const auto nsightMode = ConsoleRig::CrossModule::GetInstance()._services.CallDefault("nsight"_h, false);
         if (nsightMode)
             multithreadingOk = false;
 

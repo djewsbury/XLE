@@ -28,11 +28,13 @@
 #include "../../Assets/Assets.h"
 #include "../../xleres/FileList.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace LightingEngine
 {
 
-	static const uint64_t s_shadowTemplate = Utility::Hash64("ShadowTemplate");
-	static const uint64_t s_forwardLighting = Utility::Hash64("ForwardLighting");
+	static const uint64_t s_shadowTemplate = "ShadowTemplate"_h;
+	static const uint64_t s_forwardLighting = "ForwardLighting"_h;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -95,7 +97,7 @@ namespace RenderCore { namespace LightingEngine
 		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
 		outputStates.Bind(MakeIteratorRange(blendStates));
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Utility::Hash64("SubpassInputAttachment"));
+		usi.BindResourceView(0, "SubpassInputAttachment"_h);
 		return Techniques::CreateFullViewportOperator(
 			pool, Techniques::FullViewportOperatorSubType::DisableDepth,
 			BASIC_PIXEL_HLSL ":copy_inputattachment",
@@ -265,13 +267,13 @@ namespace RenderCore { namespace LightingEngine
 			_interface = _lightSceneDelegate->_interface;
 			_resourceViewsStart = (unsigned)_interface.GetResourceViewBindings().size();
 			if (hasSSR) {
-				_interface.BindResourceView(_resourceViewsStart+0, Hash64("SSR"));
-				_interface.BindResourceView(_resourceViewsStart+1, Hash64("SSRConfidence"));
+				_interface.BindResourceView(_resourceViewsStart+0, "SSR"_h);
+				_interface.BindResourceView(_resourceViewsStart+1, "SSRConfidence"_h);
 			}
 
 			_noise = balanceNoiseTexture.GetShaderResource();
 			_completionCmdList = balanceNoiseTexture.GetCompletionCommandList();
-			_interface.BindResourceView(_resourceViewsStart+2, Hash64("NoiseTexture"));
+			_interface.BindResourceView(_resourceViewsStart+2, "NoiseTexture"_h);
 		}
 
 		std::shared_ptr<Techniques::IShaderResourceDelegate> _lightSceneDelegate;
@@ -310,8 +312,8 @@ namespace RenderCore { namespace LightingEngine
 		mainSubpass.SetDepthStencil(depth);
 
 		if (hasSSR) {
-			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment(ConstHash64<'SSRe', 'flec', 'tion'>::Value).NoInitialState());
-			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment(ConstHash64<'SSRC', 'onfi', 'denc', 'e'>::Value).NoInitialState());
+			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment(ConstHash64Legacy<'SSRe', 'flec', 'tion'>::Value).NoInitialState());
+			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment(ConstHash64Legacy<'SSRC', 'onfi', 'denc', 'e'>::Value).NoInitialState());
 		}
 		mainSubpass.SetName("MainForward");
 

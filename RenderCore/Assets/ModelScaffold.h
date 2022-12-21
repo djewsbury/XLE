@@ -78,7 +78,7 @@ namespace RenderCore { namespace Assets
 		ModelScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
 		~ModelScaffold();
 
-		static const auto CompileProcessType = ConstHash64<'Mode', 'l'>::Value;
+		static const auto CompileProcessType = ConstHash64Legacy<'Mode', 'l'>::Value;
 		static const ::Assets::ArtifactRequest ChunkRequests[2];
 	private:
 		std::vector<Machine>	_geoMachines;
@@ -136,7 +136,7 @@ namespace RenderCore { namespace Assets
 		ModelSupplementScaffold();
 		~ModelSupplementScaffold();
 
-		static const auto CompileProcessType = ConstHash64<'Mode', 'l'>::Value;
+		static const auto CompileProcessType = ConstHash64Legacy<'Mode', 'l'>::Value;
 		static const ::Assets::ArtifactRequest ChunkRequests[2];
 
 	private:
@@ -180,7 +180,7 @@ namespace RenderCore { namespace Assets
 
 		const ::Assets::DependencyValidation&					GetDependencyValidation() const { return _depVal;  }
 
-		static const auto CompileProcessType = ConstHash64<'Skel', 'eton'>::Value;
+		static const auto CompileProcessType = ConstHash64Legacy<'Skel', 'eton'>::Value;
 		static const ::Assets::ArtifactRequest ChunkRequests[1];
 
 		SkeletonScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
@@ -208,7 +208,7 @@ namespace RenderCore { namespace Assets
 
 		const ::Assets::DependencyValidation&					GetDependencyValidation() const { return _depVal; }
 
-		static const auto CompileProcessType = ConstHash64<'Anim', 'Set'>::Value;
+		static const auto CompileProcessType = ConstHash64Legacy<'Anim', 'Set'>::Value;
 		static const ::Assets::ArtifactRequest ChunkRequests[1];
 
 		AnimationSetScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);

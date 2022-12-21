@@ -18,8 +18,8 @@
 namespace RenderCore { namespace Assets
 {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-	static const uint64_t Type_AnimationSet = ConstHash64<'Anim', 'Set'>::Value;
-	static const auto ChunkType_Log = ConstHash64<'Log'>::Value;
+	static const uint64_t Type_AnimationSet = ConstHash64Legacy<'Anim', 'Set'>::Value;
+	static const auto ChunkType_Log = ConstHash64Legacy<'Log'>::Value;
 
 	static void MergeInAsManyAnimations(
 		GeoProc::NascentAnimationSet& dst,

@@ -18,15 +18,17 @@
 #include "../../Math/Vector.h"
 #include "../../Math/MathSerialization.h"
 
+using namespace Utility::Literals;
+
 namespace EntityInterface
 {
-    static const uint64_t Property_LocalToWorld = Hash64("LocalToWorld");
-    static const uint64_t Property_Visible = Hash64("VisibleHierarchy");
-    static const uint64_t Property_Model = Hash64("model");
-    static const uint64_t Property_Material = Hash64("material");
-    static const uint64_t Property_Supplements = Hash64("supplements");
-    static const uint64_t Property_Bounds = Hash64("Bounds");
-    static const uint64_t Property_LocalBounds = Hash64("LocalBounds");
+    constexpr uint64_t Property_LocalToWorld = "LocalToWorld"_h;
+    constexpr uint64_t Property_Visible = "VisibleHierarchy"_h;
+    constexpr uint64_t Property_Model = "model"_h;
+    constexpr uint64_t Property_Material = "material"_h;
+    constexpr uint64_t Property_Supplements = "supplements"_h;
+    constexpr uint64_t Property_Bounds = "Bounds"_h;
+    constexpr uint64_t Property_LocalBounds = "LocalBounds"_h;
 
 	enum VisibilityChange { None, MakeVisible, MakeHidden };
 	static VisibilityChange GetVisibilityChange(IteratorRange<const PropertyInitializer*> initializers)
@@ -362,7 +364,7 @@ namespace EntityInterface
     {
         std::weak_ptr<SceneEngine::DynamicImposters> weakPtrToManager = imposters;
         flexSys.RegisterCallback(
-            Hash64("DynamicImpostersConfig"),
+            "DynamicImpostersConfig"_h,
             [weakPtrToManager](
                 const RetainedEntities& flexSys, EntityId obj,
                 RetainedEntities::ChangeType changeType)

@@ -25,6 +25,8 @@
 #include "../Utility/BitUtils.h"
 #include <cctype>
 
+using namespace Utility::Literals;
+
 namespace RenderCore
 {
     const TextureViewDesc::SubResourceRange TextureViewDesc::All = SubResourceRange{0, Unlimited};
@@ -409,7 +411,7 @@ namespace RenderCore
         if (!MainSubFrameHeap) {
                 // initialize our global from the global services
                 // this will ensure that the same object will be used across multiple DLLs
-            static auto Fn_GetStorage = ConstHash64<'gets', 'ubfr', 'ameh', 'eap'>::Value;
+            static auto Fn_GetStorage = ConstHash64Legacy<'gets', 'ubfr', 'ameh', 'eap'>::Value;
             auto& services = ConsoleRig::CrossModule::GetInstance()._services;
             if (!services.Has<SubFrameHeap*()>(Fn_GetStorage)) {
                 SubFrameHeap** storedPtr = &MainSubFrameHeap;
@@ -433,7 +435,7 @@ namespace RenderCore
         if (!MainHeap) {
                 // initialize our global from the global services
                 // this will ensure that the same object will be used across multiple DLLs
-            static auto Fn_GetStorage = ConstHash64<'gets', 'hare', 'dpkt', 'heap'>::Value;
+            static auto Fn_GetStorage = ConstHash64Legacy<'gets', 'hare', 'dpkt', 'heap'>::Value;
             auto& services = ConsoleRig::CrossModule::GetInstance()._services;
             if (!services.Has<MiniHeap*()>(Fn_GetStorage)) {
                 MiniHeap** storedPtr = &MainHeap;
@@ -631,61 +633,61 @@ namespace RenderCore
         {
             MiniInputElementDesc P2CT_Elements[] =
             {
-                MiniInputElementDesc{ Hash64("PIXELPOSITION"), Format::R32G32_FLOAT },
-                MiniInputElementDesc{ Hash64("COLOR"), Format::R8G8B8A8_UNORM },
-                MiniInputElementDesc{ Hash64("TEXCOORD"), Format::R32G32_FLOAT }
+                MiniInputElementDesc{ "PIXELPOSITION"_h, Format::R32G32_FLOAT },
+                MiniInputElementDesc{ "COLOR"_h, Format::R8G8B8A8_UNORM },
+                MiniInputElementDesc{ "TEXCOORD"_h, Format::R32G32_FLOAT }
             };
 
             MiniInputElementDesc P2C_Elements[] = 
             {
-                MiniInputElementDesc{ Hash64("PIXELPOSITION"), Format::R32G32_FLOAT },
-                MiniInputElementDesc{ Hash64("COLOR"), Format::R8G8B8A8_UNORM }
+                MiniInputElementDesc{ "PIXELPOSITION"_h, Format::R32G32_FLOAT },
+                MiniInputElementDesc{ "COLOR"_h, Format::R8G8B8A8_UNORM }
             };
 
             MiniInputElementDesc PCT_Elements[] = 
             {
-                MiniInputElementDesc{ Hash64("POSITION"), Format::R32G32B32_FLOAT },
-                MiniInputElementDesc{ Hash64("COLOR"), Format::R8G8B8A8_UNORM },
-                MiniInputElementDesc{ Hash64("TEXCOORD"), Format::R32G32_FLOAT }
+                MiniInputElementDesc{ "POSITION"_h, Format::R32G32B32_FLOAT },
+                MiniInputElementDesc{ "COLOR"_h, Format::R8G8B8A8_UNORM },
+                MiniInputElementDesc{ "TEXCOORD"_h, Format::R32G32_FLOAT }
             };
 
             MiniInputElementDesc P_Elements[] = 
             {
-                MiniInputElementDesc{ Hash64("POSITION"), Format::R32G32B32_FLOAT }
+                MiniInputElementDesc{ "POSITION"_h, Format::R32G32B32_FLOAT }
             };
 
             MiniInputElementDesc PC_Elements[] = 
             {
-                MiniInputElementDesc{ Hash64("POSITION"), Format::R32G32B32_FLOAT },
-                MiniInputElementDesc{ Hash64("COLOR"), Format::R8G8B8A8_UNORM }
+                MiniInputElementDesc{ "POSITION"_h, Format::R32G32B32_FLOAT },
+                MiniInputElementDesc{ "COLOR"_h, Format::R8G8B8A8_UNORM }
             };
 
             MiniInputElementDesc PT_Elements[] = 
             {
-                MiniInputElementDesc{ Hash64("POSITION"), Format::R32G32B32_FLOAT },
-                MiniInputElementDesc{ Hash64("TEXCOORD"), Format::R32G32_FLOAT }
+                MiniInputElementDesc{ "POSITION"_h, Format::R32G32B32_FLOAT },
+                MiniInputElementDesc{ "TEXCOORD"_h, Format::R32G32_FLOAT }
             };
 
             MiniInputElementDesc PN_Elements[] = 
             {
-                MiniInputElementDesc{ Hash64("POSITION"), Format::R32G32B32_FLOAT },
-                MiniInputElementDesc{ Hash64("NORMAL"), Format::R32G32B32_FLOAT }
+                MiniInputElementDesc{ "POSITION"_h, Format::R32G32B32_FLOAT },
+                MiniInputElementDesc{ "NORMAL"_h, Format::R32G32B32_FLOAT }
             };
 
             MiniInputElementDesc PNT_Elements[] = 
             {
-                MiniInputElementDesc{ Hash64("POSITION"), Format::R32G32B32_FLOAT },
-                MiniInputElementDesc{ Hash64("NORMAL"), Format::R32G32B32_FLOAT },
-                MiniInputElementDesc{ Hash64("TEXCOORD"), Format::R32G32_FLOAT }
+                MiniInputElementDesc{ "POSITION"_h, Format::R32G32B32_FLOAT },
+                MiniInputElementDesc{ "NORMAL"_h, Format::R32G32B32_FLOAT },
+                MiniInputElementDesc{ "TEXCOORD"_h, Format::R32G32_FLOAT }
             };
 
             MiniInputElementDesc PNTT_Elements[] = 
             {
-                MiniInputElementDesc{ Hash64("POSITION"), Format::R32G32B32_FLOAT },
-                MiniInputElementDesc{ Hash64("NORMAL"), Format::R32G32B32_FLOAT },
-                MiniInputElementDesc{ Hash64("TEXCOORD"), Format::R32G32_FLOAT },
-                MiniInputElementDesc{ Hash64("TEXTANGENT"), Format::R32G32B32_FLOAT },
-                MiniInputElementDesc{ Hash64("TEXBITANGENT"), Format::R32G32B32_FLOAT }
+                MiniInputElementDesc{ "POSITION"_h, Format::R32G32B32_FLOAT },
+                MiniInputElementDesc{ "NORMAL"_h, Format::R32G32B32_FLOAT },
+                MiniInputElementDesc{ "TEXCOORD"_h, Format::R32G32_FLOAT },
+                MiniInputElementDesc{ "TEXTANGENT"_h, Format::R32G32B32_FLOAT },
+                MiniInputElementDesc{ "TEXBITANGENT"_h, Format::R32G32B32_FLOAT }
             };
         }
 

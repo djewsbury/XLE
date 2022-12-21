@@ -23,6 +23,8 @@
 #include <assert.h>
 #include <algorithm>
 
+using namespace Utility::Literals;
+
 namespace RenderOverlays
 {
 	class FontTexture2D
@@ -147,7 +149,7 @@ namespace RenderOverlays
 		static RenderCore::UniformsStreamInterface CreateFontResourceUSI()
 		{
 			RenderCore::UniformsStreamInterface result;
-			result.BindResourceView(0, Hash64("FontResource"));
+			result.BindResourceView(0, "FontResource"_h);
 			return result;
 		}
 		static ParameterBox CreateFontRendererSelectorBoxFontResource()
@@ -278,7 +280,7 @@ namespace RenderOverlays
 		static RenderCore::UniformsStreamInterface CreateInputTextureUSI()
 		{
 			RenderCore::UniformsStreamInterface result;
-			result.BindResourceView(0, Hash64("InputTexture"));
+			result.BindResourceView(0, "InputTexture"_h);
 			return result;
 		}
 		static ParameterBox CreateFontRendererSelectorBox()

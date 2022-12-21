@@ -44,6 +44,8 @@
 
 using namespace Catch::literals;
 using namespace std::chrono_literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	static const char* s_basicTexturingGraph = R"--(
@@ -146,8 +148,8 @@ namespace UnitTests
 
 		UnitTestGlobalUniforms(const RenderCore::ResourceDesc& targetDesc) : _targetDesc(targetDesc)
 		{
-			BindImmediateData(0, Hash64("GlobalTransform"));
-			BindImmediateData(1, Hash64("LocalTransform"));
+			BindImmediateData(0, "GlobalTransform"_h);
+			BindImmediateData(1, "LocalTransform"_h);
 		}
 
 		RenderCore::ResourceDesc _targetDesc;
@@ -193,7 +195,7 @@ namespace UnitTests
 			ParameterBox resourceBindings;
 			resourceBindings.SetParameter("BoundTexture", "xleres/DefaultResources/waternoise.png");
 			std::vector<std::pair<uint64_t, SamplerDesc>> samplerBindings;
-			samplerBindings.push_back(std::make_pair(Hash64("BoundSampler"), SamplerDesc{}));
+			samplerBindings.push_back(std::make_pair("BoundSampler"_h, SamplerDesc{}));
 			auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(
 				constantBindings, resourceBindings, samplerBindings);
 			auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
@@ -371,13 +373,13 @@ namespace UnitTests
 			for (unsigned c=0; c<dummySlots; ++c)
 				BindResourceView(c, Hash64("slot-doesnt-exist-" + std::to_string(c)));
 			_realTextureSlot = dummySlots;
-			BindResourceView(_realTextureSlot, Hash64("SeqTex0"));
+			BindResourceView(_realTextureSlot, "SeqTex0"_h);
 			_realSamplerSlot = 0;
-			BindSampler(_realSamplerSlot, Hash64("SeqSampler0"));
+			BindSampler(_realSamplerSlot, "SeqSampler0"_h);
 			for (unsigned c=0; c<dummySlots; ++c)
 				BindImmediateData(c, Hash64("imm-slot-doesnt-exist-" + std::to_string(c)));
 			_realImmediateDataSlot = dummySlots;
-			BindImmediateData(_realImmediateDataSlot, Hash64("SeqBuffer0"));
+			BindImmediateData(_realImmediateDataSlot, "SeqBuffer0"_h);
 
 			std::vector<uint8_t> dummyData(32*32, 0);
 			// inefficient use of HostVisibleSequentialWrite, not recommended for use outside of unit tests
@@ -456,17 +458,17 @@ namespace UnitTests
 		
 		{
 			auto helper0 = Techniques::CreateUniformDelegateManager();
-			helper0->BindSemiConstantDescriptorSet(Hash64("Sequencer"), Techniques::CreateSemiConstantDescriptorSet(fakeSequencerDescSet, "unittest", PipelineType::Graphics, *testHelper->_device));
+			helper0->BindSemiConstantDescriptorSet("Sequencer"_h, Techniques::CreateSemiConstantDescriptorSet(fakeSequencerDescSet, "unittest", PipelineType::Graphics, *testHelper->_device));
 			helper0->BindShaderResourceDelegate(del0);
 			helper0->BindShaderResourceDelegate(del1);
-			helper0->BindUniformDelegate(Hash64("slot-doesnt-exist-0"), udel0);
-			helper0->BindUniformDelegate(Hash64("slot-doesnt-exist-1"), udel0);
-			helper0->BindUniformDelegate(Hash64("GlobalTransform"), udel0);
-			helper0->BindUniformDelegate(Hash64("LocalTransform"), udel0);
-			helper0->BindUniformDelegate(Hash64("slot-doesnt-exist-2"), udel0);
+			helper0->BindUniformDelegate("slot-doesnt-exist-0"_h, udel0);
+			helper0->BindUniformDelegate("slot-doesnt-exist-1"_h, udel0);
+			helper0->BindUniformDelegate("GlobalTransform"_h, udel0);
+			helper0->BindUniformDelegate("LocalTransform"_h, udel0);
+			helper0->BindUniformDelegate("slot-doesnt-exist-2"_h, udel0);
 
 			helper0->BindShaderResourceDelegate(del2);
-			helper0->BindUniformDelegate(Hash64("LocalTransform"), udel1);
+			helper0->BindUniformDelegate("LocalTransform"_h, udel1);
 
 			helper0->BringUpToDateGraphics(parsingContext);
 			REQUIRE(del2->_resViewQueryCount == 1);
@@ -484,14 +486,14 @@ namespace UnitTests
 
 		{
 			auto helper1 = Techniques::CreateUniformDelegateManager();
-			helper1->BindSemiConstantDescriptorSet(Hash64("Sequencer"), Techniques::CreateSemiConstantDescriptorSet(fakeSequencerDescSet, "unittest", PipelineType::Graphics, *testHelper->_device));
+			helper1->BindSemiConstantDescriptorSet("Sequencer"_h, Techniques::CreateSemiConstantDescriptorSet(fakeSequencerDescSet, "unittest", PipelineType::Graphics, *testHelper->_device));
 			helper1->BindShaderResourceDelegate(del0);
 			helper1->BindShaderResourceDelegate(del1);
-			helper1->BindUniformDelegate(Hash64("slot-doesnt-exist-0"), udel0);
-			helper1->BindUniformDelegate(Hash64("slot-doesnt-exist-1"), udel0);
-			helper1->BindUniformDelegate(Hash64("GlobalTransform"), udel0);
-			helper1->BindUniformDelegate(Hash64("LocalTransform"), udel0);
-			helper1->BindUniformDelegate(Hash64("slot-doesnt-exist-2"), udel0);
+			helper1->BindUniformDelegate("slot-doesnt-exist-0"_h, udel0);
+			helper1->BindUniformDelegate("slot-doesnt-exist-1"_h, udel0);
+			helper1->BindUniformDelegate("GlobalTransform"_h, udel0);
+			helper1->BindUniformDelegate("LocalTransform"_h, udel0);
+			helper1->BindUniformDelegate("slot-doesnt-exist-2"_h, udel0);
 
 			helper1->BringUpToDateGraphics(parsingContext);
 			REQUIRE(del2->_resViewQueryCount == 1);

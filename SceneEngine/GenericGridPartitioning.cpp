@@ -10,6 +10,8 @@
 #include <stack>
 #include <cfloat>
 
+using namespace Utility::Literals;
+
 namespace SceneEngine
 {
     const float s_maxCellCreep = 0.5f;
@@ -296,10 +298,10 @@ namespace SceneEngine
         return result;
     }
 
-	static const uint64 ChunkType_GridPartitioning = ConstHash64<'Grid', 'Part'>::Value;
-	static const unsigned GridPartitioningDataVersion = 0;
+	constexpr uint64_t ChunkType_GridPartitioning = ConstHash64Legacy<'Grid', 'Part'>::Value;
+	constexpr unsigned GridPartitioningDataVersion = 0;
 
-	static const ::Assets::ArtifactRequest GridPartitioningChunkRequests[]
+	constexpr ::Assets::ArtifactRequest GridPartitioningChunkRequests[]
     {
         ::Assets::ArtifactRequest { "GridPartitioning", ChunkType_GridPartitioning, GridPartitioningDataVersion, ::Assets::ArtifactRequest::DataType::BlockSerializer },
     };

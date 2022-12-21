@@ -39,6 +39,7 @@
 extern "C" const char ConsoleRig_VersionString[];
 extern "C" const char ConsoleRig_BuildDateString[];
 
+using namespace Utility::Literals;
 namespace ConsoleRig
 {
 
@@ -82,12 +83,12 @@ namespace ConsoleRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    static auto Fn_GetConsole = ConstHash64<'getc', 'onso', 'le'>::Value;
-    static auto Fn_ConsoleMainModule = ConstHash64<'cons', 'olem', 'ain'>::Value;
-    static auto Fn_GetAppName = ConstHash64<'appn', 'ame'>::Value;
-    static auto Fn_GuidGen = ConstHash64<'guid', 'gen'>::Value;
-    static auto Fn_RedirectCout = ConstHash64<'redi', 'rect', 'cout'>::Value;
-	static auto Fn_GetAssetRoot = ConstHash64<'asse', 'troo', 't'>::Value;
+    static auto Fn_GetConsole = ConstHash64Legacy<'getc', 'onso', 'le'>::Value;
+    static auto Fn_ConsoleMainModule = ConstHash64Legacy<'cons', 'olem', 'ain'>::Value;
+    static auto Fn_GetAppName = ConstHash64Legacy<'appn', 'ame'>::Value;
+    static auto Fn_GuidGen = ConstHash64Legacy<'guid', 'gen'>::Value;
+    static auto Fn_RedirectCout = ConstHash64Legacy<'redi', 'rect', 'cout'>::Value;
+	static auto Fn_GetAssetRoot = ConstHash64Legacy<'asse', 'troo', 't'>::Value;
 
 	void DebugUtil_Startup();
 	void DebugUtil_Shutdown();
@@ -248,7 +249,7 @@ namespace ConsoleRig
             // state to use the nsight configuration when the given flag is set.
         const auto* cmdLine = OSServices::GetCommandLine();
         if (cmdLine && XlFindString(cmdLine, "-nsight"))
-            CrossModule::GetInstance()._services.Add(Hash64("nsight"), []() { return true; });
+            CrossModule::GetInstance()._services.Add("nsight"_h, []() { return true; });
 
         _pimpl->_pluginSet = std::make_unique<PluginSet>();
     }

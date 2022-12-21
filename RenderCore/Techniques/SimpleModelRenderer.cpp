@@ -28,6 +28,8 @@
 #include <utility>
 #include <map>
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace Techniques 
 {
 	#if _DEBUG
@@ -155,7 +157,7 @@ namespace RenderCore { namespace Techniques
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static const uint64_t s_topologicalCmdStream = Hash64("adjacency");
+	constexpr uint64_t s_topologicalCmdStream = "adjacency"_h;
 
 	void SimpleModelRenderer::BuildDrawables(
 		IteratorRange<DrawablesPacket** const> pkts,

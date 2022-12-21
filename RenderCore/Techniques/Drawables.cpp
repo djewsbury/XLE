@@ -28,6 +28,8 @@
 #include "../../Utility/ArithmeticUtils.h"
 #include "../../Utility/BitUtils.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace Techniques
 {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,7 +37,7 @@ namespace RenderCore { namespace Techniques
 	constexpr unsigned s_uniformGroupSequencer = 0;
 	constexpr unsigned s_uniformGroupMaterial = 1;
 	constexpr unsigned s_uniformGroupDraw = 2;
-	static const auto s_materialDescSetName = Hash64("Material");
+	constexpr auto s_materialDescSetName = "Material"_h;
 
 	namespace Internal
 	{

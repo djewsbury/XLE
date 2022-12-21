@@ -28,7 +28,7 @@
 namespace PlatformRig
 {
 
-	static auto Fn_ShowScreen = ConstHash64<'show', 'scre', 'en'>::Value;
+	constexpr auto Fn_ShowScreen = ConstHash64Legacy<'show', 'scre', 'en'>::Value;
 
 	DebugOverlaysApparatus::DebugOverlaysApparatus(
 		const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,

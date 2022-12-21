@@ -35,6 +35,7 @@
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 using namespace Catch::literals;
+using namespace Utility::Literals;
 
 namespace UnitTests
 {
@@ -228,19 +229,19 @@ namespace UnitTests
 		std::shared_ptr<Techniques::Internal::DeformerPipelineCollection> pipelineCollection;
 		{
 			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Hash64("StaticVertexAttachments"));
-			usi.BindResourceView(1, Hash64("InputAttributes"));
-			usi.BindResourceView(2, Hash64("OutputAttributes"));
-			usi.BindResourceView(3, Hash64("DeformTemporaryAttributes"));
-			usi.BindResourceView(4, Hash64("JointTransforms"));
-			usi.BindResourceView(5, Hash64("IAParams"));
-			usi.BindResourceView(6, Hash64("SkinIAParams"));
+			usi.BindResourceView(0, "StaticVertexAttachments"_h);
+			usi.BindResourceView(1, "InputAttributes"_h);
+			usi.BindResourceView(2, "OutputAttributes"_h);
+			usi.BindResourceView(3, "DeformTemporaryAttributes"_h);
+			usi.BindResourceView(4, "JointTransforms"_h);
+			usi.BindResourceView(5, "IAParams"_h);
+			usi.BindResourceView(6, "SkinIAParams"_h);
 
 			UniformsStreamInterface pushConstantsUSI;
-			pushConstantsUSI.BindImmediateData(0, Hash64("InvocationParams"));
+			pushConstantsUSI.BindImmediateData(0, "InvocationParams"_h);
 
 			ShaderSourceParser::InstantiationRequest instRequests { SKIN_COMPUTE_HLSL };
-			uint64_t patchExpansions[] { Hash64("PerformDeform"), Hash64("GetDeformInvocationParams") };
+			uint64_t patchExpansions[] { "PerformDeform"_h, "GetDeformInvocationParams"_h };
 
 			pipelineCollection = std::make_shared<Techniques::Internal::DeformerPipelineCollection>(
 				std::make_shared<Techniques::PipelineCollection>(testHelper._device),
@@ -330,7 +331,7 @@ namespace UnitTests
 		auto inputFloat3s = AsFloat3s(
 			Techniques::Internal::AsVertexElementIteratorRange(
 				MakeIteratorRange(rawInputBuffer), 
-				*Techniques::Internal::FindElement(animVb._ia._elements, Hash64("POSITION")), 
+				*Techniques::Internal::FindElement(animVb._ia._elements, "POSITION"_h), 
 				animVb._ia._vertexStride));
 
 		std::vector<uint8_t> outputBufferData;
@@ -361,7 +362,7 @@ namespace UnitTests
 		const RenderCore::Assets::GeoInputAssembly& ia, 
 		uint64_t semanticHash)
 	{
-		auto* ele = Techniques::Internal::FindElement(ia._elements, Hash64("POSITION"));
+		auto* ele = Techniques::Internal::FindElement(ia._elements, "POSITION"_h);
 		REQUIRE(ele);
 		auto eleRange = Techniques::Internal::AsVertexElementIteratorRange(rawVB, *ele, ia._vertexStride);
 		return AsFloat3s(eleRange);
@@ -384,7 +385,7 @@ namespace UnitTests
 		// Find the positions within the raw GPU output and convert to float3s
 		auto* skinningData = GetSkinningDataAtGeo0(*modelScaffold);
 		REQUIRE(skinningData);
-		auto gpuPositions = GetFloat3sFromVertexBuffer(MakeIteratorRange(gpuRawBuffer), skinningData->_animatedVertexElements._ia, Hash64("POSITION"));
+		auto gpuPositions = GetFloat3sFromVertexBuffer(MakeIteratorRange(gpuRawBuffer), skinningData->_animatedVertexElements._ia, "POSITION"_h);
 
 		REQUIRE(cpuPositions.size() == gpuPositions.size());
 		auto vCount = gpuPositions.size();
@@ -489,7 +490,7 @@ namespace UnitTests
 			testInst0._generatedElements.push_back({ "GENERATED", 1, Format::R32_UINT });
 			testInst0._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
 			testInst0._upstreamSourceElements.push_back({ "NORMAL", 0, Format::R8G8B8A8_UNORM });
-			testInst0._suppressElements.push_back(Hash64("BADSEMANTIC"));
+			testInst0._suppressElements.push_back("BADSEMANTIC"_h);
 			
 			std::vector<DeformOperationInstantiation> instantiations;
 			instantiations.push_back(testInst0);
@@ -532,7 +533,7 @@ namespace UnitTests
 			testInst[0]._generatedElements.push_back({ "GENERATED2", 0, Format::R8G8B8A8_UNORM });
 			testInst[0]._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
 			testInst[0]._upstreamSourceElements.push_back({ "NORMAL", 0, Format::R8G8B8A8_UNORM });
-			testInst[0]._suppressElements.push_back(Hash64("TANGENT"));
+			testInst[0]._suppressElements.push_back("TANGENT"_h);
 
 			testInst[1]._generatedElements.push_back({ "TEMPORARY", 1, Format::R16G16B16A16_FLOAT });
 			testInst[1]._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
@@ -540,7 +541,7 @@ namespace UnitTests
 
 			testInst[2]._generatedElements.push_back({ "GENERATED3", 0, Format::R16G16B16A16_FLOAT });
 			testInst[2]._upstreamSourceElements.push_back({ "TEMPORARY", 1, Format::R16G16B16A16_FLOAT });
-			testInst[2]._suppressElements.push_back(Hash64("TANGENT"));
+			testInst[2]._suppressElements.push_back("TANGENT"_h);
 			
 			Techniques::Internal::DeformBufferIterators bufferIterators;
 			std::vector<DeformerInputBinding::GeoBinding> geoBindings;
@@ -611,9 +612,9 @@ namespace UnitTests
 			REQUIRE(nascentDeform._generatedElements[2]._semanticName == "GENERATED");
 
 			REQUIRE(nascentDeform._suppressedElements.size() == 3);
-			REQUIRE(std::find(nascentDeform._suppressedElements.begin(), nascentDeform._suppressedElements.end(), Hash64("GENERATED")) != nascentDeform._suppressedElements.end());
-			REQUIRE(std::find(nascentDeform._suppressedElements.begin(), nascentDeform._suppressedElements.end(), Hash64("GENERATED2")) != nascentDeform._suppressedElements.end());
-			REQUIRE(std::find(nascentDeform._suppressedElements.begin(), nascentDeform._suppressedElements.end(), Hash64("GENERATED")+1) != nascentDeform._suppressedElements.end());
+			REQUIRE(std::find(nascentDeform._suppressedElements.begin(), nascentDeform._suppressedElements.end(), "GENERATED"_h) != nascentDeform._suppressedElements.end());
+			REQUIRE(std::find(nascentDeform._suppressedElements.begin(), nascentDeform._suppressedElements.end(), "GENERATED2"_h) != nascentDeform._suppressedElements.end());
+			REQUIRE(std::find(nascentDeform._suppressedElements.begin(), nascentDeform._suppressedElements.end(), "GENERATED"_h+1) != nascentDeform._suppressedElements.end());
 		
 			unsigned generatedVertexStride = 8+4+4;
 			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_PostDeform] == generatedVertexStride*vertexCount);

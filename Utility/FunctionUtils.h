@@ -135,9 +135,9 @@ namespace Utility
     ///     Consider the following example:
     ///      <code>\code{.cpp}
     ///         VariantFunctions fns;
-    ///         fns.Add(Hash64("Inc"), [](int i) { return i+1; });
+    ///         fns.Add("Inc"_h, [](int i) { return i+1; });
     ///             ....
-    ///         auto result = fns.Call<int>(Hash64("Inc"), 2);
+    ///         auto result = fns.Call<int>("Inc"_h, 2);
     ///     \endcode</code>
     ///
     ///     This will call the lamdba function, and pass "2" as the parameter.
@@ -147,7 +147,7 @@ namespace Utility
     ///         void Publish(std::shared_ptr<Foo> foo)
     ///         {
     ///             std::weak_ptr<Foo> weakPtrToFoo = foo;
-    ///             s_variantFunctions.Add(Hash64("GetFoo"), 
+    ///             s_variantFunctions.Add("GetFoo"_h, 
     ///                 [weakPtrToFoo]() { return weakPtrToFoo.lock(); });
     ///         }
     ///     \endcode</code>
@@ -167,7 +167,7 @@ namespace Utility
     ///         void Foo::AddEvents(VariantFunctions& fn)
     ///         {
     ///             using namespace std::placeholders;
-    ///             fn.Add(Hash64("OnMouseClick"), 
+    ///             fn.Add("OnMouseClick"_h, 
     ///                 std::bind(&Foo::OnMouseClick, shared_from_this(), _1, _2, _3));
     ///         }
     ///     \endcode</code>

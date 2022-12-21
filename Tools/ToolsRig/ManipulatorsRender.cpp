@@ -29,6 +29,8 @@
 
 // #include "../../RenderCore/DX11/Metal/DX11Utils.h"
 
+using namespace Utility::Literals;
+
 namespace ToolsRig
 {
     using namespace RenderCore;
@@ -237,9 +239,9 @@ namespace ToolsRig
             const IResourceView* resources[] = { depthSrv.get(), circleHighlight.GetShaderResource().get() };
 
 			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, Hash64("CircleHighlightParameters"));
-            usi.BindResourceView(0, Hash64("DepthTexture"));
-            usi.BindResourceView(1, Hash64("HighlightResource"));
+			usi.BindImmediateData(0, "CircleHighlightParameters"_h);
+            usi.BindResourceView(0, "DepthTexture"_h);
+            usi.BindResourceView(1, "HighlightResource"_h);
 
                 // note --  this will render a full screen quad. we could render cylinder geometry instead,
                 //          because this decal only affects the area within a cylinder. But it's just for
@@ -293,9 +295,9 @@ namespace ToolsRig
             const IResourceView* resources[] = { depthSrv.get(), circleHighlight.GetShaderResource().get() };
 
 			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, Hash64("RectangleHighlightParameters"));
-            usi.BindResourceView(0, Hash64("DepthTexture"));
-            usi.BindResourceView(1, Hash64("HighlightResource"));
+			usi.BindImmediateData(0, "RectangleHighlightParameters"_h);
+            usi.BindResourceView(0, "DepthTexture"_h);
+            usi.BindResourceView(1, "HighlightResource"_h);
 
                 // note --  this will render a full screen quad. we could render cylinder geometry instead,
                 //          because this decal only affects the area within a cylinder. But it's just for
@@ -435,8 +437,8 @@ namespace ToolsRig
         const Metal::ShaderResourceView* resources[] = { &srv };
         ConstantBufferView cbvs[] = { reciprocalViewportDimensions };
 		UniformsStreamInterface interf;
-		interf.BindConstantBuffer(0, {Hash64("ReciprocalViewportDimensionsCB")});
-        interf.BindShaderResource(0, Hash64("DiffuseTexture"));
+		interf.BindConstantBuffer(0, {"ReciprocalViewportDimensionsCB"_h});
+        interf.BindShaderResource(0, "DiffuseTexture"_h);
 
 		Metal::BoundUniforms boundLayout(shaderProgram, Metal::PipelineLayoutConfig{}, {}, interf);
 		boundLayout.Apply(metalContext, 1, {MakeIteratorRange(cbvs), UniformsStream::MakeResources(MakeIteratorRange(resources))});

@@ -15,6 +15,8 @@
 #include "../../Assets/Continuation.h"
 #include "../../xleres/FileList.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace LightingEngine
 {
 	void SkyOperator::Execute(Techniques::ParsingContext& parsingContext)
@@ -38,7 +40,7 @@ namespace RenderCore { namespace LightingEngine
 		assert(descSetLayout);
 		
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Hash64("Sky"));
+		usi.BindResourceView(0, "Sky"_h);
 		auto& commonRes = *Techniques::Services::GetCommonResources();
 		if (texture) {
 			_descSet = Techniques::ConstructDescriptorSetHelper{_device, &commonRes._samplerPool}
@@ -79,7 +81,7 @@ namespace RenderCore { namespace LightingEngine
 		const Techniques::FrameBufferTarget& fbTarget)
 	{
 		UniformsStreamInterface usi;
-		usi.BindFixedDescriptorSet(0, Hash64("SkyDS"));
+		usi.BindFixedDescriptorSet(0, "SkyDS"_h);
 
 		ParameterBox params;
 		params.SetParameter("SKY_PROJECTION", 5);

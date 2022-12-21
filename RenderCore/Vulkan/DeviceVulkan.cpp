@@ -57,7 +57,7 @@ namespace RenderCore { namespace ImplVulkan
 	static std::string GetApplicationName()
 	{
 		return ConsoleRig::CrossModule::GetInstance()._services.CallDefault<std::string>(
-			ConstHash64<'appn', 'ame'>::Value, std::string("<<unnamed>>"));
+			ConstHash64Legacy<'appn', 'ame'>::Value, std::string("<<unnamed>>"));
 	}
 
 	static std::vector<VkLayerProperties> EnumerateLayers()

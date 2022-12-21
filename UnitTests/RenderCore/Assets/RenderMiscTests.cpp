@@ -16,6 +16,8 @@
 #include <random>
 
 using namespace Catch::literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	using NameAndType = RenderCore::Assets::PredefinedCBLayout::NameAndType;
@@ -79,7 +81,7 @@ namespace UnitTests
 	static void TestHashingNormalizingAndScrambling(IteratorRange<const RenderCore::InputElementDesc*> inputAssembly)
 	{
 		using namespace RenderCore;
-		auto hashingSeed = Hash64("hash-for-seed");
+		auto hashingSeed = "hash-for-seed"_h;
 		auto expectedHash = HashInputAssembly(inputAssembly, hashingSeed);
 		auto normalizedElements = NormalizeInputAssembly(inputAssembly);
 		REQUIRE(expectedHash == HashInputAssembly(normalizedElements, hashingSeed));
@@ -96,7 +98,7 @@ namespace UnitTests
 	{
 		using namespace RenderCore;
 
-		auto hashingSeed = Hash64("hash-for-seed");
+		auto hashingSeed = "hash-for-seed"_h;
 
 		// "InputElementDesc" and "MiniInputElementDesc" should hash to the same value
 		auto hashExpandedStyle = HashInputAssembly(MakeIteratorRange(ToolsRig::Vertex3D_InputLayout), hashingSeed);

@@ -16,6 +16,8 @@
 #include "catch2/catch_approx.hpp"
 
 using namespace Catch::literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
     static int foo(int x, int y, int z) { return x + y + z; }
@@ -306,17 +308,17 @@ namespace UnitTests
     {
         StringSection<> s0("somestring"), s1("1234567890qwerty");
         REQUIRE(
-            ConstHash64<'some', 'stri', 'ng'>::Value ==
-            ConstHash64FromString(s0.begin(), s0.end()));
+            ConstHash64Legacy<'some', 'stri', 'ng'>::Value ==
+            ConstHash64LegacyFromString(s0.begin(), s0.end()));
         REQUIRE(
-            ConstHash64<'1234', '5678', '90qw', 'erty'>::Value ==
-            ConstHash64FromString(s1.begin(), s1.end()));
+            ConstHash64Legacy<'1234', '5678', '90qw', 'erty'>::Value ==
+            ConstHash64LegacyFromString(s1.begin(), s1.end()));
     }
 
     TEST_CASE( "Utilities-FastParseValue (integer)", "[utility]" )
     {
-        const uint64_t testCount = 100000;
-        for (uint64_t t=0; t<testCount; ++t) {
+        const uint32_t testCount = 100000;
+        for (uint32_t t=0; t<(uint32_t)testCount; ++t) {
             auto u32 = (std::numeric_limits<uint32_t>::max() / testCount) * t;
             char buffer[64];
             uint32_t parsed = 0;
@@ -523,7 +525,7 @@ namespace UnitTests
 
             auto expectedHash = Hash64(KEY);
             REQUIRE(nonConstExprEvalHash == expectedHash);
-            REQUIRE(ConstHash64New(KEY, std::strlen(KEY)) == expectedHash);
+            REQUIRE(ConstHash64(KEY, std::strlen(KEY)) == expectedHash);
             REQUIRE(constExprEvalHash == expectedHash);
             REQUIRE(constExprMSVCEvalHash == expectedHash);
             REQUIRE(uint64_t(HashedToEnum::HashValue) == expectedHash);
@@ -570,7 +572,7 @@ namespace UnitTests
             REQUIRE(constExprEvalHash == constExprMSVCEvalHash);
 
             auto expectedHash = Hash32(KEY);
-            REQUIRE(ConstHash32New(KEY, std::strlen(KEY)) == expectedHash);
+            REQUIRE(ConstHash32(KEY, std::strlen(KEY)) == expectedHash);
             REQUIRE(constExprEvalHash == expectedHash);
             REQUIRE(constExprMSVCEvalHash == expectedHash);
             REQUIRE(uint64_t(HashedToEnum::HashValue32) == (uint64_t)expectedHash);

@@ -29,7 +29,7 @@
 
 namespace Assets 
 {
-	static const auto ChunkType_Log = ConstHash64<'Log'>::Value;
+	static const auto ChunkType_Log = ConstHash64Legacy<'Log'>::Value;
 
 	struct ExtensionAndDelegate
 	{

@@ -40,7 +40,7 @@ namespace RenderCore { namespace Assets
 		MaterialScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
 		~MaterialScaffold();
 
-		static const auto CompileProcessType = ConstHash64<'ResM', 'at'>::Value;
+		static const auto CompileProcessType = ConstHash64Legacy<'ResM', 'at'>::Value;
 		static const ::Assets::ArtifactRequest ChunkRequests[1];
 	protected:
 		std::vector<std::pair<uint64_t, Machine>> _materialMachines;
@@ -53,8 +53,8 @@ namespace RenderCore { namespace Assets
 		IteratorRange<ScaffoldCmdIterator> GetOuterCommandStream() const;
 	};
 
-	static constexpr uint64 ChunkType_ResolvedMat = ConstHash64<'ResM', 'at'>::Value;
-	static constexpr uint64 ChunkType_PatchCollections = ConstHash64<'Patc', 'hCol'>::Value;
+	static constexpr uint64 ChunkType_ResolvedMat = ConstHash64Legacy<'ResM', 'at'>::Value;
+	static constexpr uint64 ChunkType_PatchCollections = ConstHash64Legacy<'Patc', 'hCol'>::Value;
 	static constexpr unsigned ResolvedMat_ExpectedVersion = 1;
 
 }}

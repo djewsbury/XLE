@@ -25,6 +25,8 @@
 #include "catch2/catch_approx.hpp"
 
 using namespace Catch::literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	static bool ComponentsMatch(uint32_t c1, uint32_t c2) {
@@ -74,8 +76,8 @@ namespace UnitTests
 	};
 
 	static RenderCore::MiniInputElementDesc miniInputElePC[] = {
-		{ Hash64("position"), RenderCore::Format::R32G32B32A32_FLOAT },
-		{ Hash64("color"), RenderCore::Format::R8G8B8A8_UNORM }
+		{ "position"_h, RenderCore::Format::R32G32B32A32_FLOAT },
+		{ "color"_h, RenderCore::Format::R8G8B8A8_UNORM }
 	};
 
 	static unsigned boxesSize = (96 - 32) * (96 - 32);
@@ -115,10 +117,10 @@ namespace UnitTests
 	};
 
 	const RenderCore::ConstantBufferElementDesc ConstantBufferElementDesc_Values[] {
-		RenderCore::ConstantBufferElementDesc { Hash64("A"), RenderCore::Format::R32_FLOAT, offsetof(Values, A) },
-		RenderCore::ConstantBufferElementDesc { Hash64("B"), RenderCore::Format::R32_FLOAT, offsetof(Values, B) },
-		RenderCore::ConstantBufferElementDesc { Hash64("C"), RenderCore::Format::R32_FLOAT, offsetof(Values, C) },
-		RenderCore::ConstantBufferElementDesc { Hash64("vA"), RenderCore::Format::R32G32B32A32_FLOAT, offsetof(Values, vA) }
+		RenderCore::ConstantBufferElementDesc { "A"_h, RenderCore::Format::R32_FLOAT, offsetof(Values, A) },
+		RenderCore::ConstantBufferElementDesc { "B"_h, RenderCore::Format::R32_FLOAT, offsetof(Values, B) },
+		RenderCore::ConstantBufferElementDesc { "C"_h, RenderCore::Format::R32_FLOAT, offsetof(Values, C) },
+		RenderCore::ConstantBufferElementDesc { "vA"_h, RenderCore::Format::R32G32B32A32_FLOAT, offsetof(Values, vA) }
 	};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -313,8 +315,8 @@ namespace UnitTests
 		{
 			auto rpi = fbHelper.BeginRenderPass(*threadContext);
 
-			MiniInputElementDesc miniInputElePC1[] { { Hash64("position"), Format::R32G32_SINT } };
-			MiniInputElementDesc miniInputElePC2[] { { Hash64("color"), Format::R8G8B8A8_UNORM } };
+			MiniInputElementDesc miniInputElePC1[] { { "position"_h, Format::R32G32_SINT } };
+			MiniInputElementDesc miniInputElePC2[] { { "color"_h, Format::R8G8B8A8_UNORM } };
 
 			Metal::BoundInputLayout::SlotBinding slotBindings[] {
 				{ MakeIteratorRange(miniInputElePC1), 0 },
@@ -545,7 +547,7 @@ namespace UnitTests
 			encoder.Bind(shaderProgram);
 
 			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, Hash64("Values"));
+			usi.BindImmediateData(0, "Values"_h);
 			Metal::BoundUniforms uniforms { shaderProgram, usi };
 			REQUIRE(uniforms.GetBoundLooseImmediateDatas() == 1ull);
 
@@ -582,7 +584,7 @@ namespace UnitTests
 			encoder.Bind(shaderProgram);
 
 			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, Hash64("Values"), MakeIteratorRange(ConstantBufferElementDesc_Values));
+			usi.BindImmediateData(0, "Values"_h, MakeIteratorRange(ConstantBufferElementDesc_Values));
 			Metal::BoundUniforms uniforms { shaderProgram, usi };
 			REQUIRE(uniforms.GetBoundLooseImmediateDatas() == 1ull);
 
@@ -628,14 +630,14 @@ namespace UnitTests
 		{
 			// incorrect arrangement of constant buffer elements
 			const ConstantBufferElementDesc ConstantBufferElementDesc_IncorrectBinding[] {
-				ConstantBufferElementDesc { Hash64("A"), Format::R32_FLOAT, sizeof(Values) - sizeof(Values::A) - offsetof(Values, A) },
-				ConstantBufferElementDesc { Hash64("B"), Format::R32_FLOAT, sizeof(Values) - sizeof(Values::A) - offsetof(Values, B) },
-				ConstantBufferElementDesc { Hash64("C"), Format::R32_FLOAT, sizeof(Values) - sizeof(Values::A) - offsetof(Values, C) },
-				ConstantBufferElementDesc { Hash64("vA"), Format::R32G32B32A32_FLOAT, sizeof(Values) - sizeof(Values::vA) - offsetof(Values, vA) }
+				ConstantBufferElementDesc { "A"_h, Format::R32_FLOAT, sizeof(Values) - sizeof(Values::A) - offsetof(Values, A) },
+				ConstantBufferElementDesc { "B"_h, Format::R32_FLOAT, sizeof(Values) - sizeof(Values::A) - offsetof(Values, B) },
+				ConstantBufferElementDesc { "C"_h, Format::R32_FLOAT, sizeof(Values) - sizeof(Values::A) - offsetof(Values, C) },
+				ConstantBufferElementDesc { "vA"_h, Format::R32G32B32A32_FLOAT, sizeof(Values) - sizeof(Values::vA) - offsetof(Values, vA) }
 			};
 
 			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, Hash64("Values"), MakeIteratorRange(ConstantBufferElementDesc_IncorrectBinding));
+			usi.BindImmediateData(0, "Values"_h, MakeIteratorRange(ConstantBufferElementDesc_IncorrectBinding));
 			Metal::BoundUniforms uniforms { shaderProgram, usi };
 			(void)uniforms;
 		}
@@ -643,12 +645,12 @@ namespace UnitTests
 		{
 			// some missing constant buffer elements
 			const ConstantBufferElementDesc ConstantBufferElementDesc_MissingValues[] {
-				RenderCore::ConstantBufferElementDesc { Hash64("A"), RenderCore::Format::R32_FLOAT, offsetof(Values, A) },
-				RenderCore::ConstantBufferElementDesc { Hash64("vA"), RenderCore::Format::R32G32B32A32_FLOAT, offsetof(Values, vA) }
+				RenderCore::ConstantBufferElementDesc { "A"_h, RenderCore::Format::R32_FLOAT, offsetof(Values, A) },
+				RenderCore::ConstantBufferElementDesc { "vA"_h, RenderCore::Format::R32G32B32A32_FLOAT, offsetof(Values, vA) }
 			};
 
 			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, Hash64("Values"), MakeIteratorRange(ConstantBufferElementDesc_MissingValues));
+			usi.BindImmediateData(0, "Values"_h, MakeIteratorRange(ConstantBufferElementDesc_MissingValues));
 			Metal::BoundUniforms uniforms { shaderProgram, usi };
 			(void)uniforms;
 		}
@@ -656,13 +658,13 @@ namespace UnitTests
 		{
 			// Incorrect formats of elements within the constant buffer
 			const ConstantBufferElementDesc ConstantBufferElementDesc_IncorrectFormats[] {
-				RenderCore::ConstantBufferElementDesc { Hash64("A"), RenderCore::Format::R32G32_FLOAT, offsetof(Values, A) },
-				RenderCore::ConstantBufferElementDesc { Hash64("C"), RenderCore::Format::R8G8B8A8_UNORM, offsetof(Values, C) },
-				RenderCore::ConstantBufferElementDesc { Hash64("vA"), RenderCore::Format::R32G32B32_FLOAT, offsetof(Values, vA) }
+				RenderCore::ConstantBufferElementDesc { "A"_h, RenderCore::Format::R32G32_FLOAT, offsetof(Values, A) },
+				RenderCore::ConstantBufferElementDesc { "C"_h, RenderCore::Format::R8G8B8A8_UNORM, offsetof(Values, C) },
+				RenderCore::ConstantBufferElementDesc { "vA"_h, RenderCore::Format::R32G32B32_FLOAT, offsetof(Values, vA) }
 			};
 
 			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, Hash64("Values"), MakeIteratorRange(ConstantBufferElementDesc_IncorrectFormats));
+			usi.BindImmediateData(0, "Values"_h, MakeIteratorRange(ConstantBufferElementDesc_IncorrectFormats));
 			Metal::BoundUniforms uniforms { shaderProgram, usi };
 			(void)uniforms;
 		}
@@ -670,14 +672,14 @@ namespace UnitTests
 		{
 			// overlapping values in the constant buffer elements
 			const ConstantBufferElementDesc ConstantBufferElementDesc_OverlappingValues[] {
-				RenderCore::ConstantBufferElementDesc { Hash64("A"), RenderCore::Format::R32G32_FLOAT, offsetof(Values, A) },
-				RenderCore::ConstantBufferElementDesc { Hash64("B"), RenderCore::Format::R32G32_FLOAT, offsetof(Values, B) },
-				RenderCore::ConstantBufferElementDesc { Hash64("C"), RenderCore::Format::R32G32_FLOAT, offsetof(Values, C) },
-				RenderCore::ConstantBufferElementDesc { Hash64("vA"), RenderCore::Format::R32G32B32A32_FLOAT, offsetof(Values, vA) }
+				RenderCore::ConstantBufferElementDesc { "A"_h, RenderCore::Format::R32G32_FLOAT, offsetof(Values, A) },
+				RenderCore::ConstantBufferElementDesc { "B"_h, RenderCore::Format::R32G32_FLOAT, offsetof(Values, B) },
+				RenderCore::ConstantBufferElementDesc { "C"_h, RenderCore::Format::R32G32_FLOAT, offsetof(Values, C) },
+				RenderCore::ConstantBufferElementDesc { "vA"_h, RenderCore::Format::R32G32B32A32_FLOAT, offsetof(Values, vA) }
 			};
 
 			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, Hash64("Values"), MakeIteratorRange(ConstantBufferElementDesc_OverlappingValues));
+			usi.BindImmediateData(0, "Values"_h, MakeIteratorRange(ConstantBufferElementDesc_OverlappingValues));
 			Metal::BoundUniforms uniforms { shaderProgram, usi };
 			(void)uniforms;
 		}
@@ -760,8 +762,8 @@ namespace UnitTests
 			encoder.Bind(shaderProgramCB);
 
 			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Hash64("Values"));
-			usi.BindSampler(0, Hash64("Values_sampler"));
+			usi.BindResourceView(0, "Values"_h);
+			usi.BindSampler(0, "Values_sampler"_h);
 			Metal::BoundUniforms uniforms { shaderProgramCB, usi };
 			
 			auto srv = testTexture._res->CreateTextureView(BindFlag::ShaderResource);
@@ -781,7 +783,7 @@ namespace UnitTests
 			encoder.Bind(shaderProgramSRV);
 
 			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, Hash64("Texture"));
+			usi.BindImmediateData(0, "Texture"_h);
 			Metal::BoundUniforms uniforms { shaderProgramSRV, usi };
 			
 			Values v;
@@ -797,7 +799,7 @@ namespace UnitTests
 			encoder.Bind(shaderProgramCB);
 
 			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, Hash64("Values"), MakeIteratorRange(ConstantBufferElementDesc_Values));
+			usi.BindImmediateData(0, "Values"_h, MakeIteratorRange(ConstantBufferElementDesc_Values));
 			Metal::BoundUniforms uniforms { shaderProgramCB, usi };
 
 			REQUIRE_THROWS(
@@ -813,7 +815,7 @@ namespace UnitTests
 			encoder.Bind(shaderProgramSRV);
 
 			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Hash64("Texture"));
+			usi.BindResourceView(0, "Texture"_h);
 			Metal::BoundUniforms uniforms { shaderProgramSRV, usi };
 
 			REQUIRE_THROWS(
@@ -867,8 +869,8 @@ namespace UnitTests
 			encoder.Bind(shaderProgramCB);
 
 			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Hash64("Values"));
-			usi.BindSampler(0, Hash64("Values_sampler"));
+			usi.BindResourceView(0, "Values"_h);
+			usi.BindSampler(0, "Values_sampler"_h);
 			Metal::BoundUniforms uniforms { shaderProgramCB, usi };
 
 			auto srv = testTexture._res->CreateTextureView(BindFlag::ShaderResource);
@@ -888,7 +890,7 @@ namespace UnitTests
 			encoder.Bind(shaderProgramSRV);
 
 			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, Hash64("Texture"));
+			usi.BindImmediateData(0, "Texture"_h);
 			Metal::BoundUniforms uniforms { shaderProgramSRV, usi };
 
 			Values v;
@@ -905,7 +907,7 @@ namespace UnitTests
 			encoder.Bind(inputLayout, Topology::TriangleList);
 
 			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, Hash64("Values"), MakeIteratorRange(ConstantBufferElementDesc_Values));
+			usi.BindImmediateData(0, "Values"_h, MakeIteratorRange(ConstantBufferElementDesc_Values));
 			#if GFXAPI_TARGET == GFXAPI_APPLEMETAL
 				auto pipeline = encoder.CreatePipeline(Metal::GetObjectFactory());
 				Metal::BoundUniforms uniforms { *pipeline, usi };
@@ -926,7 +928,7 @@ namespace UnitTests
 			encoder.Bind(inputLayout, Topology::TriangleList);
 
 			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Hash64("Texture"));
+			usi.BindResourceView(0, "Texture"_h);
 			#if GFXAPI_TARGET == GFXAPI_APPLEMETAL
 				auto pipeline = encoder.CreatePipeline(Metal::GetObjectFactory());
 				Metal::BoundUniforms uniforms { *pipeline, usi };
@@ -981,8 +983,8 @@ namespace UnitTests
 			encoder.Bind(shaderProgram);
 
 			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Hash64("Texture"));
-			usi.BindSampler(0, Hash64("Texture_sampler"));
+			usi.BindResourceView(0, "Texture"_h);
+			usi.BindSampler(0, "Texture_sampler"_h);
 			Metal::BoundUniforms uniforms { shaderProgram, usi };
 
 			auto srv = testTexture._res->CreateTextureView(BindFlag::ShaderResource);
@@ -1050,8 +1052,8 @@ namespace UnitTests
 			encoder.Bind(shaderProgram);
 
 			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Hash64("Texture"));
-			usi.BindSampler(0, Hash64("Texture_sampler"));
+			usi.BindResourceView(0, "Texture"_h);
+			usi.BindSampler(0, "Texture_sampler"_h);
 			Metal::BoundUniforms uniforms { shaderProgram, usi };
 
 			auto srv = testTexture._res->CreateTextureView(BindFlag::ShaderResource);
@@ -1090,8 +1092,8 @@ namespace UnitTests
 			encoder.Bind(shaderProgram);
 
 			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Hash64("Texture"));
-			usi.BindSampler(0, Hash64("Texture_sampler"));
+			usi.BindResourceView(0, "Texture"_h);
+			usi.BindSampler(0, "Texture_sampler"_h);
 			Metal::BoundUniforms uniforms { shaderProgram, usi };
 
 			auto srv = testTexture._res->CreateTextureView(BindFlag::ShaderResource);
@@ -1188,15 +1190,15 @@ namespace UnitTests
 			auto encoder = metalContext.BeginComputeEncoder(*pipelineLayout);
 
 			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Hash64("ArrayInput")+interfaceRemapping[0]);
-			usi.BindResourceView(1, Hash64("ArrayInput")+interfaceRemapping[1]);
-			usi.BindResourceView(2, Hash64("ArrayInput")+interfaceRemapping[2]);
-			usi.BindResourceView(3, Hash64("ArrayInput")+interfaceRemapping[3]);
-			usi.BindResourceView(4, Hash64("ArrayInput")+interfaceRemapping[4]);
-			usi.BindResourceView(5, Hash64("ArrayInput")+interfaceRemapping[5]);
-			usi.BindResourceView(6, Hash64("ArrayInput")+interfaceRemapping[6]);
-			usi.BindResourceView(7, Hash64("ArrayInput")+interfaceRemapping[7]);
-			usi.BindResourceView(8, Hash64("Output"));
+			usi.BindResourceView(0, "ArrayInput"_h+interfaceRemapping[0]);
+			usi.BindResourceView(1, "ArrayInput"_h+interfaceRemapping[1]);
+			usi.BindResourceView(2, "ArrayInput"_h+interfaceRemapping[2]);
+			usi.BindResourceView(3, "ArrayInput"_h+interfaceRemapping[3]);
+			usi.BindResourceView(4, "ArrayInput"_h+interfaceRemapping[4]);
+			usi.BindResourceView(5, "ArrayInput"_h+interfaceRemapping[5]);
+			usi.BindResourceView(6, "ArrayInput"_h+interfaceRemapping[6]);
+			usi.BindResourceView(7, "ArrayInput"_h+interfaceRemapping[7]);
+			usi.BindResourceView(8, "Output"_h);
 			Metal::BoundUniforms uniforms { *pipeline, usi };
 
 			const IResourceView* resourceViews[9];
@@ -1332,11 +1334,11 @@ namespace UnitTests
 			auto encoder = metalContext.BeginComputeEncoder(*pipelineLayout);
 
 			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Hash64("Output"));
-			usi.BindResourceView(1, Hash64("UnorderedAccessReadBuffer"));
-			usi.BindResourceView(2, Hash64("UnorderedAccessRWBuffer"));
-			usi.BindResourceView(3, Hash64("TexelBuffer"));
-			usi.BindResourceView(4, Hash64("InputTexelBuffer"));
+			usi.BindResourceView(0, "Output"_h);
+			usi.BindResourceView(1, "UnorderedAccessReadBuffer"_h);
+			usi.BindResourceView(2, "UnorderedAccessRWBuffer"_h);
+			usi.BindResourceView(3, "TexelBuffer"_h);
+			usi.BindResourceView(4, "InputTexelBuffer"_h);
 			Metal::BoundUniforms uniforms { *pipeline, usi };
 
 			auto targetView = targetTexture->CreateTextureView(BindFlag::UnorderedAccess);
@@ -1414,35 +1416,35 @@ namespace UnitTests
 
 		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slots.size() == 3);
 		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slotNames.size() == 3);
-		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slotNames[0] == Hash64("RWTex"));
-		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slotNames[1] == Hash64("UnorderedAccessReadBuffer"));
-		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slotNames[2] == Hash64("UnorderedAccessRWBuffer"));
+		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slotNames[0] == "RWTex"_h);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slotNames[1] == "UnorderedAccessReadBuffer"_h);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slotNames[2] == "UnorderedAccessRWBuffer"_h);
 		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slots[0]._type == DescriptorType::UnorderedAccessTexture);
 		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slots[1]._type == DescriptorType::UnorderedAccessBuffer);
 		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slots[2]._type == DescriptorType::UnorderedAccessBuffer);
 
 		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slots.size() == 5);
 		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slotNames.size() == 5);
-		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slotNames[0] == Hash64("UniformBuffer"));
-		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slotNames[3] == Hash64("TexelBuffer"));
-		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slotNames[4] == Hash64("InputTexelBuffer"));
+		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slotNames[0] == "UniformBuffer"_h);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slotNames[3] == "TexelBuffer"_h);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slotNames[4] == "InputTexelBuffer"_h);
 		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slots[0]._type == DescriptorType::UniformBuffer);
 		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slots[3]._type == DescriptorType::UnorderedAccessTexelBuffer);
 		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slots[4]._type == DescriptorType::UniformTexelBuffer);
 
 		REQUIRE(pipelineLayout.GetDescriptorSets()[2]._signature._slots.size() == 6);
 		REQUIRE(pipelineLayout.GetDescriptorSets()[2]._signature._slotNames.size() == 6);
-		REQUIRE(pipelineLayout.GetDescriptorSets()[2]._signature._slotNames[2] == Hash64("Samplr"));
-		REQUIRE(pipelineLayout.GetDescriptorSets()[2]._signature._slotNames[5] == Hash64("Tex"));
+		REQUIRE(pipelineLayout.GetDescriptorSets()[2]._signature._slotNames[2] == "Samplr"_h);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[2]._signature._slotNames[5] == "Tex"_h);
 		REQUIRE(pipelineLayout.GetDescriptorSets()[2]._signature._slots[2]._type == DescriptorType::Sampler);
 		REQUIRE(pipelineLayout.GetDescriptorSets()[2]._signature._slots[5]._type == DescriptorType::SampledTexture);
 
 		REQUIRE(pipelineLayout.GetPushConstants().size() == 1);
 		REQUIRE(pipelineLayout.GetPushConstants()[0]._cbSize == 80);
 		REQUIRE(pipelineLayout.GetPushConstants()[0]._cbElements.size() == 3);
-		REQUIRE(pipelineLayout.GetPushConstants()[0]._cbElements[0]._semanticHash == Hash64("M"));
-		REQUIRE(pipelineLayout.GetPushConstants()[0]._cbElements[1]._semanticHash == Hash64("A"));
-		REQUIRE(pipelineLayout.GetPushConstants()[0]._cbElements[2]._semanticHash == Hash64("B"));
+		REQUIRE(pipelineLayout.GetPushConstants()[0]._cbElements[0]._semanticHash == "M"_h);
+		REQUIRE(pipelineLayout.GetPushConstants()[0]._cbElements[1]._semanticHash == "A"_h);
+		REQUIRE(pipelineLayout.GetPushConstants()[0]._cbElements[2]._semanticHash == "B"_h);
 
 		const char readBuffersShaderText[] = R"--(
 			struct InputStruct { float4 A; float4 B; };
@@ -1472,10 +1474,10 @@ namespace UnitTests
 
 		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slots.size() == 6);
 		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slotNames.size() == 6);
-		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slotNames[0] == Hash64("StructuredBufferComplex"));
-		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slotNames[1] == Hash64("StructuredBufferSimple"));
-		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slotNames[2] == Hash64("TexelBuffer"));
-		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slotNames[3] == Hash64("UniformBuffer"));
+		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slotNames[0] == "StructuredBufferComplex"_h);
+		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slotNames[1] == "StructuredBufferSimple"_h);
+		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slotNames[2] == "TexelBuffer"_h);
+		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slotNames[3] == "UniformBuffer"_h);
 		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slots[0]._type == DescriptorType::UnorderedAccessBuffer);
 		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slots[1]._type == DescriptorType::UnorderedAccessBuffer);
 		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slots[2]._type == DescriptorType::UnorderedAccessTexelBuffer);
@@ -1500,7 +1502,7 @@ namespace UnitTests
 		auto encoder = metalContext.BeginComputeEncoder(*pipelineLayout);
 
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Hash64("OutputTexture"));
+		usi.BindResourceView(0, "OutputTexture"_h);
 		Metal::BoundUniforms uniforms { *pipeline, usi };
 
 		auto targetView = targetTexture.CreateTextureView(BindFlag::UnorderedAccess);
@@ -1713,38 +1715,38 @@ namespace UnitTests
 
 		DescriptorSetSignature commonEarlyDescSet
 			{
-				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, Hash64("s0d0")),
-				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s0d1")),
-				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s0d2")),
-				std::make_pair(DescriptorSlot{DescriptorType::UnorderedAccessBuffer}, Hash64("s0d3")),
-				std::make_pair(DescriptorSlot{DescriptorType::UniformBufferDynamicOffset}, Hash64("s0d4")),
+				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, "s0d0"_h),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, "s0d1"_h),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, "s0d2"_h),
+				std::make_pair(DescriptorSlot{DescriptorType::UnorderedAccessBuffer}, "s0d3"_h),
+				std::make_pair(DescriptorSlot{DescriptorType::UniformBufferDynamicOffset}, "s0d4"_h),
 			};
 
 		DescriptorSetSignature materialDescSet0
 			{
-				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s1d0")),
-				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s1d1")),
-				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s1d2")),
-				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s1d3")),
-				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s1d4")),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, "s1d0"_h),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, "s1d1"_h),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, "s1d2"_h),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, "s1d3"_h),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, "s1d4"_h),
 			};
 
 		DescriptorSetSignature materialDescSet1
 			{
-				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, Hash64("s2d0")),
-				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, Hash64("s2d1")),
-				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, Hash64("s2d2")),
-				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, Hash64("s2d3")),
-				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, Hash64("s2d4"))
+				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, "s2d0"_h),
+				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, "s2d1"_h),
+				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, "s2d2"_h),
+				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, "s2d3"_h),
+				std::make_pair(DescriptorSlot{DescriptorType::UniformBuffer}, "s2d4"_h)
 			};
 
 		DescriptorSetSignature materialDescSet2
 			{
-				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s3d0")),
-				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s3d1")),
-				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture, 5}, Hash64("s3d2")),
-				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, Hash64("s3d3")),
-				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture, 2}, Hash64("s3d4"))
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, "s3d0"_h),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, "s3d1"_h),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture, 5}, "s3d2"_h),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture}, "s3d3"_h),
+				std::make_pair(DescriptorSlot{DescriptorType::SampledTexture, 2}, "s3d4"_h)
 			};
 
 		PipelineLayoutInitializer pl0;
@@ -1845,8 +1847,8 @@ namespace UnitTests
 		// Differences in the sequential desc set hashes should bubble up to affect the bound uniform GroupRulesHash
 		{
 			UniformsStreamInterface usi0, usi1;
-			usi0.BindResourceView(0, Hash64("s0d1"));
-			usi1.BindResourceView(0, Hash64("s1d3"));		// in materialDescSet0
+			usi0.BindResourceView(0, "s0d1"_h);
+			usi1.BindResourceView(0, "s1d3"_h);		// in materialDescSet0
 
 			Metal::BoundUniforms boundUniforms0 { cl0, usi0, usi1 };
 			Metal::BoundUniforms boundUniforms1 { cl1, usi0, usi1 };

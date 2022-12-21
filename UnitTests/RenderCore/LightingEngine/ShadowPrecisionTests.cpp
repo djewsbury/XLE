@@ -44,6 +44,8 @@
 
 using namespace Catch::literals;
 using namespace std::chrono_literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	static RenderCore::LightingEngine::ILightScene::LightSourceId CreateTestLight(RenderCore::LightingEngine::ILightScene& lightScene, float theta)
@@ -336,10 +338,10 @@ namespace UnitTests
 		using namespace RenderCore;
 		auto rpi = Techniques::RenderPassToPresentationTarget(parsingContext);
 		UniformsStreamInterface usi;
-		auto cascadeIndexTexture = parsingContext.GetAttachmentReservation().GetSemanticResource(Hash64("CascadeIndex")+0);
+		auto cascadeIndexTexture = parsingContext.GetAttachmentReservation().GetSemanticResource("CascadeIndex"_h+0);
 		REQUIRE(cascadeIndexTexture);
 		auto cascadeIndexTextureSRV = cascadeIndexTexture->CreateTextureView(BindFlag::ShaderResource);
-		usi.BindResourceView(0, Hash64("PrebuiltCascadeIndexTexture"));
+		usi.BindResourceView(0, "PrebuiltCascadeIndexTexture"_h);
 		IResourceView* srvs[] = { cascadeIndexTextureSRV.get() };
 		UniformsStream us;
 		us._resourceViews = MakeIteratorRange(srvs);
@@ -499,7 +501,7 @@ namespace UnitTests
 
 					SaveImage(*threadContext, *colorLDR, "sun-source-cascades-scene-camera");
 
-					auto cascadeIndexTexture = parsingContext.GetAttachmentReservation().GetSemanticResource(Hash64("CascadeIndex")+0);
+					auto cascadeIndexTexture = parsingContext.GetAttachmentReservation().GetSemanticResource("CascadeIndex"_h+0);
 					REQUIRE(cascadeIndexTexture);
 					auto cascadeIndexReadback = cascadeIndexTexture->ReadBackSynchronized(*threadContext);
 					unsigned cascadePixelCount[5] = {0,0,0,0,0};

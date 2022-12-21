@@ -29,6 +29,8 @@
 
 #include "../../SceneEngine/PlacementsManager.h"        // For some of the code in RenderingUtil below
 
+using namespace Utility::Literals;
+
 namespace GUILayer
 {
     class VertexFormatRecord
@@ -317,7 +319,7 @@ namespace GUILayer
         _depthTestEnable = true;
 
         _mainUniformsInterface = std::make_shared<RenderCore::UniformsStreamInterface>();
-        _mainUniformsInterface->BindImmediateData(0, Hash64("LocalTransform"));
+        _mainUniformsInterface->BindImmediateData(0, "LocalTransform"_h);
     }
     SimpleRenderingContext::~SimpleRenderingContext() {}
     SimpleRenderingContext::!SimpleRenderingContext() {}

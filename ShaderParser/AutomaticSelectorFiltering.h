@@ -33,7 +33,7 @@ namespace ShaderSourceParser
 
 		void MergeIn(const SelectorFilteringRules& source);
 
-		static const auto CompileProcessType = ConstHash64<'Filt', 'erRu', 'les'>::Value;
+		static constexpr auto CompileProcessType = ConstHash64Legacy<'Filt', 'erRu', 'les'>::Value;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
 		friend void SerializationOperator(

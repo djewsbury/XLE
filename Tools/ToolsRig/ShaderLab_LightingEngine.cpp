@@ -27,10 +27,12 @@
 #include "../../Utility/Streams/FormatterUtils.h"
 #include <memory>
 
+using namespace Utility::Literals;
+
 namespace ToolsRig
 {
 	using namespace RenderCore;
-	static const uint64_t s_shadowTemplate = Utility::Hash64("ShadowTemplate");
+	constexpr uint64_t s_shadowTemplate = "ShadowTemplate"_h;
 
 	class PrepareForwardLightScene : public std::enable_shared_from_this<PrepareForwardLightScene>
 	{

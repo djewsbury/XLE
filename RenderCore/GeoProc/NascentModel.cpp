@@ -19,6 +19,8 @@
 #include "../../Core/Exceptions.h"
 #include <sstream>
 
+using namespace Utility::Literals;
+
 // #define WRITE_TOPOLOGICAL_CMDSTREAM 1
 
 namespace RenderCore { namespace Assets { namespace GeoProc
@@ -375,7 +377,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				serializer << 0ull;	// default cmd stream id (s_CmdStreamGuid_Default)
 			} else {
 				assert(mode == CmdStreamMode::Topological);
-				serializer << Hash64("adjacency");
+				serializer << "adjacency"_h;
 			}
 			serializer << cmdStreamSerializer.SizePrimaryBlock();
 			serializer.SerializeSubBlock(cmdStreamSerializer);

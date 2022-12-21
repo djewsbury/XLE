@@ -44,6 +44,8 @@
 
 using namespace Catch::literals;
 using namespace std::chrono_literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	static const char* s_localPixelShader = R"--(
@@ -191,8 +193,8 @@ namespace UnitTests
 			drawable->_geo = drawableGeo.get();
 			drawable->_vertexCount = sphereGeo.size();
 			RenderCore::UniformsStreamInterface usi;
-			usi.BindImmediateData(0, Hash64("LocalTransform"));
-			usi.BindImmediateData(1, Hash64("Settings"));
+			usi.BindImmediateData(0, "LocalTransform"_h);
+			usi.BindImmediateData(1, "Settings"_h);
 			drawable->_looseUniformsInterface = testApparatus._drawablesPool->CreateProtectedLifetime(std::move(usi)).get();
 			drawable->_drawFn = [](Techniques::ParsingContext&, const Techniques::ExecuteDrawableContext& drawFnContext, const Techniques::Drawable& drawable)
 				{

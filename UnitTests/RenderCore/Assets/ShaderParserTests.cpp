@@ -38,6 +38,8 @@
 #include "../../../ShaderParser/GraphSyntax.h"
 
 using namespace Catch::literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	// The following data is mounted as virtual files in the folder "ut-data"
@@ -319,7 +321,7 @@ static const int NonPreprocessorLine0 = 0;
 		/*
 			todo -- this requires RenderCore::Techniques linked in. Maybe better off in a different unit test
 		auto tech = ::Assets::AutoConstructAsset<RenderCore::Techniques::TechniqueSetFile>("ut-data/example.tech");
-		const auto* entry = tech->FindEntry(Hash64("PerPixel"));
+		const auto* entry = tech->FindEntry("PerPixel"_h);
 		REQUIRE(entry != nullptr);
 		*/
 

@@ -33,8 +33,8 @@
 using namespace Catch::literals;
 namespace UnitTests
 {
-	static constexpr uint64_t Type_UnitTestArtifact = ConstHash64<'unit', 'test', 'arti', 'fact'>::Value;
-	static constexpr uint64_t Type_UnitTestExtraArtifact = ConstHash64<'unit', 'test', 'extr', 'a'>::Value;
+	static constexpr uint64_t Type_UnitTestArtifact = ConstHash64Legacy<'unit', 'test', 'arti', 'fact'>::Value;
+	static constexpr uint64_t Type_UnitTestExtraArtifact = ConstHash64Legacy<'unit', 'test', 'extr', 'a'>::Value;
 
 	class TestCompileOperation : public ::Assets::ICompileOperation
 	{
@@ -86,7 +86,7 @@ namespace UnitTests
 			// store and is mostly used for debugging purposes
 			{
 				SerializedArtifact opRes;
-				opRes._chunkTypeCode = ConstHash64<'Metr', 'ics'>::Value;
+				opRes._chunkTypeCode = ConstHash64Legacy<'Metr', 'ics'>::Value;
 				opRes._version = 1;
 				opRes._name = "unitary-artifact-metrics";
 				opRes._data = ::Assets::AsBlob("This is file data from TestCompileOperation for " + _initializer);

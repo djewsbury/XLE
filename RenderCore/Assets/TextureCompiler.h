@@ -16,7 +16,7 @@ namespace Assets { class OperationContext; }
 
 namespace RenderCore { namespace Assets
 {
-	static const auto TextureCompilerProcessType = ConstHash64<'Text', 'ure'>::Value;
+	constexpr auto TextureCompilerProcessType = ConstHash64Legacy<'Text', 'ure'>::Value;
 
 	class TextureCompilationRequest
 	{

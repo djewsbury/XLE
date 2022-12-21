@@ -21,6 +21,8 @@
 #include "catch2/catch_approx.hpp"
 
 using namespace Catch::literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	static const char* s_vs_descriptorSetTest = R"--(#version 400
@@ -267,12 +269,12 @@ namespace UnitTests
 			encoder.Bind(shaderProgram);
 
 			UniformsStreamInterface uniformInterface;
-			uniformInterface.BindImmediateData(0, Hash64("Set0Binding0"));
-			uniformInterface.BindImmediateData(1, Hash64("Set1Binding4"));
-			uniformInterface.BindImmediateData(2, Hash64("PushConstants0"));
-			uniformInterface.BindImmediateData(3, Hash64("PushConstants1"));
-			uniformInterface.BindResourceView(0, Hash64("Set1Binding5"));		// this is the storage buffer / unordered access buffer
-			uniformInterface.BindResourceView(1, Hash64("Set1Binding6"));		// this is the storage texture / unordered access texture
+			uniformInterface.BindImmediateData(0, "Set0Binding0"_h);
+			uniformInterface.BindImmediateData(1, "Set1Binding4"_h);
+			uniformInterface.BindImmediateData(2, "PushConstants0"_h);
+			uniformInterface.BindImmediateData(3, "PushConstants1"_h);
+			uniformInterface.BindResourceView(0, "Set1Binding5"_h);		// this is the storage buffer / unordered access buffer
+			uniformInterface.BindResourceView(1, "Set1Binding6"_h);		// this is the storage texture / unordered access texture
 			Metal::BoundUniforms uniforms(shaderProgram, uniformInterface);
 
 			UniformsStream uniformsStream;
@@ -324,10 +326,10 @@ namespace UnitTests
 			encoder.Bind(shaderProgram);
 
 			UniformsStreamInterface uniformInterface;
-			uniformInterface.BindImmediateData(0, Hash64("PushConstants0"));
-			uniformInterface.BindImmediateData(1, Hash64("PushConstants1"));
-			uniformInterface.BindFixedDescriptorSet(0, Hash64("Set0"));
-			uniformInterface.BindFixedDescriptorSet(1, Hash64("Set1"));
+			uniformInterface.BindImmediateData(0, "PushConstants0"_h);
+			uniformInterface.BindImmediateData(1, "PushConstants1"_h);
+			uniformInterface.BindFixedDescriptorSet(0, "Set0"_h);
+			uniformInterface.BindFixedDescriptorSet(1, "Set1"_h);
 			Metal::BoundUniforms uniforms(shaderProgram, uniformInterface);
 
 			UniformsStream uniformsStream;
@@ -366,10 +368,10 @@ namespace UnitTests
 			auto encoder = metalContext.BeginGraphicsEncoder(*pipelineLayout);
 
 			UniformsStreamInterface uniformInterface;
-			uniformInterface.BindImmediateData(0, Hash64("PushConstants0"));
-			uniformInterface.BindImmediateData(1, Hash64("PushConstants1"));
-			uniformInterface.BindFixedDescriptorSet(0, Hash64("Set0"));
-			uniformInterface.BindFixedDescriptorSet(1, Hash64("Set1"));
+			uniformInterface.BindImmediateData(0, "PushConstants0"_h);
+			uniformInterface.BindImmediateData(1, "PushConstants1"_h);
+			uniformInterface.BindFixedDescriptorSet(0, "Set0"_h);
+			uniformInterface.BindFixedDescriptorSet(1, "Set1"_h);
 			Metal::BoundUniforms uniforms(*pipeline, uniformInterface);
 
 			UniformsStream uniformsStream;

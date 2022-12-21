@@ -19,6 +19,8 @@
 #include "../Utility/StringFormat.h"
 #include "../Utility/StringUtils.h"
 
+using namespace Utility::Literals;
+
 namespace RenderOverlays
 {
 	using namespace RenderCore;
@@ -353,7 +355,7 @@ namespace RenderOverlays
 	, _fontRenderingManager(nullptr)
 	{
 		_texturedUSI = std::make_shared<RenderCore::UniformsStreamInterface>();
-		_texturedUSI->BindResourceView(0, Hash64("InputTexture"));
+		_texturedUSI->BindResourceView(0, "InputTexture"_h);
 		_requiredBufferUploadsCommandList = 0;
 	}
 

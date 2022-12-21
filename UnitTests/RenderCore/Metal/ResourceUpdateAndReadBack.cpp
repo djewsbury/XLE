@@ -32,6 +32,7 @@
 #include <random>
 
 using namespace Catch::literals;
+using namespace Utility::Literals;
 
 namespace UnitTests
 {
@@ -83,10 +84,10 @@ namespace UnitTests
 	};
 
 	const RenderCore::ConstantBufferElementDesc ConstantBufferElementDesc_Values[] {
-		RenderCore::ConstantBufferElementDesc { Hash64("A"), RenderCore::Format::R32_FLOAT, offsetof(Values, A) },
-		RenderCore::ConstantBufferElementDesc { Hash64("B"), RenderCore::Format::R32_FLOAT, offsetof(Values, B) },
-		RenderCore::ConstantBufferElementDesc { Hash64("C"), RenderCore::Format::R32_FLOAT, offsetof(Values, C) },
-		RenderCore::ConstantBufferElementDesc { Hash64("vA"), RenderCore::Format::R32G32B32A32_FLOAT, offsetof(Values, vA) }
+		RenderCore::ConstantBufferElementDesc { "A"_h, RenderCore::Format::R32_FLOAT, offsetof(Values, A) },
+		RenderCore::ConstantBufferElementDesc { "B"_h, RenderCore::Format::R32_FLOAT, offsetof(Values, B) },
+		RenderCore::ConstantBufferElementDesc { "C"_h, RenderCore::Format::R32_FLOAT, offsetof(Values, C) },
+		RenderCore::ConstantBufferElementDesc { "vA"_h, RenderCore::Format::R32G32B32A32_FLOAT, offsetof(Values, vA) }
 	};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -194,7 +195,7 @@ namespace UnitTests
 		// ............. Setup BoundInputLayout & BoundUniforms ................................
 
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Hash64("Values"), MakeIteratorRange(ConstantBufferElementDesc_Values));
+		usi.BindResourceView(0, "Values"_h, MakeIteratorRange(ConstantBufferElementDesc_Values));
 		Metal::BoundUniforms uniforms { shaderProgram, usi };
 
 		// ............. Start RPI .............................................................
@@ -324,7 +325,7 @@ namespace UnitTests
 		// ............. Setup BoundInputLayout & BoundUniforms ................................
 
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Hash64("Values"), MakeIteratorRange(ConstantBufferElementDesc_Values));
+		usi.BindResourceView(0, "Values"_h, MakeIteratorRange(ConstantBufferElementDesc_Values));
 		Metal::BoundUniforms uniforms { shaderProgram, usi };
 
 		// ............. Start RPI .............................................................
@@ -705,8 +706,8 @@ namespace UnitTests
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc, LoadStore::Clear);
 
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Hash64("Texture"));
-		usi.BindSampler(0, Hash64("Texture_sampler"));
+		usi.BindResourceView(0, "Texture"_h);
+		usi.BindSampler(0, "Texture_sampler"_h);
 		Metal::BoundUniforms uniforms { shaderProgram, usi };
 		auto sampler = testHelper->_device->CreateSampler({});
 

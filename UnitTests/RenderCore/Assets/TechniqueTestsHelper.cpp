@@ -14,6 +14,8 @@
 #include "../../../Assets/AssetSetManager.h"
 #include "../../../Assets/AssetServices.h"
 
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	TechniqueTestApparatus::TechniqueTestApparatus(MetalTestHelper& testHelper)
@@ -50,8 +52,8 @@ namespace UnitTests
 		auto sequencerDescSetLayout = RenderCore::Techniques::FindLayout(graphicsMainLayout, "Sequencer", PipelineType::Graphics);
 		auto seqSemiConstantGraphics = Techniques::CreateSemiConstantDescriptorSet(*sequencerDescSetLayout->GetLayout(), "unittest", PipelineType::Graphics, *testHelper._device);
 		auto seqSemiConstantCompute = Techniques::CreateSemiConstantDescriptorSet(*sequencerDescSetLayout->GetLayout(), "unittest", PipelineType::Compute, *testHelper._device);
-		_techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet(Hash64("Sequencer"), std::move(seqSemiConstantGraphics));
-		_techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet(Hash64("Sequencer"), std::move(seqSemiConstantCompute));
+		_techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet("Sequencer"_h, std::move(seqSemiConstantGraphics));
+		_techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet("Sequencer"_h, std::move(seqSemiConstantCompute));
 		_techniqueContext->_pipelineAccelerators = _pipelineAccelerators;
 		_techniqueContext->_drawablesPool = _drawablesPool;
 		_techniqueContext->_systemAttachmentFormats = Techniques::CalculateDefaultSystemFormats(*testHelper._device);

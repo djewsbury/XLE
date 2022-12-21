@@ -24,6 +24,8 @@
 #include "../../Utility/StringFormat.h"
 #include "../../xleres/FileList.h"
 
+using namespace Utility::Literals;
+
 namespace RenderOverlays
 {
     using namespace RenderCore;
@@ -101,15 +103,15 @@ namespace RenderOverlays
     , _completionCmdList(distinctColors->GetCompletionCommandList())
     {
 		UniformsStreamInterface drawHighlightInterface;
-		drawHighlightInterface.BindImmediateData(0, Hash64("Settings"));
-        drawHighlightInterface.BindResourceView(0, Hash64("InputTexture"));
+		drawHighlightInterface.BindImmediateData(0, "Settings"_h);
+        drawHighlightInterface.BindResourceView(0, "InputTexture"_h);
 		_drawHighlightUniforms = Metal::BoundUniforms(*_drawHighlight, drawHighlightInterface);
 
         //// ////
         
 		UniformsStreamInterface drawShadowInterface;
-		drawShadowInterface.BindImmediateData(0, Hash64("ShadowHighlightSettings"));
-        drawShadowInterface.BindResourceView(0, Hash64("InputTexture"));
+		drawShadowInterface.BindImmediateData(0, "ShadowHighlightSettings"_h);
+        drawShadowInterface.BindResourceView(0, "InputTexture"_h);
 		_drawShadowUniforms = Metal::BoundUniforms(*_drawShadow, drawShadowInterface);
 
         //// ////

@@ -602,7 +602,7 @@ namespace ToolsRig
 				auto comma = s.find_first_of(',', offset);
 				if (comma == std::string::npos) comma = s.size();
 				if (offset == comma) break;
-				auto hash = ConstHash64FromString(AsPointer(s.begin()) + offset, AsPointer(s.begin()) + comma);
+				auto hash = ConstHash64LegacyFromString(AsPointer(s.begin()) + offset, AsPointer(s.begin()) + comma);
 				supplements.push_back(hash);
 				offset = comma;
 			}

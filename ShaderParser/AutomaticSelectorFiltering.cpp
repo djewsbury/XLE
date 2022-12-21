@@ -32,7 +32,7 @@
 
 namespace ShaderSourceParser
 {
-	static const auto ChunkType_Metrics = ConstHash64<'Metr', 'ics'>::Value;
+	constexpr auto ChunkType_Metrics = ConstHash64Legacy<'Metr', 'ics'>::Value;
 
 	void SerializationOperator(
 		Utility::OutputStreamFormatter& formatter,

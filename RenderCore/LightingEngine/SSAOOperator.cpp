@@ -24,11 +24,13 @@
 #include "../Metal/DeviceContext.h"
 #include "../Vulkan/Metal/IncludeVulkan.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace LightingEngine
 {
-	static const auto Hash_AOOutput = ConstHash64<'ao-o', 'utpu', 't'>::Value;
-	static const auto Hash_AOAccumulation = ConstHash64<'ao-a', 'ccum', 'ulat', 'ion'>::Value;
-	static const auto Hash_AOAccumulationPrev = ConstHash64<'ao-a', 'ccum', 'ulat', 'ion'>::Value+1;
+	static const auto Hash_AOOutput = ConstHash64Legacy<'ao-o', 'utpu', 't'>::Value;
+	static const auto Hash_AOAccumulation = ConstHash64Legacy<'ao-a', 'ccum', 'ulat', 'ion'>::Value;
+	static const auto Hash_AOAccumulationPrev = ConstHash64Legacy<'ao-a', 'ccum', 'ulat', 'ion'>::Value+1;
 
 	static const auto s_aoFormat = Format::R8_UNORM;
 
@@ -255,16 +257,16 @@ namespace RenderCore { namespace LightingEngine
             assert(opDesc._maxWorldSpaceDistance > 0);
 
             UniformsStreamInterface usi;
-            usi.BindResourceView(0, Hash64("InputTexture"));
-            usi.BindResourceView(1, Hash64("OutputTexture"));
-            usi.BindResourceView(2, Hash64("AccumulationAO"));
-            usi.BindResourceView(3, Hash64("AccumulationAOLast"));
-            usi.BindResourceView(4, Hash64("InputNormals"));
-            usi.BindResourceView(5, Hash64("GBufferMotion"));
-            usi.BindResourceView(6, Hash64("HistoryAcc"));
-            usi.BindResourceView(7, Hash64("HierarchicalDepths"));
-            usi.BindResourceView(8, Hash64("DitherTable"));
-            usi.BindImmediateData(0, Hash64("AOProps"));
+            usi.BindResourceView(0, "InputTexture"_h);
+            usi.BindResourceView(1, "OutputTexture"_h);
+            usi.BindResourceView(2, "AccumulationAO"_h);
+            usi.BindResourceView(3, "AccumulationAOLast"_h);
+            usi.BindResourceView(4, "InputNormals"_h);
+            usi.BindResourceView(5, "GBufferMotion"_h);
+            usi.BindResourceView(6, "HistoryAcc"_h);
+            usi.BindResourceView(7, "HierarchicalDepths"_h);
+            usi.BindResourceView(8, "DitherTable"_h);
+            usi.BindImmediateData(0, "AOProps"_h);
 
             ParameterBox selectors;
             if (opDesc._sampleBothDirections) selectors.SetParameter("BOTH_WAYS", 1);

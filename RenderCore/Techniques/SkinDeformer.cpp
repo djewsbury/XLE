@@ -27,13 +27,15 @@
 #include "../../xleres/FileList.h"
 #include <assert.h>
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace Techniques
 {
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static const auto s_weightsEle = Hash64("WEIGHTS");
-	static const auto s_jointIndicesEle = Hash64("JOINTINDICES");
+	static constexpr auto s_weightsEle = "WEIGHTS"_h;
+	static constexpr auto s_jointIndicesEle = "JOINTINDICES"_h;
 	static const std::string s_positionEleName = "POSITION";
 	static const std::string s_tangentEleName = "TEXTANGENT";
 	static const std::string s_normalEleName = "NORMAL";
@@ -832,19 +834,19 @@ namespace RenderCore { namespace Techniques
 		GPUSkinDeformConfigure(std::shared_ptr<PipelineCollection> pipelineCollection)
 		{
 			UniformsStreamInterface usi;
-			usi.BindResourceView(0, Hash64("StaticVertexAttachments"));
-			usi.BindResourceView(1, Hash64("InputAttributes"));
-			usi.BindResourceView(2, Hash64("OutputAttributes"));
-			usi.BindResourceView(3, Hash64("DeformTemporaryAttributes"));
-			usi.BindResourceView(4, Hash64("JointTransforms"));
-			usi.BindResourceView(5, Hash64("IAParams"));
-			usi.BindResourceView(6, Hash64("SkinIAParams"));
+			usi.BindResourceView(0, "StaticVertexAttachments"_h);
+			usi.BindResourceView(1, "InputAttributes"_h);
+			usi.BindResourceView(2, "OutputAttributes"_h);
+			usi.BindResourceView(3, "DeformTemporaryAttributes"_h);
+			usi.BindResourceView(4, "JointTransforms"_h);
+			usi.BindResourceView(5, "IAParams"_h);
+			usi.BindResourceView(6, "SkinIAParams"_h);
 
 			UniformsStreamInterface pushConstantsUSI;
-			pushConstantsUSI.BindImmediateData(0, Hash64("InvocationParams"));
+			pushConstantsUSI.BindImmediateData(0, "InvocationParams"_h);
 
 			ShaderSourceParser::InstantiationRequest instRequest { SKIN_COMPUTE_HLSL };
-			uint64_t patchExpansions[] { Hash64("PerformDeform"), Hash64("GetDeformInvocationParams") };
+			uint64_t patchExpansions[] { "PerformDeform"_h, "GetDeformInvocationParams"_h };
 
 			_pipelineCollection = std::make_shared<Internal::DeformerPipelineCollection>(
 				std::move(pipelineCollection),

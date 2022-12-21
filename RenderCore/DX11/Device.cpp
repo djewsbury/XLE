@@ -35,6 +35,8 @@
 #include <dxgi.h>
 #include <dxgidebug.h>
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace ImplDX11
 {
     static void DumpAllDXGIObjects();
@@ -99,7 +101,7 @@ namespace RenderCore { namespace ImplDX11
         auto adapter = SelectAdapter();
 
         #if defined(_DEBUG)
-            const auto nsightMode = ConsoleRig::CrossModule::GetInstance()._services.CallDefault(Hash64("nsight"), false);
+            const auto nsightMode = ConsoleRig::CrossModule::GetInstance()._services.CallDefault("nsight"_h, false);
             unsigned deviceCreationFlags = nsightMode?0:D3D11_CREATE_DEVICE_DEBUG;
         #else
             unsigned deviceCreationFlags = 0;

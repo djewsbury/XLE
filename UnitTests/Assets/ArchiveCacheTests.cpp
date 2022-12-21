@@ -16,21 +16,22 @@
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 
-
 using namespace Catch::literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
-	static const auto ChunkType_Metrics = ConstHash64<'Metr', 'ics'>::Value;
-	static const auto ChunkType_Log = ConstHash64<'Log'>::Value;
+	static const auto ChunkType_Metrics = ConstHash64Legacy<'Metr', 'ics'>::Value;
+	static const auto ChunkType_Log = ConstHash64Legacy<'Log'>::Value;
 
 	static ::Assets::ICompileOperation::SerializedArtifact s_artifactsObj1[] {
 		::Assets::ICompileOperation::SerializedArtifact {
-			Hash64("artifact-one"),
+			"artifact-one"_h,
 			1,
 			"artifact-one",
 			::Assets::AsBlob("artifact-one-contents") },
 		::Assets::ICompileOperation::SerializedArtifact {
-			Hash64("artifact-two"),
+			"artifact-two"_h,
 			5,
 			"artifact-two",
 			::Assets::AsBlob("artifact-two-contents") },
@@ -48,12 +49,12 @@ namespace UnitTests
 
 	static ::Assets::ICompileOperation::SerializedArtifact s_artifactsObj2[] {
 		::Assets::ICompileOperation::SerializedArtifact {
-			Hash64("artifact-one"),
+			"artifact-one"_h,
 			1,
 			"item-two-artifact-one",
 			::Assets::AsBlob("item-two-artifact-one-contents") },
 		::Assets::ICompileOperation::SerializedArtifact {
-			Hash64("artifact-two"),
+			"artifact-two"_h,
 			5,
 			"item-two-artifact-two",
 			::Assets::AsBlob("item-two-artifact-two-contents") },
@@ -71,12 +72,12 @@ namespace UnitTests
 
 	static ::Assets::ICompileOperation::SerializedArtifact s_artifactsObj2Replacement[] {
 		::Assets::ICompileOperation::SerializedArtifact {
-			Hash64("artifact-one"),
+			"artifact-one"_h,
 			1,
 			"item-two-replacement-artifact-one",
 			::Assets::AsBlob("item-two-replacement-artifact-one-contents") },
 		::Assets::ICompileOperation::SerializedArtifact {
-			Hash64("artifact-two"),
+			"artifact-two"_h,
 			5,
 			"item-two-replacement-artifact-two",
 			::Assets::AsBlob("item-two-replacement-artifact-two-contents") },
@@ -120,7 +121,7 @@ namespace UnitTests
 			::Assets::ArchiveCacheSet cacheSet(::Assets::MainFileSystem::GetDefaultFileSystem(), dummyVersionDesc);
 			auto archive = cacheSet.GetArchive(archiveFileName);
 
-			uint64_t objectOneId = Hash64("ObjectOne");
+			constexpr uint64_t objectOneId = "ObjectOne"_h;
 			archive->Commit(
 				objectOneId, "Object",
 				MakeIteratorRange(s_artifactsObj1),
@@ -133,9 +134,9 @@ namespace UnitTests
 			REQUIRE(depVal);
 			REQUIRE(depVal.GetValidationIndex() == 0);
 			
-			::Assets::ArtifactRequest requests[] {
-				::Assets::ArtifactRequest { "--ignored--", Hash64("artifact-one"), 1, ::Assets::ArtifactRequest::DataType::SharedBlob },
-				::Assets::ArtifactRequest { "--ignored--", Hash64("artifact-two"), 5, ::Assets::ArtifactRequest::DataType::Raw }
+			constexpr ::Assets::ArtifactRequest requests[] {
+				::Assets::ArtifactRequest { "--ignored--", "artifact-one"_h, 1, ::Assets::ArtifactRequest::DataType::SharedBlob },
+				::Assets::ArtifactRequest { "--ignored--", "artifact-two"_h, 5, ::Assets::ArtifactRequest::DataType::Raw }
 			};
 			auto resolvedRequests = artifactCollection->ResolveRequests(MakeIteratorRange(requests));
 			REQUIRE(resolvedRequests.size() == 2);
@@ -154,7 +155,7 @@ namespace UnitTests
 			REQUIRE(reattemptResolve[1]._buffer);
 			REQUIRE(reattemptResolve[1]._bufferSize);
 
-			uint64_t objectTwoId = Hash64("ObjectTwo");
+			constexpr uint64_t objectTwoId = "ObjectTwo"_h;
 			archive->Commit(
 				objectTwoId, "ObjectTwo",
 				MakeIteratorRange(s_artifactsObj2),
@@ -182,9 +183,9 @@ namespace UnitTests
 					(void)resolvedRequests;
 				}());
 
-			::Assets::ArtifactRequest requests2[] {
-				::Assets::ArtifactRequest { "--ignored--", Hash64("artifact-one"), 1, ::Assets::ArtifactRequest::DataType::SharedBlob },
-				::Assets::ArtifactRequest { "--ignored--", Hash64("artifact-two"), 5, ::Assets::ArtifactRequest::DataType::SharedBlob }
+			constexpr ::Assets::ArtifactRequest requests2[] {
+				::Assets::ArtifactRequest { "--ignored--", "artifact-one"_h, 1, ::Assets::ArtifactRequest::DataType::SharedBlob },
+				::Assets::ArtifactRequest { "--ignored--", "artifact-two"_h, 5, ::Assets::ArtifactRequest::DataType::SharedBlob }
 			};
 
 			artifactCollection = archive->TryOpenFromCache(objectTwoId);
@@ -214,15 +215,15 @@ namespace UnitTests
 			::Assets::ArchiveCacheSet cacheSet(::Assets::MainFileSystem::GetDefaultFileSystem(), dummyVersionDesc);
 			auto archive = cacheSet.GetArchive(archiveFileName);
 
-			auto artifactCollection = archive->TryOpenFromCache(Hash64("ObjectOne"));
+			auto artifactCollection = archive->TryOpenFromCache("ObjectOne"_h);
 			REQUIRE(artifactCollection);
 			auto depVal = artifactCollection->GetDependencyValidation();
 			REQUIRE(depVal);
 			REQUIRE(depVal.GetValidationIndex() == 0);
 
-			::Assets::ArtifactRequest requests[] {
-				::Assets::ArtifactRequest { "--ignored--", Hash64("artifact-one"), 1, ::Assets::ArtifactRequest::DataType::SharedBlob },
-				::Assets::ArtifactRequest { "--ignored--", Hash64("artifact-two"), 5, ::Assets::ArtifactRequest::DataType::Raw }
+			constexpr ::Assets::ArtifactRequest requests[] {
+				::Assets::ArtifactRequest { "--ignored--", "artifact-one"_h, 1, ::Assets::ArtifactRequest::DataType::SharedBlob },
+				::Assets::ArtifactRequest { "--ignored--", "artifact-two"_h, 5, ::Assets::ArtifactRequest::DataType::Raw }
 			};
 			auto resolvedRequests = artifactCollection->ResolveRequests(MakeIteratorRange(requests));
 			REQUIRE(resolvedRequests.size() == 2);

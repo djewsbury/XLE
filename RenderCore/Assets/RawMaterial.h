@@ -203,7 +203,7 @@ namespace RenderCore { namespace Assets
 			StringSection<::Assets::ResChar> requestParameters);
         RawMatConfigurations() = default;
 
-        static const auto CompileProcessType = ConstHash64<'RawM', 'at'>::Value;
+        static const auto CompileProcessType = ConstHash64Legacy<'RawM', 'at'>::Value;
 
         auto GetDependencyValidation() const -> const ::Assets::DependencyValidation& { return _validationCallback; }
     protected:

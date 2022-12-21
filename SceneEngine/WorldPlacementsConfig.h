@@ -41,7 +41,7 @@ namespace SceneEngine
 		::Assets::DependencyValidation _depVal;
     };
 
-    static const auto CompileProcessType_WorldPlacementsConfig = ConstHash64<'Worl', 'dPla', 'ceme', 'nts'>::Value;
+    constexpr auto CompileProcessType_WorldPlacementsConfig = ConstHash64Legacy<'Worl', 'dPla', 'ceme', 'nts'>::Value;
 
     class PlacementCellSet;
     void InitializeCellSet(

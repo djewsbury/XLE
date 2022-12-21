@@ -32,6 +32,8 @@
 
 #include "../../Tools/ToolsRig/VisualisationGeo.h"
 
+using namespace Utility::Literals;
+
 static Int2 GetCursorPos();
 
 namespace RenderCore { namespace LightingEngine
@@ -336,20 +338,20 @@ namespace RenderCore { namespace LightingEngine
 				finalResult->_operatorToPipelineMap = operatorToPipelineMap; 
 
 				UniformsStreamInterface sharedUsi;
-				sharedUsi.BindFixedDescriptorSet(0, Utility::Hash64("SharedDescriptors"), &descSetAndCmdList._signature);
+				sharedUsi.BindFixedDescriptorSet(0, "SharedDescriptors"_h, &descSetAndCmdList._signature);
 
 				UniformsStreamInterface usi;
-				usi.BindFixedDescriptorSet(0, Utility::Hash64("ShadowTemplate"));
-				usi.BindImmediateData(CB::GlobalTransform, Utility::Hash64("GlobalTransform"));
-				usi.BindImmediateData(CB::LightBuffer, Utility::Hash64("LightBuffer"));
-				usi.BindImmediateData(CB::Debugging, Utility::Hash64("Debugging"));
-				usi.BindResourceView(SR::GBuffer_Diffuse, Utility::Hash64("GBuffer_Diffuse"));
-				usi.BindResourceView(SR::GBuffer_Normals, Utility::Hash64("GBuffer_Normals"));
-				usi.BindResourceView(SR::GBuffer_Parameters, Utility::Hash64("GBuffer_Parameters"));
-				usi.BindResourceView(SR::DepthTexture, Utility::Hash64("DepthTexture"));
+				usi.BindFixedDescriptorSet(0, "ShadowTemplate"_h);
+				usi.BindImmediateData(CB::GlobalTransform, "GlobalTransform"_h);
+				usi.BindImmediateData(CB::LightBuffer, "LightBuffer"_h);
+				usi.BindImmediateData(CB::Debugging, "Debugging"_h);
+				usi.BindResourceView(SR::GBuffer_Diffuse, "GBuffer_Diffuse"_h);
+				usi.BindResourceView(SR::GBuffer_Normals, "GBuffer_Normals"_h);
+				usi.BindResourceView(SR::GBuffer_Parameters, "GBuffer_Parameters"_h);
+				usi.BindResourceView(SR::DepthTexture, "DepthTexture"_h);
 				if (enableShadowProbe) {
-					usi.BindResourceView(SR::StaticShadowProbeDatabase, Utility::Hash64("StaticShadowProbeDatabase"));
-					usi.BindResourceView(SR::StaticShadowProbeProperties, Utility::Hash64("StaticShadowProbeProperties"));
+					usi.BindResourceView(SR::StaticShadowProbeDatabase, "StaticShadowProbeDatabase"_h);
+					usi.BindResourceView(SR::StaticShadowProbeProperties, "StaticShadowProbeProperties"_h);
 				}
 				finalResult->_boundUniforms = Metal::BoundUniforms {
 					finalResult->_pipelineLayout,

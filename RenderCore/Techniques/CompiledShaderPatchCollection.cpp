@@ -247,7 +247,7 @@ namespace RenderCore { namespace Techniques
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static const uint64_t CompileProcess_InstantiateShaderGraph = ConstHash64<'Inst', 'shdr'>::Value;
+	static const uint64_t CompileProcess_InstantiateShaderGraph = ConstHash64Legacy<'Inst', 'shdr'>::Value;
 	const uint64 CompiledShaderByteCode_InstantiateShaderGraph::CompileProcessType = CompileProcess_InstantiateShaderGraph;
 
 	static auto AssembleShader(
@@ -373,7 +373,7 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	static const auto ChunkType_Log = ConstHash64<'Log'>::Value;
+	static const auto ChunkType_Log = ConstHash64Legacy<'Log'>::Value;
 	class ShaderGraphCompileOperation : public ::Assets::ICompileOperation
 	{
 	public:

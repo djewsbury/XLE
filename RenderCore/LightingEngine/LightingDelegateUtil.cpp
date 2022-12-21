@@ -18,6 +18,8 @@
 #include "../../xleres/FileList.h"
 #include <utility>
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
 	class SequencerAddendums : public IAttachDriver
@@ -242,7 +244,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		BuildGBufferResourceDelegate(Techniques::DeferredShaderResource& normalsFittingResource)
 		{
-			BindResourceView(0, Utility::Hash64("NormalsFittingTexture"));
+			BindResourceView(0, "NormalsFittingTexture"_h);
 			_normalsFitting = normalsFittingResource.GetShaderResource();
 			_completionCmdList = normalsFittingResource.GetCompletionCommandList();
 		}

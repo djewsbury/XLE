@@ -28,6 +28,8 @@
 #include "../../xleres/FileList.h"
 #include <deque>
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace Techniques
 {
 	class ImmediateRendererTechniqueDelegate : public ITechniqueDelegate
@@ -37,10 +39,10 @@ namespace RenderCore { namespace Techniques
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
-			static const uint64_t s_patchShape = Hash64("IShape2D_Calculate");
-			static const uint64_t s_patchFill = Hash64("IFill_Calculate");
-			static const uint64_t s_patchOutline = Hash64("IOutline_Calculate");
-			static const uint64_t s_patchTwoLayersShader = Hash64("TwoLayersShader");
+			constexpr uint64_t s_patchShape = "IShape2D_Calculate"_h;
+			constexpr uint64_t s_patchFill = "IFill_Calculate"_h;
+			constexpr uint64_t s_patchOutline = "IOutline_Calculate"_h;
+			constexpr uint64_t s_patchTwoLayersShader = "TwoLayersShader"_h;
 
 			unsigned dsMode = 0;
 			// We're re-purposing the _writeMask flag for depth test and write

@@ -8,6 +8,7 @@
 #include "../../Utility/Streams/SerializationUtils.h"
 #include "../../Utility/MemoryUtils.h"
 
+using namespace Utility::Literals;
 namespace RenderCore { namespace Assets
 {
 	static LegacyRegisterBindingDesc::RegisterQualifier AsQualifier(StringSection<char> str)
@@ -112,7 +113,7 @@ namespace RenderCore { namespace Assets
 			return result;
 		#else
 			LegacyRegisterBindingDesc result;
-			result.AppendPassThroughDescriptorSet(Hash64("Numeric"));
+			result.AppendPassThroughDescriptorSet("Numeric"_h);
 			return result;
 		#endif
 	}

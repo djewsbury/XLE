@@ -18,9 +18,9 @@
 
 namespace RenderCore
 {
-	static const auto ChunkType_Log = ConstHash64<'Log'>::Value;
-	static const auto ChunkType_Metrics = ConstHash64<'Metr', 'ics'>::Value;
-	static const auto ChunkType_CompiledShaderByteCode = ConstHash64<'Shdr', 'Byte', 'Code'>::Value;
+	static const auto ChunkType_Log = ConstHash64Legacy<'Log'>::Value;
+	static const auto ChunkType_Metrics = ConstHash64Legacy<'Metr', 'ics'>::Value;
+	static const auto ChunkType_CompiledShaderByteCode = ConstHash64Legacy<'Shdr', 'Byte', 'Code'>::Value;
 
 	class MinimalShaderSource::Pimpl
 	{

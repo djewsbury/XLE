@@ -22,7 +22,7 @@
 namespace RenderCore { namespace Assets
 {
 
-	static const auto s_MaterialCompileProcessType = ConstHash64<'RawM', 'at'>::Value;
+	static const auto s_MaterialCompileProcessType = ConstHash64Legacy<'RawM', 'at'>::Value;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

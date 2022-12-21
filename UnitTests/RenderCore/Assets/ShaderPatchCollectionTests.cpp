@@ -40,6 +40,8 @@
 #include "catch2/catch_approx.hpp"
 
 using namespace Catch::literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	static const char s_exampleTechniqueFragments[] = R"--(
@@ -296,12 +298,12 @@ namespace UnitTests
 				std::make_shared<ExpandIncludesPreprocessor>());
 			auto compilerRegistration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(customShaderSource, compilers);
 
-			const uint64_t CompileProcess_InstantiateShaderGraph = ConstHash64<'Inst', 'shdr'>::Value;
+			const uint64_t CompileProcess_InstantiateShaderGraph = ConstHash64Legacy<'Inst', 'shdr'>::Value;
 			
 			InputStreamFormatter<utf8> formattr { MakeStringSection(s_fragmentsWithSelectors) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 			auto compiledCollection = std::make_shared<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, *matDescSetLayout);
-			std::vector<uint64_t> instantiations { Hash64("PerPixel") };
+			std::vector<uint64_t> instantiations { "PerPixel"_h };
 
 			::Assets::InitializerPack initializers {
 				"ut-data/frameworkEntry.pixel.hlsl:frameworkEntry:ps_*", 
@@ -329,7 +331,7 @@ namespace UnitTests
 			CompiledShaderPatchCollection compiledCollection(patchCollection, *matDescSetLayout);
 
 			// Check for some of the expected interface elements
-			REQUIRE(compiledCollection.GetInterface().HasPatchType(Hash64("CoordinatesToColor")));
+			REQUIRE(compiledCollection.GetInterface().HasPatchType("CoordinatesToColor"_h));
 			const auto& descSet = compiledCollection.GetInterface().GetMaterialDescriptorSet();
 			const auto& slots = descSet._slots;
 			REQUIRE(slots.size() == (size_t)matDescSetLayout->GetLayout()->_slots.size());

@@ -33,6 +33,8 @@
 	#include "../../OSServices/WinAPI/IncludeWindows.h"
 #endif
 
+using namespace Utility::Literals;
+
 namespace ToolsRig
 {
 	class GlobalStateDelegate : public RenderCore::Techniques::IShaderResourceDelegate
@@ -60,7 +62,7 @@ namespace ToolsRig
 
 		GlobalStateDelegate()
 		{
-			_interface.BindImmediateData(0, Hash64("GlobalState"));
+			_interface.BindImmediateData(0, "GlobalState"_h);
 		}
 	};
 
@@ -310,7 +312,7 @@ namespace ToolsRig
 			using namespace RenderCore;
 
 			// since we're writing to ColorLDR, never attempt to copy this onto itself
-			auto attachmentSemantic = ConstHash64FromString(AsPointer(_attachmentName.begin()), AsPointer(_attachmentName.end()));
+			auto attachmentSemantic = ConstHash64LegacyFromString(AsPointer(_attachmentName.begin()), AsPointer(_attachmentName.end()));
 			if (attachmentSemantic == RenderCore::Techniques::AttachmentSemantics::ColorLDR) return;
 
 			// update graphics descriptor set, because we've probably just done bunch of unbind operations
@@ -333,8 +335,8 @@ namespace ToolsRig
 					auto attachmentSRV = rpi.GetNonFrameBufferAttachmentView(0);
 
 					UniformsStreamInterface usi;
-					usi.BindResourceView(0, Hash64("VisualizeInput"));
-					usi.BindImmediateData(0, Hash64("DebuggingGlobals"));
+					usi.BindResourceView(0, "VisualizeInput"_h);
+					usi.BindImmediateData(0, "DebuggingGlobals"_h);
 					UniformsStream us;
 					IResourceView* srvs[] = { attachmentSRV.get() };
 					us._resourceViews = MakeIteratorRange(srvs);
@@ -390,7 +392,7 @@ namespace ToolsRig
 
 		virtual auto GetRequiredAttachments() const -> std::vector<std::pair<uint64_t, RenderCore::BindFlag::BitField>> override
 		{
-			auto attachmentHash = ConstHash64FromString(AsPointer(_attachmentName.begin()), AsPointer(_attachmentName.end()));
+			auto attachmentHash = ConstHash64LegacyFromString(AsPointer(_attachmentName.begin()), AsPointer(_attachmentName.end()));
 			if (attachmentHash == RenderCore::Techniques::AttachmentSemantics::ColorLDR) return {};
 			return {std::make_pair(attachmentHash, RenderCore::BindFlag::ShaderResource)};
 		}
@@ -436,7 +438,7 @@ namespace ToolsRig
 	static VisualizeAttachmentShader DefaultVisualizeAttachmentShader(StringSection<> attachmentName)
 	{
 		using namespace RenderCore::Techniques::AttachmentSemantics;
-		auto semantic = ConstHash64FromString(AsPointer(attachmentName.begin()), AsPointer(attachmentName.end()));
+		auto semantic = ConstHash64LegacyFromString(AsPointer(attachmentName.begin()), AsPointer(attachmentName.end()));
 		if (semantic == GBufferNormal) return VisualizeAttachmentShader::GBufferNormals;
 		else if (semantic == GBufferMotion) return VisualizeAttachmentShader::Motion;
 		else if (semantic == Depth) return VisualizeAttachmentShader::Depth;

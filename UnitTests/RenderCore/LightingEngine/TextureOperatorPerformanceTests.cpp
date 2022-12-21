@@ -32,6 +32,8 @@
 
 using namespace Catch::literals;
 using namespace std::chrono_literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	//
@@ -274,8 +276,8 @@ namespace UnitTests
 	{
 		using namespace RenderCore;
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Hash64("InputTexture"));
-		usi.BindSampler(0, Hash64("DynamicSampler"));
+		usi.BindResourceView(0, "InputTexture"_h);
+		usi.BindSampler(0, "DynamicSampler"_h);
 		UniformsStream us;
 		IResourceView* srvs[] = { &inputSRV };
 		us._resourceViews = MakeIteratorRange(srvs);
@@ -307,9 +309,9 @@ namespace UnitTests
 	{
 		using namespace RenderCore;
 		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Hash64("InputTexture"));
-		usi.BindResourceView(1, Hash64("OutputTexture"));
-		usi.BindSampler(0, Hash64("DynamicSampler"));
+		usi.BindResourceView(0, "InputTexture"_h);
+		usi.BindResourceView(1, "OutputTexture"_h);
+		usi.BindSampler(0, "DynamicSampler"_h);
 		UniformsStream us;
 		IResourceView* srvs[] = { &inputSRV, &outputUAV };
 		us._resourceViews = MakeIteratorRange(srvs);
@@ -363,7 +365,7 @@ namespace UnitTests
 
 		testHelper->BeginFrameCapture();
 
-		const auto downsampledResult = Hash64("Downsampled");
+		const auto downsampledResult = "Downsampled"_h;
 		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateShapeStackDrawableWriter();
 		auto commonResourceBox = std::make_shared<Techniques::CommonResourceBox>(*testHelper->_device);
 

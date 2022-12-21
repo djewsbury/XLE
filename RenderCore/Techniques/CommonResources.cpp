@@ -155,13 +155,13 @@ namespace RenderCore { namespace Techniques
             case MultisampleDepthPrev: return "MultisampleDepthPrev";
             case GBufferNormalPrev: return "GBufferNormalPrev";
             case ColorHDRPrev: return "ColorHDRPrev";
-            case ConstHash64<'SSRe', 'flec', 'tion'>::Value: return "SSReflection";
-            case ConstHash64<'SSRe', 'flec', 'tion'>::Value+1: return "SSReflectionPrev";
-            case ConstHash64<'SSRC', 'onfi', 'denc', 'e'>::Value: return "SSRConfidence";
-            case ConstHash64<'SSRC', 'onfi', 'denc', 'e'>::Value+1: return "SSRConfidencePrev";
-            case ConstHash64<'SSRC', 'onfi', 'denc', 'eInt'>::Value: return "SSRConfidenceInt";
-            case ConstHash64<'SSRI', 'nt'>::Value: return "SSRInt";
-            case ConstHash64<'SSRD', 'ebug'>::Value: return "SSRDebug";
+            case ConstHash64Legacy<'SSRe', 'flec', 'tion'>::Value: return "SSReflection";
+            case ConstHash64Legacy<'SSRe', 'flec', 'tion'>::Value+1: return "SSReflectionPrev";
+            case ConstHash64Legacy<'SSRC', 'onfi', 'denc', 'e'>::Value: return "SSRConfidence";
+            case ConstHash64Legacy<'SSRC', 'onfi', 'denc', 'e'>::Value+1: return "SSRConfidencePrev";
+            case ConstHash64Legacy<'SSRC', 'onfi', 'denc', 'eInt'>::Value: return "SSRConfidenceInt";
+            case ConstHash64Legacy<'SSRI', 'nt'>::Value: return "SSRInt";
+            case ConstHash64Legacy<'SSRD', 'ebug'>::Value: return "SSRDebug";
             default: return nullptr;
             }
         }

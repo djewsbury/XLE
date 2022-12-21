@@ -20,6 +20,8 @@
 #include "catch2/catch_approx.hpp"
 
 using namespace Catch::literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	T2(OutputType, InputType) OutputType* QueryInterfaceCast(InputType& input)
@@ -86,7 +88,7 @@ namespace UnitTests
 		auto pipeline = pipelineBuilder.CreatePipeline(Metal::GetObjectFactory());
 
 		UniformsStreamInterface usi;
-		usi.BindImmediateData(0, Hash64("InputData"));
+		usi.BindImmediateData(0, "InputData"_h);
 		Metal::BoundUniforms boundUniforms(*pipeline, usi);
 
 		Int2 screenMaxs { targetDesc._textureDesc._width, targetDesc._textureDesc._height };

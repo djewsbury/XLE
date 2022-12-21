@@ -24,6 +24,8 @@
 #include "catch2/catch_approx.hpp"
 
 using namespace Catch::literals;
+using namespace Utility::Literals;
+
 namespace UnitTests
 {
 	static std::string Filter(
@@ -57,7 +59,7 @@ namespace UnitTests
 			RenderCore::Techniques::TechniqueSetFile techniqueSetFile(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 			(void)techniqueSetFile;
 
-			auto* entry = techniqueSetFile.FindEntry(Hash64("Config"));
+			auto* entry = techniqueSetFile.FindEntry("Config"_h);
 			REQUIRE(entry != nullptr);
 
 			// The value given to SELECTOR_0 should overide the default set value in the technique
@@ -103,7 +105,7 @@ namespace UnitTests
 			RenderCore::Techniques::TechniqueSetFile techniqueSetFile(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 			(void)techniqueSetFile;
 
-			auto* entry = techniqueSetFile.FindEntry(Hash64("Config"));
+			auto* entry = techniqueSetFile.FindEntry("Config"_h);
 			REQUIRE(entry != nullptr);
 
 			// The settings in the "Config" group should override what we inherited from the 

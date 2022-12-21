@@ -25,6 +25,8 @@
 #include "../../Assets/Marker.h"
 #include "../../Assets/Assets.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace LightingEngine
 {
 	class ForwardPlusLightScene::AmbientLightConfig
@@ -330,12 +332,12 @@ namespace RenderCore { namespace LightingEngine
 		ShaderResourceDelegate(ForwardPlusLightScene& lightScene)
 		{
 			_lightScene = &lightScene;
-			BindResourceView(0, Hash64("LightDepthTable"));
-			BindResourceView(1, Hash64("LightList"));
-			BindResourceView(2, Hash64("TiledLightBitField"));
-			BindResourceView(3, Hash64("EnvironmentProps"));
-			BindResourceView(4, Hash64("StaticShadowProbeDatabase"));
-			BindResourceView(5, Hash64("StaticShadowProbeProperties"));
+			BindResourceView(0, "LightDepthTable"_h);
+			BindResourceView(1, "LightList"_h);
+			BindResourceView(2, "TiledLightBitField"_h);
+			BindResourceView(3, "EnvironmentProps"_h);
+			BindResourceView(4, "StaticShadowProbeDatabase"_h);
+			BindResourceView(5, "StaticShadowProbeProperties"_h);
 		}
 	};
 
