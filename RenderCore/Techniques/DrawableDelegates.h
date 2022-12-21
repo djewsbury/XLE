@@ -71,7 +71,8 @@ namespace RenderCore { namespace Techniques
         virtual void BringUpToDateGraphics(ParsingContext& parsingContext) = 0;
         virtual void BringUpToDateCompute(ParsingContext& parsingContext) = 0;
 
-        virtual const UniformsStreamInterface& GetInterface() = 0;
+        virtual const UniformsStreamInterface& GetInterfaceGraphics() = 0;
+        virtual const UniformsStreamInterface& GetInterfaceCompute() = 0;
         virtual ~IUniformDelegateManager();
     };
 

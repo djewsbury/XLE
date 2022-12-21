@@ -78,7 +78,7 @@ namespace RenderCore { namespace Techniques
 		auto& uniformDelegateMan = *parserContext.GetUniformDelegateManager();
 		uniformDelegateMan.BringUpToDateGraphics(parserContext);
 
-		const UniformsStreamInterface& globalUSI = uniformDelegateMan.GetInterface();
+		const UniformsStreamInterface& globalUSI = uniformDelegateMan.GetInterfaceGraphics();
 
 		UniformsStreamInterface materialUSI;
 		materialUSI.BindFixedDescriptorSet(0, s_materialDescSetName);
@@ -162,7 +162,7 @@ namespace RenderCore { namespace Techniques
 						} else {
 							assert(stream._type == DrawableGeo::StreamType::PacketStorage);
 							vbv[c]._resource = temporaryVB._res;
-							vbv[c]._offset = stream._vbOffset + temporaryVB._begin;
+							vbv[c]._offset = unsigned(stream._vbOffset + temporaryVB._begin);
 						}
 					}
 
@@ -832,7 +832,7 @@ namespace RenderCore { namespace Techniques
 				for (auto& p:_availablePackets) p._pool = nullptr;
 				_availablePackets.clear();
 				_destroyedPktMarker = ~0u;	// max value -- just destroy everything now
-				_aliveCount -= _holdingPendingDestruction.size();
+				_aliveCount -= (int)_holdingPendingDestruction.size();
 				toDestroy = std::move(_holdingPendingDestruction);
 			}
 			if (toDestroy.empty()) break;

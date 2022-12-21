@@ -38,7 +38,7 @@ namespace RenderCore { namespace Techniques
 			ParsingContext& parsingContext,
 			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
-			auto& sysUsi = parsingContext.GetUniformDelegateManager()->GetInterface();
+			auto& sysUsi = parsingContext.GetUniformDelegateManager()->GetInterfaceGraphics();
 			auto& boundUniforms = _boundUniforms.Get(*_pipeline, sysUsi, _usi);
 
 			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
@@ -232,7 +232,7 @@ namespace RenderCore { namespace Techniques
 			uint64_t pushConstantsBinding = 0)
 		{
 			assert(!_betweenBeginEnd);
-			auto& sysUsi = parsingContext.GetUniformDelegateManager()->GetInterface();
+			auto& sysUsi = parsingContext.GetUniformDelegateManager()->GetInterfaceCompute();
 			UniformsStreamInterface pushConstantsUSI;
 			if (pushConstantsBinding) pushConstantsUSI.BindImmediateData(0, pushConstantsBinding);
 			auto& boundUniforms = _boundUniforms.Get(*_pipeline, sysUsi, _usi, pushConstantsUSI);

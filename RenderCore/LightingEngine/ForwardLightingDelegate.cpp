@@ -461,6 +461,7 @@ namespace RenderCore { namespace LightingEngine
 						[](LightingTechniqueIterator& iterator) {
 							iterator._parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
 							iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
+							iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateCompute(*iterator._parsingContext);
 						});
 
 					// Build hierarchical depths
