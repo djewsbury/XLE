@@ -9,6 +9,7 @@
 #include "../Core/SelectConfiguration.h"
 #include "../Core/Prefix.h"
 #include "Detail/API.h"
+#include "ctti/type_id.hpp"
 #include <string>
 #include <assert.h>
 #include <stdlib.h>
@@ -72,6 +73,11 @@ namespace Utility
 
     template<typename Type>
         using AlignedUniquePtr = std::unique_ptr<Type, AlignedDeletor<Type>>;
+
+        ////////////   T Y P E   C O D E S   ////////////
+
+    template<typename Type>
+        constexpr ctti::detail::hash_t TypeHashCode = ctti::unnamed_type_id<Type>().hash();     // unnamed_type_id<> has std::decay within it
 
         ////////////   H A S H I N G   ////////////
 
