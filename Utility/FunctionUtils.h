@@ -286,6 +286,19 @@ namespace Utility
         SignatureMismatch() : std::runtime_error("Function signature does not match expected signature") {}
     };
 
+    namespace Internal
+    {
+        // We use typeid() when for this, because both MSVC+clang produce the same values even for
+        // complex types (assuming they are using the same stdlib implementation)
+        // __PRETTY_FUNCTION__ based methods aren't consistant between compilers, even when typeid() is
+        // (additional __cdecl decorations, etc)
+        template<typename Type>
+            inline size_t GetValidationTypeCode() { 
+                static size_t result = typeid(Type).hash_code();
+                return result;
+            }
+    }
+
     template<typename Fn>
         void VariantFunctions::Add(Id id, std::function<Fn>&& fn)
     {
@@ -297,7 +310,7 @@ namespace Utility
         sfn._size = sizeof(std::function<Fn>);
         sfn._destructor = &Internal::Destructor<std::function<Fn>>;
         sfn._moveConstructor = &Internal::MoveConstructor<std::function<Fn>>;
-        sfn._typeHashCode = typeid(std::function<Fn>).hash_code();
+        sfn._typeHashCode = Internal::GetValidationTypeCode<std::function<Fn>>();
 		sfn._moduleId = OSServices::GetCurrentModuleId();
         
         if ((_buffer.size() + sfn._size) > _buffer.capacity())
@@ -323,7 +336,7 @@ namespace Utility
         
         using FnType = std::function<Result (Args...)>;
         auto expectedSize = sizeof(FnType);
-        if (i->second._size != expectedSize || typeid(FnType).hash_code() != i->second._typeHashCode)
+        if (i->second._size != expectedSize || Internal::GetValidationTypeCode<FnType>() != i->second._typeHashCode)
             Throw(SignatureMismatch());
 
         auto* obj = (void*)PtrAdd(AsPointer(_buffer.begin()), i->second._offset);
@@ -341,7 +354,7 @@ namespace Utility
         
         using FnType = std::function<Result (Args...)>;
         auto expectedSize = sizeof(FnType);
-        if (i->second._size != expectedSize || typeid(FnType).hash_code() != i->second._typeHashCode)
+        if (i->second._size != expectedSize || Internal::GetValidationTypeCode<FnType>() != i->second._typeHashCode)
             return false;
 
         auto* obj = (void*)PtrAdd(AsPointer(_buffer.begin()), i->second._offset);
@@ -360,7 +373,7 @@ namespace Utility
         
         using FnType = std::function<Result (Args...)>;
         auto expectedSize = sizeof(FnType);
-        if (i->second._size != expectedSize || typeid(FnType).hash_code() != i->second._typeHashCode)
+        if (i->second._size != expectedSize || Internal::GetValidationTypeCode<FnType>() != i->second._typeHashCode)
             Throw(SignatureMismatch());
 
         auto* obj = (void*)PtrAdd(AsPointer(_buffer.begin()), i->second._offset);
@@ -378,7 +391,7 @@ namespace Utility
         
         using FnType = std::function<FnSig>;
         auto expectedSize = sizeof(FnType);
-        if (i->second._size != expectedSize || typeid(FnType).hash_code() != i->second._typeHashCode)
+        if (i->second._size != expectedSize || Internal::GetValidationTypeCode<FnType>() != i->second._typeHashCode)
             Throw(SignatureMismatch());
 
         auto* obj = (void*)PtrAdd(AsPointer(_buffer.begin()), i->second._offset);
@@ -398,7 +411,7 @@ namespace Utility
             // an exception. (this is the only use for the FnSig argument
         using FnType = std::function<FnSig>;
         auto expectedSize = sizeof(FnType);
-        if (i->second._size != expectedSize || typeid(FnType).hash_code() != i->second._typeHashCode)
+        if (i->second._size != expectedSize || Internal::GetValidationTypeCode<FnType>() != i->second._typeHashCode)
             Throw(SignatureMismatch());
 
         return true;
