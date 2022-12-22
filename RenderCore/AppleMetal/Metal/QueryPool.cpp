@@ -38,7 +38,7 @@ namespace RenderCore { namespace Metal_AppleMetal
     auto SyncEventSet::SetEvent() -> SyncEvent {
         auto iDevice = _context->GetDevice();
         assert(iDevice);
-        auto *deviceInterface = ((RenderCore::ImplAppleMetal::Device*)iDevice->QueryInterface(typeid(RenderCore::ImplAppleMetal::Device).hash_code()));
+        auto *deviceInterface = ((RenderCore::ImplAppleMetal::Device*)iDevice->QueryInterface(TypeHashCode<RenderCore::ImplAppleMetal::Device>));
         assert(deviceInterface);
         auto device = deviceInterface->GetUnderlying();
         assert(device);

@@ -157,9 +157,11 @@ namespace RenderCore { namespace LightingEngine
 	void* ForwardPlusLightScene::TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode)
 	{
 		if (sourceId == 0) {
-			if (interfaceTypeCode == typeid(IDistantIBLSource).hash_code()) return (IDistantIBLSource*)this;
-			if (interfaceTypeCode == typeid(ISSAmbientOcclusion).hash_code()) return (ISSAmbientOcclusion*)this;
-			return nullptr;
+			switch (interfaceTypeCode) {
+			case TypeHashCode<IDistantIBLSource>: return (IDistantIBLSource*)this;
+			case TypeHashCode<ISSAmbientOcclusion>: return (ISSAmbientOcclusion*)this;
+			default: return nullptr;
+			}
 		} else {
 			return Internal::StandardLightScene::TryGetLightSourceInterface(sourceId, interfaceTypeCode);
 		}
@@ -167,12 +169,14 @@ namespace RenderCore { namespace LightingEngine
 
 	void* ForwardPlusLightScene::QueryInterface(uint64_t typeCode)
 	{
-		if (typeCode == typeid(ISemiStaticShadowProbeScheduler).hash_code())
+		switch (typeCode) {
+		case TypeHashCode<ISemiStaticShadowProbeScheduler>:
 			return (ISemiStaticShadowProbeScheduler*)_shadowProbesManager.get();
-		else if (typeCode == typeid(IDynamicShadowProjectionScheduler).hash_code())
+		case TypeHashCode<IDynamicShadowProjectionScheduler>:
 			return (IDynamicShadowProjectionScheduler*)_shadowScheduler.get();
-		else
+		default:
 			return StandardLightScene::QueryInterface(typeCode);
+		}
 	}
 
 	void ForwardPlusLightScene::SetEquirectangularSource(std::shared_ptr<::Assets::OperationContext> loadingContext, StringSection<> input)

@@ -515,7 +515,7 @@ namespace RenderCore { namespace LightingEngine
 
 			unsigned lightIdx = 0;
 			for (auto lightIterator=set._baseData.begin(); lightIterator!=set._baseData.end(); ++lightIterator, ++lightIdx) {
-				assert(lightIterator->QueryInterface(typeid(Internal::StandardPositionalLight).hash_code()) == &lightIterator.get());
+				assert(lightIterator->QueryInterface(TypeHashCode<Internal::StandardPositionalLight>) == &lightIterator.get());
 				auto& standardLightDesc = *lightIterator;
 
 				if (lightShape == LightSourceShape::Sphere) {

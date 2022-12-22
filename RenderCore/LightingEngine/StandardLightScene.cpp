@@ -10,11 +10,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 {
 	void* StandardPositionalLight::QueryInterface(uint64_t interfaceTypeCode)
 	{
-		if (interfaceTypeCode == typeid(IPositionalLightSource).hash_code()) {
+		switch(interfaceTypeCode) {
+		case TypeHashCode<IPositionalLightSource>:
 			return (IPositionalLightSource*)this;
-		} else if (interfaceTypeCode == typeid(IUniformEmittance).hash_code()) {
+		case TypeHashCode<IUniformEmittance>:
 			return (IUniformEmittance*)this;
-		} else if (interfaceTypeCode == typeid(StandardPositionalLight).hash_code()) {
+		case TypeHashCode<StandardPositionalLight>:
 			return this;
 		}
 		return nullptr;
@@ -22,14 +23,16 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	void* StandardPositionalLight::QueryInterface(uint64_t interfaceTypeCode, StandardPositionLightFlags::BitField flags)
 	{
-		if (interfaceTypeCode == typeid(IPositionalLightSource).hash_code()) {
+		switch (interfaceTypeCode) {
+		case TypeHashCode<IPositionalLightSource>:
 			return (IPositionalLightSource*)this;
-		} else if (interfaceTypeCode == typeid(IUniformEmittance).hash_code()) {
+		case TypeHashCode<IUniformEmittance>:
 			return (IUniformEmittance*)this;
-		} else if (interfaceTypeCode == typeid(IFiniteLightSource).hash_code()) {
+		case TypeHashCode<IFiniteLightSource>:
 			if (flags & StandardPositionLightFlags::SupportFiniteRange)
 				return (IFiniteLightSource*)this;
-		} else if (interfaceTypeCode == typeid(StandardPositionalLight).hash_code()) {
+			return nullptr;
+		case TypeHashCode<StandardPositionalLight>:
 			return this;
 		}
 		return nullptr;
@@ -177,9 +180,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	void* StandardLightScene::QueryInterface(uint64_t typeCode)
 	{
-		if (typeCode == typeid(StandardLightScene).hash_code())
+		switch (typeCode) {
+		case TypeHashCode<StandardLightScene>:
 			return this;
-		return nullptr;
+		default:
+			return nullptr;
+		}		
 	}
 
 	void StandardLightScene::RegisterComponent(std::shared_ptr<ILightSceneComponent> comp)

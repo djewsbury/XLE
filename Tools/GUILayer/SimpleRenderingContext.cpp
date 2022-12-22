@@ -120,7 +120,7 @@ namespace GUILayer
             }
 
 			if (ib) {
-				auto* res = (RenderCore::Metal::Resource*)ib->QueryInterface(typeid(RenderCore::Metal::Resource).hash_code());
+				auto* res = (RenderCore::Metal::Resource*)ib->QueryInterface(TypeHashCode<RenderCore::Metal::Resource>);
 				assert(res);
 				if (res)
 					devContext.Bind(*res, RenderCore::Format::R32_UINT);

@@ -249,12 +249,14 @@ namespace RenderCore { namespace Techniques
 
 	void* CPUSkinDeformer::QueryInterface(size_t typeId)
 	{
-		if (typeId == typeid(CPUSkinDeformer).hash_code())
+		switch(typeId) {
+		case TypeHashCode<CPUSkinDeformer>:
 			return this;
-		else if (typeId == typeid(ISkinDeformer).hash_code())
+		case TypeHashCode<ISkinDeformer>:
 			return (ISkinDeformer*)this;
-		else if (typeId == typeid(IGeoDeformer).hash_code())
+		case TypeHashCode<IGeoDeformer>:
 			return (IGeoDeformer*)this;
+		}
 		return nullptr;
 	}
 
@@ -711,12 +713,14 @@ namespace RenderCore { namespace Techniques
 
 	void* GPUSkinDeformer::QueryInterface(size_t typeId)
 	{
-		if (typeId == typeid(GPUSkinDeformer).hash_code())
+		switch (typeId) {
+		case TypeHashCode<GPUSkinDeformer>:
 			return this;
-		else if (typeId == typeid(ISkinDeformer).hash_code())
+		case TypeHashCode<ISkinDeformer>:
 			return (ISkinDeformer*)this;
-		else if (typeId == typeid(IGeoDeformer).hash_code())
+		case TypeHashCode<IGeoDeformer>:
 			return (IGeoDeformer*)this;
+		}
 		return nullptr;
 	}
 

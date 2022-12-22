@@ -16,9 +16,11 @@
 
 namespace RenderCore { namespace Metal_AppleMetal
 {
+    constexpr auto s_resourceInterface = TypeHashCode<Resource>;
+
     void* Resource::QueryInterface(size_t guid)
     {
-        if (guid == typeid(Resource).hash_code())
+        if (guid == s_resourceInterface)
             return this;
         return nullptr;
     }
@@ -30,7 +32,7 @@ namespace RenderCore { namespace Metal_AppleMetal
 
     std::vector<uint8_t> Resource::ReadBackSynchronized(IThreadContext& context, SubResourceId subRes) const
     {
-        auto* metalContext = (ImplAppleMetal::ThreadContext*)context.QueryInterface(typeid(ImplAppleMetal::ThreadContext).hash_code());
+        auto* metalContext = (ImplAppleMetal::ThreadContext*)context.QueryInterface(TypeHashCode<ImplAppleMetal::ThreadContext>);
         if (!metalContext)
             Throw(std::runtime_error("Incorrect thread context passed to Apple Metal Resource::ReadBack implementation"));
 
@@ -391,7 +393,7 @@ namespace RenderCore { namespace Metal_AppleMetal
     {
         ResourceDesc ExtractDesc(const IResource& input)
         {
-            auto* res = (Resource*)const_cast<IResource&>(input).QueryInterface(typeid(Resource).hash_code());
+            auto* res = (Resource*)const_cast<IResource&>(input).QueryInterface(s_resourceInterface);
             if (res)
                 return res->GetDesc();
             return ResourceDesc{};
@@ -414,7 +416,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         RenderCore::Format srcDataFormat,
         VectorPattern<unsigned, 3> srcDataDimensions)
     {
-        auto* metalContentRes = (RenderCore::Metal_AppleMetal::Resource*)dst._resource->QueryInterface(typeid(RenderCore::Metal_AppleMetal::Resource).hash_code());
+        auto* metalContentRes = (RenderCore::Metal_AppleMetal::Resource*)dst._resource->QueryInterface(s_resourceInterface);
         assert(metalContentRes);
 
         auto srcPixelCount = srcDataDimensions[0] * srcDataDimensions[1] * srcDataDimensions[2];
@@ -451,10 +453,10 @@ namespace RenderCore { namespace Metal_AppleMetal
         const CopyPartial_Dest& dst,
         const CopyPartial_Src& src)
     {
-        auto* dstMetalRes = (RenderCore::Metal_AppleMetal::Resource*)dst._resource->QueryInterface(typeid(RenderCore::Metal_AppleMetal::Resource).hash_code());
+        auto* dstMetalRes = (RenderCore::Metal_AppleMetal::Resource*)dst._resource->QueryInterface(s_resourceInterface);
         assert(dstMetalRes);
 
-        auto* srcMetalRes = (RenderCore::Metal_AppleMetal::Resource*)src._resource->QueryInterface(typeid(RenderCore::Metal_AppleMetal::Resource).hash_code());
+        auto* srcMetalRes = (RenderCore::Metal_AppleMetal::Resource*)src._resource->QueryInterface(s_resourceInterface);
         assert(srcMetalRes);
 
         if (!_openedEncoder) {
@@ -533,10 +535,10 @@ namespace RenderCore { namespace Metal_AppleMetal
 
     void BlitEncoder::Copy(IResource& dst, IResource& src)
     {
-        auto* dstMetalRes = (RenderCore::Metal_AppleMetal::Resource*)dst.QueryInterface(typeid(RenderCore::Metal_AppleMetal::Resource).hash_code());
+        auto* dstMetalRes = (RenderCore::Metal_AppleMetal::Resource*)dst.QueryInterface(s_resourceInterface);
         assert(dstMetalRes);
 
-        auto* srcMetalRes = (RenderCore::Metal_AppleMetal::Resource*)src.QueryInterface(typeid(RenderCore::Metal_AppleMetal::Resource).hash_code());
+        auto* srcMetalRes = (RenderCore::Metal_AppleMetal::Resource*)src.QueryInterface(s_resourceInterface);
         assert(srcMetalRes);
 
         if (!_openedEncoder) {

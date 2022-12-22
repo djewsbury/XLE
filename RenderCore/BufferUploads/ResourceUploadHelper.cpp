@@ -596,7 +596,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 				LinearBufferDesc::Create(size)),
            "staging-page");
 
-        if (auto* threadContextVulkan = (IThreadContextVulkan*)threadContext.QueryInterface(typeid(IThreadContextVulkan).hash_code()))
+        constexpr auto threadContextVulkanInterface = TypeHashCode<IThreadContextVulkan>;
+        if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(&threadContext))
             _asyncTracker = threadContextVulkan->GetQueueTracker();
 
         #if defined(_DEBUG)
@@ -922,8 +923,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
     void UploadsThreadContext::UpdateGPUTracking()
     {
-        auto* vulkanThreadContext = (IThreadContextVulkan*)_mainContext->QueryInterface(typeid(IThreadContextVulkan).hash_code());
-        if (vulkanThreadContext)
+        if (auto* vulkanThreadContext = query_interface_cast<IThreadContextVulkan*>(_mainContext.get()))
             return vulkanThreadContext->UpdateGPUTracking();
     }
 

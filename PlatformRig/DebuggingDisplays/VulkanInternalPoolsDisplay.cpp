@@ -32,7 +32,7 @@ namespace PlatformRig { namespace Overlays
 			const unsigned headerLineHeight = 30;
 			const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
 
-			auto* vulkanDevice = (RenderCore::IDeviceVulkan*)_device->QueryInterface(typeid(RenderCore::IDeviceVulkan).hash_code());
+			auto* vulkanDevice = (RenderCore::IDeviceVulkan*)_device->QueryInterface(TypeHashCode<RenderCore::IDeviceVulkan>);
 			if (!vulkanDevice) return;
 
 			{
@@ -129,7 +129,7 @@ namespace PlatformRig { namespace Overlays
 
 	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateVulkanInternalPoolsDisplay(std::shared_ptr<RenderCore::IDevice> device)
 	{
-		auto* vulkanDevice = (RenderCore::IDeviceVulkan*)device->QueryInterface(typeid(RenderCore::IDeviceVulkan).hash_code());
+		auto* vulkanDevice = (RenderCore::IDeviceVulkan*)device->QueryInterface(TypeHashCode<RenderCore::IDeviceVulkan>);
 		if (!vulkanDevice) return nullptr;
 
 		return std::make_shared<VulkanInternalPoolsDisplay>(std::move(device));

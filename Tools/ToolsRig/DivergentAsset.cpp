@@ -170,7 +170,7 @@ namespace ToolsRig
 
 		auto stringInitializer = ::Assets::Internal::AsString(params...);
 		DivergentAssetManager::GetInstance().AddAsset(
-			typeid(AssetType).hash_code(), idInAssetHeap, stringInitializer,
+			TypeHashCode<AssetType>, idInAssetHeap, stringInitializer,
 			divergentAsset);
 
 		return divergentAsset;

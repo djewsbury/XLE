@@ -2,6 +2,7 @@
 
 #include "AssetHeap.h"
 #include "../Utility/HeapUtils.h"
+#include "ctti/type_id.hpp"
 
 namespace Assets
 {
@@ -42,6 +43,8 @@ namespace Assets
         #if defined(_DEBUG)
             std::vector<std::pair<uint64_t, AssetHeapRecord>> _initializationRecords;
         #endif
+
+        static constexpr auto s_typeCode = TypeHashCode<AssetType>;
     };
 
     template<typename AssetType>
@@ -201,7 +204,7 @@ namespace Assets
     template<typename AssetType>
         uint64_t        AssetHeapLRU<AssetType>::GetTypeCode() const
         {
-            return typeid(AssetType).hash_code();
+            return s_typeCode;
         }
 
     template<typename AssetType>

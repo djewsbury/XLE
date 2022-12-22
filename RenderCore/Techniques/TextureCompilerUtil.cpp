@@ -112,7 +112,7 @@ namespace RenderCore { namespace Techniques
 		auto inputRes = CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
 		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc), "texture-compiler");
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
-		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code()))
+		if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(threadContext.get()))
 			threadContextVulkan->AttachNameToCommandList(s_equRectFilterName);
 
 		computeOpFuture->StallWhilePending();
@@ -150,7 +150,7 @@ namespace RenderCore { namespace Techniques
 						dispatchGroup = {};
 						threadContext->CommitCommands();
 						dispatchGroup = computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
-						if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code()))
+						if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
 							threadContextVulkan->AttachNameToCommandList(s_equRectFilterName);
 					} else {
 						/* 	We shouldn't need a barrier here, because we won't write to the same pixel in the same
@@ -203,7 +203,7 @@ namespace RenderCore { namespace Techniques
 		threadContext->CommitCommands();
 		// Release the command buffer pool, because Vulkan requires pumping the command buffer destroys regularly,
 		// and we may not be doing that in this thread for awhile
-		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code()))
+		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
 			threadContextVulkan->ReleaseCommandBufferPool();
 		return result;
 	}
@@ -222,7 +222,7 @@ namespace RenderCore { namespace Techniques
 
 		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc), "texture-compiler");
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
-		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code()))
+		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
 			threadContextVulkan->AttachNameToCommandList(s_equRectFilterName);
 
 		computeOpFuture->StallWhilePending();
@@ -263,7 +263,7 @@ namespace RenderCore { namespace Techniques
 		threadContext->CommitCommands();
 		// Release the command buffer pool, because Vulkan requires pumping the command buffer destroys regularly,
 		// and we may not be doing that in this thread for awhile
-		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code()))
+		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
 			threadContextVulkan->ReleaseCommandBufferPool();
 		return result;
 	}

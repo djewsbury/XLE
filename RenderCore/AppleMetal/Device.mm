@@ -131,13 +131,16 @@ namespace RenderCore { namespace ImplAppleMetal
         return *_annotator;
     }
 
+    constexpr auto s_threadContextAppleMetalInterface = ;
+    constexpr auto s_threadContextInterface = TypeHashCode<ThreadContext>;
+
     void*                       ThreadContext::QueryInterface(size_t guid)
     {
-        if (guid == typeid(IThreadContextAppleMetal).hash_code())
-            return (IThreadContextAppleMetal*)this;
-        if (guid == typeid(ThreadContext).hash_code())
-            return (ThreadContext*)this;
-        return nullptr;
+        switch (guid) {
+        case TypeHashCode<IThreadContextAppleMetal>: return (IThreadContextAppleMetal*)this;
+        case TypeHashCode<ThreadContext>: return (ThreadContext*)this;
+        default: return nullptr;
+        }
     }
 
     const std::shared_ptr<Metal_AppleMetal::DeviceContext>&  ThreadContext::GetDeviceContext()
@@ -200,10 +203,10 @@ namespace RenderCore { namespace ImplAppleMetal
 
     void* Device::QueryInterface(size_t guid)
     {
-        if (guid == typeid(Device).hash_code()) {
-            return this;
+        switch (guid) {
+        case TypeHashCode<Device>: return this;
+        default: return nullptr;
         }
-        return nullptr;
     }
 
     std::shared_ptr<IResource> Device::CreateResource(const ResourceDesc& desc, const ResourceInitializer& init)

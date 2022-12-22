@@ -25,10 +25,12 @@
 
 namespace RenderCore { namespace Metal_AppleMetal
 {
+    constexpr auto s_resourceInterface = TypeHashCode<Resource>;
+
     static const Resource& AsResource(const IResource* rp)
     {
         static Resource dummy;
-        auto* res = (Resource*)const_cast<IResource*>(rp)->QueryInterface(typeid(Resource).hash_code());
+        auto* res = (Resource*)const_cast<IResource*>(rp)->QueryInterface(s_resourceInterface);
         if (res)
             return *res;
         return dummy;
@@ -1381,10 +1383,12 @@ namespace RenderCore { namespace Metal_AppleMetal
         assert(0);
     }
 
+    constexpr auto s_threadContextAppleMetalInterface = TypeHashCode<IThreadContextAppleMetal>;
+
     const std::shared_ptr<DeviceContext>& DeviceContext::Get(IThreadContext& threadContext)
     {
         static std::shared_ptr<DeviceContext> dummy;
-        auto* tc = (IThreadContextAppleMetal*)threadContext.QueryInterface(typeid(IThreadContextAppleMetal).hash_code());
+        auto* tc = (IThreadContextAppleMetal*)threadContext.QueryInterface(s_threadContextAppleMetalInterface);
         if (tc) return tc->GetDeviceContext();
         return dummy;
     }

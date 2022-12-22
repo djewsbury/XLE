@@ -123,7 +123,7 @@ namespace UnitTests
             (void)fn0;
         }
 
-        ClassAccessors accessors(typeid(TestClass).hash_code());
+        ClassAccessors accessors(TypeHashCode<TestClass>);
         accessors.Add(
             "IntMemberWithImplicitFunctions",
             [](const TestClass& cls) { return cls._intMember; },
@@ -260,7 +260,7 @@ namespace UnitTests
 
     TEST_CASE( "ClassAccessors-AccessorSerialize", "[utility]" )
     {
-        ClassAccessors accessors(typeid(TestClass).hash_code());
+        ClassAccessors accessors(TypeHashCode<TestClass>);
         accessors.Add("IntMember", &TestClass::_intMember);
         accessors.Add("VectorMember", &TestClass::_vectorMember);
 

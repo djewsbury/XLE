@@ -297,9 +297,8 @@ namespace PlatformRig
         } else {
 
             float threadingPressure = 0.f;
-            auto* vulkanContext = (RenderCore::IThreadContextVulkan*)context->QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code());
-            if (vulkanContext)
-                threadingPressure = vulkanContext->GetThreadingPressure();
+            if (auto* threadContextVulkan = query_interface_cast<RenderCore::IThreadContextVulkan*>(context.get()))
+                threadingPressure = threadContextVulkan->GetThreadingPressure();
 
             if (threadingPressure > 0.f) {
                 // Start dropping frames if we have high threading pressure

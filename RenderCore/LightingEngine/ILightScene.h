@@ -8,6 +8,7 @@
 #include "../../Math/Matrix.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/StringUtils.h"
+#include "../../Utility/MemoryUtils.h"
 #include <cstdint>
 
 namespace Assets { class OperationContext; }
@@ -35,7 +36,8 @@ namespace RenderCore { namespace LightingEngine
 		template<typename Type>
 			Type* TryGetLightSourceInterface(LightSourceId sourceId)
 			{
-				return (Type*)TryGetLightSourceInterface(sourceId, typeid(Type).hash_code());
+				constexpr auto interfaceCode = TypeHashCode<Type>;
+				return (Type*)TryGetLightSourceInterface(sourceId, interfaceCode);
 			}
 	};
 

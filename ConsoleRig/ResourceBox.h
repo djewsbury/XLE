@@ -13,6 +13,7 @@
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/PtrUtils.h"
 #include "../Utility/IteratorUtils.h"
+#include "ctti/type_id.hpp"
 #include <vector>
 #include <utility>
 #include <memory>
@@ -53,7 +54,7 @@ namespace ConsoleRig
 		{
 			static BoxTable<Box>* table = nullptr;
 			if (!table)
-				table = (BoxTable<Box>*)GetOrRegisterBoxTable(typeid(Box).hash_code(), std::make_unique<Internal::BoxTable<Box>>());
+				table = (BoxTable<Box>*)GetOrRegisterBoxTable(TypeHashCode<Box>, std::make_unique<Internal::BoxTable<Box>>());
 			return table->_internalTable;
 		}
 
@@ -61,7 +62,7 @@ namespace ConsoleRig
 		{
 			static BoxTable<Box>* table = nullptr;
 			if (!table)
-				table = (BoxTable<Box>*)GetOrRegisterBoxTable(typeid(Box).hash_code(), std::make_unique<Internal::BoxTable<Box>>());
+				table = (BoxTable<Box>*)GetOrRegisterBoxTable(TypeHashCode<Box>, std::make_unique<Internal::BoxTable<Box>>());
 			return table->_internalFuturesTable;
 		}
 	}

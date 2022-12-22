@@ -135,12 +135,15 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 		if (setIdx < _sceneSets.size() && _sceneSets[setIdx]._activeSet)
 			if (_sceneSets[setIdx]._activeProjections.IsAllocated(lightIdx)) {
-				if (interfaceTypeCode == typeid(IAttachDriver).hash_code())
+				switch (interfaceTypeCode) {
+				case TypeHashCode<IAttachDriver>:
 					return &_sceneSets[setIdx]._addendums[lightIdx];
-				if (_sceneSets[setIdx]._addendums[lightIdx]._driver)
-					if (auto* res = _sceneSets[setIdx]._addendums[lightIdx]._driver->QueryInterface(interfaceTypeCode))
-						return res;
-				return _sceneSets[setIdx]._projections[lightIdx]->QueryInterface(interfaceTypeCode);
+				default:
+					if (_sceneSets[setIdx]._addendums[lightIdx]._driver)
+						if (auto* res = _sceneSets[setIdx]._addendums[lightIdx]._driver->QueryInterface(interfaceTypeCode))
+							return res;
+					return _sceneSets[setIdx]._projections[lightIdx]->QueryInterface(interfaceTypeCode);
+				}
 			}
 		return nullptr;
 	}
@@ -179,6 +182,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	}
 	DynamicShadowProjectionScheduler::~DynamicShadowProjectionScheduler() {}
 
+	constexpr auto s_positionalLightSourceInterface = TypeHashCode<IPositionalLightSource>;
+	constexpr auto s_orthoShadowProjectionsInterface = TypeHashCode<IOrthoShadowProjections>;
+	constexpr auto s_finiteLightSourceInterface = TypeHashCode<IFiniteLightSource>;
+
 	static TechniqueSequenceParseId SetupShadowParse(
 		LightingTechniqueIterator& iterator,
 		LightingTechniqueSequence& sequence,
@@ -191,10 +198,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		if (addendums._driver) {
 			// Note the TryGetLightSourceInterface is expensive particular, and scales poorly with the number of
 			// lights in the scene
-			auto* positionalLight = (IPositionalLightSource*)addendums._srcLight->QueryInterface(typeid(IPositionalLightSource).hash_code());
-			auto* orthoShadowProjections = (IOrthoShadowProjections*)proj.QueryInterface(typeid(IOrthoShadowProjections).hash_code());
+			auto* positionalLight = (IPositionalLightSource*)addendums._srcLight->QueryInterface(s_positionalLightSourceInterface);
+			auto* orthoShadowProjections = (IOrthoShadowProjections*)proj.QueryInterface(s_orthoShadowProjectionsInterface);
 			assert(orthoShadowProjections);
-			volumeTester = ((Internal::IShadowProjectionDriver*)addendums._driver->QueryInterface(typeid(Internal::IShadowProjectionDriver).hash_code()))->UpdateProjections(
+			volumeTester = ((Internal::IShadowProjectionDriver*)addendums._driver->QueryInterface(TypeHashCode<Internal::IShadowProjectionDriver>))->UpdateProjections(
 				*iterator._parsingContext, *positionalLight, *orthoShadowProjections);
 		}
 
@@ -270,13 +277,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		probe._position = Zero<Float3>();
 		probe._nearRadius = 1.f;
 		probe._farRadius = 1024.f;
-		auto* positional = (IPositionalLightSource*)light.QueryInterface(typeid(IPositionalLightSource).hash_code());
+		auto* positional = (IPositionalLightSource*)light.QueryInterface(s_positionalLightSourceInterface);
 		assert(positional);
 		if (positional) {
 			probe._position = ExtractTranslation(positional->GetLocalToWorld());
 			probe._nearRadius = ExtractUniformScaleFast(AsFloat3x4(positional->GetLocalToWorld()));
 		}
-		auto* finite = (IFiniteLightSource*)light.QueryInterface(typeid(IFiniteLightSource).hash_code());
+		auto* finite = (IFiniteLightSource*)light.QueryInterface(s_finiteLightSourceInterface);
 		if (finite)
 			probe._farRadius = finite->GetCutoffRange();
 		return probe;
@@ -578,9 +585,14 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	void* SemiStaticShadowProbeScheduler::QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode)
 	{
-		if (interfaceTypeCode == typeid(ISemiStaticShadowProbeScheduler).hash_code() && _sceneSets[setIdx]._activeSet)
-			return (ISemiStaticShadowProbeScheduler*)this;
-		return nullptr;
+		switch(interfaceTypeCode) {
+		case TypeHashCode<ISemiStaticShadowProbeScheduler>:
+			if (_sceneSets[setIdx]._activeSet)
+				return (ISemiStaticShadowProbeScheduler*)this;
+			return nullptr;
+		default:
+			return nullptr;
+		}
 	}
 
 	auto SemiStaticShadowProbeScheduler::GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx) -> AllocatedDatabaseEntry

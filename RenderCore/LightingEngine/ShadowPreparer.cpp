@@ -238,18 +238,22 @@ namespace RenderCore { namespace LightingEngine
 
 			virtual void* QueryInterface(uint64_t interfaceTypeCode) override
 			{
-				if (interfaceTypeCode == typeid(IDepthTextureResolve).hash_code()) {
+				switch (interfaceTypeCode) {
+				case TypeHashCode<IDepthTextureResolve>:
 					return (IDepthTextureResolve*)this;
-				} else if (interfaceTypeCode == typeid(IArbitraryShadowProjections).hash_code()) {
+				case TypeHashCode<IArbitraryShadowProjections>:
 					if (_projections._mode == ShadowProjectionMode::Arbitrary || _projections._mode == ShadowProjectionMode::ArbitraryCubeMap)
 						return (IArbitraryShadowProjections*)this;
-				} else if (interfaceTypeCode == typeid(IOrthoShadowProjections).hash_code()) {
+					return nullptr;
+				case TypeHashCode<IOrthoShadowProjections>:
 					if (_projections._mode == ShadowProjectionMode::Ortho)
 						return (IOrthoShadowProjections*)this;
-				} else if (interfaceTypeCode == typeid(INearShadowProjection).hash_code()) {
+					return nullptr;
+				case TypeHashCode<INearShadowProjection>:
 					if (_projections._useNearProj)
 						return (INearShadowProjection*)this;
-				} else if (interfaceTypeCode == typeid(StandardShadowProjection).hash_code()) {
+					return nullptr;
+				case TypeHashCode<StandardShadowProjection>:
 					return this;
 				}
 				return nullptr;
@@ -280,7 +284,7 @@ namespace RenderCore { namespace LightingEngine
 	static Internal::PreparedDMShadowFrustum SetupPreparedDMShadowFrustum(
 		Internal::ILightBase& projectionBase, float shadowTextureSize, unsigned operatorMaxFrustumCount)
 	{
-		assert(projectionBase.QueryInterface(typeid(Internal::StandardShadowProjection).hash_code()) == &projectionBase);
+		assert(projectionBase.QueryInterface(TypeHashCode<Internal::StandardShadowProjection>) == &projectionBase);
 		auto& projection = *(Internal::StandardShadowProjection*)&projectionBase;
 		auto projectionCount = std::min(projection._projections.Count(), Internal::MaxShadowTexturesPerLight);
 		if (!projectionCount)
@@ -307,7 +311,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::AttachmentPool& shadowGenAttachmentPool,
 		ViewPool& viewPool)
 	{
-		assert(projectionBase.QueryInterface(typeid(Internal::StandardShadowProjection).hash_code()) == &projectionBase);
+		assert(projectionBase.QueryInterface(TypeHashCode<Internal::StandardShadowProjection>) == &projectionBase);
 		auto& projection = *(Internal::StandardShadowProjection*)&projectionBase;
 		_workingDMFrustum = SetupPreparedDMShadowFrustum(projection, _shadowTextureSize, _maxFrustumCount);
 		assert(_workingDMFrustum.IsReady());

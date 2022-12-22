@@ -6,6 +6,7 @@
 #include "../Vulkan/IDeviceVulkan.h"
 #include "../Vulkan/Metal/ObjectFactory.h"		// for Metal_Vulkan::IAsyncTracker
 #include "../../Utility/HeapUtils.h"
+#include "../Utility/MemoryUtils.h"
 #include <vector>
 #include <memory>
 
@@ -51,7 +52,7 @@ namespace RenderCore { namespace Techniques
 
 		GPUTrackerHeap(IDevice& device)
 		{
-			auto* vulkanDevice = (IDeviceVulkan*)device.QueryInterface(typeid(IDeviceVulkan).hash_code());
+			auto* vulkanDevice = (IDeviceVulkan*)device.QueryInterface(TypeHashCode<IDeviceVulkan>);
 			if (!vulkanDevice)
 				Throw(std::runtime_error("Requires vulkan device for GPU tracking"));
 			_tracker = vulkanDevice->GetGraphicsQueueAsyncTracker();

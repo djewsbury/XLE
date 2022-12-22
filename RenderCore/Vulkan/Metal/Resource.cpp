@@ -627,9 +627,12 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void* Resource::QueryInterface(size_t guid)
 	{
-		if (guid == typeid(Resource).hash_code())
+		switch (guid) {
+		case TypeHashCode<Resource>:
 			return this;
-		return nullptr;
+		default:
+			return nullptr;
+		}
 	}
 
     namespace Internal

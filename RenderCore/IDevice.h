@@ -146,9 +146,7 @@ namespace RenderCore
         /// <example>
         /// Example:
         ///     <code>\code
-        ///     RenderCore::IDeviceDX11* dx11Device =
-        ///          (RenderCore::IDeviceDX11*)device->QueryInterface(typeid(RenderCore::IDeviceDX11).hash_code());
-        ///     if (dx11Device) {
+        ///     if (auto* dx11Device = query_interface_cast<RenderCore::IDeviceDX11*>(device))) {
         ///         ...
         ///     }
         ///     \endcode</code>

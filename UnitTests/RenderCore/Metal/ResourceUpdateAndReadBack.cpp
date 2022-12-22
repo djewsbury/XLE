@@ -270,7 +270,7 @@ namespace UnitTests
 
 		auto testHelper = MakeTestHelper();
 
-		auto* glesDevice = (IDeviceOpenGLES*)testHelper->_device->QueryInterface(typeid(IDeviceOpenGLES).hash_code());
+		auto* glesDevice = (IDeviceOpenGLES*)testHelper->_device->QueryInterface(TypeHashCode<IDeviceOpenGLES>);
 		if (glesDevice) {
 			if (!(glesDevice->GetFeatureSet() & Metal_OpenGLES::FeatureSet::GLES300)) {
 				FAIL("Known issues running this code on non GLES300 OpenGL: unsynchronized writes are simulated with synchronized writes, so we don't get the expected results");
@@ -476,7 +476,7 @@ namespace UnitTests
 	static RenderCore::Metal_Vulkan::IAsyncTracker::Marker GetProducerMarker(RenderCore::IThreadContext& threadContext)
 	{
 		using namespace RenderCore;
-		auto* vulkanDevice = (IDeviceVulkan*)threadContext.GetDevice()->QueryInterface(typeid(IDeviceVulkan).hash_code());
+		auto* vulkanDevice = (IDeviceVulkan*)threadContext.GetDevice()->QueryInterface(TypeHashCode<IDeviceVulkan>);
 		if (!vulkanDevice)
 			Throw(std::runtime_error("Expecting Vulkan device"));
 		return vulkanDevice->GetGraphicsQueueAsyncTracker()->GetProducerMarker();
@@ -485,7 +485,7 @@ namespace UnitTests
 	static RenderCore::Metal_Vulkan::IAsyncTracker::Marker GetConsumerMarker(RenderCore::IThreadContext& threadContext)
 	{
 		using namespace RenderCore;
-		auto* vulkanDevice = (IDeviceVulkan*)threadContext.GetDevice()->QueryInterface(typeid(IDeviceVulkan).hash_code());
+		auto* vulkanDevice = (IDeviceVulkan*)threadContext.GetDevice()->QueryInterface(TypeHashCode<IDeviceVulkan>);
 		if (!vulkanDevice)
 			Throw(std::runtime_error("Expecting Vulkan device"));
 		return vulkanDevice->GetGraphicsQueueAsyncTracker()->GetConsumerMarker();

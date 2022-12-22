@@ -80,12 +80,14 @@ namespace RenderCore { namespace LightingEngine
 
 		void* QueryInterface(uint64_t typeCode) override
 		{
-			if (typeCode == typeid(ISemiStaticShadowProbeScheduler).hash_code())
+			switch (typeCode) {
+			case TypeHashCode<ISemiStaticShadowProbeScheduler>:
 				return (ISemiStaticShadowProbeScheduler*)_shadowProbesManager.get();
-			else if (typeCode == typeid(IDynamicShadowProjectionScheduler).hash_code())
+			case TypeHashCode<IDynamicShadowProjectionScheduler>:
 				return (IDynamicShadowProjectionScheduler*)_shadowScheduler.get();
-			else
+			default:
 				return StandardLightScene::QueryInterface(typeCode);
+			}
 		}
 	};
 

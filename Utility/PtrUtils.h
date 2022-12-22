@@ -7,6 +7,7 @@
 #pragma once
 
 #include "../Core/Prefix.h"
+#include "../Utility/MemoryUtils.h"		// for TypeHashCode
 #include <memory>
 #include <string>
 #include <vector>
@@ -301,7 +302,8 @@ namespace Utility
         RequestedInterface query_interface_cast(SrcType* input)
     {
 		assert(input);
-        return (RequestedInterface)input->QueryInterface(typeid(std::decay_t<std::remove_pointer_t<RequestedInterface>>).hash_code());
+		constexpr auto interfaceCode = TypeHashCode<std::decay_t<std::remove_pointer_t<RequestedInterface>>>;
+        return (RequestedInterface)input->QueryInterface(interfaceCode);
     }
 
     template<typename T>

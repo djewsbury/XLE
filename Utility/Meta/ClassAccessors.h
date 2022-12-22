@@ -9,6 +9,7 @@
 #include "../FunctionUtils.h"
 #include "../ImpliedTyping.h"
 #include "../Optional.h"
+#include "../Utility/MemoryUtils.h"
 #include <string>
 #include <functional>
 #include <vector>
@@ -168,7 +169,7 @@ namespace Utility
             std::pair<void*, const ClassAccessors*> ClassAccessorsWithChildLists::TryCreateChild(
                 Type& dst, uint64_t childListId) const
             {
-                assert(typeid(Type).hash_code() == _associatedType);
+                assert(TypeHashCode<Type> == _associatedType);
                 return TryCreateChild(&dst, childListId);
             }
     }
@@ -181,7 +182,7 @@ namespace Utility
     template<typename ResultType, typename ObjectType>
         std::optional<ResultType> ClassAccessors::Get(const ObjectType& srcObject, PropertyName id) const
     {
-        assert(typeid(ObjectType).hash_code() == _associatedType);
+        assert(TypeHashCode<ObjectType> == _associatedType);
         ResultType res;
         if (Get(MakeOpaqueIteratorRange(res), ImpliedTyping::TypeOf<std::decay_t<ResultType>>(), &srcObject, id))
             return res;
@@ -191,21 +192,21 @@ namespace Utility
     template<typename ValueType, typename ObjectType>
         bool ClassAccessors::Set(ObjectType& dstObject, PropertyName id, const ValueType& valueSrc) const
     {
-        assert(typeid(ObjectType).hash_code() == _associatedType);
+        assert(TypeHashCode<ObjectType> == _associatedType);
         return Set(&dstObject, id, MakeOpaqueIteratorRange(valueSrc), ImpliedTyping::TypeOf<std::decay_t<ValueType>>());
     }
 
     template<typename ObjectType>
         std::optional<std::string> ClassAccessors::GetAsString(const ObjectType& srcObject, PropertyName id, bool strongTyping) const
     {
-        assert(typeid(ObjectType).hash_code() == _associatedType);
+        assert(TypeHashCode<ObjectType> == _associatedType);
         return GetAsString((const void*)&srcObject, id, strongTyping);
     }
 
     template<typename ObjectType>
         bool ClassAccessors::SetFromString(ObjectType& srcObject, PropertyName id, StringSection<> src) const
     {
-        assert(typeid(ObjectType).hash_code() == _associatedType);
+        assert(TypeHashCode<ObjectType> == _associatedType);
         return SetFromString((void*)&srcObject, id, src);
     }
 }

@@ -77,8 +77,8 @@ namespace ConsoleRig
         template<typename Type>
             Table<Type>& GetTable()
         {
-            auto hash = typeid(Type).hash_code();
-            auto i = LowerBound(_tables, (uint64)hash);
+            constexpr auto hash = TypeHashCode<Type>;
+            auto i = LowerBound(_tables, (uint64_t)hash);
             if (i == _tables.end() || i->first != hash) {
                 auto newTable = std::make_unique<CVarTable<Type>>();
                 i = _tables.insert(i, std::make_pair(hash, std::move(newTable)));

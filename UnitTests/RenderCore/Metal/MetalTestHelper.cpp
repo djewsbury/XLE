@@ -58,8 +58,7 @@ namespace UnitTests
 		// For GLES, we must initialize the root context to something. Since we're not going to be
 		// rendering to window for unit tests, we will never create a PresentationChain (during which the
 		// device implicitly initializes the root context in the normal flow)
-		auto* glesDevice = (RenderCore::IDeviceOpenGLES*)_device->QueryInterface(typeid(RenderCore::IDeviceOpenGLES).hash_code());
-		if (glesDevice)
+		if (auto* glesDevice = query_interface_cast<RenderCore::IDeviceOpenGLES*>(_device.get()))
 			glesDevice->InitializeRootContextHeadless();
 
 		_defaultLegacyBindings = CreateDefaultLegacyRegisterBindingDesc();
@@ -127,8 +126,7 @@ namespace UnitTests
 
 	std::shared_ptr<RenderCore::ILowLevelCompiler> CreateDefaultShaderCompiler(RenderCore::IDevice& device, const RenderCore::LegacyRegisterBindingDesc& registerBindings)
 	{
-		auto* vulkanDevice  = (RenderCore::IDeviceVulkan*)device.QueryInterface(typeid(RenderCore::IDeviceVulkan).hash_code());
-		if (vulkanDevice) {
+		if (auto* vulkanDevice  = query_interface_cast<RenderCore::IDeviceVulkan*>(&device)) {
 			// Vulkan allows for multiple ways for compiling shaders. The tests currently use a HLSL to GLSL to SPIRV 
 			// cross compilation approach
 			RenderCore::VulkanCompilerConfiguration cfg;

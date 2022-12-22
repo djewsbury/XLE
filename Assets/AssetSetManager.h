@@ -63,7 +63,8 @@ namespace Assets
             // avoid this. Alternatively, this might be a good candidate for a spin
             // lock, instead of a mutex
         Lock();
-        auto existing = GetSetForTypeCode(typeid(Type).hash_code());
+        constexpr auto typeId = DefaultAssetHeap<Type>::s_typeCode;
+        auto existing = GetSetForTypeCode(typeId);
         if (existing) {
             Unlock();
             return *static_cast<DefaultAssetHeap<Type>*>(existing);
@@ -74,7 +75,7 @@ namespace Assets
         {
             auto newPtr = std::make_unique<DefaultAssetHeap<Type>>();
             result = newPtr.get();
-            Add(typeid(Type).hash_code(), std::move(newPtr));
+            Add(typeId, std::move(newPtr));
         } catch (...) {
             Unlock();
             throw;

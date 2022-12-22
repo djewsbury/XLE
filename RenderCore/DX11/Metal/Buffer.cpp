@@ -55,7 +55,7 @@ namespace RenderCore { namespace Metal_DX11
 
 	void* Buffer::QueryInterface(size_t guid)
 	{
-		if (guid == typeid(Buffer).hash_code())
+		if (guid == TypeHashCode<Buffer>)
 			return this;
 		return Resource::QueryInterface(guid);
 	}

@@ -191,7 +191,7 @@ namespace ToolsRig
         {
 			// auto captureMarker = sharedStates.CaptureState(threadContext, parserContext.GetRenderStateDelegate(), {});
             TRY {
-                FixedFunctionModel::DelayedDrawCallSet delayedDraws(typeid(ModelRenderer).hash_code());
+                FixedFunctionModel::DelayedDrawCallSet delayedDraws(TypeHashCode<ModelRenderer>);
                 renderer.Prepare(
                     delayedDraws, sharedStates, AsFloat4x4(Float3(-samplePoint)), meshToModel);
 

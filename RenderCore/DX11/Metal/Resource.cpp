@@ -17,6 +17,8 @@
 
 namespace RenderCore { namespace Metal_DX11
 {
+	constexpr auto s_resourceInterface = TypeHashCode<Resource>;
+
 	void Copy(
 		DeviceContext& context, 
 		Resource& dst, const Resource& src,
@@ -74,11 +76,11 @@ namespace RenderCore { namespace Metal_DX11
             useSrcBox = true;
         }
 
-		Resource* dstD3DResource = (Resource*)dst._resource->QueryInterface(typeid(Resource).hash_code());
+		Resource* dstD3DResource = (Resource*)dst._resource->QueryInterface(s_resourceInterface);
 		if (!dstD3DResource)
 			Throw(std::runtime_error("BltPass::Copy failed because destination resource does not appear to be a compatible type"));
 
-		Resource* srcD3DResource = (Resource*)src._resource->QueryInterface(typeid(Resource).hash_code());
+		Resource* srcD3DResource = (Resource*)src._resource->QueryInterface(s_resourceInterface);
 		if (!srcD3DResource)
 			Throw(std::runtime_error("BltPass::Copy failed because source resource does not appear to be a compatible type"));
 
@@ -124,7 +126,7 @@ namespace RenderCore { namespace Metal_DX11
 
 	void*       Resource::QueryInterface(size_t guid)
 	{
-		if (guid == typeid(Resource).hash_code())
+		if (guid == TypeHashCode<Resource>)
 			return (Resource*)this;
 		return nullptr;
 	}
@@ -167,7 +169,7 @@ namespace RenderCore { namespace Metal_DX11
 		mirrorDesc._bindFlags = BindFlag::TransferDst;
 		mirrorDesc._allocationRules |= AllocationRules::Staging;
 		auto mirrorResource = context.GetDevice()->CreateResource(mirrorDesc);
-		auto* d3dMirrorResource = (Resource*)mirrorResource->QueryInterface(typeid(Resource).hash_code());
+		auto* d3dMirrorResource = (Resource*)mirrorResource->QueryInterface(s_resourceInterface);
 		Copy(*DeviceContext::Get(context), *d3dMirrorResource, *this);
 
 		// It's tempting to just return mirrorResource->ReadBack(context, subRes); here,
@@ -592,7 +594,7 @@ namespace RenderCore { namespace Metal_DX11
 
 	ID3D::Resource* AsID3DResource(IResource& res)
 	{
-		auto*d3dRes = (Resource*)res.QueryInterface(typeid(Resource).hash_code());
+		auto*d3dRes = (Resource*)res.QueryInterface(s_resourceInterface);
 		if (!d3dRes) return nullptr;
 		return d3dRes->_underlying.get();
 	}
@@ -609,7 +611,7 @@ namespace RenderCore { namespace Metal_DX11
 
 	Resource& AsResource(IResource& res)
 	{
-		auto* r = (Resource*)res.QueryInterface(typeid(Resource).hash_code());
+		auto* r = (Resource*)res.QueryInterface(s_resourceInterface);
 		assert(r);
 		return *r;
 	}

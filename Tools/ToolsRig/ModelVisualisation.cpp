@@ -565,7 +565,7 @@ namespace ToolsRig
 			const ModelScaffold* modelScaffold = nullptr)
 		: _model(&model), _boundingBox(boundingBox), _sharedStateSet(&sharedStateSet)
 		, _settings(&settings), _modelScaffold(modelScaffold) 
-		, _delayedDrawCalls(typeid(ModelRenderer).hash_code())
+		, _delayedDrawCalls(TypeHashCode<ModelRenderer>)
 		{
 			PrepareWithEmbeddedSkeleton(
 				_delayedDrawCalls, *_model,

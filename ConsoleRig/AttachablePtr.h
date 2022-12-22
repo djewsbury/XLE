@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../Utility/FunctionUtils.h"		// (for VariantFunctions)
+#include "../Utility/MemoryUtils.h"
 #include "../Core/Prefix.h"
 #include "../Core/SelectConfiguration.h"
 #include <memory>
@@ -29,7 +30,7 @@ namespace ConsoleRig
 		// using TypeKey = std::type_index;
 		// template<typename Obj> TypeKey KeyForType() { return std::type_index(typeid(Obj)); }
 		using TypeKey = uint64_t;
-		template<typename Obj> TypeKey KeyForType() { return typeid(Obj).hash_code(); }
+		template<typename Obj> TypeKey KeyForType() { constexpr auto result = TypeHashCode<Obj>; return result; }
 
 		class InfraModuleManager
 		{

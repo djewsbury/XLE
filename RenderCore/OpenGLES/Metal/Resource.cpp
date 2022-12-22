@@ -87,7 +87,7 @@ namespace RenderCore { namespace Metal_OpenGLES
 
     void* Resource::QueryInterface(size_t guid)
     {
-        if (guid == typeid(Resource).hash_code())
+        if (guid == TypeHashCode<Resource>)
             return this;
         return nullptr;
     }
@@ -473,7 +473,7 @@ namespace RenderCore { namespace Metal_OpenGLES
 
     ResourceDesc ExtractDesc(const IResource& input)
     {
-        auto* res = (Resource*)const_cast<IResource&>(input).QueryInterface(typeid(Resource).hash_code());
+        auto* res = (Resource*)const_cast<IResource&>(input).QueryInterface(TypeHashCode<Resource>);
         if (res)
             return res->GetDesc();
         return ResourceDesc{};
@@ -597,7 +597,7 @@ namespace RenderCore { namespace Metal_OpenGLES
         VectorPattern<unsigned, 3> srcDataDimensions)
     {
         auto texelFormatType = RenderCore::Metal_OpenGLES::AsTexelFormatType(srcDataFormat);
-        auto oglesContentRes = (RenderCore::Metal_OpenGLES::Resource*)dst._resource->QueryInterface(typeid(RenderCore::Metal_OpenGLES::Resource).hash_code());
+        auto oglesContentRes = (RenderCore::Metal_OpenGLES::Resource*)dst._resource->QueryInterface(TypeHashCode<RenderCore::Metal_OpenGLES::Resource>);
         assert(oglesContentRes);
 
         if (dst._leftTopFront[2] != 0 || srcDataDimensions[2] != 1 || dst._subResource._arrayLayer != 0)

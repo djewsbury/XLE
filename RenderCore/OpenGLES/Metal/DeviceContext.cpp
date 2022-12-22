@@ -522,7 +522,7 @@ namespace RenderCore { namespace Metal_OpenGLES
     const std::shared_ptr<DeviceContext>& DeviceContext::Get(IThreadContext& threadContext)
     {
         static std::shared_ptr<DeviceContext> dummy;
-        auto* tc = (IThreadContextOpenGLES*)threadContext.QueryInterface(typeid(IThreadContextOpenGLES).hash_code());
+        auto* tc = (IThreadContextOpenGLES*)threadContext.QueryInterface(TypeHashCode<IThreadContextOpenGLES>);
         if (tc) return tc->GetDeviceContext();
         return dummy;
     }

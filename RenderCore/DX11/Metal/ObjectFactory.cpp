@@ -18,7 +18,7 @@ namespace RenderCore { namespace Metal_DX11
 {
 	static intrusive_ptr<ID3D::Device> ExtractUnderlyingDevice(RenderCore::IDevice& device)
 	{
-		auto* dx11Device = (RenderCore::IDeviceDX11*)device.QueryInterface(typeid(RenderCore::IDeviceDX11).hash_code());
+		auto* dx11Device = (RenderCore::IDeviceDX11*)device.QueryInterface(TypeHashCode<RenderCore::IDeviceDX11>);
 		if (dx11Device) {
 			return dx11Device->GetUnderlyingDevice();
 		}
@@ -376,7 +376,7 @@ namespace RenderCore { namespace Metal_DX11
 
 	ObjectFactory& GetObjectFactory(IResource& res)
 	{
-		auto*d3dRes = (Resource*)res.QueryInterface(typeid(Resource).hash_code());
+		auto*d3dRes = (Resource*)res.QueryInterface(TypeHashCode<Resource>);
 		if (!d3dRes) Throw(::Exceptions::BasicLabel("Could not get object factory associated with device"));
 		return GetObjectFactory(*d3dRes->_underlying);
 	}

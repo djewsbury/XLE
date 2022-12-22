@@ -163,7 +163,7 @@ namespace RenderCore { namespace ImplOpenGLES
 
     void* DeviceOpenGLES::QueryInterface(size_t guid)
     {
-        if (guid == typeid(IDeviceOpenGLES).hash_code()) {
+        if (guid == TypeHashCode<IDeviceOpenGLES>) {
             return (IDeviceOpenGLES*)this;
         }
         return nullptr;
@@ -407,7 +407,7 @@ namespace RenderCore { namespace ImplOpenGLES
 
     void* ThreadContextOpenGLES::QueryInterface(size_t guid)
     {
-        if (guid == typeid(IThreadContextOpenGLES).hash_code()) {
+        if (guid == TypeHashCode<IThreadContextOpenGLES>) {
             return (IThreadContextOpenGLES*)this;
         }
         return nullptr;

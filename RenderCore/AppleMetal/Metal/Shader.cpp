@@ -433,7 +433,7 @@ namespace RenderCore { namespace Metal_AppleMetal
     std::shared_ptr<ILowLevelCompiler> CreateLowLevelShaderCompiler(IDevice& device)
     {
         // KenD -- Metal HACK -- holding on to a static Metal library for now.  We should cache it, but we might consider a different approach to construction
-        auto* dev = (ImplAppleMetal::Device*)device.QueryInterface(typeid(ImplAppleMetal::Device).hash_code());
+        auto* dev = (ImplAppleMetal::Device*)device.QueryInterface(TypeHashCode<ImplAppleMetal::Device>);
         id<MTLDevice> metalDevice = dev->GetUnderlying();
         assert(metalDevice);
         /* default library may be useful for some things still... quick testing of ad-hoc functions, perhaps */

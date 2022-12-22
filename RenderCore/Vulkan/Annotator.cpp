@@ -314,7 +314,7 @@ namespace RenderCore { namespace ImplVulkan
 	: _queryPool(factory)
 	, _threadContext(&threadContext)
 	{
-		auto vulkanDevice = (IDeviceVulkan*)threadContext.GetDevice()->QueryInterface(typeid(IDeviceVulkan).hash_code());
+		auto vulkanDevice = (IDeviceVulkan*)threadContext.GetDevice()->QueryInterface(TypeHashCode<IDeviceVulkan>);
 		assert(vulkanDevice);
 		_asyncTracker = vulkanDevice->GetGraphicsQueueAsyncTracker();
 

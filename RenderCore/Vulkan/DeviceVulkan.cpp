@@ -1824,13 +1824,16 @@ namespace RenderCore { namespace ImplVulkan
 
 	void* APIInstance::QueryInterface(size_t guid)
 	{
-		if (guid == typeid(IAPIInstanceVulkan).hash_code())
+		switch (guid) {
+		case TypeHashCode<IAPIInstanceVulkan>:
 			return (IAPIInstanceVulkan*)this;
-		else if (guid == typeid(APIInstance).hash_code())
+		case TypeHashCode<APIInstance>:
 			return this;
-		else if (guid == typeid(IAPIInstance).hash_code())
+		case TypeHashCode<IAPIInstance>:
 			return (IAPIInstance*)this;
-		return nullptr;
+		default:
+			return nullptr;
+		}
 	}
 
 	APIInstance::APIInstance(const APIFeatures& features)
@@ -2341,13 +2344,16 @@ namespace RenderCore { namespace ImplVulkan
 
 	void*   Device::QueryInterface(size_t guid)
 	{
-		if (guid == typeid(IDeviceVulkan).hash_code())
+		switch (guid) {
+		case TypeHashCode<IDeviceVulkan>:
 			return (IDeviceVulkan*)this;
-		if (guid == typeid(Device).hash_code())
+		case TypeHashCode<Device>:
 			return (Device*)this;
-		if (guid == typeid(IDevice).hash_code())
+		case TypeHashCode<IDevice>:
 			return (IDevice*)this;
-		return nullptr;
+		default:
+			return nullptr;
+		}
 	}
 
 	VkInstance Device::GetVulkanInstance() { return _instance.get(); }
@@ -2932,10 +2938,16 @@ namespace RenderCore { namespace ImplVulkan
 
     void*   ThreadContext::QueryInterface(size_t guid)
     {
-        if (guid == typeid(IThreadContextVulkan).hash_code()) { return (IThreadContextVulkan*)this; }
-		if (guid == typeid(ThreadContext).hash_code()) { return (ThreadContext*)this; }
-		if (guid == typeid(IThreadContext).hash_code()) { return (IThreadContext*)this; }
-        return nullptr;
+        switch (guid) {
+		case TypeHashCode<IThreadContextVulkan>:
+			return (IThreadContextVulkan*)this;
+		case TypeHashCode<ThreadContext>:
+			return (ThreadContext*)this;
+		case TypeHashCode<IThreadContext>:
+			return (IThreadContext*)this;
+		default:
+        	return nullptr;
+		}
     }
 
     const std::shared_ptr<Metal_Vulkan::DeviceContext>& ThreadContext::GetMetalContext()

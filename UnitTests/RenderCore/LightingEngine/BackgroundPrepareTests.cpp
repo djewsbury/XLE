@@ -131,7 +131,7 @@ namespace UnitTests
 					auto threadContext = RenderCore::Techniques::GetThreadContext();
 					auto& lightScene = RenderCore::LightingEngine::GetLightScene(*result._compiledLightingTechnique);
 
-					auto* shadowProbes = (RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler*)lightScene.QueryInterface(typeid(RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler).hash_code());
+					auto* shadowProbes = (RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler*)lightScene.QueryInterface(TypeHashCode<RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler>);
 					REQUIRE(shadowProbes);
 
 					// give the probe manager an initial view position
@@ -203,7 +203,7 @@ namespace UnitTests
 			RenderCore::LightingEngine::ILightScene& lightScene,
 			RenderCore::IThreadContext& threadContext) override
 		{ 
-			if (auto* scheduler = (RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler*)lightScene.QueryInterface(typeid(RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler).hash_code())) {
+			if (auto* scheduler = (RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler*)lightScene.QueryInterface(TypeHashCode<RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler>)) {
 				scheduler->SetNearRadius(0.2f);
 				return scheduler->BeginPrepare(threadContext, 64);
 			}
@@ -289,7 +289,7 @@ namespace UnitTests
 			// We must call OnFrameBarrier on the ISemiStaticShadowProbeScheduler at least once to
 			// update the status of the probe manager (since it's cmdlist has not been committed)
 			auto& lightScene = RenderCore::LightingEngine::GetLightScene(*scene._compiledLightingTechnique);
-			auto* shadowProbes = (RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler*)lightScene.QueryInterface(typeid(RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler).hash_code());
+			auto* shadowProbes = (RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler*)lightScene.QueryInterface(TypeHashCode<RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler>);
 			REQUIRE(shadowProbes);
 			shadowProbes->OnFrameBarrier(Float3(0,0,0), 1000);
 		}

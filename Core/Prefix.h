@@ -135,41 +135,6 @@ static const unsigned MaxExtension    = 256;    /* max. length of extension comp
 
 #if defined(__cplusplus)
 
-template<typename Type>
-    inline void DeleteAndClear(Type*& ptr)
-    {
-        delete ptr;
-        ptr = nullptr;
-    }
-
-template<typename Type>
-    inline void ReleaseAndClear(Type*& ptr)
-    {
-        if (ptr) {
-            ptr->Release();
-            ptr = nullptr;
-        }
-    }
-
-template<typename Type>
-    inline void DeleteArrayAndClear(Type*& ptr)
-    {
-        delete ptr;
-        ptr = nullptr;
-    }
-
-#if !defined(foreach)
-    #define foreach(iteratorName, ContainerType, container)                                         \
-        for (auto iteratorName=container.begin(); iteratorName!=container.end(); ++iteratorName)    \
-        /**/
-#endif
-
-#if !defined(foreach_const)
-    #define foreach_const(iteratorName, ContainerType, container)                                   \
-        for (auto iteratorName=container.cbegin(); iteratorName!=container.cend(); ++iteratorName)  \
-        /**/
-#endif
-
     /// <summary>Wraps a compile condition for a if() statement<summary>
     /// Visual Studio produces "Conditional Expression is Constant" warnings
     /// when a static boolean value is used in a condition. This is a simple

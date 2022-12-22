@@ -368,10 +368,10 @@ namespace RenderCore { namespace ImplDX11
 
     void*                   DeviceDX11::QueryInterface(size_t guid)
     {
-        if (guid == typeid(IDeviceDX11).hash_code()) {
-            return (IDeviceDX11*)this;
+        switch (guid) {
+        case TypeHashCode<IDeviceDX11>: return (IDeviceDX11*)this;
+        default: return nullptr;
         }
-        return nullptr;
     }
 
     ID3D::Device*           DeviceDX11::GetUnderlyingDevice()
@@ -595,8 +595,10 @@ namespace RenderCore { namespace ImplDX11
 
     void*   ThreadContextDX11::QueryInterface(size_t guid)
     {
-        if (guid == typeid(IThreadContextDX11).hash_code()) { return (IThreadContextDX11*)this; }
-        return nullptr;
+        switch (guid) {
+        case TypeHashCode<IThreadContextDX11>: return (IThreadContextDX11*)this;
+        default: return nullptr;
+        }
     }
 
     std::shared_ptr<Metal_DX11::DeviceContext>&  ThreadContextDX11::GetUnderlying()

@@ -22,11 +22,6 @@
 using namespace Catch::literals;
 namespace UnitTests
 {
-	T2(OutputType, InputType) OutputType* QueryInterfaceCast(InputType& input)
-	{
-		return (OutputType*)input.QueryInterface(typeid(OutputType).hash_code());
-	}
-
 	std::string BuildSODefinesString(IteratorRange<const RenderCore::InputElementDesc*> desc)
 	{
 		std::stringstream str;

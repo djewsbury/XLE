@@ -24,11 +24,6 @@ using namespace Utility::Literals;
 
 namespace UnitTests
 {
-	T2(OutputType, InputType) OutputType* QueryInterfaceCast(InputType& input)
-	{
-		return (OutputType*)input.QueryInterface(typeid(OutputType).hash_code());
-	}
-
 	static const char vsText[] = R"(
 		float4 main(float2 input : POSITION, float2 texCoord : TEXCOORD, out float2 oTexCoord : TEXCOORD) : SV_Position 
 		{
@@ -61,7 +56,7 @@ namespace UnitTests
 			TextureDesc::Plain2D(256, 256, Format::R32G32B32A32_FLOAT));
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc, LoadStore::Retain);
 
-		auto* vulkanThreadContext = (IThreadContextVulkan*)threadContext->QueryInterface(typeid(IThreadContextVulkan).hash_code());
+		auto* vulkanThreadContext = (IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<IThreadContextVulkan>);
 		REQUIRE(vulkanThreadContext);	// only implemented for Vulkan currently
 
 		// Spawn a lot of threads, and each one run a simple shader that

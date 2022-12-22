@@ -6,6 +6,7 @@
 #include "DeferredConstruction.h"
 #include "../Utility/Threading/Mutex.h"
 #endif
+#include "../Utility/MemoryUtils.h"
 #include <memory>
 #include <functional>
 
@@ -73,6 +74,8 @@ namespace Assets
 		~DefaultAssetHeap();
 		DefaultAssetHeap(const DefaultAssetHeap&) = delete;
 		DefaultAssetHeap& operator=(const DefaultAssetHeap&) = delete;
+
+		static constexpr auto s_typeCode = TypeHashCode<AssetType>;
 	private:
 		mutable Threading::Mutex _lock;		
 		std::vector<std::pair<uint64_t, PtrToFuture>> _assets;
@@ -240,7 +243,7 @@ namespace Assets
 	template<typename AssetType>
 		uint64_t		DefaultAssetHeap<AssetType>::GetTypeCode() const
 		{
-			return typeid(AssetType).hash_code();
+			return s_typeCode;
 		}
 
 	template<typename AssetType>

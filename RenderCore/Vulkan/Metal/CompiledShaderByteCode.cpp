@@ -766,7 +766,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	std::shared_ptr<ILowLevelCompiler> CreateLowLevelShaderCompiler(
 		IDevice& device, const VulkanCompilerConfiguration& cfg)
 	{
-		auto* vulkanDevice = (IDeviceVulkan*)device.QueryInterface(typeid(IDeviceVulkan).hash_code());
+		auto* vulkanDevice = (IDeviceVulkan*)device.QueryInterface(TypeHashCode<IDeviceVulkan>);
 		if (!vulkanDevice) return nullptr;
 
 		#if defined(ENABLE_GLSLLANG)

@@ -38,7 +38,7 @@ namespace GUILayer
 	static String^ GetAssetTypeName(uint64_t typeCode)
 	{
 		using MatType = RenderCore::Assets::RawMaterial;
-		if (typeCode == typeid(MatType).hash_code()) {
+		if (typeCode == TypeHashCode<MatType>) {
 			return "Material";
 		}
 		return String::Empty;
@@ -53,7 +53,7 @@ namespace GUILayer
 	static System::Drawing::Image^ GetAssetTypeImage(uint64_t typeCode)
 	{
 		using MatType = RenderCore::Assets::RawMaterial;
-		if (typeCode == typeid(MatType).hash_code()) {
+		if (typeCode == TypeHashCode<MatType>) {
 			if (!ResourceImages::s_materialImage) {
 				System::IO::Stream^ stream = System::Reflection::Assembly::GetExecutingAssembly()->GetManifestResourceStream("materialS.png");
 				ResourceImages::s_materialImage = System::Drawing::Image::FromStream(stream);
@@ -420,7 +420,7 @@ namespace GUILayer
 	static AssetSaveEntry BuildAssetSaveEntry(uint64_t typeCode, const StringSection<::Assets::ResChar> identifier, const ToolsRig::IDivergentAsset& divAsset)
 	{
 		// HACK -- special case for RawMaterial objects!
-		if (typeCode == typeid(RenderCore::Assets::RawMaterial).hash_code()) {
+		if (typeCode == TypeHashCode<RenderCore::Assets::RawMaterial>) {
 			auto splitName = MakeFileNameSplitter(identifier);
 			auto originalFile = TryLoadOriginalFileAsBlob(splitName.AllExceptParameters());
 
@@ -471,6 +471,7 @@ namespace GUILayer
     auto PendingSaveList::Commit() -> CommitResult^
     {
 		std::stringstream errorMessages;
+        constexpr auto materialCode = TypeHashCode<RawMaterial>;
 
 		using namespace RenderCore::Assets;
 		auto& divAssetMan = ToolsRig::DivergentAssetManager::GetInstance();
@@ -478,7 +479,7 @@ namespace GUILayer
 			if (!d._hasChanges) continue;
 
 			// only RawMaterial objects supported here currently
-			if (d._typeCode != typeid(RawMaterial).hash_code())
+			if (d._typeCode != materialCode)
 				continue;
 
             auto entry = GetEntry(d._typeCode, d._idInAssetHeap);

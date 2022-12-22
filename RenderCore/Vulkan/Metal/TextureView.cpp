@@ -12,6 +12,8 @@
 
 namespace RenderCore { namespace Metal_Vulkan
 {
+    constexpr auto s_resourceInterface = TypeHashCode<Resource>;
+
     static VkImageViewType AsImageViewType(TextureDesc::Dimensionality dims, bool isArray)
     {
         switch (dims) {
@@ -280,7 +282,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	: _type(Type::ImageView)
     {
         assert(image);
-		auto res = (Resource*)image->QueryInterface(typeid(Resource).hash_code());
+		auto res = (Resource*)image->QueryInterface(s_resourceInterface);
 		if (!res)
 			Throw(::Exceptions::BasicLabel("Incorrect resource type passed to Vulkan ResourceView"));
 
@@ -349,7 +351,7 @@ namespace RenderCore { namespace Metal_Vulkan
         // This variation is for "texel buffers"
         //      -- ie, these are used with VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT or VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT,
         //          it's a little less common a feature
-		auto res = (Resource*)buffer->QueryInterface(typeid(Resource).hash_code());
+		auto res = (Resource*)buffer->QueryInterface(s_resourceInterface);
 		if (!res)
 			Throw(::Exceptions::BasicLabel("Incorrect resource type passed to Vulkan ResourceView"));
 
@@ -372,7 +374,7 @@ namespace RenderCore { namespace Metal_Vulkan
     : _bufferRange(rangeOffset, rangeSize)
     , _type(Type::BufferAndRange)
     {
-        auto res = (Resource*)buffer->QueryInterface(typeid(Resource).hash_code());
+        auto res = (Resource*)buffer->QueryInterface(s_resourceInterface);
 		if (!res)
 			Throw(::Exceptions::BasicLabel("Incorrect resource type passed to Vulkan ResourceView"));
 

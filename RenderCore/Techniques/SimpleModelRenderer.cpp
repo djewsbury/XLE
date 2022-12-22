@@ -850,13 +850,15 @@ namespace RenderCore { namespace Techniques
 			d._skinDeformer->FeedInSkeletonMachineResults(instanceIdx, skeletonMachineOutput, d._deformerBindings);
 	}
 
+	constexpr auto s_skinDeformerInterface = TypeHashCode<ISkinDeformer>;
+
 	RendererSkeletonInterface::RendererSkeletonInterface(
 		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
 		IteratorRange<const std::shared_ptr<IGeoDeformer>*> skinDeformers)
 	{
 		_deformers.reserve(skinDeformers.size());
 		for (auto&d:skinDeformers) {
-			auto* skinDeformer = (ISkinDeformer*)d->QueryInterface(typeid(ISkinDeformer).hash_code());
+			auto* skinDeformer = (ISkinDeformer*)d->QueryInterface(s_skinDeformerInterface);
 			if (!skinDeformer)
 				Throw(std::runtime_error("Incorrect deformer type passed to RendererSkeletonInterface. Expecting SkinDeformer"));
 			_deformers.push_back(Deformer{ skinDeformer, skinDeformer->CreateBinding(smOutputInterface), d });
@@ -869,10 +871,10 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation depVal)
 	: _depVal(depVal)
 	{
-		auto srcDeformers = geoDeformerInfrastructure.GetOperations(typeid(ISkinDeformer).hash_code());
+		auto srcDeformers = geoDeformerInfrastructure.GetOperations(s_skinDeformerInterface);
 		_deformers.reserve(srcDeformers.size());
 		for (auto&d:srcDeformers) {
-			auto* skinDeformer = (ISkinDeformer*)d->QueryInterface(typeid(ISkinDeformer).hash_code());
+			auto* skinDeformer = (ISkinDeformer*)d->QueryInterface(s_skinDeformerInterface);
 			if (!skinDeformer)
 				Throw(std::runtime_error("Incorrect deformer type passed to RendererSkeletonInterface. Expecting SkinDeformer"));
 			_deformers.push_back(Deformer{ skinDeformer, skinDeformer->CreateBinding(smOutputInterface), d });

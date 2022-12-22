@@ -1069,9 +1069,10 @@ namespace RenderCore { namespace LightingEngine
 
         virtual void* QueryInterface(uint64_t interfaceTypeCode) override
         {
-            if (interfaceTypeCode == typeid(Internal::IShadowProjectionDriver).hash_code()) {
+            switch (interfaceTypeCode) {
+            case TypeHashCode<Internal::IShadowProjectionDriver>:
                 return (Internal::IShadowProjectionDriver*)this;
-            } else if (interfaceTypeCode == typeid(ISunSourceShadows).hash_code()) {
+            case TypeHashCode<ISunSourceShadows>:
                 return (ISunSourceShadows*)this;
             }
             return nullptr;
@@ -1173,7 +1174,7 @@ namespace RenderCore { namespace LightingEngine
 template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine::SunSourceFrustumSettings>()
 {
     using Obj = RenderCore::LightingEngine::SunSourceFrustumSettings;
-    static ClassAccessors props(typeid(Obj).hash_code());
+    static ClassAccessors props(TypeHashCode<Obj>);
     static bool init = false;
     if (!init) {
         props.Add("MaxCascadeCount",

@@ -132,6 +132,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 	}
 
+	constexpr auto s_resourceInterface = TypeHashCode<Resource>;
+	constexpr auto s_threadContextVulkanInterface = TypeHashCode<IThreadContextVulkan>;
+
 	void        GraphicsEncoder::Bind(IteratorRange<const VertexBufferView*> vbViews, const IndexBufferView& ibView)
 	{
 		assert(_sharedState->_commandList.GetUnderlying());
@@ -142,7 +145,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(vbViews.size() < s_maxBoundVBs);
 		for (unsigned c=0; c<vbViews.size(); ++c) {
 			offsets[c] = vbViews[c]._offset;
-			assert(const_cast<IResource*>(vbViews[c]._resource)->QueryInterface(typeid(Resource).hash_code()));
+			assert(const_cast<IResource*>(vbViews[c]._resource)->QueryInterface(s_resourceInterface));
 			buffers[c] = checked_cast<const Resource*>(vbViews[c]._resource)->GetBuffer();
 		}
 		vkCmdBindVertexBuffers(
@@ -860,7 +863,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		VLA(VkBuffer, buffers, outputBuffers.size());
 		for (unsigned c=0; c<outputBuffers.size(); ++c) {
 			offsets[c] = outputBuffers[c]._offset;
-			assert(const_cast<IResource*>(outputBuffers[c]._resource)->QueryInterface(typeid(Resource).hash_code()));
+			assert(const_cast<IResource*>(outputBuffers[c]._resource)->QueryInterface(s_resourceInterface));
 			buffers[c] = checked_cast<const Resource*>(outputBuffers[c]._resource)->GetBuffer();
 		}
 
@@ -888,8 +891,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	const std::shared_ptr<DeviceContext>& DeviceContext::Get(IThreadContext& threadContext)
 	{
 		IThreadContextVulkan* vulkanContext = 
-			(IThreadContextVulkan*)threadContext.QueryInterface(
-				typeid(IThreadContextVulkan).hash_code());
+			(IThreadContextVulkan*)threadContext.QueryInterface(s_threadContextVulkanInterface);
 		if (vulkanContext)
 			return vulkanContext->GetMetalContext();
 		Throw(std::runtime_error("Incorrect thread context type passed to DeviceContext accessor"));
@@ -898,8 +900,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	std::shared_ptr<DeviceContext> DeviceContext::BeginPrimaryCommandList(IThreadContext& threadContext)
 	{
 		IThreadContextVulkan* vulkanContext = 
-			(IThreadContextVulkan*)threadContext.QueryInterface(
-				typeid(IThreadContextVulkan).hash_code());
+			(IThreadContextVulkan*)threadContext.QueryInterface(s_threadContextVulkanInterface);
 		if (vulkanContext)
 			return vulkanContext->BeginPrimaryCommandList();
 		Throw(std::runtime_error("Incorrect thread context type passed to DeviceContext accessor"));
@@ -908,8 +909,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	std::shared_ptr<DeviceContext> DeviceContext::BeginSecondaryCommandList(IThreadContext& threadContext)
 	{
 		IThreadContextVulkan* vulkanContext = 
-			(IThreadContextVulkan*)threadContext.QueryInterface(
-				typeid(IThreadContextVulkan).hash_code());
+			(IThreadContextVulkan*)threadContext.QueryInterface(s_threadContextVulkanInterface);
 		if (vulkanContext)
 			return vulkanContext->BeginSecondaryCommandList();
 		Throw(std::runtime_error("Incorrect thread context type passed to DeviceContext accessor"));

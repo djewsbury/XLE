@@ -77,7 +77,7 @@ namespace RenderCore { namespace Metal_DX11
     void DeviceContext::Bind(const IndexBufferView& IB)
 	{
 		assert(IB._resource);
-		auto* d3dResource = (Resource*)const_cast<IResource*>(IB._resource)->QueryInterface(typeid(Resource).hash_code());
+		auto* d3dResource = (Resource*)const_cast<IResource*>(IB._resource)->QueryInterface(TypeHashCode<Resource>);
 		assert(d3dResource);
 		assert(QueryInterfaceCast<ID3D::Buffer>(d3dResource->_underlying.get()));
         _underlying->IASetIndexBuffer((ID3D::Buffer*)d3dResource->_underlying.get(), AsDXGIFormat(IB._indexFormat), IB._offset);
@@ -365,7 +365,7 @@ namespace RenderCore { namespace Metal_DX11
 
     std::shared_ptr<DeviceContext>  DeviceContext::Get(IThreadContext& threadContext)
     {
-        auto tc = (IThreadContextDX11*)threadContext.QueryInterface(typeid(IThreadContextDX11).hash_code());
+        auto tc = (IThreadContextDX11*)threadContext.QueryInterface(TypeHashCode<IThreadContextDX11>);
         if (tc) {
             return tc->GetUnderlying();
         }

@@ -285,7 +285,7 @@ namespace RenderCore { namespace Metal_OpenGLES
                     BindToFramebuffer(
                         GL_FRAMEBUFFER,
                         GL_COLOR_ATTACHMENT0 + c,
-                        *(Resource*)resource->QueryInterface(typeid(Resource).hash_code()),
+                        *(Resource*)resource->QueryInterface(TypeHashCode<Resource>),
                         attachmentView._window);
                     drawBuffers[c] = GL_COLOR_ATTACHMENT0 + c;
                     sp._resolveFlags |= GL_COLOR_BUFFER_BIT;
@@ -305,7 +305,7 @@ namespace RenderCore { namespace Metal_OpenGLES
                     if (!resource)
                         Throw(::Exceptions::BasicLabel("Could not find attachment resource for resolve in FrameBuffer::FrameBuffer"));
 
-                    auto& res = *(Resource*)resource->QueryInterface(typeid(Resource).hash_code());
+                    auto& res = *(Resource*)resource->QueryInterface(TypeHashCode<Resource>);
                     BindToFramebuffer(GL_FRAMEBUFFER, GetDepthStencilBindingPoint(res, attachmentView._window), res, attachmentView._window);
                     sp._resolveFlags |= GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT;
 

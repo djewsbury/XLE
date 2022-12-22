@@ -129,7 +129,7 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<RenderCore::ILowLevelCompiler> CreateDefaultShaderCompiler(RenderCore::IDevice& device)
 	{
-		auto* vulkanDevice  = (RenderCore::IDeviceVulkan*)device.QueryInterface(typeid(RenderCore::IDeviceVulkan).hash_code());
+		auto* vulkanDevice  = (RenderCore::IDeviceVulkan*)device.QueryInterface(TypeHashCode<RenderCore::IDeviceVulkan>);
 		if (vulkanDevice) {
 			// Vulkan allows for multiple ways for compiling shaders. The tests currently use a HLSL to GLSL to SPIRV 
 			// cross compilation approach

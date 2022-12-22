@@ -442,7 +442,7 @@ namespace RenderCore { namespace Techniques
 	, _compiledLayoutPool(std::move(compiledLayoutPool))
 	, _drawablesPool(std::move(drawablesPool))
 	{
-		auto* deviceVulkan = (RenderCore::IDeviceVulkan*)_device->QueryInterface(typeid(RenderCore::IDeviceVulkan).hash_code());
+		auto* deviceVulkan = (RenderCore::IDeviceVulkan*)_device->QueryInterface(TypeHashCode<RenderCore::IDeviceVulkan>);
 		if (deviceVulkan) {
 			_asyncTracker = deviceVulkan->GetGraphicsQueueAsyncTracker();
 			_temporaryStorageManager = std::make_unique<Metal_Vulkan::TemporaryStorageManager>(Metal::GetObjectFactory(), _asyncTracker);

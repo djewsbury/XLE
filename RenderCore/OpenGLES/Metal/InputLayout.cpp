@@ -752,7 +752,7 @@ namespace RenderCore { namespace Metal_OpenGLES
                             Log(Error) << "Allocation failed on dynamic CB buffer. Cannot write uniform values." << std::endl;
                         }
                     } else {
-                        assert(((IResource*)cbv._prebuiltBuffer)->QueryInterface(typeid(Resource).hash_code()));
+                        assert(((IResource*)cbv._prebuiltBuffer)->QueryInterface(TypeHashCode<Resource>));
                         auto* res = checked_cast<const Resource*>(cbv._prebuiltBuffer);
 
                         if (!res->GetConstantBuffer().empty()) {

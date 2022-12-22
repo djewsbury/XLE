@@ -431,7 +431,7 @@
 
             if (!renderCoreContext.IsImmediate()) {
 				auto dev = renderCoreContext.GetDevice();
-				IDeviceDX11* devDX11 = (IDeviceDX11*)dev->QueryInterface(typeid(IDeviceDX11).hash_code());
+				IDeviceDX11* devDX11 = (IDeviceDX11*)dev->QueryInterface(TypeHashCode<IDeviceDX11>);
 				if (devDX11) {
 						//
 						//  See D3D documentation for "ID3D11DeviceContext::UpdateSubresource'

@@ -238,7 +238,7 @@ namespace UnitTests
 		
 		std::shared_ptr<RenderCore::IShaderSource> customShaderSource;
 
-		auto* vulkanDevice  = (RenderCore::IDeviceVulkan*)testHelper->_device->QueryInterface(typeid(RenderCore::IDeviceVulkan).hash_code());
+		auto* vulkanDevice  = (RenderCore::IDeviceVulkan*)testHelper->_device->QueryInterface(TypeHashCode<RenderCore::IDeviceVulkan>);
 		if (vulkanDevice) {
 			RenderCore::VulkanCompilerConfiguration cfg;
 			cfg._shaderMode = RenderCore::VulkanShaderMode::GLSLToSPIRV;

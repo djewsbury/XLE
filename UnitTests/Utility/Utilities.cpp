@@ -12,6 +12,7 @@
 #include "../../Utility/Conversion.h"
 #include "../../Utility/FastParseValue.h"
 #include <stdexcept>
+#include <iostream>
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 
@@ -589,6 +590,16 @@ namespace UnitTests
 
             static_assert(CONCAT(KEY_11, _h32) != 0, "Should fail if constexpr is not actually evaluating at compile time");
         }
+    }
+
+    struct NamespaceScopeStruct {};
+    class NamespaceScopeClass {};
+
+    TEST_CASE( "constexpr-typeid", "[utility]" )
+    {
+        // Github version of ctti has an error within it that would cause incorrect names on recent versions of MSVC
+        REQUIRE(ctti::type_id<NamespaceScopeStruct>().name() == "UnitTests::NamespaceScopeStruct");
+        REQUIRE(ctti::type_id<NamespaceScopeClass>().name() == "UnitTests::NamespaceScopeClass");
     }
 
 }
