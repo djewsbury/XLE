@@ -61,3 +61,6 @@
 [submodule "Foreign/wildcards"]
 	path = Foreign/wildcards
 	url = git@github.com:zemasoft/wildcards
+[submodule "Foreign/ctti"]
+	path = Foreign/ctti
+	url = git@github.com:Manu343726/ctti.git
