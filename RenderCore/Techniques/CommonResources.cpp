@@ -11,6 +11,8 @@
 #include "../Metal/DeviceContext.h"     // for Metal::CompleteInitialization
 #include "../../Utility/MemoryUtils.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace Techniques
 {
     DepthStencilDesc CommonResourceBox::s_dsReadWrite { CompareOp::GreaterEqual };
@@ -155,13 +157,13 @@ namespace RenderCore { namespace Techniques
             case MultisampleDepthPrev: return "MultisampleDepthPrev";
             case GBufferNormalPrev: return "GBufferNormalPrev";
             case ColorHDRPrev: return "ColorHDRPrev";
-            case ConstHash64Legacy<'SSRe', 'flec', 'tion'>::Value: return "SSReflection";
-            case ConstHash64Legacy<'SSRe', 'flec', 'tion'>::Value+1: return "SSReflectionPrev";
-            case ConstHash64Legacy<'SSRC', 'onfi', 'denc', 'e'>::Value: return "SSRConfidence";
-            case ConstHash64Legacy<'SSRC', 'onfi', 'denc', 'e'>::Value+1: return "SSRConfidencePrev";
-            case ConstHash64Legacy<'SSRC', 'onfi', 'denc', 'eInt'>::Value: return "SSRConfidenceInt";
-            case ConstHash64Legacy<'SSRI', 'nt'>::Value: return "SSRInt";
-            case ConstHash64Legacy<'SSRD', 'ebug'>::Value: return "SSRDebug";
+            case "SSReflection"_h: return "SSReflection";
+            case "SSReflection"_h+1: return "SSReflectionPrev";
+            case "SSRConfidence"_h: return "SSRConfidence";
+            case "SSRConfidence"_h+1: return "SSRConfidencePrev";
+            case "SSRConfidenceInt"_h: return "SSRConfidenceInt";
+            case "SSRInt"_h: return "SSRInt";
+            case "SSRDebug"_h: return "SSRDebug";
             default: return nullptr;
             }
         }

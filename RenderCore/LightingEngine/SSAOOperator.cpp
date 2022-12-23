@@ -28,9 +28,9 @@ using namespace Utility::Literals;
 
 namespace RenderCore { namespace LightingEngine
 {
-	static const auto Hash_AOOutput = ConstHash64Legacy<'ao-o', 'utpu', 't'>::Value;
-	static const auto Hash_AOAccumulation = ConstHash64Legacy<'ao-a', 'ccum', 'ulat', 'ion'>::Value;
-	static const auto Hash_AOAccumulationPrev = ConstHash64Legacy<'ao-a', 'ccum', 'ulat', 'ion'>::Value+1;
+	static const auto Hash_AOOutput = "ao-output"_h;
+	static const auto Hash_AOAccumulation = "ao-accumulation"_h;
+	static const auto Hash_AOAccumulationPrev = "ao-accumulation"_h+1;
 
 	static const auto s_aoFormat = Format::R8_UNORM;
 

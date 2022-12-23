@@ -93,7 +93,7 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::TechniqueContext _techContext;
 			std::unique_ptr<Techniques::ParsingContext> _parsingContext;
 			
-			static const auto semanticProbePrepare = ConstHash64Legacy<'prob', 'epre'>::Value;
+			static const auto semanticProbePrepare = "probe-prepare"_h;
 			StaticProbePrepareHelper(IThreadContext& threadContext, ShadowProbes::Pimpl& pimpl)
 			: _pimpl(&pimpl)
 			{

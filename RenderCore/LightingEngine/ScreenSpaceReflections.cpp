@@ -110,11 +110,11 @@ namespace RenderCore { namespace LightingEngine
 		ResolutionDependentResources() {};
 	};
 
-	constexpr uint64_t SSRReflections = ConstHash64Legacy<'SSRe', 'flec', 'tion'>::Value;
-	constexpr uint64_t SSRConfidence = ConstHash64Legacy<'SSRC', 'onfi', 'denc', 'e'>::Value;
-	constexpr uint64_t SSRConfidenceInt = ConstHash64Legacy<'SSRC', 'onfi', 'denc', 'eInt'>::Value;
-	constexpr uint64_t SSRInt = ConstHash64Legacy<'SSRI', 'nt'>::Value;
-	constexpr uint64_t SSRDebug = ConstHash64Legacy<'SSRD', 'ebug'>::Value;
+	constexpr uint64_t SSRReflections = "SSReflection"_h;
+	constexpr uint64_t SSRConfidence = "SSRConfidence"_h;
+	constexpr uint64_t SSRConfidenceInt = "SSRConfidenceInt"_h;
+	constexpr uint64_t SSRInt = "SSRInt"_h;
+	constexpr uint64_t SSRDebug = "SSRDebug"_h;
 
 	constexpr unsigned s_nfb_outputUAV = 0;
 	constexpr unsigned s_nfb_outputSRV = 1;

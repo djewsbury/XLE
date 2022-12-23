@@ -318,8 +318,8 @@ namespace RenderCore { namespace LightingEngine
 		mainSubpass.SetDepthStencil(depth);
 
 		if (hasSSR) {
-			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment(ConstHash64Legacy<'SSRe', 'flec', 'tion'>::Value).NoInitialState());
-			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment(ConstHash64Legacy<'SSRC', 'onfi', 'denc', 'e'>::Value).NoInitialState());
+			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment("SSReflection"_h).NoInitialState());
+			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment("SSRConfidence"_h).NoInitialState());
 		}
 		mainSubpass.SetName("MainForward");
 

@@ -312,7 +312,7 @@ namespace ToolsRig
 			using namespace RenderCore;
 
 			// since we're writing to ColorLDR, never attempt to copy this onto itself
-			auto attachmentSemantic = ConstHash64LegacyFromString(AsPointer(_attachmentName.begin()), AsPointer(_attachmentName.end()));
+			auto attachmentSemantic = Hash64(AsPointer(_attachmentName.begin()), AsPointer(_attachmentName.end()));
 			if (attachmentSemantic == RenderCore::Techniques::AttachmentSemantics::ColorLDR) return;
 
 			// update graphics descriptor set, because we've probably just done bunch of unbind operations
@@ -392,7 +392,7 @@ namespace ToolsRig
 
 		virtual auto GetRequiredAttachments() const -> std::vector<std::pair<uint64_t, RenderCore::BindFlag::BitField>> override
 		{
-			auto attachmentHash = ConstHash64LegacyFromString(AsPointer(_attachmentName.begin()), AsPointer(_attachmentName.end()));
+			auto attachmentHash = Hash64(AsPointer(_attachmentName.begin()), AsPointer(_attachmentName.end()));
 			if (attachmentHash == RenderCore::Techniques::AttachmentSemantics::ColorLDR) return {};
 			return {std::make_pair(attachmentHash, RenderCore::BindFlag::ShaderResource)};
 		}
@@ -438,7 +438,7 @@ namespace ToolsRig
 	static VisualizeAttachmentShader DefaultVisualizeAttachmentShader(StringSection<> attachmentName)
 	{
 		using namespace RenderCore::Techniques::AttachmentSemantics;
-		auto semantic = ConstHash64LegacyFromString(AsPointer(attachmentName.begin()), AsPointer(attachmentName.end()));
+		auto semantic = Hash64(AsPointer(attachmentName.begin()), AsPointer(attachmentName.end()));
 		if (semantic == GBufferNormal) return VisualizeAttachmentShader::GBufferNormals;
 		else if (semantic == GBufferMotion) return VisualizeAttachmentShader::Motion;
 		else if (semantic == Depth) return VisualizeAttachmentShader::Depth;

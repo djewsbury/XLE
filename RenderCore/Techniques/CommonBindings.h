@@ -46,25 +46,25 @@ namespace RenderCore { namespace Techniques
 
 	namespace AttachmentSemantics
     {
-        constexpr uint64_t MultisampleDepth = ConstHash64Legacy<'Mult', 'isam', 'pleD', 'epth'>::Value;
-        constexpr uint64_t GBufferDiffuse   = ConstHash64Legacy<'GBuf', 'ferD', 'iffu', 'se'>::Value;
-        constexpr uint64_t GBufferNormal    = ConstHash64Legacy<'GBuf', 'ferN', 'orma', 'l'>::Value;
-        constexpr uint64_t GBufferParameter = ConstHash64Legacy<'GBuf', 'ferP', 'aram', 'eter'>::Value;
-        constexpr uint64_t GBufferMotion    = ConstHash64Legacy<'GBuf', 'ferM', 'otio', 'n'>::Value;
-        constexpr uint64_t HistoryAcc       = ConstHash64Legacy<'Hist', 'oryA', 'cc'>::Value;
+        constexpr auto MultisampleDepth = ConstHash64("MultisampleDepth");
+        constexpr auto GBufferDiffuse   = ConstHash64("GBufferDiffuse");
+        constexpr auto GBufferNormal    = ConstHash64("GBufferNormal");
+        constexpr auto GBufferParameter = ConstHash64("GBufferParameter");
+        constexpr auto GBufferMotion    = ConstHash64("GBufferMotion");
+        constexpr auto HistoryAcc       = ConstHash64("HistoryAcc");
 
-        constexpr uint64_t ColorLDR         = ConstHash64Legacy<'Colo', 'rLDR'>::Value;
-        constexpr uint64_t ColorHDR         = ConstHash64Legacy<'Colo', 'rHDR'>::Value;
-        constexpr uint64_t Depth            = ConstHash64Legacy<'Dept', 'h'>::Value;
+        constexpr auto ColorLDR         = ConstHash64("ColorLDR");
+        constexpr auto ColorHDR         = ConstHash64("ColorHDR");
+        constexpr auto Depth            = ConstHash64("Depth");
 
-		constexpr uint64_t ShadowDepthMap	= ConstHash64Legacy<'Shad', 'owDe', 'pthM', 'ap'>::Value;
+		constexpr auto ShadowDepthMap	= ConstHash64("ShadowDepthMap");
 
-        constexpr uint64_t HierarchicalDepths	= ConstHash64Legacy<'Hier', 'arch', 'ical', 'Dept'>::Value;
-        constexpr uint64_t TiledLightBitField	= ConstHash64Legacy<'Tile', 'dLig', 'htBi', 'tFie'>::Value;
+        constexpr auto HierarchicalDepths	= ConstHash64("HierarchicalDepths");
+        constexpr auto TiledLightBitField	= ConstHash64("TiledLightBitField");
 
-        constexpr uint64_t MultisampleDepthPrev = ConstHash64Legacy<'Mult', 'isam', 'pleD', 'epth'>::Value+1;
-        constexpr uint64_t GBufferNormalPrev    = ConstHash64Legacy<'GBuf', 'ferN', 'orma', 'l'>::Value+1;
-        constexpr uint64_t ColorHDRPrev         = ConstHash64Legacy<'Colo', 'rHDR'>::Value+1;
+        constexpr auto MultisampleDepthPrev = ConstHash64("MultisampleDepth")+1;
+        constexpr auto GBufferNormalPrev    = ConstHash64("GBufferNormal")+1;
+        constexpr auto ColorHDRPrev         = ConstHash64("ColorHDR")+1;
 
         const char* TryDehash(uint64_t);
 	}
