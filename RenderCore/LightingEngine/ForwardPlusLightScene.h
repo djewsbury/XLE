@@ -32,13 +32,13 @@ namespace RenderCore { namespace LightingEngine
 		const IPreparedShadowResult* GetDominantPreparedShadow();
 
 		void FinalizeConfiguration();
-		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext);
+		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext, bool enableSSR);
 		void Prerender(IThreadContext&);
 
-		std::optional<LightSourceOperatorDesc> GetDominantLightOperator() const;
-		std::optional<ShadowOperatorDesc> GetDominantShadowOperator() const;
+		// std::optional<LightSourceOperatorDesc> GetDominantLightOperator() const;
+		// std::optional<ShadowOperatorDesc> GetDominantShadowOperator() const;
 		std::shared_ptr<Techniques::IShaderResourceDelegate> CreateMainSceneResourceDelegate();
-		const AmbientLightOperatorDesc& GetAmbientLightOperatorDesc() const;
+		// const AmbientLightOperatorDesc& GetAmbientLightOperatorDesc() const;
 
 		// The following are for propagating configuration settings to operators managed by the delegate
 		// signaled on the rendering thread just before rendering begins (ie, avoid long operations)s
@@ -60,35 +60,50 @@ namespace RenderCore { namespace LightingEngine
 			IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 			const AmbientLightOperatorDesc& ambientLightOperator);
 
-		ForwardPlusLightScene(const AmbientLightOperatorDesc& ambientLightOperator);
+		struct ShadowPreparerIdMapping
+		{
+			std::vector<unsigned> _operatorToShadowPreparerId;
+			unsigned _operatorForStaticProbes = ~0u;
+			std::vector<ShadowOperatorDesc> _shadowPreparers;
+			ShadowProbes::Configuration _shadowProbesCfg;
+			unsigned _dominantLightOperator = ~0u;
+			unsigned _dominantShadowOperator = ~0u;
+		};
+
+		struct LightOperatorInfo
+		{
+			Internal::StandardPositionLightFlags::BitField _standardLightFlags = 0;
+			unsigned _uniformShapeCode = 0;
+		};
+
+		ForwardPlusLightScene();
+
+		struct ConstructionServices
+		{
+			std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
+			std::shared_ptr<Techniques::PipelineCollection> _pipelinePool;
+			std::shared_ptr<SharedTechniqueDelegateBox> _techDelBox;
+		};
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<ForwardPlusLightScene>>&& promise,
-			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-			const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
-			const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-			IteratorRange<const LightSourceOperatorDesc*> positionalLightOperators,
-			IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-			const AmbientLightOperatorDesc& ambientLightOperator,
+			const ConstructionServices&,
+			ShadowPreparerIdMapping&& shadowPreparerMapping,
+			std::vector<LightOperatorInfo>&& lightOperatorInfo,
 			const RasterizationLightTileOperator::Configuration& tilerCfg);
 
 		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
 		std::shared_ptr<Internal::DynamicShadowProjectionScheduler> _shadowScheduler;
 
 	private:
-		std::vector<LightSourceOperatorDesc> _positionalLightOperators;
+		// std::vector<LightSourceOperatorDesc> _positionalLightOperators;
 		std::shared_ptr<RasterizationLightTileOperator> _lightTiler;
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<SharedTechniqueDelegateBox> _techDelBox;
 
-		std::vector<ShadowOperatorDesc> _shadowOperators;
-		struct ShadowPreparerIdMapping
-		{
-			std::vector<unsigned> _operatorToShadowPreparerId;
-			unsigned _operatorForStaticProbes = ~0u;
-			ShadowProbes::Configuration _shadowProbesCfg;
-		};
+		// std::vector<ShadowOperatorDesc> _shadowOperators;
 		ShadowPreparerIdMapping _shadowPreparerIdMapping;
+		std::vector<LightOperatorInfo> _lightOperatorInfo;
 
 		std::shared_ptr<ShadowProbes> _shadowProbes;
 		std::shared_ptr<Internal::SemiStaticShadowProbeScheduler> _shadowProbesManager;
@@ -123,14 +138,11 @@ namespace RenderCore { namespace LightingEngine
 		Signal<std::shared_ptr<Techniques::DeferredShaderResource>> _onChangeSkyTexture;
 
 		static std::shared_ptr<ForwardPlusLightScene> CreateInternal(
+			const ConstructionServices&,
 			std::shared_ptr<DynamicShadowPreparers> shadowPreparers,
 			std::shared_ptr<RasterizationLightTileOperator> lightTiler, 
-			const std::vector<LightSourceOperatorDesc>& positionalLightOperators,
-			const std::vector<ShadowOperatorDesc>& shadowOperators,
-			const AmbientLightOperatorDesc& ambientLightOperator, 
-			const ForwardPlusLightScene::ShadowPreparerIdMapping& shadowPreparerMapping, 
-			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators, 
-			const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox);
+			ForwardPlusLightScene::ShadowPreparerIdMapping&& shadowPreparerMapping,
+			std::vector<LightOperatorInfo>&& lightOperatorInfo);
 	};
 
 }}

@@ -43,7 +43,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		auto i = LowerBound(_lookupTable, sourceId);
 		if (i == _lookupTable.end() || i->first != sourceId) return nullptr;		// not found
 
-		auto& set = _tileableLightSets[i->second._lightSet];
+		auto& set = _lightSets[i->second._lightSet];
 		assert(set._baseData._allocationFlags.IsAllocated(i->second._lightIndex));
 
 		// test components first
@@ -59,7 +59,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 		auto result = _nextLightSource++;
 		auto lightSetIdx = GetLightSet(operatorId, ~0u);
-		auto lightSet = &_tileableLightSets[lightSetIdx];
+		auto lightSet = &_lightSets[lightSetIdx];
 
 		auto newLight = lightSet->_baseData.Allocate();
 		auto newLightIdx = newLight.GetIndex();
@@ -80,7 +80,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			return;		// not found
 		}
 
-		auto* set =  &_tileableLightSets[i->second._lightSet];
+		auto* set =  &_lightSets[i->second._lightSet];
 
 		for (const auto& comp:set->_boundComponents)
 			comp->DeregisterLight(i->second._lightSet, i->second._lightIndex);
@@ -98,8 +98,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::vector<std::pair<LightSourceId, LightSetAndIndex>>::iterator i,
 		unsigned dstSetIdx)
 	{
-		auto* dstSet = &_tileableLightSets[dstSetIdx];
-		auto* srcSet = &_tileableLightSets[i->second._lightSet];
+		auto* dstSet = &_lightSets[dstSetIdx];
+		auto* srcSet = &_lightSets[i->second._lightSet];
 		assert(dstSetIdx != i->second._lightSet);
 
 		auto l = std::move(srcSet->_baseData.GetObject(i->second._lightIndex));
@@ -137,7 +137,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				continue;
 			}
 
-			auto* srcSet = &_tileableLightSets[i->second._lightSet];
+			auto* srcSet = &_lightSets[i->second._lightSet];
 			auto dstSetIdx = GetLightSet(srcSet->_operatorId, shadowOperatorId);
 			if (i->second._lightSet == dstSetIdx) continue;	// no actual change
 
@@ -147,12 +147,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	auto StandardLightScene::GetLightSet(LightOperatorId lightOperator, ShadowOperatorId shadowOperator) -> unsigned
 	{
-		for (auto s=_tileableLightSets.begin(); s!=_tileableLightSets.end(); ++s)
+		for (auto s=_lightSets.begin(); s!=_lightSets.end(); ++s)
 			if (s->_operatorId == lightOperator && s->_shadowOperatorId == shadowOperator)
-				return std::distance(_tileableLightSets.begin(), s);
-		_tileableLightSets.push_back(LightSet{lightOperator, shadowOperator});
-		auto newSetIdx =  (unsigned)_tileableLightSets.size()-1;
-		auto& newSet = _tileableLightSets.back();
+				return std::distance(_lightSets.begin(), s);
+		_lightSets.push_back(LightSet{lightOperator, shadowOperator});
+		auto newSetIdx =  (unsigned)_lightSets.size()-1;
+		auto& newSet = _lightSets.back();
 		newSet._boundComponents.reserve(_components.size());
 		for (auto& comp:_components)
 			if (comp->BindToSet(newSet._operatorId, newSet._shadowOperatorId, newSetIdx))
@@ -166,7 +166,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	void StandardLightScene::Clear()
 	{
 		// we have to clear components, because we don't actually remove all lights from the components
-		for (auto& set:_tileableLightSets) {
+		for (auto& set:_lightSets) {
 			set._baseData = {};
 			set._boundComponents.clear();
 		}
@@ -193,8 +193,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		_components.push_back(std::move(comp));
 		auto& newComp = _components.back();
 
-		for (unsigned setIdx=0; setIdx<_tileableLightSets.size(); ++setIdx) {
-			auto& set = _tileableLightSets[setIdx];
+		for (unsigned setIdx=0; setIdx<_lightSets.size(); ++setIdx) {
+			auto& set = _lightSets[setIdx];
 			if (newComp->BindToSet(set._operatorId, set._shadowOperatorId, setIdx)) {
 				set._boundComponents.push_back(newComp);
 				for (auto i=set._baseData.begin(); i!=set._baseData.end(); ++i)
@@ -205,7 +205,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	void StandardLightScene::DeregisterComponent(ILightSceneComponent& comp)
 	{
-		for (auto& set:_tileableLightSets)
+		for (auto& set:_lightSets)
 			for (auto i=set._boundComponents.begin(); i!=set._boundComponents.end(); ++i) {
 				if (i->get() == &comp) set._boundComponents.erase(i);
 				break;
@@ -224,7 +224,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		if (i != _associatedFlags.end()) i->second |= flag;
 		else _associatedFlags.emplace_back(operatorId, flag);
 
-		for (auto& set:_tileableLightSets)
+		for (auto& set:_lightSets)
 			if (set._operatorId == operatorId)
 				set._flags |= flag;
 	}

@@ -4,8 +4,9 @@
 
 #pragma once
 
-#include "DeferredLightingResolve.h"
+#include "DeferredLightingResolve.h"		// for LightStencilingGeometry
 #include "../Metal/Forward.h"
+#include "../Metal/InputLayout.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Math/Vector.h"
 #include <memory>
@@ -79,8 +80,6 @@ namespace RenderCore { namespace LightingEngine
 	
 	private:
 		std::shared_ptr<RenderCore::Techniques::PipelineCollection> _pipelinePool;
-		::Assets::DependencyValidation _depVal;
-		UInt2 _lightTileBufferSize = UInt2{0,0};
 
 		std::shared_ptr<RenderCore::IResourceView> _metricsBufferUAV;
 		std::shared_ptr<RenderCore::IResourceView> _metricsBufferSRV;
@@ -97,5 +96,7 @@ namespace RenderCore { namespace LightingEngine
 
 		Internal::StandardLightScene* _lightScene;
 		Configuration _config;
+		UInt2 _lightTileBufferSize = UInt2{0,0};
+		::Assets::DependencyValidation _depVal;
 	};
 }}

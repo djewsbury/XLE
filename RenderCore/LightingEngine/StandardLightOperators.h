@@ -14,6 +14,20 @@ namespace RenderCore { namespace LightingEngine
 	enum class LightSourceShape { Directional, Sphere, Tube, Rectangle, Disc };
 	enum class DiffuseModel { Lambert, Disney };
 
+	struct ChainedOperatorDesc
+	{
+		const ChainedOperatorDesc* _next = nullptr;
+		uint64_t _structureType = 0;
+		ChainedOperatorDesc(size_t structureType=0) : _structureType{structureType} {}
+	};
+
+	template <typename Type>
+		struct ChainedOperatorTemplate : public ChainedOperatorDesc
+	{
+		Type _desc;
+		ChainedOperatorTemplate() : ChainedOperatorDesc(TypeHashCode<Type>) {}
+	};
+
 	struct LightSourceOperatorDesc
 	{
 		LightSourceShape _shape = LightSourceShape::Directional;
@@ -29,31 +43,8 @@ namespace RenderCore { namespace LightingEngine
 		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
 	};
 
-	struct ScreenSpaceReflectionsOperatorDesc
-	{
-		bool _enableFinalBlur = false;
-		bool _splitConfidence = true;
-
-		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
-	};
-
-	struct AmbientOcclusionOperatorDesc
-	{
-		unsigned _searchSteps = 32;
-		float _maxWorldSpaceDistance = std::numeric_limits<float>::max();
-		bool _sampleBothDirections = true;
-		bool _lateTemporalFiltering = true;
-		bool _enableFiltering = true;
-		bool _enableHierarchicalStepping = true;
-		float _thicknessHeuristicFactor = 0.15f;		// set to 1 to disable
-
-		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
-	};
-
 	struct AmbientLightOperatorDesc
 	{
-		std::optional<ScreenSpaceReflectionsOperatorDesc> _ssrOperator;
-		std::optional<AmbientOcclusionOperatorDesc> _ssaoOperator;
 	};
 
 	std::optional<LightSourceShape> AsLightSourceShape(StringSection<>);

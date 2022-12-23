@@ -487,8 +487,8 @@ namespace RenderCore { namespace LightingEngine
 		auto cameraPosition = ExtractTranslation(projectionDesc._cameraToWorld);
 		assert(Equivalent(MagnitudeSquared(cameraForward), 1.0f, 1e-3f));
 
-		for (unsigned setIdx=0; setIdx<lightScene._tileableLightSets.size(); ++setIdx) {
-			auto& set = lightScene._tileableLightSets[setIdx];
+		for (unsigned setIdx=0; setIdx<lightScene._lightSets.size(); ++setIdx) {
+			auto& set = lightScene._lightSets[setIdx];
 			if (set._operatorId == lightResolveOperators._operatorDescs.size())
 				continue;	// this is the ambient light
 
@@ -526,7 +526,7 @@ namespace RenderCore { namespace LightingEngine
 						continue;
 				}
 
-				auto lightUniforms = Internal::MakeLightUniforms(standardLightDesc, lightResolveOperators._operatorDescs[set._operatorId]);
+				auto lightUniforms = Internal::MakeLightUniforms(standardLightDesc, Internal::AsUniformShapeCode(lightResolveOperators._operatorDescs[set._operatorId]._shape));
 				if (shadowProbeScheduler)		// this can be done more efficiently, since we're effectively just iterating through a parrallel array
 					lightUniforms._staticProbeDatabaseEntry = 1+shadowProbeScheduler->GetAllocatedDatabaseEntry(setIdx, lightIdx)._databaseIndex;
 				cbvs[CB::LightBuffer] = MakeOpaqueIteratorRange(lightUniforms);

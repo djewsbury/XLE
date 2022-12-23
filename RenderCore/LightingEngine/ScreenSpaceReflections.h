@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include "StandardLightOperators.h"
 #include "../../Assets/AssetsCore.h"
+#include "../../Utility/MemoryUtils.h"
 #include <memory>
 #include <future>
 
@@ -33,6 +33,14 @@ namespace RenderCore { namespace LightingEngine
 	class LightingTechniqueIterator;
 	class RenderStepFragmentInterface;
 	class BlueNoiseGeneratorTables;
+
+	struct ScreenSpaceReflectionsOperatorDesc
+	{
+		bool _enableFinalBlur = false;
+		bool _splitConfidence = true;
+
+		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
+	};
 
 	class ScreenSpaceReflectionsOperator : public std::enable_shared_from_this<ScreenSpaceReflectionsOperator>
 	{

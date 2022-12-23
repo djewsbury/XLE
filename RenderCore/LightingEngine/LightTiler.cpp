@@ -83,7 +83,7 @@ namespace RenderCore { namespace LightingEngine
 			float farClip = CalculateNearAndFarPlane(ExtractMinimalProjection(projDesc._cameraToProjection), Techniques::GetDefaultClipSpaceType()).second;
 
 			unsigned lightSetIdx = 0;
-			for (auto& lightSet:_lightScene->_tileableLightSets) {
+			for (auto& lightSet:_lightScene->_lightSets) {
 
 				if (lightSet._flags & Internal::StandardPositionLightFlags::LightTiler) {
 					unsigned idxOffset = 0;

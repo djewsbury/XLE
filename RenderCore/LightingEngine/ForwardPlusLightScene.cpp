@@ -88,31 +88,14 @@ namespace RenderCore { namespace LightingEngine
 		_pingPongCounter = 0;
 
 		// Default to using the first light operator & first shadow operator for the dominant light
-		unsigned dominantOperatorId = ~0u;
-		unsigned dominantShadowOperatorId = ~0u;
-		for (unsigned c=0; c<_positionalLightOperators.size(); ++c)
-			if (_positionalLightOperators[c]._flags & LightSourceOperatorDesc::Flags::DominantLight) {
-				if (dominantOperatorId != ~0u)
-					Throw(std::runtime_error("Multiple dominant light operators detected. This isn't supported -- there must be either 0 or 1"));
-				dominantOperatorId = c;
-			}
-		for (unsigned c=0; c<_shadowOperators.size(); ++c) {
-			if (_shadowOperators[c]._dominantLight) {
-				if (dominantShadowOperatorId != ~0u)
-					Throw(std::runtime_error("Multiple dominant shadow operators detected. This isn't supported -- there must be either 0 or 1"));
-				dominantShadowOperatorId = c;
-			}
-		}
-		if (dominantOperatorId != ~0u) {
-			_dominantLightSet = std::make_shared<Internal::DominantLightSet>(dominantOperatorId, dominantShadowOperatorId);
+		if (_shadowPreparerIdMapping._dominantLightOperator != ~0u) {
+			_dominantLightSet = std::make_shared<Internal::DominantLightSet>(_shadowPreparerIdMapping._dominantLightOperator, _shadowPreparerIdMapping._dominantShadowOperator);
 			RegisterComponent(_dominantLightSet);
 		}
 
-		for (unsigned op=0; op<_positionalLightOperators.size(); ++op) {
-			AssociateFlag(op, Internal::StandardPositionLightFlags::SupportFiniteRange);		// all lights get "SupportFiniteRange"
-			if (!(_positionalLightOperators[op]._flags & LightSourceOperatorDesc::Flags::DominantLight))
-				AssociateFlag(op, Internal::StandardPositionLightFlags::LightTiler);
-		}
+		for (unsigned op=0; op<_lightOperatorInfo.size(); ++op)
+			if (_lightOperatorInfo[op]._standardLightFlags)
+				AssociateFlag(op, _lightOperatorInfo[op]._standardLightFlags);
 
 		if (_shadowPreparerIdMapping._operatorForStaticProbes != ~0u) {
 			_shadowProbes = std::make_shared<ShadowProbes>(_pipelineAccelerators, *_techDelBox, _shadowPreparerIdMapping._shadowProbesCfg);
@@ -120,7 +103,10 @@ namespace RenderCore { namespace LightingEngine
 			RegisterComponent(_shadowProbesManager);
 		}
 
-		if (!_shadowPreparerIdMapping._operatorToShadowPreparerId.empty()) {
+		bool atLeastOneShadowPreparer = false;
+		for (auto i:_shadowPreparerIdMapping._operatorToShadowPreparerId) atLeastOneShadowPreparer |= i != ~0u;
+
+		if (atLeastOneShadowPreparer) {
 			_shadowScheduler = std::make_shared<Internal::DynamicShadowProjectionScheduler>(
 				_pipelineAccelerators->GetDevice(), _shadowPreparers,
 				_shadowPreparerIdMapping._operatorToShadowPreparerId);
@@ -204,10 +190,8 @@ namespace RenderCore { namespace LightingEngine
 			});
 	}
 
-	void ForwardPlusLightScene::ConfigureParsingContext(Techniques::ParsingContext& parsingContext)
+	void ForwardPlusLightScene::ConfigureParsingContext(Techniques::ParsingContext& parsingContext, bool enableSSR)
 	{
-		bool lastFrameBuffersPrimed = _pingPongCounter != 0;
-
 		/////////////////
 		++_pingPongCounter;
 
@@ -231,17 +215,17 @@ namespace RenderCore { namespace LightingEngine
 			auto end = tilerOutputs._lightOrdering.begin() + tilerOutputs._lightCount;
 			for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
 				auto setIdx = *idx >> 16, lightIdx = (*idx)&0xffff;
-				auto op = _tileableLightSets[setIdx]._operatorId;
-				assert(!(_positionalLightOperators[op]._flags & LightSourceOperatorDesc::Flags::DominantLight));
-				auto& lightDesc = _tileableLightSets[setIdx]._baseData.GetObject(lightIdx);
-				*i = MakeLightUniforms(lightDesc, _positionalLightOperators[op]);
+				auto op = _lightSets[setIdx]._operatorId;
+				assert(_lightSets[setIdx]._operatorId != _shadowPreparerIdMapping._dominantLightOperator);
+				auto& lightDesc = _lightSets[setIdx]._baseData.GetObject(lightIdx);
+				*i = MakeLightUniforms(lightDesc, _lightOperatorInfo[op]._uniformShapeCode);
 			}
 
 			if (_shadowProbesManager) {
 				i = (Internal::CB_Light*)map.GetData().begin();
 				for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
 					auto setIdx = *idx >> 16, lightIdx = (*idx)&0xffff;
-					assert(!(_positionalLightOperators[_tileableLightSets[setIdx]._operatorId]._flags & LightSourceOperatorDesc::Flags::DominantLight));
+					assert(_lightSets[setIdx]._operatorId != _shadowPreparerIdMapping._dominantLightOperator);
 					auto probe = _shadowProbesManager->GetAllocatedDatabaseEntry(setIdx, lightIdx);
 					i->_staticProbeDatabaseEntry = probe._databaseIndex;
 					++i->_staticProbeDatabaseEntry;		// ~0u becomes zero, or add one --> because we want zero to be the sentinal
@@ -259,12 +243,12 @@ namespace RenderCore { namespace LightingEngine
 
 			if (_dominantLightSet && _dominantLightSet->_hasLight) {
 				i->_dominantLight = Internal::MakeLightUniforms(
-					_tileableLightSets[_dominantLightSet->_setIdx]._baseData.GetObject(0),
-					_positionalLightOperators[_dominantLightSet->_lightOpId]);
+					_lightSets[_dominantLightSet->_setIdx]._baseData.GetObject(0),
+					_lightOperatorInfo[_dominantLightSet->_lightOpId]._uniformShapeCode);
 			}
 
 			i->_lightCount = tilerOutputs._lightCount;
-			i->_enableSSR = _ambientLight->_ambientLightOperator._ssrOperator.has_value() && lastFrameBuffersPrimed;
+			i->_enableSSR = enableSSR;
 			std::memcpy(i->_diffuseSHCoefficients, _diffuseSHCoefficients, sizeof(_diffuseSHCoefficients));
 			map.FlushCache();
 		}
@@ -350,6 +334,7 @@ namespace RenderCore { namespace LightingEngine
 		return std::make_shared<ShaderResourceDelegate>(*this);
 	}
 
+#if 0
 	std::optional<LightSourceOperatorDesc> ForwardPlusLightScene::GetDominantLightOperator() const
 	{
 		if (!_dominantLightSet)
@@ -368,6 +353,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		return _ambientLight->_ambientLightOperator;
 	}
+#endif
 
 	bool ForwardPlusLightScene::ShadowProbesSupported() const
 	{
@@ -375,17 +361,7 @@ namespace RenderCore { namespace LightingEngine
 		return _shadowPreparerIdMapping._operatorForStaticProbes != ~0u;
 	}
 
-	static ShadowProbes::Configuration MakeShadowProbeConfiguration(const ShadowOperatorDesc& opDesc)
-	{
-		ShadowProbes::Configuration result;
-		assert(opDesc._width == opDesc._height);		// expecting square probe textures
-		result._staticFaceDims = opDesc._width;
-		result._staticFormat = opDesc._format;
-		result._singleSidedBias = opDesc._singleSidedBias;
-		result._doubleSidedBias = opDesc._doubleSidedBias;
-		return result;
-	}
-
+#if 0
 	bool ForwardPlusLightScene::IsCompatible(
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
@@ -414,6 +390,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 		return true;
 	}
+#endif
 
 	unsigned ForwardPlusLightScene::BindOnChangeSkyTexture(std::function<void(std::shared_ptr<Techniques::DeferredShaderResource>)>&& fn)
 	{
@@ -432,10 +409,9 @@ namespace RenderCore { namespace LightingEngine
 		_onChangeSkyTexture.Unbind(bindId);
 	}
 
-	ForwardPlusLightScene::ForwardPlusLightScene(const AmbientLightOperatorDesc& ambientLightOperator)
+	ForwardPlusLightScene::ForwardPlusLightScene()
 	{
 		_ambientLight = std::make_shared<AmbientLightConfig>();
-		_ambientLight->_ambientLightOperator = ambientLightOperator;
 
 		// We'll maintain the first few ids for system lights (ambient surrounds, etc)
 		ReserveLightSourceIds(32);
@@ -443,26 +419,21 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	std::shared_ptr<ForwardPlusLightScene> ForwardPlusLightScene::CreateInternal(
+		const ConstructionServices& constructionServices,
 		std::shared_ptr<DynamicShadowPreparers> shadowPreparers,
-		std::shared_ptr<RasterizationLightTileOperator> lightTiler, 
-		const std::vector<LightSourceOperatorDesc>& positionalLightOperators,
-		const std::vector<ShadowOperatorDesc>& shadowOperators,
-		const AmbientLightOperatorDesc& ambientLightOperator, 
-		const ForwardPlusLightScene::ShadowPreparerIdMapping& shadowPreparerMapping, 
-		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators, 
-		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox)
+		std::shared_ptr<RasterizationLightTileOperator> lightTiler,
+		ForwardPlusLightScene::ShadowPreparerIdMapping&& shadowPreparerMapping,
+		std::vector<LightOperatorInfo>&& lightOperatorInfo)
 	{
-		auto lightScene = std::make_shared<ForwardPlusLightScene>(ambientLightOperator);
-		lightScene->_positionalLightOperators = std::move(positionalLightOperators);
-		lightScene->_shadowOperators = std::move(shadowOperators);
+		auto lightScene = std::make_shared<ForwardPlusLightScene>();
 		lightScene->_shadowPreparers = shadowPreparers;
-		lightScene->_pipelineAccelerators = std::move(pipelineAccelerators);
-		lightScene->_techDelBox = std::move(techDelBox);
+		lightScene->_shadowPreparerIdMapping = std::move(shadowPreparerMapping);
+		lightScene->_pipelineAccelerators = constructionServices._pipelineAccelerators;
+		lightScene->_techDelBox = constructionServices._techDelBox;
+		lightScene->_lightOperatorInfo = std::move(lightOperatorInfo);
 
 		lightScene->_lightTiler = lightTiler;
 		lightTiler->SetLightScene(*lightScene);
-
-		lightScene->_shadowPreparerIdMapping = std::move(shadowPreparerMapping);
 
 		lightScene->FinalizeConfiguration();
 		return lightScene;
@@ -470,51 +441,23 @@ namespace RenderCore { namespace LightingEngine
 
 	void ForwardPlusLightScene::ConstructToPromise(
 		std::promise<std::shared_ptr<ForwardPlusLightScene>>&& promise,
-		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
-		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		IteratorRange<const LightSourceOperatorDesc*> positionalLightOperatorsInit,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-		const AmbientLightOperatorDesc& ambientLightOperator,
+		const ConstructionServices& constructionServices,
+		ShadowPreparerIdMapping&& shadowPreparerMapping,
+		std::vector<LightOperatorInfo>&& lightOperatorInfo,
 		const RasterizationLightTileOperator::Configuration& tilerCfg)
 	{
-		// We need to decode all of these operator configurations so that we have the 
-		// right set of things to construct
+		auto shadowPreparationOperatorsFuture = CreateDynamicShadowPreparers(
+			shadowPreparerMapping._shadowPreparers,
+			constructionServices._pipelineAccelerators, constructionServices._techDelBox);
 
-		ShadowPreparerIdMapping shadowOperatorMapping;
-		shadowOperatorMapping._operatorToShadowPreparerId.resize(shadowGenerators.size(), ~0u);
-		std::future<std::shared_ptr<DynamicShadowPreparers>> shadowPreparationOperatorsFuture;
-
-		// Map the shadow operator ids onto the underlying type of shadow (dynamically generated, shadow probes, etc)
-		{
-			VLA_UNSAFE_FORCE(ShadowOperatorDesc, preparers, shadowGenerators.size());
-			unsigned dynShadowCount = 0;
-			for (unsigned c=0; c<shadowGenerators.size(); ++c) {
-				if (shadowGenerators[c]._resolveType == ShadowResolveType::Probe) {
-					// setup shadow operator for probes
-					if (shadowOperatorMapping._operatorForStaticProbes != ~0u)
-						Throw(std::runtime_error("Multiple operators for shadow probes detected. Only zero or one is supported"));
-					shadowOperatorMapping._operatorForStaticProbes = c;
-					shadowOperatorMapping._shadowProbesCfg = MakeShadowProbeConfiguration(shadowGenerators[c]);
-				} else {
-					preparers[dynShadowCount] = shadowGenerators[c];
-					shadowOperatorMapping._operatorToShadowPreparerId[c] = dynShadowCount;
-					++dynShadowCount;
-				}
-			}
-			shadowPreparationOperatorsFuture = CreateDynamicShadowPreparers(
-				MakeIteratorRange(preparers, &preparers[dynShadowCount]),
-				pipelineAccelerators, techDelBox);
-		}
-
-		auto lightTilerFuture = ::Assets::ConstructToMarkerPtr<RasterizationLightTileOperator>(pipelinePool, tilerCfg);
-		std::vector<LightSourceOperatorDesc> positionalLightOperators { positionalLightOperatorsInit.begin(), positionalLightOperatorsInit.end() };
-		std::vector<ShadowOperatorDesc> shadowOperatorsDesc { shadowGenerators.begin(), shadowGenerators.end() };
+		auto lightTilerFuture = ::Assets::ConstructToMarkerPtr<RasterizationLightTileOperator>(constructionServices._pipelinePool, tilerCfg);
 
 		using namespace std::placeholders;
 		::Assets::WhenAll(std::move(shadowPreparationOperatorsFuture), lightTilerFuture).ThenConstructToPromise(
 			std::move(promise),
-			std::bind(CreateInternal, _1, _2, std::move(positionalLightOperators), std::move(shadowOperatorsDesc), ambientLightOperator, std::move(shadowOperatorMapping), pipelineAccelerators, techDelBox));
+			[shadowPreparerMapping=std::move(shadowPreparerMapping), lightOperatorInfo=std::move(lightOperatorInfo), constructionServices](auto shadowPreparer, auto lightTiler) mutable {
+				return CreateInternal(constructionServices, std::move(shadowPreparer), std::move(lightTiler), std::move(shadowPreparerMapping), std::move(lightOperatorInfo));
+			});
 	}
 
 }}

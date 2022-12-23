@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include "StandardLightOperators.h"
 #include "../../Assets/AssetsCore.h"
+#include "../../Utility/MemoryUtils.h"
 #include <memory>
 #include <future>
 
@@ -18,7 +18,19 @@ namespace RenderCore { namespace LightingEngine
 {
 	class LightingTechniqueIterator;
 	class RenderStepFragmentInterface;
-	struct AmbientOcclusionOperatorDesc;
+
+	struct AmbientOcclusionOperatorDesc
+	{
+		unsigned _searchSteps = 32;
+		float _maxWorldSpaceDistance = std::numeric_limits<float>::max();
+		bool _sampleBothDirections = true;
+		bool _lateTemporalFiltering = true;
+		bool _enableFiltering = true;
+		bool _enableHierarchicalStepping = true;
+		float _thicknessHeuristicFactor = 0.15f;		// set to 1 to disable
+
+		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
+	};
 
 	class SSAOOperator : public std::enable_shared_from_this<SSAOOperator>
 	{

@@ -26,19 +26,19 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
     }
 #endif
 
-    static unsigned AsLightShapeId(LightSourceShape shape)
+    unsigned AsUniformShapeCode(LightSourceShape shape)
     {
         return unsigned(shape);
     }
 
-    CB_Light MakeLightUniforms(const StandardPositionalLight& light, const LightSourceOperatorDesc& operatorDesc)
+    CB_Light MakeLightUniforms(const StandardPositionalLight& light, unsigned shapeCode)
     {
         return CB_Light 
             {
                 light._position, light._cutoffRange, 
                 light._brightness, light._radii[0],
                 ExtractRight(light._orientation), light._radii[1],
-                ExtractForward(light._orientation), AsLightShapeId(operatorDesc._shape), 
+                ExtractForward(light._orientation), shapeCode, 
                 ExtractUp(light._orientation), 0
             };
     }

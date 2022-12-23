@@ -45,7 +45,8 @@ namespace ToolsRig
 
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext)
 		{
-			_lightScene->ConfigureParsingContext(parsingContext);
+			bool enableSSR = false;
+			_lightScene->ConfigureParsingContext(parsingContext, enableSSR);
 			if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow())
 				parsingContext.GetUniformDelegateManager()->BindFixedDescriptorSet(s_shadowTemplate, *dominantShadow->GetDescriptorSet());
 		}

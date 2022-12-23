@@ -20,6 +20,7 @@
 #include "../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
 #include "../../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../../RenderCore/LightingEngine/ShadowPreparer.h"
+#include "../../RenderCore/LightingEngine/ToneMapOperator.h"
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/CommonResources.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
@@ -350,7 +351,7 @@ namespace ToolsRig
 				TRY {
 					SceneEngine::MergedLightingEngineCfg lightingEngineCfg;
 					RenderCore::LightingEngine::AmbientLightOperatorDesc ambientOp;
-					ambientOp._ssrOperator = RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc{};
+					RenderCore::LightingEngine::ChainedOperatorTemplate<RenderCore::LightingEngine::ToneMapAcesOperatorDesc> techniqueOperators = {};
 					lightingEngineCfg.SetAmbientOperator(ambientOp);
 					envSettings->BindCfg(lightingEngineCfg);
 					std::future<std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique>> compiledLightingTechniqueFuture;
@@ -360,7 +361,7 @@ namespace ToolsRig
 							lightingApparatus,
 							lightingEngineCfg.GetLightOperators(),
 							lightingEngineCfg.GetShadowOperators(),
-							lightingEngineCfg.GetAmbientOperator(),
+							techniqueOperators,
 							targets, fbProps);
 					} else {
 						compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(

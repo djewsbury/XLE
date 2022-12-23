@@ -115,7 +115,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			std::vector<std::shared_ptr<ILightSceneComponent>> _boundComponents;
 			StandardPositionLightFlags::BitField _flags = 0;
 		};
-		std::vector<LightSet> _tileableLightSets;
+		std::vector<LightSet> _lightSets;
 
 		struct LightSetAndIndex { unsigned _lightSet, _lightIndex; };
 		std::vector<std::pair<LightSourceId, LightSetAndIndex>> _lookupTable;
