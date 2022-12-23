@@ -44,6 +44,7 @@ target_include_directories(ForeignMisc INTERFACE json/include)
 target_include_directories(ForeignMisc INTERFACE future/include)
 target_include_directories(ForeignMisc INTERFACE thousandeyes-futures/include)
 target_include_directories(ForeignMisc INTERFACE wildcards/include)
+target_include_directories(ForeignMisc INTERFACE ctti/include)
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(ForeignMisc PRIVATE -Wno-parentheses-equality -Wno-incompatible-pointer-types-discards-qualifiers)

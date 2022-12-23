@@ -145,7 +145,7 @@ namespace RenderCore { namespace Techniques
 						assert(dc._firstVertex == 0);
 						drawable._firstIndex = dc._firstIndex;
 						drawable._indexCount = dc._indexCount;
-						drawable._objectToWorldCount = objectToWorlds.size();
+						drawable._objectToWorldCount = (unsigned)objectToWorlds.size();
 						drawable._objectToWorlds = transformsPkt;
 						drawable._deformInstanceIdx = deformInstanceIdx;
 					}
@@ -266,7 +266,7 @@ namespace RenderCore { namespace Techniques
 						assert(dc._firstVertex == 0);
 						drawable._firstIndex = dc._firstIndex;
 						drawable._indexCount = dc._indexCount;
-						drawable._objectToWorldCount = objectToWorlds.size();
+						drawable._objectToWorldCount = (unsigned)objectToWorlds.size();
 						drawable._objectToWorlds = transformsPkt;
 						drawable._deformInstanceIdx = deformInstanceIdx;
 						drawable._viewMasks = viewMasksPkt;

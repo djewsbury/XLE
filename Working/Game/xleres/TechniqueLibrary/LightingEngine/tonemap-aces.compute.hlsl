@@ -55,5 +55,4 @@ RWTexture2D<float3> LDROutput;		// output could be >8 bit depth, of course, but 
 
 	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y)
 		LDROutput[pixelId] = saturate(LinearToSRGB_Formal(ToneMapAces(HDRInput[pixelId])));
-		// LDROutput[pixelId] = saturate(LinearToSRGB_Formal(HDRInput[pixelId]));
 }

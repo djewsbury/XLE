@@ -761,7 +761,7 @@ namespace RenderCore { namespace Techniques
 		_elementToObject.reserve(construction.GetElementCount());
 
 		for (auto ele:construction) {
-			_elementStarts.push_back(_modelJointIndexToMachineOutput.size());
+			_elementStarts.push_back((unsigned)_modelJointIndexToMachineOutput.size());
 
 			_elementToObject.push_back(AsFloat3x4(ele.GetElementToObject().value_or(Identity<Float4x4>())));
 			
