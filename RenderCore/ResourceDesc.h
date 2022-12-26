@@ -200,6 +200,8 @@ namespace RenderCore
 
                 SimultaneouslyStencilAttachment = 1<<8,
                 SimultaneouslyStencilReadOnly = 1<<9,
+
+                SimultaneouslyUnorderedAccess = 1<<10,
             };
 			using BitField = unsigned;
 		};

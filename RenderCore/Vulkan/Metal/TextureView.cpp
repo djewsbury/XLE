@@ -173,9 +173,10 @@ namespace RenderCore { namespace Metal_Vulkan
 
         // the logic below assumes that only one or zero "simultaneously..." flag is set
         auto simultaneousFlags = viewFlags & (
-                TextureViewDesc::Flags::SimultaneouslyColorAttachment|TextureViewDesc::Flags::SimultaneouslyColorReadOnly
-            |TextureViewDesc::Flags::SimultaneouslyDepthAttachment|TextureViewDesc::Flags::SimultaneouslyDepthReadOnly
-            |TextureViewDesc::Flags::SimultaneouslyStencilAttachment|TextureViewDesc::Flags::SimultaneouslyStencilReadOnly);
+              TextureViewDesc::Flags::SimultaneouslyColorAttachment|TextureViewDesc::Flags::SimultaneouslyColorReadOnly
+            | TextureViewDesc::Flags::SimultaneouslyDepthAttachment|TextureViewDesc::Flags::SimultaneouslyDepthReadOnly
+            | TextureViewDesc::Flags::SimultaneouslyStencilAttachment|TextureViewDesc::Flags::SimultaneouslyStencilReadOnly
+            | TextureViewDesc::Flags::SimultaneouslyUnorderedAccess);
         assert(popcount(simultaneousFlags) <= 1);
 
         if (immediateAspects & (VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT)) {
@@ -257,6 +258,8 @@ namespace RenderCore { namespace Metal_Vulkan
             if (imageLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && (viewFlags & TextureViewDesc::Flags::SimultaneouslyColorAttachment)) {
                 imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             } else if (imageLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && (viewFlags & TextureViewDesc::Flags::SimultaneouslyColorReadOnly)) {
+                imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            } else if (simultaneousFlags & TextureViewDesc::Flags::SimultaneouslyUnorderedAccess) {
                 imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             }
         }
