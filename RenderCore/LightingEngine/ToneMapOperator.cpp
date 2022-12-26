@@ -12,10 +12,13 @@
 #include "../Techniques/CommonResources.h"
 #include "../Techniques/PipelineOperators.h"
 #include "../Techniques/Services.h"
+#include "../Assets/PredefinedPipelineLayout.h"
 #include "../Metal/Resource.h"
 #include "../Metal/DeviceContext.h"
+#include "../Metal/InputLayout.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Continuation.h"
+#include "../../Assets/Assets.h"
 #include "../../xleres/FileList.h"
 
 using namespace Utility::Literals;
@@ -66,135 +69,122 @@ namespace RenderCore { namespace LightingEngine
 		auto mipChainTopWidth = fbProps._width>>1, mipChainTopHeight = fbProps._height>>1;
 
 		////////////////////////////////////////////////////////////
-
+		
 		{
-			const unsigned dispatchGroupWidth = 8;
-			const unsigned dispatchGroupHeight = 8;
-			VLA(const IResourceView*, views, 1+s_shaderMipChainUniformCount);
+			auto encoder = metalContext.BeginComputeEncoder(*_compiledPipelineLayout);
+			Metal::CapturedStates capturedStates;
+			encoder.BeginStateCapture(capturedStates);
+
+			// Set the uniforms once, and forget
+			// We just use push constants on a per-dispatch basis
+			VLA(const IResourceView*, views, 3+s_shaderMipChainUniformCount);
 			views[0] = &hdrInput;
-			unsigned c=0;
-			for (; c<_brightPassMipCountCount; ++c) views[1+c] = brightPassMipChainUAV[c];
-			auto* dummyUav = Techniques::Services::GetCommonResources()->_black2DSRV.get();
-			for (; c<s_shaderMipChainUniformCount; ++c) views[1+c] = dummyUav;
-
-			UniformsStream uniforms;
-			uniforms._resourceViews = MakeIteratorRange(views, views+1+s_shaderMipChainUniformCount);
-			_brightPass->Dispatch(
-				parsingContext,
-				(mipChainTopWidth + dispatchGroupWidth - 1) / dispatchGroupWidth,
-				(mipChainTopHeight + dispatchGroupHeight - 1) / dispatchGroupHeight,
-				1,
-				uniforms);
-		}
-
-		Metal::BarrierHelper(metalContext).Add(
-			*brightPassMipChainUAV[0]->GetResource(), TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
-			Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
-			Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
-
-		{
-			VLA(const IResourceView*, views, 2+s_shaderMipChainUniformCount);
-			views[0] = &brightPassMipChainSRV;
 			views[1] = _atomicCounterBufferView.get();
+			views[2] = &brightPassMipChainSRV;
 			unsigned c=0;
-			for (; c<_brightPassMipCountCount; ++c) views[2+c] = brightPassMipChainUAV[c];
+			for (; c<_brightPassMipCountCount; ++c) views[3+c] = brightPassMipChainUAV[c];
 			auto* dummyUav = Techniques::Services::GetCommonResources()->_black2DSRV.get();
-			for (; c<s_shaderMipChainUniformCount; ++c) views[2+c] = dummyUav;
-
-			// note -- thread group counts based on the size of the input texture, not any of the mip levels
-			const auto threadGroupX = (mipChainTopWidth+63)>>6, threadGroupY = (mipChainTopHeight+63)>>6;
+			for (; c<s_shaderMipChainUniformCount; ++c) views[3+c] = dummyUav;
 
 			UniformsStream uniforms;
-			uniforms._resourceViews = MakeIteratorRange(views, views+2+s_shaderMipChainUniformCount);
-			struct FastMipChain_ControlUniforms {
-				Float2 _reciprocalInputDims;
-				unsigned _dummy[2];
-				uint32_t _threadGroupCount;
-				unsigned _dummy2;
-				uint32_t _mipCount;
-				unsigned _dummy3;
-			} controlUniforms {
-				Float2 { 1.f/float(mipChainTopWidth), 1.f/float(mipChainTopHeight) },
-				{0,0},
-				threadGroupX * threadGroupY,
-				0,
-				_brightPassMipCountCount - 1,
-				0
-			};
-			UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(controlUniforms) };
-			uniforms._immediateData = immDatas;
-			_brightDownsample->Dispatch(
-				parsingContext,
-				threadGroupX, threadGroupY, 1,
+			uniforms._resourceViews = MakeIteratorRange(views, views+3+s_shaderMipChainUniformCount);
+			_brightPassBoundUniforms->ApplyLooseUniforms(
+				metalContext, encoder,
 				uniforms);
-		}
 
-		{
-			VLA(const IResourceView*, views, s_shaderMipChainUniformCount*2);
-			views[0] = &brightPassMipChainSRV;
-			unsigned c=0;
-			for (; c<_brightPassMipCountCount; ++c)
-				views[1+c] = brightPassMipChainUAV[c];
-			auto* dummyUav = Techniques::Services::GetCommonResources()->_black2DSRV.get();
-			for (; c<s_shaderMipChainUniformCount; ++c)
-				views[1+c] = dummyUav;
-
-			auto* mipChainResource = brightPassMipChainUAV[0]->GetResource().get();
-
-			for (unsigned pass=0; pass<_brightPassMipCountCount-1; ++pass) {
-				auto srcMip = _brightPassMipCountCount-1-pass;
-				auto dstMip = _brightPassMipCountCount-2-pass;
-
-				// there's a sequence of barriers as we walk up the mip chain
-				// we could potentially do this smarter if we built a system like ffx_spd, but going the other way
-				{
-					Metal::BarrierHelper barrierHelper{metalContext};
-					barrierHelper.Add(
-						*mipChainResource, TextureViewDesc::SubResourceRange{srcMip, 1}, TextureViewDesc::All,
-						Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
-						Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
-					if (dstMip == 0)
-						barrierHelper.Add(
-							*mipChainResource, TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
-							Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute},
-							Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
-				}
-
+			{
 				const unsigned dispatchGroupWidth = 8;
 				const unsigned dispatchGroupHeight = 8;
-				auto topMipWidth = fbProps._width >> 1, topMipHeight = fbProps._height >> 1;
-				const auto
-					threadGroupX = ((topMipWidth>>dstMip)+dispatchGroupWidth)/dispatchGroupWidth,
-					threadGroupY = ((topMipHeight>>dstMip)+dispatchGroupHeight)/dispatchGroupHeight;
-
-				UniformsStream uniforms;
-				uniforms._resourceViews = MakeIteratorRange(views, views+2*s_shaderMipChainUniformCount);
-				struct ControlUniforms {
-					Float2 _reciprocalDstDims;
-					unsigned _dummy2[2];
-					UInt2 _threadGroupCount;
-					unsigned _mipIndex;
-					unsigned _dummy;
-				} controlUniforms {
-					Float2 { 1.f/float(topMipWidth>>dstMip), 1.f/float(topMipHeight>>dstMip) },
-					{0,0},
-					{ threadGroupX, threadGroupY },
-					dstMip,
-					0
-				};
-				UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(controlUniforms) };
-				uniforms._immediateData = immDatas;
-				_brightUpsample->Dispatch(
-					parsingContext,
-					threadGroupX, threadGroupY, 1,
-					uniforms);
+				encoder.Dispatch(
+					*_brightPass,
+					(mipChainTopWidth + dispatchGroupWidth - 1) / dispatchGroupWidth,
+					(mipChainTopHeight + dispatchGroupHeight - 1) / dispatchGroupHeight,
+					1);
 			}
 
-			// final map also shifted to ShaderResource
-			Metal::BarrierHelper{metalContext}.Add(
-				*mipChainResource, TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
+			Metal::BarrierHelper(metalContext).Add(
+				*brightPassMipChainUAV[0]->GetResource(), TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
 				Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
 				Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+
+			{
+				// note -- thread group counts based on the size of the input texture, not any of the mip levels
+				const auto threadGroupX = (mipChainTopWidth+63)>>6, threadGroupY = (mipChainTopHeight+63)>>6;
+				struct FastMipChain_ControlUniforms {
+					Float2 _reciprocalInputDims;
+					unsigned _dummy[2];
+					uint32_t _threadGroupCount;
+					unsigned _dummy2;
+					uint32_t _mipCount;
+					unsigned _dummy3;
+				} controlUniforms {
+					Float2 { 1.f/float(mipChainTopWidth), 1.f/float(mipChainTopHeight) },
+					{0,0},
+					threadGroupX * threadGroupY,
+					0,
+					_brightPassMipCountCount - 1,
+					0
+				};
+				encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(controlUniforms));
+				encoder.Dispatch(
+					*_brightDownsample,
+					threadGroupX, threadGroupY, 1);
+			}
+
+			{
+				auto* mipChainResource = brightPassMipChainUAV[0]->GetResource().get();
+
+				for (unsigned pass=0; pass<_brightPassMipCountCount-1; ++pass) {
+					auto srcMip = _brightPassMipCountCount-1-pass;
+					auto dstMip = _brightPassMipCountCount-2-pass;
+
+					// there's a sequence of barriers as we walk up the mip chain
+					// we could potentially do this smarter if we built a system like ffx_spd, but going the other way
+					{
+						Metal::BarrierHelper barrierHelper{metalContext};
+						barrierHelper.Add(
+							*mipChainResource, TextureViewDesc::SubResourceRange{srcMip, 1}, TextureViewDesc::All,
+							Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+							Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+						if (dstMip == 0)
+							barrierHelper.Add(
+								*mipChainResource, TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
+								Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute},
+								Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
+					}
+
+					const unsigned dispatchGroupWidth = 8;
+					const unsigned dispatchGroupHeight = 8;
+					auto topMipWidth = fbProps._width >> 1, topMipHeight = fbProps._height >> 1;
+					const auto
+						threadGroupX = ((topMipWidth>>dstMip)+dispatchGroupWidth)/dispatchGroupWidth,
+						threadGroupY = ((topMipHeight>>dstMip)+dispatchGroupHeight)/dispatchGroupHeight;
+
+					struct ControlUniforms {
+						Float2 _reciprocalDstDims;
+						unsigned _dummy2[2];
+						UInt2 _threadGroupCount;
+						unsigned _mipIndex;
+						unsigned _dummy;
+					} controlUniforms {
+						Float2 { 1.f/float(topMipWidth>>dstMip), 1.f/float(topMipHeight>>dstMip) },
+						{0,0},
+						{ threadGroupX, threadGroupY },
+						dstMip,
+						0
+					};
+					encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(controlUniforms));
+					encoder.Dispatch(
+						*_brightUpsample,
+						threadGroupX, threadGroupY, 1);
+				}
+
+				// final map also shifted to ShaderResource
+				Metal::BarrierHelper{metalContext}.Add(
+					*mipChainResource, TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
+					Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+					Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+			}
 		}
 
 		////////////////////////////////////////////////////////////
@@ -343,71 +333,95 @@ namespace RenderCore { namespace LightingEngine
 		//
 		// note -- we could consider having all of the shaders share a pipeline layout, and then
 		// just use a single BoundUniforms applied once
-		UniformsStreamInterface toneMapUsi;
-		toneMapUsi.BindResourceView(0, "HDRInput"_h);
-		toneMapUsi.BindResourceView(1, "LDROutput"_h);
-		toneMapUsi.BindResourceView(2, "Params"_h);
-		toneMapUsi.BindResourceView(3, "BrightPass"_h);
-		auto futureToneMap = Techniques::CreateComputeOperator(
-			_pool,
-			TONEMAP_ACES_COMPUTE_HLSL ":main",
-			ParameterBox{},
-			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-			toneMapUsi);
 
-		UniformsStreamInterface brightPassUsi;
-		brightPassUsi.BindResourceView(0, "HDRInput"_h);
-		for (unsigned c=0; c<s_shaderMipChainUniformCount; ++c)
-			brightPassUsi.BindResourceView(1+c, "MipChainUAV"_h+c);
-		auto futureBrightPass = Techniques::CreateComputeOperator(
-			_pool,
-			BLOOM_COMPUTE_HLSL ":BrightPassFilter",
-			ParameterBox{},
-			BLOOM_PIPELINE ":ComputeMain",
-			brightPassUsi);
-
-		UniformsStreamInterface downsampleUsi;
-		downsampleUsi.BindResourceView(0, "MipChainSRV"_h);
-		downsampleUsi.BindResourceView(1, "AtomicBuffer"_h);
-		for (unsigned c=0; c<s_shaderMipChainUniformCount; ++c)
-			downsampleUsi.BindResourceView(2+c, "MipChainUAV"_h+c);
-		downsampleUsi.BindImmediateData(0, "ControlUniforms"_h);
-		auto futureDownsample = Techniques::CreateComputeOperator(
-			_pool,
-			BLOOM_COMPUTE_HLSL ":FastMipChain",
-			ParameterBox{},
-			BLOOM_PIPELINE ":ComputeMain",
-			downsampleUsi);
-
-		UniformsStreamInterface upsampleUsi;
-		upsampleUsi.BindResourceView(0, "MipChainSRV"_h);
-		for (unsigned c=0; c<s_shaderMipChainUniformCount; ++c)
-			upsampleUsi.BindResourceView(1+c, "MipChainUAV"_h+c);
-		upsampleUsi.BindImmediateData(0, "ControlUniforms"_h);
-		auto futureUpsample = Techniques::CreateComputeOperator(
-			_pool,
-			BLOOM_COMPUTE_HLSL ":UpsampleStep",
-			ParameterBox{},
-			BLOOM_PIPELINE ":ComputeMain",
-			upsampleUsi);
-
-		::Assets::WhenAll(futureToneMap, futureBrightPass, futureDownsample, futureUpsample).ThenConstructToPromise(
+		auto pipelineLayout = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(BLOOM_PIPELINE ":ComputeMain");
+		::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
 			std::move(promise),
-			[strongThis=shared_from_this()](auto toneMap, auto brightPass, auto brightPassDownsample, auto brightPassUpsample) {
-				assert(strongThis->_secondStageConstructionState == 1);
-				strongThis->_toneMap = std::move(toneMap);
-				strongThis->_brightPass = std::move(brightPass);
-				strongThis->_brightDownsample = std::move(brightPassDownsample);
-				strongThis->_brightUpsample = std::move(brightPassUpsample);
-				::Assets::DependencyValidationMarker depVals[] {
-					strongThis->_toneMap->GetDependencyValidation(),
-					strongThis->_brightPass->GetDependencyValidation(),
-					strongThis->_brightDownsample->GetDependencyValidation(),
-					strongThis->_brightUpsample->GetDependencyValidation()
-				};
-				strongThis->_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
-				strongThis->_secondStageConstructionState = 2;
-				return strongThis;
+			[strongThis=shared_from_this()](auto&& promise, auto predefinedPipelineLayout)
+			{
+				TRY {
+					UniformsStreamInterface toneMapUsi;
+					toneMapUsi.BindResourceView(0, "HDRInput"_h);
+					toneMapUsi.BindResourceView(1, "LDROutput"_h);
+					toneMapUsi.BindResourceView(2, "Params"_h);
+					toneMapUsi.BindResourceView(3, "BrightPass"_h);
+					auto futureToneMap = Techniques::CreateComputeOperator(
+						strongThis->_pool,
+						TONEMAP_ACES_COMPUTE_HLSL ":main",
+						ParameterBox{},
+						GENERAL_OPERATOR_PIPELINE ":ComputeMain",
+						toneMapUsi);
+
+					auto& commonResources = *Techniques::Services::GetCommonResources();
+					auto compiledPipelineLayout = strongThis->_pool->GetDevice()->CreatePipelineLayout(
+						predefinedPipelineLayout->MakePipelineLayoutInitializer(Techniques::GetDefaultShaderLanguage(), &commonResources._samplerPool),
+						"tone-map-aces");
+
+					// We want to use an identical pipeline layout for all of the shader operators, and share
+					// uniform bindings for all of the bloom operators
+					// Since this is a little different, we'll forgo the IComputeShaderOperator object and
+					// just use the lower level PipelineCollection object
+
+					std::promise<Techniques::ComputePipelineAndLayout> promisedBrightPass;
+					auto futureBrightPass = promisedBrightPass.get_future();
+					strongThis->_pool->CreateComputePipeline(
+						std::move(promisedBrightPass),
+						compiledPipelineLayout,
+						BLOOM_COMPUTE_HLSL ":BrightPassFilter",
+						{});
+
+					std::promise<Techniques::ComputePipelineAndLayout> promisedDownsample;
+					auto futureDownsample = promisedDownsample.get_future();
+					strongThis->_pool->CreateComputePipeline(
+						std::move(promisedDownsample),
+						compiledPipelineLayout,
+						BLOOM_COMPUTE_HLSL ":FastMipChain",
+						{});
+
+					std::promise<Techniques::ComputePipelineAndLayout> promisedUpsample;
+					auto futureUpsample = promisedUpsample.get_future();
+					strongThis->_pool->CreateComputePipeline(
+						std::move(promisedUpsample),
+						compiledPipelineLayout,
+						BLOOM_COMPUTE_HLSL ":UpsampleStep",
+						{});
+
+					UniformsStreamInterface brightPassUsi;
+					brightPassUsi.BindResourceView(0, "HDRInput"_h);
+					brightPassUsi.BindResourceView(1, "AtomicBuffer"_h);
+					brightPassUsi.BindResourceView(2, "MipChainSRV"_h);
+					for (unsigned c=0; c<s_shaderMipChainUniformCount; ++c)
+						brightPassUsi.BindResourceView(3+c, "MipChainUAV"_h+c);
+					UniformsStreamInterface usi2;
+					usi2.BindImmediateData(0, "ControlUniforms"_h);
+					auto brightPassBoundUniforms = std::make_shared<Metal::BoundUniforms>(compiledPipelineLayout, brightPassUsi, usi2);
+
+					::Assets::WhenAll(std::move(futureToneMap), std::move(futureBrightPass), std::move(futureDownsample), std::move(futureUpsample)).ThenConstructToPromise(
+						std::move(promise),
+						[strongThis, compiledPipelineLayout, brightPassBoundUniforms, pipelineLayoutDepVal=predefinedPipelineLayout->GetDependencyValidation()]
+						(auto toneMap, auto brightPass, auto brightPassDownsample, auto brightPassUpsample) mutable
+						{
+							assert(strongThis->_secondStageConstructionState == 1);
+							strongThis->_toneMap = std::move(toneMap);
+							strongThis->_brightPass = std::move(brightPass._pipeline);
+							strongThis->_brightDownsample = std::move(brightPassDownsample._pipeline);
+							strongThis->_brightUpsample = std::move(brightPassUpsample._pipeline);
+							strongThis->_compiledPipelineLayout = std::move(compiledPipelineLayout);
+							strongThis->_brightPassBoundUniforms = std::move(brightPassBoundUniforms);
+							::Assets::DependencyValidationMarker depVals[] {
+								strongThis->_toneMap->GetDependencyValidation(),
+								brightPass.GetDependencyValidation(),
+								brightPassDownsample.GetDependencyValidation(),
+								brightPassUpsample.GetDependencyValidation(),
+								pipelineLayoutDepVal
+							};
+							strongThis->_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
+							strongThis->_secondStageConstructionState = 2;
+							return strongThis;
+						});
+				} CATCH(...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
 			});
 	}
 

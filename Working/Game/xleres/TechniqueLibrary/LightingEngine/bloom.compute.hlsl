@@ -4,10 +4,10 @@
 
 #include "xleres/Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
 
-Texture2D<float3>		HDRInput;
-RWTexture2D<float3>		MipChainUAV[6];
-Texture2D<float3>		MipChainSRV;
-SamplerState 			BilinearClamp;
+Texture2D<float3>		HDRInput : register(t0, space0);
+RWTexture2D<float3>		MipChainUAV[6] : register(u1, space0);
+Texture2D<float3>		MipChainSRV : register(t2, space0);
+SamplerState 			BilinearClamp : register(s4, space0);
 
 float CalculateLuminance(float3 color)
 {
@@ -143,7 +143,7 @@ uint2 UpsampleStep_GetThreadGroupCount() { return asuint(ControlUniforms.B.xy); 
 
 #define SPD_LINEAR_SAMPLER
 
-globallycoherent RWBuffer<uint> AtomicBuffer;		// global atomic counter - MUST be initialized to 0
+globallycoherent RWBuffer<uint> AtomicBuffer : register(u3, space0);		// global atomic counter - MUST be initialized to 0
 
 float2 FastMipChain_GetReciprocalInputDims() { return ControlUniforms.A.xy; }
 uint FastMipChain_GetMipCount() { return ControlUniforms.B.z; }

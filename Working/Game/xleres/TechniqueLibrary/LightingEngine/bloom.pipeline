@@ -1,7 +1,12 @@
 
-DescriptorSet General
+DescriptorSet Bloom
 {
-	Sampler BilinearClamp
+	SampledTexture				HDRInput;				// 0
+	UnorderedAccessTexture		MipChainUAV[6];			// 1
+	SampledTexture				MipChainSRV;			// 2
+	StorageTexelBuffer 			AtomicBuffer;			// 3
+
+	Sampler BilinearClamp								// 4
 	{
 		Filter = Bilinear,
 		AddressU = Clamp,
@@ -11,6 +16,12 @@ DescriptorSet General
 
 PipelineLayout ComputeMain
 {
-	AutoDescriptorSet General;
+	ComputeDescriptorSet Bloom;
+
+	CSPushConstants ControlUniforms
+	{
+		float4 A;
+		uint4 B;
+	};
 };
 

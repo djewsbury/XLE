@@ -4,12 +4,13 @@
 
 #include "StandardLightScene.h"
 #include "../Format.h"
+#include "../Metal/Forward.h"		// for Metal::GraphicsPipeline
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/MemoryUtils.h"
 #include <memory>
 #include <future>
 
-namespace RenderCore { class IResourceView; class IDevice; class FrameBufferProperties; class IThreadContext; }
+namespace RenderCore { class IResourceView; class IDevice; class FrameBufferProperties; class IThreadContext; class ICompiledPipelineLayout; }
 namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class IShaderOperator; class PipelineCollection; class ParsingContext; struct FrameBufferTarget; }}
 namespace RenderCore { namespace LightingEngine 
 {
@@ -59,9 +60,11 @@ namespace RenderCore { namespace LightingEngine
 		~ToneMapAcesOperator();
 	private:
 		std::shared_ptr<Techniques::IComputeShaderOperator> _toneMap;
-		std::shared_ptr<Techniques::IComputeShaderOperator> _brightPass;
-		std::shared_ptr<Techniques::IComputeShaderOperator> _brightDownsample;
-		std::shared_ptr<Techniques::IComputeShaderOperator> _brightUpsample;
+		std::shared_ptr<Metal::ComputePipeline> _brightPass;
+		std::shared_ptr<Metal::ComputePipeline> _brightDownsample;
+		std::shared_ptr<Metal::ComputePipeline> _brightUpsample;
+		std::shared_ptr<Metal::BoundUniforms> _brightPassBoundUniforms;
+		std::shared_ptr<ICompiledPipelineLayout> _compiledPipelineLayout;
 		std::shared_ptr<IResourceView> _params[3];
 		std::shared_ptr<IResourceView> _atomicCounterBufferView;
 		unsigned _paramsBufferCounter = 0;
