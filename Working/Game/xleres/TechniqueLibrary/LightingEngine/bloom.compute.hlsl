@@ -4,9 +4,8 @@
 
 #include "xleres/Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
 
-Texture2D<float3>		InputTexture;
-RWTexture2D<float3>		OutputLuminance;
-RWTexture2D<float3>		MipChainUAV[5];
+Texture2D<float3>		HDRInput;
+RWTexture2D<float3>		MipChainUAV[6];
 Texture2D<float3>		MipChainSRV;
 SamplerState 			BilinearClamp;
 
@@ -55,20 +54,20 @@ float3 BrightPassScale(float3 input)
 {
 	// Before we do any blurring, we need to find and separate the parts of the image
 	// that are bright enough to bloom
-	// We're expecting InputTexture & OutputTexture to be different resolutions here.
+	// We're expecting HDRInput & OutputTexture to be different resolutions here.
 	// we'll assume quartering for simplicity
 
 	uint2 textureDims;
-	OutputLuminance.GetDimensions(textureDims.x, textureDims.y);
+	MipChainUAV[0].GetDimensions(textureDims.x, textureDims.y);
 
 	uint2 threadGroupCounts = uint2((textureDims.x+8-1)/8, (textureDims.y+8-1)/8);
 	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
 
 	uint2 twiddler = uint2(1,0);
-	float3 A = InputTexture.Load(uint3(pixelId.xy*2+twiddler.yy, 0)).rgb;
-	float3 B = InputTexture.Load(uint3(pixelId.xy*2+twiddler.xy, 0)).rgb;
-	float3 C = InputTexture.Load(uint3(pixelId.xy*2+twiddler.yx, 0)).rgb;
-	float3 D = InputTexture.Load(uint3(pixelId.xy*2+twiddler.xx, 0)).rgb;
+	float3 A = HDRInput.Load(uint3(pixelId.xy*2+twiddler.yy, 0)).rgb;
+	float3 B = HDRInput.Load(uint3(pixelId.xy*2+twiddler.xy, 0)).rgb;
+	float3 C = HDRInput.Load(uint3(pixelId.xy*2+twiddler.yx, 0)).rgb;
+	float3 D = HDRInput.Load(uint3(pixelId.xy*2+twiddler.xx, 0)).rgb;
 	
 	float lA = CalculateLuminance(A);
 	float lB = CalculateLuminance(B);
@@ -105,7 +104,7 @@ float3 BrightPassScale(float3 input)
 			) / 4.0;
 	#endif
 
-	OutputLuminance[pixelId] = outputColor;
+	MipChainUAV[0][pixelId] = outputColor;
 }
 
 [[vk::push_constant]] struct ControlUniformsStruct
@@ -135,7 +134,7 @@ uint2 UpsampleStep_GetThreadGroupCount() { return asuint(ControlUniforms.B.xy); 
  		+ MipChainSRV.SampleLevel(BilinearClamp, baseSourceTC + twiddler.xy, mipIndex+1).rgb
  		;
 
-	MipChainUAV[mipIndex][pixelId] = filteredSample.rgb * 0.25;
+	MipChainUAV[mipIndex][pixelId] += filteredSample.rgb * 0.25;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -144,7 +143,7 @@ uint2 UpsampleStep_GetThreadGroupCount() { return asuint(ControlUniforms.B.xy); 
 
 #define SPD_LINEAR_SAMPLER
 
-RWBuffer<uint> AtomicBuffer;		// global atomic counter - MUST be initialized to 0
+globallycoherent RWBuffer<uint> AtomicBuffer;		// global atomic counter - MUST be initialized to 0
 
 float2 FastMipChain_GetReciprocalInputDims() { return ControlUniforms.A.xy; }
 uint FastMipChain_GetMipCount() { return ControlUniforms.B.z; }
@@ -171,14 +170,14 @@ uint FastMipChain_GetThreadGroupCount() { return ControlUniforms.B.x; }
 	AF4 SpdLoadSourceImage(ASU2 p)
 	{
 		AF2 textureCoord = p * FastMipChain_GetReciprocalInputDims() + FastMipChain_GetReciprocalInputDims();
-		return float4(InputTexture.SampleLevel(BilinearClamp, textureCoord, 0).rgb, 1);
+		return float4(MipChainSRV.SampleLevel(BilinearClamp, textureCoord, 0).rgb, 1);
 	}
 
 	// SpdLoad() takes a 32-bit signed integer 2D coordinate and loads color.
 	// Loads the 5th mip level, each value is computed by a different thread group
 	// last thread group will access all its elements and compute the subsequent mips
-	AF4 SpdLoad(ASU2 tex){return AF4(MipChainUAV[5][tex], 1);}
-	void SpdStore(ASU2 pix, AF4 value, AU1 index){MipChainUAV[index][pix] = value;}
+	AF4 SpdLoad(ASU2 tex){return AF4(MipChainUAV[1+5][tex], 1);}
+	void SpdStore(ASU2 pix, AF4 value, AU1 index){MipChainUAV[1+index][pix] = value;}
 
 	// Define the LDS load and store functions
 	AF4 SpdLoadIntermediate(AU1 x, AU1 y){return spd_intermediate[x][y];}
@@ -194,16 +193,16 @@ uint FastMipChain_GetThreadGroupCount() { return ControlUniforms.B.x; }
 
 	AH4 SpdLoadSourceImageH(ASU2 p){
 		AF2 textureCoord = p * FastMipChain_GetReciprocalInputDims() + FastMipChain_GetReciprocalInputDims();
-		return AH4(InputTexture.SampleLevel(BilinearClamp, textureCoord, 0).rgb, 1);
+		return AH4(MipChainSRV.SampleLevel(BilinearClamp, textureCoord, 0).rgb, 1);
 	}
 
 	// SpdLoadH() takes a 32-bit signed integer 2D coordinate and loads color.
 	// Loads the 5th mip level, each value is computed by a different thread group
 	// last thread group will access all its elements and compute the subsequent mips
-	AH4 SpdLoadH(ASU2 tex){return AH4(MipChainUAV[5][tex].rgb, 1);}
+	AH4 SpdLoadH(ASU2 tex){return AH4(MipChainUAV[1+5][tex].rgb, 1);}
 
 	// Define the store function
-	void SpdStoreH(ASU2 pix, AH4 value, AU1 index){MipChainUAV[index][pix] = AF4(value);}
+	void SpdStoreH(ASU2 pix, AH4 value, AU1 index){MipChainUAV[1+index][pix] = AF4(value);}
 
 	// Define the lds load and store functions
 	AH4 SpdLoadIntermediateH(AU1 x, AU1 y){return spd_intermediate[x][y];}

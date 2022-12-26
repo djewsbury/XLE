@@ -28,7 +28,7 @@ namespace RenderCore { namespace LightingEngine
 		Float3x4 _postToneScale;
 	};
 
-	static const unsigned s_shaderMipChainUniformCount = 5;
+	static const unsigned s_shaderMipChainUniformCount = 6;
 
 	static Float4x4 BuildPreToneScaleTransform();
 	static Float4x4 BuildPostToneScaleTransform_SRGB();
@@ -36,7 +36,6 @@ namespace RenderCore { namespace LightingEngine
 	void ToneMapAcesOperator::Execute(
 		Techniques::ParsingContext& parsingContext,
 		IResourceView& ldrOutput, IResourceView& hdrInput,
-		IResourceView& brightPassTempUAV, IResourceView& brightPassTempSRV,
 		IteratorRange<IResourceView const*const*> brightPassMipChainUAV,
 		IResourceView& brightPassMipChainSRV)
 	{
@@ -64,39 +63,46 @@ namespace RenderCore { namespace LightingEngine
 		assert(_brightPassMipCountCount <= s_shaderMipChainUniformCount);
 		assert(brightPassMipChainUAV.size() == _brightPassMipCountCount);
 
-		auto brightPassTempWidth = fbProps._width>>1, brightPassTempHeight = fbProps._height>>1;
+		auto mipChainTopWidth = fbProps._width>>1, mipChainTopHeight = fbProps._height>>1;
 
 		////////////////////////////////////////////////////////////
 
 		{
 			const unsigned dispatchGroupWidth = 8;
 			const unsigned dispatchGroupHeight = 8;
-			ResourceViewStream uniforms {
-				hdrInput, brightPassTempUAV
-			};
+			VLA(const IResourceView*, views, 1+s_shaderMipChainUniformCount);
+			views[0] = &hdrInput;
+			unsigned c=0;
+			for (; c<_brightPassMipCountCount; ++c) views[1+c] = brightPassMipChainUAV[c];
+			auto* dummyUav = Techniques::Services::GetCommonResources()->_black2DSRV.get();
+			for (; c<s_shaderMipChainUniformCount; ++c) views[1+c] = dummyUav;
+
+			UniformsStream uniforms;
+			uniforms._resourceViews = MakeIteratorRange(views, views+1+s_shaderMipChainUniformCount);
 			_brightPass->Dispatch(
 				parsingContext,
-				(brightPassTempWidth + dispatchGroupWidth - 1) / dispatchGroupWidth,
-				(brightPassTempHeight + dispatchGroupHeight - 1) / dispatchGroupHeight,
+				(mipChainTopWidth + dispatchGroupWidth - 1) / dispatchGroupWidth,
+				(mipChainTopHeight + dispatchGroupHeight - 1) / dispatchGroupHeight,
 				1,
 				uniforms);
 		}
 
 		Metal::BarrierHelper(metalContext).Add(
-			*brightPassTempUAV.GetResource(),
+			*brightPassMipChainUAV[0]->GetResource(), TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
 			Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
 			Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
 
 		{
 			VLA(const IResourceView*, views, 2+s_shaderMipChainUniformCount);
-			views[0] = &brightPassTempSRV;
+			views[0] = &brightPassMipChainSRV;
 			views[1] = _atomicCounterBufferView.get();
 			unsigned c=0;
 			for (; c<_brightPassMipCountCount; ++c) views[2+c] = brightPassMipChainUAV[c];
 			auto* dummyUav = Techniques::Services::GetCommonResources()->_black2DSRV.get();
 			for (; c<s_shaderMipChainUniformCount; ++c) views[2+c] = dummyUav;
 
-			const auto threadGroupX = (brightPassTempWidth+63)>>6, threadGroupY = (brightPassTempHeight+63)>>6;
+			// note -- thread group counts based on the size of the input texture, not any of the mip levels
+			const auto threadGroupX = (mipChainTopWidth+63)>>6, threadGroupY = (mipChainTopHeight+63)>>6;
 
 			UniformsStream uniforms;
 			uniforms._resourceViews = MakeIteratorRange(views, views+2+s_shaderMipChainUniformCount);
@@ -108,11 +114,11 @@ namespace RenderCore { namespace LightingEngine
 				uint32_t _mipCount;
 				unsigned _dummy3;
 			} controlUniforms {
-				Float2 { 1.f/float(brightPassTempWidth), 1.f/float(brightPassTempHeight) },
+				Float2 { 1.f/float(mipChainTopWidth), 1.f/float(mipChainTopHeight) },
 				{0,0},
 				threadGroupX * threadGroupY,
 				0,
-				_brightPassMipCountCount,
+				_brightPassMipCountCount - 1,
 				0
 			};
 			UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(controlUniforms) };
@@ -124,9 +130,6 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		{
-			auto topMipWidth = fbProps._width >> 2, topMipHeight = fbProps._height >> 2;
-			const unsigned dispatchGroupWidth = 8;
-			const unsigned dispatchGroupHeight = 8;
 			VLA(const IResourceView*, views, s_shaderMipChainUniformCount*2);
 			views[0] = &brightPassMipChainSRV;
 			unsigned c=0;
@@ -143,11 +146,23 @@ namespace RenderCore { namespace LightingEngine
 				auto dstMip = _brightPassMipCountCount-2-pass;
 
 				// there's a sequence of barriers as we walk up the mip chain
-				Metal::BarrierHelper{metalContext}.Add(
-					*mipChainResource, TextureViewDesc::SubResourceRange{srcMip, 1}, TextureViewDesc::All,
-					Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
-					Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+				// we could potentially do this smarter if we built a system like ffx_spd, but going the other way
+				{
+					Metal::BarrierHelper barrierHelper{metalContext};
+					barrierHelper.Add(
+						*mipChainResource, TextureViewDesc::SubResourceRange{srcMip, 1}, TextureViewDesc::All,
+						Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+						Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+					if (dstMip == 0)
+						barrierHelper.Add(
+							*mipChainResource, TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
+							Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute},
+							Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
+				}
 
+				const unsigned dispatchGroupWidth = 8;
+				const unsigned dispatchGroupHeight = 8;
+				auto topMipWidth = fbProps._width >> 1, topMipHeight = fbProps._height >> 1;
 				const auto
 					threadGroupX = ((topMipWidth>>dstMip)+dispatchGroupWidth)/dispatchGroupWidth,
 					threadGroupY = ((topMipHeight>>dstMip)+dispatchGroupHeight)/dispatchGroupHeight;
@@ -212,19 +227,18 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState().FinalState(BindFlag::RenderTarget), BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard());
-		auto brightPassTempAttachment = result.DefineAttachment("brightpass-temp"_h).NoInitialState().Discard();
-		spDesc.AppendNonFrameBufferAttachmentView(brightPassTempAttachment, BindFlag::UnorderedAccess);
-		spDesc.AppendNonFrameBufferAttachmentView(brightPassTempAttachment, BindFlag::ShaderResource);
-		auto brightPassMipChain = result.DefineAttachment("brightpass-mip-chain"_h).NoInitialState().Discard();
+		auto brightPassMipChain = result.DefineAttachment("brightpass-working"_h).NoInitialState().Discard();
+		{
+			TextureViewDesc view;
+			// view._flags |= TextureViewDesc::Flags::SimultaneouslyUnorderedAccess;
+			spDesc.AppendNonFrameBufferAttachmentView(brightPassMipChain, BindFlag::ShaderResource, view);
+		}
 		for (unsigned c=0; c<_brightPassMipCountCount; ++c) {
 			TextureViewDesc view;
 			view._mipRange._min = c;
 			view._mipRange._count = 1;
 			spDesc.AppendNonFrameBufferAttachmentView(brightPassMipChain, BindFlag::UnorderedAccess, view);
 		}
-		TextureViewDesc view;
-		// view._flags |= TextureViewDesc::Flags::SimultaneouslyUnorderedAccess;
-		spDesc.AppendNonFrameBufferAttachmentView(brightPassMipChain, BindFlag::ShaderResource, view);
 		spDesc.SetName("tone-map-aces-operator");
 
 		result.AddSubpass(
@@ -232,14 +246,12 @@ namespace RenderCore { namespace LightingEngine
 			[op=this](LightingTechniqueIterator& iterator) {
 				auto& ldrOutput = *iterator._rpi.GetNonFrameBufferAttachmentView(0);
 				auto& hdrInput = *iterator._rpi.GetNonFrameBufferAttachmentView(1);
-				auto& brightPassTempUAV = *iterator._rpi.GetNonFrameBufferAttachmentView(2);
-				auto& brightPassTempSRV = *iterator._rpi.GetNonFrameBufferAttachmentView(3);
+				auto& brightPassMipChainSRV = *iterator._rpi.GetNonFrameBufferAttachmentView(2);
 
 				assert(op->_brightPassMipCountCount);
 				VLA(const IResourceView*, brightPassMipChainUAV, op->_brightPassMipCountCount);
 				for (unsigned c=0; c<op->_brightPassMipCountCount; ++c)
-					brightPassMipChainUAV[c] = iterator._rpi.GetNonFrameBufferAttachmentView(4+c).get();
-				auto& brightPassMipChainSRV = *iterator._rpi.GetNonFrameBufferAttachmentView(4+op->_brightPassMipCountCount);
+					brightPassMipChainUAV[c] = iterator._rpi.GetNonFrameBufferAttachmentView(3+c).get();
 
 				iterator._rpi.AutoNonFrameBufferBarrier({
 					{1, BindFlag::ShaderResource, ShaderStage::Compute}
@@ -247,12 +259,11 @@ namespace RenderCore { namespace LightingEngine
 				{
 					Metal::BarrierHelper barrierHelper{iterator._parsingContext->GetThreadContext()};
 					barrierHelper.Add(*ldrOutput.GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
-					barrierHelper.Add(*brightPassTempUAV.GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
 					barrierHelper.Add(*brightPassMipChainUAV[0]->GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
 				}
 				
 				op->Execute(
-					*iterator._parsingContext, ldrOutput, hdrInput, brightPassTempUAV, brightPassTempSRV,
+					*iterator._parsingContext, ldrOutput, hdrInput,
 					MakeIteratorRange(brightPassMipChainUAV, brightPassMipChainUAV+op->_brightPassMipCountCount),
 					brightPassMipChainSRV);
 
@@ -265,7 +276,7 @@ namespace RenderCore { namespace LightingEngine
 	void ToneMapAcesOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext)
 	{
 		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
-		_brightPassMipCountCount = IntegerLog2(std::max(fbSize[0], fbSize[1])) - 2;
+		_brightPassMipCountCount = IntegerLog2(std::max(fbSize[0], fbSize[1])) - 1;
 		_brightPassMipCountCount = std::min(_brightPassMipCountCount, s_shaderMipChainUniformCount);		// Only need to so far
 		Techniques::PreregisteredAttachment attachments[] {
 			Techniques::PreregisteredAttachment {
@@ -276,18 +287,11 @@ namespace RenderCore { namespace LightingEngine
 				"color-hdr"
 			},
 			Techniques::PreregisteredAttachment {
-				"brightpass-temp"_h,
+				"brightpass-working"_h,
 				CreateDesc(
 					BindFlag::UnorderedAccess | BindFlag::ShaderResource,
-					TextureDesc::Plain2D(fbSize[0]>>1, fbSize[1]>>1, Format::B8G8R8A8_UNORM)),
-				"brightpass-temp"
-			},
-			Techniques::PreregisteredAttachment {
-				"brightpass-mip-chain"_h,
-				CreateDesc(
-					BindFlag::UnorderedAccess | BindFlag::ShaderResource,
-					TextureDesc::Plain2D(fbSize[0]>>2, fbSize[1]>>2, Format::B8G8R8A8_UNORM, _brightPassMipCountCount)),
-				"brightpass-mip-chain"
+					TextureDesc::Plain2D(fbSize[0]>>1, fbSize[1]>>1, Format::B8G8R8A8_UNORM, _brightPassMipCountCount)),
+				"brightpass-working"
 			}
 		};
 		for (const auto& a:attachments)
@@ -352,8 +356,9 @@ namespace RenderCore { namespace LightingEngine
 			toneMapUsi);
 
 		UniformsStreamInterface brightPassUsi;
-		brightPassUsi.BindResourceView(0, "InputTexture"_h);
-		brightPassUsi.BindResourceView(1, "OutputLuminance"_h);
+		brightPassUsi.BindResourceView(0, "HDRInput"_h);
+		for (unsigned c=0; c<s_shaderMipChainUniformCount; ++c)
+			brightPassUsi.BindResourceView(1+c, "MipChainUAV"_h+c);
 		auto futureBrightPass = Techniques::CreateComputeOperator(
 			_pool,
 			BLOOM_COMPUTE_HLSL ":BrightPassFilter",
@@ -362,7 +367,7 @@ namespace RenderCore { namespace LightingEngine
 			brightPassUsi);
 
 		UniformsStreamInterface downsampleUsi;
-		downsampleUsi.BindResourceView(0, "InputTexture"_h);
+		downsampleUsi.BindResourceView(0, "MipChainSRV"_h);
 		downsampleUsi.BindResourceView(1, "AtomicBuffer"_h);
 		for (unsigned c=0; c<s_shaderMipChainUniformCount; ++c)
 			downsampleUsi.BindResourceView(2+c, "MipChainUAV"_h+c);

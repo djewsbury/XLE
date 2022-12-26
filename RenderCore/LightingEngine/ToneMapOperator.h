@@ -40,7 +40,6 @@ namespace RenderCore { namespace LightingEngine
 		void Execute(
 			Techniques::ParsingContext& parsingContext,
 			IResourceView& ldrOutput, IResourceView& hdrInput,
-			IResourceView& brightPassTempUAV, IResourceView& brightPassTempSRV, 
 			IteratorRange<IResourceView const*const*> brightPassMipChainUAV,
 			IResourceView& brightPassMipChainSRV);
 
