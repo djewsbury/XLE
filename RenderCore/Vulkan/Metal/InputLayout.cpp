@@ -885,16 +885,47 @@ namespace RenderCore { namespace Metal_Vulkan
 
 						unsigned inputSlot = ~0u, groupIdx = ~0u;
 						UniformStreamType bindingType = UniformStreamType::None;
-						std::tie(bindingType, groupIdx, inputSlot) = FindBinding(_looseUniforms, bindingName);
 
-						if (bindingType == UniformStreamType::ResourceView || bindingType == UniformStreamType::ImmediateData || bindingType == UniformStreamType::Sampler) {
-							assert(SlotTypeCompatibleWithBinding(bindingType, descSet._signature._slots[slotIdx]._type));
-							AddLooseUniformBinding(
-								bindingType,
-								descSetIdx, slotIdx,
-								groupIdx, inputSlot, ShaderStageMaskForPipelineType(descSet._pipelineType),
-								ProgressiveDescriptorSetBuilder::ResourceDims::Unknown,
-								"pipeline-layout-binding");
+						if (descSet._signature._slots[slotIdx]._count <= 1) {
+							std::tie(bindingType, groupIdx, inputSlot) = FindBinding(_looseUniforms, bindingName);
+
+							if (bindingType == UniformStreamType::ResourceView || bindingType == UniformStreamType::ImmediateData || bindingType == UniformStreamType::Sampler) {
+								assert(SlotTypeCompatibleWithBinding(bindingType, descSet._signature._slots[slotIdx]._type));
+								AddLooseUniformBinding(
+									bindingType,
+									descSetIdx, slotIdx,
+									groupIdx, inputSlot, ShaderStageMaskForPipelineType(descSet._pipelineType),
+									ProgressiveDescriptorSetBuilder::ResourceDims::Unknown,
+									"pipeline-layout-binding");
+							}
+						} else {
+							auto eleCount = descSet._signature._slots[slotIdx]._count;
+							bool foundBinding = false;
+							VLA(unsigned, inputSlots, eleCount);
+							for (unsigned c=0; c<eleCount; ++c) inputSlots[c] = ~0u;
+							for (unsigned c=0; c<eleCount; ++c) {
+								unsigned eleGroupIdx = ~0u;
+								UniformStreamType eleBindingType = UniformStreamType::None;
+								std::tie(eleBindingType, eleGroupIdx, inputSlot) = FindBinding(_looseUniforms, bindingName+c);
+								if (eleBindingType != UniformStreamType::None) {
+									if (groupIdx != ~0u && eleGroupIdx != groupIdx)
+										Throw(std::runtime_error("Array elements for shader input split across multiple BoundUniforms groups (variable: " + std::string{"pipeline-layout-binding"} + "). This is not supported, elements for the same array must be in the same input group."));
+									if (bindingType != UniformStreamType::None && eleBindingType != bindingType)
+										Throw(std::runtime_error("Array elements for shader input given with diferent types (variable: " + std::string{"pipeline-layout-binding"} + "). This is not supported, elements for the same array must have the same type."));
+									groupIdx = eleGroupIdx;
+									bindingType = eleBindingType;
+									inputSlots[c] = inputSlot;
+									foundBinding = true;
+								}
+							}
+
+							if (foundBinding) {
+								AddLooseUniformArrayBinding(
+									bindingType,
+									descSetIdx, slotIdx,
+									groupIdx, MakeIteratorRange(inputSlots, &inputSlots[eleCount]), ShaderStageMaskForPipelineType(descSet._pipelineType),
+									"pipeline-layout-binding");
+							}
 						}
 					}
 				} else {
