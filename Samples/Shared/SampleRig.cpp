@@ -54,9 +54,9 @@ namespace Sample
         auto osWindow = std::make_unique<PlatformRig::Window>();
         if (config._initialWindowSize)
             osWindow->Resize((*config._initialWindowSize)[0], (*config._initialWindowSize)[1]);
-        if (auto* vulkanInstance = (RenderCore::IAPIInstanceVulkan*)renderAPI->QueryInterface(typeid(RenderCore::IAPIInstanceVulkan).hash_code())) {
+        if (auto* vulkanInstance = query_interface_cast<RenderCore::IAPIInstanceVulkan*>(renderAPI.get())) {
             Log(Verbose) << "-------------- vulkan instance --------------" << std::endl;
-            Log(Verbose) << vulkanInstance->LogInstance() << std::endl;
+            Log(Verbose) << vulkanInstance->LogInstance(osWindow->GetUnderlyingHandle()) << std::endl;
 
             auto count = renderAPI->GetDeviceConfigurationCount();
             for (unsigned c=0; c<count; ++c) {

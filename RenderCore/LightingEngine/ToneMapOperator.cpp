@@ -131,60 +131,58 @@ namespace RenderCore { namespace LightingEngine
 					threadGroupX, threadGroupY, 1);
 			}
 
-			{
-				auto* mipChainResource = brightPassMipChainUAV[0]->GetResource().get();
+			auto* mipChainResource = brightPassMipChainUAV[0]->GetResource().get();
 
-				for (unsigned pass=0; pass<_brightPassMipCountCount-1; ++pass) {
-					auto srcMip = _brightPassMipCountCount-1-pass;
-					auto dstMip = _brightPassMipCountCount-2-pass;
+			for (unsigned pass=0; pass<_brightPassMipCountCount-1; ++pass) {
+				auto srcMip = _brightPassMipCountCount-1-pass;
+				auto dstMip = _brightPassMipCountCount-2-pass;
 
-					// there's a sequence of barriers as we walk up the mip chain
-					// we could potentially do this smarter if we built a system like ffx_spd, but going the other way
-					{
-						Metal::BarrierHelper barrierHelper{metalContext};
+				// there's a sequence of barriers as we walk up the mip chain
+				// we could potentially do this smarter if we built a system like ffx_spd, but going the other way
+				{
+					Metal::BarrierHelper barrierHelper{metalContext};
+					barrierHelper.Add(
+						*mipChainResource, TextureViewDesc::SubResourceRange{srcMip, 1}, TextureViewDesc::All,
+						Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+						Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+					if (dstMip == 0)
 						barrierHelper.Add(
-							*mipChainResource, TextureViewDesc::SubResourceRange{srcMip, 1}, TextureViewDesc::All,
-							Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
-							Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
-						if (dstMip == 0)
-							barrierHelper.Add(
-								*mipChainResource, TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
-								Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute},
-								Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
-					}
-
-					const unsigned dispatchGroupWidth = 8;
-					const unsigned dispatchGroupHeight = 8;
-					auto topMipWidth = fbProps._width >> 1, topMipHeight = fbProps._height >> 1;
-					const auto
-						threadGroupX = ((topMipWidth>>dstMip)+dispatchGroupWidth)/dispatchGroupWidth,
-						threadGroupY = ((topMipHeight>>dstMip)+dispatchGroupHeight)/dispatchGroupHeight;
-
-					struct ControlUniforms {
-						Float2 _reciprocalDstDims;
-						unsigned _dummy2[2];
-						UInt2 _threadGroupCount;
-						unsigned _mipIndex;
-						unsigned _dummy;
-					} controlUniforms {
-						Float2 { 1.f/float(topMipWidth>>dstMip), 1.f/float(topMipHeight>>dstMip) },
-						{0,0},
-						{ threadGroupX, threadGroupY },
-						dstMip,
-						0
-					};
-					encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(controlUniforms));
-					encoder.Dispatch(
-						*_brightUpsample,
-						threadGroupX, threadGroupY, 1);
+							*mipChainResource, TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
+							Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute},
+							Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
 				}
 
-				// final map also shifted to ShaderResource
-				Metal::BarrierHelper{metalContext}.Add(
-					*mipChainResource, TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
-					Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
-					Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+				const unsigned dispatchGroupWidth = 8;
+				const unsigned dispatchGroupHeight = 8;
+				auto topMipWidth = fbProps._width >> 1, topMipHeight = fbProps._height >> 1;
+				const auto
+					threadGroupX = ((topMipWidth>>dstMip)+dispatchGroupWidth)/dispatchGroupWidth,
+					threadGroupY = ((topMipHeight>>dstMip)+dispatchGroupHeight)/dispatchGroupHeight;
+
+				struct ControlUniforms {
+					Float2 _reciprocalDstDims;
+					unsigned _dummy2[2];
+					UInt2 _threadGroupCount;
+					unsigned _mipIndex;
+					unsigned _dummy;
+				} controlUniforms {
+					Float2 { 1.f/float(topMipWidth>>dstMip), 1.f/float(topMipHeight>>dstMip) },
+					{0,0},
+					{ threadGroupX, threadGroupY },
+					dstMip,
+					0
+				};
+				encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(controlUniforms));
+				encoder.Dispatch(
+					*_brightUpsample,
+					threadGroupX, threadGroupY, 1);
 			}
+
+			// final map also shifted to ShaderResource
+			Metal::BarrierHelper{metalContext}.Add(
+				*mipChainResource, TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
+				Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+				Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
 		}
 
 		////////////////////////////////////////////////////////////

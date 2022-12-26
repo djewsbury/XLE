@@ -350,13 +350,15 @@ namespace ToolsRig
 
 				TRY {
 					SceneEngine::MergedLightingEngineCfg lightingEngineCfg;
-					RenderCore::LightingEngine::AmbientLightOperatorDesc ambientOp;
-					RenderCore::LightingEngine::ChainedOperatorTemplate<RenderCore::LightingEngine::ToneMapAcesOperatorDesc> techniqueOperators = {};
-					lightingEngineCfg.SetAmbientOperator(ambientOp);
 					envSettings->BindCfg(lightingEngineCfg);
 					std::future<std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique>> compiledLightingTechniqueFuture;
 					const bool forwardLighting = true;
 					if (forwardLighting) {
+						RenderCore::LightingEngine::ChainedOperatorTemplate<RenderCore::LightingEngine::ForwardLightingTechniqueDesc> techniqueOperators = {};
+						RenderCore::LightingEngine::ChainedOperatorTemplate<RenderCore::LightingEngine::AmbientLightOperatorDesc> ambientOperator;
+						RenderCore::LightingEngine::ChainedOperatorTemplate<RenderCore::LightingEngine::ToneMapAcesOperatorDesc> toneMapOperator;
+						techniqueOperators._next = &ambientOperator;
+						ambientOperator._next = &toneMapOperator;
 						compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateForwardLightingTechnique(
 							lightingApparatus,
 							lightingEngineCfg.GetLightOperators(),
