@@ -2209,6 +2209,54 @@ namespace RenderCore { namespace Metal_Vulkan
 		_dstStageMask |= postBarrierUsage._pipelineStageFlags;
 		return *this;
 	}
+
+	BarrierHelper& BarrierHelper::Add(
+		IResource& resource,
+		TextureViewDesc::SubResourceRange mipRange,
+		TextureViewDesc::SubResourceRange arrayLayerRange,
+		BarrierResourceUsage preBarrierUsage, BarrierResourceUsage postBarrierUsage)
+	{
+		// "SpecializeForResource" fixes up layout selection for depth stencil images
+		auto lifetimeBindFlags = checked_cast<Resource*>(&resource)->AccessDesc()._bindFlags;
+		preBarrierUsage = preBarrierUsage.SpecializeForResource(lifetimeBindFlags);
+		postBarrierUsage = postBarrierUsage.SpecializeForResource(lifetimeBindFlags);
+		assert(preBarrierUsage._pipelineStageFlags);
+		assert(postBarrierUsage._pipelineStageFlags);
+		// both or neither must be VK_QUEUE_FAMILY_IGNORED. We only use srcQueueFamilyIndex & dstQueueFamilyIndex during Queue Family Ownership Transfer (see the Vulkan spec)
+		assert(!((preBarrierUsage._queueFamily == VK_QUEUE_FAMILY_IGNORED) ^ (postBarrierUsage._queueFamily == VK_QUEUE_FAMILY_IGNORED)));
+
+		auto* res = checked_cast<Resource*>(&resource);
+		if (res->GetBuffer()) {
+			Throw(std::runtime_error("Incorrect form of BarrierHelper::Add() used with buffer type resource"));
+		} else {
+			if (_imageBarrierCount == dimof(_imageBarriers)) Flush();
+			_imageBarrierGuids[_imageBarrierCount] = { resource.GetGUID(), postBarrierUsage._imageLayout == res->_steadyStateImageLayout };
+			auto& barrier = _imageBarriers[_imageBarrierCount++];
+			barrier = {};
+			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			barrier.pNext = nullptr;
+			barrier.oldLayout = preBarrierUsage._imageLayout;
+			barrier.newLayout = postBarrierUsage._imageLayout;
+			barrier.srcAccessMask = preBarrierUsage._accessFlags;
+			barrier.dstAccessMask = postBarrierUsage._accessFlags;
+			barrier.image = checked_cast<Resource*>(&resource)->GetImage();
+			barrier.srcQueueFamilyIndex = preBarrierUsage._queueFamily;
+			barrier.dstQueueFamilyIndex = postBarrierUsage._queueFamily;
+			barrier.subresourceRange.aspectMask = AsImageAspectMask(res->AccessDesc()._textureDesc._format);
+			barrier.subresourceRange.baseMipLevel = mipRange._min;
+			barrier.subresourceRange.levelCount = std::max(1u, (unsigned)mipRange._count);
+			barrier.subresourceRange.baseArrayLayer = arrayLayerRange._min;
+			if (res->AccessDesc()._textureDesc._dimensionality == TextureDesc::Dimensionality::CubeMap) {
+				// See TextureView.cpp for equivalent transform
+				barrier.subresourceRange.layerCount = (arrayLayerRange._count == 0) ? 6u : arrayLayerRange._count;
+			} else
+				barrier.subresourceRange.layerCount = std::max(1u, (unsigned)arrayLayerRange._count);
+		}
+		_srcStageMask |= preBarrierUsage._pipelineStageFlags;
+		_dstStageMask |= postBarrierUsage._pipelineStageFlags;
+		return *this;
+	}
+
 	void BarrierHelper::Flush()
 	{
 		if (!_bufferBarrierCount && !_imageBarrierCount) return;

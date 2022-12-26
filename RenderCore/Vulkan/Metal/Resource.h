@@ -281,7 +281,14 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkPipelineStageFlags _dstStageMask = 0;
 		DeviceContext* _deviceContext;
 
-		BarrierHelper& Add(IResource& resource, BarrierResourceUsage preBarrierUsage, BarrierResourceUsage postBarrierUsage);
+		BarrierHelper& Add(
+			IResource& resource,
+			BarrierResourceUsage preBarrierUsage, BarrierResourceUsage postBarrierUsage);
+		BarrierHelper& Add(
+			IResource& resource,
+			TextureViewDesc::SubResourceRange mipRange,
+			TextureViewDesc::SubResourceRange arrayLayerRange,
+			BarrierResourceUsage preBarrierUsage, BarrierResourceUsage postBarrierUsage);
 		BarrierHelper(IThreadContext& threadContext);
 		BarrierHelper(DeviceContext& metalContext);
 		~BarrierHelper();
