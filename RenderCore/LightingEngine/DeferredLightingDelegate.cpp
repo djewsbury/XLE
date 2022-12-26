@@ -555,13 +555,12 @@ namespace RenderCore { namespace LightingEngine
 		sp.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(BindFlag::ShaderResource), BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::Aspect::Depth});
 		fbDesc.AddSubpass(std::move(sp));
 
-		Techniques::AttachmentBarrier preBarriers[] { 
-			{Techniques::AttachmentSemantics::GBufferNormal, BindFlag::ShaderResource, ShaderStage::Pixel},
-			{Techniques::AttachmentSemantics::MultisampleDepth, BindFlag::ShaderResource, ShaderStage::Pixel}
-		};
-		parsingContext.GetAttachmentReservation().Barrier(parsingContext.GetThreadContext(), preBarriers);
-
 		Techniques::RenderPassInstance rpi { parsingContext, fbDesc };
+
+		rpi.AutoNonFrameBufferBarrier({
+			{0, BindFlag::ShaderResource, ShaderStage::Pixel},
+			{1, BindFlag::ShaderResource, ShaderStage::Pixel}
+		});
 
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, "GBuffer_Normals"_h);

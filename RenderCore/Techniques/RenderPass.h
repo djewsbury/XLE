@@ -306,7 +306,7 @@ namespace RenderCore { namespace Techniques
 
         void CompleteInitialization(IThreadContext&);
         bool HasPendingCompleteInitialization() const;
-        void Barrier(IThreadContext&, IteratorRange<const AttachmentBarrier*>);
+        void AutoBarrier(IThreadContext&, IteratorRange<const AttachmentBarrier*>);
 
         void Absorb(AttachmentReservation&&);
 
@@ -366,7 +366,7 @@ namespace RenderCore { namespace Techniques
 
     struct AttachmentBarrier
     {
-        uint64_t _semantic = 0ull;
+        AttachmentName _attachment = ~AttachmentName(0);
         BindFlag::BitField _layout = 0;
         ShaderStage _shaderStage = ShaderStage::Pixel;
     };
@@ -431,6 +431,8 @@ namespace RenderCore { namespace Techniques
 
         auto GetNonFrameBufferAttachmentView(unsigned viewedAttachmentSlot) const -> const std::shared_ptr<IResourceView>&;
 
+        void AutoNonFrameBufferBarrier(IteratorRange<const AttachmentBarrier*>);
+
         // Construct from a fully actualized "FrameBufferDesc" (eg, one generated via a
         // FragmentStitchingContext)
         RenderPassInstance(
@@ -476,7 +478,7 @@ namespace RenderCore { namespace Techniques
         ParsingContext* _attachedParsingContext = nullptr;
         bool _trueRenderPass = false;
 
-        std::vector<std::shared_ptr<IResourceView>> _viewedAttachments;         // good candidate for subframe heap
+        std::vector<std::pair<std::shared_ptr<IResourceView>, unsigned>> _viewedAttachments;         // good candidate for subframe heap
         std::vector<unsigned> _viewedAttachmentsMap;                            // good candidate for subframe heap
     };
 

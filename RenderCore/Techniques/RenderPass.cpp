@@ -1185,20 +1185,16 @@ namespace RenderCore { namespace Techniques
         return false;
     }
 
-    void AttachmentReservation::Barrier(IThreadContext& threadContext, IteratorRange<const AttachmentBarrier*> barriers)
+    void AttachmentReservation::AutoBarrier(IThreadContext& threadContext, IteratorRange<const AttachmentBarrier*> barriers)
     {
         auto& metalContext = *Metal::DeviceContext::Get(threadContext);
         Metal::BarrierHelper barrierHelper(metalContext);
         for (auto b:barriers) {
-            auto i = std::find_if(_entries.begin(), _entries.end(), [s=b._semantic](const auto& q) { return q._semantic == s; });
-            if (i == _entries.end()) {
-                assert(0);      // couldn't find this attachment
-                continue;
-            }
-            if (i->_currentLayout != b._semantic) {
-                auto* resource = (i->_poolResource == ~0u) ? i->_resource.get() : _pool->GetResource(i->_poolResource).get();
-                barrierHelper.Add(*resource, i->_currentLayout, Metal::BarrierResourceUsage{b._layout, b._shaderStage});
-                i->_currentLayout = b._layout;
+            auto& i = _entries[b._attachment];
+            if (i._currentLayout != b._layout) {
+                auto* resource = (i._poolResource == ~0u) ? i._resource.get() : _pool->GetResource(i._poolResource).get();
+                barrierHelper.Add(*resource, i._currentLayout, Metal::BarrierResourceUsage{b._layout, b._shaderStage});
+                i._currentLayout = b._layout;
             }
         }
     }
@@ -1415,7 +1411,28 @@ namespace RenderCore { namespace Techniques
         assert((spIdx+1) < _viewedAttachmentsMap.size());
         auto base = _viewedAttachmentsMap[spIdx];
         assert((_viewedAttachmentsMap[spIdx+1] - base) > viewedAttachmentSlot);     // if you hit this, it means "viewedAttachmentSlot" is out of bounds for the current subpass
-        return _viewedAttachments[base+viewedAttachmentSlot];
+        return _viewedAttachments[base+viewedAttachmentSlot].first;
+    }
+
+    void RenderPassInstance::AutoNonFrameBufferBarrier(IteratorRange<const AttachmentBarrier*> barriers)
+    {
+        assert(!barriers.empty());
+        // Barrier to the new state, from whatever state we think the attachment is currently in 
+        auto spIdx = GetCurrentSubpassIndex();
+        assert((spIdx+1) < _viewedAttachmentsMap.size());
+        auto base = _viewedAttachmentsMap[spIdx];
+
+        VLA_UNSAFE_FORCE(AttachmentBarrier, translatedBarriers, barriers.size());
+        for (unsigned c=0; c<barriers.size(); ++c) {
+            auto viewedAttachmentSlot = barriers[c]._attachment;
+            assert((_viewedAttachmentsMap[spIdx+1] - base) > viewedAttachmentSlot);     // if you hit this, it means "viewedAttachmentSlot" is out of bounds for the current subpass
+            auto attachmentIdx = _viewedAttachments[base+viewedAttachmentSlot].second;
+            translatedBarriers[c]._attachment = attachmentIdx;
+            translatedBarriers[c]._layout = barriers[c]._layout;
+            translatedBarriers[c]._shaderStage = barriers[c]._shaderStage;
+        }
+
+        _attachmentPoolReservation.AutoBarrier(_attachedParsingContext->GetThreadContext(), MakeIteratorRange(translatedBarriers, translatedBarriers+barriers.size()));
     }
 
     static bool HasClear(LoadStore ls) 
@@ -1514,7 +1531,7 @@ namespace RenderCore { namespace Techniques
         _viewedAttachmentsMap = stitchedFragment._viewedAttachmentsMap;
         _viewedAttachments.reserve(stitchedFragment._viewedAttachments.size());
         for (const auto&view:stitchedFragment._viewedAttachments)
-            _viewedAttachments.push_back(_attachmentPoolReservation.GetView(view._resourceName, view._usage, view._window));
+            _viewedAttachments.emplace_back(_attachmentPoolReservation.GetView(view._resourceName, view._usage, view._window), view._resourceName);
     }
 
     RenderPassInstance::RenderPassInstance(
