@@ -32,6 +32,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		SPIRVReflection::StorageClass _storageClass = SPIRVReflection::StorageClass::Unknown;
 		const SPIRVReflection::BasicType* _basicType = nullptr;
 		const SPIRVReflection::ResourceType* _resourceType = nullptr;
+		const SPIRVReflection::VectorType* _vectorType = nullptr;
 		std::optional<unsigned> _arrayElementCount;
 		bool _isStructType = false;
 		bool _isRuntimeArrayStructType = false;
@@ -96,13 +97,18 @@ namespace RenderCore { namespace Metal_Vulkan
 			} else if (std::find(reflection._runtimeArrayStructTypes.begin(), reflection._runtimeArrayStructTypes.end(), typeToLookup) != reflection._runtimeArrayStructTypes.end()) {
 				result._isRuntimeArrayStructType = true;
 			} else {
-				auto r = LowerBound(reflection._resourceTypes, typeToLookup);
-				if (r != reflection._resourceTypes.end() && r->first == typeToLookup) {
-					result._resourceType = &r->second;
+				auto v = LowerBound(reflection._vectorTypes, typeToLookup);
+				if (v != reflection._vectorTypes.end() && v->first == typeToLookup) {
+					result._vectorType = &v->second;
 				} else {
-					#if defined(_DEBUG)
-						std::cout << "Could not understand type information for input " << result._name << std::endl;
-					#endif
+					auto r = LowerBound(reflection._resourceTypes, typeToLookup);
+					if (r != reflection._resourceTypes.end() && r->first == typeToLookup) {
+						result._resourceType = &r->second;
+					} else {
+						#if defined(_DEBUG)
+							std::cout << "Could not understand type information for input " << result._name << std::endl;
+						#endif
+					}
 				}
 			}
 		}
@@ -371,6 +377,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	static bool ShaderVariableCompatibleWithDescriptorSet(const ReflectionVariableInformation& reflectionVariable, DescriptorType slotType)
 	{
+		assert(!reflectionVariable._vectorType);		// raw vector types not supported
 		switch (slotType) { 
 		case DescriptorType::SampledTexture:
 		case DescriptorType::UnorderedAccessTexture:
@@ -1593,22 +1600,12 @@ namespace RenderCore { namespace Metal_Vulkan
 				result._type = varinfo._resourceType->_readWriteVariation ? DescriptorType::UnorderedAccessTexture : DescriptorType::SampledTexture;
 				// note that varinfo._resourceType->_arrayVariation & varinfo._resourceType->_multisampleVariation don't have an impact
 			}
+		} else if (varinfo._vectorType) {
+			result._type = DescriptorType::UniformBuffer;
 		} else
 			return {};
 
 		result._count = varinfo._arrayElementCount.value_or(1);
-		return result;
-	}
-
-	ConstantBufferElementDesc AsConstantBufferElementDesc(const ReflectionVariableInformation& varinfo)
-	{
-		if (!varinfo._basicType) return {};
-
-		ConstantBufferElementDesc result;
-		result._semanticHash = Hash64(varinfo._name);
-		result._nativeFormat = Format::Unknown;		// format conversion not handled
-		result._offset = varinfo._binding._offset;
-		result._arrayElementCount = varinfo._arrayElementCount.value_or(0);
 		return result;
 	}
 
