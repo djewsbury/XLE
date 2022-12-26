@@ -1,0 +1,16 @@
+
+DescriptorSet General
+{
+	Sampler BilinearClamp
+	{
+		Filter = Bilinear,
+		AddressU = Clamp,
+		AddressV = Clamp
+	};
+};
+
+PipelineLayout ComputeMain
+{
+	AutoDescriptorSet General;
+};
+

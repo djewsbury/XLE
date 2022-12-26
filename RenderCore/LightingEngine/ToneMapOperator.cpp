@@ -9,8 +9,11 @@
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/CommonBindings.h"
+#include "../Techniques/CommonResources.h"
 #include "../Techniques/PipelineOperators.h"
+#include "../Techniques/Services.h"
 #include "../Metal/Resource.h"
+#include "../Metal/DeviceContext.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Continuation.h"
 #include "../../xleres/FileList.h"
@@ -25,13 +28,26 @@ namespace RenderCore { namespace LightingEngine
 		Float3x4 _postToneScale;
 	};
 
+	static const unsigned s_shaderMipChainUniformCount = 5;
+
 	static Float4x4 BuildPreToneScaleTransform();
 	static Float4x4 BuildPostToneScaleTransform_SRGB();
 
-	void ToneMapAcesOperator::Execute(Techniques::ParsingContext& parsingContext, IResourceView& ldrOutput, IResourceView& hdrInput)
+	void ToneMapAcesOperator::Execute(
+		Techniques::ParsingContext& parsingContext,
+		IResourceView& ldrOutput, IResourceView& hdrInput,
+		IResourceView& brightPassTempUAV, IResourceView& brightPassTempSRV,
+		IteratorRange<IResourceView const*const*> brightPassMipChainUAV,
+		IResourceView& brightPassMipChainSRV)
 	{
-		Metal::BarrierHelper{parsingContext.GetThreadContext()}.Add(*hdrInput.GetResource(), BindFlag::UnorderedAccess, BindFlag::ShaderResource);
-		Metal::BarrierHelper{parsingContext.GetThreadContext()}.Add(*ldrOutput.GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
+		assert(_secondStageConstructionState == 2);
+		assert(_toneMap);
+
+		auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
+		vkCmdFillBuffer(	// we could alternatively clear this in the "BrightPassFilter" shader
+			metalContext.GetActiveCommandList().GetUnderlying().get(),
+			checked_cast<Metal::Resource*>(_atomicCounterBufferView->GetResource().get())->GetBuffer(), 
+			0, VK_WHOLE_SIZE, 0);
 
 		_paramsBufferCounter = (_paramsBufferCounter+1)%dimof(_params);
 		if (_paramsBufferCopyCountdown) {
@@ -44,58 +60,246 @@ namespace RenderCore { namespace LightingEngine
 
 		auto fbProps = parsingContext._rpi->GetFrameBufferDesc().GetProperties();
 		assert(fbProps._width != 0 && fbProps._height != 0);
-		const unsigned dispatchGroupWidth = 8;
-		const unsigned dispatchGroupHeight = 8;
-		ResourceViewStream uniforms {
-			hdrInput, ldrOutput,
-			*_params[_paramsBufferCounter],
-		};
-		_shader->Dispatch(
-			parsingContext,
-			(fbProps._width + dispatchGroupWidth - 1) / dispatchGroupWidth,
-			(fbProps._height + dispatchGroupHeight - 1) / dispatchGroupHeight,
-			1,
-			uniforms);
+		assert(_brightPassMipCountCount == std::min(IntegerLog2(std::max(fbProps._width, fbProps._height)) - 2, s_shaderMipChainUniformCount));
+		assert(_brightPassMipCountCount <= s_shaderMipChainUniformCount);
+		assert(brightPassMipChainUAV.size() == _brightPassMipCountCount);
 
-		Metal::BarrierHelper{parsingContext.GetThreadContext()}.Add(*ldrOutput.GetResource(), {BindFlag::UnorderedAccess, ShaderStage::Compute}, BindFlag::RenderTarget);
+		auto brightPassTempWidth = fbProps._width>>1, brightPassTempHeight = fbProps._height>>1;
+
+		////////////////////////////////////////////////////////////
+
+		{
+			const unsigned dispatchGroupWidth = 8;
+			const unsigned dispatchGroupHeight = 8;
+			ResourceViewStream uniforms {
+				hdrInput, brightPassTempUAV
+			};
+			_brightPass->Dispatch(
+				parsingContext,
+				(brightPassTempWidth + dispatchGroupWidth - 1) / dispatchGroupWidth,
+				(brightPassTempHeight + dispatchGroupHeight - 1) / dispatchGroupHeight,
+				1,
+				uniforms);
+		}
+
+		Metal::BarrierHelper(metalContext).Add(
+			*brightPassTempUAV.GetResource(),
+			Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+			Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+
+		{
+			VLA(const IResourceView*, views, 2+s_shaderMipChainUniformCount);
+			views[0] = &brightPassTempSRV;
+			views[1] = _atomicCounterBufferView.get();
+			unsigned c=0;
+			for (; c<_brightPassMipCountCount; ++c) views[2+c] = brightPassMipChainUAV[c];
+			auto* dummyUav = Techniques::Services::GetCommonResources()->_black2DSRV.get();
+			for (; c<s_shaderMipChainUniformCount; ++c) views[2+c] = dummyUav;
+
+			const auto threadGroupX = (brightPassTempWidth+63)>>6, threadGroupY = (brightPassTempHeight+63)>>6;
+
+			UniformsStream uniforms;
+			uniforms._resourceViews = MakeIteratorRange(views, views+2+s_shaderMipChainUniformCount);
+			struct FastMipChain_ControlUniforms {
+				Float2 _reciprocalInputDims;
+				unsigned _dummy[2];
+				uint32_t _threadGroupCount;
+				unsigned _dummy2;
+				uint32_t _mipCount;
+				unsigned _dummy3;
+			} controlUniforms {
+				Float2 { 1.f/float(brightPassTempWidth), 1.f/float(brightPassTempHeight) },
+				{0,0},
+				threadGroupX * threadGroupY,
+				0,
+				_brightPassMipCountCount,
+				0
+			};
+			UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(controlUniforms) };
+			uniforms._immediateData = immDatas;
+			_brightDownsample->Dispatch(
+				parsingContext,
+				threadGroupX, threadGroupY, 1,
+				uniforms);
+		}
+
+		{
+			auto topMipWidth = fbProps._width >> 2, topMipHeight = fbProps._height >> 2;
+			const unsigned dispatchGroupWidth = 8;
+			const unsigned dispatchGroupHeight = 8;
+			VLA(const IResourceView*, views, s_shaderMipChainUniformCount*2);
+			views[0] = &brightPassMipChainSRV;
+			unsigned c=0;
+			for (; c<_brightPassMipCountCount; ++c)
+				views[1+c] = brightPassMipChainUAV[c];
+			auto* dummyUav = Techniques::Services::GetCommonResources()->_black2DSRV.get();
+			for (; c<s_shaderMipChainUniformCount; ++c)
+				views[1+c] = dummyUav;
+
+			auto* mipChainResource = brightPassMipChainUAV[0]->GetResource().get();
+
+			for (unsigned pass=0; pass<_brightPassMipCountCount-1; ++pass) {
+				auto srcMip = _brightPassMipCountCount-1-pass;
+				auto dstMip = _brightPassMipCountCount-2-pass;
+
+				// there's a sequence of barriers as we walk up the mip chain
+				Metal::BarrierHelper{metalContext}.Add(
+					*mipChainResource, TextureViewDesc::SubResourceRange{srcMip, 1}, TextureViewDesc::All,
+					Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+					Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+
+				const auto
+					threadGroupX = ((topMipWidth>>dstMip)+dispatchGroupWidth)/dispatchGroupWidth,
+					threadGroupY = ((topMipHeight>>dstMip)+dispatchGroupHeight)/dispatchGroupHeight;
+
+				UniformsStream uniforms;
+				uniforms._resourceViews = MakeIteratorRange(views, views+2*s_shaderMipChainUniformCount);
+				struct ControlUniforms {
+					Float2 _reciprocalDstDims;
+					unsigned _dummy2[2];
+					UInt2 _threadGroupCount;
+					unsigned _mipIndex;
+					unsigned _dummy;
+				} controlUniforms {
+					Float2 { 1.f/float(topMipWidth>>dstMip), 1.f/float(topMipHeight>>dstMip) },
+					{0,0},
+					{ threadGroupX, threadGroupY },
+					dstMip,
+					0
+				};
+				UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(controlUniforms) };
+				uniforms._immediateData = immDatas;
+				_brightUpsample->Dispatch(
+					parsingContext,
+					threadGroupX, threadGroupY, 1,
+					uniforms);
+			}
+
+			// final map also shifted to ShaderResource
+			Metal::BarrierHelper{metalContext}.Add(
+				*mipChainResource, TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
+				Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+				Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+		}
+
+		////////////////////////////////////////////////////////////
+
+		{
+			const unsigned dispatchGroupWidth = 8;
+			const unsigned dispatchGroupHeight = 8;
+			ResourceViewStream uniforms {
+				hdrInput, ldrOutput,
+				*_params[_paramsBufferCounter],
+				brightPassMipChainSRV
+			};
+			_toneMap->Dispatch(
+				parsingContext,
+				(fbProps._width + dispatchGroupWidth - 1) / dispatchGroupWidth,
+				(fbProps._height + dispatchGroupHeight - 1) / dispatchGroupHeight,
+				1,
+				uniforms);
+		}
 	}
 
-	::Assets::DependencyValidation ToneMapAcesOperator::GetDependencyValidation() const { return _shader->GetDependencyValidation(); }
+	::Assets::DependencyValidation ToneMapAcesOperator::GetDependencyValidation() const { assert(_secondStageConstructionState==2); return _depVal; }
 
 	RenderStepFragmentInterface ToneMapAcesOperator::CreateFragment(const FrameBufferProperties& fbProps)
-    {
-        RenderStepFragmentInterface result{PipelineType::Compute};
+	{
+		assert(_secondStageConstructionState == 0);
+		RenderStepFragmentInterface result{PipelineType::Compute};
 
 		// todo -- what should we set the final state for ColorLDR to be here? just go directly to PresentationSrc?
-        Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-        spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState().FinalState(BindFlag::RenderTarget), BindFlag::UnorderedAccess);
-        spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).InitialState(BindFlag::UnorderedAccess).Discard());
-        spDesc.SetName("tone-map-aces-operator");
+		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
+		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState().FinalState(BindFlag::RenderTarget), BindFlag::UnorderedAccess);
+		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard());
+		auto brightPassTempAttachment = result.DefineAttachment("brightpass-temp"_h).NoInitialState().Discard();
+		spDesc.AppendNonFrameBufferAttachmentView(brightPassTempAttachment, BindFlag::UnorderedAccess);
+		spDesc.AppendNonFrameBufferAttachmentView(brightPassTempAttachment, BindFlag::ShaderResource);
+		auto brightPassMipChain = result.DefineAttachment("brightpass-mip-chain"_h).NoInitialState().Discard();
+		for (unsigned c=0; c<_brightPassMipCountCount; ++c) {
+			TextureViewDesc view;
+			view._mipRange._min = c;
+			view._mipRange._count = 1;
+			spDesc.AppendNonFrameBufferAttachmentView(brightPassMipChain, BindFlag::UnorderedAccess, view);
+		}
+		TextureViewDesc view;
+		// view._flags |= TextureViewDesc::Flags::SimultaneouslyUnorderedAccess;
+		spDesc.AppendNonFrameBufferAttachmentView(brightPassMipChain, BindFlag::ShaderResource, view);
+		spDesc.SetName("tone-map-aces-operator");
 
-        result.AddSubpass(
-            std::move(spDesc),
-            [op=shared_from_this()](LightingTechniqueIterator& iterator) {
-                op->Execute(
-                    *iterator._parsingContext,
-                    *iterator._rpi.GetNonFrameBufferAttachmentView(0),
-                    *iterator._rpi.GetNonFrameBufferAttachmentView(1));
-            });
+		result.AddSubpass(
+			std::move(spDesc),
+			[op=this](LightingTechniqueIterator& iterator) {
+				auto& ldrOutput = *iterator._rpi.GetNonFrameBufferAttachmentView(0);
+				auto& hdrInput = *iterator._rpi.GetNonFrameBufferAttachmentView(1);
+				auto& brightPassTempUAV = *iterator._rpi.GetNonFrameBufferAttachmentView(2);
+				auto& brightPassTempSRV = *iterator._rpi.GetNonFrameBufferAttachmentView(3);
 
-        return result;
-    }
+				assert(op->_brightPassMipCountCount);
+				VLA(const IResourceView*, brightPassMipChainUAV, op->_brightPassMipCountCount);
+				for (unsigned c=0; c<op->_brightPassMipCountCount; ++c)
+					brightPassMipChainUAV[c] = iterator._rpi.GetNonFrameBufferAttachmentView(4+c).get();
+				auto& brightPassMipChainSRV = *iterator._rpi.GetNonFrameBufferAttachmentView(4+op->_brightPassMipCountCount);
+
+				iterator._rpi.AutoNonFrameBufferBarrier({
+					{1, BindFlag::ShaderResource, ShaderStage::Compute}
+				});
+				{
+					Metal::BarrierHelper barrierHelper{iterator._parsingContext->GetThreadContext()};
+					barrierHelper.Add(*ldrOutput.GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
+					barrierHelper.Add(*brightPassTempUAV.GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
+					barrierHelper.Add(*brightPassMipChainUAV[0]->GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
+				}
+				
+				op->Execute(
+					*iterator._parsingContext, ldrOutput, hdrInput, brightPassTempUAV, brightPassTempSRV,
+					MakeIteratorRange(brightPassMipChainUAV, brightPassMipChainUAV+op->_brightPassMipCountCount),
+					brightPassMipChainSRV);
+
+				Metal::BarrierHelper{iterator._parsingContext->GetThreadContext()}.Add(*ldrOutput.GetResource(), {BindFlag::UnorderedAccess, ShaderStage::Compute}, BindFlag::RenderTarget);
+			});
+
+		return result;
+	}
 
 	void ToneMapAcesOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext)
 	{
-		// todo -- should we actually define the ColorHDR attachment here?
+		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
+		_brightPassMipCountCount = IntegerLog2(std::max(fbSize[0], fbSize[1])) - 2;
+		_brightPassMipCountCount = std::min(_brightPassMipCountCount, s_shaderMipChainUniformCount);		// Only need to so far
+		Techniques::PreregisteredAttachment attachments[] {
+			Techniques::PreregisteredAttachment {
+				Techniques::AttachmentSemantics::ColorHDR,
+				CreateDesc(
+					BindFlag::RenderTarget | BindFlag::ShaderResource,
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], _desc._lightAccumulationBufferFormat)),
+				"color-hdr"
+			},
+			Techniques::PreregisteredAttachment {
+				"brightpass-temp"_h,
+				CreateDesc(
+					BindFlag::UnorderedAccess | BindFlag::ShaderResource,
+					TextureDesc::Plain2D(fbSize[0]>>1, fbSize[1]>>1, Format::B8G8R8A8_UNORM)),
+				"brightpass-temp"
+			},
+			Techniques::PreregisteredAttachment {
+				"brightpass-mip-chain"_h,
+				CreateDesc(
+					BindFlag::UnorderedAccess | BindFlag::ShaderResource,
+					TextureDesc::Plain2D(fbSize[0]>>2, fbSize[1]>>2, Format::B8G8R8A8_UNORM, _brightPassMipCountCount)),
+				"brightpass-mip-chain"
+			}
+		};
+		for (const auto& a:attachments)
+			stitchingContext.DefineAttachment(a);
 	}
 
 	ToneMapAcesOperator::ToneMapAcesOperator(
-		const ToneMapAcesOperatorDesc& desc,
-		std::shared_ptr<Techniques::IComputeShaderOperator> shader,
-		std::shared_ptr<Techniques::PipelineCollection> pipelinePool)
-	: _shader(std::move(shader))
+		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
+		const ToneMapAcesOperatorDesc& desc)
+	: _secondStageConstructionState(0)
+	, _desc(desc)
 	{
-		_device = pipelinePool->GetDevice();
 		_pool = std::move(pipelinePool);
 
 		_paramsData.resize(sizeof(CB_Params));
@@ -111,41 +315,100 @@ namespace RenderCore { namespace LightingEngine
 		_params[1] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(1*_paramsData.size()), (unsigned)_paramsData.size());
 		_params[2] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(2*_paramsData.size()), (unsigned)_paramsData.size());
 		_paramsBufferCopyCountdown = 3;
+
+		auto atomicBuffer = _pool->GetDevice()->CreateResource(
+			CreateDesc(
+				BindFlag::TransferDst | BindFlag::UnorderedAccess | BindFlag::TexelBuffer,
+				LinearBufferDesc::Create(4*4)),
+			"tonemap-aces-atomic-counter");
+		_atomicCounterBufferView = atomicBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
 	}
 
 	ToneMapAcesOperator::~ToneMapAcesOperator()
 	{}
 
-	void ToneMapAcesOperator::ConstructToPromise(
+	void ToneMapAcesOperator::SecondStageConstruction(
 		std::promise<std::shared_ptr<ToneMapAcesOperator>>&& promise,
-		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
-		const ToneMapAcesOperatorDesc& desc)
+		const Techniques::FrameBufferTarget& fbTarget)
 	{
-		UniformsStreamInterface usi;
-		usi.BindResourceView(0, "HDRInput"_h);
-		usi.BindResourceView(1, "LDROutput"_h);
-		usi.BindResourceView(2, "Params"_h);
-
-		ParameterBox params;
+		assert(_secondStageConstructionState == 0);
+		_secondStageConstructionState = 1;
 
 		// We could do tonemapping in a pixel shader with an input attachment
 		// but it's probanly more practical to just use a compute shader
-		auto futureShader = Techniques::CreateComputeOperator(
-			pipelinePool,
+		//
+		// note -- we could consider having all of the shaders share a pipeline layout, and then
+		// just use a single BoundUniforms applied once
+		UniformsStreamInterface toneMapUsi;
+		toneMapUsi.BindResourceView(0, "HDRInput"_h);
+		toneMapUsi.BindResourceView(1, "LDROutput"_h);
+		toneMapUsi.BindResourceView(2, "Params"_h);
+		toneMapUsi.BindResourceView(3, "BrightPass"_h);
+		auto futureToneMap = Techniques::CreateComputeOperator(
+			_pool,
 			TONEMAP_ACES_COMPUTE_HLSL ":main",
-			params,
+			ParameterBox{},
 			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-			usi);
-		::Assets::WhenAll(futureShader).ThenConstructToPromise(
+			toneMapUsi);
+
+		UniformsStreamInterface brightPassUsi;
+		brightPassUsi.BindResourceView(0, "InputTexture"_h);
+		brightPassUsi.BindResourceView(1, "OutputLuminance"_h);
+		auto futureBrightPass = Techniques::CreateComputeOperator(
+			_pool,
+			BLOOM_COMPUTE_HLSL ":BrightPassFilter",
+			ParameterBox{},
+			BLOOM_PIPELINE ":ComputeMain",
+			brightPassUsi);
+
+		UniformsStreamInterface downsampleUsi;
+		downsampleUsi.BindResourceView(0, "InputTexture"_h);
+		downsampleUsi.BindResourceView(1, "AtomicBuffer"_h);
+		for (unsigned c=0; c<s_shaderMipChainUniformCount; ++c)
+			downsampleUsi.BindResourceView(2+c, "MipChainUAV"_h+c);
+		downsampleUsi.BindImmediateData(0, "ControlUniforms"_h);
+		auto futureDownsample = Techniques::CreateComputeOperator(
+			_pool,
+			BLOOM_COMPUTE_HLSL ":FastMipChain",
+			ParameterBox{},
+			BLOOM_PIPELINE ":ComputeMain",
+			downsampleUsi);
+
+		UniformsStreamInterface upsampleUsi;
+		upsampleUsi.BindResourceView(0, "MipChainSRV"_h);
+		for (unsigned c=0; c<s_shaderMipChainUniformCount; ++c)
+			upsampleUsi.BindResourceView(1+c, "MipChainUAV"_h+c);
+		upsampleUsi.BindImmediateData(0, "ControlUniforms"_h);
+		auto futureUpsample = Techniques::CreateComputeOperator(
+			_pool,
+			BLOOM_COMPUTE_HLSL ":UpsampleStep",
+			ParameterBox{},
+			BLOOM_PIPELINE ":ComputeMain",
+			upsampleUsi);
+
+		::Assets::WhenAll(futureToneMap, futureBrightPass, futureDownsample, futureUpsample).ThenConstructToPromise(
 			std::move(promise),
-			[desc, pipelinePool=std::move(pipelinePool)](auto shader) {
-				return std::make_shared<ToneMapAcesOperator>(desc, std::move(shader), pipelinePool);
+			[strongThis=shared_from_this()](auto toneMap, auto brightPass, auto brightPassDownsample, auto brightPassUpsample) {
+				assert(strongThis->_secondStageConstructionState == 1);
+				strongThis->_toneMap = std::move(toneMap);
+				strongThis->_brightPass = std::move(brightPass);
+				strongThis->_brightDownsample = std::move(brightPassDownsample);
+				strongThis->_brightUpsample = std::move(brightPassUpsample);
+				::Assets::DependencyValidationMarker depVals[] {
+					strongThis->_toneMap->GetDependencyValidation(),
+					strongThis->_brightPass->GetDependencyValidation(),
+					strongThis->_brightDownsample->GetDependencyValidation(),
+					strongThis->_brightUpsample->GetDependencyValidation()
+				};
+				strongThis->_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
+				strongThis->_secondStageConstructionState = 2;
+				return strongThis;
 			});
 	}
 
-	uint64_t ToneMapAcesOperatorDesc::GetHash() const
+	uint64_t ToneMapAcesOperatorDesc::GetHash(uint64_t seed) const
 	{
-		return 0;
+		return seed;
 	}
 
 	namespace ACES
@@ -322,6 +585,97 @@ namespace RenderCore { namespace LightingEngine
 		auto result = ACES::XYZ_2_DISPLAY_PRI_MAT * Expand(D60_2_D65_CAT, {0,0,0}) * ACES::AP1_2_XYZ_MAT * Expand(ACES::ODT_SAT_MAT, {0,0,0}) * A;
 		return result;
 	}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	void CopyToneMapOperator::Execute(Techniques::ParsingContext& parsingContex, IResourceView& hdrInput)
+	{
+		assert(_secondStageConstructionState == 2);
+		assert(_shader);
+
+		ResourceViewStream us { hdrInput };
+		_shader->Draw(parsingContex, us);
+	}
+
+	RenderStepFragmentInterface CopyToneMapOperator::CreateFragment(const FrameBufferProperties& fbProps)
+	{
+		RenderStepFragmentInterface fragment { RenderCore::PipelineType::Graphics };
+		auto hdrInput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard();
+		auto ldrOutput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState();
+
+		Techniques::FrameBufferDescFragment::SubpassDesc subpass;
+		subpass.AppendOutput(ldrOutput);
+		subpass.AppendInput(hdrInput);
+		subpass.SetName("tonemap");
+
+		fragment.AddSubpass(
+			std::move(subpass),
+			[op=this](LightingTechniqueIterator& iterator) {
+				op->Execute(
+					*iterator._parsingContext,
+					*iterator._rpi.GetInputAttachmentView(0));
+			});
+		return fragment;
+	}
+
+	void CopyToneMapOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext)
+	{
+		const bool precisionTargets = false;
+		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
+		Techniques::PreregisteredAttachment attachments[] {
+			Techniques::PreregisteredAttachment {
+				Techniques::AttachmentSemantics::ColorHDR,
+				CreateDesc(
+					BindFlag::RenderTarget | BindFlag::InputAttachment,
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT)),
+				"color-hdr"
+			}
+		};
+		for (const auto& a:attachments)
+			stitchingContext.DefineAttachment(a);
+	}
+
+	::Assets::DependencyValidation CopyToneMapOperator::GetDependencyValidation() const
+	{
+		assert(_secondStageConstructionState == 2);
+		return _shader->GetDependencyValidation();
+	}
+
+	void CopyToneMapOperator::SecondStageConstruction(
+		std::promise<std::shared_ptr<CopyToneMapOperator>>&& promise,
+		const Techniques::FrameBufferTarget& fbTarget)
+	{
+		assert(_secondStageConstructionState == 0);
+		_secondStageConstructionState = 1;
+
+		Techniques::PixelOutputStates outputStates;
+		outputStates.Bind(*fbTarget._fbDesc, fbTarget._subpassIdx);
+		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
+		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
+		outputStates.Bind(MakeIteratorRange(blendStates));
+		UniformsStreamInterface usi;
+		usi.BindResourceView(0, "SubpassInputAttachment"_h);
+		auto shaderFuture = Techniques::CreateFullViewportOperator(
+			_pool, Techniques::FullViewportOperatorSubType::DisableDepth,
+			BASIC_PIXEL_HLSL ":copy_inputattachment",
+			{}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
+			outputStates, usi);
+		::Assets::WhenAll(std::move(shaderFuture)).ThenConstructToPromise(
+			std::move(promise),
+			[strongThis=shared_from_this()](auto shader) {
+				assert(strongThis->_secondStageConstructionState == 1);
+				strongThis->_shader = std::move(shader);
+				strongThis->_secondStageConstructionState = 2;
+				return strongThis;
+			});
+	}
+
+	void CopyToneMapOperator::CompleteInitialization(IThreadContext& threadContext) {}
+
+	CopyToneMapOperator::CopyToneMapOperator(std::shared_ptr<Techniques::PipelineCollection> pipelinePool)
+	: _pool(std::move(pipelinePool)) {}
+	CopyToneMapOperator::~CopyToneMapOperator() {}
 
 }}
 

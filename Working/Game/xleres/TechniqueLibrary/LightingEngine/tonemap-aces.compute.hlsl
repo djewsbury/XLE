@@ -44,6 +44,9 @@ float3 ToneMapAces(float3 x)
 Texture2D<float3> HDRInput;
 RWTexture2D<float3> LDROutput;		// output could be >8 bit depth, of course, but we're expecting smaller range than the input
 
+Texture2D<float3> BrightPass;
+SamplerState FixedSampler;
+
 [numthreads(8, 8, 1)]
 	void main(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
@@ -53,6 +56,11 @@ RWTexture2D<float3> LDROutput;		// output could be >8 bit depth, of course, but 
 	uint2 threadGroupCounts = uint2((textureDims.x+8-1)/8, (textureDims.y+8-1)/8);
 	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
 
-	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y)
-		LDROutput[pixelId] = saturate(LinearToSRGB_Formal(ToneMapAces(HDRInput[pixelId])));
+	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y) {
+		float3 linearColour = ToneMapAces(HDRInput[pixelId]);
+		// float3 linearColour = saturate(LinearToSRGB_Formal(HDRInput[pixelId]));
+		linearColour += BrightPass.SampleLevel(FixedSampler, pixelId.xy / float2(textureDims.xy), 0);
+
+		LDROutput[pixelId] = saturate(LinearToSRGB_Formal(linearColour));
+	}
 }

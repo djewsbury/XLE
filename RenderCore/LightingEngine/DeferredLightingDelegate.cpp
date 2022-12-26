@@ -295,13 +295,6 @@ namespace RenderCore { namespace LightingEngine
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], stitchingContext.GetSystemAttachmentFormat(Techniques::SystemAttachmentFormat::MainDepthStencil))),
 				"main-depth"
 			},
-			Techniques::PreregisteredAttachment {
-				Techniques::AttachmentSemantics::ColorHDR,
-				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT)),
-				"color-hdr"
-			},
 				// Generally the deferred pixel shader will just copy information from the albedo
 				// texture into the first deferred buffer. So the first deferred buffer should
 				// have the same pixel format as much input textures.

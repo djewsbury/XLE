@@ -39,17 +39,15 @@ RWBuffer<uint> AtomicBuffer             : register(u2, space0);
 groupshared float GroupDepthValues[16][16];
 groupshared uint GroupAtomicCounter;
 
-#define DS_FALLBACK
-
 // input/output interface for the ffx_spd library
 AF4 SpdLoadSourceImage(ASU2 index)                  { return InputDepths[index].xxxx; }
-AF4 SpdLoad(ASU2 index)                             { return DownsampleDepths[6][index].xxxx; }
-void SpdStore(ASU2 pixel, AF4 outValue, AU1 index)  { DownsampleDepths[index + 1][pixel] = outValue.x; }
+AF4 SpdLoad(ASU2 index)                             { return DownsampleDepths[6][index].xxxx; } // 5 -> 6 as we store a copy of the depth buffer at index 0
+void SpdStore(ASU2 pixel, AF4 outValue, AU1 index)  { DownsampleDepths[index + 1][pixel] = outValue.x; } // + 1 as we store a copy of the depth buffer at index 0
 void SpdIncreaseAtomicCounter()                     { InterlockedAdd(AtomicBuffer[0], 1, GroupAtomicCounter); }
 AU1 SpdGetAtomicCounter()                           { return GroupAtomicCounter; }
 void SpdStoreIntermediate(AU1 x, AU1 y, AF4 value)  { GroupDepthValues[x][y] = value.x; }
 
-// For AMD screenspace reflections, the reduction operator must return the closest depth of the for
+// For AMD screenspace reflections, the reduction operator must return the closest depth
 // so for ReverseZ depth mode, we must use a max operator
 AF4 SpdReduce4(AF4 v0, AF4 v1, AF4 v2, AF4 v3)      { return max(max(v0, v1), max(v2,v3)); }
 
