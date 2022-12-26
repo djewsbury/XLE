@@ -9,6 +9,7 @@
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/TechniqueUtils.h"		// (for ProjectionDesc)
 #include "../../Assets/DepVal.h"
+#include <variant>
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -41,6 +42,7 @@ namespace RenderCore { namespace LightingEngine
 
 		void CreateStep_BindDelegate(std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate);
 		void CreateStep_InvalidateUniforms();
+		void CreateStep_BringUpToDateUniforms();
 
 		// Ensure that we retain attachment data for the given semantic. This is typically used for debugging
 		//		-- ie, keeping an intermediate attachment that would otherwise be discarded after usage
@@ -60,13 +62,9 @@ namespace RenderCore { namespace LightingEngine
 		~LightingTechniqueSequence();
 
 	private:
-		// PendingCreateFragmentStep is used internally to merge subsequent CreateStep_ calls
-		// into single render passes
-		std::vector<std::pair<RenderStepFragmentInterface, FragmentInterfaceRegistration>> _pendingCreateFragmentSteps;
-
 		struct ExecuteStep
 		{
-			enum class Type { DrawSky, CallFunction, ExecuteDrawables, BeginRenderPassInstance, EndRenderPassInstance, NextRenderPassStep, PrepareOnly_ExecuteDrawables, BindDelegate, InvalidateUniforms, None };
+			enum class Type { DrawSky, CallFunction, ExecuteDrawables, BeginRenderPassInstance, EndRenderPassInstance, NextRenderPassStep, PrepareOnly_ExecuteDrawables, BindDelegate, InvalidateUniforms, BringUpToDateUniforms, None };
 			Type _type = Type::None;
 			std::shared_ptr<Techniques::SequencerConfig> _sequencerConfig;
 			std::shared_ptr<Techniques::IShaderResourceDelegate> _shaderResourceDelegate;
@@ -83,6 +81,12 @@ namespace RenderCore { namespace LightingEngine
 			bool _prepareOnly = false;
 		};
 		std::vector<ParseStep> _parseSteps;
+
+		// PendingCreateFragmentStep is used internally to merge subsequent CreateStep_ calls
+		// into single render passes
+		using PendingCreateFragmentPair = std::pair<RenderStepFragmentInterface, FragmentInterfaceRegistration>;
+		using PendingCreateFragmentVariant = std::variant<PendingCreateFragmentPair, ExecuteStep>;
+		std::vector<PendingCreateFragmentVariant> _pendingCreateFragmentSteps;
 
 		std::vector<std::vector<Techniques::FrameBufferDescFragment>> _fbDescsPendingStitch;
 		std::vector<Techniques::FragmentStitchingContext::StitchResult> _fbDescs;

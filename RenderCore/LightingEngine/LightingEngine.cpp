@@ -23,11 +23,15 @@ namespace RenderCore { namespace LightingEngine
 	void LightingTechniqueSequence::CreateStep_CallFunction(std::function<StepFnSig>&& fn)
 	{
 		assert(!_frozen);
-		ResolvePendingCreateFragmentSteps();
 		ExecuteStep newStep;
 		newStep._type = ExecuteStep::Type::CallFunction;
 		newStep._function = std::move(fn);
-		_steps.emplace_back(std::move(newStep));
+
+		if (_pendingCreateFragmentSteps.empty()) {
+			_steps.emplace_back(std::move(newStep));
+		} else {
+			_pendingCreateFragmentSteps.emplace_back(std::move(newStep));
+		}
 	}
 
 	auto LightingTechniqueSequence::CreateParseScene(Techniques::BatchFlags::BitField batches) -> TechniqueSequenceParseId
@@ -106,13 +110,17 @@ namespace RenderCore { namespace LightingEngine
 		TechniqueSequenceParseId parseId)
 	{
 		assert(!_frozen);
-		ResolvePendingCreateFragmentSteps();
 		ExecuteStep newStep;
 		newStep._type = ExecuteStep::Type::PrepareOnly_ExecuteDrawables;
 		newStep._sequencerConfig = std::move(sequencerConfig);
 		newStep._shaderResourceDelegate = std::move(uniformDelegate);
 		newStep._fbDescIdx = parseId;
-		_steps.emplace_back(std::move(newStep));
+
+		if (_pendingCreateFragmentSteps.empty()) {
+			_steps.emplace_back(std::move(newStep));
+		} else {
+			_pendingCreateFragmentSteps.emplace_back(std::move(newStep));
+		}
 	}
 
 	void LightingTechniqueSequence::CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig, TechniqueSequenceParseId parseId)
@@ -122,13 +130,18 @@ namespace RenderCore { namespace LightingEngine
 		newStep._type = ExecuteStep::Type::PrepareOnly_ExecuteDrawables;
 		newStep._sequencerConfig = std::move(sequencerConfig);
 		newStep._fbDescIdx = parseId;
-		_steps.emplace_back(std::move(newStep));
+
+		if (_pendingCreateFragmentSteps.empty()) {
+			_steps.emplace_back(std::move(newStep));
+		} else {
+			_pendingCreateFragmentSteps.emplace_back(std::move(newStep));
+		}
 	}
 
 	auto LightingTechniqueSequence::CreateStep_RunFragments(RenderStepFragmentInterface&& fragments) -> FragmentInterfaceRegistration
 	{
 		assert(!_frozen);
-		if (!_pendingCreateFragmentSteps.empty() && _pendingCreateFragmentSteps[0].first.GetPipelineType() != fragments.GetPipelineType())
+		if (!_pendingCreateFragmentSteps.empty() && std::get<PendingCreateFragmentPair>(_pendingCreateFragmentSteps[0]).first.GetPipelineType() != fragments.GetPipelineType())
 			ResolvePendingCreateFragmentSteps();
 		_pendingCreateFragmentSteps.emplace_back(std::make_pair(std::move(fragments), _nextFragmentInterfaceRegistration));
 		return _nextFragmentInterfaceRegistration++;
@@ -140,7 +153,12 @@ namespace RenderCore { namespace LightingEngine
 		ExecuteStep newStep;
 		newStep._type = ExecuteStep::Type::BindDelegate;
 		newStep._shaderResourceDelegate = std::move(uniformDelegate);
-		_steps.emplace_back(std::move(newStep));
+		
+		if (_pendingCreateFragmentSteps.empty()) {
+			_steps.emplace_back(std::move(newStep));
+		} else {
+			_pendingCreateFragmentSteps.emplace_back(std::move(newStep));
+		}
 	}
 
 	void LightingTechniqueSequence::CreateStep_InvalidateUniforms()
@@ -148,7 +166,25 @@ namespace RenderCore { namespace LightingEngine
 		assert(!_frozen);
 		ExecuteStep newStep;
 		newStep._type = ExecuteStep::Type::InvalidateUniforms;
-		_steps.emplace_back(std::move(newStep));
+		
+		if (_pendingCreateFragmentSteps.empty()) {
+			_steps.emplace_back(std::move(newStep));
+		} else {
+			_pendingCreateFragmentSteps.emplace_back(std::move(newStep));
+		}
+	}
+
+	void LightingTechniqueSequence::CreateStep_BringUpToDateUniforms()
+	{
+		assert(!_frozen);
+		ExecuteStep newStep;
+		newStep._type = ExecuteStep::Type::BringUpToDateUniforms;
+		
+		if (_pendingCreateFragmentSteps.empty()) {
+			_steps.emplace_back(std::move(newStep));
+		} else {
+			_pendingCreateFragmentSteps.emplace_back(std::move(newStep));
+		}
 	}
 
 	void LightingTechniqueSequence::ForceRetainAttachment(uint64_t semantic, BindFlag::BitField layout)
@@ -166,8 +202,9 @@ namespace RenderCore { namespace LightingEngine
 
 		{
 			std::vector<Techniques::FrameBufferDescFragment> fragments;
-			for (auto& step:_pendingCreateFragmentSteps)
-				fragments.emplace_back(Techniques::FrameBufferDescFragment{step.first.GetFrameBufferDescFragment()});
+			for (auto& pendingStep:_pendingCreateFragmentSteps)
+				if (pendingStep.index() == 0)
+					fragments.emplace_back(Techniques::FrameBufferDescFragment{std::get<PendingCreateFragmentPair>(pendingStep).first.GetFrameBufferDescFragment()});
 			_fbDescsPendingStitch.emplace_back(std::move(fragments));
 		}
 
@@ -178,47 +215,54 @@ namespace RenderCore { namespace LightingEngine
 		_steps.emplace_back(std::move(beginStep));
 		
 		unsigned stepCounter = 0;
-		for (auto& fragmentStep:_pendingCreateFragmentSteps) {
-			assert(_fragmentInterfaceMappings.size() == fragmentStep.second);
-			_fragmentInterfaceMappings.push_back({beginStep._fbDescIdx, stepCounter});
+		for (auto& pendingStep:_pendingCreateFragmentSteps) {
 
-			assert(!fragmentStep.first.GetSubpassAddendums().empty());
-			for (unsigned c=0; c<fragmentStep.first.GetSubpassAddendums().size(); ++c) {
-				if (stepCounter != 0) _steps.push_back({ExecuteStep::Type::NextRenderPassStep});
-				auto& sb = fragmentStep.first.GetSubpassAddendums()[c];
+			if (pendingStep.index() == 0) {
+				auto& fragmentStep = std::get<PendingCreateFragmentPair>(pendingStep);
 
-				using SubpassExtension = RenderStepFragmentInterface::SubpassExtension;
-				if (sb._type == SubpassExtension::Type::ExecuteDrawables) {
-					assert(sb._techniqueDelegate);
+				assert(_fragmentInterfaceMappings.size() == fragmentStep.second);
+				_fragmentInterfaceMappings.push_back({beginStep._fbDescIdx, stepCounter});
 
-					ExecuteStep drawStep;
-					drawStep._type = ExecuteStep::Type::ExecuteDrawables;
-					#if defined(_DEBUG)
-						auto name = fragmentStep.first.GetFrameBufferDescFragment().GetSubpasses()[c]._name;
-						if (name.empty()) name = s_defaultSequencerCfgName;
-					#else
-						auto name = s_defaultSequencerCfgName;
-					#endif
-					drawStep._fbDescIdx = CreateParseScene(sb._batchFilter);
-					_sequencerConfigsPendingConstruction.push_back(
-						SequencerConfigPendingConstruction {
-							(unsigned)_steps.size(),
-							name, sb._techniqueDelegate, sb._sequencerSelectors,
-							beginStep._fbDescIdx, c });
-					drawStep._shaderResourceDelegate = sb._shaderResourceDelegate;
-					_steps.emplace_back(std::move(drawStep));
-				} else if (sb._type == SubpassExtension::Type::ExecuteSky) {
-					_steps.push_back({ExecuteStep::Type::DrawSky});
-				} else if (sb._type == SubpassExtension::Type::CallLightingIteratorFunction) {
-					ExecuteStep newStep;
-					newStep._type = ExecuteStep::Type::CallFunction;
-					newStep._function = std::move(sb._lightingIteratorFunction);
-					_steps.emplace_back(std::move(newStep));
-				} else {
-					assert(sb._type == SubpassExtension::Type::HandledByPrevious);
+				assert(!fragmentStep.first.GetSubpassAddendums().empty());
+				for (unsigned c=0; c<fragmentStep.first.GetSubpassAddendums().size(); ++c) {
+					if (stepCounter != 0) _steps.push_back({ExecuteStep::Type::NextRenderPassStep});
+					auto& sb = fragmentStep.first.GetSubpassAddendums()[c];
+
+					using SubpassExtension = RenderStepFragmentInterface::SubpassExtension;
+					if (sb._type == SubpassExtension::Type::ExecuteDrawables) {
+						assert(sb._techniqueDelegate);
+
+						ExecuteStep drawStep;
+						drawStep._type = ExecuteStep::Type::ExecuteDrawables;
+						#if defined(_DEBUG)
+							auto name = fragmentStep.first.GetFrameBufferDescFragment().GetSubpasses()[c]._name;
+							if (name.empty()) name = s_defaultSequencerCfgName;
+						#else
+							auto name = s_defaultSequencerCfgName;
+						#endif
+						drawStep._fbDescIdx = CreateParseScene(sb._batchFilter);
+						_sequencerConfigsPendingConstruction.push_back(
+							SequencerConfigPendingConstruction {
+								(unsigned)_steps.size(),
+								name, sb._techniqueDelegate, sb._sequencerSelectors,
+								beginStep._fbDescIdx, c });
+						drawStep._shaderResourceDelegate = sb._shaderResourceDelegate;
+						_steps.emplace_back(std::move(drawStep));
+					} else if (sb._type == SubpassExtension::Type::ExecuteSky) {
+						_steps.push_back({ExecuteStep::Type::DrawSky});
+					} else if (sb._type == SubpassExtension::Type::CallLightingIteratorFunction) {
+						ExecuteStep newStep;
+						newStep._type = ExecuteStep::Type::CallFunction;
+						newStep._function = std::move(sb._lightingIteratorFunction);
+						_steps.emplace_back(std::move(newStep));
+					} else {
+						assert(sb._type == SubpassExtension::Type::HandledByPrevious);
+					}
+
+					++stepCounter;
 				}
-
-				++stepCounter;
+			} else {
+				_steps.emplace_back(std::get<ExecuteStep>(std::move(pendingStep)));
 			}
 		}
 
@@ -654,6 +698,11 @@ namespace RenderCore { namespace LightingEngine
 				_iterator->_parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
 				break;
 
+			case LightingTechniqueSequence::ExecuteStep::Type::BringUpToDateUniforms:
+				_iterator->_parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*_iterator->_parsingContext);
+				_iterator->_parsingContext->GetUniformDelegateManager()->BringUpToDateCompute(*_iterator->_parsingContext);
+				break;
+
 			case LightingTechniqueSequence::ExecuteStep::Type::None:
 				assert(0);
 				break;
@@ -776,6 +825,7 @@ namespace RenderCore { namespace LightingEngine
 			case LightingTechniqueSequence::ExecuteStep::Type::NextRenderPassStep:
 			case LightingTechniqueSequence::ExecuteStep::Type::BindDelegate:
 			case LightingTechniqueSequence::ExecuteStep::Type::InvalidateUniforms:
+			case LightingTechniqueSequence::ExecuteStep::Type::BringUpToDateUniforms:
 				break;
 
 			case LightingTechniqueSequence::ExecuteStep::Type::None:
