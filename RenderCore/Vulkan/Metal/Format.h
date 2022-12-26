@@ -10,11 +10,15 @@
 #include <stdint.h>
 
 using VkFormat_ = uint32_t;
+using VkColorSpaceKHR_ = uint32_t;
 
 namespace RenderCore { namespace Metal_Vulkan
 {
     VkFormat_ AsVkFormat(Format);
 	Format AsFormat(VkFormat_);
     void InitFormatConversionTables();
+
+    const char* FormatAsString(VkFormat_);
+    const char* ColorSpaceAsString(VkColorSpaceKHR_);
 }}
 

@@ -273,6 +273,8 @@ namespace RenderCore { namespace ImplVulkan
 			str << "  " << l.layerName << std::hex << " (0x" << l.specVersion << ", 0x" << l.implementationVersion << ") " << std::dec << l.description << std::endl;
 	}
 
+	static std::vector<VkSurfaceFormatKHR> GetSurfaceFormats(VkPhysicalDevice physDev, VkSurfaceKHR surface);
+
 	static void LogPhysicalDevices(std::ostream& str, VkInstance instance, VkSurfaceKHR surface)
 	{
 		auto devices = EnumeratePhysicalDevices(instance);
@@ -315,6 +317,13 @@ namespace RenderCore { namespace ImplVulkan
 					if (supportsPresent)
 						str << "      Can present to output window" << std::endl;
 				}
+			}
+
+			if (surface) {
+				auto formats = GetSurfaceFormats(dev, surface);
+				str << "  [" << formats.size() << "] presentation chain formats: " << std::endl;
+				for (auto f:formats)
+					str << "    {" << Metal_Vulkan::FormatAsString(f.format) << ", " << Metal_Vulkan::ColorSpaceAsString(f.colorSpace) << "}" << std::endl;
 			}
 		}
 	}
@@ -1985,10 +1994,10 @@ namespace RenderCore { namespace ImplVulkan
 		pools._temporaryStorageManager = std::make_unique<Metal_Vulkan::TemporaryStorageManager>(objFactory, _graphicsQueue->GetTracker());
 
 		auto& limits = objFactory.GetPhysicalDeviceProperties().limits;
-		_limits._constantBufferOffsetAlignment = limits.minUniformBufferOffsetAlignment;
-		_limits._unorderedAccessBufferOffsetAlignment = limits.minStorageBufferOffsetAlignment;
-		_limits._texelBufferOffsetAlignment = limits.minTexelBufferOffsetAlignment;
-		_limits._copyBufferOffsetAlignment = limits.optimalBufferCopyOffsetAlignment;
+		_limits._constantBufferOffsetAlignment = (uint32_t)limits.minUniformBufferOffsetAlignment;
+		_limits._unorderedAccessBufferOffsetAlignment = (uint32_t)limits.minStorageBufferOffsetAlignment;
+		_limits._texelBufferOffsetAlignment = (uint32_t)limits.minTexelBufferOffsetAlignment;
+		_limits._copyBufferOffsetAlignment = (uint32_t)limits.optimalBufferCopyOffsetAlignment;
 		_limits._maxPushConstantsSize = limits.maxPushConstantsSize;
 		assert(_limits._constantBufferOffsetAlignment != 0);
 		assert(_limits._unorderedAccessBufferOffsetAlignment != 0);
@@ -2008,7 +2017,7 @@ namespace RenderCore { namespace ImplVulkan
 
     struct SwapChainProperties
     {
-        VkFormat                        _fmt;
+        VkSurfaceFormatKHR				_fmt;
         VkExtent2D                      _extent;
         uint32_t                        _desiredNumberOfImages;
         VkSurfaceTransformFlagBitsKHR   _preTransform;
@@ -2030,38 +2039,50 @@ namespace RenderCore { namespace ImplVulkan
         // the surface has no preferred format.  Otherwise, at least one
         // supported format will be returned.
 		//
-		// Sometimes we get both an SRGB & non-SRGB format. Let's prefer the
-		// LDR SRGB format, if we can find one.
-        result._fmt = VK_FORMAT_UNDEFINED;
+		// Sometimes we get both a linear & non-linear format. If we have the UnorderedAccess
+		// bind flag, let's prefer a linear format in that case (because non-linear formats 
+		// can't be bound as a storage texture -- inconvenient if our tonemapper is a compute shader)
+        result._fmt = {VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
 
-		VkFormat vkPreferedFormat = VK_FORMAT_B8G8R8A8_SRGB;
+		const bool preferSRGBMarkedFormats = !(requestedDesc._bindFlags & BindFlag::UnorderedAccess);
+
+		VkFormat vkPreferedFormat = preferSRGBMarkedFormats ? VK_FORMAT_B8G8R8A8_SRGB : VK_FORMAT_B8G8R8A8_UNORM;
 		if (requestedDesc._format != Format(0))
 			vkPreferedFormat = (VkFormat)Metal_Vulkan::AsVkFormat(requestedDesc._format);
 
-		for (auto f:fmts)
-			if (f.format == vkPreferedFormat)
-				result._fmt = vkPreferedFormat;
-				
-		if (result._fmt == VK_FORMAT_UNDEFINED) {
-			for (auto f:fmts)
-				if (f.format == VK_FORMAT_B8G8R8A8_SRGB)
-					result._fmt = VK_FORMAT_B8G8R8A8_SRGB;
+		// We don't have an XLE API for output colorspaces other than SRGB
+		VkColorSpaceKHR vkPreferedColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+
+		if (requestedDesc._format != Format(0))
+			vkPreferedColorSpace = 
+				(GetComponentType(requestedDesc._format) == FormatComponentType::UNorm_SRGB)
+				? VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+				: VK_COLOR_SPACE_PASS_THROUGH_EXT;
+
+		if (std::find_if(fmts.begin(), fmts.end(), [q=VkSurfaceFormatKHR{vkPreferedFormat, vkPreferedColorSpace}](const auto& c) { return c.format == q.format && c.colorSpace == q.colorSpace; }) != fmts.end())
+			result._fmt = {vkPreferedFormat, vkPreferedColorSpace};
+
+		if (preferSRGBMarkedFormats) {
+			if (result._fmt.format == VK_FORMAT_UNDEFINED && std::find_if(fmts.begin(), fmts.end(), [q=VkSurfaceFormatKHR{VK_FORMAT_B8G8R8A8_SRGB, vkPreferedColorSpace}](const auto& c) { return c.format == q.format && c.colorSpace == q.colorSpace; }) != fmts.end())
+				result._fmt = {VK_FORMAT_B8G8R8A8_SRGB, vkPreferedColorSpace};
+
+			if (result._fmt.format == VK_FORMAT_UNDEFINED && std::find_if(fmts.begin(), fmts.end(), [q=VkSurfaceFormatKHR{VK_FORMAT_B8G8R8_SRGB, vkPreferedColorSpace}](const auto& c) { return c.format == q.format && c.colorSpace == q.colorSpace; }) != fmts.end())
+				result._fmt = {VK_FORMAT_B8G8R8_SRGB, vkPreferedColorSpace};
+		} else {
+			if (result._fmt.format == VK_FORMAT_UNDEFINED && std::find_if(fmts.begin(), fmts.end(), [q=VkSurfaceFormatKHR{VK_FORMAT_B8G8R8A8_UNORM, vkPreferedColorSpace}](const auto& c) { return c.format == q.format && c.colorSpace == q.colorSpace; }) != fmts.end())
+				result._fmt = {VK_FORMAT_B8G8R8A8_UNORM, vkPreferedColorSpace};
+
+			if (result._fmt.format == VK_FORMAT_UNDEFINED && std::find_if(fmts.begin(), fmts.end(), [q=VkSurfaceFormatKHR{VK_FORMAT_B8G8R8_UNORM, vkPreferedColorSpace}](const auto& c) { return c.format == q.format && c.colorSpace == q.colorSpace; }) != fmts.end())
+				result._fmt = {VK_FORMAT_B8G8R8_UNORM, vkPreferedColorSpace};
 		}
 
-		if (result._fmt == VK_FORMAT_UNDEFINED) {
-			for (auto f:fmts)
-				if (f.format == VK_FORMAT_B8G8R8_SRGB)
-					result._fmt = VK_FORMAT_B8G8R8_SRGB;
-		}
-
-		if (result._fmt == VK_FORMAT_UNDEFINED) {
+		if (result._fmt.format == VK_FORMAT_UNDEFINED)
 			for (auto f:fmts)
 				if (f.format != VK_FORMAT_UNDEFINED)
-					result._fmt = f.format;
-		}
+					result._fmt = f;
 
-		if (result._fmt == VK_FORMAT_UNDEFINED)
-			result._fmt = VK_FORMAT_B8G8R8A8_SRGB;
+		if (result._fmt.format == VK_FORMAT_UNDEFINED)
+			result._fmt = {VK_FORMAT_B8G8R8A8_UNORM, VK_COLORSPACE_SRGB_NONLINEAR_KHR};		// no valid formats! we will definitely fail from here
 
         VkSurfaceCapabilitiesKHR surfCapabilities;
         auto res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(phyDev, surface, &surfCapabilities);
@@ -2115,7 +2136,7 @@ namespace RenderCore { namespace ImplVulkan
         swapChainInfo.pNext = nullptr;
         swapChainInfo.surface = surface;
         swapChainInfo.minImageCount = props._desiredNumberOfImages;
-        swapChainInfo.imageFormat = props._fmt;
+        swapChainInfo.imageFormat = props._fmt.format;
         swapChainInfo.imageExtent.width = props._extent.width;
         swapChainInfo.imageExtent.height = props._extent.height;
         swapChainInfo.preTransform = props._preTransform;
@@ -2124,7 +2145,7 @@ namespace RenderCore { namespace ImplVulkan
         swapChainInfo.presentMode = props._presentMode;
         swapChainInfo.oldSwapchain = oldSwapChain;
         swapChainInfo.clipped = true;		// note -- when this is true, reading back from the presentation image itself may not contain all of the pixels
-        swapChainInfo.imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+        swapChainInfo.imageColorSpace = props._fmt.colorSpace;
         swapChainInfo.imageUsage = Metal_Vulkan::AsImageUsageFlags(props._bindFlags);
         swapChainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         swapChainInfo.queueFamilyIndexCount = 0;
@@ -2363,7 +2384,7 @@ namespace RenderCore { namespace ImplVulkan
 	static PresentationChainDesc AsPresentationChainDesc(const SwapChainProperties& props)
 	{
 		return {
-			props._extent.width, props._extent.height, Metal_Vulkan::AsFormat(props._fmt),
+			props._extent.width, props._extent.height, Metal_Vulkan::AsFormat(props._fmt.format),
 			TextureSamples::Create(),
 			props._bindFlags,
 			!(props._presentMode == VK_PRESENT_MODE_IMMEDIATE_KHR),
@@ -2425,8 +2446,8 @@ namespace RenderCore { namespace ImplVulkan
 
         if (desc._width*desc._height) {
 			_swapChain = CreateUnderlyingSwapChain(_underlyingDevice, _surface.get(), oldSwapChain.get(), props);
-			_bufferDesc = TextureDesc::Plain2D(props._extent.width, props._extent.height, Metal_Vulkan::AsFormat(props._fmt));
 			_desc = AsPresentationChainDesc(props);
+			_bufferDesc = TextureDesc::Plain2D(_desc._width, _desc._height, _desc._format);
 
 			BuildImages();
 		} else {
@@ -2569,8 +2590,8 @@ namespace RenderCore { namespace ImplVulkan
 		assert(props._desiredNumberOfImages <= dimof(_presentImageAttachedSyncs));
         _swapChain = CreateUnderlyingSwapChain(_underlyingDevice, _surface.get(), nullptr, props);
 
-        _bufferDesc = TextureDesc::Plain2D(props._extent.width, props._extent.height, Metal_Vulkan::AsFormat(props._fmt));
 		_desc = AsPresentationChainDesc(props);
+		_bufferDesc = TextureDesc::Plain2D(_desc._width, _desc._height, _desc._format);
 
         // We need to get pointers to each image and build the synchronization semaphores
 		// we should decouple the number of command lists from the number of present images
