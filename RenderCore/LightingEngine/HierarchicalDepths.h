@@ -14,7 +14,7 @@ namespace RenderCore
 	class IResourceView;
 }
 
-namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelineCollection; }}
+namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelineCollection; struct FrameBufferTarget; }}
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 
 namespace RenderCore { namespace LightingEngine
@@ -26,24 +26,23 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		void Execute(RenderCore::LightingEngine::LightingTechniqueIterator& iterator);
-		RenderCore::LightingEngine::RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
 
+		RenderCore::LightingEngine::RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
 		void PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext);
-		::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
-		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCommandList; }
+		::Assets::DependencyValidation GetDependencyValidation() const { assert(_secondStageConstructionState==2); return _depVal; }
+
+		void SecondStageConstruction(
+			std::promise<std::shared_ptr<HierarchicalDepthsOperator>>&& promise,
+			const Techniques::FrameBufferTarget& fbTarget);
 
 		HierarchicalDepthsOperator(
-			std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> resolveOp,
-			std::shared_ptr<RenderCore::IDevice> device);
-		~HierarchicalDepthsOperator();
-
-		static void ConstructToPromise(
-			std::promise<std::shared_ptr<HierarchicalDepthsOperator>>&& future,
 			std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool);
+		~HierarchicalDepthsOperator();
 	private:
 		std::shared_ptr<Techniques::IComputeShaderOperator> _resolveOp;
 		std::shared_ptr<IResourceView> _atomicCounterBufferView;
-		BufferUploads::CommandListID _completionCommandList = 0;
+		std::shared_ptr<RenderCore::Techniques::PipelineCollection> _pipelinePool;
 		::Assets::DependencyValidation _depVal;
+		unsigned _secondStageConstructionState = 0;		// debug usage only
 	};
 }}

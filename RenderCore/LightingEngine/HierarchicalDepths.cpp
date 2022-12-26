@@ -22,6 +22,9 @@ namespace RenderCore { namespace LightingEngine
 {
 	void HierarchicalDepthsOperator::Execute(RenderCore::LightingEngine::LightingTechniqueIterator& iterator)
 	{
+		assert(_secondStageConstructionState == 2);
+		assert(_resolveOp);
+
 		GPUProfilerBlock profileBlock(*iterator._threadContext, "HierarchicalDepthsOperator");
 
 		Metal::BarrierHelper{*iterator._threadContext}.Add(*iterator._rpi.GetNonFrameBufferAttachmentView(1)->GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
@@ -59,6 +62,7 @@ namespace RenderCore { namespace LightingEngine
 
 	RenderCore::LightingEngine::RenderStepFragmentInterface HierarchicalDepthsOperator::CreateFragment(const FrameBufferProperties& fbProps)
 	{
+		assert(_secondStageConstructionState == 0);
 		LightingEngine::RenderStepFragmentInterface result{PipelineType::Compute};
 
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
@@ -101,15 +105,10 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	HierarchicalDepthsOperator::HierarchicalDepthsOperator(
-		std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> resolveOp,
-		std::shared_ptr<RenderCore::IDevice> device)
-	: _resolveOp(std::move(resolveOp))
+		std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool)
+	: _pipelinePool(std::move(pipelinePool))
 	{
-		_depVal = ::Assets::GetDepValSys().Make();
-		_depVal.RegisterDependency(_resolveOp->GetDependencyValidation());
-		_completionCommandList = 0;
-
-		auto atomicBuffer = device->CreateResource(
+		auto atomicBuffer = _pipelinePool->GetDevice()->CreateResource(
 			CreateDesc(
 				BindFlag::TransferDst | BindFlag::UnorderedAccess | BindFlag::TexelBuffer,
 				LinearBufferDesc::Create(4*4)),
@@ -119,10 +118,13 @@ namespace RenderCore { namespace LightingEngine
 
 	HierarchicalDepthsOperator::~HierarchicalDepthsOperator() {}
 
-	void HierarchicalDepthsOperator::ConstructToPromise(
+	void HierarchicalDepthsOperator::SecondStageConstruction(
 		std::promise<std::shared_ptr<HierarchicalDepthsOperator>>&& promise,
-		std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool)
+		const Techniques::FrameBufferTarget& fbTarget)
 	{
+		assert(_secondStageConstructionState == 0);
+		_secondStageConstructionState = 1;
+
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, "AtomicBuffer"_h);
 		usi.BindResourceView(1, "InputDepths"_h);
@@ -132,7 +134,7 @@ namespace RenderCore { namespace LightingEngine
 
 		ParameterBox selectors;
 		auto resolveOp = Techniques::CreateComputeOperator(
-			pipelinePool,
+			_pipelinePool,
 			HIERARCHICAL_DEPTHS_HLSL ":GenerateDownsampleDepths",
 			selectors, 
 			SSR_PIPELINE ":DownsampleDepths",
@@ -140,9 +142,14 @@ namespace RenderCore { namespace LightingEngine
 
 		::Assets::WhenAll(resolveOp).ThenConstructToPromise(
 			std::move(promise), 
-			[dev=pipelinePool->GetDevice()](auto resolveOp) { return std::make_shared<HierarchicalDepthsOperator>(std::move(resolveOp), std::move(dev)); });
+			[strongThis=shared_from_this()](auto resolveOp) {
+				assert(strongThis->_secondStageConstructionState == 1);
+				strongThis->_resolveOp = std::move(resolveOp);
+				strongThis->_depVal = strongThis->_resolveOp->GetDependencyValidation();
+				strongThis->_secondStageConstructionState = 2;
+				return strongThis;
+			});
 	}
-
 
 }}
 

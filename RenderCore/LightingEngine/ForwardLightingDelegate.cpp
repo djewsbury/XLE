@@ -37,26 +37,41 @@ using namespace Utility::Literals;
 namespace RenderCore { namespace LightingEngine
 {
 
-	static const uint64_t s_shadowTemplate = "ShadowTemplate"_h;
-	static const uint64_t s_forwardLighting = "ForwardLighting"_h;
+	constexpr uint64_t s_shadowTemplate = "ShadowTemplate"_h;
+	constexpr uint64_t s_forwardLighting = "ForwardLighting"_h;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class ForwardLightingCaptures
+	struct OperatorDigest;
+
+	class ForwardLightingCaptures : public std::enable_shared_from_this<ForwardLightingCaptures>
 	{
 	public:
 		std::shared_ptr<ForwardPlusLightScene> _lightScene;
 		std::shared_ptr<SkyOperator> _skyOperator;
 		std::shared_ptr<HierarchicalDepthsOperator> _hierarchicalDepthsOperator;
 		std::shared_ptr<ScreenSpaceReflectionsOperator> _ssrOperator;
+		std::shared_ptr<ToneMapAcesOperator> _acesOperator;
+		std::shared_ptr<CopyToneMapOperator> _copyToneMapOperator;
 		std::shared_ptr<Techniques::SemiConstantDescriptorSet> _forwardLightingSemiConstant;
 
 		void DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence);
-		void DoToneMap(LightingTechniqueIterator& iterator);
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext);
 		void ReleaseParsingContext(Techniques::ParsingContext& parsingContext);
 
 		void ConfigureSkyOperatorBindings();
+
+		struct SecondStageConstructionOperators;
+		auto ConstructMainSequence(
+			CompiledLightingTechnique& lightingTechnique,
+			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
+			IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
+			const FrameBufferProperties& fbProps,
+			const OperatorDigest& digest,
+			Techniques::DeferredShaderResource& balancedNoiseTexture,
+			std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionNormalRoughnessDelegate,
+			std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionDelegate,
+			std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_DisableDepthWrite) -> std::shared_ptr<SecondStageConstructionOperators>;
 
 		std::vector<unsigned> _boundOnSkyTextureChange;
 		~ForwardLightingCaptures()
@@ -91,38 +106,6 @@ namespace RenderCore { namespace LightingEngine
 			_lightScene->_shadowScheduler->ClearPreparedShadows();
 	}
 
-	static ::Assets::PtrToMarkerPtr<Techniques::IShaderOperator> CreateToneMapOperator(
-		const std::shared_ptr<Techniques::PipelineCollection>& pool, 
-		Techniques::RenderPassInstance& rpi)
-	{
-		Techniques::PixelOutputStates outputStates;
-		outputStates.Bind(rpi);
-		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
-		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
-		outputStates.Bind(MakeIteratorRange(blendStates));
-		UniformsStreamInterface usi;
-		usi.BindResourceView(0, "SubpassInputAttachment"_h);
-		return Techniques::CreateFullViewportOperator(
-			pool, Techniques::FullViewportOperatorSubType::DisableDepth,
-			BASIC_PIXEL_HLSL ":copy_inputattachment",
-			{}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
-			outputStates, usi);
-	};
-
-	void ForwardLightingCaptures::DoToneMap(LightingTechniqueIterator& iterator)
-	{
-		// Very simple stand-in for tonemap -- just use a copy shader to write the HDR values directly to the LDR texture
-		auto pipelineFuture = CreateToneMapOperator(iterator._parsingContext->GetTechniqueContext()._graphicsPipelinePool, iterator._rpi);
-		pipelineFuture->StallWhilePending();
-		auto pipeline = pipelineFuture->TryActualize();
-		if (pipeline) {
-			UniformsStream us;
-			IResourceView* srvs[] = { iterator._rpi.GetInputAttachmentView(0).get() };
-			us._resourceViews = MakeIteratorRange(srvs);
-			(*pipeline)->Draw(*iterator._threadContext, us);
-		}
-	}
-
 	void ForwardLightingCaptures::ConfigureSkyOperatorBindings()
 	{
 		unsigned binding0 = _lightScene->BindOnChangeSkyTexture(
@@ -148,30 +131,7 @@ namespace RenderCore { namespace LightingEngine
 		_boundOnSkyTextureChange.push_back(binding1);
 	}
 
-	static RenderStepFragmentInterface CreateToneMapFragment(
-		std::function<void(LightingTechniqueIterator&)>&& fn)
-	{
-		RenderStepFragmentInterface fragment { RenderCore::PipelineType::Graphics };
-		auto hdrInput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard();
-		auto ldrOutput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState();
-
-		Techniques::FrameBufferDescFragment::SubpassDesc subpass;
-		subpass.AppendOutput(ldrOutput);
-		subpass.AppendInput(hdrInput);
-		subpass.SetName("tonemap");
-		fragment.AddSubpass(std::move(subpass), std::move(fn));
-		return fragment;
-	}
-
-	static std::future<std::shared_ptr<SkyOperator>> CreateSkyOperator(
-		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
-		const Techniques::FrameBufferTarget& fbTarget,
-		const SkyOperatorDesc& desc)
-	{
-		return ::Assets::ConstructToFuturePtr<SkyOperator>(desc, pipelinePool, fbTarget);
-	}
-
-	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, bool precisionTargets = false)
+	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext)
 	{
 		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
 		Techniques::PreregisteredAttachment attachments[] {
@@ -181,13 +141,6 @@ namespace RenderCore { namespace LightingEngine
 					BindFlag::DepthStencil | BindFlag::ShaderResource | BindFlag::InputAttachment,
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], stitchingContext.GetSystemAttachmentFormat(Techniques::SystemAttachmentFormat::MainDepthStencil))),
 				"main-depth"
-			},
-			Techniques::PreregisteredAttachment {
-				Techniques::AttachmentSemantics::ColorHDR,
-				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT)),
-				"color-hdr"
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferNormal,
@@ -450,18 +403,141 @@ namespace RenderCore { namespace LightingEngine
 		}
 	};
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	static Techniques::FrameBufferTarget AsFrameBufferTarget(
+		LightingTechniqueSequence& sequence,
+		LightingTechniqueSequence::FragmentInterfaceRegistration regId)
+	{
+		auto resolvedFB = sequence.GetResolvedFrameBufferDesc(regId);
+		return Techniques::FrameBufferTarget{resolvedFB.first, resolvedFB.second};
+	}
+
+	template<typename Type, typename... Params>
+		static std::future<std::shared_ptr<Type>> SecondStageConstruction(
+			Type& op, Params&&... params)
+	{
+		std::promise<std::shared_ptr<Type>> promise;
+		auto future = promise.get_future();
+		op.SecondStageConstruction(std::move(promise), std::forward<Params>(params)...);
+		return future;
+	}
+
+	struct ForwardLightingCaptures::SecondStageConstructionOperators
+	{
+		std::future<std::shared_ptr<HierarchicalDepthsOperator>> _futureHierarchicalDepths;
+		std::future<std::shared_ptr<ScreenSpaceReflectionsOperator>> _futureSSR;
+		std::future<std::shared_ptr<ToneMapAcesOperator>> _futureAces;
+		std::future<std::shared_ptr<CopyToneMapOperator>> _futureCopyToneMap;
+		std::future<std::shared_ptr<SkyOperator>> _futureSky;
+	};
+
+	std::shared_ptr<ForwardLightingCaptures::SecondStageConstructionOperators> ForwardLightingCaptures::ConstructMainSequence(
+		CompiledLightingTechnique& lightingTechnique,
+		std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
+		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
+		const FrameBufferProperties& fbProps,
+		const OperatorDigest& digest,
+		Techniques::DeferredShaderResource& balancedNoiseTexture,
+		std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionNormalRoughnessDelegate,
+		std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionDelegate,
+		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_DisableDepthWrite)
+	{
+		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps, Techniques::CalculateDefaultSystemFormats(*pipelineAccelerators->GetDevice()) };
+		PreregisterAttachments(stitchingContext);
+		_hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);
+		_lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
+		if (_ssrOperator) _ssrOperator->PreregisterAttachments(stitchingContext);
+		if (_acesOperator) _acesOperator->PreregisterAttachments(stitchingContext);
+		if (_copyToneMapOperator) _copyToneMapOperator->PreregisterAttachments(stitchingContext);
+
+		auto& mainSequence = lightingTechnique.CreateSequence();
+		mainSequence.CreateStep_CallFunction(
+			[](LightingTechniqueIterator& iterator) {
+				if (iterator._deformAcceleratorPool)
+					iterator._deformAcceleratorPool->SetVertexInputBarrier(*iterator._threadContext);
+			});
+
+		// Pre depth
+		if (_ssrOperator) {
+			mainSequence.CreateStep_RunFragments(CreateDepthMotionNormalFragment(depthMotionNormalRoughnessDelegate));
+		} else {
+			mainSequence.CreateStep_RunFragments(CreateDepthMotionFragment(depthMotionDelegate));
+		}
+
+		mainSequence.CreateStep_InvalidateUniforms();
+		mainSequence.CreateStep_BringUpToDateUniforms();
+
+		// Build hierarchical depths
+		auto hierachicalDepthsReg = mainSequence.CreateStep_RunFragments(_hierarchicalDepthsOperator->CreateFragment(stitchingContext._workingProps));
+
+		// Light tiling & configure lighting descriptors
+		mainSequence.CreateStep_RunFragments(_lightScene->GetLightTiler().CreateInitFragment(stitchingContext._workingProps));
+		mainSequence.CreateStep_RunFragments(_lightScene->GetLightTiler().CreateFragment(stitchingContext._workingProps));
+		mainSequence.ResolvePendingCreateFragmentSteps();
+
+		// Calculate SSRs
+		LightingTechniqueSequence::FragmentInterfaceRegistration ssrFragmentReg;
+		if (_ssrOperator)
+			ssrFragmentReg = mainSequence.CreateStep_RunFragments(_ssrOperator->CreateFragment(stitchingContext._workingProps));
+
+		mainSequence.CreateStep_CallFunction(
+			[captures=shared_from_this()](LightingTechniqueIterator& iterator) {
+				captures->ConfigureParsingContext(*iterator._parsingContext);
+				captures->_lightScene->GetLightTiler().BarrierToReadingLayout(*iterator._threadContext);
+			});
+
+		// Draw main scene
+		auto mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
+			CreateForwardSceneFragment(shared_from_this(), forwardIllumDelegate_DisableDepthWrite, _ssrOperator!=nullptr, balancedNoiseTexture, digest._dominantLightOperator, digest._dominantShadowOperator));
+
+		// simplify uniforms before going into post processing steps
+		mainSequence.CreateStep_CallFunction(
+			[captures=shared_from_this()](LightingTechniqueIterator& iterator) {
+				captures->ReleaseParsingContext(*iterator._parsingContext);	// almost need a "finally" step for this, because it may not be called on exception
+			});
+		mainSequence.CreateStep_BringUpToDateUniforms();
+
+		// Post processing
+		LightingTechniqueSequence::FragmentInterfaceRegistration toneMapReg;
+		if (_acesOperator) {
+			toneMapReg = mainSequence.CreateStep_RunFragments(_acesOperator->CreateFragment(stitchingContext._workingProps));
+		} else {
+			assert(_copyToneMapOperator);
+			toneMapReg = mainSequence.CreateStep_RunFragments(_copyToneMapOperator->CreateFragment(stitchingContext._workingProps));
+		}
+
+		lightingTechnique.CompleteConstruction(std::move(pipelineAccelerators), stitchingContext);
+
+		// Some operators requires a second stage construction, which must be done after we've finalized the frame buffer desc(s)
+		// This is because low level graphics pipelines used the FrameBufferDesc as a construction parameter
+		// It also gives the operator full context about how it's going to be used
+		auto ops = std::make_shared<SecondStageConstructionOperators>();
+		ops->_futureSky = SecondStageConstruction(*_skyOperator, AsFrameBufferTarget(mainSequence, mainSceneFragmentRegistration));
+		if (_ssrOperator)
+			ops->_futureSSR = SecondStageConstruction(*_ssrOperator, AsFrameBufferTarget(mainSequence, ssrFragmentReg));
+		ops->_futureHierarchicalDepths = SecondStageConstruction(*_hierarchicalDepthsOperator, AsFrameBufferTarget(mainSequence, hierachicalDepthsReg));
+		if (_acesOperator)
+			ops->_futureAces = SecondStageConstruction(*_acesOperator, AsFrameBufferTarget(mainSequence, toneMapReg));
+		if (_copyToneMapOperator)
+			ops->_futureCopyToneMap = SecondStageConstruction(*_copyToneMapOperator, AsFrameBufferTarget(mainSequence, toneMapReg));
+		return ops;
+	}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	template<typename MarkerType, typename Time>
 		static bool MarkerTimesOut(std::future<MarkerType>& marker, Time timeoutTime) { return marker.wait_until(timeoutTime) == std::future_status::timeout; }
 	template<typename MarkerType, typename Time>
 		static bool MarkerTimesOut(std::shared_future<MarkerType>& marker, Time timeoutTime) { return marker.wait_until(timeoutTime) == std::future_status::timeout; }
 	template<typename MarkerType, typename Time>
 		static bool MarkerTimesOut(::Assets::Marker<MarkerType>& marker, Time timeoutTime)
-		{
-			auto remainingTime = timeoutTime - std::chrono::steady_clock::now();
-			if (remainingTime.count() <= 0) return true;
-			auto t = marker.StallWhilePending(std::chrono::duration_cast<std::chrono::microseconds>(remainingTime));
-			return t.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Pending;
-		}
+	{
+		auto remainingTime = timeoutTime - std::chrono::steady_clock::now();
+		if (remainingTime.count() <= 0) return true;
+		auto t = marker.StallWhilePending(std::chrono::duration_cast<std::chrono::microseconds>(remainingTime));
+		return t.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Pending;
+	}
 
 	void CreateForwardLightingTechnique(
 		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
@@ -476,12 +552,6 @@ namespace RenderCore { namespace LightingEngine
 	{
 		struct ConstructionHelper
 		{
-			// optional operators
-			::Assets::PtrToMarkerPtr<HierarchicalDepthsOperator> _hierarchicalDepthsOperatorFuture;
-			::Assets::PtrToMarkerPtr<ScreenSpaceReflectionsOperator> _ssrFuture;
-			::Assets::PtrToMarkerPtr<SSAOOperator> _ssaoFuture;
-			::Assets::PtrToMarkerPtr<ToneMapAcesOperator> _toneMapAcesOperator;
-
 			// main technique delegates
 			SharedTechniqueDelegateBox::TechniqueDelegateFuture _depthMotionNormalRoughnessDelegate;
 			SharedTechniqueDelegateBox::TechniqueDelegateFuture _depthMotionDelegate;
@@ -494,7 +564,6 @@ namespace RenderCore { namespace LightingEngine
 		auto helper = std::make_shared<ConstructionHelper>();
 
 		helper->_balancedNoiseTexture = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
-		helper->_hierarchicalDepthsOperatorFuture = ::Assets::ConstructToMarkerPtr<HierarchicalDepthsOperator>(pipelinePool);
 
 		OperatorDigest digest { resolveOperators, shadowOperators, globalOperators };
 
@@ -502,15 +571,6 @@ namespace RenderCore { namespace LightingEngine
 			ForwardPlusLightScene::ConstructionServices{pipelineAccelerators, pipelinePool, techDelBox},
 			std::move(digest._shadowPrepreparerIdMapping), std::move(digest._lightSceneOperatorInfo),
 			digest._tilingConfig);
-
-		if (digest._ssr)
-			helper->_ssrFuture = ::Assets::ConstructToMarkerPtr<ScreenSpaceReflectionsOperator>(pipelinePool, *digest._ssr);
-
-		if (digest._ssao)
-			helper->_ssaoFuture = ::Assets::ConstructToMarkerPtr<SSAOOperator>(pipelinePool, *digest._ssao, true);
-
-		if (digest._tonemapAces)
-			helper->_toneMapAcesOperator = ::Assets::ConstructToMarkerPtr<ToneMapAcesOperator>(pipelinePool, *digest._tonemapAces);
 
 		helper->_depthMotionNormalRoughnessDelegate = techDelBox->GetDepthMotionNormalRoughnessDelegate();
 		helper->_depthMotionDelegate = techDelBox->GetDepthMotionDelegate();
@@ -523,10 +583,6 @@ namespace RenderCore { namespace LightingEngine
 			[helper](auto timeout) {
 				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
 				if (MarkerTimesOut(helper->_lightSceneFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
-				if (helper->_hierarchicalDepthsOperatorFuture && MarkerTimesOut(*helper->_hierarchicalDepthsOperatorFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
-				if (helper->_ssrFuture && MarkerTimesOut(*helper->_ssrFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
-				if (helper->_ssaoFuture && MarkerTimesOut(*helper->_ssaoFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
-				if (helper->_toneMapAcesOperator && MarkerTimesOut(*helper->_toneMapAcesOperator, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (MarkerTimesOut(helper->_depthMotionNormalRoughnessDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (MarkerTimesOut(helper->_depthMotionDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (MarkerTimesOut(helper->_forwardIllumDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
@@ -539,106 +595,81 @@ namespace RenderCore { namespace LightingEngine
 				TRY {
 					auto captures = std::make_shared<ForwardLightingCaptures>();
 					captures->_lightScene = helper->_lightSceneFuture.get();
-					captures->_hierarchicalDepthsOperator = helper->_hierarchicalDepthsOperatorFuture->Actualize();
-					if (helper->_ssrFuture)
-						captures->_ssrOperator = helper->_ssrFuture->Actualize();
+
 					captures->_forwardLightingSemiConstant = Techniques::CreateSemiConstantDescriptorSet(
 						*techDelBox->_forwardLightingDescSetTemplate, "ForwardLighting", PipelineType::Graphics, *pipelinePool->GetDevice());
+
+					// operators
+					captures->_hierarchicalDepthsOperator = std::make_shared<HierarchicalDepthsOperator>(pipelinePool);
+					captures->_skyOperator = std::make_shared<SkyOperator>(pipelinePool, SkyOperatorDesc { SkyTextureType::Equirectangular });
+					captures->ConfigureSkyOperatorBindings();
+					if (digest._ssr)
+						captures->_ssrOperator = std::make_shared<ScreenSpaceReflectionsOperator>(pipelinePool, *digest._ssr);
+					if (digest._tonemapAces) {
+						captures->_acesOperator = std::make_shared<ToneMapAcesOperator>(pipelinePool, *digest._tonemapAces);
+					} else {
+						captures->_copyToneMapOperator = std::make_shared<CopyToneMapOperator>(pipelinePool);
+					}
 
 					auto depthMotionNormalRoughnessDelegate = helper->_depthMotionNormalRoughnessDelegate.get();
 					auto depthMotionDelegate = helper->_depthMotionDelegate.get();
 					auto forwardIllumDelegate_DisableDepthWrite = helper->_forwardIllumDelegate.get();
 					auto balancedNoiseTexture = helper->_balancedNoiseTexture.get();
 
-					Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps, Techniques::CalculateDefaultSystemFormats(*pipelinePool->GetDevice()) };
-					PreregisterAttachments(stitchingContext);
-					captures->_hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);
-					captures->_lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
-					if (captures->_ssrOperator)
-						captures->_ssrOperator->PreregisterAttachments(stitchingContext);
-
 					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(captures->_lightScene);
 					lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
-					lightingTechnique->_depVal.RegisterDependency(captures->_hierarchicalDepthsOperator->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(captures->_lightScene->GetLightTiler().GetDependencyValidation());
-					if (captures->_ssrOperator)
-						lightingTechnique->_depVal.RegisterDependency(captures->_ssrOperator->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(depthMotionNormalRoughnessDelegate->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(depthMotionDelegate->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(forwardIllumDelegate_DisableDepthWrite->GetDependencyValidation());
+					lightingTechnique->_depVal.RegisterDependency(balancedNoiseTexture->GetDependencyValidation());
 
-					// Prepare shadows
+					// Prepare shadows sequence
 					lightingTechnique->CreateDynamicSequence(
 						[captures](LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence) {
 							captures->DoShadowPrepare(iterator, sequence);
 							captures->_lightScene->Prerender(*iterator._threadContext);
 						});
 
-					auto& mainSequence = lightingTechnique->CreateSequence();
-					mainSequence.CreateStep_CallFunction(
-						[](LightingTechniqueIterator& iterator) {
-							if (iterator._deformAcceleratorPool)
-								iterator._deformAcceleratorPool->SetVertexInputBarrier(*iterator._threadContext);
-						});
+					// main sequence & setup second stage construction
+					auto secondStageHelper = captures->ConstructMainSequence(
+						*lightingTechnique,
+						pipelineAccelerators,
+						preregisteredAttachments, fbProps, digest, *balancedNoiseTexture,
+						depthMotionNormalRoughnessDelegate, depthMotionDelegate, forwardIllumDelegate_DisableDepthWrite);
 
-					// Pre depth
-					if (captures->_ssrOperator) {
-						mainSequence.CreateStep_RunFragments(CreateDepthMotionNormalFragment(depthMotionNormalRoughnessDelegate));
-					} else {
-						mainSequence.CreateStep_RunFragments(CreateDepthMotionFragment(depthMotionDelegate));
-					}
-
-					mainSequence.CreateStep_CallFunction(
-						[](LightingTechniqueIterator& iterator) {
-							iterator._parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
-							iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
-							iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateCompute(*iterator._parsingContext);
-						});
-
-					// Build hierarchical depths
-					mainSequence.CreateStep_RunFragments(captures->_hierarchicalDepthsOperator->CreateFragment(stitchingContext._workingProps));
-
-					// Light tiling & configure lighting descriptors
-					mainSequence.CreateStep_RunFragments(captures->_lightScene->GetLightTiler().CreateInitFragment(stitchingContext._workingProps));
-					mainSequence.CreateStep_RunFragments(captures->_lightScene->GetLightTiler().CreateFragment(stitchingContext._workingProps));
-
-					// Calculate SSRs
-					if (captures->_ssrOperator)
-						mainSequence.CreateStep_RunFragments(captures->_ssrOperator->CreateFragment(stitchingContext._workingProps));
-
-					mainSequence.CreateStep_CallFunction(
-						[captures](LightingTechniqueIterator& iterator) {
-							captures->ConfigureParsingContext(*iterator._parsingContext);
-							captures->_lightScene->GetLightTiler().BarrierToReadingLayout(*iterator._threadContext);
-						});
-
-					// Draw main scene
-					auto mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
-						CreateForwardSceneFragment(captures, forwardIllumDelegate_DisableDepthWrite, captures->_ssrOperator!=nullptr, *balancedNoiseTexture, digest._dominantLightOperator, digest._dominantShadowOperator));
-
-					// Post processing
-					auto toneMapFragment = CreateToneMapFragment(
-						[captures](LightingTechniqueIterator& iterator) {
-							captures->DoToneMap(iterator);
-						});
-					mainSequence.CreateStep_RunFragments(std::move(toneMapFragment));
-
-					mainSequence.CreateStep_CallFunction(
-						[captures](LightingTechniqueIterator& iterator) {
-							captures->ReleaseParsingContext(*iterator._parsingContext);	// almost need a "finally" step for this, because it may not be called on exception
-						});
-
-					lightingTechnique->CompleteConstruction(pipelineAccelerators, stitchingContext);
-
-					// Any final operators that depend on the resolved frame buffer:
-					auto resolvedFB = mainSequence.GetResolvedFrameBufferDesc(mainSceneFragmentRegistration);
-					auto skyOpFuture = CreateSkyOperator(pipelinePool, Techniques::FrameBufferTarget{resolvedFB.first, resolvedFB.second}, SkyOperatorDesc { SkyTextureType::Equirectangular });
-					::Assets::WhenAll(std::move(skyOpFuture)).ThenConstructToPromise(
+					::Assets::PollToPromise(
 						std::move(thatPromise),
-						[captures, lightingTechnique](auto skyOp) {
-							captures->_skyOperator = skyOp;
-							captures->ConfigureSkyOperatorBindings();
-							lightingTechnique->_depVal.RegisterDependency(skyOp->GetDependencyValidation());
+						[secondStageHelper](auto timeout) {
+							auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+							if (secondStageHelper->_futureHierarchicalDepths.valid() && MarkerTimesOut(secondStageHelper->_futureHierarchicalDepths, timeoutTime)) return ::Assets::PollStatus::Continue;
+							if (secondStageHelper->_futureSSR.valid() && MarkerTimesOut(secondStageHelper->_futureSSR, timeoutTime)) return ::Assets::PollStatus::Continue;
+							// if (secondStageHelper->_futureSSAO && MarkerTimesOut(*secondStageHelper->_futureSSAO, timeoutTime)) return ::Assets::PollStatus::Continue;
+							if (secondStageHelper->_futureAces.valid() && MarkerTimesOut(secondStageHelper->_futureAces, timeoutTime)) return ::Assets::PollStatus::Continue;
+							if (secondStageHelper->_futureCopyToneMap.valid() && MarkerTimesOut(secondStageHelper->_futureCopyToneMap, timeoutTime)) return ::Assets::PollStatus::Continue;
+							if (secondStageHelper->_futureSky.valid() && MarkerTimesOut(secondStageHelper->_futureSky, timeoutTime)) return ::Assets::PollStatus::Continue;
+							return ::Assets::PollStatus::Finish;
+						},
+						[secondStageHelper, lightingTechnique, captures]() {
+							// Shake out any exceptions
+							secondStageHelper->_futureHierarchicalDepths.get();
+							if (secondStageHelper->_futureSSR.valid()) secondStageHelper->_futureSSR.get();
+							// secondStageHelper->_futureSSAO.get();
+							if (secondStageHelper->_futureAces.valid()) secondStageHelper->_futureAces.get();
+							if (secondStageHelper->_futureCopyToneMap.valid()) secondStageHelper->_futureCopyToneMap.get();
+							secondStageHelper->_futureSky.get();
+
+							// register dep vals for operators after we've done their second-stage-construction 
+							lightingTechnique->_depVal.RegisterDependency(captures->_hierarchicalDepthsOperator->GetDependencyValidation());
+							if (captures->_ssrOperator)
+								lightingTechnique->_depVal.RegisterDependency(captures->_ssrOperator->GetDependencyValidation());
+							if (captures->_acesOperator)
+								lightingTechnique->_depVal.RegisterDependency(captures->_acesOperator->GetDependencyValidation());
+							if (captures->_copyToneMapOperator)
+								lightingTechnique->_depVal.RegisterDependency(captures->_copyToneMapOperator->GetDependencyValidation());
+							lightingTechnique->_depVal.RegisterDependency(captures->_skyOperator->GetDependencyValidation());
+
+							// Everything finally finished
 							return lightingTechnique;
 						});
 				} CATCH(...) {

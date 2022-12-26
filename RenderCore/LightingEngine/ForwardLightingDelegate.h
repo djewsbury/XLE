@@ -19,6 +19,10 @@ namespace RenderCore { namespace LightingEngine
 	struct AmbientLightOperatorDesc;
 	struct ChainedOperatorDesc;
 
+	struct ForwardLightingTechniqueDesc
+	{
+	};
+
 	void CreateForwardLightingTechnique(
 		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,

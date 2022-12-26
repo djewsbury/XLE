@@ -10,6 +10,7 @@
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/Services.h"
 #include "../Techniques/CommonResources.h"
+#include "../Techniques/CommonBindings.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Continuation.h"
@@ -21,6 +22,8 @@ namespace RenderCore { namespace LightingEngine
 {
 	void SkyOperator::Execute(Techniques::ParsingContext& parsingContext)
 	{
+		assert(_secondStageConstructionState == 2);
+		assert(_shader);
 		const IDescriptorSet* descSets[] = { _descSet.get() };
 		_shader->Draw(
 			parsingContext,
@@ -35,6 +38,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void SkyOperator::SetResource(std::shared_ptr<IResourceView> texture)
 	{
+		assert(_secondStageConstructionState == 2);
 		auto& pipelineLayout = _shader->GetPredefinedPipelineLayout();
 		auto* descSetLayout = pipelineLayout.FindDescriptorSet("SkyDS");
 		assert(descSetLayout);
@@ -58,28 +62,27 @@ namespace RenderCore { namespace LightingEngine
 		}
 	}
 
-	::Assets::DependencyValidation SkyOperator::GetDependencyValidation() const { return _shader->GetDependencyValidation(); }
+	::Assets::DependencyValidation SkyOperator::GetDependencyValidation() const { assert(_secondStageConstructionState == 2); return _shader->GetDependencyValidation(); }
 
 	SkyOperator::SkyOperator(
-		const SkyOperatorDesc& desc,
-		std::shared_ptr<Techniques::IShaderOperator> shader,
-		std::shared_ptr<Techniques::PipelineCollection> pipelinePool)
-	: _shader(std::move(shader))
+		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
+		const SkyOperatorDesc& desc)
+	: _secondStageConstructionState(0)
 	{
 		_device = pipelinePool->GetDevice();
 		_pool = std::move(pipelinePool);
-		SetResource(nullptr);		// initial blocked out state
 	}
 
 	SkyOperator::~SkyOperator()
 	{}
 
-	void SkyOperator::ConstructToPromise(
+	void SkyOperator::SecondStageConstruction(
 		std::promise<std::shared_ptr<SkyOperator>>&& promise,
-		const SkyOperatorDesc& desc,
-		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 		const Techniques::FrameBufferTarget& fbTarget)
 	{
+		assert(_secondStageConstructionState == 0);
+		_secondStageConstructionState = 1;
+
 		UniformsStreamInterface usi;
 		usi.BindFixedDescriptorSet(0, "SkyDS"_h);
 
@@ -91,7 +94,7 @@ namespace RenderCore { namespace LightingEngine
 		AttachmentBlendDesc blendDescs[] {Techniques::CommonResourceBox::s_abOpaque};
 		po.Bind(MakeIteratorRange(blendDescs));
 		auto futureShader = CreateFullViewportOperator(
-			pipelinePool,
+			_pool,
 			Techniques::FullViewportOperatorSubType::MaxDepth,
 			SKY_PIXEL_HLSL ":main",
 			params,
@@ -99,14 +102,18 @@ namespace RenderCore { namespace LightingEngine
 			po, usi);
 		::Assets::WhenAll(futureShader).ThenConstructToPromise(
 			std::move(promise),
-			[desc, pipelinePool=std::move(pipelinePool)](auto shader) {
-				return std::make_shared<SkyOperator>(desc, std::move(shader), pipelinePool);
+			[strongThis=shared_from_this()](auto shader) {
+				assert(strongThis->_secondStageConstructionState == 1);
+				strongThis->_shader = std::move(shader);
+				strongThis->_secondStageConstructionState = 2;
+				strongThis->SetResource(nullptr);		// initial blocked out state
+				return strongThis;
 			});
 	}
 
-	uint64_t SkyOperatorDesc::GetHash() const
+	uint64_t SkyOperatorDesc::GetHash(uint64_t seed) const
 	{
-		return (uint64_t)_textureType;
+		return HashCombine((uint64_t)_textureType, seed);
 	}
 }}
 

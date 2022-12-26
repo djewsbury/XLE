@@ -32,34 +32,32 @@ namespace RenderCore { namespace LightingEngine
 	struct SkyOperatorDesc
 	{
 		SkyTextureType _textureType = SkyTextureType::Equirectangular;
-		uint64_t GetHash() const;
+		uint64_t GetHash(uint64_t seed=DefaultSeed64) const;
 	};
 
-	class SkyOperator
+	class SkyOperator : public std::enable_shared_from_this<SkyOperator>
 	{
 	public:
 		void Execute(Techniques::ParsingContext& parsingContext);
 		void Execute(LightingTechniqueIterator&);
 		void SetResource(std::shared_ptr<IResourceView>);
 
+		void SecondStageConstruction(
+			std::promise<std::shared_ptr<SkyOperator>>&& promise,
+			const Techniques::FrameBufferTarget& fbTarget);
+
 		::Assets::DependencyValidation GetDependencyValidation() const;
 
 		SkyOperator(
-			const SkyOperatorDesc& desc,
-			std::shared_ptr<Techniques::IShaderOperator> shader,
-			std::shared_ptr<Techniques::PipelineCollection> pipelinePool);
-		~SkyOperator();
-
-		static void ConstructToPromise(
-			std::promise<std::shared_ptr<SkyOperator>>&& promise,
-			const SkyOperatorDesc& desc,
 			std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
-			const Techniques::FrameBufferTarget& fbTarget);
+			const SkyOperatorDesc& desc);
+		~SkyOperator();
 	private:
 		std::shared_ptr<Techniques::IShaderOperator> _shader;
 		std::shared_ptr<IDescriptorSet> _descSet;
 		std::shared_ptr<Techniques::PipelineCollection> _pool;
 		std::shared_ptr<IDevice> _device;
+		unsigned _secondStageConstructionState = 0;		// debug usage only
 	};
 
 }}

@@ -24,6 +24,7 @@ namespace RenderCore { namespace Techniques
 	class IComputeShaderOperator;
 	class PipelineCollection;
 	class DeferredShaderResource;
+	struct FrameBufferTarget;
 }}
 namespace RenderCore { namespace Assets { class PredefinedCBLayout; } }
 namespace RenderCore { namespace BufferUploads { class ResourceLocator; } }
@@ -53,26 +54,17 @@ namespace RenderCore { namespace LightingEngine
 		void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext);
 
 		void ResetAccumulation();
-		::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
+		::Assets::DependencyValidation GetDependencyValidation() const { assert(_secondStageConstructionState == 2); return _depVal; }
 
+		void SecondStageConstruction(
+			std::promise<std::shared_ptr<ScreenSpaceReflectionsOperator>>&& promise,
+			const Techniques::FrameBufferTarget& fbTarget);
 		void CompleteInitialization(IThreadContext& threadContext);		// must be called after CompleteInitialization()
 
 		ScreenSpaceReflectionsOperator(
-			const ScreenSpaceReflectionsOperatorDesc& desc,
-			std::shared_ptr<Techniques::IComputeShaderOperator> classifyTiles,
-			std::shared_ptr<Techniques::IComputeShaderOperator> prepareIndirectArgs,
-			std::shared_ptr<Techniques::IComputeShaderOperator> intersect,
-			std::shared_ptr<Techniques::IComputeShaderOperator> resolveSpatial,
-			std::shared_ptr<Techniques::IComputeShaderOperator> resolveTemporal,
-			std::shared_ptr<Techniques::IComputeShaderOperator> reflectionsBlur,
-			const RenderCore::Assets::PredefinedCBLayout& configCBLayout,
-			std::shared_ptr<IDevice> device);
-		~ScreenSpaceReflectionsOperator();
-
-		static void ConstructToPromise(
-			std::promise<std::shared_ptr<ScreenSpaceReflectionsOperator>>&& promise,
 			std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 			const ScreenSpaceReflectionsOperatorDesc& desc);
+		~ScreenSpaceReflectionsOperator();
 	private:
 		ScreenSpaceReflectionsOperatorDesc _desc;
 		std::shared_ptr<Techniques::IComputeShaderOperator> _classifyTiles;
@@ -96,9 +88,11 @@ namespace RenderCore { namespace LightingEngine
 		std::unique_ptr<BlueNoiseGeneratorTables> _blueNoiseRes;
 		
 		std::shared_ptr<IDevice> _device;
+		std::shared_ptr<Techniques::PipelineCollection> _pipelinePool;
 		::Assets::DependencyValidation _depVal;
 		unsigned _pingPongCounter = ~0u;
 		bool _pendingCompleteInit = true;
+		unsigned _secondStageConstructionState = 0;		// debug usage only
 	};
 
 }}

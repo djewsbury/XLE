@@ -142,6 +142,10 @@ namespace RenderCore { namespace LightingEngine
 
 	void ScreenSpaceReflectionsOperator::Execute(LightingEngine::LightingTechniqueIterator& iterator)
 	{
+		assert(_secondStageConstructionState == 2);
+		assert(_classifyTiles && _prepareIndirectArgs && _intersect && _resolveSpatial && _resolveTemporal);
+		assert(!_desc._enableFinalBlur || _reflectionsBlur);
+
 		if (_pendingCompleteInit) {
 			CompleteInitialization(*iterator._threadContext);
 
@@ -312,6 +316,7 @@ namespace RenderCore { namespace LightingEngine
 
 	LightingEngine::RenderStepFragmentInterface ScreenSpaceReflectionsOperator::CreateFragment(const FrameBufferProperties& fbProps)
 	{
+		assert(_secondStageConstructionState == 0);
 		LightingEngine::RenderStepFragmentInterface result{PipelineType::Compute};
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
 		auto outputReflections = result.DefineAttachment(SSRReflections).NoInitialState().FinalState(BindFlag::ShaderResource);
@@ -477,59 +482,13 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	ScreenSpaceReflectionsOperator::ScreenSpaceReflectionsOperator(
-		const ScreenSpaceReflectionsOperatorDesc& desc,
-		std::shared_ptr<Techniques::IComputeShaderOperator> classifyTiles,
-		std::shared_ptr<Techniques::IComputeShaderOperator> prepareIndirectArgs,
-		std::shared_ptr<Techniques::IComputeShaderOperator> intersect,
-		std::shared_ptr<Techniques::IComputeShaderOperator> resolveSpatial,
-		std::shared_ptr<Techniques::IComputeShaderOperator> resolveTemporal,
-		std::shared_ptr<Techniques::IComputeShaderOperator> reflectionsBlur,
-		const RenderCore::Assets::PredefinedCBLayout& configCBLayout,
-		std::shared_ptr<IDevice> device)
+		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
+		const ScreenSpaceReflectionsOperatorDesc& desc)
 	: _desc(desc)
-	, _classifyTiles(std::move(classifyTiles))
-	, _prepareIndirectArgs(std::move(prepareIndirectArgs))
-	, _intersect(std::move(intersect))
-	, _resolveSpatial(std::move(resolveSpatial))
-	, _resolveTemporal(std::move(resolveTemporal))
-	, _reflectionsBlur(std::move(reflectionsBlur))
-	, _device(std::move(device))
+	, _pipelinePool(std::move(pipelinePool))
+	, _device(_pipelinePool->GetDevice())
 	{
 		_blueNoiseRes = std::make_unique<BlueNoiseGeneratorTables>(*_device);
-
-		::Assets::DependencyValidationMarker subDepVals[] {
-			_classifyTiles->GetDependencyValidation(),
-			_prepareIndirectArgs->GetDependencyValidation(),
-			_intersect->GetDependencyValidation(),
-			_resolveSpatial->GetDependencyValidation(),
-			_resolveTemporal->GetDependencyValidation(),
-			_reflectionsBlur->GetDependencyValidation()
-		};
-		_depVal = ::Assets::GetDepValSys().MakeOrReuse(subDepVals);
-
-		{
-			ParameterBox params;
-			_configCBData = configCBLayout.BuildCBDataAsVector(params, Techniques::GetDefaultShaderLanguage());
-		}
-
-		///////////////////
-
-		auto rayCounterBuffer = _device->CreateResource(
-			CreateDesc(
-				BindFlag::TransferDst | BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TexelBuffer,
-				LinearBufferDesc::Create(2*sizeof(uint32_t))),
-			"ssr-ray-counter");
-		_rayCounterBufferUAV = rayCounterBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
-		_rayCounterBufferSRV = rayCounterBuffer->CreateTextureView(BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
-
-		///////////////////
-
-		_indirectArgsBuffer = _device->CreateResource(
-			CreateDesc(
-				BindFlag::DrawIndirectArgs | BindFlag::UnorderedAccess | BindFlag::TexelBuffer,
-				LinearBufferDesc::Create(3*sizeof(uint32_t))),
-			"ssr-indirect-args");
-		_indirectArgsBufferUAV = _indirectArgsBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
 	}
 
 	ScreenSpaceReflectionsOperator::~ScreenSpaceReflectionsOperator() {}
@@ -543,10 +502,9 @@ namespace RenderCore { namespace LightingEngine
 		Throw(std::runtime_error("Missing CBLayout named (" + name.AsString() + ")"));
 	}
 	
-	void ScreenSpaceReflectionsOperator::ConstructToPromise(
+	void ScreenSpaceReflectionsOperator::SecondStageConstruction(
 		std::promise<std::shared_ptr<ScreenSpaceReflectionsOperator>>&& promise,
-		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
-		const ScreenSpaceReflectionsOperatorDesc& desc)
+		const Techniques::FrameBufferTarget& fbTarget)
 	{
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, "g_denoised_reflections"_h);
@@ -588,7 +546,7 @@ namespace RenderCore { namespace LightingEngine
 		usi.BindResourceView(27, "SSRDebug"_h);
 		usi.BindResourceView(28, "SSRConfiguration"_h);
 
-		if (desc._splitConfidence) {
+		if (_desc._splitConfidence) {
 			usi.BindResourceView(29, "g_confidence_result"_h);
 			usi.BindResourceView(30, "g_confidence_result_read"_h);
 			usi.BindResourceView(31, "g_spatially_denoised_confidence"_h);
@@ -602,45 +560,45 @@ namespace RenderCore { namespace LightingEngine
 
 		ParameterBox selectors;
 		selectors.SetParameter("DEBUGGING_PRODUCTS", 1);
-		if (desc._splitConfidence)
+		if (_desc._splitConfidence)
 			selectors.SetParameter("SPLIT_CONFIDENCE", 1);
 		auto classifyTiles = Techniques::CreateComputeOperator(
-			pipelinePool,
+			_pipelinePool,
 			SSR_CLASSIFY_TILES_HLSL ":ClassifyTiles",
 			selectors,
 			SSR_PIPELINE ":Main",
 			usi);
 
 		auto prepareIndirectArgs = Techniques::CreateComputeOperator(
-			pipelinePool,
+			_pipelinePool,
 			SSR_CLASSIFY_TILES_HLSL ":PrepareIndirectArgs",
 			selectors,
 			SSR_PIPELINE ":Main",
 			usi);
 
 		auto intersect = Techniques::CreateComputeOperator(
-			pipelinePool,
+			_pipelinePool,
 			SSR_INTERSECT_HLSL ":SSRIntersect",
 			selectors,
 			SSR_PIPELINE ":Main",
 			usi);
 
 		auto resolveSpatial = Techniques::CreateComputeOperator(
-			pipelinePool,
+			_pipelinePool,
 			SSR_RESOLVE_SPATIAL_HLSL ":ResolveSpatial",
 			selectors,
 			SSR_PIPELINE ":Main",
 			usi);
 
 		auto resolveTemporal = Techniques::CreateComputeOperator(
-			pipelinePool,
+			_pipelinePool,
 			SSR_RESOLVE_TEMPORAL_HLSL ":ResolveTemporal",
 			selectors,
 			SSR_PIPELINE ":Main",
 			usi);
 
 		auto reflectionsBlur = Techniques::CreateComputeOperator(
-			pipelinePool,
+			_pipelinePool,
 			SSR_REFLECTIONS_BLUR_HLSL ":ReflectionsBlur",
 			selectors,
 			SSR_PIPELINE ":Main",
@@ -650,11 +608,46 @@ namespace RenderCore { namespace LightingEngine
 
 		::Assets::WhenAll(classifyTiles, prepareIndirectArgs, intersect, resolveSpatial, resolveTemporal, reflectionsBlur, pipelineLayoutFuture).ThenConstructToPromise(
 			std::move(promise), 
-			[dev=pipelinePool->GetDevice(), desc](auto classifyTiles, auto prepareIndirectArgs, auto intersect, auto resolveSpatial, auto resolveTemporal, auto reflectionsBlur, auto pipelineLayout) { 
-				return std::make_shared<ScreenSpaceReflectionsOperator>(
-					desc,
-					std::move(classifyTiles), std::move(prepareIndirectArgs), std::move(intersect), std::move(resolveSpatial), std::move(resolveTemporal), std::move(reflectionsBlur),
-					FindCBLayout(*pipelineLayout, "SSRConfiguration"), std::move(dev));
+			[strongThis=shared_from_this()](auto classifyTiles, auto prepareIndirectArgs, auto intersect, auto resolveSpatial, auto resolveTemporal, auto reflectionsBlur, auto pipelineLayout) { 
+				assert(strongThis->_secondStageConstructionState == 1);
+
+				::Assets::DependencyValidationMarker subDepVals[] {
+					classifyTiles->GetDependencyValidation(),
+					prepareIndirectArgs->GetDependencyValidation(),
+					intersect->GetDependencyValidation(),
+					resolveSpatial->GetDependencyValidation(),
+					resolveTemporal->GetDependencyValidation(),
+					reflectionsBlur->GetDependencyValidation(),
+					pipelineLayout->GetDependencyValidation()
+				};
+				strongThis->_depVal = ::Assets::GetDepValSys().MakeOrReuse(subDepVals);
+
+				{
+					ParameterBox params;
+					auto configCBLayout = FindCBLayout(*pipelineLayout, "SSRConfiguration");
+					strongThis->_configCBData = configCBLayout.BuildCBDataAsVector(params, Techniques::GetDefaultShaderLanguage());
+				}
+
+				///////////////////
+
+				auto rayCounterBuffer = strongThis->_device->CreateResource(
+					CreateDesc(
+						BindFlag::TransferDst | BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TexelBuffer,
+						LinearBufferDesc::Create(2*sizeof(uint32_t))),
+					"ssr-ray-counter");
+				strongThis->_rayCounterBufferUAV = rayCounterBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
+				strongThis->_rayCounterBufferSRV = rayCounterBuffer->CreateTextureView(BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
+
+				///////////////////
+
+				strongThis->_indirectArgsBuffer = strongThis->_device->CreateResource(
+					CreateDesc(
+						BindFlag::DrawIndirectArgs | BindFlag::UnorderedAccess | BindFlag::TexelBuffer,
+						LinearBufferDesc::Create(3*sizeof(uint32_t))),
+					"ssr-indirect-args");
+				strongThis->_indirectArgsBufferUAV = strongThis->_indirectArgsBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
+
+				return strongThis;
 			});
 	}
 
