@@ -19,6 +19,7 @@
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Metal/QueryPool.h"
 #include "../../../RenderCore/Metal/ObjectFactory.h"
+#include "../../../RenderCore/Metal/InputLayout.h"
 #include "../../../RenderCore/IDevice.h"
 #include "../../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../../Math/Transformations.h"
@@ -336,6 +337,55 @@ namespace UnitTests
 			us);
 	}
 
+	static RenderCore::Techniques::CameraDesc SetupCamera(UInt2 workingRes)
+	{
+		RenderCore::Techniques::CameraDesc camera;
+		camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{-1.f, 0.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, 1.0f}), Float3{10.0f, 0.f, 0.0f});
+		camera._projection = RenderCore::Techniques::CameraDesc::Projection::Orthogonal;
+		camera._nearClip = 0.0f;
+		camera._farClip = 100.f;
+		const auto aspectRatio = workingRes[0] / (float)workingRes[1]; 
+		camera._left = -2.f * aspectRatio;
+		camera._top = 2.f;
+		camera._right = 2.f * aspectRatio;
+		camera._bottom = -2.f;
+		return camera;
+	}
+
+	static std::shared_ptr<RenderCore::IResourceView> DrawStartingImage(LightingEngineTestApparatus& testApparatus, RenderCore::Techniques::ParsingContext& parsingContext)
+	{
+		using namespace RenderCore;
+
+		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testApparatus._pipelineAccelerators->GetDevice(), *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateShapeStackDrawableWriter();
+
+		Techniques::FrameBufferDescFragment fragDesc;
+			
+		// write-input-texture
+		// output 0: some arbitrary pixels for downsampling (Format::R11G11B10_FLOAT precision)
+		SubpassDesc writeInputTexture;
+		writeInputTexture.SetName("write-input-texture");
+		auto preDownsampleAttachment = fragDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR)
+			.Clear().FinalState(BindFlag::ShaderResource);
+		writeInputTexture.AppendOutput(preDownsampleAttachment);
+		fragDesc.AddSubpass(std::move(writeInputTexture));
+
+		Techniques::RenderPassInstance rpi { parsingContext, fragDesc };
+		WriteDownsampleInput(testApparatus, parsingContext, rpi, *drawableWriter);
+		return rpi.GetOutputAttachmentSRV(0, {});
+	}
+
+	static RenderCore::Metal::TimeStampQueryPool::FrameResults StallAndGetFrameResults(RenderCore::Metal::DeviceContext& metalContext, RenderCore::Metal::TimeStampQueryPool& queryPool, unsigned frameId)
+	{
+		for (;;) {
+			auto queryResults = queryPool.GetFrameResults(metalContext, frameId);
+			if (queryResults._resultsReady) {
+				REQUIRE(queryResults._resultsEnd != queryResults._resultsStart);
+				REQUIRE(queryResults._frequency != 0);
+				return queryResults;
+			}
+		}
+	}
+
 	TEST_CASE( "LightingEngine-DownsamplePerformance", "[rendercore_lighting_engine]" )
 	{
 		using namespace RenderCore;
@@ -349,24 +399,13 @@ namespace UnitTests
 			BindFlag::RenderTarget | BindFlag::ShaderResource,
 			TextureDesc::Plain2D(workingRes[0], workingRes[1], Format::R8G8B8A8_UNORM_SRGB /*Format::R11G11B10_FLOAT*/ /*Format::R32G32B32A32_FLOAT*/ ));
 
-		RenderCore::Techniques::CameraDesc camera;
-		camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{-1.f, 0.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, 1.0f}), Float3{10.0f, 0.f, 0.0f});
-		camera._projection = Techniques::CameraDesc::Projection::Orthogonal;
-		camera._nearClip = 0.0f;
-		camera._farClip = 100.f;
-		const auto aspectRatio = workingRes[0] / (float)workingRes[1]; 
-		camera._left = -2.f * aspectRatio;
-		camera._top = 2.f;
-		camera._right = 2.f * aspectRatio;
-		camera._bottom = -2.f;
-		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
+		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, SetupCamera(workingRes));
 		parsingContext.GetFragmentStitchingContext()._workingProps._width = workingRes[0];
 		parsingContext.GetFragmentStitchingContext()._workingProps._height = workingRes[1];
 
 		testHelper->BeginFrameCapture();
 
 		const auto downsampledResult = "Downsampled"_h;
-		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateShapeStackDrawableWriter();
 		auto commonResourceBox = std::make_shared<Techniques::CommonResourceBox>(*testHelper->_device);
 
 		{
@@ -374,24 +413,7 @@ namespace UnitTests
 			auto queryPoolFrameId = queryPool.BeginFrame(*Metal::DeviceContext::Get(*threadContext));
 			const unsigned iterationCount = 512;
 
-			std::shared_ptr<IResourceView> downsampleSrcSRV = nullptr;
-			{
-				Techniques::FrameBufferDescFragment fragDesc;
-			
-				// write-input-texture
-				// output 0: some arbitrary pixels for downsampling (Format::R11G11B10_FLOAT precision)
-				SubpassDesc writeInputTexture;
-				writeInputTexture.SetName("write-input-texture");
-				auto preDownsampleAttachment = fragDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR)
-					.Clear().FinalState(BindFlag::ShaderResource);
-				writeInputTexture.AppendOutput(preDownsampleAttachment);
-				fragDesc.AddSubpass(std::move(writeInputTexture));
-
-				Techniques::RenderPassInstance rpi { parsingContext, fragDesc };
-				WriteDownsampleInput(testApparatus, parsingContext, rpi, *drawableWriter);
-				downsampleSrcSRV = rpi.GetOutputAttachmentSRV(0, {});
-			}
-
+			auto downsampleSrcSRV = DrawStartingImage(testApparatus, parsingContext);
 			std::shared_ptr<IResource> downsampledResource = nullptr;
 			if (1) {
 				// downsample
@@ -436,19 +458,220 @@ namespace UnitTests
 
 			queryPool.EndFrame(*Metal::DeviceContext::Get(*threadContext), queryPoolFrameId);
 			threadContext->CommitCommands();
-			for (;;) {
-				auto queryResults = queryPool.GetFrameResults(*Metal::DeviceContext::Get(*threadContext), queryPoolFrameId);
-				if (queryResults._resultsReady) {
-					REQUIRE(queryResults._resultsEnd != queryResults._resultsStart);
-					REQUIRE(queryResults._frequency != 0);
-					auto elapsed = *(queryResults._resultsStart+1) - *queryResults._resultsStart;
-					Log(Warning) << "Pixel shader based downsample: " << elapsed / float(queryResults._frequency) * 1000.0f / float(iterationCount) << "ms" << std::endl;
-					break;
-				}
-			}
+			auto queryResults = StallAndGetFrameResults(*Metal::DeviceContext::Get(*threadContext), queryPool, queryPoolFrameId);
+			auto elapsed = *(queryResults._resultsStart+1) - *queryResults._resultsStart;
+			std::cout << "Pixel shader based downsample: " << elapsed / float(queryResults._frequency) * 1000.0f / float(iterationCount) << "ms" << std::endl;
 
 			// SaveImage(*threadContext, *downsampleSrcSRV->GetResource(), "downsampled-src");
 			SaveImage(*threadContext, *downsampledResource, "downsampled");
+		}
+
+		testHelper->EndFrameCapture();
+
+		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt);
+	}
+
+	static RenderCore::Techniques::ComputePipelineAndLayout ActualizePipeline(
+		RenderCore::Techniques::PipelineCollection& pipelineCollection,
+		RenderCore::Techniques::PipelineLayoutOptions&& pipelineLayout,
+		StringSection<> shader,
+		const ParameterBox& selectors = {})
+	{
+		const ParameterBox* pBoxes[] { &selectors };
+		std::promise<RenderCore::Techniques::ComputePipelineAndLayout> promisedPipeline;
+		auto futurePipeline = promisedPipeline.get_future();
+		pipelineCollection.CreateComputePipeline(std::move(promisedPipeline), std::move(pipelineLayout), shader, pBoxes);
+		return futurePipeline.get();
+	}
+
+	TEST_CASE( "LightingEngine-BlurPerformance", "[rendercore_lighting_engine]" )
+	{
+		// Testing performance for blurring operators (eg, for bloom)
+
+		using namespace RenderCore;
+		LightingEngineTestApparatus testApparatus;
+		auto testHelper = testApparatus._metalTestHelper.get();
+		auto threadContext = testHelper->_device->GetImmediateContext();
+		auto mnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
+
+		UInt2 workingRes { 2560, 1440 };
+		auto targetDesc = CreateDesc(
+			BindFlag::RenderTarget | BindFlag::ShaderResource,
+			TextureDesc::Plain2D(workingRes[0], workingRes[1], Format::R8G8B8A8_UNORM_SRGB /*Format::R11G11B10_FLOAT*/ /*Format::R32G32B32A32_FLOAT*/ ));
+
+		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, SetupCamera(workingRes));
+		parsingContext.GetFragmentStitchingContext()._workingProps._width = workingRes[0];
+		parsingContext.GetFragmentStitchingContext()._workingProps._height = workingRes[1];
+
+		auto& commonResources = *Techniques::Services::GetCommonResources();
+		auto predefinedPipelineLayout = ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(BLOOM_PIPELINE ":ComputeMain");
+		auto compiledPipelineLayout = testApparatus._pipelineCollection->GetDevice()->CreatePipelineLayout(
+			predefinedPipelineLayout->MakePipelineLayoutInitializer(Techniques::GetDefaultShaderLanguage(), &commonResources._samplerPool),
+			"tone-map-aces");
+
+		auto brightPassFilter = ActualizePipeline(*testApparatus._pipelineCollection, compiledPipelineLayout, BLOOM_COMPUTE_HLSL ":BrightPassFilter");
+		auto fastMipChain = ActualizePipeline(*testApparatus._pipelineCollection, compiledPipelineLayout, BLOOM_COMPUTE_HLSL ":FastMipChain");
+		auto upsampleStep = ActualizePipeline(*testApparatus._pipelineCollection, compiledPipelineLayout, BLOOM_COMPUTE_HLSL ":UpsampleStep");
+
+		const unsigned s_shaderMipChainUniformCount = 6;
+		std::shared_ptr<Metal::BoundUniforms> brightPassBoundUniforms;
+		{
+			UniformsStreamInterface brightPassUsi;
+			brightPassUsi.BindResourceView(0, "HDRInput"_h);
+			brightPassUsi.BindResourceView(1, "AtomicBuffer"_h);
+			brightPassUsi.BindResourceView(2, "MipChainSRV"_h);
+			for (unsigned c=0; c<s_shaderMipChainUniformCount; ++c)
+				brightPassUsi.BindResourceView(3+c, "MipChainUAV"_h+c);
+			UniformsStreamInterface usi2;
+			usi2.BindImmediateData(0, "ControlUniforms"_h);
+			brightPassBoundUniforms = std::make_shared<Metal::BoundUniforms>(compiledPipelineLayout, brightPassUsi, usi2);
+		}
+
+		testHelper->BeginFrameCapture();
+
+		{
+			Metal::TimeStampQueryPool queryPool(Metal::GetObjectFactory());
+			auto queryPoolFrameId = queryPool.BeginFrame(*Metal::DeviceContext::Get(*threadContext));
+			const unsigned iterationCount = 512;
+
+			auto downsampleSrcSRV = DrawStartingImage(testApparatus, parsingContext);
+
+			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
+			Metal::BarrierHelper(metalContext).Add(
+				*downsampleSrcSRV->GetResource(),
+				Metal::BarrierResourceUsage{BindFlag::RenderTarget},
+				Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+
+			if (1) {
+				auto brightPassMipCountCount = IntegerLog2(std::max(workingRes[0], workingRes[1])) - 1;
+				brightPassMipCountCount = std::min(brightPassMipCountCount, s_shaderMipChainUniformCount);
+
+				auto atomicBuffer = testHelper->_device->CreateResource(
+					CreateDesc(
+						BindFlag::TransferDst | BindFlag::UnorderedAccess | BindFlag::TexelBuffer,
+						LinearBufferDesc::Create(4*4)),
+					"atomic-counter");
+				auto atomicCounterBufferView = atomicBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
+
+				// setup "render pass" and begin...
+				parsingContext.GetFragmentStitchingContext().DefineAttachment(
+					Techniques::PreregisteredAttachment {
+						"blur-mip-chain"_h,
+						CreateDesc(
+							BindFlag::UnorderedAccess | BindFlag::ShaderResource,
+							TextureDesc::Plain2D(workingRes[0]/2, workingRes[1]/2, Format::B8G8R8A8_UNORM, brightPassMipCountCount)),
+						"blur-mip-chain",
+						Techniques::PreregisteredAttachment::State::Uninitialized
+					});
+				Techniques::FrameBufferDescFragment fragDesc;
+				fragDesc._pipelineType = PipelineType::Compute;
+				Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
+				spDesc.SetName("downsample-test");
+				auto attachment = fragDesc.DefineAttachment("blur-mip-chain"_h).NoInitialState();
+				spDesc.AppendNonFrameBufferAttachmentView(attachment, BindFlag::ShaderResource);
+				for (unsigned c=0; c<brightPassMipCountCount; ++c) {
+					TextureViewDesc view;
+					view._mipRange._min = c;
+					view._mipRange._count = 1;
+					spDesc.AppendNonFrameBufferAttachmentView(attachment, BindFlag::UnorderedAccess, view);
+				}
+				fragDesc.AddSubpass(std::move(spDesc));
+				Techniques::RenderPassInstance rpi { parsingContext, fragDesc };
+
+				Metal::BarrierHelper(metalContext).Add(
+					*rpi.GetNonFrameBufferAttachmentView(0)->GetResource(),
+					Metal::BarrierResourceUsage::NoState(),
+					Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
+				auto mipChainTopWidth = workingRes[0]/2, mipChainTopHeight = workingRes[1]/2;
+
+				auto encoder = metalContext.BeginComputeEncoder(*compiledPipelineLayout);
+				Metal::CapturedStates capturedStates;
+				encoder.BeginStateCapture(capturedStates);
+
+				// setup uniforms
+
+				{
+					VLA(const IResourceView*, views, 3+s_shaderMipChainUniformCount);
+					views[0] = downsampleSrcSRV.get();
+					views[1] = atomicCounterBufferView.get();
+					views[2] = rpi.GetNonFrameBufferAttachmentView(0).get();
+					unsigned c=0;
+					for (; c<brightPassMipCountCount; ++c) views[3+c] = rpi.GetNonFrameBufferAttachmentView(1+c).get();
+					auto* dummyUav = Techniques::Services::GetCommonResources()->_black2DSRV.get();
+					for (; c<s_shaderMipChainUniformCount; ++c) views[3+c] = dummyUav;
+
+					UniformsStream uniforms;
+					uniforms._resourceViews = MakeIteratorRange(views, views+3+s_shaderMipChainUniformCount);
+					brightPassBoundUniforms->ApplyLooseUniforms(
+						metalContext, encoder,
+						uniforms);
+				}
+
+				// "bright pass filter" step
+
+				{
+					queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
+					for (unsigned c=0; c<iterationCount; ++c) {
+						const unsigned dispatchGroupWidth = 8;
+						const unsigned dispatchGroupHeight = 8;
+						encoder.Dispatch(
+							*brightPassFilter._pipeline,
+							(mipChainTopWidth + dispatchGroupWidth - 1) / dispatchGroupWidth,
+							(mipChainTopHeight + dispatchGroupHeight - 1) / dispatchGroupHeight,
+							1);
+					}
+					Metal::BarrierHelper(metalContext).Add(
+						*rpi.GetNonFrameBufferAttachmentView(0)->GetResource(), TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
+						Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+						Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+					queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
+				}
+
+				// "downsample" step
+
+				{
+					for (unsigned c=0; c<iterationCount; ++c) {
+						// have to freshly clear atomicCounterBufferView for every call fast mip chain invocation
+						vkCmdFillBuffer(
+							metalContext.GetActiveCommandList().GetUnderlying().get(),
+							checked_cast<Metal::Resource*>(atomicCounterBufferView->GetResource().get())->GetBuffer(), 
+							0, VK_WHOLE_SIZE, 0);
+
+						const auto threadGroupX = (mipChainTopWidth+63)>>6, threadGroupY = (mipChainTopHeight+63)>>6;
+						struct FastMipChain_ControlUniforms {
+							Float2 _reciprocalInputDims;
+							unsigned _dummy[2];
+							uint32_t _threadGroupCount;
+							unsigned _dummy2;
+							uint32_t _mipCount;
+							unsigned _dummy3;
+						} controlUniforms {
+							Float2 { 1.f/float(mipChainTopWidth), 1.f/float(mipChainTopHeight) },
+							{0,0},
+							threadGroupX * threadGroupY,
+							0,
+							brightPassMipCountCount - 1,
+							0
+						};
+						encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(controlUniforms));
+						encoder.Dispatch(
+							*fastMipChain._pipeline,
+							threadGroupX, threadGroupY, 1);
+					}
+					queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
+				}
+
+				// end, report results
+
+				encoder = {};
+				queryPool.EndFrame(*Metal::DeviceContext::Get(*threadContext), queryPoolFrameId);
+				threadContext->CommitCommands(CommitCommandsFlags::WaitForCompletion);
+				auto queryResults = StallAndGetFrameResults(*Metal::DeviceContext::Get(*threadContext), queryPool, queryPoolFrameId);
+				auto elapsed0 = *(queryResults._resultsStart+1) - *queryResults._resultsStart;
+				auto elapsed1 = *(queryResults._resultsStart+2) - *(queryResults._resultsStart+1);
+				std::cout << "BrightPassFilter: " << elapsed0 / float(queryResults._frequency) * 1000.0f / float(iterationCount) << "ms" << std::endl;
+				std::cout << "DownsampleStep: " << elapsed1 / float(queryResults._frequency) * 1000.0f / float(iterationCount) << "ms" << std::endl;
+			}
 		}
 
 		testHelper->EndFrameCapture();
