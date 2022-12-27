@@ -80,6 +80,7 @@
 #define TONEMAP_ACES_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/tonemap-aces.compute.hlsl"
 #define BLOOM_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/bloom.compute.hlsl"
 #define BLOOM_PIPELINE "xleres/TechniqueLibrary/LightingEngine/bloom.pipeline"
+#define SEPARABLE_FILTER_2_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/separable-filter2.compute.hlsl"
 
 #define SKY_PIXEL_HLSL "xleres/TechniqueLibrary/SceneEngine/Effects/Sky.pixel.hlsl"
 

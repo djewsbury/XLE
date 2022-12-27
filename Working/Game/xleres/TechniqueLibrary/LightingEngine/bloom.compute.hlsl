@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "xleres/Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
+#include "../Math/MathConstants.hlsl"
 
 Texture2D<float3>		HDRInput : register(t0, space0);
 RWTexture2D<float3>		MipChainUAV[6] : register(u1, space0);
@@ -178,6 +179,53 @@ float3 UpsampleFilter_TentCircularBias(float2 tc, uint mipIndex, float2 texelSiz
 	return filteredSample;
 }
 
+float GaussianWeight2D(float2 offset, float stdDevSq)
+{
+	// See https://en.wikipedia.org/wiki/Gaussian_blur
+	// Note that this is equivalent to the product of 1d weight of x and y
+	const float twiceStdDevSq = 2.0 * stdDevSq;
+	const float C = 1.0 / (pi * twiceStdDevSq);		// can done later, because it's constant for all weights
+	return C * exp(-dot(offset, offset) / twiceStdDevSq);
+}
+
+float3 UpsampleFilter_ComplexGaussianPrototype(uint2 pixelId, uint dstMipIndex, float2 dstTexelSize)
+{
+	// Prototype -- very low performance code
+	// let's use actual gaussian weights -- calculated precisely to take into account the different
+	// sizes of the src and dst pixels
+	// This should give us an upper bound in terms of quality
+	// Sample a 5x5 area from the src mip
+	float3 srcData[5][5];
+	float srcWeight[5][5];
+	const float stdDevSq = 1;
+	for (int i=-2; i<=2; ++i)
+		for (int j=-2; j<=2; ++j) {
+			uint2 srcMipPixelId = pixelId / 2 + int2(i, j);
+			srcData[2+i][2+j] = MipChainSRV.mips[dstMipIndex+1][srcMipPixelId];
+
+			// Calculate the weight for this pixel
+			// we're begin super particular, so we'll do an integration approximation
+			// ... though maybe the true integral here isn't so hard to calculate
+			float weight = 0.f;
+			for (uint x=0; x<16; ++x)
+				for (uint y=0; y<16; ++y) {
+					float2 srcMipPixelCenter = float2(
+						srcMipPixelId.x + ((float)x+0.5) / 16.0,
+						srcMipPixelId.y + ((float)y+0.5) / 16.0);
+					float2 dstMipPixelCenter = 2.0 * srcMipPixelCenter;
+					float2 offset = dstMipPixelCenter - (float2(pixelId) + 0.5.xx);
+					weight += GaussianWeight2D(offset, stdDevSq) / 64.0;
+				}
+				
+			srcWeight[2+i][2+j] = weight;
+		}
+	
+	float3 result = 0.0;
+	for (uint x=0; x<5; ++x)
+		for (uint y=0; y<5; ++y)
+			result += srcData[x][y] * srcWeight[x][y];		// weights already normalized
+	return result;
+}
 
 [numthreads(8, 8, 1)]
 	void UpsampleStep(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
@@ -194,6 +242,7 @@ float3 UpsampleFilter_TentCircularBias(float2 tc, uint mipIndex, float2 texelSiz
 	if (filterType == 0) 		filteredSample = UpsampleFilter_Square(baseSourceTC, mipIndex+1, srcTexelSize);
 	else if (filterType == 1) 	filteredSample = UpsampleFilter_BasicTent(baseSourceTC, mipIndex+1, srcTexelSize);
 	else if (filterType == 2) 	filteredSample = UpsampleFilter_TentCircularBias(baseSourceTC, mipIndex+1, srcTexelSize);
+	else if (filterType == 3) 	filteredSample = UpsampleFilter_ComplexGaussianPrototype(pixelId, mipIndex, UpsampleStep_GetOutputReciprocalDims());
 	MipChainUAV[mipIndex][pixelId] += filteredSample;
 }
 

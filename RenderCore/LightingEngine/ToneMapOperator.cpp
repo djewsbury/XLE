@@ -40,7 +40,8 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::ParsingContext& parsingContext,
 		IResourceView& ldrOutput, IResourceView& hdrInput,
 		IteratorRange<IResourceView const*const*> brightPassMipChainUAV,
-		IResourceView& brightPassMipChainSRV)
+		IResourceView& brightPassMipChainSRV,
+		IResourceView& highResBlurWorking)
 	{
 		assert(_secondStageConstructionState == 2);
 		assert(_toneMap);
@@ -188,6 +189,38 @@ namespace RenderCore { namespace LightingEngine
 		////////////////////////////////////////////////////////////
 
 		{
+			// Gaussian filter experiment
+			const unsigned blockSize = 16;
+			ResourceViewStream uniforms { brightPassMipChainSRV, highResBlurWorking };
+			_gaussianFilter->Dispatch(
+				parsingContext,
+				((fbProps._width>>1) + blockSize - 1) / blockSize,
+				((fbProps._height>>1) + blockSize - 1) / blockSize,
+				1,
+				uniforms);
+
+			Metal::BarrierHelper{metalContext}.Add(
+				*highResBlurWorking.GetResource(), TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
+				Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+				Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
+
+			ResourceViewStream uniforms2 { highResBlurWorking, brightPassMipChainSRV };
+			_gaussianFilter->Dispatch(
+				parsingContext,
+				((fbProps._width>>1) + blockSize - 1) / blockSize,
+				((fbProps._height>>1) + blockSize - 1) / blockSize,
+				1,
+				uniforms2);
+
+			Metal::BarrierHelper{metalContext}.Add(
+				*brightPassMipChainSRV.GetResource(), TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
+				Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+				Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
+		}
+
+		////////////////////////////////////////////////////////////
+
+		{
 			const unsigned dispatchGroupWidth = 8;
 			const unsigned dispatchGroupHeight = 8;
 			ResourceViewStream uniforms {
@@ -202,6 +235,7 @@ namespace RenderCore { namespace LightingEngine
 				1,
 				uniforms);
 		}
+		
 	}
 
 	::Assets::DependencyValidation ToneMapAcesOperator::GetDependencyValidation() const { assert(_secondStageConstructionState==2); return _depVal; }
@@ -227,6 +261,7 @@ namespace RenderCore { namespace LightingEngine
 			view._mipRange._count = 1;
 			spDesc.AppendNonFrameBufferAttachmentView(brightPassMipChain, BindFlag::UnorderedAccess, view);
 		}
+		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment("brightpass-highres-blur-working"_h).NoInitialState().Discard());
 		spDesc.SetName("tone-map-aces-operator");
 
 		result.AddSubpass(
@@ -235,6 +270,7 @@ namespace RenderCore { namespace LightingEngine
 				auto& ldrOutput = *iterator._rpi.GetNonFrameBufferAttachmentView(0);
 				auto& hdrInput = *iterator._rpi.GetNonFrameBufferAttachmentView(1);
 				auto& brightPassMipChainSRV = *iterator._rpi.GetNonFrameBufferAttachmentView(2);
+				auto& highResBlurWorking = *iterator._rpi.GetNonFrameBufferAttachmentView(3+op->_brightPassMipCountCount);
 
 				assert(op->_brightPassMipCountCount);
 				VLA(const IResourceView*, brightPassMipChainUAV, op->_brightPassMipCountCount);
@@ -248,12 +284,13 @@ namespace RenderCore { namespace LightingEngine
 					Metal::BarrierHelper barrierHelper{iterator._parsingContext->GetThreadContext()};
 					barrierHelper.Add(*ldrOutput.GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
 					barrierHelper.Add(*brightPassMipChainUAV[0]->GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
+					barrierHelper.Add(*highResBlurWorking.GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
 				}
 				
 				op->Execute(
 					*iterator._parsingContext, ldrOutput, hdrInput,
 					MakeIteratorRange(brightPassMipChainUAV, brightPassMipChainUAV+op->_brightPassMipCountCount),
-					brightPassMipChainSRV);
+					brightPassMipChainSRV, highResBlurWorking);
 
 				Metal::BarrierHelper{iterator._parsingContext->GetThreadContext()}.Add(*ldrOutput.GetResource(), {BindFlag::UnorderedAccess, ShaderStage::Compute}, BindFlag::RenderTarget);
 			});
@@ -280,6 +317,13 @@ namespace RenderCore { namespace LightingEngine
 					BindFlag::UnorderedAccess | BindFlag::ShaderResource,
 					TextureDesc::Plain2D(fbSize[0]>>1, fbSize[1]>>1, Format::B8G8R8A8_UNORM, _brightPassMipCountCount)),
 				"brightpass-working"
+			},
+			Techniques::PreregisteredAttachment {
+				"brightpass-highres-blur-working"_h,
+				CreateDesc(
+					BindFlag::UnorderedAccess | BindFlag::ShaderResource,
+					TextureDesc::Plain2D(fbSize[0]>>1, fbSize[1]>>1, Format::B8G8R8A8_UNORM)),
+				"brightpass-highres-blur-working"
 			}
 		};
 		for (const auto& a:attachments)
@@ -394,10 +438,20 @@ namespace RenderCore { namespace LightingEngine
 					usi2.BindImmediateData(0, "ControlUniforms"_h);
 					auto brightPassBoundUniforms = std::make_shared<Metal::BoundUniforms>(compiledPipelineLayout, brightPassUsi, usi2);
 
-					::Assets::WhenAll(std::move(futureToneMap), std::move(futureBrightPass), std::move(futureDownsample), std::move(futureUpsample)).ThenConstructToPromise(
+					UniformsStreamInterface guassianFilterUsi;
+					guassianFilterUsi.BindResourceView(0, "InputTexture"_h);
+					guassianFilterUsi.BindResourceView(1, "OutputTexture"_h);
+					auto futureGaussianFilter = Techniques::CreateComputeOperator(
+						strongThis->_pool,
+						SEPARABLE_FILTER_2_COMPUTE_HLSL ":Gaussian11RGB",
+						ParameterBox{},
+						GENERAL_OPERATOR_PIPELINE ":ComputeMain",
+						guassianFilterUsi);
+
+					::Assets::WhenAll(std::move(futureToneMap), std::move(futureBrightPass), std::move(futureDownsample), std::move(futureUpsample), std::move(futureGaussianFilter)).ThenConstructToPromise(
 						std::move(promise),
 						[strongThis, compiledPipelineLayout, brightPassBoundUniforms, pipelineLayoutDepVal=predefinedPipelineLayout->GetDependencyValidation()]
-						(auto toneMap, auto brightPass, auto brightPassDownsample, auto brightPassUpsample) mutable
+						(auto toneMap, auto brightPass, auto brightPassDownsample, auto brightPassUpsample, auto guassianFilter) mutable
 						{
 							assert(strongThis->_secondStageConstructionState == 1);
 							strongThis->_toneMap = std::move(toneMap);
@@ -406,11 +460,13 @@ namespace RenderCore { namespace LightingEngine
 							strongThis->_brightUpsample = std::move(brightPassUpsample._pipeline);
 							strongThis->_compiledPipelineLayout = std::move(compiledPipelineLayout);
 							strongThis->_brightPassBoundUniforms = std::move(brightPassBoundUniforms);
+							strongThis->_gaussianFilter = std::move(guassianFilter);
 							::Assets::DependencyValidationMarker depVals[] {
 								strongThis->_toneMap->GetDependencyValidation(),
 								brightPass.GetDependencyValidation(),
 								brightPassDownsample.GetDependencyValidation(),
 								brightPassUpsample.GetDependencyValidation(),
+								strongThis->_gaussianFilter->GetDependencyValidation(),
 								pipelineLayoutDepVal
 							};
 							strongThis->_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);

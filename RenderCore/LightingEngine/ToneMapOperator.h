@@ -42,7 +42,8 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::ParsingContext& parsingContext,
 			IResourceView& ldrOutput, IResourceView& hdrInput,
 			IteratorRange<IResourceView const*const*> brightPassMipChainUAV,
-			IResourceView& brightPassMipChainSRV);
+			IResourceView& brightPassMipChainSRV,
+			IResourceView& highResBlurWorking);
 
 		RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
 		void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext);
@@ -75,6 +76,8 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::PipelineCollection> _pool;
 		::Assets::DependencyValidation _depVal;
 		unsigned _brightPassMipCountCount = 0;
+
+		std::shared_ptr<Techniques::IComputeShaderOperator> _gaussianFilter;
 	};
 
 	class CopyToneMapOperator : public std::enable_shared_from_this<CopyToneMapOperator>
