@@ -60,10 +60,13 @@ float GaussianWeight1D(float offset, float stdDevSq)
 	uint threadX = groupThreadId.x;
 	uint threadY = groupThreadId.y;
 
+	uint2 inputTextureDims;
+	InputTexture.GetDimensions(inputTextureDims.x, inputTextureDims.y);
+
 	for (cy=threadY; cy<24; cy+=8) {
 		for (cx=threadX; cx<24; cx+=8) {
 			int2 A = srcTextureOffset + int2(cx, cy);
-			if (A.x >= 0 && A.x < 1282 && A.y >= 0 && A.y < 492) {
+			if (A.x >= 0 && A.x < inputTextureDims.x && A.y >= 0 && A.y < inputTextureDims.y) {
 				float3 c = InputTexture[A].rgb;
 				IntermediateR0[cx][cy] = c.r;
 				IntermediateG0[cx][cy] = c.g;
@@ -83,7 +86,7 @@ float GaussianWeight1D(float offset, float stdDevSq)
 	cy = linearThreadGroupIdx & 0x1f;
 	if (cy < BLOCK_DIMS) {
 		int2 A = srcTextureOffset + int2(cx, cy);
-		if (A.x >= 0 && A.x < 1282 && A.y >= 0 && A.y < 492) {
+		if (A.x >= 0 && A.x < inputTextureDims.x && A.y >= 0 && A.y < inputTextureDims.y) {
 			float3 c = InputTexture[A].rgb;
 			IntermediateR0[cx][cy] = c.r;
 			IntermediateG0[cx][cy] = c.g;
@@ -95,7 +98,7 @@ float GaussianWeight1D(float offset, float stdDevSq)
 		}
 
 		A = srcTextureOffset + int2(cy, cx);
-		if (A.x >= 0 && A.x < 1282 && A.y >= 0 && A.y < 492) {
+		if (A.x >= 0 && A.x < inputTextureDims.x && A.y >= 0 && A.y < inputTextureDims.y) {
 			float3 c = InputTexture[A].rgb;
 			IntermediateR0[cy][cx] = c.r;
 			IntermediateG0[cy][cx] = c.g;
@@ -111,15 +114,6 @@ float GaussianWeight1D(float offset, float stdDevSq)
 	// horizontal part
 	GroupMemoryBarrierWithGroupSync();
 
-#if 0
-	for (uint cy=0; cy<16; cy+=8) {
-		for (uint cx=0; cx<16; cx+=8) {
-			uint x = threadX + cx + BLOCK_BORDER;
-			uint y = threadY + cy + BLOCK_BORDER;
-			OutputTexture[srcTextureOffset + uint2(x, y)] = float3(IntermediateR0[x][y], IntermediateG0[x][y], IntermediateB0[x][y]);
-		}
-	}
-#else
 	const float stdDevSq = 1.32 * 1.32;
 	const float w0 = GaussianWeight1D(0.0, stdDevSq);
 	const float w1 = GaussianWeight1D(1.0, stdDevSq);
@@ -129,11 +123,10 @@ float GaussianWeight1D(float offset, float stdDevSq)
 	const float w5 = GaussianWeight1D(5.0, stdDevSq);
 
 	for (uint y=threadY; y<BLOCK_DIMS; y+=8) {
-		for (cx=0; cx<2; ++cx) {
-			uint x = threadX + cx * 8 + BLOCK_BORDER;
+		for (cx=0; cx<16; cx+=8) {
+			uint x = threadX + cx + BLOCK_BORDER;
 
 			float3 v;
-			v =0;
 			v  = float3(IntermediateR0[x-5][y], IntermediateG0[x-5][y], IntermediateB0[x-5][y]) * w5;
 			v += float3(IntermediateR0[x-4][y], IntermediateG0[x-4][y], IntermediateB0[x-4][y]) * w4;
 			v += float3(IntermediateR0[x-3][y], IntermediateG0[x-3][y], IntermediateB0[x-3][y]) * w3;
@@ -145,6 +138,7 @@ float GaussianWeight1D(float offset, float stdDevSq)
 			v += float3(IntermediateR0[x+3][y], IntermediateG0[x+3][y], IntermediateB0[x+3][y]) * w3;
 			v += float3(IntermediateR0[x+4][y], IntermediateG0[x+4][y], IntermediateB0[x+4][y]) * w4;
 			v += float3(IntermediateR0[x+5][y], IntermediateG0[x+5][y], IntermediateB0[x+5][y]) * w5;
+
 			IntermediateR1[x-BLOCK_BORDER][y] = v.x;
 			IntermediateG1[x-BLOCK_BORDER][y] = v.y;
 			IntermediateB1[x-BLOCK_BORDER][y] = v.z;
@@ -177,6 +171,5 @@ float GaussianWeight1D(float offset, float stdDevSq)
 			OutputTexture[srcTextureOffset + uint2(x+BLOCK_BORDER, y)] = v;
 		}
 	}
-#endif
 }
 

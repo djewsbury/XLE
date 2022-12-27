@@ -527,151 +527,268 @@ namespace UnitTests
 			brightPassBoundUniforms = std::make_shared<Metal::BoundUniforms>(compiledPipelineLayout, brightPassUsi, usi2);
 		}
 
+		UniformsStreamInterface gaussianFilterUsi;
+		gaussianFilterUsi.BindResourceView(0, "InputTexture"_h);
+		gaussianFilterUsi.BindResourceView(1, "OutputTexture"_h);
+		auto gaussianFilterOperatorFuture = Techniques::CreateComputeOperator(
+			testApparatus._pipelineCollection,
+			SEPARABLE_FILTER_2_COMPUTE_HLSL ":Gaussian11RGB",
+			ParameterBox{},
+			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
+			gaussianFilterUsi);
+		gaussianFilterOperatorFuture->StallWhilePending();
+		auto gaussianFilterOperator = gaussianFilterOperatorFuture->Actualize();
+
 		testHelper->BeginFrameCapture();
 
+		auto downsampleSrcSRV = DrawStartingImage(testApparatus, parsingContext);
+
+		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
+		Metal::BarrierHelper(metalContext).Add(
+			*downsampleSrcSRV->GetResource(),
+			Metal::BarrierResourceUsage{BindFlag::RenderTarget},
+			Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+
+		SECTION("MipChain blurring")
 		{
+			testHelper->_device->Stall();
 			Metal::TimeStampQueryPool queryPool(Metal::GetObjectFactory());
 			auto queryPoolFrameId = queryPool.BeginFrame(*Metal::DeviceContext::Get(*threadContext));
-			const unsigned iterationCount = 512;
+			const unsigned iterationCount = 16 * 512;
 
-			auto downsampleSrcSRV = DrawStartingImage(testApparatus, parsingContext);
+			auto brightPassMipCountCount = IntegerLog2(std::max(workingRes[0], workingRes[1])) - 1;
+			brightPassMipCountCount = std::min(brightPassMipCountCount, s_shaderMipChainUniformCount);
 
-			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-			Metal::BarrierHelper(metalContext).Add(
-				*downsampleSrcSRV->GetResource(),
-				Metal::BarrierResourceUsage{BindFlag::RenderTarget},
-				Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+			auto atomicBuffer = testHelper->_device->CreateResource(
+				CreateDesc(
+					BindFlag::TransferDst | BindFlag::UnorderedAccess | BindFlag::TexelBuffer,
+					LinearBufferDesc::Create(4*4)),
+				"atomic-counter");
+			auto atomicCounterBufferView = atomicBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
 
-			if (1) {
-				auto brightPassMipCountCount = IntegerLog2(std::max(workingRes[0], workingRes[1])) - 1;
-				brightPassMipCountCount = std::min(brightPassMipCountCount, s_shaderMipChainUniformCount);
-
-				auto atomicBuffer = testHelper->_device->CreateResource(
+			// setup "render pass" and begin...
+			parsingContext.GetFragmentStitchingContext().DefineAttachment(
+				Techniques::PreregisteredAttachment {
+					"blur-mip-chain"_h,
 					CreateDesc(
-						BindFlag::TransferDst | BindFlag::UnorderedAccess | BindFlag::TexelBuffer,
-						LinearBufferDesc::Create(4*4)),
-					"atomic-counter");
-				auto atomicCounterBufferView = atomicBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource,
+						TextureDesc::Plain2D(workingRes[0]/2, workingRes[1]/2, Format::B8G8R8A8_UNORM, brightPassMipCountCount)),
+					"blur-mip-chain",
+					Techniques::PreregisteredAttachment::State::Uninitialized
+				});
+			Techniques::FrameBufferDescFragment fragDesc;
+			fragDesc._pipelineType = PipelineType::Compute;
+			Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
+			spDesc.SetName("downsample-test");
+			auto attachment = fragDesc.DefineAttachment("blur-mip-chain"_h).NoInitialState();
+			spDesc.AppendNonFrameBufferAttachmentView(attachment, BindFlag::ShaderResource);
+			for (unsigned c=0; c<brightPassMipCountCount; ++c) {
+				TextureViewDesc view;
+				view._mipRange._min = c;
+				view._mipRange._count = 1;
+				spDesc.AppendNonFrameBufferAttachmentView(attachment, BindFlag::UnorderedAccess, view);
+			}
+			fragDesc.AddSubpass(std::move(spDesc));
+			Techniques::RenderPassInstance rpi { parsingContext, fragDesc };
 
-				// setup "render pass" and begin...
-				parsingContext.GetFragmentStitchingContext().DefineAttachment(
-					Techniques::PreregisteredAttachment {
-						"blur-mip-chain"_h,
-						CreateDesc(
-							BindFlag::UnorderedAccess | BindFlag::ShaderResource,
-							TextureDesc::Plain2D(workingRes[0]/2, workingRes[1]/2, Format::B8G8R8A8_UNORM, brightPassMipCountCount)),
-						"blur-mip-chain",
-						Techniques::PreregisteredAttachment::State::Uninitialized
-					});
-				Techniques::FrameBufferDescFragment fragDesc;
-				fragDesc._pipelineType = PipelineType::Compute;
-				Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-				spDesc.SetName("downsample-test");
-				auto attachment = fragDesc.DefineAttachment("blur-mip-chain"_h).NoInitialState();
-				spDesc.AppendNonFrameBufferAttachmentView(attachment, BindFlag::ShaderResource);
-				for (unsigned c=0; c<brightPassMipCountCount; ++c) {
-					TextureViewDesc view;
-					view._mipRange._min = c;
-					view._mipRange._count = 1;
-					spDesc.AppendNonFrameBufferAttachmentView(attachment, BindFlag::UnorderedAccess, view);
+			Metal::BarrierHelper(metalContext).Add(
+				*rpi.GetNonFrameBufferAttachmentView(0)->GetResource(),
+				Metal::BarrierResourceUsage::NoState(),
+				Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
+			auto mipChainTopWidth = workingRes[0]/2, mipChainTopHeight = workingRes[1]/2;
+
+			auto encoder = metalContext.BeginComputeEncoder(*compiledPipelineLayout);
+			Metal::CapturedStates capturedStates;
+			encoder.BeginStateCapture(capturedStates);
+
+			// setup uniforms
+
+			{
+				VLA(const IResourceView*, views, 3+s_shaderMipChainUniformCount);
+				views[0] = downsampleSrcSRV.get();
+				views[1] = atomicCounterBufferView.get();
+				views[2] = rpi.GetNonFrameBufferAttachmentView(0).get();
+				unsigned c=0;
+				for (; c<brightPassMipCountCount; ++c) views[3+c] = rpi.GetNonFrameBufferAttachmentView(1+c).get();
+				auto* dummyUav = Techniques::Services::GetCommonResources()->_black2DSRV.get();
+				for (; c<s_shaderMipChainUniformCount; ++c) views[3+c] = dummyUav;
+
+				UniformsStream uniforms;
+				uniforms._resourceViews = MakeIteratorRange(views, views+3+s_shaderMipChainUniformCount);
+				brightPassBoundUniforms->ApplyLooseUniforms(
+					metalContext, encoder,
+					uniforms);
+			}
+
+			// "bright pass filter" step
+			queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
+
+			{
+				for (unsigned c=0; c<iterationCount; ++c) {
+					const unsigned dispatchGroupWidth = 8;
+					const unsigned dispatchGroupHeight = 8;
+					encoder.Dispatch(
+						*brightPassFilter._pipeline,
+						(mipChainTopWidth + dispatchGroupWidth - 1) / dispatchGroupWidth,
+						(mipChainTopHeight + dispatchGroupHeight - 1) / dispatchGroupHeight,
+						1);
 				}
-				fragDesc.AddSubpass(std::move(spDesc));
-				Techniques::RenderPassInstance rpi { parsingContext, fragDesc };
-
 				Metal::BarrierHelper(metalContext).Add(
-					*rpi.GetNonFrameBufferAttachmentView(0)->GetResource(),
-					Metal::BarrierResourceUsage::NoState(),
-					Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
-				auto mipChainTopWidth = workingRes[0]/2, mipChainTopHeight = workingRes[1]/2;
+					*rpi.GetNonFrameBufferAttachmentView(0)->GetResource(), TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
+					Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+					Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+			}
 
-				auto encoder = metalContext.BeginComputeEncoder(*compiledPipelineLayout);
-				Metal::CapturedStates capturedStates;
-				encoder.BeginStateCapture(capturedStates);
+			// "downsample" step
+			queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
 
-				// setup uniforms
+			{
+				for (unsigned c=0; c<iterationCount; ++c) {
+					// have to freshly clear atomicCounterBufferView for every call fast mip chain invocation
+					vkCmdFillBuffer(
+						metalContext.GetActiveCommandList().GetUnderlying().get(),
+						checked_cast<Metal::Resource*>(atomicCounterBufferView->GetResource().get())->GetBuffer(), 
+						0, VK_WHOLE_SIZE, 0);
 
-				{
-					VLA(const IResourceView*, views, 3+s_shaderMipChainUniformCount);
-					views[0] = downsampleSrcSRV.get();
-					views[1] = atomicCounterBufferView.get();
-					views[2] = rpi.GetNonFrameBufferAttachmentView(0).get();
-					unsigned c=0;
-					for (; c<brightPassMipCountCount; ++c) views[3+c] = rpi.GetNonFrameBufferAttachmentView(1+c).get();
-					auto* dummyUav = Techniques::Services::GetCommonResources()->_black2DSRV.get();
-					for (; c<s_shaderMipChainUniformCount; ++c) views[3+c] = dummyUav;
-
-					UniformsStream uniforms;
-					uniforms._resourceViews = MakeIteratorRange(views, views+3+s_shaderMipChainUniformCount);
-					brightPassBoundUniforms->ApplyLooseUniforms(
-						metalContext, encoder,
-						uniforms);
+					const auto threadGroupX = (mipChainTopWidth+63)>>6, threadGroupY = (mipChainTopHeight+63)>>6;
+					struct FastMipChain_ControlUniforms {
+						Float2 _reciprocalInputDims;
+						unsigned _dummy[2];
+						uint32_t _threadGroupCount;
+						unsigned _dummy2;
+						uint32_t _mipCount;
+						unsigned _dummy3;
+					} controlUniforms {
+						Float2 { 1.f/float(mipChainTopWidth), 1.f/float(mipChainTopHeight) },
+						{0,0},
+						threadGroupX * threadGroupY,
+						0,
+						brightPassMipCountCount - 1,
+						0
+					};
+					encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(controlUniforms));
+					encoder.Dispatch(
+						*fastMipChain._pipeline,
+						threadGroupX, threadGroupY, 1);
 				}
+			}
 
-				// "bright pass filter" step
+			// "upsample" step
+			queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
 
-				{
-					queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
-					for (unsigned c=0; c<iterationCount; ++c) {
+			{
+				auto* mipChainResource = rpi.GetNonFrameBufferAttachmentView(0)->GetResource().get();
+
+				for (unsigned c=0; c<iterationCount; ++c) {
+					for (unsigned pass=0; pass<brightPassMipCountCount-1; ++pass) {
+						auto srcMip = brightPassMipCountCount-1-pass;
+						auto dstMip = brightPassMipCountCount-2-pass;
+
+						// there's a sequence of barriers as we walk up the mip chain
+						// we could potentially do this smarter if we built a system like ffx_spd, but going the other way
+						{
+							Metal::BarrierHelper barrierHelper{metalContext};
+							barrierHelper.Add(
+								*mipChainResource, TextureViewDesc::SubResourceRange{srcMip, 1}, TextureViewDesc::All,
+								Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+								Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+							if (dstMip == 0)
+								barrierHelper.Add(
+									*mipChainResource, TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
+									Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute},
+									Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
+						}
+
 						const unsigned dispatchGroupWidth = 8;
 						const unsigned dispatchGroupHeight = 8;
-						encoder.Dispatch(
-							*brightPassFilter._pipeline,
-							(mipChainTopWidth + dispatchGroupWidth - 1) / dispatchGroupWidth,
-							(mipChainTopHeight + dispatchGroupHeight - 1) / dispatchGroupHeight,
-							1);
-					}
-					Metal::BarrierHelper(metalContext).Add(
-						*rpi.GetNonFrameBufferAttachmentView(0)->GetResource(), TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
-						Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
-						Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
-					queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
-				}
+						const auto
+							threadGroupX = ((mipChainTopWidth>>dstMip)+dispatchGroupWidth)/dispatchGroupWidth,
+							threadGroupY = ((mipChainTopHeight>>dstMip)+dispatchGroupHeight)/dispatchGroupHeight;
 
-				// "downsample" step
-
-				{
-					for (unsigned c=0; c<iterationCount; ++c) {
-						// have to freshly clear atomicCounterBufferView for every call fast mip chain invocation
-						vkCmdFillBuffer(
-							metalContext.GetActiveCommandList().GetUnderlying().get(),
-							checked_cast<Metal::Resource*>(atomicCounterBufferView->GetResource().get())->GetBuffer(), 
-							0, VK_WHOLE_SIZE, 0);
-
-						const auto threadGroupX = (mipChainTopWidth+63)>>6, threadGroupY = (mipChainTopHeight+63)>>6;
-						struct FastMipChain_ControlUniforms {
-							Float2 _reciprocalInputDims;
-							unsigned _dummy[2];
-							uint32_t _threadGroupCount;
-							unsigned _dummy2;
-							uint32_t _mipCount;
-							unsigned _dummy3;
+						struct ControlUniforms {
+							Float2 _reciprocalDstDims;
+							unsigned _dummy2[2];
+							UInt2 _threadGroupCount;
+							unsigned _mipIndex;
+							unsigned _dummy;
 						} controlUniforms {
-							Float2 { 1.f/float(mipChainTopWidth), 1.f/float(mipChainTopHeight) },
+							Float2 { 1.f/float(mipChainTopWidth>>dstMip), 1.f/float(mipChainTopHeight>>dstMip) },
 							{0,0},
-							threadGroupX * threadGroupY,
-							0,
-							brightPassMipCountCount - 1,
+							{ threadGroupX, threadGroupY },
+							dstMip,
 							0
 						};
 						encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(controlUniforms));
 						encoder.Dispatch(
-							*fastMipChain._pipeline,
+							*upsampleStep._pipeline,
 							threadGroupX, threadGroupY, 1);
 					}
-					queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
 				}
-
-				// end, report results
-
-				encoder = {};
-				queryPool.EndFrame(*Metal::DeviceContext::Get(*threadContext), queryPoolFrameId);
-				threadContext->CommitCommands(CommitCommandsFlags::WaitForCompletion);
-				auto queryResults = StallAndGetFrameResults(*Metal::DeviceContext::Get(*threadContext), queryPool, queryPoolFrameId);
-				auto elapsed0 = *(queryResults._resultsStart+1) - *queryResults._resultsStart;
-				auto elapsed1 = *(queryResults._resultsStart+2) - *(queryResults._resultsStart+1);
-				std::cout << "BrightPassFilter: " << elapsed0 / float(queryResults._frequency) * 1000.0f / float(iterationCount) << "ms" << std::endl;
-				std::cout << "DownsampleStep: " << elapsed1 / float(queryResults._frequency) * 1000.0f / float(iterationCount) << "ms" << std::endl;
 			}
+
+			// end, report results
+
+			queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
+			encoder = {};
+			queryPool.EndFrame(*Metal::DeviceContext::Get(*threadContext), queryPoolFrameId);
+			threadContext->CommitCommands(CommitCommandsFlags::WaitForCompletion);
+			auto queryResults = StallAndGetFrameResults(*Metal::DeviceContext::Get(*threadContext), queryPool, queryPoolFrameId);
+			auto elapsed0 = *(queryResults._resultsStart+1) - *queryResults._resultsStart;
+			auto elapsed1 = *(queryResults._resultsStart+2) - *(queryResults._resultsStart+1);
+			auto elapsed2 = *(queryResults._resultsStart+3) - *(queryResults._resultsStart+2);
+			std::cout << "BrightPassFilter: " << elapsed0 / float(queryResults._frequency) * 1000.0f / float(iterationCount) << "ms" << std::endl;
+			std::cout << "DownsampleStep  : " << elapsed1 / float(queryResults._frequency) * 1000.0f / float(iterationCount) << "ms" << std::endl;
+			std::cout << "UpsampleStep    : " << elapsed2 / float(queryResults._frequency) * 1000.0f / float(iterationCount) << "ms" << std::endl;
+			std::cout << "Total           : " << (elapsed0+elapsed1+elapsed2) / float(queryResults._frequency) * 1000.0f / float(iterationCount) << "ms" << std::endl;
+		}
+
+		SECTION("Gaussian blurring")
+		{
+			testHelper->_device->Stall();
+			Metal::TimeStampQueryPool queryPool(Metal::GetObjectFactory());
+			auto queryPoolFrameId = queryPool.BeginFrame(*Metal::DeviceContext::Get(*threadContext));
+			const unsigned iterationCount = 16 * 512;
+
+			// setup "render pass" and begin...
+			parsingContext.GetFragmentStitchingContext().DefineAttachment(
+				Techniques::PreregisteredAttachment {
+					"gaussian-blur"_h,
+					CreateDesc(
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource,
+						TextureDesc::Plain2D(workingRes[0]/2, workingRes[1]/2, Format::B8G8R8A8_UNORM)),
+					"gaussian-blur",
+					Techniques::PreregisteredAttachment::State::Uninitialized
+				});
+			Techniques::FrameBufferDescFragment fragDesc;
+			fragDesc._pipelineType = PipelineType::Compute;
+			Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
+			spDesc.SetName("downsample-test");
+			auto attachment = fragDesc.DefineAttachment("gaussian-blur"_h).NoInitialState();
+			spDesc.AppendNonFrameBufferAttachmentView(attachment, BindFlag::UnorderedAccess);
+			fragDesc.AddSubpass(std::move(spDesc));
+			Techniques::RenderPassInstance rpi { parsingContext, fragDesc };
+
+			// "gaussian filter"
+			queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
+
+			{
+				ResourceViewStream uniforms { *downsampleSrcSRV, *rpi.GetNonFrameBufferAttachmentView(0) };
+				auto dispatchHelper = gaussianFilterOperator->BeginDispatches(parsingContext, uniforms);
+				for (unsigned c=0; c<iterationCount; ++c) {
+					const unsigned blockSize = 16;
+					dispatchHelper.Dispatch(
+						((workingRes[0]/2) + blockSize - 1) / blockSize,
+						((workingRes[1]/2) + blockSize - 1) / blockSize,
+						1);
+				}
+			}
+
+			queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
+			queryPool.EndFrame(*Metal::DeviceContext::Get(*threadContext), queryPoolFrameId);
+			threadContext->CommitCommands(CommitCommandsFlags::WaitForCompletion);
+			auto queryResults = StallAndGetFrameResults(*Metal::DeviceContext::Get(*threadContext), queryPool, queryPoolFrameId);
+			auto elapsed0 = *(queryResults._resultsStart+1) - *queryResults._resultsStart;
+			std::cout << "GaussianFilter  : " << elapsed0 / float(queryResults._frequency) * 1000.0f / float(iterationCount) << "ms" << std::endl;
 		}
 
 		testHelper->EndFrameCapture();
