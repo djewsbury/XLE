@@ -117,6 +117,68 @@ float2 UpsampleStep_GetOutputReciprocalDims() { return ControlUniforms.A.xy; }
 uint UpsampleStep_GetMipIndex() { return asuint(ControlUniforms.B.z); }
 uint2 UpsampleStep_GetThreadGroupCount() { return asuint(ControlUniforms.B.xy); }
 
+float3 UpsampleFilter_Square(float2 tc, uint mipIndex, float2 texelSize)
+{
+	float4 twiddler = float4(texelSize, -texelSize);
+ 	float3 filteredSample =
+ 		  MipChainSRV.SampleLevel(BilinearClamp, tc + twiddler.zw, mipIndex).rgb
+ 		+ MipChainSRV.SampleLevel(BilinearClamp, tc + twiddler.xw, mipIndex).rgb
+ 		+ MipChainSRV.SampleLevel(BilinearClamp, tc + twiddler.zy, mipIndex).rgb
+ 		+ MipChainSRV.SampleLevel(BilinearClamp, tc + twiddler.xy, mipIndex).rgb
+ 		;
+	filteredSample.rgb *= 0.25;
+	return filteredSample;
+}
+
+float3 UpsampleFilter_BasicTent(float2 tc, uint mipIndex, float2 texelSize)
+{
+	// classic tent filter style
+	// 1 2 1
+	// 2 4 2
+	// 1 2 1
+	const float4 twiddler = float4(texelSize.xy, -texelSize.x, 0);
+	float3 filteredSample =
+				MipChainSRV.SampleLevel(BilinearClamp, tc - twiddler.xy, mipIndex).rgb
+ 		+ 2.0 * MipChainSRV.SampleLevel(BilinearClamp, tc - twiddler.wy, mipIndex).rgb
+ 		+		MipChainSRV.SampleLevel(BilinearClamp, tc - twiddler.zy, mipIndex).rgb
+		
+ 		+ 2.0 * MipChainSRV.SampleLevel(BilinearClamp, tc - twiddler.xw, mipIndex).rgb
+		+ 4.0 * MipChainSRV.SampleLevel(BilinearClamp, tc			   , mipIndex).rgb
+		+ 2.0 * MipChainSRV.SampleLevel(BilinearClamp, tc + twiddler.xw, mipIndex).rgb
+
+		+		MipChainSRV.SampleLevel(BilinearClamp, tc + twiddler.zy, mipIndex).rgb
+ 		+ 2.0 * MipChainSRV.SampleLevel(BilinearClamp, tc + twiddler.wy, mipIndex).rgb
+ 		+		MipChainSRV.SampleLevel(BilinearClamp, tc + twiddler.xy, mipIndex).rgb
+ 		;
+	filteredSample.rgb *= 1.0 / 16.0;
+	return filteredSample;
+}
+
+float3 UpsampleFilter_TentCircularBias(float2 tc, uint mipIndex, float2 texelSize)
+{
+	// Tent filter with circular bias (see http://cg.skku.edu/pub/papers/2009-lee-tvcg-mintdof-cam.pdf)
+	// this filtering is in general not particularly mathematical or strict, so small tweaks can help
+	// if they improve the look
+	const float4 twiddler = float4(texelSize.xy, -texelSize.x, 0);
+	const float circularBias = 0.70710678; // 1.0 / sqrt(2.0);
+	float3 filteredSample =
+				MipChainSRV.SampleLevel(BilinearClamp, tc - twiddler.xy * circularBias	, mipIndex).rgb
+ 		+ 2.0 * MipChainSRV.SampleLevel(BilinearClamp, tc - twiddler.wy					, mipIndex).rgb
+ 		+		MipChainSRV.SampleLevel(BilinearClamp, tc - twiddler.zy * circularBias	, mipIndex).rgb
+		
+ 		+ 2.0 * MipChainSRV.SampleLevel(BilinearClamp, tc - twiddler.xw					, mipIndex).rgb
+		+ 4.0 * MipChainSRV.SampleLevel(BilinearClamp, tc				 				, mipIndex).rgb
+		+ 2.0 * MipChainSRV.SampleLevel(BilinearClamp, tc + twiddler.xw					, mipIndex).rgb
+
+		+		MipChainSRV.SampleLevel(BilinearClamp, tc + twiddler.zy * circularBias	, mipIndex).rgb
+ 		+ 2.0 * MipChainSRV.SampleLevel(BilinearClamp, tc + twiddler.wy					, mipIndex).rgb
+ 		+		MipChainSRV.SampleLevel(BilinearClamp, tc + twiddler.xy * circularBias	, mipIndex).rgb
+ 		;
+	filteredSample.rgb *= 1.0 / 16.0;
+	return filteredSample;
+}
+
+
 [numthreads(8, 8, 1)]
 	void UpsampleStep(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
@@ -124,17 +186,15 @@ uint2 UpsampleStep_GetThreadGroupCount() { return asuint(ControlUniforms.B.xy); 
 	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
 	uint mipIndex = UpsampleStep_GetMipIndex();
 
-	float2 baseSourceTC = pixelId.xy * UpsampleStep_GetOutputReciprocalDims();
-	const float A = 2.0;
-	float4 twiddler = float4(A * UpsampleStep_GetOutputReciprocalDims(), -A * UpsampleStep_GetOutputReciprocalDims());
- 	float3 filteredSample =
- 		  MipChainSRV.SampleLevel(BilinearClamp, baseSourceTC + twiddler.zw, mipIndex+1).rgb
- 		+ MipChainSRV.SampleLevel(BilinearClamp, baseSourceTC + twiddler.xw, mipIndex+1).rgb
- 		+ MipChainSRV.SampleLevel(BilinearClamp, baseSourceTC + twiddler.zy, mipIndex+1).rgb
- 		+ MipChainSRV.SampleLevel(BilinearClamp, baseSourceTC + twiddler.xy, mipIndex+1).rgb
- 		;
-
-	MipChainUAV[mipIndex][pixelId] += filteredSample.rgb * 0.25;
+	const float2 srcTexelSize = 2.0 * UpsampleStep_GetOutputReciprocalDims();
+	const float2 offset = 0.5.xx;		// offset to sample in the middle of the dst pixel
+	const float2 baseSourceTC = (float2(pixelId.xy) + offset) * UpsampleStep_GetOutputReciprocalDims();
+	const uint filterType = 2;
+	float3 filteredSample;
+	if (filterType == 0) 		filteredSample = UpsampleFilter_Square(baseSourceTC, mipIndex+1, srcTexelSize);
+	else if (filterType == 1) 	filteredSample = UpsampleFilter_BasicTent(baseSourceTC, mipIndex+1, srcTexelSize);
+	else if (filterType == 2) 	filteredSample = UpsampleFilter_TentCircularBias(baseSourceTC, mipIndex+1, srcTexelSize);
+	MipChainUAV[mipIndex][pixelId] += filteredSample;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -210,7 +270,19 @@ uint FastMipChain_GetThreadGroupCount() { return ControlUniforms.B.x; }
 
 	// Define your reduction function: takes as input the four 2x2 values and returns 1 output value
 	// todo also consider brightness weighting here
-	AH4 SpdReduce4H(AH4 v0, AH4 v1, AH4 v2, AH4 v3){return AH4((v0.rgb+v1.rgb+v2.rgb+v3.rgb)*AH1(0.25), 1);}
+	AH4 SpdReduce4H(AH4 v0, AH4 v1, AH4 v2, AH4 v3)
+	{
+		const bool brightnessWeighted = false;
+		if (brightnessWeighted) {
+			float w0 = 1.0 / (1.0 + max(v0.x, max(v0.y, v0.z)));
+			float w1 = 1.0 / (1.0 + max(v1.x, max(v1.y, v1.z)));
+			float w2 = 1.0 / (1.0 + max(v2.x, max(v2.y, v2.z)));
+			float w3 = 1.0 / (1.0 + max(v3.x, max(v3.y, v3.z)));
+			return AH4((v0.rgb*w0 + v1.rgb*w1 + v2.rgb*w2 + v3.rgb*w3) / (w0+w1+w2+w3), 1);
+		} else {
+			return AH4((v0.rgb+v1.rgb+v2.rgb+v3.rgb)*AH1(0.25), 1);
+		}
+	}
 
 #endif
 
