@@ -30,9 +30,9 @@ float3 c5c9CurveEsimate_LogY3(float3 x)
 
 float3 ToneMapAces(float3 x)
 {
-	x = mul(PreToneScale, x);
+	x = mul(PreToneScale, float4(x, 0));
 	x = exp(c5c9CurveEsimate_LogY3(x));
-	return mul(PostToneScale, x);
+	return mul(PostToneScale, float4(x, 0));
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,14 +44,46 @@ float3 ToneMapAces(float3 x)
 Texture2D<float3> HDRInput;
 RWTexture2D<float3> LDROutput;		// output could be >8 bit depth, of course, but we're expecting smaller range than the input
 
+#if HAS_BRIGHT_PASS
 Texture2D<float3> BrightPass;
-SamplerState FixedSampler;
+SamplerState BilinearClamp;
+
+float3 BrightPassSample(float2 tc, float2 brightPassTexelSize)
+{
+	const uint sampleQuality = 1;
+	if (sampleQuality == 0) {
+		return BrightPass.SampleLevel(BilinearClamp, tc, 0);
+	} else if (sampleQuality == 1) {
+		// Using a tent filter with circular bias; ala the upsampling steps
+		const float pushApart = 1.5;
+		const float4 twiddler = pushApart * float4(brightPassTexelSize.xy, -brightPassTexelSize.x, 0);
+		const float circularBias = 0.70710678; // 1.0 / sqrt(2.0);
+		float3 filteredSample =
+					BrightPass.SampleLevel(BilinearClamp, tc - twiddler.xy * circularBias	, 0).rgb
+			+ 2.0 * BrightPass.SampleLevel(BilinearClamp, tc - twiddler.wy					, 0).rgb
+			+		BrightPass.SampleLevel(BilinearClamp, tc - twiddler.zy * circularBias	, 0).rgb
+			
+			+ 2.0 * BrightPass.SampleLevel(BilinearClamp, tc - twiddler.xw					, 0).rgb
+			+ 4.0 * BrightPass.SampleLevel(BilinearClamp, tc				 				, 0).rgb
+			+ 2.0 * BrightPass.SampleLevel(BilinearClamp, tc + twiddler.xw					, 0).rgb
+
+			+		BrightPass.SampleLevel(BilinearClamp, tc + twiddler.zy * circularBias	, 0).rgb
+			+ 2.0 * BrightPass.SampleLevel(BilinearClamp, tc + twiddler.wy					, 0).rgb
+			+		BrightPass.SampleLevel(BilinearClamp, tc + twiddler.xy * circularBias	, 0).rgb
+			;
+		return filteredSample * 1.0 / 16.0;
+	} else {
+		return 0;
+	}
+}
+#endif
 
 [numthreads(8, 8, 1)]
 	void main(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
 	uint2 textureDims;
 	LDROutput.GetDimensions(textureDims.x, textureDims.y);
+	float2 brightPassTexelSize = float2(2.0 / textureDims.x, 2.0 / textureDims.y);		// assuming bright pass load at quarter resolution
 
 	uint2 threadGroupCounts = uint2((textureDims.x+8-1)/8, (textureDims.y+8-1)/8);
 	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
@@ -59,8 +91,9 @@ SamplerState FixedSampler;
 	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y) {
 		float3 linearColour = ToneMapAces(HDRInput[pixelId]);
 		// float3 linearColour = saturate(LinearToSRGB_Formal(HDRInput[pixelId]));
-		linearColour += BrightPass.SampleLevel(FixedSampler, pixelId.xy / float2(textureDims.xy), 0);
-
-		LDROutput[pixelId] = saturate(LinearToSRGB_Formal(linearColour));
+		#if HAS_BRIGHT_PASS
+			linearColour += BrightPassSample(pixelId.xy / float2(textureDims.xy), brightPassTexelSize);
+		#endif
+		LDROutput[pixelId] = LinearToSRGB_Formal(saturate(linearColour));
 	}
 }

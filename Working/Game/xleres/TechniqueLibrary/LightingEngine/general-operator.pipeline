@@ -10,6 +10,13 @@ DescriptorSet General
 		AddressU = Wrap,
 		AddressV = Wrap
 	};
+
+	Sampler BilinearClamp
+	{
+		Filter = Bilinear,
+		AddressU = Clamp,
+		AddressV = Clamp
+	};
 };
 
 PipelineLayout ComputeMain

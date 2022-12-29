@@ -32,18 +32,58 @@ namespace RenderCore { namespace LightingEngine
 		/// Typical values: Format::R11G11B10_FLOAT, Format::R16G16B16A16_FLOAT, Format::R32G32B32A32_FLOAT
 		Format _lightAccumulationBufferFormat = Format::R11G11B10_FLOAT;
 
+		/// <summary>Maximum radius for "large bloom" effect</summary>
+		/// Set _maxLargeBloomRadius to greater than 0.0 in order to enable the large bloom radius
+		/// 
+		/// We allow for 2 separate bloom operations (which can both be used at the same time)
+		/// This one is a large radius / soft bloom -- with this bloom, small highlights become very soft, but
+		/// bright pixels effect a larger area.
+		float _maxLargeBloomRadius = 0.f;
+
+		/// <summary>Enable the small bloom</summary>
+		/// This is the second bloom effect. It can be used instead of, or alongside the "large bloom" effect.
+		///
+		/// This one uses a more accurate blur over a much smaller radius. It can give a nice tight highlight around 
+		/// small details
+		bool _enableSmallBloom = false;
+
 		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
 	};
 
-	class ToneMapAcesOperator : public std::enable_shared_from_this<ToneMapAcesOperator>
+	class IBloom
+	{
+	public:
+		/// Using exact powers of 2 is recommended for the large radius
+		virtual void SetLargeRadius(float) = 0;
+		virtual float GetLargeRadius() const = 0;
+
+		virtual void SetSmallRadius(float) = 0;
+		virtual float SetSmallRadius() const = 0;
+
+		virtual void SetThreshold(float) = 0;
+		virtual float GetThreshold() const = 0;
+
+		virtual void SetDesaturationFactor(float) = 0;
+		virtual float GetDesaturationFactor() const = 0;
+
+		virtual void SetLargeBloomBrightness(Float3) = 0;
+		virtual Float3 GetLargeBloomBrightness() const = 0;
+
+		virtual void SetSmallBloomBrightness(Float3) = 0;
+		virtual Float3 GetSmallBloomBrightness() const = 0;
+
+		virtual ~IBloom();
+	};
+
+	class ToneMapAcesOperator : public std::enable_shared_from_this<ToneMapAcesOperator>, public IBloom
 	{
 	public:
 		void Execute(
 			Techniques::ParsingContext& parsingContext,
 			IResourceView& ldrOutput, IResourceView& hdrInput,
 			IteratorRange<IResourceView const*const*> brightPassMipChainUAV,
-			IResourceView& brightPassMipChainSRV,
-			IResourceView& highResBlurWorking);
+			IResourceView* brightPassMipChainSRV,
+			IResourceView* brightPassHighResBlurWorkingUAV, IResourceView* brightPassHighResBlurWorkingSRV);
 
 		RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
 		void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext);
@@ -64,9 +104,11 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Metal::ComputePipeline> _brightPass;
 		std::shared_ptr<Metal::ComputePipeline> _brightDownsample;
 		std::shared_ptr<Metal::ComputePipeline> _brightUpsample;
+		std::shared_ptr<Metal::ComputePipeline> _gaussianFilter;
 		std::shared_ptr<Metal::BoundUniforms> _brightPassBoundUniforms;
 		std::shared_ptr<ICompiledPipelineLayout> _compiledPipelineLayout;
 		std::shared_ptr<IResourceView> _params[3];
+		std::shared_ptr<IResourceView> _brightPassParams[3];
 		std::shared_ptr<IResourceView> _atomicCounterBufferView;
 		unsigned _paramsBufferCounter = 0;
 		unsigned _paramsBufferCopyCountdown = 0;
@@ -77,7 +119,22 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::DependencyValidation _depVal;
 		unsigned _brightPassMipCountCount = 0;
 
-		std::shared_ptr<Techniques::IComputeShaderOperator> _gaussianFilter;
+		float _brightPassLargeRadius = 1.f;
+		float _brightPassSmallRadius = 1.f;
+
+		// IBloom interface
+		void SetLargeRadius(float) override;
+		float GetLargeRadius() const override;
+		void SetSmallRadius(float) override;
+		float SetSmallRadius() const override;
+		void SetThreshold(float) override;
+		float GetThreshold() const override;
+		void SetDesaturationFactor(float) override;
+		float GetDesaturationFactor() const override;
+		void SetLargeBloomBrightness(Float3) override;
+		Float3 GetLargeBloomBrightness() const override;
+		void SetSmallBloomBrightness(Float3) override;
+		Float3 GetSmallBloomBrightness() const override;
 	};
 
 	class CopyToneMapOperator : public std::enable_shared_from_this<CopyToneMapOperator>

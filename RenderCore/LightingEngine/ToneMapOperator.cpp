@@ -31,7 +31,24 @@ namespace RenderCore { namespace LightingEngine
 		Float3x4 _postToneScale;
 	};
 
-	static const unsigned s_shaderMipChainUniformCount = 6;
+	struct CB_BrightPassParams
+	{
+		float _bloomThreshold;
+		float _bloomDesaturationFactor;
+		float _smallBlurWeights[6];
+		Float4 _largeRadiusBrightness;
+		Float4 _smallRadiusBrightness;
+
+		void CalculateSmallBlurWeights(float radius);
+	};
+
+	struct AllParams
+	{
+		CB_Params _tonemapParams;
+		CB_BrightPassParams _brightPassParams;
+	};
+
+	static const unsigned s_shaderMipChainUniformCount = 8;		// there's a limit to how many mip levels are actually useful
 
 	static Float4x4 BuildPreToneScaleTransform();
 	static Float4x4 BuildPostToneScaleTransform_SRGB();
@@ -40,8 +57,8 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::ParsingContext& parsingContext,
 		IResourceView& ldrOutput, IResourceView& hdrInput,
 		IteratorRange<IResourceView const*const*> brightPassMipChainUAV,
-		IResourceView& brightPassMipChainSRV,
-		IResourceView& highResBlurWorking)
+		IResourceView* brightPassMipChainSRV,
+		IResourceView* brightPassHighResBlurWorkingUAV, IResourceView* brightPassHighResBlurWorkingSRV)
 	{
 		assert(_secondStageConstructionState == 2);
 		assert(_toneMap);
@@ -52,6 +69,7 @@ namespace RenderCore { namespace LightingEngine
 			checked_cast<Metal::Resource*>(_atomicCounterBufferView->GetResource().get())->GetBuffer(), 
 			0, VK_WHOLE_SIZE, 0);
 
+		static_assert(dimof(_brightPassParams) == dimof(_params));
 		_paramsBufferCounter = (_paramsBufferCounter+1)%dimof(_params);
 		if (_paramsBufferCopyCountdown) {
 			Metal::ResourceMap map { *parsingContext.GetThreadContext().GetDevice(), *_params[0]->GetResource(), Metal::ResourceMap::Mode::WriteDiscardPrevious };
@@ -63,32 +81,33 @@ namespace RenderCore { namespace LightingEngine
 
 		auto fbProps = parsingContext._rpi->GetFrameBufferDesc().GetProperties();
 		assert(fbProps._width != 0 && fbProps._height != 0);
-		assert(_brightPassMipCountCount == std::min(IntegerLog2(std::max(fbProps._width, fbProps._height)) - 2, s_shaderMipChainUniformCount));
 		assert(_brightPassMipCountCount <= s_shaderMipChainUniformCount);
 		assert(brightPassMipChainUAV.size() == _brightPassMipCountCount);
 
-		auto mipChainTopWidth = fbProps._width>>1, mipChainTopHeight = fbProps._height>>1;
-
 		////////////////////////////////////////////////////////////
 		
-		{
+		if (brightPassMipChainSRV && !brightPassMipChainUAV.empty()) {
+			auto mipChainTopWidth = fbProps._width>>1, mipChainTopHeight = fbProps._height>>1;
+
 			auto encoder = metalContext.BeginComputeEncoder(*_compiledPipelineLayout);
 			Metal::CapturedStates capturedStates;
 			encoder.BeginStateCapture(capturedStates);
 
 			// Set the uniforms once, and forget
 			// We just use push constants on a per-dispatch basis
-			VLA(const IResourceView*, views, 3+s_shaderMipChainUniformCount);
+			auto* dummyUav = Techniques::Services::GetCommonResources()->_black2DSRV.get();
+			const IResourceView* views[5+s_shaderMipChainUniformCount];
 			views[0] = &hdrInput;
 			views[1] = _atomicCounterBufferView.get();
-			views[2] = &brightPassMipChainSRV;
+			views[2] = _brightPassParams[_paramsBufferCounter].get();
+			views[3] = brightPassHighResBlurWorkingUAV ? brightPassHighResBlurWorkingUAV : dummyUav;
+			views[4] = brightPassMipChainSRV;
 			unsigned c=0;
-			for (; c<_brightPassMipCountCount; ++c) views[3+c] = brightPassMipChainUAV[c];
-			auto* dummyUav = Techniques::Services::GetCommonResources()->_black2DSRV.get();
-			for (; c<s_shaderMipChainUniformCount; ++c) views[3+c] = dummyUav;
+			for (; c<brightPassMipChainUAV.size(); ++c) views[5+c] = brightPassMipChainUAV[c];
+			for (; c<s_shaderMipChainUniformCount; ++c) views[5+c] = dummyUav;
 
 			UniformsStream uniforms;
-			uniforms._resourceViews = MakeIteratorRange(views, views+3+s_shaderMipChainUniformCount);
+			uniforms._resourceViews = views;
 			_brightPassBoundUniforms->ApplyLooseUniforms(
 				metalContext, encoder,
 				uniforms);
@@ -108,114 +127,108 @@ namespace RenderCore { namespace LightingEngine
 				Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
 				Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
 
-			{
-				// note -- thread group counts based on the size of the input texture, not any of the mip levels
-				const auto threadGroupX = (mipChainTopWidth+63)>>6, threadGroupY = (mipChainTopHeight+63)>>6;
-				struct FastMipChain_ControlUniforms {
-					Float2 _reciprocalInputDims;
-					unsigned _dummy[2];
-					uint32_t _threadGroupCount;
-					unsigned _dummy2;
-					uint32_t _mipCount;
-					unsigned _dummy3;
-				} controlUniforms {
-					Float2 { 1.f/float(mipChainTopWidth), 1.f/float(mipChainTopHeight) },
-					{0,0},
-					threadGroupX * threadGroupY,
-					0,
-					_brightPassMipCountCount - 1,
-					0
-				};
-				encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(controlUniforms));
+			if (_desc._enableSmallBloom) {
+				const unsigned blockSize = 16;
 				encoder.Dispatch(
-					*_brightDownsample,
-					threadGroupX, threadGroupY, 1);
+					*_gaussianFilter,
+					(mipChainTopWidth + blockSize - 1) / blockSize,
+					(mipChainTopHeight + blockSize - 1) / blockSize,
+					1);
 			}
 
-			auto* mipChainResource = brightPassMipChainUAV[0]->GetResource().get();
+			if (_desc._maxLargeBloomRadius > 0.f) {
 
-			for (unsigned pass=0; pass<_brightPassMipCountCount-1; ++pass) {
-				auto srcMip = _brightPassMipCountCount-1-pass;
-				auto dstMip = _brightPassMipCountCount-2-pass;
+				unsigned upsampleCount = unsigned(std::log2(_brightPassLargeRadius) - 1.f);		// see below for calculation
+				upsampleCount = std::min(upsampleCount, _brightPassMipCountCount - 1);
 
-				// there's a sequence of barriers as we walk up the mip chain
-				// we could potentially do this smarter if we built a system like ffx_spd, but going the other way
+				auto* mipChainResource = brightPassMipChainUAV[0]->GetResource().get();
 				{
-					Metal::BarrierHelper barrierHelper{metalContext};
-					barrierHelper.Add(
-						*mipChainResource, TextureViewDesc::SubResourceRange{srcMip, 1}, TextureViewDesc::All,
-						Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
-						Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
-					if (dstMip == 0)
-						barrierHelper.Add(
-							*mipChainResource, TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
-							Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute},
-							Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
+					// note -- thread group counts based on the size of the input texture, not any of the mip levels
+					const auto threadGroupX = (mipChainTopWidth+63)>>6, threadGroupY = (mipChainTopHeight+63)>>6;
+					struct FastMipChain_ControlUniforms {
+						Float2 _reciprocalInputDims;
+						unsigned _dummy[2];
+						uint32_t _threadGroupCount;
+						unsigned _dummy2;
+						uint32_t _mipCount;
+						unsigned _dummy3;
+					} controlUniforms {
+						Float2 { 1.f/float(mipChainTopWidth), 1.f/float(mipChainTopHeight) },
+						{0,0},
+						threadGroupX * threadGroupY,
+						0,
+						upsampleCount,
+						0
+					};
+					encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(controlUniforms));
+					encoder.Dispatch(
+						*_brightDownsample,
+						threadGroupX, threadGroupY, 1);
 				}
 
-				const unsigned dispatchGroupWidth = 8;
-				const unsigned dispatchGroupHeight = 8;
-				auto topMipWidth = fbProps._width >> 1, topMipHeight = fbProps._height >> 1;
-				const auto
-					threadGroupX = ((topMipWidth>>dstMip)+dispatchGroupWidth)/dispatchGroupWidth,
-					threadGroupY = ((topMipHeight>>dstMip)+dispatchGroupHeight)/dispatchGroupHeight;
+				for (unsigned pass=0; pass<upsampleCount; ++pass) {
+					auto srcMip = upsampleCount-pass;
+					auto dstMip = upsampleCount-1-pass;
 
-				struct ControlUniforms {
-					Float2 _reciprocalDstDims;
-					unsigned _dummy2[2];
-					UInt2 _threadGroupCount;
-					unsigned _mipIndex;
-					unsigned _dummy;
-				} controlUniforms {
-					Float2 { 1.f/float(topMipWidth>>dstMip), 1.f/float(topMipHeight>>dstMip) },
-					{0,0},
-					{ threadGroupX, threadGroupY },
-					dstMip,
-					0
-				};
-				encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(controlUniforms));
-				encoder.Dispatch(
-					*_brightUpsample,
-					threadGroupX, threadGroupY, 1);
+					// there's a sequence of barriers as we walk up the mip chain
+					// we could potentially do this smarter if we built a system like ffx_spd, but going the other way
+					{
+						Metal::BarrierHelper barrierHelper{metalContext};
+						barrierHelper.Add(
+							*mipChainResource, TextureViewDesc::SubResourceRange{srcMip, 1}, TextureViewDesc::All,
+							Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+							Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+						if (dstMip == 0) {
+							barrierHelper.Add(
+								*mipChainResource, TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
+								Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute},
+								Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
+
+							if (brightPassHighResBlurWorkingUAV)
+								barrierHelper.Add(
+									*brightPassHighResBlurWorkingUAV->GetResource(),
+									Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+									Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
+						}
+					}
+
+					const unsigned dispatchGroupWidth = 8;
+					const unsigned dispatchGroupHeight = 8;
+					auto topMipWidth = fbProps._width >> 1, topMipHeight = fbProps._height >> 1;
+					const auto
+						threadGroupX = ((topMipWidth>>dstMip)+dispatchGroupWidth)/dispatchGroupWidth,
+						threadGroupY = ((topMipHeight>>dstMip)+dispatchGroupHeight)/dispatchGroupHeight;
+
+					struct ControlUniforms {
+						Float2 _reciprocalDstDims;
+						unsigned _dummy2[2];
+						UInt2 _threadGroupCount;
+						unsigned _mipIndex;
+						unsigned _copyHighResBlur;
+					} controlUniforms {
+						Float2 { 1.f/float(topMipWidth>>dstMip), 1.f/float(topMipHeight>>dstMip) },
+						{0,0},
+						{ threadGroupX, threadGroupY },
+						dstMip,
+						(dstMip == 0) && brightPassHighResBlurWorkingUAV
+					};
+					encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(controlUniforms));
+					encoder.Dispatch(
+						*_brightUpsample,
+						threadGroupX, threadGroupY, 1);
+				}
+
+				// final blurred texture now shifted to ShaderResource
+				Metal::BarrierHelper{metalContext}.Add(
+					*brightPassMipChainSRV->GetResource(), TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
+					Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+					Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+			} else if (_desc._enableSmallBloom) {
+				Metal::BarrierHelper{metalContext}.Add(
+					*brightPassHighResBlurWorkingUAV->GetResource(),
+					Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+					Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
 			}
-
-			// final map also shifted to ShaderResource
-			Metal::BarrierHelper{metalContext}.Add(
-				*mipChainResource, TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
-				Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
-				Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
-		}
-
-		////////////////////////////////////////////////////////////
-
-		{
-			// Gaussian filter experiment
-			const unsigned blockSize = 16;
-			ResourceViewStream uniforms { brightPassMipChainSRV, highResBlurWorking };
-			_gaussianFilter->Dispatch(
-				parsingContext,
-				((fbProps._width>>1) + blockSize - 1) / blockSize,
-				((fbProps._height>>1) + blockSize - 1) / blockSize,
-				1,
-				uniforms);
-
-			Metal::BarrierHelper{metalContext}.Add(
-				*highResBlurWorking.GetResource(), TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
-				Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
-				Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
-
-			ResourceViewStream uniforms2 { highResBlurWorking, brightPassMipChainSRV };
-			_gaussianFilter->Dispatch(
-				parsingContext,
-				((fbProps._width>>1) + blockSize - 1) / blockSize,
-				((fbProps._height>>1) + blockSize - 1) / blockSize,
-				1,
-				uniforms2);
-
-			Metal::BarrierHelper{metalContext}.Add(
-				*brightPassMipChainSRV.GetResource(), TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
-				Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
-				Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
 		}
 
 		////////////////////////////////////////////////////////////
@@ -226,7 +239,7 @@ namespace RenderCore { namespace LightingEngine
 			ResourceViewStream uniforms {
 				hdrInput, ldrOutput,
 				*_params[_paramsBufferCounter],
-				brightPassMipChainSRV
+				*((_desc._maxLargeBloomRadius > 0.f) ? brightPassMipChainSRV : brightPassHighResBlurWorkingSRV)
 			};
 			_toneMap->Dispatch(
 				parsingContext,
@@ -249,33 +262,46 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState().FinalState(BindFlag::RenderTarget), BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard());
-		auto brightPassMipChain = result.DefineAttachment("brightpass-working"_h).NoInitialState().Discard();
-		{
-			TextureViewDesc view;
-			// view._flags |= TextureViewDesc::Flags::SimultaneouslyUnorderedAccess;
-			spDesc.AppendNonFrameBufferAttachmentView(brightPassMipChain, BindFlag::ShaderResource, view);
+		unsigned brightPassMipChainSRVIdx = ~0u, brightPassMipChainUAVIdx = ~0u, brightPassHighResBlurWorkingUAVIdx = ~0u, brightPassHighResBlurWorkingSRVIdx = ~0u;
+		if (_desc._maxLargeBloomRadius > 0.f || _desc._enableSmallBloom) {
+			auto brightPassMipChain = result.DefineAttachment("brightpass-working"_h).NoInitialState().Discard();
+			{
+				TextureViewDesc view;
+				// view._flags |= TextureViewDesc::Flags::SimultaneouslyUnorderedAccess;
+				brightPassMipChainSRVIdx = spDesc.AppendNonFrameBufferAttachmentView(brightPassMipChain, BindFlag::ShaderResource, view);
+			}
+			for (unsigned c=0; c<_brightPassMipCountCount; ++c) {
+				TextureViewDesc view;
+				view._mipRange._min = c;
+				view._mipRange._count = 1;
+				auto idx = spDesc.AppendNonFrameBufferAttachmentView(brightPassMipChain, BindFlag::UnorderedAccess, view);
+				if (c == 0) brightPassMipChainUAVIdx = idx;
+			}
 		}
-		for (unsigned c=0; c<_brightPassMipCountCount; ++c) {
-			TextureViewDesc view;
-			view._mipRange._min = c;
-			view._mipRange._count = 1;
-			spDesc.AppendNonFrameBufferAttachmentView(brightPassMipChain, BindFlag::UnorderedAccess, view);
+		if (_desc._enableSmallBloom) {
+			auto highResBlur = result.DefineAttachment("brightpass-highres-blur-working"_h).NoInitialState().Discard();
+			brightPassHighResBlurWorkingUAVIdx = spDesc.AppendNonFrameBufferAttachmentView(highResBlur, BindFlag::UnorderedAccess);
+			brightPassHighResBlurWorkingSRVIdx = spDesc.AppendNonFrameBufferAttachmentView(highResBlur, BindFlag::ShaderResource);
 		}
-		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment("brightpass-highres-blur-working"_h).NoInitialState().Discard());
 		spDesc.SetName("tone-map-aces-operator");
 
 		result.AddSubpass(
 			std::move(spDesc),
-			[op=this](LightingTechniqueIterator& iterator) {
+			[op=this, brightPassMipChainSRVIdx, brightPassMipChainUAVIdx, brightPassHighResBlurWorkingUAVIdx, brightPassHighResBlurWorkingSRVIdx](LightingTechniqueIterator& iterator) {
 				auto& ldrOutput = *iterator._rpi.GetNonFrameBufferAttachmentView(0);
 				auto& hdrInput = *iterator._rpi.GetNonFrameBufferAttachmentView(1);
-				auto& brightPassMipChainSRV = *iterator._rpi.GetNonFrameBufferAttachmentView(2);
-				auto& highResBlurWorking = *iterator._rpi.GetNonFrameBufferAttachmentView(3+op->_brightPassMipCountCount);
+				IResourceView* brightPassHighResBlurWorkingUAV = nullptr, *brightPassHighResBlurWorkingSRV = nullptr, *brightPassMipChainSRV = nullptr;
+				if (brightPassMipChainSRVIdx != ~0u)
+					brightPassMipChainSRV = iterator._rpi.GetNonFrameBufferAttachmentView(brightPassMipChainSRVIdx).get();
+				if (brightPassHighResBlurWorkingUAVIdx != ~0u)
+					brightPassHighResBlurWorkingUAV = iterator._rpi.GetNonFrameBufferAttachmentView(brightPassHighResBlurWorkingUAVIdx).get();
+				if (brightPassHighResBlurWorkingSRVIdx != ~0u)
+					brightPassHighResBlurWorkingSRV = iterator._rpi.GetNonFrameBufferAttachmentView(brightPassHighResBlurWorkingSRVIdx).get();
 
-				assert(op->_brightPassMipCountCount);
-				VLA(const IResourceView*, brightPassMipChainUAV, op->_brightPassMipCountCount);
+				assert(op->_brightPassMipCountCount <= s_shaderMipChainUniformCount);
+				const IResourceView* brightPassMipChainUAV[s_shaderMipChainUniformCount];
 				for (unsigned c=0; c<op->_brightPassMipCountCount; ++c)
-					brightPassMipChainUAV[c] = iterator._rpi.GetNonFrameBufferAttachmentView(3+c).get();
+					brightPassMipChainUAV[c] = iterator._rpi.GetNonFrameBufferAttachmentView(brightPassMipChainUAVIdx+c).get();
 
 				iterator._rpi.AutoNonFrameBufferBarrier({
 					{1, BindFlag::ShaderResource, ShaderStage::Compute}
@@ -283,14 +309,16 @@ namespace RenderCore { namespace LightingEngine
 				{
 					Metal::BarrierHelper barrierHelper{iterator._parsingContext->GetThreadContext()};
 					barrierHelper.Add(*ldrOutput.GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
-					barrierHelper.Add(*brightPassMipChainUAV[0]->GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
-					barrierHelper.Add(*highResBlurWorking.GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
+					if (brightPassMipChainSRV)
+						barrierHelper.Add(*brightPassMipChainSRV->GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
+					if (brightPassHighResBlurWorkingUAV)
+						barrierHelper.Add(*brightPassHighResBlurWorkingUAV->GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
 				}
 				
 				op->Execute(
 					*iterator._parsingContext, ldrOutput, hdrInput,
-					MakeIteratorRange(brightPassMipChainUAV, brightPassMipChainUAV+op->_brightPassMipCountCount),
-					brightPassMipChainSRV, highResBlurWorking);
+					MakeIteratorRange(brightPassMipChainUAV, brightPassMipChainUAV+op->_brightPassMipCountCount), brightPassMipChainSRV,
+					brightPassHighResBlurWorkingUAV, brightPassHighResBlurWorkingSRV);
 
 				Metal::BarrierHelper{iterator._parsingContext->GetThreadContext()}.Add(*ldrOutput.GetResource(), {BindFlag::UnorderedAccess, ShaderStage::Compute}, BindFlag::RenderTarget);
 			});
@@ -301,33 +329,50 @@ namespace RenderCore { namespace LightingEngine
 	void ToneMapAcesOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext)
 	{
 		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
-		_brightPassMipCountCount = IntegerLog2(std::max(fbSize[0], fbSize[1])) - 1;
-		_brightPassMipCountCount = std::min(_brightPassMipCountCount, s_shaderMipChainUniformCount);		// Only need to so far
-		Techniques::PreregisteredAttachment attachments[] {
+		stitchingContext.DefineAttachment(
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::ColorHDR,
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::ShaderResource,
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], _desc._lightAccumulationBufferFormat)),
 				"color-hdr"
-			},
-			Techniques::PreregisteredAttachment {
-				"brightpass-working"_h,
-				CreateDesc(
-					BindFlag::UnorderedAccess | BindFlag::ShaderResource,
-					TextureDesc::Plain2D(fbSize[0]>>1, fbSize[1]>>1, Format::B8G8R8A8_UNORM, _brightPassMipCountCount)),
-				"brightpass-working"
-			},
-			Techniques::PreregisteredAttachment {
-				"brightpass-highres-blur-working"_h,
-				CreateDesc(
-					BindFlag::UnorderedAccess | BindFlag::ShaderResource,
-					TextureDesc::Plain2D(fbSize[0]>>1, fbSize[1]>>1, Format::B8G8R8A8_UNORM)),
-				"brightpass-highres-blur-working"
-			}
-		};
-		for (const auto& a:attachments)
-			stitchingContext.DefineAttachment(a);
+			});
+
+		const auto bloomTextureFormat = Format::B8G8R8A8_UNORM;
+		_brightPassMipCountCount = 0;
+
+		if (_desc._maxLargeBloomRadius > 0.f || _desc._enableSmallBloom) {
+
+			// We're using "tent" weights at each mip level as we upsample
+			// If we say that our filter is radius=2 (somewhat arbitrarily), then that 
+			// radius effectively doubles every time we upsample. So the final radius is 2^(1+upsample steps)
+			// mip count = upsample steps + 1, so therefor:
+
+			auto radiusFactor = (_desc._maxLargeBloomRadius > 0.f) ? (std::log2(_desc._maxLargeBloomRadius)) : 1.f;
+			_brightPassMipCountCount = (unsigned)radiusFactor;
+			_brightPassMipCountCount = std::min(IntegerLog2(std::max(fbSize[0], fbSize[1])) - 1, _brightPassMipCountCount);
+			_brightPassMipCountCount = std::min(_brightPassMipCountCount, s_shaderMipChainUniformCount);
+
+			stitchingContext.DefineAttachment(
+				Techniques::PreregisteredAttachment {
+					"brightpass-working"_h,
+					CreateDesc(
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource,
+						TextureDesc::Plain2D(fbSize[0]>>1, fbSize[1]>>1, bloomTextureFormat, _brightPassMipCountCount)),
+					"brightpass-working"
+				});
+		}
+
+		if (_desc._enableSmallBloom) {
+			stitchingContext.DefineAttachment(
+				Techniques::PreregisteredAttachment {
+					"brightpass-highres-blur-working"_h,
+					CreateDesc(
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource,
+						TextureDesc::Plain2D(fbSize[0]>>1, fbSize[1]>>1, bloomTextureFormat)),
+					"brightpass-highres-blur-working"
+				});
+		}
 	}
 
 	ToneMapAcesOperator::ToneMapAcesOperator(
@@ -338,18 +383,29 @@ namespace RenderCore { namespace LightingEngine
 	{
 		_pool = std::move(pipelinePool);
 
-		_paramsData.resize(sizeof(CB_Params));
-		auto& params = *(CB_Params*)_paramsData.data();
-		params._preToneScale = Truncate(BuildPreToneScaleTransform());
-		params._postToneScale = Truncate(BuildPostToneScaleTransform_SRGB());
+		if (_desc._maxLargeBloomRadius > 0.f) _desc._maxLargeBloomRadius = std::max(_desc._maxLargeBloomRadius, 4.f);
+		_brightPassLargeRadius = std::min(1.f, _desc._maxLargeBloomRadius);
+		_brightPassSmallRadius = _desc._enableSmallBloom ? 3.5f : 0.f;
+		_paramsData.resize(sizeof(AllParams));
+		auto& params = *(AllParams*)_paramsData.data();
+		params._tonemapParams._preToneScale = Truncate(BuildPreToneScaleTransform());
+		params._tonemapParams._postToneScale = Truncate(BuildPostToneScaleTransform_SRGB());
+		params._brightPassParams._bloomDesaturationFactor = .5f;
+		params._brightPassParams._bloomThreshold = .8f;
+		params._brightPassParams.CalculateSmallBlurWeights(_brightPassSmallRadius);
+		params._brightPassParams._largeRadiusBrightness = Float4(1,1,1,1);
+		params._brightPassParams._smallRadiusBrightness = Float4(1,1,1,1);
 
 		// we need to multi-buffer the params buffer in order to update it safely
 		auto paramsBuffer = _pool->GetDevice()->CreateResource(
-			CreateDesc(BindFlag::ConstantBuffer, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc::Create(unsigned(dimof(_params)*_paramsData.size()))),
+			CreateDesc(BindFlag::ConstantBuffer, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc::Create(unsigned(3*sizeof(AllParams)))),
 			"aces-tonemap-params");
-		_params[0] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(0*_paramsData.size()), (unsigned)_paramsData.size());
-		_params[1] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(1*_paramsData.size()), (unsigned)_paramsData.size());
-		_params[2] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(2*_paramsData.size()), (unsigned)_paramsData.size());
+		_params[0] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(0*sizeof(AllParams)), (unsigned)sizeof(CB_Params));
+		_brightPassParams[0] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(0*sizeof(AllParams)+sizeof(CB_Params)), (unsigned)sizeof(CB_BrightPassParams));
+		_params[1] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(1*sizeof(AllParams)), (unsigned)sizeof(CB_Params));
+		_brightPassParams[1] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(1*sizeof(AllParams)+sizeof(CB_Params)), (unsigned)sizeof(CB_BrightPassParams));
+		_params[2] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(2*sizeof(AllParams)), (unsigned)sizeof(CB_Params));
+		_brightPassParams[2] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(2*sizeof(AllParams)+sizeof(CB_Params)), (unsigned)sizeof(CB_BrightPassParams));
 		_paramsBufferCopyCountdown = 3;
 
 		auto atomicBuffer = _pool->GetDevice()->CreateResource(
@@ -387,10 +443,13 @@ namespace RenderCore { namespace LightingEngine
 					toneMapUsi.BindResourceView(1, "LDROutput"_h);
 					toneMapUsi.BindResourceView(2, "Params"_h);
 					toneMapUsi.BindResourceView(3, "BrightPass"_h);
+
+					bool hasBrightPass = strongThis->_desc._enableSmallBloom || (strongThis->_desc._maxLargeBloomRadius > 0.f);
+
 					auto futureToneMap = Techniques::CreateComputeOperator(
 						strongThis->_pool,
 						TONEMAP_ACES_COMPUTE_HLSL ":main",
-						ParameterBox{},
+						ParameterBox{ std::make_pair("HAS_BRIGHT_PASS", hasBrightPass ? "1" : "0") },
 						GENERAL_OPERATOR_PIPELINE ":ComputeMain",
 						toneMapUsi);
 
@@ -428,25 +487,25 @@ namespace RenderCore { namespace LightingEngine
 						BLOOM_COMPUTE_HLSL ":UpsampleStep",
 						{});
 
+					std::promise<Techniques::ComputePipelineAndLayout> promisedGaussianFilter;
+					auto futureGaussianFilter = promisedGaussianFilter.get_future();
+					strongThis->_pool->CreateComputePipeline(
+						std::move(promisedGaussianFilter),
+						compiledPipelineLayout,
+						SEPARABLE_FILTER_2_COMPUTE_HLSL ":Gaussian11RGB",
+						{});
+
 					UniformsStreamInterface brightPassUsi;
 					brightPassUsi.BindResourceView(0, "HDRInput"_h);
 					brightPassUsi.BindResourceView(1, "AtomicBuffer"_h);
-					brightPassUsi.BindResourceView(2, "MipChainSRV"_h);
+					brightPassUsi.BindResourceView(2, "BloomParameters"_h);
+					brightPassUsi.BindResourceView(3, "HighResBlurTemp"_h);
+					brightPassUsi.BindResourceView(4, "MipChainSRV"_h);
 					for (unsigned c=0; c<s_shaderMipChainUniformCount; ++c)
-						brightPassUsi.BindResourceView(3+c, "MipChainUAV"_h+c);
+						brightPassUsi.BindResourceView(5+c, "MipChainUAV"_h+c);
 					UniformsStreamInterface usi2;
 					usi2.BindImmediateData(0, "ControlUniforms"_h);
 					auto brightPassBoundUniforms = std::make_shared<Metal::BoundUniforms>(compiledPipelineLayout, brightPassUsi, usi2);
-
-					UniformsStreamInterface guassianFilterUsi;
-					guassianFilterUsi.BindResourceView(0, "InputTexture"_h);
-					guassianFilterUsi.BindResourceView(1, "OutputTexture"_h);
-					auto futureGaussianFilter = Techniques::CreateComputeOperator(
-						strongThis->_pool,
-						SEPARABLE_FILTER_2_COMPUTE_HLSL ":Gaussian11RGB",
-						ParameterBox{},
-						GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-						guassianFilterUsi);
 
 					::Assets::WhenAll(std::move(futureToneMap), std::move(futureBrightPass), std::move(futureDownsample), std::move(futureUpsample), std::move(futureGaussianFilter)).ThenConstructToPromise(
 						std::move(promise),
@@ -458,15 +517,15 @@ namespace RenderCore { namespace LightingEngine
 							strongThis->_brightPass = std::move(brightPass._pipeline);
 							strongThis->_brightDownsample = std::move(brightPassDownsample._pipeline);
 							strongThis->_brightUpsample = std::move(brightPassUpsample._pipeline);
+							strongThis->_gaussianFilter = std::move(guassianFilter._pipeline);
 							strongThis->_compiledPipelineLayout = std::move(compiledPipelineLayout);
 							strongThis->_brightPassBoundUniforms = std::move(brightPassBoundUniforms);
-							strongThis->_gaussianFilter = std::move(guassianFilter);
 							::Assets::DependencyValidationMarker depVals[] {
 								strongThis->_toneMap->GetDependencyValidation(),
 								brightPass.GetDependencyValidation(),
 								brightPassDownsample.GetDependencyValidation(),
 								brightPassUpsample.GetDependencyValidation(),
-								strongThis->_gaussianFilter->GetDependencyValidation(),
+								guassianFilter.GetDependencyValidation(),
 								pipelineLayoutDepVal
 							};
 							strongThis->_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
@@ -479,9 +538,113 @@ namespace RenderCore { namespace LightingEngine
 			});
 	}
 
+	void ToneMapAcesOperator::SetLargeRadius(float radius)
+	{
+		if (_desc._maxLargeBloomRadius <= 0.f)
+			Throw(std::runtime_error("Cannot set large bloom radius because this feature was disabled in the operator desc"));
+		_brightPassLargeRadius = std::clamp(radius, 4.f, _desc._maxLargeBloomRadius);
+	}
+
+	float ToneMapAcesOperator::GetLargeRadius() const
+	{
+		return _brightPassLargeRadius;
+	}
+
+	void ToneMapAcesOperator::SetSmallRadius(float radius)
+	{
+		if (_desc._maxLargeBloomRadius <= 0.f)
+			Throw(std::runtime_error("Cannot set small bloom radius because this feature was disabled in the operator desc"));
+		_brightPassSmallRadius = radius;
+		auto& params = *(AllParams*)_paramsData.data();
+		params._brightPassParams.CalculateSmallBlurWeights(_brightPassSmallRadius);
+		_paramsBufferCopyCountdown = dimof(_params);
+	}
+
+	float ToneMapAcesOperator::SetSmallRadius() const
+	{
+		return _brightPassSmallRadius;
+	}
+
+	void ToneMapAcesOperator::SetThreshold(float bloomThreshold)
+	{
+		if (_desc._maxLargeBloomRadius <= 0.f && !_desc._enableSmallBloom)
+			Throw(std::runtime_error("Cannot set bloom property because this feature was disabled in the operator desc"));
+		auto& params = *(AllParams*)_paramsData.data();
+		params._brightPassParams._bloomThreshold = bloomThreshold;
+		_paramsBufferCopyCountdown = dimof(_params);
+	}
+
+	float ToneMapAcesOperator::GetThreshold() const
+	{
+		auto& params = *(AllParams*)_paramsData.data();
+		return params._brightPassParams._bloomThreshold;
+	}
+
+	void ToneMapAcesOperator::SetDesaturationFactor(float desatFactor)
+	{
+		if (_desc._maxLargeBloomRadius <= 0.f && !_desc._enableSmallBloom)
+			Throw(std::runtime_error("Cannot set bloom property because this feature was disabled in the operator desc"));
+		auto& params = *(AllParams*)_paramsData.data();
+		params._brightPassParams._bloomDesaturationFactor = desatFactor;
+		_paramsBufferCopyCountdown = dimof(_params);
+	}
+
+	float ToneMapAcesOperator::GetDesaturationFactor() const
+	{
+		auto& params = *(AllParams*)_paramsData.data();
+		return params._brightPassParams._bloomDesaturationFactor;
+	}
+
+	void ToneMapAcesOperator::SetLargeBloomBrightness(Float3 brightness)
+	{
+		if (_desc._maxLargeBloomRadius <= 0.f)
+			Throw(std::runtime_error("Cannot set bloom property because this feature was disabled in the operator desc"));
+		auto& params = *(AllParams*)_paramsData.data();
+		params._brightPassParams._largeRadiusBrightness = Expand(brightness, 1.f);
+		_paramsBufferCopyCountdown = dimof(_params);
+	}
+
+	Float3 ToneMapAcesOperator::GetLargeBloomBrightness() const
+	{
+		auto& params = *(AllParams*)_paramsData.data();
+		return Truncate(params._brightPassParams._largeRadiusBrightness);
+	}
+
+	void ToneMapAcesOperator::SetSmallBloomBrightness(Float3 brightness)
+	{
+		if (!_desc._enableSmallBloom)
+			Throw(std::runtime_error("Cannot set bloom property because this feature was disabled in the operator desc"));
+		auto& params = *(AllParams*)_paramsData.data();
+		params._brightPassParams._smallRadiusBrightness = Expand(brightness, 1.f);
+		_paramsBufferCopyCountdown = dimof(_params);
+	}
+
+	Float3 ToneMapAcesOperator::GetSmallBloomBrightness() const
+	{
+		auto& params = *(AllParams*)_paramsData.data();
+		return Truncate(params._brightPassParams._smallRadiusBrightness);
+	}
+
 	uint64_t ToneMapAcesOperatorDesc::GetHash(uint64_t seed) const
 	{
 		return seed;
+	}
+
+	static float GaussianWeight1D(float offset, float stdDevSq)
+	{
+		// See https://en.wikipedia.org/wiki/Gaussian_blur
+		const float twiceStdDevSq = 2.0f * stdDevSq;
+		const float C = 1.0f / std::sqrt(gPI * twiceStdDevSq);
+		return C * std::exp(-offset*offset / twiceStdDevSq);
+	}
+
+	void CB_BrightPassParams::CalculateSmallBlurWeights(float radius)
+	{
+		// Calculate radius such that 1.5*stdDev = radius
+		// This is selected because it just tends to match the blur size we get with the large radius blur
+		float stdDevSq = radius * radius / (1.5f * 1.5f);
+		for (unsigned c=0; c<dimof(_smallBlurWeights); ++c)
+			_smallBlurWeights[c] = GaussianWeight1D(float(c), stdDevSq);
 	}
 
 	namespace ACES
@@ -749,6 +912,9 @@ namespace RenderCore { namespace LightingEngine
 	CopyToneMapOperator::CopyToneMapOperator(std::shared_ptr<Techniques::PipelineCollection> pipelinePool)
 	: _pool(std::move(pipelinePool)) {}
 	CopyToneMapOperator::~CopyToneMapOperator() {}
+
+
+	IBloom::~IBloom() {}
 
 }}
 

@@ -2,11 +2,13 @@
 DescriptorSet Bloom
 {
 	SampledTexture				HDRInput;				// 0
-	UnorderedAccessTexture		MipChainUAV[6];			// 1
-	SampledTexture				MipChainSRV;			// 2
-	StorageTexelBuffer 			AtomicBuffer;			// 3
+	UnorderedAccessTexture		HighResBlurTemp;		// 1
+	UnorderedAccessTexture		MipChainUAV[8];			// 2
+	SampledTexture				MipChainSRV;			// 3
+	StorageTexelBuffer 			AtomicBuffer;			// 4
+	ConstantBuffer				BloomParameters;		// 5
 
-	Sampler BilinearClamp								// 4
+	Sampler BilinearClamp								// 6
 	{
 		Filter = Bilinear,
 		AddressU = Clamp,

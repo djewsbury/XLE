@@ -4,8 +4,17 @@
 
 #include "../Math/MathConstants.hlsl"
 
-Texture2D InputTexture;
-RWTexture2D<float3> OutputTexture;
+RWTexture2D<float3> OutputTexture : register(u1, space0);
+Texture2D<float3> InputTexture : register(t3, space0);
+
+cbuffer BloomParameters : register(b5, space0)
+{
+	float BloomThreshold;
+	float BloomDesaturationFactor;
+	float Weight0, Weight1, Weight2, Weight3, Weight4, Weight5;
+	float4 BloomLargeRadiusBrightness;
+	float4 BloomSmallRadiusBrightness;
+}
 
 #define BLOCK_CENTER 16
 #define BLOCK_BORDER 5
@@ -125,14 +134,12 @@ float GaussianWeight1D(float offset, float stdDevSq)
 	// horizontal part
 	GroupMemoryBarrierWithGroupSync();
 
-	// const float stdDevSq = 1.32 * 1.32;
-	const float stdDevSq = 2.5 * 2.5;
-	const F16 w0 = GaussianWeight1D(0.0, stdDevSq);
-	const F16 w1 = GaussianWeight1D(1.0, stdDevSq);
-	const F16 w2 = GaussianWeight1D(2.0, stdDevSq);
-	const F16 w3 = GaussianWeight1D(3.0, stdDevSq);
-	const F16 w4 = GaussianWeight1D(4.0, stdDevSq);
-	const F16 w5 = GaussianWeight1D(5.0, stdDevSq);
+	const F16 w0 = Weight0;
+	const F16 w1 = Weight1;
+	const F16 w2 = Weight2;
+	const F16 w3 = Weight3;
+	const F16 w4 = Weight4;
+	const F16 w5 = Weight5;
 
 	for (uint y=threadY; y<BLOCK_DIMS; y+=8) {
 		for (cx=0; cx<BLOCK_CENTER; cx+=8) {
@@ -178,6 +185,9 @@ float GaussianWeight1D(float offset, float stdDevSq)
 			v += F16_3(IntermediateR1[x][y+3], IntermediateG1[x][y+3], IntermediateB1[x][y+3]) * w3;
 			v += F16_3(IntermediateR1[x][y+4], IntermediateG1[x][y+4], IntermediateB1[x][y+4]) * w4;
 			v += F16_3(IntermediateR1[x][y+5], IntermediateG1[x][y+5], IntermediateB1[x][y+5]) * w5;
+
+			// integrate the brightness factor immediately
+			v *= BloomSmallRadiusBrightness;
 
 			// vertical & horizontal parts done -- just write out
 			OutputTexture[srcTextureOffset + uint2(x+BLOCK_BORDER, y)] = v;

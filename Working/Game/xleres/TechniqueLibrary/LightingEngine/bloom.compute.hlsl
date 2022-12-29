@@ -6,9 +6,19 @@
 #include "../Math/MathConstants.hlsl"
 
 Texture2D<float3>		HDRInput : register(t0, space0);
-RWTexture2D<float3>		MipChainUAV[6] : register(u1, space0);
-Texture2D<float3>		MipChainSRV : register(t2, space0);
-SamplerState 			BilinearClamp : register(s4, space0);
+RWTexture2D<float3>		HighResBlurTemp : register(u1, space0);
+RWTexture2D<float3>		MipChainUAV[8] : register(u2, space0);
+Texture2D<float3>		MipChainSRV : register(t3, space0);
+SamplerState 			BilinearClamp : register(s6, space0);
+
+cbuffer BloomParameters : register(b5, space0)
+{
+	float BloomThreshold;
+	float BloomDesaturationFactor;
+	float Weight0, Weight1, Weight2, Weight3, Weight4, Weight5;
+	float4 BloomLargeRadiusBrightness;
+	float4 BloomSmallRadiusBrightness;
+}
 
 float CalculateLuminance(float3 color)
 {
@@ -41,14 +51,13 @@ float CalculateLuminance(float3 color)
 	}
 }
 
-#define BloomThreshold .95
-#define BloomDesaturationFactor .5
-
 float3 BrightPassScale(float3 input)
 {
 	const float threshold = BloomThreshold;
 	return saturate(input/threshold - 1.0.xxx);
 }
+
+// #define USE_GEOMETRIC_MEAN 1
 
 [numthreads(8, 8, 1)]
 	void BrightPassFilter(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
@@ -96,7 +105,7 @@ float3 BrightPassScale(float3 input)
 			+ BrightPassScale(D) * wD
 			) / (wA + wB + wC + wD);
 	#else
-		const float tinyValue = 1-5f;
+		const float tinyValue = 1e-5f;
 		outputColor = (
 			  log(max(BrightPassScale(A), tinyValue.xxx))
 			+ log(max(BrightPassScale(B), tinyValue.xxx))
@@ -117,6 +126,7 @@ float3 BrightPassScale(float3 input)
 float2 UpsampleStep_GetOutputReciprocalDims() { return ControlUniforms.A.xy; }
 uint UpsampleStep_GetMipIndex() { return asuint(ControlUniforms.B.z); }
 uint2 UpsampleStep_GetThreadGroupCount() { return asuint(ControlUniforms.B.xy); }
+bool UpsampleStep_CopyHighResBlur() { return (bool)asuint(ControlUniforms.B.w); }
 
 float3 UpsampleFilter_Square(float2 tc, uint mipIndex, float2 texelSize)
 {
@@ -157,10 +167,17 @@ float3 UpsampleFilter_BasicTent(float2 tc, uint mipIndex, float2 texelSize)
 
 float3 UpsampleFilter_TentCircularBias(float2 tc, uint mipIndex, float2 texelSize)
 {
+	// Pushing apart the samples here helps improve the stability of the blurred image considerably
+	// while also giving us more blur.
+	// with pushApart=1.5, we should get approx 3 texels between each sample, which is probably the
+	// most we can sustain -- with the bilinear, this should still result in all pixels being weighted
+	const float pushApart = 1.5;
 	// Tent filter with circular bias (see http://cg.skku.edu/pub/papers/2009-lee-tvcg-mintdof-cam.pdf)
-	// this filtering is in general not particularly mathematical or strict, so small tweaks can help
+	// The bias here will ultimately just play with the bilinear weights since every SampleLevel here
+	// is actually going to become 4 samples.
+	// This filtering is in general not particularly mathematical or strict, so small tweaks can help
 	// if they improve the look
-	const float4 twiddler = float4(texelSize.xy, -texelSize.x, 0);
+	const float4 twiddler = pushApart * float4(texelSize.xy, -texelSize.x, 0);
 	const float circularBias = 0.70710678; // 1.0 / sqrt(2.0);
 	float3 filteredSample =
 				MipChainSRV.SampleLevel(BilinearClamp, tc - twiddler.xy * circularBias	, mipIndex).rgb
@@ -243,7 +260,24 @@ float3 UpsampleFilter_ComplexGaussianPrototype(uint2 pixelId, uint dstMipIndex, 
 	else if (filterType == 1) 	filteredSample = UpsampleFilter_BasicTent(baseSourceTC, mipIndex+1, srcTexelSize);
 	else if (filterType == 2) 	filteredSample = UpsampleFilter_TentCircularBias(baseSourceTC, mipIndex+1, srcTexelSize);
 	else if (filterType == 3) 	filteredSample = UpsampleFilter_ComplexGaussianPrototype(pixelId, mipIndex, UpsampleStep_GetOutputReciprocalDims());
-	MipChainUAV[mipIndex][pixelId] += filteredSample;
+
+	if (mipIndex == 0) {
+		// high res is an alternative to what's behind
+		if (UpsampleStep_CopyHighResBlur()) {
+			#if !USE_GEOMETRIC_MEAN
+				filteredSample *= BloomLargeRadiusBrightness.rgb;
+			#else
+				filteredSample = exp(filteredSample) * BloomLargeRadiusBrightness.rgb;
+			#endif
+			filteredSample += HighResBlurTemp[pixelId]; // in the final upsample we merge in the small radius blur
+		} else {
+			filteredSample += MipChainUAV[mipIndex][pixelId];
+			filteredSample *= BloomLargeRadiusBrightness.rgb;
+		}
+		MipChainUAV[mipIndex][pixelId] = filteredSample;
+	} else {
+		MipChainUAV[mipIndex][pixelId] += filteredSample;
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -252,7 +286,7 @@ float3 UpsampleFilter_ComplexGaussianPrototype(uint2 pixelId, uint dstMipIndex, 
 
 #define SPD_LINEAR_SAMPLER
 
-globallycoherent RWBuffer<uint> AtomicBuffer : register(u3, space0);		// global atomic counter - MUST be initialized to 0
+globallycoherent RWBuffer<uint> AtomicBuffer : register(u4, space0);		// global atomic counter - MUST be initialized to 0
 
 float2 FastMipChain_GetReciprocalInputDims() { return ControlUniforms.A.xy; }
 uint FastMipChain_GetMipCount() { return ControlUniforms.B.z; }
