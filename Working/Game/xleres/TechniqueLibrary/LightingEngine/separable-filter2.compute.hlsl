@@ -11,14 +11,23 @@ RWTexture2D<float3> OutputTexture;
 #define BLOCK_BORDER 5
 #define BLOCK_DIMS (BLOCK_CENTER+BLOCK_BORDER+BLOCK_BORDER)
 
-// if we can support half-floats, probably a little more ideal here
-groupshared float IntermediateR0[BLOCK_DIMS][BLOCK_DIMS];
-groupshared float IntermediateG0[BLOCK_DIMS][BLOCK_DIMS];
-groupshared float IntermediateB0[BLOCK_DIMS][BLOCK_DIMS];
+#define F16 min16float			// float16_t
+#define F16_3 min16float3		// float16_t3
 
-groupshared float IntermediateR1[BLOCK_CENTER][BLOCK_DIMS];
-groupshared float IntermediateG1[BLOCK_CENTER][BLOCK_DIMS];
-groupshared float IntermediateB1[BLOCK_CENTER][BLOCK_DIMS];
+// Half float does seem to help significantly here
+// In one profile on a 6900xt, I get 0.034ms with F16 and 0.048ms with floats
+//
+// The size of groupshared memory we're allocating does have a big effect on performance. The drivers allow pretty big
+// allocations, but it looks like going too large may reduce parallization, or something like that
+//
+// if we don't have float16_t support, we could probably emulate it with 16 bit unorm values...?
+groupshared F16 IntermediateR0[BLOCK_DIMS][BLOCK_DIMS];
+groupshared F16 IntermediateG0[BLOCK_DIMS][BLOCK_DIMS];
+groupshared F16 IntermediateB0[BLOCK_DIMS][BLOCK_DIMS];
+
+groupshared F16 IntermediateR1[BLOCK_CENTER][BLOCK_DIMS];
+groupshared F16 IntermediateG1[BLOCK_CENTER][BLOCK_DIMS];
+groupshared F16 IntermediateB1[BLOCK_CENTER][BLOCK_DIMS];
 
 uint ExtractEvenBits(uint x)
 {
@@ -63,8 +72,10 @@ float GaussianWeight1D(float offset, float stdDevSq)
 	uint2 inputTextureDims;
 	InputTexture.GetDimensions(inputTextureDims.x, inputTextureDims.y);
 
-	for (cy=threadY; cy<24; cy+=8) {
-		for (cx=threadX; cx<24; cx+=8) {
+	const uint blockDimsMultiple = (BLOCK_DIMS / 8) * 8;
+
+	for (cy=threadY; cy<blockDimsMultiple; cy+=8) {
+		for (cx=threadX; cx<blockDimsMultiple; cx+=8) {
 			int2 A = srcTextureOffset + int2(cx, cy);
 			if (A.x >= 0 && A.x < inputTextureDims.x && A.y >= 0 && A.y < inputTextureDims.y) {
 				float3 c = InputTexture[A].rgb;
@@ -82,7 +93,7 @@ float GaussianWeight1D(float offset, float stdDevSq)
 	// awkward vertical & horizontal stripe to fill in the remainder
 	// how much of our cache carefullness is defeated by this?
 	uint linearThreadGroupIdx = (threadX * 8) + threadY;
-	cx = 24+(linearThreadGroupIdx >> 5);
+	cx = blockDimsMultiple+(linearThreadGroupIdx >> 5);
 	cy = linearThreadGroupIdx & 0x1f;
 	if (cy < BLOCK_DIMS) {
 		int2 A = srcTextureOffset + int2(cx, cy);
@@ -114,30 +125,31 @@ float GaussianWeight1D(float offset, float stdDevSq)
 	// horizontal part
 	GroupMemoryBarrierWithGroupSync();
 
-	const float stdDevSq = 1.32 * 1.32;
-	const float w0 = GaussianWeight1D(0.0, stdDevSq);
-	const float w1 = GaussianWeight1D(1.0, stdDevSq);
-	const float w2 = GaussianWeight1D(2.0, stdDevSq);
-	const float w3 = GaussianWeight1D(3.0, stdDevSq);
-	const float w4 = GaussianWeight1D(4.0, stdDevSq);
-	const float w5 = GaussianWeight1D(5.0, stdDevSq);
+	// const float stdDevSq = 1.32 * 1.32;
+	const float stdDevSq = 2.5 * 2.5;
+	const F16 w0 = GaussianWeight1D(0.0, stdDevSq);
+	const F16 w1 = GaussianWeight1D(1.0, stdDevSq);
+	const F16 w2 = GaussianWeight1D(2.0, stdDevSq);
+	const F16 w3 = GaussianWeight1D(3.0, stdDevSq);
+	const F16 w4 = GaussianWeight1D(4.0, stdDevSq);
+	const F16 w5 = GaussianWeight1D(5.0, stdDevSq);
 
 	for (uint y=threadY; y<BLOCK_DIMS; y+=8) {
-		for (cx=0; cx<16; cx+=8) {
+		for (cx=0; cx<BLOCK_CENTER; cx+=8) {
 			uint x = threadX + cx + BLOCK_BORDER;
 
-			float3 v;
-			v  = float3(IntermediateR0[x-5][y], IntermediateG0[x-5][y], IntermediateB0[x-5][y]) * w5;
-			v += float3(IntermediateR0[x-4][y], IntermediateG0[x-4][y], IntermediateB0[x-4][y]) * w4;
-			v += float3(IntermediateR0[x-3][y], IntermediateG0[x-3][y], IntermediateB0[x-3][y]) * w3;
-			v += float3(IntermediateR0[x-2][y], IntermediateG0[x-2][y], IntermediateB0[x-2][y]) * w2;
-			v += float3(IntermediateR0[x-1][y], IntermediateG0[x-1][y], IntermediateB0[x-1][y]) * w1;
-			v += float3(IntermediateR0[x  ][y], IntermediateG0[x  ][y], IntermediateB0[x  ][y]) * w0;
-			v += float3(IntermediateR0[x+1][y], IntermediateG0[x+1][y], IntermediateB0[x+1][y]) * w1;
-			v += float3(IntermediateR0[x+2][y], IntermediateG0[x+2][y], IntermediateB0[x+2][y]) * w2;
-			v += float3(IntermediateR0[x+3][y], IntermediateG0[x+3][y], IntermediateB0[x+3][y]) * w3;
-			v += float3(IntermediateR0[x+4][y], IntermediateG0[x+4][y], IntermediateB0[x+4][y]) * w4;
-			v += float3(IntermediateR0[x+5][y], IntermediateG0[x+5][y], IntermediateB0[x+5][y]) * w5;
+			F16_3 v;
+			v  = F16_3(IntermediateR0[x-5][y], IntermediateG0[x-5][y], IntermediateB0[x-5][y]) * w5;
+			v += F16_3(IntermediateR0[x-4][y], IntermediateG0[x-4][y], IntermediateB0[x-4][y]) * w4;
+			v += F16_3(IntermediateR0[x-3][y], IntermediateG0[x-3][y], IntermediateB0[x-3][y]) * w3;
+			v += F16_3(IntermediateR0[x-2][y], IntermediateG0[x-2][y], IntermediateB0[x-2][y]) * w2;
+			v += F16_3(IntermediateR0[x-1][y], IntermediateG0[x-1][y], IntermediateB0[x-1][y]) * w1;
+			v += F16_3(IntermediateR0[x  ][y], IntermediateG0[x  ][y], IntermediateB0[x  ][y]) * w0;
+			v += F16_3(IntermediateR0[x+1][y], IntermediateG0[x+1][y], IntermediateB0[x+1][y]) * w1;
+			v += F16_3(IntermediateR0[x+2][y], IntermediateG0[x+2][y], IntermediateB0[x+2][y]) * w2;
+			v += F16_3(IntermediateR0[x+3][y], IntermediateG0[x+3][y], IntermediateB0[x+3][y]) * w3;
+			v += F16_3(IntermediateR0[x+4][y], IntermediateG0[x+4][y], IntermediateB0[x+4][y]) * w4;
+			v += F16_3(IntermediateR0[x+5][y], IntermediateG0[x+5][y], IntermediateB0[x+5][y]) * w5;
 
 			IntermediateR1[x-BLOCK_BORDER][y] = v.x;
 			IntermediateG1[x-BLOCK_BORDER][y] = v.y;
@@ -149,23 +161,23 @@ float GaussianWeight1D(float offset, float stdDevSq)
 	// vertical part
 	GroupMemoryBarrierWithGroupSync();
 
-	for (cy=0; cy<16; cy+=8) {
-		for (cx=0; cx<16; cx+=8) {
+	for (cy=0; cy<BLOCK_CENTER; cy+=8) {
+		for (cx=0; cx<BLOCK_CENTER; cx+=8) {
 			uint x = threadX + cx;
 			uint y = threadY + cy + BLOCK_BORDER;
 
-			float3 v;
-			v  = float3(IntermediateR1[x][y-5], IntermediateG1[x][y-5], IntermediateB1[x][y-5]) * w5;
-			v += float3(IntermediateR1[x][y-4], IntermediateG1[x][y-4], IntermediateB1[x][y-4]) * w4;
-			v += float3(IntermediateR1[x][y-3], IntermediateG1[x][y-3], IntermediateB1[x][y-3]) * w3;
-			v += float3(IntermediateR1[x][y-2], IntermediateG1[x][y-2], IntermediateB1[x][y-2]) * w2;
-			v += float3(IntermediateR1[x][y-1], IntermediateG1[x][y-1], IntermediateB1[x][y-1]) * w1;
-			v += float3(IntermediateR1[x][y  ], IntermediateG1[x][y  ], IntermediateB1[x][y  ]) * w0;
-			v += float3(IntermediateR1[x][y+1], IntermediateG1[x][y+1], IntermediateB1[x][y+1]) * w1;
-			v += float3(IntermediateR1[x][y+2], IntermediateG1[x][y+2], IntermediateB1[x][y+2]) * w2;
-			v += float3(IntermediateR1[x][y+3], IntermediateG1[x][y+3], IntermediateB1[x][y+3]) * w3;
-			v += float3(IntermediateR1[x][y+4], IntermediateG1[x][y+4], IntermediateB1[x][y+4]) * w4;
-			v += float3(IntermediateR1[x][y+5], IntermediateG1[x][y+5], IntermediateB1[x][y+5]) * w5;
+			F16_3 v;
+			v  = F16_3(IntermediateR1[x][y-5], IntermediateG1[x][y-5], IntermediateB1[x][y-5]) * w5;
+			v += F16_3(IntermediateR1[x][y-4], IntermediateG1[x][y-4], IntermediateB1[x][y-4]) * w4;
+			v += F16_3(IntermediateR1[x][y-3], IntermediateG1[x][y-3], IntermediateB1[x][y-3]) * w3;
+			v += F16_3(IntermediateR1[x][y-2], IntermediateG1[x][y-2], IntermediateB1[x][y-2]) * w2;
+			v += F16_3(IntermediateR1[x][y-1], IntermediateG1[x][y-1], IntermediateB1[x][y-1]) * w1;
+			v += F16_3(IntermediateR1[x][y  ], IntermediateG1[x][y  ], IntermediateB1[x][y  ]) * w0;
+			v += F16_3(IntermediateR1[x][y+1], IntermediateG1[x][y+1], IntermediateB1[x][y+1]) * w1;
+			v += F16_3(IntermediateR1[x][y+2], IntermediateG1[x][y+2], IntermediateB1[x][y+2]) * w2;
+			v += F16_3(IntermediateR1[x][y+3], IntermediateG1[x][y+3], IntermediateB1[x][y+3]) * w3;
+			v += F16_3(IntermediateR1[x][y+4], IntermediateG1[x][y+4], IntermediateB1[x][y+4]) * w4;
+			v += F16_3(IntermediateR1[x][y+5], IntermediateG1[x][y+5], IntermediateB1[x][y+5]) * w5;
 
 			// vertical & horizontal parts done -- just write out
 			OutputTexture[srcTextureOffset + uint2(x+BLOCK_BORDER, y)] = v;

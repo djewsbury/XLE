@@ -670,6 +670,12 @@ namespace UnitTests
 					encoder.Dispatch(
 						*fastMipChain._pipeline,
 						threadGroupX, threadGroupY, 1);
+
+					// barrier to prevent multiple iterations running synchronously
+					Metal::BarrierHelper(metalContext).Add(
+						*rpi.GetNonFrameBufferAttachmentView(0)->GetResource(),
+						Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+						Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
 				}
 			}
 
@@ -780,6 +786,13 @@ namespace UnitTests
 						((workingRes[0]/2) + blockSize - 1) / blockSize,
 						((workingRes[1]/2) + blockSize - 1) / blockSize,
 						1);
+					// If we barrier here, it should discourage iterations from running synchronously
+					// that may be more or less realistic -- given that in a practical situations, other shaders
+					// could potentially run synchronously
+					Metal::BarrierHelper(metalContext).Add(
+						*rpi.GetNonFrameBufferAttachmentView(0)->GetResource(),
+						Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+						Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute});
 				}
 			}
 
