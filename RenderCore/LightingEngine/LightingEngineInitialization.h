@@ -10,6 +10,9 @@
 #include "../Techniques/TechniqueUtils.h"		// (for ProjectionDesc)
 #include "../../Assets/DepVal.h"
 #include <variant>
+#include <memory>
+#include <vector>
+#include <functional>
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -148,6 +151,8 @@ namespace RenderCore { namespace LightingEngine
 		mutable unsigned _frameIdx = 0;
 		mutable Techniques::ProjectionDesc _prevProjDesc;
 		mutable bool _hasPrevProjDesc = false;
+
+		std::function<void*(uint64_t)> _queryInterfaceHelper;
 
 	private:
 		std::shared_ptr<ILightScene> _lightScene;

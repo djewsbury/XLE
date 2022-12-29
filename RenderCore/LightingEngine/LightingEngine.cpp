@@ -440,6 +440,15 @@ namespace RenderCore { namespace LightingEngine
 		return technique.GetDependencyValidation();
 	}
 
+	namespace Internal
+	{
+		void* QueryInterface(CompiledLightingTechnique& technique, uint64_t typeCode)
+		{
+			if (!technique._queryInterfaceHelper) return nullptr;
+			return technique._queryInterfaceHelper(typeCode);
+		}
+	}
+
 	CompiledLightingTechnique::CompiledLightingTechnique(const std::shared_ptr<ILightScene>& lightScene)
 	: _lightScene(lightScene)
 	{}

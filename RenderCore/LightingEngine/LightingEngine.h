@@ -5,6 +5,9 @@
 #pragma once
 
 #include "../../Utility/IteratorUtils.h"
+#include "../../Utility/MemoryUtils.h"
+#include <memory>
+#include <vector>
 
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class IDeformAcceleratorPool; class DrawablesPacket; class ParsingContext; struct PreparedResourcesVisibility; }}
@@ -59,5 +62,11 @@ namespace RenderCore { namespace LightingEngine
 	class ILightScene;
 	ILightScene& GetLightScene(CompiledLightingTechnique&);
 	const ::Assets::DependencyValidation& GetDependencyValidation(CompiledLightingTechnique&);
+	namespace Internal { void* QueryInterface(CompiledLightingTechnique&, uint64_t typeCode); }
+	template<typename Type>
+		Type* QueryInterface(CompiledLightingTechnique& technique)
+		{
+			return (Type*)Internal::QueryInterface(technique, TypeHashCode<Type>);
+		}
 
 }}

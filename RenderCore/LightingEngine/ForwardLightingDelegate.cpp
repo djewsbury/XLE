@@ -623,6 +623,14 @@ namespace RenderCore { namespace LightingEngine
 					lightingTechnique->_depVal.RegisterDependency(depthMotionDelegate->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(forwardIllumDelegate_DisableDepthWrite->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(balancedNoiseTexture->GetDependencyValidation());
+					lightingTechnique->_queryInterfaceHelper =
+						[captures](uint64_t typeCode) -> void* {
+							switch (typeCode) {
+							case TypeHashCode<IBloom>:
+								return (IBloom*)captures->_acesOperator.get();
+							}
+							return nullptr;
+						};
 
 					// Prepare shadows sequence
 					lightingTechnique->CreateDynamicSequence(
