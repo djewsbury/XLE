@@ -81,7 +81,7 @@ namespace UnitTests
 		// for us (some gfx-apis can already do this, others need a little help)
 		auto mnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 
-		auto customShaderSource = std::make_shared<RenderCore::MinimalShaderSource>(
+		auto customShaderSource = RenderCore::CreateMinimalShaderSource(
 			CreateDefaultShaderCompiler(*testHelper->_device, *testHelper->_defaultLegacyBindings),
 			std::make_shared<ExpandIncludesPreprocessor>());
 
@@ -171,6 +171,11 @@ namespace UnitTests
 			IteratorRange<const void*> byteCodeBlob) const override
 		{
 			return _chain->GenerateMetrics(byteCodeBlob);
+		}
+
+		RenderCore::ILowLevelCompiler::CompilerCapability::BitField GetCompilerCapabilities() const override
+		{
+			return _chain->GetCompilerCapabilities();
 		}
 
 		CountingShaderSource(const std::shared_ptr<RenderCore::IShaderSource>& chain)

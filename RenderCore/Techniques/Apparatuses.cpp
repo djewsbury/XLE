@@ -51,7 +51,7 @@ namespace RenderCore { namespace Techniques
 
 		_device = device;
 		_shaderCompiler = CreateDefaultShaderCompiler(*device);
-		_shaderSource = std::make_shared<MinimalShaderSource>(_shaderCompiler);
+		_shaderSource = CreateMinimalShaderSource(_shaderCompiler);
 		
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		_shaderFilteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);

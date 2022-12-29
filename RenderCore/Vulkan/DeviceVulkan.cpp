@@ -1364,6 +1364,16 @@ namespace RenderCore { namespace ImplVulkan
 		enabledFeatures2.features.shaderImageGatherExtended = xleFeatures._shaderImageGatherExtended;
 		enabledFeatures2.features.fragmentStoresAndAtomics = xleFeatures._pixelShaderStoresAndAtomics;
 		enabledFeatures2.features.vertexPipelineStoresAndAtomics = xleFeatures._vertexGeoTessellationShaderStoresAndAtomics;
+		#if VK_VERSION_1_2
+			VkPhysicalDeviceShaderFloat16Int8Features float16Features = {};
+			if (xleFeatures._shaderFloat16) {
+				float16Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES;
+				float16Features.shaderFloat16 = true;
+				float16Features.shaderInt8 = false;		// not exposed
+				appender->pNext = (VkBaseInStructure*)&float16Features;
+				appender = (VkBaseInStructure*)&float16Features;
+			}
+		#endif
 
 		// texture compression types
 		enabledFeatures2.features.textureCompressionETC2 = xleFeatures._textureCompressionETC2;
@@ -1632,6 +1642,7 @@ namespace RenderCore { namespace ImplVulkan
 		APPEND_STRUCT(VkPhysicalDeviceVulkan12Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
 		APPEND_STRUCT(VkPhysicalDeviceTransformFeedbackFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TRANSFORM_FEEDBACK_FEATURES_EXT);
 		APPEND_STRUCT(VkPhysicalDeviceTextureCompressionASTCHDRFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXTURE_COMPRESSION_ASTC_HDR_FEATURES_EXT);	// brought into vk1.3 core
+		APPEND_STRUCT(VkPhysicalDeviceShaderFloat16Int8Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES);		// (part of vk1.2 core)
 
 		#undef APPEND_STRUCT
 
@@ -1677,6 +1688,7 @@ namespace RenderCore { namespace ImplVulkan
 		result._shaderImageGatherExtended = features.features.shaderImageGatherExtended;
 		result._pixelShaderStoresAndAtomics = features.features.fragmentStoresAndAtomics;
 		result._vertexGeoTessellationShaderStoresAndAtomics = features.features.vertexPipelineStoresAndAtomics;
+		result._shaderFloat16 = VkPhysicalDeviceShaderFloat16Int8Features_inst.shaderFloat16;
 
 		// texture compression types
 		result._textureCompressionETC2 = features.features.textureCompressionETC2;

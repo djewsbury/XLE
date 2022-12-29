@@ -4,11 +4,12 @@
 
 #include "Shader.h"
 #include "../IDeviceVulkan.h"
+#include "../../DeviceInitialization.h"
 
 namespace RenderCore { namespace Metal_DX11
 {
 	std::shared_ptr<ILowLevelCompiler> CreateVulkanPrecompiler();
-	std::shared_ptr<ILowLevelCompiler> CreateHLSLToSPIRVCompiler();
+	std::shared_ptr<ILowLevelCompiler> CreateHLSLToSPIRVCompiler(ILowLevelCompiler::CompilerCapability::BitField);
 }}
 
 #if defined(ENABLE_GLSLLANG)
@@ -778,7 +779,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			} else
 		#endif 
 		if (cfg._shaderMode == VulkanShaderMode::HLSLToSPIRV) {
-			return Metal_DX11::CreateHLSLToSPIRVCompiler();
+			ILowLevelCompiler::CompilerCapability::BitField capabilities = 0;
+			if (device.GetDeviceFeatures()._shaderFloat16)
+				capabilities |= ILowLevelCompiler::CompilerCapability::Float16;
+			return Metal_DX11::CreateHLSLToSPIRVCompiler(capabilities);
 		} else {
 			assert(0);
 			return nullptr;

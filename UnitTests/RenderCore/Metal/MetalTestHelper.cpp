@@ -65,7 +65,7 @@ namespace UnitTests
 		_pipelineLayout = CreateDefaultPipelineLayout(*_device);
 
 		_shaderCompiler = CreateDefaultShaderCompiler(*_device, *_defaultLegacyBindings);
-		_shaderSource = std::make_shared<RenderCore::MinimalShaderSource>(_shaderCompiler);
+		_shaderSource = RenderCore::CreateMinimalShaderSource(_shaderCompiler);
 	}
 
 	MetalTestHelper::MetalTestHelper(const std::shared_ptr<RenderCore::IDevice>& device)
@@ -80,7 +80,7 @@ namespace UnitTests
 		_pipelineLayout = CreateDefaultPipelineLayout(*_device);
 
 		_shaderCompiler = _device->CreateShaderCompiler();
-		_shaderSource = std::make_shared<RenderCore::MinimalShaderSource>(_shaderCompiler);
+		_shaderSource = RenderCore::CreateMinimalShaderSource(_shaderCompiler);
 	}
 
 	MetalTestHelper::~MetalTestHelper()

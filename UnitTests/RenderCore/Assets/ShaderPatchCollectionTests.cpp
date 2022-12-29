@@ -293,7 +293,7 @@ namespace UnitTests
 			// Ensure that we can compile a shader graph via the intermediate compilers
 			// mechanisms
 			auto metalTestHelper = MakeTestHelper();
-			auto customShaderSource = std::make_shared<RenderCore::MinimalShaderSource>(
+			auto customShaderSource = RenderCore::CreateMinimalShaderSource(
 				CreateDefaultShaderCompiler(*metalTestHelper->_device, *metalTestHelper->_defaultLegacyBindings),
 				std::make_shared<ExpandIncludesPreprocessor>());
 			auto compilerRegistration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(customShaderSource, compilers);

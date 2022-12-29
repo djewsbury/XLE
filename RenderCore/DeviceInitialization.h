@@ -83,6 +83,7 @@ namespace RenderCore
         bool _shaderImageGatherExtended = false;
         bool _pixelShaderStoresAndAtomics = false;
         bool _vertexGeoTessellationShaderStoresAndAtomics = false;
+        bool _shaderFloat16 = false;
 
         // texture compression types
         bool _textureCompressionETC2 = false;

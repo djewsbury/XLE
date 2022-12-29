@@ -300,6 +300,8 @@ namespace RenderCore { namespace Metal_DX11
 			fixedArguments.push_back(L"-spirv");
 			fixedArguments.push_back(L"-fspv-target-env=vulkan1.1");
 			fixedArguments.push_back(L"-fvk-use-dx-layout");			// XLE associates the DirectX alignment rules with HLSL source;
+			if (_capabilities & CompilerCapability::Float16)
+				fixedArguments.push_back(L"-enable-16bit-types");
 
 			if (shaderPath._compilationFlags & CompilationFlags::DebugSymbols) {
 				fixedArguments.push_back(L"-Qembed_debug");
@@ -421,6 +423,7 @@ namespace RenderCore { namespace Metal_DX11
 			return "Shader metrics not yet implemented for dxcompiler";
 		}
 
+		virtual CompilerCapability::BitField GetCapabilities() const override { return _capabilities; }
 		virtual ShaderLanguage GetShaderLanguage() const override { return ShaderLanguage::HLSL; }
 
 		using FixedDefined = std::pair<std::basic_string<wchar_t>, std::basic_string<wchar_t>>;
@@ -437,7 +440,7 @@ namespace RenderCore { namespace Metal_DX11
 			StringSection<char> definesTable, const char shaderModel[],
 			IteratorRange<const FixedDefined*> fixedDefines);
 
-		DXShaderCompiler(std::vector<FixedDefined>&& fixedDefines, ShaderFeatureLevel featureLevel, std::string defaultShaderModel)
+		DXShaderCompiler(std::vector<FixedDefined>&& fixedDefines, ShaderFeatureLevel featureLevel, std::string defaultShaderModel, CompilerCapability::BitField capabilities)
 		: _fixedDefines(std::move(fixedDefines))
 		, _featureLevel(featureLevel)
 		, _defaultShaderModel(std::move(defaultShaderModel))
@@ -445,6 +448,7 @@ namespace RenderCore { namespace Metal_DX11
 			auto& library = GetDXCompilerLibrary();
 			_utils = library.CreateDXCompilerInterface<IDxcUtils>(CLSID_DxcUtils);
 			_compiler = library.CreateDXCompilerInterface<IDxcCompiler3>(CLSID_DxcCompiler);
+			_capabilities = capabilities & CompilerCapability::Float16;
 		}
 
 		~DXShaderCompiler()
@@ -458,16 +462,10 @@ namespace RenderCore { namespace Metal_DX11
 		intrusive_ptr<IDxcCompiler3> _compiler;
 
 		std::string _defaultShaderModel;
+		CompilerCapability::BitField _capabilities = 0;
 
 		mutable Threading::Mutex _lock;
 	};
-
-	static const wchar_t s_shaderModelDef_V[] = L"VSH";
-    static const wchar_t s_shaderModelDef_P[] = L"PSH";
-    static const wchar_t s_shaderModelDef_G[] = L"GSH";
-    static const wchar_t s_shaderModelDef_H[] = L"HSH";
-    static const wchar_t s_shaderModelDef_D[] = L"DSH";
-    static const wchar_t s_shaderModelDef_C[] = L"CSH";
 
 	void DXShaderCompiler::DefinesTable::Add(StringSection<wchar_t> name, StringSection<wchar_t> value)
 	{
@@ -509,18 +507,6 @@ namespace RenderCore { namespace Metal_DX11
 		for (const auto& fixed:fixedDefines)
 			result.Add(fixed.first, fixed.second);
 
-		const wchar_t* shaderModelStr = nullptr;
-		switch (tolower(shaderModel[0])) {
-		case 'v': shaderModelStr = s_shaderModelDef_V; break;
-		case 'p': shaderModelStr = s_shaderModelDef_P; break;
-		case 'g': shaderModelStr = s_shaderModelDef_G; break;
-		case 'h': shaderModelStr = s_shaderModelDef_H; break;
-		case 'd': shaderModelStr = s_shaderModelDef_D; break;
-		case 'c': shaderModelStr = s_shaderModelDef_C; break;
-		}
-		if (shaderModelStr)
-			result.Add(shaderModelStr, L"1");
-
 		auto iterator = definesTable.begin();
 		while (iterator != definesTable.end()) {
 			auto defineEnd = std::find(iterator, definesTable.end(), ';');
@@ -551,16 +537,13 @@ namespace RenderCore { namespace Metal_DX11
 		return result;
 	}
 
-	std::shared_ptr<ILowLevelCompiler> CreateHLSLToSPIRVCompiler()
+	std::shared_ptr<ILowLevelCompiler> CreateHLSLToSPIRVCompiler(ILowLevelCompiler::CompilerCapability::BitField capabilities)
 	{
 		std::vector<DXShaderCompiler::FixedDefined> fixedDefines {
 			std::make_pair(L"VULKAN", L"1")
-			#if defined(_DEBUG)
-				, std::make_pair(L"_DEBUG", L"1")
-			#endif
 		};
 
-		std::string defaultShaderModel = "6_1";
-		return std::make_shared<DXShaderCompiler>(std::move(fixedDefines), ShaderFeatureLevel::Level_11_0, std::move(defaultShaderModel));
+		std::string defaultShaderModel = "6_2";
+		return std::make_shared<DXShaderCompiler>(std::move(fixedDefines), ShaderFeatureLevel::Level_11_0, std::move(defaultShaderModel), capabilities);
 	}
 }}

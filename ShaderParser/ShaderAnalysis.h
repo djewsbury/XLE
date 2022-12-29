@@ -11,7 +11,7 @@
 #include <set>
 
 namespace Assets { class DirectorySearchRules; }
-namespace RenderCore { class SourceCodeWithRemapping; }
+namespace RenderCore { struct SourceCodeWithRemapping; }
 
 namespace ShaderSourceParser
 {

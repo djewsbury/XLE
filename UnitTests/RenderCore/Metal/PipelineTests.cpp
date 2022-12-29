@@ -243,7 +243,7 @@ namespace UnitTests
 			RenderCore::VulkanCompilerConfiguration cfg;
 			cfg._shaderMode = RenderCore::VulkanShaderMode::GLSLToSPIRV;
 		 	auto shaderCompiler = vulkanDevice->CreateShaderCompiler(cfg);
-			customShaderSource = std::make_shared<RenderCore::MinimalShaderSource>(shaderCompiler);
+			customShaderSource = RenderCore::CreateMinimalShaderSource(shaderCompiler);
 		} else {
 			Throw(std::runtime_error("This test only implemented for Vulkan"));
 		}

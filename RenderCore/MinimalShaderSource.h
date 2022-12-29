@@ -13,9 +13,8 @@ namespace Assets { class DirectorySearchRules; }
 
 namespace RenderCore
 {
-	class SourceCodeWithRemapping
+	struct SourceCodeWithRemapping
     {
-    public:
         std::string _processedSource;
 		unsigned _processedSourceLineCount = 0;
         std::vector<ILowLevelCompiler::SourceLineMarker> _lineMarkers;
@@ -32,37 +31,9 @@ namespace RenderCore
 		virtual ~ISourceCodePreprocessor();
     };
 
-	class MinimalShaderSource : public IShaderSource
-	{
-	public:
-		ShaderByteCodeBlob CompileFromFile(
-			const ILowLevelCompiler::ResId& resId, 
-			StringSection<> definesTable) const override;
-			
-		ShaderByteCodeBlob CompileFromMemory(
-			StringSection<> shaderInMemory, StringSection<> entryPoint, 
-			StringSection<> shaderModel, StringSection<> definesTable) const override;
-
-		ILowLevelCompiler::ResId MakeResId(
-            StringSection<> initializer) const override;
-
-		std::string GenerateMetrics(
-        	IteratorRange<const void*> byteCodeBlob) const override;
-
-		MinimalShaderSource(
-			const std::shared_ptr<ILowLevelCompiler>& compiler,
-			const std::shared_ptr<ISourceCodePreprocessor>& preprocessor = nullptr);
-		~MinimalShaderSource();
-
-	protected:
-		class Pimpl;
-		std::unique_ptr<Pimpl> _pimpl;
-
-		ShaderByteCodeBlob Compile(
-			StringSection<> shaderInMemory,
-			const ILowLevelCompiler::ResId& resId,
-			StringSection<::Assets::ResChar> definesTable) const;
-	};
+	std::shared_ptr<IShaderSource> CreateMinimalShaderSource(
+		std::shared_ptr<ILowLevelCompiler> compiler,
+		std::shared_ptr<ISourceCodePreprocessor> preprocessor = nullptr);
 
 	::Assets::CompilerRegistration RegisterShaderCompiler(
 		const std::shared_ptr<IShaderSource>& shaderSource,

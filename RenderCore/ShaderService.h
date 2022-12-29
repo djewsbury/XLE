@@ -36,6 +36,12 @@ namespace RenderCore
             using BitField = unsigned;
         };
 
+        struct CompilerCapability
+        {
+            enum Flags { Float16 = 1<<0, CompletionFunctionCompile = 1<<1 };
+            using BitField = unsigned;
+        };
+
 		class ResId
         {
         public:
@@ -80,11 +86,10 @@ namespace RenderCore
 
         virtual void AdaptResId(ResId&) const = 0;
 
-        virtual bool SupportsCompletionFunctionCompile() { return false; }
-
         virtual std::string MakeShaderMetricsString(
             const void* byteCode, size_t byteCodeSize) const = 0;
 
+        virtual CompilerCapability::BitField GetCapabilities() const { return 0; }
         virtual ShaderLanguage GetShaderLanguage() const = 0;
 
         virtual ~ILowLevelCompiler();
@@ -112,6 +117,8 @@ namespace RenderCore
 
         virtual std::string GenerateMetrics(
             IteratorRange<const void*> byteCodeBlob) const = 0;
+
+        virtual ILowLevelCompiler::CompilerCapability::BitField GetCompilerCapabilities() const = 0;
 
         virtual ~IShaderSource();
     };
