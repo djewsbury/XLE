@@ -206,27 +206,11 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
 		auto tiledLightBitField = result.DefineAttachment(Techniques::AttachmentSemantics::TiledLightBitField).NoInitialState().FinalState(BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(tiledLightBitField, BindFlag::TransferDst);
-		/*spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::UnorderedAccess);
-		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment("LowRezDepthBuffer"_h), BindFlag::DepthStencil);*/
 		spDesc.SetName("rasterization-light-tiler-init");
 		result.AddSubpass(
 			std::move(spDesc),
 			[](LightingEngine::LightingTechniqueIterator& iterator) {
 				auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
-				/*
-					Can't copy from our R32_FLOAT downsampled depth buffer onto a D32_FLOAT texture to be used for depth/stencil tests
-				auto bltEncoder = metalContext.BeginBlitEncoder();
-				CopyPartial_Dest copyDst;
-				copyDst._resource = iterator._rpi.GetNonFrameBufferAttachmentView(2)->GetResource().get();
-				copyDst._subResource = {};
-				copyDst._leftTopFront = {0,0,0};
-				CopyPartial_Src copySrc;
-				copySrc._resource = iterator._rpi.GetNonFrameBufferAttachmentView(1)->GetResource().get();
-				copySrc._subResource = {5, 0};
-				copySrc._leftTopFront = {0,0,0};
-				copySrc._rightBottomBack = {lightTileBufferSize[0],lightTileBufferSize[1],1};
-				bltEncoder.Copy(copyDst, copySrc);
-				*/
 				auto& view = *iterator._rpi.GetNonFrameBufferAttachmentView(0);
 				Metal::BarrierHelper{*iterator._threadContext}.Add(*view.GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::TransferDst);
 				metalContext.ClearUInt(view, UInt4{0,0,0,0});
@@ -241,24 +225,14 @@ namespace RenderCore { namespace LightingEngine
 		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
 		unsigned planesRequired = _config._maxLightsPerView/32;
 		_lightTileBufferSize = UInt2{(fbSize[0]+s_gridDims-1)/s_gridDims, (fbSize[1]+s_gridDims-1)/s_gridDims};
-		Techniques::PreregisteredAttachment attachments[] {
+		stitchingContext.DefineAttachment(
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::TiledLightBitField,
 				CreateDesc(
 					BindFlag::UnorderedAccess|BindFlag::ShaderResource|BindFlag::TransferDst,
 					TextureDesc::Plain3D(_lightTileBufferSize[0], _lightTileBufferSize[1], planesRequired, Format::R32_UINT)),
 				"tiled-light-bit-field"
-			}/*,
-			Techniques::PreregisteredAttachment {
-				"LowRezDepthBuffer"_h,
-				CreateDesc(
-					BindFlag::DepthStencil|BindFlag::TransferDst, 0, 0, 
-					TextureDesc::Plain2D(_lightTileBufferSize[0], _lightTileBufferSize[1], Format::D32_FLOAT),
-					"tiled-light-depth-buffer")
-			}*/
-		};
-		for (const auto& a:attachments)
-			stitchingContext.DefineAttachment(a);
+			});
 	}
 
 	void RasterizationLightTileOperator::CompleteInitialization(IThreadContext& threadContext)

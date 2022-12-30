@@ -59,7 +59,7 @@ namespace RenderCore { namespace LightingEngine
 		void SetWorldToProjections(IteratorRange<const Float4x4*> worldToProjections)
 		{
 			assert(worldToProjections.size() > 0 && worldToProjections.size() <= dimof(_multProbeProperties._worldToProjection));
-			_projectionCount = std::min(worldToProjections.size(), dimof(_multProbeProperties._worldToProjection));
+			_projectionCount = (unsigned)std::min(worldToProjections.size(), dimof(_multProbeProperties._worldToProjection));
 			for (unsigned c=0; c<_projectionCount; ++c)
 				_multProbeProperties._worldToProjection[c] = worldToProjections[c];
 		}
@@ -180,7 +180,7 @@ namespace RenderCore { namespace LightingEngine
 
 						_pimpl->_multiViewUniformsDelegate->SetWorldToProjections(MakeIteratorRange(_pendingViews));
 						_staticPrepareHelper->_parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
-						auto rpi = _staticPrepareHelper->BeginRPI(_probesToRender[_probeIterator].first*6, _pendingViews.size());
+						auto rpi = _staticPrepareHelper->BeginRPI(_probesToRender[_probeIterator].first*6, (unsigned)_pendingViews.size());
 						TRY {
 							Techniques::Draw(
 								*_staticPrepareHelper->_parsingContext, *_pimpl->_pipelineAccelerators,
@@ -194,7 +194,7 @@ namespace RenderCore { namespace LightingEngine
 							assert(_pimpl->_staticTable == staticTable);
 						#endif
 					}
-					_probeIterator += _pendingViews.size()/6;
+					_probeIterator += (unsigned)_pendingViews.size()/6;
 					_pendingViews.clear();
 				}
 
@@ -265,7 +265,7 @@ namespace RenderCore { namespace LightingEngine
 
 	unsigned ShadowProbes::GetReservedProbeCount()
 	{
-		return _pimpl->_probes.size();
+		return (unsigned)_pimpl->_probes.size();
 	}
 
 	std::shared_ptr<IProbeRenderingInstance> ShadowProbes::PrepareStaticProbes(IThreadContext& threadContext, IteratorRange<const std::pair<unsigned, Probe>*> probesAndIndices)
