@@ -53,7 +53,7 @@ namespace PlatformRig
     class FrameRateRecorder
     {
     public:
-        void PushFrameDuration(uint64_t duration);
+        void PushFrameInterval(uint64_t duration);
         std::tuple<float, float, float> GetPerformanceStats() const;
 
         FrameRateRecorder();
@@ -70,11 +70,11 @@ namespace PlatformRig
     public:
         AccumulatedAllocations::Snapshot _prevFrameAllocationCount;
         FrameRateRecorder _frameRate;
-        uint64_t _prevFrameStartTime;
         float _timerToSeconds;
         unsigned _frameRenderCount;
         uint64_t _frameLimiter;
         uint64_t _timerFrequency;
+        uint64_t _lastFrameBarrierTimePoint = 0;
 
         uint64_t _mainOverlayRigTargetConfig = 0;
         uint64_t _debugScreensTargetConfig = 0; 
@@ -85,8 +85,7 @@ namespace PlatformRig
         RenderCore::Techniques::AttachmentReservation _capturedDoubleBufferAttachments;
 
         Pimpl()
-        : _prevFrameStartTime(0) 
-        , _timerFrequency(OSServices::GetPerformanceCounterFrequency())
+        : _timerFrequency(OSServices::GetPerformanceCounterFrequency())
         , _frameRenderCount(0)
         , _frameLimiter(0)
         {
@@ -130,14 +129,7 @@ namespace PlatformRig
         CPUProfileEvent_Conditional pEvnt("FrameRig::ExecuteFrame", cpuProfiler);
         assert(&parserContext.GetThreadContext() == context.get());
 
-        uint64_t startTime = OSServices::GetPerformanceCounter();
-        if (_pimpl->_frameLimiter) {
-            CPUProfileEvent_Conditional pEvnt2("FrameLimiter", cpuProfiler);
-            while (startTime < _pimpl->_prevFrameStartTime + _pimpl->_frameLimiter) {
-                Threading::YieldTimeSlice();
-                startTime = OSServices::GetPerformanceCounter();
-            }
-        }
+        if (!_pimpl->_lastFrameBarrierTimePoint) _pimpl->_lastFrameBarrierTimePoint = OSServices::GetPerformanceCounter();
 
         #if defined(_DEBUG)
             const bool intermittentlyCommitAssets = true;
@@ -151,12 +143,6 @@ namespace PlatformRig
             }
         #endif
 
-        float frameElapsedTime = 1.f/60.f;
-        if (_pimpl->_prevFrameStartTime!=0) {
-            frameElapsedTime = (startTime - _pimpl->_prevFrameStartTime) * _pimpl->_timerToSeconds;
-        }
-        _pimpl->_prevFrameStartTime = startTime;
-
         RenderCore::Techniques::SetThreadContext(context);
 
         if (cpuProfiler)
@@ -167,8 +153,6 @@ namespace PlatformRig
 		TRY {
             if (auto* threadContextVulkan = query_interface_cast<RenderCore::IThreadContextVulkan*>(context.get()))
                 threadContextVulkan->BeginFrameRenderingCommandList();
-
-            // auto presentationTarget = context->BeginFrame(presChain);
 
             context->GetAnnotator().Frame_Begin(_pimpl->_frameRenderCount);		// (on Vulkan, we must do this after IThreadContext::BeginFrameRenderingCommandList(), because that primes the command list in the vulkan device)
             endAnnotatorFrame = true;
@@ -235,24 +219,6 @@ namespace PlatformRig
 
 			////////////////////////////////
 
-			// auto f = _pimpl->_frameRate.GetPerformanceStats();
-			// auto heapMetrics = AccumulatedAllocations::GetCurrentHeapMetrics();
-			// 
-			// DrawFrameRate(
-			//     context, res._frameRateFont.get(), res._smallDebugFont.get(), std::get<0>(f), std::get<1>(f), std::get<2>(f), 
-			//     heapMetrics._usage, _pimpl->_prevFrameAllocationCount._allocationCount);
-
-			{
-				if (Tweakable("FrameRigStats", false) && (_pimpl->_frameRenderCount % 64) == (64-1)) {
-					auto f = _pimpl->_frameRate.GetPerformanceStats();
-					Log(Verbose) << "Ave FPS: " << 1000.f / std::get<0>(f) << std::endl;
-						// todo -- we should get a rolling average of these values
-					if (_pimpl->_prevFrameAllocationCount._allocationCount) {
-						Log(Verbose) << "(" << _pimpl->_prevFrameAllocationCount._freeCount << ") frees and (" << _pimpl->_prevFrameAllocationCount._allocationCount << ") allocs during frame. Ave alloc: (" << _pimpl->_prevFrameAllocationCount._allocationsSize / _pimpl->_prevFrameAllocationCount._allocationCount << ")." << std::endl;
-					}
-				}
-			}
-
             if (_subFrameEvents)
                 _subFrameEvents->_onPrePresent.Invoke(*context);
 
@@ -287,13 +253,15 @@ namespace PlatformRig
         if (_subFrameEvents)
             _subFrameEvents->_onFrameBarrier.Invoke();
 
-        uint64_t duration = OSServices::GetPerformanceCounter() - startTime;
-        _pimpl->_frameRate.PushFrameDuration(duration);
+        uint64_t frameBarrierTimePoint = OSServices::GetPerformanceCounter();
+        auto frameBarrierTime = frameBarrierTimePoint-_pimpl->_lastFrameBarrierTimePoint;
+        _pimpl->_frameRate.PushFrameInterval(frameBarrierTime);
+        _pimpl->_lastFrameBarrierTimePoint = frameBarrierTimePoint;
+
         ++_pimpl->_frameRenderCount;
         auto accAlloc = AccumulatedAllocations::GetInstance();
-        if (accAlloc) {
+        if (accAlloc)
             _pimpl->_prevFrameAllocationCount = accAlloc->GetAndClear();
-        }
 
         if (cpuProfiler)
             if (auto* threadContextVulkan = query_interface_cast<RenderCore::IThreadContextVulkan*>(context.get()))
@@ -310,13 +278,13 @@ namespace PlatformRig
             if (threadingPressure > 0.f) {
                 // Start dropping frames if we have high threading pressure
                 // This happens when there is some expensive background thread generating long cmd lists (or just not submitting frequently)
-                ::Threading::Sleep(16 * std::min(60.f, threadingPressure));
+                ::Threading::Sleep(uint32_t(16 * std::min(60.f, threadingPressure)));
             } else {
                 Threading::YieldTimeSlice();    // this might be too extreme. We risk not getting execution back for a long while
             }
         }
 
-        return { frameElapsedTime, parserContext.HasPendingAssets() };
+        return { frameBarrierTime / float(_pimpl->_timerFrequency), parserContext.HasPendingAssets() };
     }
 
     auto FrameRig::ExecuteFrame(
@@ -450,7 +418,7 @@ namespace PlatformRig
 
 ///////////////////////////////////////////////////////////////////////////////
 
-    void FrameRateRecorder::PushFrameDuration(uint64_t duration)
+    void FrameRateRecorder::PushFrameInterval(uint64_t duration)
     {
             // (note, in this scheme, one entry is always empty -- so actual capacity is really dimof(_durationHistory)-1)
         _durationHistory[_bufferEnd] = duration;

@@ -140,7 +140,7 @@ namespace Sample
                         // ------- Render ----------------------------------------
                     auto frameResult = frameRig.ExecuteFrame(*sampleGlobals._windowApparatus);
                         // ------- Update ----------------------------------------
-                    sampleOverlay->OnUpdate(frameResult._elapsedTime * Tweakable("TimeScale", 1.0f));
+                    sampleOverlay->OnUpdate(frameResult._intervalTime * Tweakable("TimeScale", 1.0f));
                     sampleGlobals._frameRenderingApparatus->_frameCPUProfiler->EndFrame();
 
                     if (msgPump == PlatformRig::Window::PumpResult::Background)

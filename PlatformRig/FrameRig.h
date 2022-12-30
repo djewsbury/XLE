@@ -25,7 +25,7 @@ namespace PlatformRig
     public:
         struct FrameResult
         {
-            float _elapsedTime = 0.f;
+            float _intervalTime = 0.f;
             bool _hasPendingResources = false;
         };
 
