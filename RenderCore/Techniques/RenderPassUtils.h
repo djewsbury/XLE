@@ -41,4 +41,8 @@ namespace RenderCore { namespace Techniques
         ParsingContext& parserContext,
 		LoadStore loadOperation = LoadStore::Retain,
 		ClearValue clearValue = MakeClearValue(0.f, 0));
+
+	IResource* GetAttachmentResource(
+		Techniques::ParsingContext& parsingContext,
+		uint64_t semantic);
 }}

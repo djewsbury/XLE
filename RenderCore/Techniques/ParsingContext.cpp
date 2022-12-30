@@ -68,6 +68,24 @@ namespace RenderCore { namespace Techniques
         _internal->_attachmentReservation.Bind(semantic, std::move(resource), currentLayout);
     }
 
+    void ParsingContext::BindAttachment(uint64_t semantic, std::shared_ptr<IPresentationChain> presChain, BindFlags::BitField currentLayout)
+    {
+        assert(presChain);
+        auto semanticName = AttachmentSemantics::TryDehash(semantic);
+        auto presChainDesc = presChain->GetDesc();
+        auto imageDesc = CreateDesc(
+            presChainDesc._bindFlags,
+            AllocationRules::ResizeableRenderTarget,
+            TextureDesc::Plain2D(presChainDesc._width, presChainDesc._height, presChainDesc._format, 1, 0, presChainDesc._samples));
+        _internal->_stitchingContext.DefineAttachment(
+            semantic,
+            imageDesc,
+            semanticName ? semanticName : "<<unknown>>",
+            RenderCore::Techniques::PreregisteredAttachment::State::Uninitialized,
+            currentLayout);
+        _internal->_attachmentReservation.Bind(semantic, std::move(presChain), imageDesc, currentLayout);
+    }
+
     ParsingContext::ParsingContext(TechniqueContext& techniqueContext, IThreadContext& threadContext)
 	: _techniqueContext(&techniqueContext)
     , _threadContext(&threadContext)

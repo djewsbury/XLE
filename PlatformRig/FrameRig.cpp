@@ -117,11 +117,13 @@ namespace PlatformRig
         }
     };
 
+    static RenderCore::IResource* GetAttachmentResource(RenderCore::Techniques::ParsingContext& parsingContext, uint64_t semantic);
+
 ///////////////////////////////////////////////////////////////////////////////
 
     auto FrameRig::ExecuteFrame(
         std::shared_ptr<RenderCore::IThreadContext> context,
-        RenderCore::IPresentationChain& presChain,
+        std::shared_ptr<RenderCore::IPresentationChain> presChain,
 		RenderCore::Techniques::ParsingContext& parserContext) -> FrameResult
     {
         auto* cpuProfiler = _pimpl->_frameCPUProfiler.get();
@@ -163,9 +165,12 @@ namespace PlatformRig
 
         bool endAnnotatorFrame = false;
 		TRY {
-            auto presentationTarget = context->BeginFrame(presChain);
+            if (auto* threadContextVulkan = query_interface_cast<RenderCore::IThreadContextVulkan*>(context.get()))
+                threadContextVulkan->BeginFrameRenderingCommandList();
 
-            context->GetAnnotator().Frame_Begin(_pimpl->_frameRenderCount);		// (on Vulkan, we must do this after IThreadContext::BeginFrame(), because that primes the command list in the vulkan device)
+            // auto presentationTarget = context->BeginFrame(presChain);
+
+            context->GetAnnotator().Frame_Begin(_pimpl->_frameRenderCount);		// (on Vulkan, we must do this after IThreadContext::BeginFrameRenderingCommandList(), because that primes the command list in the vulkan device)
             endAnnotatorFrame = true;
 
                 //  We must invalidate the cached state at least once per frame.
@@ -182,13 +187,13 @@ namespace PlatformRig
             }
 
 			// Bind the presentation target as the default output for the parser context
-            parserContext.BindAttachment(RenderCore::Techniques::AttachmentSemantics::ColorLDR, presentationTarget, false, RenderCore::BindFlag::PresentationSrc);
+            auto presentationChainDesc = presChain->GetDesc();
+            parserContext.BindAttachment(RenderCore::Techniques::AttachmentSemantics::ColorLDR, presChain, RenderCore::BindFlag::PresentationSrc);
             parserContext.GetAttachmentReservation().Absorb(std::move(_pimpl->_capturedDoubleBufferAttachments));
 
-            auto targetDesc = presentationTarget->GetDesc();
             auto& stitchingContext = parserContext.GetFragmentStitchingContext();
-            stitchingContext._workingProps = RenderCore::FrameBufferProperties { targetDesc._textureDesc._width, targetDesc._textureDesc._height };
-            parserContext.GetViewport() = RenderCore::ViewportDesc { 0.f, 0.f, (float)targetDesc._textureDesc._width, (float)targetDesc._textureDesc._height };
+            stitchingContext._workingProps = RenderCore::FrameBufferProperties { presentationChainDesc._width, presentationChainDesc._height };
+            parserContext.GetViewport() = RenderCore::ViewportDesc { 0.f, 0.f, (float)presentationChainDesc._width, (float)presentationChainDesc._height };
 
 			////////////////////////////////
 
@@ -208,12 +213,14 @@ namespace PlatformRig
 			}
 			CATCH_END
 
+            // Techniques::GetAttachmentResource will acquire the presentation chain resource if it hasn't been acquired yet
+            auto* presentationTarget = RenderCore::Techniques::GetAttachmentResource(parserContext, RenderCore::Techniques::AttachmentSemantics::ColorLDR);
+
             if (!mainOverlaySucceeded) {
                 // We must at least clear, because the _debugScreenOverlaySystem might have something to render
-                // (also redefine AttachmentSemantics::ColorLDR as initialized here)
                 RenderCore::Metal::DeviceContext::Get(*context)->Clear(*presentationTarget->CreateTextureView(RenderCore::BindFlag::RenderTarget), Float4(0,0,0,1));
                 using namespace RenderCore::Techniques;
-                stitchingContext.DefineAttachment(AttachmentSemantics::ColorLDR, targetDesc, "color-hdr", PreregisteredAttachment::State::Initialized, RenderCore::BindFlag::TransferDst);
+                stitchingContext.DefineAttachment(AttachmentSemantics::ColorLDR, presentationTarget->GetDesc(), "color-ldr", PreregisteredAttachment::State::Initialized, RenderCore::BindFlag::TransferDst);
             }
 
 			TRY {
@@ -262,7 +269,7 @@ namespace PlatformRig
 
 			{
 				CPUProfileEvent_Conditional pEvnt2("Present", cpuProfiler);
-				context->Present(presChain);
+				context->Present(*presChain);
 			}
 
             if (_subFrameEvents)
@@ -314,18 +321,18 @@ namespace PlatformRig
 
     auto FrameRig::ExecuteFrame(
         std::shared_ptr<RenderCore::IThreadContext> context,
-        RenderCore::IPresentationChain& presChain) -> FrameResult
+        std::shared_ptr<RenderCore::IPresentationChain> presChain) -> FrameResult
     {
         RenderCore::Techniques::ParsingContext parserContext{_pimpl->_techniqueContext, *context};
         return ExecuteFrame(
-            std::move(context), presChain,
+            std::move(context), std::move(presChain),
             parserContext);
     }
 
     auto FrameRig::ExecuteFrame(
         WindowApparatus& windowApparatus) -> FrameResult
     {
-        return ExecuteFrame(windowApparatus._immediateContext, *windowApparatus._presentationChain);
+        return ExecuteFrame(windowApparatus._immediateContext, windowApparatus._presentationChain);
     }
 
     void FrameRig::UpdatePresentationChain(RenderCore::IPresentationChain& presChain)
@@ -334,6 +341,7 @@ namespace PlatformRig
         auto& device = *presChain.GetDevice();
 
         using namespace RenderCore;
+        // Should match ParsingContext::BindAttachment (for IPresentationChain)
         auto targetDesc = CreateDesc(
             desc._bindFlags, 
             AllocationRules::ResizeableRenderTarget,

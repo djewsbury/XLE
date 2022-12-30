@@ -258,6 +258,7 @@ namespace RenderCore { namespace Techniques
     {
     public:
         const std::shared_ptr<IResource>& GetResource(AttachmentName resName) const;
+        const ResourceDesc& GetResourceDesc(AttachmentName resName) const;
         AttachmentName GetNameForResource(IResource&) const;
 
         auto GetSRV(AttachmentName resName, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
@@ -287,6 +288,7 @@ namespace RenderCore { namespace Techniques
     {
     public:
         AttachmentName Bind(uint64_t semantic, std::shared_ptr<IResource> resource, BindFlag::BitField currentLayout);     // set currentLayout to ~0u for never initialized/no state
+        AttachmentName Bind(uint64_t semantic, std::shared_ptr<IPresentationChain> presentationChain, const ResourceDesc& resourceDesc, BindFlag::BitField currentLayout);
         void Unbind(const IResource& resource);
         void UpdateAttachments(AttachmentReservation& childReservation, IteratorRange<const AttachmentTransform*> transforms);
 
@@ -331,8 +333,10 @@ namespace RenderCore { namespace Techniques
     private:
         struct Entry
         {
+            ResourceDesc _desc;
             unsigned _poolResource = ~0u;
             std::shared_ptr<IResource> _resource;
+            std::shared_ptr<IPresentationChain> _presentationChain;
             uint64_t _semantic = ~0ull;
             BindFlag::BitField _currentLayout = (BindFlag::BitField)0;
             std::optional<ClearValue> _pendingClear;
@@ -349,6 +353,7 @@ namespace RenderCore { namespace Techniques
         {
             AttachmentName _poolName = ~0u;
             std::shared_ptr<IResource> _resource;
+            std::shared_ptr<IPresentationChain> _presentationChain;
             uint64_t _semantic;
             std::optional<ClearValue> _pendingClear;
             std::optional<BindFlag::BitField> _currentLayout;

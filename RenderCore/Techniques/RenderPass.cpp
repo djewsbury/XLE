@@ -343,7 +343,7 @@ namespace RenderCore { namespace Techniques
             const FrameBufferDesc* _completedDesc;
         };
         Result BuildFrameBuffer(
-            Metal::ObjectFactory& factory,
+            IThreadContext& threadContext,
             const FrameBufferDesc& desc,
             IteratorRange<const PreregisteredAttachment*> resolvedAttachmentDescs,
             AttachmentPool& attachmentPool,
@@ -419,7 +419,7 @@ namespace RenderCore { namespace Techniques
     static bool HasExplicitAspect(const TextureViewDesc& viewDesc) { return viewDesc._format._aspect != TextureViewDesc::Aspect::UndefinedAspect || viewDesc._format._explicitFormat != Format(0); }
 
     auto FrameBufferPool::BuildFrameBuffer(
-        Metal::ObjectFactory& factory,
+        IThreadContext& threadContext,
         const FrameBufferDesc& desc,
         IteratorRange<const PreregisteredAttachment*> resolvedAttachmentDescs,
         AttachmentPool& attachmentPool,
@@ -427,6 +427,11 @@ namespace RenderCore { namespace Techniques
     {    
         auto poolAttachments = attachmentPool.Reserve(resolvedAttachmentDescs, parentReservation);
 		assert(poolAttachments.GetResourceCount() == desc.GetAttachments().size());
+        auto& factory = Metal::GetObjectFactory(*threadContext.GetDevice());
+
+        // CompleteInitialization initialization will create any resources that haven't yet been created, as well as
+        // calling acquiring any presentation chain images
+        poolAttachments.CompleteInitialization(threadContext);
 
         std::vector<AttachmentDesc> adjustedAttachments;
         adjustedAttachments.reserve(desc.GetAttachments().size());
@@ -606,6 +611,15 @@ namespace RenderCore { namespace Techniques
         return attach->_resource;
 	}
 
+    const ResourceDesc& AttachmentPool::GetResourceDesc(AttachmentName attachName) const
+    {
+        static ResourceDesc nullDesc;
+        if (attachName >= _pimpl->_attachments.size()) return nullDesc;
+        auto* attach = &_pimpl->_attachments[attachName];
+        assert(attach);
+        return attach->_desc;
+    }
+
     AttachmentName AttachmentPool::GetNameForResource(IResource& res) const
     {
         for (unsigned c=0; c<_pimpl->_attachments.size(); ++c)
@@ -689,6 +703,7 @@ namespace RenderCore { namespace Techniques
                 #endif
 
                 selectedAttachments[r]._resource = matchingParent->_resource;
+                selectedAttachments[r]._presentationChain = matchingParent->_presentationChain;
                 selectedAttachments[r]._poolName = matchingParent->_poolResource;
                 selectedAttachments[r]._currentLayout = matchingParent->_currentLayout;
                 selectedAttachments[r]._semantic = request._semantic;
@@ -709,7 +724,7 @@ namespace RenderCore { namespace Techniques
         for (unsigned r=0; r<attachmentRequests.size(); ++r) {
             const auto& request = attachmentRequests[r];
 
-            if (selectedAttachments[r]._poolName != ~0u || selectedAttachments[r]._resource) continue;
+            if (selectedAttachments[r]._poolName != ~0u || selectedAttachments[r]._resource || selectedAttachments[r]._presentationChain) continue;
 
             // We will never attempt to reuse something from the parent reservation (unless the semantics match),
             // even another temporary -- ie, we're expecting any temporaries in the parent reservation are there
@@ -842,6 +857,31 @@ namespace RenderCore { namespace Techniques
     {
         Entry newEntry;
         newEntry._resource = std::move(resource);
+        newEntry._desc = newEntry._resource->GetDesc();
+        newEntry._semantic = semantic;
+        newEntry._currentLayout = currentLayout;    // current layout can be ~0u, which means never initialized
+
+        // replace an existing binding to this semantic, if one exists
+        for (auto e=_entries.begin(); e!=_entries.end(); ++e) {
+            if (e->_semantic == semantic) {
+                if (_pool && e->_poolResource != ~0u) {
+                    AttachmentName toRelease = e->_poolResource;
+                    _pool->Release(MakeIteratorRange(&toRelease, &toRelease+1), _reservationFlags);
+                }
+                *e = std::move(newEntry);
+                return (AttachmentName)std::distance(_entries.begin(), e);
+            }
+        }
+
+        _entries.push_back(std::move(newEntry));
+        return AttachmentName(_entries.size()-1);
+    }
+
+    AttachmentName AttachmentReservation::Bind(uint64_t semantic, std::shared_ptr<IPresentationChain> presentationChain, const ResourceDesc& resourceDesc, BindFlag::BitField currentLayout)
+    {
+        Entry newEntry;
+        newEntry._presentationChain = std::move(presentationChain);
+        newEntry._desc = resourceDesc;
         newEntry._semantic = semantic;
         newEntry._currentLayout = currentLayout;    // current layout can be ~0u, which means never initialized
 
@@ -904,6 +944,12 @@ namespace RenderCore { namespace Techniques
                         _entries[c]._currentLayout = transform._finalLayout;
                         _entries[c]._pendingClear = {};
                         _entries[c]._pendingSwitchToLayout = {};
+                    } else if (_entries[c]._presentationChain && _entries[c]._presentationChain == childEntry._presentationChain) {
+                        // child reservation may have acquired the resource for this presentationChain
+                        _entries[c]._resource = childEntry._resource;
+                        _entries[c]._currentLayout = transform._finalLayout;
+                        _entries[c]._pendingClear = {};
+                        _entries[c]._pendingSwitchToLayout = {};
                     }
 
                 if (childEntry._semantic != ~0ull && childEntry._semantic != 0ull) {
@@ -918,6 +964,7 @@ namespace RenderCore { namespace Techniques
                         }
                     if (!foundExistingBinding) {
                         Entry newEntry;
+                        newEntry._desc = childEntry._desc;
                         newEntry._poolResource = childEntry._poolResource;
                         newEntry._resource = childEntry._resource;
                         newEntry._currentLayout = transform._finalLayout;
@@ -974,26 +1021,24 @@ namespace RenderCore { namespace Techniques
     const std::shared_ptr<IResource>& AttachmentReservation::GetResource(AttachmentName resName) const
     {
         assert(resName < _entries.size());
-        const auto& e = _entries[resName];
-        if (e._poolResource == ~0u) return e._resource;
+        auto& e = _entries[resName];
+        if (e._resource) return e._resource;
+        assert(!e._presentationChain);
         return _pool->GetResource(e._poolResource);
     }
 
     ResourceDesc AttachmentReservation::GetResourceDesc(AttachmentName resName) const
     {
         assert(resName < _entries.size());
-        const auto& e = _entries[resName];
-        if (e._poolResource == ~0u) return e._resource->GetDesc();
-        return _pool->GetResource(e._poolResource)->GetDesc();
+        return _entries[resName]._desc;
     }
 
     auto AttachmentReservation::GetView(AttachmentName resName, BindFlag::Enum usage, const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
     {
         assert(resName < _entries.size());
         const auto& e = _entries[resName];
-        if (e._poolResource == ~0u) {
+        if (e._poolResource == ~0u)
             return _viewPool.GetTextureView(e._resource, usage, window);
-        }
         return _pool->GetView(e._poolResource, usage, window);
     }
 
@@ -1007,6 +1052,7 @@ namespace RenderCore { namespace Techniques
         static std::shared_ptr<IResource> dummy;
         for (const auto& e:_entries)
             if (e._semantic == semantic) {
+                assert(!e._presentationChain);
                 if (e._poolResource == ~0u) return e._resource;
                 return _pool->GetResource(e._poolResource);
             }
@@ -1030,6 +1076,7 @@ namespace RenderCore { namespace Techniques
         if (existing != _entries.end()) {
             // check compatibility, using the same behaviour as AttachmentPool::Reserve
             // We can get a mis-match if (for example) resolution changed and there's still a registered attachment with the previous size
+            assert(!existing->_presentationChain);
             auto* res = (existing->_poolResource != ~0u) ? _pool->GetResource(existing->_poolResource).get() : existing->_resource.get();
             if (!MatchRequest(desc, res->GetDesc()))
                 Throw(std::runtime_error("Double buffer attachment description mismatch between an existing registered attachment and requested attachment"));
@@ -1051,6 +1098,7 @@ namespace RenderCore { namespace Techniques
         newEntry._semantic = todaySemantic;
         newEntry._pendingClear = defaultContents;
         newEntry._pendingSwitchToLayout = initialLayout;
+        newEntry._desc = desc;
         _entries.emplace_back(std::move(newEntry));
 
         if (existingRegistration == _doubleBufferAttachments.end()) {
@@ -1122,12 +1170,21 @@ namespace RenderCore { namespace Techniques
 
         for (auto& a:_entries) {
             if (a._pendingSwitchToLayout) {
-                if (a._poolResource == ~0u) {
+                if (a._resource) {
+                    if (a._currentLayout == ~0u) {
+                        barrierHelper.Add(*a._resource, Metal::BarrierResourceUsage::NoState(), *a._pendingSwitchToLayout);
+                    } else
+                        barrierHelper.Add(*a._resource, a._currentLayout, *a._pendingSwitchToLayout);
+                } else if (a._presentationChain) {
+                    assert(!a._resource);
+                    a._resource = threadContext.BeginFrame(*a._presentationChain);
+                    assert(a._resource);
                     if (a._currentLayout == ~0u) {
                         barrierHelper.Add(*a._resource, Metal::BarrierResourceUsage::NoState(), *a._pendingSwitchToLayout);
                     } else
                         barrierHelper.Add(*a._resource, a._currentLayout, *a._pendingSwitchToLayout);
                 } else {
+                    assert(a._poolResource != ~0u);
                     auto& poolResource = _pool->_pimpl->_attachments[a._poolResource];
                     if (!poolResource._resource) {
                         _pool->_pimpl->BuildAttachment(a._poolResource);
@@ -1143,6 +1200,9 @@ namespace RenderCore { namespace Techniques
                 }
                 a._currentLayout = a._pendingSwitchToLayout.value();
                 a._pendingSwitchToLayout = {};
+            } else if (a._presentationChain && !a._resource) {
+                a._resource = threadContext.BeginFrame(*a._presentationChain);
+                assert(a._resource);
             } else if (a._poolResource != ~0u) {
                 auto& poolResource = _pool->_pimpl->_attachments[a._poolResource];
                 if (poolResource._pendingCompleteInitialization) {
@@ -1253,11 +1313,14 @@ namespace RenderCore { namespace Techniques
     : _pool(pool)
     , _reservationFlags(flags)
     {
+        assert(reservedAttachments.empty() || _pool);
         _entries.reserve(reservedAttachments.size());
         for (const auto& a:reservedAttachments) {
             Entry e;
             e._poolResource = a._poolName;
+            e._desc = pool->GetResourceDesc(a._poolName);
             e._resource = std::move(a._resource);
+            e._presentationChain = std::move(a._presentationChain);
             e._semantic = a._semantic;
             e._pendingClear = a._pendingClear;
             e._pendingSwitchToLayout = a._pendingSwitchToLayout;
@@ -1441,7 +1504,7 @@ namespace RenderCore { namespace Techniques
 	}
 	
     RenderPassInstance::RenderPassInstance(
-        IThreadContext& context,
+        IThreadContext& threadContext,
         const FrameBufferDesc& layout,
         IteratorRange<const PreregisteredAttachment*> fullAttachmentsDescription,
         FrameBufferPool& frameBufferPool,
@@ -1449,12 +1512,11 @@ namespace RenderCore { namespace Techniques
         AttachmentReservation* parentReservation,
         const RenderPassBeginDesc& beginInfo)
     {
-        _attachedContext = Metal::DeviceContext::Get(context).get();
+        _attachedContext = Metal::DeviceContext::Get(threadContext).get();
 
         auto fb = frameBufferPool.BuildFrameBuffer(
-            Metal::GetObjectFactory(*context.GetDevice()),
+            threadContext,
             layout, fullAttachmentsDescription, attachmentPool, parentReservation);
-        fb._poolReservation.CompleteInitialization(context);
 
         _frameBuffer = std::move(fb._frameBuffer);
         _attachmentPoolReservation = std::move(fb._poolReservation);

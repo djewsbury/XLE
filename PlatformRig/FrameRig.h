@@ -34,11 +34,11 @@ namespace PlatformRig
 
         FrameResult ExecuteFrame(
             std::shared_ptr<RenderCore::IThreadContext> context,
-            RenderCore::IPresentationChain& presChain);
+            std::shared_ptr<RenderCore::IPresentationChain> presChain);
 
         auto ExecuteFrame(
             std::shared_ptr<RenderCore::IThreadContext> context,
-            RenderCore::IPresentationChain& presChain,
+            std::shared_ptr<RenderCore::IPresentationChain> presChain,
             RenderCore::Techniques::ParsingContext& parserContext) -> FrameResult;
 
         void SetFrameLimiter(unsigned maxFPS);

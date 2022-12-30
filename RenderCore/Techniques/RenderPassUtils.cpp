@@ -86,4 +86,30 @@ namespace RenderCore { namespace Techniques
 		frag.AddSubpass(std::move(subpass));
         return RenderPassInstance{parserContext, frag, RenderPassBeginDesc{MakeIteratorRange(&clearValue, &clearValue+1)}};	
 	}
+
+	IResource* GetAttachmentResource(ParsingContext& parsingContext, uint64_t semantic)
+	{
+		// Get the attachment bound to the given semantic from the AttachmentReservation in the parsing context
+		// This will create the attachment resource if it hasn't been created yet
+		// Need to jump through some hoops to do this; because most of the interfaces were built for interacting
+		// with render passes
+		auto preregs = parsingContext.GetFragmentStitchingContext().GetPreregisteredAttachments();
+		auto i = std::find_if(preregs.begin(), preregs.end(), [semantic](const auto& c) { return c._semantic == semantic; });
+		if (i == preregs.end())
+			return nullptr;
+		auto newReservation = parsingContext.GetTechniqueContext()._attachmentPool->Reserve(
+			MakeIteratorRange(i, i+1),
+			&parsingContext.GetAttachmentReservation());
+		assert(newReservation.GetResourceCount() == 1);
+		newReservation.CompleteInitialization(parsingContext.GetThreadContext());
+
+		AttachmentTransform transform;
+		transform._type = AttachmentTransform::LoadedAndStored;
+		transform._initialLayout = i->_layout;
+		transform._finalLayout = i->_layout;
+		parsingContext.GetAttachmentReservation().UpdateAttachments(newReservation, MakeIteratorRange(&transform, &transform+1));
+
+		return newReservation.GetResource(0).get();
+
+	}
 }}
