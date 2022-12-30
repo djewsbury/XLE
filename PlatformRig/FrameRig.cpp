@@ -116,8 +116,6 @@ namespace PlatformRig
         }
     };
 
-    static RenderCore::IResource* GetAttachmentResource(RenderCore::Techniques::ParsingContext& parsingContext, uint64_t semantic);
-
 ///////////////////////////////////////////////////////////////////////////////
 
     auto FrameRig::ExecuteFrame(

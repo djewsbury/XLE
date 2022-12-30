@@ -188,26 +188,21 @@ namespace UnitTests
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		SECTION("Forward lighting")
 		{
-			std::promise<std::shared_ptr<LightingEngine::ILightScene>> promisedLightScene;
-			auto futureLightScene = promisedLightScene.get_future();
-			LightingEngine::CreateForwardLightingScene(
-				std::move(promisedLightScene),
-				testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
-				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator),
-				LightingEngine::AmbientLightOperatorDesc{});
-			auto lightScene = futureLightScene.get();		// stall
+			RenderCore::LightingEngine::ChainedOperatorTemplate<RenderCore::LightingEngine::ForwardLightingTechniqueDesc> techniqueOperators = {};
+			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 
 			std::promise<std::shared_ptr<LightingEngine::CompiledLightingTechnique>> promisedLightingTechnique;
 			auto futureLightingTechnique = promisedLightingTechnique.get_future();
-			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			LightingEngine::CreateForwardLightingTechnique(
 				std::move(promisedLightingTechnique),
 				testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
-				lightScene,
+				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator),
+				techniqueOperators,
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = futureLightingTechnique.get();		// stall
+			auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
 
-			ConfigureLightScene(*lightScene);
+			ConfigureLightScene(lightScene);
 
 			StallAndPrepareResources(testApparatus, parsingContext, *lightingTechnique, *drawableWriter);
 
@@ -294,9 +289,11 @@ namespace UnitTests
 			auto lightId = CreateTestLight(lightScene);
 			CreateSphereShadowProjection(lightScene, lightId);
 
-			testApparatus._bufferUploads->Update(*threadContext);
+#if 0
+			testApparatus._bufferUploads->v(*threadContext);
 			Threading::Sleep(16);
 			testApparatus._bufferUploads->Update(*threadContext);
+#endif
 
 			// stall until all resources are ready
 			{

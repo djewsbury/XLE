@@ -2787,7 +2787,7 @@ namespace RenderCore { namespace ImplVulkan
 		if (!swapChain->ReadyForRendering())
 			Throw(std::runtime_error("IPresentationChain is zero sized or otherwise not ready for rendering"));
 		// If you trigger this assert, it means that we didn't get a successful Present() following the previous BeginFrame()
-		assert(_nextQueueShouldWaitOnAcquire = VK_NULL_HANDLE);
+		assert(_nextQueueShouldWaitOnAcquire == VK_NULL_HANDLE);
 		auto nextImage = swapChain->AcquireNextImage(*_submissionQueue, _cpuProfiler);
 		_nextQueueShouldWaitOnAcquire = swapChain->GetPresentImageAttachedSyncs()._onAcquireComplete.get();
         return std::move(nextImage);
