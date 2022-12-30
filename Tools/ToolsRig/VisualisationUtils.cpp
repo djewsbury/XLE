@@ -357,14 +357,19 @@ namespace ToolsRig
 						RenderCore::LightingEngine::ChainedOperatorTemplate<RenderCore::LightingEngine::ForwardLightingTechniqueDesc> techniqueOperators = {};
 						RenderCore::LightingEngine::ChainedOperatorTemplate<RenderCore::LightingEngine::AmbientLightOperatorDesc> ambientOperator;
 						RenderCore::LightingEngine::ChainedOperatorTemplate<RenderCore::LightingEngine::ToneMapAcesOperatorDesc> toneMapOperator;
+						RenderCore::LightingEngine::ChainedOperatorTemplate<RenderCore::LightingEngine::MSAADesc> msaaDesc;
+						// toneMapOperator._desc._maxLargeBloomRadius = 128.f;
+						// toneMapOperator._desc._enableSmallBloom = true;
+						// msaaDesc._desc._samples = RenderCore::TextureSamples::Create(8);
 						techniqueOperators._next = &ambientOperator;
 						ambientOperator._next = &toneMapOperator;
+						toneMapOperator._next = &msaaDesc;
 						compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateForwardLightingTechnique(
 							lightingApparatus,
 							lightingEngineCfg.GetLightOperators(),
 							lightingEngineCfg.GetShadowOperators(),
 							techniqueOperators,
-							targets, fbProps);
+							targets);
 					} else {
 						compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
 							lightingApparatus,

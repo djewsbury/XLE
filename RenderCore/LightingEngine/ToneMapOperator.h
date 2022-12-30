@@ -113,6 +113,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::PipelineCollection> _pool;
 		::Assets::DependencyValidation _depVal;
 		unsigned _brightPassMipCountCount = 0;
+		TextureSamples _samples = TextureSamples::Create();
 
 		float _brightPassLargeRadius = 1.f;
 		float _brightPassSmallRadius = 1.f;

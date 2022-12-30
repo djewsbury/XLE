@@ -134,26 +134,27 @@ namespace RenderCore { namespace LightingEngine
 	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext)
 	{
 		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
+		auto samples = stitchingContext._workingProps._samples;
 		Techniques::PreregisteredAttachment attachments[] {
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::MultisampleDepth,
 				CreateDesc(
 					BindFlag::DepthStencil | BindFlag::ShaderResource | BindFlag::InputAttachment,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], stitchingContext.GetSystemAttachmentFormat(Techniques::SystemAttachmentFormat::MainDepthStencil))),
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], stitchingContext.GetSystemAttachmentFormat(Techniques::SystemAttachmentFormat::MainDepthStencil), samples)),
 				"main-depth"
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferNormal,
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::ShaderResource,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_SNORM)),
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_SNORM, samples)),
 				"gbuffer-normal"
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferMotion,
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::ShaderResource,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8_SINT)),
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8_SINT, samples)),
 				"gbuffer-motion"
 			}
 		};
@@ -322,6 +323,7 @@ namespace RenderCore { namespace LightingEngine
 		std::optional<ScreenSpaceReflectionsOperatorDesc> _ssr;
 		std::optional<AmbientOcclusionOperatorDesc> _ssao;
 		std::optional<ToneMapAcesOperatorDesc> _tonemapAces;
+		std::optional<MSAADesc> _msaa;
 
 		ForwardPlusLightScene::ShadowPreparerIdMapping _shadowPrepreparerIdMapping;
 		std::vector<ForwardPlusLightScene::LightOperatorInfo> _lightSceneOperatorInfo;
@@ -380,22 +382,28 @@ namespace RenderCore { namespace LightingEngine
 			auto* chain = &globalOperatorsChain;
 			while (chain) {
 				switch(chain->_structureType) {
-				case ctti::type_id<ScreenSpaceReflectionsOperatorDesc>().hash():
+				case TypeHashCode<ScreenSpaceReflectionsOperatorDesc>:
 					if (_ssr)
 						Throw(std::runtime_error("Multiple SSR operators found, where only one expected"));
 					_ssr = ChainedOperatorCast<ScreenSpaceReflectionsOperatorDesc>(*chain);
 					break;
 
-				case ctti::type_id<AmbientOcclusionOperatorDesc>().hash():
+				case TypeHashCode<AmbientOcclusionOperatorDesc>:
 					if (_ssao)
 						Throw(std::runtime_error("Multiple SSAO operators found, where only one expected"));
 					_ssao = ChainedOperatorCast<AmbientOcclusionOperatorDesc>(*chain);
 					break;
 
-				case ctti::type_id<ToneMapAcesOperatorDesc>().hash():
+				case TypeHashCode<ToneMapAcesOperatorDesc>:
 					if (_tonemapAces)
 						Throw(std::runtime_error("Multiple tonemap operators found, where only one expected"));
 					_tonemapAces = ChainedOperatorCast<ToneMapAcesOperatorDesc>(*chain);
+					break;
+
+				case TypeHashCode<MSAADesc>:
+					if (_msaa)
+						Throw(std::runtime_error("Multiple antialiasing operators found, where only one expected"));
+					_msaa = ChainedOperatorCast<MSAADesc>(*chain);
 					break;
 				}
 				chain = chain->_next;
@@ -539,6 +547,14 @@ namespace RenderCore { namespace LightingEngine
 		return t.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Pending;
 	}
 
+	static UInt2 ExtractOutputResolution(IteratorRange<const Techniques::PreregisteredAttachment*> preregs)
+	{
+		auto i = std::find_if(preregs.begin(), preregs.end(), [](const auto& q) { return q._semantic == Techniques::AttachmentSemantics::ColorLDR; });
+		if (i == preregs.end())
+			Throw(std::runtime_error("Missing ColorLDR attachment in input interface"));
+		return { i->_desc._textureDesc._width, i->_desc._textureDesc._height };
+	}
+
 	void CreateForwardLightingTechnique(
 		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
@@ -547,8 +563,7 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
 		const ChainedOperatorDesc& globalOperators,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit,
-		const FrameBufferProperties& fbProps)
+		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit)
 	{
 		struct ConstructionHelper
 		{
@@ -576,6 +591,8 @@ namespace RenderCore { namespace LightingEngine
 		helper->_depthMotionDelegate = techDelBox->GetDepthMotionDelegate();
 		helper->_forwardIllumDelegate = techDelBox->GetForwardIllumDelegate_DisableDepthWrite();
 
+		auto resolution = ExtractOutputResolution(preregisteredAttachmentsInit);
+
 		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
 
 		::Assets::PollToPromise(
@@ -589,7 +606,7 @@ namespace RenderCore { namespace LightingEngine
 				if (MarkerTimesOut(helper->_balancedNoiseTexture, timeoutTime)) return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
 			},
-			[helper, techDelBox, pipelineAccelerators, pipelinePool, preregisteredAttachments=std::move(preregisteredAttachments), fbProps, digest=std::move(digest)]
+			[helper, techDelBox, pipelineAccelerators, pipelinePool, preregisteredAttachments=std::move(preregisteredAttachments), resolution, digest=std::move(digest)]
 			(std::promise<std::shared_ptr<CompiledLightingTechnique>>&& thatPromise) {
 
 				TRY {
@@ -600,6 +617,7 @@ namespace RenderCore { namespace LightingEngine
 						*techDelBox->_forwardLightingDescSetTemplate, "ForwardLighting", PipelineType::Graphics, *pipelinePool->GetDevice());
 
 					// operators
+					auto msaaSamples = digest._msaa ? digest._msaa->_samples : TextureSamples::Create(); 
 					captures->_hierarchicalDepthsOperator = std::make_shared<HierarchicalDepthsOperator>(pipelinePool);
 					captures->_skyOperator = std::make_shared<SkyOperator>(pipelinePool, SkyOperatorDesc { SkyTextureType::Equirectangular });
 					captures->ConfigureSkyOperatorBindings();
@@ -640,6 +658,7 @@ namespace RenderCore { namespace LightingEngine
 						});
 
 					// main sequence & setup second stage construction
+					FrameBufferProperties fbProps { resolution[0], resolution[1], msaaSamples };
 					auto secondStageHelper = captures->ConstructMainSequence(
 						*lightingTechnique,
 						pipelineAccelerators,
@@ -691,8 +710,7 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		const ChainedOperatorDesc& globalOperators,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit,
-		const FrameBufferProperties& fbProps)
+		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit)
 	{
 #if 0
 		std::promise<std::shared_ptr<ILightScene>> lightScenePromise;
@@ -727,7 +745,7 @@ namespace RenderCore { namespace LightingEngine
 			std::move(promisedTechnique),
 			apparatus->_pipelineAccelerators, apparatus->_lightingOperatorCollection, apparatus->_sharedDelegates,
 			resolveOperators, shadowGenerators, globalOperators,
-			preregisteredAttachmentsInit, fbProps);
+			preregisteredAttachmentsInit);
 		return result;
 
 	}

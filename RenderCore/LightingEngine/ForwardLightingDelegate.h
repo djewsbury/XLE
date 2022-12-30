@@ -5,6 +5,7 @@
 #pragma once
 
 #include "LightingEngine.h"
+#include "../ResourceDesc.h"		// for TextureSamples
 #include "../../Assets/AssetsCore.h"
 
 namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; class PipelineCollection; class IPipelineAcceleratorPool; } }
@@ -23,6 +24,11 @@ namespace RenderCore { namespace LightingEngine
 	{
 	};
 
+	struct MSAADesc
+	{
+		TextureSamples _samples = TextureSamples::Create();
+	};
+
 	void CreateForwardLightingTechnique(
 		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
@@ -31,8 +37,7 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
 		const ChainedOperatorDesc& globalOperators,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit,
-		const FrameBufferProperties& fbProps);
+		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit);
 
 #if 0
 	void CreateForwardLightingScene(
@@ -51,8 +56,7 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		const ChainedOperatorDesc& globalOperators,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
-		const FrameBufferProperties& fbProps);
+		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments);
 
 	bool ForwardLightingTechniqueIsCompatible(
 		CompiledLightingTechnique& technique,

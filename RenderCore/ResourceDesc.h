@@ -143,6 +143,9 @@ namespace RenderCore
         static TextureDesc Plain2D(
             uint32_t width, uint32_t height, Format format, 
             uint8_t mipCount=1, uint16_t arrayCount=0, const TextureSamples& samples = TextureSamples::Create());
+        static TextureDesc Plain2D(
+            uint32_t width, uint32_t height, Format format,
+            const TextureSamples& samples);
         static TextureDesc Plain3D(
             uint32_t width, uint32_t height, uint32_t depth, Format format, uint8_t mipCount=1);
         static TextureDesc PlainCube(
@@ -395,6 +398,22 @@ namespace RenderCore
 		result._dimensionality = Dimensionality::T2D;
 		result._mipCount = mipCount;
 		result._arrayCount = arrayCount;
+		result._samples = samples;
+		return result;
+	}
+
+	inline TextureDesc TextureDesc::Plain2D(
+		uint32_t width, uint32_t height, Format format,
+		const TextureSamples& samples)
+	{
+		TextureDesc result;
+		result._width = width;
+		result._height = height;
+		result._depth = 1;
+		result._format = format;
+		result._dimensionality = Dimensionality::T2D;
+		result._mipCount = 1;
+		result._arrayCount = 0;
 		result._samples = samples;
 		return result;
 	}

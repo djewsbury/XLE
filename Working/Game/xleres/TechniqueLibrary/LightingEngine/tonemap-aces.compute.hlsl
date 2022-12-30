@@ -41,7 +41,11 @@ float3 ToneMapAces(float3 x)
 
 #include "xleres/Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
 
-Texture2D<float3> HDRInput;
+#if HDR_INPUT_SAMPLE_COUNT
+	Texture2DMS<float3> HDRInput;
+#else
+	Texture2D<float3> HDRInput;
+#endif
 RWTexture2D<float3> LDROutput;		// output could be >8 bit depth, of course, but we're expecting smaller range than the input
 
 #if HAS_BRIGHT_PASS
@@ -78,6 +82,9 @@ float3 BrightPassSample(float2 tc, float2 brightPassTexelSize)
 }
 #endif
 
+float3 MinimalToneMap(float3 x) 		{ return x/(1+x); }
+float3 InvertMinimalToneMap(float3 y) 	{ return y/(1-y); }
+
 [numthreads(8, 8, 1)]
 	void main(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
@@ -89,8 +96,21 @@ float3 BrightPassSample(float2 tc, float2 brightPassTexelSize)
 	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
 
 	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y) {
-		float3 linearColour = ToneMapAces(HDRInput[pixelId]);
-		// float3 linearColour = saturate(LinearToSRGB_Formal(HDRInput[pixelId]));
+
+		float3 hdrInput;
+		#if HDR_INPUT_SAMPLE_COUNT
+			// Integrated resolve for MSAA. We do this at this point if there are no postprocessing effects that need to happen
+			// in HDR post-resolve, but pre-tonemap
+			// But note that this minimal tonemap becomes extremely flat -- we could be loosing a lot of precision just going through these transforms
+			hdrInput = MinimalToneMap(HDRInput.sample[0][pixelId]);
+			[unroll] for (uint c=1; c<HDR_INPUT_SAMPLE_COUNT; ++c)
+				hdrInput += MinimalToneMap(HDRInput.sample[c][pixelId]);
+			hdrInput = InvertMinimalToneMap(hdrInput / HDR_INPUT_SAMPLE_COUNT);
+		#else
+			hdrInput = HDRInput[pixelId];
+		#endif
+
+		float3 linearColour = ToneMapAces(hdrInput);
 		#if HAS_BRIGHT_PASS
 			linearColour += BrightPassSample(pixelId.xy / float2(textureDims.xy), brightPassTexelSize);
 		#endif

@@ -256,6 +256,7 @@ namespace RenderCore { namespace LightingEngine
 	RenderStepFragmentInterface ToneMapAcesOperator::CreateFragment(const FrameBufferProperties& fbProps)
 	{
 		assert(_secondStageConstructionState == 0);
+		_samples = fbProps._samples;
 		RenderStepFragmentInterface result{PipelineType::Compute};
 
 		// todo -- what should we set the final state for ColorLDR to be here? just go directly to PresentationSrc?
@@ -334,7 +335,7 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::AttachmentSemantics::ColorHDR,
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::ShaderResource,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], _desc._lightAccumulationBufferFormat)),
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], _desc._lightAccumulationBufferFormat, stitchingContext._workingProps._samples)),
 				"color-hdr"
 			});
 
@@ -445,11 +446,14 @@ namespace RenderCore { namespace LightingEngine
 					toneMapUsi.BindResourceView(3, "BrightPass"_h);
 
 					bool hasBrightPass = strongThis->_desc._enableSmallBloom || (strongThis->_desc._maxLargeBloomRadius > 0.f);
+					ParameterBox toneMapParameters;
+					toneMapParameters.SetParameter("HAS_BRIGHT_PASS", hasBrightPass ? 1 : 0);
+					toneMapParameters.SetParameter("HDR_INPUT_SAMPLE_COUNT", strongThis->_samples._sampleCount);
 
 					auto futureToneMap = Techniques::CreateComputeOperator(
 						strongThis->_pool,
 						TONEMAP_ACES_COMPUTE_HLSL ":main",
-						ParameterBox{ std::make_pair("HAS_BRIGHT_PASS", hasBrightPass ? "1" : "0") },
+						std::move(toneMapParameters),
 						GENERAL_OPERATOR_PIPELINE ":ComputeMain",
 						toneMapUsi);
 
