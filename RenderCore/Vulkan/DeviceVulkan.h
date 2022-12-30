@@ -56,12 +56,7 @@ namespace RenderCore { namespace ImplVulkan
         const TextureDesc& GetBufferDesc() { return _bufferDesc; }
 
 		void PresentToQueue(Metal_Vulkan::SubmissionQueue& queue, IteratorRange<const VkSemaphore*>);
-        struct AquireResult
-        {
-            std::shared_ptr<IResource> _resource;
-            VulkanSharedPtr<VkCommandBuffer> _primaryCommandBuffer;
-        };
-        AquireResult AcquireNextImage(Metal_Vulkan::SubmissionQueue&, HierarchicalCPUProfiler*);
+        std::shared_ptr<IResource> AcquireNextImage(Metal_Vulkan::SubmissionQueue&, HierarchicalCPUProfiler*);
 
 		struct PresentImageAttachedSyncs
 		{
@@ -69,14 +64,7 @@ namespace RenderCore { namespace ImplVulkan
 			VulkanUniquePtr<VkSemaphore>    _onCommandBufferComplete;
         };
 
-        struct CommandListAttachedSyncs
-        {
-			VulkanUniquePtr<VkFence>    _presentFence;
-			bool _presentFenceWaitable = false;
-		};
-
 		PresentImageAttachedSyncs& GetPresentImageAttachedSyncs() { return _presentImageAttachedSyncs[0]; }
-        CommandListAttachedSyncs& GetCommandListAttachedSyncs() { return _commandListAttachedSyncs[0]; }
 
         bool ReadyForRendering() const { return _swapChain != nullptr; }
 
@@ -85,7 +73,6 @@ namespace RenderCore { namespace ImplVulkan
 			Metal_Vulkan::ObjectFactory& factory,
             VulkanSharedPtr<VkSurfaceKHR> surface, 
 			const PresentationChainDesc& requestDesc,
-            Metal_Vulkan::SubmissionQueue* submissionQueue,
             const void* platformValue);
         ~PresentationChain();
     private:
@@ -96,18 +83,11 @@ namespace RenderCore { namespace ImplVulkan
 
 		TextureDesc     _bufferDesc;
 		PresentationChainDesc	_desc;
-        unsigned        _primaryBufferCount;
 
         std::vector<std::shared_ptr<IResource>> _images;
         unsigned		_lastAcquiredImage;
 
         PresentImageAttachedSyncs   _presentImageAttachedSyncs[3];      // zero always active
-        CommandListAttachedSyncs    _commandListAttachedSyncs[3];       // zero always active
-
-        Metal_Vulkan::SubmissionQueue*	_submissionQueue;
-
-		Metal_Vulkan::CommandBufferPool _primaryCommandBufferPool;
-		VulkanSharedPtr<VkCommandBuffer> _primaryCommandLists[3];
 
         std::weak_ptr<Device> _device;
 
@@ -116,6 +96,31 @@ namespace RenderCore { namespace ImplVulkan
     };
 
 ////////////////////////////////////////////////////////////////////////////////
+
+    class PrimaryCommandBufferChain
+    {
+    public:
+        VulkanSharedPtr<VkCommandBuffer> AquireNextCommandBuffer(HierarchicalCPUProfiler*);
+
+        struct CommandListAttachedSyncs
+        {
+			VulkanUniquePtr<VkFence>    _presentFence;
+			bool _presentFenceWaitable = false;
+		};
+        CommandListAttachedSyncs& GetCommandListAttachedSyncs() { return _commandListAttachedSyncs[0]; }
+
+        PrimaryCommandBufferChain(
+			Metal_Vulkan::ObjectFactory& factory,
+            Metal_Vulkan::SubmissionQueue& submissionQueue);
+        ~PrimaryCommandBufferChain();
+    private:
+        CommandListAttachedSyncs _commandListAttachedSyncs[3];       // zero always active
+        Metal_Vulkan::CommandBufferPool _primaryCommandBufferPool;
+		VulkanSharedPtr<VkCommandBuffer> _primaryCommandLists[3];
+        unsigned _primaryBufferCount;
+        Metal_Vulkan::SubmissionQueue*	_submissionQueue;
+        VkDevice						_underlyingDevice;
+    };
 
     class ThreadContext : public IThreadContext, public IThreadContextVulkan
     {
@@ -146,6 +151,7 @@ namespace RenderCore { namespace ImplVulkan
 
         virtual void*   QueryInterface(size_t guid) override;
         const std::shared_ptr<Metal_Vulkan::DeviceContext>& GetMetalContext() override;
+        std::shared_ptr<Metal_Vulkan::DeviceContext> BeginFrameRenderingCommandList() override;
         std::shared_ptr<Metal_Vulkan::DeviceContext> BeginPrimaryCommandList() override;
         std::shared_ptr<Metal_Vulkan::DeviceContext> BeginSecondaryCommandList() override;
 
@@ -171,6 +177,7 @@ namespace RenderCore { namespace ImplVulkan
 
         VkSemaphore                         _nextQueueShouldWaitOnAcquire = VK_NULL_HANDLE;
 
+        std::shared_ptr<PrimaryCommandBufferChain> _primaryCommandBufferChain;
         std::vector<Metal_Vulkan::CommandList> _interimCmdLists;
 
         HierarchicalCPUProfiler* _cpuProfiler = nullptr;

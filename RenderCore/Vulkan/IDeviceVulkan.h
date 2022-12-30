@@ -48,6 +48,7 @@ namespace RenderCore
 	{
 	public:
 		virtual const std::shared_ptr<Metal_Vulkan::DeviceContext>& GetMetalContext() = 0;
+		virtual std::shared_ptr<Metal_Vulkan::DeviceContext> BeginFrameRenderingCommandList() = 0;
 		virtual std::shared_ptr<Metal_Vulkan::DeviceContext> BeginPrimaryCommandList() = 0;
 		virtual std::shared_ptr<Metal_Vulkan::DeviceContext> BeginSecondaryCommandList() = 0;
 
