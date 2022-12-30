@@ -242,11 +242,72 @@ namespace RenderCore
         friend bool operator==(SubResourceId lhs, SubResourceId rhs) { return lhs._mip == rhs._mip && lhs._arrayLayer == rhs._arrayLayer; }
     };
 
+    // See KHR Vulkan documentation for output color spaces: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkColorSpaceKHR.html
+    // DXGI output color spaces: https://learn.microsoft.com/en-us/windows/win32/api/dxgicommon/ne-dxgicommon-dxgi_color_space_type
+    // Apple NSColorSpace: https://developer.apple.com/documentation/appkit/nscolorspace?language=objc
+    // Apple CGColorSpace: https://developer.apple.com/documentation/coregraphics/kcgcolorspacedisplayp3?language=objc
+    enum class PresentationColorSpace
+    {
+        SRGB_NonLinear,             // common SDR displays
+		BT709_NonLinear,			// Rec 709, BT.709 uses the same primaries as SRGB, but has a different monitor curve (without the linear part), and perhaps some other minor specification differences
+        BT2020_NonLinear,           // HDR10, BT.2020 primaries, D65 whitepoint, SMPTE ST2084 monitor curve
+        DisplayP3_NonLinear,        // Apple color space, P3 primaries, D65 whitepoint, SRGB monitor curve
+        Adobe_NonLinear,            // Adobe primaries & 2.2 gamma
+        SRGB_Linear,                // (actually extended SRGB)
+
+        FreeSyncDisplayNative,      // FreeSync2 configured color space
+
+        // Not exposed
+        // Vulkan
+        //      VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT
+        //      VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT (linear version)
+        //      VK_COLOR_SPACE_DCI_P3_NONLINEAR_EXT
+        //      VK_COLOR_SPACE_BT709_LINEAR_EXT (linear version)
+        //      VK_COLOR_SPACE_BT2020_LINEAR_EXT (linear version)
+        //      VK_COLOR_SPACE_DOLBYVISION_EXT
+        //      VK_COLOR_SPACE_HDR10_HLG_EXT (hlg version)
+        //      VK_COLOR_SPACE_ADOBERGB_LINEAR_EXT (linear version)
+        //      VK_COLOR_SPACE_PASS_THROUGH_EXT
+        //
+        // DXGI
+        //      (DXGI also allows for "studio" and "full" versions of most modes)
+        //      Also DXGI only has linear versions for PT709 primaries
+        //      DXGI_COLOR_SPACE_YCBCR_FULL_G22_NONE_P709_X601
+        //      DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P601
+        //      DXGI_COLOR_SPACE_YCBCR_FULL_G22_LEFT_P601
+        //      DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709
+        //      DXGI_COLOR_SPACE_YCBCR_FULL_G22_LEFT_P709
+        //      DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P2020
+        //      DXGI_COLOR_SPACE_YCBCR_FULL_G22_LEFT_P2020
+        //      DXGI_COLOR_SPACE_RGB_STUDIO_G22_NONE_P2020 (simple gamma version)
+        //      DXGI_COLOR_SPACE_YCBCR_STUDIO_G2084_LEFT_P2020
+        //      DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_TOPLEFT_P2020
+        //      DXGI_COLOR_SPACE_YCBCR_STUDIO_G2084_TOPLEFT_P2020
+        //      DXGI_COLOR_SPACE_YCBCR_STUDIO_GHLG_TOPLEFT_P2020 (hlg version)
+        //      DXGI_COLOR_SPACE_YCBCR_FULL_GHLG_TOPLEFT_P2020 (hlg version)
+        //      DXGI_COLOR_SPACE_RGB_STUDIO_G24_NONE_P709
+        //      DXGI_COLOR_SPACE_RGB_STUDIO_G24_NONE_P2020
+        //      DXGI_COLOR_SPACE_YCBCR_STUDIO_G24_LEFT_P709
+        //      DXGI_COLOR_SPACE_YCBCR_STUDIO_G24_LEFT_P2020
+        //      DXGI_COLOR_SPACE_YCBCR_STUDIO_G24_TOPLEFT_P2020
+        //
+        // CGColorSpace
+        //      kCGColorSpaceDisplayP3_HLG
+        //      kCGColorSpaceDisplayP3_PQ_EOTF
+        //      kCGColorSpaceExtendedLinearDisplayP3
+        //      kCGColorSpaceACESCGLinear
+        //      kCGColorSpaceDCIP3
+        //      kCGColorSpaceROMMRGB
+        //      kCGColorSpaceITUR_2020_HLG (hgl version)
+        //      kCGColorSpaceExtendedLinearITUR_2020 (linear version)
+    };
+
     class PresentationChainDesc
     {
     public:
         unsigned _width = 0u, _height = 0u;
         Format _format = Format(0);
+        PresentationColorSpace _colorSpace = PresentationColorSpace::SRGB_NonLinear;
         TextureSamples _samples = TextureSamples::Create();
         BindFlag::BitField _bindFlags = BindFlag::RenderTarget;
         bool _vsync = true;

@@ -2027,6 +2027,47 @@ namespace RenderCore { namespace ImplVulkan
         _globalsContainer = nullptr;
     }
 
+	static PresentationColorSpace AsPresentationColorSpace(VkColorSpaceKHR input)
+	{
+		switch (input) {
+		case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR: return PresentationColorSpace::SRGB_NonLinear;
+		case VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT: return PresentationColorSpace::DisplayP3_NonLinear;
+		case VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT: return PresentationColorSpace::SRGB_Linear;
+		case VK_COLOR_SPACE_BT709_NONLINEAR_EXT: return PresentationColorSpace::BT709_NonLinear;
+		case VK_COLOR_SPACE_HDR10_ST2084_EXT: return PresentationColorSpace::BT2020_NonLinear;
+		case VK_COLOR_SPACE_ADOBERGB_NONLINEAR_EXT: return PresentationColorSpace::Adobe_NonLinear;
+		case VK_COLOR_SPACE_DISPLAY_NATIVE_AMD: return PresentationColorSpace::FreeSyncDisplayNative;
+		case VK_COLOR_SPACE_DCI_P3_NONLINEAR_EXT: 
+		case VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT:
+		case VK_COLOR_SPACE_BT709_LINEAR_EXT:
+		case VK_COLOR_SPACE_BT2020_LINEAR_EXT:
+		case VK_COLOR_SPACE_DOLBYVISION_EXT:
+		case VK_COLOR_SPACE_HDR10_HLG_EXT:
+		case VK_COLOR_SPACE_ADOBERGB_LINEAR_EXT:
+		case VK_COLOR_SPACE_PASS_THROUGH_EXT:
+		case VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT:
+		default:
+			assert(0);
+		 	return PresentationColorSpace::SRGB_NonLinear;		// unknown
+		}
+	}
+
+	static VkColorSpaceKHR AsVkColorSpaceKHR(PresentationColorSpace input)
+	{
+		switch (input) {
+		case PresentationColorSpace::SRGB_NonLinear: return VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+		case PresentationColorSpace::BT709_NonLinear: return VK_COLOR_SPACE_BT709_NONLINEAR_EXT;
+		case PresentationColorSpace::BT2020_NonLinear: return VK_COLOR_SPACE_HDR10_ST2084_EXT;
+		case PresentationColorSpace::DisplayP3_NonLinear: return VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT;
+		case PresentationColorSpace::Adobe_NonLinear: return VK_COLOR_SPACE_ADOBERGB_NONLINEAR_EXT;
+		case PresentationColorSpace::SRGB_Linear: return VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT;
+		case PresentationColorSpace::FreeSyncDisplayNative: return VK_COLOR_SPACE_DISPLAY_NATIVE_AMD;
+		default:
+			assert(0);
+			return VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+		}
+	}
+
     struct SwapChainProperties
     {
         VkSurfaceFormatKHR				_fmt;
@@ -2056,20 +2097,16 @@ namespace RenderCore { namespace ImplVulkan
 		// can't be bound as a storage texture -- inconvenient if our tonemapper is a compute shader)
         result._fmt = {VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
 
-		const bool preferSRGBMarkedFormats = !(requestedDesc._bindFlags & BindFlag::UnorderedAccess);
+		const bool preferSRGBMarkedFormats =
+			!(requestedDesc._bindFlags & BindFlag::UnorderedAccess)
+			&& requestedDesc._colorSpace != PresentationColorSpace::SRGB_Linear
+			;
 
 		VkFormat vkPreferedFormat = preferSRGBMarkedFormats ? VK_FORMAT_B8G8R8A8_SRGB : VK_FORMAT_B8G8R8A8_UNORM;
 		if (requestedDesc._format != Format(0))
 			vkPreferedFormat = (VkFormat)Metal_Vulkan::AsVkFormat(requestedDesc._format);
 
-		// We don't have an XLE API for output colorspaces other than SRGB
-		VkColorSpaceKHR vkPreferedColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-
-		if (requestedDesc._format != Format(0))
-			vkPreferedColorSpace = 
-				(GetComponentType(requestedDesc._format) == FormatComponentType::UNorm_SRGB)
-				? VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
-				: VK_COLOR_SPACE_PASS_THROUGH_EXT;
+		VkColorSpaceKHR vkPreferedColorSpace = AsVkColorSpaceKHR(requestedDesc._colorSpace);
 
 		if (std::find_if(fmts.begin(), fmts.end(), [q=VkSurfaceFormatKHR{vkPreferedFormat, vkPreferedColorSpace}](const auto& c) { return c.format == q.format && c.colorSpace == q.colorSpace; }) != fmts.end())
 			result._fmt = {vkPreferedFormat, vkPreferedColorSpace};
@@ -2396,7 +2433,9 @@ namespace RenderCore { namespace ImplVulkan
 	static PresentationChainDesc AsPresentationChainDesc(const SwapChainProperties& props)
 	{
 		return {
-			props._extent.width, props._extent.height, Metal_Vulkan::AsFormat(props._fmt.format),
+			props._extent.width, props._extent.height,
+			Metal_Vulkan::AsFormat(props._fmt.format),
+			AsPresentationColorSpace(props._fmt.colorSpace),
 			TextureSamples::Create(),
 			props._bindFlags,
 			!(props._presentMode == VK_PRESENT_MODE_IMMEDIATE_KHR),
@@ -2406,7 +2445,7 @@ namespace RenderCore { namespace ImplVulkan
 
 	static bool operator==(const PresentationChainDesc& lhs, const PresentationChainDesc& rhs)
 	{
-		return lhs._width == rhs._width && lhs._height == rhs._height && lhs._format == rhs._format
+		return lhs._width == rhs._width && lhs._height == rhs._height && lhs._format == rhs._format && lhs._colorSpace == rhs._colorSpace
 			&& lhs._samples == rhs._samples && lhs._bindFlags == rhs._bindFlags
 			&& lhs._vsync == rhs._vsync && lhs._imageCount == rhs._imageCount;
 	}

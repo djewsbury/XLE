@@ -4,6 +4,7 @@
 
 #include "StandardLightScene.h"
 #include "../Format.h"
+#include "../ResourceDesc.h"
 #include "../Metal/Forward.h"		// for Metal::GraphicsPipeline
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/MemoryUtils.h"
@@ -16,17 +17,11 @@ namespace RenderCore { namespace LightingEngine
 {
 	class RenderStepFragmentInterface;
 
-	enum OutputColorSpace {
-		SRGB,
-		Rec709,			// Rec 709, BT.709 uses the same primaries as SRGB, but has a different monitor curve (without the linear part), and perhaps some other minor specification differences
-		/* potential alternative color primaries (p3, Rec2020, etc)*/
-	};
-
 	struct ToneMapAcesOperatorDesc
 	{
 		/// <summary>Color primaries written to output ColorLDR</summary>
 		/// Usually this is exposed to the user, because it should match however their monitor is calibrated
-		OutputColorSpace _outputColorSpace = OutputColorSpace::Rec709;
+		PresentationColorSpace _outputColorSpace = PresentationColorSpace::SRGB_NonLinear;
 
 		/// <summary>Pixel format for CoLorHDR (ie, pre-tonemapping light accumulation buffer)</summary>
 		/// Typical values: Format::R11G11B10_FLOAT, Format::R16G16B16A16_FLOAT, Format::R32G32B32A32_FLOAT
