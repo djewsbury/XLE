@@ -323,7 +323,7 @@ namespace RenderCore { namespace LightingEngine
             | (CompressToBits(_enableHierarchicalStepping, 1) << 11ull)
             ;
 
-        uint32_t value1 =
+        uint64_t value1 =
             CompressToBits(*reinterpret_cast<const unsigned*>(&_maxWorldSpaceDistance), 32)
             | (CompressToBits(*reinterpret_cast<const unsigned*>(&_thicknessHeuristicFactor), 32) << 32ull)
             ;

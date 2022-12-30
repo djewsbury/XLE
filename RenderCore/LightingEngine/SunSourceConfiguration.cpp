@@ -1008,7 +1008,7 @@ namespace RenderCore { namespace LightingEngine
         const float ratio0 = wsXYRange / wsDepthResolution;
         const float ratio1 = std::sqrt(wsXYRange*wsXYRange + wsXYRange*wsXYRange) / wsDepthResolution;
 
-        result._singleSidedBias._depthBias = result._doubleSidedBias._depthBias = (int)-settings._baseBias * std::ceil(ratio1);      // note -- negative for ReverseZ modes
+        result._singleSidedBias._depthBias = result._doubleSidedBias._depthBias = int(-settings._baseBias * std::ceil(ratio1));      // note -- negative for ReverseZ modes
         result._singleSidedBias._depthBiasClamp = result._doubleSidedBias._depthBiasClamp = 0.f;
         result._singleSidedBias._slopeScaledBias = result._doubleSidedBias._slopeScaledBias = settings._slopeScaledBias;
 
