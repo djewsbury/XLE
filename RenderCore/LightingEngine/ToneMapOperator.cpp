@@ -339,7 +339,7 @@ namespace RenderCore { namespace LightingEngine
 				"color-hdr"
 			});
 
-		const auto bloomTextureFormat = Format::B8G8R8A8_UNORM;
+		const auto bloomTextureFormat = Format::R10G10B10A2_UNORM;
 		_brightPassMipCountCount = 0;
 
 		if (_desc._maxLargeBloomRadius > 0.f || _desc._enableSmallBloom) {
@@ -392,7 +392,7 @@ namespace RenderCore { namespace LightingEngine
 		params._tonemapParams._preToneScale = Truncate(BuildPreToneScaleTransform());
 		params._tonemapParams._postToneScale = Truncate(BuildPostToneScaleTransform_SRGB());
 		params._brightPassParams._bloomDesaturationFactor = .5f;
-		params._brightPassParams._bloomThreshold = .8f;
+		params._brightPassParams._bloomThreshold = 2.0f;
 		params._brightPassParams.CalculateSmallBlurWeights(_brightPassSmallRadius);
 		params._brightPassParams._largeRadiusBrightness = Float4(1,1,1,1);
 		params._brightPassParams._smallRadiusBrightness = Float4(1,1,1,1);

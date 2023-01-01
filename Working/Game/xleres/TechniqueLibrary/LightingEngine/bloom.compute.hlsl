@@ -2,12 +2,14 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#pragma GCC diagnostic ignored "-Wconversion"		// the DirectXShaderCompiler might be ignoring these, unfortunately
+
 #include "xleres/Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
 #include "../Math/MathConstants.hlsl"
 
 Texture2D<float3>		HDRInput : register(t0, space0);
-RWTexture2D<float3>		HighResBlurTemp : register(u1, space0);
-RWTexture2D<float3>		MipChainUAV[8] : register(u2, space0);
+RWTexture2D<float4>		HighResBlurTemp : register(u1, space0);
+RWTexture2D<float4>		MipChainUAV[8] : register(u2, space0);
 Texture2D<float3>		MipChainSRV : register(t3, space0);
 SamplerState 			BilinearClamp : register(s6, space0);
 
@@ -32,8 +34,8 @@ float CalculateLuminance(float3 color)
 		//				luminance values. So perhaps we should use
 		//				a curve like this in this calculation.
 		//
-	const bool usePerceivedBrightness = true;
-	if (usePerceivedBrightness) {
+	const uint method = 2;
+	if (method == 1) {
 			//
 			//		See some interesting results from this "perceived brightness"
 			//		algorithm:
@@ -45,6 +47,11 @@ float CalculateLuminance(float3 color)
 			//
 		const float3 componentWeights = float3(0.299f, .587f, .114f);
 		return sqrt(max(0,dot(componentWeights, color*color)));		// negatives cause havok... we have to be careful!
+	} else if (method == 2) {
+		float r = color.r, g = color.g, b = color.b;
+		float chroma = sqrt(dot(color, float3(r-b, g-r, b-g)));
+		const float ycRadiusWeight = 1.75;
+  		return (ycRadiusWeight*chroma + color.b+color.g+color.r) / 3.0;
 	} else {
 		const float3 componentWeights = float3(0.2126f, 0.7152f, 0.0722f);
 		return dot(color, componentWeights);
@@ -53,9 +60,15 @@ float CalculateLuminance(float3 color)
 
 float3 BrightPassScale(float3 input)
 {
+	// We can calculate the bloom on each channel individually; but it tends to just create far too much
+	// saturation. It's better to bloom based on some luminance heuristic.
+	// There are more complicated calculations we can make here; but arguably the simple linear effect has a bit of charm to it
 	const float threshold = BloomThreshold;
-	return saturate(input/threshold - 1.0.xxx);
+	float a = CalculateLuminance(input) / threshold - 1.0;
+	return saturate(input * a);
 }
+
+float FastLuminance(float3 c) { return (c.x+c.y+c.z)*0.333333; }
 
 // #define USE_GEOMETRIC_MEAN 1
 
@@ -78,17 +91,22 @@ float3 BrightPassScale(float3 input)
 	float3 B = HDRInput.Load(uint3(pixelId.xy*2+twiddler.xy, 0)).rgb;
 	float3 C = HDRInput.Load(uint3(pixelId.xy*2+twiddler.yx, 0)).rgb;
 	float3 D = HDRInput.Load(uint3(pixelId.xy*2+twiddler.xx, 0)).rgb;
+
+	float3 bA = BrightPassScale(A);
+	float3 bB = BrightPassScale(B);
+	float3 bC = BrightPassScale(C);
+	float3 bD = BrightPassScale(D);
 	
-	float lA = CalculateLuminance(A);
-	float lB = CalculateLuminance(B);
-	float lC = CalculateLuminance(C);
-	float lD = CalculateLuminance(D);
+	float lA = FastLuminance(bA);
+	float lB = FastLuminance(bB);
+	float lC = FastLuminance(bC);
+	float lD = FastLuminance(bD);
 
 	// desaturate a bit
-	A = lerp(A, lA.xxx, BloomDesaturationFactor);
-	B = lerp(B, lB.xxx, BloomDesaturationFactor);
-	C = lerp(C, lC.xxx, BloomDesaturationFactor);
-	D = lerp(D, lD.xxx, BloomDesaturationFactor);
+	bA = lerp(bA, lA.xxx, BloomDesaturationFactor);
+	bB = lerp(bB, lB.xxx, BloomDesaturationFactor);
+	bC = lerp(bC, lC.xxx, BloomDesaturationFactor);
+	bD = lerp(bD, lD.xxx, BloomDesaturationFactor);
 
 	float3 outputColor;
 	#if !USE_GEOMETRIC_MEAN
@@ -99,22 +117,22 @@ float3 BrightPassScale(float3 input)
 		float wD = 1.0 / (lD + 1.0);
 
 		outputColor = (
-			  BrightPassScale(A) * wA
-			+ BrightPassScale(B) * wB
-			+ BrightPassScale(C) * wC
-			+ BrightPassScale(D) * wD
+			  bA * wA
+			+ bB * wB
+			+ bC * wC
+			+ bD * wD
 			) / (wA + wB + wC + wD);
 	#else
 		const float tinyValue = 1e-5f;
 		outputColor = (
-			  log(max(BrightPassScale(A), tinyValue.xxx))
-			+ log(max(BrightPassScale(B), tinyValue.xxx))
-			+ log(max(BrightPassScale(C), tinyValue.xxx))
-			+ log(max(BrightPassScale(D), tinyValue.xxx))
+			  log(max(bA, tinyValue.xxx))
+			+ log(max(bB, tinyValue.xxx))
+			+ log(max(bC, tinyValue.xxx))
+			+ log(max(bD, tinyValue.xxx))
 			) / 4.0;
 	#endif
 
-	MipChainUAV[0][pixelId] = outputColor;
+	MipChainUAV[0][pixelId] = float4(outputColor, 1);
 }
 
 [[vk::push_constant]] struct ControlUniformsStruct
@@ -269,14 +287,14 @@ float3 UpsampleFilter_ComplexGaussianPrototype(uint2 pixelId, uint dstMipIndex, 
 			#else
 				filteredSample = exp(filteredSample) * BloomLargeRadiusBrightness.rgb;
 			#endif
-			filteredSample += HighResBlurTemp[pixelId]; // in the final upsample we merge in the small radius blur
+			filteredSample += HighResBlurTemp[pixelId].rgb; // in the final upsample we merge in the small radius blur
 		} else {
-			filteredSample += MipChainUAV[mipIndex][pixelId];
+			filteredSample += MipChainUAV[mipIndex][pixelId].rgb;
 			filteredSample *= BloomLargeRadiusBrightness.rgb;
 		}
-		MipChainUAV[mipIndex][pixelId] = filteredSample;
+		MipChainUAV[mipIndex][pixelId] = float4(filteredSample, 1);
 	} else {
-		MipChainUAV[mipIndex][pixelId] += filteredSample;
+		MipChainUAV[mipIndex][pixelId] = float4(MipChainUAV[mipIndex][pixelId].rgb + filteredSample, 1);
 	}
 }
 
@@ -319,8 +337,8 @@ uint FastMipChain_GetThreadGroupCount() { return ControlUniforms.B.x; }
 	// SpdLoad() takes a 32-bit signed integer 2D coordinate and loads color.
 	// Loads the 5th mip level, each value is computed by a different thread group
 	// last thread group will access all its elements and compute the subsequent mips
-	AF4 SpdLoad(ASU2 tex){return AF4(MipChainUAV[1+5][tex], 1);}
-	void SpdStore(ASU2 pix, AF4 value, AU1 index){MipChainUAV[1+index][pix] = value;}
+	AF4 SpdLoad(ASU2 tex){return AF4(MipChainUAV[1+5][tex].rgb, 1);}
+	void SpdStore(ASU2 pix, AF4 value, AU1 index){MipChainUAV[1+index][pix] = float4(value.xyz, 1);}
 
 	// Define the LDS load and store functions
 	AF4 SpdLoadIntermediate(AU1 x, AU1 y){return spd_intermediate[x][y];}
@@ -345,7 +363,7 @@ uint FastMipChain_GetThreadGroupCount() { return ControlUniforms.B.x; }
 	AH4 SpdLoadH(ASU2 tex){return AH4(MipChainUAV[1+5][tex].rgb, 1);}
 
 	// Define the store function
-	void SpdStoreH(ASU2 pix, AH4 value, AU1 index){MipChainUAV[1+index][pix] = AF4(value);}
+	void SpdStoreH(ASU2 pix, AH4 value, AU1 index){MipChainUAV[1+index][pix] = AF4(value.xyz, 1);}
 
 	// Define the lds load and store functions
 	AH4 SpdLoadIntermediateH(AU1 x, AU1 y){return spd_intermediate[x][y];}

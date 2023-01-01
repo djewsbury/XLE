@@ -46,7 +46,7 @@ float3 ToneMapAces(float3 x)
 #else
 	Texture2D<float3> HDRInput;
 #endif
-RWTexture2D<float3> LDROutput;		// output could be >8 bit depth, of course, but we're expecting smaller range than the input
+RWTexture2D<float4> LDROutput;		// output could be >8 bit depth, of course, but we're expecting smaller range than the input
 
 #if HAS_BRIGHT_PASS
 Texture2D<float3> BrightPass;
@@ -114,6 +114,6 @@ float3 InvertMinimalToneMap(float3 y) 	{ return y/(1-y); }
 		#if HAS_BRIGHT_PASS
 			linearColour += BrightPassSample(pixelId.xy / float2(textureDims.xy), brightPassTexelSize);
 		#endif
-		LDROutput[pixelId] = LinearToSRGB_Formal(saturate(linearColour));
+		LDROutput[pixelId] = float4(LinearToSRGB_Formal(saturate(linearColour)), 1);
 	}
 }
