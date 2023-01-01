@@ -28,19 +28,19 @@ namespace RenderCore { namespace LightingEngine
 		Format _lightAccumulationBufferFormat = Format::R11G11B10_FLOAT;
 
 		/// <summary>Maximum radius for "large bloom" effect</summary>
-		/// Set _maxLargeBloomRadius to greater than 0.0 in order to enable the large bloom radius
+		/// Set _broadBloomMaxRadius to greater than 0.0 in order to enable the large bloom radius
 		/// 
 		/// We allow for 2 separate bloom operations (which can both be used at the same time)
 		/// This one is a large radius / soft bloom -- with this bloom, small highlights become very soft, but
 		/// bright pixels effect a larger area.
-		float _maxLargeBloomRadius = 0.f;
+		float _broadBloomMaxRadius = 0.f;
 
 		/// <summary>Enable the small bloom</summary>
 		/// This is the second bloom effect. It can be used instead of, or alongside the "large bloom" effect.
 		///
 		/// This one uses a more accurate blur over a much smaller radius. It can give a nice tight highlight around 
 		/// small details
-		bool _enableSmallBloom = false;
+		bool _enablePreciseBloom = false;
 
 		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
 	};
@@ -48,24 +48,24 @@ namespace RenderCore { namespace LightingEngine
 	class IBloom
 	{
 	public:
-		/// Using exact powers of 2 is recommended for the large radius
-		virtual void SetLargeRadius(float) = 0;
-		virtual float GetLargeRadius() const = 0;
-
-		virtual void SetSmallRadius(float) = 0;
-		virtual float SetSmallRadius() const = 0;
-
 		virtual void SetThreshold(float) = 0;
 		virtual float GetThreshold() const = 0;
 
 		virtual void SetDesaturationFactor(float) = 0;
 		virtual float GetDesaturationFactor() const = 0;
 
-		virtual void SetLargeBloomBrightness(Float3) = 0;
-		virtual Float3 GetLargeBloomBrightness() const = 0;
+		/// Using exact powers of 2 is recommended for the large radius
+		virtual void SetBroadRadius(float) = 0;
+		virtual float GetBroadRadius() const = 0;
 
-		virtual void SetSmallBloomBrightness(Float3) = 0;
-		virtual Float3 GetSmallBloomBrightness() const = 0;
+		virtual void SetPreciseRadius(float) = 0;
+		virtual float GetPreciseRadius() const = 0;
+
+		virtual void SetBroadBrightness(Float3) = 0;
+		virtual Float3 GetBroadBrightness() const = 0;
+
+		virtual void SetPreciseBrightness(Float3) = 0;
+		virtual Float3 GetPreciseBrightness() const = 0;
 
 		virtual ~IBloom();
 	};
@@ -119,18 +119,18 @@ namespace RenderCore { namespace LightingEngine
 		float _brightPassSmallRadius = 1.f;
 
 		// IBloom interface
-		void SetLargeRadius(float) override;
-		float GetLargeRadius() const override;
-		void SetSmallRadius(float) override;
-		float SetSmallRadius() const override;
+		void SetBroadRadius(float) override;
+		float GetBroadRadius() const override;
+		void SetPreciseRadius(float) override;
+		float GetPreciseRadius() const override;
 		void SetThreshold(float) override;
 		float GetThreshold() const override;
 		void SetDesaturationFactor(float) override;
 		float GetDesaturationFactor() const override;
-		void SetLargeBloomBrightness(Float3) override;
-		Float3 GetLargeBloomBrightness() const override;
-		void SetSmallBloomBrightness(Float3) override;
-		Float3 GetSmallBloomBrightness() const override;
+		void SetBroadBrightness(Float3) override;
+		Float3 GetBroadBrightness() const override;
+		void SetPreciseBrightness(Float3) override;
+		Float3 GetPreciseBrightness() const override;
 	};
 
 	class CopyToneMapOperator : public std::enable_shared_from_this<CopyToneMapOperator>

@@ -127,7 +127,7 @@ namespace RenderCore { namespace LightingEngine
 				Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
 				Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
 
-			if (_desc._enableSmallBloom) {
+			if (_desc._enablePreciseBloom) {
 				const unsigned blockSize = 16;
 				encoder.Dispatch(
 					*_gaussianFilter,
@@ -136,7 +136,7 @@ namespace RenderCore { namespace LightingEngine
 					1);
 			}
 
-			if (_desc._maxLargeBloomRadius > 0.f) {
+			if (_desc._broadBloomMaxRadius > 0.f) {
 
 				unsigned upsampleCount = unsigned(std::log2(_brightPassLargeRadius) - 1.f);		// see below for calculation
 				upsampleCount = std::min(upsampleCount, _brightPassMipCountCount - 1);
@@ -223,7 +223,7 @@ namespace RenderCore { namespace LightingEngine
 					*brightPassMipChainSRV->GetResource(), TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
 					Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
 					Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
-			} else if (_desc._enableSmallBloom) {
+			} else if (_desc._enablePreciseBloom) {
 				Metal::BarrierHelper{metalContext}.Add(
 					*brightPassHighResBlurWorkingUAV->GetResource(),
 					Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
@@ -239,7 +239,7 @@ namespace RenderCore { namespace LightingEngine
 			ResourceViewStream uniforms {
 				hdrInput, ldrOutput,
 				*_params[_paramsBufferCounter],
-				*((_desc._maxLargeBloomRadius > 0.f) ? brightPassMipChainSRV : brightPassHighResBlurWorkingSRV)
+				*((_desc._broadBloomMaxRadius > 0.f) ? brightPassMipChainSRV : brightPassHighResBlurWorkingSRV)
 			};
 			_toneMap->Dispatch(
 				parsingContext,
@@ -264,7 +264,7 @@ namespace RenderCore { namespace LightingEngine
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState().FinalState(BindFlag::RenderTarget), BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard());
 		unsigned brightPassMipChainSRVIdx = ~0u, brightPassMipChainUAVIdx = ~0u, brightPassHighResBlurWorkingUAVIdx = ~0u, brightPassHighResBlurWorkingSRVIdx = ~0u;
-		if (_desc._maxLargeBloomRadius > 0.f || _desc._enableSmallBloom) {
+		if (_desc._broadBloomMaxRadius > 0.f || _desc._enablePreciseBloom) {
 			auto brightPassMipChain = result.DefineAttachment("brightpass-working"_h).NoInitialState().Discard();
 			{
 				TextureViewDesc view;
@@ -279,7 +279,7 @@ namespace RenderCore { namespace LightingEngine
 				if (c == 0) brightPassMipChainUAVIdx = idx;
 			}
 		}
-		if (_desc._enableSmallBloom) {
+		if (_desc._enablePreciseBloom) {
 			auto highResBlur = result.DefineAttachment("brightpass-highres-blur-working"_h).NoInitialState().Discard();
 			brightPassHighResBlurWorkingUAVIdx = spDesc.AppendNonFrameBufferAttachmentView(highResBlur, BindFlag::UnorderedAccess);
 			brightPassHighResBlurWorkingSRVIdx = spDesc.AppendNonFrameBufferAttachmentView(highResBlur, BindFlag::ShaderResource);
@@ -342,14 +342,14 @@ namespace RenderCore { namespace LightingEngine
 		const auto bloomTextureFormat = Format::R10G10B10A2_UNORM;
 		_brightPassMipCountCount = 0;
 
-		if (_desc._maxLargeBloomRadius > 0.f || _desc._enableSmallBloom) {
+		if (_desc._broadBloomMaxRadius > 0.f || _desc._enablePreciseBloom) {
 
 			// We're using "tent" weights at each mip level as we upsample
 			// If we say that our filter is radius=2 (somewhat arbitrarily), then that 
 			// radius effectively doubles every time we upsample. So the final radius is 2^(1+upsample steps)
 			// mip count = upsample steps + 1, so therefor:
 
-			auto radiusFactor = (_desc._maxLargeBloomRadius > 0.f) ? (std::log2(_desc._maxLargeBloomRadius)) : 1.f;
+			auto radiusFactor = (_desc._broadBloomMaxRadius > 0.f) ? (std::log2(_desc._broadBloomMaxRadius)) : 1.f;
 			_brightPassMipCountCount = (unsigned)radiusFactor;
 			_brightPassMipCountCount = std::min(IntegerLog2(std::max(fbSize[0], fbSize[1])) - 1, _brightPassMipCountCount);
 			_brightPassMipCountCount = std::min(_brightPassMipCountCount, s_shaderMipChainUniformCount);
@@ -364,7 +364,7 @@ namespace RenderCore { namespace LightingEngine
 				});
 		}
 
-		if (_desc._enableSmallBloom) {
+		if (_desc._enablePreciseBloom) {
 			stitchingContext.DefineAttachment(
 				Techniques::PreregisteredAttachment {
 					"brightpass-highres-blur-working"_h,
@@ -384,9 +384,9 @@ namespace RenderCore { namespace LightingEngine
 	{
 		_pool = std::move(pipelinePool);
 
-		if (_desc._maxLargeBloomRadius > 0.f) _desc._maxLargeBloomRadius = std::max(_desc._maxLargeBloomRadius, 4.f);
-		_brightPassLargeRadius = std::min(1.f, _desc._maxLargeBloomRadius);
-		_brightPassSmallRadius = _desc._enableSmallBloom ? 3.5f : 0.f;
+		if (_desc._broadBloomMaxRadius > 0.f) _desc._broadBloomMaxRadius = std::max(_desc._broadBloomMaxRadius, 4.f);
+		_brightPassLargeRadius = std::min(1.f, _desc._broadBloomMaxRadius);
+		_brightPassSmallRadius = _desc._enablePreciseBloom ? 3.5f : 0.f;
 		_paramsData.resize(sizeof(AllParams));
 		auto& params = *(AllParams*)_paramsData.data();
 		params._tonemapParams._preToneScale = Truncate(BuildPreToneScaleTransform());
@@ -445,7 +445,7 @@ namespace RenderCore { namespace LightingEngine
 					toneMapUsi.BindResourceView(2, "Params"_h);
 					toneMapUsi.BindResourceView(3, "BrightPass"_h);
 
-					bool hasBrightPass = strongThis->_desc._enableSmallBloom || (strongThis->_desc._maxLargeBloomRadius > 0.f);
+					bool hasBrightPass = strongThis->_desc._enablePreciseBloom || (strongThis->_desc._broadBloomMaxRadius > 0.f);
 					ParameterBox toneMapParameters;
 					toneMapParameters.SetParameter("HAS_BRIGHT_PASS", hasBrightPass ? 1 : 0);
 					toneMapParameters.SetParameter("HDR_INPUT_SAMPLE_COUNT", strongThis->_samples._sampleCount);
@@ -542,21 +542,21 @@ namespace RenderCore { namespace LightingEngine
 			});
 	}
 
-	void ToneMapAcesOperator::SetLargeRadius(float radius)
+	void ToneMapAcesOperator::SetBroadRadius(float radius)
 	{
-		if (_desc._maxLargeBloomRadius <= 0.f)
+		if (_desc._broadBloomMaxRadius <= 0.f)
 			Throw(std::runtime_error("Cannot set large bloom radius because this feature was disabled in the operator desc"));
-		_brightPassLargeRadius = std::clamp(radius, 4.f, _desc._maxLargeBloomRadius);
+		_brightPassLargeRadius = std::clamp(radius, 4.f, _desc._broadBloomMaxRadius);
 	}
 
-	float ToneMapAcesOperator::GetLargeRadius() const
+	float ToneMapAcesOperator::GetBroadRadius() const
 	{
 		return _brightPassLargeRadius;
 	}
 
-	void ToneMapAcesOperator::SetSmallRadius(float radius)
+	void ToneMapAcesOperator::SetPreciseRadius(float radius)
 	{
-		if (_desc._maxLargeBloomRadius <= 0.f)
+		if (_desc._broadBloomMaxRadius <= 0.f)
 			Throw(std::runtime_error("Cannot set small bloom radius because this feature was disabled in the operator desc"));
 		_brightPassSmallRadius = radius;
 		auto& params = *(AllParams*)_paramsData.data();
@@ -564,14 +564,14 @@ namespace RenderCore { namespace LightingEngine
 		_paramsBufferCopyCountdown = dimof(_params);
 	}
 
-	float ToneMapAcesOperator::SetSmallRadius() const
+	float ToneMapAcesOperator::GetPreciseRadius() const
 	{
 		return _brightPassSmallRadius;
 	}
 
 	void ToneMapAcesOperator::SetThreshold(float bloomThreshold)
 	{
-		if (_desc._maxLargeBloomRadius <= 0.f && !_desc._enableSmallBloom)
+		if (_desc._broadBloomMaxRadius <= 0.f && !_desc._enablePreciseBloom)
 			Throw(std::runtime_error("Cannot set bloom property because this feature was disabled in the operator desc"));
 		auto& params = *(AllParams*)_paramsData.data();
 		params._brightPassParams._bloomThreshold = bloomThreshold;
@@ -586,7 +586,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void ToneMapAcesOperator::SetDesaturationFactor(float desatFactor)
 	{
-		if (_desc._maxLargeBloomRadius <= 0.f && !_desc._enableSmallBloom)
+		if (_desc._broadBloomMaxRadius <= 0.f && !_desc._enablePreciseBloom)
 			Throw(std::runtime_error("Cannot set bloom property because this feature was disabled in the operator desc"));
 		auto& params = *(AllParams*)_paramsData.data();
 		params._brightPassParams._bloomDesaturationFactor = desatFactor;
@@ -599,31 +599,31 @@ namespace RenderCore { namespace LightingEngine
 		return params._brightPassParams._bloomDesaturationFactor;
 	}
 
-	void ToneMapAcesOperator::SetLargeBloomBrightness(Float3 brightness)
+	void ToneMapAcesOperator::SetBroadBrightness(Float3 brightness)
 	{
-		if (_desc._maxLargeBloomRadius <= 0.f)
+		if (_desc._broadBloomMaxRadius <= 0.f)
 			Throw(std::runtime_error("Cannot set bloom property because this feature was disabled in the operator desc"));
 		auto& params = *(AllParams*)_paramsData.data();
 		params._brightPassParams._largeRadiusBrightness = Expand(brightness, 1.f);
 		_paramsBufferCopyCountdown = dimof(_params);
 	}
 
-	Float3 ToneMapAcesOperator::GetLargeBloomBrightness() const
+	Float3 ToneMapAcesOperator::GetBroadBrightness() const
 	{
 		auto& params = *(AllParams*)_paramsData.data();
 		return Truncate(params._brightPassParams._largeRadiusBrightness);
 	}
 
-	void ToneMapAcesOperator::SetSmallBloomBrightness(Float3 brightness)
+	void ToneMapAcesOperator::SetPreciseBrightness(Float3 brightness)
 	{
-		if (!_desc._enableSmallBloom)
+		if (!_desc._enablePreciseBloom)
 			Throw(std::runtime_error("Cannot set bloom property because this feature was disabled in the operator desc"));
 		auto& params = *(AllParams*)_paramsData.data();
 		params._brightPassParams._smallRadiusBrightness = Expand(brightness, 1.f);
 		_paramsBufferCopyCountdown = dimof(_params);
 	}
 
-	Float3 ToneMapAcesOperator::GetSmallBloomBrightness() const
+	Float3 ToneMapAcesOperator::GetPreciseBrightness() const
 	{
 		auto& params = *(AllParams*)_paramsData.data();
 		return Truncate(params._brightPassParams._smallRadiusBrightness);
