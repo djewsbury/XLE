@@ -42,7 +42,9 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     TRY {
 		auto mnt0 = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS("Game/xleres", ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
-        Sample::ExecuteSample(std::make_shared<Sample::NativeModelViewerOverlay>());
+        Sample::SampleConfiguration cfg;
+        cfg._presentationChainBindFlags = RenderCore::BindFlag::UnorderedAccess;
+        Sample::ExecuteSample(std::make_shared<Sample::NativeModelViewerOverlay>(), cfg);
         ::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt0);
     } CATCH (const std::exception& e) {
         Log(Error) << "Hit top level exception. Aborting program!" << std::endl;
