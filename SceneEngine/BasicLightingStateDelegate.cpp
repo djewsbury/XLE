@@ -21,8 +21,8 @@
 #include "../Utility/Streams/FormatterUtils.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/Conversion.h"
-// #include "../Utility/Meta/AccessorSerialize.h"
-// #include "../Utility/Meta/ClassAccessors.h"
+
+using namespace Utility::Literals;
  
 namespace SceneEngine
 {
@@ -38,8 +38,8 @@ namespace SceneEngine
         std::vector<RenderCore::LightingEngine::ILightScene::LightSourceId> _lightSources;
         void UpdateLights(RenderCore::LightingEngine::ILightScene& lightScene)
         {
-            static float cutoffRadius = 7.5f;
-            static float swirlingRadius = 15.0f;
+            const float cutoffRadius = _desc._cutoffRadius;
+            const float swirlingRadius = _desc._swirlingRadius;
             float startingAngle = 0.f + _time;
             const auto tileLightCount = _lightSources.size();
             for (unsigned c=0; c<tileLightCount; ++c) {
@@ -74,10 +74,10 @@ namespace SceneEngine
 
         void BindScene(RenderCore::LightingEngine::ILightScene& lightScene)
         {
+            if (!_desc._lightCount) return;
             assert(_operatorId != ~0u);
             assert(_lightSources.empty());
-            const auto tileLightCount = 32u;
-            for (unsigned c=0; c<tileLightCount; ++c) {
+            for (unsigned c=0; c<_desc._lightCount; ++c) {
                 auto lightId = lightScene.CreateLightSource(_operatorId);
                 _lightSources.push_back(lightId);
             }
@@ -92,18 +92,23 @@ namespace SceneEngine
 
         void        BindCfg(MergedLightingEngineCfg& cfg)
         {
-            RenderCore::LightingEngine::LightSourceOperatorDesc opDesc;
-            opDesc._shape = RenderCore::LightingEngine::LightSourceShape::Sphere;
-            _operatorId = cfg.Register(opDesc);
+            if (_desc._lightCount) {
+                RenderCore::LightingEngine::LightSourceOperatorDesc opDesc;
+                opDesc._shape = RenderCore::LightingEngine::LightSourceShape::Sphere;
+                _operatorId = cfg.Register(opDesc);
+            }
         }
 
-        SwirlingPointLights()
+        SwirlingPointLights(const SwirlingLightsOperatorDesc& desc = {}) : _desc(desc)
         {
             _time = 0.f;
         }
         float _time;
         unsigned _operatorId = ~0u;
+        SwirlingLightsOperatorDesc _desc;
     };
+
+    static bool SetProperty(SwirlingLightsOperatorDesc&, uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
 
     class BasicLightingStateDelegate : public ILightingStateDelegate
     {
@@ -137,6 +142,7 @@ namespace SceneEngine
             ParameterBox _parameters;
         };
         std::vector<PendingLightSource> _lightSourcesInCfgFile;
+        ParameterBox _bloomPropertiesInCfgFile;
 
         std::vector<unsigned> _lightSourcesInBoundScene;
 
@@ -163,10 +169,10 @@ namespace SceneEngine
     {
     }
 
-    void        BasicLightingStateDelegate::BindScene(RenderCore::LightingEngine::ILightScene& lightScene, std::shared_ptr<::Assets::OperationContext> operationContext)
+    void        BasicLightingStateDelegate::BindScene(
+        RenderCore::LightingEngine::ILightScene& lightScene,
+        std::shared_ptr<::Assets::OperationContext> operationContext)
     {
-        const ParameterBox::ParameterName SkyTexture = "SkyTexture";
-
         std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::LightSourceId>> lightNameToId;
 
         for (const auto&light:_lightSourcesInCfgFile) {
@@ -188,9 +194,8 @@ namespace SceneEngine
                 _lightSourcesInBoundScene.push_back(newLight);
 
                 auto* distanceIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IDistantIBLSource>(newLight);
-                if (distanceIBL) {
-                    distanceIBL->SetEquirectangularSource(operationContext, light._parameters.GetParameterAsString(SkyTexture).value());
-                }
+                if (distanceIBL)
+                    distanceIBL->SetEquirectangularSource(operationContext, light._parameters.GetParameterAsString("SkyTexture"_h).value());
                 continue;
             }
         }
@@ -213,6 +218,11 @@ namespace SceneEngine
             RenderCore::LightingEngine::SetupSunSourceShadows(
                 lightScene, lightId->second, sunSource.second);
         }
+
+        if (_bloomPropertiesInCfgFile.GetCount() != 0)
+            if (auto* bloom = query_interface_cast<RenderCore::LightingEngine::IBloom*>(&lightScene))
+                for (auto p:_bloomPropertiesInCfgFile)
+                    SetProperty(*bloom, p.HashName(), p.RawValue(), p.Type());
 
         _swirlingLights.BindScene(lightScene);
     }
@@ -248,12 +258,36 @@ namespace SceneEngine
             _sunSourceHashToShadowOperatorId.emplace_back(c.first, cfg.Register(shadowOperator));
         }
 
-        _swirlingLights.BindCfg(cfg);
-
         if (!_operatorResolveContext._ambientOperators._objects.empty()) {
-            cfg.SetAmbientOperator(_operatorResolveContext._ambientOperators._objects[0].second);
+            if (_operatorResolveContext._ambientOperators._objects.size() != 1)
+                Throw(std::runtime_error("Only one ambient operator allowed in BasicLightingStateDelegate configuration file"));
+
+            cfg.SetOperator(_operatorResolveContext._ambientOperators._objects[0].second);
             _ambientOperator = _operatorResolveContext._ambientOperators._objects[0].first;
         }
+
+        if (!_operatorResolveContext._toneMapAcesOperators._objects.empty()) {
+            if (_operatorResolveContext._toneMapAcesOperators._objects.size() != 1)
+                Throw(std::runtime_error("Only one tonemap operator allowed in BasicLightingStateDelegate configuration file"));
+
+            cfg.SetOperator(_operatorResolveContext._toneMapAcesOperators._objects[0].second);
+        }
+
+        if (!_operatorResolveContext._forwardLightingOperators._objects.empty()) {
+            if (_operatorResolveContext._forwardLightingOperators._objects.size() != 1)
+                Throw(std::runtime_error("Only one forward lighting operator allowed in BasicLightingStateDelegate configuration file"));
+
+            cfg.SetOperator(_operatorResolveContext._forwardLightingOperators._objects[0].second);
+        }
+
+        if (!_operatorResolveContext._multiSampleOperators._objects.empty()) {
+            if (_operatorResolveContext._multiSampleOperators._objects.size() != 1)
+                Throw(std::runtime_error("Only one multisample operator allowed in BasicLightingStateDelegate configuration file"));
+
+            cfg.SetOperator(_operatorResolveContext._multiSampleOperators._objects[0].second);
+        }
+
+        _swirlingLights.BindCfg(cfg);
 
         std::sort(_lightOperatorHashToId.begin(), _lightOperatorHashToId.end(), CompareFirst<uint64_t, unsigned>());
         std::sort(_shadowOperatorHashToId.begin(), _shadowOperatorHashToId.end(), CompareFirst<uint64_t, unsigned>());
@@ -315,6 +349,17 @@ namespace SceneEngine
                 if (!associatedLight.IsEmpty() && hashName.has_value())
                     _shadowToAssociatedLight.emplace_back(hashName.value(), Hash64(associatedLight));
 
+            } else if (XlEqString(keyname, "Bloom")) {
+
+                RequireBeginElement(formatter);
+                StringSection<> keyname;
+                while (formatter.TryKeyedItem(keyname)) {
+                    ImpliedTyping::TypeDesc typeDesc;
+                    auto data = RequireRawValue(formatter, typeDesc);
+                    _bloomPropertiesInCfgFile.SetParameter(keyname, data, typeDesc);
+                }
+                RequireEndElement(formatter);
+
             } else {
                 SkipValueOrElement(formatter);
             }
@@ -346,6 +391,17 @@ namespace SceneEngine
                 RequireBeginElement(formatter);
                 DeserializeLightSources(formatter);
                 RequireEndElement(formatter);
+            } else if (XlEqString(keyname, "SwirlingLights")) {
+                RequireBeginElement(formatter);
+                SwirlingLightsOperatorDesc opDesc;
+                uint64_t keyname;
+                while (formatter.TryKeyedItem(keyname)) {
+                    ImpliedTyping::TypeDesc typeDesc;
+                    auto value = RequireRawValue(formatter, typeDesc);
+                    SetProperty(opDesc, keyname, value, typeDesc);
+                }
+                RequireEndElement(formatter);
+                _swirlingLights = opDesc;
             } else
                 formatter.SkipValueOrElement();
         }
@@ -362,37 +418,6 @@ namespace SceneEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if 0
-    LightDesc::LightDesc()
-    {
-        _orientation = Identity<Float3x3>();
-		_position = Float3{0, 1, 0};
-		_radii = Float2{0, 0};
-
-        _cutoffBrightness = 0.01f;
-        _brightness = Float3{1,1,1};
-		_diffuseWideningMin = 1.0f;
-		_diffuseWideningMax = 1.0f;
-
-        _shape = RenderCore::LightingEngine::LightSourceShape::Directional;
-        _diffuseModel = RenderCore::LightingEngine::DiffuseModel::Disney;
-        _isDominantLight = false;
-    }
-
-    EnvironmentalLightingDesc DefaultEnvironmentalLightingDesc()
-    {
-        EnvironmentalLightingDesc result;
-        result._ambientLight = Float3(0.f, 0.f, 0.f);
-        result._skyTexture = "xleres/defaultresources/sky/samplesky2.dds";
-        result._diffuseIBL = "xleres/defaultresources/sky/samplesky2_diffuse.dds";
-        result._specularIBL = "xleres/defaultresources/sky/samplesky2_specular.dds";
-        result._skyTextureType = RenderCore::LightingEngine::SkyTextureType::Cube;
-        result._skyReflectionScale = 1.f;
-        result._doAtmosphereBlur = false;
-        return result;
-    }
-#endif
-
     RenderCore::LightingEngine::SunSourceFrustumSettings DefaultSunSourceFrustumSettings()
     {
         RenderCore::LightingEngine::SunSourceFrustumSettings result;
@@ -403,94 +428,6 @@ namespace SceneEngine
         result._textureSize = 2048;
         return result;
     }
-
-#if 0
-    static ParameterBox::ParameterNameHash ParamHash(const char name[])
-    {
-        return ParameterBox::MakeParameterNameHash(name);
-    }
-
-    static Float3 AsFloat3Color(unsigned packedColor)
-    {
-        return Float3(
-            (float)((packedColor >> 16) & 0xff) / 255.f,
-            (float)((packedColor >>  8) & 0xff) / 255.f,
-            (float)(packedColor & 0xff) / 255.f);
-    }
-
-    RenderCore::LightingEngine::EnvironmentalLightingDesc MakeEnvironmentalLightingDesc(const ParameterBox& props)
-    {
-        static const auto ambientHash = ParamHash("AmbientLight");
-        static const auto ambientBrightnessHash = ParamHash("AmbientBrightness");
-
-        static const auto skyTextureHash = ParamHash("SkyTexture");
-        static const auto skyTextureTypeHash = ParamHash("SkyTextureType");
-        static const auto skyReflectionScaleHash = ParamHash("SkyReflectionScale");
-        static const auto skyReflectionBlurriness = ParamHash("SkyReflectionBlurriness");
-        static const auto skyBrightness = ParamHash("SkyBrightness");
-        static const auto diffuseIBLHash = ParamHash("DiffuseIBL");
-        static const auto specularIBLHash = ParamHash("SpecularIBL");
-
-        static const auto rangeFogInscatterHash = ParamHash("RangeFogInscatter");
-        static const auto rangeFogInscatterReciprocalScaleHash = ParamHash("RangeFogInscatterReciprocalScale");
-        static const auto rangeFogInscatterScaleHash = ParamHash("RangeFogInscatterScale");
-        static const auto rangeFogThicknessReciprocalScaleHash = ParamHash("RangeFogThicknessReciprocalScale");
-
-        static const auto atmosBlurStdDevHash = ParamHash("AtmosBlurStdDev");
-        static const auto atmosBlurStartHash = ParamHash("AtmosBlurStart");
-        static const auto atmosBlurEndHash = ParamHash("AtmosBlurEnd");
-
-        static const auto flagsHash = ParamHash("Flags");
-
-            ////////////////////////////////////////////////////////////
-
-        RenderCore::LightingEngine::EnvironmentalLightingDesc result;
-        result._ambientLight = props.GetParameter(ambientBrightnessHash, 1.f) * AsFloat3Color(props.GetParameter(ambientHash, ~0x0u));
-        result._skyReflectionScale = props.GetParameter(skyReflectionScaleHash, result._skyReflectionScale);
-        result._skyReflectionBlurriness = props.GetParameter(skyReflectionBlurriness, result._skyReflectionBlurriness);
-        result._skyBrightness = props.GetParameter(skyBrightness, result._skyBrightness);
-        result._skyTextureType = (RenderCore::LightingEngine::SkyTextureType)props.GetParameter(skyTextureTypeHash, unsigned(result._skyTextureType));
-
-        float inscatterScaleScale = 1.f / std::max(1e-5f, props.GetParameter(rangeFogInscatterReciprocalScaleHash, 1.f));
-        inscatterScaleScale = props.GetParameter(rangeFogInscatterScaleHash, inscatterScaleScale);
-        result._rangeFogInscatter = inscatterScaleScale * AsFloat3Color(props.GetParameter(rangeFogInscatterHash, 0));
-        result._rangeFogThickness = 1.f / std::max(1e-5f, props.GetParameter(rangeFogThicknessReciprocalScaleHash, 0.f));
-
-        result._atmosBlurStdDev = props.GetParameter(atmosBlurStdDevHash, result._atmosBlurStdDev);
-        result._atmosBlurStart = props.GetParameter(atmosBlurStartHash, result._atmosBlurStart);
-        result._atmosBlurEnd = std::max(result._atmosBlurStart, props.GetParameter(atmosBlurEndHash, result._atmosBlurEnd));
-
-        auto flags = props.GetParameter<unsigned>(flagsHash);
-        if (flags.has_value()) {
-            result._doAtmosphereBlur = !!(flags.value() & (1<<0));
-            result._doRangeFog = !!(flags.value() & (1<<1));
-        }
-
-        auto skyTexture = props.GetParameterAsString(skyTextureHash);
-        if (skyTexture.has_value())
-            result._skyTexture = skyTexture.value();
-        auto diffuseIBL = props.GetParameterAsString(diffuseIBLHash);
-        if (diffuseIBL.has_value())
-            result._diffuseIBL = diffuseIBL.value();
-        auto specularIBL = props.GetParameterAsString(specularIBLHash);
-        if (specularIBL.has_value())
-            result._specularIBL = specularIBL.value();
-
-		// If we don't have a diffuse IBL texture, or specular IBL texture, then attempt to build
-		// the filename from the sky texture
-		if ((result._diffuseIBL.empty() || result._specularIBL.empty()) && !result._skyTexture.empty()) {
-			auto splitter = MakeFileNameSplitter(result._skyTexture);
-
-			if (result._diffuseIBL.empty())
-				result._diffuseIBL = Concatenate(MakeStringSection(splitter.DriveAndPath().begin(), splitter.File().end()), "_diffuse", splitter.ExtensionWithPeriod());
-
-			if (result._specularIBL.empty())
-				result._specularIBL = Concatenate(MakeStringSection(splitter.DriveAndPath().begin(), splitter.File().end()), "_specular", splitter.ExtensionWithPeriod());
-		}
-
-        return result;
-    }
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -518,25 +455,62 @@ namespace SceneEngine
         return unsigned(_shadowHashes.size()-1);
     }
 
-    void MergedLightingEngineCfg::SetAmbientOperator(const RenderCore::LightingEngine::AmbientLightOperatorDesc& operatorDesc)
+    template<typename T> void MergedLightingEngineCfg::AddToOperatorList(T& op)
     {
-        _ambientOperator = operatorDesc;
+        if (_firstChainedOperator) {
+            auto* o = _firstChainedOperator;
+            while (o != &op && o->_next) o = const_cast<RenderCore::LightingEngine::ChainedOperatorDesc*>(o->_next);
+            if (o != &op) {
+                assert(!o->_next);
+                assert(!op._next);
+                o->_next = &op;
+            }
+        } else {
+            _firstChainedOperator = &op;
+        }
     }
+
+    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::AmbientLightOperatorDesc& operatorDesc)
+    { 
+        _ambientOperator._desc = operatorDesc;
+        AddToOperatorList(_ambientOperator);
+    }
+
+    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::ForwardLightingTechniqueDesc& operatorDesc)
+    {
+        _forwardLightingOperator._desc = operatorDesc;
+        AddToOperatorList(_forwardLightingOperator);
+    }
+
+    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::ToneMapAcesOperatorDesc& operatorDesc)
+    {
+        _toneMapAcesOperator._desc = operatorDesc;
+        AddToOperatorList(_toneMapAcesOperator);
+    }
+
+    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::MultiSampleOperatorDesc& operatorDesc)
+    {
+        _msaaOperator._desc = operatorDesc;
+        AddToOperatorList(_msaaOperator);
+    }
+
+    MergedLightingEngineCfg::MergedLightingEngineCfg() = default;
+    MergedLightingEngineCfg::~MergedLightingEngineCfg() = default;
 
     std::future<void> IScene::PrepareForView(PrepareForViewContext& prepareContext) const { return {}; }
     IScene::~IScene() {}
     ISceneOverlay::~ISceneOverlay() {}
 
 
-    static const ParameterBox::ParameterName LocalToWorld = "LocalToWorld";
-    static const ParameterBox::ParameterName Position = "Position";
-    static const ParameterBox::ParameterName Radius = "Radius";
-    static const ParameterBox::ParameterName Brightness = "Brightness";
-    static const ParameterBox::ParameterName CutoffBrightness = "CutoffBrightness";
-    static const ParameterBox::ParameterName CutoffRange = "CutoffRange";
-    static const ParameterBox::ParameterName DiffuseWideningMin = "DiffuseWideningMin";
-    static const ParameterBox::ParameterName DiffuseWideningMax = "DiffuseWideningMax";
-    static const ParameterBox::ParameterName EquirectangularSource = "EquirectangularSource";
+    constexpr auto LocalToWorld = "LocalToWorld"_h;
+    constexpr auto Position = "Position"_h;
+    constexpr auto Radius = "Radius"_h;
+    constexpr auto Brightness = "Brightness"_h;
+    constexpr auto CutoffBrightness = "CutoffBrightness"_h;
+    constexpr auto CutoffRange = "CutoffRange"_h;
+    constexpr auto DiffuseWideningMin = "DiffuseWideningMin"_h;
+    constexpr auto DiffuseWideningMax = "DiffuseWideningMax"_h;
+    constexpr auto EquirectangularSource = "EquirectangularSource"_h;
 
     void InitializeLight(
         RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
@@ -611,14 +585,16 @@ namespace SceneEngine
         RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
     {
-        if (propertyNameHash == LocalToWorld._hash) {
+        switch (propertyNameHash) {
+        case LocalToWorld:
             if (auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId)) {
                 if (auto localToWorld = ConvertOrCast<Float3x4>(data, type)) {
                     positional->SetLocalToWorld(AsFloat4x4(localToWorld.value()));
                     return true;
                 }
             }
-        } else if (propertyNameHash == Position._hash) {
+            break;
+        case Position:
             if (auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId)) {
                 if (auto position = ConvertOrCast<Float3>(data, type)) {
                     Float4x4 localToWorld = positional->GetLocalToWorld();
@@ -627,7 +603,8 @@ namespace SceneEngine
                     return true;
                 }
             }
-        } else if (propertyNameHash == Radius._hash) {
+            break;
+        case Radius:
             if (auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId)) {
                 if (auto radius = ConvertOrCast<Float3>(data, type)) {
                     ScaleRotationTranslationM srt{positional->GetLocalToWorld()};
@@ -636,54 +613,107 @@ namespace SceneEngine
                     return true;
                 }
             }
-        } else if (propertyNameHash == Brightness._hash) {
+            break;
+        case Brightness:
             if (auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId)) {
                 if (auto brightness = ConvertOrCast<Float3>(data, type)) {
                     uniformEmittance->SetBrightness(brightness.value());
                     return true;
                 }
             }
-        } else if (propertyNameHash == DiffuseWideningMin._hash) {
+            break;
+        case DiffuseWideningMin:
             if (auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId)) {
                 if (auto wideningMin = ConvertOrCast<float>(data, type)) {
                     uniformEmittance->SetDiffuseWideningFactors({wideningMin.value(), uniformEmittance->GetDiffuseWideningFactors()[1]});
                     return true;
                 }
             }
-        } else if (propertyNameHash == DiffuseWideningMax._hash) {
+            break;
+        case DiffuseWideningMax:
             if (auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId)) {
                 if (auto wideningMax = ConvertOrCast<float>(data, type)) {
                     uniformEmittance->SetDiffuseWideningFactors({uniformEmittance->GetDiffuseWideningFactors()[0], wideningMax.value()});
                     return true;
                 }
             }
-        } else if (propertyNameHash == CutoffBrightness._hash) {
+            break;
+        case CutoffBrightness:
             if (auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId)) {
                 if (auto cutoffBrightness = ConvertOrCast<float>(data, type)) {
                     finite->SetCutoffBrightness(cutoffBrightness.value());
                     return true;
                 }
             }
-        } else if (propertyNameHash == CutoffRange._hash) {
+            break;
+        case CutoffRange:
             if (auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId)) {
                 if (auto cutoffRange = ConvertOrCast<float>(data, type)) {
                     finite->SetCutoffRange(cutoffRange.value());
                     return true;
                 }
             }
-        } else if (propertyNameHash == EquirectangularSource._hash) {
+            break;
+        case EquirectangularSource:
             if (auto* distantIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IDistantIBLSource>(sourceId)) {
                 auto src = ImpliedTyping::AsString(data, type);
                 distantIBL->SetEquirectangularSource(nullptr, src);     // todo -- Assets::OperationContext
             }
+            break;
         }
 
         return false;
     }
 
-    static const ParameterBox::ParameterName Shape = "Shape";
-    static const ParameterBox::ParameterName DiffuseModel = "DiffuseModel";
-    static const ParameterBox::ParameterName DominantLight = "DominantLight";
+    bool SetProperty(
+        RenderCore::LightingEngine::IBloom& bloom,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        switch (propertyNameHash) {
+        case "BroadRadius"_h:
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                bloom.SetBroadRadius(*value);
+                return true;
+            }
+            break;
+
+        case "PreciseRadius"_h:
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                bloom.SetPreciseRadius(*value);
+                return true;
+            }
+            break;
+
+        case "Threshold"_h:
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                bloom.SetThreshold(*value);
+                return true;
+            }
+            break;
+
+        case "Desaturation"_h:
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                bloom.SetDesaturationFactor(*value);
+                return true;
+            }
+            break;
+
+        case "BroadBrightness"_h:
+            if (auto value = ConvertOrCast<Float3>(data, type)) {
+                bloom.SetBroadBrightness(*value);
+                return true;
+            }
+            break;
+
+        case "PreciseBrightness"_h:
+            if (auto value = ConvertOrCast<Float3>(data, type)) {
+                bloom.SetPreciseBrightness(*value);
+                return true;
+            }
+            break;
+        }
+        return false;
+    }
 
     template<typename MemberType, std::optional<MemberType> StringToEnum(StringSection<>), typename ObjectType>
         static void SetViaEnumFn(ObjectType& dst, MemberType ObjectType::*ptrToMember, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
@@ -705,13 +735,14 @@ namespace SceneEngine
         uint64_t propertyNameHash, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
     {
         using namespace RenderCore::LightingEngine;
-        if (propertyNameHash == Shape._hash) {
+        switch (propertyNameHash) {
+        case "Shape"_h:
             SetViaEnumFn<LightSourceShape, AsLightSourceShape>(desc, &LightSourceOperatorDesc::_shape, data, type);
             return true;
-        } else if (propertyNameHash == DiffuseModel._hash) {
+        case "DiffuseModel"_h:
             SetViaEnumFn<RenderCore::LightingEngine::DiffuseModel, AsDiffuseModel>(desc, &LightSourceOperatorDesc::_diffuseModel, data, type);
             return true;
-        } else if (propertyNameHash == DominantLight._hash) {
+        case "DominantLight"_h:
             if (auto value = ConvertOrCast<unsigned>(data, type)) {
                 if (value.value()) {
                     desc._flags |= RenderCore::LightingEngine::LightSourceOperatorDesc::Flags::DominantLight;
@@ -720,60 +751,56 @@ namespace SceneEngine
                 }
                 return true;
             }
+            break;
         }
         return false;
     }
-
-    static const ParameterBox::ParameterName Format = "Format";
-    static const ParameterBox::ParameterName ResolveType = "ResolveType";
-    static const ParameterBox::ParameterName ProjectionMode = "ProjectionMode";
-    static const ParameterBox::ParameterName FilterModel = "FilterModel";
-    static const ParameterBox::ParameterName CullMode = "CullMode";
-    static const ParameterBox::ParameterName Dims = "Dims";
-    static const ParameterBox::ParameterName SlopeScaledBias = "SlopeScaledBias";
-    static const ParameterBox::ParameterName DepthBias = "DepthBias";
-    static const ParameterBox::ParameterName DepthBiasClamp = "DepthBiasClamp";
 
     bool SetProperty(
         RenderCore::LightingEngine::ShadowOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
     {
         using namespace RenderCore::LightingEngine;
-        if (propertyNameHash == Format._hash) {
+        switch (propertyNameHash) {
+        case "Format"_h:
             SetViaEnumFn<RenderCore::Format, RenderCore::AsFormat>(desc, &ShadowOperatorDesc::_format, data, type);
             return true;
-        } else if (propertyNameHash == ResolveType._hash) {
+        case "ResolveType"_h:
             SetViaEnumFn<ShadowResolveType, AsShadowResolveType>(desc, &ShadowOperatorDesc::_resolveType, data, type);
             return true;
-        } else if (propertyNameHash == ProjectionMode._hash) {
+        case "ProjectionMode"_h:
             SetViaEnumFn<ShadowProjectionMode, AsShadowProjectionMode>(desc, &ShadowOperatorDesc::_projectionMode, data, type);
             return true;
-        } else if (propertyNameHash == FilterModel._hash) {
+        case "FilterModel"_h:
             SetViaEnumFn<ShadowFilterModel, AsShadowFilterModel>(desc, &ShadowOperatorDesc::_filterModel, data, type);
             return true;
-        } else if (propertyNameHash == CullMode._hash) {
+        case "CullMode"_h:
             SetViaEnumFn<RenderCore::CullMode, RenderCore::AsCullMode>(desc, &ShadowOperatorDesc::_cullMode, data, type);
             return true;
-        } else if (propertyNameHash == Dims._hash) {
+        case "Dims"_h:
             if (auto dims = ConvertOrCast<uint32_t>(data, type)) {
                 desc._width = desc._height = dims.value();
                 return true;
             }
-        } else if (propertyNameHash == SlopeScaledBias._hash) {
+            break;
+        case "SlopeScaledBias"_h:
             if (auto slopeScaledBias = ConvertOrCast<float>(data, type)) {
                  desc._doubleSidedBias._slopeScaledBias = desc._singleSidedBias._slopeScaledBias = slopeScaledBias.value();
                  return true;
             }
-        } else if (propertyNameHash == DepthBias._hash) {
+            break;
+        case "DepthBias"_h:
             if (auto depthBias = ConvertOrCast<int>(data, type)) {
                 desc._doubleSidedBias._depthBias = desc._singleSidedBias._depthBias = depthBias.value();
                 return true;
             }
-        } else if (propertyNameHash == DepthBiasClamp._hash) {
+            break;
+        case "DepthBiasClamp"_h:
             if (auto depthBiasClamp = ConvertOrCast<float>(data, type)) {
                 desc._doubleSidedBias._depthBiasClamp = desc._singleSidedBias._depthBiasClamp = depthBiasClamp.value();
                 return true;
             }
+            break;
         }
 
         return true;
@@ -786,116 +813,117 @@ namespace SceneEngine
         return false;
     }
 
-    static const ParameterBox::ParameterName MaxCascadeCount = "MaxCascadeCount";
-    static const ParameterBox::ParameterName MaxDistanceFromCamera = "MaxDistanceFromCamera";
-    static const ParameterBox::ParameterName CascadeSizeFactor = "CascadeSizeFactor";
-    static const ParameterBox::ParameterName FocusDistance = "FocusDistance";
-    static const ParameterBox::ParameterName ResolutionScale = "ResolutionScale";
-    static const ParameterBox::ParameterName Flags = "Flags";
-    static const ParameterBox::ParameterName TextureSize = "TextureSize";
-    static const ParameterBox::ParameterName BlurAngleDegrees = "BlurAngleDegrees";
-    static const ParameterBox::ParameterName MinBlurSearch = "MinBlurSearch";
-    static const ParameterBox::ParameterName MaxBlurSearch = "MaxBlurSearch";
-    static const ParameterBox::ParameterName HighPrecisionDepths = "HighPrecisionDepths";
-    static const ParameterBox::ParameterName CasterDistanceExtraBias = "CasterDistanceExtraBias";
-    static const ParameterBox::ParameterName WorldSpaceResolveBias = "WorldSpaceResolveBias";
-    static const ParameterBox::ParameterName BaseBias = "BaseBias";
-    static const ParameterBox::ParameterName EnableContactHardening = "EnableContactHardening";
-
     bool SetProperty(
         RenderCore::LightingEngine::SunSourceFrustumSettings& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         static const unsigned s_staticMaxSubProjections = 6;
 
-        if (propertyNameHash == MaxCascadeCount._hash) {
+        switch (propertyNameHash) {
+        case "MaxCascadeCount"_h:
             if (auto value = ConvertOrCast<uint32_t>(data, type)) {
                 desc._maxFrustumCount = Clamp(value.value(), 1u, s_staticMaxSubProjections);
                 return true;
             }
-        } else if (propertyNameHash == MaxDistanceFromCamera._hash) {
+            break;
+        case "MaxDistanceFromCamera"_h:
             if (auto value = ConvertOrCast<float>(data, type)) {
                 desc._maxDistanceFromCamera = value.value();
                 return true;
             }
-        } else if (propertyNameHash == CascadeSizeFactor._hash) {
+            break;
+        case "CascadeSizeFactor"_h:
             if (auto value = ConvertOrCast<float>(data, type)) {
                 desc._frustumSizeFactor = value.value();
                 return true;
             }
-        } else if (propertyNameHash == FocusDistance._hash) {
+            break;
+        case "FocusDistance"_h:
             if (auto value = ConvertOrCast<float>(data, type)) {
                 desc._focusDistance = value.value();
                 return true;
             }
-        } else if (propertyNameHash == ResolutionScale._hash) {
+            break;
+        case "ResolutionScale"_h:
             if (auto value = ConvertOrCast<float>(data, type)) {
                 desc._resolutionScale = value.value();
                 return true;
             }
-        } else if (propertyNameHash == Flags._hash) {
+            break;
+        case "Flags"_h:
             if (auto value = ConvertOrCast<uint32_t>(data, type)) {
                 desc._flags = value.value();
                 return true;
             }
-        } else if (propertyNameHash == TextureSize._hash) {
+            break;
+        case "TextureSize"_h:
             if (auto value = ConvertOrCast<uint32_t>(data, type)) {
                 desc._textureSize = 1<<(IntegerLog2(value.value()-1)+1);  // ceil to a power of two
                 return true;
             }
-        } else if (propertyNameHash == BlurAngleDegrees._hash) {
+            break;
+        case "BlurAngleDegrees"_h:
             if (auto value = ConvertOrCast<float>(data, type)) {
                 desc._tanBlurAngle = XlTan(Deg2Rad(value.value()));
                 return true;
             }
-        } else if (propertyNameHash == MinBlurSearch._hash) {
+            break;
+        case "MinBlurSearch"_h:
             if (auto value = ConvertOrCast<float>(data, type)) {
                 desc._minBlurSearch = value.value();
                 return true;
             }
-        } else if (propertyNameHash == MaxBlurSearch._hash) {
+            break;
+        case "MaxBlurSearch"_h:
             if (auto value = ConvertOrCast<float>(data, type)) {
                 desc._maxBlurSearch = value.value();
                 return true;
             }
-        } else if (propertyNameHash == HighPrecisionDepths._hash) {
+            break;
+        case "HighPrecisionDepths"_h:
             if (auto value = ConvertOrCast<uint32_t>(data, type)) {
                 using Obj = RenderCore::LightingEngine::SunSourceFrustumSettings;
                 if (value.value()) desc._flags |= Obj::Flags::HighPrecisionDepths; 
                 else desc._flags &= ~Obj::Flags::HighPrecisionDepths; 
                 return true;
             }
-        } else if (propertyNameHash == CasterDistanceExtraBias._hash) {
+            break;
+        case "CasterDistanceExtraBias"_h:
             if (auto value = ConvertOrCast<float>(data, type)) {
                 desc._casterDistanceExtraBias = value.value();
                 return true;
             }
-        } else if (propertyNameHash == WorldSpaceResolveBias._hash) {
+            break;
+        case "WorldSpaceResolveBias"_h:
             if (auto value = ConvertOrCast<float>(data, type)) {
                 desc._worldSpaceResolveBias = value.value();
                 return true;
             }
-        } else if (propertyNameHash == SlopeScaledBias._hash) {
+            break;
+        case "SlopeScaledBias"_h:
             if (auto value = ConvertOrCast<float>(data, type)) {
                 desc._slopeScaledBias = value.value();
                 return true;
             }
-        } else if (propertyNameHash == BaseBias._hash) {
+            break;
+        case "BaseBias"_h:
             if (auto value = ConvertOrCast<float>(data, type)) {
                 desc._baseBias = value.value();
                 return true;
             }
-        } else if (propertyNameHash == EnableContactHardening._hash) {
+            break;
+        case "EnableContactHardening"_h:
             if (auto value = ConvertOrCast<bool>(data, type)) {
                 desc._enableContactHardening = value.value();
                 return true;
             }
-        } else if (propertyNameHash == FilterModel._hash) {
+            break;
+        case "FilterModel"_h:
             using namespace RenderCore::LightingEngine;
             using Obj = RenderCore::LightingEngine::SunSourceFrustumSettings;
             SetViaEnumFn<ShadowFilterModel, AsShadowFilterModel>(desc, &Obj::_filterModel, data, type);
             return true;
-        } else if (propertyNameHash == CullMode._hash) {
+        case "CullMode"_h:
             using Obj = RenderCore::LightingEngine::SunSourceFrustumSettings;
             SetViaEnumFn<RenderCore::CullMode, RenderCore::AsCullMode>(desc, &Obj::_cullMode, data, type);
             return true;
@@ -904,86 +932,96 @@ namespace SceneEngine
         return false;
     }
 
+    bool SetProperty(
+        RenderCore::LightingEngine::ForwardLightingTechniqueDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        // no properties yet
+        return false;
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::DeferredLightingTechniqueDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        // no properties yet
+        return false;
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::ToneMapAcesOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        switch (propertyNameHash) {
+        case "BroadBloomMaxRadius"_h:
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._broadBloomMaxRadius = *value;
+                return true;
+            }
+            break;
+
+        case "EnableBroadBloom"_h:
+            if (auto value = ConvertOrCast<bool>(data, type)) {
+                desc._broadBloomMaxRadius = *value ? 128.f : 0.f;
+                return true;
+            }
+            break;
+
+        case "EnablePreciseBloom"_h:
+            if (auto value = ConvertOrCast<bool>(data, type)) {
+                desc._enablePreciseBloom = *value;
+                return true;
+            }
+            break;
+        }
+        return false;
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::MultiSampleOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        switch (propertyNameHash) {
+        case "SampleCount"_h:
+            if (auto value = ConvertOrCast<unsigned>(data, type)) {
+                desc._samples._sampleCount = *value;
+                return true;
+            }
+            break;
+
+        case "SamplingQuality"_h:
+            if (auto value = ConvertOrCast<unsigned>(data, type)) {
+                desc._samples._samplingQuality = *value;
+                return true;
+            }
+            break;
+        }
+        return false;
+    }
+
+    bool SetProperty(SwirlingLightsOperatorDesc& desc, uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        switch (propertyNameHash) {
+        case "LightCount"_h:
+            if (auto value = ConvertOrCast<unsigned>(data, type)) {
+                desc._lightCount = *value;
+                return true;
+            }
+            break;
+        case "SwirlingRadius"_h:
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._swirlingRadius = *value;
+                return true;
+            }
+            break;
+        case "CutoffRadius"_h:
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._cutoffRadius = *value;
+                return true;
+            }
+            break;
+        }
+        return false;
+    }
+
 }
-
-#if 0
-
-namespace SceneEngine
-{
-    ToneMapSettings::ToneMapSettings() {}
-}
-
-template<> const ClassAccessors& Legacy_GetAccessors<SceneEngine::ToneMapSettings>()
-{
-    static ClassAccessors dummy(0);
-    return dummy;
-}
-
-#endif
-
-#if 0
-
-template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine::LightSourceOperatorDesc>()
-{
-	using Obj = RenderCore::LightingEngine::LightSourceOperatorDesc;
-	static ClassAccessors props(typeid(Obj).hash_code());
-	static bool init = false;
-	if (!init) {
-		AddStringToEnum<RenderCore::LightingEngine::LightSourceShape, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsLightSourceShape>(props, "Shape", &Obj::_shape);
-		AddStringToEnum<RenderCore::LightingEngine::DiffuseModel, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsDiffuseModel>(props, "DiffuseModel", &Obj::_diffuseModel);
-        props.Add(
-            "DominantLight",
-            [](const Obj& obj) { return !!(obj._flags & RenderCore::LightingEngine::LightSourceOperatorDesc::Flags::DominantLight); },
-            [](Obj& obj, uint32_t value) { 
-                if (value) {
-                    obj._flags |= RenderCore::LightingEngine::LightSourceOperatorDesc::Flags::DominantLight;
-                } else {
-                    obj._flags &= ~RenderCore::LightingEngine::LightSourceOperatorDesc::Flags::DominantLight;
-                }
-            });
-		init = true;
-	}
-	return props;
-}
-
-template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine::AmbientLightOperatorDesc>()
-{
-	using Obj = RenderCore::LightingEngine::AmbientLightOperatorDesc;
-	static ClassAccessors props(typeid(Obj).hash_code());
-	static bool init = false;
-	if (!init) {
-		init = true;
-	}
-	return props;
-}
-
-template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine::ShadowOperatorDesc>()
-{
-	using Obj = RenderCore::LightingEngine::ShadowOperatorDesc;
-	static ClassAccessors props(typeid(Obj).hash_code());
-	static bool init = false;
-	if (!init) {
-		AddStringToEnum<RenderCore::Format, RenderCore::AsString, RenderCore::AsFormat>(props, "Format", &Obj::_format);
-		AddStringToEnum<RenderCore::LightingEngine::ShadowResolveType, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsShadowResolveType>(props, "ResolveType", &Obj::_resolveType);
-		AddStringToEnum<RenderCore::LightingEngine::ShadowProjectionMode, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsShadowProjectionMode>(props, "ProjectionMode", &Obj::_projectionMode);
-		AddStringToEnum<RenderCore::LightingEngine::ShadowFilterModel, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsShadowFilterModel>(props, "FilterModel", &Obj::_filterModel);
-        AddStringToEnum<RenderCore::CullMode, RenderCore::AsString, RenderCore::AsCullMode>(props, "CullMode", &Obj::_cullMode);
-		props.Add("Dims", [](const Obj& obj) { return obj._width; }, [](Obj& obj, uint32_t value) { obj._width = obj._height = value; });
-		props.Add(
-            "SlopeScaledBias", 
-            [](const Obj& obj) { return obj._singleSidedBias._slopeScaledBias; },
-            [](Obj& obj, float slopeScaledBias) { obj._doubleSidedBias._slopeScaledBias = obj._singleSidedBias._slopeScaledBias = slopeScaledBias; });
-        props.Add(
-            "DepthBias", 
-            [](const Obj& obj) { return obj._singleSidedBias._depthBias; },
-            [](Obj& obj, int depthBias) { obj._doubleSidedBias._depthBias = obj._singleSidedBias._depthBias = depthBias; });
-        props.Add(
-            "DepthBiasClamp", 
-            [](const Obj& obj) { return obj._singleSidedBias._depthBiasClamp; },
-            [](Obj& obj, float depthBiasClamp) { obj._doubleSidedBias._depthBiasClamp = obj._singleSidedBias._depthBiasClamp = depthBiasClamp; });
-		init = true;
-	}
-	return props;
-}
-
-#endif

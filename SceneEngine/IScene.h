@@ -7,6 +7,9 @@
 #include "../RenderCore/Techniques/TechniqueUtils.h"
 #include "../RenderCore/LightingEngine/StandardLightOperators.h"
 #include "../RenderCore/LightingEngine/StandardLightScene.h"
+#include "../RenderCore/LightingEngine/ForwardLightingDelegate.h"
+#include "../RenderCore/LightingEngine/DeferredLightingDelegate.h"
+#include "../RenderCore/LightingEngine/ToneMapOperator.h"
 
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; class ParsingContext; class IImmediateDrawables; } }
@@ -73,17 +76,35 @@ namespace SceneEngine
     public:
         unsigned Register(const RenderCore::LightingEngine::LightSourceOperatorDesc&);
         unsigned Register(const RenderCore::LightingEngine::ShadowOperatorDesc&);
-        void SetAmbientOperator(const RenderCore::LightingEngine::AmbientLightOperatorDesc&);
+
+        void SetOperator(const RenderCore::LightingEngine::AmbientLightOperatorDesc&);
+        void SetOperator(const RenderCore::LightingEngine::ForwardLightingTechniqueDesc&);
+        void SetOperator(const RenderCore::LightingEngine::DeferredLightingTechniqueDesc&);
+        void SetOperator(const RenderCore::LightingEngine::ToneMapAcesOperatorDesc&);
+        void SetOperator(const RenderCore::LightingEngine::MultiSampleOperatorDesc&);
 
         IteratorRange<const RenderCore::LightingEngine::LightSourceOperatorDesc*> GetLightOperators() const { return _lightResolveOperators; }
         IteratorRange<const RenderCore::LightingEngine::ShadowOperatorDesc*> GetShadowOperators() const { return _shadowResolveOperators; }
-        const RenderCore::LightingEngine::AmbientLightOperatorDesc& GetAmbientOperator() const { return _ambientOperator; }
+        const RenderCore::LightingEngine::ChainedOperatorDesc* GetChainedGlobalOperators() const { return _firstChainedOperator; }
 
+        MergedLightingEngineCfg();
+        ~MergedLightingEngineCfg();
+        MergedLightingEngineCfg(MergedLightingEngineCfg&&) = delete;
+        MergedLightingEngineCfg& operator=(MergedLightingEngineCfg&&) = delete;
     private:
         std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> _lightResolveOperators;
         std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> _shadowResolveOperators;
         std::vector<uint64_t> _lightHashes, _shadowHashes;
-        RenderCore::LightingEngine::AmbientLightOperatorDesc _ambientOperator;
+
+        template<typename T> using ChainingTemplate = RenderCore::LightingEngine::ChainedOperatorTemplate<T>;
+        ChainingTemplate<RenderCore::LightingEngine::AmbientLightOperatorDesc> _ambientOperator;
+        ChainingTemplate<RenderCore::LightingEngine::ForwardLightingTechniqueDesc> _forwardLightingOperator;
+        ChainingTemplate<RenderCore::LightingEngine::DeferredLightingTechniqueDesc> _deferredLightingOperator;
+        ChainingTemplate<RenderCore::LightingEngine::ToneMapAcesOperatorDesc> _toneMapAcesOperator;
+        ChainingTemplate<RenderCore::LightingEngine::MultiSampleOperatorDesc> _msaaOperator;
+        RenderCore::LightingEngine::ChainedOperatorDesc* _firstChainedOperator = nullptr;
+
+        template<typename T> void AddToOperatorList(T& op);
     };
 
 	class ILightingStateDelegate

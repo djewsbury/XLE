@@ -9,11 +9,6 @@
 #include "IScene.h"
 #include "../Assets/DepVal.h"
 #include "../Assets/AssetsCore.h"
-#if 0
-#include "../SceneEngine/VolumetricFog.h"
-#include "../SceneEngine/Ocean.h"
-#include "../SceneEngine/DeepOceanSim.h"
-#endif
 
 namespace RenderCore { namespace LightingEngine { struct SunSourceFrustumSettings; }}
 namespace Utility { class ParameterBox; }
@@ -29,6 +24,13 @@ namespace SceneEngine
 
     RenderCore::LightingEngine::SunSourceFrustumSettings    DefaultSunSourceFrustumSettings();
 
+    struct SwirlingLightsOperatorDesc
+    {
+        unsigned _lightCount = 0u;
+        float _swirlingRadius = 15.f;
+        float _cutoffRadius = 7.5f;
+    };
+
     void InitializeLight(
         RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
         const Utility::ParameterBox& parameters,
@@ -36,6 +38,10 @@ namespace SceneEngine
 
     bool SetProperty(
         RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
+
+    bool SetProperty(
+        RenderCore::LightingEngine::IBloom& bloom,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
 
     bool SetProperty(
@@ -52,6 +58,22 @@ namespace SceneEngine
 
     bool SetProperty(
         RenderCore::LightingEngine::SunSourceFrustumSettings& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
+
+    bool SetProperty(
+        RenderCore::LightingEngine::ForwardLightingTechniqueDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
+
+    bool SetProperty(
+        RenderCore::LightingEngine::DeferredLightingTechniqueDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
+        
+    bool SetProperty(
+        RenderCore::LightingEngine::ToneMapAcesOperator& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
+
+    bool SetProperty(
+        RenderCore::LightingEngine::MultiSampleOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
 }
 

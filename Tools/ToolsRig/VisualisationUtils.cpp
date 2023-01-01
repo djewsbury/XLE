@@ -17,10 +17,6 @@
 #include "../../RenderOverlays/HighlightEffects.h"
 #include "../../RenderOverlays/SimpleVisualization.h"
 #include "../../RenderCore/LightingEngine/LightingEngine.h"
-#include "../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
-#include "../../RenderCore/LightingEngine/ForwardLightingDelegate.h"
-#include "../../RenderCore/LightingEngine/ShadowPreparer.h"
-#include "../../RenderCore/LightingEngine/ToneMapOperator.h"
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/CommonResources.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
@@ -137,22 +133,6 @@ namespace ToolsRig
 
         return result;
     }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-	static void ApplyTweakables(RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
-	{
-		// Simple solution for applying tweakables values to lighting technique effects
-		if (auto* bloom = RenderCore::LightingEngine::QueryInterface<RenderCore::LightingEngine::IBloom>(lightingTechnique)) {
-			bloom->SetLargeRadius(Tweakable("BloomLargeRadius", 64.f));
-			bloom->SetSmallRadius(Tweakable("BloomSmallRadius", 3.5f));
-			bloom->SetThreshold(Tweakable("BloomThreshold", 2.0f));
-			bloom->SetDesaturationFactor(Tweakable("BloomDesat", .75f));
-			float b0 = Tweakable("BloomLargeBrightness", .5f), b1 = Tweakable("BloomSmallBrightness", 1.f);
-			bloom->SetLargeBloomBrightness(Float3(b0, b0, b0));
-			bloom->SetSmallBloomBrightness(Float3(b1, b1, b1));
-		}
-	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -369,32 +349,12 @@ namespace ToolsRig
 				TRY {
 					SceneEngine::MergedLightingEngineCfg lightingEngineCfg;
 					envSettings->BindCfg(lightingEngineCfg);
-					std::future<std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique>> compiledLightingTechniqueFuture;
-					const bool forwardLighting = true;
-					if (forwardLighting) {
-						RenderCore::LightingEngine::ChainedOperatorTemplate<RenderCore::LightingEngine::ForwardLightingTechniqueDesc> techniqueOperators = {};
-						RenderCore::LightingEngine::ChainedOperatorTemplate<RenderCore::LightingEngine::AmbientLightOperatorDesc> ambientOperator;
-						RenderCore::LightingEngine::ChainedOperatorTemplate<RenderCore::LightingEngine::ToneMapAcesOperatorDesc> toneMapOperator;
-						RenderCore::LightingEngine::ChainedOperatorTemplate<RenderCore::LightingEngine::MSAADesc> msaaDesc;
-						// toneMapOperator._desc._maxLargeBloomRadius = 128.f;
-						// toneMapOperator._desc._enableSmallBloom = true;
-						// msaaDesc._desc._samples = RenderCore::TextureSamples::Create(8);
-						techniqueOperators._next = &ambientOperator;
-						ambientOperator._next = &toneMapOperator;
-						toneMapOperator._next = &msaaDesc;
-						compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateForwardLightingTechnique(
-							lightingApparatus,
-							lightingEngineCfg.GetLightOperators(),
-							lightingEngineCfg.GetShadowOperators(),
-							techniqueOperators,
-							targets);
-					} else {
-						compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
-							lightingApparatus,
-							lightingEngineCfg.GetLightOperators(),
-							lightingEngineCfg.GetShadowOperators(),
-							targets, fbProps);
-					}
+					auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateLightingTechnique(
+						lightingApparatus,
+						lightingEngineCfg.GetLightOperators(),
+						lightingEngineCfg.GetShadowOperators(),
+						lightingEngineCfg.GetChainedGlobalOperators(),
+						targets);
 
 					::Assets::WhenAll(std::move(compiledLightingTechniqueFuture)).ThenConstructToPromise(
 						std::move(promise),
@@ -1489,21 +1449,6 @@ namespace ToolsRig
 		if (marker)
 			marker->StallWhilePending();
 	}
-	
-	/*const std::shared_ptr<SceneEngine::IScene>& TryActualize(const ::Assets::MarkerPtr<SceneEngine::IScene>& future)
-	{
-		// This function exists because we can't call TryActualize() from a C++/CLR source file because
-		// of the problem related to including <mutex>
-		return future.TryActualize();
-	}
-
-	std::optional<std::string> GetActualizationError(const ::Assets::MarkerPtr<SceneEngine::IScene>& future)
-	{
-		auto state = future.GetAssetState();
-		if (state != ::Assets::AssetState::Invalid)
-			return {};
-		return ::Assets::AsString(future.GetActualizationLog());
-	}*/
 
     void ChangeEvent::Invoke() 
     {

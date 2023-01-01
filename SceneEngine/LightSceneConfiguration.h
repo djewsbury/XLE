@@ -34,13 +34,9 @@ namespace SceneEngine
 		ObjectTable<RenderCore::LightingEngine::LightSourceOperatorDesc> _lightSourceOperators;
 		ObjectTable<RenderCore::LightingEngine::ShadowOperatorDesc> _shadowOperators;
 		ObjectTable<RenderCore::LightingEngine::AmbientLightOperatorDesc> _ambientOperators;
-
-		template<typename Formatter>
-			void DeserializeLightSourceOperator(Formatter& fmttr) { _lightSourceOperators.DeserializeObject(fmttr); }
-		template<typename Formatter>
-			void DeserializeShadowOperator(Formatter& fmttr) { _shadowOperators.DeserializeObject(fmttr); }
-		template<typename Formatter>
-			void DeserializeAmbientOperator(Formatter& fmttr) { _ambientOperators.DeserializeObject(fmttr); }
+		ObjectTable<RenderCore::LightingEngine::ForwardLightingTechniqueDesc> _forwardLightingOperators;
+		ObjectTable<RenderCore::LightingEngine::ToneMapAcesOperatorDesc> _toneMapAcesOperators;
+		ObjectTable<RenderCore::LightingEngine::MultiSampleOperatorDesc> _multiSampleOperators;
 
 		template<typename Formatter>
 			void Deserialize(Formatter& fmttr) 
@@ -49,15 +45,27 @@ namespace SceneEngine
 			while (fmttr.TryKeyedItem(name)) {
 				if (XlEqString(name, "LightSource")) {
 					RequireBeginElement(fmttr);
-					DeserializeLightSourceOperator(fmttr);
+					_lightSourceOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 				} else if (XlEqString(name, "Shadow")) {
 					RequireBeginElement(fmttr);
-					DeserializeShadowOperator(fmttr);
+					_shadowOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 				} else if (XlEqString(name, "Ambient")) {
 					RequireBeginElement(fmttr);
-					DeserializeAmbientOperator(fmttr);
+					_ambientOperators.DeserializeObject(fmttr);
+					RequireEndElement(fmttr);
+				} else if (XlEqString(name, "ForwardLighting")) {
+					RequireBeginElement(fmttr);
+					_forwardLightingOperators.DeserializeObject(fmttr);
+					RequireEndElement(fmttr);
+				} else if (XlEqString(name, "ToneMapAces")) {
+					RequireBeginElement(fmttr);
+					_toneMapAcesOperators.DeserializeObject(fmttr);
+					RequireEndElement(fmttr);
+				} else if (XlEqString(name, "MultiSample")) {
+					RequireBeginElement(fmttr);
+					_multiSampleOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 				} else {
 					SkipValueOrElement(fmttr);
