@@ -123,6 +123,7 @@ namespace PlatformRig
         std::shared_ptr<RenderCore::IPresentationChain> presChain,
 		RenderCore::Techniques::ParsingContext& parserContext) -> FrameResult
     {
+        using namespace RenderCore;
         auto* cpuProfiler = _pimpl->_frameCPUProfiler.get();
         CPUProfileEvent_Conditional pEvnt("FrameRig::ExecuteFrame", cpuProfiler);
         assert(&parserContext.GetThreadContext() == context.get());
@@ -141,15 +142,15 @@ namespace PlatformRig
             }
         #endif
 
-        RenderCore::Techniques::SetThreadContext(context);
+        Techniques::SetThreadContext(context);
 
         if (cpuProfiler)
-            if (auto* threadContextVulkan = query_interface_cast<RenderCore::IThreadContextVulkan*>(context.get()))
+            if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(context.get()))
                 threadContextVulkan->AttachCPUProfiler(cpuProfiler);
 
         bool endAnnotatorFrame = false;
 		TRY {
-            if (auto* threadContextVulkan = query_interface_cast<RenderCore::IThreadContextVulkan*>(context.get()))
+            if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(context.get()))
                 threadContextVulkan->BeginFrameRenderingCommandList();
 
             context->GetAnnotator().Frame_Begin(_pimpl->_frameRenderCount);		// (on Vulkan, we must do this after IThreadContext::BeginFrameRenderingCommandList(), because that primes the command list in the vulkan device)
@@ -170,12 +171,12 @@ namespace PlatformRig
 
 			// Bind the presentation target as the default output for the parser context
             auto presentationChainDesc = presChain->GetDesc();
-            parserContext.BindAttachment(RenderCore::Techniques::AttachmentSemantics::ColorLDR, presChain, RenderCore::BindFlag::PresentationSrc);
+            parserContext.BindAttachment(Techniques::AttachmentSemantics::ColorLDR, presChain, BindFlag::PresentationSrc);
             parserContext.GetAttachmentReservation().Absorb(std::move(_pimpl->_capturedDoubleBufferAttachments));
 
             auto& stitchingContext = parserContext.GetFragmentStitchingContext();
-            stitchingContext._workingProps = RenderCore::FrameBufferProperties { presentationChainDesc._width, presentationChainDesc._height };
-            parserContext.GetViewport() = RenderCore::ViewportDesc { 0.f, 0.f, (float)presentationChainDesc._width, (float)presentationChainDesc._height };
+            stitchingContext._workingProps = FrameBufferProperties { presentationChainDesc._width, presentationChainDesc._height };
+            parserContext.GetViewport() = ViewportDesc { 0.f, 0.f, (float)presentationChainDesc._width, (float)presentationChainDesc._height };
 
 			////////////////////////////////
 
@@ -183,7 +184,7 @@ namespace PlatformRig
 			TRY {
 				if (_mainOverlaySys) {
                     #if defined(_DEBUG)
-                        assert(_pimpl->_mainOverlayRigTargetConfig == RenderCore::Techniques::HashPreregisteredAttachments(stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps));
+                        assert(_pimpl->_mainOverlayRigTargetConfig == Techniques::HashPreregisteredAttachments(stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps));
                     #endif
                     _mainOverlaySys->Render(parserContext);
                     mainOverlaySucceeded = true;
@@ -196,13 +197,12 @@ namespace PlatformRig
 			CATCH_END
 
             // Techniques::GetAttachmentResource will acquire the presentation chain resource if it hasn't been acquired yet
-            auto* presentationTarget = RenderCore::Techniques::GetAttachmentResource(parserContext, RenderCore::Techniques::AttachmentSemantics::ColorLDR);
+            auto* presentationTarget = Techniques::GetAttachmentResource(parserContext, Techniques::AttachmentSemantics::ColorLDR);
 
             if (!mainOverlaySucceeded) {
                 // We must at least clear, because the _debugScreenOverlaySystem might have something to render
-                RenderCore::Metal::DeviceContext::Get(*context)->Clear(*presentationTarget->CreateTextureView(RenderCore::BindFlag::RenderTarget), Float4(0,0,0,1));
-                using namespace RenderCore::Techniques;
-                stitchingContext.DefineAttachment(AttachmentSemantics::ColorLDR, presentationTarget->GetDesc(), "color-ldr", PreregisteredAttachment::State::Initialized, RenderCore::BindFlag::TransferDst);
+                Metal::DeviceContext::Get(*context)->Clear(*presentationTarget->CreateTextureView(BindFlag::RenderTarget), Float4(0,0,0,1));
+                stitchingContext.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR, presentationTarget->GetDesc(), "color-ldr", Techniques::PreregisteredAttachment::State::Initialized, BindFlag::TransferDst);
             }
 
 			TRY {
@@ -221,11 +221,11 @@ namespace PlatformRig
                 _subFrameEvents->_onPrePresent.Invoke(*context);
 
             if (parserContext._requiredBufferUploadsCommandList)
-                RenderCore::Techniques::Services::GetBufferUploads().StallAndMarkCommandListDependency(*context, parserContext._requiredBufferUploadsCommandList);
+                Techniques::Services::GetBufferUploads().StallAndMarkCommandListDependency(*context, parserContext._requiredBufferUploadsCommandList);
 
             {
-                RenderCore::Metal::BarrierHelper barrierHelper(*context);
-                barrierHelper.Add(*presentationTarget, RenderCore::BindFlag::RenderTarget, RenderCore::BindFlag::PresentationSrc);
+                Metal::BarrierHelper barrierHelper(*context);
+                barrierHelper.Add(*presentationTarget, BindFlag::RenderTarget, BindFlag::PresentationSrc);
             }
 
             endAnnotatorFrame = false;
@@ -245,7 +245,7 @@ namespace PlatformRig
 			Log(Error) << "Suppressed error in frame rig render: " << e.what() << std::endl;
 		    if (endAnnotatorFrame)
                 context->GetAnnotator().Frame_End();
-            RenderCore::Techniques::SetThreadContext(nullptr);
+            Techniques::SetThreadContext(nullptr);
 	    } CATCH_END
 	
         if (_subFrameEvents)
@@ -262,7 +262,7 @@ namespace PlatformRig
             _pimpl->_prevFrameAllocationCount = accAlloc->GetAndClear();
 
         if (cpuProfiler)
-            if (auto* threadContextVulkan = query_interface_cast<RenderCore::IThreadContextVulkan*>(context.get()))
+            if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(context.get()))
                 threadContextVulkan->AttachCPUProfiler(nullptr);
 
         if (parserContext.HasPendingAssets()) {
@@ -270,7 +270,7 @@ namespace PlatformRig
         } else {
 
             float threadingPressure = 0.f;
-            if (auto* threadContextVulkan = query_interface_cast<RenderCore::IThreadContextVulkan*>(context.get()))
+            if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(context.get()))
                 threadingPressure = threadContextVulkan->GetThreadingPressure();
 
             if (threadingPressure > 0.f) {

@@ -34,11 +34,11 @@ namespace Sample
 	public:
 		std::shared_ptr<RenderCore::IDevice> _renderDevice;
 
-		std::shared_ptr<PlatformRig::WindowApparatus> _windowApparatus;
         std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
         std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus> _immediateDrawingApparatus;
         std::shared_ptr<RenderCore::Techniques::PrimaryResourcesApparatus> _primaryResourcesApparatus;
         std::shared_ptr<RenderCore::Techniques::FrameRenderingApparatus> _frameRenderingApparatus;
+		std::shared_ptr<PlatformRig::WindowApparatus> _windowApparatus;
 		std::shared_ptr<PlatformRig::DebugOverlaysApparatus> _debugOverlaysApparatus;
 
 		std::vector<PlatformRig::DebugScreenRegistration> _displayRegistrations;

@@ -43,8 +43,6 @@ namespace Sample
 
 	void ExecuteSample(std::shared_ptr<ISampleOverlay>&& sampleOverlay, const SampleConfiguration& config)
     {
-		SampleGlobals sampleGlobals;
-
         Log(Verbose) << "Building primary managers" << std::endl;
         auto renderAPI = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
 
@@ -66,9 +64,9 @@ namespace Sample
         }
 
         auto capability = renderAPI->QueryFeatureCapability(0);
-        sampleGlobals._renderDevice = renderAPI->CreateDevice(0, capability);
+        auto renderDevice = renderAPI->CreateDevice(0, capability);
 
-        auto techniqueServices = ConsoleRig::MakeAttachablePtr<RenderCore::Techniques::Services>(sampleGlobals._renderDevice);
+        auto techniqueServices = ConsoleRig::MakeAttachablePtr<RenderCore::Techniques::Services>(renderDevice);
         ConsoleRig::AttachablePtr<ToolsRig::IPreviewSceneRegistry> previewSceneRegistry = ToolsRig::CreatePreviewSceneRegistry();
         ConsoleRig::AttachablePtr<EntityInterface::IEntityMountingTree> entityMountingTree = EntityInterface::CreateMountingTree();
         ::ConsoleRig::GlobalServices::GetInstance().LoadDefaultPlugins();
@@ -78,6 +76,8 @@ namespace Sample
             // as they go along
             // We separate this initialization work like this to provide some flexibility. It's only necessary to
             // construct as much as will be required for the specific use case 
+        SampleGlobals sampleGlobals;
+        sampleGlobals._renderDevice = std::move(renderDevice);
         sampleGlobals._drawingApparatus = std::make_shared<RenderCore::Techniques::DrawingApparatus>(sampleGlobals._renderDevice);
         sampleGlobals._immediateDrawingApparatus = std::make_shared<RenderCore::Techniques::ImmediateDrawingApparatus>(sampleGlobals._drawingApparatus);
         sampleGlobals._primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(sampleGlobals._renderDevice);
