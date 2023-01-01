@@ -34,6 +34,10 @@ namespace Utility
 		template<typename...> static auto HasTryCastValue_Helper(...) -> std::false_type;
 		template<typename Type> struct HasTryCastValue : decltype(HasTryCastValue_Helper<Type>(0)) {};
 
+		template<typename Type> static auto HasTryKeyedItemHash_Helper(int) -> decltype(std::declval<Type>().TryKeyedItem(std::declval<uint64_t&>()), std::true_type{});
+		template<typename...> static auto HasTryKeyedItemHash_Helper(...) -> std::false_type;
+		template<typename Type> struct HasTryKeyedItemHash : decltype(HasTryKeyedItemHash_Helper<Type>(0)) {};
+
 		template<typename Formatter>
 			struct FormatterTraits
 		{
@@ -42,6 +46,7 @@ namespace Utility
 			static constexpr auto HasTryStringValue = Internal::HasTryStringValue<Formatter>::value;
 			static constexpr auto HasTryRawValue = Internal::HasTryRawValue<Formatter>::value;
 			static constexpr auto HasTryCastValue = Internal::HasTryRawValue<Formatter>::value;
+			static constexpr auto HasTryKeyedItemHash = Internal::HasTryKeyedItemHash<Formatter>::value;
 		};
 	}
 

@@ -21,6 +21,7 @@ namespace Formatters
         virtual bool TryBeginElement() = 0;
 		virtual bool TryEndElement() = 0;
 		virtual bool TryKeyedItem(StringSection<>& name) = 0;
+        virtual bool TryKeyedItem(uint64_t& name) = 0;
 
         //
         // Different underlying formatters work with values in different ways. In order for each

@@ -132,6 +132,32 @@ namespace EntityInterface
 			}
 		}
 
+		bool TryKeyedItem(uint64_t& name) override
+		{
+			auto virtualState = GetVirtualElementsBlob();
+			if (virtualState == FormatterBlob::None) {
+				if (_activeMount == _mounts.end()) return false;
+				auto result = _activeMount->_formatter->TryKeyedItem(name);
+				if (!result && _activeMount->_formatter->PeekNext() == FormatterBlob::None) {
+					++_activeMount;
+					BeginActiveFormatter();
+					return TryKeyedItem(name);
+				}
+				return result;
+			} else {
+				if (virtualState == FormatterBlob::KeyedItem) {
+					auto i = _activeFormatterExternalMountIterator;
+					while (i!=_activeMount->_externalMountPoint.end() && *i != s_fnRules.GetSeparator<char>()) ++i;
+					name = Hash64(MakeStringSection(_activeFormatterExternalMountIterator, i));
+					while (i!=_activeMount->_externalMountPoint.end() && *i == s_fnRules.GetSeparator<char>()) ++i;
+					_activeFormatterExternalMountIterator = i;
+					_pendingVirtualBeginElement = true;
+					return true;
+				}
+				return false;
+			}
+		}
+
 		bool TryStringValue(StringSection<>& value) override
 		{
 			if (GetVirtualElementsBlob() == FormatterBlob::None) {

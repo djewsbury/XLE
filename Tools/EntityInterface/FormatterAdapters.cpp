@@ -21,6 +21,17 @@ namespace EntityInterface
 		virtual bool TryBeginElement() override { return _fmttr.TryBeginElement(); }
 		virtual bool TryEndElement() override { return _fmttr.TryEndElement(); }
 		virtual bool TryKeyedItem(StringSection<>& name) override { return _fmttr.TryKeyedItem(name); }
+		virtual bool TryKeyedItem(uint64_t& name) override
+		{
+			if constexpr (Internal::FormatterTraits<Formatter>::HasTryKeyedItemHash) {
+				return _fmttr.TryKeyedItem(name);
+			} else {
+				StringSection<> stringKeyName;
+				auto result = _fmttr.TryKeyedItem(stringKeyName);
+				if (result) name = Hash64(stringKeyName);
+				return result;
+			}
+		}
 
 		virtual bool TryStringValue(StringSection<>& value) override
 		{ 
@@ -144,6 +155,15 @@ namespace EntityInterface
 		virtual bool TryBeginElement() override { return _fmttr.TryBeginElement(); }
 		virtual bool TryEndElement() override { return _fmttr.TryEndElement(); }
 		virtual bool TryKeyedItem(StringSection<>& name) override { return _fmttr.TryKeyedItem(name); }
+		virtual bool TryKeyedItem(uint64_t& name) override 
+		{
+			// no hash version of TryKeyedItem -- just have to hash now
+			static_assert(!Internal::FormatterTraits<decltype(_fmttr)>::HasTryKeyedItemHash);
+			StringSection<> stringName;
+			auto result = _fmttr.TryKeyedItem(stringName);
+			if (result) name = Hash64(stringName);
+			return result;
+		}
 
 		virtual bool TryStringValue(StringSection<>& value) override
 		{ 
