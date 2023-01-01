@@ -140,6 +140,22 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+	static void ApplyTweakables(RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
+	{
+		// Simple solution for applying tweakables values to lighting technique effects
+		if (auto* bloom = RenderCore::LightingEngine::QueryInterface<RenderCore::LightingEngine::IBloom>(lightingTechnique)) {
+			bloom->SetLargeRadius(Tweakable("BloomLargeRadius", 64.f));
+			bloom->SetSmallRadius(Tweakable("BloomSmallRadius", 3.5f));
+			bloom->SetThreshold(Tweakable("BloomThreshold", 2.0f));
+			bloom->SetDesaturationFactor(Tweakable("BloomDesat", .75f));
+			float b0 = Tweakable("BloomLargeBrightness", .5f), b1 = Tweakable("BloomSmallBrightness", 1.f);
+			bloom->SetLargeBloomBrightness(Float3(b0, b0, b0));
+			bloom->SetSmallBloomBrightness(Float3(b1, b1, b1));
+		}
+	}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
 	class SimpleSceneOverlay : public ISimpleSceneOverlay
     {
     public:
@@ -234,6 +250,8 @@ namespace ToolsRig
 				ResetCamera();
 				_pendingCameraReset = false;
 			}
+
+			ApplyTweakables(*actualizedScene->_compiledLightingTechnique);
 
 			auto cam = _camera ? AsCameraDesc(*_camera) : RenderCore::Techniques::CameraDesc{};
 			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(cam, {parserContext.GetViewport()._width, parserContext.GetViewport()._height});
