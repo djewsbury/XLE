@@ -148,9 +148,7 @@ namespace Utility
         ParameterBox();
         ParameterBox(std::initializer_list<std::pair<const utf8*, const char*>>);
         template<typename CharType>
-            ParameterBox(InputStreamFormatter<CharType>& stream, 
-				IteratorRange<const void*> defaultValue = {}, 
-                const ImpliedTyping::TypeDesc& defaultValueType = ImpliedTyping::TypeDesc{ImpliedTyping::TypeCat::Void, 0u});
+            ParameterBox(InputStreamFormatter<CharType>& stream);
         ParameterBox(ParameterBox&& moveFrom) never_throws;
         ParameterBox& operator=(ParameterBox&& moveFrom) never_throws;
 		

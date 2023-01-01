@@ -14,6 +14,7 @@
 #include "Conversion.h"
 #include "Streams/StreamFormatter.h"
 #include "Streams/OutputStreamFormatter.h"
+#include "Streams/FormatterUtils.h"
 #include <algorithm>
 #include <utility>
 #include <sstream>
@@ -56,19 +57,12 @@ namespace Utility
             return;
         }
 
-        uint8_t buffer[NativeRepMaxSize];
-		assert(stringData.size() < NativeRepMaxSize);
-        auto typeDesc = ParseFullMatch(stringData, MakeIteratorRange(buffer));
-        if (typeDesc._type != TypeCat::Void) {
-			SetParameter(name, {buffer, PtrAdd(buffer, std::min(sizeof(buffer), (size_t)typeDesc.GetSize()))}, typeDesc);
-        } else {
-            // no conversion... just store a string
-            auto hash = MakeParameterNameHash(name);
-            SetParameterHint(
-                std::lower_bound(_hashNames.cbegin(), _hashNames.cend(), hash),
-				hash, name, MakeIteratorRange(stringData.begin(), stringData.end()),
-                TypeDesc{TypeCat::UInt8, (uint16_t)(stringData.size()), TypeHint::String}, false);
-        }
+        // SetParameterHint will convert string to value type where possible
+        auto hash = MakeParameterNameHash(name);
+        SetParameterHint(
+            std::lower_bound(_hashNames.cbegin(), _hashNames.cend(), hash),
+            hash, name, MakeIteratorRange(stringData.begin(), stringData.end()),
+            TypeDesc{TypeCat::UInt8, (uint32_t)(stringData.size()), TypeHint::String}, true);
     }
 
 	template<>
@@ -548,85 +542,40 @@ namespace Utility
     }
 
     template<typename CharType>
-        ParameterBox::ParameterBox(
-            InputStreamFormatter<CharType>& stream, 
-            IteratorRange<const void*> defaultValue, const ImpliedTyping::TypeDesc& defaultValueType)
+        ParameterBox::ParameterBox(InputStreamFormatter<CharType>& fmttr)
     {
         using namespace ImpliedTyping;
 
             // note -- fixed size buffer here bottlenecks max size for native representations
             // of these values
-        uint8_t nativeTypeBuffer[NativeRepMaxSize];
         std::vector<utf8> nameBuffer;
-        std::vector<char> valueBuffer;
 
-            // attempt to read attributes from a serialized text file
-            // as soon as we hit something that is not another attribute
-            // (it could be a sub-element, or the end of this element)
-            // then we will stop reading and return
-        while (stream.PeekNext() == InputStreamFormatter<CharType>::Blob::KeyedItem) {
-            typename InputStreamFormatter<CharType>::InteriorSection name, value;
-            bool success = stream.TryKeyedItem(name) && stream.TryStringValue(value);
-            if (!success)
-                Throw(::Exceptions::BasicLabel("Parsing exception while reading attribute in parameter box deserialization"));
+        StringSection<> keyname;
+        while (fmttr.TryKeyedItem(keyname)) {
+            if (keyname.IsEmpty())
+                Throw(::Exceptions::BasicLabel("Empty name in parameter box deserialization"));
+            
+            if constexpr (!std::is_same_v<CharType, utf8>) {
+                auto nameLen = (size_t(name._end) - size_t(name._start)) / sizeof(CharType);
+                {
+                    nameBuffer.resize(nameLen*2+1);
+                    
+                    auto nameConvResult = Conversion::Convert(
+                        AsPointer(nameBuffer.begin()), nameBuffer.size(),
+                        name._start, name._end);
 
-            auto nameLen = (size_t(name._end) - size_t(name._start)) / sizeof(CharType);
-			{
-                nameBuffer.resize(nameLen*2+1);
-                
-                auto nameConvResult = Conversion::Convert(
-                    AsPointer(nameBuffer.begin()), nameBuffer.size(),
-                    name._start, name._end);
-
-                if (nameConvResult <= 0)
-                    Throw(::Exceptions::BasicLabel("Empty name or error converting string name in parameter box deserialization"));
-
-				nameLen = std::min(nameBuffer.size()-1, (size_t)nameConvResult);
-                nameBuffer[nameLen] = '\0';
-            }
-
-            if (!value._start || !value._end) {
-                    // if there is no value attached, we default to the value given us
-                    // (usually jsut void)
-                SetParameter(AsPointer(nameBuffer.cbegin()), defaultValue, defaultValueType);
-                continue;
-            }
-
-            TypeDesc nativeType{TypeCat::Void};
-            if (constant_expression<sizeof(CharType) == sizeof(utf8)>::result()) {
-
-                nativeType = ParseFullMatch(
-                    MakeStringSection((const char*)value._start, (const char*)value._end),
-                    MakeIteratorRange(nativeTypeBuffer));
-
-            } else {
-
-                valueBuffer.resize((value._end - value._start)*2+1);
-                auto valueLen = Conversion::Convert(
-                    AsPointer(valueBuffer.begin()), valueBuffer.size(),
-                    value._start, value._end);
-
-                // a failed conversion here is valid, but it means we must treat the value as a string
-                if (valueLen>=0) {
-                    nativeType = ParseFullMatch(
-                        MakeStringSection(AsPointer(valueBuffer.begin()), AsPointer(valueBuffer.begin()) + valueLen),
-                        MakeIteratorRange(nativeTypeBuffer));
+                    nameLen = std::min(nameBuffer.size()-1, (size_t)nameConvResult);
+                    nameBuffer[nameLen] = '\0';
                 }
 
+                keyname = MakeStringSection(AsPointer(nameBuffer.cbegin()), PtrAdd(AsPointer(nameBuffer.cbegin()), nameLen));
             }
 
-            if (nativeType._type != TypeCat::Void) {
-                SetParameter(
-					MakeStringSection(AsPointer(nameBuffer.cbegin()), PtrAdd(AsPointer(nameBuffer.cbegin()), nameLen)), 
-					MakeIteratorRange(nativeTypeBuffer, PtrAdd(nativeTypeBuffer, nativeType.GetSize())), 
-					nativeType);
-            } else {
-                    // this is just a string. We should store it as a string, in whatever character set it came in
-                SetParameter(
-                    MakeStringSection(AsPointer(nameBuffer.cbegin()), PtrAdd(AsPointer(nameBuffer.cbegin()), nameLen)),
-                    MakeIteratorRange(value.begin(), value.end()), 
-                    TypeDesc{TypeOf<CharType>()._type, uint16_t(value._end - value._start), TypeHint::String});
-            }
+            ImpliedTyping::TypeDesc valueType;
+            auto value = RequireRawValue(fmttr, valueType);
+
+            // SetParamter will do string to value type conversion if necessary
+            SetParameter(keyname, value, valueType);
         }
     }
 
@@ -658,7 +607,7 @@ namespace Utility
     }
 
     template void ParameterBox::SerializeWithCharType<utf8>(OutputStreamFormatter& stream) const;
-    template ParameterBox::ParameterBox(InputStreamFormatter<utf8>& stream, IteratorRange<const void*>, const ImpliedTyping::TypeDesc&);
+    template ParameterBox::ParameterBox(InputStreamFormatter<utf8>&);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
