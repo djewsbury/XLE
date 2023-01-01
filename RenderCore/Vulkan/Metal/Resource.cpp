@@ -565,8 +565,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		// better off with a custom rolled solution that tracks the specific operations involved
 		context.CommitCommands(CommitCommandsFlags::WaitForCompletion);
 
-		DeviceContext::Get(context);		// trigger recreation of command list, due to CommitCommands() finishing the previous one
-
 		const bool doPartialResourceMap = false;
 		if (doPartialResourceMap) {
 			ResourceMap map{
