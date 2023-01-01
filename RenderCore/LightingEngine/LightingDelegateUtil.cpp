@@ -13,6 +13,7 @@
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/DeferredShaderResource.h"
 #include "../Techniques/ParsingContext.h"
+#include "../Techniques/CommonBindings.h"
 #include "../../Utility/PtrUtils.h"
 #include "../../Assets/Assets.h"
 #include "../../xleres/FileList.h"
@@ -651,6 +652,14 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	void* DominantLightSet::QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode)
 	{
 		return nullptr;
+	}
+
+	UInt2 ExtractOutputResolution(IteratorRange<const Techniques::PreregisteredAttachment*> preregs)
+	{
+		auto i = std::find_if(preregs.begin(), preregs.end(), [](const auto& q) { return q._semantic == Techniques::AttachmentSemantics::ColorLDR; });
+		if (i == preregs.end())
+			Throw(std::runtime_error("Missing ColorLDR attachment in input interface"));
+		return { i->_desc._textureDesc._width, i->_desc._textureDesc._height };
 	}
 
 }}}

@@ -323,7 +323,7 @@ namespace RenderCore { namespace LightingEngine
 		std::optional<ScreenSpaceReflectionsOperatorDesc> _ssr;
 		std::optional<AmbientOcclusionOperatorDesc> _ssao;
 		std::optional<ToneMapAcesOperatorDesc> _tonemapAces;
-		std::optional<MSAADesc> _msaa;
+		std::optional<MultiSampleOperatorDesc> _msaa;
 
 		ForwardPlusLightScene::ShadowPreparerIdMapping _shadowPrepreparerIdMapping;
 		std::vector<ForwardPlusLightScene::LightOperatorInfo> _lightSceneOperatorInfo;
@@ -335,7 +335,7 @@ namespace RenderCore { namespace LightingEngine
 		OperatorDigest(
 			IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 			IteratorRange<const ShadowOperatorDesc*> shadowOperators,
-			const ChainedOperatorDesc& globalOperatorsChain)
+			const ChainedOperatorDesc* globalOperatorsChain)
 		{
 			// Given a partially opaque set of operators, try to digest and interpret them in order so we know how to create
 			// the light scene, and what operators to create
@@ -379,7 +379,7 @@ namespace RenderCore { namespace LightingEngine
 				}
 			}
 
-			auto* chain = &globalOperatorsChain;
+			auto* chain = globalOperatorsChain;
 			while (chain) {
 				switch(chain->_structureType) {
 				case TypeHashCode<ScreenSpaceReflectionsOperatorDesc>:
@@ -400,10 +400,10 @@ namespace RenderCore { namespace LightingEngine
 					_tonemapAces = ChainedOperatorCast<ToneMapAcesOperatorDesc>(*chain);
 					break;
 
-				case TypeHashCode<MSAADesc>:
+				case TypeHashCode<MultiSampleOperatorDesc>:
 					if (_msaa)
 						Throw(std::runtime_error("Multiple antialiasing operators found, where only one expected"));
-					_msaa = ChainedOperatorCast<MSAADesc>(*chain);
+					_msaa = ChainedOperatorCast<MultiSampleOperatorDesc>(*chain);
 					break;
 				}
 				chain = chain->_next;
@@ -547,14 +547,6 @@ namespace RenderCore { namespace LightingEngine
 		return t.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Pending;
 	}
 
-	static UInt2 ExtractOutputResolution(IteratorRange<const Techniques::PreregisteredAttachment*> preregs)
-	{
-		auto i = std::find_if(preregs.begin(), preregs.end(), [](const auto& q) { return q._semantic == Techniques::AttachmentSemantics::ColorLDR; });
-		if (i == preregs.end())
-			Throw(std::runtime_error("Missing ColorLDR attachment in input interface"));
-		return { i->_desc._textureDesc._width, i->_desc._textureDesc._height };
-	}
-
 	void CreateForwardLightingTechnique(
 		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
@@ -562,7 +554,7 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
-		const ChainedOperatorDesc& globalOperators,
+		const ChainedOperatorDesc* globalOperators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit)
 	{
 		struct ConstructionHelper
@@ -591,7 +583,7 @@ namespace RenderCore { namespace LightingEngine
 		helper->_depthMotionDelegate = techDelBox->GetDepthMotionDelegate();
 		helper->_forwardIllumDelegate = techDelBox->GetForwardIllumDelegate_DisableDepthWrite();
 
-		auto resolution = ExtractOutputResolution(preregisteredAttachmentsInit);
+		auto resolution = Internal::ExtractOutputResolution(preregisteredAttachmentsInit);
 
 		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
 
@@ -705,82 +697,20 @@ namespace RenderCore { namespace LightingEngine
 			});
 	}
 
-	std::future<std::shared_ptr<CompiledLightingTechnique>> CreateForwardLightingTechnique(
-		const std::shared_ptr<LightingEngineApparatus>& apparatus,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-		const ChainedOperatorDesc& globalOperators,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit)
-	{
-#if 0
-		std::promise<std::shared_ptr<ILightScene>> lightScenePromise;
-		auto lightSceneFuture = lightScenePromise.get_future();
-		CreateForwardLightingScene(
-			std::move(lightScenePromise),
-			apparatus->_pipelineAccelerators, apparatus->_lightingOperatorCollection, apparatus->_sharedDelegates, 
-			resolveOperators, shadowGenerators, ambientLightOperator);
-
-		std::promise<std::shared_ptr<CompiledLightingTechnique>> promisedTechnique;
-		auto result = promisedTechnique.get_future();
-		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
-		::Assets::WhenAll(std::move(lightSceneFuture)).ThenConstructToPromise(
-			std::move(promisedTechnique),
-			[
-				A=apparatus->_pipelineAccelerators, B=apparatus->_lightingOperatorCollection, C=apparatus->_sharedDelegates,
-				preregisteredAttachments=std::move(preregisteredAttachments), fbProps
-			](auto&& promise, auto lightSceneActual) {
-				CreateForwardLightingTechnique(
-					std::move(promise),
-					A, B, C,
-					lightSceneActual,
-					*(const ChainedOperatorDesc*)nullptr,		// todo -- cannot be brought into the lamdba like this
-					MakeIteratorRange(preregisteredAttachments), fbProps);
-			});
-		return result;
-#endif
-
-		std::promise<std::shared_ptr<CompiledLightingTechnique>> promisedTechnique;
-		auto result = promisedTechnique.get_future();
-		CreateForwardLightingTechnique(
-			std::move(promisedTechnique),
-			apparatus->_pipelineAccelerators, apparatus->_lightingOperatorCollection, apparatus->_sharedDelegates,
-			resolveOperators, shadowGenerators, globalOperators,
-			preregisteredAttachmentsInit);
-		return result;
-
-	}
-
-#if 0
-	void CreateForwardLightingScene(
-		std::promise<std::shared_ptr<ILightScene>>&& promise,
-		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
-		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		IteratorRange<const LightSourceOperatorDesc*> positionalLightOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-		const AmbientLightOperatorDesc& ambientLightOperator)
-	{
-		RasterizationLightTileOperator::Configuration tilingConfig;
-		std::promise<std::shared_ptr<ForwardPlusLightScene>> specialisedPromise;
-		auto specializedFuture = specialisedPromise.get_future();
-		ForwardPlusLightScene::ConstructToPromise(
-			std::move(specialisedPromise), pipelineAccelerators, pipelinePool, techDelBox,
-			positionalLightOperators, shadowGenerators, ambientLightOperator, tilingConfig);
-
-		// transform from shared_ptr<ForwardPlusLightScene> -> shared_ptr<ILightScene>
-		::Assets::WhenAll(std::move(specializedFuture)).ThenConstructToPromise(std::move(promise), [](auto ptr) { return std::static_pointer_cast<ILightScene>(std::move(ptr)); });
-	}
-
 	bool ForwardLightingTechniqueIsCompatible(
 		CompiledLightingTechnique& technique,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		const AmbientLightOperatorDesc& ambientLightOperator)
 	{
+		assert(0);	// todo -- update for chained technique operators
+#if 0
 		auto* lightScene = checked_cast<ForwardPlusLightScene*>(&technique.GetLightScene());
 		return lightScene->IsCompatible(resolveOperators, shadowGenerators, ambientLightOperator);
-	}
+#else
+		return false;
 #endif
+	}
 
 }}
 

@@ -386,14 +386,15 @@ namespace RenderCore { namespace LightingEngine
 			});
 	}
 
-	std::future<std::shared_ptr<CompiledLightingTechnique>> CreateDeferredLightingTechnique(
+	void CreateDeferredLightingTechnique(
+		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promisedTechnique,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelineCollection,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperatorsInit,
 		IteratorRange<const ShadowOperatorDesc*> shadowOperatorsInit,
+		const ChainedOperatorDesc* globalOperators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit,
-		const FrameBufferProperties& fbProps,
 		DeferredLightingTechniqueFlags::BitField flags)
 	{
 		auto buildGBufferFragment = CreateBuildGBufferSceneFragment(*techDelBox, GBufferType::PositionNormalParameters);
@@ -404,17 +405,18 @@ namespace RenderCore { namespace LightingEngine
 		auto lightSceneFuture = lightScenePromise.get_future();
 		BeginLightSceneConstruction(std::move(lightScenePromise), pipelineAccelerators, techDelBox, shadowOperatorsInit);
 
-		std::promise<std::shared_ptr<CompiledLightingTechnique>> promisedTechnique;
-		auto result = promisedTechnique.get_future();
+		auto resolution = Internal::ExtractOutputResolution(preregisteredAttachmentsInit);
+
 		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
 		::Assets::WhenAll(std::move(buildGBufferFragment), std::move(lightSceneFuture)).ThenConstructToPromise(
 			std::move(promisedTechnique),
-			[pipelineAccelerators, techDelBox, fbProps, 
+			[pipelineAccelerators, techDelBox, resolution,
 			preregisteredAttachments=std::move(preregisteredAttachments), shadowDescSet=techDelBox->_dmShadowDescSetTemplate,
 			resolveOperators=std::move(resolveOperators), shadowOperators=std::move(shadowOperators), pipelineCollection, lightingOperatorLayout=techDelBox->_lightingOperatorLayout, flags](
 				auto&& thatPromise, auto buildGbuffer, auto lightScene) {
 
 				TRY {
+					FrameBufferProperties fbProps { resolution[0], resolution[1], TextureSamples::Create() };
 					Techniques::FragmentStitchingContext stitchingContext{preregisteredAttachments, fbProps, Techniques::CalculateDefaultSystemFormats(*pipelineAccelerators->GetDevice())};
 					PreregisterAttachments(stitchingContext, GBufferType::PositionNormalParameters);
 
@@ -506,26 +508,7 @@ namespace RenderCore { namespace LightingEngine
 					thatPromise.set_exception(std::current_exception());
 				} CATCH_END
 			});
-
-		return result;
 	}
-
-	std::future<std::shared_ptr<CompiledLightingTechnique>> CreateDeferredLightingTechnique(
-		const std::shared_ptr<LightingEngineApparatus>& apparatus,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
-		const FrameBufferProperties& fbProps,
-		DeferredLightingTechniqueFlags::BitField flags)
-	{
-		return CreateDeferredLightingTechnique(
-			apparatus->_pipelineAccelerators,
-			apparatus->_lightingOperatorCollection,
-			apparatus->_sharedDelegates,
-			resolveOperators, shadowGenerators, preregisteredAttachments,
-			fbProps, flags);		
-	}
-
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 		//   D E B U G G I N G   &   P R O F I L I N G    //

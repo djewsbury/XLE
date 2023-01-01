@@ -14,20 +14,6 @@ namespace RenderCore { namespace LightingEngine
 	enum class LightSourceShape { Directional, Sphere, Tube, Rectangle, Disc };
 	enum class DiffuseModel { Lambert, Disney };
 
-	struct ChainedOperatorDesc
-	{
-		const ChainedOperatorDesc* _next = nullptr;
-		uint64_t _structureType = 0;
-		ChainedOperatorDesc(size_t structureType=0) : _structureType{structureType} {}
-	};
-
-	template <typename Type>
-		struct ChainedOperatorTemplate : public ChainedOperatorDesc
-	{
-		Type _desc;
-		ChainedOperatorTemplate() : ChainedOperatorDesc(TypeHashCode<Type>) {}
-	};
-
 	struct LightSourceOperatorDesc
 	{
 		LightSourceShape _shape = LightSourceShape::Directional;

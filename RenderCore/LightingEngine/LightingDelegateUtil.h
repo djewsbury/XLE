@@ -18,6 +18,7 @@ namespace RenderCore { namespace Techniques
 	class FrameBufferPool;
 	class AttachmentPool;
 	class IShaderResourceDelegate;
+	struct PreregisteredAttachment;
 }}
 
 namespace RenderCore { namespace LightingEngine
@@ -38,6 +39,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	class ILightSceneComponent;
 
 	::Assets::MarkerPtr<Techniques::IShaderResourceDelegate> CreateBuildGBufferResourceDelegate();
+	UInt2 ExtractOutputResolution(IteratorRange<const Techniques::PreregisteredAttachment*>);
 
 	class SemiStaticShadowProbeScheduler : public ISemiStaticShadowProbeScheduler, public ILightSceneComponent
 	{

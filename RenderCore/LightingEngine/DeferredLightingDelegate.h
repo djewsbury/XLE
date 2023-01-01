@@ -17,28 +17,25 @@ namespace RenderCore { namespace LightingEngine
 	struct LightSourceOperatorDesc;
 	struct ShadowOperatorDesc;
 
+	struct DeferredLightingTechniqueDesc
+	{
+	};
+
 	namespace DeferredLightingTechniqueFlags
 	{
 		enum Enum { GenerateDebuggingTextures = 1<<0 };
 		using BitField = unsigned;
 	};
 
-	std::future<std::shared_ptr<CompiledLightingTechnique>> CreateDeferredLightingTechnique(
-		const std::shared_ptr<LightingEngineApparatus>& apparatus,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
-		const FrameBufferProperties& fbProps,
-		DeferredLightingTechniqueFlags::BitField flags = 0);
-
-	std::future<std::shared_ptr<CompiledLightingTechnique>> CreateDeferredLightingTechnique(
+	void CreateDeferredLightingTechnique(
+		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelineCollection,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
+		const ChainedOperatorDesc* globalOperators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
-		const FrameBufferProperties& fbProps,
 		DeferredLightingTechniqueFlags::BitField flags = 0);
 }}
 

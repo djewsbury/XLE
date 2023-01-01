@@ -7,6 +7,8 @@
 #include "LightingEngineIterator.h"
 #include "RenderStepFragments.h"
 #include "LightingEngineApparatus.h"
+#include "ForwardLightingDelegate.h"		// for construction
+#include "DeferredLightingDelegate.h"		// for construction
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/PipelineAccelerator.h"
 #include "../Techniques/Techniques.h"
@@ -917,6 +919,74 @@ namespace RenderCore { namespace LightingEngine
 		_prepareResourcesIterator = std::make_unique<PrepareResourcesIterator>();
 		_prepareResourcesIterator->_pipelineAcceleratorPool = technique._pipelineAccelerators.get();
 		_prepareResourcesIterator->_compiledTechnique = &technique;
+	}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	void CreateLightingTechnique(
+		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
+		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
+		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
+		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
+		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
+		const ChainedOperatorDesc* globalOperators,
+		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments)
+	{
+		// Convenience function to select from one of the built-in lighting techniques
+		// We'll scan the list of operator descs and decide on a technique type from what we
+		// find there
+		bool foundForwardTechnique = false, foundDeferredTechnique = false;
+		auto* op = globalOperators;
+		while (op) {
+			switch (op->_structureType) {
+			case TypeHashCode<ForwardLightingTechniqueDesc>:
+				foundForwardTechnique = true;
+				break;
+			case TypeHashCode<DeferredLightingTechniqueDesc>:
+				foundDeferredTechnique = true;
+				break;
+			}
+			op = op->_next;
+		}
+		if (foundForwardTechnique && foundDeferredTechnique)
+			Throw(std::runtime_error("Multiple top level lighting technique types found. There can only be one"));
+
+		if (!foundDeferredTechnique) {
+			CreateForwardLightingTechnique(
+				std::move(promise),
+				pipelineAccelerators, pipelinePool, techDelBox,
+				resolveOperators, shadowOperators,
+				globalOperators,
+				preregisteredAttachments);
+		} else {
+			CreateDeferredLightingTechnique(
+				std::move(promise),
+				pipelineAccelerators, pipelinePool, techDelBox,
+				resolveOperators, shadowOperators,
+				globalOperators,
+				preregisteredAttachments);
+		}
+	}
+
+	// Simplified construction --
+	std::future<std::shared_ptr<CompiledLightingTechnique>> CreateLightingTechnique(
+		const std::shared_ptr<LightingEngineApparatus>& apparatus,
+		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
+		const ChainedOperatorDesc* globalOperators,
+		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments)
+	{
+		std::promise<std::shared_ptr<CompiledLightingTechnique>> promisedTechnique;
+		auto result = promisedTechnique.get_future();
+		CreateLightingTechnique(
+			std::move(promisedTechnique),
+			apparatus->_pipelineAccelerators,
+			apparatus->_lightingOperatorCollection,
+			apparatus->_sharedDelegates,
+			resolveOperators, shadowGenerators, globalOperators,
+			preregisteredAttachments);
+		return result;
 	}
 
 }}

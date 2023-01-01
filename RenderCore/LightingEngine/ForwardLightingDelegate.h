@@ -24,7 +24,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 	};
 
-	struct MSAADesc
+	struct MultiSampleOperatorDesc
 	{
 		TextureSamples _samples = TextureSamples::Create();
 	};
@@ -36,27 +36,8 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
-		const ChainedOperatorDesc& globalOperators,
+		const ChainedOperatorDesc* globalOperators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit);
-
-#if 0
-	void CreateForwardLightingScene(
-		std::promise<std::shared_ptr<ILightScene>>&& promise,
-		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
-		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-		const AmbientLightOperatorDesc& ambientLightOperator);
-#endif
-
-	// Simplified construction --
-	std::future<std::shared_ptr<CompiledLightingTechnique>> CreateForwardLightingTechnique(
-		const std::shared_ptr<LightingEngineApparatus>& apparatus,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-		const ChainedOperatorDesc& globalOperators,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments);
 
 	bool ForwardLightingTechniqueIsCompatible(
 		CompiledLightingTechnique& technique,
